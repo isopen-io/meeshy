@@ -17,65 +17,33 @@ struct DataStorageView: View {
         ZStack {
             theme.backgroundGradient.ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                header
-                scrollContent
-            }
+            CollapsibleHeaderPage(
+                title: String(localized: "settings.data.storage.title", defaultValue: "Stockage", bundle: .main),
+                onBack: { dismiss() },
+                titleColor: theme.textPrimary,
+                backArrowColor: Color(hex: accentColor),
+                backgroundColor: theme.backgroundPrimary,
+                content: { pageContent }
+            )
         }
         .task {
             await loadCacheSize()
         }
     }
 
-    // MARK: - Header
+    // MARK: - Content
 
-    private var header: some View {
-        HStack {
-            Button {
-                HapticFeedback.light()
-                dismiss()
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "chevron.backward")
-                        .font(MeeshyFont.relative(14, weight: .semibold))
-                    Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
-                        .font(MeeshyFont.relative(15, weight: .medium))
-                }
-                .foregroundColor(Color(hex: accentColor))
-            }
-            .accessibilityLabel(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
-
-            Spacer()
-
-            Text(String(localized: "settings.data.storage.title", defaultValue: "Stockage", bundle: .main))
-                .font(MeeshyFont.relative(17, weight: .bold))
-                .foregroundColor(theme.textPrimary)
-                .accessibilityAddTraits(.isHeader)
-
-            Spacer()
-
-            Color.clear.frame(width: 60, height: 24)
-                .accessibilityHidden(true)
+    private var pageContent: some View {
+        VStack(spacing: 20) {
+            cacheSection
+            // Purge SÉLECTIVE (type × domaine). Vit dans MeeshyUI pour que
+            // ses libellés soient servis par le catalogue du module —
+            // `bundle: .module` — plutôt que par celui de l'app.
+            SelectiveCachePurgeView()
+            Spacer().frame(height: 40)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-    }
-
-    // MARK: - Scroll Content
-
-    private var scrollContent: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: 20) {
-                cacheSection
-                // Purge SÉLECTIVE (type × domaine). Vit dans MeeshyUI pour que
-                // ses libellés soient servis par le catalogue du module —
-                // `bundle: .module` — plutôt que par celui de l'app.
-                SelectiveCachePurgeView()
-                Spacer().frame(height: 40)
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 16)
-        }
+        .padding(.top, 16)
     }
 
     // MARK: - Cache Section
@@ -142,6 +110,9 @@ struct DataStorageView: View {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(12, weight: .semibold))
                 .foregroundColor(Color(hex: color))
+                // Décorative — jumelle de `SettingsView.settingsSection` : sans
+                // ce masque, VoiceOver annonce le nom du symbole avant le titre.
+                .accessibilityHidden(true)
             Text(title.uppercased())
                 .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
                 .foregroundColor(Color(hex: color))

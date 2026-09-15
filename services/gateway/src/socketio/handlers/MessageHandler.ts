@@ -130,6 +130,7 @@ import { toEncryptedPayload } from '../../validation/encryption-envelope.js';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import type { RedisDeliveryQueue } from '../../services/RedisDeliveryQueue';
 import type { QueuedVariantFor } from '../queuedEventContract';
+import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
 
 const handlerLogger = enhancedLogger.child({ module: 'MessageHandler' });
 
@@ -760,37 +761,41 @@ export class MessageHandler {
       // admis ici, alors que l'UI web lui propose le geste et que la route
       // conversation-scopée l'admet. Une politique cachée dans un `where` est
       // une politique qu'on ne peut ni lire ni unifier.
-      const message = await this.prisma.message.findFirst({
-        where: {
-          id: validated.messageId,
-          deletedAt: null,
-        },
-        select: {
-          id: true,
-          conversationId: true,
-          // L'état TERMINAL du conteneur, exigé par `admitMessageEdit`. Deux
-          // colonnes ajoutées à un `select` déjà là : aucun aller-retour de plus.
-          conversation: { select: { isActive: true, closedAt: true } },
-          senderId: true,
-          content: true,
-          originalLanguage: true,
-          // `messageType` et `createdAt` ne sont pas lus par la décision
-          // d'admission : ils sont REQUIS par le contrat de fil
-          // (`SocketIOMessage`) que la diffusion doit servir. Deux colonnes de
-          // plus sur un `select` déjà là — aucun aller-retour supplémentaire.
-          messageType: true,
-          createdAt: true,
-          // Lu pour la réconciliation des mentions : une mention ajoutée en
-          // éditant un message éphémère ne doit pas survivre à ce message.
-          expiresAt: true,
-          // Lu pour la réconciliation des liens : `metadata` est un blob
-          // PARTAGÉ, et le recomposer sans le lire écraserait `postReplyTo` et
-          // `location`.
-          metadata: true,
-          sender: { select: { id: true, userId: true, displayName: true, avatar: true, role: true } },
-          attachments: { select: attachmentMediaSelect },
-        },
-      });
+      const message = await withOrphanedSenderRepair(
+        { prisma: this.prisma, conversationIds: discoverConversationIdsByMessageIds(this.prisma, [validated.messageId]) },
+        () =>
+          this.prisma.message.findFirst({
+            where: {
+              id: validated.messageId,
+              deletedAt: null,
+            },
+            select: {
+              id: true,
+              conversationId: true,
+              // L'état TERMINAL du conteneur, exigé par `admitMessageEdit`. Deux
+              // colonnes ajoutées à un `select` déjà là : aucun aller-retour de plus.
+              conversation: { select: { isActive: true, closedAt: true } },
+              senderId: true,
+              content: true,
+              originalLanguage: true,
+              // `messageType` et `createdAt` ne sont pas lus par la décision
+              // d'admission : ils sont REQUIS par le contrat de fil
+              // (`SocketIOMessage`) que la diffusion doit servir. Deux colonnes de
+              // plus sur un `select` déjà là — aucun aller-retour supplémentaire.
+              messageType: true,
+              createdAt: true,
+              // Lu pour la réconciliation des mentions : une mention ajoutée en
+              // éditant un message éphémère ne doit pas survivre à ce message.
+              expiresAt: true,
+              // Lu pour la réconciliation des liens : `metadata` est un blob
+              // PARTAGÉ, et le recomposer sans le lire écraserait `postReplyTo` et
+              // `location`.
+              metadata: true,
+              sender: { select: { id: true, userId: true, displayName: true, avatar: true, role: true } },
+              attachments: { select: attachmentMediaSelect },
+            },
+          })
+      );
 
       if (!message) {
         this._sendGenericError(callback, 'Message not found or you are not authorized to edit it', socket);
@@ -1075,29 +1080,33 @@ export class MessageHandler {
         return;
       }
 
-      const message = await this.prisma.message.findFirst({
-        where: { id: validated.messageId, deletedAt: null },
-        select: {
-          id: true,
-          conversationId: true,
-          senderId: true,
-          sender: { select: { id: true, userId: true } },
-          // L'appartenance n'est plus jointe : `admitMessageDelete` la lit
-          // lui-même, et seulement quand l'acteur n'est PAS l'auteur. La
-          // conversation ne l'est plus non plus : `applyMessageRemovalEffects`
-          // relit `lastMessageAt` lui-même, au plus près de son écriture
-          // conditionnelle. Restent le contenu et les métadonnées, qui portent
-          // les deux représentations des `/l/<token>` du message. Et, depuis que
-          // le décompte des compteurs vit dans la même unité, `messageType` et
-          // les MIME des pièces jointes — capturés ICI parce qu'ils ne sont plus
-          // lisibles une fois les attachements supprimés, quelques lignes plus
-          // bas.
-          content: true,
-          metadata: true,
-          messageType: true,
-          attachments: { select: { id: true, mimeType: true } },
-        },
-      });
+      const message = await withOrphanedSenderRepair(
+        { prisma: this.prisma, conversationIds: discoverConversationIdsByMessageIds(this.prisma, [validated.messageId]) },
+        () =>
+          this.prisma.message.findFirst({
+            where: { id: validated.messageId, deletedAt: null },
+            select: {
+              id: true,
+              conversationId: true,
+              senderId: true,
+              sender: { select: { id: true, userId: true } },
+              // L'appartenance n'est plus jointe : `admitMessageDelete` la lit
+              // lui-même, et seulement quand l'acteur n'est PAS l'auteur. La
+              // conversation ne l'est plus non plus : `applyMessageRemovalEffects`
+              // relit `lastMessageAt` lui-même, au plus près de son écriture
+              // conditionnelle. Restent le contenu et les métadonnées, qui portent
+              // les deux représentations des `/l/<token>` du message. Et, depuis que
+              // le décompte des compteurs vit dans la même unité, `messageType` et
+              // les MIME des pièces jointes — capturés ICI parce qu'ils ne sont plus
+              // lisibles une fois les attachements supprimés, quelques lignes plus
+              // bas.
+              content: true,
+              metadata: true,
+              messageType: true,
+              attachments: { select: { id: true, mimeType: true } },
+            },
+          })
+      );
 
       if (!message) {
         this._sendGenericError(callback, 'Message not found', socket);

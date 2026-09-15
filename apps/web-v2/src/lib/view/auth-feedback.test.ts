@@ -6,6 +6,9 @@ import {
   placeMagicLinkValidationFailure,
   placeSignupFailure,
   resolveForgotPasswordOutcome,
+  resolveResetPasswordOutcome,
+  resolveResetTokenState,
+  resolveVerifyEmailOutcome,
   type ForgotPasswordData,
   type PhoneConflict,
 } from './auth-feedback';
@@ -28,10 +31,41 @@ describe('placeSignupFailure — le champ vise directement une saisie', () => {
     expect(result.bannerError).toBeNull();
   });
 
-  test('field:"username" (nom SERVEUR) ⇒ sous NOM AFFICHÉ (table iOS)', () => {
+  /**
+   * LA TABLE A CHANGÉ (#6479). `username` se repliait sur le nom affiché parce
+   * qu'aucune saisie ne le portait. L'écran montre et ENVOIE désormais le
+   * pseudo : un refus qui le vise doit se poser SOUS lui, sinon le message
+   * accuse un champ que l'utilisateur n'a pas touché.
+   */
+  test('field:"username" ⇒ sous le PSEUDO, qui a maintenant sa saisie', () => {
     const result = placeSignupFailure(failure({ status: 400, code: 'VALIDATION_ERROR', field: 'username' }));
-    expect(result.fieldErrors.displayName).toBeDefined();
+    expect(result.fieldErrors.username).toBeDefined();
+    expect(result.fieldErrors.displayName).toBeUndefined();
     expect(result.fieldErrors.email).toBeUndefined();
+  });
+
+  /**
+   * La contrepartie d'ENVOYER le pseudo : une collision est un REFUS, plus un
+   * renommage silencieux. Les trois valeurs libres que la passerelle sert avec
+   * lui sont ce qui empêche ce refus d'être un mur — et elles doivent traverser
+   * jusqu'à l'écran.
+   */
+  test('USERNAME_TAKEN porte les trois pseudos libres jusqu’à l’écran', () => {
+    const result = placeSignupFailure(
+      failure({
+        status: 409,
+        code: 'USERNAME_TAKEN',
+        field: 'username',
+        suggestions: ['ada-l', 'ada-lovelace2', 'ada1815'],
+      }),
+    );
+    expect(result.fieldErrors.username).toBeDefined();
+    expect(result.usernameSuggestions).toEqual(['ada-l', 'ada-lovelace2', 'ada1815']);
+  });
+
+  test('tout autre refus ne propose AUCUN pseudo', () => {
+    const result = placeSignupFailure(failure({ status: 400, code: 'VALIDATION_ERROR', field: 'email' }));
+    expect(result.usernameSuggestions).toEqual([]);
   });
 
   test('field:"phoneCountryCode" ⇒ sous téléphone (même saisie que phoneNumber)', () => {
@@ -204,5 +238,78 @@ describe('placeMagicLinkValidationFailure — un seul texte pour les cinq phrase
     const result = placeMagicLinkValidationFailure(failure({ status: 500, error: 'Server error' }));
     expect(result.message).not.toBe('Server error');
     expect(result.message).toContain('500');
+  });
+});
+
+describe('resolveVerifyEmailOutcome — code faux ET code expiré rendent le MÊME 400', () => {
+  test('succès ⇒ verified', () => {
+    expect(resolveVerifyEmailOutcome({ ok: true, data: { message: 'Email vérifié' }, status: 200 })).toEqual({ kind: 'verified' });
+  });
+
+  test('un compte déjà vérifié EST un succès (magic-link.ts:349-354), jamais un refus', () => {
+    const result = resolveVerifyEmailOutcome({
+      ok: true,
+      data: { message: 'déjà vérifiée', alreadyVerified: true, verifiedAt: '2026-09-01T00:00:00.000Z' },
+      status: 200,
+    });
+    expect(result).toEqual({ kind: 'verified' });
+  });
+
+  test('400 ⇒ invalid-code, quel que soit le texte serveur', () => {
+    for (const error of ['Invalid verification code', 'Verification code has expired']) {
+      expect(resolveVerifyEmailOutcome(failure({ status: 400, error }))).toEqual({ kind: 'invalid-code' });
+    }
+  });
+
+  test('status 0 ⇒ offline', () => {
+    expect(resolveVerifyEmailOutcome(failure({ status: 0, error: 'Failed to fetch' }))).toEqual({ kind: 'offline' });
+  });
+
+  test('autre statut ⇒ failed, générique + code, jamais `error` brut', () => {
+    const result = resolveVerifyEmailOutcome(failure({ status: 500, error: 'Server error' }));
+    expect(result.kind).toBe('failed');
+    expect((result as { message: string }).message).not.toBe('Server error');
+    expect((result as { message: string }).message).toContain('500');
+  });
+});
+
+describe('resolveResetTokenState — `valid:false` en 200 N’EST PAS un succès HTTP à confondre', () => {
+  test('valid:true ⇒ valid', () => {
+    expect(resolveResetTokenState({ ok: true, data: { valid: true }, status: 200 })).toBe('valid');
+  });
+
+  test('valid:false EN 200 (jeton périmé/consommé) ⇒ invalid — la VALEUR tranche, pas l’enveloppe', () => {
+    expect(resolveResetTokenState({ ok: true, data: { valid: false }, status: 200 })).toBe('invalid');
+  });
+
+  test('400 ⇒ invalid', () => {
+    expect(resolveResetTokenState(failure({ status: 400, error: 'Reset token is required' }))).toBe('invalid');
+  });
+
+  test('status 0 ⇒ offline', () => {
+    expect(resolveResetTokenState(failure({ status: 0, error: 'Failed to fetch' }))).toBe('offline');
+  });
+});
+
+describe('resolveResetPasswordOutcome — un reset NE CONNECTE personne', () => {
+  test('succès ⇒ reset', () => {
+    expect(resolveResetPasswordOutcome({ ok: true, data: { message: 'ok' }, status: 200 })).toEqual({ kind: 'reset' });
+  });
+
+  test('400 (jeton invalide/expiré en pratique) ⇒ invalid-token', () => {
+    expect(resolveResetPasswordOutcome(failure({ status: 400, error: 'Invalid or expired reset token' }))).toEqual({
+      kind: 'invalid-token',
+    });
+  });
+
+  test('status 0 ⇒ offline', () => {
+    expect(resolveResetPasswordOutcome(failure({ status: 0, error: 'Failed to fetch' }))).toEqual({ kind: 'offline' });
+  });
+
+  test('autre statut ⇒ failed, générique + code', () => {
+    const result = resolveResetPasswordOutcome(failure({ status: 500, error: 'Server error' }));
+    expect(result.kind).toBe('failed');
+    expect((result as { message: string }).message).not.toBe('Server error');
+    expect((result as { message: string }).message).toContain('500');
   });
 });

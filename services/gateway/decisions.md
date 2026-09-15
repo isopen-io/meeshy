@@ -2303,3 +2303,258 @@ la décision et le mode d'emploi manquaient. Le critère de fin #4 de l'issue
 eux-mêmes ; il ne s'applique pas à (c), qui ne change rien au calendrier de
 déploiement. Suivi : la mesure de #4631 (dérive du compose de staging sur le
 dépôt) reste un défaut distinct, non fermé par cette décision.
+
+## 2026-09-12 : SSRF de l'illustration d'agent — le trou 1 se ferme par épinglage au connect, `undici` devient une dépendance directe (#6201)
+
+**Statut** : Accepté
+
+**Contexte** : le trou 2 de #6201 (une seule adresse validée sur N) a été fermé
+sur `dev` (`fba914e6a7`). Restait le trou 1 : `publicHttpUrl` valide un nom via
+`lookup(host)` AVANT la requête, et le transport par défaut (`fetch` global —
+donc `undici`, déjà présent transitivement, mais non résoluble en dépendance
+directe du gateway) résout le même nom une SECONDE fois, indépendamment, au
+moment d'ouvrir la connexion TCP. Un DNS contrôlé par l'attaquant, à TTL court,
+peut rendre une adresse publique à la première résolution et une adresse
+interne à la seconde — TOCTOU classique, sans course à gagner puisque c'est le
+serveur DNS de l'attaquant qui choisit quand changer de réponse.
+
+Trois voies avaient été mesurées par l'issue :
+
+| voie | ferme le trou | coût |
+|---|---|---|
+| **`Agent` undici avec `connect: { lookup }`** | oui, proprement — la résolution qui valide EST celle qui connecte | déclarer `undici` en dépendance directe, toucher `bun.lock` |
+| réécrire l'URL avec l'IP + en-tête `Host` | oui | casse le SNI TLS sans `servername`, à reconstruire à chaque saut de redirection |
+| passer à `node:https` | oui | réécrit tout le transport (streaming, bornes de taille, timeouts) — coût disproportionné pour une seule garde |
+
+**Décision** : la première voie. `node:undici` n'existe pas comme module
+intégré sous Node 22 (`ERR_UNKNOWN_BUILTIN_MODULE`, vérifié) : `undici` est donc
+ajouté aux `dependencies` de `services/gateway/package.json` (il était déjà
+présent transitivement via `fastify`/`jsdom`/`srvx`, à une version identique —
+aucune résolution nouvelle, seulement une déclaration directe et une entrée de
+lockfile). Un `Agent({ connect: { lookup } })` est construit avec un
+`connect.lookup` qui applique EXACTEMENT la règle de `publicHttpUrl` (« toutes
+les adresses publiques », résolution vide refusée) ; cet Agent sert de
+`dispatcher` au `fetch` par défaut. La validation et la connexion partagent
+ainsi la MÊME résolution fraîche, prise au dernier moment possible — il n'y a
+plus de fenêtre entre les deux à faire dériver.
+
+Portée volontairement étroite : seul le `fetchImpl` PAR DÉFAUT passe par l'Agent
+épinglé. Un `fetchImpl` injecté (les 42 témoins existants) contourne l'Agent
+entièrement, comme avant — aucune régression sur la suite unitaire, qui
+continue de tester la logique de garde sans réseau réel. Un unique Agent est
+mémoïsé pour le `lookup` par défaut (une résolution pinnée par requête suffit,
+pas une instance par appel) ; un `lookup` de test en obtient un dédié.
+
+**Preuve** : `services/gateway/src/services/zmq-agent/agent-illustration.ts`
+(`createConnectLookup`, `pinnedAgentFor`, `pinnedFetch`) ; le témoin qui exerce
+le NIVEAU que le trou 1 exigeait (§ « épinglage au connect » du fichier de
+test) — il n'injecte PAS `fetchImpl`, seulement un `lookup` qui compte ses
+appels et change de réponse entre le premier (pré-validation) et le second
+(résolution réelle au connect). Contre-épreuve mesurée : en repointant le
+`fetchImpl` par défaut sur le `fetch` global NU (la forme d'avant ce lot), ce
+même témoin ROUGIT — `lookup` n'est appelé qu'une fois, la résolution réelle
+passant par le DNS système hors de portée du témoin. `npx tsc --noEmit` : 0
+erreur. `bun run test` sur le fichier : 43/43 verts.
+
+**Alternatives rejetées** : réécriture d'URL (SNI cassé) et migration vers
+`node:https` (coût disproportionné pour une seule garde, documentées dans
+l'issue). Aucune des deux n'a été implémentée.
+
+**Conséquences** : `services/gateway/package.json` déclare `undici@^8.10.0` ;
+`bun.lock` porte l'entrée. `pnpm-lock.yaml` n'a délibérément pas été
+re-régénéré dans ce lot — le CI pnpm tourne en `--no-frozen-lockfile` (le
+résout à la volée) et une régénération locale a fait dériver des entrées sans
+rapport (bump de `socket.io-parser`/`ws`, ajout non lié dans `apps/web-v2`) ;
+les inclure aurait élargi ce lot au-delà de sa portée. Une session qui
+régénère `pnpm-lock.yaml` pour une autre raison peut porter cette entrée dans
+la foulée.
+
+## `postInclude` devient un `Prisma.PostSelect` — `storyViews` ne voyage plus vers tout lecteur d'un post (2026-09-12, #4791)
+
+**Le fait** : `GET /posts/:id/views` (la liste des spectateurs d'une story)
+est réservée à l'auteur — `403` pour tout autre lecteur
+(`routes/posts/interactions.ts`). Mais `postInclude`
+(`services/gateway/src/services/posts/postIncludes.ts`), le point d'hydratation
+UNIQUE utilisé par `PostService`, `PostFeedService`, `PostAudioService` et les
+routes de recherche/proximité/hashtag, était un `Prisma.PostInclude` — et
+Prisma renvoie TOUS les scalaires d'un modèle sous `include`, quelles que
+soient les relations nommées. `Post.storyViews` (la même donnée, embarquée)
+partait donc vers chaque lecteur AUTORISÉ à voir le post — fil, recherche,
+à proximité, reposts, commentaires attachés — sans qu'aucune route ne l'ait
+demandé ni qu'un test ne le voie : le schéma de réponse de ces routes ne
+déclare `storyViews` nulle part, donc rien ne l'aurait arrêté à la
+sérialisation non plus.
+
+**La décision** : convertir `postInclude` (et `storyPostInclude`, qui en
+dérive par spread) en `Prisma.PostSelect` — un `select` explicite listant
+CHAQUE scalaire du modèle Post SAUF `storyViews` (`postScalarSelect`), plus
+les cinq relations déjà présentes. `select` est le seul des deux qui puisse
+exprimer « tout sauf CE champ » ; `include` ne le peut pas par construction.
+Les 22 sites d'appel (`PostService` ×15, `PostFeedService` ×6 dont un
+imbriqué sous `postBookmark.include.post`, `PostAudioService`, les routes
+`nearby`/`hashtag`) passent désormais `select: postInclude` (ou
+`storyPostInclude`/`feedPostInclude`), jamais `include:` — le compilateur
+(`Prisma.validator<Prisma.PostSelect>()`) refuse toute autre forme, ce qui a
+servi de garde de migration : `tsc --noEmit` (0 erreur) après conversion
+confirme qu'aucun site n'a été oublié.
+
+**Alternative rejetée** : retirer purement la colonne `storyViews` du schéma.
+Rejetée parce que `PostService.republishStory`/`updatePost` la remettent
+encore explicitement à `[]` à la republication d'une story (reset
+d'engagement) — une écriture vivante, donc pas du code mort à retirer sans
+readresser d'abord ces deux sites séparément (hors de la portée de cette
+issue, qui vise la fuite de LECTURE, pas la propriété d'écriture).
+
+**Preuve** : `services/gateway/src/services/posts/__tests__/postIncludes.test.ts`
+— trois témoins dédiés (`postScalarSelect`, `postInclude`, `storyPostInclude`
+n'ont jamais `storyViews`), ROUGE prouvé en réintroduisant temporairement
+`storyViews: true` dans `postScalarSelect` (3 échecs), puis restauré. Suite
+complète : `npx tsc --noEmit` gateway 0 erreur ; 118 suites / 2203 tests
+`posts`/`PostService`/`PostFeedService`/`PostAudioService` verts (aucune
+régression sur les 22 sites convertis).
+
+**Hors de portée depuis cet environnement** (aucun accès infra/production) :
+le critère de fin n°1 de #4791 — compter les documents Post portant encore un
+`storyViews` legacy non vide (`db.posts.countDocuments({ storyViews: { $ne: [] } })`
+sur staging/production) — n'a pas pu être mesuré. La migration
+`scripts/migrations/mongodb/018_clear_legacy_post_storyViews.js` est committée
+(dry-run par défaut, compte les documents concernés, `APPLIQUER=true` pour
+vider `storyViews` sur les lignes héritées) mais n'a pas été jouée. L'issue
+reste ouverte pour ce point, à fermer par une session avec accès à la base.
+
+## Doubles de test partiels (#6296) — le risque réel est « classe exportée + `instanceof` externe », pas « classe exportée »
+
+**Le fait mesuré** : #6294 a fermé un cas précis (`utils/withMutationLog`,
+`MutationResultGone` laissée à `undefined` par un double partiel). #6296
+demandait de mesurer si le motif dépasse ce seul module — il dépasse : 397
+modules locaux du gateway sont totalement doublés (`jest.mock(path, () =>
+({...}))` sans `jest.requireActual`), sur 2 592 sites ; 93 d'entre eux
+exportent au moins une classe, candidate à `instanceof`.
+
+**Ce qu'« exporte une classe » ne suffit pas à établir** : la plupart des 93
+sont des classes de SERVICE (`CallService`, `MentionService`, `CacheStore`…),
+jamais vérifiées par `instanceof` — le double les remplace par un `jest.fn()`
+et c'est exactement l'usage voulu. Le risque #6294 est plus étroit : une
+classe **exportée par le module M**, vérifiée par `instanceof` dans un fichier
+**AUTRE que M**, alors qu'un test du second fichier double M en entier. Deux
+productions réelles se rencontrent dans ce cas précis (throw dans un
+collaborateur mocké, catch dans le fichier sous test) ; une classe
+`instanceof`-vérifiée SEULEMENT à l'intérieur de son propre module ne peut pas
+être exploitée de cette façon — la mocker en entier retire le throw ET le
+catch ensemble.
+
+**Vérifié un par un, ça donne CINQ modules à risque confirmé** (sur les
+93 candidats) : `services/CallService.ts` (`CallAlreadyEndedError`, vérifiée
+dans `AuthHandler.ts`/`CallEventsHandler.ts`/`calls-lifecycle.ts`),
+`services/AgentHttpClient.ts` (`AgentUnavailableError`, dans
+`routes/admin/agent-delivery-queue.ts`/`agent-configs.ts`),
+`services/conversationPreferencesSync.ts`
+(`ConversationPreferencesScopeError`, dans `routes/conversation-preferences.ts`),
+`services/AudioTranslateService.ts` (`AudioTranslateError`, dans
+`routes/voice/analysis.ts`/`translation.ts`), et
+`routes/conversations/delete-for-me.ts`
+(`ConversationDeleteForMeNotAParticipantError`, dans `routes/user-deletions.ts`).
+`middleware/auth.ts` (108 doubles — le module le plus mocké de tous) est
+l'exemple négatif qui a affiné la règle : `GuestAccessRevokedError` est lancée
+ET vérifiée par `instanceof` uniquement DANS `middleware/auth.ts` lui-même ;
+aucun autre fichier de production n'y touche. Un double total de ce module
+retire les deux ensemble, donc le motif ne peut jamais s'y déclencher.
+
+**Décision** : généraliser la garde de #6294 en un balayage PARAMÉTRÉ
+(`__tests__/security/instanceof-checked-class-mock-completeness-{sweep,guard}.test.ts`)
+plutôt que d'écrire un garde par module. Le balayage DÉRIVE lui-même la liste
+des « modules sensibles » (classe exportée, `instanceof` externe) depuis le
+code de production — jamais une liste à la main, pour la même raison que
+`#4432`/`#4992` : une liste tenue à la main dérive. Les 48 sites de double
+total des cinq modules confirmés étalent désormais
+`...(jest.requireActual('<module>') as object)` — même patron que #6294.
+Huit d'entre eux (tous `services/CallService.ts`, forme
+`() => { class CallAlreadyEndedError extends Error {...} return {...}; }`)
+RECONSTRUISAIENT déjà la classe à la main, sous le même nom, `extends Error`,
+rendue dans l'objet exporté — alternative valide (Jest sert la MÊME classe
+mockée au throw et au catch dans un seul registre de module) que le
+balayage reconnaît et ne signale plus comme fautive.
+
+**Ce qui reste ACCEPTÉ, par décision, pas par oubli** : les 88 autres modules
+à classe restent des doubles totaux — aucune preuve de risque `instanceof`
+externe ne les touche aujourd'hui. Le balayage est DÉRIVÉ du code : si un
+futur commit fait vérifier l'une de leurs classes par `instanceof` depuis un
+autre fichier, le module devient sensible automatiquement et la garde rougit
+au prochain double qui l'omet — sans qu'il faille étendre une liste à la
+main. La seconde moitié du périmètre de #6296 — un module dont une FONCTION
+(pas une classe) est directement appelée en production depuis un autre
+fichier — n'est pas couverte par ce balayage : elle exige de suivre les appels
+de fonction, pas seulement `instanceof`, et une automatisation fiable n'a pas
+été mesurée faisable dans ce lot. Suivi ouvert en issue séparée plutôt que
+laissé tacite.
+
+**Preuve** : RED prouvé avant correctif (48 offenders listés par le
+balayage, `bun run test` sur la garde) ; GREEN après (`offenders()` rend
+`[]`) ; `npx tsc --noEmit` gateway 0 erreur ; les 54 suites/1385 témoins
+affectés (`CallEventsHandler*`, `MeeshySocketIOManager`, `calls-routes`,
+`agent-*`, `AttachmentTranslateService`, `user-deletions-*`,
+`conversation-index`, `message-new-producer-parity`) verts, aucune
+régression.
+
+## Gate B (#6160) — les quatre codes de diagnostic muets restent muets ; assumer, pas tenter (2026-09-13, #6160)
+
+**Le fait** : #6160 a mesuré, le 2026-09-12, ~3 467 occurrences des quatre
+codes que `ts-jest` musèle encore sous `tsconfig.test.json`
+(`diagnostics.ignoreCodes: [2322, 2339, 2345, 2740]` — `TS2307` en est sorti
+par #6252, gate A livré par #6309, gate C par #6218). Il ne restait que cette
+décision. Remesuré le lendemain sur `dev` (HEAD `6e34289a5b`,
+`tsc -p tsconfig.test.json --noEmit --pretty false`), le compte n'a pas
+stagné : **13 964** occurrences (`TS2345` 13 189, `TS2339` 521, `TS2322` 195,
+`TS2740` 59) — près de quatre fois le chiffre de la veille, en une seule
+journée de développement normal. `TS2345` se répartit sur **638 fichiers de
+test distincts** (aucun n'en concentre plus de 5 % — le plus chargé,
+`CallService.test.ts`, en porte 618/13 189) : ce n'est pas un défaut localisé,
+c'est la forme structurelle du mock partiel que l'issue décrivait déjà —
+`const svc = { markAsRead: jest.fn() } as unknown as NotificationService`
+typechecke le double, pas l'appel qu'il reçoit.
+
+**La décision** : **assumer, pas tenter.** Les quatre codes restent dans
+`diagnostics.ignoreCodes` — indéfiniment, pas seulement le temps de cette
+issue. Deux raisons, une par famille :
+
+- `2322`/`2345`/`2740` (195 + 13 189 + 59 = 13 443 occurrences) sont
+  indifférents à l'exécution — déjà établi dans l'issue et revérifié en séance
+  (la comparaison a lieu quand même ; un test dont l'assertion ne tient plus
+  rougit). Les fermer demanderait des fabriques de mocks TYPÉES pour
+  l'ensemble du corpus de tests du gateway — pas un correctif borné, une
+  réécriture de la façon dont TOUT test du service construit ses doubles.
+  Rapport coût/signal mauvais : zéro panne silencieuse évitée, un chantier qui
+  dépasse d'un ordre de grandeur n'importe quel autre lot de cette issue
+  (13 443 contre 92 pour le gate A, 19 pour `TS2307`).
+- `TS2339` (521, « propriété inexistante ») PEUT produire un vert à vide (une
+  lecture `undefined` que `toBeUndefined()` / `toBeFalsy()` / `not.toBe(x)`
+  laisse passer) — c'est la seule des quatre à demander un traitement, mais
+  LOCAL, jamais en bloc : la règle déjà posée dans #6160 pour les 23 suites
+  visées par le gate C (rejuger `TS2339` suite par suite avant réintégration,
+  le démuseler ensuite pour cette suite précise) reste la procédure. Rien à
+  ajouter en dehors d'elle.
+
+**Pourquoi pas un cliquet** (la forme des gates A et C) : un cliquet
+DÉCROISSANT sur ce compte rougirait à chaque mock partiel ajouté — c'est-à-dire
+à peu près chaque test écrit dans ce service, vu la croissance mesurée en 24 h.
+Ce ne serait pas un gate, ce serait un frein sur l'écriture de tests, contraire
+à la TDD non négociable de ce dépôt (`CLAUDE.md` racine). Un cliquet CROISSANT
+(jamais baisser) ne protégerait rien, puisque rien ne doit baisser. Aucune
+forme de cliquet ne s'applique à un compte dont la croissance est le signe
+d'une activité saine.
+
+**Alternative rejetée** : démuseler les quatre codes et vivre avec un
+typecheck des tests rouge en continu. Rejetée — un gate rouge en permanence
+cesse d'être un signal ; la prochaine régression RÉELLE se noierait dans les
+13 964 lignes déjà là, exactement l'inverse de ce que `TS2307` a démontré
+utile à démuseler (#6252 : 19 occurrences, toutes de vrais chemins cassés).
+
+**Conséquences** : `services/gateway/jest.config.json` et
+`jest.config.temp.json` conservent `diagnostics.ignoreCodes: [2322, 2339,
+2345, 2740]`. Les gates A (#6309, cliquet décroissant sur les fichiers de test
+jamais chargés, hors ces quatre codes) et C (#6218, cliquet croissant sur les
+suites collectées par Jest) restent les deux gardes actives de cette famille
+de risque ; la procédure de réintégration suite-par-suite (rejuger `TS2339`
+avant de sortir une suite de `testPathIgnorePatterns`) reste écrite dans
+#6160. Avec cette décision, les quatre points du critère de fin de #6160 sont
+tous livrés — l'issue peut se fermer.

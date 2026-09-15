@@ -38,6 +38,20 @@ const SCREENS = [
       SAISIE (aucun `?token=`) ; l'attente et son compte à rebours sont tenus
       par les témoins de `magic-link.test.tsx`, qu'une capture figée ne saurait
       montrer sans mentir sur le temps. */
+  /** LE LECTEUR PLEIN ÉCRAN DE STORIES (#5817) — les DEUX formes du périmètre :
+      la story TEXTE (fond d'effet + texte résolu par le Prisme, rang ≠ 1 :
+      l'original est anglais, le lecteur voit le français) et la story IMAGE
+      (média plein cadre + légende dessous). Le lecteur force son canevas noir,
+      comme iOS (`preferredColorScheme(.dark)`) : les deux schémas doivent rendre
+      la MÊME image — c'est la jumelle claire qui prouve qu'aucun jeton de
+      surface ne fuit dans le lecteur. */
+  /** LE FIL DES PUBLICATIONS (#5893) — deux cartes de tête sur le corpus de
+      fixtures : un POST (en-tête + texte + média) puis les suivantes. Il entre
+      dans la série STANDING pour qu'aucun changement de la carte ne passe
+      désormais sans image, dans les DEUX schémas. */
+  { name: 'feed', path: '/feed' },
+  { name: 'story-text', path: '/story/st-amie-1' },
+  { name: 'story-image', path: '/story/st-amie-2' },
   { name: 'welcome', path: '/welcome' },
   { name: 'magic-link', path: '/auth/magic-link' },
   { name: 'magic-link-validate', path: '/auth/magic-link/validate' },
@@ -284,6 +298,45 @@ for (const scheme of ['dark', 'light']) {
     await page.waitForTimeout(400);
     await page.screenshot({ path: `${OUTPUT}${name}.${scheme}.png` });
     console.log(`  ${name} · ${scheme}`);
+    await page.close();
+  }
+
+  /**
+   * thread-media-grid / thread-media-grid-bubbles (#6169, #6221) — LA GRILLE
+   * 2/3/4+, les DEUX peaux. `media-13` (`MEDIA_GRID_QUAD_WITNESS_ID`,
+   * `fixtures-media-grid.ts`) porte QUATRE images sans débordement (aucun
+   * badge `+N`) : la vue la plus proche de la cible iOS
+   * (`FocalMediaGridLayout`/`BubbleStandardLayout+Media.swift`) à comparer
+   * face à face avec la capture Ref-Native du même message.
+   *
+   * LE MODE SE CHOISIT TOUJOURS EXPLICITEMENT, MÊME « focal » (défaut trouvé
+   * en revue #6169) : ce bloc partage le `context` (donc le `localStorage`,
+   * donc la préférence de mode) avec le bloc `thread-media`/`thread-media-
+   * bubbles` juste au-dessus, qui LAISSE le mode à « bulles » sans le
+   * remettre à « focal » avant de rendre la main. Une NOUVELLE `page()` ne
+   * réinitialise PAS cette préférence — mesuré : la capture « focal » de ce
+   * bloc rendait la puce « Bulles » et les rangées en surface teintée. On
+   * choisit donc la ligne du menu CORRESPONDANT AU SKIN dans les deux cas,
+   * jamais seulement pour « bulles ».
+   */
+  for (const [name, skin, menuLabel] of [
+    ['thread-media-grid', 'focal', 'Focal'],
+    ['thread-media-grid-bubbles', 'bulles', 'Bulles'],
+  ]) {
+    const page = await context.newPage();
+    await page.clock.setFixedTime(INSTANT);
+    await page.goto(`${BASE}/c/c-medias`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(300);
+    await page.getByRole('button', { name: /Mode de lecture/ }).click();
+    await page.waitForTimeout(150);
+    await page.getByRole('menuitemradio', { name: new RegExp(menuLabel) }).click();
+    await page.waitForTimeout(300);
+    await page.evaluate(() =>
+      document.querySelector('[data-message="media-13"]')?.scrollIntoView({ block: 'center' }),
+    );
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: `${OUTPUT}${name}.${scheme}.png` });
+    console.log(`  ${name} · ${scheme} (${skin})`);
     await page.close();
   }
 

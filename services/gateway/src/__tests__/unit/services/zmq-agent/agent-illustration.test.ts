@@ -296,8 +296,7 @@ describe('agent-illustration — la garde lit TOUTES les adresses du nom (#6201)
   });
 
   /**
-   * LE TROU 1 (TOCTOU / rebinding) N'EST PAS TESTABLE ICI, ET C'EST LA VRAIE
-   * LEÇON DE #6201.
+   * LE TROU 1 (TOCTOU / rebinding) N'ÉTAIT PAS TESTABLE ICI — historique.
    *
    * J'ai d'abord écrit un témoin censé constater la dette : un `lookup` rendant
    * une adresse publique au 1er appel et celle des métadonnées au 2e, et
@@ -317,9 +316,53 @@ describe('agent-illustration — la garde lit TOUTES les adresses du nom (#6201)
    * > témoin qui manque, c'est un NIVEAU de test : il faut un transport réel
    * > (résolveur local pointant deux A, ou serveur de test) pour l'exercer.
    *
-   * La dette est donc portée par #6201 et par ce commentaire, PAS par un test
-   * qui affirmerait un comportement. Le jour où l'épinglage au connect est posé
-   * (une des trois voies de l'issue), la preuve devra venir d'un test
-   * d'intégration — et ce bloc devra le citer.
+   * Le trou est fermé plus bas dans ce fichier (§ « épinglage au connect ») en
+   * laissant le `fetchImpl` par DÉFAUT (undici, épinglé) agir, et en n'injectant
+   * QUE `lookup` — exactement le niveau que ce commentaire réclamait.
    */
+});
+
+/**
+ * TROU 1 FERMÉ (#6201) — ÉPINGLAGE AU CONNECT.
+ *
+ * Le bloc ci-dessus a démontré qu'aucun arrangement de `fetchImpl` + `lookup`
+ * injectés ne peut voir le désaccord validation/transport : un faux transport
+ * ne résout aucun nom, donc il n'y a pas de seconde résolution à contredire.
+ *
+ * Le correctif retire la seconde résolution INDÉPENDANTE : `pinnedFetch`
+ * construit un `Agent` undici dont `connect.lookup` EST le `lookup` fourni,
+ * appliquant la même règle « toutes les adresses publiques » que
+ * `publicHttpUrl`. La validation et la connexion partagent alors la même
+ * résolution fraîche — il n'y a plus de fenêtre entre les deux à faire
+ * dériver.
+ *
+ * Ce témoin n'injecte donc PAS `fetchImpl` : il laisse le transport par défaut
+ * (undici, épinglé) agir, et n'injecte que `lookup` — le niveau que le
+ * commentaire ci-dessus réclamait. `lookup` compte ses appels : le premier
+ * sert la pré-validation (`publicHttpUrl`), le second sert la résolution
+ * RÉELLE au moment du connect — c'est là qu'un DNS qui change d'avis entre les
+ * deux instants doit être rattrapé, sans qu'aucune connexion n'ait jamais pu
+ * s'établir vers l'adresse privée.
+ */
+describe('agent-illustration — épinglage au connect (#6201, trou 1)', () => {
+  it('refuse la connexion si le nom change d’avis entre la pré-validation et le connect', async () => {
+    let calls = 0;
+    const flappingLookup: LookupLike = async () => {
+      calls += 1;
+      // 1er appel (pré-validation du sourceUrl, par `publicHttpUrl`) : public.
+      // Tout appel suivant (la résolution RÉELLE au connect, via l'Agent
+      // épinglé) : privé — un DNS à TTL court qui change de réponse entre les
+      // deux instants, exactement le scénario que #6201 décrit.
+      return calls === 1 ? [{ address: '93.184.216.34', family: 4 }] : [{ address: '10.0.0.5', family: 4 }];
+    };
+
+    const result = await resolveAgentIllustration({ sourceUrl: ARTICLE, lookup: flappingLookup });
+
+    expect(result).toBeNull();
+    // La pré-validation a vu "public" (elle a été appelée), mais la connexion
+    // réelle ne s'est jamais établie : le second appel — celui du connect via
+    // l'Agent épinglé — a vu l'adresse privée et a refusé AVANT tout octet
+    // échangé sur le réseau.
+    expect(calls).toBeGreaterThanOrEqual(2);
+  });
 });

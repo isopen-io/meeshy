@@ -316,7 +316,36 @@ final class MessageListPerformanceTests: XCTestCase {
         window.rootViewController = vc
         window.makeKeyAndVisible()
         vc.view.layoutIfNeeded()
-        guard let cv = vc.view.subviews.compactMap({ $0 as? UICollectionView }).first else {
+        // **La recherche descend la hiérarchie ENTIÈRE, pas son premier étage.**
+        //
+        // `vc.view.subviews.compactMap { $0 as? UICollectionView }` ne regardait
+        // que les enfants DIRECTS. La liste a été ENVELOPPÉE un temps par le
+        // conteneur de voile (#6013, retiré en #6537) : elle n'était alors plus
+        // au premier étage, et ce témoin échouait sur
+        // « UICollectionView introuvable » : il ne mesurait plus RIEN, en
+        // annonçant un défaut de structure là où il n'y avait qu'un conteneur
+        // de plus.
+        //
+        // > Un témoin de PERFORMANCE qui ne trouve pas son sujet ne devient pas
+        // La recherche RÉCURSIVE reste : elle est juste que la liste soit
+        // enveloppée ou non, et c'est précisément ce qui la rend durable.
+        //
+        // > lent : il devient muet, et son rouge parle d'autre chose que de ce
+        // > qu'il surveille. C'est la pire des deux pannes — on cesse de
+        // > mesurer le coût du défilement sans cesser de croire qu'on le
+        // > mesure.
+        //
+        // Descendre récursivement dit la même chose et survit au prochain
+        // habillage : ce qui compte est qu'IL Y AIT une liste à faire défiler,
+        // pas qu'elle soit posée à un étage convenu.
+        func firstCollectionView(in root: UIView) -> UICollectionView? {
+            if let cv = root as? UICollectionView { return cv }
+            for sub in root.subviews {
+                if let found = firstCollectionView(in: sub) { return found }
+            }
+            return nil
+        }
+        guard let cv = firstCollectionView(in: vc.view) else {
             return XCTFail("UICollectionView introuvable dans la hiérarchie du VC")
         }
 

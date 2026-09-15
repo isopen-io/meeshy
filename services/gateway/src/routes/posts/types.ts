@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { OBJECT_ID_REGEX } from '@meeshy/shared/utils/object-id';
 import { MAX_POST_MEDIA } from '@meeshy/shared/types/attachment';
 import { EMOJI_MAX_LENGTH } from '@meeshy/shared/types/reaction';
+import { utf16Bounded } from '@meeshy/shared/utils/validation-primitives';
 
 // ============================================
 // CURSOR PAGINATION HELPERS
@@ -135,7 +136,7 @@ const StoryTextObjectSchema = z.object({
 
 const StoryStickerObjectSchema = z.object({
   id: z.string().max(STORY_ID_MAX).optional(),
-  emoji: z.string().max(EMOJI_MAX_LENGTH).optional(),
+  emoji: utf16Bounded(z.string(), { max: EMOJI_MAX_LENGTH }).optional(),
   x: z.number().min(-10).max(10).optional(),
   y: z.number().min(-10).max(10).optional(),
   scale: z.number().min(0).max(20).optional(),
@@ -458,6 +459,11 @@ export const UpdateCommentSchema = z.object({
   /// Prisma `Int` est un int32 Mongo, et iOS reconstruit un `UInt32` depuis
   /// cette valeur — un flag hors borne casserait les deux côtés.
   effectFlags: z.number().int().min(0).max(0x7FFFFFFF).optional(),
+  // ISO 639-1 (or BCP-47) source language, déclarée par le composer — même
+  // contrat que `UpdatePostSchema.originalLanguage`. N'a d'effet QUE si
+  // `content` change aussi (garde métier dans `PostCommentService.updateComment`) ;
+  // absente sur un changement de texte, la redétection reprend la main.
+  originalLanguage: z.string().min(2).max(16).optional(),
 }).refine(
   (data) => data.content !== undefined || data.effectFlags !== undefined,
   { message: 'Nothing to update' },
@@ -538,7 +544,7 @@ export const ReelFeedQuerySchema = FeedQuerySchema.extend({
 });
 
 export const LikeSchema = z.object({
-  emoji: z.string().max(EMOJI_MAX_LENGTH).default('❤️'),
+  emoji: utf16Bounded(z.string(), { max: EMOJI_MAX_LENGTH }).default('❤️'),
 });
 
 /**
@@ -566,7 +572,7 @@ export const LikeSchema = z.object({
  * geste à l'aveugle que cette route existe pour supprimer.
  */
 export const UnlikeSchema = z.object({
-  emoji: z.string().trim().min(1).max(EMOJI_MAX_LENGTH).optional(),
+  emoji: utf16Bounded(z.string().trim(), { min: 1, max: EMOJI_MAX_LENGTH }).optional(),
 });
 
 /**

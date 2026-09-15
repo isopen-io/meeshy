@@ -91,6 +91,43 @@ class BookmarksViewModel: ObservableObject {
         }
     }
 
+    /// **Le cœur des FAVORIS aimait dans le vide** (retour porteur 2026-09-13).
+    ///
+    /// `BookmarksView` montait `FeedPostCard` sans `onLike`. Le paramètre étant
+    /// optionnel, rien ne rougissait — et le bouton n'était pas seulement
+    /// inerte : il jouait sa rafale ET sa haptique avant d'appeler un rappel
+    /// absent. L'utilisateur recevait la confirmation sensorielle d'un geste qui
+    /// n'avait pas lieu. Garde : `FeedPostCardLikeWiringSourceGuardTests`.
+    ///
+    /// La règle de bascule vient de `PostLikeMutation`, partagée : ce qui reste
+    /// ici est ce que ce modèle SEUL possède — son service, son instantané de
+    /// restauration, et sa clé de cache « bookmarks ».
+    ///
+    /// L'instantané est relocalisé par ID à la restauration, jamais par l'index
+    /// capturé : la liste peut avoir bougé pendant l'aller-retour réseau
+    /// (`removeBookmark` retire des lignes, `loadMore` en ajoute), et réécrire à
+    /// un index périmé restaurerait l'ancien état SUR UN AUTRE POST.
+    func toggleLike(_ postId: String) async {
+        guard let index = posts.firstIndex(where: { $0.id == postId }) else { return }
+        let snapshot = posts[index]
+        let outcome = PostLikeMutation.toggled(isLiked: snapshot.isLiked, likes: snapshot.likes)
+        posts[index].isLiked = outcome.isLiked
+        posts[index].likes = outcome.likes
+        do {
+            if outcome.isLiked {
+                try await postService.like(postId: postId)
+            } else {
+                try await postService.unlike(postId: postId)
+            }
+            try? await CacheCoordinator.shared.feed.save(posts, for: "bookmarks")
+        } catch {
+            if let current = posts.firstIndex(where: { $0.id == postId }) {
+                posts[current] = snapshot
+            }
+            FeedbackToastManager.shared.showError(String(localized: "feed.like.error", defaultValue: "Impossible d'aimer la publication", bundle: .main))
+        }
+    }
+
     /// vm-bookmarks-pagination-01 — page suivante RÉSEAU, jamais le cache :
     /// le sentinel rappelait loadBookmarks() qui re-servait le .fresh et
     /// bloquait la pagination pour toute la session.

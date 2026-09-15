@@ -162,12 +162,14 @@ struct RootRouteDestination: View {
         case .hashtagResults(let tag):
             HashtagResultsView(tag: tag)
         case .bookmarks:
-            // Pas de `navigationBarHidden` : cet écran n'a pas
-            // d'en-tête maison, la barre système porte son titre ET
-            // son retour. La masquer en ferait un cul-de-sac.
+            // Barre masquée comme ses voisines : l'écran porte désormais
+            // l'en-tête partagé, son titre ET son retour en verre (#6481).
+            // Le glissement depuis le bord survit à la barre masquée.
             BookmarksView()
+                .navigationBarHidden(true)
         case .starredMessages:
             StarredMessagesView()
+                .navigationBarHidden(true)
         case .friendRequests:
             FriendRequestListView()
                 .navigationBarHidden(true)

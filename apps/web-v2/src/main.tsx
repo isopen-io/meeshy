@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query';
-import { StrictMode, useEffect, type ReactNode } from 'react';
+import { Fragment, StrictMode, useEffect, useSyncExternalStore, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useStore } from 'zustand/react';
 
@@ -9,6 +9,7 @@ import Shell from '@/components/shell';
 import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
+import { currentInterfaceLanguage, subscribeInterfaceLanguage } from '@/lib/interface-language';
 import { useRoute } from '@/lib/router';
 import { followSystem } from '@/lib/scheme';
 import { resolveRouteAccess } from '@/lib/session-guard';
@@ -89,13 +90,30 @@ function Skeleton() {
   );
 }
 
+/**
+ * LA LANGUE D'INTERFACE CHANGE À CHAUD (#5563). Chaque libellé lit le catalogue
+ * de façon SYNCHRONE au rendu (`translate`, #6206) : un changement de langue ne
+ * se voit donc qu'au prochain rendu de chaque écran. La racine s'abonne au
+ * changement et REMONTE l'arbre sous une nouvelle clé — l'adresse, le cache de
+ * requêtes et la session vivent hors de l'arbre et restent intacts, et le
+ * catalogue est déjà chargé quand la notification part
+ * (`setInterfaceLanguage`, `followBrowserInterfaceLanguage`). Aucun rechargement,
+ * là où iOS attend le relancement.
+ */
+function InterfaceLanguageRoot({ children }: { children: ReactNode }) {
+  const language = useSyncExternalStore(subscribeInterfaceLanguage, currentInterfaceLanguage, currentInterfaceLanguage);
+  return <Fragment key={language}>{children}</Fragment>;
+}
+
 const root = document.getElementById('root');
 if (!root) throw new Error('#root absent du document');
 
 createRoot(root).render(
   <StrictMode>
     <QueryClientProvider client={appQueryClient}>
-      <Router wrap={(screen) => <Shell><SessionGate>{screen}</SessionGate></Shell>} skeleton={<Skeleton />} />
+      <InterfaceLanguageRoot>
+        <Router wrap={(screen) => <Shell><SessionGate>{screen}</SessionGate></Shell>} skeleton={<Skeleton />} />
+      </InterfaceLanguageRoot>
     </QueryClientProvider>
   </StrictMode>,
 );

@@ -263,16 +263,25 @@ export const UNPREFIXED_MOUNT_DECISIONS: readonly UnprefixedMountDecision[] = [
   },
   {
     module: 'userDeletionsRoutes',
-    routeCount: 7,
+    // 13 = 7 alias LEGACY (reçoivent `basePath: '/api'`, jamais `prefix` —
+    // même raison que TUS) + 6 adresses CANONIQUES (#4317), composées en
+    // ABSOLU via `apiPath()` par le module lui-même, donc elles aussi hors du
+    // préfixage natif de Fastify. Seul `delete-for-me` (conversation) reste
+    // SANS successeur ici : sous `/api/v1` il collisionnerait avec
+    // `routes/conversations/delete-for-me.ts`, déjà monté — c'est la seule
+    // des sept adresses legacy dont le successeur vit dans un AUTRE module.
+    routeCount: 13,
     perimeter: 'sous-api',
     reason:
-      "Reçoit `basePath: '/api'`, jamais `prefix` — même raison que TUS. Reste sous `/api` non versionné parce " +
-      "que `DELETE …/conversations/:id/delete-for-me` collisionnerait, sous `/api/v1`, avec " +
-      '`routes/conversations/delete-for-me.ts` déjà monté : trancher laquelle des deux survit est une décision ' +
-      "produit, pas un rangement d'adresse.",
+      "Reçoit `basePath: '/api'`, jamais `prefix` — même raison que TUS. `delete-for-me` (conversation) reste " +
+      "sous `/api` non versionné : sous `/api/v1` il collisionnerait avec `routes/conversations/delete-for-me.ts` " +
+      'déjà monté là et plus complet — #4317 a tranché que celui-ci survit. Les six autres gestes ' +
+      "(restore-for-me, clear-history, delete/restore-for-me message, retrait en lot, liste des conversations " +
+      "supprimées) n'avaient ni doublon ni successeur : #4317 leur a donné une adresse canonique sous `apiPath()`, " +
+      'enregistrée EN PLUS de leur alias `/api` — jamais à sa place.',
     decisionAt:
-      'src/routes/user-deletions.ts (`UserDeletionsRoutesOptions`) et le commentaire du montage dans ' +
-      'src/route-registration.ts ; sept entrées `known-gap` dans ' +
+      'src/routes/user-deletions.ts (`UserDeletionsRoutesOptions`, § « Ce qui RESTAIT — soldé ») et le ' +
+      'commentaire du montage dans src/route-registration.ts ; treize entrées `known-gap` dans ' +
       'src/__tests__/route-manifest/no-routes-outside-api-v1.ts.',
   },
   {

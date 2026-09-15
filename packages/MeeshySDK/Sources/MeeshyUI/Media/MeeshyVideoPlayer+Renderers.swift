@@ -34,6 +34,15 @@ internal struct _FlatRenderer: View {
         item.preferredForwardBufferDuration = player.performance.preferredForwardBufferDuration
         let queue = AVQueuePlayer(playerItem: item)
         queue.isMuted = true
+        /* UN LECTEUR EN BOUCLE NE VEILLE PAS L'ÉCRAN (#6221, volet énergie).
+           `preventsDisplaySleepDuringVideoPlayback` vaut `true` par DÉFAUT :
+           cette vignette muette, qui boucle indéfiniment dans chaque bulle,
+           carte de feed, commentaire et rangée Focal, empêchait l'écran de
+           s'éteindre tant qu'elle était montée. Personne ne « regarde » une
+           vignette silencieuse en boucle — c'est la définition d'un décor.
+           `RecentMediaStrip:900` et `AttachmentQuickLookPreview:50` le
+           posaient déjà ; ce site, le plus instancié des six, ne l'avait pas. */
+        queue.preventsDisplaySleepDuringVideoPlayback = false
         queue.automaticallyWaitsToMinimizeStalling = player.performance.waitsToMinimizeStalling
         looper = AVPlayerLooper(player: queue, templateItem: item)
         avPlayer = queue

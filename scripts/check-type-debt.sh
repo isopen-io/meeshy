@@ -230,14 +230,34 @@ NC='\033[0m'
 # une amelioration s'enregistre a sa valeur MESUREE, jamais a zero : ecrire zero
 # n'enregistre pas un progres, il affirme une fin.
 #
-# 1144 -> 1128 le 2026-09-12 (#6203). `1b2e6057` (#6192) a fait porter
-# `createdAt`/`updatedAt` par la fabrique de test du sujet du modal admin,
-# retirant 16 erreurs sans resserrer cette valeur — le cliquet est reste rouge
-# sur `dev` depuis ce commit (« AMELIORATION NON ENREGISTREE »).
+# 1144 → 1128 le 2026-09-12, et l'effet est ENTIÈREMENT attribué.
 #
-# Ancrage : CI (run 34700349484, job « Quality (bun) », tete e7c8916a — la
-# base de dev au moment du releve) et mesure locale s'accordent exactement sur
-# 1128 ; aucun fichier d'`apps/web` n'est touche par ce commit-ci.
+# Le lot #6192 (l'animateur et ses sujets administrables) a fait descendre la
+# dette de seize erreurs, et son propre commit le DIT : `1b2e6057db` —
+# « la fabrique de sujet du modal porte createdAt/updatedAt — la dette de types
+# descend de 1144 à 1128 ». Il a fait le progrès, l'a mesuré, et n'a pas resserré
+# le cliquet : c'est exactement la moitié que ce garde existe pour attraper, et
+# il l'a attrapée (run 34701896625, job « Quality (bun) »).
+#
+# CORROBORATION, parce que la leçon de l'épisode `WEB_BASELINE=0` ci-dessus
+# l'exige — un compte ne se corrobore jamais par lui-même. Trois sources
+# concordent, dont DEUX mesures indépendantes :
+#
+#   • la CI rend « AMÉLIORATION NON ENREGISTRÉE : 1128 erreurs, baseline 1144 » ;
+#   • ce script, relancé ici sur l'arbre à jour, rend le même 1128 (exit 1) ;
+#   • le commit qui a produit l'amélioration annonce la même arrivée, 1128.
+#
+# Les deux premières sont des mesures ; la troisième est une déclaration. Elle ne
+# compte que parce que les deux autres la confirment — dans l'autre sens, une
+# valeur annoncée par un commit et jamais remesurée est précisément ce qui a
+# produit le `WEB_BASELINE=0` de l'épisode précédent.
+#
+# QUATRIÈME source, apportée par #6203 : une session parallèle a diagnostiqué le
+# même rouge et resserré à la même valeur, ancrée sur un AUTRE run et une AUTRE
+# tête — run 34700349484, job « Quality (bun) », tête `e7c8916a`. Deux relevés
+# CI indépendants, à des états différents de `dev`, rendent 1128 ; c'est la
+# corroboration la plus forte que ce fichier ait enregistrée pour une baseline,
+# et elle est gardée alors même que le correctif, lui, faisait doublon.
 readonly WEB_BASELINE=1128
 
 # Le compilateur DU DÉPÔT, en chemin absolu — jamais `npx tsc`.

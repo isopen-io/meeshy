@@ -50,9 +50,29 @@ function isTwoFactorResponse(data: LoginResponseData): data is LoginTwoFactorDat
  * (#5218). Composée par `composeRegisterBody()` (`signup-form.ts`).
  */
 export type RegisterBody = {
-  readonly displayName: string;
+  /**
+   * ABSENT ⇒ la passerelle le DÉRIVE de la partie locale de l'adresse (#6441,
+   * `displayNameDepuisEmail`). La clé est OMISE, jamais posée à `''` : même
+   * raison que `password` ci-dessous — `displayNameProperty` porte
+   * `minLength: 1`, une chaîne vide serait refusée.
+   */
+  /**
+   * Le pseudo que l'écran MONTRE et donc ENVOIE (#6479). `resoudreUsername`
+   * (`registration.service.ts`) l'emploie tel quel — la passerelle ne génère
+   * que si la clé est ABSENTE. Une collision devient alors un refus
+   * `USERNAME_TAKEN` servi avec trois pseudos libres, jamais un renommage
+   * silencieux.
+   */
+  readonly username?: string;
+  readonly displayName?: string;
   readonly email: string;
-  readonly password: string;
+  /**
+   * ABSENT ⇒ le compte naît sans mot de passe (#6424), et sa seule porte est
+   * le lien magique. La clé est OMISE, jamais posée à `''` : la passerelle lit
+   * l'absence ; une chaîne vide serait une valeur, refusée par la borne de
+   * longueur — l'inscription échouerait dans le cas même qu'elle ouvre.
+   */
+  readonly password?: string;
   readonly phoneNumber?: string;
   readonly phoneCountryCode?: string;
   readonly systemLanguage?: string;
@@ -138,6 +158,39 @@ export type MagicLinkRequestData = { readonly expiresInSeconds?: number };
 /** `POST /auth/forgot-password` (`password-reset.ts:110-215`) — nominal SANS
  * `data`, erreur interne `{ message }` : aucun champ que ce client consulte. */
 export type ForgotPasswordData = { readonly message?: string } | undefined;
+
+/**
+ * `POST /auth/verify-email` (`magic-link.ts:307-364`, `AuthSchemas.verifyEmail`)
+ * — CE client n'envoie QUE la branche `code` (le champ à 6 chiffres de
+ * `EmailVerificationView`, jamais `token` : la validation par LIEN reste hors
+ * tranche, elle vit sur `/auth/magic-link/validate`). `alreadyVerified` +
+ * `verifiedAt` distinguent la branche « déjà vérifié » (magic-link.ts:349-354)
+ * d'une vérification neuve, sans que ce soit une erreur pour l'appelant.
+ */
+export type VerifyEmailData = {
+  readonly message: string;
+  readonly alreadyVerified?: boolean;
+  readonly verifiedAt?: string;
+};
+
+/** `POST /auth/resend-verification` (`magic-link.ts:377-416`) — toujours 200
+ * générique, même garde de non-révélation que `forgotPassword`. */
+export type ResendVerificationData = { readonly message: string };
+
+/** `GET /auth/reset-password/verify-token` (`password-reset.ts:341-...`) —
+ * un jeton invalide/expiré rend `valid:false` en 200, PAS une erreur HTTP :
+ * la route existe pour que l'écran distingue ce cas AVANT de montrer le
+ * formulaire (§ description de la route). */
+export type VerifyResetTokenData = {
+  readonly valid: boolean;
+  readonly requires2FA?: boolean;
+  readonly expiresAt?: string;
+};
+
+/** `POST /auth/reset-password` (`password-reset.ts:221-...`) — AUCUNE
+ * écriture de magasin : un reset invalide toutes les sessions SERVEUR
+ * (`disconnectRevokedSessions`), il n'en établit aucune côté client. */
+export type ResetPasswordData = { readonly message: string };
 
 export function createAuthClient({ transport, store }: AuthDeps) {
   async function login(request: LoginRequest): Promise<ApiResult<LoginResponseData>> {
@@ -257,6 +310,46 @@ export function createAuthClient({ transport, store }: AuthDeps) {
     return result;
   }
 
+  /** `POST /auth/verify-email` (T-verify) — AUCUNE écriture de magasin : la
+   * session existe déjà, posée par `register()` au moment de l'inscription
+   * (#4264) ; vérifier l'e-mail ne (re)connecte personne. */
+  async function verifyEmail(request: { readonly email: string; readonly code: string }): Promise<ApiResult<VerifyEmailData>> {
+    return transport.request<VerifyEmailData>({ method: 'POST', path: '/api/v1/auth/verify-email', body: request });
+  }
+
+  /** `POST /auth/resend-verification` (T-verify) — même garde de non-révélation
+   * que `forgotPassword` : la passerelle répond 200 que le compte existe ou non. */
+  async function resendVerification(email: string): Promise<ApiResult<ResendVerificationData>> {
+    return transport.request<ResendVerificationData>({ method: 'POST', path: '/api/v1/auth/resend-verification', body: { email } });
+  }
+
+  /** `GET /auth/reset-password/verify-token` (T-reset) — le jeton voyage en
+   * QUERY STRING (méthode GET), jamais dans un corps. */
+  async function verifyResetToken(token: string): Promise<ApiResult<VerifyResetTokenData>> {
+    return transport.request<VerifyResetTokenData>({
+      method: 'GET',
+      path: `/api/v1/auth/reset-password/verify-token?token=${encodeURIComponent(token)}`,
+    });
+  }
+
+  /** `POST /auth/reset-password` (T-reset) — `twoFactorCode` suit la même
+   * discipline que `rememberDevice` de `login()` : omis si non fourni, jamais
+   * envoyé `undefined`. */
+  async function resetPassword(request: {
+    readonly token: string;
+    readonly newPassword: string;
+    readonly confirmPassword: string;
+    readonly twoFactorCode?: string;
+  }): Promise<ApiResult<ResetPasswordData>> {
+    const body = {
+      token: request.token,
+      newPassword: request.newPassword,
+      confirmPassword: request.confirmPassword,
+      ...(request.twoFactorCode !== undefined ? { twoFactorCode: request.twoFactorCode } : {}),
+    };
+    return transport.request<ResetPasswordData>({ method: 'POST', path: '/api/v1/auth/reset-password', body });
+  }
+
   async function logout(): Promise<ApiResult<{ message: string }>> {
     // Les jetons sont capturés AVANT le wipe : `SessionSnapshotStore.wipe()`
     // (Swift) est la PREMIÈRE opération d'un logout, et le rester ici oblige
@@ -279,7 +372,19 @@ export function createAuthClient({ transport, store }: AuthDeps) {
     return transport.request<{ message: string }>({ method: 'POST', path: '/api/v1/auth/logout', headers });
   }
 
-  return { login, register, completeTwoFactor, logout, requestMagicLink, validateMagicLink, forgotPassword };
+  return {
+    login,
+    register,
+    completeTwoFactor,
+    logout,
+    requestMagicLink,
+    validateMagicLink,
+    forgotPassword,
+    verifyEmail,
+    resendVerification,
+    verifyResetToken,
+    resetPassword,
+  };
 }
 
 /**
@@ -288,7 +393,19 @@ export function createAuthClient({ transport, store }: AuthDeps) {
  * seconde instance de l'un ou de l'autre.
  */
 export const auth = createAuthClient({ transport: httpTransport, store: sessionStore });
-export const { login, register, completeTwoFactor, logout, requestMagicLink, validateMagicLink, forgotPassword } = auth;
+export const {
+  login,
+  register,
+  completeTwoFactor,
+  logout,
+  requestMagicLink,
+  validateMagicLink,
+  forgotPassword,
+  verifyEmail,
+  resendVerification,
+  verifyResetToken,
+  resetPassword,
+} = auth;
 
 // Réexport pour un appelant qui a seulement besoin de composer une requête
 // bas niveau (recette manuelle § 7 de la spécification).

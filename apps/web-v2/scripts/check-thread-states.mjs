@@ -30,7 +30,10 @@ import { fileURLToPath } from 'node:url';
 
 import { launchChromium } from './lib/browser.mjs';
 import { checkThreadMedia } from './lib/check-media.mjs';
+import { checkThreadMediaGrid } from './lib/check-media-grid.mjs';
+import { checkViewerVideoTransport } from './lib/check-media-transport.mjs';
 import { checkMessageStates } from './lib/check-message-states.mjs';
+import { checkRealtimeEvents } from './lib/check-realtime-events.mjs';
 import { checkTypingVisibility } from './lib/check-typing-visibility.mjs';
 
 const DIST = join(fileURLToPath(new URL('..', import.meta.url)), 'dist');
@@ -1037,6 +1040,24 @@ await checkThreadMedia({ browser, BASE, expect, setScheme, AA_THRESHOLD, skin: '
 await checkThreadMedia({ browser, BASE, expect, setScheme, AA_THRESHOLD, skin: 'bulles', scheme: 'dark' });
 
 /**
+ * 8bis — LA GRILLE DE MÉDIAS ET SA VISIONNEUSE (#6169) — `lib/check-media-
+ * grid.mjs` : tuiles comptées, badge `+N`, décodage sans saut de mise en
+ * page, tap ⇒ visionneuse au bon index avec focus piégé et retour matériel
+ * qui ferme la couche sans quitter le fil.
+ */
+await checkThreadMediaGrid({ browser, BASE, expect, setScheme, skin: 'focal', scheme: 'light' });
+await checkThreadMediaGrid({ browser, BASE, expect, setScheme, skin: 'bulles', scheme: 'dark' });
+
+/**
+ * 8ter — LA BARRE DE LECTURE DE LA VISIONNEUSE (#6359) — `lib/check-media-
+ * transport.mjs` : la vraie vidéo de media-12 décodée par Chromium, la piste
+ * au couloir bas, la lecture qui suit la souris PENDANT le glissement, le muet
+ * et la vitesse qui agissent sans cacher le chrome, Échap qui ferme le menu et
+ * jamais la visionneuse. Un seul schéma : la barre n'a pas de variante claire.
+ */
+await checkViewerVideoTransport({ browser, BASE, expect, setScheme, scheme: 'dark' });
+
+/**
  * 9 — LES ÉTATS DU MESSAGE (#5936) — `lib/check-message-states.mjs`, QUATRE
  * runs : un badge se juge sur son propre fond, qui change avec la peau ET
  * le schéma (contraste AA mesuré dans chacun des quatre).
@@ -1047,6 +1068,14 @@ await checkMessageStates({ browser, BASE, expect, setScheme, AA_THRESHOLD, skin:
 await checkMessageStates({ browser, BASE, expect, setScheme, AA_THRESHOLD, skin: 'bulles', scheme: 'dark' });
 
 await checkTypingVisibility({ browser, BASE, expect });
+
+/**
+ * 11 — LE FIL TEMPS RÉEL (#6171) — `conversation:updated`, `message:translation`
+ * et le roster multi-frappeurs, DEUX runs (clair/sombre), `lib/check-
+ * realtime-events.mjs`.
+ */
+await checkRealtimeEvents({ browser, BASE, expect, setScheme, AA_THRESHOLD, scheme: 'light' });
+await checkRealtimeEvents({ browser, BASE, expect, setScheme, AA_THRESHOLD, scheme: 'dark' });
 
 await browser.close();
 server.close();

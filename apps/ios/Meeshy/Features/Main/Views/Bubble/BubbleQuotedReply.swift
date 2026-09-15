@@ -23,12 +23,10 @@ import MeeshyUI
 ///
 /// Cette peau ne VIOLAIT pas la loi avant ce lot : elle n'offrait qu'une seule
 /// zone, et son nom n'a jamais ete tactile. Il lui manquait les zones 1 et 2 —
-/// un ECART, pas une infraction. Il est comble ici parce que cette peau est
-/// celle que voit TOUT LE MONDE : le programme beta naît eteint
-/// (`BetaFeaturesPreference`, defaut OFF), donc `readingModes` est OFF, donc
-/// `ReadingModeOrchestrator.resolveOrchestratorDecision` rend `.bubbles` des
-/// sa premiere branche. La rangee plate, ou le defaut a ete signale, est
-/// derriere le drapeau.
+/// un ECART, pas une infraction. Il est comble ici parce que cette peau etait,
+/// lors de ce lot, celle que voyait TOUT LE MONDE (le programme beta naissait
+/// eteint, donc les modes de lecture aussi). Depuis la sortie de beta
+/// (2026-09-14, #6482), Bulles est un choix parmi les modes de lecture.
 ///
 /// **La zone 3 vit chez l'HOTE, pas ici** — les trois hotes de ce composant
 /// (`BubbleStandardLayout.bubbleInnerContentBody`,

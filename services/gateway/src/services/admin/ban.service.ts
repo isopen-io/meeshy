@@ -24,6 +24,13 @@ export interface LiftBanParams {
  * `@db.ObjectId` sans relation Prisma (aucune contrainte de clé étrangère) :
  * ce sentinel — un ObjectId valide, tous zéros — ne désigne aucun `User`
  * réel, convention courante pour un acteur système en base MongoDB. #5527.
+ *
+ * Et la collision est STRUCTURELLEMENT impossible, pas seulement improbable :
+ * un `ObjectId` généré par MongoDB encode un timestamp non nul dans ses quatre
+ * premiers octets, ce qui exclut la valeur toute à zéro — aucun `User.id` réel
+ * ne peut la porter. (Argument repris d'une seconde implémentation de #5527,
+ * `claude/eager-planck-pbtl73`, à la fusion du 2026-09-13 : c'était la seule
+ * chose que cette branche disait mieux.)
  */
 export const SYSTEM_ACTOR_ID = '000000000000000000000000';
 

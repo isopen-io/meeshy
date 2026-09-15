@@ -21,7 +21,7 @@
       "authenticated-only": "Authentifié (onRequest/preHandler référence fastify.authenticate) sans requirePermission/requireHierarchy/requireSovereign détecté, donc S2 ou S3. Les deux ne se distinguent pas mécaniquement : l'appartenance à la ressource (S3) peut être vérifiée à l'intérieur du corps du handler, invisible depuis le serveur assemblé."
     }
   },
-  "routeCount": 560,
+  "routeCount": 567,
   "routes": [
     {
       "method": "DELETE",
@@ -631,6 +631,34 @@
       "path": "/api/v1/messages/:messageId",
       "module": "messageRoutes",
       "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/messages/:messageId/delete-for-me",
+      "module": "userDeletionsRoutes",
+      "mountPrefix": "",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/messages/bulk/delete-for-me",
+      "module": "userDeletionsRoutes",
+      "mountPrefix": "",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",
@@ -4079,6 +4107,20 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/user/deleted-conversations",
+      "module": "userDeletionsRoutes",
+      "mountPrefix": "",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/users/:id",
       "module": "userRoutes",
       "mountPrefix": "/api/v1",
@@ -6300,6 +6342,20 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/conversations/:conversationId/clear-history",
+      "module": "userDeletionsRoutes",
+      "mountPrefix": "",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/conversations/:conversationId/encryption",
       "module": "encryptionRoutes",
       "mountPrefix": "/api/v1",
@@ -6359,6 +6415,20 @@
       "path": "/api/v1/conversations/:conversationId/receipts",
       "module": "conversationReceiptsRoutes",
       "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/conversations/:conversationId/restore-for-me",
+      "module": "userDeletionsRoutes",
+      "mountPrefix": "",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",
@@ -6657,6 +6727,20 @@
       "path": "/api/v1/me/preferences/categories/reorder",
       "module": "anonyme~9",
       "mountPrefix": "/api/v1/me/preferences/categories",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/messages/:messageId/restore-for-me",
+      "module": "userDeletionsRoutes",
+      "mountPrefix": "",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",
@@ -6991,6 +7075,20 @@
     {
       "method": "POST",
       "path": "/api/v1/posts/impressions/batch",
+      "module": "anonyme~10",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/posts/media/:mediaId/caption/translate",
       "module": "anonyme~10",
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",

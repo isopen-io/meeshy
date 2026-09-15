@@ -425,6 +425,41 @@ const mutate = (world, apply) => {
   return copy;
 };
 
+/**
+ * LA VERSION QUE TOUS LES MANIFESTES ACCEPTERAIENT, DÉRIVÉE — jamais écrite en
+ * dur.
+ *
+ * La sonde « un retard déclaré qui a cessé de retarder » doit poser un override
+ * qu'AUCUN manifeste ne contredit, pour vérifier que le garde réclame alors le
+ * retrait du paquet de `OVERRIDES_LAGGING_BEHIND_THEIR_MANIFESTS`. Cette
+ * version était un littéral, `8.5.26` — exactement ce qu'`apps/web` déclarait
+ * le jour où la sonde a été écrite. Le jour où ce manifeste est passé à
+ * `^8.5.28`, `8.5.26` a cessé de le satisfaire : la sonde est devenue AVEUGLE,
+ * et le garde a perdu, en silence, le seul témoin qui surveillait sa propre
+ * liste de retards déclarés.
+ *
+ * Un littéral qui encode une portée du moment rend l'écart permanent et
+ * invisible (leçon 594). On dérive donc la version des manifestes, comme le
+ * garde dérive déjà tout le reste : le plancher le plus haut parmi les portées
+ * déclarées satisfait toutes les portées de la même ligne majeure.
+ */
+const versionEveryManifestWouldAccept = (world, name) => {
+  const floors = world.manifests
+    .flatMap(({ document }) =>
+      DEPENDENCY_FIELDS.flatMap((field) => {
+        const range = rangesAt(document, field)[name];
+        return range === undefined || !isInstallableRange(range) ? [] : [range];
+      }),
+    )
+    .map((range) => parseVersion(/^[\^~]/.test(range) ? range.slice(1) : range))
+    .filter((version) => version !== null);
+  const highest = floors.reduce(
+    (winner, version) => (winner === null || isAtLeast(version, winner) ? version : winner),
+    null,
+  );
+  return (highest ?? [0, 0, 0]).join('.');
+};
+
 const MUTATIONS = [
   [
     "un manifeste de workspace que le lock n'a jamais vu",
@@ -504,7 +539,10 @@ const MUTATIONS = [
     'un retard déclaré qui a cessé de retarder',
     (world) => {
       const root = world.manifests.find(({ directory }) => directory === '');
-      root.document.overrides = { ...root.document.overrides, postcss: '8.5.26' };
+      root.document.overrides = {
+        ...root.document.overrides,
+        postcss: versionEveryManifestWouldAccept(world, 'postcss'),
+      };
     },
     'overrides postcss ne contredit plus aucun manifeste',
   ],

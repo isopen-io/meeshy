@@ -234,29 +234,18 @@ Utilisateur: admin
 Mot de passe: [VOIR secrets/clear.txt]
 ```
 
-### 3. Tester MongoDB UI
+### 3. Tester MongoDB UI / Redis UI
+
+Plus routées par Traefik (#3640) — accès par tunnel SSH uniquement, aucun
+mot de passe applicatif :
 
 ```bash
-# Ouvrir dans le navigateur
-https://mongo.meeshy.me
-
-# Identifiants
-Utilisateur: admin
-Mot de passe: [VOIR secrets/clear.txt]
+ssh -L 8081:127.0.0.1:8081 -L 8082:127.0.0.1:8082 root@meeshy.me
+# puis, en local :
+# http://localhost:8081 (Mongo) / http://localhost:8082 (Redis)
 ```
 
-### 4. Tester Redis UI
-
-```bash
-# Ouvrir dans le navigateur
-https://redis.meeshy.me
-
-# Identifiants
-Utilisateur: admin
-Mot de passe: [VOIR secrets/clear.txt]
-```
-
-### 5. Tester l'application Meeshy
+### 4. Tester l'application Meeshy
 
 ```bash
 # Ouvrir dans le navigateur
@@ -268,7 +257,7 @@ https://meeshy.me
 3. atabeth / [VOIR secrets/clear.txt]
 ```
 
-### 6. Vérifier les logs
+### 5. Vérifier les logs
 
 ```bash
 # Logs Gateway (gestion des utilisateurs)

@@ -1,124 +1,55 @@
-import { useState } from 'react';
+import { Suspense, lazy, useState } from 'react';
 
 import { maskedAttachment } from '@meeshy/shared/utils/attachment-protection';
 
 import type { Attachment } from '@/lib/api/types';
 import { attachmentSrc } from '@/lib/api/media-url';
-import { electAudio, electDescription } from '@/lib/view/media';
-import { kindOf, waveformOf } from '@/lib/view/message';
-import { useAudioPlayback } from '@/lib/view/use-audio-playback';
+import { electAudio, type MediaCarrier } from '@/lib/view/media';
+import { partitionAttachments, type MediaGridFrame } from '@/lib/view/media-grid-layout';
+import { waveformOf } from '@/lib/view/message';
+import { useMediaPlayback } from '@/lib/view/use-media-playback';
+import { PLAYBACK_SPEEDS, seekFraction, speedLabel } from '@/lib/view/media-transport';
+import { activeSegmentIndex, segmentSeekTarget } from '@/lib/view/transcript-karaoke';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { READER_LOCALE } from '@/lib/reader';
-import { MEDIA_GRID_MAX_WIDTH, TRANSCRIPT_TEXT_OPACITY } from '@/lib/reading-mode/metrics';
+import { TRANSCRIPT_TEXT_OPACITY } from '@/lib/reading-mode/metrics';
 
 import { Glyph, GlyphSvg } from './glyph';
 import { MEDIA_GLYPHS } from './glyphs-media';
-import { THREAD_STATES_GLYPHS } from './glyphs-thread-states';
+import { MaskedAttachment } from './masked-attachment';
+import { MediaGrid } from './media-grid';
 
 /**
- * LES WIDGETS DE MÉDIA DU FIL (#5805) — SITE UNIQUE, partagé par `bubble.tsx`
- * et `focal-row.tsx` (rangée plate), extrait de `message-blocks.tsx`
- * (`Voice` :315-355, `Attachments` :357-421 avant ce lot — la RESPONSABILITÉ
- * change : « blocs de contenu d'un message » ≠ « widgets de média », que les
- * stories, le feed et les commentaires monteront aussi).
+ * LES WIDGETS DE MÉDIA DU FIL (#5805, redécoupé #6221 « la grille de
+ * médias ») — SITE UNIQUE, partagé par `bubble.tsx` et `focal-row.tsx`
+ * (rangée plate). `Attachments` est désormais le PARTITIONNEUR
+ * (`partitionAttachments`, miroir `BubbleContentBuilder.swift:221-247`) :
+ * `visual` (image | vidéo) monte `MediaGrid` (grille 2/3/4+, `media-
+ * grid.tsx` — ce fichier n'en connaît plus le détail), `audio` monte
+ * `VoiceAttachment` (ci-dessous, INCHANGÉ), `nonMedia` un fichier/lieu.
+ *
+ * `ImageTile`/`VideoFallback`/`MaskedAttachment` ont DÉMÉNAGÉ vers
+ * `media-grid.tsx` / `video-tile.tsx` / `masked-attachment.tsx` — ce fichier
+ * ne les redéfinit plus, il les ORCHESTRE.
+ *
+ * La visionneuse plein écran (`media-viewer.tsx`) est un CHUNK À LA
+ * DEMANDE : `lazy(() => import('./media-viewer'))`, monté SEULEMENT quand
+ * `openIndex !== null` — jamais un `import` statique depuis ce fichier, qui
+ * vit dans le socle du fil (`thread-*.js`, gardé par `measure-weight.mjs`).
  *
  * UNE IMAGE et UN VOCAL, dans la langue du LECTEUR : l'`alt`/la transcription
  * descend le Prisme (`servedTranscript`, `api/prism.ts`) et la PISTE audio
  * élue suit la langue du TEXTE déjà servi — jamais une seconde descente
- * (CLAUDE.md § Prisme, cycle 128 ; `resolveAudioTrack`). Un seul vocal joue à
- * la fois (`useAudioPlayback` → `audioCoordinator`).
+ * (CLAUDE.md § Prisme, cycle 128 ; `resolveAudioTrack`). Un seul média joue à
+ * la fois (`useMediaPlayback` → `mediaCoordinator`, partagé vocal/vidéo).
  *
- * HORS TRANCHE (issues compagnons, § 9 de la spécification #5805) : la
- * grille 2/3/4+ et son badge `+N`, la LECTURE vidéo (poster, `<video>`,
- * plein écran), la visionneuse plein écran, le karaoké segment par segment
- * et la vitesse, le carrousel multi-pistes — le site est prêt à les
- * recevoir, aucun ne les réclame ici.
- *
- * `kind === 'video'` REND depuis #6193 : `return null` n'est pas une mise
- * hors tranche, c'est une perte SILENCIEUSE — le message existe, son auteur
- * croit avoir envoyé quelque chose, et le lecteur ne voyait aucune trace.
- * `VideoFallback` sert un repli LISIBLE (glyphe, nom, durée si connue) ;
- * la lecture elle-même reste hors tranche, décidée à sa propre issue.
+ * HORS TRANCHE (issues compagnons, § 1.5/§3 de la spécification #6221) : la
+ * pellicule conversation-entière et ses trois actions (réagir/répondre/
+ * composer), le karaoké segment par segment et la vitesse, le carrousel
+ * multi-pistes, l'anneau de téléchargement.
  */
-
-function ImageTile({
-  attachment,
-  languages,
-  displayLanguage,
-  fallbackLanguage,
-}: {
-  readonly attachment: Attachment;
-  readonly languages: readonly string[];
-  readonly displayLanguage?: string;
-  readonly fallbackLanguage: string;
-}) {
-  // `electDescription`, jamais `electAudio` (revue #5805) : une image n'a pas
-  // de piste, et le site qui lui en rendait une lui remettait son propre PNG.
-  const described = electDescription({ attachment, readerLanguages: languages, displayLanguage, fallbackLanguage });
-  const hasDimensions = attachment.width !== undefined && attachment.height !== undefined;
-  const aspectRatio = hasDimensions ? `${attachment.width} / ${attachment.height}` : `${MEDIA_GRID_MAX_WIDTH} / 240`;
-  // `lang` est ABSENT ssi la langue servie est celle du document — jamais un
-  // attribut redondant sur du contenu déjà dans la langue de la page.
-  const lang = described.language !== READER_LOCALE ? described.language : undefined;
-  // L'ÉCHEC DE DÉCODAGE (`onError`) — `<img hidden>`, mais le glyphe et le
-  // libellé SERVI restent (table des états, § 6 de la spécification #5805) :
-  // le même repli d'accessibilité qu'une pièce SANS URL, jamais un silence.
-  const [failed, setFailed] = useState(false);
-  const showsFallbackLabel = attachment.fileUrl === '' || failed;
-
-  return (
-    <figure
-      data-attachment={attachment.id}
-      /* `relative` + enfants `absolute inset-0` (revue #5805) — PAS `grid`
-         avec deux enfants au même `col-start-1 row-start-1`, qui peignait le
-         glyphe de repli PAR-DESSUS une image pourtant décodée et opaque.
-         Un défaut de PEINTURE, invisible à toute propriété DOM (`hidden`,
-         `opacity`, `naturalWidth` étaient tous justes) : seul un
-         échantillonnage de pixels le voit — d'où le témoin (n) de
-         `scripts/lib/check-media.mjs`, sans lequel il reviendrait en silence.
-
-         LA CAUSE N'EST PAS LA GRILLE, c'est `opacity-40` SUR LE GLYPHE, et
-         c'est la règle qu'il faut retenir : une opacité < 1 crée un CONTEXTE
-         D'EMPILEMENT, peint à l'étape des contextes d'empilement — donc APRÈS
-         (au-dessus de) ses frères EN FLUX non positionnés, quel que soit
-         l'ordre du DOM. Isolé sur trois boîtes minimales (Chromium, pixel
-         central sur une image indigo `99,102,241`) :
-           grille + glyphe OPAQUE ........... 99,102,241 (l'image gagne)
-           grille + glyphe `opacity:.4` ..... 59,61,144  (le GLYPHE gagne)
-           deux `absolute` + `opacity:.4` ... 99,102,241 (l'image gagne)
-         Poser les DEUX enfants en `absolute` les remet dans la même couche,
-         où l'ordre du DOM tranche — l'`<img>`, postérieure, gagne. Reposer un
-         voile translucide sur un frère en flux le ferait remonter au-dessus,
-         ici comme sur n'importe quelle autre surface. */
-      className="relative max-w-full overflow-hidden rounded-media"
-      style={{
-        width: MEDIA_GRID_MAX_WIDTH,
-        aspectRatio,
-        // Jamais `bg-black/40` (valeur en dur, `targets/bulle.md` § 10) : un
-        // fond dérivé de l'accent de la conversation, faible opacité.
-        backgroundColor: 'color-mix(in srgb, var(--accent) 12%, transparent)',
-      }}
-      {...(showsFallbackLabel ? { role: 'img', 'aria-label': described.text } : {})}
-    >
-      {/* Le glyphe reste DERRIÈRE : fond de chargement ET repli d'erreur. */}
-      <Glyph name="image" size={40} className="absolute inset-0 m-auto opacity-40" />
-      {attachment.fileUrl === '' ? null : (
-        <img
-          data-attachment-image={attachment.id}
-          src={attachmentSrc(attachment.fileUrl)}
-          alt={described.text}
-          hidden={failed}
-          {...(lang !== undefined ? { lang } : {})}
-          {...(attachment.width !== undefined ? { width: attachment.width } : {})}
-          {...(attachment.height !== undefined ? { height: attachment.height } : {})}
-          loading="lazy"
-          decoding="async"
-          className="absolute inset-0 size-full object-cover"
-          onError={() => setFailed(true)}
-        />
-      )}
-    </figure>
-  );
-}
+const MediaViewer = lazy(() => import('./media-viewer'));
 
 /** [0..1] → pourcentage arrondi au DIXIÈME — `MediaConsumptionProgressBar.swift:23-41`. */
 const consumptionPercentOf = (fraction: number): number => Math.round(fraction * 1000) / 10;
@@ -140,7 +71,40 @@ function VoiceAttachment({
     displayLanguage,
     fallbackLanguage,
   });
-  const { status, progress, toggle, bind } = useAudioPlayback({ attachmentId: attachment.id });
+  // `tracksTime` est OPT-IN : sans lui `position`/`duration` restent à 0 et une
+  // tuile du fil ne paie rien. Le vocal en a besoin — le karaoké et le parcours
+  // au doigt lisent tous deux la position.
+  const { status, progress, toggle, bind, position, duration, seek, rate, setRate } =
+    useMediaPlayback({ attachmentId: attachment.id, tracksTime: true });
+  const uiLanguage = currentInterfaceLanguage();
+
+  /*
+   LE KARAOKÉ NE S'ALLUME QUE SUR LA LANGUE D'ORIGINE (#6306).
+
+   `Attachment.transcription.segments` horodate le texte ORIGINAL. Quand le
+   Prisme sert une TRADUCTION, les bornes ne décrivent plus le texte affiché :
+   surligner « segment 2 » y désignerait des mots qui ne correspondent à rien.
+   Un karaoké faux est pire qu'aucun karaoké — il affirme suivre la voix.
+
+   La garde compare donc la langue SERVIE à celle de la transcription. Le jour
+   où la passerelle horodatera aussi les traductions, c'est cette comparaison
+   qui s'ouvrira, pas le rendu.
+  */
+  /*
+   `AttachmentTranscription` est une UNION — audio, vidéo, document, image — et
+   seules les deux premières horodatent. Le typecheck l'a dit avant le rendu :
+   `Property 'segments' does not exist on type 'DocumentTranscription'`. On
+   n'élargit donc pas le type de la charge ; on interroge la forme, une fois,
+   à l'endroit qui en a besoin.
+  */
+  const transcription = attachment.transcription;
+  const timed =
+    transcription !== undefined && 'segments' in transcription ? transcription.segments : undefined;
+  const segments =
+    timed !== undefined && timed.length > 0 && transcript.language === transcription?.language
+      ? timed
+      : undefined;
+  const activeSegment = segments === undefined ? null : activeSegmentIndex(segments, position);
 
   const waves = waveformOf(attachment);
   // `duration` voyage en MILLISECONDES sur la charge du dépôt.
@@ -214,7 +178,39 @@ function VoiceAttachment({
             <Glyph name="fillPlay" size={13} className="text-white" />
           )}
         </button>
-        <span className="flex h-6 flex-1 items-center gap-px" aria-hidden>
+        {/* L'ONDE SE PARCOURT AU DOIGT (#6306) — elle était `aria-hidden` et
+            inerte : on voyait la progression sans pouvoir s'y déplacer.
+            `onPointerMove` déplace RÉELLEMENT l'écoute pendant le geste
+            (`AVAudioPlayer.currentTime` a son équivalent gratuit ici : poser
+            `currentTime` sur un `<audio>` ne coûte aucun décodage), ce que la
+            directive « gestes progressifs et annulables » exige — un `onEnded`
+            seul y est nommément interdit.
+            `role="slider"` plutôt qu'`aria-hidden` : ce qui a un effet doit être
+            atteignable au clavier et annoncé. */}
+        <span
+          role="slider"
+          tabIndex={0}
+          aria-label={translate(uiLanguage, 'media.audio.position')}
+          aria-valuemin={0}
+          aria-valuemax={Math.max(1, Math.round(duration))}
+          aria-valuenow={Math.round(position)}
+          className="flex h-6 flex-1 cursor-pointer items-center gap-px"
+          onPointerDown={(e) => {
+            e.currentTarget.setPointerCapture(e.pointerId);
+            const r = e.currentTarget.getBoundingClientRect();
+            seek(seekFraction({ clientX: e.clientX, left: r.left, width: r.width }) * duration);
+          }}
+          onPointerMove={(e) => {
+            if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+            const r = e.currentTarget.getBoundingClientRect();
+            seek(seekFraction({ clientX: e.clientX, left: r.left, width: r.width }) * duration);
+          }}
+          onKeyDown={(e) => {
+            if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+            e.preventDefault();
+            seek(Math.max(0, Math.min(duration, position + (e.key === 'ArrowRight' ? 5 : -5))));
+          }}
+        >
           {waves.map((h, i) => (
             <span
               key={i}
@@ -230,6 +226,19 @@ function VoiceAttachment({
         <span className="shrink-0 text-time tabular-nums">
           {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}
         </span>
+        {/* LA VITESSE (#6306) — un cycle, pas un menu : c'est le geste d'iOS
+            (`cycleSpeed`), et un vocal se réécoute plus vite bien plus souvent
+            qu'on ne choisit une vitesse précise. La loi des paliers est celle du
+            transport vidéo, partagée — deux échelles de vitesse dans la même app
+            seraient une jumelle divergente. */}
+        <button
+          type="button"
+          onClick={() => setRate(PLAYBACK_SPEEDS[(PLAYBACK_SPEEDS.indexOf(rate as 1) + 1) % PLAYBACK_SPEEDS.length] ?? 1)}
+          className="tap-target-22 shrink-0 rounded-chip px-1 text-time tabular-nums"
+          aria-label={translate(uiLanguage, 'media.audio.speed')}
+        >
+          {speedLabel(rate, uiLanguage)}
+        </button>
       </div>
 
       {transcript.text !== '' ? (
@@ -242,7 +251,25 @@ function VoiceAttachment({
           style={{ opacity: TRANSCRIPT_TEXT_OPACITY }}
           {...(lang !== undefined ? { lang } : {})}
         >
-          {transcript.text}
+          {segments === undefined
+            ? transcript.text
+            : segments.map((segment, i) => (
+                <span
+                  key={`${segment.startMs}-${i}`}
+                  onClick={() => {
+                    const target = segmentSeekTarget(segments, i);
+                    if (target !== null) seek(target);
+                  }}
+                  className="cursor-pointer"
+                  /* Le segment prononcé reprend sa pleine opacité ; les autres
+                     gardent celle du bloc. On ne CHANGE pas la couleur — un
+                     surlignage teinté rendrait la transcription illisible en
+                     schéma clair, où l'opacité fait déjà tout le contraste. */
+                  style={i === activeSegment ? { opacity: 1, fontWeight: 500 } : undefined}
+                >
+                  {segment.text}{' '}
+                </span>
+              ))}
         </p>
       ) : null}
 
@@ -270,92 +297,13 @@ function VoiceAttachment({
   );
 }
 
-/** `duration` en MILLISECONDES (même convention que `VoiceAttachment`) → `m:ss`. */
-const durationLabelOf = (durationMs: number | undefined): string | undefined => {
-  if (durationMs === undefined) return undefined;
-  const seconds = Math.round(durationMs / 1000);
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
-};
-
-/**
- * LE REPLI D'UNE PIÈCE VIDÉO (#6193) — la LECTURE (poster, `<video>`, plein
- * écran) reste hors tranche (§9 de #5805) ; ce widget dit seulement qu'une
- * vidéo EST là, avec ce que le dépôt en connaît déjà : son TYPE (le glyphe
- * + le libellé), sa DURÉE si l'attachement la porte, son NOM si l'auteur en
- * a un. `return null` perdait les trois en silence.
- */
-function VideoFallback({ attachment }: { readonly attachment: Attachment }) {
-  const duration = durationLabelOf(attachment.duration);
-
-  return (
-    <div className="flex items-center gap-2 py-1" data-attachment={attachment.id} data-video-fallback>
-      <GlyphSvg glyph={THREAD_STATES_GLYPHS.videoCamera} size={24} />
-      <span className="min-w-0 flex-1 truncate text-title">
-        {attachment.originalName !== '' ? attachment.originalName : 'Vidéo'}
-      </span>
-      <span className="shrink-0 text-time opacity-70 tabular-nums">
-        {duration ?? `${Math.round(attachment.fileSize / 1024)} Ko`}
-      </span>
-    </div>
-  );
-}
-
-/**
- * LE SUBSTITUT D'UNE PIÈCE MASQUÉE (#6189) — ce qu'on rend À LA PLACE du média.
- *
- * Ce qui ne sort PAS, et c'est la liste du cycle 125 : le fichier, son URL, sa
- * vignette, son NOM d'origine, sa TAILLE, sa DURÉE. « Une protection de contenu
- * se mesure sur tout ce que la charge TRANSPORTE, jamais sur sa seule chaîne. »
- *
- * Ce qui sort : le TYPE (une photo, un vocal, un fichier) et le fait qu'elle est
- * protégée. Le type seul ne dit rien du contenu et rend le substitut lisible —
- * c'est ce que fait la bannière serveur, qui sert « 👁️ 🖼️ ».
- *
- * TAILLE FIXE, jamais dérivée du ratio réel : réserver les dimensions vraies
- * éviterait un saut de mise en page (dimension 4), mais ferait sortir une mesure
- * de la pièce. Le carré est le choix fail-closed, et il ne saute pas non plus
- * puisqu'il ne dépend de rien qui arrive plus tard.
- *
- * PAS D'AFFORDANCE DE RÉVÉLATION dans ce lot : la fenêtre de 5 s d'iOS
- * (`FocalAttachmentBlock.swift`, `isRevealed`) suppose une consommation serveur
- * par PIÈCE que le web n'appelle pas encore. Un bouton qui ne révèle rien serait
- * un contrôle inerte — la loi 4 l'interdit. Suivi dans #6189.
- */
-function MaskedAttachment({ attachment }: { readonly attachment: Attachment }) {
-  const kind = kindOf(attachment);
-  const libelle = kind === 'audio' ? 'Vocal protégé' : kind === 'image' ? 'Photo protégée' : 'Pièce protégée';
-  const glyphe = kind === 'audio' ? 'microphone' : kind === 'image' ? 'image' : 'file';
-
-  return (
-    <div
-      data-protected-attachment="hidden"
-      role="img"
-      aria-label={libelle}
-      className="flex items-center justify-center gap-2 rounded-2xl"
-      style={{
-        width: MASKED_TILE_SIZE,
-        height: MASKED_TILE_SIZE,
-        maxWidth: '100%',
-        backgroundColor: 'color-mix(in srgb, var(--accent) 10%, transparent)',
-      }}
-    >
-      <span className="flex flex-col items-center gap-1" style={{ opacity: TRANSCRIPT_TEXT_OPACITY }}>
-        <Glyph name={glyphe} size={24} />
-        <Glyph name="eyeSlash" size={14} />
-        <span className="text-mini">{libelle}</span>
-      </span>
-    </div>
-  );
-}
-
-/** Le côté du substitut, en points — un carré, indépendant de la pièce. */
-const MASKED_TILE_SIZE = 140;
-
 export function Attachments({
   attachments,
   languages,
   displayLanguage,
   fallbackLanguage,
+  carrier,
+  mediaFrame,
 }: {
   readonly attachments: readonly Attachment[];
   /** Le prisme du lecteur — descendu pour l'`alt`/la transcription ET la piste audio. */
@@ -364,59 +312,66 @@ export function Attachments({
   readonly displayLanguage?: string;
   /** La langue de la pièce QUAND elle n'a pas de transcription — `message.originalLanguage`. */
   readonly fallbackLanguage: string;
+  /** Remis à la visionneuse plein écran (auteur, date, légende servie) — absent ⇒ aucun bloc auteur (loi 4). */
+  readonly carrier?: MediaCarrier;
+  /** La forme de la grille, DÉCLARÉE par l'hôte (revue #6169) : `box` en bulle, `tiles` en rangée plate. Obligatoire — un défaut muet ferait porter à l'une des peaux la forme de l'autre. */
+  readonly mediaFrame: MediaGridFrame;
 }) {
+  const { visual, audio, nonMedia } = partitionAttachments(attachments);
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+
   return (
     <>
-      {attachments.map((attachment, i) => {
-        // LA PIÈCE DÉCLARÉE PROTÉGÉE NE REND PAS SON MÉDIA (#6189, cycle 125).
-        //
-        // La protection du MESSAGE est gardée un cran plus haut — `bubble.tsx`
-        // et `focal-row.tsx` enveloppent tout le bloc de contenu dans
-        // `ProtectedContent`, attesté par gate depuis #6184. Mais une pièce
-        // porte ses PROPRES `isViewOnce` / `isBlurred` / `effectFlags`,
-        // indépendants de ceux du message : mesuré le 2026-09-12, une pièce à
-        // vue unique sur un message ordinaire rendait son `<img>` et l'URL du
-        // fichier en clair, pendant qu'iOS la retenait
-        // (`FocalAttachmentBlock.swift:130`).
-        //
-        // La question se pose PIÈCE PAR PIÈCE, jamais pour la première : une
-        // seule pièce déclarée masquée parmi cinq doit être la seule retenue.
-        if (maskedAttachment(attachment)) return <MaskedAttachment key={i} attachment={attachment} />;
+      {visual.length > 0 ? (
+        <MediaGrid
+          items={visual}
+          frame={mediaFrame}
+          languages={languages}
+          fallbackLanguage={fallbackLanguage}
+          onOpen={setOpenIndex}
+          {...(displayLanguage !== undefined ? { displayLanguage } : {})}
+        />
+      ) : null}
 
-        const kind = kindOf(attachment);
-        if (kind === 'audio') {
-          return (
-            <VoiceAttachment
-              key={i}
-              attachment={attachment}
-              languages={languages}
-              fallbackLanguage={fallbackLanguage}
-              {...(displayLanguage !== undefined ? { displayLanguage } : {})}
-            />
-          );
-        }
-        if (kind === 'image') {
-          return (
-            <ImageTile
-              key={i}
-              attachment={attachment}
-              languages={languages}
-              fallbackLanguage={fallbackLanguage}
-              {...(displayLanguage !== undefined ? { displayLanguage } : {})}
-            />
-          );
-        }
-        if (kind === 'file') {
-          return (
-            <div key={i} className="flex items-center gap-2 py-1">
-              <Glyph name="file" size={24} />
-              <span className="min-w-0 flex-1 truncate text-title">{attachment.originalName}</span>
-              <span className="text-time opacity-70">{Math.round(attachment.fileSize / 1024)} Ko</span>
-            </div>
-          );
-        }
-        return <VideoFallback key={i} attachment={attachment} />;
-      })}
+      {audio.map((attachment, i) =>
+        maskedAttachment(attachment) ? (
+          <MaskedAttachment key={`audio-${i}`} attachment={attachment} />
+        ) : (
+          <VoiceAttachment
+            key={`audio-${i}`}
+            attachment={attachment}
+            languages={languages}
+            fallbackLanguage={fallbackLanguage}
+            {...(displayLanguage !== undefined ? { displayLanguage } : {})}
+          />
+        ),
+      )}
+
+      {nonMedia.map((attachment, i) =>
+        maskedAttachment(attachment) ? (
+          <MaskedAttachment key={`file-${i}`} attachment={attachment} />
+        ) : (
+          <div key={`file-${i}`} className="flex items-center gap-2 py-1">
+            <Glyph name="file" size={24} />
+            <span className="min-w-0 flex-1 truncate text-title">{attachment.originalName}</span>
+            <span className="text-time opacity-70">{Math.round(attachment.fileSize / 1024)} Ko</span>
+          </div>
+        ),
+      )}
+
+      {openIndex !== null ? (
+        <Suspense fallback={null}>
+          <MediaViewer
+            items={visual}
+            startIndex={openIndex}
+            onClose={() => setOpenIndex(null)}
+            languages={languages}
+            fallbackLanguage={fallbackLanguage}
+            {...(displayLanguage !== undefined ? { displayLanguage } : {})}
+            {...(carrier !== undefined ? { carrier } : {})}
+          />
+        </Suspense>
+      ) : null}
     </>
   );
 }

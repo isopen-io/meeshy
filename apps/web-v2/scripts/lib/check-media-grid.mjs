@@ -1,0 +1,421 @@
+/**
+ * G1-G4 — LA GRILLE DE MÉDIAS 2/3/4+ ET SA VISIONNEUSE (#6169, § 5 étape c de
+ * la spécification « grille de médias »). EXTRAIT de `check-thread-states.mjs`
+ * dès la naissance (le même motif que `check-media.mjs`, § 5805) — l'hôte
+ * était déjà à 51 lignes du plafond dur de 1 200, chaque écran ajoute sa
+ * suite ici, jamais dans l'hôte.
+ *
+ * `expect`, `setScheme` sont REMIS par l'hôte, jamais redéfinis (leçon de
+ * `lib/check-summary.mjs` : deux compteurs de défauts rendraient un gate vert
+ * avec des échecs dedans). `waitForRowSettled` vient de `check-media.mjs` —
+ * EXPORTÉE là-bas, jamais recopiée ici : la même course (le virtualiseur
+ * corrige `scrollTop` pendant qu'il mesure les rangées voisines) menace
+ * n'importe quelle rangée du même fil.
+ *
+ * CORRECTION DE LA SPÉCIFICATION (mesurée, pas devinée) — G3 : « history.length
+ * égal au relevé » après Échap ne tient PAS dans un navigateur réel. Sondé
+ * (`launchChromium`, trois scénarios) : `history.back()` ne fait JAMAIS
+ * décroître `history.length` — il ne fait que REPOSITIONNER le curseur sur
+ * une entrée déjà comptée. `pushState` (ouverture) puis `back()` (Échap)
+ * laisse donc `history.length` à `relevé + 1`, pour toujours : c'est
+ * `use-back-dismiss.ts` qui le dit lui-même (« elle REND son entrée… pour
+ * qu'un retour ULTÉRIEUR ne soit pas avalé à la place ») — RENDUE, jamais
+ * EFFACÉE. L'invariant qui COMPTE, et qui est ici vérifié à la place du
+ * littéral erroné, est celui que cette phrase promet : un retour matériel
+ * ULTÉRIEUR ne consomme plus qu'UNE seule couche (jamais deux, jamais zéro).
+ */
+import { waitForRowSettled } from './check-media.mjs';
+
+const QUAD_ID = 'media-13';
+const OVERFLOW_ID = 'media-14';
+const TRIPLE_VIDEO_ID = 'media-12';
+
+async function scrollUntilMounted(page, scroller, id) {
+  for (let attempt = 1; attempt <= 40; attempt += 1) {
+    const mounted = await page.evaluate((mid) => document.querySelector(`[data-message="${mid}"]`) !== null, id);
+    if (mounted) return;
+    await scroller.evaluate((el) => {
+      el.scrollTop = 0;
+    });
+    await page.waitForTimeout(150);
+  }
+}
+
+/**
+ * Le pixel RÉELLEMENT composité à `(x, y)` du viewport — une capture 1 × 1
+ * décodée dans la page (même voie que `mesurerCoeurPeint` de
+ * `check-media.mjs`) : la forme d'une grille (un écart qui laisse voir le fond,
+ * un coin arrondi) ne se lit dans aucun style calculé, seulement à l'écran.
+ */
+async function paintedAt(page, x, y) {
+  const shot = await page.screenshot({ clip: { x: Math.floor(x), y: Math.floor(y), width: 1, height: 1 } });
+  return page.evaluate(async (data) => {
+    const bitmap = new Image();
+    await new Promise((ok, ko) => {
+      bitmap.onload = ok;
+      bitmap.onerror = ko;
+      bitmap.src = `data:image/png;base64,${data}`;
+    });
+    const canvas = document.createElement('canvas');
+    canvas.width = 1;
+    canvas.height = 1;
+    const context = canvas.getContext('2d');
+    context.drawImage(bitmap, 0, 0);
+    return Array.from(context.getImageData(0, 0, 1, 1).data.slice(0, 3));
+  }, shot.toString('base64'));
+}
+
+const INDIGO = [99, 102, 241];
+const BLACK = [0, 0, 0];
+const near = (rgb, target) => rgb.every((c, i) => Math.abs(c - target[i]) <= 6);
+
+export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, skin, scheme }) {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  await setScheme(context, scheme);
+  const page = await context.newPage();
+  await page.goto(`${BASE}/c/c-medias`, { waitUntil: 'load' });
+  await page.waitForSelector('[data-message]');
+
+  const scroller = page.locator('main#contenu');
+  await scrollUntilMounted(page, scroller, QUAD_ID);
+  await waitForRowSettled(page, QUAD_ID);
+
+  if (skin === 'bulles') {
+    await page.getByRole('button', { name: /Mode de lecture/ }).click();
+    await page.getByRole('menuitemradio', { name: /Bulles/ }).click();
+    await page.waitForTimeout(300);
+    await waitForRowSettled(page, QUAD_ID);
+  }
+
+  const rowOf = (id) => page.locator(`[data-message="${id}"]`);
+
+  // ===== G1 — la grille compte ses tuiles =====
+  const quadTileCount = await rowOf(QUAD_ID).locator('[data-media-tile]').count();
+  expect(quadTileCount === 4, `[${skin}/${scheme}] media-13 (4 images) rend 4 [data-media-tile] (obtenu ${quadTileCount})`);
+
+  const gridBox = await rowOf(QUAD_ID).locator('[data-media-grid]').first().boundingBox();
+  const quadRowBox = await rowOf(QUAD_ID).boundingBox();
+  expect(
+    gridBox !== null && Math.abs(gridBox.width - 300) <= 0.5,
+    `[${skin}/${scheme}] la boîte de la grille mesure 300px de large (obtenu ${gridBox?.width})`,
+  );
+  expect(
+    gridBox !== null && Math.abs(gridBox.height - 240) <= 0.5,
+    `[${skin}/${scheme}] la boîte de la grille mesure 240px de haut (obtenu ${gridBox?.height})`,
+  );
+  expect(
+    gridBox !== null && quadRowBox !== null && gridBox.x + gridBox.width <= quadRowBox.x + quadRowBox.width + 0.5,
+    `[${skin}/${scheme}] la grille ne déborde jamais de la rangée (${JSON.stringify({ gridBox, quadRowBox })})`,
+  );
+
+  await scrollUntilMounted(page, scroller, OVERFLOW_ID);
+  await waitForRowSettled(page, OVERFLOW_ID);
+  const overflowRow = rowOf(OVERFLOW_ID);
+  const overflowBadge = overflowRow.locator('[data-overflow]');
+  expect((await overflowBadge.count()) === 1, `[${skin}/${scheme}] media-14 (6 images) porte un badge [data-overflow]`);
+  expect(
+    (await overflowBadge.textContent()) === '+2',
+    `[${skin}/${scheme}] le badge dit « +2 » (6 pièces − 4 visibles) (obtenu ${await overflowBadge.textContent()})`,
+  );
+  const overflowTileCount = await overflowRow.locator('[data-media-tile]').count();
+  expect(overflowTileCount === 4, `[${skin}/${scheme}] media-14 rend 4 tuiles visibles (obtenu ${overflowTileCount})`);
+  const maskedTile = overflowRow.locator('[data-protected-attachment="hidden"]');
+  expect((await maskedTile.count()) === 1, `[${skin}/${scheme}] la 3ᵉ pièce (isBlurred) rend son substitut masqué`);
+  expect(
+    (await maskedTile.locator('img').count()) === 0,
+    `[${skin}/${scheme}] le substitut masqué ne rend AUCUN <img>`,
+  );
+
+  // ===== G2 — chaque tuile est décodée, aucune image perdue =====
+  //
+  // `naturalWidth` N'EST PAS LE BON TÉMOIN ICI (sondé, pas deviné) : dès
+  // qu'un `<img>` porte un `srcset` à descripteur de LARGEUR (`imageVariants`,
+  // D4 §1.4.4), le navigateur rapporte `naturalWidth` AJUSTÉ par la densité
+  // implicite (`largeur déclarée du candidat / largeur du créneau `sizes``),
+  // jamais la dimension réelle décodée. La fixture déclare `640w` pour un
+  // pixel-témoin RÉELLEMENT 1×1 ; avec `sizes="149px"` (la case d'une grille
+  // 4+), la densité calculée (~4,3) fait tomber `naturalWidth` à
+  // `round(1 / 4,3) = 0` — MESURÉ (trois sondes, `1×1 + srcset 640w` ⇒ 0,
+  // MÊME 1×1 SANS srcset ⇒ 1) — un vrai décodage réussi rendant un ZÉRO
+  // trompeur, jamais un défaut de `MediaGrid`. `drawImage` sur un canvas,
+  // lui, dessine les pixels RÉELLEMENT décodés quelle que soit la densité
+  // rapportée (sondé : le même élément à `naturalWidth: 0` peint l'indigo
+  // exact `99,102,241` une fois dessiné) — c'est ce que ce témoin vérifie :
+  // « aucune image perdue » se lit au PIXEL peint, pas à une métrique que la
+  // responsivité peut fausser sans qu'aucun octet ne soit perdu.
+  await rowOf(QUAD_ID).evaluate((el) => el.scrollIntoView({ block: 'center' }));
+  await waitForRowSettled(page, QUAD_ID);
+  const quadImages = rowOf(QUAD_ID).locator('img[data-attachment-image]');
+  const quadImageCount = await quadImages.count();
+  const paintedColours = [];
+  for (let i = 0; i < quadImageCount; i += 1) {
+    const colour = await quadImages.nth(i).evaluate(async (el) => {
+      if (typeof el.decode === 'function') await el.decode().catch(() => {});
+      await new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)));
+      const canvas = document.createElement('canvas');
+      canvas.width = 4;
+      canvas.height = 4;
+      const context = canvas.getContext('2d');
+      context.drawImage(el, 0, 0, 4, 4);
+      const [r, g, b] = context.getImageData(0, 0, 1, 1).data;
+      return [r, g, b];
+    });
+    paintedColours.push(colour);
+  }
+  expect(
+    paintedColours.length === 4 && paintedColours.every((rgb) => near(rgb, INDIGO)),
+    `[${skin}/${scheme}] les 4 images de media-13 peignent le pixel servi, aucune perdue (${JSON.stringify(paintedColours)})`,
+  );
+
+  /**
+   * « AUCUN SAUT AU CHARGEMENT » SE PROUVE SANS LES IMAGES (revue #6169). La
+   * première écriture comparait `top` avant/après une attente, sur des images
+   * DÉJÀ décodées (des data URI) : elle ne pouvait pas rougir. Une image non
+   * encore chargée ne contribue AUCUNE taille intrinsèque — on retire donc les
+   * `<img>` du rendu : si la hauteur de la RANGÉE bouge, c'est qu'elle
+   * dépendait des octets, et le fil sautera sur un réseau lent.
+   */
+  const rowHeights = await rowOf(QUAD_ID).evaluate(async (row) => {
+    const images = Array.from(row.querySelectorAll('img'));
+    const withImages = row.getBoundingClientRect().height;
+    images.forEach((img) => {
+      img.style.display = 'none';
+    });
+    await new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)));
+    const withoutImages = row.getBoundingClientRect().height;
+    images.forEach((img) => {
+      img.style.display = '';
+    });
+    await new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)));
+    return { withImages, withoutImages };
+  });
+  expect(
+    Math.abs(rowHeights.withImages - rowHeights.withoutImages) < 0.5,
+    `[${skin}/${scheme}] la hauteur de media-13 ne dépend pas de ses octets — aucun saut au chargement (${JSON.stringify(rowHeights)})`,
+  );
+
+  /**
+   * G5 — LA FORME DE LA GRILLE SUIT LA PEAU iOS (revue #6169). Deux sources
+   * Swift, deux formes : la BULLE pose UNE boîte noire arrondie
+   * (`BubbleStandardLayout.swift:814-817`, `.background(Color.black)` puis
+   * `.clipShape` sur la grille entière) ; la rangée PLATE arrondit CHAQUE case
+   * et ne peint rien entre elles (`FocalAttachmentBlock.swift:203-213`, le
+   * `clipShape` est sur la cellule, aucun fond de conteneur) — la capture
+   * Ref-Native `targets/thread.media-grid.light.png` montre les écarts au
+   * fond du fil. Se lit au PIXEL : l'écart entre les deux premières cases, et
+   * le coin intérieur bas-droit de la première.
+   */
+  await waitForRowSettled(page, QUAD_ID);
+  const leadingBox = await rowOf(QUAD_ID).locator('[data-media-tile]').nth(0).boundingBox();
+  const trailingBox = await rowOf(QUAD_ID).locator('[data-media-tile]').nth(1).boundingBox();
+  const shapeGrid = await rowOf(QUAD_ID).locator('[data-media-grid]').first().boundingBox();
+  const middleY = leadingBox.y + leadingBox.height / 2;
+  const gapColour = await paintedAt(page, (leadingBox.x + leadingBox.width + trailingBox.x) / 2, middleY);
+  const innerCornerColour = await paintedAt(page, leadingBox.x + leadingBox.width - 1, leadingBox.y + leadingBox.height - 1);
+  if (skin === 'bulles') {
+    expect(
+      near(gapColour, BLACK) && near(innerCornerColour, INDIGO),
+      `[${skin}/${scheme}] la bulle pose UNE boîte noire : écart noir, coin intérieur plein (écart ${gapColour}, coin ${innerCornerColour})`,
+    );
+  } else {
+    const backgroundColour = await paintedAt(page, shapeGrid.x - 8, middleY);
+    expect(
+      !near(gapColour, BLACK) && near(gapColour, backgroundColour),
+      `[${skin}/${scheme}] la rangée plate laisse l'écart au FOND du fil, jamais noir (écart ${gapColour}, fond ${backgroundColour})`,
+    );
+    expect(
+      !near(innerCornerColour, INDIGO),
+      `[${skin}/${scheme}] la rangée plate arrondit CHAQUE case : coin intérieur de la 1ʳᵉ hors média (coin ${innerCornerColour})`,
+    );
+  }
+
+  // ===== G4 — la vidéo en grille est un <video> avec poster =====
+  await scrollUntilMounted(page, scroller, TRIPLE_VIDEO_ID);
+  await waitForRowSettled(page, TRIPLE_VIDEO_ID);
+  const tripleRow = rowOf(TRIPLE_VIDEO_ID);
+  expect(
+    (await tripleRow.locator('[data-media-tile]').count()) === 3,
+    `[${skin}/${scheme}] media-12 (2 images + 1 vidéo) rend 3 [data-media-tile]`,
+  );
+  expect(
+    (await tripleRow.locator('video[poster]').count()) === 1,
+    `[${skin}/${scheme}] la vidéo de media-12 porte un poster, jamais un <video> vide`,
+  );
+
+  // ===== G3 — le tap ouvre la visionneuse au bon index, le focus est piégé, le retour la ferme =====
+  await rowOf(QUAD_ID).evaluate((el) => el.scrollIntoView({ block: 'center' }));
+  await waitForRowSettled(page, QUAD_ID);
+  const historyLengthBefore = await page.evaluate(() => window.history.length);
+  const secondTile = rowOf(QUAD_ID).locator('[data-media-tile]').nth(1);
+  await secondTile.click();
+  await page.waitForSelector('[data-media-viewer]');
+
+  const dialog = page.locator('[data-media-viewer]');
+  expect((await dialog.getAttribute('role')) === 'dialog', `[${skin}/${scheme}] la visionneuse porte role="dialog"`);
+  expect((await dialog.getAttribute('aria-modal')) === 'true', `[${skin}/${scheme}] la visionneuse porte aria-modal="true"`);
+  expect(
+    (await dialog.getAttribute('data-viewer-index')) === '1',
+    `[${skin}/${scheme}] la visionneuse s'ouvre sur l'index 1 (2ᵉ tuile) (obtenu ${await dialog.getAttribute('data-viewer-index')})`,
+  );
+  const rootInert = await page.evaluate(() => document.getElementById('root')?.hasAttribute('inert') ?? false);
+  expect(rootInert, `[${skin}/${scheme}] #root porte inert le temps de l'ouverture`);
+  const focusedIsClose = await page.evaluate(() => document.activeElement?.getAttribute('aria-label') === 'Fermer');
+  expect(focusedIsClose, `[${skin}/${scheme}] le focus initial est sur le bouton « Fermer »`);
+
+  const filmstripItems = dialog.locator('[data-filmstrip-item]');
+  expect((await filmstripItems.count()) === 4, `[${skin}/${scheme}] la pellicule compte 4 vignettes (media-13)`);
+  expect(
+    (await filmstripItems.nth(1).getAttribute('aria-current')) === 'true',
+    `[${skin}/${scheme}] la 2ᵉ vignette porte aria-current="true"`,
+  );
+
+  /**
+   * #6345 — LA GÉOMÉTRIE RÉELLE, AU NAVIGATEUR. `FILMSTRIP_RESERVED_HEIGHT`
+   * (80, border-box) était calculée et testée en pur mais consommée par
+   * PERSONNE : le couloir ne réservait que 70px (padding asymétrique). Deux
+   * mesures, dans le MÊME navigateur que celui qui composite les pixels —
+   * jamais un style calculé lu hors contexte (`getBoundingClientRect`, comme
+   * `check-floating-clearance.mjs`) :
+   * 1. la bande rend EXACTEMENT 80px (± 1 pour l'arrondi sous-pixel) ;
+   * 2. la page MÉDIA active ne descend jamais SOUS le haut de la bande — la
+   *    scène et la pellicule ne se recouvrent jamais.
+   */
+  const filmstripRect = await dialog.locator('[data-filmstrip]').evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    return { top: r.top, height: r.height };
+  });
+  expect(
+    Math.abs(filmstripRect.height - 80) < 1,
+    `[${skin}/${scheme}] la pellicule réserve 80px (FILMSTRIP_RESERVED_HEIGHT), obtenu ${filmstripRect.height}`,
+  );
+  const activePageBottom = await dialog.locator('[data-viewer-page][data-full-pixels="true"]').first().evaluate((el) => {
+    const inner = el.querySelector('img, video');
+    return (inner ?? el).getBoundingClientRect().bottom;
+  });
+  expect(
+    activePageBottom <= filmstripRect.top + 1,
+    `[${skin}/${scheme}] le média actif reste AU-DESSUS de la pellicule (bas média ${activePageBottom}, haut pellicule ${filmstripRect.top})`,
+  );
+
+  /**
+   * #6345 — DÉFILER LA PELLICULE À LA MAIN CHOISIT LE MÉDIA AFFICHÉ. Avant ce
+   * lot, seul le CLIC sur une vignette sélectionnait (témoin G3 ci-dessus) ;
+   * le défilement libre de la bande n'avait aucun effet retour sur la scène
+   * (`filmstripIndexAtPlayhead` calculée, jamais lue). Miroir
+   * `ConversationMediaFilmstrip` iOS 17+ (`scrollPosition(id:anchor:)`).
+   */
+  await dialog.locator('[data-filmstrip]').evaluate((el) => {
+    el.scrollLeft = 179; // filmstripIndexAtPlayhead(179, 4) === 3 (media-stage.test.ts)
+    el.dispatchEvent(new Event('scroll', { bubbles: false }));
+  });
+  await page.waitForFunction(() => document.querySelector('[data-media-viewer]')?.getAttribute('data-viewer-index') === '3');
+  expect(
+    (await filmstripItems.nth(3).getAttribute('aria-current')) === 'true',
+    `[${skin}/${scheme}] défiler la pellicule à la main jusqu'à l'index 3 pose aria-current sur la 4ᵉ vignette`,
+  );
+  // Restauré à l'index 1 (clic, chemin déjà éprouvé par G3) — le reste du témoin G3 suppose cet état,
+  // focus REMIS sur « Fermer » : le clic de restauration l'a déplacé sur la vignette.
+  await filmstripItems.nth(1).click();
+  await page.waitForFunction(() => document.querySelector('[data-media-viewer]')?.getAttribute('data-viewer-index') === '1');
+  await dialog.getByRole('button', { name: 'Fermer' }).focus();
+
+  // Shift+Tab depuis « Fermer » (le premier focalisable) revient au DERNIER
+  // (motif QUE le composant lui-même applique — `nextFocusIndex`, prouvé ici
+  // dans un vrai navigateur, jamais seulement en unitaire).
+  await page.keyboard.press('Shift+Tab');
+  const wrappedToLast = await page.evaluate(() => {
+    const dlg = document.querySelector('[data-media-viewer]');
+    const focusables = Array.from(dlg.querySelectorAll('button, [href], [tabindex]:not([tabindex="-1"])')).filter(
+      (el) => !el.hasAttribute('disabled'),
+    );
+    return focusables.length > 0 && document.activeElement === focusables[focusables.length - 1];
+  });
+  expect(wrappedToLast, `[${skin}/${scheme}] Shift+Tab depuis « Fermer » boucle sur le DERNIER focalisable (le piège)`);
+
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('[data-media-viewer]', { state: 'detached' });
+  const rootInertAfter = await page.evaluate(() => document.getElementById('root')?.hasAttribute('inert') ?? false);
+  expect(!rootInertAfter, `[${skin}/${scheme}] Échap retire inert de #root`);
+  const focusReturnedToTile = await page.evaluate(() => document.activeElement?.hasAttribute('data-media-tile') ?? false);
+  expect(focusReturnedToTile, `[${skin}/${scheme}] Échap restitue le focus à la tuile cliquée`);
+
+  const lengthAfterEscape = await page.evaluate(() => window.history.length);
+  // Voir la correction de spécification en tête de fichier : l'entrée poussée
+  // à l'ouverture est RENDUE (le curseur recule d'un cran), jamais EFFACÉE —
+  // `history.length` ne peut donc que rester à `relevé + 1`, pour toujours.
+  expect(
+    lengthAfterEscape === historyLengthBefore + 1,
+    `[${skin}/${scheme}] Échap REND son entrée : history.length reste à relevé+1 (relevé ${historyLengthBefore}, obtenu ${lengthAfterEscape})`,
+  );
+  const urlAfterEscape = new URL(page.url()).pathname;
+  expect(
+    urlAfterEscape === '/c/c-medias',
+    `[${skin}/${scheme}] Échap ferme la COUCHE, jamais l'écran (URL ${urlAfterEscape})`,
+  );
+
+  await context.close();
+
+  /**
+   * RETOUR MATÉRIEL/NAVIGATEUR, DANS UN CONTEXTE NEUF (sondé, pas deviné) —
+   * enchaîner un second `history.back()` RÉEL dans la MÊME page que celui
+   * d'Échap ci-dessus s'est révélé une COURSE : `history.back()` navigue de
+   * façon ASYNCHRONE au niveau du navigateur (pas seulement du DOM), et une
+   * réouverture (nouveau `pushState`) qui course cette navigation encore EN
+   * VOL fait parfois atterrir le `page.goBack()` suivant sur `about:blank`
+   * (mesuré : intermittent, un run sur deux). Un DEUXIÈME retour réel dans la
+   * MÊME page n'a rien à prouver que le premier ne prouve déjà ; l'isoler
+   * dans un contexte neuf (un seul aller-retour d'historique) élimine la
+   * course au lieu de la couvrir d'une attente de plus.
+   */
+  const backContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  await setScheme(backContext, scheme);
+  const backPage = await backContext.newPage();
+  await backPage.goto(`${BASE}/c/c-medias`, { waitUntil: 'load' });
+  await backPage.waitForSelector('[data-message]');
+  const backScroller = backPage.locator('main#contenu');
+  await scrollUntilMounted(backPage, backScroller, QUAD_ID);
+  await waitForRowSettled(backPage, QUAD_ID);
+  if (skin === 'bulles') {
+    await backPage.getByRole('button', { name: /Mode de lecture/ }).click();
+    await backPage.getByRole('menuitemradio', { name: /Bulles/ }).click();
+    await backPage.waitForFunction(() => typeof window.history.state?.backDismiss !== 'string');
+    await waitForRowSettled(backPage, QUAD_ID);
+  }
+  await backPage.locator(`[data-message="${QUAD_ID}"]`).evaluate((el) => el.scrollIntoView({ block: 'center' }));
+  await waitForRowSettled(backPage, QUAD_ID);
+  /**
+   * #6319 — l'entrée que le retour consomme est relevée À L'INSERTION de la
+   * visionneuse (l'observateur de mutations s'exécute juste après le commit),
+   * jamais après une attente : c'est l'historique que trouverait un retour
+   * tapé dans la première image. Une entrée posée par un effet passif
+   * (après peinture) laissait ce retour quitter le fil — `URL blank`.
+   */
+  await backPage.evaluate(() => {
+    window.__entryBeforeViewer = window.history.state?.backDismiss ?? null;
+    window.__entryAtViewerInsert = undefined;
+    const observer = new MutationObserver(() => {
+      if (document.querySelector('[data-media-viewer]') === null) return;
+      observer.disconnect();
+      window.__entryAtViewerInsert = window.history.state?.backDismiss ?? null;
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  });
+  await backPage.locator(`[data-message="${QUAD_ID}"] [data-media-tile]`).nth(1).click();
+  await backPage.waitForSelector('[data-media-viewer]');
+  const entries = await backPage.evaluate(() => ({
+    before: window.__entryBeforeViewer,
+    atInsert: window.__entryAtViewerInsert,
+  }));
+  expect(
+    typeof entries.atInsert === 'string' && entries.atInsert !== entries.before,
+    `[${skin}/${scheme}] la visionneuse est insérée AVEC son entrée d'historique — un retour dès la première image lui appartient (avant ${entries.before}, à l'insertion ${entries.atInsert})`,
+  );
+  await backPage.goBack();
+  await backPage.waitForSelector('[data-media-viewer]', { state: 'detached' });
+  const urlAfterGoBack = new URL(backPage.url()).pathname;
+  expect(
+    urlAfterGoBack === '/c/c-medias',
+    `[${skin}/${scheme}] un retour navigateur ferme la visionneuse SANS quitter le fil (URL ${urlAfterGoBack})`,
+  );
+  await backContext.close();
+}

@@ -22,7 +22,7 @@ struct ConversationActiveMember: Identifiable { // internal for cross-file exten
 }
 
 struct ConversationOverlayState {
-    var overlayMessage: Message? = nil
+    @Indirect var overlayMessage: Message? = nil
     /// Aperçu d'appui long en Focal : pixels de la cellule vivante + frame
     /// écran, capturés par le contrôleur au moment du geste. `nil` en mode
     /// bulles — l'overlay garde alors son `ThemedMessageBubble` historique.
@@ -44,14 +44,14 @@ struct ConversationOverlayState {
     /// Maximum de messages ET pièces jointes sélectionnables au total
     /// (retour porteur 2026-08-27, #4005).
     static let selectionCap = 100
-    var detailSheetMessage: Message? = nil
+    @Indirect var detailSheetMessage: Message? = nil
     /// Message whose call-detail sheet (transcript-aware, `CallSummaryDetailSheet`)
     /// is presented — separate from `detailSheetMessage`, which stays wired to
     /// `MessageMoreSheet` for regular messages.
-    var callDetailMessage: Message? = nil
+    @Indirect var callDetailMessage: Message? = nil
     var moreSheetInitialItem: MoreItem? = nil
     /// Message dont le picker d'emoji complet (réaction) est présenté.
-    var fullReactionPickerMessage: Message? = nil
+    @Indirect var fullReactionPickerMessage: Message? = nil
     var quickReactionMessageId: String? = nil
 
     /// Bubble cell frame (window coordinates) of the message whose
@@ -65,7 +65,7 @@ struct ConversationOverlayState {
     var deleteConfirmSelectionActive = false
     /// Message dont la feuille de partage système (`UIActivityViewController`)
     /// est présentée — action « Partager » du menu « Plus… ».
-    var shareMessage: Message? = nil
+    @Indirect var shareMessage: Message? = nil
     var showStoryViewer = false
     var storyViewerUserId: String? = nil
     var storyViewerGroupIndex: Int = 0
@@ -165,9 +165,8 @@ struct ConversationView: View {
     /// l'afficherait deux fois.
     var showsOwnConnectionBanner: Bool = false
     /// I-075 — override ÉPHÉMÈRE, JAMAIS persistant : item « Focal (bêta) » du
-    /// menu d'appui long de la liste (gardé par
-    /// `BetaFeaturesPreference.isEnabled`, préférence utilisateur défaut ON —
-    /// amendement produit 2026-08-16). `nil` (défaut) ⇒
+    /// menu d'appui long de la liste (retiré avec Focal iOS le 2026-08-18).
+    /// `nil` (défaut) ⇒
     /// `init` bit-à-bit identique à avant ce lot — SEUL le site d'appel qui
     /// lit `router.pendingForcedReadingMode` (RootView/iPadRootView) passe une
     /// valeur non-`nil`. Transmis tel quel à
@@ -266,7 +265,12 @@ struct ConversationView: View {
     /// Lecture/écriture depuis les handlers (send, mention, edit) via
     /// `composerText.text` — hors body, donc sans créer de dépendance.
     @State var composerText = ConversationComposerTextModel()
-    @StateObject var audioRecorder = AudioRecorderManager()
+    /// POSSÉDÉ, PAS OBSERVÉ (#6226) — `@State` et non `@StateObject` : le
+    /// vumètre publie vingt fois par seconde et la racine n'en lit aucune
+    /// valeur dans son `body`. Elle appelle des MÉTHODES, ce qui n'exige aucun
+    /// abonnement ; `ComposerAudioHost` est l'unique observateur. Même
+    /// dispositif que `composerText` deux lignes plus haut (#4105).
+    @State var audioRecorder = AudioRecorderManager()
     @State var scrollButtonAudioIsPlaying = false
     @StateObject var pendingAudioPlayer = AudioPlaybackManager()
     /// Composant unifié « Enregistrer » au niveau écran — sert l'action
@@ -979,6 +983,7 @@ struct ConversationView: View {
                         HapticFeedback.light()
                         mediaSaveCoordinator.requestSave(MediaSaveRequest(
                             kind: attachment.kind,
+                            origin: .transmitted,
                             remoteURLString: attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl,
                             suggestedFileName: attachment.originalName.isEmpty ? nil : attachment.originalName,
                             attachmentId: attachment.id.isEmpty ? nil : attachment.id
@@ -1341,203 +1346,33 @@ struct ConversationView: View {
 
     // MARK: - Body Content (extracted to help type-checker)
 
-    private var bodyContent: AnyView {
+    /// **La couche de la liste de messages, SORTIE du cadre de `bodyContent`** (#6213 bis).
+    ///
+    /// Mesuré sur appareil (`CrashStackDumper`, palmarès des cadres apparié
+    /// PAR ADRESSE de retour) : `bodyContent` occupait **552 Ko** d'un seul
+    /// cadre, sur une pile principale de 1008 Ko — et le tronc entier
+    /// (`body → bodyWithSheets → bodyWithCovers → bodyWithLifecycle →
+    /// bodyContent`) en occupait **847**. L'adresse fautive tombait 88 octets
+    /// sous le plancher de pile : page de garde, débordement franc.
+    ///
+    /// ## Pourquoi les six `AnyView` posés ici depuis 2026-08-17 n'ont rien changé
+    ///
+    /// Ils étaient posés EN LIGNE, sur la branche : `AnyView(uneBranche)`.
+    /// L'érasure a lieu APRÈS que le cadre a réservé la place du type
+    /// concret — elle borne ce qui SORT de l'expression, jamais ce qui a été
+    /// réservé pour la construire. En `-Onone`, un `ZStack` de quatorze
+    /// branches réserve la place de TOUTES, y compris celles qu'il
+    /// n'exécutera pas.
+    ///
+    /// Déplacer la branche dans SA propriété change le mécanisme, pas le
+    /// style : la construction se fait dans un cadre à elle, entré puis
+    /// quitté, et `bodyContent` ne voit plus passer que seize octets. Les
+    /// branches se SUCCÈDENT au lieu de s'ADDITIONNER.
+    ///
+    /// Cette branche-ci est la plus lourde du lot : ~340 lignes d'arguments
+    /// et de closures pour un représentable UIKit.
+    private var messageListLayer: AnyView {
         AnyView(
-        ZStack {
-            conversationBackground
-
-            // Cold-start skeleton: shown ONLY while the initial fetch is
-            // in flight AND no cached messages exist yet. Renders above
-            // the (empty) MessageListView so the layout stays stable
-            // when the first batch lands and the placeholder fades out.
-            if viewModel.paginationPhase.isBlockingSpinnerNeeded && viewModel.messages.isEmpty {
-                // AnyView : `bodyContent` — même débordement de pile Swift au
-                // décodage de mangled name que la chaîne header (commentaires
-                // sur `floatingHeaderSection` plus haut), cette fois porté par
-                // le nombre de branches conditionnelles du ZStack top-level
-                // (2026-08-17). Chaque branche erasée réduit le type composite
-                // que `bodyContent` doit résoudre au 1er rendu.
-                AnyView(
-                    messageSkeletonOverlay
-                        .transition(.opacity)
-                        .zIndex(1)
-                )
-            }
-
-            // WS-9 (F-088) — le mode `.summary` route vers un HÔTE DÉDIÉ
-            // (contrat §WS-9 : « le mode résumé a peut-être besoin d'un hôte
-            // dédié »), ADDITIF à ce ZStack — aucun site F-085/086bis
-            // (`MessageListView` et ses closures ci-dessous) n'est touché.
-            // `LivingSummaryHost` construit son propre `@StateObject` — ce
-            // site d'appel ne passe que des primitives, zéro `@State` neuf
-            // ici. `zIndex(80)` : au-dessus du fil/composer/scroll-to-bottom
-            // (≤ 60) et de `previewMode` (49), en-dessous du header flottant
-            // (100, toujours joignable) et de la barre d'erreur/quick-reaction
-            // (97/99, sans objet en mode résumé).
-            // Chantier Rivière iOS, lot 1 (2026-08-21) — le mode `.river` route
-            // vers un HÔTE DÉDIÉ, comme `.summary` : la géométrie vient de la
-            // loi partagée (`RiverLaneResolver`), le texte du Prisme (traduction
-            // préférée ou original), et un avis système n'est la voix de
-            // personne (`RiverConversationMapping`).
-            if readingModeController.mode == .river {
-                // `Color.clear.overlay { … }` plutôt que l'hôte nu : la Rivière
-                // est LARGE par nature (jusqu'à sept couloirs de 300 pt) et un
-                // `ScrollView` rend la taille IDÉALE de son contenu quand on ne
-                // lui propose rien — ce ZStack s'élargissait alors à ~2100 pt et
-                // CENTRAIT tous ses autres enfants dessus, en-tête compris
-                // (mesuré au simulateur : bouton « Retour » à x = −683, hors
-                // écran, malgré son `zIndex(100)`). Un `overlay` reçoit la
-                // taille de son hôte et ne la fait JAMAIS grandir : le
-                // débordement s'arrête ici.
-                AnyView(Color.clear.overlay(RiverConversationHost(
-                    messages: viewModel.messages,
-                    viewerId: viewModel.currentUserIdForView,
-                    // Îlot dynamique + bande de boutons de l'en-tête flottant
-                    // (`floatingHeaderSection`, zIndex 100) : la Rivière PINGLE
-                    // sa bande de couloirs en haut de son pane, elle doit donc
-                    // commencer SOUS l'en-tête — contrairement au fil, dont les
-                    // bulles ont le droit de défiler dessous.
-                    topInset: previewMode ? 0 : DeviceLayout.safeAreaTop + Self.riverHeaderClearance,
-                    // R-7 : la même réserve basse que le fil — le composeur
-                    // n'est jamais une zone où une bulle reste prise.
-                    bottomInset: composerHeight + 16 + (previewMode ? 0 : DeviceLayout.safeAreaBottom),
-                    // L2b/2b-7 : la frappe atteint le lecteur quel que soit
-                    // son mode — le pane Rivière est OPAQUE et couvrait la
-                    // cellule de frappe du Fil. Même source que le Fil
-                    // (`typingParticipants`, avec leur visage), même vue (`TypingIndicatorBubble`).
-                    //
-                    // ⚠️ Cette lecture n'est PAS vivante (#5961, suivi #5962).
-                    // Elle s'appuyait sur `typingObserver`, dont on a mesuré
-                    // qu'il observait le store d'un ViewModel jeté : le corps ne
-                    // repasse pas sur `typing:start`/`stop`, donc la Rivière
-                    // affiche le roster figé de son dernier rendu. Le correctif
-                    // est le même que pour la pastille de retour en bas —
-                    // `ConversationTypingRosterHost` — mais il se pose ici DANS
-                    // un `AnyView` imbriqué d'un corps déjà lourd, et se livre
-                    // à part pour ne pas mêler un risque de profondeur de type
-                    // à un correctif mesuré.
-                    typingParticipants: viewModel.typingParticipants,
-                    // R-5 : identité vivante — les MÊMES sources que le Fil
-                    // (`MessageListViewController` : présence par expéditeur,
-                    // anneau de story sauf pour soi, fiche par le routeur).
-                    presence: { message in PresenceManager.shared.presenceState(for: message.senderId) },
-                    storyRing: { message in
-                        message.isMe ? .none : storyViewModel.storyRingState(forUserId: message.senderId)
-                    },
-                    onOpenProfile: { user in
-                        if user.isAnonymous, let participantId = user.participantId, let conversationId = conversation?.id {
-                            router.participantProfileTarget = ParticipantProfileTarget(
-                                conversationId: conversationId,
-                                participantId: participantId
-                            )
-                        } else {
-                            router.deepLinkProfileUser = user
-                        }
-                    },
-                    onViewStory: { userId in
-                        overlayState.storyViewerUserId = userId
-                        overlayState.storyViewerSlideIndex = 0
-                        overlayState.storyViewerStartAtFirstUnviewed = true
-                        overlayState.showStoryViewer = true
-                    },
-                    // Lot 3 : mêmes retours au Fil que le Résumé — Script,
-                    // puis atterrissage sur le message (et le composeur en
-                    // mode réponse pour « Répondre »).
-                    onOpenInThread: { messageId in
-                        readingModeController.select(.script)
-                        scrollState.scrollToMessageId = messageId
-                        scrollState.scrollToMessageTrigger += 1
-                    },
-                    onReply: { messageId in
-                        readingModeController.select(.script)
-                        guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
-                        triggerReply(for: msg)
-                        scrollState.scrollToMessageId = messageId
-                        scrollState.scrollToMessageTrigger += 1
-                    },
-                    // #3901 — la Rivière ne rend jamais bulle par bulle
-                    // (`MessageListViewController.rendersThread`), donc ne
-                    // peut jamais faire avancer le curseur de lecture par le
-                    // chemin habituel (`seenIds`). Le curseur avance ici,
-                    // SANS jamais geler de `readAt` individuel, quand le
-                    // lecteur atteint le présent.
-                    onReachPresent: {
-                        viewModel.markCaughtUpFromSummaryOrRiver()
-                    },
-                    text: { message in
-                        viewModel.preferredTranslation(for: message.id)?.translatedContent ?? message.content
-                    }
-                )))
-                // Le pane monte JUSQU'AU bord physique haut : `topInset` porte
-                // déjà la safe area, et sans cela le fil (rendu dessous)
-                // réapparaissait dans la bande de la barre d'état — une
-                // deuxième conversation par-dessus la première.
-                .ignoresSafeArea(edges: .top)
-                .zIndex(80)
-                .transition(.opacity)
-            }
-
-            if readingModeController.mode == .summary {
-                // AnyView : même coupe que ci-dessus (contribue au débordement
-                // de pile de `bodyContent`, 2026-08-17).
-                AnyView(LivingSummaryHost(
-                    messages: viewModel.messages,
-                    viewerId: viewModel.currentUserIdForView,
-                    viewerUsername: AuthManager.shared.currentUser?.username,
-                    windowCoversUnread: !viewModel.hasOlderMessages,
-                    analysisProvider: isAnonymous ? nil : ConversationAnalysisService.shared,
-                    conversationId: viewModel.conversationId,
-                    isDark: isDark,
-                    onReplyToPerson: { entry in
-                        readingModeController.select(.script)
-                        guard let targetId = entry.evidenceMessageIds.first,
-                              let msg = viewModel.messages.first(where: { $0.id == targetId }) else { return }
-                        triggerReply(for: msg)
-                        scrollState.scrollToMessageId = targetId
-                        scrollState.scrollToMessageTrigger += 1
-                    },
-                    onOpenEpisode: { episode in
-                        readingModeController.select(.script)
-                        guard let targetId = episode.messageIds.first else { return }
-                        scrollState.scrollToMessageId = targetId
-                        scrollState.scrollToMessageTrigger += 1
-                    },
-                    onResumeThread: {
-                        readingModeController.select(.script)
-                        if let firstUnread = viewModel.messages.first(where: { !$0.isMe })?.id {
-                            scrollState.scrollToMessageId = firstUnread
-                            scrollState.scrollToMessageTrigger += 1
-                        }
-                    }
-                ))
-                // 2b-2 — le Résumé Vivant naissait VIDE quand il était le mode
-                // d'OUVERTURE. `LivingSummaryHost` construit son ViewModel dans
-                // l'autoclosure d'un `@StateObject` : elle n'est évaluée qu'à la
-                // CRÉATION de l'identité de vue, et le VM ne recompose jamais
-                // son digest. Or le fil s'ouvre souvent AVANT ses messages
-                // (cache puis réseau) — même moment d'ouverture que la Rivière,
-                // qui le traite par son empreinte.
-                //
-                // L'identité bascule EXACTEMENT une fois, au passage vide →
-                // peuplé : l'autoclosure se réévalue avec les messages, et rien
-                // d'autre ne bouge. En pratique une conversation ne redevient
-                // pas vide ; rien dans `viewModel.messages`
-                // (`@Published var messages: [Message] = []`) ne l'interdit
-                // formellement (F12, revue adversariale 2026-08-25) — si le
-                // fil redevenait vide (purge, rechargement raté, réouverture
-                // sur une fenêtre froide), l'hôte serait simplement RECONSTRUIT :
-                // coût borné, jamais un digest périmé affiché. Coût assumé
-                // par ailleurs : le `.task` d'enrichissement agent se rejoue
-                // une fois (no-op pour un invité).
-                //
-                // Ce n'est PAS `showsSkeleton` qui peut garder ce basculement :
-                // il tombe à `false` dès que la réponse agent arrive, donc avant
-                // la première population sur base froide.
-                .id(viewModel.messages.isEmpty)
-                .zIndex(80)
-                .transition(.opacity)
-            }
-
             // UIKit bridge powered by GRDB store (always available after eager init)
             MessageListView(
                 store: viewModel.messageStore,
@@ -1554,7 +1389,6 @@ struct ConversationView: View {
                 // 0 en preview, ni voile : hébergée dans une `.sheet` à détentes, déjà
                 // sous la status bar, la vue décalerait le flux dans le vide.
                 topInset: previewMode ? 0 : DeviceLayout.safeAreaTop,
-                chromeVisibility: previewMode ? .hidden : ThreadChromeFade.Visibility(header: !hidesEntireHeaderForScroll, composer: !hidesComposerChromeForScroll),
                 scrollToBottomTrigger: scrollState.scrollToBottomTrigger,
                 scrollToMessageId: scrollState.scrollToMessageId,
                 scrollToMessageTrigger: scrollState.scrollToMessageTrigger,
@@ -1871,6 +1705,209 @@ struct ConversationView: View {
             // compose dans `contentInset.top`), compensée de
             // `safeAreaBottom` au site d'appel — le repos est inchangé.
             .ignoresSafeArea(.container, edges: [.top, .bottom])
+        )
+    }
+
+    private var bodyContent: AnyView {
+        AnyView(
+        ZStack {
+            conversationBackground
+
+            // Cold-start skeleton: shown ONLY while the initial fetch is
+            // in flight AND no cached messages exist yet. Renders above
+            // the (empty) MessageListView so the layout stays stable
+            // when the first batch lands and the placeholder fades out.
+            if viewModel.paginationPhase.isBlockingSpinnerNeeded && viewModel.messages.isEmpty {
+                // AnyView : `bodyContent` — même débordement de pile Swift au
+                // décodage de mangled name que la chaîne header (commentaires
+                // sur `floatingHeaderSection` plus haut), cette fois porté par
+                // le nombre de branches conditionnelles du ZStack top-level
+                // (2026-08-17). Chaque branche erasée réduit le type composite
+                // que `bodyContent` doit résoudre au 1er rendu.
+                AnyView(
+                    messageSkeletonOverlay
+                        .transition(.opacity)
+                        .zIndex(1)
+                )
+            }
+
+            // WS-9 (F-088) — le mode `.summary` route vers un HÔTE DÉDIÉ
+            // (contrat §WS-9 : « le mode résumé a peut-être besoin d'un hôte
+            // dédié »), ADDITIF à ce ZStack — aucun site F-085/086bis
+            // (`MessageListView` et ses closures ci-dessous) n'est touché.
+            // `LivingSummaryHost` construit son propre `@StateObject` — ce
+            // site d'appel ne passe que des primitives, zéro `@State` neuf
+            // ici. `zIndex(80)` : au-dessus du fil/composer/scroll-to-bottom
+            // (≤ 60) et de `previewMode` (49), en-dessous du header flottant
+            // (100, toujours joignable) et de la barre d'erreur/quick-reaction
+            // (97/99, sans objet en mode résumé).
+            // Chantier Rivière iOS, lot 1 (2026-08-21) — le mode `.river` route
+            // vers un HÔTE DÉDIÉ, comme `.summary` : la géométrie vient de la
+            // loi partagée (`RiverLaneResolver`), le texte du Prisme (traduction
+            // préférée ou original), et un avis système n'est la voix de
+            // personne (`RiverConversationMapping`).
+            if readingModeController.mode == .river {
+                // `Color.clear.overlay { … }` plutôt que l'hôte nu : la Rivière
+                // est LARGE par nature (jusqu'à sept couloirs de 300 pt) et un
+                // `ScrollView` rend la taille IDÉALE de son contenu quand on ne
+                // lui propose rien — ce ZStack s'élargissait alors à ~2100 pt et
+                // CENTRAIT tous ses autres enfants dessus, en-tête compris
+                // (mesuré au simulateur : bouton « Retour » à x = −683, hors
+                // écran, malgré son `zIndex(100)`). Un `overlay` reçoit la
+                // taille de son hôte et ne la fait JAMAIS grandir : le
+                // débordement s'arrête ici.
+                AnyView(Color.clear.overlay(RiverConversationHost(
+                    messages: viewModel.messages,
+                    viewerId: viewModel.currentUserIdForView,
+                    // Îlot dynamique + bande de boutons de l'en-tête flottant
+                    // (`floatingHeaderSection`, zIndex 100) : la Rivière PINGLE
+                    // sa bande de couloirs en haut de son pane, elle doit donc
+                    // commencer SOUS l'en-tête — contrairement au fil, dont les
+                    // bulles ont le droit de défiler dessous.
+                    topInset: previewMode ? 0 : DeviceLayout.safeAreaTop + Self.riverHeaderClearance,
+                    // R-7 : la même réserve basse que le fil — le composeur
+                    // n'est jamais une zone où une bulle reste prise.
+                    bottomInset: composerHeight + 16 + (previewMode ? 0 : DeviceLayout.safeAreaBottom),
+                    // L2b/2b-7 : la frappe atteint le lecteur quel que soit
+                    // son mode — le pane Rivière est OPAQUE et couvrait la
+                    // cellule de frappe du Fil. Même source que le Fil
+                    // (`typingParticipants`, avec leur visage), même vue (`TypingIndicatorBubble`).
+                    //
+                    // ⚠️ Cette lecture n'est PAS vivante (#5961, suivi #5962).
+                    // Elle s'appuyait sur `typingObserver`, dont on a mesuré
+                    // qu'il observait le store d'un ViewModel jeté : le corps ne
+                    // repasse pas sur `typing:start`/`stop`, donc la Rivière
+                    // affiche le roster figé de son dernier rendu. Le correctif
+                    // est le même que pour la pastille de retour en bas —
+                    // `ConversationTypingRosterHost` — mais il se pose ici DANS
+                    // un `AnyView` imbriqué d'un corps déjà lourd, et se livre
+                    // à part pour ne pas mêler un risque de profondeur de type
+                    // à un correctif mesuré.
+                    typingParticipants: viewModel.typingParticipants,
+                    // R-5 : identité vivante — les MÊMES sources que le Fil
+                    // (`MessageListViewController` : présence par expéditeur,
+                    // anneau de story sauf pour soi, fiche par le routeur).
+                    presence: { message in PresenceManager.shared.presenceState(for: message.senderId) },
+                    storyRing: { message in
+                        message.isMe ? .none : storyViewModel.storyRingState(forUserId: message.senderId)
+                    },
+                    onOpenProfile: { user in
+                        if user.isAnonymous, let participantId = user.participantId, let conversationId = conversation?.id {
+                            router.participantProfileTarget = ParticipantProfileTarget(
+                                conversationId: conversationId,
+                                participantId: participantId
+                            )
+                        } else {
+                            router.deepLinkProfileUser = user
+                        }
+                    },
+                    onViewStory: { userId in
+                        overlayState.storyViewerUserId = userId
+                        overlayState.storyViewerSlideIndex = 0
+                        overlayState.storyViewerStartAtFirstUnviewed = true
+                        overlayState.showStoryViewer = true
+                    },
+                    // Lot 3 : mêmes retours au Fil que le Résumé — Script,
+                    // puis atterrissage sur le message (et le composeur en
+                    // mode réponse pour « Répondre »).
+                    onOpenInThread: { messageId in
+                        readingModeController.select(.script)
+                        scrollState.scrollToMessageId = messageId
+                        scrollState.scrollToMessageTrigger += 1
+                    },
+                    onReply: { messageId in
+                        readingModeController.select(.script)
+                        guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
+                        triggerReply(for: msg)
+                        scrollState.scrollToMessageId = messageId
+                        scrollState.scrollToMessageTrigger += 1
+                    },
+                    // #3901 — la Rivière ne rend jamais bulle par bulle
+                    // (`MessageListViewController.rendersThread`), donc ne
+                    // peut jamais faire avancer le curseur de lecture par le
+                    // chemin habituel (`seenIds`). Le curseur avance ici,
+                    // SANS jamais geler de `readAt` individuel, quand le
+                    // lecteur atteint le présent.
+                    onReachPresent: {
+                        viewModel.markCaughtUpFromSummaryOrRiver()
+                    },
+                    text: { message in
+                        viewModel.preferredTranslation(for: message.id)?.translatedContent ?? message.content
+                    }
+                )))
+                // Le pane monte JUSQU'AU bord physique haut : `topInset` porte
+                // déjà la safe area, et sans cela le fil (rendu dessous)
+                // réapparaissait dans la bande de la barre d'état — une
+                // deuxième conversation par-dessus la première.
+                .ignoresSafeArea(edges: .top)
+                .zIndex(80)
+                .transition(.opacity)
+            }
+
+            if readingModeController.mode == .summary {
+                // AnyView : même coupe que ci-dessus (contribue au débordement
+                // de pile de `bodyContent`, 2026-08-17).
+                AnyView(LivingSummaryHost(
+                    messages: viewModel.messages,
+                    viewerId: viewModel.currentUserIdForView,
+                    viewerUsername: AuthManager.shared.currentUser?.username,
+                    windowCoversUnread: !viewModel.hasOlderMessages,
+                    analysisProvider: isAnonymous ? nil : ConversationAnalysisService.shared,
+                    conversationId: viewModel.conversationId,
+                    isDark: isDark,
+                    onReplyToPerson: { entry in
+                        readingModeController.select(.script)
+                        guard let targetId = entry.evidenceMessageIds.first,
+                              let msg = viewModel.messages.first(where: { $0.id == targetId }) else { return }
+                        triggerReply(for: msg)
+                        scrollState.scrollToMessageId = targetId
+                        scrollState.scrollToMessageTrigger += 1
+                    },
+                    onOpenEpisode: { episode in
+                        readingModeController.select(.script)
+                        guard let targetId = episode.messageIds.first else { return }
+                        scrollState.scrollToMessageId = targetId
+                        scrollState.scrollToMessageTrigger += 1
+                    },
+                    onResumeThread: {
+                        readingModeController.select(.script)
+                        if let firstUnread = viewModel.messages.first(where: { !$0.isMe })?.id {
+                            scrollState.scrollToMessageId = firstUnread
+                            scrollState.scrollToMessageTrigger += 1
+                        }
+                    }
+                ))
+                // 2b-2 — le Résumé Vivant naissait VIDE quand il était le mode
+                // d'OUVERTURE. `LivingSummaryHost` construit son ViewModel dans
+                // l'autoclosure d'un `@StateObject` : elle n'est évaluée qu'à la
+                // CRÉATION de l'identité de vue, et le VM ne recompose jamais
+                // son digest. Or le fil s'ouvre souvent AVANT ses messages
+                // (cache puis réseau) — même moment d'ouverture que la Rivière,
+                // qui le traite par son empreinte.
+                //
+                // L'identité bascule EXACTEMENT une fois, au passage vide →
+                // peuplé : l'autoclosure se réévalue avec les messages, et rien
+                // d'autre ne bouge. En pratique une conversation ne redevient
+                // pas vide ; rien dans `viewModel.messages`
+                // (`@Published var messages: [Message] = []`) ne l'interdit
+                // formellement (F12, revue adversariale 2026-08-25) — si le
+                // fil redevenait vide (purge, rechargement raté, réouverture
+                // sur une fenêtre froide), l'hôte serait simplement RECONSTRUIT :
+                // coût borné, jamais un digest périmé affiché. Coût assumé
+                // par ailleurs : le `.task` d'enrichissement agent se rejoue
+                // une fois (no-op pour un invité).
+                //
+                // Ce n'est PAS `showsSkeleton` qui peut garder ce basculement :
+                // il tombe à `false` dès que la réponse agent arrive, donc avant
+                // la première population sur base froide.
+                .id(viewModel.messages.isEmpty)
+                .zIndex(80)
+                .transition(.opacity)
+            }
+
+            // UIKit bridge powered by GRDB store (always available after eager init)
+            // Sortie du cadre de `bodyContent` (#6213 bis) — voir son doc-comment.
+            messageListLayer
 
             // L'indicateur de frappe n'est PAS un overlay : c'est une vraie
             // cellule du flux de messages, rendue en dernier par
@@ -2201,47 +2238,33 @@ struct ConversationView: View {
         AnyView(floatingHeaderSectionBody)
     }
 
-    @ViewBuilder
+    /// Remplacé par la frontière NOMINALE `ConversationFloatingHeaderSection`
+    /// (#6213 bis) — ce cadre pesait **565 712 octets**, 55 % de la pile
+    /// principale, parce qu'en `-Onone` un appelant réserve la place du type
+    /// concret de CHAQUE branche `some View`, y compris celles qu'il
+    /// n'exécutera pas. Les quatre branches passent désormais en closures
+    /// `() -> AnyView` : elles se succèdent au lieu de s'additionner.
+    /// Mesure et raisonnement complets dans le doc-comment de la struct.
     private var floatingHeaderSectionBody: some View {
-        VStack {
-            if isAnonymous {
-                AnyView(anonymousHeaderBar)
-            } else if isTyping {
-                AnyView(typingHeaderBar)
-            } else {
-                // Oubliée lors de la coupe "leçon 5cdde93c4" (commentaire
-                // ci-dessus) : seule branche de ce VStack encore renvoyée en
-                // `some View` nu. `expandedHeaderBand` a depuis grossi (chip
-                // de mode de lecture, §WS-7/Focal) jusqu'à redevenir la
-                // branche la plus complexe — et donc la nouvelle cause du
-                // même débordement de pile au décodage de mangled name
-                // (2026-08-17, `ReadingModeController.decision` puis
-                // `__swift_instantiateConcreteTypeFromMangledNameV2`,
-                // toujours sous `expandedHeaderBand → … →
-                // readingModeAffordanceCluster`). Même traitement que ses
-                // branches sœurs.
-                // Focal/Script + défilement : le header entier glisse vers le
-                // bord HAUT en fondant et en revient (loi `hidesEntireHeader`,
-                // rendu `EdgeHiddenChrome`) — plus de démontage ; les touches
-                // passent au fil pendant l'escamotage (`allowsHitTesting`).
-                AnyView(expandedHeaderBand.hiddenTowardsEdge(hidesEntireHeaderForScroll, .top))
-            }
-
-            if headerState.showSearch {
-                AnyView(searchBar.transition(.move(edge: .top).combined(with: .opacity)))
-            }
-
-            Spacer()
-        }
-        .zIndex(100)
-        // Le mouvement est PUBLIÉ ici, consommé plus bas par les seuls
-        // `.hiddenWhileScrolling()` des grappes de boutons : le header garde
-        // son opacité, ses branches gardent leur type-erasure individuelle
-        // (note "leçon 5cdde93c4" au-dessus sur le crash de mangled name).
-        .scrollMotionActive(hidesHeaderActionsForScroll)
-        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: composerState.showOptions)
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isTyping)
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: headerState.showSearch)
+        ConversationFloatingHeaderSection(
+            isAnonymous: isAnonymous,
+            isTyping: isTyping,
+            showSearch: headerState.showSearch,
+            showOptions: composerState.showOptions,
+            hidesHeaderActions: hidesHeaderActionsForScroll,
+            anonymousBar: { AnyView(anonymousHeaderBar) },
+            typingBar: { AnyView(typingHeaderBar) },
+            // Focal/Script + défilement : le header entier glisse vers le bord
+            // HAUT en fondant et en revient (loi `hidesEntireHeader`, rendu
+            // `EdgeHiddenChrome`) — plus de démontage ; les touches passent au
+            // fil pendant l'escamotage (`allowsHitTesting`). Conservé DANS la
+            // closure : c'est la branche qu'il habille, pas la section.
+            expandedBand: { AnyView(expandedHeaderBand.hiddenTowardsEdge(hidesEntireHeaderForScroll, .top)) },
+            searchBar: { AnyView(searchBar.transition(.move(edge: .top).combined(with: .opacity))) }
+        )
+        // Cette animation-ci reste à l'HÔTE : sa valeur (`hidesEntireHeaderForScroll`)
+        // ne gouverne aucune branche de la section — elle accompagne
+        // l'escamotage déjà posé dans la closure `expandedBand`.
         .animation(.easeOut(duration: FocalMetrics.HiddenChrome.easeOut), value: hidesEntireHeaderForScroll)
     }
 
@@ -2300,25 +2323,29 @@ struct ConversationView: View {
     /// and crashed in `swift::SubstGenericParametersFromMetadata::buildDescriptorPath`.
     /// AnyView is a known escape hatch for this class of bug — its mangled
     /// name is a single fixed token, capping the chain depth.
+    /// **Frontière NOMINALE** — `ConversationExpandedHeaderBand` (#6194).
+    ///
+    /// Ce maillon était une propriété calculée (`expandedHeaderBandBody`) que
+    /// six `AnyView` successifs n'ont pas suffi à borner : c'est précisément
+    /// ici que la pile débordait, en résolvant le type de
+    /// `expandedHeaderMidContent`. Une struct `View` obtient son propre nœud
+    /// dans l'AttributeGraph, et le graphe déroule la pile avant d'évaluer son
+    /// `body` — une propriété calculée, jamais. Voir le doc-comment de la
+    /// struct pour la trace et le raisonnement complet.
     private var expandedHeaderBand: AnyView {
-        AnyView(expandedHeaderBandBody)
-    }
-
-    @ViewBuilder
-    private var expandedHeaderBandBody: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: MeeshySpacing.sm) {
-                ThemedBackButton(color: accentColor, compactMode: composerState.showOptions, unreadCount: viewModel.otherConversationsUnread) { HapticFeedback.light(); router.pop() }
-                expandedHeaderMidContent
-                headerAvatarView
-            }
-            .padding(.trailing, MeeshySpacing.sm)
-        }
-        .padding(.horizontal, composerState.showOptions ? MeeshySpacing.sm + 2 : 0)
-        .padding(.vertical, composerState.showOptions ? MeeshySpacing.sm - 2 : 0)
-        .background(expandedHeaderBackground)
-        .padding(.horizontal, composerState.showOptions ? MeeshySpacing.sm : MeeshySpacing.lg)
-        .padding(.top, MeeshySpacing.sm)
+        AnyView(ConversationExpandedHeaderBand(
+            showOptions: composerState.showOptions,
+            backButton: {
+                AnyView(ThemedBackButton(
+                    color: accentColor,
+                    compactMode: composerState.showOptions,
+                    unreadCount: viewModel.otherConversationsUnread
+                ) { HapticFeedback.light(); router.pop() })
+            },
+            midContent: { expandedHeaderMidContent },
+            avatar: { headerAvatarView },
+            background: { expandedHeaderBackground }
+        ))
     }
 
     /// Middle slot of the header band (between back button and avatar).
@@ -2327,19 +2354,16 @@ struct ConversationView: View {
     /// alongside the rest of the band produced an opaque return type that
     /// Swift's runtime metadata resolver couldn't materialize — `body` would
     /// crash at first render with a deep `swift_getTypeByMangledName` stack.
-    // AnyView : casse la récursion de type de `expandedHeaderBandBody` (crash
-    // stack-overflow du décodeur de métadonnées Swift au 1er rendu SUR DEVICE).
+    // Frontière NOMINALE — `ConversationHeaderMidContent` (#6194). L'`AnyView`
+    // posé ici en 2026-08 ne suffisait pas : c'est le getter de CE maillon que
+    // la trace du crash désigne, sous
+    // `__swift_instantiateConcreteTypeFromMangledNameV2`.
     private var expandedHeaderMidContent: AnyView {
-        if composerState.showOptions {
-            return AnyView(expandedHeaderTitleAndTags)
-        } else {
-            // Le bouton d'appel reste à côté de la recherche dans les 2 états
-            // (le collapse/expand ne bascule que la zone nom/tags).
-            return AnyView(HStack {
-                Spacer()
-                headerButtonsCluster
-            })
-        }
+        AnyView(ConversationHeaderMidContent(
+            showOptions: composerState.showOptions,
+            titleAndTags: { AnyView(expandedHeaderTitleAndTags) },
+            actionButtons: { headerButtonsCluster }
+        ))
     }
 
     /// Call + search buttons, grouped with zero extra spacing between them
@@ -2356,26 +2380,20 @@ struct ConversationView: View {
     /// `floatingHeaderSection`). Le retour, l'avatar et le titre ne la
     /// suivent pas — on doit pouvoir quitter la conversation et savoir où on
     /// est, même en plein défilement.
-    // AnyView : `some View` nu ici gardait la porte ouverte au même débordement
-    // que `expandedHeaderBand`/`expandedHeaderMidContent` (commentaires
-    // ci-dessus) — érasé un cran plus bas (le seul enfant
-    // `readingModeAffordanceCluster`) ne suffisait pas : l'APPELANT
-    // (`expandedHeaderMidContent`) doit quand même résoudre le type opaque
-    // COMPOSITE de `headerButtonsCluster` — TOUS ses enfants combinés,
-    // `headerCallButtons`/`expandedHeaderSearchButton` compris — avant de
-    // pouvoir appeler `AnyView(HStack { … headerButtonsCluster })` un cran
-    // plus haut. Seule l'érasure à LA DÉCLARATION de `headerButtonsCluster`
-    // coupe la chaîne au bon endroit (2026-08-17, même récursion
-    // `swift_getTypeByMangledName` malgré la première coupe).
+    // Frontière NOMINALE — `ConversationHeaderActionsCluster` (#6194).
+    //
+    // Le commentaire d'origine (2026-08-17) tenait le bon raisonnement : « érasé
+    // un cran plus bas ne suffisait pas — l'APPELANT doit quand même résoudre le
+    // type opaque COMPOSITE, TOUS ses enfants combinés ». Il en tirait le remède
+    // le plus proche, une érasure de plus. C'est exactement ce qu'un type
+    // NOMINAL supprime : son nom se substitue au sous-arbre entier dans le
+    // mangled name, donc le démangleur n'a plus à le parcourir.
     private var headerButtonsCluster: AnyView {
-        AnyView(
-            HStack(spacing: 0) {
-                headerCallButtons.layoutPriority(1)
-                expandedHeaderSearchButton
-                readingModeAffordanceCluster
-            }
-            .hiddenWhileScrolling()
-        )
+        AnyView(ConversationHeaderActionsCluster(
+            callButtons: { headerCallButtons },
+            searchButton: { expandedHeaderSearchButton },
+            readingModeCluster: { readingModeAffordanceCluster }
+        ))
     }
 
     /// Chip de mode + bouton Aa (§WS-7 travaux 3-4, arbitrage F-086bis) —
@@ -2633,6 +2651,7 @@ struct ConversationView: View {
                     HapticFeedback.light()
                     mediaSaveCoordinator.requestSave(MediaSaveRequest(
                         kind: attachment.kind,
+                        origin: .transmitted,
                         remoteURLString: attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl,
                         suggestedFileName: attachment.originalName.isEmpty ? nil : attachment.originalName,
                         attachmentId: attachment.id.isEmpty ? nil : attachment.id
@@ -2806,6 +2825,7 @@ struct ConversationView: View {
                 HapticFeedback.light()
                 mediaSaveCoordinator.requestSave(MediaSaveRequest(
                     kind: attachment.kind,
+                    origin: .transmitted,
                     remoteURLString: attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl,
                     suggestedFileName: attachment.originalName.isEmpty ? nil : attachment.originalName,
                     attachmentId: attachment.id.isEmpty ? nil : attachment.id

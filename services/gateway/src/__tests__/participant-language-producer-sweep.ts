@@ -145,6 +145,11 @@ export const CREATIONS_SANS_LANGUE: Readonly<Record<string, string>> = {
   'services/InitService.ts': [
     'le SEED de développement — des comptes fabriqués, jamais un lecteur réel.',
   ].join(' '),
+  'services/messaging/repairOrphanedMessageSenders.ts': [
+    'le TOMBSTONE « Compte supprimé » (#6501) — un expéditeur disparu que rien',
+    "ne relit : sans compte, inactif, jamais destinataire d'une traduction ;",
+    "sa langue n'a aucun lecteur, et en inventer une serait fabriquer un prisme.",
+  ].join(' '),
 };
 
 /** Ce qu'une écriture de participant fait de la colonne `language`. */

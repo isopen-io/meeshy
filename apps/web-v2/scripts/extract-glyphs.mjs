@@ -67,6 +67,22 @@ const OVERRIDES = {
    * seul lirait mal à 13-18 px sur le fond dégradé du bouton.
    */
   pause: join(CORE, 'fill/pause-fill.svg'),
+  /**
+   * `heart-fill` / `bookmark-fill` (#6278) — le cœur et le signet d'une carte
+   * du fil se peignent PLEINS quand le lecteur a posé le geste
+   * (`heart.fill` / `bookmark.fill`, `FeedPostCard.swift:946-947,1059-1095`).
+   * Le contour seul ne dirait pas l'état : c'est lui que `aria-pressed`
+   * annonce, et le pixel doit dire la même chose.
+   */
+  'heart-fill': join(CORE, 'fill/heart-fill.svg'),
+  'bookmark-fill': join(CORE, 'fill/bookmark-fill.svg'),
+  /**
+   * `coin-fill` (#6427) — la PIÈCE des Meeshes, PLEINE : à 18-20 px, à côté
+   * d'un solde en gras, le contour de `coin` se perd, et c'est la silhouette
+   * métallique qui doit dire « monnaie ». Même tracé que l'actif iOS
+   * `MeeshCoin`, pour que les deux plateformes montrent la même pièce.
+   */
+  'coin-fill': join(CORE, 'fill/coin-fill.svg'),
 };
 
 /**
@@ -152,6 +168,8 @@ const PROGRESSION = [
   'fire',
   'star',
   'medal',
+  // La pièce des Meeshes (#6427) : la médaille reste aux BADGES.
+  'coin-fill',
   'chat-text',
   'article',
   'camera',
@@ -278,7 +296,7 @@ emit({
  * `/forgot-password`, jamais dans le socle : ces trois glyphes ne servent
  * qu'a un visiteur SANS session, un chemin rare compare au fil.
  */
-const AUTH = ['envelope', 'magic-wand', 'arrow-clockwise'];
+const AUTH = ['envelope', 'magic-wand', 'arrow-clockwise', 'info', 'pencil-simple'];
 
 emit({
   ids: AUTH,
@@ -326,6 +344,25 @@ emit({
 });
 
 /**
+ * LE JEU D'ECRAN DE LA BARRE DE LECTURE DE LA VISIONNEUSE (#6359) — miroir
+ * des symboles de `VideoTransportControls.swift` : `speaker.wave.2.fill` /
+ * `speaker.slash.fill` (muet), `pip.enter` (image dans l'image) et
+ * `ellipsis` (le menu vitesse / image dans l'image). `pause` et `fill-play`
+ * restent la ou ils sont (`MEDIA_GLYPHS`, socle) : le chunk de la visionneuse
+ * les recoit deja, les dupliquer ici paierait leurs octets deux fois. Charge
+ * avec le chunk `media-viewer`, jamais dans le socle ni dans le chunk du fil.
+ */
+const MEDIA_TRANSPORT = ['speaker-high', 'speaker-slash', 'picture-in-picture', 'dots-three'];
+
+emit({
+  ids: MEDIA_TRANSPORT,
+  output: join(HERE, '../src/components/glyphs-media-transport.ts'),
+  constant: 'MEDIA_TRANSPORT_GLYPHS',
+  type: 'MediaTransportGlyphName',
+  role: "LE JEU D'ECRAN de la barre de lecture de la visionneuse (#6359) : charge avec le chunk media-viewer, jamais dans le socle.",
+});
+
+/**
  * LE JEU D'ECRAN DES ETATS DU MESSAGE (#5936) — miroir
  * `BubbleMetaBadges.swift` (transfere : `arrowshape.turn.up.right.fill`,
  * modifie : `pencil`), `LocationMessageView` (lieu : `mappin.and.ellipse`),
@@ -348,4 +385,346 @@ emit({
   constant: 'THREAD_STATES_GLYPHS',
   type: 'ThreadStatesGlyphName',
   role: "LE JEU D'ECRAN des etats du message (#5936) : transfere, modifie, lieu, citation de story, appel video, avis d'arrivee — charge avec le chunk du fil, jamais dans le socle.",
+});
+
+/**
+ * LE JEU D'ECRAN DES MENUS FLOTTANTS (#6104) — les quatre glyphes des deux
+ * boutons flottants et de leur echelle, miroir `RootMenuLadderEntry.swift` :
+ *
+ * | iOS | phosphor | pourquoi celui-la |
+ * |---|---|---|
+ * | `square.stack.fill` (le Flux) | `stack` | des plans empiles, la meme idee |
+ * | `sparkle.magnifyingglass` (Decouvrir) | `binoculars` | voir plus loin |
+ * | `person.3.fill` (Communautes) | `users-three` | TROIS personnes, comme iOS |
+ * | `gearshape.fill` (Reglages) | `gear` | — |
+ *
+ * `binoculars` plutot que `magnifying-glass` : phosphor ne publie pas la
+ * loupe a etincelles d'iOS, et la loupe NUE est deja le glyphe de la
+ * RECHERCHE dans cette application (barre de la liste). Deux sens pour un
+ * meme dessin, sur deux surfaces que l'utilisateur enchaine, est exactement
+ * la divergence que la dimension 6 nomme — les jumelles disent « chercher des
+ * GENS », ce que la loupe ne dit plus ici.
+ *
+ * `link-simple`, `bell`, `phone` et `user` — les quatre autres glyphes de
+ * l'echelle et du profil — restent au SOCLE, ou ils vivent deja : les
+ * dupliquer ici paierait leurs octets DEUX FOIS au meme demarrage, puisque le
+ * socle est toujours charge. C'est l'arbitrage que `composer-tray` a deja
+ * tranche dans ce fichier pour `image`/`file`/`microphone`/`x`.
+ */
+const FLOATING = ['stack', 'binoculars', 'users-three', 'gear'];
+
+emit({
+  ids: FLOATING,
+  output: join(HERE, '../src/components/glyphs-floating.ts'),
+  constant: 'FLOATING_GLYPHS',
+  type: 'FloatingGlyphName',
+  role: "LE JEU D'ECRAN des menus flottants (#6104) : charge avec le chunk des menus, jamais dans le socle.",
+});
+
+/**
+ * LE JEU D'ECRAN DU FIL DES PUBLICATIONS (#5893, #6104) — les cinq
+ * statistiques STATIQUES de `FeedPostCard` (aimer, commenter, repartager,
+ * enregistrer, partager), miroir `FeedPostCard.swift:976-1131`. Ce lot les
+ * rend en COMPTEURS, jamais en boutons (lecture seule, D-6) : les glyphes
+ * restent les memes qu'iOS, seul l'effet du geste change (aucun).
+ *
+ * `arrows-clockwise` pour repartager (`arrow.2.squarepath` cote iOS) : le
+ * mouvement circulaire est la meme idee, phosphor ne publie pas l'exact
+ * pictogramme SF Symbols. `chat-circle` (bulle nue) plutot que
+ * `chat-circle-text` (deja dans PROGRESSION, une bulle a lignes) : la carte
+ * de post n'a besoin que de la bulle, jamais du texte a l'interieur.
+ *
+ * `waveform` (deja dans PROGRESSION, mais un AUTRE chunk -- dupliquer ici
+ * evite de faire dependre le fil de la route progression) sert le repli
+ * plein cadre d'un media AUDIO (post ou reel) avant toute lecture. `caret-right`
+ * sert les DEUX fleches du carrousel de FeedPostCardCarousel -- `caret-left`
+ * N'Y ENTRE PAS : il est deja au SOCLE (`caretLeft`, retour de l'en-tete), le
+ * dupliquer paierait ses octets deux fois au meme demarrage.
+ *
+ * `monitor-play` (#6457) : le bouton « Lancer les Reels » de l'en-tete du fil,
+ * miroir de `play.rectangle.on.rectangle.fill` (`FeedView.swift`) -- un cadre
+ * d'ecran qui porte le triangle de lecture, la meme idee que le symbole iOS.
+ * Le lecteur des Reels relit ce MEME jeu (coeur, signet, partage, onde) plutot
+ * que d'en recopier les traces dans un jeu a lui.
+ */
+const FEED = ['heart', 'heart-fill', 'chat-circle', 'arrows-clockwise', 'bookmark', 'bookmark-fill', 'share-network', 'waveform', 'caret-right', 'monitor-play'];
+
+emit({
+  ids: FEED,
+  output: join(HERE, '../src/components/glyphs-feed.ts'),
+  constant: 'FEED_GLYPHS',
+  type: 'FeedGlyphName',
+  role: "LE JEU D'ECRAN du fil des publications (#5893) : les cinq statistiques de la carte de post, charge avec la route /feed, jamais dans le socle.",
+});
+
+/**
+ * LE JEU D'ECRAN DE LA CLOCHE (#6288) — les glyphes du rail de categories,
+ * miroir `NotificationCategory.icon` (`NotificationListView.swift:37-51`) :
+ *
+ * | iOS | phosphor |
+ * |---|---|
+ * | `circle.fill` (non lues) | `circle` |
+ * | `bubble.left.fill` (messages) | `chat-circle` |
+ * | `heart.fill` (reactions) | `heart` |
+ * | `at` (mentions) | `at` |
+ * | `hand.thumbsup.fill` (social) | `thumbs-up` |
+ * | `person.badge.plus` (contacts) | `user-plus` |
+ * | `person.3.fill` (groupes) | `users-three` |
+ * | `globe` (traductions) | `globe` |
+ * | `gear` (systeme) | `gear` |
+ *
+ * plus `trash` pour « Supprimer » dans le menu d'une ligne. `bell` (toutes),
+ * `phone` (appels) et `check` (marquer lue) restent au SOCLE, ou ils vivent
+ * deja. `heart`, `chat-circle`, `users-three`, `gear`, `globe` et `user-plus`
+ * existent aussi dans d'autres jeux d'ecran : ceux-la ne se chargent jamais
+ * avec la cloche, aucun octet n'est donc paye deux fois au meme demarrage.
+ */
+const NOTIFICATIONS = ['circle', 'chat-circle', 'heart', 'at', 'thumbs-up', 'user-plus', 'users-three', 'globe', 'gear', 'trash'];
+
+emit({
+  ids: NOTIFICATIONS,
+  output: join(HERE, '../src/components/glyphs-notifications.ts'),
+  constant: 'NOTIFICATIONS_GLYPHS',
+  type: 'NotificationsGlyphName',
+  role: "LE JEU D'ECRAN de la cloche (#6288) : le rail des categories et le menu d'une ligne, charge avec la route /notifications, jamais dans le socle.",
+});
+
+/**
+ * LE JEU D'ECRAN DU PROFIL (#6289) — miroir des symboles de `ProfileView.swift`
+ * et du bandeau de statistiques de `UserProfileSheet+DetailsTab.swift` :
+ *
+ * | iOS | phosphor |
+ * |---|---|
+ * | `pencil.circle.fill` (avatar) | `pencil-simple` |
+ * | `photo.fill` (banniere) | `camera` |
+ * | `person.text.rectangle.fill` (identite) | `identification-card` |
+ * | `text.quote` (bio) | `quotes` |
+ * | `at` (pseudo) | `at` |
+ * | `envelope.fill` (contact) | `envelope-simple` |
+ * | `globe` (langues) | `globe` |
+ * | `chart.bar.fill` (statistiques) | `chart-bar` |
+ * | `paperplane.fill` (messages) | `chat-circle` |
+ * | `calendar` (membre depuis, jours) | `calendar-blank` |
+ * | `person.badge.plus.fill` (demandes) | `user-plus` |
+ * | `chevron.forward` | `caret-right` |
+ *
+ * `user`, `phone`, `translate`, `trophy`, `users` et `x` restent au SOCLE.
+ */
+const PROFILE = [
+  'pencil-simple',
+  'camera',
+  'identification-card',
+  'quotes',
+  'at',
+  'envelope-simple',
+  'globe',
+  'chart-bar',
+  'chat-circle',
+  'calendar-blank',
+  'user-plus',
+  'caret-right',
+];
+
+emit({
+  ids: PROFILE,
+  output: join(HERE, '../src/components/glyphs-profile.ts'),
+  constant: 'PROFILE_GLYPHS',
+  type: 'ProfileGlyphName',
+  role: "LE JEU D'ECRAN du profil (#6289) : sections, contacts, langues, statistiques et entrees, charge avec la route /me, jamais dans le socle.",
+});
+
+/**
+ * LE JEU D'ECRAN DES REGLAGES (#5563) — miroir des symboles de `SettingsView.swift`
+ * et de `PrivacySettingsView.swift` :
+ *
+ * | iOS | phosphor |
+ * |---|---|
+ * | `person.circle.fill` (compte) | `user-circle` |
+ * | `shield.fill` (securite) | `shield-check` |
+ * | `person.crop.circle.badge.minus` (supprimer) | `user-minus` |
+ * | `eye.fill` (visibilite) | `eye` |
+ * | `circle.fill` (statut en ligne) | `circle` |
+ * | `keyboard` (indicateur de frappe) | `keyboard` |
+ * | `paintbrush.fill` (apparence) | `paint-brush` |
+ * | `circle.lefthalf.filled` / `sun.max` / `moon` (theme) | `circle-half` / `sun` / `moon` |
+ * | `globe` (langue de l'interface) | `globe` |
+ * | `bell.badge.fill` (notifications) | `bell-ringing` |
+ * | `speaker.wave.2.fill` (sons) | `speaker-high` |
+ * | `slider.horizontal.3` (plus d'options) | `sliders-horizontal` |
+ * | `externaldrive.fill` (donnees) | `hard-drives` |
+ * | `bubble.left` (messages) | `chat-text` |
+ * | `square.and.arrow.up.fill` (export) | `export` |
+ * | `wrench.and.screwdriver.fill` (outils) | `wrench` |
+ * | `info.circle.fill` (a propos) | `info` |
+ * | `doc.text.fill` (conditions) | `file-text` |
+ * | `hand.raised.fill` (politique) | `hand-palm` |
+ * | `sparkles` (version) | `sparkle` |
+ * | `rectangle.portrait.and.arrow.forward` (deconnexion) | `sign-out` |
+ * | lien vers le legacy (propre au web) | `arrow-square-out` |
+ * | `chevron.forward` | `caret-right` |
+ *
+ * `lock`, `clock`, `checks`, `translate`, `bell`, `image` et `trophy` restent au SOCLE.
+ */
+const SETTINGS = [
+  'user-circle',
+  'shield-check',
+  'user-minus',
+  'eye',
+  'circle',
+  'keyboard',
+  'paint-brush',
+  'circle-half',
+  'sun',
+  'moon',
+  'globe',
+  'bell-ringing',
+  'speaker-high',
+  'sliders-horizontal',
+  'hard-drives',
+  'chat-text',
+  'export',
+  'wrench',
+  'info',
+  'file-text',
+  'hand-palm',
+  'sparkle',
+  'sign-out',
+  'arrow-square-out',
+  'caret-right',
+];
+
+emit({
+  ids: SETTINGS,
+  output: join(HERE, '../src/components/glyphs-settings.ts'),
+  constant: 'SETTINGS_GLYPHS',
+  type: 'SettingsGlyphName',
+  role: "LE JEU D'ECRAN des reglages (#5563) : sections, bascules, theme, liens vers le legacy, charge avec la route /settings, jamais dans le socle.",
+});
+
+/**
+ * LE JEU D'ECRAN DES COMMUNAUTES (#6364) — miroir des symboles de
+ * `CommunityListView.swift`, `CommunityDetailView.swift` et
+ * `CommunityCreateView.swift` :
+ *
+ * | iOS | phosphor |
+ * |---|---|
+ * | `bubble.left.fill` (conversations d'une carte) | `chat-circle` |
+ * | `bubble.left.and.bubble.right.fill` (canaux du detail) | `chats-circle` |
+ * | `globe` (publique) | `globe` |
+ * | `plus.circle.fill` (creer) | `plus-circle` |
+ * | `person.3.fill` (etat vide) | `users-three` |
+ * | `xmark.circle.fill` (effacer la recherche) | `x-circle` |
+ * | `lock.shield.fill` / `eye.fill` (confidentialite a la creation) | `shield-check` / `eye` |
+ * | `chevron.forward` | `caret-right` |
+ *
+ * `lock`, `users`, `magnifyingGlass`, `caretLeft` et `warningCircle` restent au SOCLE.
+ */
+const COMMUNITIES = ['chat-circle', 'chats-circle', 'globe', 'plus-circle', 'users-three', 'x-circle', 'shield-check', 'eye', 'caret-right'];
+
+emit({
+  ids: COMMUNITIES,
+  output: join(HERE, '../src/components/glyphs-communities.ts'),
+  constant: 'COMMUNITIES_GLYPHS',
+  type: 'CommunitiesGlyphName',
+  role: "LE JEU D'ECRAN des communautes (#6364) : cartes, detail, recherche et creation, charge avec les routes /communities, jamais dans le socle.",
+});
+
+/**
+ * LE JEU D'ECRAN DU JOURNAL D'APPELS (#6362) — miroir des symboles de
+ * `CallsTab.swift` :
+ *
+ * | iOS | phosphor |
+ * |---|---|
+ * | `arrow.up.right` (appel emis) | `arrow-up-right` |
+ * | `arrow.down.left` (appel recu) | `arrow-down-left` |
+ * | `arrow.down.left` en rouge (appel manque) | `phone-x` — divergence assumee (D-61) : la direction ne se dit jamais par la couleur seule |
+ * | `video.fill` (appel video) | `video-camera` |
+ * | `phone.arrow.up.right` (etat vide) | `phone-outgoing` |
+ *
+ * `phone`, `caretLeft` et `warningCircle` restent au SOCLE.
+ */
+/**
+ * LA DÉCOUVERTE DE PERSONNES (#6363) — `PeopleDiscoveryView` et ses trois
+ * onglets : `person.badge.plus` (Demandes, Ajouter), `hand.raised.fill`
+ * (Bloqués), `envelope.fill` (inviter par e-mail), `paperplane` (état vide des
+ * envoyées), `person.2.slash` (état vide des reçues, rendu `user-check` barré
+ * par le sens plutôt que par un trait). Chargé avec la route /discover.
+ */
+const DISCOVER = ['user-plus', 'hand-palm', 'envelope-simple', 'paper-plane-tilt', 'user-check'];
+
+emit({
+  ids: DISCOVER,
+  output: join(HERE, '../src/components/glyphs-discover.ts'),
+  constant: 'DISCOVER_GLYPHS',
+  type: 'DiscoverGlyphName',
+  role: "LE JEU D'ECRAN de la decouverte de personnes (#6363) : onglets, ajout, blocage, invitation et etats vides, charge avec la route /discover, jamais dans le socle.",
+});
+
+const CALLS = ['arrow-up-right', 'arrow-down-left', 'phone-x', 'video-camera', 'phone-outgoing'];
+
+emit({
+  ids: CALLS,
+  output: join(HERE, '../src/components/glyphs-calls.ts'),
+  constant: 'CALLS_GLYPHS',
+  type: 'CallsGlyphName',
+  role: "LE JEU D'ECRAN du journal d'appels (#6362) : directions, type video et etat vide, charge avec la route /calls, jamais dans le socle.",
+});
+
+/**
+ * LE JEU D'ECRAN DE « MES LIENS » (#6361) — miroir des symboles de
+ * `LinksHubView.swift`, `ShareLinksView.swift`, `ShareLinkDetailView.swift` et
+ * `CreateShareLinkView.swift` :
+ *
+ * | iOS | phosphor |
+ * |---|---|
+ * | `link.badge.plus` (banniere, etat vide) | `link` |
+ * | `link` / `link.badge.minus` (lien actif / inactif) | `link-simple` (socle) / `link-break` |
+ * | `plus.circle.fill` (creer) | `plus-circle` |
+ * | `checkmark.circle.fill` (actifs) | `check-circle` |
+ * | `person.fill.badge.plus` (rejoints, utilisations) | `user-plus` |
+ * | `doc.on.doc` (copier) | `copy` |
+ * | `square.and.arrow.up` (partager) | `export` |
+ * | `pause.circle` / `play.circle` (desactiver / activer) | `pause-circle` / `play-circle` |
+ * | `infinity` (maximum) | `infinity` |
+ * | `bubble.left.and.bubble.right.fill` (section conversation) | `chats-circle` |
+ * | `tag.fill` (identite) | `tag` |
+ * | `person.badge.key.fill` (acces invites) | `key` (socle) |
+ * | `slider.horizontal.3` (permissions) | `sliders-horizontal` |
+ * | `gauge.with.dots.needle.bottom.50percent` (limites) | `gauge` |
+ * | `person.fill.checkmark` / `person.fill` / `envelope.fill` / `calendar` | `user-check` / `user` (socle) / `envelope-simple` / `calendar-blank` |
+ * | `bubble.left.fill` / `photo.fill` / `paperclip` / `clock.fill` | `chat-circle` / `image` (socle) / `paperclip` / `clock-counter-clockwise` |
+ * | `person.2.fill` / `clock.badge.xmark` (limites) | `users` (socle) / `hourglass` |
+ * | `chevron.forward` | `caret-right` |
+ */
+const LINKS = [
+  'link',
+  'link-break',
+  'plus-circle',
+  'check-circle',
+  'user-plus',
+  'copy',
+  'export',
+  'pause-circle',
+  'play-circle',
+  'infinity',
+  'chats-circle',
+  'tag',
+  'sliders-horizontal',
+  'gauge',
+  'user-check',
+  'envelope-simple',
+  'calendar-blank',
+  'chat-circle',
+  'paperclip',
+  'clock-counter-clockwise',
+  'hourglass',
+  'caret-right',
+];
+
+emit({
+  ids: LINKS,
+  output: join(HERE, '../src/components/glyphs-links.ts'),
+  constant: 'LINKS_GLYPHS',
+  type: 'LinksGlyphName',
+  role: "LE JEU D'ECRAN de Mes liens (#6361) : hub, liens de partage, detail et creation, charge avec les routes /links, jamais dans le socle.",
 });

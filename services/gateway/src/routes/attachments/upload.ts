@@ -11,6 +11,8 @@ import {
   sendForbidden,
   sendNotFound,
   sendInternalError,
+  sendPayloadTooLarge,
+  sendUnsupportedMediaType,
 } from '../../utils/response.js';
 
 const logger = enhancedLogger.child({ module: 'AttachmentUploadRoutes' });
@@ -102,6 +104,17 @@ export async function registerUploadRoutes(
             description: 'The share link this anonymous session was authenticated with no longer exists',
             ...errorResponseSchema
           },
+          // #6604 — un fichier dont le type déclaré ne correspond pas à son
+          // contenu réel, ou dont la taille dépasse la limite de sa
+          // catégorie, est un refus de DEMANDE : jamais un 500.
+          413: {
+            description: 'A file exceeds the size limit for its category',
+            ...errorResponseSchema
+          },
+          415: {
+            description: 'A file\'s declared media type does not match its content, or is not admitted',
+            ...errorResponseSchema
+          },
           500: {
             description: 'Internal server error',
             ...errorResponseSchema
@@ -187,6 +200,26 @@ export async function registerUploadRoutes(
             if (verdict.allowed === false) {
               return sendForbidden(reply, verdict.reason);
             }
+          }
+        }
+
+        // #6604 — même famille que #6557 : un refus de DEMANDE (type non
+        // admis, taille excessive) ne doit ni disparaître en silence
+        // (`uploadMultiple` avale les erreurs PAR FICHIER pour rester
+        // résilient à un échec de traitement isolé — ce n'est pas le même
+        // contrat qu'un refus D'ADMISSION, qui doit être vu par l'appelant)
+        // ni dégénérer en 500 générique si une exception nue s'échappait
+        // ailleurs. Validé AVANT tout octet écrit, pour tous les fichiers du
+        // lot : un seul fichier refusé refuse l'ENSEMBLE de la requête,
+        // plutôt que de publier une réponse 200 partielle qui ne dit pas ce
+        // qui manque (#6603).
+        for (const file of files) {
+          const validation = attachmentService.validateFile(file);
+          if (!validation.valid) {
+            if (validation.code === 'FILE_TOO_LARGE') {
+              return sendPayloadTooLarge(reply, validation.error);
+            }
+            return sendUnsupportedMediaType(reply, validation.error);
           }
         }
 

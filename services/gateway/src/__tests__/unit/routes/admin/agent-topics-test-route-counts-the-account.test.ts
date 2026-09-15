@@ -61,6 +61,7 @@ jest.mock('../../../../services/CacheStore', () => {
 });
 
 jest.mock('../../../../services/AgentHttpClient', () => ({
+  ...(jest.requireActual('../../../../services/AgentHttpClient') as object),
   AgentHttpClient: jest.fn().mockImplementation(() => ({
     invalidateCache: jest.fn<any>().mockResolvedValue({}),
   })),

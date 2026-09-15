@@ -117,6 +117,12 @@ function registeredUserRow(overrides: Record<string, unknown> = {}) {
     updatedAt: new Date('2026-08-01T00:00:00.000Z'),
     deviceLocale: null,
     profileCompletionRate: 80,
+    // #6424 — la ligne porte désormais un mot de passe NULLABLE, et
+    // `loadSecuritySummary` la relit pour en dériver `hasPassword`. Le poser
+    // ici plutôt que de laisser `undefined` rend le double fidèle à la
+    // colonne : un `undefined` dirait « pas de mot de passe » pour un compte
+    // qui en a un, et le témoin ci-dessous mesurerait le double, pas la loi.
+    password: '$2b$12$hash-de-test',
     ...overrides,
   };
 }
@@ -297,7 +303,7 @@ describe('GET /api/v1/me?fields=', () => {
 });
 
 describe('GET /api/v1/me?expand=security', () => {
-  it('ajoute { hasSignalKeys, signalRegistrationId, lastKeyRotation } — exactement la forme de GET /me/preferences/encryption', async () => {
+  it('ajoute { hasSignalKeys, signalRegistrationId, lastKeyRotation, hasPassword } — la forme de GET /me/preferences/encryption, plus le mot de passe (#6424)', async () => {
     const res = await app.inject({
       method: 'GET',
       url: `${PREFIXE_ME}?expand=security`,
@@ -308,7 +314,40 @@ describe('GET /api/v1/me?expand=security', () => {
       hasSignalKeys: true,
       signalRegistrationId: 4242,
       lastKeyRotation: '2026-03-04T05:06:07.000Z',
+      hasPassword: true,
     });
+  });
+
+  /**
+   * `hasPassword` (#6424) — la seule façon pour un client de savoir s'il doit
+   * proposer « définir un mot de passe » ou « changer le mot de passe ».
+   *
+   * Le second témoin est le plus important : le HASH ne doit jamais franchir
+   * la sérialisation. `fast-json-stringify` le retirerait faute d'être
+   * déclaré au schéma — mais compter sur une omission de schéma pour retenir
+   * un secret est le piège que le dépôt a déjà payé (cycle 84).
+   */
+  it('dit hasPassword=false pour un compte né d’une inscription par e-mail seul', async () => {
+    prisma.user.findUnique.mockResolvedValue(registeredUserRow({ password: null }));
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `${PREFIXE_ME}?expand=security`,
+      headers: { authorization: `Bearer ${signJwt()}` },
+    });
+
+    expect(res.json().data.user.security.hasPassword).toBe(false);
+  });
+
+  it('ne sert JAMAIS le hash — ni dans security, ni ailleurs dans la charge', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: `${PREFIXE_ME}?expand=security`,
+      headers: { authorization: `Bearer ${signJwt()}` },
+    });
+
+    expect(res.body).not.toContain('$2b$12$hash-de-test');
+    expect(res.json().data.user).not.toHaveProperty('password');
   });
 
   it("expand=security s'ajoute MÊME quand ?fields= ne le nomme pas — la source combine les deux (fields=id,username,displayName,avatar,role&expand=security)", async () => {
@@ -328,7 +367,7 @@ describe('GET /api/v1/me?expand=security', () => {
       url: `${PREFIXE_ME}?expand=security`,
       headers: { 'x-session-token': 'session-anonyme-1' },
     });
-    expect(res.json().data.user.security).toEqual({ hasSignalKeys: false, signalRegistrationId: null, lastKeyRotation: null });
+    expect(res.json().data.user.security).toEqual({ hasSignalKeys: false, signalRegistrationId: null, lastKeyRotation: null, hasPassword: false });
     expect(prisma.signalPreKeyBundle.findUnique).not.toHaveBeenCalled();
   });
 });

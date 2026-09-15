@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
+import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
+
 import type { Attachment, Message } from '@/lib/api/types';
 
 import { composeMessageLabel } from './message-a11y-label';
@@ -347,5 +349,63 @@ describe('composeMessageLabel — les états du lot (#5936)', () => {
     });
     expect(label).toContain('👍');
     expect(label).not.toContain('pouce levé');
+  });
+});
+
+/**
+ * LES EFFETS DÉCORATIFS (#6175, revue-correction défaut majeur 1) — même
+ * discipline que « modifié »/« épinglé » : le badge visuel
+ * (`EffectsIndicator`) est `aria-hidden`, ce segment est le SEUL endroit qui
+ * les prononce.
+ */
+describe('composeMessageLabel — les effets décoratifs (#6175)', () => {
+  test('aucun effet ⇒ aucun segment « effets »', () => {
+    const label = composeMessageLabel({
+      message: message({}),
+      isMine: false,
+      servedText: 'Bonjour',
+      delivery: null,
+      protection: 'standard',
+    });
+    expect(label).not.toContain('effets');
+  });
+
+  test('un bit de cycle de vie seul (BLURRED) ⇒ aucun segment « effets »', () => {
+    const label = composeMessageLabel({
+      message: message({ effectFlags: MESSAGE_EFFECT_FLAGS.BLURRED }),
+      isMine: false,
+      servedText: 'Bonjour',
+      delivery: null,
+      protection: 'standard',
+    });
+    expect(label).not.toContain('effets');
+  });
+
+  test('CONFETTI actif ⇒ « effets : confettis », après « éphémère »', () => {
+    const label = composeMessageLabel({
+      message: message({
+        effectFlags: MESSAGE_EFFECT_FLAGS.CONFETTI,
+        expiresAt: new Date('2026-09-10T09:10:00.000Z'),
+      }),
+      isMine: false,
+      servedText: 'Bonjour',
+      delivery: null,
+      protection: 'standard',
+    });
+    const ephemeralIndex = label.indexOf('éphémère');
+    const effectsIndex = label.indexOf('effets : confettis');
+    expect(ephemeralIndex).toBeGreaterThan(-1);
+    expect(effectsIndex).toBeGreaterThan(ephemeralIndex);
+  });
+
+  test('deux effets ⇒ joints par une virgule, dans l’ordre iOS', () => {
+    const label = composeMessageLabel({
+      message: message({ effectFlags: MESSAGE_EFFECT_FLAGS.SPARKLE | MESSAGE_EFFECT_FLAGS.SHAKE }),
+      isMine: false,
+      servedText: 'Bonjour',
+      delivery: null,
+      protection: 'standard',
+    });
+    expect(label).toContain('effets : secousse, scintillant');
   });
 });

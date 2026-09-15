@@ -31,22 +31,21 @@ import { messagesQueryKey } from '@/lib/api/messages';
 import { useConversationsSnapshot, useThreadData } from '@/lib/api/query';
 import { applyConsumption } from '@/lib/api/view-once';
 import type { Message } from '@/lib/api/types';
-import { served } from '@/lib/api/prism';
 import { sessionStore } from '@/lib/api/session';
-import { useTypists } from '@/lib/api/use-typists';
 import { resolveViewer } from '@/lib/api/viewer';
 import { accentOf, withAccent } from '@/lib/accent';
 import { isGroup, titleOf, unreadOf } from '@/lib/view/conversation';
 import { useParams } from '@/lib/router';
 import { mergeTimeline, place } from '@/lib/grouping';
 import { useReaderLanguages } from '@/lib/view/use-reader';
+import { useReplyToPreview } from '@/lib/view/use-reply-preview';
 import { useSend } from '@/lib/view/use-send';
 import { useMessageMenu } from '@/lib/view/use-message-menu';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { translationChoices } from '@/lib/view/message-actions';
 import { deliveryOf as deliveryStatusOf, isMineOf } from '@/lib/view/message';
 import { useOnline } from '@/lib/net/online';
-import { useTypingEmitter } from '@/lib/view/use-typing-emitter';
+import { useThreadTyping } from '@/lib/view/use-thread-typing';
 import { menuRows } from '@/lib/reading-mode/catalog';
 import {
   resolveThreadMode,
@@ -57,11 +56,16 @@ import {
 import { readingModeStore } from '@/lib/reading-mode/store';
 import { usePersistedReadingMode } from '@/lib/reading-mode/use-persisted-mode';
 import { readingModeScopeOf } from '@/lib/reading-mode/scope';
+import { draftStore } from '@/lib/send/draft-store';
+import type { PendingAttachment } from '@/lib/send/attachments';
+import type { ComposeProtection } from '@/lib/send/compose-protection';
+import { useThreadDraft } from '@/lib/view/use-draft';
 import { useThreadScene } from '@/lib/reading-mode/scene';
 import { chromeStyleVars, sceneStyleVars } from '@/lib/reading-mode/metrics';
 import { backdropStyleVars } from '@/lib/view/thread-backdrop';
 import { BOTTOM_ANCHOR_FRAMES, pinToBottom } from '@/lib/view/pin-to-bottom';
 import { useThreadChromeSignals } from '@/lib/view/use-thread-chrome-signals';
+import { useThreadInsets } from '@/lib/view/use-thread-insets';
 import { ThreadModes } from './thread-modes';
 
 /**
@@ -126,19 +130,6 @@ export default function ThreadScreen() {
     () => conversation?.participants.find((p) => p.userId === viewer.id),
     [conversation, viewer.id],
   );
-
-  /**
-   * QUI ÉCRIT — RÉEL, jamais deviné (#5793). `useTypists` lit le magasin de
-   * frappe alimenté par `api/socket.ts` (`typing:start`/`typing:stop`), et
-   * ne rend le premier frappeur du roster que si son échéance de sécurité
-   * n'est pas dépassée. Aucun typist connu ⇒ aucun indicateur : on n'invente
-   * pas de copie, la forme iOS est « <Auteur> écrit »
-   * (`ConversationListViewModel.swift:966`).
-   */
-  const typists = useTypists(conversationId, viewer.id ?? '');
-  const typist = typists[0];
-  const onTypingTextChange = useTypingEmitter(conversationId);
-  const typistId = typist?.userId;
 
   /**
    * LA FENÊTRE COUVRE-T-ELLE TOUT LE NON-LU ? — `threadData.hasOlder` mime
@@ -307,6 +298,20 @@ export default function ThreadScreen() {
   });
 
   /**
+   * LE BROUILLON DU COMPOSEUR, CITATION COMPRISE (#6175) — même clé
+   * (lecteur, conversation) que le mode de lecture ci-dessus, et la MÊME
+   * discipline de lecture. Ce hook POSSÈDE `replyTarget` : la persistance de
+   * la citation ne peut pas dépendre d'une frappe, et son annulation doit
+   * atteindre le magasin (§ doc-comment de `useThreadDraft`, qui porte le
+   * détail et la mesure).
+   */
+  const { initial: initialDraft, replyTarget, setReplyTarget, reportComposerDraft } = useThreadDraft({
+    store: draftStore,
+    scope,
+    conversationId: conversation?.id,
+  });
+
+  /**
    * MÉMORISÉS, parce que le virtualiseur re-rend cet écran à chaque image de
    * défilement : sans `useMemo`, la loi, les capacités et les CINQ lignes du
    * menu (objets neufs, libellés interpolés) étaient reconstruites soixante
@@ -419,6 +424,7 @@ export default function ThreadScreen() {
    * Style : ce fichier l'avait déjà payé une fois, `thread-header.tsx`
    * §revue #5814, `thread-modes.tsx` §#5878).
    */
+  const { bottomEdgeRef, vars: insetVars } = useThreadInsets();
   const chrome = useThreadChromeSignals({
     scroller,
     mode: readingDecision.mode,
@@ -428,6 +434,23 @@ export default function ThreadScreen() {
     viewerId: viewer.id ?? '',
     group,
     readerLanguages,
+    noteProgrammaticScroll: scene.noteProgrammaticScroll,
+  });
+
+  /**
+   * QUI ÉCRIT — LE ROSTER ENTIER (#6171, § 5 étape 0/2 de la spécification) —
+   * extrait dans `lib/view/use-thread-typing.ts` : le magasin de frappe, le
+   * port d'émission ET l'ancrage à l'APPARITION (G8, jamais au changement de
+   * meneur) y vivent désormais, doc-comment complet là-bas. `thread-modes.tsx`
+   * reçoit `typing.typists` (le tableau ENTIER, jamais `typists[0]`, G1) et
+   * compose lui-même le libellé (`typingAnnouncement`) et le meneur
+   * (`typingLead`).
+   */
+  const typing = useThreadTyping({
+    conversationId,
+    viewerId: viewer.id ?? '',
+    scroller,
+    nearBottom: chrome.nearBottom,
     noteProgrammaticScroll: scene.noteProgrammaticScroll,
   });
 
@@ -483,44 +506,11 @@ export default function ThreadScreen() {
     setPendingJump(null);
   }, [pendingJump, readingDecision.mode, jumpToMessage]);
 
-  /**
-   * L'INDICATEUR DE FRAPPE DOIT SE VOIR (revue-correction #5793) — la cellule
-   * s'ajoute APRÈS le dernier message, donc SOUS le bas du défileur. Mesuré au
-   * navigateur sur `/c/c-deploiement` : avant la frappe le lecteur est
-   * exactement en bas (`scrollHeight − clientHeight − scrollTop === 0`) ;
-   * l'apparition ajoute 42 px et le laisse à 42 px du bas — la cellule tombe
-   * à y 760..802 dans un scrollport qui s'arrête à 768, soit **34 de ses 42 px
-   * cachés**. Le cas NOMINAL d'une conversation vivante (on est en bas) était
-   * donc celui où l'indicateur ne se voyait pas. Tant que `typing` valait
-   * `true` en dur, il était monté AVANT l'ancrage d'ouverture et le défaut
-   * n'existait pas : le rendre réel l'a créé.
-   *
-   * `nearBottom` est le verdict du chrome (`use-thread-chrome-signals.ts`),
-   * pas une seconde marge, et il se lit AVANT la croissance (il est calculé
-   * sur `virtualizer.getTotalSize()`, que cette cellule hors `<ol>` ne change
-   * pas). Un lecteur qui a remonté son historique n'est JAMAIS ramené en bas —
-   * même règle que l'ancrage d'ouverture, qui s'abandonne à la première
-   * intention. `pinToBottom` est la loi PARTAGÉE, et `noteProgrammaticScroll`
-   * empêche ce défilement de RÉVÉLER le chrome comme le ferait un geste.
-   *
-   * Clé `typistId` (jamais l'objet) : le keepalive de 3 s remplace l'entrée du
-   * magasin à chaque `typing:start`, donc son identité — s'y accrocher
-   * rejouerait l'ancrage toutes les trois secondes.
-   */
-  useEffect(() => {
-    const element = scroller.current;
-    if (typistId === undefined || element === null || !chrome.nearBottom) return;
-    const cancel = pinToBottom(element, { frames: 1, onFirstFrame: noteProgrammaticScroll });
-    return cancel;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [typistId]);
-
-  /**
-   * LE PRÉ-ADRESSAGE DU COMPOSEUR (#5695, écart 8 §1.4) — au tap d'un
-   * visage de la Rampe, le composeur s'ouvre déjà adressé à cette personne :
-   * la citation ET `replyToId` à l'envoi.
-   */
-  const [replyTarget, setReplyTarget] = useState<string | null>(null);
+  /* LE PRÉ-ADRESSAGE DU COMPOSEUR (#5695, écart 8 §1.4) — au tap d'un visage
+     de la Rampe, le composeur s'ouvre déjà adressé : la citation ET
+     `replyToId` à l'envoi. Si le message cité a quitté le cache entre-temps,
+     `replyToMessage` (plus bas) rend `undefined` et le bandeau ne se monte
+     pas — fail-closed, jamais une citation FANTÔME. */
 
   /**
    * LE MENU DU MESSAGE (#5814) — appui long / clic droit / `ContextMenu` sur
@@ -607,6 +597,66 @@ export default function ThreadScreen() {
   }, [count]);
 
   /**
+   * LA CITATION DU COMPOSEUR PRÉ-ADRESSÉ (#5695, écart 8 ; revue-correction
+   * #6175, défauts bloquant 1 et majeur 2) — DÉCLARÉE ICI, AVANT les retours
+   * anticipés plus bas : un `useMemo` après un retour anticipé viole les
+   * Rules of Hooks dès que le premier rendu est `pending` (aucun hook après)
+   * et le second rendu réel (N hooks de plus) — React lève « Rendered more
+   * hooks than during the previous render. » exactement à cette transition.
+   * `replyToMessage` ne dépend que de `messages` (mémoïsé plus haut) et de
+   * `replyTarget` (issu de `useThreadDraft`, également plus haut) : aucune
+   * des deux valeurs n'exige `conversation` narrowée non-optionnelle.
+   *
+   * Le memo lui-même vit dans `useReplyToPreview`
+   * (`lib/view/use-reply-preview.ts`), EXTRAIT pour être testable seul : le
+   * témoin qui en prouve la stabilité d'identité
+   * (`use-reply-preview.test.tsx`) n'a pas à monter tout `ThreadScreen`
+   * (routeur, TanStack Query, virtualiseur…) pour rougir sur ce défaut.
+   */
+  const replyToMessage = replyTarget === null ? undefined : messages.find((m) => m.id === replyTarget);
+  const replyTo = useReplyToPreview({ message: replyToMessage, readerLanguages });
+
+  /**
+   * `handleComposerSend`/`handleCancelReply` (revue-correction #6175, défaut
+   * bloquant 1) — également remontés ICI : ils ne dépendent que de `send`
+   * (plus haut), `replyToMessage` (ci-dessus) et `setReplyTarget`
+   * (`useThreadDraft`, plus haut), donc aucune contrainte ne les retenait
+   * après les retours anticipés — les y laisser aurait recréé la même
+   * violation des Rules of Hooks que celle corrigée ci-dessus.
+   */
+  const handleComposerSend = useCallback(
+    ({
+      text,
+      attachments,
+      language,
+      protection,
+    }: {
+      text: string;
+      attachments: readonly PendingAttachment[];
+      language: string;
+      protection: ComposeProtection;
+    }) => {
+      /* LE MESSAGE CITÉ ENTIER, PAS SON SEUL IDENTIFIANT
+         (revue-correction #5813, défaut majeur 6) — `replyToMessage`
+         est déjà résolu plus haut pour la bande du composeur ; le
+         réutiliser ici évite une seconde recherche ET porte la
+         citation jusqu'à la bulle optimiste.
+         `language` (#5828) — décidée PAR MESSAGE par le composeur
+         (détection locale → choix → rang 1 du Prisme du LECTEUR),
+         jamais `readerLocale` : c'est la langue de l'ÉCRIVAIN qui
+         doit partir en `originalLanguage`, jamais celle du lecteur.
+         `protection` (#6175) — éphémère / flou / effets choisis par
+         la rangée haute, composée en champs `Message` par
+         `localMessageOf` (`protectionFieldsOf`). */
+      send(text, attachments, replyToMessage ?? null, language, protection);
+      setReplyTarget(null);
+    },
+    [send, replyToMessage, setReplyTarget],
+  );
+
+  const handleCancelReply = useCallback(() => setReplyTarget(null), [setReplyTarget]);
+
+  /**
    * LES TROIS ÉTATS AVANT LE RENDU RÉEL (#5650, F5/F8/§5 étape 10) — TOUS les
    * HOOKS ci-dessus se sont déjà exécutés (règle des Hooks : jamais un hook
    * après un retour anticipé) ; tout ce qui suit est du calcul SIMPLE, en
@@ -638,44 +688,32 @@ export default function ThreadScreen() {
   const summaryLang =
     typeof document === 'object' && readerLocale !== document.documentElement.lang ? readerLocale : undefined;
 
-  /**
-   * LA CITATION DU COMPOSEUR PRÉ-ADRESSÉ (#5695, écart 8) — l'extrait passe
-   * par le PRISME (`served()`, jamais `content` brut) : citer quelqu'un dans
-   * une langue qu'il n'a pas écrite serait exactement le défaut que le
-   * Prisme existe pour éviter.
-   */
-  const replyToMessage = replyTarget === null ? undefined : messages.find((m) => m.id === replyTarget);
-  const replyToServed =
-    replyToMessage === undefined
-      ? undefined
-      : served({
-          preferredLanguages: readerLanguages,
-          originalLanguage: replyToMessage.originalLanguage,
-          translations: replyToMessage.translations,
-          original: replyToMessage.content,
-        });
-  const replyTo =
-    replyToMessage === undefined || replyToServed === undefined
-      ? undefined
-      : {
-          author: replyToMessage.sender?.displayName ?? replyToMessage.senderId,
-          excerpt: replyToServed.text,
-          /* La PAIRE, jamais le seul texte : `served()` rend `language`
-             précisément pour que l'hôte puisse DIRE dans quelle langue il
-             sert (`lang`), comme `bubble.tsx` et `focal-row.tsx`. */
-          ...(replyToServed.language === '' ? {} : { language: replyToServed.language }),
-        };
-
   return (
     /* `h-dvh` + `overflow-hidden`, et NON `min-h-dvh` : c'est ce qui fait la
        difference entre une PAGE (le document entier defile, le composeur suit)
        et une APPLICATION (seule la zone des messages defile, l'en-tete et le
        composeur sont des bords fixes). Avec `min-h-dvh` le composeur recouvrait
-       les derniers messages — le defaut le plus visible du premier rendu. */
+       les derniers messages — le defaut le plus visible du premier rendu.
+
+       PLUS DE COLONNE FLEX, ET PLUS DE `pt-safe` ICI (#6213). Les trois pièces
+       étaient des FRÈRES DE FLUX — en-tête, défileur, composeur — donc le
+       défileur était BORNÉ par ses voisins et leurs arêtes TRANCHAIENT le
+       contenu (capture porteur du 2026-09-12). iOS pose l'inverse : la liste
+       court de bord PHYSIQUE à bord physique (`.ignoresSafeArea(.container,
+       edges: [.top, .bottom])`, `ConversationView.swift:1873`), le chrome
+       FLOTTE au-dessus, et les réserves sont des marges INTÉRIEURES du
+       défileur (`topInset`/`bottomInset`, :1552-1556) — c'est ce que
+       `lib/view/thread-insets.ts` calcule et que `useThreadInsets` pose ici.
+
+       L'encoche haute descend donc avec elles : elle est portée par le
+       défileur (`--thread-pad-top`) ET par la bande flottante (`pt-safe`,
+       `components/thread-header.tsx` — son dernier bord fixe en haut), jamais
+       par cette racine, qui doit rester exactement haute de `100dvh` pour que
+       le contenu puisse transiter sous la bande. */
     <div
       ref={chrome.host}
-      className="relative flex h-dvh flex-col overflow-hidden pt-safe"
-      style={{ ...withAccent(accent), ...chromeStyleVars(), ...backdropStyleVars() } as CSSProperties}
+      className="relative h-dvh overflow-hidden"
+      style={{ ...withAccent(accent), ...chromeStyleVars(), ...insetVars, ...backdropStyleVars() } as CSSProperties}
     >
       <div className="thread-backdrop" aria-hidden />
       <ThreadHeader
@@ -716,9 +754,8 @@ export default function ThreadScreen() {
         défileur, borné par le header au-dessus et le composeur en dessous
         (« la géométrie fait le travail », §1.5 de la spécification).
       */}
-      <div className="relative flex flex-1 flex-col overflow-hidden">
-        <DayPill label={chrome.dayPillLabel} headerExpanded={expanded} />
-        <main
+      <DayPill label={chrome.dayPillLabel} headerExpanded={expanded} />
+      <main
           id="contenu"
           ref={scroller}
         /* `tabIndex={-1}` — focalisable PROGRAMMATIQUEMENT (jamais dans
@@ -738,7 +775,20 @@ export default function ThreadScreen() {
           liste : même effet quand le contenu est court, et un débordement
           normal quand il est long.
         */
-        className="scrollbar-none flex flex-1 flex-col overflow-y-auto px-3.5 pt-2 pb-2"
+        /*
+          `absolute inset-0` — LE DÉFILEUR EST L'ÉCRAN (#6213), et les deux
+          bandes de chrome flottent au-dessus de lui. Ses réserves sont des
+          marges INTÉRIEURES (`--thread-pad-top`/`--thread-pad-bottom`,
+          `lib/view/thread-insets.ts`), miroir exact des `contentInset` d'iOS :
+          le contenu TRANSITE sous la bande au lieu de s'arrêter à son arête,
+          et l'escamotage du chrome (#5774) découvre enfin du contenu au lieu
+          de libérer du vide.
+
+          `pt-2`/`pb-2` ont disparu avec la borne : la respiration basse est
+          désormais le `+16` d'iOS, porté par la loi (`LIST_BOTTOM_BREATH`),
+          et la haute est l'encoche.
+        */
+        className="scrollbar-none absolute inset-0 flex flex-col overflow-y-auto px-3.5"
         /*
           LES COTES DE LA SCÈNE DU FIL (#5648) — la SEULE porte par laquelle
           `reading-mode/metrics.ts::sceneStyleVars()` atteint le CSS,
@@ -748,7 +798,7 @@ export default function ThreadScreen() {
           reposer ici, une variable CSS traverse les nœuds intermédiaires
           sans qu'ils la déclarent.
         */
-        style={sceneStyleVars()}
+        style={{ ...sceneStyleVars(), paddingTop: 'var(--thread-pad-top)', paddingBottom: 'var(--thread-pad-bottom)' }}
       >
         {/*
           `flexShrink: 0` n'est PAS une précaution : `<main>` est un conteneur
@@ -793,18 +843,17 @@ export default function ThreadScreen() {
           longPress={messageMenu.longPress}
           onPickLanguage={messageMenu.onPickLanguage}
           onReact={messageMenu.onMenuReact}
-          typist={typist}
+          typists={typing.typists}
           accent={accent}
         />
-        </main>
-        <ScrollToBottomButton
-          visible={chrome.scrollButtonVisible}
-          unreadCount={chrome.scrollButtonUnreadCount}
-          senderName={chrome.scrollButtonSenderName}
-          previewText={chrome.scrollButtonPreviewText}
-          onClick={chrome.onScrollToBottom}
-        />
-      </div>
+      </main>
+      <ScrollToBottomButton
+        visible={chrome.scrollButtonVisible}
+        unreadCount={chrome.scrollButtonUnreadCount}
+        senderName={chrome.scrollButtonSenderName}
+        previewText={chrome.scrollButtonPreviewText}
+        onClick={chrome.onScrollToBottom}
+      />
 
       {/*
         LA PILULE VISIBLE (revue #5814, défaut majeur 10) — le refus d'une
@@ -816,11 +865,18 @@ export default function ThreadScreen() {
         d'écran. Motif `dayLabel` (rondeur, flou) au-dessus du composeur.
       */}
       {announcer.text !== '' ? (
-        <div className="flex justify-center px-4 pb-1.5" aria-hidden>
+        /* FLOTTANTE, et ancrée au bord bas MESURÉ (#6213) — jamais dans le
+           flux : en frère de flux elle poussait tout l'écran d'une trentaine
+           de pixels à chaque annonce, et le fil sautait sous les yeux du
+           lecteur pour dire « Message copié ». */
+        <div
+          className="pointer-events-none absolute inset-x-0 z-20 flex justify-center px-4"
+          style={{ bottom: 'var(--thread-notice-bottom)' }}
+          aria-hidden
+        >
           <span
-            className="rounded-chip px-3 py-1.5 text-mini font-semibold backdrop-blur-md"
+            className="glass-prominent glass-card rounded-chip px-3 py-1.5 text-mini font-semibold"
             style={{
-              backgroundColor: 'color-mix(in srgb, var(--color-ios-card) 92%, transparent)',
               color: 'var(--color-ios-ink)',
               border: '0.5px solid var(--color-edge)',
             }}
@@ -843,6 +899,20 @@ export default function ThreadScreen() {
         fil. Le Résumé porte déjà son geste de sortie, « Reprendre le fil »
         (`onResumeThread`) : composer d'abord.
       */}
+      {/*
+        LE BORD BAS, ET LA SEULE PIÈCE MESURÉE DE L'ÉCRAN (#6213) — cette
+        enveloppe existe TOUJOURS, même vide (Résumé Vivant) : c'est elle que
+        `useThreadInsets` observe, et un nœud qui se démonte emporterait son
+        `ResizeObserver` avec lui. Sa hauteur devient la réserve basse du
+        défileur, exactement comme `updateComposerHeight` alimente
+        `bottomInset` côté iOS (`ConversationView.swift:2013-2019`).
+
+        `absolute bottom-0` : le composeur FLOTTE au-dessus du fil (iOS
+        `zIndex(50)`), il ne le borne plus. C'est ce qui permet à la dernière
+        bulle de sortir de l'écran par le bord pendant le geste au lieu de
+        s'arrêter net sur la pilule de langue — le défaut de la capture.
+      */}
+      <div ref={bottomEdgeRef} className="absolute inset-x-0 bottom-0 z-20">
       {readingDecision.mode === 'summary' ? null : messageMenu.selection !== null ? (
         /* LE MODE SÉLECTION REMPLACE LE COMPOSEUR (#5814, question 5) —
            miroir `ConversationView.swift:1986` : jamais les deux à la fois. */
@@ -863,28 +933,22 @@ export default function ThreadScreen() {
           l'enveloppe (bascule micro → champ, ouverture du tiroir de pièces
           jointes) ne désengage rien.
         */
-        <div className="thread-composer-chrome shrink-0" onFocus={chrome.onComposerFocus} onBlur={chrome.onComposerBlur}>
+        <div className="thread-composer-chrome" onFocus={chrome.onComposerFocus} onBlur={chrome.onComposerBlur}>
           <Composer
             preferred={readerLanguages}
-            onSend={({ text, attachments, language }) => {
-              /* LE MESSAGE CITÉ ENTIER, PAS SON SEUL IDENTIFIANT
-                 (revue-correction #5813, défaut majeur 6) — `replyToMessage`
-                 est déjà résolu plus haut pour la bande du composeur ; le
-                 réutiliser ici évite une seconde recherche ET porte la
-                 citation jusqu'à la bulle optimiste.
-                 `language` (#5828) — décidée PAR MESSAGE par le composeur
-                 (détection locale → choix → rang 1 du Prisme du LECTEUR),
-                 jamais `readerLocale` : c'est la langue de l'ÉCRIVAIN qui
-                 doit partir en `originalLanguage`, jamais celle du lecteur. */
-              send(text, attachments, replyToMessage ?? null, language);
-              setReplyTarget(null);
-            }}
-            onTextChange={onTypingTextChange}
+            onSend={handleComposerSend}
+            onTextChange={typing.onTextChange}
+            draft={initialDraft}
+            /* `replyToId` COMPOSÉ PAR `useThreadDraft` (#6175) — `Composer`
+               ne connaît que la citation PRÉ-ADRESSÉE
+               (`replyTo.author`/`excerpt`), jamais l'identifiant. */
+            onDraftChange={reportComposerDraft}
             {...(viewerParticipant ? { rights: viewerParticipant.permissions } : {})}
-            {...(replyTo ? { replyTo, onCancelReply: () => setReplyTarget(null) } : {})}
+            {...(replyTo ? { replyTo, onCancelReply: handleCancelReply } : {})}
           />
         </div>
       )}
+      </div>
 
       {/* LE MENU DU MESSAGE (#5814) — portail conditionnel : monté SEULEMENT
           quand `useLongPress`/le clic droit/`ContextMenu` ont ciblé un

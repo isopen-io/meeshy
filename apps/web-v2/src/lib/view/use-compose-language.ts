@@ -58,6 +58,17 @@ export function useComposeLanguage(params: {
   /** Injecté par les témoins — défaut `defaultLanguageDetector()` (navigateur
    * si prêt, sinon l'heuristique en chunk à la demande). */
   readonly detector?: LanguageDetector;
+  /**
+   * LA GRAINE RESTAURÉE (#6175) — `selectedLanguage` d'un brouillon repris :
+   * posée comme langue COURANTE (`sticky`, jamais ÉPINGLÉE) dès le montage,
+   * exactement comme si une détection franche venait de l'adopter avant la
+   * première frappe. Une détection franche ultérieure la DÉPLACE encore (§
+   * T7 de la spécification #6175) ; un choix explicite (`choose`) gagne
+   * comme toujours. Lue UNE seule fois (identité du composant) : un
+   * changement de cette prop après le montage n'a aucun effet, comme
+   * `currentLanguage` n'est jamais réinitialisée après coup côté iOS.
+   */
+  readonly initialLanguage?: string;
 }): {
   /** = `composeLanguage(...)` — CE QUI PARTIRA si l'envoi a lieu maintenant. */
   readonly language: string;
@@ -81,7 +92,9 @@ export function useComposeLanguage(params: {
 
   const [text, setTextState] = useState('');
   const [detected, setDetected] = useState<DetectedLanguage | null>(null);
-  const [sticky, setSticky] = useState<ComposeSticky | null>(null);
+  const [sticky, setSticky] = useState<ComposeSticky | null>(() =>
+    params.initialLanguage === undefined ? null : { code: params.initialLanguage, pinned: false },
+  );
   const [locked, setLocked] = useState(false);
 
   /** LE JETON DE GÉNÉRATION — un compteur MONOTONE, jamais l'horloge murale

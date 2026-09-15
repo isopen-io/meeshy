@@ -57,13 +57,15 @@ type Handle = ReturnType<typeof useComposeLanguage>;
 function Harness({
   preferred,
   detector,
+  initialLanguage,
   onReady,
 }: {
   preferred: readonly string[];
   detector: LanguageDetector;
+  initialLanguage?: string;
   onReady: (handle: Handle) => void;
 }) {
-  const handle = useComposeLanguage({ preferred, detector });
+  const handle = useComposeLanguage({ preferred, detector, ...(initialLanguage === undefined ? {} : { initialLanguage }) });
   onReady(handle);
   return (
     <div data-language={handle.language} data-source={handle.source}>
@@ -72,7 +74,11 @@ function Harness({
   );
 }
 
-function mount(preferred: readonly string[], detector: LanguageDetector): { el: HTMLDivElement; handleOf: () => Handle } {
+function mount(
+  preferred: readonly string[],
+  detector: LanguageDetector,
+  initialLanguage?: string,
+): { el: HTMLDivElement; handleOf: () => Handle } {
   let handle: Handle | null = null;
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -82,6 +88,7 @@ function mount(preferred: readonly string[], detector: LanguageDetector): { el: 
       <Harness
         preferred={preferred}
         detector={detector}
+        {...(initialLanguage === undefined ? {} : { initialLanguage })}
         onReady={(h) => {
           handle = h;
         }}
@@ -353,5 +360,38 @@ describe('useComposeLanguage — la pastille dit ce qui partira', () => {
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
+  });
+});
+
+describe('useComposeLanguage — initialLanguage est le rang courant (#6175, brouillon restauré)', () => {
+  test('au montage, sans aucune frappe : language === initialLanguage, source === "sticky"', () => {
+    const { el } = mount(['fr', 'en'], fakeDetector(() => null), 'de');
+    expect(stateOf(el)).toEqual({ language: 'de', source: 'sticky' });
+  });
+
+  test('une détection franche déplace la langue COURANTE au-delà de la graine restaurée', async () => {
+    const { el, handleOf } = mount(['fr'], fakeDetector(() => ({ language: 'en', confidence: 0.97 })), 'de');
+    act(() => {
+      handleOf().setText('Do you confirm the mockup?');
+    });
+    await passDebounce();
+    expect(stateOf(el)).toEqual({ language: 'en', source: 'detected' });
+  });
+
+  test('un texte trop court laisse la graine restaurée en place', async () => {
+    const { el, handleOf } = mount(['fr'], fakeDetector(() => ({ language: 'en', confidence: 0.97 })), 'de');
+    act(() => {
+      handleOf().setText('ok');
+    });
+    await passDebounce();
+    expect(stateOf(el)).toEqual({ language: 'de', source: 'sticky' });
+  });
+
+  test('un choix explicite gagne toujours sur la graine restaurée', () => {
+    const { el, handleOf } = mount(['fr'], fakeDetector(() => null), 'de');
+    act(() => {
+      handleOf().choose('es');
+    });
+    expect(stateOf(el)).toEqual({ language: 'es', source: 'chosen' });
   });
 });

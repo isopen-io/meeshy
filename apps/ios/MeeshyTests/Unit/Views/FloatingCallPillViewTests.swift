@@ -273,37 +273,63 @@ final class FloatingCallPillViewTests: XCTestCase {
         )
     }
 
-    // 2026-08-12 — barre immersive façon WhatsApp : le fond de la bannière
-    // remonte sous la status bar jusqu'au bord haut du viewport. Sans cette
-    // extension, la zone status bar laisse voir le contenu scrollé derrière
-    // (bulles de messages au-dessus de la barre — capture user 2026-08-12).
-    func test_banner_backgroundBleedsIntoTopSafeArea_immersive() throws {
-        let source = try pillSource()
-        XCTAssertTrue(
-            source.contains(".ignoresSafeArea(.container, edges: .top)"),
-            "The banner background must extend under the status bar to the top of the " +
-            "viewport (WhatsApp-style immersive bar) — otherwise scrolled content stays " +
-            "visible in the status-bar strip above the banner."
+    // 2026-08-12 — barre immersive façon WhatsApp : la zone status bar ne doit
+    // pas laisser voir le contenu scrollé derrière (bulles de messages au-dessus
+    // de la barre — capture user 2026-08-12).
+    //
+    // 2026-09-14 (#6579) — L'EXIGENCE TIENT, SON PROPRIÉTAIRE A CHANGÉ. La
+    // bannière posait elle-même `.ignoresSafeArea(.container, edges: .top)` sur
+    // son décor ; le mini-lecteur audio ne posait rien, donc une écoute sans
+    // appel laissait la bande au fond thématique. Une peinture portée par chaque
+    // barre est présente chez l'une et absente chez l'autre : elle appartient
+    // désormais à `TopChromeBand`, monté UNE fois sur le conteneur qui les
+    // empile. Le détail de la bande est gardé par `TopChromeBandGuardTests`.
+    //
+    // 2026-09-15 — deux formes, deux sens OPPOSÉS : `.ignoresSafeArea(…)`
+    // RÉCLAME l'encart, `ignoresSafeAreaEdges: []` y RENONCE. La seconde est
+    // exigée parce que le défaut de `.background(_:)` est `.all` — sans elle,
+    // la bannière reprend la bande en silence, sans qu'une ligne ne change.
+    func test_banner_noLongerOwnsTheStatusBarBleed_theTopChromeBandDoes() throws {
+        XCTAssertFalse(
+            try pillSource().contains("ignoresSafeArea("),
+            "La bannière ne peint plus que sa propre hauteur — sinon la bande " +
+            "a deux propriétaires, donc deux comportements."
         )
-        guard let backgroundRange = source.range(of: ".background("),
-              let offsetRange = source.range(of: ".offset(x: pillDragOffset)") else {
-            XCTFail("expected pillContent to keep its .background + .offset chain")
-            return
-        }
-        let backgroundBlock = String(source[backgroundRange.lowerBound..<offsetRange.lowerBound])
         XCTAssertTrue(
-            backgroundBlock.contains(".ignoresSafeArea(.container, edges: .top)"),
-            "ignoresSafeArea must apply to the banner BACKGROUND only (decor bleed), " +
-            "never to the banner content — the controls must stay inside the safe area."
+            try pillSource().contains("ignoresSafeAreaEdges: []"),
+            "…et elle doit y renoncer EXPLICITEMENT : `.background(_:)` étend " +
+            "son fond dans l'encart par défaut (`.all`)."
+        )
+        let band = try String(
+            contentsOf: URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .appendingPathComponent("Meeshy/Features/Main/Components/TopChromeTint.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(
+            AppSourceGuard.stripComments(band).contains(".offset(y: -DeviceLayout.safeAreaTop)"),
+            "…et c'est `TopChromeBand` qui remonte dans la bande système " +
+            "jusqu'au bord haut du viewport, pour l'appel COMME pour l'écoute."
         )
     }
 
     // 2026-08-12 — retour user (second passage, remplace le fondu demandé le
     // matin même) : la bannière est PLEINEMENT indigo. Pas de voile noir
     // (l'ancien scrim 40 % la faisait lire comme une « barre noire » sur la
-    // status bar), pas de fondu transparent en bas — un aplat indigo net dont
-    // les arrêts (CallBannerContrast.bannerTop/bannerBottom) portent seuls le
-    // contraste WCAG (CallBannerContrastTests).
+    // status bar), pas de fondu transparent en bas.
+    //
+    // 2026-09-15 (#6579) — APLAT, plus un dégradé. La bannière TOUCHE la bande
+    // du haut : leur joint est un pixel, et un dégradé DIAGONAL n'offre pas UNE
+    // couleur à ce joint mais une rampe (`#4F45E4` à gauche → `#3831A5` à
+    // droite) qu'aucun aplat ne raccorde ailleurs qu'en un point. Le producteur
+    // unique de la couleur du chrome haut est `TopChromeTint` — la bande et les
+    // DEUX barres lisent la même valeur, donc la couture est continue par
+    // construction. Mesure de pixels de part et d'autre du joint :
+    // `TopChromeBandRenderTests`. Cette garde-ci empêche seulement qu'un lot
+    // futur repose un dégradé ou un voile : elle ne prouve rien à elle seule.
     func test_banner_isFullIndigo_noScrimNoFade() throws {
         let source = try pillSource()
         guard let backgroundRange = source.range(of: ".background("),
@@ -321,21 +347,19 @@ final class FloatingCallPillViewTests: XCTestCase {
         XCTAssertFalse(
             backgroundBlock.contains("Color.black.opacity"),
             "No black scrim over the banner — the status-bar strip must read " +
-            "as plain indigo, never as a dark band (user feedback 2026-08-12). " +
-            "Contrast comes from the gradient stops, calibrated in " +
-            "CallBannerContrastTests."
+            "as plain indigo, never as a dark band (user feedback 2026-08-12)."
+        )
+        XCTAssertFalse(
+            backgroundBlock.contains("LinearGradient"),
+            "Plus de dégradé sous la bannière (#6579) : son bord HAUT porterait " +
+            "une couleur différente à chaque abscisse, et la bande du haut — un " +
+            "aplat — ne pourrait raccorder qu'en un point de l'écran."
         )
         XCTAssertTrue(
-            backgroundBlock.contains("CallBannerContrast.bannerTop") &&
-            backgroundBlock.contains("CallBannerContrast.bannerBottom"),
-            "The banner decor must use the calibrated CallBannerContrast " +
-            "stops so the WCAG tests and the shipped gradient can never drift " +
-            "apart."
-        )
-        XCTAssertTrue(
-            backgroundBlock.contains(".ignoresSafeArea(.container, edges: .top)"),
-            "The indigo decor must keep bleeding under the status bar / " +
-            "Dynamic Island — the call details sit right below the island."
+            backgroundBlock.contains("TopChromeTint.call.bandColor"),
+            "Le fond de la bannière vient du producteur UNIQUE du chrome haut. " +
+            "Une constante recopiée ici se prouverait par une égalité de " +
+            "littéraux ; lue là-bas, la continuité de la couture est structurelle."
         )
     }
 
@@ -595,13 +619,16 @@ final class FloatingCallPillViewTests: XCTestCase {
 @MainActor
 final class CallPresentationLayerMountTests: XCTestCase {
 
-    private func rootViewSource() throws -> String {
+    /// EXTRAIT de `RootView.swift` le 2026-09-14 (#6579) : celui-ci dépassait le
+    /// plafond dur de 1200 lignes, donc y ajouter le montage de la bande du haut
+    /// était interdit.
+    private func layerSource() throws -> String {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()   // Views/
             .deletingLastPathComponent()   // Unit/
             .deletingLastPathComponent()   // MeeshyTests/
             .deletingLastPathComponent()   // ios/
-            .appendingPathComponent("Meeshy/Features/Main/Views/RootView.swift")
+            .appendingPathComponent("Meeshy/Features/Main/Views/RootLayers/CallPresentationLayer.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
@@ -610,13 +637,13 @@ final class CallPresentationLayerMountTests: XCTestCase {
     /// et matcheraient sinon les assertions négatives (même piège que la
     /// garde RTL, cf. RightToLeftLayoutGuardTests.strippingComments).
     private func callPresentationLayerBody() throws -> String {
-        let source = AppSourceGuard.stripComments(try rootViewSource())
-        guard let start = source.range(of: "struct CallPresentationLayer: ViewModifier {"),
-              let end = source.range(of: "\nstruct ", range: start.upperBound..<source.endIndex) else {
-            XCTFail("CallPresentationLayer not found in RootView.swift")
+        let source = AppSourceGuard.stripComments(try layerSource())
+        guard let start = source.range(of: "struct CallPresentationLayer: ViewModifier {") else {
+            XCTFail("CallPresentationLayer not found in CallPresentationLayer.swift")
             return ""
         }
-        return String(source[start.lowerBound..<end.lowerBound])
+        let end = source.range(of: "\nstruct ", range: start.upperBound..<source.endIndex)
+        return String(source[start.lowerBound..<(end?.lowerBound ?? source.endIndex)])
     }
 
     func test_pill_isMountedAsFrameCompressingVStack_notSafeAreaInset() throws {

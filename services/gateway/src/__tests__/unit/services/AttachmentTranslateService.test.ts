@@ -21,7 +21,7 @@ const mockAudioTranslateService: any = {
 };
 
 jest.mock('../../../services/AudioTranslateService', () => ({
-  AudioTranslateService: jest.fn().mockImplementation(() => mockAudioTranslateService)
+  ...(jest.requireActual('../../../services/AudioTranslateService') as object), AudioTranslateService: jest.fn().mockImplementation(() => mockAudioTranslateService)
 }));
 
 // Mock Prisma

@@ -37,10 +37,12 @@ private final class MockPhotoLibrarySaver: PhotoLibrarySaving, @unchecked Sendab
 private final class StubMediaSaveBranding: MediaSaveBranding, @unchecked Sendable {
     var stampedURL: URL?
     private(set) var stampedKinds: [AttachmentKind] = []
+    private(set) var stampedOrigins: [MediaOrigin] = []
     private(set) var stampedFiles: [URL] = []
 
-    func stamp(_ file: URL, kind: AttachmentKind) async -> BrandedMedia {
+    func stamp(_ file: URL, kind: AttachmentKind, origin: MediaOrigin) async -> BrandedMedia {
         stampedKinds.append(kind)
+        stampedOrigins.append(origin)
         stampedFiles.append(file)
         guard let stampedURL else { return .original(file) }
         return BrandedMedia(url: stampedURL, isStamped: true)
@@ -93,9 +95,10 @@ final class MediaSaveCoordinatorTests: XCTestCase {
     }
 
     private func makeRequest(kind: AttachmentKind = .image,
+                             origin: MediaOrigin = .transmitted,
                              url: String = "https://gate.meeshy.me/media/photo.jpg",
                              suggestedName: String? = "Vacances.jpg") -> MediaSaveRequest {
-        MediaSaveRequest(kind: kind, remoteURLString: url, suggestedFileName: suggestedName)
+        MediaSaveRequest(kind: kind, origin: origin, remoteURLString: url, suggestedFileName: suggestedName)
     }
 
     // MARK: Présentation
@@ -366,6 +369,7 @@ final class MediaSaveCoordinatorTests: XCTestCase {
     private func makeRequestWithAttachment(kind: AttachmentKind = .image,
                                            attachmentId: String? = "att-42") -> MediaSaveRequest {
         MediaSaveRequest(kind: kind,
+                         origin: .transmitted,
                          remoteURLString: "https://gate.meeshy.me/media/photo.jpg",
                          suggestedFileName: "Photo.jpg",
                          attachmentId: attachmentId)
@@ -456,6 +460,26 @@ final class MediaSaveCoordinatorTests: XCTestCase {
         XCTAssertEqual(branding.stampedKinds, [.image])
     }
 
+    /// Le prédicat de la marque décide par l'ORIGINE (directive porteur
+    /// 2026-09-12), et cette origine ne vit que sur la requête : si le
+    /// coordinateur ne la transmettait pas, `MeeshyMediaSaveBranding` aurait beau
+    /// être juste, il trancherait sur une valeur qui n'est pas celle du site
+    /// d'appel. Les deux origines sont interrogées — une seule serait vraie par
+    /// accident sur un stub qui n'en produit qu'une.
+    func test_pick_handsTheRequestOrigin_toTheBranding() async throws {
+        for origin in MediaOrigin.allCases {
+            let branding = StubMediaSaveBranding()
+            let (sut, resolver, _, _) = makeSUT(branding: branding)
+            resolver.result = .success(try makeTempSourceFile(named: "photo.jpg"))
+            sut.requestSave(makeRequest(kind: .image, origin: origin))
+
+            await sut.pick(.photoLibrary)
+
+            XCTAssertEqual(branding.stampedOrigins, [origin],
+                           "L'origine déclarée par le point d'entrée doit arriver intacte au prédicat de la marque")
+        }
+    }
+
     func test_pick_photoLibrary_video_savesTheStampedFile() async throws {
         let branding = StubMediaSaveBranding()
         let stamped = try makeStampedFile(named: "clip.mp4")
@@ -522,7 +546,7 @@ final class MediaSaveCoordinatorTests: XCTestCase {
     // MARK: exportFileName — extension réelle du fichier écrit
 
     func test_exportFileName_adoptsTheStampedExtension_whenItDiffers() {
-        let request = MediaSaveRequest(kind: .image, remoteURLString: "https://x/photo.heic",
+        let request = MediaSaveRequest(kind: .image, origin: .transmitted, remoteURLString: "https://x/photo.heic",
                                        suggestedFileName: "Vacances.heic")
 
         XCTAssertEqual(MediaSaveCoordinator.exportFileName(for: request, actualExtension: "jpg"),
@@ -530,7 +554,7 @@ final class MediaSaveCoordinatorTests: XCTestCase {
     }
 
     func test_exportFileName_keepsTheSuggestedName_whenExtensionsAgree() {
-        let request = MediaSaveRequest(kind: .image, remoteURLString: "https://x/photo.jpg",
+        let request = MediaSaveRequest(kind: .image, origin: .transmitted, remoteURLString: "https://x/photo.jpg",
                                        suggestedFileName: "Vacances.jpg")
 
         XCTAssertEqual(MediaSaveCoordinator.exportFileName(for: request, actualExtension: "JPG"),

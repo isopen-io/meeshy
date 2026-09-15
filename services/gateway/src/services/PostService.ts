@@ -9,6 +9,7 @@ import { NOT_DELETED } from './posts/postIncludes';
 import { claimableMediaWhere, describeClaimShortfall } from './posts/mediaOwnership';
 import { applyMediaOrder } from './posts/mediaOrder';
 import { applyMediaText } from './posts/mediaText';
+import { triggerMediaCaptionTranslations, writeMediaCaption, type WrittenMediaCaption } from './posts/mediaCaptionWrites';
 import { engagementAggregateIncrements } from './posts/engagementIncrements';
 import { qualifiesAsReel } from '@meeshy/shared/utils/reel-composition';
 import { ephemeralExpiresAt } from './posts/ephemeralPosts';
@@ -39,7 +40,7 @@ import { getSharedNotificationService } from './notifications/notification-servi
 import { reclaimMediaRowBytes } from './posts/reclaimPostMediaBytes';
 import { extractCaptureTracks } from './posts/captureTracks';
 import { mediaCaptureTracks } from './posts/mediaCaptureTracks';
-import { feedsSoundLibrary } from './posts/soundEligibility';
+import { orchestrateSoundCapture, type SoundCaptureVerdict } from './posts/soundCaptureVerdict';
 import { normalizeLanguageCode, normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { parseSharedPlace, type SharedPlace } from './location/sharedPlace';
 import { quantizeCoordinate, resolveDiscoverabilityPrecision, type DiscoverabilityPrecision } from './location/geoDiscoverability';
@@ -353,7 +354,7 @@ export class PostService {
         ...(geoPoint ? { geoPoint: geoPoint as unknown as Prisma.InputJsonValue, geoPrecision } : {}),
         ...(repostOfId !== undefined ? { repostOfId, originalRepostOfId } : {}),
       },
-      include: postInclude,
+      select: postInclude,
     });
 
     // Link pre-uploaded media if any
@@ -433,17 +434,11 @@ export class PostService {
     const captureTracks = await this.collectCaptureTracks(
       post.id, data.storyEffects, data.allowSoundExtraction ?? false,
       Boolean(data.mediaIds?.length));
-    this.soundCaptureService.captureSounds({
-      postId: post.id,
-      authorId: post.authorId,
-      // Règle UNIQUE et partagée (PUBLIC ou COMMUNITY, jamais un repost). Elle
-      // vivait dupliquée ici et dans `updatePost`, et la seconde copie avait
-      // déjà été oubliée une fois — c'était la troisième porte du piège
-      // d'attribution.
-      feedsLibrary: feedsSoundLibrary({ visibility: data.visibility, repostOfId: data.repostOfId }),
-      tracks: captureTracks,
-    }).catch((err: unknown) => {
-      log.error('captureSounds (createPost) a échoué', err instanceof Error ? err : new Error(String(err)), { postId: post.id });
+    // Éligibilité + capture fire-and-forget + verdict synchrone (#6603) — voir posts/soundCaptureVerdict.ts.
+    const soundLibrary = orchestrateSoundCapture({
+      postId: post.id, authorId: post.authorId, visibility: data.visibility, repostOfId: data.repostOfId,
+      tracks: captureTracks, soundCaptureService: this.soundCaptureService,
+      onError: (err) => log.error('captureSounds (createPost) a échoué', err instanceof Error ? err : new Error(String(err)), { postId: post.id }),
     });
 
     // Déclencher la traduction Prisme pour les stories avec texte (fire-and-forget)
@@ -523,9 +518,10 @@ export class PostService {
     // Refetch pour inclure transcription et translations après toutes les opérations media
     const refreshed = await this.prisma.post.findUnique({
       where: { id: post.id },
-      include: postInclude,
+      select: postInclude,
     });
-    return refreshed ?? post;
+    // `soundLibrary` : champ de service (#6603), pas une colonne.
+    return { ...(refreshed ?? post), soundLibrary };
   }
 
   private async triggerStoryTextTranslation(postId: string, content: string, authorId: string, sourceLanguageOverride?: string): Promise<void> {
@@ -755,7 +751,11 @@ export class PostService {
   /// route). Previously, every fetch silently inflated viewCount.
   async getPostById(postId: string, viewerUserId?: string) {
     const visibilityFilter = await this.buildVisibilityFilter(viewerUserId);
-    const detailInclude = {
+    // Un `select`, jamais un `include` : `postInclude` est un `PostSelect`
+    // (scalaires compris) depuis #4791, et le passer sous `include` fait
+    // rejeter la lecture par Prisma — chaque ouverture de post rendait 500
+    // (#6503). `satisfies` rend la forme vérifiable par `tsc` au site même.
+    const detailSelect = {
       ...postInclude,
       // Le détail charge TOUTES les références, silencieuses comprises : c'est
       // `projectReferencesForViewer` qui décide de ce que CE lecteur en voit.
@@ -765,10 +765,10 @@ export class PostService {
       // `postMentions` est le nom de la RELATION (le schéma nomme
       // `Post.postMentions`) ; la clé exposée au client, elle, est `mentions`.
       postMentions: { select: { display: true, mentionedUser: { select: authorSelect } } },
-    };
+    } satisfies Prisma.PostSelect;
     const visible = await this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED, ...visibilityFilter },
-      include: detailInclude,
+      select: detailSelect,
     });
 
     // Un référencé HORS audience ne passe pas le filtre ci-dessus — c'est
@@ -779,7 +779,7 @@ export class PostService {
     const post = visible ?? (viewerUserId
       ? await this.prisma.post.findFirst({
           where: { id: postId, deletedAt: NOT_DELETED },
-          include: detailInclude,
+          select: detailSelect,
         })
       : null);
     if (!post) return null;
@@ -993,7 +993,8 @@ export class PostService {
    * Elle porte, en profil Post, la légende de CE média — distincte du `content`
    * du post, qui reste celui de la publication (modèle § 3). Les deux textes ont
    * des sujets différents : le premier décrit une image, le second dit ce que
-   * l'auteur publie.
+   * l'auteur publie. Chaque légende écrite part en traduction (#6280,
+   * `posts/mediaCaptionWrites.ts`).
    */
   private async applyMediaCaption(
     postId: string,
@@ -1001,7 +1002,7 @@ export class PostService {
     mediaCaption: Record<string, string> | undefined,
     client: Pick<PrismaClient, 'postMedia'> = this.prisma,
   ): Promise<void> {
-    await applyMediaText('caption', postId, requestedMediaIds, mediaCaption, client);
+    triggerMediaCaptionTranslations(await writeMediaCaption(postId, requestedMediaIds, mediaCaption, client));
   }
 
   /**
@@ -1279,6 +1280,9 @@ export class PostService {
       }
     }
 
+    // Écrite dans la transaction, traduite après son commit (`mediaCaptionWrites.ts`).
+    let writtenMediaCaptions: WrittenMediaCaption[] = [];
+
     const updated = await this.prisma.$transaction(async (tx) => {
       if (mediaIdsToRemove.length > 0) {
         await tx.postMedia.deleteMany({ where: { id: { in: mediaIdsToRemove }, postId } });
@@ -1296,7 +1300,7 @@ export class PostService {
           enhancedLogger.warn(`[PostService] updatePost: ${shortfall}`, { postId, authorId: userId });
         }
         await this.applyMediaAlt(postId, mediaIdsToAttach, mediaAlt, tx);
-        await this.applyMediaCaption(postId, mediaIdsToAttach, mediaCaption, tx);
+        writtenMediaCaptions = await writeMediaCaption(postId, mediaIdsToAttach, mediaCaption, tx);
         await applyMediaOrder(tx, postId, mediaIdsToAttach);
       }
       if (storyContentEdit) {
@@ -1307,9 +1311,11 @@ export class PostService {
       return tx.post.update({
         where: { id: postId },
         data: updateData,
-        include: postInclude,
+        select: postInclude,
       });
     });
+
+    triggerMediaCaptionTranslations(writtenMediaCaptions);
 
     // Les octets des médias que l'édition vient de retirer. APRÈS le commit,
     // et c'est l'inverse de l'ordre du balayage : ici la transaction peut
@@ -1391,23 +1397,22 @@ export class PostService {
     // sur le repost passerait donc le scope `postId` et créerait un `Sound`
     // crédité au reposteur avec l'audio d'autrui. `feedsSoundLibrary` renvoie
     // false sur tout repost, et `captureSounds` libère alors les usages.
+    // Verdict synchrone (#6603) ; `undefined` si l'édition ne touche pas les sons.
+    let soundLibrary: SoundCaptureVerdict | undefined;
     if (data.storyEffects !== undefined || editTouchesComposition || data.allowSoundExtraction !== undefined) {
       const effectiveEffects = data.storyEffects
         ?? (updated.storyEffects as Record<string, unknown> | null) ?? undefined;
       const editedTracks = await this.collectCaptureTracks(
         updated.id, effectiveEffects, updated.allowSoundExtraction === true,
         finalMedia.length > 0);
-      this.soundCaptureService.captureSounds({
-        postId: updated.id,
-        authorId: updated.authorId,
-        feedsLibrary: feedsSoundLibrary({ visibility: updated.visibility, repostOfId: updated.repostOfId }),
-        tracks: editedTracks,
-      }).catch((err: unknown) => {
-        log.error('captureSounds (updatePost) a échoué', err instanceof Error ? err : new Error(String(err)), { postId: updated.id });
+      soundLibrary = orchestrateSoundCapture({
+        postId: updated.id, authorId: updated.authorId, visibility: updated.visibility, repostOfId: updated.repostOfId,
+        tracks: editedTracks, soundCaptureService: this.soundCaptureService,
+        onError: (err) => log.error('captureSounds (updatePost) a échoué', err instanceof Error ? err : new Error(String(err)), { postId: updated.id }),
       });
     }
 
-    return updated;
+    return soundLibrary ? { ...updated, soundLibrary } : updated;
   }
 
   /**
@@ -1456,7 +1461,7 @@ export class PostService {
 
     return this.prisma.post.findFirst({
       where: { id: postId },
-      include: postInclude,
+      select: postInclude,
     });
   }
 
@@ -1513,7 +1518,7 @@ export class PostService {
 
     const post = await this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED },
-      include: postInclude,
+      select: postInclude,
     });
     if (!post) return null;
 
@@ -1539,7 +1544,7 @@ export class PostService {
 
     return this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED },
-      include: postInclude,
+      select: postInclude,
     });
   }
 
@@ -1574,7 +1579,7 @@ export class PostService {
   async unlikePost(postId: string, userId: string, emoji?: string) {
     const post = await this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED },
-      include: postInclude,
+      select: postInclude,
     });
     if (!post) return null;
 
@@ -1633,7 +1638,7 @@ export class PostService {
 
     const refreshed = await this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED },
-      include: postInclude,
+      select: postInclude,
     });
 
     // Le post a été relu après le retrait ; s'il a disparu entre-temps, la
@@ -2148,7 +2153,7 @@ export class PostService {
     return this.prisma.post.update({
       where: { id: postId },
       data: { shareCount: { increment: 1 } },
-      include: postInclude,
+      select: postInclude,
     });
   }
 
@@ -2162,7 +2167,7 @@ export class PostService {
     return this.prisma.post.update({
       where: { id: postId },
       data: { isPinned: true },
-      include: postInclude,
+      select: postInclude,
     });
   }
 
@@ -2176,7 +2181,7 @@ export class PostService {
     return this.prisma.post.update({
       where: { id: postId },
       data: { isPinned: false },
-      include: postInclude,
+      select: postInclude,
     });
   }
 
@@ -2411,6 +2416,9 @@ export class PostService {
       duration?: number;
       caption?: string;
       alt?: string;
+      // Traductions de légende copiées : le texte source ne change pas (#6280).
+      captionLanguage?: string;
+      captionTranslations?: Prisma.InputJsonValue;
       language?: string;
       transcription?: Prisma.InputJsonValue;
       uploaderId?: string;
@@ -2458,6 +2466,8 @@ export class PostService {
           duration?: number | null;
           caption?: string | null;
           alt?: string | null;
+          captionLanguage?: string | null;
+          captionTranslations?: Prisma.JsonValue | null;
           language?: string | null;
           transcription?: Prisma.JsonValue | null;
         }>;
@@ -2488,6 +2498,8 @@ export class PostService {
             duration: m.duration ?? undefined,
             caption: m.caption ?? undefined,
             alt: m.alt ?? undefined,
+            captionLanguage: m.captionLanguage ?? undefined,
+            captionTranslations: (m.captionTranslations ?? undefined) as Prisma.InputJsonValue | undefined,
             language: m.language ?? undefined,
             transcription: (m.transcription ?? undefined) as Prisma.InputJsonValue | undefined,
             // Le reposteur possède la copie : c'est LUI qui vient d'en écrire
@@ -2541,7 +2553,7 @@ export class PostService {
             ...(snapshotStoryEffects !== undefined ? { storyEffects: snapshotStoryEffects } : {}),
             ...(snapshotMedia !== undefined ? { media: { create: snapshotMedia } } : {}),
           },
-          include: postInclude,
+          select: postInclude,
         });
 
         // The media just duplicated above got fresh `PostMedia` ids — but
@@ -2632,7 +2644,7 @@ export class PostService {
         isQuote,
         ...(expiresAt !== undefined ? { expiresAt } : {}),
       },
-      include: postInclude,
+      select: postInclude,
     });
 
     await this.prisma.post.update({

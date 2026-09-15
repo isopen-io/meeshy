@@ -7,8 +7,11 @@ android {
         applicationId "me.meeshy.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // Numéro de build LU à la construction (D-45) : `-PmeeshyBuildNumber=<n>`,
+        // posé par scripts/build-shells.mjs. Sans lui, 1 — la marque d'un build
+        // fait HORS du site unique.
+        versionCode = (project.findProperty('meeshyBuildNumber') ?: '1').toString().toInteger()
+        versionName "2.0.6"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

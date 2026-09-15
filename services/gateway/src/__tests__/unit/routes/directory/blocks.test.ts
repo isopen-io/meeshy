@@ -31,6 +31,7 @@ jest.mock('../../../../services/CacheStore', () => ({
 }));
 
 jest.mock('../../../../utils/withMutationLog', () => ({
+  ...(jest.requireActual('../../../../utils/withMutationLog') as object),
   withMutationLog: jest.fn(async (args: any) => args.op()),
 }));
 

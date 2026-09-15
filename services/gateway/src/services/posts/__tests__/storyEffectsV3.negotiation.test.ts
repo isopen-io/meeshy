@@ -67,6 +67,7 @@ jest.mock('../../../middleware/rate-limiter', () => ({
 }));
 
 jest.mock('../../../utils/withMutationLog', () => ({
+  ...(jest.requireActual('../../../utils/withMutationLog') as object),
   withMutationLog: jest.fn<any>().mockImplementation(({ op }: any) => op()),
 }));
 

@@ -48,6 +48,11 @@ import { sendWithETag } from '../../utils/etag';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { presenceMissingEntryPolicy, viewerFromRequest } from '../users/presence-gate';
 import { logger } from './messages-shared';
+import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
+import {
+  backfillCitedAttachments,
+  type MessageRattrapable,
+} from '../../services/messaging/citedAttachmentBackfill';
 import {
   MESSAGES_VIEW_QUERY_PROPERTIES,
   resolveCollectionView,
@@ -500,8 +505,10 @@ export function registerMessagesListRoute(
                 personalHiding
               )
             }),
-        // 2. Récupérer les messages avec toutes les relations
-        prisma.message.findMany({
+        // 2. Récupérer les messages avec toutes les relations. Un expéditeur
+        // disparu faisait rejeter la page ENTIÈRE en 500 (#6501) : la lecture
+        // répare la conversation, puis se rejoue UNE fois.
+        withOrphanedSenderRepair({ prisma, conversationIds: [conversationId] }, () => prisma.message.findMany({
           where: personalWhereClause,
           select: messageSelect,
           // Forward watermark backfill returns oldest-after-watermark first so
@@ -518,7 +525,7 @@ export function registerMessagesListRoute(
           // boundary claimed more and cost the client a round trip to disprove.
           take: (before || isAroundMode || afterMode || searchMode) ? limit + 1 : limit,
           skip: (before || isAroundMode || afterMode) ? 0 : offset
-        }),
+        })),
         // 3. Récupérer les préférences linguistiques (si authentifié)
         shouldFetchUserPrefs
           ? prisma.user.findFirst({
@@ -663,6 +670,12 @@ export function registerMessagesListRoute(
       timings.forwardedEnrichment = performance.now() - t0;
 
       await enrichPostReplyMessagesForList(prisma, mappedMessages);
+
+      // #6164 — la pièce NOMMÉE d'une citation peut tomber hors de la fenêtre
+      // `take: 4` du `select` de `replyTo` (répondre à la 5e photo d'un
+      // carrousel). On la rattrape par son ID, en UNE requête pour la page —
+      // plutôt qu'en faisant payer un `take: 10` à chaque message du fil.
+      await backfillCitedAttachments(prisma, mappedMessages as readonly MessageRattrapable[]);
 
       // Lieu partagé : hisser `metadata.location` en top-level `location` —
       // même miroir que `postReplyTo` ci-dessus, mais sur TOUT message

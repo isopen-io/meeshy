@@ -717,6 +717,7 @@ private struct AudioFullscreenPage: View {
         HapticFeedback.light()
         saveCoordinator.requestSave(MediaSaveRequest(
             kind: .audio,
+            origin: .transmitted,
             remoteURLString: currentAudioUrl,
             suggestedFileName: attachment.originalName.isEmpty ? nil : attachment.originalName,
             attachmentId: attachment.id.isEmpty ? nil : attachment.id
@@ -725,68 +726,17 @@ private struct AudioFullscreenPage: View {
 
     // MARK: - Waveform Section
 
+    /// La bande d'onde vit dans `AudioFullscreenWaveform` (2026-09-13) :
+    /// le porteur y demande un GLISSEMENT (« on voit le recul sur la
+    /// waveform ») et ce fichier était hors budget, où la règle du dépôt
+    /// impose d'extraire AVANT d'ajouter. La page ne garde que le câblage.
     private var waveformSection: some View {
-        GeometryReader { geo in
-            let barCount = waveformAnalyzer.samples.isEmpty ? 80 : waveformAnalyzer.samples.count
-            let barWidth: CGFloat = 3
-            let spacing: CGFloat = 2
-            let totalWidth = CGFloat(barCount) * (barWidth + spacing) - spacing
-            let needsScroll = totalWidth > geo.size.width
-            let playheadBarIndex = max(0, min(barCount - 1, Int(progress * Double(barCount))))
-
-            ScrollViewReader { proxy in
-                ScrollView(.horizontal, showsIndicators: false) {
-                    ZStack(alignment: .leading) {
-                        HStack(spacing: spacing) {
-                            ForEach(0..<barCount, id: \.self) { i in
-                                let fraction = Double(i) / Double(barCount)
-                                let isPlayed = fraction <= progress
-                                let sample = waveformAnalyzer.samples.isEmpty
-                                    ? fallbackHeight(index: i)
-                                    : CGFloat(waveformAnalyzer.samples[i])
-                                let height = max(3, sample * geo.size.height * 0.9)
-                                let computedWidth = needsScroll
-                                    ? barWidth
-                                    : max(2, (geo.size.width - spacing * CGFloat(barCount - 1)) / CGFloat(barCount))
-
-                                RoundedRectangle(cornerRadius: 1.5)
-                                    .fill(isPlayed ? accent : Color.white.opacity(0.15))
-                                    .frame(width: computedWidth, height: height)
-                                    .overlay(
-                                        needsScroll && i == playheadBarIndex
-                                            ? RoundedRectangle(cornerRadius: 1.5)
-                                                .fill(Color.white)
-                                                .frame(width: 2, height: geo.size.height * 0.95)
-                                            : nil
-                                    )
-                                    .id("bar-\(i)")
-                            }
-                        }
-                        .frame(height: geo.size.height, alignment: .center)
-                    }
-                    .contentShape(Rectangle())
-                    .onTapGesture { location in
-                        let contentWidth = needsScroll ? totalWidth : geo.size.width
-                        let fraction = max(0, min(1, location.x / contentWidth))
-                        player.seek(to: fraction)
-                        HapticFeedback.light()
-                    }
-                }
-                .adaptiveOnChange(of: playheadBarIndex) { _, newIdx in
-                    guard needsScroll else { return }
-                    withAnimation(.linear(duration: 0.2)) {
-                        proxy.scrollTo("bar-\(newIdx)", anchor: .center)
-                    }
-                }
-            }
-        }
-        .frame(height: 80)
-    }
-
-    private func fallbackHeight(index: Int) -> CGFloat {
-        let seed = Double(index * 7 + 3)
-        let value = 0.2 + abs(sin(seed) * 0.4 + cos(seed * 0.5) * 0.3)
-        return CGFloat(min(1.0, value))
+        AudioFullscreenWaveform(
+            samples: waveformAnalyzer.samples,
+            progress: progress,
+            accent: accent,
+            onSeek: { player.seek(to: $0) }
+        )
     }
 
     // MARK: - Center Controls
@@ -877,13 +827,13 @@ private struct AudioFullscreenPage: View {
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
+                    // L'écoute SUIT le doigt (`currentTime` : coût nul) — #6300.
                     .onChanged { value in
                         isSeeking = true
                         seekValue = max(0, min(1, value.location.x / geo.size.width))
+                        player.seek(to: seekValue)
                     }
-                    .onEnded { value in
-                        let fraction = max(0, min(1, value.location.x / geo.size.width))
-                        player.seek(to: fraction)
+                    .onEnded { _ in
                         isSeeking = false
                         seekValue = 0
                     }

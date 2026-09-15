@@ -1,0 +1,90 @@
+/**
+ * LA VISIONNEUSE PLEIN ÉCRAN (#6221) — la feuille voyage avec SON chunk
+ * (`media-viewer-*.js`/`.css`), jamais dans `app.css` : c'est un écran
+ * atteint par une MINORITÉ de sessions (un fil qui reçoit plusieurs médias),
+ * et son poids ne doit rien coûter à l'ouverture de l'application — même
+ * arbitrage que `floating-menus.css`.
+ */
+
+.media-viewer-track {
+  scroll-snap-type: x mandatory;
+}
+
+.media-viewer-page {
+  scroll-snap-align: center;
+}
+
+.media-viewer-chrome {
+  transition:
+    opacity 250ms ease,
+    transform 250ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .media-viewer-chrome {
+    transition-duration: 0ms;
+  }
+}
+
+/**
+ * CLASSES DÉDIÉES POUR LES UTILITAIRES TAILWIND PROPRES À CE CHUNK (#6169,
+ * § 5 étape e de la spécification « grille de médias », même arbitrage que
+ * `floating-menus.css`). Tailwind scanne TOUT le code SOURCE, quel que soit
+ * le chunk JS de destination — un utilitaire à valeur ARBITRAIRE ou à
+ * OPACITÉ EN SLASH qui n'apparaît QUE dans `media-viewer.tsx`/`media-
+ * filmstrip.tsx` (mesuré : `grep` sur `src/**\/*.tsx` hors ces deux fichiers,
+ * zéro autre occurrence) est néanmoins ÉCRIT dans la feuille UNIQUE
+ * (`index-*.css`, chargée avant le premier pixel) — le découpage par chunk
+ * JS n'achète RIEN pour le CSS tant que la classe reste écrite en Tailwind.
+ * Ces règles remplacent CES utilitaires-là, un par un ; les utilitaires
+ * PARTAGÉS avec un autre fichier (`h-[3px]` avec `video-tile.tsx`,
+ * `max-w-full`/`opacity-40`/`opacity-70`/`text-white` avec `media-grid.tsx`/
+ * `attachment-blocks.tsx`, etc.) restent en Tailwind : les retirer d'ici ne
+ * changerait rien à `index-*.css`, l'autre fichier les y écrit déjà.
+ */
+.media-viewer-layer {
+  z-index: 1000;
+}
+
+.media-viewer-track-frame {
+  min-height: 0;
+}
+
+.media-viewer-close {
+  width: 2.5rem;
+  height: 2.5rem;
+  background-color: rgb(255 255 255 / 15%);
+}
+
+.media-viewer-progress-track {
+  width: 100%;
+  background-color: rgb(255 255 255 / 20%);
+}
+
+.media-viewer-media {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  transition-duration: 200ms;
+}
+
+.media-viewer-fallback-glyph {
+  opacity: 0.3;
+}
+
+.media-viewer-paused-badge {
+  background-color: rgb(0 0 0 / 55%);
+}
+
+/** Partagée par la page « média indisponible » (ViewerImagePage) et la page masquée (ViewerMaskedPage) — MÊME teinte. */
+.media-viewer-muted-text {
+  color: rgb(255 255 255 / 70%);
+}
+
+.media-filmstrip-item {
+  border-radius: 0.375rem;
+}
+
+.media-filmstrip-masked-glyph {
+  color: rgb(255 255 255 / 60%);
+}

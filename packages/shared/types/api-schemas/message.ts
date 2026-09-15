@@ -220,6 +220,32 @@ export const messageSchema = {
         effectFlags: { type: 'number' },
         isEncrypted: { type: 'boolean' },
         encryptionMode: { type: 'string', nullable: true },
+        // #6164 — la PIÈCE NOMMÉE que cette réponse vise, quand elle en vise
+        // une : l'instantané FIGÉ gravé dans `metadata.attachmentReplyTo` du
+        // message QUI CITE (arbitrage porteur du 2026-09-12, #6123 voie C —
+        // aucune colonne, `Message.metadata Json?` existe déjà).
+        //
+        // DEUX champs, et deux seulement — l'ancre du saut et la NATURE du
+        // média. Tout ce qui DÉCRIT la pièce (sa vignette, son nom, son poids,
+        // sa durée, sa transcription) se relit à chaque service sur
+        // `attachments` ci-dessous, pièce par pièce, et y est retenu par
+        // `mediaMayTravel` : figer l'un d'eux ici survivrait à une protection
+        // posée APRÈS la réponse et à la suppression de la pièce. La liste
+        // complète de ce qui est révocable vit avec la forme, dans
+        // `services/messaging/attachmentReplySnapshot.ts`.
+        //
+        // Sans cette déclaration, fast-json-stringify strippe le champ EN
+        // SILENCE — c'est arrivé à `replyTo.translations` (#4945) : sélectionner
+        // juste et mapper juste ne suffit pas, le fil reste vide sans erreur.
+        attachmentReplyTo: {
+          type: 'object',
+          nullable: true,
+          description: 'Pièce jointe NOMMÉE par la réponse (instantané figé) — ancre du saut et nature du média. Absent ⇒ la réponse vise le message entier, et le client retombe sur son média représentatif.',
+          properties: {
+            attachmentId: { type: 'string' },
+            kind: { type: 'string', enum: ['image', 'video', 'audio', 'location', 'file'] }
+          }
+        },
         sender: {
           type: 'object',
           nullable: true,

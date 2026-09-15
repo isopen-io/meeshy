@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useRef } from 'react';
 
 import { checkStatusOf, isMineOf, servedRowLanguage, translatedLanguagesOf } from '@/lib/view/message';
 import type { LocalDelivery } from '@/lib/view/message';
@@ -6,6 +6,7 @@ import { badgesOf, editedOf, ephemeralBadgeOf, systemRowOf } from '@/lib/view/me
 import { bodyKindOf, placeOf, storyCitationOf } from '@/lib/view/message-body';
 import { initialsOf, presenceOf } from '@/lib/view/conversation';
 import { prismFor, served } from '@/lib/api/prism';
+import { mediaCarrierOf } from '@/lib/view/media';
 import type { PlacedMessage } from '@/lib/grouping';
 import { time } from '@/lib/grouping';
 import type { FlatRowMode } from '@/lib/reading-mode/decision';
@@ -22,6 +23,7 @@ import {
   STICKER_SIDE,
   TEXT_INDENT,
 } from '@/lib/reading-mode/metrics';
+import { useFocalLoupe } from '@/lib/view/use-focal-loupe';
 
 import { Avatar } from './avatar';
 import { Attachments } from './attachment-blocks';
@@ -35,6 +37,7 @@ import {
   Badges,
   Check,
   EditedMark,
+  EffectsIndicator,
   FailedSendBand,
   Flags,
   PrismPastille,
@@ -201,6 +204,12 @@ export const FocalRow = memo(function FocalRow({
   const nowMs = now();
   const kind = expired ? 'expired' : protectionOf(message, nowMs);
   const isMine = isMineOf(message, viewerId);
+
+  /** LA LOUPE (#6586/#6588) — avant tout retour anticipé (règle des Hooks) :
+   * un message expiré/système/supprimé n'est jamais élu, la rangée n'y
+   * grandit donc jamais, mais le hook doit tourner sur CHAQUE rendu. */
+  const rowRef = useRef<HTMLDivElement>(null);
+  useFocalLoupe(rowRef, elected);
 
   // `expired` — EmptyView : rien à rendre, mais l'ANCRE structurelle reste
   // (`data-message`) pour que les gates puissent constater l'absence.
@@ -457,6 +466,8 @@ export const FocalRow = memo(function FocalRow({
           attachments={message.attachments}
           languages={languages}
           fallbackLanguage={message.originalLanguage}
+          carrier={mediaCarrierOf({ message, caption: rendered })}
+          mediaFrame="tiles"
           {...(displayLanguage !== undefined ? { displayLanguage } : {})}
         />
       ) : null}
@@ -489,6 +500,7 @@ export const FocalRow = memo(function FocalRow({
 
   return (
     <div
+      ref={rowRef}
       data-reading-mode={mode}
       data-elected={elected ? 'true' : undefined}
       data-message={message.id}
@@ -583,8 +595,13 @@ export const FocalRow = memo(function FocalRow({
         ) : null}
 
         {/* LES BADGES DE TÊTE — épinglé, transféré (#5936) — AU-DESSUS de
-            l'identité, `FocalRow.swift:233`. */}
-        <Badges badges={badges} />
+            l'identité, `FocalRow.swift:233`. LES EFFETS DÉCORATIFS (#6175,
+            revue-correction défaut majeur 1) rejoignent la même rangée —
+            voir le doc-comment de `EffectsIndicator`, `message-blocks.tsx`. */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Badges badges={badges} />
+          <EffectsIndicator effectFlags={message.effectFlags} />
+        </div>
 
         {/* LE BADGE ÉPHÉMÈRE — AU-DESSUS de l'identité (F11,
             `FocalEphemeralBadge.swift:22-37`, `FocalRow.swift:365-376`),

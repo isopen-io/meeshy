@@ -217,6 +217,15 @@ final class UserPreferencesManagerTests: XCTestCase {
         XCTAssertEqual(manager.application.voiceProfileConsentAt, stamped)
     }
 
+    /// #6611 — l'horodatage d'un consentement est une date du fil
+    /// (`WireDate`) : la passerelle le sert en `toISOString`, à millisecondes.
+    func test_grantVoiceAutoTranslationConsent_stampsWireDateWithMilliseconds() {
+        manager.grantVoiceAutoTranslationConsent(now: Date(timeIntervalSince1970: 1_789_464_863.563))
+
+        XCTAssertEqual(manager.application.dataProcessingConsentAt, "2026-09-15T09:34:23.563Z")
+        XCTAssertEqual(manager.application.voiceCloningEnabledAt, "2026-09-15T09:34:23.563Z")
+    }
+
     // MARK: - shouldApplyRemote (applyRemote server-wins race, P1)
     //
     // `applyRemote` itself is private and only reachable through

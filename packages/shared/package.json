@@ -1,6 +1,6 @@
 {
   "name": "@meeshy/shared",
-  "version": "1.19.1",
+  "version": "1.21.0",
   "description": "Shared library for Meeshy - Types, Prisma Schema, Utilities",
   "private": true,
   "type": "module",
@@ -128,11 +128,11 @@
     "zod": "^4.4.3"
   },
   "optionalDependencies": {
-    "@signalapp/libsignal-client": "^0.101.0"
+    "@signalapp/libsignal-client": "^0.102.0"
   },
   "devDependencies": {
     "@types/node": "^20.19.43",
-    "@vitest/coverage-v8": "^4.1.10",
+    "@vitest/coverage-v8": "^5.0.0",
     "prisma": "^6.15.0",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"

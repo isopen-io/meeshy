@@ -192,6 +192,15 @@ export interface Attachment {
    * original for inline previews.
    */
   readonly imageVariants?: readonly ImageVariant[];
+  /**
+   * #6221 — le TYPE CLIENT rattrape son contrat : la passerelle SERT ce champ
+   * (`api-schemas/message-attachment.ts:91`, `schema.prisma:1010`,
+   * `serializeAttachmentForSocket.ts:106`) depuis avant ce lot ; il manquait
+   * seulement ICI. Encodage ThumbHash (Evan Wallace, licence MIT) en base64
+   * standard — le placeholder peint AVANT toute requête réseau
+   * (`apps/web-v2/src/lib/media/thumbhash.ts`).
+   */
+  readonly thumbHash?: string;
 
   // ===== AUDIO/VIDEO METADATA =====
   readonly duration?: number;       // Duration in milliseconds

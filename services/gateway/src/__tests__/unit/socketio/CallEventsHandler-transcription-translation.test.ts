@@ -18,6 +18,7 @@ import { EventEmitter } from 'events';
 
 const mockGetCallSession = jest.fn<any>();
 jest.mock('../../../services/CallService', () => ({
+  ...(jest.requireActual('../../../services/CallService') as object),
   CallService: jest.fn().mockImplementation(() => ({
     getCallSession: mockGetCallSession,
   })),

@@ -39,6 +39,7 @@ const mockCreateMissedCallNotification = jest.fn<any>().mockResolvedValue(null);
 const mockReleaseActiveCallClaim = jest.fn<any>();
 
 jest.mock('../../../services/CallService', () => ({
+  ...(jest.requireActual('../../../services/CallService') as object),
   CallService: jest.fn().mockImplementation(() => ({
     initiateCall: mockInitiateCall,
     generateIceServers: mockGenerateIceServers,

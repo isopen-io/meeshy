@@ -26,6 +26,9 @@
  */
 import { readFileSync } from 'node:fs';
 
+import { mediaGridCurveFailures } from './lib/curve-media-grid.mjs';
+import { MOSAIC_LAYOUT_COTES, mosaicLayoutCurveFailures } from './lib/curve-mosaic-layout.mjs';
+
 const ROOT = new URL('../../..', import.meta.url).pathname;
 const UPSTREAM = `${ROOT}packages/shared/utils/focus-curve.ts`;
 /**
@@ -116,6 +119,8 @@ const SWIFT_MAPPINGS = [
    * lirait alors le premier trouvé, pas nécessairement celui de `Muted`.
    */
   ['opacity', 'MUTED_OPACITY', 'opacité d’une rangée en sourdine (Muted.opacity, #5559)'],
+  ['loupeGain', 'LOUPE_GAIN', 'gain de loupe de la rangée qui traverse la bande (FocusCard.loupeGain, #6588)'],
+  ['marginHorizontal', 'ROW_MARGIN_HORIZONTAL', 'écrêtage horizontal de la loupe (Row.marginHorizontal, #6588)'],
 ];
 
 /**
@@ -206,6 +211,9 @@ const FOCAL_MAPPINGS = [
   ['edgeTravel', 'HIDDEN_CHROME_EDGE_TRAVEL', "course de l'escamotage vers le bord (HiddenChrome.edgeTravel)"],
   // --- #5936 : le sticker de la rangée plate (Sticker.side).
   ['side', 'STICKER_SIDE', 'côté du sticker en rangée plate (Sticker.side)'],
+  // --- #6588 : la LOUPE du message élu (Focus.loupeGain / FocusCard.marginVertical).
+  ['loupeGain', 'FOCUS_LOUPE_GAIN', 'gain de loupe du message élu (Focus.loupeGain, #6588)'],
+  ['marginVertical', 'FOCUS_CARD_MARGIN_VERTICAL', 'écrêtage vertical de la loupe du message élu (FocusCard.marginVertical, #6588)'],
 ];
 
 for (const [swiftName, downstreamName, what] of FOCAL_MAPPINGS) {
@@ -415,15 +423,16 @@ for (const [swiftName, downstreamName, what] of REVEAL_MAPPINGS) {
  * gardait `RAIL_SIZE_COMPACT` (`components/stories-rail.tsx`, la branche
  * `#5652` de cette fusion) en parité TEXTUELLE stricte avec
  * `AvatarContext.storyTrayCompact` (36 pt, `MeeshyAvatar.swift`). La bande
- * épinglée retenue par la fusion (`components/story-rail.tsx`, doc-comment
- * « LA COTE — DEUX CONSTANTES iOS ») ne reprend PAS cette cote : elle sert la
- * cote COMPACTE de `rail-tile.tsx` (`RAIL_TILE_COMPACT` = 30), partagée avec
- * la tuile de conversation, un choix ASSUMÉ et non tranché par cette fusion
- * (« l'écart qui reste… n'est pas tranché par cette fusion »). Un gate qui
- * exigeait l'égalité stricte avec 36 pt rougirait donc sur un écart QUI EST
- * la décision, pas un défaut — et son fichier source (`stories-rail.tsx`) a
- * disparu avec la branche qu'il gardait. Si la cote 36 doit un jour redevenir
- * la référence, elle se regarde à `rail-tile.tsx`, jamais ici.
+ * épinglée retenue par la fusion servait alors la cote COMPACTE de
+ * `rail-tile.tsx` (30), un écart non tranché — et son fichier source
+ * (`stories-rail.tsx`) a disparu avec la branche qu'il gardait.
+ *
+ * **#6133 A TRANCHÉ : 36 EST REDEVENUE LA RÉFÉRENCE**, et elle se regarde là où
+ * ce commentaire l'annonçait — `rail-tile.tsx` (`RAIL_TILE_COMPACT` = 36,
+ * `RAIL_TILE_GRANDE` = 88, la cote iOS gouvernant l'AVATAR). Sa garde n'est pas
+ * revenue ici en parité TEXTUELLE : elle mesure la cote PEINTE, en bornes
+ * absolues nommées, au navigateur (`check-lens.mjs` § 7,
+ * `check-floating-clearance.mjs`) et dans `rail-tile.test.tsx`.
  */
 
 /**
@@ -759,6 +768,42 @@ for (const [swiftSource, swiftName, downstreamName, what] of MENU_MAPPINGS) {
     failures.push(`boîte emoji du sticker : Swift ${emojiBoxSwift}, dérivée ${emojiBoxDerived}`);
 }
 
+/**
+ * PARTIE 10 — LE SEUIL DU TIRER-POUR-RAFRAÎCHIR (#6195). Le brief de la
+ * spécification nomme cette section « PARTIE 6 », déjà prise par la
+ * typographie de la Lentille (ci-dessus, même renumérotation qu'à la
+ * PARTIE 9) : numérotée ici dans l'ordre réel du fichier.
+ *
+ * SOURCE SWIFT DISTINCTE de `FocalMetrics.swift` : `pullThreshold` est une
+ * PROPRIÉTÉ CALCULÉE (`{ 90 }`, pas `= 90`) de
+ * `MeeshyRefreshableScroll.swift` — sa propre regex, motif PARTIE 9 pour
+ * `EmojiDetector.swift`.
+ */
+{
+  const refreshableScrollSwift = readFileSync(
+    `${ROOT}packages/MeeshySDK/Sources/MeeshyUI/Primitives/MeeshyRefreshableScroll.swift`,
+    'utf8',
+  );
+  const pullToRefreshDerived = readFileSync(`${ROOT}apps/web-v2/src/lib/view/pull-to-refresh.ts`, 'utf8');
+
+  const pullThresholdSwift = (() => {
+    const m = /pullThreshold:\s*CGFloat\s*\{\s*(-?[0-9.]+)\s*\}/.exec(refreshableScrollSwift);
+    return m === null ? null : Number(m[1]);
+  })();
+  const pullThresholdDerived = count(pullToRefreshDerived, 'PULL_THRESHOLD');
+
+  if (pullThresholdSwift === null) {
+    failures.push('seuil du tirer-pour-rafraîchir : « pullThreshold: CGFloat { … } » introuvable dans MeeshyRefreshableScroll.swift');
+  } else if (pullThresholdDerived === null) {
+    failures.push('seuil du tirer-pour-rafraîchir : « PULL_THRESHOLD » introuvable dans lib/view/pull-to-refresh.ts');
+  } else if (pullThresholdSwift !== pullThresholdDerived) {
+    failures.push(`seuil du tirer-pour-rafraîchir : Swift ${pullThresholdSwift}, dérivé ${pullThresholdDerived}`);
+  }
+}
+
+failures.push(...mediaGridCurveFailures({ root: ROOT, count }));
+failures.push(...mosaicLayoutCurveFailures({ root: ROOT, count }));
+
 if (failures.length > 0) {
   console.error('\n  La loi de la Lentille a DÉRIVÉ de packages/shared/utils/focus-curve.ts :\n');
   for (const e of failures) console.error(`    · ${e}`);
@@ -786,5 +831,10 @@ console.log(
     `\n  Le menu du message est conforme à MessageOverlayMenu.swift/MessageActionsMenu.swift` +
     ` (${MENU_MAPPINGS.length} cotes + le chrome de la liste + les 6/20 emojis du rail).` +
     `\n  Les états du message sont conformes à EmojiDetector.swift/BubbleSticker.swift` +
-    ` (3 tailles d'emoji seul + 2 cotes de sticker en bulle).`,
+    ` (3 tailles d'emoji seul + 2 cotes de sticker en bulle).` +
+    `\n  Le seuil du tirer-pour-rafraîchir est conforme à MeeshyRefreshableScroll.swift (1 cote).` +
+    `\n  La grille de médias du Fil est conforme à FocalAttachmentBlock.swift/BubbleStandardLayout+Media.swift/` +
+    `ConversationMediaFilmstrip.swift/+Geometry.swift/+Pages.swift (21 cotes).` +
+    `\n  L'agencement d'une publication est conforme à CanvasV3.swift/MosaicLayout.swift/PostSceneMosaic.swift` +
+    ` et à canvas-v3.ts (${MOSAIC_LAYOUT_COTES} cotes ; les valeurs sont gardées par mosaic-layout.test.ts).`,
 );

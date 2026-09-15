@@ -124,8 +124,11 @@ final class NativeSharePresentationTests: XCTestCase {
             "onCreateShareLink → InviteFriendsSheet. It must stay deleted rather than be revived: " +
             "it carried a third copy of the window-hierarchy walk plus two hardcoded French strings."
         )
+        // The sheet targets moved onto the heap in 19a7e14189 (2026-09-13,
+        // `ConversationListSheetTargets`): `inviteSheetConversation` became
+        // `sheetTargets.inviteSheet`. The affordance itself never moved (#5599).
         XCTAssertTrue(
-            source.contains("inviteSheetConversation = conversation"),
+            source.contains("sheetTargets.inviteSheet = conversation"),
             "The live share affordance (onCreateShareLink → InviteFriendsSheet) must remain wired."
         )
     }

@@ -131,13 +131,58 @@ final class StoryNotificationTargetViewModelTests: XCTestCase {
         XCTAssertEqual(vm.state, .offline)
     }
 
-    /// A 5xx is likewise not a confirmed "not found" — only a genuine 404
-    /// (`APIError.serverError(404, _)`) may claim `.expired`.
-    func test_load_withoutCache_andServerError500_emitsOffline_notExpired() async {
+    /// #6508 — a 5xx is not a confirmed "not found", and it is NOT a network
+    /// failure either: the server answered and failed. Reporting it as
+    /// `.offline` told connected users to check their connection (#6503).
+    func test_load_withoutCache_andServerError500_emitsServerFailed_neverOffline() async {
+        let vm = await loadedWithoutCache(failingWith: MeeshyError.server(statusCode: 500, message: "Erreur serveur"))
+        XCTAssertEqual(vm.state, .serverFailed)
+    }
+
+    /// `APIClient` turns an unreadable body into `server(0)` — a server
+    /// answer, never a connectivity problem.
+    func test_load_withoutCache_andUndecodableBody_emitsServerFailed() async {
+        let vm = await loadedWithoutCache(failingWith: MeeshyError.server(statusCode: 0, message: "Erreur de decodage"))
+        XCTAssertEqual(vm.state, .serverFailed)
+    }
+
+    /// The 404 AS `APIClient` THROWS IT (`MeeshyError`, not `APIError`): the
+    /// previous guard only matched `APIError.serverError`, which `APIClient`
+    /// never throws — a real 404 became `.offline`.
+    func test_load_withoutCache_and404AsTheClientThrowsIt_emitsExpired() async {
+        let vm = await loadedWithoutCache(failingWith: MeeshyError.server(statusCode: 404, message: "Post not found"))
+        XCTAssertEqual(vm.state, .expired)
+    }
+
+    /// A 403 (private, out of audience) is an answer too: unavailable.
+    func test_load_withoutCache_andForbidden_emitsExpired_neverOffline() async {
+        let vm = await loadedWithoutCache(failingWith: MeeshyError.forbidden(reason: nil, body: nil))
+        XCTAssertEqual(vm.state, .expired)
+    }
+
+    /// Réessayer depuis un échec doit pouvoir le REMPLACER : `load()` ne
+    /// réécrivait que `.loading`, si bien qu'un échec réseau suivi d'un échec
+    /// serveur continuait de dire « hors ligne ».
+    func test_retry_afterANetworkFailure_thenAServerFailure_saysTheServer() async {
         let mock = MockStoryService()
         mock.cachedPostResult = nil
-        mock.fetchPostResult = .failure(APIError.serverError(500, "Internal Server Error"))
+        mock.fetchPostResult = .failure(MeeshyError.network(.noConnection))
+        let vm = StoryNotificationTargetViewModel(
+            storyId: "p1", intent: .reactions, context: makeContext(), storyService: mock
+        )
+        await vm.load()
+        XCTAssertEqual(vm.state, .offline)
 
+        mock.fetchPostResult = .failure(MeeshyError.server(statusCode: 503, message: "Service Unavailable"))
+        await vm.load()
+
+        XCTAssertEqual(vm.state, .serverFailed)
+    }
+
+    private func loadedWithoutCache(failingWith error: Error) async -> StoryNotificationTargetViewModel {
+        let mock = MockStoryService()
+        mock.cachedPostResult = nil
+        mock.fetchPostResult = .failure(error)
         let vm = StoryNotificationTargetViewModel(
             storyId: "p1",
             intent: .reactions,
@@ -145,7 +190,7 @@ final class StoryNotificationTargetViewModelTests: XCTestCase {
             storyService: mock
         )
         await vm.load()
-        XCTAssertEqual(vm.state, .offline)
+        return vm
     }
 
     /// A cache hit already answered the question (active or expired) — a
@@ -293,7 +338,8 @@ extension StoryNotificationTargetViewModel.LoadState: @retroactive Equatable {
     public static func == (lhs: Self, rhs: Self) -> Bool {
         switch (lhs, rhs) {
         case (.loading, .loading), (.expired, .expired),
-             (.expiredConsumed, .expiredConsumed), (.offline, .offline):
+             (.expiredConsumed, .expiredConsumed), (.offline, .offline),
+             (.serverFailed, .serverFailed):
             return true
         case (.active(let a), .active(let b)):
             return a.id == b.id

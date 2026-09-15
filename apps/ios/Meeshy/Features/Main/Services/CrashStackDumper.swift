@@ -18,6 +18,45 @@ import Darwin
 enum CrashStackDumper {
     private static var dumpPathBuffer = [CChar](repeating: 0, count: 1024)
 
+    /// Tampon d'en-tête, alloué À L'INSTALLATION (#6213 bis).
+    ///
+    /// Le handler ne peut RIEN allouer : il court après un SIGSEGV, souvent
+    /// parce que la pile est morte. Tout ce qu'il écrit doit donc déjà exister.
+    private static var headerBuffer = [CChar](repeating: 0, count: 512)
+
+    /// Écrit `value` en hexadécimal dans `buf` à partir de `at`, et rend la
+    /// position suivante. Async-signal-safe par construction : aucune
+    /// allocation, aucun appel de bibliothèque — `snprintf` ne l'est pas.
+    private static func writeHex(_ value: UInt, into buf: UnsafeMutablePointer<CChar>, at start: Int) -> Int {
+        let digits: [CChar] = [48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 97, 98, 99, 100, 101, 102]
+        buf[start] = 48      // '0'
+        buf[start + 1] = 120 // 'x'
+        var i = start + 2
+        var seen = false
+        var shift = 60
+        while shift >= 0 {
+            let nibble = Int((value >> UInt(shift)) & 0xF)
+            if nibble != 0 || seen || shift == 0 {
+                seen = true
+                buf[i] = digits[nibble]
+                i += 1
+            }
+            shift -= 4
+        }
+        return i
+    }
+
+    private static func writeASCII(_ text: StaticString, into buf: UnsafeMutablePointer<CChar>, at start: Int) -> Int {
+        var i = start
+        text.withUTF8Buffer { bytes in
+            for b in bytes {
+                buf[i] = CChar(bitPattern: b)
+                i += 1
+            }
+        }
+        return i
+    }
+
     static func install() {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         let path = docs.appendingPathComponent("segv_backtrace.txt").path
@@ -33,10 +72,119 @@ enum CrashStackDumper {
         sigaltstack(&stack, nil)
 
         var action = sigaction()
-        action.__sigaction_u.__sa_sigaction = { sig, _, _ in
+        action.__sigaction_u.__sa_sigaction = { sig, info, ucontext in
             CrashStackDumper.dumpPathBuffer.withUnsafeBufferPointer { pathPtr in
                 let fd = open(pathPtr.baseAddress!, O_CREAT | O_WRONLY | O_TRUNC, 0o644)
                 if fd >= 0 {
+                    /*
+                     LE VERDICT AVANT LA PILE (#6213 bis) — « débordement » et
+                     « pointeur invalide » rendent le MÊME signal 11 et la même
+                     trace d'apparence normale. Les distinguer à l'œil, sur la
+                     forme de la pile, est un pari : une récursion visible dit
+                     « débordement », mais son ABSENCE ne dit rien — un cadre
+                     unique et énorme déborde sans se répéter.
+                     Ce que le noyau sait, lui, c'est l'ADRESSE fautive. Comparée
+                     aux bornes de la pile du thread, elle tranche :
+                       · juste SOUS la limite basse  ⇒ page de garde ⇒ débordement
+                       · ailleurs                    ⇒ accès invalide, point.
+                     Trois lignes écrites avant la trace, à zéro allocation.
+                    */
+                    CrashStackDumper.headerBuffer.withUnsafeMutableBufferPointer { hdr in
+                        guard let base = hdr.baseAddress else { return }
+                        let me = pthread_self()
+                        let high = UInt(bitPattern: pthread_get_stackaddr_np(me))
+                        let size = UInt(pthread_get_stacksize_np(me))
+                        let fault = UInt(bitPattern: info?.pointee.si_addr)
+                        var i = CrashStackDumper.writeASCII("=== signal ", into: base, at: 0)
+                        i = CrashStackDumper.writeHex(UInt(UInt32(bitPattern: sig)), into: base, at: i)
+                        i = CrashStackDumper.writeASCII(" si_addr=", into: base, at: i)
+                        i = CrashStackDumper.writeHex(fault, into: base, at: i)
+                        i = CrashStackDumper.writeASCII(" stack_high=", into: base, at: i)
+                        i = CrashStackDumper.writeHex(high, into: base, at: i)
+                        i = CrashStackDumper.writeASCII(" stack_size=", into: base, at: i)
+                        i = CrashStackDumper.writeHex(size, into: base, at: i)
+                        i = CrashStackDumper.writeASCII(" stack_low=", into: base, at: i)
+                        i = CrashStackDumper.writeHex(high &- size, into: base, at: i)
+                        i = CrashStackDumper.writeASCII(" ===\n", into: base, at: i)
+                        _ = write(fd, base, i)
+                    }
+                    /*
+                     LA TAILLE DE CHAQUE CADRE (#6213 bis) — « ça déborde » ne
+                     dit pas QUOI corriger. 149 cadres pour 1008 Ko, c'est une
+                     MOYENNE de 7 Ko ; une moyenne sur une distribution que l'on
+                     sait très inégale ne désigne personne. Ce qu'il faut est le
+                     PALMARÈS : quel `body` matérialise, à lui seul, des dizaines
+                     de kilo-octets de type composite.
+                     On marche la chaîne des pointeurs de cadre depuis le
+                     CONTEXTE du crash (`ucontext`), pas depuis le handler — qui
+                     court sur la pile alternative et ne verrait que lui-même.
+                     Sur arm64 : [fp] = fp de l'appelant, [fp+8] = adresse de
+                     retour ; la taille d'un cadre est la distance à son
+                     appelant. Même ordre que `backtrace`, donc les deux listes
+                     se lisent en regard.
+                    */
+                    /*
+                     BORNÉ À arm64, l'ABI que ce bloc DÉCRIT (#6213 ter).
+                     Le commentaire ci-dessus dit « Sur arm64 : [fp] = fp de
+                     l'appelant, [fp+8] = adresse de retour » — mais le code ne
+                     GARDAIT pas ce qu'il affirmait. `__ss.__fp` n'existe que sur
+                     `__darwin_arm64_thread_state64` ; le champ homologue de
+                     `__darwin_x86_thread_state64` s'appelle `__rbp`.
+                     Pourquoi la panne a survécu à un build device VERT : un build
+                     d'appareil ne compile QUE arm64, tandis que
+                     `-destination "generic/platform=iOS Simulator"` — ce que fait
+                     la CI « iOS Tests » — compile arm64 ET x86_64. La condition
+                     manquante n'était donc pas visible du côté où j'avais mesuré.
+                     > Une garde d'architecture absente ne se voit pas sur la
+                     > tranche qu'on a compilée : elle se voit sur celle qu'on n'a
+                     > pas compilée. Un vert d'appareil ne dit rien du simulateur.
+                     Pas de branche x86_64 : le palmarès de cadres sert le
+                     diagnostic sur APPAREIL RÉEL (le débordement de pile mesuré y
+                     vivait), et aucun simulateur Intel ne tourne sur cette machine.
+                     Écrire une seconde ABI que rien n'exercerait serait du code
+                     mort crédible — exactement ce que ce dépôt paie ailleurs.
+                     La trace `backtrace()` qui suit, elle, reste servie sur TOUTE
+                     architecture : seul le palmarès est arm64.
+                    */
+                    #if arch(arm64)
+                    if let uc = ucontext?.assumingMemoryBound(to: ucontext_t.self),
+                       let mc = uc.pointee.uc_mcontext {
+                        CrashStackDumper.headerBuffer.withUnsafeMutableBufferPointer { hdr in
+                            guard let base = hdr.baseAddress else { return }
+                            var i = CrashStackDumper.writeASCII("--- cadres (fp, octets) ---\n", into: base, at: 0)
+                            _ = write(fd, base, i)
+                            var fp = UInt(mc.pointee.__ss.__fp)
+                            var level = 0
+                            while fp != 0, level < 192 {
+                                let next = UInt(UnsafeRawPointer(bitPattern: fp)?.load(as: UInt.self) ?? 0)
+                                let span = next > fp ? next &- fp : 0
+                                /* L'ADRESSE DE RETOUR, pour un appariement EXACT.
+                                   Apparier deux listes parcourues séparément — la
+                                   chaîne de fp et `backtrace()` — par leur RANG est
+                                   un pari : les deux ne comptent pas les mêmes
+                                   cadres, et le décalage dérive en cours de pile.
+                                   Mesuré : « bodyContent » attribué à trois niveaux
+                                   différents. Avec l'adresse, chaque cadre se
+                                   raccroche à SA ligne de symbole, sans offset. */
+                                let ra = UInt(UnsafeRawPointer(bitPattern: fp &+ 8)?.load(as: UInt.self) ?? 0)
+                                i = CrashStackDumper.writeHex(UInt(level), into: base, at: 0)
+                                i = CrashStackDumper.writeASCII(" fp=", into: base, at: i)
+                                i = CrashStackDumper.writeHex(fp, into: base, at: i)
+                                i = CrashStackDumper.writeASCII(" ra=", into: base, at: i)
+                                i = CrashStackDumper.writeHex(ra, into: base, at: i)
+                                i = CrashStackDumper.writeASCII(" size=", into: base, at: i)
+                                i = CrashStackDumper.writeHex(span, into: base, at: i)
+                                i = CrashStackDumper.writeASCII("\n", into: base, at: i)
+                                _ = write(fd, base, i)
+                                if next <= fp { break }
+                                fp = next
+                                level += 1
+                            }
+                            i = CrashStackDumper.writeASCII("--- trace ---\n", into: base, at: 0)
+                            _ = write(fd, base, i)
+                        }
+                    }
+                    #endif
                     var addrs = [UnsafeMutableRawPointer?](repeating: nil, count: 192)
                     let n = backtrace(&addrs, 192)
                     backtrace_symbols_fd(&addrs, n, fd)
@@ -50,6 +198,30 @@ enum CrashStackDumper {
         sigaction(SIGSEGV, &action, nil)
         sigaction(SIGBUS, &action, nil)
         NSLog("[CrashStackDumper] installed (Documents/segv_backtrace.txt)")
+        /* LA TAILLE DES TYPES DE VALEUR DU FIL (#6213 bis) — un cadre de pile
+           n'est grand que parce qu'un type l'est. `ConversationView` est
+           CAPTURÉ PAR VALEUR par chaque closure de son `body` ; si son état
+           inline pèse des dizaines de kilo-octets, chaque capture les recopie.
+           Trois nombres valent mieux que trois hypothèses. */
+        /* LE RELEVÉ DES TAILLES DE VUES (#6221, suite) — une vue SwiftUI est un
+           type VALEUR que chaque closure de son `body` COPIE. Sa taille est
+           donc un coût de PILE payé à chaque rendu, invisible à tout profil
+           d'allocation. Ce relevé est l'instrument qui a trouvé les 15 Ko de
+           `ConversationView` ; il reste en place, en DEBUG, pour que la
+           prochaine vue qui grossit se voie avant de déborder. */
+        NSLog("[sizes] ConversationView=%d RootView=%d iPadRootView=%d ConversationListView=%d StoryViewerView=%d",
+              MemoryLayout<ConversationView>.size,
+              MemoryLayout<RootView>.size,
+              MemoryLayout<iPadRootView>.size,
+              MemoryLayout<ConversationListView>.size,
+              MemoryLayout<StoryViewerView>.size)
+        NSLog("[sizes-etats] overlay=%d composer=%d scroll=%d header=%d Message=%d Conversation=%d",
+              MemoryLayout<ConversationOverlayState>.size,
+              MemoryLayout<ConversationComposerState>.size,
+              MemoryLayout<ConversationScrollState>.size,
+              MemoryLayout<ConversationHeaderState>.size,
+              MemoryLayout<Message>.size,
+              MemoryLayout<Conversation>.size)
     }
 }
 #endif

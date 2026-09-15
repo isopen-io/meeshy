@@ -62,7 +62,7 @@ extension ConversationListView {
     // `ConversationRowItem`. < iOS 26 : overlay custom
     // (`ConversationContextMenuView`, déclenché par `RowPressBounceModifier`
     // → `onLongPress`). Les DEUX chemins doivent rester en parité d'actions ;
-    // la suppression arme toujours `deleteTargetConversation` (confirmation
+    // la suppression arme toujours `sheetTargets.deleteTarget` (confirmation
     // système — invariants `ConversationMenuSystemDesignGuardTests`).
 
     // MARK: - Native Context Menu (iOS 26 Liquid Glass)
@@ -170,8 +170,10 @@ extension ConversationListView {
         // card I-071, ce sous-menu — l'aperçu-menu `LentillePeekView` a été
         // supprimé le 2026-08-21 : l'aperçu montre les derniers messages).
         // Drapeau OFF ⇒ rien de plus ici : bit-à-bit identique au menu
-        // d'aujourd'hui, comme partout ailleurs dans la Lentille.
-        if LentilleFeatureFlag.isLentilleListEnabled {
+        // d'aujourd'hui, comme partout ailleurs dans la Lentille. Modes de
+        // lecture coupés (#6482) ⇒ pas de sous-menu non plus : un mode choisi
+        // ici serait ignoré à l'ouverture, qui rend Script.
+        if LentilleFeatureFlag.isLentilleListEnabled, LentilleFeatureFlag.isReadingModesEnabled {
             LentilleReadingModeSubmenu(
                 conversation: conversation,
                 isAnonymous: ConversationListReaderAnonymity.isAnonymous(currentUser: AuthManager.shared.currentUser)
@@ -181,7 +183,7 @@ extension ConversationListView {
         // Détails
         Button {
             HapticFeedback.light()
-            conversationInfoConversation = conversation
+            sheetTargets.info = conversation
         } label: {
             Label(
                 String(localized: "context.details", defaultValue: "Détails", bundle: .main),
@@ -194,7 +196,7 @@ extension ConversationListView {
             Button {
                 HapticFeedback.light()
                 renameText = conversation.name
-                renameTarget = conversation
+                sheetTargets.rename = conversation
             } label: {
                 Label(
                     String(localized: "context.rename", defaultValue: "Renommer", bundle: .main),
@@ -258,7 +260,7 @@ extension ConversationListView {
             if canCreateShareLink(for: conversation) {
                 Button {
                     HapticFeedback.medium()
-                    inviteSheetConversation = conversation
+                    sheetTargets.inviteSheet = conversation
                 } label: {
                     Label(
                         String(localized: "context.invite_friends", defaultValue: "Inviter mes amis", bundle: .main),
@@ -273,10 +275,10 @@ extension ConversationListView {
                 HapticFeedback.medium()
                 if isLockedCtx {
                     lockSheetMode = .unlockConversation
-                    lockSheetConversation = conversation
+                    sheetTargets.lockSheet = conversation
                 } else if ConversationLockManager.shared.masterPinConfigured {
                     lockSheetMode = .lockConversation
-                    lockSheetConversation = conversation
+                    sheetTargets.lockSheet = conversation
                 } else {
                     showNoMasterPinAlert = true
                 }
@@ -309,18 +311,9 @@ extension ConversationListView {
                 )
             }
 
-            // Focal (bêta) — I-075, amendement produit 2026-08-16. Publication
-            // bêta publique (plus un outil de dev) : force le mode Focal pour
-            // CETTE ouverture SEULE, sans écrire NI la préférence de mode NI
-            // aucun drapeau (jamais `select()`, jamais `LentilleFeatureFlag
-            // .setForDebug`, jamais `BetaFeaturesPreference.setEnabled`).
-            // Gardé par `BetaFeaturesPreference.isEnabled` (préférence
-            // utilisateur « Activer les bêta » — réglages, SettingsView)
-            // — indépendant de `reading_modes` : allumer ce
-            // dernier globalement re-déciderait la vue de TOUTES LES AUTRES
-            // conversations (mode AUTO), ce que ce chantier interdit.
             // RETRAIT FOCAL iOS (2026-08-18) : l'item « Focal (bêta) »
-            // (I-075) est retiré avec le mode — Script est le mode nominal.
+            // (I-075), qui forçait Focal pour une seule ouverture, est retiré
+            // avec le mode — Script est le mode nominal.
 
             // Bloquer / Débloquer (DM uniquement)
             if conversation.type == .direct, let userId = conversation.participantUserId {
@@ -342,7 +335,7 @@ extension ConversationListView {
                 } else {
                     Button(role: .destructive) {
                         HapticFeedback.heavy()
-                        blockTargetConversation = conversation
+                        sheetTargets.blockTarget = conversation
                         showBlockConfirmation = true
                     } label: {
                         Label(
@@ -364,7 +357,7 @@ extension ConversationListView {
         // Supprimer — arme la confirmation système (jamais de delete direct).
         Button(role: .destructive) {
             HapticFeedback.heavy()
-            deleteTargetConversation = conversation
+            sheetTargets.deleteTarget = conversation
         } label: {
             Label(
                 String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main),
@@ -400,7 +393,7 @@ extension ConversationListView {
             contextMenuAppeared = false
         }
         let work = DispatchWorkItem {
-            contextMenuConversation = nil
+            sheetTargets.contextMenu = nil
             previewScale = 1.0
             previewEmergeOffset = 0
             dragOffsetY = 0
@@ -474,7 +467,7 @@ extension ConversationListView {
 
     @ViewBuilder
     var conversationContextMenuOverlay: some View {
-        if let conversation = contextMenuConversation {
+        if let conversation = sheetTargets.contextMenu {
             ZStack {
                 Rectangle()
                     .fill(.ultraThinMaterial)
@@ -523,7 +516,7 @@ extension ConversationListView {
                             router.pendingOpenSearch = true
                             onSelect(conversation)
                         },
-                        onInfo: { dismissContextMenu(); conversationInfoConversation = conversation },
+                        onInfo: { dismissContextMenu(); sheetTargets.info = conversation },
                         onProfileInfo: { dismissContextMenu(); handleProfileView(conversation) }
                     )
                     // Preview STATIQUE (parité `.contextMenu` natif) : le
@@ -596,10 +589,10 @@ extension ConversationListView {
                                 }
                             }
                         },
-                        onDetails: { conversationInfoConversation = conversation },
+                        onDetails: { sheetTargets.info = conversation },
                         onRename: {
                             renameText = conversation.name
-                            renameTarget = conversation
+                            sheetTargets.rename = conversation
                         },
                         onSetFavorite: { emoji in
                             Task { await conversationViewModel.setFavoriteReaction(conversationId: conversation.id, emoji: emoji) }
@@ -610,14 +603,14 @@ extension ConversationListView {
                         onMove: { sectionId in
                             conversationViewModel.moveToSection(conversationId: conversation.id, sectionId: sectionId)
                         },
-                        onInvite: { inviteSheetConversation = conversation },
+                        onInvite: { sheetTargets.inviteSheet = conversation },
                         onLock: {
                             if ConversationLockManager.shared.isLocked(conversation.id) {
                                 lockSheetMode = .unlockConversation
-                                lockSheetConversation = conversation
+                                sheetTargets.lockSheet = conversation
                             } else if ConversationLockManager.shared.masterPinConfigured {
                                 lockSheetMode = .lockConversation
-                                lockSheetConversation = conversation
+                                sheetTargets.lockSheet = conversation
                             } else {
                                 showNoMasterPinAlert = true
                             }
@@ -638,14 +631,14 @@ extension ConversationListView {
                                     await MainActor.run { HapticFeedback.success() }
                                 }
                             } else {
-                                blockTargetConversation = conversation
+                                sheetTargets.blockTarget = conversation
                                 showBlockConfirmation = true
                             }
                         },
                         onDelete: {
                             // Destructif → confirmation système obligatoire
                             // (dialog attaché dans ConversationListView.body).
-                            deleteTargetConversation = conversation
+                            sheetTargets.deleteTarget = conversation
                         },
                         onOpenFocalBetaPreview: {
                             // RETRAIT FOCAL iOS (2026-08-18) : l'item n'est
@@ -760,7 +753,7 @@ extension ConversationListView {
         let hovered = sectionFrameRegistry.frames
             .first(where: { $0.value.contains(location) })?
             .key
-        let pinnedIsLive = contextMenuConversation?.userState.isPinned == false
+        let pinnedIsLive = sheetTargets.contextMenu?.userState.isPinned == false
         let target = (hovered == "pinned" && !pinnedIsLive) ? nil : hovered
         if dropTargetSection != target {
             withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
@@ -782,7 +775,7 @@ extension ConversationListView {
             }
             dismissContextMenu()
         }
-        guard let conversation = contextMenuConversation else { return }
+        guard let conversation = sheetTargets.contextMenu else { return }
         let hovered = sectionFrameRegistry.frames
             .first(where: { $0.value.contains(location) })?
             .key

@@ -316,6 +316,22 @@ describe('SocialEventsHandler', () => {
       expect(roomsArg).toContain(`feed:${FRIEND_ID_2}`);
       expect(roomsArg).toContain(`feed:${AUTHOR_ID}`);
       expect(roomsArg).toContain(`post:${POST_ID}`);
+
+      // **L'ACTEUR reçoit son propre écho** (retour porteur 2026-09-13 : « le
+      // like n'est pas synchronisé entre les différentes vues »).
+      //
+      // `USER_ID` n'est NI l'auteur NI l'un des deux amis : c'est exactement le
+      // rang sur lequel ce témoin doit porter. Sur un acteur AMI, la règle
+      // fautive et la règle juste rendent le même verdict — il serait vert sans
+      // rien garder (leçon 261 du dépôt : un témoin de RANG s'écrit sur un rang
+      // AUTRE que le premier).
+      //
+      // Ce que fermait son absence : le fil sert des posts PUBLICS d'inconnus
+      // (`buildPostVisibilityOrFilter`). Aimer l'un d'eux depuis le fil
+      // n'émettait donc AUCUN événement vers l'auteur du geste — et l'écho
+      // serveur est le seul pont entre l'état optimiste de la vue et le modèle
+      // que la surface suivante lira.
+      expect(roomsArg).toContain(`feed:${USER_ID}`);
     });
 
     it('emits single event to all rooms (no duplicate delivery)', async () => {
@@ -338,6 +354,14 @@ describe('SocialEventsHandler', () => {
       const roomsArg = (io.to as jest.Mock<any>).mock.calls[0][0] as string[];
       expect(roomsArg).toContain(`post:${POST_ID}`);
       expect(roomsArg).toContain(`feed:${AUTHOR_ID}`);
+
+      // Le RETRAIT du like a la même audience que sa pose. Le témoin est écrit
+      // à part de celui du like parce que les deux passent par des appels
+      // DISTINCTS à `emitToFeedsAndPostRoom` : rendre le premier vert ne dit
+      // rien du second, et l'asymétrie qu'on corrige ici — l'un des deux
+      // appels portant l'acteur et pas l'autre — laisserait le cœur se
+      // rallumer tout seul en changeant de vue.
+      expect(roomsArg).toContain(`feed:${USER_ID}`);
     });
   });
 
@@ -664,6 +688,32 @@ describe('SocialEventsHandler', () => {
 
       const allRoomArgs = emittedRooms(io);
       expect(allRoomArgs.some((r: string) => r.includes('post:'))).toBe(true);
+    });
+  });
+
+  describe('broadcastMediaCaptionTranslationUpdated (#6280)', () => {
+    const translation = { text: 'Hello world', translationModel: 'nllb', confidenceScore: 0.9, createdAt: '2026-09-14T00:00:00.000Z' };
+
+    it('emits media:caption-translation-updated to feed rooms and post room for a POST-attached media', async () => {
+      const { handler, io } = buildHandler();
+      const data = { mediaId: 'media-1', postId: POST_ID, language: 'en', translation } as any;
+
+      await handler.broadcastMediaCaptionTranslationUpdated(data, AUTHOR_ID, 'PUBLIC', []);
+
+      const rooms = emittedRooms(io);
+      expect(rooms.some((r: string) => r.includes('post:'))).toBe(true);
+      expect(rooms).toContain(`feed:${FRIEND_ID_1}`);
+    });
+
+    it('uses the comment broadcast rooms when the media belongs to a comment', async () => {
+      const { handler, io } = buildHandler();
+      const data = { mediaId: 'media-1', postId: POST_ID, commentId: COMMENT_ID, language: 'en', translation } as any;
+
+      await handler.broadcastMediaCaptionTranslationUpdated(data, AUTHOR_ID, 'PUBLIC', []);
+
+      const rooms = emittedRooms(io);
+      expect(rooms.some((r: string) => r.includes('post:'))).toBe(true);
+      expect(rooms).toContain(`feed:${FRIEND_ID_1}`);
     });
   });
 

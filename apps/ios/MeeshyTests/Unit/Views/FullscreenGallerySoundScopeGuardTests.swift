@@ -29,8 +29,20 @@ final class FullscreenGallerySoundScopeGuardTests: XCTestCase {
 
     private static let gallery = "Meeshy/Features/Main/Views/ConversationMediaGalleryView.swift"
 
+    /// **L'UNITÉ de la galerie, jamais son seul fichier racine.**
+    ///
+    /// Les trois témoins lisaient `ConversationMediaGalleryView.swift` tout
+    /// court. Le #6162 en a extrait `+Transport.swift` — et le témoin 2 est
+    /// aussitôt devenu rouge sur un littéral (`VideoTransportControls(`) qui
+    /// avait légitimement déménagé, pendant que le témoin 1, lui, ne balayait
+    /// plus la moitié où un `BackgroundSoundBadge` pourrait désormais naître.
+    ///
+    /// > Le rouge du positif et le vert SILENCIEUX du négatif sont le même
+    /// > défaut : une garde qui épingle un FICHIER se périme au premier
+    /// > découpage. `AppSourceGuard.unit` glob les frères `+*.swift`, donc un
+    /// > fichier neuf entre automatiquement dans ce que la garde interdit.
     private func source(_ relativePath: String) throws -> String {
-        try MyStoriesSourceCorpus.text(of: relativePath)
+        try AppSourceGuard.unit(relativePath)
     }
 
     /// Racine du dépôt — la galerie délègue son muet à un composant du SDK, et

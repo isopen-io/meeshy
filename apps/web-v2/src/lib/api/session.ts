@@ -77,6 +77,24 @@ export type SessionState =
       readonly expiresAt: number;
     };
 
+/**
+ * LES CHAMPS DE SOI QU'UNE ÉDITION DE PROFIL FAIT VOYAGER JUSQU'À LA SESSION
+ * (#6289) — exactement ceux que `SessionUser` porte au-delà de l'identité, et
+ * rien d'autre : la bio, la bannière et les contacts vivent dans le cache du
+ * profil, jamais dans le `localStorage` de la session (règle 1 ci-dessus).
+ *
+ * `undefined` = champ non touché ; `null` = champ EFFACÉ (une langue régionale
+ * retirée quitte le Prisme). `customDestinationLanguage` garde son `null`, que
+ * la connexion sert déjà sous cette forme.
+ */
+export type SessionProfileFields = {
+  readonly displayName?: string | null;
+  readonly avatar?: string | null;
+  readonly systemLanguage?: string;
+  readonly regionalLanguage?: string | null;
+  readonly customDestinationLanguage?: string | null;
+};
+
 export type SessionStorage = {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
@@ -95,6 +113,10 @@ export type SessionStoreState = {
     readonly expiresIn: number;
   }): void;
   beginTwoFactor(payload: { readonly user: PendingUser; readonly twoFactorToken: string }): void;
+  /** Applique une édition de profil à la session TENUE, et la persiste —
+   * projetée comme à l'`establish`. Sans effet hors d'une session
+   * authentifiée : il n'y a pas de soi à modifier. */
+  updateUser(fields: SessionProfileFields): void;
   restoreSession(): void;
   clearSession(): void;
 };
@@ -193,11 +215,34 @@ export type SessionStoreOptions = {
   readonly now?: () => number;
 };
 
+/** `undefined` garde la valeur tenue, `null` l'EFFACE — la clé disparaît
+ * alors de l'utilisateur plutôt que d'y rester vide. */
+const nextOptional = (value: string | null | undefined, current: string | undefined): string | undefined =>
+  value === undefined ? current : (value ?? undefined);
+
+function withProfileFields(user: SessionUser, fields: SessionProfileFields): SessionUser {
+  const displayName = nextOptional(fields.displayName, user.displayName);
+  const avatar = nextOptional(fields.avatar, user.avatar);
+  const systemLanguage = fields.systemLanguage ?? user.systemLanguage;
+  const regionalLanguage = nextOptional(fields.regionalLanguage, user.regionalLanguage);
+  const customDestinationLanguage =
+    fields.customDestinationLanguage === undefined ? user.customDestinationLanguage : fields.customDestinationLanguage;
+  return {
+    id: user.id,
+    username: user.username,
+    ...(displayName === undefined ? {} : { displayName }),
+    ...(avatar === undefined ? {} : { avatar }),
+    ...(systemLanguage === undefined ? {} : { systemLanguage }),
+    ...(regionalLanguage === undefined ? {} : { regionalLanguage }),
+    ...(customDestinationLanguage === undefined ? {} : { customDestinationLanguage }),
+  };
+}
+
 export function createSessionStore(options: SessionStoreOptions = {}): SessionStoreApi {
   const storage = options.storage ?? safeLocalStorage();
   const now = options.now ?? (() => Date.now());
 
-  return createStore<SessionStoreState>((set) => ({
+  return createStore<SessionStoreState>((set, get) => ({
     session: { status: 'anonymous' },
     establish: ({ user, token, sessionToken, expiresIn }) => {
       const projected = pickSessionUser(user);
@@ -207,6 +252,13 @@ export function createSessionStore(options: SessionStoreOptions = {}): SessionSt
     },
     beginTwoFactor: ({ user, twoFactorToken }) => {
       set({ session: { status: 'pending2fa', user: pickPendingUser(user), twoFactorToken } });
+    },
+    updateUser: (fields) => {
+      const current = get().session;
+      if (current.status !== 'authenticated') return;
+      const user = pickSessionUser(withProfileFields(current.user, fields));
+      persist(storage, { user, token: current.token, sessionToken: current.sessionToken, expiresAt: current.expiresAt });
+      set({ session: { ...current, user } });
     },
     restoreSession: () => {
       const persisted = readPersisted(storage);

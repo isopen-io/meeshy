@@ -175,8 +175,8 @@ test_prod() {
     echo ""
 
     check_http "Traefik Dashboard" "https://traefik.meeshy.me/dashboard/" "true" || true
-    check_http "MongoDB UI" "https://mongo.meeshy.me" "true" || true
-    check_http "Redis UI" "https://redis.meeshy.me" "true" || true
+    # MongoDB UI / Redis UI: plus routées par Traefik (#3640), accès SSH
+    # tunnel uniquement — non testables depuis l'extérieur du serveur.
     check_http "Gateway" "https://gate.meeshy.me/health" "true" || true
     check_http "Translator" "https://ml.meeshy.me/health" "true" || true
     check_http "Frontend" "https://meeshy.me" "true" || true

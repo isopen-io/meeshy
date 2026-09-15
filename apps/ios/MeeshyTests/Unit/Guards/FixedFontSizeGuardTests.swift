@@ -158,7 +158,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // C'est le pendant de la leçon 347 pour un cliquet : une liste qui
         // nomme des FICHIERS se périme au premier découpage.
         "Features/Main/Components/UniversalComposerBar+Send.swift",
-        "Features/Main/Composer/ComposerFormatFan.swift",
         "Features/Main/Composer/ComposerMoodSurface.swift",
         "Features/Main/Composer/ComposerTopBar.swift",
         // #4102 — RELOCALISATION pure : le meuble est découpé, ses sites figés
@@ -205,6 +204,13 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // > qui a cessé de les couvrir. Toute extraction hors d'un fichier de
         // > `bearingFiles` doit inscrire sa destination dans le MÊME commit.
         "Features/Main/Views/ConversationMediaGalleryView.swift",
+        // #6145 — RELOCALISATION pure, même forme qu'au #4084 : le glyphe figé
+        // du couloir haut (18 pt dans un cercle glass de 40) quitte le fichier
+        // racine avec le contrôle qu'il décore — la flèche d'enregistrement
+        // devenue menu ⋯. La POPULATION ne bouge pas : ni `totalCeiling` ni
+        // `textCeiling`, seul le NOM change. Le racine en porte encore d'autres
+        // (la croix, le transport vidéo) : il reste dans la liste.
+        "Features/Main/Views/ConversationMediaGalleryView+Menu.swift",
         "Features/Main/Views/ConversationMediaGalleryView+Pages.swift",
         "Features/Main/Views/ConversationView+ComposerAttachments.swift",
         "Features/Main/Views/ConversationView+ComposerBanners.swift",
@@ -283,7 +289,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/SupportView.swift",
         "Features/Main/Views/TrackingLinksView.swift",
         "Features/Main/Views/UserStatsView.swift",
-        "Features/Main/Views/VoiceProfileManageView.swift",
         "Features/Main/Views/VoiceProfileWizardView.swift",
         "Features/Main/Views/WebRTCVideoView.swift",
         "Features/Stories/Notifications/StoryExpiredContent.swift",
@@ -368,7 +373,15 @@ final class FixedFontSizeGuardTests: XCTestCase {
     /// sa barre haute, trois dans ses étapes) et le carrousel d'accueil un — et
     /// les vingt sont partis avec leurs fichiers. `SignupView` et `WelcomeView`
     /// n'en introduisent aucun.
-    private static let totalCeiling = 226
+    // 226 → 214 (#6481, 2026-09-14) : les pages ouvertes depuis Réglages montent
+    // l'en-tête partagé, et leurs chevrons, croix et (+) faits main à taille figée
+    // sont partis avec lui. `VoiceProfileManageView` sort de `bearingFiles`.
+    // 214 → 213 (#6502) : l'éventail du haut est retiré, et avec lui le chevron
+    // `.font(.system(size: 9, weight: .bold))` de son chip, un GLYPHE (le texte
+    // figé ne bouge donc pas). `ComposerFormatFan.swift` sort de `bearingFiles`
+    // dans le même commit (règle 4) ; `ComposerPublishMenu.swift`, qui le
+    // remplace, n'emploie que des polices relatives.
+    private static let totalCeiling = 213
 
     // MARK: - Règle 1 — aucun écran neuf n'introduit de taille figée
 

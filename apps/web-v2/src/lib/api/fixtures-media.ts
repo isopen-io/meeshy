@@ -1,5 +1,6 @@
 import type { Attachment, Conversation, Message } from './types';
 import { VIEWER_ID, amina, attachmentDefaults, conversationDefaults, dayAt, kwame, message, translation, viewer } from './fixtures-base';
+import { MEDIA_GRID_MESSAGES, MEDIA_SOLO_VIDEO_MESSAGE } from './fixtures-media-grid';
 
 /**
  * LE CORPUS « MÉDIAS » (#5805) — le SEUL fil du jeu qui porte une image ET
@@ -488,7 +489,28 @@ const media7 = mediaMessage({
   ],
 } as unknown as Parameters<typeof mediaMessage>[0]);
 
-export const MEDIA_MESSAGES: readonly Message[] = [media8, media9, media10, media1, media2, media3, media4, media5, media6, media7];
+/**
+ * `MEDIA_GRID_MESSAGES` (#6221) — QUATRE messages de `fixtures-media-grid.ts`
+ * (2/3/4/6 pièces), chronologiquement entre `media-6` (09:25) et `media-7`
+ * (09:30, `lastMessage` — INCHANGÉ). `MEDIA_SOLO_VIDEO_MESSAGE` (`media-15`,
+ * 09:22) se place, LUI, entre `media-5` (09:20) et `media-6` (09:25) — d'où
+ * les DEUX points d'insertion plutôt qu'une seule concaténation en bout de
+ * tableau : cet array n'est jamais trié, son ORDRE est l'ordre affiché.
+ */
+export const MEDIA_MESSAGES: readonly Message[] = [
+  media8,
+  media9,
+  media10,
+  media1,
+  media2,
+  media3,
+  media4,
+  media5,
+  MEDIA_SOLO_VIDEO_MESSAGE,
+  media6,
+  ...MEDIA_GRID_MESSAGES,
+  media7,
+];
 
 export const MEDIA_CONVERSATION: Conversation = {
   ...conversationDefaults,

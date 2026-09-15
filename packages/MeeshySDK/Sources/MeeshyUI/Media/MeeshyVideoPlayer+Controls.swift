@@ -280,11 +280,20 @@ internal struct _InlineOverlayControls: View {
                         state = true
                     }
                     .onChanged { value in
-                        seekValue = max(0, min(1, value.location.x / geo.size.width))
+                        // L'image suit le doigt : déplacement TOLÉRANT pendant
+                        // le geste (image-clé la plus proche, coalescé par
+                        // `SharedAVPlayerManager`). Même correction que la barre
+                        // du couloir — jusqu'ici seule la pastille bougeait,
+                        // au-dessus d'une image figée. Directive « gestes
+                        // progressifs et annulables » (2026-08-30).
+                        let fraction = max(0, min(1, value.location.x / geo.size.width))
+                        seekValue = fraction
+                        manager.seek(to: fraction * manager.duration, precise: false)
                     }
                     .onEnded { value in
+                        // CONCLUT sur la frame exacte ; ne décide plus.
                         let fraction = max(0, min(1, value.location.x / geo.size.width))
-                        manager.seek(to: fraction * manager.duration)
+                        manager.seek(to: fraction * manager.duration, precise: true)
                         seekValue = 0
                     }
             )

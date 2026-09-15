@@ -46,6 +46,11 @@ backend/node_modules/
 !apps/web-v2/src/lib/*.d.ts
 !apps/web-v2/scripts/*.d.mts
 !apps/web-v2/scripts/lib/*.d.mts
+# Même classe côté gateway (#6160) : `bun-test-shim.d.ts` déclare le module
+# `bun:test` qu'importe `bun-preload.ts` (chargé par `bunfig.toml`, jamais
+# par ts-jest) — sans lui, `tsc -p tsconfig.test.json` lève TS2307 sur un
+# fichier présent dans l'arbre de travail et absent d'un clone frais.
+!services/gateway/src/__tests__/bun-test-shim.d.ts
 **/*/build/
 **/*/dist/
 **/*/*.*.map

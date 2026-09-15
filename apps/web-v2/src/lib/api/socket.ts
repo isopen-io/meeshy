@@ -11,8 +11,22 @@ import type { TypingActionData, TypingEvent } from '@meeshy/shared/types/socketi
 import type { ConversationStoreState } from '@/lib/conversation-store';
 import type { SocketClient, SocketFactory } from '@/lib/net/socket';
 import type { OutboxState } from '@/lib/send/outbox-store';
+import { applyMediaCaptionTranslation, applyPostToggle, applyServedCount, type MediaCaptionTranslationUpdate } from '@/lib/feed/interactions';
+import { decodeNotification } from '@/lib/notifications/record';
 
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
+import { FEED_QUERY_KEY } from './feed';
+import type { FeedInfiniteData } from './feed-pages';
+import { FRIENDS_QUERY_PREFIX } from './friends-keys';
+import { NOTIFICATIONS_QUERY_KEY } from './notifications';
+import {
+  applyNotificationCounts,
+  applyNotificationDeleted,
+  applyNotificationDeletedBulk,
+  applyNotificationNew,
+  applyNotificationRead,
+  applyNotificationReadBulk,
+} from './notifications-realtime';
 import {
   applyConversationUnreadUpdated,
   applyConversationUpdated,
@@ -44,6 +58,54 @@ function isTypingEvent(payload: unknown): payload is TypingEvent {
   if (typeof payload !== 'object' || payload === null) return false;
   const p = payload as Record<string, unknown>;
   return typeof p.userId === 'string' && typeof p.conversationId === 'string' && typeof p.username === 'string';
+}
+
+const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
+
+/** `PostLikedEventData` / `PostUnlikedEventData` (`@meeshy/shared/types/post`),
+ * réduits aux trois champs que le fil lit — validés, jamais crus sur parole. */
+type PostLikeEvent = { readonly postId: string; readonly userId: string; readonly likeCount: number };
+
+function isPostLikeEvent(payload: unknown): payload is PostLikeEvent {
+  if (typeof payload !== 'object' || payload === null) return false;
+  const p = payload as Record<string, unknown>;
+  return typeof p.postId === 'string' && typeof p.userId === 'string' && isFiniteNumber(p.likeCount);
+}
+
+/** `PostBookmarkedEventData` — PERSONNEL (émis aux seuls sockets de l'auteur
+ * du geste), donc `bookmarked` décrit toujours le lecteur. */
+type PostBookmarkEvent = { readonly postId: string; readonly bookmarked: boolean; readonly bookmarkCount?: number };
+
+function isPostBookmarkEvent(payload: unknown): payload is PostBookmarkEvent {
+  if (typeof payload !== 'object' || payload === null) return false;
+  const p = payload as Record<string, unknown>;
+  return (
+    typeof p.postId === 'string' &&
+    typeof p.bookmarked === 'boolean' &&
+    (p.bookmarkCount === undefined || isFiniteNumber(p.bookmarkCount))
+  );
+}
+
+/** `MediaCaptionTranslationUpdatedEventData` (`@meeshy/shared/types/post`,
+ * #6280), réduite aux champs que `applyMediaCaptionTranslation` consomme —
+ * `postId`/`commentId` ne servent qu'au ROUTAGE serveur (ZMQ, audience) :
+ * la fusion côté cache retrouve le média par `mediaId`, quel que soit le
+ * document (post ou commentaire) qui le porte. `commentId` n'est donc PAS
+ * relu ici : un média de commentaire n'a jamais d'entrée dans `FEED_QUERY_KEY`,
+ * `applyMediaCaptionTranslation` ne trouve rien à fusionner et ne modifie
+ * rien, sans lever. */
+function isMediaCaptionTranslationEvent(payload: unknown): payload is MediaCaptionTranslationUpdate {
+  if (typeof payload !== 'object' || payload === null) return false;
+  const p = payload as Record<string, unknown>;
+  if (typeof p.mediaId !== 'string' || typeof p.language !== 'string') return false;
+  if (typeof p.translation !== 'object' || p.translation === null) return false;
+  const t = p.translation as Record<string, unknown>;
+  return (
+    typeof t.text === 'string' &&
+    typeof t.translationModel === 'string' &&
+    typeof t.createdAt === 'string' &&
+    (t.confidenceScore === undefined || isFiniteNumber(t.confidenceScore))
+  );
 }
 
 export type RealtimeSessionInfo = {
@@ -150,9 +212,30 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
     typingTimers.delete(key);
   };
 
+  /**
+   * `message:new` RÉTRACTE la frappe de SON AUTEUR (#6171, G2) — miroir
+   * `ConversationListViewModel.swift:992-1013` : « l'arrivée du message est
+   * la preuve la plus forte que la frappe est terminée … il ne retire que
+   * CET auteur et laisse les autres frappeurs en place ». La règle vit ICI
+   * (`api/socket.ts`), pas dans `realtime-apply.ts` : la seconde est PURE sur
+   * le cache et ne connaît pas le magasin de frappe (D-40) — ne pas lui
+   * donner une dépendance de plus.
+   *
+   * DEUX ESPACES D'IDS (doc `conversation.ts:210-226`) : `senderId` porte un
+   * `Participant.id`, `sender.userId` un `User.id` — le magasin de frappe est
+   * indexé par `userId` (`typing:start`, `TypingEvent.userId`), donc les DEUX
+   * candidats sont retirés, dédoublonnés. `stop` est IDEMPOTENT
+   * (`typing-store.ts:56-67`) : un candidat qui ne tapait pas ne coûte rien.
+   */
   const onMessageNew = (payload: unknown): void => {
     if (!isSocketMessage(payload)) return;
     applyMessageNew(deps.queryClient, deps.outbox, payload);
+
+    const candidates = new Set([payload.senderId, payload.sender?.userId].filter((id): id is string => id !== undefined));
+    for (const userId of candidates) {
+      disarmTypingSafetyTimeout(payload.conversationId, userId);
+      deps.typing.getState().stop(payload.conversationId, userId);
+    }
   };
 
   const onTypingStart = (payload: unknown): void => {
@@ -208,6 +291,100 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
     void deps.queryClient.invalidateQueries({ queryKey: STORY_TRAY_QUERY_KEY });
   };
 
+  /**
+   * `post:liked` / `post:unliked` / `post:bookmarked` (#6278, D-47) — LE FIL
+   * SUIT LES GESTES EN DIRECT, par les DEUX mêmes fonctions pures que
+   * l'optimiste (`lib/feed/interactions.ts`). Le compte diffusé est ABSOLU et
+   * remplace l'estimation ; « aimé par moi » ne bascule que pour un geste du
+   * LECTEUR (un autre de ses appareils) — le « j'aime » d'un autre ne remplit
+   * jamais son cœur. Miroir `FeedView.swift:1331-1357`.
+   */
+  const updateFeed = (update: (data: FeedInfiniteData | undefined) => FeedInfiniteData | undefined): void => {
+    deps.queryClient.setQueryData<FeedInfiniteData>(FEED_QUERY_KEY, update);
+  };
+
+  const onPostLikeChanged =
+    (on: boolean) =>
+    (payload: unknown): void => {
+      if (!isPostLikeEvent(payload)) return;
+      const { postId, likeCount } = payload;
+      const byViewer = payload.userId === deps.viewerId();
+      updateFeed((data) =>
+        applyServedCount(byViewer ? applyPostToggle(data, { postId, kind: 'like', on }) : data, {
+          postId,
+          kind: 'like',
+          count: likeCount,
+        }),
+      );
+    };
+  const onPostLiked = onPostLikeChanged(true);
+  const onPostUnliked = onPostLikeChanged(false);
+
+  const onPostBookmarked = (payload: unknown): void => {
+    if (!isPostBookmarkEvent(payload)) return;
+    const { postId, bookmarked, bookmarkCount } = payload;
+    updateFeed((data) => {
+      const toggled = applyPostToggle(data, { postId, kind: 'bookmark', on: bookmarked });
+      return bookmarkCount === undefined ? toggled : applyServedCount(toggled, { postId, kind: 'bookmark', count: bookmarkCount });
+    });
+  };
+
+  /**
+   * `media:caption-translation-updated` (#6280) — LA LÉGENDE D'UN MÉDIA DU
+   * FIL SUIT LE PIPELINE ZMQ EN DIRECT, même motif que `post:liked` ci-dessus :
+   * une fonction pure (`applyMediaCaptionTranslation`, `lib/feed/interactions.ts`)
+   * appliquée à `FEED_QUERY_KEY`. `updateFeed` retrouve le média par id, quelle
+   * que soit la page qui le porte (`flattenFeedPages` garde la PREMIÈRE
+   * occurrence d'un post servi deux fois — la fusion doit donc viser TOUTES
+   * les pages, pas seulement la première, ce que `applyMediaCaptionTranslation`
+   * fait déjà via `mapPosts`).
+   */
+  const onMediaCaptionTranslationUpdated = (payload: unknown): void => {
+    if (!isMediaCaptionTranslationEvent(payload)) return;
+    updateFeed((data) => applyMediaCaptionTranslation(data, payload));
+  };
+
+  /**
+   * `notification:*` (#6288) — LA CLOCHE SUIT LA PASSERELLE SANS RELIRE : les
+   * règles vivent dans `notifications-realtime.ts`, ces lignes les branchent.
+   *
+   * Le DÉDOUBLONNAGE de `notification:new` vit ICI, sur la connexion : une
+   * notification dont aucune liste n'est en cache (cloche jamais ouverte) ne
+   * peut pas être reconnue par le cache, et le compte l'avancerait à chaque
+   * rediffusion. La mémoire est BORNÉE — une session longue ne doit rien
+   * retenir d'autre que les derniers identifiants vus.
+   */
+  const seenNotifications = new Set<string>();
+  const SEEN_NOTIFICATIONS_CAP = 200;
+  const onNotificationNew = (payload: unknown): void => {
+    const notification = decodeNotification(payload);
+    if (notification === null || seenNotifications.has(notification.id)) return;
+    seenNotifications.add(notification.id);
+    if (seenNotifications.size > SEEN_NOTIFICATIONS_CAP) {
+      const oldest = seenNotifications.values().next().value;
+      if (oldest !== undefined) seenNotifications.delete(oldest);
+    }
+    applyNotificationNew(deps.queryClient, notification);
+  };
+  const onNotificationRead = (payload: unknown): void => applyNotificationRead(deps.queryClient, payload);
+  const onNotificationReadBulk = (payload: unknown): void => applyNotificationReadBulk(deps.queryClient, payload);
+  const onNotificationDeleted = (payload: unknown): void => applyNotificationDeleted(deps.queryClient, payload);
+  const onNotificationDeletedBulk = (payload: unknown): void => applyNotificationDeletedBulk(deps.queryClient, payload);
+  const onNotificationCounts = (payload: unknown): void => applyNotificationCounts(deps.queryClient, payload);
+
+  /**
+   * `friend-request:*` (#6321) — LES DEMANDES D'AMITIÉ SUIVENT LA PASSERELLE :
+   * une demande reçue, annulée par son auteur, acceptée ou refusée par l'autre
+   * partie invalide la famille `['friends']` — le panier des reçues que la
+   * pastille du barreau « Découvrir » compte, les envoyées, les contacts, les
+   * bloqués. Une invalidation plutôt qu'une écriture locale : la charge ne
+   * porte que des identifiants (`FriendRequestNewEventData`), jamais la ligne
+   * à peindre ni le nom de la personne.
+   */
+  const onFriendshipChanged = (): void => {
+    void deps.queryClient.invalidateQueries({ queryKey: FRIENDS_QUERY_PREFIX });
+  };
+
   /** Le MÊME geste qu'un 401 HTTP (§ doc-comment de `RealtimeDeps`) — les
    * DEUX motifs ferment la session, aucun ne tente de rafraîchir (D-26). */
   const onTokenExpired = (_payload: AuthTokenExpiredEventData): void => deps.onClearSession();
@@ -241,6 +418,13 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
        `['conversations', id, 'messages']` (la page du fil). Seules les requêtes
        ACTIVES sont re-jouées — un fil fermé se contente d'être marqué périmé. */
     void deps.queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
+    /* LA CLOCHE AUSSI (#6288) : une notification émise pendant la coupure n'a
+       jamais atteint ce socket, et `notification:counts` ne se rejoue pas. */
+    void deps.queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_QUERY_KEY });
+    /* LES DEMANDES D'AMITIÉ AUSSI (#6321) : une demande reçue pendant la
+       coupure n'a jamais atteint ce socket, et la pastille du barreau
+       « Découvrir » la compterait trop tard. */
+    void deps.queryClient.invalidateQueries({ queryKey: FRIENDS_QUERY_PREFIX });
   };
 
   socket.on<unknown>(SERVER_EVENTS.AUTHENTICATED, onAuthenticated);
@@ -254,6 +438,20 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.STORY_UPDATED, onStoryChanged);
   socket.on<unknown>(SERVER_EVENTS.STORY_DELETED, onStoryChanged);
   socket.on<unknown>(SERVER_EVENTS.STORY_VIEWED, onStoryChanged);
+  socket.on<unknown>(SERVER_EVENTS.POST_LIKED, onPostLiked);
+  socket.on<unknown>(SERVER_EVENTS.POST_UNLIKED, onPostUnliked);
+  socket.on<unknown>(SERVER_EVENTS.POST_BOOKMARKED, onPostBookmarked);
+  socket.on<unknown>(SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, onMediaCaptionTranslationUpdated);
+  socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_NEW, onNotificationNew);
+  socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_READ, onNotificationRead);
+  socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_READ_BULK, onNotificationReadBulk);
+  socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_DELETED, onNotificationDeleted);
+  socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_DELETED_BULK, onNotificationDeletedBulk);
+  socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_COUNTS, onNotificationCounts);
+  socket.on<unknown>(SERVER_EVENTS.FRIEND_REQUEST_NEW, onFriendshipChanged);
+  socket.on<unknown>(SERVER_EVENTS.FRIEND_REQUEST_CANCELLED, onFriendshipChanged);
+  socket.on<unknown>(SERVER_EVENTS.FRIEND_REQUEST_ACCEPTED, onFriendshipChanged);
+  socket.on<unknown>(SERVER_EVENTS.FRIEND_REQUEST_REJECTED, onFriendshipChanged);
   socket.on<AuthTokenExpiredEventData>(SERVER_EVENTS.AUTH_TOKEN_EXPIRED, onTokenExpired);
   socket.on<AuthSessionRevokedEventData>(SERVER_EVENTS.AUTH_SESSION_REVOKED, onSessionRevoked);
 
@@ -290,6 +488,20 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.STORY_UPDATED, onStoryChanged);
       socket.off<unknown>(SERVER_EVENTS.STORY_DELETED, onStoryChanged);
       socket.off<unknown>(SERVER_EVENTS.STORY_VIEWED, onStoryChanged);
+      socket.off<unknown>(SERVER_EVENTS.POST_LIKED, onPostLiked);
+      socket.off<unknown>(SERVER_EVENTS.POST_UNLIKED, onPostUnliked);
+      socket.off<unknown>(SERVER_EVENTS.POST_BOOKMARKED, onPostBookmarked);
+      socket.off<unknown>(SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, onMediaCaptionTranslationUpdated);
+      socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_NEW, onNotificationNew);
+      socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_READ, onNotificationRead);
+      socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_READ_BULK, onNotificationReadBulk);
+      socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_DELETED, onNotificationDeleted);
+      socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_DELETED_BULK, onNotificationDeletedBulk);
+      socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_COUNTS, onNotificationCounts);
+      socket.off<unknown>(SERVER_EVENTS.FRIEND_REQUEST_NEW, onFriendshipChanged);
+      socket.off<unknown>(SERVER_EVENTS.FRIEND_REQUEST_CANCELLED, onFriendshipChanged);
+      socket.off<unknown>(SERVER_EVENTS.FRIEND_REQUEST_ACCEPTED, onFriendshipChanged);
+      socket.off<unknown>(SERVER_EVENTS.FRIEND_REQUEST_REJECTED, onFriendshipChanged);
       socket.off<AuthTokenExpiredEventData>(SERVER_EVENTS.AUTH_TOKEN_EXPIRED, onTokenExpired);
       socket.off<AuthSessionRevokedEventData>(SERVER_EVENTS.AUTH_SESSION_REVOKED, onSessionRevoked);
       socket.disconnect();

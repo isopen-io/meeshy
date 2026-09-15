@@ -94,7 +94,20 @@ jest.mock('../../../services/CacheStore', () => ({
   }),
 }));
 
+// Le module réel est ÉTALÉ d'abord (#6293) : ce double ne rendait que
+// `withMutationLog`, laissant `withMutationOutcome` et la classe
+// `MutationResultGone` à `undefined`. Depuis que la route like emploie
+// `withMutationOutcome` pour garder ses effets de bord au rejeu, l'appeler ici
+// levait un `TypeError` que le `catch` de la route déguisait en 500 — ce fichier
+// attendait 404 et lisait 500, sans qu'aucun message ne parle d'idempotence.
+// Même remède que `interactions.harness.ts`, qui le documente déjà.
 jest.mock('../../../utils/withMutationLog', () => ({
+  // `as object` EXIGÉ : `jest.requireActual` rend `unknown`, et TS refuse
+  // d'étaler `unknown` (TS2698). C'est pour cette raison que
+  // `interactions.harness.ts` prend le module en PARAMÈTRE typé `object` plutôt
+  // que d'appeler `requireActual` chez lui — son doc-comment le dit, et la
+  // première version de ce correctif ne l'a pas lu.
+  ...(jest.requireActual('../../../utils/withMutationLog') as object),
   withMutationLog: jest.fn().mockImplementation(({ op }: any) => op()),
 }));
 
@@ -142,7 +155,7 @@ const buildAuthMiddleware = (userId?: string) =>
     if (userId) {
       req.authContext = {
         isAuthenticated: true,
-        registeredUser: { id: userId, username: 'testuser' },
+        registeredUser: { emailVerifiedAt: new Date(), id: userId, username: 'testuser' },
       };
     }
     done();

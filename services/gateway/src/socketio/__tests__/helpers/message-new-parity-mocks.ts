@@ -199,6 +199,7 @@ jest.mock('../../CallEventsHandler', () => ({
 }));
 
 jest.mock('../../../services/CallService', () => ({
+  ...(jest.requireActual('../../../services/CallService') as object),
   CallService: jest.fn().mockImplementation(() => ({})),
 }));
 

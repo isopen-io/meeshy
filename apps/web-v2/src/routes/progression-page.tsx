@@ -48,10 +48,7 @@ export function ProgressionPage({
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden pt-safe">
-      <header
-        className="z-10 shrink-0 backdrop-blur-xl"
-        style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-surface) 80%, transparent)' }}
-      >
+      <header className="glass z-10 shrink-0">
         <div className="flex items-center gap-2 px-4 py-2">
           <Link
             to="progression"

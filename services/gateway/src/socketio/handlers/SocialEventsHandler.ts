@@ -29,6 +29,7 @@ import type {
   PostTranslationUpdatedEventData,
   CommentTranslationUpdatedEventData,
   CommentMediaUpdatedEventData,
+  MediaCaptionTranslationUpdatedEventData,
 } from '@meeshy/shared/types/post';
 
 // enhancedLogger (Pino) sort en prod ; le `logger` Winston de server.ts est
@@ -176,8 +177,34 @@ export class SocialEventsHandler {
     postId: string,
     event: E,
     data: SocialEventPayload<E>,
+    actorId?: string,
   ): void {
-    const rooms = [...recipientIds, authorId].map((id) => ROOMS.feed(id));
+    // **L'ACTEUR fait partie de l'audience de son propre geste** (retour
+    // porteur 2026-09-13 : « le like n'est pas synchronisé entre les
+    // différentes vues »).
+    //
+    // `recipientIds` sont les amis de l'AUTEUR, filtrés par visibilité. Celui
+    // qui AGIT n'y figurait que par accident — s'il se trouvait être ami de
+    // l'auteur, ou l'auteur lui-même. Or le fil sert des posts PUBLICS
+    // d'inconnus (`buildPostVisibilityOrFilter` accepte
+    // `visibility: PUBLIC` sans restriction d'auteur), et le fil ne rejoint
+    // AUCUNE post room — les seuls `joinPostRoom` sont le détail, le reel
+    // viewer, la feuille de commentaires et le lecteur de story.
+    //
+    // Conséquence côté client : aimer depuis le fil le post public d'un
+    // inconnu n'émettait rien vers son auteur. Aucun modèle n'apprenait le
+    // like — ni `FeedViewModel.posts`, ni `CacheCoordinator`, ni GRDB ; seul
+    // l'état optimiste de la VUE le savait, et il meurt avec elle. Le cœur se
+    // vidait donc en passant au reel viewer, qui sème son état depuis
+    // `FeedPost.isLiked`.
+    //
+    // `io.to([...])` dédoublonne (cf. `emitToUserFeedAndPostRoom` plus bas) :
+    // ajouter l'acteur ne double aucune livraison quand il est déjà ami ou
+    // auteur. Les six consommateurs client sont déjà abonnés ET déjà gardés
+    // sur l'acteur (`if actorId == currentUserId`) — cette ligne suffit donc à
+    // fermer la boucle sur toutes les surfaces à la fois.
+    const audience = actorId ? [...recipientIds, authorId, actorId] : [...recipientIds, authorId];
+    const rooms = audience.map((id) => ROOMS.feed(id));
     rooms.push(ROOMS.post(postId));
     emitServerEvent(this.io.to(rooms), event, data);
   }
@@ -325,7 +352,7 @@ export class SocialEventsHandler {
     const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds);
     // Feed rooms (amis filtrés par visibilité + auteur) ET post room (détail /
     // reel viewer) en UN SEUL emit dédoublonné — plus de double-livraison.
-    this.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.POST_LIKED, data);
+    this.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.POST_LIKED, data, data.userId);
   }
 
   async broadcastPostUnliked(
@@ -335,7 +362,7 @@ export class SocialEventsHandler {
     visibilityUserIds: string[],
   ): Promise<void> {
     const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds);
-    this.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.POST_UNLIKED, data);
+    this.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.POST_UNLIKED, data, data.userId);
   }
 
   async broadcastPostReposted(data: PostRepostedEventData, authorId: string): Promise<void> {
@@ -603,6 +630,29 @@ export class SocialEventsHandler {
     const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds);
     const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
     this.io.to(rooms).emit(SERVER_EVENTS.COMMENT_MEDIA_UPDATED, data);
+  }
+
+  /**
+   * Diffuse `media:caption-translation-updated` (traduction de légende de
+   * média prête, #6280) à la même audience filtrée par visibilité que les
+   * autres traductions du post porteur. Un média de COMMENTAIRE utilise les
+   * mêmes rooms que `comment:translation-updated`/`comment:media-updated`
+   * (post room comprise, join-gated) ; un média de POST direct utilise
+   * `emitToFeedsAndPostRoom` (même déduplication que `broadcastPostUpdated`).
+   */
+  async broadcastMediaCaptionTranslationUpdated(
+    data: MediaCaptionTranslationUpdatedEventData,
+    postAuthorId: string,
+    visibility: string | null | undefined,
+    visibilityUserIds: string[],
+  ): Promise<void> {
+    const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds);
+    if (data.commentId) {
+      const rooms = this.commentBroadcastRooms(recipients, postAuthorId, data.postId);
+      this.io.to(rooms).emit(SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, data);
+      return;
+    }
+    this.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, data);
   }
 
   // ==============================================

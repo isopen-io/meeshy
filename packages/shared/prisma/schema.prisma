@@ -121,7 +121,21 @@ model User {
   searchTokens              String[] @default([])
   /// ISO 3166-1 alpha-2 country code for phone (e.g., "FR", "US", "GB")
   phoneCountryCode          String?
-  password                  String
+  /// Mot de passe — ABSENT tant que la personne n'en a pas choisi un (#6424).
+  ///
+  /// La colonne était non nullable parce qu'un compte naissait toujours d'un
+  /// formulaire qui en exigeait un. Depuis l'inscription par e-mail seul, un
+  /// compte peut exister sans : son unique porte est alors le LIEN MAGIQUE, et
+  /// `null` est ce qui le dit — pas un hash de chaîne vide, pas un hash
+  /// aléatoire que personne ne connaît. Les deux fabriqueraient un secret
+  /// impossible à distinguer d'un vrai, donc impossible à interroger : « cette
+  /// personne a-t-elle un mot de passe ? » n'aurait plus de réponse, et c'est
+  /// exactement la question dont dépendent la porte de connexion et le contenu
+  /// des e-mails de lien magique.
+  ///
+  /// `verifyPassword(saisie, null)` rend `false` sans lever (`utils/password-hash.ts`)
+  /// — l'absence n'ouvre donc jamais, même si un chemin oubliait de la lire.
+  password                  String?
   displayName               String?
   /// User profile picture
   avatar                    String?
@@ -963,6 +977,20 @@ model MessageAttachment {
   alt     String?
   /// Caption/legend displayed with the attachment
   caption String?
+
+  // Légende — traduction (Prisme), champs ADDITIFS, même forme que
+  // `PostMedia.captionLanguage` / `.captionTranslations` (#6280) — réutilise
+  // `MediaCaptionTranslations` (packages/shared/types/media-caption-translation.ts)
+  // SANS modification. DISTINCTE de `translations` (pistes audio/transcriptions,
+  // déjà occupée) et de `language` — voir schema PostMedia pour le même garde-fou.
+  //
+  // GUARDÉES fail-closed : un attachement à vue unique (`isViewOnce`), flouté
+  // (`isBlurred`) ou chiffré (`isEncrypted`) ne déclenche JAMAIS de traduction
+  // de légende — décision #6533, packages/shared/decisions.md § 2026-09-14.
+  // `MessageAttachmentCaptionTranslationService` (services/gateway) est le seul
+  // écrivain de ces deux colonnes.
+  captionLanguage     String? // langue source détectée/déclarée de `caption`
+  captionTranslations Json? // { [lang]: { text, translationModel, confidenceScore, createdAt, updatedAt? } } — voir MediaCaptionTranslations
 
   // =====================================================
   // FORWARDING FIELDS
@@ -3616,6 +3644,19 @@ model PostMedia {
   // Description
   caption      String?
   alt          String?  // Accessibilité
+
+  /// Langue SOURCE de `caption` (ISO 639-1, détectée à l'écriture). DISTINCTE
+  /// de `language` ci-dessous, qui décrit la langue du MÉDIA (variantes
+  /// TTS/sous-titres) — pas celle de sa légende. `null` tant que `caption` est
+  /// vide ou n'a pas encore été traduite (#6280).
+  captionLanguage String?
+  /// Traductions de `caption`, MÊME forme que `Post.translations`
+  /// (`{ "fr": { text, translationModel, confidenceScore?, createdAt, updatedAt? } }`).
+  /// DISTINCTE de `translations` ci-dessous, déjà prise par les pistes
+  /// audio/transcriptions traduites — n'y range JAMAIS une légende, et
+  /// inversement. Voir `packages/shared/types/media-caption-translation.ts`
+  /// et `packages/shared/decisions.md` § 2026-09-14 (#6280).
+  captionTranslations Json?
 
   // Transcription audio (même structure que Attachment.transcription)
   /// Structure: {

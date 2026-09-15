@@ -19,20 +19,27 @@ struct DeleteAccountView: View {
     @State private var errorMessage: String?
     @State private var showEmailConfirmation = false
 
+    /// Référence stable, jamais observée par la racine : seul l'en-tête se
+    /// re-rend au fil du défilement (même dispositif que Réglages).
+    @State private var scrollRelay = ScrollOffsetRelay()
+
     private let requiredPhrase = "SUPPRIMER MON COMPTE"
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .top) {
             theme.backgroundGradient.ignoresSafeArea()
 
+            // L'en-tête partagé est monté À LA MAIN plutôt que par
+            // `CollapsibleHeaderPage` : l'écran bascule vers la confirmation par
+            // e-mail, qui ne défile pas. Le retour en verre (#6481) reste présent
+            // dans les deux états — la confirmation en était privée.
             if showEmailConfirmation {
                 emailConfirmationView
             } else {
-                VStack(spacing: 0) {
-                    header
-                    scrollContent
-                }
+                scrollContent
             }
+
+            header
         }
         .alert(String(localized: "account.delete.final.title", defaultValue: "Confirmation finale", bundle: .main), isPresented: $showFinalAlert) {
             Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) { }
@@ -47,41 +54,32 @@ struct DeleteAccountView: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack {
-            Button {
-                HapticFeedback.light()
-                dismiss()
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "chevron.backward")
-                        .font(MeeshyFont.relative(14, weight: .semibold))
-                    Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
-                        .font(MeeshyFont.relative(15, weight: .medium))
-                }
-                .foregroundColor(MeeshyColors.error)
-            }
-            .accessibilityLabel(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
-
-            Spacer()
-
-            Text(String(localized: "account.delete.title", defaultValue: "Supprimer le compte", bundle: .main))
-                .font(MeeshyFont.relative(17, weight: .bold))
-                .foregroundColor(MeeshyColors.error)
-                .accessibilityAddTraits(.isHeader)
-
-            Spacer()
-
-            Color.clear.frame(width: 60, height: 24)
-                .accessibilityHidden(true)
+        ScrollOffsetReader(relay: scrollRelay) { offset in
+            CollapsibleHeader(
+                title: String(localized: "account.delete.title", defaultValue: "Supprimer le compte", bundle: .main),
+                scrollOffset: offset,
+                onBack: { dismiss() },
+                titleColor: MeeshyColors.error,
+                backArrowColor: MeeshyColors.error,
+                backgroundColor: theme.backgroundPrimary
+            )
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
     }
 
     // MARK: - Scroll Content
 
     private var scrollContent: some View {
         ScrollView(showsIndicators: false) {
+            GeometryReader { geo in
+                Color.clear.preference(
+                    key: ScrollOffsetPreferenceKey.self,
+                    value: geo.frame(in: .named("scroll")).minY
+                )
+            }
+            .frame(height: 0)
+
+            Color.clear.frame(height: CollapsibleHeaderMetrics.expandedHeight)
+
             VStack(spacing: 20) {
                 warningCard
                 confirmationSection
@@ -100,6 +98,9 @@ struct DeleteAccountView: View {
             .padding(.horizontal, 16)
             .padding(.top, 16)
         }
+        .coordinateSpace(name: "scroll")
+        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollRelay.offset = $0 }      // iOS 16–17
+        .trackScrollContentOffset { scrollRelay.offset = -$0 }                               // iOS 18+
     }
 
     // MARK: - Warning Card
@@ -281,6 +282,9 @@ struct DeleteAccountView: View {
             do {
                 _ = try await AccountService.shared.openDeletionRequest(confirmationPhrase: requiredPhrase, currentPassword: currentPassword)
                 HapticFeedback.success()
+                // La confirmation ne défile pas : l'en-tête s'y montre déplié,
+                // quel que soit le repli laissé par le formulaire quitté.
+                scrollRelay.offset = 0
                 withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                     showEmailConfirmation = true
                 }

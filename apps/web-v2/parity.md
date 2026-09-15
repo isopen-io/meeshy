@@ -11,7 +11,7 @@
 |---|---|---|
 | `apps/web` (legacy) | **80** | **la PRODUCTION, seule — 100 % du trafic utilisateur** |
 | `apps/web-old-version3` | 48 | n'a jamais servi un écran ; **annulée** le 2026-09-07, quitte le dépôt avec #5882 |
-| `apps/web-v2` (la v3.1) | **20** — 15 écrans + 5 documents pré-rendus | **le STAGING**, depuis la bascule du 2026-09-07 |
+| `apps/web-v2` (la v3.1) | **31** — 26 écrans + 5 documents pré-rendus | **le STAGING**, depuis la bascule du 2026-09-07 |
 
 **L'ancienne refonte n'a jamais servi un seul écran à un utilisateur réel.**
 
@@ -25,6 +25,26 @@
 > réaligner dessus. Comme la correction du 2026-09-09 le disait déjà : c'est
 > le script qui fait foi, jamais ce tableau, et l'écart n'est gardé par aucun
 > gate sur son propre delta.
+
+> **Correction du 2026-09-13 (revue-correction #5817).** Le tableau était
+> resté à « 20 » alors que la table de routes avait gagné neuf adresses
+> depuis. Mesure du jour, `node scripts/route-inventory.mjs` : **29** routes
+> v3.1 (24 écrans + 5 documents pré-rendus) / **91** adresses distinctes en
+> union avec le legacy. Ce lot en apporte UNE (`/story/$post`) ; les huit
+> autres étaient déjà là et personne n'avait reprojeté le script — c'est
+> exactement le mode de dérive que l'absence de gate sur ce delta rend
+> silencieux, et il vient de se reproduire pour la troisième fois.
+
+> **Correction du 2026-09-13, second lot (#5672).** `/auth/verify-email` et
+> `/reset-password` passent de `legacy` à `V4.0.0` : le code de vérification
+> après inscription et la réinitialisation depuis le lien reçu sont
+> désormais servis par la v3.1 (`src/routes/verify-email.tsx`,
+> `src/routes/reset-password.tsx`, ports `verifyEmail`/`resendVerification`/
+> `verifyResetToken`/`resetPassword` de `src/lib/api/auth.ts`). Mesure du
+> jour, `node scripts/route-inventory.mjs` : **31** routes v3.1 (26 écrans +
+> 5 documents pré-rendus) / **91** adresses distinctes en union avec le
+> legacy — l'union ne bouge pas, ces deux adresses existaient déjà côté
+> legacy et changent seulement de verdict.
 
 > **Correction du 2026-09-08 (#5669).** Ce tableau a porté « `apps/web-v2` — 0 —
 > nulle part encore » pendant tout le cadrage de #5492, et c'était FAUX : la
@@ -267,10 +287,10 @@ dans une version ultérieure ·
 | `/signup/affiliate/:token` | **V4.0.0** | une porte parmi d'autres vers la clé d'affiliation |
 | `/auth/magic-link` | **V4.0.0** | |
 | `/auth/magic-link/validate` | **V4.0.0** | |
-| `/forgot-password` | **V4.0.0** | porté par #5816 : le MÊME écran répond à 200 et à 404 — l'existence d'une adresse ne se lit pas dans la réponse. Le flux TÉLÉPHONE et `/reset-password` restent `legacy` |
+| `/forgot-password` | **V4.0.0** | porté par #5816 : le MÊME écran répond à 200 et à 404 — l'existence d'une adresse ne se lit pas dans la réponse. Le flux TÉLÉPHONE reste `legacy` |
 | `/forgot-password/check-email` | `legacy` | état d'attente du précédent |
-| `/reset-password` | `legacy` | consommation du lien de réinitialisation |
-| `/auth/verify-email` | `legacy` | vérification d'adresse |
+| `/reset-password` | **V4.0.0** | porté par #5672 : le jeton (`?token=`) se vérifie via `GET /reset-password/verify-token` AVANT de montrer le formulaire — un jeton périmé ne laisse jamais saisir un mot de passe pour échouer à l'envoi |
+| `/auth/verify-email` | **V4.0.0** | porté par #5672 : anatomie de `EmailVerificationView.swift` — code à 6 chiffres (`?email=`), jamais le jeton de lien (validation par LIEN hors tranche, `/auth/magic-link/validate`) |
 | `/auth/verify-phone` | `legacy` | vérification de téléphone |
 | `/auth/verify-2fa` | `legacy` | second facteur |
 | `/settings/verify-email-change` | `legacy` | confirmation d'un changement d'adresse |
@@ -290,6 +310,8 @@ dans une version ultérieure ·
 | `/c/:conversation` | **V4.0.0** | **adresse neuve** — le fil du membre |
 | `/chat/:share_link` | **V4.0.0** | **adresse neuve** — rejoindre par lien public |
 | `/call/:callId` | `legacy` | appel en cours |
+| `/calls` | **V4.0.0** | **adresse neuve, servie par la v3.1 depuis #6362** — le journal d'appels (miroir de l'onglet `.calls` de `ContactsHubView`) : manqués, reçus, émis, filtre « Manqués », une ligne ouvre le fil. Écran seul et non onglet d'un hub (D-61). Lancer ou rappeler un appel reste hors du web, suivi par son issue |
+| `/discover` | **V4.0.0** | **adresse neuve, servie par la v3.1 depuis #6363** — la découverte de personnes (miroir de `PeopleDiscoveryView`) : onglets Découvrir (inviter par e-mail, rechercher, un geste par relation), Demandes (reçues, envoyées ; accepter, refuser, annuler) et Bloqués (débloquer). `?onglet=` et `?demandes=` portent l'onglet et le filtre. SMS et carnet d'adresses, suggestions, profil d'autrui et « À proximité » suivis par leurs issues (D-62) |
 
 ### Profil et réglages
 
@@ -307,12 +329,14 @@ dans une version ultérieure ·
 |---|---|---|
 | `/feed`, `/feeds`, `/feed/posts`, `/feed/reels` | `legacy` | **quatre** adresses de fil : fusionner à la reprise, pas porter à l'identique |
 | `/post/:postId`, `/feeds/post/:postId` | `legacy` | deux adresses pour un post |
-| `/story/:postId`, `/reel/:postId`, `/mood/:postId` | `legacy` | **liens partageables publiquement** — à porter avant tout décommissionnement |
+| `/story/:postId` | **`v3.1`** | **PORTÉ** le 2026-09-13 (#5817) — `/story/$post`, le lecteur plein écran ; l'adresse LEGACY est reprise telle quelle (D-5), un lien déjà partagé continue de mener au bon endroit |
+| `/reel/:postId`, `/mood/:postId` | `legacy` | **liens partageables publiquement** — à porter avant tout décommissionnement |
 | `/hashtag/:tag` | `legacy` | |
 | `/search` | `legacy` | |
-| `/communities`, `/communities/:id` | `legacy` | |
+| `/communities`, `/communities/:id` | **V4.0.0** | **servies par la v3.1 depuis #6364** — la liste de SES communautés et le détail d'une communauté (ses conversations mènent au fil) ; nomenclature du legacy reprise (D-5). `/communities/new` est une **adresse neuve** (la création, miroir `Route.communityCreate`). Membres, invitation, réglages, rejoindre/quitter et publications restent au legacy, chacun suivi par son issue (D-60) |
 | `/contacts` | `legacy` | |
-| `/links`, `/links/tracked/:token` | `legacy` | `/l/:token` de la V4.0.0 en est le pendant public |
+| `/links` | **V4.0.0** | **servie par la v3.1 depuis #6361** — le hub « Mes liens » et ses liens de PARTAGE : `/links/share` (liste et agrégats), `/links/share/:linkId` (détail, copier, partager, désactiver/activer) et `/links/share/new` (création) sont des **adresses neuves**, miroir `Route.shareLinks`. Les liens de suivi (#6408), l'affiliation (#6409) et les liens de communauté (#6410) restent au legacy (D-63) |
+| `/links/tracked/:token` | `legacy` | `/l/:token` de la V4.0.0 en est le pendant public ; la famille « liens de suivi » arrive avec #6408 |
 
 ### Liens et redirections
 

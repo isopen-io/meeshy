@@ -1,37 +1,67 @@
 import CoreGraphics
 import Foundation
 
-/// **Ce qui s'annonce quand quelqu'un se met à écrire** (issue #4066, directive
-/// porteur 2026-08-28 : « il existe un composant qui rend les informations en
-/// gros et c'est ce composant qu'il faut utiliser lorsqu'un utilisateur
-/// commence la frappe ! Laisser le SyncPill dans sa forme normale »).
+/// **Ce qui s'annonce quand quelqu'un se met à écrire** (issue #6188, directive
+/// porteur 2026-09-12 : « supprime le composant qui grandit en venant de la
+/// dynamic island lorsqu'on a une personne qui écrit et garder l'information
+/// uniquement dans SyncPill avec un effet Zoom-In Zoom-Out qui agrandit la pill
+/// puis reduit au début de la frappe »).
 ///
-/// La pastille ne grossit plus. Ce qui doit se voir paraît par
-/// `IslandEmergingBanner` — une capsule qui naît dans la Dynamic Island et se
-/// pose dessous. Trois révisions de l'accentuation en dix jours (#4018 → #4026
-/// → #4050) s'arrêtent ici, et pas sur un quatrième réglage :
+/// ## Le va-et-vient, écrit ici pour qu'il cesse
 ///
-/// > Une capsule de STATUT n'est pas le porteur d'une annonce. La grossir la
-/// > laisse être ce qu'elle est ; une annonce doit paraître comme une annonce.
+/// L'accentuation de la pastille a été posée puis reprise TROIS fois en dix
+/// jours — pulse fixe (#4018), liée à la durée du signal (#4026), fenêtre
+/// réarmable (#4050) — puis SUPPRIMÉE le 2026-08-28 (#4066, `960f7d1df0`) au
+/// profit d'`IslandEmergingBanner`, une capsule naissant dans la Dynamic
+/// Island, au motif que « une capsule de STATUT n'est pas le porteur d'une
+/// annonce ». La directive du 2026-09-12 revient sur ce choix : l'île se tait,
+/// la pastille porte de nouveau l'annonce, et elle le fait en enflant.
+///
+/// C'est la CINQUIÈME révision du même geste. Elle est notée parce qu'un
+/// fichier muet sur ce point en invite une sixième — et parce que le prochain
+/// lecteur doit savoir que l'argument « une capsule de statut n'annonce pas »
+/// a déjà été tenu, et tranché dans l'autre sens par le porteur.
+///
+/// ## Ce que la loi décide, et ce qu'elle laisse à la peau
 ///
 /// Type pur, `nonisolated`, sans horloge murale ni SwiftUI : la peau injecte
-/// l'instant et la mesure — même patron que `ScrollTimePillLaw` et
-/// `FocalMagnificationLaw`.
+/// l'instant et joue l'animation — même patron que `ScrollTimePillLaw` et
+/// `FocalMagnificationLaw`. La loi dit QUOI annoncer et de COMBIEN enfler ;
+/// `SyncPill` dit quand la frame est peinte.
 nonisolated enum TypingAnnouncementLaw {
 
-    /// Combien de temps la capsule reste posée avant de se refondre dans l'île.
+    /// **De combien la pastille enfle au début d'une frappe.**
     ///
-    /// Volontairement plus COURT que `SyncPill.idleHideDelay` (6 s) : l'annonce
-    /// dit « quelqu'un vient de commencer », pas « quelqu'un écrit encore ».
-    /// C'est la pastille, sous sa forme normale, qui porte la durée — et cette
-    /// division du travail est précisément ce que l'accentuation confondait.
-    static let visibleDuration: TimeInterval = 4.0
+    /// `1.18` et non `1.5` (la valeur de #4018, qui avait motivé deux des trois
+    /// reprises) : la pastille vit sous la Dynamic Island, dans un couloir
+    /// étroit, et une capsule qui grandit de moitié y touche les bords sur les
+    /// petits écrans. L'emphase doit se REMARQUER, pas déplacer la mise en
+    /// page — c'est un accent, pas un changement de taille.
+    static let emphasisScale: CGFloat = 1.18
 
-    /// Le padding de la capsule, repris de l'ancien appelant du composant
-    /// (`CallView.remoteQualityDegradedBanner`) pour que les deux capsules
-    /// aient la même assise.
-    static let horizontalPadding: CGFloat = 16
-    static let verticalPadding: CGFloat = 8
+    /// Montée, palier, retour. Trois durées plutôt qu'un aller-retour
+    /// symétrique : sans palier, l'œil qui regarde ailleurs au mauvais moment
+    /// ne voit rien du tout, et l'accent n'aurait servi à personne.
+    static let emphasisRiseDuration: TimeInterval = 0.22
+    static let emphasisHoldDuration: TimeInterval = 0.45
+    static let emphasisFallDuration: TimeInterval = 0.28
+
+    /// Le temps total pendant lequel la pastille est hors de sa taille de
+    /// repos. Dérivé, jamais saisi deux fois : la peau programme son retour sur
+    /// cette valeur, et un écart entre les deux laisserait la pastille enflée.
+    static var emphasisTotalDuration: TimeInterval {
+        emphasisRiseDuration + emphasisHoldDuration + emphasisFallDuration
+    }
+
+    /// L'échelle à appliquer selon que l'emphase est en cours ou non.
+    ///
+    /// Une fonction plutôt qu'un ternaire au site d'appel : c'est la seule
+    /// forme où « au repos, la pastille est à sa taille » est un fait
+    /// TESTABLE. La régression de 2026-08 n'était pas une mauvaise amplitude,
+    /// c'était une pastille qui ne redescendait pas.
+    static func scale(emphasizing: Bool) -> CGFloat {
+        emphasizing ? emphasisScale : 1
+    }
 
     /// L'entrée à annoncer parmi celles qui viennent d'arriver.
     ///
@@ -40,35 +70,32 @@ nonisolated enum TypingAnnouncementLaw {
     ///   déjà. Les distinguer par leur préfixe d'identifiant plutôt que par un
     ///   drapeau de plus garde la règle lisible à côté de `typingEntries`, qui
     ///   pose ce préfixe.
-    /// - La PLUS RÉCENTE, jamais une file : deux capsules qui se succéderaient
-    ///   dans l'île en moins de quatre secondes se liraient comme un
-    ///   clignotement. L'ordre est celui de `typingEntries` (trié par
-    ///   conversation), donc stable d'un rendu à l'autre.
+    /// - La PLUS RÉCENTE, jamais une file : deux emphases qui se succéderaient
+    ///   en moins d'une seconde se liraient comme un clignotement. L'ordre est
+    ///   celui de `typingEntries` (trié par conversation), donc stable d'un
+    ///   rendu à l'autre.
+    /// - Sur des entrées NEUVES uniquement (l'appelant filtre) : une frappe qui
+    ///   continue ne rejoue pas l'accent.
     static func announcement(among newEntries: [SyncPillEntry]) -> SyncPillEntry? {
         newEntries.last { $0.id.hasPrefix(typingIDPrefix) }
     }
 
-    /// Le préfixe que `ConnectionBanner.typingEntries` pose sur ses
-    /// identifiants. Nommé ici pour que les deux sites ne le réécrivent pas
-    /// chacun de leur côté.
+    /// Le préfixe que `ConnectionBanner.typingEntries` pose sur l'identifiant
+    /// d'une ligne de frappe : `typing.<conversationId>`.
     static let typingIDPrefix = "typing."
 
-    /// La taille POSÉE de la capsule, dérivée de la largeur mesurée du libellé.
+    /// **La conversation où quelqu'un écrit**, lue depuis l'identifiant de
+    /// l'entrée (#6188).
     ///
-    /// Le composant en dérive l'échelle et l'offset de NAISSANCE : une taille
-    /// fausse fait naître la capsule hors de l'île, ce que son propre
-    /// doc-comment nomme comme le mode d'échec à éviter. Elle se calcule donc à
-    /// partir d'une mesure réelle du texte, jamais d'une estimation.
-    ///
-    /// La largeur est bornée : un pseudonyme très long ne doit pas faire naître
-    /// une capsule plus large que l'écran.
-    static func settledSize(
-        labelWidth: CGFloat,
-        lineHeight: CGFloat,
-        maxWidth: CGFloat
-    ) -> CGSize {
-        let width = min(maxWidth, max(0, labelWidth) + 2 * horizontalPadding)
-        let height = max(0, lineHeight) + 2 * verticalPadding
-        return CGSize(width: width, height: height)
+    /// Toucher l'annonce doit ouvrir cette conversation. L'entrée porte déjà sa
+    /// destination dans `source` (`.conversation(id:messageId:)`), et c'est
+    /// elle que le tap emprunte ; cette fonction existe pour les appelants qui
+    /// n'ont que l'identifiant sous la main, et pour que « ce préfixe encode un
+    /// identifiant de conversation » soit un fait vérifié plutôt qu'une
+    /// convention orale entre deux fichiers.
+    static func conversationId(fromEntryId entryId: String) -> String? {
+        guard entryId.hasPrefix(typingIDPrefix) else { return nil }
+        let id = String(entryId.dropFirst(typingIDPrefix.count))
+        return id.isEmpty ? nil : id
     }
 }

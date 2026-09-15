@@ -11,7 +11,11 @@ import { createOutboxStore, entriesOf } from '@/lib/send/outbox-store';
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
 import { messagesQueryKey, type MessagesPage } from './messages';
 import { createRealtimeConnection, type RealtimeDeps } from './socket';
+import { FEED_QUERY_KEY } from './feed';
+import type { FeedInfiniteData, FeedPost } from './feed-pages';
 import { STORY_TRAY_QUERY_KEY } from './stories';
+import { BLOCKED_USERS_QUERY_KEY } from './blocks';
+import { friendRequestsQueryKey } from './friend-requests';
 import { createTypingStore, typistsOf } from './typing-store';
 import type { Message } from './types';
 
@@ -225,20 +229,30 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
    */
   test('`conversation:updated` fusionne la carte SERVEUR dans la ligne de LISTE', () => {
     const { deps, socket, queryClient } = buildDeps();
-    queryClient.setQueryData(CONVERSATIONS_QUERY_KEY, [
-      {
-        id: 'c-a',
-        type: 'direct',
-        status: 'active',
-        visibility: 'private',
-        isActive: true,
-        memberCount: 2,
-        participants: [],
-        createdAt: new Date(),
-        lastMessage: { id: 'm-1', content: 'Hola', conversationId: 'c-a' } as unknown as Message,
-        lastMessageOriginalLanguage: 'es',
-      },
-    ]);
+    // Le cache de liste porte des PAGES (`InfiniteData`, #6195).
+    queryClient.setQueryData(CONVERSATIONS_QUERY_KEY, {
+      pages: [
+        {
+          conversations: [
+            {
+              id: 'c-a',
+              type: 'direct',
+              status: 'active',
+              visibility: 'private',
+              isActive: true,
+              memberCount: 2,
+              participants: [],
+              createdAt: new Date(),
+              lastMessage: { id: 'm-1', content: 'Hola', conversationId: 'c-a' } as unknown as Message,
+              lastMessageOriginalLanguage: 'es',
+            },
+          ],
+          pagination: { limit: 30, offset: 0, total: 1, hasMore: false },
+          cursorPagination: { limit: 30, hasMore: false, nextCursor: null },
+        },
+      ],
+      pageParams: [undefined],
+    });
 
     createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
     socket.fire(SERVER_EVENTS.CONVERSATION_UPDATED, {
@@ -249,9 +263,10 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
       lastMessageTranslations: { fr: 'Salut' },
     });
 
-    const list = queryClient.getQueryData<{ readonly id: string; readonly lastMessageTranslations?: unknown }[]>(
-      CONVERSATIONS_QUERY_KEY,
-    );
+    const data = queryClient.getQueryData<{
+      readonly pages: readonly { readonly conversations: readonly { readonly id: string; readonly lastMessageTranslations?: unknown }[] }[];
+    }>(CONVERSATIONS_QUERY_KEY);
+    const list = data?.pages.flatMap((p) => p.conversations);
     expect(list?.find((c) => c.id === 'c-a')?.lastMessageTranslations).toEqual({ fr: 'Salut' });
   });
 
@@ -312,6 +327,155 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
       expect(queryClient.getQueryState(STORY_TRAY_QUERY_KEY)?.isInvalidated).toBe(true);
     });
   }
+
+  /**
+   * `friend-request:*` (#6321) — LES DEMANDES D'AMITIÉ SUIVENT LA PASSERELLE.
+   * Les charges ne portent que des identifiants : une invalidation de la
+   * famille `['friends']` recompte la pastille du barreau « Découvrir » et
+   * rafraîchit les paniers de la découverte, bloqués compris.
+   */
+  const FRIEND_EVENTS: readonly [string, unknown][] = [
+    [SERVER_EVENTS.FRIEND_REQUEST_NEW, { friendRequestId: 'f-1', senderId: 'u-1', receiverId: 'u-me' }],
+    [SERVER_EVENTS.FRIEND_REQUEST_CANCELLED, { friendRequestId: 'f-1', cancelledBy: 'u-1' }],
+    [SERVER_EVENTS.FRIEND_REQUEST_ACCEPTED, { friendRequestId: 'f-1', accepterId: 'u-1' }],
+    [SERVER_EVENTS.FRIEND_REQUEST_REJECTED, { friendRequestId: 'f-1', rejecterId: 'u-1' }],
+  ];
+  for (const [event, payload] of FRIEND_EVENTS) {
+    test(`\`${event}\` invalide les demandes d’amitié et les bloqués`, () => {
+      const { deps, socket, queryClient } = buildDeps();
+      queryClient.setQueryData(friendRequestsQueryKey('received'), { pages: [], pageParams: [] });
+      queryClient.setQueryData(BLOCKED_USERS_QUERY_KEY, { pages: [], pageParams: [] });
+      createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+      socket.fire(event, payload);
+
+      expect(queryClient.getQueryState(friendRequestsQueryKey('received'))?.isInvalidated).toBe(true);
+      expect(queryClient.getQueryState(BLOCKED_USERS_QUERY_KEY)?.isInvalidated).toBe(true);
+    });
+  }
+
+  test('une RE-authentification invalide aussi les demandes d’amitié — une demande reçue pendant la coupure se recompte', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    queryClient.setQueryData(friendRequestsQueryKey('received'), { pages: [], pageParams: [] });
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+    socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
+    expect(queryClient.getQueryState(friendRequestsQueryKey('received'))?.isInvalidated).toBe(false);
+
+    socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
+    expect(queryClient.getQueryState(friendRequestsQueryKey('received'))?.isInvalidated).toBe(true);
+  });
+
+  /**
+   * `post:liked` / `post:unliked` / `post:bookmarked` (#6278) — LE FIL SUIT
+   * LES GESTES EN DIRECT. Le compte diffusé est ABSOLU (`PostLikedEventData
+   * .likeCount`, `PostBookmarkedEventData.bookmarkCount`) : il REMPLACE ce que
+   * le cache estimait. L'état « aimé par moi » ne bascule que si l'auteur du
+   * geste est le lecteur (un autre appareil) — le « j'aime » d'un autre ne
+   * remplit jamais MON cœur.
+   */
+  const feedWith = (partial: Partial<FeedPost>): FeedInfiniteData => ({
+    pages: [
+      {
+        posts: [{ id: 'p-1', type: 'POST', createdAt: '2026-09-13T10:00:00.000Z', ...partial }],
+        pagination: { limit: 20, hasMore: false, nextCursor: null },
+      },
+    ],
+    pageParams: [undefined],
+  });
+  const feedPost = (queryClient: QueryClient) => queryClient.getQueryData<FeedInfiniteData>(FEED_QUERY_KEY)?.pages[0]?.posts[0];
+
+  test('`post:liked` d’un AUTRE lecteur remplace le compte par le compte servi, sans remplir mon cœur', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    queryClient.setQueryData(FEED_QUERY_KEY, feedWith({ isLikedByMe: false, likeCount: 3 }));
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.POST_LIKED, { postId: 'p-1', userId: 'u-other', emoji: '❤️', likeCount: 7, reactionSummary: {} });
+
+    expect(feedPost(queryClient)?.likeCount).toBe(7);
+    expect(feedPost(queryClient)?.isLikedByMe).toBe(false);
+  });
+
+  test('`post:liked` du lecteur LUI-MÊME (autre appareil) remplit le cœur ET pose le compte servi', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    queryClient.setQueryData(FEED_QUERY_KEY, feedWith({ isLikedByMe: false, likeCount: 3 }));
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.POST_LIKED, { postId: 'p-1', userId: 'u-viewer', emoji: '❤️', likeCount: 4, reactionSummary: {} });
+
+    expect(feedPost(queryClient)?.isLikedByMe).toBe(true);
+    expect(feedPost(queryClient)?.likeCount).toBe(4);
+  });
+
+  test('`post:unliked` du lecteur vide le cœur et pose le compte servi', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    queryClient.setQueryData(FEED_QUERY_KEY, feedWith({ isLikedByMe: true, likeCount: 4 }));
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.POST_UNLIKED, { postId: 'p-1', userId: 'u-viewer', emoji: '❤️', likeCount: 3, reactionSummary: {} });
+
+    expect(feedPost(queryClient)?.isLikedByMe).toBe(false);
+    expect(feedPost(queryClient)?.likeCount).toBe(3);
+  });
+
+  test('`post:bookmarked` (personnel) pose le signet ET le compte servi', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    queryClient.setQueryData(FEED_QUERY_KEY, feedWith({ isBookmarkedByMe: false, bookmarkCount: 1 }));
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.POST_BOOKMARKED, { postId: 'p-1', bookmarked: true, bookmarkCount: 5 });
+
+    expect(feedPost(queryClient)?.isBookmarkedByMe).toBe(true);
+    expect(feedPost(queryClient)?.bookmarkCount).toBe(5);
+  });
+
+  /**
+   * `media:caption-translation-updated` (#6280) — LA LÉGENDE D'UN MÉDIA DU
+   * FIL SUIT LE PIPELINE ZMQ EN DIRECT. Miroir de `post:liked` ci-dessus :
+   * une fonction pure appliquée à `FEED_QUERY_KEY`.
+   */
+  test('`media:caption-translation-updated` entre la traduction dans le cache du média visé', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    queryClient.setQueryData(
+      FEED_QUERY_KEY,
+      feedWith({ media: [{ id: 'm-1', mimeType: 'image/jpeg', fileUrl: 'a.jpg', caption: 'The market', captionLanguage: 'en' }] }),
+    );
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, {
+      mediaId: 'm-1',
+      postId: 'p-1',
+      language: 'fr',
+      translation: { text: 'Le marché', translationModel: 'nllb-200', createdAt: '2026-09-14T00:00:00.000Z' },
+    });
+
+    expect(feedPost(queryClient)?.media?.[0]?.captionTranslations).toEqual({
+      fr: { text: 'Le marché', translationModel: 'nllb-200', createdAt: '2026-09-14T00:00:00.000Z' },
+    });
+  });
+
+  test('une charge de traduction de légende MALFORMÉE est ignorée — le cache ne bouge pas', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    const data = feedWith({ media: [{ id: 'm-1', mimeType: 'image/jpeg', fileUrl: 'a.jpg' }] });
+    queryClient.setQueryData(FEED_QUERY_KEY, data);
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, { mediaId: 'm-1', language: 'fr' });
+    socket.fire(SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, null);
+
+    expect(queryClient.getQueryData(FEED_QUERY_KEY)).toBe(data);
+  });
+
+  test('une charge de geste MALFORMÉE est ignorée — le cache ne bouge pas', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    const data = feedWith({ isLikedByMe: false, likeCount: 3 });
+    queryClient.setQueryData(FEED_QUERY_KEY, data);
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.POST_LIKED, { postId: 'p-1', likeCount: 'beaucoup' });
+    socket.fire(SERVER_EVENTS.POST_BOOKMARKED, null);
+
+    expect(queryClient.getQueryData(FEED_QUERY_KEY)).toBe(data);
+  });
 
   test('`typing:start` alimente le magasin de frappe, JAMAIS pour soi-même', () => {
     const { deps, socket, typing } = buildDeps({ viewerId: () => 'u-viewer' });
@@ -374,6 +538,135 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
     // Le minuteur est annulé — le rejouer ne doit rien casser (pas d'entrée à retirer deux fois).
     expect(() => scheduler.fireAll()).not.toThrow();
     expect(typistsOf(typing.getState(), 'c-a', Date.now())).toEqual([]);
+  });
+
+  /**
+   * DEUX FRAPPEURS EXPIRENT UN PAR UN (#6171, T8) — le magasin de frappe
+   * tient DÉJÀ plusieurs entrées par conversation (`typing-store.ts`) ; ce
+   * témoin prouve que la CONNEXION arme un minuteur de sécurité PAR
+   * frappeur, jamais un seul pour toute la conversation.
+   */
+  test('DEUX frappeurs expirent UN PAR UN — chaque minuteur ne retire que le sien (#6171, T8)', () => {
+    const scheduler = fakeScheduler();
+    const { deps, socket, typing } = buildDeps({
+      scheduleTimeout: scheduler.scheduleTimeout,
+      clearTimeoutFn: scheduler.clearTimeoutFn,
+    });
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.TYPING_START, { userId: 'u-kwame', username: 'kwame', displayName: 'Kwame Mensah', conversationId: 'c-a' });
+    socket.fire(SERVER_EVENTS.TYPING_START, { userId: 'u-fatou', username: 'fatou', displayName: 'Fatou Bâ', conversationId: 'c-a' });
+    expect(typistsOf(typing.getState(), 'c-a', Date.now()).map((t) => t.userId)).toEqual(['u-kwame', 'u-fatou']);
+
+    // Le minuteur de Kwame (le PREMIER programmé) se déclenche seul.
+    scheduler.scheduled[0]?.fn();
+    expect(typistsOf(typing.getState(), 'c-a', Date.now()).map((t) => t.userId)).toEqual(['u-fatou']);
+
+    scheduler.scheduled[1]?.fn();
+    expect(typistsOf(typing.getState(), 'c-a', Date.now())).toEqual([]);
+  });
+
+  test('un SECOND `typing:start` du MÊME frappeur réarme SON minuteur sans toucher celui d’un autre', () => {
+    const scheduler = fakeScheduler();
+    const { deps, socket, typing } = buildDeps({
+      scheduleTimeout: scheduler.scheduleTimeout,
+      clearTimeoutFn: scheduler.clearTimeoutFn,
+    });
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.TYPING_START, { userId: 'u-kwame', username: 'kwame', conversationId: 'c-a' });
+    socket.fire(SERVER_EVENTS.TYPING_START, { userId: 'u-fatou', username: 'fatou', conversationId: 'c-a' });
+    socket.fire(SERVER_EVENTS.TYPING_START, { userId: 'u-kwame', username: 'kwame', conversationId: 'c-a' });
+
+    expect(scheduler.scheduled[0]?.cleared).toBe(true); // le PREMIER minuteur de Kwame a été annulé.
+    expect(scheduler.scheduled[1]?.cleared).toBe(false); // celui de Fatou n'a jamais été touché.
+    /**
+     * L'ORDRE NE BOUGE PAS (revue-correction #6171, défaut 3) — Kwame est
+     * apparu EN PREMIER ; son keepalive réarme son échéance (assertions
+     * ci-dessus) mais ne le renvoie PAS en queue du roster, miroir
+     * `ConversationSocketHandler.swift:366-380`/`:392-395` (« Republie le
+     * roster dans l'ordre de première apparition »). Cette assertion
+     * attendait AUPARAVANT `['u-fatou', 'u-kwame']` — l'ancienne forme de
+     * `typing-store.ts` § `start` (`filter` puis ajout en QUEUE) déplaçait
+     * le frappeur qui réarme, et ce test consacrait le défaut au lieu de le
+     * révéler : falsifié par `typing-store.test.ts` § « un keepalive du
+     * MÊME frappeur ne lui fait perdre ni sa place de meneur ni l'ordre ».
+     */
+    expect(typistsOf(typing.getState(), 'c-a', Date.now()).map((t) => t.userId)).toEqual(['u-kwame', 'u-fatou']);
+  });
+
+  /**
+   * `message:new` RÉTRACTE la frappe de SON AUTEUR (#6171, G2/T9) — miroir
+   * `ConversationListViewModel.swift:992-1013`. Un frappeur qui n'a pas écrit
+   * ce message reste en place.
+   */
+  test('un `message:new` rétracte la frappe de SON AUTEUR, et de lui seul (#6171, G2/T9)', () => {
+    const scheduler = fakeScheduler();
+    const { deps, socket, typing } = buildDeps({
+      scheduleTimeout: scheduler.scheduleTimeout,
+      clearTimeoutFn: scheduler.clearTimeoutFn,
+    });
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.TYPING_START, { userId: 'u-kwame', username: 'kwame', conversationId: 'c-a' });
+    socket.fire(SERVER_EVENTS.TYPING_START, { userId: 'u-fatou', username: 'fatou', conversationId: 'c-a' });
+
+    socket.fire(SERVER_EVENTS.MESSAGE_NEW, socketMessage({ senderId: 'u-kwame' }));
+
+    expect(typistsOf(typing.getState(), 'c-a', Date.now()).map((t) => t.userId)).toEqual(['u-fatou']);
+    expect(scheduler.scheduled[0]?.cleared).toBe(true); // le minuteur de Kwame est désarmé.
+    expect(scheduler.scheduled[1]?.cleared).toBe(false); // celui de Fatou ne l'est pas.
+  });
+
+  test('la rétractation lit AUSSI `sender.userId` (deux espaces d’ids, doc `conversation.ts:210-226`)', () => {
+    const { deps, socket, typing } = buildDeps();
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.TYPING_START, { userId: 'u-kwame', username: 'kwame', conversationId: 'c-a' });
+    socket.fire(SERVER_EVENTS.MESSAGE_NEW, socketMessage({ senderId: 'p-kwame', sender: { id: 'p-kwame', displayName: 'Kwame Mensah', userId: 'u-kwame' } }));
+
+    expect(typistsOf(typing.getState(), 'c-a', Date.now())).toEqual([]);
+  });
+
+  /**
+   * `message:translation` BASCULE LE CACHE SANS AUCUNE REQUÊTE (#6171, T2) —
+   * le compteur de fetch = 0 EST le critère de fin de l'issue.
+   */
+  test('`message:translation` bascule le cache SANS AUCUNE requête (compteur de fetch = 0) (#6171, T2)', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    queryClient.setQueryData<MessagesPage>(messagesQueryKey('c-a'), {
+      messages: [{ ...socketMessage({ id: 'm-1', originalLanguage: 'es', content: 'Hola' }), translations: [] } as unknown as Message],
+      hasOlder: false,
+    });
+    let fetchCount = 0;
+    void queryClient.getQueryCache().build(queryClient, {
+      queryKey: messagesQueryKey('c-a'),
+      queryFn: async () => {
+        fetchCount += 1;
+        throw new Error('aucune requête ne doit partir');
+      },
+    });
+
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+    socket.fire(SERVER_EVENTS.MESSAGE_TRANSLATION, {
+      messageId: 'm-1',
+      translations: [
+        {
+          id: 't-1',
+          messageId: 'm-1',
+          sourceLanguage: 'es',
+          targetLanguage: 'fr',
+          translatedContent: 'Salut',
+          translationModel: 'basic',
+          cacheKey: 'k',
+          cached: false,
+        },
+      ],
+    });
+
+    const page = queryClient.getQueryData<MessagesPage>(messagesQueryKey('c-a'));
+    expect(page?.messages.find((m) => m.id === 'm-1')?.translations.find((t) => t.targetLanguage === 'fr')?.translatedContent).toBe('Salut');
+    expect(fetchCount).toBe(0);
   });
 
   test('émettre la frappe passe par `typing:start`/`typing:stop`, avec `{ conversationId }`', () => {
@@ -502,6 +795,9 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
     deps.queryClient.setQueryData(STORY_TRAY_QUERY_KEY, []);
     socket.fire(SERVER_EVENTS.STORY_CREATED, { story: { id: 's-1' } });
     expect(deps.queryClient.getQueryState(STORY_TRAY_QUERY_KEY)?.isInvalidated).toBe(false);
+    deps.queryClient.setQueryData(friendRequestsQueryKey('received'), { pages: [], pageParams: [] });
+    socket.fire(SERVER_EVENTS.FRIEND_REQUEST_NEW, { friendRequestId: 'f-1', senderId: 'u-1', receiverId: 'u-me' });
+    expect(deps.queryClient.getQueryState(friendRequestsQueryKey('received'))?.isInvalidated).toBe(false);
     // Le minuteur de sécurité en attente a été annulé par `destroy`.
     expect(scheduler.scheduled.every((s) => s.cleared)).toBe(true);
   });

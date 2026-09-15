@@ -52,11 +52,17 @@ final class LoadMoreRepliesCell: UICollectionViewCell {
 
     /// Pluriel résolu explicitement : le markup AGA inline (`^[…](inflect: true)`)
     /// dans un `defaultValue` sans entrée String Catalog fuit en brut sur iOS 18.x.
-    static func labelText(remaining: Int) -> String {
+    /// `bundle` et `locale` vont par PAIRE, comme `PostStatAccessibility` : la
+    /// table de traduction et la règle de pluriel — sans eux, un témoin juge la
+    /// langue du SIMULATEUR plutôt que la loi.
+    static func labelText(remaining: Int,
+                          bundle: Bundle = .main,
+                          locale: Locale = .current) -> String {
         String(
             localized: "comments.load-more-replies",
             defaultValue: "Voir \(remaining) réponses de plus",
-            bundle: .main
+            bundle: bundle,
+            locale: locale
         )
     }
 

@@ -8,6 +8,7 @@ import { defineConfig, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 import { INSTITUTIONAL_PATTERN } from './scripts/lib/institutional-routes.mjs';
+import { INLINE_INTERFACE_LANGUAGE_BOOTSTRAP } from './src/lib/inline-interface-language-bootstrap.js';
 import { INLINE_SCHEME_BOOTSTRAP } from './src/lib/inline-scheme-bootstrap.js';
 import { declaredBuildFlag } from './src/lib/build-flag';
 
@@ -30,6 +31,30 @@ const inlineSchemeBootstrap = (): Plugin => ({
       );
     }
     return html.replace(SCHEME_BOOTSTRAP_MARKER, INLINE_SCHEME_BOOTSTRAP);
+  },
+});
+
+/**
+ * Même patron que ci-dessus, pour la langue d'INTERFACE (#6206) : `index.html`
+ * porte un marqueur, ce greffon l'injecte depuis
+ * `inline-interface-language-bootstrap.js` — la même constante que lit
+ * `src/lib/interface-language.ts` — pour que le HTML et le module applicatif
+ * ne puissent plus diverger sur la clé de stockage ni sur les langues
+ * supportées.
+ */
+const INTERFACE_LANGUAGE_BOOTSTRAP_MARKER = '/*@INLINE_INTERFACE_LANGUAGE_BOOTSTRAP@*/';
+
+const inlineInterfaceLanguageBootstrap = (): Plugin => ({
+  name: 'meeshy-inline-interface-language-bootstrap',
+  transformIndexHtml(html) {
+    if (!html.includes(INTERFACE_LANGUAGE_BOOTSTRAP_MARKER)) {
+      throw new Error(
+        `index.html ne porte plus le marqueur ${INTERFACE_LANGUAGE_BOOTSTRAP_MARKER} : le script ` +
+          "d'amorçage de la langue d'interface ne serait plus injecté, et <html lang> resterait figé sur " +
+          'la valeur statique du HTML (#6206).',
+      );
+    }
+    return html.replace(INTERFACE_LANGUAGE_BOOTSTRAP_MARKER, INLINE_INTERFACE_LANGUAGE_BOOTSTRAP);
   },
 });
 
@@ -364,6 +389,7 @@ export default defineConfig({
   plugins: [
     tailwind(),
     inlineSchemeBootstrap(),
+    inlineInterfaceLanguageBootstrap(),
     prerenderInstitutionalPages(),
     ...(forCapacitor ? [dropInstitutionalServiceWorker()] : []),
     /**
@@ -559,8 +585,38 @@ export default defineConfig({
             ) {
               return 'socketio';
             }
+            /**
+             * ZOD (#6289) — la frontière du profil (`lib/api/profile.ts`,
+             * `zod/mini`) est son SEUL importeur. Sans ce nom, la règle par
+             * défaut le rangeait dans `core` : mesuré, la première peinture
+             * passait de ~40,8 à 45,43 Ko pour un validateur qu'aucun écran
+             * du socle ne lit.
+             */
+            if (id.includes('/node_modules/zod/') || id.includes('/zod@')) return 'zod';
             return 'core';
           }
+          /**
+           * LES NOMS D'ÉVÉNEMENTS SOCKET.IO (revue-correction #6171, défaut 1)
+           * — `event-names.ts` (`@meeshy/shared`) est atteint à la fois par
+           * `lib/api/socket.ts` (le chunk `realtime`, chargé en `import()`
+           * statique depuis `lib/api/realtime.ts`) ET par
+           * `lib/api/fixtures-realtime.ts`, désormais lui-même en `import()`
+           * DEPUIS `realtime.ts` (§ défaut 1) — deux entrées asynchrones
+           * distinctes qui partagent ce petit module. Sans ce nom, Rollup
+           * range les exports dans LA PREMIÈRE des deux à les atteindre et
+           * fait importer l'autre depuis elle : `fixtures-realtime` se
+           * retrouvait à importer STATIQUEMENT le chunk `realtime`, ce que
+           * `budgets.json › on_demand_chunks.realtime.dynamic_only` refuse —
+           * à raison, ce chunk ne doit avoir qu'une seule voie d'accès, un
+           * `import()`. Le nommer casse l'arête : les deux chunks importent
+           * ce tiers, ni l'un ni l'autre ne s'importent entre eux.
+           */
+          /* Le nom NE COMMENCE PAS PAR `socketio-` : le motif du budget
+           * `socketio` (`^assets/socketio-`) matcherait ce chunk EN PLUS du
+           * client `socket.io-client` qu'il borne, et ferait déborder un
+           * plafond que ce lot ne doit pas toucher (mesuré : 14,56 Ko contre
+           * 14 avant ce renommage). */
+          if (id.includes('/socketio-events/event-names')) return 'socket-event-names';
           return undefined;
         },
       },

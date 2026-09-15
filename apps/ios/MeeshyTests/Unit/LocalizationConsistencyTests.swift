@@ -182,6 +182,12 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Models/ConversationFilterLabel.swift",  // 9
         "apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift",  // 9
         "apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView.swift",  // 9
+        // #6145 — le menu ⋯ a emporté quatre clés hors du fichier épinglé (les
+        // deux verbes, la note de marque, le libellé VoiceOver du glyphe). Un
+        // cliquet ancré sur un CHEMIN cesse de voir ce qu'une découpe déplace,
+        // et il cesse de le voir EN SILENCE : sa destination s'inscrit donc
+        // dans le même commit (leçon 578).
+        "apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView+Menu.swift",  // 5
         "apps/ios/Meeshy/Features/Main/Views/StoryExportShareSheet.swift",  // 9
         "apps/ios/Meeshy/Features/Contacts/DiscoverViewModel.swift",  // 8
         "apps/ios/Meeshy/Features/Contacts/RequestsViewModel.swift",  // 8
@@ -223,7 +229,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Components/CallSignalGlyph.swift",  // 5
         "apps/ios/Meeshy/Features/Main/Components/LanguageFlagChip.swift",  // 5
         "apps/ios/Meeshy/Features/Main/Composer/ComposerDescriptionLayer.swift",  // 5
-        "apps/ios/Meeshy/Features/Main/Composer/ComposerFormatFan.swift",  // 5
+        "apps/ios/Meeshy/Features/Main/Composer/ComposerFormatAvailability.swift",  // 5
         "apps/ios/Meeshy/Features/Main/Focal/Summary/EpisodeSegmenter.swift",  // 5
         "apps/ios/Meeshy/Features/Main/Lentille/Chrome/LentilleSectionIdentity.swift",  // 5
         "apps/ios/Meeshy/Features/Main/Services/CrashDiagnosticsManager.swift",  // 5
@@ -273,6 +279,12 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/StoryLanguageQuickBar.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Views/iPadRootView.swift",  // 2
         "apps/ios/Meeshy/Features/Stories/Notifications/StoryNotificationOfflineContent.swift",  // 2
+        // #6508 — les mots d'un échec d'ouverture ont QUITTÉ l'écran ci-dessus
+        // (et le détail d'un post) pour la table que partagent le détail, la
+        // cible story et le lecteur de réels. Le cliquet suit le CODE, pas le
+        // chemin : la destination s'inscrit dans le même commit (leçon 578).
+        "apps/ios/Meeshy/Features/Main/Views/ContentFetchFailure+Copy.swift",  // 6
+        "apps/ios/Meeshy/Features/Main/Views/ReelOpenFailureView.swift",  // 2
         "apps/ios/Meeshy/Core/DependencyContainer.swift",  // 1
         "apps/ios/Meeshy/Features/Auth/ViewModels/EmailVerificationViewModel.swift",  // 1
         "apps/ios/Meeshy/Features/Contacts/CallStarter.swift",  // 1
@@ -367,12 +379,19 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleStoryCitationCard.swift",  // 3
         "apps/ios/Meeshy/Features/Main/Views/ShareLinkDetailView.swift",  // 19
         "apps/ios/Meeshy/Features/Main/Views/RootView.swift",  // 18
+        // #6579 — `CallPresentationLayer` a QUITTÉ l'écran ci-dessus pour son
+        // propre fichier (RootView.swift dépassait le plafond dur de 1200
+        // lignes). Le cliquet suit le CODE, pas le chemin : sans cette ligne,
+        // `call.unknown` sortirait du cliquet en silence (leçon 578).
+        "apps/ios/Meeshy/Features/Main/Views/RootLayers/CallPresentationLayer.swift",  // 1
         "apps/ios/Meeshy/Features/Auth/Views/EmailVerificationView.swift",  // 17
         "apps/ios/Meeshy/Features/Main/Components/RecentMediaStrip.swift",  // 17
         "apps/ios/Meeshy/Features/Main/ViewModels/FeedViewModel.swift",  // 17
         "apps/ios/Meeshy/Features/Main/Views/ChangePasswordView.swift",  // 17
         "apps/ios/Meeshy/Features/Main/Components/CameraView.swift",  // 16
-        "apps/ios/Meeshy/Features/Main/ViewModels/PostDetailViewModel.swift",  // 16
+        "apps/ios/Meeshy/Features/Main/ViewModels/PostDetailViewModel.swift",  // 15
+        // #6600 — l'édition de commentaire a quitté l'hôte avec sa clé.
+        "apps/ios/Meeshy/Features/Main/ViewModels/PostDetailViewModel+CommentEdit.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Views/FloatingCallPillView.swift",  // 16
         "apps/ios/Meeshy/Features/Main/Views/MagicLinkView.swift",  // 16
         "apps/ios/Meeshy/Features/Main/Views/ReportUserView.swift",  // 16

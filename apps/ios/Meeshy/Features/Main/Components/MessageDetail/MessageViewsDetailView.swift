@@ -298,11 +298,16 @@ struct MessageViewsDetailView: View {
 
     /// Pluriel résolu explicitement : le markup AGA inline (`^[…](inflect: true)`)
     /// dans un `defaultValue` sans entrée String Catalog fuit en brut sur iOS 18.x.
-    static func sendAttemptCountLabel(_ count: Int) -> String {
+    /// `bundle` / `locale` : même paire que `PostStatAccessibility` — la table
+    /// et la règle de pluriel, injectables pour qu'un témoin fixe la loi.
+    static func sendAttemptCountLabel(_ count: Int,
+                                      bundle: Bundle = .main,
+                                      locale: Locale = .current) -> String {
         String(
             localized: "message-detail.send-history.attempt-count",
             defaultValue: "\(count) tentatives",
-            bundle: .main
+            bundle: bundle,
+            locale: locale
         )
     }
 

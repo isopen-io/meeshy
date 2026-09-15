@@ -73,12 +73,16 @@ function decodeAttachment(raw: Attachment): Attachment {
     translations: rawTranslations,
     alt: rawAlt,
     thumbnailUrl: rawThumbnailUrl,
+    thumbHash: rawThumbHash,
     ...rest
   } = raw as Attachment & {
     readonly transcription?: Attachment['transcription'] | null;
     readonly translations?: Attachment['translations'] | null;
     readonly alt?: Attachment['alt'] | null;
     readonly thumbnailUrl?: Attachment['thumbnailUrl'] | null;
+    // #6221 — la passerelle sert `thumbHash: null`, EXPLICITE, jamais absent :
+    // même régime que `thumbnailUrl` deux lignes plus haut.
+    readonly thumbHash?: Attachment['thumbHash'] | null;
   };
   return {
     ...rest,
@@ -86,6 +90,7 @@ function decodeAttachment(raw: Attachment): Attachment {
     ...fieldOf('translations', rawTranslations),
     ...fieldOf('alt', rawAlt),
     ...fieldOf('thumbnailUrl', rawThumbnailUrl),
+    ...fieldOf('thumbHash', rawThumbHash),
   };
 }
 

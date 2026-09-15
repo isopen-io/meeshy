@@ -75,11 +75,17 @@ describe("L'alias non versionné de « supprimer pour moi » annonce son success
   /**
    * Le contre-témoin, et il compte autant : un hook posé sur l'INSTANCE — la
    * faute la plus facile ici, les sept routes vivant dans un seul fichier —
-   * passerait le témoin ci-dessus en déclarant dépréciées les six autres, dont
-   * AUCUNE n'a de successeur à nommer. Une annonce qui désigne le vide est
-   * pire qu'un silence : elle envoie le client vers une adresse absente.
+   * ferait annoncer à chaque voisine le successeur de `delete-for-me`, alors
+   * qu'elle en a désormais un À ELLE (#4317, les six migrations vers
+   * `/api/v1`). Une annonce qui désigne l'adresse d'UNE AUTRE route est pire
+   * qu'un silence : elle envoie le client migrer vers un chemin qui ne fait
+   * pas ce qu'il demandait.
+   *
+   * Les six voisines ne sont donc plus muettes depuis #4317 — voir
+   * `user-deletions-v1-migration.test.ts` pour la preuve de leur PROPRE
+   * successeur — mais aucune ne doit jamais porter CELUI de `delete-for-me`.
    */
-  it("ne déborde sur AUCUNE des six autres routes du même fichier", async () => {
+  it("n'annonce le successeur de delete-for-me sur AUCUNE des six autres routes du même fichier", async () => {
     const app = await monter();
 
     const voisines = [
@@ -93,8 +99,9 @@ describe("L'alias non versionné de « supprimer pour moi » annonce son success
 
     for (const { method, url } of voisines) {
       const res = await app.inject({ method, url, payload: {} });
-      expect(Object.keys(res.headers)).not.toContain('deprecation');
-      expect(Object.keys(res.headers)).not.toContain('link');
+      expect(res.headers.link).not.toBe(
+        '</api/v1/conversations/c42/delete-for-me>; rel="successor-version"'
+      );
     }
 
     await app.close();

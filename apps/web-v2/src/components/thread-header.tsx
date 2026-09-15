@@ -52,9 +52,22 @@ export function ThreadHeader({
   readonly onResetReadingModeToAuto: () => void;
 }) {
   return (
+    /*
+      LA BANDE FLOTTE, ELLE NE BORNE PLUS (#6213) — `absolute inset-x-0 top-0`
+      au lieu d'un `shrink-0` de colonne flex. Elle était HABILLÉE en bande
+      flottante (le verre régulier, `styles/glass.css`) mais POSÉE en frère de
+      flux : rien ne passait jamais dessous, le flou n'avait rien à flouter,
+      et son arête basse TRANCHAIT le contenu (capture porteur 2026-09-12).
+      Miroir `floatingHeaderSection`, zIndex 100 au-dessus d'une liste qui
+      court jusqu'au bord physique (`ConversationView.swift:1873, 1891`).
+
+      `pt-safe` : la bande est le dernier bord fixe du HAUT, c'est donc elle
+      qui porte l'encoche — la racine `h-dvh` ne le peut plus sans empêcher le
+      contenu de transiter sous elle (voir `routes/thread.tsx`), et le
+      défileur la porte de son côté en marge INTÉRIEURE (`--thread-pad-top`).
+    */
     <header
-      className="thread-header z-10 shrink-0 backdrop-blur-xl"
-      style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-surface) 80%, transparent)' }}
+      className="thread-header glass absolute inset-x-0 top-0 z-30 pt-safe"
     >
       <div className="flex items-center gap-2 px-4 py-2">
         {/*
@@ -109,7 +122,13 @@ export function ThreadHeader({
             <h1 className="truncate text-title font-bold" style={{ color: 'var(--color-ios-ink)' }}>
               {title}
             </h1>
-            <p className="flex items-center gap-1 text-mini" style={{ color: 'var(--color-ios-ink-2)' }}>
+            {/* `--color-ios-ink` et non `-ink-2` (#6308) : l'encre secondaire, semi-
+                transparente (`color-mix(in srgb, #4338ca 80%, transparent)` en clair),
+                posée sur cette bande DE VERRE au pire cas (flou désactivé, #6124/D-51)
+                mesure 3,58:1 — sous la barre AA. `--color-ios-ink` y tient (mesuré par
+                `scripts/lib/glass-contrast.test.ts`), la hiérarchie reste lisible par la
+                taille (`text-mini`) plutôt que par l'opacité. */}
+            <p className="flex items-center gap-1 text-mini" style={{ color: 'var(--color-ios-ink)' }}>
               <Glyph name="lock" size={9} style={{ color: 'var(--color-ok)' }} />
               {group ? `${conversation.memberCount} participants` : 'Chiffré de bout en bout'}
             </p>

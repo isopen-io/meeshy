@@ -25,11 +25,11 @@
       },
       "multiLanguage": {
         "title": "Support Multi-langues",
-        "description": "Supportant plus de 100 langues du monde entier"
+        "description": "Supportant plus de 80 langues du monde entier"
       },
       "privacy": {
-        "title": "Privé et Sécurisé",
-        "description": "Vos conversations sont chiffrées de bout en bout"
+        "title": "Sécurisé par conception",
+        "description": "Traduction côté serveur avec une sécurité de niveau entreprise, en transit et au repos. Vos messages directs peuvent être chiffrés de bout en bout."
       },
       "groupChats": {
         "title": "Chats de Groupe",

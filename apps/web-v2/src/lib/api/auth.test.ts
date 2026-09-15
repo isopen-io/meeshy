@@ -458,3 +458,115 @@ describe('forgotPassword() — POST /auth/forgot-password (password-reset.ts:110
     expect(result).toEqual({ ok: true, data: undefined, status: 200 });
   });
 });
+
+describe('verifyEmail() — POST /auth/verify-email (magic-link.ts:307-364, AuthSchemas.verifyEmail)', () => {
+  test('corps { email, code } — AUCUN `token` (ce chemin est le code à 6 chiffres, jamais le lien) ; magasin intact', async () => {
+    const store = memoryStore();
+    const { transport, calls } = stubTransport([{ ok: true, data: { message: 'Email vérifié' }, status: 200 }]);
+    const auth = createAuthClient({ transport, store });
+
+    const result = await auth.verifyEmail({ email: 'ada@x.io', code: '123456' });
+
+    expect(calls[0]).toEqual({ method: 'POST', path: '/api/v1/auth/verify-email', body: { email: 'ada@x.io', code: '123456' } });
+    expect(result).toEqual({ ok: true, data: { message: 'Email vérifié' }, status: 200 });
+    expect(store.getState().session).toEqual({ status: 'anonymous' });
+  });
+
+  test('un code déjà vérifié rend `alreadyVerified` + `verifiedAt` SANS erreur (magic-link.ts:349-354)', async () => {
+    const store = memoryStore();
+    const { transport } = stubTransport([
+      { ok: true, data: { message: 'déjà vérifiée', alreadyVerified: true, verifiedAt: '2026-09-01T00:00:00.000Z' }, status: 200 },
+    ]);
+    const auth = createAuthClient({ transport, store });
+
+    const result = await auth.verifyEmail({ email: 'ada@x.io', code: '123456' });
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.data.alreadyVerified).toBe(true);
+  });
+
+  test('code faux ⇒ échec transmis TEL QUEL, jamais avalé', async () => {
+    const store = memoryStore();
+    const { transport } = stubTransport([{ ok: false, status: 400, error: 'Invalid or expired verification code' }]);
+    const auth = createAuthClient({ transport, store });
+
+    const result = await auth.verifyEmail({ email: 'ada@x.io', code: '000000' });
+
+    expect(result).toEqual({ ok: false, status: 400, error: 'Invalid or expired verification code' });
+  });
+});
+
+describe('resendVerification() — POST /auth/resend-verification (magic-link.ts:377-416)', () => {
+  test('corps { email } ; toujours 200 générique, même garde de non-révélation que forgotPassword', async () => {
+    const store = memoryStore();
+    const { transport, calls } = stubTransport([{ ok: true, data: { message: 'Si un compte existe…' }, status: 200 }]);
+    const auth = createAuthClient({ transport, store });
+
+    const result = await auth.resendVerification('ada@x.io');
+
+    expect(calls[0]).toEqual({ method: 'POST', path: '/api/v1/auth/resend-verification', body: { email: 'ada@x.io' } });
+    expect(result.ok).toBe(true);
+  });
+});
+
+describe('verifyResetToken() — GET /auth/reset-password/verify-token (password-reset.ts:341-401)', () => {
+  test('jeton dans la query string, jamais dans le corps (méthode GET)', async () => {
+    const store = memoryStore();
+    const { transport, calls } = stubTransport([{ ok: true, data: { valid: true, requires2FA: false }, status: 200 }]);
+    const auth = createAuthClient({ transport, store });
+
+    const result = await auth.verifyResetToken('abc123');
+
+    expect(calls[0]).toEqual({ method: 'GET', path: '/api/v1/auth/reset-password/verify-token?token=abc123' });
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.data.valid).toBe(true);
+  });
+
+  test('un jeton EXPIRÉ rend `valid:false` — pas une erreur HTTP (§ description de la route)', async () => {
+    const store = memoryStore();
+    const { transport } = stubTransport([{ ok: true, data: { valid: false }, status: 200 }]);
+    const auth = createAuthClient({ transport, store });
+
+    const result = await auth.verifyResetToken('perime');
+
+    expect(result.ok && result.data.valid).toBe(false);
+  });
+});
+
+describe('resetPassword() — POST /auth/reset-password (password-reset.ts:221-...)', () => {
+  test('corps { token, newPassword, confirmPassword } ; AUCUNE écriture de session — un reset ne connecte personne', async () => {
+    const store = memoryStore();
+    const { transport, calls } = stubTransport([{ ok: true, data: { message: 'Mot de passe réinitialisé' }, status: 200 }]);
+    const auth = createAuthClient({ transport, store });
+
+    const result = await auth.resetPassword({ token: 'abc123', newPassword: 'Sup3r!Secret', confirmPassword: 'Sup3r!Secret' });
+
+    expect(calls[0]).toEqual({
+      method: 'POST',
+      path: '/api/v1/auth/reset-password',
+      body: { token: 'abc123', newPassword: 'Sup3r!Secret', confirmPassword: 'Sup3r!Secret' },
+    });
+    expect(result.ok).toBe(true);
+    expect(store.getState().session).toEqual({ status: 'anonymous' });
+  });
+
+  test('`twoFactorCode` omis quand absent — jamais envoyé `undefined` (même discipline que `rememberDevice`)', async () => {
+    const store = memoryStore();
+    const { transport, calls } = stubTransport([{ ok: true, data: { message: 'ok' }, status: 200 }]);
+    const auth = createAuthClient({ transport, store });
+
+    await auth.resetPassword({ token: 't', newPassword: 'Sup3r!Secret', confirmPassword: 'Sup3r!Secret' });
+
+    expect('twoFactorCode' in (calls[0]!.body as Record<string, unknown>)).toBe(false);
+  });
+
+  test('jeton invalide/expiré ⇒ 400 transmis tel quel', async () => {
+    const store = memoryStore();
+    const { transport } = stubTransport([{ ok: false, status: 400, error: 'Invalid or expired reset token' }]);
+    const auth = createAuthClient({ transport, store });
+
+    const result = await auth.resetPassword({ token: 'perime', newPassword: 'Sup3r!Secret', confirmPassword: 'Sup3r!Secret' });
+
+    expect(result).toEqual({ ok: false, status: 400, error: 'Invalid or expired reset token' });
+  });
+});

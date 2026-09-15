@@ -2,6 +2,65 @@ import { prismFor, resolveAudioTrack, servedTranscript, type Served, type Served
 import type { Attachment } from '@/lib/api/types';
 
 /**
+ * `MediaCarrier` (#6221, § 5 étape 5) — CE QUE LA VISIONNEUSE REMET AU BAS DU
+ * CADRE (`bottomMetadataOverlay`, `ConversationMediaGalleryView.swift:690-760`) :
+ * l'auteur, la date d'envoi, et une légende DÉJÀ SERVIE par le Prisme — la
+ * MÊME descente que le texte du message, jamais une seconde (cycle 128).
+ * `caption: null` ⇒ pas de légende ; `sender: null` (jamais un « ? ») ⇒ pas
+ * de bloc auteur (loi 4). Posé par `bubble.tsx`/`focal-row.tsx` depuis ce
+ * qu'ils ont déjà résolu — ce type ne RÉSOUT rien, il ne fait que VOYAGER.
+ */
+export type MediaCarrier = {
+  readonly caption: Served | null;
+  readonly sender: { readonly displayName: string } | null;
+  readonly sentAt: string;
+};
+
+/**
+ * `mediaCarrierOf` (#6169, § 5 étape f de la spécification « grille de
+ * médias ») — COMPOSE un `MediaCarrier` depuis ce que l'hôte
+ * (`bubble.tsx`/`focal-row.tsx`) a DÉJÀ résolu. Ne RÉSOUT rien : `caption`
+ * VOYAGE telle que reçue (la MÊME `Served` que le corps du message, cycle
+ * 128 — une seconde descente ici referait exactement l'erreur que ce cycle
+ * a fermée sur trois clients). `sender: null` (jamais un « ? ») dès que
+ * `message.sender` est absent OU que son `displayName` est vide — un
+ * identifiant illisible n'est pas une identité à montrer (loi 4).
+ *
+ * `CarrierMessageSource` prend le SEUL sous-ensemble de `Message` dont cette
+ * fonction a besoin (`sender?.displayName`, `createdAt`) — jamais
+ * `Pick<Message, …>`, qui aurait exigé un `Participant` COMPLET (rôle,
+ * permissions…) chez chaque appelant, y compris les témoins.
+ *
+ * NON MÉMOÏSÉE chez `bubble.tsx`/`focal-row.tsx` (écart ASSUMÉ avec la
+ * spécification #6169, qui demandait un `useMemo` sur des primitives) —
+ * vérifié dans le CODE, pas deviné : `carrier` n'atteint QUE `MediaViewer`
+ * (`attachment-blocks.tsx`, chunk à la demande, monté SEULEMENT si
+ * `openIndex !== null`, jamais `memo`-isé), JAMAIS `MediaGrid` (le seul
+ * descendant `memo`-isé de cette chaîne, qui ne reçoit ni ne lit `carrier`).
+ * Une identité instable sur `carrier` ne fait donc sauter AUCUNE
+ * optimisation `memo` existante — le coût qu'un `useMemo` éviterait est nul,
+ * mesuré sur le graphe de props réel, pas supposé. Introduire le PREMIER
+ * hook de `bubble.tsx` (591 l., trois retours anticipés AVANT le rendu de
+ * `Attachments`) pour un gain nul aurait été le risque que ce lot n'a pas à
+ * prendre — si un futur consommateur `memo`-isé lit un jour `carrier`
+ * directement, MESURER alors, et mémoïser à cet endroit-là.
+ */
+export type CarrierMessageSource = {
+  readonly sender?: { readonly displayName?: string } | null;
+  readonly createdAt: Date;
+};
+
+export function mediaCarrierOf(params: { readonly message: CarrierMessageSource; readonly caption: Served }): MediaCarrier {
+  const { message, caption } = params;
+  const displayName = message.sender?.displayName;
+  return {
+    sender: displayName !== undefined && displayName !== '' ? { displayName } : null,
+    sentAt: message.createdAt.toISOString(),
+    caption,
+  };
+}
+
+/**
  * L'ÉLECTION D'UNE PIÈCE JOINTE (#5805) — la composition en DEUX temps que
  * `api/prism.ts` sépare volontairement : `servedTranscript` élit le TEXTE,
  * `resolveAudioTrack` REÇOIT sa langue pour élire la PISTE — jamais une

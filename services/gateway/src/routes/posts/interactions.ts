@@ -115,16 +115,30 @@ export function registerInteractionRoutes(
       // idempotent at the storage layer (the reaction set keeps a
       // single entry per (userId, postId)), d'où `replayCost: 'converges'`.
       //
-      // ATTENTION — ce commentaire promettait « so replays don't double-fire
-      // notifications ». C'est FAUX et ça l'a toujours été : la diffusion et
-      // `createPostLikeNotification` vivent APRÈS le journal, sans condition,
-      // donc un rejeu les refait. Le verrou ne garde que ce qu'il ENVELOPPE.
-      // Le remède existe depuis 2026-08-25 — `withMutationOutcome`, dont le
-      // verdict `replayed` retient les effets de bord, appliqué juste en
-      // dessous sur le repost — mais il n'a PAS été porté ici : la route like
-      // est hors du fil rouge du repost et sa suite de tests mocke le helper.
-      // Dette nommée, pas invariant tenu.
-      const post = await withMutationLog({
+      // `withMutationOutcome` (et non `withMutationLog`) parce que le like ne
+      // voyage pas SEUL : une diffusion et une notification partent juste en
+      // dessous. Un verrou qui ne garde que l'ÉCRITURE laisse partir l'annonce
+      // en double à chaque rejeu — deux bannières pour un like unique
+      // (`createNotification` fait un `prisma.notification.create` sec, sans
+      // clé d'idempotence) et un second `post:liked` à toute l'audience. Le
+      // verdict les garde.
+      //
+      // Cette dette a été NOMMÉE ici pendant un temps et tenue par personne :
+      // le commentaire d'origine promettait « so replays don't double-fire
+      // notifications », ce qui était faux. #6293 la solde en portant le patron
+      // que le repost applique deux cents lignes plus bas, et la forme que la
+      // route DELETE jumelle appliquait DÉJÀ (`&& removedEmoji`, « rien retiré
+      // ⇒ rien annoncé ») : le défaut était confiné au POST.
+      //
+      // Le témoin est `__tests__/unit/routes/posts/likeIdempotency.test.ts`, et
+      // il ne mocke PAS `withMutationLog` — un `jest.mock` du helper (ce que
+      // fait `interactions.harness.ts`) rend la suite verte que la route garde
+      // ses effets ou non. C'est ce mock qui a laissé la dette vivre.
+      // Pas d'annotation de type : `T` s'INFÈRE depuis `op`, qui rend le
+      // résultat de `withMentions` (`Omit<…, 'mentions'|'postMentions'> & …`) et
+      // non celui de `likePost`. L'écrire à la main ici invitait à nommer le
+      // mauvais des deux — c'est ce que la première version de ce lot a fait.
+      const outcome = await withMutationOutcome({
         request,
         fastify,
         userId: authContext.registeredUser.id,
@@ -148,9 +162,16 @@ export function registerInteractionRoutes(
         if (err instanceof Error && err.message === 'POST_NOT_FOUND') return null;
         throw err;
       });
-      if (!post) {
+      if (!outcome) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
+      if (outcome.status === 'gone') {
+        return sendGone(reply, 'Like already applied, its result is gone', { code: 'MUTATION_RESULT_GONE' });
+      }
+      const post = outcome.result;
+      // Un rejeu resert le post ; il ne REFAIT rien. Ce booléen gouverne les
+      // deux effets qui voyagent AVEC le like, et eux seuls.
+      const isFreshLike = outcome.status === 'applied';
 
       // Broadcast like via Socket.IO — porte l'id de la CIBLE réelle
       // (`targetPostId`, l'original pour un repost simple) : les clients
@@ -160,7 +181,7 @@ export function registerInteractionRoutes(
       // - STATUS → status:reacted to author + post room (same privacy model as STORY)
       // - POST/MOOD → post:liked fan-out to all friends
       const socialEvents = fastify.socialEvents;
-      if (socialEvents && post.authorId) {
+      if (socialEvents && post.authorId && isFreshLike) {
         // `likeCount` + `reactionSummary` : l'état ABSOLU après le geste, la
         // même paire que `post:liked` porte depuis toujours. Les jumeaux
         // story/status ne portaient qu'un emoji et un acteur, ce qui n'autorise
@@ -201,7 +222,7 @@ export function registerInteractionRoutes(
 
       // Create notification for post author
       const notifService = fastify.notificationService;
-      if (notifService && post.authorId) {
+      if (notifService && post.authorId && isFreshLike) {
         notifService.createPostLikeNotification({
           actorId: authContext.registeredUser.id,
           postId: targetPostId,
@@ -906,17 +927,24 @@ export function registerInteractionRoutes(
         }, authContext.registeredUser.id).catch((err) => enhancedLogger.warn('[POST /posts/:postId/repost]: broadcast post reposted failed', { err }));
       }
 
-      // Notify original post author
+      // Notifier l'auteur de l'original est un EFFET SECONDAIRE, comme le
+      // broadcast juste au-dessus : il part HORS du chemin de la réponse. La
+      // relecture de l'original était awaitée dans ce `try` ; quand elle jetait
+      // (#6503, `getPostById` refusé par Prisma), le `catch` rendait 500 pour
+      // un repost DÉJÀ créé, et l'app annonçait un échec au-dessus d'une
+      // écriture actée (#6524).
       const notifService = fastify.notificationService;
       if (notifService && repost.repostOfId && isFreshRepost) {
-        // Même garde que la route de traduction : sans le viewer, le lookup
-        // applique le filtre anonyme et ne retrouve pas une story réservée aux
-        // contacts — l'auteur d'une story repartagée n'était alors jamais
-        // notifié.
-        const original = await postService.getPostById(postId, authContext.registeredUser.id);
-        if (original?.authorId) {
-          notifService.createPostRepostNotification({
-            actorId: authContext.registeredUser.id,
+        const actorId = authContext.registeredUser.id;
+        void (async () => {
+          // Même garde que la route de traduction : sans le viewer, le lookup
+          // applique le filtre anonyme et ne retrouve pas une story réservée aux
+          // contacts — l'auteur d'une story repartagée n'était alors jamais
+          // notifié.
+          const original = await postService.getPostById(postId, actorId);
+          if (!original?.authorId) return;
+          await notifService.createPostRepostNotification({
+            actorId,
             originalPostId: postId,
             postAuthorId: original.authorId,
             repostId: repost.id,
@@ -924,8 +952,8 @@ export function registerInteractionRoutes(
             postPreview: (original as { content?: string | null }).content?.slice(0, 80) ?? undefined,
             postCreatedAt: (original as { createdAt?: Date | string | null }).createdAt ?? undefined,
             postExpiresAt: (original as { expiresAt?: Date | string | null }).expiresAt ?? undefined,
-          }).catch((err) => enhancedLogger.warn('[POST /posts/:postId/repost]: notify post repost failed', { err }));
-        }
+          });
+        })().catch((err) => enhancedLogger.warn('[POST /posts/:postId/repost]: notify post repost failed', { err }));
       }
 
       return sendSuccess(reply, payload, { statusCode: 201 });

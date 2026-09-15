@@ -718,15 +718,15 @@ describe('PostFeedService.getStories', () => {
     expect(args.select.author).toBeDefined();
   });
 
-  it('keeps the full include without projection (backward compatible)', async () => {
+  it('keeps the full select without projection (backward compatible)', async () => {
     mockPostFindMany.mockResolvedValue([]);
 
     const service = new PostFeedService(mockPrisma);
     await service.getStories('user-1');
 
     const args = mockPostFindMany.mock.calls[0][0];
-    expect(args.include).toBeDefined();
-    expect(args.select).toBeUndefined();
+    expect(args.select).toBeDefined();
+    expect(args.include).toBeUndefined();
   });
 
   it('still flags isViewedByMe in the tray projection', async () => {

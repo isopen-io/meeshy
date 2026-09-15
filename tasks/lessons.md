@@ -31621,3 +31621,823 @@ une raison fausse.
 Voisins : leçon 586 (deux gardes opposées sur la même chaîne — ici deux CORPS
 pour une loi, le même mal), leçon 590 (mesurer avant d'accuser le diff),
 `CLAUDE.md` § Prisme cycle 125 et § Single Source of Truth.
+
+---
+
+## Leçon 592 — Un défaut qui vit dans le DÉSACCORD entre deux collaborateurs injectés est invisible à TOUT test qui injecte les deux
+
+**Mesuré le 2026-09-12, #6201**, sur la garde SSRF de
+`services/gateway/src/services/zmq-agent/agent-illustration.ts`. Trouvé par une
+session pair, vérifié et prolongé ici.
+
+La garde valide l'hôte par `lookup()`, puis `fetch()` **re-résout le nom
+indépendamment** — d'où un rebinding DNS. Sa suite fait 219 lignes et dix-sept
+cas : hôte privé, `og:image` privée, sauts de redirection revalidés, boucle,
+content-type, budget d'octets. **Excellente, et structurellement aveugle**, parce
+que chaque cas s'écrit ainsi :
+
+```ts
+await resolveAgentIllustration({ sourceUrl: ARTICLE, fetchImpl, lookup: publicLookup });
+```
+
+> **Les deux collaborateurs sont injectés, donc remplacés par une fiction
+> COHÉRENTE — et le défaut vit précisément dans leur DÉSACCORD.** Ce n'est pas un
+> cas de test qui manque : c'est un NIVEAU de test qui manque. Ajouter des cas
+> unitaires n'y changera rien, quel que soit leur nombre.
+
+### La contre-épreuve va plus loin que l'intuition
+
+J'ai essayé d'écrire le témoin qui constaterait la dette — un `lookup` rendant
+une adresse publique au 1er appel et celle des métadonnées au 2e. **Il a rougi**,
+et sa cause démonte l'idée même du témoin : les deux appels que la garde fait ne
+sont pas « validation puis transport », ce sont les validations de DEUX URL
+(`publicHttpUrl` est appelé sur l'URL source, sur l'image extraite du HTML, et
+sur chaque redirection). Un faux transport ne résout AUCUN nom : il n'existe
+aucune seconde résolution à contredire.
+
+**Le geste opérant** : ne pas écrire un témoin qui rougit pour de mauvaises
+raisons, mais poser à l'endroit exact un commentaire qui dit *pourquoi le témoin
+ne peut pas exister à ce niveau*, et renvoyer la preuve au niveau qui peut la
+porter (ici un test d'intégration à transport réel). **Un test absent et expliqué
+vaut mieux qu'un test présent qui mesure autre chose.**
+
+### Deux corollaires du même lot, qui dépassent le SSRF
+
+**1. `[].every(...)` rend `true`.** Une garde écrite
+`addresses.every(estPublique)` est donc un VERT À VIDE sur une résolution
+vide — l'inverse exact d'un fail-closed. Le vide se refuse EXPLICITEMENT, sur
+toute collection dont on ne contrôle pas la taille.
+
+**2. Un témoin d'ORDRE s'écrit sur les DEUX ordres.** Forme fautive rejouée
+(`addresses[0]` seul) : **rouge uniquement quand la PREMIÈRE adresse est
+publique**. Le cas « privée puis publique » restait VERT sur le code fautif,
+qui voyait déjà la privée en tête. L'ordre des enregistrements A est choisi par
+l'attaquant — les deux ordres sont nécessaires, jamais redondants. C'est la
+leçon 261 sous un autre jour : un témoin de RANG s'écrit sur un rang AUTRE que
+le premier, sinon la forme juste et la forme fautive rendent le même verdict.
+
+---
+
+## Leçon 593 — Une enquête sur une RÉVISION se fait entièrement sur cette révision : un arbre propre n'est pas un arbre à jour
+
+**Mesuré le 2026-09-12, #6201.** J'ai publié deux affirmations fausses — « aucun
+appelant » et « aucun témoin » — dont la première inversait la conclusion d'une
+issue de sécurité en « urgence abaissée ». Un pair les a démenties en une passe.
+
+La cause n'est ni un oubli ni une requête trop étroite :
+
+```bash
+git show origin/dev:services/.../agent-illustration.ts   # ← la BONNE révision
+grep -rn "resolveAgentIllustration" services apps packages  # ← le DISQUE
+```
+
+Le worktree était **en retard de douze commits** ; l'appelant et la suite de
+tests n'y existaient pas encore. J'ai donc lu le fichier sur `origin/dev` et
+cherché ses consommateurs sur un état antérieur.
+
+> **Mélanger `git show <rev>:<chemin>` et `grep` sur l'arbre de travail produit
+> une conclusion fausse ET COHÉRENTE : le fichier existe, ses appelants « non »,
+> et rien dans la sortie ne signale l'incohérence.** La parade est `git grep
+> <rev>` (ou un `fetch` puis mise à jour AVANT d'enquêter), et elle coûte le même
+> temps.
+
+**Le piège qui a rendu l'erreur invisible** : `git status` était propre, et
+`git rev-parse HEAD` affichait un sha d'apparence fraîche — celui de mon dernier
+push, une heure plus tôt. Ni l'un ni l'autre ne dit la distance au distant.
+
+> **Un arbre propre n'est pas un arbre à jour.** La seule mesure qui le dit est
+> `git rev-list --count HEAD..origin/dev` après un `fetch`.
+
+Même famille, en miroir : le pair m'avait attribué le lot en lisant la PRÉSENCE
+du commit dans mon arbre plutôt que son INTRODUCTION (`git branch -r --contains`
+croisé avec `--ancestry-path`). **Présence et provenance sont deux questions ;
+révision et arbre de travail sont deux substrats.** Les confondre donne chaque
+fois une réponse cohérente et fausse.
+
+## Leçon 594 — Une CONSTANTE qui n'existe que pour décrire un écart à la référence rend cet écart permanent, et invisible
+
+**Le fait.** Le porteur signale, capture à l'appui (2026-09-12, #6213), que le fil de `apps/web-v2` COUPE son contenu : arête basse de l'en-tête en haut, pilule de langue du composeur en bas, dernière ligne du dernier message tranchée en deux. Sous iOS, « le défilement est visible du haut de l'écran au bas de l'écran, avec de l'espace vers le bas ».
+
+**La cause n'était pas cachée. Elle était ÉCRITE, et promue en constante.** `src/lib/reading-mode/metrics.ts` portait ceci depuis #5774 :
+
+```
+/**
+ * L'EN-TÊTE DE LA v3.1 EST EN FLUX — celui d'iOS FLOTTE au-dessus de la
+ * liste, et c'est toute la différence : `topOffset` y est mesuré depuis le
+ * haut du CADRE [...] ici l'enveloppe du défileur COMMENCE déjà au bord bas
+ * du header, cette hauteur est donc DÉJÀ DÉPENSÉE.
+ */
+export const DAY_PILL_MARGIN = DAY_PILL_TOP - DAY_PILL_HEADER_PADDING - DAY_PILL_HEADER_ROW;
+```
+
+Le commentaire est juste. Le calcul est juste. La pilule de jour tombait au bon pixel, et son gate le mesurait en vert. **Tout ce qui touchait cette constante était correct** — c'est bien pour ça qu'elle a tenu trois lots.
+
+Ce qu'elle faisait, en revanche, c'est **transformer un écart de POSE en donnée de référence**. Écrite comme une soustraction dérivée de la cote iOS, elle avait l'air d'une dérivation de plus, au milieu de quarante autres qui, elles, RAPPROCHENT le web d'iOS. Le fichier entier proclame « aucune valeur numérique ici, chaque cote arrive d'iOS » ; celle-ci arrivait d'iOS **moins** ce qu'iOS ne faisait pas. Une fois posée, plus personne n'a de raison d'y revenir : elle est cohérente, testée, commentée.
+
+**Le fond.** Deux façons de traiter un écart connu à la référence :
+
+| | ce qu'on écrit | ce qui arrive |
+|---|---|---|
+| l'écart devient une **constante** | `DAY_PILL_MARGIN = TOP − 8 − 44` | il est absorbé, tout redevient vert, plus rien ne le signale — il se livre |
+| l'écart devient une **issue** | « l'en-tête est en flux, iOS le fait flotter » | il reste visible, il se planifie, il se ferme |
+
+La constante ne ment pas : elle **compense**. Et une compensation correcte est exactement ce qui empêche un défaut de se manifester ailleurs que là où il fait mal — ici, à l'œil du porteur, six semaines plus tard, sur la seule dimension qu'aucun témoin ne regardait.
+
+**Le signe qui l'attrape**, et il est lisible sans rien connaître du domaine : *une constante dont le doc-comment explique pourquoi la plateforme de RÉFÉRENCE fait autrement*. Pas « d'où vient cette valeur » — ça, c'est une dérivation saine — mais « pourquoi la nôtre diffère ». Le second n'est pas une dérivation, c'est **une dette qui a pris la forme d'un nombre**.
+
+**Le corollaire de rangement.** Quand la cause tombe, la compensation se RETIRE, elle ne se garde pas « au cas où » : le lot #6213 a fait flotter le chrome, et `DAY_PILL_MARGIN` maintenue aurait remonté la pilule de 52 px. Une compensation survit toujours à ce qu'elle compensait — c'est sa nature d'être posée une fois et de ne plus se relire.
+
+**Deux traces du même motif, trouvées dans le même lot** (elles ne sont pas des coïncidences, elles sont ce que ce motif produit) :
+
+1. **L'habillage sans la pose.** `thread-header.tsx` portait `backdrop-blur-xl` et un fond à 80 % — l'habit d'une bande flottante — sur un élément posé `shrink-0` dans une colonne flex. Un flou qui n'avait rien à flouter, pendant trois lots. **Un composant peut être HABILLÉ pour un rôle qu'il ne tient pas** ; le style est l'intention, la pose est le fait, et rien ne les confronte.
+2. **Le témoin vert par la prose.** `routes/safe-area.test.ts` vérifie `source.includes('pt-safe')`. Retirer `pt-safe` de la racine du fil l'a laissé VERT — parce que le commentaire que je venais d'écrire pour expliquer son retrait contient la chaîne `pt-safe`. **Un témoin qui cherche une chaîne dans un fichier trouve les commentaires qui parlent de la règle aussi bien que la règle.** Rendu honnête par une exemption motivée, jamais par un `pt-safe` reposé ailleurs pour faire taire le rouge.
+
+**La question à poser**, quand un écran de portage ne ressemble pas à sa référence : ne pas chercher d'abord ce qui MANQUE, mais **ce qui a été écrit pour rendre l'écart supportable**. Le code qui compense est toujours plus facile à trouver que le code absent — il porte un nom, il a des lecteurs, et son commentaire dit exactement quel écart il sert.
+
+## Leçon 595 — Une vue SwiftUI est un type VALEUR : sa TAILLE est un coût de PILE, payé à chaque rendu, invisible à tout profil d'allocation
+
+**Le fait.** L'app plantait à l'ouverture de toute conversation. Trois lots (#5837, #5855, #6194) ont diagnostiqué une récursion du démangleur de métadonnées et posé le bon remède — des frontières nominales. Après #6194 la trace ne portait plus une seule frame de démangleur, et **ça plantait toujours**.
+
+**Ce qui a débloqué l'enquête, c'est une mesure que personne n'avait faite** : l'adresse fautive contre les bornes de pile.
+
+```
+signal 0xb  si_addr=0x16da6bff8  stack_low=0x16da6c000
+→ huit octets SOUS le plancher : page de garde.
+```
+
+**« Débordement de pile » et « pointeur invalide » rendent le MÊME signal 11 et une trace d'apparence normale.** Une récursion visible dit « débordement » ; **son absence ne dit rien** — un cadre unique et énorme déborde sans se répéter. Trois lots avaient lu la FORME de la pile pour en déduire la nature du défaut ; c'est une inférence, pas une mesure, et elle était fausse deux fois sur trois.
+
+**La cause.**
+
+```
+ConversationView = 15 088 octets
+  ├─ overlayState   7 088   ← six `Message?` EN LIGNE (~1,4 Ko pièce)
+  ├─ composerState  3 897
+  └─ scrollState    1 040
+```
+
+Une vue SwiftUI est une `struct`, donc un **type valeur**, et **chaque closure de son `body` la capture en la COPIANT**. Une vue de 15 Ko rend chaque cadre de pile proportionnellement énorme : le site qui formait une dizaine de closures en réclamait 490 Ko, sur une pile principale de **1008 Ko**.
+
+> **Ce n'était pas la PROFONDEUR de la pile qui débordait, c'était sa LARGEUR.**
+
+Six copies de `Message` dormaient dans un même sac d'état pour n'en servir qu'une : un menu, une feuille de détail et un partage ne s'ouvrent jamais ensemble. Sept emplacements permanents pour un contenu à la fois.
+
+**Le corollaire qui explique six correctifs ratés.** `AnyView` posé EN LIGNE — `AnyView(uneBranche)` — érase **après** que le cadre a réservé la place du type concret. Il borne ce qui SORT de l'expression, jamais ce qui a été réservé pour la construire. **Déplacer la branche dans SA propriété** change le mécanisme : la construction se fait dans un cadre à elle, entré puis quitté. Les branches se SUCCÈDENT au lieu de s'ADDITIONNER — `bodyContent` est passé de 622 à 172 Ko par ce seul geste, sans qu'une ligne de rendu change.
+
+**Ce coût n'apparaît sur AUCUN profil d'allocation** : rien n'est alloué, la pile est simplement plus large. C'est pourquoi il a survécu à trois enquêtes.
+
+**La garde qui manquait, et la façon dont elle manquait.** `ConversationViewBodyTypeDepthTests` mesurait la profondeur des types. Elle était **VERTE pendant tous ces crashs** : elle regardait la bonne chose et la mauvaise dimension. Un champ de valeur ajouté à un état ne change aucune profondeur, ne rougit aucun témoin, et rapproche la vue du plancher de pile.
+
+> **Un témoin vert sur la dimension voisine est plus dangereux qu'un témoin absent** : il donne l'impression que la question est gardée. Devant un défaut qui revient malgré une garde verte, demander non pas « la garde est-elle juste ? » mais **« garde-t-elle la dimension qui échoue ? »**
+
+**Le corollaire de généralisation, payé dans le même lot.** Une fois `ConversationView` corrigée, le relevé a montré que la vue la plus lourde n'était pas elle : `ConversationListView`, l'écran principal, pesait **10 256 octets** — sept `Conversation?` en ligne, même motif, même « une seule à la fois ». Elle n'avait pas encore débordé. **Corriger la victime et garder la victime seule aurait laissé passer la suivante** ; le témoin budgète donc les cinq vues racines, dont deux sous le plafond sans avoir été touchées — un budget, pas une cible.
+
+**Trois pièges de méthode payés en chemin**, tous de la même famille (une lecture prise pour une mesure) :
+
+1. **Apparier deux listes parcourues séparément par leur RANG est un pari.** La chaîne de pointeurs de cadre et `backtrace()` ne comptent pas les mêmes cadres, et le décalage DÉRIVE. Symptôme : la même fonction attribuée à trois niveaux. J'ai refactoré une branche latérale sur cette foi. Apparier par **adresse de retour**.
+2. **Une trace laissée par un crash antérieur se lit comme la preuve du tir courant.** Le Release n'embarque pas le dumper (`#if DEBUG`) : la sonde reprenait le fichier précédent, `si_addr` identique au bit près. Dater le fichier avant le tir.
+3. **La boucle de vérification s'arrêtait un geste avant le défaut.** L'app ne plante pas au LANCEMENT, elle plante à l'OUVERTURE d'une conversation — et aucune commande de déploiement ne fait ce geste. « Build vert + app lancée » a été pris trois fois pour « corrigé ». Le geste était pilotable depuis toujours : `meeshy://conversation/<id>` + `devicectl --payload-url`, l'identifiant lu dans la base de l'appareil. D'où `apps/ios/scripts/probe-conversation-open.sh`.
+
+Issues : #6221 (le crash), #6213 (le lot voisin). Mémoire : `reference_swiftui_type_depth_stack_overflow.md`, corrigée en conséquence.
+
+## Leçon 596 — Un import de HAUT NIVEAU fait de la conformité de `node` une condition de CHARGEMENT de la suite, pas d'exécution de la garde
+
+`#6201` ajoute `import { Agent, fetch } from 'undici'` au sommet de
+`services/gateway/src/services/zmq-agent/agent-illustration.ts`. Sous jest, la suite
+entière a cessé de charger :
+
+```
+TypeError: webidl.util.markAsUncloneable is not a function
+  at new CacheStorage (undici/lib/web/cache/cachestorage.js:20)
+  at agent-illustration.ts:4
+→ « Test suite failed to run » : les ~20 témoins SSRF ne s'exécutent PLUS
+```
+
+J'ai lu ce rouge comme une régression de la fusion. Il ne l'était pas. Trois lignes
+tranchent, et elles se lisent **avant** de toucher au code :
+
+```
+undici@8.10.0     engines: { node: ">=22.19.0" }
+services/gateway  engines: { node: ">=22.19.0" }   ← déjà déclaré AVANT ce lot
+.github/ci.yml    NODE_VERSION: '22.19'            ← conforme
+ma machine        v22.9.0                          ← hors spec
+```
+
+`markAsUncloneable` (`node:worker_threads`) n'apparaît qu'à node **22.12**. Rejoué
+sous `~/.nvm/versions/node/v22.13.1/bin/node` : **45 témoins verts**.
+
+1. **Le rouge mesurait la machine.** Même famille que « un rouge des deux côtés du
+   diff mesure aussi la machine », avec un détour de plus : ici le `engines` juste
+   était **déjà là, antérieur au lot**, et c'est l'environnement qui avait dérivé
+   sans qu'aucun outil ne le dise. La parade est une commande, pas une intuition :
+   `node -e "console.log(require('<paquet>/package.json').engines)"` croisé avec
+   `node --version` et le `NODE_VERSION` du workflow.
+2. **Le symptôme ne nomme RIEN du sujet.** Ni SSRF, ni DNS, ni le lot : une erreur
+   de `webidl` dans un fichier de cache HTTP. Un import de haut niveau transforme
+   la conformité de node en condition de *chargement*, donc vingt témoins de
+   sécurité disparaissent d'un coup pour une raison qui n'a aucun rapport avec eux.
+   Un import dynamique dans la fonction déplacerait la panne de « la suite ne
+   charge pas » vers « cette garde-là échoue » — c'est une dette nommée, pas
+   corrigée dans ce lot.
+3. **La bonne version dort souvent déjà sur la machine.** `ls ~/.nvm/versions/node`
+   avant de conclure « je ne peux pas vérifier localement, la CI dira » :
+   `PATH=~/.nvm/versions/node/<v>/bin:$PATH npx jest …` a suffi à prouver le lot.
+
+Corollaire de **contre-épreuve sans égression**. Pour prouver qu'un témoin
+DISCRIMINE le correctif, le témoin livré visait un vrai site tiers. Rejoué sur un
+hôte en `.invalid` (TLD réservé RFC 2606, jamais résolu) : avec l'épinglage la
+résolution ne quitte jamais le `lookup` injecté, donc l'hôte est sans importance ;
+sans lui, le transport résout un nom inexistant et échoue **sans ouvrir de
+connexion**. Mesuré `calls=2` (vert) contre `calls=1` (rouge). Et l'assertion
+discriminante n'était pas `expect(result).toBeNull()` — une connexion qui échoue
+rend `null` aussi — mais le **compte de résolutions**.
+
+Issues : #6201 (l'épinglage), #6160 (le cliquet fusionné dans le même lot).
+Mémoire : `reference_a_top_level_import_makes_node_conformance_a_loading_condition.md`.
+
+## Leçon 597 — Sur un `dev` que plusieurs sessions alimentent, ne surveillez pas VOTRE sha : surveillez la POINTE qui le contient
+
+Deux fois le même soir, mes fusions se sont retrouvées **sans verdict CI propre** :
+une fois par ma faute (deux pushes à vingt minutes d'écart, le second superséda le
+run en attente du premier), une fois par le push d'un pair arrivé quatre minutes
+après le mien.
+
+```
+22:47  07a0a232e9  CI → cancelled   (mon push de 22:55 l'a superséda)
+22:55  8a4f0e4c6e  CI → cancelled   (le push d'un pair à 22:59 l'a superséda)
+22:59  5226fa9c00  CI → in_progress ← le SEUL verdict qui existera
+```
+
+La leçon connue disait « grouper les pushes ». Elle est juste et insuffisante :
+**elle ne protège que de soi-même.** Sur une branche partagée, votre verdict est
+mangé par des pushes que vous ne contrôlez pas, et attendre un run sur votre sha
+est attendre quelque chose qui n'arrivera jamais.
+
+> Le verdict qui compte est le premier run **terminé et non annulé** dont le sha
+> **CONTIENT** vos commits. Le test est `git merge-base --is-ancestor <mon-sha>
+> <sha-du-run>` — jamais un `startswith` sur votre sha, qui ne voit que votre
+> commit.
+
+Un run vert sur un descendant vérifie vos commits tout autant : ils sont dans son
+arbre. Chercher un verdict « à vous » est une exigence de forme qui n'a pas de
+contrepartie technique.
+
+Mémoire : `reference_a_push_to_dev_kills_a_queued_verdict_not_a_running_one.md`,
+complétée de ce corollaire.
+
+## Leçon 598 — Une montée de dépendance peut changer l'UNITÉ d'une borne de validation, et un seul témoin sur des centaines rougira
+
+`dev` était rouge sur un typecheck : `ZodLiteral<"all">` non assignable à `SomeType`, parce que dependabot avait monté `zod` dans `packages/shared` seul et que le type traversait la frontière de paquet — deux univers de types. J'ai aligné les quatre workspaces **vers le haut**. Le typecheck est passé au vert, et le vrai défaut s'est ouvert :
+
+```
+z.string().max(32) sur '😀'.repeat(20)   (40 unités UTF-16, 20 code points)
+  zod 4.4.3 → REFUSÉ          zod 4.6.3 → ACCEPTÉ
+```
+
+`4.4.3` comptait des unités UTF-16 (`String.length`) ; `4.5+` compte des **code points**. `.min()` et `.length()` basculent avec `.max()`. Sens de la panne : **fail-OPEN** — une borne emoji passe de 32 unités (~64 octets) à 32 code points (~128 octets) — sur **242** sites : 171 dans `services/gateway/src`, 70 dans `packages/shared`, 1 dans `services/agent`.
+
+1. **Une seule de ces 242 bornes avait une fixture en caractères ASTRAUX**, donc un seul témoin pouvait rougir (`socket-event-schemas.test.ts`, « rejects an oversized forged emoji payload »). Les 241 autres ont changé de sens sans qu'aucun test ne bouge. **Un changement d'unité ne se voit que sur une entrée qui distingue les deux unités** : en ASCII, code points et unités UTF-16 coïncident, donc toute fixture ASCII reste verte par construction.
+
+2. **Le premier symptôme n'est pas le défaut, et aligner VERS LE HAUT est le mauvais réflexe.** La question à poser avant d'aligner une version sur la plus récente n'est pas « quelle version dependabot veut-il ? » mais **« cette version change-t-elle un COMPORTEMENT, ou seulement des types ? »**. Aligner vers le BAS ferme une scission de types tout aussi bien, sans rien changer d'autre — et c'est la seule direction sûre quand on ne peut pas auditer les sites affectés dans le même lot.
+
+3. **Un caret ne tient rien ; seul un épinglage tient.** Ramener les quatre manifestes à `^4.4.3` laissait le lock garder 4.6.3, et n'importe quel `bun install` futur aurait rejoué le fail-open en silence. Un override racine est la garde.
+
+4. **Un contrat écrit dans un commentaire et vérifié par personne se perd à la première montée de dépendance.** Le contrat d'unité était énoncé au bon endroit depuis onze jours (`packages/shared/__tests__/types/reaction.test.ts` : « counts UTF-16 code units (String.length) ») et ses trois témoins l'assertaient en **JS pur** (`longest.length`) : ils ne pouvaient pas voir zod changer d'avis. Un commentaire qui énonce un invariant dont aucun témoin n'exerce le PRODUCTEUR est une documentation, pas une garde.
+
+5. **L'aveu qui compte le plus** : le message de mon premier correctif ne citait comme preuve que des `type-check` et un garde de lockfile — **aucune suite de tests**. Le défaut vivait exactement là. **Un correctif de DÉPENDANCE se prouve par les SUITES, jamais par le typecheck** : le typecheck voit les formes, jamais les comportements. C'est la leçon des « ensembles disjoints » (typecheck et tests ne couvrent pas les mêmes fichiers) appliquée à une autre dimension — ils ne couvrent pas les mêmes QUESTIONS.
+
+Le témoin posé tient désormais le contrat : `z.string().max(EMOJI_MAX_LENGTH)` sur 32 emojis astraux (64 unités pour 32 code points, la seule forme qui distingue les deux comptages), avec sa contre-épreuve en BMP. Contre-épreuve du témoin lui-même, jouée sur les deux copies du store :
+
+```
+entrée : 64 unités UTF-16, 32 code points
+zod 4.4.3 → max(32) refuse    ✓ le témoin passe
+zod 4.6.3 → max(32) ACCEPTE   ✗ le témoin rougit
+```
+
+Issues : #6234 (le `dev` rouge), #6235 (la montée délibérée, avec l'unité des 242 bornes à régler — l'override EST la garde jusque-là).
+Décision : `packages/shared/decisions.md` § 2026-09-13.
+Mémoire : `reference_a_dependency_bump_can_change_the_unit_of_a_validation_bound.md`.
+
+## Leçon 599 — Faire FLOTTER ce qui était en flux change ce qui passe SOUS lui : toute mesure d'occlusion devient dépendante du défilement
+
+#6220 a sorti la barre de recherche de la liste du flux (`absolute inset-x-0 bottom-0 z-10`), avec la bonne réserve (`padding-block-end` mesurée par `ResizeObserver`) pour que la dernière rangée reste atteignable. Le lot a ajouté ses témoins sur ce qu'il visait — le CENTRE de la dernière rangée, au bas maximal du défilement — et ils passent. `Peaux web-v2` est pourtant devenu rouge sur `dev` :
+
+```
+· la cible tactile du bouton d'actions de « c-nouvelle » couvre 44×44
+    (2 coin(s) hors cible, boîte 34×34
+     | bas-gauche → DIV.flex … backdrop-blur-xl           [DANS LA BARRE]
+     | bas-droit  → DIV.absolute inset-x-0 bottom-0 z-10  [DANS LA BARRE]
+     | btnTop=753 btnBottom=787  vh=844)
+```
+
+1. **Une réserve protège la FIN du contenu, jamais son passage.** `padding-block-end` garantit qu'on peut défiler assez loin pour voir la dernière rangée dégagée. Elle ne dit rien des rangées qui traversent la bande du flotteur en chemin — et c'est désormais chacune d'elles, à un moment. La question à poser à tout élément qu'on fait flotter n'est pas seulement « le contenu peut-il l'éviter ? » mais **« qu'est-ce qui passe dessous, et que lui prend-il au passage ? »**.
+
+2. **Le débord d'une cible tactile dépasse la boîte, donc il sort de la réserve.** `tap-target-34` porte un bouton de 34 px à 44 par un `::after` de 5 px sur chaque bord. Une réserve calculée sur des BOÎTES laisse ces 5 px sous le flotteur. Un débord invisible est invisible aux mesures de disposition aussi.
+
+3. **Le symptôme désigne la POSITION, pas l'élément — et il le dit en changeant de nom.** Le constat tombait sur `c-nouvelle` en local et `c-salon-riviere` en CI. **Un défaut qui change de sujet d'une machine à l'autre est un artefact de position**, et le chercher dans la rangée nommée est une impasse. Une sonde qui rend l'élément gagnant de `elementFromPoint` (et non le seul compte de coins ratés) a donné la réponse en un tir.
+
+4. **Corriger la MESURE, pas la loi — et le prouver.** La section mesurait la géométrie du bouton ; l'occlusion par un flotteur assumé est un autre sujet, dont la réponse produit (parité iOS) est que la barre possède sa bande. Le gate centre donc la rangée avant de mesurer, avec une CONTRE-GARDE qui vérifie qu'elle est bien dégagée de la barre — sans quoi un futur changement de disposition remettrait la mesure sous le flotteur en silence. Et la garde garde ses dents, vérifié : plancher porté de 44 à 60 ⇒ **29 constats en défaut, quatre coins chacun**. Sans cette contre-épreuve, « le gate est vert » ne distingue pas une garde réparée d'une garde désarmée.
+
+Issues : #6220 (la barre flottante), #6237 (l'artefact et sa correction).
+
+## Leçon 600 — Un `jest.mock` de module qui ne rend qu'UNE PARTIE de ses exports laisse les autres à `undefined` : un piège LATENT qui se déclenche quand une route adopte l'export voisin
+
+En portant `withMutationOutcome` à la route `POST /posts/:postId/like` (#6293), un
+témoin sans rapport a rougi : `routes/posts/__tests__/error-format.test.ts`
+attendait **404** pour un post inconnu et lisait **500**. Sa cause était dans son
+propre double :
+
+```js
+jest.mock('../../../utils/withMutationLog', () => ({
+  withMutationLog: jest.fn().mockImplementation(({ op }) => op()),
+}));
+```
+
+L'usine remplace le module ENTIER. `withMutationOutcome` et la classe
+`MutationResultGone` y valaient donc `undefined` — appeler le premier levait un
+`TypeError` que le `catch` de la route déguisait en 500, et aucun message ne
+parlait d'idempotence.
+
+1. **Le piège est LATENT, et il se compte.** Balayé : **42** fichiers du gateway
+   mockent ce module sans étaler le réel ; **un seul** rougissait, parce qu'un
+   seul exerce la route que je venais de changer. Les 41 autres attendent la
+   prochaine route qui adoptera un export voisin. Un double trop étroit ne casse
+   rien le jour où on l'écrit — il casse le jour où quelqu'un d'autre grandit le
+   module.
+2. **Le remède tient en une ligne, et il était déjà écrit** :
+   `...jest.requireActual('<module>')` avant l'override. `interactions.harness.ts`
+   le fait ET l'explique (« une usine qui ne rendait que `withMutationLog` les
+   laissait à `undefined` — `instanceof undefined` lève un TypeError qui se
+   déguise en 500 sur des chemins d'erreur sans rapport »). La connaissance
+   existait à côté du piège, sans le désarmer.
+3. **Corollaire, mesuré dans le même lot : une file `mockResolvedValueOnce` non
+   consommée est un ÉTAT PARTAGÉ entre témoins.** Deux témoins pilotaient le
+   helper mocké pour atteindre son chemin `onDuplicate` ; ma route ne l'appelant
+   plus, leurs `Once` restaient en file et FUYAIENT dans les `describe` suivants,
+   décalant d'un cran les doubles de onze témoins `DELETE` — onze rouges dont
+   aucun ne parlait de `like`. **Un témoin qui pilote un mock plutôt que son
+   sujet coûte deux fois : il ne mesure rien, et il déplace ce que les autres
+   mesurent.**
+
+**Complément du même jour, et c'est une faute que j'ai commise en corrigeant la
+première.** Le remède — étaler le module réel — s'écrit avec un CAST :
+
+```js
+...(jest.requireActual('<module>') as object),   // et non `...jest.requireActual(...)`
+```
+
+`jest.requireActual` rend `unknown`, et TypeScript refuse d'étaler `unknown`
+(**TS2698**). Écrite sans cast, ma correction a rendu la suite **incapable de se
+CHARGER** — signature à reconnaître, déjà connue de ce dépôt : `Tests: 24138
+passed, 24138 total` avec `Test Suites: 1 failed`. **Zéro test en échec et une
+suite en échec = une suite qui n'a pas compilé**, donc une garde muette, pas une
+assertion fausse.
+
+Et la convention existait : balayé, le gateway porte ~145 étalements de
+`requireActual` et **tous** portent un cast (`as object`, `as Record<string,
+unknown>`) ou la forme générique `requireActual<Record<string, unknown>>(...)`.
+`interactions.harness.ts` l'évite autrement — il prend le module en PARAMÈTRE
+typé `object`, et son doc-comment dit pourquoi. J'ai cité ce doc-comment dans mon
+message de commit sans copier sa forme.
+
+> **Citer une convention n'est pas l'appliquer.** Quand un fichier voisin explique
+> pourquoi il fait quelque chose d'une certaine façon, la relecture utile n'est
+> pas « il a raison » mais « ma ligne a-t-elle la même forme que la sienne ? ».
+
+Et le même jour : mon balayage local était passé au VERT sur cette forme avant que
+`jest` ne monte de 30.4.2 à 30.5.1 dans une intégration de dépendances. Un
+typage qui se resserre transforme une ligne légale en erreur de compilation, sans
+que la ligne ait bougé — corollaire direct de la leçon 598.
+
+Et la leçon de fond sur ces deux témoins : ils affirmaient le chemin de rejeu en
+le SIMULANT. Leur intention est reprise dans
+`__tests__/unit/routes/posts/likeIdempotency.test.ts`, qui ne mocke PAS le helper
+— le rejeu y est réel, levé par un faux `MutationLogService` en mémoire. C'est la
+même doctrine que `repostIdempotency.test.ts` énonce depuis son en-tête : « un
+`jest.mock(...)` ici rendrait toute la suite verte que la route enveloppe ou non ».
+
+Issue : #6293. Le balayage des 41 doubles restants a son issue propre.
+
+## Leçon 601 — Sur une machine à sept worktrees, la BRANCHE dit d'où l'on pousse, pas qui a indexé : le discriminant est le TRAILER de session, et le commit de FUSION en est dépourvu
+
+Deux sessions ont passé une partie de la nuit à se demander qui tenait `dev`. La
+réponse s'est trouvée en une ligne, et le chemin vaut la réponse.
+
+`git log --format=%an` ne sépare rien : toutes les sessions committent sous
+l'identité du porteur. La note que je portais en mémoire disait « ce qui dit qui a
+fait quoi est la BRANCHE, jamais le nom ». **Faux dès qu'il y a plus d'un
+worktree** : `git worktree list` en rend **sept** sur cette machine, et une
+session peut écrire dans un worktree PARTAGÉ tout en poussant sur sa propre
+branche. La branche dit d'où l'on POUSSE ; elle ne dit pas qui a INDEXÉ.
+
+Le discriminant direct est le trailer que chaque session pose dans le corps de
+ses commits :
+
+```bash
+git log --format=%B -1 <sha> | grep -oE 'session_[A-Za-z0-9]+'
+```
+
+Six commits de `dev` que `%an` rendait indistinguables se sont séparés d'un
+coup — trois d'une session pair (qui l'a ensuite confirmé), un de la mienne, deux
+muets.
+
+1. **Le trou est structurel, et il est au pire endroit.** `git merge --no-edit`
+   ne produit aucun trailer. Or **le commit le plus susceptible d'emporter le
+   travail d'autrui est précisément celui qui ne dit pas qui l'a fait** : une
+   fusion de consolidation. Mesuré sur `dev` : **12 des 60 derniers commits sans
+   trailer, soit 20 %** — mes propres fusions comprises. La parade est un `-m`
+   explicite sur toute fusion de consolidation ; elle ne coûte rien et rend la
+   ligne attribuable.
+2. **`git add -A` n'indexe que le worktree COURANT** — chaque worktree a son
+   propre index. « Mon `add -A` a-t-il pu emporter le travail en cours d'un
+   pair ? » se répond donc par « dans quel worktree l'ai-je lancé ? », et un
+   `add -A` dans un worktree distinct est innocent par construction. Mais dans un
+   worktree PARTAGÉ il emporte tout : y indexer par CHEMIN, jamais en bloc. Deux
+   `wip(ios): point d'etape` ont ainsi emporté le travail iOS en cours d'une
+   session — sans trailer, donc sans auteur identifiable.
+3. **Le rôle de porteur de `dev` mérite d'être situé, pas supposé.** « Je tiens
+   `dev` » n'est vérifiable par personne tant qu'aucune trace ne le dit. Si deux
+   sessions le croient en même temps, aucune ne s'en aperçoit avant un conflit —
+   c'est exactement ce qui est arrivé, et ce qui s'est réglé en une question
+   posée plutôt qu'en un arbitrage de commits.
+
+Corollaire de posture, appris de l'autre côté : la session pair a reconnu d'elle-même
+avoir poussé une intégration de dépendances **sans lancer le garde que le dépôt
+tient pour ça**, et son raisonnement (« le lock périmé ne casse rien, la CI
+installe non figé ») était JUSTE sur son axe. Ce qui a cassé vivait sur un autre
+axe : la scission des manifestes entre workspaces. **Un raisonnement correct sur
+la dimension qu'on regarde ne dit rien des dimensions qu'on ne regarde pas** —
+d'où l'intérêt d'un garde, qui les regarde toutes sans avoir à y penser.
+
+## Leçon 602 — Une vérification enchaînée à l'action qu'elle garde, dans la même commande, n'est pas une garde : c'est un journal (2026-09-13)
+
+**Cas.** Libérer de l'espace en retirant les worktrees « finis ». Pour
+`v2_meeshy-claude` — propre, tête dans `dev`, aucun commit hors `dev` — la
+commande était `lsof -a -d cwd | grep v2_meeshy-claude; git worktree remove
+v2_meeshy-claude`. Le `lsof` a AFFICHÉ trois processus vivants (`zsh`, `gh`,
+`sort`) : une autre session Claude, suspendue depuis 49 minutes dans un
+`gh api graphql --paginate`, avait son répertoire courant là. Le worktree a
+été retiré dans la même seconde, parce que `;` n'attend le verdict de personne.
+Rien n'était perdu dans git ; le répertoire a été recréé aussitôt au même
+chemin, sur la même branche.
+
+1. **« Propre et absorbé » ne dit rien de l'OCCUPATION.** Les trois critères
+   qui prouvent qu'on ne perd aucun travail (`status --porcelain` vide, zéro
+   commit hors `dev`, branche poussée) ne disent pas si une session vivante a
+   son répertoire courant dedans. C'est un quatrième critère, d'une autre
+   nature : un fait de PROCESSUS, pas de dépôt.
+2. **La forme opérante** : la vérification est un appel, sa lecture est un
+   temps, l'action destructive est un AUTRE appel. Si l'on tient à une seule
+   commande, la garde CONDITIONNE l'action
+   (`[ -z "$(lsof -a -d cwd | grep …)" ] && git worktree remove …`), elle ne la
+   précède jamais par `;`.
+3. **Le trailer de session ne désigne pas l'occupant d'un worktree** : la tête
+   de `v2_meeshy-claude` portait le trailer d'un pair (c'était la tête de
+   `dev`), et ce pair a répondu que ce worktree n'était pas le sien. Un commit
+   dit qui l'a ÉCRIT ; seul `lsof` dit qui est LÀ.
+
+## Leçon 603 — `onChange` React ne voit pas un `input.value = X` suivi d'un `dispatchEvent(new Event('input'))` sous `happy-dom` ; `onInput` le voit toujours
+
+Deux écrans neufs (`verify-email-flow.tsx`, `reset-password-flow.tsx`, apps/web-v2 #5672) posaient `onChange={(e) => setX(e.currentTarget.value)}` sur leurs champs contrôlés. Les témoins interactifs (`createRoot` + `act`, patron `auth.test.ts`/`magic-link.test.tsx`) échouaient TOUS de la même façon : le bouton restait désactivé après avoir « rempli » le champ, `stub.calls` restait vide, et pourtant `input.value` valait bien la chaîne posée.
+
+1. **Le symptôme pointait vers `onlyDigits()` (le filtre du champ), et le vrai défaut était ailleurs.** Un test isolé, minimal (`useState` + `<input onChange>` seul, sans aucune logique métier) reproduisait le même échec : `onChange` ne se déclenchait JAMAIS, alors qu'un test IDENTIQUE avec `onInput` à la place se déclenchait à chaque fois. Ce n'est donc pas une fonction pure qui a un défaut — c'est le COUPLE « poser `.value` puis redispatcher un `input` natif » qui échappe au mécanisme de suivi de valeur que React installe pour distinguer un changement RÉEL d'un changement PROGRAMMATIQUE, sous l'implémentation `happy-dom` du DOM.
+
+2. **Le motif existait déjà dans le dépôt, et personne ne l'avait généralisé.** `magic-link-flow.tsx#magic-link-email` posait `onInput`, pas `onChange` — c'est le SEUL champ testé interactivement avant ce lot, et son auteur avait déjà buté sur le même mur sans laisser de trace explicite. Tous les autres champs du dossier (`login.tsx`, `signup.tsx`, `forgot-password.tsx`) posent `onChange` et n'ont AUCUN témoin interactif — seulement `renderToStaticMarkup` sur l'état initial, qui ne peut pas voir le défaut. **Un motif qui ne vit que dans un seul fichier, sans commentaire qui dise pourquoi, ne se retrouve qu'en revivant la même panne.**
+
+3. **La question à poser avant d'écrire un test interactif sur un champ contrôlé neuf** : « ce champ a-t-il un frère déjà testé de cette façon dans le dépôt ? Comment pose-t-il son gestionnaire ? » — pas « `onChange` est-il le nom React standard ? » (il l'est, et c'est justement ce qui rend le piège invisible à la relecture : le code compile, se lit juste, et ne rougit qu'à l'exécution du test).
+
+4. **Le correctif est un remplacement d'un mot, jamais une réécriture** : `onChange` → `onInput` sur CHAQUE champ contrôlé qu'un témoin interactif pose par `input.value = X; dispatchEvent(new Event('input'))`. Un champ qui n'est vérifié QUE par `renderToStaticMarkup` (état initial, aucune interaction) peut rester en `onChange` sans que rien ne le prouve encore — mais le jour où il gagne un témoin interactif, il tombera dans le même panneau.
+
+Détail : `apps/web-v2/decisions.md` § D-47.
+
+## Leçon 604 — Avant d'écrire une « loi pure » dans `shared`, chercher la CAPACITÉ, jamais le NOM : la jumelle qu'on s'apprête à créer existe souvent déjà, en mieux (2026-09-14)
+
+**Cas.** #6424 demandait de dériver un pseudo et un nom affiché de la partie
+locale d'une adresse. J'ai écrit `packages/shared/utils/username-from-email.ts`
+— trois fonctions pures, seize témoins verts, un commit poussé. Puis, en
+branchant la passerelle, `services/gateway/src/services/auth/registration-identity.ts`
+(#5216) : `pseudoRacine` tirait DÉJÀ le pseudo de la partie locale de l'adresse,
+et `generateUsername` réglait en plus l'unicité — sept candidats en UNE requête,
+repli aléatoire, bornes du schéma respectées. La jumelle que je venais d'écrire
+était la moins bonne des deux : elle ne connaissait pas la base.
+
+1. **La recherche qui aurait suffi n'était pas sur le nom.** `git grep
+   username-from-email` ne rend rien ; `git grep -n "split('@')"` rend le site
+   existant en une seconde. Un module se cherche par ce qu'il FAIT — la
+   primitive qu'il emploie forcément — pas par le nom qu'on lui aurait donné.
+2. **« Une loi pure appartient à `shared` » est un raisonnement, pas une
+   mesure.** Il est juste dans l'absolu et faux ici : l'unicité d'un pseudo
+   n'est pas décidable sans la base, donc la loi complète ne PEUT pas vivre
+   dans `shared`. L'architecture qu'on déduit du principe doit céder devant
+   celle qu'on mesure dans le dépôt.
+3. **Ce qui reste après le retrait est le vrai lot.** Sur trois fonctions
+   écrites, une seule manquait — le NOM AFFICHÉ. Les deux autres étaient des
+   redites. Le lot utile s'est révélé plus petit que le lot imaginé, et deux
+   défauts du site existant (le `+` du sous-adressage, le point d'une adresse)
+   n'auraient jamais été vus depuis la jumelle.
+4. **Le retrait se commit, il ne se force-push pas.** La branche garde le
+   commit qui crée la jumelle et celui qui la retire : l'historique porte la
+   mesure, et le prochain qui aura l'idée la retrouvera.
+
+## Leçon 605 — Une borne abaissée sur directive peut rester INATTEIGNABLE parce qu'une règle VOISINE la retire, et le gate reste vert (2026-09-14)
+
+**Cas.** Directive du 13 septembre, après mesure de 18 refus d'inscription pour
+2 comptes créés en 24 h : « il faut diminuer à 6 caractères au lieu de 12 ».
+`PASSWORD_MIN_LENGTH` est passée de 12 à 6, ses trois littéraux Ajv alignés, la
+garde de parité verte. Mais `validatePasswordStrength` — appelée par les CINQ
+portes qui acceptent un mot de passe — exige en plus une majuscule, un chiffre
+et un score `zxcvbn` ≥ 3/4. Aucun mot de passe de six caractères CHOISI PAR UN
+HUMAIN n'atteint 3/4. La borne abaissée n'a atteint personne, et le refus
+mesuré en production a continué.
+
+1. **Une borne ne gouverne que ce qu'elle est SEULE à gouverner.** La question
+   à poser en abaissant un seuil n'est pas « la valeur est-elle bien changée
+   partout ? » (ce que la garde de parité mesure très bien) mais **« qui
+   d'autre refuse la même chose, pour une autre raison ? »**. Le voisin ne
+   partage ni le nom, ni le fichier, ni le témoin.
+2. **Le motif est celui de la « loi qui calcule une valeur que personne ne
+   lit », dans sa forme la plus coûteuse** : ici la valeur est LUE, la garde
+   est verte, la directive est appliquée — et le symptôme survit. Ce qui la
+   rend invisible est précisément que tout est correct.
+3. **Le témoin qui l'attrape n'est pas un témoin de valeur.** Ce n'est pas
+   « `PASSWORD_MIN_LENGTH === 6` » mais « il EXISTE un mot de passe de
+   `PASSWORD_MIN_LENGTH` caractères que la porte accepte ». Une borne déclarée
+   sans témoin d'atteignabilité est une promesse que rien ne tient.
+
+## Leçon 606 — Un compte SANS secret ne doit pas payer le verrou qui protège les comptes AVEC secret (2026-09-14)
+
+**Cas.** #6424 rend `User.password` nullable. `verifyPassword(saisie, null)`
+rend `false` — juste, documenté, et **indistinguable d'un mot de passe faux**.
+Or la branche d'échec de `AuthService.authenticate` COMPTE la tentative et
+ferme le compte au seuil (#4138). Cinq essais auraient donc verrouillé quinze
+minutes un compte dont le mot de passe n'existe pas, c'est-à-dire un compte que
+personne ne peut deviner : le verrou n'aurait protégé personne et n'aurait puni
+que son détenteur.
+
+1. **Un `false` correct peut être au mauvais ENDROIT.** La fonction de
+   comparaison a raison de rendre `false` ; c'est l'appelant qui doit
+   distinguer « le secret ne correspond pas » de « il n'y a pas de secret ».
+   Le refus se lève AVANT la comparaison, ne compte rien, et nomme la porte à
+   prendre (`PASSWORD_NOT_SET`, 401).
+2. **Le témoin central n'est pas le message, c'est l'ABSENCE D'ÉCRITURE.**
+   `expect(update).not.toHaveBeenCalled()` après sept tentatives : un témoin
+   qui vérifierait seulement le code d'erreur resterait vert alors que le
+   compteur monte.
+3. **La généralisation.** Toute colonne qu'on rend nullable transforme une
+   comparaison en trois cas là où le code en compte deux. Chercher, en aval de
+   la comparaison, ce qui PUNIT l'échec — compteur, verrou, journal de
+   sécurité, limiteur — et se demander si la troisième valeur mérite la même
+   punition.
+
+## Leçon 607 — Un composant peut avoir sa suite de tests et n'être monté NULLE PART : un fichier de test n'est pas un consommateur (2026-09-14)
+
+**Cas.** En cherchant où l'e-mail de #6424 devait renvoyer pour « définir un
+mot de passe », mesure de `apps/web` : `PasswordSettings` (256 lignes) et
+`__tests__/components/settings/password-settings.test.tsx` existent tous deux,
+et le composant a **zéro consommateur** hors sa propre définition. L'onglet
+« Security » des réglages monte `EncryptionSettings`. Conséquence : **aucune
+personne ne pouvait changer son mot de passe depuis l'application web**, seulement
+le réinitialiser par e-mail depuis `/forgot-password`.
+
+1. **Le comptage doit EXCLURE les tests.** `git grep -l PasswordSettings` rend
+   deux fichiers et rassure ; en retirant `__tests__`, il n'en reste qu'un — sa
+   définition. C'est cette seconde commande qui mesure quelque chose.
+2. **Le motif est celui de la « vue sans consommateur ne rougit nulle part »,
+   avec une aggravation** : la suite de tests VERTE fait croire que la
+   fonctionnalité est éprouvée. Elle l'est — sur un composant que personne
+   n'affiche.
+3. **La question qui l'attrape** se pose au moment où l'on veut renvoyer
+   quelqu'un vers un écran : « ce lien atterrit-il sur une page qui parle de
+   ça ? ». C'est la loi 4 (un contrôle existe s'il a un effet) appliquée à une
+   DESTINATION plutôt qu'à un bouton.
+4. **Corollaire mesuré le même jour** : la barre latérale de `/admin` pointait
+   « Journaux d'audit » vers `/admin/audit`, quand la page vit dans
+   `app/admin/audit-logs/`. Un 404 depuis toujours, trouvé en RECOPIANT la
+   table vers une autre application. Porter une liste de destinations est une
+   occasion de les VÉRIFIER — recopiée sans mesure, elle importe ses 404 dans
+   l'application neuve.
+
+## Leçon 608 — Un script de PREUVE qui lit mal rend des verts VIDES, et ce sont les plus rassurants (2026-09-14)
+
+**Cas.** Pour prouver le flux #6424 sur staging, un script en six étapes lisait
+la base par `ssh root@… "docker exec … mongosh --eval '<js>'"`. Le `<js>`
+contenait des guillemets simples ; les couches shell les ont mangés ; `mongosh`
+a rendu une chaîne VIDE. Le script assérait alors :
+
+```bash
+printf '%s' "$LIGNE" | grep -q '"password"' && verdict "…" ko || verdict "la colonne password est ABSENTE" ok
+```
+
+`grep -q` sur du vide est faux, donc la branche `ok` s'exécutait : **« la
+colonne password est ABSENTE » passait au vert sans qu'aucune ligne n'ait été
+lue.** Même chose pour « le compteur n'a jamais été écrit ». Deux preuves
+inexistantes, et ce sont précisément les deux qui rassuraient le plus.
+
+Ce que la base disait vraiment, une fois le passage par base64 mis en place :
+`{"password":null,"failedLoginAttempts":{"low":0,…}}` — les faits étaient bons.
+**Le produit était juste ; l'instrument mentait.**
+
+1. **Une assertion d'ABSENCE doit d'abord prouver la PRÉSENCE de la lecture.**
+   La forme opérante est en deux temps : une garde `lu()` qui échoue si la
+   réponse est vide, PUIS l'assertion. Sans elle, « absent » et « pas
+   interrogé » rendent le même verdict — et c'est le vert.
+2. **Assérer sur la VALEUR, jamais sur l'absence d'une sous-chaîne.**
+   `grep -q '"password":null'` (ce que la base DIT) plutôt que
+   `! grep -q '"password"'` (ce qu'elle ne dit pas) : la première ne peut pas
+   passer sur du vide.
+3. **Un `<js>` qui traverse ssh + docker + sh se transporte en base64.** Trois
+   couches de shell, trois occasions de perdre un guillemet ; l'encodage retire
+   la question au lieu de la compter.
+4. **La leçon générale, et c'est elle qui pique** : ce dépôt passe ses journées
+   à traquer « la garde qui ne garde rien » chez les autres. Un outil de
+   VÉRIFICATION est du code comme un autre — il mérite la question qu'on pose à
+   toute garde : *que rend-il quand ce qu'il mesure n'existe pas ?* Ici,
+   « vert ». Le premier réflexe devant un script de preuve tout vert est de le
+   faire échouer exprès (interroger un compte inexistant) et de vérifier qu'il
+   rougit.
+
+**La même faute est revenue TROIS fois de plus dans le même fichier, chaque
+fois d'un cran plus fin** — et c'est la vraie leçon, parce que corriger
+l'instance ne l'a jamais empêchée de revenir :
+
+| l'assertion verdit… | parce que |
+|---|---|
+| sans avoir **lu** | `grep -q` sur une chaîne vide est faux |
+| sans que l'action ait **eu lieu** | six connexions refusées en 429 |
+| sans que l'action ait eu lieu **assez** | quatre essais sous un seuil de cinq |
+| sans que la mesure soit **possible** | zéro essai, conclusion rendue quand même |
+
+Une seule question les attrape toutes : **cette assertion peut-elle verdir pour
+un motif étranger à ce qu'elle affirme ?** Elle se pose à l'écriture, pas au
+débogage. Et un harnais a besoin de TROIS verdicts, pas deux : *prouvé*,
+*réfuté*, et **non mesurable** — confondre le troisième avec le premier est ce
+qui produit les verts vides, le confondre avec le second accuse le produit
+d'une limite d'environnement.
+
+**Corollaire, mesuré le même jour : un harnais peut s'étrangler lui-même.** La
+clé du limiteur de connexion est `ip:<ip>:<3 premiers caractères de
+l'identifiant>` (`utils/rate-limiter.ts`, 5 essais / 15 min). Toutes les
+adresses de test commençant par `pre`, tous les passages partageaient un seul
+seau : le deuxième était étranglé par le premier, et l'échec ressemblait à un
+défaut du produit. Avant d'accuser le serveur d'un 429, lire la CLÉ du
+limiteur — ce qu'elle agrège dit si deux exécutions du test sont, pour lui, la
+même personne.
+## Leçon 609 — Un résolveur « site unique » ne l'est que pour les appelants qui l'APPELLENT : la question n'est pas « la règle existe-t-elle ? » mais « quelles surfaces la contournent ? » (2026-09-13)
+
+**Cas.** Retour porteur : sur `staging.meeshy.me/notifications`,
+`GET https://gate.meeshy.me/2026/09/<id>/harbor_<uuid>.png net::ERR_FAILED`,
+puis `workbox … no-response`. `apps/web-v2` avait pourtant DEUX lots consacrés
+à cette règle (#5668, #5805), un site unique déclaré (`attachmentSrc`,
+`media-url.ts`) et un doc-comment de quarante lignes qui l'énonce.
+
+1. **Le site unique servait les PIÈCES JOINTES, et l'identité lui échappait.**
+   `attachmentSrc` était appelé par les huit surfaces qui rendent un média de
+   message ou de post. L'AVATAR (`Avatar src`, dix appelants), la VIGNETTE
+   d'une notification, la BANNIÈRE d'une communauté et celle d'un profil
+   posaient la valeur brute. Rien ne les distinguait à la relecture : ce sont
+   des `<img src={…}>` comme les autres, et le champ s'appelle `avatar`, pas
+   `fileUrl` — **le nom du champ avait masqué la nature de la donnée.** La
+   requête qui les trouve n'interroge pas le résolveur mais son COMPLÉMENT :
+   `grep "src={"` moins les appels à `attachmentSrc`.
+2. **La règle vit DANS le composant partagé, pas chez ses dix appelants.** Le
+   legacy avait déjà tranché ainsi (`AvatarImage`,
+   `apps/web/components/ui/avatar.tsx`, « point de passage unique ») ; le
+   chantier avait recopié le composant sans recopier la règle. Demander à
+   chaque appelant de se souvenir, c'est la voir oubliée au onzième.
+3. **Le résolveur lui-même testait la FORME au lieu de la CIBLE.** Une chaîne
+   `https://…` y valait « déjà résolue » — vrai pour un CDN, faux pour
+   `https://gate.meeshy.me/2026/09/…`, qui porte un hôte et une clé mais
+   AUCUNE route (la racine de la passerelle ne sert rien). Idem pour
+   `/2026/09/…` : une barre initiale n'est pas une route. La question juste
+   n'est pas « cette chaîne a-t-elle la forme d'une adresse ? » mais **« la
+   route qu'elle désigne existe-t-elle ? »**
+4. **Une migration qui reconnaît un SEGMENT laisse tout ce qui ne le porte
+   pas.** La 013 réécrit les valeurs contenant `/attachments/file/` ; l'adresse
+   héritée sans segment de service lui a échappé — non comptée, non
+   sauvegardée, toujours servie. Un inventaire de migration énonce deux
+   affirmations, et la seconde (« ce sont là toutes les formes ») n'est presque
+   jamais vérifiée (leçon 261, rejouée sur des données au lieu de résolveurs).
+5. **L'hôte que porte une donnée héritée est à JETER, pas à honorer.** Sur
+   staging, la valeur en base nommait la passerelle de PRODUCTION (un dump
+   restauré — le risque que le doc-comment de la 013 énonce mot pour mot). La
+   réparation vise la base CONFIGURÉE : la clé identifie le fichier, l'hôte est
+   une décision de déploiement (#4324).
+6. **Et l'échec était MUET.** `onError` masque l'`<img>`, le dégradé
+   d'initiales réapparaît : « photo introuvable » se lit exactement comme
+   « compte sans photo ». Seule la console le disait, et seulement sur le web —
+   iOS et Android portent les deux mêmes trous (#6389) sans même une console
+   pour les dire.
+
+Correctif : #6388 (web). Suivis ouverts : #6389 (iOS/Android), #6390 (les
+lignes héritées en base), #6391 (le magasin `static:`, que le chantier ne
+connaît pas du tout).
+
+## Leçon 610 — Un témoin qui s'en remet à l'ÉLAN mesure la machine autant que le produit : rendre le geste décisif, pas emporté (2026-09-14)
+
+`check-reels.mjs` synthétisait son balayage avec `preventFling: false` et une
+distance de **35 %** de la hauteur. En local, le fling portait le défileur
+au-delà du point de bascule de `scroll-snap` — la moitié — et la page
+s'accrochait. **En CI, le défileur ne bougeait pas d'un pixel** : douze
+invariants tombaient, et leurs messages accusaient l'application.
+
+Le gate était arrivé AVEC sa feature (#6457), dans un push dont la CI a été
+annulée par le suivant. **Il n'a donc jamais été vert sur `dev`** — et personne
+ne pouvait le savoir : un verdict annulé ressemble à un verdict absent.
+
+### Les deux fautes, et laquelle comptait
+
+Retirer le fling a d'abord rendu le rouge REPRODUCTIBLE en local :
+
+    le balayage tactile déplace le défileur (0 → 299)     ← sur 844
+    balayer vers le haut accroche le réel SUIVANT (0)      ← revenu en arrière
+
+Le fling n'était donc pas la cause : c'était le MASQUE. La cause est la
+distance — 35 % est sous le point de bascule, et le défileur revient. L'élan
+franchissait la moitié, donc le témoin passait **pour une raison qui ne lui
+appartenait pas**, et tombait dès que le compositeur ne servait plus cet élan.
+
+60 %, sans fling, dépasse la bascule de façon déterministe.
+
+### Ce qu'il faut en retenir
+
+- **Un geste de test ne doit rien devoir à la physique.** Le fling dépend du fil
+  compositeur, que tous les hôtes ne servent pas pareil — un runner sans GPU,
+  une machine chargée. L'invariant mesuré ici n'était pas « le doigt lance
+  bien », c'était « un arrêt par réel ».
+- **Un harnais muet accuse le produit.** Tant que le témoin ne disait pas si le
+  GESTE était parti, son message désignait l'application. Un `check` de plus —
+  « le balayage déplace le défileur (avant → après) » — sépare les deux, et
+  c'est lui qui a donné la réponse en une exécution.
+- **Un vert obtenu par l'élan est un vert emprunté.** Il ne dit pas que la
+  valeur est juste, il dit que la marge l'a couverte. Quand la marge disparaît,
+  le rouge semble venir de nulle part.
+
+### Et le geste lui-même n'arrivait pas
+
+Le correctif de distance a suffi en local, pas en CI : la seconde exécution a
+rendu `déplace le défileur (0 → 0)` sur les quatre peaux. Le témoin de
+déplacement — ajouté au tour précédent — a donné la réponse sans ambiguïté :
+`Input.synthesizeScrollGesture` passe par le pipeline de GESTES du navigateur,
+que ce runner headless ne sert pas. Deux fautes indépendantes se masquaient
+l'une l'autre, et seule la première était visible en local.
+
+`Input.dispatchTouchEvent` entre par la voie ordinaire : `touchStart`, douze
+`touchMove`, `touchEnd`. Ce que reçoit la page est indiscernable d'un vrai
+doigt. La cascade essaie le geste, puis les événements bruts, **et la sortie dit
+laquelle a porté** (`par geste` / `par événements tactiles`).
+
+**Un repli SILENCIEUX aurait été pire que le rouge** : le gate serait devenu
+vert sur un hôte incapable de livrer un geste, sans que personne ne le sache.
+Et la voie de repli s'ÉPROUVE avant d'être poussée — en neutralisant la
+première localement, jamais en espérant qu'elle marche le jour où elle servira.
+
+Voisine de [[reference_a_red_on_both_sides_of_the_diff_also_measures_the_machine]]
+et du piège inverse : ici, VERT d'un seul côté mesurait la machine.
+
+## Leçon 611 — Un témoin qui lit le TEXTE SOURCE verdit sur un correctif ANNULÉ
+
+**Mesuré le 2026-09-15 sur trois lots indépendants** de la chaîne de publication (#6577, #6579, #6164).
+Trois relecteurs adverses, trois fois le même résultat : le correctif neutralisé **en conservant les chaînes
+que les greps cherchent**, et les témoins restent verts.
+
+| lot | mutation | verdict |
+|---|---|---|
+| #6577 | les 8 affectations de `retractMedia` rendues no-op (`documentLocalMedia = mediaPorters.localMedia`) | **241/241 verts** |
+| #6579 | `.opacity(0)` sur la bande ; puis `onDisplayedContextChange: { _ in }` | **13/13** puis **33/33 verts** |
+| #6164 | garde fail-closed annulée par `&& false` ; protection perdue par `servedQuotedAttachments({}, …)` | **27/27 verts** |
+
+Les trois correctifs étaient **plausiblement justes**. Aucun n'était **prouvé**.
+
+### La cause structurelle, qui rendait le défaut inévitable sur iOS
+
+Sur #6577, la raison n'était pas « le testeur a été paresseux » : **un `@State` a un setter `nonmutating` qui
+n'écrit nulle part tant que SwiftUI n'a pas installé la vue.** Aucun témoin ne *pouvait* distinguer
+« appliqué » de « calculé puis jeté » — la struct pure était testable, son application ne l'était pas.
+Le remède a été de sortir les huit porteurs du `@State` vers un store observable, puis de tester l'aller-retour
+porteurs → charge.
+
+> **Quand un correctif passe par un `@State`, poser la question AVANT d'écrire son témoin :
+> qu'est-ce qui, dans ce test, installe la vue ?** Sans réponse, le témoin mesurera le calcul, jamais l'écriture.
+
+### Le geste qui l'attrape
+
+**Neutraliser sa propre règle en conservant les chaînes que les greps cherchent, puis rejouer.**
+Si rien ne rougit, le témoin ne vaut rien. Un source-guard garde un *câblage* — il empêche un futur lot de
+re-poser un motif interdit — mais il ne peut jamais être la seule preuve qu'une feature marche.
+
+### Trois pièges de la neutralisation elle-même, payés dans la même vague
+
+1. `git checkout -- <fichier>` restaure **HEAD**, pas l'état de travail non commité : il a annulé un correctif
+   voisin pas encore commité. **Copier en `.bak` hors du dépôt** avant de muter, restaurer depuis la copie.
+2. Une assertion **non scopée** (`src.contains("originalLanguage: language,")` sur le fichier entier) est
+   satisfaite par n'importe quelle occurrence — y compris par la chaîne **citée dans un commentaire**.
+   Une fenêtre `body(from:to:)` ne distingue pas le code du commentaire.
+3. Un oracle peut rougir sur une mutation **et** sur un arbre intact. Le harnais de #6579 gardait
+   `window.safeAreaInsets.top` (sa fenêtre, toujours 62) au lieu de `DeviceLayout.safeAreaTop`, la seule
+   grandeur que la production lise : il accusait la bande quand la scène n'était pas `.foregroundActive`.
+   **C'est la présente leçon retournée contre son propre outil** — un témoin qui ne mesure pas la quantité
+   qui gouverne ce qu'il observe ne mesure rien. Et le défaut d'environnement rendait *le même verdict*
+   que la mutation `.opacity(0)` : 6 témoins, 27 assertions. D'où la nécessité de diagnostiquer l'environnement
+   à part, avec un message qui l'accuse **lui** et jamais la feature.
+
+Voir aussi la leçon sur le disque saturé : un rouge qui ne parle pas du code parle de la **machine**.

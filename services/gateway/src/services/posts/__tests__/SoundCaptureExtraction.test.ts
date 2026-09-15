@@ -64,9 +64,20 @@ describe('SoundCaptureService — extraction vidéo', () => {
     jest.fn<(input: string, output: string) => Promise<void>>()
       .mockImplementation(async (_input, output) => { await fs.writeFile(output, payload); });
 
-  function makeService(prisma: ReturnType<typeof buildPrisma>,
-                       extractor: (input: string, output: string) => Promise<void>) {
-    return new SoundCaptureService(prisma, soundsDir, uploadsRoot, extractor);
+  /**
+   * Défaut déterministe pour les témoins qui ne portent pas sur la forme
+   * d'onde : ne rien injecter ferait tourner le VRAI ffmpeg (défaut de
+   * production) contre des octets factices — même philosophie que
+   * `extractor`, mais explicite plutôt qu'implicite via le défaut du
+   * constructeur.
+   */
+  function makeService(
+    prisma: ReturnType<typeof buildPrisma>,
+    extractor: (input: string, output: string) => Promise<void>,
+    computeWaveform: (filePath: string) => Promise<number[]> =
+      jest.fn<(p: string) => Promise<number[]>>().mockResolvedValue([]),
+  ) {
+    return new SoundCaptureService(prisma, soundsDir, uploadsRoot, extractor, computeWaveform);
   }
 
   it('test_videoTrackWithOptIn_createsSoundCreditedToAuthorWithProvenance', async () => {
@@ -171,6 +182,48 @@ describe('SoundCaptureService — extraction vidéo', () => {
     });
 
     expect(prisma.sound.create).not.toHaveBeenCalled();
+  });
+
+  it('test_captureFromVideo_computesWaveformFromTheExtractedAudioFile', async () => {
+    // #6602 — la forme d'onde se calcule sur le flux EXTRAIT (le `.m4a`
+    // démuxé), jamais sur le conteneur vidéo source : c'est lui qui vit en
+    // bibliothèque.
+    const media = await seedVideo('v1');
+    const prisma = buildPrisma({
+      postMedia: { findMany: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([media]) },
+    });
+    const extractor = fakeExtractor('aac-bytes');
+    const computeWaveform = jest.fn<(p: string) => Promise<number[]>>().mockResolvedValue([0.5, 0.6]);
+
+    await makeService(prisma, extractor, computeWaveform).captureSounds({
+      postId: 'p1', authorId: 'u1', feedsLibrary: true,
+      tracks: [{ trackId: 'media:v1', postMediaId: 'v1', extractFromVideo: true }],
+    });
+
+    expect(prisma.sound.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ waveform: [0.5, 0.6] }),
+    }));
+    const [computedFrom] = computeWaveform.mock.calls[0]!;
+    expect(computedFrom).not.toBe(path.join(uploadsRoot, media.filePath));
+  });
+
+  it('test_captureFromVideo_clientWaveformTakesPrecedenceOverComputation', async () => {
+    const media = await seedVideo('v1');
+    const prisma = buildPrisma({
+      postMedia: { findMany: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([media]) },
+    });
+    const extractor = fakeExtractor('aac-bytes');
+    const computeWaveform = jest.fn<(p: string) => Promise<number[]>>().mockResolvedValue([0.9]);
+
+    await makeService(prisma, extractor, computeWaveform).captureSounds({
+      postId: 'p1', authorId: 'u1', feedsLibrary: true,
+      tracks: [{ trackId: 'media:v1', postMediaId: 'v1', extractFromVideo: true, waveform: [0.1, 0.2] }],
+    });
+
+    expect(prisma.sound.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ waveform: [0.1, 0.2] }),
+    }));
+    expect(computeWaveform).not.toHaveBeenCalled();
   });
 
   it('test_sameExtractedStream_dedupesOnExistingSound', async () => {

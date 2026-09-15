@@ -183,7 +183,7 @@ export async function chargerPostsProches(
       id: { in: orderedIds },
       ...buildPublicDiscoverablePrismaWhere(now),
     },
-    include: postInclude,
+    select: postInclude,
   });
   const postsById = new Map(posts.map((post) => [post.id, post]));
 

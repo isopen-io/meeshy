@@ -11,6 +11,18 @@ import { QUICK_REACTIONS } from '@/lib/view/message-actions';
 import { COMPOSE_DETECT_DEBOUNCE_MS } from '@/lib/view/use-compose-language';
 
 /**
+ * CE FICHIER PORTE LA CITATION, LA LANGUE D'ÉCRITURE, LES PIÈCES JOINTES ET
+ * L'ENVOI DE `Composer` (revue-correction #6175, défaut majeur 3) — DÉCOUPÉ
+ * PAR RESPONSABILITÉ après avoir franchi le plafond dur de 1200 lignes du
+ * CLAUDE.md racine (888 → 1425 lignes en un seul lot). Le brouillon
+ * (restauration + rapport) vit dans `composer-draft.test.tsx`, le câblage de
+ * la rangée haute (éphémère/flou/effets/tonalité) dans
+ * `composer-top-row-wiring.test.tsx`, et l'accent substitué qu'elle
+ * déclenche dans `composer-accent-wiring.test.tsx` — quatre fichiers, une
+ * seule responsabilité chacun, aucun sous le même toit qu'un autre écran.
+ */
+
+/**
  * LA CITATION PRÉ-ADRESSÉE DIT SA LANGUE (revue #5695) — `replyTo.excerpt`
  * est servi par le PRISME (`served()`, `routes/thread.tsx`), donc il peut
  * être dans une langue AUTRE que celle du document. Le témoin est écrit sur
@@ -884,5 +896,30 @@ describe('Composer — la langue d’écriture est un contrôle avec effet (#582
       const pill = el.querySelector<HTMLButtonElement>('[data-composer-language]')!;
       expect(pill.querySelector('[lang]')).toBeNull();
     });
+  });
+});
+
+/**
+ * `Composer` EST `memo` (revue-correction #6175, défaut majeur 3) —
+ * `thread.tsx` re-rend à chaque image de défilement d'une liste virtualisée
+ * (son propre doc-comment le dit) ; sans `memo`, la partie la plus dense de
+ * l'arbre du composeur repassait par un rendu complet à chaque frame,
+ * qu'AUCUNE de ses props n'ait changé. Ce témoin porte sur la structure du
+ * composant exporté — `React.memo` marque le type qu'il enveloppe d'un
+ * `$$typeof` distinct (`Symbol.for('react.memo')`), vérifiable SANS mesurer
+ * un rendu réel (`Profiler.onRender` s'est avéré, à la mesure, se déclencher
+ * pour CHAQUE commit qui traverse la limite `Profiler` même quand le composant
+ * mémoïsé qu'il enveloppe bascule sans exécuter son corps — il mesure le
+ * PASSAGE de React par cette frontière, pas l'exécution de la fonction
+ * mémoïsée ; ce n'est donc pas l'outil qui répond à la question posée ici).
+ * Il rougirait si `memo(...)` était un jour retiré — la stabilité des props
+ * que `thread.tsx` lui fournit désormais (`handleComposerSend`/`replyTo` via
+ * `useCallback`/`useMemo`) est ce qui rend ce `memo` UTILE, documentée à son
+ * site d'appel plutôt que reprouvée ici par une seconde méthode.
+ */
+describe('Composer — `memo` (revue-correction #6175, défaut majeur 3)', () => {
+  test('l’export est enveloppé dans React.memo', () => {
+    const composerType = Composer as unknown as { readonly $$typeof?: symbol };
+    expect(composerType.$$typeof).toBe(Symbol.for('react.memo'));
   });
 });

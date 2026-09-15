@@ -812,6 +812,7 @@ struct FeedPostCard: View {
         }
         mediaSaveCoordinator.requestSave(MediaSaveRequest(
             kind: attachmentKind,
+            origin: .composed,
             remoteURLString: url,
             suggestedFileName: media.fileName
         ))
@@ -1376,7 +1377,7 @@ extension FeedPostCard: Equatable {
             && lhs.post.content == rhs.post.content
             && lhs.post.mentions == rhs.post.mentions
             && lhs.post.translatedContent == rhs.post.translatedContent
-            && (lhs.post.translations?.count ?? 0) == (rhs.post.translations?.count ?? 0)
+            && Self.translatableSignature(of: lhs.post) == Self.translatableSignature(of: rhs.post)
             && lhs.isCommentsExpanded == rhs.isCommentsExpanded
             && lhs.authorMoodEmoji == rhs.authorMoodEmoji
             && lhs.authorStoryRing == rhs.authorStoryRing

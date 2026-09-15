@@ -318,25 +318,24 @@ describe('POST /posts/:postId/like — notificationService fires createPostLikeN
 
 // ─── POST /posts/:postId/like — onDuplicate callback ─────────────────────────
 
-describe('POST /posts/:postId/like — withMutationLog onDuplicate path', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => { app = await buildApp(); });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 200 via onDuplicate path and calls getPostById', async () => {
-    mockWithMutationLog.mockImplementationOnce(async ({ onDuplicate }: any) => onDuplicate(POST_ID));
-    const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/like`, payload: {} });
-    expect(res.statusCode).toBe(200);
-    expect(mockGetPostById).toHaveBeenCalledWith(POST_ID, USER_ID);
-  });
-
-  it('returns 404 via onDuplicate when getPostById returns null', async () => {
-    mockWithMutationLog.mockImplementationOnce(async ({ onDuplicate }: any) => onDuplicate(POST_ID));
-    mockGetPostById.mockResolvedValueOnce(null);
-    const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/like`, payload: {} });
-    expect(res.statusCode).toBe(404);
-  });
-});
+// ─── POST /posts/:postId/like — le chemin onDuplicate a DÉMÉNAGÉ (#6293) ─────
+//
+// Deux témoins vivaient ici : « returns 200 via onDuplicate path » et
+// « returns 404 via onDuplicate when getPostById returns null ». Ils pilotaient
+// le helper MOCKÉ (`mockWithMutationLog.mockImplementationOnce(({ onDuplicate })
+// => onDuplicate(POST_ID))`), donc ils mesuraient la fiction du harnais, pas la
+// route : depuis que la route emploie `withMutationOutcome` pour garder ses
+// effets de bord au rejeu, ce mock n'est plus sur son chemin.
+//
+// Leur intention est reprise dans
+// `likeIdempotency.test.ts`, contre le VRAI helper et un faux
+// `MutationLogService` en mémoire — donc le rejeu y est réel, pas simulé.
+//
+// Et ils avaient un second coût, mesuré en les retirant : leurs
+// `mockImplementationOnce` / `mockResolvedValueOnce` n'étant plus consommés,
+// ils FUYAIENT dans les `describe` suivants et décalaient d'un cran toutes les
+// files de mocks des témoins DELETE — onze rouges dont aucun ne parlait de
+// `like`. Une file `Once` non consommée est un état partagé entre témoins.
 
 // ─── DELETE /posts/:postId/like — STORY type ─────────────────────────────────
 

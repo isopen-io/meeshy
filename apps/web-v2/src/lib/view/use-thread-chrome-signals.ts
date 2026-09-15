@@ -6,6 +6,7 @@ import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes
 import { served } from '@/lib/api/prism';
 import type { Message } from '@/lib/api/types';
 import type { PlacedMessage } from '@/lib/grouping';
+import { createDayPillRevealSubscriber, useDayPillReveal } from '@/lib/view/day-pill-reveal';
 import { createScrollerGestureSubscriber, useThreadChrome } from '@/lib/view/use-thread-chrome';
 import { isNearBottom, stickyDayOf, type VirtualRowSpan } from '@/lib/view/thread-chrome';
 import { initialUnreadBelowState, reduceUnreadBelow } from '@/lib/view/unread-below';
@@ -79,6 +80,11 @@ export function useThreadChromeSignals(input: {
     subscribeGesture,
     ready,
   });
+  /* LA PILULE DE JOUR S'EFFACE AU REPOS (#6101) — un troisième consommateur
+     de la loi partagée du défilement, projeté hors React sur le même hôte. */
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const subscribeDayPill = useMemo(() => createDayPillRevealSubscriber(scroller), []);
+  useDayPillReveal(host, { subscribe: subscribeDayPill, ready });
   const onComposerFocus = useCallback(() => setComposerEngaged(true), []);
   const onComposerBlur = useCallback((event: FocusEvent<HTMLElement>) => {
     if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setComposerEngaged(false);

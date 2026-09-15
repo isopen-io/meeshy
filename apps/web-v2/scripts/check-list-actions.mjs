@@ -58,6 +58,16 @@
  *     CLIQUET : la porte est arrivée, ce témoin mesure désormais l'effet du
  *     tap plutôt que l'absence de contrôle — tout en SERVANT ce que ses ports
  *     résolvent (anneau, couverture, humeur).
+ * 11. LA BARRE DE RECHERCHE NE VOLE JAMAIS LE CENTRE D'UN CONTRÔLE AU BAS DE
+ *     LA LISTE (#6220) — posée EN FLUX, elle réduisait la boîte de
+ *     `#contenu` d'autant, et la rangée qui tombait pile sur cette frontière
+ *     avait son centre — et celui de son bouton « Actions de conversation »
+ *     — VOLÉ par la barre elle-même (`elementFromPoint`), une frontière
+ *     qu'AUCUN défilement supplémentaire ne pouvait plus jamais franchir
+ *     puisqu'elle EST le bas de la boîte défilante. La liste défilée
+ *     jusqu'à son maximum RÉEL (gestes `wheel`, jamais un `scrollTop`
+ *     programmé — seul un geste réel arme le même défilement qu'un doigt),
+ *     la dernière rangée et son bouton doivent retomber sur EUX-MÊMES.
  */
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
@@ -191,13 +201,41 @@ check(
 );
 
 // ------------------------------------------------------- 2. cible tactile réelle
+//
+// LA RANGÉE EST D'ABORD AMENÉE AU CENTRE DU SCROLLPORT, ET C'EST UNE CONDITION
+// DE LA MESURE, PAS UNE COMMODITÉ (#6229 → #6237).
+//
+// Depuis que la barre de recherche FLOTTE (`absolute inset-x-0 bottom-0 z-10`,
+// #6220), les rangées passent SOUS elle pendant le défilement — c'est le
+// comportement voulu, celui d'iOS, et `#contenu` réserve sa hauteur pour que la
+// DERNIÈRE rangée reste atteignable dégagée. Mais le débord `::after` de la
+// cible tactile (34 + 2×5 = 44) dépasse la boîte du bouton de 5 px : pour toute
+// rangée qui se trouve à cet instant sous la barre, `elementFromPoint` rend la
+// barre sur les deux coins BAS. Mesuré : `bas-gauche → DIV…backdrop-blur-xl`,
+// `bas-droit → DIV.absolute inset-x-0 bottom-0 z-10`, bouton 753→787 dans une
+// fenêtre de 844 dont la barre occupe 779→844.
+//
+// Ce que ce constat mesurait alors était l'OCCLUSION par un flotteur assumé, pas
+// la géométrie du bouton — le seul sujet de cette section. Et il tombait sur une
+// rangée DIFFÉRENTE selon la machine (`c-nouvelle` en local, `c-salon-riviere`
+// en CI), signature d'un artefact de position. Centrer la rangée reproduit ce
+// que fait un doigt — on amène à soi ce qu'on veut toucher — et la garde
+// conserve ses dents : un bouton réellement trop petit rougit toujours, partout.
+//
+// La contre-garde est juste en dessous : on VÉRIFIE que la rangée mesurée est
+// bien dégagée de la barre, sinon un futur changement de disposition pourrait
+// remettre la mesure sous le flotteur sans que rien ne le dise.
 for (const row of rows) {
+  await page.evaluate((r) => {
+    document.querySelector(`[data-row="${r}"]`)?.scrollIntoView({ block: 'center' });
+  }, row);
+  await page.waitForTimeout(80);
   await page.hover(`[data-row="${row}"]`);
   await page.waitForTimeout(60);
   const hit = await page.evaluate(
     ({ row, floor }) => {
       const btn = document.querySelector(`[data-row="${row}"] button[aria-label="Actions de conversation"]`);
-      if (btn === null) return { ok: false, why: 'bouton absent' };
+      if (btn === null) return { ok: false, why: 'bouton absent', degage: false };
       const r = btn.getBoundingClientRect();
       const cx = r.left + r.width / 2;
       const cy = r.top + r.height / 2;
@@ -212,9 +250,19 @@ for (const row of rows) {
         const el = document.elementFromPoint(x, y);
         return el !== btn && !btn.contains(el);
       });
-      return { ok: misses.length === 0, why: `${misses.length} coin(s) hors cible, boîte ${Math.round(r.width)}×${Math.round(r.height)}` };
+      const bar = document.querySelector('[data-search-bar]')?.getBoundingClientRect();
+      const degage = bar === undefined || cy + half < bar.top;
+      return {
+        ok: misses.length === 0,
+        why: `${misses.length} coin(s) hors cible, boîte ${Math.round(r.width)}×${Math.round(r.height)}`,
+        degage,
+      };
     },
     { row, floor: TAP_FLOOR },
+  );
+  check(
+    hit.degage,
+    `la rangée « ${row} » est mesurée DÉGAGÉE de la barre flottante — sinon on mesure le flotteur, pas le bouton`,
   );
   check(hit.ok, `la cible tactile du bouton d'actions de « ${row} » couvre ${TAP_FLOOR}×${TAP_FLOOR} (${hit.why})`);
 }
@@ -648,33 +696,42 @@ check(
 );
 
 /**
- * LE CLIQUET DU §10 EST TOMBÉ (#5765) — LA PORTE EST ARRIVÉE (#6080) : chaque
- * pastille mène désormais à `/stories?author=…` (`routes/stories.tsx`). Ce
- * que ce témoin mesure maintenant n'est plus « zéro contrôle » mais l'EFFET
- * du tap — une pastille cliquable qui ne mène nulle part serait pire que
- * l'ancien état sans porte du tout.
+ * LE CLIQUET DU §10 EST TOMBÉ (#5765) — LA PORTE EST ARRIVÉE (#6080), PUIS
+ * ELLE A CHANGÉ DE DESTINATION (#5817) : une pastille menait à la liste
+ * filtrée `/stories?author=…` ; elle ouvre désormais LE LECTEUR PLEIN ÉCRAN,
+ * `/story/$post`, à la story d'entrée que son groupe porte
+ * (`group.entryStoryId`, `lib/view/story-tray.ts`). Ce que ce témoin mesure
+ * n'a pas changé — l'EFFET du tap, une pastille qui ne mène nulle part étant
+ * pire que l'absence de porte —, seulement ce qui doit apparaître au bout.
+ *
+ * L'identité se compare par IDENTIFIANT (`data-story-author`, porté par
+ * l'en-tête du lecteur), jamais par un libellé : « Votre story » et le nom
+ * d'un contact sont deux textes que la traduction et le repli de nom peuvent
+ * changer sans que la porte, elle, soit cassée.
  */
 const premierAuteur = await enTetePage.evaluate(
   () => document.querySelector('[data-rail="grande"] a[data-story-author]')?.getAttribute('data-story-author') ?? null,
 );
+const lienAttendu = await enTetePage.evaluate(
+  () => document.querySelector('[data-rail="grande"] a[data-story-author]')?.getAttribute('href') ?? null,
+);
 await enTetePage.click('[data-rail="grande"] a[data-story-author]');
-await enTetePage.waitForFunction(() => window.location.pathname === '/stories', undefined, { timeout: 3000 }).catch(() => {});
-/* La route `/stories` est chargée à la DEMANDE (`screen: () => import(...)`,
-   `route-table.tsx`) : le changement de `pathname` ci-dessus ne dit rien de
-   l'arrivée du chunk. Attendre le `<h1>` lui-même, pas seulement l'URL. */
-await enTetePage.waitForSelector('h1', { timeout: 3000 }).catch(() => {});
-const surStories = await enTetePage.evaluate(() => ({
+/* La route `/story/$post` est chargée à la DEMANDE (`screen: () => import(...)`,
+   `route-table.tsx`) : le changement de `pathname` ne dit rien de l'arrivée du
+   chunk. Attendre la SCÈNE elle-même, pas seulement l'URL. */
+await enTetePage.waitForSelector('[data-story-scene]', { timeout: 5000 }).catch(() => {});
+const surLecteur = await enTetePage.evaluate(() => ({
   pathname: window.location.pathname,
-  search: window.location.search,
-  titre: document.querySelector('h1')?.textContent ?? null,
+  scene: document.querySelector('[data-story-scene]')?.getAttribute('data-story-scene') ?? null,
+  auteur: document.querySelector('[data-story-scene] [data-story-author]')?.getAttribute('data-story-author') ?? null,
 }));
 check(
-  surStories.pathname === '/stories' && premierAuteur !== null && surStories.search.includes(`author=${premierAuteur}`),
-  `un tap sur la première pastille du rail ouvre RÉELLEMENT la story de SON auteur (${JSON.stringify({ premierAuteur, ...surStories })})`,
+  lienAttendu !== null && surLecteur.pathname === lienAttendu && surLecteur.scene !== null,
+  `un tap sur la première pastille du rail OUVRE le lecteur à l'adresse qu'elle promet (${JSON.stringify({ lienAttendu, ...surLecteur })})`,
 );
 check(
-  surStories.titre !== null && surStories.titre !== 'Stories' && surStories.titre !== "Aucune story pour l'instant",
-  `l'écran ouvert nomme l'auteur tapé, pas un titre générique (titre : « ${surStories.titre} »)`,
+  premierAuteur !== null && surLecteur.auteur === premierAuteur,
+  `le lecteur ouvert est celui de l'auteur TAPÉ, pas d'un autre (attendu « ${premierAuteur} », obtenu « ${surLecteur.auteur} »)`,
 );
 await enTetePage.goto(`${BASE}/`, { waitUntil: 'load' });
 await enTetePage.waitForSelector('[data-row]');
@@ -736,6 +793,99 @@ check(
 );
 
 await enTeteContext.close();
+
+// --------------- 11. la barre de recherche ne vole jamais un contrôle en bas de liste
+/**
+ * LE DÉFAUT EXACT DE #6220 — la barre de recherche est posée EN BAS,
+ * FLOTTANTE au-dessus de `#contenu` (`routes/conversations.tsx`) : avant
+ * correction, elle occupait sa propre place EN FLUX, réduisant d'autant la
+ * boîte défilante — la rangée qui tombait pile sur cette frontière avait
+ * son centre, et celui de son bouton « Actions de conversation », VOLÉ par
+ * la barre elle-même, SANS qu'aucun défilement supplémentaire ne puisse
+ * jamais l'en sortir (la frontière DE DÉFILEMENT était la barre). `#contenu`
+ * réserve désormais sa hauteur MESURÉE en `padding-block-end` — le critère
+ * de fin de #6220 : au bas RÉEL du défilement, la dernière rangée et son
+ * bouton se touchent au centre.
+ *
+ * Un `wheel` RÉEL, jamais un `scrollTop` programmé assigné directement : ce
+ * dernier s'est mesuré instable ici (une valeur inférieure au maximum,
+ * vraisemblablement reprise par un écouteur de défilement de l'écran) — le
+ * même geste que #5648 impose déjà pour armer une scène, pour la même
+ * raison : seul un défilement REÇU COMME UNE INTENTION vaut le geste d'un
+ * doigt.
+ */
+const bottomContext = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'dark' });
+const bottomPage = await bottomContext.newPage();
+await bottomPage.goto(`${BASE}/`, { waitUntil: 'load' });
+await bottomPage.waitForSelector('[data-row]');
+await bottomPage.waitForTimeout(300);
+
+/**
+ * LA RÉSERVE, MESURÉE DIRECTEMENT — le témoin de bout en bout ci-dessous ne
+ * ROUGIT PAS sur l'ancien code pour CE corpus précis : `QuickActions`
+ * (`components/quick-actions.tsx`, 50dvh dès qu'une rangée est visible)
+ * laisse toujours une marge géante après la dernière conversation, quel que
+ * soit le filtre — le défaut RÉEL (une frontière de défilement qui EST la
+ * barre, donc plus jamais franchissable) ne dépend pas de ce hasard de
+ * corpus. Cette assertion mesure la CAUSE structurelle, indépendamment de
+ * tout contenu : `#contenu` doit réserver AU MOINS la hauteur RENDUE de la
+ * barre en `padding-block-end`, sans quoi le défaut revient dès qu'un écran
+ * (une recherche à un seul résultat sans `QuickActions`, un autre corpus)
+ * n'offre plus cette marge fortuite.
+ */
+const reserve = await bottomPage.evaluate(() => {
+  const ul = document.getElementById('contenu');
+  const bar = document.querySelector('[data-search-bar]');
+  return {
+    barHeight: bar === null ? null : bar.getBoundingClientRect().height,
+    padBottom: parseFloat(getComputedStyle(ul).paddingBottom) || 0,
+  };
+});
+check(reserve.barHeight !== null, 'la barre de recherche (`[data-search-bar]`) est bien présente pour la mesure');
+check(
+  reserve.barHeight !== null && reserve.padBottom >= reserve.barHeight - 1,
+  `#contenu réserve AU MOINS la hauteur RENDUE de la barre en padding-block-end (${JSON.stringify(reserve)})`,
+);
+
+await bottomPage.hover('#contenu');
+for (let i = 0; i < 40; i += 1) {
+  await bottomPage.mouse.wheel(0, 400);
+  await bottomPage.waitForTimeout(30);
+}
+await bottomPage.waitForTimeout(500);
+/** Le bouton n'est peint QU'AU SURVOL/FOCUS d'une rangée non magnifiée (§2 ci-
+ *  dessus) — le survoler d'abord est la même précaution que la section 2. */
+await bottomPage.locator('[data-row]').last().hover();
+await bottomPage.waitForTimeout(150);
+
+const bottomOverlap = await bottomPage.evaluate(() => {
+  const ul = document.getElementById('contenu');
+  const rows = [...document.querySelectorAll('[data-row]')];
+  const last = rows[rows.length - 1];
+  const btn = last?.querySelector('button[aria-label="Actions de conversation"]');
+  const centerHitsSelf = (el) => {
+    if (el === null || el === undefined) return null;
+    const r = el.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return hit === el || el.contains(hit);
+  };
+  return {
+    atMax: ul.scrollTop >= ul.scrollHeight - ul.clientHeight - 1,
+    rowOk: centerHitsSelf(last),
+    buttonOk: centerHitsSelf(btn),
+  };
+});
+check(bottomOverlap.atMax, 'le défilement RÉEL (wheel) atteint le bas MAXIMAL de la liste');
+check(
+  bottomOverlap.rowOk === true,
+  `au bas MAXIMAL du défilement, le centre de la DERNIÈRE rangée retombe sur elle-même, jamais sur la barre de recherche (${JSON.stringify(bottomOverlap)})`,
+);
+check(
+  bottomOverlap.buttonOk === true,
+  `au bas MAXIMAL du défilement, le centre du bouton d'actions de la DERNIÈRE rangée retombe sur LUI, jamais sur la barre de recherche (${JSON.stringify(bottomOverlap)})`,
+);
+
+await bottomContext.close();
 
 await browser.close();
 server.close();

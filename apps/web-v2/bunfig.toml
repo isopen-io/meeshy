@@ -25,3 +25,13 @@
 # le litteral de construction corrige. Les temoins comparent au SYMBOLE, pas a
 # une chaine ecrite.
 "__APP_VERSION__" = "\"0.0.0-test\""
+
+# LE CATALOGUE D'INTERFACE DE LA LANGUE DU DOCUMENT, chargé avant tout témoin
+# (#6206). En production, aucun écran ne se rend avant que la route ait chargé
+# le catalogue de la langue résolue (`route-table.tsx` § `screenPrerequisite`) ;
+# sous `bun test`, un composant rendu hors routeur lirait un catalogue absent.
+# Ce préchargement rejoue le CONTRAT du démarrage pour la langue du HTML
+# statique (`fr`) — ce n'est pas un repli : un témoin qui pose une autre
+# langue charge son catalogue lui-même, et une clé absente reste rouge.
+[test]
+preload = ["./src/test-support/interface-catalog-preload.ts"]

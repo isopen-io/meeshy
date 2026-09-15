@@ -50,7 +50,16 @@ permissions:
 
 env:
   DOCKER_NAMESPACE: isopen
-  PLATFORMS: linux/amd64,linux/arm64
+  # Les plateformes de docker.yml, qui publie le même `latest` sur main (#6442) :
+  # deux listes pour un même tag rendaient son architecture tirée au sort par
+  # l'ordre d'arrivée des deux workflows. Aucune étape n'émule arm64 ici : sous
+  # QEMU, le translator ne compilait pas sentencepiece==0.1.97 (trois échecs,
+  # 2026-07-28 et 2026-08-03) et la passerelle plantait dans `prisma generate`
+  # (`qemu: uncaught target signal 4`, deux fois le 2026-09-14) sur une recette
+  # identique à celle de la veille. Une image arm64 se construira sur un runner
+  # arm64 natif, dans les deux workflows à la fois ; scripts/check-release-platforms.mjs
+  # rougit dès qu'ils divergent.
+  PLATFORMS: linux/amd64
   # '22.19' et non '22' : undici@8 exige >= 22.19.0 (worker_threads.markAsUncloneable,
   # arrive en 22.12), et le serveur assemble par les generateurs de manifeste le charge.
   # La ligne MINEURE, pas une version exacte — figer le patch ferait rater les correctifs
@@ -182,6 +191,15 @@ jobs:
           echo "🔄 Synchronizing package.json → VERSION files..."
           node scripts/sync-versions.js
 
+      # `changeset version` monte apps/web-v2/package.json SANS construire de
+      # coque : sans cette étape, main portait 2.0.2 dans package.json et 2.0.0
+      # dans build.gradle/project.pbxproj, et « Test web-v2 » y était rouge
+      # (témoin #6196, build-shells.test.ts). Le commit de release (`git add -A`)
+      # emporte les deux fichiers dérivés.
+      - name: Sync web-v2 shell versions
+        if: steps.version.outputs.published == 'true'
+        run: node apps/web-v2/scripts/sync-shell-version.mjs
+
       - name: Get new version
         id: get-version
         run: |
@@ -287,9 +305,6 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "📦 $SERVICE_NAME version: $VERSION"
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
@@ -310,34 +325,12 @@ jobs:
             type=raw,value=${{ github.ref_name }},enable=${{ github.ref != 'refs/heads/main' }}
             type=sha,prefix=sha-,format=short
 
-      - name: Determine build platforms
-        id: platforms
-        run: |
-          # Translator: AMD64 only. sentencepiece==0.1.97 (pinned transitively by
-          # espnet==202412 — cf. requirements.txt) ships no cp311/cp312 wheel for
-          # ANY platform, so uv always compiles it from source — including on
-          # native amd64 runners, where the g++ toolchain handles it fine. Under
-          # QEMU arm64 emulation the same compile fails deterministically
-          # ("Relocations in generic ELF (EM: 62)" / "file in wrong format" /
-          # collect2 exit 1) — reproduced identically in 3 separate release.yml
-          # runs (2026-07-28 10:09, 2026-07-28 16:20, 2026-08-03 13:30).
-          # docker.yml already carves out this same exception (see its
-          # "Determine build platforms" step) and has stayed green on main;
-          # release.yml built translator via the blanket $PLATFORMS
-          # (linux/amd64,linux/arm64) with no override, hence the divergence.
-          if [[ "${{ matrix.service }}" == "translator" ]]; then
-            echo "value=linux/amd64" >> $GITHUB_OUTPUT
-            echo "⚠️ Translator: building AMD64 only (ARM64 QEMU cannot compile sentencepiece==0.1.97 from source)"
-          else
-            echo "value=${{ env.PLATFORMS }}" >> $GITHUB_OUTPUT
-          fi
-
       - name: Build and push
         uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
-          platforms: ${{ steps.platforms.outputs.value }}
+          platforms: ${{ env.PLATFORMS }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

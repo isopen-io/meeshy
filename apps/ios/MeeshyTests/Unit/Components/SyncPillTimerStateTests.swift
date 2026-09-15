@@ -63,31 +63,51 @@ final class SyncPillTimerStateTests: XCTestCase {
         return try fichiers.map { ($0.lastPathComponent, try String(contentsOf: $0, encoding: .utf8)) }
     }
 
-    /// **La pastille ne grossit plus, et ce n'est pas un oubli.**
+    /// **La pastille s'accentue à l'annonce de frappe — par UNE loi, et plus
+    /// jamais par une fenêtre d'accent.**
     ///
-    /// L'accent a été repris TROIS fois en dix jours — pulse fixe (#4018),
-    /// lié à la durée du signal (#4026), fenêtre de six secondes réarmable
-    /// (#4050) — puis SUPPRIMÉ par `960f7d1df0` sur décision du porteur du
-    /// 2026-08-28 : « l'effet sur la SyncPill qui la grossit est inutile, il
-    /// existe un composant qui rend les informations en gros et c'est ce
-    /// composant qu'il faut utiliser lorsqu'un utilisateur commence la frappe ».
-    /// L'annonce de frappe appartient depuis à `IslandEmergingBanner`.
+    /// L'histoire, qu'il faut garder : l'accent a été repris TROIS fois en dix
+    /// jours — pulse fixe (#4018), lié à la durée du signal (#4026), fenêtre de
+    /// six secondes réarmable (#4050) — puis SUPPRIMÉ par `960f7d1df0` sur
+    /// décision du porteur du 2026-08-28, au profit d'`IslandEmergingBanner`.
     ///
-    /// Une décision reprise trois fois puis renversée a besoin d'un témoin,
-    /// sans quoi la quatrième reprise se fera de bonne foi : rien dans le
-    /// code ne dit qu'un accent a déjà été essayé et refusé.
-    func test_syncPill_carriesNoAccentAnymore() throws {
-        let interdits = ["scaleEffect", "isAccented", "accentScale", "setAccented",
+    /// **Décision renversée par le porteur le 2026-09-12** (`eb8a12f85d`, #6188) :
+    /// « l'île se tait pour la frappe, la pastille porte l'annonce et l'accentue
+    /// au début, et la toucher ouvre la conversation où l'on écrit ». La capsule
+    /// masquait la pastille tout en étant non touchable : quatre secondes où
+    /// l'information était visible et RIEN touchable.
+    ///
+    /// Ce que ce témoin garde désormais (#5599, réécrit comme sa version
+    /// précédente le demandait) :
+    /// - l'amplitude ET le retour au repos sortent d'UNE loi,
+    ///   `TypingAnnouncementLaw` — le défaut des reprises précédentes n'était
+    ///   pas la taille mais le retour, que deux sources font diverger ; tout
+    ///   `scaleEffect` d'un fichier `SyncPill*` passe donc par elle ;
+    /// - la machinerie d'accent abandonnée (fenêtre, échéance, drapeau) ne
+    ///   revient pas.
+    func test_syncPill_accentComesOnlyFromTheTypingAnnouncementLaw() throws {
+        let interdits = ["isAccented", "accentScale", "setAccented",
                          "accentHold", "accentDeadline", "applyAccentWindow"]
         for (name, text) in try unitSources() {
             for interdit in interdits {
                 XCTAssertFalse(
                     text.contains(interdit),
                     """
-                    \(name) porte « \(interdit) » : l'accent de la pastille a été                     ABANDONNÉ le 2026-08-28 (960f7d1df0), après trois reprises.                     Une annonce « en gros » se fait par IslandEmergingBanner —                     une capsule de STATUT n'en est pas le porteur. Si le porteur                     revient sur cette décision, c'est ce témoin qu'il faut retirer                     EXPLICITEMENT, avec la nouvelle décision écrite à sa place.
+                    \(name) porte « \(interdit) » : la fenêtre d'accent a été ABANDONNÉE le \
+                    2026-08-28 (960f7d1df0) ; l'accent de frappe rendu le 2026-09-12 \
+                    (eb8a12f85d) passe par TypingAnnouncementLaw, jamais par un état d'accent.
                     """
                 )
             }
+            let echelles = text.components(separatedBy: "scaleEffect(").count - 1
+            let parLaLoi = text.components(separatedBy: "scaleEffect(TypingAnnouncementLaw.scale(").count - 1
+            XCTAssertEqual(
+                echelles, parLaLoi,
+                """
+                \(name) porte un scaleEffect qui ne passe pas par TypingAnnouncementLaw.scale : \
+                amplitude et retour au repos doivent sortir de la MÊME loi (eb8a12f85d, #6188).
+                """
+            )
         }
     }
 

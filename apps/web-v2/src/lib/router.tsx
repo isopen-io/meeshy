@@ -79,7 +79,45 @@ function subscriber(onSchemeChange: () => void): () => void {
   return () => subscribers.delete(onSchemeChange);
 }
 
+/**
+ * `isCurrentHref` — l'adresse VISÉE est-elle celle où l'on est DÉJÀ ?
+ *
+ * Comparaison de CHAÎNES, pas de `new URL()` : tous les appelants de
+ * `navigate` passent une adresse RELATIVE À LA RACINE (`href(...)`,
+ * `'/stories'`, `` `${location.pathname}?…` `` — relevé exhaustif au
+ * 2026-09-13), soit exactement la forme que ce concaténé produit. Une forme
+ * ABSOLUE ne s'apparierait pas et retomberait sur l'empilement d'hier :
+ * fail-open, jamais une navigation avalée par erreur — et 120 octets de
+ * moins avant le premier pixel qu'un `new URL()` gardé (le budget de la
+ * courbe se tient à 0,1 Ko près).
+ */
+function isCurrentHref(url: string): boolean {
+  if (typeof window === 'undefined') return false;
+  return url === `${window.location.pathname}${window.location.search}${window.location.hash}`;
+}
+
+/**
+ * NAVIGUER VERS L'ADRESSE OÙ L'ON EST DÉJÀ N'EMPILE RIEN (revue-correction
+ * #5893, mesuré dans un navigateur réel).
+ *
+ * `pushState` accepte volontiers la MÊME adresse deux fois : chaque tap
+ * ajoutait une entrée. Le bouton flottant de GAUCHE pointait alors sur `feed`
+ * quelle que soit la route (il bascule depuis #6456, `feedDiscDestination`),
+ * donc sur `/feed` il ne changeait RIEN à l'écran — loi 4 — tout en faisant
+ * grossir l'historique : `history.length` 3 → 4 par tap, mesuré. Le bouton
+ * RETOUR matériel d'Android (directive coque 5b) ramenait alors sur `/feed`
+ * au lieu de la liste, autant de fois qu'on avait tapé.
+ *
+ * La garde vit ICI, au SITE UNIQUE de la navigation, et pas chez l'appelant :
+ * les trente écrans à venir porteront tous des liens vers des destinations qui
+ * peuvent être la leur (une échelle de menu, un onglet, un fil d'Ariane), et
+ * une garde par appelant est une garde qu'on oublie.
+ *
+ * Un `replace` EXPLICITE traverse : c'est ainsi qu'une redirection réécrit
+ * l'entrée courante (garde de session, canonicalisation d'URL).
+ */
 export function navigate(url: string, replace = false): void {
+  if (!replace && isCurrentHref(url)) return;
   if (replace) window.history.replaceState(null, '', url);
   else window.history.pushState(null, '', url);
   notify();
@@ -170,16 +208,34 @@ export function useSearch(): [URLSearchParams, (next: URLSearchParams, replace?:
 
 // --- La fabrique -----------------------------------------------------------
 
-export function createRouter<T extends RouteTable>(table: T, notFound: ComponentType) {
-  const entries = Object.entries(table).map(([key, route]) => ({
-    key,
-    pattern: route.pattern,
-    compile: compile(route.pattern),
-    // `lazy` est appele UNE fois par route : le module se memorise tout seul,
-    // donc precharger revient a declencher l'import, et le rendu le retrouve.
-    Screen: lazy(route.screen),
-    load: route.screen,
-  }));
+export type RouterOptions = {
+  /**
+   * Ce qu'un ecran ATTEND avant de se rendre (#6206) — le catalogue
+   * d'interface de la langue resolue. Il est cherche EN PARALLELE du chunk de
+   * l'ecran, jamais apres : en serie, chaque premier ecran paierait un
+   * aller-retour reseau de plus sur la 3G visee. Le squelette tient pendant
+   * les deux.
+   */
+  readonly screenPrerequisite?: () => Promise<unknown>;
+};
+
+export function createRouter<T extends RouteTable>(table: T, notFound: ComponentType, options: RouterOptions = {}) {
+  const { screenPrerequisite } = options;
+  const entries = Object.entries(table).map(([key, route]) => {
+    const load =
+      screenPrerequisite === undefined
+        ? route.screen
+        : () => Promise.all([route.screen(), screenPrerequisite()]).then(([screen]) => screen);
+    return {
+      key,
+      pattern: route.pattern,
+      compile: compile(route.pattern),
+      // `lazy` est appele UNE fois par route : le module se memorise tout seul,
+      // donc precharger revient a declencher l'import, et le rendu le retrouve.
+      Screen: lazy(load),
+      load,
+    };
+  });
 
   function href<C extends keyof T & string>(
     key: C,
@@ -276,6 +332,7 @@ export function createRouter<T extends RouteTable>(table: T, notFound: Component
     replace = false,
     children,
     onClick: onClickProp,
+    anchorRef,
     ...rest
   }: {
     to: C;
@@ -293,6 +350,22 @@ export function createRouter<T extends RouteTable>(table: T, notFound: Component
      * surfaces a venir ; deux lignes ici l'evitent partout.
      */
     replace?: boolean;
+    /**
+     * L'ANCRE ELLE-MEME, pour qui doit lui DONNER LE FOCUS (#6104).
+     *
+     * `ref` ne peut pas servir ici : ce composant est generique, et `ref` est
+     * extrait des props par le runtime — par React 19 comme par
+     * `preact/compat`, mais pas de la meme facon. Une porte NOMMEE se comporte
+     * identiquement dans les deux variantes que ce POC compare, ce qui est
+     * exactement sa raison d'etre.
+     *
+     * Elle existe parce qu'un menu ARIA doit pouvoir poser le focus sur ses
+     * lignes (fleches, Home/End, entree dans le menu a l'ouverture — voir
+     * `lib/view/roving-menu.ts`) et qu'une ligne qui NAVIGUE doit rester un
+     * lien. Sans elle, un menu de liens n'aurait eu le choix qu'entre perdre
+     * le clavier et perdre le `href`.
+     */
+    anchorRef?: (element: HTMLAnchorElement | null) => void;
     children: ReactNode;
   } & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 'href' | 'children'>) {
     const url = href(to, params, search);
@@ -317,6 +390,7 @@ export function createRouter<T extends RouteTable>(table: T, notFound: Component
     return (
       <a
         {...rest}
+        ref={anchorRef}
         href={url}
         onPointerEnter={armPrefetch}
         onPointerLeave={disarm}

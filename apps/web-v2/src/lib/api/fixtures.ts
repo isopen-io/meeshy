@@ -1,4 +1,5 @@
 import type { ReadingModePreference } from '@meeshy/shared/types/reading-modes';
+import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 
 import { previewUrlFor } from '@/lib/send/attachment-preview-url';
 
@@ -21,6 +22,8 @@ import {
   viewer,
 } from './fixtures-base';
 import { CATCHUP_CONVERSATION, CATCHUP_CONVERSATION_ID, CATCHUP_MESSAGES } from './fixtures-catchup';
+import { LIVE_CONVERSATION, LIVE_CONVERSATION_ID, LIVE_MESSAGES } from './fixtures-live';
+import { PAGINATION_CONVERSATIONS } from './fixtures-pagination';
 import { MEDIA_CONVERSATION, MEDIA_CONVERSATION_ID, MEDIA_MESSAGES } from './fixtures-media';
 import { STATES_CONVERSATION, STATES_CONVERSATION_ID, STATES_MESSAGES } from './fixtures-states';
 import {
@@ -482,6 +485,7 @@ export const CONVERSATIONS: readonly Conversation[] = [
     lastMessageTranslations: { en: "I'll push the measurement tonight." },
     lastMessageOriginalLanguage: 'fr',
   },
+  LIVE_CONVERSATION,
   {
     ...conversationDefaults,
     id: 'c-amina',
@@ -627,6 +631,14 @@ export const CONVERSATIONS: readonly Conversation[] = [
   CATCHUP_CONVERSATION,
   MEDIA_CONVERSATION,
   STATES_CONVERSATION,
+  /**
+   * LE CORPUS DE PAGINATION (#6195) — 34 conversations STRICTEMENT plus
+   * anciennes que les 11 ci-dessus (`fixtures-pagination.ts`), pour que la
+   * Lentille ait de quoi défiler au-delà d'une page serveur (30). Les 11
+   * précédentes restent en TÊTE du tri `lastMessageAt desc` et en page 1 —
+   * une ligne d'étalement, aucun comportement changé pour elles.
+   */
+  ...PAGINATION_CONVERSATIONS,
 ];
 
 
@@ -773,6 +785,12 @@ export function recordSentMessage(
     readonly messageType?: 'image' | 'file' | 'audio' | 'video';
     readonly attachmentIds?: readonly string[];
     readonly replyToId?: string;
+    /** LA PROTECTION (#6175) — mime la recomposition SERVEUR
+     * (`messages-send.ts:240-245`), copiée dans le doc-comment ci-dessous. */
+    readonly isBlurred?: boolean;
+    readonly expiresAt?: string;
+    readonly effectFlags?: number;
+    readonly isViewOnce?: boolean;
   },
 ): SentFixtureMessage {
   sentMessageCounter += 1;
@@ -782,6 +800,14 @@ export function recordSentMessage(
   const attachments = (body.attachmentIds ?? [])
     .map((id) => uploadedAttachmentsById.get(id))
     .filter((a): a is Attachment => a !== undefined);
+  // MÊME RECOMPOSITION que le serveur (`messages-send.ts:240-245`) — un
+  // bouchon de fixtures qui se contenterait de RECOPIER `effectFlags` sans y
+  // ajouter les bits de cycle de vie mentirait sur ce que la vraie
+  // passerelle stocke.
+  let effectFlags = body.effectFlags ?? 0;
+  if (body.isBlurred === true) effectFlags |= MESSAGE_EFFECT_FLAGS.BLURRED;
+  if (body.expiresAt !== undefined) effectFlags |= MESSAGE_EFFECT_FLAGS.EPHEMERAL;
+  if (body.isViewOnce === true) effectFlags |= MESSAGE_EFFECT_FLAGS.VIEW_ONCE;
   const created: SentFixtureMessage = {
     ...message({
       id: `fx-sent-${sentMessageCounter}`,
@@ -796,6 +822,10 @@ export function recordSentMessage(
       readCount: 0,
       ...(attachments.length > 0 ? { attachments } : {}),
       ...(body.replyToId === undefined ? {} : { replyToId: body.replyToId }),
+      isBlurred: body.isBlurred === true,
+      isViewOnce: body.isViewOnce === true,
+      ...(effectFlags === 0 ? {} : { effectFlags }),
+      ...(body.expiresAt === undefined ? {} : { expiresAt: new Date(body.expiresAt) }),
       createdAt: new Date(),
     }),
     clientMessageId: body.clientMessageId,
@@ -834,6 +864,7 @@ export const messagesOf = (conversationId: string): readonly Message[] => {
   if (conversationId === CATCHUP_CONVERSATION_ID) return withSent(conversationId, withConsumption(CATCHUP_MESSAGES));
   if (conversationId === MEDIA_CONVERSATION_ID) return withSent(conversationId, withConsumption(MEDIA_MESSAGES));
   if (conversationId === STATES_CONVERSATION_ID) return withSent(conversationId, withConsumption(STATES_MESSAGES));
+  if (conversationId === LIVE_CONVERSATION_ID) return withSent(conversationId, withConsumption(LIVE_MESSAGES));
   const last = CONVERSATIONS.find((c) => c.id === conversationId)?.lastMessage;
   return withSent(conversationId, last === undefined ? [] : withConsumption([last]));
 };

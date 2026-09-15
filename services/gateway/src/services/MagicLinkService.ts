@@ -12,6 +12,7 @@
  */
 
 import crypto from 'crypto';
+import { passwordSettingsUrl, profileEditUrl } from './email/account-identity-block';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { CacheStore } from './CacheStore';
 import { EmailService } from './EmailService';
@@ -124,8 +125,19 @@ export class MagicLinkService {
         select: {
           id: true,
           email: true,
+          username: true,
+          displayName: true,
           firstName: true,
           lastName: true,
+          /**
+           * LU pour être réduit à un booléen, jamais pour être confronté
+           * (#6424). Tant qu'aucun mot de passe n'est posé, cet e-mail est la
+           * seule porte du compte — c'est donc le seul endroit où rappeler
+           * qu'on peut cesser d'en dépendre, et le savoir demande de lire la
+           * colonne. La valeur est convertie deux lignes plus bas et n'est
+           * plus jamais référencée : elle ne voyage pas jusqu'au gabarit.
+           */
+          password: true,
           ...RECIPIENT_LANG_SELECT
         }
       });
@@ -182,7 +194,11 @@ export class MagicLinkService {
       });
 
       // 7. Send magic link email
-      await this.sendMagicLinkEmail(user, rawToken, geoData?.location || 'Unknown');
+      await this.sendMagicLinkEmail(user, rawToken, geoData?.location || 'Unknown', {
+        username: user.username,
+        displayName: user.displayName ?? user.username,
+        hasPassword: user.password !== null && user.password !== undefined,
+      });
 
       // 8. Log security event
       await this.logSecurityEvent(user.id, 'MAGIC_LINK_REQUESTED', 'LOW', {
@@ -543,7 +559,14 @@ export class MagicLinkService {
   private async sendMagicLinkEmail(
     user: { email: string; firstName: string; lastName: string } & RecipientLanguagePrefs,
     token: string,
-    location: string
+    location: string,
+    /**
+     * L'identité SANS son hash (#6424) — le booléen est calculé par l'appelant,
+     * qui seul a lu la colonne. Passer l'utilisateur entier ferait voyager le
+     * hash jusqu'au gabarit, où rien n'en a l'usage : c'est la question
+     * « qu'est-ce qui part À CÔTÉ ? » posée à un argument.
+     */
+    identite: { username: string; displayName: string; hasPassword: boolean },
   ): Promise<void> {
     const baseUrl = process.env.FRONTEND_URL || 'https://meeshy.me';
     const magicLinkUrl = `${baseUrl}/auth/magic-link?token=${encodeURIComponent(token)}`;
@@ -553,7 +576,12 @@ export class MagicLinkService {
       name: user.firstName,
       magicLink: magicLinkUrl,
       location,
-      language: recipientLanguage(user, 'fr')
+      language: recipientLanguage(user, 'fr'),
+      identity: {
+        ...identite,
+        profileUrl: profileEditUrl(baseUrl),
+        passwordUrl: passwordSettingsUrl(baseUrl),
+      },
     });
   }
 

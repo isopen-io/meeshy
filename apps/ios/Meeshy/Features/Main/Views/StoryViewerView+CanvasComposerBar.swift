@@ -214,9 +214,10 @@ struct StoryComposerBarView: View {
                 // No-op: shouldPauseTimer handles all pause logic based on UI state
             },
             focusTrigger: $composerFocusTrigger,
-            onRecordingChange: { recording in
-                isComposerEngaged = recording
-            },
+            // #6587 — `onRecordingChange` RETIRÉ : déclaré, affecté, jamais
+            // invoqué par la barre. Le câbler écraserait `isComposerEngaged`
+            // à false en fin d'enregistrement et relâcherait une pause posée
+            // par le focus ; la pause passe déjà par `onHasContentChange`.
             onHasContentChange: { hasContent in
                 hasComposerContent = hasContent
             }

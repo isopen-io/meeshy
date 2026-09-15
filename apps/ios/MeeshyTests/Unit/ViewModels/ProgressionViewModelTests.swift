@@ -95,4 +95,40 @@ final class ProgressionViewModelTests: XCTestCase {
         XCTAssertEqual(sut.progress?.badgesEarned, 2)
         XCTAssertFalse(sut.showsSkeleton)
     }
+
+    // MARK: - La frappe (#6467)
+
+    private var echecDeFrappe: String {
+        String(localized: "progression.meesh.mint_error", defaultValue: "La frappe n'a pas abouti — réessayez", bundle: .main)
+    }
+
+    /// **L'échec se dit là où le geste a eu lieu.** Mesuré sur staging le
+    /// 2026-09-14 : l'échec allait à `loadState`, que l'écran rend EN HAUT du
+    /// contenu, sous le détail resté ouvert. Rien ne changeait dans le détail,
+    /// et le porteur a retouché deux fois.
+    func test_mint_failure_isToldToTheDetail() async {
+        let (sut, service) = makeSUT(result: .success(makePayload()))
+        await sut.load(forceNetwork: true)
+        service.mintResult = .failure(URLError(.networkConnectionLost))
+
+        await sut.mint()
+
+        XCTAssertFalse(sut.isMinting, "la frappe reste « en cours » après son échec")
+        XCTAssertEqual(sut.mintError, echecDeFrappe)
+        XCTAssertNotNil(sut.progress, "un échec de frappe ne retire pas l'instantané")
+    }
+
+    func test_mint_retryAfterAFailure_clearsTheError_andKeepsTheSameIntent() async {
+        let (sut, service) = makeSUT(result: .success(makePayload()))
+        await sut.load(forceNetwork: true)
+        service.mintResult = .failure(URLError(.networkConnectionLost))
+        await sut.mint()
+
+        service.mintResult = .success(APIMeeshMintResult(status: "minted", balance: 1, mintedLifetime: 1))
+        await sut.mint()
+
+        XCTAssertNil(sut.mintError, "l'échec précédent reste affiché après une frappe réussie")
+        XCTAssertEqual(service.mintRequestIds.count, 2)
+        XCTAssertEqual(service.mintRequestIds.first, service.mintRequestIds.last, "le réessai doit porter la MÊME intention")
+    }
 }

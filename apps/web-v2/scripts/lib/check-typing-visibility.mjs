@@ -22,14 +22,22 @@
 const KEEPALIVE_GRACE_MS = 6000;
 const AFTER_SCROLL_MS = 4000;
 
-/** Le nœud de l'indicateur — reconnu par son TEXTE (« <Nom> écrit »), pas par
- * une classe : c'est ce que l'utilisateur lit. */
+/**
+ * Le nœud de l'indicateur — reconnu par `data-typing-cell`, jamais par son
+ * TEXTE (revue-correction #6171, défaut 4) : la tenue PLATE (Focal/Script,
+ * le mode PAR DÉFAUT D-7 — donc celui de CE gate sur `/c/c-deploiement`) ne
+ * rend plus de texte visible (« <Nom> écrit »), miroir
+ * `TypingIndicatorBubble(isFlat: true)` — pastille + trois points seuls. La
+ * forme précédente (scanner un texte finissant par « écrit ») serait
+ * devenue aveugle et aurait fait passer une régression de visibilité pour
+ * une absence de frappeur. `TypingRosterCell`
+ * (`components/typing-roster-cell.tsx`) pose ce crochet dans LES DEUX
+ * tenues précisément pour ça.
+ */
 const measure = () => {
   const main = document.querySelector('main');
-  const node = [...document.querySelectorAll('main div')].find(
-    (e) => /écrit$/.test((e.textContent ?? '').trim()) && e.children.length <= 3,
-  );
-  if (main === null || node === undefined) return null;
+  const node = document.querySelector('main [data-typing-cell]');
+  if (main === null || node === null) return null;
   const cell = node.getBoundingClientRect();
   const port = main.getBoundingClientRect();
   return { bottom: Math.round(cell.bottom), port: Math.round(port.bottom), height: Math.round(cell.height) };

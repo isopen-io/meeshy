@@ -20,10 +20,10 @@ jest.mock('../../../../utils/logger', () => ({ logError: jest.fn() }));
 jest.mock('../../../../utils/rate-limiter.js', () => ({
   createCustomRateLimiter: () => ({ middleware: () => async () => undefined }),
 }));
-jest.mock('../../../../utils/withMutationLog', () => {
-  class MutationResultGone extends Error {}
-  return { withMutationLog: jest.fn(async (args: any) => args.op()), MutationResultGone };
-});
+jest.mock('../../../../utils/withMutationLog', () => ({
+  ...(jest.requireActual('../../../../utils/withMutationLog') as object),
+  withMutationLog: jest.fn(async (args: any) => args.op()),
+}));
 
 /**
  * La LOI de visibilité de la présence est doublée — pas réécrite.

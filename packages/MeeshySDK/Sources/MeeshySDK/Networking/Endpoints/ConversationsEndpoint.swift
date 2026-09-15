@@ -14,6 +14,7 @@ import Foundation
 public enum ConversationsEndpoint: MeeshyEndpoint, Sendable {
     case byConversationIdActiveCall(conversationId: String)
     case byConversationIdAttachments(conversationId: String)
+    case byConversationIdClearHistory(conversationId: String)
     case byConversationIdEncryption(conversationId: String)
     case byConversationIdEncryptionStatus(conversationId: String)
     case byConversationIdLinks(conversationId: String)
@@ -22,6 +23,7 @@ public enum ConversationsEndpoint: MeeshyEndpoint, Sendable {
     case byConversationIdMessagesByMessageIdDeliveryReceipt(conversationId: String, messageId: String)
     case byConversationIdReadStatuses(conversationId: String)
     case byConversationIdReceipts(conversationId: String)
+    case byConversationIdRestoreForMe(conversationId: String)
     case byId(id: String)
     case byIdAnalysis(id: String)
     case byIdDeleteForMe(id: String)
@@ -57,6 +59,7 @@ public enum ConversationsEndpoint: MeeshyEndpoint, Sendable {
         switch self {
         case .byConversationIdActiveCall(let conversationId): return "/api/v1/conversations/\(conversationId)/active-call"
         case .byConversationIdAttachments(let conversationId): return "/api/v1/conversations/\(conversationId)/attachments"
+        case .byConversationIdClearHistory(let conversationId): return "/api/v1/conversations/\(conversationId)/clear-history"
         case .byConversationIdEncryption(let conversationId): return "/api/v1/conversations/\(conversationId)/encryption"
         case .byConversationIdEncryptionStatus(let conversationId): return "/api/v1/conversations/\(conversationId)/encryption-status"
         case .byConversationIdLinks(let conversationId): return "/api/v1/conversations/\(conversationId)/links"
@@ -65,6 +68,7 @@ public enum ConversationsEndpoint: MeeshyEndpoint, Sendable {
         case .byConversationIdMessagesByMessageIdDeliveryReceipt(let conversationId, let messageId): return "/api/v1/conversations/\(conversationId)/messages/\(messageId)/delivery-receipt"
         case .byConversationIdReadStatuses(let conversationId): return "/api/v1/conversations/\(conversationId)/read-statuses"
         case .byConversationIdReceipts(let conversationId): return "/api/v1/conversations/\(conversationId)/receipts"
+        case .byConversationIdRestoreForMe(let conversationId): return "/api/v1/conversations/\(conversationId)/restore-for-me"
         case .byId(let id): return "/api/v1/conversations/\(id)"
         case .byIdAnalysis(let id): return "/api/v1/conversations/\(id)/analysis"
         case .byIdDeleteForMe(let id): return "/api/v1/conversations/\(id)/delete-for-me"

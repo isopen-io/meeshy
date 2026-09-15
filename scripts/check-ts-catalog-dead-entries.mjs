@@ -250,7 +250,29 @@ export const parseCatalogBlock = (blockLines) => {
 // routes. #3954 livre le contrat serveur et son exposition dans les
 // catalogues générés ; les appelants (iOS/web/Android) sont le périmètre de
 // #3953, une issue distincte.
-const BASELINE_DEAD_ENTRIES = 270;
+//
+// 270 → 276 (#4317) : `conversations.byConversationIdClearHistory`,
+// `.byConversationIdRestoreForMe`, `messages.bulkDeleteForMe`,
+// `.byMessageIdDeleteForMe`, `.byMessageIdRestoreForMe` et
+// `user.deletedConversations` — six gestes utilisateur qui vivaient sous
+// `/api` sans jamais avoir été versionnés migrent enfin sous `/api/v1`
+// (adresse CANONIQUE, en plus de leur alias legacy déprécié). Mortes à la
+// naissance PAR CONSTRUCTION, même forme que `usersByUserIdBan` (#5528,
+// miroir Swift) ci-dessus : les trois clients continuent d'appeler l'adresse
+// legacy — aucun n'a besoin de migrer dans l'immédiat, le retrait de l'alias
+// restant gouverné par le compteur d'accès nul (#4275). Faire pointer un
+// client vers la nouvelle adresse est un travail à part, pas ouvert par ce
+// lot.
+//
+// 276 → 277 (#6280) : `posts.mediaByMediaIdCaptionTranslate`
+// (`POST /posts/media/:mediaId/caption/translate`, traduction à la demande de
+// la LÉGENDE d'un média — un contenu distinct du texte du post). Morte à la
+// naissance DANS CE COMPTAGE, par construction : son appelant est le SDK iOS
+// (`PostService.requestMediaCaptionTranslation`, catalogue Swift, où elle
+// n'est pas morte), et ce script ne balaie que `apps/web` (legacy gelé) et
+// `packages/shared` — pas `apps/web-v2`. Même forme que
+// `posts.byPostIdTranslate`, déjà sans appelant ici pour la même raison.
+const BASELINE_DEAD_ENTRIES = 277;
 
 export const readWorld = (root) => {
   const source = readFileSync(join(root, CATALOG_FILE), 'utf8');

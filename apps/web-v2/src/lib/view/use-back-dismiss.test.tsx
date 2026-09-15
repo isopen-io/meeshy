@@ -65,6 +65,44 @@ describe('useBackDismiss — le retour matériel ferme la COUCHE, pas l’écran
     expect(window.history.length).toBe(before + 1);
   });
 
+  /**
+   * LA COUCHE VISIBLE A DÉJÀ POSÉ SON ENTRÉE (#6319) — un effet PASSIF pose
+   * l'entrée APRÈS la peinture (Preact : un `requestAnimationFrame` puis un
+   * `setTimeout`). Entre l'image qui montre la couche et cet effet, un retour
+   * n'avait aucune entrée à consommer : il quittait le FIL (mesuré en CI,
+   * `URL blank`, trois têtes de dev sur neuf). L'observateur de mutations
+   * s'exécute juste après le commit qui insère la couche — ce qu'il lit est
+   * l'historique que le premier retour possible trouverait.
+   */
+  test('la couche est insérée AVEC son entrée d’historique — un retour dès la première image lui appartient (#6319)', async () => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    window.history.replaceState(null, '', window.location.href);
+    globals.IS_REACT_ACT_ENVIRONMENT = false;
+    try {
+      const stateWhenInserted = await new Promise<unknown>((resolve) => {
+        const observer = new MutationObserver(() => {
+          if (container.querySelector('[data-open="true"]') === null) return;
+          observer.disconnect();
+          resolve(window.history.state);
+        });
+        observer.observe(container, { childList: true, subtree: true });
+        root.render(<Harness open onClose={() => {}} />);
+      });
+      await act(async () => {});
+      const marker =
+        typeof stateWhenInserted === 'object' && stateWhenInserted !== null && 'backDismiss' in stateWhenInserted
+          ? stateWhenInserted.backDismiss
+          : null;
+      expect(typeof marker === 'string' && /^back-dismiss-\d+$/.test(marker) ? 'posée' : `absente (${String(marker)})`).toBe(
+        'posée',
+      );
+    } finally {
+      globals.IS_REACT_ACT_ENVIRONMENT = true;
+    }
+  });
+
   test('popstate (retour matériel) ⇒ ferme SANS naviguer davantage', () => {
     let closed = false;
     mount(true, () => {
@@ -90,6 +128,31 @@ describe('useBackDismiss — le retour matériel ferme la COUCHE, pas l’écran
       expect(backCalls).toBe(1);
     } finally {
       window.history.back = originalBack;
+    }
+  });
+
+  /**
+   * LE BARREAU QUI NAVIGUE — mesuré sur l'échelle flottante (#6288) : le lien
+   * pousse sa destination PUIS ferme la couche. Rendre « son » entrée à ce
+   * moment-là reculerait d'UNE entrée — celle de la destination — et
+   * défaisait la navigation : `/notifications` poussée, `/` rendue.
+   */
+  test('une navigation survenue pendant que la couche est ouverte n’est PAS défaite à sa fermeture', () => {
+    let backCalls = 0;
+    const originalBack = window.history.back.bind(window.history);
+    window.history.back = () => {
+      backCalls += 1;
+    };
+    try {
+      mount(true, () => {});
+      window.history.pushState(null, '', '/destination');
+      act(() => {
+        root.render(<Harness open={false} onClose={() => {}} />);
+      });
+      expect(backCalls).toBe(0);
+    } finally {
+      window.history.back = originalBack;
+      window.history.replaceState(null, '', '/');
     }
   });
 

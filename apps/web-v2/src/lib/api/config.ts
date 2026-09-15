@@ -66,7 +66,14 @@ export type ApiEnv = {
   readonly VITE_READING_MODES?: string;
 };
 
-const PRODUCTION_ORIGIN = 'https://gate.meeshy.me';
+/**
+ * Exportée pour `legacy-link.ts` (#6354) : le legacy (`https://meeshy.me`) ne
+ * sert QUE la production — aucun hôte de staging ne l'héberge (mesuré :
+ * `legacy.staging.meeshy.me` / `app.staging.meeshy.me` / `v1.staging.meeshy.me`
+ * ne répondent pas). Comparer `apiConfig.base` à cette origine est donc le test
+ * exact de « ce build parle-t-il à la passerelle qui a un legacy ? ».
+ */
+export const PRODUCTION_ORIGIN = 'https://gate.meeshy.me';
 const API_PREFIX_PATTERN = /\/api\/v1\/?$/;
 const ABSOLUTE_ORIGIN_PATTERN = /^https?:\/\//i;
 

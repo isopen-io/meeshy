@@ -9,6 +9,7 @@ import { messagesQueryKey, sendMessage, type MessagesPage, type SendMessageBody 
 import type { Message, Participant } from '@/lib/api/types';
 
 import { messageTypeOfPending, type PendingAttachment } from './attachments';
+import type { ComposeProtection } from './compose-protection';
 import { confirmedMessageOf, localMessageOf, type LocalMessage } from './local-message';
 import { entriesOf, type OutboxState } from './outbox-store';
 
@@ -42,6 +43,16 @@ export type Draft = {
    * `POST …/messages`.
    */
   readonly attachments?: readonly PendingAttachment[];
+  /**
+   * LA PROTECTION CHOISIE (#6175) — éphémère / flou / vue unique / effets
+   * décoratifs, composée en champs `Message` par `localMessageOf`
+   * (`protectionFieldsOf`, `compose-protection.ts`) UNE seule fois, à la
+   * création : `retrySend` relit le MÊME `LocalMessage`, jamais recalculée
+   * (`expiresAt` ne doit JAMAIS reculer d'un renvoi à l'autre). `undefined`
+   * ⇒ aucune protection (comportement INCHANGÉ, tous les témoins historiques
+   * de ce module continuent de passer sans cette clé).
+   */
+  readonly protection?: ComposeProtection;
 };
 
 /**
@@ -111,6 +122,25 @@ export function debounceEntryCountForTests(): number {
  * un vocal PUR part sans la clé) ; `messageType` OMIS à `'text'` (le défaut
  * serveur, `messages-send.ts:59`).
  */
+/**
+ * LA PROTECTION, RELUE depuis le message local plutôt que RECOMPOSÉE
+ * (#6175) — `localMessageOf` a déjà posé `isBlurred`/`isViewOnce`/
+ * `effectFlags`/`expiresAt` par `protectionFieldsOf` : ce corps relit ces
+ * MÊMES champs, jamais une seconde composition depuis `ComposeProtection` (un
+ * seul site de vérité entre ce qui s'affiche et ce qui part). Chaque clé est
+ * OMISE à sa valeur par défaut (`false`/`0`/absente) — même discipline que
+ * `content`/`replyToId` ci-dessous, miroir `ConversationViewModel+Send.swift:428-437`
+ * (« aucune clé à sa valeur par défaut »).
+ */
+function protectionBodyOf(message: LocalMessage): Pick<SendMessageBody, 'isBlurred' | 'expiresAt' | 'effectFlags' | 'isViewOnce'> {
+  return {
+    ...(message.isBlurred ? { isBlurred: true } : {}),
+    ...(message.expiresAt === undefined ? {} : { expiresAt: message.expiresAt.toISOString() }),
+    ...(message.effectFlags ? { effectFlags: message.effectFlags } : {}),
+    ...(message.isViewOnce ? { isViewOnce: true } : {}),
+  };
+}
+
 function bodyOf(message: LocalMessage, attachmentIds: readonly string[]): SendMessageBody {
   const declared = declaredAttachmentType(message.messageType);
   return {
@@ -120,6 +150,7 @@ function bodyOf(message: LocalMessage, attachmentIds: readonly string[]): SendMe
     ...(declared === undefined ? {} : { messageType: declared }),
     ...(attachmentIds.length > 0 ? { attachmentIds } : {}),
     ...(message.replyToId === undefined ? {} : { replyToId: message.replyToId }),
+    ...protectionBodyOf(message),
   };
 }
 
@@ -338,6 +369,7 @@ export async function performSend(params: {
     ...(draft.replyToId === undefined ? {} : { replyToId: draft.replyToId }),
     ...(draft.replyTo === undefined ? {} : { replyTo: draft.replyTo }),
     ...(draft.attachments === undefined || draft.attachments.length === 0 ? {} : { attachments: draft.attachments }),
+    ...(draft.protection === undefined ? {} : { protection: draft.protection }),
     now: new Date(nowMs),
   });
 

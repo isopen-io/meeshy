@@ -71,12 +71,34 @@
  *     chance ; l'autre moitié du temps il passe par ABSENCE (leçon 560, « un
  *     lot qui RENOMME rend anti-corrélé tout garde qui reconnaissait par le
  *     nom » — et sa sonde dont la cible a disparu, qui sort VERTE).
+ *
+ * 9.  L'HORLOGE DE CHAQUE PAGE EST FIGÉE SUR `INSTANT` (#6228). La §9
+ *     pagination (#6195) a fait rougir ce gate sur `dev` — la rangée
+ *     `c-live` bougeait de 32 px « après immobilité », dans les deux
+ *     schémas. Mesuré : PAS un défaut de défilement. `LIVE_SCHEDULE`
+ *     (`fixtures-realtime.ts`) ADOPTE `live-1` comme dernier message de
+ *     `c-live` 4 500 ms après `connect()`, avec `lastMessageAt:
+ *     LIVE_1.createdAt` — un horaire ancré sur `minutesAgo(40)`, donc sur
+ *     l'HEURE RÉELLE du runner. Dans les quarante premières minutes après
+ *     minuit LOCAL, ce ré-étiquetage fait franchir à `c-live` la frontière
+ *     « Aujourd'hui »/« Hier » PENDANT le test — un séparateur de jour
+ *     s'insère ou disparaît au-dessus de sa rangée, qui n'est pas un
+ *     `[data-row]` et ne compte donc dans aucune des deux mesures de
+ *     hauteur, seulement dans le décalage qu'il produit. C'est exactement
+ *     la classe que #6130 (`lib/instant.mjs`) a fermée pour les autres
+ *     gates de ce répertoire — restée ouverte ici parce que la §9 est
+ *     arrivée après #6130 sans reprendre son remède. `setFixedTime` (jamais
+ *     `clock.install`, qui gèle aussi `setTimeout`/`performance.now()`
+ *     et désarmerait l'aplatissement au repos que ce même gate mesure) posé
+ *     AVANT chaque `goto` — les fixtures lisent `minutesAgo(...)` à
+ *     l'import du module, donc dans la page, donc après la navigation.
  */
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 
 import { launchChromium } from './lib/browser.mjs';
+import { INSTANT } from './lib/instant.mjs';
 
 const DIST = new URL('../dist/', import.meta.url).pathname;
 const TYPES = {
@@ -134,6 +156,7 @@ const apparence = (page) =>
 // ---------------------------------------------------------------- mouvement normal
 const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
 const page = await context.newPage();
+await page.clock.setFixedTime(INSTANT);
 await page.goto(`${BASE}/`, { waitUntil: 'load' });
 await page.waitForSelector('[data-row]');
 await page.waitForTimeout(300);
@@ -218,9 +241,18 @@ const grandRailWidthBefore = await page.evaluate(
   () => document.querySelector('[data-rail="grande"] [data-rail-tile]')?.getBoundingClientRect().width ?? null,
 );
 constate(grandRailWidthBefore !== null, 'aucune tuile trouvée dans [data-rail="grande"] avant défilement');
+/**
+ * LA COTE RETENUE, NOMMÉE (#6133) — la cote iOS gouverne l'AVATAR
+ * (`MeeshyAvatar.storyTray` = 88), l'anneau se pose autour (`ringSize = size +
+ * 6`) et la cellule du grand plateau respire à la largeur de son libellé
+ * (`StoryRingCell`, `.frame(width: 96)`). La borne est ABSOLUE : `>= 80`
+ * laissait passer l'ancienne cellule de 88 autant que la juste de 96.
+ */
+const IOS_GRANDE_CELL = 96;
+const IOS_COMPACT_RING = 36 + 6;
 constate(
-  grandRailWidthBefore !== null && grandRailWidthBefore >= 80,
-  `le grand rail ne part pas de la cote GRANDE (~88 px) : ${grandRailWidthBefore}`,
+  grandRailWidthBefore === IOS_GRANDE_CELL,
+  `le grand rail ne part pas de la cellule d'iOS (${IOS_GRANDE_CELL} px — avatar .storyTray 88, anneau 94) : ${grandRailWidthBefore}`,
 );
 constate(
   await page.evaluate(() => document.querySelector('[data-rail="pinned"]') === null),
@@ -271,11 +303,11 @@ const afterScroll = await page.evaluate(() => {
   };
 });
 constate(
-  afterScroll.pinnedTileWidth !== null && afterScroll.pinnedTileWidth < 45,
-  `la bande épinglée ne compacte pas à la cote COMPACTE (~37 px) après défilement : ${afterScroll.pinnedTileWidth}`,
+  afterScroll.pinnedTileWidth === IOS_COMPACT_RING,
+  `la bande épinglée ne compacte pas à la cellule d'iOS (${IOS_COMPACT_RING} px — avatar .storyTrayCompact 36, anneau 42) après défilement : ${afterScroll.pinnedTileWidth}`,
 );
 constate(
-  afterScroll.grandeTileWidth !== null && afterScroll.grandeTileWidth >= 80,
+  afterScroll.grandeTileWidth === IOS_GRANDE_CELL,
   `le GRAND rail a changé de cote après défilement — il ne devrait plus jamais compacter lui-même : ${afterScroll.grandeTileWidth}`,
 );
 constate(
@@ -351,6 +383,7 @@ await context.close();
  */
 const stickyContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
 const stickyPage = await stickyContext.newPage();
+await stickyPage.clock.setFixedTime(INSTANT);
 await stickyPage.goto(`${BASE}/`, { waitUntil: 'load' });
 await stickyPage.waitForSelector('[data-sticker]');
 await stickyPage.waitForTimeout(200);
@@ -523,59 +556,89 @@ await stickyContext.close();
 
 // ------------------------------------------- rythme vertical vs. barre de recherche
 /**
- * LA JONCTION AJOUTÉE PAR CHAQUE EN-TÊTE (#5694, correction défaut 3 — revue
- * défaut 2) NE PEUT PAS DÉPLACER LA BARRE DE RECHERCHE. `check-lens.mjs`
- * mesure déjà que la MISE EN PAGE des rangées ne bouge jamais au défilement
- * (témoin 1) ; celui-ci mesure la question SŒUR posée en revue — la
- * hauteur AJOUTÉE par les sections (stickers + jonctions, #5694 écart 6)
- * pousse-t-elle la barre de recherche, ou la dernière rangée sous elle ?
+ * LA BARRE DE RECHERCHE EST FLOTTANTE, PAS UNE FRONTIÈRE DE DÉFILEMENT
+ * (#6220, révise l'invariant posé par #5694). Elle vivait comme un FRÈRE
+ * `shrink-0` de `<div id="contenu">` dans la colonne flex : le scrollport ne
+ * pouvait alors ni la recouvrir ni être recouvert par elle — structurellement
+ * vrai, et c'est ce que ce témoin mesurait. Mais cette même frontière ÉTAIT
+ * le bord de clip du scrollport : la rangée qui tombait pile dessus avait son
+ * centre — et celui de son bouton d'actions — VOLÉ par la barre elle-même
+ * (`elementFromPoint`), sans qu'aucun défilement supplémentaire ne puisse
+ * jamais l'en sortir, puisque la frontière DE DÉFILEMENT ÉTAIT la barre.
  *
- * Structurellement NON : `<div id="contenu">` (`flex-1 overflow-y-auto`) et
- * la barre (`shrink-0`) sont des FRÈRES d'une colonne flex de hauteur FIXE
- * (`h-dvh`) — la hauteur de CONTENU de la liste, quelle qu'elle soit, est
- * bornée par `flex-1` et défile en interne ; elle ne peut redimensionner un
- * frère `shrink-0`. Mesuré ici plutôt qu'assumé : un futur qui romprait
- * cette garantie (ex. `overflow: visible`, un frère qui redevient `flex:
- * auto`) romprait ce témoin, jamais seulement une capture manuelle.
+ * `#6220` inverse la géographie, comme le rail de stories réserve sa
+ * gouttière pour ses propres boutons flottants (`story-rail.tsx`,
+ * `RAIL_ACTIONS_WIDTH`) : la barre flotte désormais SUR le scrollport
+ * (`absolute inset-x-0 bottom-0`, `routes/conversations.tsx`), qui reçoit
+ * TOUTE la hauteur disponible et réserve la place de la barre en
+ * `padding-block-end` — MESURÉE (`searchBarRef`), jamais supposée. Ce que ce
+ * témoin garde n'est donc plus « jamais de recouvrement » (une barre
+ * flottante recouvre par nature ce qui n'a pas encore défilé au-dessus
+ * d'elle — c'est attendu, et réversible d'un geste) mais l'invariant qui
+ * compte réellement : au bord RÉEL du défilement — là où plus aucun geste ne
+ * peut rien révéler de plus — aucune rangée ne reste bloquée SOUS elle.
  */
 const layoutContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
 const layoutPage = await layoutContext.newPage();
+await layoutPage.clock.setFixedTime(INSTANT);
 await layoutPage.goto(`${BASE}/`, { waitUntil: 'load' });
 await layoutPage.waitForSelector('[data-row]');
 await layoutPage.waitForTimeout(200);
 
-const layoutSweep = await layoutPage.evaluate(async () => {
+const searchBarMetrics = await layoutPage.evaluate(() => {
   const scrollport = document.getElementById('contenu');
-  const searchBar = document.querySelector('input[type="search"]')?.closest('div.shrink-0');
-  if (scrollport === null || searchBar === null || searchBar === undefined) return null;
-  const settle = () => new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)));
-  const searchTop = searchBar.getBoundingClientRect().top;
-  const readings = [];
-  for (const top of [0, scrollport.scrollHeight]) {
-    scrollport.scrollTo({ top });
-    await settle();
-    const scrollportBottom = scrollport.getBoundingClientRect().bottom;
-    const probeY = Math.round((scrollportBottom + searchTop) / 2);
-    const overRow = document
-      .elementFromPoint(Math.round(scrollport.getBoundingClientRect().left + scrollport.clientWidth / 2), probeY)
-      ?.closest('[data-row]');
-    readings.push({
-      top,
-      scrollportBottom,
-      searchTop,
-      rowUnderSearch: overRow?.getAttribute('data-row') ?? null,
-    });
-  }
-  return { searchTop, readings };
+  const searchBar = document.querySelector('[data-search-bar]');
+  if (scrollport === null || searchBar === null) return null;
+  return {
+    searchBarHeight: searchBar.getBoundingClientRect().height,
+    padBottom: parseFloat(getComputedStyle(scrollport).paddingBottom) || 0,
+  };
 });
-constate(layoutSweep !== null, "la barre de recherche ou le scrollport sont introuvables — impossible de mesurer leur jonction");
+/* Le bord RÉEL du défilement — un `wheel` RÉEL, jamais un `scrollTop`
+   programmé assigné ou passé à `scrollTo` : les deux se sont mesurés
+   instables ici (une valeur inférieure au maximum, reprise avant même la
+   lecture suivante) — le même geste que #5648 impose déjà pour armer une
+   scène, pour la même raison : seul un défilement REÇU COMME UNE INTENTION
+   vaut le geste d'un doigt (`check-list-actions.mjs`, section #6220). */
+await layoutPage.hover('#contenu');
+for (let i = 0; i < 40; i += 1) {
+  await layoutPage.mouse.wheel(0, 400);
+  await layoutPage.waitForTimeout(30);
+}
+await layoutPage.waitForTimeout(400);
+
+const layoutSweep = await layoutPage.evaluate((metrics) => {
+  const scrollport = document.getElementById('contenu');
+  const searchBar = document.querySelector('[data-search-bar]');
+  if (scrollport === null || searchBar === null || metrics === null) return null;
+  const { searchBarHeight, padBottom } = metrics;
+  const searchTop = searchBar.getBoundingClientRect().top;
+  const scrollportBottom = scrollport.getBoundingClientRect().bottom;
+  const probeY = Math.round((searchTop + scrollportBottom) / 2);
+  const overRow = document
+    .elementFromPoint(Math.round(scrollport.getBoundingClientRect().left + scrollport.clientWidth / 2), probeY)
+    ?.closest('[data-row]');
+  return {
+    searchBarHeight,
+    padBottom,
+    searchTop,
+    scrollportBottom,
+    atMax: scrollport.scrollTop >= scrollport.scrollHeight - scrollport.clientHeight - 1,
+    rowUnderSearch: overRow?.getAttribute('data-row') ?? null,
+  };
+}, searchBarMetrics);
+constate(layoutSweep !== null, 'la barre de recherche (`[data-search-bar]`) ou le scrollport sont introuvables');
 constate(
-  layoutSweep !== null && layoutSweep.readings.every((r) => r.scrollportBottom <= r.searchTop + 1),
-  `le scrollport de la liste déborde sur la barre de recherche — ${JSON.stringify(layoutSweep?.readings)}`,
+  layoutSweep !== null && layoutSweep.atMax,
+  `le défilement RÉEL (wheel) atteint bien le bord RÉEL du scrollport — ${JSON.stringify(layoutSweep)}`,
 );
 constate(
-  layoutSweep !== null && layoutSweep.readings.every((r) => r.rowUnderSearch === null),
-  `une rangée est peinte SOUS la barre de recherche (zone entre le bas du scrollport et le haut de la barre) — ${JSON.stringify(layoutSweep?.readings)}`,
+  layoutSweep !== null && layoutSweep.padBottom >= layoutSweep.searchBarHeight - 1,
+  `le scrollport réserve AU MOINS la hauteur RENDUE de la barre en padding-block-end — ${JSON.stringify(layoutSweep)}`,
+);
+constate(
+  layoutSweep !== null && layoutSweep.rowUnderSearch === null,
+  `au bord RÉEL du défilement, une rangée reste peinte SOUS la barre de recherche (zone entre le bas du scrollport et le haut de la barre) — ${JSON.stringify(layoutSweep)}`,
 );
 
 await layoutPage.close();
@@ -594,6 +657,7 @@ await layoutContext.close();
  */
 const headerContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
 const headerPage = await headerContext.newPage();
+await headerPage.clock.setFixedTime(INSTANT);
 await headerPage.goto(`${BASE}/`, { waitUntil: 'load' });
 await headerPage.waitForSelector('[data-row]');
 await headerPage.waitForTimeout(200);
@@ -750,6 +814,7 @@ await headerContext.close();
  */
 const kbdContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
 const kbdPage = await kbdContext.newPage();
+await kbdPage.clock.setFixedTime(INSTANT);
 await kbdPage.goto(`${BASE}/`, { waitUntil: 'load' });
 await kbdPage.waitForSelector('[data-row]');
 await kbdPage.evaluate(() => document.getElementById('contenu')?.scrollTo({ top: 600 }));
@@ -827,6 +892,7 @@ const contexteReduit = await browser.newContext({
   reducedMotion: 'reduce',
 });
 const pageReduite = await contexteReduit.newPage();
+await pageReduite.clock.setFixedTime(INSTANT);
 await pageReduite.goto(`${BASE}/`, { waitUntil: 'load' });
 await pageReduite.waitForSelector('[data-row]');
 await pageReduite.evaluate(() => document.getElementById('contenu')?.scrollTo({ top: 600 }));
@@ -865,6 +931,102 @@ constate(
   'mouvement réduit : une case ne mesure plus 84',
 );
 
+// ---------------------------------------------------- §9 pagination (#6195)
+/**
+ * §9 — LE DÉFILEMENT INFINI NE BOUGE AUCUNE RANGÉE DE LA PAGE 1 (#6195).
+ * Même critère binaire que le reste du fichier, étendu à la PAGE 2 : les 30
+ * premières rangées, une fois la page 2 arrivée (45 au total), gardent
+ * EXACTEMENT le même `offsetTop`/`offsetHeight` qu'avant le chargement — le
+ * pied de pagination est un `<li>` APRÈS les sections, jamais une insertion
+ * qui repousserait ce qui précède. Passé en CLAIR ET EN SOMBRE (motif
+ * `capture.mjs`), contrairement au reste de ce fichier (un seul schéma).
+ */
+const pagination = [];
+for (const colorScheme of ['light', 'dark']) {
+  const pgContext = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme });
+  const pgPage = await pgContext.newPage();
+  await pgPage.clock.setFixedTime(INSTANT);
+  await pgPage.goto(`${BASE}/`, { waitUntil: 'load' });
+  await pgPage.waitForSelector('[data-row]');
+  await pgPage.waitForTimeout(300);
+
+  // `c-kwame` (archivée) est FETCHÉE dans la page 1 (30) mais MASQUÉE par le
+  // filtre « all » (`applyFilter`, précédence iOS `:598-601` — une conversation
+  // archivée n'apparaît que sous l'onglet « archived ») : 29 rangées RENDUES
+  // pour 30 FETCHÉES, 44 pour 45 une fois la page 2 arrivée. C'est un
+  // comportement EXISTANT, pas un effet de la pagination.
+  const RENDERED_PAGE_1 = 29;
+  const RENDERED_TOTAL = 44;
+
+  const page1 = await geometrie(pgPage);
+  constate(page1.length === RENDERED_PAGE_1, `§9 (${colorScheme}) : la page 1 ne porte pas ${RENDERED_PAGE_1} rangées rendues (${page1.length})`);
+
+  await pgPage.evaluate(() => {
+    const el = document.getElementById('contenu');
+    el?.scrollTo({ top: el.scrollHeight });
+  });
+  await pgPage
+    .waitForFunction(
+      (n) => document.querySelectorAll('[data-row]').length === n,
+      RENDERED_TOTAL,
+      { timeout: 5_000 },
+    )
+    .catch(() => undefined);
+
+  const page2 = await geometrie(pgPage);
+  constate(page2.length === RENDERED_TOTAL, `§9 (${colorScheme}) : après défilement, ${RENDERED_TOTAL} rangées attendues (${page2.length})`);
+  constate(
+    page2.every((r) => r.height === 84),
+    `§9 (${colorScheme}) : une case ne mesure plus 84 après la page 2`,
+  );
+  for (const before of page1) {
+    const after = page2.find((r) => r.id === before.id);
+    constate(
+      after !== undefined && after.haut === before.haut,
+      `§9 (${colorScheme}) : la rangée « ${before.id} » a bougé après la page 2 (${before.haut} → ${after?.haut})`,
+    );
+  }
+
+  const footerAndTail = await pgPage.evaluate(() => {
+    const footer = document.querySelector('[data-pagination-footer]');
+    const sentinel = document.querySelector('[data-load-more-sentinel]');
+    const rows = [...document.querySelectorAll('[data-row]')];
+    const lastRow = rows[rows.length - 1] ?? null;
+    const tailAfterFooter =
+      footer !== null && lastRow !== null
+        ? Boolean(lastRow.compareDocumentPosition(footer) & Node.DOCUMENT_POSITION_FOLLOWING)
+        : null;
+    return { footerState: footer?.getAttribute('data-pagination-footer') ?? null, sentinelPresent: sentinel !== null, tailAfterFooter };
+  });
+  constate(
+    footerAndTail.footerState === 'exhausted',
+    `§9 (${colorScheme}) : le pied n'est pas « exhausted » après 45 rangées (${footerAndTail.footerState})`,
+  );
+  constate(!footerAndTail.sentinelPresent, `§9 (${colorScheme}) : la sentinelle de défilement infini est encore présente`);
+  constate(
+    footerAndTail.tailAfterFooter === true,
+    `§9 (${colorScheme}) : le pied de pagination ne SUIT pas la dernière rangée dans le document`,
+  );
+  // Ce que la §9 a mesuré, DIT — sans cette ligne, une section entière du gate
+  // ne laissait aucune trace dans sa sortie : impossible de voir qu'elle a
+  // tourné, donc impossible de distinguer « verte » de « sautée ».
+  pagination.push(`${colorScheme} : ${page1.length} → ${page2.length} rangées, pied « ${footerAndTail.footerState} », aucune rangée déplacée`);
+
+  // Aplatissement (§6 du fichier) — l'invariant tient aussi après immobilité.
+  await pgPage.waitForTimeout(5_000);
+  const page2AfterRest = await geometrie(pgPage);
+  for (const before of page1) {
+    const after = page2AfterRest.find((r) => r.id === before.id);
+    constate(
+      after !== undefined && after.haut === before.haut,
+      `§9 (${colorScheme}), après immobilité : la rangée « ${before.id} » a bougé (${before.haut} → ${after?.haut})`,
+    );
+  }
+
+  await pgPage.close();
+  await pgContext.close();
+}
+
 await browser.close();
 server.close();
 
@@ -873,7 +1035,8 @@ console.log(`
   paliers de défilement ${readings.map((r) => `${r.y}`).join(', ')} px
   opacités distinctes   ${seenOpacities.size}
   transformations       ${seenTransforms.size} distinctes
-  mouvement réduit      opacités toutes à 1, élection conservée`);
+  mouvement réduit      opacités toutes à 1, élection conservée
+  §9 pagination         ${pagination.join('\n                        ')}`);
 
 if (failures.length > 0) {
   console.error(`\n  ${failures.length} invariant(s) rompu(s) :`);

@@ -31,15 +31,15 @@
       "subtitle": "A modern messaging platform that breaks language barriers",
       "universalTranslation": {
         "title": "Universal Translation",
-        "description": "Support for over 200 languages with advanced AI models (NLLB)"
+        "description": "Support for over 80 languages with advanced AI models (NLLB)"
       },
       "autoDetection": {
         "title": "Automatic Detection",
         "description": "Automatically detects message language for more accurate translation."
       },
       "privacy": {
-        "title": "100% Private",
-        "description": "Server-side translation with enterprise-grade security. Your data is protected with encryption."
+        "title": "Secure by Design",
+        "description": "Server-side translation with enterprise-grade security, in transit and at rest. Direct messages can be end-to-end encrypted."
       },
       "realtime": {
         "title": "Real-time",

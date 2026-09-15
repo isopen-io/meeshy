@@ -91,6 +91,63 @@ const ALIAS_SUPPRESSION_CONVERSATION = {
   retraitLe: dateDeRetrait(DEPUIS_ALIAS_SUPPRESSION_CONVERSATION),
 } as const;
 
+/**
+ * #4317 — jour où les SIX gestes ci-dessous, jusque-là sans doublon NI
+ * successeur, gagnent une adresse sous `/api/v1`. La décision « laquelle des
+ * deux implémentations survit ? » ne les concernait pas (elle ne portait que
+ * sur `delete-for-me` ci-dessus) : rien ne les empêchait de rejoindre le reste
+ * de l'API versionnée, et c'était un bogue de rangement, pas une question
+ * produit (cf. le commentaire de tête de fichier, § « Ce qui RESTE »).
+ */
+const DEPUIS_MIGRATION_V1_GESTES_UTILISATEUR = '2026-09-13';
+
+/**
+ * Les six alias en sursis, un par geste migré — même patron que
+ * `ALIAS_SUPPRESSION_CONVERSATION` : successeur calculé PAR REQUÊTE quand
+ * l'adresse porte un id (jamais le gabarit `:conversationId`/`:messageId`),
+ * littéral sinon. `retraitLe` se dérive de la fenêtre par défaut du dépôt
+ * (180 jours, `identity.md` § 5).
+ */
+const ALIAS_SUPPRESSION_RESTAURATION_CONVERSATION = {
+  depuis: DEPUIS_MIGRATION_V1_GESTES_UTILISATEUR,
+  successeur: (request: FastifyRequest) =>
+    apiPath(`/conversations/${(request.params as ConversationIdParams).conversationId}/restore-for-me`),
+  retraitLe: dateDeRetrait(DEPUIS_MIGRATION_V1_GESTES_UTILISATEUR),
+} as const;
+
+const ALIAS_SUPPRESSION_CLEAR_HISTORY = {
+  depuis: DEPUIS_MIGRATION_V1_GESTES_UTILISATEUR,
+  successeur: (request: FastifyRequest) =>
+    apiPath(`/conversations/${(request.params as ConversationIdParams).conversationId}/clear-history`),
+  retraitLe: dateDeRetrait(DEPUIS_MIGRATION_V1_GESTES_UTILISATEUR),
+} as const;
+
+const ALIAS_SUPPRESSION_MESSAGE_DELETE_FOR_ME = {
+  depuis: DEPUIS_MIGRATION_V1_GESTES_UTILISATEUR,
+  successeur: (request: FastifyRequest) =>
+    apiPath(`/messages/${(request.params as MessageIdParams).messageId}/delete-for-me`),
+  retraitLe: dateDeRetrait(DEPUIS_MIGRATION_V1_GESTES_UTILISATEUR),
+} as const;
+
+const ALIAS_SUPPRESSION_MESSAGE_RESTORE_FOR_ME = {
+  depuis: DEPUIS_MIGRATION_V1_GESTES_UTILISATEUR,
+  successeur: (request: FastifyRequest) =>
+    apiPath(`/messages/${(request.params as MessageIdParams).messageId}/restore-for-me`),
+  retraitLe: dateDeRetrait(DEPUIS_MIGRATION_V1_GESTES_UTILISATEUR),
+} as const;
+
+const ALIAS_SUPPRESSION_MESSAGES_BULK_DELETE_FOR_ME = {
+  depuis: DEPUIS_MIGRATION_V1_GESTES_UTILISATEUR,
+  successeur: apiPath('/messages/bulk/delete-for-me'),
+  retraitLe: dateDeRetrait(DEPUIS_MIGRATION_V1_GESTES_UTILISATEUR),
+} as const;
+
+const ALIAS_SUPPRESSION_DELETED_CONVERSATIONS = {
+  depuis: DEPUIS_MIGRATION_V1_GESTES_UTILISATEUR,
+  successeur: apiPath('/user/deleted-conversations'),
+  retraitLe: dateDeRetrait(DEPUIS_MIGRATION_V1_GESTES_UTILISATEUR),
+} as const;
+
 export type UserDeletionsRoutesOptions = {
   readonly basePath?: string;
 };
@@ -145,15 +202,24 @@ export type UserDeletionsRoutesOptions = {
  * retrait reste gouverné par le compteur d'accès nul (#4275), jamais par une
  * revue de code client.
  *
- * ## Ce qui RESTE, et qui est un bogue, pas un rangement
+ * ## Ce qui RESTAIT — soldé
  *
- * Les six AUTRES routes de ce fichier n'ont aucun doublon ET aucun appelant
- * (mesuré sur les trois clients). Deux d'entre elles — `restore-for-me` et
- * `GET /user/deleted-conversations` — LISENT `deletedForUserAt`, dont le seul
- * écrivain serveur est la route ci-dessus, celle que personne n'appelle : la
- * corbeille de conversations ne peut donc rien contenir. Suivi en bogue à
- * part, référencé depuis #4317 — pas ici, parce qu'y toucher n'est plus une
- * question d'adresse.
+ * Les six AUTRES routes de ce fichier n'avaient, à l'ouverture de #4317, ni
+ * doublon ni successeur — ce n'était donc pas la décision produit que
+ * l'issue posait, mais un bogue de rangement. Deux dettes le composaient,
+ * closes séparément :
+ *
+ * - **La colonne lue par `restore-for-me` et `GET /user/deleted-conversations`**
+ *   (#4332) : elles lisaient `UserConversationPreferences.deletedForUserAt`,
+ *   qu'aucun écrivain réel ne posait, et la corbeille ne pouvait donc rien
+ *   contenir. Les deux lisent désormais `Participant.deletedForMe` — la
+ *   colonne que la route canonique de suppression écrit.
+ * - **L'adresse** (#4317, ce lot) : les six gestes gagnent une adresse
+ *   CANONIQUE sous `apiPath()`, enregistrée EN PLUS de leur alias `/api`
+ *   legacy — jamais à sa place. L'alias annonce sa dépréciation
+ *   (`depreciee`) comme celui de `delete-for-me` ci-dessus ; le retrait réel
+ *   reste gouverné par le compteur d'accès nul (#4275), jamais par une revue
+ *   de code client.
  */
 export default async function userDeletionsRoutes(
   fastify: FastifyInstance,
@@ -279,40 +345,36 @@ export default async function userDeletionsRoutes(
    * Pas de filtre `isActive` sur le `findFirst` : c'est justement l'inverse
    * qu'on cherche — un participant que « supprimer pour moi » a désactivé.
    */
-  fastify.post<{ Params: ConversationIdParams }>(
-    `${basePath}/conversations/:conversationId/restore-for-me`,
-    {
-      preValidation: [authMiddleware],
-      schema: {
-        description: 'Restore a previously deleted conversation to the authenticated user\'s view. Only works if the conversation was previously deleted by the user AND the conversation itself was not closed for everyone in the process.',
-        tags: ['users', 'conversations'],
-        summary: 'Restore deleted conversation',
-        params: {
-          type: 'object',
-          required: ['conversationId'],
-          properties: {
-            conversationId: { type: 'string', description: 'Conversation ID to restore' }
-          }
-        },
-        response: {
-          200: {
-            type: 'object',
-            properties: {
-              success: { type: 'boolean', example: true },
-              data: {
-                type: 'object',
-                properties: {
-                  message: { type: 'string', example: 'Conversation restored' }
-                }
-              }
-            }
-          },
-          400: errorResponseSchema,
-          500: errorResponseSchema
-        }
+  const restoreConversationForMeSchema = {
+    description: 'Restore a previously deleted conversation to the authenticated user\'s view. Only works if the conversation was previously deleted by the user AND the conversation itself was not closed for everyone in the process.',
+    tags: ['users', 'conversations'],
+    summary: 'Restore deleted conversation',
+    params: {
+      type: 'object',
+      required: ['conversationId'],
+      properties: {
+        conversationId: { type: 'string', description: 'Conversation ID to restore' }
       }
     },
-    async (request, reply) => {
+    response: {
+      200: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          data: {
+            type: 'object',
+            properties: {
+              message: { type: 'string', example: 'Conversation restored' }
+            }
+          }
+        }
+      },
+      400: errorResponseSchema,
+      500: errorResponseSchema
+    }
+  } as const;
+
+  const restoreConversationForMeHandler = async (request: FastifyRequest<{ Params: ConversationIdParams }>, reply: FastifyReply) => {
       try {
         const { conversationId } = request.params;
         const authRequest = request as UnifiedAuthRequest;
@@ -381,56 +443,71 @@ export default async function userDeletionsRoutes(
         logger.error('Error restoring conversation for user', error as Error);
         return sendInternalError(reply, 'Internal server error');
       }
-    }
+    };
+
+  // Adresse CANONIQUE (#4317), enregistrée en premier : un appelant qui migre
+  // en avance de l'annonce ci-dessous ne doit rien trouver de différent.
+  fastify.post<{ Params: ConversationIdParams }>(
+    apiPath('/conversations/:conversationId/restore-for-me'),
+    { preValidation: [authMiddleware], schema: restoreConversationForMeSchema },
+    restoreConversationForMeHandler
+  );
+
+  // Adresse legacy en sursis (#4317) — même schéma, même poignée ; seule
+  // l'annonce de dépréciation distingue les deux registrations.
+  fastify.post<{ Params: ConversationIdParams }>(
+    `${basePath}/conversations/:conversationId/restore-for-me`,
+    {
+      onRequest: depreciee(ALIAS_SUPPRESSION_RESTAURATION_CONVERSATION),
+      preValidation: [authMiddleware],
+      schema: restoreConversationForMeSchema,
+    },
+    restoreConversationForMeHandler
   );
 
   /**
    * POST /api/conversations/:conversationId/clear-history
    * Clear all messages before a certain date (delete for user only)
    */
-  fastify.post<{ Params: ConversationIdParams; Body: ClearHistoryBody }>(
-    `${basePath}/conversations/:conversationId/clear-history`,
-    {
-      preValidation: [authMiddleware],
-      schema: {
-        description: 'Clear conversation history before a specific date for the authenticated user only. Messages before the specified date will be hidden from the user\'s view. Other participants are not affected.',
-        tags: ['users', 'conversations'],
-        summary: 'Clear conversation history',
-        params: {
-          type: 'object',
-          required: ['conversationId'],
-          properties: {
-            conversationId: { type: 'string', description: 'Conversation ID to clear history for' }
-          }
-        },
-        body: {
-          type: 'object',
-          required: ['beforeDate'],
-          properties: {
-            beforeDate: { type: 'string', format: 'date-time', description: 'ISO 8601 date string - messages before this date will be hidden' }
-          }
-        },
-        response: {
-          200: {
-            type: 'object',
-            properties: {
-              success: { type: 'boolean', example: true },
-              data: {
-                type: 'object',
-                properties: {
-                  message: { type: 'string', example: 'Chat history cleared before 2024-01-15T10:30:00.000Z' },
-                  clearHistoryBefore: { type: 'string', format: 'date-time', description: 'The date before which messages are hidden' }
-                }
-              }
-            }
-          },
-          400: errorResponseSchema,
-          403: errorResponseSchema,
-          500: errorResponseSchema
-        }
+  const clearHistorySchema = {
+    description: 'Clear conversation history before a specific date for the authenticated user only. Messages before the specified date will be hidden from the user\'s view. Other participants are not affected.',
+    tags: ['users', 'conversations'],
+    summary: 'Clear conversation history',
+    params: {
+      type: 'object',
+      required: ['conversationId'],
+      properties: {
+        conversationId: { type: 'string', description: 'Conversation ID to clear history for' }
       }
     },
-    async (request, reply) => {
+    body: {
+      type: 'object',
+      required: ['beforeDate'],
+      properties: {
+        beforeDate: { type: 'string', format: 'date-time', description: 'ISO 8601 date string - messages before this date will be hidden' }
+      }
+    },
+    response: {
+      200: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          data: {
+            type: 'object',
+            properties: {
+              message: { type: 'string', example: 'Chat history cleared before 2024-01-15T10:30:00.000Z' },
+              clearHistoryBefore: { type: 'string', format: 'date-time', description: 'The date before which messages are hidden' }
+            }
+          }
+        }
+      },
+      400: errorResponseSchema,
+      403: errorResponseSchema,
+      500: errorResponseSchema
+    }
+  } as const;
+
+  const clearHistoryHandler = async (request: FastifyRequest<{ Params: ConversationIdParams; Body: ClearHistoryBody }>, reply: FastifyReply) => {
       try {
         const { conversationId } = request.params;
         const { beforeDate } = request.body;
@@ -496,18 +573,29 @@ export default async function userDeletionsRoutes(
         logger.error('Error clearing history', error as Error);
         return sendInternalError(reply, 'Internal server error');
       }
-    }
+    };
+
+  fastify.post<{ Params: ConversationIdParams; Body: ClearHistoryBody }>(
+    apiPath('/conversations/:conversationId/clear-history'),
+    { preValidation: [authMiddleware], schema: clearHistorySchema },
+    clearHistoryHandler
+  );
+
+  fastify.post<{ Params: ConversationIdParams; Body: ClearHistoryBody }>(
+    `${basePath}/conversations/:conversationId/clear-history`,
+    {
+      onRequest: depreciee(ALIAS_SUPPRESSION_CLEAR_HISTORY),
+      preValidation: [authMiddleware],
+      schema: clearHistorySchema,
+    },
+    clearHistoryHandler
   );
 
   /**
    * DELETE /api/messages/:messageId/delete-for-me
    * Soft-delete a message from the user's view only
    */
-  fastify.delete<{ Params: MessageIdParams }>(
-    `${basePath}/messages/:messageId/delete-for-me`,
-    {
-      preValidation: [authMiddleware],
-      schema: {
+  const messageDeleteForMeSchema = {
         description: 'Soft-delete a specific message from the authenticated user\'s view. Other participants will still see the message. The message can be restored later.',
         tags: ['users', 'messages'],
         summary: 'Delete message for current user',
@@ -535,9 +623,9 @@ export default async function userDeletionsRoutes(
           404: errorResponseSchema,
           500: errorResponseSchema
         }
-      }
-    },
-    async (request, reply) => {
+  } as const;
+
+  const messageDeleteForMeHandler = async (request: FastifyRequest<{ Params: MessageIdParams }>, reply: FastifyReply) => {
       try {
         const { messageId } = request.params;
         const authRequest = request as UnifiedAuthRequest;
@@ -581,47 +669,58 @@ export default async function userDeletionsRoutes(
         logger.error('Error deleting message for user', error as Error);
         return sendInternalError(reply, 'Internal server error');
       }
-    }
+    };
+
+  fastify.delete<{ Params: MessageIdParams }>(
+    apiPath('/messages/:messageId/delete-for-me'),
+    { preValidation: [authMiddleware], schema: messageDeleteForMeSchema },
+    messageDeleteForMeHandler
+  );
+
+  fastify.delete<{ Params: MessageIdParams }>(
+    `${basePath}/messages/:messageId/delete-for-me`,
+    {
+      onRequest: depreciee(ALIAS_SUPPRESSION_MESSAGE_DELETE_FOR_ME),
+      preValidation: [authMiddleware],
+      schema: messageDeleteForMeSchema,
+    },
+    messageDeleteForMeHandler
   );
 
   /**
    * POST /api/messages/:messageId/restore-for-me
    * Restore a previously deleted message for the user
    */
-  fastify.post<{ Params: MessageIdParams }>(
-    `${basePath}/messages/:messageId/restore-for-me`,
-    {
-      preValidation: [authMiddleware],
-      schema: {
-        description: 'Restore a previously deleted message to the authenticated user\'s view. Only works if the message was previously deleted by the user.',
-        tags: ['users', 'messages'],
-        summary: 'Restore deleted message',
-        params: {
-          type: 'object',
-          required: ['messageId'],
-          properties: {
-            messageId: { type: 'string', description: 'Message ID to restore' }
-          }
-        },
-        response: {
-          200: {
-            type: 'object',
-            properties: {
-              success: { type: 'boolean', example: true },
-              data: {
-                type: 'object',
-                properties: {
-                  message: { type: 'string', example: 'Message restored' }
-                }
-              }
-            }
-          },
-          400: errorResponseSchema,
-          500: errorResponseSchema
-        }
+  const messageRestoreForMeSchema = {
+    description: 'Restore a previously deleted message to the authenticated user\'s view. Only works if the message was previously deleted by the user.',
+    tags: ['users', 'messages'],
+    summary: 'Restore deleted message',
+    params: {
+      type: 'object',
+      required: ['messageId'],
+      properties: {
+        messageId: { type: 'string', description: 'Message ID to restore' }
       }
     },
-    async (request, reply) => {
+    response: {
+      200: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          data: {
+            type: 'object',
+            properties: {
+              message: { type: 'string', example: 'Message restored' }
+            }
+          }
+        }
+      },
+      400: errorResponseSchema,
+      500: errorResponseSchema
+    }
+  } as const;
+
+  const messageRestoreForMeHandler = async (request: FastifyRequest<{ Params: MessageIdParams }>, reply: FastifyReply) => {
       try {
         const { messageId } = request.params;
         const authRequest = request as UnifiedAuthRequest;
@@ -654,56 +753,67 @@ export default async function userDeletionsRoutes(
         logger.error('Error restoring message for user', error as Error);
         return sendInternalError(reply, 'Internal server error');
       }
-    }
+    };
+
+  fastify.post<{ Params: MessageIdParams }>(
+    apiPath('/messages/:messageId/restore-for-me'),
+    { preValidation: [authMiddleware], schema: messageRestoreForMeSchema },
+    messageRestoreForMeHandler
+  );
+
+  fastify.post<{ Params: MessageIdParams }>(
+    `${basePath}/messages/:messageId/restore-for-me`,
+    {
+      onRequest: depreciee(ALIAS_SUPPRESSION_MESSAGE_RESTORE_FOR_ME),
+      preValidation: [authMiddleware],
+      schema: messageRestoreForMeSchema,
+    },
+    messageRestoreForMeHandler
   );
 
   /**
    * DELETE /api/messages/bulk/delete-for-me
    * Bulk delete multiple messages from the user's view
    */
-  fastify.delete<{ Body: { messageIds: string[] } }>(
-    `${basePath}/messages/bulk/delete-for-me`,
-    {
-      preValidation: [authMiddleware],
-      schema: {
-        description: 'Bulk delete multiple messages from the authenticated user\'s view in a single request. Maximum 100 messages per request. Other participants are not affected. Only messages from conversations where the user is a member can be deleted.',
-        tags: ['users', 'messages'],
-        summary: 'Bulk delete messages for current user',
-        body: {
-          type: 'object',
-          required: ['messageIds'],
-          properties: {
-            messageIds: {
-              type: 'array',
-              items: { type: 'string' },
-              minItems: 1,
-              maxItems: 100,
-              description: 'Array of message IDs to delete (max 100)'
-            }
-          }
-        },
-        response: {
-          200: {
-            type: 'object',
-            properties: {
-              success: { type: 'boolean', example: true },
-              data: {
-                type: 'object',
-                properties: {
-                  message: { type: 'string', example: '15 messages deleted from your view' },
-                  deletedCount: { type: 'number', description: 'Number of messages actually deleted' },
-                  requestedCount: { type: 'number', description: 'Number of message IDs requested' }
-                }
-              }
-            }
-          },
-          400: errorResponseSchema,
-          403: errorResponseSchema,
-          500: errorResponseSchema
+  const messagesBulkDeleteForMeSchema = {
+    description: 'Bulk delete multiple messages from the authenticated user\'s view in a single request. Maximum 100 messages per request. Other participants are not affected. Only messages from conversations where the user is a member can be deleted.',
+    tags: ['users', 'messages'],
+    summary: 'Bulk delete messages for current user',
+    body: {
+      type: 'object',
+      required: ['messageIds'],
+      properties: {
+        messageIds: {
+          type: 'array',
+          items: { type: 'string' },
+          minItems: 1,
+          maxItems: 100,
+          description: 'Array of message IDs to delete (max 100)'
         }
       }
     },
-    async (request, reply) => {
+    response: {
+      200: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          data: {
+            type: 'object',
+            properties: {
+              message: { type: 'string', example: '15 messages deleted from your view' },
+              deletedCount: { type: 'number', description: 'Number of messages actually deleted' },
+              requestedCount: { type: 'number', description: 'Number of message IDs requested' }
+            }
+          }
+        }
+      },
+      400: errorResponseSchema,
+      403: errorResponseSchema,
+      500: errorResponseSchema
+    }
+  } as const;
+
+  const messagesBulkDeleteForMeHandler = async (request: FastifyRequest<{ Body: { messageIds: string[] } }>, reply: FastifyReply) => {
       try {
         const { messageIds } = request.body;
         const authRequest = request as UnifiedAuthRequest;
@@ -758,54 +868,65 @@ export default async function userDeletionsRoutes(
         logger.error('Error bulk deleting messages', error as Error);
         return sendInternalError(reply, 'Internal server error');
       }
-    }
+    };
+
+  fastify.delete<{ Body: { messageIds: string[] } }>(
+    apiPath('/messages/bulk/delete-for-me'),
+    { preValidation: [authMiddleware], schema: messagesBulkDeleteForMeSchema },
+    messagesBulkDeleteForMeHandler
+  );
+
+  fastify.delete<{ Body: { messageIds: string[] } }>(
+    `${basePath}/messages/bulk/delete-for-me`,
+    {
+      onRequest: depreciee(ALIAS_SUPPRESSION_MESSAGES_BULK_DELETE_FOR_ME),
+      preValidation: [authMiddleware],
+      schema: messagesBulkDeleteForMeSchema,
+    },
+    messagesBulkDeleteForMeHandler
   );
 
   /**
    * GET /api/user/deleted-conversations
    * Get list of conversations the user has deleted (for potential restoration)
    */
-  fastify.get(
-    `${basePath}/user/deleted-conversations`,
-    {
-      preValidation: [authMiddleware],
-      schema: {
-        description: 'Get a list of all conversations the authenticated user has deleted from their view. Returns conversation details and deletion timestamps. These conversations can be restored.',
-        tags: ['users', 'conversations'],
-        summary: 'Get user deleted conversations',
-        response: {
-          200: {
-            type: 'object',
-            properties: {
-              success: { type: 'boolean', example: true },
-              data: {
-                type: 'array',
-                items: {
+  const deletedConversationsSchema = {
+    description: 'Get a list of all conversations the authenticated user has deleted from their view. Returns conversation details and deletion timestamps. These conversations can be restored.',
+    tags: ['users', 'conversations'],
+    summary: 'Get user deleted conversations',
+    response: {
+      200: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          data: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                conversationId: { type: 'string', description: 'Conversation ID' },
+                conversation: {
                   type: 'object',
                   properties: {
-                    conversationId: { type: 'string', description: 'Conversation ID' },
-                    conversation: {
-                      type: 'object',
-                      properties: {
-                        id: { type: 'string' },
-                        identifier: { type: 'string' },
-                        title: { type: 'string', nullable: true },
-                        type: { type: 'string', enum: ['direct', 'group'] },
-                        avatar: { type: 'string', nullable: true },
-                        lastMessageAt: { type: 'string', format: 'date-time', nullable: true }
-                      }
-                    },
-                    deletedAt: { type: 'string', format: 'date-time', nullable: true, description: 'When the user deleted this conversation' }
+                    id: { type: 'string' },
+                    identifier: { type: 'string' },
+                    title: { type: 'string', nullable: true },
+                    type: { type: 'string', enum: ['direct', 'group'] },
+                    avatar: { type: 'string', nullable: true },
+                    lastMessageAt: { type: 'string', format: 'date-time', nullable: true }
                   }
-                }
+                },
+                deletedAt: { type: 'string', format: 'date-time', nullable: true, description: 'When the user deleted this conversation' }
               }
             }
-          },
-          500: errorResponseSchema
+          }
         }
-      }
-    },
-    async (request: FastifyRequest, reply: FastifyReply) => {
+      },
+      500: errorResponseSchema
+    }
+  } as const;
+
+  const deletedConversationsHandler = async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         const authContext = (request as UnifiedAuthRequest).authContext;
         const userId = authContext.userId;
@@ -850,6 +971,21 @@ export default async function userDeletionsRoutes(
         logger.error('Error fetching deleted conversations', error as Error);
         return sendInternalError(reply, 'Internal server error');
       }
-    }
+    };
+
+  fastify.get(
+    apiPath('/user/deleted-conversations'),
+    { preValidation: [authMiddleware], schema: deletedConversationsSchema },
+    deletedConversationsHandler
+  );
+
+  fastify.get(
+    `${basePath}/user/deleted-conversations`,
+    {
+      onRequest: depreciee(ALIAS_SUPPRESSION_DELETED_CONVERSATIONS),
+      preValidation: [authMiddleware],
+      schema: deletedConversationsSchema,
+    },
+    deletedConversationsHandler
   );
 }

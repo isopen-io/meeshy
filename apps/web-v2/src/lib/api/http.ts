@@ -67,6 +67,16 @@ export type ApiFailure = {
    * dur ou rester vague (#5912) : la fenêtre d'un limiteur est une donnée du
    * serveur, jamais une constante du client. */
   readonly retryAfter?: number;
+  /**
+   * Les pseudos LIBRES servis avec un refus `USERNAME_TAKEN` (#6479).
+   *
+   * `suggestionsDePseudo` (`registration.service.ts`) en rend trois, en UNE
+   * requête : proposer un remède coûte le même aller-retour que constater le
+   * problème. Depuis que l'écran ENVOIE le pseudo qu'il montre, une collision
+   * est un REFUS et non plus un renommage silencieux — sans ces trois valeurs,
+   * l'utilisateur se retrouverait devant un mur.
+   */
+  readonly suggestions?: readonly string[];
 };
 
 export type ApiSuccess<T> = {
@@ -95,12 +105,19 @@ export type ApiSuccess<T> = {
    * jumelle divergente que ce transport existe pour éviter.
    */
   readonly cursorPagination?: CursorPaginationMeta;
+  /**
+   * #6361 — les MÉTA-DONNÉES qu'une route pose à côté de `data`
+   * (`GET /links?include=summary` : `meta.summary`, les agrégats réels de ses
+   * liens). Transmises telles quelles et NON typées : c'est au port qui les
+   * lit de les valider (`decodeShareLinksSummary`, `zod/mini`).
+   */
+  readonly meta?: Readonly<Record<string, unknown>>;
 };
 
 export type ApiResult<T> = ApiSuccess<T> | ApiFailure;
 
 export type HttpRequest = {
-  readonly method: 'GET' | 'PUT' | 'POST' | 'DELETE';
+  readonly method: 'GET' | 'PUT' | 'POST' | 'PATCH' | 'DELETE';
   readonly path: string;
   readonly body?: unknown;
   /** Transmis tel quel à `fetch` — l'appelant (TanStack Query, un effet de
@@ -213,6 +230,13 @@ function envelopeOf(payload: unknown): Record<string, unknown> {
  * `SignupViewModel.applyRejection` (iOS) : « le premier message qui vise un
  * champ gagne ».
  */
+/** Les pseudos de rechange, étalés à la racine par `sendError` comme `field`. */
+function suggestionsOf(envelope: Record<string, unknown>): readonly string[] {
+  const brut = envelope.suggestions;
+  if (!Array.isArray(brut)) return [];
+  return brut.filter((valeur): valeur is string => typeof valeur === 'string');
+}
+
 function fieldOf(envelope: Record<string, unknown>): string | undefined {
   if (typeof envelope.field === 'string') return envelope.field;
   if (Array.isArray(envelope.details)) {
@@ -325,6 +349,9 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
         ...(envelope.cursorPagination !== undefined
           ? { cursorPagination: envelope.cursorPagination as CursorPaginationMeta }
           : {}),
+        ...(envelope.meta !== null && typeof envelope.meta === 'object' && !Array.isArray(envelope.meta)
+          ? { meta: envelope.meta as Readonly<Record<string, unknown>> }
+          : {}),
       };
     }
 
@@ -336,6 +363,7 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
       ...(typeof envelope.code === 'string' ? { code: envelope.code } : {}),
       ...(field !== undefined ? { field } : {}),
       ...(typeof envelope.retryAfter === 'number' ? { retryAfter: envelope.retryAfter } : {}),
+      ...(suggestionsOf(envelope).length > 0 ? { suggestions: suggestionsOf(envelope) } : {}),
     };
   }
 

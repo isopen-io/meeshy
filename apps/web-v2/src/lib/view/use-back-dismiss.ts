@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 
 /**
  * LE RETOUR MATÉRIEL CONSOMME LA COUCHE MODALE, PAS L'ÉCRAN (#5555, puis
@@ -20,15 +20,41 @@ import { useEffect, useRef } from 'react';
  * au lieu de quitter l'écran. Fermée autrement (Échap, un clic hors-menu,
  * une action choisie), elle REND son entrée (`history.back()`) pour qu'un
  * retour ULTÉRIEUR ne soit pas avalé à la place.
+ *
+ * **ELLE NE REND QUE SA PROPRE ENTRÉE** (#6313). Une couche fermée PARCE
+ * QU'UNE ACTION A NAVIGUÉ — un barreau de l'échelle flottante pousse sa
+ * destination puis referme l'échelle — n'est plus l'entrée courante :
+ * reculer d'une entrée défaisait la navigation elle-même (mesuré : `/notifications`
+ * poussée, `/` rendue, sur `dev` comme sur la branche de #6288). L'entrée
+ * posée porte donc une MARQUE, et le retour n'a lieu que si l'historique est
+ * encore dessus. Le prix, assumé : après une telle navigation, l'entrée de la
+ * couche reste sous la destination, et un retour y ramène l'écran d'origine —
+ * exactement ce qu'on quittait.
+ *
+ * **L'ENTRÉE EST POSÉE DANS LE COMMIT QUI INSÈRE LA COUCHE** (#6319). Un effet
+ * passif la posait APRÈS la peinture (Preact : un `requestAnimationFrame`
+ * puis un `setTimeout`) : dans l'intervalle, la couche était VISIBLE et un
+ * retour ne trouvait aucune entrée à consommer — il quittait le fil (mesuré
+ * en CI : `URL blank`, trois têtes de dev sur neuf). L'effet de mise en page
+ * s'exécute avant que le navigateur ne rende la main : aucune image ne montre
+ * la couche sans que le retour lui appartienne.
  */
+let nextMarker = 0;
+
+function carriesMarker(state: unknown, marker: string): boolean {
+  return typeof state === 'object' && state !== null && (state as { readonly backDismiss?: unknown }).backDismiss === marker;
+}
+
 export function useBackDismiss(onClose: () => void): void {
   const onCloseRef = useRef(onClose);
   useEffect(() => {
     onCloseRef.current = onClose;
   });
 
-  useEffect(() => {
-    window.history.pushState(null, '');
+  useLayoutEffect(() => {
+    nextMarker += 1;
+    const marker = `back-dismiss-${nextMarker}`;
+    window.history.pushState({ backDismiss: marker }, '');
     let consumedByHistory = false;
     const onPopState = () => {
       consumedByHistory = true;
@@ -38,7 +64,7 @@ export function useBackDismiss(onClose: () => void): void {
 
     return () => {
       window.removeEventListener('popstate', onPopState);
-      if (!consumedByHistory) window.history.back();
+      if (!consumedByHistory && carriesMarker(window.history.state, marker)) window.history.back();
     };
   }, []);
 }

@@ -38,6 +38,15 @@ export type RouteKey =
   | 'thread'
   | 'conversationsNew'
   | 'progression'
+  | 'stories'
+  | 'storyCompose'
+  | 'story'
+  | 'feed'
+  | 'notifications'
+  | 'profile'
+  | 'settings'
+  | 'admin'
+  | 'adminUsers'
   | 'login'
   | 'signup'
   | 'welcome'
@@ -55,8 +64,57 @@ export type RouteAccessDecision = 'allow' | 'redirect-login' | 'redirect-home' |
  * route privée non déclarée est la forme la plus discrète du défaut : rien ne
  * rougit, l'écran s'ouvre, et c'est l'API qui dit non — trois écrans plus
  * tard, on aura oublié pourquoi.
+ *
+ * `stories`/`storyCompose`/`story` (#5817, correctif d'un défaut de la MÊME
+ * classe, relevé § 2 de la spécification) — leurs ports (`GET /posts/feed/
+ * stories`, `POST /posts/:postId/view`) sont tous `requiredAuth` ; un
+ * visiteur sans compte y recevait un écran qui s'ouvre puis un 401 en
+ * silence, jamais une invitation à se connecter.
+ *
+ * `feed` (#5893) — `GET /social/posts?scope=home` EXIGE une session
+ * (`services/gateway/src/routes/posts/feed.ts:790-792`, 401 `UNAUTHORIZED`),
+ * bien que `optionalAuth` garde la porte : un visiteur sans compte y recevait
+ * jusqu'ici l'écran d'attente (route publique par défaut), puis — le jour où
+ * ce lot lui donne du contenu — un 401 en silence.
+ *
+ * `notifications` (#6288) — la même classe, fermée AVANT le contenu cette
+ * fois : les routes `/notifications*` de la passerelle portent toutes
+ * `onRequest: [fastify.authenticate]`.
+ *
+ * `profile` (#6289) — `/me` est SON profil : `PATCH /users/me*` et
+ * `GET /users/me/stats` portent `fastify.authenticate`. Un visiteur sans compte
+ * n'a pas de soi à voir ni à modifier.
+ *
+ * `settings` (#6340) — `GET`/`PATCH /me/preferences` portent
+ * `fastify.authenticate`. Laissée publique par #5563, la route ouvrait sans
+ * session un écran dont la requête restait désactivée : squelettes À VIE, et
+ * une déconnexion offerte à qui n'est pas connecté.
+ *
+ * `admin` / `adminUsers` (#6432) — PRIVÉES, et cette garde ne fait que la
+ * MOITIÉ du travail. Elle exige une session ; le DROIT, lui, se lit au
+ * serveur (`GET /me/permissions`) dans l'écran. La séparation n'est pas un
+ * oubli : `SessionUser` ne projette pas `role` (`lib/api/session.ts`), donc
+ * une garde de route qui trancherait ici ne pourrait que le DEVINER — et une
+ * garde qui devine sur une porte d'administration est pire qu'aucune garde,
+ * parce qu'on croit qu'elle garde. Ce qu'elle apporte est réel malgré tout :
+ * un visiteur sans compte est renvoyé vers la connexion plutôt que de voir un
+ * écran qui charge puis refuse.
  */
-const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>(['list', 'thread', 'conversationsNew', 'progression']);
+const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
+  'list',
+  'thread',
+  'conversationsNew',
+  'progression',
+  'stories',
+  'storyCompose',
+  'story',
+  'feed',
+  'notifications',
+  'profile',
+  'settings',
+  'admin',
+  'adminUsers',
+]);
 const AUTH_ROUTES: ReadonlySet<string> = new Set<RouteKey>(['login', 'signup', 'welcome', 'magicLink', 'forgotPassword']);
 
 /**

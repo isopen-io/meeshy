@@ -24,5 +24,5 @@
 export type { Conversation, Message } from '@meeshy/shared/types/conversation';
 export type { MessageTranslation } from '@meeshy/shared/types/message-types';
 export type { Participant } from '@meeshy/shared/types/participant';
-export type { Attachment } from '@meeshy/shared/types/attachment';
+export type { Attachment, ImageVariant } from '@meeshy/shared/types/attachment';
 export type { UserPresenceStatus } from '@meeshy/shared/utils/user-presence';

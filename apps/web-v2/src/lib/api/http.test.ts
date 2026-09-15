@@ -120,6 +120,24 @@ describe('createHttpTransport — l’enveloppe', () => {
     });
   });
 
+  test('succès portant `meta` ⇒ `meta` transmis tel quel (#6361, `GET /links?include=summary`)', async () => {
+    // forme : services/gateway/src/routes/links/user.ts — `meta.summary`, sibling de `data`
+    const { impl } = fakeFetch({
+      status: 200,
+      body: { success: true, data: [], meta: { summary: { totalLinks: 2, activeLinks: 1, totalUses: 7 } } },
+    });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+    const result = await transport.request<unknown[]>({ method: 'GET', path: '/api/v1/links' });
+    expect(result.ok && result.meta).toEqual({ summary: { totalLinks: 2, activeLinks: 1, totalUses: 7 } });
+  });
+
+  test('succès sans `meta` ⇒ aucune clé `meta` fabriquée', async () => {
+    const { impl } = fakeFetch({ status: 200, body: { success: true, data: [] } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+    const result = await transport.request<unknown[]>({ method: 'GET', path: '/api/v1/links' });
+    expect(result.ok && 'meta' in result).toBe(false);
+  });
+
   test('succès 201 ⇒ status: 201 posé (#5814, distingue « créée » de 200 « inchangée »)', async () => {
     // forme : routes/reactions.ts:132-270 (POST /api/v1/reactions, création)
     const { impl } = fakeFetch({ status: 201, body: { success: true, data: { id: 'r-1' } } });

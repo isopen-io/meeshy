@@ -36,6 +36,16 @@ public enum ProgressionBlock: Sendable, Equatable {
     /// distinctes — où j'en suis, ce qui multiplie, ce que je tiens — méritent
     /// trois blocs, pas un bloc dense (directive porteur).
     case flamme
+    /// LES MEESHES, SOUS LE NIVEAU (directive porteur 2026-09-14, #6497).
+    ///
+    /// Le solde ne vivait que dans l'entrée d'en-tête : il fallait toucher la
+    /// pièce pour savoir ce qu'on avait. Sous le niveau, ce qui se CONVERTIT
+    /// vient juste après ce qui se GAGNE.
+    ///
+    /// Conditionnel, contrairement aux trois heros : la passerelle ne sert le
+    /// bloc `meesh` que lorsqu'elle sait le calculer. Annoncer « 0 Meesh » sur
+    /// un compte dont le serveur ne dit RIEN parlerait à sa place.
+    case meesh
     case sectionLink(ProgressionSection)
 }
 
@@ -57,6 +67,12 @@ public enum ProgressionLayout {
             section != .defis || !progress.achievementSections.isEmpty
         }
 
-        return [.lastAchievement, .level, .elans, .flamme] + sections.map { ProgressionBlock.sectionLink($0) }
+        // UN SEUL littéral, et le conditionnel en FILTRE : l'ordre des heros se
+        // lit d'un coup d'œil, des deux côtés du miroir. Composer par `+` le
+        // coupait en morceaux, et le témoin de parité ne lisait plus que le
+        // premier (mesuré 2026-09-14).
+        return ([.lastAchievement, .level, .meesh, .elans, .flamme] as [ProgressionBlock])
+            .filter { $0 != .meesh || progress.meesh != nil }
+            + sections.map { ProgressionBlock.sectionLink($0) }
     }
 }

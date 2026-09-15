@@ -426,6 +426,9 @@ describe('decodeMessage — les pièces jointes, `null` explicite sur transcript
     translations: null,
     alt: null,
     thumbnailUrl: null,
+    // #6221 — CINQUIÈME clé, même régime : la passerelle sert `thumbHash:
+    // null` sur toute pièce sans hash calculé (miroir Prisma `String?`).
+    thumbHash: null,
   };
 
   const rawWithAttachment = {
@@ -449,6 +452,7 @@ describe('decodeMessage — les pièces jointes, `null` explicite sur transcript
     expect('translations' in (attachment as object)).toBe(false);
     expect('alt' in (attachment as object)).toBe(false);
     expect('thumbnailUrl' in (attachment as object)).toBe(false);
+    expect('thumbHash' in (attachment as object)).toBe(false);
   });
 
   test('le fil ne s’effondre plus : électer la description de la pièce décodée ne lève pas', () => {

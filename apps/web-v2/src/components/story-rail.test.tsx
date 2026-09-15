@@ -3,6 +3,8 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import type { InterfaceLanguage } from '@/lib/interface-language';
 import { StoryRail } from './story-rail';
 import { RAIL_TILE_COMPACT, RAIL_TILE_GRANDE } from './rail-tile';
 import type { StoryTrayGroup } from '@/lib/view/story-tray';
@@ -20,9 +22,10 @@ import type { StoryTrayGroup } from '@/lib/view/story-tray';
  */
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
-beforeAll(() => {
+beforeAll(async () => {
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
+  await loadInterfaceCatalog('en');
 });
 
 afterAll(async () => {
@@ -46,13 +49,22 @@ afterEach(() => {
   container = undefined;
 });
 
+/**
+ * `stories` porte désormais UNE story par défaut (#5817) — un
+ * `StoryTrayGroup` réel n'est JAMAIS construit vide (`groupStoriesByAuthor`
+ * ne pousse un groupe qu'à partir d'au moins une story), et la tuile a
+ * maintenant besoin d'un id de story RÉEL pour composer son lien
+ * (`group.entryStoryId`, posé par `groupStoriesByAuthor`,
+ * `lib/view/story-tray.ts`).
+ */
 const group = (authorId: string, displayName: string): StoryTrayGroup => ({
   authorId,
   author: { id: authorId, displayName } as StoryTrayGroup['author'],
-  stories: [],
+  stories: [{ id: `st-${authorId}`, isViewedByMe: false } as StoryTrayGroup['stories'][number]],
   latestAt: 0,
   hasUnseen: true,
   isMine: false,
+  entryStoryId: `st-${authorId}`,
 });
 
 function mount(props: {
@@ -60,6 +72,7 @@ function mount(props: {
   readonly groups: readonly StoryTrayGroup[];
   readonly loading?: boolean;
   readonly inert?: boolean;
+  readonly language?: InterfaceLanguage;
 }): HTMLDivElement {
   const c = document.createElement('div');
   document.body.appendChild(c);
@@ -72,6 +85,7 @@ function mount(props: {
         variant={props.variant}
         groups={props.groups}
         loading={props.loading ?? false}
+        language={props.language ?? 'fr'}
         {...(props.inert === undefined ? {} : { inert: props.inert })}
       />,
     );
@@ -86,6 +100,19 @@ describe('StoryRail — la grande en flux, la compacte épinglée', () => {
     expect(ul).not.toBeNull();
     expect(ul?.querySelector(`[data-rail-tile="${RAIL_TILE_GRANDE}"]`)).not.toBeNull();
     expect(el.textContent).toContain('Amina Diallo');
+  });
+
+  /**
+   * **LE LIBELLÉ DU GROUPE DU LECTEUR SUIT LA LANGUE D'INTERFACE** (#6550) —
+   * `storyAuthorLabel()` est partagée par ce rail et `routes/stories.tsx` ; ce
+   * témoin couvre le site d'appel du rail, rendu en `en`, comme le demande le
+   * critère de fin de #6550.
+   */
+  test('la tuile du lecteur suit la langue d\'interface — jamais « Votre story » figé (#6550)', () => {
+    const mienne: StoryTrayGroup = { ...group('u-moi', 'peu importe'), isMine: true };
+    const el = mount({ variant: 'grande', groups: [mienne], language: 'en' });
+    expect(el.textContent).toContain('Your story');
+    expect(el.textContent).not.toContain('Votre story');
   });
 
   /**
@@ -219,10 +246,16 @@ describe('StoryRail — `inert` retire le grand rail du clavier et de l’access
  * pas d'équivalent chez dev, donc aucun témoin à porter : ils sont neufs ici.
  */
 describe('StoryRail — ce que le corpus des stories apporte', () => {
-  test('chaque tuile mène à la story de SON auteur, jamais au fil', () => {
+  /**
+   * #5817 — la tuile ouvre désormais LE LECTEUR PLEIN ÉCRAN (`/story/$post`),
+   * jamais le fil ET jamais non plus l'ancienne destination `/stories?author=`
+   * (#6080) : elle pose l'id d'ENTRÉE qu'elle a calculé (`entryStoryId()`),
+   * pas l'id de l'auteur.
+   */
+  test('chaque tuile mène À LA STORY de son auteur (/story/$post), jamais au fil ni à /stories', () => {
     const el = mount({ variant: 'grande', groups: [group('u-amina', 'Amina Diallo')] });
     const lien = el.querySelector('a[data-story-author="u-amina"]') as HTMLAnchorElement;
-    expect(lien.getAttribute('href')).toContain('u-amina');
+    expect(lien.getAttribute('href')).toBe('/story/st-u-amina');
   });
 
   test('les deux portes flottantes n’existent QUE sur le grand plateau', () => {
@@ -270,5 +303,54 @@ describe('StoryRail — ce que le corpus des stories apporte', () => {
     root = undefined;
     const sansHumeur = mount({ variant: 'grande', groups: [group('u-amina', 'Amina Diallo')] });
     expect(sansHumeur.querySelector('[data-mood]')).toBeNull();
+  });
+});
+
+/**
+ * **LA TUILE PEINT LA COTE D'iOS** (#6133) — l'avatar porte `.storyTray` /
+ * `.storyTrayCompact`, l'anneau se pose AUTOUR (`ringSize = size + 6`), la
+ * cellule compose l'anneau et son libellé. La loi est dans `rail-tile.tsx` ;
+ * ces témoins mesurent qu'elle est PEINTE, pas seulement déclarée.
+ */
+describe('StoryTile — la cote d’iOS, peinte (#6133)', () => {
+  test('grand plateau : avatar 88, anneau 94 posé autour, cellule 96', () => {
+    const el = mount({ variant: 'grande', groups: [group('u-amina', 'Amina Diallo')] });
+    const li = el.querySelector('[data-rail-tile]') as HTMLElement;
+    const anneau = el.querySelector('[data-anneau]') as HTMLElement;
+    const avatar = anneau.querySelector('.avatar-root') as HTMLElement;
+    expect(li.style.width).toBe('96px');
+    expect(anneau.style.width).toBe('94px');
+    expect(anneau.style.height).toBe('94px');
+    expect(avatar.style.width).toBe('88px');
+  });
+
+  test('bande épinglée : avatar 36, anneau et cellule 42, cible de 44 sans élargir la case', () => {
+    const el = mount({ variant: 'pinned', groups: [group('u-amina', 'Amina Diallo')] });
+    const li = el.querySelector('[data-rail-tile]') as HTMLElement;
+    const anneau = el.querySelector('[data-anneau]') as HTMLElement;
+    const avatar = anneau.querySelector('.avatar-root') as HTMLElement;
+    const lien = el.querySelector('a[data-story-author]') as HTMLElement;
+    expect(li.style.width).toBe('42px');
+    expect(anneau.style.width).toBe('42px');
+    expect(avatar.style.width).toBe('36px');
+    expect(lien.style.minHeight).toBe('44px');
+    expect(lien.style.minWidth).toBe('44px');
+    expect(lien.style.marginLeft).toBe('-1px');
+  });
+
+  test('le trait de l’anneau suit `ringWidth` : doublé et à la marque pour une story non vue', () => {
+    const nonVue = mount({ variant: 'grande', groups: [{ ...group('u-amina', 'Amina Diallo'), hasUnseen: true }] });
+    const trait = (nonVue.querySelector('[data-anneau]') as HTMLElement).style.boxShadow;
+    expect(trait).toContain('1.4px');
+    expect(trait).toContain('brand');
+    act(() => {
+      root!.unmount();
+    });
+    root = undefined;
+
+    const vue = mount({ variant: 'grande', groups: [{ ...group('u-amina', 'Amina Diallo'), hasUnseen: false }] });
+    const traitVu = (vue.querySelector('[data-anneau]') as HTMLElement).style.boxShadow;
+    expect(traitVu).toContain('1px');
+    expect(traitVu).not.toContain('brand');
   });
 });

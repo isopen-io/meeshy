@@ -62,7 +62,7 @@ extension ConversationView {
         let currentUserId = AuthManager.shared.currentUser?.id ?? ""
         let senderColor = DynamicColorGenerator.colorForName(AuthManager.shared.currentUser?.displayName ?? "?")
         let localKey = fileURL.absoluteString
-        let local = MeeshyMessageAttachment(
+        var local = MeeshyMessageAttachment(
             id: attachmentId,
             fileName: fileName, originalName: fileName,
             // Le poids n'est pas encore connu — il naîtra de l'encodage, et
@@ -77,6 +77,31 @@ extension ConversationView {
             uploadedBy: currentUserId,
             thumbnailColor: senderColor
         )
+        /*
+         LE TEXTE DU STICKER VOYAGE AVEC SON IMAGE (#6377, porteur 2026-09-14).
+
+         Un sticker part comme un PNG : sans ces deux champs, le fil ne reçoit
+         qu'une image muette. `alt` et `caption` existaient déjà sur
+         `MeeshyMessageAttachment` et le texte était déjà là, dans le
+         `MessageSticker` que cet appel transporte — les deux n'étaient pas
+         reliés.
+
+         Ce que leur absence coûtait : un lecteur d'écran annonçait « image »,
+         une bannière de notification ne montrait rien, et une recherche dans le
+         fil ne pouvait pas retrouver un sticker par ce qu'il DIT.
+
+         Les deux champs portent le MÊME texte, et c'est voulu : ce qu'un
+         sticker montre EST sa légende, il n'a pas de description alternative
+         distincte de son contenu. Les séparer inviterait à en remplir un seul.
+
+         `sticker == nil` — un PNG de « Mes stickers », collé tel quel — n'a
+         aucun texte à décrire : les champs restent nils plutôt que de porter
+         un nom de fichier, qui ne décrit rien et se lirait à voix haute.
+        */
+        if let texte = sticker.flatMap(StickerAltText.describe) {
+            local.alt = texte
+            local.caption = texte
+        }
         // La bulle optimiste lit `file://…` : amorcer le cache MÉMOIRE sous
         // cette clé AVANT de la poser pour qu'elle peigne l'image déjà rendue,
         // sans relire le disque ni le réseau. Le cache DISQUE, lui, attend les

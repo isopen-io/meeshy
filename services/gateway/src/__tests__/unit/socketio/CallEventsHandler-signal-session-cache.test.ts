@@ -21,6 +21,7 @@ const mockClearRingingTimeout = jest.fn<any>();
 const mockUpdateCallStatus = jest.fn<any>().mockResolvedValue(undefined);
 
 jest.mock('../../../services/CallService', () => ({
+  ...(jest.requireActual('../../../services/CallService') as object),
   CallService: jest.fn().mockImplementation(() => ({
     getCallSession: mockGetCallSession,
     clearRingingTimeout: mockClearRingingTimeout,

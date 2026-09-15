@@ -149,12 +149,37 @@ export type MeSecuritySummary = {
   readonly hasSignalKeys: boolean;
   readonly signalRegistrationId: number | null;
   readonly lastKeyRotation: Date | null;
+  /**
+   * Le compte a-t-il un mot de passe (#6424) ?
+   *
+   * `false` pour un compte né d'une inscription par e-mail seul, dont la seule
+   * porte est le lien magique. C'est la seule façon pour un client de savoir
+   * s'il doit proposer « définir un mot de passe » ou « changer le mot de
+   * passe » — et de ne pas demander un ancien mot de passe qui n'existe pas.
+   *
+   * ## Pourquoi ici, et pas sur l'utilisateur servi
+   *
+   * `AUTH_USER_SELECT` porte une loi explicite : « les SECRETS y sont ajoutés
+   * par le chemin qui doit les confronter, jamais par un site partagé ». Y
+   * poser `password: true` pour en dériver un booléen ferait voyager le hash
+   * vers les trois chemins d'authentification, dont deux n'en ont aucun usage.
+   *
+   * Ce bloc-ci est l'endroit juste : il est LOCAL à la lecture de soi, il est
+   * déjà l'hôte des booléens dérivés d'un secret (`hasSignalKeys`), il n'est
+   * servi que sur `?expand=security`, et le hash est converti en booléen DANS
+   * la fonction ci-dessous — il n'en ressort jamais.
+   */
+  readonly hasPassword: boolean;
 };
 
 const NO_SECURITY: MeSecuritySummary = {
   hasSignalKeys: false,
   signalRegistrationId: null,
   lastKeyRotation: null,
+  // Un participant anonyme n'a pas de ligne `User`, donc pas de mot de passe —
+  // et pas davantage de profil où en poser un. `false` est ici un FAIT, pas un
+  // défaut prudent.
+  hasPassword: false,
 };
 
 /**
@@ -164,19 +189,39 @@ const NO_SECURITY: MeSecuritySummary = {
  * est tranché SANS requête, pas seulement optimisé.
  */
 export async function loadSecuritySummary(
-  prisma: Pick<PrismaClient, 'signalPreKeyBundle'>,
+  prisma: Pick<PrismaClient, 'signalPreKeyBundle' | 'user'>,
   userId: string
 ): Promise<MeSecuritySummary> {
-  const bundle = await prisma.signalPreKeyBundle.findUnique({
-    where: { userId },
-    select: { registrationId: true, isActive: true, lastRotatedAt: true },
-  });
+  /**
+   * Les deux lectures partent ENSEMBLE : elles ne dépendent pas l'une de
+   * l'autre, et les enchaîner ajouterait un aller-retour à un `?expand` que la
+   * page de réglages demande à chaque ouverture.
+   *
+   * Le `select` du second ne demande QUE `password`, et la valeur est réduite
+   * à un booléen sur la ligne suivante : le hash ne quitte pas cette fonction,
+   * ni par le retour, ni par un journal.
+   */
+  const [bundle, compte] = await Promise.all([
+    prisma.signalPreKeyBundle.findUnique({
+      where: { userId },
+      select: { registrationId: true, isActive: true, lastRotatedAt: true },
+    }),
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { password: true },
+    }),
+  ]);
   const activeBundle = bundle?.isActive ? bundle : null;
 
   return {
     hasSignalKeys: activeBundle !== null,
     signalRegistrationId: activeBundle?.registrationId ?? null,
     lastKeyRotation: activeBundle?.lastRotatedAt ?? null,
+    // `?? null` puis comparaison : une ligne INTROUVABLE (course avec une
+    // suppression de compte) rend `null`, donc `false` — jamais `undefined`,
+    // que `fast-json-stringify` retirerait de la charge en laissant le client
+    // deviner.
+    hasPassword: (compte?.password ?? null) !== null,
   };
 }
 
@@ -421,6 +466,11 @@ const meUserSchema = {
         hasSignalKeys: { type: 'boolean' },
         signalRegistrationId: { type: 'number', nullable: true },
         lastKeyRotation: { type: 'string', format: 'date-time', nullable: true },
+        hasPassword: {
+          type: 'boolean',
+          description:
+            'False for an account created by e-mail alone (#6424): its only door is the magic link until its holder sets a password. Clients use it to offer "set a password" instead of "change password", and to stop asking for a current password that does not exist.',
+        },
       },
     },
   },

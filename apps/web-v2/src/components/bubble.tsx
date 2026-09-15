@@ -4,6 +4,7 @@ import { bodyKindOf, placeOf, storyCitationOf } from '@/lib/view/message-body';
 import { initialsOf, presenceOf } from '@/lib/view/conversation';
 import type { LocalDelivery } from '@/lib/view/message';
 import { prismFor, served } from '@/lib/api/prism';
+import { mediaCarrierOf } from '@/lib/view/media';
 import type { PlacedMessage } from '@/lib/grouping';
 import { time } from '@/lib/grouping';
 import { languageBand, mountsBottomLine } from '@/lib/reading-mode/meta';
@@ -19,6 +20,7 @@ import {
   Badges,
   Check,
   EditedMark,
+  EffectsIndicator,
   FailedSendBand,
   Flags,
   PrismPastille,
@@ -289,6 +291,8 @@ export function Bubble({
           attachments={message.attachments}
           languages={languages}
           fallbackLanguage={message.originalLanguage}
+          carrier={mediaCarrierOf({ message, caption: rendered })}
+          mediaFrame="box"
           {...(displayLanguage !== undefined ? { displayLanguage } : {})}
         />
       ) : null}
@@ -387,8 +391,9 @@ export function Bubble({
         {/* LES BADGES DE TÊTE (#5936) — AU-DESSUS de la bulle, HORS du fond
             coloré, alignés du côté de la bulle (`BubbleStandardLayout
             .swift:522-541`). */}
-        <div className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
+        <div className={`flex items-center gap-1.5 ${isMine ? 'justify-end' : 'justify-start'}`}>
           <Badges badges={badges} />
+          <EffectsIndicator effectFlags={message.effectFlags} />
         </div>
 
         {/* LE BADGE ÉPHÉMÈRE — AU-DESSUS de la bulle, HORS du fond coloré

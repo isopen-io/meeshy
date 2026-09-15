@@ -273,19 +273,26 @@ describe('DELETE /posts/:id/bookmark — service error', () => {
 
 // ─── POST /posts/:id/view ─────────────────────────────────────────────────────
 
-describe('POST /posts/:id/like — onDuplicate replay path', () => {
-  it('returns 200 when mutation log replays via onDuplicate', async () => {
-    const { withMutationLog } = jest.requireMock('../../../../utils/withMutationLog') as any;
-    withMutationLog.mockImplementationOnce(async ({ onDuplicate }: any) => {
-      return onDuplicate('post-001');
-    });
-    mockGetPostById.mockResolvedValueOnce({ id: 'post-001', type: 'POST', authorId: 'author-1', likeCount: 1, reactionSummary: { '❤️': 1 } });
-    const app = await buildApp();
-    const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/like`, payload: {} });
-    expect(res.statusCode).toBe(200);
-    await app.close();
-  });
-});
+// ─── POST /posts/:id/like — le rejeu a DÉMÉNAGÉ (#6293) ──────────────────────
+//
+// Ce témoin pilotait le helper MOCKÉ (`withMutationLog.mockImplementationOnce`
+// rendant `onDuplicate(...)`), donc il mesurait la fiction du harnais : depuis
+// que la route POST emploie `withMutationOutcome` pour garder ses effets de bord
+// au rejeu, ce mock n'est plus sur son chemin.
+//
+// Son intention — « un rejeu rend 200 par onDuplicate » — vit désormais dans
+// `likeIdempotency.test.ts`, contre le VRAI helper et un faux
+// `MutationLogService` en mémoire.
+//
+// Le témoin jumeau de DELETE juste en dessous reste VALIDE : la route DELETE
+// emploie toujours `withMutationLog`, et elle garde déjà sa diffusion sur
+// `removedEmoji` (« rien retiré ⇒ rien annoncé ») — le défaut d'idempotence
+// était confiné au POST.
+//
+// Coût mesuré de ce témoin, en le retirant : ses `Once` non consommés FUYAIENT
+// dans les `describe` suivants et faisaient échouer deux témoins « emoji
+// désigné » de DELETE, cent lignes plus bas, sans qu'aucun message ne parle de
+// `like`. Une file `Once` non consommée est un état partagé entre témoins.
 
 // ─── POST /posts/:id/like — POST type with notifications (lines 97, 113) ────
 

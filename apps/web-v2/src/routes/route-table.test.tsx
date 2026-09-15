@@ -1,7 +1,11 @@
-import { describe, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { Suspense } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { compile, match } from '@/lib/router';
-import { ROUTES } from './route-table';
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { NotFound, ROUTES } from './route-table';
 
 /**
  * LES ADRESSES D'AUTHENTIFICATION (#5555, T8) — `/login` et `/signup`
@@ -75,5 +79,103 @@ describe('ROUTES — les quatre adresses de #5816', () => {
     expect(typeof ROUTES.magicLink.screen).toBe('function');
     expect(typeof ROUTES.magicLinkValidate.screen).toBe('function');
     expect(typeof ROUTES.forgotPassword.screen).toBe('function');
+  });
+});
+
+/**
+ * LE LECTEUR PLEIN ÉCRAN (#5817) — `/story/$post` nomme un POST, jamais une
+ * personne (D-5, nomenclature legacy `/story/:postId`) ; l'id d'entrée est
+ * calculé par l'APPELANT (rail, liste) — voir `entryStoryId`,
+ * `lib/view/story-tray.ts`.
+ */
+describe('ROUTES — le lecteur de stories (#5817)', () => {
+  /** LE DÉTAIL D'UNE PUBLICATION (#6278, D-49) — `/post/$post` est l'adresse
+   * que la passerelle range dans ses liens suivis (`PostService.ts:1742`) et
+   * que le legacy sert déjà (`apps/web/app/post/[postId]`) ; `/feeds/post/$post`
+   * est celle des liens profonds d'iOS (`DeepLinkRouter.swift:106`) et du
+   * partage (`share-url.ts`). Deux portes, UN écran. */
+  test('post s’apparie à /post/<id>, et /feeds/post/<id> ouvre le MÊME écran', () => {
+    expect(match(compile(ROUTES.post.pattern), '/post/abc123')).toEqual({ post: 'abc123' });
+    expect(match(compile(ROUTES.postDeepLink.pattern), '/feeds/post/abc123')).toEqual({ post: 'abc123' });
+    expect(match(compile(ROUTES.post.pattern), '/post/')).toBe(null);
+    expect(ROUTES.postDeepLink.screen).toBe(ROUTES.post.screen);
+  });
+
+  test('story s’apparie à /story/<id> et en extrait le paramètre `post`', () => {
+    const compiled = compile(ROUTES.story.pattern);
+    expect(match(compiled, '/story/abc123')).toEqual({ post: 'abc123' });
+    expect(match(compiled, '/story/')).toBe(null);
+    expect(match(compiled, '/stories')).toBe(null);
+  });
+
+  test('story est un import() paresseux', () => {
+    expect(typeof ROUTES.story.screen).toBe('function');
+  });
+});
+
+/**
+ * L'ÉCRAN D'ADRESSE INCONNUE (#6341) — ses deux textes viennent du catalogue
+ * d'interface, plus « Cette href n’existe pas. » en dur. Le témoin s'écrit en
+ * ANGLAIS et en ARABE : en français, le texte en dur d'hier et le catalogue
+ * rendraient la même chose pour le titre (mais pas pour le mot « href », qui
+ * ne survivrait à aucune des deux).
+ */
+describe('NotFound — ce qu’il dit vient du catalogue (#6341)', () => {
+  beforeAll(async () => {
+    ensureHappyDomRegistered();
+    await Promise.all([loadInterfaceCatalog('en'), loadInterfaceCatalog('ar'), loadInterfaceCatalog('fr')]);
+  });
+
+  afterAll(async () => {
+    await releaseHappyDomIfRegistered();
+  });
+
+  afterEach(() => {
+    document.documentElement.lang = 'fr';
+  });
+
+  const render = () => renderToStaticMarkup(<NotFound />);
+
+  test('fr : le titre ne porte plus le mot « href »', () => {
+    const html = render();
+    expect(html).toContain('Cette adresse n&#x27;existe pas.');
+    expect(html).toContain('Revenir aux conversations');
+    expect(html).not.toContain('Cette href');
+  });
+
+  test('en : titre et retour en anglais', () => {
+    document.documentElement.lang = 'en';
+    const html = render();
+    expect(html).toContain('This address doesn&#x27;t exist.');
+    expect(html).toContain('Back to conversations');
+    expect(html).not.toContain('adresse');
+  });
+
+  test('ar : titre et retour en arabe', () => {
+    document.documentElement.lang = 'ar';
+    const html = render();
+    expect(html).toContain('هذا العنوان غير موجود.');
+    expect(html).toContain('العودة إلى المحادثات');
+  });
+
+  /**
+   * SUSPENSE SANS ROUTE (#6341) — une adresse inconnue n'a, par définition,
+   * traversé aucun `screenPrerequisite` : `NotFound` doit donc pouvoir se
+   * rendre sous une limite Suspense (celle que `router.tsx` pose déjà autour
+   * de chaque écran) SANS jamais laisser fuir l'erreur « catalogue lu avant
+   * d'être chargé » — que le catalogue de la langue courante soit déjà en
+   * cache ou non. Le comportement de `suspendForInterfaceCatalog` lui-même
+   * (jette la promesse en cours puis ne jette plus) est prouvé sans dépendre
+   * de l'ordre d'exécution des fichiers de témoins dans `i18n-catalog.test.ts`.
+   */
+  test('sous Suspense, une adresse inconnue ne laisse jamais fuir l’erreur de catalogue non chargé', () => {
+    document.documentElement.lang = 'de';
+    expect(() =>
+      renderToStaticMarkup(
+        <Suspense fallback={<p>…</p>}>
+          <NotFound />
+        </Suspense>,
+      ),
+    ).not.toThrow();
   });
 });

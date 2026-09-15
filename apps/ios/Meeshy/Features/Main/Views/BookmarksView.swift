@@ -19,6 +19,14 @@ struct BookmarksView: View {
     /// Observé — un basculement Clair/Sombre doit repeindre la liste, ce que le
     /// `{ ThemeManager.shared }` calculé des écrans voisins ne fait pas.
     @StateObject private var theme = ThemeManager.shared
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.isPresented) private var isPresented
+    @Environment(\.meeshyPanelDismiss) private var panelDismiss
+    /// Retour opérant dans les trois contextes de présentation : pile iPhone,
+    /// panneau droit iPad, sheet — même dispositif que `StarredMessagesView`.
+    private var back: PanelBackAction {
+        PanelBackAction(isPresented: isPresented, dismiss: dismiss, panelDismiss: panelDismiss)
+    }
     @EnvironmentObject private var router: Router
     @EnvironmentObject private var storyViewModel: StoryViewModel
     @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
@@ -58,6 +66,52 @@ struct BookmarksView: View {
     }
 
     var body: some View {
+        VStack(spacing: 0) {
+            header
+            bookmarkList
+        }
+        .background(theme.backgroundGradient.ignoresSafeArea())
+        .task { await viewModel.loadBookmarks() }
+        .fullScreenCover(isPresented: Binding(
+            get: { storyAuthorUserId != nil },
+            set: { if !$0 { storyAuthorUserId = nil } }
+        )) {
+            StoryViewerContainer(
+                viewModel: storyViewModel,
+                userId: storyAuthorUserId,
+                isPresented: Binding(
+                    get: { storyAuthorUserId != nil },
+                    set: { if !$0 { storyAuthorUserId = nil } }
+                ),
+                singleGroup: true,
+                startAtFirstUnviewed: true,
+                presentationSource: "BookmarksView.authorAvatar"
+            )
+            // fullScreenCover n'hérite pas des EnvironmentObjects — trio
+            // requis par StoryViewerView (SharePickerView interne).
+            .environmentObject(router)
+            .environmentObject(statusViewModel)
+            .environmentObject(conversationListViewModel)
+        }
+    }
+
+    /// En-tête partagé, FIXE (`scrollOffset: 0`) — même raison que la liste des
+    /// utilisateurs bloqués : la liste porte `.refreshable`, et un en-tête posé
+    /// en surimpression couvrirait le tirer-pour-rafraîchir (#6481). Il remplace
+    /// la barre système, que la route masque désormais.
+    private var header: some View {
+        CollapsibleHeader(
+            title: String(localized: "bookmarks.title", defaultValue: "Publications enregistrées", bundle: .main),
+            scrollOffset: 0,
+            onBack: { back() },
+            titleColor: theme.textPrimary,
+            backArrowColor: MeeshyColors.brandPrimary,
+            backgroundColor: theme.backgroundPrimary,
+            trailing: { EmptyView() }
+        )
+    }
+
+    private var bookmarkList: some View {
         ScrollView(showsIndicators: false) {
             LazyVStack(spacing: 12) {
                 // Le sélecteur ne s'affiche que si la liste contient bien les
@@ -73,6 +127,9 @@ struct BookmarksView: View {
                     ForEach(visiblePosts) { post in
                         FeedPostCard(
                             post: post,
+                            onLike: { postId in
+                                Task { await viewModel.toggleLike(postId) }
+                            },
                             onBookmark: { postId in
                                 Task { await viewModel.removeBookmark(postId) }
                             },
@@ -117,32 +174,7 @@ struct BookmarksView: View {
             .padding(.top, 8)
             .padding(.bottom, 20)
         }
-        .background(theme.backgroundGradient.ignoresSafeArea())
-        .navigationTitle(String(localized: "bookmarks.title", defaultValue: "Favoris", bundle: .main))
-        .navigationBarTitleDisplayMode(.inline)
         .refreshable { await viewModel.refresh() }
-        .task { await viewModel.loadBookmarks() }
-        .fullScreenCover(isPresented: Binding(
-            get: { storyAuthorUserId != nil },
-            set: { if !$0 { storyAuthorUserId = nil } }
-        )) {
-            StoryViewerContainer(
-                viewModel: storyViewModel,
-                userId: storyAuthorUserId,
-                isPresented: Binding(
-                    get: { storyAuthorUserId != nil },
-                    set: { if !$0 { storyAuthorUserId = nil } }
-                ),
-                singleGroup: true,
-                startAtFirstUnviewed: true,
-                presentationSource: "BookmarksView.authorAvatar"
-            )
-            // fullScreenCover n'hérite pas des EnvironmentObjects — trio
-            // requis par StoryViewerView (SharePickerView interne).
-            .environmentObject(router)
-            .environmentObject(statusViewModel)
-            .environmentObject(conversationListViewModel)
-        }
     }
 
     private var filterPicker: some View {

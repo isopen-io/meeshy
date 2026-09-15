@@ -1,5 +1,646 @@
 # @meeshy/translator
 
+## 1.51.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - le fil et sa carte parlent la langue d'interface, pas le français en dur (#6546)
+  - la montée de React quitte le lot — @types/react 19.3 ajoutait deux erreurs au cliquet de dette
+  - budget interface_catalogs remesuré après les 28 clés du Flux (#6488)
+  - l'inscription se déplie barreau par barreau, et ce qui est calculé se voit et se modifie
+  - le plein écran de scène traduit le contenu qu'il affiche — légende du média ou texte du post (#6280)
+  - le fil et sa carte parlent la langue d'interface, pas le français en dur (#6488)
+  - /login s'ouvre sur le lien magique, et l'identifiant + mot de passe devient une option nommée
+  - quatre clés de catalogue orphelines depuis la refonte de l'inscription (#6479)
+  - le catalogue ne garde plus les quatre clés du nom d'inscription que plus rien n'emploie (#6541)
+  - le fil décode et sert la légende de média traduite (#6280)
+  - fix-orphan-participants.ts ne laisse plus de messages sans expéditeur (#6518) (#6540)
+  - le fil applique et affiche la légende de média traduite (#6280)
+  - le store social câble le socket media:caption-translation-updated (#6280)
+  - ApiPostMedia/FeedMedia décodent et résolvent la légende traduite (#6280)
+  - le fil se lit et se touche de l'en-tête au composeur — les deux voiles disparaissent, la pastille à mots tourne (#6537)
+  - les surfaces de légende de média servent la traduction résolue par le Prisme (#6280)
+  - le store du fil applique la traduction de légende reçue par socket (#6280)
+  - événement socket media:caption-translation-updated (#6280)
+  - APIPostMedia/FeedMedia décodent et résolvent la légende traduite (#6280)
+  - au-delà de sept mots, le bouton d'envoi ordinaire — et la touche Retour passe à la ligne (#6537)
+  - le solde des Meeshes passe SOUS le niveau — et MeeshHero cesse d'être un mort-vivant (#6497)
+  - le texte du post affiché en plein écran et le drapeau actif viennent d'une seule langue (#6504)
+  - une légende de média qui répète le texte du post s'offre à la traduction (#6504)
+  - l'icône de traduction de la légende ouvre la feuille de traduction des messages (#6504)
+  - la légende dépliée se pose juste au-dessus de « voir moins », et la traduction s'offre entre les deux (#6504)
+  - le témoin du plancher de mot de passe le DÉRIVE — le rouge de dev et main est soldé
+  - un double tap latéral avance/recule la vidéo de 10 s, comme iOS (#6369)
+  - la légende de média sort de PostService, et le gestionnaire socket en mocke le service (#6280)
+  - l'édition d'un post ne déclenche plus la traduction de légende DANS sa transaction (#6280)
+  - route POST /posts/media/:mediaId/caption/translate (#6280)
+  - jest.requireActual fonctionne sous bun test (#6519)
+  - PostService déclenche la traduction de légende à la création/édition/repost (#6280)
+  - MediaCaptionTranslationService — traduction de la légende d'un média (#6280)
+  - ContactDirectoryService.match() ne perd plus un contact sans blockedUserIds (#6529) (#6530)
+  - un post s'ouvre à nouveau — getPostById lit par select, plus par include (#6503)
+  - aucun effaceur ne laisse plus de message sans expéditeur (#6501)
+  - un expéditeur disparu est réparé, et la lecture de la conversation rejouée une fois (#6501)
+  - PostMedia.captionLanguage/captionTranslations + événement média:légende-traduction
+
+## 1.50.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - le cliquet des couleurs en dur ne compte plus l'appel mais le codage en dur (#6511)
+  - le geste tactile n'ARRIVAIT pas sur le runner — cascade déclarée, voie de repli ÉPROUVÉE avant d'être poussée
+  - le cliquet des couleurs rougissait sur l'APPLICATION de la règle qu'il défend — référence 943 → 946 (#6481, #6511)
+  - le gate Réels ne s'en remet plus à l'ÉLAN — douze invariants accusaient l'application pour une faute du harnais
+  - l'indice de l'appui long du disque du Flux n'est plus lu comme un texte orphelin (#6499)
+  - le bouton retour des Réels ne quitte jamais Meeshy, et vient en premier au clavier (#6498)
+  - les paliers anciens ne tombaient pas par le plafond, mais par 26 DOUBLONS — l'index unique n'existait pas (#6472)
+  - le détail Meesh dit sa frappe et son échec, et l'entrée prend la forme d'iOS (#6470)
+  - « votre point de conversation » au singulier — l'accord passe par la RÈGLE, jamais par un `if` français (#6478)
+  - le disque du Flux bascule Flux ↔ conversations, et son appui long ouvre les Réels (#6456)
+  - l'inscription se refait — téléphone d'abord, identité dérivée montrée ET envoyée (#6479)
+  - l'état vide de Messages favoris cesse d'afficher des guillemets échappés (#6481)
+  - chaque page ouverte depuis Réglages porte le retour en verre, un en-tête clair et des (+) en verre (#6481)
+  - la leçon 604 arrivée en double devient 609, et iOS reçoit le miroir Swift de la dérivation d'identité (#6479)
+  - remplissage des points historiques, option B — script à blanc par défaut (#6434) (#6455)
+  - retire next-pwa, jamais importé, qui épinglait un sous-arbre next/react/playwright (#6420)
+  - la migration 013 reconnaît enfin l'adresse héritée sans route de flux (#6390)
+  - les Réels se regardent — un pager plein écran servi par la passerelle, ouvert depuis le Flux (#6457)
+  - la dérivation d'identité MONTE au partagé — un écran ne peut promettre que ce qu'il calcule avec le serveur (#6479)
+  - l'entrée Meesh devient une seule pièce de verre, et Progression prend l'en-tête qui se réduit avec le retour en verre (#6466, #6480)
+  - un numéro IMPLAUSIBLE est refusé — la validité d'un numéro n'est pas sa vraisemblance (#6479)
+  - les trois notes passent derrière un (i) — l'écran d'inscription cesse d'être un mur de texte (#6441)
+  - le détail Meesh dit la frappe en cours et son échec, l'élan lit sa fenêtre, l'entrée devient un groupe de verre (#6467, #5927, #6466)
+  - un double tap latéral avance/recule la vidéo de 10 s, comme iOS (#6369) (#6374)
+  - le remplissage éteint aussi les niveaux gravés au-dessus du score (#6434, #6465)
+  - le menu flottant droit mène à l'administration, pour qui en a la permission servie (#6458)
+  - la frappe n'éteint que les paliers non couverts, et rejoue un conflit d'écriture (#6465, #6467)
+  - le champ téléphone dit ce que le numéro OUVRE — le seul levier honnête pour qu'il soit donné (#6441)
+  - le nom affiché devient facultatif — l'adresse seule ouvre enfin le compte que l'écran promettait (#6441)
+  - remplissage des points historiques, option B — loi pure, passage gardé, simulation par défaut (#6434)
+  - Découvrir reconnaît un contact ou un bloqué au-delà de la première page de cent (#6421)
+  - CI — sync-pill est un crochet de sélection, pas une classe stylée
+  - la pastille hors ligne descend sous la seconde bande de quatre écrans
+  - hors production, les réglages non portés deviennent inertes plutôt que de mener au legacy de PRODUCTION (#6354)
+  - un avatar et une vignette passent par la route de flux, jamais par la racine de la passerelle
+  - un marqueur (beta) et un marqueur de saut CI dans le même commit ne se supprime plus en silence
+  - un post s'ouvre à nouveau — getPostById lit par select, plus par include (#6503)
+  - un compte sans blockedUserIds redevient chercheable (#6452) (#6471)
+  - monter requireEmailVerification sur publier/inviter/créer un lien (#6437) (#6450)
+  - budget global de 10 s sur l'illustration d'agent (#6198)
+
+## 1.49.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - la borne de mot de passe DÉCLARÉE redevient atteignable (#6436) (#6446)
+  - rester sous le budget de taille de PasswordResetService.test.ts
+  - changer son mot de passe révoque les autres sessions (#6435)
+  - la borne de mot de passe DÉCLARÉE redevient atteignable (#6436)
+  - l'accolade orpheline qui cassait MagicLinkService, et la garde nommée pour un champ qui mesurait tout l'écran (#6424)
+  - Release publie pour les plateformes de Docker — plus d'étage arm64 émulé (#6442)
+  - les clients offrent l'inscription par adresse seule — le mot de passe devient un choix (#6424, #6441)
+  - l'entrée Meesh montre une pièce d'argent, plus le logo Meeshy (#6427)
+  - `hasPassword` rejoint la forme SERVIE par /me, et le témoin du lien magique quitte un fichier hors budget (#6424)
+  - les onglets de Découvrir se parcourent aux flèches du clavier (#6430)
+  - la Meesh se montre en pièce d'argent sur le web — jeton meeshSilver dérivé de MeeshyColors (#6427)
+  - l'espace d'administration est SERVI par la v2, fail-closed (#6432)
+  - une Meesh frappée apparaît au solde — les totaux se lisent au registre (#6428)
+  - le premier e-mail d'un compte lui DIT son identité, et la porte qu'il a (#6424)
+  - un compte peut naître d'une adresse seule, et vivre sans mot de passe (#6424)
+  - le bouton « Mettre à jour » restait GRIS pour un compte sans mot de passe (#6424)
+  - un e-mail suffit à nommer un compte — pseudo et nom affichés dérivés de sa partie locale (#6424)
+
+## 1.48.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - l'écran d'attente des destinations flottantes, qu'aucune route ne monte plus, quitte le dépôt (#6416)
+  - un double tap n'agit qu'une fois, un geste en vol ne ment pas, une requête en pause se dit hors ligne (#6417, #6418, #6419)
+  - Mes liens se lisent et se gèrent sur le web, comme LinksHubView d'iOS (#6361)
+  - le barreau « Découvrir » porte son compte dans les gates de langue et de menu (#6406)
+  - le texte d'un sticker voyage avec son image — legende et alt
+  - les témoins d'inscription suivent le minimum de mot de passe du schéma, sans littéral (#6393)
+  - le barreau « Découvrir » porte le compte des demandes reçues, comme iOS (#6321)
+  - on découvre des personnes sur le web, comme PeopleDiscoveryView d'iOS (#6363)
+  - le journal d'appels se lit sur le web, comme l'onglet Appels d'iOS (#6362)
+  - ses communautés se lisent, s'ouvrent et se créent comme sur iOS (#6364)
+  - la barre de lecture est un chunk à la demande — une visionneuse de photos ne la paie plus (#6359)
+  - la visionneuse monte la barre de lecture au couloir bas et le play/pause au centre (#6359)
+  - la mécanique et la barre de lecture vidéo — position, durée, parcours au doigt, muet, vitesse, image dans l'image (#6359)
+  - le retour matériel ferme le menu d'une rangée sans quitter la liste (#6357)
+  - la landing n'affirme plus « 200 languages » ni la confidentialité absolue de la traduction serveur (#6350)
+  - le contraste du verre a un gate, pas seulement une prose (#6308) (#6347)
+  - le contraste du verre a un gate, pas seulement une prose (#6308)
+  - la pellicule de la visionneuse défile dans les deux sens et réserve sa hauteur (#6346)
+  - message-deletion-single-source.test.ts tourne sous Vitest, pas bun:test (#6414)
+  - la longueur minimale d'un mot de passe revient à 6 (directive porteur 2026-09-13)
+
+## 1.47.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - NotFound parle la langue d'interface, sans le mot « href » (#6341)
+  - les trois derniers rouges — un témoin littéral, un témoin muet, et le cliquet de dette
+  - une couche modale est insérée AVEC son entrée d'historique — un retour dans la première image ne quitte plus le fil (#6319)
+  - « settings » rejoint l'union RouteKey que la porte privée déclare (#6340)
+  - « Modifier » du profil n'est offert qu'une fois le profil servi — plus de bouton sans effet au démarrage à froid ou en erreur (#6343)
+  - une confirmation des réglages n'écrit que les réglages du geste — une réponse périmée ne réécrit plus la bascule voisine (#6342)
+  - les réglages sont une route privée — sans session, la porte renvoie à la connexion au lieu de squelettes sans fin (#6340)
+  - le plein cadre ne rogne plus — la vue ÉCOUTE enfin le solveur de cadrage
+  - les réglages suivent SettingsView — thème et langue d'interface à chaud, bascules obéies par la passerelle, legacy atteignable, déconnexion (#5563)
+  - le média suit le doigt, et l'appui long reprend la lecture
+  - onze gardes rouges de #5599 réalignées sur le code qu'elles gardent — aucune n'était un défaut de l'app
+  - son profil se voit et se modifie — bannière, avatar recompressé, identité, trois rangs du Prisme, statistiques, demandes (#6289)
+  - la leçon du tour #6169 devient la 603 — deux leçons portaient le numéro 600 et la garde de numérotation rougissait dev
+  - menu ouvert, le compte de notifications passe du disque au barreau « Notifications » — et la pastille suit le disque qu'on déplace (#6219)
+  - la cloche se lit par catégorie, se marque lue en optimiste et mène à sa cible — le bouton flottant porte le vrai compte (#6288, #6219, #6313)
+  - le fil porte la grille de médias 2/3/4+ avec son badge +N, la vidéo en tuile et la visionneuse plein écran avec sa pellicule (#6169)
+  - l'interface a un catalogue en sept langues, un chunk par langue, et ses premiers clients (#6206)
+  - la pilule de jour s'efface au repos, et le verre a UN site, deux densités et un flou (#6101, #6124)
+  - quatre gardes du header suivent la loi là où elle a déménagé
+  - trois gardes annonçaient « suppression sans confirmation » sur un code intact
+  - relève les cliquets de dette « catalogue mort » pour les 6 routes de #4317
+  - le catalogue perd ses 68 clés en double et gagne les six actions du menu natif des messages (#5599)
+  - la langue d'un vocal ne s'hérite plus du message précédent
+  - partager une publication du fil — feuille du système dans le geste, presse-papier en repli, partage compté après coup (#6278)
+  - les cœurs des FAVORIS et des HASHTAGS jouaient leur rafale sans rien aimer
+  - une seule adresse pour le détail tant que la première peinture est saturée — l'alias /feeds/post attend #6279 (#6278)
+  - le Flux s'ouvre sur le plateau des stories et son en-tête s'escamote ; aucun disque flottant ne recouvre un texte au repos (#6277)
+  - le plateau des stories porte la cote d'iOS — elle gouverne l'AVATAR, pas la cellule (#6133)
+  - le détail d'une publication — /post/:id et /feeds/post/:id, cache d'abord, gestes partagés avec le fil (#6278)
+  - l'image translator se reconstruit (anyio 4.15.1) et la release dérive la version des coques web-v2 (#6196)
+  - le fil suit les gestes en direct — post:liked, post:unliked et post:bookmarked posent le compte servi (#6278)
+  - le cœur et le signet d'une carte du fil deviennent des boutons à bascule — l'intention part, le cache peint (#6278)
+  - aimer et enregistrer une publication — optimiste, idempotent, défait sur refus, annoncé hors ligne (#6278)
+  - l'état « aimé / enregistré » du lecteur atteint la carte, et un geste bascule le cache paginé du fil sans jamais compter deux fois (#6278)
+  - le plein écran d'une scène cadre au ratio RÉEL, plus en 9:16 d'office
+  - le rail et le lecteur de stories appellent leurs successeurs, jamais les routes dépréciées (#6284)
+  - le rail et le lecteur de stories appellent leurs successeurs, jamais les routes dépréciées
+  - le fil des publications se lit sur le web, texte et image, légende dans la langue du lecteur, et la liste y mène au doigt
+  - spell out full test paths in CLAUDE.md to satisfy the path-existence guard
+  - stop routing Mongo/Redis admin UIs and raw DB ports on staging (#6254, #6255)
+  - stop routing Mongo/Redis admin UIs through Traefik in prod (#3640) (#6253)
+  - stop routing Mongo/Redis admin UIs through Traefik in prod (#3640)
+  - les stories se regardent en plein écran, une après l'autre, avec progression, tap avant/arrière, appui qui suspend et légende dans la langue du lecteur
+  - pin the emoji length bound to UTF-16 units, independent of zod's version (#6248)
+  - pin the emoji length bound to UTF-16 units, independently of zod's version
+  - le gate des actions de rangée mesurait le FLOTTEUR, pas le bouton (#6237)
+  - épingler zod à 4.4.3 — 4.5 compte des CODE POINTS et desserre 242 bornes en silence
+  - dev rouge — zod scindé entre deux workspaces, et un garde aveuglé par son propre littéral
+  - le composeur restaure la langue de son brouillon et porte les six occupantes de la rangée haute d'iOS
+  - check-lens fige son horloge, la rangée c-live cesse de bouger après minuit
+  - VoiceOver n'annonce plus « waveform and mic » avant « PROFIL VOCAL »
+  - deux deinit isolées double-libéraient — dont celle que je venais d'introduire (Refs #6226)
+  - le vumètre ne fait plus battre toute la conversation, et six portillons Equatable sont enfin posés (Refs #6226)
+  - la barre de recherche flotte et réserve sa place — plus de frontière de défilement infranchissable (Closes #6220)
+  - le plafond du chunk des menus flottants dit la mesure RÉELLE
+  - une vignette en boucle ne veille plus l'écran, et la Lentille tombe à 1,3 Ko (Refs #6221)
+  - les seize connexions de LECTURE reçoivent enfin le réglage SQLite (Refs #6221)
+  - la Lentille maigrit de 10 Ko à 3 — sept cibles de feuille sur le tas (Refs #6221)
+  - ouvrir une conversation ne déborde plus la pile — la vue maigrit de 15 Ko à 5 (Closes #6221)
+  - un menu flottant se déplace, s'accroche au bord et retrouve sa place
+  - deux menus flottants ouvrent le Flux et les sept autres écrans
+  - le numéro de build des coques suit une source unique et l'artefact construit est audité (Closes #6211)
+  - les huit destinations des menus flottants ont une adresse
+  - le fil défile d'un bord à l'autre de l'écran — le chrome flotte, il ne coupe plus (Closes #6213)
+  - shouldRetry does three attempts total, not five
+  - la Lentille charge la suite de la liste au défilement et se rafraîchit au tirer, comme sur iOS
+  - fixe la locale du scénario de langue du composeur en fr-FR
+  - un socle i18n d'interface, langue résolue au démarrage (#6206)
+  - la lecture d'un média se fait dans un cadre, et le plateau porte tout le reste
+  - réunir les gestes du plateau sur la vue qui les dispute, et faire converger les deux solveurs de cadrage
+  - le fil temps réel reçoit conversation:updated, message:translation et le roster multi-frappeurs
+  - le double tap latéral d'une vidéo recule ou avance de dix secondes
+  - les deux coques dérivent leur version de package.json, jamais 1.0 en littéral
+  - la progression d'une vidéo descend dans le couloir du plateau (#6162)
+  - une pièce jointe VIDÉO rend un repli lisible au lieu d'un vide (#6197)
+  - une pièce jointe VIDÉO rend un repli lisible au lieu d'un vide
+  - poser réagir · répondre · composer en colonne à droite du cadre (#6161)
+  - la frappe se lit dans la pastille, qui enfle et se rétracte
+  - l'app installée porte le numéro de build du projet
+  - la pastille « en pause » fait monter son glyphe avec son texte (#6142)
+  - le menu ⋯ remplace le bouton d'enregistrement du couloir haut
+  - retirer la capsule n/N du couloir haut de la galerie média
+  - ouvrir le plein cadre au tap, à l'appui long et au glissement (#6142)
+  - habiller le hors-champ d'un média de son ThumbHash, dans les deux états (#6143)
+  - poser le média de conversation dans un cadre arrondi, et rendre ses contrôles au plateau (#6141)
+  - réserve la marque aux œuvres composées, jamais aux médias transmis (#6146)
+  - le solveur du plateau de lecture rend le cadre ET le média (#6141)
+  - un message épinglé, transféré, modifié, système ou emoji seul se reconnaît dans le fil
+  - le témoin de check-utilities cesse d'affirmer le bug que #5960 a corrigé (#5966)
+  - les chips de l'Élan servent la fenêtre, pas le cumul (#5897)
+  - une CSP réelle en Report-Only, plus de domaine inexistant (#5728)
+  - retirer une réaction en tapant sa propre capsule (#5865)
+  - extraire le montage des modes du fil dans thread-modes.tsx
+  - six gardes de web-v3 cessent d'être verts parce qu'ils ne tournaient nulle part
+  - un refus d'inscription pour quota dit la vraie attente
+  - un pseudo déjà pris n'épuise plus le quota d'inscription
+  - le garde de dérive compare au contexte de build, pas à la tête
+  - golden partagé du Prisme pour ses quatre familles de résolveurs
+  - le CLAUDE.md cesse de citer le script que ce lot supprime
+  - @MainActor sur AchievementCopySingularAgreementTests
+  - la v3.1 prend l'image du legacy, et l'app annulée quitte le dépôt
+  - AchievementCopy accorde le singulier du palier 1 (#5859)
+  - le cliquet des couleurs ignore les commentaires (#5883)
+  - le cliquet des couleurs compte des USAGES, plus des mentions (#5883)
+  - la CI cesse de construire l'app annulée, et le chantier web reprend son nom (#5880)
+  - les 48 clés du lot engagement quittent le français forcé — run test (#5852)
+  - prerender-institutional lit le dist réellement construit (#5821)
+  - un démarrage sans repli LLM avertit (WARN), plus n'informe (#5826)
+  - sections.test.ts partage l'instant de l'ancre du fil au lieu d'un second new Date()
+  - exempt Next.js special files from the API-literal guard
+  - generate sitemap.xml and robots.txt (#3672)
+  - SPM cache key on Package.resolved instead of project.yml (#3609)
+  - le fil « Équipe déploiement » reste ancré à AUJOURD'HUI à Paris
+  - un conteneur en retard sur ses routes se signale avant l'utilisateur (#5644)
+  - retire un `as any` du témoin #3737 — dette ESLint régressait de 1
+  - conversation:updated porte enfin son groupe MÉDIA (#3737)
+  - répare le budget de taille et deux dernières fixtures 12-car. (#3629)
+  - aligne les fixtures de mot de passe sur PASSWORD_MIN_LENGTH=12 (#3629)
+  - régénère UsersEndpoint.swift et relève le cliquet de dette Swift (#3690)
+  - mot de passe 12 caractères partout, lookups email/phone limités (#3629)
+  - compacte() retire les commentaires CSS avant de replier l'espace
+  - resserre le cliquet de dette de lint web après le retrait du hook mort (#3646)
+  - un seul hook lit les messages d'une conversation (#3646)
+  - le menu du message le plus ancien s'ouvre vers le bas, sans JS
+  - apps/web sert le certificat mkcert partagé sur https://meeshy.local:3100
+  - remesure les ratchets écrasés par la fusion de dev (#5385)
+  - rattrape le ratchet participate/liste après #5386
+  - un message du fil se transfère vers une autre conversation (#5386)
+  - désambiguïse le doublon « Leçon 162 » de tasks/lessons.md
+  - amorce le transfert de message (#5386) — menu, mutations, envoi
+  - l'expiration d'un retrait s'annonce, l'annuler se nomme (#5387)
+  - composer.js réenregistré, feed.js ne paie plus le texte du composer
+  - sépare la durée de vie d'une story de la copie de création (#5479)
+  - remesure le budget de composer.js (drift pré-existant)
+  - sdk-tests nomme ce qui casse avant de mourir (#5466)
+  - un fond file:// ne gagne plus sur le postMediaId (drift pré-existant, #5457)
+  - le témoin de déclenchement suit le refactor #5407
+  - désactive le cache distant Turborepo, jamais joignable sans TURBO_TOKEN (#4861)
+  - StickerPaletteTests suit le déplacement du déclencheur de lieu (drift pré-existant, #5461)
+  - StickerPaletteTests suit le déplacement du déclencheur de lieu (#5407, #5461)
+  - un fond file:// ne gagne plus sur le postMediaId d'une story
+  - le témoin de rédaction d'en-tête appelle redactHeader lui aussi
+  - fix second missed TestEndpoint.root reference in APIServiceTests
+  - ShareLinkService migre vers DELETE /guest-sessions/me (#5425)
+  - rédige l'en-tête Authorization et couvre /auth/login/2fa (#4843)
+  - remesure le budget de navigateur.js après le correctif #5440
+  - la navigation douce attrape les trois promesses de la View Transition (#5440)
+  - attrape ready et finished d'une transition abandonnée (#5440)
+  - attache rate-limit@file au routeur Traefik du gateway (#3622)
+  - PATCH /admin/share-links/:id rouvre un lien fermé (#5429)
+  - scope le locator a.avatar-lien à la ligne de Marta sur /chats
+  - remesure le budget du fil après la fusion de deux correctifs concurrents
+  - remesure le budget du fil, ratchet rouge sur dev — porté de #5426
+  - un message s'épingle dans le fil v3, avec son bandeau (#5385)
+  - resync jetons-de-vues.json/issues-a-ouvrir.md with dev
+  - un refus de schéma à l'inscription parle français, jamais Ajv
+  - resync budgets-mesures.json/budgets.json with dev after merge
+  - guard the dead-entry debt of the generated Swift/TS endpoint catalogs (#5372)
+  - la liste et le tableau de bord enregistrent le travailleur de zone (#5321)
+  - retire le jumeau mort PostApi.getStories, documente activeCall()
+  - unify French wording between app and SDK localization catalogs
+  - retire le bloc de rendu dupliqué qui bloquait la collecte Playwright
+  - armer la fenêtre glissante de session sur les deux refresh du web
+  - généraliser la garde #6294 aux classes instanceof-vérifiées — 5 modules confirmés, 48 sites (#6338)
+  - respecter le budget de taille figé (#4531) sur les trois suites qui l'ont dépassé
+  - généraliser la garde #6294 aux classes instanceof-vérifiées — 5 modules confirmés, 48 sites
+  - renumérote la leçon 600 dupliquée en 603 — « Test gateway » rouge sur dev, sans rapport avec ce lot
+  - #4317 — les six gestes utilisateur sans successeur migrent sous /api/v1 (#6302)
+  - #4317 — les six gestes utilisateur sans successeur migrent sous /api/v1
+  - couvre la forme corps-de-fonction du double withMutationLog (#6294, revue #6295)
+  - étale le module réel dans les 7 doubles étroits de withMutationLog restants, et pose son garde
+  - l'ACTEUR d'un like fait partie de l'audience de son propre geste
+  - withMutationLog requireActual needs an object cast (error-format.test.ts)
+  - le `requireActual` étalé prend son cast — la suite d'error-format se CHARGE à nouveau (#6293)
+  - étale le module réel dans les 5 doubles fautifs de withMutationLog, gate en cliquet (#6294)
+  - un like rejoué ne double plus la notification de l'auteur (#6293)
+  - démuseler TS2307 — 19 imports cassés dans des tests, jamais résolus (#6252)
+  - démuseler TS2307 — 19 imports cassés dans des tests, jamais résolus
+  - postInclude cesse de servir storyViews à tout lecteur d'un post (#6208)
+  - keep PostFeedService.test.ts at its inherited line budget
+  - repoint the two remaining include-shape post assertions to select
+  - postInclude cesse de servir storyViews à tout lecteur d'un post
+  - épingle la résolution DNS au connect pour l'illustration d'agent (#6201)
+  - la garde SSRF de l'illustration valide TOUTES les adresses du nom, jamais la première (#6201)
+  - StatusHandler's typing-denial test double gains socket.leave()
+  - typing:start signals a lost conversation membership instead of failing silently
+  - table légère votes/réponses pour stickers interactifs (O10)
+  - factor the five account-deletion sweep steps to stay under the file-size budget
+  - un compte supprimé n'est plus interrogeable en clair (#5691)
+  - un avis d'arrivée avance l'horloge de sa conversation
+  - align EngagementService.test.ts on the content axis weight of 9
+  - une session expirée cesse d'être ressuscitée ou de rouvrir un socket (#5712)
+  - route la purge du défi 2FA par son site unique (#4542)
+  - un compte supprimé n'garde plus son identité en clair (#5691)
+  - anonymize messages of a deleted account automatically (#5689)
+  - un ban à durée s'expire tout seul (#5527)
+  - align account-deletion grace period to the promised 30 days, purge sessions/voice profile/share links automatically (#3632)
+  - route GET /me/export pagination through the SSOT validatePagination
+  - l'export RGPD couvre posts, stories, commentaires, réactions, médias, profil vocal et sessions (#3633)
+  - résout le conflit de merge dev↔PR sur messagePostSaveEffects
+  - ne pas mocker les schémas de réponse partagés dans le nouveau test (#3627)
+  - poser un sticker alimente l'axe d'engagement « tool.sticker »
+  - un commentaire texte alimente l'axe d'engagement « comment.text »
+  - un auteur peut désactiver les commentaires de son post (#3959)
+  - la réinitialisation de mot de passe par un admin révoque les sessions actives (#5569)
+  - EXACT geo-discoverability est réservée à un opt-in explicite et à un adulte vérifié (#3637)
+  - vérification MIME universelle, retrait EXIF, SVG en téléchargement forcé sur la route legacy (#3627)
+  - export média watermarké côté serveur (#3600)
+  - l'invitation par e-mail persiste sa relation et mène à une page qui existe (#3691)
+  - répare les deux cliquets touchés par la nouvelle route (#3690)
+  - un code de parrainage intrinsèque au compte (#3690)
+  - extrait le témoin du jeton hérité pour rester sous le budget de taille (#4531)
+  - retire rotateRefreshToken mort, garde un JWT hérité de 6 mois refusé (#3621)
+  - persist detectedLanguage on Post so on-demand translation reuses it (#5422)
+  - remove three dead polling-translation routes (#5423)
+  - route direct .log.warn( calls through logWarn() (#5415)
+  - cover 'expired' in queuedMessageArrival's exhaustive table
+  - classe `expired` dans la garde d'exhaustivité des files d'attente
+  - remove IEncryptionAdapter, exercised by no implementer or caller
+  - give a self-destructing message its own message:expired event
+  - remove SignalProtocolAdapter, unreachable from every production path
+  - réparer les 5 suites que la mesure ciblée du lot précédent avait manquées
+  - mesurer et rallumer noUnusedParameters — deux gardes de sécurité manquantes trouvées au passage
+  - apply reader's personal history hiding to forward-source previews
+  - un repost de story v3 remappe enfin ses propres postMediaId
+  - grpcio-reflection revient à 1.76.0 — le pin qui plafonne protobuf sous 7 (#6297)
+  - un seul jeu de défauts de workers, scaling réel, gRPC mort retiré (#3664)
+  - stop caching and serving translation failures as text
+  - régénère api/endpoints.ts et les énumérations iOS pour #4317
+  - accorder le singulier du palier 1 des succès de volume
+  - posts delegate Prism translation stripping to a shared adapter
+  - exclude admin-only exploitation routes from client API catalogs (#5424)
+  - régénère api/endpoints.ts pour PATCH /admin/share-links/:id
+
+## 1.46.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - le `requireActual` étalé prend son cast — la suite d'error-format se CHARGE à nouveau (#6293)
+  - un like rejoué ne double plus la notification de l'auteur (#6293)
+  - le rail et le lecteur de stories appellent leurs successeurs, jamais les routes dépréciées (#6284)
+  - le fil des publications se lit sur le web, texte et image, légende dans la langue du lecteur, et la liste y mène au doigt
+  - spell out full test paths in CLAUDE.md to satisfy the path-existence guard
+  - stop routing Mongo/Redis admin UIs and raw DB ports on staging (#6254, #6255)
+  - stop routing Mongo/Redis admin UIs through Traefik in prod (#3640) (#6253)
+  - démuseler TS2307 — 19 imports cassés dans des tests, jamais résolus (#6252)
+  - les stories se regardent en plein écran, une après l'autre, avec progression, tap avant/arrière, appui qui suspend et légende dans la langue du lecteur
+  - pin the emoji length bound to UTF-16 units, independent of zod's version (#6248)
+  - le gate des actions de rangée mesurait le FLOTTEUR, pas le bouton (#6237)
+  - épingler zod à 4.4.3 — 4.5 compte des CODE POINTS et desserre 242 bornes en silence
+  - dev rouge — zod scindé entre deux workspaces, et un garde aveuglé par son propre littéral
+  - le composeur restaure la langue de son brouillon et porte les six occupantes de la rangée haute d'iOS
+  - check-lens fige son horloge, la rangée c-live cesse de bouger après minuit
+  - VoiceOver n'annonce plus « waveform and mic » avant « PROFIL VOCAL »
+  - deux deinit isolées double-libéraient — dont celle que je venais d'introduire (Refs #6226)
+  - le vumètre ne fait plus battre toute la conversation, et six portillons Equatable sont enfin posés (Refs #6226)
+  - la barre de recherche flotte et réserve sa place — plus de frontière de défilement infranchissable (Closes #6220)
+  - le plafond du chunk des menus flottants dit la mesure RÉELLE
+  - une vignette en boucle ne veille plus l'écran, et la Lentille tombe à 1,3 Ko (Refs #6221)
+  - les seize connexions de LECTURE reçoivent enfin le réglage SQLite (Refs #6221)
+  - la Lentille maigrit de 10 Ko à 3 — sept cibles de feuille sur le tas (Refs #6221)
+  - ouvrir une conversation ne déborde plus la pile — la vue maigrit de 15 Ko à 5 (Closes #6221)
+  - un menu flottant se déplace, s'accroche au bord et retrouve sa place
+  - deux menus flottants ouvrent le Flux et les sept autres écrans
+  - le numéro de build des coques suit une source unique et l'artefact construit est audité (Closes #6211)
+  - les huit destinations des menus flottants ont une adresse
+  - le fil défile d'un bord à l'autre de l'écran — le chrome flotte, il ne coupe plus (Closes #6213)
+  - shouldRetry does three attempts total, not five
+  - la Lentille charge la suite de la liste au défilement et se rafraîchit au tirer, comme sur iOS
+  - fixe la locale du scénario de langue du composeur en fr-FR
+  - postInclude cesse de servir storyViews à tout lecteur d'un post (#6208)
+  - un socle i18n d'interface, langue résolue au démarrage (#6206)
+  - keep PostFeedService.test.ts at its inherited line budget
+  - repoint the two remaining include-shape post assertions to select
+  - postInclude cesse de servir storyViews à tout lecteur d'un post
+  - épingle la résolution DNS au connect pour l'illustration d'agent (#6201)
+  - la lecture d'un média se fait dans un cadre, et le plateau porte tout le reste
+  - réunir les gestes du plateau sur la vue qui les dispute, et faire converger les deux solveurs de cadrage
+  - le fil temps réel reçoit conversation:updated, message:translation et le roster multi-frappeurs
+  - le double tap latéral d'une vidéo recule ou avance de dix secondes
+  - la garde SSRF de l'illustration valide TOUTES les adresses du nom, jamais la première (#6201)
+  - les deux coques dérivent leur version de package.json, jamais 1.0 en littéral
+  - la progression d'une vidéo descend dans le couloir du plateau (#6162)
+  - une pièce jointe VIDÉO rend un repli lisible au lieu d'un vide (#6197)
+  - une pièce jointe VIDÉO rend un repli lisible au lieu d'un vide
+  - poser réagir · répondre · composer en colonne à droite du cadre (#6161)
+  - la frappe se lit dans la pastille, qui enfle et se rétracte
+  - l'app installée porte le numéro de build du projet
+  - la pastille « en pause » fait monter son glyphe avec son texte (#6142)
+  - le menu ⋯ remplace le bouton d'enregistrement du couloir haut
+  - retirer la capsule n/N du couloir haut de la galerie média
+  - ouvrir le plein cadre au tap, à l'appui long et au glissement (#6142)
+  - habiller le hors-champ d'un média de son ThumbHash, dans les deux états (#6143)
+  - poser le média de conversation dans un cadre arrondi, et rendre ses contrôles au plateau (#6141)
+  - réserve la marque aux œuvres composées, jamais aux médias transmis (#6146)
+  - le solveur du plateau de lecture rend le cadre ET le média (#6141)
+  - StatusHandler's typing-denial test double gains socket.leave()
+  - typing:start signals a lost conversation membership instead of failing silently
+  - un message épinglé, transféré, modifié, système ou emoji seul se reconnaît dans le fil
+  - le témoin de check-utilities cesse d'affirmer le bug que #5960 a corrigé (#5966)
+  - table légère votes/réponses pour stickers interactifs (O10)
+  - les chips de l'Élan servent la fenêtre, pas le cumul (#5897)
+  - factor the five account-deletion sweep steps to stay under the file-size budget
+  - un compte supprimé n'est plus interrogeable en clair (#5691)
+  - retirer une réaction en tapant sa propre capsule (#5865)
+  - extraire le montage des modes du fil dans thread-modes.tsx
+  - six gardes de web-v3 cessent d'être verts parce qu'ils ne tournaient nulle part
+  - un refus d'inscription pour quota dit la vraie attente
+  - un avis d'arrivée avance l'horloge de sa conversation
+  - un pseudo déjà pris n'épuise plus le quota d'inscription
+  - le garde de dérive compare au contexte de build, pas à la tête
+  - golden partagé du Prisme pour ses quatre familles de résolveurs
+  - le CLAUDE.md cesse de citer le script que ce lot supprime
+  - @MainActor sur AchievementCopySingularAgreementTests
+  - la v3.1 prend l'image du legacy, et l'app annulée quitte le dépôt
+  - AchievementCopy accorde le singulier du palier 1 (#5859)
+  - le cliquet des couleurs ignore les commentaires (#5883)
+  - le cliquet des couleurs compte des USAGES, plus des mentions (#5883)
+  - la CI cesse de construire l'app annulée, et le chantier web reprend son nom (#5880)
+  - les 48 clés du lot engagement quittent le français forcé — run test (#5852)
+  - align EngagementService.test.ts on the content axis weight of 9
+  - prerender-institutional lit le dist réellement construit (#5821)
+  - un démarrage sans repli LLM avertit (WARN), plus n'informe (#5826)
+  - sections.test.ts partage l'instant de l'ancre du fil au lieu d'un second new Date()
+  - SPM cache key on Package.resolved instead of project.yml (#3609)
+  - le fil « Équipe déploiement » reste ancré à AUJOURD'HUI à Paris
+  - une session expirée cesse d'être ressuscitée ou de rouvrir un socket (#5712)
+  - route la purge du défi 2FA par son site unique (#4542)
+  - un compte supprimé n'garde plus son identité en clair (#5691)
+  - anonymize messages of a deleted account automatically (#5689)
+  - un ban à durée s'expire tout seul (#5527)
+  - align account-deletion grace period to the promised 30 days, purge sessions/voice profile/share links automatically (#3632)
+  - un conteneur en retard sur ses routes se signale avant l'utilisateur (#5644)
+  - route GET /me/export pagination through the SSOT validatePagination
+  - l'export RGPD couvre posts, stories, commentaires, réactions, médias, profil vocal et sessions (#3633)
+  - résout le conflit de merge dev↔PR sur messagePostSaveEffects
+  - ne pas mocker les schémas de réponse partagés dans le nouveau test (#3627)
+  - poser un sticker alimente l'axe d'engagement « tool.sticker »
+  - un commentaire texte alimente l'axe d'engagement « comment.text »
+  - un auteur peut désactiver les commentaires de son post (#3959)
+  - conversation:updated porte enfin son groupe MÉDIA (#3737)
+  - la réinitialisation de mot de passe par un admin révoque les sessions actives (#5569)
+  - EXACT geo-discoverability est réservée à un opt-in explicite et à un adulte vérifié (#3637)
+  - vérification MIME universelle, retrait EXIF, SVG en téléchargement forcé sur la route legacy (#3627)
+  - export média watermarké côté serveur (#3600)
+  - répare le budget de taille et deux dernières fixtures 12-car. (#3629)
+  - l'invitation par e-mail persiste sa relation et mène à une page qui existe (#3691)
+  - aligne les fixtures de mot de passe sur PASSWORD_MIN_LENGTH=12 (#3629)
+  - régénère UsersEndpoint.swift et relève le cliquet de dette Swift (#3690)
+  - mot de passe 12 caractères partout, lookups email/phone limités (#3629)
+  - répare les deux cliquets touchés par la nouvelle route (#3690)
+  - un code de parrainage intrinsèque au compte (#3690)
+  - extrait le témoin du jeton hérité pour rester sous le budget de taille (#4531)
+  - retire rotateRefreshToken mort, garde un JWT hérité de 6 mois refusé (#3621)
+  - compacte() retire les commentaires CSS avant de replier l'espace
+  - resserre le cliquet de dette de lint web après le retrait du hook mort (#3646)
+  - le menu du message le plus ancien s'ouvre vers le bas, sans JS
+  - remesure les ratchets écrasés par la fusion de dev (#5385)
+  - rattrape le ratchet participate/liste après #5386
+  - un message du fil se transfère vers une autre conversation (#5386)
+  - désambiguïse le doublon « Leçon 162 » de tasks/lessons.md
+  - amorce le transfert de message (#5386) — menu, mutations, envoi
+  - l'expiration d'un retrait s'annonce, l'annuler se nomme (#5387)
+  - composer.js réenregistré, feed.js ne paie plus le texte du composer
+  - sépare la durée de vie d'une story de la copie de création (#5479)
+  - remesure le budget de composer.js (drift pré-existant)
+  - sdk-tests nomme ce qui casse avant de mourir (#5466)
+  - un fond file:// ne gagne plus sur le postMediaId (drift pré-existant, #5457)
+  - le témoin de déclenchement suit le refactor #5407
+  - désactive le cache distant Turborepo, jamais joignable sans TURBO_TOKEN (#4861)
+  - StickerPaletteTests suit le déplacement du déclencheur de lieu (drift pré-existant, #5461)
+  - StickerPaletteTests suit le déplacement du déclencheur de lieu (#5407, #5461)
+  - persist detectedLanguage on Post so on-demand translation reuses it (#5422)
+  - un fond file:// ne gagne plus sur le postMediaId d'une story
+  - le témoin de rédaction d'en-tête appelle redactHeader lui aussi
+  - fix second missed TestEndpoint.root reference in APIServiceTests
+  - ShareLinkService migre vers DELETE /guest-sessions/me (#5425)
+  - rédige l'en-tête Authorization et couvre /auth/login/2fa (#4843)
+  - remove three dead polling-translation routes (#5423)
+  - remesure le budget de navigateur.js après le correctif #5440
+  - la navigation douce attrape les trois promesses de la View Transition (#5440)
+  - attrape ready et finished d'une transition abandonnée (#5440)
+  - attache rate-limit@file au routeur Traefik du gateway (#3622)
+  - PATCH /admin/share-links/:id rouvre un lien fermé (#5429)
+  - scope le locator a.avatar-lien à la ligne de Marta sur /chats
+  - remesure le budget du fil après la fusion de deux correctifs concurrents
+  - remesure le budget du fil, ratchet rouge sur dev — porté de #5426
+  - route direct .log.warn( calls through logWarn() (#5415)
+  - un message s'épingle dans le fil v3, avec son bandeau (#5385)
+  - resync jetons-de-vues.json/issues-a-ouvrir.md with dev
+  - un refus de schéma à l'inscription parle français, jamais Ajv
+  - resync budgets-mesures.json/budgets.json with dev after merge
+  - guard the dead-entry debt of the generated Swift/TS endpoint catalogs (#5372)
+  - la liste et le tableau de bord enregistrent le travailleur de zone (#5321)
+  - cover 'expired' in queuedMessageArrival's exhaustive table
+  - retire le jumeau mort PostApi.getStories, documente activeCall()
+  - unify French wording between app and SDK localization catalogs
+  - classe `expired` dans la garde d'exhaustivité des files d'attente
+  - remove IEncryptionAdapter, exercised by no implementer or caller
+  - give a self-destructing message its own message:expired event
+  - retire le bloc de rendu dupliqué qui bloquait la collecte Playwright
+  - remove SignalProtocolAdapter, unreachable from every production path
+  - réparer les 5 suites que la mesure ciblée du lot précédent avait manquées
+  - mesurer et rallumer noUnusedParameters — deux gardes de sécurité manquantes trouvées au passage
+  - apply reader's personal history hiding to forward-source previews
+  - un repost de story v3 remappe enfin ses propres postMediaId
+  - une CSP réelle en Report-Only, plus de domaine inexistant (#5728)
+  - exempt Next.js special files from the API-literal guard
+  - generate sitemap.xml and robots.txt (#3672)
+  - retire un `as any` du témoin #3737 — dette ESLint régressait de 1
+  - un seul hook lit les messages d'une conversation (#3646)
+  - apps/web sert le certificat mkcert partagé sur https://meeshy.local:3100
+  - armer la fenêtre glissante de session sur les deux refresh du web
+  - un seul jeu de défauts de workers, scaling réel, gRPC mort retiré (#3664)
+  - stop caching and serving translation failures as text
+  - accorder le singulier du palier 1 des succès de volume
+  - posts delegate Prism translation stripping to a shared adapter
+  - exclude admin-only exploitation routes from client API catalogs (#5424)
+  - régénère api/endpoints.ts pour PATCH /admin/share-links/:id
+
+## 1.45.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - l'import relatif de la loi de protection porte son extension .js (#6189)
+  - une pièce jointe DÉCLARÉE protégée ne rend plus son média — et sa loi descend dans shared (#6189)
+  - un seul site résout apiConfig.source en dépendances (#6151)
+  - le rail des stories porte l'humeur de son auteur, et chaque pastille ouvre sa story
+  - le témoin clavier de la Lentille compte les TROIS arrêts de l'en-tête, pas un
+  - le projet Xcode reprend les trois fichiers de #6156 — xcodegen regénéré
+  - le cliquet de dette de taille reprend son mou (#6050)
+  - dans l'éditeur d'objet, le clavier et le panneau d'options s'excluent (#6156)
+  - la purge de déconnexion vide le DERNIER QueryClient, pas celui capturé au premier montage
+  - retire l'invalidation du rail des statuts, superseded par la fusion story-rail
+  - le témoin de peinture exige l'IDENTITÉ de l'image servie, pas l'uniformité de son cœur
+  - purge Cache Storage, React Query cache and E2EE keys at logout (#3743)
+  - le rail de la Lentille porte les stories d'iOS, et les deux boutons d'en-tête ont leur effet
+  - le rail défile quand il ne tient pas, et choisir un outil rend le clavier (#6131, #6132)
+  - la mise en évidence d'un saut s'ENREGISTRE avant le geste, elle ne se guette plus (#6148)
+  - écrire n'est pas publier — le socle s'efface pendant la frappe (#6132)
+  - la légende en place solde ses dettes — gardes déplacées, réserve inerte retirée, hôte découpé (#6126)
+  - le témoin des médias attend la PEINTURE de l'image, pas son chargement (#6135)
+  - le gate du mode de lecture cesse de rougir entre minuit et dix heures (#6130)
+  - le composeur dit dans quelle langue on écrit et l'envoie comme langue d'origine
+  - l'enveloppe du grand plateau cède avec son rail, et le gate cesse d'interroger deux noms morts (#6080)
+  - éditer, sélectionner et composer passent en tête du menu système (#6117)
+  - le double tap ouvre le menu système, l'appui long le menu Meeshy (#6117)
+  - le fil et la liste reçoivent le temps réel de la passerelle (socket.io, message:new, typing)
+  - MEESHY_SHELL_START_PATH sert les deux coques, ou se refuse
+  - la compaction du trail des stories ne déplace plus les rangées de la Lentille
+  - une image s'affiche et un vocal se joue dans le fil, dans la langue du lecteur
+  - le rail des stories cesse de promettre un contenu qui ne vient pas
+  - la pastille de coupure cessait d'aller chercher son code SUR LE RÉSEAU
+  - le modèle d'une traduction est facultatif jusqu'au bout de la chaîne
+  - le bouton « Réagir » du plein écran parle les sept langues (#6114)
+  - une traduction malformée ne vide plus la conversation entière
+  - le rejeu hors-ligne d'un réglage cesse d'échouer à chaque tentative
+  - « Composer » s'ouvre depuis le média d'un post et la slide d'une story (#6085)
+  - les réactions de story et de plein écran reviennent à une taille tenable (×0,75)
+  - la pastille de synchronisation ne pèse plus avant le premier pixel
+  - le chevron du retour et son compte de non-lus vivent sur la MÊME ligne
+  - la réaction du plein écran s'ouvre par un bouton et se pose par-dessus tout
+  - les vues de conversation s'alignent sur iOS, et le rail montre de vraies stories
+  - une image ouverte en plein écran se réagit sur la pièce elle-même
+  - ouvrir une conversation cesse de casser le fil quand un message n'a aucune réaction (#6086)
+  - la barre de réactions d'une story grandit, perd son fond et garde son glissé
+  - l'habillage de la barre de réaction devient une option de l'hôte
+  - les huit rouges hérités de la suite iOS — sept témoins gardaient la lettre, un seul défaut de code — run test
+  - le catalogue perd ses 68 clés en double, et un témoin texte l'interdit
+  - la table de jetons a de nouveau un gate WCAG/parité/cascade
+  - un lien de partage qui EXPIRE retire enfin l'accès à ses invités
+  - mes doc-comments de #6166 faisaient remonter le cumul de dette de taille
+  - le seul TS2305 qui empêchait la suite de sécurité des notifications de se charger
+  - la propriété d'une notification passe de la DISCIPLINE de l'appelant à la signature
+  - la suite de protection du fil se CHARGE de nouveau — et ma preuve ne pouvait pas voir le défaut
+  - un dernier message protégé ne s'affiche plus en clair au démarrage à froid
+  - une transcription faite sur l'appareil garde ses horodatages
+  - la liste des conversations charge enfin les quatre réglages qu'elle promet
+  - le cliquet des bouchons de schéma de réponse redevient vert (#6092)
+  - un dernier message protégé ne part plus en clair dans la liste
+  - le filtre du rattrapage se fait vérifier par Prisma, pas par un as const
+  - un rattrapage rouvre la vidéo et la voix des entrées par lien déjà écrites
+  - l'entrée par lien laisse la vidéo et la voix suivre les drapeaux de l'hôte
+  - le rattrapage passe la requête à TypeScript, sans assertion
+  - la migration legacy n'ouvre plus un membre fermé, et un rattrapage rouvre l'existant
+  - les trois portes de création écrivent la table des droits d'un membre nommé
+  - StatusHandler's typing-denial test double gains socket.leave()
+
 ## 1.44.0
 
 ### Minor Changes

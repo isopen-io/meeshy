@@ -13,9 +13,12 @@ import { describe, it, expect, jest } from '@jest/globals';
 
 import {
   derivedNames,
+  displayNameDepuisEmail,
   generateUsername,
+  partieLocale,
   pseudoRacine,
   pseudoSlug,
+  slugDAdresse,
   type UsernameLookup,
 } from '../../../services/auth/registration-identity';
 import { searchTokensFor } from '../../../utils/search-tokens';
@@ -106,9 +109,16 @@ describe('pseudoRacine — trois sources, dans cet ordre', () => {
   });
 
   it("retombe sur la partie locale de l'adresse quand le nom ne donne rien", () => {
-    // Le point n'est pas un séparateur de pseudo : seul l'ESPACE devient `-`,
-    // le reste hors `[a-z0-9_-]` est retiré. `li.lei` donne donc `lilei`.
-    expect(pseudoRacine({ displayName: '李雷', email: 'li.lei@example.com' })).toBe('lilei');
+    // Le point EST un séparateur — dans une adresse (#6424). Ce témoin
+    // épinglait `lilei` avec sa raison : « seul l'ESPACE devient `-` ». La
+    // raison valait tant que l'adresse n'était qu'un dernier recours ; elle ne
+    // vaut plus depuis qu'elle est la source NOMINALE de l'identité, où
+    // `prenom.nom@` est la façon dont le monde écrit un nom.
+    expect(pseudoRacine({ displayName: '李雷', email: 'li.lei@example.com' })).toBe('li-lei');
+  });
+
+  it('ignore le SOUS-ADRESSAGE — `jean+meeshy` nomme Jean, pas Meeshy', () => {
+    expect(pseudoRacine({ displayName: '李雷', email: 'jean+meeshy@example.com' })).toBe('jean');
   });
 
   it('retombe sur un secours quand ni le nom ni l’adresse ne donnent deux caractères', () => {
@@ -197,5 +207,120 @@ describe('generateUsername — un pseudo LIBRE, en une requête', () => {
       expect(findFirst).toHaveBeenCalledTimes(3);
       expect(pseudo).toMatch(/^lena-vogel\d{4}$/);
     });
+  });
+});
+
+
+/**
+ * L'IDENTITÉ TIRÉE D'UNE SEULE ADRESSE (#6424).
+ *
+ * Directive porteur 2026-09-14 : « on met un e-mail, tu crées un compte avec le
+ * pseudo pris de la première partie de l'e-mail, le display name pareil ».
+ *
+ * L'écran d'inscription en avait trois champs (#5216) ; il n'en a plus qu'un.
+ * Ce que ces témoins mesurent est le nouvel écart : entre une adresse et les
+ * DEUX colonnes qu'elle doit maintenant remplir seule — un identifiant sous
+ * contrat, et un nom qu'on lit.
+ */
+describe('partieLocale — ce qui, dans une adresse, nomme quelqu’un', () => {
+  it.each([
+    ['marie@example.com', 'marie'],
+    ['jean+meeshy@example.com', 'jean'],
+    ['jean+banque+autre@example.com', 'jean'],
+    ['marie.dupont@example.com', 'marie.dupont'],
+  ])('lit %j comme %j', (adresse, attendu) => {
+    expect(partieLocale(adresse)).toBe(attendu);
+  });
+
+  it('rend la chaîne vide sur une adresse absente plutôt que de lever', () => {
+    expect(partieLocale(undefined)).toBe('');
+  });
+});
+
+describe('slugDAdresse — le point d’une adresse est une frontière de mot', () => {
+  it.each([
+    ['marie.dupont@example.com', 'marie-dupont'],
+    ['marie..dupont.@example.com', 'marie-dupont'],
+    ['jean+meeshy@example.com', 'jean'],
+    ['Jérôme@example.com', 'jerome'],
+    ['MARIE@EXAMPLE.COM', 'marie'],
+  ])('slugifie %j en %j', (adresse, attendu) => {
+    expect(slugDAdresse(adresse)).toBe(attendu);
+  });
+
+  it('déplie les diacritiques au lieu de les supprimer — `jérôme`, jamais `jrme`', () => {
+    expect(slugDAdresse('jérôme@example.com')).toBe('jerome');
+  });
+
+  it('laisse le chemin du NOM AFFICHÉ intact — le point n’y est toujours pas un séparateur', () => {
+    expect(pseudoSlug('Dr. House')).toBe('dr-house');
+    expect(pseudoSlug('li.lei')).toBe('lilei');
+  });
+});
+
+describe('displayNameDepuisEmail — « pareil » désigne la SOURCE, pas la forme', () => {
+  it.each([
+    ['marie.dupont@example.com', 'Marie Dupont'],
+    ['jean_luc@example.com', 'Jean Luc'],
+    ['marie@example.com', 'Marie'],
+    ['jean+meeshy@example.com', 'Jean'],
+  ])('lit %j comme %j', (adresse, attendu) => {
+    expect(displayNameDepuisEmail(adresse)).toBe(attendu);
+  });
+
+  it('se capitalise comme le reste du dépôt — la MÊME fonction que derivedNames', () => {
+    expect(displayNameDepuisEmail('marie.dupont@example.com')).toBe(
+      [capitalizeName('marie'), capitalizeName('dupont')].join(' '),
+    );
+  });
+
+  it('rend `\'\'` — jamais un nom inventé — quand rien ne se tire de l’adresse', () => {
+    expect(displayNameDepuisEmail('李雷@example.com')).toBe('');
+    expect(displayNameDepuisEmail('a@example.com')).toBe('');
+    expect(displayNameDepuisEmail(undefined)).toBe('');
+  });
+
+  it('alimente `derivedNames` sans le faire mentir : deux mots donnent prénom + nom', () => {
+    expect(derivedNames(displayNameDepuisEmail('marie.dupont@example.com'))).toEqual({
+      firstName: 'Marie',
+      lastName: 'Dupont',
+    });
+  });
+
+  it('un mononyme reste un mononyme — la colonne `lastName` reste vide, on n’invente pas', () => {
+    expect(derivedNames(displayNameDepuisEmail('marie@example.com'))).toEqual({
+      firstName: 'Marie',
+      lastName: '',
+    });
+  });
+});
+
+describe('l’identité dérivée d’une adresse satisfait le CONTRAT d’inscription', () => {
+  const adresses = [
+    'marie@example.com',
+    'marie.dupont@example.com',
+    'jean+meeshy@example.com',
+    'jérôme@example.com',
+    'MARIE.DUPONT@EXAMPLE.COM',
+    'un.nom.vraiment.beaucoup.trop.long@example.com',
+    "o'brien@example.com",
+    'user_name-42@example.com',
+    'ano_bob@example.com',
+  ];
+
+  it.each(adresses)('le pseudo dérivé de %j est recevable', async (adresse) => {
+    const { lookup } = annuaire();
+    const pseudo = await generateUsername(lookup, { email: adresse });
+
+    expect(pseudo).toMatch(/^[a-zA-Z0-9_-]+$/);
+    expect(pseudo.length).toBeGreaterThanOrEqual(2);
+    expect(pseudo.length).toBeLessThanOrEqual(16);
+  });
+
+  it('aucune adresse de la liste ne repart avec le pseudo de SECOURS', async () => {
+    for (const adresse of adresses) {
+      const { lookup } = annuaire();
+      expect(await generateUsername(lookup, { email: adresse })).not.toBe('user');
+    }
   });
 });

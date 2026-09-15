@@ -478,8 +478,36 @@ final class ComposerLeadingRailSourceGuardTests: XCTestCase {
         //
         // Ce que le témoin doit dire n'a pas changé : le ressort PRÉCÈDE tout ce
         // qui se peint. Sa condition s'intercale, elle ne le déplace pas.
-        XCTAssertTrue(source.contains("ifaxis==.vertical,pushesToThumb{Spacer(minLength:0)}switchmode{"),
+        // **Le `switch` a été EXTRAIT le 2026-09-12** (`d76b5468d7`, #6131 : le
+        // rail défile quand il ne tient pas). Il vit désormais dans
+        // `railEntries`, et le ressort ne le précède plus TEXTUELLEMENT — il
+        // précède l'appel. L'ancrage, lui, n'a pas bougé d'un point.
+        //
+        // > C'est la TROISIÈME fois que ce témoin épingle une forme en croyant
+        // > tenir l'ancrage : son propre doc-comment raconte déjà #4072 et
+        // > #4582. Un témoin qui exige une concaténation littérale mesure la
+        // > façon d'écrire, pas la propriété — et il rougit sur chaque
+        // > extraction légitime, en annonçant que les portes ont cessé d'être
+        // > poussées vers le bas alors qu'elles le sont toujours.
+        //
+        // Ce qu'il doit dire tient en deux faits, et ils survivent à
+        // l'extraction : le ressort est CONDITIONNEL et POSÉ, et il précède ce
+        // qui se peint — quel que soit le nom sous lequel cela se peint.
+        guard let ressort = source.range(of: "ifaxis==.vertical,pushesToThumb{Spacer(minLength:0)}") else {
+            return XCTFail("""
+                Le ressort conditionnel a disparu du rail : sans lui, un `VStack` centré \
+                remet les entrées hautes hors de portée du pouce dès que la scène rétrécit.
+                """)
+        }
+        guard let entrees = source.range(of: "railEntries", range: ressort.upperBound..<source.endIndex) else {
+            return XCTFail("""
+                Le ressort ne précède plus les entrées : c'est lui, et non un alignement, \
+                qui les ancre en bas.
+                """)
+        }
+        XCTAssertTrue(ressort.upperBound <= entrees.lowerBound,
                       "Le ressort doit PRÉCÉDER les entrées : c'est lui qui les ancre en bas.")
+        // Et les entrées peignent bien les deux modes — extraites ou non.
         XCTAssertTrue(source.contains("case.doors(letdoors):ForEach(doors"))
         // **Le mode OUTIL peint ses contrôleurs, sans que la forme soit figée.**
         //

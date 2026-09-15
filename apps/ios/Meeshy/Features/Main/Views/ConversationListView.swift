@@ -242,35 +242,32 @@ struct ConversationListView: View {
     // robuste.
 
     // UI states
-    @State var blockTargetConversation: Conversation? = nil
+    /// LES SEPT CIBLES DE FEUILLES, SUR LE TAS (#6221, suite) — elles étaient
+    /// sept `@State var …: Conversation?`, soit ~6,9 Ko des 10 256 octets de
+    /// cette vue, pour un contenu à la fois. Voir `ConversationListSheetTargets`.
+    @State var sheetTargets = ConversationListSheetTargets()
     @State var showBlockConfirmation = false
     /// Cible de la demande de suppression (menu custom ou swipe « hide »).
     /// Tout callback destructif passe par le confirmationDialog système —
     /// jamais d'appel direct à `deleteConversation` depuis un menu.
-    @State var deleteTargetConversation: Conversation? = nil
     @State var lockSheetMode: ConversationLockSheet.Mode = .lockConversation
-    @State var lockSheetConversation: Conversation? = nil
     @State var showNoMasterPinAlert = false
     @State var showGlobalSearch = false
-    @State var conversationInfoConversation: Conversation? = nil
     
     // Widget preview state
     @State var showWidgetPreview = false
     @State private var showShareLinkSheet = false
 
     // Invite sheet
-    @State var inviteSheetConversation: Conversation? = nil
 
     // Communities data
     @State var userCommunities: [MeeshyCommunity] = []
 
     // Preview state for hard press
-    @State private var previewConversation: Conversation? = nil
 
     /// Conversation dont l'overlay de menu contextuel custom est présenté
     /// (appui long). Menu custom qui dessine ses icônes — le `.contextMenu`
     /// natif ne les affiche pas sur iOS 26.
-    @State var contextMenuConversation: Conversation? = nil
     /// Pilote l'animation zoom + rebond de l'overlay (false au montage → true
     /// via `.onAppear` ; false à la fermeture). Voir `conversationContextMenuOverlay`.
     @State var contextMenuAppeared = false
@@ -305,7 +302,8 @@ struct ConversationListView: View {
 
     /// Renommage : conversation cible + texte en cours d'édition (action
     /// « Renommer » du menu contextuel, groupes/communautés uniquement).
-    @State var renameTarget: Conversation? = nil
+    /// (#6221) `sheetTargets.rename` a rejoint `sheetTargets` — c'est une cible de
+    /// feuille comme les sept autres, et elle était restée en ligne pour 992 o.
     @State var renameText: String = ""
 
     // Drag & Drop : le `.onDrag` natif est RÉACTIVÉ sur le chemin iOS 26
@@ -316,7 +314,13 @@ struct ConversationListView: View {
     // posé par personne (un drag annulé ne laisse aucun état) — conservé
     // uniquement pour le plumbing `isDragging` des rows (poignée dédiée /
     // mode édition futur).
-    @State private var draggingConversation: Conversation? = nil
+    /// (#6221) L'IDENTIFIANT, PAS LA CONVERSATION. Le commentaire ci-dessus le
+    /// dit : ce champ « n'est plus posé par personne ». Il pesait pourtant 992
+    /// octets EN LIGNE dans la vue — et une vue SwiftUI est un type valeur que
+    /// chaque closure de son `body` copie. Le seul usage est une comparaison
+    /// d'id (`isDragging`) ; le plumbing documenté est conservé intact, à seize
+    /// octets au lieu de neuf cent quatre-vingt-douze.
+    @State private var draggingConversationId: String? = nil
     /// Section surlignée comme cible de drop. Alimenté par le morph drag de
     /// l'overlay (chip sous le doigt — voir `previewCollapseGesture`,
     /// +Overlays) en plus du `SectionDropDelegate` historique. Pas `private` :
@@ -801,7 +805,7 @@ struct ConversationListView: View {
             conversation: conversation,
             community: community,
             rowWidth: rowWidth,
-            isDragging: draggingConversation?.id == conversation.id,
+            isDragging: draggingConversationId == conversation.id,
             presenceState: presenceManager.presenceState(for: conversation.participantUserId ?? ""),
             isDark: theme.mode.isDark,
             storyRingState: storyRingState(for: conversation),
@@ -821,12 +825,12 @@ struct ConversationListView: View {
             onViewConversationInfo: { handleConversationInfoView(conversation) },
             onMoodBadgeTap: { anchor in handleMoodBadgeTap(conversation, at: anchor) },
             onCreateShareLink: canCreateShareLink(for: conversation) ? {
-                inviteSheetConversation = conversation
+                sheetTargets.inviteSheet = conversation
             } : nil,
             onTap: {
                 if ConversationLockManager.shared.isLocked(conversation.id) {
                     lockSheetMode = .openConversation
-                    lockSheetConversation = conversation
+                    sheetTargets.lockSheet = conversation
                 } else {
                     onSelect(conversation)
                 }
@@ -845,7 +849,7 @@ struct ConversationListView: View {
                 // effacerait ce menu fraîchement ouvert (~0.26 s plus tard).
                 contextMenuDismissWork?.cancel()
                 contextMenuDismissWork = nil
-                let wasMounted = contextMenuConversation != nil
+                let wasMounted = sheetTargets.contextMenu != nil
                 contextMenuAppeared = false
                 contextMenuSourceFrame = sourceFrame.height > 0 ? sourceFrame : nil
                 previewScale = 1.0
@@ -853,7 +857,7 @@ struct ConversationListView: View {
                 dragOffsetY = 0
                 dragOffsetX = 0
                 chipModeLatched = false
-                contextMenuConversation = conversation
+                sheetTargets.contextMenu = conversation
                 if wasMounted {
                     // Réouverture rapide : l'overlay est encore monté, donc
                     // `.onAppear` ne re-fire pas — sans relance ici le menu
@@ -966,10 +970,10 @@ struct ConversationListView: View {
             ) {
                 if isLocked {
                     lockSheetMode = .unlockConversation
-                    lockSheetConversation = conversation
+                    sheetTargets.lockSheet = conversation
                 } else if lockManager.masterPinConfigured {
                     lockSheetMode = .lockConversation
-                    lockSheetConversation = conversation
+                    sheetTargets.lockSheet = conversation
                 } else {
                     showNoMasterPinAlert = true
                 }
@@ -1022,7 +1026,7 @@ struct ConversationListView: View {
                         HapticFeedback.success()
                     }
                 } else {
-                    blockTargetConversation = conversation
+                    sheetTargets.blockTarget = conversation
                     showBlockConfirmation = true
                 }
             })
@@ -1033,7 +1037,7 @@ struct ConversationListView: View {
             label: SwipeLabels.hide,
             color: MeeshyColors.error
         ) {
-            deleteTargetConversation = conversation
+            sheetTargets.deleteTarget = conversation
         })
 
         return actions
@@ -1083,7 +1087,7 @@ struct ConversationListView: View {
                     router.deepLinkProfileUser = user
                 }
             }
-            .sheet(item: $conversationInfoConversation) { conversation in
+            .sheet(item: $sheetTargets.info) { conversation in
                 ConversationInfoSheet(
                     conversation: conversation,
                     accentColor: conversation.accentColor,
@@ -1092,7 +1096,7 @@ struct ConversationListView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
             }
-            .sheet(item: $inviteSheetConversation) { conversation in
+            .sheet(item: $sheetTargets.inviteSheet) { conversation in
                 InviteFriendsSheet(conversation: conversation)
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
@@ -1166,7 +1170,7 @@ struct ConversationListView: View {
                 }
             }
             .overlay { conversationContextMenuOverlay }
-            .sheet(item: $lockSheetConversation) { conversation in
+            .sheet(item: $sheetTargets.lockSheet) { conversation in
                 ConversationLockSheet(
                     mode: lockSheetMode,
                     conversationId: conversation.id,
@@ -1186,19 +1190,19 @@ struct ConversationListView: View {
             .alert(
                 String(localized: "conversation.rename.title", defaultValue: "Renommer la conversation", bundle: .main),
                 isPresented: Binding(
-                    get: { renameTarget != nil },
-                    set: { if !$0 { renameTarget = nil } }
+                    get: { sheetTargets.rename != nil },
+                    set: { if !$0 { sheetTargets.rename = nil } }
                 )
             ) {
                 TextField(String(localized: "conversation.rename.placeholder", defaultValue: "Nom", bundle: .main), text: $renameText)
                 Button(String(localized: "common.save", defaultValue: "Enregistrer", bundle: .main)) {
-                    if let target = renameTarget {
+                    if let target = sheetTargets.rename {
                         Task { await conversationViewModel.renameConversation(conversationId: target.id, title: renameText) }
                     }
-                    renameTarget = nil
+                    sheetTargets.rename = nil
                 }
                 Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {
-                    renameTarget = nil
+                    sheetTargets.rename = nil
                 }
             }
             .sheet(isPresented: $showWidgetPreview) {
@@ -1219,7 +1223,7 @@ struct ConversationListView: View {
                 titleVisibility: .visible
             ) {
                 Button(String(localized: "action.block"), role: .destructive) {
-                    guard let conv = blockTargetConversation,
+                    guard let conv = sheetTargets.blockTarget,
                           let targetUserId = conv.participantUserId else { return }
                     Task {
                         await BlockActionCoordinator.shared.block(userId: targetUserId)
@@ -1237,11 +1241,11 @@ struct ConversationListView: View {
             .confirmationDialog(
                 String(localized: "conversation.delete.confirm.title", defaultValue: "Supprimer la conversation ?", bundle: .main),
                 isPresented: Binding(
-                    get: { deleteTargetConversation != nil },
-                    set: { if !$0 { deleteTargetConversation = nil } }
+                    get: { sheetTargets.deleteTarget != nil },
+                    set: { if !$0 { sheetTargets.deleteTarget = nil } }
                 ),
                 titleVisibility: .visible,
-                presenting: deleteTargetConversation
+                presenting: sheetTargets.deleteTarget
             ) { conversation in
                 Button(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), role: .destructive) {
                     HapticFeedback.heavy()
@@ -1857,7 +1861,7 @@ struct ConversationListView: View {
                     // l'écran (sans cette queue, la magnificence ne touchait
                     // jamais la fin de la liste). Drapeau OFF : queue neutre.
                     listTail
-                        .adaptiveOnChange(of: draggingConversation) { oldValue, newValue in
+                        .adaptiveOnChange(of: draggingConversationId) { oldValue, newValue in
                             if oldValue != nil && newValue == nil {
                                 withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
                                     dropTargetSection = nil
@@ -1961,7 +1965,7 @@ struct ConversationListView: View {
                 conversations: conversationViewModel.conversations.filter { canCreateShareLink(for: $0) },
                 onSelect: { conversation in
                     showShareLinkSheet = false
-                    inviteSheetConversation = conversation
+                    sheetTargets.inviteSheet = conversation
                 }
             )
         }
@@ -1988,7 +1992,7 @@ struct ConversationListView: View {
     // MARK: - Handle Conversation Info View
     private func handleConversationInfoView(_ conversation: Conversation) {
         // Open conversation info sheet (works for all conversation types)
-        conversationInfoConversation = conversation
+        sheetTargets.info = conversation
     }
 
     // MARK: - Handle Mood Badge Tap (opens status bubble)

@@ -7,6 +7,8 @@ import { enhancedLogger } from '../utils/logger-enhanced';
 import { ensureGlobalConversationMembership } from './conversations/ensureGlobalConversationMembership';
 import { getJwtSecret, requireStrongSecret } from '../utils/secrets';
 import { PASSWORD_MIN_LENGTH } from '@meeshy/shared/utils/validation-primitives';
+import { UserAuditAction } from '@meeshy/shared/types';
+import { maySeedEmailVerification, seedAccountEmail, seedAccounts, type SeedAccount } from './seed-accounts';
 
 /**
  * Les trois comptes de bootstrap (#3623) — `bigboss123`/`admin123` étaient un
@@ -32,7 +34,6 @@ export function reservedGlobalMemberRole(username: string): MemberRoleType {
   if (username === 'admin') return 'admin';
   return 'member';
 }
-
 
 export class InitService {
   private prisma: PrismaClient;
@@ -153,7 +154,7 @@ export class InitService {
     const password = requireSeedPassword('MEESHY_PASSWORD', 'bigboss123'); // CONFIGURABLE
     const firstName = 'Meeshy'; // FIXE
     const lastName = 'Sama'; // FIXE
-    const email = process.env.MEESHY_EMAIL || 'meeshy@meeshy.me'; // CONFIGURABLE
+    const email = seedAccountEmail('meeshy'); // CONFIGURABLE (`seed-accounts.ts`)
     const systemLanguage = process.env.MEESHY_SYSTEM_LANGUAGE || 'en'; // CONFIGURABLE
     const regionalLanguage = process.env.MEESHY_REGIONAL_LANGUAGE || 'fr'; // CONFIGURABLE
     const customDestinationLanguage = process.env.MEESHY_CUSTOM_DESTINATION_LANGUAGE || 'pt'; // CONFIGURABLE
@@ -189,7 +190,9 @@ export class InitService {
 
       const user = result.user;
 
-      // Mettre à jour le rôle vers BIGBOSS (fixe)
+      // Mettre à jour le rôle vers BIGBOSS (fixe). La vérification d'e-mail du
+      // seed n'est PAS posée ici : `ensureSeedAccountsVerified()` la pose à
+      // CHAQUE boot, hors de la porte `shouldInitialize()` (#6581).
       await this.prisma.user.update({
         where: { id: user.id },
         data: { role: UserRoleEnum.BIGBOSS }
@@ -224,7 +227,7 @@ export class InitService {
     const password = requireSeedPassword('ADMIN_PASSWORD', 'admin123'); // CONFIGURABLE
     const firstName = 'Admin'; // FIXE
     const lastName = 'Manager'; // FIXE
-    const email = process.env.ADMIN_EMAIL || 'admin@meeshy.me'; // CONFIGURABLE
+    const email = seedAccountEmail('admin'); // CONFIGURABLE (`seed-accounts.ts`)
     const systemLanguage = process.env.ADMIN_SYSTEM_LANGUAGE || 'en'; // CONFIGURABLE - Default: English
     const regionalLanguage = process.env.ADMIN_REGIONAL_LANGUAGE || 'fr'; // CONFIGURABLE - Default: French
     const customDestinationLanguage = process.env.ADMIN_CUSTOM_DESTINATION_LANGUAGE || 'es'; // CONFIGURABLE - Default: Spanish
@@ -268,7 +271,8 @@ export class InitService {
           throw new Error('Échec de la création de l\'utilisateur Admin');
         }
 
-        // Mettre à jour le rôle vers ADMIN (fixe)
+        // Mettre à jour le rôle vers ADMIN (fixe) — cf. `ensureSeedAccountsVerified()`
+        // pour la vérification d'e-mail du seed (#6581).
         await this.prisma.user.update({
           where: { id: result.user.id },
           data: { role: UserRoleEnum.ADMIN }
@@ -383,6 +387,74 @@ export class InitService {
   }
 
   /**
+   * Les trois comptes SEMÉS peuvent publier — à CHAQUE boot (#6581).
+   *
+   * Leurs adresses ne reçoivent aucun courrier (`seed-accounts.ts`), donc
+   * personne ne peut cliquer le lien de vérification. Depuis #6437,
+   * `requireEmailVerification` garde `POST /posts` : sans `emailVerifiedAt`,
+   * le compte de démonstration que ce service vient de créer prend
+   * `403 EMAIL_NOT_VERIFIED` à sa première publication — il lit, il écrit en
+   * conversation, et il n'alimente jamais la bibliothèque de sons, qui ne naît
+   * QUE d'une publication publique.
+   *
+   * INCONDITIONNELLE, comme ses trois voisines et pour la MÊME raison : la
+   * porte `shouldInitialize()` ne s'ouvre que sur une base VIDE (ses six
+   * lectures rendent toutes une ligne sur une base saine). Un rattrapage
+   * derrière elle est du code MORT — c'est exactement ce que
+   * `ensurePostGeoIndex` a payé d'un 500 en production le 2026-08-25, et le
+   * premier jet de ce lot l'avait rejoué. `server.ts` l'appelle APRÈS
+   * `initializeDatabase()` pour que la base fraîchement semée passe par le
+   * MÊME site que la base héritée : une seule écriture de `emailVerifiedAt`
+   * dans tout le service.
+   *
+   * Idempotente : `maySeedEmailVerification` refuse un compte déjà vérifié,
+   * un compte dont l'adresse a été REPURPOSÉE (production, 2026-09-15 :
+   * `atabeth` porte `zuymanto@gmail.com`) et un compte sur lequel un
+   * administrateur a tranché.
+   */
+  async ensureSeedAccountsVerified(): Promise<void> {
+    try {
+      await Promise.all(seedAccounts().map((account) => this.ensureSeedAccountVerified(account)));
+    } catch (error) {
+      logger.error('[INIT] ❌ Erreur lors de la vérification d\'e-mail des comptes semés', error);
+      throw error;
+    }
+  }
+
+  private async ensureSeedAccountVerified(account: SeedAccount): Promise<void> {
+    const existing = await this.prisma.user.findFirst({
+      where: { username: account.username },
+      select: { id: true, email: true, emailVerifiedAt: true },
+    });
+    if (!existing) return;
+
+    const eligible = maySeedEmailVerification({
+      emailVerifiedAt: existing.emailVerifiedAt,
+      email: existing.email,
+      seedEmail: account.email,
+    });
+    if (!eligible) return;
+
+    // TROISIÈME refus, et le seul qui ne se lise pas sur la ligne : la décision
+    // d'un administrateur PRIME, dans les deux sens. `verifyEmail(userId, false)`
+    // exige un motif et laisse une trace ; la réécrire au boot suivant
+    // l'annulerait EN SILENCE. Lue seulement maintenant — les deux refus bon
+    // marché ci-dessus épargnent cette requête sur le cas nominal (compte déjà
+    // vérifié), qui est celui de chaque boot d'une base saine.
+    const decided = await this.prisma.adminAuditLog.findFirst({
+      where: { userId: existing.id, action: UserAuditAction.VERIFY_EMAIL },
+      select: { id: true },
+    });
+    if (decided) return;
+
+    await this.prisma.user.update({
+      where: { id: existing.id },
+      data: { emailVerifiedAt: new Date() },
+    });
+    logger.info(`[INIT] ✅ Compte semé "${account.username}" vérifié d'office (adresse sans boîte réelle)`);
+  }
+
+  /**
    * Réinitialise complètement la base de données
    */
   private async resetDatabase(): Promise<void> {
@@ -427,7 +499,7 @@ export class InitService {
     const password = requireSeedPassword('ATABETH_PASSWORD', 'admin123');
     const firstName = process.env.ATABETH_FIRST_NAME || 'André';
     const lastName = process.env.ATABETH_LAST_NAME || 'Tabeth';
-    const email = process.env.ATABETH_EMAIL || 'atabeth@meeshy.me';
+    const email = seedAccountEmail('atabeth');
     const role = process.env.ATABETH_ROLE || 'ADMIN';  // Default: ADMIN (can manage translations)
     const systemLanguage = process.env.ATABETH_SYSTEM_LANGUAGE || 'en';  // Default: English
     const regionalLanguage = process.env.ATABETH_REGIONAL_LANGUAGE || 'fr';  // Default: French
@@ -464,7 +536,8 @@ export class InitService {
 
       const user = result.user;
 
-      // Mettre à jour le rôle vers la valeur configurée
+      // Mettre à jour le rôle vers la valeur configurée — cf.
+      // `ensureSeedAccountsVerified()` pour la vérification d'e-mail (#6581).
       await this.prisma.user.update({
         where: { id: user.id },
         data: { role: role as any }

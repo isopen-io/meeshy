@@ -9,8 +9,23 @@ import { resolveRouteAccess, type RouteKey } from './session-guard';
  */
 
 /** `conversationsNew` (#5652, revue) — créer une conversation est un geste de
- * MEMBRE ; la route est arrivée avec son écran sans être déclarée privée. */
-const PRIVATE_ROUTES: readonly RouteKey[] = ['list', 'thread', 'conversationsNew', 'progression'];
+ * MEMBRE ; la route est arrivée avec son écran sans être déclarée privée.
+ * `stories`/`storyCompose`/`story` (#5817) rejoignent le même correctif : leurs
+ * ports sont tous `requiredAuth`. `feed` (#5893) de même — `scope=home` exige
+ * une session malgré `optionalAuth` à la porte. */
+const PRIVATE_ROUTES: readonly RouteKey[] = [
+  'list',
+  'thread',
+  'conversationsNew',
+  'progression',
+  'stories',
+  'storyCompose',
+  'story',
+  'feed',
+  'notifications',
+  'profile',
+  'settings',
+];
 const PUBLIC_AUTH_ROUTES: readonly RouteKey[] = ['login', 'signup'];
 
 describe('resolveRouteAccess — source fixtures : toujours allow (les deux moitiés du seuil)', () => {
@@ -29,6 +44,27 @@ describe('resolveRouteAccess — source gateway, visiteur anonyme sur une route 
   // #5547 — le tableau de bord lit `GET /me/engagement`, qui ne sert que
   // l'utilisateur AUTHENTIFIÉ : un visiteur sans compte n'y a rien à voir.
   test('progression', () => expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey: 'progression' })).toBe('redirect-login'));
+  // #5817 — GET /posts/feed/stories et POST /posts/:postId/view sont
+  // requiredAuth : un visiteur sans compte n'y a rien à voir.
+  test('stories', () => expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey: 'stories' })).toBe('redirect-login'));
+  test('storyCompose', () => expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey: 'storyCompose' })).toBe('redirect-login'));
+  test('story', () => expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey: 'story' })).toBe('redirect-login'));
+  // #5893 — GET /social/posts?scope=home exige une session malgré
+  // optionalAuth à la porte : un visiteur sans compte y recevait jusqu'ici
+  // l'écran d'attente (route publique par défaut).
+  test('feed', () => expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey: 'feed' })).toBe('redirect-login'));
+  // #6288 — les six routes `/notifications*` de la passerelle portent toutes
+  // `onRequest: [fastify.authenticate]` : la cloche d'un visiteur sans compte
+  // n'existe pas, et un écran qui s'ouvre sur un 401 muet n'invite personne.
+  test('notifications', () =>
+    expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey: 'notifications' })).toBe('redirect-login'));
+  // #6340 — `GET`/`PATCH /me/preferences` portent `fastify.authenticate` : sans
+  // session, l'écran des réglages désactivait sa requête et gardait ses
+  // squelettes À VIE, avec une déconnexion offerte à qui n'est pas connecté.
+  test('settings', () =>
+    expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey: 'settings' })).toBe('redirect-login'));
+  test('profile', () =>
+    expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey: 'profile' })).toBe('redirect-login'));
 });
 
 describe('resolveRouteAccess — source gateway, session ACTIVE sur login/signup ⇒ redirect-home', () => {
@@ -102,4 +138,38 @@ describe('resolveRouteAccess — l’accueil (#5816)', () => {
       expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'fixtures', routeKey, welcomeCompleted: false })).toBe('allow');
     }
   });
+});
+
+/**
+ * L'ESPACE D'ADMINISTRATION (#6432) — cette garde n'en fait que la MOITIÉ.
+ *
+ * Elle exige une session ; le DROIT se lit au serveur dans l'écran
+ * (`GET /me/permissions`). La séparation est délibérée : `SessionUser` ne
+ * projette pas `role`, donc une garde de route qui trancherait ici ne pourrait
+ * que le deviner — et une garde qui devine sur une porte d'administration est
+ * pire qu'aucune garde, parce qu'on la croit posée.
+ *
+ * Ce que ces témoins mesurent est donc exactement ce que cette loi PROMET, ni
+ * plus ni moins : un visiteur sans compte n'entre pas.
+ */
+describe("les routes d'administration sont PRIVÉES", () => {
+  for (const routeKey of ['admin', 'adminUsers'] as const) {
+    test(`${routeKey} : une session AUTHENTIFIÉE passe`, () => {
+      expect(
+        resolveRouteAccess({ sessionStatus: 'authenticated', source: 'gateway', routeKey }),
+      ).toBe('allow');
+    });
+
+    test(`${routeKey} : sans session, on est renvoyé vers la connexion`, () => {
+      expect(
+        resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey }),
+      ).toBe('redirect-login');
+    });
+
+    test(`${routeKey} : sans accueil soldé, l'accueil passe d'abord`, () => {
+      expect(
+        resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey, welcomeCompleted: false }),
+      ).toBe('redirect-welcome');
+    });
+  }
 });

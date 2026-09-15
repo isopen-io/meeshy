@@ -162,7 +162,7 @@ export class PostFeedService {
 
     const candidates = await this.prisma.post.findMany({
       where,
-      include: feedPostInclude,
+      select: feedPostInclude,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: candidateLimit,
     });
@@ -434,7 +434,7 @@ export class PostFeedService {
           // Story-scoped include : l'auteur embarque isOnline/lastActiveAt pour
           // que l'interstitiel d'identité du viewer résolve la présence AU
           // moment du switch de groupe (jamais après affichage du slide).
-          include: storyPostInclude,
+          select: storyPostInclude,
           orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
           take: limit + 1,
         });
@@ -682,7 +682,7 @@ export class PostFeedService {
 
     const candidates = await this.prisma.post.findMany({
       where: { deletedAt: NOT_DELETED, type: PostType.REEL, AND: andClauses },
-      include: feedPostInclude,
+      select: feedPostInclude,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: candidatePoolSize,
     });
@@ -907,7 +907,7 @@ export class PostFeedService {
 
     const posts = await this.prisma.post.findMany({
       where,
-      include: feedPostInclude,
+      select: feedPostInclude,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
     });
@@ -973,7 +973,7 @@ export class PostFeedService {
 
     const posts = await this.prisma.post.findMany({
       where,
-      include: feedPostInclude,
+      select: feedPostInclude,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
     });
@@ -1028,7 +1028,7 @@ export class PostFeedService {
       where,
       include: {
         post: {
-          include: feedPostInclude,
+          select: feedPostInclude,
         },
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],

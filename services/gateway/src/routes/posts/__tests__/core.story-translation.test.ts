@@ -85,6 +85,7 @@ jest.mock('../../../services/MentionService', () => ({
 }));
 
 jest.mock('../../../utils/withMutationLog', () => ({
+  ...(jest.requireActual('../../../utils/withMutationLog') as object),
   withMutationLog: jest.fn(({ op }: { op: () => Promise<unknown> }) => op()),
 }));
 
@@ -142,7 +143,7 @@ async function buildApp(postServiceImpl: ReturnType<typeof buildMockPostService>
   const requiredAuth = async (request: import('fastify').FastifyRequest, _reply: import('fastify').FastifyReply) => {
     (request as unknown as Record<string, unknown>).authContext = {
       isAuthenticated: true,
-      registeredUser: { id: 'user-id-abc' },
+      registeredUser: { emailVerifiedAt: new Date(), id: 'user-id-abc' },
     };
   };
 

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
-import { resolveAttachmentSrc } from './media-url';
+import { attachmentSrcSet, resolveAttachmentSrc, sizesFor } from './media-url';
+import type { ImageVariant } from './types';
 
 /**
  * `resolveAttachmentSrc` — défaut 2 de la revue #5668 : `Attachment.fileUrl`
@@ -90,5 +91,113 @@ describe('resolveAttachmentSrc — la clé de stockage NUE (#5805)', () => {
     expect(resolveAttachmentSrc('/api/v1/attachments/file/2026%2F09%2Fphoto.png', 'https://gate.meeshy.me')).toBe(
       'https://gate.meeshy.me/api/v1/attachments/file/2026%2F09%2Fphoto.png',
     );
+  });
+});
+
+/**
+ * `attachmentSrcSet`/`sizesFor` (#6221, D4 §1.4.4) — la variante ÉLUE par la
+ * largeur d'affichage, sous sa forme NATIVE navigateur.
+ */
+describe('attachmentSrcSet — la forme native du srcset', () => {
+  const variant = (width: number, url: string): ImageVariant => ({
+    width,
+    height: Math.round((width * 2) / 3),
+    url,
+    size: 1000,
+    format: 'webp',
+  });
+
+  test('chaque variante passe par attachmentSrc — même route que fileUrl, jamais une seconde résolution', () => {
+    const variants = [variant(320, '2026/09/a-320.webp'), variant(640, '2026/09/a-640.webp')];
+    expect(attachmentSrcSet(variants)).toBe(
+      'https://gate.meeshy.me/api/v1/attachments/file/2026%2F09%2Fa-320.webp 320w, ' +
+        'https://gate.meeshy.me/api/v1/attachments/file/2026%2F09%2Fa-640.webp 640w',
+    );
+  });
+
+  test('undefined ou liste vide : undefined — jamais un srcset vide', () => {
+    expect(attachmentSrcSet(undefined)).toBeUndefined();
+    expect(attachmentSrcSet([])).toBeUndefined();
+  });
+
+  test('sizesFor(149) = "149px"', () => {
+    expect(sizesFor(149)).toBe('149px');
+  });
+});
+
+/**
+ * LA SIXIÈME FORME — L'ADRESSE HÉRITÉE QUI PORTE UNE CLÉ, SANS SA ROUTE.
+ *
+ * Mesurée le 2026-09-13 sur `staging.meeshy.me/notifications` :
+ * `GET https://gate.meeshy.me/2026/09/<id>/harbor_<uuid>.png net::ERR_FAILED`,
+ * puis `workbox … no-response` — le service worker relaie l'échec réseau sans
+ * pouvoir servir quoi que ce soit. L'adresse ment DEUX fois : elle désigne la
+ * RACINE de la passerelle, où aucune route ne sert de fichier, et elle nomme
+ * l'hôte de PRODUCTION depuis une page de STAGING (une base restaurée depuis
+ * un dump — le risque que le doc-comment de la migration 013 nomme mot pour
+ * mot).
+ *
+ * La migration 013 (`scripts/migrations/mongodb/013_store_media_keys_not_urls.js`)
+ * ne réécrit QUE les valeurs qui portent `/attachments/file/` : une adresse
+ * héritée sans ce segment lui échappe, et elle est encore en base. Le legacy
+ * la RÉPARE depuis toujours (`apps/web/utils/attachment-url.ts`, branche
+ * « URL mal formée ») ; le chantier la laissait passer parce qu'une chaîne
+ * `https://…` y valait « déjà résolue ».
+ *
+ * LA RÉPARATION SE FAIT CONTRE LA BASE CONFIGURÉE, jamais contre l'hôte que
+ * l'adresse porte : c'est la clé qui identifie le fichier, l'hôte est une
+ * décision de déploiement (#4324) — et sur staging, l'hôte écrit en base est
+ * le mauvais.
+ */
+describe('resolveAttachmentSrc — l’adresse héritée sans route (#6388)', () => {
+  test('une adresse qui porte la clé NUE derrière un hôte devient la route de flux de la base CONFIGURÉE', () => {
+    expect(
+      resolveAttachmentSrc(
+        'https://gate.meeshy.me/2026/09/6aa607414ffea5f6989529bf/harbor_415810f3-d027-4da2-aa8d-2b2a489bb44e.png',
+        'https://gate.staging.meeshy.me',
+      ),
+    ).toBe(
+      'https://gate.staging.meeshy.me/api/v1/attachments/file/2026%2F09%2F6aa607414ffea5f6989529bf%2Fharbor_415810f3-d027-4da2-aa8d-2b2a489bb44e.png',
+    );
+  });
+
+  test('la clé est DÉCODÉE puis ré-encodée une seule fois — jamais de double %25', () => {
+    expect(resolveAttachmentSrc('https://gate.meeshy.me/2026/09/mon%20fichier.png', 'https://gate.meeshy.me')).toBe(
+      'https://gate.meeshy.me/api/v1/attachments/file/2026%2F09%2Fmon%20fichier.png',
+    );
+  });
+
+  test('une adresse qui porte DÉJÀ la route de flux traverse INCHANGÉE — jamais une seconde route', () => {
+    expect(
+      resolveAttachmentSrc('https://gate.meeshy.me/api/v1/attachments/file/2026%2F09%2Fphoto.png', 'https://gate.staging.meeshy.me'),
+    ).toBe('https://gate.meeshy.me/api/v1/attachments/file/2026%2F09%2Fphoto.png');
+  });
+
+  /**
+   * LA MÊME FORME, SANS L'HÔTE — `/2026/09/<id>/photo.png`. Le legacy la répare
+   * au même titre (`apps/web/utils/attachment-url.ts`, § « chemin de date ») :
+   * une barre initiale n'en fait pas une ROUTE, et `${base}/2026/09/…` rend
+   * exactement l'adresse que la console de staging montrait.
+   */
+  test('un chemin de DATE (barre initiale, pas de route) devient la route de flux', () => {
+    expect(resolveAttachmentSrc('/2026/09/6aa607/harbor_41.png', 'https://gate.staging.meeshy.me')).toBe(
+      'https://gate.staging.meeshy.me/api/v1/attachments/file/2026%2F09%2F6aa607%2Fharbor_41.png',
+    );
+  });
+
+  test('un chemin qui porte DÉJÀ la route de flux garde sa forme — seule la base s’ajoute', () => {
+    expect(resolveAttachmentSrc('/api/v1/attachments/file/2026%2F09%2Fphoto.png', 'https://gate.meeshy.me')).toBe(
+      'https://gate.meeshy.me/api/v1/attachments/file/2026%2F09%2Fphoto.png',
+    );
+  });
+
+  test('le magasin STATIQUE traverse INCHANGÉ — ses avatars ne sont pas sur la passerelle (#4625)', () => {
+    expect(resolveAttachmentSrc('https://static.meeshy.me/u/i/2025/11/avatar_1763143871947_o0.jpg', 'https://gate.meeshy.me')).toBe(
+      'https://static.meeshy.me/u/i/2025/11/avatar_1763143871947_o0.jpg',
+    );
+  });
+
+  test('une adresse EXTERNE sans forme de clé traverse INCHANGÉE', () => {
+    expect(resolveAttachmentSrc('https://cdn.example.com/photo.png', 'https://gate.meeshy.me')).toBe('https://cdn.example.com/photo.png');
   });
 });

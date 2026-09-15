@@ -11,7 +11,7 @@
 - Socket.IO Client 4.8 (real-time)
 - Zod 4 (validation), Framer Motion 11 (animations)
 - FFmpeg.wasm (client-side audio), Tone.js (playback)
-- Firebase 10 (push notifications), next-pwa (service worker)
+- Firebase 10 (push notifications), hand-written service worker (`public/sw.js`, registered by `utils/service-worker.ts` — no `next-pwa`, unused and removed #6403)
 
 ## Project Structure
 ```

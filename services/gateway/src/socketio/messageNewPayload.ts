@@ -2,6 +2,7 @@ import type { Message } from '@meeshy/shared/types/index';
 import { resolveWireSenderId } from './messageEditedPayload';
 import { stickerFromMetadata } from '../services/stickers/messageSticker';
 import { servedQuotedMessage } from '../services/messaging/servedQuotedMessage';
+import { attachmentReplyToFromMetadata } from '../services/messaging/attachmentReplySnapshot';
 
 /**
  * Source UNIQUE de la charge utile `message:new`.
@@ -170,8 +171,19 @@ export function buildMessageNewPayload(
     // champ sans un seul champ de protection : répondre à un message à vue
     // unique republiait son texte EN CLAIR dans la bulle temps réel, alors que
     // le même fil rechargé par REST affichait « 👁️ 💬 ».
+    // #6164 — la PIÈCE NOMMÉE voyage avec la citation, et elle est DÉRIVÉE DE
+    // LA LIGNE (`metadata` du message QUI CITE, jamais du message cité), donc
+    // elle appartient à cette unité comme `sticker` dix lignes plus bas. Sans
+    // elle, la bulle temps réel désigne le média représentatif et le même fil
+    // rechargé par REST en désigne un autre : la citation SAUTE de la vignette
+    // 3 à la vignette 1 au premier rafraîchissement.
     replyTo: message.replyTo
-      ? { ...(inputs.replyTo as Record<string, unknown>), ...servedQuotedMessage(message.replyTo) }
+      ? {
+          ...(inputs.replyTo as Record<string, unknown>),
+          ...servedQuotedMessage(message.replyTo, {
+            attachmentReplyTo: attachmentReplyToFromMetadata(message.metadata),
+          }),
+        }
       : inputs.replyTo,
     storyReplyToId: message.storyReplyToId || undefined,
     forwardedFromId: message.forwardedFromId || undefined,

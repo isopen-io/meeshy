@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import MeeshySDK
 
 /// Pure, `nonisolated` framing solver for the story canvas **container transform**.
 /// The canvas keeps fixed intrinsic 9:16 bounds (`CanvasGeometry.aspectFitSize` of the
@@ -147,9 +148,39 @@ public nonisolated enum StoryCanvasFraming {
         // centred rounded card that (a) starts below the header, (b) never overlaps the sheet
         // when open, (c) grows toward full-but-margined when the sheet collapses — identical
         // for every tool incl. drawing (user spec 2026-06-02).
-        let scaleH = regionHeight / intrinsic.height
-        let scaleW = regionWidth / intrinsic.width
-        let scale = min(1, max(0, min(scaleH, scaleW)))
+        //
+        // **Cet ajustement est la loi de `MediaStageFraming`, et il n'en existe
+        // qu'un** (#6141, moitié de convergence). La story le calculait avec sa
+        // propre arithmétique — deux solveurs de cadrage pour une seule question,
+        // rendant le même nombre, donc leur doublon était invisible à toute
+        // assertion de valeur jusqu'au jour où l'un bougerait.
+        //
+        // Trois choses qu'il faut dire ici, parce qu'elles expliquent pourquoi la
+        // projection ne prend PAS tout :
+        //
+        // - **le plancher est NUL.** Le plateau de lecture ne descend jamais sous
+        //   trois fois son overlay ; une carte de story, elle, se laisse rétrécir
+        //   par le sheet — c'est même toute sa géométrie. Le plancher est une
+        //   entrée de l'hôte précisément pour que les deux puissent différer sur
+        //   ce point sans différer sur la loi.
+        // - **la gouttière est nulle aussi** : les marges latérales sont déjà
+        //   retirées par `sideInset` au-dessus, et les compter deux fois
+        //   rétrécirait la carte.
+        // - **l'ALIGNEMENT vertical reste ici.** `center` / `top` / `bottom` est
+        //   une question que le plateau de lecture ne pose pas ; le solveur rend
+        //   des COTES, la story en tire un `scale` et place l'offset elle-même.
+        let cadre = MediaStageFraming.resolve(
+            MediaStageFraming.Input(
+                viewport: CGSize(width: regionWidth, height: regionHeight),
+                mediaRatio: input.canvasRatio,
+                corridors: MediaStageFraming.Corridors(safeTop: 0, top: 0, rail: 0,
+                                                       transport: 0, safeBottom: 0, gutter: 0),
+                presentation: .carded,
+                cardedCornerRadius: input.cardedCornerRadius,
+                minimumFrameHeight: 0
+            )
+        )
+        let scale = min(1, max(0, cadre.media.height / intrinsic.height))
 
         // `.top` : la carte colle au bord SUPÉRIEUR de la région (flush sous
         // le header) — le mou vertical éventuel (contrainte largeur active)

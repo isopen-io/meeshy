@@ -17,8 +17,19 @@
  * un mesusage se voit en revue au lieu de se cacher derriere `rounded-lg`.
  */
 @import 'tailwindcss';
+/* LA FEUILLE DE PREMIÈRE PEINTURE NAÎT DU CODE LIVRÉ, jamais de sa PROSE
+   (#6124). La détection automatique de Tailwind lit aussi les gates de
+   `scripts/` et les documents Markdown : un nom de classe CITÉ dans un
+   commentaire, une assertion ou une décision (`backdrop-blur-xl`,
+   `backdrop-filter`) y fabriquait un utilitaire que rien n'emploie, avec ses
+   `@property` — mesuré à ~0,1 Ko gzip de la feuille servie avant le premier
+   pixel. Même arbitrage que `institutional.css` (`source(none)`), borné ici
+   aux deux sources qui ne sont jamais du code d'écran. */
+@source not '../../scripts';
+@source not '../../**/*.md';
 @import '@meeshy/design-tokens/tokens.css';
 @import './ios.css';
+@import './glass.css';
 
 /* Le schema SOMBRE est le defaut de la table (`:root, :root.dark`) ; le clair
    s'obtient par la classe `.light`. La variante ci-dessous sert les rares cas
@@ -276,12 +287,39 @@
  * (composeur, barre de recherche) ; le plancher de 8px est la respiration due
  * quand l'appareil n'a pas d'indicateur home.
  */
+/*
+ * L'ENCOCHE EST DECLAREE UNE FOIS, ICI (#6213) — `env()` n'apparait plus
+ * qu'a cet endroit du depot.
+ *
+ * Elle etait ecrite DEUX fois, sous deux formes : ces deux utilitaires
+ * lisaient `env()` en direct, pendant que `--safe-top`/`--safe-bottom`
+ * portaient la MEME mesure pour les lois pures (`lib/view/safe-area.ts`,
+ * `placeMessageMenuCluster`). Deux jumelles qui ne pouvaient pas diverger sur
+ * un appareil — elles lisaient la meme source — mais qui ne pouvaient pas non
+ * plus etre PILOTEES ensemble : aucun temoin de navigateur ne sait poser un
+ * `env()`, donc aucun ne pouvait mesurer une mise en page a encoche. Le fil
+ * (#6213) en avait besoin, `check-thread-scroll-edges.mjs` les surcharge
+ * desormais toutes les deux d'un seul geste.
+ *
+ * Les variables vivaient dans `thread-menu.css` — donc dans le CHUNK du fil :
+ * elles etaient absentes partout ailleurs. Sur `:root` de la feuille critique,
+ * elles s'appliquent au document entier, ce que leur commentaire d'origine
+ * affirmait deja.
+ */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
 @utility pt-safe {
-  padding-top: env(safe-area-inset-top);
+  padding-top: var(--safe-top);
 }
 
 @utility pb-safe {
-  padding-bottom: max(env(safe-area-inset-bottom), 8px);
+  /* Le plancher de 8px est la respiration due quand l'appareil n'a pas
+     d'indicateur home ; il reste ICI, sur le BORD, jamais dans la variable —
+     `--safe-bottom` doit dire l'encoche REELLE aux lois qui la lisent. */
+  padding-bottom: max(var(--safe-bottom), 8px);
 }
 
 @utility offscreen {
@@ -465,20 +503,40 @@
  * « le chrome gagne — un contrôle recouvert est un contrôle qu'on ne peut plus
  * lire, alors qu'une annonce posée 8 pt plus bas reste parfaitement visible ».
  *
- * La cote est MESURÉE, jamais estimée : relevé au navigateur à 390 × 844 le
- * 2026-09-11, le bas de l'en-tête de LISTE est à 64 px et celui du FIL à 60 px
- * (hors encoche, que chaque écran porte lui-même en `pt-safe`). On prend le
- * plus haut des deux, plus les 8 px d'air d'iOS — sur-dégager est le sens
- * SÛR de l'erreur, sous-dégager recouvre un bouton.
+ * La cote n'est plus ICI : elle DÉPEND de l'écran depuis #6401/#6387 (quatre
+ * écrans portent une seconde bande sous leur en-tête, que 72 px recouvrait en
+ * plein milieu) — `syncPillTop()` (`lib/view/sync-pill-offset.ts`) la calcule
+ * et `sync-pill.tsx` la pose en style EN LIGNE, qui l'emporte sur toute règle
+ * de cette feuille. Une seconde valeur ici referait diverger les deux.
  */
-.sync-pill {
-  top: calc(env(safe-area-inset-top, 0px) + 72px);
-}
 
 @utility scrollbar-none {
   scrollbar-width: none;
 
   &::-webkit-scrollbar {
     display: none;
+  }
+}
+
+/* LE RESSORT DU COMPOSER, porte a l'inscription (#6479).
+ *
+ * `UniversalComposerBar+Attachments.swift:228` anime ses pieces jointes avec
+ * `spring(response: 0.32, dampingFraction: 0.8)` : la valeur DEPASSE puis
+ * revient. `cubic-bezier(0.22, 1.2, 0.36, 1)` en est la lecture CSS — le
+ * troisieme point passe au-dessus de 1, c'est lui qui porte le depassement.
+ *
+ * La grille `0fr -> 1fr` anime la HAUTEUR sans qu'aucune valeur fixe ne soit
+ * devinee : le contenu reste mesure par lui-meme, et rien ne se coupe quand la
+ * taille de police change (Dynamic Type, zoom navigateur).
+ *
+ * `prefers-reduced-motion` la coupe : une animation qui EXPLIQUE ne doit pas
+ * etre une animation qu'on subit. */
+.signup-spring {
+  transition: grid-template-rows 320ms cubic-bezier(0.22, 1.2, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .signup-spring {
+    transition: none;
   }
 }

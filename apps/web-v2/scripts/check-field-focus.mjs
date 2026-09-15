@@ -61,8 +61,20 @@ const server = createServer(async (req, res) => {
 await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
 const BASE = `http://127.0.0.1:${server.address().port}`;
 
-/** Les trois portes d'entrée qui montent un `Field` sans session. */
-const ECRANS = ['/auth/magic-link', '/forgot-password', '/login'];
+/**
+ * Les portes d'entrée qui montent un `Field` sans session, ET SANS APPEL
+ * RÉSEAU PRÉALABLE — aucun gate ne dépend du staging (CLAUDE.md racine),
+ * donc seuls les écrans dont le formulaire apparaît de façon SYNCHRONE
+ * peuvent figurer ici. `/auth/verify-email?email=` qualifie (le code se
+ * saisit avant tout appel) ; `/reset-password?token=` NE qualifie PAS : son
+ * formulaire n'apparaît qu'après `GET /reset-password/verify-token`, un
+ * appel réseau réel que ce serveur statique local ne peut pas servir — son
+ * champ mot de passe réutilise pourtant le MÊME `Field` que les autres
+ * (`reset-password-flow.tsx`), donc le couple de focus y est identique par
+ * construction, sans qu'un gate réseau-dépendant soit nécessaire pour le
+ * prouver (#5672).
+ */
+const ECRANS = ['/auth/magic-link', '/forgot-password', '/login', '/auth/verify-email?email=ada%40meeshy.example'];
 
 const browser = await launchChromium();
 const failures = [];
