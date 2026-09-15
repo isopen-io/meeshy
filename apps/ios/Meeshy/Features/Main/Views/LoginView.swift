@@ -476,18 +476,24 @@ struct LoginView: View {
             loginButton(action: attemptLogin, disabled: username.isEmpty || password.isEmpty)
 
             VStack(spacing: MeeshySpacing.sm) {
-                // « Connexion sans mot de passe » en premier (action mise en avant),
+                // « Se connecter par e-mail » en premier (action mise en avant),
                 // « Mot de passe oublié » en dessous — empilés, plus côte à côte.
+                // Le libellé dit CE QU'ON FAIT, jamais la technique : la baguette
+                // reste le signe, le mot « magique » est parti (#6626).
                 Button { showMagicLink = true } label: {
-                    Text(String(localized: "auth.login.passwordless", bundle: .main))
-                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [MeeshyColors.purple500, MeeshyColors.indigo400],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
+                    HStack(spacing: MeeshySpacing.xs) {
+                        Image(systemName: "wand.and.stars")
+                            .accessibilityHidden(true)
+                        Text(String(localized: "auth.login.passwordless", bundle: .main))
+                    }
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [MeeshyColors.purple500, MeeshyColors.indigo400],
+                            startPoint: .leading,
+                            endPoint: .trailing
                         )
+                    )
                 }
                 .bounceOnTap(scale: 0.94)
                 .accessibilityLabel(String(localized: "auth.login.passwordless", bundle: .main))
