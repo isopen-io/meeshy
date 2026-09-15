@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import XCTest
+@testable import Meeshy
 
 /// **LES PIXELS RENDUS — la seule preuve qu'une peinture atteint l'écran.**
 ///
@@ -57,6 +58,26 @@ import XCTest
 /// `.opacity(0)` a démasqué. L'app, elle, n'a jamais ce comportement : la
 /// composition y vit sous `RootThemedBackground`, un sol plein bord. Le harnais
 /// pose donc le même sol — c'est une condition de FIDÉLITÉ, pas une précaution.
+///
+/// **7 — Le harnais doit garder la grandeur QUI GOUVERNE, jamais sa voisine.**
+/// La bande se dimensionne sur `DeviceLayout.safeAreaTop`, qui ne rend l'encart
+/// que si une scène est `.foregroundActive` — sinon **0**. Ce fichier gardait
+/// `window.safeAreaInsets.top`, l'encart que la FENÊTRE déclare : deux valeurs
+/// distinctes, qui coïncident tant que l'app tient le premier plan et divergent
+/// dès qu'elle le perd. Mesuré le 2026-09-15 : app déplacée du premier plan,
+/// `activationState` passe 0 → 1 → 2, `DeviceLayout.safeAreaTop` tombe à 0
+/// pendant que `window.safeAreaInsets.top` reste à 62 ; la bande fait alors 0 pt
+/// de haut, ne peint rien, et **27 assertions de six témoins accusent la bande**
+/// sur du code parfaitement juste — la garde d'alors ne pouvant pas tomber,
+/// puisqu'elle interrogeait la valeur restée bonne.
+///
+/// C'est la leçon du lot #6579 retournée contre son propre harnais : *un témoin
+/// qui ne mesure pas la quantité gouvernant ce qu'il observe ne mesure rien.*
+/// La garde interroge donc désormais `DeviceLayout.safeAreaTop`, et un
+/// environnement qui ne peut pas la fournir se solde par un `XCTSkip` qui accuse
+/// l'ENVIRONNEMENT — pas la bande. Le skip est dans la SIGNATURE (`init` est
+/// `throws`) : on ne peut pas obtenir un `RenderedPixels` là où la mesure n'a
+/// pas de sens, donc aucun témoin futur ne peut oublier la garde.
 @MainActor
 final class RenderedPixels {
 
@@ -68,8 +89,9 @@ final class RenderedPixels {
     /// COMPRIS : c'est dans cette bande-là que la bande du chrome se peint.
     let root: UIView
 
-    /// L'encart haut que la FENÊTRE déclare — la valeur que lit
-    /// `DeviceLayout.safeAreaTop`, donc celle contre laquelle la bande se mesure.
+    /// L'encart haut **que la production lit** : `DeviceLayout.safeAreaTop`, la
+    /// grandeur qui donne sa hauteur à la bande — jamais `window.safeAreaInsets`,
+    /// qui en est la voisine et ne tombe pas quand elle tombe (condition 7).
     let safeAreaTop: CGFloat
 
     private var window: UIWindow?
@@ -81,7 +103,7 @@ final class RenderedPixels {
         _ vue: some View,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) {
+    ) throws {
         let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
         let scene = scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
         let taille = scene?.screen.bounds.size ?? CGSize(width: 393, height: 852)
@@ -111,17 +133,64 @@ final class RenderedPixels {
 
         self.window = window
         self.root = host.view
-        self.safeAreaTop = window.safeAreaInsets.top
 
-        if window.safeAreaInsets.top <= 0 {
-            XCTFail(
+        // CONDITION 7 — la garde interroge `DeviceLayout.safeAreaTop`, la
+        // grandeur dont la bande tient sa hauteur, et NON l'encart de la fenêtre.
+        // Une scène peut n'être `.foregroundActive` que par intermittence (fin
+        // d'activation au démarrage du bundle, alerte système refermée) : on lui
+        // laisse une fenêtre BORNÉE de revenir avant de renoncer. L'attente ne
+        // coûte rien quand la condition tient déjà, et elle ne peut pas rendre un
+        // témoin indulgent — elle décide de MESURER ou de NE PAS mesurer, jamais
+        // d'un verdict.
+        var insetProduction = DeviceLayout.safeAreaTop
+        if insetProduction <= 0 {
+            let echeance = Date().addingTimeInterval(1)
+            while Date() < echeance, insetProduction <= 0 {
+                RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+                insetProduction = DeviceLayout.safeAreaTop
+            }
+        }
+        self.safeAreaTop = insetProduction
+
+        let insetFenetre = window.safeAreaInsets.top
+        let etats = UIApplication.shared.connectedScenes
+            .compactMap { ($0 as? UIWindowScene)?.activationState.rawValue }
+            .map(String.init)
+            .joined(separator: ",")
+
+        guard insetProduction > 0 else {
+            dismount()
+            throw XCTSkip(
                 """
-                La fenêtre de test ne déclare AUCUN encart haut (\(window.safeAreaInsets)). \
-                La bande du chrome se dimensionne sur `DeviceLayout.safeAreaTop` : \
-                sans encart, elle est haute de zéro et tout témoin de peinture \
-                serait vert ou rouge pour une raison étrangère au code mesuré. \
-                Scènes: \(scenes.count) · rattachée: \(scene != nil) · \
-                taille \(taille) · clé: \(window.isKeyWindow)
+                ENVIRONNEMENT — aucune scène n'est au premier plan : \
+                `DeviceLayout.safeAreaTop` rend \(insetProduction), ce témoin ne \
+                mesure rien ici. Ce n'est PAS un verdict sur la bande du chrome : \
+                la fenêtre de test déclare bien son encart (\(insetFenetre) pt), \
+                mais `DeviceLayout` ne lit que la scène `.foregroundActive` \
+                (états observés : [\(etats)] — 0 = actif, 1 = inactif, 2 = arrière-plan). \
+                La bande se dimensionne sur cette valeur : à 0 elle est haute de \
+                zéro et ne peint pas un pixel, sur du code parfaitement juste. \
+                Cause habituelle : l'app hôte a été déplacée du premier plan de son \
+                appareil pendant la suite (une autre app lancée dessus, une alerte \
+                système, un `simctl launch` d'une session voisine). Remède : relancer \
+                la suite avec l'hôte au premier plan de SON simulateur.
+                """,
+                file: file, line: line
+            )
+        }
+
+        guard abs(insetProduction - insetFenetre) < 0.5 else {
+            dismount()
+            throw XCTSkip(
+                """
+                ENVIRONNEMENT — la production et le harnais ne mesurent pas la \
+                même fenêtre : `DeviceLayout.safeAreaTop` = \(insetProduction) pt, \
+                encart de la fenêtre montée = \(insetFenetre) pt. Les coordonnées \
+                des témoins se calculent sur l'une et la bande se peint sur \
+                l'autre : aucun verdict n'est recevable. Cause habituelle : une \
+                fenêtre laissée CLÉ par un témoin précédent qui n'a pas appelé \
+                `dismount()`. Scènes : \(scenes.count) · états [\(etats)] · \
+                notre fenêtre est clé : \(window.isKeyWindow).
                 """,
                 file: file, line: line
             )

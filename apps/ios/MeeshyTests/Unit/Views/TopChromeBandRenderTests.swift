@@ -143,8 +143,8 @@ final class TopChromeBandRenderTests: XCTestCase {
         ancre: Color? = nil,
         file: StaticString = #filePath,
         line: UInt = #line
-    ) -> RenderedPixels {
-        let rendu = RenderedPixels(vue, file: file, line: line)
+    ) throws -> RenderedPixels {
+        let rendu = try RenderedPixels(vue, file: file, line: line)
         ecran = rendu
         let couleur = ancre ?? Self.sentinelle
         let milieu = Int(rendu.root.bounds.width / 2)
@@ -169,9 +169,9 @@ final class TopChromeBandRenderTests: XCTestCase {
     /// laisser aucun pixel dans l'encart système. Tant qu'elle y étendait sa
     /// couleur, tout témoin de bande était vert pour la peinture de la BARRE —
     /// et la neutralisation de la bande ne rougissait rien.
-    func test_laBarreSeule_sansAucuneBande_neTeintePasLEncart() {
+    func test_laBarreSeule_sansAucuneBande_neTeintePasLEncart() throws {
         let (coord, _) = coordinateur(actif: true)
-        let rendu = monter(VStack(spacing: 0) {
+        let rendu = try monter(VStack(spacing: 0) {
             MiniAudioPlayerBar(coordinatorForTesting: coord, currentConversationId: { nil })
             Self.sentinelle
         })
@@ -200,9 +200,9 @@ final class TopChromeBandRenderTests: XCTestCase {
     /// (elle ne peint plus), et `onDisplayedContextChange: { _ in }` sur
     /// `CallPresentationLayer` (le contexte affiché ne remonte plus, donc
     /// `TopChromeTint.resolve` rend `nil`).
-    func test_uneEcouteEnCours_PEINT_laBandeDeLEncartHaut() {
+    func test_uneEcouteEnCours_PEINT_laBandeDeLEncartHaut() throws {
         let (coord, _) = coordinateur(actif: true)
-        let rendu = monter(EcranReel(coordinateur: coord, conversationCourante: nil))
+        let rendu = try monter(EcranReel(coordinateur: coord, conversationCourante: nil))
         let largeur = Int(rendu.root.bounds.width)
 
         let apparue = rendu.settle(borne: 4) { rendu.pixel(largeur / 2, 2, matches: bande) }
@@ -222,9 +222,9 @@ final class TopChromeBandRenderTests: XCTestCase {
 
     /// Aucune barre ⇒ aucune bande. La sentinelle prouve d'abord que la frame est
     /// peinte, donc que l'absence mesurée en est une.
-    func test_aucuneBarreActive_neLaissePasUnPixelDeBande() {
+    func test_aucuneBarreActive_neLaissePasUnPixelDeBande() throws {
         let (coord, _) = coordinateur(actif: false)
-        let rendu = monter(EcranReel(coordinateur: coord, conversationCourante: nil))
+        let rendu = try monter(EcranReel(coordinateur: coord, conversationCourante: nil))
         let largeur = Int(rendu.root.bounds.width)
 
         for x in [8, largeur / 2, largeur - 8] {
@@ -239,8 +239,8 @@ final class TopChromeBandRenderTests: XCTestCase {
 
     /// La bande occupe l'encart système, et s'y ARRÊTE. L'offset de `-safeAreaTop`
     /// est ce qui le garantit ; ce témoin le mesure au lieu de le relire.
-    func test_laBandeRemplitLEncart_etNeDescendPasDessous() {
-        let rendu = monter(BandeSeule(callIsActive: true))
+    func test_laBandeRemplitLEncart_etNeDescendPasDessous() throws {
+        let rendu = try monter(BandeSeule(callIsActive: true))
         let x = Int(rendu.root.bounds.width / 2)
         let encart = Int(rendu.safeAreaTop)
 
@@ -267,9 +267,9 @@ final class TopChromeBandRenderTests: XCTestCase {
     /// rendue, ce que la mesure du lot n'avait pas (sa capture relevait `#FAF9F9`
     /// sous la bande : aucune barre n'était à l'écran, donc le joint n'a jamais
     /// été observé).
-    func test_laCoutureEstContinue_avecLaBarreDEcouteREELLEMENTRendue() {
+    func test_laCoutureEstContinue_avecLaBarreDEcouteREELLEMENTRendue() throws {
         let (coord, _) = coordinateur(actif: true)
-        let rendu = monter(EcranReel(coordinateur: coord, conversationCourante: nil))
+        let rendu = try monter(EcranReel(coordinateur: coord, conversationCourante: nil))
         let largeur = Int(rendu.root.bounds.width)
         let encart = Int(rendu.safeAreaTop)
 
@@ -305,8 +305,8 @@ final class TopChromeBandRenderTests: XCTestCase {
     /// (`TopChromeTint.call.bandColor`, le producteur unique) ; que la pilule
     /// pose bien celui-là, et rien d'autre, est tenu par
     /// `FloatingCallPillViewTests.test_banner_isFullIndigo_noScrimNoFade`.
-    func test_laCoutureEstContinue_avecLAplatDeLaBarreDAppel() {
-        let rendu = monter(BarreEtBande(fond: TopChromeTint.call.bandColor))
+    func test_laCoutureEstContinue_avecLAplatDeLaBarreDAppel() throws {
+        let rendu = try monter(BarreEtBande(fond: TopChromeTint.call.bandColor))
         let largeur = Int(rendu.root.bounds.width)
         let encart = Int(rendu.safeAreaTop)
 
@@ -326,13 +326,13 @@ final class TopChromeBandRenderTests: XCTestCase {
     /// Sans ce contre-témoin, les deux précédents pourraient être verts parce
     /// qu'ils comparent deux lectures d'un même aplat trivialement égal — c'est-
     /// à-dire pour une raison étrangère à ce qu'ils prétendent mesurer.
-    func test_leTemoinDeCouture_rougiraitSurLeDegradeDiagonalDAvant() {
+    func test_leTemoinDeCouture_rougiraitSurLeDegradeDiagonalDAvant() throws {
         let degradeDAvant = LinearGradient(
             colors: [CallBannerContrast.bannerTop, CallBannerContrast.bannerBottom],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
-        let rendu = monter(BarreEtBande(fond: degradeDAvant))
+        let rendu = try monter(BarreEtBande(fond: degradeDAvant))
         let encart = Int(rendu.safeAreaTop)
         let droite = Int(rendu.root.bounds.width) - 6
 
@@ -361,7 +361,7 @@ final class TopChromeBandRenderTests: XCTestCase {
         coord: ConversationAudioCoordinator,
         conversationCourante: String?,
         journal: Journal
-    ) -> RenderedPixels {
+    ) throws -> RenderedPixels {
         let vue = VStack(spacing: 0) {
             MiniAudioPlayerBar(
                 coordinatorForTesting: coord,
@@ -370,13 +370,13 @@ final class TopChromeBandRenderTests: XCTestCase {
             )
             Self.sentinelle
         }
-        return monter(vue)
+        return try monter(vue)
     }
 
-    func test_laBarreRemonteSonContexte_horsDeLaConversationQuiJoue() {
+    func test_laBarreRemonteSonContexte_horsDeLaConversationQuiJoue() throws {
         let (coord, _) = coordinateur(actif: true, conversation: "conv-A")
         let journal = Journal()
-        let rendu = monterLaBarre(coord: coord, conversationCourante: "conv-B", journal: journal)
+        let rendu = try monterLaBarre(coord: coord, conversationCourante: "conv-B", journal: journal)
         rendu.attendre(borne: 3) { !journal.recus.isEmpty }
 
         XCTAssertFalse(journal.recus.isEmpty, "La barre n'a rien remonté du tout.")
@@ -396,9 +396,9 @@ final class TopChromeBandRenderTests: XCTestCase {
     /// le résultat : l'hôte reste à `nil` et l'encart reste au fond thématique.
     /// Une barre qui remonterait `coordinator.activeContext` au lieu de ce
     /// qu'elle AFFICHE peindrait ici un ruban indigo au-dessus de rien.
-    func test_dansLaConversationQuiJoue_laBandeNePeintAucunPixel() {
+    func test_dansLaConversationQuiJoue_laBandeNePeintAucunPixel() throws {
         let (coord, _) = coordinateur(actif: true, conversation: "conv-A")
-        let rendu = monter(EcranReel(coordinateur: coord, conversationCourante: "conv-A"))
+        let rendu = try monter(EcranReel(coordinateur: coord, conversationCourante: "conv-A"))
         let largeur = Int(rendu.root.bounds.width)
 
         for x in [8, largeur / 2, largeur - 8] {
@@ -420,10 +420,10 @@ final class TopChromeBandRenderTests: XCTestCase {
     /// barre qui remonterait `coordinator.activeContext` au lieu de ce qu'elle
     /// AFFICHE rendrait exactement le même écran. Éprouvé : cette mutation-là
     /// laisse tous les témoins d'état fixe verts, et ne rougit qu'ici.
-    func test_enEntrantDansLaConversationQuiJoue_laBandeSEfface() {
+    func test_enEntrantDansLaConversationQuiJoue_laBandeSEfface() throws {
         let (coord, _) = coordinateur(actif: true, conversation: "conv-A")
         let route = Route("conv-B")
-        let rendu = monter(EcranAvecRoute(route: route, coordinateur: coord))
+        let rendu = try monter(EcranAvecRoute(route: route, coordinateur: coord))
         let largeur = Int(rendu.root.bounds.width)
 
         XCTAssertTrue(
@@ -445,10 +445,10 @@ final class TopChromeBandRenderTests: XCTestCase {
         )
     }
 
-    func test_laBarreResteRemontee_pendantLaFenetreDeGrace() {
+    func test_laBarreResteRemontee_pendantLaFenetreDeGrace() throws {
         let (coord, _) = coordinateur(actif: true, conversation: "conv-A")
         let journal = Journal()
-        let rendu = monterLaBarre(coord: coord, conversationCourante: nil, journal: journal)
+        let rendu = try monterLaBarre(coord: coord, conversationCourante: nil, journal: journal)
         rendu.attendre(borne: 3) { !journal.recus.isEmpty }
         XCTAssertNotNil(journal.recus.last ?? nil, "Préalable : la barre doit d'abord remonter.")
 
@@ -483,9 +483,9 @@ final class TopChromeBandRenderTests: XCTestCase {
     /// s'arrête SOUS la barre. Le volet n'atteint jamais l'encart système, la
     /// bande ne recouvre donc aucun pixel de volet — et la bande ne peut pas non
     /// plus être trouée par lui.
-    func test_pendantUneEcoute_leVoletNeMonteJamaisDansLEncart_etLaBandeLeCouvrePas() {
+    func test_pendantUneEcoute_leVoletNeMonteJamaisDansLEncart_etLaBandeLeCouvrePas() throws {
         let (coord, _) = coordinateur(actif: true)
-        let rendu = monter(
+        let rendu = try monter(
             EcranReel(coordinateur: coord, conversationCourante: nil, avecVolet: true),
             ancre: Self.volet
         )
