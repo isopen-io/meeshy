@@ -168,6 +168,11 @@ final class RenderedScreen {
     /// Tous les identifiants POSÉS, dans l'ordre de l'arbre.
     var identifiers: [String] { RenderedScreen.noeuds(root).compactMap(\.identifier) }
 
+    /// Tout l'arbre rendu, cadres compris, dans l'ordre de l'arbre — pour les
+    /// témoins qui retrouvent un élément par son LIBELLÉ (une vignette annonce
+    /// sa position, elle ne porte pas d'identifiant).
+    var nodes: [Node] { RenderedScreen.noeuds(root) }
+
     /// Le nœud portant cet identifiant, s'il est rendu.
     func node(_ identifier: String) -> Node? {
         RenderedScreen.noeuds(root).first { $0.identifier == identifier }

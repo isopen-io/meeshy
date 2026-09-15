@@ -24,11 +24,31 @@ import MeeshyUI
 /// la marge de tête — `largeur − vignette − marge de queue` — qui fait
 /// COÏNCIDER les deux ancrages. Un média aligné sur le bord de contenu de tête
 /// est alors EXACTEMENT celui posé sous la tête de lecture, à droite ; les
-/// points d'arrêt du `viewAligned` et les positions que lit
-/// `scrollPosition(anchor: .trailing)` tombent donc sur la même grille, à tout
+/// points d'arrêt du `viewAligned` et les positions que lit et écrit
+/// `scrollPosition(anchor: .leading)` tombent donc sur la même grille, à tout
 /// décalage — y compris en butée de fin, où le dernier média est à droite.
 /// Une marge de tête choisie autrement les ferait diverger d'un reste, et la
 /// bande s'arrêterait sur un média coupé.
+///
+/// ## L'ancre de position est le bord de TÊTE (#6759)
+///
+/// La tête de lecture est à droite, mais la position s'ancre à gauche : par la
+/// coïncidence ci-dessus, le bord de contenu de tête et la tête de lecture
+/// désignent le même média.
+///
+/// L'ancre `.trailing`, traduction littérale de la règle, laissait la bande
+/// VIDE à l'ouverture. SwiftUI résout la position INITIALE d'une ancre de queue
+/// avec la marge de tête du mauvais côté : `bord droit du média − (largeur +
+/// marge de tête)` au lieu de `bord droit du média − (largeur − marge de
+/// queue)`, arrondi à la grille du `viewAligned`. Mesuré à 402 pt, sur
+/// 40/40 : 1 644 au lieu de 2 004, sur iOS 18.2 comme sur 26.1. Sur 5/5, la
+/// cible tombe avant le début de la bande : iOS 26.1 la suit (−444 au lieu de
+/// −96, aucune vignette dans la fenêtre), iOS 18.2 bute au début (le PREMIER
+/// média sous la tête de lecture). Les changements de page et la lecture
+/// au défilement étaient justes, d'où une bande qui « réapparaissait » en
+/// feuilletant. L'ancre de tête est juste dans les trois usages, sur les deux
+/// runtimes : `ConversationMediaFilmstripHostingTests` le mesure sur la bande
+/// réellement hébergée.
 ///
 /// ## Coût de rendu
 ///
@@ -156,7 +176,7 @@ struct ConversationMediaFilmstrip: View {
         .contentMargins(.leading, leadingInset, for: .scrollContent)
         .contentMargins(.trailing, FilmstripMetrics.trailingInset, for: .scrollContent)
         .scrollTargetBehavior(.viewAligned(limitBehavior: .never))
-        .scrollPosition(id: $scrollAnchorID, anchor: .trailing)
+        .scrollPosition(id: $scrollAnchorID, anchor: .leading)
         .padding(.bottom, FilmstripMetrics.bottomPadding)
         .adaptiveOnChange(of: scrollAnchorID) { _, newID in
             guard let newID, newID != currentPageID else { return }

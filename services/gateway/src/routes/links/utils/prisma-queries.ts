@@ -87,7 +87,13 @@ export const shareLinkSelectStructure = {
       title: true,
       description: true,
       type: true,
-      createdAt: true
+      createdAt: true,
+      // #6740 — `canPreview` (retrieval.ts) doit refuser l'aperçu public d'une
+      // conversation FERMÉE, exactement comme `isConversationClosed` (SSOT,
+      // `services/messaging/conversationWriteAdmission.ts`) le décide déjà pour
+      // l'écriture. Les deux colonnes qu'elle lit — rien de plus.
+      isActive: true,
+      closedAt: true
     }
   }
 };

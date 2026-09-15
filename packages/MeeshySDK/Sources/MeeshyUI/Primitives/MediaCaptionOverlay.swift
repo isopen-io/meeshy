@@ -530,8 +530,12 @@ private struct PlafondDeHauteur: Layout {
 
 // MARK: - Lisibilité sur un fond quelconque
 
-private extension View {
+public extension View {
     /// L'ombre portée qui fait tenir du texte blanc sur une composition claire.
+    ///
+    /// `public` depuis #6693 : le nom de l'auteur d'un réel, posé sur la même image que
+    /// la légende, la réclame quand la luminance du média le demande — une seconde
+    /// recette d'ombre côté app aurait été une seconde règle.
     /// Deux passes : une courte et dense qui détache la lettre, une longue et
     /// douce qui pose le bloc. Une seule ne suffit pas sur un fond blanc.
     func legibleOverCanvas() -> some View {

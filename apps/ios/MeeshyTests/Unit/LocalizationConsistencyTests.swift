@@ -348,7 +348,10 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Components/EffectsPickerView.swift",  // 24
         "apps/ios/Meeshy/Features/Main/Views/CreateTrackingLinkView.swift",  // 24
         "apps/ios/Meeshy/Features/Main/Views/ProfileUserPostsList.swift",  // 24
-        "apps/ios/Meeshy/Features/Main/Views/ReelsPlayerView.swift",  // 24
+        "apps/ios/Meeshy/Features/Main/Views/ReelsPlayerView.swift",  // 5
+        // #6693 — le rail d'actions a quitté l'hôte avec ses quatorze clés. Le cliquet
+        // suit le CODE, pas le chemin : sa destination s'inscrit dans le même commit.
+        "apps/ios/Meeshy/Features/Main/Views/ReelsPlayerView+ActionRail.swift",  // 14
         "apps/ios/Meeshy/Features/Main/Components/EditPostSheet.swift",  // 23
         "apps/ios/Meeshy/Features/Main/Components/ReportMessageSheet.swift",  // 21
         "apps/ios/Meeshy/Features/Main/Views/FeedView.swift",  // 21

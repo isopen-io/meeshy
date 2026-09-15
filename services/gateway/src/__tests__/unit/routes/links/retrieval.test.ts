@@ -259,6 +259,119 @@ describe('GET /links/:identifier — success unauthenticated with history allowe
   });
 });
 
+// ─── GET /links/:identifier — #6740: non-membre, lien expiré ou conversation fermée ──
+
+describe('GET /links/:identifier — #6740 non-membre, lien expiré', () => {
+  it('returns 403 for an anonymous caller on an expired link, and serves no message', async () => {
+    mockFindShareLinkByIdentifier.mockResolvedValueOnce(makeShareLink({
+      expiresAt: new Date(Date.now() - 60_000),
+    }));
+    const messagesCallsBefore = mockGetConversationMessages.mock.calls.length;
+    const membersCallsBefore = mockFindLinkMembers.mock.calls.length;
+    const { app } = await buildApp({ auth: 'none' });
+    const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}` });
+    expect(res.statusCode).toBe(403);
+    expect(mockGetConversationMessages.mock.calls.length).toBe(messagesCallsBefore);
+    expect(mockFindLinkMembers.mock.calls.length).toBe(membersCallsBefore);
+    await app.close();
+  });
+
+  it('returns 403 for a registered non-member caller on an expired link', async () => {
+    mockFindShareLinkByIdentifier.mockResolvedValueOnce(makeShareLink({
+      expiresAt: new Date(Date.now() - 60_000),
+      conversation: {
+        id: CONV_ID,
+        identifier: 'test-conv',
+        title: 'Test Conversation',
+        description: null,
+        type: 'group',
+        createdAt: new Date('2024-01-01'),
+        participants: [],
+      },
+    }));
+    const { app } = await buildApp();
+    const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}` });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it('returns 200 for an anonymous caller when expiresAt is in the future', async () => {
+    mockFindShareLinkByIdentifier.mockResolvedValueOnce(makeShareLink({
+      expiresAt: new Date(Date.now() + 60_000),
+    }));
+    const { app } = await buildApp({ auth: 'none' });
+    const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}` });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
+describe('GET /links/:identifier — #6740 non-membre, conversation fermée', () => {
+  it('returns 403 for an anonymous caller when the conversation is closed (closedAt set)', async () => {
+    mockFindShareLinkByIdentifier.mockResolvedValueOnce(makeShareLink({
+      conversation: {
+        id: CONV_ID,
+        identifier: 'test-conv',
+        title: 'Test Conversation',
+        description: null,
+        type: 'group',
+        createdAt: new Date('2024-01-01'),
+        isActive: true,
+        closedAt: new Date('2026-01-01'),
+        participants: [],
+      },
+    }));
+    const messagesCallsBefore = mockGetConversationMessages.mock.calls.length;
+    const membersCallsBefore = mockFindLinkMembers.mock.calls.length;
+    const { app } = await buildApp({ auth: 'none' });
+    const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}` });
+    expect(res.statusCode).toBe(403);
+    expect(mockGetConversationMessages.mock.calls.length).toBe(messagesCallsBefore);
+    expect(mockFindLinkMembers.mock.calls.length).toBe(membersCallsBefore);
+    await app.close();
+  });
+
+  it('returns 403 for a registered non-member caller when the conversation is closed (isActive: false)', async () => {
+    mockFindShareLinkByIdentifier.mockResolvedValueOnce(makeShareLink({
+      conversation: {
+        id: CONV_ID,
+        identifier: 'test-conv',
+        title: 'Test Conversation',
+        description: null,
+        type: 'group',
+        createdAt: new Date('2024-01-01'),
+        isActive: false,
+        closedAt: null,
+        participants: [],
+      },
+    }));
+    const { app } = await buildApp();
+    const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}` });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it('returns 200 for an anonymous caller when the conversation is open', async () => {
+    mockFindShareLinkByIdentifier.mockResolvedValueOnce(makeShareLink({
+      conversation: {
+        id: CONV_ID,
+        identifier: 'test-conv',
+        title: 'Test Conversation',
+        description: null,
+        type: 'group',
+        createdAt: new Date('2024-01-01'),
+        isActive: true,
+        closedAt: null,
+        participants: [],
+      },
+    }));
+    const { app } = await buildApp({ auth: 'none' });
+    const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}` });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
 // ─── GET /links/:identifier — meeshy global conversation ─────────────────────
 
 describe('GET /links/:identifier — meeshy global conversation grants access', () => {
