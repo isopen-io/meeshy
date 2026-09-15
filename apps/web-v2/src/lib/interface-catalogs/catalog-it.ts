@@ -58,6 +58,7 @@ const it = {
   'feed.post.media.audio': 'Audio',
   'feed.post.media.previous': 'Media precedente',
   'feed.post.media.next': 'Media successivo',
+  'feed.post.media.mosaic': 'Mosaico di {count} media',
   'feed.post.see_more': 'mostra altro',
   'feed.post.see_less': 'mostra meno',
   'feed.post.reel.chip': 'Reel',

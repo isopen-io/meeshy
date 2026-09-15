@@ -3,6 +3,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import { unwrap } from './client';
 import type { DataSource } from './config';
 import {
+  CANVAS_CAPS_HEADERS,
   flattenFeedPages,
   nextFeedCursor,
   type FeedPage,
@@ -63,6 +64,7 @@ export async function loadFeedPage(
   const result = await params.transport.request<readonly FeedPost[]>({
     method: 'GET',
     path: `/api/v1/social/posts?${query.toString()}`,
+    headers: CANVAS_CAPS_HEADERS,
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });
   if (!result.ok) return result;
