@@ -60,6 +60,7 @@ import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.theme.formColumnWidth
 
 /**
  * Change-password screen (feature-parity §L) — port of iOS `ChangePasswordView`.
@@ -109,6 +110,7 @@ fun ChangePasswordScreen(
                     .fillMaxSize()
                     .padding(padding)
                     .verticalScroll(rememberScrollState())
+                    .formColumnWidth()
                     .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
                 verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
             ) {

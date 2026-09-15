@@ -16,11 +16,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.width
 import com.google.common.truth.Truth.assertWithMessage
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.flow.MutableStateFlow
 import me.meeshy.sdk.auth.AuthRepository
+import me.meeshy.sdk.model.ChangePhoneResponse
+import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.TwoFactorSetupInfo
 import me.meeshy.sdk.net.api.TwoFactorStatusInfo
+import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.user.UserRepository
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.Rule
@@ -38,11 +44,13 @@ private val TABLET_MIN_WIDTH = 840.dp
 private const val TOLERANCE_DP = 0.5f
 
 private const val ENABLE_TWO_FACTOR = "Set up two-factor authentication"
+private const val UNVERIFIED_PHONE = "+33612345678"
 
 /**
- * Les écrans de sécurité du compte — mot de passe et double authentification, code
- * compris — tiennent dans la colonne centrée de la connexion sur tablette, et gardent
- * leur géométrie sur téléphone (#6645).
+ * Les écrans de sécurité du compte — mot de passe, double authentification et code SMS
+ * du changement de numéro, toutes les étapes de code comprises — tiennent dans la
+ * colonne centrée de la connexion sur tablette, et gardent leur géométrie sur téléphone
+ * (#6645).
  *
  * Le témoin mesure les CONTRÔLES rendus, jamais le nœud qui porterait la borne.
  */
@@ -101,6 +109,30 @@ class SecurityScreensFormWidthTest {
         compose.assertInCenteredFormColumn(hasSetTextAction())
     }
 
+    @Test
+    @Config(qualifiers = TABLET)
+    fun `phone code step sits in the centered form column on a tablet`() {
+        val viewModel = accountContactViewModel()
+        show { AccountContactScreen(onBack = {}, viewModel = viewModel) }
+
+        viewModel.verifyCurrentPhone()
+        compose.waitUntil { compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isNotEmpty() }
+
+        compose.assertInCenteredFormColumn(hasSetTextAction())
+    }
+
+    @Test
+    @Config(qualifiers = PHONE)
+    fun `phone code step keeps its phone geometry`() {
+        val viewModel = accountContactViewModel()
+        show { AccountContactScreen(onBack = {}, viewModel = viewModel) }
+
+        viewModel.verifyCurrentPhone()
+        compose.waitUntil { compose.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isNotEmpty() }
+
+        compose.assertSpansPhoneWidth(hasSetTextAction(), horizontalPadding = MeeshySpacing.lg * 2)
+    }
+
     private fun show(screen: @Composable () -> Unit) {
         compose.setContent { MeeshyTheme { screen() } }
         compose.waitForIdle()
@@ -113,6 +145,17 @@ class SecurityScreensFormWidthTest {
             TwoFactorSetupInfo(secret = "JBSWY3DPEHPK3PXP", qrCodeDataUrl = "", otpauthUrl = ""),
         )
         return TwoFactorViewModel(repository)
+    }
+
+    private fun accountContactViewModel(): AccountContactViewModel {
+        val users = mockk<UserRepository>(relaxed = true)
+        coEvery { users.changePhone(any()) } returns
+            NetworkResult.Success(ChangePhoneResponse(pendingPhoneNumber = UNVERIFIED_PHONE))
+        val session = mockk<SessionRepository>(relaxed = true)
+        every { session.currentUser } returns MutableStateFlow(
+            MeeshyUser(id = "u1", username = "alice", email = "alice@meeshy.me", phoneNumber = UNVERIFIED_PHONE),
+        )
+        return AccountContactViewModel(users, session)
     }
 }
 
