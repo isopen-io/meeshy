@@ -296,6 +296,27 @@ describe('MagicLinkFlow — (f) erreurs', () => {
     expect(el.querySelector('[role="timer"]')).toBeNull();
   });
 
+  /**
+   * #6666 — depuis #6658, la passerelle rend un VRAI 429
+   * (`code: 'RATE_LIMITED'`) plutôt que le 200 `data:{}` ci-dessus. Le même
+   * bandeau doit apparaître, jamais le message de succès générique — et
+   * l'étape doit rester « saisie », jamais « attente ».
+   */
+  test('429 (code RATE_LIMITED) ⇒ même bandeau, jamais l’étape « attente » (#6666)', async () => {
+    const { clock, now } = fakeClock();
+    const stub = requestStub([{ ok: false, status: 429, error: 'Too many requests', code: 'RATE_LIMITED' }]);
+    const el = mount({ request: stub.request, clock, now });
+    fill(el, 'ada@meeshy.example');
+    await act(async () => {
+      submit(el);
+      await Promise.resolve();
+    });
+    const alert = el.querySelector('[role="alert"]');
+    expect(alert?.textContent ?? '').toContain('Trop de demandes');
+    expect(el.textContent).not.toContain('E-mail envoyé');
+    expect(el.querySelector('[role="timer"]')).toBeNull();
+  });
+
   test('invalid-email ⇒ sous le champ', async () => {
     const { clock, now } = fakeClock();
     const stub = requestStub([{ ok: false, status: 400, error: 'Invalid email address' }]);
