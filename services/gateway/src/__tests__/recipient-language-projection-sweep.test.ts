@@ -200,6 +200,43 @@ describe('ce que la remontée sait suivre, et ce qu’elle refuse de deviner', (
     ]);
   });
 
+  it('suit un RESTE de destructuration — et REFUSE celui qui retire une colonne du prisme', () => {
+    // La forme du dépôt : `PasswordResetService` écarte le hash du mot de passe
+    // d'une ligne chargée avec la projection complète. Le reste garde les quatre
+    // colonnes, donc la chaîne se remonte (#6676).
+    const garde = bacAvec({
+      'utils/recipient-language.ts': SSOT_MINIMALE,
+      'reste-sain.ts': [
+        "import { RECIPIENT_LANG_SELECT, recipientLanguage } from './utils/recipient-language';",
+        'export async function g(prisma) {',
+        '  const account = await prisma.user.findFirst({ select: { id: true, password: true, ...RECIPIENT_LANG_SELECT } });',
+        '  const { password, ...user } = account;',
+        "  return recipientLanguage(user, 'en');",
+        '}',
+      ].join('\n'),
+    });
+    expect(balayerAppelsDeCadrage(garde).map((a) => a.verdict)).toEqual(['complete']);
+    expect(chainesNonRemontees(garde)).toEqual([]);
+
+    // Et le sens qui compte : un reste qui ÉCARTE une colonne de langue l'a
+    // perdue pour de bon. Le verdict accuse, il ne remonte pas à la source.
+    const perdante = bacAvec({
+      'utils/recipient-language.ts': SSOT_MINIMALE,
+      'reste-perdant.ts': [
+        "import { RECIPIENT_LANG_SELECT, recipientLanguage } from './utils/recipient-language';",
+        'export async function h(prisma) {',
+        '  const account = await prisma.user.findFirst({ select: { id: true, ...RECIPIENT_LANG_SELECT } });',
+        '  const { systemLanguage, ...user } = account;',
+        "  return recipientLanguage(user, 'en');",
+        '}',
+      ].join('\n'),
+    });
+    expect(balayerAppelsDeCadrage(perdante).map((a) => a.verdict)).toEqual(['non-resolue']);
+    expect(chainesNonRemontees(perdante)).toEqual([
+      'reste-perdant.ts — recipientLanguage(user) : le reste retire `systemLanguage`',
+    ]);
+  });
+
   it('rend `complete` une lecture SANS select — Prisma y sert tous les scalaires', () => {
     const racine = bacAvec({
       'nu.ts': [
