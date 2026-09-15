@@ -35,7 +35,7 @@ export function matchesMongoWhere(row: MongoDocument, where: MongoDocument | und
       return (condition as MongoDocument[]).every((branch) => matchesMongoWhere(row, branch));
     }
     if (key === 'NOT') {
-      return !matchesMongoWhere(row, condition as MongoDocument);
+      return matchesNot(row, condition as MongoDocument);
     }
 
     // Le coeur de ce double : `{ champ: null }` exige la clé PRÉSENTE et nulle.
@@ -47,6 +47,32 @@ export function matchesMongoWhere(row: MongoDocument, where: MongoDocument | und
 
     return has(row, key) && row[key] === condition;
   });
+}
+
+/**
+ * `NOT` négocie en général toute l'algèbre booléenne (`!matchesMongoWhere`) —
+ * sauf pour `has`, où c'est FAUX contre la production. Le connecteur MongoDB
+ * de Prisma enveloppe un filtre de tableau (`{ field: { has } }`) d'un test
+ * d'existence qu'il n'ajoute qu'à l'intérieur du filtre, jamais à la clause
+ * `NOT` qui l'englobe — si bien que `NOT: { field: { has } }` REQUIERT le
+ * champ, il ne se contente pas de son absence comme le ferait une négation
+ * honnête (`!(exists && contains)` inclurait un champ absent). Mesuré en
+ * production sur `blockedUserIds` (#6452) : 206 comptes actifs sur 246,
+ * n'ayant jamais écrit cette colonne, étaient exclus par ce `NOT` — pas
+ * inclus, comme l'algèbre générale l'aurait prédit.
+ */
+function matchesNot(row: MongoDocument, condition: MongoDocument): boolean {
+  const entries = Object.entries(condition);
+  if (entries.length === 1) {
+    const [field, filter] = entries[0];
+    if (typeof filter === 'object' && filter !== null && !(filter instanceof Date)) {
+      const filterEntries = Object.entries(filter as MongoDocument);
+      if (filterEntries.length === 1 && filterEntries[0][0] === 'has') {
+        return has(row, field) && !matchesFieldFilter(row, field, filter as MongoDocument);
+      }
+    }
+  }
+  return !matchesMongoWhere(row, condition);
 }
 
 function matchesFieldFilter(row: MongoDocument, key: string, filter: MongoDocument): boolean {
@@ -69,6 +95,14 @@ function matchesFieldFilter(row: MongoDocument, key: string, filter: MongoDocume
     }
     if (operator === 'in') {
       return has(row, key) && (operand as unknown[]).some((candidate) => sameValue(row[key], candidate));
+    }
+    if (operator === 'notIn') {
+      return !has(row, key) || !(operand as unknown[]).some((candidate) => sameValue(row[key], candidate));
+    }
+    if (operator === 'has') {
+      // Un tableau ABSENT ne « contient » rien — c'est la même règle que le
+      // reste du fichier, appliquée à `has` plutôt qu'à `isSet`/`equals`.
+      return has(row, key) && Array.isArray(row[key]) && (row[key] as unknown[]).some((v) => sameValue(v, operand));
     }
     throw new Error(`double Mongo: opérateur non supporté « ${key}.${operator} »`);
   });

@@ -125,7 +125,9 @@ public protocol PostServiceProviding: Sendable {
     /// Édition d'un commentaire par son auteur : contenu et/ou effets visuels
     /// (`effectFlags`, même bitfield que la création — lueur/pulse/…). Une
     /// requirement séparée avec défaut ci-dessous pour garder les mocks valides.
-    func updateComment(postId: String, commentId: String, content: String?, effectFlags: Int?) async throws -> APIPostComment
+    /// `originalLanguage` déclare la langue du texte corrigé — `nil` laisse la
+    /// passerelle la redétecter (#6598, #6600).
+    func updateComment(postId: String, commentId: String, content: String?, effectFlags: Int?, originalLanguage: String?) async throws -> APIPostComment
     func repost(postId: String, targetType: PostType?, content: String?, isQuote: Bool, visibility: String?) async throws -> APIPost
     /// Variante IDEMPOTENTE — envoie `clientMutationId` en header
     /// `X-Client-Mutation-Id`, ce que le gateway attend depuis que
@@ -184,6 +186,10 @@ public protocol PostServiceProviding: Sendable {
     func createCanvasPost(type: PostType, content: String?, storyEffects: StoryEffects?, visibility: String, visibilityUserIds: [String]?, originalLanguage: String?, mediaIds: [String]?, repostOfId: String?, mentions: [PostMentionInput]?, allowSoundExtraction: Bool?, mediaAlt: [String: String]?, mediaCaption: [String: String]?) async throws -> APIPost
     func createWithType(_ type: PostType, content: String, visibility: String, moodEmoji: String?, storyEffects: StoryEffects?) async throws -> APIPost
     func requestTranslation(postId: String, targetLanguage: String) async throws
+    /// `POST /posts/media/:mediaId/caption/translate` — traduction à la demande de
+    /// la LÉGENDE d'un média (#6280) : un contenu distinct du texte du post, qui
+    /// revient par `media:caption-translation-updated`.
+    func requestMediaCaptionTranslation(mediaId: String, targetLanguage: String) async throws
     func pinPost(postId: String) async throws
     func unpinPost(postId: String) async throws
     func viewPost(postId: String, duration: Int?) async throws
@@ -379,7 +385,7 @@ public extension PostServiceProviding {
     /// Défaut : les conformeurs existants (mocks) restent valides — un mock qui
     /// n'observe pas l'édition n'a pas à l'implémenter, et un test qui
     /// l'exercerait sans surcharge échoue explicitement.
-    func updateComment(postId: String, commentId: String, content: String?, effectFlags: Int?) async throws -> APIPostComment {
+    func updateComment(postId: String, commentId: String, content: String?, effectFlags: Int?, originalLanguage: String?) async throws -> APIPostComment {
         throw NSError(domain: "PostServiceProviding", code: -1,
                       userInfo: [NSLocalizedDescriptionKey: "updateComment not implemented by this conformer"])
     }
@@ -585,8 +591,8 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         return response.data
     }
 
-    public func updateComment(postId: String, commentId: String, content: String?, effectFlags: Int?) async throws -> APIPostComment {
-        let body = UpdateCommentRequest(content: content, effectFlags: effectFlags)
+    public func updateComment(postId: String, commentId: String, content: String?, effectFlags: Int?, originalLanguage: String?) async throws -> APIPostComment {
+        let body = UpdateCommentRequest(content: content, effectFlags: effectFlags, originalLanguage: originalLanguage)
         let response: APIResponse<APIPostComment> = try await api.patch(
             PostsEndpoint.byPostIdCommentsByCommentId(postId: postId, commentId: commentId), body: body
         )
@@ -746,6 +752,15 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         let bodyData = try JSONSerialization.data(withJSONObject: body)
         let _: APIResponse<[String: String]> = try await api.request(
             PostsEndpoint.byPostIdTranslate(postId: postId),
+            method: "POST",
+            body: bodyData
+        )
+    }
+
+    public func requestMediaCaptionTranslation(mediaId: String, targetLanguage: String) async throws {
+        let bodyData = try JSONSerialization.data(withJSONObject: ["targetLanguage": targetLanguage])
+        let _: APIResponse<MediaCaptionTranslationRequestAck> = try await api.request(
+            PostsEndpoint.mediaByMediaIdCaptionTranslate(mediaId: mediaId),
             method: "POST",
             body: bodyData
         )
@@ -965,4 +980,12 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
             body: BatchBody(sessions: sessions)
         )
     }
+}
+
+/// Accusé de `POST /posts/media/:mediaId/caption/translate` (#6280) :
+/// `{ requested: true, targetLanguage }` — un booléen voisin d'une chaîne, que
+/// `[String: String]` ne décode pas.
+struct MediaCaptionTranslationRequestAck: Decodable, Sendable {
+    let requested: Bool?
+    let targetLanguage: String?
 }

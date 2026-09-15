@@ -1,9 +1,12 @@
-import { beforeAll, describe, expect, test } from 'bun:test';
+import { act, useState } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { decodeFriendRequest, decodePerson, type FriendRequestRecord, type PersonSummary } from '@/lib/api/friend-requests';
-import type { Relationship } from '@/lib/discover/view';
+import type { DiscoverTab, Relationship } from '@/lib/discover/view';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import {
   BlockedPersonRow,
@@ -28,7 +31,7 @@ import {
  */
 
 beforeAll(async () => {
-  await Promise.all([loadInterfaceCatalog('fr'), loadInterfaceCatalog('en')]);
+  await Promise.all([loadInterfaceCatalog('fr'), loadInterfaceCatalog('en'), loadInterfaceCatalog('ar')]);
 });
 
 const noop = () => undefined;
@@ -116,6 +119,13 @@ describe('les onglets', () => {
     expect(html).not.toContain('data-discover-tab-count');
   });
 
+  test('un seul onglet — le sélectionné — est dans l’ordre de tabulation (#6422)', () => {
+    const html = renderToStaticMarkup(<DiscoverTabBar language="fr" selected="requests" received={0} onSelect={noop} />);
+    expect(html).toMatch(/tabindex="-1"[^>]*data-discover-tab="discover"/);
+    expect(html).toMatch(/tabindex="0"[^>]*data-discover-tab="requests"/);
+    expect(html).toMatch(/tabindex="-1"[^>]*data-discover-tab="blocked"/);
+  });
+
   test('« Demandes » porte le compte des reçues et l’annonce ; au-delà de 99, « 99+ »', () => {
     const three = renderToStaticMarkup(<DiscoverTabBar language="fr" selected="discover" received={3} onSelect={noop} />);
     expect(three).toContain('data-discover-tab-count="3"');
@@ -181,5 +191,105 @@ describe('hors ligne (#6419)', () => {
     expect(html).toContain('role="status"');
     expect(html).toContain('La liste se chargera dès le retour du réseau.');
     expect(html).not.toContain('dernier chargement');
+  });
+});
+
+/**
+ * LES FLÈCHES DU TABLIST (#6422) — `role="tablist"`/`role="tab"` promettent
+ * au clavier le motif WAI-ARIA « Tabs » ; sans DOM réel, aucun témoin ne peut
+ * observer le focus qui se déplace (`renderToStaticMarkup` n'a pas de
+ * `document`). Patron `message-menu.test.tsx` (happy-dom + `createRoot` +
+ * `act`), scopé à ce bloc seulement.
+ */
+describe('DiscoverTabBar — les flèches du clavier (#6422)', () => {
+  const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+
+  beforeAll(() => {
+    ensureHappyDomRegistered();
+    globals.IS_REACT_ACT_ENVIRONMENT = true;
+  });
+
+  afterAll(async () => {
+    delete globals.IS_REACT_ACT_ENVIRONMENT;
+    await releaseHappyDomIfRegistered();
+  });
+
+  let container: HTMLDivElement;
+  let root: Root;
+
+  afterEach(() => {
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  function Harness({ language, initial }: { readonly language: 'fr' | 'ar'; readonly initial: DiscoverTab }) {
+    const [selected, setSelected] = useState<DiscoverTab>(initial);
+    return <DiscoverTabBar language={language} selected={selected} received={0} onSelect={setSelected} />;
+  }
+
+  const mount = (language: 'fr' | 'ar' = 'fr', initial: DiscoverTab = 'discover') => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(<Harness language={language} initial={initial} />);
+    });
+    return container;
+  };
+
+  const tab = (name: DiscoverTab): HTMLElement => {
+    const el = document.querySelector<HTMLElement>(`[data-discover-tab="${name}"]`);
+    if (el === null) throw new Error(`aucun onglet « ${name} »`);
+    return el;
+  };
+
+  const press = (el: HTMLElement, key: string) => {
+    act(() => {
+      el.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key }));
+    });
+  };
+
+  test('ArrowRight avance d’un onglet et le sélectionne', () => {
+    mount();
+    act(() => tab('discover').focus());
+    press(tab('discover'), 'ArrowRight');
+    expect(document.activeElement).toBe(tab('requests'));
+    expect(tab('requests').getAttribute('aria-selected')).toBe('true');
+  });
+
+  test('ArrowLeft depuis le premier onglet boucle sur le dernier', () => {
+    mount();
+    act(() => tab('discover').focus());
+    press(tab('discover'), 'ArrowLeft');
+    expect(document.activeElement).toBe(tab('blocked'));
+  });
+
+  test('End puis Home vont au dernier puis au premier onglet', () => {
+    mount();
+    act(() => tab('discover').focus());
+    press(tab('discover'), 'End');
+    expect(document.activeElement).toBe(tab('blocked'));
+    press(tab('blocked'), 'Home');
+    expect(document.activeElement).toBe(tab('discover'));
+  });
+
+  test('en arabe, les flèches s’inversent : ArrowLeft avance', () => {
+    mount('ar');
+    act(() => tab('discover').focus());
+    press(tab('discover'), 'ArrowLeft');
+    expect(document.activeElement).toBe(tab('requests'));
+    press(tab('requests'), 'ArrowRight');
+    expect(document.activeElement).toBe(tab('discover'));
+  });
+
+  test('un seul onglet est dans l’ordre de tabulation, y compris après un déplacement', () => {
+    mount();
+    act(() => tab('discover').focus());
+    press(tab('discover'), 'ArrowRight');
+    expect(tab('requests').tabIndex).toBe(0);
+    expect(tab('discover').tabIndex).toBe(-1);
+    expect(tab('blocked').tabIndex).toBe(-1);
   });
 });

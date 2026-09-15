@@ -65,6 +65,7 @@ export type ProgressionBlock =
    * que je tiens — méritent trois blocs, pas un bloc dense.
    */
   | { readonly kind: 'flamme' }
+  | { readonly kind: 'meesh' }
   | { readonly kind: 'section-link'; readonly section: ProgressionSection };
 
 /**
@@ -97,11 +98,32 @@ export function progressionLayout(progress: EngagementProgress): readonly Progre
     (section) => section !== 'defis' || (progress.achievementSections ?? []).length > 0,
   );
 
+  /**
+   * UN SEUL littéral, et le conditionnel en FILTRE : l'ordre des heros se lit
+   * d'un coup d'œil, des deux côtés du miroir (`ProgressionLayout.swift`).
+   *
+   * LES MEESHES, SOUS LE NIVEAU (directive porteur 2026-09-14, #6497). Le solde
+   * vivait dans l'entrée d'en-tête et NULLE PART ailleurs : il fallait toucher
+   * la pièce pour savoir ce qu'on avait. Sous le niveau, ce qui se CONVERTIT
+   * vient juste après ce qui se GAGNE.
+   *
+   * Conditionnel, contrairement aux trois autres heros : la passerelle ne sert
+   * le bloc `meesh` que lorsqu'elle sait le calculer. Un hero annonçant
+   * « 0 Meesh » sur un compte dont le serveur ne dit RIEN parlerait à sa place —
+   * la même nuance que la porte des défis.
+   */
+  const heros: readonly ProgressionBlock[] = (
+    [
+      { kind: 'last-achievement' },
+      { kind: 'level' },
+      { kind: 'meesh' },
+      { kind: 'elans' },
+      { kind: 'flamme' },
+    ] as const
+  ).filter((bloc) => bloc.kind !== 'meesh' || (progress.meesh !== undefined && progress.meesh !== null));
+
   return [
-    { kind: 'last-achievement' },
-    { kind: 'level' },
-    { kind: 'elans' },
-    { kind: 'flamme' },
+    ...heros,
     ...sections.map((section) => ({ kind: 'section-link', section }) as const),
   ];
 }

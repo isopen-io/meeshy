@@ -90,13 +90,6 @@ extension MeeshyComposerHost {
             // ici parce que la carte `média → slide` et la slide courante
             // vivent ici : demander à la surface de la refaire l'obligerait à
             // lire le ViewModel, donc à cesser d'être sans état.
-            // #4047 — le chip de TYPE descend dans la barre haute de la
-            // surface, entre la fermeture et les slides. `nil` quand la règle
-            // de placement ne le sert pas : la surface n'a alors rien à peindre
-            // là, et non un trou à combler.
-            formatFan: mountsFormatFan
-                && ComposerFormatFanPlacement.place(for: mountedSurface) == .documentHeader
-                ? AnyView(formatChip) : nil,
             // #4047 — le `⋯` au bout de la barre. Le meuble décide des ENTRÉES
             // par la règle, jamais par un `if` écrit dans un `body` ; aucune
             // entrée ⇒ `nil` ⇒ aucun bouton (loi 4).
@@ -235,7 +228,7 @@ extension MeeshyComposerHost {
             loadedImages: viewModel.loadedImages,
             imagesVersion: viewModel.loadedImagesVersion,
             onSelect: { viewModel.selectSlide(at: $0) },
-            onDelete: { viewModel.removeSlide(at: $0) }))
+            onDelete: { retractScene(at: $0) }))
     }
 
     var documentContentMedia: [ComposerContentMedia] {

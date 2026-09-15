@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,9 +13,25 @@ import { buildApiUrl } from '@/lib/config';
 import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { authManager } from '@/services/auth-manager.service';
 
+/**
+ * LE PREMIER MOT DE PASSE N'EN A PAS D'ANCIEN (#6424).
+ *
+ * Un compte né d'une inscription par e-mail seul n'a pas de mot de passe : sa
+ * seule porte est le lien magique, et l'e-mail qui le porte renvoie ICI pour
+ * en poser un. Ce formulaire réclamait un mot de passe « actuel » dont
+ * l'absence est justement la raison de la visite — un cul-de-sac.
+ *
+ * `hasPassword` est LU au serveur (`GET /me?expand=security`), jamais deviné :
+ * un défaut prudent côté client rendrait le champ obligatoire pour tout le
+ * monde en cas d'erreur réseau, c'est-à-dire refermerait le cul-de-sac
+ * exactement quand la personne y est. `null` = pas encore su ⇒ le champ est
+ * proposé sans être exigé.
+ */
 export function PasswordSettings() {
 
   const { t } = useI18n('settings');
+  /** `null` tant que la réponse n'est pas là — ni « en a un », ni « n'en a pas ». */
+  const [hasPassword, setHasPassword] = useState<boolean | null>(null);
   const [formData, setFormData] = useState({
     currentPassword: '',
     newPassword: '',
@@ -27,6 +43,31 @@ export function PasswordSettings() {
     confirm: false,
   });
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    let vivant = true;
+
+    void (async () => {
+      try {
+        const reponse = await fetch(`${buildApiUrl(API_ENDPOINTS.me.root)}?expand=security`, {
+          headers: { Authorization: `Bearer ${authManager.getAuthToken()}` },
+        });
+        if (!reponse.ok) return;
+        const charge = await reponse.json();
+        const valeur = charge?.data?.user?.security?.hasPassword;
+        if (vivant && typeof valeur === 'boolean') setHasPassword(valeur);
+      } catch {
+        // Silencieux À DESSEIN : l'échec laisse `hasPassword` à `null`, donc le
+        // champ « mot de passe actuel » proposé mais non exigé. C'est le seul
+        // état qui ne ferme la porte à personne — ni à qui en a un (il le
+        // saisit), ni à qui n'en a pas (il le laisse vide).
+      }
+    })();
+
+    return () => {
+      vivant = false;
+    };
+  }, []);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({
@@ -49,7 +90,10 @@ export function PasswordSettings() {
   };
 
   const validateForm = (): boolean => {
-    if (!formData.currentPassword) {
+    // L'ancien mot de passe n'est exigé que s'il EXISTE. Le serveur applique la
+    // même règle sur l'état lu en base (`PATCH /users/me/password`) : ce test
+    // n'est qu'une politesse, il ne garde rien.
+    if (hasPassword !== false && !formData.currentPassword) {
       toast.error(t('security.password.errors.currentRequired'));
       return false;
     }
@@ -64,7 +108,7 @@ export function PasswordSettings() {
       return false;
     }
 
-    if (formData.currentPassword === formData.newPassword) {
+    if (formData.currentPassword && formData.currentPassword === formData.newPassword) {
       toast.error(t('security.password.errors.samePassword'));
       return false;
     }
@@ -85,8 +129,11 @@ export function PasswordSettings() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${authManager.getAuthToken()}`
         },
+        // `currentPassword` n'est envoyé que s'il a été saisi : la clé absente
+        // dit « il n'y en a pas », là où une chaîne vide dirait « en voici un,
+        // et il est vide » — que le serveur refuserait.
         body: JSON.stringify({
-          currentPassword: formData.currentPassword,
+          ...(formData.currentPassword ? { currentPassword: formData.currentPassword } : {}),
           newPassword: formData.newPassword,
           confirmPassword: formData.confirmPassword
         })
@@ -126,7 +173,17 @@ export function PasswordSettings() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4 sm:space-y-6">
-        {/* Mot de passe actuel */}
+        {hasPassword === false && (
+          <p className="rounded-md bg-indigo-50 p-3 text-sm text-indigo-900 dark:bg-indigo-950 dark:text-indigo-100">
+            {t(
+              'security.password.firstPasswordNotice',
+              "Votre compte n'a pas encore de mot de passe : vous vous connectez par lien magique. Définissez-en un pour vous connecter aussi avec votre e-mail, votre pseudo ou votre numéro.",
+            )}
+          </p>
+        )}
+
+        {/* Mot de passe actuel — masqué quand le compte n'en a pas (#6424) */}
+        {hasPassword !== false && (
         <div className="space-y-2">
           <Label htmlFor="current-password" className="text-sm sm:text-base">
             {t('security.password.currentPassword')}
@@ -156,6 +213,7 @@ export function PasswordSettings() {
             </button>
           </div>
         </div>
+        )}
 
         {/* Nouveau mot de passe */}
         <div className="space-y-2">
@@ -244,7 +302,18 @@ export function PasswordSettings() {
               SoundFeedback.playClick();
               handleSave();
             }}
-            disabled={isLoading || !formData.currentPassword || !formData.newPassword || !formData.confirmPassword}
+            // Le mot de passe ACTUEL n'entre dans la condition que si le
+            // compte en a un (#6424) : sans cette garde, le bouton restait
+            // gris pour un compte né d'une inscription par e-mail seul —
+            // c'est-à-dire pour la personne que ce formulaire vient
+            // précisément servir. Un champ masqué qui désactive quand même le
+            // bouton est la forme la plus silencieuse du contrôle inerte.
+            disabled={
+              isLoading ||
+              (hasPassword !== false && !formData.currentPassword) ||
+              !formData.newPassword ||
+              !formData.confirmPassword
+            }
             className="w-full sm:w-auto focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
           >
             {isLoading ? t('security.password.updating') : t('security.password.update')}

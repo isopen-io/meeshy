@@ -1,7 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { Post } from '@meeshy/shared/types/post';
-import { UnifiedAuthRequest } from '../../middleware/auth';
+import { UnifiedAuthRequest, requireEmailVerification } from '../../middleware/auth';
 import { PostService } from '../../services/PostService';
 import { storyContentEditRequested } from '../../services/posts/storyEditPolicy';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
@@ -216,7 +216,8 @@ export function registerCoreRoutes(
   // PARTAGÉ que POST /posts et POST /posts/:postId/repost
   // (`sharedWriteRateLimit`, cf. définition ci-dessus).
   fastify.post('/posts/from-attachment', {
-    preValidation: [requiredAuth],
+    // #6437 — même porte de publication que POST /posts ci-dessus.
+    preValidation: [requiredAuth, requireEmailVerification],
     preHandler: [sharedWriteRateLimit],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
@@ -367,7 +368,9 @@ export function registerCoreRoutes(
   // éviter le plafond de création » vit dans ce partage, pas dans un
   // plafond individuel supplémentaire.
   fastify.post('/posts', {
-    preValidation: [requiredAuth],
+    // #6437 — publier (post ou story) sort du compte vers d'autres personnes ;
+    // avant le budget d'écriture partagé pour ne pas le consommer en pure perte.
+    preValidation: [requiredAuth, requireEmailVerification],
     preHandler: [sharedWriteRateLimit],
     bodyLimit: 1 * 1024 * 1024,
   }, async (request: FastifyRequest, reply: FastifyReply) => {

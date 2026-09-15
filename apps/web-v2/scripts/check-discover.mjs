@@ -18,6 +18,9 @@
  *  2. AU REPOS, chaque contrôle et chaque texte visible retombe sur lui-même à
  *     son centre (`elementFromPoint`) — aucun disque flottant n'en vole un — et
  *     chaque contrôle fait au moins 44 de haut ;
+ *  2 bis. le tablist des onglets répond aux flèches, Début et Fin (#6422) —
+ *     ArrowRight/ArrowLeft déplacent le focus ET la sélection, et un seul
+ *     onglet reste dans l'ordre de tabulation ;
  *  3. la recherche rend chaque relation par SON geste (Accepter/Refuser, En
  *     attente, Contact, Bloqué, Ajouter), et « Ajouter » passe « En attente » au
  *     geste, en moins de 300 ms ;
@@ -33,8 +36,9 @@
  *  8. chaque texte tient AA dans les deux schémas — capsules et pastille
  *     d'onglet comprises ;
  *  9. AUCUN point de présence n'est peint, dans aucun état ;
- * 10. hors ligne, les demandes restent lisibles et le disent ; aucune erreur de
- *     page.
+ * 10. hors ligne, les demandes restent lisibles et le disent ; la pastille de
+ *     synchronisation ne recouvre aucun onglet du barreau (#6401) ; aucune
+ *     erreur de page.
  *
  * `CAPTURE_DIR=<dossier>` écrit les captures de recette.
  */
@@ -44,6 +48,7 @@ import { extname, join, normalize } from 'node:path';
 
 import { launchChromium } from './lib/browser.mjs';
 import { contrastOf } from './lib/contrast.mjs';
+import { syncPillOverlap } from './lib/sync-pill-clearance.mjs';
 
 const DIST = new URL('../dist/', import.meta.url).pathname;
 const TYPES = {
@@ -231,6 +236,21 @@ try {
         6,
       );
 
+      // ------------------------------------------------ 2 bis. les flèches du tablist (#6422)
+      await page.focus('[data-discover-tab="discover"]');
+      await page.keyboard.press('ArrowRight');
+      const afterRight = await page.evaluate(() => document.activeElement?.getAttribute('data-discover-tab') ?? null);
+      check(afterRight === 'requests', `${label} : ArrowRight avance le focus sur « Demandes » (${afterRight})`);
+      check((await attrOf(page, '[data-discover-tab="requests"]', 'aria-selected')) === 'true', `${label} : ArrowRight sélectionne l'onglet, pas seulement son focus`);
+      await page.keyboard.press('End');
+      const afterEnd = await page.evaluate(() => document.activeElement?.getAttribute('data-discover-tab') ?? null);
+      check(afterEnd === 'blocked', `${label} : End va au dernier onglet (${afterEnd})`);
+      await page.keyboard.press('Home');
+      const afterHome = await page.evaluate(() => document.activeElement?.getAttribute('data-discover-tab') ?? null);
+      check(afterHome === 'discover', `${label} : Home revient au premier onglet (${afterHome})`);
+      const tabIndices = await page.$$eval('[data-discover-tab]', (els) => els.map((el) => el.tabIndex));
+      check(JSON.stringify(tabIndices) === JSON.stringify([0, -1, -1]), `${label} : un seul onglet — le sélectionné — reste dans l'ordre de tabulation (${JSON.stringify(tabIndices)})`);
+
       // ------------------------------------------------ 3. la recherche rend chaque relation par son geste
       const relations = {};
       for (const [query, id] of [
@@ -378,6 +398,16 @@ try {
       await page.click('[data-request="fx-fr-fatou"] [data-request-reject]');
       await page.waitForTimeout(150);
       check((await page.$('[data-request="fx-fr-fatou"]')) !== null, `${label} : hors ligne, un geste ne retire rien — rien ne part`);
+
+      // -------------------------------- 10 bis. la pastille ne recouvre pas le barreau (#6401)
+      await page.waitForSelector('.sync-pill');
+      const discoverOverlap = await syncPillOverlap(page, ['[data-discover-tab]']);
+      check(discoverOverlap.pill !== null, `${label} : hors ligne, la pastille de synchronisation est posée`);
+      check(
+        discoverOverlap.covers.length === 0,
+        `${label} : hors ligne, la pastille ne recouvre aucun onglet du barreau — ${JSON.stringify(discoverOverlap.covers)}`,
+      );
+
       await capture(page, `decouvrir-hors-ligne-${slug}`);
       await context.setOffline(false);
 

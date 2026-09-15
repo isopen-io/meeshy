@@ -15,7 +15,12 @@ import MeeshyUI
 /// noir en thème clair. Les deux tokens ci-dessous sont donc la seule source de
 /// couleur de texte et d'icône de la barre.
 enum MiniAudioPlayerBarStyle {
-    static var background: Color { MeeshyColors.indigo600 }
+    /// Lu depuis `TopChromeTint` (#6579) : la bande du haut et cette barre se
+    /// TOUCHENT, et un joint continu se prouve par un producteur unique, pas par
+    /// deux constantes qu'on jure égales. `TopChromeTint.audio.bandColor` reste
+    /// `MeeshyColors.indigo600`, ce que `test_barStyle_paintsAnOpaqueIndigo`
+    /// continue de tenir.
+    static var background: Color { TopChromeTint.audio.bandColor }
     static var primaryForeground: Color { .white }
     static var secondaryForeground: Color { Color.white.opacity(0.72) }
 }
@@ -56,16 +61,27 @@ struct MiniAudioPlayerBar: View {
     /// the closure is re-invoked on each body eval, which already runs
     /// when `coordinator.activeContext` changes.
     private let currentConversationId: () -> String?
+    /// Remonte ce que la barre AFFICHE — pas ce que le coordinateur joue (#6579).
+    ///
+    /// La bande du haut (`TopChromeBand`) doit se peindre exactement quand cette
+    /// barre occupe le sommet. Or la barre se MASQUE à l'intérieur de la
+    /// conversation qui joue, et se MAINTIENT 5 s après la fin de la file
+    /// (`graceContext`) : deux règles que seule elle connaît. Elle les remonte
+    /// donc, plutôt que de laisser son hôte les réécrire — et l'hôte évite ainsi
+    /// d'observer un coordinateur qui publie à ~20 Hz.
+    private let onDisplayedContextChange: (ActiveAudioContext?) -> Void
 
     init(coordinatorForTesting: ConversationAudioCoordinator? = nil,
          onTapBody: @escaping () -> Void = {},
          currentConversationId: @escaping () -> String? = { nil },
+         onDisplayedContextChange: @escaping (ActiveAudioContext?) -> Void = { _ in },
          routerForTesting: ((String) -> Void)? = nil) {
         self._coordinator = ObservedObject(
             wrappedValue: coordinatorForTesting ?? .shared
         )
         self.onTapBody = onTapBody
         self.currentConversationId = currentConversationId
+        self.onDisplayedContextChange = onDisplayedContextChange
         self.routerForTesting = routerForTesting
     }
 
@@ -114,8 +130,15 @@ struct MiniAudioPlayerBar: View {
         .adaptiveOnChange(of: coordinator.activeContext) { _, newValue in
             handleContextChange(newValue)
         }
+        // Sur `displayedContext`, pas sur `activeContext` : c'est la valeur
+        // AFFICHÉE qui doit gouverner la bande du haut (#6579) — masquage dans
+        // la conversation qui joue et fenêtre de grâce compris.
+        .adaptiveOnChange(of: displayedContext) { _, newValue in
+            onDisplayedContextChange(newValue)
+        }
         .onAppear {
             lastObservedContext = coordinator.activeContext
+            onDisplayedContextChange(displayedContext)
         }
     }
 
@@ -226,6 +249,11 @@ struct MiniAudioPlayerBar: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+        // Les 6 pt de respiration sont ABSORBÉS par le bandeau (#6579) : posés
+        // APRÈS `.background`, ils laissaient une couture de 6 pt non teintés
+        // entre la bande du haut et l'aplat de la barre. Posés avant, ils sont
+        // peints de la même couleur — la respiration reste, la couture non.
+        .padding(.top, 6)
         // Bandeau INDIGO PLEIN, à angles droits, pleine largeur (retour user
         // 2026-08-13). La capsule glass d'avant flottait au-dessus du contenu
         // et empruntait sa couleur au fond : à ce point de montage — le bloc
@@ -234,15 +262,23 @@ struct MiniAudioPlayerBar: View {
         // sur ce qu'elle est. Un aplat de marque, bord à bord, se lit comme la
         // bande d'état qu'il est réellement.
         .frame(maxWidth: .infinity)
-        .background(MiniAudioPlayerBarStyle.background)
-        // Petit espace vertical : que ce bloc soit le tout premier élément
-        // du VStack de compression (pas d'appel actif — respire depuis la
-        // safe area) ou qu'il suive `FloatingCallPillView` (appel actif —
-        // respire depuis la bannière pleine largeur), il ne doit jamais
-        // coller au bord. Vit DANS `content(for:)`, jamais sur le composant
-        // entier au point de montage, pour ne créer aucune empreinte quand
-        // `displayedContext == nil` (cf. doc du VStack dans RootView.swift).
-        .padding(.top, 6)
+        // Petit espace vertical (le `.padding(.top, 6)` ci-dessus) : que ce bloc
+        // soit le tout premier élément du VStack de compression (pas d'appel
+        // actif — respire depuis la bande du haut) ou qu'il suive
+        // `FloatingCallPillView` (appel actif — respire depuis la bannière
+        // pleine largeur), il ne doit jamais coller au bord. Vit DANS
+        // `content(for:)`, jamais sur le composant entier au point de montage,
+        // pour ne créer aucune empreinte quand `displayedContext == nil`
+        // (cf. doc du VStack dans CallPresentationLayer.swift).
+        // `ignoresSafeAreaEdges: []` — EXPLICITE, parce que le défaut de
+        // `.background(_:)` est `.all` (#6579). Une barre adjacente à l'encart
+        // système y étend donc son fond SANS que rien ne le dise, ce qui redonne
+        // à CHAQUE barre une seconde propriété de la bande — exactement le
+        // défaut que ce lot ferme. Mesuré au pixel : avec le défaut implicite,
+        // la bande neutralisée à `.opacity(0)` laissait l'encart peint quand
+        // même, et le témoin de rendu restait vert. La barre ne peint QUE sa
+        // propre hauteur ; l'encart appartient à `TopChromeBand`, et à lui seul.
+        .background(MiniAudioPlayerBarStyle.background, ignoresSafeAreaEdges: [])
         .contentShape(Rectangle())
         .onTapGesture { openConversation(for: context) }
     }

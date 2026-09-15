@@ -85,6 +85,11 @@ export const ROUTES = {
      ces sept destinations n'existent pas dans `apps/web`. `/me` complète
      l'espace ouvert par `/me/progression` (#5547). */
   feed: { pattern: '/feed', screen: () => import('@/routes/feed') },
+  /* LES RÉELS (#6457) — miroir `ReelsPresenter` : `present(posts:startId:)`
+     (un réel touché dans le Flux, `?seed=<id>`) et `presentFresh()` (le bouton
+     de l'en-tête du Flux, sans graine). Une seule adresse pour les deux
+     intentions, comme `/stories`. Adresse NEUVE : le legacy n'a pas de Réels. */
+  reels: { pattern: '/reels', screen: () => import('@/routes/reels') },
   /* LE DÉTAIL D'UNE PUBLICATION (#6278, D-48, D-49) — `/post/$post` est
      l'adresse que la passerelle range dans ses liens suivis
      (`PostService.ts:1742`) et que le legacy sert (`apps/web/app/post/[postId]`,
@@ -115,6 +120,22 @@ export const ROUTES = {
   community: { pattern: '/communities/$community', screen: () => import('@/routes/community') },
   settings: { pattern: '/settings', screen: () => import('@/routes/settings') },
   profile: { pattern: '/me', screen: () => import('@/routes/profile') },
+  /* L'ESPACE D'ADMINISTRATION (#6432) — nomenclature LEGACY reprise (D-5) :
+     `apps/web/app/admin` et `apps/web/app/admin/users` servent déjà ces deux
+     adresses, et un administrateur qui bascule d'une application à l'autre
+     doit retrouver ses signets.
+
+     L'ORDRE compte : le routeur rend la PREMIÈRE adresse qui correspond. Ici
+     les deux motifs sont littéraux et disjoints, mais toute section future en
+     `/admin/$quelquechose` devra se poser AVANT un éventuel motif paramétré,
+     comme `communityNew` avant `community`.
+
+     La garde n'est PAS dans cette table : `resolveRouteAccess` n'exige qu'une
+     session, et le DROIT se lit au serveur (`GET /me/permissions`) dans
+     l'écran lui-même. Une garde de route qui déciderait ici devrait connaître
+     le rôle, que `SessionUser` ne projette pas. */
+  admin: { pattern: '/admin', screen: () => import('@/routes/admin') },
+  adminUsers: { pattern: '/admin/users', screen: () => import('@/routes/admin-users') },
 } as const;
 
 /**

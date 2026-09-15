@@ -27,8 +27,10 @@ function makePrisma(params: {
   milestones?: Array<{ milestoneType: string; milestoneKey: string; reachedAt: Date }>;
   /** Bornes du registre de frappe (#5839) — `null` quand rien n'a été frappé. */
   mintDates?: { first: Date | null; last: Date | null };
+  /** Ce que porte le REGISTRE (#6428) : la somme des `delta` et le nombre de frappes. */
+  ledger?: { deltaSum: number | null; mints: number };
 }) {
-  const { user, counters = [], milestones = [], mintDates } = params;
+  const { user, counters = [], milestones = [], mintDates, ledger } = params;
   return {
     user: {
       findUnique: jest.fn<any>().mockResolvedValue(user === undefined ? null : user),
@@ -40,10 +42,12 @@ function makePrisma(params: {
       findMany: jest.fn<any>().mockResolvedValue(milestones),
     },
     meeshLedger: {
-      aggregate: jest.fn<any>().mockResolvedValue({
-        _min: { createdAt: mintDates?.first ?? null },
-        _max: { createdAt: mintDates?.last ?? null },
-      }),
+      aggregate: jest.fn<any>().mockImplementation(async (args: { _sum?: unknown }) =>
+        args._sum
+          ? { _sum: { delta: ledger?.deltaSum ?? null } }
+          : { _min: { createdAt: mintDates?.first ?? null }, _max: { createdAt: mintDates?.last ?? null } },
+      ),
+      count: jest.fn<any>().mockResolvedValue(ledger?.mints ?? 0),
     },
   } as any;
 }
@@ -269,6 +273,24 @@ describe('GET /me/engagement — les bornes du registre de frappe', () => {
 
     expect(body.data.meesh.firstMintedAt).toBeNull();
     expect(body.data.meesh.lastMintedAt).toBeNull();
+    await app.close();
+  });
+
+  /**
+   * #6428 — la colonne peut MANQUER : Prisma sur MongoDB écrit `increment` par
+   * `$add`, qui laisse `null` un champ absent. Le compte qui avait frappé en
+   * production lisait « Aucune Meesh » sur une ligne de registre bien réelle.
+   */
+  it('sert le solde et les frappes du REGISTRE quand la colonne manque', async () => {
+    const prisma = makePrisma({
+      user: { currentStreakDays: 1, longestStreakDays: 1, engagementScore: 9375 },
+      ledger: { deltaSum: 1, mints: 1 },
+    });
+    const app = await buildApp(prisma);
+    const body = JSON.parse((await getEngagement(app, USER_ID)).body);
+
+    expect(body.data.meesh.balance).toBe(1);
+    expect(body.data.meesh.mintedLifetime).toBe(1);
     await app.close();
   });
 

@@ -113,6 +113,9 @@ jobs:
   detect:
     name: Detect Changes
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read # requis par `gh run list` — lire le dernier run réussi de CE workflow (#6551)
     outputs:
       services: ${{ steps.services.outputs.result }}
       has_changes: ${{ steps.services.outputs.has_changes }}
@@ -122,8 +125,29 @@ jobs:
         with:
           fetch-depth: 0
 
+      # #6551 — la base de diff ne doit plus être la poussée IMMÉDIATEMENT
+      # précédente (`github.event.before`), qui disparaît avec son diff quand
+      # `concurrency: cancel-in-progress` annule le run qui l'aurait traitée.
+      # C'est le dernier run RÉUSSI de ce workflow sur cette branche qui sert de
+      # repère : tout ce qui s'est accumulé depuis — cancels compris — rentre
+      # dans le diff du prochain run qui aboutit.
+      - name: Résoudre le dernier run réussi de ce workflow sur cette branche
+        id: last_success
+        if: github.event_name != 'workflow_dispatch' && !startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          SHA=$(gh run list --repo "${{ github.repository }}" --workflow docker.yml \
+            --branch "${{ github.ref_name }}" --status success --limit 1 \
+            --json headSha --jq '.[0].headSha // empty' 2>/dev/null) || SHA=""
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
       - name: Detect changes
         id: changes
+        env:
+          LAST_SUCCESSFUL_SHA: ${{ steps.last_success.outputs.sha }}
+          EVENT_BEFORE: ${{ github.event.before }}
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             SERVICES="${{ github.event.inputs.custom_services }}"
@@ -176,10 +200,20 @@ jobs:
             # un build de trop coûte quelques minutes de runner ; un build
             # manquant coûte une livraison silencieusement absente, qu'on ne
             # découvre qu'en constatant que staging sert l'ancien.
-            BASE="${{ github.event.before }}"
-            if ! git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
-              echo "::warning::base de comparaison introuvable ($BASE) — construction de TOUS les services plutôt qu'une détection devinée"
-              BASE=""
+            #
+            # #6551 — la base n'est plus `github.event.before` en premier
+            # choix : c'est le dernier run RÉUSSI (résolu à l'étape
+            # précédente), avec `event.before` en repli si aucun run réussi
+            # n'est connu ou que son SHA a disparu de l'historique (force-push).
+            # `resolve-docker-detect-base.mjs` porte la décision et son
+            # `--self-test` — ne pas réécrire cette logique ici.
+            RESOLVED=$(node scripts/resolve-docker-detect-base.mjs)
+            BASE=$(echo "$RESOLVED" | sed -n 's/^base=//p')
+            SOURCE=$(echo "$RESOLVED" | sed -n 's/^source=//p')
+            if [[ -z "$BASE" ]]; then
+              echo "::warning::base de comparaison introuvable (ni dernier run réussi, ni event.before valides) — construction de TOUS les services plutôt qu'une détection devinée"
+            else
+              echo "::notice::base de détection = $BASE (source: $SOURCE)"
             fi
             if [[ -n "$BASE" ]]; then
               CHANGED=$(git diff --name-only "$BASE" "${{ github.sha }}")
@@ -656,7 +690,7 @@ jobs:
           severity: 'CRITICAL,HIGH'
 
       - name: Upload scan results
-        uses: github/codeql-action/upload-sarif@v4.37.9
+        uses: github/codeql-action/upload-sarif@v4.38.0
         continue-on-error: true
         with:
           sarif_file: 'trivy-${{ matrix.service }}.sarif'

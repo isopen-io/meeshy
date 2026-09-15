@@ -2,6 +2,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
 import { attachmentMediaSelect } from '../../../services/attachments/attachmentIncludes';
 import { applyHistoryFloor } from '../../../services/historyFloor';
+import { withOrphanedSenderRepair } from '../../../services/messaging/withOrphanedSenderRepair';
 
 /**
  * Plafond d'affichage des listes membres / participants anonymes d'un lien de
@@ -263,7 +264,7 @@ export async function getConversationMessages(
   offset: number,
   options: LinkMessageReadOptions = {}
 ): Promise<any[]> {
-  return prisma.message.findMany({
+  return withOrphanedSenderRepair({ prisma, conversationIds: [conversationId] }, () => prisma.message.findMany({
     where: applyHistoryFloor({ conversationId, deletedAt: null }, options.historyFloor ?? null),
     orderBy: { createdAt: 'desc' },
     take: limit,
@@ -271,7 +272,7 @@ export async function getConversationMessages(
     include: {
       sender: senderInclude
     }
-  });
+  }));
 }
 
 /**
@@ -300,7 +301,7 @@ export async function getConversationMessagesWithDetails(
   offset: number,
   options: LinkMessageReadOptions = {}
 ): Promise<any[]> {
-  return prisma.message.findMany({
+  return withOrphanedSenderRepair({ prisma, conversationIds: [conversationId] }, () => prisma.message.findMany({
     where: applyHistoryFloor({ conversationId, deletedAt: null }, options.historyFloor ?? null),
     orderBy: { createdAt: 'desc' },
     take: limit,
@@ -322,7 +323,7 @@ export async function getConversationMessagesWithDetails(
         }
       }
     }
-  });
+  }));
 }
 
 /**

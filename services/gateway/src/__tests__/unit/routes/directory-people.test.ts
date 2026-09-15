@@ -118,7 +118,13 @@ describe('La recherche interroge l’INDEX, jamais cinq colonnes', () => {
     const where = findMany.mock.calls[0][0].where as Record<string, any>;
     expect(where.isActive).toBe(true);
     expect(JSON.stringify(where.AND)).toContain('isSet');
-    expect(where.NOT).toMatchObject({ blockedUserIds: { has: VIEWER } });
+    // Le blocage vit désormais DANS `AND`, sous la même forme « absent vs
+    // null » que `deletedAt` (#6452) : un `NOT` nu au premier niveau
+    // écarterait aussi les comptes qui n'ont jamais écrit `blockedUserIds`.
+    expect(where.NOT).toBeUndefined();
+    expect(where.AND).toContainEqual({
+      OR: [{ blockedUserIds: { isSet: false } }, { NOT: { blockedUserIds: { has: VIEWER } } }],
+    });
 
     await app.close();
   });

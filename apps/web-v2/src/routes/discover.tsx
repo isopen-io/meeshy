@@ -39,6 +39,7 @@ import { useSearch } from '@/lib/router';
 import { coldStateOf } from '@/lib/view/cold-state';
 import { PULL_THRESHOLD, pullTransform } from '@/lib/view/pull-to-refresh';
 import { useTapGate } from '@/lib/view/tap-gate';
+import { useExhaustPages } from '@/lib/view/use-exhaust-pages';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { useLoadMoreSentinel } from '@/lib/view/use-load-more-sentinel';
 import { useMinute } from '@/lib/view/use-minute';
@@ -120,6 +121,12 @@ export default function DiscoverScreen() {
   const sent = useInfiniteQuery({ ...friendRequestsQueryOptions(apiDeps, 'sent'), enabled }, appQueryClient);
   const accepted = useInfiniteQuery({ ...friendRequestsQueryOptions(apiDeps, 'accepted'), enabled }, appQueryClient);
   const blocked = useInfiniteQuery({ ...blockedUsersQueryOptions(apiDeps), enabled }, appQueryClient);
+  /* L'INDEX de relation (#6421) doit lire TOUS les contacts et TOUS les
+     bloqués, pas seulement leur première page — `accepted` n'a aucune liste
+     visible pour le faire défiler, et `blocked` ne défile que sous son
+     propre onglet. */
+  useExhaustPages(accepted, enabled);
+  useExhaustPages(blocked, enabled);
 
   const receivedRows = useMemo(() => flattenFriendRequests(received.data), [received.data]);
   const sentRows = useMemo(() => flattenFriendRequests(sent.data), [sent.data]);

@@ -183,6 +183,19 @@ export interface MessageRequest {
    * même raison : la validation stricte vit côté gateway.
    */
   readonly sticker?: unknown;
+
+  /**
+   * La PIÈCE NOMMÉE que cette réponse vise (#6164), champ dédié — même
+   * doctrine que `location` et `sticker` : jamais fusionné dans `metadata`
+   * côté client, rangé par la seule passerelle dans
+   * `Message.metadata.attachmentReplyTo`.
+   *
+   * Forme non typée ici pour la même raison que ses deux voisins : la règle
+   * stricte vit côté gateway (`services/messaging/attachmentReplySnapshot.ts`)
+   * — et elle n'est PAS qu'une forme, elle lit la base. La pièce doit
+   * appartenir au message cité, sans quoi l'envoi est REFUSÉ.
+   */
+  readonly attachmentReplyTo?: unknown;
 }
 
 // ===== RÉPONSE UNIFIÉE =====

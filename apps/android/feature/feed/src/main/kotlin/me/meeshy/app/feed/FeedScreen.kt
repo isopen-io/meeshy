@@ -17,8 +17,6 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -76,8 +74,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -90,7 +86,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.pluralStringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -98,8 +93,6 @@ import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 import me.meeshy.feature.feed.R
 import me.meeshy.ui.component.bubble.LanguageChip
-import me.meeshy.ui.component.media.MediaCollage
-import me.meeshy.ui.component.media.rememberThumbHashPainter
 import me.meeshy.ui.theme.hexColor
 import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.theme.MeeshyPalette
@@ -634,7 +627,7 @@ private fun PostCard(
 
             if (post.images.isNotEmpty()) {
                 Spacer(Modifier.height(MeeshySpacing.md))
-                PostImageGrid(images = post.images, onImageTap = onImageTap)
+                PostImageLayout(images = post.images, layout = post.layout, onImageTap = onImageTap)
             }
 
             post.location?.let { loc ->
@@ -740,105 +733,6 @@ private fun PostLanguageStripRow(
             }
         }
     }
-}
-
-private val COLLAGE_HEIGHT = 260.dp
-
-@Composable
-private fun PostImageGrid(images: List<FeedPostImage>, onImageTap: (Int) -> Unit) {
-    val shape = RoundedCornerShape(MeeshyRadius.md)
-    val openLabel = stringResource(R.string.feed_open_media)
-    val layout = MediaCollage.solve(images.size)
-    if (layout.isEmpty) return
-    if (layout.isSingle) {
-        val image = images.first()
-        AsyncImage(
-            model = image.url,
-            contentDescription = stringResource(R.string.feed_image_description),
-            contentScale = ContentScale.Crop,
-            placeholder = rememberThumbHashPainter(image.thumbHash),
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(imageAspectRatio(image))
-                .clip(shape)
-                .background(MeeshyPalette.Indigo500.copy(alpha = 0.08f))
-                .clickable(onClickLabel = openLabel) { onImageTap(0) },
-        )
-        return
-    }
-    Column(
-        modifier = Modifier.height(COLLAGE_HEIGHT),
-        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
-    ) {
-        layout.rows.forEach { row ->
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(row.heightWeight),
-            ) {
-                row.cells.forEach { cell ->
-                    CollageTile(
-                        image = images[cell.index],
-                        overflowCount = cell.overflowCount,
-                        shape = shape,
-                        onClick = { onImageTap(cell.index) },
-                        onClickLabel = openLabel,
-                        modifier = Modifier
-                            .weight(cell.widthWeight)
-                            .fillMaxHeight(),
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CollageTile(
-    image: FeedPostImage,
-    overflowCount: Int,
-    shape: Shape,
-    onClick: () -> Unit,
-    onClickLabel: String,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier = modifier
-            .clip(shape)
-            .background(MeeshyPalette.Indigo500.copy(alpha = 0.08f))
-            .clickable(onClickLabel = onClickLabel, onClick = onClick),
-    ) {
-        AsyncImage(
-            model = image.thumbnailUrl ?: image.url,
-            contentDescription = stringResource(R.string.feed_image_description),
-            contentScale = ContentScale.Crop,
-            placeholder = rememberThumbHashPainter(image.thumbHash),
-            modifier = Modifier.fillMaxSize(),
-        )
-        if (overflowCount > 0) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.45f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = stringResource(R.string.feed_hidden_images, overflowCount),
-                    color = MeeshyPalette.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 20.sp,
-                )
-            }
-        }
-    }
-}
-
-private fun imageAspectRatio(image: FeedPostImage): Float {
-    val width = image.width ?: return 1.4f
-    val height = image.height ?: return 1.4f
-    if (width <= 0 || height <= 0) return 1.4f
-    return (width.toFloat() / height.toFloat()).coerceIn(0.7f, 1.9f)
 }
 
 @Composable

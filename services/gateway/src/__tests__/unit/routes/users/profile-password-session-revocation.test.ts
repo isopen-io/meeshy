@@ -60,12 +60,12 @@ const USER_ID = '507f1f77bcf86cd799439011';
 const mockUser = { id: USER_ID, password: '$2b$12$hashedpassword' };
 const CURRENT_TOKEN = 'current-session-token';
 
-async function buildApp(): Promise<FastifyInstance> {
+async function buildApp(compte: { id: string; password: string | null } = mockUser): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   app.decorate('prisma', {
     user: {
-      findUnique: jest.fn<any>().mockResolvedValue(mockUser),
-      update: jest.fn<any>().mockResolvedValue(mockUser),
+      findUnique: jest.fn<any>().mockResolvedValue(compte),
+      update: jest.fn<any>().mockResolvedValue(compte),
     },
   });
   app.decorate('authenticate', async (req: FastifyRequest) => {
@@ -132,6 +132,33 @@ describe('PATCH /users/me/password — session revocation (#6435)', () => {
     expect(mockDisconnectSession).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: 'session-only', userId: USER_ID })
     );
+
+    await app.close();
+  });
+
+  // #6447 — le cas même que #6435 nomme : un compte né d'une adresse seule
+  // (#6424) reprend la main par lien magique et pose son PREMIER mot de passe.
+  // L'intrus déjà connecté doit sortir, la session qui pose le mot de passe
+  // rester. Aucun autre témoin ne porte sur un compte sans mot de passe.
+  it('revokes the other sessions when the account sets its FIRST password (#6424, #6435)', async () => {
+    mockInvalidateAllSessions.mockClear();
+    mockDisconnectSession.mockClear();
+    mockGetUserSessions.mockResolvedValueOnce([
+      { id: 'session-current', isCurrentSession: true },
+      { id: 'session-intruder', isCurrentSession: false },
+    ]);
+
+    const app = await buildApp({ id: USER_ID, password: null });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/users/me/password',
+      headers: { 'x-session-token': CURRENT_TOKEN },
+      payload: { newPassword: 'Xk9$mQ2vLp8#nR4wZ' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockInvalidateAllSessions).toHaveBeenCalledWith(USER_ID, CURRENT_TOKEN, 'password_changed');
+    expect(mockDisconnectSession.mock.calls.map((call: any[]) => call[0].sessionId)).toEqual(['session-intruder']);
 
     await app.close();
   });

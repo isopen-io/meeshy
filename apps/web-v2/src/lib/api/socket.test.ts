@@ -428,6 +428,43 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
     expect(feedPost(queryClient)?.bookmarkCount).toBe(5);
   });
 
+  /**
+   * `media:caption-translation-updated` (#6280) — LA LÉGENDE D'UN MÉDIA DU
+   * FIL SUIT LE PIPELINE ZMQ EN DIRECT. Miroir de `post:liked` ci-dessus :
+   * une fonction pure appliquée à `FEED_QUERY_KEY`.
+   */
+  test('`media:caption-translation-updated` entre la traduction dans le cache du média visé', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    queryClient.setQueryData(
+      FEED_QUERY_KEY,
+      feedWith({ media: [{ id: 'm-1', mimeType: 'image/jpeg', fileUrl: 'a.jpg', caption: 'The market', captionLanguage: 'en' }] }),
+    );
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, {
+      mediaId: 'm-1',
+      postId: 'p-1',
+      language: 'fr',
+      translation: { text: 'Le marché', translationModel: 'nllb-200', createdAt: '2026-09-14T00:00:00.000Z' },
+    });
+
+    expect(feedPost(queryClient)?.media?.[0]?.captionTranslations).toEqual({
+      fr: { text: 'Le marché', translationModel: 'nllb-200', createdAt: '2026-09-14T00:00:00.000Z' },
+    });
+  });
+
+  test('une charge de traduction de légende MALFORMÉE est ignorée — le cache ne bouge pas', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    const data = feedWith({ media: [{ id: 'm-1', mimeType: 'image/jpeg', fileUrl: 'a.jpg' }] });
+    queryClient.setQueryData(FEED_QUERY_KEY, data);
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, { mediaId: 'm-1', language: 'fr' });
+    socket.fire(SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, null);
+
+    expect(queryClient.getQueryData(FEED_QUERY_KEY)).toBe(data);
+  });
+
   test('une charge de geste MALFORMÉE est ignorée — le cache ne bouge pas', () => {
     const { deps, socket, queryClient } = buildDeps();
     const data = feedWith({ isLikedByMe: false, likeCount: 3 });

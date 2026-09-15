@@ -8,6 +8,8 @@ import { createIntervalClock, type IntervalClockScheduler } from '@/lib/view/int
 import type { MagicLinkRequestData } from '@/lib/view/magic-link';
 
 import { MagicLinkFlow, type MagicLinkFlowDeps } from '@/components/magic-link-flow';
+import { MagicLinkValidation } from '@/components/magic-link-validation';
+import { controlledBy, perceivableText } from '@/test-support/perceivable-text';
 
 /**
  * T9 (#5816) — « MagicLinkFlow », les cinq états (vide, saisie, envoi,
@@ -156,6 +158,66 @@ describe('MagicLinkFlow — (c) envoi', () => {
   });
 });
 
+/**
+ * LES INDÉSIRABLES, NOMMÉS PENDANT L'ATTENTE — derrière un (i) « Rien reçu ? »
+ * depuis #6626.
+ *
+ * La passerelle rend 200 même pour une adresse inconnue
+ * (`MagicLinkService.ts:133-137`, anti-énumération) : l'écran ne peut donc ni
+ * promettre l'envoi ni le démentir. #6404 posait la note EN CLAIR ; la
+ * directive porteur du 2026-09-15 (« moins de détails […] utiliser des (i) »)
+ * la replie derrière un contrôle qui NOMME la question qu'on se pose à cet
+ * instant. Repliée ne veut pas dire absente : le texte reste dans le DOM,
+ * `sr-only`, et un lecteur d'écran l'atteint sans trouver le bouton.
+ */
+describe('MagicLinkFlow — la note sur les indésirables', () => {
+  test('absente à la saisie ; à l’attente, un (i) « Rien reçu ? » replié qui s’ouvre', async () => {
+    const { clock, now } = fakeClock();
+    const stub = requestStub([{ ok: true, data: { expiresInSeconds: 600 }, status: 200 }]);
+    const el = mount({ request: stub.request, clock, now });
+    expect(el.querySelector('[aria-label="Rien reçu ?"]')).toBeNull();
+
+    fill(el, 'ada@meeshy.example');
+    await act(async () => {
+      submit(el);
+      await Promise.resolve();
+    });
+
+    const info = el.querySelector('button[aria-label="Rien reçu ?"]') as HTMLButtonElement | null;
+    expect(info).not.toBeNull();
+    expect(info?.getAttribute('aria-expanded')).toBe('false');
+    const note = controlledBy(info);
+    expect(note?.textContent).toBe('Regardez vos indésirables (spam) : le message peut y être tombé.');
+    expect(note?.classList.contains('sr-only')).toBe(true);
+
+    act(() => {
+      info?.click();
+    });
+    expect(info?.getAttribute('aria-expanded')).toBe('true');
+    expect(note?.classList.contains('sr-only')).toBe(false);
+  });
+});
+
+describe('MagicLinkFlow — le vocabulaire dit « e-mail », jamais « magique » (#6626)', () => {
+  test('l’en-tête de l’écran plein est « Connexion par e-mail »', () => {
+    const { clock, now } = fakeClock();
+    const el = mount({ request: requestStub([]).request, clock, now });
+    expect(el.querySelector('h1')?.textContent).toBe('Connexion par e-mail');
+    expect(perceivableText(el)).not.toMatch(/magi(que|c)/iu);
+  });
+
+  test('l’écran d’un lien invalide ne le dit pas davantage', () => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(<MagicLinkValidation token={null} returnUrl={null} />);
+    });
+    expect(container.textContent).toContain('Lien invalide ou expiré');
+    expect(perceivableText(container)).not.toMatch(/magi(que|c)/iu);
+  });
+});
+
 describe('MagicLinkFlow — (d) attente + compte à rebours', () => {
   test('« Lien envoyé ! », timer 10:00 → 0:00, expiration, renvoi relance à 10:00', async () => {
     const { clock, now, advanceSeconds, hasActiveTimer } = fakeClock();
@@ -170,10 +232,12 @@ describe('MagicLinkFlow — (d) attente + compte à rebours', () => {
       await Promise.resolve();
     });
 
-    expect(el.textContent).toContain('Lien envoyé !');
+    expect(el.textContent).toContain('E-mail envoyé');
+    expect((el.textContent ?? '').replace(/\s+/gu, ' ')).toContain('Ouvrez le lien reçu à ada@meeshy.example');
+    expect(perceivableText(el)).not.toMatch(/magi(que|c)/iu);
     const timer = () => el.querySelector('[role="timer"]');
     expect(timer()?.textContent).toBe('10:00');
-    const resend = () => el.querySelector('[aria-label="Renvoyer le lien magique"]') as HTMLButtonElement;
+    const resend = () => el.querySelector('[aria-label="Renvoyer le lien"]') as HTMLButtonElement;
     expect(resend().disabled).toBe(true);
 
     advanceSeconds(599);

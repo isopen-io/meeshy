@@ -413,7 +413,7 @@ final class ConversationServiceTests: XCTestCase {
         let sent = mock.lastRequest?.bodyJSON?["historyVisibleFrom"] as? String
         XCTAssertNotNil(sent)
         XCTAssertTrue(
-            sent?.hasSuffix("T00:00:00Z") ?? false,
+            sent?.hasSuffix("T00:00:00.000Z") ?? false,
             "the grant must floor to midnight, got \(sent ?? "nil") — a mid-day floor hides the morning of the chosen day"
         )
     }

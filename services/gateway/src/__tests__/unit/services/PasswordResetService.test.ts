@@ -665,45 +665,11 @@ describe('PasswordResetService', () => {
         expect(result.error).toContain(`minimum ${PASSWORD_MIN_LENGTH} characters`);
       });
 
-      it('should reject password without lowercase letter', async () => {
-        mockZxcvbn.mockReturnValue({ score: 4, feedback: {} });
-
-        const result = await service.completePasswordReset({
-          ...validResetCompletion,
-          newPassword: 'ALLUPPERCASE123!',
-          confirmPassword: 'ALLUPPERCASE123!'
-        });
-
-        expect(result.success).toBe(false);
-        expect(result.error).toContain('one lowercase letter');
-      });
-
-      it('should reject password without uppercase letter', async () => {
-        mockZxcvbn.mockReturnValue({ score: 4, feedback: {} });
-
-        const result = await service.completePasswordReset({
-          ...validResetCompletion,
-          newPassword: 'alllowercase123!',
-          confirmPassword: 'alllowercase123!'
-        });
-
-        expect(result.success).toBe(false);
-        expect(result.error).toContain('one uppercase letter');
-      });
-
-      it('should reject password without digit', async () => {
-        mockZxcvbn.mockReturnValue({ score: 4, feedback: {} });
-
-        const result = await service.completePasswordReset({
-          ...validResetCompletion,
-          newPassword: 'NoDigitsHere!!',
-          confirmPassword: 'NoDigitsHere!!'
-        });
-
-        expect(result.success).toBe(false);
-        expect(result.error).toContain('one digit');
-      });
-
+      // Les anciens témoins "should reject password without {lowercase,uppercase,digit}"
+      // sont retirés (#6436, pas de règle de composition) — le même comportement
+      // ("validation passe, la reprise échoue sur le token") est déjà couvert
+      // ci-dessous, et l'absence de garde de composition l'est par
+      // `password-strength.test.ts`.
       it('should accept password without special character (special chars are optional)', async () => {
         // Special characters are now optional in password validation
         // The password should still pass basic requirements if it has:
@@ -1260,8 +1226,9 @@ describe('PasswordResetService', () => {
     });
 
     it('should include zxcvbn warning in errors', () => {
+      // score 1 stays below any length-proportional tier (#6436) for this password.
       mockZxcvbn.mockReturnValue({
-        score: 2,
+        score: 1,
         feedback: { warning: 'This is a commonly used password' }
       });
 
@@ -1729,8 +1696,8 @@ describe('PasswordResetService - Security Tests', () => {
 
   it('should reject low-score password with no zxcvbn warning message', async () => {
     // Covers the FALSE branch of `if (result.feedback.warning)` at line 652:
-    // score < MIN_PASSWORD_SCORE but feedback.warning is empty → only score error pushed
-    mockZxcvbn.mockReturnValue({ score: 2, feedback: { warning: '' } });
+    // score below the length-proportional minimum (#6436) but feedback.warning empty.
+    mockZxcvbn.mockReturnValue({ score: 1, feedback: { warning: '' } });
 
     const result = await service.completePasswordReset({
       ...validResetCompletion,

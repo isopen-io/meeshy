@@ -165,9 +165,8 @@ struct ConversationView: View {
     /// l'afficherait deux fois.
     var showsOwnConnectionBanner: Bool = false
     /// I-075 — override ÉPHÉMÈRE, JAMAIS persistant : item « Focal (bêta) » du
-    /// menu d'appui long de la liste (gardé par
-    /// `BetaFeaturesPreference.isEnabled`, préférence utilisateur défaut ON —
-    /// amendement produit 2026-08-16). `nil` (défaut) ⇒
+    /// menu d'appui long de la liste (retiré avec Focal iOS le 2026-08-18).
+    /// `nil` (défaut) ⇒
     /// `init` bit-à-bit identique à avant ce lot — SEUL le site d'appel qui
     /// lit `router.pendingForcedReadingMode` (RootView/iPadRootView) passe une
     /// valeur non-`nil`. Transmis tel quel à
@@ -1390,7 +1389,6 @@ struct ConversationView: View {
                 // 0 en preview, ni voile : hébergée dans une `.sheet` à détentes, déjà
                 // sous la status bar, la vue décalerait le flux dans le vide.
                 topInset: previewMode ? 0 : DeviceLayout.safeAreaTop,
-                chromeVisibility: previewMode ? .hidden : ThreadChromeFade.Visibility(header: !hidesEntireHeaderForScroll, composer: !hidesComposerChromeForScroll),
                 scrollToBottomTrigger: scrollState.scrollToBottomTrigger,
                 scrollToMessageId: scrollState.scrollToMessageId,
                 scrollToMessageTrigger: scrollState.scrollToMessageTrigger,

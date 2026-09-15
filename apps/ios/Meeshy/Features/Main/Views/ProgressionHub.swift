@@ -243,12 +243,12 @@ struct ProgressionElansHero: View {
     let progress: EngagementProgress
     let isDark: Bool
 
+    /// La FENÊTRE servie (#5927), la même que la phrase juste en dessous. Balayer
+    /// les compteurs cumulés contredisait la phrase dès qu'une famille était
+    /// délaissée, et, après une frappe qui les avait vidés, affichait « 5 familles
+    /// actives » au-dessus d'une seule pastille (staging, 2026-09-14).
     private var famillesActives: [EngagementAxisFamily] {
-        var vues: [EngagementAxisFamily] = []
-        for axe in progress.axes where axe.scale.value > 0 {
-            if !vues.contains(axe.axis.family) { vues.append(axe.axis.family) }
-        }
-        return vues
+        progress.elan?.activeFamilies ?? []
     }
 
     var body: some View {

@@ -63,7 +63,17 @@ public extension MeeshyEndpoint {
     /// s'écrit — les sites d'appel n'ont jamais à savoir laquelle des deux
     /// bases s'applique à leur route.
     var absoluteURLString: String {
-        MeeshyConfig.shared.serverOrigin + path
+        absoluteURLString(apiBaseURL: MeeshyConfig.shared.apiBaseURL)
+    }
+
+    /// La même composition pour un client dont la base d'API est INJECTÉE.
+    ///
+    /// `SyncDeltaClient` écrivait `baseURL + SyncEndpoint.root.path` : l'app
+    /// appelait `/api/v1/api/v1/sync` et la passerelle répondait 404 à chaque
+    /// synchronisation delta (#6539). La garde
+    /// `EndpointBaseURLConcatenationGuardTests` interdit le retour de cette forme.
+    func absoluteURLString(apiBaseURL: String) -> String {
+        MeeshyConfig.origin(ofAPIBaseURL: apiBaseURL) + path
     }
 }
 

@@ -114,10 +114,13 @@ describe('pickFields', () => {
 // ─── loadSecuritySummary — exactement la requête de me/preferences/index.ts ──
 
 describe('loadSecuritySummary', () => {
-  function makePrisma(bundle: unknown) {
+  function makePrisma(bundle: unknown, password: string | null = 'hash-bcrypt') {
     return {
       signalPreKeyBundle: {
         findUnique: jest.fn<any>().mockResolvedValue(bundle),
+      },
+      user: {
+        findUnique: jest.fn<any>().mockResolvedValue(password === undefined ? null : { password }),
       },
     } as any;
   }
@@ -137,6 +140,7 @@ describe('loadSecuritySummary', () => {
       hasSignalKeys: false,
       signalRegistrationId: null,
       lastKeyRotation: null,
+      hasPassword: true,
     });
   });
 
@@ -146,6 +150,7 @@ describe('loadSecuritySummary', () => {
       hasSignalKeys: false,
       signalRegistrationId: null,
       lastKeyRotation: null,
+      hasPassword: true,
     });
   });
 
@@ -156,6 +161,54 @@ describe('loadSecuritySummary', () => {
       hasSignalKeys: true,
       signalRegistrationId: 4242,
       lastKeyRotation: rotatedAt,
+      hasPassword: true,
+    });
+  });
+
+  /**
+   * `hasPassword` — la SEULE façon pour un client de savoir s'il doit proposer
+   * « définir un mot de passe » ou « changer le mot de passe » (#6424).
+   *
+   * Le témoin le plus important du groupe est le dernier : le HASH ne doit pas
+   * ressortir. Une régression qui le laisserait passer ne casserait rien, ne
+   * lèverait rien, et servirait un bcrypt à tout client demandant
+   * `?expand=security`.
+   */
+  describe('hasPassword — un compte sans mot de passe se LIT (#6424)', () => {
+    it('rend false quand la colonne est null — inscription par e-mail seul', async () => {
+      const resume = await loadSecuritySummary(makePrisma(null, null), 'user-1');
+      expect(resume.hasPassword).toBe(false);
+    });
+
+    it('rend true quand un hash est présent', async () => {
+      const resume = await loadSecuritySummary(makePrisma(null, 'hash-bcrypt'), 'user-1');
+      expect(resume.hasPassword).toBe(true);
+    });
+
+    it('ne demande QUE la colonne password — jamais la ligne entière', async () => {
+      const prisma = makePrisma(null, null);
+      await loadSecuritySummary(prisma, 'user-1');
+      expect(prisma.user.findUnique).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+        select: { password: true },
+      });
+    });
+
+    it('rend false — jamais undefined — quand la ligne est INTROUVABLE', async () => {
+      const prisma = {
+        signalPreKeyBundle: { findUnique: jest.fn<any>().mockResolvedValue(null) },
+        user: { findUnique: jest.fn<any>().mockResolvedValue(null) },
+      } as any;
+      const resume = await loadSecuritySummary(prisma, 'disparu');
+
+      expect(resume.hasPassword).toBe(false);
+      expect(Object.keys(resume)).toContain('hasPassword');
+    });
+
+    it('le HASH ne ressort JAMAIS du résumé', async () => {
+      const resume = await loadSecuritySummary(makePrisma(null, 'hash-bcrypt'), 'user-1');
+      expect(JSON.stringify(resume)).not.toContain('hash-bcrypt');
+      expect(resume).not.toHaveProperty('password');
     });
   });
 });

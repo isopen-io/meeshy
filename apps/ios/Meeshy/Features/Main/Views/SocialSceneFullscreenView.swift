@@ -118,6 +118,39 @@ struct SocialSceneFullscreenView: View {
     /// **Repliée par défaut** — le brief le demande explicitement pour l'espace
     /// de contenu de la légende, et c'est la même règle que partout ailleurs.
     @State private var captionExpanded = false
+    /// La langue choisie dans la rangée de traduction de la légende (#6504) ;
+    /// `nil` : la langue que le Prisme a résolue.
+    @State private var langueDeLegende: String?
+    /// Les langues demandées depuis la feuille, pas encore arrivées.
+    @State private var languesDemandees: Set<String> = []
+    /// La feuille de traduction des messages, ouverte par l'icône de la rangée.
+    @State private var feuilleDeTraductionOuverte = false
+    /// Les traductions de CE post arrivées pendant l'ouverture (#6560) : tant
+    /// que le plein écran couvre la carte hôte, le post qu'elle relaie ne change pas.
+    @State private var arrivees: [CaptionTranslationArrival] = []
+    /// **La seconde à laquelle la scène d'entrée s'OUVRE** (#6580).
+    ///
+    /// Le porteur : « lorsqu'on a un son de fond, ouverture en détail on joue le
+    /// son directement aligné, correctement ». La carte du fil joue la scène en
+    /// boucle et lègue sa position (`ScenePlaybackPositions`) ; ce plein écran
+    /// la reprend, au lieu de tout recommencer — vidéo comme fond sonore.
+    ///
+    /// **Un INSTANTANÉ, jamais un fil.** La mémoire continue de s'écrire
+    /// pendant qu'on regarde (cette vue y publie à son tour) : la relire à
+    /// chaque rendu ferait recaler la lecture en boucle. Elle est donc lue UNE
+    /// fois, à l'apparition — `.id(startSceneIndex)` garantissant une vue
+    /// neuve à chaque présentation.
+    ///
+    /// Lue à l'APPARITION et non à l'`init` : elle arrive donc APRÈS le montage
+    /// du canvas, et c'est `updateUIView` qui la sème
+    /// (`StoryReaderRepresentable.shouldReseed`). Rien ne joue d'ici là — la
+    /// lecture est levée par ce même `onAppear`.
+    @State private var positionDOuverture: Double = 0
+
+    /// Le post de l'hôte, augmenté des traductions arrivées depuis l'ouverture.
+    private var postAffiche: FeedPost {
+        CaptionTranslationArrival.applying(arrivees, to: post)
+    }
 
     /// **Le porteur de la scène.** Le document dit ce qu'il faut peindre ; il ne
     /// dit pas où vivent les pixels. Sans lui, le résolveur du player n'a aucun
@@ -139,9 +172,162 @@ struct SocialSceneFullscreenView: View {
     /// « dans le feed si possible et en plein écran obligatoirement »), d'où le
     /// repli sur le texte du porteur : rien d'autre ne le rend ici, et sans lui
     /// le format qu'on ouvre POUR mieux lire est celui qui montre le moins.
+    private var legende: (text: String, origin: SceneCaption.Origin)? {
+        SceneCaption.resolveWithOrigin(sceneIndex: sceneIndex, in: document, post: post,
+                                       carrierFallback: true)
+    }
+
+    /// **Le contenu que la rangée et la feuille traduisent** : celui qui est
+    /// AFFICHÉ, identifié par sa source — la légende propre du média de la
+    /// scène, ou le texte du post en repli (#6280). Jamais l'un pour l'autre :
+    /// ce sont deux contenus, même à chaînes égales.
+    private var sourceDeTraduction: CaptionTranslationSource? {
+        guard let legende else { return nil }
+        return CaptionTranslationSource.of(
+            origin: legende.origin,
+            post: postAffiche,
+            mediaId: SceneCaption.mediaIdentity(sceneIndex: sceneIndex, in: document, post: post)
+        )
+    }
+
+    /// La langue dont le contenu est affiché : le choix du lecteur dans la
+    /// rangée ou la feuille, sinon la descente du Prisme. UNE résolution pour le
+    /// texte ET le drapeau actif — deux résolutions divergeaient (#6531).
+    private var langueAffichee: String? {
+        langueDeLegende ?? sourceDeTraduction?.displayedLanguage(preferredLanguages: preferredContentLanguages)
+    }
+
+    /// La légende AFFICHÉE, dans la langue affichée : texte du post ou légende
+    /// du média, chacun avec ses seules traductions.
     private var caption: String? {
-        SceneCaption.resolve(sceneIndex: sceneIndex, in: document, post: post,
-                             carrierFallback: true)
+        guard let legende else { return nil }
+        guard let source = sourceDeTraduction else { return legende.text }
+        return CaptionTranslationOffer.carrierText(
+            content: source.text,
+            originalLanguage: source.originalLanguage,
+            translations: source.translations,
+            language: langueAffichee
+        )
+    }
+
+    /// **L'offre de traduction de la légende** (#6504, #6280) — sur le contenu
+    /// affiché, texte du post ou légende du média.
+    private var offreDeTraduction: CaptionTranslationOffer {
+        guard let source = sourceDeTraduction else { return .none }
+        return CaptionTranslationOffer.resolve(
+            originalLanguage: source.originalLanguage,
+            translationLanguages: Array(source.translations.keys),
+            activeLanguage: langueAffichee
+        )
+    }
+
+    /// La rangée posée entre la légende et « voir moins ». `nil` : rien à offrir.
+    private var rangeeDeTraduction: AnyView? {
+        let offre = offreDeTraduction
+        guard offre != .none else { return nil }
+        return AnyView(MediaCaptionTranslationRow(
+            offer: offre,
+            isRequesting: !languesDemandees.isEmpty,
+            onSelectLanguage: { code in
+                withAnimation(.easeInOut(duration: 0.2)) { langueDeLegende = code }
+            },
+            onOpenTranslations: { feuilleDeTraductionOuverte = true }
+        ))
+    }
+
+    /// Les traductions du contenu affiché, dans la forme que la feuille des
+    /// messages lit.
+    private var traductionsAffichees: [MessageTranslation] {
+        guard let source = sourceDeTraduction else { return [] }
+        return source.translations
+            .map { langue, texte in
+                MessageTranslation(
+                    id: "\(source.target.identifiant)-\(langue)",
+                    messageId: source.target.identifiant,
+                    sourceLanguage: source.originalLanguage ?? "",
+                    targetLanguage: langue,
+                    translatedContent: texte,
+                    translationModel: "nllb-200",
+                    confidenceScore: nil
+                )
+            }
+            .sorted { $0.targetLanguage < $1.targetLanguage }
+    }
+
+    /// **LA feuille de traduction des messages et des audios**, réutilisée pour
+    /// le contenu affiché (directive porteur 2026-09-14 : l'icône « ouvre la
+    /// feuille habituelle de traduction … pour demander une traduction de ce
+    /// contenu dans la langue souhaitée »). Une langue déjà traduite affiche la
+    /// légende dans cette langue ; une autre demande la traduction de CE contenu
+    /// par sa route — jamais la traduction locale d'un message qui n'existe pas.
+    private var feuilleDeTraduction: some View {
+        let origine = sourceDeTraduction?.originalLanguage ?? ""
+        return NavigationStack {
+            ScrollView(showsIndicators: false) {
+                MessageLanguageDetailView(
+                    message: Message(
+                        id: sourceDeTraduction?.target.identifiant ?? post.id,
+                        conversationId: "",
+                        content: sourceDeTraduction?.text ?? post.content,
+                        originalLanguage: origine,
+                        createdAt: post.timestamp,
+                        senderName: post.author,
+                        senderColor: post.authorColor,
+                        senderAvatarURL: post.authorAvatarURL,
+                        senderUserId: post.authorId
+                    ),
+                    contactColor: post.authorColor,
+                    conversationId: "",
+                    textTranslations: traductionsAffichees,
+                    onSelectTranslation: { traduction in
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            langueDeLegende = traduction?.targetLanguage ?? origine
+                        }
+                    },
+                    translatingTextLanguages: languesDemandees,
+                    onRequestTextTranslation: { cible, _ in demanderTraduction(vers: cible) },
+                    fetchesMessageTranslations: false
+                )
+                .padding(16)
+            }
+            .navigationTitle(String(localized: "feed.post.translation.title", defaultValue: "Langues", bundle: .main))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .main)) {
+                        feuilleDeTraductionOuverte = false
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    /// La demande part tout de suite, par la route du contenu affiché ; la
+    /// traduction revient par la socket (`post:translation-updated` ou
+    /// `media:caption-translation-updated`), que la vue plie elle-même sur le
+    /// post affiché (#6560). En cas d'échec, la langue quitte l'attente pour
+    /// qu'on puisse réessayer.
+    private func demanderTraduction(vers cible: String) {
+        guard let source = sourceDeTraduction else { return }
+        let langue = cible.lowercased()
+        languesDemandees.insert(langue)
+        Task {
+            do {
+                switch source.target {
+                case .post(let id):
+                    try await PostService.shared.requestTranslation(postId: id, targetLanguage: langue)
+                case .mediaCaption(let mediaId):
+                    try await PostService.shared.requestMediaCaptionTranslation(mediaId: mediaId, targetLanguage: langue)
+                }
+            } catch {
+                languesDemandees.remove(langue)
+                FeedbackToastManager.shared.showError(
+                    String(localized: "feed.post.translation.error", defaultValue: "Erreur de traduction", bundle: .main)
+                )
+            }
+        }
     }
 
     var body: some View {
@@ -152,11 +338,30 @@ struct SocialSceneFullscreenView: View {
 
             chrome
         }
+        // Une traduction arrivée sort sa langue de l'attente (#6504, #6280).
+        .adaptiveOnChange(of: sourceDeTraduction?.translations.count ?? 0) { _, _ in
+            languesDemandees.subtract((sourceDeTraduction?.translations ?? [:]).keys.map { $0.lowercased() })
+        }
+        .onReceive(SocialSocketManager.shared.mediaCaptionTranslationUpdated.receive(on: DispatchQueue.main)) { recue in
+            guard recue.postId == post.id else { return }
+            arrivees.append(.mediaCaption(recue))
+        }
+        .onReceive(SocialSocketManager.shared.postTranslationUpdated.receive(on: DispatchQueue.main)) { recue in
+            guard recue.postId == post.id else { return }
+            arrivees.append(.post(recue))
+        }
+        .sheet(isPresented: $feuilleDeTraductionOuverte) { feuilleDeTraduction }
         // **La lecture ne s'arme que s'il y a quelque chose à jouer.** Un
         // canvas fixe n'a ni vidéo, ni son, ni animation : lever `isPlaying`
         // y ferait tourner un displayLink pour rien, et allumerait un bouton
         // pause qui ne mettrait rien en pause (loi 4).
         .onAppear {
+            // **La position d'ouverture AVANT la lecture** : les deux sont
+            // posées dans la même transaction, donc le canvas reçoit la
+            // seconde d'entrée et la commande de jouer d'un seul tenant.
+            positionDOuverture = ScenePlaybackPositions.shared.position(
+                for: ScenePlaybackPositions.key(carrierId: post.id,
+                                                sceneIndex: startSceneIndex)) ?? 0
             isPlaying = bouge
             // **Filet de sécurité du pager** — le MÊME que celui de la galerie
             // plein écran des médias, et pour la même raison : `scrollPosition`
@@ -260,6 +465,8 @@ struct SocialSceneFullscreenView: View {
         .adaptiveOnChange(of: pageCourante) { _, nouvelle in
             guard let index = pages.first(where: { $0.id == nouvelle })?.index else { return }
             sceneIndex = index
+            // Une autre scène porte un autre contenu : la langue choisie ne le suit pas.
+            langueDeLegende = nil
         }
     }
 
@@ -299,7 +506,11 @@ struct SocialSceneFullscreenView: View {
             sceneIndex: .constant(index),
             isPlaying: .constant(isPlaying && index == sceneIndex),
             accentColorHex: accentColor,
-            carrier: carrier
+            carrier: carrier,
+            // **Seule la scène par laquelle on ENTRE reprend une position** :
+            // c'est la seule qu'on regardait dans le fil. Une scène qu'on
+            // rejoint au défilement n'a jamais été jouée — elle commence.
+            startAt: index == startSceneIndex ? positionDOuverture : 0
         )
         .preferredContentLanguages(preferredContentLanguages)
         // **LE RATIO RÉEL DE LA SCÈNE, jamais le portrait d'office** (retour
@@ -352,6 +563,8 @@ struct SocialSceneFullscreenView: View {
                         // le voile du composant masquerait la scène qu'on est
                         // venu regarder ; l'ombre du texte suffit à le détacher.
                         dimsBackgroundWhenExpanded: false,
+                        // La traduction ENTRE la légende et son invite (#6504).
+                        accessory: rangeeDeTraduction,
                         onToggle: {
                             withAnimation(.easeInOut(duration: 0.2)) {
                                 captionExpanded.toggle()

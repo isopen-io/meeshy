@@ -545,20 +545,23 @@ export class EngagementService {
    * La version précédente écrivait par `{ increment: weight }`, en s'appuyant
    * sur ce doc-comment : « un `User` créé avant cette migration a le champ
    * ABSENT (pas à zéro), et Mongo traite `$inc` sur un champ absent comme un
-   * départ à zéro ». L'affirmation est JUSTE pour un champ absent, et le champ
-   * n'était pas absent — il était `null`. Vérifié contre Mongo 8 :
+   * départ à zéro ». L'affirmation est juste de `$inc`, mais **Prisma n'envoie
+   * pas `$inc` sur MongoDB** : il traduit l'incrément en pipeline
+   * `$set: { champ: { $add: ['$champ', n] } }` (journal de requêtes, base
+   * jetable, 2026-09-14, #6428). Et `$add` rend `null` dès qu'un opérande est
+   * absent ou `null` :
    *
-   *     champ ABSENT + $inc  ->  { s: 3 }
-   *     champ NULL   + $inc  ->  ERREUR « Cannot apply $inc to a value of
-   *                              non-numeric type »
+   *     champ ABSENT + increment  ->  null en base, relu 0 par Prisma
+   *     champ NULL   + increment  ->  null en base, relu 0 par Prisma
+   *     champ 0      + increment  ->  1
    *
    * Mesuré en production le 2026-09-08 : `engagementScore` valait `null` sur
    * les 9 comptes ayant une activité, la somme pondérée de leurs compteurs
-   * allant de 8 à 140. Chaque crédit échouait, en silence — cet appel est le
-   * DERNIER de `recordActivity`, donc compteurs, badges, succès et série
-   * étaient déjà commités quand il rejetait. Aucune ligne d'erreur, trois mois
-   * de score mort, et un écran « Progression » annonçant « Niveau 0 · 0 point »
-   * à un compte qui avait produit 140 points.
+   * allant de 8 à 140. Chaque crédit se perdait en silence : l'écriture
+   * RÉUSSISSAIT et laissait `null`, que la lecture rendait zéro. Aucune ligne
+   * d'erreur, trois mois de score mort, et un écran « Progression » annonçant
+   * « Niveau 0 · 0 point » à un compte qui avait produit 140 points. La même
+   * cause a fait disparaître la première frappe de Meesh (#6428).
    *
    * Le pipeline d'agrégation `$ifNull` traite `null` ET l'absence comme zéro,
    * en UNE écriture atomique — strictement mieux qu'une normalisation suivie

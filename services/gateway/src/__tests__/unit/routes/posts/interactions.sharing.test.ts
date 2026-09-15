@@ -482,6 +482,49 @@ describe('POST /posts/:id/repost — createPostRepostNotification rejects (line 
   });
 });
 
+// #6524 — staging, 2026-09-14 : `getPostById` jetait (#6503) APRÈS la création
+// du repost, pendant la relecture qui ne sert qu'à notifier l'auteur de
+// l'original. La route rendait 500 pour une écriture ACTÉE ; l'app annulait son
+// état optimiste et disait « Erreur lors du repost » au-dessus d'un repost bien
+// présent au rafraîchissement.
+const flushSideEffects = async () => {
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+};
+
+describe('POST /posts/:id/repost — un effet secondaire ne défait pas un repost acté (#6524)', () => {
+  it('rend 201 avec le repost quand la relecture de l\'original jette après la création', async () => {
+    mockRepostPost.mockResolvedValueOnce({ id: 'repost-001', repostOfId: POST_ID, type: 'POST', authorId: USER_ID });
+    mockGetPostById.mockRejectedValueOnce(
+      Object.assign(new Error('Invalid scalar field `id` for include statement on model Post'), { name: 'PrismaClientValidationError' }),
+    );
+    const app = await buildApp({ withNotifications: true });
+
+    const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/repost`, payload: {} });
+    await flushSideEffects();
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json().data.id).toBe('repost-001');
+    expect((app as any).notificationService.createPostRepostNotification).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('notifie toujours l\'auteur de l\'original quand la relecture réussit', async () => {
+    mockRepostPost.mockResolvedValueOnce({ id: 'repost-001', repostOfId: POST_ID, type: 'POST', authorId: USER_ID });
+    mockGetPostById.mockResolvedValueOnce({ id: POST_ID, authorId: 'original-author', type: 'POST', content: 'Original', createdAt: new Date() });
+    const app = await buildApp({ withNotifications: true });
+
+    const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/repost`, payload: {} });
+    await flushSideEffects();
+
+    expect(res.statusCode).toBe(201);
+    expect((app as any).notificationService.createPostRepostNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ postAuthorId: 'original-author', repostId: 'repost-001', originalPostId: POST_ID }),
+    );
+    await app.close();
+  });
+});
+
 // ─── Branch coverage: null-coalescing and ternary false branches ─────────────
 
 describe('POST /posts/:id/share — no body uses ?? {} fallback (line 480)', () => {

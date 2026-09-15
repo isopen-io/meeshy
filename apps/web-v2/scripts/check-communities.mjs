@@ -32,6 +32,7 @@
  *     création qui REMPLACE l'écran par le détail et se lit en tête de liste au
  *     retour ;
  *  7. hors ligne, la liste reste lisible et le dit, et la création ne part pas ;
+ *     la pastille de synchronisation ne recouvre pas la recherche (#6401) ;
  *  8. aucune erreur de page.
  *
  * `CAPTURE_DIR=<dossier>` écrit les captures de recette.
@@ -42,6 +43,7 @@ import { extname, join, normalize } from 'node:path';
 
 import { launchChromium } from './lib/browser.mjs';
 import { contrastOf } from './lib/contrast.mjs';
+import { syncPillOverlap } from './lib/sync-pill-clearance.mjs';
 
 const DIST = new URL('../dist/', import.meta.url).pathname;
 const TYPES = {
@@ -415,6 +417,16 @@ try {
       await context.setOffline(true);
       await page.waitForSelector('[data-community-offline]');
       check((await cardNames(page)).length >= 3, `${label} : hors ligne, la liste reste lisible et le dit`);
+
+      // -------------------------------- 7 bis. la pastille ne recouvre pas la recherche (#6401)
+      await page.waitForSelector('.sync-pill');
+      const communitiesOverlap = await syncPillOverlap(page, ['[data-community-search]']);
+      check(communitiesOverlap.pill !== null, `${label} : hors ligne, la pastille de synchronisation est posée`);
+      check(
+        communitiesOverlap.covers.length === 0,
+        `${label} : hors ligne, la pastille ne recouvre pas le champ de recherche — ${JSON.stringify(communitiesOverlap.covers)}`,
+      );
+
       await capture(page, `communautes-hors-ligne-${slug}`);
       await page.click('[data-community-create]');
       await page.waitForURL('**/communities/new');

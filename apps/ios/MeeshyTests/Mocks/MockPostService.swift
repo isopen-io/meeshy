@@ -529,6 +529,8 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
 
     func requestTranslation(postId: String, targetLanguage: String) async throws {}
 
+    func requestMediaCaptionTranslation(mediaId: String, targetLanguage: String) async throws {}
+
     func pinPost(postId: String) async throws {}
 
     func unpinPost(postId: String) async throws {}
@@ -582,12 +584,14 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     var lastUpdateCommentId: String?
     var lastUpdateCommentContent: String?
     var lastUpdateCommentEffectFlags: Int?
+    var lastUpdateCommentOriginalLanguage: String?
 
-    func updateComment(postId: String, commentId: String, content: String?, effectFlags: Int?) async throws -> APIPostComment {
+    func updateComment(postId: String, commentId: String, content: String?, effectFlags: Int?, originalLanguage: String?) async throws -> APIPostComment {
         updateCommentCallCount += 1
         lastUpdateCommentId = commentId
         lastUpdateCommentContent = content
         lastUpdateCommentEffectFlags = effectFlags
+        lastUpdateCommentOriginalLanguage = originalLanguage
         return try updateCommentResult.get()
     }
 

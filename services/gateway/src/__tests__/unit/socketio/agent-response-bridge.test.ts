@@ -209,3 +209,37 @@ describe('handleAgentResponse — illustration (#6192)', () => {
     expect(deps.resolveIllustration).not.toHaveBeenCalled();
   });
 });
+
+describe('handleAgentResponse — budget global de l\'illustration (#6198)', () => {
+  it('posts a text-only message once the budget elapses, without waiting for the resolver to settle', async () => {
+    const deps = makeDeps({ illustrationBudgetMs: 20 });
+    deps.resolveIllustration.mockReturnValue(new Promise<never>(() => {})); // never settles
+    const startedAt = Date.now();
+
+    await handleAgentResponse(deps, makeResponse({ illustration: { sourceUrl: ARTICLE } }));
+
+    expect(Date.now() - startedAt).toBeLessThan(500);
+    expect(deps.attachmentService.uploadFile).not.toHaveBeenCalled();
+    expect(deps.messagingService.handleMessage.mock.calls[0][0]).not.toHaveProperty('attachmentIds');
+    expect(deps.broadcastNewMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('posts a text-only message when the upload alone exceeds the remaining budget', async () => {
+    const deps = makeDeps({ illustrationBudgetMs: 20 });
+    deps.resolveIllustration.mockResolvedValue({ buffer: JPEG, mimeType: 'image/jpeg', filename: 'x.jpg', sourceUrl: ARTICLE, imageUrl: 'https://cdn.example/x.jpg' });
+    deps.attachmentService.uploadFile.mockReturnValue(new Promise<never>(() => {})); // never settles
+
+    await handleAgentResponse(deps, makeResponse({ illustration: { sourceUrl: ARTICLE } }));
+
+    expect(deps.messagingService.handleMessage.mock.calls[0][0]).not.toHaveProperty('attachmentIds');
+  });
+
+  it('still uploads the image when it resolves well within budget', async () => {
+    const deps = makeDeps({ illustrationBudgetMs: 5_000 });
+    deps.resolveIllustration.mockResolvedValue({ buffer: JPEG, mimeType: 'image/jpeg', filename: 'x.jpg', sourceUrl: ARTICLE, imageUrl: 'https://cdn.example/x.jpg' });
+
+    await handleAgentResponse(deps, makeResponse({ illustration: { sourceUrl: ARTICLE } }));
+
+    expect(deps.messagingService.handleMessage.mock.calls[0][0]).toMatchObject({ attachmentIds: ['att-1'] });
+  });
+});

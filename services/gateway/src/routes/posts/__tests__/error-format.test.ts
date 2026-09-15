@@ -155,7 +155,7 @@ const buildAuthMiddleware = (userId?: string) =>
     if (userId) {
       req.authContext = {
         isAuthenticated: true,
-        registeredUser: { id: userId, username: 'testuser' },
+        registeredUser: { emailVerifiedAt: new Date(), id: userId, username: 'testuser' },
       };
     }
     done();

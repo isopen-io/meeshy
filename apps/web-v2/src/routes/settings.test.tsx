@@ -7,7 +7,7 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 import type { AppPreferences } from '@/lib/api/app-preferences';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { FLOATING_CORRIDOR_BOTTOM } from '@/lib/view/floating-corridor';
-import { legacyHref } from '@/lib/view/legacy-link';
+import { legacyHref, legacyReachable } from '@/lib/view/legacy-link';
 
 import {
   AboutSection,
@@ -105,7 +105,7 @@ describe('la carte de profil', () => {
 
 describe('le compte — ce que la v2.0 ne porte pas reste atteignable', () => {
   test('Sécurité et suppression du compte ouvrent le legacy, dans un nouvel onglet, et le disent', () => {
-    const host = dom(<AccountSection language="fr" />);
+    const host = dom(<AccountSection language="fr" legacyReachable />);
     for (const destination of ['security', 'accountDeletion'] as const) {
       const link = linkTo(host, legacyHref(destination));
       expect(link).not.toBeNull();
@@ -116,6 +116,26 @@ describe('le compte — ce que la v2.0 ne porte pas reste atteignable', () => {
     expect(host.textContent).toContain('Sécurité');
     expect(host.textContent).toContain('Supprimer le compte');
   });
+
+  /* #6354 (D-67) : hors production, aucune rangée ne mène à la production
+     réelle — un testeur de staging ne doit jamais atterrir sur SA suppression
+     de compte, sous un compte qui n'est pas le sien. */
+  test('hors production : ni lien ni href vers le legacy — une rangée inerte qui le dit', () => {
+    const host = dom(<AccountSection language="fr" legacyReachable={false} />);
+    for (const destination of ['security', 'accountDeletion'] as const) {
+      expect(linkTo(host, legacyHref(destination))).toBeNull();
+    }
+    expect(host.querySelectorAll('a[data-legacy]')).toHaveLength(0);
+    expect(host.querySelectorAll('[data-legacy-unavailable]')).toHaveLength(2);
+    expect(host.textContent).toContain('Sécurité');
+    expect(host.textContent).toContain('Supprimer le compte');
+    expect(host.textContent).toContain('Indisponible sur cet environnement');
+  });
+
+  test('legacyReachable reflète exactement `apiConfig.base` (#6354)', () => {
+    expect(legacyReachable('https://gate.meeshy.me')).toBe(true);
+    expect(legacyReachable('https://gate.staging.meeshy.me')).toBe(false);
+  });
 });
 
 describe('la confidentialité — quatre bascules que la passerelle obéit', () => {
@@ -123,35 +143,50 @@ describe('la confidentialité — quatre bascules que la passerelle obéit', () 
 
   test('chaque bascule annonce son état réel', () => {
     const host = dom(
-      <PrivacySection language="fr" view={ready({ showOnlineStatus: false, showTypingIndicator: false })} disabled={false} onToggle={noop} onRetry={noop} />,
+      <PrivacySection
+        language="fr"
+        view={ready({ showOnlineStatus: false, showTypingIndicator: false })}
+        disabled={false}
+        onToggle={noop}
+        onRetry={noop}
+        legacyReachable
+      />,
     );
     expect(NAMES.map((name) => switchNamed(host, name)?.getAttribute('aria-checked'))).toEqual(['false', 'true', 'true', 'false']);
   });
 
   test('ce qu’une bascule COÛTE se lit sous elle — la réciprocité des accusés de lecture', () => {
-    const host = dom(<PrivacySection language="fr" view={ready()} disabled={false} onToggle={noop} onRetry={noop} />);
+    const host = dom(<PrivacySection language="fr" view={ready()} disabled={false} onToggle={noop} onRetry={noop} legacyReachable />);
     expect(host.textContent).toContain('vous ne verrez pas non plus si vos messages ont été lus');
   });
 
   test('hors ligne, aucune bascule n’est actionnable', () => {
-    const host = dom(<PrivacySection language="fr" view={ready()} disabled onToggle={noop} onRetry={noop} />);
+    const host = dom(<PrivacySection language="fr" view={ready()} disabled onToggle={noop} onRetry={noop} legacyReachable />);
     expect(NAMES.every((name) => switchNamed(host, name)?.hasAttribute('disabled'))).toBe(true);
   });
 
   test('sans cache : un squelette nommé, jamais une bascule inventée', () => {
-    const host = dom(<PrivacySection language="fr" view={{ kind: 'loading' }} disabled={false} onToggle={noop} onRetry={noop} />);
+    const host = dom(<PrivacySection language="fr" view={{ kind: 'loading' }} disabled={false} onToggle={noop} onRetry={noop} legacyReachable />);
     expect(host.querySelectorAll('[role="switch"]')).toHaveLength(0);
     expect(host.querySelector('[aria-busy="true"]')?.textContent).toContain('Chargement des réglages');
   });
 
   test('en échec : une reprise, jamais une bascule inventée', () => {
-    const host = dom(<PrivacySection language="fr" view={{ kind: 'error' }} disabled={false} onToggle={noop} onRetry={noop} />);
+    const host = dom(<PrivacySection language="fr" view={{ kind: 'error' }} disabled={false} onToggle={noop} onRetry={noop} legacyReachable />);
     expect(host.querySelectorAll('[role="switch"]')).toHaveLength(0);
     expect([...host.querySelectorAll('button')].map((button) => button.textContent)).toContain('Réessayer');
   });
 
   test('les autres options de confidentialité restent au legacy', () => {
-    expect(linkTo(dom(<PrivacySection language="fr" view={ready()} disabled={false} onToggle={noop} onRetry={noop} />), legacyHref('privacy'))).not.toBeNull();
+    expect(
+      linkTo(dom(<PrivacySection language="fr" view={ready()} disabled={false} onToggle={noop} onRetry={noop} legacyReachable />), legacyHref('privacy')),
+    ).not.toBeNull();
+  });
+
+  test('hors production : la rangée « plus d’options » devient inerte (#6354)', () => {
+    const host = dom(<PrivacySection language="fr" view={ready()} disabled={false} onToggle={noop} onRetry={noop} legacyReachable={false} />);
+    expect(linkTo(host, legacyHref('privacy'))).toBeNull();
+    expect(host.querySelector('[data-legacy-unavailable="privacy"]')).not.toBeNull();
   });
 });
 
@@ -217,22 +252,37 @@ describe('l’apparence', () => {
 
 describe('les notifications', () => {
   test('les notifications poussées et leur son, dans leur état réel', () => {
-    const host = dom(<NotificationsSection language="fr" view={ready({ soundEnabled: false })} disabled={false} onToggle={noop} onRetry={noop} />);
+    const host = dom(<NotificationsSection language="fr" view={ready({ soundEnabled: false })} disabled={false} onToggle={noop} onRetry={noop} legacyReachable />);
     expect(switchNamed(host, 'Notifications')?.getAttribute('aria-checked')).toBe('true');
     expect(switchNamed(host, 'Sons')?.getAttribute('aria-checked')).toBe('false');
   });
 
   test('les options fines restent au legacy', () => {
-    const host = dom(<NotificationsSection language="fr" view={ready()} disabled={false} onToggle={noop} onRetry={noop} />);
+    const host = dom(<NotificationsSection language="fr" view={ready()} disabled={false} onToggle={noop} onRetry={noop} legacyReachable />);
     expect(linkTo(host, legacyHref('notification'))?.textContent).toContain("Plus d'options");
+  });
+
+  test('hors production : la rangée « plus d’options » devient inerte (#6354)', () => {
+    const host = dom(<NotificationsSection language="fr" view={ready()} disabled={false} onToggle={noop} onRetry={noop} legacyReachable={false} />);
+    expect(linkTo(host, legacyHref('notification'))).toBeNull();
+    expect(host.querySelector('[data-legacy-unavailable="notification"]')).not.toBeNull();
   });
 });
 
 describe('les données', () => {
   test('médias, messages et export mènent au legacy', () => {
-    const host = dom(<DataSection language="fr" />);
+    const host = dom(<DataSection language="fr" legacyReachable />);
     expect(linkTo(host, legacyHref('media'))?.textContent).toContain('Médias');
     expect(linkTo(host, legacyHref('message'))?.textContent).toContain('Messages');
+    expect(host.textContent).toContain('Exporter mes données');
+  });
+
+  test('hors production : aucune des trois rangées ne mène au legacy (#6354)', () => {
+    const host = dom(<DataSection language="fr" legacyReachable={false} />);
+    expect(host.querySelectorAll('a[data-legacy]')).toHaveLength(0);
+    expect(host.querySelectorAll('[data-legacy-unavailable]')).toHaveLength(3);
+    expect(host.textContent).toContain('Médias');
+    expect(host.textContent).toContain('Messages');
     expect(host.textContent).toContain('Exporter mes données');
   });
 });

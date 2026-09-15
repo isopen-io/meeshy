@@ -25,7 +25,8 @@
  * @module services/auth/registration-identity
  */
 
-import { capitalizeName } from '../../utils/normalize';
+import { pseudoRacine } from '@meeshy/shared/utils/registration-identity';
+
 import { candidatsDePseudo } from '../../utils/username-candidates';
 
 /** Longueur maximale d'un `username` — bornée par `registerRequestSchema`. */
@@ -40,77 +41,31 @@ const PSEUDO_MIN = 2;
 const RACINE_AVEC_SUFFIXE = 12;
 /** Combien de tirages avant d'abandonner. Trois collisions de suite sur 10 000 valeurs est déjà improbable. */
 const TIRAGES_MAX = 3;
-/** Le dernier recours quand le nom affiché ET l'adresse ne donnent rien de slugifiable. */
-const PSEUDO_DE_SECOURS = 'user';
-
-/** Les deux colonnes de nom que la ligne `User` exige. */
-export type DerivedNames = {
-  readonly firstName: string;
-  readonly lastName: string;
-};
 
 /**
- * Découpe un nom affiché en prénom / nom.
+ * LA PARTIE PURE EST PARTAGÉE (#6479) — elle n'habite plus ici.
  *
- * **Un mononyme rend `lastName: ''`, et c'est voulu.** Le schéma Prisma déclare
- * `lastName String` — non nullable — donc la colonne EXIGE une valeur ; la
- * chaîne vide est la seule qui dise « cette personne n'a pas de nom de
- * famille » sans en inventer un. Inventer aurait un coût réel : `searchTokensFor`
- * indexerait un mot que personne n'a écrit, et l'annuaire le rendrait.
- * (`capitalizeName('')` et `searchTokensFor({ lastName: '' })` tolèrent la
- * chaîne vide — vérifié, pas supposé.)
+ * `pseudoSlug`, `partieLocale`, `slugDAdresse`, `displayNameDepuisEmail`,
+ * `derivedNames` et `pseudoRacine` sont montés dans `@meeshy/shared` pour que
+ * les CLIENTS puissent montrer, avant l'envoi, le pseudo et le nom affiché que
+ * cette passerelle va créer. Une jumelle côté client aurait dérivé autrement un
+ * jour, et l'écran aurait promis ce que le serveur ne fait pas.
  *
- * Les espaces multiples sont réduits AVANT le découpage : « Ana   María » a
- * deux mots, pas quatre dont deux vides.
+ * Ce qui RESTE ici est ce qui ne peut pas voyager : `generateUsername` négocie
+ * avec la BASE — un pseudo doit être LIBRE, et cette question n'a de réponse
+ * que côté serveur.
  */
-export function derivedNames(displayName: string): DerivedNames {
-  const mots = displayName.trim().split(/\s+/).filter((mot) => mot !== '');
+export {
+  capitalizeName,
+  derivedNames,
+  displayNameDepuisEmail,
+  partieLocale,
+  pseudoRacine,
+  pseudoSlug,
+  slugDAdresse,
+  type DerivedNames,
+} from '@meeshy/shared/utils/registration-identity';
 
-  return {
-    firstName: capitalizeName(mots[0] ?? ''),
-    lastName: capitalizeName(mots.slice(1).join(' ')),
-  };
-}
-
-/**
- * La forme « pseudo » d'une chaîne quelconque.
- *
- * NFD puis retrait des marques combinantes : « Léa » et « Lea » donnent le même
- * slug, sans quoi le pseudo d'une inscription accentuée serait rejeté par
- * `usernamePatternSource` (ASCII strict) juste après avoir été généré.
- */
-export function pseudoSlug(valeur: string): string {
-  return valeur
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/\s+/g, '-')
-    .replace(/[^a-z0-9_-]/g, '')
-    .replace(/[-_]{2,}/g, '-')
-    .replace(/^[-_]+|[-_]+$/g, '')
-    .slice(0, PSEUDO_MAX);
-}
-
-/**
- * La RACINE d'un pseudo généré : le nom affiché, sinon la partie locale de
- * l'adresse, sinon un secours.
- *
- * L'adresse n'est pas un repli cosmétique : un nom affiché entièrement
- * non-latin (« 李雷 », « Пётр ») donne un slug VIDE — les marques combinantes
- * partent, mais les idéogrammes ne sont pas de l'ASCII. Sans ce second essai,
- * toute une population repartirait avec le même `user`.
- */
-export function pseudoRacine(input: { readonly displayName?: string; readonly email?: string }): string {
-  const depuisNom = pseudoSlug(input.displayName ?? '');
-  if (depuisNom.length >= PSEUDO_MIN) return depuisNom;
-
-  const depuisEmail = pseudoSlug((input.email ?? '').split('@')[0] ?? '');
-  if (depuisEmail.length >= PSEUDO_MIN) return depuisEmail;
-
-  return PSEUDO_DE_SECOURS;
-}
-
-/** Ce que la génération a besoin de LIRE — jamais un `PrismaClient` entier. */
 export type UsernameLookup = {
   findMany(args: {
     where: { username: { in: string[]; mode: 'insensitive' } };

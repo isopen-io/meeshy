@@ -132,6 +132,37 @@ export class UserLockedError extends BaseAppError {
   }
 }
 
+/**
+ * Le compte existe, mais il n'a PAS de mot de passe (#6424).
+ *
+ * Un compte né d'une inscription par e-mail seul n'en a aucun : `null` dans la
+ * colonne. Sans cette classe, `verifyPassword(saisie, null)` rendait `false` —
+ * juste, mais indistinguable d'un mot de passe FAUX. Deux conséquences, et la
+ * seconde est un vrai défaut :
+ *
+ * 1. la personne lisait « Identifiants invalides » sans jamais apprendre que sa
+ *    porte est le lien magique — un cul-de-sac dont rien ne sort ;
+ * 2. surtout, chaque tentative COMPTAIT : cinq essais verrouillaient pour
+ *    quinze minutes un compte dont le mot de passe n'existe pas, donc un compte
+ *    que personne ne peut deviner. Le verrou punissait la seule victime possible.
+ *
+ * ## Ce que ce refus APPREND, et pourquoi c'est assumé
+ *
+ * Il dit « cette adresse a un compte, sans mot de passe ». L'existence d'un
+ * compte est déjà apprenable par `POST /register` (`EMAIL_TAKEN`, oracle
+ * documenté et payant, #4158) ; ce qui s'y ajoute est qu'il n'y a AUCUN secret
+ * à deviner — une information qui décourage l'attaque plutôt que de l'armer.
+ * Le limiteur de `POST /login` la borne comme il borne tout le reste.
+ *
+ * 401, et non 403 : c'est un refus d'AUTHENTIFICATION dont le remède est de se
+ * présenter autrement, pas une permission manquante.
+ */
+export class PasswordNotSetError extends BaseAppError {
+  constructor(message = "Ce compte n'a pas encore de mot de passe — connectez-vous par lien magique") {
+    super(message, 401, 'PASSWORD_NOT_SET');
+  }
+}
+
 export class UserInactiveError extends BaseAppError {
   constructor(message = 'Compte inactif ou désactivé') {
     super(message, 403, 'USER_INACTIVE');
@@ -164,6 +195,29 @@ export class RateLimitError extends BaseAppError {
 export class TooManyLoginAttemptsError extends RateLimitError {
   constructor(retryAfter: number) {
     super(retryAfter, `Trop de tentatives de connexion échouées. Réessayez dans ${retryAfter} secondes`, 'TOO_MANY_LOGIN_ATTEMPTS');
+  }
+}
+
+// ========== TÉLÉVERSEMENT (#6604) ==========
+//
+// Un fichier refusé (type ou taille) est une erreur de DEMANDE, jamais de
+// SERVEUR — même famille que #6557 (`postId` malformé → 404, jamais 500).
+// `UploadProcessor.validateFile` rendait un verdict `{valid:false, error}`
+// sans code HTTP ; `uploadFile`/`uploadEncryptedFile` le traduisaient en
+// `throw new Error(...)` NU. Tout appelant qui n'avale pas cette exception
+// (contrairement à `uploadMultiple`, qui l'avale PAR FICHIER pour rester
+// résilient à un échec de traitement isolé) la laissait dégénérer en 500
+// générique au gestionnaire global, faute de `err.statusCode`.
+
+export class UnsupportedMediaTypeError extends BaseAppError {
+  constructor(message: string) {
+    super(message, 415, 'UNSUPPORTED_MEDIA_TYPE');
+  }
+}
+
+export class PayloadTooLargeError extends BaseAppError {
+  constructor(message: string) {
+    super(message, 413, 'FILE_TOO_LARGE');
   }
 }
 

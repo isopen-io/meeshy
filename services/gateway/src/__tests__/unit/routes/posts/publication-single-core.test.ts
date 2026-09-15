@@ -250,7 +250,7 @@ async function buildApp(): Promise<Harness> {
   const requiredAuth = async (req: FastifyRequest) => {
     (req as any).authContext = {
       isAuthenticated: true,
-      registeredUser: { id: USER_ID, role: 'USER', username: 'bob' },
+      registeredUser: { emailVerifiedAt: new Date(), id: USER_ID, role: 'USER', username: 'bob' },
     };
   };
 

@@ -84,7 +84,7 @@ export function MagicLinkValidation({
           <h1 className="text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
             Lien invalide ou expiré
           </h1>
-          <p style={{ color: 'var(--color-ios-ink-2)' }}>Un lien magique expire après 10 minutes et ne sert qu’une fois.</p>
+          <p style={{ color: 'var(--color-ios-ink-2)' }}>Un lien de connexion expire après 10 minutes et ne sert qu’une fois.</p>
           <div className="grid gap-3">
             <Link
               to="magicLink"

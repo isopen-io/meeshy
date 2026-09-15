@@ -9,15 +9,23 @@ struct ActiveSessionsView: View {
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
     @StateObject private var viewModel = ActiveSessionsViewModel()
+    /// Référence stable, jamais observée par la racine : seul l'en-tête se
+    /// re-rend au fil du défilement (même dispositif que Réglages).
+    @State private var scrollRelay = ScrollOffsetRelay()
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .top) {
             theme.backgroundGradient.ignoresSafeArea()
 
+            // L'en-tête partagé est monté À LA MAIN plutôt que par
+            // `CollapsibleHeaderPage` : l'écran bascule entre chargement, vide et
+            // liste, et seul ce dernier état défile. Le retour en verre (#6481)
+            // doit rester présent dans les trois.
             VStack(spacing: 0) {
-                header
                 content
             }
+
+            header
         }
         .alert(
             String(localized: "sessions_error_title", defaultValue: "Erreur"),
@@ -33,34 +41,16 @@ struct ActiveSessionsView: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack {
-            Button {
-                HapticFeedback.light()
-                dismiss()
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "chevron.backward")
-                        .font(MeeshyFont.relative(14, weight: .semibold))
-                    Text(String(localized: "sessions_back", defaultValue: "Retour"))
-                        .font(MeeshyFont.relative(15, weight: .medium))
-                }
-                .foregroundColor(MeeshyColors.indigo500)
-            }
-
-            Spacer()
-
-            Text(String(localized: "sessions_title", defaultValue: "Sessions actives"))
-                .font(MeeshyFont.relative(17, weight: .bold))
-                .foregroundColor(theme.textPrimary)
-                // Titre d'écran → trait En-tête pour le rotor VoiceOver (168i, parité 142i/164i).
-                .accessibilityAddTraits(.isHeader)
-
-            Spacer()
-
-            Color.clear.frame(width: 60, height: 24)
+        ScrollOffsetReader(relay: scrollRelay) { offset in
+            CollapsibleHeader(
+                title: String(localized: "sessions_title", defaultValue: "Sessions actives"),
+                scrollOffset: offset,
+                onBack: { dismiss() },
+                titleColor: theme.textPrimary,
+                backArrowColor: MeeshyColors.indigo500,
+                backgroundColor: theme.backgroundPrimary
+            )
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
     }
 
     // MARK: - Content
@@ -68,12 +58,17 @@ struct ActiveSessionsView: View {
     @ViewBuilder
     private var content: some View {
         if viewModel.isLoading {
+            Color.clear.frame(height: CollapsibleHeaderMetrics.expandedHeight)
             Spacer()
             ProgressView()
                 .tint(MeeshyColors.indigo500)
             Spacer()
         } else if viewModel.sessions.isEmpty {
+            Color.clear.frame(height: CollapsibleHeaderMetrics.expandedHeight)
             emptyState
+                // Un état qui ne défile pas rend l'en-tête déplié : le relais
+                // pourrait garder le repli de la liste quittée.
+                .onAppear { scrollRelay.offset = 0 }
         } else {
             sessionsList
         }
@@ -101,6 +96,16 @@ struct ActiveSessionsView: View {
 
     private var sessionsList: some View {
         ScrollView(showsIndicators: false) {
+            GeometryReader { geo in
+                Color.clear.preference(
+                    key: ScrollOffsetPreferenceKey.self,
+                    value: geo.frame(in: .named("scroll")).minY
+                )
+            }
+            .frame(height: 0)
+
+            Color.clear.frame(height: CollapsibleHeaderMetrics.expandedHeight)
+
             VStack(spacing: 16) {
                 ForEach(viewModel.sessions) { session in
                     sessionRow(session)
@@ -115,6 +120,9 @@ struct ActiveSessionsView: View {
             .padding(.horizontal, 16)
             .padding(.top, 16)
         }
+        .coordinateSpace(name: "scroll")
+        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollRelay.offset = $0 }      // iOS 16–17
+        .trackScrollContentOffset { scrollRelay.offset = -$0 }                               // iOS 18+
     }
 
     // MARK: - Session Row

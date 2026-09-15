@@ -404,6 +404,91 @@ describe('MediaViewer — la barre de lecture d’une vidéo (#6359)', () => {
   });
 });
 
+describe('MediaViewer — le double tap latéral, ±10 s comme iOS (#6369)', () => {
+  function stageWithRect(body: HTMLElement, width: number): HTMLElement {
+    const stage = currentPage(body).firstElementChild as HTMLElement;
+    stage.getBoundingClientRect = () => ({ left: 0, top: 0, width, height: 600, right: width, bottom: 600, x: 0, y: 0, toJSON: () => ({}) });
+    return stage;
+  }
+
+  async function mountActiveVideo(duration: number, position = 60): Promise<{ readonly body: HTMLElement; readonly video: HTMLVideoElement }> {
+    const items = attachmentsOf(MEDIA_GRID_TRIPLE_WITNESS_ID);
+    const videoIndex = items.findIndex((a) => a.mimeType.startsWith('video/'));
+    const body = mount({ items, startIndex: videoIndex, onClose: () => {} });
+    const video = currentPage(body).querySelector('video')!;
+    await act(async () => {
+      Object.defineProperty(video, 'duration', { value: duration, configurable: true });
+      Object.defineProperty(video, 'currentTime', { value: position, configurable: true, writable: true });
+      video.dispatchEvent(new Event('loadedmetadata'));
+      // `lateralSeek` lit `playback.position` — le hook ne le connaît QUE via
+      // `timeupdate` (`use-media-playback.ts`, `emitPosition`) : poser
+      // `currentTime` sans l'émettre laisserait la position à zéro.
+      video.dispatchEvent(new Event('timeupdate'));
+    });
+    return { body, video };
+  }
+
+  const doubleClickAt = (stage: HTMLElement, clientX: number): void => {
+    stage.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, clientX, clientY: 300 }));
+  };
+
+  test('un double tap au tiers GAUCHE recule la lecture de 10 s', async () => {
+    const { body, video } = await mountActiveVideo(180);
+    const stage = stageWithRect(body, 300);
+
+    await act(async () => {
+      doubleClickAt(stage, 40);
+    });
+
+    expect(video.currentTime).toBe(50);
+  });
+
+  test('un double tap au tiers DROIT avance la lecture de 10 s', async () => {
+    const { body, video } = await mountActiveVideo(180);
+    const stage = stageWithRect(body, 300);
+
+    await act(async () => {
+      doubleClickAt(stage, 260);
+    });
+
+    expect(video.currentTime).toBe(70);
+  });
+
+  test('un double tap au CENTRE ne déplace pas la lecture — aucun double tap n’y est armé, le tap simple garde son effet immédiat', async () => {
+    const { body, video } = await mountActiveVideo(180);
+    const stage = stageWithRect(body, 300);
+
+    await act(async () => {
+      doubleClickAt(stage, 150);
+    });
+
+    expect(video.currentTime).toBe(60);
+  });
+
+  test('le saut RESTE borné aux extrémités de la piste', async () => {
+    const { body, video } = await mountActiveVideo(65, 4);
+    const stage = stageWithRect(body, 300);
+
+    await act(async () => {
+      doubleClickAt(stage, 40);
+    });
+
+    expect(video.currentTime).toBe(0);
+  });
+
+  test('CONTRE-ÉPREUVE : un double tap latéral sur une page IMAGE ne bouge rien — sans durée, aucune zone ne se réclame, le zoom garde le geste', () => {
+    const items = attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID);
+    const body = mount({ items, startIndex: 0, onClose: () => {} });
+    const img = currentPage(body).querySelector('img')!;
+
+    act(() => {
+      img.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, clientX: 20 }));
+    });
+
+    expect(img.style.transform).toBe('scale(2.5)');
+  });
+});
+
 describe('MediaViewer — la vidéo rend un <video> réel avec poster, jamais null', () => {
   test('media-12 : la page active sur l’index vidéo porte un <video poster>', () => {
     const items = attachmentsOf(MEDIA_GRID_TRIPLE_WITNESS_ID); // [image, image, vidéo]

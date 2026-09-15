@@ -341,7 +341,7 @@ extension iPadRootView {
 
         case .securityAlert, .loginNewDevice, .legacySystemAlert,
              .passwordChanged, .twoFactorEnabled, .twoFactorDisabled,
-             .system, .maintenance, .updateAvailable, .voiceCloneReady:
+             .system, .maintenance, .updateAvailable, .voiceCloneReady, .reportResolved:
             // Pas d'entité cible : ouvrir le panneau notifications plutôt
             // qu'un tap muet.
             rightPanelRoute = .notifications
@@ -401,7 +401,7 @@ extension iPadRootView {
 
         case .securityAlert, .loginNewDevice, .legacySystemAlert,
              .passwordChanged, .twoFactorEnabled, .twoFactorDisabled,
-             .system, .maintenance, .updateAvailable, .voiceCloneReady:
+             .system, .maintenance, .updateAvailable, .voiceCloneReady, .reportResolved:
             rightPanelRoute = .notifications
 
         default:
@@ -533,7 +533,7 @@ extension iPadRootView {
 
         case .securityAlert, .loginNewDevice, .legacySystemAlert,
              .passwordChanged, .twoFactorEnabled, .twoFactorDisabled,
-             .system, .maintenance, .updateAvailable, .voiceCloneReady:
+             .system, .maintenance, .updateAvailable, .voiceCloneReady, .reportResolved:
             // Pas d'entité cible : ouvrir le panneau notifications plutôt
             // qu'un tap muet.
             rightPanelRoute = .notifications

@@ -74,6 +74,13 @@ export const ALLOWED = new Map([
       'défauts 1/8 — `check-list-actions.mjs`) : le fondu de sourdine vit en ' +
       'style INLINE (`opacity`, prop `Avatar`), jamais dans la feuille',
   ],
+  [
+    'sync-pill',
+    'crochet de sélection des gates (`syncPillOverlap`, `document.querySelector' +
+      "('.sync-pill')`) — sa cote de pose (#6401, #6387) vit en style INLINE " +
+      '(`syncPillTop()`), jamais dans la feuille, depuis que cette cote dépend ' +
+      'de la route',
+  ],
 ]);
 
 export const sourceFiles = (dir) =>
