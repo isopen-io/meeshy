@@ -249,3 +249,50 @@ struct GalleryScenePlayPause: View {
                      defaultValue: "Tout reprendre", bundle: .main))
     }
 }
+
+// MARK: - La scène ouverte
+
+extension ConversationMediaGalleryView {
+
+    /// **La page d'une scène**, construite ici plutôt que dans le fichier racine
+    /// (1 020 lignes) : tout ce qu'elle lit est déjà visible des extensions. La
+    /// fermeture vient de l'appelant — `dismissGallery()` arrête aussi la piste
+    /// vidéo, et elle est privée au fichier racine.
+    func scenePage(_ scene: GallerySceneItem,
+                   attachment: MessageAttachment,
+                   distance: Int,
+                   onDismiss: @escaping () -> Void) -> some View {
+        GalleryScenePage(
+            item: scene,
+            stage: stage(for: attachment),
+            presentation: stagePresentation,
+            accentColor: accentColor,
+            preferredContentLanguages: sceneContext?.playerLanguages ?? [],
+            isActive: distance == 0,
+            isPlaying: scenePlaying,
+            rendersPlayer: GalleryRenderWindow.rendersFullPixels(distance: distance),
+            isEntry: attachment.id == startAttachmentId,
+            accessibilityLabel: sceneAccessibilityLabel(attachment),
+            onEnterStage: { onEnterStage($0) },
+            onDismiss: onDismiss
+        )
+        .equatable()
+    }
+
+    /// **La scène de la page OUVERTE, ou `nil`** — la seule question que le
+    /// transport, la pastille, le menu et le play/pause posent à la nature d'une
+    /// page (#6709). Elle se lit sur `sceneContext`, jamais sur le MIME de la
+    /// pièce synthétique.
+    var currentScene: GallerySceneItem? {
+        currentAttachment.flatMap { sceneContext?.scenes[$0.id] }
+    }
+
+    /// **Ce que VoiceOver dit d'une page scène** : sa légende quand elle en a
+    /// une, sinon « Scène partagée par … » — la page ne doit jamais être muette.
+    func sceneAccessibilityLabel(_ attachment: MessageAttachment) -> String {
+        if let legende = captionMap[attachment.id], !legende.isEmpty { return legende }
+        return String(format: String(localized: "a11y.feed.post.scene",
+                                     defaultValue: "Scène partagée par %@", bundle: .main),
+                      senderInfoMap[attachment.id]?.senderName ?? "")
+    }
+}

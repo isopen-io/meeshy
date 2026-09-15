@@ -321,10 +321,13 @@ extension ConversationMediaGalleryView {
     /// **L'état d'immersion entre ici** (#6142) : `framing` le projette sur le
     /// solveur, donc franchir une porte change des COTES. Un état qui n'aurait
     /// commandé que du chrome aurait laissé la loi de cadrage sans interrupteur.
+    ///
+    /// **Une page scène reçoit le rapport de SA scène** (#6709) : sa pièce est
+    /// synthétique, sans dimensions — `mediaRatio(of:scenes:)` le sait.
     func stage(for attachment: MessageAttachment) -> MediaStageFraming.Result {
         MediaGalleryStage.resolve(
             viewport: DeviceLayout.windowSize,
-            mediaRatio: MediaGalleryStage.ratio(of: attachment),
+            mediaRatio: MediaGalleryStage.mediaRatio(of: attachment, scenes: sceneContext?.scenes ?? [:]),
             presentation: stagePresentation.framing,
             corridors: stageCorridors
         )

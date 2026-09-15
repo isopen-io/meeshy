@@ -147,6 +147,16 @@ struct ConversationMediaGalleryView: View {
     /// affichent pas.
     var onReactToMedia: ((MessageAttachment, String) -> Void)?
 
+    /// **La publication dont la galerie montre les SCÈNES** (#6709) — `nil` hors
+    /// d'un post. Une pièce dont l'identité est dans `scenes` est une page scène
+    /// (`+ScenePage.swift`) ; toutes les autres restent des pièces jointes.
+    var sceneContext: GallerySceneContext?
+
+    /// **« Répondre » existe-t-il sur CETTE pièce ?** (#6710) `nil` ⇒ sur toutes.
+    /// Un média joint à un commentaire ne se cite pas depuis un post : le geste
+    /// n'y existe pas (loi 4), au lieu d'un bouton qui ne ferait rien.
+    var replyableMedia: ((MessageAttachment) -> Bool)?
+
     /// `id → position`, construite une fois à la présentation. Remplace les
     /// `firstIndex(where:)` linéaires qui tournaient à chaque changement de page
     /// ET à chaque fermeture (`stopActiveVideoAudio`).
@@ -211,6 +221,12 @@ struct ConversationMediaGalleryView: View {
     /// #6751 — la transition clavier ANNONCÉE, seule source de sa hauteur.
     @State private var replyKeyboard: KeyboardTransition?
 
+    /// **La commande de lecture de la scène ouverte** (#6709) — l'équivalent,
+    /// pour une scène, de l'état de lecture du player partagé. Levée à chaque
+    /// page : un plein écran est une demande de voir, y compris ce qui bouge.
+    /// `internal` — `+Presentation.swift` et `+Transport.swift` l'écrivent.
+    @State var scenePlaying = true
+
     init(
         allAttachments: [MessageAttachment],
         startAttachmentId: String,
@@ -222,7 +238,9 @@ struct ConversationMediaGalleryView: View {
         onReplyToMedia: ((MessageAttachment) -> Void)? = nil,
         onSendReplyToMedia: ((MessageAttachment, String, String) -> Void)? = nil,
         replyCitation: ((MessageAttachment) -> ReplyReference?)? = nil,
-        onReactToMedia: ((MessageAttachment, String) -> Void)? = nil
+        onReactToMedia: ((MessageAttachment, String) -> Void)? = nil,
+        replyableMedia: ((MessageAttachment) -> Bool)? = nil,
+        sceneContext: GallerySceneContext? = nil
     ) {
         self.allAttachments = allAttachments
         self.startAttachmentId = startAttachmentId
@@ -235,6 +253,8 @@ struct ConversationMediaGalleryView: View {
         self.onSendReplyToMedia = onSendReplyToMedia
         self.replyCitation = replyCitation
         self.onReactToMedia = onReactToMedia
+        self.replyableMedia = replyableMedia
+        self.sceneContext = sceneContext
         let positions = Dictionary(
             allAttachments.enumerated().map { ($0.element.id, $0.offset) },
             uniquingKeysWith: { first, _ in first }
@@ -498,6 +518,12 @@ struct ConversationMediaGalleryView: View {
         // au-dessus, et pour la même raison.
         if oldID != newID, reactionBarOpen { reactionBarOpen = false }
 
+        // **Une scène atteinte au glissement se LIT** (#6709) : la commande se
+        // relève à chaque page, comme une vidéo active part d'elle-même
+        // (`GalleryVideoPage`). La pause posée sur la scène précédente ne suit pas
+        // le lecteur sur la suivante.
+        if oldID != newID, !scenePlaying { scenePlaying = true }
+
         if let oldID, oldID != newID, let oldIndex = indexByID[oldID] {
             let oldAtt = allAttachments[oldIndex]
             if oldAtt.type == .video && videoManager.activeURL == oldAtt.fileUrl {
@@ -553,7 +579,15 @@ struct ConversationMediaGalleryView: View {
             .equatable()
 
         default:
-            Color.black
+            // **Une scène de post est une pièce SYNTHÉTIQUE** (#6709) : son MIME
+            // n'est ni image ni vidéo, donc elle arrive ici. Sa nature se lit sur
+            // `sceneContext`, jamais sur le MIME ; toute autre pièce reste noire.
+            if let scene = sceneContext?.scenes[attachment.id] {
+                scenePage(scene, attachment: attachment, distance: distance,
+                          onDismiss: { dismissGallery() })
+            } else {
+                Color.black
+            }
         }
     }
 
@@ -737,7 +771,28 @@ struct ConversationMediaGalleryView: View {
                 // par l'ombre de `MediaCaptionOverlay`, jamais par la place
                 // qu'on prendrait à quelqu'un d'autre.
                 bottomMetadataOverlay(att)
-                if let caption = servedCaption(att.id) {
+                // **La légende d'une SCÈNE se traduit par sa propre source**
+                // (#6709, #6504) : texte du post ou légende du média, chacun par
+                // sa route, avec LA feuille de traduction des messages. Montée
+                // avec l'identité de la pièce : la langue choisie ne suit pas le
+                // lecteur sur la page suivante, qui porte un autre contenu.
+                if let context = sceneContext, let anchor = context.captions[att.id],
+                   let texte = captionMap[att.id] {
+                    GallerySceneCaptionBlock(
+                        post: context.post,
+                        anchor: anchor,
+                        fallbackText: texte,
+                        preferredLanguages: context.captionLanguages,
+                        isExpanded: captionExpanded,
+                        maxExpandedHeight: cadreCaptionMaxHeight,
+                        onToggle: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                captionExpanded.toggle()
+                            }
+                        }
+                    )
+                    .id(att.id)
+                } else if let caption = servedCaption(att.id) {
                     captionLanguageRow(att.id)
                     captionOverlay(caption)
                 }
@@ -865,7 +920,9 @@ struct ConversationMediaGalleryView: View {
         let route = FullscreenReplyRoute.route(
             isProtected: ComposableAttachment.isProtected(att),
             hasInPlaceComposer: onSendReplyToMedia != nil && replyCitation != nil,
-            hasThreadHandOff: onReplyToMedia != nil
+            // `replyableMedia` (#6710) : un hôte de post ne relaie que ce qu'il
+            // sait citer — jamais un média joint à un commentaire.
+            hasThreadHandOff: onReplyToMedia != nil && (replyableMedia?(att) ?? true)
         )
         if route != .none {
             Button {
@@ -952,30 +1009,35 @@ struct ConversationMediaGalleryView: View {
                 }
                 .accessibilityElement(children: .contain)
             }
-            HStack(spacing: 8) {
-                // Glyphe de type média décoratif (apparié aux dimensions) —
-                // scale avec le texte mais masqué de VoiceOver.
-                Image(systemName: att.type == .video ? "video.fill" : "photo")
-                    .font(MeeshyFont.relative(11))
-                    .foregroundColor(.white.opacity(0.6))
-                    .accessibilityHidden(true)
-                if let w = att.width, let h = att.height, w > 0, h > 0 {
-                    Text("\(w) \u{00D7} \(h)")
-                        .font(MeeshyFont.relative(11, weight: .medium, design: .monospaced))
+            // **Une scène n'a ni format, ni dimensions, ni poids** (#6709) : sa
+            // pièce est synthétique, et la ligne n'y montrerait qu'un glyphe
+            // « photo » qui ment sur ce qu'on regarde. L'auteur et sa date restent.
+            if sceneContext?.scenes[att.id] == nil {
+                HStack(spacing: 8) {
+                    // Glyphe de type média décoratif (apparié aux dimensions) —
+                    // scale avec le texte mais masqué de VoiceOver.
+                    Image(systemName: att.type == .video ? "video.fill" : "photo")
+                        .font(MeeshyFont.relative(11))
                         .foregroundColor(.white.opacity(0.6))
+                        .accessibilityHidden(true)
+                    if let w = att.width, let h = att.height, w > 0, h > 0 {
+                        Text("\(w) \u{00D7} \(h)")
+                            .font(MeeshyFont.relative(11, weight: .medium, design: .monospaced))
+                            .foregroundColor(.white.opacity(0.6))
+                    }
+                    if att.fileSize > 0 {
+                        Text(att.fileSizeFormatted)
+                            .font(MeeshyFont.relative(11, weight: .medium))
+                            .foregroundColor(.white.opacity(0.5))
+                    }
+                    Spacer()
                 }
-                if att.fileSize > 0 {
-                    Text(att.fileSizeFormatted)
-                        .font(MeeshyFont.relative(11, weight: .medium))
-                        .foregroundColor(.white.opacity(0.5))
-                }
-                Spacer()
+                // Regroupe dimensions + poids en un seul arrêt VoiceOver et
+                // remplace le « × » (lu « multiplication ») par un « par » localisé.
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(mediaMetadataAccessibilityLabel(att))
+                .accessibilityHidden(mediaMetadataAccessibilityLabel(att).isEmpty)
             }
-            // Regroupe dimensions + poids en un seul arrêt VoiceOver et remplace
-            // le « × » (lu « multiplication ») par un « par » localisé.
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(mediaMetadataAccessibilityLabel(att))
-            .accessibilityHidden(mediaMetadataAccessibilityLabel(att).isEmpty)
         }
         .padding(.horizontal, 16)
         .padding(.top, 12)

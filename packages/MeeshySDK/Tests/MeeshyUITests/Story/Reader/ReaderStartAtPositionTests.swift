@@ -171,8 +171,8 @@ final class ReaderStartAtPositionTests: XCTestCase {
         carte.canvas()?.simulateTickAt(seconds: 4.2)
         carte.tearDown()
 
-        // Ce que fait l'hôte du détail (`SocialSceneFullscreenView`) à son
-        // apparition : il lit la mémoire et la passe en `startAt`.
+        // Ce que fait la page scène du plein écran (`GalleryScenePage`, #6709) à
+        // son apparition : elle lit la mémoire et la passe en `startAt`.
         let detail = Stage(startAt: 0, positionKey: Self.cle)
         defer { detail.tearDown() }
         detail.publish(startAt: ScenePlaybackPositions.shared.position(for: Self.cle) ?? 0,
