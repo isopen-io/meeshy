@@ -191,16 +191,30 @@ nonisolated struct PostGalleryLot {
     /// serveur refuserait la citation, donc `nil` — et la page n'offre pas le
     /// geste (loi 4). Une scène sans média n'a rien à citer.
     func quotation(for pieceId: String, in post: FeedPost) -> CommentQuotedMedia? {
-        let mediaId = scenes[pieceId].map(\.mediaId) ?? pieceId
-        guard let mediaId, let media = post.media.first(where: { $0.id == mediaId }) else { return nil }
+        guard let mediaId = postMediaId(for: pieceId, in: post),
+              let media = post.media.first(where: { $0.id == mediaId }) else { return nil }
         return CommentQuotedMedia(postMediaId: media.id,
                                   kind: CommentQuotedMedia.Kind(rawValue: media.type.rawValue) ?? .file,
                                   media: media)
     }
 
+    /// **Le média du POST que cette page montre** — son propre média pour une page
+    /// média, celui que la scène montre pour une page scène. `nil` pour un média
+    /// joint à un commentaire ou une scène sans média : ni la citation ni « Créer
+    /// avec ce média » n'y ont de pièce. Site unique des deux gestes.
+    func postMediaId(for pieceId: String, in post: FeedPost) -> String? {
+        let candidat = scenes[pieceId].map(\.mediaId) ?? pieceId
+        guard let candidat, post.media.contains(where: { $0.id == candidat }) else { return nil }
+        return candidat
+    }
+
+    /// **« Créer avec CE média »** (#6709) — la cible du média que la page montre,
+    /// par la règle d'offre unique (`ComposerSeedTarget(post:mediaId:)`). Recette du
+    /// 2026-09-16 : sur les posts à plusieurs scènes, la colonne n'offrait que
+    /// « Répondre », parce que l'offre était résolue pour le POST entier.
     @MainActor
     func composeTarget(for pieceId: String, in post: FeedPost) -> ComposerSeedTarget? {
-        nil
+        postMediaId(for: pieceId, in: post).flatMap { ComposerSeedTarget(post: post, mediaId: $0) }
     }
 
     /// L'identité d'une page scène. L'INDEX et non l'id de scène :

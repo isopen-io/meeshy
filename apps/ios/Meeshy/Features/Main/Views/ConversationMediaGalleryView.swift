@@ -157,6 +157,17 @@ struct ConversationMediaGalleryView: View {
     /// n'y existe pas (loi 4), au lieu d'un bouton qui ne ferait rien.
     var replyableMedia: ((MessageAttachment) -> Bool)?
 
+    /// **« Créer avec ce média » existe-t-il sur CETTE pièce ?** (#6709) `nil` ⇒ sur
+    /// toutes. Un post offre la pièce qu'on REGARDE — une scène et son média, jamais
+    /// un média de commentaire : sans cible, pas de bouton (loi 4).
+    var composableMedia: ((MessageAttachment) -> Bool)?
+
+    /// **Où la colonne d'actions est posée dans le cadre** (#6709) — mesurée, parce
+    /// que la hauteur du bloc auteur et légende qui la porte change avec la page.
+    /// Elle décide du fond que la colonne a sous elle
+    /// (`MediaGalleryStage.columnBackdrop`). `internal` : `+Geometry.swift` la lit.
+    @State var actionColumnFrame: CGRect = .zero
+
     /// `id → position`, construite une fois à la présentation. Remplace les
     /// `firstIndex(where:)` linéaires qui tournaient à chaque changement de page
     /// ET à chaque fermeture (`stopActiveVideoAudio`).
@@ -240,6 +251,7 @@ struct ConversationMediaGalleryView: View {
         replyCitation: ((MessageAttachment) -> ReplyReference?)? = nil,
         onReactToMedia: ((MessageAttachment, String) -> Void)? = nil,
         replyableMedia: ((MessageAttachment) -> Bool)? = nil,
+        composableMedia: ((MessageAttachment) -> Bool)? = nil,
         sceneContext: GallerySceneContext? = nil
     ) {
         self.allAttachments = allAttachments
@@ -254,6 +266,7 @@ struct ConversationMediaGalleryView: View {
         self.replyCitation = replyCitation
         self.onReactToMedia = onReactToMedia
         self.replyableMedia = replyableMedia
+        self.composableMedia = composableMedia
         self.sceneContext = sceneContext
         let positions = Dictionary(
             allAttachments.enumerated().map { ($0.element.id, $0.offset) },
@@ -845,14 +858,25 @@ struct ConversationMediaGalleryView: View {
                 mediaActions(allAttachments[currentIndex])
             }
         }
+        // #6709 — la colonne MESURE sa place dans le cadre : c'est elle, et non le
+        // média de la page, qui dit ce qui est peint sous ses boutons.
+        .onGeometryChange(for: CGRect.self) { proxy in
+            proxy.frame(in: .named(MediaGalleryStage.cadreSpace))
+        } action: { cadre in
+            actionColumnFrame = cadre
+        }
         .frame(maxWidth: .infinity, alignment: .trailing)
         .padding(.trailing, MediaGalleryStage.gutter)
-        // #6693 — la colonne est POSÉE sur le média (#6161) : sa teinte suit la
-        // luminance de la pièce affichée, et non le blanc d'office (1,83:1 sur une
-        // vidéo violette).
+        // #6693 — la colonne est POSÉE sur le cadre (#6161) : sa teinte suit la
+        // luminance de ce qu'elle a SOUS elle (#6709) — le média, ou la bande du
+        // hors-champ quand le cadre est plus haut que lui —, jamais le blanc
+        // d'office (1,83:1 sur une vidéo violette).
         .mediaChromeTinted()
         .mediaChromeScheme(for: currentIndex < allAttachments.count
-                           ? .attachment(allAttachments[currentIndex]) : nil)
+                           ? MediaGalleryStage.columnBackdrop(for: allAttachments[currentIndex],
+                                                              stage: currentStage,
+                                                              columnFrame: actionColumnFrame)
+                           : nil)
     }
 
     /// Les trois actions, chacune derrière sa propre closure optionnelle : un
@@ -956,7 +980,9 @@ struct ConversationMediaGalleryView: View {
                          defaultValue: "Cite le message qui porte ce média et revient au composer.",
                          bundle: .main))
         }
-        if let onComposeWithMedia {
+        // `composableMedia` (#6709) : un hôte de post n'offre « Créer avec ce média »
+        // que sur une pièce qui a sa cible — jamais un bouton qui n'armerait rien.
+        if let onComposeWithMedia, composableMedia?(att) ?? true {
             Button {
                 HapticFeedback.light()
                 onComposeWithMedia(att)

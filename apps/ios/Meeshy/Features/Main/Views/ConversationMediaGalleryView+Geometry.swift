@@ -227,10 +227,43 @@ enum MediaGalleryStage {
         return StoryLetterboxFill.source(thumbHash: thumbHash)
     }
 
+    /// **Le nom de l'espace du CADRE** — celui où la colonne d'actions mesure sa
+    /// place (#6709). Le média y est centré par construction : les pages le posent
+    /// au centre de leur cadre.
+    static let cadreSpace = "media.stage.cadre"
+
+    /// **Ce que la colonne d'actions a SOUS elle** (#6709, recette du 2026-09-16).
+    ///
+    /// La colonne se pose sur le cadre (#6161), et le cadre ne montre pas que le
+    /// média : quand il est plus haut que lui — le plancher de hauteur sous un
+    /// panorama —, elle tombe dans la BANDE du hors-champ. Sa teinte (#6693) doit
+    /// suivre ce qui y est peint, jamais un média qu'elle ne couvre pas : sur la page
+    /// panorama 4:1 d'un post, teintée d'après la vignette claire du panorama, son
+    /// glyphe sombre se lisait à 1,16:1 sur la bande noire.
+    ///
+    /// - posée sur le média (son centre dans le média centré du cadre) : le média ;
+    /// - dans la bande habillée : l'empreinte seule — c'est elle que la bande peint
+    ///   (`backdrop(stage:thumbHash:)`), jamais la vignette nette ;
+    /// - dans la bande nue : `nil`, donc le schéma sombre de la loi — un glyphe clair
+    ///   sur le noir.
+    ///
+    /// Avant sa première mesure, rien ne dit où est la colonne : elle garde le fond du
+    /// média plutôt que de basculer le temps d'une passe.
     static func columnBackdrop(for attachment: MessageAttachment,
                                stage: MediaStageFraming.Result,
                                columnFrame: CGRect) -> MediaChromeBackdrop? {
-        .attachment(attachment)
+        guard !columnFrame.isEmpty else { return .attachment(attachment) }
+        let media = CGRect(x: (stage.frame.width - stage.media.width) / 2,
+                           y: (stage.frame.height - stage.media.height) / 2,
+                           width: stage.media.width,
+                           height: stage.media.height)
+        guard !media.contains(CGPoint(x: columnFrame.midX, y: columnFrame.midY)) else {
+            return .attachment(attachment)
+        }
+        guard case .thumbHash(let empreinte) = backdrop(stage: stage, thumbHash: attachment.thumbHash) else {
+            return nil
+        }
+        return MediaChromeBackdrop(key: attachment.id, thumbHash: empreinte, bitmapURL: nil)
     }
 
     private static func freeRegionRatio(viewport: CGSize,
@@ -394,6 +427,10 @@ extension ConversationMediaGalleryView {
                 cadreOverlay
             }
         }
+        // L'espace où la colonne mesure sa place (#6709) : le cadre lui-même, où le
+        // média est centré — `MediaGalleryStage.columnBackdrop` y lit ce qui est sous
+        // elle.
+        .coordinateSpace(name: MediaGalleryStage.cadreSpace)
         .frame(width: currentStage.frame.width, height: currentStage.frame.height)
         .clipShape(RoundedRectangle(cornerRadius: currentStage.cornerRadius, style: .continuous))
         .frame(maxWidth: .infinity, maxHeight: .infinity)

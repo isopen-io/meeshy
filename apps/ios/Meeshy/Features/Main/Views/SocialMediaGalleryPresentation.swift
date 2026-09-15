@@ -97,18 +97,20 @@ private struct SocialMediaGalleryLayer: ViewModifier {
     @State private var pendingCompose: ComposerSeedTarget?
     @State private var composeTarget: ComposerSeedTarget?
 
-    /// **La règle d'offre décide, pas la galerie** (critère 2 de #6085). Un post
-    /// à deux photos, un média sans URL, un post vide : la cible ne se construit
-    /// pas, et sans cible il n'y a aucun bouton.
-    private var composable: ComposerSeedTarget? {
-        guard storyComposer != nil, let post else { return nil }
-        guard let cible = ComposerSeedTarget(post: post), cible.attachment != nil else { return nil }
-        // **Un bouton qui dit « avec CE média » doit en emporter un** (loi 4).
-        // La règle d'offre rend un plan SANS média quand le porteur en a
-        // plusieurs — le texte reste semable, et c'est juste pour un menu de
-        // message. Ici le libellé promet la pièce : sans elle, le contrôle
-        // mentirait au moment précis où l'utilisateur la regarde.
-        return cible
+    /// **« Composer » s'arme sur la PIÈCE ouverte** (#6709, recette du 2026-09-16).
+    ///
+    /// La couche résolvait la règle d'offre pour le POST entier (critère 2 de
+    /// #6085) : un post à plusieurs scènes n'offrait donc aucune pièce, et la
+    /// colonne n'avait que « Répondre ». La galerie montre UNE pièce, et la règle
+    /// d'offre répond maintenant pour elle (`PostGalleryLot.composeTarget`) ; la
+    /// couche ne fait plus qu'armer la cible reçue. Sans publieur, aucune entrée
+    /// (loi 4).
+    private var armCompose: ((ComposerSeedTarget) -> Void)? {
+        guard storyComposer != nil else { return nil }
+        return { cible in
+            pendingCompose = cible
+            isPresented = false
+        }
     }
 
     func body(content: Content) -> some View {
@@ -166,10 +168,7 @@ private struct SocialMediaGalleryLayer: ViewModifier {
                     // écran — celle qui porte déjà « Créer avec ce média » en
                     // conversation — et non un bouton inventé pour le fil :
                     // même libellé, même glyphe, même rang.
-                    onCompose: composable.map { cible in {
-                        pendingCompose = cible
-                        isPresented = false
-                    } },
+                    onCompose: armCompose,
                     // **« Commenter CE média »** (#6578) — même rangée
                     // d'actions, même glyphe de réponse qu'en conversation.
                     //
@@ -243,10 +242,10 @@ struct SocialMediaGalleryContent: View {
     /// transmet pas) ⇒ le Prisme du lecteur.
     let playerLanguages: [String]
 
-    /// **« Composer » sur la pièce ouverte** (#6085). `nil` ⇒ aucun bouton — la
-    /// galerie ne connaît que des pièces jointes, et c'est la COUCHE qui a
-    /// résolu la règle d'offre sur le post porteur.
-    var onCompose: (() -> Void)?
+    /// **« Composer » sur la pièce ouverte** (#6085, #6709). `nil` ⇒ aucun bouton.
+    /// La couche arme la cible ; c'est ICI, par le lot, que la règle d'offre répond
+    /// pour la pièce qu'on regarde (`PostGalleryLot.composeTarget`).
+    var onCompose: ((ComposerSeedTarget) -> Void)?
 
     /// **« Commenter CE média »** (#6578) — la moitié publication du geste dont
     /// `ConversationView+MediaGallery` porte la moitié conversation.
@@ -260,7 +259,7 @@ struct SocialMediaGalleryContent: View {
          startSceneIndex: Int = 0,
          accentColor: String,
          playerLanguages: [String] = [],
-         onCompose: (() -> Void)? = nil,
+         onCompose: ((ComposerSeedTarget) -> Void)? = nil,
          onQuote: ((CommentQuotedMedia) -> Void)? = nil) {
         self.post = post
         self.startMediaId = startMediaId
@@ -295,12 +294,19 @@ struct SocialMediaGalleryContent: View {
             captionServings: lot.captionServings,
             captionMap: lot.captionMap,
             senderInfoMap: lot.attributions.mapValues(Self.senderInfo),
-            onComposeWithMedia: onCompose.map { action in { _ in action() } },
+            // **« Créer avec CE média »** (#6709) : la cible de la pièce OUVERTE, par
+            // la règle d'offre unique — une scène sème le média qu'elle montre, et une
+            // pièce sans cible n'a pas de bouton.
+            onComposeWithMedia: onCompose.map { arm in { piece in
+                guard let cible = lot.composeTarget(for: piece.id, in: affiche) else { return }
+                arm(cible)
+            } },
             onReplyToMedia: onQuote.map { quote in { piece in
                 guard let citation = lot.quotation(for: piece.id, in: affiche) else { return }
                 quote(citation)
             } },
             replyableMedia: { lot.quotation(for: $0.id, in: affiche) != nil },
+            composableMedia: { lot.composeTarget(for: $0.id, in: affiche) != nil },
             sceneContext: lot.scenes.isEmpty ? nil : GallerySceneContext(
                 post: affiche,
                 scenes: lot.scenes,

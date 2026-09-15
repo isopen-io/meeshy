@@ -179,6 +179,18 @@ struct ComposerSeedTarget: Identifiable {
                   origin: .socialMedia(postId: post.id, mediaId: plan.media?.id))
     }
 
+    /// **La pièce qu'une page du plein écran montre** (#6709) — « Créer avec CE
+    /// média » sur un post à plusieurs médias. Un bouton qui promet LA pièce doit en
+    /// emporter une : sans média dans le plan, aucune cible. Même identité et même
+    /// origine qu'une cible de post à un seul média.
+    init?(post: FeedPost, mediaId: String) {
+        guard let plan = ComposableAttachment.seedPlan(inPost: post, mediaId: mediaId),
+              let media = plan.media else { return nil }
+        self.init(id: "post/\(post.id)/\(media.id)",
+                  plan: plan,
+                  origin: .socialMedia(postId: post.id, mediaId: media.id))
+    }
+
     /// **La slide d'une STORY** (#6085). `preferredLanguages` descend le Prisme
     /// du lecteur sur le texte qui pré-remplira la description.
     init?(story: StoryItem, preferredLanguages: [String]) {
