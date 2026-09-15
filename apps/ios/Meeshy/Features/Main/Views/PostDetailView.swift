@@ -144,11 +144,11 @@ struct PostDetailView: View {
     @State var pendingPlace: SharedPlace? = nil
     @StateObject var audioRecorder = AudioRecorderManager()
     @State private var isTextExpanded = false
-    @State private var headerScrollRelay = ScrollOffsetRelay()
+    @State var headerScrollRelay = ScrollOffsetRelay()
     // Inline story canvas playback gating (audio active → pause when off-screen / in call).
     @State var storyCanvasVisible: Bool = true
     @State var isCallActive: Bool = false
-    @State var scrollViewportHeight: CGFloat = 0
+    @State var sceneMeasures = PostDetailSceneFraming.Measures()
     static let scrollSpace = "postDetailScroll"
     /// Set once `PostService.share(... generateLink: true)` returns — the
     /// `.sheet(item:)` further down presents the system share UI as soon
@@ -788,10 +788,10 @@ struct PostDetailView: View {
                         .trackScrollContentOffset { headerScrollRelay.offset = -$0 }
                         .background(
                             GeometryReader { geo in
-                                Color.clear.preference(key: ScrollViewportHeightKey.self, value: geo.size.height)
+                                Color.clear.preference(key: ScrollViewportSizeKey.self, value: geo.size)
                             }
                         )
-                        .onPreferenceChange(ScrollViewportHeightKey.self) { scrollViewportHeight = $0 }
+                        .onPreferenceChange(ScrollViewportSizeKey.self) { sceneMeasures.viewport = $0 }
                         .onAppear {
                             if showComments {
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
@@ -1804,7 +1804,7 @@ struct StoryCanvasFrameKey: PreferenceKey {
     static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = nextValue() }
 }
 
-private struct ScrollViewportHeightKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+private struct ScrollViewportSizeKey: PreferenceKey {
+    static var defaultValue: CGSize = .zero
+    static func reduce(value: inout CGSize, nextValue: () -> CGSize) { value = nextValue() }
 }
