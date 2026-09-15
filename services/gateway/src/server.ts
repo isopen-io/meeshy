@@ -51,6 +51,7 @@ import { MutationLogService } from './services/MutationLogService';
 import { registerAllRoutes } from './route-registration';
 import { canonicaliserCheminsOpenApi } from './utils/openapi-canonical-paths';
 import { InitService } from './services/InitService';
+import { bootstrapDatabase } from './services/database-bootstrap';
 import { MeeshySocketIOHandler } from './socketio/MeeshySocketIOHandler';
 import { CallCleanupService } from './services/CallCleanupService';
 import { shutdownEncryptionService } from './services/EncryptionService';
@@ -827,31 +828,11 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       await this.prisma.user.findFirst();
       logger.info(`✓ Database connected successfully`);
 
-      // Initialize database with default data
-      const initService = new InitService(this.prisma);
-
-      // Invariant de schéma, à CHAQUE boot — avant la porte `shouldInitialize`,
-      // qui ne s'ouvre que sur une base vide. Derrière elle, une base déjà
-      // peuplée ne recevait jamais l'index géospatial (500 sur /posts/nearby).
-      await initService.ensurePostGeoIndex();
-      await initService.ensureFriendRequestIndexes();
-      await initService.ensureContactDeltaIndex();
-
-      // Check if initialization is needed
-      const shouldInit = await initService.shouldInitialize();
-
-      if (shouldInit) {
-        const forceReset = process.env.FORCE_DB_RESET === 'true';
-        if (forceReset) {
-          logger.info('🔄 FORCE_DB_RESET=true - Database will be completely reset and reinitialized');
-        } else {
-          logger.info('🔧 Database initialization required, starting...');
-        }
-        await initService.initializeDatabase();
-        logger.info('✅ Database initialization completed successfully');
-      } else {
-        logger.info('✅ Database already initialized, skipping initialization');
-      }
+      // Séquence de démarrage de la base — SSOT `bootstrapDatabase`, qui tient
+      // ensemble ce qui est un invariant de CHAQUE boot (index, comptes semés)
+      // et ce qui est un ensemencement (derrière `shouldInitialize()`, porte
+      // qui ne s'ouvre que sur une base VIDE).
+      await bootstrapDatabase(new InitService(this.prisma), logger);
 
     } catch (error) {
       logger.error('✗ Database connection failed:', error);
