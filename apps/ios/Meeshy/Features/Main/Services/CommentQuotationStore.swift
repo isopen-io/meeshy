@@ -27,6 +27,12 @@ import MeeshySDK
 @MainActor
 final class CommentQuotationStore: ObservableObject {
 
+    // iOS 26.1 : la `deinit` synthétisée d'un type `@MainActor` est ISOLÉE
+    // (SE-0466) et double-libère au démontage hors d'une tâche — abrt. Même
+    // déclaration que `CommentMediaGalleryContext` et que `CommentDraftStore`.
+    // Garde : `MainActorDeinitSourceGuardTests`.
+    nonisolated deinit {}
+
     static let shared = CommentQuotationStore()
 
     /// La désignation courante, par post. `@Published` sur la CARTE et non sur
