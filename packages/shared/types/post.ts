@@ -575,6 +575,27 @@ export interface MediaCaptionTranslationUpdatedEventData {
   };
 }
 
+/**
+ * Émis (`media:alt-translation-updated`) quand le pipeline ZMQ a traduit le
+ * texte ALTERNATIF d'accessibilité (`PostMedia.alt`) d'un média — post OU
+ * commentaire (#6737, suite de la décision #6534). Jumelle exacte de
+ * `MediaCaptionTranslationUpdatedEventData`, sur un champ DISTINCT : `alt`
+ * décrit le média pour un lecteur d'écran, `caption` est une légende
+ * éditoriale — les deux se traduisent indépendamment.
+ */
+export interface MediaAltTranslationUpdatedEventData {
+  readonly mediaId: string;
+  readonly postId: string;
+  readonly commentId?: string;
+  readonly language: string;
+  readonly translation: {
+    readonly text: string;
+    readonly translationModel: string;
+    readonly confidenceScore?: number;
+    readonly createdAt: string;
+  };
+}
+
 export interface CommentReactionAggregation {
   readonly emoji: string;
   readonly count: number;
