@@ -260,6 +260,10 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/ParticipantProfileSheet.swift",
         "Features/Main/Views/ReelAudioBackdrop.swift",
         "Features/Main/Views/ReelRepostEmbedCell.swift",
+        // #6693 — RELOCALISATION pure : les glyphes figés du rail d'actions (26 pt dans
+        // une colonne fixe de 48, doctrine 86i) quittent l'hôte avec le rail. La
+        // POPULATION ne bouge pas ; l'hôte en garde d'autres et reste dans la liste.
+        "Features/Main/Views/ReelsPlayerView+ActionRail.swift",
         "Features/Main/Views/ReelsPlayerView.swift",
         "Features/Main/Views/ShareLinkIdentitySheet.swift",
         "Features/Main/Views/ShareLinksView.swift",

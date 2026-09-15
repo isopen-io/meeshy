@@ -40,6 +40,14 @@
  *   (#4808) : aucune identité, ni compte ni session invitée, sur une route
  *   qui accepte les deux — un 401 « sec » ne dit pas au client qu'il peut
  *   continuer en anonyme.
+ * - `TOKEN_INVALID` — un `Authorization: Bearer` a été PRÉSENTÉ et n'a pas
+ *   authentifié (signature invalide, expiré, ou compte inconnu/inactif),
+ *   distinct de `UNAUTHORIZED` (aucune créance DU TOUT) : un appelant sans
+ *   Bearer peut légitimement continuer en invité sur les portes qui
+ *   l'acceptent, un appelant dont le Bearer a été REFUSÉ ne le peut pas — la
+ *   porte `optionalAuth` (#6741) retombant sinon en `authContext` anonyme,
+ *   indiscernable d'une requête sans aucune créance. Sites :
+ *   `routes/conversations/link-admission.ts` (`POST /links/:key/members`).
  *
  * Un site qui découvre un sens supplémentaire l'ajoute ICI, avec sa liste de
  * sites, plutôt que d'inventer un code local — c'est ce qui a produit la
@@ -68,6 +76,8 @@ export const AUTH_ERROR_CODES = {
    * une nouvelle saisie.
    */
   PASSWORD_NOT_SET: 'PASSWORD_NOT_SET',
+  /** Bearer présenté et refusé (signature/expiration/compte) — distinct de l'absence de créance. */
+  TOKEN_INVALID: 'TOKEN_INVALID',
 } as const;
 
 export type AuthErrorCode = (typeof AUTH_ERROR_CODES)[keyof typeof AUTH_ERROR_CODES];

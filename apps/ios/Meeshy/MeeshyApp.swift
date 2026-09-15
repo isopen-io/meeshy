@@ -16,12 +16,9 @@ struct MeeshyApp: App {
     @StateObject private var theme = ThemeManager.shared
     @StateObject private var a11yPrefs = MeeshyAccessibilityPreferences.shared
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
-    // Splash : shown ALWAYS on cold start, regardless of auth state, until the
-    // boot work in `.task` finishes (session check + conversations cache
-    // preload). Dismissed explicitly from the task once data is ready ; the
-    // SplashScreen itself no longer auto-dismisses. A minimum elapsed time
-    // (1.2s) is enforced so the animation never flashes when the cache is hot.
-    @State private var showSplash = true
+    /// Le splash et sa loi de vie (#6744) : il tombe dès que la session et la
+    /// liste en cache sont prêtes, et à son plafond quoi que fasse le démarrage.
+    @StateObject private var launchSplash = LaunchSplashController()
     @State private var hasCheckedSession = false
     @State private var activeGuestSession: GuestSession?
     @State private var crashReportsToShow: [CrashDiagnostic] = []
@@ -113,13 +110,18 @@ struct MeeshyApp: App {
                             LoginView()
                         }
                     }
-                    .opacity(showSplash ? 0 : 1)
+                    .opacity(launchSplash.phase == .covering ? 0 : 1)
 
-                    // #4363 — il ne se RETIRE plus, il s'efface : un retrait
-                    // interrompu laisse la vue hit-testable. Voir `fullScreenGate`.
-                    SplashScreen(onFinish: {})
-                        .fullScreenGate(isPresented: showSplash)
-                        .zIndex(1)
+                    // #4363 / #6744 — il s'efface d'abord (`fullScreenGate`
+                    // coupe touches et VoiceOver), puis quitte l'arbre SANS
+                    // transition. Son plafond vit dans SA tâche : aucune attente
+                    // du démarrage ne peut le retenir. Voir `LaunchSplashController`.
+                    if launchSplash.phase != .gone {
+                        SplashScreen()
+                            .fullScreenGate(isPresented: launchSplash.phase == .covering)
+                            .task { await launchSplash.holdUntilCeiling() }
+                            .zIndex(1)
+                    }
                 }
                 // `!isAuthenticated` protège d'un ACCIDENT — un lien traité
                 // avant la fin de `checkExistingSession`, qui échouerait un
@@ -150,7 +152,7 @@ struct MeeshyApp: App {
                     }
                 }
                 .fullScreenCover(isPresented: .init(
-                    get: { shouldShowOnboarding && !showSplash && activeGuestSession == nil },
+                    get: { shouldShowOnboarding && launchSplash.phase != .covering && activeGuestSession == nil },
                     set: { _ in }
                 )) {
                     WelcomeView(hasCompletedOnboarding: $hasCompletedOnboarding)
@@ -201,12 +203,6 @@ struct MeeshyApp: App {
                     let _ = deepLinkRouter.handle(url: url)
                 }
                 .task {
-                    // Splash : capture boot start so we can enforce a minimum
-                    // 1.2s display time once data is ready. Without this, a
-                    // hot-cache cold start would flash the splash away mid-
-                    // animation.
-                    let splashStart = ContinuousClock.now
-
                     ImageDownsamplingConfig.applyGlobal()
                     KeychainManager.shared.migrateToAfterFirstUnlock()
                     MeeshyConfig.shared.restoreEnvironment()
@@ -231,6 +227,7 @@ struct MeeshyApp: App {
                     // bannière déjà livrée suit la suppression — même atome de
                     // retrait que le push de contrôle `notification_revoked`.
                     NotificationActionHandler.shared.observeRevocations(from: NotificationToastManager.shared.notificationWasDeleted.eraseToAnyPublisher())
+                    launchSplash.reach(.cache)
                     await CacheCoordinator.shared.start()
                     // Touch PresenceManager early so it has subscribed to
                     // `presence:snapshot` + `user:status` + `didReconnect`
@@ -239,12 +236,11 @@ struct MeeshyApp: App {
                     // land before any view referencing PresenceManager.shared
                     // has been built, and PassthroughSubject would drop it.
                     _ = PresenceManager.shared
-                    // Start NWPathMonitor at the very top of boot so the splash
-                    // gating below can read a resolved `isOffline` (the keychain +
-                    // session work between here and the socket-wait gives the
-                    // initial path time to land). Without this early touch the
-                    // monitor would first start at the gate and still report the
-                    // optimistic `online` default, defeating the offline fast-path.
+                    // Start NWPathMonitor at the very top of boot so the path has
+                    // resolved by the time `checkExistingSession()` asks
+                    // `NetworkMonitor.isOnline` whether a proactive token refresh
+                    // may run. Without this early touch the monitor would first
+                    // start there and answer with its optimistic `online` default.
                     _ = NetworkMonitor.shared
                     // `StoryOfflineQueueBootstrap` a été supprimé : son
                     // gestionnaire de publication ré-enfilait l'item dans la
@@ -265,6 +261,7 @@ struct MeeshyApp: App {
                     // `OfflineQueue.bootRecovery()` already resets every
                     // inflight record regardless of kind or id prefix.
                     let bootPool = dependencies.dbPool
+                    launchSplash.reach(.outbox)
                     await OfflineQueue.shared.configure(pool: bootPool)
 
                     // Partages que l'extension n'a pas pu envoyer : ils
@@ -340,6 +337,7 @@ struct MeeshyApp: App {
                             return nil
                         }
                     }
+                    launchSplash.reach(.settingsQueue)
                     await SettingsActionQueue.shared.setFlushHandler { @Sendable action in
                         do {
                             // Le chemin vient d'un enregistrement PERSISTÉ, écrit
@@ -483,34 +481,13 @@ struct MeeshyApp: App {
                     // here and letting it finish in the background is safe; the
                     // badges fill in shortly after the list is already on screen.
                     Task { await FriendshipCache.shared.hydrate() }
+                    launchSplash.reach(.session)
                     await authManager.checkExistingSession()
                     hasCheckedSession = true
                     // Prisme Linguistique — mémorise la langue UI (langue
                     // principale de l'utilisateur) dès que la session cold-start
                     // est résolue, pour l'appliquer au prochain lancement.
                     UILanguageOverride.cache(from: authManager.currentUser?.systemLanguage)
-                    // Splash gating : trois bornes temporelles concurrentes
-                    //   floor   1.0s — laisse l'intro jouer : à 1.0s logo/title
-                    //                    sont posés et le sous-titre (spring lancé
-                    //                    à 0.35s) est ~95% settled ; le résidu de
-                    //                    rebond passe sous le fade-out de 0.6s.
-                    //                    AVANT 1.2s = 200ms de splash en trop.
-                    //   socket  1.5s — fenêtre BORNÉE pour que les sockets
-                    //                    échangent leur 1er handshake. Cache-first
-                    //                    (NON-NÉGOCIABLE) : on n'attend PAS le
-                    //                    réseau quand le cache est prêt. Sur une
-                    //                    connexion lente, la liste cachée s'affiche
-                    //                    à 1.5s puis se rafraîchit (présences /
-                    //                    unreads) dès que les sockets landent —
-                    //                    plutôt que de retenir le splash 3s.
-                    //   ceiling 5.0s — hard cap : si le réseau est down,
-                    //                    on dismiss quand même pour ne JAMAIS
-                    //                    bloquer l'utilisateur derrière un
-                    //                    splash infini.
-                    let minSplashDuration: Duration = .milliseconds(1000)
-                    let socketTimeout: Duration = .milliseconds(1500)
-                    let maxSplashDuration: Duration = .seconds(5)
-
                     if authManager.isAuthenticated {
                         // P1 — prime SessionManager's `lastKnownUserId` cache
                         // on EVERY cold start with an already-restored session,
@@ -521,9 +498,11 @@ struct MeeshyApp: App {
                         // with no userId to scope its Keychain wipe against.
                         Task { await SessionManager.shared.migrateKeychainIfNeeded() }
                         // Précharge le cache liste — SQLite read instantané,
-                        // retourne `.empty` au tout premier install.
-                        let cacheResult = await CacheCoordinator.shared.conversations.load(for: "list")
-                        let hasCachedContent = cacheResult.snapshot() != nil
+                        // retourne `.empty` au tout premier install. C'est ce que
+                        // le splash attend pour tomber : la liste se montre
+                        // servie, jamais vide puis remplie.
+                        launchSplash.reach(.conversationList)
+                        _ = await CacheCoordinator.shared.conversations.load(for: "list")
 
                         // Détacher TOUS les bootstraps réseau (push, VoIP,
                         // unread, sync). Sur un réseau dégradé, chacun peut
@@ -540,45 +519,16 @@ struct MeeshyApp: App {
                             await NotificationToastManager.shared.refreshUnreadCount()
                             await NotificationCoordinator.shared.syncNow()
                         }
-
-                        // Si on a déjà du contenu en cache, attendre que LES
-                        // DEUX sockets (Message + Social) aient confirmé leur
-                        // connexion avant de dismiss → la liste s'affiche
-                        // avec présences + unreads "frais" sans flash post-
-                        // splash. Bounded par maxSplashDuration depuis
-                        // splashStart pour ne jamais bloquer.
-                        //
-                        // Si cache vide (premier lancement, cold-start total),
-                        // on NE bloque PAS : ConversationListView a son
-                        // skeleton (`loadState == .loading`) qui prend le
-                        // relais et anime le chargement initial.
-                        // Offline fast-path : when the device is confirmed offline
-                        // the sockets cannot handshake, so awaiting them only burns
-                        // the full `socketTimeout` (1.5s) of dead time behind the
-                        // splash. The cached list is ready — dismiss on the 1.0s
-                        // floor instead and let presences/unreads refresh once the
-                        // sockets land after reconnect. Only the optimistic `online`
-                        // default (path not yet resolved) or a real online path
-                        // takes the bounded wait.
-                        if hasCachedContent && !NetworkMonitor.shared.isOffline {
-                            let remaining = maxSplashDuration - splashStart.duration(to: .now)
-                            let bounded = min(socketTimeout, remaining)
-                            if bounded > .zero {
-                                await Self.awaitBothSocketsConnected(timeout: bounded)
-                            }
-                        }
                     } else {
                         handleGuestDeepLink(deepLinkRouter.pendingDeepLink)
                     }
 
-                    // Floor 1.2s : enforce que l'animation joue intégralement.
-                    let elapsed = splashStart.duration(to: .now)
-                    if elapsed < minSplashDuration {
-                        try? await Task.sleep(for: minSplashDuration - elapsed)
-                    }
-                    withAnimation(.easeInOut(duration: 0.6)) {
-                        showSplash = false
-                    }
+                    // **Plus d'attente des sockets derrière un cache prêt**
+                    // (#6223, arbitré le 2026-09-15 : « Dès que prêt »). Elle
+                    // retenait le splash jusqu'à 1,5 s pour que présences et
+                    // non-lus ne se mettent pas à jour sous les yeux — ce que
+                    // Cache-First demande justement de laisser voir.
+                    await launchSplash.markReady()
                     // Surface any crash/hang reports captured since the last
                     // foreground. Done after the splash + session work so the
                     // toast lands on a stable UI rather than racing the splash
@@ -838,34 +788,6 @@ struct MeeshyApp: App {
     /// when the conversation audio coordinator is actively playing we do NOT
     /// tear down the shared `AVAudioSession`, so iOS keeps streaming the
     /// engine in background under the `UIBackgroundModes: audio` declaration.
-    // MARK: - Splash gating
-
-    /// Bloque jusqu'à ce que `MessageSocketManager.isConnected` ET
-    /// `SocialSocketManager.isConnected` soient simultanément `true`, ou
-    /// jusqu'à expiration de `timeout` — celui des deux qui arrive en
-    /// premier. Aucune erreur ni Throwable : en cas de timeout réseau, on
-    /// retourne silencieusement pour laisser le splash dismiss.
-    ///
-    /// Polling 100ms : empreinte mémoire négligeable, < 50 cycles sur le
-    /// timeout 3-5s typique, et évite la complexité d'un `withCheckedContinuation`
-    /// qui leak si annulé pendant l'attente Combine.
-    @MainActor
-    fileprivate static func awaitBothSocketsConnected(timeout: Duration) async {
-        // Already connected: pas d'attente nécessaire
-        if MessageSocketManager.shared.isConnected && SocialSocketManager.shared.isConnected {
-            return
-        }
-        let pollInterval: Duration = .milliseconds(100)
-        let deadline = ContinuousClock.now.advanced(by: timeout)
-        while ContinuousClock.now < deadline {
-            if MessageSocketManager.shared.isConnected && SocialSocketManager.shared.isConnected {
-                return
-            }
-            try? await Task.sleep(for: pollInterval)
-            if Task.isCancelled { return }
-        }
-    }
-
     static func handleScenePhaseForTesting(_ newPhase: ScenePhase) async {
         switch newPhase {
         case .background:
@@ -1173,155 +1095,5 @@ struct SystemThemeDetector<Content: View>: View {
             .onAppear {
                 ThemeManager.shared.syncWithSystem(systemScheme)
             }
-    }
-}
-
-// MARK: - Splash Screen
-struct SplashScreen: View {
-    let onFinish: () -> Void
-
-    @State private var showLogo = false
-    @State private var showTitle = false
-    @State private var showSubtitle = false
-    @State private var glowPulse = false
-    @State private var backgroundScale: CGFloat = 1.2
-    @ObservedObject private var theme = ThemeManager.shared
-
-    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
-    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
-    private var reduceMotion: Bool {
-        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
-    }
-
-    private var isDark: Bool { theme.mode.isDark }
-
-    var body: some View {
-        ZStack {
-            // Animated gradient background
-            LinearGradient(
-                colors: isDark ? [
-                    Color(hex: "09090B"),
-                    Color(hex: "13111C"),
-                    MeeshyColors.indigo950
-                ] : [
-                    Color(hex: "FFFFFF"),
-                    Color(hex: "F8F7FF"),
-                    MeeshyColors.indigo50
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .scaleEffect(backgroundScale)
-            .ignoresSafeArea()
-
-            // Ambient orbs
-            Circle()
-                .fill(MeeshyColors.indigo600.opacity(isDark ? 0.15 : 0.10))
-                .frame(width: 200, height: 200)
-                .blur(radius: 60)
-                .offset(x: -80, y: -200)
-                .scaleEffect(glowPulse ? 1.3 : 0.8)
-
-            Circle()
-                .fill(MeeshyColors.indigo400.opacity(isDark ? 0.12 : 0.08))
-                .frame(width: 160, height: 160)
-                .blur(radius: 50)
-                .offset(x: 90, y: 180)
-                .scaleEffect(glowPulse ? 1.2 : 0.9)
-
-            Circle()
-                .fill(MeeshyColors.indigo800.opacity(isDark ? 0.10 : 0.06))
-                .frame(width: 120, height: 120)
-                .blur(radius: 40)
-                .offset(x: 60, y: -80)
-                .scaleEffect(glowPulse ? 1.1 : 1.0)
-
-            VStack(spacing: 0) {
-                Spacer()
-
-                // Animated Logo
-                AnimatedLogoView(color: isDark ? .white : MeeshyColors.indigo950, lineWidth: 10, continuous: false)
-                    .frame(width: 120, height: 120)
-                    .opacity(showLogo ? 1 : 0)
-                    .scaleEffect(showLogo ? 1 : 0.5)
-                    .padding(.bottom, 32)
-
-                // App Name
-                Text(verbatim: "Meeshy")
-                    .font(MeeshyFont.relative(46, weight: .bold, design: .rounded))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [MeeshyColors.indigo500, MeeshyColors.indigo700],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .shadow(color: MeeshyColors.indigo500.opacity(isDark ? 0.5 : 0.25), radius: 12, x: 0, y: 4)
-                    .fixedSize()
-                    .frame(height: 80)
-                    .opacity(showTitle ? 1 : 0)
-                    .offset(y: showTitle ? 0 : -40)
-                    .padding(.bottom, 8)
-
-                // Tagline
-                Text(String(localized: "splash.tagline", bundle: .main))
-                    .font(MeeshyFont.relative(16, weight: .medium))
-                    .foregroundColor(theme.textMuted)
-                    .frame(height: 40)
-                    .opacity(showSubtitle ? 1 : 0)
-                    .offset(y: showSubtitle ? 0 : -20)
-
-                Spacer()
-
-                // Footer : version + signature + brand logo (shared — see BrandSignature)
-                BrandSignature()
-                    .opacity(showSubtitle ? 1 : 0)
-                    .padding(.bottom, 24)
-            }
-        }
-        .onAppear {
-            // Staggered entrance — fast and punchy
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
-                showLogo = true
-            }
-
-            // Title: fade in + descend with bounce overshoot
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.6).delay(0.2)) {
-                showTitle = true
-            }
-
-            // Subtitle: same bounce, slightly later
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.6).delay(0.35)) {
-                showSubtitle = true
-            }
-
-            // Le halo est DÉCORATIF : sous Reduce Motion il ne se pose sur
-            // aucune valeur, il n'existe pas. `glowPulse` reste `false`, donc
-            // les trois orbes gardent leur échelle de repos. Avec le halo de
-            // `LoginView`, ce sont les deux seuls des sept sites de #4286 où
-            // « ne rien faire » est le bon repos — les cinq autres portent un
-            // STATUT, et devaient choisir une valeur qui le dit encore.
-            if !reduceMotion {
-                withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
-                    glowPulse = true
-                }
-            }
-
-            withAnimation(.easeInOut(duration: 1.0)) {
-                backgroundScale = 1.0
-            }
-
-            // Dismissal is driven by MeeshyApp.task once boot data is ready.
-            // The `onFinish` callback is kept in the signature for backwards
-            // compatibility (callers may still wire it) but is no longer
-            // invoked automatically here — the previous 1.2s timer caused
-            // the splash to vanish before the conversations cache was
-            // hydrated, which defeated its purpose.
-        }
-        .onDisappear {
-            withTransaction(Transaction(animation: nil)) {
-                glowPulse = false
-            }
-        }
     }
 }

@@ -792,6 +792,12 @@ struct ConversationMediaGalleryView: View {
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
         .padding(.trailing, MediaGalleryStage.gutter)
+        // #6693 — la colonne est POSÉE sur le média (#6161) : sa teinte suit la
+        // luminance de la pièce affichée, et non le blanc d'office (1,83:1 sur une
+        // vidéo violette).
+        .mediaChromeTinted()
+        .mediaChromeScheme(for: currentIndex < allAttachments.count
+                           ? .attachment(allAttachments[currentIndex]) : nil)
     }
 
     /// Les trois actions, chacune derrière sa propre closure optionnelle : un
@@ -827,11 +833,11 @@ struct ConversationMediaGalleryView: View {
                 // le même signe pour la même promesse, « il y en a plus ».
                 Image(systemName: "face.smiling")
                     .font(.system(size: 17, weight: .semibold))
-                    .foregroundColor(reactionBarOpen ? MeeshyColors.indigo400 : .white)
+                    .mediaChromeForeground(reactionBarOpen ? MeeshyColors.indigo400 : nil)
                     .overlay(alignment: .topTrailing) {
                         Image(systemName: "plus")
                             .font(.system(size: 9, weight: .black))
-                            .foregroundColor(reactionBarOpen ? MeeshyColors.indigo400 : .white)
+                            .mediaChromeForeground(reactionBarOpen ? MeeshyColors.indigo400 : nil)
                             .offset(x: 6, y: -5)
                     }
                     .frame(width: MediaStageActionColumn.glass,
@@ -877,7 +883,7 @@ struct ConversationMediaGalleryView: View {
             } label: {
                 Image(systemName: "arrowshape.turn.up.left.fill")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white)
+                    .glassControlForeground()
                     .frame(width: MediaStageActionColumn.glass,
                            height: MediaStageActionColumn.glass)
                     .adaptiveGlass(in: Circle(), interactive: true)
@@ -902,7 +908,7 @@ struct ConversationMediaGalleryView: View {
                 // 82i) — ne pas scaler. Le glass APRÈS le sizing.
                 Image(systemName: "wand.and.stars")
                     .font(.system(size: 17, weight: .semibold))
-                    .foregroundColor(.white)
+                    .glassControlForeground()
                     .frame(width: MediaStageActionColumn.glass,
                            height: MediaStageActionColumn.glass)
                     .adaptiveGlass(in: Circle(), interactive: true)

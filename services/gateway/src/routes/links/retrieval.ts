@@ -11,6 +11,7 @@ import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-
 import { presenceMissingEntryPolicy, viewerFromRequest } from '../users/presence-gate';
 import { createLegacyHybridRequest } from './utils/link-helpers';
 import { historyReaderFromAuthContext, loadReaderHistoryFloor } from '../../services/historyFloor';
+import { isConversationClosed } from '../../services/messaging/conversationWriteAdmission';
 import {
   findShareLinkByIdentifier,
   getConversationMessages,
@@ -153,8 +154,19 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
       }
 
       // Aperçu public : la règle de repli, valable pour tout appelant qui n'est
-      // ni membre ni participant anonyme de CE lien.
-      const canPreview = shareLink.isActive && shareLink.allowViewHistory;
+      // ni membre ni participant anonyme de CE lien. #6740 — `isActive` et
+      // `allowViewHistory` gouvernaient déjà cet aperçu, mais laissaient
+      // passer un lien EXPIRÉ ou une conversation FERMÉE : l'un et l'autre
+      // sont désormais des conditions à part entière, jamais déduites de
+      // `isActive` (un lien peut rester actif après l'échéance de son propre
+      // `expiresAt`, et `isConversationClosed` porte une raison distincte de
+      // fermeture). `isConversationClosed` est la SSOT déjà posée pour
+      // l'écriture — même lecture, même décision, ici pour la LECTURE.
+      const linkNotExpired = !shareLink.expiresAt || shareLink.expiresAt > new Date();
+      const canPreview = shareLink.isActive
+        && shareLink.allowViewHistory
+        && linkNotExpired
+        && !isConversationClosed(shareLink.conversation);
 
       // Vérifier les permissions d'accès. `memberRow` est une lecture CIBLÉE
       // (#4165), indexée sur (conversationId, userId) — indépendante de
