@@ -124,6 +124,20 @@ check(
   `/chat/:lien inconnu reste sur l'invitation et dit son refus (alertes : ${deadLinkAlert}, chemin : ${deadLink.pathname})`,
 );
 
+const deadTracking = await settle('/l/recette_inexistant');
+check(
+  deadTracking.pathname === '/l/recette_inexistant/expired',
+  `un lien suivi inconnu mène à son état expiré, jamais à une cible (obtenu : ${deadTracking.pathname})`,
+);
+
+const deletion = await settle('/account/deletion?token=recette_invalide&action=confirm');
+await page.waitForSelector('button, [role="alert"]', { timeout: SETTLE_MS }).catch(() => {});
+const deletionControls = await page.locator('button, [role="alert"]').count();
+check(
+  deletion.pathname === '/account/deletion' && deletionControls >= 1,
+  `le lien d'e-mail de suppression de compte s'ouvre sans session sur sa page (chemin : ${deletion.pathname}, contrôles : ${deletionControls})`,
+);
+
 if (LINK !== '') {
   await settle(`/chat/${encodeURIComponent(LINK)}`);
   await page.waitForSelector('a[href*="next="]', { timeout: SETTLE_MS }).catch(() => {});
