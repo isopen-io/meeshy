@@ -128,6 +128,24 @@ struct SocialSceneFullscreenView: View {
     /// Les traductions de CE post arrivées pendant l'ouverture (#6560) : tant
     /// que le plein écran couvre la carte hôte, le post qu'elle relaie ne change pas.
     @State private var arrivees: [CaptionTranslationArrival] = []
+    /// **La seconde à laquelle la scène d'entrée s'OUVRE** (#6580).
+    ///
+    /// Le porteur : « lorsqu'on a un son de fond, ouverture en détail on joue le
+    /// son directement aligné, correctement ». La carte du fil joue la scène en
+    /// boucle et lègue sa position (`ScenePlaybackPositions`) ; ce plein écran
+    /// la reprend, au lieu de tout recommencer — vidéo comme fond sonore.
+    ///
+    /// **Un INSTANTANÉ, jamais un fil.** La mémoire continue de s'écrire
+    /// pendant qu'on regarde (cette vue y publie à son tour) : la relire à
+    /// chaque rendu ferait recaler la lecture en boucle. Elle est donc lue UNE
+    /// fois, à l'apparition — `.id(startSceneIndex)` garantissant une vue
+    /// neuve à chaque présentation.
+    ///
+    /// Lue à l'APPARITION et non à l'`init` : elle arrive donc APRÈS le montage
+    /// du canvas, et c'est `updateUIView` qui la sème
+    /// (`StoryReaderRepresentable.shouldReseed`). Rien ne joue d'ici là — la
+    /// lecture est levée par ce même `onAppear`.
+    @State private var positionDOuverture: Double = 0
 
     /// Le post de l'hôte, augmenté des traductions arrivées depuis l'ouverture.
     private var postAffiche: FeedPost {
@@ -338,6 +356,12 @@ struct SocialSceneFullscreenView: View {
         // y ferait tourner un displayLink pour rien, et allumerait un bouton
         // pause qui ne mettrait rien en pause (loi 4).
         .onAppear {
+            // **La position d'ouverture AVANT la lecture** : les deux sont
+            // posées dans la même transaction, donc le canvas reçoit la
+            // seconde d'entrée et la commande de jouer d'un seul tenant.
+            positionDOuverture = ScenePlaybackPositions.shared.position(
+                for: ScenePlaybackPositions.key(carrierId: post.id,
+                                                sceneIndex: startSceneIndex)) ?? 0
             isPlaying = bouge
             // **Filet de sécurité du pager** — le MÊME que celui de la galerie
             // plein écran des médias, et pour la même raison : `scrollPosition`
@@ -482,7 +506,11 @@ struct SocialSceneFullscreenView: View {
             sceneIndex: .constant(index),
             isPlaying: .constant(isPlaying && index == sceneIndex),
             accentColorHex: accentColor,
-            carrier: carrier
+            carrier: carrier,
+            // **Seule la scène par laquelle on ENTRE reprend une position** :
+            // c'est la seule qu'on regardait dans le fil. Une scène qu'on
+            // rejoint au défilement n'a jamais été jouée — elle commence.
+            startAt: index == startSceneIndex ? positionDOuverture : 0
         )
         .preferredContentLanguages(preferredContentLanguages)
         // **LE RATIO RÉEL DE LA SCÈNE, jamais le portrait d'office** (retour

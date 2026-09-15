@@ -41,6 +41,13 @@ public struct MeeshyScenePlayer: View {
     private let contentProgressHandler: ((Double) -> Void)?
     private let playbackProgressingHandler: ((Bool) -> Void)?
     private var playbackTimeHandler: ((Double) -> Void)?
+    /// **La position à laquelle la scène s'OUVRE** (#6580) — la moitié
+    /// manquante d'`onPlaybackTime`. La carte publie sa position ; l'hôte du
+    /// détail la rend ici, et la scène reprend à la bonne seconde au lieu de
+    /// tout recommencer. Elle voyage par l'INIT, comme les autres fils du
+    /// contrat B4 et pour la même raison (E4) : un fil chaîné sort de la
+    /// fenêtre équilibrée qu'une garde de couture relit.
+    private let startAt: Double
     @Binding private var sceneIndex: Int
     @Binding private var isPlaying: Bool
     /// `startsPaused` réalisé : la commande de lecture n'est honorée qu'À PARTIR
@@ -67,6 +74,7 @@ public struct MeeshyScenePlayer: View {
                 preferredContentLanguages: [String] = [],
                 isMuted: Bool? = nil,
                 isOutgoing: Bool = false,
+                startAt: Double = 0,
                 preloadedImages: [String: UIImage] = [:],
                 preloadedVideoURLs: [String: URL] = [:],
                 preloadedAudioURLs: [String: URL] = [:],
@@ -82,6 +90,7 @@ public struct MeeshyScenePlayer: View {
         self.languages = preferredContentLanguages
         self.requestedMute = isMuted
         self.isOutgoing = isOutgoing
+        self.startAt = startAt
         self.preloadedImages = preloadedImages
         self.preloadedVideoURLs = preloadedVideoURLs
         self.preloadedAudioURLs = preloadedAudioURLs
@@ -224,6 +233,16 @@ public struct MeeshyScenePlayer: View {
                                                              hasAppeared: hasAppeared,
                                                              isPlaying: isPlaying),
                                  isOutgoing: isOutgoing,
+                                 startAt: startAt,
+                                 // **La position se LÈGUE d'une surface à la
+                                 // suivante** (#6580) : la carte du fil joue,
+                                 // le plein écran qu'elle ouvre reprend là. La
+                                 // clé est celle du PORTEUR + du rang de scène,
+                                 // la seule que les deux surfaces partagent —
+                                 // l'identité d'hôte, elle, porte le n° de
+                                 // boucle, qui leur est propre.
+                                 positionKey: ScenePlaybackPositions.key(
+                                    carrierId: carrier?.id, sceneIndex: sceneIndex),
                                  onCompletion: loopHandler,
                                  onContentReady: contentReadyHandler,
                                  onContentProgress: contentProgressHandler,
