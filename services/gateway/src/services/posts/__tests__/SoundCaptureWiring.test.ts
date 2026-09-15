@@ -16,14 +16,26 @@ describe('PostService — câblage de la capture', () => {
     expect(strip('const a = 1; // x')).toContain('const a = 1;');
   });
 
+  // `this.soundCaptureService.captureSounds` n'est plus appelé DIRECTEMENT
+  // par `PostService` depuis #6603 : `orchestrateSoundCapture`
+  // (posts/soundCaptureVerdict.ts) tient le trio éligibilité → capture
+  // fire-and-forget → verdict synchrone, extrait plutôt qu'ajouté en ligne —
+  // `PostService.ts` est déjà hors du budget de taille du dépôt. Son
+  // comportement RÉEL (appelle bien `captureSounds`, avec `feedsLibrary`
+  // calculé par `feedsSoundLibrary`) est prouvé par
+  // `soundCaptureVerdict.test.ts`, pas par ce fichier — qui ne garde plus que
+  // le CÂBLAGE : que les deux sites appellent l'helper au bon endroit, avec
+  // SES bonnes entrées.
+  const ORCHESTRATION_CALL = 'orchestrateSoundCapture(';
+
   it('test_createPost_callsCaptureSounds', () => {
-    expect(code).toContain('this.soundCaptureService.captureSounds');
+    expect(code).toContain(ORCHESTRATION_CALL);
   });
 
   it('test_captureCall_isOutsideMediaIdsGuard', () => {
     const guard = code.indexOf('if (data.mediaIds?.length)');
     const blockEnd = code.indexOf('\n    }', guard);
-    expect(code.indexOf('this.soundCaptureService.captureSounds')).toBeGreaterThan(blockEnd);
+    expect(code.indexOf(ORCHESTRATION_CALL)).toBeGreaterThan(blockEnd);
     // `indexOf` ne voit que la PREMIÈRE occurrence : ré-encadrer l'appel dans un
     // SECOND `if (data.mediaIds?.length)` en aval passait inaperçu. Une story
     // peut réutiliser un média déjà attaché, donc ce gate ne doit exister qu'une
@@ -32,7 +44,7 @@ describe('PostService — câblage de la capture', () => {
   });
 
   it('test_captureCall_isNotGatedOnMobileTranscription', () => {
-    const capture = code.indexOf('this.soundCaptureService.captureSounds');
+    const capture = code.indexOf(ORCHESTRATION_CALL);
     // Fenêtre courte : à 400 caractères elle attrapait la garde voisine légitime.
     expect(code.slice(Math.max(0, capture - 150), capture)).not.toContain('mobileTranscription');
   });
@@ -42,7 +54,7 @@ describe('PostService — câblage de la capture', () => {
     const end = code.indexOf('async deletePost');
     expect(start).toBeGreaterThan(-1);
     expect(end).toBeGreaterThan(start);
-    expect(code.slice(start, end)).toContain('this.soundCaptureService.captureSounds');
+    expect(code.slice(start, end)).toContain(ORCHESTRATION_CALL);
   });
 
   it('test_repostPost_isNotWired_inLotA', () => {
@@ -50,6 +62,7 @@ describe('PostService — câblage de la capture', () => {
     // Sans cette borne, renommer la méthode ferait passer le test À VIDE :
     // indexOf rend -1, slice(-1) rend le dernier caractère du fichier.
     expect(start).toBeGreaterThan(-1);
+    expect(code.slice(start)).not.toContain(ORCHESTRATION_CALL);
     expect(code.slice(start)).not.toContain('this.soundCaptureService.captureSounds');
   });
 
@@ -60,12 +73,14 @@ describe('PostService — câblage de la capture', () => {
    * rouvert de l'autre.
    */
   it('test_createPost_repostPath_doesNotFeedTheLibrary', () => {
-    const capture = code.indexOf('this.soundCaptureService.captureSounds');
+    const capture = code.indexOf(ORCHESTRATION_CALL);
     const call = code.slice(capture, capture + 400);
-    // La règle est une fonction PARTAGÉE, testée exhaustivement
-    // (`soundEligibility.test.ts`). Cette garde ne vérifie plus que le
-    // câblage : que ce site l'appelle bien avec SES deux entrées.
-    expect(call).toContain('feedsSoundLibrary({ visibility: data.visibility, repostOfId: data.repostOfId })');
+    // La règle elle-même (`feedsSoundLibrary`) vit désormais DANS
+    // `orchestrateSoundCapture`, testée exhaustivement là — via
+    // `soundEligibility.test.ts` et `soundCaptureVerdict.test.ts`. Cette garde
+    // ne vérifie plus que le câblage : que ce site lui passe SES deux entrées.
+    expect(call).toContain('visibility: data.visibility,');
+    expect(call).toContain('repostOfId: data.repostOfId,');
   });
 
   /**
@@ -78,8 +93,9 @@ describe('PostService — câblage de la capture', () => {
     const end = code.indexOf('async deletePost');
     expect(start).toBeGreaterThan(-1);
     expect(end).toBeGreaterThan(start);
-    expect(code.slice(start, end))
-      .toContain('feedsSoundLibrary({ visibility: updated.visibility, repostOfId: updated.repostOfId })');
+    const body = code.slice(start, end);
+    expect(body).toContain('visibility: updated.visibility,');
+    expect(body).toContain('repostOfId: updated.repostOfId,');
   });
 
   /**
@@ -130,7 +146,7 @@ describe('PostService — câblage de la capture', () => {
     const body = code.slice(start, end);
     const guard = body.indexOf(
       'if (data.storyEffects !== undefined || editTouchesComposition || data.allowSoundExtraction !== undefined)');
-    const call = body.indexOf('this.soundCaptureService.captureSounds');
+    const call = body.indexOf(ORCHESTRATION_CALL);
     expect(guard).toBeGreaterThan(-1);
     expect(call).toBeGreaterThan(guard);
     expect(body).toContain('?? (updated.storyEffects as Record<string, unknown> | null) ?? undefined');
