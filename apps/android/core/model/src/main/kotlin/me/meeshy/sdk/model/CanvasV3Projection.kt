@@ -254,6 +254,7 @@ fun StoryEffects.Companion.rendering(document: CanvasV3, sceneIndex: Int = 0): S
             backgroundAudioEnd = sound?.bounds?.end,
             voiceTranscriptions = sound?.transcriptions,
             backgroundAudioVariants = sound?.variants,
+            layout = document.layout,
         )
 
     var background: String? = null
@@ -309,5 +310,6 @@ fun StoryEffects.Companion.rendering(document: CanvasV3, sceneIndex: Int = 0): S
         opening = transitionOf(scene.opening),
         closing = transitionOf(scene.closing),
         clipTransitions = scene.clipTransitions?.mapNotNull { decodeWire<StoryClipTransition>(it) },
+        layout = document.layout,
     )
 }
