@@ -23,23 +23,10 @@ jest.mock('../../../utils/logger-enhanced.js', () => ({
   enhancedLogger: { child: () => ({ error: jest.fn(), warn: jest.fn(), info: jest.fn(), debug: jest.fn() }) },
 }));
 
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  messageAttachmentSchema: { type: 'object', properties: { id: { type: 'string' } } },
-  // `error`/`message`/`code` déclarés (comme le vrai `errorResponseSchema`,
-  // #4884) — un schéma sans `properties` EFFACE via fast-json-stringify
-  // (`additionalProperties: false` par défaut) : sans eux, un témoin de
-  // comportement qui inspecte le CORPS d'une erreur passerait sur un faux
-  // vide plutôt que sur ce que la route sert réellement.
-  errorResponseSchema: {
-    type: 'object',
-    properties: {
-      success: { type: 'boolean' },
-      error: { type: 'string' },
-      message: { type: 'string' },
-      code: { type: 'string' },
-    },
-  },
-}));
+// #4649 — ne PAS bouchonner `@meeshy/shared/types/api-schemas` : le schéma
+// RÉEL est ce qui garde `fast-json-stringify` armé, et c'est précisément ce
+// que ces témoins vérifient (le corps 415/413 servi, pas un double qui
+// désarmerait la sérialisation).
 
 const mockUploadMultiple = jest.fn<any>();
 const mockValidateFile = jest.fn<any>();
