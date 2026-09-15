@@ -78,6 +78,19 @@ export type CorsOriginOptions = Readonly<{
 /** Le message porté par le refus, identique aux deux portes depuis toujours. */
 export const CORS_REJECTION_MESSAGE = 'Not allowed by CORS';
 
+/**
+ * Marque une erreur comme UN refus CORS — jamais son seul message (#6591).
+ *
+ * La porte HTTP (`fastifyCorsOrigin`) passe cette erreur au rappel de
+ * `@fastify/cors`, qui la relaie telle quelle au gestionnaire d'erreurs global
+ * de `server.ts` (`next(error)` → `setErrorHandler`). Sans ce marqueur, ce
+ * gestionnaire n'a aucun moyen de distinguer un refus CORS — attendu, déjà
+ * journalisé en WARN par `onRejected` — d'une panne serveur réelle : les deux
+ * tombaient dans le même repli générique, d'où le 500 et la ligne ERROR
+ * mesurés en production (64 en 25 minutes, zéro utilisateur touché).
+ */
+const CORS_REJECTION_MARKER: unique symbol = Symbol('meeshy.corsRejection');
+
 /** Le seul `NODE_ENV` qui court-circuite l'allowlist. Comparé au mot près. */
 export const DEVELOPMENT_NODE_ENV = 'development';
 
@@ -140,7 +153,20 @@ export function originIsAllowed(
 
 function rejectionFor(origin: string, onRejected?: RejectedOriginObserver): Error {
   onRejected?.(origin);
-  return new Error(CORS_REJECTION_MESSAGE);
+  const error = new Error(CORS_REJECTION_MESSAGE) as Error & { [CORS_REJECTION_MARKER]?: true };
+  error[CORS_REJECTION_MARKER] = true;
+  return error;
+}
+
+/**
+ * `true` si `error` est un refus produit par `rejectionFor` ci-dessus —
+ * jamais une autre erreur qui porterait le même message par coïncidence.
+ * Consommé par `server.ts` pour répondre 403 sans relever la ligne au niveau
+ * ERROR (#6591) : un refus CORS n'est pas une panne serveur.
+ */
+export function isCorsRejection(error: unknown): error is Error {
+  if (!(error instanceof Error)) return false;
+  return (error as Error & { [CORS_REJECTION_MARKER]?: true })[CORS_REJECTION_MARKER] === true;
 }
 
 /**

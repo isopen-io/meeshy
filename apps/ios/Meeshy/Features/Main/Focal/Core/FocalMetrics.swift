@@ -202,6 +202,12 @@ nonisolated public enum FocalMetrics {
         /// Le retrait CONSTANT de `FocalRow` — `avatarSize` + la même
         /// gouttière de `7` que `Text.indent` (`22 + 7 = 29`).
         public static let textIndent: CGFloat = avatarSize + 7
+
+        /// LOUPE du message élu (directive porteur 2026-09-15, #6586 : « même
+        /// chose pour le mode focal ») : l'élu seul grandit de ce gain pendant
+        /// la scène, ses voisins restent à plat (directive 2026-08-24).
+        /// `FocalScrollPerspective.loupeScale` l'écrête à la marge de la carte.
+        public static let loupeGain: CGFloat = 0.05
     }
 
     // MARK: - Citation

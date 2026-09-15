@@ -209,6 +209,33 @@ export function sendUpgradeRequired(
 }
 
 /**
+ * Send a 413 Payload Too Large error — a file exceeds the size limit for
+ * its category (#6604).
+ */
+export function sendPayloadTooLarge(
+  reply: FastifyReply,
+  error: string,
+  options?: { message?: string; code?: string }
+): void {
+  sendError(reply, 413, error, { code: 'FILE_TOO_LARGE', ...options });
+}
+
+/**
+ * Send a 415 Unsupported Media Type error — a request-shaped refusal, never
+ * a server failure (#6604, same family as #6557 : a DEMANDE error must not
+ * surface as a 500). The caller names the received type and the accepted
+ * ones in `error`/`message` so the client can act (convert the file) rather
+ * than retry (which a 500 would suggest).
+ */
+export function sendUnsupportedMediaType(
+  reply: FastifyReply,
+  error: string,
+  options?: { message?: string; code?: string }
+): void {
+  sendError(reply, 415, error, { code: 'UNSUPPORTED_MEDIA_TYPE', ...options });
+}
+
+/**
  * Send a 500 Internal Server Error
  */
 export function sendInternalError(

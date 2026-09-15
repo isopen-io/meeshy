@@ -170,14 +170,12 @@ extension ProfileSheetUser {
     public static func from(user: MeeshyUser, accentColor: String = "") -> ProfileSheetUser {
         let lastActive: Date? = {
             guard let str = user.lastActiveAt else { return nil }
-            return (try? Date(str, strategy: .iso8601.time(includingFractionalSeconds: true)))
-                ?? (try? Date(str, strategy: .iso8601))
+            return WireDate.date(from: str)
         }()
 
         let createdAt: Date? = {
             guard let str = user.createdAt else { return nil }
-            return (try? Date(str, strategy: .iso8601.time(includingFractionalSeconds: true)))
-                ?? (try? Date(str, strategy: .iso8601))
+            return WireDate.date(from: str)
         }()
 
         let resolvedDisplayName: String? = user.displayName ?? {

@@ -156,13 +156,9 @@ public struct NotificationRowView: View, Equatable {
 
     // MARK: - Computed
 
-    /// Parse an ISO-8601 timestamp, accepting either fractional or whole-second
-    /// `withInternetDateTime`.
+    /// Une date du fil, avec ou sans fractions de seconde (`WireDate`, #6611).
     static func parseISODate(_ string: String) -> Date? {
-        if let date = try? Date(string, strategy: .iso8601) {
-            return date
-        }
-        return try? Date(string, strategy: Date.ISO8601FormatStyle(includingFractionalSeconds: true))
+        WireDate.date(from: string)
     }
 
     private var relativeTime: String {

@@ -2666,15 +2666,15 @@ final class MessageListViewController: UIViewController {
         )
     }
 
-    /// Tap sur la zone MÉDIA d'une citation — résout la pièce jointe citée :
-    /// image/vidéo → plein écran (`onMediaTap`, la même galerie que la
-    /// rangée), audio → lecture (`playAudio`, même file que la rangée) ;
-    /// document et cité hors fenêtre locale → saut à l'original (la carte
-    /// document y offre téléchargement/partage).
+    /// Tap sur la zone MÉDIA d'une citation — la pièce est élue par
+    /// `ReplyReference.citedAttachment(among:)`, site UNIQUE partagé avec son
+    /// ICÔNE (#6164) : image/vidéo → plein écran (`onMediaTap`), audio →
+    /// lecture (`playAudio`, même file) ; document et cité hors fenêtre locale
+    /// → saut à l'original (la carte document y offre téléchargement/partage).
     private func openQuotedMedia(_ reference: ReplyReference) {
         let localId = resolveLocalId(reference.messageId)
         guard let quoted = store.domainMessage(for: localId, currentUserId: currentUserId),
-              let attachment = quoted.attachments.first(where: { $0.type != .location })
+              let attachment = reference.citedAttachment(among: quoted.attachments)
         else {
             scrollToMessage(localId: localId)
             return
@@ -3416,11 +3416,11 @@ extension MessageListViewController {
         // reste écrite et testée — elle n'est simplement plus APPLIQUÉE ; la
         // planche est fixe.
         //
-        // Ce qui distingue le message élu n'est donc plus sa taille mais sa
-        // CARTE et ses chips, posées par la reconfiguration au tick d'élection.
-        for cell in cells { FocalScrollPerspective.reset(cell.contentView.layer) }
+        // Ce qui distingue l'élu : sa CARTE, ses chips et sa LOUPE (#6586,
+        // 2026-09-15) — lui seul grandit, ses voisins restent à plat.
         let focused = FocalScrollPerspective.focusedId(cells: geometries, focusY: focusY, currentId: focalFocusedLocalId)
         let electionChanged = focalFocusedLocalId != focused
+        for cell in cells { FocalScrollPerspective.magnify(cell.contentView.layer, isFocused: focused != nil && focalGeometry(of: cell)?.id == focused, animated: electionChanged) }
         focalFocusedLocalId = focused
         // Les détails du message en focus apparaissent AVEC la carte, pas au
         // posé (directive 2026-08-22) : la reconfiguration ne change aucune

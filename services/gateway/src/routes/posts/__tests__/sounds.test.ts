@@ -1,6 +1,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import Fastify from 'fastify';
 import { registerSoundRoutes } from '../sounds';
+import { authorAccentColor } from '@meeshy/shared/utils/conversation-colors';
 
 // ⚠ v1 : les fixtures utilisaient 'sound-1', rejeté par la garde ObjectId de
 // la route elle-même — 4 tests sur 6 recevaient 400, dont celui censé prouver
@@ -232,6 +233,61 @@ describe('routes /sounds', () => {
     const body = JSON.stringify(res.json());
     expect(body).not.toContain('secret-hash');
     expect(body).not.toContain('uploaderId');
+  });
+});
+
+/**
+ * #6605 — un `Sound` né d'un post vocal n'a ni `coverUrl` ni `coverThumbHash`
+ * (`SoundCaptureService.findCover` ne trouve d'image/vidéo QUE dans le même
+ * post), et son auteur peut ne pas avoir d'avatar (`User.avatar` nullable,
+ * sans défaut à l'inscription) : la cascade documentée sur `toDTO`
+ * (coverUrl → coverThumbHash → avatar) pouvait donc se terminer sur RIEN.
+ * `coverColor` est le dernier palier, garanti non vide — même graine que
+ * `authorAccentColor` sur les posts/commentaires/réels (web-v2).
+ */
+describe('routes /sounds — vignette de repli (#6605)', () => {
+  it('test_getSound_withoutCoverAndWithoutAvatar_stillServesADeterministicColor', async () => {
+    const findUnique = jest.fn<() => Promise<unknown>>().mockResolvedValue({
+      ...base, uploaderId: 'user-abc', isPublic: true, mutedAt: null,
+      coverUrl: null, coverThumbHash: null,
+      uploader: { id: 'user-abc', username: 'alice', displayName: null, avatar: null },
+    });
+    const res = await (await buildApp({ sound: { findUnique } })).inject({ method: 'GET', url: `/sounds/${ID}` });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.coverColor).toBe(authorAccentColor('user-abc', 'alice'));
+    expect(res.json().data.coverColor).toMatch(/^#[0-9A-F]{6}$/);
+  });
+
+  it('test_getSound_sameUploader_matchesTheAccentUsedForTheirOtherContent', async () => {
+    const findUnique = jest.fn<() => Promise<unknown>>().mockResolvedValue({
+      ...base, uploaderId: 'user-abc', isPublic: true, mutedAt: null,
+      uploader: { id: 'user-abc', username: 'alice', displayName: 'Alice', avatar: null },
+    });
+    const res = await (await buildApp({ sound: { findUnique } })).inject({ method: 'GET', url: `/sounds/${ID}` });
+    // displayName prime sur username, exactement comme `PostDetail`/`ReelPlayer`.
+    expect(res.json().data.coverColor).toBe(authorAccentColor('user-abc', 'Alice'));
+  });
+
+  it('test_getSound_withCoverUrl_servesCoverColorAlongsideItRatherThanInsteadOfIt', async () => {
+    const findUnique = jest.fn<() => Promise<unknown>>().mockResolvedValue({
+      ...base, uploaderId: 'user-abc', isPublic: true, mutedAt: null,
+      coverUrl: '/cover.jpg', coverThumbHash: 'abc',
+      uploader: { id: 'user-abc', username: 'alice', displayName: null, avatar: null },
+    });
+    const res = await (await buildApp({ sound: { findUnique } })).inject({ method: 'GET', url: `/sounds/${ID}` });
+    expect(res.json().data).toMatchObject({ coverUrl: '/cover.jpg', coverThumbHash: 'abc' });
+    expect(res.json().data.coverColor).toBeTruthy();
+  });
+
+  it('test_getSound_withoutUploaderIncluded_stillServesANonEmptyColor', async () => {
+    // Repli du repli : si la relation `uploader` n'a même pas été chargée,
+    // `coverColor` reste non vide — semé sur l'id du son plutôt que de sortir vide.
+    const findUnique = jest.fn<() => Promise<unknown>>().mockResolvedValue({
+      ...base, uploaderId: 'user-abc', isPublic: true, mutedAt: null,
+    });
+    const res = await (await buildApp({ sound: { findUnique } })).inject({ method: 'GET', url: `/sounds/${ID}` });
+    expect(res.json().data.coverColor).toMatch(/^#[0-9A-F]{6}$/);
   });
 });
 

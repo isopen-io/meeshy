@@ -1,10 +1,13 @@
 import { useState } from 'react';
 
 import { Avatar } from './avatar';
+import { FeedMediaMosaic } from './feed-media-mosaic';
+import { FeedMediaSurface } from './feed-media-surface';
 import { Glyph, GlyphSvg } from './glyph';
 import { FEED_GLYPHS } from './glyphs-feed';
 import type { FeedCardMedia, FeedCardModel, FeedCardStats, FeedCardText, FeedCardViewer } from '@/lib/feed/card-model';
 import type { PostToggleKind } from '@/lib/feed/interactions';
+import { isPagedLayout } from '@/lib/feed/mosaic-layout';
 import { FEED_TEXT_TRUNCATION_LIMIT, truncateWords } from '@/lib/feed/text';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -140,74 +143,6 @@ function FeedActionsRow({
 }
 
 /**
- * LA SURFACE D'UN MÉDIA — image (ThumbHash peint AVANT toute requête, puis
- * `loading="lazy"`) ou repli plein cadre pour vidéo (`fillPlay`) / audio
- * (`waveform`), dont la LECTURE reste hors tranche (D-42, § 1.5 de la
- * spécification).
- */
-function FeedMediaSurface({ media }: { readonly media: FeedCardMedia }) {
-  const [loaded, setLoaded] = useState(false);
-
-  if (media.kind === 'video' || media.kind === 'audio') {
-    const language = currentInterfaceLanguage();
-    const poster = media.thumbnailSrc ?? media.placeholder;
-    return (
-      <div
-        className="absolute inset-0 grid place-items-center"
-        style={{
-          backgroundColor: 'var(--color-ios-card)',
-          /**
-           * `url("...")`, GUILLEMETÉ (défaut bloquant relevé à la capture,
-           * #5893) — un `data:image/svg+xml` peut contenir un `)` NON
-           * échappé : `encodeURIComponent` échappe `#` mais PAS `(`/`)`
-           * (MDN), et le SVG des fixtures référence son dégradé par
-           * `fill="url(#g)"`. Sans guillemets, le PREMIER `)` rencontré —
-           * celui de cette référence interne, pas la fin de l'URI — clôt le
-           * `url()` CSS prématurément ; le navigateur rejette alors la
-           * valeur ENTIÈRE en silence (`backgroundImage` retombe à `none`,
-           * aucune erreur console) et le repli plein cadre restait BLANC.
-           * Guillemeter est la forme CSS qui admet `)` sans ambiguïté,
-           * quelle que soit la source de l'URL.
-           */
-          ...(poster !== undefined ? { backgroundImage: `url("${poster}")`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}),
-        }}
-      >
-        {media.kind === 'video' ? (
-          <Glyph name="fillPlay" size={44} style={{ color: 'rgba(255,255,255,0.85)' }} title={translate(language, 'feed.post.media.video')} />
-        ) : (
-          <GlyphSvg
-            glyph={FEED_GLYPHS.waveform}
-            size={72}
-            style={{ color: 'rgba(255,255,255,0.55)' }}
-            title={translate(language, 'feed.post.media.audio')}
-          />
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <>
-      {media.placeholder !== undefined ? (
-        <img src={media.placeholder} alt="" aria-hidden="true" className="absolute inset-0 size-full object-cover" />
-      ) : null}
-      <img
-        src={media.src}
-        /* `PostMedia.alt` SERVI, jamais la légende (déjà rendue en texte
-           visible sous le média) : la répéter la ferait lire deux fois.
-           Sans texte d'accessibilité, l'image est DÉCORATIVE (`alt=""`) —
-           c'est la forme juste quand rien n'en décrit le contenu. */
-        alt={media.altText ?? ''}
-        loading="lazy"
-        onLoad={() => setLoaded(true)}
-        className="absolute inset-0 size-full object-cover transition-opacity duration-300"
-        style={{ opacity: media.placeholder === undefined || loaded ? 1 : 0 }}
-      />
-    </>
-  );
-}
-
-/**
  * LE CARROUSEL — vue 3f de la planche : « un lot de médias se PARCOURT, il
  * ne se contemple pas ». L'index de page vit ICI (`useState`), jamais dans
  * `FeedPostCard`, pour ne pas invalider toute la carte à chaque page
@@ -221,7 +156,7 @@ function FeedMediaCarousel({ media }: { readonly media: readonly FeedCardMedia[]
   if (current === undefined) return null;
 
   return (
-    <div className="relative overflow-hidden" style={{ borderRadius: 12, aspectRatio: `1 / ${current.ratio}` }} data-feed-media>
+    <div className="relative overflow-hidden" style={{ borderRadius: 12, aspectRatio: `1 / ${current.ratio}` }} data-feed-media data-feed-layout="carousel">
       <FeedMediaSurface media={current} />
       {current.caption !== undefined ? (
         <p
@@ -426,6 +361,16 @@ function FeedReelCard({ model, ...hosts }: { readonly model: FeedCardModel } & C
   );
 }
 
+/**
+ * LES MÉDIAS D'UN POST, DANS L'AGENCEMENT DE SON AUTEUR (#6514) — le carrousel
+ * pour le défaut, et pour un média seul (une mosaïque d'un élément n'en est
+ * pas une) ; une mosaïque pour les quatre autres.
+ */
+function FeedPostMedia({ media, layout }: { readonly media: readonly FeedCardMedia[]; readonly layout: FeedCardModel['layout'] }) {
+  if (isPagedLayout(layout) || media.length < 2) return <FeedMediaCarousel media={media} />;
+  return <FeedMediaMosaic media={media} layout={layout} />;
+}
+
 export function FeedPostCard({ model, ...hosts }: { readonly model: FeedCardModel } & CardHosts) {
   if (model.isReel) return <FeedReelCard model={model} {...hostsOf(hosts)} />;
 
@@ -439,7 +384,7 @@ export function FeedPostCard({ model, ...hosts }: { readonly model: FeedCardMode
       {model.text !== undefined ? <FeedPostText text={model.text} /> : null}
       {model.media.length > 0 ? (
         <div className="px-3">
-          <FeedMediaCarousel media={model.media} />
+          <FeedPostMedia media={model.media} layout={model.layout} />
         </div>
       ) : null}
       <div className="px-3">

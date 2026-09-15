@@ -58,6 +58,18 @@ jobs:
             url: https://gate.staging.meeshy.me/health
             ref: origin/dev
             paths: 'services/gateway packages/shared'
+          # #6551 — le frontend a sa PROPRE image, construite et déployée
+          # indépendamment du gateway (`docker.yml` ne recrée que ce dont le
+          # digest a bougé). Le confondre avec la cible `staging` ci-dessus
+          # aurait laissé passer exactement l'incident qui a ouvert cette
+          # issue : `gateway-staging` recréé et à jour pendant que
+          # `frontend-staging` restait périmé, sans qu'aucun gate ne rougisse.
+          # Pas de pendant « production » : `apps/web-v2` n'y est pas encore
+          # servi (legacy `apps/web` seul, hors périmètre de ce gate — #5609).
+          - name: frontend-staging
+            url: https://staging.meeshy.me/build-info.json
+            ref: origin/dev
+            paths: 'apps/web-v2 packages/design-tokens packages/shared'
     steps:
       - name: Checkout (historique complet — requis par git merge-base/rev-list)
         uses: actions/checkout@v7
