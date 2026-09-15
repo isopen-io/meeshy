@@ -408,9 +408,69 @@ final class MediaGalleryStageGeometryTests: XCTestCase {
                       "le rayon vient du solveur : il tombe à 0 en plein cadre")
     }
 
+    // MARK: - Ce que la colonne d'actions a SOUS elle (#6709)
+
+    /// **La colonne se teinte sur ce qui est PEINT sous elle, pas sur le média de
+    /// la page.** Recette du 2026-09-16 (Meeshy-iOS26, PR #6761) : sur la page
+    /// panorama 4:1 d'un post, la colonne tombe dans la bande NOIRE sous la scène ;
+    /// teintée d'après la luminance CLAIRE du panorama, son glyphe sombre se lisait
+    /// à 1,16:1 sur sa pastille.
+    func test_laColonneDansLaBandeDUnPanorama_sansEmpreinte_seLitSurLeNoir() {
+        let panorama = resolve(ratio: 4)
+        let piece = makeAttachment(width: 1_600, height: 400)
+
+        XCTAssertNil(
+            MediaGalleryStage.columnBackdrop(for: piece, stage: panorama,
+                                             columnFrame: Self.colonne(sous: panorama)),
+            "la bande est noire : la vignette claire du panorama n'est pas sous la colonne"
+        )
+        XCTAssertEqual(MediaChromeScheme.scheme(for: nil, sample: nil), .dark,
+                       "sur le noir, le glyphe reste clair")
+    }
+
+    /// La bande HABILLÉE peint l'empreinte floutée (#6143) : c'est elle, et elle
+    /// seule, que la colonne doit lire — jamais la vignette nette du média.
+    func test_laColonneDansLaBande_avecEmpreinte_suitLEmpreinteSeule() throws {
+        let panorama = resolve(ratio: 4)
+        let piece = makeAttachment(width: 1_600, height: 400, thumbHash: "empreinte")
+        let fond = try XCTUnwrap(MediaGalleryStage.columnBackdrop(for: piece, stage: panorama,
+                                                                  columnFrame: Self.colonne(sous: panorama)))
+
+        XCTAssertEqual(fond.thumbHash, "empreinte")
+        XCTAssertNil(fond.bitmapURL, "la bande peint l'empreinte, jamais la vignette nette")
+    }
+
+    /// Posée SUR le média, la colonne garde la règle de #6693 : la luminance du média.
+    func test_laColonnePoseeSurLeMedia_suitLeMedia() {
+        let portrait = resolve(ratio: 0.8)
+        let piece = makeAttachment(width: 1_600, height: 2_000)
+        let surLeMedia = CGRect(x: portrait.frame.width - 56, y: portrait.frame.height / 2,
+                                width: 44, height: 44)
+
+        XCTAssertEqual(MediaGalleryStage.columnBackdrop(for: piece, stage: portrait, columnFrame: surLeMedia),
+                       .attachment(piece))
+    }
+
+    /// Avant la première mesure, rien ne dit où est la colonne : elle garde le fond
+    /// du média plutôt que de basculer au noir le temps d'une passe.
+    func test_avantSaMesure_laColonneGardeLeFondDuMedia() {
+        let panorama = resolve(ratio: 4)
+        let piece = makeAttachment(width: 1_600, height: 400)
+
+        XCTAssertEqual(MediaGalleryStage.columnBackdrop(for: piece, stage: panorama, columnFrame: .zero),
+                       .attachment(piece))
+    }
+
+    /// Une colonne d'une action, posée juste sous le bas du média, au bord droit
+    /// du cadre — là où la recette l'a mesurée sur le panorama.
+    private static func colonne(sous stage: MediaStageFraming.Result) -> CGRect {
+        let basDuMedia = (stage.frame.height + stage.media.height) / 2
+        return CGRect(x: stage.frame.width - 56, y: basDuMedia + 12, width: 44, height: 44)
+    }
+
     // MARK: - Fabrique
 
-    private func makeAttachment(width: Int?, height: Int?) -> MessageAttachment {
+    private func makeAttachment(width: Int?, height: Int?, thumbHash: String? = nil) -> MessageAttachment {
         MessageAttachment(
             id: "a-\(width ?? -1)x\(height ?? -1)",
             mimeType: "image/jpeg",
@@ -418,6 +478,7 @@ final class MediaGalleryStageGeometryTests: XCTestCase {
             fileUrl: "https://cdn.meeshy.me/a.jpg",
             width: width,
             height: height,
+            thumbHash: thumbHash,
             uploadedBy: "u-1"
         )
     }

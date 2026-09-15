@@ -198,6 +198,11 @@ nonisolated struct PostGalleryLot {
                                   media: media)
     }
 
+    @MainActor
+    func composeTarget(for pieceId: String, in post: FeedPost) -> ComposerSeedTarget? {
+        nil
+    }
+
     /// L'identité d'une page scène. L'INDEX et non l'id de scène :
     /// `CanvasV3(migrating:)` a gravé `"s1"` en dur pendant tout le corpus
     /// legacy, et deux scènes homonymes doivent rester deux pages. Le préfixe ne

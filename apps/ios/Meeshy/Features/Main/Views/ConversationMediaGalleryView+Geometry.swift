@@ -227,6 +227,12 @@ enum MediaGalleryStage {
         return StoryLetterboxFill.source(thumbHash: thumbHash)
     }
 
+    static func columnBackdrop(for attachment: MessageAttachment,
+                               stage: MediaStageFraming.Result,
+                               columnFrame: CGRect) -> MediaChromeBackdrop? {
+        .attachment(attachment)
+    }
+
     private static func freeRegionRatio(viewport: CGSize,
                                         presentation: MediaStageFraming.Presentation,
                                         corridors: MediaStageFraming.Corridors) -> CGFloat {

@@ -386,4 +386,41 @@ final class PostGalleryLotTests: XCTestCase {
         XCTAssertFalse(GalleryScenePlayback.playing(after: .togglePlayback, isPlaying: true))
         XCTAssertTrue(GalleryScenePlayback.playing(after: .none, isPlaying: true))
     }
+
+    // MARK: - #6709 — « Créer avec ce média » sur une page de post
+
+    /// **La page d'une scène offre « Créer avec CE média »** — recette du
+    /// 2026-09-16 (Meeshy-iOS26, PR #6761) : sur les posts à plusieurs scènes, la
+    /// colonne n'avait que « Répondre ». La règle d'offre répond au POST
+    /// (« exactement une pièce composable ») ; la galerie, elle, montre UNE pièce,
+    /// et c'est elle que « CE média » désigne.
+    @MainActor
+    func test_composer_surUneSceneDUnPostAPlusieursScenes_semeLeMediaQuElleMontre() throws {
+        let publication = post(media: [media("m1"), media("m2"), media("m3")],
+                               scenes: [scene("s1", media: "m1"), scene("s2", media: "m2"), scene("s3", media: "m3")],
+                               content: "Trois scènes")
+        let lot = compose(publication)
+        let seconde = try XCTUnwrap(lot.attachments.dropFirst().first?.id)
+
+        let cible = try XCTUnwrap(lot.composeTarget(for: seconde, in: publication),
+                                  "la page d'une scène doit offrir « Créer avec ce média »")
+        XCTAssertEqual(cible.attachment?.id, "m2")
+        XCTAssertEqual(cible.origin, .socialMedia(postId: "p1", mediaId: "m2"))
+        XCTAssertEqual(cible.plan.description, "Trois scènes")
+    }
+
+    /// Un média JOINT à un commentaire n'est pas un média du post, et une scène
+    /// sans média n'a aucune pièce à poser : « Créer avec CE média » n'y existe pas.
+    @MainActor
+    func test_composer_surUnMediaDeCommentaire_ouUneSceneSansMedia_nOffreRien() {
+        let publication = troisScenes()
+        let lot = compose(publication, comments: [comment("c1", media: [media("x")])])
+        XCTAssertNil(lot.composeTarget(for: "x", in: publication),
+                     "un média de commentaire n'est pas un média du post")
+
+        let texte = post(scenes: [scene("s1")], content: "Juste du texte")
+        let sansMedia = compose(texte)
+        XCTAssertNil(sansMedia.attachments.first.flatMap { sansMedia.composeTarget(for: $0.id, in: texte) },
+                     "« Créer avec CE média » promet une pièce : une scène sans média n'en a pas")
+    }
 }
