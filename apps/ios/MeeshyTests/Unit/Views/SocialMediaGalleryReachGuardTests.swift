@@ -64,13 +64,24 @@ final class SocialMediaGalleryReachGuardTests: XCTestCase {
     /// Le site unique doit servir la LÉGENDE, sinon le plein écran perd ce que
     /// la surface d'origine affichait — le défaut réparé par #4934, qu'un
     /// quatrième exemplaire recopié aurait pu réintroduire.
+    ///
+    /// **Depuis #6709, la composition vit dans le LOT** (`PostGalleryLot`), la
+    /// valeur pure que le site unique appelle pour les scènes, les médias et
+    /// ceux des commentaires. La garde suit la règle là où elle a déménagé, et
+    /// exige en plus que le site PASSE à la galerie ce que le lot compose — sans
+    /// quoi un lot juste servirait une galerie muette.
     func test_leSiteUniqueSertLaLegendeEtSesAlternatives() throws {
-        let code = try source("Meeshy/Features/Main/Views/SocialMediaGalleryPresentation.swift")
+        let site = try source("Meeshy/Features/Main/Views/SocialMediaGalleryPresentation.swift")
+        let lot = try source("Meeshy/Features/Main/Views/PostGalleryLot.swift")
 
-        XCTAssertTrue(code.contains("SocialMediaCaption.map("),
-                      "la légende simple doit être servie")
-        XCTAssertTrue(code.contains("SocialMediaCaption.serving("),
+        XCTAssertTrue(lot.contains("SocialMediaCaption.map("),
+                      "la légende simple doit être composée")
+        XCTAssertTrue(lot.contains("SocialMediaCaption.serving("),
                       "…et ses alternatives de langue, sans quoi la bascule disparaît en plein écran")
+        XCTAssertTrue(site.contains("captionMap: lot.captionMap"),
+                      "le site unique doit passer à la galerie la légende que le lot compose")
+        XCTAssertTrue(site.contains("captionServings: lot.captionServings"),
+                      "…et ses alternatives de langue")
     }
 
     /// La pastille du réel n'existe QUE lorsqu'elle a un effet — loi 4 : un

@@ -114,14 +114,19 @@ final class MediaGalleryLetterboxDressingTests: XCTestCase {
     /// **La galerie ne tient pas sa propre table de règles.** La cascade des
     /// sources vit dans `StoryLetterboxFill` ; la recopier ici ferait diverger
     /// les deux surfaces le jour où l'une changerait, sans que rien ne rougisse.
+    ///
+    /// **Trois pages, un seul appel de règle chacune** (#6709) : la scène de post
+    /// est devenue une page de la galerie, et son hors-champ s'habille par la
+    /// MÊME règle que ses sœurs image et vidéo — c'est l'appel qui s'ajoute, jamais
+    /// une table. Un quatrième site devrait être une quatrième nature de page.
     func test_theRule_delegatesToTheSDKTable_neverACopy() throws {
         let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(Self.gallery))
 
         XCTAssertTrue(code.contains("StoryLetterboxFill.source(thumbHash:"),
                       "la règle d'app DÉLÈGUE la cascade au SDK")
         XCTAssertEqual(
-            code.components(separatedBy: "MediaGalleryStage.backdrop(").count - 1, 2,
-            "une page image, une page vidéo — et aucun troisième site pour en décider autrement"
+            code.components(separatedBy: "MediaGalleryStage.backdrop(").count - 1, 3,
+            "une page image, une page vidéo, une page scène — et aucun quatrième site pour en décider autrement"
         )
     }
 

@@ -163,6 +163,18 @@ enum MediaGalleryStage {
         return CGFloat(width) / CGFloat(height)
     }
 
+    /// **Le rapport que le solveur reçoit pour une PAGE** (#6709).
+    ///
+    /// Une page scène est une pièce SYNTHÉTIQUE, sans dimensions : lui demander
+    /// `ratio(of:)` rendrait `nil`, et le cadre prendrait toute la zone libre au
+    /// lieu du rapport de la scène. Le rapport d'une scène vient donc de sa
+    /// valeur (`GallerySceneItem.aspect`, dont `PostGalleryLot.sceneAspect` est
+    /// le site unique) ; celui d'une image ou d'une vidéo, de ses dimensions.
+    static func mediaRatio(of attachment: MessageAttachment,
+                           scenes: [String: GallerySceneItem]) -> CGFloat? {
+        scenes[attachment.id]?.aspect ?? ratio(of: attachment)
+    }
+
     /// **Un ratio inconnu prend toute la zone libre — il ne se devine pas.**
     ///
     /// Deviner (4:3, 16:9, peu importe) ferait SAUTER le cadre à l'instant où
@@ -309,10 +321,13 @@ extension ConversationMediaGalleryView {
     /// **L'état d'immersion entre ici** (#6142) : `framing` le projette sur le
     /// solveur, donc franchir une porte change des COTES. Un état qui n'aurait
     /// commandé que du chrome aurait laissé la loi de cadrage sans interrupteur.
+    ///
+    /// **Une page scène reçoit le rapport de SA scène** (#6709) : sa pièce est
+    /// synthétique, sans dimensions — `mediaRatio(of:scenes:)` le sait.
     func stage(for attachment: MessageAttachment) -> MediaStageFraming.Result {
         MediaGalleryStage.resolve(
             viewport: DeviceLayout.windowSize,
-            mediaRatio: MediaGalleryStage.ratio(of: attachment),
+            mediaRatio: MediaGalleryStage.mediaRatio(of: attachment, scenes: sceneContext?.scenes ?? [:]),
             presentation: stagePresentation.framing,
             corridors: stageCorridors
         )

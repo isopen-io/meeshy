@@ -75,14 +75,25 @@ extension ConversationMediaGalleryView {
         withAnimation(.easeInOut(duration: 0.25)) { stagePresentation = next }
     }
 
-    /// Applique au player partagé ce que la porte commande — et rien d'autre.
+    /// Applique ce que la porte commande — et rien d'autre.
     ///
-    /// `pauseActiveVideo()` porte déjà la garde qui compte : ne toucher au
-    /// player que si la piste active est bien celle de cette page. La bascule
-    /// la reprend telle quelle, sans quoi reprendre depuis la galerie
+    /// **Une scène se commande par la GALERIE, pas par le player partagé**
+    /// (#6709). Sa lecture est `scenePlaying`, que le player de la page descend à
+    /// son canvas ; l'appui long l'arrête en entrant et la bascule une fois
+    /// dedans (`GalleryScenePlayback`), exactement comme il le fait d'une vidéo.
+    /// Une scène FIXE n'a rien à arrêter : la commande reste où elle est.
+    ///
+    /// Pour une vidéo, `pauseActiveVideo()` porte déjà la garde qui compte : ne
+    /// toucher au player que si la piste active est bien celle de cette page. La
+    /// bascule la reprend telle quelle, sans quoi reprendre depuis la galerie
     /// relancerait la lecture d'une AUTRE surface (le feed, une bulle, une
     /// image-dans-l'image).
     func applyTransport(_ intent: StageTransportIntent) {
+        if let scene = currentScene {
+            guard scene.moves else { return }
+            scenePlaying = GalleryScenePlayback.playing(after: intent, isPlaying: scenePlaying)
+            return
+        }
         switch intent {
         case .none:
             return
@@ -111,9 +122,10 @@ extension ConversationMediaGalleryView {
     }
 
     /// **Y a-t-il seulement quelque chose à arrêter ?** La question que la
-    /// pastille pose avant de s'afficher : au-dessus d'une photo, « en pause »
-    /// annoncerait l'arrêt de rien.
+    /// pastille pose avant de s'afficher : au-dessus d'une photo — ou d'une
+    /// scène fixe —, « en pause » annoncerait l'arrêt de rien.
     var currentMediaIsPlayable: Bool {
+        if let scene = currentScene { return scene.moves }
         guard currentIndex < allAttachments.count else { return false }
         return allAttachments[currentIndex].type == .video
     }
@@ -130,11 +142,14 @@ extension ConversationMediaGalleryView {
     /// second play/pause ferait deux contrôleurs pour une seule lecture, au
     /// MÊME endroit de l'écran — le défaut que le poster central de la page
     /// vidéo a déjà coûté une fois.
+    ///
+    /// L'état de lecture est celui de ce qui est OUVERT : la commande de la
+    /// galerie pour une scène (#6709), le player partagé pour une vidéo.
     @ViewBuilder
     var pausedBadgeLayer: some View {
         if MediaStagePause.showsBadge(presentation: stagePresentation,
                                       isPlayable: currentMediaIsPlayable,
-                                      isPlaying: videoManagerIsPlaying) {
+                                      isPlaying: currentScene != nil ? scenePlaying : videoManagerIsPlaying) {
             MediaStagePausedBadge()
                 .allowsHitTesting(false)
                 .transition(.opacity.combined(with: .scale(scale: 0.9)))
