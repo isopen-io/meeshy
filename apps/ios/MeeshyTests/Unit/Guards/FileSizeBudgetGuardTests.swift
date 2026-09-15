@@ -336,7 +336,12 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // seul le plafond baisse, d'exactement ce que le lot retire — le cumul
     // mesuré ce jour est 58 154, et les 6 lignes de mou préexistantes ne sont
     // pas reprises ici, pour la raison de coordination de #6016.
-    private static let legacyLineCeiling = 58_160
+    //
+    // #6644 — 58 160 → 58 159 (−1). `MeeshyApp.swift` perd la borne qu'il posait
+    // autour de `LoginView` : l'écran la porte désormais lui-même. Le plafond
+    // baisse d'exactement ce que le lot retire ; le mou préexistant n'est pas
+    // repris, pour la même raison de coordination.
+    private static let legacyLineCeiling = 58_159
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

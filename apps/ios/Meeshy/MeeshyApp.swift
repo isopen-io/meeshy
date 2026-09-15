@@ -111,7 +111,6 @@ struct MeeshyApp: App {
                             AdaptiveRootView()
                         } else if hasCheckedSession {
                             LoginView()
-                                .iPadFormWidth()
                         }
                     }
                     .opacity(showSplash ? 0 : 1)

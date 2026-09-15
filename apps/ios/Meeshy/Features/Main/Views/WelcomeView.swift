@@ -88,16 +88,23 @@ struct WelcomeView: View {
             HapticFeedback.medium()
             isShowingSignup = true
         } label: {
-            ZStack {
-                RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                    .fill(MeeshyColors.brandGradient)
-                    .frame(minHeight: 52)
-                Text(String(localized: "welcome.createAccount", defaultValue: "Créer un compte", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold))
-                    .foregroundColor(.white)
-            }
+            // La forme est un FOND, pas un membre de la pile (#6644) : posée
+            // dans un `ZStack` avec un `minHeight` sans plafond, elle prenait
+            // toute la hauteur que l'écran lui proposait — sur iPad, deux
+            // boutons de près de 500 pt. Un fond épouse le libellé ; c'est le
+            // libellé qui donne la hauteur, 52 pt au moins, davantage si le
+            // texte grossit.
+            Text(String(localized: "welcome.createAccount", defaultValue: "Créer un compte", bundle: .main))
+                .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold))
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity, minHeight: 52)
+                .background(
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                        .fill(MeeshyColors.brandGradient)
+                )
         }
         .bounceOnTap()
+        .accessibilityIdentifier("welcome.createAccount")
         .accessibilityLabel(String(localized: "welcome.createAccount", defaultValue: "Créer un compte", bundle: .main))
         .accessibilityHint(String(localized: "welcome.createAccount.hint", defaultValue: "Ouvre le formulaire d'inscription", bundle: .main))
     }
@@ -107,16 +114,21 @@ struct WelcomeView: View {
             HapticFeedback.light()
             completeWelcome()
         } label: {
-            ZStack {
-                RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                    .stroke(theme.inputBorder.opacity(0.6), lineWidth: 1)
-                    .frame(minHeight: 52)
-                Text(String(localized: "welcome.signIn", defaultValue: "Se connecter", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
-            }
+            // Même correction que « Créer un compte ». Et la forme de TOUCHE
+            // est posée à part : un contour ne couvre que son trait, et le
+            // bouton ne se touchait qu'au libellé et au liseré.
+            Text(String(localized: "welcome.signIn", defaultValue: "Se connecter", bundle: .main))
+                .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
+                .foregroundColor(theme.textPrimary)
+                .frame(maxWidth: .infinity, minHeight: 52)
+                .background(
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                        .stroke(theme.inputBorder.opacity(0.6), lineWidth: 1)
+                )
+                .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
         }
         .bounceOnTap()
+        .accessibilityIdentifier("welcome.signIn")
         .accessibilityLabel(String(localized: "welcome.signIn", defaultValue: "Se connecter", bundle: .main))
         .accessibilityHint(String(localized: "welcome.signIn.hint", defaultValue: "Ouvre l'écran de connexion", bundle: .main))
     }
