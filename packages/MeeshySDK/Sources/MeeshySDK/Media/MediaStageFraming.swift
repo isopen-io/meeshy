@@ -23,10 +23,17 @@ import CoreGraphics
 /// sur son hors-champ habillé. Un solveur qui ne rendrait qu'une taille
 /// obligerait chaque hôte à recalculer l'autre, donc à réimplémenter la règle.
 ///
-/// Le plancher se DÉRIVE : il vaut trois fois la hauteur de l'overlay posé sur
-/// le cadre, pour que celui-ci n'en couvre jamais plus du tiers. Il est passé en
-/// entrée plutôt que codé ici — c'est l'hôte qui connaît son overlay, comme
-/// c'est lui qui connaît la hauteur réelle de son rail.
+/// La séparation joue aussi sur l'autre axe (#6692) : une image très haute (1:4)
+/// ne fait que 151 pt de large en pleine hauteur. Le cadre reste alors au
+/// plancher de LARGEUR, et le média flotte entre deux bandes latérales — sans
+/// quoi l'auteur, sa date et la colonne d'actions posés sur le cadre s'y
+/// écrasaient.
+///
+/// Les deux planchers se DÉRIVENT. La hauteur vaut trois fois celle de l'overlay
+/// posé sur le cadre, pour que celui-ci n'en couvre jamais plus du tiers ; la
+/// largeur, ce que la colonne d'actions posée sur le cadre exige. Ils sont
+/// passés en entrée plutôt que codés ici — c'est l'hôte qui connaît son overlay
+/// et sa colonne, comme c'est lui qui connaît la hauteur réelle de son rail.
 ///
 /// ## Placement
 ///
@@ -99,19 +106,29 @@ public nonisolated enum MediaStageFraming {
         public let presentation: Presentation
         public let cardedCornerRadius: CGFloat
         public let minimumFrameHeight: CGFloat
+        /// **Le jumeau du plancher de hauteur, sur l'autre axe** (#6692).
+        ///
+        /// Ce qui se pose sur le cadre a une largeur autant qu'une hauteur. Sans
+        /// lui, une image très haute gardait la seule largeur de son média
+        /// ajusté, et tout ce qui s'y posait s'y écrasait. Même contrat que la
+        /// hauteur : un minimum jamais un maximum, borné par la zone libre, sans
+        /// effet en plein cadre — et une valeur que l'HÔTE dérive de son chrome.
+        public let minimumFrameWidth: CGFloat
 
         public init(viewport: CGSize,
                     mediaRatio: CGFloat,
                     corridors: Corridors,
                     presentation: Presentation,
                     cardedCornerRadius: CGFloat,
-                    minimumFrameHeight: CGFloat) {
+                    minimumFrameHeight: CGFloat,
+                    minimumFrameWidth: CGFloat) {
             self.viewport = viewport
             self.mediaRatio = mediaRatio
             self.corridors = corridors
             self.presentation = presentation
             self.cardedCornerRadius = cardedCornerRadius
             self.minimumFrameHeight = minimumFrameHeight
+            self.minimumFrameWidth = minimumFrameWidth
         }
     }
 
@@ -161,15 +178,27 @@ public nonisolated enum MediaStageFraming {
             let media = aspectFit(ratio: input.mediaRatio,
                                   in: CGSize(width: regionWidth, height: regionHeight))
 
-            // Le plancher est un MINIMUM, jamais un maximum : il ne rabote aucun
-            // cadre haut, et il reste borné par la zone libre — un plancher plus
-            // grand que l'écran pousserait le rail dehors.
-            let flooredHeight = min(max(media.height, input.minimumFrameHeight), regionHeight)
+            // Les deux planchers ne touchent que le CADRE : le média garde sa
+            // taille ajustée et flotte dedans, sur son hors-champ habillé.
+            let frame = CGSize(
+                width: floored(media.width, minimum: input.minimumFrameWidth, bound: regionWidth),
+                height: floored(media.height, minimum: input.minimumFrameHeight, bound: regionHeight)
+            )
 
-            return Result(frame: CGSize(width: media.width, height: flooredHeight),
-                          media: media,
-                          cornerRadius: input.cardedCornerRadius)
+            return Result(frame: frame, media: media, cornerRadius: input.cardedCornerRadius)
         }
+    }
+
+    /// **Un plancher est un MINIMUM, jamais un maximum** — et il reste borné par
+    /// la zone libre.
+    ///
+    /// Il ne rabote aucun cadre plus grand que lui, et un plancher plus grand que
+    /// l'écran ne gagne jamais : en hauteur il pousserait le rail dehors, en
+    /// largeur il mordrait sur les gouttières. Une seule écriture pour les deux
+    /// axes (#6692) : deux `min(max(…))` recopiés côte à côte seraient deux
+    /// règles qui se ressemblent, jusqu'au jour où l'une bouge.
+    private static func floored(_ value: CGFloat, minimum: CGFloat, bound: CGFloat) -> CGFloat {
+        min(max(value, minimum), bound)
     }
 
     /// **Ajuste au ratio puis centre — jamais de rognage, jamais d'étirement.**

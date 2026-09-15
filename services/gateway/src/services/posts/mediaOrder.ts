@@ -47,3 +47,32 @@ export async function applyMediaOrder(
     ),
   );
 }
+
+/**
+ * Le même RANG, pour les médias d'un COMMENTAIRE (#6578).
+ *
+ * Jumelle exacte de `applyMediaOrder` : même raison (la liste de la requête est
+ * le seul porteur de l'ordre voulu), même garde (le porteur dans le `where`,
+ * si bien qu'un id que la réclamation vient de refuser n'est pas touché). Elle
+ * n'existe séparément que parce que la colonne du porteur change — `commentId`
+ * et `postId` sont exclusifs par construction, et une fonction qui prendrait
+ * « un porteur quelconque » permettrait d'écrire l'un en croyant écrire
+ * l'autre.
+ *
+ * Elle n'avait pas lieu d'être tant qu'un commentaire ne portait qu'un média :
+ * un seul rang ne s'ordonne pas.
+ */
+export async function applyCommentMediaOrder(
+  client: Pick<PrismaClient, 'postMedia'>,
+  commentId: string,
+  mediaIds: readonly string[],
+): Promise<void> {
+  const ranked = [...new Set(mediaIds)];
+  if (ranked.length === 0) return;
+
+  await Promise.all(
+    ranked.map((id, order) =>
+      client.postMedia.updateMany({ where: { id, commentId }, data: { order } }),
+    ),
+  );
+}

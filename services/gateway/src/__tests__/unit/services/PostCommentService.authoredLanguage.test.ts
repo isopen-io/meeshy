@@ -63,7 +63,7 @@ describe('PostCommentService.addComment — langue d’écriture déclarée (#65
     const { prisma, create } = buildPrisma();
     const service = new PostCommentService(prisma, noopTrackingLinks);
 
-    await service.addComment('post-1', 'a1', FRENCH_LOOKING, undefined, undefined, 'de');
+    await service.addComment('post-1', 'a1', FRENCH_LOOKING, { originalLanguage: 'de' });
 
     expect(writtenData(create).originalLanguage).toBe('de');
   });
@@ -72,7 +72,7 @@ describe('PostCommentService.addComment — langue d’écriture déclarée (#65
     const { prisma, create } = buildPrisma();
     const service = new PostCommentService(prisma, noopTrackingLinks);
 
-    await service.addComment('post-1', 'a1', FRENCH_LOOKING, undefined, undefined, 'de_DE');
+    await service.addComment('post-1', 'a1', FRENCH_LOOKING, { originalLanguage: 'de_DE' });
 
     expect(writtenData(create).originalLanguage).toBe('de');
   });

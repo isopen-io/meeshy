@@ -1406,7 +1406,7 @@ struct FeedView: View {
                 // ouverte directement depuis le bouton commentaire d'un réel du feed.
                 CommentsSheetView(post: post, accentColor: post.authorColor)
             }
-            .sheet(item: $editingPost) { post in
+            .postEditCover(item: $editingPost) { post in
                 EditPostSheet(
                     originalContent: post.content,
                     originalLanguage: post.originalLanguage,

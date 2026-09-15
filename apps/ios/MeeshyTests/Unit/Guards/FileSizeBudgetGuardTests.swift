@@ -69,7 +69,6 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         "MessageOverlayMenu.swift",
         "P2PWebRTCClient.swift",
         "PostDetailView.swift",
-        "PostDetailViewModel.swift",
         "ProfileUserPostsList.swift",
         "ReelsPlayerView.swift",
         "RootView.swift",
@@ -349,7 +348,15 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // `StoryViewerView+ImageOnly.swift` ; la forme de l'image seule s'y ajoute
     // ensuite. L'hôte RESTE en dette (2 313) ; le plafond baisse d'exactement ce
     // que le lot retire.
-    private static let legacyLineCeiling = 58_138
+    // #6578 — 58 138 → 56 430 (−1 708). Commenter en citant un média du post
+    // touchait trois hôtes en dette ; rien n'a été ajouté à aucun d'eux. Le
+    // composer de `PostDetailView.swift` (2 329 → 2 163) et la ligne de
+    // `FeedCommentsSheet.swift` (2 519 → 2 127) sont partis dans leurs propres
+    // fichiers, et `PostDetailViewModel.swift` (1 365 → 1 149) repasse SOUS le
+    // plafond dur : il QUITTE la liste, pour toujours. Le plafond baisse de ce
+    // que le lot retire aux deux qui restent (166 + 392) et du poids de celui
+    // qui sort (1 150) — jamais du mou préexistant.
+    private static let legacyLineCeiling = 56_430
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

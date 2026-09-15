@@ -163,6 +163,10 @@ export const commentsPreviewInclude = Prisma.validator<Prisma.Post$commentsArgs>
     likeCount: true,
     replyCount: true,
     createdAt: true,
+    // #6578 — `postId` est REQUIS par le service de la citation : la re-lecture
+    // du média cité revérifie son appartenance au post commenté SUR LA LIGNE
+    // relue. Sans lui, l'aperçu embarqué sert un `quotedMedia` non vérifié.
+    postId: true,
     // Rappel projet : tout champ lu par un resolver doit figurer dans son
     // `select`. Sans `metadata` ici, un commentaire portant un lieu partagé
     // (`metadata.location`) l'affiche dans la liste complète des commentaires

@@ -63,7 +63,7 @@ struct PostDetailView: View {
     /// Autocomplétion @mention pour le composer de commentaire — contexte `.post`,
     /// donc le backend suggère l'auteur du post, les personnes ayant commenté, puis
     /// les contacts (parité avec `FeedCommentsSheet`).
-    @StateObject private var mentionController: MentionComposerController
+    @StateObject var mentionController: MentionComposerController
     // internal : lu par `PostDetailView+Canvas.swift` (#4086) — un membre
     // `private` d'une View n'est PAS visible depuis un fichier d'extension.
     var theme: ThemeManager { ThemeManager.shared }
@@ -113,10 +113,10 @@ struct PostDetailView: View {
     @State var composerLanguage: String = DefaultComposerLanguage.resolve()
     @State var commentBlurEnabled: Bool = false
     @State var commentEffects: MessageEffects = .none
-    @State private var composerFocusTrigger: Bool = false
+    @State var composerFocusTrigger: Bool = false
     /// Focus réel du champ du composer — pilote l'insertion d'un texte déposé
     /// (au curseur quand le champ a le focus, sinon à la fin).
-    @State private var composerIsFocused: Bool = false
+    @State var composerIsFocused: Bool = false
     /// Section de commentaire actuellement surlignée (cible d'une notification).
     @State private var highlightedCommentId: String? = nil
     /// Garde-fou : ne défile vers la cible qu'une seule fois (les commentaires
@@ -131,18 +131,18 @@ struct PostDetailView: View {
     @State var composerText: String = ""
     /// @mention auto-injectée par `beginReply` (réponse à une réponse) — suivie
     /// pour la retirer proprement si on change de cible sans envoyer.
-    @State private var prefilledMention: String? = nil
+    @State var prefilledMention: String? = nil
     // Comment attachments + real voice capture (parity with feed/reels composer).
     @State var commentAttachments: [ComposerAttachment] = []
-    @State private var showCommentPhotoPicker: Bool = false
-    @State private var commentPhotoItems: [PhotosPickerItem] = []
-    @State private var showCommentFilePicker: Bool = false
-    @State private var showCommentLocationPicker: Bool = false
+    @State var showCommentPhotoPicker: Bool = false
+    @State var commentPhotoItems: [PhotosPickerItem] = []
+    @State var showCommentFilePicker: Bool = false
+    @State var showCommentLocationPicker: Bool = false
     /// Lieu choisi via le picker, en attente d'envoi — transporté jusqu'au
     /// commentaire à l'envoi (contrairement à `FeedCommentsSheet`, dont le
     /// transport arrive dans une tâche ultérieure du plan).
-    @State private var pendingPlace: SharedPlace? = nil
-    @StateObject private var audioRecorder = AudioRecorderManager()
+    @State var pendingPlace: SharedPlace? = nil
+    @StateObject var audioRecorder = AudioRecorderManager()
     @State private var isTextExpanded = false
     @State private var headerScrollRelay = ScrollOffsetRelay()
     // Inline story canvas playback gating (audio active → pause when off-screen / in call).
@@ -400,7 +400,7 @@ struct PostDetailView: View {
     /// (`secondary = shiftHue(primary, +30°)`) : sans lui, le composer
     /// retombe sur son défaut de marque et le bouton d'envoi rend un dégradé
     /// hybride accent → indigo.
-    private var composerSecondaryColor: String {
+    var composerSecondaryColor: String {
         DynamicColorGenerator.hueShiftedHex(accentColor, degrees: 30)
     }
 
@@ -1019,7 +1019,7 @@ struct PostDetailView: View {
             // TrackingLink owned by the current user.
             ShareSheet(activityItems: [link.url])
         }
-        .sheet(isPresented: $isEditing) {
+        .postEditCover(post: displayPost, isPresented: $isEditing) {
             if let post = displayPost {
                 EditPostSheet(
                     originalContent: post.content,
@@ -2057,7 +2057,7 @@ EngagementGlyph(
 
     // MARK: - Composer
 
-    private var replyBannerView: AnyView? {
+    var replyBannerView: AnyView? {
         // Mode ÉDITION : bandeau dédié (prioritaire sur la réponse).
         if let editing = viewModel.editingComment {
             return AnyView(
@@ -2148,172 +2148,6 @@ EngagementGlyph(
         )
     }
 
-    private var composer: some View {
-        UniversalComposerBar(
-            style: .light,
-            mode: .comment,
-            onIngest: { ingests in handleComposerIngest(ingests) },
-            accentColor: accentColor,
-            secondaryColor: composerSecondaryColor,
-            forceShowAttachment: true,
-            forceShowVoice: true,
-            selectedLanguage: composerLanguage,
-            onLanguageChange: { composerLanguage = $0 },
-            onFocusChange: { composerIsFocused = $0 },
-            onSendMessage: { text, attachments, _ in submitComment(text: text, attachments: attachments) },
-            onLocationRequest: { showCommentLocationPicker = true },
-            textBinding: $composerText,
-            replyBanner: replyBannerView,
-            customAttachmentsPreview: (commentAttachments.isEmpty && pendingPlace == nil)
-                ? nil
-                : AnyView(CommentAttachmentsTray(attachments: commentAttachments, onRemove: { id in
-                    commentAttachments.removeAll { $0.id == id }
-                  }, place: pendingPlace, onRemovePlace: { pendingPlace = nil })),
-            onTextChange: { text in
-                mentionController.handleQuery(in: text)
-                CommentDraftStore.shared.save(postId: postId, text: text)
-            },
-            onStartRecording: { startCommentRecording() },
-            onStopRecordingToAttachment: { stopCommentRecordingToAttachment() },
-            onSendRecording: { stopAndSendCommentRecording() },
-            onCancelRecording: { audioRecorder.cancelRecording() },
-            externalIsRecording: audioRecorder.isRecording,
-            externalRecordingDuration: audioRecorder.duration,
-            externalAudioLevels: audioRecorder.audioLevels,
-            externalHasContent: !commentAttachments.isEmpty || audioRecorder.isRecording || pendingPlace != nil,
-            onPhotoLibrary: { showCommentPhotoPicker = true },
-            onFilePicker: { showCommentFilePicker = true },
-            isBlurEnabled: $commentBlurEnabled,
-            pendingEffects: $commentEffects,
-            externalAttachments: commentAttachments,
-            focusTrigger: $composerFocusTrigger
-        )
-        .photosPicker(
-            isPresented: $showCommentPhotoPicker,
-            selection: $commentPhotoItems,
-            maxSelectionCount: 1,
-            matching: .any(of: [.images, .videos])
-        )
-        .fileImporter(
-            isPresented: $showCommentFilePicker,
-            allowedContentTypes: [.item],
-            allowsMultipleSelection: false
-        ) { result in
-            if case .success(let urls) = result {
-                commentAttachments = CommentComposerStaging.fileAttachments(from: urls)
-            }
-        }
-        .sheet(isPresented: $showCommentLocationPicker) {
-            LocationPickerView(accentColor: accentColor) { place in
-                pendingPlace = place
-                showCommentLocationPicker = false
-            }
-        }
-        .adaptiveOnChange(of: commentPhotoItems) { _, items in
-            Task {
-                commentAttachments = await CommentComposerStaging.photoAttachments(from: items)
-                await MainActor.run { commentPhotoItems = [] }
-            }
-        }
-    }
-
-    // MARK: - Reply targeting
-
-    /// Amorce une réponse. Répondre à une réponse (niveau 2) reste plat au niveau
-    /// 2 (cf. `sendReply` : parentId = racine) ; on préremplit une @mention vers
-    /// l'auteur ciblé pour qu'il soit notifié (`user_mentioned`) malgré le
-    /// reparentage à la racine.
-    private func beginReply(to target: FeedComment) {
-        viewModel.replyingTo = target
-        composerFocusTrigger = true
-        // Retire la @mention auto-injectée d'une cible précédente avant d'en poser
-        // une nouvelle (évite accumulation / mauvais auteur notifié).
-        if let old = prefilledMention, composerText.hasPrefix(old) {
-            composerText = String(composerText.dropFirst(old.count))
-        }
-        prefilledMention = nil
-        guard target.parentId != nil,
-              let username = target.authorUsername, !username.isEmpty else { return }
-        let mention = "@\(username) "
-        if !composerText.hasPrefix(mention) {
-            composerText = mention + composerText
-        }
-        prefilledMention = mention
-    }
-
-    // MARK: - Comment send + voice (parity with feed/reels composer)
-
-    /// Dépôt / collage arrivé par la bande du composer (`onIngest`) : textes
-    /// fusionnés en UNE insertion (au curseur si le champ a le focus, sinon à
-    /// la fin), fichiers routés vers le staging commentaire existant
-    /// (spec 2026-07-30, lot 1).
-    private func handleComposerIngest(_ ingests: [ComposerIngest]) {
-        if let block = CommentComposerIngestion.mergedText(from: ingests) {
-            if !(composerIsFocused && CommentComposerIngestion.insertAtCursor(block)) {
-                composerText += block
-            }
-        }
-        CommentComposerIngestion.stageFiles(
-            CommentComposerIngestion.files(from: ingests),
-            accentColor: accentColor
-        ) { staged in
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                commentAttachments.append(contentsOf: staged)
-            }
-        }
-    }
-
-    private func submitComment(text: String, attachments: [ComposerAttachment]) {
-        if let editing = viewModel.editingComment {
-            submitCommentEdit(editing, text: text)
-            return
-        }
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let media = CommentComposerStaging.firstPendingMedia(in: attachments)
-        commentAttachments.removeAll()
-        let place = pendingPlace
-        pendingPlace = nil
-        guard !trimmed.isEmpty || media != nil || place != nil else { return }
-        let flags = commentEffects.flags.rawValue | (commentBlurEnabled ? MessageEffectFlags.blurred.rawValue : 0)
-        commentEffects = .none
-        commentBlurEnabled = false
-        // Réponse plate à 2 niveaux (cf. sendReply) : reparente à la racine.
-        let parentId = viewModel.replyingTo?.parentId ?? viewModel.replyingTo?.id
-        let effectFlags = flags > 0 ? Int(flags) : nil
-        // #6587 — la pastille DÉCLARE la langue ; sans ce relais, le serveur la devine.
-        let lang = composerLanguage
-        Task {
-            if let media {
-                await viewModel.submitCommentWithMedia(trimmed, originalLanguage: lang, effectFlags: effectFlags, parentId: parentId, pendingMedia: media, location: place)
-            } else if parentId != nil {
-                await viewModel.sendReply(trimmed, originalLanguage: lang, effectFlags: effectFlags, location: place)
-            } else {
-                await viewModel.sendComment(trimmed, originalLanguage: lang, effectFlags: effectFlags, location: place)
-            }
-        }
-    }
-
-    private func startCommentRecording() {
-        audioRecorder.startRecording()
-        HapticFeedback.medium()
-    }
-
-    @discardableResult
-    private func stopCommentRecordingToAttachment() -> Bool {
-        guard audioRecorder.duration > 0.5 else {
-            audioRecorder.cancelRecording()
-            return false
-        }
-        let duration = audioRecorder.duration
-        guard let url = audioRecorder.stopRecording() else { return false }
-        commentAttachments.append(CommentComposerStaging.voiceAttachment(duration: duration, url: url))
-        return true
-    }
-
-    private func stopAndSendCommentRecording() {
-        guard stopCommentRecordingToAttachment() else { return }
-        submitComment(text: "", attachments: commentAttachments)
-    }
 }
 
 // MARK: - Story canvas visibility preference keys
