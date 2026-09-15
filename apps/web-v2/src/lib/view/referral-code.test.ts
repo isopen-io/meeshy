@@ -30,8 +30,14 @@ describe('d’où vient le code', () => {
     expect(referralCodeFromSearch(search('parrain=ref_zoe'))).toBe('ref_zoe');
   });
 
+  /** La clé du LEGACY (`apps/web/middleware.ts:63` capte `/?affiliate=TOKEN`
+   * sur n'importe quelle adresse). Des liens la portant sont déjà partagés. */
+  test('`?affiliate=` — celle du legacy — est lue aussi', () => {
+    expect(referralCodeFromSearch(search('affiliate=aff_legacy'))).toBe('aff_legacy');
+  });
+
   test('l’ORDRE des clés est fixé, pas laissé au hasard de l’adresse', () => {
-    expect(REFERRAL_SEARCH_KEYS).toEqual(['ref', 'parrain']);
+    expect(REFERRAL_SEARCH_KEYS).toEqual(['ref', 'parrain', 'affiliate']);
     expect(referralCodeFromSearch(search('parrain=second&ref=premier'))).toBe('premier');
   });
 

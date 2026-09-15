@@ -106,14 +106,12 @@ public final class JoinFlowViewModel: ObservableObject {
         isSubmitting = true
         errorMessage = nil
 
-        let birthdayString: String? = info.requireBirthday ? birthday.formatted(.iso8601) : nil
-
         let request = AnonymousJoinRequest(
             firstName: firstName.trimmingCharacters(in: .whitespaces),
             lastName: lastName.trimmingCharacters(in: .whitespaces),
             username: username.trimmingCharacters(in: .whitespaces).isEmpty ? nil : username.trimmingCharacters(in: .whitespaces),
             email: email.trimmingCharacters(in: .whitespaces).isEmpty ? nil : email.trimmingCharacters(in: .whitespaces),
-            birthday: birthdayString,
+            birthday: Self.birthdayField(birthday, required: info.requireBirthday),
             language: language
         )
 
@@ -144,6 +142,12 @@ public final class JoinFlowViewModel: ObservableObject {
     }
 
     // MARK: - Helpers
+
+    /// La date de naissance telle qu'elle part vers la passerelle — une
+    /// date-heure (`z.iso.datetime()`), seulement quand le lien l'exige.
+    nonisolated static func birthdayField(_ birthday: Date, required: Bool) -> String? {
+        required ? WireDate.string(from: birthday) : nil
+    }
 
     private func isValidEmail(_ email: String) -> Bool {
         let trimmed = email.trimmingCharacters(in: .whitespaces)

@@ -102,6 +102,20 @@ describe('l’adresse valide ouvre l’identité, DIRECTEMENT', () => {
     expect(has(el, '[data-derived-identity]')).toBe(false);
   });
 
+  /**
+   * VENU DE #6626, ET IL SURVIT AU REDÉCOUPAGE (#6582). Le (i) du mot de passe
+   * fait citer sa note par `aria-describedby` : en déduire `aria-invalid`
+   * annonçait « invalide » un champ facultatif que personne n'avait touché. Le
+   * geste d'ouverture a changé — l'adresse seule suffit désormais — mais la
+   * propriété mesurée, elle, n'a pas bougé d'un pixel.
+   */
+  test('le mot de passe paru, vide, ne s’annonce pas invalide', () => {
+    const el = mount();
+    type(el, '#signup-email', 'ada@meeshy.example');
+    const motDePasse = el.querySelector('#signup-password');
+    expect(motDePasse?.getAttribute('aria-invalid')).toBe('false');
+  });
+
   test('une adresse valide suffit — aucun geste sur le numéro n’est demandé', () => {
     const el = mount();
     type(el, '#signup-email', 'ada@meeshy.example');

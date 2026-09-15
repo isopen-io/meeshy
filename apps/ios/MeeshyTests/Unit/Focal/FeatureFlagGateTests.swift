@@ -2,84 +2,52 @@ import XCTest
 @testable import Meeshy
 
 /// F-080 (WS-1) — `MeeshyFeatureFlags.isReadingModesEnabled` : délègue à
-/// `LentilleFeatureFlag.readingModes` (M-046, déjà couvert par
-/// `LentilleFlagGateTests`, y compris la cascade vers `BetaFeaturesPreference`
-/// — I-075, second amendement 2026-08-16) plutôt que de dupliquer la
-/// résolution `UserDefaults`/`ProcessInfo`. Ce fichier ne re-teste PAS la
-/// matrice complète (déjà verte côté `LentilleFlagGateTests`) — il prouve la
-/// DÉLÉGATION (témoin discriminant unique : la cascade bêta, absente d'ici
-/// AVANT l'amendement), et le critère d'acceptation §WS-1 : « drapeau OFF
-/// ⇒ toute décision rend `.bubbles` » (le mode de repli, contrat
-/// §3.1 `.bubbleLegacy` — RE-PREUVE : rawValue identique, nom de cas réel
-/// `.bubbles` sur la loi gelée).
+/// `LentilleFeatureFlag.readingModes` (matrice complète dans
+/// `LentilleFlagGateTests`) plutôt que de dupliquer la résolution
+/// `UserDefaults`/`ProcessInfo`. Ce fichier prouve la DÉLÉGATION, puis ce que
+/// l'écran rend quand les modes de lecture sont coupés.
 ///
-/// **I-075 RETIRÉ le 2026-08-18 (décision produit)** — la cascade bêta
-/// SUBSISTE (donc la délégation reste ce que ce fichier prouve), mais son
-/// étage 3 n'est plus consulté que si la préférence bêta est EXPLICITEMENT
-/// exprimée : absence de toute clé ⇒ OFF. Un seul témoin de délégation
-/// changeait de verdict, il est retourné et documenté sur place ; les
-/// témoins « env prime » et « clé explicite » sont INCHANGÉS.
+/// **Sortie de bêta (directive porteur du 2026-09-14, #6482).** Les modes de
+/// lecture sont actifs par défaut. Coupés dans les Réglages, la loi partagée
+/// rend toujours `.bubbles`/`.flagDisabled` (vecteurs TS↔Swift, inchangés) et
+/// c'est la couche de rendu iOS (`ReadingModeController.renderDecision`) qui
+/// ouvre la conversation en SCRIPT — le mode classique n'est plus Bulles.
 @MainActor
 final class FeatureFlagGateTests: XCTestCase {
 
-    private func makeIsolatedDefaults() -> UserDefaults {
-        UserDefaults(suiteName: "FeatureFlagGateTests-\(UUID().uuidString)")!
+    private func makeIsolatedDefaults() throws -> UserDefaults {
+        try XCTUnwrap(UserDefaults(suiteName: "FeatureFlagGateTests-\(UUID().uuidString)"))
     }
 
     // MARK: - Délégation, pas de duplication
 
-    /// I-075 RETIRÉ le 2026-08-18 (décision produit) — la délégation porte
-    /// désormais le RETRAIT : `defaults`/`environment` fraîches ⇒ `false`.
-    ///
-    /// AVANT (2026-08-16 → 2026-08-18), ce témoin s'appelait
-    /// `…_defaultsToTrue_viaBetaCascade` et affirmait `XCTAssertTrue` sur ce
-    /// décor EXACT, au motif que `readingModes` repliait sur
-    /// `BetaFeaturesPreference.isEnabled` (défaut ON) quand sa propre clé
-    /// n'avait jamais été posée. L'étage bêta n'est plus consulté que si la
-    /// préférence est EXPRIMÉE — ici elle ne l'est pas, donc OFF.
-    ///
-    /// La paire discriminante survit au retrait, mais elle est REDISTRIBUÉE :
-    /// ce test-ci resterait vert même si `MeeshyFeatureFlags` recalculait sa
-    /// propre résolution (`defaults.bool` rendrait `false` lui aussi). Ce
-    /// sont `…_matchesUnderlyingFlagForSameInputs` (égalité stricte) et le
-    /// témoin d'opt-in ci-dessous — que SEULE une vraie délégation peut
-    /// satisfaire — qui referment l'échappatoire.
-    func test_isReadingModesEnabled_injectable_defaultsToFalse_afterBetaCascadeWithdrawal() {
-        let defaults = makeIsolatedDefaults()
+    /// Discriminant vis-à-vis d'une résolution dupliquée en
+    /// `defaults.bool(forKey:)`, qui rendrait `false` sur ce décor vierge :
+    /// seule la délégation voit le défaut ON.
+    func test_isReadingModesEnabled_injectable_nothingWritten_returnsTrue() throws {
+        let defaults = try makeIsolatedDefaults()
+
+        XCTAssertTrue(MeeshyFeatureFlags.isReadingModesEnabled(defaults: defaults, environment: [:]))
+    }
+
+    func test_isReadingModesEnabled_injectable_ownKeyExplicitlyFalse_returnsFalse() throws {
+        let defaults = try makeIsolatedDefaults()
+        LentilleFeatureFlag.setEnabled(.readingModes, enabled: false, defaults: defaults)
+
         XCTAssertFalse(MeeshyFeatureFlags.isReadingModesEnabled(defaults: defaults, environment: [:]))
     }
 
-    /// Témoin d'opt-in de la délégation : la bêta EXPLICITEMENT activée
-    /// suffit encore à allumer les modes de lecture À TRAVERS
-    /// `MeeshyFeatureFlags`. Discriminant vis-à-vis d'une implémentation qui
-    /// aurait dupliqué la résolution en `defaults.bool(forKey:)` — celle-ci
-    /// rendrait `false` ici, la clé `meeshy.flag.reading_modes` n'étant
-    /// jamais posée.
-    func test_isReadingModesEnabled_injectable_betaExplicitlyOn_returnsTrue() {
-        let defaults = makeIsolatedDefaults()
-        BetaFeaturesPreference.setEnabled(true, defaults: defaults)
-
-        XCTAssertTrue(MeeshyFeatureFlags.isReadingModesEnabled(defaults: defaults, environment: [:]))
-    }
-
-    func test_isReadingModesEnabled_injectable_userDefaultsTrue_returnsTrue() {
-        let defaults = makeIsolatedDefaults()
-        defaults.set(true, forKey: LentilleFeatureFlag.readingModes.userDefaultsKey)
-
-        XCTAssertTrue(MeeshyFeatureFlags.isReadingModesEnabled(defaults: defaults, environment: [:]))
-    }
-
-    func test_isReadingModesEnabled_injectable_envOverridePrimes() {
-        let defaults = makeIsolatedDefaults()
+    func test_isReadingModesEnabled_injectable_envOverridePrimes() throws {
+        let defaults = try makeIsolatedDefaults()
         defaults.set(true, forKey: LentilleFeatureFlag.readingModes.userDefaultsKey)
         let environment = [LentilleFeatureFlag.readingModes.environmentKey: "0"]
 
         XCTAssertFalse(MeeshyFeatureFlags.isReadingModesEnabled(defaults: defaults, environment: environment))
     }
 
-    func test_isReadingModesEnabled_injectable_matchesUnderlyingFlagForSameInputs() {
-        let defaults = makeIsolatedDefaults()
-        let environment = [LentilleFeatureFlag.readingModes.environmentKey: "1"]
+    func test_isReadingModesEnabled_injectable_matchesUnderlyingFlagForSameInputs() throws {
+        let defaults = try makeIsolatedDefaults()
+        let environment = [LentilleFeatureFlag.readingModes.environmentKey: "0"]
 
         XCTAssertEqual(
             MeeshyFeatureFlags.isReadingModesEnabled(defaults: defaults, environment: environment),
@@ -87,7 +55,7 @@ final class FeatureFlagGateTests: XCTestCase {
         )
     }
 
-    // MARK: - Flag OFF ⇒ toute décision rend le mode de repli (bit-à-bit identique à aujourd'hui)
+    // MARK: - Drapeau OFF — la LOI partagée rend Bulles (inchangée, vecteurs TS↔Swift)
 
     func test_flagDisabled_orchestratorDecision_alwaysResolvesToBubbles() {
         let capabilities = ReadingModeOrchestrator.resolveCapabilities(
@@ -113,23 +81,48 @@ final class FeatureFlagGateTests: XCTestCase {
         XCTAssertEqual(decision.reason, .flagDisabled)
     }
 
-    func test_flagDisabled_readingModeController_resolvesToBubbles() {
-        let store = InMemoryPreferenceStoreStub()
-        let capabilities = ReadingModeOrchestrator.resolveCapabilities(
-            .init(identity: .init(isAnonymous: false), isFlagEnabled: false, conversationType: .group, activeParticipantCount: 3)
-        )
+    // MARK: - Drapeau OFF — l'écran iOS rend Script (#6482)
 
+    /// La raison de la loi est conservée : `.flagDisabled` dit à l'encoche que
+    /// rien n'a été choisi ni décidé automatiquement.
+    func test_flagDisabled_readingModeController_rendersScript_keepingTheLawReason() {
         let controller = ReadingModeController(
             conversationId: "c1",
             scope: .registered(userId: "u1"),
             unreadCount: 0,
-            capabilities: capabilities,
+            capabilities: flagDisabledCapabilities(),
+            isFlagEnabled: false,
+            store: InMemoryPreferenceStoreStub()
+        )
+
+        XCTAssertEqual(controller.mode, .script)
+        XCTAssertEqual(controller.decision.reason, .flagDisabled)
+    }
+
+    /// Un choix collant `.bubbles` mémorisé quand les modes étaient actifs ne
+    /// rouvre pas Bulles une fois les modes coupés : c'est le choix du mode de
+    /// lecture lui-même qui est retiré, pas seulement son automatisme.
+    func test_flagDisabled_stickyBubbles_stillRendersScript() {
+        let store = InMemoryPreferenceStoreStub()
+        store.setMode(.bubbles, for: "c1", scope: .registered(userId: "u1"))
+
+        let controller = ReadingModeController(
+            conversationId: "c1",
+            scope: .registered(userId: "u1"),
+            unreadCount: 3,
+            capabilities: flagDisabledCapabilities(),
             isFlagEnabled: false,
             store: store
         )
 
-        XCTAssertEqual(controller.mode, .bubbles)
+        XCTAssertEqual(controller.mode, .script)
         XCTAssertEqual(controller.decision.reason, .flagDisabled)
+    }
+
+    private func flagDisabledCapabilities() -> ReadingModeOrchestrator.ReadingModeCapabilities {
+        ReadingModeOrchestrator.resolveCapabilities(
+            .init(identity: .init(isAnonymous: false), isFlagEnabled: false, conversationType: .group, activeParticipantCount: 3)
+        )
     }
 }
 

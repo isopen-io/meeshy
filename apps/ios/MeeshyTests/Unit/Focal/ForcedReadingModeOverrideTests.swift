@@ -2,9 +2,8 @@ import XCTest
 @testable import Meeshy
 
 /// I-075 — override ÉPHÉMÈRE `ReadingModeController.init(forcedMode:)` (item
-/// « Focal (bêta) » du menu d'appui long de la liste, gardé par
-/// `BetaFeaturesPreference.isEnabled`, préférence utilisateur défaut ON —
-/// amendement produit 2026-08-16).
+/// « Focal (bêta) » du menu d'appui long de la liste, retiré avec Focal iOS le
+/// 2026-08-18).
 ///
 /// RETRAIT FOCAL iOS (2026-08-18) : le court-circuit de forçage est INTACT,
 /// mais `ReadingModeController.clampRetiredModes` rabat toute décision
@@ -111,8 +110,10 @@ final class ForcedReadingModeOverrideTests: XCTestCase {
     // MARK: - Garantie 2 : `nil` ⇒ décision inchangée (témoin discriminant)
 
     /// Même décor que `test_forcedMode_winsOverFlagDisabled`, `forcedMode: nil` :
-    /// la décision REDEVIENT celle de la loi normale (`.bubbles`/`flagDisabled`)
-    /// — la preuve que le court-circuit, ôté, ne laisse AUCUN résidu.
+    /// la décision REDEVIENT celle du chemin normal drapeau OFF — la loi rend
+    /// `.bubbles`/`flagDisabled`, que le rendu iOS ouvre en Script depuis la
+    /// sortie de bêta (2026-09-14, #6482) — la preuve que le court-circuit,
+    /// ôté, ne laisse AUCUN résidu.
     func test_nilForcedMode_leavesDecisionUnchanged_flagDisabledCase() {
         let store = RecordingPreferenceStoreSpy()
         let controller = ReadingModeController(
@@ -124,7 +125,7 @@ final class ForcedReadingModeOverrideTests: XCTestCase {
             store: store
         )
 
-        XCTAssertEqual(controller.mode, .bubbles)
+        XCTAssertEqual(controller.mode, .script)
         XCTAssertEqual(controller.decision.reason, .flagDisabled)
     }
 

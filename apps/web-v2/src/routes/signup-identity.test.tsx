@@ -55,19 +55,40 @@ describe('à l’ouverture, le CONTACT et lui seul', () => {
 
 describe('l’avertissement de validation d’adresse', () => {
   /**
-   * Il n'est PAS derrière un (i) : ce n'est pas un détail qu'on consulte, c'est
-   * une CONDITION du compte. Un témoin sur sa présence VISIBLE, pas sur son
-   * existence dans le DOM.
+   * DERRIÈRE UN (i) « Pourquoi un lien » depuis #6626 (directive porteur
+   * 2026-09-15 : « moins de détails sur la page de connexion et
+   * d'enregistrement ; utiliser des (i) »). #6479 l'avait posé en clair ; la
+   * directive postérieure le supplante. Replié ne veut pas dire absent : le
+   * texte reste porté par `aria-describedby` du champ, donc un lecteur d'écran
+   * l'entend en entrant dans l'adresse.
    */
-  test('il est rendu, en clair, sous le champ', () => {
-    expect(html).toContain('data-signup-email-verification');
-    expect(html).toContain('valider votre compte');
+  const note = /<p id="([^"]+)" class="([^"]*)"[^>]*>Nous vous enverrons un lien à cette adresse : il faudra l’ouvrir pour valider votre compte\.<\/p>/u.exec(html);
+
+  test('le champ e-mail porte un (i) « Pourquoi un lien », replié', () => {
+    const bouton = /<button[^>]*aria-expanded="false"[^>]*aria-controls="([^"]+)"[^>]*aria-label="Pourquoi un lien"/u.exec(html);
+    expect(bouton).not.toBeNull();
+    expect(note?.[1]).toBe(bouton?.[1]);
   });
 
-  test('et il n’est pas replié — aucune classe sr-only ne le masque', () => {
-    const bloc = html.slice(html.indexOf('data-signup-email-verification'));
-    expect(bloc.slice(0, 120)).not.toContain('sr-only');
+  test('la note est rendue, mais repliée — `sr-only`, jamais en clair', () => {
+    expect(note).not.toBeNull();
+    expect(note?.[2]).toContain('sr-only');
   });
+
+  test('et le champ la cite dans `aria-describedby`', () => {
+    const champ = /<input id="signup-email"[^>]*aria-describedby="([^"]+)"/u.exec(html);
+    expect(champ).not.toBeNull();
+    expect(champ?.[1]).toBe(note?.[1]);
+  });
+
+  /** Citer une note n'est pas un refus : un champ qui déduirait `aria-invalid`
+   * de la seule présence d'un `aria-describedby` s'annoncerait « invalide »
+   * dès l'ouverture, sur une adresse que personne n'a encore tapée. */
+  test('le champ vide ne s’annonce pas invalide pour autant', () => {
+    expect(html).toMatch(/<input id="signup-email"[^>]*aria-invalid="false"/u);
+  });
+
+  test('aucun libellé ne dit « magique »', () => expect(html).not.toMatch(/magi(que|c)/iu));
 });
 
 describe('DerivedIdentity — ce que la passerelle recevra, affiché', () => {

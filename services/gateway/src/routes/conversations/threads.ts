@@ -19,6 +19,8 @@ import { hoistStickerOnto } from '../../services/stickers/messageSticker';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';
 import { MESSAGE_PROTECTION_SELECT } from './messages-list-query';
 import { servedQuotedMessage, type QuotedMessageRow } from '../../services/messaging/servedQuotedMessage';
+import { attachmentReplyToFromMetadata } from '../../services/messaging/attachmentReplySnapshot';
+import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
 
 const logger = enhancedLogger.child({ module: 'ThreadsRoute' });
 
@@ -192,6 +194,13 @@ function serializeThreadMessage<T extends Record<string, unknown>>(message: T): 
  * que le message RACINE porte déjà ses drapeaux depuis #4885 et que le schéma
  * de réponse (`additionalProperties: true`) ne tronque rien qui les
  * accompagnerait.
+ *
+ * #6164 — l'instantané de la PIÈCE NOMMÉE passe par la même unité, et il se lit
+ * sur `message.metadata` : il est gravé sur le message QUI CITE, jamais sur le
+ * message CITÉ (dont le `metadata`, chargé ici pour le hoist de position,
+ * porterait la pièce que LUI visait un cran plus haut dans le fil). Sans ce
+ * relais, l'aperçu du parent d'un fil désigne le média représentatif quand la
+ * liste du même fil désigne la pièce nommée.
  */
 function maskThreadMessageQuote<T extends Record<string, unknown>>(message: T): T {
   const replyTo = (message as { replyTo?: unknown }).replyTo;
@@ -203,7 +212,10 @@ function maskThreadMessageQuote<T extends Record<string, unknown>>(message: T): 
     ...message,
     replyTo: {
       ...quotedRow,
-      ...servedQuotedMessage(quotedRow, { includeTranslations: false }),
+      ...servedQuotedMessage(quotedRow, {
+        includeTranslations: false,
+        attachmentReplyTo: attachmentReplyToFromMetadata(message['metadata']),
+      }),
     },
   };
 }
@@ -280,13 +292,15 @@ export function registerThreadsRoutes(
         reader: historyReaderFromAuthContext(authContext)
       });
 
-      const parent = await prisma.message.findFirst({
-        where: applyPersonalHistoryHiding(
-          applyHistoryFloor({ id: messageId, conversationId, deletedAt: null }, historyFloor),
-          hiding
-        ),
-        select: threadMessageSelect
-      });
+      const parent = await withOrphanedSenderRepair({ prisma, conversationIds: [conversationId] }, () =>
+        prisma.message.findFirst({
+          where: applyPersonalHistoryHiding(
+            applyHistoryFloor({ id: messageId, conversationId, deletedAt: null }, historyFloor),
+            hiding
+          ),
+          select: threadMessageSelect
+        })
+      );
 
       if (!parent) {
         return sendNotFound(reply, 'Message not found');
@@ -314,14 +328,16 @@ function findReplies(
   hiding: PersonalHistoryHiding = NO_PERSONAL_HIDING,
   historyFloor: Date | null = null
 ) {
-  return prisma.message.findMany({
-    where: applyPersonalHistoryHiding(
-      applyHistoryFloor({ conversationId, replyToId: { in: parentIds }, deletedAt: null }, historyFloor),
-      hiding
-    ),
-    select: threadMessageSelect,
-    orderBy: { createdAt: 'asc' as const }
-  });
+  return withOrphanedSenderRepair({ prisma, conversationIds: [conversationId] }, () =>
+    prisma.message.findMany({
+      where: applyPersonalHistoryHiding(
+        applyHistoryFloor({ conversationId, replyToId: { in: parentIds }, deletedAt: null }, historyFloor),
+        hiding
+      ),
+      select: threadMessageSelect,
+      orderBy: { createdAt: 'asc' as const }
+    })
+  );
 }
 
 type ThreadMessage = Awaited<ReturnType<typeof findReplies>>[number];

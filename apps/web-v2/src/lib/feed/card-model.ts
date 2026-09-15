@@ -8,6 +8,7 @@ import { initialsOf } from '@/lib/view/conversation';
 import { resolveMediaCaption } from '@/lib/api/prism';
 
 import { feedMediaKindOf, postMediaRatio, reelCardRatio, type FeedMediaKind } from './layout';
+import { resolveMosaicLayout, type MosaicLayoutMode } from './mosaic-layout';
 import { resolveFeedText } from './text';
 import { thumbHashPlaceholder } from '@/lib/media/thumbhash';
 
@@ -81,6 +82,9 @@ export type FeedCardModel = {
   readonly repostOfHandle?: string;
   readonly text?: FeedCardText;
   readonly media: readonly FeedCardMedia[];
+  /** L'agencement CHOISI par l'auteur (#6514, `resolveMosaicLayout`) —
+   * `carousel` quand le document n'en dit rien. */
+  readonly layout: MosaicLayoutMode;
   readonly stats: FeedCardStats;
 };
 
@@ -197,6 +201,7 @@ export function resolveFeedCardModel(
     ...(repostOfHandle !== undefined ? { repostOfHandle } : {}),
     ...(text !== undefined ? { text } : {}),
     media: resolveMedia(post, isReel, params.preferredLanguages),
+    layout: resolveMosaicLayout(post.storyEffects),
     stats: {
       likeCount: numberOrUndefined(post.likeCount) ?? 0,
       commentCount: numberOrUndefined(post.commentCount) ?? 0,

@@ -1,5 +1,74 @@
 # @meeshy/shared
 
+## 1.21.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - le fil et sa carte parlent la langue d'interface, pas le français en dur (#6546)
+  - la montée de React quitte le lot — @types/react 19.3 ajoutait deux erreurs au cliquet de dette
+  - budget interface_catalogs remesuré après les 28 clés du Flux (#6488)
+  - l'inscription se déplie barreau par barreau, et ce qui est calculé se voit et se modifie
+  - le plein écran de scène traduit le contenu qu'il affiche — légende du média ou texte du post (#6280)
+  - le fil et sa carte parlent la langue d'interface, pas le français en dur (#6488)
+  - /login s'ouvre sur le lien magique, et l'identifiant + mot de passe devient une option nommée
+  - quatre clés de catalogue orphelines depuis la refonte de l'inscription (#6479)
+  - le catalogue ne garde plus les quatre clés du nom d'inscription que plus rien n'emploie (#6541)
+  - le fil décode et sert la légende de média traduite (#6280)
+  - fix-orphan-participants.ts ne laisse plus de messages sans expéditeur (#6518) (#6540)
+  - le fil applique et affiche la légende de média traduite (#6280)
+  - le store social câble le socket media:caption-translation-updated (#6280)
+  - ApiPostMedia/FeedMedia décodent et résolvent la légende traduite (#6280)
+  - le fil se lit et se touche de l'en-tête au composeur — les deux voiles disparaissent, la pastille à mots tourne (#6537)
+  - les surfaces de légende de média servent la traduction résolue par le Prisme (#6280)
+  - le store du fil applique la traduction de légende reçue par socket (#6280)
+  - événement socket media:caption-translation-updated (#6280)
+  - APIPostMedia/FeedMedia décodent et résolvent la légende traduite (#6280)
+  - au-delà de sept mots, le bouton d'envoi ordinaire — et la touche Retour passe à la ligne (#6537)
+  - le solde des Meeshes passe SOUS le niveau — et MeeshHero cesse d'être un mort-vivant (#6497)
+  - le texte du post affiché en plein écran et le drapeau actif viennent d'une seule langue (#6504)
+  - une légende de média qui répète le texte du post s'offre à la traduction (#6504)
+  - l'icône de traduction de la légende ouvre la feuille de traduction des messages (#6504)
+  - la légende dépliée se pose juste au-dessus de « voir moins », et la traduction s'offre entre les deux (#6504)
+  - le témoin du plancher de mot de passe le DÉRIVE — le rouge de dev et main est soldé
+  - un double tap latéral avance/recule la vidéo de 10 s, comme iOS (#6369)
+  - la légende de média sort de PostService, et le gestionnaire socket en mocke le service (#6280)
+  - l'édition d'un post ne déclenche plus la traduction de légende DANS sa transaction (#6280)
+  - route POST /posts/media/:mediaId/caption/translate (#6280)
+  - jest.requireActual fonctionne sous bun test (#6519)
+  - PostService déclenche la traduction de légende à la création/édition/repost (#6280)
+  - MediaCaptionTranslationService — traduction de la légende d'un média (#6280)
+  - ContactDirectoryService.match() ne perd plus un contact sans blockedUserIds (#6529) (#6530)
+  - un post s'ouvre à nouveau — getPostById lit par select, plus par include (#6503)
+  - aucun effaceur ne laisse plus de message sans expéditeur (#6501)
+  - un expéditeur disparu est réparé, et la lecture de la conversation rejouée une fois (#6501)
+  - PostMedia.captionLanguage/captionTranslations + événement média:légende-traduction
+
+## 1.20.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - la borne de mot de passe DÉCLARÉE redevient atteignable (#6436) (#6446)
+  - rester sous le budget de taille de PasswordResetService.test.ts
+  - changer son mot de passe révoque les autres sessions (#6435)
+  - la borne de mot de passe DÉCLARÉE redevient atteignable (#6436)
+  - l'accolade orpheline qui cassait MagicLinkService, et la garde nommée pour un champ qui mesurait tout l'écran (#6424)
+  - Release publie pour les plateformes de Docker — plus d'étage arm64 émulé (#6442)
+  - les clients offrent l'inscription par adresse seule — le mot de passe devient un choix (#6424, #6441)
+  - l'entrée Meesh montre une pièce d'argent, plus le logo Meeshy (#6427)
+  - `hasPassword` rejoint la forme SERVIE par /me, et le témoin du lien magique quitte un fichier hors budget (#6424)
+  - les onglets de Découvrir se parcourent aux flèches du clavier (#6430)
+  - la Meesh se montre en pièce d'argent sur le web — jeton meeshSilver dérivé de MeeshyColors (#6427)
+  - l'espace d'administration est SERVI par la v2, fail-closed (#6432)
+  - une Meesh frappée apparaît au solde — les totaux se lisent au registre (#6428)
+  - le premier e-mail d'un compte lui DIT son identité, et la porte qu'il a (#6424)
+  - un compte peut naître d'une adresse seule, et vivre sans mot de passe (#6424)
+  - le bouton « Mettre à jour » restait GRIS pour un compte sans mot de passe (#6424)
+  - un e-mail suffit à nommer un compte — pseudo et nom affichés dérivés de sa partie locale (#6424)
+
 ## 1.19.5
 
 ### Patch Changes

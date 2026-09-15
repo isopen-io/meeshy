@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 
 import SignupScreen from '@/routes/signup';
 import type { ReferralValidation } from '@/lib/api/affiliate';
+import { REFERRAL_MEMORY_KEY } from '@/lib/view/referral-memory';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 /**
@@ -103,6 +104,39 @@ describe('sans code dans l’adresse, le champ ne s’impose à personne', () =>
       (el.querySelector('[data-signup-referral-toggle]') as HTMLButtonElement).click();
     });
     expect(el.querySelector('#signup-referral')).not.toBeNull();
+  });
+});
+
+/**
+ * LA MÉMOIRE — CE QUE LE LEGACY AVAIT, ET QUE CE LOT REPREND (#6584).
+ *
+ * `apps/web` écrit le jeton pour 30 jours (`localStorage` + cookie) et le relit
+ * à l'inscription. Sans cette moitié, seul le cas RARE comptait : s'inscrire
+ * sans jamais quitter la page d'arrivée. Le cas nominal d'un lien partagé —
+ * cliquer, regarder, s'inscrire plus tard — perdait le parrainage.
+ */
+describe('un code reçu la veille tient encore', () => {
+  test('sans rien dans l’adresse, un code MÉMORISÉ ouvre le bloc et le remplit', () => {
+    window.localStorage.setItem(REFERRAL_MEMORY_KEY, JSON.stringify({ code: 'aff_hier', savedAt: Date.now() }));
+    const el = mountAt('/signup');
+    openIdentity(el);
+    expect((el.querySelector('#signup-referral') as HTMLInputElement).value).toBe('aff_hier');
+    window.localStorage.clear();
+  });
+
+  test('l’ADRESSE gagne sur la mémoire — un nouveau lien remplace l’ancien', () => {
+    window.localStorage.setItem(REFERRAL_MEMORY_KEY, JSON.stringify({ code: 'aff_ancien', savedAt: Date.now() }));
+    const el = mountAt('/signup?ref=aff_nouveau');
+    openIdentity(el);
+    expect((el.querySelector('#signup-referral') as HTMLInputElement).value).toBe('aff_nouveau');
+    window.localStorage.clear();
+  });
+
+  test('arriver par un lien RETIENT le code pour la navigation qui suit', () => {
+    window.localStorage.clear();
+    mountAt('/signup?ref=aff_retenu');
+    expect(window.localStorage.getItem(REFERRAL_MEMORY_KEY) ?? '').toContain('aff_retenu');
+    window.localStorage.clear();
   });
 });
 

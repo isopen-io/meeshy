@@ -368,18 +368,6 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
     private let decoder: JSONDecoder
     private let logger = Logger(subsystem: "com.meeshy.sdk", category: "network")
 
-    private nonisolated(unsafe) static let isoFormatterWithFractional: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-
-    private nonisolated(unsafe) static let isoFormatter: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
-
     // Responses are decoded OFF the main thread. APIClient lives in a module built
     // with SE-0461 (NonisolatedNonsendingByDefault), so a nonisolated async request
     // method runs on its caller — typically a @MainActor view model — and the
@@ -401,8 +389,7 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
             let dateStr = try container.decode(String.self)
-            if let date = APIClient.isoFormatterWithFractional.date(from: dateStr) { return date }
-            if let date = APIClient.isoFormatter.date(from: dateStr) { return date }
+            if let date = WireDate.date(from: dateStr) { return date }
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(dateStr)")
         }
         return decoder

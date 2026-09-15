@@ -42,19 +42,26 @@ final class ComposerClearAllInventoryTests: XCTestCase {
     ///   `mediaRoleByURL`), qui servent aussi de gardes
     ///   d'idempotence — un index survivant fait SAUTER la re-pose du même
     ///   fichier après un effacement.
+    ///
+    /// **Les huit porteurs du MÉDIA ont quitté cette liste au #6577, et c'est le
+    /// correctif.** Ils y figuraient par leur nom — cinq sur huit —, et les
+    /// TROIS absents (`documentMediaObjectIdBySource`, `documentMediaAlts`,
+    /// `railPosedMediaURLs`) n'étaient réclamés par personne : la garde
+    /// épinglait l'oubli au lieu de l'attraper. Ils partent désormais d'un bloc,
+    /// par `ComposerMediaRetractionRun.clear`, dont la page blanche
+    /// (`ComposerMediaPorters.empty`) a huit champs que le compilateur exige
+    /// tous. La preuve qu'ils partent VRAIMENT est un témoin de comportement —
+    /// `ComposerClearAllBehaviourTests` — sur un store instancié ; cette
+    /// liste-ci ne garde plus que ce qui reste énuméré.
     private static let composition = [
+        "ComposerMediaRetractionRun.clear(",
         "viewModel.reset()",
         "documentText",
-        "documentLocalMedia",
         "documentBackground",
         "documentLocation",
         "documentDiscoverability",
-        "documentTranscriptions",
-        "documentMediaCaptions",
         "composerReferences",
         "editedForegroundSound",
-        "slideIdByMediaURL",
-        "mediaRoleByURL",
         "selectedSceneItemKind"
     ]
 

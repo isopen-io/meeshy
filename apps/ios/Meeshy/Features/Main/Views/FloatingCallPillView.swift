@@ -114,8 +114,33 @@ struct FloatingCallPillView: View {
 
     private let pillHeight: CGFloat = 64
 
+    /// Le prédicat de visibilité de la pilule, sorti du `body` pour que la BANDE
+    /// DU HAUT (#6579) se peigne exactement quand la pilule occupe le sommet.
+    ///
+    /// `callState.isActive` seul ne le dit pas : la pilule se masque aussi en
+    /// plein écran (le cover est présenté par-dessus) et pendant le PiP système.
+    /// Une bande calée sur `isActive` peindrait donc un ruban indigo au-dessus
+    /// d'une barre absente — la bande DÉCOULE de la barre, elle ne la devine pas.
+    /// Pas `nonisolated` : la conformité `Equatable` SYNTHÉTISÉE de
+    /// `CallDisplayMode` est isolée au `MainActor` (la cible compile sous
+    /// `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`), donc `==` y est
+    /// inutilisable depuis un contexte nonisolated. Les deux appelants — ce
+    /// `body` et `CallPresentationLayer.body(content:)` — sont déjà
+    /// MainActor-isolés.
+    static func isShowingPill(
+        displayMode: CallDisplayMode,
+        callState: CallState,
+        isSystemPiPActive: Bool
+    ) -> Bool {
+        displayMode == .pip && callState.isActive && !isSystemPiPActive
+    }
+
     var body: some View {
-        if callManager.displayMode == .pip && callManager.callState.isActive && !callManager.isSystemPiPActive {
+        if Self.isShowingPill(
+            displayMode: callManager.displayMode,
+            callState: callManager.callState,
+            isSystemPiPActive: callManager.isSystemPiPActive
+        ) {
             pillContent
                 // Bannière verre + contrôles blancs : on épingle le verre en
                 // sombre pour rester lisible quel que soit le mode système.
@@ -146,27 +171,34 @@ struct FloatingCallPillView: View {
         // Pleine largeur (façon barre d'appel WhatsApp) : la bannière s'étire
         // d'un bord à l'autre au sommet de l'app au lieu de flotter en capsule.
         .frame(maxWidth: .infinity)
-        .background(
-            // Retour user 2026-08-12 (second passage) : PLEINEMENT indigo.
-            // Plus de voile noir (l'ancien scrim 40 % faisait lire la zone
-            // status bar comme une « barre noire ») ni de fondu transparent
-            // en bas — un aplat indigo net, arrêts 600→800 calibrés WCAG
-            // sans scrim (CallBannerContrastTests : blanc ≥ 6.3:1, glyphes
-            // d'état ≥ 3:1 aux deux arrêts).
-            LinearGradient(
-                colors: [CallBannerContrast.bannerTop, CallBannerContrast.bannerBottom],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            // Immersif façon WhatsApp : la bannière est posée en tête du
-            // VStack de compression (CallPresentationLayer), donc SOUS la
-            // status bar — seul son décor déborde jusqu'au bord haut du
-            // viewport : l'indigo recouvre la bande status bar / Dynamic
-            // Island, et les détails d'appel (signal, durée) s'affichent
-            // juste sous l'îlot. Le layout du contenu (contrôles, avatar)
-            // reste dans la safe area.
-            .ignoresSafeArea(.container, edges: .top)
-        )
+        // Retour user 2026-08-12 (second passage) : PLEINEMENT indigo. Plus de
+        // voile noir (l'ancien scrim 40 % faisait lire la zone status bar comme
+        // une « barre noire ») ni de fondu transparent en bas.
+        //
+        // APLAT, et plus un dégradé 600→800 (#6579). La bannière TOUCHE la bande
+        // du haut : leur joint est un pixel. Un dégradé DIAGONAL n'offre pas UNE
+        // couleur à ce joint mais une rampe — `#4F45E4` à gauche, `#423CC5` au
+        // milieu, `#3831A5` à droite — qu'aucun aplat ne peut raccorder ailleurs
+        // qu'en un point. Le SEUL producteur de la couleur du chrome haut est
+        // désormais `TopChromeTint` : la bande et la barre lisent la MÊME valeur,
+        // donc la couture est continue par construction, à toute largeur.
+        // Raisonnement complet et bilan de contraste : en-tête de
+        // `TopChromeTint.swift` ; mesure de pixels : `TopChromeBandRenderTests`.
+        //
+        // La bannière ne peint QUE sa propre hauteur (#6579). Le débord jusqu'au
+        // bord haut du viewport — l'indigo qui recouvre la zone status bar /
+        // Dynamic Island — appartient à `TopChromeBand`, monté sur le VStack de
+        // `CallPresentationLayer`. Cette barre le possédait, le mini-lecteur ne
+        // le possédait pas : une écoute audio sans appel laissait donc le haut
+        // au fond thématique. Une peinture portée par chaque barre est présente
+        // chez l'une et absente chez l'autre — la bande a UN propriétaire.
+        //
+        // `ignoresSafeAreaEdges: []` est EXPLICITE : le défaut de
+        // `.background(_:)` est `.all`, donc une barre adjacente à l'encart
+        // système y étend son fond sans que rien ne le déclare — une seconde
+        // propriété de la bande, muette, chez chaque barre. C'est le défaut que
+        // ce lot ferme ; le laisser implicite le rouvrirait par omission.
+        .background(TopChromeTint.call.bandColor, ignoresSafeAreaEdges: [])
         .offset(x: pillDragOffset)
         .opacity(pillDragOpacity)
         .simultaneousGesture(collapseDragGesture)

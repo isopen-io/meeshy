@@ -39,6 +39,14 @@ const ar = {
   'reels.media.error': 'تعذّر التشغيل — إعادة المحاولة',
   'reels.image': 'صورة {index} من {count}',
 
+  'stories.title': 'القصص',
+  'stories.loading': 'جاري تحميل القصص…',
+  'stories.error': 'تعذّر تحميل القصص.',
+  'stories.empty.title': 'لا توجد قصص حتى الآن',
+  'stories.empty.subtitle': 'ستظهر هنا قصص جهات اتصالك لمدة أربع وعشرين ساعة.',
+  'stories.create': 'إنشاء قصة',
+  'stories.count.one': '{count} قصة',
+  'stories.count.other': '{count} قصص',
   'stories.mine': 'قصتك',
 
   'feed.post.action.like': 'إعجاب',
@@ -50,6 +58,7 @@ const ar = {
   'feed.post.media.audio': 'صوت',
   'feed.post.media.previous': 'الوسائط السابقة',
   'feed.post.media.next': 'الوسائط التالية',
+  'feed.post.media.mosaic': 'فسيفساء من {count} وسائط',
   'feed.post.see_more': 'عرض المزيد',
   'feed.post.see_less': 'عرض أقل',
   'feed.post.reel.chip': 'ريل',
@@ -172,6 +181,12 @@ const ar = {
   'profile.language.choose': 'اختيار',
   'profile.language.clear.regional': 'إزالة اللغة الإقليمية',
   'profile.language.clear.custom': 'إزالة اللغة المخصّصة',
+
+  'languageSheet.title.read': 'لغة القراءة',
+  'languageSheet.title.write': 'لغة الكتابة',
+  'languageSheet.search': 'البحث عن لغة',
+  'languageSheet.empty': 'لا توجد لغة تطابق «{search}».',
+
   'profile.stats.messages': 'الرسائل',
   'profile.stats.translations': 'الترجمات',
   'profile.stats.languages': 'اللغات',

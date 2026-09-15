@@ -4,8 +4,9 @@ import { useStore } from 'zustand/react';
 import { CountrySheet } from '@/components/country-sheet';
 import { DerivedIdentity } from '@/components/derived-identity';
 import { Field } from '@/components/field';
-import { Glyph, GlyphSvg } from '@/components/glyph';
+import { Glyph } from '@/components/glyph';
 import { AUTH_GLYPHS } from '@/components/glyphs-auth';
+import { InfoHintButton, InfoHintText, useInfoHint, type InfoHint } from '@/components/info-hint';
 import { LanguageSheet } from '@/components/language-sheet';
 import { RungReveal } from '@/components/rung-reveal';
 import { getLanguageInfo } from '@meeshy/shared/utils/languages';
@@ -40,6 +41,7 @@ import {
   normalizeReferralCode,
   referralCodeFromLocation,
 } from '@/lib/view/referral-code';
+import { forgetReferralCode, recallReferralCode, rememberReferralCode } from '@/lib/view/referral-memory';
 import { Link, href, navigate } from '@/routes/route-table';
 
 /**
@@ -79,6 +81,36 @@ const INDIGO_TINT = 'var(--ios-indigo-500)';
  * copieront.
  */
 const INDIGO_LINK = 'text-[color:var(--ios-indigo-400)] light:text-[color:var(--ios-indigo-600)]';
+/**
+ * L'AVERTISSEMENT DE VALIDATION (#6479) — derrière un (i) depuis #6626.
+ *
+ * #6479 le posait en clair, au motif que c'est une CONDITION du compte et non un
+ * détail qu'on consulte. La directive porteur postérieure (2026-09-15 : « moins
+ * de détails sur la page de connexion et d'enregistrement ; utiliser des (i)
+ * pour pouvoir informer sur le mode de fonctionnement si naturellement ce n'est
+ * pas clair ») le supplante : l'écran ne dit plus en toutes lettres qu'un lien
+ * partira, il le dit à qui demande « Pourquoi un lien ». La condition, elle,
+ * n'est pas cachée à qui ne voit pas l'écran — la note reste citée par
+ * `aria-describedby` de l'adresse.
+ */
+const EMAIL_VERIFICATION: InfoHint = {
+  label: 'Pourquoi un lien',
+  text: 'Nous vous enverrons un lien à cette adresse : il faudra l’ouvrir pour valider votre compte.',
+  glyph: AUTH_GLYPHS.info,
+};
+
+/**
+ * CE QUE LE NUMÉRO OUVRE — derrière le (i) depuis le retour porteur « la page
+ * est trop surchargée » (#6441). Les deux usages sont MESURÉS, pas promis :
+ * identifiant de connexion (`AuthService.ts:158`) et découverte par un contact
+ * qui l'a au carnet (`contacts-match.ts`, `matchedBy: 'phone'`).
+ */
+const PHONE_BENEFIT: InfoHint = {
+  label: 'À quoi sert le numéro',
+  text: 'Il vous permettra de vous connecter, et à vos proches de vous retrouver.',
+  glyph: AUTH_GLYPHS.info,
+};
+
 const EMPTY_FEEDBACK: SignupFeedback = {
   fieldErrors: {},
   bannerError: null,
@@ -129,9 +161,9 @@ export default function SignupScreen({
   const [isSubmitting, setSubmitting] = useState(false);
   const [isShowingCountrySheet, setShowingCountrySheet] = useState(false);
   const [isShowingLanguageSheet, setShowingLanguageSheet] = useState(false);
-  // Le téléphone ne passe pas par `Field` (il porte le sélecteur de pays) : son
-  // (i) est tenu ici, avec la même loi — replié par défaut, jamais retiré du DOM.
-  const [isPhoneHintOpen, setPhoneHintOpen] = useState(false);
+  // Le téléphone ne passe pas par `Field` (il porte le sélecteur de pays) : il
+  // pose le MÊME (i), dont la note garde l'identifiant que sa saisie cite.
+  const phoneHint = useInfoHint('signup-phone-hint');
   // Une inscription réussie AUTHENTIFIE déjà (`auth.register` établit la
   // session, #4264) — sans ce drapeau, l'effet ci-dessous mènerait à `list`
   // avant que `handleSubmit` n'ait pu router vers la vérification d'e-mail
@@ -153,7 +185,7 @@ export default function SignupScreen({
   if (nextReveal !== reveal) setReveal(nextReveal);
 
   /**
-   * LE PARRAINAGE (#6584) — lu UNE fois dans l'adresse, à l'initialisation.
+   * LE PARRAINAGE (#6584) — l'adresse D'ABORD, la MÉMOIRE ensuite.
    *
    * `referralCodeFromLocation` plutôt que `useSearch()` : ce dernier exige le
    * contexte du routeur, et l'inscription est montée telle quelle par ses
@@ -161,12 +193,28 @@ export default function SignupScreen({
    * deux (`LoginDoors`). Le code d'invitation ne change pas sous les doigts de
    * celui qui remplit le formulaire : le lire une fois suffit.
    *
-   * Le bloc s'ouvre SEUL quand l'adresse porte un code, et reste replié sinon :
-   * la très grande majorité des inscriptions n'en ont pas, et un champ de plus
-   * imposé à tout le monde pour servir une minorité est exactement la
-   * surcharge que le porteur a déjà refusée (#6441).
+   * **`recallReferralCode` est la reprise du LEGACY** (`apps/web` écrit le
+   * jeton pour 30 jours et le relit à l'inscription) : quelqu'un qui clique une
+   * invitation, regarde l'accueil et s'inscrit le lendemain garde son
+   * parrainage. Sans elle, seul le cas rare — s'inscrire sans jamais quitter la
+   * page d'arrivée — aurait compté. L'adresse GAGNE sur la mémoire : un
+   * nouveau lien remplace un ancien, jamais l'inverse.
+   *
+   * Le bloc s'ouvre SEUL quand un code est connu, et reste replié sinon : la
+   * très grande majorité des inscriptions n'en ont pas, et un champ de plus
+   * imposé à tout le monde pour servir une minorité est exactement la surcharge
+   * que le porteur a déjà refusée (#6441).
    */
-  const [referralCode, setReferralCode] = useState(referralCodeFromLocation);
+  const [referralCode, setReferralCode] = useState(() => {
+    const fromAddress = referralCodeFromLocation();
+    if (fromAddress !== '') {
+      // Il vient d'arriver par un lien : on le retient POUR la navigation qui
+      // suit, au cas où l'inscription ne se termine pas dans cette page-ci.
+      rememberReferralCode(fromAddress);
+      return fromAddress;
+    }
+    return recallReferralCode();
+  });
   const [isReferralOpen, setReferralOpen] = useState(() => referralCode !== '');
   const [referral, setReferral] = useState<ReferralStatus>({ kind: 'idle' });
 
@@ -231,6 +279,10 @@ export default function SignupScreen({
      */
     const code = normalizeReferralCode(referralCode);
     if (isReferralCodeShaped(code)) {
+      // OUBLIÉ tout de suite, pas à la réponse : le compte est créé, ce code a
+      // servi. L'attendre pour l'oublier le laisserait se rattacher une seconde
+      // fois à une inscription suivante sur le même navigateur.
+      forgetReferralCode();
       void convertReferral({ code, userId: result.data.user.id }).catch(() => undefined);
     }
     navigate(href('verifyEmail', undefined, { email: form.email }), true);
@@ -279,7 +331,17 @@ export default function SignupScreen({
 
         <div className="grid gap-5 pb-8">
           <div className="grid gap-1">
-            <Field id="signup-email" label="Adresse e-mail" tint={INDIGO_TINT} focused={focused === 'email'} error={emailError}>
+            {/* `aria-invalid` suit le REFUS, jamais `describedBy` : le champ
+                cite aussi la note de son (i), et s'annoncerait « invalide »
+                avant la première lettre. */}
+            <Field
+              id="signup-email"
+              label="Adresse e-mail"
+              tint={INDIGO_TINT}
+              focused={focused === 'email'}
+              error={emailError}
+              hint={EMAIL_VERIFICATION}
+            >
               {({ id, describedBy }) => (
                 <input
                   id={id}
@@ -295,18 +357,10 @@ export default function SignupScreen({
                   className="w-full bg-transparent py-3 text-input outline-none"
                   style={{ color: 'var(--color-ios-ink)' }}
                   aria-describedby={describedBy}
-                  aria-invalid={describedBy !== undefined}
+                  aria-invalid={emailError !== undefined}
                 />
               )}
             </Field>
-            {/* L'AVERTISSEMENT DE VALIDATION (#6479, directive porteur).
-                Il n'est pas derrière un (i) : ce n'est pas un détail qu'on
-                consulte, c'est une CONDITION du compte. Le savoir avant
-                d'envoyer évite de taper une adresse jetable puis de découvrir
-                qu'on ne peut pas entrer. */}
-            <p data-signup-email-verification className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-              Nous vous enverrons un lien à cette adresse : il faudra l’ouvrir pour valider votre compte.
-            </p>
             {feedback.showSignIn ? (
               <Link
                 to="login"
@@ -359,17 +413,7 @@ export default function SignupScreen({
                   aria-label="Téléphone"
                   aria-describedby="signup-phone-hint"
                 />
-                <button
-                  type="button"
-                  onClick={() => setPhoneHintOpen((open) => !open)}
-                  aria-expanded={isPhoneHintOpen}
-                  aria-controls="signup-phone-hint"
-                  aria-label="À quoi sert le numéro"
-                  className="grid shrink-0 place-items-center rounded-full"
-                  style={{ minWidth: 44, minHeight: 44, marginRight: -10, color: 'var(--color-ios-ink-3)' }}
-                >
-                  <GlyphSvg glyph={AUTH_GLYPHS.info} size={18} />
-                </button>
+                <InfoHintButton hint={PHONE_BENEFIT} state={phoneHint} style={{ marginRight: -10 }} />
               </div>
             </div>
             {feedback.fieldErrors.phoneNumber !== undefined ? (
@@ -377,22 +421,9 @@ export default function SignupScreen({
                 {feedback.fieldErrors.phoneNumber}
               </p>
             ) : null}
-            {/* CE QU'IL OUVRE — derrière le (i) depuis le retour porteur « la
-                page est trop surchargée ». Les deux usages sont MESURÉS, pas
-                promis : identifiant de connexion (`AuthService.ts:158`) et
-                découverte par un contact qui l'a au carnet
-                (`contacts-match.ts`, `matchedBy: 'phone'`).
-                `sr-only` plutôt que démonté : REPLIÉ ne veut pas dire ABSENT —
-                `aria-describedby` de l'input le porte toujours, donc un lecteur
-                d'écran l'entend sans avoir à trouver le bouton. */}
-            <p
-              id="signup-phone-hint"
-              data-signup-phone-benefit
-              className={`text-caption ${isPhoneHintOpen ? '' : 'sr-only'}`}
-              style={{ color: 'var(--color-ios-ink-2)' }}
-            >
-              Il vous permettra de vous connecter, et à vos proches de vous retrouver.
-            </p>
+            {/* CE QU'IL OUVRE — voir `PHONE_BENEFIT`. Replié, jamais démonté :
+                `aria-describedby` de la saisie le porte toujours. */}
+            <InfoHintText hint={PHONE_BENEFIT} state={phoneHint} />
           </div>
 
           {/* LE RESTE — SECOND BARREAU (#6582) : identité dérivée, mot de
@@ -456,7 +487,7 @@ export default function SignupScreen({
                 placeholder={`${PASSWORD_MIN} caractères minimum`}
                 className="w-full bg-transparent py-3 text-input outline-none"
                 aria-describedby={describedBy}
-                aria-invalid={describedBy !== undefined}
+                aria-invalid={feedback.fieldErrors.password !== undefined}
                 style={{ color: 'var(--color-ios-ink)' }}
               />
             )}

@@ -1,9 +1,17 @@
 import { describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { dirname, join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
+import { allFiles } from './files.mjs';
 import {
   GLASS_CONTRAST_INVENTORY,
+  derivedGlassInkPairs,
   glassContrastAudit,
+  glassContrastCoverage,
+  glassInkUsages,
   glassWorstCaseContrast,
+  loadColorAliasMap,
   loadGlassDensities,
   loadIosSchemes,
   resolveColor,
@@ -133,5 +141,114 @@ describe('le dépôt — le verre tient AA, mesuré depuis les fichiers réels (
     const ink = resolveColor(light['--ios-day-ink']!, light);
     const ratioAt78 = glassWorstCaseContrast({ tone, ink, densityPercent: 78, scheme: 'light' });
     expect(ratioAt78).toBeLessThan(4.5);
+  });
+});
+
+/**
+ * #6367 — L'INVENTAIRE EST NOMMÉ, PAS DÉRIVÉ : un nouveau couple (ton, encre)
+ * posé sur une surface `glass*` passait le gate en SILENCE tant que personne
+ * ne se souvenait d'ajouter son entrée. `glassInkUsages`/`derivedGlassInkPairs`
+ * rejouent les usages RÉELS (classe `glass`/`glass-prominent`, ton hérité par
+ * `glass-card`, encre peinte sur le tag ou un descendant) ; `glassContrastCoverage`
+ * est le gate : tout couple dérivé absent de `GLASS_CONTRAST_INVENTORY` tombe.
+ */
+
+const source = (path: string, text: string) => ({ path, text });
+
+describe('glassInkUsages — le couple (ton, encre) réellement peint, depuis des sources fabriquées', () => {
+  test('l’encre posée sur LE TAG qui porte le verre forme un couple avec son propre ton', () => {
+    const tsx = `<span className="glass glass-card rounded-chip" style={{ color: 'var(--color-day-ink)' }}>Hier</span>`;
+    expect(glassInkUsages(tsx)).toEqual([{ toneAlias: '--color-ios-card', inkAlias: '--color-day-ink', density: 'glass' }]);
+  });
+
+  test('l’encre posée sur un DESCENDANT, à toute profondeur, hérite du ton de l’ancêtre de verre', () => {
+    const tsx = `
+      <header className="thread-header glass">
+        <div className="flex">
+          <h1 style={{ color: 'var(--color-ios-ink)' }}>Titre</h1>
+        </div>
+      </header>`;
+    expect(glassInkUsages(tsx)).toEqual([{ toneAlias: '--color-ios-surface', inkAlias: '--color-ios-ink', density: 'glass' }]);
+  });
+
+  test('`glass-prominent` est une densité distincte de `glass`', () => {
+    const tsx = `<div className="glass-prominent glass-card"><span style={{ color: 'var(--color-ios-ink)' }}>x</span></div>`;
+    expect(glassInkUsages(tsx)).toEqual([{ toneAlias: '--color-ios-card', inkAlias: '--color-ios-ink', density: 'glass-prominent' }]);
+  });
+
+  test('`glass-accent` est HORS dérivation — sa valeur varie par conversation (D-51)', () => {
+    const tsx = `<button className="glass glass-accent"><span style={{ color: 'var(--color-ios-ink)' }}>x</span></button>`;
+    expect(glassInkUsages(tsx)).toEqual([]);
+  });
+
+  test('une encre HORS du verre (aucun ancêtre `glass*`) ne forme aucun couple', () => {
+    const tsx = `<div className="rounded-card"><span style={{ color: 'var(--color-ios-ink)' }}>x</span></div>`;
+    expect(glassInkUsages(tsx)).toEqual([]);
+  });
+
+  test('un enfant sorti du verre (balise fermante) ne porte plus son ton', () => {
+    const tsx = `
+      <div>
+        <header className="glass"><span>x</span></header>
+        <p style={{ color: 'var(--color-ios-ink)' }}>hors du verre</p>
+      </div>`;
+    expect(glassInkUsages(tsx)).toEqual([]);
+  });
+
+  test('un générique TypeScript (`useState<string>`) n’ouvre pas un tag et ne casse pas la profondeur', () => {
+    const tsx = `
+      function C() {
+        const [x] = useState<string>('a');
+        return <header className="glass"><span style={{ color: 'var(--color-ios-ink)' }}>{x}</span></header>;
+      }`;
+    expect(glassInkUsages(tsx)).toEqual([{ toneAlias: '--color-ios-surface', inkAlias: '--color-ios-ink', density: 'glass' }]);
+  });
+
+  test('un élément auto-fermant ne pousse aucun cadre — il ne peut pas avoir de descendant', () => {
+    const tsx = `<header className="glass" /><span style={{ color: 'var(--color-ios-ink)' }}>hors du verre</span>`;
+    expect(glassInkUsages(tsx)).toEqual([]);
+  });
+});
+
+describe('derivedGlassInkPairs / glassContrastCoverage — la garde, falsifiée', () => {
+  test('un couple hors du schéma iOS (`--accent`, une couleur sémantique) sort de la dérivation', () => {
+    const tsx = `<header className="glass"><span style={{ color: 'var(--accent)' }}>x</span></header>`;
+    expect(derivedGlassInkPairs([source('src/components/x.tsx', tsx)])).toEqual([]);
+  });
+
+  test('un couple neuf, absent de l’inventaire, FAIT ROUGIR la garde — le défaut que #6367 corrige', () => {
+    const tsx = `<div className="glass-prominent"><span style={{ color: 'var(--color-ios-ink-3)' }}>x</span></div>`;
+    const violations = glassContrastCoverage([source('src/components/fabrique.tsx', tsx)]);
+    expect(violations).toEqual([
+      { tone: '--ios-surface', ink: '--ios-ink-3', density: 'glass-prominent', sites: ['src/components/fabrique.tsx'] },
+    ]);
+  });
+
+  test('un couple déjà déclaré dans l’inventaire ne rougit pas', () => {
+    const tsx = `<span className="glass glass-card" style={{ color: 'var(--color-day-ink)' }}>Hier</span>`;
+    expect(glassContrastCoverage([source('src/components/thread-chrome.tsx', tsx)])).toEqual([]);
+  });
+
+  test('le même couple, deux fichiers, ne rougit qu’une fois et cite les DEUX sites', () => {
+    const tsx = `<div className="glass-prominent"><span style={{ color: 'var(--color-ios-ink-3)' }}>x</span></div>`;
+    const violations = glassContrastCoverage([source('src/a.tsx', tsx), source('src/b.tsx', tsx)]);
+    expect(violations).toEqual([{ tone: '--ios-surface', ink: '--ios-ink-3', density: 'glass-prominent', sites: ['src/a.tsx', 'src/b.tsx'] }]);
+  });
+});
+
+describe('le dépôt — tout couple (ton, encre) posé sur une surface glass* est déclaré (#6367)', () => {
+  const APP = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+  const sources = allFiles(join(APP, 'src'))
+    .filter((file) => /\.tsx$/.test(file) && !/\.test\.tsx?$/.test(file))
+    .map((file) => source(relative(APP, file), readFileSync(file, 'utf8')));
+
+  test('la table d’alias `--color-*` → `--ios-*` existe et couvre l’encre/le ton de l’inventaire', () => {
+    const aliases = loadColorAliasMap();
+    expect(aliases['--color-ios-ink']).toBe('--ios-ink');
+    expect(aliases['--color-ios-card']).toBe('--ios-surface-card');
+  });
+
+  test('aucun couple (ton, encre) réellement peint sur du verre n’échappe à l’inventaire nommé', () => {
+    expect(glassContrastCoverage(sources)).toEqual([]);
   });
 });

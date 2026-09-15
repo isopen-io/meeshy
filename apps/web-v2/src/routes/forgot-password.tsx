@@ -4,10 +4,11 @@ import { AuthAmbient, AuthBrandFooter, AuthSubmitButton } from '@/components/aut
 import { Field } from '@/components/field';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { AUTH_GLYPHS } from '@/components/glyphs-auth';
+import { InfoHintButton, InfoHintText, useInfoHint, type InfoHint } from '@/components/info-hint';
 import { auth } from '@/lib/api/auth';
 import { useOnline } from '@/lib/net/online';
 import { isEmailValid } from '@/lib/signup-form';
-import { SPAM_HINT } from '@/lib/view/auth-copy';
+import { NOTHING_RECEIVED_LABEL, NOTHING_RECEIVED_TEXT } from '@/lib/view/auth-copy';
 import { resolveForgotPasswordOutcome, type ForgotPasswordOutcome } from '@/lib/view/auth-feedback';
 import { Link } from '@/routes/route-table';
 
@@ -39,6 +40,18 @@ import { Link } from '@/routes/route-table';
 
 const FORGOT_PASSWORD_TINT = 'var(--color-ios-brand)';
 
+/**
+ * LES INDÉSIRABLES, MÊME QUESTION ET MÊME RÉPONSE QUE LE LIEN PAR E-MAIL
+ * (#6583) — texte et libellé viennent de `lib/view/auth-copy.ts`, le (i) du
+ * socle (`components/info-hint.tsx`, extrait par #6626). Deux écrans attendent
+ * le même e-mail : ils le disent avec les mêmes mots, et de la même façon.
+ */
+const NOTHING_RECEIVED: InfoHint = {
+  label: NOTHING_RECEIVED_LABEL,
+  text: NOTHING_RECEIVED_TEXT,
+  glyph: AUTH_GLYPHS.info,
+};
+
 /** Ce que l'écran DEMANDE — injecté pour que le témoin atteigne l'état
  * « envoyé » sans parler à une passerelle, comme `MagicLinkPanel` depuis
  * #6404. Le défaut reste le client réel : aucun écran ne se bouchonne en
@@ -53,6 +66,7 @@ export default function ForgotPasswordScreen({ deps = defaultDeps }: { readonly 
   const [focused, setFocused] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [outcome, setOutcome] = useState<ForgotPasswordOutcome | null>(null);
+  const nothingReceived = useInfoHint();
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -85,12 +99,12 @@ export default function ForgotPasswordScreen({ deps = defaultDeps }: { readonly 
               Si un compte existe avec <strong style={{ color: 'var(--color-ios-ink)' }}>{email}</strong>, un lien de
               réinitialisation vient d’être envoyé.
             </p>
-            {/* LES INDÉSIRABLES — `SPAM_HINT` (`lib/view/auth-copy.ts`), la
-                MÊME phrase que le lien magique : c'est la même attente d'un
-                e-mail qui peut ne jamais paraître (#6583). */}
-            <p data-forgot-password-spam-hint className="text-center text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-              {SPAM_HINT}
-            </p>
+            {/* LES INDÉSIRABLES — voir `NOTHING_RECEIVED` : même question,
+                même réponse et même (i) que l'attente du lien par e-mail. */}
+            <div className="grid justify-items-center" data-forgot-password-spam-hint>
+              <InfoHintButton hint={NOTHING_RECEIVED} state={nothingReceived} showsLabel />
+              <InfoHintText hint={NOTHING_RECEIVED} state={nothingReceived} className="text-center" />
+            </div>
             <Link
               to="login"
               replace

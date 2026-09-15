@@ -3,7 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import ForgotPasswordScreen, { type ForgotPasswordDeps } from '@/routes/forgot-password';
-import { SPAM_HINT } from '@/lib/view/auth-copy';
+import { NOTHING_RECEIVED_TEXT } from '@/lib/view/auth-copy';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 /**
@@ -80,14 +80,15 @@ describe('/forgot-password prend la forme de /login', () => {
 });
 
 /**
- * LA NOTE SUR LES INDÉSIRABLES (#6583) — le lien magique la porte depuis
- * #6404, et c'est EXACTEMENT le même moment : on attend un e-mail qui peut ne
- * jamais paraître. La constante est PARTAGÉE (`lib/view/auth-copy.ts`) plutôt
- * que recopiée : deux phrases pour une même attente auraient dérivé au premier
+ * LA NOTE SUR LES INDÉSIRABLES (#6583) — la connexion par e-mail la porte
+ * depuis #6404, repliée derrière un (i) depuis #6626, et c'est EXACTEMENT le
+ * même moment : on attend un e-mail qui peut ne jamais paraître. Le TEXTE est
+ * PARTAGÉ (`lib/view/auth-copy.ts`) et le (i) vient du socle — deux phrases,
+ * ou deux mises en scène, pour une même attente auraient dérivé au premier
  * correctif.
  */
 describe('l’écran d’envoi dit où chercher l’e-mail', () => {
-  test('la note sur les indésirables paraît, et c’est la MÊME que celle du lien magique', async () => {
+  test('« Rien reçu ? » est là, et sa note est la MÊME que celle de la connexion par e-mail', async () => {
     const el = mount({ request: async () => ({ ok: true as const, status: 200, data: { message: 'ok' } }) });
     const champ = el.querySelector('#forgot-email') as HTMLInputElement;
     act(() => {
@@ -100,6 +101,9 @@ describe('l’écran d’envoi dit où chercher l’e-mail', () => {
     // L'écran d'envoi n'a pas de titre non plus (§ le bloc ci-dessus) : c'est
     // l'enveloppe et la phrase qui disent ce qui vient de se passer.
     expect(text(el)).toContain('vient d’être envoyé');
-    expect(text(el)).toContain(SPAM_HINT);
+    // Le (i) de #6626 : la note est dans le DOM, repliée en `sr-only`, et le
+    // libellé de son bouton est LU à côté du glyphe (§ `InfoHintButton`).
+    expect(el.querySelector('button[aria-label="Rien reçu ?"]')).not.toBeNull();
+    expect(text(el)).toContain(NOTHING_RECEIVED_TEXT);
   });
 });

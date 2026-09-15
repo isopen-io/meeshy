@@ -14,6 +14,7 @@
 
 import { describe, it, expect, jest } from '@jest/globals';
 import {
+  discoverConversationIdsByMessageIds,
   isOrphanedSenderError,
   withOrphanedSenderRepair,
 } from '../../../../services/messaging/withOrphanedSenderRepair';
@@ -106,5 +107,100 @@ describe('withOrphanedSenderRepair', () => {
 
     await expect(withOrphanedSenderRepair(scopeOf(db), read)).rejects.toBe(origine);
     expect(read).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('withOrphanedSenderRepair — portée par RÉSOLVEUR (#6516)', () => {
+  it("appelle le résolveur APRÈS l'échec, jamais avant, et répare ce qu'il rend", async () => {
+    const db = withOrphans();
+    const discover = jest.fn<any>().mockResolvedValue([CONV]);
+    const read = jest.fn<any>().mockRejectedValueOnce(orphanedSenderPrismaError()).mockResolvedValueOnce('page');
+
+    const scope = { prisma: db.prisma as never, conversationIds: discover };
+    await expect(withOrphanedSenderRepair(scope, read)).resolves.toBe('page');
+
+    expect(discover).toHaveBeenCalledTimes(1);
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(hasTombstone(db, GHOST)).toBe(true);
+    expect(hasTombstone(db, GHOST_ELSEWHERE)).toBe(false);
+  });
+
+  it('une lecture qui réussit du premier coup n’appelle jamais le résolveur', async () => {
+    const db = withOrphans();
+    const discover = jest.fn<any>().mockResolvedValue([CONV]);
+    const read = jest.fn<any>().mockResolvedValue('page');
+
+    await expect(withOrphanedSenderRepair({ prisma: db.prisma as never, conversationIds: discover }, read)).resolves.toBe(
+      'page'
+    );
+    expect(discover).not.toHaveBeenCalled();
+  });
+
+  it('un résolveur qui ne trouve RIEN ne répare rien, et le rejeu échoue sans boucler', async () => {
+    const db = withOrphans();
+    const discover = jest.fn<any>().mockResolvedValue([]);
+    const persistante = orphanedSenderPrismaError();
+    const read = jest.fn<any>().mockRejectedValue(persistante);
+
+    await expect(withOrphanedSenderRepair({ prisma: db.prisma as never, conversationIds: discover }, read)).rejects.toBe(
+      persistante
+    );
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(db.prisma.message.aggregateRaw).not.toHaveBeenCalled();
+  });
+
+  it('un résolveur qui échoue rend l’erreur d’ORIGINE, sans rejouer la lecture', async () => {
+    const db = withOrphans();
+    const discover = jest.fn<any>().mockRejectedValue(new Error('discovery refused'));
+    const origine = orphanedSenderPrismaError();
+    const read = jest.fn<any>().mockRejectedValue(origine);
+
+    await expect(withOrphanedSenderRepair({ prisma: db.prisma as never, conversationIds: discover }, read)).rejects.toBe(
+      origine
+    );
+    expect(read).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('discoverConversationIdsByMessageIds (#6516)', () => {
+  it('lit la seule conversation d’un message trouvé par id seul, sans jamais sélectionner `sender`', async () => {
+    const db = withOrphans();
+
+    const discover = discoverConversationIdsByMessageIds(db.prisma as never, ['m1']);
+    await expect(discover()).resolves.toEqual([CONV]);
+  });
+
+  it('déduplique les conversations de PLUSIEURS messages', async () => {
+    const db = withOrphans();
+
+    const discover = discoverConversationIdsByMessageIds(db.prisma as never, ['m1', 'm2']);
+    const found = await discover();
+    expect([...found].sort()).toEqual([CONV, OTHER_CONV].sort());
+  });
+
+  it('ne lit RIEN pour une liste d’ids vide — jamais une passe globale par accident', async () => {
+    const db = withOrphans();
+    const discover = discoverConversationIdsByMessageIds(db.prisma as never, []);
+
+    await expect(discover()).resolves.toEqual([]);
+    expect(db.prisma.message.findMany).not.toHaveBeenCalled();
+  });
+
+  it('un id déjà purgé (message introuvable) n’apporte aucune conversation', async () => {
+    const db = withOrphans();
+    const discover = discoverConversationIdsByMessageIds(db.prisma as never, ['ghost-message-id']);
+
+    await expect(discover()).resolves.toEqual([]);
+  });
+
+  it('branché bout en bout : une lecture par id seul se répare et se rejoue', async () => {
+    const db = withOrphans();
+    const read = jest.fn<any>().mockRejectedValueOnce(orphanedSenderPrismaError()).mockResolvedValueOnce('message');
+
+    const scope = { prisma: db.prisma as never, conversationIds: discoverConversationIdsByMessageIds(db.prisma as never, ['m1']) };
+    await expect(withOrphanedSenderRepair(scope, read)).resolves.toBe('message');
+
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(hasTombstone(db, GHOST)).toBe(true);
   });
 });

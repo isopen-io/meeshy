@@ -40,7 +40,7 @@ import { getSharedNotificationService } from './notifications/notification-servi
 import { reclaimMediaRowBytes } from './posts/reclaimPostMediaBytes';
 import { extractCaptureTracks } from './posts/captureTracks';
 import { mediaCaptureTracks } from './posts/mediaCaptureTracks';
-import { feedsSoundLibrary } from './posts/soundEligibility';
+import { orchestrateSoundCapture, type SoundCaptureVerdict } from './posts/soundCaptureVerdict';
 import { normalizeLanguageCode, normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { parseSharedPlace, type SharedPlace } from './location/sharedPlace';
 import { quantizeCoordinate, resolveDiscoverabilityPrecision, type DiscoverabilityPrecision } from './location/geoDiscoverability';
@@ -434,17 +434,11 @@ export class PostService {
     const captureTracks = await this.collectCaptureTracks(
       post.id, data.storyEffects, data.allowSoundExtraction ?? false,
       Boolean(data.mediaIds?.length));
-    this.soundCaptureService.captureSounds({
-      postId: post.id,
-      authorId: post.authorId,
-      // Règle UNIQUE et partagée (PUBLIC ou COMMUNITY, jamais un repost). Elle
-      // vivait dupliquée ici et dans `updatePost`, et la seconde copie avait
-      // déjà été oubliée une fois — c'était la troisième porte du piège
-      // d'attribution.
-      feedsLibrary: feedsSoundLibrary({ visibility: data.visibility, repostOfId: data.repostOfId }),
-      tracks: captureTracks,
-    }).catch((err: unknown) => {
-      log.error('captureSounds (createPost) a échoué', err instanceof Error ? err : new Error(String(err)), { postId: post.id });
+    // Éligibilité + capture fire-and-forget + verdict synchrone (#6603) — voir posts/soundCaptureVerdict.ts.
+    const soundLibrary = orchestrateSoundCapture({
+      postId: post.id, authorId: post.authorId, visibility: data.visibility, repostOfId: data.repostOfId,
+      tracks: captureTracks, soundCaptureService: this.soundCaptureService,
+      onError: (err) => log.error('captureSounds (createPost) a échoué', err instanceof Error ? err : new Error(String(err)), { postId: post.id }),
     });
 
     // Déclencher la traduction Prisme pour les stories avec texte (fire-and-forget)
@@ -526,7 +520,8 @@ export class PostService {
       where: { id: post.id },
       select: postInclude,
     });
-    return refreshed ?? post;
+    // `soundLibrary` : champ de service (#6603), pas une colonne.
+    return { ...(refreshed ?? post), soundLibrary };
   }
 
   private async triggerStoryTextTranslation(postId: string, content: string, authorId: string, sourceLanguageOverride?: string): Promise<void> {
@@ -1402,23 +1397,22 @@ export class PostService {
     // sur le repost passerait donc le scope `postId` et créerait un `Sound`
     // crédité au reposteur avec l'audio d'autrui. `feedsSoundLibrary` renvoie
     // false sur tout repost, et `captureSounds` libère alors les usages.
+    // Verdict synchrone (#6603) ; `undefined` si l'édition ne touche pas les sons.
+    let soundLibrary: SoundCaptureVerdict | undefined;
     if (data.storyEffects !== undefined || editTouchesComposition || data.allowSoundExtraction !== undefined) {
       const effectiveEffects = data.storyEffects
         ?? (updated.storyEffects as Record<string, unknown> | null) ?? undefined;
       const editedTracks = await this.collectCaptureTracks(
         updated.id, effectiveEffects, updated.allowSoundExtraction === true,
         finalMedia.length > 0);
-      this.soundCaptureService.captureSounds({
-        postId: updated.id,
-        authorId: updated.authorId,
-        feedsLibrary: feedsSoundLibrary({ visibility: updated.visibility, repostOfId: updated.repostOfId }),
-        tracks: editedTracks,
-      }).catch((err: unknown) => {
-        log.error('captureSounds (updatePost) a échoué', err instanceof Error ? err : new Error(String(err)), { postId: updated.id });
+      soundLibrary = orchestrateSoundCapture({
+        postId: updated.id, authorId: updated.authorId, visibility: updated.visibility, repostOfId: updated.repostOfId,
+        tracks: editedTracks, soundCaptureService: this.soundCaptureService,
+        onError: (err) => log.error('captureSounds (updatePost) a échoué', err instanceof Error ? err : new Error(String(err)), { postId: updated.id }),
       });
     }
 
-    return updated;
+    return soundLibrary ? { ...updated, soundLibrary } : updated;
   }
 
   /**

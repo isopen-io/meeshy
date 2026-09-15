@@ -1,6 +1,14 @@
 import { describe, expect, test } from 'bun:test';
 
-import { armingLaw, electThreadFocus, focusLine, THREAD_FOCUS_BAND_HYSTERESIS, velocityOf } from './election';
+import {
+  armingLaw,
+  electThreadFocus,
+  focalLoupeScale,
+  focusLine,
+  THREAD_FOCUS_BAND_HYSTERESIS,
+  velocityOf,
+} from './election';
+import { FOCUS_CARD_MARGIN_VERTICAL, FOCUS_LOUPE_GAIN } from './metrics';
 
 /**
  * Miroir `FocalScrollPerspectiveTests.swift:53-65` — la ligne de focus est
@@ -126,6 +134,39 @@ describe('armingLaw.isArmed', () => {
     expect(
       armingLaw.isArmed({ alreadyArmed: false, scrollStartedAt: null, now: 0, velocity: 0 }),
     ).toBe(false);
+  });
+});
+
+/**
+ * LA LOUPE DU MESSAGE ÉLU (#6586/#6588) — miroir
+ * `FocalScrollPerspectiveTests.test_loupeScale_magnifiesOnlyTheFocusedMessage`
+ * et `.test_loupeScale_aTallMessageNeverOverflowsItsCardMargin`, mêmes vecteurs.
+ */
+describe('focalLoupeScale', () => {
+  const size = { width: 390, height: 60 };
+
+  test('les cotes sont celles de FocalMetrics.swift', () => {
+    expect(FOCUS_LOUPE_GAIN).toBe(0.05);
+    expect(FOCUS_CARD_MARGIN_VERTICAL).toBe(8);
+  });
+
+  test("l'élu grandit du gain plein", () => {
+    expect(focalLoupeScale({ isFocused: true, reducedMotion: false, ...size })).toBeCloseTo(1 + FOCUS_LOUPE_GAIN, 10);
+  });
+
+  test('une rangée non élue reste à plat', () => {
+    expect(focalLoupeScale({ isFocused: false, reducedMotion: false, ...size })).toBe(1);
+  });
+
+  test('reduce motion -> identité', () => {
+    expect(focalLoupeScale({ isFocused: true, reducedMotion: true, ...size })).toBe(1);
+  });
+
+  test('un long message ne déborde jamais de la marge verticale de sa carte', () => {
+    const tall = { width: 390, height: 900 };
+    const scale = focalLoupeScale({ isFocused: true, reducedMotion: false, ...tall });
+    expect(scale).toBeGreaterThan(1);
+    expect((scale - 1) * tall.height / 2).toBeLessThanOrEqual(FOCUS_CARD_MARGIN_VERTICAL + 0.0001);
   });
 });
 
