@@ -161,7 +161,7 @@ export function ResetPasswordFlow({ token, deps = defaultDeps }: { token: string
           <Link
             to="login"
             replace
-            className="grid place-items-center rounded-[14px] px-8 font-bold text-white"
+            className="grid w-full place-items-center rounded-[14px] px-8 font-bold text-white"
             style={{ minHeight: 52, background: RESET_TINT }}
           >
             Se connecter

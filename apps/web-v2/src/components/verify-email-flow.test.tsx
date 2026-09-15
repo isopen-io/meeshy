@@ -185,7 +185,7 @@ describe('VerifyEmailFlow — code juste', () => {
     });
 
     expect(stub.calls).toEqual([{ email: 'ada@meeshy.example', code: '123456' }]);
-    expect(el.textContent).toContain('Email vérifié !');
+    expect(el.textContent).toContain('E-mail vérifié !');
     const anchors = Array.from(el.querySelectorAll('a'));
     expect(anchors.some((a) => a.textContent === 'Continuer')).toBe(true);
   });
@@ -201,7 +201,7 @@ describe('VerifyEmailFlow — code juste', () => {
       await Promise.resolve();
     });
 
-    expect(el.textContent).toContain('Email vérifié !');
+    expect(el.textContent).toContain('E-mail vérifié !');
   });
 });
 
@@ -218,7 +218,7 @@ describe('VerifyEmailFlow — code faux', () => {
     });
 
     expect(el.querySelector('#verify-email-code-error')?.textContent).toBe('Code invalide ou expiré');
-    expect(el.textContent).not.toContain('Email vérifié');
+    expect(el.textContent).not.toContain('E-mail vérifié');
   });
 });
 

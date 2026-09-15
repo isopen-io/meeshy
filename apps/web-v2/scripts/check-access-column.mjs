@@ -25,7 +25,13 @@
  *      au seul téléphone (une colonne qui y rétrécit) y rougirait ;
  *   3. aucun gabarit ne défile horizontalement ;
  *   4. la colonne de la connexion elle-même ne dépasse pas `max-w-sm` (384 px)
- *      — sans cette borne absolue, élargir la référence verdirait tout.
+ *      — sans cette borne absolue, élargir la référence verdirait tout ;
+ *   5. chaque ACTION PEINTE de l'écran (bouton ou lien à fond, d'au moins
+ *      44 px de haut, posé dans un empilement vertical) prend la largeur de
+ *      son conteneur, et son libellé n'en déborde pas (#6679). La vérification
+ *      d'e-mail rendait « Vérifier » dans un carré de 56 px au libellé coupé,
+ *      sans qu'aucune colonne ne sorte de ses marges : les points 1 à 4 ne
+ *      pouvaient pas le voir.
  *
  * LES ÉTATS QUI NE S'ATTEIGNENT QU'APRÈS UNE RÉPONSE DU SERVEUR (second
  * facteur, e-mail envoyé, lien vérifié, mot de passe enregistré) sont servis
@@ -231,12 +237,42 @@ const mesureColonne = (page) =>
     }, lignee(perceptibles[0]));
     const colonne = commun[commun.length - 1];
     const r = colonne.getBoundingClientRect();
+    /* Un fond peint distingue l'action principale d'un lien de texte ; un
+       empilement vertical écarte les puces posées en rangée (l'indicatif du
+       téléphone de l'inscription), qui n'ont pas à prendre toute la largeur. */
+    const peinte = (style) => style.backgroundImage !== 'none' || !['rgba(0, 0, 0, 0)', 'transparent'].includes(style.backgroundColor);
+    const empileVerticalement = (parent) => {
+      const s = getComputedStyle(parent);
+      if (s.display === 'block') return true;
+      if (s.display.endsWith('flex')) return s.flexDirection.startsWith('column');
+      if (s.display.endsWith('grid')) return s.gridTemplateColumns.trim().split(/\s+/).length === 1;
+      return false;
+    };
+    const actions = perceptibles
+      .filter(
+        (el) =>
+          el.matches('button, a') &&
+          el.getBoundingClientRect().height >= 44 &&
+          peinte(getComputedStyle(el)) &&
+          el.parentElement !== null &&
+          empileVerticalement(el.parentElement),
+      )
+      .map((el) => {
+        const s = getComputedStyle(el.parentElement);
+        return {
+          libelle: (el.textContent ?? '').trim().slice(0, 40),
+          largeur: el.getBoundingClientRect().width,
+          conteneur: el.parentElement.clientWidth - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight),
+          debordLibelle: el.scrollWidth - el.clientWidth,
+        };
+      });
     return {
       perceptibles: perceptibles.length,
       gauche: r.left,
       droite: innerWidth - r.right,
       largeur: r.width,
       debord: document.documentElement.scrollWidth - innerWidth,
+      actions,
       element: `${colonne.tagName.toLowerCase()}.${[...colonne.classList].slice(0, 6).join('.')}`,
     };
   });
@@ -346,6 +382,13 @@ for (const viewport of [ORDINATEUR, TABLETTE, TELEPHONE]) {
       const ecart = Math.abs(m.gauche - m.droite);
       bilan.push({ etat: etat.nom, gabarit, largeur: Math.round(m.largeur), gauche: Math.round(m.gauche), droite: Math.round(m.droite) });
       constate(m.debord <= 0, `${tag} : la page défile horizontalement (${m.debord} px de trop)`);
+      for (const a of m.actions) {
+        constate(a.debordLibelle <= TOLERANCE, `${tag} : le libellé « ${a.libelle} » déborde de son bouton de ${a.debordLibelle} px`);
+        constate(
+          a.conteneur - a.largeur <= TOLERANCE,
+          `${tag} : « ${a.libelle} » mesure ${a.largeur.toFixed(1)} px dans un conteneur de ${a.conteneur.toFixed(1)} px — l'action ne prend pas la largeur de sa colonne`,
+        );
+      }
       constate(
         ecart <= TOLERANCE,
         `${tag} : la colonne n'est pas centrée — marge gauche ${m.gauche.toFixed(1)} px, droite ${m.droite.toFixed(1)} px (${m.element})`,

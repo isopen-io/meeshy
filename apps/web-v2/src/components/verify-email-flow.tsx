@@ -104,7 +104,7 @@ export function VerifyEmailFlow({ email, deps = defaultDeps }: { email: string |
 
   return (
     <AuthColumn>
-      <AuthColumnBar to={closeTarget} title="Vérification de l’email" />
+      <AuthColumnBar to={closeTarget} title="Vérification de l’e-mail" />
 
       {email === null ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center">
@@ -127,12 +127,12 @@ export function VerifyEmailFlow({ email, deps = defaultDeps }: { email: string |
             <Glyph name="checks" size={48} />
           </span>
           <h2 className="text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
-            Email vérifié !
+            E-mail vérifié !
           </h2>
           <Link
             to={closeTarget}
             replace
-            className="grid place-items-center rounded-[14px] px-8 font-bold text-white"
+            className="grid w-full place-items-center rounded-[14px] px-8 font-bold text-white"
             style={{ minHeight: 52, background: VERIFY_TINT }}
           >
             Continuer
@@ -144,7 +144,7 @@ export function VerifyEmailFlow({ email, deps = defaultDeps }: { email: string |
             <Glyph name="envelopeOpen" size={48} />
           </span>
           <h2 className="text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
-            Vérifiez votre email
+            Vérifiez votre e-mail
           </h2>
           <p style={{ color: 'var(--color-ios-ink-2)' }}>
             Entrez le code à 6 chiffres envoyé à <strong>{email}</strong>
