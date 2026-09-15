@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   FEED_POSTS,
   POST_CAROUSEL,
+  POST_HERO,
   POST_IMAGE_EN_TRANSLATED,
   POST_LONG_TEXT,
   POST_NO_DIMENSIONS,
@@ -12,6 +13,7 @@ import {
   REEL_PORTRAIT,
   pageOfFeed,
 } from './fixtures-feed';
+import { resolveMosaicLayout } from '@/lib/feed/mosaic-layout';
 import { wordCountOf } from '@/lib/feed/text';
 
 describe('FEED_POSTS — le corpus exerce chaque famille du § 3.4', () => {
@@ -41,6 +43,11 @@ describe('FEED_POSTS — le corpus exerce chaque famille du § 3.4', () => {
     for (const media of POST_CAROUSEL.media ?? []) expect(media.caption).toBeDefined();
   });
 
+  test('POST_HERO porte trois photos et l’agencement `hero` choisi par son auteur (#6514)', () => {
+    expect(POST_HERO.media).toHaveLength(3);
+    expect(resolveMosaicLayout(POST_HERO.storyEffects)).toBe('hero');
+  });
+
   test('POST_REPOST porte l’attribution de republication', () => {
     expect(POST_REPOST.repostOf?.author?.username).toBe('yann.petit');
   });
@@ -48,7 +55,8 @@ describe('FEED_POSTS — le corpus exerce chaque famille du § 3.4', () => {
   test('REEL_PORTRAIT est un REEL vidéo en portrait, dimensionné', () => {
     expect(REEL_PORTRAIT.type).toBe('REEL');
     const media = REEL_PORTRAIT.media?.[0];
-    expect(media?.mimeType).toBe('video/mp4');
+    expect(media?.mimeType?.startsWith('video/')).toBe(true);
+    expect(media?.fileUrl.startsWith('data:video/webm;base64,')).toBe(true);
     expect(media?.height).toBeGreaterThan(media?.width ?? 0);
   });
 

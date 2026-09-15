@@ -28,11 +28,17 @@ nonisolated enum SocialMediaCaption {
     /// 1) la légende propre du média ; 2) à défaut le texte du porteur, mais
     /// SEULEMENT s'il n'a qu'un seul visuel — au-delà, ce texte décrit le LOT et
     /// le coller sous chaque pièce ferait mentir la légende.
-    static func map(for media: [FeedMedia], carrierText: String?) -> [String: String] {
+    /// `preferredLanguages` descend le Prisme sur la légende PROPRE de chaque
+    /// média (`FeedMedia.resolvedCaption`, #6280) — défaut `[]` pour que les
+    /// appelants qui ne le fournissent pas encore (dont `SceneCaption.swift`,
+    /// hors périmètre tant que #6521 n'est pas fusionnée) gardent leur
+    /// comportement inchangé.
+    static func map(for media: [FeedMedia], carrierText: String?, preferredLanguages: [String] = []) -> [String: String] {
         let visuals = media.filter { CommentMediaGallery.isPageable($0) }
         let fallback = visuals.count == 1 ? carrierText : nil
         return visuals.reduce(into: [String: String]()) { result, item in
-            if let caption = resolve(own: item.caption, carrierText: fallback) {
+            let own = item.resolvedCaption(preferredLanguages: preferredLanguages)
+            if let caption = resolve(own: own, carrierText: fallback) {
                 result[item.id] = caption
             }
         }
@@ -117,26 +123,24 @@ nonisolated extension SocialMediaCaption {
     /// **La descente UNIQUE** dont `map(for:carrierText:)` est la projection
     /// pauvre.
     ///
-    /// ## Pourquoi les alternatives sont si souvent VIDES, et pourquoi c'est juste
+    /// ## D'où viennent les alternatives
     ///
-    /// Une légende a deux provenances, et une seule est traduisible :
+    /// Une légende a deux provenances, TOUTES DEUX traduisibles depuis #6280 :
     ///
     /// | provenance | traduisible ? |
     /// |---|---|
-    /// | le TEXTE DU PORTEUR, servi quand le porteur n'a qu'UN visuel | **oui** — `FeedPost.translations` existe |
-    /// | la légende PROPRE du média (`PostMedia.caption`) | **non** — rien ne la traduit (#4904) |
+    /// | le TEXTE DU PORTEUR, servi quand le porteur n'a qu'UN visuel | oui — `FeedPost.translations` |
+    /// | la légende PROPRE du média (`PostMedia.caption`) | oui depuis #6280 — `PostMedia.captionTranslations`, descendue par `FeedMedia.resolvedCaption` |
     ///
-    /// Servir la traduction du POST sur la légende propre d'un média serait pire
-    /// que ne rien servir : ce serait afficher un texte qui ne décrit pas ce
-    /// média. **Le Prisme sert un contenu traduit, jamais un contenu VOISIN
-    /// traduit.**
-    ///
-    /// La portée de la bascule est donc bornée par #4904, et c'est déclaré
-    /// plutôt que caché : un post à trois photos garde trois légendes non
-    /// traduites et AUCUN contrôle — le comportement juste, pas un manque
-    /// silencieux.
+    /// Avant #6280, la ligne « légende propre » ne l'était pas (#4904) : servir
+    /// la traduction du POST sur la légende propre d'un média aurait été pire
+    /// que ne rien servir (contenu VOISIN traduit, pas le média). Cette règle
+    /// vaut TOUJOURS entre les deux provenances — jamais mélanger le texte du
+    /// porteur et les traductions PROPRES d'un média — mais la légende propre
+    /// porte désormais SES PROPRES alternatives.
     static func serving(for media: [FeedMedia],
-                        carrier: SocialCarrierText) -> [String: SocialMediaCaptionServing] {
+                        carrier: SocialCarrierText,
+                        preferredLanguages: [String] = []) -> [String: SocialMediaCaptionServing] {
         let visuals = media.filter { CommentMediaGallery.isPageable($0) }
         // La MÊME condition que `map(for:carrierText:)` : au-delà d'un visuel,
         // le texte du porteur décrit le LOT et le coller sous chaque pièce
@@ -145,15 +149,18 @@ nonisolated extension SocialMediaCaption {
         let fallback = carrierApplies ? carrier.served : nil
 
         return visuals.reduce(into: [String: SocialMediaCaptionServing]()) { result, item in
-            guard let texte = resolve(own: item.caption, carrierText: fallback) else { return }
-            // Les alternatives n'existent QUE si le texte servi EST celui du
-            // porteur. Une légende propre non vide gagne sur le porteur, donc
-            // sort du champ des traductions — et le contrôle disparaît avec
-            // elle, ce qui est le comportement juste.
-            let ownIsServed = (item.caption ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-            let alternatives = (carrierApplies && !ownIsServed && carrier.byLanguage.count > 1)
-                ? carrier.byLanguage
-                : [:]
+            let ownResolved = item.resolvedCaption(preferredLanguages: preferredLanguages)
+            guard let texte = resolve(own: ownResolved, carrierText: fallback) else { return }
+            // Les alternatives du PORTEUR n'existent QUE si le texte servi EST
+            // celui du porteur. Une légende propre non vide gagne sur le
+            // porteur, donc sort du champ des traductions du porteur — et
+            // porte À LA PLACE ses propres traductions, si le pipeline
+            // ZMQ en a produit (#6280).
+            let ownIsServed = (ownResolved ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            let ownAlternatives = ownIsServed ? (item.captionTranslations ?? [:]) : [:]
+            let alternatives = !ownAlternatives.isEmpty
+                ? ownAlternatives
+                : ((carrierApplies && !ownIsServed && carrier.byLanguage.count > 1) ? carrier.byLanguage : [:])
             result[item.id] = SocialMediaCaptionServing(text: texte, alternatives: alternatives)
         }
     }
@@ -214,11 +221,14 @@ enum CommentMediaGallery {
         var senders: [String: ConversationViewModel.MediaSenderInfo] = [:]
         var seen = Set<String>()
 
+        let preferred = ReaderPrism.resolve(for: AuthManager.shared.currentUser)
         for comment in comments {
             for media in comment.media where pageableTypes.contains(media.type) {
                 guard seen.insert(media.id).inserted else { continue }
                 attachments.append(media.toMessageAttachment())
-                if let caption = Self.caption(of: media, in: comment) { captions[media.id] = caption }
+                if let caption = Self.caption(of: media, in: comment, preferredLanguages: preferred) {
+                    captions[media.id] = caption
+                }
                 senders[media.id] = ConversationViewModel.MediaSenderInfo(
                     senderName: comment.author,
                     senderAvatarURL: comment.authorAvatarURL,
@@ -240,12 +250,12 @@ enum CommentMediaGallery {
     /// Site UNIQUE de la règle pour les commentaires : la galerie partagée ET le
     /// repli solo de `CommentMediaView` l'appellent, faute de quoi le MÊME média
     /// porterait deux légendes selon que l'hôte a câblé la liste ou non.
-    static func caption(of media: FeedMedia, carrierText: String?) -> String? {
-        SocialMediaCaption.resolve(own: media.caption, carrierText: carrierText)
+    static func caption(of media: FeedMedia, carrierText: String?, preferredLanguages: [String] = []) -> String? {
+        SocialMediaCaption.resolve(own: media.resolvedCaption(preferredLanguages: preferredLanguages), carrierText: carrierText)
     }
 
-    static func caption(of media: FeedMedia, in comment: FeedComment) -> String? {
-        caption(of: media, carrierText: comment.displayContent)
+    static func caption(of media: FeedMedia, in comment: FeedComment, preferredLanguages: [String] = []) -> String? {
+        caption(of: media, carrierText: comment.displayContent, preferredLanguages: preferredLanguages)
     }
 
     /// Aplatit les commentaires racines et leurs réponses dans l'ORDRE OÙ

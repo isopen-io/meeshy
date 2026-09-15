@@ -1,0 +1,145 @@
+/**
+ * LES SECTIONS D'ADMINISTRATION, ET QUI LES VOIT (#6432).
+ *
+ * Directive porteur 2026-09-14 : « c'est ici qu'on livre un accès à la page
+ * d'administration à la v2 ; pas besoin de tout refaire, on peut réutiliser ce
+ * qui existe ».
+ *
+ * ## Ce que ce module reprend, et ce qu'il corrige
+ *
+ * La liste est le MIROIR MESURÉ de la barre latérale du legacy
+ * (`apps/web/components/admin/AdminLayout.tsx`, onze entrées) : même ordre,
+ * mêmes permissions, mêmes destinations. Une seule adresse change, et c'est un
+ * CORRECTIF : le legacy pointe « Journaux d'audit » vers `/admin/audit`, une
+ * page qui n'existe pas (`apps/web/app/admin/audit-logs/page.tsx` est la
+ * vraie). Un barreau qui mène à un 404 est un contrôle qui ment — le recopier
+ * aurait importé le défaut dans une application neuve.
+ *
+ * ## Pourquoi la permission décide, et jamais le rôle
+ *
+ * `SessionUser` (`lib/api/session.ts`) ne PROJETTE pas `role` : le magasin ne
+ * garde que quatre champs, délibérément. Un écran qui déciderait de l'accès
+ * depuis la session ne pourrait donc que le deviner.
+ *
+ * La décision vient du SERVEUR — `GET /me/permissions`, qui rend la matrice
+ * projetée depuis son site unique (`services/admin/served-permissions.ts`).
+ * Ce module ne fait que la LIRE : il ne connaît aucun rôle, aucune hiérarchie,
+ * et n'a donc aucune règle à tenir d'accord avec la passerelle.
+ *
+ * ## Fail-closed par construction
+ *
+ * `visibleAdminSections` prend `AdminPermissions | null`. `null` — pas encore
+ * su, ou requête refusée — rend une liste VIDE, jamais la liste complète : un
+ * défaut de réseau ne doit pas ouvrir une porte, et c'est le sens que l'appel
+ * doit avoir par DÉFAUT, pas par précaution de l'appelant.
+ */
+
+/** Les clés de `servedPermissionsSchema` que l'administration consulte. */
+export type AdminPermissions = {
+  readonly canAccessAdmin: boolean;
+  readonly canManageUsers: boolean;
+  readonly canManageGroups: boolean;
+  readonly canManageConversations: boolean;
+  readonly canViewAnalytics: boolean;
+  readonly canModerateContent: boolean;
+  readonly canViewAuditLogs: boolean;
+  readonly canManageNotifications: boolean;
+  readonly canManageTranslations: boolean;
+};
+
+export type AdminPermissionKey = keyof AdminPermissions;
+
+/**
+ * Les clés de catalogue des onze sections — une UNION littérale, jamais
+ * `string`.
+ *
+ * `translate` est générique sur sa clé : il exige un troisième argument dès
+ * que la chaîne du catalogue porte un `{paramètre}`. Typer `labelKey` en
+ * `string` élargit donc la clé à TOUT le catalogue, y compris ses entrées
+ * paramétrées — et le site d'appel se voit réclamer des paramètres qu'aucune
+ * de ces onze chaînes n'a. L'union rend la contrainte exacte.
+ */
+export type AdminSectionLabelKey =
+  | 'admin.nav.dashboard'
+  | 'admin.nav.users'
+  | 'admin.nav.moderation'
+  | 'admin.nav.audit'
+  | 'admin.nav.analytics'
+  | 'admin.nav.trackingLinks'
+  | 'admin.nav.ranking'
+  | 'admin.nav.broadcasts'
+  | 'admin.nav.settings'
+  | 'admin.nav.agent'
+  | 'admin.nav.monitoring';
+
+export type AdminSection = {
+  readonly id: string;
+  /** Clé du catalogue d'interface — jamais un libellé en dur. */
+  readonly labelKey: AdminSectionLabelKey;
+  /** Adresse SERVIE PAR LA V2, ou `null` quand la section vit encore au legacy. */
+  readonly path: string | null;
+  /** Chemin legacy, servi tant que la section n'a pas sa vue en v2. */
+  readonly legacyPath: string;
+  readonly permission: AdminPermissionKey;
+  readonly glyph: string;
+};
+
+/**
+ * Les onze sections, dans l'ordre du legacy.
+ *
+ * `path: null` signifie « la v2 n'a pas encore cette vue » — la tuile mène
+ * alors au legacy, explicitement marquée. C'est un état HONNÊTE : un hub qui
+ * n'afficherait que ses deux vues natives ferait croire que l'administration
+ * s'est réduite, et un hub dont neuf tuiles sur onze ouvriraient un écran
+ * d'attente serait onze contrôles qui mentent.
+ */
+export const ADMIN_SECTIONS: readonly AdminSection[] = [
+  { id: 'dashboard', labelKey: 'admin.nav.dashboard', path: '/admin', legacyPath: '/admin', permission: 'canAccessAdmin', glyph: '📊' },
+  { id: 'users', labelKey: 'admin.nav.users', path: '/admin/users', legacyPath: '/admin/users', permission: 'canManageUsers', glyph: '👥' },
+  { id: 'moderation', labelKey: 'admin.nav.moderation', path: null, legacyPath: '/admin/moderation', permission: 'canModerateContent', glyph: '🛡️' },
+  // `/admin/audit-logs`, jamais `/admin/audit` — voir le doc-comment de module.
+  { id: 'audit', labelKey: 'admin.nav.audit', path: null, legacyPath: '/admin/audit-logs', permission: 'canViewAuditLogs', glyph: '📜' },
+  { id: 'analytics', labelKey: 'admin.nav.analytics', path: null, legacyPath: '/admin/analytics', permission: 'canViewAnalytics', glyph: '📈' },
+  { id: 'trackingLinks', labelKey: 'admin.nav.trackingLinks', path: null, legacyPath: '/admin/tracking-links', permission: 'canViewAnalytics', glyph: '🔗' },
+  { id: 'ranking', labelKey: 'admin.nav.ranking', path: null, legacyPath: '/admin/ranking', permission: 'canViewAnalytics', glyph: '🏆' },
+  { id: 'broadcasts', labelKey: 'admin.nav.broadcasts', path: null, legacyPath: '/admin/broadcasts', permission: 'canManageNotifications', glyph: '📣' },
+  { id: 'settings', labelKey: 'admin.nav.settings', path: null, legacyPath: '/admin/settings', permission: 'canManageTranslations', glyph: '⚙️' },
+  { id: 'agent', labelKey: 'admin.nav.agent', path: null, legacyPath: '/admin/agent', permission: 'canAccessAdmin', glyph: '🤖' },
+  { id: 'monitoring', labelKey: 'admin.nav.monitoring', path: null, legacyPath: '/admin/monitoring', permission: 'canAccessAdmin', glyph: '💓' },
+];
+
+/**
+ * Les sections qu'un porteur de cette matrice a le droit de voir.
+ *
+ * `canAccessAdmin` faux ⇒ AUCUNE section, même si une permission fine est
+ * vraie : l'accès à l'espace précède l'accès à ses pièces. C'est la même
+ * hiérarchie que garde le legacy (`AdminLayout` refuse le rendu entier avant
+ * de filtrer sa barre), et la seule qui empêche un rôle intermédiaire d'entrer
+ * par une section isolée.
+ */
+export function visibleAdminSections(permissions: AdminPermissions | null): readonly AdminSection[] {
+  if (!canEnterAdmin(permissions)) return [];
+
+  return ADMIN_SECTIONS.filter((section) => permissions?.[section.permission] === true);
+}
+
+/**
+ * **LA PORTE DE L'ESPACE, et elle seule** — ce que l'écran `/admin`, la rangée
+ * des Réglages et le barreau du menu flottant (#6458) consultent pour savoir
+ * s'ils MÈNENT à l'administration. Un seul prédicat : trois sites qui
+ * réécriraient `?.canAccessAdmin === true` finiraient par ne plus s'accorder
+ * sur le cas `null`.
+ */
+export function canEnterAdmin(permissions: AdminPermissions | null): boolean {
+  return permissions?.canAccessAdmin === true;
+}
+
+/** La destination d'une tuile : la v2 quand elle l'a, le legacy sinon. */
+export function adminSectionTarget(
+  section: AdminSection,
+  legacyOrigin: string,
+): { readonly href: string; readonly external: boolean } {
+  if (section.path !== null) return { href: section.path, external: false };
+
+  return { href: `${legacyOrigin.replace(/\/+$/, '')}${section.legacyPath}`, external: true };
+}

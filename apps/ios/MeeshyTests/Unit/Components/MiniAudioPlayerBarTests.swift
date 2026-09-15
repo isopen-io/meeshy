@@ -281,8 +281,11 @@ final class MiniAudioPlayerBarTests: XCTestCase {
             "Plus d'arrondi : la bande va d'un bord à l'autre."
         )
         XCTAssertTrue(
-            code.contains(".background(MiniAudioPlayerBarStyle.background)"),
-            "Le fond doit être l'aplat de marque, posé via le token de style."
+            code.contains(".background(MiniAudioPlayerBarStyle.background, ignoresSafeAreaEdges: [])"),
+            "Le fond doit être l'aplat de marque, posé via le token de style — et " +
+            "BORNÉ à la hauteur de la barre : le défaut de `.background(_:)` est " +
+            "`.all`, donc sans `ignoresSafeAreaEdges: []` la barre reprend la " +
+            "peinture de la bande du haut en silence (#6579)."
         )
         XCTAssertTrue(
             code.contains(".frame(maxWidth: .infinity)"),

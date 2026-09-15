@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { LEGACY_DESTINATIONS, legacyHref } from './legacy-link';
+import { LEGACY_DESTINATIONS, legacyHref, legacyReachable } from './legacy-link';
 
 /**
  * LES ENTRÉES NON PORTÉES RESTENT ATTEIGNABLES (#5563) — « un réglage qu'on ne
@@ -28,5 +28,19 @@ describe('legacyHref — l’adresse exacte que le legacy sait ouvrir', () => {
     for (const destination of LEGACY_DESTINATIONS) {
       expect(new URL(legacyHref(destination)).origin).toBe('https://meeshy.me');
     }
+  });
+});
+
+describe('legacyReachable — le legacy ne sert QUE la production (#6354, D-67)', () => {
+  test('la passerelle de production : atteignable', () => {
+    expect(legacyReachable('https://gate.meeshy.me')).toBe(true);
+  });
+
+  test('la passerelle de staging : PAS atteignable — aucun legacy n’y répond', () => {
+    expect(legacyReachable('https://gate.staging.meeshy.me')).toBe(false);
+  });
+
+  test('une base relative (dev proxé) : pas atteignable non plus', () => {
+    expect(legacyReachable('')).toBe(false);
   });
 });

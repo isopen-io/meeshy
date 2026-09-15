@@ -206,14 +206,34 @@ const lastNameProperty = {
  */
 export const registerRequestSchema = {
   type: 'object',
-  required: ['email', 'password'],
-  anyOf: [
-    { required: ['displayName'], properties: { displayName: displayNameProperty } },
-    {
-      required: ['firstName', 'lastName'],
-      properties: { firstName: firstNameProperty, lastName: lastNameProperty }
-    }
-  ],
+  /**
+   * L'ADRESSE SEULE SUFFIT (#6424) — ce `required` en portait deux de plus.
+   *
+   * Directive porteur 2026-09-14 : « tu vas t'assurer qu'on puisse créer un
+   * compte à partir d'un e-mail ! On met un e-mail, tu crées un compte avec le
+   * pseudo pris de la première partie de l'e-mail, le display name pareil ».
+   *
+   * Deux exigences tombent, pour deux raisons distinctes :
+   *
+   * - **`password`** — un compte peut désormais n'en avoir aucun. Sa seule
+   *   porte est alors le LIEN MAGIQUE, et il en pose un quand il veut
+   *   (`PATCH /users/me/password`, qui ne réclame plus d'ancien quand il n'y
+   *   en a pas). `User.password` est nullable ; `null` DIT cet état, là où un
+   *   hash inventé le rendrait indistinguable d'un vrai secret.
+   *
+   * - **La disjonction d'identité** (`anyOf` : `displayName`, ou
+   *   `firstName` + `lastName`) — elle exigeait que la CHARGE nomme le compte.
+   *   Le serveur sait le nommer sans elle : l'adresse est REQUISE, et
+   *   `displayNameDepuisEmail` / `pseudoRacine` en tirent le nom affiché et le
+   *   pseudo (`services/auth/registration-identity.ts`). La garder aurait
+   *   refusé, au nom d'une donnée manquante, une inscription dont la donnée
+   *   manquante est précisément ce que le serveur fabrique.
+   *
+   * Ce qui NE change pas : une charge qui nomme le compte est respectée telle
+   * quelle — la dérivation ne s'applique qu'au silence, jamais par-dessus une
+   * valeur fournie.
+   */
+  required: ['email'],
   properties: {
     displayName: displayNameProperty,
     username: {
@@ -234,7 +254,7 @@ export const registerRequestSchema = {
     password: {
       type: 'string',
       minLength: 6,
-      description: 'Password (minimum PASSWORD_MIN_LENGTH characters)'
+      description: 'Password (minimum PASSWORD_MIN_LENGTH characters). OPTIONAL since #6424: omit it and the account is created without one — its only door is then the magic link, until the holder sets a password from their profile.'
     },
     firstName: firstNameProperty,
     lastName: lastNameProperty,

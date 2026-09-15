@@ -118,8 +118,13 @@ public struct EngagementElanProgress: Sendable, Equatable {
     public let windowDays: Int
     /// `true` dès ×2 — la seule condition d'affichage.
     public let isAccelerated: Bool
+    /// Les familles actives SUR LA FENÊTRE, dans l'ordre servi (#5927). Une
+    /// famille inconnue du client est ignorée ; une liste absente (passerelle
+    /// antérieure à #5897) rend `[]`, jamais un repli sur les compteurs cumulés.
+    public let activeFamilies: [EngagementAxisFamily]
 
     public init(payload: APIEngagementProgress.Elan) {
+        activeFamilies = (payload.activeFamilies ?? []).compactMap(EngagementAxisFamily.init(rawValue:))
         // Borné à [1, 5] ICI aussi : le plafond est une règle de produit, pas
         // une convention de sérialisation — un serveur qui servirait 9 ne doit
         // pas faire afficher 9.
@@ -348,22 +353,8 @@ public enum EngagementProgressResolver {
     /// une chaîne absente ou illisible, jamais une date inventée.
     public static func reachedDate(_ iso: String?) -> Date? {
         guard let iso else { return nil }
-        return isoFractional.date(from: iso) ?? isoPlain.date(from: iso)
+        return WireDate.date(from: iso)
     }
-
-    // `nonisolated(unsafe)` : ISO8601DateFormatter est thread-safe (même motif
-    // que `NotificationModels.swift`).
-    nonisolated(unsafe) private static let isoFractional: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter
-    }()
-
-    nonisolated(unsafe) private static let isoPlain: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter
-    }()
 
     // MARK: - Détail
 

@@ -119,7 +119,7 @@ export function mimeTypeToAudioFormat(mimeType: string): string {
  * Un seul endroit décrit donc la convention : producteurs ET consommateurs.
  */
 
-export const TRANSLATION_TARGET_NAMESPACES = ['post', 'comment', 'story'] as const;
+export const TRANSLATION_TARGET_NAMESPACES = ['post', 'comment', 'story', 'media-caption', 'message-attachment-caption'] as const;
 
 export type TranslationTargetNamespace = (typeof TRANSLATION_TARGET_NAMESPACES)[number];
 

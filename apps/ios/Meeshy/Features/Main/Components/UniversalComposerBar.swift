@@ -285,9 +285,6 @@ struct UniversalComposerBar: View {
     /// Caller must reset to false after triggering.
     var focusTrigger: Binding<Bool> = .constant(false)
 
-    /// Called when recording state changes (true = started, false = stopped)
-    var onRecordingChange: ((Bool) -> Void)? = nil
-
     /// Called when composer content changes (text, attachments, or recording).
     /// True = has pending content that should block story timer.
     var onHasContentChange: ((Bool) -> Void)? = nil
@@ -298,6 +295,14 @@ struct UniversalComposerBar: View {
     /// La feuille des dix cadres à mots, ouverte par un appui long sur la
     /// pastille (#5326).
     @State var showTextStickerSheet = false
+
+    /// **Le cran de la rotation des cadres à mots** (#6537).
+    ///
+    /// Un entier qui MONTE, jamais un index borné : le modulo se prend au
+    /// moment de lire le tour, dont la longueur change quand l'auteur épingle
+    /// ou pose un cadre. Un index borné par l'ancienne longueur aurait pointé
+    /// hors du nouveau tour.
+    @State var stickerRotationStep = 0
     @FocusState var isFocused: Bool
     @State var sendBounce = false
     @State var focusBounce = false

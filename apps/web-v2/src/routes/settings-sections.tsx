@@ -95,19 +95,40 @@ function Chevron() {
   );
 }
 
+/**
+ * **`reachable` (#6354, D-67) — hors production, aucun lien vers le legacy.**
+ * Le legacy (`https://meeshy.me`) ne sert QUE la production ; un lecteur de
+ * staging qui suivrait « Supprimer le compte » atterrirait sur la suppression
+ * de la production, potentiellement sous un autre compte. Sans hôte legacy à
+ * offrir à la place (aucun n'existe côté staging), la seule rangée
+ * fail-closed est INERTE — même libellé et icône, aucun `href`, une légende
+ * qui le dit (loi 4 : rien n'est offert qui n'a un effet).
+ */
 function LegacyRow({
   language,
   destination,
   label,
   icon,
   tint,
+  reachable,
 }: {
   readonly language: InterfaceLanguage;
   readonly destination: LegacyDestination;
   readonly label: SettingsKey;
   readonly icon: IconSpec;
   readonly tint: string;
+  readonly reachable: boolean;
 }) {
+  if (!reachable) {
+    return (
+      <div aria-disabled="true" data-legacy-unavailable={destination} className={ROW_CLASS} style={{ ...ROW_STYLE, opacity: 0.5 }}>
+        <RowIcon tint={tint}>
+          <IconOf icon={icon} size={15} />
+        </RowIcon>
+        <RowText label={translate(language, label)} caption={translate(language, 'settings.legacy.unavailable')} />
+      </div>
+    );
+  }
   return (
     <a href={legacyHref(destination)} target="_blank" rel="noopener noreferrer" data-legacy={destination} className={ROW_CLASS} style={ROW_STYLE}>
       <RowIcon tint={tint}>
@@ -166,16 +187,24 @@ export function ProfileCard({ language, user }: { readonly language: InterfaceLa
   );
 }
 
-export function AccountSection({ language }: { readonly language: InterfaceLanguage }) {
+export function AccountSection({ language, legacyReachable }: { readonly language: InterfaceLanguage; readonly legacyReachable: boolean }) {
   return (
     <GroupedSection id="settings-account" title={upper(language, 'settings.section.account')} icon={SECTION_ICON({ set: 'ecran', name: 'userCircle' })}>
-      <LegacyRow language={language} destination="security" label="settings.security.title" icon={{ set: 'ecran', name: 'shieldCheck' }} tint="var(--ios-indigo-600)" />
+      <LegacyRow
+        language={language}
+        destination="security"
+        label="settings.security.title"
+        icon={{ set: 'ecran', name: 'shieldCheck' }}
+        tint="var(--ios-indigo-600)"
+        reachable={legacyReachable}
+      />
       <LegacyRow
         language={language}
         destination="accountDeletion"
         label="settings.delete_account"
         icon={{ set: 'ecran', name: 'userMinus' }}
         tint="var(--color-error)"
+        reachable={legacyReachable}
       />
     </GroupedSection>
   );
@@ -348,9 +377,10 @@ type PreferenceSectionProps = {
   readonly disabled: boolean;
   readonly onToggle: (key: BooleanPreference, value: boolean) => void;
   readonly onRetry: () => void;
+  readonly legacyReachable: boolean;
 };
 
-export function PrivacySection({ language, view, disabled, onToggle, onRetry }: PreferenceSectionProps) {
+export function PrivacySection({ language, view, disabled, onToggle, onRetry, legacyReachable }: PreferenceSectionProps) {
   return (
     <GroupedSection id="settings-privacy" title={upper(language, 'settings.privacy.title')} icon={SECTION_ICON({ set: 'socle', name: 'lock' })}>
       <Toggles language={language} view={view} specs={PRIVACY_TOGGLES} disabled={disabled} onToggle={onToggle} onRetry={onRetry} />
@@ -360,12 +390,13 @@ export function PrivacySection({ language, view, disabled, onToggle, onRetry }: 
         label="settings.notif.more_options"
         icon={{ set: 'ecran', name: 'slidersHorizontal' }}
         tint="var(--color-ios-brand)"
+        reachable={legacyReachable}
       />
     </GroupedSection>
   );
 }
 
-export function NotificationsSection({ language, view, disabled, onToggle, onRetry }: PreferenceSectionProps) {
+export function NotificationsSection({ language, view, disabled, onToggle, onRetry, legacyReachable }: PreferenceSectionProps) {
   return (
     <GroupedSection id="settings-notifications" title={upper(language, 'settings.section.notifications')} icon={SECTION_ICON({ set: 'socle', name: 'bell' })}>
       <Toggles language={language} view={view} specs={NOTIFICATION_TOGGLES} disabled={disabled} onToggle={onToggle} onRetry={onRetry} />
@@ -375,6 +406,7 @@ export function NotificationsSection({ language, view, disabled, onToggle, onRet
         label="settings.notif.more_options"
         icon={{ set: 'ecran', name: 'slidersHorizontal' }}
         tint="var(--color-error)"
+        reachable={legacyReachable}
       />
     </GroupedSection>
   );
@@ -488,17 +520,51 @@ export function AppearanceSection({
   );
 }
 
-export function DataSection({ language }: { readonly language: InterfaceLanguage }) {
+export function DataSection({ language, legacyReachable }: { readonly language: InterfaceLanguage; readonly legacyReachable: boolean }) {
   return (
     <GroupedSection id="settings-data" title={upper(language, 'settings.section.data')} icon={SECTION_ICON({ set: 'ecran', name: 'hardDrives' })}>
-      <LegacyRow language={language} destination="media" label="settings.media" icon={{ set: 'socle', name: 'image' }} tint="var(--color-warning)" />
-      <LegacyRow language={language} destination="message" label="settings.messages" icon={{ set: 'ecran', name: 'chatText' }} tint="var(--color-warning)" />
-      <LegacyRow language={language} destination="privacy" label="settings.export_data" icon={{ set: 'ecran', name: 'export' }} tint="var(--color-warning)" />
+      <LegacyRow
+        language={language}
+        destination="media"
+        label="settings.media"
+        icon={{ set: 'socle', name: 'image' }}
+        tint="var(--color-warning)"
+        reachable={legacyReachable}
+      />
+      <LegacyRow
+        language={language}
+        destination="message"
+        label="settings.messages"
+        icon={{ set: 'ecran', name: 'chatText' }}
+        tint="var(--color-warning)"
+        reachable={legacyReachable}
+      />
+      <LegacyRow
+        language={language}
+        destination="privacy"
+        label="settings.export_data"
+        icon={{ set: 'ecran', name: 'export' }}
+        tint="var(--color-warning)"
+        reachable={legacyReachable}
+      />
     </GroupedSection>
   );
 }
 
-export function ToolsSection({ language }: { readonly language: InterfaceLanguage }) {
+/**
+ * `showAdmin` — l'ENTRÉE de l'espace d'administration (#6432).
+ *
+ * Elle n'apparaît que pour qui y a droit, et le droit vient du SERVEUR
+ * (`GET /me/permissions`, résolu par l'écran hôte) : `SessionUser` ne projette
+ * pas `role`, donc rien ici ne peut le déduire.
+ *
+ * **Cacher la rangée n'est PAS la garde.** L'écran `/admin` refait la lecture
+ * pour lui-même — on y entre aussi par un lien profond, et une porte gardée
+ * seulement par l'absence de son bouton n'est pas gardée. Cette rangée ne fait
+ * que la DÉCOUVERTE ; c'est la raison pour laquelle son absence, en cas
+ * d'erreur réseau, ne coûte qu'un chemin d'accès et jamais une fuite.
+ */
+export function ToolsSection({ language, showAdmin = false }: { readonly language: InterfaceLanguage; readonly showAdmin?: boolean }) {
   return (
     <GroupedSection id="settings-tools" title={upper(language, 'settings.section.tools')} icon={SECTION_ICON({ set: 'ecran', name: 'wrench' })}>
       <Link to="progression" data-settings-progression className={ROW_CLASS} style={ROW_STYLE}>
@@ -508,6 +574,15 @@ export function ToolsSection({ language }: { readonly language: InterfaceLanguag
         <RowText label={translate(language, 'settings.tools.progression')} />
         <Chevron />
       </Link>
+      {showAdmin ? (
+        <Link to="admin" data-settings-admin className={ROW_CLASS} style={ROW_STYLE}>
+          <RowIcon tint="var(--color-ios-brand)">
+            <Glyph name="key" size={15} />
+          </RowIcon>
+          <RowText label={translate(language, 'admin.title')} />
+          <Chevron />
+        </Link>
+      ) : null}
     </GroupedSection>
   );
 }

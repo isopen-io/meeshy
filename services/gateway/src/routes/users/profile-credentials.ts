@@ -47,9 +47,9 @@ export async function updateUserPassword(fastify: FastifyInstance) {
       },
       body: {
         type: 'object',
-        required: ['currentPassword', 'newPassword'],
+        required: ['newPassword'],
         properties: {
-          currentPassword: { type: 'string', minLength: 1, description: 'Current password for verification — no length bound: a bound would lock out accounts created under a lower one' },
+          currentPassword: { type: 'string', minLength: 1, description: 'Current password for verification — REQUIRED unless the account has none yet (email-only signup, #6424), in which case the authenticated session is the proof. No length bound: a bound would lock out accounts created under a lower one' },
           newPassword: { type: 'string', minLength: PASSWORD_MIN_LENGTH, description: 'New password (min PASSWORD_MIN_LENGTH characters)' }
         }
       },
@@ -92,10 +92,33 @@ export async function updateUserPassword(fastify: FastifyInstance) {
         return sendNotFound(reply, 'User not found');
       }
 
-      const isPasswordValid = await verifyPassword(body.currentPassword, user.password);
+      /**
+       * POSER LE PREMIER MOT DE PASSE (#6424).
+       *
+       * Un compte né d'une inscription par e-mail seul n'a pas de mot de
+       * passe. Lui en réclamer un « actuel » pour en poser un premier rend la
+       * porte inatteignable : la preuve exigée est précisément la chose que
+       * l'appel vient créer.
+       *
+       * Ce qui la remplace n'est pas RIEN — c'est la SESSION. Un compte sans
+       * mot de passe n'a qu'une porte, le lien magique, et la franchir prouve
+       * le contrôle de la boîte mail. Le `onRequest: [fastify.authenticate]`
+       * de cette route est donc déjà une preuve de possession, du même ordre
+       * que celle qu'un lien de réinitialisation apporte à `/reset-password`.
+       *
+       * L'exception est BORNÉE par l'état de la ligne, jamais par ce que la
+       * requête déclare : `user.password === null` est lu en base. Un appel
+       * qui omettrait `currentPassword` sur un compte qui en a un se voit
+       * refusé exactement comme avant.
+       */
+      const premierMotDePasse = user.password === null || user.password === undefined;
 
-      if (!isPasswordValid) {
-        return sendBadRequest(reply, 'Current password is incorrect');
+      if (!premierMotDePasse) {
+        const isPasswordValid = await verifyPassword(body.currentPassword ?? '', user.password);
+
+        if (!isPasswordValid) {
+          return sendBadRequest(reply, 'Current password is incorrect');
+        }
       }
 
       // #3629 — cette porte ne validait que la LONGUEUR (`updatePasswordSchema`,

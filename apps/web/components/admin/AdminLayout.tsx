@@ -101,7 +101,11 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
     {
       icon: FileText,
       label: t('layout.navAuditLogs'),
-      href: '/admin/audit',
+      // `/admin/audit-logs`, jamais `/admin/audit` (#6432) : la page vit dans
+      // `app/admin/audit-logs/page.tsx`, et `app/admin/audit` n'existe pas.
+      // Ce barreau menait donc à un 404 — un contrôle qui ment, mesuré en
+      // portant la barre latérale vers la v2.
+      href: '/admin/audit-logs',
       permission: 'canViewAuditLogs',
     },
     {

@@ -508,7 +508,8 @@ final class MutationPayloadsTests: XCTestCase {
             clientMutationId: ClientMutationId.generate(),
             postId: "post-1",
             parentCommentId: nil,
-            content: "Great post!"
+            content: "Great post!",
+            originalLanguage: "en"
         )
         let data = try encoder.encode(original)
         let decoded = try decoder.decode(CreateCommentPayload.self, from: data)
@@ -520,7 +521,8 @@ final class MutationPayloadsTests: XCTestCase {
             clientMutationId: ClientMutationId.generate(),
             postId: "post-1",
             parentCommentId: "comment-parent",
-            content: "Agreed"
+            content: "Agreed",
+            originalLanguage: "en"
         )
         let data = try encoder.encode(original)
         let decoded = try decoder.decode(CreateCommentPayload.self, from: data)
@@ -533,6 +535,7 @@ final class MutationPayloadsTests: XCTestCase {
             postId: "post-1",
             parentCommentId: "comment-parent",
             content: "Sparkles",
+            originalLanguage: "en",
             effectFlags: 5
         )
         let data = try encoder.encode(original)
@@ -551,6 +554,61 @@ final class MutationPayloadsTests: XCTestCase {
         let decoded = try decoder.decode(CreateCommentPayload.self, from: Data(legacyJSON.utf8))
         XCTAssertNil(decoded.effectFlags)
         XCTAssertNil(decoded.parentCommentId)
+    }
+
+
+    /// #6587 — la langue d'ÉCRITURE déclarée par l'auteur doit atteindre le
+    /// serveur, y compris par le chemin durable (outbox).
+    ///
+    /// Le témoin n'interroge pas une propriété (elle n'existait pas avant ce
+    /// lot, et un rouge de COMPILATION ne prouve rien) : il interroge le
+    /// VOYAGE. Une ligne d'outbox qui porte `originalLanguage` doit la
+    /// restituer à l'encodage — c'est exactement ce que le dispatcher
+    /// réencode vers `POST /posts/:id/comments`.
+    ///
+    /// Le contenu est volontairement une phrase que l'heuristique serveur
+    /// (`detectLanguage`, `services/gateway/src/services/PostService.ts`)
+    /// classerait « fr » alors que l'auteur a déclaré « de » : si l'assertion
+    /// verdit, c'est parce que la DÉCLARATION a voyagé, jamais parce que la
+    /// devinette est tombée juste.
+    func test_createCommentPayload_carriesAuthoredLanguageThroughTheWire() throws {
+        let wire = """
+        {"clientMutationId":"cmid_lang_6587","postId":"post-1","content":"Je suis dans les nuages avec vous","originalLanguage":"de"}
+        """
+        let decoded = try decoder.decode(CreateCommentPayload.self, from: Data(wire.utf8))
+        let reencoded = try JSONSerialization.jsonObject(
+            with: try encoder.encode(decoded)
+        ) as? [String: Any]
+
+        XCTAssertEqual(
+            reencoded?["originalLanguage"] as? String, "de",
+            "La langue d'écriture déclarée doit survivre à l'aller-retour outbox."
+        )
+    }
+
+    /// #6587, revers du témoin ci-dessus — une ligne gravée AVANT le champ se
+    /// relit sans perte. `FeedPersistenceActor` décode ces blobs en `try?` :
+    /// un champ requis au DÉCODAGE ferait disparaître SANS ERREUR toute la
+    /// file d'attente hors-ligne d'une app mise à jour.
+    func test_createCommentPayload_decodesLegacyRowWithoutLanguage() throws {
+        let legacyJSON = """
+        {"clientMutationId":"cmid_legacy6587","postId":"post-1","parentCommentId":"c-parent","content":"Coucou","effectFlags":5}
+        """
+        let decoded = try decoder.decode(CreateCommentPayload.self, from: Data(legacyJSON.utf8))
+
+        XCTAssertEqual(decoded.clientMutationId, "cmid_legacy6587")
+        XCTAssertEqual(decoded.postId, "post-1")
+        XCTAssertEqual(decoded.parentCommentId, "c-parent")
+        XCTAssertEqual(decoded.content, "Coucou")
+        XCTAssertEqual(decoded.effectFlags, 5)
+
+        let reencoded = try JSONSerialization.jsonObject(
+            with: try encoder.encode(decoded)
+        ) as? [String: Any]
+        XCTAssertNil(
+            reencoded?["originalLanguage"],
+            "Une ligne gravée avant le champ ne doit pas se voir attribuer une langue."
+        )
     }
 
     // MARK: - DeleteCommentPayload (Phase C)

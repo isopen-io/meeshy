@@ -26,7 +26,8 @@
  *  5. « Manqués » se peint en moins d'une seconde (depuis le cache de « Tous »),
  *     l'adresse porte `?filtre=missed`, et « Tous » rend les cinq ;
  *  6. une ligne ouvre le fil de SA conversation, et le retour ramène au journal ;
- *  7. hors ligne, le journal reste lisible et le dit ;
+ *  7. hors ligne, le journal reste lisible et le dit ; la pastille de
+ *     synchronisation ne recouvre aucun filtre du rail (#6401, #6387) ;
  *  8. aucune erreur de page.
  *
  * `CAPTURE_DIR=<dossier>` écrit les captures de recette.
@@ -37,6 +38,7 @@ import { extname, join, normalize } from 'node:path';
 
 import { launchChromium } from './lib/browser.mjs';
 import { contrastOf } from './lib/contrast.mjs';
+import { syncPillOverlap } from './lib/sync-pill-clearance.mjs';
 
 const DIST = new URL('../dist/', import.meta.url).pathname;
 const TYPES = {
@@ -253,6 +255,16 @@ try {
       check((await shownCalls(page)).length === 5, `${label} : hors ligne, le journal reste lisible et le dit`);
       const offlineInk = await contrastOf(page, '[data-calls-offline] .text-caption');
       check(offlineInk !== null && offlineInk >= WCAG_AA, `${label} : et l'annonce tient AA (${offlineInk})`);
+
+      // -------------------------------- 7 bis. la pastille ne recouvre pas le rail (#6401, #6387)
+      await page.waitForSelector('.sync-pill');
+      const callsOverlap = await syncPillOverlap(page, ['[data-call-filter]']);
+      check(callsOverlap.pill !== null, `${label} : hors ligne, la pastille de synchronisation est posée`);
+      check(
+        callsOverlap.covers.length === 0,
+        `${label} : hors ligne, la pastille ne recouvre aucun filtre du rail — ${JSON.stringify(callsOverlap.covers)}`,
+      );
+
       await capture(page, `appels-hors-ligne-${slug}`);
       await context.setOffline(false);
 

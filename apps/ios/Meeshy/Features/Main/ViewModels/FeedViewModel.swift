@@ -67,7 +67,7 @@ class FeedViewModel: ObservableObject {
     private var nextCursor: String?
     private let api: APIClientProviding
     private let offlineQueue: OfflineQueueing
-    private let feedCache: any FeedCacheStoring
+    let feedCache: any FeedCacheStoring
     private let limit = 20
     private var cancellables = Set<AnyCancellable>()
     /// Subscriptions owned by `subscribeToSocketEvents()` only — kept
@@ -91,6 +91,13 @@ class FeedViewModel: ObservableObject {
     /// Tracks postIds whose comments are currently being prefetched, to coalesce
     /// duplicate calls triggered by repeated cell .onAppear events.
     private var prefetchingComments: Set<String> = []
+    /// PostIds dont le texte affiché a été fixé par une bascule MANUELLE du
+    /// lecteur (`setTranslationOverride`, tap sur un drapeau). Une traduction
+    /// arrivant ensuite par socket (#6531) merge dans `translations` mais ne
+    /// doit PAS re-résoudre l'affichage — sinon le choix explicite du lecteur
+    /// serait écrasé par la prochaine langue reçue. `clearTranslationOverride`
+    /// (retour au Prisme) retire le postId de cet ensemble.
+    private var manualTranslationOverrides: Set<String> = []
 
     // MARK: - Persistence Layer
 
@@ -1147,7 +1154,7 @@ class FeedViewModel: ObservableObject {
         return FeedMedia(type: type, url: url.absoluteString)
     }
 
-    func sendComment(postId: String, content: String, parentId: String? = nil, effectFlags: Int? = nil) async {
+    func sendComment(postId: String, content: String, originalLanguage: String?, parentId: String? = nil, effectFlags: Int? = nil, location: SharedPlace? = nil) async {
         guard let index = posts.firstIndex(where: { $0.id == postId }) else { return }
         // T10c — optimistic insert + durable outbox enqueue (survives offline +
         // app kill, flushes on reconnect via T10) instead of the direct
@@ -1167,16 +1174,16 @@ class FeedViewModel: ObservableObject {
             timestamp: Date(),
             likes: 0, replies: 0,
             parentId: parentId,
-            effectFlags: effectFlags ?? 0
+            effectFlags: effectFlags ?? 0, originalLanguage: originalLanguage, location: location
         )
         posts[index].comments.insert(optimistic, at: 0)
         posts[index].commentCount += 1
 
         let payload = CreateCommentPayload(
-            clientMutationId: cmid,
-            postId: postId,
-            parentCommentId: parentId,
-            content: content
+            clientMutationId: cmid, postId: postId,
+            parentCommentId: parentId, content: content,
+            originalLanguage: originalLanguage,
+            location: location, effectFlags: effectFlags
         )
         do {
             try await offlineQueue.enqueue(.createComment, payload: payload, conversationId: postId)
@@ -1392,6 +1399,7 @@ class FeedViewModel: ObservableObject {
         guard let index = posts.firstIndex(where: { $0.id == postId }),
               let translation = posts[index].translations?[language] else { return }
         posts[index].translatedContent = translation.text
+        manualTranslationOverrides.insert(postId)
     }
 
     /// Re-resolves the post's displayed language back to the Prisme default
@@ -1406,6 +1414,7 @@ class FeedViewModel: ObservableObject {
     func clearTranslationOverride(postId: String) {
         guard let index = posts.firstIndex(where: { $0.id == postId }) else { return }
         posts[index] = posts[index].resolved(preferredLanguages: preferredLanguages)
+        manualTranslationOverrides.remove(postId)
     }
 
     func requestTranslation(postId: String, targetLanguage: String) async {
@@ -1638,10 +1647,12 @@ class FeedViewModel: ObservableObject {
                 )
                 let langs = self.preferredLanguages
                 let language = data.language
+                let preserveOverride = self.manualTranslationOverrides.contains(data.postId)
                 // Batch mutations into a single array assignment
                 var post = self.posts[index]
                 Self.applyPostTranslation(translation, language: language,
-                                          preferredLanguages: langs, to: &post)
+                                          preferredLanguages: langs,
+                                          preserveManualOverride: preserveOverride, to: &post)
                 self.posts[index] = post
                 // Un post vit sous PLUSIEURS clés (main-feed, sa clé détail,
                 // bookmarks, pager reels) : `debouncedCacheSave` ne réécrit que
@@ -1651,7 +1662,8 @@ class FeedViewModel: ObservableObject {
                 Task.detached(priority: .utility) { [feedCache = self.feedCache] in
                     await feedCache.patchEverywhere(itemId: postId) {
                         Self.applyPostTranslation(translation, language: language,
-                                                  preferredLanguages: langs, to: &$0)
+                                                  preferredLanguages: langs,
+                                                  preserveManualOverride: preserveOverride, to: &$0)
                     }
                 }
                 self.debouncedCacheSave()
@@ -1687,29 +1699,54 @@ class FeedViewModel: ObservableObject {
                 self.debouncedCacheSave()
             }
             .store(in: &socketCancellables)
+
+        // --- media:caption-translation-updated (#6280) — FeedViewModel+MediaCaptionTranslation.swift ---
+        socialSocket.mediaCaptionTranslationUpdated
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in self?.receiveMediaCaptionTranslation($0) }
+            .store(in: &socketCancellables)
     }
 
     /// Règle unique de pose d'une traduction de post — appliquée à l'exemplaire
-    /// en mémoire ET à chaque exemplaire en cache. `translatedContent` n'est
-    /// posé que si la langue est préférée et qu'aucune traduction n'est déjà
-    /// affichée (une traduction plus prioritaire ne doit pas être écrasée).
+    /// en mémoire ET à chaque exemplaire en cache. La traduction reçue est
+    /// TOUJOURS fusionnée dans `post.translations` ; le texte AFFICHÉ est
+    /// re-résolu par la descente unique du Prisme (`FeedPost.resolved`), qui
+    /// parcourt `preferredLanguages` dans l'ordre et fait concourir la langue
+    /// d'origine à SON rang (règle 3 du Prisme — jamais un court-circuit).
+    /// Avant #6531, la première traduction reçue dont la langue figurait
+    /// N'IMPORTE OÙ dans le Prisme devenait le texte affiché : arrivée dans le
+    /// désordre (`pt` avant `en` avec Prisme `[en, pt]`), ou langue d'origine
+    /// de rang 1 détrônée par une traduction de rang inférieur.
+    ///
+    /// `preserveManualOverride` protège un choix EXPLICITE du lecteur (tap
+    /// d'un drapeau, `setTranslationOverride`) : la traduction est mergée,
+    /// mais l'affichage courant n'est pas touché.
     nonisolated static func applyPostTranslation(
         _ translation: PostTranslation,
         language: String,
         preferredLanguages: [String],
+        preserveManualOverride: Bool = false,
         to post: inout FeedPost
     ) {
         var translations = post.translations ?? [:]
         translations[language] = translation
         post.translations = translations
-        guard post.translatedContent == nil,
-              preferredLanguages.contains(where: { $0.caseInsensitiveCompare(language) == .orderedSame })
-        else { return }
-        post.translatedContent = translation.text
+        guard !preserveManualOverride else { return }
+        post = post.resolved(preferredLanguages: preferredLanguages)
     }
 
     /// Idem pour un commentaire. Retourne `false` quand rien ne change — le
     /// sink s'en sert pour ne pas réécrire le cache pour rien.
+    ///
+    /// `FeedComment` ne porte pas de dictionnaire `translations` (contrairement
+    /// à `FeedPost`) : une seule traduction est mémorisée à la fois, donc une
+    /// résolution complète par rang (comme `FeedPost.resolved`) n'est pas
+    /// possible ici sans élargir le modèle. Ce que cette garde corrige quand
+    /// même (#6531) : la langue D'ORIGINE, quand elle occupe un rang AU MOINS
+    /// AUSSI prioritaire que la traduction qui arrive, n'est plus détrônée —
+    /// c'est le même défaut que celui démontré sur les posts, reproductible à
+    /// l'identique sur un commentaire. L'ordre d'arrivée ENTRE deux
+    /// traductions non-originales reste, lui, non résolu par ce correctif.
     nonisolated static func applyCommentTranslation(
         _ text: String,
         commentId: String,
@@ -1717,10 +1754,16 @@ class FeedViewModel: ObservableObject {
         preferredLanguages: [String],
         to post: inout FeedPost
     ) -> Bool {
-        guard preferredLanguages.contains(where: { $0.caseInsensitiveCompare(language) == .orderedSame }),
-              let index = post.comments.firstIndex(where: { $0.id == commentId }),
-              post.comments[index].translatedContent == nil
+        guard let index = post.comments.firstIndex(where: { $0.id == commentId }) else { return false }
+        let comment = post.comments[index]
+        let preferred = preferredLanguages.filter { !$0.isEmpty }.map { $0.lowercased() }
+        guard let incomingRank = preferred.firstIndex(where: { $0 == language.lowercased() })
         else { return false }
+        let originalRank = comment.originalLanguage
+            .map { $0.lowercased() }
+            .flatMap { orig in preferred.firstIndex(where: { $0 == orig }) }
+        if let originalRank, originalRank <= incomingRank { return false }
+        guard comment.translatedContent == nil else { return false }
         post.comments[index].translatedContent = text
         return true
     }
@@ -1865,7 +1908,7 @@ class FeedViewModel: ObservableObject {
         }
     }
 
-    private func debouncedCacheSave() {
+    func debouncedCacheSave() {
         cacheSaveTask?.cancel()
         let snapshot = posts
         cacheSaveTask = Task {

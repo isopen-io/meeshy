@@ -3,9 +3,13 @@
  * `PasswordResetService` par #3629, désormais partagée par l'inscription,
  * le changement de mot de passe authentifié, la création admin et la
  * réinitialisation admin.
+ *
+ * Score proportionnel à la longueur, sans classe de caractères imposée
+ * (#6436) — voir le doc-comment de `password-strength.ts` pour la mesure qui
+ * justifie les paliers.
  */
 import { describe, it, expect } from '@jest/globals';
-import { validatePasswordStrength, MIN_PASSWORD_SCORE } from '../../utils/password-strength';
+import { validatePasswordStrength, minPasswordScoreForLength } from '../../utils/password-strength';
 import { PASSWORD_MIN_LENGTH } from '@meeshy/shared/utils/validation';
 
 describe('validatePasswordStrength', () => {
@@ -22,37 +26,59 @@ describe('validatePasswordStrength', () => {
     expect(result.errors).toContain(`minimum ${PASSWORD_MIN_LENGTH} characters`);
   });
 
-  it('rejects a password meeting the length bound but missing a character class', () => {
-    // Exactement ce qu'un schéma qui ne borne QUE la longueur laissait passer
-    // avant #3629 : douze caractères, tous minuscules.
-    const result = validatePasswordStrength('a'.repeat(PASSWORD_MIN_LENGTH));
+  it('accepts a password with no character-class variety at all, as long as its zxcvbn score clears the bar for its length', () => {
+    // Exactement ce que la règle de composition interdisait avant #6436 :
+    // pas de majuscule, pas de chiffre — et pourtant pas trivialement
+    // devinable à cette longueur.
+    const result = validatePasswordStrength('correcthorsebatterystaple');
+    expect(result.isValid).toBe(true);
+    expect(result.errors).toHaveLength(0);
+  });
+
+  it("proves the declared PASSWORD_MIN_LENGTH is reachable: a password of exactly that length can pass", () => {
+    // Le critère de fin de #6436 : ce témoin serait ROUGE sous l'ancienne
+    // règle (score >= 3 fixe), qu'aucun mot de passe de 6 caractères
+    // n'atteint jamais, si aléatoire soit-il.
+    const password = 'Vr7#tL';
+    expect(password).toHaveLength(PASSWORD_MIN_LENGTH);
+
+    const result = validatePasswordStrength(password);
+    expect(result.isValid).toBe(true);
+    expect(result.errors).toHaveLength(0);
+  });
+
+  it('rejects a common, guessable password at PASSWORD_MIN_LENGTH on zxcvbn score alone', () => {
+    // Un motif du top-100 (score 0) reste refusé même à la longueur minimale.
+    const result = validatePasswordStrength('123456');
     expect(result.isValid).toBe(false);
-    expect(result.errors).toContain('one uppercase letter');
-    expect(result.errors).toContain('one digit');
+    const scoreError = result.errors.find((e) => e.includes('password strength score'));
+    expect(scoreError).toBeDefined();
+    expect(scoreError).toContain(`minimum: ${minPasswordScoreForLength(6)}/4`);
   });
 
-  it('rejects a password without an uppercase letter', () => {
-    const result = validatePasswordStrength('longenoughbutlowercase123');
-    expect(result.errors).toContain('one uppercase letter');
-  });
-
-  it('rejects a password without a lowercase letter', () => {
-    const result = validatePasswordStrength('LONGENOUGHBUTUPPERCASE123');
-    expect(result.errors).toContain('one lowercase letter');
-  });
-
-  it('rejects a password without a digit', () => {
-    const result = validatePasswordStrength('LongEnoughButNoDigitsHere');
-    expect(result.errors).toContain('one digit');
-  });
-
-  it('rejects a common, guessable password on zxcvbn score alone, even at PASSWORD_MIN_LENGTH', () => {
-    // Meets length + every character class, but is a well-known pattern —
-    // exactly the case that length and character classes alone cannot catch.
+  it('rejects a common, guessable password well past PASSWORD_MIN_LENGTH on zxcvbn score alone', () => {
+    // Longueur et classes de caractères réunies ne suffisent pas à couvrir un
+    // motif connu — exactement le cas que la longueur seule ne peut pas
+    // attraper.
     const result = validatePasswordStrength('Password12345');
     expect(result.isValid).toBe(false);
     const scoreError = result.errors.find((e) => e.includes('password strength score'));
     expect(scoreError).toBeDefined();
-    expect(scoreError).toContain(`minimum: ${MIN_PASSWORD_SCORE}/4`);
+    expect(scoreError).toContain(`minimum: ${minPasswordScoreForLength('Password12345'.length)}/4`);
+  });
+
+  describe('minPasswordScoreForLength', () => {
+    it('is monotonically non-decreasing with length', () => {
+      let previous = 0;
+      for (let length = PASSWORD_MIN_LENGTH; length <= 40; length++) {
+        const score = minPasswordScoreForLength(length);
+        expect(score).toBeGreaterThanOrEqual(previous);
+        previous = score;
+      }
+    });
+
+    it('never exceeds the zxcvbn scale', () => {
+      expect(minPasswordScoreForLength(1000)).toBeLessThanOrEqual(4);
+    });
   });
 });

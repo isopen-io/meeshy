@@ -16,7 +16,7 @@ import {
   createAuthGlobalRateLimiter,
   createTwoFactorLoginRateLimiter
 } from '../../utils/rate-limiter.js';
-import { UserLockedError } from '../../errors/custom-errors.js';
+import { PasswordNotSetError, UserLockedError } from '../../errors/custom-errors.js';
 import {
   AuthRouteContext,
   TwoFactorRequestBody,
@@ -216,6 +216,13 @@ export function registerLoginRoutes(context: AuthRouteContext) {
       // sa date de fin. La convertir en 500 ici priverait la personne
       // légitime de la seule information qui l'aide (#4138).
       if (error instanceof UserLockedError) {
+        throw error;
+      }
+      // #6424 — même raison que le verrou juste au-dessus : le refus PORTE
+      // l'information dont la personne a besoin (« prends le lien magique »).
+      // Le convertir en 500 la laisserait devant une porte dont elle ne sait
+      // pas qu'il en existe une autre.
+      if (error instanceof PasswordNotSetError) {
         throw error;
       }
       logger.error('Erreur serveur lors de la connexion', error as Error);

@@ -45,6 +45,8 @@ export type RouteKey =
   | 'notifications'
   | 'profile'
   | 'settings'
+  | 'admin'
+  | 'adminUsers'
   | 'login'
   | 'signup'
   | 'welcome'
@@ -87,6 +89,16 @@ export type RouteAccessDecision = 'allow' | 'redirect-login' | 'redirect-home' |
  * `fastify.authenticate`. Laissée publique par #5563, la route ouvrait sans
  * session un écran dont la requête restait désactivée : squelettes À VIE, et
  * une déconnexion offerte à qui n'est pas connecté.
+ *
+ * `admin` / `adminUsers` (#6432) — PRIVÉES, et cette garde ne fait que la
+ * MOITIÉ du travail. Elle exige une session ; le DROIT, lui, se lit au
+ * serveur (`GET /me/permissions`) dans l'écran. La séparation n'est pas un
+ * oubli : `SessionUser` ne projette pas `role` (`lib/api/session.ts`), donc
+ * une garde de route qui trancherait ici ne pourrait que le DEVINER — et une
+ * garde qui devine sur une porte d'administration est pire qu'aucune garde,
+ * parce qu'on croit qu'elle garde. Ce qu'elle apporte est réel malgré tout :
+ * un visiteur sans compte est renvoyé vers la connexion plutôt que de voir un
+ * écran qui charge puis refuse.
  */
 const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
   'list',
@@ -100,6 +112,8 @@ const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
   'notifications',
   'profile',
   'settings',
+  'admin',
+  'adminUsers',
 ]);
 const AUTH_ROUTES: ReadonlySet<string> = new Set<RouteKey>(['login', 'signup', 'welcome', 'magicLink', 'forgotPassword']);
 

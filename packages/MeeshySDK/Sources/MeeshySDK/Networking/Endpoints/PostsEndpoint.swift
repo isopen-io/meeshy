@@ -45,6 +45,7 @@ public enum PostsEndpoint: MeeshyEndpoint, Sendable {
     case hashtagByTag(tag: String)
     case impressionsBatch
     case mediaByMediaId(mediaId: String)
+    case mediaByMediaIdCaptionTranslate(mediaId: String)
     case nearby
     case nearbyDensity
     case root
@@ -86,6 +87,7 @@ public enum PostsEndpoint: MeeshyEndpoint, Sendable {
         case .hashtagByTag(let tag): return "/api/v1/posts/hashtag/\(tag)"
         case .impressionsBatch: return "/api/v1/posts/impressions/batch"
         case .mediaByMediaId(let mediaId): return "/api/v1/posts/media/\(mediaId)"
+        case .mediaByMediaIdCaptionTranslate(let mediaId): return "/api/v1/posts/media/\(mediaId)/caption/translate"
         case .nearby: return "/api/v1/posts/nearby"
         case .nearbyDensity: return "/api/v1/posts/nearby/density"
         case .root: return "/api/v1/posts"

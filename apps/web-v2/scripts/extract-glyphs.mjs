@@ -76,6 +76,13 @@ const OVERRIDES = {
    */
   'heart-fill': join(CORE, 'fill/heart-fill.svg'),
   'bookmark-fill': join(CORE, 'fill/bookmark-fill.svg'),
+  /**
+   * `coin-fill` (#6427) — la PIÈCE des Meeshes, PLEINE : à 18-20 px, à côté
+   * d'un solde en gras, le contour de `coin` se perd, et c'est la silhouette
+   * métallique qui doit dire « monnaie ». Même tracé que l'actif iOS
+   * `MeeshCoin`, pour que les deux plateformes montrent la même pièce.
+   */
+  'coin-fill': join(CORE, 'fill/coin-fill.svg'),
 };
 
 /**
@@ -161,6 +168,8 @@ const PROGRESSION = [
   'fire',
   'star',
   'medal',
+  // La pièce des Meeshes (#6427) : la médaille reste aux BADGES.
+  'coin-fill',
   'chat-text',
   'article',
   'camera',
@@ -287,7 +296,7 @@ emit({
  * `/forgot-password`, jamais dans le socle : ces trois glyphes ne servent
  * qu'a un visiteur SANS session, un chemin rare compare au fil.
  */
-const AUTH = ['envelope', 'magic-wand', 'arrow-clockwise'];
+const AUTH = ['envelope', 'magic-wand', 'arrow-clockwise', 'info', 'pencil-simple'];
 
 emit({
   ids: AUTH,
@@ -431,8 +440,14 @@ emit({
  * sert les DEUX fleches du carrousel de FeedPostCardCarousel -- `caret-left`
  * N'Y ENTRE PAS : il est deja au SOCLE (`caretLeft`, retour de l'en-tete), le
  * dupliquer paierait ses octets deux fois au meme demarrage.
+ *
+ * `monitor-play` (#6457) : le bouton « Lancer les Reels » de l'en-tete du fil,
+ * miroir de `play.rectangle.on.rectangle.fill` (`FeedView.swift`) -- un cadre
+ * d'ecran qui porte le triangle de lecture, la meme idee que le symbole iOS.
+ * Le lecteur des Reels relit ce MEME jeu (coeur, signet, partage, onde) plutot
+ * que d'en recopier les traces dans un jeu a lui.
  */
-const FEED = ['heart', 'heart-fill', 'chat-circle', 'arrows-clockwise', 'bookmark', 'bookmark-fill', 'share-network', 'waveform', 'caret-right'];
+const FEED = ['heart', 'heart-fill', 'chat-circle', 'arrows-clockwise', 'bookmark', 'bookmark-fill', 'share-network', 'waveform', 'caret-right', 'monitor-play'];
 
 emit({
   ids: FEED,

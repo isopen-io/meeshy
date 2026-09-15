@@ -99,6 +99,17 @@ public nonisolated struct MeeshyColors {
     public static let communityAccent = warning
     public static let communityAccentHex = warningHex
 
+    // MARK: - Monnaie (#6427)
+    //
+    // L'ARGENT de la pièce Meesh. Une Meesh est une monnaie : son glyphe dit
+    // « pièce », et sa couleur « métal », là où l'ambre de l'entrée dit
+    // « récompense à saisir ». Un gris ardoise clair plutôt qu'un gris neutre :
+    // la pointe de bleu est ce qui fait lire du métal et non du plastique, sur
+    // le verre clair comme sur le fond sombre.
+
+    public static let meeshSilver = Color(hex: "A8B1BF")
+    public static let meeshSilverHex = "A8B1BF"
+
     /// Fond du badge de compteur de messages non lus, thématisé.
     /// Light : rouge vif (`error`). Dark : rouge foncé (`errorDark`).
     public static func unreadBadgeBackground(isDark: Bool) -> Color {

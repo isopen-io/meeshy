@@ -162,7 +162,13 @@ describe("`where` — servirProfilPublic n'applique JAMAIS la portée de contact
     const where = prisma.user.findFirst.mock.calls[0][0].where as Record<string, unknown>;
     expect(where.email).toBe('cible@example.com');
     expect(where.isActive).toBe(true);
-    expect(where.NOT).toMatchObject({ blockedUserIds: { has: VIEWER } });
+    // Le blocage vit dans `AND`, sous la même forme « absent vs null » que
+    // `deletedAt` — un `NOT` nu au premier niveau écarterait aussi les
+    // comptes qui n'ont jamais écrit `blockedUserIds` (#6452).
+    expect(where.NOT).toBeUndefined();
+    expect(where.AND).toContainEqual({
+      OR: [{ blockedUserIds: { isSet: false } }, { NOT: { blockedUserIds: { has: VIEWER } } }],
+    });
     expect(JSON.stringify(where.AND)).toContain('isSet');
 
     await app.close();
@@ -177,7 +183,10 @@ describe("`where` — servirProfilPublic n'applique JAMAIS la portée de contact
     const where = prisma.user.findFirst.mock.calls[0][0].where as Record<string, unknown>;
     expect(where.phoneNumber).toBeDefined();
     expect(where.isActive).toBe(true);
-    expect(where.NOT).toMatchObject({ blockedUserIds: { has: VIEWER } });
+    expect(where.NOT).toBeUndefined();
+    expect(where.AND).toContainEqual({
+      OR: [{ blockedUserIds: { isSet: false } }, { NOT: { blockedUserIds: { has: VIEWER } } }],
+    });
 
     await app.close();
   });

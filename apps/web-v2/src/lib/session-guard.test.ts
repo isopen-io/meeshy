@@ -139,3 +139,37 @@ describe('resolveRouteAccess — l’accueil (#5816)', () => {
     }
   });
 });
+
+/**
+ * L'ESPACE D'ADMINISTRATION (#6432) — cette garde n'en fait que la MOITIÉ.
+ *
+ * Elle exige une session ; le DROIT se lit au serveur dans l'écran
+ * (`GET /me/permissions`). La séparation est délibérée : `SessionUser` ne
+ * projette pas `role`, donc une garde de route qui trancherait ici ne pourrait
+ * que le deviner — et une garde qui devine sur une porte d'administration est
+ * pire qu'aucune garde, parce qu'on la croit posée.
+ *
+ * Ce que ces témoins mesurent est donc exactement ce que cette loi PROMET, ni
+ * plus ni moins : un visiteur sans compte n'entre pas.
+ */
+describe("les routes d'administration sont PRIVÉES", () => {
+  for (const routeKey of ['admin', 'adminUsers'] as const) {
+    test(`${routeKey} : une session AUTHENTIFIÉE passe`, () => {
+      expect(
+        resolveRouteAccess({ sessionStatus: 'authenticated', source: 'gateway', routeKey }),
+      ).toBe('allow');
+    });
+
+    test(`${routeKey} : sans session, on est renvoyé vers la connexion`, () => {
+      expect(
+        resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey }),
+      ).toBe('redirect-login');
+    });
+
+    test(`${routeKey} : sans accueil soldé, l'accueil passe d'abord`, () => {
+      expect(
+        resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey, welcomeCompleted: false }),
+      ).toBe('redirect-welcome');
+    });
+  }
+});

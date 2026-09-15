@@ -139,5 +139,39 @@ export async function checkViewerVideoTransport({ browser, BASE, expect, setSche
   expect((await page.locator('[data-viewer-transport-slot] [role="menu"]').count()) === 0, `${label} Échap referme le menu`);
   expect((await page.locator('[data-media-viewer]').count()) === 1, `${label} Échap dans le menu laisse la visionneuse ouverte`);
 
+  // ===== T6 — le double tap latéral (#6369) avance/recule de 10 s, comme iOS =====
+  // La vidéo de `media-12` dure ~7 s : le pas de 10 s dépasse toujours la
+  // piste, donc chaque bord CLAMPE — la butée seule suffit à prouver le sens
+  // du geste, sans dépendre de la position au moment où T6 démarre.
+  const stage = page.locator('[data-media-viewer] [data-viewer-page]').filter({ has: page.locator('video') });
+  const stageBox = await stage.boundingBox();
+
+  await page.mouse.dblclick(stageBox.x + stageBox.width * 0.1, stageBox.y + stageBox.height / 2);
+  await page.waitForTimeout(50);
+  const afterBackward = await viewerVideoState(page);
+  expect(
+    afterBackward !== null && afterBackward.currentTime < 0.5,
+    `${label} le double tap au tiers gauche recule, borné à zéro (${afterBackward?.currentTime})`,
+  );
+
+  await page.mouse.dblclick(stageBox.x + stageBox.width * 0.9, stageBox.y + stageBox.height / 2);
+  await page.waitForTimeout(50);
+  const afterForward = await viewerVideoState(page);
+  expect(
+    afterForward !== null && afterForward.currentTime > afterForward.duration - 0.5,
+    `${label} le double tap au tiers droit avance, borné à la fin (${afterForward?.currentTime} / ${afterForward?.duration})`,
+  );
+
+  // Y loin du centre vertical : le bouton play/pause (64 px, centré) y couvrirait
+  // le double tap et le confondrait avec un rejeu de lecture depuis `ended`.
+  await page.mouse.dblclick(stageBox.x + stageBox.width * 0.5, stageBox.y + stageBox.height * 0.15);
+  await page.waitForTimeout(50);
+  const afterCentre = await viewerVideoState(page);
+  expect(
+    afterCentre !== null && Math.abs(afterCentre.currentTime - afterForward.currentTime) < 0.3,
+    `${label} le double tap au centre ne déplace pas la lecture, aucun double tap n'y est armé (${afterCentre?.currentTime} contre ${afterForward.currentTime})`,
+  );
+  expect((await page.locator('[data-media-viewer]').count()) === 1, `${label} le double tap latéral laisse la visionneuse ouverte`);
+
   await context.close();
 }

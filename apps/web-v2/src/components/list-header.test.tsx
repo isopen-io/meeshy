@@ -68,7 +68,7 @@ function mount(pinned: boolean): HTMLDivElement {
     r.render(
       <ListHeader
         pinned={pinned}
-        railProps={{ groups: GROUPS, loading: false }}
+        railProps={{ groups: GROUPS, loading: false, language: 'fr' }}
         conversations={[]}
         viewerId="u-viewer"
       />,
@@ -83,7 +83,7 @@ function rerender(el: HTMLDivElement, pinned: boolean): void {
     root!.render(
       <ListHeader
         pinned={pinned}
-        railProps={{ groups: GROUPS, loading: false }}
+        railProps={{ groups: GROUPS, loading: false, language: 'fr' }}
         conversations={[]}
         viewerId="u-viewer"
       />,
@@ -163,11 +163,11 @@ describe('ListHeader — le focus passe à la tuile jumelle du grand rail', () =
         <div>
           <ListHeader
             pinned={pinned}
-            railProps={{ groups: GROUPS, loading: false }}
+            railProps={{ groups: GROUPS, loading: false, language: 'fr' }}
             conversations={[]}
             viewerId="u-viewer"
           />
-          <StoryRail variant="grande" groups={GROUPS} loading={false} />
+          <StoryRail variant="grande" groups={GROUPS} loading={false} language="fr" />
         </div>,
       );
     });
@@ -187,11 +187,11 @@ describe('ListHeader — le focus passe à la tuile jumelle du grand rail', () =
         <div>
           <ListHeader
             pinned={false}
-            railProps={{ groups: GROUPS, loading: false }}
+            railProps={{ groups: GROUPS, loading: false, language: 'fr' }}
             conversations={[]}
             viewerId="u-viewer"
           />
-          <StoryRail variant="grande" groups={GROUPS} loading={false} />
+          <StoryRail variant="grande" groups={GROUPS} loading={false} language="fr" />
         </div>,
       );
     });
@@ -231,11 +231,11 @@ describe('ListHeader — le focus passe à la tuile jumelle du grand rail', () =
         <div>
           <ListHeader
             pinned={false}
-            railProps={{ groups: GROUPS, loading: false }}
+            railProps={{ groups: GROUPS, loading: false, language: 'fr' }}
             conversations={[]}
             viewerId="u-viewer"
           />
-          <StoryRail variant="grande" groups={GROUPS} loading={false} />
+          <StoryRail variant="grande" groups={GROUPS} loading={false} language="fr" />
         </div>,
       );
     });
@@ -255,11 +255,11 @@ describe('ListHeader — le focus passe à la tuile jumelle du grand rail', () =
         <div>
           <ListHeader
             pinned={false}
-            railProps={{ groups: GROUPS, loading: false }}
+            railProps={{ groups: GROUPS, loading: false, language: 'fr' }}
             conversations={[]}
             viewerId="u-viewer"
           />
-          <StoryRail variant="grande" groups={GROUPS} loading={false} />
+          <StoryRail variant="grande" groups={GROUPS} loading={false} language="fr" />
         </div>,
       );
     });

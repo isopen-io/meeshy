@@ -50,8 +50,43 @@ export type AgentResponseBridgeDeps = {
   resolveUsernamesToIds(usernames: string[]): Promise<string[]>;
   attachmentService: { uploadFile(file: FileToUpload, userId: string): Promise<Pick<UploadResult, 'id'>> };
   resolveIllustration?: (sourceUrl: string) => Promise<ResolvedIllustration | null>;
+  /** Budget global (résolution + téléversement), en ms. Défaut `ILLUSTRATION_BUDGET_MS` (#6198). */
+  illustrationBudgetMs?: number;
   broadcastNewMessage(message: Message, conversationId: string): Promise<void>;
 };
+
+/**
+ * Budget GLOBAL, tout compris (résolution de l'image + téléversement), au-delà
+ * duquel le message part en texte plutôt que d'attendre (#6198). La file ZMQ
+ * est traitée en série (`startListening`) : une source lente retarde toutes
+ * les réponses suivantes, alors que le message d'agent n'est sur aucun chemin
+ * utilisateur synchrone — un sujet lancé en retard ne vaut rien de plus qu'un
+ * sujet lancé sans photo.
+ *
+ * `resolveAgentIllustration` borne déjà CHAQUE saut réseau (8 s par défaut,
+ * jusqu'à 4 sauts pour la page comme pour l'image) mais rien ne borne leur
+ * SOMME : ce budget est la seule garde sur le total.
+ */
+const ILLUSTRATION_BUDGET_MS = 10_000;
+
+const BUDGET_EXCEEDED = Symbol('agent-illustration-budget-exceeded');
+
+/**
+ * Course contre une horloge : ne PAS annuler `work` — `resolveAgentIllustration`
+ * n'expose aucun signal d'annulation, et l'appel abandonné reste borné par ses
+ * propres délais de saut. Le perdant de la course reste résolu SANS écouteur
+ * dédié : `Promise.race` lui attache déjà une réaction, donc son issue tardive
+ * — succès ou rejet — ne produit jamais de rejet non observé (§ CLAUDE.md
+ * « `void p` exige TOUJOURS `p.catch(...)` », qui ne s'applique qu'à une
+ * promesse réellement détachée).
+ */
+function withBudget<T>(work: Promise<T>, budgetMs: number): Promise<T | typeof BUDGET_EXCEEDED> {
+  const timeout = new Promise<typeof BUDGET_EXCEEDED>((resolve) => {
+    const timer = setTimeout(() => resolve(BUDGET_EXCEEDED), budgetMs);
+    timer.unref?.();
+  });
+  return Promise.race([work, timeout]);
+}
 
 async function conversationParticipantsForMention(
   prisma: AgentResponseBridgeDeps['prisma'],
@@ -102,17 +137,27 @@ async function resolveMentionedUserIds(deps: AgentResponseBridgeDeps, response: 
 async function uploadIllustration(deps: AgentResponseBridgeDeps, response: AgentResponsePayload): Promise<readonly string[] | undefined> {
   const sourceUrl = response.illustration?.sourceUrl;
   if (!sourceUrl) return undefined;
+  const budgetMs = deps.illustrationBudgetMs ?? ILLUSTRATION_BUDGET_MS;
+  const startedAt = Date.now();
   try {
     const resolve = deps.resolveIllustration ?? ((url: string) => resolveAgentIllustration({ sourceUrl: url }));
-    const resolved = await resolve(sourceUrl);
-    if (!resolved) return undefined;
-    const uploaded = await deps.attachmentService.uploadFile(
-      { buffer: resolved.buffer, filename: resolved.filename, mimeType: resolved.mimeType, size: resolved.buffer.length },
-      response.asUserId,
-    );
-    return [uploaded.id];
+    const work = (async (): Promise<readonly string[] | undefined> => {
+      const resolved = await resolve(sourceUrl);
+      if (!resolved) return undefined;
+      const uploaded = await deps.attachmentService.uploadFile(
+        { buffer: resolved.buffer, filename: resolved.filename, mimeType: resolved.mimeType, size: resolved.buffer.length },
+        response.asUserId,
+      );
+      return [uploaded.id];
+    })();
+    const result = await withBudget(work, budgetMs);
+    if (result === BUDGET_EXCEEDED) {
+      logger.warn(`[Agent] Illustration budget exceeded (${budgetMs}ms) — conv=${response.conversationId} source=${sourceUrl}`);
+      return undefined;
+    }
+    return result;
   } catch (error) {
-    logger.warn(`[Agent] Illustration abandonnée — conv=${response.conversationId} source=${sourceUrl}`, error);
+    logger.warn(`[Agent] Illustration abandonnée (${Date.now() - startedAt}ms) — conv=${response.conversationId} source=${sourceUrl}`, error);
     return undefined;
   }
 }

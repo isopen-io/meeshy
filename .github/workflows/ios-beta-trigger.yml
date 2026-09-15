@@ -17,6 +17,18 @@ name: iOS (beta) → Xcode Cloud
 #
 # PRÉREQUIS : le workflow Xcode Cloud doit être ACTIVÉ dans App Store Connect.
 # Un workflow désactivé refuse les démarrages, y compris par API.
+#
+# PIÈGE FERMÉ PAR #6351 : si le message du commit porte AUSSI un marqueur de
+# saut CI ([skip ci], [ci skip], [no ci], [skip actions], [actions skip],
+# skip-checks:true) — par exemple en CITANT le message d'un commit de release
+# antérieur — GitHub supprime TOUS les workflows du push avant même que ce
+# fichier ne s'exécute, ce job compris. Ce fichier ne peut donc pas se
+# protéger lui-même contre ce cas ; deux gardes externes le font à sa place :
+# un hook de commit local (.githooks/commit-msg) et un témoin périodique sur
+# schedule (.github/workflows/beta-marker-audit.yml), tous deux appuyés sur
+# scripts/check-beta-skip-conflict.mjs — dont les marqueurs beta DOIVENT
+# rester synchronisés avec le tableau `markers` juste en dessous
+# (`--self-test` le vérifie).
 
 on:
   push:

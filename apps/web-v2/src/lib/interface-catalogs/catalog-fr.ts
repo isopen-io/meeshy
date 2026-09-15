@@ -25,6 +25,81 @@ const fr = {
   'typing.double': '{first} et {second} écrivent',
   'typing.several': 'Plusieurs personnes écrivent',
 
+  /* LES RÉELS (#6457) — le bouton de l'en-tête du Flux et le lecteur plein
+     écran ; `feed.header.reels`, `reels.back`, `reels.empty` et
+     `reels.action.*` reprennent les clés d'iOS. */
+  'feed.header.reels': 'Lancer les Réels',
+  'reels.title': 'Réels',
+  'reels.back': 'Retour',
+  'reels.open': 'Regarder le réel de {author}',
+  'reels.item': 'Réel de {author}, {index} sur {count}',
+  'reels.loading': 'Chargement des réels',
+  'reels.empty': 'Aucun réel pour le moment',
+  'reels.empty.hint': 'Les réels de vos contacts apparaîtront ici.',
+  'reels.error': 'Impossible de charger les réels',
+  'reels.error.hint': 'Réessayez dans un instant.',
+  'reels.retry': 'Réessayer',
+  'reels.offline': 'Hors ligne',
+  'reels.offline.cold': 'Les réels se chargeront dès le retour du réseau.',
+  'reels.action.like': 'J’aime',
+  'reels.action.bookmark': 'Enregistrer',
+  'reels.action.share': 'Partager',
+  'reels.sound.on': 'Activer le son',
+  'reels.sound.off': 'Couper le son',
+  'reels.play': 'Lire le réel',
+  'reels.pause': 'Mettre le réel en pause',
+  'reels.media.error': 'Lecture impossible — Réessayer',
+  'reels.image': 'Image {index} sur {count}',
+
+  /* TOUTES LES STORIES (#6547) — `routes/stories.tsx`, même patron que le Flux. */
+  'stories.title': 'Stories',
+  'stories.loading': 'Chargement des stories…',
+  'stories.error': "Les stories n'ont pas pu être chargées.",
+  'stories.empty.title': "Aucune story pour l'instant",
+  'stories.empty.subtitle': 'Les stories de vos contacts apparaîtront ici pendant vingt-quatre heures.',
+  'stories.create': 'Créer une story',
+  'stories.count.one': '{count} story',
+  'stories.count.other': '{count} stories',
+  /* LE LIBELLÉ DU GROUPE DU LECTEUR (#6550) — partagé par le rail
+     (`components/story-rail.tsx`) et la liste « Toutes les stories »
+     (`routes/stories.tsx`), via `storyAuthorLabel()`. */
+  'stories.mine': 'Votre story',
+
+  /* LA CARTE DU FIL ET SES GESTES (#6488) — `FeedPostCard`, l'en-tête et les
+     quatre états du Flux (`routes/feed.tsx`), et les échecs d'un geste
+     (`lib/api/feed-gestures.ts`, `lib/feed/share-url.ts`) : tous écrits en
+     dur en français jusqu'ici, alors qu'une coque branchée en anglais servait
+     déjà `reels.open` sur la même carte. */
+  'feed.post.action.like': 'Aimer',
+  'feed.post.action.comment': 'Commenter',
+  'feed.post.action.repost': 'Repartager',
+  'feed.post.action.bookmark': 'Enregistrer',
+  'feed.post.action.share': 'Partager',
+  'feed.post.media.video': 'Vidéo',
+  'feed.post.media.audio': 'Audio',
+  'feed.post.media.previous': 'Média précédent',
+  'feed.post.media.next': 'Média suivant',
+  'feed.post.media.mosaic': 'Mosaïque de {count} médias',
+  'feed.post.see_more': 'voir plus',
+  'feed.post.see_less': 'voir moins',
+  'feed.post.reel.chip': 'Réel',
+  'feed.post.reel.of': 'Réel de {author}',
+  'feed.error.title': 'Impossible de charger le fil',
+  'feed.error.body': 'Réessayez dans un instant.',
+  'feed.offline.title': 'Hors ligne',
+  'feed.offline.body': 'Le fil s’affichera à la reconnexion.',
+  'feed.retry': 'Réessayer',
+  'feed.empty.title': 'Aucune publication',
+  'feed.empty.subtitle': 'Les publications de vos contacts apparaîtront ici.',
+  'feed.loading': 'Chargement du fil',
+  'feed.allLoaded': 'Toutes les publications sont chargées',
+  'feed.like.error': 'Impossible d’aimer la publication',
+  'post.bookmark.error': 'Erreur lors de l’enregistrement',
+  'feed.gesture.pending': 'Geste non confirmé — hors ligne',
+  'feed.share.error': 'Impossible de partager la publication',
+  'feed.share.copied': 'Lien copié — il ne reste qu’à le coller.',
+  'feed.share.text': 'Une publication sur Meeshy',
+
   'root.menu.feed': 'Flux',
   'root.menu.links': 'Mes liens',
   'root.menu.notifications': 'Notifications',
@@ -33,6 +108,8 @@ const fr = {
   'root.menu.communities': 'Communautés',
   'root.menu.settings': 'Réglages',
   'root.menu.profile': 'Profil',
+  'root.menu.conversations': 'Conversations',
+  'a11y.floating.feed.hint': 'Appui long pour lancer les Réels',
   'a11y.floating.menu': 'Menu',
   'a11y.floating.menu.ladder': 'Navigation Meeshy',
   'a11y.floating.menu.unread.one': 'Menu, {count} notification non lue',
@@ -125,6 +202,17 @@ const fr = {
   'profile.language.choose': 'Choisir',
   'profile.language.clear.regional': 'Retirer la langue régionale',
   'profile.language.clear.custom': 'Retirer la langue personnalisée',
+
+  /* LA FEUILLE DE CHOIX DE LANGUE, PARLÉE DANS LA LANGUE D'INTERFACE (#6328)
+     — titre par défaut (inscription), titre du composeur, recherche et état
+     vide de `language-sheet.tsx`. `title`/`selected` restent des props
+     explicites (#5828) : ces clés ne servent qu'à défaut d'un `title` fourni
+     par l'appelant, et toujours pour la recherche/l'état vide. */
+  'languageSheet.title.read': 'Langue de lecture',
+  'languageSheet.title.write': 'Langue d’écriture',
+  'languageSheet.search': 'Rechercher une langue',
+  'languageSheet.empty': 'Aucune langue ne correspond à « {search} ».',
+
   'profile.stats.messages': 'Messages',
   'profile.stats.translations': 'Traductions',
   'profile.stats.languages': 'Langues',
@@ -176,6 +264,7 @@ const fr = {
   'settings.logout.message': 'Voulez-vous vraiment vous déconnecter ?',
   'settings.logout.inprogress': 'Déconnexion en cours...',
   'settings.legacy': 'Version classique, nouvel onglet',
+  'settings.legacy.unavailable': 'Indisponible sur cet environnement',
   'settings.loading': 'Chargement des réglages',
   'settings.error.title': 'Impossible de charger vos réglages',
   'settings.retry': 'Réessayer',
@@ -187,6 +276,8 @@ const fr = {
   'media.video.play': 'Lire la vidéo',
   'media.video.pause': 'Pause',
   'media.video.position': 'Position de lecture',
+  'media.audio.position': 'Position de lecture',
+  'media.audio.speed': 'Vitesse de lecture',
   'media.video.position.value': '{elapsed} sur {total}',
   'media.video.mute': 'Couper le son',
   'media.video.unmute': 'Réactiver le son',
@@ -435,6 +526,43 @@ const fr = {
   'links.create.error.offline': 'Hors ligne : le lien n’a pas été créé.',
   'links.create.error.refused': 'Vous ne pouvez pas créer de lien pour cette conversation.',
   'links.create.error.default': 'Le lien n’a pas pu être créé. Réessayez.',
+
+  /* L'ESPACE D'ADMINISTRATION (#6432) — les onze sections reprennent les
+     libellés de la barre latérale du legacy (`AdminLayout.tsx`), pour qu'un
+     administrateur retrouve ses repères d'une application à l'autre. */
+  'admin.title': 'Administration',
+  'admin.role': 'Votre rôle : {role}',
+  'admin.denied.title': 'Espace réservé',
+  'admin.denied.message': 'Cet espace demande un droit d\'administration.',
+  'admin.counters.title': 'En un coup d\'œil',
+  'admin.counters.unavailable': 'Compteurs indisponibles pour le moment.',
+  'admin.counters.users': 'Comptes',
+  'admin.counters.activeUsers': 'Comptes actifs',
+  'admin.counters.messages': 'Messages',
+  'admin.counters.communities': 'Communautés',
+  'admin.counters.reports': 'Signalements',
+  'admin.counters.newUsers': 'Nouveaux (24 h)',
+  'admin.sections.title': 'Sections',
+  'admin.sections.legacy': 'ancienne interface',
+  'admin.nav.dashboard': 'Tableau de bord',
+  'admin.nav.users': 'Comptes',
+  'admin.nav.moderation': 'Modération',
+  'admin.nav.audit': 'Journaux d\'audit',
+  'admin.nav.analytics': 'Statistiques',
+  'admin.nav.trackingLinks': 'Liens de suivi',
+  'admin.nav.ranking': 'Classement',
+  'admin.nav.broadcasts': 'Diffusions',
+  'admin.nav.settings': 'Réglages',
+  'admin.nav.agent': 'Agent',
+  'admin.nav.monitoring': 'Supervision',
+  'admin.users.search': 'Rechercher un compte',
+  'admin.users.count': '{count} compte(s)',
+  'admin.users.empty': 'Aucun compte ne correspond.',
+  'admin.users.unavailable': 'Liste indisponible pour le moment.',
+  'admin.users.inactive': 'désactivé',
+  'admin.users.previous': 'Précédents',
+  'admin.users.next': 'Suivants',
+
 } as const;
 
 export default fr;

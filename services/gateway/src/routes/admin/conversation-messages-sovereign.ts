@@ -57,6 +57,7 @@ import { sendPaginatedSuccess, sendNotFound, sendInternalError } from '../../uti
 // voir son doc-comment pour le détail des six colonnes.
 import { messageContentIsProtected, messageContentProtectionSelect } from './media-protection';
 import { logError } from '../../utils/logger.js';
+import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
 
 const REASON_MIN_LENGTH = 10;
 
@@ -169,7 +170,7 @@ export function registerConversationMessagesSovereignRoute(fastify: FastifyInsta
       // les lectures non-admin. Auparavant sélectionné (`deletedAt: true`)
       // mais jamais filtré : un message effacé restait lisible en entier.
       const where = { conversationId, deletedAt: null };
-      const [messages, total] = await Promise.all([
+      const [messages, total] = await withOrphanedSenderRepair({ prisma: fastify.prisma, conversationIds: [conversationId] }, () => Promise.all([
         fastify.prisma.message.findMany({
           where,
           select: {
@@ -204,7 +205,7 @@ export function registerConversationMessagesSovereignRoute(fastify: FastifyInsta
           take: limitNum
         }),
         fastify.prisma.message.count({ where })
-      ]);
+      ]));
 
       const data = messages.map((message) => {
         const protege = messageContentIsProtected(message);

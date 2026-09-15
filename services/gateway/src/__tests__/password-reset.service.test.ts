@@ -287,31 +287,33 @@ describe('PasswordResetService', () => {
       });
     });
 
-    it('should reject passwords without uppercase', () => {
+    it('accepts a password with no uppercase letter, as long as its zxcvbn score clears the bar (#6436)', () => {
+      // NIST SP 800-63B : aucune classe de caractères n'est plus exigée —
+      // seule la robustesse mesurée par zxcvbn compte.
       const validation = validatePasswordStrength('weakpassword123!');
-      expect(validation.isValid).toBe(false);
-      expect(validation.errors).toContain('one uppercase letter');
+      expect(validation.isValid).toBe(true);
     });
 
-    it('should reject passwords without lowercase', () => {
+    it('accepts a password with no lowercase letter, as long as its zxcvbn score clears the bar (#6436)', () => {
       const validation = validatePasswordStrength('WEAKPASSWORD123!');
-      expect(validation.isValid).toBe(false);
-      expect(validation.errors).toContain('one lowercase letter');
+      expect(validation.isValid).toBe(true);
     });
 
-    it('should reject passwords without digits', () => {
+    it('accepts a password with no digit, as long as its zxcvbn score clears the bar (#6436)', () => {
       const validation = validatePasswordStrength('WeakPassword!');
-      expect(validation.isValid).toBe(false);
-      expect(validation.errors).toContain('one digit');
+      expect(validation.isValid).toBe(true);
     });
 
     it('should reject weak passwords based on zxcvbn score', () => {
-      const validation = validatePasswordStrength('WeakPassword123');
+      // 'Password12345' réunit longueur et diversité de caractères, et reste
+      // un motif trop devinable (score 1) pour sa tranche de longueur
+      // (13 caractères ⇒ minimum 2, cf. minPasswordScoreForLength).
+      const validation = validatePasswordStrength('Password12345');
       expect(validation.isValid).toBe(false);
       // Check that the password is rejected due to low strength score (uses zxcvbn)
       const scoreError = validation.errors.find((err: string) => err.includes('password strength score'));
       expect(scoreError).toBeDefined();
-      expect(scoreError).toContain('minimum: 3/4');
+      expect(scoreError).toContain('minimum: 2/4');
     });
 
     it('should reject passwords shorter than PASSWORD_MIN_LENGTH', () => {

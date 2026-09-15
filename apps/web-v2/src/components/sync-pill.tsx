@@ -4,7 +4,9 @@ import { useStore } from 'zustand/react';
 import { Glyph } from './glyph';
 import { outboxStore } from '@/lib/send/outbox-store';
 import { useOnline } from '@/lib/net/online';
+import { useRoute } from '@/lib/router';
 import { nextSyncPillExpiry, resolveSyncPill, syncPillLabel } from '@/lib/view/sync-pill';
+import { syncPillTop } from '@/lib/view/sync-pill-offset';
 
 /**
  * **LA PASTILLE DE SYNCHRONISATION** (#6080) — miroir `SyncPill` /
@@ -25,10 +27,13 @@ import { nextSyncPillExpiry, resolveSyncPill, syncPillLabel } from '@/lib/view/s
  * chrome qui gagne — un contrôle recouvert est un contrôle qu'on ne peut plus
  * lire, alors qu'une annonce posée 8 pt plus bas reste parfaitement visible. »
  *
- * D'où `--sync-pill-top` (`styles/app.css`), MESURÉ et non estimé : le bas du
- * plus haut chrome de l'application (64 px pour l'en-tête de liste, 60 pour
- * celui du fil — relevé au navigateur à 390 × 844), plus l'encoche, plus les
- * 8 px d'air qu'iOS pose entre les deux.
+ * D'où le calcul MESURÉ et non estimé : le bas du plus haut chrome de
+ * l'application (64 px pour l'en-tête de liste, 60 pour celui du fil — relevé
+ * au navigateur à 390 × 844), plus l'encoche, plus les 8 px d'air qu'iOS pose
+ * entre les deux. Quatre écrans portent une SECONDE bande sous cet en-tête et
+ * feraient tomber la pastille en plein milieu (#6401, #6387) : `syncPillTop()`
+ * (`lib/view/sync-pill-offset.ts`) la descend sous cette bande sur ces
+ * quatre-là, au lieu d'une cote unique pour tous les écrans.
  *
  * **Elle vit dans la COQUILLE**, comme `RootChromeLayer` côté iOS : au-dessus
  * de tous les écrans, hors de chacun. C'est la seule exception à la minceur
@@ -57,6 +62,7 @@ export function SyncPill() {
   const online = useOnline();
   const entries = useStore(outboxStore, (s) => s.entries);
   const [now, setNow] = useState(() => Date.now());
+  const top = syncPillTop(useRoute().key);
 
   /**
    * TOUTES LES CONVERSATIONS, jamais celle qui est ouverte : une pastille
@@ -87,6 +93,7 @@ export function SyncPill() {
   return (
     <div
       className="sync-pill pointer-events-none fixed inset-x-0 z-50 flex justify-center px-4"
+      style={{ top: `calc(env(safe-area-inset-top, 0px) + ${top}px)` }}
       role="status"
       aria-live="polite"
     >

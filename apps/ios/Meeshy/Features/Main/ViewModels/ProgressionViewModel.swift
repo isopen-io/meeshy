@@ -30,6 +30,11 @@ final class ProgressionViewModel: ObservableObject {
     /// Une frappe est en vol (#5743) — le bouton reste affiché, avec son état
     /// dit : le faire disparaître au tap donnerait l'impression d'un échec.
     @Published private(set) var isMinting = false
+    /// L'échec de la DERNIÈRE frappe, dit dans le détail où le geste a eu lieu
+    /// (#6467). Il allait à `loadState`, que l'écran rend en haut du contenu,
+    /// SOUS le détail resté ouvert : rien ne changeait là où l'on regardait, et
+    /// l'on retouchait. Effacé au geste suivant.
+    @Published private(set) var mintError: String?
 
     /**
      * L'identifiant d'IDEMPOTENCE, généré une fois par INTENTION de frappe et
@@ -120,18 +125,17 @@ final class ProgressionViewModel: ObservableObject {
     func mint() async {
         guard !isMinting else { return }
         isMinting = true
+        mintError = nil
         defer { isMinting = false }
         do {
             _ = try await service.mintMeesh(requestId: mintRequestId)
             mintRequestId = UUID().uuidString
             await load(forceNetwork: true)
         } catch {
-            loadState = .error(
-                String(
-                    localized: "progression.meesh.mint_error",
-                    defaultValue: "La frappe n'a pas abouti — réessayez",
-                    bundle: .main
-                )
+            mintError = String(
+                localized: "progression.meesh.mint_error",
+                defaultValue: "La frappe n'a pas abouti — réessayez",
+                bundle: .main
             )
         }
     }

@@ -42,6 +42,27 @@ public struct ReplyReference: Codable, Equatable, Sendable {
     public let previewText: String
     public let isMe: Bool
     public let attachmentType: String?
+
+    /// L'ANCRE de la citation : la PIÈCE NOMMÉE que cette réponse vise (#6164).
+    ///
+    /// Répondre à la troisième photo d'un carrousel de cinq est licite ; la
+    /// passerelle grave l'identifiant et la NATURE dans
+    /// `metadata.attachmentReplyTo` et les ressert sous `replyTo`. C'est, avec
+    /// la nature, le SEUL fait qui ne se relit pas — tout ce qui DÉCRIT la
+    /// pièce (vignette, nom, taille, DURÉE) se relit à chaque service et
+    /// disparaît si la pièce devient secrète ou est supprimée.
+    ///
+    /// **Optionnel, et il doit le rester** : `MeeshyMessage.init(from:)` décode
+    /// `replyTo` par `decodeIfPresent`, qui PROPAGE l'échec d'un sous-décodage.
+    /// Un champ requis ferait disparaître du cache L2 le message ENTIER dès que
+    /// son blob `replyToJson` a été gravé avant ce champ — pas seulement sa
+    /// citation. Même discipline que `authorAvatarUrl`,
+    /// `attachmentIsProtected` et `ForwardReference.conversationType`.
+    ///
+    /// `nil` = « on ne sait pas laquelle » ⇒ repli sur le média REPRÉSENTATIF,
+    /// exactement comme avant ce lot. Aucune citation existante ne change de
+    /// rendu.
+    public let attachmentId: String?
     public let attachmentThumbnailUrl: String?
     /// La piece jointe citee est PROTEGEE — vue unique ou floutee — donc son
     /// contenu ne doit ni s'afficher ni s'annoncer dans la citation.
@@ -141,7 +162,7 @@ public struct ReplyReference: Codable, Equatable, Sendable {
             && (attachmentType != nil || attachmentThumbnailUrl?.isEmpty == false)
     }
 
-    public init(messageId: String = "", authorName: String, previewText: String, isMe: Bool = false, authorColor: String? = nil, authorAvatarUrl: String? = nil, attachmentType: String? = nil, attachmentThumbnailUrl: String? = nil, attachmentIsProtected: Bool? = nil, isStoryReply: Bool = false,
+    public init(messageId: String = "", authorName: String, previewText: String, isMe: Bool = false, authorColor: String? = nil, authorAvatarUrl: String? = nil, attachmentType: String? = nil, attachmentId: String? = nil, attachmentThumbnailUrl: String? = nil, attachmentIsProtected: Bool? = nil, isStoryReply: Bool = false,
                 storyPublishedAt: Date? = nil, storyReactionCount: Int? = nil, storyCommentCount: Int? = nil, storyShareCount: Int? = nil, storyThumbnailUrl: String? = nil, moodEmoji: String? = nil,
                 attachmentFacts: QuotedAttachmentFacts? = nil) {
         self.messageId = messageId
@@ -151,6 +172,7 @@ public struct ReplyReference: Codable, Equatable, Sendable {
         self.authorColor = authorColor ?? DynamicColorGenerator.colorForName(authorName)
         self.authorAvatarUrl = authorAvatarUrl
         self.attachmentType = attachmentType
+        self.attachmentId = attachmentId
         self.attachmentThumbnailUrl = attachmentThumbnailUrl
         self.attachmentIsProtected = attachmentIsProtected
         self.attachmentThumbHash = attachmentFacts?.thumbHash
@@ -167,6 +189,29 @@ public struct ReplyReference: Codable, Equatable, Sendable {
         self.storyShareCount = storyShareCount
         self.storyThumbnailUrl = storyThumbnailUrl
         self.moodEmoji = moodEmoji
+    }
+}
+
+// MARK: - La pièce que la citation DÉSIGNE
+
+public extension ReplyReference {
+    /// La pièce jointe que CETTE citation vise, parmi celles du message cité.
+    ///
+    /// UN site pour l'ICÔNE et pour l'OUVERTURE (#6164) : `MessageListViewController
+    /// .openQuotedMedia` et la composition de la citation doivent résoudre la
+    /// MÊME pièce, sans quoi la vignette décrit une photo et le plein écran en
+    /// ouvre une autre — le défaut exact que `quotedRepresentative` avait déjà
+    /// fermé pour la règle « premier hors localisation » (2026-08-27).
+    ///
+    /// Trois cas, et le troisième est celui qui compte :
+    /// - identifiant ABSENT ⇒ le représentatif, la règle d'avant, inchangée ;
+    /// - identifiant PRÉSENT et pièce trouvée ⇒ elle, quel que soit son rang ;
+    /// - identifiant PRÉSENT et pièce INTROUVABLE (supprimée, hors fenêtre) ⇒
+    ///   `nil`, **jamais** le représentatif. Emprunter la première serait
+    ///   montrer une photo que cette réponse ne cite pas.
+    func citedAttachment(among attachments: [MeeshyMessageAttachment]) -> MeeshyMessageAttachment? {
+        guard let attachmentId else { return attachments.quotedRepresentative }
+        return attachments.first { $0.id == attachmentId }
     }
 }
 

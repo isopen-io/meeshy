@@ -13,7 +13,7 @@ import type { ApiFailure, ApiResult } from '../api/http';
  * phrase destinée à un lecteur.
  */
 
-export type SignupField = 'displayName' | 'email' | 'phoneNumber' | 'password';
+export type SignupField = 'username' | 'displayName' | 'email' | 'phoneNumber' | 'password';
 
 export type SignupFeedback = {
   readonly fieldErrors: Partial<Record<SignupField, string>>;
@@ -21,6 +21,15 @@ export type SignupFeedback = {
   /** Vrai quand le serveur a répondu `EMAIL_TAKEN` : l'écran offre alors
    * « Se connecter » sous le champ (miroir `emailAlreadyRegistered`). */
   readonly showSignIn: boolean;
+  /**
+   * Les pseudos LIBRES à proposer quand celui qu'on envoyait est pris (#6479).
+   *
+   * Vide partout ailleurs. Ce refus est la contrepartie assumée d'ENVOYER le
+   * pseudo : la passerelle ne renomme plus personne dans son dos, donc elle
+   * refuse — et servir trois valeurs libres est ce qui empêche ce refus d'être
+   * un mur.
+   */
+  readonly usernameSuggestions: readonly string[];
 };
 
 /** Le conflit de numéro (`register.ts:301-331`) — AUCUN champ HTTP ne le
@@ -48,8 +57,15 @@ const AUTH_GENERIC_FAILURE_MESSAGE = 'Une erreur est survenue. Veuillez réessay
  */
 function fieldForServerName(name: string): SignupField | null {
   switch (name) {
-    case 'displayName':
+    /**
+     * `username` a sa PROPRE saisie depuis #6479 — il ne se replie plus sur le
+     * nom affiché. L'écran montre le pseudo qu'il va créer et l'ENVOIE ; un
+     * refus qui le vise doit donc se poser SOUS lui, sinon le message accuse
+     * un champ que l'utilisateur n'a pas touché.
+     */
     case 'username':
+      return 'username';
+    case 'displayName':
     case 'firstName':
     case 'lastName':
       return 'displayName';
@@ -121,13 +137,18 @@ export function placeSignupFailure(failure: ApiFailure | PhoneConflict): SignupF
   // `ApiFailure` après ce retour anticipé — un `&&` composé ne l'aurait pas
   // fait aussi proprement.
   if ('kind' in failure) {
-    return { fieldErrors: { phoneNumber: PHONE_OWNERSHIP_CONFLICT_MESSAGE }, bannerError: null, showSignIn: false };
+    return {
+      fieldErrors: { phoneNumber: PHONE_OWNERSHIP_CONFLICT_MESSAGE },
+      bannerError: null,
+      showSignIn: false,
+      usernameSuggestions: [],
+    };
   }
 
   const showSignIn = failure.code === EMAIL_TAKEN_CODE;
 
   if (failure.status === 0) {
-    return { fieldErrors: {}, bannerError: NETWORK_UNAVAILABLE_MESSAGE, showSignIn };
+    return { fieldErrors: {}, bannerError: NETWORK_UNAVAILABLE_MESSAGE, showSignIn, usernameSuggestions: [] };
   }
 
   // Avant le calcul de `field` : un 429 ne vise aucune saisie à corriger, et
@@ -135,18 +156,28 @@ export function placeSignupFailure(failure: ApiFailure | PhoneConflict): SignupF
   // retour anticipé il tombait déjà au bandeau générique, juste avec le
   // mauvais texte (#5912).
   if (failure.status === 429) {
-    return { fieldErrors: {}, bannerError: signupRateLimitedMessage(failure.retryAfter), showSignIn: false };
+    return {
+      fieldErrors: {},
+      bannerError: signupRateLimitedMessage(failure.retryAfter),
+      showSignIn: false,
+      usernameSuggestions: [],
+    };
   }
 
   const field = (failure.field !== undefined ? fieldForServerName(failure.field) : null) ?? fieldForCode(failure.code);
 
   if (field !== null) {
-    return { fieldErrors: { [field]: failure.error }, bannerError: null, showSignIn };
+    return {
+      fieldErrors: { [field]: failure.error },
+      bannerError: null,
+      showSignIn,
+      usernameSuggestions: failure.suggestions ?? [],
+    };
   }
 
   // Un refus qu'aucun champ ne porte doit rester VISIBLE : sans ce repli, un
   // code inconnu effacerait le formulaire de toute trace de l'échec.
-  return { fieldErrors: {}, bannerError: rejectionBannerMessage(failure), showSignIn };
+  return { fieldErrors: {}, bannerError: rejectionBannerMessage(failure), showSignIn, usernameSuggestions: [] };
 }
 
 // --- Connexion ---------------------------------------------------------

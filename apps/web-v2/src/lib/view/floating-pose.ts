@@ -28,6 +28,20 @@ export const LADDER_RUNG = 46;
 /** L'air entre deux barreaux — `MeeshySpacing.md` (`RootView.swift:1700`). */
 export const LADDER_GAP = 12;
 
+/** Le pas d'iOS, du centre d'un barreau au centre du suivant — `46 + 12`. */
+export const LADDER_PITCH = LADDER_RUNG + LADDER_GAP;
+
+/**
+ * L'air MINIMAL entre deux barreaux quand l'échelle se resserre (#6458). Deux
+ * barreaux de 46 qui se touchent restent deux cibles de 44, mais un doigt posé
+ * entre les deux n'appartient plus à personne : quatre est le plus petit air
+ * qui garde la frontière visible.
+ */
+const LADDER_MIN_GAP = 4;
+
+/** La marge que le dernier barreau garde avec le bord du cadre. */
+export const LADDER_EDGE = 8;
+
 /**
  * Le saut entre le CENTRE du bouton et le CENTRE du premier barreau —
  * `26 + 12 + 23` (`RootView.swift:1707`) : le rayon du bouton, l'air, puis le
@@ -87,9 +101,48 @@ export function ladderExpandsDown(y: number): boolean {
  * `index`. Une seule formule pour les deux sens : écrite deux fois, elle
  * aurait divergé — c'est le motif que cette application a déjà payé trois fois.
  */
-export function ladderRungOffset(index: number, expandsDown: boolean): number {
-  const distance = FIRST_RUNG + index * (LADDER_RUNG + LADDER_GAP);
+export function ladderRungOffset(index: number, expandsDown: boolean, pitch: number = LADDER_PITCH): number {
+  const distance = FIRST_RUNG + index * pitch;
   return expandsDown ? distance : -distance;
+}
+
+/**
+ * **LA PLACE DE L'ÉCHELLE, des deux côtés du disque** (#6458) — du CENTRE du
+ * disque au bord du cadre, moins la marge du bord ; en haut, la barre d'état
+ * d'une coque (`safeTop`) est déduite : un barreau posé dessous est sous
+ * l'heure, pas à l'écran.
+ */
+export type LadderRooms = { readonly up: number; readonly down: number };
+
+export function ladderRooms(frame: {
+  readonly center: number;
+  readonly frameTop: number;
+  readonly frameBottom: number;
+  readonly safeTop: number;
+}): LadderRooms {
+  return {
+    up: frame.center - frame.frameTop - frame.safeTop - LADDER_EDGE,
+    down: frame.frameBottom - frame.center - LADDER_EDGE,
+  };
+}
+
+/**
+ * **LE PAS DE L'ÉCHELLE** (#6458) — celui d'iOS tant que l'échelle tient, et
+ * RESSERRÉ quand elle ne tient plus.
+ *
+ * Six barreaux tiennent partout où la charte mesure ; le septième (l'espace
+ * d'administration, extension web) ne tient pas à 320 × 568 depuis la pose par
+ * défaut : 152 + 61 + 6 × 58 + 23 = 584. Plutôt que de le laisser sortir de
+ * l'écran — en silence, le clavier y menant un focus invisible —, le pas se
+ * réduit à ce que la place autorise, jamais sous un air de quatre.
+ *
+ * `room: null` — la place n'est pas encore mesurée (premier rendu, cadre
+ * dégénéré) : le pas d'iOS, qui est aussi celui de tout écran assez grand.
+ */
+export function ladderPitch({ count, room }: { readonly count: number; readonly room: number | null }): number {
+  if (room === null || count <= 1) return LADDER_PITCH;
+  const tient = Math.floor((room - FIRST_RUNG - LADDER_RUNG / 2) / (count - 1));
+  return Math.min(LADDER_PITCH, Math.max(LADDER_RUNG + LADDER_MIN_GAP, tient));
 }
 
 
@@ -119,6 +172,13 @@ export type FloatingBounds = {
  * parcourue qui tranche, exactement comme `LONG_PRESS_MAX_DISTANCE_PX` le fait
  * déjà dans `long-press.ts`, et la valeur est la même pour que deux gestes de
  * la même application n'aient pas deux tolérances au tremblement.
+ *
+ * **L'égalité est GARDÉE par un témoin** (#6456, `floating-drag.test.ts`) : le
+ * disque du Flux porte les deux gestes à la fois, et régler l'une sans l'autre
+ * ouvrirait une bande de distances où l'appui long est annulé sans que le
+ * glisser ait commencé — un disque qui ne fait RIEN. Le témoin plutôt qu'un
+ * import : cette loi pure est lue par le chrome du Flux, et `long-press.ts`
+ * tire React et ses gestionnaires.
  */
 export const FLOATING_DRAG_THRESHOLD = 6;
 

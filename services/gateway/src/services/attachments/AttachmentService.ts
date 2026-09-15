@@ -20,6 +20,7 @@ import {
   type FileToUpload,
   type UploadResult,
   type EncryptedUploadResult,
+  type AttachmentValidationVerdict,
 } from './UploadProcessor';
 import { attachmentServiceRowSelect } from './attachmentIncludes';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
@@ -46,7 +47,7 @@ export class AttachmentService {
 
   // ==================== DÉLÉGATION UPLOAD ====================
 
-  validateFile(file: FileToUpload): { valid: boolean; error?: string } {
+  validateFile(file: FileToUpload): AttachmentValidationVerdict {
     return this.uploadProcessor.validateFile(file);
   }
 

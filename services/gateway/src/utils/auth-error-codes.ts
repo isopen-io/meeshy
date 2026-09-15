@@ -61,6 +61,13 @@ export const AUTH_ERROR_CODES = {
   TWO_FACTOR_FAILED: 'TWO_FACTOR_FAILED',
   /** Aucune identité (compte ou session invitée) sur une route qui accepte les deux. */
   LINK_SESSION_REQUIRED: 'LINK_SESSION_REQUIRED',
+  /**
+   * Le compte existe et n'a PAS de mot de passe (#6424) — sa porte est le lien
+   * magique. Distinct d'`INVALID_CREDENTIALS`, qui dit « ce secret est faux » :
+   * ici il n'y a pas de secret, et le client doit proposer un autre chemin, pas
+   * une nouvelle saisie.
+   */
+  PASSWORD_NOT_SET: 'PASSWORD_NOT_SET',
 } as const;
 
 export type AuthErrorCode = (typeof AUTH_ERROR_CODES)[keyof typeof AUTH_ERROR_CODES];

@@ -695,7 +695,7 @@ public final class NotificationToastManager: ObservableObject {
     /// refresh. De-duplicated by id, so an APN + socket double-delivery (already
     /// guarded above) or a later REST refresh never doubles the row.
     private func persistToCache(_ event: SocketNotificationEvent, isRead: Bool = false) {
-        let createdAtStr = Date().formatted(.iso8601.time(includingFractionalSeconds: true))
+        let createdAtStr = WireDate.string(from: Date())
         let base = event.toAPINotification(createdAt: createdAtStr)
         let apiNotification = isRead ? base.withReadState(true) : base
         Task {

@@ -110,9 +110,9 @@ struct PostDetailView: View {
     /// play permet d'arrêter tout ou de poursuivre tout ». Distinct du muet,
     /// qui laisse la scène courir en silence.
     @State var isCanvasPaused = false
-    @State private var composerLanguage: String = DefaultComposerLanguage.resolve()
-    @State private var commentBlurEnabled: Bool = false
-    @State private var commentEffects: MessageEffects = .none
+    @State var composerLanguage: String = DefaultComposerLanguage.resolve()
+    @State var commentBlurEnabled: Bool = false
+    @State var commentEffects: MessageEffects = .none
     @State private var composerFocusTrigger: Bool = false
     /// Focus réel du champ du composer — pilote l'insertion d'un texte déposé
     /// (au curseur quand le champ a le focus, sinon à la fin).
@@ -128,12 +128,12 @@ struct PostDetailView: View {
     /// Texte du composer, lié au `UniversalComposerBar`. Permet de préremplir une
     /// @mention quand on répond à une réponse (niveau 2) — l'auteur ciblé est
     /// notifié via `user_mentioned` même si la réponse est reparentée à la racine.
-    @State private var composerText: String = ""
+    @State var composerText: String = ""
     /// @mention auto-injectée par `beginReply` (réponse à une réponse) — suivie
     /// pour la retirer proprement si on change de cible sans envoyer.
     @State private var prefilledMention: String? = nil
     // Comment attachments + real voice capture (parity with feed/reels composer).
-    @State private var commentAttachments: [ComposerAttachment] = []
+    @State var commentAttachments: [ComposerAttachment] = []
     @State private var showCommentPhotoPicker: Bool = false
     @State private var commentPhotoItems: [PhotosPickerItem] = []
     @State private var showCommentFilePicker: Bool = false
@@ -613,15 +613,7 @@ struct PostDetailView: View {
                 onDeleteComment: { target in
                     Task { await viewModel.deleteComment(target) }
                 },
-                onEditComment: { target in
-                    viewModel.clearReply()
-                    viewModel.editingComment = target
-                    composerText = target.content
-                    let flags = MessageEffectFlags(rawValue: UInt32(clamping: target.effectFlags))
-                    commentBlurEnabled = flags.contains(.blurred)
-                    commentEffects = MessageEffects(flags: flags.subtracting(.blurred))
-                    HapticFeedback.light()
-                },
+                onEditComment: { target in beginEditComment(target) },
                 onRequestTranslation: { target in
                     let lang = AuthManager.shared.currentUser?.preferredContentLanguages.first?.lowercased() ?? "fr"
                     Task {
@@ -845,13 +837,7 @@ struct PostDetailView: View {
                 // suppression qui n'a pas eu lieu et n'offre que « Retour »,
                 // retirant la seule action utile : réessayer (#4903).
                 Spacer()
-                if PostDetailAbsenceReason.resolve(hasPost: false,
-                                                   isLoading: false,
-                                                   error: viewModel.error) == .loadFailed {
-                    loadFailedState
-                } else {
-                    unavailableState
-                }
+                absenceState
                 Spacer()
             }
 
@@ -1714,7 +1700,8 @@ EngagementGlyph(
     /// déjà l'une des plus grosses expressions du fichier ; tout ce qu'on peut
     /// en sortir doit en sortir.
     static func captionServings(for post: FeedPost) -> [String: SocialMediaCaptionServing] {
-        SocialMediaCaption.serving(for: post.media, carrier: .from(post: post))
+        SocialMediaCaption.serving(for: post.media, carrier: .from(post: post),
+                                   preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser))
     }
 
     struct DetailMediaAuthor {
@@ -2090,10 +2077,7 @@ EngagementGlyph(
                     Spacer()
                     Button {
                         withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                            viewModel.editingComment = nil
-                            composerText = ""
-                            commentEffects = .none
-                            commentBlurEnabled = false
+                            cancelEditComment()
                         }
                     } label: {
                         Image(systemName: "xmark")
@@ -2281,16 +2265,7 @@ EngagementGlyph(
 
     private func submitComment(text: String, attachments: [ComposerAttachment]) {
         if let editing = viewModel.editingComment {
-            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty || !editing.media.isEmpty else { return }
-            let flags = commentEffects.flags.rawValue
-                | (commentBlurEnabled ? MessageEffectFlags.blurred.rawValue : 0)
-            viewModel.editingComment = nil
-            composerText = ""
-            commentEffects = .none
-            commentBlurEnabled = false
-            commentAttachments.removeAll()
-            Task { await viewModel.updateComment(editing, content: trimmed, effectFlags: Int(flags)) }
+            submitCommentEdit(editing, text: text)
             return
         }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -2299,21 +2274,21 @@ EngagementGlyph(
         let place = pendingPlace
         pendingPlace = nil
         guard !trimmed.isEmpty || media != nil || place != nil else { return }
-        let effects = commentEffects
-        let blur = commentBlurEnabled
+        let flags = commentEffects.flags.rawValue | (commentBlurEnabled ? MessageEffectFlags.blurred.rawValue : 0)
         commentEffects = .none
         commentBlurEnabled = false
         // Réponse plate à 2 niveaux (cf. sendReply) : reparente à la racine.
         let parentId = viewModel.replyingTo?.parentId ?? viewModel.replyingTo?.id
-        let flags = effects.flags.rawValue | (blur ? MessageEffectFlags.blurred.rawValue : 0)
         let effectFlags = flags > 0 ? Int(flags) : nil
+        // #6587 — la pastille DÉCLARE la langue ; sans ce relais, le serveur la devine.
+        let lang = composerLanguage
         Task {
             if let media {
-                await viewModel.submitCommentWithMedia(trimmed, effectFlags: effectFlags, parentId: parentId, pendingMedia: media, location: place)
+                await viewModel.submitCommentWithMedia(trimmed, originalLanguage: lang, effectFlags: effectFlags, parentId: parentId, pendingMedia: media, location: place)
             } else if parentId != nil {
-                await viewModel.sendReply(trimmed, effectFlags: effectFlags, location: place)
+                await viewModel.sendReply(trimmed, originalLanguage: lang, effectFlags: effectFlags, location: place)
             } else {
-                await viewModel.sendComment(trimmed, effectFlags: effectFlags, location: place)
+                await viewModel.sendComment(trimmed, originalLanguage: lang, effectFlags: effectFlags, location: place)
             }
         }
     }

@@ -109,8 +109,11 @@ final class SignupViewModelTests: XCTestCase {
         XCTAssertEqual(registrar.lastRegisterRequest?.email, "awa@example.com")
         XCTAssertEqual(registrar.lastRegisterRequest?.phoneNumber, "612345678")
         XCTAssertEqual(registrar.lastRegisterRequest?.phoneCountryCode, "FR")
-        XCTAssertNil(registrar.lastRegisterRequest?.username,
-                     "la passerelle dérive le pseudo — le client ne l'envoie plus (#5218)")
+        // LA LOI A CHANGÉ (#6479). #5218 retirait le pseudo pour ne pas le faire
+        // INVENTER à l'utilisateur. Il n'est plus inventé : il est MONTRÉ,
+        // dérivé de l'adresse, et modifiable — donc il part, et la passerelle
+        // n'a plus rien à générer.
+        XCTAssertEqual(registrar.lastRegisterRequest?.username, "awa-ndiaye")
     }
 
     // MARK: - Table code → champ
@@ -147,9 +150,11 @@ final class SignupViewModelTests: XCTestCase {
 
     /// **`USERNAME_TAKEN` vise le NOM AFFICHÉ.** Le client n'envoie plus de
     /// pseudo : la passerelle le dérive du nom, donc la seule saisie que
-    /// l'utilisateur peut corriger est celle-là. L'envoyer au bandeau laisserait
-    /// « ce pseudo est déjà pris » flotter au-dessus d'un écran sans champ pseudo.
-    func test_usernameTaken_landsUnderTheDisplayNameField() async {
+    /// L'écran A un champ pseudo depuis #6479, et il ENVOIE sa valeur : le refus
+    /// se pose donc SOUS lui. Avant, il se repliait sur le nom affiché faute de
+    /// saisie — l'envoyer au bandeau aurait laissé « ce pseudo est déjà pris »
+    /// flotter au-dessus d'un écran sans champ pseudo.
+    func test_usernameTaken_landsUnderTheUsernameField() async {
         let (sut, registrar) = makeSUT()
         fillValidForm(sut)
         registrar.registerResult = .failure(
@@ -159,8 +164,12 @@ final class SignupViewModelTests: XCTestCase {
 
         _ = await sut.submit()
 
-        XCTAssertEqual(sut.error(for: .displayName), "Ce nom est déjà pris")
+        XCTAssertEqual(sut.error(for: .username), "Ce nom est déjà pris")
         XCTAssertNil(sut.bannerError)
+        // La contrepartie d'ENVOYER le pseudo : une collision est un REFUS, plus
+        // un renommage silencieux. Les valeurs libres doivent remonter, sinon
+        // ce refus est un mur.
+        XCTAssertEqual(sut.usernameSuggestions, ["awa2", "awa_nd"])
     }
 
     /// Un `VALIDATION_ERROR` ne pose PAS de `field` à la racine : il énumère ses
@@ -337,10 +346,17 @@ final class SignupViewModelTests: XCTestCase {
 
     // MARK: - La table, éprouvée sur elle-même
 
-    func test_serverFieldNames_derivedFromDisplayName_allLandOnDisplayName() {
-        for name in ["displayName", "username", "firstName", "lastName"] {
+    /// LA TABLE A CHANGÉ (#6479) : `username` a sa propre saisie et ne se replie
+    /// plus. Les deux noms d'état civil, eux, restent dérivés du nom affiché —
+    /// c'est la seule saisie qui permet de les changer.
+    func test_serverFieldNames_civilNames_landOnDisplayName() {
+        for name in ["displayName", "firstName", "lastName"] {
             XCTAssertEqual(SignupViewModel.field(forServerName: name), .displayName, name)
         }
+    }
+
+    func test_serverFieldName_username_landsOnItsOwnField() {
+        XCTAssertEqual(SignupViewModel.field(forServerName: "username"), .username)
     }
 
     func test_serverFieldNames_phonePair_landsOnThePhoneField() {

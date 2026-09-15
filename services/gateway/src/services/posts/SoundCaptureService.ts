@@ -7,11 +7,22 @@ import path from 'path';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { servableExtension, staticFileUrl } from './soundFormats';
+import { pcm16ToWaveform } from './waveformSamples';
 
 const log = enhancedLogger.child({ module: 'SoundCaptureService' });
 
 const AUDIO_MIME_PREFIX = 'audio/';
 const VIDEO_MIME_PREFIX = 'video/';
+
+/**
+ * Le feature-flag qui active la bibliothèque de sons — LECTURE UNIQUE, partagée
+ * avec `soundCaptureVerdict` (#6603) : sans elle, le verdict synchrone dirait
+ * une piste « soumise » alors que `captureSounds` ci-dessous l'aurait ignorée
+ * au tout premier `if`.
+ */
+export function soundLibraryEnabled(): boolean {
+  return process.env.SOUND_LIBRARY_ENABLED === 'true';
+}
 
 /**
  * Démuxe la piste audio d'une vidéo vers un `.m4a` AAC.
@@ -43,6 +54,45 @@ function spawnFfmpegExtract(inputPath: string, outputPath: string): Promise<void
     proc.on('close', (code) => {
       clearTimeout(timer);
       if (code === 0) resolve();
+      else reject(new Error(`ffmpeg exit ${code}: ${stderr.slice(-400)}`));
+    });
+  });
+}
+
+/**
+ * Calcule des échantillons de forme d'onde depuis un fichier audio SUR DISQUE
+ * — le repli SERVEUR (#6602) quand `CaptureTrack.waveform` (calculé côté
+ * client) est absent, ce qui est le cas NOMINAL d'un post vocal ou d'une
+ * bande-son démuxée : aucune UI de composer n'a jamais tourné pour ces deux
+ * chemins, donc aucun client n'a jamais eu de forme d'onde à envoyer.
+ *
+ * Injectable (tests), même patron que `VideoAudioExtractor`. Rejette sur
+ * échec : c'est l'appelant qui décide qu'un pic de forme d'onde manquant
+ * n'est jamais bloquant (`captureSounds` ne rejette JAMAIS).
+ */
+export type WaveformExtractor = (filePath: string) => Promise<number[]>;
+
+function spawnFfmpegWaveform(inputPath: string): Promise<number[]> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn('ffmpeg', [
+      '-i', inputPath,
+      '-f', 's16le',
+      '-ac', '1',
+      '-ar', '8000',
+      'pipe:1',
+    ]);
+    const chunks: Buffer[] = [];
+    let stderr = '';
+    const timer = setTimeout(() => {
+      proc.kill('SIGKILL');
+      reject(new Error('ffmpeg waveform timeout'));
+    }, 60_000);
+    proc.stdout.on('data', (d: Buffer) => chunks.push(d));
+    proc.stderr.on('data', (d) => { stderr += String(d); });
+    proc.on('error', (err) => { clearTimeout(timer); reject(err); });
+    proc.on('close', (code) => {
+      clearTimeout(timer);
+      if (code === 0) resolve(pcm16ToWaveform(Buffer.concat(chunks)));
       else reject(new Error(`ffmpeg exit ${code}: ${stderr.slice(-400)}`));
     });
   });
@@ -100,7 +150,27 @@ export class SoundCaptureService {
     /** `PostMedia.filePath` est RELATIF à cette racine (tus-handler.ts:129). */
     private uploadsRoot: string = process.env.UPLOAD_PATH ?? '/app/uploads',
     private extractVideoAudio: VideoAudioExtractor = spawnFfmpegExtract,
+    private computeWaveform: WaveformExtractor = spawnFfmpegWaveform,
   ) {}
+
+  /**
+   * La forme d'onde du CLIENT prime quand elle existe (composer, aujourd'hui
+   * seulement l'upload manuel) ; sinon elle est CALCULÉE depuis le fichier
+   * réellement stocké (#6602). Ne rejette jamais : un échec de calcul rend
+   * `[]`, exactement le comportement historique — jamais une cause d'échec de
+   * la capture, qui elle-même ne doit jamais affecter la publication.
+   */
+  private async resolveWaveform(track: CaptureTrack, sourcePath: string): Promise<number[]> {
+    if (track.waveform && track.waveform.length > 0) return track.waveform;
+    try {
+      return await this.computeWaveform(sourcePath);
+    } catch (error) {
+      log.warn('Calcul de la forme d\'onde impossible — Sound.waveform restera vide', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
+  }
 
   /** SHA-256 lu EN FLUX : la durée est illimitée, charger en mémoire ferait tomber le gateway. */
   static hashFile(filePath: string): Promise<string> {
@@ -115,7 +185,7 @@ export class SoundCaptureService {
 
   async captureSounds(ctx: CaptureContext): Promise<void> {
     try {
-      if (process.env.SOUND_LIBRARY_ENABLED !== 'true') return;
+      if (!soundLibraryEnabled()) return;
       // Repasser un contenu public en privé doit LIBÉRER ses usages, pas les
       // figer : sinon publier puis restreindre laisse le compteur gonflé pour
       // toujours, et c'est lui qui trie la découverte.
@@ -469,6 +539,10 @@ export class SoundCaptureService {
         return;
       }
 
+      // Sur le flux EXTRAIT, pas la vidéo source — c'est lui qui vit en
+      // bibliothèque (cf. doc-comment de la méthode, dédoublonnage compris).
+      const waveform = await this.resolveWaveform(track, extracted);
+
       // Même règle que `captureOne` : nom OPAQUE, jamais le hash (oracle de
       // possession — cf. commentaire de `captureOne`).
       const filename = `${crypto.randomUUID()}.m4a`;
@@ -485,7 +559,7 @@ export class SoundCaptureService {
           isAutoGenerated: true,
           duration: Math.round((media.duration ?? 0) / 1000),
           durationMs: media.duration ?? 0,
-          waveform: track.waveform ?? [],
+          waveform,
           contentHash: hash,
           sourcePostId: ctx.postId,
           canonicalPostMediaId: media.id,
@@ -541,6 +615,8 @@ export class SoundCaptureService {
         return;
       }
 
+      const waveform = await this.resolveWaveform(track, absolute);
+
       // Nom OPAQUE, surtout pas le hash. `fileUrl` est dans le DTO public : le
       // nommer `<sha256>.<ext>` publiait le `contentHash` que `toDTO` retire
       // explicitement, et donnait un oracle de possession — `GET /static/<hash
@@ -565,11 +641,10 @@ export class SoundCaptureService {
           isAutoGenerated: true,
           duration: Math.round((media.duration ?? 0) / 1000),
           durationMs: media.duration ?? 0,
-          // `Float[]` n'est pas nullable en Prisma : l'absence s'écrit `[]`,
-          // qui est exactement ce que sert déjà toute la bibliothèque
-          // existante — donc aucun changement pour une piste sans échantillons.
-          // Sans cette ligne, `Sound.waveform` n'avait AUCUN écrivain.
-          waveform: track.waveform ?? [],
+          // Client si fourni (composer), sinon CALCULÉ depuis le fichier
+          // stocké (#6602) — `[]` seulement si les deux échouent. `Float[]`
+          // n'est pas nullable en Prisma : l'absence s'écrit `[]`.
+          waveform,
           contentHash: hash,
           sourcePostId: ctx.postId,
           canonicalPostMediaId: media.id,

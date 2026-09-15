@@ -174,8 +174,13 @@ describe('replyTo — les traductions du message cité sont demandées et projet
     const debut = source.indexOf('mappedMessage.replyTo = ');
     expect(debut).toBeGreaterThan(-1);
     const mapping = source.slice(debut, source.indexOf('return mappedMessage;', debut));
+    // Les deux options de CE contrat sont épinglées dans l'ordre ; ce qui suit
+    // est laissé OUVERT (#6164 y a ajouté `attachmentReplyTo`, gardé par son
+    // propre témoin). Épingler l'accolade fermante ferait rougir ce contrat-ci
+    // à chaque option ajoutée à un autre — une garde qui tombe pour une raison
+    // qu'elle ne mesure pas envoie chercher au mauvais endroit.
     expect(mapping).toMatch(
-      /\.\.\.servedQuotedMessage\(message\.replyTo, \{\s*includeTranslations,\s*languages: hasLanguageFilter \? languageFilter : undefined,\s*\}\)/,
+      /\.\.\.servedQuotedMessage\(message\.replyTo, \{\s*includeTranslations,\s*languages: hasLanguageFilter \? languageFilter : undefined,/,
     );
   });
 

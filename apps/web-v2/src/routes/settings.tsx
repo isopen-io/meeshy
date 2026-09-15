@@ -2,9 +2,12 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from 'zustand/react';
 
+import { adminIdentityQueryOptions } from '@/lib/api/admin';
+import { canEnterAdmin } from '@/lib/admin/sections';
 import { performPreferenceEdit, type PreferenceActionDeps } from '@/lib/api/app-preferences-actions';
 import { appPreferencesQueryOptions, type PreferencesPatch, type ThemeMode } from '@/lib/api/app-preferences';
 import { logout } from '@/lib/api/auth';
+import { apiConfig } from '@/lib/api/config';
 import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
@@ -19,6 +22,7 @@ import {
 import { useOnline } from '@/lib/net/online';
 import { currentThemePreference, setThemePreference, type ThemePreference } from '@/lib/scheme';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
+import { legacyReachable } from '@/lib/view/legacy-link';
 import { href, navigate } from '@/routes/route-table';
 import {
   AboutSection,
@@ -133,10 +137,27 @@ const notices = {
 
 export default function SettingsScreen() {
   const language = currentInterfaceLanguage();
+
+  /**
+   * L'ENTRÉE de l'administration (#6432) — visible seulement pour qui y a
+   * droit. Le droit vient du SERVEUR : `SessionUser` ne projette pas `role`.
+   *
+   * `retry: false` et aucune remontée d'erreur : un refus (403) ou une panne
+   * laisse simplement la rangée absente. C'est le bon défaut — la rangée n'est
+   * qu'un chemin de DÉCOUVERTE, la garde étant refaite par l'écran `/admin`
+   * lui-même. Une erreur affichée ici apprendrait à un visiteur ordinaire
+   * qu'il existe un espace qu'on lui refuse.
+   */
+  const droits = useQuery(adminIdentityQueryOptions(apiDeps));
+  const peutAdministrer = canEnterAdmin(droits.data?.permissions ?? null);
   const online = useOnline();
   const sessionUser = useStore(sessionStore, (state) => (state.session.status === 'authenticated' ? state.session.user : null));
   const enabled = apiDeps.source === 'fixtures' || sessionUser !== null;
   const query = useQuery({ ...appPreferencesQueryOptions(apiDeps), enabled }, appQueryClient);
+  /* Le legacy ne sert QUE la production (#6354, D-67) : hors production, les
+     rangées non portées deviennent inertes plutôt que de mener quiconque, sur
+     staging ou dans une coque, vers la production réelle. */
+  const legacyOk = legacyReachable(apiConfig.base);
 
   const [theme, setTheme] = useState<ThemePreference>(currentThemePreference);
   const [interfaceChoice, setInterfaceChoice] = useState<InterfaceLanguage | null>(interfaceLanguageChoice);
@@ -194,8 +215,8 @@ export default function SettingsScreen() {
             language={language}
             user={sessionUser === null ? null : { username: sessionUser.username, displayName: sessionUser.displayName ?? null, avatar: sessionUser.avatar ?? null }}
           />
-          <AccountSection language={language} />
-          <PrivacySection language={language} view={view} disabled={!online} onToggle={toggle} onRetry={() => void query.refetch()} />
+          <AccountSection language={language} legacyReachable={legacyOk} />
+          <PrivacySection language={language} view={view} disabled={!online} onToggle={toggle} onRetry={() => void query.refetch()} legacyReachable={legacyOk} />
           <AppearanceSection
             language={language}
             theme={theme}
@@ -204,9 +225,16 @@ export default function SettingsScreen() {
             onInterfaceLanguage={chooseInterfaceLanguage}
             primaryLanguage={sessionUser?.systemLanguage ?? null}
           />
-          <NotificationsSection language={language} view={view} disabled={!online} onToggle={toggle} onRetry={() => void query.refetch()} />
-          <DataSection language={language} />
-          <ToolsSection language={language} />
+          <NotificationsSection
+            language={language}
+            view={view}
+            disabled={!online}
+            onToggle={toggle}
+            onRetry={() => void query.refetch()}
+            legacyReachable={legacyOk}
+          />
+          <DataSection language={language} legacyReachable={legacyOk} />
+          <ToolsSection language={language} showAdmin={peutAdministrer} />
           <AboutSection language={language} version={__APP_VERSION__} />
           <LogoutButton language={language} busy={loggingOut} onPress={() => setConfirming(true)} />
         </SettingsContent>

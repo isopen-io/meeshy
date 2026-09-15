@@ -157,9 +157,20 @@ export function contactLookupScope(options: {
     // `AND` et non `OR` à la racine : l'appelant pose lui-même un `OR` pour sa
     // liste d'identifiants (`ContactDirectoryService.match`), et deux `OR`
     // frères s'écraseraient en silence.
-    AND: [{ OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }] }],
+    AND: [
+      { OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }] },
+      // Même piège « absent vs null », sur le champ VOISIN : `NOT: {
+      // blockedUserIds: { has } }` seul écarte aussi les documents où
+      // `blockedUserIds` est ABSENT — sur le connecteur MongoDB, Prisma
+      // enveloppe le filtre de tableau d'un test d'existence, et `NOT`
+      // inverse cette absence en refus. Mesuré en production (#6452) : 206
+      // comptes actifs sur 246 n'ont jamais écrit ce champ (jamais bloqué
+      // personne) et disparaissaient de toute recherche. Un `OR` isSet
+      // couvre les deux cas : champ absent (rien à exclure) OU champ
+      // présent et ne contenant pas le viewer.
+      { OR: [{ blockedUserIds: { isSet: false } }, { NOT: { blockedUserIds: { has: options.viewerId } } }] },
+    ],
     id: { notIn: [...options.blockedByViewer] },
-    NOT: { blockedUserIds: { has: options.viewerId } },
   };
 }
 
@@ -198,17 +209,17 @@ export class ContactDirectoryService {
 
     const candidates = await this.prisma.user.findMany({
       where: {
+        // Même loi que les deux sœurs publiques (#6529, même défaut que
+        // #6452) : `isActive`, le filtre anti-suppression et le filtre
+        // anti-blocage « absent vs null/vide » — `blockedUserIds` est un
+        // champ TABLEAU dont `isSet` n'est pas exposé au typage Prisma
+        // généré (`StringNullableListFilter` ne le déclare pas, alors que le
+        // connecteur MongoDB le sert), d'où le passage par cette fonction
+        // plutôt qu'un littéral typé directement contre `UserWhereInput`.
+        // `id` est réécrit juste après : cette route exclut aussi le
+        // demandeur LUI-MÊME, que `contactLookupScope` n'a pas à connaître.
+        ...contactLookupScope({ viewerId: excludeUserId, blockedByViewer: [] }),
         id: { notIn: [excludeUserId, ...blockedUserIds] },
-        isActive: true,
-        // Même piège que dans `contactLookupScope` ci-dessus : `deletedAt: null`
-        // seul n'atteint aucune ligne dont le champ est ABSENT — c'est-à-dire
-        // toutes celles créées avant l'ajout de la colonne. Cette route étant
-        // sans appelant (le chemin iOS qui l'utilisait est mort), personne ne
-        // l'a vu.
-        AND: [{ OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }] }],
-        // Un compte qui a bloqué le demandeur ne doit pas ressortir de son
-        // carnet d'adresses — le blocage vaut dans les deux sens.
-        NOT: { blockedUserIds: { has: excludeUserId } },
         OR: [
           ...(phones.length > 0 ? [{ phoneNumber: { in: phones } }] : []),
           ...(emails.length > 0 ? [{ email: { in: emails } }] : []),

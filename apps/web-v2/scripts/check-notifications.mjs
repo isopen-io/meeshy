@@ -33,7 +33,9 @@
  *  7. le menu d'une rangée marque lu, puis supprime — chacun avec son effet ;
  *  8. « Tout lire » vide le compte : l'en-tête ne l'affiche plus et la pastille
  *     DISPARAÎT à zéro ;
- *  9. aucune erreur de page.
+ *  9. hors ligne, les rangées restent lisibles et la pastille de synchronisation
+ *     ne recouvre aucune capsule du rail de catégories (#6387) ;
+ * 10. aucune erreur de page.
  *
  * `CAPTURE_DIR=<dossier>` écrit les captures de recette (liste, catégorie
  * filtrée, état vide), par schéma et par gabarit.
@@ -44,6 +46,7 @@ import { extname, join, normalize } from 'node:path';
 
 import { launchChromium } from './lib/browser.mjs';
 import { contrastOf } from './lib/contrast.mjs';
+import { syncPillOverlap } from './lib/sync-pill-clearance.mjs';
 
 const DIST = new URL('../dist/', import.meta.url).pathname;
 const TYPES = {
@@ -409,7 +412,20 @@ try {
       );
       await closeLadder(page);
 
-      // ------------------------------------------------ 9. aucune erreur
+      // ------------------------------------------------ 9. hors ligne (#6387)
+      await context.setOffline(true);
+      await page.waitForSelector('.sync-pill');
+      check((await rowsOf(page)).length > 0, `${label} : hors ligne, les rangées restent lisibles`);
+      const notificationsOverlap = await syncPillOverlap(page, ['[data-category]']);
+      check(notificationsOverlap.pill !== null, `${label} : hors ligne, la pastille de synchronisation est posée`);
+      check(
+        notificationsOverlap.covers.length === 0,
+        `${label} : hors ligne, la pastille ne recouvre aucune capsule du rail — ${JSON.stringify(notificationsOverlap.covers)}`,
+      );
+      await capture(page, `cloche-hors-ligne-${scheme}-${width}x${height}`);
+      await context.setOffline(false);
+
+      // ------------------------------------------------ 10. aucune erreur
       check(errors.length === 0, `${label} : aucune erreur de page — ${JSON.stringify(errors)}`);
       await context.close();
     }

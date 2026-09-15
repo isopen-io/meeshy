@@ -27,6 +27,7 @@ import { MetadataManager } from './MetadataManager';
 import { planVideoTranscode, buildVideoTranscodeArgs } from './video-transcode-plan.js';
 import { isExifStrippable, stripExifFromImageBuffer } from './ExifStrip.js';
 import { verifyDeclaredMimeType } from './ContentSignature.js';
+import { UnsupportedMediaTypeError, PayloadTooLargeError } from '../../errors/custom-errors.js';
 
 export interface FileToUpload {
   buffer: Buffer;
@@ -34,6 +35,16 @@ export interface FileToUpload {
   mimeType: string;
   size: number;
 }
+
+/**
+ * Verdict de `validateFile` (#6604). `code` distingue un refus de TAILLE
+ * (413) d'un refus de TYPE (415) — les deux sont des erreurs de DEMANDE,
+ * jamais de serveur, et un appelant HTTP en a besoin pour choisir le bon
+ * statut plutôt que de laisser une exception nue dégénérer en 500 générique.
+ */
+export type AttachmentValidationVerdict =
+  | { valid: true; error?: undefined; code?: undefined }
+  | { valid: false; error: string; code: 'FILE_TOO_LARGE' | 'UNSUPPORTED_MEDIA_TYPE' };
 
 export interface UploadResult {
   id: string;
@@ -92,6 +103,24 @@ export interface EncryptedUploadResult extends UploadResult {
  */
 const declaredCaptureInApp = (providedMetadata?: any): boolean =>
   providedMetadata?.capturedInApp === true;
+
+/**
+ * Traduit un verdict `{valid:false}` en exception TYPÉE (#6604) — jamais un
+ * `Error` nu, pour que tout appelant qui laisse l'exception s'échapper (au
+ * lieu de l'avaler comme `uploadMultiple`) obtienne le bon statut HTTP via
+ * `typedErrorResponse` (`errors/custom-errors.ts`) plutôt qu'un 500 générique.
+ *
+ * Prend `code`/`error` à PART (pas le verdict entier) : `strictNullChecks`
+ * étant désactivé pour ce paquet (`tsconfig.json`), le compilateur ne
+ * rétrécit pas `AttachmentValidationVerdict` sur `if (!validation.valid)`
+ * assez pour prouver `code`/`error` définis à l'appel — passer les deux
+ * champs contourne la preuve plutôt que de la contester.
+ */
+function throwUploadValidationError(code: 'FILE_TOO_LARGE' | 'UNSUPPORTED_MEDIA_TYPE', error: string): never {
+  throw code === 'FILE_TOO_LARGE'
+    ? new PayloadTooLargeError(error)
+    : new UnsupportedMediaTypeError(error);
+}
 
 /**
  * Processeur d'upload des attachments
@@ -156,7 +185,7 @@ export class UploadProcessor {
    * pouvait déclarer n'importe quel mimeType sans qu'aucun octet ne soit
    * jamais regardé.
    */
-  validateFile(file: FileToUpload): { valid: boolean; error?: string } {
+  validateFile(file: FileToUpload): AttachmentValidationVerdict {
     const attachmentType = getAttachmentType(file.mimeType, file.filename);
     const sizeLimit = getSizeLimit(attachmentType);
 
@@ -164,13 +193,19 @@ export class UploadProcessor {
       const limitGB = Math.floor(sizeLimit / (1024 * 1024 * 1024));
       return {
         valid: false,
+        code: 'FILE_TOO_LARGE',
         error: `Fichier trop volumineux. Taille max: ${limitGB}GB`
       };
     }
 
     const signatureVerdict = verifyDeclaredMimeType(file.mimeType, file.buffer);
     if (signatureVerdict.verified === false) {
-      return { valid: false, error: signatureVerdict.reason };
+      // #6604 — un type déclaré qui ne correspond pas au contenu réel est un
+      // refus de MÉDIA, pas une panne serveur : le `code` laisse l'appelant
+      // choisir 415 plutôt que de laisser une exception nue dégénérer en 500
+      // générique (§ `throw new Error` plus bas, avalé par `uploadMultiple`
+      // mais nu pour tout appelant qui ne l'avale pas).
+      return { valid: false, code: 'UNSUPPORTED_MEDIA_TYPE', error: signatureVerdict.reason };
     }
 
     return { valid: true };
@@ -429,8 +464,8 @@ export class UploadProcessor {
 
     const validation = this.validateFile(file);
     if (!validation.valid) {
-      logger.error('Validation échouée', { error: validation.error });
-      throw new Error(validation.error);
+      logger.error('Validation échouée', { error: validation.error, code: validation.code });
+      throwUploadValidationError(validation.code, validation.error);
     }
 
     const filePath = this.generateFilePath(userId, file.filename);
@@ -587,7 +622,7 @@ export class UploadProcessor {
 
     const validation = this.validateFile(file);
     if (!validation.valid) {
-      throw new Error(validation.error);
+      throwUploadValidationError(validation.code, validation.error);
     }
 
     const attachmentType = getAttachmentType(file.mimeType, file.filename);
