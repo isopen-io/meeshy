@@ -146,7 +146,7 @@ public final class JoinFlowViewModel: ObservableObject {
     /// La date de naissance telle qu'elle part vers la passerelle — une
     /// date-heure (`z.iso.datetime()`), seulement quand le lien l'exige.
     nonisolated static func birthdayField(_ birthday: Date, required: Bool) -> String? {
-        required ? birthday.formatted(.iso8601) : nil
+        required ? WireDate.string(from: birthday) : nil
     }
 
     private func isValidEmail(_ email: String) -> Bool {

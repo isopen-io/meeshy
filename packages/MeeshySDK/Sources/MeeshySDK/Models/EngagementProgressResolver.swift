@@ -353,22 +353,8 @@ public enum EngagementProgressResolver {
     /// une chaîne absente ou illisible, jamais une date inventée.
     public static func reachedDate(_ iso: String?) -> Date? {
         guard let iso else { return nil }
-        return isoFractional.date(from: iso) ?? isoPlain.date(from: iso)
+        return WireDate.date(from: iso)
     }
-
-    // `nonisolated(unsafe)` : ISO8601DateFormatter est thread-safe (même motif
-    // que `NotificationModels.swift`).
-    nonisolated(unsafe) private static let isoFractional: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter
-    }()
-
-    nonisolated(unsafe) private static let isoPlain: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter
-    }()
 
     // MARK: - Détail
 

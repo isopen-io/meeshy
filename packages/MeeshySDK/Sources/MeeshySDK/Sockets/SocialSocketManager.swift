@@ -400,19 +400,6 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     public let didReconnect = PassthroughSubject<Void, Never>()
     private var lifecycleCancellables = Set<AnyCancellable>()
 
-    // Cached formatters — ISO8601DateFormatter is expensive to allocate.
-    // Safe to share: options are set once during init and never mutated after.
-    private nonisolated(unsafe) static let isoFormatterWithFractional: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-    private nonisolated(unsafe) static let isoFormatterBasic: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
-
     /// Factory UNIQUE des décodeurs de payloads socket. La gateway émet ses
     /// dates en ISO 8601 (avec ou sans fractions) — un `JSONDecoder()` nu
     /// (stratégie par défaut = Double epoch) fait échouer TOUT payload
@@ -427,8 +414,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         d.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
             let dateStr = try container.decode(String.self)
-            if let date = SocialSocketManager.isoFormatterWithFractional.date(from: dateStr) { return date }
-            if let date = SocialSocketManager.isoFormatterBasic.date(from: dateStr) { return date }
+            if let date = WireDate.date(from: dateStr) { return date }
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(dateStr)")
         }
         return d

@@ -78,7 +78,7 @@ public final class ContactDirectoryService: ContactDirectoryServiceProviding, @u
             items.append(URLQueryItem(name: "q", value: query))
         }
         if let updatedSince {
-            items.append(URLQueryItem(name: "updatedSince", value: updatedSince.formatted(.iso8601)))
+            items.append(URLQueryItem(name: "updatedSince", value: WireDate.string(from: updatedSince)))
         }
         return try await api.request(
             DirectoryEndpoint.contacts,
