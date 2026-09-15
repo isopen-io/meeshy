@@ -176,10 +176,16 @@ extension CommentQuotedMedia {
     /// et c'est le seul mot qu'une citation dont la cible a disparu a le droit
     /// de dire.
     var legende: String {
+        legende(bundle: .main, locale: .current)
+    }
+
+    /// La même règle depuis une table et une locale DONNÉES : un témoin juge le
+    /// texte sans dépendre de la langue de la machine qui l'exécute.
+    func legende(bundle: Bundle, locale: Locale) -> String {
         if let caption = media?.caption, !caption.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return caption
         }
-        return nomDeLaNature
+        return nomDeLaNature(bundle: bundle, locale: locale)
     }
 
     var libelleAccessibilite: String {
@@ -188,18 +194,18 @@ extension CommentQuotedMedia {
                bundle: .main)
     }
 
-    private var nomDeLaNature: String {
+    private func nomDeLaNature(bundle: Bundle, locale: Locale) -> String {
         switch kind {
         case .image:
-            return String(localized: "comment.quote.kind.image", defaultValue: "Une photo", bundle: .main)
+            return String(localized: "comment.quote.kind.image", defaultValue: "Une photo", bundle: bundle, locale: locale)
         case .video:
-            return String(localized: "comment.quote.kind.video", defaultValue: "Une vidéo", bundle: .main)
+            return String(localized: "comment.quote.kind.video", defaultValue: "Une vidéo", bundle: bundle, locale: locale)
         case .audio:
-            return String(localized: "comment.quote.kind.audio", defaultValue: "Un audio", bundle: .main)
+            return String(localized: "comment.quote.kind.audio", defaultValue: "Un audio", bundle: bundle, locale: locale)
         case .location:
-            return String(localized: "comment.quote.kind.location", defaultValue: "Un lieu", bundle: .main)
+            return String(localized: "comment.quote.kind.location", defaultValue: "Un lieu", bundle: bundle, locale: locale)
         case .file:
-            return String(localized: "comment.quote.kind.file", defaultValue: "Une pièce jointe", bundle: .main)
+            return String(localized: "comment.quote.kind.file", defaultValue: "Une pièce jointe", bundle: bundle, locale: locale)
         }
     }
 }
