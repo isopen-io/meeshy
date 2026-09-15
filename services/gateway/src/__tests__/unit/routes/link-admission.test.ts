@@ -195,6 +195,39 @@ describe('POST /links/:key/members — invité (S1)', () => {
   });
 });
 
+// ─── POST /links/:key/members — Bearer présenté et refusé (#6741) ────────────
+//
+// `fakeOptionalAuth` ne lit que `x-test-identity` : un `Authorization: Bearer`
+// sans cet en-tête reproduit exactement ce que rend le VRAI middleware quand
+// `jwt.verify` échoue et que `requireAuth: false` — `authContext: undefined`,
+// indiscernable d'une requête sans aucune créance (`middleware/auth.ts:772-780`).
+
+describe('POST /links/:key/members — Bearer présenté et refusé (#6741)', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => { app = await buildApp(); });
+  afterAll(async () => { await app.close(); });
+
+  it('401 TOKEN_INVALID quand un Bearer est présenté sans authentifier, et ne crée aucun participant', async () => {
+    (app as any).prisma.participant.create.mockClear();
+
+    const res = await postMembers(app, { nickname: 'Ana' }, { authorization: 'Bearer expired.or.invalid' });
+
+    expect(res.statusCode).toBe(401);
+    expect(res.json().code).toBe('TOKEN_INVALID');
+    expect((app as any).prisma.participant.create).not.toHaveBeenCalled();
+  });
+
+  it('entre bien en invité quand AUCUN Bearer n\'est présenté — non-régression', async () => {
+    const res = await postMembers(app, { nickname: 'Ana' });
+    expect(res.statusCode).toBe(201);
+  });
+
+  it('entre bien en inscrit quand le Bearer authentifie réellement — non-régression', async () => {
+    const res = await postMembers(app, {}, { ...asRegistered, authorization: 'Bearer whatever-the-real-middleware-verified' });
+    expect(res.statusCode).toBe(201);
+  });
+});
+
 // ─── POST /links/:key/members — inscrit ──────────────────────────────────────
 
 describe('POST /links/:key/members — inscrit (S2)', () => {
