@@ -55,7 +55,12 @@ extension ReelPageView {
             // conservée) — l'icône et le libellé a11y suivent
             // `audioPlayer.isPlaying`, jamais un état local séparé qui
             // pourrait diverger du son réellement audible.
-            if BackgroundSoundBadge.showsMuteButton(for: announcement), borrowedSoundTrack != nil {
+            //
+            // Réel COMPOSÉ (#6745) : le son de fond est joué par le PLAYER de
+            // la scène, et c'est son muet que le bouton pilote.
+            if BackgroundSoundBadge.showsMuteButton(for: announcement), isSceneReel {
+                sceneSoundMuteButton
+            } else if BackgroundSoundBadge.showsMuteButton(for: announcement), borrowedSoundTrack != nil {
                 Button {
                     audioPlayer.togglePlayPause()
                     HapticFeedback.light()

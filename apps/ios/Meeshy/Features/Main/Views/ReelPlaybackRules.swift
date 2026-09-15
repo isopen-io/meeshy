@@ -1,5 +1,6 @@
 import Foundation
 import MeeshySDK
+import MeeshyUI
 
 // =============================================================================
 //  Règles PURES de lecture d'un réel — extraites de `ReelsPlayerView.swift` (#6745)
@@ -47,12 +48,53 @@ enum ReelWatchAttachmentPolicy {
 
 // MARK: - Reel Scene Routing (pure)
 
+/// **Un réel composé se rejoue comme sa scène** (#6745).
+///
+/// La page du lecteur demandait « quels médias ce réel porte-t-il ? » et jouait
+/// sa vidéo brute. Un réel composé porte une SCÈNE dont la vidéo n'est que le
+/// fond : c'est la scène qui dit si cette vidéo parle, et c'est sur SA timeline
+/// que joue le son de fond. La question juste est donc « porte-t-il une
+/// scène ? », posée ici une fois pour la page, le son et la télémétrie.
 enum ReelSceneRouting {
-    static func sceneDocument(for reel: FeedPost) -> CanvasV3? { nil }
+    /// Le document que le réel rejoue, ou `nil` pour un réel de médias.
+    static func sceneDocument(for reel: FeedPost) -> CanvasV3? {
+        guard let document = reel.storyEffects?.canvasV3, !document.scenes.isEmpty else { return nil }
+        return document
+    }
 
-    static func borrowedSoundTrack(for reel: FeedPost) -> StoryAudioPlayerObject? { nil }
+    /// La piste de fond que la PAGE joue elle-même : seulement pour un réel
+    /// « son emprunté » sans scène ni média. Un réel à scène en est exclu — la
+    /// scène joue déjà ce son, et le lecteur l'entendrait deux fois, décalé.
+    static func borrowedSoundTrack(for reel: FeedPost) -> StoryAudioPlayerObject? {
+        guard sceneDocument(for: reel) == nil,
+              reel.primaryReelDisplayMedia == nil,
+              let effects = reel.storyEffects else { return nil }
+        let track = effects.resolvedBackgroundAudio
+            ?? effects.audioPlayerObjects?.first(where: { !($0.mediaURL ?? "").isEmpty })
+        guard let track, !(track.mediaURL ?? "").isEmpty else { return nil }
+        return track
+    }
 
-    static func attachesSharedVideoWatch(for reel: FeedPost, loadedAttachmentId: String?) -> Bool { false }
+    /// Le temps du moteur vidéo partagé n'appartient à un réel à scène que si
+    /// ce moteur porte SA vidéo : la scène n'emprunte le player partagé que pour
+    /// son média porteur déjà chargé, et ouvre le sien sinon. Lire le moteur sans
+    /// cette preuve attribuerait au réel le visionnage d'une autre vidéo.
+    static func attachesSharedVideoWatch(for reel: FeedPost, loadedAttachmentId: String?) -> Bool {
+        guard let document = sceneDocument(for: reel) else {
+            return ReelWatchAttachmentPolicy.shouldAttachVideoWatch(mediaType: reel.primaryReelDisplayMedia?.type)
+        }
+        guard let carrier = MeeshyScenePlayer.carrierMediaIdentity(in: document, sceneIndex: 0) else { return false }
+        return loadedAttachmentId == carrier
+    }
+}
+
+/// La progression d'un réel composé : sa position sur la timeline de la scène,
+/// bornée à la barre quoi que le player rapporte.
+enum ReelSceneProgress {
+    nonisolated static func fraction(elapsed: Double, duration: Double) -> Double {
+        guard duration > 0 else { return 0 }
+        return min(1, max(0, elapsed / duration))
+    }
 }
 
 // MARK: - Reel Media Layout

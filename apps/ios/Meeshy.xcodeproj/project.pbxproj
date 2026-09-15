@@ -1913,6 +1913,7 @@
 		FDE8D8068409785FF05AF704 /* BubbleQuotedReplyAttachmentKindTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE5C54DB65786EBF028BE834 /* BubbleQuotedReplyAttachmentKindTests.swift */; };
 		FDF007FCF97A073C52C8E977 /* FixedFontSizeGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B15311851D75EB63010F3EB5 /* FixedFontSizeGuardTests.swift */; };
 		FDF11C2FC303EDE3D39728CB /* StoryUploadFormatTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8D8D65D7833021EB57D4D01 /* StoryUploadFormatTests.swift */; };
+		FDF83F4D47C97E57C58CD874 /* ReelsPlayerView+Scene.swift in Sources */ = {isa = PBXBuildFile; fileRef = D653F74CE58853AAFCB5E858 /* ReelsPlayerView+Scene.swift */; };
 		FE0BB5CA5644871C89F38E4B /* StoryRepublishComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C5A63C1065F1FC49E15B748 /* StoryRepublishComposer.swift */; };
 		FE153ABD46011EC965D6958C /* StickerLibraryArtwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E0C53461B2935152F9221D8 /* StickerLibraryArtwork.swift */; };
 		FE1A1BFF610C8BFAA8041CDD /* DiscoverTabSMSComposerCoordinatorSourceGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A9155B40380452CBB53B7A6 /* DiscoverTabSMSComposerCoordinatorSourceGuardTests.swift */; };
@@ -3576,6 +3577,7 @@
 		D5FFA5FA5EEA0FF6A2240681 /* FocalMediaGridLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocalMediaGridLayoutTests.swift; sourceTree = "<group>"; };
 		D6387DC198E8CFACBC7C26A5 /* ComposerObjectEditorView+Media.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ComposerObjectEditorView+Media.swift"; sourceTree = "<group>"; };
 		D650D48CA6476144A940F839 /* MockMessageSocket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockMessageSocket.swift; sourceTree = "<group>"; };
+		D653F74CE58853AAFCB5E858 /* ReelsPlayerView+Scene.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ReelsPlayerView+Scene.swift"; sourceTree = "<group>"; };
 		D66B484CFD599D9F34CE9984 /* StoryViewerScopeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryViewerScopeTests.swift; sourceTree = "<group>"; };
 		D690BCE592CB1AF61B6546E1 /* ProfileUserPostsRenderWindowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileUserPostsRenderWindowTests.swift; sourceTree = "<group>"; };
 		D698580FAFF8B236B37BC026 /* NavigationContainerMigrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationContainerMigrationTests.swift; sourceTree = "<group>"; };
@@ -5690,6 +5692,7 @@
 				7D1E6B9BF11CC5FC478865B1 /* ReelRepostEmbedCell.swift */,
 				3A2AF3F8064D43789A7B9275 /* ReelsPlayerView.swift */,
 				6E02ACDEDB3968288BB670EE /* ReelsPlayerView+Carousel.swift */,
+				D653F74CE58853AAFCB5E858 /* ReelsPlayerView+Scene.swift */,
 				F1EA58B60EA154A6B02A1337 /* ReelsPlayerView+Video.swift */,
 				45A4C9A6909529AD1474461B /* ReelsPresenter.swift */,
 				536F3DEED9D22C4D9FA9B0C8 /* ReplyContextCleaner.swift */,
@@ -7492,6 +7495,7 @@
 				A00A2358B3C928F95116FA17 /* ReelPlaybackRules.swift in Sources */,
 				C0D3478A1B32814600A112C5 /* ReelRepostEmbedCell.swift in Sources */,
 				BFCE3183DD29CB75F570B98C /* ReelsPlayerView+Carousel.swift in Sources */,
+				FDF83F4D47C97E57C58CD874 /* ReelsPlayerView+Scene.swift in Sources */,
 				B4C74C188F3D70F40F1F7BF9 /* ReelsPlayerView+Video.swift in Sources */,
 				4678105E720C6346F70D355F /* ReelsPlayerView.swift in Sources */,
 				07FBEEBCF37687C9BA22BA75 /* ReelsPresenter.swift in Sources */,

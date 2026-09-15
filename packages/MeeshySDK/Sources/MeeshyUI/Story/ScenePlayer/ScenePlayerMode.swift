@@ -11,13 +11,18 @@ public nonisolated enum ScenePlayerMode: Equatable, Sendable {
 
 /// La règle de chaque mode — la seule chose que le player décide de lui-même.
 ///
-/// `startsPaused` ne dépend PAS du mode : les trois naissent en pause, y compris
-/// le reader, dont la lecture démarre par la commande du viewer.
+/// `startsPaused` ne dépend PAS du mode : tous naissent en pause, y compris le
+/// reader, dont la lecture démarre par la commande du viewer.
 ///
 /// `isMuted` et `locksMute` se lisent ENSEMBLE : le premier dit ce que le mode
 /// PROPOSE quand l'hôte ne demande rien, le second si l'hôte a seulement le
 /// droit de demander. Seule la carte de fil verrouille — un viewer story porte
 /// son propre muet persistant, piloté par l'utilisateur au rail.
+///
+/// **Le réel (#6745) est le seul mode qui boucle AVEC le son.** La carte boucle
+/// muette, le reader joue une fois : un réel composé qui passait par l'un
+/// perdait soit son son de fond, soit sa boucle. Il porte aussi la chrome — sa
+/// progression lit le fil de position.
 public nonisolated struct ScenePlayerConfig: Equatable, Sendable {
     public let startsPaused: Bool
     /// Le muet que le mode propose à DÉFAUT de commande de l'hôte.
@@ -33,7 +38,7 @@ public nonisolated struct ScenePlayerConfig: Equatable, Sendable {
         self.startsPaused = true
         self.isMuted = mode == .card
         self.locksMute = mode == .card
-        self.loops = mode == .card
-        self.showsChrome = mode == .reader
+        self.loops = mode == .card || mode == .reel
+        self.showsChrome = mode == .reader || mode == .reel
     }
 }

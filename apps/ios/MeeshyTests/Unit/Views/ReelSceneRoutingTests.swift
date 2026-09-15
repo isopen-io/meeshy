@@ -57,6 +57,18 @@ final class ReelSceneRoutingTests: XCTestCase {
         XCTAssertEqual(duration, 21, accuracy: 0.01)
     }
 
+    // MARK: - La progression suit la timeline de la scène
+
+    func test_theProgress_isThePositionOnTheSceneTimeline() {
+        XCTAssertEqual(ReelSceneProgress.fraction(elapsed: 10.5, duration: 21), 0.5, accuracy: 0.0001)
+    }
+
+    func test_theProgress_staysInsideTheBar_whateverThePlayerReports() {
+        XCTAssertEqual(ReelSceneProgress.fraction(elapsed: 30, duration: 21), 1)
+        XCTAssertEqual(ReelSceneProgress.fraction(elapsed: -1, duration: 21), 0)
+        XCTAssertEqual(ReelSceneProgress.fraction(elapsed: 4, duration: 0), 0)
+    }
+
     // MARK: - La télémétrie ne s'attribue pas le temps d'une autre vidéo
 
     func test_aComposedReel_takesTheSharedVideoWatch_onlyWhenTheEngineHoldsItsVideo() {

@@ -224,7 +224,7 @@ struct ReelsPlayerView: View {
     private func finalizeReelSession(for reelId: String?) {
         guard let reelId,
               let reel = viewModel.reels.first(where: { $0.id == reelId }),
-              ReelWatchAttachmentPolicy.shouldAttachVideoWatch(mediaType: reel.primaryReelDisplayMedia?.type)
+              ReelSceneRouting.attachesSharedVideoWatch(for: reel, loadedAttachmentId: SharedAVPlayerManager.shared.attachmentId)
         else { return }
         let m = SharedAVPlayerManager.shared
         let watchMs = m.currentTime.isNaN ? 0 : Int(m.currentTime * 1000)
@@ -487,6 +487,10 @@ struct ReelPageView: View {
     /// Prisme: the language the viewer explicitly picked via a flag / the
     /// translate toggle. `nil` = the auto-resolved preferred translation.
     @State var selectedLanguage: String?
+    /// Réel composé (#6745) — voir `ReelsPlayerView+Scene.swift`.
+    @State var scenePaused = false
+    @State var sceneSoundMuted = false
+    @StateObject var sceneClock = ReelSceneClock()
     // Plain reference (NOT @ObservedObject): the page itself doesn't need to
     // re-render on every 0.1s time tick — only `ReelScrubBar` observes the
     // manager. Used here only for the fire-and-forget `togglePlayPause()` tap.
@@ -517,7 +521,7 @@ struct ReelPageView: View {
     /// True when this active reel is a video so the scrub bar shows only where
     /// there is a seekable timeline (images/audio reels have none here).
     private var isVideoReel: Bool {
-        reel.primaryReelDisplayMedia?.type == .video
+        !isSceneReel && reel.primaryReelDisplayMedia?.type == .video
     }
 
     /// The audio media for an audio reel, else `nil`. Drives the immersive
@@ -527,18 +531,11 @@ struct ReelPageView: View {
         return media
     }
 
-    /// Piste « son EMPRUNTÉ à la bibliothèque » d'un réel/poste SANS média
-    /// propre : l'audio vit alors dans la composition (`storyEffects`), sous la
-    /// forme produite par `publishBorrowedSoundPost` / `addBorrowedSound`
-    /// (`soundId` + `mediaURL` serveur). Limité au cas sans média — un réel
-    /// vidéo+fond musical passe par le lecteur de composition (StoryItem), pas
-    /// par cette page.
+    /// Piste « son EMPRUNTÉ à la bibliothèque » d'un réel SANS scène ni média :
+    /// la page la joue elle-même. Un réel composé en est exclu — sa scène joue
+    /// déjà ce fond (#6745) ; la règle vit dans `ReelSceneRouting`.
     var borrowedSoundTrack: StoryAudioPlayerObject? {
-        guard reel.primaryReelDisplayMedia == nil, let effects = reel.storyEffects else { return nil }
-        let track = effects.resolvedBackgroundAudio
-            ?? effects.audioPlayerObjects?.first(where: { !($0.mediaURL ?? "").isEmpty })
-        guard let track, !(track.mediaURL ?? "").isEmpty else { return nil }
-        return track
+        ReelSceneRouting.borrowedSoundTrack(for: reel)
     }
 
     /// The "original" language for the meta-row flag strip: the audio
@@ -663,6 +660,10 @@ struct ReelPageView: View {
                 // just below the description / action rail. Drag to seek.
                 if isVideoReel && isActive {
                     ReelScrubBar(manager: playerManager, accentColor: accentColor)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 14)
+                } else if isSceneReel && isActive {
+                    ReelSceneProgressBar(clock: sceneClock, accentColor: accentColor)
                         .padding(.horizontal, 16)
                         .padding(.top, 14)
                 }
@@ -889,6 +890,7 @@ struct ReelPageView: View {
             withAnimation(.easeInOut(duration: 0.25)) { chromeHidden = false }
             return
         }
+        if isSceneReel { scenePaused.toggle() }
         if isVideoReel { playerManager.togglePlayPause() }
     }
 
@@ -896,7 +898,11 @@ struct ReelPageView: View {
 
     @ViewBuilder
     private var mediaLayer: some View {
-        if let media = reel.primaryReelDisplayMedia {
+        if let document = sceneDocument {
+            ReelSceneView(reel: reel, document: document, isActive: isActive,
+                          revealCompleted: revealCompleted, isMuted: sceneSoundMuted,
+                          isPaused: $scenePaused, clock: sceneClock)
+        } else if let media = reel.primaryReelDisplayMedia {
             switch media.type {
             case .video:
                 ReelVideoView(media: media, isActive: isActive, revealCompleted: revealCompleted)
