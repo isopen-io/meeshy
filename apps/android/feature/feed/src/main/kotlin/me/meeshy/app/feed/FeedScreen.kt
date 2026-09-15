@@ -627,7 +627,7 @@ private fun PostCard(
 
             if (post.images.isNotEmpty()) {
                 Spacer(Modifier.height(MeeshySpacing.md))
-                PostImageGrid(images = post.images, onImageTap = onImageTap)
+                PostImageLayout(images = post.images, layout = post.layout, onImageTap = onImageTap)
             }
 
             post.location?.let { loc ->
