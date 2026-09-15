@@ -7,7 +7,12 @@ import {
   blend,
   electFocus,
   enterLevel,
+  LOUPE_GAIN,
+  loupe,
   perspective,
+  RAMP_LENGTH,
+  RAMP_START,
+  ROW_MARGIN_HORIZONTAL,
 } from './law';
 
 /**
@@ -152,6 +157,51 @@ describe("l'aplatissement de la scène (blend)", () => {
   test('un level hors [0, 1] est écrêté', () => {
     expect(blend(p, -3)).toEqual({ alpha: 1, scale: 1 });
     expect(blend(p, 7)).toEqual(p);
+  });
+});
+
+/**
+ * LA LOUPE (#6586/#6588) — miroir
+ * `LentilleFocusCardTests.test_loupe_magnifiesTheRowInTheBand_neverItsNeighbours_andRampsSmoothly`
+ * et `.test_loupe_neverGrowsTheRowPastItsHorizontalMargin`, mêmes vecteurs.
+ */
+describe('la loupe de la rangée (#6588)', () => {
+  const wide = 390;
+  const far = RAMP_START + RAMP_LENGTH + 1;
+  const mid = RAMP_START + RAMP_LENGTH / 2;
+
+  test('les cotes sont celles de LentilleMetrics.swift', () => {
+    expect(LOUPE_GAIN).toBe(0.04);
+    expect(ROW_MARGIN_HORIZONTAL).toBe(8);
+  });
+
+  test('la rangée dans la bande grandit du gain plein', () => {
+    expect(loupe({ distance: 0, level: 1, reducedMotion: false, width: wide })).toBeCloseTo(1 + LOUPE_GAIN, 10);
+    expect(loupe({ distance: 20, level: 1, reducedMotion: false, width: wide })).toBeCloseTo(1 + LOUPE_GAIN, 10);
+  });
+
+  test('une voisine au-delà de la rampe ne grandit pas', () => {
+    expect(loupe({ distance: far, level: 1, reducedMotion: false, width: wide })).toBe(1);
+  });
+
+  test('à mi-rampe, la moitié du gain', () => {
+    expect(loupe({ distance: -mid, level: 1, reducedMotion: false, width: wide })).toBeCloseTo(1 + LOUPE_GAIN / 2, 10);
+  });
+
+  test('suit le niveau de scène', () => {
+    expect(loupe({ distance: 0, level: 0.5, reducedMotion: false, width: wide })).toBeCloseTo(1 + LOUPE_GAIN / 2, 10);
+    expect(loupe({ distance: 0, level: 0, reducedMotion: false, width: wide })).toBe(1);
+  });
+
+  test('reduce motion -> identité', () => {
+    expect(loupe({ distance: 0, level: 1, reducedMotion: true, width: wide })).toBe(1);
+  });
+
+  test('une liste large (iPad) ne pousse jamais la rangée hors de sa marge horizontale', () => {
+    const width = 1000;
+    const scale = loupe({ distance: 0, level: 1, reducedMotion: false, width });
+    expect(scale).toBeGreaterThan(1);
+    expect((scale - 1) * width / 2).toBeLessThanOrEqual(ROW_MARGIN_HORIZONTAL + 0.0001);
   });
 });
 

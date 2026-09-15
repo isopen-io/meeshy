@@ -10,6 +10,7 @@ import {
   breathing,
   electFocus,
   enterLevel,
+  loupe,
   perspective,
 } from './law';
 
@@ -119,12 +120,12 @@ export function useScene(frame: { current: HTMLElement | null }): Scene {
        * entrelacer ferait, à chaque rangée, une invalidation puis une
        * relecture — le « layout thrashing » : O(n) recalculs au lieu d'un.
        */
-      const metrics: { readonly node: HTMLElement; readonly id: string; readonly midY: number }[] = [];
+      const metrics: { readonly node: HTMLElement; readonly id: string; readonly midY: number; readonly width: number }[] = [];
       for (const rank of ranks) {
         const r = rank.getBoundingClientRect();
         const id = rank.dataset.row;
         if (id === undefined) continue;
-        metrics.push({ node: rank, id, midY: r.top + r.height / 2 });
+        metrics.push({ node: rank, id, midY: r.top + r.height / 2, width: r.width });
       }
 
       const elected = electFocus({
@@ -139,10 +140,14 @@ export function useScene(frame: { current: HTMLElement | null }): Scene {
         const rawP = reduced ? { alpha: 1, scale: 1 } : perspective(distance);
         const p = reduced ? rawP : blend(rawP, currentLevel);
         const breath = breathing({ distance, level: currentLevel, reducedMotion: reduced });
+        // La LOUPE (#6586/#6588) grandit la rangée EN PLUS de la perspective —
+        // deux échelles qui se MULTIPLIENT, comme les deux `.scaleEffect`
+        // empilés côté iOS (`LentillePerspective` puis `LentilleFocusBreathing`).
+        const magnify = loupe({ distance, level: currentLevel, reducedMotion: reduced, width: m.width });
         const visual = m.node.firstElementChild;
         if (visual instanceof HTMLElement) {
           visual.style.opacity = String(p.alpha);
-          visual.style.transform = `translateY(${breath}px) scale(${p.scale})`;
+          visual.style.transform = `translateY(${breath}px) scale(${p.scale * magnify})`;
         }
       }
 
