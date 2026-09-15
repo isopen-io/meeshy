@@ -504,7 +504,14 @@ final class PermissionGateSourceGuardTests: XCTestCase {
                                to: "conversationId: story.id", in: src)
         XCTAssertTrue(offline.contains("originalLanguage: language"),
                       "Le repli hors-ligne d'un commentaire de story doit porter la langue déclarée.")
-        XCTAssertTrue(src.contains("originalLanguage: language,"),
+
+        // SCOPÉE au seul appel REST (#6587) : `src.contains(…)` sur le fichier
+        // ENTIER était satisfaite par le repli qu'on vient de vérifier — la
+        // garde restait VERTE sur un chemin direct neutralisé, donc elle
+        // n'assurait rien. Une garde de source ne vaut que par sa fenêtre.
+        let direct = try body(from: "try await StoryInteractionService().postComment(",
+                              to: "effectFlags: effectFlags", in: src)
+        XCTAssertTrue(direct.contains("originalLanguage: language,"),
                       "Le chemin direct de la story doit déclarer la même langue que son repli.")
     }
 
@@ -525,6 +532,53 @@ final class PermissionGateSourceGuardTests: XCTestCase {
             XCTAssertTrue(fn.contains(door),
                           "Porte d'envoi sans la langue déclarée : \(door)")
         }
+    }
+
+    // MARK: - La LIGNE OPTIMISTE porte la langue, elle aussi (#6587)
+    //
+    // Les deux rangées suivantes sont des gardes de SOURCE assumées, faute
+    // d'hôte interrogeable : l'une vit dans une `View` SwiftUI, l'autre derrière
+    // un téléversement réseau dont l'échec ANNULE l'insert qu'on voudrait
+    // observer. Les trois portes qu'un modèle expose (`sendComment`,
+    // `sendReply` côté détail, `sendComment` côté fil) sont, elles, épinglées
+    // par des témoins de COMPORTEMENT — `PostDetailViewModelTests` et
+    // `FeedViewModelTests` appellent, puis lisent `originalLanguage` sur la
+    // ligne rendue. Une garde de source ne prouve pas qu'une valeur arrive ;
+    // elle empêche seulement un futur lot de la retirer en silence.
+
+    /// La ligne optimiste du fil de commentaires d'un post, et la ligne SERVEUR
+    /// qui la remplace à la réponse REST. Sans la seconde, la pastille
+    /// apparaîtrait puis disparaîtrait dans la même seconde sur le chemin
+    /// nominal EN LIGNE — un correctif dont la valeur n'atteint aucun lecteur.
+    func test_feedCommentsSheet_optimisticRow_carriesTheAuthoredLanguage() throws {
+        let src = try source("Meeshy/Features/Main/Views/FeedCommentsSheet.swift")
+
+        let optimistic = try body(from: "let tempId = ClientMutationId.generate()",
+                                  to: "if let parentId {", in: src)
+        XCTAssertTrue(optimistic.contains("originalLanguage: lang"),
+                      "La ligne optimiste doit porter la langue de la pastille : son auteur la LIT.")
+
+        let served = try body(from: "originalLanguage: lang, location: place, clientMutationId: tempId",
+                              to: "// Swap the optimistic temp", in: src)
+        XCTAssertTrue(served.contains("originalLanguage: apiComment.originalLanguage"),
+                      "La ligne serveur qui remplace l'optimiste doit garder la langue, sinon la pastille clignote.")
+    }
+
+    /// Même paire pour la porte MÉDIA du détail de post — celle dont l'insert
+    /// optimiste n'est pas observable (`CommentMediaUploader.upload` précède la
+    /// première frontière testable, et son échec annule l'insert).
+    func test_postDetailViewModel_mediaDoor_carriesTheAuthoredLanguage() throws {
+        let src = try source("Meeshy/Features/Main/ViewModels/PostDetailViewModel.swift")
+
+        let optimistic = try body(from: "func submitCommentWithMedia(",
+                                  to: "let snapshotComments = comments", in: src)
+        XCTAssertTrue(optimistic.contains("originalLanguage: originalLanguage"),
+                      "La ligne optimiste d'un commentaire AVEC MÉDIA doit porter la langue déclarée.")
+
+        let served = try body(from: "let server = FeedComment(",
+                              to: "if let parentId {", in: src)
+        XCTAssertTrue(served.contains("originalLanguage: apiComment.originalLanguage"),
+                      "La ligne serveur qui la remplace doit garder la langue.")
     }
 
     /// Le corollaire d'asymétrie du champ REQUIS : `FeedView` portait une

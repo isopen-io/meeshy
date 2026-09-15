@@ -612,6 +612,27 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertTrue(sut.posts[0].comments.isEmpty, "optimistic comment must be removed on rollback")
     }
 
+    /// #6587 — la ligne optimiste doit porter la langue DÉCLARÉE à la pastille.
+    /// `FeedComment.originalLanguage` alimente la descente du prisme et la
+    /// pastille `LanguageFlagChip` : sans elle, l'auteur lit son propre
+    /// commentaire frais sans indication de langue, et la ligne est persistée
+    /// ainsi. La langue déclarée diffère de celle que le contenu suggère —
+    /// sinon le témoin ne distinguerait pas une déclaration d'une devinette.
+    func test_sendComment_stampsTheAuthoredLanguageOnTheOptimisticRow() async {
+        let queue = MockOfflineQueue()
+        let (sut, api, _, _) = makeSUT(offlineQueue: queue)
+        api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p1")]))
+        await sut.loadFeed(forceRefresh: true)
+
+        await sut.sendComment(postId: "p1", content: "Ceci a tout l'air d'être du français", originalLanguage: "de")
+
+        XCTAssertEqual(sut.posts[0].comments.first?.originalLanguage, "de",
+                       "la ligne optimiste du fil doit porter la langue de la pastille, pas nil")
+        let payload = queue.enqueueCalls.first?.payload as? CreateCommentPayload
+        XCTAssertEqual(payload?.originalLanguage, sut.posts[0].comments.first?.originalLanguage,
+                       "la ligne AFFICHÉE et la ligne ENVOYÉE déclarent la même langue")
+    }
+
     // MARK: - Outbox terminal outcome (R7) — rollback on .exhausted
 
     func test_likePost_rollsBack_whenOutcomeExhausted() async {

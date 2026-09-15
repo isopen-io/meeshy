@@ -743,7 +743,7 @@ class PostDetailViewModel: ObservableObject {
             likes: 0,
             replies: 0,
             effectFlags: effectFlags ?? 0,
-            location: location
+            originalLanguage: originalLanguage, location: location
         )
         comments.insert(optimistic, at: 0)
         self.post?.commentCount = snapshotCount + 1
@@ -803,7 +803,7 @@ class PostDetailViewModel: ObservableObject {
             replies: 0,
             parentId: parentId,
             effectFlags: effectFlags ?? 0,
-            location: location
+            originalLanguage: originalLanguage, location: location
         )
         var existing = repliesMap[parentId] ?? []
         existing.insert(optimistic, at: 0)
@@ -931,7 +931,7 @@ class PostDetailViewModel: ObservableObject {
             content: content, timestamp: Date(),
             likes: 0, replies: 0, parentId: parentId,
             effectFlags: effectFlags ?? 0,
-            media: [pendingMedia.optimistic]
+            originalLanguage: originalLanguage, media: [pendingMedia.optimistic]
         )
         let snapshotComments = comments
         let snapshotReplies = parentId.flatMap { repliesMap[$0] }
@@ -961,7 +961,7 @@ class PostDetailViewModel: ObservableObject {
                 content: apiComment.content, timestamp: apiComment.createdAt,
                 likes: 0, replies: 0, parentId: parentId,
                 effectFlags: apiComment.effectFlags ?? effectFlags ?? 0,
-                media: (apiComment.media ?? []).map { $0.toFeedMedia() }
+                originalLanguage: apiComment.originalLanguage, media: (apiComment.media ?? []).map { $0.toFeedMedia() }
             )
             if let parentId {
                 var existing = repliesMap[parentId] ?? []

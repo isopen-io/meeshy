@@ -1167,7 +1167,7 @@ class FeedViewModel: ObservableObject {
             timestamp: Date(),
             likes: 0, replies: 0,
             parentId: parentId,
-            effectFlags: effectFlags ?? 0, location: location
+            effectFlags: effectFlags ?? 0, originalLanguage: originalLanguage, location: location
         )
         posts[index].comments.insert(optimistic, at: 0)
         posts[index].commentCount += 1

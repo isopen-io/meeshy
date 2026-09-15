@@ -1937,6 +1937,7 @@ struct CommentsSheetView: View {
         // exacte — le twin-match par contenu ne tenait pas quand le serveur
         // normalise le texte (sanitize).
         let tempId = ClientMutationId.generate()
+        let lang = composerLanguage
         let me = AuthManager.shared.currentUser
         let optimistic = FeedComment(
             id: tempId,
@@ -1947,7 +1948,7 @@ struct CommentsSheetView: View {
             content: trimmed, timestamp: Date(),
             likes: 0, replies: 0, parentId: parentId,
             effectFlags: effectFlags ?? 0,
-            media: media.map { [$0.optimistic] } ?? []
+            originalLanguage: lang, media: media.map { [$0.optimistic] } ?? []
         )
         if let parentId {
             var existing = repliesMap[parentId] ?? []
@@ -1965,8 +1966,6 @@ struct CommentsSheetView: View {
             liveComments = current
         }
         liveCommentCount = (liveCommentCount ?? post.commentCount) + 1
-
-        let lang = composerLanguage
 
         Task {
             do {
@@ -1988,7 +1987,7 @@ struct CommentsSheetView: View {
                     likes: 0, replies: 0,
                     parentId: parentId,
                     effectFlags: apiComment.effectFlags ?? effectFlags ?? 0,
-                    media: (apiComment.media ?? []).map { $0.toFeedMedia() }
+                    originalLanguage: apiComment.originalLanguage, media: (apiComment.media ?? []).map { $0.toFeedMedia() }
                 )
                 // Swap the optimistic temp for the server row (no count
                 // change). Idempotent if the socket event already did it.
