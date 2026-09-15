@@ -364,7 +364,13 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // d'exactement ce que le lot retire. Le cumul mesuré avant le lot était
     // 56 061 : ses 369 lignes de mou préexistant ne sont pas reprises ici, pour
     // la raison de coordination de #6016.
-    private static let legacyLineCeiling = 56_077
+    // #6701 — 56 077 → 56 046 (−31). Les voiles de lisibilité du lecteur de
+    // story devaient suivre le chrome dans `StoryViewerView+Canvas.swift`
+    // (2 313 lignes), hôte en dette. La couche en est d'abord sortie, entière,
+    // dans `StoryViewerView+CanvasScrims.swift` ; la règle s'y pose ensuite,
+    // hors de l'hôte. L'hôte RESTE en dette (2 282) ; le plafond baisse
+    // d'exactement ce que le lot retire.
+    private static let legacyLineCeiling = 56_046
 
     // MARK: - Règle 1 — pas de 43ᵉ
 
