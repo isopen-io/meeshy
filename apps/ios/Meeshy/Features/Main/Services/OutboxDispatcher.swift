@@ -659,8 +659,18 @@ nonisolated struct CreateCommentBody: Encodable {
     /// Encodée en `encodeIfPresent` : une ligne gravée avant le champ rejoue
     /// sans la clé, donc sous le repli, exactement comme avant.
     let originalLanguage: String?
+    /// **L'ANCRE du média cité** (#6578) — l'ULTIME saut d'une citation rejouée
+    /// depuis la file durable. Le serveur attend un OBJET
+    /// (`quotedPostMedia: { postMediaId }`) et REFUSE en 400 un média étranger
+    /// au post commenté : encoder une chaîne plate ferait échouer l'envoi
+    /// entier, pas seulement la citation.
+    let quotedPostMediaId: String?
 
-    enum CodingKeys: String, CodingKey { case content, parentId, location, effectFlags, originalLanguage }
+    enum CodingKeys: String, CodingKey {
+        case content, parentId, location, effectFlags, originalLanguage, quotedPostMedia
+    }
+
+    private struct QuotedPostMediaAnchor: Encodable { let postMediaId: String }
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
@@ -669,6 +679,12 @@ nonisolated struct CreateCommentBody: Encodable {
         try container.encodeIfPresent(location, forKey: .location)
         try container.encodeIfPresent(effectFlags, forKey: .effectFlags)
         try container.encodeIfPresent(originalLanguage, forKey: .originalLanguage)
+        // `encodeIfPresent` : une ligne gravée avant le champ rejoue SANS la
+        // clé, donc exactement comme avant.
+        try container.encodeIfPresent(
+            quotedPostMediaId.map { QuotedPostMediaAnchor(postMediaId: $0) },
+            forKey: .quotedPostMedia
+        )
     }
 
     /// SEUL site qui traduit un `CreateCommentPayload` persisté en octets HTTP.
@@ -678,7 +694,8 @@ nonisolated struct CreateCommentBody: Encodable {
             parentId: payload.parentCommentId,
             location: payload.location,
             effectFlags: payload.effectFlags,
-            originalLanguage: payload.originalLanguage
+            originalLanguage: payload.originalLanguage,
+            quotedPostMediaId: payload.quotedPostMediaId
         ))
     }
 }

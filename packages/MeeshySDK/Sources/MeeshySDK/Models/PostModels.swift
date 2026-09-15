@@ -151,6 +151,30 @@ public struct APIPostComment: Decodable, Sendable {
     /// `CodingKeys` custom sur ce type). `var`/`= nil` : source-compatible
     /// avec le memberwise init déjà utilisé par les tests existants.
     public var location: SharedPlace? = nil
+    /// L'ANCRE FIGÉE du média cité (#6578), hissée depuis
+    /// `metadata.quotedPostMedia` — même geste que `location` ci-dessus.
+    public var quotedPostMedia: APIQuotedPostMediaRef? = nil
+    /// Le média cité, RELU par la passerelle à chaque service. Absent quand il
+    /// n'existe plus ou qu'il a quitté le post commenté — la citation reste,
+    /// portée par `quotedPostMedia`.
+    public var quotedMedia: APIPostMedia? = nil
+
+    /// **Le recollement des deux moitiés, site UNIQUE.**
+    ///
+    /// Une vue ne doit jamais avoir à savoir que la citation voyage sous deux
+    /// clés : c'est exactement le genre de détail qu'un deuxième lecteur
+    /// recopie de travers. `nil` ⇒ ce commentaire parle du POST, pas d'un média
+    /// en particulier.
+    public var quotedCitation: CommentQuotedMedia? {
+        guard let ancre = quotedPostMedia else { return nil }
+        return CommentQuotedMedia(
+            postMediaId: ancre.postMediaId,
+            // Une nature inconnue vaut « une pièce jointe » — vrai, et sans
+            // effet sur le décodage du commentaire.
+            kind: CommentQuotedMedia.Kind(rawValue: ancre.kind) ?? .file,
+            media: quotedMedia?.toFeedMedia()
+        )
+    }
 }
 
 public struct APIPostTranslationEntry: Codable, Sendable {
@@ -507,7 +531,8 @@ extension APIPost {
                         originalLanguage: c.originalLanguage, translatedContent: commentTranslatedContent,
                         currentUserReactions: c.currentUserReactions,
                         media: (c.media ?? []).map { $0.toFeedMedia() },
-                        location: c.location)
+                        location: c.location,
+                        quotedMedia: c.quotedCitation)
         }
 
         let repost: RepostContent? = repostOf?.toRepostContent()
