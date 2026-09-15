@@ -225,14 +225,19 @@ export function MagicLinkPanel({ deps = defaultMagicLinkDeps, footer, onCancel, 
         <GlyphSvg glyph={AUTH_GLYPHS.magicWand} size={56} />
       </span>
 
-      <div className="grid justify-items-center gap-1">
-        <div className="flex items-center justify-center gap-1">
-          <h2 className="min-w-0 text-center text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
+      {/* LE (i) SUIT LE DERNIER MOT DU TITRE. Titre et bouton dans une rangée
+          flexible : à 390 px, « Votre adresse e-mail » passe sur deux lignes, sa
+          boîte prend TOUTE la largeur, et le (i) partait flotter au bord de
+          l'écran, loin du texte qu'il explique (mesuré en capture). En ligne,
+          le bouton se range derrière « e-mail », quelle que soit la césure. */}
+      <div className="grid gap-1 text-center">
+        <div>
+          <h2 className="inline text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
             Votre adresse e-mail
           </h2>
-          <InfoHintButton hint={HOW_IT_WORKS} state={howItWorks} />
+          <InfoHintButton hint={HOW_IT_WORKS} state={howItWorks} style={{ display: 'inline-grid', verticalAlign: 'middle' }} />
         </div>
-        <InfoHintText hint={HOW_IT_WORKS} state={howItWorks} className="text-center" />
+        <InfoHintText hint={HOW_IT_WORKS} state={howItWorks} />
       </div>
 
       <Field id="magic-link-email" glyph={AUTH_GLYPHS.envelope} tint="var(--ios-indigo-400)" focused={focused} error={fieldError}>
