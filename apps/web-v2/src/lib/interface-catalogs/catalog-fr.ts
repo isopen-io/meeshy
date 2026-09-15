@@ -202,6 +202,17 @@ const fr = {
   'profile.language.choose': 'Choisir',
   'profile.language.clear.regional': 'Retirer la langue régionale',
   'profile.language.clear.custom': 'Retirer la langue personnalisée',
+
+  /* LA FEUILLE DE CHOIX DE LANGUE, PARLÉE DANS LA LANGUE D'INTERFACE (#6328)
+     — titre par défaut (inscription), titre du composeur, recherche et état
+     vide de `language-sheet.tsx`. `title`/`selected` restent des props
+     explicites (#5828) : ces clés ne servent qu'à défaut d'un `title` fourni
+     par l'appelant, et toujours pour la recherche/l'état vide. */
+  'languageSheet.title.read': 'Langue de lecture',
+  'languageSheet.title.write': 'Langue d’écriture',
+  'languageSheet.search': 'Rechercher une langue',
+  'languageSheet.empty': 'Aucune langue ne correspond à « {search} ».',
+
   'profile.stats.messages': 'Messages',
   'profile.stats.translations': 'Traductions',
   'profile.stats.languages': 'Langues',

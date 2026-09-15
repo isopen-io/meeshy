@@ -2,6 +2,9 @@ import { useState } from 'react';
 
 import { SUPPORTED_LANGUAGES } from '@meeshy/shared/utils/languages';
 
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
+
 import { Glyph } from './glyph';
 import { Sheet, SheetEmpty } from './sheet';
 
@@ -22,10 +25,17 @@ import { Sheet, SheetEmpty } from './sheet';
  * composeur (« Langue d'écriture », `selected` = la valeur COURANTE de la
  * pastille), jamais une jumelle : le critère de fin de #5828 l'exige
  * explicitement (« réutiliser, jamais une seconde feuille »). L'inscription
- * ne passe ni l'un ni l'autre — défauts inchangés.
+ * ne passe ni l'un ni l'autre — le titre par défaut vient alors du catalogue
+ * d'interface (`languageSheet.title.read`, #6328), plus jamais un littéral
+ * français fixe.
+ *
+ * RECHERCHE ET ÉTAT VIDE (#6328) — parlent la langue d'INTERFACE
+ * (`currentInterfaceLanguage()`), jamais celle du contenu : ce sont des
+ * libellés SYSTÈME de la feuille, distincts du Prisme de contenu que cette
+ * feuille sert à choisir.
  */
 export function LanguageSheet({
-  title = 'Langue de lecture',
+  title,
   selected,
   onSelect,
   onClose,
@@ -35,6 +45,7 @@ export function LanguageSheet({
   onSelect: (code: string) => void;
   onClose: () => void;
 }) {
+  const language = currentInterfaceLanguage();
   const [search, setSearch] = useState('');
   const needle = search.trim().toLowerCase();
   const filtered =
@@ -49,9 +60,9 @@ export function LanguageSheet({
 
   return (
     <Sheet
-      title={title}
-      searchLabel="Rechercher une langue"
-      searchPlaceholder="Rechercher une langue"
+      title={title ?? translate(language, 'languageSheet.title.read')}
+      searchLabel={translate(language, 'languageSheet.search')}
+      searchPlaceholder={translate(language, 'languageSheet.search')}
       search={search}
       onSearchChange={setSearch}
       onClose={onClose}
@@ -79,7 +90,9 @@ export function LanguageSheet({
           </li>
         );
       })}
-      {filtered.length === 0 ? <SheetEmpty label={`Aucune langue ne correspond à « ${search} ».`} /> : null}
+      {filtered.length === 0 ? (
+        <SheetEmpty label={translate(language, 'languageSheet.empty', { search })} />
+      ) : null}
     </Sheet>
   );
 }

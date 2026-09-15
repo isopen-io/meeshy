@@ -181,6 +181,12 @@ const ar = {
   'profile.language.choose': 'اختيار',
   'profile.language.clear.regional': 'إزالة اللغة الإقليمية',
   'profile.language.clear.custom': 'إزالة اللغة المخصّصة',
+
+  'languageSheet.title.read': 'لغة القراءة',
+  'languageSheet.title.write': 'لغة الكتابة',
+  'languageSheet.search': 'البحث عن لغة',
+  'languageSheet.empty': 'لا توجد لغة تطابق «{search}».',
+
   'profile.stats.messages': 'الرسائل',
   'profile.stats.translations': 'الترجمات',
   'profile.stats.languages': 'اللغات',

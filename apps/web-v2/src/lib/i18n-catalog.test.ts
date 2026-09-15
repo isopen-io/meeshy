@@ -100,6 +100,24 @@ describe('translate — une clé, sa langue, ses paramètres', () => {
     expect(translate('en', 'typing.double', { first: 'Kwame', second: 'Fatou' })).toBe('Kwame and Fatou are typing');
     expect(translate('ar', 'typing.double', { first: 'Kwame', second: 'Fatou' })).toBe('Kwame وFatou يكتبان');
   });
+
+  /**
+   * LA FEUILLE DE LANGUE, TROIS TEXTES SYSTÈME (#6328) — avant ce lot,
+   * `language-sheet.tsx` les écrivait en dur, en français, quelle que soit
+   * l'interface (`components/language-sheet.tsx`, `composer.tsx`). Témoin de
+   * COMPORTEMENT sur `translate()`, le même appel que le composant fait —
+   * `i18n-catalog.test.ts` garde déjà la PARITÉ des sept catalogues ; ce
+   * témoin garde le TEXTE exact d'une langue non française, pour que ce lot
+   * ne repose pas uniquement sur `auth-screens.test.tsx` (rendu du défaut de
+   * l'inscription) pour l'état vide, hors de portée d'un rendu statique.
+   */
+  test('languageSheet.* — allemand, jamais une recopie du français', async () => {
+    await loadInterfaceCatalog('de');
+    expect(translate('de', 'languageSheet.title.read')).toBe('Lesesprache');
+    expect(translate('de', 'languageSheet.title.write')).toBe('Schreibsprache');
+    expect(translate('de', 'languageSheet.search')).toBe('Sprache suchen');
+    expect(translate('de', 'languageSheet.empty', { search: 'xy' })).toBe('Keine Sprache passt zu „xy“.');
+  });
 });
 
 /**

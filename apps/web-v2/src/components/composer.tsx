@@ -16,6 +16,8 @@ import { releasePreviewUrl } from '@/lib/send/attachment-preview-url';
 import { composerAccentOf, decorativeEffectCountOf, type ComposeProtection } from '@/lib/send/compose-protection';
 import { composerChromeAccentStyle } from '@/lib/send/composer-accent';
 import type { ComposerDraft } from '@/lib/send/draft-store';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import type { ComposerDraftReport } from '@/lib/view/use-draft';
 import { useComposeLanguage } from '@/lib/view/use-compose-language';
 import { useSentiment } from '@/lib/view/use-sentiment';
@@ -478,7 +480,7 @@ export const Composer = memo(function Composer({
       {languageSheetOpen ? (
         <Suspense fallback={null}>
           <LanguageSheet
-            title="Langue d’écriture"
+            title={translate(currentInterfaceLanguage(), 'languageSheet.title.write')}
             selected={compose.language}
             onSelect={(code) => {
               compose.choose(code);
