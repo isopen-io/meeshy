@@ -395,6 +395,11 @@ extension StoryCanvasUIView {
             isPrimaryMediaPending: mediaPending
         )
         isPlaybackStalled = !progressing
+        // R1 s'applique aussi aux AVPLAYER (#6580). Le watchdog gouverne la
+        // retenue comme il gouverne le gel du playhead : une fois expiré,
+        // `progressing` redevient vrai et l'image ne doit pas rester figée sur
+        // un audio qui n'arrivera jamais.
+        holdVideosWhileAudioPending(audioPending && !watchdogExpired)
 
         // C-DIR3 — self-heal : un player `.paused` alors que rien ne le pause
         // (ni user, ni échec) ne se relancera JAMAIS seul — les didSet
@@ -424,6 +429,46 @@ extension StoryCanvasUIView {
         onPlaybackProgressing?(progressing)
     }
 
+    /// **R1 étendu aux AVPlayer (#6580).** La porte R1 attend que le fichier
+    /// audio de la slide soit téléchargé et schedulé ; elle gelait le PLAYHEAD
+    /// (`isPlaybackStalled` coupe `advancePlayheadIfActive`) et laissait les
+    /// `AVPlayer` rouler. La vidéo prenait donc une avance qu'aucun recalage ne
+    /// rattrape — le recalage vise `slidePlayheadSeconds`, c'est-à-dire le
+    /// playhead gelé.
+    ///
+    /// **Une SUSPENSION, pas une re-décision.** On mémorise l'état des deux
+    /// portes et on le restaure à l'identique ; rejouer les gates du « GO »
+    /// ici lèverait des portes que d'autres conditions (fenêtre absente,
+    /// préemption d'un autre canvas) tenaient délibérément fermées.
+    ///
+    /// L'audio n'est PAS ajouté à `contentReadyFired`, par conception : l'image
+    /// ne doit pas attendre le son, et l'y ajouter rallongerait l'ouverture.
+    /// On gèle ce qui doit rester EN PHASE ; on ne retarde pas l'affichage.
+    func holdVideosWhileAudioPending(_ pending: Bool) {
+        guard mode == .play else { return }
+        guard pending else {
+            guard let held = videoGatesHeldForAudio else { return }
+            videoGatesHeldForAudio = nil
+            // Une pause utilisateur posée PENDANT la retenue gouverne : la
+            // relâche rendrait la lecture sous une slide gelée. Le marqueur est
+            // soldé quand même — `setStoryPlaybackPaused(false)` reprendra par
+            // son propre chemin.
+            guard !isPlaybackPaused else { return }
+            pushSlidePlayheadToLayers()
+            backgroundLayer.isPlaybackActive = held.background
+            foregroundVideosPlaybackActive = held.foreground
+            forEachMediaLayer { $0.startAlignedIfActive() }
+            return
+        }
+        guard videoGatesHeldForAudio == nil else { return }
+        // Rien qui roule ⇒ rien à retenir, et surtout aucun marqueur posé :
+        // sans ça, la relâche RELÈVERAIT des portes que personne n'avait levées.
+        guard backgroundLayer.isPlaybackActive || foregroundVideosPlaybackActive else { return }
+        videoGatesHeldForAudio = (backgroundLayer.isPlaybackActive, foregroundVideosPlaybackActive)
+        backgroundLayer.isPlaybackActive = false
+        foregroundVideosPlaybackActive = false
+    }
+
     /// C-DIR3 — re-drive la lecture par le chemin canonique du resume en
     /// FORÇANT les didSet (flip false→true) : exactement ce que le cycle
     /// long-press/relâcher réparait à la main sur device. Loggé pour le
@@ -447,6 +492,9 @@ extension StoryCanvasUIView {
         playbackStallSince = nil
         playbackPausedProbeSince = nil
         playbackSelfHealKicks = 0
+        // Une nouvelle session de lecture ne doit pas hériter d'une retenue R1
+        // de la session précédente : son état restauré n'aurait plus de sens.
+        videoGatesHeldForAudio = nil
     }
 
     /// Test-only seam : drive the health core with an injected `timeControlStatus`

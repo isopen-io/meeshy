@@ -1048,6 +1048,18 @@ public final class StoryCanvasUIView: UIView {
     /// résolution d'effets à chaque tick.
     var slideHasSchedulableAudio: Bool = false
 
+    /// Ce que valaient les deux portes vidéo AVANT la retenue R1 (#6580),
+    /// `nil` hors retenue.
+    ///
+    /// `isSlideAudioPending()` gelait le playhead sans geler les `AVPlayer` :
+    /// la vidéo roulait pendant l'attente du fichier audio et prenait une
+    /// avance qu'aucun recalage ne rattrape — le recalage vise justement le
+    /// playhead gelé. On SUSPEND donc les deux portes, et on les RESTAURE
+    /// telles quelles : rejouer les gates du « GO » à la relâche ferait
+    /// démarrer des players que d'autres portes (fenêtre absente, préemption)
+    /// tenaient délibérément fermés.
+    var videoGatesHeldForAudio: (background: Bool, foreground: Bool)?
+
     /// Présence d'une piste audio par identifiant de média vidéo, sondée une
     /// seule fois par clip puis mémorisée.
     ///
