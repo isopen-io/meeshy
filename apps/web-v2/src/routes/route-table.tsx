@@ -27,6 +27,12 @@ export const ROUTES = {
      n'apporte qu'une donnée, et une donnée se transporte dans l'adresse plutôt
      que dans un second écran d'inscription à faire diverger. */
   signupAffiliate: { pattern: '/signup/affiliate/$token', screen: () => import('@/routes/signup-affiliate') },
+  /* LA JONCTION PAR LIEN (#5561, bascule #6702) — l'adresse que TOUS les liens
+     de partage émis visent : la passerelle (`sharing.ts:243`), iOS
+     (`ShareLinkModels.swift`), Android et la v2 (`links.ts § shareLinkUrl`).
+     Le legacy la servait (`apps/web/app/chat/[id]`, D-5) et ne la sert plus.
+     PUBLIQUE : `session-guard.ts` ne la range dans aucun ensemble. */
+  chatJoin: { pattern: '/chat/$link', screen: () => import('@/routes/chat-join') },
   /* Le tableau de bord des streaks & badges (#5547) — sous `/me/`, l'espace
      du profil (inventaire de parité : `/me` est V4.0.0), privé (garde de
      session), découpé comme les autres : aucun octet avant le premier pixel. */
@@ -76,6 +82,25 @@ export const ROUTES = {
      après un rafraîchissement, jamais une navigation en mémoire seule. */
   verifyEmail: { pattern: '/auth/verify-email', screen: () => import('@/routes/verify-email') },
   resetPassword: { pattern: '/reset-password', screen: () => import('@/routes/reset-password') },
+  /* LES LIENS REÇUS (#6714, #6715) — des adresses que la PASSERELLE compose
+     et qui circulent déjà : e-mails, messages, publications, Android. Chacune
+     garde l'adresse exacte que le legacy servait (D-5) : sinon chaque lien
+     déjà envoyé mènerait à la page introuvable.
+     - `/l/:token` (`TrackingLinkService.buildTrackingUrl`) compte le clic et
+       ouvre la cible ; `/l/:token/expired` est l'état clos d'un lien mort, à
+       sa propre adresse pour qu'un rafraîchissement ne recompte pas le clic ;
+     - `/account/deletion` (`buildDeletionPageUrl`, `routes/me/delete-account.ts`),
+       obligation réglementaire, que la rangée « Supprimer le compte » des
+       réglages ouvre aussi ;
+     - `/settings/verify-email-change` (`contact-change.ts`, `contact-changes.ts`) ;
+     - `/settings/notifications`, le désabonnement des diffusions
+       (`jobs/broadcast-sender.ts`).
+     Aucune n'entre dans un ensemble de la garde (`lib/session-guard.ts`). */
+  trackingLink: { pattern: '/l/$token', screen: () => import('@/routes/tracking-link') },
+  trackingLinkExpired: { pattern: '/l/$token/expired', screen: () => import('@/routes/tracking-link-expired') },
+  accountDeletion: { pattern: '/account/deletion', screen: () => import('@/routes/account-deletion') },
+  verifyEmailChange: { pattern: '/settings/verify-email-change', screen: () => import('@/routes/verify-email-change') },
+  settingsNotifications: { pattern: '/settings/notifications', screen: () => import('@/routes/settings-notifications') },
   /* LES HUIT DESTINATIONS DES MENUS FLOTTANTS (#6214) — le Flux pour le bouton
      de gauche, les six barreaux de l'échelle de droite, et le profil qu'ouvre
      l'avatar. Leurs libellés, teintes et glyphes vivent dans UNE table

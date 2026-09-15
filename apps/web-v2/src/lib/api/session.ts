@@ -4,6 +4,8 @@ import type { User } from '@meeshy/shared/types/user';
 
 import { safeLocalStorage } from '../storage';
 
+import { claimLegacySession } from './legacy-session';
+
 /**
  * LE MAGASIN DE SESSION (#5605, T3) — UNE source, motif `conversation-store.ts`
  * (`zustand/vanilla` : observable HORS de tout composant, sans DOM).
@@ -210,6 +212,18 @@ function purge(storage: SessionStorage): void {
   }
 }
 
+/**
+ * LA BASCULE DE meeshy.me NE DÉCONNECTE PERSONNE (#6702). Quand
+ * `meeshy.session` est ABSENTE, la session laissée par le legacy
+ * (`legacy-session.ts`) devient une entrée `meeshy.session`, projetée comme à
+ * l'`establish` — puis passe par la MÊME restauration que toute autre : forme,
+ * échéance, projection. Une entrée v2 présente a toujours le dernier mot.
+ */
+function adoptLegacySession(storage: SessionStorage, now: number): void {
+  const legacy = claimLegacySession(storage, now);
+  if (legacy !== null) persist(storage, { ...legacy, user: pickSessionUser(legacy.user) });
+}
+
 export type SessionStoreOptions = {
   readonly storage?: SessionStorage;
   readonly now?: () => number;
@@ -261,6 +275,7 @@ export function createSessionStore(options: SessionStoreOptions = {}): SessionSt
       set({ session: { ...current, user } });
     },
     restoreSession: () => {
+      if (readPersisted(storage) === 'absent') adoptLegacySession(storage, now());
       const persisted = readPersisted(storage);
       if (persisted === 'absent') return;
       if (persisted === 'corrupted' || persisted.expiresAt <= now()) {

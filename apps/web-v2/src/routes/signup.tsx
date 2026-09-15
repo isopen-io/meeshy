@@ -43,6 +43,7 @@ import {
   referralCodeFromLocation,
 } from '@/lib/view/referral-code';
 import { forgetReferralCode, recallReferralCode, rememberReferralCode } from '@/lib/view/referral-memory';
+import { landingAfterSession, safeNextPath } from '@/lib/session-guard';
 import { Link, href, navigate } from '@/routes/route-table';
 
 /**
@@ -146,6 +147,30 @@ export type SignupReferralDeps = { readonly validate: (code: string) => Promise<
 
 const defaultReferralDeps: SignupReferralDeps = { validate: (code) => validateReferralCode(code) };
 
+/**
+ * OÙ MÈNE UN COMPTE QUI VIENT D'ÊTRE CRÉÉ (#5561).
+ *
+ * Sans `next`, la vérification de l'e-mail (D-53, #5672), inchangée. Avec un
+ * `next` sûr — l'invitation d'où l'on s'est inscrit —, l'invitation : c'est la
+ * raison pour laquelle ce compte existe, et « Rejoindre » l'y attend en un
+ * geste. Faire passer la vérification d'abord renverrait, à sa fin, sur la
+ * liste : l'invitation serait perdue. La vérification ne l'est pas : son lien
+ * part par courriel dès l'inscription (`registration.service.ts:488`), et
+ * rejoindre comme écrire restent ouverts à un compte non confirmé (#6437,
+ * `EMAIL_VERIFICATION_GATED_ROUTES`).
+ */
+export function landingAfterRegistration(input: { readonly next: string | null; readonly email: string }): string {
+  return safeNextPath(input.next) ?? href('verifyEmail', undefined, { email: input.email });
+}
+
+/** `next` lu sur l'ADRESSE plutôt que par `useSearch()` — même raison que
+ * `referralCodeFromLocation` : l'écran est monté tel quel par ses témoins, hors
+ * du routeur, et l'invitation ne change pas sous les doigts de qui s'inscrit. */
+function nextFromLocation(): string | null {
+  if (typeof window === 'undefined') return null;
+  return new URLSearchParams(window.location.search).get('next');
+}
+
 export default function SignupScreen({
   referralDeps = defaultReferralDeps,
 }: { readonly referralDeps?: SignupReferralDeps } = {}) {
@@ -170,6 +195,9 @@ export default function SignupScreen({
   // avant que `handleSubmit` n'ait pu router vers la vérification d'e-mail
   // (D-53, #5672, raccordement).
   const [justRegistered, setJustRegistered] = useState(false);
+  const [next] = useState(nextFromLocation);
+  /** Ce que les liens vers la connexion TRANSMETTENT — jamais une valeur hostile. */
+  const safeNext = safeNextPath(next);
 
   /**
    * CE QUI EST PARU (#6405, redécoupé par #6582) — la loi est dans
@@ -239,8 +267,8 @@ export default function SignupScreen({
   // Même doctrine que login.tsx : `auth.register` parle TOUJOURS à la
   // passerelle réelle, indépendamment de `apiConfig.source`.
   useEffect(() => {
-    if (session.status === 'authenticated' && !justRegistered) navigate(href('list'), true);
-  }, [session.status, justRegistered]);
+    if (session.status === 'authenticated' && !justRegistered) navigate(landingAfterSession(next, href('list')), true);
+  }, [session.status, justRegistered, next]);
 
   function patch(fields: Partial<SignupFormState>) {
     setForm((current) => ({ ...current, ...fields }));
@@ -286,7 +314,7 @@ export default function SignupScreen({
       forgetReferralCode();
       void convertReferral({ code, userId: result.data.user.id }).catch(() => undefined);
     }
-    navigate(href('verifyEmail', undefined, { email: form.email }), true);
+    navigate(landingAfterRegistration({ next, email: form.email }), true);
   }
 
   const emailError = feedback.fieldErrors.email;
@@ -353,6 +381,7 @@ export default function SignupScreen({
             {feedback.showSignIn ? (
               <Link
                 to="login"
+                search={{ next: safeNext ?? undefined }}
                 replace
                 className={`inline-flex items-center justify-self-start text-caption font-semibold ${INDIGO_LINK}`}
                 style={{ minHeight: 44 }}
@@ -664,6 +693,7 @@ export default function SignupScreen({
               faire paraître le lien qui l'emmène ailleurs. */}
           <Link
             to="login"
+            search={{ next: safeNext ?? undefined }}
             replace
             className="inline-flex items-center justify-self-center text-title font-semibold"
             style={{ minHeight: 44, color: 'var(--color-ios-ink-2)' }}
