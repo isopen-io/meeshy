@@ -33,20 +33,36 @@
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { attachmentFullSelect } from '../attachments/attachmentIncludes';
-import { servedQuotedAttachments } from './servedQuotedMessage';
+import { servedQuotedAttachments, type QuotedMessageRow } from './servedQuotedMessage';
+
+type CitingReply = QuotedMessageRow & {
+  readonly attachmentReplyTo?: { readonly attachmentId?: unknown } | null;
+};
+
+type Attachable = { attachments?: unknown };
+
+const citingReplyOf = (message: unknown): CitingReply | null => {
+  if (typeof message !== 'object' || message === null || !('replyTo' in message)) return null;
+  const { replyTo } = message;
+  return typeof replyTo === 'object' && replyTo !== null ? replyTo : null;
+};
+
+const carriesId = (value: unknown, id: string): boolean =>
+  typeof value === 'object' && value !== null && 'id' in value && value.id === id;
 
 export async function backfillCitedAttachments(
   prisma: PrismaClient,
-  mappedMessages: any[]
+  mappedMessages: readonly unknown[]
 ): Promise<void> {
-  const attendues = new Map<string, any[]>();
-  for (const m of mappedMessages) {
-    const citee = m?.replyTo?.attachmentReplyTo?.attachmentId;
-    if (typeof citee !== 'string' || citee.length === 0) continue;
-    const dejaServie = Array.isArray(m.replyTo.attachments)
-      && m.replyTo.attachments.some((a: any) => a?.id === citee);
+  const attendues = new Map<string, CitingReply[]>();
+  for (const message of mappedMessages) {
+    const reply = citingReplyOf(message);
+    const citee = reply?.attachmentReplyTo?.attachmentId;
+    if (!reply || typeof citee !== 'string' || citee.length === 0) continue;
+    const dejaServie = Array.isArray(reply.attachments)
+      && reply.attachments.some((attachment: unknown) => carriesId(attachment, citee));
     if (dejaServie) continue;
-    attendues.set(citee, [...(attendues.get(citee) ?? []), m]);
+    attendues.set(citee, [...(attendues.get(citee) ?? []), reply]);
   }
   if (attendues.size === 0) return;
 
@@ -54,15 +70,16 @@ export async function backfillCitedAttachments(
     where: { id: { in: [...attendues.keys()] } },
     select: attachmentFullSelect,
   });
-  const parId = new Map(pieces.map((p: any) => [p.id, p]));
+  const parId = new Map(pieces.map((piece) => [piece.id, piece] as const));
 
-  for (const [attachmentId, messages] of attendues) {
+  for (const [attachmentId, replies] of attendues) {
     const piece = parId.get(attachmentId);
     if (!piece) continue;
-    for (const m of messages) {
-      if (piece.messageId !== m.replyTo?.id) continue;
-      const servies = Array.isArray(m.replyTo.attachments) ? m.replyTo.attachments : [];
-      m.replyTo.attachments = [...servies, ...servedQuotedAttachments(m.replyTo, [piece])];
+    for (const reply of replies) {
+      if (piece.messageId !== reply.id) continue;
+      const servies = Array.isArray(reply.attachments) ? reply.attachments : [];
+      const attachable: Attachable = reply;
+      attachable.attachments = [...servies, ...servedQuotedAttachments(reply, [piece])];
     }
   }
 }

@@ -672,7 +672,7 @@ export function registerMessagesListRoute(
       // `take: 4` du `select` de `replyTo` (répondre à la 5e photo d'un
       // carrousel). On la rattrape par son ID, en UNE requête pour la page —
       // plutôt qu'en faisant payer un `take: 10` à chaque message du fil.
-      await backfillCitedAttachments(prisma, mappedMessages as any[]);
+      await backfillCitedAttachments(prisma, mappedMessages);
 
       // Lieu partagé : hisser `metadata.location` en top-level `location` —
       // même miroir que `postReplyTo` ci-dessus, mais sur TOUT message
