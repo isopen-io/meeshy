@@ -321,20 +321,10 @@ public final class StoryMediaLayer: CALayer {
         // promesse de la planche `4c` au niveau du rendu — « aucun ne
         // ré-encode » — et la seule écriture qui la tienne sans toucher au
         // fichier.
-        let effectiveRatio = MediaCropRule.effectiveRatio(
-            sourceRatio: media.aspectRatio, crop: media.crop)
-        // Design-space frame (1080-référentiel) → render-space via geometry.
-        let baseDesignSize = Self.baseMediaDesignSize(aspectRatio: effectiveRatio)
         applyCrop(media.crop)
-        let scaledDesignSize = CGSize(
-            width: baseDesignSize.width * CGFloat(media.scale),
-            height: baseDesignSize.height * CGFloat(media.scale)
-        )
-        let renderedSize = geometry.render(scaledDesignSize)
-
-        let designCenterX = geometry.designLength(forNormalized: CGFloat(media.x))
-        let designCenterY = geometry.designHeightLength(forNormalized: CGFloat(media.y))
-        let renderedCenter = geometry.render(CGPoint(x: designCenterX, y: designCenterY))
+        let pose = Self.renderedPose(for: media, geometry: geometry)
+        let renderedSize = pose.size
+        let renderedCenter = pose.center
 
         bounds = CGRect(origin: .zero, size: renderedSize)
         position = renderedCenter
@@ -417,6 +407,22 @@ public final class StoryMediaLayer: CALayer {
         let borné = MediaCropRule.clamped(crop)
         contentsRect = CGRect(x: borné.x, y: borné.y,
                               width: borné.width, height: borné.height)
+    }
+
+    /// **La taille et le centre qu'un média pose dans le canvas** — la moitié
+    /// géométrique de `configure`, sortie pour que le mesureur de l'image seule
+    /// (`StorySceneFootprint`, #6636) lise la MÊME pose que le calque, jamais une
+    /// jumelle. Le recadrage change les proportions de l'objet (#5085).
+    static func renderedPose(for media: StoryMediaObject,
+                             geometry: CanvasGeometry) -> (size: CGSize, center: CGPoint) {
+        let effectiveRatio = MediaCropRule.effectiveRatio(
+            sourceRatio: media.aspectRatio, crop: media.crop)
+        let baseDesignSize = baseMediaDesignSize(aspectRatio: effectiveRatio)
+        let scaledDesignSize = CGSize(width: baseDesignSize.width * CGFloat(media.scale),
+                                      height: baseDesignSize.height * CGFloat(media.scale))
+        let designCenter = CGPoint(x: geometry.designLength(forNormalized: CGFloat(media.x)),
+                                   y: geometry.designHeightLength(forNormalized: CGFloat(media.y)))
+        return (geometry.render(scaledDesignSize), geometry.render(designCenter))
     }
 
     internal static func baseMediaDesignSize(aspectRatio: Double) -> CGSize {

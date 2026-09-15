@@ -199,6 +199,7 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         self.isPaused = isPaused
         self.isOutgoing = isOutgoing
         self.startAt = startAt
+        self.servesLetterboxFill = servesLetterboxFill
         self.positionKey = positionKey
         self.onCompletion = onCompletion
         self.onContentReady = onContentReady
@@ -221,6 +222,7 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         // l'anim (user 2026-05-28 « les média jouent en double / s'entrevauche »).
         let initialMode: RenderMode = isOutgoing ? .edit : .play
         let view = StoryCanvasUIView(slide: slide, mode: initialMode)
+        view.servesLetterboxFill = servesLetterboxFill
         let mediaList = storyItem.media
         let completion = onCompletion
         let contentReady = onContentReady
@@ -341,6 +343,10 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         if languagesChanged {
             view.setPreferredLanguages(preferredLanguages)
         }
+        // #6636 — le verdict de l'image seule peut changer sans nouvelle vue
+        // (rotation d'un iPad, traduction arrivée) ; le canvas l'ignore s'il
+        // n'a pas bougé.
+        view.servesLetterboxFill = servesLetterboxFill
         if identityChanged && !isOutgoing {
             // Reset défensif de la timeline canvas quand l'id slide change :
             // garantit que `currentTime` redémarre à zéro EN PHASE avec
