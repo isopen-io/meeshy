@@ -79,7 +79,7 @@ final class TopChromeBandGuardTests: XCTestCase {
 
         let tint = try code(tintPath)
         XCTAssertEqual(
-            count("ignoresSafeArea", in: tint), 1,
+            count(".overlay(alignment: .top)", in: tint), 1,
             "`TopChromeTint.swift` doit déclarer EXACTEMENT une bande — le site " +
             "unique qui peint le haut, quelle que soit la barre active."
         )
@@ -113,15 +113,28 @@ final class TopChromeBandGuardTests: XCTestCase {
             "La bande peint et RIEN d'autre : aucun geste, aucune forme de " +
             "contact — sinon elle intercepte les appuis du chrome qu'elle habille."
         )
+    }
+
+    /// La bande se pose en `.overlay`, et le geste qui l'empêche de couvrir la
+    /// barre est l'OFFSET — pas le choix de la couche.
+    ///
+    /// Mesuré au simulateur le 2026-09-14 (Meeshy-FullscreenCluster, appel
+    /// forcé) : un `.background` ne rend RIEN, pas même un aplat rouge opaque
+    /// de 200 pt. Le `content` que le modifier enveloppe contient
+    /// `RootThemedBackground`, qui porte `.ignoresSafeArea()` et peint donc la
+    /// fenêtre entière — tout ce qui vit DERRIÈRE lui est masqué.
+    func test_laBandeSePoseEnOverlay_etNeCouvreLaBarreQueGraceALOffset() throws {
+        let tint = try code(tintPath)
         XCTAssertTrue(
-            tint.contains(".background(alignment: .top)"),
-            "En `.background(alignment: .top)` : la bande se glisse derrière le " +
-            "sommet du VStack et remonte jusqu'au bord, sans rien recouvrir."
+            tint.contains(".overlay(alignment: .top)"),
+            "En `.background`, la bande passe SOUS `RootThemedBackground` " +
+            "(qui ignore la safe area) et ne rend pas un pixel — mesuré."
         )
-        XCTAssertFalse(
-            tint.contains(".overlay"),
-            "La bande se pose en `.background`, jamais en `.overlay` : posée " +
-            "par-dessus, elle couvrirait la pilule et le mini-lecteur eux-mêmes."
+        XCTAssertTrue(
+            tint.contains(".offset(y: -DeviceLayout.safeAreaTop)"),
+            "…et c'est l'offset d'exactement sa propre hauteur qui la remonte " +
+            "dans la bande système : sans lui, l'overlay couvrirait les " +
+            "premiers points de la pilule et du mini-lecteur qu'il prolonge."
         )
     }
 

@@ -121,7 +121,13 @@ struct FloatingCallPillView: View {
     /// plein écran (le cover est présenté par-dessus) et pendant le PiP système.
     /// Une bande calée sur `isActive` peindrait donc un ruban indigo au-dessus
     /// d'une barre absente — la bande DÉCOULE de la barre, elle ne la devine pas.
-    nonisolated static func isShowingPill(
+    /// Pas `nonisolated` : la conformité `Equatable` SYNTHÉTISÉE de
+    /// `CallDisplayMode` est isolée au `MainActor` (la cible compile sous
+    /// `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`), donc `==` y est
+    /// inutilisable depuis un contexte nonisolated. Les deux appelants — ce
+    /// `body` et `CallPresentationLayer.body(content:)` — sont déjà
+    /// MainActor-isolés.
+    static func isShowingPill(
         displayMode: CallDisplayMode,
         callState: CallState,
         isSystemPiPActive: Bool

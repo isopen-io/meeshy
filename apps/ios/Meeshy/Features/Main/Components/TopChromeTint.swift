@@ -90,9 +90,21 @@ struct TopChromeTint: Equatable, Sendable {
 /// `@EnvironmentObject` ni `@Environment` ne se propagent dans une closure
 /// `.background`/`.overlay` — crash documenté quatre fois dans ce dépôt.
 ///
-/// Trois propriétés, chacune pour une raison distincte :
-/// • `.background`, jamais `.overlay` — posée par-dessus, la bande couvrirait
-///   la pilule et le mini-lecteur qu'elle est censée prolonger ;
+/// **`.overlay`, et pas `.background` — mesuré au simulateur, pas raisonné.**
+/// Un `.background(alignment: .top)` est INVISIBLE ici : le `content` que ce
+/// modifier enveloppe contient `RootThemedBackground`, qui porte
+/// `.ignoresSafeArea()` et peint donc la fenêtre ENTIÈRE, bande status-bar
+/// comprise. Tout ce qui se pose DERRIÈRE ce contenu disparaît dessous. La
+/// preuve : un aplat ROUGE opaque de 200 pt posé en `.background` ne rend pas
+/// un pixel (capture 2026-09-14, Meeshy-FullscreenCluster, appel forcé).
+///
+/// L'objection qui avait fait préférer `.background` — « par-dessus, la bande
+/// couvrirait la pilule et le mini-lecteur » — est réelle, et c'est l'OFFSET
+/// qui y répond : l'overlay est aligné sur le haut du `VStack`, donc sur la
+/// limite BASSE de l'encart, puis remonté de toute sa hauteur. Il n'occupe que
+/// la bande système, et pas un point de la barre qu'il prolonge.
+///
+/// Les deux autres propriétés, chacune pour sa raison :
 /// • hauteur = `DeviceLayout.safeAreaTop`, lue sur la FENÊTRE — un
 ///   `GeometryProxy.safeAreaInsets` rend 0 dans un sous-arbre qui ignore la
 ///   safe area (motif documenté `MessageListViewController.swift:567-574`) ;
@@ -104,12 +116,11 @@ struct TopChromeBand: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .background(alignment: .top) {
+            .overlay(alignment: .top) {
                 if let tint = TopChromeTint.resolve(callIsActive: callIsActive, audio: audio) {
                     tint.bandColor
                         .frame(height: DeviceLayout.safeAreaTop)
-                        .frame(maxWidth: .infinity)
-                        .ignoresSafeArea(.container, edges: .top)
+                        .offset(y: -DeviceLayout.safeAreaTop)
                         .allowsHitTesting(false)
                 }
             }
