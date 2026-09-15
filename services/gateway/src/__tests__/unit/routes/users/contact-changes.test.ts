@@ -109,14 +109,19 @@ const BASE_USER = {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function makePrisma(overrides: Record<string, any> = {}) {
-  return {
+  const prisma: any = {
     user: {
       findUnique: jest.fn<any>().mockResolvedValue(BASE_USER),
       findFirst: jest.fn<any>().mockResolvedValue(null),
       update: jest.fn<any>().mockResolvedValue(BASE_USER),
     },
+    passwordResetToken: {
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
+    $transaction: jest.fn<any>((cb: any) => cb(prisma)),
     ...overrides,
-  } as any;
+  };
+  return prisma;
 }
 
 async function buildApp(opts: {
@@ -348,6 +353,12 @@ describe('POST /users/me/contact-changes/email/verify', () => {
     expect(body.data.user.email).toBe('new@test.com');
     expect(prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ email: 'new@test.com', pendingEmail: null }),
+    }));
+    // #6661 — révoque, dans la MÊME écriture, les liens de réinitialisation
+    // encore valides émis vers l'ancienne adresse.
+    expect(prisma.passwordResetToken.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ userId: USER_ID, isRevoked: false }),
+      data: expect.objectContaining({ isRevoked: true, revokedReason: 'EMAIL_CHANGED' }),
     }));
     await app.close();
   });

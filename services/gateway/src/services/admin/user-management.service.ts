@@ -16,6 +16,7 @@ import {
   ensureGlobalConversationMembership,
   type GlobalMembershipSocketManager,
 } from '../conversations/ensureGlobalConversationMembership';
+import { revokePasswordResetTokensForEmailChange } from '../../utils/password-reset-revocation';
 
 type UserSortKey = NonNullable<UserFilters['sortBy']>;
 
@@ -273,13 +274,18 @@ export class UserManagementService {
       throw new Error('Invalid password');
     }
 
-    // Mettre à jour l'email
-    const updatedUser = await this.prisma.user.update({
-      where: { id: userId },
-      data: {
-        email: data.newEmail,
-        updatedAt: new Date()
-      },
+    // Mettre à jour l'email — dans la MÊME écriture, révoquer les liens de
+    // réinitialisation encore valides de l'ancienne adresse (#6661).
+    const updatedUser = await this.prisma.$transaction(async (tx) => {
+      const u = await tx.user.update({
+        where: { id: userId },
+        data: {
+          email: data.newEmail,
+          updatedAt: new Date()
+        },
+      });
+      await revokePasswordResetTokensForEmailChange(tx, userId);
+      return u;
     });
 
     return updatedUser as unknown as FullUser;

@@ -55,14 +55,19 @@ const USER_ID = '507f1f77bcf86cd799439011';
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function makePrisma(overrides: Record<string, any> = {}) {
-  return {
+  const prisma: any = {
     user: {
       findUnique: jest.fn<any>().mockResolvedValue(null),
       findFirst: jest.fn<any>().mockResolvedValue(null),
       update: jest.fn<any>().mockResolvedValue({}),
     },
+    passwordResetToken: {
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
+    $transaction: jest.fn<any>((cb: any) => cb(prisma)),
     ...overrides,
-  } as any;
+  };
+  return prisma;
 }
 
 async function buildApp(opts: {
@@ -155,6 +160,27 @@ describe('POST /users/me/verify-email-change — success', () => {
     const res = await app.inject({ method: 'POST', url: '/users/me/verify-email-change', payload: { token: 'mytoken' } });
     expect(res.statusCode).toBe(200);
     expect(res.json().data.newEmail).toBe('new@test.com');
+    await app.close();
+  });
+
+  // #6661 — un lien de réinitialisation émis vers l'ANCIENNE adresse ne doit
+  // plus rester valide une fois l'adresse changée, dans la MÊME écriture.
+  it('revokes still-valid password reset tokens in the same transaction (#6661)', async () => {
+    const prisma = makePrisma();
+    const hashedToken = require('crypto').createHash('sha256').update('mytoken').digest('hex');
+    prisma.user.findUnique = jest.fn<any>().mockResolvedValue({
+      id: USER_ID, email: 'old@test.com', pendingEmail: 'new@test.com',
+      pendingEmailVerificationToken: hashedToken,
+      pendingEmailVerificationExpiry: new Date(Date.now() + 3600000),
+    });
+    prisma.user.findFirst = jest.fn<any>().mockResolvedValue(null);
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({ method: 'POST', url: '/users/me/verify-email-change', payload: { token: 'mytoken' } });
+    expect(res.statusCode).toBe(200);
+    expect(prisma.passwordResetToken.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ userId: USER_ID, isRevoked: false }),
+      data: expect.objectContaining({ isRevoked: true, revokedReason: 'EMAIL_CHANGED' }),
+    }));
     await app.close();
   });
 });
