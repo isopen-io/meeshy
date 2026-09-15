@@ -686,6 +686,7 @@ struct StoryCardView: View {
     /// Cf. doc de `RenderableSlideCache` — partagé par les 3 lecteurs du
     /// slide renderable dans ce body (representable, fond média, backdrop).
     @State private var renderableSlideCache = RenderableSlideCache()
+    @State var imageOnlyVerdictCache = StoryImageOnlyVerdictCache() // #6636 — `+ImageOnly`
 
     // Story content
     let currentStory: StoryItem?
@@ -1041,6 +1042,7 @@ struct StoryCardView: View {
                               carrier: outgoing,
                               preferredContentLanguages: resolvedViewerLanguageChain,
                               isOutgoing: true,
+                              servesLetterboxFill: imageOnlyRect(of: outgoing) == nil,
                               preloadedImages: preloadedImages,
                               preloadedVideoURLs: preloadedVideoURLs,
                               preloadedAudioURLs: preloadedAudioURLs)
@@ -1051,7 +1053,8 @@ struct StoryCardView: View {
                                      preloadedImages: preloadedImages,
                                      preloadedVideoURLs: preloadedVideoURLs,
                                      preloadedAudioURLs: preloadedAudioURLs,
-                                     isOutgoing: true)
+                                     isOutgoing: true,
+                                     servesLetterboxFill: imageOnlyRect(of: outgoing) == nil)
         }
     }
 
@@ -1097,6 +1100,7 @@ struct StoryCardView: View {
                               carrier: story,
                               preferredContentLanguages: resolvedViewerLanguageChain,
                               isMuted: isGlobalMuted,
+                              servesLetterboxFill: imageOnlyRect(of: story) == nil,
                               preloadedImages: preloadedImages,
                               preloadedVideoURLs: preloadedVideoURLs,
                               preloadedAudioURLs: preloadedAudioURLs,
@@ -1115,6 +1119,7 @@ struct StoryCardView: View {
                                      preloadedAudioURLs: preloadedAudioURLs,
                                      mute: isGlobalMuted,
                                      isPaused: isCanvasPlaybackPaused,
+                                     servesLetterboxFill: imageOnlyRect(of: story) == nil,
                                      onContentReady: { isContentReady = true },
                                      onContentProgress: { p in slideContentProgress = latchedContentProgress(p) },
                                      onPlaybackProgressing: { progressing in
@@ -1249,21 +1254,9 @@ struct StoryCardView: View {
                     .clipped()
                     .opacity(outgoingOpacity)
                     .scaleEffect(closingScale)
-                    // Canvas sortant suit la carte (même cadrage) pendant le cross-fade.
-                    // clipShape AVANT scale/offset : appliqué après, le clip
-                    // restait sur les bounds NON déplacés — le contenu décalé
-                    // vers le bas gardait un bord HAUT brut (coins carrés) et
-                    // se faisait rogner en bas par les coins arrondis du rect
-                    // d'origine (bug user 2026-07-11 « haut carré, bas à
-                    // moitié arrondi »). Rayon compensé : le clip vit en
-                    // espace non-scalé.
-                    .clipShape(RoundedRectangle(
-                        cornerRadius: readerCanvasFraming.scale > 0
-                            ? readerCanvasFraming.cornerRadius / readerCanvasFraming.scale
-                            : readerCanvasFraming.cornerRadius,
-                        style: .continuous))
-                    .scaleEffect(readerCanvasFraming.scale)
-                    .offset(y: readerCanvasFraming.offset.height)
+                    // Canvas sortant suit la carte (même cadrage, même forme —
+                    // l'image seule quand il n'est qu'une image, #6636).
+                    .readerCard(framing: readerCanvasFraming, imageRect: imageOnlyRect(of: outgoing))
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
@@ -1346,16 +1339,9 @@ struct StoryCardView: View {
                         RevealCircleShape(progress: isRevealActive ? 1.0 : (currentStory?.storyEffects?.opening == .reveal ? 0.001 : 1.0))
                     )
                     // Carte → plein écran (mutualisé composer). Visuel pur (la frame
-                    // reste `canvasFitSize` → projection design→render intacte).
-                    // clipShape AVANT scale/offset (cf. canvas sortant ci-dessus :
-                    // après, le haut restait carré et le bas à moitié arrondi).
-                    .clipShape(RoundedRectangle(
-                        cornerRadius: readerCanvasFraming.scale > 0
-                            ? readerCanvasFraming.cornerRadius / readerCanvasFraming.scale
-                            : readerCanvasFraming.cornerRadius,
-                        style: .continuous))
-                    .scaleEffect(readerCanvasFraming.scale)
-                    .offset(y: readerCanvasFraming.offset.height)
+                    // reste `canvasFitSize` → projection design→render intacte) ;
+                    // l'image seule quand la story n'est qu'une image (#6636).
+                    .readerCard(framing: readerCanvasFraming, imageRect: imageOnlyRect(of: story))
                     // Ombre portée : la carte se détache du backdrop ThumbHash flou (même
                     // contenu) par son BORD arrondi + son ombre, pas par un voile sombre
                     // (demande user 2026-06-02 « bords arrondis + ThumbHash en fond »).
@@ -1418,16 +1404,9 @@ struct StoryCardView: View {
                     .frame(width: canvasFitSize.width,
                            height: canvasFitSize.height)
                     .clipped()
-                    // Le loader suit la carte (même cadrage) → pas de saut entre le
-                    // placeholder ThumbHash carté et le canvas carté.
-                    // clipShape AVANT scale/offset (même correctif que le canvas).
-                    .clipShape(RoundedRectangle(
-                        cornerRadius: readerCanvasFraming.scale > 0
-                            ? readerCanvasFraming.cornerRadius / readerCanvasFraming.scale
-                            : readerCanvasFraming.cornerRadius,
-                        style: .continuous))
-                    .scaleEffect(readerCanvasFraming.scale)
-                    .offset(y: readerCanvasFraming.offset.height)
+                    // Le loader suit la carte (même cadrage, même forme) → pas de
+                    // saut entre le placeholder ThumbHash et le canvas.
+                    .readerCard(framing: readerCanvasFraming, imageRect: imageOnlyRect(of: story))
                     .animation(.spring(response: 0.42, dampingFraction: 0.84), value: canvasIsExpanded)
                     .allowsHitTesting(false)
                     .transition(.opacity)

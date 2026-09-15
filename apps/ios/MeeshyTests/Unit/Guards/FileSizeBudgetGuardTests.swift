@@ -341,7 +341,15 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // autour de `LoginView` : l'écran la porte désormais lui-même. Le plafond
     // baisse d'exactement ce que le lot retire ; le mou préexistant n'est pas
     // repris, pour la même raison de coordination.
-    private static let legacyLineCeiling = 58_159
+    //
+    // #6636 — 58 159 → 58 138 (−21). La story qui n'est qu'une image devait
+    // changer la forme de la carte dans `StoryViewerView+Canvas.swift`, hôte en
+    // dette. Les trois clips recopiés à la main (canvas sortant, courant,
+    // chargeur) sont d'abord partis dans UN modificateur, `readerCard`, chez
+    // `StoryViewerView+ImageOnly.swift` ; la forme de l'image seule s'y ajoute
+    // ensuite. L'hôte RESTE en dette (2 313) ; le plafond baisse d'exactement ce
+    // que le lot retire.
+    private static let legacyLineCeiling = 58_138
 
     // MARK: - Règle 1 — pas de 43ᵉ
 
