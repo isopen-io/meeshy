@@ -186,10 +186,10 @@ describe('MessagingService', () => {
         update: jest.fn(),
         findMany: jest.fn(),
         findFirst: jest.fn().mockResolvedValue(null),
-        // Lu par `admitMessageForward` pour connaître l'état de la SOURCE d'un
-        // transfert. Nul par défaut : sans `forwardedFromId` le garde ne lit
-        // rien, et un envoi ordinaire ne doit pas dépendre de ce double.
-        findUnique: jest.fn().mockResolvedValue(null)
+        // Lu par `admitMessageForward` (chaque test le surcharge) et par
+        // `admitAttachmentReply` (#6601) — vivant par défaut, dans CETTE
+        // conversation : un envoi sans forwardedFromId ni replyToId ne l'appelle jamais.
+        findUnique: jest.fn().mockResolvedValue({ conversationId: testConversationId, deletedAt: null })
       },
       trackingLink: {
         updateMany: jest.fn()

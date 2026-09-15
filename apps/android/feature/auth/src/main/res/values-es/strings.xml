@@ -46,10 +46,10 @@
     <string name="auth_back">Atrás</string>
     <string name="auth_back_to_login">Volver al inicio de sesión</string>
     <string name="auth_email_label">Correo electrónico</string>
-    <string name="auth_forgot_title">Restablecer contraseña</string>
-    <string name="auth_forgot_subtitle">Introduce tu correo y te enviaremos un enlace de restablecimiento.</string>
-    <string name="auth_forgot_send">Enviar enlace</string>
-    <string name="auth_forgot_sent">Si existe una cuenta para %1$s, se ha enviado un enlace. Revisa tu bandeja de entrada.</string>
+    <string name="auth_forgot_title">Contraseña olvidada</string>
+    <string name="auth_forgot_subtitle">Recibe por correo un enlace para elegir una nueva contraseña.</string>
+    <string name="auth_forgot_never_had_label">¿Nunca has tenido contraseña?</string>
+    <string name="auth_forgot_never_had_text">Ese mismo enlace te permite crear una.</string>
     <string name="auth_magic_title">Inicio de sesión por correo</string>
     <string name="auth_magic_header">Tu dirección de correo</string>
     <string name="auth_magic_how_label">Cómo funciona</string>

@@ -507,6 +507,17 @@ jobs:
       - name: Deployment validator derivation witness
         run: bash scripts/deployment/deploy-validate-config.sh --self-test
 
+      # #6556 — une purge qui demande `y/N` au bout d'un `ssh` lit une entrée
+      # vide, comprend « N » et ne retire rien : l'hôte de staging se remplit
+      # jusqu'au `no space left on device`, le déploiement s'arrête et staging
+      # sert une version périmée que rien n'annonce. Ce garde exige le drapeau
+      # non interactif sur CHAQUE purge du dépôt, une purge AVANT chaque `pull`
+      # distant, et — seconde moitié de la directive porteur du 2026-09-15 —
+      # que tout job porteur d'une clé SSH de déploiement reste épinglé à
+      # `refs/heads/dev` : la production ne se déploie jamais toute seule.
+      - name: Docker prune & deploy-only-on-dev guard
+        run: node scripts/check-docker-prune-noninteractive.mjs --self-test && node scripts/check-docker-prune-noninteractive.mjs
+
       # Casse de compilation Swift détectable sans compilateur. Ici (ubuntu,
       # quelques secondes) plutôt que sur le runner macOS : `xcodebuild` coûte
       # ~15 min et meurt à la première erreur, alors que ce garde les liste
@@ -803,6 +814,17 @@ jobs:
         run: |
           cd apps/web-v2
           node scripts/check-field-focus.mjs
+
+      # #6643 — chaque page et état d'accès (connexion et second facteur,
+      # accueil, inscription, mot de passe oublié, nouveau mot de passe, lien
+      # par e-mail, vérification d'e-mail) tient dans la colonne centrée de la
+      # connexion à 1440×900 et 834×1194, et garde la colonne de la tablette à
+      # 390×844 (plus petit ancêtre commun du contenu perceptible).
+      - name: Gate colonne des pages d'accès (centrée, jamais plus large que la connexion)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-access-column.mjs
 
       - name: Gate dist de la coque Capacitor (variante B)
         if: ${{ !cancelled() }}

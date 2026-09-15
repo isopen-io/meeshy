@@ -23,6 +23,7 @@ import {
   isForwardRefused,
   sanitizeForwardReferences
 } from './forwardAdmission';
+import { admitAttachmentReply } from './attachmentReplySnapshot';
 import {
   admitConversationWrite,
   isConversationWriteRefused,
@@ -336,6 +337,32 @@ export class MessagingService {
                 corr
               )
             : 'fr');
+
+      // 4.4. Admission de la CITATION (#6601) — `replyToId` doit désigner un
+      //      message VIVANT de CETTE conversation. Posé ICI pour la même
+      //      raison que l'admission du transfert juste en dessous : les trois
+      //      transports d'envoi (REST, socket texte, socket pièces jointes)
+      //      convergent sur `handleMessage`, seul site qui voit
+      //      `conversationId` déjà résolu sans jamais faire confiance au
+      //      client. Un garde par transport aurait fait grossir
+      //      `MessageHandler.ts` — déjà hors budget (#4426) — pour une règle
+      //      qui n'a besoin de vivre qu'une fois.
+      //
+      //      La route REST relit la MÊME garde plus tôt (`messages-send.ts`),
+      //      avec la pièce jointe nommée en plus : elle a besoin de
+      //      l'instantané `{attachmentId, kind}` qu'`admitAttachmentReply`
+      //      rend, pour le graver dans `metadata.attachmentReplyTo`. Ici on ne
+      //      revérifie que le lien message-cité → conversation — gratuit pour
+      //      un envoi qui ne cite personne, et redondant mais inoffensif pour
+      //      la route REST qui l'a déjà fait (une lecture par identifiant).
+      const citation = await admitAttachmentReply(this.prisma, {
+        conversationId,
+        replyToId: request.replyToId
+      });
+      if (!citation.ok) {
+        logger.info('reply citation refused', { ...corr, conversationId, reason: citation.reason });
+        return this.createErrorResponse(citation.reason ?? 'Message cité invalide');
+      }
 
       // 4.5. Admission du TRANSFERT — la dernière sortie de l'éphémère et de la
       //      vue unique. Une copie transférée est une ligne `Message`

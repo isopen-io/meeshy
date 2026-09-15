@@ -478,6 +478,19 @@ jobs:
   #
   # Ce job ne recrée QUE les services dont l'image vient d'être construite —
   # jamais `up -d` nu, qui toucherait les huit autres services de staging.
+  #
+  # **DEV ET RIEN D'AUTRE** (directive porteur 2026-09-15). Le déploiement
+  # automatique s'arrête à staging : la production ne part JAMAIS toute seule,
+  # ni sur une poussée dans `main`, ni sur un tag `v*` — elle se déploie à la
+  # main, par un humain qui l'a décidé. Le `if:` ci-dessous est la garde, et
+  # `scripts/check-docker-prune-noninteractive.mjs` (job `quality` de `ci.yml`)
+  # interdit qu'un futur job porteur d'une clé SSH s'en dispense.
+  #
+  # **CE QUE FAIT L'HÔTE** est écrit dans `infrastructure/scripts/meeshy-deploy-staging.sh` —
+  # la source de `/usr/local/bin/meeshy-deploy-staging.sh`, que cette clé
+  # contrainte exécute. Il PURGE les images obsolètes avant de tirer (#6556) ;
+  # sa mise à jour sur la machine reste un geste manuel, documenté en tête de
+  # ce script.
   deploy-staging:
     name: Deploy to staging
     runs-on: ubuntu-latest

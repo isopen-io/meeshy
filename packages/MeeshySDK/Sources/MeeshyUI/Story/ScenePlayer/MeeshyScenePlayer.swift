@@ -48,6 +48,7 @@ public struct MeeshyScenePlayer: View {
     /// contrat B4 et pour la même raison (E4) : un fil chaîné sort de la
     /// fenêtre équilibrée qu'une garde de couture relit.
     private let startAt: Double
+    private let servesLetterboxFill: Bool
     @Binding private var sceneIndex: Int
     @Binding private var isPlaying: Bool
     /// `startsPaused` réalisé : la commande de lecture n'est honorée qu'À PARTIR
@@ -75,6 +76,7 @@ public struct MeeshyScenePlayer: View {
                 isMuted: Bool? = nil,
                 isOutgoing: Bool = false,
                 startAt: Double = 0,
+                servesLetterboxFill: Bool = true,
                 preloadedImages: [String: UIImage] = [:],
                 preloadedVideoURLs: [String: URL] = [:],
                 preloadedAudioURLs: [String: URL] = [:],
@@ -91,6 +93,7 @@ public struct MeeshyScenePlayer: View {
         self.requestedMute = isMuted
         self.isOutgoing = isOutgoing
         self.startAt = startAt
+        self.servesLetterboxFill = servesLetterboxFill
         self.preloadedImages = preloadedImages
         self.preloadedVideoURLs = preloadedVideoURLs
         self.preloadedAudioURLs = preloadedAudioURLs
@@ -234,6 +237,9 @@ public struct MeeshyScenePlayer: View {
                                                              isPlaying: isPlaying),
                                  isOutgoing: isOutgoing,
                                  startAt: startAt,
+                                 // #6636 — le lecteur qui présente l'image
+                                 // seule ne fait plus peindre la bande.
+                                 servesLetterboxFill: servesLetterboxFill,
                                  // **La position se LÈGUE d'une surface à la
                                  // suivante** (#6580) : la carte du fil joue,
                                  // le plein écran qu'elle ouvre reprend là. La

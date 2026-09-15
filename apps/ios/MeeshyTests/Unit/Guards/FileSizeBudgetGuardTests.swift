@@ -336,7 +336,20 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // seul le plafond baisse, d'exactement ce que le lot retire — le cumul
     // mesuré ce jour est 58 154, et les 6 lignes de mou préexistantes ne sont
     // pas reprises ici, pour la raison de coordination de #6016.
-    private static let legacyLineCeiling = 58_160
+    //
+    // #6644 — 58 160 → 58 159 (−1). `MeeshyApp.swift` perd la borne qu'il posait
+    // autour de `LoginView` : l'écran la porte désormais lui-même. Le plafond
+    // baisse d'exactement ce que le lot retire ; le mou préexistant n'est pas
+    // repris, pour la même raison de coordination.
+    //
+    // #6636 — 58 159 → 58 138 (−21). La story qui n'est qu'une image devait
+    // changer la forme de la carte dans `StoryViewerView+Canvas.swift`, hôte en
+    // dette. Les trois clips recopiés à la main (canvas sortant, courant,
+    // chargeur) sont d'abord partis dans UN modificateur, `readerCard`, chez
+    // `StoryViewerView+ImageOnly.swift` ; la forme de l'image seule s'y ajoute
+    // ensuite. L'hôte RESTE en dette (2 313) ; le plafond baisse d'exactement ce
+    // que le lot retire.
+    private static let legacyLineCeiling = 58_138
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

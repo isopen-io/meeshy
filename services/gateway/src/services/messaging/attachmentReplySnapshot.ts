@@ -127,7 +127,7 @@ export type AttachmentReplyAdmission = {
   readonly reason?: string;
 };
 
-/** Le strict nécessaire de Prisma : la ligne de la pièce, et son porteur. */
+/** Le strict nécessaire de Prisma : la ligne de la pièce, son porteur, et le message cité. */
 type AttachmentOwnerReader = {
   readonly messageAttachment: {
     findUnique: (args: {
@@ -135,27 +135,38 @@ type AttachmentOwnerReader = {
       select: { id: true; messageId: true; mimeType: true };
     }) => Promise<{ id: string; messageId: string; mimeType: string | null } | null>;
   };
+  readonly message: {
+    findUnique: (args: {
+      where: { id: string };
+      select: { id: true; conversationId: true; deletedAt: true };
+    }) => Promise<{ id: string; conversationId: string; deletedAt: Date | null } | null>;
+  };
 };
 
 /**
  * LA GARDE D'ENVOI — site UNIQUE de la règle, wiré par transport.
  *
- * Elle lie la PIÈCE au MESSAGE CITÉ, et rien de plus. Ce n'est PAS une faute de
- * frappe qu'on tolérerait en retombant sur le représentatif : l'identifiant
- * gravé sert d'ancre à un saut, et chaque service qui le relit ira chercher la
- * ligne. Au moindre doute sur CE lien — pièce introuvable, porteur différent,
- * message cité absent, forme illisible — on REFUSE l'envoi.
+ * Elle lie DEUX choses, lues ensemble : le message CITÉ à la CONVERSATION de
+ * l'envoi, et la PIÈCE au message cité. « Citer la pièce d'un message qu'on ne
+ * cite pas, c'est citer la pièce d'une conversation qu'on ne lit peut-être pas »
+ * (#6601) — les deux bornes se répondent, et aucune ne dispense de l'autre.
  *
- * **CE QU'ELLE NE FAIT PAS, et il faut le lire avant de s'y fier (#6601).**
- * Elle a longtemps porté la phrase « citer la pièce d'un message qu'on ne cite
- * pas, c'est citer la pièce d'une conversation qu'on ne lit peut-être pas » —
- * qui nomme exactement le cas qu'elle NE BLOQUE PAS. `replyToId` n'est validé
- * contre la conversation de l'envoi NULLE PART dans le chemin d'écriture
- * (mesuré : `messages-send.ts`, `MessageHandler`, `MessageProcessor` le font
- * transiter sans contrôle ; aucune lecture d'appartenance du message cité dans
- * tout le gateway). La borne « une conversation qu'on lit » est donc à
- * construire, et c'est #6601 — cette garde-ci ne peut pas la porter seule, elle
- * ne reçoit que le couple (message cité, pièce).
+ * La première s'applique à TOUT `replyToId`, avec ou sans pièce citée : un
+ * appelant qui répond dans la conversation A à un message de la conversation B
+ * lirait un texte, un auteur et des pièces jointes qu'il n'a pas le droit de
+ * voir. Au moindre doute — message introuvable, supprimé, porté par une autre
+ * conversation — on REFUSE l'envoi (fail-CLOSED), en distinguant la PREUVE
+ * d'un rattachement fautif (le message existe, ailleurs) de l'ABSENCE de
+ * preuve (rien n'a pu être confirmé) : même verdict ici — c'est une écriture,
+ * pas une notification à laisser passer par prudence — mais un `reason` propre
+ * à chacun (règle des trois états, `services/gateway/CLAUDE.md` § « Une garde
+ * d'admission se pose sur CHAQUE chemin »).
+ *
+ * La seconde, inchangée depuis #6164 : au moindre doute sur le lien PIÈCE ↔
+ * MESSAGE CITÉ — pièce introuvable, porteur différent, forme illisible — on
+ * refuse aussi. Ce n'est PAS une faute de frappe qu'on tolérerait en retombant
+ * sur le représentatif : l'identifiant gravé sert d'ancre à un saut, et chaque
+ * service qui le relit ira chercher la ligne.
  *
  * La NATURE est DÉRIVÉE du MIME relu, jamais de ce que le client déclare :
  * `kind` est le seul fait descriptif qui survit à une protection posée plus
@@ -163,12 +174,33 @@ type AttachmentOwnerReader = {
  * qui annonce `file` sur une piste audio verrait sinon sa citation dire
  * « un fichier » pour toujours.
  *
- * Un envoi qui ne nomme aucune pièce ne coûte AUCUNE requête.
+ * Un envoi qui ne cite ni message ni pièce ne coûte AUCUNE requête.
  */
 export async function admitAttachmentReply(
   prisma: AttachmentOwnerReader,
-  params: { readonly replyToId?: string | null; readonly attachmentReplyTo?: unknown }
+  params: {
+    readonly conversationId: string;
+    readonly replyToId?: string | null;
+    readonly attachmentReplyTo?: unknown;
+  }
 ): Promise<AttachmentReplyAdmission> {
+  const replyToId = params.replyToId?.trim() ?? '';
+
+  // #6601 — la borne de CONVERSATION, lue avant toute autre chose : elle
+  // s'applique à CHAQUE citation, pas seulement à celles qui nomment une pièce.
+  if (replyToId.length > 0) {
+    const cited = await prisma.message.findUnique({
+      where: { id: replyToId },
+      select: { id: true, conversationId: true, deletedAt: true },
+    });
+    if (!cited || cited.deletedAt) {
+      return { ok: false, reason: 'La lecture n’a pas confirmé le message cité' };
+    }
+    if (cited.conversationId !== params.conversationId) {
+      return { ok: false, reason: 'Le message cité n’appartient pas à cette conversation' };
+    }
+  }
+
   const declared = params.attachmentReplyTo;
   if (declared === undefined || declared === null) return { ok: true, snapshot: null };
 
@@ -181,7 +213,6 @@ export async function admitAttachmentReply(
     return { ok: false, reason: 'attachmentReplyTo.attachmentId est requis' };
   }
 
-  const replyToId = params.replyToId?.trim() ?? '';
   if (replyToId.length === 0) {
     return { ok: false, reason: 'Citer une pièce jointe exige de citer le message qui la porte' };
   }

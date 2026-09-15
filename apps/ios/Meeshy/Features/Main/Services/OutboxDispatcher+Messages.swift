@@ -359,7 +359,14 @@ extension OutboxDispatcher {
                 copyAttachmentsFromMessageId: copyAttachmentsFromMessageId,
                 // Sticker (#4823) rejoué sous la même clé `sticker` que
                 // l'envoi direct — omis quand nil.
-                sticker: item.sticker
+                sticker: item.sticker,
+                // L'ANCRE de la pièce citée (#6164) rejouée telle quelle. Le
+                // rejeu passe TOUJOURS par ce POST : `sendMessage` déclare un
+                // envoi porteur d'ancre inéligible au canal socket, qui ne la
+                // transporte pas — sans cette ligne, un échec réseau suffisait
+                // à faire citer la première photo d'un carrousel à une réponse
+                // composée sur la troisième.
+                attachmentReplyTo: QuotedAttachmentSend(anchor: item.attachmentReplyTo)
             )
             let response = try await MessageService.shared.send(
                 conversationId: item.conversationId, request: request

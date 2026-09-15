@@ -105,7 +105,7 @@ const DETTE_HERITEE: Readonly<Record<string, number>> = {
   'services/CallService.ts': 3121,
   'services/PostService.ts': 2663,
   'socketio/handlers/MessageHandler.ts': 2336,
-  'services/EmailService.ts': 1843,
+  'services/EmailService.ts': 1032,
   'server.ts': 1406,
   'services/PostFeedService.ts': 1401,
   'services/AuthService.ts': 1324,

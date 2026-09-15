@@ -670,8 +670,29 @@ public struct SendMessageRequest: Encodable, Sendable {
     /// synthétisé omet les optionnels nil : un `sticker` nil n'apparaît PAS
     /// dans le corps envoyé.
     public var sticker: MessageSticker?
+    /// **La PIÈCE que cette réponse cite** (#6164, moitié ÉCRITURE) — clé JSON
+    /// `attachmentReplyTo`, que `messages-send.ts` valide
+    /// (`z.object({ attachmentId: z.string().min(1) }).optional()`) puis ADMET
+    /// par `admitAttachmentReply` avant de la ranger sous
+    /// `metadata.attachmentReplyTo`.
+    ///
+    /// **Ce champ n'a de sens qu'avec `replyToId`** : citer une pièce sans
+    /// citer son message est REFUSÉ côté serveur (« Citer une pièce jointe
+    /// exige de citer le message qui la porte »), et la garde relit la ligne
+    /// pour vérifier qu'elle appartient bien au message cité.
+    ///
+    /// **Ce champ N'EST PAS transportable par le socket.** `MessageHandler.ts`
+    /// ne le lit nulle part et `admitAttachmentReply` n'y est pas wiré : un
+    /// envoi qui le porte doit rester sur le POST REST. La règle vit chez
+    /// l'appelant (`ConversationViewModel.sendMessage`), qui seul connaît les
+    /// deux transports — mais elle se lit ICI, parce que c'est ici qu'on est
+    /// tenté d'ajouter le champ à un autre corps.
+    ///
+    /// L'encodage synthétisé omet les optionnels nil : une réponse ordinaire
+    /// n'a AUCUNE clé `attachmentReplyTo` dans son corps.
+    public var attachmentReplyTo: QuotedAttachmentSend?
 
-    public init(content: String?, originalLanguage: String? = nil, replyToId: String? = nil, storyReplyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, expiresAt: Date? = nil, ephemeralDuration: Int? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil, effectFlags: UInt32? = nil, isEncrypted: Bool? = nil, encryptionMode: String? = nil, clientMessageId: String? = nil, location: SharedPlace? = nil, copyAttachmentsFromMessageId: String? = nil, sticker: MessageSticker? = nil) {
+    public init(content: String?, originalLanguage: String? = nil, replyToId: String? = nil, storyReplyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, expiresAt: Date? = nil, ephemeralDuration: Int? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil, effectFlags: UInt32? = nil, isEncrypted: Bool? = nil, encryptionMode: String? = nil, clientMessageId: String? = nil, location: SharedPlace? = nil, copyAttachmentsFromMessageId: String? = nil, sticker: MessageSticker? = nil, attachmentReplyTo: QuotedAttachmentSend? = nil) {
         self.clientMessageId = clientMessageId ?? ClientMessageId.generate()
         self.content = content; self.originalLanguage = originalLanguage
         self.replyToId = replyToId; self.storyReplyToId = storyReplyToId; self.forwardedFromId = forwardedFromId
@@ -683,6 +704,7 @@ public struct SendMessageRequest: Encodable, Sendable {
         self.location = location
         self.copyAttachmentsFromMessageId = copyAttachmentsFromMessageId
         self.sticker = sticker
+        self.attachmentReplyTo = attachmentReplyTo
     }
 }
 

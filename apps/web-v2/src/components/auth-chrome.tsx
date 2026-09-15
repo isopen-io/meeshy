@@ -127,7 +127,7 @@ export function AuthSubmitButton({
       type="submit"
       disabled={disabled || isSubmitting}
       aria-busy={isSubmitting}
-      className="grid place-items-center rounded-[14px] font-bold text-white transition-opacity"
+      className="grid w-full place-items-center rounded-[14px] font-bold text-white transition-opacity"
       style={{
         minHeight: 52,
         background,

@@ -46,10 +46,10 @@
     <string name="auth_back">Back</string>
     <string name="auth_back_to_login">Back to login</string>
     <string name="auth_email_label">Email</string>
-    <string name="auth_forgot_title">Reset password</string>
-    <string name="auth_forgot_subtitle">Enter your email address and we will send you a reset link.</string>
-    <string name="auth_forgot_send">Send reset link</string>
-    <string name="auth_forgot_sent">If an account exists for %1$s, a reset link has been sent. Check your inbox.</string>
+    <string name="auth_forgot_title">Forgot password</string>
+    <string name="auth_forgot_subtitle">Get a link by email to choose a new password.</string>
+    <string name="auth_forgot_never_had_label">Never had a password?</string>
+    <string name="auth_forgot_never_had_text">The same link lets you create one.</string>
     <string name="auth_magic_title">Email sign-in</string>
     <string name="auth_magic_header">Your email address</string>
     <string name="auth_magic_how_label">How it works</string>

@@ -26,7 +26,9 @@ final class EmailSignInWordingTests: XCTestCase {
     private static let loginView = "Meeshy/Features/Main/Views/LoginView.swift"
     private static let magicLinkView = "Meeshy/Features/Main/Views/MagicLinkView.swift"
     private static let signupView = "Meeshy/Features/Auth/Signup/SignupView.swift"
-    private static let infoHint = "Meeshy/Features/Auth/AuthInfoHint.swift"
+    /// Descendu dans MeeshyUI au #6644 : « Mot de passe oublié », qui vit dans le
+    /// SDK, monte le même (i) — et le SDK ne peut pas importer l'app.
+    private static let infoHint = "../../packages/MeeshySDK/Sources/MeeshyUI/Auth/Components/AuthInfoHint.swift"
     private static let catalogPath = "Meeshy/Localizable.xcstrings"
 
     private static let shippedLocales: Set<String> = ["ar", "de", "en", "es", "fr", "it", "pt-BR"]

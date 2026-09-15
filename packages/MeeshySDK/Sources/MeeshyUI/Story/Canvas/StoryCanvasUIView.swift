@@ -438,6 +438,17 @@ public final class StoryCanvasUIView: UIView {
     /// `StoryBackgroundLayer` (no overlay) since the 2026-06-03 pivot.
     var composerImageRevision: UInt64 = 0
 
+    /// **L'hôte présente-t-il le canvas ENTIER ?** (#6636) — `false` quand le
+    /// lecteur rogne la carte au rectangle de l'image : la bande sort du cadre
+    /// visible et ne se peint plus. Posé sur le calque de fond, qui le garde à
+    /// travers chaque `rebuildLayers`.
+    public var servesLetterboxFill: Bool = true {
+        didSet {
+            guard oldValue != servesLetterboxFill else { return }
+            backgroundLayer.setLetterboxFillSuppressed(!servesLetterboxFill)
+        }
+    }
+
     /// Two-pass backdrop snapshot helper. Drives the MPS path on
     /// `StoryGlassBackdropLayer` by capturing the canvas-minus-glass tree
     /// once per `rebuildLayers()` tick and serving cropped regions to each

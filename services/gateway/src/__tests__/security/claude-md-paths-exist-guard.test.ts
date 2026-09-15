@@ -71,7 +71,6 @@ const DETTE: ReadonlyArray<{ fichier: string; introuvables: number }> = [
   { fichier: 'CLAUDE.md', introuvables: 7 },
   { fichier: 'apps/ios/CLAUDE.md', introuvables: 4 },
   { fichier: 'apps/web/CLAUDE.md', introuvables: 1 },
-  { fichier: 'infrastructure/CLAUDE.md', introuvables: 1 },
   { fichier: 'packages/MeeshySDK/CLAUDE.md', introuvables: 7 },
   { fichier: 'packages/shared/CLAUDE.md', introuvables: 1 },
 ];
@@ -125,6 +124,25 @@ const CITATIONS_VOLONTAIREMENT_ABSENTES: ReadonlyArray<{
   {
     chemin: 'X/index.ts',
     raison: "gabarit générique du § « Un fichier `X.ts` à côté d'un répertoire `X/` », pas une adresse",
+  },
+  {
+    chemin: 'usr/local/bin/meeshy-deploy-staging.sh',
+    raison:
+      "ADRESSE SUR L'HÔTE DISTANT, jamais un fichier du dépôt : la ligne citée est " +
+      '« `infrastructure/scripts/meeshy-deploy-staging.sh` (la source de ' +
+      '`/usr/local/bin/meeshy-deploy-staging.sh`, ce que la clé SSH contrainte de la CI ' +
+      "exécute sur l'hôte) » — elle NOMME la source dans le dépôt et sa destination sur " +
+      "le serveur. La destination ne peut exister ici sous aucune racine ; exiger le " +
+      'contraire demanderait de taire le chemin réel, ce qui perdrait le seul fait utile ' +
+      "de la phrase (#6556, #6676).",
+  },
+  {
+    chemin: 'opt/meeshy/production/docker-compose.yml',
+    raison:
+      "ADRESSE SUR L'HÔTE DISTANT, même nature que la précédente : le compose de " +
+      'PRODUCTION vit dans `/opt/meeshy/production/` sur le serveur et DIVERGE de celui du ' +
+      "dépôt — c'est précisément ce que le document avertit. Le citer est le but ; il ne " +
+      'peut pas exister ici.',
   },
   {
     chemin: 'dist/src/server.js',
