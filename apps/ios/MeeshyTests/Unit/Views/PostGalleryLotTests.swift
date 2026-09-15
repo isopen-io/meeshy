@@ -140,6 +140,31 @@ final class PostGalleryLotTests: XCTestCase {
         XCTAssertEqual(pages[1].aspect, CanvasGeometry.portraitRatio, accuracy: 0.0001)
     }
 
+    /// **Une scène qui n'est qu'une image PLUS LARGE qu'elle se cadre au rapport
+    /// de son image** — la loi partagée de présentation d'une scène
+    /// (`SceneFraming.presentationAspect`, #6697, fusionnée par #6736).
+    ///
+    /// Mesuré à la recette staging du 2026-09-15 sur le post « PAYSAGE 16:9 » :
+    /// un seul objet, un fond au rapport 1,7778, sans cadrage déclaré. Cadré en
+    /// 9:16, le fond rempli sortait des deux côtés du cadre et la page n'en
+    /// montrait que le tiers central — la carte du fil et le détail ont été
+    /// corrigés par #6736, et la galerie les rejoint par le même point.
+    func test_uneSceneQuiNestQuUneImagePaysage_seCadreAuRapportDeSonImage() throws {
+        let paysage = 16.0 / 9.0
+        let fond = ObjectV3(id: "fond", kind: .media, anchor: .free(x: 0.5, y: 0.5),
+                            plane: .content, z: 0,
+                            transform: TransformV3(scale: 1, rotation: 0, opacity: 1),
+                            payload: ["isBackground": .bool(true),
+                                      "aspectRatio": .number(paysage),
+                                      "postMediaId": .string("m1"),
+                                      "mediaType": .string("image")])
+        let lot = compose(post(media: [media("m1")], scenes: [SceneV3(id: "s1", objects: [fond])]))
+        let page = try XCTUnwrap(lot.attachments.first.flatMap { lot.scenes[$0.id] })
+
+        XCTAssertEqual(Double(page.aspect), paysage, accuracy: 0.0001,
+                       "Cadrée en 9:16, une scène qui n'est qu'une image paysage n'en montre que le tiers central.")
+    }
+
     /// Le bouton de lecture et l'appui long n'ont d'effet que sur ce qui bouge.
     func test_seuleUneSceneQuiBouge_seLit() {
         let lot = compose(post(scenes: [scene("fixe"), scene("anime", opening: ["kind": .string("fade")])]))

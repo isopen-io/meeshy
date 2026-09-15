@@ -1,6 +1,7 @@
 import Foundation
 import CoreGraphics
 import MeeshySDK
+import MeeshyUI
 
 /// **Une SCÈNE de post, posée dans la galerie comme une page parmi les autres**
 /// (#6709).
@@ -207,12 +208,20 @@ nonisolated struct PostGalleryLot {
 
     /// **Le rapport auquel une scène se présente — point UNIQUE de la galerie.**
     ///
-    /// Aujourd'hui `SceneFullscreenFraming.ratio` (le rapport du porteur, sinon
-    /// le portrait). La loi partagée de présentation d'une scène arrive au SDK
-    /// (`SceneFraming.presentationAspect`, #6736) : c'est ICI, et nulle part
-    /// ailleurs, qu'elle se branche.
+    /// La loi partagée de présentation d'une scène (`SceneFraming.presentationAspect`,
+    /// #6697, fusionnée par #6736) : une scène qui n'est qu'une image PLUS LARGE
+    /// qu'elle se présente au rapport de son image, toute autre au rapport de son
+    /// canvas. Le canvas vient de la loi du porteur (`SceneFullscreenFraming.ratio`
+    /// — `carrierAspect`, sinon le portrait), comme le détail d'un post le lui
+    /// remet ; la règle n'est pas recopiée ici, elle est appelée.
+    ///
+    /// Un index hors du document garde le repli portrait de la loi du porteur :
+    /// un pager monte ses voisines, et une page hors bornes existe le temps d'une
+    /// transition.
     static func sceneAspect(_ document: CanvasV3, sceneIndex: Int) -> CGFloat {
-        SceneFullscreenFraming.ratio(of: document, sceneIndex: sceneIndex)
+        let canvas = SceneFullscreenFraming.ratio(of: document, sceneIndex: sceneIndex)
+        guard document.scenes.indices.contains(sceneIndex) else { return canvas }
+        return SceneFraming.presentationAspect(scene: document.scenes[sceneIndex], canvasAspect: canvas)
     }
 
     // MARK: - La publication
