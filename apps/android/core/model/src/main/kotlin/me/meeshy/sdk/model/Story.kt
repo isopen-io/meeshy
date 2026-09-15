@@ -358,6 +358,19 @@ data class StoryEffects(
     val musicTrackId: String? = null,
     val musicStartTime: Double? = null,
     val musicEndTime: Double? = null,
+    /**
+     * L'agencement choisi par l'AUTEUR de la publication (#6514), que seul un
+     * document canvas v3 déclare (`CanvasV3.layout`) et que
+     * [StoryEffects.Companion.rendering] recopie ici. `null` pour tout le corpus
+     * antérieur ; on le lit par [resolvedLayout], jamais en direct.
+     *
+     * Il n'a pas de famille v1 : la forme v1 ne le porte que parce qu'Android
+     * réécrit `storyEffects` en v1 (le cache Room des stories), et que la
+     * relecture doit rendre la même mise en page, comme iOS qui garde
+     * `document?.layout` en réencodant (`CanvasV3(migrating:keeping:)`). Nul par
+     * défaut, il n'est jamais émis par un contenu composé sur Android.
+     */
+    val layout: MosaicLayoutMode? = null,
 )
 
 /** A single story slide — port of StorySlide (StoryModels.swift). */

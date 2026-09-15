@@ -13,6 +13,9 @@
     <string name="feed_unbookmark">Retirer l\'enregistrement</string>
     <string name="feed_hidden_images">+%1$d</string>
     <string name="feed_open_media">Ouvrir l’image</string>
+    <string name="feed_media_page_counter">%1$d / %2$d</string>
+    <string name="feed_media_previous">Image précédente</string>
+    <string name="feed_media_next">Image suivante</string>
     <string name="feed_media_saved">Enregistré dans la galerie</string>
     <string name="feed_media_save_failed">Échec de l’enregistrement</string>
     <string name="feed_pinned">Épinglé</string>

@@ -35,6 +35,7 @@ import kotlinx.serialization.json.intOrNull
  */
 object StoryEffectsWireSerializer : KSerializer<StoryEffects> {
     private val legacy = StoryEffects.serializer()
+    private const val LAYOUT_KEY = "layout"
 
     /**
      * Le descripteur annonce du JSON ARBITRAIRE. Annoncer celui de `legacy`
@@ -65,12 +66,19 @@ object StoryEffectsWireSerializer : KSerializer<StoryEffects> {
         coerceInputValues = true
     }
 
+    /**
+     * L'agencement (#6514) est un attribut du canvas v3. Un document NON marqué
+     * est la forme v1, qui ne le porte que par la réécriture d'Android lui-même
+     * (voir [StoryEffects.layout]) ; un document MARQUÉ sous v3 se déclare
+     * antérieur au canvas et ne peut donc pas en porter un.
+     */
     override fun deserialize(decoder: Decoder): StoryEffects {
         val input = decoder as? JsonDecoder ?: return decoder.decodeSerializableValue(legacy)
         val element = input.decodeJsonElement()
         val document = element as? JsonObject ?: return StoryEffects()
-        val mark = (document["v"] as? JsonPrimitive)?.intOrNull ?: 0
-        if (mark < 3) return input.json.decodeFromJsonElement(legacy, document)
+        val mark = (document["v"] as? JsonPrimitive)?.intOrNull
+            ?: return input.json.decodeFromJsonElement(legacy, document)
+        if (mark < 3) return input.json.decodeFromJsonElement(legacy, JsonObject(document - LAYOUT_KEY))
         val canvas = runCatching { forwardTolerant.decodeFromJsonElement(CanvasV3.serializer(), document) }
             .getOrNull() ?: return StoryEffects()
         return StoryEffects.rendering(canvas, sceneIndex = 0)
