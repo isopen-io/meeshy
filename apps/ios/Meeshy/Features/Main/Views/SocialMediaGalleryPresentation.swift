@@ -209,7 +209,34 @@ private struct SocialMediaGalleryLayer: ViewModifier {
                         onCompose: composable.map { cible in {
                             pendingCompose = cible
                             isPresented = false
-                        } }
+                        } },
+                        // **« Commenter CE média »** (#6578) — même rangée
+                        // d'actions, même glyphe de réponse qu'en conversation.
+                        //
+                        // La couche DÉSIGNE puis se referme ; elle n'écrit
+                        // rien. Le composer du fil, qui n'est pas monté ici,
+                        // reprend la désignation par `CommentQuotationStore` —
+                        // le même magasin par `postId` que `CommentDraftStore`
+                        // pour le brouillon texte, et pour la même raison : une
+                        // modale ne peut pas poser un `@State` sur l'hôte qui
+                        // la présente.
+                        //
+                        // Aucune règle d'offre à évaluer : tout média d'un post
+                        // est citable par qui peut le voir, et le serveur
+                        // REFUSE de toute façon un média étranger au post
+                        // commenté. Les médias PROTÉGÉS sont exclus en amont
+                        // par `ConversationMediaGalleryView`.
+                        onQuote: { piece in
+                            CommentQuotationStore.shared.designate(
+                                CommentQuotedMedia(
+                                    postMediaId: piece.id,
+                                    kind: CommentQuotedMedia.Kind(rawValue: piece.type.rawValue) ?? .file,
+                                    media: post.media.first { $0.id == piece.id }
+                                ),
+                                for: post.id
+                            )
+                            isPresented = false
+                        }
                     )
                 }
             }
@@ -253,6 +280,10 @@ struct SocialMediaGalleryContent: View {
     /// résolu la règle d'offre sur le post porteur.
     var onCompose: (() -> Void)?
 
+    /// **« Commenter CE média »** (#6578) — la moitié publication du geste dont
+    /// `ConversationView+MediaGallery` porte la moitié conversation.
+    var onQuote: ((MessageAttachment) -> Void)?
+
     var body: some View {
         let items = attachments
         ConversationMediaGalleryView(
@@ -272,7 +303,8 @@ struct SocialMediaGalleryContent: View {
                 preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser)
             ),
             senderInfoMap: senderInfoMap,
-            onComposeWithMedia: onCompose.map { action in { _ in action() } }
+            onComposeWithMedia: onCompose.map { action in { _ in action() } },
+            onReplyToMedia: onQuote
         )
     }
 }
