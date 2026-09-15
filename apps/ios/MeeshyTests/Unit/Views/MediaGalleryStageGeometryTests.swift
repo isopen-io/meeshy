@@ -130,6 +130,90 @@ final class MediaGalleryStageGeometryTests: XCTestCase {
                        accuracy: 0.5)
     }
 
+    // MARK: - Le plancher de LARGEUR se dérive aussi (#6692)
+
+    /// **Le jumeau du plancher de hauteur n'est pas un nombre non plus.** Ce qui
+    /// se pose sur le cadre a une LARGEUR : la colonne réagir · répondre ·
+    /// composer, décollée du bord par une gouttière et du milieu par une autre,
+    /// tient dans le TIERS latéral du cadre — la zone où le double tap avance
+    /// déjà (`MediaStageSeek.lateralFraction`). Le témoin porte sur les
+    /// IDENTITÉS : si la cible, la gouttière ou le tiers changent, le plancher
+    /// suit sans qu'on y touche.
+    func test_theWidthFloor_isTheActionColumnBandInTheLateralThird_neverAChosenNumber() {
+        XCTAssertEqual(
+            MediaGalleryStage.minimumFrameWidth,
+            (MediaGalleryStage.gutter + MediaStageActionColumn.width + MediaGalleryStage.gutter)
+                / MediaStageSeek.lateralFraction,
+            accuracy: 0.001
+        )
+    }
+
+    /// **L'image de la recette : 900 × 3 600.** Sans plancher de largeur, son
+    /// cadre ne gardait que la largeur du média ajusté : l'auteur, la date et la
+    /// ligne de format passaient chacun sur deux lignes, la dernière débordait
+    /// sous le coin arrondi, et la colonne d'actions se posait au milieu de
+    /// l'image. Le cadre s'arrête désormais au plancher ; le média garde sa
+    /// taille et flotte dedans, sur son hors-champ habillé.
+    func test_carded_veryTallImage_keepsTheWidthFloor_andItsMediaFloats() {
+        let resolved = resolve(ratio: 900.0 / 3_600.0)
+
+        XCTAssertEqual(resolved.media.height, 603, accuracy: 0.5,
+                       "contrainte par la hauteur libre")
+        XCTAssertEqual(resolved.media.width, 150.75, accuracy: 0.5,
+                       "603 × 0,25 — le média n'est ni rogné ni étiré")
+        XCTAssertEqual(resolved.frame.width, MediaGalleryStage.minimumFrameWidth, accuracy: 0.5,
+                       "le CADRE s'arrête au plancher de largeur")
+        XCTAssertEqual(resolved.frame.height, resolved.media.height, accuracy: 0.5)
+        XCTAssertTrue(resolved.letterboxes,
+                      "deux bandes latérales, que le ThumbHash habille (#6143)")
+    }
+
+    /// **Aucun ratio courant ne change de cadre**, pas même sur le cadre le plus
+    /// ÉTROIT qu'un média courant puisse recevoir : la 9:16 d'un lot qui réserve
+    /// à la fois le rail et la bande de progression (555 × 0,5625 ≈ 312 pt sur
+    /// 390 × 844, 582 × 0,5625 ≈ 327 pt sur l'iPhone 16 Pro réel de la recette).
+    ///
+    /// Vert des deux côtés du diff, et c'est dit : ce qu'il attrape est le lot
+    /// qui REMONTERAIT le plancher. Recopier les 330 du plancher de hauteur
+    /// élargirait déjà cette scène de 18 pt.
+    func test_theWidthFloor_changesNoCommonRatio_evenOnTheNarrowestCadre() {
+        let video = MessageAttachment(
+            id: "fixture-video",
+            mimeType: "video/mp4",
+            fileSize: 4_204_800,
+            fileUrl: "https://cdn.meeshy.me/fixture.mp4",
+            width: 1_080,
+            height: 1_920,
+            duration: 12_000,
+            uploadedBy: "u-fixture"
+        )
+        let lots = [MediaGalleryLot.imagesOnly(6), MediaGalleryLot.imagesOnly(5) + [video]]
+        let ecrans: [(viewport: CGSize, safeTop: CGFloat, safeBottom: CGFloat)] = [
+            (CGSize(width: 390, height: 844), 59, 34),
+            (CGSize(width: 402, height: 874), 62, 34),
+        ]
+
+        XCTAssertGreaterThan(MediaGalleryStage.corridors(safeTop: 59, safeBottom: 34, attachments: lots[1]).transport, 0,
+                             "le second lot réserve bien la bande : c'est lui qui rend le cadre le plus étroit")
+
+        for ecran in ecrans {
+            for lot in lots {
+                for ratio in [0.8, 0.5625, 16.0 / 9.0] {
+                    let resolved = MediaGalleryStage.resolve(
+                        viewport: ecran.viewport,
+                        mediaRatio: ratio,
+                        presentation: .carded,
+                        corridors: MediaGalleryStage.corridors(safeTop: ecran.safeTop,
+                                                               safeBottom: ecran.safeBottom,
+                                                               attachments: lot)
+                    )
+                    XCTAssertEqual(resolved.frame.width, resolved.media.width, accuracy: 0.5,
+                                   "ratio \(ratio) sur \(ecran.viewport) : le plancher de largeur ne doit pas mordre")
+                }
+            }
+        }
+    }
+
     // MARK: - Un média sans proportions connues
 
     /// Beaucoup de pièces jointes arrivent sans `width` ni `height`. Le cadre ne
