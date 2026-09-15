@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useRef } from 'react';
 
 import { checkStatusOf, isMineOf, servedRowLanguage, translatedLanguagesOf } from '@/lib/view/message';
 import type { LocalDelivery } from '@/lib/view/message';
@@ -23,6 +23,7 @@ import {
   STICKER_SIDE,
   TEXT_INDENT,
 } from '@/lib/reading-mode/metrics';
+import { useFocalLoupe } from '@/lib/view/use-focal-loupe';
 
 import { Avatar } from './avatar';
 import { Attachments } from './attachment-blocks';
@@ -203,6 +204,12 @@ export const FocalRow = memo(function FocalRow({
   const nowMs = now();
   const kind = expired ? 'expired' : protectionOf(message, nowMs);
   const isMine = isMineOf(message, viewerId);
+
+  /** LA LOUPE (#6586/#6588) — avant tout retour anticipé (règle des Hooks) :
+   * un message expiré/système/supprimé n'est jamais élu, la rangée n'y
+   * grandit donc jamais, mais le hook doit tourner sur CHAQUE rendu. */
+  const rowRef = useRef<HTMLDivElement>(null);
+  useFocalLoupe(rowRef, elected);
 
   // `expired` — EmptyView : rien à rendre, mais l'ANCRE structurelle reste
   // (`data-message`) pour que les gates puissent constater l'absence.
@@ -493,6 +500,7 @@ export const FocalRow = memo(function FocalRow({
 
   return (
     <div
+      ref={rowRef}
       data-reading-mode={mode}
       data-elected={elected ? 'true' : undefined}
       data-message={message.id}

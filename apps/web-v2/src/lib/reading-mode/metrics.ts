@@ -93,6 +93,17 @@ export const FOCUS_CARD_RADIUS = 18;
 export const FOCUS_CARD_HORIZONTAL_INSET = 6;
 
 /**
+ * `FocalMetrics.FocusCard.marginVertical` / `Focus.loupeGain` (#6586/#6588) —
+ * la LOUPE du message élu : lui seul grandit de ce gain, ses voisins restent
+ * à plat (directive 2026-08-24). `marginVertical` borne l'écrêtage vertical
+ * (`reading-mode/election.ts::focalLoupeScale`) ; `ROW_PADDING_HORIZONTAL`
+ * ci-dessus borne déjà l'horizontal — même cote que `Row.paddingHorizontal`,
+ * pas de constante séparée.
+ */
+export const FOCUS_CARD_MARGIN_VERTICAL = 8;
+export const FOCUS_LOUPE_GAIN = 0.05;
+
+/**
  * `FocalScrollPerspective.focusCardFillOpacityDark` / `.Light` — la teinte de
  * la carte (accent de la conversation mélangé à cette opacité).
  */
