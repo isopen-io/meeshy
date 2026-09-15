@@ -360,9 +360,15 @@ struct ConversationMediaGalleryView: View {
                 // `ZStack` que ses quatre autres enfants étendent à l'écran
                 // entier. Détail et mesure : `MediaReplyKeyboardInset`.
                 .padding(.bottom, MediaReplyKeyboardInset.bottomInset(for: replyKeyboard))
-                .ignoresSafeArea(.keyboard, edges: .bottom)
                 .animation(.easeOut(duration: replyKeyboard?.duration ?? 0.25), value: replyKeyboard?.height)
         }
+        // #6751 — **l'inset clavier est neutralisé à la RACINE, pas par couche.**
+        // Mesuré au simulateur : posé sur les enfants, il ne protège rien —
+        // c'est la racine du `fullScreenCover` que la fenêtre pousse, et les
+        // couches montent avec elle (le média sortait par le haut, « Fermer »
+        // à y = −47). La pile ne bouge donc plus du tout, et la SEULE chose qui
+        // suit le clavier est la couche de saisie, par son padding explicite.
+        .ignoresSafeArea(.keyboard, edges: .bottom)
         .observingKeyboardTransition($replyKeyboard)
         .statusBar(hidden: true)
         .onAppear {

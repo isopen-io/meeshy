@@ -65,6 +65,36 @@ final class MediaReplyKeyboardInsetTests: XCTestCase {
         XCTAssertEqual(MediaReplyKeyboardInset.sendEffects, [.dismissKeyboard, .hideComposer])
     }
 
+    // MARK: - Le CÂBLAGE, mesuré au simulateur avant d'être gardé
+
+    /// **La neutralisation est à la RACINE, pas par couche** — et ce témoin
+    /// existe parce que la première version du correctif ne l'était pas.
+    ///
+    /// Mesuré au simulateur (iPhone 16 Pro / iOS 18.2, clavier logiciel) :
+    /// `.ignoresSafeArea(.keyboard)` posé sur les ENFANTS du `ZStack` ne protège
+    /// rien — c'est la racine du `fullScreenCover` que la fenêtre pousse, et les
+    /// couches montent avec elle. Capture à l'appui : le média sortait par le
+    /// haut et le bouton « Fermer » se retrouvait à y = −47, pendant que la
+    /// barre restait sous le clavier.
+    ///
+    /// Une garde de SOURCE, faute de mieux : le défaut vit dans la composition
+    /// de la pile, que seul un rendu réel exerce. Elle garde donc l'endroit où
+    /// la ligne est posée, pas son effet — et le dit.
+    func test_lHote_neutralise_lInsetClavier_a_la_RACINE() throws {
+        let texte = try MyStoriesSourceCorpus.text(
+            of: "Meeshy/Features/Main/Views/ConversationMediaGalleryView.swift")
+
+        // Les deux modificateurs de RACINE, consécutifs : c'est cette
+        // adjacence qui dit « posé sur le ZStack », et elle ne dépend d'aucun
+        // commentaire — le corpus les dépouille.
+        XCTAssertTrue(
+            texte.contains(".ignoresSafeArea(.keyboard, edges: .bottom)\n        .observingKeyboardTransition($replyKeyboard)"),
+            "La neutralisation doit être posée sur le ZStack RACINE, juste avant l'observation : "
+            + "posée sur une couche, elle ne protège rien — la fenêtre pousse la racine et les "
+            + "couches montent avec elle (mesuré au simulateur, #6751)."
+        )
+    }
+
     /// L'ANNULATION n'a pas à fermer le clavier avant de retirer la barre : le
     /// retrait de la barre emporte son champ de saisie, donc le clavier avec.
     /// Le distinguer de l'envoi est ce qui empêche d'écrire « deux effets
