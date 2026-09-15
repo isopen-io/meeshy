@@ -1627,6 +1627,16 @@ describe('MessagingService', () => {
         replyToId: parentMessageId
       };
 
+      // #6601 — `admitAttachmentReply` lit désormais le message cité pour le
+      // lier à `conversationId` avant d'admettre l'envoi ; sans ce double, la
+      // valeur par défaut (`null`) ferait refuser cette réponse pourtant
+      // légitime.
+      mockPrisma.message.findUnique.mockResolvedValue({
+        id: parentMessageId,
+        conversationId: testConversationId,
+        deletedAt: null
+      });
+
       mockPrisma.message.create.mockResolvedValue({
         ...createMockMessage({ replyToId: parentMessageId }),
         sender: { id: testUserId },

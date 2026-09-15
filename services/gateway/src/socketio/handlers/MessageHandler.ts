@@ -40,7 +40,6 @@ import {
   postReplyToFromMetadata,
   POST_REPLY_SNAPSHOT_SELECT,
 } from '../../services/messaging/postReplySnapshot';
-import { admitAttachmentReply } from '../../services/messaging/attachmentReplySnapshot';
 import { sharedPlaceFromMetadata, hoistLocationOnto } from '../../services/location/sharedPlace';
 import { StatusService } from '../../services/StatusService';
 import { NotificationService } from '../../services/notifications/NotificationService';
@@ -365,18 +364,6 @@ export class MessageHandler {
         return;
       }
 
-      // #6601 — même garde que le transport REST (`messages-send.ts`) : un
-      // `replyToId` qui ne désigne pas un message vivant de CETTE conversation
-      // est refusé ici aussi, jamais transmis à `MessagingService` sans contrôle.
-      const citation = await admitAttachmentReply(this.prisma, {
-        conversationId: validated.conversationId,
-        replyToId: validated.replyToId,
-      });
-      if (!citation.ok) {
-        this._sendError(callback, citation.reason ?? 'Message cité invalide', socket);
-        return;
-      }
-
       const corr: Record<string, any> = {
         clientMessageId: validated.clientMessageId,
         conversationId: validated.conversationId,
@@ -585,18 +572,6 @@ export class MessageHandler {
       const resolvedParticipantId = await this._resolveParticipantId(userId, participantId, validated.conversationId, isAnonymous);
       if (!resolvedParticipantId) {
         this._sendError(callback, 'Not a participant in this conversation', socket);
-        return;
-      }
-
-      // #6601 — même garde que `handleMessageSend` : ce path est le PRINCIPAL
-      // pour les pièces jointes (voix, photo, vidéo), et un `replyToId` cité
-      // dessus n'est pas plus exempt de contrôle que sur le path texte.
-      const citation = await admitAttachmentReply(this.prisma, {
-        conversationId: validated.conversationId,
-        replyToId: validated.replyToId,
-      });
-      if (!citation.ok) {
-        this._sendError(callback, citation.reason ?? 'Message cité invalide', socket);
         return;
       }
 

@@ -164,6 +164,10 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   'message-translation/MessageTranslationService.ts': { kind: 'exempt', reads: 8, why: DOES_NOT_SELECT_SENDER },
   'MessageReadStatusService.ts': { kind: 'exempt', reads: 12, why: DOES_NOT_SELECT_SENDER },
   'messaging/anonymizeDeletedAccountMessages.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #6601 — la garde de citation : `{ select: { id: true, conversationId: true, deletedAt: true } }`,
+  // jamais `sender`. Elle lie le message cité à la conversation de l'envoi ;
+  // un expéditeur disparu n'entre dans aucune de ses branches.
+  'messaging/attachmentReplySnapshot.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/conversationWriteAdmission.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/forwardAdmission.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/messageMentions.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
