@@ -50,6 +50,8 @@ extension ReelPageView {
 /// la SEULE barre de progression : la page ne se ré-évalue pas à chaque image.
 @MainActor
 final class ReelSceneClock: ObservableObject {
+    nonisolated deinit {}
+
     @Published var progress: Double = 0
 }
 

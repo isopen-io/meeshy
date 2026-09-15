@@ -55,6 +55,7 @@ final class FeedSceneCoherenceGuardTests: XCTestCase {
         "PostDetailView+RepostEmbed.swift": "idem, l'embed cité d'un détail",
         "StoryViewerView+Canvas.swift": "viewer story plein écran — la lecture y est commandée par le lecteur",
         "SocialSceneFullscreenView.swift": "pager plein écran — une scène à la fois, les pages voisines montées pour la fluidité du glissement et tenues en pause (#5596)",
+        "ReelsPlayerView+Scene.swift": "lecteur de réels plein écran — une page à la fois ; sa scène joue sous la porte de la page ACTIVE (`ReelMediaAutostart`), jamais sous une élection de viewport (#6745)",
     ]
     // `MeeshyComposerHost+Socle.swift` a figuré ici une heure : je l'avais tiré
     // d'un `git grep` NU, où il apparaît parce qu'un doc-comment RACONTE qu'il
