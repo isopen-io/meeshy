@@ -15,20 +15,13 @@ extension MeeshyComposerHost {
     /// alternative`** (2026-09-05).
     ///
     /// Le pont est `documentMediaObjectIdBySource`, alimenté par le retour
-    /// d'`applyContentMedia` — le seul site qui ait jamais connu les deux
-    /// bouts. Une source dont l'objet n'a pas d'alternative n'entre pas dans
-    /// la carte : un `nil` et une chaîne vide se disent pareil à l'arrivée, et
-    /// une chaîne vide poserait une alternative BLANCHE — un lecteur d'écran
-    /// annoncerait alors « image » suivi de rien, ce qui est pire que rien.
-    var altsParURLSource: ComposerMediaCaptions {
-        documentMediaObjectIdBySource.reduce(into: ComposerMediaCaptions()) { carte, entree in
-            let (source, objectId) = entree
-            guard let texte = documentMediaAlts[objectId],
-                  !texte.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            else { return }
-            carte[source] = texte
-        }
-    }
+    /// d'`applyContentMedia` — le seul site qui ait jamais connu les deux bouts.
+    ///
+    /// **La projection elle-même est DESCENDUE sur `ComposerMediaPorters` au
+    /// #6577** (`altsBySourceURL`), où le retrait d'un média peut se prouver sur
+    /// ce que la charge porte vraiment. La réécrire dans un témoin en aurait
+    /// fait une jumelle à faire diverger ; ce site la CONSULTE.
+    var altsParURLSource: ComposerMediaCaptions { mediaPorters.altsBySourceURL }
 
     /// **Ce que la flèche remet au site de montage, pour le CHOIX du geste**
     /// (#6502). La surface est celle d'OUVERTURE ; le format et l'agencement
