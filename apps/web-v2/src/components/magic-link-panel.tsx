@@ -229,11 +229,13 @@ export function MagicLinkPanel({ deps = defaultMagicLinkDeps, footer, onCancel, 
           flexible : à 390 px, « Votre adresse e-mail » passe sur deux lignes, sa
           boîte prend TOUTE la largeur, et le (i) partait flotter au bord de
           l'écran, loin du texte qu'il explique (mesuré en capture). En ligne,
-          le bouton se range derrière « e-mail », quelle que soit la césure. */}
+          le bouton se range derrière « e-mail », quelle que soit la césure.
+          « e-mail » ne se coupe pas : le navigateur cassait au trait d'union
+          (« e- » / « mail »), mesuré à la capture suivante. */}
       <div className="grid gap-1 text-center">
         <div>
           <h2 className="inline text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
-            Votre adresse e-mail
+            Votre adresse <span className="whitespace-nowrap">e-mail</span>
           </h2>
           <InfoHintButton hint={HOW_IT_WORKS} state={howItWorks} style={{ display: 'inline-grid', verticalAlign: 'middle' }} />
         </div>
