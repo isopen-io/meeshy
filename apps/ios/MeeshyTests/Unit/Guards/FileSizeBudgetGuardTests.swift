@@ -399,14 +399,29 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // #6693 et #6745 retirent tous deux de `ReelsPlayerView.swift`, par des parties
     // que la fusion applique sans conflit ; l'hôte reste en dette, donc les deux
     // retraits s'additionnent.
-    // #6708 — 54 450 → 54 434 (−16). La mesure du détail passe par
+    // #6701 — 56 077 → 56 046 (−31). Les voiles de lisibilité du lecteur de
+    // story devaient suivre le chrome dans `StoryViewerView+Canvas.swift`
+    // (2 313 lignes), hôte en dette. La couche en est d'abord sortie, entière,
+    // dans `StoryViewerView+CanvasScrims.swift` ; la règle s'y pose ensuite,
+    // hors de l'hôte. L'hôte RESTE en dette (2 282) ; le plafond baisse
+    // d'exactement ce que le lot retire.
+    //
+    // Les cinq lots se cumulent : 54 450 − 31 = 54 419. Seul #6701 retire de
+    // `StoryViewerView+Canvas.swift` : son retrait s'additionne sans
+    // recouvrement.
+    // #6708 — 54 419 → 54 403 (−16). La mesure du détail passe par
     // `onGeometryChange` : dans `PostDetailView.swift`, le couple
     // `GeometryReader` + préférence de la zone de défilement devient une ligne, et
     // les deux clés de préférence orphelines partent (1 810 → 1 794). Rien n'y est
-    // ajouté ; le plafond baisse d'exactement ce que le lot retire. Aucun des lots
-    // cumulés ci-dessus ne touche `PostDetailView.swift` après #6696 : les retraits
-    // s'additionnent.
-    private static let legacyLineCeiling = 54_434
+    // ajouté ; le plafond baisse d'exactement ce que le lot retire.
+    //
+    // Les six lots se cumulent : 54 450 − 31 − 16 = 54 403. #6701 retire de
+    // `StoryViewerView+Canvas.swift`, #6708 de `PostDetailView.swift` — deux hôtes
+    // distincts, donc les deux baisses s'additionnent. Cumul MESURÉ sur les 26 noms
+    // après fusion : 54 034, soit le même mou de 369 lignes qu'avant (#6016) —
+    // compté comme la règle 3 le fait, `components(separatedBy: .newlines)` sur la
+    // racine `apps/ios/Meeshy`.
+    private static let legacyLineCeiling = 54_403
 
     // MARK: - Règle 1 — pas de 43ᵉ
 
