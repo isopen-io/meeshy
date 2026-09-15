@@ -10,24 +10,11 @@ import Foundation
 /// (clé `meeshy.flag.reading_modes` — SI POSÉE EXPLICITEMENT), déjà couvert
 /// par `LentilleFlagGateTests`.
 ///
-/// **RE-PREUVE (I-075, second amendement 2026-08-16)** : « défaut OFF »
-/// n'est plus vrai. Clé jamais posée ⇒ `LentilleFeatureFlag.readingModes`
-/// replie sur `BetaFeaturesPreference.isEnabled` (défaut ON) — le drapeau
-/// devient le premier « client » du programme bêta : à l'installation, les
-/// modes de lecture sont ACTIFS (l'orchestrateur GELÉ décide au tap normal
-/// d'une conversation), et couper « Activer les bêta » (réglages) les
-/// désactive tous d'un coup. Voir la docstring de `LentilleFeatureFlag`
-/// pour la cascade à trois étages.
-///
-/// **I-075 RETIRÉ le 2026-08-18 (décision produit) — « défaut OFF » est de
-/// nouveau vrai.** Le paragraphe ci-dessus décrit l'état du code entre le
-/// 2026-08-16 et le 2026-08-18, conservé pour l'historique. Depuis le
-/// retrait, une bêta jamais touchée ne vaut pas opt-in — et depuis le
-/// 2026-08-22 la préférence bêta naît elle-même OFF : à l'installation, rien
-/// n'étant posé, `isReadingModesEnabled` vaut `false` et le tap normal ouvre
-/// en BULLES. L'opt-in volontaire (toggle « Bêta » réellement basculé, ou clé
-/// `meeshy.flag.reading_modes` posée) reste intégralement honoré, dans les
-/// deux sens.
+/// **Sortie de bêta (2026-09-14, #6482).** Les modes de lecture ont vécu
+/// derrière la préférence « Activer les bêta » (I-075, du 2026-08-16 au
+/// 2026-09-13) ; ils sont désormais actifs par défaut, avec leur interrupteur
+/// dans les Réglages. Voir la docstring de `LentilleFeatureFlag` pour la
+/// cascade.
 ///
 /// `LentilleFeatureFlag.swift` anticipe explicitement ce fichier : « Toute
 /// évolution ultérieure qui introduirait un `MeeshyFeatureFlags` central

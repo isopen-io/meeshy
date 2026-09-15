@@ -38,9 +38,8 @@ final class ReadingModeController: ObservableObject {
     private let store: FocalReadingModePreferenceStoring
     private let now: () -> Date
 
-    /// I-075 — override ÉPHÉMÈRE posé par l'item « Focal (bêta) » du menu
-    /// d'appui long de la liste, gardé par `BetaFeaturesPreference.isEnabled`
-    /// (préférence utilisateur, défaut ON — amendement produit 2026-08-16).
+    /// I-075 — override ÉPHÉMÈRE posé jadis par l'item « Focal (bêta) » du menu
+    /// d'appui long de la liste (retiré avec Focal iOS le 2026-08-18).
     /// Non-`nil` ⇒ la
     /// décision D'OUVERTURE de CETTE instance est `forcedMode`, quels que
     /// soient le drapeau `reading_modes`, la préférence collante ou le compte
@@ -104,6 +103,12 @@ final class ReadingModeController: ObservableObject {
 
     /// Règle de RENDU iOS posée sur la décision de la loi partagée (2026-08-21).
     ///
+    /// 0. **Modes de lecture coupés ⇒ Script (sortie de bêta, 2026-09-14,
+    ///    #6482).** La loi partagée rend `.bubbles`/`.flagDisabled` (vecteurs
+    ///    TS↔Swift, inchangés) ; le mode classique d'iOS est désormais Script.
+    ///    La raison `.flagDisabled` est conservée — rien n'a été choisi ni
+    ///    décidé automatiquement — et un collant `.bubbles` ne s'y oppose pas :
+    ///    couper les modes retire le choix du mode lui-même.
     /// 1. **Focal est de retour** — le clamp `.focal → .script` du retrait
     ///    2026-08-18 est levé : la passe de perspective MINIMALE
     ///    (`FocalScrollPerspective`, transform + opacity CALayer sur les
@@ -122,7 +127,10 @@ final class ReadingModeController: ObservableObject {
         lawDecision: ReadingModeOrchestrator.OrchestratorDecision,
         isFlagEnabled: Bool
     ) -> ReadingModeOrchestrator.OrchestratorDecision {
-        guard isFlagEnabled, stickyMode == .bubbles else { return lawDecision }
+        guard isFlagEnabled else {
+            return ReadingModeOrchestrator.OrchestratorDecision(mode: .script, reason: lawDecision.reason)
+        }
+        guard stickyMode == .bubbles else { return lawDecision }
         return ReadingModeOrchestrator.OrchestratorDecision(mode: .bubbles, reason: .sticky)
     }
 

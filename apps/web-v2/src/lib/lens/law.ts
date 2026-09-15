@@ -27,10 +27,16 @@
  * qu'on l'y accorde.
  */
 
-/** `f = min(1, d/520)`, `alpha = 1 − 0,45f`, `echelle = 1 − 0,04f`. */
-export const LIST_MAX_DISTANCE = 520;
+/** `f = min(1, d/400)`, `alpha = 1 − 0,45f`, `echelle = 1 − 0,10f` (loupe accentuée, #6586). */
+export const LIST_MAX_DISTANCE = 400;
 export const LIST_FADE = 0.45;
-export const LIST_SCALE = 0.04;
+export const LIST_SCALE = 0.1;
+
+/** `LentilleMetrics.Row.marginHorizontal` — écrêtage horizontal de la loupe (#6588). */
+export const ROW_MARGIN_HORIZONTAL = 8;
+
+/** `LentilleMetrics.FocusCard.loupeGain` — gain de loupe de la rangée qui traverse la bande (#6586/#6588). */
+export const LOUPE_GAIN = 0.04;
 
 /** Sous la bande : fondu court sur `d/160`, plafonné à `−0,35`. */
 export const BELOW_BAND_DISTANCE = 160;
@@ -146,6 +152,14 @@ export const RAMP_START = 36;
 export const RAMP_LENGTH = 40;
 
 /**
+ * `LentilleFocusBreathing.ramp` — 0 dans la demi-rangée de l'élue, 1 une
+ * rangée plus loin. PARTAGÉE par la respiration et la loupe (#6588) : les
+ * deux effets grandissent/s'écartent sur la MÊME rampe, pour qu'une rangée
+ * qui traverse la bande ne saute jamais.
+ */
+const ramp = (distance: number): number => clamp01((Math.abs(distance) - RAMP_START) / RAMP_LENGTH);
+
+/**
  * L'OPACITÉ D'UNE RANGÉE EN SOURDINE — `LentilleMetrics.Muted.opacity`
  * (`apps/ios/.../Lentille/Core/LentilleMetrics.swift:303`), le SEUL rendu de
  * la sourdine sur la peau Lentille (contrat §4.3, cité par
@@ -206,6 +220,29 @@ export const breathing = ({
   readonly reducedMotion: boolean;
 }): number => {
   if (reducedMotion || level <= 0 || distance === 0) return 0;
-  const ramp = clamp01((Math.abs(distance) - RAMP_START) / RAMP_LENGTH);
-  return (distance > 0 ? -1 : 1) * BREATHING * ramp * level;
+  return (distance > 0 ? -1 : 1) * BREATHING * ramp(distance) * level;
+};
+
+/**
+ * `LentilleFocusBreathing.loupe` (#6586/#6588) — la rangée qui traverse la
+ * bande GRANDIT de `LOUPE_GAIN`, sur la MÊME rampe que la respiration : `1 +
+ * gain` dans la demi-rangée de l'élue, retour à `1` une rangée plus loin. Le
+ * gain est écrêté pour que la rangée, qui grandit autour de son centre, ne
+ * dépasse jamais sa marge horizontale (`ROW_MARGIN_HORIZONTAL`) — sans quoi
+ * une liste large (iPad) la pousserait hors de son couloir.
+ */
+export const loupe = ({
+  distance,
+  level,
+  reducedMotion,
+  width,
+}: {
+  readonly distance: number;
+  readonly level: number;
+  readonly reducedMotion: boolean;
+  readonly width: number;
+}): number => {
+  if (reducedMotion || level <= 0 || width <= 0) return 1;
+  const gain = Math.min(LOUPE_GAIN, (2 * ROW_MARGIN_HORIZONTAL) / width);
+  return 1 + gain * (1 - ramp(distance)) * level;
 };

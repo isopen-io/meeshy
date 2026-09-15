@@ -388,11 +388,15 @@ struct LentilleConversationRow: View {
             // c'est actuellement, avec la chip du nombre d'utilisateurs qui
             // doit être actionnable » (directive 2026-08-23).
             if let magnification {
-                LentilleModePill(
-                    conversation: conversation,
-                    isAnonymous: magnification.isAnonymous,
-                    isDark: isDark
-                )
+                // Modes de lecture coupés (#6482) ⇒ pas d'encoche : elle
+                // proposerait un mode que l'ouverture ignorerait.
+                if LentilleFeatureFlag.isReadingModesEnabled {
+                    LentilleModePill(
+                        conversation: conversation,
+                        isAnonymous: magnification.isAnonymous,
+                        isDark: isDark
+                    )
+                }
                 if conversation.type != .direct {
                     LentilleMemberCountChip(
                         conversation: conversation,

@@ -43,6 +43,14 @@ const pt = {
   'reels.media.error': 'Não foi possível reproduzir — Tentar novamente',
   'reels.image': 'Imagem {index} de {count}',
 
+  'stories.title': 'Stories',
+  'stories.loading': 'Carregando stories…',
+  'stories.error': 'Não foi possível carregar os stories.',
+  'stories.empty.title': 'Nenhum story por enquanto',
+  'stories.empty.subtitle': 'Os stories dos seus contatos vão aparecer aqui por vinte e quatro horas.',
+  'stories.create': 'Criar um story',
+  'stories.count.one': '{count} story',
+  'stories.count.other': '{count} stories',
   'stories.mine': 'Seu story',
 
   'feed.post.action.like': 'Curtir',

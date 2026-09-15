@@ -103,8 +103,12 @@
 // réancré à leur compte réel ; les variables inconnues restent sous un second
 // cliquet, séparé, sans prétendre les classer une à une — cette
 // classification reste une revue humaine, hors de portée d'un script.
+//
+// 2026-09-14 (#6482) — variables inconnues 445 → 444. La section Bêta de
+// Réglages part avec son interrupteur : `Color(hex: MeeshyColors.successHex)`
+// quitte `SettingsView`. Aucun littéral ne bouge (118).
 const REFERENCE_LITERAL_COLOR_COUNT = 118;
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 445;
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 444;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';

@@ -13,10 +13,10 @@
 
 
 import { Glyph, GlyphSvg, type GlyphShape } from '@/components/glyph';
-import { meeshMissing } from '@/lib/view/meesh-copy';
 import { GLYPHS } from '@/components/glyphs';
 import { PROGRESSION_GLYPHS } from '@/components/glyphs-progression';
 import { ProgressBar } from '@/components/progress-bar';
+import { meeshMissing } from '@/lib/view/meesh-copy';
 import {
   ACHIEVEMENT_COPY,
   ACHIEVEMENT_SECTION_TITLES,
@@ -24,19 +24,12 @@ import {
   AXIS_GLYPHS,
   AXIS_LABELS,
   BADGE_UNIT,
-  LEVEL_UNIT,
-  STREAK_UNIT,
-  levelTitle,
   nextStepLabel,
   reachedAtLabel,
-  scoreLabel,
-  streakLabel,
-  streakRecordLabel,
   type ProgressionGlyph,
 } from '@/lib/view/progression';
 import {
   type EngagementAxisProgress,
-  type EngagementElanProgress,
   type EngagementMeeshProgress,
   type EngagementProgress,
   type EngagementTier,
@@ -169,56 +162,6 @@ export function AxisRow({ axis }: { axis: EngagementAxisProgress }) {
   );
 }
 
-export function LevelCard({ progress }: { progress: EngagementProgress }) {
-  const { level } = progress;
-  return (
-    <Card tint={BRAND}>
-      <div className="flex items-center gap-2">
-        <span style={{ color: BRAND }}>
-          <GlyphSvg glyph={PROGRESSION_GLYPHS.star} size={16} />
-        </span>
-        <p className="text-title font-bold" style={{ color: INK }}>
-          {levelTitle(level.level)}
-        </p>
-      </div>
-      <p className="mt-1 text-caption" style={{ color: INK_2 }}>
-        {scoreLabel(level.value)}
-      </p>
-      <div className="mt-3">
-        <ProgressBar progress={level.progress} label={`Niveau ${level.level} — vers le niveau ${level.level + 1}`} tint={BRAND} />
-      </div>
-      <p className="mt-2 text-check" style={{ color: INK_2 }}>
-        {nextStepLabel(level, LEVEL_UNIT, level.nextThreshold === null ? null : level.level + 1)}
-      </p>
-    </Card>
-  );
-}
-
-export function StreakCard({ progress }: { progress: EngagementProgress }) {
-  const { streak } = progress;
-  return (
-    <Card tint={STREAK_TINT}>
-      <div className="flex items-center gap-2">
-        <span style={{ color: STREAK_TINT }}>
-          <GlyphSvg glyph={PROGRESSION_GLYPHS.fire} size={16} />
-        </span>
-        <p className="text-title font-bold" style={{ color: INK }}>
-          {streakLabel(streak.currentDays)}
-        </p>
-      </div>
-      <p className="mt-1 text-caption" style={{ color: INK_2 }}>
-        {streakRecordLabel(streak.longestDays)}
-      </p>
-      <div className="mt-3">
-        <ProgressBar progress={streak.progress} label="Série de jours actifs — vers le prochain jalon" tint={STREAK_TINT} />
-      </div>
-      <p className="mt-2 text-check" style={{ color: INK_2 }}>
-        {nextStepLabel(streak, STREAK_UNIT)}
-      </p>
-    </Card>
-  );
-}
-
 export function AchievementsSection({ progress }: { progress: EngagementProgress }) {
   const unlocked = progress.achievements.filter((a) => a.unlocked).length;
   return (
@@ -269,53 +212,6 @@ export function AchievementsSection({ progress }: { progress: EngagementProgress
  * LE CORPS — pur. `online` vient de l'écran : hors ligne, l'instantané reste
  * peint tel quel, le bandeau de l'en-tête dit le reste.
  */
-/**
- * LE HÉROS DES MEESHES (#5743) — la première chose qu'on voit sur l'écran.
- *
- * Trois refus, tous délibérés :
- *
- *  - **rien du tout** quand la passerelle ne sert pas le bloc (`meesh`
- *    absent) : un client déployé avant ce lot ne doit pas peindre un solde
- *    inventé ;
- *  - **pas de bouton grisé** — directive porteur : « le bouton pour convertir
- *    quand les points le permettent, sinon pas de bouton ». Un contrôle qui
- *    existe sans effet est un contrôle qui ment (loi 4) ;
- *  - **la barre se mesure sur les points DÉBITABLES**, jamais sur le score
- *    total. Une barre nourrie par le plancher conversationnel promettrait une
- *    Meesh qui n'arriverait jamais.
- *
- * Et quand la frappe est impossible, l'écran DIT pourquoi — le plancher est
- * une promesse (« ce qu'on a bâti en parlant aux autres ne se vend pas »), et
- * une promesse muette ne rassure personne.
- */
-/**
- * L'ÉLAN COURANT (#5749) — montré SEULEMENT quand il change quelque chose.
- *
- * Au neutre (×1) rien ne s'affiche : un badge « ×1 » n'apprend rien et occupe
- * la place de ce qui compte. Et le texte dit ce qui PORTE le multiplicateur —
- * un accélérateur dont on ignore la cause ne se pilote pas, il se subit.
- */
-export function ElanBanner({ elan }: { elan: EngagementElanProgress }) {
-  const familles =
-    elan.activeFamilyCount === 1 ? '1 famille active' : `${elan.activeFamilyCount} familles actives`;
-  return (
-    <p
-      role="status"
-      className="flex items-center gap-2 rounded-card px-4 py-2 text-check font-semibold"
-      style={{
-        backgroundColor: 'color-mix(in srgb, var(--color-ios-brand) 14%, transparent)',
-        color: INK,
-      }}
-    >
-      <span style={{ color: BRAND }} aria-hidden="true">
-        <GlyphSvg glyph={PROGRESSION_GLYPHS.magicWand} size={13} />
-      </span>
-      Élan ×{elan.factor} — {familles} sur {elan.windowDays} jours
-      {elan.hasStanding ? ', plus votre assise' : ''}. Vos prochains gestes rapportent {elan.factor} fois plus.
-    </p>
-  );
-}
-
 /**
  * LES SUCCÈS GÉNÉRÉS, EN RANGÉES HORIZONTALES (#5759).
  *

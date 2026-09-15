@@ -13,6 +13,7 @@ import {
 import { resolvePersonalPreviewOverrides } from './utils/personalPreviewOverride';
 import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloorsForOrFail } from '../services/historyFloor';
 import type { ServerEmitIO } from './serverEmit';
+import { withOrphanedSenderRepair } from '../services/messaging/withOrphanedSenderRepair';
 
 /**
  * Minimal Socket.IO surface used by this helper. Kept structural so the
@@ -238,6 +239,11 @@ export async function emitConversationPreviewUpdate(
 ): Promise<void> {
   if (!io) return;
   try {
+    // `prisma` n'est ici qu'un `Pick<PrismaClient, …>` (testabilité) ; le
+    // vrai client, dont la réparation a besoin, est ce que chaque appelant de
+    // production lui passe réellement — d'où le cast, local à ce module
+    // (même motif que `copyAttachments.ts`, #6516).
+    const realPrisma = prisma as unknown as PrismaClient;
     const [participants, latest] = await Promise.all([
       prisma.participant.findMany({
         where: { conversationId, isActive: true },
@@ -250,11 +256,13 @@ export async function emitConversationPreviewUpdate(
         //
         select: PREVIEW_PARTICIPANT_SELECT,
       }),
-      prisma.message.findFirst({
-        where: { conversationId, deletedAt: null },
-        orderBy: { createdAt: 'desc' },
-        select: PREVIEW_MESSAGE_SELECT,
-      }) as Promise<PreviewMessage | null>,
+      withOrphanedSenderRepair({ prisma: realPrisma, conversationIds: [conversationId] }, () =>
+        prisma.message.findFirst({
+          where: { conversationId, deletedAt: null },
+          orderBy: { createdAt: 'desc' },
+          select: PREVIEW_MESSAGE_SELECT,
+        })
+      ) as Promise<PreviewMessage | null>,
     ]);
 
     if (scope?.onlyIfLatestIs != null && latest?.id !== scope.onlyIfLatestIs) return;

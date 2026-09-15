@@ -27,18 +27,14 @@ import MeeshySDK
 /// commentaire d'origine concluait au défaut OFF « tant qu'aucune suite du
 /// bundle n'écrit la clé `meeshy.flag.lentille_list` ».
 ///
-/// L'élargissement du programme bêta au drapeau `lentille_list` (2026-08-19,
-/// `LentilleFeatureFlag.isCoveredByBetaProgramme`) a AJOUTÉ une entrée à ce
-/// drapeau : la préférence `meeshy.pref.beta_features_enabled`. Or ce domaine
-/// `.standard` est celui de l'APP HÔTE du bundle de tests — si l'app a
-/// réellement activé la bêta sur ce simulateur, la clé y est, et la suite
-/// recevait alors le sectionnement Lentille en croyant tester le legacy
-/// (constaté : `lentille.older` au lieu de `other`).
+/// Depuis la sortie de bêta (2026-09-14, #6482) la liste Lentille est ACTIVE
+/// par défaut : sans épinglage, la suite recevrait le sectionnement Lentille
+/// en croyant tester le legacy (constaté : `lentille.older` au lieu de `other`).
 ///
 /// Un test ne doit pas conclure d'une absence qu'il ne contrôle pas. `setUp`
-/// POSE donc explicitement `meeshy.flag.lentille_list = false` : l'étage 2
-/// (clé propre du drapeau) prime sur l'étage 3 (bêta), ce qui épingle OFF quoi
-/// que porte le domaine hôte. `tearDown` retire la clé — jamais de résidu.
+/// POSE donc explicitement `meeshy.flag.lentille_list = false` : la clé écrite
+/// prime sur le défaut, ce qui épingle OFF quoi que porte le domaine hôte.
+/// `tearDown` retire la clé — jamais de résidu.
 @MainActor
 final class LentilleGroupingGraftTests: XCTestCase {
 

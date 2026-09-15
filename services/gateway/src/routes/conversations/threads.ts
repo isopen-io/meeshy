@@ -19,6 +19,7 @@ import { hoistStickerOnto } from '../../services/stickers/messageSticker';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';
 import { MESSAGE_PROTECTION_SELECT } from './messages-list-query';
 import { servedQuotedMessage, type QuotedMessageRow } from '../../services/messaging/servedQuotedMessage';
+import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
 
 const logger = enhancedLogger.child({ module: 'ThreadsRoute' });
 
@@ -280,13 +281,15 @@ export function registerThreadsRoutes(
         reader: historyReaderFromAuthContext(authContext)
       });
 
-      const parent = await prisma.message.findFirst({
-        where: applyPersonalHistoryHiding(
-          applyHistoryFloor({ id: messageId, conversationId, deletedAt: null }, historyFloor),
-          hiding
-        ),
-        select: threadMessageSelect
-      });
+      const parent = await withOrphanedSenderRepair({ prisma, conversationIds: [conversationId] }, () =>
+        prisma.message.findFirst({
+          where: applyPersonalHistoryHiding(
+            applyHistoryFloor({ id: messageId, conversationId, deletedAt: null }, historyFloor),
+            hiding
+          ),
+          select: threadMessageSelect
+        })
+      );
 
       if (!parent) {
         return sendNotFound(reply, 'Message not found');
@@ -314,14 +317,16 @@ function findReplies(
   hiding: PersonalHistoryHiding = NO_PERSONAL_HIDING,
   historyFloor: Date | null = null
 ) {
-  return prisma.message.findMany({
-    where: applyPersonalHistoryHiding(
-      applyHistoryFloor({ conversationId, replyToId: { in: parentIds }, deletedAt: null }, historyFloor),
-      hiding
-    ),
-    select: threadMessageSelect,
-    orderBy: { createdAt: 'asc' as const }
-  });
+  return withOrphanedSenderRepair({ prisma, conversationIds: [conversationId] }, () =>
+    prisma.message.findMany({
+      where: applyPersonalHistoryHiding(
+        applyHistoryFloor({ conversationId, replyToId: { in: parentIds }, deletedAt: null }, historyFloor),
+        hiding
+      ),
+      select: threadMessageSelect,
+      orderBy: { createdAt: 'asc' as const }
+    })
+  );
 }
 
 type ThreadMessage = Awaited<ReturnType<typeof findReplies>>[number];

@@ -24,10 +24,16 @@ function MinimalHeader() {
   return (
     <header className="glass z-10 shrink-0">
       <div className="flex items-center gap-2 px-4 py-2">
+        {/* `--color-ios-ink`, jamais `--color-ios-brand` (#6367) : le chevron
+            posé sur cette bande de verre, pire cas (flou désactivé, D-51),
+            mesure 2,78:1 en clair / 2,53:1 en sombre avec l'indigo nu —
+            sous la barre AA non-texte (3:1). `--color-ios-ink` y tient
+            (même ton, même densité que `thread-header.tsx`, mesuré par
+            `scripts/lib/glass-contrast.test.ts`). */}
         <Link
           to="list"
           className="grid size-11 shrink-0 place-items-center rounded-chip"
-          style={{ color: 'var(--color-ios-brand)' }}
+          style={{ color: 'var(--color-ios-ink)' }}
           aria-label="Retour"
         >
           <Glyph name="caretLeft" size={22} />

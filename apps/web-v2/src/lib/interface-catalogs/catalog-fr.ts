@@ -51,6 +51,15 @@ const fr = {
   'reels.media.error': 'Lecture impossible — Réessayer',
   'reels.image': 'Image {index} sur {count}',
 
+  /* TOUTES LES STORIES (#6547) — `routes/stories.tsx`, même patron que le Flux. */
+  'stories.title': 'Stories',
+  'stories.loading': 'Chargement des stories…',
+  'stories.error': "Les stories n'ont pas pu être chargées.",
+  'stories.empty.title': "Aucune story pour l'instant",
+  'stories.empty.subtitle': 'Les stories de vos contacts apparaîtront ici pendant vingt-quatre heures.',
+  'stories.create': 'Créer une story',
+  'stories.count.one': '{count} story',
+  'stories.count.other': '{count} stories',
   /* LE LIBELLÉ DU GROUPE DU LECTEUR (#6550) — partagé par le rail
      (`components/story-rail.tsx`) et la liste « Toutes les stories »
      (`routes/stories.tsx`), via `storyAuthorLabel()`. */

@@ -208,7 +208,7 @@ export class PostCommentService {
   async updateComment(
     commentId: string,
     userId: string,
-    data: { content?: string; effectFlags?: number },
+    data: { content?: string; effectFlags?: number; originalLanguage?: string },
   ) {
     const existing = await this.prisma.postComment.findFirst({
       where: { id: commentId, deletedAt: NOT_DELETED },
@@ -232,13 +232,15 @@ export class PostCommentService {
     if (contentChanged) updateData.isEdited = true;
     if (data.content !== undefined) updateData.content = data.content;
     if (data.effectFlags !== undefined) updateData.effectFlags = data.effectFlags;
-    // Texte changé → les traductions ET la langue d'origine décrivaient
-    // l'ANCIEN contenu. On purge les deux ; le pipeline de retraduction
-    // redétecte la langue du nouveau texte (originalLanguage absent =
-    // auto-détection, même contrat qu'une création sans claim client).
+    // Texte changé → les traductions décrivaient l'ANCIEN contenu, purgées
+    // dans tous les cas. La langue d'origine suit `data.originalLanguage` —
+    // la déclaration du composer (pastille de langue), même contrat que
+    // `UpdatePostSchema.originalLanguage` — quand l'appelant la fournit ;
+    // sans déclaration, `null` relance l'auto-détection du nouveau texte par
+    // le pipeline de retraduction (comportement inchangé).
     if (contentChanged) {
       updateData.translations = {};
-      updateData.originalLanguage = null;
+      updateData.originalLanguage = data.originalLanguage ?? null;
     }
 
     const comment = await this.prisma.postComment.update({

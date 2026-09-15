@@ -54,10 +54,9 @@ struct MeeshyApp: App {
         // appareil), ne crashe jamais.
         UILanguageOverride.applyIfNeeded()
 
-        // Programme bêta — lecture au lancement : si « Activer les bêta » est
-        // ON, `UserDefaults` dit quelles fonctionnalités le sont (tout-ou-rien
-        // aujourd'hui, une par une demain). Journal `me.meeshy.app:beta`.
-        BetaFeaturesPreference.resolveAtLaunch()
+        // Sortie de bêta (2026-09-14, #6482) : la préférence « Activer les
+        // bêta » ne gouverne plus rien — sa clé est retirée de l'appareil.
+        LentilleFeatureFlag.removeRetiredBetaPreference()
 
         #if DEBUG
         // Filet de diagnostic dev : capture la stack des SIGSEGV que
