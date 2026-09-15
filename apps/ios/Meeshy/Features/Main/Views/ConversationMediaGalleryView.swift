@@ -208,6 +208,8 @@ struct ConversationMediaGalleryView: View {
     /// C'est la même raison que `captionLanguage` quelques lignes plus haut —
     /// ce qui appartient à un média se range par média.
     @State private var replyDrafts: [String: String] = [:]
+    /// #6751 — la transition clavier ANNONCÉE, seule source de sa hauteur.
+    @State private var replyKeyboard: KeyboardTransition?
 
     init(
         allAttachments: [MessageAttachment],
@@ -353,7 +355,21 @@ struct ConversationMediaGalleryView: View {
             // même rang que la traînée d'émojis, et pour la même raison : elle
             // doit passer par-dessus tous les contrôleurs du plateau.
             replyComposerLayer
+                // #6751 — l'inset est EXPLICITE : l'ajustement automatique de
+                // SwiftUI ne s'applique pas à une couche alignée en bas d'un
+                // `ZStack` que ses quatre autres enfants étendent à l'écran
+                // entier. Détail et mesure : `MediaReplyKeyboardInset`.
+                .padding(.bottom, MediaReplyKeyboardInset.bottomInset(for: replyKeyboard))
+                .animation(.easeOut(duration: replyKeyboard?.duration ?? 0.25), value: replyKeyboard?.height)
         }
+        // #6751 — **l'inset clavier est neutralisé à la RACINE, pas par couche.**
+        // Mesuré au simulateur : posé sur les enfants, il ne protège rien —
+        // c'est la racine du `fullScreenCover` que la fenêtre pousse, et les
+        // couches montent avec elle (le média sortait par le haut, « Fermer »
+        // à y = −47). La pile ne bouge donc plus du tout, et la SEULE chose qui
+        // suit le clavier est la couche de saisie, par son padding explicite.
+        .ignoresSafeArea(.keyboard, edges: .bottom)
+        .observingKeyboardTransition($replyKeyboard)
         .statusBar(hidden: true)
         .onAppear {
             // Filet de sécurité : `scrollPosition(id:)` honore la valeur initiale
@@ -402,19 +418,25 @@ struct ConversationMediaGalleryView: View {
                     composerLanguage: $replyLanguage,
                     onSend: { text, language in
                         onSendReplyToMedia?(target, text, language)
+                        // #6751 — le clavier d'abord, la barre ensuite : la
+                        // suite est décidée par `MediaReplyKeyboardInset`.
+                        MediaReplyKeyboardInset.apply(MediaReplyKeyboardInset.sendEffects) {
                         // **La galerie NE SE REFERME PAS** — ni ici, ni au
                         // retrait de la barre. C'est tout l'objet du lot : on
                         // parle de la pièce en la regardant. La barre redescend
                         // pour rendre le média entier, et un second tap sur
                         // « répondre » la remonte.
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                            replyTarget = nil
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                replyTarget = nil
+                            }
                         }
                         HapticFeedback.light()
                     },
                     onCancel: {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                            replyTarget = nil
+                        MediaReplyKeyboardInset.apply(MediaReplyKeyboardInset.cancelEffects) {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                replyTarget = nil
+                            }
                         }
                     }
                 )
@@ -770,6 +792,12 @@ struct ConversationMediaGalleryView: View {
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
         .padding(.trailing, MediaGalleryStage.gutter)
+        // #6693 — la colonne est POSÉE sur le média (#6161) : sa teinte suit la
+        // luminance de la pièce affichée, et non le blanc d'office (1,83:1 sur une
+        // vidéo violette).
+        .mediaChromeTinted()
+        .mediaChromeScheme(for: currentIndex < allAttachments.count
+                           ? .attachment(allAttachments[currentIndex]) : nil)
     }
 
     /// Les trois actions, chacune derrière sa propre closure optionnelle : un
@@ -805,11 +833,11 @@ struct ConversationMediaGalleryView: View {
                 // le même signe pour la même promesse, « il y en a plus ».
                 Image(systemName: "face.smiling")
                     .font(.system(size: 17, weight: .semibold))
-                    .foregroundColor(reactionBarOpen ? MeeshyColors.indigo400 : .white)
+                    .mediaChromeForeground(reactionBarOpen ? MeeshyColors.indigo400 : nil)
                     .overlay(alignment: .topTrailing) {
                         Image(systemName: "plus")
                             .font(.system(size: 9, weight: .black))
-                            .foregroundColor(reactionBarOpen ? MeeshyColors.indigo400 : .white)
+                            .mediaChromeForeground(reactionBarOpen ? MeeshyColors.indigo400 : nil)
                             .offset(x: 6, y: -5)
                     }
                     .frame(width: MediaStageActionColumn.glass,
@@ -855,7 +883,7 @@ struct ConversationMediaGalleryView: View {
             } label: {
                 Image(systemName: "arrowshape.turn.up.left.fill")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white)
+                    .glassControlForeground()
                     .frame(width: MediaStageActionColumn.glass,
                            height: MediaStageActionColumn.glass)
                     .adaptiveGlass(in: Circle(), interactive: true)
@@ -880,7 +908,7 @@ struct ConversationMediaGalleryView: View {
                 // 82i) — ne pas scaler. Le glass APRÈS le sizing.
                 Image(systemName: "wand.and.stars")
                     .font(.system(size: 17, weight: .semibold))
-                    .foregroundColor(.white)
+                    .glassControlForeground()
                     .frame(width: MediaStageActionColumn.glass,
                            height: MediaStageActionColumn.glass)
                     .adaptiveGlass(in: Circle(), interactive: true)

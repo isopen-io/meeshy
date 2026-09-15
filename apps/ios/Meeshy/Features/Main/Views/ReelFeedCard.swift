@@ -289,14 +289,19 @@ struct ReelFeedCard: View, Equatable {
                 Menu {
                     moreOptionsMenuContent
                 } label: {
+                    // **Le glyphe suit la luminance du réel** (#6693) : blanc d'office sur
+                    // un verre qui prend la couleur du média, il tombait à 1,45:1 sur une
+                    // mire cyan. Le schéma se pose sur le LIBELLÉ — posé sur le `Menu`, il
+                    // habillerait aussi sa feuille.
                     Image(systemName: "ellipsis")
                         .font(MeeshyFont.relative(15, weight: .bold))
-                        .foregroundColor(.white)
+                        .glassControlForeground()
                         .padding(8)
                         .background(Circle().fill(.ultraThinMaterial))
                         .overlay(Circle().stroke(Color.white.opacity(0.25), lineWidth: 1))
                         .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
                         .contentShape(Circle())
+                        .mediaChromeTinted()
                 }
                 .padding(10)
                 .accessibilityLabel(String(localized: "feed.post.more_options", defaultValue: "Plus d'options", bundle: .main))
@@ -304,6 +309,7 @@ struct ReelFeedCard: View, Equatable {
             }
             Spacer()
         }
+        .mediaChromeScheme(for: .feedCard(post))
     }
 
     // MARK: - Bouton de son (coin haut-gauche — seul coin libre, S2)

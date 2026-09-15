@@ -277,7 +277,7 @@ struct ProfileUserPostsList: View {
             // d'un poste OU d'un réel du profil commente sans quitter le profil.
             CommentsSheetView(post: post, accentColor: post.authorColor)
         }
-        .sheet(item: $editingPost) { post in
+        .postEditCover(item: $editingPost) { post in
             EditPostSheet(
                 originalContent: post.content,
                 originalLanguage: post.originalLanguage,

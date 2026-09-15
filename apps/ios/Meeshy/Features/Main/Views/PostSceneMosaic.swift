@@ -97,6 +97,11 @@ struct PostSceneMosaic: View {
     /// muet (`ScenePlayerConfig.locksMute`, #4084), et c'est `hostMute` qui
     /// tranche, jamais une seconde règle recopiée ici.
     var isMuted: Bool = false
+    /// **La hauteur que le détail laisse à la boîte des scènes** (#6696) —
+    /// `nil` dans le fil. Elle se traduit en LARGEUR maximale au rapport de la
+    /// boîte : dans une pile défilante, un `frame(maxHeight:)` ne propose aucune
+    /// hauteur et laisse le contenu déborder.
+    var maxBoxHeight: CGFloat? = nil
     /// Le doigt sur une tuile ouvre le plein écran SUR CETTE SCÈNE — pas sur
     /// la première. Une mosaïque dont toutes les tuiles mènent au même endroit
     /// serait un seul bouton dessiné quatre fois.
@@ -153,6 +158,29 @@ struct PostSceneMosaic: View {
         MosaicLayout.tiles(sceneCount: document.scenes.count, mode: mode)
     }
 
+    /// Le rapport largeur / hauteur de la boîte des scènes : la page la plus
+    /// haute du carrousel, ou la géométrie de la mosaïque. Un seul site, lu par
+    /// la vue ET par l'hôte qui borne sa hauteur.
+    static func boxAspect(document: CanvasV3) -> CGFloat {
+        let mode = document.resolvedLayout
+        return MosaicLayout.isPaged(mode: mode)
+            ? SceneCarouselLayout.cardAspect(document: document)
+            : 1 / MosaicLayout.aspectRatio(mode: mode)
+    }
+
+    /// Ce que le carrousel pose SOUS sa boîte : l'espacement, puis les pastilles.
+    static let pageDotsSpacing: CGFloat = 8
+    static let pageDotHeight: CGFloat = 6
+
+    static func accessoryHeight(document: CanvasV3) -> CGFloat {
+        MosaicLayout.isPaged(mode: document.resolvedLayout) ? pageDotsSpacing + pageDotHeight : 0
+    }
+
+    private var largeurDeBoite: CGFloat {
+        let plafond = maxBoxHeight.map { $0 * Self.boxAspect(document: document) } ?? .infinity
+        return min(PostSceneCard.maxWidth, plafond)
+    }
+
     var body: some View {
         if MosaicLayout.isPaged(mode: mode) {
             carrousel
@@ -164,7 +192,7 @@ struct PostSceneMosaic: View {
     // MARK: - Le défilement image par image
 
     private var carrousel: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: Self.pageDotsSpacing) {
             ZStack(alignment: .topTrailing) {
                 TabView(selection: $page) {
                     ForEach(tuiles, id: \.sceneIndex) { tuile in
@@ -181,9 +209,8 @@ struct PostSceneMosaic: View {
             // a aucune, et lui en demander une donne une bande de la hauteur du
             // compteur à la première passe (défaut mesuré sur le carrousel des
             // médias, dont ce fichier reprend la leçon plutôt que l'erreur).
-            .aspectRatio(SceneCarouselLayout.cardAspect(document: document),
-                         contentMode: .fit)
-            .frame(maxWidth: PostSceneCard.maxWidth)
+            .aspectRatio(Self.boxAspect(document: document), contentMode: .fit)
+            .frame(maxWidth: largeurDeBoite)
             .frame(maxWidth: .infinity, alignment: .center)
             .clipShape(RoundedRectangle(cornerRadius: 16))
             .reportReelFrame(id: post.id, kind: .scene)
@@ -276,7 +303,7 @@ struct PostSceneMosaic: View {
                     .fill(position == page
                           ? Color(hex: accentColor)
                           : Color(hex: accentColor).opacity(0.28))
-                    .frame(width: position == page ? 18 : 6, height: 6)
+                    .frame(width: position == page ? 18 : 6, height: Self.pageDotHeight)
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: page)
             }
         }
@@ -308,8 +335,8 @@ struct PostSceneMosaic: View {
             // qu'on vient de fermer.
             .frame(width: boite.width, height: boite.height, alignment: .topLeading)
         }
-        .aspectRatio(1 / MosaicLayout.aspectRatio(mode: mode), contentMode: .fit)
-        .frame(maxWidth: PostSceneCard.maxWidth)
+        .aspectRatio(Self.boxAspect(document: document), contentMode: .fit)
+        .frame(maxWidth: largeurDeBoite)
         .frame(maxWidth: .infinity, alignment: .center)
     }
 
@@ -349,7 +376,17 @@ struct PostSceneMosaic: View {
             ? document.scenes[tuile.sceneIndex] : nil
         let bouge = scene.map(SceneMotion.isCinematic) ?? false
         ZStack {
-            if scene != nil {
+            if let scene, MosaicLayout.isPaged(mode: mode),
+               let image = SceneFraming.imageAspect(scene: scene) {
+                // **Une PAGE qui n'est qu'une image se montre entière** (#6697).
+                // La boîte du carrousel prend la forme de sa page la plus haute :
+                // un canvas 9:16 rempli y rognait l'image sur ses deux côtés.
+                // Au rapport de l'image, elle tient dans la page, comme dans la
+                // carte à scène unique.
+                scenePlayer(sceneIndex: tuile.sceneIndex, joue: joue && bouge)
+                    .preferredContentLanguages(preferredContentLanguages)
+                    .aspectRatio(image, contentMode: .fit)
+            } else if scene != nil {
                 // **Une TUILE montre la scène ENTIÈRE, réduite** (directive
                 // porteur 2026-09-06 : « la mise à l'échelle d'une scène doit
                 // mettre à l'échelle tout son contenu »).

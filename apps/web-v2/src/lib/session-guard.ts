@@ -1,4 +1,5 @@
 import type { SessionState } from './api/session';
+import { safeReturnPath } from './view/magic-link';
 
 /**
  * LA GARDE DE ROUTE (#5555, E6) — pure. Elle décide, elle ne navigue pas :
@@ -52,7 +53,33 @@ export type RouteKey =
   | 'welcome'
   | 'magicLink'
   | 'magicLinkValidate'
-  | 'forgotPassword';
+  | 'forgotPassword'
+  /**
+   * LA JONCTION PAR LIEN (#5561) — dans AUCUN ensemble, comme
+   * `magicLinkValidate`. `/chat/:link` est la seule adresse de conversation
+   * qui sert quelqu'un sans compte, et la seule où un compte connecté
+   * REJOINT : privée, elle renverrait l'invité vers la connexion avant qu'il
+   * sache à quoi il est invité ; d'authentification, elle renverrait le
+   * membre vers `/` avant qu'il ait pu rejoindre. L'écran lit la session
+   * lui-même pour choisir entre « Rejoindre » et ses deux sorties.
+   */
+  | 'chatJoin'
+  /**
+   * LES LIENS REÇUS (#6714, #6715) — dans AUCUN ensemble, comme
+   * `magicLinkValidate` et `chatJoin` : un lien reçu s'ouvre quel que soit le
+   * statut. `/l/:token` et `/account/deletion?token=` sont PUBLICS par nature
+   * — la passerelle ne les authentifie pas, et annuler sa suppression ne doit
+   * pas exiger l'accès au compte. `/settings/verify-email-change` et
+   * `/settings/notifications` agissent sur le compte CONNECTÉ, mais une
+   * redirection d'ici vers `/login` PERDRAIT le jeton de l'e-mail, faute de
+   * chemin de retour : leurs écrans lisent la session eux-mêmes, ne dépensent
+   * rien sans elle, et disent qu'il faut se connecter.
+   */
+  | 'trackingLink'
+  | 'trackingLinkExpired'
+  | 'accountDeletion'
+  | 'verifyEmailChange'
+  | 'settingsNotifications';
 
 export type RouteAccessDecision = 'allow' | 'redirect-login' | 'redirect-home' | 'redirect-welcome';
 
@@ -146,4 +173,51 @@ export function resolveRouteAccess(input: {
   }
 
   return 'allow';
+}
+
+/** Les caractères que le parseur d'URL EFFACE — blancs, contrôles C0, DEL.
+ * Aucun ne sort de `href()`, qui encode tout. Une fonction plutôt qu'une classe
+ * d'expression régulière : la source n'a ainsi aucun caractère de contrôle à
+ * écrire, pas même échappé. */
+const isWhitespaceOrControl = (character: string): boolean => {
+  const code = character.charCodeAt(0);
+  return character.trim() === '' || code < 0x20 || code === 0x7f;
+};
+
+/**
+ * `next` — OÙ REVENIR APRÈS S'ÊTRE CONNECTÉ (#5561), ou `null`.
+ *
+ * La valeur vient de l'ADRESSE, donc de quiconque a fabriqué le lien. La règle
+ * de même origine est celle de `safeReturnPath` (`view/magic-link.ts`, le
+ * retour d'un lien magique) — réemployée, jamais recopiée : deux clampages
+ * d'une même valeur hostile divergeraient au premier correctif.
+ *
+ * Elle y ajoute ce que `safeReturnPath` laisse passer et qu'une redirection de
+ * SESSION ne peut pas se permettre : le parseur d'URL retire tabulations et
+ * retours à la ligne, si bien que `/\t/evil.com` devient `//evil.com`. Ce
+ * n'est pas une redirection ouverte — `history.replaceState` refuse une autre
+ * origine — mais il LÈVE, et dans l'effet de `SessionGate` (`main.tsx`) c'est
+ * l'application entière qui tomberait pour un lien forgé.
+ *
+ * `null` plutôt que `'/'` : un appelant doit pouvoir savoir qu'il n'y a RIEN à
+ * transmettre (le lien « Créer un compte » ne porte pas un `next=/` inventé).
+ */
+export function safeNextPath(raw: string | null): string | null {
+  if (raw === null || raw === '' || [...raw].some(isWhitespaceOrControl)) return null;
+  return safeReturnPath(raw) === raw ? raw : null;
+}
+
+/**
+ * LA DESTINATION D'UNE SESSION QUI VIENT DE S'OUVRIR — `next` s'il est sûr,
+ * l'accueil sinon. L'accueil est FOURNI par l'appelant (`href('list')`) : ce
+ * module décide, il ne connaît pas le routeur.
+ *
+ * Elle sert les TROIS sites qui naviguent quand une session s'établit sur un
+ * écran d'authentification — `SessionGate` (`redirect-home`), la connexion et
+ * l'inscription. Ils partent du même rendu : si l'un seulement honorait
+ * `next`, le parent (`SessionGate`, dont l'effet s'exécute APRÈS celui de
+ * l'écran) le recouvrirait par `/`.
+ */
+export function landingAfterSession(next: string | null, home: string): string {
+  return safeNextPath(next) ?? home;
 }

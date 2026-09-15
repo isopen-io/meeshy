@@ -2179,7 +2179,7 @@ describe('PostCommentService', () => {
       prisma.postComment.findFirst.mockResolvedValue(null);
 
       await expect(
-        service.addComment('post-1', 'user-1', 'Reply', 'bad-parent'),
+        service.addComment('post-1', 'user-1', 'Reply', { parentId: 'bad-parent' }),
       ).rejects.toThrow('PARENT_NOT_FOUND');
 
       expect(prisma.postComment.create).not.toHaveBeenCalled();
@@ -2195,7 +2195,7 @@ describe('PostCommentService', () => {
       prisma.post.update.mockResolvedValue(makePost());
       prisma.postComment.update.mockResolvedValue(parentComment);
 
-      const result = await service.addComment('post-1', 'user-1', 'Nice!', 'parent-1');
+      const result = await service.addComment('post-1', 'user-1', 'Nice!', { parentId: 'parent-1' });
 
       expect(prisma.postComment.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -2226,7 +2226,7 @@ describe('PostCommentService', () => {
       prisma.postComment.create.mockResolvedValue(makeComment({ id: 'c-fr' }));
       prisma.post.update.mockResolvedValue(makePost());
 
-      await service.addComment('post-1', 'user-1', 'Bonjour', undefined, undefined, 'fr-FR');
+      await service.addComment('post-1', 'user-1', 'Bonjour', { originalLanguage: 'fr-FR' });
 
       expect(prisma.postComment.create).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ originalLanguage: 'fr' }) }),
@@ -2238,7 +2238,7 @@ describe('PostCommentService', () => {
       prisma.postComment.create.mockResolvedValue(makeComment({ id: 'c-bas' }));
       prisma.post.update.mockResolvedValue(makePost());
 
-      await service.addComment('post-1', 'user-1', 'mbolo', undefined, undefined, 'bas');
+      await service.addComment('post-1', 'user-1', 'mbolo', { originalLanguage: 'bas' });
 
       expect(prisma.postComment.create).toHaveBeenCalledWith(
         expect.objectContaining({ data: expect.objectContaining({ originalLanguage: 'bas' }) }),

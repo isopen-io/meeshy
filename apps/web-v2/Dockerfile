@@ -170,6 +170,13 @@ RUN apk add --no-cache tini curl
 COPY apps/web-v2/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/dist/ /usr/share/nginx/html/
 
+# LES ADRESSES PUBLIQUES DU DOMAINE (#6713) — le legacy est décommissionné
+# (#6702) : liens universels, robots, logo des e-mails, anciens formats de lien
+# et redirections relatives. Prouvées ICI, sur le serveur construit : une image
+# dont une adresse est fausse ne se construit pas.
+COPY apps/web-v2/scripts/check-nginx-public.sh /tmp/check-nginx-public.sh
+RUN sh /tmp/check-nginx-public.sh && rm /tmp/check-nginx-public.sh
+
 # 3400 : 3100 est au legacy, 3300 à l'ancienne refonte. Les trois peuvent
 # tourner côte à côte pendant la bascule.
 EXPOSE 3400

@@ -1,6 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 
-import { partagerInvitation, TEXTE_INVITATION, type PortailPartage } from './invitation';
+import {
+  memoriserLienParLecteur,
+  partagerInvitation,
+  partagerInvitationParrainee,
+  retourInvitationParrainee,
+  TEXTE_INVITATION,
+  type PortailPartage,
+} from './invitation';
 
 const LIEN = 'https://meeshy.me';
 
@@ -65,5 +72,158 @@ describe('RETOUR_INVITATION', () => {
     // s'est passé » sont indiscernables.
     expect(RETOUR_INVITATION.copie).toBeTruthy();
     expect(RETOUR_INVITATION.indisponible).toBeTruthy();
+  });
+});
+
+const LIEN_PARRAIN = 'https://meeshy.me/signup/affiliate/aff_zoe';
+
+/** Un portail qui NOTE tout ce qu'on lui fait faire. */
+const portailTemoin = (share?: PortailPartage['share']) => {
+  const partages: Array<{ title: string; text: string; url: string }> = [];
+  const copies: string[] = [];
+  const portail: PortailPartage = {
+    share: share ?? (async (d) => void partages.push(d)),
+    copier: async (t) => void copies.push(t),
+  };
+  return { portail, partages, copies };
+};
+
+describe('partagerInvitationParrainee — inviter avec SON code (#6707)', () => {
+  test('le lien de parrainage part par la feuille, avec le texte d’invitation', async () => {
+    const { portail, partages } = portailTemoin();
+
+    const issue = await partagerInvitationParrainee({ chargerLien: async () => LIEN_PARRAIN, portail });
+
+    expect(issue).toEqual({ resultat: 'partage', lien: LIEN_PARRAIN });
+    expect(partages).toEqual([{ title: 'Meeshy', text: TEXTE_INVITATION, url: LIEN_PARRAIN }]);
+  });
+
+  /**
+   * Le cas que l'issue interdit : partager le site nu en le laissant croire
+   * parrainé. Sans lien, RIEN ne part — ni feuille, ni presse-papier.
+   */
+  test('sans lien, rien ne part : ni feuille ni presse-papier', async () => {
+    const { portail, partages, copies } = portailTemoin();
+
+    const issue = await partagerInvitationParrainee({ chargerLien: async () => null, portail });
+
+    expect(issue).toEqual({ resultat: 'lien-indisponible' });
+    expect(partages).toEqual([]);
+    expect(copies).toEqual([]);
+  });
+
+  test('un chargement qui LÈVE est un lien indisponible, jamais une exception', async () => {
+    const { portail, partages } = portailTemoin();
+
+    const issue = await partagerInvitationParrainee({
+      chargerLien: async () => {
+        throw new Error('hors ligne');
+      },
+      portail,
+    });
+
+    expect(issue).toEqual({ resultat: 'lien-indisponible' });
+    expect(partages).toEqual([]);
+  });
+
+  test('une annulation reste une annulation : aucune copie', async () => {
+    const { portail, copies } = portailTemoin(async () => {
+      throw Object.assign(new Error('annulé'), { name: 'AbortError' });
+    });
+
+    const issue = await partagerInvitationParrainee({ chargerLien: async () => LIEN_PARRAIN, portail });
+
+    expect(issue).toEqual({ resultat: 'annule', lien: LIEN_PARRAIN });
+    expect(copies).toEqual([]);
+  });
+});
+
+describe('retourInvitationParrainee — ce que l’utilisateur doit s’entendre dire', () => {
+  test('un lien indisponible SE VOIT, et n’invite pas à partager la page nue', () => {
+    const message = retourInvitationParrainee({ resultat: 'lien-indisponible' });
+
+    expect(message).toBeTruthy();
+    expect(message ?? '').not.toContain('adresse de cette page');
+  });
+
+  /**
+   * Après l'attente du réseau, Safari refuse la feuille ET le presse-papier
+   * (`decisions.md`, D-48). « Copiez l'adresse de cette page » ferait partager
+   * une adresse SANS code : le message porte donc le lien lui-même.
+   */
+  test('partage impossible : le message porte le lien de parrainage, à copier à la main', () => {
+    const message = retourInvitationParrainee({ resultat: 'indisponible', lien: LIEN_PARRAIN });
+
+    expect(message ?? '').toContain(LIEN_PARRAIN);
+    expect(message ?? '').not.toContain('adresse de cette page');
+  });
+
+  test('la feuille a déjà parlé : partage et annulation se taisent, la copie s’annonce', () => {
+    expect(retourInvitationParrainee({ resultat: 'partage', lien: LIEN_PARRAIN })).toBeNull();
+    expect(retourInvitationParrainee({ resultat: 'annule', lien: LIEN_PARRAIN })).toBeNull();
+    expect(retourInvitationParrainee({ resultat: 'copie', lien: LIEN_PARRAIN })).toBeTruthy();
+  });
+});
+
+/** Un chargeur qui compte ses appels et rend, dans l'ordre, les valeurs données. */
+const chargeurTemoin = (reponses: ReadonlyArray<string | null>) => {
+  const appels = { n: 0 };
+  const chargerLien = async (): Promise<string | null> => {
+    const reponse = reponses[Math.min(appels.n, reponses.length - 1)] ?? null;
+    appels.n += 1;
+    return reponse;
+  };
+  return { chargerLien, appels };
+};
+
+describe('memoriserLienParLecteur — le second geste part SANS attendre le réseau', () => {
+  test('le même lecteur ne recharge pas son lien', async () => {
+    const { chargerLien, appels } = chargeurTemoin([LIEN_PARRAIN]);
+    const lienDe = memoriserLienParLecteur(chargerLien);
+
+    expect(await lienDe('u1')).toBe(LIEN_PARRAIN);
+    expect(await lienDe('u1')).toBe(LIEN_PARRAIN);
+    expect(appels.n).toBe(1);
+  });
+
+  /** Se déconnecter puis se connecter sous un AUTRE compte dans le même
+   * onglet ne doit jamais partager le code du compte précédent. */
+  test('un autre lecteur recharge le sien', async () => {
+    const { chargerLien, appels } = chargeurTemoin(['https://meeshy.me/signup/affiliate/aff_u1', 'https://meeshy.me/signup/affiliate/aff_u2']);
+    const lienDe = memoriserLienParLecteur(chargerLien);
+
+    expect(await lienDe('u1')).toBe('https://meeshy.me/signup/affiliate/aff_u1');
+    expect(await lienDe('u2')).toBe('https://meeshy.me/signup/affiliate/aff_u2');
+    expect(appels.n).toBe(2);
+  });
+
+  test('un échec n’est pas mémorisé : le geste suivant réessaie', async () => {
+    const { chargerLien, appels } = chargeurTemoin([null, LIEN_PARRAIN]);
+    const lienDe = memoriserLienParLecteur(chargerLien);
+
+    expect(await lienDe('u1')).toBeNull();
+    expect(await lienDe('u1')).toBe(LIEN_PARRAIN);
+    expect(appels.n).toBe(2);
+  });
+
+  /** Un double tap ne crée pas deux jetons : les deux gestes attendent le
+   * MÊME chargement. */
+  test('deux gestes simultanés partagent UN seul chargement', async () => {
+    const { chargerLien, appels } = chargeurTemoin([LIEN_PARRAIN]);
+    const lienDe = memoriserLienParLecteur(chargerLien);
+
+    const [a, b] = await Promise.all([lienDe('u1'), lienDe('u1')]);
+
+    expect([a, b]).toEqual([LIEN_PARRAIN, LIEN_PARRAIN]);
+    expect(appels.n).toBe(1);
+  });
+
+  test('sans lecteur identifié, rien n’est mémorisé', async () => {
+    const { chargerLien, appels } = chargeurTemoin([LIEN_PARRAIN]);
+    const lienDe = memoriserLienParLecteur(chargerLien);
+
+    await lienDe(null);
+    await lienDe(null);
+    expect(appels.n).toBe(2);
   });
 });

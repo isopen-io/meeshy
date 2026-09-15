@@ -8,8 +8,8 @@ import { PostAudioService } from './posts/PostAudioService';
 import { NOT_DELETED } from './posts/postIncludes';
 import { claimableMediaWhere, describeClaimShortfall } from './posts/mediaOwnership';
 import { applyMediaOrder } from './posts/mediaOrder';
-import { applyMediaText } from './posts/mediaText';
 import { triggerMediaCaptionTranslations, writeMediaCaption, type WrittenMediaCaption } from './posts/mediaCaptionWrites';
+import { triggerMediaAltTranslations, writeMediaAlt, type WrittenMediaAlt } from './posts/mediaAltWrites';
 import { engagementAggregateIncrements } from './posts/engagementIncrements';
 import { qualifiesAsReel } from '@meeshy/shared/utils/reel-composition';
 import { ephemeralExpiresAt } from './posts/ephemeralPosts';
@@ -972,6 +972,9 @@ export class PostService {
    * Une chaîne vide EFFACE `alt` (`null`) plutôt que de laisser une valeur
    * strictement vide sur le fil : cohérent avec `caption`/`content`, où le
    * client retire un texte en envoyant `''`, jamais en omettant la clé.
+   *
+   * Écrit ET déclenche (#6737, jumelle d'`applyMediaCaption`) — `updatePost`
+   * appelle `writeMediaAlt` seule et repousse le déclenchement après commit.
    */
   private async applyMediaAlt(
     postId: string,
@@ -979,7 +982,7 @@ export class PostService {
     mediaAlt: Record<string, string> | undefined,
     client: Pick<PrismaClient, 'postMedia'> = this.prisma,
   ): Promise<void> {
-    await applyMediaText('alt', postId, requestedMediaIds, mediaAlt, client);
+    triggerMediaAltTranslations(await writeMediaAlt(postId, requestedMediaIds, mediaAlt, client));
   }
 
   /**
@@ -1280,8 +1283,10 @@ export class PostService {
       }
     }
 
-    // Écrite dans la transaction, traduite après son commit (`mediaCaptionWrites.ts`).
+    // Écrites dans la transaction, traduites après son commit
+    // (`mediaCaptionWrites.ts` / `mediaAltWrites.ts`).
     let writtenMediaCaptions: WrittenMediaCaption[] = [];
+    let writtenMediaAlts: WrittenMediaAlt[] = [];
 
     const updated = await this.prisma.$transaction(async (tx) => {
       if (mediaIdsToRemove.length > 0) {
@@ -1299,7 +1304,7 @@ export class PostService {
         if (shortfall) {
           enhancedLogger.warn(`[PostService] updatePost: ${shortfall}`, { postId, authorId: userId });
         }
-        await this.applyMediaAlt(postId, mediaIdsToAttach, mediaAlt, tx);
+        writtenMediaAlts = await writeMediaAlt(postId, mediaIdsToAttach, mediaAlt, tx);
         writtenMediaCaptions = await writeMediaCaption(postId, mediaIdsToAttach, mediaCaption, tx);
         await applyMediaOrder(tx, postId, mediaIdsToAttach);
       }
@@ -1316,6 +1321,7 @@ export class PostService {
     });
 
     triggerMediaCaptionTranslations(writtenMediaCaptions);
+    triggerMediaAltTranslations(writtenMediaAlts);
 
     // Les octets des médias que l'édition vient de retirer. APRÈS le commit,
     // et c'est l'inverse de l'ordre du balayage : ici la transaction peut

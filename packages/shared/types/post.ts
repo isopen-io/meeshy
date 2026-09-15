@@ -44,12 +44,38 @@ export interface ContentTrackingLink {
 }
 
 /**
+ * LE MÉDIA DU POST QU'UN COMMENTAIRE CITE (#6578) — l'instantané FIGÉ, et RIEN
+ * d'autre.
+ *
+ * Voie `metadata.quotedPostMedia`, AUCUNE colonne — même arbitrage porteur que
+ * #6123/#6164 (voie C hybride). Ce qui est gravé ne peut jamais devenir un
+ * secret : l'ancre du saut et la NATURE du média. **Tout ce qui DÉCRIT le média
+ * — vignette, `fileUrl`, nom, taille, DURÉE, légende, alt — est RELU à chaque
+ * service** et voyage à côté, en `quotedMedia`. Figer l'un d'eux ici
+ * survivrait à la suppression du média et à une légende retirée.
+ *
+ * La liste complète de ce qui est révocable vit avec la garde d'écriture, dans
+ * `services/gateway/src/services/posts/quotedPostMediaSnapshot.ts`.
+ *
+ * `undefined` ⇒ le commentaire parle du POST, pas d'un média en particulier.
+ * Aucun commentaire existant ne change de rendu.
+ */
+export interface QuotedPostMediaRef {
+  /** L'ancre du saut — `PostMedia.id`, TOUJOURS un média du post commenté. */
+  readonly postMediaId: string;
+  /** La NATURE du média, dérivée du MIME côté serveur — jamais déclarée par le client. */
+  readonly kind: 'image' | 'video' | 'audio' | 'location' | 'file';
+}
+
+/**
  * Métadonnées structurées libres d'un post/commentaire (parité Message.metadata).
  * `trackingLinks` est rempli automatiquement à la création quand le contenu
  * contient des URLs brutes.
  */
 export interface PostMetadata {
   readonly trackingLinks?: readonly ContentTrackingLink[];
+  /** Le média du post que CE commentaire cite (#6578) — cf. {@link QuotedPostMediaRef}. */
+  readonly quotedPostMedia?: QuotedPostMediaRef;
   readonly [key: string]: unknown;
 }
 
@@ -99,6 +125,20 @@ export interface PostComment {
   readonly metadata?: PostMetadata | null;
   /** Copie hissée top-level de `metadata.trackingLinks` sur le payload socket. */
   readonly trackingLinks?: readonly ContentTrackingLink[];
+  /**
+   * Copie hissée top-level de `metadata.quotedPostMedia` (#6578) — l'ancre
+   * FIGÉE, servie sur les QUATRE surfaces (liste, réponses, création, écho
+   * socket). Elle survit à la disparition du média : un média cité supprimé ou
+   * détaché dit « une photo » et rien de plus.
+   */
+  readonly quotedPostMedia?: QuotedPostMediaRef;
+  /**
+   * Le média cité, RELU à chaque service (#6578) — la moitié RÉVOCABLE de la
+   * citation. Absent quand le média n'existe plus, ou quand il a quitté le post
+   * commenté (fail-closed : une garde d'écriture ne dit rien des lignes écrites
+   * avant elle). Même forme que `PostMedia` d'un post, donc même décodeur.
+   */
+  readonly quotedMedia?: PostMedia | null;
   readonly likeCount: number;
   readonly replyCount: number;
   readonly reactionSummary?: Record<string, number> | null;
@@ -523,6 +563,27 @@ export interface CommentMediaUpdatedEventData {
  * `commentId` est absent quand le média appartient directement à un post.
  */
 export interface MediaCaptionTranslationUpdatedEventData {
+  readonly mediaId: string;
+  readonly postId: string;
+  readonly commentId?: string;
+  readonly language: string;
+  readonly translation: {
+    readonly text: string;
+    readonly translationModel: string;
+    readonly confidenceScore?: number;
+    readonly createdAt: string;
+  };
+}
+
+/**
+ * Émis (`media:alt-translation-updated`) quand le pipeline ZMQ a traduit le
+ * texte ALTERNATIF d'accessibilité (`PostMedia.alt`) d'un média — post OU
+ * commentaire (#6737, suite de la décision #6534). Jumelle exacte de
+ * `MediaCaptionTranslationUpdatedEventData`, sur un champ DISTINCT : `alt`
+ * décrit le média pour un lecteur d'écran, `caption` est une légende
+ * éditoriale — les deux se traduisent indépendamment.
+ */
+export interface MediaAltTranslationUpdatedEventData {
   readonly mediaId: string;
   readonly postId: string;
   readonly commentId?: string;

@@ -111,18 +111,25 @@ Un client qui ne sait pas rendre le mouvement peint la décoration FIXE et ne se
 déclare pas amputé : c'est web et Android aujourd'hui (#4911), et c'est la
 conséquence directe du choix « propriété, pas kind ».
 
-## 3. Les trois chromes, et l'état MESURÉ de chacun
+## 3. Les quatre chromes, et l'état MESURÉ de chacun
 
 `ScenePlayerConfig(mode:)` est « la seule chose que le player décide de
-lui-même ». Les trois modes ne diffèrent que par quatre témoins :
+lui-même ». Les quatre modes ne diffèrent que par quatre témoins :
 
 | mode | `isMuted` | `locksMute` | `loops` | `showsChrome` | monté par |
 |---|---|---|---|---|---|
 | `.reader` | non | non | non | **oui** | `StoryViewerView+Canvas` (2 sites) |
 | `.card` | **oui** | **oui** | **oui** | non | `FeedSceneAutoplay` — `PostSceneCard` |
+| `.reel` | non | non | **oui** | **oui** | `ReelsPlayerView+Scene` — `ReelSceneView` |
 | `.preview` | non | non | non | non | **aucun site — retiré le 2026-08-24** |
 
-`startsPaused` ne dépend PAS du mode : **les trois naissent en pause**, y compris
+> **`.reel` est né le 2026-09-15 (#6745) d'un manque, pas d'une préférence.** Le
+> lecteur de réels jouait la VIDÉO BRUTE d'un réel composé : ni son de fond, ni
+> coupure voulue par l'auteur. Le passer par la scène exigeait un mode qui boucle
+> comme la carte et s'entend comme le reader — aucun des trois ne réunissait les
+> deux.
+
+`startsPaused` ne dépend PAS du mode : **tous naissent en pause**, y compris
 le plein écran, dont la lecture démarre par la commande du viewer.
 
 > **La colonne « monté par » a changé le 2026-09-05 sans qu'aucune règle bouge.**

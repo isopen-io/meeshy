@@ -166,7 +166,7 @@ struct ReelsPlayerView: View {
             // recorded the (deduplicated) share + minted the caller's TrackingLink.
             ShareSheet(activityItems: [link.url])
         }
-        .sheet(item: $editingReel) { reel in
+        .postEditCover(item: $editingReel) { reel in
             EditPostSheet(
                 originalContent: reel.content,
                 originalLanguage: reel.originalLanguage,
@@ -224,7 +224,7 @@ struct ReelsPlayerView: View {
     private func finalizeReelSession(for reelId: String?) {
         guard let reelId,
               let reel = viewModel.reels.first(where: { $0.id == reelId }),
-              ReelWatchAttachmentPolicy.shouldAttachVideoWatch(mediaType: reel.primaryReelDisplayMedia?.type)
+              ReelSceneRouting.attachesSharedVideoWatch(for: reel, loadedAttachmentId: SharedAVPlayerManager.shared.attachmentId)
         else { return }
         let m = SharedAVPlayerManager.shared
         let watchMs = m.currentTime.isNaN ? 0 : Int(m.currentTime * 1000)
@@ -400,41 +400,6 @@ struct ReelsPlayerView: View {
     }
 }
 
-// MARK: - Reel media open-autostart gate (pure)
-
-/// The single open-autostart gate shared by a reel's audio AND video paths
-/// (WS3.1): an active reel starts its media only once the liquid reveal has
-/// completed and no call owns the audio session. Extracted as a pure function so
-/// the truth table is unit-testable. `ReelVideoView.drive()` encodes the
-/// identical condition for the video engine, so both media kinds start in
-/// lockstep.
-enum ReelMediaAutostart {
-    nonisolated static func shouldStart(isActive: Bool, revealCompleted: Bool, isCallActive: Bool) -> Bool {
-        isActive && revealCompleted && !isCallActive
-    }
-
-    /// Idempotency guard for the audio open-autostart (F4/F6): only (re)start the
-    /// engine when it is not already loaded with this url. `currentUrl` and `url`
-    /// MUST be compared in the SAME normalized form the engine stores — for a
-    /// `file://` url `AudioPlaybackManager.playLocal` stores `URL.absoluteString`,
-    /// which can differ from the raw string, so the caller normalizes first. Keeps
-    /// a re-render / reveal flip from restarting in-place audio.
-    nonisolated static func shouldLoadAudio(currentUrl: String?, url: String) -> Bool {
-        currentUrl != url
-    }
-}
-
-// MARK: - Reel Watch Attachment Policy (pure)
-
-/// `finalizeReelSession` reads the SHARED video engine (`SharedAVPlayerManager`)
-/// only when the reel actually being finalized is a video reel — pure,
-/// testable gate mirroring `ReelMediaAutostart`.
-enum ReelWatchAttachmentPolicy {
-    nonisolated static func shouldAttachVideoWatch(mediaType: FeedMediaType?) -> Bool {
-        mediaType == .video
-    }
-}
-
 // MARK: - Reel Audio Language Resolver (Prisme, pure)
 
 /// Prisme Linguistique — pure resolution of the TTS language to auto-select for
@@ -522,6 +487,10 @@ struct ReelPageView: View {
     /// Prisme: the language the viewer explicitly picked via a flag / the
     /// translate toggle. `nil` = the auto-resolved preferred translation.
     @State var selectedLanguage: String?
+    /// Réel composé (#6745) — voir `ReelsPlayerView+Scene.swift`.
+    @State var scenePaused = false
+    @State var sceneSoundMuted = false
+    @StateObject var sceneClock = ReelSceneClock()
     // Plain reference (NOT @ObservedObject): the page itself doesn't need to
     // re-render on every 0.1s time tick — only `ReelScrubBar` observes the
     // manager. Used here only for the fire-and-forget `togglePlayPause()` tap.
@@ -552,7 +521,7 @@ struct ReelPageView: View {
     /// True when this active reel is a video so the scrub bar shows only where
     /// there is a seekable timeline (images/audio reels have none here).
     private var isVideoReel: Bool {
-        reel.primaryReelDisplayMedia?.type == .video
+        !isSceneReel && reel.primaryReelDisplayMedia?.type == .video
     }
 
     /// The audio media for an audio reel, else `nil`. Drives the immersive
@@ -562,18 +531,11 @@ struct ReelPageView: View {
         return media
     }
 
-    /// Piste « son EMPRUNTÉ à la bibliothèque » d'un réel/poste SANS média
-    /// propre : l'audio vit alors dans la composition (`storyEffects`), sous la
-    /// forme produite par `publishBorrowedSoundPost` / `addBorrowedSound`
-    /// (`soundId` + `mediaURL` serveur). Limité au cas sans média — un réel
-    /// vidéo+fond musical passe par le lecteur de composition (StoryItem), pas
-    /// par cette page.
+    /// Piste « son EMPRUNTÉ à la bibliothèque » d'un réel SANS scène ni média :
+    /// la page la joue elle-même. Un réel composé en est exclu — sa scène joue
+    /// déjà ce fond (#6745) ; la règle vit dans `ReelSceneRouting`.
     var borrowedSoundTrack: StoryAudioPlayerObject? {
-        guard reel.primaryReelDisplayMedia == nil, let effects = reel.storyEffects else { return nil }
-        let track = effects.resolvedBackgroundAudio
-            ?? effects.audioPlayerObjects?.first(where: { !($0.mediaURL ?? "").isEmpty })
-        guard let track, !(track.mediaURL ?? "").isEmpty else { return nil }
-        return track
+        ReelSceneRouting.borrowedSoundTrack(for: reel)
     }
 
     /// The "original" language for the meta-row flag strip: the audio
@@ -700,11 +662,18 @@ struct ReelPageView: View {
                     ReelScrubBar(manager: playerManager, accentColor: accentColor)
                         .padding(.horizontal, 16)
                         .padding(.top, 14)
+                } else if isSceneReel && isActive {
+                    ReelSceneProgressBar(clock: sceneClock, accentColor: accentColor)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 14)
                 }
             }
             // Sit the description / action rail / scrub lower, closer to the
             // bottom edge (just clearing the home indicator).
             .padding(.bottom, 44)
+            // #6693 — la luminance du réel AFFICHÉ commande le rail et la lisibilité de
+            // l'auteur : une mesure par média (`ReelsPlayerView+ActionRail.swift`).
+            .mediaChromeScheme(for: .reel(reel, visibleMediaId: visibleCarouselMediaId))
             // The whole chrome stack (info + rail + scrub) fades out together in
             // immersive mode and stops taking touches so the restoring tap and
             // long-press reach the content zone underneath.
@@ -924,6 +893,7 @@ struct ReelPageView: View {
             withAnimation(.easeInOut(duration: 0.25)) { chromeHidden = false }
             return
         }
+        if isSceneReel { scenePaused.toggle() }
         if isVideoReel { playerManager.togglePlayPause() }
     }
 
@@ -931,7 +901,11 @@ struct ReelPageView: View {
 
     @ViewBuilder
     private var mediaLayer: some View {
-        if let media = reel.primaryReelDisplayMedia {
+        if let document = sceneDocument {
+            ReelSceneView(reel: reel, document: document, isActive: isActive,
+                          revealCompleted: revealCompleted, isMuted: sceneSoundMuted,
+                          isPaused: $scenePaused, clock: sceneClock)
+        } else if let media = reel.primaryReelDisplayMedia {
             switch media.type {
             case .video:
                 ReelVideoView(media: media, isActive: isActive, revealCompleted: revealCompleted)
@@ -1002,225 +976,6 @@ struct ReelPageView: View {
             remoteURLString: url,
             suggestedFileName: media.fileName
         ))
-    }
-}
-
-// MARK: - Action Rail (reactive — observes the view-model so the like / bookmark
-// / comment counters update the instant they change)
-
-private struct ReelActionRail: View {
-    @ObservedObject var viewModel: ReelsViewModel
-    let reel: FeedPost
-    var onComment: () -> Void
-    var onShare: () -> Void
-    var onEdit: () -> Void
-    var onOpenDetail: (() -> Void)?
-    /// Menu « … » → déclenche le flux « Enregistrer en local » sur le média
-    /// du réel (coordinateur possédé par `ReelPageView`, seul habilité à
-    /// présenter la sheet de destination).
-    var onSaveMedia: () -> Void
-
-    @State private var showsReactionPalette = false
-
-    private var isOwnReel: Bool {
-        guard let me = AuthManager.shared.currentUser?.id else { return false }
-        return me == reel.authorId
-    }
-
-    var body: some View {
-        VStack(spacing: 22) {
-            let isLiked = viewModel.isLiked(reel.id)
-            ReelActionButton(
-                systemName: isLiked ? "heart.fill" : "heart",
-                outline: "heart",
-                tint: isLiked ? MeeshyColors.error : .white,
-                count: viewModel.likeCount(reel),
-                participated: isLiked,
-                accentHex: reel.authorColor,
-                action: { viewModel.toggleLike(reel) }
-            )
-            .accessibilityLabel(String(localized: "reels.action.like", defaultValue: "J'aime", bundle: .main))
-            // Appui bref = ❤️ ; appui long = la palette. Le GESTE est ici, le
-            // CADRE sur le rail entier : un overlay ancré à un bouton s'y
-            // trouve comprimé et la rangée d'émojis s'ouvre vide — mesuré au
-            // simulateur sur le détail d'un post, et le rail est plus étroit
-            // encore.
-            .reactionPaletteTrigger(isPresented: $showsReactionPalette)
-
-            // Vues/impressions : désormais privées (auteur-only) dans la ligne meta
-            // sous le nom — plus de compteur de vues public ici.
-
-            ReelActionButton(
-                systemName: "bubble.right.fill",
-                tint: .white,
-                count: viewModel.commentCount(reel),
-                action: onComment
-            )
-            .accessibilityLabel(String(localized: "reels.action.comment", defaultValue: "Commenter", bundle: .main))
-
-            let isBookmarked = viewModel.isBookmarked(reel.id)
-            ReelActionButton(
-                systemName: isBookmarked ? "bookmark.fill" : "bookmark",
-                outline: "bookmark",
-                tint: isBookmarked ? MeeshyColors.warning : .white,
-                count: viewModel.bookmarkCount(reel),
-                participated: isBookmarked,
-                accentHex: reel.authorColor,
-                action: { viewModel.toggleBookmark(reel) }
-            )
-            .accessibilityLabel(String(localized: "reels.action.bookmark", defaultValue: "Enregistrer", bundle: .main))
-
-            // Icône principale : Republier (Partager reste disponible dans le
-            // menu « … », parité avec `ReelFeedCard.actionsRow`). Repost
-            // append-only (pas d'un-repost) — `participated` reste vrai une
-            // fois posé, comme le feed.
-            let isReposted = viewModel.isReposted(reel.id)
-            ReelActionButton(
-                systemName: "arrow.2.squarepath",
-                outline: "arrow.2.squarepath",
-                tint: isReposted ? MeeshyColors.success : .white,
-                count: viewModel.repostCount(reel),
-                participated: isReposted,
-                accentHex: reel.authorColor,
-                action: { viewModel.repost(reel) }
-            )
-            .accessibilityLabel(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main))
-
-            moreOptionsMenu
-        }
-        // Le CADRE sur le rail ENTIER, pas sur le bouton : la rangée d'émojis
-        // s'ouvre vers la GAUCHE (le rail est collé au bord droit de l'écran),
-        // au niveau du cœur. Ancrée au bouton, elle s'ouvrait comprimée et
-        // hors cadre — mesuré au simulateur sur le détail d'un post.
-        .reactionPaletteFrame(isPresented: $showsReactionPalette,
-                              isDark: true,
-                              anchor: .topTrailing,
-                              offsetX: -56) { viewModel.react(reel, emoji: $0) }
-    }
-
-    /// Menu « … » — mêmes actions/libellés/icônes que `FeedPostCard`/`ReelFeedCard`
-    /// (copier/partager/enregistrer/épingler/modifier/supprimer/signaler), parité
-    /// du lecteur plein écran avec les cartes du feed.
-    private var moreOptionsMenu: some View {
-        Menu {
-            if let onOpenDetail {
-                Button {
-                    onOpenDetail()
-                } label: {
-                    Label(String(localized: "feed.post.open", defaultValue: "Ouvrir", bundle: .main), systemImage: "arrow.up.right.square")
-                }
-            }
-            Button {
-                UIPasteboard.general.string = reel.content
-                HapticFeedback.success()
-            } label: {
-                Label(String(localized: "feed.post.copy_text", defaultValue: "Copier le texte", bundle: .main), systemImage: "doc.on.doc")
-            }
-            Button {
-                onShare()
-            } label: {
-                Label(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
-            }
-            if reel.primaryReelDisplayMedia != nil {
-                Button {
-                    onSaveMedia()
-                } label: {
-                    Label(String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main), systemImage: "arrow.down.to.line")
-                }
-            }
-            if isOwnReel {
-                Button {
-                    Task { await viewModel.pinPost(reel.id) }
-                    HapticFeedback.light()
-                } label: {
-                    Label(String(localized: "feed.post.pin", defaultValue: "Épingler", bundle: .main), systemImage: "pin")
-                }
-                Button {
-                    onEdit()
-                    HapticFeedback.light()
-                } label: {
-                    Label(String(localized: "feed.post.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
-                }
-                Divider()
-                Button(role: .destructive) {
-                    Task { await viewModel.deletePost(reel.id) }
-                    HapticFeedback.medium()
-                } label: {
-                    Label(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
-                }
-            } else {
-                Divider()
-                Button(role: .destructive) {
-                    Task { await viewModel.reportPost(reel.id) }
-                    HapticFeedback.medium()
-                } label: {
-                    Label(String(localized: "feed.post.report", defaultValue: "Signaler", bundle: .main), systemImage: "exclamationmark.triangle")
-                }
-            }
-        } label: {
-            VStack(spacing: 5) {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 26, weight: .semibold))
-                    .foregroundColor(.white)
-                    .frame(width: 48, height: 32)
-            }
-            .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
-        }
-        .accessibilityLabel(String(localized: "feed.post.more_options", defaultValue: "Plus d'options", bundle: .main))
-        .accessibilityHint(String(localized: "feed.post.more_options.hint", defaultValue: "Ouvre le menu des actions", bundle: .main))
-    }
-}
-
-// MARK: - Action Button
-
-private struct ReelActionButton: View {
-    let systemName: String
-    /// Outline variant overlaid in the accent colour when `participated` — an
-    /// accent BORDER on the glyph (not a circle). Nil = no participation border.
-    var outline: String? = nil
-    let tint: Color
-    let count: Int?
-    var participated: Bool = false
-    var accentHex: String = ""
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 5) {
-                ZStack {
-                    // Glyphes du rail d'actions (like/comment/bookmark/share) : taille figée pour
-                    // la cohérence de la colonne fixe width:48 (doctrine 86i) ; le bouton porte le libellé
-                    Image(systemName: systemName)
-                        .font(.system(size: 26, weight: .semibold))
-                        .foregroundColor(tint)
-                    if participated, let outline {
-                        Image(systemName: outline)
-                            .font(.system(size: 26, weight: .semibold))
-                            .foregroundColor(Color(hex: accentHex))
-                    }
-                }
-                .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
-                if let count, count > 0 {
-                    Text(CompactCountLabel.text(count))
-                        .font(.caption2.weight(.semibold))
-                        .foregroundColor(.white)
-                        .shadow(color: .black.opacity(0.35), radius: 2)
-                }
-            }
-            .frame(width: 48)
-            // Élargit la zone sensible autour du glyph + compteur. La pile
-            // d'actions flotte au-dessus du `mediaLayer` qui porte le tap
-            // play/pause (`handleContentTap`) : sans cette extension, un tap qui
-            // manquait le glyph de quelques pixels traversait jusqu'au média et
-            // togglait la lecture au lieu d'activer le bouton (bug user
-            // 2026-06-28). `contentShape(Rectangle())` rend tout le rectangle
-            // élargi (padding inclus) sensible, et le padding vertical comble les
-            // gaps entre les boutons du rail.
-            .padding(.vertical, 6)
-            .padding(.horizontal, 6)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
     }
 }
 
@@ -1361,60 +1116,6 @@ private struct ReelScrubBar: View {
         }
         .frame(height: 32)
         .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isSeeking)
-    }
-}
-
-// MARK: - Reel Media Layout
-
-/// Pure classification of a reel's media into the surface that should render it.
-/// App-side: it encodes the product decision of HOW a reel composes its media
-/// (single video, image carousel, rich audio, or images + independent audio),
-/// derived solely from the post's media. `resolve` is total and order-preserving.
-///
-/// Not yet wired into `mediaLayer` (which still shows `primaryReelMedia`): it is
-/// the tested foundation for the deferred images+audio mixed-media composition.
-enum ReelMediaLayout: Equatable {
-    /// No playable/visual media (documents only, or empty).
-    case empty
-    /// A single video drives the reel — video wins over every other kind.
-    case video(FeedMedia)
-    /// One or more images, no audio: a full-screen image carousel.
-    case images([FeedMedia])
-    /// One or more audios, no images and no video: the rich audio surface.
-    case audioOnly([FeedMedia])
-    /// Images (full-screen carousel background) with one or more audios.
-    case imagesWithAudio(images: [FeedMedia], audios: [FeedMedia])
-
-    /// Classifies `media` into a layout. Video has top priority; otherwise the
-    /// presence of images and/or audios decides. Documents are ignored
-    /// (never a reel surface), so a post carrying only those resolves to `.empty`.
-    static func resolve(media: [FeedMedia]) -> ReelMediaLayout {
-        if let video = media.first(where: { $0.type == .video }) { return .video(video) }
-        let images = media.filter { $0.type == .image }
-        let audios = media.filter { $0.type == .audio }
-        switch (images.isEmpty, audios.isEmpty) {
-        case (true, true): return .empty
-        case (false, true): return .images(images)
-        case (true, false): return .audioOnly(audios)
-        case (false, false): return .imagesWithAudio(images: images, audios: audios)
-        }
-    }
-
-    static func == (lhs: ReelMediaLayout, rhs: ReelMediaLayout) -> Bool {
-        switch (lhs, rhs) {
-        case (.empty, .empty):
-            return true
-        case let (.video(a), .video(b)):
-            return a.id == b.id
-        case let (.images(a), .images(b)):
-            return a.map(\.id) == b.map(\.id)
-        case let (.audioOnly(a), .audioOnly(b)):
-            return a.map(\.id) == b.map(\.id)
-        case let (.imagesWithAudio(ai, aa), .imagesWithAudio(bi, ba)):
-            return ai.map(\.id) == bi.map(\.id) && aa.map(\.id) == ba.map(\.id)
-        default:
-            return false
-        }
     }
 }
 

@@ -861,7 +861,8 @@ struct ThemedFeedOverlay: View {
             // touchpoint funnels through `meeshy.me/l/<token>`.
             ShareSheet(activityItems: [link.url])
         }
-        .sheet(item: $editingPost) { post in
+        // #6700 — une story ouvre le meuble, un post l'ancien éditeur.
+        .postEditCover(item: $editingPost) { post in
             EditPostSheet(
                 originalContent: post.content,
                 originalLanguage: post.originalLanguage,

@@ -666,6 +666,18 @@ public struct CreateCommentPayload: Codable, Sendable, Equatable {
     /// donc un champ requis à la relecture ferait disparaître SANS ERREUR
     /// toute la file hors-ligne gravée avant la mise à jour de l'app.
     public let originalLanguage: String?
+    /// **L'ANCRE du média du post que ce commentaire CITE** (#6578).
+    ///
+    /// L'ancre SEULE : la nature est dérivée du MIME par le serveur, et tout ce
+    /// qui décrit le média est relu à chaque service. Graver ici une vignette
+    /// ferait ressusciter, au rejeu d'une file vieille de plusieurs jours, un
+    /// média que son auteur a pu retirer entre-temps.
+    ///
+    /// TOLÉRANT au décodage (`String?` + `decodeIfPresent`), comme ses voisins :
+    /// `FeedPersistenceActor` relit ces blobs en `try?`, donc un champ requis à
+    /// la relecture ferait disparaître SANS ERREUR toute la file gravée avant la
+    /// mise à jour de l'app.
+    public let quotedPostMediaId: String?
 
     public init(
         clientMutationId: String,
@@ -674,7 +686,8 @@ public struct CreateCommentPayload: Codable, Sendable, Equatable {
         content: String,
         originalLanguage: String?,
         location: SharedPlace? = nil,
-        effectFlags: Int? = nil
+        effectFlags: Int? = nil,
+        quotedPostMediaId: String? = nil
     ) {
         self.clientMutationId = clientMutationId
         self.postId = postId
@@ -683,6 +696,7 @@ public struct CreateCommentPayload: Codable, Sendable, Equatable {
         self.originalLanguage = originalLanguage
         self.location = location
         self.effectFlags = effectFlags
+        self.quotedPostMediaId = quotedPostMediaId
     }
 
     public init(from decoder: Decoder) throws {
@@ -694,6 +708,7 @@ public struct CreateCommentPayload: Codable, Sendable, Equatable {
         originalLanguage = try c.decodeIfPresent(String.self, forKey: .originalLanguage)
         location = try c.decodeIfPresent(SharedPlace.self, forKey: .location)
         effectFlags = try c.decodeIfPresent(Int.self, forKey: .effectFlags)
+        quotedPostMediaId = try c.decodeIfPresent(String.self, forKey: .quotedPostMediaId)
     }
 }
 
