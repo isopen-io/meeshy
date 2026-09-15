@@ -16,16 +16,33 @@ jest.mock('../../../utils/logger-enhanced.js', () => ({
 
 jest.mock('@meeshy/shared/types/api-schemas', () => ({
   messageAttachmentSchema: { type: 'object', properties: { id: { type: 'string' } } },
-  errorResponseSchema: { type: 'object', properties: { success: { type: 'boolean' } } },
+  // `error`/`message`/`code` déclarés (comme le vrai `errorResponseSchema`,
+  // #4884) — un schéma sans `properties` EFFACE via fast-json-stringify
+  // (`additionalProperties: false` par défaut) : sans eux, un témoin de
+  // comportement qui inspecte le CORPS d'une erreur (#6604) passerait sur un
+  // faux vide plutôt que sur ce que la route sert réellement.
+  errorResponseSchema: {
+    type: 'object',
+    properties: {
+      success: { type: 'boolean' },
+      error: { type: 'string' },
+      message: { type: 'string' },
+      code: { type: 'string' },
+    },
+  },
 }));
 
 const mockUploadMultiple = jest.fn<any>();
 const mockCreateTextAttachment = jest.fn<any>();
+// #6604 — la route valide chaque fichier AVANT l'upload ; le défaut « valide »
+// laisse tous les témoins existants (qui n'exercent pas ce refus) inchangés.
+const mockValidateFile = jest.fn<any>().mockReturnValue({ valid: true });
 
 jest.mock('../../../services/attachments', () => ({
   AttachmentService: jest.fn().mockImplementation(() => ({
     uploadMultiple: (...a: any[]) => mockUploadMultiple(...a),
     createTextAttachment: (...a: any[]) => mockCreateTextAttachment(...a),
+    validateFile: (...a: any[]) => mockValidateFile(...a),
   })),
 }));
 
@@ -368,6 +385,85 @@ describe('POST /attachments/upload — service error', () => {
       payload: multipartFileBuffer('photo.jpg', 'image/jpeg', JPEG_HEADER),
     });
     expect(res.statusCode).toBe(500);
+  });
+});
+
+describe('POST /attachments/upload — rejected media type (#6604)', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    app = await buildApp();
+  });
+  afterAll(async () => {
+    await app.close();
+    // Ne pas laisser ce verdict fuiter vers les describe suivants — tous les
+    // autres témoins du fichier s'appuient sur le défaut `{valid:true}`.
+    mockValidateFile.mockReturnValue({ valid: true });
+  });
+
+  it('renvoie 415 (jamais 500) quand le type déclaré ne correspond pas au contenu, avec un code exploitable et un message qui nomme le type reçu', async () => {
+    mockUploadMultiple.mockClear();
+    mockValidateFile.mockReturnValue({
+      valid: false,
+      code: 'UNSUPPORTED_MEDIA_TYPE',
+      error: 'Declared type "image/png" does not match any known image signature',
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/attachments/upload',
+      headers: { 'content-type': CT },
+      payload: multipartFileBuffer('fake.png', 'image/png', PDF_HEADER),
+    });
+
+    expect(res.statusCode).toBe(415);
+    const body = res.json();
+    expect(body.success).toBe(false);
+    expect(body.code).toBe('UNSUPPORTED_MEDIA_TYPE');
+    expect(body.error).toContain('image/png');
+    expect(mockUploadMultiple).not.toHaveBeenCalled();
+  });
+
+  it('renvoie 413 (jamais 500) quand un fichier dépasse la limite de sa catégorie', async () => {
+    mockUploadMultiple.mockClear();
+    mockValidateFile.mockReturnValue({
+      valid: false,
+      code: 'FILE_TOO_LARGE',
+      error: 'Fichier trop volumineux. Taille max: 10GB',
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/attachments/upload',
+      headers: { 'content-type': CT },
+      payload: multipartFileBuffer('huge.jpg', 'image/jpeg', JPEG_HEADER),
+    });
+
+    expect(res.statusCode).toBe(413);
+    const body = res.json();
+    expect(body.success).toBe(false);
+    expect(body.code).toBe('FILE_TOO_LARGE');
+    expect(mockUploadMultiple).not.toHaveBeenCalled();
+  });
+
+  it("refuse la requête ENTIÈRE quand un seul fichier d'un lot multiple est rejeté, sans en téléverser aucun", async () => {
+    mockUploadMultiple.mockClear();
+    mockValidateFile
+      .mockReturnValueOnce({ valid: true })
+      .mockReturnValueOnce({ valid: false, code: 'UNSUPPORTED_MEDIA_TYPE', error: 'Declared type "image/png" does not match any known image signature' });
+    const payload = Buffer.concat([
+      Buffer.from(`--${BOUNDARY}\r\nContent-Disposition: form-data; name="files"; filename="good.jpg"\r\nContent-Type: image/jpeg\r\n\r\n`, 'utf8'),
+      JPEG_HEADER,
+      Buffer.from(`\r\n--${BOUNDARY}\r\nContent-Disposition: form-data; name="files"; filename="bad.png"\r\nContent-Type: image/png\r\n\r\n`, 'utf8'),
+      PDF_HEADER,
+      Buffer.from(`\r\n--${BOUNDARY}--\r\n`, 'utf8'),
+    ]);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/attachments/upload',
+      headers: { 'content-type': CT },
+      payload,
+    });
+
+    expect(res.statusCode).toBe(415);
+    expect(mockUploadMultiple).not.toHaveBeenCalled();
   });
 });
 
