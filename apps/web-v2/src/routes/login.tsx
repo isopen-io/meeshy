@@ -11,6 +11,7 @@ import { auth } from '@/lib/api/auth';
 import { sessionStore } from '@/lib/api/session';
 import { useOnline } from '@/lib/net/online';
 import { useSearch } from '@/lib/router';
+import { landingAfterSession, safeNextPath } from '@/lib/session-guard';
 import { placeLoginFailure } from '@/lib/view/auth-feedback';
 import { Link, href, navigate } from '@/routes/route-table';
 
@@ -61,6 +62,13 @@ const PASSWORD_METHOD = 'password';
 /** L'ancienne écriture, LUE mais jamais émise (§ doc-comment ci-dessus). */
 const LEGACY_PASSWORD_METHOD = 'motdepasse';
 
+/**
+ * `next` — OÙ REVENIR UNE FOIS CONNECTÉ (#5561). Une invitation `/chat/:link`
+ * y envoie un visiteur sans session ; la connexion le lui rend. La valeur est
+ * clampée à chaque usage (`safeNextPath`), jamais crue.
+ */
+const NEXT_PARAM = 'next';
+
 type LoginMethod = 'lien' | 'password';
 
 export function loginMethodFromSearch(raw: string | null): LoginMethod {
@@ -89,14 +97,23 @@ const INDIGO_LINK = 'text-[color:var(--ios-indigo-400)] light:text-[color:var(--
  */
 export default function LoginScreen({ magicLinkDeps }: { readonly magicLinkDeps?: MagicLinkPanelDeps } = {}) {
   const [search] = useSearch();
-  return <LoginDoors method={loginMethodFromSearch(search.get(METHOD_PARAM))} {...(magicLinkDeps === undefined ? {} : { magicLinkDeps })} />;
+  return (
+    <LoginDoors
+      method={loginMethodFromSearch(search.get(METHOD_PARAM))}
+      next={search.get(NEXT_PARAM)}
+      {...(magicLinkDeps === undefined ? {} : { magicLinkDeps })}
+    />
+  );
 }
 
 export function LoginDoors({
   method,
+  next = null,
   magicLinkDeps,
 }: {
   readonly method: LoginMethod;
+  /** La valeur BRUTE de `?next=` — clampée ici, là où elle sert. */
+  readonly next?: string | null;
   readonly magicLinkDeps?: MagicLinkPanelDeps;
 }) {
   const session = useStore(sessionStore, (s) => s.session);
@@ -110,6 +127,10 @@ export function LoginDoors({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const requires2FA = session.status === 'pending2fa';
+  /** Ce que les liens qui RÉÉCRIVENT l'adresse transmettent — changer de porte
+   * ou aller s'inscrire ne doit pas perdre l'invitation, ni propager un `next`
+   * hostile. `undefined` : `href()` omet alors le paramètre. */
+  const nextSearch = { [NEXT_PARAM]: safeNextPath(next) ?? undefined };
 
   /**
    * L'AUTHENTIFICATION PARLE TOUJOURS À LA PASSERELLE RÉELLE (`auth.ts` importe
@@ -120,8 +141,8 @@ export function LoginDoors({
    * restent `allow` partout, délibérément, pour ne pas casser le POC).
    */
   useEffect(() => {
-    if (session.status === 'authenticated') navigate(href('list'), true);
-  }, [session.status]);
+    if (session.status === 'authenticated') navigate(landingAfterSession(next, href('list')), true);
+  }, [session.status, next]);
 
   async function handleLoginSubmit(event: FormEvent) {
     event.preventDefault();
@@ -242,7 +263,7 @@ export function LoginDoors({
             <div className="mt-1 grid justify-items-center gap-2">
               <Link
                 to="login"
-                search={{ [METHOD_PARAM]: PASSWORD_METHOD }}
+                search={{ [METHOD_PARAM]: PASSWORD_METHOD, ...nextSearch }}
                 replace
                 className={`inline-flex items-center text-title font-semibold ${INDIGO_LINK}`}
                 style={{ minHeight: 44 }}
@@ -321,7 +342,7 @@ export function LoginDoors({
               découpé dans le TEXTE (`background-clip: text`), et un tracé en
               `currentColor` y serait transparent. */}
           <div className="mt-1 grid justify-items-center gap-2">
-            <Link to="login" replace className="inline-flex items-center gap-2 font-semibold text-title" style={{ minHeight: 44 }}>
+            <Link to="login" search={nextSearch} replace className="inline-flex items-center gap-2 font-semibold text-title" style={{ minHeight: 44 }}>
               <GlyphSvg glyph={AUTH_GLYPHS.magicWand} size={18} style={{ color: 'var(--ios-purple-500)' }} />
               <span
                 style={{
@@ -348,7 +369,7 @@ export function LoginDoors({
 
       <p className="text-title" style={{ color: 'var(--color-ios-ink-2)' }}>
         Pas de compte ?{' '}
-        <Link to="signup" className="font-semibold" style={{ background: TITLE_GRADIENT, WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>
+        <Link to="signup" search={nextSearch} className="font-semibold" style={{ background: TITLE_GRADIENT, WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>
           Créer un compte
         </Link>
       </p>

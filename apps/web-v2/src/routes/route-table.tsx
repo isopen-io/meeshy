@@ -27,6 +27,12 @@ export const ROUTES = {
      n'apporte qu'une donnée, et une donnée se transporte dans l'adresse plutôt
      que dans un second écran d'inscription à faire diverger. */
   signupAffiliate: { pattern: '/signup/affiliate/$token', screen: () => import('@/routes/signup-affiliate') },
+  /* LA JONCTION PAR LIEN (#5561, bascule #6702) — l'adresse que TOUS les liens
+     de partage émis visent : la passerelle (`sharing.ts:243`), iOS
+     (`ShareLinkModels.swift`), Android et la v2 (`links.ts § shareLinkUrl`).
+     Le legacy la servait (`apps/web/app/chat/[id]`, D-5) et ne la sert plus.
+     PUBLIQUE : `session-guard.ts` ne la range dans aucun ensemble. */
+  chatJoin: { pattern: '/chat/$link', screen: () => import('@/routes/chat-join') },
   /* Le tableau de bord des streaks & badges (#5547) — sous `/me/`, l'espace
      du profil (inventaire de parité : `/me` est V4.0.0), privé (garde de
      session), découpé comme les autres : aucun octet avant le premier pixel. */
