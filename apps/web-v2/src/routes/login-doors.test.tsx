@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 
 import { LoginDoors, loginMethodFromSearch } from '@/routes/login';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { controlledBy, perceivableText as perceivable } from '@/test-support/perceivable-text';
 
 /**
  * LES DEUX PORTES DE `/login` (#6404) — directive porteur 2026-09-13 :
@@ -57,12 +58,35 @@ function mountAt(url: string): HTMLDivElement {
 
 const text = (el: HTMLElement) => (el.textContent ?? '').replace(/\s+/gu, ' ');
 
-describe('/login — la porte PAR DÉFAUT est le lien magique', () => {
-  test('sans paramètre : le champ e-mail et « Envoyer le lien magique », jamais un champ mot de passe', () => {
+describe('/login — la porte PAR DÉFAUT est la connexion par e-mail (#6626)', () => {
+  test('sans paramètre : le champ e-mail et « Recevoir le lien », jamais un champ mot de passe', () => {
     const el = mountAt('/login');
     expect(el.querySelector('#magic-link-email')).not.toBeNull();
-    expect(text(el)).toContain('Envoyer le lien magique');
+    expect(text(el)).toContain('Votre adresse e-mail');
+    expect(text(el)).toContain('Recevoir le lien');
     expect(el.querySelector('#login-password')).toBeNull();
+  });
+
+  test('le mode de fonctionnement est derrière un (i) « Comment ça marche », replié par défaut', () => {
+    const el = mountAt('/login');
+    const info = el.querySelector('button[aria-label="Comment ça marche"]') as HTMLButtonElement | null;
+    expect(info).not.toBeNull();
+    expect(info?.getAttribute('aria-expanded')).toBe('false');
+    const note = controlledBy(info);
+    expect(note?.textContent).toBe('Pas de mot de passe à retenir : nous vous envoyons un lien par e-mail. Ouvrez-le et vous êtes connecté.');
+    expect(note?.classList.contains('sr-only')).toBe(true);
+
+    act(() => {
+      info?.click();
+    });
+    expect(info?.getAttribute('aria-expanded')).toBe('true');
+    expect(note?.classList.contains('sr-only')).toBe(false);
+  });
+
+  test('aucun libellé perçu ne dit « magique » — la baguette reste, le mot part', () => {
+    const el = mountAt('/login');
+    expect(perceivable(el)).not.toMatch(/magi(que|c)/iu);
+    expect(el.querySelector('form svg')).not.toBeNull();
   });
 
   test('l’autre porte est NOMMÉE, et mène à l’adresse qui la porte', () => {
@@ -87,10 +111,16 @@ describe('/login?methode=motdepasse — l’identifiant et le mot de passe', () 
     expect(identifiant?.getAttribute('autocomplete')).toBe('username');
   });
 
-  test('le retour vers le lien magique est un LIEN vers l’adresse par défaut', () => {
+  test('le retour vers la porte par défaut dit « Se connecter par e-mail », baguette en tête, et mène à /login', () => {
     const el = mountAt('/login?methode=motdepasse');
-    const retour = [...el.querySelectorAll('a')].find((a) => (a.textContent ?? '').includes('lien'));
+    const retour = [...el.querySelectorAll('a')].find((a) => text(a).trim() === 'Se connecter par e-mail');
     expect(retour?.getAttribute('href')).toBe('/login');
+    expect(retour?.firstElementChild?.tagName.toLowerCase()).toBe('svg');
+  });
+
+  test('aucun libellé perçu ne dit « magique »', () => {
+    const el = mountAt('/login?methode=motdepasse');
+    expect(perceivable(el)).not.toMatch(/magi(que|c)/iu);
   });
 
   test('un paramètre inconnu retombe sur la porte par défaut — jamais un écran vide', () => {
