@@ -33,6 +33,7 @@ import { fileURLToPath } from 'node:url';
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const IOS_TOKENS_PATH = join(HERE, '..', '..', '..', '..', 'packages', 'design-tokens', 'ios.css');
 export const GLASS_CSS_PATH = join(HERE, '..', '..', 'src', 'styles', 'glass.css');
+export const IOS_ALIAS_PATH = join(HERE, '..', '..', 'src', 'styles', 'ios.css');
 
 const NAMED_COLORS = {
   white: { r: 255, g: 255, b: 255, a: 1 },
@@ -208,6 +209,17 @@ export const GLASS_CONTRAST_INVENTORY = [
     density: 'glass-prominent',
     kind: 'non-text',
   },
+  {
+    /* Trouvé par la dérivation automatique (#6367), absent de l'audit manuel
+       du 2026-09-13 : `MinimalHeader` peignait le chevron en `--color-ios-brand`
+       nu, 2,78:1 / 2,53:1 au pire cas — sous la barre AA non-texte. Corrigé par
+       `--color-ios-ink` (voir `thread-states.tsx`). */
+    site: 'src/components/thread-states.tsx — MinimalHeader, le chevron de retour des écrans refusé/erreur',
+    tone: '--ios-surface',
+    ink: '--ios-ink',
+    density: 'glass',
+    kind: 'non-text',
+  },
 ];
 
 export const MIN_RATIO = { text: 4.5, 'non-text': 3 };
@@ -216,6 +228,154 @@ export const MIN_RATIO = { text: 4.5, 'non-text': 3 };
  * L'audit complet : chaque entrée de l'inventaire, dans les deux schémas,
  * avec son ratio mesuré et le seuil qu'il doit tenir.
  */
+/**
+ * L'ALIAS `--color-*` → jeton `--ios-*` (#6367) — `src/styles/ios.css` NOMME
+ * les jetons iOS pour Tailwind (`@theme inline`) ; c'est cette table, jamais
+ * une recopie, qui relie une couleur écrite dans le JSX (`--color-ios-ink`)
+ * au jeton mesuré par `loadIosSchemes()` (`--ios-ink`). Un alias absent d'ici
+ * (`--accent`, `--color-ok`…) n'est pas un jeton iOS fixe : il sort du
+ * balayage, jamais par une liste d'exclusion à la main.
+ */
+export function loadColorAliasMap() {
+  const css = readFileSync(IOS_ALIAS_PATH, 'utf8');
+  const block = extractBlock(css, /@theme\s+inline\s*\{/);
+  const aliases = {};
+  for (const [name, value] of Object.entries(parseDeclarations(block))) {
+    const match = /^var\(\s*(--[\w-]+)\s*\)$/.exec(value);
+    if (match) aliases[name] = match[1];
+  }
+  return aliases;
+}
+
+const GLASS_TONE_ALIAS_BY_TOKEN = { 'glass-card': '--color-ios-card' };
+const GLASS_EXCLUDED_TOKENS = new Set(['glass-accent']);
+const GLASS_DEFAULT_TONE_ALIAS = '--color-ios-surface';
+const CLASS_VALUE = /className=(?:"([^"]*)"|\{`([^`]*)`\}|\{'([^']*)'\}|'([^']*)')/;
+const STYLE_COLOR = /color:\s*['"]var\((--[\w-]+)\)['"]/;
+
+/** Le ton et la densité de verre d'un tag, depuis SA classe — jamais un ancêtre (`--glass-tone` se pose sur la surface elle-même, `glass.css`). */
+function classifyGlassTag(tagText) {
+  const classMatch = CLASS_VALUE.exec(tagText);
+  const classText = classMatch?.slice(1).find((v) => v !== undefined) ?? '';
+  const tokens = classText.split(/\s+/).filter(Boolean);
+  if (tokens.some((t) => GLASS_EXCLUDED_TOKENS.has(t))) return null;
+  const density = tokens.includes('glass-prominent') ? 'glass-prominent' : tokens.includes('glass') ? 'glass' : null;
+  if (!density) return null;
+  const toneToken = tokens.find((t) => GLASS_TONE_ALIAS_BY_TOKEN[t]);
+  return { density, toneAlias: toneToken ? GLASS_TONE_ALIAS_BY_TOKEN[toneToken] : GLASS_DEFAULT_TONE_ALIAS };
+}
+
+/** La fin du tag ouvert à `start` (`<` inclus) — profondeur d'accolades et guillemets ignorés, comme `extractBlock`. */
+function findTagEnd(text, start) {
+  let depth = 0;
+  let quote = null;
+  for (let i = start; i < text.length; i += 1) {
+    const c = text[i];
+    if (quote) {
+      if (c === quote && text[i - 1] !== '\\') quote = null;
+      continue;
+    }
+    if (c === '"' || c === "'" || c === '`') quote = c;
+    else if (c === '{') depth += 1;
+    else if (c === '}') depth -= 1;
+    else if (c === '>' && depth === 0) return i;
+  }
+  return -1;
+}
+
+/**
+ * Chaque couple (alias de ton, alias d'encre, densité) réellement PEINT
+ * ensemble dans le JSX (#6367) : un tag qui porte le verre ouvre un CADRE
+ * hérité par ses descendants (comme `--glass-tone` en CSS) jusqu'à sa
+ * fermeture ; toute encre déclarée dans ce cadre — sur le tag lui-même ou un
+ * descendant, à toute profondeur — forme un couple avec lui.
+ *
+ * `</...>` est TOUJOURS une fermeture JSX sans ambiguïté (aucune syntaxe TS
+ * ne produit `</`) : le caractère qui précède le `<` n'est jamais regardé
+ * pour une fermeture — seulement pour une ouverture, où un générique
+ * TypeScript appelé (`useState<string>('a')`) prend la même forme. Ce
+ * générique-là est reconnu à ce qui le suit, pas à ce qui le précède : son
+ * `>` fermant est immédiatement suivi de `(`, ce que ferme jamais un tag JSX
+ * ouvrant (`<b>x</b>` n'appelle rien).
+ */
+export function glassInkUsages(text) {
+  const usages = [];
+  const stack = [];
+  let i = 0;
+  while (i < text.length) {
+    const lt = text.indexOf('<', i);
+    if (lt === -1) break;
+    if (text[lt + 1] === '/') {
+      const gt = text.indexOf('>', lt);
+      if (gt === -1) break;
+      stack.pop();
+      i = gt + 1;
+      continue;
+    }
+    if (!/[A-Za-z>]/.test(text[lt + 1] ?? '')) {
+      i = lt + 1;
+      continue;
+    }
+    const end = findTagEnd(text, lt);
+    if (end === -1) {
+      i = lt + 1;
+      continue;
+    }
+    const prev = text[lt - 1];
+    const isGenericCall = prev !== undefined && /[\w$]/.test(prev) && text[end + 1] === '(';
+    if (isGenericCall) {
+      i = end + 1;
+      continue;
+    }
+    const tagText = text.slice(lt, end + 1);
+    const selfClosing = /\/\s*>$/.test(tagText);
+    const frame = classifyGlassTag(tagText);
+    const active = frame ?? [...stack].reverse().find(Boolean) ?? null;
+    const colorMatch = STYLE_COLOR.exec(tagText);
+    if (colorMatch && active) {
+      usages.push({ toneAlias: active.toneAlias, density: active.density, inkAlias: colorMatch[1] });
+    }
+    if (!selfClosing) stack.push(frame ?? null);
+    i = end + 1;
+  }
+  return usages;
+}
+
+/**
+ * L'audit dérivé (#6367) : chaque couple (ton, encre, densité) réellement
+ * peint dans `src/**\/*.tsx`, résolu vers les jetons `--ios-*` mesurés par
+ * `glassContrastAudit`. Une encre hors du schéma iOS (`--accent`, un jeton
+ * sémantique) n'a pas d'alias dans `loadColorAliasMap()` — elle sort ici,
+ * jamais par une exclusion nommée.
+ */
+export function derivedGlassInkPairs(sources) {
+  const aliases = loadColorAliasMap();
+  const byKey = new Map();
+  for (const { path, text } of sources) {
+    if (!/\.tsx$/.test(path)) continue;
+    for (const usage of glassInkUsages(text)) {
+      const tone = aliases[usage.toneAlias];
+      const ink = aliases[usage.inkAlias];
+      if (!tone || !ink) continue;
+      const key = `${tone}|${ink}|${usage.density}`;
+      if (!byKey.has(key)) byKey.set(key, { tone, ink, density: usage.density, sites: new Set() });
+      byKey.get(key).sites.add(path);
+    }
+  }
+  return [...byKey.values()].map((entry) => ({ ...entry, sites: [...entry.sites].sort() }));
+}
+
+/**
+ * Les couples dérivés SANS entrée dans l'inventaire (#6367) — un usage réel
+ * que personne n'a encore mesuré ni classé (texte / non-texte). C'est ce
+ * témoin qui rougit sur un couple neuf, là où `GLASS_CONTRAST_INVENTORY`
+ * seul ne pouvait que garder ce qu'on y avait déjà écrit.
+ */
+export function glassContrastCoverage(sources, inventory = GLASS_CONTRAST_INVENTORY) {
+  const declared = new Set(inventory.map((entry) => `${entry.tone}|${entry.ink}|${entry.density}`));
+  return derivedGlassInkPairs(sources).filter((pair) => !declared.has(`${pair.tone}|${pair.ink}|${pair.density}`));
+}
+
 export function glassContrastAudit(inventory = GLASS_CONTRAST_INVENTORY) {
   const schemes = loadIosSchemes();
   const densities = loadGlassDensities();
