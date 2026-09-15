@@ -36,15 +36,48 @@ final class ScenePlayerModeTests: XCTestCase {
         XCTAssertFalse(config.showsChrome)
     }
 
+    /// #6745 — le réel plein écran rejoue sa scène comme la carte (en boucle),
+    /// mais l'entend comme le reader (son, muet non verrouillé, fil de position).
+    /// Aucun des trois modes existants ne réunissait les deux.
+    func test_reelConfig_isBornPaused_keepsSound_loops_andShowsChrome() {
+        let config = ScenePlayerConfig(mode: .reel)
+        XCTAssertTrue(config.startsPaused)
+        XCTAssertFalse(config.isMuted)
+        XCTAssertFalse(config.locksMute)
+        XCTAssertTrue(config.loops)
+        XCTAssertTrue(config.showsChrome)
+    }
+
     func test_everyMode_isBornPaused() {
-        for mode: ScenePlayerMode in [.reader, .preview, .card] {
+        for mode: ScenePlayerMode in [.reader, .preview, .card, .reel] {
             XCTAssertTrue(ScenePlayerConfig(mode: mode).startsPaused, "\(mode)")
         }
     }
 
-    func test_loopIsTheCardRule_alone() {
+    func test_onlyTheSurfacesThatReplay_loop() {
         XCTAssertFalse(ScenePlayerConfig(mode: .reader).loops)
         XCTAssertFalse(ScenePlayerConfig(mode: .preview).loops)
+        XCTAssertTrue(ScenePlayerConfig(mode: .card).loops)
+        XCTAssertTrue(ScenePlayerConfig(mode: .reel).loops)
+    }
+
+    func test_theReel_reArmsItselfWhenTheSceneCompletes_andKeepsItsSound() {
+        let reel = Self.player(document: Self.textDocument(), mode: .reel)
+        XCTAssertNotNil(reel.host.onCompletion, "loops : le réel se relance lui-même")
+        XCTAssertFalse(reel.host.mute, "le réel plein écran joue AVEC le son")
+
+        let muted = MeeshyScenePlayer(document: Self.textDocument(), mode: .reel,
+                                      sceneIndex: .constant(0), isPlaying: .constant(false),
+                                      accentColorHex: "#7C3AED", isMuted: true)
+        XCTAssertTrue(muted.host.mute, "le muet du réel reste une commande de l'hôte, jamais un verrou")
+    }
+
+    func test_theReel_receivesThePositionFeed_forItsProgress() {
+        var ticks: [Double] = []
+        let reel = Self.player(document: Self.textDocument(), mode: .reel)
+            .onPlaybackTime { ticks.append($0) }
+        reel.host.onPlaybackTime?(2.5)
+        XCTAssertEqual(ticks, [2.5])
     }
 
     // MARK: - Le player monte l'hôte existant, nourri par le pont v3

@@ -386,7 +386,20 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // Les trois lots se cumulent : 56 430 − 216 − 353 − 1 328 = 54 533. Aucun ne
     // touche le fichier d'un autre (`ReelsPlayerView.swift`, `PostDetailView.swift`,
     // `MeeshyApp.swift`) : leurs retraits s'additionnent sans recouvrement.
-    private static let legacyLineCeiling = 54_533
+    // #6745 — 56 430 → 56 347 (−83). Un réel composé devait se rejouer comme
+    // sa scène, et la page qui le lit vit dans `ReelsPlayerView.swift`, hôte en
+    // dette. Les règles pures qu'il fallait étendre — la porte d'autoplay, la
+    // politique de télémétrie, la classification des médias — en sont d'abord
+    // sorties, telles quelles, vers `ReelPlaybackRules.swift` (−89) ; la vue de
+    // scène vit dans `ReelsPlayerView+Scene.swift`, et l'hôte ne garde que son
+    // aiguillage (+6). Il RESTE en dette ; le plafond baisse d'exactement ce que
+    // le lot retire.
+    //
+    // Les quatre lots se cumulent : 56 430 − 216 − 353 − 1 328 − 83 = 54 450.
+    // #6693 et #6745 retirent tous deux de `ReelsPlayerView.swift`, par des parties
+    // que la fusion applique sans conflit ; l'hôte reste en dette, donc les deux
+    // retraits s'additionnent.
+    private static let legacyLineCeiling = 54_450
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

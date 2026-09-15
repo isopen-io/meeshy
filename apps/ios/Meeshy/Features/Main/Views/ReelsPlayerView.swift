@@ -224,7 +224,7 @@ struct ReelsPlayerView: View {
     private func finalizeReelSession(for reelId: String?) {
         guard let reelId,
               let reel = viewModel.reels.first(where: { $0.id == reelId }),
-              ReelWatchAttachmentPolicy.shouldAttachVideoWatch(mediaType: reel.primaryReelDisplayMedia?.type)
+              ReelSceneRouting.attachesSharedVideoWatch(for: reel, loadedAttachmentId: SharedAVPlayerManager.shared.attachmentId)
         else { return }
         let m = SharedAVPlayerManager.shared
         let watchMs = m.currentTime.isNaN ? 0 : Int(m.currentTime * 1000)
@@ -400,41 +400,6 @@ struct ReelsPlayerView: View {
     }
 }
 
-// MARK: - Reel media open-autostart gate (pure)
-
-/// The single open-autostart gate shared by a reel's audio AND video paths
-/// (WS3.1): an active reel starts its media only once the liquid reveal has
-/// completed and no call owns the audio session. Extracted as a pure function so
-/// the truth table is unit-testable. `ReelVideoView.drive()` encodes the
-/// identical condition for the video engine, so both media kinds start in
-/// lockstep.
-enum ReelMediaAutostart {
-    nonisolated static func shouldStart(isActive: Bool, revealCompleted: Bool, isCallActive: Bool) -> Bool {
-        isActive && revealCompleted && !isCallActive
-    }
-
-    /// Idempotency guard for the audio open-autostart (F4/F6): only (re)start the
-    /// engine when it is not already loaded with this url. `currentUrl` and `url`
-    /// MUST be compared in the SAME normalized form the engine stores — for a
-    /// `file://` url `AudioPlaybackManager.playLocal` stores `URL.absoluteString`,
-    /// which can differ from the raw string, so the caller normalizes first. Keeps
-    /// a re-render / reveal flip from restarting in-place audio.
-    nonisolated static func shouldLoadAudio(currentUrl: String?, url: String) -> Bool {
-        currentUrl != url
-    }
-}
-
-// MARK: - Reel Watch Attachment Policy (pure)
-
-/// `finalizeReelSession` reads the SHARED video engine (`SharedAVPlayerManager`)
-/// only when the reel actually being finalized is a video reel — pure,
-/// testable gate mirroring `ReelMediaAutostart`.
-enum ReelWatchAttachmentPolicy {
-    nonisolated static func shouldAttachVideoWatch(mediaType: FeedMediaType?) -> Bool {
-        mediaType == .video
-    }
-}
-
 // MARK: - Reel Audio Language Resolver (Prisme, pure)
 
 /// Prisme Linguistique — pure resolution of the TTS language to auto-select for
@@ -522,6 +487,10 @@ struct ReelPageView: View {
     /// Prisme: the language the viewer explicitly picked via a flag / the
     /// translate toggle. `nil` = the auto-resolved preferred translation.
     @State var selectedLanguage: String?
+    /// Réel composé (#6745) — voir `ReelsPlayerView+Scene.swift`.
+    @State var scenePaused = false
+    @State var sceneSoundMuted = false
+    @StateObject var sceneClock = ReelSceneClock()
     // Plain reference (NOT @ObservedObject): the page itself doesn't need to
     // re-render on every 0.1s time tick — only `ReelScrubBar` observes the
     // manager. Used here only for the fire-and-forget `togglePlayPause()` tap.
@@ -552,7 +521,7 @@ struct ReelPageView: View {
     /// True when this active reel is a video so the scrub bar shows only where
     /// there is a seekable timeline (images/audio reels have none here).
     private var isVideoReel: Bool {
-        reel.primaryReelDisplayMedia?.type == .video
+        !isSceneReel && reel.primaryReelDisplayMedia?.type == .video
     }
 
     /// The audio media for an audio reel, else `nil`. Drives the immersive
@@ -562,18 +531,11 @@ struct ReelPageView: View {
         return media
     }
 
-    /// Piste « son EMPRUNTÉ à la bibliothèque » d'un réel/poste SANS média
-    /// propre : l'audio vit alors dans la composition (`storyEffects`), sous la
-    /// forme produite par `publishBorrowedSoundPost` / `addBorrowedSound`
-    /// (`soundId` + `mediaURL` serveur). Limité au cas sans média — un réel
-    /// vidéo+fond musical passe par le lecteur de composition (StoryItem), pas
-    /// par cette page.
+    /// Piste « son EMPRUNTÉ à la bibliothèque » d'un réel SANS scène ni média :
+    /// la page la joue elle-même. Un réel composé en est exclu — sa scène joue
+    /// déjà ce fond (#6745) ; la règle vit dans `ReelSceneRouting`.
     var borrowedSoundTrack: StoryAudioPlayerObject? {
-        guard reel.primaryReelDisplayMedia == nil, let effects = reel.storyEffects else { return nil }
-        let track = effects.resolvedBackgroundAudio
-            ?? effects.audioPlayerObjects?.first(where: { !($0.mediaURL ?? "").isEmpty })
-        guard let track, !(track.mediaURL ?? "").isEmpty else { return nil }
-        return track
+        ReelSceneRouting.borrowedSoundTrack(for: reel)
     }
 
     /// The "original" language for the meta-row flag strip: the audio
@@ -698,6 +660,10 @@ struct ReelPageView: View {
                 // just below the description / action rail. Drag to seek.
                 if isVideoReel && isActive {
                     ReelScrubBar(manager: playerManager, accentColor: accentColor)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 14)
+                } else if isSceneReel && isActive {
+                    ReelSceneProgressBar(clock: sceneClock, accentColor: accentColor)
                         .padding(.horizontal, 16)
                         .padding(.top, 14)
                 }
@@ -927,6 +893,7 @@ struct ReelPageView: View {
             withAnimation(.easeInOut(duration: 0.25)) { chromeHidden = false }
             return
         }
+        if isSceneReel { scenePaused.toggle() }
         if isVideoReel { playerManager.togglePlayPause() }
     }
 
@@ -934,7 +901,11 @@ struct ReelPageView: View {
 
     @ViewBuilder
     private var mediaLayer: some View {
-        if let media = reel.primaryReelDisplayMedia {
+        if let document = sceneDocument {
+            ReelSceneView(reel: reel, document: document, isActive: isActive,
+                          revealCompleted: revealCompleted, isMuted: sceneSoundMuted,
+                          isPaused: $scenePaused, clock: sceneClock)
+        } else if let media = reel.primaryReelDisplayMedia {
             switch media.type {
             case .video:
                 ReelVideoView(media: media, isActive: isActive, revealCompleted: revealCompleted)
@@ -1145,60 +1116,6 @@ private struct ReelScrubBar: View {
         }
         .frame(height: 32)
         .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isSeeking)
-    }
-}
-
-// MARK: - Reel Media Layout
-
-/// Pure classification of a reel's media into the surface that should render it.
-/// App-side: it encodes the product decision of HOW a reel composes its media
-/// (single video, image carousel, rich audio, or images + independent audio),
-/// derived solely from the post's media. `resolve` is total and order-preserving.
-///
-/// Not yet wired into `mediaLayer` (which still shows `primaryReelMedia`): it is
-/// the tested foundation for the deferred images+audio mixed-media composition.
-enum ReelMediaLayout: Equatable {
-    /// No playable/visual media (documents only, or empty).
-    case empty
-    /// A single video drives the reel — video wins over every other kind.
-    case video(FeedMedia)
-    /// One or more images, no audio: a full-screen image carousel.
-    case images([FeedMedia])
-    /// One or more audios, no images and no video: the rich audio surface.
-    case audioOnly([FeedMedia])
-    /// Images (full-screen carousel background) with one or more audios.
-    case imagesWithAudio(images: [FeedMedia], audios: [FeedMedia])
-
-    /// Classifies `media` into a layout. Video has top priority; otherwise the
-    /// presence of images and/or audios decides. Documents are ignored
-    /// (never a reel surface), so a post carrying only those resolves to `.empty`.
-    static func resolve(media: [FeedMedia]) -> ReelMediaLayout {
-        if let video = media.first(where: { $0.type == .video }) { return .video(video) }
-        let images = media.filter { $0.type == .image }
-        let audios = media.filter { $0.type == .audio }
-        switch (images.isEmpty, audios.isEmpty) {
-        case (true, true): return .empty
-        case (false, true): return .images(images)
-        case (true, false): return .audioOnly(audios)
-        case (false, false): return .imagesWithAudio(images: images, audios: audios)
-        }
-    }
-
-    static func == (lhs: ReelMediaLayout, rhs: ReelMediaLayout) -> Bool {
-        switch (lhs, rhs) {
-        case (.empty, .empty):
-            return true
-        case let (.video(a), .video(b)):
-            return a.id == b.id
-        case let (.images(a), .images(b)):
-            return a.map(\.id) == b.map(\.id)
-        case let (.audioOnly(a), .audioOnly(b)):
-            return a.map(\.id) == b.map(\.id)
-        case let (.imagesWithAudio(ai, aa), .imagesWithAudio(bi, ba)):
-            return ai.map(\.id) == bi.map(\.id) && aa.map(\.id) == ba.map(\.id)
-        default:
-            return false
-        }
     }
 }
 
