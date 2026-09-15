@@ -6,6 +6,14 @@ import path from 'path';
 import { createHash } from 'crypto';
 import { SoundCaptureService } from '../SoundCaptureService';
 
+/**
+ * Défaut déterministe pour les témoins qui ne portent pas sur la forme
+ * d'onde : sans lui, chaque instanciation à 3 arguments tournerait le VRAI
+ * ffmpeg (défaut de production) contre des fichiers factices. Les témoins
+ * qui exercent la forme d'onde injectent explicitement leur propre stub.
+ */
+const noopWaveform = async () => [];
+
 function buildPrisma(overrides: Record<string, unknown> = {}) {
   return {
     postMedia: { findMany: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([]) },
@@ -88,7 +96,7 @@ describe('SoundCaptureService', () => {
     const prisma = buildPrisma({
       postMedia: { findMany: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([media]) },
     });
-    await new SoundCaptureService(prisma, soundsDir, uploadsRoot).captureSounds({
+    await new SoundCaptureService(prisma, soundsDir, uploadsRoot, undefined, noopWaveform).captureSounds({
       postId: 'p1', authorId: 'u1', feedsLibrary: false,
       tracks: [{ trackId: 't1', postMediaId: 'm1' }],
     });
@@ -106,13 +114,21 @@ describe('SoundCaptureService', () => {
   // — un `Sound` naît AVEC sa forme d'onde, jamais avec un `[]` gravé en dur —
   // sur le seul écrivain restant, et ils la portent MIEUX : ils assertent sur
   // l'appel Prisma réel, là où le témoin retiré lisait du texte.
+  //
+  // #6602 — un post vocal ou une bande-son démuxée n'ont JAMAIS de forme
+  // d'onde CLIENT (aucune UI de composer ne tourne sur ces deux chemins) :
+  // `track.waveform ?? []` gravait donc TOUJOURS `[]` en pratique. Les témoins
+  // ci-dessous injectent un `WaveformExtractor` factice (5e paramètre, même
+  // patron que `VideoAudioExtractor`) plutôt que de dépendre d'un vrai ffmpeg
+  // — déterministe, rapide, et sans binaire externe requis pour le témoin.
 
   it('test_captureWritesWaveformOnCreatedSound', async () => {
     const media = await seedMedia('m1');
     const prisma = buildPrisma({
       postMedia: { findMany: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([media]) },
     });
-    await new SoundCaptureService(prisma, soundsDir, uploadsRoot).captureSounds({
+    const computeWaveform = jest.fn<() => Promise<number[]>>();
+    await new SoundCaptureService(prisma, soundsDir, uploadsRoot, undefined, computeWaveform).captureSounds({
       postId: 'p1', authorId: 'u1', feedsLibrary: true,
       tracks: [{ trackId: 't1', postMediaId: 'm1', waveform: [0.1, 0.7, 0.3] }],
     });
@@ -121,18 +137,40 @@ describe('SoundCaptureService', () => {
         data: expect.objectContaining({ waveform: [0.1, 0.7, 0.3] }),
       }),
     );
+    // La forme d'onde du CLIENT prime : aucun calcul serveur n'est nécessaire.
+    expect(computeWaveform).not.toHaveBeenCalled();
   });
 
-  it('test_captureWithoutWaveform_writesEmptyArray', async () => {
-    // `Float[]` n'est pas nullable en Prisma : l'absence s'écrit `[]`, ce que
-    // sert déjà toute la bibliothèque existante. Aucun changement de
-    // comportement pour une piste sans échantillons — c'est la garde de
-    // non-régression.
+  it('test_captureWithoutClientWaveform_computesItFromTheStoredFile', async () => {
+    // Cas NOMINAL d'un post vocal : aucune UI de composer n'a tourné, donc
+    // aucune forme d'onde n'arrive du client — c'est le serveur qui la calcule
+    // depuis le fichier réellement stocké.
+    const media = await seedMedia('m1');
+    const prisma = buildPrisma({
+      postMedia: { findMany: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([media]) },
+    });
+    const computeWaveform = jest.fn<(p: string) => Promise<number[]>>().mockResolvedValue([0.2, 0.4, 0.8]);
+    await new SoundCaptureService(prisma, soundsDir, uploadsRoot, undefined, computeWaveform).captureSounds({
+      postId: 'p1', authorId: 'u1', feedsLibrary: true,
+      tracks: [{ trackId: 't1', postMediaId: 'm1' }],
+    });
+    expect(prisma.sound.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ waveform: [0.2, 0.4, 0.8] }) }),
+    );
+    // Calculée sur le fichier SOURCE réel, pas un chemin arbitraire.
+    expect(computeWaveform).toHaveBeenCalledWith(path.join(uploadsRoot, media.filePath));
+  });
+
+  it('test_waveformComputationFails_writesEmptyArrayRatherThanFailingTheCapture', async () => {
+    // `Float[]` n'est pas nullable en Prisma : l'absence s'écrit `[]`. Et un
+    // calcul de forme d'onde raté ne doit JAMAIS empêcher la capture du son —
+    // c'est un ornement, pas une condition d'existence.
     const media = await seedMedia('m2');
     const prisma = buildPrisma({
       postMedia: { findMany: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([media]) },
     });
-    await new SoundCaptureService(prisma, soundsDir, uploadsRoot).captureSounds({
+    const computeWaveform = jest.fn<() => Promise<number[]>>().mockRejectedValue(new Error('ffmpeg exit 1'));
+    await new SoundCaptureService(prisma, soundsDir, uploadsRoot, undefined, computeWaveform).captureSounds({
       postId: 'p1', authorId: 'u1', feedsLibrary: true,
       tracks: [{ trackId: 't1', postMediaId: 'm2' }],
     });
@@ -140,6 +178,11 @@ describe('SoundCaptureService', () => {
       expect.objectContaining({ data: expect.objectContaining({ waveform: [] }) }),
     );
   });
+
+  // Le chemin VIDÉO (démuxage `allowSoundExtraction`) a son propre témoin,
+  // `test_captureFromVideo_computesWaveformFromTheExtractedAudioFile`, dans
+  // `SoundCaptureExtraction.test.ts` — le fichier dédié à ce chemin, dont
+  // l'extracteur ffmpeg est déjà systématiquement injecté.
 
   // MARK: - Fenêtre choisie vs défaut accepté, et plafond sur la durée réelle
 
@@ -172,7 +215,7 @@ describe('SoundCaptureService', () => {
 
   it('test_recordUsage_stampsWindowAdjustedAtOnlyWhenAuthorMovedIt', async () => {
     const prisma = borrowedPrisma(90000);
-    await new SoundCaptureService(prisma, soundsDir, uploadsRoot).captureSounds({
+    await new SoundCaptureService(prisma, soundsDir, uploadsRoot, undefined, noopWaveform).captureSounds({
       postId: 'p1', authorId: 'u1', feedsLibrary: true,
       tracks: [{ trackId: 't1', soundId: 's1', windowAdjusted: true }],
     });
@@ -181,7 +224,7 @@ describe('SoundCaptureService', () => {
 
   it('test_recordUsage_leavesWindowAdjustedAtNullOnAcceptedDefault', async () => {
     const prisma = borrowedPrisma(90000);
-    await new SoundCaptureService(prisma, soundsDir, uploadsRoot).captureSounds({
+    await new SoundCaptureService(prisma, soundsDir, uploadsRoot, undefined, noopWaveform).captureSounds({
       postId: 'p1', authorId: 'u1', feedsLibrary: true,
       tracks: [{ trackId: 't1', soundId: 's1' }],
     });
@@ -195,7 +238,7 @@ describe('SoundCaptureService', () => {
     // corrige — et ce plafond exige la base, donc il ne peut pas vivre dans
     // `extractCaptureTracks`, qui est pure.
     const prisma = borrowedPrisma(12000);
-    await new SoundCaptureService(prisma, soundsDir, uploadsRoot).captureSounds({
+    await new SoundCaptureService(prisma, soundsDir, uploadsRoot, undefined, noopWaveform).captureSounds({
       postId: 'p1', authorId: 'u1', feedsLibrary: true,
       tracks: [{ trackId: 't1', soundId: 's1', startMs: 0, endMs: 60000 }],
     });
@@ -204,7 +247,7 @@ describe('SoundCaptureService', () => {
 
   it('test_recordUsage_unknownSoundDuration_leavesEndMsUntouched', async () => {
     const prisma = borrowedPrisma(null);
-    await new SoundCaptureService(prisma, soundsDir, uploadsRoot).captureSounds({
+    await new SoundCaptureService(prisma, soundsDir, uploadsRoot, undefined, noopWaveform).captureSounds({
       postId: 'p1', authorId: 'u1', feedsLibrary: true,
       tracks: [{ trackId: 't1', soundId: 's1', startMs: 0, endMs: 60000 }],
     });
@@ -216,7 +259,7 @@ describe('SoundCaptureService', () => {
     // déplace sa fenêtre et republie ne modifiait jamais la ligne, donc
     // `windowAdjustedAt` était inécrivable après la première publication.
     const prisma = borrowedPrisma(90000);
-    const service = new SoundCaptureService(prisma, soundsDir, uploadsRoot);
+    const service = new SoundCaptureService(prisma, soundsDir, uploadsRoot, undefined, noopWaveform);
     const base = { postId: 'p1', authorId: 'u1', feedsLibrary: true };
     await service.captureSounds({ ...base, tracks: [{ trackId: 't1', soundId: 's1', startMs: 0, endMs: 5000 }] });
     await service.captureSounds({
@@ -240,7 +283,7 @@ describe('SoundCaptureService', () => {
         count: jest.fn<() => Promise<number>>().mockResolvedValue(0),
       },
     });
-    await new SoundCaptureService(prisma, soundsDir, uploadsRoot).captureSounds({
+    await new SoundCaptureService(prisma, soundsDir, uploadsRoot, undefined, noopWaveform).captureSounds({
       postId: 'p1', authorId: 'u1', feedsLibrary: false, tracks: [],
     });
     expect(prisma.soundUsage.deleteMany).toHaveBeenCalledWith(
@@ -256,7 +299,7 @@ describe('SoundCaptureService', () => {
     const prisma = buildPrisma({
       postMedia: { findMany: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([media]) },
     });
-    await new SoundCaptureService(prisma, soundsDir, uploadsRoot).captureSounds({
+    await new SoundCaptureService(prisma, soundsDir, uploadsRoot, undefined, noopWaveform).captureSounds({
       postId: 'p1', authorId: 'u1', feedsLibrary: true,
       tracks: [{ trackId: 't1', postMediaId: 'm1' }],
     });
@@ -265,7 +308,7 @@ describe('SoundCaptureService', () => {
 
   it('test_captureSounds_scopesMediaLookupToThePost', async () => {
     const prisma = buildPrisma();
-    await new SoundCaptureService(prisma, soundsDir, uploadsRoot).captureSounds({
+    await new SoundCaptureService(prisma, soundsDir, uploadsRoot, undefined, noopWaveform).captureSounds({
       postId: 'p1', authorId: 'u1', feedsLibrary: true,
       tracks: [{ trackId: 't1', postMediaId: 'media-d-autrui' }],
     });
@@ -283,7 +326,7 @@ describe('SoundCaptureService', () => {
         findFirst: jest.fn(), create: jest.fn(), update: jest.fn(),
       },
     });
-    await new SoundCaptureService(prisma, soundsDir, uploadsRoot).captureSounds({
+    await new SoundCaptureService(prisma, soundsDir, uploadsRoot, undefined, noopWaveform).captureSounds({
       postId: 'p1', authorId: 'u1', feedsLibrary: true,
       tracks: [{ trackId: 't1', soundId: '507f1f77bcf86cd799439012' }],
     });
@@ -295,7 +338,7 @@ describe('SoundCaptureService', () => {
     const prisma = buildPrisma({
       postMedia: { findMany: jest.fn<() => Promise<unknown[]>>().mockResolvedValue(medias) },
     });
-    await new SoundCaptureService(prisma, soundsDir, uploadsRoot).captureSounds({
+    await new SoundCaptureService(prisma, soundsDir, uploadsRoot, undefined, noopWaveform).captureSounds({
       postId: 'p1', authorId: 'u1', feedsLibrary: true,
       tracks: medias.map((m, i) => ({ trackId: `t${i}`, postMediaId: m.id })),
     });
@@ -312,7 +355,7 @@ describe('SoundCaptureService', () => {
         create: jest.fn(), update: jest.fn<() => Promise<unknown>>().mockResolvedValue({}),
       },
     });
-    await new SoundCaptureService(prisma, soundsDir, uploadsRoot).captureSounds({
+    await new SoundCaptureService(prisma, soundsDir, uploadsRoot, undefined, noopWaveform).captureSounds({
       postId: 'p1', authorId: 'u1', feedsLibrary: true,
       tracks: [{ trackId: 't1', postMediaId: 'm1' }],
     });
@@ -324,7 +367,7 @@ describe('SoundCaptureService', () => {
     const prisma = buildPrisma({
       postMedia: { findMany: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([media]) },
     });
-    await new SoundCaptureService(prisma, soundsDir, uploadsRoot).captureSounds({
+    await new SoundCaptureService(prisma, soundsDir, uploadsRoot, undefined, noopWaveform).captureSounds({
       postId: 'p1', authorId: 'u1', feedsLibrary: true,
       tracks: [{ trackId: 't1', postMediaId: 'm1' }],
     });
@@ -343,7 +386,7 @@ describe('SoundCaptureService', () => {
         count: jest.fn<() => Promise<number>>().mockResolvedValue(0),
       },
     });
-    await new SoundCaptureService(prisma, soundsDir, uploadsRoot).captureSounds({
+    await new SoundCaptureService(prisma, soundsDir, uploadsRoot, undefined, noopWaveform).captureSounds({
       postId: 'p1', authorId: 'u1', feedsLibrary: true, tracks: [{ trackId: 't1', postMediaId: 'm1' }],
     });
     expect(prisma.soundUsage.deleteMany).toHaveBeenCalledWith(
@@ -366,7 +409,7 @@ describe('SoundCaptureService', () => {
         count: jest.fn<() => Promise<number>>().mockResolvedValue(2),
       },
     });
-    await new SoundCaptureService(prisma, soundsDir, uploadsRoot).releasePost('p1');
+    await new SoundCaptureService(prisma, soundsDir, uploadsRoot, undefined, noopWaveform).releasePost('p1');
 
     expect(prisma.sound.update).toHaveBeenCalledWith({
       where: { id: 'sound-a' }, data: { usageCount: 2 },
@@ -383,13 +426,13 @@ describe('SoundCaptureService', () => {
         findMany: jest.fn<() => Promise<unknown[]>>().mockRejectedValue(new Error('DB down')),
       },
     });
-    await expect(new SoundCaptureService(prisma, soundsDir, uploadsRoot).releasePost('p1'))
+    await expect(new SoundCaptureService(prisma, soundsDir, uploadsRoot, undefined, noopWaveform).releasePost('p1'))
       .resolves.toBeUndefined();
   });
 
   it('test_releasePosts_emptyList_touchesNothing', async () => {
     const prisma = buildPrisma();
-    await new SoundCaptureService(prisma, soundsDir, uploadsRoot).releasePosts([]);
+    await new SoundCaptureService(prisma, soundsDir, uploadsRoot, undefined, noopWaveform).releasePosts([]);
     expect(prisma.soundUsage.findMany).not.toHaveBeenCalled();
     expect(prisma.soundUsage.deleteMany).not.toHaveBeenCalled();
   });
@@ -409,7 +452,7 @@ describe('SoundCaptureService', () => {
         update: jest.fn<() => Promise<unknown>>().mockResolvedValue({}),
       },
     });
-    await new SoundCaptureService(prisma, soundsDir, uploadsRoot).captureSounds({
+    await new SoundCaptureService(prisma, soundsDir, uploadsRoot, undefined, noopWaveform).captureSounds({
       postId: 'p1', authorId: 'u1', feedsLibrary: true,
       tracks: [{ trackId: 't1', soundId: '507f1f77bcf86cd799439012', startMs: 500, endMs: 3500 }],
     });
@@ -432,7 +475,7 @@ describe('SoundCaptureService', () => {
         findFirst: jest.fn(), create: jest.fn(), update: jest.fn(),
       },
     });
-    await new SoundCaptureService(prisma, soundsDir, uploadsRoot).captureSounds({
+    await new SoundCaptureService(prisma, soundsDir, uploadsRoot, undefined, noopWaveform).captureSounds({
       postId: 'p1', authorId: 'u1', feedsLibrary: true,
       tracks: [{ trackId: 't1', soundId: '507f1f77bcf86cd799439012' }],
     });
@@ -450,7 +493,7 @@ describe('SoundCaptureService', () => {
     const prisma = buildPrisma({
       postMedia: { findMany: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([media]) },
     });
-    await new SoundCaptureService(prisma, soundsDir, uploadsRoot).captureSounds({
+    await new SoundCaptureService(prisma, soundsDir, uploadsRoot, undefined, noopWaveform).captureSounds({
       postId: 'p1', authorId: 'u1', feedsLibrary: true,
       tracks: [{ trackId: 't1', postMediaId: 'm1' }],
     });
@@ -499,7 +542,7 @@ describe('SoundCaptureService', () => {
     });
     const prisma = buildPrisma({ postMedia: { findMany, findFirst } });
 
-    await new SoundCaptureService(prisma, soundsDir, uploadsRoot).captureSounds({
+    await new SoundCaptureService(prisma, soundsDir, uploadsRoot, undefined, noopWaveform).captureSounds({
       postId: 'p1', authorId: 'u1', feedsLibrary: true,
       tracks: [{ trackId: 't1', postMediaId: 'm1' }],
     });
@@ -523,7 +566,7 @@ describe('SoundCaptureService', () => {
         }),
       },
     });
-    await new SoundCaptureService(prisma, soundsDir, uploadsRoot).captureSounds({
+    await new SoundCaptureService(prisma, soundsDir, uploadsRoot, undefined, noopWaveform).captureSounds({
       postId: 'p1', authorId: 'u1', feedsLibrary: true,
       tracks: [{ trackId: 't1', postMediaId: 'm1' }],
     });
@@ -542,7 +585,7 @@ describe('SoundCaptureService', () => {
         findFirst: jest.fn<() => Promise<unknown>>().mockRejectedValue(new Error('DB down')),
       },
     });
-    await new SoundCaptureService(prisma, soundsDir, uploadsRoot).captureSounds({
+    await new SoundCaptureService(prisma, soundsDir, uploadsRoot, undefined, noopWaveform).captureSounds({
       postId: 'p1', authorId: 'u1', feedsLibrary: true,
       tracks: [{ trackId: 't1', postMediaId: 'm1' }],
     });
@@ -564,7 +607,7 @@ describe('SoundCaptureService', () => {
         ]),
       },
     });
-    await new SoundCaptureService(prisma, soundsDir, uploadsRoot).captureSounds({
+    await new SoundCaptureService(prisma, soundsDir, uploadsRoot, undefined, noopWaveform).captureSounds({
       postId: 'p1', authorId: 'u1', feedsLibrary: true,
       tracks: [{ trackId: 't1', postMediaId: 'm1' }],
     });
@@ -582,7 +625,7 @@ describe('SoundCaptureService', () => {
         ]),
       },
     });
-    await new SoundCaptureService(prisma, soundsDir, uploadsRoot).captureSounds({
+    await new SoundCaptureService(prisma, soundsDir, uploadsRoot, undefined, noopWaveform).captureSounds({
       postId: 'p1', authorId: 'u1', feedsLibrary: true,
       tracks: [{ trackId: 't1', postMediaId: 'm1' }],
     });
@@ -668,7 +711,7 @@ describe('SoundCaptureService', () => {
         count: jest.fn<() => Promise<number>>().mockResolvedValue(2),
       },
     });
-    const result = await new SoundCaptureService(prisma, soundsDir, uploadsRoot)
+    const result = await new SoundCaptureService(prisma, soundsDir, uploadsRoot, undefined, noopWaveform)
       .reconcileUsageCounts();
 
     expect(result).toEqual({ examined: 1, drifted: 1, fixed: 0 });
@@ -689,7 +732,7 @@ describe('SoundCaptureService', () => {
         count: jest.fn<() => Promise<number>>().mockResolvedValue(2),
       },
     });
-    const result = await new SoundCaptureService(prisma, soundsDir, uploadsRoot)
+    const result = await new SoundCaptureService(prisma, soundsDir, uploadsRoot, undefined, noopWaveform)
       .reconcileUsageCounts({ apply: true });
 
     // `s2` est déjà juste : on ne le réécrit pas.
@@ -726,7 +769,7 @@ describe('SoundCaptureService', () => {
         count: jest.fn<() => Promise<number>>().mockResolvedValue(1),
       },
     });
-    const result = await new SoundCaptureService(prisma, soundsDir, uploadsRoot)
+    const result = await new SoundCaptureService(prisma, soundsDir, uploadsRoot, undefined, noopWaveform)
       .sweepOrphanUsages({ apply: true });
 
     // `soft-supprime` compte comme orphelin : c'est précisément le cas où
@@ -747,7 +790,7 @@ describe('SoundCaptureService', () => {
           .mockResolvedValue([]),
       },
     });
-    const result = await new SoundCaptureService(prisma, soundsDir, uploadsRoot)
+    const result = await new SoundCaptureService(prisma, soundsDir, uploadsRoot, undefined, noopWaveform)
       .sweepOrphanUsages();
 
     expect(result.orphans).toBe(1);
@@ -759,7 +802,7 @@ describe('SoundCaptureService', () => {
     const prisma = buildPrisma({
       postMedia: { findMany: jest.fn<() => Promise<unknown[]>>().mockRejectedValue(new Error('DB down')) },
     });
-    await expect(new SoundCaptureService(prisma, soundsDir, uploadsRoot).captureSounds({
+    await expect(new SoundCaptureService(prisma, soundsDir, uploadsRoot, undefined, noopWaveform).captureSounds({
       postId: 'p1', authorId: 'u1', feedsLibrary: true, tracks: [{ trackId: 't1', postMediaId: 'm1' }],
     })).resolves.toBeUndefined();
   });
@@ -767,7 +810,7 @@ describe('SoundCaptureService', () => {
   it('test_captureSounds_flagDisabled_capturesNothing', async () => {
     process.env.SOUND_LIBRARY_ENABLED = 'false';
     const prisma = buildPrisma();
-    await new SoundCaptureService(prisma, soundsDir, uploadsRoot).captureSounds({
+    await new SoundCaptureService(prisma, soundsDir, uploadsRoot, undefined, noopWaveform).captureSounds({
       postId: 'p1', authorId: 'u1', feedsLibrary: true, tracks: [{ trackId: 't1', postMediaId: 'm1' }],
     });
     expect(prisma.postMedia.findMany).not.toHaveBeenCalled();
