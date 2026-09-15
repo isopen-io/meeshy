@@ -78,8 +78,16 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      # `packages` is pinned because the action's default list still asks for the
+      # legacy `tools` package, which `cmdline-tools/20.0` no longer publishes.
+      # The runner image picked that version up on 2026-09-15, and every run
+      # then died here ("Failed to find package 'tools'", sdkmanager exit 1)
+      # before any Gradle task. `platform-tools` is the only package this gate
+      # needs up front: AGP resolves the platform and build-tools itself.
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
 
       # Derived from app/build.gradle.kts rather than hardcoded: a compileSdk
       # bump must not require editing this workflow in lockstep and silently
