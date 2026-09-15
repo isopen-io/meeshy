@@ -804,6 +804,17 @@ jobs:
           cd apps/web-v2
           node scripts/check-field-focus.mjs
 
+      # #6643 — chaque page et état d'accès (connexion et second facteur,
+      # accueil, inscription, mot de passe oublié, nouveau mot de passe, lien
+      # par e-mail, vérification d'e-mail) tient dans la colonne centrée de la
+      # connexion à 1440×900 et 834×1194, et garde la colonne de la tablette à
+      # 390×844 (plus petit ancêtre commun du contenu perceptible).
+      - name: Gate colonne des pages d'accès (centrée, jamais plus large que la connexion)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-access-column.mjs
+
       - name: Gate dist de la coque Capacitor (variante B)
         if: ${{ !cancelled() }}
         run: |
