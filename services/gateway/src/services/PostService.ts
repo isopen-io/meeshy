@@ -434,21 +434,11 @@ export class PostService {
     const captureTracks = await this.collectCaptureTracks(
       post.id, data.storyEffects, data.allowSoundExtraction ?? false,
       Boolean(data.mediaIds?.length));
-    // `orchestrateSoundCapture` (posts/soundCaptureVerdict.ts) : éligibilité
-    // PARTAGÉE (PUBLIC ou COMMUNITY, jamais un repost — elle vivait dupliquée
-    // ici et dans `updatePost`, et la seconde copie avait déjà été oubliée
-    // une fois), capture fire-and-forget INCHANGÉE, et le verdict SYNCHRONE
-    // (#6603) qui dit au client si le contenu alimente la bibliothèque —
-    // sans attendre le pipeline de capture.
+    // Éligibilité + capture fire-and-forget + verdict synchrone (#6603) — voir posts/soundCaptureVerdict.ts.
     const soundLibrary = orchestrateSoundCapture({
-      postId: post.id,
-      authorId: post.authorId,
-      visibility: data.visibility,
-      repostOfId: data.repostOfId,
-      tracks: captureTracks,
-      soundCaptureService: this.soundCaptureService,
-      onError: (err) => log.error('captureSounds (createPost) a échoué',
-        err instanceof Error ? err : new Error(String(err)), { postId: post.id }),
+      postId: post.id, authorId: post.authorId, visibility: data.visibility, repostOfId: data.repostOfId,
+      tracks: captureTracks, soundCaptureService: this.soundCaptureService,
+      onError: (err) => log.error('captureSounds (createPost) a échoué', err instanceof Error ? err : new Error(String(err)), { postId: post.id }),
     });
 
     // Déclencher la traduction Prisme pour les stories avec texte (fire-and-forget)
@@ -530,9 +520,7 @@ export class PostService {
       where: { id: post.id },
       select: postInclude,
     });
-    // `soundLibrary` n'est PAS une colonne — un champ de SERVICE ajouté à
-    // l'objet rendu (§ #6603), qui traverse `servePublishedPost` par simple
-    // spread, jusqu'à la réponse de `POST /posts`.
+    // `soundLibrary` : champ de service (#6603), pas une colonne.
     return { ...(refreshed ?? post), soundLibrary };
   }
 
@@ -1409,9 +1397,7 @@ export class PostService {
     // sur le repost passerait donc le scope `postId` et créerait un `Sound`
     // crédité au reposteur avec l'audio d'autrui. `feedsSoundLibrary` renvoie
     // false sur tout repost, et `captureSounds` libère alors les usages.
-    // Verdict SYNCHRONE (#6603), même contrat qu'à la création : `undefined`
-    // quand l'édition n'exprime rien sur les sons (aucune des trois portes
-    // ci-dessus) — il n'y a alors rien de nouveau à annoncer au client.
+    // Verdict synchrone (#6603) ; `undefined` si l'édition ne touche pas les sons.
     let soundLibrary: SoundCaptureVerdict | undefined;
     if (data.storyEffects !== undefined || editTouchesComposition || data.allowSoundExtraction !== undefined) {
       const effectiveEffects = data.storyEffects
@@ -1420,14 +1406,9 @@ export class PostService {
         updated.id, effectiveEffects, updated.allowSoundExtraction === true,
         finalMedia.length > 0);
       soundLibrary = orchestrateSoundCapture({
-        postId: updated.id,
-        authorId: updated.authorId,
-        visibility: updated.visibility,
-        repostOfId: updated.repostOfId,
-        tracks: editedTracks,
-        soundCaptureService: this.soundCaptureService,
-        onError: (err) => log.error('captureSounds (updatePost) a échoué',
-          err instanceof Error ? err : new Error(String(err)), { postId: updated.id }),
+        postId: updated.id, authorId: updated.authorId, visibility: updated.visibility, repostOfId: updated.repostOfId,
+        tracks: editedTracks, soundCaptureService: this.soundCaptureService,
+        onError: (err) => log.error('captureSounds (updatePost) a échoué', err instanceof Error ? err : new Error(String(err)), { postId: updated.id }),
       });
     }
 
