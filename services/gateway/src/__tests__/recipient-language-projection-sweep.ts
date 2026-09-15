@@ -38,6 +38,7 @@
  * | étalement | `...RECIPIENT_LANG_SELECT`, `...this.LANG_SELECT` |
  * | projection nommée | `select: this.LANG_SELECT` |
  * | paramètre de fonction LOCALE | `sendMagicLinkEmail(user, …)` — résolu par ses appels |
+ * | RESTE de destructuration | `const { password, ...user } = account` — remonte à `account` |
  *
  * Un étalement se résout sur sa DÉFINITION — dans le fichier, ou chez le voisin
  * importé à un saut. Reconnaître le seul nom `RECIPIENT_LANG_SELECT` comme
@@ -440,14 +441,32 @@ const resoudreIdentifiant = (
     `\\bfor\\s*\\(\\s*(?:const|let|var)\\s+${echappe}\\s+of\\s+([^)]*)\\)`,
     'g',
   );
+  // `const { password, ...user } = account` — un RESTE de destructuration. Le
+  // reste conserve TOUTES les propriétés sauf celles nommées avant lui : la
+  // chaîne se remonte donc à sa source, et c'est `resoudreReste` qui vérifie
+  // qu'aucune colonne du prisme n'a été retirée en chemin (#6676).
+  const restes = new RegExp(
+    `\\b(?:const|let|var)\\s*\\{([^{}]*?)\\.\\.\\.${echappe}\\s*\\}\\s*=\\s*([^;]+);`,
+    'g',
+  );
 
   for (const portee of porteesDe(ctx.source, avant)) {
     const depuis = portee?.debutCorps ?? 0;
     const liaison = derniereEntre(ctx.source, liaisons, depuis, avant);
     const iteration = derniereEntre(ctx.source, iterations, depuis, avant);
+    const reste = derniereEntre(ctx.source, restes, depuis, avant);
 
-    if (liaison !== undefined && (iteration === undefined || iteration.index < liaison.index)) {
+    // La forme la plus PROCHE de l'appel gagne : une même portée peut lier deux
+    // fois le même nom, et c'est la dernière liaison avant l'appel qui vaut.
+    const plusProche = [liaison, iteration, reste]
+      .filter((m): m is RegExpExecArray => m !== undefined)
+      .sort((a, b) => b.index - a.index)[0];
+
+    if (plusProche !== undefined && plusProche === liaison) {
       return resoudreLiaison(ctx, liaison, chemin, profondeur);
+    }
+    if (plusProche !== undefined && plusProche === reste) {
+      return resoudreReste(ctx, reste as RegExpExecArray, chemin, profondeur);
     }
     if (iteration !== undefined) {
       const itere = (iteration[1] as string).trim();
@@ -459,6 +478,33 @@ const resoudreIdentifiant = (
     }
   }
   return { ok: false, trace: `\`${ident}\` sans liaison ni paramètre` };
+};
+
+/**
+ * Ce qu'un RESTE de destructuration charge : tout ce que porte sa SOURCE, moins
+ * les propriétés nommées avant le `...`.
+ *
+ * Le sens de la garde impose la précaution : si l'une des colonnes du prisme
+ * figure parmi les retirées, la chaîne les a PERDUES en route, et le verdict
+ * doit accuser plutôt que de remonter à une source qui, elle, les portait.
+ * C'est le cas que `PasswordResetService` frôle — il retire `password`, jamais
+ * une colonne de langue.
+ */
+const resoudreReste = (
+  ctx: Contexte,
+  reste: RegExpExecArray,
+  chemin: readonly string[],
+  profondeur: number,
+): Resolution => {
+  const retirees = partiesDe(reste[1] ?? '').map((p) => (p.split(':')[0] as string).trim());
+  const perdue = COLONNES_DU_PRISME.find((c) => retirees.includes(c));
+  if (perdue !== undefined) return { ok: false, trace: `le reste retire \`${perdue}\`` };
+
+  const source = (reste[2] ?? '').trim();
+  if (!/^[A-Za-z_$][\w$]*$/.test(source)) {
+    return { ok: false, trace: `reste sur ${source.slice(0, 40)}` };
+  }
+  return resoudreIdentifiant(ctx, source, reste.index, chemin, profondeur + 1);
 };
 
 const estLeParametre = (partie: string, ident: string): boolean =>
