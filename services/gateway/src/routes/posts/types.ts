@@ -459,6 +459,11 @@ export const UpdateCommentSchema = z.object({
   /// Prisma `Int` est un int32 Mongo, et iOS reconstruit un `UInt32` depuis
   /// cette valeur — un flag hors borne casserait les deux côtés.
   effectFlags: z.number().int().min(0).max(0x7FFFFFFF).optional(),
+  // ISO 639-1 (or BCP-47) source language, déclarée par le composer — même
+  // contrat que `UpdatePostSchema.originalLanguage`. N'a d'effet QUE si
+  // `content` change aussi (garde métier dans `PostCommentService.updateComment`) ;
+  // absente sur un changement de texte, la redétection reprend la main.
+  originalLanguage: z.string().min(2).max(16).optional(),
 }).refine(
   (data) => data.content !== undefined || data.effectFlags !== undefined,
   { message: 'Nothing to update' },

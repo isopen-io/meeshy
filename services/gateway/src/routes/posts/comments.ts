@@ -507,6 +507,7 @@ export function registerCommentRoutes(
           const c = await commentService.updateComment(commentId, authContext.registeredUser.id, {
             content: sanitizedContent,
             effectFlags: parsed.data.effectFlags,
+            originalLanguage: parsed.data.originalLanguage,
           });
           if (!c) throw new Error('COMMENT_NOT_FOUND');
           return c as UpdateResult & { id: string };
