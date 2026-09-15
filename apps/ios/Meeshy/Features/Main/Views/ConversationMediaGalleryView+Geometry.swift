@@ -417,23 +417,59 @@ extension ConversationMediaGalleryView {
     /// est déjà, et là où aucun joueur au monde ne met autre chose. Le cadre
     /// centre son média, donc le centre du cadre EST le centre du média : la
     /// couche n'a aucune cote à tenir d'accord avec le solveur.
+    /// **#6760 — le chrome s'aligne sur le PLATEAU, jamais sur le média.**
+    ///
+    /// Directive porteur (2026-09-15) : « les details de l'auteur et les actions
+    /// doivent être aligné sur le plateau ! […] le plateau est la scene ! »
+    ///
+    /// Les deux blocs étaient jusqu'ici DANS le `.frame(currentStage.frame)`,
+    /// c'est-à-dire bornés par le cadre du MÉDIA — donc déplacés par la forme du
+    /// fichier. Mesuré sur la capture du porteur, une pièce 900 × 3 600 : la
+    /// colonne d'actions se posait à x ≈ 615, le bord du média, quand le plateau
+    /// s'arrête à 690. Une pièce large les aurait repoussées : le repère que
+    /// l'utilisateur apprend bougeait d'un média à l'autre.
+    ///
+    /// Le média garde son cadre et son arrondi ; le chrome prend le plateau. La
+    /// loi qui le dit — et le témoin d'INVARIANCE qui la prouve — vit dans
+    /// `StageChromeAlignment`.
     var cadreRegion: some View {
         ZStack {
             cadreCenterPlayPause
+                .frame(width: currentStage.frame.width, height: currentStage.frame.height)
+                .clipShape(RoundedRectangle(cornerRadius: currentStage.cornerRadius, style: .continuous))
 
             VStack(spacing: 0) {
                 Spacer(minLength: 0)
                 cadreActionColumn
                 cadreOverlay
             }
+            .frame(width: stageChromeWidth)
         }
-        // L'espace où la colonne mesure sa place (#6709) : le cadre lui-même, où le
-        // média est centré — `MediaGalleryStage.columnBackdrop` y lit ce qui est sous
-        // elle.
+        // L'espace où la colonne mesure sa place (#6709) : la région du plateau, qui
+        // porte à la fois le cadre et le chrome — `MediaGalleryStage.columnBackdrop`
+        // y lit ce qui est sous elle.
         .coordinateSpace(name: MediaGalleryStage.cadreSpace)
-        .frame(width: currentStage.frame.width, height: currentStage.frame.height)
-        .clipShape(RoundedRectangle(cornerRadius: currentStage.cornerRadius, style: .continuous))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// La largeur du PLATEAU — celle que le chrome prend, quelle que soit la
+    /// forme du média. `StageChromeAlignment` porte la règle ; ceci n'est que sa
+    /// projection sur la géométrie de cet hôte.
+    var stageChromeWidth: CGFloat {
+        StageChromeAlignment.chromeBounds(
+            stage: CGRect(origin: .zero, size: plateauSize),
+            // `currentStage.frame` est une TAILLE, pas un rectangle posé :
+            // le cadre du média n'a pas d'origine propre, il est centré.
+            media: CGRect(origin: .zero, size: currentStage.frame)
+        ).width
+    }
+
+    /// Le plateau : la région libre entre les couloirs, gouttière comprise.
+    /// C'est la surface que le ThumbHash habille déjà (`MediaStageBackdrop`) —
+    /// le chrome s'y aligne désormais aussi.
+    var plateauSize: CGSize {
+        CGSize(width: max(0, DeviceLayout.windowSize.width - 2 * MediaGalleryStage.gutter),
+               height: max(0, currentStage.frame.height))
     }
 
     /// **Ce qui se pose sur le cadre part avec lui** (spec § 2.2) : la légende,
