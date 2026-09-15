@@ -12,10 +12,11 @@ import { controlledBy, perceivableText as perceivable } from '@/test-support/per
  * « proposer l'option se connecter avec identifiant (e-mail, téléphone,
  * pseudo) et mot de passe ».
  *
- * Le choix vit dans l'ADRESSE (`?methode=motdepasse`), jamais dans un état
- * local : le retour arrière le rend, un lien le partage, et une recette ouvre
- * directement l'une des deux portes. Le témoin monte donc l'écran à une
- * adresse DONNÉE, comme le fait le routeur.
+ * Le choix vit dans l'ADRESSE (`?methode=password` depuis #6583 — voir plus
+ * bas pour l'ancienne valeur, toujours LUE), jamais dans un état local : le
+ * retour arrière le rend, un lien le partage, et une recette ouvre directement
+ * l'une des deux portes. Le témoin monte donc l'écran à une adresse DONNÉE,
+ * comme le fait le routeur.
  */
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
@@ -93,13 +94,56 @@ describe('/login — la porte PAR DÉFAUT est la connexion par e-mail (#6626)', 
     const el = mountAt('/login');
     const lien = [...el.querySelectorAll('a')].find((a) => (a.textContent ?? '').includes('identifiant'));
     expect(lien).toBeDefined();
-    expect(lien?.getAttribute('href')).toBe('/login?methode=motdepasse');
+    expect(lien?.getAttribute('href')).toBe('/login?methode=password');
   });
 });
 
-describe('/login?methode=motdepasse — l’identifiant et le mot de passe', () => {
+/**
+ * « LA PAGE DOIT ÊTRE SANS TITRE SAUF LA BAGUETTE MAGIQUE » (#6583, directive
+ * porteur 2026-09-14), RÉDUITE AU BLASON par celle du 2026-09-15 (#6626).
+ *
+ * #6583 retirait DEUX choses de la porte par défaut : le blason « Meeshy » et
+ * le titre de section « Entrez votre adresse email », qui disaient deux fois
+ * ce que la page EST à quelqu'un qui vient de cliquer « Se connecter ».
+ *
+ * Le BLASON reste retiré : rien depuis ne l'a redemandé, et c'est lui qui
+ * redisait le nom du produit. Le TITRE de section, lui, revient — #6626 en a
+ * fait « Votre adresse e-mail », l'ancre du (i) « Comment ça marche » qui
+ * porte désormais TOUT le mode de fonctionnement (premier `describe`). Un
+ * titre qui héberge la mécanique ne répète plus le champ ; et la directive
+ * postérieure a été relue deux fois sur ce titre même (la place du (i), la
+ * césure de « e-mail »), donc vue plutôt que subie.
+ *
+ * La porte du MOT DE PASSE garde son blason : elle n'a pas de baguette, et un
+ * écran sans en-tête d'aucune sorte n'aurait plus rien pour se nommer.
+ */
+describe('/login — la porte par défaut n’a plus de blason', () => {
+  test('ni le blason « Meeshy », ni l’ancien titre de #6404', () => {
+    const el = mountAt('/login');
+    expect(el.querySelector('h1')).toBeNull();
+    expect(text(el)).not.toContain('Entrez votre adresse');
+  });
+
+  test('la baguette, le titre qui porte le (i), le champ et le bouton', () => {
+    const el = mountAt('/login');
+    // La baguette est le SEUL tracé d'en-tête restant : le blason de marque
+    // rendait trois `<line>`, elle n'en rend aucune.
+    expect(el.querySelector('svg')).not.toBeNull();
+    expect(el.querySelectorAll('line')).toHaveLength(0);
+    expect(text(el)).toContain('Votre adresse e-mail');
+    expect(el.querySelector('#magic-link-email')).not.toBeNull();
+    expect(text(el)).toContain('Recevoir le lien');
+  });
+
+  test('la porte du mot de passe GARDE son blason', () => {
+    const el = mountAt('/login?methode=password');
+    expect(el.querySelectorAll('line')).toHaveLength(3);
+  });
+});
+
+describe('/login?methode=password — l’identifiant et le mot de passe', () => {
   test('les deux champs, et l’identifiant DIT ce qu’il accepte', () => {
-    const el = mountAt('/login?methode=motdepasse');
+    const el = mountAt('/login?methode=password');
     const identifiant = el.querySelector('#login-username') as HTMLInputElement | null;
     expect(identifiant).not.toBeNull();
     expect(el.querySelector('#login-password')).not.toBeNull();
@@ -127,6 +171,19 @@ describe('/login?methode=motdepasse — l’identifiant et le mot de passe', () 
     const el = mountAt('/login?methode=nimportequoi');
     expect(el.querySelector('#magic-link-email')).not.toBeNull();
   });
+
+  /**
+   * L'ANCIENNE VALEUR RESTE LUE (#6583) — `motdepasse` a été l'adresse de
+   * cette porte pendant toute la vie de #6404 : elle est dans des signets, des
+   * liens partagés et la recette. Elle n'est plus jamais ÉMISE (le témoin de
+   * l'autre porte, plus haut, exige `?methode=password`), mais la retirer du
+   * vocabulaire de LECTURE renverrait ces adresses sur le lien magique — un
+   * écran qui n'est pas celui qu'on a demandé.
+   */
+  test('`?methode=motdepasse`, l’ancienne adresse, ouvre toujours cette porte', () => {
+    const el = mountAt('/login?methode=motdepasse');
+    expect(el.querySelector('#login-password')).not.toBeNull();
+  });
 });
 
 describe('/login — « Créer un compte » reste atteignable des DEUX portes', () => {
@@ -138,7 +195,7 @@ describe('/login — « Créer un compte » reste atteignable des DEUX portes', 
     });
     container.remove();
 
-    const motdepasse = mountAt('/login?methode=motdepasse');
+    const motdepasse = mountAt('/login?methode=password');
     expect([...motdepasse.querySelectorAll('a')].some((a) => a.getAttribute('href') === '/signup')).toBe(true);
   });
 });
