@@ -120,7 +120,7 @@ export class PasswordResetService {
       }
 
       // 3. Find user by email (case-insensitive)
-      const account = await this.prisma.user.findFirst({
+      const user = await this.prisma.user.findFirst({
         where: {
           email: { equals: email.toLowerCase().trim(), mode: 'insensitive' },
           isActive: true
@@ -140,15 +140,16 @@ export class PasswordResetService {
       });
 
       // 4. User not found - return generic response
-      if (!account) {
+      if (!user) {
         logger.info('[PasswordResetService] ❌ User not found - returning generic response');
         return this.genericSuccessResponse();
       }
 
-      // Le hash ne sert qu'à SAVOIR si le compte en a un : il ne suit pas `user`,
-      // qui voyage jusqu'au courriel et aux événements de sécurité.
-      const { password, ...user } = account;
-      const hasPassword = password !== null;
+      // Le hash ne sert qu'à SAVOIR si le compte en a un : seul ce booléen en
+      // sort (témoin : `PasswordResetService.passwordless.test.ts`). `user` reste
+      // lié à sa requête — le balayage du cadrage (#4642) remonte
+      // `recipientLanguage(user)` jusqu'à `RECIPIENT_LANG_SELECT` par cette liaison.
+      const hasPassword = user.password !== null;
 
       // 5. Email not verified — la garde ne vaut que pour un compte qui A un mot
       // de passe (#6642). `MagicLinkService` livre déjà ses liens à une adresse
