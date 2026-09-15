@@ -17,11 +17,14 @@
  * `__tests__/unit/services/attachment-reply-citation.test.ts` : les greps qui
  * les gardaient auparavant sont restés verts sur un correctif annulé.
  *
- * **CE QUE CE RATTRAPAGE ÉLARGIT (#6601).** Les deux gardes lient la pièce au
- * MESSAGE CITÉ ; aucune ne lie le message cité à la conversation qu'on LIT —
- * `replyToId` n'est validé contre aucune conversation dans le chemin d'envoi.
- * Le trou PRÉEXISTE à ce module, mais celui-ci l'élargit : il va chercher une
- * pièce PAR SON ID, donc hors de la fenêtre `take: 4` qui le plafonnait jusque-là.
+ * **CE QUE CE RATTRAPAGE ÉLARGISSAIT, et qui est fermé depuis #6601.** Les deux
+ * gardes d'envoi (`admitAttachmentReply`) lient désormais la pièce au MESSAGE
+ * CITÉ **et** le message cité à la conversation qu'on LIT — `replyToId` est
+ * validé contre la conversation de l'envoi au même site. Ce module lisait déjà
+ * une pièce PAR SON ID, donc hors de la fenêtre `take: 4` qui la plafonnait
+ * avant lui ; il ne peut désormais plus rattraper une pièce dont le message
+ * cité n'appartenait pas à cette conversation, puisque l'envoi qui l'aurait
+ * produite est refusé en amont.
  *
  * Une pièce SUPPRIMÉE n'est simplement pas rattrapée : la citation garde son
  * ancre et sa nature (« une photo »), et ne se vide pas.
