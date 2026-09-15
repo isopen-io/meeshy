@@ -33,18 +33,43 @@
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { attachmentFullSelect } from '../attachments/attachmentIncludes';
-import { servedQuotedAttachments } from './servedQuotedMessage';
+import { servedQuotedAttachments, type QuotedMessageRow } from './servedQuotedMessage';
+
+/**
+ * La forme MINIMALE que ce module LIT et MUTE, sur une charge déjà sérialisée.
+ * Elle étend `QuotedMessageRow` — ce que `servedQuotedAttachments` exige — des
+ * deux seuls champs que le rattrapage touche. Déclarer la forme plutôt que de
+ * la contourner par `any` garde la garde d'appartenance (`piece.messageId !==
+ * m.replyTo?.id`) sous le regard du compilateur : c'est elle qui est
+ * fail-closed, et un `any` la rendrait muette au premier renommage.
+ */
+type CitationRattrapable = QuotedMessageRow & {
+  attachments?: readonly unknown[];
+  readonly attachmentReplyTo?: { readonly attachmentId?: unknown } | null;
+};
+
+/**
+ * Ouverte par l'index : un message servi porte des dizaines de champs que ce
+ * module ne lit pas. Ce qui est DÉCLARÉ est ce qu'il touche — le reste passe
+ * en `unknown`, jamais en `any`, pour que rien ne s'y lise par accident.
+ */
+export type MessageRattrapable = {
+  readonly replyTo?: CitationRattrapable | null;
+  readonly [autreChamp: string]: unknown;
+};
 
 export async function backfillCitedAttachments(
   prisma: PrismaClient,
-  mappedMessages: any[]
+  mappedMessages: readonly MessageRattrapable[]
 ): Promise<void> {
-  const attendues = new Map<string, any[]>();
+  const attendues = new Map<string, MessageRattrapable[]>();
   for (const m of mappedMessages) {
     const citee = m?.replyTo?.attachmentReplyTo?.attachmentId;
     if (typeof citee !== 'string' || citee.length === 0) continue;
     const dejaServie = Array.isArray(m.replyTo.attachments)
-      && m.replyTo.attachments.some((a: any) => a?.id === citee);
+      && m.replyTo.attachments.some(
+        (a) => (a as { id?: unknown } | null)?.id === citee
+      );
     if (dejaServie) continue;
     attendues.set(citee, [...(attendues.get(citee) ?? []), m]);
   }
@@ -54,7 +79,7 @@ export async function backfillCitedAttachments(
     where: { id: { in: [...attendues.keys()] } },
     select: attachmentFullSelect,
   });
-  const parId = new Map(pieces.map((p: any) => [p.id, p]));
+  const parId = new Map(pieces.map((p) => [p.id, p] as const));
 
   for (const [attachmentId, messages] of attendues) {
     const piece = parId.get(attachmentId);
@@ -62,7 +87,12 @@ export async function backfillCitedAttachments(
     for (const m of messages) {
       if (piece.messageId !== m.replyTo?.id) continue;
       const servies = Array.isArray(m.replyTo.attachments) ? m.replyTo.attachments : [];
-      m.replyTo.attachments = [...servies, ...servedQuotedAttachments(m.replyTo, [piece])];
+      // La charge servie est mutable en pratique : `readonly` déclare ici ce que
+      // le module PROMET de ne pas remplacer ailleurs, pas une immuabilité runtime.
+      (m.replyTo as { attachments?: readonly unknown[] }).attachments = [
+        ...servies,
+        ...servedQuotedAttachments(m.replyTo, [piece]),
+      ];
     }
   }
 }
