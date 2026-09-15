@@ -25,6 +25,7 @@ export function Field({
   glyph,
   tint,
   focused,
+  valid = false,
   error,
   hint,
   children,
@@ -46,6 +47,27 @@ export function Field({
    * jamais une troisième source de vérité pour le focus. */
   tint: string;
   focused: boolean;
+  /**
+   * LE CHAMP EST BON, ET ÇA SE VOIT (#6582, directive porteur 2026-09-14 :
+   * « si le mot de passe est entré et est OK, entourer le champ en vert
+   * directement »).
+   *
+   * La teinte est `var(--color-success)` — le jeton de la table PARTAGÉE, qui
+   * porte déjà une valeur par schéma (`#10b981` en sombre, `#047857` en clair,
+   * `packages/design-tokens/{dark,light}.css`). Aucune couleur n'est
+   * fabriquée ici, et aucune variante `light:` n'est nécessaire : c'est
+   * exactement le mécanisme qu'`app.css` décrit en tête (« une couleur juste
+   * l'est dans les deux schémas, par construction »). Mesuré sur la carte :
+   * 7,3:1 en sombre, 5,3:1 en clair.
+   *
+   * Le signal ne tient PAS à la seule couleur (règle 17) : le bord épaissit
+   * aussi (1px → 2px, comme au focus), et l'appelant dit en toutes lettres ce
+   * que le vert lui a appris. `data-field-state` le rend mesurable sans
+   * interroger une chaîne de style.
+   *
+   * Un refus GAGNE toujours : un champ ne peut pas être bon et refusé.
+   */
+  valid?: boolean | undefined;
   error?: string | undefined;
   /**
    * LE DÉTAIL DERRIÈRE UN (i) (#6441, retour porteur « la page est trop
@@ -70,6 +92,8 @@ export function Field({
   const errorId = `${id}-error`;
   const hintState = useInfoHint();
   const iconStyle = { color: `color-mix(in srgb, ${tint} 70%, transparent)`, flexShrink: 0 };
+  const isValid = valid && error === undefined;
+  const isEmphasized = focused || isValid;
   return (
     <div className="grid gap-1">
       {label !== undefined ? (
@@ -79,6 +103,7 @@ export function Field({
       ) : null}
       <div
         className="field-box flex items-center gap-3 rounded-[14px] px-4 transition-colors"
+        data-field-state={isValid ? 'valid' : undefined}
         style={{
           minHeight: 48,
           backgroundColor: 'var(--color-ios-card)',
@@ -88,8 +113,12 @@ export function Field({
              tient pas sur un fond dont le contraste de couleur est faible.
              `box-sizing: border-box` (préflight Tailwind) absorbe le pixel
              de plus DANS la boîte : ni ses voisins ni sa hauteur ne bougent. */
-          border: `${focused ? '2px' : '1px'} solid ${
-            focused ? `color-mix(in srgb, ${tint} 60%, transparent)` : 'color-mix(in srgb, var(--color-ios-ink-3) 30%, transparent)'
+          border: `${isEmphasized ? '2px' : '1px'} solid ${
+            isValid
+              ? 'var(--color-success)'
+              : focused
+                ? `color-mix(in srgb, ${tint} 60%, transparent)`
+                : 'color-mix(in srgb, var(--color-ios-ink-3) 30%, transparent)'
           }`,
         }}
       >

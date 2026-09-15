@@ -9,58 +9,46 @@ import {
 } from './signup-rungs';
 
 /**
- * « LES CHAMPS APPARAISSENT UNIQUEMENT AU FUR ET À MESURE » (#6405, directive
- * porteur 2026-09-14) — et la moitié qu'on oublie : un champ paru ne se
- * REFERME jamais.
+ * LES DEUX BARREAUX (#6582, directive porteur 2026-09-14) — « il faut mettre
+ * dès le départ le numéro et l'email à montrer, et lorsqu'on a fini de mettre
+ * l'email, faire apparaître les détails de son identité DIRECTEMENT ».
+ *
+ * La loi de #6405 en avait TROIS, le numéro se méritant derrière l'adresse.
+ * Elle en a deux : le CONTACT (adresse et numéro ensemble) et l'IDENTITÉ. Ce
+ * qui survit de #6405 est la moitié qu'on oublie — un champ paru ne se REFERME
+ * jamais.
  */
 
 describe('à l’ouverture', () => {
-  test('un seul barreau : l’adresse', () => {
-    expect(visibleSignupRungs(INITIAL_SIGNUP_REVEAL)).toEqual(['email']);
-    expect(showsSignupRung(INITIAL_SIGNUP_REVEAL, 'phone')).toBe(false);
+  test('le contact SEUL — et il porte l’adresse ET le numéro', () => {
+    expect(visibleSignupRungs(INITIAL_SIGNUP_REVEAL)).toEqual(['contact']);
+    expect(showsSignupRung(INITIAL_SIGNUP_REVEAL, 'contact')).toBe(true);
     expect(showsSignupRung(INITIAL_SIGNUP_REVEAL, 'identity')).toBe(false);
   });
 
   test('une adresse INCOMPLÈTE n’ouvre rien', () => {
-    const reveal = nextSignupReveal(INITIAL_SIGNUP_REVEAL, { emailValid: false, phoneAnswered: false });
-    expect(visibleSignupRungs(reveal)).toEqual(['email']);
+    expect(visibleSignupRungs(nextSignupReveal(INITIAL_SIGNUP_REVEAL, { emailValid: false }))).toEqual(['contact']);
   });
 });
 
 describe('l’avancée', () => {
-  test('une adresse valide ouvre le NUMÉRO, et lui seul', () => {
-    const reveal = nextSignupReveal(INITIAL_SIGNUP_REVEAL, { emailValid: true, phoneAnswered: false });
-    expect(visibleSignupRungs(reveal)).toEqual(['email', 'phone']);
+  test('une adresse valide ouvre l’identité, DIRECTEMENT — aucun geste intermédiaire', () => {
+    expect(visibleSignupRungs(nextSignupReveal(INITIAL_SIGNUP_REVEAL, { emailValid: true }))).toEqual(SIGNUP_RUNGS);
   });
 
-  test('le numéro RÉPONDU ouvre le reste — identité, mot de passe, langue, bouton', () => {
-    const apresEmail = nextSignupReveal(INITIAL_SIGNUP_REVEAL, { emailValid: true, phoneAnswered: false });
-    const apresNumero = nextSignupReveal(apresEmail, { emailValid: true, phoneAnswered: true });
-    expect(visibleSignupRungs(apresNumero)).toEqual(SIGNUP_RUNGS);
-  });
-
-  test('répondre au numéro AVANT d’avoir une adresse valide n’ouvre rien — aucun barreau ne saute son prédécesseur', () => {
-    const reveal = nextSignupReveal(INITIAL_SIGNUP_REVEAL, { emailValid: false, phoneAnswered: true });
-    expect(visibleSignupRungs(reveal)).toEqual(['email']);
+  test('le numéro n’entre dans AUCUNE condition — il est visible d’emblée, donc il n’ouvre rien', () => {
+    // Le témoin de #6405 devait dire « répondre au numéro avant l'adresse
+    // n'ouvre rien » ; ici, la question ne se pose plus : `SignupAnswers` ne
+    // porte plus qu'une observation, et c'est ce que ce témoin fige.
+    const cle = Object.keys(nextSignupReveal(INITIAL_SIGNUP_REVEAL, { emailValid: true }));
+    expect(cle).toEqual(['identitySettled']);
   });
 });
 
 describe('la monotonie — un champ paru ne disparaît jamais', () => {
-  test('revenir corriger son adresse ne referme NI le numéro NI le reste', () => {
-    const ouvert = nextSignupReveal(
-      nextSignupReveal(INITIAL_SIGNUP_REVEAL, { emailValid: true, phoneAnswered: false }),
-      { emailValid: true, phoneAnswered: true },
-    );
-    const pendantLaCorrection = nextSignupReveal(ouvert, { emailValid: false, phoneAnswered: false });
-    expect(visibleSignupRungs(pendantLaCorrection)).toEqual(SIGNUP_RUNGS);
-  });
-
-  test('effacer son numéro après l’avoir tapé ne referme pas le reste', () => {
-    const ouvert = nextSignupReveal(
-      nextSignupReveal(INITIAL_SIGNUP_REVEAL, { emailValid: true, phoneAnswered: false }),
-      { emailValid: true, phoneAnswered: true },
-    );
-    expect(visibleSignupRungs(nextSignupReveal(ouvert, { emailValid: true, phoneAnswered: false }))).toEqual(SIGNUP_RUNGS);
+  test('revenir corriger son adresse ne referme pas l’identité', () => {
+    const ouvert = nextSignupReveal(INITIAL_SIGNUP_REVEAL, { emailValid: true });
+    expect(visibleSignupRungs(nextSignupReveal(ouvert, { emailValid: false }))).toEqual(SIGNUP_RUNGS);
   });
 });
 
@@ -71,8 +59,8 @@ describe('l’identité de l’état', () => {
    * `TranslationToggle` a payé (CLAUDE.md § Prisme).
    */
   test('rien ne s’ouvre ⇒ l’objet PRÉCÉDENT, à l’identique', () => {
-    const reveal = nextSignupReveal(INITIAL_SIGNUP_REVEAL, { emailValid: true, phoneAnswered: true });
-    expect(nextSignupReveal(reveal, { emailValid: true, phoneAnswered: true })).toBe(reveal);
-    expect(nextSignupReveal(INITIAL_SIGNUP_REVEAL, { emailValid: false, phoneAnswered: false })).toBe(INITIAL_SIGNUP_REVEAL);
+    const ouvert = nextSignupReveal(INITIAL_SIGNUP_REVEAL, { emailValid: true });
+    expect(nextSignupReveal(ouvert, { emailValid: true })).toBe(ouvert);
+    expect(nextSignupReveal(INITIAL_SIGNUP_REVEAL, { emailValid: false })).toBe(INITIAL_SIGNUP_REVEAL);
   });
 });

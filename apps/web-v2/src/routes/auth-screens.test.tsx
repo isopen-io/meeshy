@@ -29,7 +29,7 @@ describe('LoginScreen — la marque et la version', () => {
   // La porte du MOT DE PASSE (#6404) : c'est elle qui porte les deux champs
   // que ce bloc mesure. La porte par défaut (connexion par e-mail) a ses propres
   // témoins dans `login-doors.test.tsx`.
-  const html = renderToStaticMarkup(<LoginDoors method="motdepasse" />);
+  const html = renderToStaticMarkup(<LoginDoors method="password" />);
 
   test('rend le GLYPHE des trois traits, jamais l’icône d’application', () => {
     expect(html.match(/<line/g)).toHaveLength(3);
@@ -68,7 +68,7 @@ describe('LoginScreen — la marque et la version', () => {
  * « Mot de passe oublié ? », comme iOS.
  */
 describe('LoginScreen — les deux portes', () => {
-  const html = renderToStaticMarkup(<LoginDoors method="motdepasse" />);
+  const html = renderToStaticMarkup(<LoginDoors method="password" />);
 
   test('le retour vers le lien (/login) précède « Mot de passe oublié ? » (/forgot-password)', () => {
     const lienIndex = html.indexOf('Se connecter par e-mail');
@@ -118,12 +118,12 @@ describe('SignupScreen — les navigations sont des ancres, la langue vient du c
   const html = renderToStaticMarkup(<SignupScreen />);
 
   /**
-   * L'ÉTAT INITIAL NE MONTRE PLUS QUE LE PREMIER BARREAU (#6405) — mais les
-   * deux SORTIES restent : le « X » et « Déjà un compte ? ». Elles ne sont pas
-   * des champs, et quelqu'un qui s'est trompé d'écran ne doit pas remplir une
-   * adresse pour faire paraître le lien qui l'emmène ailleurs. La pastille de
-   * langue et les deux pages légales, elles, vivent au troisième barreau —
-   * `signup-rungs.test.tsx` les mesure une fois dépliés.
+   * L'ÉTAT INITIAL NE MONTRE QUE LE BARREAU DE CONTACT (#6405, redécoupé par
+   * #6582) — mais les deux SORTIES restent : le « X » et « Déjà un compte ? ».
+   * Elles ne sont pas des champs, et quelqu'un qui s'est trompé d'écran ne
+   * doit pas remplir une adresse pour faire paraître le lien qui l'emmène
+   * ailleurs. La pastille de langue et les deux pages légales, elles, vivent
+   * au second barreau — `signup-rungs.test.tsx` les mesure une fois dépliés.
    */
   test('les deux sorties vers la connexion sont des ANCRES, dès la première seconde', () => {
     expect(html.match(/href="\/login"/g)).toHaveLength(2);
