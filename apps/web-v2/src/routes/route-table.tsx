@@ -21,6 +21,12 @@ export const ROUTES = {
   conversationsNew: { pattern: '/conversations/new', screen: () => import('@/routes/conversation-new') },
   login: { pattern: '/login', screen: () => import('@/routes/login') },
   signup: { pattern: '/signup', screen: () => import('@/routes/signup') },
+  /* LE LIEN DE PARRAINAGE (#6584) — l'adresse que le legacy sert
+     (`apps/web/app/signup/affiliate/[token]`, D-5) et que les invitations déjà
+     partagées visent. Elle REDIRIGE vers `/signup?ref=<token>` : le lien
+     n'apporte qu'une donnée, et une donnée se transporte dans l'adresse plutôt
+     que dans un second écran d'inscription à faire diverger. */
+  signupAffiliate: { pattern: '/signup/affiliate/$token', screen: () => import('@/routes/signup-affiliate') },
   /* Le tableau de bord des streaks & badges (#5547) — sous `/me/`, l'espace
      du profil (inventaire de parité : `/me` est V4.0.0), privé (garde de
      session), découpé comme les autres : aucun octet avant le premier pixel. */
