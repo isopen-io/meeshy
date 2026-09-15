@@ -399,7 +399,17 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // #6693 et #6745 retirent tous deux de `ReelsPlayerView.swift`, par des parties
     // que la fusion applique sans conflit ; l'hôte reste en dette, donc les deux
     // retraits s'additionnent.
-    private static let legacyLineCeiling = 54_450
+    // #6701 — 56 077 → 56 046 (−31). Les voiles de lisibilité du lecteur de
+    // story devaient suivre le chrome dans `StoryViewerView+Canvas.swift`
+    // (2 313 lignes), hôte en dette. La couche en est d'abord sortie, entière,
+    // dans `StoryViewerView+CanvasScrims.swift` ; la règle s'y pose ensuite,
+    // hors de l'hôte. L'hôte RESTE en dette (2 282) ; le plafond baisse
+    // d'exactement ce que le lot retire.
+    //
+    // Les cinq lots se cumulent : 54 450 − 31 = 54 419. Seul #6701 retire de
+    // `StoryViewerView+Canvas.swift` : son retrait s'additionne sans
+    // recouvrement.
+    private static let legacyLineCeiling = 54_419
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

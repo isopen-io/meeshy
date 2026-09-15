@@ -93,6 +93,7 @@ extension StoryCanvasUIView {
             backgroundLayer.isPlaybackActive = false
             audioMixer.pause()
             displayLink?.isPaused = true
+            settlePlaybackHealthUnderUserPause()
         } else {
             // Resume in place. Réveille le displayLink et les players
             // depuis leur dernière position — pas de re-init coûteuse. Fond,
@@ -365,6 +366,10 @@ extension StoryCanvasUIView {
     /// Le player média « primaire » de la slide qui pilote la timeline : vidéo
     /// de fond en priorité, sinon première vidéo foreground. `nil` pour une
     /// slide sans vidéo (image / couleur / audio-only) → jamais gatée.
+    ///
+    /// Un clip de premier plan joué jusqu'au bout n'en est plus un (#6757) : il
+    /// n'attend plus rien, et sa pause de fin se lisait comme un stall — spinner
+    /// et timeline gelée jusqu'au watchdog, puis relances qui rejouaient sa fin.
     func primaryMediaPlayer() -> AVPlayer? {
         if case .video = backgroundLayer.kind, let player = backgroundLayer.avPlayer {
             return player
@@ -373,6 +378,7 @@ extension StoryCanvasUIView {
             if let media = sub as? StoryMediaLayer,
                media.media?.isBackground == false,
                media.media?.kind == .video,
+               !media.hasPlayedToEnd,
                let player = media.avPlayer {
                 return player
             }
@@ -385,12 +391,35 @@ extension StoryCanvasUIView {
     /// content-ready et la vidéo bg n'a pas démarré).
     func refreshPlaybackHealth(now: CFTimeInterval) {
         guard contentReadyFired else { return }
+        probePlaybackHealth(now: now)
+    }
+
+    func probePlaybackHealth(now: CFTimeInterval) {
         let player = primaryMediaPlayer()
         applyPlaybackHealth(status: player?.timeControlStatus,
                             failed: player?.currentItem?.status == .failed,
                             audioPending: isSlideAudioPending(),
                             mediaPending: isBackgroundImagePending(),
                             now: now)
+    }
+
+    /// **Une pause utilisateur n'est pas un stall, même lu juste avant elle (#6757).**
+    ///
+    /// La pause gèle `displayLink`, dont le tick est le SEUL site qui sonde la
+    /// santé. Un stall lu à l'image d'avant — un clip arrivé à sa fin, un
+    /// buffering — restait donc émis pendant toute la pause : le spinner de l'hôte
+    /// ne tombait jamais, et le watchdog comptait le temps de pause comme un stall,
+    /// si bien que la reprise forçait « progresse » sur une vidéo encore bloquée.
+    ///
+    /// Le solde rejoue la sonde SOUS la pause, où `StoryPlaybackHealth` rend
+    /// « progresse » et où le watchdog repart de zéro. Il passe par la file
+    /// principale : l'hôte appelle `setPaused` depuis `updateUIView`, où lui rendre
+    /// un état est interdit. Une reprise survenue entre-temps le rend caduc.
+    func settlePlaybackHealthUnderUserPause() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.mode == .play, self.isPlaybackPaused else { return }
+            self.probePlaybackHealth(now: CACurrentMediaTime())
+        }
     }
 
     /// R2 — image de fond dont le bitmap FINAL n'est pas encore stampé : le

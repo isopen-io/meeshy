@@ -1440,39 +1440,8 @@ struct StoryCardView: View {
             // rail (`StoryActionSidebarView`, via `displayedLanguageCode`), au
             // point d'entrée des traductions. Plus de badge flottant ici.
 
-            // === Layer 5: Gradient scrims for readability over photos ===
-            VStack {
-                LinearGradient(
-                    stops: [
-                        .init(color: .black.opacity(0.7), location: 0),
-                        .init(color: .black.opacity(0.4), location: 0.5),
-                        .init(color: .black.opacity(0.0), location: 1)
-                    ],
-                    startPoint: .top, endPoint: .bottom
-                )
-                .frame(height: topInset + 110)
-                Spacer()
-                // Scrim bottom plus opaque + plus haut — assure que le caption
-                // texte d'une slide (rendu par le canvas à y≈0.95 en design
-                // coords) ne déborde plus visuellement sur la zone composer
-                // « Commenter... ». Le canvas du reader est positionné au
-                // centre du geometry (9:16 fit-to-width), donc un text
-                // positioné bas du slide tombe juste au-dessus du composer.
-                // Sans ce scrim fort, les deux se superposent — symptôme
-                // user-reporté 2026-05-27.
-                LinearGradient(
-                    stops: [
-                        .init(color: .black.opacity(0.0), location: 0),
-                        .init(color: .black.opacity(0.55), location: 0.45),
-                        .init(color: .black.opacity(0.92), location: 1)
-                    ],
-                    startPoint: .top, endPoint: .bottom
-                )
-                .frame(height: 240)
-            }
-            .ignoresSafeArea()
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
+            // === Layer 5: voiles de lisibilité — ils suivent le chrome (#6701) ===
+            StoryReaderScrims(topInset: topInset, chromeVisible: chromeVisible)
 
             // === Layer 6: Gesture overlay (tap left/right, long press) ===
             StoryGestureOverlayView(
