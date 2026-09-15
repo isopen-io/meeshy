@@ -227,23 +227,3 @@ export async function admitAttachmentReply(
 
   return { ok: true, snapshot: { attachmentId: piece.id, kind: attachmentReplyKindFor(piece.mimeType) } };
 }
-
-/**
- * Le MOTIF de refus d'une citation, ou `null` si elle passe.
- *
- * `admitAttachmentReply` rend une ADMISSION — un verdict ET l'instantané que le
- * transport REST grave. Les deux chemins SOCKET ne gravent rien : le socket ne
- * transporte pas `attachmentReplyTo`, donc tout ce qu'ils peuvent faire d'une
- * citation est la refuser. Ils le faisaient par douze lignes strictement
- * identiques chacun, dans `MessageHandler.ts` — un fichier hors budget, où le
- * `CLAUDE.md` racine interdit l'ajout avant extraction. C'est cette règle qui a
- * rougi (#6676), et c'est elle qui dicte la forme : la garde vit ici, avec la
- * loi qu'elle applique, et l'appelant n'en garde que la décision.
- */
-export async function citationRefusee(
-  prisma: AttachmentOwnerReader,
-  params: { readonly conversationId: string; readonly replyToId?: string | null }
-): Promise<string | null> {
-  const verdict = await admitAttachmentReply(prisma, params);
-  return verdict.ok ? null : (verdict.reason ?? 'Message cité invalide');
-}

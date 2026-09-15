@@ -534,36 +534,19 @@ describe('#6164 — la pièce NOMMÉE d’une citation', () => {
       expect(route).toMatch(/attachmentReplyTo:\s*z\./);
     });
 
-    it('#6601 — les DEUX transports socket (texte, pièces jointes) appellent la garde avec la conversation', () => {
+    it('#6601 — le point de convergence des trois transports (`MessagingService.handleMessage`) appelle la garde avec la conversation — les deux chemins socket n’ont pas besoin de leur propre copie', () => {
+      const service = readFileSync(
+        join(__dirname, '../../../services/messaging/MessagingService.ts'),
+        'utf-8'
+      );
+      expect(service).toMatch(/\bimport\s*\{[^}]*\badmitAttachmentReply\b[^}]*\}\s*from\s*['"][^'"]*attachmentReplySnapshot['"]/);
+      expect(service).toMatch(/\bawait\s+admitAttachmentReply\(\s*this\.prisma,\s*\{\s*conversationId/);
+
       const handler = readFileSync(
         join(__dirname, '../../../socketio/handlers/MessageHandler.ts'),
         'utf-8'
       );
-      // Témoin d'INVENTAIRE, jamais de comportement : il lit le TEXTE SOURCE,
-      // donc il ne prouve pas que la garde s'applique — la leçon 611 le dit, et
-      // ce sont les quarante témoins de ce fichier qui EXERCENT la garde qui
-      // portent cette preuve-là. Ce qu'il retient, lui : les deux chemins socket
-      // n'ont pas cessé d'y passer.
-      //
-      // Le nom délégué est LU depuis l'import plutôt qu'épelé ici. #6676 a
-      // extrait l'appel derrière `citationRefusee` pour faire redescendre
-      // `MessageHandler.ts` sous son budget de taille ; un témoin qui épelait le
-      // nom a rougi sur une extraction qui ne change RIEN à la garde. Un RETRAIT,
-      // lui, le fait toujours rougir — c'est ce qu'il doit attraper.
-      const importe = handler.match(
-        /\bimport\s*\{\s*([A-Za-z0-9_]+)\s*\}\s*from\s*['"][^'"]*attachmentReplySnapshot['"]/
-      );
-      expect(importe).not.toBeNull();
-      const delegue = (importe as RegExpMatchArray)[1] as string;
-
-      // L'argument doit porter la CONVERSATION : soit la charge validée (qui la
-      // contient), soit un littéral qui la nomme. Sans elle, la garde ne peut
-      // pas comparer, et le défaut que #6601 ferme reviendrait en silence.
-      const appels =
-        handler.match(
-          new RegExp(`\\bawait\\s+${delegue}\\(\\s*this\\.prisma,\\s*(?:validated\\b|\\{\\s*conversationId)`, 'g')
-        ) ?? [];
-      expect(appels.length).toBe(2);
+      expect(handler).not.toMatch(/\badmitAttachmentReply\b/);
     });
 
     it('le site UNIQUE de composition range l’instantané sous metadata — jamais une clé posée à la main', () => {

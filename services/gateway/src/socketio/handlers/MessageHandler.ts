@@ -40,7 +40,6 @@ import {
   postReplyToFromMetadata,
   POST_REPLY_SNAPSHOT_SELECT,
 } from '../../services/messaging/postReplySnapshot';
-import { citationRefusee } from '../../services/messaging/attachmentReplySnapshot';
 import { sharedPlaceFromMetadata, hoistLocationOnto } from '../../services/location/sharedPlace';
 import { StatusService } from '../../services/StatusService';
 import { NotificationService } from '../../services/notifications/NotificationService';
@@ -365,11 +364,6 @@ export class MessageHandler {
         return;
       }
 
-      // #6601 — un `replyToId` étranger à CETTE conversation est refusé, sur ce
-      // chemin comme sur le REST ; la loi vit dans `attachmentReplySnapshot` (#6676).
-      const refus = await citationRefusee(this.prisma, validated);
-      if (refus) return this._sendError(callback, refus, socket);
-
       const corr: Record<string, any> = {
         clientMessageId: validated.clientMessageId,
         conversationId: validated.conversationId,
@@ -580,11 +574,6 @@ export class MessageHandler {
         this._sendError(callback, 'Not a participant in this conversation', socket);
         return;
       }
-
-      // #6601 — un `replyToId` étranger à CETTE conversation est refusé, sur ce
-      // chemin comme sur le REST ; la loi vit dans `attachmentReplySnapshot` (#6676).
-      const refus = await citationRefusee(this.prisma, validated);
-      if (refus) return this._sendError(callback, refus, socket);
 
       const attachmentService = this.attachmentService;
 
