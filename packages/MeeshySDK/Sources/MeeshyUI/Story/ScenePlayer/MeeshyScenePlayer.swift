@@ -234,6 +234,15 @@ public struct MeeshyScenePlayer: View {
                                                              isPlaying: isPlaying),
                                  isOutgoing: isOutgoing,
                                  startAt: startAt,
+                                 // **La position se LÈGUE d'une surface à la
+                                 // suivante** (#6580) : la carte du fil joue,
+                                 // le plein écran qu'elle ouvre reprend là. La
+                                 // clé est celle du PORTEUR + du rang de scène,
+                                 // la seule que les deux surfaces partagent —
+                                 // l'identité d'hôte, elle, porte le n° de
+                                 // boucle, qui leur est propre.
+                                 positionKey: ScenePlaybackPositions.key(
+                                    carrierId: carrier?.id, sceneIndex: sceneIndex),
                                  onCompletion: loopHandler,
                                  onContentReady: contentReadyHandler,
                                  onContentProgress: contentProgressHandler,

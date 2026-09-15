@@ -143,6 +143,49 @@ extension StoryCanvasUIView {
         pushSlidePlayheadToLayers()
     }
 
+    /// **Re-sème la position APRÈS le montage (#6580).**
+    ///
+    /// `seedPlayhead` ne s'exécute qu'à `makeUIView`, et la position d'ouverture
+    /// est une valeur ASYNCHRONE : l'hôte du détail la tient de la carte. Un
+    /// hôte monté avant qu'elle soit connue restait à ZÉRO pour toujours — il
+    /// n'existait aucun second chemin de semis. La moitié « ouvrir à la bonne
+    /// seconde » n'était donc servie qu'aux hôtes assez chanceux pour la
+    /// connaître avant leur premier rendu.
+    ///
+    /// **Re-semer n'est pas semer.** La passe audio est déjà planifiée contre
+    /// l'ANCIENNE origine : déplacer le playhead sans la refaire partir ferait
+    /// sauter la vidéo à `t` sous un son resté à zéro — le défaut que ce lot
+    /// corrige, à l'envers. `realignAudioToPlayhead()` solde la clé
+    /// d'idempotence du mixer pour que le funnel replanifie depuis la NOUVELLE
+    /// ancre.
+    ///
+    /// L'idempotence (« ne pas recaler à chaque rendu ») appartient à
+    /// l'APPELANT, qui seul sait ce qu'il a déjà demandé :
+    /// `StoryReaderRepresentable.shouldReseed(requested:seeded:)`. Ici, le
+    /// playhead COURANT ne peut pas servir de référence — il avance en
+    /// permanence, et le comparer à la position d'ouverture ferait reculer la
+    /// lecture une image sur deux.
+    @discardableResult
+    public func reseedPlayhead(_ seconds: Double) -> Bool {
+        guard seconds.isFinite, seconds > 0 else { return false }
+        let clamped = min(seconds, effectiveSlideTotalDuration)
+        guard clamped > 0 else { return false }
+        seedPlayhead(clamped)
+        realignAudioToPlayhead()
+        return true
+    }
+
+    /// Fait repartir la passe audio depuis l'ancre courante. No-op tant que le
+    /// mixer n'a rien planifié pour CETTE slide : la passe à venir lira la
+    /// nouvelle position d'elle-même, et un `stop()` prématuré ne ferait que
+    /// retarder son démarrage.
+    private func realignAudioToPlayhead() {
+        guard mode == .play else { return }
+        guard audioMixer.hasStartedPlayback(slideKey: currentSlideKey) else { return }
+        audioMixer.stop()
+        startAudioPlayback()
+    }
+
     func forEachAVPlayer(_ block: (AVPlayer) -> Void) {
         for sub in itemsContainer.sublayers ?? [] {
             if let media = sub as? StoryMediaLayer, let player = media.avPlayer {

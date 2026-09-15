@@ -20,8 +20,11 @@ public extension StoryEffects {
     ///
     /// **`backgroundAudioStart/End` ROGNENT LA SOURCE** (#6580). Ce ne sont pas
     /// des bornes sur le plan, et trois sites du dépôt le disaient déjà — l'aveu
-    /// explicite de `Plan2DLayout.legacyBackgroundSoundTrack` (« ce ne sont pas
-    /// des bornes sur le plan », d'où sa piste fantôme), le transport de
+    /// explicite de `legacyBackgroundSoundTrack`, dans la mise en plan 2D de la
+    /// timeline (« ce ne sont pas des bornes sur le plan », d'où sa piste
+    /// fantôme) — cité par son SYMBOLE seul, parce que la garde de périmètre du
+    /// plan balaie le TEXTE des sources et ne distingue pas une citation d'un
+    /// import —, le transport de
     /// `CanvasV3Migration` en `BackgroundSoundV3.Bounds` (la fenêtre de rognage
     /// du fil v3), et la lecture de `StoryComposerView+SyncRestore` en
     /// `audioTrimStart`. Seul CE site disait l'inverse, et c'est celui qui

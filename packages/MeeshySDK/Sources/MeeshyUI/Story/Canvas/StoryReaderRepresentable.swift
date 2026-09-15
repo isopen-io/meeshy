@@ -107,6 +107,56 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
     /// `seedPlayhead(_:)` sème au montage.
     let startAt: Double
 
+    /// **Sous quelle clé cette surface MÉMORISE sa position** (#6580), `nil`
+    /// pour celles qui n'ont rien à léguer.
+    ///
+    /// C'est l'ENVERS de `startAt` : l'un reprend, l'autre lègue. Deux surfaces
+    /// qui jouent la même scène — la carte du fil, puis le plein écran qu'elle
+    /// ouvre — partagent la clé, donc la position (cf. `ScenePlaybackPositions`).
+    /// La mémoire s'écrit depuis l'émission que le canvas fait déjà : elle ne
+    /// crée aucun rappel de plus, et n'a rien à voir avec `onPlaybackTime`, qui
+    /// reste le fil d'une CHROME (le mode `.card` continue de ne pas le payer).
+    let positionKey: String?
+
+    /// **Le seuil au-delà duquel une position REÇUE recale la lecture.**
+    ///
+    /// Une valeur DÉCLARÉE, pas un hasard : la position d'ouverture arrive de
+    /// la carte, et sans seuil chaque rendu qui la reporte d'un cheveu
+    /// relancerait le playhead ET la passe audio. 0,35 s est le plus petit
+    /// écart au-delà duquel un recalage coûte moins cher que la désynchro
+    /// qu'il corrige — en deçà, l'utilisateur n'entend pas le décalage mais
+    /// verrait le recalage.
+    public static let startAtReseedThreshold: Double = 0.35
+
+    /// `true` quand la position DEMANDÉE diffère assez de celle déjà SEMÉE.
+    ///
+    /// La référence est ce qui a été semé, jamais le playhead courant : ce
+    /// dernier avance en permanence, et le comparer à une position d'ouverture
+    /// ferait reculer la lecture une image sur deux.
+    ///
+    /// Pure et statique — la garde d'idempotence s'éprouve sans monter de vue.
+    static func shouldReseed(requested: Double, seeded: Double) -> Bool {
+        guard requested.isFinite, requested > 0 else { return false }
+        return abs(requested - seeded) > startAtReseedThreshold
+    }
+
+    /// **Ce que cette vue montée a déjà SEMÉ** — la seule mémoire que le
+    /// re-semis réclame.
+    ///
+    /// Ni dans la `struct` (recréée à chaque rendu, donc sans mémoire), ni sur
+    /// le canvas (qui porte le playhead COURANT, une autre question). Le
+    /// coordinateur SwiftUI a exactement la durée de vie voulue : celle de la
+    /// vue montée.
+    public final class Coordinator {
+        // iOS 26.1 : cf. `MeeshyUIDeinitSourceGuardTests` — une `deinit`
+        // synthétisée isolée double-libère à la libération hors tâche.
+        nonisolated deinit {}
+
+        var seededStartAt: Double = 0
+    }
+
+    public func makeCoordinator() -> Coordinator { Coordinator() }
+
     // MARK: - Primary init
 
     public init(story: StoryItem,
@@ -123,6 +173,7 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
                 isPaused: Bool = false,
                 isOutgoing: Bool = false,
                 startAt: Double = 0,
+                positionKey: String? = nil,
                 onCompletion: (@Sendable () -> Void)? = nil,
                 onContentReady: (() -> Void)? = nil,
                 onContentProgress: ((Double) -> Void)? = nil,
@@ -142,6 +193,7 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         self.isPaused = isPaused
         self.isOutgoing = isOutgoing
         self.startAt = startAt
+        self.positionKey = positionKey
         self.onCompletion = onCompletion
         self.onContentReady = onContentReady
         self.onContentProgress = onContentProgress
@@ -212,7 +264,15 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         let progress = onContentProgress
         view.onContentProgress = { value in progress?(value) }
         let playback = onPlaybackTime
-        view.onPlaybackTime = { t in playback?(t) }
+        // La MÉMOIRE s'écrit sur l'émission qui existe déjà — aucun rappel de
+        // plus, et une écriture de dictionnaire n'invalide aucune vue SwiftUI.
+        // C'est ce qui permet à la carte de léguer sa position sans payer le
+        // fil de chrome que son mode lui refuse (`config.showsChrome`).
+        let memoire = positionKey
+        view.onPlaybackTime = { t in
+            if let memoire { ScenePlaybackPositions.shared.publish(t, for: memoire) }
+            playback?(t)
+        }
         let progressing = onPlaybackProgressing
         view.onPlaybackProgressing = { p in progressing?(p) }
         // Le canvas naît TOUJOURS en pause, et c'est `updateUIView` — appelé par
@@ -230,6 +290,7 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         // aurait déjà été calée sur zéro et l'audio déjà planifié depuis le
         // début de sa fenêtre — c'est le retour à zéro que #6580 corrige.
         view.seedPlayhead(startAt)
+        context.coordinator.seededStartAt = startAt
         view.setReaderContext(StoryReaderContext(
             preferredLanguages: preferredLanguages,
             mute: mute,
@@ -286,6 +347,14 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
             // Skip pour outgoing : le canvas reste en `.edit` et son média
             // reste figé jusqu'à ce que SwiftUI détruise la vue.
             view.setMode(.play, time: .zero)
+        }
+        // **La position d'ouverture peut arriver APRÈS le montage** (#6580).
+        // Elle vient de la carte : un hôte qui monte avant de la connaître
+        // resterait à zéro, `makeUIView` ne s'exécutant qu'une fois. Le seuil
+        // est ce qui empêche chaque rendu de recaler — cf. `shouldReseed`.
+        if Self.shouldReseed(requested: startAt, seeded: context.coordinator.seededStartAt) {
+            context.coordinator.seededStartAt = startAt
+            view.reseedPlayhead(startAt)
         }
         // Pause synchronisée avec le viewer : sheets, composer, drag, long-press.
         // `setPaused` est idempotent côté canvas. Pour outgoing, le canvas est

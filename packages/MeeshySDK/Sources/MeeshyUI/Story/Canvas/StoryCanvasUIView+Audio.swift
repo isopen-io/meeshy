@@ -26,14 +26,13 @@ extension StoryCanvasUIView {
         return "\(slide.id)#\(slideAudioRevision)#\(langs)"
     }
 
-    /// Materialises the slide's `t = 0` as a host-time. When the playhead is
-    /// already advanced (`currentTime > 0`, composer preview scrub) the origin
-    /// is back-dated so audio and the canvas playhead share one zero (RC4.4).
-    func captureSlideTimelineOrigin() -> UInt64 {
-        captureSlideTimelineAnchor().originHost
-    }
-
-    /// L'origine ET l'écoulé, rendus d'UNE lecture de `currentTime`.
+    /// **L'ancre de la slide : l'origine ET l'écoulé, d'UNE lecture de
+    /// `currentTime`.**
+    ///
+    /// L'origine materialise le `t = 0` de la slide en temps hôte. Quand le
+    /// playhead est déjà avancé (`currentTime > 0` — scrub d'aperçu composer,
+    /// ouverture en détail sur la position d'une carte) elle est BACK-DATÉE,
+    /// pour que l'audio et le playhead du canvas partagent un seul zéro (RC4.4).
     ///
     /// Les deux disaient la même chose et se lisaient séparément : l'origine
     /// back-datée disait au moteur *où est le zéro de la slide*, sans jamais
@@ -380,7 +379,7 @@ extension StoryCanvasUIView {
     /// encore schedulé pour CETTE slide (fichiers en cours de téléchargement /
     /// cache dans `reconfigureAudioForPlayback`). Le tick santé
     /// (`refreshPlaybackHealth`) gèle alors la timeline — la reprise est en
-    /// phase car `captureSlideTimelineOrigin()` repart du playhead gelé.
+    /// phase car `captureSlideTimelineAnchor()` repart du playhead gelé.
     ///
     /// Anti-deadlock (invariant n°9) :
     /// - clé par slide (`hasStartedPlayback(slideKey:)`) — un `play()` de la
