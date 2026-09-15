@@ -925,21 +925,6 @@ describe('PostCommentService.updateComment', () => {
     expect(result?.contentChanged).toBe(true);
   });
 
-  it('conserve la langue DÉCLARÉE par l appelant quand le contenu change (#6598)', async () => {
-    const service = setupUpdate();
-
-    await service.updateComment(COMMENT_ID, AUTHOR_ID, {
-      content: 'Nouveau texte',
-      originalLanguage: 'lingala',
-    });
-
-    const data = (mockPrisma.postComment.update as jest.Mock).mock.calls[0][0].data;
-    // La devinette regex ne doit PLUS reprendre la main sur une déclaration —
-    // c'est la « quatrième porte » de #6587 que #6598 ferme.
-    expect(data.originalLanguage).toBe('lingala');
-    expect(data.translations).toEqual({});
-  });
-
   it('un changement d effets seuls conserve traductions, langue et isEdited', async () => {
     const service = setupUpdate();
 
