@@ -208,6 +208,8 @@ struct ConversationMediaGalleryView: View {
     /// C'est la même raison que `captionLanguage` quelques lignes plus haut —
     /// ce qui appartient à un média se range par média.
     @State private var replyDrafts: [String: String] = [:]
+    /// #6751 — la transition clavier ANNONCÉE, seule source de sa hauteur.
+    @State private var replyKeyboard: KeyboardTransition?
 
     init(
         allAttachments: [MessageAttachment],
@@ -353,7 +355,15 @@ struct ConversationMediaGalleryView: View {
             // même rang que la traînée d'émojis, et pour la même raison : elle
             // doit passer par-dessus tous les contrôleurs du plateau.
             replyComposerLayer
+                // #6751 — l'inset est EXPLICITE : l'ajustement automatique de
+                // SwiftUI ne s'applique pas à une couche alignée en bas d'un
+                // `ZStack` que ses quatre autres enfants étendent à l'écran
+                // entier. Détail et mesure : `MediaReplyKeyboardInset`.
+                .padding(.bottom, MediaReplyKeyboardInset.bottomInset(for: replyKeyboard))
+                .ignoresSafeArea(.keyboard, edges: .bottom)
+                .animation(.easeOut(duration: replyKeyboard?.duration ?? 0.25), value: replyKeyboard?.height)
         }
+        .observingKeyboardTransition($replyKeyboard)
         .statusBar(hidden: true)
         .onAppear {
             // Filet de sécurité : `scrollPosition(id:)` honore la valeur initiale
@@ -402,19 +412,25 @@ struct ConversationMediaGalleryView: View {
                     composerLanguage: $replyLanguage,
                     onSend: { text, language in
                         onSendReplyToMedia?(target, text, language)
+                        // #6751 — le clavier d'abord, la barre ensuite : la
+                        // suite est décidée par `MediaReplyKeyboardInset`.
+                        MediaReplyKeyboardInset.apply(MediaReplyKeyboardInset.sendEffects) {
                         // **La galerie NE SE REFERME PAS** — ni ici, ni au
                         // retrait de la barre. C'est tout l'objet du lot : on
                         // parle de la pièce en la regardant. La barre redescend
                         // pour rendre le média entier, et un second tap sur
                         // « répondre » la remonte.
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                            replyTarget = nil
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                replyTarget = nil
+                            }
                         }
                         HapticFeedback.light()
                     },
                     onCancel: {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-                            replyTarget = nil
+                        MediaReplyKeyboardInset.apply(MediaReplyKeyboardInset.cancelEffects) {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                replyTarget = nil
+                            }
                         }
                     }
                 )
