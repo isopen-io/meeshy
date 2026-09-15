@@ -59,6 +59,8 @@ nonisolated enum LaunchBootStep: String, Sendable, Equatable {
 
 @MainActor
 final class LaunchSplashController: ObservableObject {
+    nonisolated deinit {}
+
     enum Phase: Equatable {
         case covering
         case fading
