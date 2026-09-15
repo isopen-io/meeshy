@@ -51,6 +51,9 @@ final class RenderedScreen {
     struct Node {
         let identifier: String?
         let label: String?
+        /// Le cadre que VoiceOver entoure, en coordonnées d'écran — la fenêtre
+        /// du harnais est posée à l'origine, il se lit donc en points de fenêtre.
+        let frame: CGRect
     }
 
     /// La vue racine de l'hôte — le point d'entrée de toute descente.
@@ -170,6 +173,22 @@ final class RenderedScreen {
         RenderedScreen.noeuds(root).first { $0.identifier == identifier }
     }
 
+    /// Le cadre ANNONCÉ du nœud portant cet identifiant, attendu jusqu'à `borne`.
+    ///
+    /// Un écran qui charge d'abord (la configuration 2FA interroge son service
+    /// à l'apparition) ou qui s'anime à l'entrée (la connexion fait monter ses
+    /// champs depuis l'opacité nulle) ne pose son contenu qu'après quelques
+    /// tours : lire l'arbre une seule fois rendrait `nil` sur un écran juste.
+    /// Un cadre de largeur nulle n'est pas encore posé — il ne compte pas.
+    func frame(of identifier: String, borne: TimeInterval = 5) -> CGRect? {
+        var pose: CGRect?
+        _ = RenderedScreen.attendre(borne: borne) {
+            pose = node(identifier).map(\.frame).flatMap { $0.width > 0 ? $0 : nil }
+            return pose != nil
+        }
+        return pose
+    }
+
     /// L'écran prononce-t-il ce fragment, où que ce soit ?
     func says(_ fragment: String) -> Bool {
         labels.contains { $0.contains(fragment) }
@@ -195,7 +214,7 @@ final class RenderedScreen {
         let identifier: String? = objet.responds(to: Selector(("accessibilityIdentifier")))
             ? objet.value(forKey: "accessibilityIdentifier") as? String
             : nil
-        var trouves = [Node(identifier: identifier, label: objet.accessibilityLabel)]
+        var trouves = [Node(identifier: identifier, label: objet.accessibilityLabel, frame: objet.accessibilityFrame)]
         for element in elements(de: objet) {
             trouves.append(contentsOf: noeuds(element, profondeur: profondeur + 1))
         }
