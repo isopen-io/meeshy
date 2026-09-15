@@ -372,12 +372,9 @@ describe('POST /posts/:postId/comments — la langue déclarée atteint le servi
       POST_ID,          // targetPostId
       USER_ID,          // authorId
       FRENCH_LOOKING,   // content (sanitisé — le double est l'identité)
-      undefined,        // parentId
-      undefined,        // effectFlags
-      'de',             // originalLanguage  ← la déclaration de l'auteur
-      undefined,        // mediaId
-      undefined,        // mobileTranscription
-      undefined,        // location
+      // La queue est un OBJET D'OPTIONS depuis #6578 : la position ne porte plus
+      // le sens, le NOM le porte — et c'est précisément ce que ce témoin garde.
+      expect.objectContaining({ originalLanguage: 'de' }),
     );
   });
 
@@ -391,7 +388,12 @@ describe('POST /posts/:postId/comments — la langue déclarée atteint le servi
     });
 
     expect(res.statusCode).toBe(201);
-    expect(mockAddComment.mock.calls[0][5]).toBeUndefined();
+    // L'index positionnel `[5]` valait `originalLanguage` avant #6578 ; depuis
+    // que la queue est un objet d'options, il vaut `undefined` TOUJOURS — un
+    // témoin qui ne peut plus tomber. On interroge le NOM.
+    const options = mockAddComment.mock.calls[0][3];
+    expect(options).toBeDefined();
+    expect(options.originalLanguage).toBeUndefined();
   });
 });
 

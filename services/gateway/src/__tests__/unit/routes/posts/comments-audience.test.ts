@@ -606,7 +606,7 @@ describe('POST /posts/:postId/comments — repost simple atterrit sur le fil de 
 
     expect(res.statusCode).toBe(201);
     expect(mockAddComment).toHaveBeenCalledWith(
-      ROOT_ID, VIEWER_ID, 'sur la racine', undefined, undefined, undefined, undefined, undefined, undefined,
+      ROOT_ID, VIEWER_ID, 'sur la racine', expect.objectContaining({ parentId: undefined }),
     );
     await app.close();
   });
@@ -623,7 +623,7 @@ describe('POST /posts/:postId/comments — repost simple atterrit sur le fil de 
 
     expect(res.statusCode).toBe(201);
     expect(mockAddComment).toHaveBeenCalledWith(
-      POST_ID, VIEWER_ID, 'sur la citation', undefined, undefined, undefined, undefined, undefined, undefined,
+      POST_ID, VIEWER_ID, 'sur la citation', expect.objectContaining({ parentId: undefined }),
     );
     await app.close();
   });

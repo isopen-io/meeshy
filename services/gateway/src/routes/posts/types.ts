@@ -436,9 +436,23 @@ export const CreateCommentSchema = z.object({
   /// from the content as a fallback.
   originalLanguage: z.string().min(2).max(16).optional(),
   /// IDs de PostMedia déjà uploadés (uploadcontext=comment, postId/commentId=null
-  /// pending) à attacher. Wire aligné sur le contrat message-with-attachments
-  /// (tableau), MAIS un commentaire ne porte QU'UN SEUL média → borné à 1.
-  attachmentIds: z.array(z.string()).max(1).optional(),
+  /// pending) à attacher. Wire aligné sur le contrat message-with-attachments.
+  ///
+  /// **BORNÉ À `MAX_POST_MEDIA`, PAS À 1 (#6578).** La directive porteur du
+  /// 2026-09-14 dit « ajouter d'autres média » au PLURIEL, la relation Prisma
+  /// est déjà `PostMedia[]`, et `CommentAttachmentsTray` affiche déjà un
+  /// TABLEAU de vignettes : borner à 1 faisait de ce bandeau un contrôle qui
+  /// ment — il montrait N pièces pour n'en envoyer qu'une. Le plafond RÉUTILISE
+  /// celui des médias d'un post : deux plafonds seraient deux vérités, et la
+  /// seconde dériverait au premier ajustement.
+  attachmentIds: z.array(z.string()).max(MAX_POST_MEDIA).optional(),
+  /// Le média du POST COMMENTÉ que ce commentaire cite (#6578) — voie
+  /// `metadata.quotedPostMedia`, AUCUNE colonne. `z.unknown()` parce que la
+  /// forme est tranchée par `admitQuotedPostMedia`, seul site de la règle : la
+  /// NATURE y est DÉRIVÉE du MIME relu et jamais crue sur parole, et un
+  /// `postMediaId` étranger au post y est REFUSÉ. Un schéma qui validerait la
+  /// forme ici donnerait l'illusion d'une garde là où il n'y a qu'une syntaxe.
+  quotedPostMedia: z.unknown().optional(),
   /// Transcription Whisper produite côté mobile pour un média audio (évite la
   /// re-transcription serveur). Même structure que pour les posts.
   mobileTranscription: MobileTranscriptionSchema.optional(),
