@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
@@ -89,7 +90,13 @@ fun ForgotPasswordScreen(
     }
 }
 
-/** Connexion par magic link : demande + compte a rebours + renvoi a expiration. */
+/**
+ * Connexion par e-mail : demande + compte a rebours + renvoi a expiration.
+ *
+ * L'ecran dit « e-mail », jamais le nom de la mecanique (#6626) : une ligne
+ * visible par etat, le « comment ca marche » et l'aide aux indesirables derriere
+ * leur (i) ([AuthInfoDisclosure]).
+ */
 @Composable
 fun MagicLinkScreen(
     onBack: () -> Unit,
@@ -99,10 +106,10 @@ fun MagicLinkScreen(
 
     RecoveryScaffold(title = stringResource(R.string.auth_magic_title), onBack = onBack) {
         if (state.sentTo == null) {
-            Text(
+            AuthInfoDisclosure(
+                title = stringResource(R.string.auth_magic_header),
+                label = stringResource(R.string.auth_magic_how_label),
                 text = stringResource(R.string.auth_magic_subtitle),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MeeshyTheme.tokens.textSecondary,
             )
             OutlinedTextField(
                 value = state.email,
@@ -128,8 +135,13 @@ fun MagicLinkScreen(
             }
         } else {
             SentConfirmation(
+                title = stringResource(R.string.auth_magic_sent_title),
                 message = stringResource(R.string.auth_magic_sent, state.sentTo.orEmpty()),
                 onBack = null,
+            )
+            AuthInfoDisclosure(
+                label = stringResource(R.string.auth_magic_nothing_label),
+                text = stringResource(R.string.auth_magic_nothing_text),
             )
             val countdown = state.countdown
             if (countdown != null) {
@@ -203,7 +215,7 @@ private fun RecoveryScaffold(
 }
 
 @Composable
-private fun SentConfirmation(message: String, onBack: (() -> Unit)?) {
+private fun SentConfirmation(message: String, onBack: (() -> Unit)?, title: String? = null) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
@@ -215,10 +227,20 @@ private fun SentConfirmation(message: String, onBack: (() -> Unit)?) {
             tint = MeeshyPalette.Success,
             modifier = Modifier.size(56.dp),
         )
+        if (title != null) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                color = MeeshyTheme.tokens.textPrimary,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center,
+            )
+        }
         Text(
             text = message,
             style = MaterialTheme.typography.bodyLarge,
             color = MeeshyTheme.tokens.textPrimary,
+            textAlign = if (title != null) TextAlign.Center else null,
         )
         if (onBack != null) {
             TextButton(onClick = onBack) {

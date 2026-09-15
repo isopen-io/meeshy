@@ -42,7 +42,7 @@
 
     <!-- Account recovery -->
     <string name="login_forgot_password">Mot de passe oublié ?</string>
-    <string name="login_magic_link">Lien magique</string>
+    <string name="login_magic_link">Se connecter par e-mail</string>
     <string name="auth_back">Retour</string>
     <string name="auth_back_to_login">Retour à la connexion</string>
     <string name="auth_email_label">Email</string>
@@ -50,10 +50,15 @@
     <string name="auth_forgot_subtitle">Saisissez votre adresse email et nous vous enverrons un lien de réinitialisation.</string>
     <string name="auth_forgot_send">Envoyer le lien</string>
     <string name="auth_forgot_sent">Si un compte existe pour %1$s, un lien de réinitialisation a été envoyé. Vérifiez votre boîte mail.</string>
-    <string name="auth_magic_title">Lien magique</string>
-    <string name="auth_magic_subtitle">Connectez-vous sans mot de passe : nous vous envoyons un lien de connexion à usage unique.</string>
-    <string name="auth_magic_send">Envoyer le lien magique</string>
-    <string name="auth_magic_sent">Lien envoyé à %1$s. Ouvrez-le sur cet appareil pour vous connecter.</string>
+    <string name="auth_magic_title">Connexion par e-mail</string>
+    <string name="auth_magic_header">Votre adresse e-mail</string>
+    <string name="auth_magic_how_label">Comment ça marche</string>
+    <string name="auth_magic_subtitle">Pas de mot de passe à retenir : nous vous envoyons un lien par e-mail. Ouvrez-le et vous êtes connecté.</string>
+    <string name="auth_magic_send">Recevoir le lien</string>
+    <string name="auth_magic_sent_title">E-mail envoyé</string>
+    <string name="auth_magic_sent">Ouvrez le lien reçu à %1$s</string>
+    <string name="auth_magic_nothing_label">Rien reçu ?</string>
+    <string name="auth_magic_nothing_text">Regardez vos indésirables (spam) : le message peut y être tombé.</string>
     <string name="auth_magic_countdown">Lien valide pendant %1$s</string>
     <string name="auth_magic_expired">Le lien a expiré. Envoyez-en un nouveau.</string>
     <string name="auth_magic_resend">Renvoyer le lien</string>
