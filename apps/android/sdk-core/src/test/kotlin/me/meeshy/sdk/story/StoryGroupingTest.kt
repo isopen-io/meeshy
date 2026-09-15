@@ -139,6 +139,15 @@ class StoryGroupingTest {
     }
 
     @Test
+    fun `toStoryItem carries a media's alt text verbatim (#6739)`() {
+        val post = storyPost("p1", "u1", createdAt = isoAgo(1)).copy(
+            media = listOf(ApiPostMedia(id = "m1", mimeType = "image/jpeg", alt = "A red bicycle")),
+        )
+        val media = post.toStoryItem().media.single()
+        assertThat(media.alt).isEqualTo("A red bicycle")
+    }
+
+    @Test
     fun `toStoryItem projects null captionTranslations when the media has none`() {
         val post = storyPost("p1", "u1", createdAt = isoAgo(1)).copy(
             media = listOf(ApiPostMedia(id = "m1", mimeType = "image/jpeg", caption = "Bonjour")),

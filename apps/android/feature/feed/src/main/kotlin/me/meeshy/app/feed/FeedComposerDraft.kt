@@ -28,6 +28,13 @@ data class FeedPostPublishRequest(
     val type: String = PostType.POST.name,
     val location: SharedPlace? = null,
     val language: String = ComposerLanguage.DEFAULT,
+    /**
+     * Author-authored accessibility description per media id (#6739) — same
+     * contract as [me.meeshy.sdk.net.api.CreatePostRequest.mediaAlt]: only keys
+     * present in [mediaIds] are meaningful, and an empty map means "the author
+     * typed nothing" (never sent as `mediaAlt: {}` — see [FeedViewModel]).
+     */
+    val mediaAlt: Map<String, String> = emptyMap(),
 )
 
 /**
@@ -85,6 +92,7 @@ data class FeedComposerDraft(
     val forcePlainPost: Boolean = false,
     val location: SharedPlace? = null,
     val language: String = ComposerLanguage.DEFAULT,
+    val mediaAlt: Map<String, String> = emptyMap(),
 ) {
     /** The post body actually published — whitespace-stripped. */
     val trimmedContent: String get() = text.trim()
@@ -132,8 +140,23 @@ data class FeedComposerDraft(
      */
     fun withMedia(items: List<UploadedMedia>): FeedComposerDraft = copy(media = (media + items).take(MAX_MEDIA))
 
-    /** Removes one attached media by [id]; removing an unknown id is inert. */
-    fun withoutMedia(id: String): FeedComposerDraft = copy(media = media.filterNot { it.id == id })
+    /**
+     * Removes one attached media by [id]; removing an unknown id is inert.
+     * Also prunes [mediaAlt] of that id (mirrors web's `ComposerDocumentSurface`
+     * pruning rule) — an orphaned alt-text entry for a media no longer attached
+     * must never resurface on a later, unrelated media id.
+     */
+    fun withoutMedia(id: String): FeedComposerDraft =
+        copy(media = media.filterNot { it.id == id }, mediaAlt = mediaAlt - id)
+
+    /**
+     * Sets (or clears, via a blank [text]) the accessibility description for the
+     * media identified by [mediaId] (#6739). Setting an unknown [mediaId] is
+     * accepted here — it is filtered against [mediaIds] at [publishRequest] time,
+     * exactly like the gateway's own tolerance for stale keys.
+     */
+    fun withAlt(mediaId: String, text: String): FeedComposerDraft =
+        copy(mediaAlt = if (text.isBlank()) mediaAlt - mediaId else mediaAlt + (mediaId to text))
 
     /**
      * Sets the author's override of the reel default (mirrors iOS
@@ -171,6 +194,7 @@ data class FeedComposerDraft(
             type = postType.name,
             location = location,
             language = language,
+            mediaAlt = mediaAlt.filterKeys { it in mediaIds },
         )
     }
 

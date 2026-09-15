@@ -1207,6 +1207,51 @@ class FeedViewModelTest {
     }
 
     @Test
+    fun `publishPost forwards the author's per-media alt text to the repository`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Empty))
+        coEvery {
+            repository.create(
+                content = "hi",
+                type = "POST",
+                visibility = "PUBLIC",
+                mediaIds = listOf("m1"),
+                mediaAlt = mapOf("m1" to "A red bicycle"),
+            )
+        } returns NetworkResult.Success(post("new"))
+
+        vm.publishPost(
+            content = "hi",
+            visibility = "PUBLIC",
+            mediaIds = listOf("m1"),
+            mediaAlt = mapOf("m1" to "A red bicycle"),
+        )
+
+        coVerify(exactly = 1) {
+            repository.create(
+                content = "hi",
+                type = "POST",
+                visibility = "PUBLIC",
+                mediaIds = listOf("m1"),
+                mediaAlt = mapOf("m1" to "A red bicycle"),
+            )
+        }
+    }
+
+    @Test
+    fun `publishPost with no alt text forwards a null mediaAlt, never an empty map`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Empty))
+        coEvery {
+            repository.create(content = "hi", type = "POST", visibility = "PUBLIC", mediaAlt = null)
+        } returns NetworkResult.Success(post("new"))
+
+        vm.publishPost(content = "hi", visibility = "PUBLIC")
+
+        coVerify(exactly = 1) {
+            repository.create(content = "hi", type = "POST", visibility = "PUBLIC", mediaAlt = null)
+        }
+    }
+
+    @Test
     fun `publishPost with no location forwards a null location to the repository`() = runTest {
         val vm = viewModel(me, flowOf(CacheResult.Empty))
         coEvery {

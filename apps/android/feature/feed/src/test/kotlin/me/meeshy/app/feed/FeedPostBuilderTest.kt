@@ -94,6 +94,33 @@ class FeedPostBuilderTest {
     }
 
     @Test
+    fun build_projectsTheMediaAltTextVerbatim() {
+        // #6739 — unlike caption, alt carries no Prisme translation pipeline on
+        // the wire: it is served as-is.
+        val media = ApiPostMedia(
+            id = "m1",
+            fileUrl = "https://cdn.example/m1.jpg",
+            mimeType = "image/jpeg",
+            alt = "A red bicycle leaning on a brick wall",
+        )
+        val p = post(media = listOf(media))
+
+        val result = FeedPostBuilder.build(p, Prefs(), mediaBaseUrl = null)
+
+        assertThat(result.images.single().alt).isEqualTo("A red bicycle leaning on a brick wall")
+    }
+
+    @Test
+    fun build_projectsNullAltWhenTheAuthorWroteNone() {
+        val media = ApiPostMedia(id = "m1", fileUrl = "https://cdn.example/m1.jpg", mimeType = "image/jpeg")
+        val p = post(media = listOf(media))
+
+        val result = FeedPostBuilder.build(p, Prefs(), mediaBaseUrl = null)
+
+        assertThat(result.images.single().alt).isNull()
+    }
+
+    @Test
     fun build_resolvesTheMediaCaptionThroughThePrisme() {
         // #6280 — DISTINCT of the post's own content: same-string test data is
         // deliberate, the two must never be confused (see /CLAUDE.md, media
