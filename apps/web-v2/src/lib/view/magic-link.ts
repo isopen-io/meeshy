@@ -81,17 +81,34 @@ export function spokenCountdown(seconds: number, locale: string): string {
   return parts.join(' ');
 }
 
+/** Les caractères que le parseur d'URL EFFACE — blancs, contrôles C0, DEL.
+ * Aucun ne sort de `href()`, qui encode tout. Une fonction plutôt qu'une classe
+ * d'expression régulière : la source n'a ainsi aucun caractère de contrôle à
+ * écrire, pas même échappé. */
+const isWhitespaceOrControl = (character: string): boolean => {
+  const code = character.charCodeAt(0);
+  return character.trim() === '' || code < 0x20 || code === 0x7f;
+};
+
 /**
  * Clampe `returnUrl` à un chemin MÊME-ORIGINE, jamais une URL absolue ni un
  * schéma alternatif — même doctrine que le legacy
  * (`apps/web/app/auth/magic-link/validate/page.tsx:94-97` : « returnUrl is
  * attacker-controlled … clamp it to a same-origin path »). Un `returnUrl`
  * suspect rend `'/'`, jamais l'entrée telle quelle.
+ *
+ * Rejette aussi les blancs et caractères de contrôle (#6743) : le parseur
+ * d'URL les RETIRE, si bien que `/\t/evil.com` devient `//evil.com` — et
+ * `history.replaceState` LÈVE sur une adresse d'une autre origine. Cette
+ * garde est la SEULE — `safeNextPath` (`session-guard.ts`) la réemploie
+ * plutôt que de la recopier : deux clampages d'une même valeur hostile
+ * divergeraient au premier correctif.
  */
 export function safeReturnPath(raw: string | null | undefined): string {
   if (raw === null || raw === undefined || raw === '') return '/';
   if (!raw.startsWith('/')) return '/';
   if (raw.startsWith('//')) return '/';
   if (raw.includes('\\')) return '/';
+  if ([...raw].some(isWhitespaceOrControl)) return '/';
   return raw;
 }
