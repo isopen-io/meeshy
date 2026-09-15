@@ -227,41 +227,50 @@ enum MediaGalleryStage {
         return StoryLetterboxFill.source(thumbHash: thumbHash)
     }
 
-    /// **Le nom de l'espace du CADRE** — celui où la colonne d'actions mesure sa
-    /// place (#6709). Le média y est centré par construction : les pages le posent
-    /// au centre de leur cadre.
+    /// **Le nom de l'espace du PLATEAU** — la région qui porte le cadre et le chrome
+    /// (#6760), où la colonne d'actions mesure sa place (#6709).
     static let cadreSpace = "media.stage.cadre"
 
     /// **Ce que la colonne d'actions a SOUS elle** (#6709, recette du 2026-09-16).
     ///
-    /// La colonne se pose sur le cadre (#6161), et le cadre ne montre pas que le
-    /// média : quand il est plus haut que lui — le plancher de hauteur sous un
-    /// panorama —, elle tombe dans la BANDE du hors-champ. Sa teinte (#6693) doit
-    /// suivre ce qui y est peint, jamais un média qu'elle ne couvre pas : sur la page
-    /// panorama 4:1 d'un post, teintée d'après la vignette claire du panorama, son
-    /// glyphe sombre se lisait à 1,16:1 sur la bande noire.
+    /// Depuis #6760, le chrome s'aligne sur le PLATEAU, et non plus sur le cadre : la
+    /// colonne se pose au bas de la région. Sous un cadre plus court que la région — un
+    /// panorama —, elle tombe HORS du cadre, sur le sol noir de la galerie. Sa teinte
+    /// (#6693) doit suivre ce qui y est peint, jamais un média qu'elle ne couvre pas. Sur
+    /// la page panorama 4:1 d'un post, teintée d'après la vignette claire du panorama,
+    /// son glyphe sombre se lisait à 1,16:1 sur le noir (cadre arrêté à y ≈ 598, colonne
+    /// à y 649).
     ///
-    /// - posée sur le média (son centre dans le média centré du cadre) : le média ;
-    /// - dans la bande habillée : l'empreinte seule — c'est elle que la bande peint
-    ///   (`backdrop(stage:thumbHash:)`), jamais la vignette nette ;
-    /// - dans la bande nue : `nil`, donc le schéma sombre de la loi — un glyphe clair
-    ///   sur le noir.
+    /// La règle lit trois zones sur la région mesurée. Le cadre et son média y sont posés
+    /// au milieu, par la loi du plateau (`StageChromeAlignment.mediaOrigin`) :
+    /// - **sur le média** : le média ;
+    /// - **dans la bande du cadre** : l'empreinte seule, ou `nil` quand la bande est nue.
+    ///   C'est l'empreinte que la bande peint (`backdrop(stage:thumbHash:)`), jamais la
+    ///   vignette nette ;
+    /// - **hors du cadre** : `nil`. Le sol de la galerie est noir (`Color.black`), et
+    ///   aucune page n'y peint son empreinte.
     ///
-    /// Avant sa première mesure, rien ne dit où est la colonne : elle garde le fond du
-    /// média plutôt que de basculer le temps d'une passe.
+    /// `nil` rend le schéma sombre de la loi : un glyphe clair sur le noir.
+    ///
+    /// Avant la première mesure — de la colonne ou de sa région —, rien ne dit où est la
+    /// colonne. Elle garde alors le fond du média, plutôt que de basculer le temps d'une
+    /// passe.
     static func columnBackdrop(for attachment: MessageAttachment,
                                stage: MediaStageFraming.Result,
                                region: CGSize,
                                columnFrame: CGRect) -> MediaChromeBackdrop? {
-        guard !columnFrame.isEmpty else { return .attachment(attachment) }
-        let media = CGRect(x: (stage.frame.width - stage.media.width) / 2,
-                           y: (stage.frame.height - stage.media.height) / 2,
-                           width: stage.media.width,
-                           height: stage.media.height)
-        guard !media.contains(CGPoint(x: columnFrame.midX, y: columnFrame.midY)) else {
+        guard !columnFrame.isEmpty, region.width > 0, region.height > 0 else {
             return .attachment(attachment)
         }
-        guard case .thumbHash(let empreinte) = backdrop(stage: stage, thumbHash: attachment.thumbHash) else {
+        let plateau = CGRect(origin: .zero, size: region)
+        let centre = CGPoint(x: columnFrame.midX, y: columnFrame.midY)
+        let media = CGRect(origin: StageChromeAlignment.mediaOrigin(stage: plateau, mediaSize: stage.media),
+                           size: stage.media)
+        guard !media.contains(centre) else { return .attachment(attachment) }
+        let cadre = CGRect(origin: StageChromeAlignment.mediaOrigin(stage: plateau, mediaSize: stage.frame),
+                           size: stage.frame)
+        guard cadre.contains(centre),
+              case .thumbHash(let empreinte) = backdrop(stage: stage, thumbHash: attachment.thumbHash) else {
             return nil
         }
         return MediaChromeBackdrop(key: attachment.id, thumbHash: empreinte, bitmapURL: nil)
