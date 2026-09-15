@@ -133,30 +133,39 @@ extension MeeshyComposerHost {
             sceneExport.export(.share, slide: viewModel.exportableCurrentSlide())
 
         case .clearAll:
-            // **`viewModel.reset()` d'ABORD, l'état du meuble ensuite.** Le
+            // **Les HUIT porteurs du média partent d'un bloc, et les
+            // pré-montées avec** (#6577). Ils partaient en ÉNUMÉRATION — six
+            // lignes nommées à la main — et il en manquait DEUX :
+            // `documentMediaAlts` et `railPosedMediaURLs`, qu'aucun autre site
+            // n'affectait non plus. Le second est une garde d'idempotence clée
+            // par URL : après un effacement, re-poser LA MÊME photo par le rail
+            // héritait de sa marque périmée et passait par la mauvaise porte.
+            //
+            // > **Un effacement écrit en énumération perd le prochain champ
+            // > comme il a perdu ceux-là, et rien ne rougit.** Une VALEUR ne
+            // > peut pas en perdre : `ComposerMediaPorters.empty` a huit champs,
+            // > et le compilateur les exige tous.
+            //
+            // L'appel précède `viewModel.reset()` parce que le relevé du canvas
+            // — qui nomme les fichiers des objets de scène, le son en tête,
+            // absent des huit porteurs — n'a plus rien à lire après lui.
+            ComposerMediaRetractionRun.clear(store: mediaPorterStore,
+                                             preUploads: preUploads,
+                                             viewModel: viewModel)
+            // **`viewModel.reset()` avant le reste de l'état du meuble.** Le
             // reset vide `carriedContentSources`, le cache d'idempotence
             // d'`applyContentMedia` ; sans lui, re-choisir la MÊME photo après
             // un effacement serait silencieusement sauté et n'atteindrait
             // jamais la scène.
             viewModel.reset()
             documentText = ""
-            documentLocalMedia = []
             documentBackground = nil
             documentLocation = nil
             documentDiscoverability.reset()
-            documentTranscriptions = [:]
             // Le contexte d'édition désigne une URL de `documentLocalMedia`
             // qu'on vient de vider : le laisser posé ferait remplacer une
             // entrée qui n'existe plus.
             editedForegroundSound = nil
-            // La carte média→slide est un INDEX du meuble : la laisser pleine
-            // ferait retirer, au prochain sync, des slides qui n'existent plus.
-            slideIdByMediaURL = [:]
-            // Sa jumelle sert AUSSI de garde d'idempotence (#4724) : la laisser
-            // pleine ferait sauter la re-pose de la même photo après un « Tout
-            // effacer » — exactement le défaut que `viewModel.reset()` ferme
-            // trois lignes plus haut pour `carriedContentSources`.
-            mediaRoleByURL = [:]
             selectedSceneItemKind = nil
             // **Les personnes NOMMÉES partaient avec le reste** (#5013). Elles
             // ne figuraient dans aucune des onze lignes ci-dessus : « Tout
@@ -165,14 +174,6 @@ extension MeeshyComposerHost {
             // l'écran ne montrait. Elles seraient reparties avec la
             // publication suivante, notification comprise.
             composerReferences = []
-            // **Les légendes, même classe et même silence.** Elles sont clées
-            // par l'URL LOCALE du média ; survivant à l'effacement, elles se
-            // ré-attachent à un fichier RE-CHOISI plus tard. C'est exactement
-            // ce que `mediaRoleByURL` documente deux lignes plus haut — « le
-            // rôle s'oublie avec le média, sinon un fichier re-choisi serait
-            // sauté en silence ».
-            documentMediaCaptions = [:]
-            documentMediaObjectIdBySource = [:]
             // L'index des durées sources n'est plus ici : il vivait pour la
             // bande de rognage du bas de scène, retirée le 2026-09-05, et sa
             // mesure appartient désormais à l'éditeur plein écran — qui la

@@ -229,8 +229,14 @@ final class MeeshyComposerHostPostSlidesGuardTests: XCTestCase {
         let compacted = compact(try hostSource())
         XCTAssertTrue(compacted.contains("mediaRoleByURL.removeValue(forKey:url)"),
             "Un média retiré doit rendre son rôle, sinon le re-choisir serait sauté.")
-        XCTAssertTrue(compacted.contains("mediaRoleByURL=[:]"),
-            "« Tout effacer » doit aussi vider la mémoire des rôles.")
+        // « Tout effacer » ne nomme plus les porteurs un à un depuis #6577 : il
+        // consomme `ComposerMediaPorters.empty`, dont le compilateur exige les
+        // HUIT champs. C'est ce qui a rendu visibles les deux que l'énumération
+        // oubliait (`documentMediaAlts`, `railPosedMediaURLs`). La garde vise
+        // donc la valeur, jamais la ligne — et `ComposerClearAllBehaviourTests`
+        // l'ÉPROUVE sur un store instancié.
+        XCTAssertTrue(compacted.contains("roleByURL:[:]"),
+            "La page blanche des porteurs doit remettre la mémoire des rôles à zéro.")
     }
 
     /// **La scène se démonte sur ce qu'elle CONTIENT, jamais sur ce qui l'a
@@ -402,12 +408,26 @@ final class MeeshyComposerHostPostSlidesGuardTests: XCTestCase {
     /// SILENCE : rien ne casse, rien ne loggue, l'écran reste vide là où
     /// l'auteur vient de poser une image. C'est le défaut que ce lot corrige
     /// dans le SDK, et cette garde interdit de le rouvrir depuis l'app.
+    /// **L'ordre a changé au #6577, et pour une raison qui se dit :** le relevé
+    /// du canvas — qui nomme les fichiers des objets de scène, le SON en tête,
+    /// absent des huit porteurs — n'a plus rien à lire après `reset()`. Le
+    /// retrait des porteurs précède donc le reset, et le reste de l'état du
+    /// meuble le suit toujours.
     func test_clearAll_goesThroughTheViewModelReset_notOnlyTheHostState() throws {
         let compacted = compact(try hostSource())
-        XCTAssertTrue(compacted.contains("case.clearAll:viewModel.reset()"),
-            "L'effacement doit COMMENCER par `viewModel.reset()` — lui seul oublie les sources portées.")
-        for efface in ["documentText=\"\"", "documentLocalMedia=[]", "documentBackground=nil",
-                       "documentLocation=nil", "slideIdByMediaURL=[:]", "mediaRoleByURL=[:]"] {
+        XCTAssertTrue(compacted.contains("ComposerMediaRetractionRun.clear("),
+            "« Tout effacer » doit consommer la page blanche des porteurs — l'énumération à la "
+                + "main en oubliait DEUX sur huit, et n'oubliait aucune pré-montée.")
+        guard let porteurs = compacted.range(of: "ComposerMediaRetractionRun.clear("),
+              let reset = compacted.range(of: "viewModel.reset()") else {
+            return XCTFail("`case .clearAll:` ne fait plus ni l'un ni l'autre")
+        }
+        XCTAssertLessThan(porteurs.lowerBound, reset.lowerBound,
+            "Le relevé du canvas se dresse AVANT `reset()` : après lui, le fichier d'un son de "
+                + "scène n'est plus nommable par personne, et sa pré-montée reste orpheline.")
+        XCTAssertTrue(compacted.contains("viewModel.reset()"),
+            "L'effacement doit passer par `viewModel.reset()` — lui seul oublie les sources portées.")
+        for efface in ["documentText=\"\"", "documentBackground=nil", "documentLocation=nil"] {
             XCTAssertTrue(compacted.contains(efface),
                 "« Tout effacer » laisse `\(efface)` derrière lui — un effacement partiel est pire "
                     + "qu'aucun : l'auteur croit être reparti de zéro.")

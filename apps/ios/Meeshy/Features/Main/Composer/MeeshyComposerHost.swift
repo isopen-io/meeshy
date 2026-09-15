@@ -532,7 +532,15 @@ struct MeeshyComposerHost: View {
     /// média suivant, même arrivé par la rangée du document.
     @State var railPosesNextMedia = false
 
-    @State var railPosedMediaURLs: Set<URL> = []
+    /// **Les huit porteurs du média** (#6577) — `documentLocalMedia` et ses sept
+    /// index, projetés sous leurs noms d'origine par `MeeshyComposerHost+Porters`.
+    ///
+    /// Ils étaient huit `@State`. Un `@State` ne s'ÉPROUVE pas : son `setter` est
+    /// `nonmutating` et n'écrit nulle part tant que SwiftUI n'a pas installé la
+    /// vue, si bien qu'aucun témoin ne peut distinguer « le retrait est
+    /// appliqué » de « le retrait est calculé puis jeté ». Le premier correctif
+    /// de #6577 l'a payé : ses seize témoins restaient verts sur huit no-op.
+    @StateObject var mediaPorterStore = ComposerMediaPorterStore()
 
     @State var showsPhotoPicker = false
     @State var pickedPhotoLibraryItems: [PhotosPickerItem] = []
@@ -554,109 +562,11 @@ struct MeeshyComposerHost: View {
     @State var pendingFileImport = false
 
 
-    /// Les pièces jointes LOCALES composées jusqu'ici. `documentDraft` les
-    /// transmet désormais sous `.document` — `ComposerDocumentDraft.localMedia`
-    /// ne repartait qu'à `[]` avant ce lot.
-    @State var documentLocalMedia: [ComposerDocumentMedia] = []
-
-    /// **Quelle slide porte quel média (modèle § 3, #4038).** En profil Post,
-    /// **une slide EST un média du post** : chaque média visuel ingéré a donc SA
-    /// slide, dont il devient le fond (§ 4).
-    ///
-    /// **Ce n'est pas une seconde vérité.** `documentLocalMedia` reste la source
-    /// UNIQUE — c'est elle que le plan de publication lit. Cette table n'est
-    /// qu'un INDEX de la dérivation, clé `sourceURL`, qui permet deux choses
-    /// qu'une simple reconstruction ne permettrait pas : ne pas re-poser un
-    /// média déjà posé, et retrouver la slide à retirer quand son média
-    /// disparaît. Reconstruire les slides à chaque changement aurait jeté au
-    /// passage tout ce que l'auteur a composé DESSUS.
-    @State var slideIdByMediaURL: [URL: String] = [:]
-
-    /// **Le RÔLE de chaque média posé — fond ou premier plan** (#4724).
-    ///
-    /// Sa jumelle `slideIdByMediaURL` ci-dessus ne connaît que les FONDS : c'est
-    /// sa définition, et c'est ce qui en fait la liste des tuiles. Il fallait
-    /// donc une seconde mémoire pour les autres, et elle porte deux charges à la
-    /// fois : dire ce qu'un média est devenu, et servir de garde d'idempotence
-    /// (« ce média a DÉJÀ été posé ») — rôle que l'index des fondations tenait
-    /// avant ce lot, et qu'il ne peut plus tenir depuis qu'un média peut être
-    /// posé sans rien fonder.
-    @State var mediaRoleByURL: [URL: ComposerMediaRole] = [:]
-
     /// **La graine n'est ingérée qu'UNE fois** (#5409). `onAppear` peut se
     /// rejouer (retour d'une feuille, recomposition du cover) ; sans ce loquet,
     /// le même fichier entrerait plusieurs fois dans `documentLocalMedia` et
     /// partirait en autant de pièces jointes.
     @State var seedIngestedIntoDocument = false
-
-    /// **Les LÉGENDES, une par média** (#4890, directive porteur 2026-09-02 :
-    /// « chaque image doit avoir sa légende »).
-    ///
-    /// Elle n'existe qu'en profil POST : ailleurs le texte de la slide EST le
-    /// contenu de la publication et vit dans la slide. C'est
-    /// `ComposerSlideTextRole` qui tranche, et ce champ n'est écrit que par lui
-    /// — poser ici une seconde décision de rôle referait le recouvrement que le
-    /// lot vient de retirer.
-    ///
-    /// Clé : l'URL LOCALE du média, la seule qui existe pendant la composition
-    /// (l'id serveur n'est attribué qu'à l'upload) et celle sous laquelle le
-    /// meuble tient déjà ses médias.
-    @State var documentMediaCaptions: ComposerMediaCaptions = [:]
-
-    /// **Les textes alternatifs saisis dans l'éditeur d'objet** (#4756), keyés
-    /// par `StoryMediaObject.id`.
-    ///
-    /// Clé plus simple que celle des légendes, et ce n'est pas un raccourci :
-    /// une légende se saisit sur la SCÈNE, où l'on ne connaît que l'URL locale
-    /// du média — d'où la traduction `URL → slide → porteur` de
-    /// `ComposerSlideTextRole.canvasKeyed`. Un texte alternatif se saisit dans
-    /// l'éditeur d'UN objet, qui tient son identifiant : la clé du fil
-    /// (`ComposerMediaAccessibility.mediaAlt`, keyée par `StoryMediaObject.id`)
-    /// est celle qu'on a déjà en main.
-    ///
-    /// Le nouveau composer publiait `ComposerMediaAccessibility.empty` — son
-    /// propre doc-comment l'admettait — parce que sa surface n'offrait aucun
-    /// éditeur d'alternative textuelle. Le transport existait de bout en bout ;
-    /// c'est la SOURCE qui manquait, et l'UI aussi existait, restée dans la peau
-    /// de l'atelier plein écran (`MediaAccessibilityPanel` → `ComposerBottomBand`).
-    ///
-    /// **Où cette carte ARRIVE, et où elle n'arrive pas encore** (2026-09-05) :
-    ///
-    /// | canal | format | la carte voyage ? |
-    /// |---|---|---|
-    /// | scène (`publishStoryScene` → `publishStoryInBackground`) | story | **oui**, depuis que la greffe y est posée |
-    /// | document (`publishDocument` → file durable) | **post**, mood | **non** — `ComposerDocumentDraft` n'a pas de champ d'alternative |
-    ///
-    /// Le second est le canal du POST, donc du cas nominal de cet éditeur. Ce
-    /// n'est pas une exemption mais une PERTE nommée et chiffrée : porter
-    /// `mediaAlts` sur les quatre maillons, comme `mediaCaptions` — dont
-    /// `PublishIntent.document` réaligne déjà la carte URL sur l'index de
-    /// `localMedia`. Ce qui manque en amont est l'index OBJET → URL SOURCE, que
-    /// ni `applyContentMedia` (qui nomme sa copie `tmp/<objectId>.<ext>` et ne
-    /// rend rien) ni `slideIdByMediaURL` (qui n'indexe que les FONDS) ne
-    /// fournissent. Détail : `PublishChainCensusTests.absentsDeLaVoieDurable`.
-    @State var documentMediaAlts: [String: String] = [:]
-
-    /// **`URL source → identifiant d'objet`, le chaînon qui manquait à l'alt**
-    /// (2026-09-05).
-    ///
-    /// `documentMediaAlts` est keyé par identifiant d'OBJET — c'est ce que
-    /// l'éditeur de scène édite, et c'est ce que le chemin STORY sait traduire
-    /// en `postMediaId` après l'upload (`StoryMediaTextMapping.serverKeyed`).
-    /// Le chemin DURABLE, lui, travaille par POSITION dans `localMedia`,
-    /// c'est-à-dire par URL SOURCE : `PublishIntent.document` aligne déjà les
-    /// légendes ainsi.
-    ///
-    /// Les deux clés sont justes à leur étage ; ce qui manquait était le pont.
-    /// Il ne peut venir que d'`applyContentMedia`, seul site à connaître les
-    /// deux bouts — il frappe l'`objectId` ET copie la source. Il le REND
-    /// désormais, et cette carte l'accumule.
-    ///
-    /// > **Une carte n'est pas un cache** : celle-ci est la mémoire du
-    /// > BROUILLON. Le modèle de scène ne peut pas la tenir — un objet
-    /// > remplacé, un fond rechangé, et il ne saurait plus de quel fichier il
-    /// > est né.
-    @State var documentMediaObjectIdBySource: [URL: String] = [:]
 
     /// **F2 (#3885) — la couleur de FOND choisie sur le document.** `nil` = pas
     /// de fond, la surface reste plate. La couleur est semée dans l'atelier
@@ -812,22 +722,6 @@ struct MeeshyComposerHost: View {
     @State var documentDiscoverability: NearbyDiscoverabilityChoice = .disabled
 
 
-    /// **T2.6 — la transcription du vocal composé par `AudioPostComposerView`.**
-    /// Voyage À CÔTÉ de `documentLocalMedia` (l'enregistrement, posé comme un
-    /// `ComposerDocumentMedia` ordinaire au retour) — jamais fondue dedans.
-    /// `documentDraft` la transmet telle quelle à
-    /// `ComposerDocumentDraft.document(mobileTranscription:)`, et
-    /// `PublishIntent.document(transcription:)` l'élit en aval pour la LANGUE :
-    /// la langue PARLÉE gagne sur `documentLanguage`, jamais l'inverse — la
-    /// régression que 7.4b avait fermée sur `PublishIntent.audioRecording`.
-    /// **Une transcription PAR FICHIER** (#4672).
-    ///
-    /// C'était UNE valeur, écrasée à chaque retour de la feuille. Avec deux
-    /// vocaux, la seconde effaçait la première : une seule carte s'affichait,
-    /// et le premier son partait quand même à la publication, muet et
-    /// invisible. La clé est l'URL du fichier — le seul handle que
-    /// `documentLocalMedia` et la feuille partagent.
-    @State var documentTranscriptions: [URL: MobileTranscriptionPayload] = [:]
 
     init(
         intent: ComposerIntent,

@@ -359,13 +359,18 @@ extension MeeshyComposerHost {
     /// seul endroit que les trois contextes traversent : carte de contenu,
     /// pastille de l'avatar, pastille du canvas y arrivent par le même
     /// `openSoundSheet`. Trois boutons dispersés auraient été trois lois.
+    ///
+    /// **Elle passe par `retractMedia` depuis #6577**, et ce n'était pas une
+    /// harmonisation : elle nettoyait DEUX porteurs sur huit et n'appelait
+    /// jamais `preUploads.forget(url:)`. Un son pré-monté puis supprimé laissait
+    /// son `PostMedia` orphelin côté serveur, et le registre continuait de le
+    /// tenir pour prêt — le manque exact sur lequel ce lot fonde un témoin.
+    /// Le son de FOND et la pastille de scène y descendent par leur identifiant
+    /// d'objet ; le relevé du canvas en déduit leur fichier, qu'aucun index du
+    /// meuble ne connaît.
     func deleteEditedSound() {
-        if let edite = editedForegroundSound {
-            documentLocalMedia = ComposerMediaOrder.removing(documentLocalMedia, at: edite.url)
-            documentTranscriptions[edite.url] = nil
-        }
-        if let fond = editedBackgroundSoundId { viewModel.deleteElement(id: fond) }
-        if let pastille = editedSceneChipId { viewModel.deleteElement(id: pastille) }
+        retractMedia(objectIds: [editedBackgroundSoundId, editedSceneChipId].compactMap { $0 },
+                     fileURLs: editedForegroundSound.map { [$0.url] } ?? [])
         forgetEditedSound()
         presentedPortal = nil
         HapticFeedback.medium()
@@ -379,9 +384,13 @@ extension MeeshyComposerHost {
     /// dictionnaire de transcriptions doit perdre sa clé en même temps que la
     /// liste perd sa pièce, sinon un son posé plus tard sous la même URL
     /// temporaire hériterait d'un texte qui n'est pas le sien.
+    ///
+    /// **Le « même retrait » est LE retrait depuis #6577** : les deux portes
+    /// appelaient chacune leurs deux lignes, donc partageaient un motif sans
+    /// partager la règle — et il leur manquait à toutes deux l'oubli de la
+    /// pré-montée.
     func deleteForegroundSound(_ son: ComposerForegroundSound) {
-        documentLocalMedia = ComposerMediaOrder.removing(documentLocalMedia, at: son.url)
-        documentTranscriptions[son.url] = nil
+        retractMedia(objectIds: [], fileURLs: [son.url])
         // Le son supprimé pouvait être celui que la feuille tenait ouvert.
         if editedForegroundSound?.url == son.url { editedForegroundSound = nil }
         HapticFeedback.medium()

@@ -41,22 +41,27 @@ final class ComposerMediaRetractionTests: XCTestCase {
     /// `documentMediaObjectIdBySource`. Le fusible ci-dessous vérifie que chaque
     /// `champ` existe bel et bien dans l'appel — sans quoi la garde mesurerait
     /// une charge imaginaire.
+    ///
+    /// **Les porteurs portent leur nom de STORE depuis #6577** : ils ont quitté
+    /// le `@State` du meuble pour `ComposerMediaPorterStore`, et le meuble les
+    /// projette sous leurs anciens noms. Un `@State` ne s'éprouve pas — c'est ce
+    /// qui a laissé les seize témoins de ce fichier verts sur huit no-op.
     private static let charge: [(champ: String, porteurs: [String])] = [
-        ("localMedia:", ["documentLocalMedia"]),
-        ("mediaCaptions:", ["documentMediaCaptions"]),
-        ("mediaAlts:", ["documentMediaAlts", "documentMediaObjectIdBySource"]),
-        ("mediaObjectIds:", ["documentMediaObjectIdBySource"])
+        ("localMedia:", ["localMedia"]),
+        ("mediaCaptions:", ["captions"]),
+        ("mediaAlts:", ["altsByObjectId", "objectIdBySource"]),
+        ("mediaObjectIds:", ["objectIdBySource"])
     ]
 
     /// Les INDEX que le retrait invalide. Ils ne voyagent pas dans la charge,
-    /// mais `mediaRoleByURL` porte DEUX charges (le rôle ET l'idempotence de
+    /// mais `roleByURL` porte DEUX charges (le rôle ET l'idempotence de
     /// re-pose) : survivant à son média, il fait SAUTER la re-sélection du même
     /// fichier — le défaut que « Tout effacer » documente déjà sur le même champ.
     private static let index = [
         "slideIdByMediaURL",
-        "mediaRoleByURL",
-        "railPosedMediaURLs",
-        "documentTranscriptions"
+        "roleByURL",
+        "railPosedURLs",
+        "transcriptions"
     ]
 
     // MARK: - Lecture de source
@@ -107,8 +112,23 @@ final class ComposerMediaRetractionTests: XCTestCase {
         return ""
     }
 
+    /// **Le corps qui APPLIQUE, jamais celui qui délègue.** `retractMedia` ne
+    /// fait plus qu'une ligne depuis #6577 : l'application vit dans
+    /// `ComposerMediaRetractionRun.apply`, un type que
+    /// `ComposerMediaRetractionBehaviourTests` INSTANCIE — parce qu'un `@State`
+    /// ne s'éprouve pas, et que les gardes ci-dessous sont restées vertes sur
+    /// huit no-op qui conservaient les identifiants.
+    ///
+    /// Ce qui suit est donc un CLIQUET, jamais la preuve : il interdit à un lot
+    /// futur de re-poser les motifs qu'on vient de retirer. La preuve est la
+    /// suite de comportement, et elle est nommée dans chaque message d'échec.
     private func corpsDuRetrait() throws -> String? {
-        body(after: "func retractMedia(", in: try hostSource())
+        body(after: "static func apply(", in: try hostSource())
+    }
+
+    /// Le corps de la règle PURE — celle qui calcule les porteurs nettoyés.
+    private func corpsDeLaRegle() throws -> String? {
+        body(after: "static func retracting(", in: try hostSource())
     }
 
     // MARK: - Fusibles (une garde qui ne mesure rien affirme le contraire)
@@ -136,16 +156,62 @@ final class ComposerMediaRetractionTests: XCTestCase {
     /// PEUVENT PAS nettoyer ce que la publication téléverse. Un retrait qui vit
     /// dans le SDK est donc, par construction, un demi-retrait.
     func test_leRetrait_aUnPointDEntreeUnique_surLeMeuble() throws {
-        XCTAssertNotNil(try corpsDuRetrait(),
-            "Aucun `retractMedia(` dans l'unité du meuble : les deux gestes de suppression "
+        XCTAssertTrue(compact(try hostSource()).contains("funcretractMedia("),
+            "Aucun `retractMedia(` dans l'unité du meuble : les gestes de suppression "
             + "n'appellent que le SDK, donc `documentLocalMedia` garde le média retiré et la "
             + "publication le téléverse — le fantôme que le gateway grave à `order: 0`, "
             + "c'est-à-dire en COUVERTURE (#6577).")
+        XCTAssertNotNil(try corpsDuRetrait(),
+            "Aucun `ComposerMediaRetractionRun.apply(` : l'APPLICATION du retrait est revenue "
+            + "dans le `@State` du meuble, où aucun témoin ne peut l'observer — c'est ce qui a "
+            + "laissé seize témoins verts sur huit no-op.")
+    }
+
+    /// **Les deux portes du SON passent par le point d'entrée unique** (#6577).
+    ///
+    /// Le premier lot affirmait que `deleteEditedSound()` « fait les deux
+    /// moitiés depuis #4696 ». Mesuré : elle nettoyait DEUX porteurs sur huit et
+    /// n'appelait jamais `preUploads.forget(url:)` — le manque exact sur lequel
+    /// ce fichier fonde `test_leRetrait_oublieLaPreMontee`. Sa jumelle
+    /// `deleteForegroundSound(_:)` faisait de même.
+    ///
+    /// > Un précédent cité de mémoire est une garde imaginaire : la phrase
+    /// > rassurait sur la porte la plus proche du défaut, donc sur la seule
+    /// > qu'il fallait relire.
+    func test_lesDeuxPortesDuSon_passentParLePointUnique() throws {
+        let source = try hostSource()
+        for porte in ["func deleteEditedSound(", "func deleteForegroundSound("] {
+            guard let corps = body(after: porte, in: source).map(compact) else {
+                return XCTFail("`\(porte)` introuvable — la garde ne mesurerait rien")
+            }
+            XCTAssertTrue(corps.contains("retractMedia("),
+                "`\(porte)` retire le son à la main : deux porteurs sur huit, et aucune "
+                + "pré-montée oubliée. Le `PostMedia` reste orphelin côté serveur.")
+            XCTAssertFalse(corps.contains("ComposerMediaOrder.removing(documentLocalMedia"),
+                "`\(porte)` réécrit son propre retrait à côté du point d'entrée unique.")
+        }
+    }
+
+    /// **Le retrait d'une scène ne nomme plus UNE famille sur cinq.** La version
+    /// précédente énumérait `scene.effects.mediaObjects` : un SON posé sur la
+    /// scène jetée restait pré-monté côté serveur, et aucune des trois voies de
+    /// rattrapage ne pouvait le nommer. C'est le relevé du canvas qui énumère.
+    func test_leRetraitDUneScene_neReenumerePasLesFamilles() throws {
+        let source = try hostSource()
+        guard let corps = body(after: "func retractScene(", in: source).map(compact) else {
+            return XCTFail("`retractScene(` introuvable — la garde ne mesurerait rien")
+        }
+        XCTAssertFalse(corps.contains("effects.mediaObjects"),
+            "`retractScene` réénumère les familles d'objets : celle qui manque est l'AUDIO, et "
+            + "elle manquera encore à la sixième famille.")
+        XCTAssertTrue(compact(try hostSource()).contains("census:.of(viewModel.slides)"),
+            "L'application doit dresser le relevé du canvas — sans lui, ni l'audio d'une scène, "
+            + "ni ses textes, ni un fichier peint par DEUX objets ne sont visibles de la règle.")
     }
 
     func test_leRetrait_nettoieChaquePorteurDeLaCharge() throws {
-        guard let corps = try corpsDuRetrait().map(compact) else {
-            return XCTFail("`retractMedia(` absent — voir le témoin précédent")
+        guard let corps = try corpsDeLaRegle().map(compact) else {
+            return XCTFail("`ComposerMediaRetraction.retracting(` absent — la règle a disparu")
         }
         let manquants = Self.charge
             .flatMap(\.porteurs)
@@ -158,8 +224,8 @@ final class ComposerMediaRetractionTests: XCTestCase {
     }
 
     func test_leRetrait_invalideLesIndexQuiGardentLIdempotence() throws {
-        guard let corps = try corpsDuRetrait().map(compact) else {
-            return XCTFail("`retractMedia(` absent — voir le témoin précédent")
+        guard let corps = try corpsDeLaRegle().map(compact) else {
+            return XCTFail("`ComposerMediaRetraction.retracting(` absent — la règle a disparu")
         }
         let manquants = Self.index.filter { !corps.contains($0) }
         XCTAssertTrue(manquants.isEmpty,
@@ -188,9 +254,9 @@ final class ComposerMediaRetractionTests: XCTestCase {
         guard let corps = try corpsDuRetrait().map(compact) else {
             return XCTFail("`retractMedia(` absent — voir le témoin précédent")
         }
-        guard let porteurs = corps.range(of: "documentLocalMedia="),
-              let sdk = corps.range(of: "viewModel.") else {
-            return XCTFail("Le corps du retrait n'écrit pas `documentLocalMedia` ou n'appelle pas le SDK")
+        guard let porteurs = corps.range(of: "store.porters=retrait.porteurs"),
+              let sdk = corps.range(of: "viewModel.slides.firstIndex") else {
+            return XCTFail("L'application n'écrit pas les porteurs d'un bloc, ou n'appelle pas le SDK")
         }
         XCTAssertLessThan(porteurs.lowerBound, sdk.lowerBound,
             "Le SDK est appelé AVANT l'écriture des porteurs : la dérivation branchée sur "

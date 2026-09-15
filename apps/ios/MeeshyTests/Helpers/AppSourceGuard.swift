@@ -171,6 +171,15 @@ enum AppSourceGuard {
         // > qui déménage sans emmener son adresse les éteint en silence » :
         // > même angle mort, à la création plutôt qu'au déplacement.
         "Meeshy/Features/Main/Composer/ComposerRailDoorBadge.swift",
+        // **Le retrait d'un média, sorti du meuble au #6577.** La règle pure et
+        // le relevé du canvas vivent ici ; le store porte les huit `@State`
+        // devenus valeurs, et donc les déclarations que plusieurs gardes du
+        // meuble citent (`documentMediaAlts`, la carte des légendes…). Sans ces
+        // deux adresses, toutes les gardes NÉGATIVES du meuble cesseraient de
+        // balayer le code qui retire — le mode d'oubli que ce fichier nomme
+        // trois lignes plus haut, à la création plutôt qu'au déplacement.
+        "Meeshy/Features/Main/Composer/ComposerMediaRetraction.swift",
+        "Meeshy/Features/Main/Composer/ComposerMediaPorterStore.swift",
     ]
 
     static func composerHostURLs() -> [URL] {

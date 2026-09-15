@@ -9,113 +9,74 @@ import MeeshyUI
 // publication pendant tout un lot — et le gateway le grave à `order: 0`,
 // c'est-à-dire en COUVERTURE.
 //
-// Le précédent existait à une porte : `deleteEditedSound()`
-// (`MeeshyComposerHost+Sound.swift`) fait les deux moitiés depuis #4696. La
-// famille VISUELLE ne l'avait jamais reçu — les seuls retraits de
-// `documentLocalMedia` du dépôt étaient des retraits de SON, plus le « Tout
-// effacer », qui n'en est pas un mais un effacement.
+// **Aucun précédent n'existait, contrairement à ce que ce fichier a affirmé.**
+// Sa première version disait que `deleteEditedSound()` « fait les deux moitiés
+// depuis #4696 ». C'était faux, et mesurable : cette porte nettoyait DEUX
+// porteurs sur huit (`documentLocalMedia`, `documentTranscriptions`) et
+// n'appelait jamais `preUploads.forget(url:)` — le manque exact sur lequel ce
+// lot fonde un témoin entier. Sa jumelle `deleteForegroundSound(_:)` faisait de
+// même. Les deux passent désormais par le point d'entrée ci-dessous.
+//
+// > **Un précédent cité de mémoire est une garde imaginaire.** La phrase
+// > rassurait sur la porte la plus proche du défaut, donc sur la seule qu'il
+// > fallait relire ; et elle l'a dispensée de l'être.
 
 @MainActor
 extension MeeshyComposerHost {
 
-    /// **Les huit porteurs, vus comme UNE valeur.**
-    ///
-    /// Ils ne sont pas un cache : ce sont les `@State` eux-mêmes, rassemblés le
-    /// temps d'un calcul. Les rassembler est ce qui rend le retrait ATOMIQUE —
-    /// `mediaRoleByURL` et `railPosedMediaURLs` portent chacun DEUX charges (la
-    /// valeur ET une garde d'idempotence de re-pose), et les traiter séparément
-    /// re-pose le média ou bloque en silence sa re-sélection.
-    var mediaPorters: ComposerMediaPorters {
-        ComposerMediaPorters(
-            localMedia: documentLocalMedia,
-            roleByURL: mediaRoleByURL,
-            slideIdByMediaURL: slideIdByMediaURL,
-            objectIdBySource: documentMediaObjectIdBySource,
-            captions: documentMediaCaptions,
-            altsByObjectId: documentMediaAlts,
-            transcriptions: documentTranscriptions,
-            railPosedURLs: railPosedMediaURLs)
-    }
-
     /// **Le point d'entrée UNIQUE du retrait d'un média.**
     ///
-    /// Les TROIS gestes de suppression y arrivent : le rail trailing de la scène
+    /// Les CINQ gestes de suppression y arrivent : le rail trailing de la scène
     /// (`handleTrailingRailAction(.delete)`), le menu d'appui long sur un fond
-    /// (`applyBackgroundMenu(.delete)`, #5041) et la corbeille du rail de scènes
-    /// (`retractScene(at:)`). Trois sites qui retirent sont trois inventaires à
-    /// tenir d'accord, donc un oubli à venir — c'est exactement la forme du
-    /// défaut qu'on ferme ici, et le troisième geste ne figurait déjà plus dans
-    /// l'inventaire qu'on en avait fait.
+    /// (`applyBackgroundMenu(.delete)`, #5041), la corbeille du rail de scènes
+    /// (`retractScene(at:)`) et les deux portes du SON (`deleteEditedSound()`,
+    /// `deleteForegroundSound(_:)`). Cinq sites qui retirent seraient cinq
+    /// inventaires à tenir d'accord, donc un oubli à venir — c'est exactement la
+    /// forme du défaut qu'on ferme ici, et deux des cinq gestes ne figuraient
+    /// déjà plus dans l'inventaire qu'on en avait fait.
     ///
-    /// ## L'ordre est PORTEUR
+    /// L'ORDRE des trois moitiés (pré-montée, porteurs, SDK) est porteur, et il
+    /// vit dans `ComposerMediaRetractionRun.apply` — le seul lieu qui les
+    /// applique, et le seul qu'un témoin puisse instancier.
     ///
-    /// 1. **La pré-montée d'abord.** `ComposerPreUploadRegistry.forget(url:)`
-    ///    n'avait, mesuré, AUCUN appelant de production : un fichier pré-monté
-    ///    puis retiré laissait son `PostMedia` orphelin côté serveur, et le
-    ///    registre continuait de le tenir pour prêt. L'oubli précède toute
-    ///    relecture.
-    /// 2. **Les porteurs ensuite, d'un bloc** (voir `mediaPorters`).
-    /// 3. **Le SDK en DERNIER.** `.adaptiveOnChange(of: documentLocalMedia)`
-    ///    déclenche `syncPostMediaIntoSlides()` : appeler le SDK avant ferait
-    ///    courir la dérivation sur un modèle déjà amputé et sur des index encore
-    ///    pleins.
-    ///
-    /// Un `objectId` qui ne désigne aucun fichier (un texte, une pastille) ne
-    /// retire rien des porteurs et descend tel quel au SDK : c'est le cas
-    /// nominal du rail trailing, qui supprime surtout des objets sans média.
-    func retractMedia(objectIds: [String], slideId: String? = nil) {
-        let retrait = ComposerMediaRetraction.retracting(
-            mediaPorters, objectIds: objectIds, slideId: slideId)
-
-        retrait.retiredURLs.forEach { preUploads.forget(url: $0) }
-
-        documentLocalMedia = retrait.porteurs.localMedia
-        mediaRoleByURL = retrait.porteurs.roleByURL
-        slideIdByMediaURL = retrait.porteurs.slideIdByMediaURL
-        documentMediaObjectIdBySource = retrait.porteurs.objectIdBySource
-        documentMediaCaptions = retrait.porteurs.captions
-        documentMediaAlts = retrait.porteurs.altsByObjectId
-        documentTranscriptions = retrait.porteurs.transcriptions
-        railPosedMediaURLs = retrait.porteurs.railPosedURLs
-
-        if let slideId, let index = viewModel.slides.firstIndex(where: { $0.id == slideId }),
-           viewModel.slides.count > 1 {
-            // `removeSlide` emporte déjà tous les objets de la scène : rejouer
-            // `deleteElement` derrière lui frapperait des identifiants que le
-            // modèle ne connaît plus.
-            viewModel.removeSlide(at: index)
-        } else {
-            // **`removeSlide` REFUSE de descendre sous une scène** (SDK) — et un
-            // refus SILENCIEUX, ici, retournerait le défaut qu'on vient de
-            // fermer : le fichier aurait quitté la charge pendant que ses objets
-            // resteraient à l'écran. La condition ci-dessus REPRODUIT donc celle
-            // du SDK plutôt que de lui faire confiance, et le repli supprime les
-            // objets un à un. Ce qui reste est une scène vierge — exactement
-            // l'état d'un post sans média.
-            //
-            // Aucune porte n'atteint ce cas aujourd'hui (le rail de scènes ne se
-            // peint pas sous deux scènes, et `ComposerHeaderTiles.showsDelete`
-            // l'exige une seconde fois) ; c'est une QUATRIÈME porte à venir qui
-            // le rencontrerait, comme la troisième a hérité du défaut d'origine.
-            retrait.retiredObjectIds.forEach { viewModel.deleteElement(id: $0) }
-        }
+    /// - Parameters:
+    ///   - objectIds: ce que le geste NOMME. Un `objectId` qui ne désigne aucun
+    ///     fichier (un texte, une pastille) ne retire rien des porteurs et
+    ///     descend tel quel au SDK : c'est le cas nominal du rail trailing.
+    ///   - slideId: la scène jetée, s'il y en a une — elle emporte TOUS ses
+    ///     objets, le relevé du canvas les lui donnant.
+    ///   - fileURLs: les fichiers nommés DIRECTEMENT, réservés aux portes du son :
+    ///     une carte de contenu n'a pas d'objet de canvas, donc aucun relevé ne
+    ///     peut la désigner.
+    func retractMedia(objectIds: [String], slideId: String? = nil, fileURLs: Set<URL> = []) {
+        ComposerMediaRetractionRun.apply(objectIds: objectIds,
+                                         slideId: slideId,
+                                         fileURLs: fileURLs,
+                                         store: mediaPorterStore,
+                                         preUploads: preUploads,
+                                         viewModel: viewModel)
     }
 
     /// **L'adaptateur de la corbeille du rail de scènes** — un INDEX y devient
-    /// des identités.
+    /// une identité.
     ///
     /// Le rail ne connaît que la position de la tuile ; le point d'entrée
     /// ci-dessus ne travaille que sur des identités, seule forme qui survive à
     /// l'élagage d'une scène voisine. La traduction vit donc ici, et une seule
     /// fois : la refaire dans la fermeture du rail en ferait un second retrait.
     ///
-    /// Les objets de la scène sont nommés EN PLUS de la scène : l'index des
-    /// fondations ne connaît que les FONDS, et une scène peut porter des médias
-    /// de premier plan qu'aucun fond ne représente.
+    /// **Les objets de la scène ne sont plus énumérés ici, et c'est le
+    /// correctif.** Cette fonction nommait `scene.effects.mediaObjects` — UNE
+    /// famille sur cinq. Un SON posé sur la scène (`audioPlayerObjects`) restait
+    /// donc pré-monté côté serveur avec sa transcription accrochée à son URL,
+    /// et aucune des trois voies de rattrapage ne pouvait le nommer : le pont
+    /// `documentMediaObjectIdBySource` n'est alimenté que par
+    /// `applyContentMedia`, qui écarte l'audio ; `slideIdByMediaURL` n'indexe
+    /// que les FONDS ; et `syncPostMediaIntoSlides` filtre `kind != .audio`.
+    /// C'est le relevé du canvas qui énumère désormais, depuis la slide — les
+    /// cinq familles, sans liste à tenir.
     func retractScene(at index: Int) {
         guard viewModel.slides.indices.contains(index) else { return }
-        let scene = viewModel.slides[index]
-        retractMedia(objectIds: (scene.effects.mediaObjects ?? []).map(\.id),
-                     slideId: scene.id)
+        retractMedia(objectIds: [], slideId: viewModel.slides[index].id)
     }
 }

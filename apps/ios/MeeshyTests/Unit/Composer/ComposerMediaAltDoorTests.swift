@@ -56,10 +56,20 @@ final class ComposerMediaAltDoorTests: XCTestCase {
     /// par l'écran d'édition mourrait à sa fermeture — c'est exactement ce que
     /// la légende a payé avant #4890, où `documentMediaCaptions` avait un
     /// écrivain et aucun lecteur.
+    ///
+    /// **Le magasin a quitté le `@State` au #6577** — il vit dans
+    /// `ComposerMediaPorterStore`, que le meuble tient en `@StateObject` et
+    /// projette sous le nom `documentMediaAlts`. Le propriétaire n'a pas changé
+    /// (c'est toujours le meuble, pas l'éditeur) ; ce qui a changé est qu'un
+    /// `@State` ne s'éprouve pas, donc l'APPLICATION d'un retrait ne pouvait
+    /// être prouvée que par un grep.
     func test_leMagasin_vitDansLeMeuble_etLEditeurNEnTientAucun() throws {
-        let meuble = compact(try source("MeeshyComposerHost.swift"))
-        XCTAssertTrue(meuble.contains("@StatevardocumentMediaAlts:[String:String]=[:]"),
+        let meuble = compact(try source("MeeshyComposerHost+Porters.swift"))
+        XCTAssertTrue(meuble.contains("vardocumentMediaAlts:[String:String]{"),
                       "Le meuble tient la carte des textes alternatifs.")
+        XCTAssertTrue(compact(try source("ComposerMediaPorterStore.swift"))
+                        .contains("varaltsByObjectId:[String:String]{"),
+                      "…et sa valeur vit dans le store des porteurs, instanciable par un témoin.")
 
         let editeur = compact(try source("ComposerObjectEditorView.swift"))
         XCTAssertFalse(editeur.contains("@StatevarmediaAlt"),
