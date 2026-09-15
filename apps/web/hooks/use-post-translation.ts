@@ -163,3 +163,27 @@ export function usePreferredLanguages(): string[] {
     return ordered.length > 0 ? ordered : [preferred];
   }, [config]);
 }
+
+/**
+ * Résout le texte ALTERNATIF d'accessibilité d'un média (`PostMedia.alt`)
+ * dans la langue préférée du lecteur (#6737, suite de la décision produit
+ * #6534) — même descente de Prisme que `findTranslation` ci-dessus, jamais
+ * une lecture directe de `altTranslations`.
+ *
+ * Fonction PURE (pas un hook) : les consommateurs — `PostCard`, `PostDetail`,
+ * `story-transforms.ts` — l'appellent depuis une boucle `.map()` sur les
+ * médias d'un post, où un hook serait interdit. `preferredLanguages` vient de
+ * {@link usePreferredLanguages}, appelé UNE fois par l'hôte.
+ *
+ * Règle #1 du Prisme : aucune traduction ne matche ⇒ rendre `media.alt`
+ * (l'original), jamais une chaîne vide ni `translations[0]`.
+ */
+export function resolveMediaAltText(
+  media: { alt?: string | null; altLanguage?: string | null; altTranslations?: unknown } | null | undefined,
+  preferredLanguages: readonly string[],
+): string {
+  if (!media) return '';
+  const original = media.alt ?? '';
+  const match = findTranslation(media.altTranslations, preferredLanguages, media.altLanguage ?? null);
+  return match ?? original;
+}
