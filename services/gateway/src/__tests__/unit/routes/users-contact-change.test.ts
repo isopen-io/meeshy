@@ -98,14 +98,8 @@ type RouteReg = { method: string; path: string; handler: RouteHandler; options: 
 
 function createMockPrisma() {
   const prisma: any = {
-    user: {
-      findUnique: jest.fn<any>().mockResolvedValue(null),
-      findFirst: jest.fn<any>().mockResolvedValue(null),
-      update: jest.fn<any>().mockResolvedValue({}),
-    },
-    passwordResetToken: {
-      updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
-    },
+    user: { findUnique: jest.fn<any>().mockResolvedValue(null), findFirst: jest.fn<any>().mockResolvedValue(null), update: jest.fn<any>().mockResolvedValue({}) },
+    passwordResetToken: { updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     $transaction: jest.fn<any>((cb: any) => cb(prisma)),
   };
   return prisma;
