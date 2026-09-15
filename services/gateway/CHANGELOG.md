@@ -1,5 +1,108 @@
 # @meeshy/gateway
 
+## 1.54.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - la vérification d'e-mail rend « Vérifier » à la largeur de sa colonne (#6679) (#6682)
+  - la barre de réponse du plein écran câble le dépôt et suit la taille du texte (run test) (#6680)
+  - les pages d'accès tiennent dans la colonne centrée de la connexion, et « Mot de passe oublié » sert aussi à créer un mot de passe (#6672)
+  - le réarmement de useLiveAnnouncer se prouve sans horloge réelle (#6668)
+  - les écrans d'accès tiennent au centre sur tablette, et « Mot de passe oublié » sert aussi à créer un mot de passe (#6645) (#6657)
+  - ComposerMediaPorterStore écrit sa deinit non isolée, la garde MainActorDeinit repasse au vert (#6577)
+  - le lecteur présente la story qui n'est qu'une image comme l'image seule (#6636)
+  - le mesureur lit la géométrie du rendu, et la bande de l'image seule ne se peint plus (#6636)
+  - le cliquet des entrées mortes du catalogue Swift enregistre la baisse à 255 (#6624)
+  - la loi de l'image seule est verte ; le mesureur et la bande suspendue rougissent (#6636)
+  - la purge des images du serveur final ne demande plus « y », et rien ne déploie la production toute seule (#6556)
+  - répondre à une pièce depuis son plein écran — et l'ancre qui le rend honnête (#6165)
+  - le consentement vocal part par PUT /me/consents, plus jamais par PATCH application (#6624)
+  - se connecter « par e-mail », la mécanique derrière un (i) (#6628)
+  - « e-mail » ne se coupe plus au trait d'union dans le titre du panneau (#6626)
+  - se connecter « par e-mail », le fonctionnement derrière un (i) — run test (#6626)
+  - la feuille de langue parle la langue d'interface (#6328)
+  - le (i) « Comment ça marche » suit le dernier mot du titre, jamais le bord de l'écran (#6626)
+  - se connecter et s'inscrire se lisent « par e-mail », la mécanique derrière un (i) (#6626)
+  - se connecter « par e-mail », la mécanique derrière un (i) (#6626)
+  - les dates du fil passent toutes par WireDate, les formateurs ISO 8601 jumeaux disparaissent (#6611)
+  - l'entrée en cours de piste est éprouvée à son APPLICATION, l'enveloppe de volume suit la position, et le détail ouvre où la carte en était (#6580)
+  - le fil et le détail rendent les cinq agencements de l'auteur (#6514)
+  - l'agencement de l'auteur voyage jusqu'à la présentation du fil (#6514)
+  - la grille des médias du fil sort de FeedScreen.kt (#6514)
+  - corriger un commentaire déclare la langue de la pastille (#6600)
+  - l'édition d'un commentaire quitte ses trois hôtes hors budget (#6600)
+  - une publication s'affiche dans l'agencement choisi par son auteur (#6514)
+  - le since du delta, les checkpoints et les curseurs repassent par une date-heure complète (#6609)
+  - WireDate, la source unique des dates du fil (#6609)
+  - la langue d'un commentaire atteint le serveur ET la ligne que l'auteur lit (#6587)
+  - les QUATRE transports servent la pièce citée, et le rattrapage a des témoins qui tombent (#6164)
+  - le retrait d'un média s'ÉPROUVE, et il emporte l'audio, le clone et la scène entière (#6577)
+  - la bande du haut se pose en overlay — mesuré, pas raisonné (#6579)
+  - la porte R1 gèle aussi les AVPlayer, pas seulement le playhead (#6580)
+  - la citation RENVOIE a la piece nommee, et le plein ecran l'OUVRE (#6164)
+  - une traduction de post reçue en direct ne détrône plus la langue d'origine (#6531)
+  - un déploiement annulé ne perd plus son diff, et le frontend expose sa révision
+  - la position de lecture peut voyager de la carte au détail (#6580)
+  - la langue d'écriture d'un commentaire voyage jusqu'au serveur (#6587)
+  - retirer la DERNIÈRE scène supprime ses objets, jamais rien (#6577)
+  - les bornes legacy du fond sonore rognent la SOURCE, pas la timeline (#6580)
+  - le média retiré du composer ne part plus à la publication (#6577)
+  - une reponse cite UNE PIECE NOMMEE, pas seulement son message (#6164)
+  - le mixer du lecteur sait entrer en cours de piste, et la pause ne compte plus comme du temps joué (#6580)
+  - la bande du haut a un seul propriétaire, et elle suit la barre active (#6579)
+  - l'inscription montre le contact d'emblée et n'a plus d'étapes, /login se réduit à la baguette, le parrainage s'entre (#6582, #6583, #6584)
+  - la loupe de la Lentille et du fil Focal est nettement plus prononcée — run test (#6586)
+  - la légende d'un attachement de conversation ne se traduit jamais sous protection (#6533)
+  - l'écran « Toutes les stories » parle la langue d'interface (#6547)
+  - fix-orphan-participants.ts ne laisse plus de messages sans expéditeur (#6518)
+  - retire MeeshHero, LevelCard, StreakCard et ElanBanner — exportés, testés, montés nulle part (#6497)
+  - le cliquet des couleurs d'accent redevient vert — le profil vocal convertit sa teinte une fois (#6481)
+  - Lentille, modes de lecture et Rivière quittent la bêta — actifs par défaut, trois interrupteurs dans Réglages (#6482)
+  - découvrir reconnaît un contact ou un bloqué au-delà de la première page de cent (#6421)
+  - les onglets de Découvrir se parcourent aux flèches (#6422)
+  - retire next-pwa, jamais importé, qui épinglait un sous-arbre next/react/playwright
+  - le vocal se parcourt au doigt, change de vitesse, et sa transcription suit la voix (#6306)
+  - les médias de la conversation, à plat et dans l'ordre du fil — loi pure (#6303)
+  - la transcription sait quel segment est prononcé — loi pure (#6306)
+  - la landing n'affirme plus « 200 languages » ni la confidentialité absolue de la traduction serveur
+  - la pellicule de la visionneuse défile dans les deux sens et réserve sa hauteur
+  - resserre WEB_BASELINE à 1128 — amélioration de #6192 jamais enregistrée
+  - les quatre gardes d'inventaire repassent au vert, chacune à sa cause (#6676)
+  - le balayage du cadrage remonte de nouveau recipientLanguage(user) dans PasswordResetService (#6673)
+  - « Mot de passe oublié » sert un compte sans mot de passe, qui y définit son premier (#6663)
+  - la garde de citation ne fait pas grossir MessagingService.test.ts
+  - centralise la garde de citation dans handleMessage, un site pour les trois transports
+  - MessageProcessor.ts repasse sous sa dette de taille (1113 → 1109) (#6639)
+  - replyToId est validé contre la conversation de l'envoi (#6601)
+  - le rattrapage d'une pièce citée se type au lieu de passer par any (#6164)
+  - un son sans image porte enfin une vignette de repli (#6605)
+  - trimmer PostService.ts sous le cliquet de budget de taille
+  - le compte semé qui naît vérifié n'est ni derrière une porte fermée ni un destinataire d'e-mail (#6581)
+  - un 201 de publication dit désormais si le son est entré en bibliothèque
+  - un compte semé naît vérifié, et un 201 ne prouve pas qu'un son est né (#6581)
+  - un refus CORS rend 403, plus jamais 500 ni une ligne ERROR (#6591)
+  - NotificationFormatter type ses champs Json plutôt que `any` (#3679)
+  - fixture uses a valid ObjectId postId (CI red on #6562)
+  - un postId malformé rend 404, jamais 500 (#6557)
+  - met à jour l'inventaire du garde de masquage personnel (#6516)
+  - chaque lecteur de sender orphelin est réparé ou exempté (#6516)
+  - ContactDirectoryService.match() ne perd plus un contact sans blockedUserIds (#6529)
+  - un repost réussi ne s'annonce plus comme un échec (#6524)
+  - un compte sans blockedUserIds redevient chercheable (#6452)
+  - ne pas faire grossir core.test.ts, déjà hors budget (#4531)
+  - monter requireEmailVerification sur la publication, l'invitation et la création de lien (#6437)
+  - mock SessionService/disconnectSession in profile-extended.test.ts (#6435)
+  - changer son mot de passe révoque les autres sessions (#6435)
+  - LEGACY_CONSENT_ERROR nomme PUT /me/consents/{purpose}
+  - message-deletion-single-source.test.ts tourne sous Vitest, pas bun:test
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.21.1
+
 ## 1.53.0
 
 ### Minor Changes
