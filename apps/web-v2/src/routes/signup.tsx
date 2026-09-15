@@ -41,6 +41,7 @@ import {
   normalizeReferralCode,
   referralCodeFromLocation,
 } from '@/lib/view/referral-code';
+import { forgetReferralCode, recallReferralCode, rememberReferralCode } from '@/lib/view/referral-memory';
 import { Link, href, navigate } from '@/routes/route-table';
 
 /**
@@ -184,7 +185,7 @@ export default function SignupScreen({
   if (nextReveal !== reveal) setReveal(nextReveal);
 
   /**
-   * LE PARRAINAGE (#6584) — lu UNE fois dans l'adresse, à l'initialisation.
+   * LE PARRAINAGE (#6584) — l'adresse D'ABORD, la MÉMOIRE ensuite.
    *
    * `referralCodeFromLocation` plutôt que `useSearch()` : ce dernier exige le
    * contexte du routeur, et l'inscription est montée telle quelle par ses
@@ -192,12 +193,28 @@ export default function SignupScreen({
    * deux (`LoginDoors`). Le code d'invitation ne change pas sous les doigts de
    * celui qui remplit le formulaire : le lire une fois suffit.
    *
-   * Le bloc s'ouvre SEUL quand l'adresse porte un code, et reste replié sinon :
-   * la très grande majorité des inscriptions n'en ont pas, et un champ de plus
-   * imposé à tout le monde pour servir une minorité est exactement la
-   * surcharge que le porteur a déjà refusée (#6441).
+   * **`recallReferralCode` est la reprise du LEGACY** (`apps/web` écrit le
+   * jeton pour 30 jours et le relit à l'inscription) : quelqu'un qui clique une
+   * invitation, regarde l'accueil et s'inscrit le lendemain garde son
+   * parrainage. Sans elle, seul le cas rare — s'inscrire sans jamais quitter la
+   * page d'arrivée — aurait compté. L'adresse GAGNE sur la mémoire : un
+   * nouveau lien remplace un ancien, jamais l'inverse.
+   *
+   * Le bloc s'ouvre SEUL quand un code est connu, et reste replié sinon : la
+   * très grande majorité des inscriptions n'en ont pas, et un champ de plus
+   * imposé à tout le monde pour servir une minorité est exactement la surcharge
+   * que le porteur a déjà refusée (#6441).
    */
-  const [referralCode, setReferralCode] = useState(referralCodeFromLocation);
+  const [referralCode, setReferralCode] = useState(() => {
+    const fromAddress = referralCodeFromLocation();
+    if (fromAddress !== '') {
+      // Il vient d'arriver par un lien : on le retient POUR la navigation qui
+      // suit, au cas où l'inscription ne se termine pas dans cette page-ci.
+      rememberReferralCode(fromAddress);
+      return fromAddress;
+    }
+    return recallReferralCode();
+  });
   const [isReferralOpen, setReferralOpen] = useState(() => referralCode !== '');
   const [referral, setReferral] = useState<ReferralStatus>({ kind: 'idle' });
 
@@ -262,6 +279,10 @@ export default function SignupScreen({
      */
     const code = normalizeReferralCode(referralCode);
     if (isReferralCodeShaped(code)) {
+      // OUBLIÉ tout de suite, pas à la réponse : le compte est créé, ce code a
+      // servi. L'attendre pour l'oublier le laisserait se rattacher une seconde
+      // fois à une inscription suivante sur le même navigateur.
+      forgetReferralCode();
       void convertReferral({ code, userId: result.data.user.id }).catch(() => undefined);
     }
     navigate(href('verifyEmail', undefined, { email: form.email }), true);

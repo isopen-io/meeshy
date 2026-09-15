@@ -208,7 +208,7 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // aucun n'a besoin de migrer dans l'immédiat, le retrait de l'alias restant
 // gouverné par le compteur d'accès nul (#4275). Faire pointer iOS vers la
 // nouvelle adresse est un travail client à part, pas ouvert par ce lot.
-const BASELINE_DEAD_ENTRIES = 257;
+const BASELINE_DEAD_ENTRIES = 255;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

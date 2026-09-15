@@ -2696,15 +2696,16 @@ magique — et la constante devient PARTAGÉE (`lib/view/auth-copy.ts`) plutôt 
 recopiée. Sa demande est INJECTABLE (`ForgotPasswordDeps`), comme celle du
 panneau du lien magique.
 
-*(À LA FUSION avec `dev`, le 2026-09-15 : `SPAM_HINT` n'a plus qu'UN hôte. D-71
-a replié la note du panneau du lien magique derrière le (i) « Rien reçu ? », et
-son texte y abandonne « après une minute » au profit de la formulation imposée
-aux trois clients. `/forgot-password` dit donc encore la note EN CLAIR, avec
-l'ancienne phrase, pendant que l'autre écran de la même attente la replie. Le
-module partagé est gardé tel quel — l'aligner demande de trancher si la
-directive « moins de détails » s'étend à cet écran, et un merge n'est pas le
-lieu où l'on tranche une question de produit. C'est un SUIVI, à porter par une
-issue.)*
+*(À LA FUSION avec `dev`, le 2026-09-15, puis SOLDÉ dans le même mouvement :
+D-71 a replié la note du panneau derrière le (i) « Rien reçu ? » et en a changé
+le texte — deux phrases pour une même attente avaient donc commencé à diverger,
+l'une disant « après une minute » que l'autre venait d'abandonner. La question
+de produit n'en était pas une : les deux écrans attendent le MÊME e-mail, et
+« moins de détails » ne peut pas vouloir dire replié ici et en clair là.
+`/forgot-password` porte donc le même (i), et `lib/view/auth-copy.ts` ne tient
+plus une phrase mais des CHAÎNES (`HOW_IT_WORKS_*`, `NOTHING_RECEIVED_*`) que
+les deux hôtes composent — jamais un `InfoHint`, qui porte un tracé et ferait
+descendre `lib/view` dans `components`.)*
 
 ### Le parrainage — entrer un code, et un lien qui le pose
 
@@ -2740,6 +2741,40 @@ de l'hôte. Le refus se dit en encre ordinaire, sans `role="alert"` ni teinte
 d'erreur, le bouton reste actif, et un échec RÉSEAU retombe au silence plutôt
 que d'accuser un jeton dont on ne sait rien. La conversion part sans être
 attendue.
+
+**Ce que le LEGACY avait déjà, et qui est repris** (retour porteur 2026-09-15 :
+« la version legacy avait déjà des développements dans ce sens, il faut veiller
+à réutiliser ou simplement ne rien perdre »). Trois trouvailles dans `apps/web` :
+
+1. **Le jeton SURVIT à la navigation.** `app/signup/affiliate/[token]/page.tsx`
+   l'écrit en `localStorage` et en cookie 30 jours ;
+   `use-registration-submit.ts` le relit au moment de créer le compte. Sans
+   cette moitié, seul le cas RARE comptait — s'inscrire sans jamais quitter la
+   page d'arrivée — et le cas NOMINAL d'un lien partagé (cliquer, regarder,
+   s'inscrire le lendemain) perdait le parrainage. `lib/view/referral-memory.ts`
+   le reprend sous LA MÊME CLÉ (`meeshy_affiliate_token`) : le jour où
+   `apps/web-v2` prend la place d'`apps/web`, les jetons déjà posés dans les
+   navigateurs sont relus plutôt que jetés, et une ligne écrite par le legacy —
+   le jeton NU, sans objet ni date — est comprise telle quelle. L'ÉCHÉANCE, en
+   revanche, est corrigée : le legacy borne son cookie à 30 jours et laisse la
+   copie locale sans date, donc un jeton y survit indéfiniment ; ici la date est
+   portée par la valeur, il n'y a qu'un support à faire périr. L'adresse gagne
+   toujours sur la mémoire — un nouveau lien remplace un ancien.
+2. **`?affiliate=` est la clé du legacy** (`middleware.ts:63` la capte sur
+   n'importe quelle adresse). Des liens la portant sont déjà dans la nature :
+   elle rejoint `ref` et `parrain` dans `REFERRAL_SEARCH_KEYS`.
+3. **Ce que le legacy fait pour RIEN n'est pas recopié** :
+   `use-registration-submit.ts` pose `body.affiliateToken` sur
+   `POST /auth/register`. Mesuré — ni la route, ni `registration.service.ts`, ni
+   `registerRequestSchema` ne lisent ce champ ; seul `POST /affiliate/register`,
+   après le compte, noue quoi que ce soit. Reprendre la ligne aurait recopié une
+   croyance, pas un comportement.
+
+**Deux parcours du legacy restent SANS équivalent**, inventoriés plutôt que
+perdus : la récupération de compte par TÉLÉPHONE (six étapes, `components/auth/recovery/`)
+et la reprise d'un numéro déjà rattaché (`phoneTransferToken`, que la passerelle
+sert déjà par `routes/auth/phone-transfer.ts`, et devant quoi le chantier
+s'arrête sur une phrase). #6650 les porte — bloquants pour la bascule.
 
 **Ce que ce lot ne fait pas** : la page depuis laquelle on INVITE (son code,
 ses jetons de campagne, ses filleuls, ses statistiques) n'existe toujours pas

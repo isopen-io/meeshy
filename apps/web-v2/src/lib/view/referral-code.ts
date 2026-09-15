@@ -28,12 +28,15 @@
  *
  * `ref` est la forme courte et internationale (celle que `/signup/affiliate/:token`
  * réécrit) ; `parrain` est celle qu'un lien partagé en français portera
- * naturellement. Les deux ouvrent la même porte plutôt que d'exiger de
- * connaître la bonne orthographe — et l'ordre est FIXÉ ici, jamais laissé au
- * hasard de l'adresse : deux clés présentes doivent donner le même résultat à
- * tout le monde.
+ * naturellement ; **`affiliate` est celle du LEGACY** — son `middleware.ts:63`
+ * capte `/?affiliate=TOKEN` sur N'IMPORTE quelle adresse et redirige vers sa
+ * page d'invitation. Des liens la portant sont déjà dans la nature ; ne pas la
+ * lire les perdrait tous.
+ *
+ * L'ordre est FIXÉ ici, jamais laissé au hasard de l'adresse : deux clés
+ * présentes doivent donner le même résultat à tout le monde.
  */
-export const REFERRAL_SEARCH_KEYS = ['ref', 'parrain'] as const;
+export const REFERRAL_SEARCH_KEYS = ['ref', 'parrain', 'affiliate'] as const;
 
 /** La borne haute, large exprès : elle écarte un collage accidentel de page
  * entière, pas un jeton un peu long. */

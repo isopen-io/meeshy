@@ -11,6 +11,12 @@ import {
   type MagicLinkDeadline,
   type MagicLinkRequestOutcome,
 } from '@/lib/view/magic-link';
+import {
+  HOW_IT_WORKS_LABEL,
+  HOW_IT_WORKS_TEXT,
+  NOTHING_RECEIVED_LABEL,
+  NOTHING_RECEIVED_TEXT,
+} from '@/lib/view/auth-copy';
 import { useCountdown } from '@/lib/view/use-countdown';
 
 import { AuthSubmitButton } from './auth-chrome';
@@ -62,11 +68,7 @@ const OUTCOME_FIELD_ERROR = 'Adresse e-mail invalide';
  * part à l'écran — la BAGUETTE reste l'icône de la connexion par e-mail — et le
  * vocabulaire est celui que les trois clients partagent.
  */
-const HOW_IT_WORKS: InfoHint = {
-  label: 'Comment ça marche',
-  text: 'Pas de mot de passe à retenir : nous vous envoyons un lien par e-mail. Ouvrez-le et vous êtes connecté.',
-  glyph: AUTH_GLYPHS.info,
-};
+const HOW_IT_WORKS: InfoHint = { label: HOW_IT_WORKS_LABEL, text: HOW_IT_WORKS_TEXT, glyph: AUTH_GLYPHS.info };
 
 /**
  * CE QUE LA PASSERELLE NE DIT PAS, ET QUE L'ÉCRAN DOIT DIRE (#6404).
@@ -80,11 +82,11 @@ const HOW_IT_WORKS: InfoHint = {
  * glyphe : posé seul sous le compte à rebours, un (i) muet ne dirait pas de
  * quoi il parle.
  */
-const NOTHING_RECEIVED: InfoHint = {
-  label: 'Rien reçu ?',
-  text: 'Regardez vos indésirables (spam) : le message peut y être tombé.',
-  glyph: AUTH_GLYPHS.info,
-};
+/** Le TEXTE et le LIBELLÉ viennent de `lib/view/auth-copy.ts` : `/forgot-password`
+ * attend le même e-mail et pose la même question (#6583). Deux phrases pour une
+ * même attente auraient dérivé au premier correctif — et elles avaient déjà
+ * commencé, l'une disant « après une minute » que l'autre venait d'abandonner. */
+const NOTHING_RECEIVED: InfoHint = { label: NOTHING_RECEIVED_LABEL, text: NOTHING_RECEIVED_TEXT, glyph: AUTH_GLYPHS.info };
 
 function bannerFor(outcome: MagicLinkRequestOutcome | null): string | null {
   if (outcome === null) return null;

@@ -22,6 +22,10 @@ final class UserPreferencesManagerTests: XCTestCase {
         // this, `pendingCategories` from a prior test leaks into this one's
         // `shouldApplyRemote`/`applyRemote`-adjacent assertions.
         manager.pendingCategories.removeAll()
+        // #6624 — `fetchFromBackend()` relit aussi `GET /me/consents` : sans
+        // double, un témoin de relecture appellerait le vrai réseau.
+        manager.consentService = MockConsentService()
+        manager.grantedConsents = []
     }
 
     override func tearDown() {
@@ -35,6 +39,8 @@ final class UserPreferencesManagerTests: XCTestCase {
         // whichever `OfflineQueue` pool is configured by the time it fires.
         manager.isAuthenticatedOverride = nil
         manager.service = PreferenceService.shared
+        manager.consentService = ConsentService.shared
+        manager.grantedConsents = []
         super.tearDown()
     }
 
@@ -185,45 +191,134 @@ final class UserPreferencesManagerTests: XCTestCase {
         XCTAssertTrue(manager.application.reducedMotion)
     }
 
-    // MARK: - Voice Consent (espace de préférences)
+    // MARK: - Voice Consent (#6624 — PUT /me/consents, jamais PATCH application)
 
     func test_voiceConsentGranted_defaultsToFalse() {
         XCTAssertFalse(manager.voiceConsentGranted)
         XCTAssertFalse(manager.voiceCloningConsentGranted)
     }
 
-    func test_grantVoiceAutoTranslationConsent_setsConsentChainAndAudioFeatures() {
-        manager.grantVoiceAutoTranslationConsent()
+    func test_grantVoiceAutoTranslationConsent_grantsVoiceCloningThroughTheConsentRoute() async throws {
+        let consents = MockConsentService()
+        manager.consentService = consents
 
+        try await manager.grantVoiceAutoTranslationConsent()
+
+        XCTAssertEqual(consents.setConsentCalls, [.init(purpose: .voiceCloning, granted: true)])
         XCTAssertTrue(manager.voiceConsentGranted)
         XCTAssertTrue(manager.voiceCloningConsentGranted)
-        XCTAssertNotNil(manager.application.dataProcessingConsentAt)
-        XCTAssertNotNil(manager.application.voiceDataConsentAt)
-        XCTAssertNotNil(manager.application.voiceProfileConsentAt)
-        XCTAssertNotNil(manager.application.voiceCloningEnabledAt)
+    }
+
+    func test_grantVoiceAutoTranslationConsent_turnsOnTheAudioFeatures() async throws {
+        try await manager.grantVoiceAutoTranslationConsent()
+
         XCTAssertTrue(manager.audio.transcriptionEnabled)
         XCTAssertTrue(manager.audio.audioTranslationEnabled)
         XCTAssertTrue(manager.audio.ttsEnabled)
         XCTAssertTrue(manager.audio.voiceProfileEnabled)
+        XCTAssertTrue(manager.pendingCategories.contains(.audio))
     }
 
-    func test_grantVoiceAutoTranslationConsent_isIdempotent_neverRewritesTimestamps() {
-        let first = Date(timeIntervalSince1970: 1_700_000_000)
-        manager.grantVoiceAutoTranslationConsent(now: first)
-        let stamped = manager.application.voiceProfileConsentAt
+    func test_grantVoiceAutoTranslationConsent_writesNothingIntoApplicationPreferences() async throws {
+        try await manager.grantVoiceAutoTranslationConsent()
 
-        manager.grantVoiceAutoTranslationConsent(now: first.addingTimeInterval(3600))
-
-        XCTAssertEqual(manager.application.voiceProfileConsentAt, stamped)
+        XCTAssertEqual(manager.application, .defaults)
+        XCTAssertFalse(manager.pendingCategories.contains(.application))
     }
 
-    /// #6611 — l'horodatage d'un consentement est une date du fil
-    /// (`WireDate`) : la passerelle le sert en `toISOString`, à millisecondes.
-    func test_grantVoiceAutoTranslationConsent_stampsWireDateWithMilliseconds() {
-        manager.grantVoiceAutoTranslationConsent(now: Date(timeIntervalSince1970: 1_789_464_863.563))
+    func test_grantVoiceAutoTranslationConsent_whenConsentRouteFails_throwsAndClaimsNothing() async {
+        let consents = MockConsentService()
+        consents.setConsentError = MeeshyError.server(statusCode: 409, message: "CONSENT_POLICY_VERSION_MISMATCH")
+        manager.consentService = consents
 
-        XCTAssertEqual(manager.application.dataProcessingConsentAt, "2026-09-15T09:34:23.563Z")
-        XCTAssertEqual(manager.application.voiceCloningEnabledAt, "2026-09-15T09:34:23.563Z")
+        do {
+            try await manager.grantVoiceAutoTranslationConsent()
+            XCTFail("un consentement refusé par la passerelle ne doit jamais passer pour enregistré")
+        } catch {}
+
+        XCTAssertFalse(manager.voiceConsentGranted)
+        XCTAssertFalse(manager.voiceCloningConsentGranted)
+        XCTAssertEqual(manager.audio, .defaults)
+        XCTAssertTrue(manager.pendingCategories.isEmpty)
+    }
+
+    func test_grantVoiceAutoTranslationConsent_whenGatewayAnswersNotGranted_throws() async {
+        let consents = RefusingConsentService()
+        manager.consentService = consents
+
+        do {
+            try await manager.grantVoiceAutoTranslationConsent()
+            XCTFail("une réponse `granted: false` n'accorde rien")
+        } catch {
+            XCTAssertEqual(error as? ConsentServiceError, .notGranted(.voiceCloning))
+        }
+        XCTAssertFalse(manager.voiceConsentGranted)
+    }
+
+    func test_fetchFromBackend_refreshesGrantedConsentsFromTheServer() async {
+        let prefs = MockPreferenceService()
+        prefs.allPreferencesResult = .defaults
+        manager.service = prefs
+        manager.isAuthenticatedOverride = { true }
+        let consents = MockConsentService()
+        consents.consentsResult = .success([
+            Self.servedConsent(.dataProcessing, granted: true),
+            Self.servedConsent(.voiceData, granted: true),
+            Self.servedConsent(.voiceProfile, granted: true),
+            Self.servedConsent(.voiceCloning, granted: false),
+        ])
+        manager.consentService = consents
+
+        await manager.fetchFromBackend()
+
+        XCTAssertTrue(manager.voiceConsentGranted)
+        XCTAssertFalse(manager.voiceCloningConsentGranted)
+    }
+
+    func test_fetchFromBackend_whenServerRevokedTheConsent_forgetsTheLocalGrant() async throws {
+        try await manager.grantVoiceAutoTranslationConsent()
+        let prefs = MockPreferenceService()
+        prefs.allPreferencesResult = .defaults
+        manager.service = prefs
+        manager.isAuthenticatedOverride = { true }
+        let consents = MockConsentService()
+        consents.consentsResult = .success([Self.servedConsent(.voiceProfile, granted: false)])
+        manager.consentService = consents
+
+        await manager.fetchFromBackend()
+
+        XCTAssertFalse(manager.voiceConsentGranted)
+    }
+
+    func test_fetchFromBackend_whenConsentsReadFails_keepsTheKnownGrant() async throws {
+        try await manager.grantVoiceAutoTranslationConsent()
+        let prefs = MockPreferenceService()
+        prefs.allPreferencesResult = .defaults
+        manager.service = prefs
+        manager.isAuthenticatedOverride = { true }
+        let consents = MockConsentService()
+        consents.consentsResult = .failure(MeeshyError.server(statusCode: 503, message: "indisponible"))
+        manager.consentService = consents
+
+        await manager.fetchFromBackend()
+
+        XCTAssertTrue(manager.voiceConsentGranted)
+    }
+
+    func test_resetSession_forgetsTheGrantedConsents() async throws {
+        try await manager.grantVoiceAutoTranslationConsent()
+
+        manager.resetSession()
+
+        XCTAssertFalse(manager.voiceConsentGranted)
+        XCTAssertFalse(manager.voiceCloningConsentGranted)
+    }
+
+    private static func servedConsent(_ purpose: ConsentPurpose, granted: Bool) -> ConsentEntry {
+        ConsentEntry(
+            purpose: purpose.rawValue, granted: granted,
+            grantedAt: granted ? "2026-09-15T10:00:00.000Z" : nil, policyVersion: ConsentPolicy.defaultVersion
+        )
     }
 
     // MARK: - shouldApplyRemote (applyRemote server-wins race, P1)
@@ -398,6 +493,43 @@ final class UserPreferencesManagerTests: XCTestCase {
 
         let count = try await pool.read { db in try OutboxRecord.fetchCount(db) }
         XCTAssertEqual(count, 0, "not authenticated yet — must not attempt delivery")
+    }
+
+    /// #6624 — le critère de fin de l'issue, lu sur le corps RÉELLEMENT mis en
+    /// file : sur un appareil dont le bloc local porte encore les horodatages
+    /// d'avant le correctif, accorder la traduction vocale puis changer de
+    /// thème envoie `PATCH /me/preferences/application` sans aucune clé que la
+    /// passerelle refuse.
+    func test_grantVoiceAutoTranslationConsent_thenThemeChange_applicationBodyCarriesNoRefusedConsentKey() async throws {
+        let pool = try DatabaseQueue()
+        try MessageDatabaseMigrations.runAll(on: pool)
+        await OfflineQueue.shared.configure(pool: pool)
+        await OfflineQueue.shared.clearAll()
+        manager.isAuthenticatedOverride = { true }
+        manager.updateApplication {
+            $0.dataProcessingConsentAt = "2026-09-14T15:47:48.000Z"
+            $0.voiceProfileConsentAt = "2026-09-14T15:47:48.000Z"
+            $0.voiceCloningEnabledAt = "2026-09-14T15:47:48.000Z"
+        }
+        let consents = MockConsentService()
+        manager.consentService = consents
+
+        try await manager.grantVoiceAutoTranslationConsent()
+        manager.updateApplication { $0.theme = .dark }
+        await manager.resumeOrphanedPendingSyncs([.application])
+
+        let records = try await pool.read { db in try OutboxRecord.fetchAll(db) }
+        let payloads = try records.map { try JSONDecoder().decode(UpdateSettingsPayload.self, from: $0.payload) }
+        let application = try XCTUnwrap(payloads.first { $0.category == PreferenceCategory.application.rawValue })
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: application.body) as? [String: Any])
+        let refused: Set<String> = [
+            "dataProcessingConsentAt", "voiceDataConsentAt", "voiceProfileConsentAt",
+            "voiceCloningConsentAt", "voiceCloningEnabledAt",
+        ]
+
+        XCTAssertEqual(consents.setConsentCalls, [.init(purpose: .voiceCloning, granted: true)])
+        XCTAssertEqual(body["theme"] as? String, "dark")
+        XCTAssertTrue(Set(body.keys).isDisjoint(with: refused), "clés refusées dans le corps : \(Set(body.keys).intersection(refused).sorted())")
     }
 
     // MARK: - namesUserLevelCategory (scope de la diffusion — décision pure)

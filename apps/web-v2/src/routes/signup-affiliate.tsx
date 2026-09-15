@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 
 import { useParams } from '@/lib/router';
+import { rememberReferralCode } from '@/lib/view/referral-memory';
 import { href, navigate } from '@/routes/route-table';
 
 /**
@@ -28,6 +29,11 @@ export default function SignupAffiliateScreen() {
   const { token } = useParams<'/signup/affiliate/$token'>();
 
   useEffect(() => {
+    // RETENU avant de rediriger, comme le fait le legacy sur cette même adresse
+    // (`apps/web/app/signup/affiliate/[token]/page.tsx:38`) : celui qui arrive
+    // ici ne s'inscrit pas toujours dans la minute, et son parrainage doit
+    // survivre à la visite qu'il va faire d'abord.
+    rememberReferralCode(token);
     navigate(token === '' ? href('signup') : href('signup', undefined, { ref: token }), true);
   }, [token]);
 
