@@ -27,6 +27,10 @@ nonisolated struct GallerySceneItem: Equatable {
     /// Le porteur de la scène : le document dit ce qu'il faut peindre, pas où
     /// vivent les pixels. Sans lui, une scène de MÉDIA se peint vide (#4926).
     let carrier: StoryItem
+    /// Le média du post que la scène MONTRE (`SceneCaption.mediaIdentity`), ou
+    /// `nil` pour une scène de texte, de dessin ou de couleur. C'est lui qu'une
+    /// citation désigne, et lui qu'une citation rouvre.
+    let mediaId: String?
     /// Le rapport largeur / hauteur auquel la scène se cadre — voir
     /// `PostGalleryLot.sceneAspect`.
     let aspect: CGFloat
@@ -48,6 +52,7 @@ nonisolated struct GallerySceneItem: Equatable {
         gauche.id == droite.id
             && gauche.postId == droite.postId
             && gauche.sceneIndex == droite.sceneIndex
+            && gauche.mediaId == droite.mediaId
             && gauche.aspect == droite.aspect
             && gauche.moves == droite.moves
             && gauche.thumbHash == droite.thumbHash
@@ -69,19 +74,26 @@ nonisolated struct GallerySceneCaption: Equatable {
         CaptionTranslationSource.of(origin: origin, post: post, mediaId: mediaId)
     }
 
-    /// **Le texte servi, lu DEPUIS la langue affichée** — site unique du lot (qui
-    /// sert la descente du Prisme) et du bloc de légende (qui sert le choix du
-    /// lecteur). Deux résolutions du même texte ont déjà divergé une fois (#6531).
-    func servedText(in post: FeedPost,
-                    fallback: String,
-                    preferredLanguages: [String],
-                    chosenLanguage: String?) -> String {
+    /// **La langue affichée, résolue UNE fois** — le choix du lecteur, sinon la
+    /// descente du Prisme. Le texte ET le drapeau actif la lisent : deux
+    /// résolutions parallèles ont déjà marqué « Français » actif sur un texte
+    /// portugais (#6531).
+    func displayedLanguage(in post: FeedPost,
+                           preferredLanguages: [String],
+                           chosenLanguage: String?) -> String? {
+        chosenLanguage ?? source(in: post)?.displayedLanguage(preferredLanguages: preferredLanguages)
+    }
+
+    /// **Le texte servi, lu DEPUIS la langue affichée** — site unique du lot et du
+    /// bloc de légende. Une langue sans texte connu rend le contenu, jamais une
+    /// légende vide.
+    func servedText(in post: FeedPost, fallback: String, language: String?) -> String {
         guard let source = source(in: post) else { return fallback }
         return CaptionTranslationOffer.carrierText(
             content: source.text,
             originalLanguage: source.originalLanguage,
             translations: source.translations,
-            language: chosenLanguage ?? source.displayedLanguage(preferredLanguages: preferredLanguages)
+            language: language
         )
     }
 }
@@ -151,18 +163,38 @@ nonisolated struct PostGalleryLot {
 
     /// **La page par laquelle on ENTRE.**
     ///
-    /// Un média que le lot montre en page — un média du post, ou un média de
-    /// commentaire — gagne. Sinon la scène touchée, bornée : un index hors bornes
-    /// ferait ouvrir une page qui n'existe pas. Un média du post que le lot
-    /// montre PAR SA SCÈNE n'est pas une page : c'est l'index de scène qui dit
-    /// laquelle le doigt a touchée.
+    /// 1. Une page dont l'identité est celle demandée — un média du post, ou un
+    ///    média de commentaire.
+    /// 2. La scène qui MONTRE le média demandé : c'est le chemin d'une citation,
+    ///    qui désigne un média du post et doit rouvrir la scène qui le porte.
+    /// 3. La scène touchée, bornée : un index hors bornes ferait ouvrir une page
+    ///    qui n'existe pas.
     static func entryId(in lot: PostGalleryLot, startMediaId: String?, startSceneIndex: Int) -> String {
         if let startMediaId, lot.attachments.contains(where: { $0.id == startMediaId }) {
             return startMediaId
         }
         let pagesScene = lot.attachments.filter { lot.scenes[$0.id] != nil }
+        if let startMediaId,
+           let montre = pagesScene.first(where: { lot.scenes[$0.id]?.mediaId == startMediaId }) {
+            return montre.id
+        }
         guard !pagesScene.isEmpty else { return lot.attachments.first?.id ?? "" }
         return pagesScene[min(max(0, startSceneIndex), pagesScene.count - 1)].id
+    }
+
+    /// **La citation que « Répondre » pose sur cette page** — la même que #6578,
+    /// jamais un second format.
+    ///
+    /// Une page scène cite le média qu'elle MONTRE ; une page média cite son
+    /// média. Un média JOINT à un commentaire n'est pas un média du post : le
+    /// serveur refuserait la citation, donc `nil` — et la page n'offre pas le
+    /// geste (loi 4). Une scène sans média n'a rien à citer.
+    func quotation(for pieceId: String, in post: FeedPost) -> CommentQuotedMedia? {
+        let mediaId = scenes[pieceId].map(\.mediaId) ?? pieceId
+        guard let mediaId, let media = post.media.first(where: { $0.id == mediaId }) else { return nil }
+        return CommentQuotedMedia(postMediaId: media.id,
+                                  kind: CommentQuotedMedia.Kind(rawValue: media.type.rawValue) ?? .file,
+                                  media: media)
     }
 
     /// L'identité d'une page scène. L'INDEX et non l'id de scène :
@@ -226,6 +258,7 @@ nonisolated struct PostGalleryLot {
             document: document,
             sceneIndex: index,
             carrier: carrier,
+            mediaId: media?.id,
             aspect: sceneAspect(document, sceneIndex: index),
             // Le son de fond appartient au DOCUMENT, pas à une scène : il fait
             // jouer chacune d'elles.
@@ -251,9 +284,12 @@ nonisolated struct PostGalleryLot {
                                                      carrierFallback: true)
         let anchor = legende.map { GallerySceneCaption(origin: $0.origin, mediaId: mediaId) }
         let caption = legende.map { legende in
-            GallerySceneCaption(origin: legende.origin, mediaId: mediaId)
-                .servedText(in: post, fallback: legende.text,
-                            preferredLanguages: preferredLanguages, chosenLanguage: nil)
+            let ancre = GallerySceneCaption(origin: legende.origin, mediaId: mediaId)
+            return ancre.servedText(in: post,
+                                    fallback: legende.text,
+                                    language: ancre.displayedLanguage(in: post,
+                                                                      preferredLanguages: preferredLanguages,
+                                                                      chosenLanguage: nil))
         }
         return ScenePage(item: item, attachment: attachment, anchor: anchor, caption: caption)
     }

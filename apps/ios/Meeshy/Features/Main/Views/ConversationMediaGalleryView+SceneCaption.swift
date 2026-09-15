@@ -22,7 +22,11 @@ struct GallerySceneContext {
     let post: FeedPost
     let scenes: [String: GallerySceneItem]
     let captions: [String: GallerySceneCaption]
-    let preferredContentLanguages: [String]
+    /// Le Prisme servi au PLAYER — aux textes posés DANS la scène.
+    let playerLanguages: [String]
+    /// Le Prisme servi à la LÉGENDE — celui du lot, pour que la légende d'une
+    /// scène et celle d'un média se résolvent par la même descente.
+    let captionLanguages: [String]
 }
 
 /// **La légende d'une scène, dans la langue affichée, avec sa rangée de
@@ -54,14 +58,13 @@ struct GallerySceneCaptionBlock: View {
     /// UNE résolution pour le texte ET le drapeau actif — deux résolutions
     /// divergeaient (#6531).
     private var displayedLanguage: String? {
-        chosenLanguage ?? source?.displayedLanguage(preferredLanguages: preferredLanguages)
+        anchor.displayedLanguage(in: post,
+                                 preferredLanguages: preferredLanguages,
+                                 chosenLanguage: chosenLanguage)
     }
 
     private var caption: String {
-        anchor.servedText(in: post,
-                          fallback: fallbackText,
-                          preferredLanguages: preferredLanguages,
-                          chosenLanguage: chosenLanguage)
+        anchor.servedText(in: post, fallback: fallbackText, language: displayedLanguage)
     }
 
     private var offer: CaptionTranslationOffer {

@@ -168,8 +168,63 @@ final class PostGalleryLotTests: XCTestCase {
         XCTAssertEqual(PostGalleryLot.entryId(in: lot, startMediaId: nil, startSceneIndex: 2), ids[2])
         XCTAssertEqual(PostGalleryLot.entryId(in: lot, startMediaId: nil, startSceneIndex: 9), ids[2])
         XCTAssertEqual(PostGalleryLot.entryId(in: lot, startMediaId: nil, startSceneIndex: -1), ids[0])
-        XCTAssertEqual(PostGalleryLot.entryId(in: lot, startMediaId: "m1", startSceneIndex: 1), ids[1],
-                       "Un média du post que le lot montre par sa scène n'est pas une page : la scène décide.")
+    }
+
+    /// **Un média du post montré par une scène ouvre CETTE scène.** C'est le
+    /// chemin d'une citation : un commentaire qui cite le média de la scène 3
+    /// doit rouvrir la scène 3, pas la première (#6711).
+    func test_lEntree_parUnMediaDuPost_ouvreLaSceneQuiLeMontre() {
+        let lot = compose(troisScenes())
+
+        XCTAssertEqual(PostGalleryLot.entryId(in: lot, startMediaId: "m3", startSceneIndex: 0),
+                       lot.attachments[2].id)
+    }
+
+    /// **Répondre depuis une scène cite le média qu'elle MONTRE** — la même
+    /// citation que #6578, jamais un second format. Un média JOINT à un
+    /// commentaire n'est pas un média du post : le serveur refuserait la
+    /// citation, donc la page n'offre pas le geste (loi 4).
+    func test_repondre_citeLeMediaDuPost_etJamaisUnMediaDeCommentaire() throws {
+        let publication = troisScenes()
+        let lot = compose(publication, comments: [comment("c1", media: [media("x")])])
+        let seconde = try XCTUnwrap(lot.attachments.dropFirst().first?.id)
+
+        XCTAssertEqual(lot.quotation(for: seconde, in: publication)?.postMediaId, "m2")
+        XCTAssertEqual(lot.quotation(for: seconde, in: publication)?.kind, .image)
+        XCTAssertNil(lot.quotation(for: "x", in: publication))
+
+        let texte = post(scenes: [scene("s1")])
+        let sansMedia = compose(texte)
+        XCTAssertNil(sansMedia.quotation(for: try XCTUnwrap(sansMedia.attachments.first?.id), in: texte),
+                     "Une scène sans média n'a rien à citer.")
+
+        let photos = post(media: [media("a")])
+        XCTAssertEqual(compose(photos).quotation(for: "a", in: photos)?.postMediaId, "a")
+    }
+
+    /// **Le cadre d'une page scène prend le rapport de la scène** — c'est la
+    /// question que le solveur pose à chaque page. Une pièce synthétique n'a pas
+    /// de dimensions : sans cette réponse, le cadre prendrait toute la zone libre.
+    @MainActor
+    func test_leCadreDUnePageScene_prendLeRapportDeLaScene() throws {
+        let paysage: CGFloat = 16.0 / 9.0
+        let lot = compose(post(scenes: [scene("large", carrierAspect: Double(paysage))]))
+        let page = try XCTUnwrap(lot.attachments.first)
+        let photo = MessageAttachment(id: "photo", mimeType: "image/jpeg", width: 1_600, height: 1_200)
+
+        let rapport = try XCTUnwrap(MediaGalleryStage.mediaRatio(of: page, scenes: lot.scenes))
+        XCTAssertEqual(rapport, paysage, accuracy: 0.0001)
+        XCTAssertEqual(try XCTUnwrap(MediaGalleryStage.mediaRatio(of: photo, scenes: lot.scenes)),
+                       4.0 / 3.0, accuracy: 0.0001)
+
+        let cadre = MediaGalleryStage.resolve(
+            viewport: CGSize(width: 390, height: 844),
+            mediaRatio: rapport,
+            presentation: .carded,
+            corridors: MediaGalleryStage.corridors(safeTop: 59, safeBottom: 34, attachments: lot.attachments)
+        )
+        XCTAssertEqual(cadre.media.width / cadre.media.height, paysage, accuracy: 0.01,
+                       "Le média ajusté doit garder le rapport de la scène, ni rogné ni étiré.")
     }
 
     /// La légende d'une scène est celle qui lui est ADOSSÉE — la légende de son
