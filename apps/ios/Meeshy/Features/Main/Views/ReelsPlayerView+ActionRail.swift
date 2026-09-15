@@ -176,10 +176,11 @@ struct ReelActionRail: View {
                     .glassControlForeground()
                     .frame(width: 48, height: 32)
             }
-            .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
+            .mediaChromeHalo()
             // Le schéma se pose sur le LIBELLÉ, jamais sur le `Menu` : posé plus
-            // haut, il habillerait aussi la feuille du menu.
-            .mediaChromeTinted()
+            // haut, il habillerait aussi la feuille du menu. Il se lit sur la part du
+            // réel sous CE glyphe, voile compris (#6704).
+            .mediaChromeGlyph()
         }
         .accessibilityLabel(String(localized: "feed.post.more_options", defaultValue: "Plus d'options", bundle: .main))
         .accessibilityHint(String(localized: "feed.post.more_options.hint", defaultValue: "Ouvre le menu des actions", bundle: .main))
@@ -194,7 +195,7 @@ private struct ReelActionButton: View {
     /// accent BORDER on the glyph (not a circle). Nil = no participation border.
     var outline: String? = nil
     /// La teinte d'un état ACTIF — aimé, enregistré, republié. `nil` au repos : le
-    /// glyphe prend la teinte que la luminance du réel affiché commande (#6693). Il
+    /// glyphe prend la teinte que la part du réel SOUS LUI commande (#6693, #6704). Il
     /// était blanc d'office, et la recette l'a mesuré à 2,00:1 sur une mire cyan.
     let tint: Color?
     let count: Int?
@@ -217,12 +218,12 @@ private struct ReelActionButton: View {
                             .foregroundColor(Color(hex: accentHex))
                     }
                 }
-                .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
+                .mediaChromeHalo()
                 if let count, count > 0 {
                     Text(CompactCountLabel.text(count))
                         .font(.caption2.weight(.semibold))
                         .glassControlForeground()
-                        .shadow(color: .black.opacity(0.35), radius: 2)
+                        .mediaChromeHalo()
                 }
             }
             .frame(width: 48)
@@ -237,7 +238,7 @@ private struct ReelActionButton: View {
             .padding(.vertical, 6)
             .padding(.horizontal, 6)
             .contentShape(Rectangle())
-            .mediaChromeTinted()
+            .mediaChromeGlyph()
         }
         .buttonStyle(.plain)
     }

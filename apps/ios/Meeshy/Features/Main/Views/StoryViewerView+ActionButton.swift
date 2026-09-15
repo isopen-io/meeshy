@@ -95,19 +95,17 @@ struct StoryActionButton: View {
 
                     Image(systemName: icon)
                         .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(.white)
+                        .glassControlForeground()
                         .adaptiveSymbolBounce(value: isActive)
                 }
                 .frame(width: 46, height: 46)
-                // Halo sous l'icône — lisibilité garantie sur N'IMPORTE QUEL fond
-                // de story (clair comme foncé), sans voile ni cartouche. Inactif →
-                // ombre sombre ; actif → glow coloré plus large qui renforce le
-                // contour accent.
-                .shadow(
-                    color: isActive ? (activeGlow ?? activeColor).opacity(0.55) : .black.opacity(0.6),
-                    radius: isActive ? 7 : 4,
-                    y: isActive ? 0 : 1
-                )
+                // Le glyphe prend la teinte que la slide commande (#6704) : blanc sous
+                // un halo noir sur une slide sombre, indigo sous un halo blanc sur une
+                // slide claire. Il était blanc d'office, mesuré à 1,14:1 sur une story
+                // crème. Actif, le glow coloré renforce en plus le contour accent.
+                .shadow(color: isActive ? (activeGlow ?? activeColor).opacity(0.55) : .clear,
+                        radius: isActive ? 7 : 0)
+                .mediaChromeHalo()
 
                 Text(label)
                     // Doctrine 82i : libellé du rail sous un glyphe figé, dans une
@@ -115,11 +113,10 @@ struct StoryActionButton: View {
                     // `lineLimit(1)`) → taille figée pour préserver la géométrie du
                     // rail vertical compact.
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(.white.opacity(isActive ? 0.98 : 0.85))
+                    .glassControlForeground()
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
-                    // Même halo pour le label : blanc sur fond clair sinon illisible.
-                    .shadow(color: .black.opacity(0.55), radius: 2, y: 1)
+                    .mediaChromeHalo()
             }
             .frame(width: 56)
             // Élargit la zone sensible de quelques pixels AUTOUR du glyph + label.
@@ -136,6 +133,7 @@ struct StoryActionButton: View {
             .padding(.vertical, 3)
             .padding(.horizontal, 6)
             .contentShape(Rectangle())
+            .mediaChromeGlyph()
         }
     }
 }

@@ -399,13 +399,16 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // #6693 et #6745 retirent tous deux de `ReelsPlayerView.swift`, par des parties
     // que la fusion applique sans conflit ; l'hôte reste en dette, donc les deux
     // retraits s'additionnent.
-    // #6704 — 54 450 → 54 324 (−126). Le rail du lecteur de story devait teinter
+    // #6704 — 54 450 → 54 321 (−129). Le rail du lecteur de story devait teinter
     // son glyphe et son libellé depuis la luminance de la slide, et le bouton qui
     // les peint vivait dans `StoryViewerView+Content.swift`, hôte en dette. Il en
-    // est d'abord sorti, tel quel, vers `StoryViewerView+ActionButton.swift` ; la
-    // teinte s'y ajoute ensuite. L'hôte RESTE en dette (3 060) ; le plafond baisse
+    // est d'abord sorti, tel quel, vers `StoryViewerView+ActionButton.swift` (−126) ;
+    // la teinte s'y ajoute ensuite. Côté Réels, le voile bas de la page se peint
+    // désormais depuis la valeur que la mesure compose (`MediaChromeVeil`) : le
+    // dégradé littéral de `ReelsPlayerView.swift` cède sa place, et le rail s'y
+    // branche en une ligne (−3). Les deux hôtes RESTENT en dette ; le plafond baisse
     // d'exactement ce que le lot retire.
-    private static let legacyLineCeiling = 54_324
+    private static let legacyLineCeiling = 54_321
 
     // MARK: - Règle 1 — pas de 43ᵉ
 
