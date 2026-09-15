@@ -2,16 +2,10 @@ import { useQuery } from '@tanstack/react-query';
 
 import { ADMIN_DASHBOARD_QUERY_KEY, adminIdentityQueryOptions, loadAdminDashboard } from '@/lib/api/admin';
 import { apiDeps } from '@/lib/api/deps';
-import { adminSectionTarget, visibleAdminSections } from '@/lib/admin/sections';
+import { visibleAdminSections } from '@/lib/admin/sections';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
-import {
-  AdminCounter,
-  AdminDenied,
-  AdminScreenFrame,
-  AdminSkeleton,
-  LEGACY_ADMIN_ORIGIN,
-} from '@/routes/admin-parts';
+import { AdminCounter, AdminDenied, AdminScreenFrame, AdminSkeleton } from '@/routes/admin-parts';
 import { Link } from '@/routes/route-table';
 
 /**
@@ -30,13 +24,13 @@ import { Link } from '@/routes/route-table';
  * « accès refusé » puis le contenu ferait clignoter une accusation à chaque
  * ouverture.
  *
- * ## Ce que la v2 SERT, et ce qu'elle emprunte
+ * ## Ce que la v2 SERT, et elle seule
  *
  * Deux sections sont natives — ce tableau de bord et la liste des comptes. Les
- * neuf autres ouvrent le legacy, et leur tuile le DIT (`↗`). C'est le seul
- * état honnête : un hub qui n'afficherait que ses deux vues ferait croire que
- * l'administration a rétréci, et neuf tuiles menant à un écran d'attente
- * seraient neuf contrôles qui mentent (loi 4).
+ * neuf autres ouvraient le legacy ; il est décommissionné (#6702), et elles
+ * sont MASQUÉES tant qu'elles ne sont pas portées (`lib/admin/sections.ts`).
+ * Une tuile vers un ailleurs qui n'existe plus, ou vers un écran d'attente,
+ * serait un contrôle qui ment (loi 4).
  */
 
 const nombre = (valeur: number, langue: string): string => new Intl.NumberFormat(langue).format(valeur);
@@ -121,48 +115,27 @@ export default function AdminScreen() {
         <ul className="grid gap-2">
           {sections
             .filter((section) => section.id !== 'dashboard')
-            .map((section) => {
-              const cible = adminSectionTarget(section, LEGACY_ADMIN_ORIGIN);
-              const libelle = translate(language, section.labelKey);
-              const contenu = (
-                <>
+            .map((section) => (
+              <li key={section.id}>
+                <Link
+                  to={section.route}
+                  data-admin-section={section.id}
+                  className="flex items-center gap-3 rounded-card px-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+                  style={{
+                    minHeight: 56,
+                    backgroundColor: 'var(--color-ios-surface)',
+                    border: '1px solid var(--color-edge)',
+                    color: 'var(--color-ios-ink)',
+                    outlineColor: 'var(--color-ios-brand)',
+                  }}
+                >
                   <span aria-hidden="true" className="text-body">
                     {section.glyph}
                   </span>
-                  <span className="min-w-0 flex-1 truncate text-body font-medium">{libelle}</span>
-                  {cible.external ? (
-                    <span className="text-caption" style={{ color: 'var(--color-ios-ink-3)' }}>
-                      {translate(language, 'admin.sections.legacy')} ↗
-                    </span>
-                  ) : null}
-                </>
-              );
-              const classe =
-                'flex items-center gap-3 rounded-card px-4 focus-visible:outline-2 focus-visible:outline-offset-2';
-              const style = {
-                minHeight: 56,
-                backgroundColor: 'var(--color-ios-surface)',
-                border: '1px solid var(--color-edge)',
-                color: 'var(--color-ios-ink)',
-                outlineColor: 'var(--color-ios-brand)',
-              };
-
-              return (
-                <li key={section.id}>
-                  {cible.external ? (
-                    // `rel="noreferrer"` : le legacy est une AUTRE application,
-                    // et `window.opener` lui donnerait prise sur cet onglet.
-                    <a href={cible.href} target="_blank" rel="noreferrer" data-admin-section={section.id} className={classe} style={style}>
-                      {contenu}
-                    </a>
-                  ) : (
-                    <Link to="adminUsers" data-admin-section={section.id} className={classe} style={style}>
-                      {contenu}
-                    </Link>
-                  )}
-                </li>
-              );
-            })}
+                  <span className="min-w-0 flex-1 truncate text-body font-medium">{translate(language, section.labelKey)}</span>
+                </Link>
+              </li>
+            ))}
         </ul>
       </section>
     </AdminScreenFrame>

@@ -71,6 +71,7 @@ import { isGlobalAdmin } from '@meeshy/shared/types/role-types';
 import { PostAudioService } from '../services/posts/PostAudioService';
 import { PostTranslationService } from '../services/posts/PostTranslationService';
 import { MediaCaptionTranslationService } from '../services/posts/MediaCaptionTranslationService';
+import { MediaAltTranslationService } from '../services/posts/MediaAltTranslationService';
 import { StoryTextObjectTranslationService } from '../services/posts/StoryTextObjectTranslationService';
 import type {
   ServerToClientEvents,
@@ -1673,6 +1674,9 @@ export class MeeshySocketIOManager {
         // Traduction de la LÉGENDE d'un média (#6280) — même pipeline, même
         // discipline d'init, namespace ZMQ distinct (`media-caption:`).
         MediaCaptionTranslationService.init(this.prisma, zmqClient, this.socialEventsHandler);
+        // Traduction du texte ALTERNATIF d'accessibilité d'un média (#6737) —
+        // jumelle exacte, namespace ZMQ distinct (`media-alt:`).
+        MediaAltTranslationService.init(this.prisma, zmqClient, this.socialEventsHandler);
       }
 
       // Initialiser le service de notifications avec Socket.IO

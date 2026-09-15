@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { resolveRouteAccess, type RouteKey } from './session-guard';
+import { landingAfterSession, resolveRouteAccess, safeNextPath, type RouteKey } from './session-guard';
 
 /**
  * LA PORTE (#5555, T7) — pure. Fixtures ⇒ toujours `allow` (les captures et le
@@ -172,4 +172,71 @@ describe("les routes d'administration sont PRIVÉES", () => {
       ).toBe('redirect-welcome');
     });
   }
+});
+
+/**
+ * LA JONCTION PAR LIEN (#5561) — `/chat/:link` est la SEULE adresse de
+ * conversation qui sert quelqu'un sans compte, et la seule où un compte
+ * connecté REJOINT. Elle n'entre donc dans aucun des deux ensembles : privée,
+ * elle renverrait l'invité vers la connexion avant qu'il ait vu à quoi il est
+ * invité ; d'authentification, elle renverrait le membre vers `/` avant qu'il
+ * ait pu rejoindre.
+ */
+describe('chatJoin — publique pour les TROIS statuts, accueil soldé ou non', () => {
+  for (const sessionStatus of ['anonymous', 'pending2fa', 'authenticated'] as const) {
+    for (const welcomeCompleted of [true, false]) {
+      test(`${sessionStatus}, accueil ${welcomeCompleted ? 'soldé' : 'non soldé'} ⇒ allow`, () => {
+        expect(resolveRouteAccess({ sessionStatus, source: 'gateway', routeKey: 'chatJoin', welcomeCompleted })).toBe('allow');
+      });
+    }
+  }
+});
+
+/**
+ * `next` — OÙ REVENIR APRÈS S'ÊTRE CONNECTÉ (#5561). La valeur vient de
+ * l'adresse, donc de quiconque a fabriqué le lien : elle ne sort jamais du
+ * domaine, et elle ne peut pas faire tomber l'application.
+ */
+describe('safeNextPath — un chemin INTERNE, ou rien', () => {
+  test('un chemin interne est gardé tel quel, requête comprise', () => {
+    expect(safeNextPath('/chat/mshy_equipe_7f3a')).toBe('/chat/mshy_equipe_7f3a');
+    // Les linkIds lisibles portent des TIRETS (`mshy_equipe-deploiement_7f3a`) :
+    // une classe de caractères mal bornée les refuserait sans bruit.
+    expect(safeNextPath('/chat/mshy_equipe-deploiement_7f3a')).toBe('/chat/mshy_equipe-deploiement_7f3a');
+    expect(safeNextPath('/chat/mshy_%C3%A9quipe%207f3a')).toBe('/chat/mshy_%C3%A9quipe%207f3a');
+    expect(safeNextPath('/c/64f1c2a9e8b7d6c5b4a39281?autour=m1')).toBe('/c/64f1c2a9e8b7d6c5b4a39281?autour=m1');
+  });
+
+  test('absent ou vide ⇒ rien', () => {
+    expect(safeNextPath(null)).toBeNull();
+    expect(safeNextPath('')).toBeNull();
+  });
+
+  test('refuse toute sortie du domaine : `//evil.com`, `https://…`, schémas, contre-obliques', () => {
+    for (const hostile of ['//evil.com', '//evil.com/chat/x', 'https://evil.com', 'http://evil.com/c/1', 'javascript:alert(1)', '/\\evil.com', '\\\\evil.com', 'evil.com']) {
+      expect({ hostile, next: safeNextPath(hostile) }).toEqual({ hostile, next: null });
+    }
+  });
+
+  /** Le parseur d'URL RETIRE tabulations et retours à la ligne : `/\t/evil.com`
+   * devient `//evil.com`, et `history.replaceState` LÈVE sur une adresse d'une
+   * autre origine — dans l'effet de `SessionGate`, c'est l'application entière
+   * qui tombe pour un lien forgé. */
+  test('refuse les caractères de contrôle que le parseur d’URL efface', () => {
+    for (const hostile of ['/\t/evil.com', '/\n/evil.com', '/\r/evil.com', '/chat/x ', `/chat/x${String.fromCharCode(0)}`, `/chat/x${String.fromCharCode(127)}`]) {
+      expect({ hostile: JSON.stringify(hostile), next: safeNextPath(hostile) }).toEqual({ hostile: JSON.stringify(hostile), next: null });
+    }
+  });
+});
+
+describe('landingAfterSession — `next` s’il est sûr, l’accueil sinon', () => {
+  test('un `next` interne gagne', () => {
+    expect(landingAfterSession('/chat/mshy_abc', '/')).toBe('/chat/mshy_abc');
+  });
+
+  test('un `next` absent ou hostile rend l’accueil fourni par l’appelant', () => {
+    expect(landingAfterSession(null, '/')).toBe('/');
+    expect(landingAfterSession('//evil.com', '/')).toBe('/');
+    expect(landingAfterSession('https://evil.com', '/accueil')).toBe('/accueil');
+  });
 });

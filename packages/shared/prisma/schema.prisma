@@ -3658,6 +3658,21 @@ model PostMedia {
   /// et `packages/shared/decisions.md` § 2026-09-14 (#6280).
   captionTranslations Json?
 
+  /// Langue SOURCE de `alt` (ISO 639-1, détectée à l'écriture). Jumelle exacte
+  /// de `captionLanguage`, appliquée au texte alternatif d'accessibilité
+  /// plutôt qu'à la légende éditoriale (#6737, suite de la décision #6534 :
+  /// le web a un producteur ET un consommateur réels pour `alt`, contrairement
+  /// à iOS — écrit sans jamais être rendu à VoiceOver, #6738 — et Android —
+  /// sans producteur ni consommateur, #6739). `null` tant que `alt` est vide
+  /// ou n'a pas encore été traduit.
+  altLanguage String?
+  /// Traductions de `alt`, MÊME forme que `captionTranslations` — réutilise
+  /// `MediaCaptionTranslationEntry`/`mediaCaptionTranslationsSchema`
+  /// (`packages/shared/types/media-caption-translation.ts`, écrit pour ce cas
+  /// précis) SANS modification. DISTINCTE de `captionTranslations` (traduit
+  /// `caption`, pas `alt`) et de `translations` ci-dessous (pistes audio).
+  altTranslations Json?
+
   // Transcription audio (même structure que Attachment.transcription)
   /// Structure: {
   ///   text: string,

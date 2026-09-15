@@ -453,6 +453,9 @@ export const SERVER_EVENTS = {
   // --- Media caption translation (#6280) ---
   MEDIA_CAPTION_TRANSLATION_UPDATED: 'media:caption-translation-updated',
 
+  // --- Media alt-text translation (#6737) ---
+  MEDIA_ALT_TRANSLATION_UPDATED: 'media:alt-translation-updated',
+
   // --- User Preferences ---
   USER_PREFERENCES_UPDATED: 'user:preferences-updated',
   USER_PREFERENCES_REORDERED: 'user:preferences-reordered',

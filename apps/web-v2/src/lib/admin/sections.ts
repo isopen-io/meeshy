@@ -5,15 +5,20 @@
  * d'administration à la v2 ; pas besoin de tout refaire, on peut réutiliser ce
  * qui existe ».
  *
- * ## Ce que ce module reprend, et ce qu'il corrige
+ * ## Ce que ce module reprend
  *
  * La liste est le MIROIR MESURÉ de la barre latérale du legacy
  * (`apps/web/components/admin/AdminLayout.tsx`, onze entrées) : même ordre,
- * mêmes permissions, mêmes destinations. Une seule adresse change, et c'est un
- * CORRECTIF : le legacy pointe « Journaux d'audit » vers `/admin/audit`, une
- * page qui n'existe pas (`apps/web/app/admin/audit-logs/page.tsx` est la
- * vraie). Un barreau qui mène à un 404 est un contrôle qui ment — le recopier
- * aurait importé le défaut dans une application neuve.
+ * mêmes permissions.
+ *
+ * ## Une section que la v2 ne sert pas est MASQUÉE (#6702)
+ *
+ * Le legacy est décommissionné (directive porteur 2026-09-15) : la v2 sert tout
+ * `meeshy.me`. Les neuf sections qu'il était seul à servir n'ont plus aucune
+ * adresse où mener. Leur tuile n'est donc pas offerte — ni vers un ailleurs qui
+ * n'existe plus, ni vers un écran d'attente : ce seraient neuf contrôles qui
+ * mentent (loi 4). `route: null` le dit ; porter une section, c'est lui donner
+ * sa route dans `route-table.tsx`, puis ici.
  *
  * ## Pourquoi la permission décide, et jamais le rôle
  *
@@ -72,44 +77,45 @@ export type AdminSectionLabelKey =
   | 'admin.nav.agent'
   | 'admin.nav.monitoring';
 
+/**
+ * Les routes de la v2 qu'une section ouvre — des CLÉS de `ROUTES`
+ * (`route-table.tsx`), jamais une adresse écrite à la main : `<Link to>` ne
+ * compile que sur une route qui existe, et la tuile ne peut plus viser un autre
+ * écran que le sien.
+ */
+export type AdminRoute = 'admin' | 'adminUsers';
+
 export type AdminSection = {
   readonly id: string;
   /** Clé du catalogue d'interface — jamais un libellé en dur. */
   readonly labelKey: AdminSectionLabelKey;
-  /** Adresse SERVIE PAR LA V2, ou `null` quand la section vit encore au legacy. */
-  readonly path: string | null;
-  /** Chemin legacy, servi tant que la section n'a pas sa vue en v2. */
-  readonly legacyPath: string;
+  /** La route que la v2 sert pour cette section, ou `null` : non portée, donc masquée. */
+  readonly route: AdminRoute | null;
   readonly permission: AdminPermissionKey;
   readonly glyph: string;
 };
 
-/**
- * Les onze sections, dans l'ordre du legacy.
- *
- * `path: null` signifie « la v2 n'a pas encore cette vue » — la tuile mène
- * alors au legacy, explicitement marquée. C'est un état HONNÊTE : un hub qui
- * n'afficherait que ses deux vues natives ferait croire que l'administration
- * s'est réduite, et un hub dont neuf tuiles sur onze ouvriraient un écran
- * d'attente serait onze contrôles qui mentent.
- */
+/** Une section que la v2 SERT — la seule forme qu'un écran reçoit. */
+export type ServedAdminSection = AdminSection & { readonly route: AdminRoute };
+
+/** Les onze sections, dans l'ordre du legacy ; `route: null` ⇒ masquée. */
 export const ADMIN_SECTIONS: readonly AdminSection[] = [
-  { id: 'dashboard', labelKey: 'admin.nav.dashboard', path: '/admin', legacyPath: '/admin', permission: 'canAccessAdmin', glyph: '📊' },
-  { id: 'users', labelKey: 'admin.nav.users', path: '/admin/users', legacyPath: '/admin/users', permission: 'canManageUsers', glyph: '👥' },
-  { id: 'moderation', labelKey: 'admin.nav.moderation', path: null, legacyPath: '/admin/moderation', permission: 'canModerateContent', glyph: '🛡️' },
-  // `/admin/audit-logs`, jamais `/admin/audit` — voir le doc-comment de module.
-  { id: 'audit', labelKey: 'admin.nav.audit', path: null, legacyPath: '/admin/audit-logs', permission: 'canViewAuditLogs', glyph: '📜' },
-  { id: 'analytics', labelKey: 'admin.nav.analytics', path: null, legacyPath: '/admin/analytics', permission: 'canViewAnalytics', glyph: '📈' },
-  { id: 'trackingLinks', labelKey: 'admin.nav.trackingLinks', path: null, legacyPath: '/admin/tracking-links', permission: 'canViewAnalytics', glyph: '🔗' },
-  { id: 'ranking', labelKey: 'admin.nav.ranking', path: null, legacyPath: '/admin/ranking', permission: 'canViewAnalytics', glyph: '🏆' },
-  { id: 'broadcasts', labelKey: 'admin.nav.broadcasts', path: null, legacyPath: '/admin/broadcasts', permission: 'canManageNotifications', glyph: '📣' },
-  { id: 'settings', labelKey: 'admin.nav.settings', path: null, legacyPath: '/admin/settings', permission: 'canManageTranslations', glyph: '⚙️' },
-  { id: 'agent', labelKey: 'admin.nav.agent', path: null, legacyPath: '/admin/agent', permission: 'canAccessAdmin', glyph: '🤖' },
-  { id: 'monitoring', labelKey: 'admin.nav.monitoring', path: null, legacyPath: '/admin/monitoring', permission: 'canAccessAdmin', glyph: '💓' },
+  { id: 'dashboard', labelKey: 'admin.nav.dashboard', route: 'admin', permission: 'canAccessAdmin', glyph: '📊' },
+  { id: 'users', labelKey: 'admin.nav.users', route: 'adminUsers', permission: 'canManageUsers', glyph: '👥' },
+  { id: 'moderation', labelKey: 'admin.nav.moderation', route: null, permission: 'canModerateContent', glyph: '🛡️' },
+  { id: 'audit', labelKey: 'admin.nav.audit', route: null, permission: 'canViewAuditLogs', glyph: '📜' },
+  { id: 'analytics', labelKey: 'admin.nav.analytics', route: null, permission: 'canViewAnalytics', glyph: '📈' },
+  { id: 'trackingLinks', labelKey: 'admin.nav.trackingLinks', route: null, permission: 'canViewAnalytics', glyph: '🔗' },
+  { id: 'ranking', labelKey: 'admin.nav.ranking', route: null, permission: 'canViewAnalytics', glyph: '🏆' },
+  { id: 'broadcasts', labelKey: 'admin.nav.broadcasts', route: null, permission: 'canManageNotifications', glyph: '📣' },
+  { id: 'settings', labelKey: 'admin.nav.settings', route: null, permission: 'canManageTranslations', glyph: '⚙️' },
+  { id: 'agent', labelKey: 'admin.nav.agent', route: null, permission: 'canAccessAdmin', glyph: '🤖' },
+  { id: 'monitoring', labelKey: 'admin.nav.monitoring', route: null, permission: 'canAccessAdmin', glyph: '💓' },
 ];
 
 /**
- * Les sections qu'un porteur de cette matrice a le droit de voir.
+ * Les sections qu'un porteur de cette matrice a le droit de voir, et que la v2
+ * sert.
  *
  * `canAccessAdmin` faux ⇒ AUCUNE section, même si une permission fine est
  * vraie : l'accès à l'espace précède l'accès à ses pièces. C'est la même
@@ -117,10 +123,12 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
  * de filtrer sa barre), et la seule qui empêche un rôle intermédiaire d'entrer
  * par une section isolée.
  */
-export function visibleAdminSections(permissions: AdminPermissions | null): readonly AdminSection[] {
+export function visibleAdminSections(permissions: AdminPermissions | null): readonly ServedAdminSection[] {
   if (!canEnterAdmin(permissions)) return [];
 
-  return ADMIN_SECTIONS.filter((section) => permissions?.[section.permission] === true);
+  return ADMIN_SECTIONS.filter(
+    (section): section is ServedAdminSection => section.route !== null && permissions?.[section.permission] === true,
+  );
 }
 
 /**
@@ -132,14 +140,4 @@ export function visibleAdminSections(permissions: AdminPermissions | null): read
  */
 export function canEnterAdmin(permissions: AdminPermissions | null): boolean {
   return permissions?.canAccessAdmin === true;
-}
-
-/** La destination d'une tuile : la v2 quand elle l'a, le legacy sinon. */
-export function adminSectionTarget(
-  section: AdminSection,
-  legacyOrigin: string,
-): { readonly href: string; readonly external: boolean } {
-  if (section.path !== null) return { href: section.path, external: false };
-
-  return { href: `${legacyOrigin.replace(/\/+$/, '')}${section.legacyPath}`, external: true };
 }

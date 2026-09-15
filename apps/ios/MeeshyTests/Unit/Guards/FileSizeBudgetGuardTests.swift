@@ -365,7 +365,19 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // que le lot retire. Cumul MESURÉ après le lot sur les 27 noms : 55 845 — les
     // 369 lignes de mou préexistantes ne sont pas reprises, pour la raison de
     // coordination de #6016.
-    private static let legacyLineCeiling = 56_214
+    // #6696 — 56 430 → 56 077 (−353). La scène du détail devait changer de
+    // cadre dans `PostDetailView.swift` (2 164 lignes), hôte en dette. La
+    // section MÉDIAS en est d'abord sortie, entière, dans
+    // `PostDetailView+Media.swift` ; le cadre de la scène se corrige ensuite
+    // hors de l'hôte. L'hôte RESTE en dette (1 811) ; le plafond baisse
+    // d'exactement ce que le lot retire. Le cumul mesuré avant le lot était
+    // 56 061 : ses 369 lignes de mou préexistant ne sont pas reprises ici, pour
+    // la raison de coordination de #6016.
+    //
+    // Les deux lots se cumulent : 56 430 − 216 − 353 = 55 861. Cumul MESURÉ sur
+    // les 27 noms une fois les deux fusionnés : 55 492, soit 56 061 − 216 − 353 ;
+    // les 369 lignes de mou préexistantes restent hors du compte (#6016).
+    private static let legacyLineCeiling = 55_861
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

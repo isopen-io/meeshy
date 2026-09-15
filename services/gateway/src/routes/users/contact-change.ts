@@ -14,6 +14,7 @@ import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthoriz
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { depreciee, type AdresseDepreciee } from '../../utils/deprecation';
 import { apiPath } from '@meeshy/shared/api/prefix';
+import { revokePasswordResetTokensForEmailChange } from '../../utils/password-reset-revocation';
 
 const logger = enhancedLogger.child({ module: 'contact-change' });
 
@@ -472,16 +473,20 @@ export async function verifyEmailChange(fastify: FastifyInstance) {
         return sendBadRequest(reply, 'This email address is no longer available');
       }
 
-      // Activate the email change
-      await fastify.prisma.user.update({
-        where: { id: userId },
-        data: {
-          email: user.pendingEmail,
-          emailVerifiedAt: new Date(),
-          pendingEmail: null,
-          pendingEmailVerificationToken: null,
-          pendingEmailVerificationExpiry: null
-        }
+      // Activate the email change — dans la MÊME écriture, révoquer les liens
+      // de réinitialisation encore valides de l'ancienne adresse (#6661).
+      await fastify.prisma.$transaction(async (tx) => {
+        await tx.user.update({
+          where: { id: userId },
+          data: {
+            email: user.pendingEmail,
+            emailVerifiedAt: new Date(),
+            pendingEmail: null,
+            pendingEmailVerificationToken: null,
+            pendingEmailVerificationExpiry: null
+          }
+        });
+        await revokePasswordResetTokensForEmailChange(tx, userId);
       });
 
       logger.info(`[EMAIL_CHANGE] Email changed successfully for user ${userId} to ${user.pendingEmail}`);
