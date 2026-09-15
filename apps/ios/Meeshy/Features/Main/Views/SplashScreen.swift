@@ -4,8 +4,6 @@ import MeeshyUI
 
 // MARK: - Splash Screen
 struct SplashScreen: View {
-    let onFinish: () -> Void
-
     @State private var showLogo = false
     @State private var showTitle = false
     @State private var showSubtitle = false
@@ -137,12 +135,10 @@ struct SplashScreen: View {
                 backgroundScale = 1.0
             }
 
-            // Dismissal is driven by MeeshyApp.task once boot data is ready.
-            // The `onFinish` callback is kept in the signature for backwards
-            // compatibility (callers may still wire it) but is no longer
-            // invoked automatically here — the previous 1.2s timer caused
-            // the splash to vanish before the conversations cache was
-            // hydrated, which defeated its purpose.
+            // La tombée n'est PAS décidée ici : `LaunchSplashController`
+            // (#6744) lève le rideau dès que le démarrage est prêt, et à son
+            // plafond quoi qu'il arrive. Un minuteur posé dans la vue faisait
+            // disparaître le splash avant que le cache ne soit lu.
         }
         .onDisappear {
             withTransaction(Transaction(animation: nil)) {
