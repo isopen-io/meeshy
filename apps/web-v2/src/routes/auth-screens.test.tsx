@@ -1,10 +1,13 @@
+import { act, type ReactNode } from 'react';
+import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import { CountrySheet } from '@/components/country-sheet';
 import { Field } from '@/components/field';
 import { LanguageSheet } from '@/components/language-sheet';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { authColumnIn, strayFromAuthColumn } from '@/test-support/auth-column';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { LoginDoors } from './login';
@@ -249,5 +252,61 @@ describe('Field — le refus est DESSINÉ sous son champ, et le champ le DÉSIGN
     );
     expect(clean).not.toContain('role="alert"');
     expect(clean).toContain('aria-invalid="false"');
+  });
+});
+
+/**
+ * LES ÉCRANS MONTÉS DANS UN VRAI DOM (#6643) — la colonne se lit sur l'arbre
+ * monté, pas sur une chaîne rendue. Le mot de passe oublié a ses témoins chez
+ * lui (`forgot-password.test.tsx`).
+ */
+const actGlobals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+const unmounts: Array<() => void> = [];
+
+function mount(node: ReactNode): HTMLDivElement {
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  const root = createRoot(container);
+  act(() => {
+    root.render(node);
+  });
+  unmounts.push(() => {
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+  return container;
+}
+
+function withMountedDom() {
+  beforeAll(() => {
+    ensureHappyDomRegistered({ url: 'http://localhost/' });
+    actGlobals.IS_REACT_ACT_ENVIRONMENT = true;
+  });
+  afterEach(() => {
+    unmounts.splice(0).forEach((unmount) => unmount());
+  });
+  afterAll(async () => {
+    delete actGlobals.IS_REACT_ACT_ENVIRONMENT;
+    await releaseHappyDomIfRegistered();
+  });
+}
+
+describe('Les pages d’accès tiennent dans UNE colonne, la puce « Fermer » comprise (#6643)', () => {
+  withMountedDom();
+
+  test('l’accueil : ses deux portes vivent dans la colonne', () => {
+    const el = mount(<WelcomeScreen />);
+    expect(authColumnIn(el)?.querySelector('a[href="/signup"]')).not.toBeNull();
+    expect(strayFromAuthColumn(el)).toEqual([]);
+  });
+
+  test('l’inscription : la puce « Fermer » vit DANS la colonne, jamais au bord de l’écran', () => {
+    const el = mount(<SignupScreen />);
+    const column = authColumnIn(el);
+    expect(column?.querySelector('a[aria-label="Fermer"]')?.getAttribute('href')).toBe('/login');
+    expect(column?.querySelector('#signup-email')).not.toBeNull();
+    expect(strayFromAuthColumn(el)).toEqual([]);
   });
 });

@@ -5,6 +5,7 @@ import { placeMagicLinkValidationFailure } from '@/lib/view/auth-feedback';
 import { safeReturnPath } from '@/lib/view/magic-link';
 import { href, Link, navigate } from '@/routes/route-table';
 
+import { AuthColumn } from './auth-column';
 import { AUTH_GLYPHS } from './glyphs-auth';
 import { Glyph, GlyphSvg } from './glyph';
 
@@ -66,7 +67,7 @@ export function MagicLinkValidation({
   }
 
   return (
-    <div className="grid h-dvh content-center gap-6 px-8 pt-safe pb-safe text-center">
+    <AuthColumn className="justify-center gap-6 px-8 text-center">
       {state === 'validating' ? (
         <>
           <span aria-hidden="true" className="mx-auto" style={{ color: 'var(--ios-indigo-500)' }}>
@@ -125,6 +126,6 @@ export function MagicLinkValidation({
           </button>
         </>
       ) : null}
-    </div>
+    </AuthColumn>
   );
 }

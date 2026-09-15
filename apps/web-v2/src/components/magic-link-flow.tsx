@@ -1,7 +1,5 @@
-import { Link } from '@/routes/route-table';
-
 import { AuthBrandFooter } from './auth-chrome';
-import { Glyph } from './glyph';
+import { AuthColumn, AuthColumnBar } from './auth-column';
 import { MagicLinkPanel, type MagicLinkPanelDeps } from './magic-link-panel';
 
 /**
@@ -16,35 +14,20 @@ import { MagicLinkPanel, type MagicLinkPanelDeps } from './magic-link-panel';
  * comme porte PAR DÉFAUT. Cette adresse reste servie telle quelle : c'est celle
  * que l'e-mail vise (`MagicLinkService.ts:548`) et que les liens déjà envoyés
  * ouvrent.
+ *
+ * **Et ce chrome est la colonne de la connexion** (#6643) : le même panneau
+ * s'étalait ici sur toute la largeur de l'écran pendant que `/login` le rangeait
+ * au centre.
  */
 
 export type MagicLinkFlowDeps = MagicLinkPanelDeps;
 
 export function MagicLinkFlow({ deps }: { deps?: MagicLinkFlowDeps }) {
   return (
-    <div className="flex h-dvh flex-col pt-safe pb-safe">
-      <FlowHeader />
+    <AuthColumn>
+      <AuthColumnBar to="login" title="Connexion par e-mail" />
       <MagicLinkPanel {...(deps === undefined ? {} : { deps })} autoFocus />
       <AuthBrandFooter />
-    </div>
-  );
-}
-
-function FlowHeader() {
-  return (
-    <div className="flex shrink-0 items-center px-2 pt-1">
-      <Link
-        to="login"
-        replace
-        className="grid place-items-center rounded-chip"
-        style={{ minHeight: 44, minWidth: 44, color: 'var(--color-ios-ink-2)' }}
-        aria-label="Fermer"
-      >
-        <Glyph name="x" size={20} />
-      </Link>
-      <h1 className="flex-1 text-center text-title font-semibold" style={{ color: 'var(--color-ios-ink)', marginRight: 44 }}>
-        Connexion par e-mail
-      </h1>
-    </div>
+    </AuthColumn>
   );
 }
