@@ -715,12 +715,15 @@ public struct ApplicationPreferences: Codable, Equatable, Sendable {
     public var betaFeaturesEnabled: Bool
     public var telemetryEnabled: Bool
 
-    /// Consentements données/voix — miroir des champs User, lus par le
-    /// gateway (`ConsentValidationService`) avec priorité
-    /// `UserPreferences.application` > `User`. Portés en `String?` ISO-8601
-    /// (et non `Date?`) : le PATCH `/me/preferences/application` est validé
-    /// par `z.iso.datetime({ offset: true })` côté gateway et l'encoder JSON
-    /// partagé du manager n'a pas de stratégie de date ISO.
+    /// Consentements données/voix — LECTURE SEULE, jamais ENCODÉS (#6624).
+    ///
+    /// La passerelle les déclare `z.never` dans `ApplicationPreferenceSchema`
+    /// depuis #4180 : un seul d'entre eux dans le corps de
+    /// `PATCH /me/preferences/application` refuse la catégorie ENTIÈRE en 400.
+    /// Un blob stocké avant #4180 peut encore les servir en lecture, d'où leur
+    /// décodage ; mais seule la colonne `User` fait foi, écrite par
+    /// `PUT /me/consents/{purpose}` (`ConsentService`), et ils ne sont la
+    /// source d'aucun consentement côté client.
     public var dataProcessingConsentAt: String?
     public var voiceDataConsentAt: String?
     public var voiceProfileConsentAt: String?
@@ -798,6 +801,31 @@ public struct ApplicationPreferences: Codable, Equatable, Sendable {
         voiceCloningConsentAt = try c.decodeIfPresent(String.self, forKey: .voiceCloningConsentAt)
         voiceCloningEnabledAt = try c.decodeIfPresent(String.self, forKey: .voiceCloningEnabledAt)
         extras = try c.decodeIfPresent([String: CodableValue].self, forKey: .extras) ?? [:]
+    }
+
+    /// Les cinq consentements ne sont PAS encodés (#6624) : ce bloc part tel
+    /// quel comme corps de `PATCH /me/preferences/application`, par l'outbox
+    /// comme par le repli direct.
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(theme, forKey: .theme)
+        try c.encode(accentColor, forKey: .accentColor)
+        try c.encode(interfaceLanguage, forKey: .interfaceLanguage)
+        try c.encode(fontSize, forKey: .fontSize)
+        try c.encode(fontFamily, forKey: .fontFamily)
+        try c.encode(lineHeight, forKey: .lineHeight)
+        try c.encode(compactMode, forKey: .compactMode)
+        try c.encode(sidebarPosition, forKey: .sidebarPosition)
+        try c.encode(showAvatars, forKey: .showAvatars)
+        try c.encode(animationsEnabled, forKey: .animationsEnabled)
+        try c.encode(reducedMotion, forKey: .reducedMotion)
+        try c.encode(highContrastMode, forKey: .highContrastMode)
+        try c.encode(screenReaderOptimized, forKey: .screenReaderOptimized)
+        try c.encode(keyboardShortcutsEnabled, forKey: .keyboardShortcutsEnabled)
+        try c.encode(tutorialsCompleted, forKey: .tutorialsCompleted)
+        try c.encode(betaFeaturesEnabled, forKey: .betaFeaturesEnabled)
+        try c.encode(telemetryEnabled, forKey: .telemetryEnabled)
+        try c.encode(extras, forKey: .extras)
     }
 }
 

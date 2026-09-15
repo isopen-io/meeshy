@@ -2595,18 +2595,217 @@ La route dépréciée `/friend-requests` n'est jamais appelée.
 
 **Le témoin lit ce qui est PERÇU, pas seulement le texte.** `test-support/perceivable-text.ts` joint le `textContent` et les `aria-label`/`title` : un « magique » retiré du texte mais resté dans un nom accessible serait encore dit à voix haute. Il court sur les deux portes de `/login`, l'écran plein, l'attente, le lien invalide et l'inscription.
 
-## D-72 · Les pages d'accès montent UNE colonne, celle de la connexion ; la croix de fermeture vit dans la colonne ; « Mot de passe oublié » sert aussi à créer un mot de passe — 2026-09-15 (#6643)
+---
+
+## D-72 · L'inscription montre le contact d'emblée et n'a plus d'étapes ; `/login` se réduit à la baguette ; `?methode=password` ; `/forgot-password` prend la forme de `/login` ; un code de parrainage s'entre et un lien le pose — 2026-09-14 (#6582, #6583, #6584)
+
+**Cette décision REDÉCOUPE D-69, elle ne l'annule pas.** La porte par défaut
+reste le lien magique, la machine reste unique (`MagicLinkPanel`), la note sur
+les indésirables reste, la monotonie du dépliage reste. Ce qui change, ce sont
+trois choix de D-69 que le porteur a relus le lendemain.
+
+### L'inscription — deux barreaux, et plus aucune étape
+
+Directive : « il faut mettre dès le départ le numéro et l'e-mail à montrer, et
+lorsqu'on a fini de mettre l'e-mail, faire apparaître les détails de son
+identité DIRECTEMENT […] En gros pas d'étape 1 sur N à afficher : tout se fait
+intuitivement dans la page de création de compte. »
+
+`SIGNUP_RUNGS` passe de trois à deux : `contact` (l'adresse ET le numéro, dès
+l'ouverture) puis `identity` (identité dérivée, mot de passe, parrainage,
+langue, bouton, mentions) dès que l'adresse est valide. **Le numéro remonte
+parce que le replier en faisait une ÉTAPE à franchir plutôt qu'un champ à
+laisser vide** — avec, en prime, un bouton « Je continue sans numéro » pour
+sortir d'une porte qu'on venait soi-même de fermer. Il disparaît avec lui.
+
+La jauge de trois segments et « Étape N sur N » tombent aussi, et c'est
+cohérent : elles avaient été ajoutées pour RACHETER l'impression de formulaire
+sans fin que le dépliage créait. Un dispositif dont il faut compenser l'effet
+coûte plus qu'il ne rapporte (leçon 612).
+
+`SignupAnswers` n'a plus qu'une observation (`emailValid`) : le numéro ne
+conditionne plus rien, donc `phoneAnswered` — et les trois gestes qui le
+levaient — n'ont plus de raison d'être. La loi reste PURE, MONOTONE, et rend
+l'objet précédent à l'identique quand rien ne s'ouvre, ce qui permet toujours
+de dériver l'état pendant le rendu.
+
+### Le mot de passe se PROUVE facultatif, et dit ce qu'il change
+
+« (facultatif) » quitte le libellé : *le fait que le bouton créer mon compte
+fonctionne est suffisant pour dire qu'on peut créer le compte sans mot de
+passe*. La mention décrivait ce que le contrôle montre déjà. Ce qui la remplace
+n'est pas une mention mais une CONSÉQUENCE, VISIBLE et non derrière un (i),
+parce qu'elle CHANGE selon l'état : mot de passe valide ⇒ « votre compte sera
+actif immédiatement, il restera seulement à valider votre adresse » ; champ
+vide ⇒ « votre compte restera à configurer ».
+
+Un mot de passe qui tient `PASSWORD_MIN` entoure son champ de
+`var(--color-success)` — le jeton de la table PARTAGÉE, qui porte déjà une
+valeur par schéma (`#10b981` sombre, `#047857` clair) : aucune couleur n'est
+fabriquée et aucune variante `light:` n'est nécessaire. Mesuré sur la carte :
+7,3:1 en sombre, 5,3:1 en clair. Le signal ne tient pas à la seule couleur
+(règle 17) : le bord épaissit comme au focus, et la phrase ci-dessus paraît
+avec lui. `Field` porte la nouvelle prop `valid` et l'expose en
+`data-field-state`, mesurable sans lire une chaîne de style ; un refus gagne
+toujours sur elle.
+
+### `/login` — la baguette, une phrase, un champ, un bouton
+
+Directive : « à la connexion la page doit être sans titre sauf la baguette
+magique ; laisser juste "nous vous enverrons un lien de connexion sécurisé par
+mail", le champ e-mail et le bouton. » Le blason « Meeshy » et le titre
+« Entrez votre adresse email » disaient deux fois ce que la page EST, à
+quelqu'un qui vient de cliquer « Se connecter ». Ils tombent — sur cette porte
+seulement : la porte du MOT DE PASSE garde son blason (elle n'a pas de
+baguette) et le second facteur aussi (savoir de QUI vient une demande de code
+n'est pas un ornement).
+
+Le bouton dit « Recevoir le lien » sur les deux hôtes.
+
+*(À LA FUSION avec `dev`, le 2026-09-15 : ce paragraphe est tenu à MOITIÉ. Le
+BLASON tombe, comme écrit ci-dessus — D-71 ne le redemande pas. Le TITRE DE
+SECTION revient : D-71, d'une directive POSTÉRIEURE d'un jour, en a fait
+« Votre adresse e-mail » et lui a accroché le (i) « Comment ça marche », qui
+porte désormais tout le mode de fonctionnement — y compris la phrase « nous
+vous enverrons un lien… » que ce lot voulait garder en clair. Un titre qui
+HÉBERGE la mécanique ne redit plus le champ, et cette directive-là a été relue
+deux fois sur ce titre même (la place du (i), la césure de « e-mail ») : elle
+a été vue, pas subie. `MagicLinkPanel` avait gagné une prop `heading` pour
+taire ce titre sur `/login` ; plus personne ne la posait à faux, donc elle est
+retirée plutôt que laissée morte.)*
+
+### `?methode=password` — ce qu'on cesse d'écrire, on ne cesse pas de le lire
+
+`motdepasse` a été l'adresse de cette porte pendant toute la vie de #6404 :
+elle est dans des signets, des liens partagés et la recette. La valeur ÉMISE
+devient `password` ; la valeur LUE s'élargit aux deux. La retirer de la lecture
+renverrait ces adresses sur le lien magique, c'est-à-dire sur un écran que
+personne n'a demandé.
+
+### `/forgot-password` prend la forme de `/login`
+
+L'écran portait une barre de titre — un « X » et « Mot de passe oublié » —
+héritée de la feuille modale iOS. Sur le web ce n'est pas une feuille mais une
+PAGE, atteinte par un lien de `/login`, d'où le bouton « retour » du navigateur
+ramène déjà : la barre disait son nom à qui venait de cliquer son nom. Il prend
+le halo, la colonne centrée, une enveloppe pour toute en-tête, la phrase, le
+champ, le bouton, puis le retour en pied. Sa TEINTE reste `--color-ios-brand`
+(`MeeshyForgotPasswordView.swift:309`) : les deux écrans ne font pas la même
+promesse. Il gagne la note sur les indésirables — même attente qu'un lien
+magique — et la constante devient PARTAGÉE (`lib/view/auth-copy.ts`) plutôt que
+recopiée. Sa demande est INJECTABLE (`ForgotPasswordDeps`), comme celle du
+panneau du lien magique.
+
+*(À LA FUSION avec `dev`, le 2026-09-15, puis SOLDÉ dans le même mouvement :
+D-71 a replié la note du panneau derrière le (i) « Rien reçu ? » et en a changé
+le texte — deux phrases pour une même attente avaient donc commencé à diverger,
+l'une disant « après une minute » que l'autre venait d'abandonner. La question
+de produit n'en était pas une : les deux écrans attendent le MÊME e-mail, et
+« moins de détails » ne peut pas vouloir dire replié ici et en clair là.
+`/forgot-password` porte donc le même (i), et `lib/view/auth-copy.ts` ne tient
+plus une phrase mais des CHAÎNES (`HOW_IT_WORKS_*`, `NOTHING_RECEIVED_*`) que
+les deux hôtes composent — jamais un `InfoHint`, qui porte un tracé et ferait
+descendre `lib/view` dans `components`.)*
+
+### Le parrainage — entrer un code, et un lien qui le pose
+
+Question porteur : « Qu'en est-il de la page référer ? Ou de la possibilité
+d'entrer le code du référer lors de l'inscription ? »
+
+**Relevé d'abord : la passerelle porte déjà tout, `apps/web-v2` n'en consommait
+rien.** `GET /affiliate/validate/:token` (public), `POST /affiliate/register`
+(authentifié, qui noue la relation sur l'APPELANT — le `referredUserId` du
+corps est explicitement ignoré, c'est la garde anti-forge), le code intrinsèque
+`ref_…` de chaque compte (#3690) et la page d'atterrissage legacy
+`/signup/affiliate/[token]`.
+
+**`POST /auth/register` n'est pas touché, et c'est le point d'appui.** La
+relation se noue APRÈS le compte, sur la session que l'inscription vient
+d'établir (#4264) — donc sans qu'une ligne de la passerelle change.
+
+Le champ est REPLIÉ derrière « J'ai un code de parrainage » : la très grande
+majorité des inscriptions n'en ont pas, et un champ de plus imposé à tout le
+monde est la surcharge que le porteur a déjà refusée (#6441). Un lien
+d'invitation l'ouvre tout seul, rempli — `/signup/affiliate/:token` REDIRIGE
+vers `/signup?ref=…` plutôt que de rendre un second écran d'inscription, qui
+serait la jumelle divergente que le legacy paie déjà. `?ref=` et `?parrain=`
+sont lus dans cet ORDRE, fixé pour que deux clés présentes donnent le même
+résultat à tout le monde. Le code est lu sur `window.location` à
+l'initialisation d'un état, jamais par `useSearch()` : ce dernier exige le
+contexte du routeur, et l'inscription est montée telle quelle par ses témoins.
+
+**La règle de fond : un code d'invitation n'est JAMAIS une condition d'entrée.**
+Un jeton expiré, une limite atteinte, une passerelle qui répond 500 — aucun ne
+doit empêcher de créer un compte : ce serait punir l'invité de la défaillance
+de l'hôte. Le refus se dit en encre ordinaire, sans `role="alert"` ni teinte
+d'erreur, le bouton reste actif, et un échec RÉSEAU retombe au silence plutôt
+que d'accuser un jeton dont on ne sait rien. La conversion part sans être
+attendue.
+
+**Ce que le LEGACY avait déjà, et qui est repris** (retour porteur 2026-09-15 :
+« la version legacy avait déjà des développements dans ce sens, il faut veiller
+à réutiliser ou simplement ne rien perdre »). Trois trouvailles dans `apps/web` :
+
+1. **Le jeton SURVIT à la navigation.** `app/signup/affiliate/[token]/page.tsx`
+   l'écrit en `localStorage` et en cookie 30 jours ;
+   `use-registration-submit.ts` le relit au moment de créer le compte. Sans
+   cette moitié, seul le cas RARE comptait — s'inscrire sans jamais quitter la
+   page d'arrivée — et le cas NOMINAL d'un lien partagé (cliquer, regarder,
+   s'inscrire le lendemain) perdait le parrainage. `lib/view/referral-memory.ts`
+   le reprend sous LA MÊME CLÉ (`meeshy_affiliate_token`) : le jour où
+   `apps/web-v2` prend la place d'`apps/web`, les jetons déjà posés dans les
+   navigateurs sont relus plutôt que jetés, et une ligne écrite par le legacy —
+   le jeton NU, sans objet ni date — est comprise telle quelle. L'ÉCHÉANCE, en
+   revanche, est corrigée : le legacy borne son cookie à 30 jours et laisse la
+   copie locale sans date, donc un jeton y survit indéfiniment ; ici la date est
+   portée par la valeur, il n'y a qu'un support à faire périr. L'adresse gagne
+   toujours sur la mémoire — un nouveau lien remplace un ancien.
+2. **`?affiliate=` est la clé du legacy** (`middleware.ts:63` la capte sur
+   n'importe quelle adresse). Des liens la portant sont déjà dans la nature :
+   elle rejoint `ref` et `parrain` dans `REFERRAL_SEARCH_KEYS`.
+3. **Ce que le legacy fait pour RIEN n'est pas recopié** :
+   `use-registration-submit.ts` pose `body.affiliateToken` sur
+   `POST /auth/register`. Mesuré — ni la route, ni `registration.service.ts`, ni
+   `registerRequestSchema` ne lisent ce champ ; seul `POST /affiliate/register`,
+   après le compte, noue quoi que ce soit. Reprendre la ligne aurait recopié une
+   croyance, pas un comportement.
+
+**Deux parcours du legacy restent SANS équivalent**, inventoriés plutôt que
+perdus : la récupération de compte par TÉLÉPHONE (six étapes, `components/auth/recovery/`)
+et la reprise d'un numéro déjà rattaché (`phoneTransferToken`, que la passerelle
+sert déjà par `routes/auth/phone-transfer.ts`, et devant quoi le chantier
+s'arrête sur une phrase). #6650 les porte — bloquants pour la bascule.
+
+**Ce que ce lot ne fait pas** : la page depuis laquelle on INVITE (son code,
+ses jetons de campagne, ses filleuls, ses statistiques) n'existe toujours pas
+dans `apps/web-v2` — c'est un écran avec ses quatre états et ses trois lectures
+de passerelle, porté par #6585.
+
+### Ce que D-69 disait et qui n'est plus vrai
+
+Sa dernière ligne annonçait l'inscription sans mot de passe comme bloquée par
+la passerelle. C'est FAUX depuis #6424/#6441 : `registerRequestSchema` porte
+`required: ['email']` — ni nom, ni téléphone, ni mot de passe ne sont exigés,
+et `composeRegisterBody` OMET les clés absentes. L'inscription simplifiée de la
+directive du 2026-09-13 est donc livrée ; #6405 se ferme avec ce lot.
+
+### Mesuré
+
+`bun test` 3815 verts (294 fichiers) ; `type-check` et `build` verts ; gate
+composite vert.
+
+## D-73 · Les pages d'accès montent UNE colonne, celle de la connexion ; la croix des pages qui en gardent une vit dans la colonne ; « Mot de passe oublié » sert aussi à créer un mot de passe — 2026-09-15 (#6643)
 
 **Directive porteur.** « Les pages doivent être responsives et même sur tablette ou ordinateur avoir le style de la page de connexion (au centre), la page de récupération de mot de passe doit permettre de setter le mot de passe même si on a jamais eu de mot de passe ! Les pages d'inscription, reset de mot de passe 2FA, MFA doivent être centrés même hors smartphone ! »
 
-**Mesuré avant**, sur `dev` 085b7b2149 à 1440×900 : la connexion (ses deux portes et le second facteur) et l'accueil tenaient une colonne de 384 px centrée. L'inscription, le mot de passe oublié, le nouveau mot de passe, l'écran plein du lien par e-mail, la validation d'un lien et la vérification d'e-mail s'étalaient sur 1 440 px. Aucune source ne tenait la géométrie : chaque écran recopiait sa racine, et cinq sur sept l'avaient perdue.
+**Mesuré avant**, sur `dev` b6b7e227ca, à 1440×900 et 834×1194 : la connexion (ses deux portes et le second facteur), l'accueil et le mot de passe oublié (depuis D-72) tenaient une colonne de 384 px centrée. L'inscription, le nouveau mot de passe, l'écran plein du lien par e-mail (demande, envoyé, validation, lien invalide) et la vérification d'e-mail s'étalaient sur toute la largeur. Les trois écrans centrés RECOPIAIENT la même racine ; les autres ne l'avaient jamais eue.
 
-**UNE géométrie.** `components/auth-column.tsx` : `AuthColumn` porte le FOND (plein écran, halo d'ambiance, marges de sécurité, défilement) et la COLONNE (`w-full max-w-sm`, centrée). L'écran ne passe que l'agencement DANS la colonne. La connexion et l'accueil y migrent sans changement visuel : mêmes classes, même halo. Les autres pages y gagnent le halo, parce que la directive demande le STYLE de la connexion, pas seulement sa largeur.
+**UNE géométrie.** `components/auth-column.tsx` : `AuthColumn` porte le FOND (plein écran, halo d'ambiance, marges de sécurité, défilement) et la COLONNE (`w-full max-w-sm`, centrée). L'écran ne passe que l'agencement DANS la colonne. La connexion, l'accueil et le mot de passe oublié y migrent sans changement visuel : mêmes classes, même halo. Les autres pages y gagnent le halo, parce que la directive demande le STYLE de la connexion, pas seulement sa largeur.
 
-**La croix de fermeture vit DANS la colonne** (`AuthColumnBar`). iOS la pose au bord de l'écran (`safeAreaInset(edge: .top)`), au-dessus d'un formulaire que `iPadFormWidth()` borne. Sur un écran de 1 440 px, la même pose la mettrait à plus de 500 px de ce qu'elle ferme, seule dans un coin. Dans la colonne, elle se lit avec son titre et la page entière tient au centre. Sur téléphone la colonne occupe l'écran, donc la croix ne bouge pas. L'inscription est la seule page d'accès qui dépasse un écran : sa colonne borne sa hauteur (`min-h-0`) et le formulaire défile sous la barre. La croix reste en place, comme sur iOS et comme avant.
+**La croix vit DANS la colonne.** D-72 a retiré la barre du mot de passe oublié : c'est une page atteinte par un lien, que le retour du navigateur referme, et elle garde sa forme. Les quatre pages qui gardent une croix — inscription, nouveau mot de passe, lien par e-mail, vérification d'e-mail — la posent dans la colonne (`AuthColumnBar`). iOS la pose au bord de l'écran (`safeAreaInset(edge: .top)`), au-dessus d'un formulaire que `iPadFormWidth()` borne. Sur un écran de 1 440 px, la même pose la mettrait à plus de 500 px de ce qu'elle ferme, seule dans un coin. Dans la colonne, elle se lit avec son titre et la page entière tient au centre. Sur téléphone la colonne occupe l'écran, donc la croix ne bouge pas. L'inscription est la seule page d'accès qui dépasse un écran : sa colonne borne sa hauteur (`min-h-0`) et le formulaire défile sous la barre. La croix reste en place, comme sur iOS et comme avant.
 
-**Le témoin mesure la géométrie, pas un marqueur.** `scripts/check-access-column.mjs` (gate composite et job « Peaux web-v2 ») prend pour colonne le plus petit ancêtre commun de ce qui se lit ou se touche, hors `aria-hidden` et hors texte `sr-only`. Il couvre 18 pages et états, dont le second facteur, « E-mail envoyé », le mot de passe enregistré et la validation d'un lien, servis par des réponses simulées. À 1440×900 et 834×1194, chaque colonne est centrée à 1 px près et jamais plus large que celle de la connexion. À 390×844, elle garde sa largeur de tablette. La connexion elle-même ne dépasse pas 384 px. Rouge sur `dev` (42 échecs), vert après. Les témoins DOM (`test-support/auth-column.ts`) tiennent la moitié structurelle : une colonne par écran, et tout dedans, croix comprise. Le gate navigateur ne lit pas `data-auth-column`.
+**Le témoin mesure la géométrie, pas un marqueur.** `scripts/check-access-column.mjs` (gate composite et job « Peaux web-v2 ») prend pour colonne le plus petit ancêtre commun de ce qui se lit ou se touche, hors `aria-hidden` et hors texte `sr-only`. Il couvre 18 pages et états, dont le second facteur, « E-mail envoyé », le mot de passe enregistré et la validation d'un lien, servis par des réponses simulées. À 1440×900 et 834×1194, chaque colonne est centrée à 1 px près et jamais plus large que celle de la connexion. À 390×844, elle garde sa largeur de tablette. La connexion elle-même ne dépasse pas 384 px. Rouge sur `dev` b6b7e227ca (36 échecs), vert après. Les témoins DOM (`test-support/auth-column.ts`) tiennent la moitié structurelle : une colonne par écran, et tout dedans, croix comprise. Le gate navigateur ne lit pas `data-auth-column`.
 
-**« Mot de passe oublié » dit qu'il sert aussi à créer un mot de passe.** La passerelle envoie le lien à un compte qui n'en a jamais eu (#6642). L'écran dit « Recevez par e-mail un lien pour choisir un nouveau mot de passe. » et porte un (i) « Jamais eu de mot de passe ? », dont la question se LIT à côté du glyphe : c'est exactement celle que se pose la personne concernée. Il déplie « Ce même lien vous permet d’en créer un. ». Le bouton dit « Recevoir le lien ». L'envoi rend l'écran de la connexion par e-mail (`components/email-sent-notice.tsx` : « E-mail envoyé », « Ouvrez le lien reçu à … », « Rien reçu ? »). Il disait « Si un compte existe avec …, un lien de réinitialisation a été envoyé » : deux phrases pour le même fait. La page du lien dit « Nouveau mot de passe », « Enregistrer le mot de passe », « Mot de passe enregistré » — rien n'est « réinitialisé » pour qui n'en avait pas. Aucun texte perçu, noms accessibles compris, ne dit « réinitialisation » ni « magique ». Vocabulaire commun avec iOS (#6644) et Android (#6645).
+**« Mot de passe oublié » dit qu'il sert aussi à créer un mot de passe.** La passerelle envoie le lien à un compte qui n'en a jamais eu (#6642). L'écran garde la forme de D-72 (enveloppe, phrase, champ, bouton, retour en pied) et change sa phrase : « Recevez par e-mail un lien pour choisir un nouveau mot de passe. » Un (i) « Jamais eu de mot de passe ? » la suit, dont la question se LIT à côté du glyphe : c'est exactement celle que se pose la personne concernée. Il déplie « Ce même lien vous permet d’en créer un. ». L'envoi rend l'écran de la connexion par e-mail (`components/email-sent-notice.tsx` : « E-mail envoyé », « Ouvrez le lien reçu à … », « Rien reçu ? ») au lieu de « Si un compte existe avec …, un lien de réinitialisation vient d’être envoyé » : deux phrases pour le même fait, et la seconde parlait de réinitialiser à qui n'avait rien à réinitialiser. La page du lien dit « Nouveau mot de passe », « Enregistrer le mot de passe », « Mot de passe enregistré ». Aucun texte perçu, noms accessibles compris, ne dit « réinitialisation » ni « magique ». Vocabulaire commun avec iOS (#6644) et Android (#6645).
 
 **Ce que ce lot ne fait pas.** Ces écrans restent en français en dur, quelle que soit la langue d'interface : ils n'entrent dans aucun catalogue, et #6310 tient ces chaînes avec les autres. Le comportement serveur est porté par #6642.

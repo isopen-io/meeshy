@@ -389,34 +389,47 @@ describe('#6164 — la pièce NOMMÉE d’une citation', () => {
    * sert d'ancre à un saut, et le service qui le relit chargerait la ligne. La
    * garde refuse donc au moindre doute sur CE lien.
    *
-   * Elle lie la pièce au MESSAGE CITÉ, et rien d'autre. La phrase qu'elle
-   * portait — « citer la pièce d'une conversation qu'on ne lit peut-être pas »
-   * — nommait le cas qu'elle NE BLOQUE PAS : `replyToId` n'est validé contre
-   * aucune conversation dans le chemin d'écriture. C'est #6601 ; ces témoins
-   * n'attestent que la borne qui existe.
+   * Elle lie aussi le message CITÉ à la conversation de l'envoi (#6601) —
+   * « citer la pièce d'un message qu'on ne cite pas, c'est citer la pièce
+   * d'une conversation qu'on ne lit peut-être pas » vaut désormais pour les
+   * DEUX bornes, lues au même site.
    */
-  describe('la garde d’envoi refuse un attachmentId étranger au message cité', () => {
+  describe('la garde d’envoi refuse un attachmentId étranger au message cité, et un replyToId étranger à la conversation', () => {
     const MESSAGE_CITE = '507f1f77bcf86cd799439000';
     const AUTRE_MESSAGE = '507f1f77bcf86cd799439999';
+    const CONVERSATION = '507f1f77bcf86cd799439aaa';
+    const AUTRE_CONVERSATION = '507f1f77bcf86cd799439bbb';
 
-    const fauxPrisma = (row: Record<string, unknown> | null) => ({
+    const messageVivantDansLaConversation = {
+      id: MESSAGE_CITE,
+      conversationId: CONVERSATION,
+      deletedAt: null,
+    };
+
+    const fauxPrisma = (
+      attachmentRow: Record<string, unknown> | null,
+      messageRow: Record<string, unknown> | null = messageVivantDansLaConversation
+    ) => ({
       messageAttachment: {
-        findUnique: async () => row,
+        findUnique: async () => attachmentRow,
+      },
+      message: {
+        findUnique: async () => messageRow,
       },
     });
 
     it('refuse une pièce qui appartient à un AUTRE message — la fuite que la citation ouvrirait', async () => {
       const verdict = await admitAttachmentReply(
         fauxPrisma({ id: TROISIEME, messageId: AUTRE_MESSAGE, mimeType: 'image/jpeg' }) as never,
-        { replyToId: MESSAGE_CITE, attachmentReplyTo: { attachmentId: TROISIEME } }
+        { conversationId: CONVERSATION, replyToId: MESSAGE_CITE, attachmentReplyTo: { attachmentId: TROISIEME } }
       );
       expect(verdict.ok).toBe(false);
     });
 
     it('refuse une pièce INTROUVABLE', async () => {
       const verdict = await admitAttachmentReply(
-        fauxPrisma(null) as never,
-        { replyToId: MESSAGE_CITE, attachmentReplyTo: { attachmentId: TROISIEME } }
+        fauxPrisma(null),
+        { conversationId: CONVERSATION, replyToId: MESSAGE_CITE, attachmentReplyTo: { attachmentId: TROISIEME } }
       );
       expect(verdict.ok).toBe(false);
     });
@@ -424,15 +437,15 @@ describe('#6164 — la pièce NOMMÉE d’une citation', () => {
     it('refuse une pièce nommée SANS message cité — on ne cite pas une pièce hors de son porteur', async () => {
       const verdict = await admitAttachmentReply(
         fauxPrisma({ id: TROISIEME, messageId: MESSAGE_CITE, mimeType: 'image/jpeg' }) as never,
-        { replyToId: undefined, attachmentReplyTo: { attachmentId: TROISIEME } }
+        { conversationId: CONVERSATION, replyToId: undefined, attachmentReplyTo: { attachmentId: TROISIEME } }
       );
       expect(verdict.ok).toBe(false);
     });
 
     it('refuse une forme malformée', async () => {
       const verdict = await admitAttachmentReply(
-        fauxPrisma(null) as never,
-        { replyToId: MESSAGE_CITE, attachmentReplyTo: { attachmentId: '   ' } }
+        fauxPrisma(null),
+        { conversationId: CONVERSATION, replyToId: MESSAGE_CITE, attachmentReplyTo: { attachmentId: '   ' } }
       );
       expect(verdict.ok).toBe(false);
     });
@@ -440,27 +453,95 @@ describe('#6164 — la pièce NOMMÉE d’une citation', () => {
     it('accepte la pièce du message cité — et DÉRIVE la nature du MIME relu, jamais de ce que le client déclare', async () => {
       const verdict = await admitAttachmentReply(
         fauxPrisma({ id: TROISIEME, messageId: MESSAGE_CITE, mimeType: 'audio/mp4' }) as never,
-        { replyToId: MESSAGE_CITE, attachmentReplyTo: { attachmentId: TROISIEME, kind: 'file' } }
+        { conversationId: CONVERSATION, replyToId: MESSAGE_CITE, attachmentReplyTo: { attachmentId: TROISIEME, kind: 'file' } }
       );
       expect(verdict).toEqual({ ok: true, snapshot: { attachmentId: TROISIEME, kind: 'audio' } });
     });
 
-    it('laisse passer un envoi qui ne nomme aucune pièce — sans requête', async () => {
+    it('laisse passer un envoi qui ne nomme aucun message ni aucune pièce — sans requête', async () => {
       const verdict = await admitAttachmentReply(
-        { messageAttachment: { findUnique: async () => { throw new Error('aucune requête attendue'); } } } as never,
-        { replyToId: MESSAGE_CITE, attachmentReplyTo: undefined }
+        {
+          messageAttachment: { findUnique: async () => { throw new Error('aucune requête attendue'); } },
+          message: { findUnique: async () => { throw new Error('aucune requête attendue'); } },
+        } as never,
+        { conversationId: CONVERSATION, replyToId: undefined, attachmentReplyTo: undefined }
       );
       expect(verdict).toEqual({ ok: true, snapshot: null });
     });
 
-    it('la route REST d’envoi appelle la garde — un transport qui porte le champ sans elle serait muet', () => {
+    it('#6601 — refuse un replyToId qui désigne un message d’une AUTRE conversation, même sans pièce citée', async () => {
+      const verdict = await admitAttachmentReply(
+        fauxPrisma(null, { id: MESSAGE_CITE, conversationId: AUTRE_CONVERSATION, deletedAt: null }),
+        { conversationId: CONVERSATION, replyToId: MESSAGE_CITE, attachmentReplyTo: undefined }
+      );
+      expect(verdict.ok).toBe(false);
+    });
+
+    it('#6601 — refuse un replyToId qui désigne un message SUPPRIMÉ — pas VIVANT, donc pas citable', async () => {
+      const verdict = await admitAttachmentReply(
+        fauxPrisma(null, { id: MESSAGE_CITE, conversationId: CONVERSATION, deletedAt: new Date() }),
+        { conversationId: CONVERSATION, replyToId: MESSAGE_CITE, attachmentReplyTo: undefined }
+      );
+      expect(verdict.ok).toBe(false);
+    });
+
+    it('#6601 — refuse un replyToId INTROUVABLE — la lecture n’a rien prouvé, on refuse quand même (fail-closed)', async () => {
+      const verdict = await admitAttachmentReply(
+        fauxPrisma(null, null),
+        { conversationId: CONVERSATION, replyToId: MESSAGE_CITE, attachmentReplyTo: undefined }
+      );
+      expect(verdict.ok).toBe(false);
+    });
+
+    it('#6601 — distingue les DEUX motifs de refus dans `reason`, même verdict, raison différente', async () => {
+      const messageEtranger = await admitAttachmentReply(
+        fauxPrisma(null, { id: MESSAGE_CITE, conversationId: AUTRE_CONVERSATION, deletedAt: null }),
+        { conversationId: CONVERSATION, replyToId: MESSAGE_CITE, attachmentReplyTo: undefined }
+      );
+      const preuveAbsente = await admitAttachmentReply(
+        fauxPrisma(null, null),
+        { conversationId: CONVERSATION, replyToId: MESSAGE_CITE, attachmentReplyTo: undefined }
+      );
+      expect(messageEtranger.reason).not.toEqual(preuveAbsente.reason);
+    });
+
+    it('#6601 — accepte un replyToId d’un message vivant de la MÊME conversation, sans pièce citée', async () => {
+      const verdict = await admitAttachmentReply(
+        fauxPrisma(null),
+        { conversationId: CONVERSATION, replyToId: MESSAGE_CITE, attachmentReplyTo: undefined }
+      );
+      expect(verdict).toEqual({ ok: true, snapshot: null });
+    });
+
+    it('#6601 — refuse la citation d’une pièce dont le message cité n’appartient pas à la conversation, AVANT même de relire la pièce', async () => {
+      const verdict = await admitAttachmentReply(
+        {
+          message: { findUnique: async () => ({ id: MESSAGE_CITE, conversationId: AUTRE_CONVERSATION, deletedAt: null }) },
+          messageAttachment: { findUnique: async () => { throw new Error('aucune requête attendue — la borne de conversation refuse avant'); } },
+        } as never,
+        { conversationId: CONVERSATION, replyToId: MESSAGE_CITE, attachmentReplyTo: { attachmentId: TROISIEME } }
+      );
+      expect(verdict.ok).toBe(false);
+    });
+
+    it('la route REST d’envoi appelle la garde avec la conversation — un transport qui porte le champ sans elle serait muet', () => {
       const route = readFileSync(
         join(__dirname, '../../../routes/conversations/messages-send.ts'),
         'utf-8'
       );
       expect(route).toMatch(/\bimport\s*\{[^}]*\badmitAttachmentReply\b[^}]*\}\s*from\s*['"][^'"]*attachmentReplySnapshot['"]/);
-      expect(route).toMatch(/\bawait\s+admitAttachmentReply\(/);
+      expect(route).toMatch(/\bawait\s+admitAttachmentReply\(\s*prisma,\s*\{\s*conversationId/);
       expect(route).toMatch(/attachmentReplyTo:\s*z\./);
+    });
+
+    it('#6601 — les DEUX transports socket (texte, pièces jointes) appellent la garde avec la conversation', () => {
+      const handler = readFileSync(
+        join(__dirname, '../../../socketio/handlers/MessageHandler.ts'),
+        'utf-8'
+      );
+      expect(handler).toMatch(/\bimport\s*\{[^}]*\badmitAttachmentReply\b[^}]*\}\s*from\s*['"][^'"]*attachmentReplySnapshot['"]/);
+      const appels = handler.match(/\bawait\s+admitAttachmentReply\(\s*this\.prisma,\s*\{\s*conversationId/g) ?? [];
+      expect(appels.length).toBe(2);
     });
 
     it('le site UNIQUE de composition range l’instantané sous metadata — jamais une clé posée à la main', () => {

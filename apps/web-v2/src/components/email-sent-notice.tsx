@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 
+import { NOTHING_RECEIVED_LABEL, NOTHING_RECEIVED_TEXT } from '@/lib/view/auth-copy';
+
 import { Glyph } from './glyph';
 import { AUTH_GLYPHS } from './glyphs-auth';
 import { InfoHintButton, InfoHintText, useInfoHint, type InfoHint } from './info-hint';
@@ -12,27 +14,22 @@ import { InfoHintButton, InfoHintText, useInfoHint, type InfoHint } from './info
  * et la passerelle rend 200 dans les deux cas, même pour une adresse inconnue
  * (anti-énumération) : l'écran ne peut ni promettre l'envoi ni le démentir. Le
  * mot de passe oublié disait « Si un compte existe avec …, un lien de
- * réinitialisation a été envoyé » quand la connexion disait « Ouvrez le lien
- * reçu à … » : deux phrases pour le même fait, et la première parlait de
- * réinitialiser à qui n'a jamais eu de mot de passe (#6642). Les deux écrans
- * montent celui-ci. Ce qui diffère entre par `status` (le compte à rebours de la
- * connexion) et `children` (le renvoi, ou le retour à la connexion).
+ * réinitialisation vient d’être envoyé » quand la connexion disait « Ouvrez le
+ * lien reçu à … » : deux phrases pour le même fait, et la première parlait de
+ * réinitialiser à qui n'a jamais eu de mot de passe (#6642). #6583 avait déjà
+ * rendu leur (i) « Rien reçu ? » commun ; les deux écrans montent désormais
+ * celui-ci en entier. Ce qui diffère entre par `status` (le compte à rebours de
+ * la connexion) et `children` (le renvoi, ou le retour à la connexion).
  */
 
 /**
- * CE QUE LA PASSERELLE NE DIT PAS, ET QUE L'ÉCRAN DOIT DIRE (#6404).
- *
- * Ne pouvant rien affirmer de l'envoi, l'écran nomme la première cause d'un
- * e-mail « jamais reçu » : le dossier indésirables. #6404 l'écrivait en clair ;
- * #6626 le replie derrière un (i) dont le libellé est la question qu'on se pose
- * à cet instant, et qui reste LU à côté du glyphe — posé seul sous l'adresse, un
- * (i) muet ne dirait pas de quoi il parle.
+ * CE QUE LA PASSERELLE NE DIT PAS, ET QUE L'ÉCRAN DOIT DIRE (#6404) — la
+ * première cause d'un e-mail « jamais reçu », repliée derrière un (i) dont la
+ * question reste LUE à côté du glyphe (#6626) : posé seul sous l'adresse, un
+ * (i) muet ne dirait pas de quoi il parle. Texte et libellé PARTAGÉS
+ * (`lib/view/auth-copy.ts`, #6583).
  */
-const NOTHING_RECEIVED: InfoHint = {
-  label: 'Rien reçu ?',
-  text: 'Regardez vos indésirables (spam) : le message peut y être tombé.',
-  glyph: AUTH_GLYPHS.info,
-};
+const NOTHING_RECEIVED: InfoHint = { label: NOTHING_RECEIVED_LABEL, text: NOTHING_RECEIVED_TEXT, glyph: AUTH_GLYPHS.info };
 
 export function EmailSentNotice({
   email,

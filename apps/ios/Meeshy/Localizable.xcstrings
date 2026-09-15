@@ -87323,6 +87323,53 @@
         }
       }
     },
+    "conversation.voiceConsent.failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّر تفعيل الترجمة التلقائية للرسائل الصوتية. حاول مرة أخرى لاحقًا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die automatische Übersetzung von Sprachnachrichten konnte nicht aktiviert werden. Bitte versuche es später erneut."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't turn on automatic voice message translation. Please try again later."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo activar la traducción automática de los mensajes de voz. Inténtalo de nuevo más tarde."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible d'activer la traduction automatique des vocaux. Réessayez plus tard."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossibile attivare la traduzione automatica dei messaggi vocali. Riprova più tardi."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível ativar a tradução automática das mensagens de voz. Tente novamente mais tarde."
+          }
+        }
+      }
+    },
     "conversation.voiceConsent.later": {
       "extractionState": "manual",
       "localizations": {

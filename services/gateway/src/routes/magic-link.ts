@@ -115,7 +115,7 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
       });
 
       /**
-       * UN REFUS DU LIMITEUR SE DIT (#6450).
+       * UN REFUS DU LIMITEUR SE DIT (#6655).
        *
        * La route rendait `sendSuccess` quoi que le service ait répondu. Sur un
        * refus de débit, elle servait donc `{"success":true,"message":"Too many

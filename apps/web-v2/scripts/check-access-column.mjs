@@ -113,10 +113,10 @@ const envoie = (page) => page.click('button[type="submit"]');
 const REFERENCE = { nom: 'connexion — e-mail (porte par défaut)', chemin: '/login', pret: '#magic-link-email' };
 const ETATS = [
   REFERENCE,
-  { nom: 'connexion — mot de passe', chemin: '/login?methode=motdepasse', pret: '#login-username' },
+  { nom: 'connexion — mot de passe', chemin: '/login?methode=password', pret: '#login-username' },
   {
     nom: 'connexion — double authentification',
-    chemin: '/login?methode=motdepasse',
+    chemin: '/login?methode=password',
     pret: '#login-username',
     geste: async (page) => {
       await remplit(page, [['#login-username', 'ada'], ['#login-password', 'secret-du-temoin']]);
@@ -130,9 +130,10 @@ const ETATS = [
     nom: 'inscription — dépliée',
     chemin: '/signup',
     pret: '#signup-email',
+    /* Une adresse valide déplie l'identité, le mot de passe, la langue et le
+       bouton (D-72, deux barreaux) : c'est l'état le plus long de la page. */
     geste: async (page) => {
       await remplit(page, [['#signup-email', EMAIL]]);
-      await page.click('[data-signup-skip-phone]');
     },
     fin: '#signup-password',
   },

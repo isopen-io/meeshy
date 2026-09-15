@@ -9,9 +9,7 @@ import { LanguageSheet } from '@/components/language-sheet';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { authColumnIn, strayFromAuthColumn } from '@/test-support/auth-column';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
-import { controlledBy, perceivableText } from '@/test-support/perceivable-text';
 
-import ForgotPasswordScreen, { type ForgotPasswordDeps } from './forgot-password';
 import { LoginDoors } from './login';
 import SignupScreen from './signup';
 import WelcomeScreen from './welcome';
@@ -34,7 +32,7 @@ describe('LoginScreen — la marque et la version', () => {
   // La porte du MOT DE PASSE (#6404) : c'est elle qui porte les deux champs
   // que ce bloc mesure. La porte par défaut (connexion par e-mail) a ses propres
   // témoins dans `login-doors.test.tsx`.
-  const html = renderToStaticMarkup(<LoginDoors method="motdepasse" />);
+  const html = renderToStaticMarkup(<LoginDoors method="password" />);
 
   test('rend le GLYPHE des trois traits, jamais l’icône d’application', () => {
     expect(html.match(/<line/g)).toHaveLength(3);
@@ -73,7 +71,7 @@ describe('LoginScreen — la marque et la version', () => {
  * « Mot de passe oublié ? », comme iOS.
  */
 describe('LoginScreen — les deux portes', () => {
-  const html = renderToStaticMarkup(<LoginDoors method="motdepasse" />);
+  const html = renderToStaticMarkup(<LoginDoors method="password" />);
 
   test('le retour vers le lien (/login) précède « Mot de passe oublié ? » (/forgot-password)', () => {
     const lienIndex = html.indexOf('Se connecter par e-mail');
@@ -123,12 +121,12 @@ describe('SignupScreen — les navigations sont des ancres, la langue vient du c
   const html = renderToStaticMarkup(<SignupScreen />);
 
   /**
-   * L'ÉTAT INITIAL NE MONTRE PLUS QUE LE PREMIER BARREAU (#6405) — mais les
-   * deux SORTIES restent : le « X » et « Déjà un compte ? ». Elles ne sont pas
-   * des champs, et quelqu'un qui s'est trompé d'écran ne doit pas remplir une
-   * adresse pour faire paraître le lien qui l'emmène ailleurs. La pastille de
-   * langue et les deux pages légales, elles, vivent au troisième barreau —
-   * `signup-rungs.test.tsx` les mesure une fois dépliés.
+   * L'ÉTAT INITIAL NE MONTRE QUE LE BARREAU DE CONTACT (#6405, redécoupé par
+   * #6582) — mais les deux SORTIES restent : le « X » et « Déjà un compte ? ».
+   * Elles ne sont pas des champs, et quelqu'un qui s'est trompé d'écran ne
+   * doit pas remplir une adresse pour faire paraître le lien qui l'emmène
+   * ailleurs. La pastille de langue et les deux pages légales, elles, vivent
+   * au second barreau — `signup-rungs.test.tsx` les mesure une fois dépliés.
    */
   test('les deux sorties vers la connexion sont des ANCRES, dès la première seconde', () => {
     expect(html.match(/href="\/login"/g)).toHaveLength(2);
@@ -258,9 +256,9 @@ describe('Field — le refus est DESSINÉ sous son champ, et le champ le DÉSIGN
 });
 
 /**
- * LES ÉCRANS MONTÉS DANS UN VRAI DOM (#6643) — la colonne et le mot de passe
- * oublié ont besoin d'un clic, d'une saisie et d'une réponse, qu'un rendu
- * statique ne sait pas jouer.
+ * LES ÉCRANS MONTÉS DANS UN VRAI DOM (#6643) — la colonne se lit sur l'arbre
+ * monté, pas sur une chaîne rendue. Le mot de passe oublié a ses témoins chez
+ * lui (`forgot-password.test.tsx`).
  */
 const actGlobals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 const unmounts: Array<() => void> = [];
@@ -295,8 +293,6 @@ function withMountedDom() {
   });
 }
 
-const flat = (el: Element) => (el.textContent ?? '').replace(/\s+/gu, ' ');
-
 describe('Les pages d’accès tiennent dans UNE colonne, la puce « Fermer » comprise (#6643)', () => {
   withMountedDom();
 
@@ -311,85 +307,6 @@ describe('Les pages d’accès tiennent dans UNE colonne, la puce « Fermer » c
     const column = authColumnIn(el);
     expect(column?.querySelector('a[aria-label="Fermer"]')?.getAttribute('href')).toBe('/login');
     expect(column?.querySelector('#signup-email')).not.toBeNull();
-    expect(strayFromAuthColumn(el)).toEqual([]);
-  });
-});
-
-/**
- * « MOT DE PASSE OUBLIÉ » SERT AUSSI À CRÉER UN MOT DE PASSE (#6643).
- *
- * Directive porteur 2026-09-15 : « la page de récupération de mot de passe doit
- * permettre de setter le mot de passe même si on a jamais eu de mot de passe ».
- * Le lien part aussi vers un compte qui n'en a jamais eu (#6642, passerelle) ;
- * l'écran le dit sans détail technique — une phrase qui parle de CHOISIR, et le
- * cas du premier mot de passe derrière un (i) qui NOMME la question (D-71).
- */
-describe('Mot de passe oublié — le même lien sert à créer un premier mot de passe (#6643)', () => {
-  withMountedDom();
-
-  const EMAIL = 'ada@meeshy.example';
-
-  function forgotStub() {
-    const calls: string[] = [];
-    const deps: ForgotPasswordDeps = {
-      forgotPassword: async (email: string) => {
-        calls.push(email);
-        return { ok: true, data: { message: 'ok' }, status: 200 };
-      },
-    };
-    return { calls, deps };
-  }
-
-  test('la phrase dit « par e-mail » et « choisir », le bouton « Recevoir le lien » — dans la colonne', () => {
-    const el = mount(<ForgotPasswordScreen deps={forgotStub().deps} />);
-    expect(el.querySelector('h1')?.textContent).toBe('Mot de passe oublié');
-    expect(flat(el)).toContain('Recevez par e-mail un lien pour choisir un nouveau mot de passe.');
-    expect(el.querySelector('button[type="submit"]')?.textContent).toBe('Recevoir le lien');
-    expect(authColumnIn(el)?.querySelector('#forgot-email')).not.toBeNull();
-    expect(strayFromAuthColumn(el)).toEqual([]);
-  });
-
-  test('« Jamais eu de mot de passe ? » est un (i) dont la question se LIT, replié, qui s’ouvre sur la réponse', () => {
-    const el = mount(<ForgotPasswordScreen deps={forgotStub().deps} />);
-    const info = el.querySelector('button[aria-label="Jamais eu de mot de passe ?"]') as HTMLButtonElement | null;
-    expect(info?.textContent).toContain('Jamais eu de mot de passe ?');
-    expect(info?.getAttribute('aria-expanded')).toBe('false');
-    const note = controlledBy(info);
-    expect(note?.textContent).toBe('Ce même lien vous permet d’en créer un.');
-    expect(note?.classList.contains('sr-only')).toBe(true);
-
-    act(() => {
-      info?.click();
-    });
-    expect(info?.getAttribute('aria-expanded')).toBe('true');
-    expect(note?.classList.contains('sr-only')).toBe(false);
-  });
-
-  test('aucun libellé perçu ne dit « réinitialisation » ni « magique »', () => {
-    const el = mount(<ForgotPasswordScreen deps={forgotStub().deps} />);
-    expect(perceivableText(el)).not.toMatch(/r[ée]initialis|magi(que|c)/iu);
-  });
-
-  test('envoyé : « E-mail envoyé », l’adresse, un (i) « Rien reçu ? » et le retour à la connexion — dans la colonne', async () => {
-    const stub = forgotStub();
-    const el = mount(<ForgotPasswordScreen deps={stub.deps} />);
-    const input = el.querySelector('#forgot-email') as HTMLInputElement;
-    act(() => {
-      input.value = EMAIL;
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-    await act(async () => {
-      el.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-      await Promise.resolve();
-    });
-
-    expect(stub.calls).toEqual([EMAIL]);
-    expect(el.querySelector('h2')?.textContent).toBe('E-mail envoyé');
-    expect(flat(el)).toContain(`Ouvrez le lien reçu à ${EMAIL}`);
-    expect(el.querySelector('button[aria-label="Rien reçu ?"]')).not.toBeNull();
-    const retour = [...el.querySelectorAll('a')].find((a) => flat(a).trim() === 'Retour à la connexion');
-    expect(retour?.getAttribute('href')).toBe('/login');
-    expect(perceivableText(el)).not.toMatch(/r[ée]initialis|magi(que|c)/iu);
     expect(strayFromAuthColumn(el)).toEqual([]);
   });
 });

@@ -11,6 +11,7 @@ import {
   type MagicLinkDeadline,
   type MagicLinkRequestOutcome,
 } from '@/lib/view/magic-link';
+import { HOW_IT_WORKS_LABEL, HOW_IT_WORKS_TEXT } from '@/lib/view/auth-copy';
 import { useCountdown } from '@/lib/view/use-countdown';
 
 import { AuthSubmitButton } from './auth-chrome';
@@ -63,11 +64,7 @@ const OUTCOME_FIELD_ERROR = 'Adresse e-mail invalide';
  * part à l'écran — la BAGUETTE reste l'icône de la connexion par e-mail — et le
  * vocabulaire est celui que les trois clients partagent.
  */
-const HOW_IT_WORKS: InfoHint = {
-  label: 'Comment ça marche',
-  text: 'Pas de mot de passe à retenir : nous vous envoyons un lien par e-mail. Ouvrez-le et vous êtes connecté.',
-  glyph: AUTH_GLYPHS.info,
-};
+const HOW_IT_WORKS: InfoHint = { label: HOW_IT_WORKS_LABEL, text: HOW_IT_WORKS_TEXT, glyph: AUTH_GLYPHS.info };
 
 function bannerFor(outcome: MagicLinkRequestOutcome | null): string | null {
   if (outcome === null) return null;
@@ -130,10 +127,10 @@ export function MagicLinkPanel({ deps = defaultMagicLinkDeps, footer, onCancel, 
 
   if (step === 'waiting') {
     const expired = deadline !== null && remaining <= 0;
-    /* L'ÉCRAN « E-MAIL ENVOYÉ » est celui du mot de passe oublié aussi
-       (`EmailSentNotice`, #6643) : l'adresse et « Rien reçu ? » y vivent une
-       fois. Ce qui n'appartient qu'à la connexion — le compte à rebours, le
-       renvoi, l'annulation — entre par ses deux emplacements. */
+    /* L'ÉCRAN « E-MAIL ENVOYÉ » est aussi celui du mot de passe oublié
+       (`EmailSentNotice`, #6643) : l'enveloppe, l'adresse et « Rien reçu ? » y
+       vivent une fois. Ce qui n'appartient qu'à la connexion — le compte à
+       rebours, le renvoi, l'annulation — entre par ses deux emplacements. */
     return (
       <EmailSentNotice
         email={email}

@@ -32394,6 +32394,8 @@ première localement, jamais en espérant qu'elle marche le jour où elle servir
 Voisine de [[reference_a_red_on_both_sides_of_the_diff_also_measures_the_machine]]
 et du piège inverse : ici, VERT d'un seul côté mesurait la machine.
 
+---
+
 ## Leçon 611 — Un témoin qui lit le TEXTE SOURCE verdit sur un correctif ANNULÉ
 
 **Mesuré le 2026-09-15 sur trois lots indépendants** de la chaîne de publication (#6577, #6579, #6164).
@@ -32441,3 +32443,88 @@ re-poser un motif interdit — mais il ne peut jamais être la seule preuve qu'u
    à part, avec un message qui l'accuse **lui** et jamais la feature.
 
 Voir aussi la leçon sur le disque saturé : un rouge qui ne parle pas du code parle de la **machine**.
+
+## Leçon 612 — Un dépliage progressif n'est pas une vertu : ce qui se déplie doit être ce qu'on ne SAIT PAS ENCORE, jamais ce qu'on va sûrement donner (2026-09-14)
+
+**Ce qui s'est passé.** La directive du 2026-09-13 disait « les champs
+apparaissent uniquement au fur et à mesure » ; #6405 a livré TROIS barreaux —
+l'adresse, puis le numéro, puis le reste — avec une jauge « Étape N sur 3 ».
+Vingt-quatre heures plus tard, le porteur en retire deux tiers : « il faut
+mettre dès le départ le numéro et l'e-mail à montrer […] pas d'étape 1 sur N à
+afficher : tout se fait intuitivement dans la page de création de compte ».
+
+**Pourquoi la première lecture était fausse.** La règle avait été appliquée à
+la lettre — *un champ à la fois* — au lieu de sa raison : *ne pas mettre devant
+quelqu'un un formulaire dont il ne voit pas le bout*. Or l'adresse et le numéro
+forment UNE question (« comment vous joint-on ? »), et celui qui s'inscrit sait
+déjà ce qu'il va y répondre. Les replier n'a rien épargné : ça a transformé une
+donnée qu'on allait donner en une ÉTAPE à franchir — avec, en prime, un bouton
+« Je continue sans numéro » pour sortir d'une porte qu'on venait soi-même de
+fermer.
+
+**Le signe qu'on est dans ce piège : la compensation.** La jauge de trois
+segments et « Étape N sur 3 » avaient été ajoutées, en toute conscience, pour
+« rembourser » l'impression de formulaire sans fin que le dépliage créait. Un
+dispositif dont il faut compenser l'effet est un dispositif qui coûte plus
+qu'il ne rapporte. **Quand un lot ajoute un indicateur pour rassurer sur ce
+qu'un autre choix du même lot vient de rendre inquiétant, c'est l'autre choix
+qu'il faut relire** — pas l'indicateur qu'il faut peaufiner.
+
+**La règle qui reste.** Ce qui se déplie doit être ce que l'écran APPREND :
+l'identité dérivée n'existe pas avant l'adresse, donc elle paraît après elle.
+Ce qui est déjà connu de l'utilisateur se montre. Et la MONOTONIE, elle,
+survit intacte aux deux découpages : un champ paru ne se referme jamais, sans
+quoi corriger une faute de frappe ferait s'effondrer le formulaire sous les
+doigts.
+
+**Corollaire sur les étiquettes.** « (facultatif) » a disparu du mot de passe
+par la même directive, et pour la même raison : *le fait que le bouton créer
+mon compte fonctionne est suffisant pour le dire*. Une mention qui DÉCRIT ce
+qu'un contrôle MONTRE déjà est du bruit ; ce qu'elle doit dire à la place, si
+elle doit dire quelque chose, c'est la CONSÉQUENCE que l'utilisateur ne peut
+pas deviner — ici, qu'un compte sans mot de passe reste à configurer.
+
+Voisine de la leçon 603 (`onInput` sous happy-dom), payée dans le même écran, et
+du § Prisme « qui AFFICHE ce qu'il décide ? » : une loi de dépliage juste mais
+appliquée au mauvais découpage atteint bien des pixels — les mauvais.
+---
+
+## Leçon 613 — Une confirmation `y/N` non automatisée est un no-op SILENCIEUX : la purge « posée » ne retire rien, et on croit avoir purgé (2026-09-15)
+
+**Directive porteur, deux moitiés :** dans le code de release des images sur le serveur final, la purge
+(`docker image prune`) est obligatoire **et son `y` s'envoie tout seul** ; et le déploiement automatique
+**ne se fait qu'en DEV, jamais sur `main` en production**.
+
+### Ce qui rendait le défaut invisible
+
+`docker image prune` demande `y/N`. Au bout d'un `ssh`, dans un `heredoc`, dans un job de CI, **il n'y a
+pas de terminal** : `stdin` est vide ou fermé, la réponse vide vaut « N », la commande **rend 0** et
+n'affiche même pas d'erreur. Le script continue, vert. C'est le pire des verdicts — pas un échec, une
+**absence d'effet** que rien ne distingue du succès. L'hôte de staging a accumulé une image par service et
+par version jusqu'au `no space left on device` du 2026-09-14 (#6556) : le `pull` a échoué, le déploiement
+s'est arrêté là, et staging a continué de servir la version précédente **sans que rien à l'écran ne le dise**.
+
+> **Une commande interactive dans un chemin automatisé ne « demande » rien : elle abandonne.**
+> Devant tout `prune`, `rm -i`, `apt install`, `gh` interactif dans un script, la question n'est pas
+> « ai-je posé la commande ? » mais **« qui répond, et que vaut le silence ? »**.
+
+### Le second angle mort : l'ORDRE, pas seulement la présence
+
+Une purge POSTÉRIEURE au `pull` est aussi inutile qu'une purge refusée — ce qui manque de place, c'est
+l'écriture des couches téléchargées. Même forme que la leçon 275 (« une garde se mesure sur ce qui part »)
+appliquée au temps : **une garde juste, au mauvais moment, ne garde rien.**
+
+### Ce qui reste hors du dépôt, et qu'il faut dire
+
+Ce que la CI déclenche sur l'hôte était un script **non suivi** (`/usr/local/bin/meeshy-deploy-staging.sh`,
+contraint par `command=…,restrict` dans `authorized_keys`). Deux sessions successives ont conclu « bloqué,
+pas d'accès serveur » — et la conclusion était juste sur l'ACTION, fausse sur le LIVRABLE : on ne pouvait
+pas installer le script, on pouvait **le versionner**, avec sa purge, sa liste blanche et son self-test.
+**Un livrable inatteignable n'annule pas le livrable ATTEIGNABLE qui le précède.**
+
+### Le geste qui l'attrape
+
+`scripts/check-docker-prune-noninteractive.mjs` (job `quality` de `ci.yml`), trois règles et six mutations :
+chaque purge du dépôt porte `-f`/`-af`/`--force` ; chaque script qui tire des images sur un hôte distant
+purge **avant** de tirer ; tout job de workflow porteur d'une clé SSH de déploiement reste épinglé à
+`refs/heads/dev` et ne peut mentionner ni `refs/heads/main` ni `refs/tags/`.
