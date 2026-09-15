@@ -593,7 +593,7 @@ describe('PasswordResetService', () => {
           name: `${mockUser.firstName} ${mockUser.lastName}`,
           resetLink: expect.stringContaining('token='),
           expiryMinutes: 15,
-          language: 'en'
+          language: 'en', intent: 'reset'
         });
       });
 
