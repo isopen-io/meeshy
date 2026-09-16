@@ -33,6 +33,17 @@ async function buildApp(handleMessage: jest.Mock): Promise<FastifyInstance> {
   const prisma = {
     participant: { findFirst: jest.fn() },
     conversation: { findUnique: jest.fn(), findFirst: jest.fn() },
+    // #6870 — la route admet désormais chaque `attachmentId` (existe,
+    // appartient à l'appelant) avant `handleMessage`. Ce fichier ne teste
+    // pas cette admission (voir `messages-send-attachment-admission.test.ts`)
+    // : la double reflète tout id demandé comme appartenant à l'appelant
+    // anonyme de `fakeOptionalAuth`, pour isoler le seul comportement propre
+    // à ce fichier — le statut HTTP d'un refus de `handleMessage`.
+    messageAttachment: {
+      findMany: jest.fn().mockImplementation(({ where }: { where: { id: { in: string[] } } }) =>
+        Promise.resolve(where.id.in.map((id) => ({ id, uploadedBy: PARTICIPANT_ID })))
+      ),
+    },
   } as never;
   registerSendMessageRoute(
     app as never,

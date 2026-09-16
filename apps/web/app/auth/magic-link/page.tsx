@@ -16,6 +16,7 @@ import { usePasswordResetStore } from '@/stores/password-reset-store';
 import { safeInternalPath } from '@/utils/safe-redirect';
 import { isValidEmail } from '@meeshy/shared/utils/email-validator';
 import { formatDuration } from '@/utils/audio-formatters';
+import { resolveMagicLinkRequestOutcome } from '@/lib/auth/magic-link-request-outcome';
 
 // Constants
 const MAGIC_LINK_EXPIRY_SECONDS = 600; // 10 minutes
@@ -171,10 +172,8 @@ function MagicLinkPageContent() {
       const response = await magicLinkService.requestMagicLink(trimmedEmail, rememberDevice);
       sessionStorage.setItem(STORAGE_KEY_RETRY_EMAIL, trimmedEmail);
 
-      if (response.success) {
-        setIsEmailSent(true);
-        setCountdown(MAGIC_LINK_EXPIRY_SECONDS);
-        toast.success(t('magicLink.success.emailSent'));
+      if (resolveMagicLinkRequestOutcome(response).kind === 'rate-limited') {
+        setError(t('magicLink.errors.rateLimited', 'Too many attempts. Please try again in about an hour.'));
       } else {
         setIsEmailSent(true);
         setCountdown(MAGIC_LINK_EXPIRY_SECONDS);
@@ -207,7 +206,12 @@ function MagicLinkPageContent() {
 
     try {
       const trimmedEmail = email.trim().toLowerCase();
-      await magicLinkService.requestMagicLink(trimmedEmail, rememberDevice);
+      const result = await magicLinkService.requestMagicLink(trimmedEmail, rememberDevice);
+
+      if (resolveMagicLinkRequestOutcome(result).kind === 'rate-limited') {
+        toast.error(t('magicLink.errors.rateLimited', 'Too many attempts. Please try again in about an hour.'));
+        return;
+      }
 
       setRetryCount(currentRetryCount);
       sessionStorage.setItem(STORAGE_KEY_RETRY_COUNT, currentRetryCount.toString());

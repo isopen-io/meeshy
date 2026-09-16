@@ -427,9 +427,13 @@ describe('AccountRecoveryModal', () => {
 
     it('handles rate limiting error', async () => {
       const user = userEvent.setup();
+      // Forme RÉELLE d'un 429 côté gateway (`sendError(reply, 429, message, { code })`,
+      // `services/gateway/src/routes/magic-link.ts`) : `error` porte le message HUMAIN,
+      // le code de rate-limit voyage à part dans `code` (#6665).
       mockMagicLinkService.requestMagicLink.mockResolvedValueOnce({
         success: false,
-        error: 'RATE_LIMITED',
+        error: 'Too many magic link requests. Please try again later.',
+        code: 'RATE_LIMITED',
       });
 
       render(

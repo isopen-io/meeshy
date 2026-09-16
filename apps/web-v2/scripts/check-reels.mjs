@@ -117,10 +117,26 @@ const settle = async (page, expected) => {
   }
 };
 
-/** Les lecteurs MONTÉS et ceux qui JOUENT, par page. */
+/** Les lecteurs DE RÉEL montés et ceux qui JOUENT, par page.
+ *
+ * RESTREINT à `[data-reel-index]` (#6807) — la requête balayait TOUT le
+ * document. L'invariante 9 (« le retour du navigateur quitte les Réels et ne
+ * laisse AUCUN lecteur ») s'évalue APRÈS un `goBack()` vers le Flux : elle
+ * comptait donc les médias du FIL, l'écran même où l'on vient d'atterrir.
+ *
+ * Elle était juste tant qu'aucune carte du fil ne montait de `<video>` ni
+ * d'`<audio>` — ce qui a cessé d'être vrai avec #6807. Les quatre
+ * déclinaisons ont rougi sur `page: -1`, la valeur de repli de `closest()`,
+ * qui DISAIT déjà que ces éléments n'appartenaient à aucun réel : le gate
+ * portait son propre diagnostic dans son message d'échec.
+ *
+ * La restriction ne relâche rien. L'invariante 3 — « lui seul joue », « au
+ * plus trois lecteurs montés » — parle des lecteurs de RÉEL, et c'est
+ * exactement ce qui est compté maintenant ; un média du fil n'y entrait que
+ * par accident de sélecteur. */
 const players = (page) =>
   page.evaluate(() =>
-    [...document.querySelectorAll('video, audio')].map((m) => ({
+    [...document.querySelectorAll('[data-reel-index] video, [data-reel-index] audio')].map((m) => ({
       page: Number(m.closest('[data-reel-index]')?.getAttribute('data-reel-index') ?? -1),
       playing: !m.paused && !m.ended,
     })),

@@ -32,6 +32,7 @@ import {
 } from '../../validation/encryption-envelope.js';
 import { MENTIONED_USER_IDS_SHAPE } from '../../validation/mention-list.js';
 import { admitAttachmentReply } from '../../services/messaging/attachmentReplySnapshot';
+import { admitMessageAttachments } from '../../services/messaging/attachmentSendAdmission';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { logger } from './messages-shared';
 
@@ -201,6 +202,7 @@ export function registerSendMessageRoute(
         400: errorResponseSchema,
         401: errorResponseSchema,
         403: errorResponseSchema,
+        404: errorResponseSchema,
         500: errorResponseSchema
       }
     },
@@ -302,6 +304,25 @@ export function registerSendMessageRoute(
               });
             }
           }
+        }
+      }
+
+      // #6870 — une pièce inconnue, déjà volée, ou pas encore visible par ce
+      // chemin (jamais confirmée : `associateAttachmentsToMessage` est un
+      // `updateMany` muet en aval) ne doit ni se perdre en silence ni faire
+      // échouer l'envoi sans nom. Même vérification que le transport WS
+      // (`MessageHandler.handleMessageSendWithAttachments`), AVANT que le
+      // message n'existe.
+      if (attachmentIds && attachmentIds.length > 0) {
+        const attachmentAdmission = await admitMessageAttachments(prisma, {
+          attachmentIds,
+          ownerId: userId ?? participantId,
+        });
+        if (!attachmentAdmission.ok) {
+          return sendNotFound(reply, 'Attachment not found', {
+            code: 'ATTACHMENT_NOT_FOUND',
+            message: `Attachment ${attachmentAdmission.invalidAttachmentId} not found`
+          });
         }
       }
 
