@@ -5,7 +5,7 @@ import type { ConversationsInfiniteData, ConversationsPage, ConversationsPagePar
 import { flattenConversationPages, nextConversationsCursor } from './conversations-pages';
 import type { DataSource } from './config';
 import { decodeConversation } from './decode';
-import { CONVERSATIONS } from './fixtures';
+import { conversationsWithSurged } from './fixtures';
 import { pageOfConversations } from './fixtures-pagination';
 import type { ApiResult, ApiSuccess, HttpTransport } from './http';
 import type { Conversation } from './types';
@@ -60,7 +60,12 @@ export async function loadConversationsPage(
   if (__FIXTURES__ && params.source === 'fixtures') {
     return {
       ok: true,
-      data: pageOfConversations(CONVERSATIONS, {
+      /* `conversationsWithSurged()`, jamais `CONVERSATIONS` (#6807) — le corpus
+         figé PLUS les conversations qu'un `conversation:new` a fait surgir.
+         Sans cela, l'invalidation que #6799 déclenche refaisait une page
+         IDENTIQUE : le correctif était inobservable sous fixtures, donc
+         gardable par aucun gate. Le corpus lui-même reste intouché. */
+      data: pageOfConversations(conversationsWithSurged(), {
         ...(params.before !== undefined ? { before: params.before } : {}),
         limit: PAGE_SIZE,
       }),
@@ -91,7 +96,9 @@ export async function loadConversation(
   params: ConversationsDeps & { readonly id: string; readonly signal?: AbortSignal },
 ): Promise<ApiResult<Conversation>> {
   if (__FIXTURES__ && params.source === 'fixtures') {
-    const found = CONVERSATIONS.find((c) => c.id === params.id);
+    /* Les survenues AUSSI : une conversation qui vient d'apparaître dans la
+       liste doit pouvoir s'OUVRIR, sans quoi la ligne mènerait à « introuvable ». */
+    const found = conversationsWithSurged().find((c) => c.id === params.id);
     return found === undefined
       ? { ok: false, status: 404, error: 'Conversation not found' }
       : { ok: true, data: found };
@@ -214,7 +221,11 @@ export function refreshConversations(queryClient: QueryClient, deps: Conversatio
  */
 export function createDirectConversation(deps: ConversationsDeps, participantId: string): Promise<ApiResult<Conversation>> {
   if (__FIXTURES__ && deps.source === 'fixtures') {
-    const found = CONVERSATIONS.find((c) => c.type === 'direct' && c.participants.some((p) => p.userId === participantId));
+    /* Les survenues AUSSI : un direct qui vient d'apparaître est un direct
+       EXISTANT, et le serveur est idempotent — le rendre plutôt que refuser. */
+    const found = conversationsWithSurged().find(
+      (c) => c.type === 'direct' && c.participants.some((p) => p.userId === participantId),
+    );
     if (found !== undefined) return Promise.resolve({ ok: true, data: found });
     return Promise.resolve({ ok: false, status: 501, error: 'Création de direct indisponible en fixtures' });
   }
