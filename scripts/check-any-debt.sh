@@ -144,7 +144,22 @@ readonly SHARED_BASELINE=0
 # (`RawNotificationInput`/`RawNotificationRow`). Aucun `unknown` nu laissé :
 # chaque champ a désormais le type que son producteur (Prisma) ou son
 # consommateur (`@meeshy/shared/types/notification`) déclare.
-readonly GATEWAY_BASELINE=639
+#
+# 624, pas 639 (#3679, second lot de RÉDUCTION) :
+# `routes/admin/broadcasts.ts` (577 lignes, dans le budget de taille) typait
+# ses quinze usages sur des `any` nus — huit `catch (error: any)` jamais lus
+# dans leur corps (repris en `unknown`, sans changement de comportement), deux
+# `targeting?: any` et un `(broadcast.targeting || {}) as any` repris sur le
+# type déjà partagé `BroadcastTargeting` (`jobs/broadcast-recipients.ts`), deux
+# `where`/`updateData` Prisma nus repris sur `Prisma.AdminBroadcastWhereInput` /
+# `Prisma.UserWhereInput` / `Prisma.AdminBroadcastUpdateInput`, et un
+# `(err: any)` de callback de job repris en `unknown` avec narrowing
+# `instanceof Error` (même patron que son jumeau `send-inapp`, déjà correct).
+# Le typage honnête de `targeting.activityStatus` a fait échouer la
+# compilation sur la valeur `'new'`, absente du type partagé — révélant que le
+# filtre d'ENVOI réel (`activityWindow()`) ne l'implémente pas alors que la
+# PREVIEW si : #6777, hors périmètre de ce lot de dette `any`.
+readonly GATEWAY_BASELINE=624
 
 # `apps/web` — dette réelle, jamais gardée avant ce lot (cf. en-tête « WHY
 # `apps/web` IS MEASURED… »). Mesurée sur un checkout NON construit (pas de
