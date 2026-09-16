@@ -129,6 +129,28 @@ export function StoryMediaLayer({
              une durée utile, pour la seule économie d'un état React que
              `Object.is` dédoublonne de toute façon. */
           onLoadedMetadata={(event) => onDurationKnown?.(event.currentTarget.duration * 1000)}
+          /* **ET AU MONTAGE, parce que l'évènement peut être DÉJÀ PASSÉ** (#6866).
+             Avec une source `data:` ou un cache chaud, le décodeur a fini avant
+             que Preact n'attache le gestionnaire : `loadedmetadata` ne tire
+             jamais, la durée n'atteint pas `slideDurationMs`, et la diapositive
+             coupe son clip.
+
+             Mesuré sur cinq ouvertures indépendantes de `/story/st-video-long` :
+             quatre à 34 % de barre à 3 s (9 s, juste), une à 50 % — soit
+             3000/6000 au centième, le dénominateur de la CONSTANTE — avec
+             pourtant `readyState === 4` et `duration === 9` au montage. La
+             donnée était là ; personne ne l'avait lue.
+
+             Une valeur déjà disponible se LIT, une valeur à venir s'ÉCOUTE : les
+             deux chemins alimentent la même loi, et aucun ne suffit seul.
+             L'asymétrie du filtre est voulue — ici `duration` vaut `NaN` tant
+             que rien n'est décodé, donc on ne remonte que ce qui est utile ;
+             au-dessus, l'évènement ne tire QUE lorsque la donnée existe. */
+          ref={(el) => {
+            if (el === null || onDurationKnown === undefined) return;
+            const seconds = el.duration;
+            if (Number.isFinite(seconds) && seconds > 0) onDurationKnown(seconds * 1000);
+          }}
           onError={onFailed}
         />
       );
