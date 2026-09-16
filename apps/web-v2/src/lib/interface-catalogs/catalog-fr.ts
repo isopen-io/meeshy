@@ -220,6 +220,14 @@ const fr = {
   'emailNotifications.resubscribe': 'Recevoir de nouveau ces e-mails',
   'emailNotifications.failed': 'Le changement n’a pas abouti. Réessayez.',
 
+  'dataExport.title': 'Exporter mes données',
+  'dataExport.info.body': 'Conformément au RGPD, recevez un fichier reprenant votre profil, vos messages, vos contacts et vos publications.',
+  'dataExport.action.start': 'Exporter mes données',
+  'dataExport.action.exporting': 'Export en cours…',
+  'dataExport.action.again': 'Exporter à nouveau',
+  'dataExport.done.title': 'Export terminé',
+  'dataExport.done.body': 'Le fichier a été téléchargé sur cet appareil.',
+
   'profile.title': 'Profil',
   'profile.edit': 'Modifier',
   'profile.cancel': 'Annuler',

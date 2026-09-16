@@ -196,6 +196,14 @@ const de = {
   'emailNotifications.resubscribe': 'Diese E-Mails wieder erhalten',
   'emailNotifications.failed': 'Die Änderung ist nicht durchgegangen. Versuche es erneut.',
 
+  'dataExport.title': 'Meine Daten exportieren',
+  'dataExport.info.body': 'Gemäß der DSGVO erhältst du eine Datei mit deinem Profil, deinen Nachrichten, deinen Kontakten und deinen Beiträgen.',
+  'dataExport.action.start': 'Meine Daten exportieren',
+  'dataExport.action.exporting': 'Export läuft…',
+  'dataExport.action.again': 'Erneut exportieren',
+  'dataExport.done.title': 'Export abgeschlossen',
+  'dataExport.done.body': 'Die Datei wurde auf dieses Gerät heruntergeladen.',
+
   'profile.title': 'Profil',
   'profile.edit': 'Bearbeiten',
   'profile.cancel': 'Abbrechen',
