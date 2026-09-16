@@ -29,7 +29,15 @@ export function AdminHeader({
 }: {
   readonly language: InterfaceLanguage;
   readonly title: string;
-  readonly back: 'list' | 'admin';
+  /**
+   * Les DEUX listes de membres y figurent (#6819) : un écran de détail revient
+   * à la liste d'où l'on vient, jamais au tableau de bord — et il revient dans
+   * l'ESPACE d'où l'on vient. `/adm/users/$user` renvoie vers `admUsers`,
+   * `/admin/users/$user` vers `adminUsers` ; confondre les deux ferait sauter
+   * l'administrateur d'une administration à l'autre au premier retour, alors
+   * que D-76 les tient séparées à dessein.
+   */
+  readonly back: 'list' | 'admin' | 'adminUsers' | 'admUsers';
 }) {
   return (
     <header className="flex shrink-0 items-center gap-1 px-2" style={{ height: ADMIN_HEADER_HEIGHT }} lang={language}>
@@ -122,7 +130,15 @@ export function AdminScreenFrame({
 }: {
   readonly language: InterfaceLanguage;
   readonly title: string;
-  readonly back: 'list' | 'admin';
+  /**
+   * Les DEUX listes de membres y figurent (#6819) : un écran de détail revient
+   * à la liste d'où l'on vient, jamais au tableau de bord — et il revient dans
+   * l'ESPACE d'où l'on vient. `/adm/users/$user` renvoie vers `admUsers`,
+   * `/admin/users/$user` vers `adminUsers` ; confondre les deux ferait sauter
+   * l'administrateur d'une administration à l'autre au premier retour, alors
+   * que D-76 les tient séparées à dessein.
+   */
+  readonly back: 'list' | 'admin' | 'adminUsers' | 'admUsers';
   readonly children: ReactNode;
 }) {
   return (

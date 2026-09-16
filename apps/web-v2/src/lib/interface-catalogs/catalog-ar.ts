@@ -604,6 +604,16 @@ const ar = {
   'admin.users.inactive': 'معطّل',
   'admin.users.previous': 'السابق',
   'admin.users.next': 'التالي',
+  'admin.user.title': 'عضو',
+  'admin.user.unavailable': 'البطاقة غير متاحة حاليًا.',
+  'admin.user.identity': 'الهوية',
+  'admin.user.account': 'الحساب',
+  'admin.user.created': 'انضمّ في',
+  'admin.user.lastActive': 'آخر نشاط',
+  'admin.user.twoFactor': 'التحقق بخطوتين',
+  'admin.user.enabled': 'مُفعّل',
+  'admin.user.deleted': 'محذوف',
+  'admin.user.role': 'الدور',
 
 } satisfies InterfaceCatalog;
 

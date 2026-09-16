@@ -606,6 +606,16 @@ const en = {
   'admin.users.inactive': 'disabled',
   'admin.users.previous': 'Previous',
   'admin.users.next': 'Next',
+  'admin.user.title': 'Member',
+  'admin.user.unavailable': 'Profile unavailable right now.',
+  'admin.user.identity': 'Identity',
+  'admin.user.account': 'Account',
+  'admin.user.created': 'Joined on',
+  'admin.user.lastActive': 'Last active',
+  'admin.user.twoFactor': 'Two-factor',
+  'admin.user.enabled': 'enabled',
+  'admin.user.deleted': 'deleted',
+  'admin.user.role': 'Role',
 
 } satisfies InterfaceCatalog;
 

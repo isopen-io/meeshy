@@ -635,6 +635,16 @@ const fr = {
   'admin.users.inactive': 'désactivé',
   'admin.users.previous': 'Précédents',
   'admin.users.next': 'Suivants',
+  'admin.user.title': 'Membre',
+  'admin.user.unavailable': 'Fiche indisponible pour le moment.',
+  'admin.user.identity': 'Identité',
+  'admin.user.account': 'Compte',
+  'admin.user.created': 'Inscrit le',
+  'admin.user.lastActive': 'Dernière activité',
+  'admin.user.twoFactor': 'Second facteur',
+  'admin.user.enabled': 'activé',
+  'admin.user.deleted': 'supprimé',
+  'admin.user.role': 'Rôle',
 
 } as const;
 

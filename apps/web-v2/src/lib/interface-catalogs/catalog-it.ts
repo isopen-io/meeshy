@@ -606,6 +606,16 @@ const it = {
   'admin.users.inactive': 'disattivato',
   'admin.users.previous': 'Precedenti',
   'admin.users.next': 'Successivi',
+  'admin.user.title': 'Membro',
+  'admin.user.unavailable': 'Scheda non disponibile al momento.',
+  'admin.user.identity': 'Identità',
+  'admin.user.account': 'Account',
+  'admin.user.created': 'Iscritto il',
+  'admin.user.lastActive': 'Ultima attività',
+  'admin.user.twoFactor': 'Due fattori',
+  'admin.user.enabled': 'attivato',
+  'admin.user.deleted': 'eliminato',
+  'admin.user.role': 'Ruolo',
 
 } satisfies InterfaceCatalog;
 

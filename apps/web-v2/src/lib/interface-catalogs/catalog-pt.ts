@@ -610,6 +610,16 @@ const pt = {
   'admin.users.inactive': 'desativada',
   'admin.users.previous': 'Anteriores',
   'admin.users.next': 'Seguintes',
+  'admin.user.title': 'Membro',
+  'admin.user.unavailable': 'Ficha indisponível de momento.',
+  'admin.user.identity': 'Identidade',
+  'admin.user.account': 'Conta',
+  'admin.user.created': 'Aderiu em',
+  'admin.user.lastActive': 'Última atividade',
+  'admin.user.twoFactor': 'Duplo fator',
+  'admin.user.enabled': 'ativado',
+  'admin.user.deleted': 'eliminada',
+  'admin.user.role': 'Função',
 
 } satisfies InterfaceCatalog;
 
