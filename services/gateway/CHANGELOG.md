@@ -1,5 +1,14 @@
 # @meeshy/gateway
 
+## 1.56.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - contactLookupScope no longer emits isSet on blockedUserIds
+  - garde de parité CI pour generated_languages.py (#3658)
+
 ## 1.55.0
 
 ### Minor Changes
