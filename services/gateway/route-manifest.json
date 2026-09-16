@@ -21,7 +21,7 @@
       "authenticated-only": "Authentifié (onRequest/preHandler référence fastify.authenticate) sans requirePermission/requireHierarchy/requireSovereign détecté, donc S2 ou S3. Les deux ne se distinguent pas mécaniquement : l'appartenance à la ressource (S3) peut être vérifiée à l'intérieur du corps du handler, invisible depuis le serveur assemblé."
     }
   },
-  "routeCount": 567,
+  "routeCount": 568,
   "routes": [
     {
       "method": "DELETE",
@@ -1449,6 +1449,19 @@
         "S5"
       ],
       "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/conversations",
+      "module": "userAdminRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "S6",
+      "securityLevelCandidates": [
+        "S6"
+      ],
+      "securityBasisKey": "sovereign",
       "hierarchyGated": false,
       "adminPrefixed": true
     },
