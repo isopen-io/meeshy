@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { banAdminUser, decodeAdminBans, liftAdminUserBan } from './admin-user-bans';
+import { banAdminUser, decodeAdminBans, liftAdminUserBan, loadAdminUserBans } from './admin-user-bans';
 import type { HttpTransport } from './http';
 
 /**
@@ -146,5 +146,45 @@ describe('decodeAdminBans — trois états, et `active` vient du SERVEUR', () =>
   test('écarte les entrées sans identifiant, garde les autres', () => {
     expect(decodeAdminBans([{ reason: 'sans id' }, { id: 'b-1', reason: 'spam', active: true }])).toHaveLength(1);
     expect(decodeAdminBans(null)).toEqual([]);
+  });
+});
+
+describe('loadAdminUserBans — lire l’historique, sous canViewUsers', () => {
+  test('vise GET /api/v1/admin/users/:userId/bans, identifiant ENCODÉ', async () => {
+    const { transport, appels } = transportEspion([]);
+
+    await loadAdminUserBans({ ...deps(transport), userId: 'u 1/x' });
+
+    expect(appels[0]?.method).toBe('GET');
+    expect(appels[0]?.path).toBe(`/api/v1/admin/users/${encodeURIComponent('u 1/x')}/bans`);
+  });
+
+  /**
+   * La lecture passe par le MÊME décodeur que l'écriture : un ban servi après
+   * un bannissement et un ban servi par l'historique sont la même chose, et
+   * deux décodages divergeraient sur `active` — celui-là même qu'on a choisi
+   * de ne jamais recalculer.
+   */
+  test('décode par le même chemin — `active` servi, trois états conservés', async () => {
+    const { transport } = transportEspion([
+      { id: 'b-1', reason: 'spam', expiresAt: null, liftedAt: null, active: true },
+      { id: 'b-2', reason: 'test', expiresAt: HIER, liftedAt: null, active: false },
+      { id: 'b-3', reason: 'erreur', expiresAt: null, liftedAt: '2026-09-01T00:00:00.000Z', active: false },
+    ]);
+
+    const resultat = await loadAdminUserBans({ ...deps(transport), userId: 'u-1' });
+
+    expect(resultat.ok).toBe(true);
+    expect(resultat.ok && resultat.data.map((b) => b.active)).toEqual([true, false, false]);
+    expect(resultat.ok && resultat.data[2]?.liftedAt).toBe('2026-09-01T00:00:00.000Z');
+  });
+
+  test('propage un refus TEL QUEL — un 403 de lecture reste un 403', async () => {
+    const { transport } = transportEspion({ ok: false as const, status: 403, error: 'Forbidden' }, false);
+
+    const resultat = await loadAdminUserBans({ ...deps(transport), userId: 'u-1' });
+
+    expect(resultat.ok).toBe(false);
+    expect(!resultat.ok && resultat.status).toBe(403);
   });
 });

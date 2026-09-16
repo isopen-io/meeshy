@@ -637,6 +637,19 @@ const it = {
   'admin.password.apply': 'Reimposta',
   'admin.password.done': 'Password reimpostata',
   'admin.password.failed': 'Reimpostazione non riuscita',
+  'admin.ban.open': 'Blocca',
+  'admin.ban.title': 'Blocca questo membro',
+  'admin.ban.reason': 'Motivo (obbligatorio)',
+  'admin.ban.permanent': 'Blocco permanente',
+  'admin.ban.until': 'Fino al',
+  'admin.ban.apply': 'Blocca',
+  'admin.ban.lift': 'Revoca',
+  'admin.ban.active': 'in vigore',
+  'admin.ban.expired': 'scaduto',
+  'admin.ban.lifted': 'revocato',
+  'admin.ban.none': 'Nessun blocco',
+  'admin.ban.done': 'Blocco registrato',
+  'admin.ban.failed': 'Blocco non riuscito',
 
 } satisfies InterfaceCatalog;
 

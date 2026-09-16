@@ -60,6 +60,31 @@ export function decodeAdminBans(raw: unknown): readonly AdminBan[] {
     .filter((ban): ban is AdminBan => ban !== null);
 }
 
+export const adminUserBansQueryKey = (userId: string) => ['admin', 'user', userId, 'bans'] as const;
+
+/**
+ * L'HISTORIQUE, sous `canViewUsers` — une lecture plus largement ouverte que
+ * l'écriture, qui exige ADMIN+. Un MODERATOR peut donc consulter les
+ * bannissements d'un membre sans pouvoir en prononcer.
+ *
+ * Elle passe par le MÊME décodeur que les deux écritures : un ban servi après
+ * un bannissement et un ban servi par l'historique sont la même chose. Deux
+ * décodages divergeraient sur `active` — précisément la valeur qu'on a choisi
+ * de ne jamais recalculer.
+ */
+export async function loadAdminUserBans(
+  params: AdminDeps & { readonly userId: string; readonly signal?: AbortSignal },
+): Promise<ApiResult<readonly AdminBan[]>> {
+  const result = await params.transport.request<unknown>({
+    method: 'GET',
+    path: `/api/v1/admin/users/${encodeURIComponent(params.userId)}/bans`,
+    ...(params.signal === undefined ? {} : { signal: params.signal }),
+  });
+  if (!result.ok) return result;
+
+  return { ok: true, data: decodeAdminBans(result.data) };
+}
+
 /** Le minimum que la passerelle impose (`creerBanSchema`) — un bannissement
  * sans motif ne se justifierait devant personne. */
 const MOTIF_MINIMAL = 3;

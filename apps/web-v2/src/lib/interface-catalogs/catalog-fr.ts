@@ -666,6 +666,19 @@ const fr = {
   'admin.password.apply': 'Réinitialiser',
   'admin.password.done': 'Mot de passe réinitialisé',
   'admin.password.failed': 'Échec de la réinitialisation',
+  'admin.ban.open': 'Bannir',
+  'admin.ban.title': 'Bannir ce membre',
+  'admin.ban.reason': 'Motif (obligatoire)',
+  'admin.ban.permanent': 'Bannissement permanent',
+  'admin.ban.until': 'Jusqu’au',
+  'admin.ban.apply': 'Bannir',
+  'admin.ban.lift': 'Lever',
+  'admin.ban.active': 'en vigueur',
+  'admin.ban.expired': 'expiré',
+  'admin.ban.lifted': 'levé',
+  'admin.ban.none': 'Aucun bannissement',
+  'admin.ban.done': 'Bannissement enregistré',
+  'admin.ban.failed': 'Échec du bannissement',
 
 } as const;
 

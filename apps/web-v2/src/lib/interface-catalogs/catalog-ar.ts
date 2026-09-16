@@ -635,6 +635,19 @@ const ar = {
   'admin.password.apply': 'إعادة التعيين',
   'admin.password.done': 'تم إعادة تعيين كلمة المرور',
   'admin.password.failed': 'تعذّرت إعادة التعيين',
+  'admin.ban.open': 'حظر',
+  'admin.ban.title': 'حظر هذا العضو',
+  'admin.ban.reason': 'السبب (إلزامي)',
+  'admin.ban.permanent': 'حظر دائم',
+  'admin.ban.until': 'حتى',
+  'admin.ban.apply': 'حظر',
+  'admin.ban.lift': 'رفع الحظر',
+  'admin.ban.active': 'ساري',
+  'admin.ban.expired': 'منتهٍ',
+  'admin.ban.lifted': 'مرفوع',
+  'admin.ban.none': 'لا توجد حالات حظر',
+  'admin.ban.done': 'تم تسجيل الحظر',
+  'admin.ban.failed': 'تعذّر الحظر',
 
 } satisfies InterfaceCatalog;
 

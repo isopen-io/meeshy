@@ -637,6 +637,19 @@ const de = {
   'admin.password.apply': 'Zurücksetzen',
   'admin.password.done': 'Passwort zurückgesetzt',
   'admin.password.failed': 'Zurücksetzen fehlgeschlagen',
+  'admin.ban.open': 'Sperren',
+  'admin.ban.title': 'Dieses Mitglied sperren',
+  'admin.ban.reason': 'Grund (erforderlich)',
+  'admin.ban.permanent': 'Dauerhafte Sperre',
+  'admin.ban.until': 'Bis',
+  'admin.ban.apply': 'Sperren',
+  'admin.ban.lift': 'Aufheben',
+  'admin.ban.active': 'aktiv',
+  'admin.ban.expired': 'abgelaufen',
+  'admin.ban.lifted': 'aufgehoben',
+  'admin.ban.none': 'Keine Sperren',
+  'admin.ban.done': 'Sperre gespeichert',
+  'admin.ban.failed': 'Sperren fehlgeschlagen',
 
 } satisfies InterfaceCatalog;
 

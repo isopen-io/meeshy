@@ -637,6 +637,19 @@ const es = {
   'admin.password.apply': 'Restablecer',
   'admin.password.done': 'Contraseña restablecida',
   'admin.password.failed': 'No se pudo restablecer',
+  'admin.ban.open': 'Bloquear',
+  'admin.ban.title': 'Bloquear a este miembro',
+  'admin.ban.reason': 'Motivo (obligatorio)',
+  'admin.ban.permanent': 'Bloqueo permanente',
+  'admin.ban.until': 'Hasta',
+  'admin.ban.apply': 'Bloquear',
+  'admin.ban.lift': 'Levantar',
+  'admin.ban.active': 'vigente',
+  'admin.ban.expired': 'caducado',
+  'admin.ban.lifted': 'levantado',
+  'admin.ban.none': 'Sin bloqueos',
+  'admin.ban.done': 'Bloqueo registrado',
+  'admin.ban.failed': 'No se pudo bloquear',
 
 } satisfies InterfaceCatalog;
 

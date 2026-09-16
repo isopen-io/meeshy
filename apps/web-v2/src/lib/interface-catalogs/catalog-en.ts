@@ -637,6 +637,19 @@ const en = {
   'admin.password.apply': 'Reset',
   'admin.password.done': 'Password reset',
   'admin.password.failed': 'Reset failed',
+  'admin.ban.open': 'Ban',
+  'admin.ban.title': 'Ban this member',
+  'admin.ban.reason': 'Reason (required)',
+  'admin.ban.permanent': 'Permanent ban',
+  'admin.ban.until': 'Until',
+  'admin.ban.apply': 'Ban',
+  'admin.ban.lift': 'Lift',
+  'admin.ban.active': 'active',
+  'admin.ban.expired': 'expired',
+  'admin.ban.lifted': 'lifted',
+  'admin.ban.none': 'No bans',
+  'admin.ban.done': 'Ban recorded',
+  'admin.ban.failed': 'Ban failed',
 
 } satisfies InterfaceCatalog;
 

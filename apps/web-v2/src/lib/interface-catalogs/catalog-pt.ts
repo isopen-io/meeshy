@@ -641,6 +641,19 @@ const pt = {
   'admin.password.apply': 'Repor',
   'admin.password.done': 'Palavra-passe reposta',
   'admin.password.failed': 'Não foi possível repor',
+  'admin.ban.open': 'Banir',
+  'admin.ban.title': 'Banir este membro',
+  'admin.ban.reason': 'Motivo (obrigatório)',
+  'admin.ban.permanent': 'Banimento permanente',
+  'admin.ban.until': 'Até',
+  'admin.ban.apply': 'Banir',
+  'admin.ban.lift': 'Levantar',
+  'admin.ban.active': 'em vigor',
+  'admin.ban.expired': 'expirado',
+  'admin.ban.lifted': 'levantado',
+  'admin.ban.none': 'Sem banimentos',
+  'admin.ban.done': 'Banimento registado',
+  'admin.ban.failed': 'Não foi possível banir',
 
 } satisfies InterfaceCatalog;
 
