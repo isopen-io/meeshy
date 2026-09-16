@@ -76,6 +76,13 @@ public fun MeeshyImageViewer(
      * page past the end of this list, or holding `null`, shows no backdrop.
      */
     thumbnailUrls: List<String?> = emptyList(),
+    /**
+     * Per-page author-authored accessibility description (`PostMedia.alt`,
+     * #6739), positionally aligned with [imageUrls]. A page past the end of
+     * this list, or holding `null`/blank, falls back to the viewer's generic
+     * localized image label.
+     */
+    altTexts: List<String?> = emptyList(),
     onImageSaved: ((Result<Unit>) -> Unit)? = null,
 ) {
     if (imageUrls.isEmpty()) return
@@ -113,6 +120,7 @@ public fun MeeshyImageViewer(
                 ZoomableImage(
                     url = imageUrls[page],
                     thumbnailUrl = thumbnailUrls.getOrNull(page),
+                    altText = altTexts.getOrNull(page)?.takeIf { it.isNotBlank() },
                     onZoomChanged = { zoomed ->
                         if (page == pagerState.settledPage) currentPageZoomed = zoomed
                     },
@@ -219,6 +227,7 @@ public fun MeeshyImageViewer(
 private fun ZoomableImage(
     url: String,
     thumbnailUrl: String?,
+    altText: String?,
     onZoomChanged: (Boolean) -> Unit,
     onTap: () -> Unit,
 ) {
@@ -315,7 +324,7 @@ private fun ZoomableImage(
         }
         AsyncImage(
             model = mount?.fullUrl ?: url,
-            contentDescription = stringResource(R.string.bubble_image_description),
+            contentDescription = altText ?: stringResource(R.string.bubble_image_description),
             contentScale = ContentScale.Fit,
             onState = { state ->
                 when (state) {

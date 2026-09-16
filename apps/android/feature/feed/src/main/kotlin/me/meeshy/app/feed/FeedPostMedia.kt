@@ -80,7 +80,7 @@ internal val FEED_MEDIA_GROUND: Color = MeeshyPalette.Indigo500.copy(alpha = 0.0
 internal fun FeedMediaImage(image: FeedPostImage, preferThumbnail: Boolean) {
     AsyncImage(
         model = if (preferThumbnail) image.thumbnailUrl ?: image.url else image.url,
-        contentDescription = stringResource(R.string.feed_image_description),
+        contentDescription = image.alt?.takeIf { it.isNotBlank() } ?: stringResource(R.string.feed_image_description),
         contentScale = ContentScale.Crop,
         placeholder = rememberThumbHashPainter(image.thumbHash),
         modifier = Modifier.fillMaxSize(),
