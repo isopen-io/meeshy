@@ -1029,7 +1029,15 @@ export const SUPPORTED_LANGUAGES: readonly SupportedLanguageInfo[] = [
   },
 
   // =========================================================================
-  // LANGUES CAMEROUNAISES (Sans TTS)
+  // LANGUES CAMEROUNAISES (Sans TTS, sans traduction — pas de code NLLB-200)
+  // Décision porteur #3659 / #6785 : ces 7 langues (bas, ksf, nnh, dua, ewo,
+  // byv, fan) restent OFFERTES au produit (transcription le cas échéant) mais
+  // `supportsTranslation` DOIT rester `false` — aucune entrée dans
+  // `LANGUAGE_MAPPINGS` (services/translator/src/config/settings.py) ;
+  // `TranslatorEngine` lève une erreur explicite plutôt que d'inventer une
+  // traduction. `getLanguagesWithTranslation()` alimente directement les
+  // langues cibles envoyées au translator (`PostAudioService.ts`) : un `true`
+  // ici ferait échouer chaque traduction demandée vers ces codes.
   // =========================================================================
   {
     code: 'bas',
@@ -1041,12 +1049,12 @@ export const SUPPORTED_LANGUAGES: readonly SupportedLanguageInfo[] = [
     supportsTTS: false,
     supportsSTT: true,
     supportsVoiceCloning: false,
-    supportsTranslation: true,
+    supportsTranslation: false,
     ttsEngine: 'none',
     sttEngine: 'mms_asr',
     mmsASRCode: 'bas',
     region: 'Africa (Cameroon)',
-    notes: 'TTS not available - transcription and translation only'
+    notes: 'TTS and translation not available (no NLLB-200 mapping) - transcription only'
   },
   {
     code: 'ksf',
@@ -1058,12 +1066,12 @@ export const SUPPORTED_LANGUAGES: readonly SupportedLanguageInfo[] = [
     supportsTTS: false,
     supportsSTT: true,
     supportsVoiceCloning: false,
-    supportsTranslation: true,
+    supportsTranslation: false,
     ttsEngine: 'none',
     sttEngine: 'mms_asr',
     mmsASRCode: 'ksf',
     region: 'Africa (Cameroon)',
-    notes: 'TTS not available - transcription and translation only'
+    notes: 'TTS and translation not available (no NLLB-200 mapping) - transcription only'
   },
   {
     code: 'nnh',
@@ -1075,12 +1083,12 @@ export const SUPPORTED_LANGUAGES: readonly SupportedLanguageInfo[] = [
     supportsTTS: false,
     supportsSTT: true,
     supportsVoiceCloning: false,
-    supportsTranslation: true,
+    supportsTranslation: false,
     ttsEngine: 'none',
     sttEngine: 'mms_asr',
     mmsASRCode: 'nnh',
     region: 'Africa (Cameroon)',
-    notes: 'TTS not available - transcription and translation only'
+    notes: 'TTS and translation not available (no NLLB-200 mapping) - transcription only'
   },
   {
     code: 'dua',
@@ -1092,12 +1100,12 @@ export const SUPPORTED_LANGUAGES: readonly SupportedLanguageInfo[] = [
     supportsTTS: false,
     supportsSTT: true,
     supportsVoiceCloning: false,
-    supportsTranslation: true,
+    supportsTranslation: false,
     ttsEngine: 'none',
     sttEngine: 'mms_asr',
     mmsASRCode: 'dua',
     region: 'Africa (Cameroon)',
-    notes: 'TTS not available - transcription and translation only'
+    notes: 'TTS and translation not available (no NLLB-200 mapping) - transcription only'
   },
   {
     code: 'ewo',
@@ -1109,12 +1117,12 @@ export const SUPPORTED_LANGUAGES: readonly SupportedLanguageInfo[] = [
     supportsTTS: false,
     supportsSTT: true,
     supportsVoiceCloning: false,
-    supportsTranslation: true,
+    supportsTranslation: false,
     ttsEngine: 'none',
     sttEngine: 'mms_asr',
     mmsASRCode: 'ewo',
     region: 'Africa (Cameroon)',
-    notes: 'TTS not available - transcription and translation only'
+    notes: 'TTS and translation not available (no NLLB-200 mapping) - transcription only'
   },
 
   // =========================================================================
@@ -1460,11 +1468,11 @@ export const SUPPORTED_LANGUAGES: readonly SupportedLanguageInfo[] = [
     supportsTTS: false,
     supportsSTT: false,
     supportsVoiceCloning: false,
-    supportsTranslation: true,
+    supportsTranslation: false,
     ttsEngine: 'none',
     sttEngine: 'none',
     region: 'Africa (Cameroon)',
-    notes: 'Translation only'
+    notes: 'No NLLB-200 mapping - offered but not translated (#3659)'
   },
   {
     code: 'fan',
@@ -1476,11 +1484,11 @@ export const SUPPORTED_LANGUAGES: readonly SupportedLanguageInfo[] = [
     supportsTTS: false,
     supportsSTT: false,
     supportsVoiceCloning: false,
-    supportsTranslation: true,
+    supportsTranslation: false,
     ttsEngine: 'none',
     sttEngine: 'none',
     region: 'Africa (Central)',
-    notes: 'Translation only'
+    notes: 'No NLLB-200 mapping - offered but not translated (#3659)'
   },
 ] as const;
 
