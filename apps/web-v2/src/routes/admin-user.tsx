@@ -13,6 +13,7 @@ import { ActionButton } from '@/routes/link-page-parts';
 
 import { AdminAnnouncement, AdminDenied, AdminScreenFrame, AdminSkeleton } from './admin-parts';
 import { AdminUserEditSheet } from './admin-user-edit-sheet';
+import { AdminUserBanSheet } from './admin-user-ban-sheet';
 import { AdminUserPasswordSheet } from './admin-user-password-sheet';
 
 /**
@@ -53,6 +54,7 @@ export default function AdminUserScreen() {
 
   const [edition, setEdition] = useState(false);
   const [motDePasse, setMotDePasse] = useState(false);
+  const [bannissement, setBannissement] = useState(false);
   const annonceur = useLiveAnnouncer();
   const client = useQueryClient();
 
@@ -120,6 +122,9 @@ export default function AdminUserScreen() {
           <ActionButton tone="danger" onClick={() => setMotDePasse(true)}>
             {translate(language, 'admin.password.title')}
           </ActionButton>
+          <ActionButton tone="danger" onClick={() => setBannissement(true)}>
+            {translate(language, 'admin.ban.open')}
+          </ActionButton>
         </div>
       </div>
 
@@ -144,6 +149,15 @@ export default function AdminUserScreen() {
           userId={membre.id}
           language={language}
           onClose={() => setMotDePasse(false)}
+          onAnnounce={annonceur.announce}
+        />
+      ) : null}
+
+      {bannissement ? (
+        <AdminUserBanSheet
+          userId={membre.id}
+          language={language}
+          onClose={() => setBannissement(false)}
           onAnnounce={annonceur.announce}
         />
       ) : null}
