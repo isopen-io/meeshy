@@ -9,7 +9,7 @@ Le **Meeshy Translation Service** est un microservice de traduction multi-langue
 ### Services de traduction
 - **Modèles ML** : NLLB-200-Distilled (600M/1.3B)
 - **Détection automatique** de langue source
-- **200+ langues supportées** : FR, EN, ES, DE, PT, ZH, JA, AR, et plus
+- **76 langues traduisibles** (FR, EN, ES, DE, PT, ZH, JA, AR, et plus) — l'intersection entre le catalogue produit (`SUPPORTED_LANGUAGE_CODES`, `packages/shared/utils/language-codes.ts`) et les langues effectivement mappées vers un code NLLB-200 (`LANGUAGE_MAPPINGS`, `src/config/settings.py`) ; voir `_default_supported_languages_csv()` pour le calcul
 - **Cache intelligent** avec Redis et stockage local
 - **Traitement par lots** pour optimiser les performances
 
@@ -341,9 +341,9 @@ translator/
 
 | Type | Modèle | Description |
 |------|--------|-------------|
-| `basic` | nllb-200-distilled-600M | Rapide, 200+ langues |
+| `basic` | nllb-200-distilled-600M | Rapide (capacité brute du modèle NLLB-200 — voir § Vue d'ensemble pour le catalogue Meeshy réellement traduit, 76 langues) |
 | `medium` | nllb-200-distilled-600M | Alias vers basic |
-| `premium` | nllb-200-distilled-1.3B | Haute qualité, 200+ langues |
+| `premium` | nllb-200-distilled-1.3B | Haute qualité (capacité brute du modèle NLLB-200) |
 
 ## 🐳 Docker
 

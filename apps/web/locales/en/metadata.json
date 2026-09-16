@@ -4,7 +4,7 @@
   "pages": {
     "home": {
       "title": "Meeshy - Real-time multilingual messaging",
-      "description": "Chat with the whole world in your own language. Real-time automatic translation for over 100 languages. Join global conversations with no language barrier.",
+      "description": "Chat with the whole world in your own language. Real-time automatic translation for 76 languages. Join global conversations with no language barrier.",
       "ogImageAlt": "Meeshy - Welcome to multilingual messaging"
     },
     "notifications": {
@@ -118,7 +118,7 @@
       "ogImageAlt": "Meeshy - Multilingual Messaging",
       "imageTitle": "Join Meeshy",
       "imageSubtitle": "Real-time multilingual messaging",
-      "imageUserName": "100+ languages supported",
+      "imageUserName": "76 languages supported",
       "keywords": [
         "multilingual messaging",
         "real-time translation",

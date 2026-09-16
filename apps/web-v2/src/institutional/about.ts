@@ -26,7 +26,7 @@ export const PAGE_ABOUT: ContentPage = {
         {
           kind: 'list',
           items: [
-            '🌍 Traduction en temps réel dans 100+ langues',
+            '🌍 Traduction en temps réel dans 76 langues',
             '🔒 Chiffrement de bout en bout - vos conversations restent privées',
             '🎯 Traduction côté serveur pour une qualité professionnelle et une confidentialité totale',
             '🗣️ Transcription et traduction audio pour briser les barrières orales',
@@ -133,7 +133,7 @@ export const PAGE_ABOUT: ContentPage = {
             },
             {
               title: 'Support Client Multilingue',
-              body: 'Offrez un support dans 100+ langues sans embaucher une armée de traducteurs. Un seul agent peut répondre à des clients japonais, arabes et espagnols simultanément.',
+              body: 'Offrez un support dans 76 langues sans embaucher une armée de traducteurs. Un seul agent peut répondre à des clients japonais, arabes et espagnols simultanément.',
             },
             {
               title: 'Expansion Internationale',
