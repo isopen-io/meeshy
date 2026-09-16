@@ -342,12 +342,10 @@ nonisolated enum NotificationPayloadHelpers {
     /// de rendre `nil` et de restamper le message à l'heure de la remise.
     nonisolated static func iso8601Date(_ raw: Any?) -> Date? {
         guard let value = nonEmptyString(raw) else { return nil }
-        let withFraction = ISO8601DateFormatter()
-        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let parsed = withFraction.date(from: value) { return parsed }
-        let plain = ISO8601DateFormatter()
-        plain.formatOptions = [.withInternetDateTime]
-        return plain.date(from: value)
+        if let parsed = try? Date(value, strategy: .iso8601.time(includingFractionalSeconds: true)) {
+            return parsed
+        }
+        return try? Date(value, strategy: .iso8601)
     }
 
     /// R3 — social push types whose banner exposes the inline « Commenter »
