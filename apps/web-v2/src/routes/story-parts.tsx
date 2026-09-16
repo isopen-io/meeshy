@@ -95,6 +95,12 @@ export function StoryMediaLayer({
           muted
           playsInline
           autoPlay
+          /* EN BOUCLE (#6836) — `slideDurationMs` donne à la diapositive une
+             durée en cycles ENTIERS du média ; `loop` est ce qui rend ces
+             cycles réels. Sans lui, un clip plus court que la diapositive
+             atteint `ended` et GÈLE sur sa dernière trame pendant que la barre
+             poursuit : mesuré sur `/story/st-video`, 3 s de gel sur 6. */
+          loop
           className="absolute inset-0 size-full object-cover"
           /* `onLoadedData`, pas `onLoad` : sur un élément média, `load` ne se
              déclenche pas comme sur une image — attendre le mauvais évènement

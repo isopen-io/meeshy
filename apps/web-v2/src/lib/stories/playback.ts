@@ -17,9 +17,58 @@
  */
 
 /** `defaultSlideDuration` (`StoryViewerView+Content.swift:792-828`) — parité
- * Instagram/Snapchat, abaissée depuis 12 s. Le média a sa PROPRE durée (hors
- * périmètre #5817 — story TEXTE et IMAGE seulement). */
+ * Instagram/Snapchat, abaissée depuis 12 s. C'est un PLANCHER, jamais la
+ * réponse : `slideDurationMs` ci-dessous élit la durée réelle (#6836). */
 export const DEFAULT_SLIDE_DURATION_MS = 6000;
+
+const dureeUtileOuNull = (value: number | null | undefined): number | null =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
+
+/**
+ * `slideDurationMs` — LA DURÉE D'UNE DIAPOSITIVE (#6836). PORTAGE de la loi
+ * iOS, déclarée « SINGLE SOURCE OF TRUTH » dans
+ * `StoryViewerView+Content.swift` — rien n'est conçu ici :
+ *
+ *     max(durée du média, durée configurée, 6 s),
+ *     puis arrondie au multiple SUPÉRIEUR de la période du média,
+ *     « pour que la vidéo/audio bg ne soit JAMAIS coupée au milieu d'un cycle »
+ *
+ * Spécification porteur du 2026-05-27, citée par le même fichier : slide
+ * statique ⇒ 6 s ; slide avec vidéo ou audio ⇒ durée du média, **loopé si
+ * < 6 s** ; `storyEffects.slideDuration` prime quand > 0.
+ *
+ * L'ARRONDI est ce qui distingue cette loi d'un simple `max`, et c'est lui
+ * qu'on oublie : un clip de 4 s sous un plancher de 6 s donne **8 s**, deux
+ * cycles entiers — 6 s couperaient la seconde boucle en plein milieu.
+ *
+ * Le défaut corrigé avait DEUX faces, mesurées au navigateur sur
+ * `/story/st-video` le 2026-09-16 : un clip de 3 s gelait sur sa dernière
+ * trame pendant que la barre poursuivait jusqu'à 100 %, et un clip plus long
+ * que 6 s aurait été COUPÉ — c'est exactement ce qu'iOS dit avoir corrigé
+ * chez lui (« avant ce fix, `effects.slideDuration` early-returned et les
+ * médias plus longs que la durée configurée étaient coupés »).
+ *
+ * La durée du média est REÇUE, jamais lue : `StoryTrayMedia` n'en sert aucune
+ * (`api/stories.ts` — id, url, thumbnailUrl, mimeType), donc elle vient du
+ * `<video>` à `loadedmetadata`. Même discipline que `now` dans ce module —
+ * ce qui vient du monde est injecté par l'appelant, et c'est ce qui rend
+ * cette loi éprouvable sans DOM.
+ *
+ * Une durée ABSURDE (nulle, négative, `NaN`, infinie — toutes servies par un
+ * `HTMLMediaElement` selon l'état du décodage) se rabat sur le plancher : un
+ * `Math.ceil(x / 0)` rendrait `Infinity`, donc une diapositive qui ne finit
+ * jamais.
+ */
+export function slideDurationMs(params: {
+  readonly mediaDurationMs?: number | null | undefined;
+  readonly configuredMs?: number | null | undefined;
+}): number {
+  const media = dureeUtileOuNull(params.mediaDurationMs);
+  const configuree = dureeUtileOuNull(params.configuredMs);
+  const plancher = Math.max(media ?? 0, configuree ?? 0, DEFAULT_SLIDE_DURATION_MS);
+
+  return media === null ? plancher : Math.ceil(plancher / media) * media;
+}
 
 /** `defaultExpiryInterval` (`StoryModels.swift:1731-1757`) — 20 heures,
  * utilisé seulement quand `expiresAt` est absent du corpus servi. */
