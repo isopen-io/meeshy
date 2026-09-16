@@ -39,7 +39,7 @@ Pourquoi cet angle gagne :
 | Angle | Usage |
 |---|---|
 | 1. Amis sans frontières, zéro barrière de langue | Fiche App Store (nom, sous-titre, description) |
-| 2. « Ta voix parle 80+ langues » (vocal cloné) | Hook viral : promo text, 1re capture, TikTok/UGC |
+| 2. « Ta voix parle 76 langues » (vocal cloné) | Hook viral : promo text, 1re capture, TikTok/UGC |
 | 3. Fandom en VO (K-pop, anime, gaming) | Acquisition ciblée (mots-clés, campagnes segmentées) |
 | 4. « Apprends sans t'en rendre compte » + privé | Réassurance (fin de description, presse, parents) |
 
@@ -67,7 +67,7 @@ verrouillés par WhatsApp ; même Telegram/WhatsApp n'en font qu'une réassuranc
 |---|---|---|---|
 | **Nom** (30) | `Meeshy : amis du monde entier` (29) | `Meeshy: Make Friends Worldwide` (30) | Se place sur « make friends », le champ de bataille des gagnants Gen Z, différencié par « worldwide » (longue traîne quasi vide depuis Ablo) |
 | **Sous-titre** (30) | `Chat et vocaux, toutes langues` (30) | `Chat & Voice in Any Language` (28) | Complète le nom sans répéter ses mots (ASO) : chat + voix + langues |
-| **Promo** (170) | vocal cloné + 80 langues + « ton groupe » | idem | Champ modifiable SANS re-review → à faire tourner au rythme des campagnes (fandom, rentrée, etc.) |
+| **Promo** (170) | vocal cloné + 76 langues + « ton groupe » | idem | Champ modifiable SANS re-review → à faire tourner au rythme des campagnes (fandom, rentrée, etc.) |
 | **Mots-clés** (100) | `correspondant,rencontre,amis,traduction,vocal,coreen,japonais,kpop,anime,parler,etranger,groupe` | `penpal,meet,people,translate,korean,japanese,kpop,anime,talk,strangers,global,abroad,notes` | Longue traîne fandom + pen pal (Pinterest 2026) ; pas de doublon avec nom/sous-titre ; `correspondant`/`penpal` = équivalent culturel à faible concurrence |
 | **Description** (4000) | ~2 570 | ~2 342 | Émotion d'abord (« un meilleur ami qui ne parle pas ta langue. Pas encore. »), features en bénéfices, privacy en réassurance, CTA final |
 | **Nouveautés** | style lancement | idem | Reprend les 3 signatures : vocaux traduits, sous-titres d'appel, entrée par lien |
@@ -121,9 +121,14 @@ enregistre un vocal en français, l'ami le joue en coréen avec la même voix.
 ## 6. Claims — ce qu'on dit, ce qu'on ne dit JAMAIS
 
 **Autorisé (prouvé dans le code)** :
-- « Plus de 80 langues » (81 sur iOS, 83 serveur) — JAMAIS « 200 langues »
-  (capacité brute NLLB-200, pas le catalogue ; la landing web doit être
-  corrigée sur ce point).
+- « 76 langues traduisibles » — le chiffre UNIQUE, calculé depuis
+  l'intersection entre le catalogue produit (83 langues offertes à
+  l'interface, `SUPPORTED_LANGUAGE_CODES`) et les langues effectivement
+  mappées vers un code NLLB-200 (`LANGUAGE_MAPPINGS`, 7 langues camerounaises
+  du catalogue en sont exclues — offertes mais non traduites, décision du
+  porteur). JAMAIS le chiffre brut « 200 » (capacité du modèle NLLB-200,
+  pas le catalogue) ni un compte arrondi à 80 ou plus (comptait les langues
+  offertes, pas celles réellement traduites — #3638).
 - « une voix qui ressemble à la tienne », « uniquement si tu l'actives »
   (clonage : ~25 langues, consentement + vérification d'âge implémentés) —
   JAMAIS « ta voix exacte dans toutes les langues » ni « gère tes
@@ -139,9 +144,12 @@ enregistre un vocal en français, l'ami le joue en coréen avec la même voix.
 - JAMAIS : Dynamic Island / Live Activities (stub), modes de lecture Focal
   (bêta off par défaut), agent ✦ (off).
 
-**Cohérences à corriger avant soumission** (hors périmètre de cette passe) :
-- Landing web : « over 200 languages » et « 100% Private — server-side
-  translation » à reformuler pour coller aux claims ci-dessus.
+**Cohérences déjà corrigées** :
+- Landing web : le chiffre brut « 200 » et la promesse de confidentialité
+  absolue de la traduction serveur reformulés (#6350), puis le chiffre aligné
+  sur 76 langues traduisibles, cohérent avec les claims ci-dessus (#3638).
+
+**Reste à corriger avant soumission** (hors périmètre de cette passe) :
 - `ITSAppUsesNonExemptEncryption = false` dans Info.plist à faire arbitrer
   (l'app embarque un E2EE maison CryptoKit).
 

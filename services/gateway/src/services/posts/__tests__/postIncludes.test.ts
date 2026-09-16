@@ -98,6 +98,8 @@ describe('posts/postIncludes — canonical shared selects', () => {
         'alt',
         'captionLanguage',
         'captionTranslations',
+        'altLanguage',
+        'altTranslations',
         'language',
         'variantOf',
         'transcription',
@@ -111,6 +113,15 @@ describe('posts/postIncludes — canonical shared selects', () => {
         expect.objectContaining({
           captionLanguage: true,
           captionTranslations: true,
+        }),
+      );
+    });
+
+    it('exposes the alt-text translation fields (#6737) — distinct from the caption translations', () => {
+      expect(mediaSelect).toEqual(
+        expect.objectContaining({
+          altLanguage: true,
+          altTranslations: true,
         }),
       );
     });

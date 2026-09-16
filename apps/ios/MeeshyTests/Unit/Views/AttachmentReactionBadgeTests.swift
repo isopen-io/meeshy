@@ -92,9 +92,20 @@ final class AttachmentReactionBadgeTests: XCTestCase {
     /// quand une surface CESSE de monter la pastille — un défaut qu'aucun
     /// témoin de comportement ne voit, puisque la pastille reste juste là où
     /// elle est encore montée.
-    func test_bothSurfacesMountTheSameBadge() throws {
+    ///
+    /// **La TROISIÈME surface est celle qui manquait, et c'était la principale**
+    /// (#6793) : le mode FOCAL est le mode de lecture par défaut d'une
+    /// conversation, et son `FocalGridCell` rangeait les réactions par image
+    /// « hors périmètre, accepté par arbitrage ». L'aveu était écrit dans son
+    /// doc-comment depuis le début ; personne ne le relisait. Une réaction
+    /// posée sur une pièce n'était donc visible NULLE PART dans le fil.
+    func test_everySurfaceMountsTheSameBadge() throws {
         let surfaces = [
+            // La tuile de la bulle — mode de lecture classique.
             "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift",
+            // La tuile FOCAL — le mode de lecture par DÉFAUT.
+            "Meeshy/Features/Main/Focal/Row/FocalAttachmentBlock.swift",
+            // Le plateau du plein écran (#6789).
             "Meeshy/Features/Main/Views/ConversationMediaGalleryView+Geometry.swift",
         ]
         for chemin in surfaces {

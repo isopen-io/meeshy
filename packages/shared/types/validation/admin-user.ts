@@ -52,7 +52,7 @@ export const resetPasswordValidationSchema = z.object({
   newPassword: z.string().min(PASSWORD_MIN_LENGTH),
   sendEmail: z.boolean().optional(),
   reason: z.string().optional()
-});
+}).strict();
 
 /**
  * Fonction utilitaire pour formater les erreurs Zod

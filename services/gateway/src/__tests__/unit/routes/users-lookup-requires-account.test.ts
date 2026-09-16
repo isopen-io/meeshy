@@ -47,14 +47,25 @@ import { getUserByEmail, getUserByPhone } from '../../../routes/users/profile';
 const PREFIXE = '/api/v1';
 const VIEWER = '507f1f77bcf86cd799439011';
 
-type Reglages = { authentifie: boolean; cible?: Record<string, unknown> | null };
+type Reglages = {
+  authentifie: boolean;
+  cible?: Record<string, unknown> | null;
+  /** Qui a bloqué l'appelant — la requête POSITIVE de `blockedIdsAroundViewer`. */
+  bloqueurs?: string[];
+  /** Qui l'appelant a bloqué — sa propre liste. */
+  bloquesParLAppelant?: string[];
+};
 
 function buildApp(reglages: Reglages) {
   const findFirst = jest.fn<any>(async () => reglages.cible ?? null);
   const prisma = {
     user: {
       findFirst,
-      findUnique: jest.fn<any>(async () => ({ blockedUserIds: [] })),
+      findUnique: jest.fn<any>(async () => ({
+        blockedUserIds: reglages.bloquesParLAppelant ?? [],
+      })),
+      // « qui m'a bloqué ? » — la seconde moitié de `blockedIdsAroundViewer`.
+      findMany: jest.fn<any>(async () => (reglages.bloqueurs ?? []).map((id) => ({ id }))),
     },
   };
   return { prisma, findFirst };
@@ -155,7 +166,12 @@ describe('… et les filtres que la jumelle authentifiée applique déjà', () =
   });
 
   it.each(PORTES)('$nom : écarte qui a bloqué l’appelant, et qui l’appelant a bloqué', async ({ url }) => {
-    const { prisma, findFirst } = buildApp({ authentifie: true, cible: null });
+    const { prisma, findFirst } = buildApp({
+      authentifie: true,
+      cible: null,
+      bloqueurs: ['507f1f77bcf86cd7994390aa'],
+      bloquesParLAppelant: ['507f1f77bcf86cd7994390bb'],
+    });
     const app = await monter(prisma, true);
 
     await app.inject({ method: 'GET', url });
@@ -163,14 +179,17 @@ describe('… et les filtres que la jumelle authentifiée applique déjà', () =
     const where = findFirst.mock.calls[0][0].where as Record<string, any>;
     // Le blocage vaut dans les DEUX sens : sans cela, un utilisateur bloqué
     // retrouvait le profil de qui l'a bloqué, s'il connaissait son adresse.
-    // Il vit dans `AND`, sous la même forme « absent vs null » que
-    // `deletedAt` — un `NOT` nu au premier niveau écarterait aussi les
-    // comptes qui n'ont jamais écrit `blockedUserIds` (#6452).
+    //
+    // Il vit désormais dans une LISTE, jamais dans un filtre de tableau NIÉ :
+    // `NOT: { blockedUserIds: { has } }` écarte aussi les comptes qui n'ont
+    // jamais écrit la colonne (#6452), et l'`isSet` posé pour y répondre
+    // n'existe pas sur une liste scalaire — Prisma refusait la requête, donc
+    // 500 (#6811).
     expect(where.NOT).toBeUndefined();
-    expect(where.AND).toContainEqual({
-      OR: [{ blockedUserIds: { isSet: false } }, { NOT: { blockedUserIds: { has: VIEWER } } }],
-    });
-    expect(where.id).toMatchObject({ notIn: expect.any(Array) });
+    expect(JSON.stringify(where)).not.toContain('blockedUserIds');
+    expect(where.id.notIn).toEqual(
+      expect.arrayContaining(['507f1f77bcf86cd7994390aa', '507f1f77bcf86cd7994390bb'])
+    );
 
     await app.close();
   });

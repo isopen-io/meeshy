@@ -6,6 +6,7 @@ import { parseTextEffect } from '@/lib/story-text-effect';
 import type { StoryItem } from '@/components/v2/StoryTray';
 import type { StoryData, StoryTextObjectData, StoryMediaObjectData, StoryAudioObjectData } from '@/components/v2/StoryViewer';
 import type { CanvasV3MediaResolution } from '@/components/v2/CanvasV3Scene';
+import { resolveMediaAltText } from '@/hooks/use-post-translation';
 
 /**
  * « Ce blob est-il un document canvas ? » — LE site web de la question (#4774).
@@ -482,7 +483,7 @@ export function computeStoryDurationMs(effects: Record<string, unknown> | undefi
   return slideDurationMs(effects);
 }
 
-export function postToStoryData(post: Post): StoryData {
+export function postToStoryData(post: Post, preferredLanguages: readonly string[] = []): StoryData {
   const author = post.author;
   const effects = (post.storyEffects && typeof post.storyEffects === 'object')
     ? post.storyEffects as Record<string, unknown>
@@ -510,13 +511,17 @@ export function postToStoryData(post: Post): StoryData {
     const aspectRatio = typeof m.width === 'number' && typeof m.height === 'number' && m.height > 0
       ? m.width / m.height
       : undefined;
+    // #6737 — l'alt SERVI est celui du Prisme (langue préférée du lecteur),
+    // jamais l'original brut : `resolveMediaAltText` retombe sur `m.alt` par
+    // elle-même quand aucune traduction ne matche (règle #1 du Prisme), donc
+    // le garde-fou "jamais un alt fabriqué ici" tient toujours — on ne fait
+    // que choisir la LANGUE, jamais le texte.
+    const resolvedAlt = resolveMediaAltText(m, preferredLanguages);
     mediaById.set(m.id, {
       url: m.fileUrl,
       mimeType: m.mimeType ?? '',
       ...(aspectRatio !== undefined ? { aspectRatio } : {}),
-      // S4-web — `PostMedia.alt` est déjà clé par `postMediaId` côté gateway ;
-      // un sticker importé (S1) le sert tel quel, jamais un alt fabriqué ici.
-      ...(m.alt ? { alt: m.alt } : {}),
+      ...(resolvedAlt ? { alt: resolvedAlt } : {}),
     });
   }
 

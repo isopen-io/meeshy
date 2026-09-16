@@ -820,6 +820,12 @@ extension APIMessage {
                 transcription: embeddedTranscription,
                 audioTranslations: embeddedAudioTranslations,
                 imageVariants: apiAtt.imageVariants,
+                // #6793 — les réactions par PIÈCE remontent AVEC la pièce. Elles
+                // manquaient ici et dans la projection du cache, si bien que la
+                // seule surface qui les affiche (la tuile de la bulle) ne voyait
+                // jamais que ce que l'appareil venait d'écrire lui-même.
+                reactionSummary: apiAtt.reactionSummary,
+                currentUserReactions: apiAtt.currentUserReactions,
                 deliveredToAllAt: apiAtt.deliveredToAllAt, viewedByAllAt: apiAtt.viewedByAllAt,
                 downloadedByAllAt: apiAtt.downloadedByAllAt, listenedByAllAt: apiAtt.listenedByAllAt,
                 watchedByAllAt: apiAtt.watchedByAllAt, viewedCount: apiAtt.viewedCount,

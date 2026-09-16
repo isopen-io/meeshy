@@ -111,6 +111,19 @@ export interface PostMedia {
   readonly order: number;
   readonly caption?: string | null;
   readonly alt?: string | null;
+  /**
+   * Langue SOURCE de `alt` et carte de ses traductions (#6737, suite de la
+   * décision produit #6534) — même forme que `Post.translations`
+   * (`{ [lang]: { text, translationModel, confidenceScore?, createdAt,
+   * updatedAt? } }`, voir `media-caption-translation.ts`). `null`/absent tant
+   * que `alt` est vide ou n'a pas encore été traduit. `altTranslations` reste
+   * `unknown` ici : la résolution du Prisme passe par
+   * `resolvePrismTranslation()`/`buildPostTranslationRecord()`
+   * (`@meeshy/shared/utils/conversation-helpers`), jamais par une lecture
+   * directe de cette carte.
+   */
+  readonly altLanguage?: string | null;
+  readonly altTranslations?: unknown;
 }
 
 export interface PostComment {

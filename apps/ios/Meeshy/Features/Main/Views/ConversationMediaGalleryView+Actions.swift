@@ -139,12 +139,12 @@ extension ConversationMediaGalleryView {
     /// sous les émojis.
     ///
     /// La règle — et l'INVARIANCE aux couloirs qui la dit — vit dans
-    /// `MediaStageReactionVeil` ; ceci n'en est que la projection sur cet hôte.
+    /// `MediaStageVeil` ; ceci n'en est que la projection sur cet hôte.
     /// La couche respecte la zone sûre alors que les couloirs la réservent à
     /// part : `safeBottom` n'entre donc pas dans cette somme, sans quoi la
     /// traînée flotterait une encoche trop haut.
     var reactionBarBottomInset: CGFloat {
-        MediaStageReactionVeil.rowBottomInset(corridors: stageCorridors)
+        MediaStageVeil.rowBottomInset(corridors: stageCorridors)
     }
 
     // MARK: - Réaction sur la pièce

@@ -3,9 +3,10 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import type { ApiResult } from '@/lib/api/http';
-import type { LinkInvitation, LinkJoined } from '@/lib/api/link-join';
-import { sessionStore } from '@/lib/api/session';
+import type { GuestJoinBody, LinkGuestJoined, LinkInvitation, LinkJoined } from '@/lib/api/link-join';
+import { sessionStore, type GuestIdentity } from '@/lib/api/session';
 import { compile, match } from '@/lib/router';
+import { typeInto } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { ChatJoin, type ChatJoinDeps } from './chat-join';
@@ -46,25 +47,48 @@ afterEach(() => {
 
 const LINK = 'mshy_equipe_7f3a';
 
+const OPEN_TERMS = {
+  allowed: true,
+  nicknameRequired: true,
+  emailRequired: false,
+  birthdayRequired: false,
+  languages: [] as readonly string[],
+  mayWrite: true,
+} as const;
+
 const INVITATION: LinkInvitation = {
   title: 'Équipe déploiement',
   kind: 'group',
   inviter: { name: 'Awa Diallo', avatar: null },
   readsHistory: false,
+  guest: OPEN_TERMS,
 };
 
 const JOINED: ApiResult<LinkJoined> = { ok: true, data: { conversationId: 'c-deploiement', alreadyMember: false } };
 
 const never = <T,>(): Promise<T> => new Promise<T>(() => undefined);
 
+const GUEST_JOINED: ApiResult<LinkGuestJoined> = {
+  ok: true,
+  data: {
+    conversationId: 'c-deploiement',
+    participantId: 'p-invitee',
+    sessionToken: 'anon_du_temoin',
+    readsHistory: false,
+    mayWrite: true,
+  },
+};
+
 type Recorded = {
   readonly loads: string[];
   readonly joins: Array<readonly [string, string | null]>;
+  readonly guestJoins: Array<readonly [string, GuestJoinBody]>;
+  readonly adopted: Array<readonly [string, GuestIdentity]>;
   readonly order: string[];
 };
 
 function depsWith(overrides: Partial<ChatJoinDeps> = {}): { readonly deps: ChatJoinDeps; readonly recorded: Recorded } {
-  const recorded: Recorded = { loads: [], joins: [], order: [] };
+  const recorded: Recorded = { loads: [], joins: [], guestJoins: [], adopted: [], order: [] };
   const deps: ChatJoinDeps = {
     load: async (link) => {
       recorded.loads.push(link);
@@ -73,6 +97,14 @@ function depsWith(overrides: Partial<ChatJoinDeps> = {}): { readonly deps: ChatJ
     join: async (link, language) => {
       recorded.joins.push([link, language]);
       return JOINED;
+    },
+    joinGuest: async (link, body) => {
+      recorded.guestJoins.push([link, body]);
+      return GUEST_JOINED;
+    },
+    adoptGuest: (sessionToken, guest) => {
+      recorded.adopted.push([sessionToken, guest]);
+      recorded.order.push('adopt');
     },
     go: (url, replace) => {
       recorded.order.push(`go ${url} ${replace ? 'replace' : 'push'}`);
@@ -223,9 +255,11 @@ describe('un visiteur CONNECTÉ rejoint', () => {
 });
 
 describe('un visiteur SANS session', () => {
-  test('ne peut pas rejoindre : deux sorties, chacune ramène ici par `next`', async () => {
+  test('les deux sorties le ramènent ici par `next`, et aucune jonction de MEMBRE ne part', async () => {
     const { deps, recorded } = depsWith();
     const el = await mount(deps);
+    /* « Rejoindre » est l'action d'un COMPTE : elle n'est pas offerte ici. La
+       porte anonyme, elle, l'est — et c'est « Continuer en anonyme ». */
     expect(joinButton(el)).toBeNull();
     const login = anchorTo(el, '/login');
     const signup = anchorTo(el, '/signup');
@@ -248,6 +282,181 @@ describe('un visiteur SANS session', () => {
     for (const anchor of [anchorTo(el, '/login'), anchorTo(el, '/signup')]) {
       expect(Number.parseInt(anchor?.style.minHeight ?? '0', 10)).toBeGreaterThanOrEqual(44);
     }
+  });
+});
+
+/* ========================================================================= *
+ *  REJOINDRE SANS COMPTE (#5561)
+ * ========================================================================= */
+
+/* La saisie vient du dépôt (`test-support/act-mount.ts § typeInto`), jamais
+   d'une troisième écriture de la même règle : setter natif cherché sur la
+   chaîne de prototypes DE L'ÉLÉMENT, et `act` SYNCHRONE. */
+
+const guestForm = (el: HTMLElement) => el.querySelector<HTMLFormElement>('[data-guest-form]');
+const nicknameField = (el: HTMLElement) => el.querySelector<HTMLInputElement>('[data-guest-nickname]');
+const languageField = (el: HTMLElement) => el.querySelector<HTMLSelectElement>('[data-guest-language]');
+const guestSubmit = (el: HTMLElement) => el.querySelector<HTMLButtonElement>('[data-guest-submit]');
+
+const withTerms = (terms: Partial<LinkInvitation['guest']>) => ({
+  load: async (): Promise<ApiResult<LinkInvitation>> => ({
+    ok: true,
+    data: { ...INVITATION, guest: { ...OPEN_TERMS, ...terms } },
+  }),
+});
+
+/**
+ * SOUMET LE FORMULAIRE, JAMAIS EN CLIQUANT SON BOUTON — même méthode que
+ * `test-support/act-mount.ts § submit`.
+ *
+ * Sous happy-dom, un clic sur un `<button type="submit">` ne déclenche PAS
+ * l'événement `submit` du formulaire : le geste part, et rien ne se passe. Un
+ * témoin qui cliquerait le bouton verdirait sur « rien n'est envoyé » en
+ * croyant mesurer l'envoi.
+ */
+async function submitGuest(el: HTMLElement) {
+  const form = guestForm(el);
+  if (form === null) throw new Error('formulaire d’invité absent');
+  await act(async () => {
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  });
+  await settle();
+}
+
+async function fillAndSubmit(el: HTMLElement, nickname: string) {
+  typeInto(nicknameField(el), nickname);
+  await settle();
+  await submitGuest(el);
+}
+
+describe('un visiteur SANS session REJOINT EN INVITÉ', () => {
+  test('le formulaire demande le pseudo et la langue, et RIEN d’autre tant que le lien ne l’exige pas', async () => {
+    const { deps } = depsWith();
+    const el = await mount(deps);
+    expect(guestForm(el)).not.toBeNull();
+    expect(nicknameField(el)).not.toBeNull();
+    expect(languageField(el)).not.toBeNull();
+    expect(el.querySelector('[data-guest-email]')).toBeNull();
+    expect(el.querySelector('[data-guest-birthday]')).toBeNull();
+    expect(text(guestSubmit(el))).toBe('Continuer en anonyme');
+  });
+
+  test('un lien qui exige e-mail et date de naissance les demande, et eux seuls', async () => {
+    const { deps } = depsWith(withTerms({ emailRequired: true, birthdayRequired: true }));
+    const el = await mount(deps);
+    expect(el.querySelector('[data-guest-email]')).not.toBeNull();
+    expect(el.querySelector('[data-guest-birthday]')).not.toBeNull();
+  });
+
+  /**
+   * LA LANGUE EST SEMÉE AVEC L'INVITATION — un `<select>` qui s'ouvrirait vide
+   * ferait refuser la saisie avant qu'aucune requête ne parte, et l'écran
+   * dirait « choisissez une langue » sur un champ que personne n'a touché.
+   */
+  test('le formulaire s’ouvre avec une langue DÉJÀ choisie', async () => {
+    const { deps } = depsWith();
+    const el = await mount(deps);
+    expect(languageField(el)?.value).toBe('fr');
+  });
+
+  test('le corps part, la session d’invité est ADOPTÉE, puis le fil s’ouvre', async () => {
+    const { deps, recorded } = depsWith();
+    const el = await mount(deps);
+    /* Ce que le formulaire PORTE au moment du geste — lu AVANT de soumettre :
+       une jonction réussie démonte le formulaire, et lire ses champs ensuite
+       rendrait `undefined` en laissant croire à un champ vide. */
+    typeInto(nicknameField(el), 'Awa');
+    await settle();
+    expect(nicknameField(el)?.value).toBe('Awa');
+    expect(languageField(el)?.value).toBe('fr');
+
+    await submitGuest(el);
+
+    expect(recorded.guestJoins).toEqual([[LINK, { language: 'fr', nickname: 'Awa' }]]);
+    expect(recorded.adopted).toEqual([
+      [
+        'anon_du_temoin',
+        { participantId: 'p-invitee', nickname: 'Awa', conversationId: 'c-deploiement', link: LINK, mayWrite: true },
+      ],
+    ]);
+    /* L'ADOPTION PRÉCÈDE LA NAVIGATION : le fil doit trouver la créance déjà
+       posée quand il monte, sinon sa première requête part nue. */
+    expect(recorded.order).toEqual(['adopt', 'go /c/c-deploiement replace', 'joined']);
+  });
+
+  test('aucune jonction de MEMBRE ne part sur ce chemin', async () => {
+    const { deps, recorded } = depsWith();
+    const el = await mount(deps);
+    await fillAndSubmit(el, 'Awa');
+    expect(recorded.joins).toEqual([]);
+  });
+
+  test('un pseudo exigé mais vide : RIEN ne part, et le refus se pose sous son champ', async () => {
+    const { deps, recorded } = depsWith();
+    const el = await mount(deps);
+    await submitGuest(el);
+
+    expect(recorded.guestJoins).toEqual([]);
+    expect(guestForm(el)).not.toBeNull();
+    expect(nicknameField(el)?.getAttribute('aria-invalid')).toBe('true');
+    const described = nicknameField(el)?.getAttribute('aria-describedby') ?? '';
+    expect(text(el.querySelector(`#${described.split(' ')[0]}`))).toContain('Choisissez un pseudo');
+  });
+
+  test('pseudo PRIS : le formulaire est GARDÉ, la suggestion pré-remplie, et on peut réessayer', async () => {
+    const { deps, recorded } = depsWith({
+      joinGuest: async () => ({ ok: false, status: 409, error: 'pris', code: 'USERNAME_TAKEN_IN_CONVERSATION', suggestedNickname: 'awa2' }),
+    });
+    const el = await mount(deps);
+    await fillAndSubmit(el, 'awa');
+
+    expect(guestForm(el)).not.toBeNull();
+    expect(nicknameField(el)?.value).toBe('awa2');
+    expect(text(el.querySelector('[role="alert"]'))).toContain('awa2');
+    expect(guestSubmit(el)?.disabled).toBe(false);
+    expect(recorded.order).toEqual([]);
+  });
+
+  test('un refus du LIEN retire le formulaire et garde les deux sorties', async () => {
+    const { deps } = depsWith({ joinGuest: async () => ({ ok: false, status: 410, error: 'mort', code: 'LINK_EXPIRED' }) });
+    const el = await mount(deps);
+    await fillAndSubmit(el, 'Awa');
+
+    expect(guestForm(el)).toBeNull();
+    expect(text(el.querySelector('[role="alert"]'))).toContain('expiré');
+    expect(nextOf(anchorTo(el, '/login'))).toBe('/chat/mshy_equipe_7f3a');
+    expect(anchorTo(el, '/signup')).not.toBeNull();
+  });
+
+  test('un lien qui EXIGE un compte n’offre aucun formulaire, et le DIT', async () => {
+    const { deps } = depsWith(withTerms({ allowed: false }));
+    const el = await mount(deps);
+    expect(guestForm(el)).toBeNull();
+    expect(text(el)).toContain('demande un compte Meeshy');
+    expect(anchorTo(el, '/login')).not.toBeNull();
+  });
+
+  test('un compte CONNECTÉ ne voit jamais le formulaire d’invité', async () => {
+    signIn();
+    const { deps } = depsWith();
+    const el = await mount(deps);
+    expect(guestForm(el)).toBeNull();
+    expect(joinButton(el)).not.toBeNull();
+  });
+
+  test('le détail des droits est REPLIÉ, et dit ce que l’invité pourra faire', async () => {
+    const { deps } = depsWith();
+    const el = await mount(deps);
+    const details = el.querySelector<HTMLDetailsElement>('[data-join-rights]');
+    expect(details?.open).toBe(false);
+    expect(text(details)).toContain('après votre arrivée');
+    expect(text(details)).toContain('Écrire dans la conversation');
+  });
+
+  test('un lien en LECTURE SEULE le dit dans le détail des droits', async () => {
+    const { deps } = depsWith(withTerms({ mayWrite: false }));
+    const el = await mount(deps);
+    expect(text(el.querySelector('[data-join-rights]'))).toContain('Lire seulement');
   });
 });
 

@@ -327,8 +327,8 @@ export function PostsFeedScreen() {
   const activeStoryData = useMemo(() => {
     if (!activeStoryAuthorId) return [];
     const group = storyGroups.find((g) => g[0]?.authorId === activeStoryAuthorId);
-    return group ? group.map(postToStoryData) : [];
-  }, [activeStoryAuthorId, storyGroups]);
+    return group ? group.map((post) => postToStoryData(post, preferredLanguages)) : [];
+  }, [activeStoryAuthorId, storyGroups, preferredLanguages]);
 
   // PostService.repostPost (gateway) 403s on any non-PUBLIC original. Stories
   // now DEFAULT to PUBLIC (règle produit 2026-08-23,

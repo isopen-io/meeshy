@@ -178,11 +178,25 @@ nonisolated enum FocalMediaProtection {
 /// main. La décision (« flouter ou pas ») est PURE (`FocalMediaProtection`,
 /// ci-dessus), testable sans rendu.
 ///
-/// **Toujours HORS périmètre, documenté (accepté par arbitrage)** : les
-/// réactions par-image (`AttachmentReactionLongPress`/`reactionsBadge`/
-/// `reactionPickerOverlay` de `BubbleGridCell`) — aucun critère d'acceptation
-/// §WS-3/planche ne les couvre, et les ajouter sans compilateur local serait
-/// un risque non couvert par un test.
+/// **La PASTILLE des réactions est entrée dans le périmètre le 2026-09-16**
+/// (#6793, directive porteur : « Les reactions des medias doivent etre remonté
+/// et affiché sur les medias dans les conversations ! »).
+///
+/// Ce doc-comment la rangeait « hors périmètre, accepté par arbitrage », faute
+/// de critère d'acceptation §WS-3 — et il avait raison sur le moment. Mais le
+/// mode Focal est le mode de lecture PAR DÉFAUT d'une conversation : une
+/// réaction posée sur une pièce n'était donc visible NULLE PART dans le fil,
+/// et le geste avait l'air de n'avoir rien fait. C'est l'aveu que ce paragraphe
+/// portait sans qu'on le relise.
+///
+/// Ce qui est monté ici est la pastille PARTAGÉE (`AttachmentReactionBadge`),
+/// pas une seconde écriture : la tuile de bulle et le plein écran montent
+/// exactement la même, et une garde d'inventaire tient les trois ensemble.
+///
+/// **Le GESTE, lui, reste hors périmètre** (`AttachmentReactionLongPress`,
+/// `reactionPickerOverlay`) : la directive demande que la réaction se VOIE
+/// dans la conversation, et le plein écran — atteignable d'un tap depuis cette
+/// tuile — offre déjà de la poser. Suivi : #6793.
 struct FocalGridCell: View {
     let attachment: MessageAttachment
     let slot: FocalMediaSlot
@@ -228,6 +242,26 @@ struct FocalGridCell: View {
             }
         }
         .overlay(alignment: .topTrailing) { viewOnceBadge }
+        .overlay(alignment: .bottomLeading) { reactionsBadge }
+    }
+
+    /// **Ce que la pièce a récolté** (#6793) — même coin et même dessin que la
+    /// tuile de bulle : le bas-droite est pris par le badge de téléchargement,
+    /// le haut-droite par le compteur de vue unique.
+    ///
+    /// **Une pièce PROTÉGÉE n'annonce rien**, pas même le nombre de personnes
+    /// qui y ont réagi : un compte est déjà un fait sur un contenu qu'une vue
+    /// unique, un flou ou un chiffrement retiennent (leçon § 275 — une
+    /// protection se mesure sur tout ce que la charge transporte).
+    @ViewBuilder
+    private var reactionsBadge: some View {
+        if case .none = protectionState,
+           let modèle = AttachmentReactionBadgeModel.make(
+                summary: attachment.reactionSummary,
+                currentUserReactions: attachment.currentUserReactions) {
+            AttachmentReactionBadge(model: modèle, accent: Color(hex: accentHex))
+                .padding(5)
+        }
     }
 
     @ViewBuilder
