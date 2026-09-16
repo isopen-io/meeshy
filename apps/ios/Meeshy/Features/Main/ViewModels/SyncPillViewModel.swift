@@ -107,7 +107,7 @@ final class SyncPillViewModel: ObservableObject {
         guard let next = Self.nextExpiry(items: items, now: now) else { return }
         let delay = max(0, next.timeIntervalSince(now))
         expiryTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000) + 50_000_000)
+            try? await Task.sleep(for: .seconds(delay) + .milliseconds(50))
             guard !Task.isCancelled, let self else { return }
             self.apply(items: self.lastItems, isOffline: self.lastIsOffline)
         }
