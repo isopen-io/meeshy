@@ -88,38 +88,11 @@ struct GalleryScenePage: View, Equatable {
     /// budget que `GalleryImagePage.previewSize`.
     private static let previewSize = CGSize(width: 320, height: 320)
 
-    /// **En plein cadre, le canvas COUVRE le viewport** (#6806, directive porteur
-    /// 2026-09-16 : « il faut pas afficher une troisieme couche en plein plein
-    /// écran, mais juste agrandir le canvas à sa taille total du viewport »).
-    ///
-    /// La décision est ICI et pas dans le solveur, et c'est tout le lot : une
-    /// page SAIT ce qu'elle porte. `GalleryImagePage` porte le CONTENU d'un
-    /// message — le rogner retirerait ce que l'expéditeur a envoyé, et son
-    /// hors-champ habillé est une finition. Cette page-ci porte une SURFACE DE
-    /// COMPOSITION, dont les bords ne sont à personne : la laisser en boîte aux
-    /// lettres peint une surface que nul n'a composée.
-    ///
-    /// Faire trancher cela au solveur a été essayé et mesuré au simulateur : les
-    /// médias de post se posaient EN HAUT À GAUCHE, à leurs cotes cardées. Le
-    /// solveur ne sait pas ce qu'il cadre ; cette page, si.
-    private var canvasCoverScale: CGFloat {
-        guard presentation.isFull else { return 1 }
-        return MediaStageFraming.coverScale(frame: stage.frame, media: stage.media)
-    }
-
-    /// Le canvas couvre-t-il déjà tout le cadre ? Alors plus rien à habiller —
-    /// ni le sol du visualiseur, ni le hors-champ du canvas. **Les deux
-    /// disparaissent ENSEMBLE**, parce qu'une seule des deux qui resterait serait
-    /// la même bande peinte par l'autre main.
-    private var canvasCovers: Bool { canvasCoverScale > 1.0001 }
-
     var body: some View {
         ZStack {
-            if !canvasCovers {
-                MediaStageBackdrop(
-                    source: MediaGalleryStage.backdrop(stage: stage, thumbHash: item.thumbHash)
-                )
-            }
+            MediaStageBackdrop(
+                source: MediaGalleryStage.backdrop(stage: stage, thumbHash: item.thumbHash)
+            )
 
             if rendersPlayer {
                 player
@@ -164,31 +137,9 @@ struct GalleryScenePage: View, Equatable {
             accentColorHex: accentColor,
             carrier: item.carrier,
             preferredContentLanguages: preferredContentLanguages,
-            startAt: isEntry ? openingPosition : 0,
-            // **La bande INTERNE du canvas s'éteint avec la troisième couche**
-            // (#6806). Le paramètre existe depuis #6636 ; sans lui, le canvas
-            // continuerait de peindre et de composer son propre hors-champ —
-            // invisible sous le rognage, payé à chaque image.
-            servesLetterboxFill: !canvasCovers
+            startAt: isEntry ? openingPosition : 0
         )
-        // **La taille COUVRANTE, pas un `scaleEffect`** (#6806).
-        //
-        // Deux façons d'agrandir, et elles ne rendent pas la même image. Un
-        // `scaleEffect` compose le canvas à 402 × 714,7 puis étire la COUCHE de
-        // 22 % : un texte de scène y perd ses arêtes, une vidéo y gagne du flou.
-        // Une taille plus grande, elle, redescend jusqu'au canvas, qui projette
-        // ses éléments depuis des coordonnées normalisées et les compose donc à
-        // la résolution de l'écran.
-        //
-        // Poser `stage.frame` tel quel ne fermerait RIEN : le canvas garde des
-        // bornes intrinsèques 9:16 (`CanvasGeometry.aspectFitSize`) et se
-        // recentrerait dedans, bandes comprises — simplement peintes par sa
-        // propre passe de letterbox au lieu du backdrop. La troisième couche
-        // aurait changé de main, pas disparu. Ce qu'il faut est la taille que la
-        // couverture demande ; le `clipShape` du cadre, une couche plus haut,
-        // rogne ce qui dépasse.
-        .frame(width: stage.media.width * canvasCoverScale,
-               height: stage.media.height * canvasCoverScale)
+        .frame(width: stage.media.width, height: stage.media.height)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(accessibilityLabel)
     }
@@ -205,12 +156,7 @@ struct GalleryScenePage: View, Equatable {
             Color.black
         }
         .aspectRatio(contentMode: .fill)
-        // **L'aperçu suit la même couverture que le player** (#6806) : sans quoi
-        // traverser trois scènes au glissement ferait battre l'écran entre une
-        // vignette bordée de bandes et un canvas qui les ferme — un défaut qu'on
-        // ne voit qu'EN MOUVEMENT, donc jamais dans une capture.
-        .frame(width: stage.media.width * canvasCoverScale,
-               height: stage.media.height * canvasCoverScale)
+        .frame(width: stage.media.width, height: stage.media.height)
         .clipped()
         .accessibilityHidden(true)
     }
