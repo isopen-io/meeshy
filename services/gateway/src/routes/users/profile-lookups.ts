@@ -13,7 +13,7 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import type { UsernameParams } from './types';
 import { sendSuccess, sendInternalError, sendNotFound, sendBadRequest } from '../../utils/response';
 import { gateProfilePresence, getOptionalAuth } from './presence-gate';
-import { contactLookupScope, blockedIdsOfViewer } from '../../services/ContactDirectoryService';
+import { contactLookupScope, blockedIdsAroundViewer } from '../../services/ContactDirectoryService';
 import { parseFieldList, restrictFields, type FieldSet } from '../../utils/sparse-fieldset';
 import { callerRateKey } from '../../utils/client-rate-key';
 import { createCustomRateLimiter } from '../../utils/rate-limiter';
@@ -337,8 +337,7 @@ export async function getUserByEmail(fastify: FastifyInstance) {
         where: {
           email,
           ...contactLookupScope({
-            viewerId,
-            blockedByViewer: await blockedIdsOfViewer(fastify.prisma, viewerId),
+            blockedRelatedIds: await blockedIdsAroundViewer(fastify.prisma, viewerId),
           }),
         },
         select: publicUserSelect
@@ -472,8 +471,7 @@ export async function getUserByPhone(fastify: FastifyInstance) {
         where: {
           phoneNumber: normalized.phoneNumber,
           ...contactLookupScope({
-            viewerId,
-            blockedByViewer: await blockedIdsOfViewer(fastify.prisma, viewerId),
+            blockedRelatedIds: await blockedIdsAroundViewer(fastify.prisma, viewerId),
           }),
         },
         select: publicUserSelect

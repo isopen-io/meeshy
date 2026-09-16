@@ -111,6 +111,8 @@ function prismaPartage() {
     user: {
       findFirst: findFirstConscientDuSelect(),
       findUnique: jest.fn<any>(async () => ({ blockedUserIds: [] })),
+      // « qui m'a bloqué ? » — la seconde moitié de `blockedIdsAroundViewer`.
+      findMany: jest.fn<any>(async () => []),
     },
     friendRequest: { findFirst: jest.fn<any>(async () => null) },
   };
@@ -162,13 +164,15 @@ describe("`where` — servirProfilPublic n'applique JAMAIS la portée de contact
     const where = prisma.user.findFirst.mock.calls[0][0].where as Record<string, unknown>;
     expect(where.email).toBe('cible@example.com');
     expect(where.isActive).toBe(true);
-    // Le blocage vit dans `AND`, sous la même forme « absent vs null » que
-    // `deletedAt` — un `NOT` nu au premier niveau écarterait aussi les
-    // comptes qui n'ont jamais écrit `blockedUserIds` (#6452).
+    // Le blocage vit dans une LISTE (`blockedIdsAroundViewer`), jamais dans un
+    // filtre de tableau NIÉ : `NOT: { blockedUserIds: { has } }` écarte aussi
+    // les comptes qui n'ont jamais écrit la colonne (#6452), et l'`isSet` posé
+    // pour y répondre n'existe pas sur une liste scalaire — Prisma refusait la
+    // requête, donc 500 (#6811). Seul `deletedAt`, champ OPTIONNEL, le porte.
     expect(where.NOT).toBeUndefined();
-    expect(where.AND).toContainEqual({
-      OR: [{ blockedUserIds: { isSet: false } }, { NOT: { blockedUserIds: { has: VIEWER } } }],
-    });
+    expect(JSON.stringify(where)).not.toContain('blockedUserIds');
+    expect(where.id).toMatchObject({ notIn: expect.any(Array) });
+    expect(JSON.stringify(where.AND)).toContain('deletedAt');
     expect(JSON.stringify(where.AND)).toContain('isSet');
 
     await app.close();
@@ -184,9 +188,8 @@ describe("`where` — servirProfilPublic n'applique JAMAIS la portée de contact
     expect(where.phoneNumber).toBeDefined();
     expect(where.isActive).toBe(true);
     expect(where.NOT).toBeUndefined();
-    expect(where.AND).toContainEqual({
-      OR: [{ blockedUserIds: { isSet: false } }, { NOT: { blockedUserIds: { has: VIEWER } } }],
-    });
+    expect(JSON.stringify(where)).not.toContain('blockedUserIds');
+    expect(where.id).toMatchObject({ notIn: expect.any(Array) });
 
     await app.close();
   });
