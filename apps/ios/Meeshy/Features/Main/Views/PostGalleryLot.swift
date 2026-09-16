@@ -32,9 +32,19 @@ nonisolated struct GallerySceneItem: Equatable {
     /// `nil` pour une scène de texte, de dessin ou de couleur. C'est lui qu'une
     /// citation désigne, et lui qu'une citation rouvre.
     let mediaId: String?
-    /// Le rapport largeur / hauteur auquel la scène se cadre — voir
-    /// `PostGalleryLot.sceneAspect`.
+    /// Le rapport largeur / hauteur auquel la scène se cadre SUR UNE CARTE —
+    /// voir `PostGalleryLot.sceneAspect`. Une scène qui n'est qu'une image y
+    /// prend le rapport de son image : on y ouvre la photo.
     let aspect: CGFloat
+
+    /// **Le rapport du CANVAS lui-même** (#6806) — celui auquel la scène se
+    /// présente en PLEIN CADRE, où ce qu'on ouvre est la scène et non la photo.
+    ///
+    /// Les deux voyagent ensemble parce que la question n'a pas UNE réponse :
+    /// elle en a une par SURFACE. Ne porter que `aspect` obligeait le plein
+    /// écran à se contenter du rapport d'une carte — et une scène-image carrée
+    /// y laissait 237,7 pt de sol en haut et en bas, mesurés au simulateur.
+    let canvasAspect: CGFloat
     /// La scène a-t-elle quelque chose à jouer — vidéo, son, animation,
     /// transition, ou le son de fond du document ? Seule une scène qui bouge
     /// porte un play/pause et répond à l'appui long par une pause (loi 4).
@@ -288,6 +298,7 @@ nonisolated struct PostGalleryLot {
             carrier: carrier,
             mediaId: media?.id,
             aspect: sceneAspect(document, sceneIndex: index),
+            canvasAspect: SceneFullscreenFraming.ratio(of: document, sceneIndex: index),
             // Le son de fond appartient au DOCUMENT, pas à une scène : il fait
             // jouer chacune d'elles.
             moves: SceneMotion.isCinematic(scene) || document.sound != nil,
