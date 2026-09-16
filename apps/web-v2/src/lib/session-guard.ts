@@ -74,6 +74,27 @@ export type RouteKey =
    */
   | 'adminUser'
   | 'admUser'
+  /**
+   * LES CONVERSATIONS DE L'INSTANCE (#6862) — `/admin/conversations` et
+   * `/adm/conversations`.
+   *
+   * Déclarées ici pour la raison écrite plus haut, et elle pèse ici autant que
+   * sur le détail d'un membre : cet écran ouvre l'INVENTAIRE des conversations
+   * — qui parle à qui, dans quels groupes. Oubliée, l'adresse serait PUBLIQUE
+   * par défaut, et un visiteur sans session la peindrait avant que le serveur
+   * ne refuse.
+   */
+  | 'adminConversations'
+  | 'admConversations'
+  /**
+   * LA LECTURE D'UNE CONVERSATION (#6862) — l'écran qui OUVRE le contenu,
+   * sous motif écrit et trace. De toutes les adresses d'administration, c'est
+   * celle dont l'oubli coûterait le plus : publique par défaut, elle se
+   * peindrait pour un visiteur sans session, qui y lirait au passage
+   * l'identifiant de conversation qu'il a tapé.
+   */
+  | 'adminConversation'
+  | 'admConversation'
   | 'login'
   | 'signup'
   | 'welcome'
@@ -171,6 +192,10 @@ const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
   'adm',
   'admUsers',
   'admUser',
+  'adminConversations',
+  'admConversations',
+  'adminConversation',
+  'admConversation',
 ]);
 const AUTH_ROUTES: ReadonlySet<string> = new Set<RouteKey>(['login', 'signup', 'welcome', 'magicLink', 'forgotPassword']);
 

@@ -32,6 +32,7 @@ import {
   type MessageProtectionContext
 } from './media-protection';
 import { registerConversationMessagesSovereignRoute } from './conversation-messages-sovereign';
+import { registerConversationsSovereignRoute } from './conversations-sovereign';
 import { registerUserReportsRoutes } from './user-reports';
 import { registerUserWriteRoutes } from './users-write';
 import { registerUserBanRoutes } from './user-bans';
@@ -944,4 +945,16 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
   // `conversation-messages-sovereign.ts`, une unité nommable à part entière
   // plutôt qu'une tranche de plus dans ce fichier déjà au plafond de taille.
   registerConversationMessagesSovereignRoute(fastify);
+
+  // GET /admin/conversations — le LISTING de l'instance (#6861), quatrième
+  // geste souverain du dépôt. Monté ici, à côté de son frère, parce que c'est
+  // ce module qui sert déjà `/admin/conversations/:id/participants` et
+  // `/admin/conversations/:id/messages` : les trois adresses d'un même
+  // préfixe se montent ensemble, sinon la prochaine se cherche.
+  //
+  // Le geste est SOUVERAIN pour une raison distincte de celle de son frère :
+  // celui-ci garde un CONTENU, celui-là garde un INVENTAIRE. Savoir qui parle
+  // à qui, depuis quand et dans quels groupes est une lecture de la vie privée
+  // de TOUS les membres — pas la fiche d'un seul, que `canViewUsers` ouvre.
+  registerConversationsSovereignRoute(fastify);
 }

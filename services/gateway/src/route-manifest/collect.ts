@@ -739,6 +739,20 @@ function hasHookMarker(route: CollectedRoute, marker: string): boolean {
 const PERMISSION_CALL_MARKER = 'permissionsService.hasPermission(';
 const HIERARCHY_CALL_MARKER = 'permissionsService.canManageUser(';
 const SOVEREIGN_CONST_MARKER = 'UserRoleEnum.BIGBOSS';
+/**
+ * Le RANG D'ADMINISTRATION — `requireAdminRank()`, qui admet BIGBOSS **ou**
+ * ADMIN (#6862, directive porteur du 2026-09-16).
+ *
+ * `UserRoleEnum.ADMIN` est absent de `requireSovereign()` et présent dans
+ * `requireAdminRank()` : c'est ce qui en fait un marqueur DISCRIMINANT. La
+ * réciproque n'est pas vraie — `requireAdminRank` contient AUSSI
+ * `UserRoleEnum.BIGBOSS`, puisqu'elle admet ce rang — et c'est pourquoi
+ * `deriveSecurityLevel` doit tester CE marqueur AVANT le souverain. L'ordre
+ * n'est pas un détail de style : inversé, toute garde de rang d'administration
+ * serait annoncée S6, et l'artefact dirait « BIGBOSS seul » d'une route qu'un
+ * ADMIN franchit.
+ */
+const ADMIN_RANK_CONST_MARKER = 'UserRoleEnum.ADMIN';
 
 const ADMIN_PREFIX_RE = /^\/api\/v1\/admin(\/|$)|^\/admin(\/|$)/;
 
@@ -754,6 +768,7 @@ export type SecurityBasisKey =
   | 'no-standard-auth-hook'
   | 'optional-identity'
   | 'sovereign'
+  | 'admin-rank'
   | 'permission-gated'
   | 'authenticated-only';
 
@@ -770,6 +785,14 @@ function deriveSecurityLevel(route: CollectedRoute, authenticateRef: unknown): S
   }
   if (!hasAuthenticateHook(route, authenticateRef)) {
     return { level: 'inconnu', candidates: ['S0', 'S1'], basisKey: 'no-standard-auth-hook' };
+  }
+  // AVANT le souverain, et l'ordre est porteur de sens : `requireAdminRank()`
+  // contient les DEUX constantes (elle admet BIGBOSS et ADMIN), tandis que
+  // `requireSovereign()` ne contient que la première. Tester ADMIN d'abord est
+  // donc le seul ordre qui les distingue — l'inverse annoncerait S6 une route
+  // qu'un ADMIN franchit, c'est-à-dire un artefact qui MENT sur sa garde.
+  if (hasHookMarker(route, ADMIN_RANK_CONST_MARKER)) {
+    return { level: 'inconnu', candidates: ['S4', 'S5', 'S6'], basisKey: 'admin-rank' };
   }
   if (hasHookMarker(route, SOVEREIGN_CONST_MARKER)) {
     return { level: 'S6', candidates: ['S6'], basisKey: 'sovereign' };
@@ -835,6 +858,12 @@ const SECURITY_BASIS_LEGEND: Readonly<Record<SecurityBasisKey, string>> = {
     'requireSovereign() détecté (middleware/authorize.ts) — sans ambiguïté possible : cette garde ' +
     "n'admet que BIGBOSS, par définition (aucune route ne l'utilise au 2026-08-29 ; la détection reste " +
     'structurelle et vaudra dès la première adoption).',
+  'admin-rank':
+    'requireAdminRank() détecté (middleware/authorize.ts) — la garde admet BIGBOSS ou ADMIN, et personne ' +
+    "d'autre : un MODERATOR qui PORTE la permission de domaine est refusé par elle. Détectée AVANT " +
+    'requireSovereign() parce que sa source contient les deux constantes de rôle ; l\'ordre inverse ' +
+    "annoncerait S6 une route qu'un ADMIN franchit. Le niveau exact reste inconnu (S4-S6) : la permission " +
+    'qui ACCOMPAGNE cette garde est une variable capturée, invisible depuis le serveur assemblé.',
   'permission-gated':
     'Authentifié + requirePermission(...) détecté (middleware/authorize.ts), donc S4 ou S5. Les deux ne se ' +
     'distinguent pas mécaniquement : le NOM de la permission exigée est une variable capturée dans la ' +
