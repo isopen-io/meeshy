@@ -36,6 +36,17 @@ PROJECT="Meeshy.xcodeproj"
 # `build.db`, avec la précaution en place. Les trois surcharges ci-dessous sont
 # ce qui rend la séparation RÉELLE.
 DERIVED_DATA="${MEESHY_DERIVED_DATA:-Build}"
+# Résolu en chemin ABSOLU (#3949) : un `DERIVED_DATA` relatif ("Build") rend le
+# motif `pgrep -f "xcodebuild.*-derivedDataPath.*$DERIVED_DATA"` de
+# `is_build_running`/`kill_all_builds` indiscriminant entre worktrees — chacun
+# passe `-derivedDataPath Build`, donc chacun attend et peut tuer les builds
+# des AUTRES worktrees, qui ne partagent pourtant aucun fichier avec lui. Le
+# `cd` de la ligne 3 place déjà le script dans `apps/ios/` : `$(pwd)` y désigne
+# ce worktree, jamais un autre.
+case "$DERIVED_DATA" in
+    /*) : ;;
+    *) DERIVED_DATA="$(pwd)/$DERIVED_DATA" ;;
+esac
 if [ -n "${MEESHY_DERIVED_DATA:-}" ]; then
     BUILD_LOCATION_OVERRIDES=(
         "SYMROOT=${MEESHY_DERIVED_DATA}/Products"
@@ -684,20 +695,23 @@ is_build_running() {
 }
 
 kill_all_builds() {
-    log "Killing all xcodebuild processes..."
-    pkill -f "xcodebuild" 2>/dev/null || true
+    # Restreint au même motif que is_build_running (#3949) : un `pkill -f
+    # "xcodebuild"` sans filtre de chemin tue les builds de TOUS les
+    # worktrees, y compris ceux d'autres sessions en cours.
+    log "Killing xcodebuild processes for this worktree ($DERIVED_DATA)..."
+    pkill -f "xcodebuild.*-derivedDataPath.*$DERIVED_DATA" 2>/dev/null || true
     sleep 2
     # Verify killed
-    if pgrep -f "xcodebuild" >/dev/null 2>&1; then
+    if is_build_running; then
         warn "Processes still alive, sending SIGKILL..."
-        pkill -9 -f "xcodebuild" 2>/dev/null || true
+        pkill -9 -f "xcodebuild.*-derivedDataPath.*$DERIVED_DATA" 2>/dev/null || true
         sleep 1
     fi
-    if pgrep -f "xcodebuild" >/dev/null 2>&1; then
-        err "Failed to kill all xcodebuild processes"
+    if is_build_running; then
+        err "Failed to kill xcodebuild processes for this worktree"
         exit 1
     fi
-    ok "All xcodebuild processes killed"
+    ok "xcodebuild processes for this worktree killed"
 }
 
 wait_for_existing_build() {
