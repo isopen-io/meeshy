@@ -614,6 +614,19 @@ const ar = {
   'admin.user.enabled': 'مُفعّل',
   'admin.user.deleted': 'محذوف',
   'admin.user.role': 'الدور',
+  'admin.edit.open': 'تعديل',
+  'admin.edit.title': 'تعديل العضو',
+  'admin.edit.displayName': 'الاسم المعروض',
+  'admin.edit.email': 'البريد الإلكتروني',
+  'admin.edit.bio': 'نبذة',
+  'admin.edit.active': 'الحساب نشط',
+  'admin.edit.save': 'حفظ',
+  'admin.edit.reason': 'السبب (اختياري)',
+  'admin.edit.warnRole': 'تغيير الدور يغيّر صلاحياته.',
+  'admin.edit.warnDeactivate': 'التعطيل ينهي جلساته المفتوحة.',
+  'admin.edit.confirm': 'تأكيد',
+  'admin.edit.saved': 'تم حفظ التغييرات',
+  'admin.edit.failed': 'تعذّر الحفظ',
 
 } satisfies InterfaceCatalog;
 

@@ -1,14 +1,18 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 
 import { adminIdentityQueryOptions } from '@/lib/api/admin';
-import { adminUserDetailQueryOptions, type AdminUserDetail } from '@/lib/api/admin-user-detail';
+import { adminUserDetailQueryKey, adminUserDetailQueryOptions, type AdminUserDetail } from '@/lib/api/admin-user-detail';
 import { apiDeps } from '@/lib/api/deps';
 import { visibleAdminSections } from '@/lib/admin/sections';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useParams, useRoute } from '@/lib/router';
+import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
+import { ActionButton } from '@/routes/link-page-parts';
 
-import { AdminDenied, AdminScreenFrame, AdminSkeleton } from './admin-parts';
+import { AdminAnnouncement, AdminDenied, AdminScreenFrame, AdminSkeleton } from './admin-parts';
+import { AdminUserEditSheet } from './admin-user-edit-sheet';
 
 /**
  * **LE DÉTAIL D'UN MEMBRE** (#6819) — `/admin/users/$user` et `/adm/users/$user`,
@@ -45,6 +49,10 @@ export default function AdminUserScreen() {
   const autorise = visibleAdminSections(identite.data?.permissions ?? null).some((section) => section.id === 'users');
 
   const fiche = useQuery({ ...adminUserDetailQueryOptions(apiDeps, userId), enabled: autorise });
+
+  const [edition, setEdition] = useState(false);
+  const annonceur = useLiveAnnouncer();
+  const client = useQueryClient();
 
   const titre = translate(language, 'admin.user.title');
 
@@ -101,7 +109,27 @@ export default function AdminUserScreen() {
             valeur={translate(language, membre.twoFactorEnabled ? 'admin.user.enabled' : 'admin.users.inactive')}
           />
         </Section>
+
+        <ActionButton onClick={() => setEdition(true)}>{translate(language, 'admin.edit.open')}</ActionButton>
       </div>
+
+      {edition ? (
+        <AdminUserEditSheet
+          membre={membre}
+          language={language}
+          onClose={() => setEdition(false)}
+          onAnnounce={annonceur.announce}
+          /**
+           * La route de PATCH rend le membre À JOUR, sanitisé : on l'écrit
+           * dans le cache plutôt que d'invalider. Invalider coûterait un
+           * aller-retour pour obtenir ce qu'on tient déjà, et laisserait
+           * l'écran afficher l'état d'AVANT pendant qu'il revient.
+           */
+          onSaved={(aJour) => client.setQueryData(adminUserDetailQueryKey(userId), aJour)}
+        />
+      ) : null}
+
+      <AdminAnnouncement text={annonceur.text} />
     </AdminScreenFrame>
   );
 }

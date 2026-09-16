@@ -616,6 +616,19 @@ const it = {
   'admin.user.enabled': 'attivato',
   'admin.user.deleted': 'eliminato',
   'admin.user.role': 'Ruolo',
+  'admin.edit.open': 'Modifica',
+  'admin.edit.title': 'Modifica membro',
+  'admin.edit.displayName': 'Nome visualizzato',
+  'admin.edit.email': 'E-mail',
+  'admin.edit.bio': 'Bio',
+  'admin.edit.active': 'Account attivo',
+  'admin.edit.save': 'Salva',
+  'admin.edit.reason': 'Motivo (facoltativo)',
+  'admin.edit.warnRole': 'Cambiare il ruolo modifica i permessi.',
+  'admin.edit.warnDeactivate': 'Disattivare chiude le sessioni aperte.',
+  'admin.edit.confirm': 'Conferma',
+  'admin.edit.saved': 'Modifiche salvate',
+  'admin.edit.failed': 'Salvataggio non riuscito',
 
 } satisfies InterfaceCatalog;
 

@@ -616,6 +616,19 @@ const de = {
   'admin.user.enabled': 'aktiviert',
   'admin.user.deleted': 'gelöscht',
   'admin.user.role': 'Rolle',
+  'admin.edit.open': 'Bearbeiten',
+  'admin.edit.title': 'Mitglied bearbeiten',
+  'admin.edit.displayName': 'Anzeigename',
+  'admin.edit.email': 'E-Mail',
+  'admin.edit.bio': 'Bio',
+  'admin.edit.active': 'Konto aktiv',
+  'admin.edit.save': 'Speichern',
+  'admin.edit.reason': 'Grund (optional)',
+  'admin.edit.warnRole': 'Eine Rollenänderung ändert die Rechte.',
+  'admin.edit.warnDeactivate': 'Deaktivieren beendet offene Sitzungen.',
+  'admin.edit.confirm': 'Bestätigen',
+  'admin.edit.saved': 'Änderungen gespeichert',
+  'admin.edit.failed': 'Speichern fehlgeschlagen',
 
 } satisfies InterfaceCatalog;
 

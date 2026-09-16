@@ -620,6 +620,19 @@ const pt = {
   'admin.user.enabled': 'ativado',
   'admin.user.deleted': 'eliminada',
   'admin.user.role': 'Função',
+  'admin.edit.open': 'Editar',
+  'admin.edit.title': 'Editar membro',
+  'admin.edit.displayName': 'Nome visível',
+  'admin.edit.email': 'E-mail',
+  'admin.edit.bio': 'Biografia',
+  'admin.edit.active': 'Conta ativa',
+  'admin.edit.save': 'Guardar',
+  'admin.edit.reason': 'Motivo (opcional)',
+  'admin.edit.warnRole': 'Alterar a função muda as suas permissões.',
+  'admin.edit.warnDeactivate': 'Desativar encerra as sessões abertas.',
+  'admin.edit.confirm': 'Confirmar',
+  'admin.edit.saved': 'Alterações guardadas',
+  'admin.edit.failed': 'Não foi possível guardar',
 
 } satisfies InterfaceCatalog;
 

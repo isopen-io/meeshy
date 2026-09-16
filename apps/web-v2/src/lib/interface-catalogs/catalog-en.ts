@@ -616,6 +616,19 @@ const en = {
   'admin.user.enabled': 'enabled',
   'admin.user.deleted': 'deleted',
   'admin.user.role': 'Role',
+  'admin.edit.open': 'Edit',
+  'admin.edit.title': 'Edit member',
+  'admin.edit.displayName': 'Display name',
+  'admin.edit.email': 'Email',
+  'admin.edit.bio': 'Bio',
+  'admin.edit.active': 'Account active',
+  'admin.edit.save': 'Save',
+  'admin.edit.reason': 'Reason (optional)',
+  'admin.edit.warnRole': 'Changing the role changes their permissions.',
+  'admin.edit.warnDeactivate': 'Deactivating ends their open sessions.',
+  'admin.edit.confirm': 'Confirm',
+  'admin.edit.saved': 'Changes saved',
+  'admin.edit.failed': 'Could not save',
 
 } satisfies InterfaceCatalog;
 

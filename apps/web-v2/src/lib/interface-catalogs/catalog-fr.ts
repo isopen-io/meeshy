@@ -645,6 +645,19 @@ const fr = {
   'admin.user.enabled': 'activé',
   'admin.user.deleted': 'supprimé',
   'admin.user.role': 'Rôle',
+  'admin.edit.open': 'Modifier',
+  'admin.edit.title': 'Modifier le membre',
+  'admin.edit.displayName': 'Nom affiché',
+  'admin.edit.email': 'E-mail',
+  'admin.edit.bio': 'Bio',
+  'admin.edit.active': 'Compte actif',
+  'admin.edit.save': 'Enregistrer',
+  'admin.edit.reason': 'Motif (facultatif)',
+  'admin.edit.warnRole': 'Changer le rôle modifie ses droits.',
+  'admin.edit.warnDeactivate': 'Désactiver ferme ses sessions ouvertes.',
+  'admin.edit.confirm': 'Confirmer',
+  'admin.edit.saved': 'Modifications enregistrées',
+  'admin.edit.failed': 'Échec de l’enregistrement',
 
 } as const;
 

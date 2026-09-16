@@ -616,6 +616,19 @@ const es = {
   'admin.user.enabled': 'activado',
   'admin.user.deleted': 'eliminada',
   'admin.user.role': 'Rol',
+  'admin.edit.open': 'Editar',
+  'admin.edit.title': 'Editar miembro',
+  'admin.edit.displayName': 'Nombre visible',
+  'admin.edit.email': 'Correo',
+  'admin.edit.bio': 'Biografía',
+  'admin.edit.active': 'Cuenta activa',
+  'admin.edit.save': 'Guardar',
+  'admin.edit.reason': 'Motivo (opcional)',
+  'admin.edit.warnRole': 'Cambiar el rol modifica sus permisos.',
+  'admin.edit.warnDeactivate': 'Desactivar cierra sus sesiones abiertas.',
+  'admin.edit.confirm': 'Confirmar',
+  'admin.edit.saved': 'Cambios guardados',
+  'admin.edit.failed': 'No se pudo guardar',
 
 } satisfies InterfaceCatalog;
 
