@@ -1,6 +1,6 @@
 import type { FeedAuthor, FeedPage, FeedPost } from './feed-pages';
 import { minutesAgo } from './fixtures-base';
-import { REEL_CLIP_BARS } from './fixtures-reel-clips';
+import { REEL_CLIP_BARS, REEL_CLIP_RGB, REEL_CLIP_VOICE } from './fixtures-reel-clips';
 
 /**
  * LE CORPUS DU FIL EN FIXTURES (#5893) — servi par le MÊME chemin que la
@@ -336,6 +336,75 @@ export const POST_WIRE_NULLS: FeedPost = {
   commentCount: null,
 };
 
+/**
+ * **`POST_VIDEO` — UNE VIDÉO DE POST, QUI SE JOUE DANS LE FIL** (#6807).
+ *
+ * Distincte de `REEL_PORTRAIT` par la DÉCISION qu'elle exerce : l'affiche
+ * d'un RÉEL reste immobile dans le fil (#6457, la lecture appartient au
+ * lecteur des Réels), tandis qu'une vidéo de POST se joue sur place
+ * (#6800, `FeedMediaSurface` montée `playable`). Le corpus ne portait que la
+ * première, donc la seconde règle n'était jouée par AUCUNE recette : mesuré
+ * au navigateur le 2026-09-16, `/feed` montait 13 `<img>` et zéro `<video>`.
+ *
+ * Le clip est RÉELLEMENT décodable (`REEL_CLIP_RGB`, VP8) : une image servie
+ * sous un `mimeType` vidéo peindrait « Lecture impossible » sur la seule
+ * carte censée prouver qu'une vidéo se joue.
+ */
+export const POST_VIDEO: FeedPost = {
+  ...feedPostDefaults,
+  id: 'post-video',
+  type: 'POST',
+  createdAt: minutesAgo(52),
+  author: SOFIA,
+  content: 'Le couloir du studio, en trois secondes.',
+  originalLanguage: 'fr',
+  media: [
+    {
+      id: 'media-video',
+      mimeType: 'video/webm',
+      fileUrl: REEL_CLIP_RGB,
+      thumbnailUrl: feedPhotoStandIn('#0f766e', '#14b8a6', 'square'),
+      width: 1920,
+      height: 1080,
+      /** MILLISECONDES (`FeedMedia.duration`) — trois secondes, la durée
+       * réelle du clip, pour que la pastille dise vrai. */
+      duration: 3000,
+      order: 0,
+    },
+  ],
+  likeCount: 17,
+  commentCount: 2,
+};
+
+/**
+ * **`POST_AUDIO` — UN SON DE POST** (#6807). Le corpus n'en portait AUCUN :
+ * la branche `audio` de `FeedMediaSurface` — forme d'onde et `<audio>` monté
+ * quand l'hôte la déclare `playable` — n'avait donc aucune donnée pour
+ * exister, ni en recette, ni sous un œil humain.
+ *
+ * SANS dimensions ni vignette, comme un son l'est : c'est `postMediaRatio`
+ * qui décide alors du cadre, exactement comme pour `POST_NO_DIMENSIONS`.
+ */
+export const POST_AUDIO: FeedPost = {
+  ...feedPostDefaults,
+  id: 'post-audio',
+  type: 'POST',
+  createdAt: minutesAgo(58),
+  author: LEA,
+  content: 'Deux secondes de la répétition, au casque.',
+  originalLanguage: 'fr',
+  media: [
+    {
+      id: 'media-audio',
+      mimeType: 'audio/webm',
+      fileUrl: REEL_CLIP_VOICE,
+      duration: 2008,
+      order: 0,
+    },
+  ],
+  likeCount: 9,
+};
+
 const NAMED_POSTS: readonly FeedPost[] = [
   POST_IMAGE_FR,
   POST_IMAGE_EN_TRANSLATED,
@@ -345,6 +414,8 @@ const NAMED_POSTS: readonly FeedPost[] = [
   POST_LONG_TEXT,
   POST_REPOST,
   REEL_PORTRAIT,
+  POST_VIDEO,
+  POST_AUDIO,
   POST_NO_DIMENSIONS,
   POST_WIRE_NULLS,
 ];
