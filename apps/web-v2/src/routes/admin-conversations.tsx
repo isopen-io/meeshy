@@ -12,7 +12,12 @@ import { apiDeps } from '@/lib/api/deps';
 import { visibleAdminSections } from '@/lib/admin/sections';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { useRoute } from '@/lib/router';
 import { AdminDenied, AdminScreenFrame, AdminSkeleton } from '@/routes/admin-parts';
+/** `Link` vient de la TABLE, pas du module générique : `createRouter(table)` le
+ * fabrique typé sur elle, de sorte que `to` n'accepte qu'une clé réelle et
+ * `params` la forme exacte du motif. Même import que `admin-users`. */
+import { Link } from '@/routes/route-table';
 
 /**
  * **L'INVENTAIRE DES CONVERSATIONS** (#6862) — la première moitié de la lecture
@@ -52,38 +57,68 @@ import { AdminDenied, AdminScreenFrame, AdminSkeleton } from '@/routes/admin-par
 const INK = 'var(--color-ios-ink)';
 const INK2 = 'var(--color-ios-ink-2)';
 
+/**
+ * **LA LIGNE OUVRE LA CONVERSATION** — sans ce lien, l'écran de lecture est
+ * INATTEIGNABLE autrement qu'en tapant son adresse à la main.
+ *
+ * C'est le défaut que ce composant a porté à sa première livraison : une liste
+ * dont les lignes ne mènent nulle part, au-dessus d'un écran de détail écrit,
+ * testé et branché. Ni `tsc`, ni les 4449 témoins, ni le gate de poids ne
+ * pouvaient le voir — un maillon manquant ne casse rien, il ne relie
+ * simplement pas.
+ *
+ * `cible` vient de l'écran et vaut `admConversation` ou `adminConversation`
+ * selon l'espace d'où l'on parcourt la liste : D-76 tient les deux
+ * administrations séparées, et mélanger les deux ferait sauter
+ * l'administrateur de l'une à l'autre au premier tap.
+ *
+ * Le lien porte la mise en page, pas le `<li>` : une cible tactile doit être
+ * l'élément CLIQUABLE lui-même, sinon le pouce touche la carte sans rien
+ * ouvrir sur ses bords. `minHeight: 44` est le plancher du dépôt.
+ */
 function ConversationRow({
   conversation,
   language,
+  cible,
 }: {
   readonly conversation: AdminInstanceConversation;
   readonly language: InterfaceLanguage;
+  readonly cible: 'adminConversation' | 'admConversation';
 }) {
   return (
-    <li
-      data-admin-conversation={conversation.id}
-      className="flex items-center gap-3 rounded-card px-4 py-3"
-      style={{ backgroundColor: 'var(--color-ios-surface)', border: '1px solid var(--color-edge)' }}
-    >
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-body" style={{ color: INK }}>
-          {/* Un DIRECT n'a pas de titre propre (D-75) : il porte le nom de
-              l'autre, que cette route ne sert pas. On montre son identifiant
-              plutôt qu'une ligne vide. */}
-          {conversation.title ?? conversation.identifier ?? conversation.id}
-        </p>
-        <p className="truncate text-caption" style={{ color: INK2 }}>
-          {conversation.type}
-          {' · '}
-          {translate(language, 'admin.convList.members', { count: String(conversation.memberCount) })}
-        </p>
-      </div>
+    <li data-admin-conversation={conversation.id}>
+      <Link
+        to={cible}
+        params={{ conversation: conversation.id }}
+        className="flex items-center gap-3 rounded-card px-4 py-3"
+        style={{ minHeight: 44, backgroundColor: 'var(--color-ios-surface)', border: '1px solid var(--color-edge)' }}
+      >
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-body" style={{ color: INK }}>
+            {/* Un DIRECT n'a pas de titre propre (D-75) : il porte le nom de
+                l'autre, que cette route ne sert pas. On montre son identifiant
+                plutôt qu'une ligne vide. */}
+            {conversation.title ?? conversation.identifier ?? conversation.id}
+          </p>
+          <p className="truncate text-caption" style={{ color: INK2 }}>
+            {conversation.type}
+            {' · '}
+            {translate(language, 'admin.convList.members', { count: String(conversation.memberCount) })}
+          </p>
+        </div>
+      </Link>
     </li>
   );
 }
 
 export default function AdminConversationsScreen() {
   const language = currentInterfaceLanguage();
+  const { key } = useRoute();
+  /** On reste dans l'espace d'où l'on vient : `/adm/conversations` ouvre
+   * `/adm/conversations/$conversation`, `/admin/…` son jumeau. Mélanger les
+   * deux ferait sauter l'administrateur d'une administration à l'autre au
+   * premier tap (D-76). */
+  const cible = key === 'admConversations' ? ('admConversation' as const) : ('adminConversation' as const);
   const [offset, setOffset] = useState(0);
   const [recherche, setRecherche] = useState('');
 
@@ -180,7 +215,12 @@ export default function AdminConversationsScreen() {
           </p>
           <ul className="grid gap-2">
             {page.conversations.map((conversation) => (
-              <ConversationRow key={conversation.id} conversation={conversation} language={language} />
+              <ConversationRow
+                key={conversation.id}
+                conversation={conversation}
+                language={language}
+                cible={cible}
+              />
             ))}
           </ul>
           <div className="flex justify-between gap-2 pt-4">
