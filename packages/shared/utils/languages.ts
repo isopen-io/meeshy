@@ -1029,15 +1029,7 @@ export const SUPPORTED_LANGUAGES: readonly SupportedLanguageInfo[] = [
   },
 
   // =========================================================================
-  // LANGUES CAMEROUNAISES (Sans TTS, sans traduction — pas de code NLLB-200)
-  // Décision porteur #3659 / #6785 : ces 7 langues (bas, ksf, nnh, dua, ewo,
-  // byv, fan) restent OFFERTES au produit (transcription le cas échéant) mais
-  // `supportsTranslation` DOIT rester `false` — aucune entrée dans
-  // `LANGUAGE_MAPPINGS` (services/translator/src/config/settings.py) ;
-  // `TranslatorEngine` lève une erreur explicite plutôt que d'inventer une
-  // traduction. `getLanguagesWithTranslation()` alimente directement les
-  // langues cibles envoyées au translator (`PostAudioService.ts`) : un `true`
-  // ici ferait échouer chaque traduction demandée vers ces codes.
+  // LANGUES CAMEROUNAISES (Sans TTS, sans traduction — aucun code NLLB-200, décision #3659/#6785)
   // =========================================================================
   {
     code: 'bas',
