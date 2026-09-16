@@ -97,6 +97,33 @@ public nonisolated enum MediaStageFraming {
         }
     }
 
+    /// **CE QU'ON CADRE — un contenu, ou une surface de COMPOSITION** (#6806,
+    /// directive porteur 2026-09-16 : « il faut pas afficher une troisieme
+    /// couche en plein plein écran, mais juste agrandir le canvas à sa taille
+    /// total du viewport »).
+    ///
+    /// La distinction n'est pas une nuance de présentation, c'est une
+    /// différence de NATURE, et c'est elle qui explique pourquoi la conversation
+    /// « se passe bien » là où les scènes de post, les réels et les stories ne
+    /// se passaient pas bien :
+    ///
+    /// | sujet | ce que c'est | en plein cadre |
+    /// |---|---|---|
+    /// | `content` | une pièce jointe — elle EST le contenu | AJUSTÉE, jamais rognée ; son hors-champ est habillé (#6143) |
+    /// | `scene` | une surface de composition 9:16 | elle PREND le viewport ; ce qui dépasse est rogné |
+    ///
+    /// Ajuster une pièce jointe est juste : rogner une photo retirerait ce que
+    /// l'expéditeur a envoyé. Ajuster une SCÈNE peint une surface que personne
+    /// n'a composée — le sol du visualiseur au-dessus et au-dessous, le
+    /// hors-champ du canvas au milieu, le média dedans : les TROIS couches que
+    /// la directive refuse.
+    public enum Subject: Equatable, Sendable {
+        /// Une pièce jointe, une image, une vidéo — le contenu lui-même.
+        case content
+        /// Une scène : le canvas d'un post, d'un réel ou d'une story.
+        case scene
+    }
+
     public struct Input: Equatable, Sendable {
         public let viewport: CGSize
         /// largeur / hauteur. `<= 0` ⇒ le solveur rend des zéros plutôt que de
@@ -115,13 +142,21 @@ public nonisolated enum MediaStageFraming {
         /// effet en plein cadre — et une valeur que l'HÔTE dérive de son chrome.
         public let minimumFrameWidth: CGFloat
 
+        /// **Ce qu'on cadre** (#6806). Par DÉFAUT `.content` : tous les
+        /// appelants d'avant la directive cadrent une pièce jointe, et un
+        /// défaut qui change leur comportement en silence serait le pire des
+        /// ajouts. Seules les pages de SCÈNE le déclarent.
+        public let subject: Subject
+
         public init(viewport: CGSize,
                     mediaRatio: CGFloat,
                     corridors: Corridors,
                     presentation: Presentation,
                     cardedCornerRadius: CGFloat,
                     minimumFrameHeight: CGFloat,
-                    minimumFrameWidth: CGFloat) {
+                    minimumFrameWidth: CGFloat,
+                    subject: Subject = .content) {
+            self.subject = subject
             self.viewport = viewport
             self.mediaRatio = mediaRatio
             self.corridors = corridors
@@ -166,9 +201,24 @@ public nonisolated enum MediaStageFraming {
 
         switch input.presentation {
         case .full:
-            return Result(frame: input.viewport,
-                          media: aspectFit(ratio: input.mediaRatio, in: input.viewport),
-                          cornerRadius: 0)
+            // **Une SCÈNE prend le viewport ENTIER** (#6806). Elle n'est pas un
+            // contenu qu'on préserve, c'est la surface sur laquelle l'auteur a
+            // composé : l'ajuster fabriquerait un hors-champ que personne n'a
+            // composé, et avec lui la troisième couche que la directive refuse.
+            // Une pièce jointe, elle, reste AJUSTÉE — rogner une photo
+            // retirerait ce que l'expéditeur a envoyé.
+            // **Une scène PREND le cadre, elle ne le DÉBORDE pas.** Rendre une
+            // taille plus grande que le cadre a été essayé et mesuré au
+            // simulateur le 2026-09-16 : tout l'aval de ce solveur suppose
+            // `media <= frame` (c'est le contrat « jamais de rognage » que
+            // `aspectFit` porte depuis l'origine), et une page qui reçoit un
+            // média plus grand que son cadre le pose en haut à gauche au lieu de
+            // le centrer. Le rognage appartient au CANVAS, qui sait ce qu'il
+            // compose ; le solveur lui remet l'écran entier et s'arrête là.
+            let media = input.subject == .scene
+                ? input.viewport
+                : aspectFit(ratio: input.mediaRatio, in: input.viewport)
+            return Result(frame: input.viewport, media: media, cornerRadius: 0)
 
         case .carded:
             let regionWidth = max(0, input.viewport.width - 2 * max(0, input.corridors.gutter))

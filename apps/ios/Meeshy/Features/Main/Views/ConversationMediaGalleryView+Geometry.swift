@@ -184,7 +184,8 @@ enum MediaGalleryStage {
     static func resolve(viewport: CGSize,
                         mediaRatio: CGFloat?,
                         presentation: MediaStageFraming.Presentation,
-                        corridors: MediaStageFraming.Corridors) -> MediaStageFraming.Result {
+                        corridors: MediaStageFraming.Corridors,
+                        subject: MediaStageFraming.Subject = .content) -> MediaStageFraming.Result {
         MediaStageFraming.resolve(
             MediaStageFraming.Input(
                 viewport: viewport,
@@ -195,9 +196,22 @@ enum MediaGalleryStage {
                 presentation: presentation,
                 cardedCornerRadius: cornerRadius,
                 minimumFrameHeight: minimumFrameHeight,
-                minimumFrameWidth: minimumFrameWidth
+                minimumFrameWidth: minimumFrameWidth,
+                subject: subject
             )
         )
+    }
+
+    /// **CE QU'ON CADRE, décidé par la SOURCE et non par l'appelant** (#6806).
+    ///
+    /// Une pièce dont l'identité est dans `scenes` est une page SCÈNE — c'est
+    /// déjà ce que `mediaRatio(of:scenes:)` lit pour lui donner le rapport de sa
+    /// scène. Poser la même lecture ici garde UNE question et UNE réponse : un
+    /// second prédicat, à tenir d'accord avec le premier, divergerait au premier
+    /// ajustement de l'un des deux.
+    static func subject(of attachment: MessageAttachment,
+                        scenes: [String: GallerySceneItem]) -> MediaStageFraming.Subject {
+        scenes[attachment.id] == nil ? .content : .scene
     }
 
     /// **Ce qui se peint DERRIÈRE le média, dans son cadre** (#6143, spec § 2.1).
@@ -386,11 +400,15 @@ extension ConversationMediaGalleryView {
     /// **Une page scène reçoit le rapport de SA scène** (#6709) : sa pièce est
     /// synthétique, sans dimensions — `mediaRatio(of:scenes:)` le sait.
     func stage(for attachment: MessageAttachment) -> MediaStageFraming.Result {
-        MediaGalleryStage.resolve(
+        let scenes = sceneContext?.scenes ?? [:]
+        return MediaGalleryStage.resolve(
             viewport: DeviceLayout.windowSize,
-            mediaRatio: MediaGalleryStage.mediaRatio(of: attachment, scenes: sceneContext?.scenes ?? [:]),
+            mediaRatio: MediaGalleryStage.mediaRatio(of: attachment, scenes: scenes),
             presentation: stageGeometryPresentation.framing,
-            corridors: stageCorridors
+            corridors: stageCorridors,
+            // #6806 — une SCÈNE prend le viewport en plein cadre ; une pièce
+            // jointe reste ajustée. La source décide, pas ce site.
+            subject: MediaGalleryStage.subject(of: attachment, scenes: scenes)
         )
     }
 

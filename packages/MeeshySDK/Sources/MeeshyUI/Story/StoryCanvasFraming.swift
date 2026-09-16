@@ -97,8 +97,26 @@ public nonisolated enum StoryCanvasFraming {
     ///   les bords du viewport (plein bord 9:16, coins droits), contrôleurs cachés.
     /// - Session plein écran (`isFullscreenSession`) → toujours `.free`, même quand
     ///   le chrome ré-apparaît brièvement au touch-and-hold (pas de re-cardage).
+    /// **#6806 — la session plein écran rend `.immersive`, pas `.free`.**
+    ///
+    /// Directive porteur 2026-09-16 : « Meme probleme pour les story il faut pas
+    /// afficher une troisieme couche en plein plein écran, mais juste agrandir
+    /// le canvas à sa taille total du viewport ».
+    ///
+    /// Les deux états ne peuvent plus être confondus, parce que `.free` est
+    /// AUSSI ce que le COMPOSER passe pendant le dessin et l'édition de texte :
+    /// y couvrir le viewport rognerait la scène que l'auteur est en train de
+    /// composer — le contraire exact de « dessinable jusqu'aux angles ». Le cas
+    /// `.immersive` existait depuis l'origine et ne décidait rien ; il porte
+    /// désormais la seule chose qui distingue la LECTURE plein écran de tout le
+    /// reste.
+    ///
+    /// Le PEEK (chrome masqué par appui long) garde `.free` : c'est un aperçu
+    /// transitoire, et le faire zoomer à chaque appui ferait respirer l'écran à
+    /// chaque doigt posé.
     public static func readerPresentation(isFullscreenSession: Bool, chromeVisible: Bool) -> Presentation {
-        (isFullscreenSession || !chromeVisible) ? .free : .carded
+        if isFullscreenSession { return .immersive }
+        return chromeVisible ? .carded : .free
     }
 
     /// **La colonne d'une légende : celle du CANVAS, jamais celle du conteneur.**
@@ -131,6 +149,23 @@ public nonisolated enum StoryCanvasFraming {
     }
 
     public static func resolve(_ input: Input) -> Result {
+        // **#6806 — en lecture plein écran, le canvas COUVRE le viewport.**
+        //
+        // C'était la troisième couche que la directive refuse : le canvas
+        // gardait ses bornes 9:16 intrinsèques (un aspect-fit du viewport), donc
+        // sur un iPhone 16 Pro — 0,462, plus étroit que 0,5625 — il restait
+        // 76,6 pt de sol en haut et en bas, qu'on habillait d'un flou. Le sol,
+        // le flou, puis le canvas : trois surfaces pour une scène.
+        //
+        // Le facteur est une COUVERTURE, jamais un étirement : le rapport du
+        // canvas est préservé et ce qui dépasse sort de l'écran.
+        if input.state == .immersive {
+            let intrinsic = CanvasGeometry.aspectFitSize(in: input.viewport, ratio: input.canvasRatio)
+            guard intrinsic.width > 0, intrinsic.height > 0 else { return .identity }
+            let couverture = max(input.viewport.width / intrinsic.width,
+                                 input.viewport.height / intrinsic.height)
+            return Result(scale: max(1, couverture), offset: .zero, cornerRadius: 0)
+        }
         guard input.state == .carded else { return .identity }
         let intrinsic = CanvasGeometry.aspectFitSize(in: input.viewport, ratio: input.canvasRatio)
         guard intrinsic.width > 0, intrinsic.height > 0,

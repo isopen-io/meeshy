@@ -297,3 +297,111 @@ struct MediaStageFramingTests {
         #expect(avec.frame == Self.viewport)
     }
 }
+
+// MARK: - #6806 — ce qu'on cadre décide de ce que le plein cadre remplit
+
+/// **Une SCÈNE prend le viewport ; une pièce jointe reste ajustée.**
+///
+/// Directive porteur 2026-09-16, sur capture : « il faut pas afficher une
+/// troisieme couche en plein plein écran, mais juste agrandir le canvas à sa
+/// taille total du viewport ».
+///
+/// Les nombres ci-dessous sont ceux de la capture, et c'est ce qui rend la
+/// suite utile : le doc-comment de `aspectFit` ANNONÇAIT déjà le défaut
+/// (« en plein écran, même une scène 9:16 laisse des bandes ») sans qu'aucun
+/// témoin ne le refuse. Une conséquence documentée n'est pas une conséquence
+/// voulue.
+@Suite("MediaStageFraming — le sujet du cadrage (#6806)")
+struct MediaStageFramingSubjectTests {
+
+    /// iPhone 16 Pro. Son rapport (0,4613) est plus ÉTROIT que celui d'une
+    /// scène (0,5625) : c'est la configuration qui fabrique les bandes.
+    static let viewport = CGSize(width: 393, height: 852)
+    static let scene: CGFloat = 9.0 / 16.0
+
+    static func input(ratio: CGFloat,
+                      presentation: MediaStageFraming.Presentation,
+                      subject: MediaStageFraming.Subject) -> MediaStageFraming.Input {
+        MediaStageFraming.Input(
+            viewport: viewport,
+            mediaRatio: ratio,
+            corridors: MediaStageFraming.Corridors(
+                safeTop: 59, top: 56, rail: 80, transport: 0, safeBottom: 34, gutter: 12
+            ),
+            presentation: presentation,
+            cardedCornerRadius: 22,
+            minimumFrameHeight: 330,
+            minimumFrameWidth: 204,
+            subject: subject
+        )
+    }
+
+    /// **Et ce que le lot rend : la scène PREND le viewport.** Elle le couvre
+    /// en entier, sans être étirée — 479 × 852, donc 43 pt de chaque côté hors
+    /// cadre. Le prix est assumé, et il est écrit dans `aspectFill`.
+    @Test("en plein cadre, une scène couvre tout le viewport")
+    func sceneFillsTheViewport() {
+        let résultat = MediaStageFraming.resolve(
+            Self.input(ratio: Self.scene, presentation: .full, subject: .scene)
+        )
+        #expect(résultat.frame == Self.viewport)
+        #expect(résultat.media == Self.viewport,
+                "la scène PREND le cadre — elle ne le déborde pas")
+    }
+
+    /// **Plus de hors-champ ⇒ plus de couche à peindre.** `letterboxes` est ce
+    /// que l'hôte interroge pour décider s'il monte le fond : la troisième
+    /// couche s'éteint par la LOI, pas par un second interrupteur.
+    @Test("une scène qui couvre le viewport n'a plus de hors-champ à habiller")
+    func aFilledSceneHasNoLetterbox() {
+        let scène = MediaStageFraming.resolve(
+            Self.input(ratio: Self.scene, presentation: .full, subject: .scene)
+        )
+        #expect(scène.letterboxes == false)
+    }
+
+    /// **La conversation ne change pas** — « dans les conversation le placement
+    /// se passe bien », et ce témoin est ce qui l'empêche de cesser d'être vrai.
+    /// Une pièce jointe garde son ajustement ET son hors-champ habillé (#6143).
+    @Test("une pièce jointe reste ajustée en plein cadre, avec son hors-champ")
+    func contentStaysFitted() {
+        let pièce = MediaStageFraming.resolve(
+            Self.input(ratio: Self.scene, presentation: .full, subject: .content)
+        )
+        #expect(pièce.frame == Self.viewport)
+        #expect(abs(pièce.media.width - 393) < 0.5)
+        #expect(abs(pièce.media.height - 698.7) < 0.5)
+        #expect(pièce.letterboxes, "son hors-champ reste habillé")
+        // **Les nombres de la capture du porteur**, et c'est ce qui rend ce
+        // témoin utile : 76,6 pt de sol au-dessus et au-dessous. Juste pour une
+        // pièce jointe — c'est sa finition ; faux pour une scène — c'était la
+        // troisième couche.
+        #expect(abs((Self.viewport.height - pièce.media.height) / 2 - 76.6) < 0.5)
+    }
+
+    /// **Le sujet ne touche PAS l'état cadré**, et c'est la moitié qui protège
+    /// la carte : sur le plateau, une scène est une vignette posée parmi
+    /// d'autres — la rogner y perdrait ce que l'auteur a composé, sans même le
+    /// plein écran pour le rendre.
+    @Test("en cadré, le sujet ne change rien")
+    func cardedIsIndifferentToTheSubject() {
+        let contenu = MediaStageFraming.resolve(
+            Self.input(ratio: Self.scene, presentation: .carded, subject: .content)
+        )
+        let scène = MediaStageFraming.resolve(
+            Self.input(ratio: Self.scene, presentation: .carded, subject: .scene)
+        )
+        #expect(contenu == scène)
+    }
+
+    /// Le repère « HAUTE 1:4 » de la recette, dans sa scène : la scène couvre
+    /// l'écran, et le média s'y pose ensuite selon la loi du plateau (#6760).
+    @Test("une scène très haute couvre aussi le viewport")
+    func aTallSceneAlsoFills() {
+        let résultat = MediaStageFraming.resolve(
+            Self.input(ratio: 1.0 / 4.0, presentation: .full, subject: .scene)
+        )
+        #expect(résultat.media == Self.viewport)
+        #expect(résultat.letterboxes == false)
+    }
+}
