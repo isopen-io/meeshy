@@ -4,6 +4,10 @@ import { ApiError } from './client';
 import { CACHE_SCHEMA, createAppQueryClient, purgeReaderCaches, shouldRetry, type StorageLike } from './query-client';
 import { reactionStore } from './reaction-store';
 import { createSessionStore } from './session';
+/* La CONSTANTE, jamais son littéral : un `'admin-souverain'` recopié ici
+   laisserait ce témoin vert après un renommage — vert pour la mauvaise
+   raison, sur une garde de confidentialité. */
+import { ADMIN_SOUVERAIN_PREFIXE } from './souverain';
 
 function fakeStorage(): StorageLike & { readonly raw: Map<string, string> } {
   const raw = new Map<string, string>();
@@ -68,6 +72,65 @@ describe('persistence — round trip', () => {
 
     const b = createAppQueryClient({ storage, buster: '0.0.0-test:u1' });
     expect(b.getQueryData(['conversations'])).toEqual([{ id: 'c-1' }]);
+  });
+
+  /**
+   * **UNE LECTURE SOUVERAINE NE TOUCHE PAS LE DISQUE** (#6862).
+   *
+   * `estClefSouveraine` est testé isolément dans `souverain`/`admin-conversations` ;
+   * ces témoins-ci gardent la seule chose qui compte vraiment — que `persist()`
+   * l'APPLIQUE. Un prédicat juste que le filtre n'appelle pas laisserait le
+   * contenu d'une conversation privée sur le poste de l'administrateur, où il
+   * survivrait à la session : une copie qu'`AdminAuditLog` ne connaît pas et
+   * que personne ne révoque.
+   *
+   * Ce qui est écrit est lu depuis la Map du faux stockage plutôt que par une
+   * clé de cache recopiée : le nom du seau est un détail d'implémentation, et
+   * un troisième site qui le déclare finirait par diverger.
+   */
+  const CLEF_SOUVERAINE = [ADMIN_SOUVERAIN_PREFIXE, 'messages', 'conv-1', 0] as const;
+  const SECRET = 'texte-prive-que-rien-ne-doit-ecrire-sur-le-disque';
+
+  test('le contenu d’une lecture souveraine n’entre PAS dans le stockage', () => {
+    const storage = fakeStorage();
+    const client = createAppQueryClient({ storage, buster: '0.0.0-test:u1' });
+
+    client.setQueryData(['conversations'], [{ id: 'c-1' }]);
+    client.setQueryData(CLEF_SOUVERAINE, { messages: [{ id: 'm-1', content: SECRET }] });
+    client.persist();
+
+    const ecrit = [...storage.raw.values()].join('');
+    expect(ecrit).not.toContain(SECRET);
+    expect(ecrit).not.toContain(ADMIN_SOUVERAIN_PREFIXE);
+
+    // LE CONTRASTE, sans lequel ce témoin passerait aussi sur un filtre qui
+    // n'écrirait plus RIEN — c'est-à-dire sur une v2 qui aurait perdu tout son
+    // cache persisté sans que personne ne s'en aperçoive.
+    expect(ecrit).toContain('conversations');
+    expect(ecrit).toContain('c-1');
+  });
+
+  test('exclure du DISQUE n’est pas jeter : la donnée reste en mémoire pour l’écran qui la lit', () => {
+    const storage = fakeStorage();
+    const client = createAppQueryClient({ storage, buster: '0.0.0-test:u1' });
+
+    client.setQueryData(CLEF_SOUVERAINE, { secret: SECRET });
+    client.persist();
+
+    expect(client.getQueryData(CLEF_SOUVERAINE)).toEqual({ secret: SECRET });
+  });
+
+  test('un rechargement ne la restaure pas — elle n’a jamais été écrite', () => {
+    const storage = fakeStorage();
+    const avant = createAppQueryClient({ storage, buster: '0.0.0-test:u1' });
+    avant.setQueryData(['conversations'], [{ id: 'c-1' }]);
+    avant.setQueryData(CLEF_SOUVERAINE, { secret: SECRET });
+    avant.persist();
+
+    const apres = createAppQueryClient({ storage, buster: '0.0.0-test:u1' });
+    expect(apres.getQueryData(CLEF_SOUVERAINE)).toBeUndefined();
+    // Et le reste du cache a bien survécu : la garde est CIBLÉE, pas générale.
+    expect(apres.getQueryData(['conversations'])).toEqual([{ id: 'c-1' }]);
   });
 
   test('buster différent ⇒ undefined ET l’entrée est purgée', () => {

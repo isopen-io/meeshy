@@ -658,6 +658,13 @@ const it = {
   'admin.conv.title': 'Conversazioni',
   'admin.conv.empty': 'Nessuna conversazione',
   'admin.conv.members': '{count} membri',
+  'admin.nav.conversations': 'Conversazioni',
+  'admin.convList.search': 'Cerca una conversazione',
+  'admin.convList.count': '{count} conversazione/i',
+  'admin.convList.empty': 'Nessuna conversazione corrisponde.',
+  'admin.convList.unavailable': 'Elenco non disponibile al momento.',
+  'admin.convList.members': '{count} membri',
+  'admin.convList.sovereign': 'La lettura è riservata al rango sovrano.',
 
 } satisfies InterfaceCatalog;
 

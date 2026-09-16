@@ -662,6 +662,13 @@ const pt = {
   'admin.conv.title': 'Conversas',
   'admin.conv.empty': 'Sem conversas',
   'admin.conv.members': '{count} membros',
+  'admin.nav.conversations': 'Conversas',
+  'admin.convList.search': 'Procurar uma conversa',
+  'admin.convList.count': '{count} conversa(s)',
+  'admin.convList.empty': 'Nenhuma conversa corresponde.',
+  'admin.convList.unavailable': 'Lista indisponível no momento.',
+  'admin.convList.members': '{count} membros',
+  'admin.convList.sovereign': 'A leitura é reservada ao nível soberano.',
 
 } satisfies InterfaceCatalog;
 

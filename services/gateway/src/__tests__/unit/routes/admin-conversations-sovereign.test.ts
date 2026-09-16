@@ -108,25 +108,43 @@ async function lister(url: string, role: string, opts: { conversations?: AnyReco
   return { res, espion };
 }
 
+/**
+ * LE SEUIL EST DOUBLE, et c'est ce que ces quatre témoins mesurent.
+ *
+ * Directive porteur du 2026-09-16 : « permettre aussi aux ADMIN de pouvoir
+ * accéder à ces informations pour le moment ». La route exige donc la
+ * permission `canManageConversations` **et** le rang (BIGBOSS ou ADMIN).
+ *
+ * Le témoin qui porte tout le poids est celui du MODERATOR : il PORTE
+ * `canManageConversations` (matrice centrale), et seule la garde de rang
+ * l'arrête. Une route gardée par la seule permission passerait les trois
+ * autres témoins sans broncher, et n'échouerait que sur celui-là.
+ */
 describe('GET /admin/conversations — le rang', () => {
-  it('refuse un ADMIN — canViewUsers ouvre la fiche d\'un membre, pas l\'inventaire de l\'instance', async () => {
+  it('sert un BIGBOSS', async () => {
+    const { res } = await lister('/api/v1/admin/conversations', 'BIGBOSS');
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('sert un ADMIN — directive porteur du 2026-09-16', async () => {
     const { res } = await lister('/api/v1/admin/conversations', 'ADMIN');
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(200);
   });
 
-  it('refuse un AUDIT', async () => {
-    const { res } = await lister('/api/v1/admin/conversations', 'AUDIT');
-    expect(res.statusCode).toBe(403);
-  });
-
-  it('refuse un MODERATOR', async () => {
+  it('refuse un MODERATOR — il PORTE la permission, il n\'a pas le RANG', async () => {
+    // Le témoin qui distingue une garde de rang d'une garde de permission.
     const { res } = await lister('/api/v1/admin/conversations', 'MODERATOR');
     expect(res.statusCode).toBe(403);
   });
 
-  it('sert un BIGBOSS', async () => {
-    const { res } = await lister('/api/v1/admin/conversations', 'BIGBOSS');
-    expect(res.statusCode).toBe(200);
+  it('refuse un AUDIT — il n\'a ni la permission ni le rang', async () => {
+    const { res } = await lister('/api/v1/admin/conversations', 'AUDIT');
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('refuse un USER', async () => {
+    const { res } = await lister('/api/v1/admin/conversations', 'USER');
+    expect(res.statusCode).toBe(403);
   });
 });
 

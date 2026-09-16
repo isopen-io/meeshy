@@ -48,8 +48,16 @@ import type { ApiResult } from './http';
  * Le préfixe COMMUN des clés de requête souveraines — le point d'accroche
  * unique de l'exclusion de persistance. Ne jamais composer une clé de ce
  * domaine sans passer par les fabriques ci-dessous.
+ *
+ * Il vit dans `souverain.ts`, un module SANS dépendance, et non ici : son
+ * second appelant est `query-client.ts`, qui est dans le SOCLE de la première
+ * peinture. Importer CE module depuis le socle y tirerait tous les décodeurs
+ * d'administration et ferait dépasser le budget de poids — voir le
+ * doc-comment de `souverain.ts`. Réexporté pour que les usagers n'aient qu'un
+ * import à connaître.
  */
-export const ADMIN_SOUVERAIN_PREFIXE = 'admin-souverain' as const;
+export { ADMIN_SOUVERAIN_PREFIXE, estClefSouveraine } from './souverain';
+import { ADMIN_SOUVERAIN_PREFIXE } from './souverain';
 
 /** Le motif écrit est refusé par le SCHÉMA de la route sous dix caractères. */
 export const MOTIF_LONGUEUR_MINIMALE = 10;
@@ -62,11 +70,6 @@ export const adminConversationsQueryKey = (offset: number, recherche: string, ty
 
 export const adminConversationMessagesQueryKey = (conversationId: string, offset: number) =>
   [ADMIN_SOUVERAIN_PREFIXE, 'messages', conversationId, offset] as const;
-
-/** `true` si cette clé porte une lecture souveraine — donc à ne PAS persister. */
-export function estClefSouveraine(key: readonly unknown[]): boolean {
-  return key[0] === ADMIN_SOUVERAIN_PREFIXE;
-}
 
 const asTextOrNull = (value: unknown): string | null =>
   typeof value === 'string' && value !== '' ? value : null;

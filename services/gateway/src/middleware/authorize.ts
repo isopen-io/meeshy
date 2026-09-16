@@ -134,6 +134,42 @@ export function requireSovereign() {
 }
 
 /**
+ * Exige le rang d'ADMINISTRATION — BIGBOSS **ou** ADMIN, et personne d'autre.
+ *
+ * Directive porteur du 2026-09-16 : « permettre aussi aux ADMIN de pouvoir
+ * accéder à ces informations **pour le moment** ». Le « pour le moment » est
+ * dans la directive, et il est repris ici : c'est un seuil ASSUMÉ comme
+ * révisable, pas une doctrine.
+ *
+ * ## Pourquoi une garde de RANG, et pas `requirePermission('canManageConversations')`
+ *
+ * Parce que cette permission est aussi portée par **MODERATOR** (matrice
+ * centrale, `permissions.service.ts`). L'employer ici ouvrirait la lecture des
+ * conversations privées à un rôle que la directive ne nomme pas — et ce genre
+ * d'élargissement, obtenu de biais par une permission de domaine, est
+ * exactement ce que #4157 avait fermé en montant ces gestes en S6.
+ *
+ * La directive dit « aussi aux ADMIN ». Une garde de rang dit cela, exactement
+ * cela, et rien de plus.
+ *
+ * ## Ce que ce seuil NE retire PAS
+ *
+ * Le motif écrit obligatoire et la trace `AdminAuditLog` restent en place sur
+ * la lecture de CONTENU : un ADMIN lit désormais, et sa lecture laisse la même
+ * empreinte qu'un BIGBOSS. Abaisser le rang et effacer la trace auraient été
+ * deux décisions ; seule la première est demandée.
+ */
+export function requireAdminRank() {
+  return async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    const moi = acteur(request);
+    if (!moi) return refuser(reply, 401, 'Authentification requise');
+    if (moi.role !== UserRoleEnum.BIGBOSS && moi.role !== UserRoleEnum.ADMIN) {
+      return refuser(reply, 403, "Rang d'administration requis");
+    }
+  };
+}
+
+/**
  * Écrit la trace d'un geste d'administration — APRÈS qu'il a réussi.
  *
  * Ce n'est pas une garde : elle n'admet ni ne refuse. Elle vit dans ce fichier

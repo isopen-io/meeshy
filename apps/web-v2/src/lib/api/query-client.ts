@@ -2,6 +2,9 @@ import { QueryClient, dehydrate, hydrate, type DehydratedState } from '@tanstack
 
 import { ApiError } from './client';
 import { reactionStore } from './reaction-store';
+/* `souverain.ts` n'a AUCUNE dépendance — c'est ce qui le rend importable
+   depuis le socle sans y tirer les décodeurs d'administration (#6862). */
+import { estClefSouveraine } from './souverain';
 import { sessionStore, type SessionStoreApi, type SessionStoreState } from './session';
 
 /**
@@ -203,7 +206,28 @@ export function createAppQueryClient(options: CreateAppQueryClientOptions): AppQ
 
   const persist = (): void => {
     try {
-      const state = dehydrate(client, { shouldDehydrateQuery: (q) => q.state.status === 'success' });
+      /**
+       * **UNE LECTURE SOUVERAINE NE TOUCHE PAS LE DISQUE** (#6862).
+       *
+       * `dehydrate` écrivait ici TOUTE requête réussie. Le contenu d'une
+       * conversation privée, lu par un BIGBOSS sous motif écrit et geste
+       * tracé, y atterrissait donc comme le reste — et **survivait à la
+       * session**, sur le poste de l'administrateur. `AdminAuditLog` dit
+       * « il a lu » ; il ne dit pas « il en garde une copie depuis six
+       * jours », et personne ne peut révoquer celle-là.
+       *
+       * Le prédicat vient de `souverain.ts` — un module sans dépendance —
+       * précisément pour que ce fichier, qui est dans le SOCLE de la première
+       * peinture, n'ait pas à importer les décodeurs d'administration et à
+       * les faire payer à tous les lecteurs (`budgets.json`).
+       *
+       * Ne couvre PAS le cache du service worker (`caches.open('api')`, sept
+       * jours sur le disque), qui retient les réponses HTTP par un autre
+       * chemin : voir `purgeReaderCaches` ci-dessus, et le suivi de #6862.
+       */
+      const state = dehydrate(client, {
+        shouldDehydrateQuery: (q) => q.state.status === 'success' && !estClefSouveraine(q.queryKey),
+      });
       const reactions = reactionStore.getState().mine;
       storage.setItem(CACHE_KEY, JSON.stringify({ buster, state, reactions }));
     } catch {

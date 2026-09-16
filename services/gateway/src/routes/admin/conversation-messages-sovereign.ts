@@ -45,7 +45,7 @@
  */
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
-import { requireSovereign, withAudit } from '../../middleware/authorize';
+import { requireAdminRank, requirePermission, withAudit } from '../../middleware/authorize';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validatePagination } from '../../utils/pagination';
 import { sendPaginatedSuccess, sendNotFound, sendInternalError } from '../../utils/response';
@@ -71,7 +71,29 @@ export function registerConversationMessagesSovereignRoute(fastify: FastifyInsta
     Params: { conversationId: string };
     Querystring: { offset?: string; limit?: string; reason: string };
   }>('/admin/conversations/:conversationId/messages', {
-    onRequest: [fastify.authenticate, requireSovereign()],
+    /**
+     * **LE RANG A BAISSÉ, LA TRACE N'A PAS BOUGÉ** — directive porteur du
+     * 2026-09-16 : « permettre aussi aux ADMIN de pouvoir accéder à ces
+     * informations **pour le moment** ».
+     *
+     * #4157 avait monté ce geste en S6 (`requireSovereign()`, BIGBOSS seul)
+     * avec un motif explicite : « aucune permission de domaine ne doit pouvoir
+     * déléguer la lecture de conversations privées en série ». La directive
+     * revient sur ce seuil, et le « pour le moment » qu'elle porte est repris
+     * tel quel — c'est un seuil ASSUMÉ comme révisable.
+     *
+     * Ce qui NE change pas, et c'est ce qui compte : le motif écrit reste
+     * obligatoire (refusé au schéma sous dix caractères) et `withAudit` écrit
+     * toujours sa ligne. Un ADMIN lit désormais, et sa lecture laisse la MÊME
+     * empreinte qu'un BIGBOSS. Abaisser le rang et effacer la trace auraient
+     * été deux décisions distinctes ; une seule est demandée.
+     *
+     * `requireAdminRank()` plutôt que la seule permission : `canManageConversations`
+     * est aussi portée par MODERATOR (matrice centrale), et l'élargissement
+     * obtenu de biais par une permission de domaine est exactement ce que
+     * #4157 fermait. La garde de rang dit « aussi les ADMIN », et rien de plus.
+     */
+    onRequest: [fastify.authenticate, requirePermission('canManageConversations'), requireAdminRank()],
     schema: {
       description:
         'Lit le contenu intégral des messages d\'une conversation privée. Rang souverain (BIGBOSS), motif écrit ' +

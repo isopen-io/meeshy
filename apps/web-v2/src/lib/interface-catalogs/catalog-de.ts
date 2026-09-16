@@ -658,6 +658,13 @@ const de = {
   'admin.conv.title': 'Unterhaltungen',
   'admin.conv.empty': 'Keine Unterhaltungen',
   'admin.conv.members': '{count} Mitglieder',
+  'admin.nav.conversations': 'Unterhaltungen',
+  'admin.convList.search': 'Unterhaltung suchen',
+  'admin.convList.count': '{count} Unterhaltung(en)',
+  'admin.convList.empty': 'Keine Unterhaltung gefunden.',
+  'admin.convList.unavailable': 'Liste derzeit nicht verfügbar.',
+  'admin.convList.members': '{count} Mitglieder',
+  'admin.convList.sovereign': 'Das Lesen ist dem souveränen Rang vorbehalten.',
 
 } satisfies InterfaceCatalog;
 

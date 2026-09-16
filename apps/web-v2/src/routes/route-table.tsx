@@ -19,6 +19,9 @@ const publicationScreen = () => import('@/routes/post');
 const adminScreen = () => import('@/routes/admin');
 const adminUsersScreen = () => import('@/routes/admin-users');
 const adminUserScreen = () => import('@/routes/admin-user');
+/* LA LECTURE SOUVERAINE DES CONVERSATIONS (#6862) — mêmes DEUX adresses, même
+   `import()` unique, pour la même raison que les comptes. */
+const adminConversationsScreen = () => import('@/routes/admin-conversations');
 
 export const ROUTES = {
   list: { pattern: '/', screen: () => import('@/routes/conversations') },
@@ -203,6 +206,13 @@ export const ROUTES = {
   adm: { pattern: '/adm', screen: adminScreen },
   admUsers: { pattern: '/adm/users', screen: adminUsersScreen },
   admUser: { pattern: '/adm/users/$user', screen: adminUserScreen },
+  /* LES CONVERSATIONS, EN RÉGIME SOUVERAIN (#6862) — deux segments, comme la
+     liste des comptes, et les deux espaces comme tout le reste de
+     l'administration. Déclarées AUSSI dans `session-guard.ts` : sans quoi
+     elles seraient publiques par défaut, et cet écran ouvre l'inventaire des
+     conversations de l'instance. */
+  adminConversations: { pattern: '/admin/conversations', screen: adminConversationsScreen },
+  admConversations: { pattern: '/adm/conversations', screen: adminConversationsScreen },
 } as const;
 
 /**

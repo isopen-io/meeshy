@@ -389,8 +389,41 @@ describe('GET /admin/users/:userId/reported-messages', () => {
 describe('GET /admin/conversations/:conversationId/messages', () => {
   const REASON = 'Enquête sur un signalement de harcèlement (#9142)';
 
-  it('refuse un rôle non-souverain (ADMIN) — canViewUsers ne suffit plus', async () => {
-    const app = await buildApp(createMockPrisma({}), 'ADMIN');
+  /**
+   * LE SEUIL A CHANGÉ — directive porteur du 2026-09-16 : « permettre aussi
+   * aux ADMIN de pouvoir accéder à ces informations pour le moment ».
+   *
+   * Cette route était le TROISIÈME geste S6 de #4157 c.2 (BIGBOSS seul). Elle
+   * exige désormais la permission `canManageConversations` ET le rang
+   * d'administration (BIGBOSS ou ADMIN). Ce qui n'a PAS bougé : le motif écrit
+   * et la trace — voir les témoins plus bas, inchangés.
+   */
+  it('sert un ADMIN — directive porteur du 2026-09-16', async () => {
+    const app = await buildApp(createMockPrisma({ messages: [], messagesCount: 0 }), 'ADMIN');
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/admin/conversations/conv-1/messages?reason=${encodeURIComponent(REASON)}`,
+      headers: { authorization: 'Bearer x' },
+    });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it('refuse un MODERATOR — il PORTE canManageConversations, il n\'a pas le RANG', async () => {
+    // Le seul témoin qui distingue une garde de RANG d'une garde de
+    // PERMISSION : MODERATOR porte la permission dans la matrice centrale.
+    const app = await buildApp(createMockPrisma({}), 'MODERATOR');
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/admin/conversations/conv-1/messages?reason=${encodeURIComponent(REASON)}`,
+      headers: { authorization: 'Bearer x' },
+    });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it('refuse un AUDIT — ni permission ni rang', async () => {
+    const app = await buildApp(createMockPrisma({}), 'AUDIT');
     const res = await app.inject({
       method: 'GET',
       url: `/api/v1/admin/conversations/conv-1/messages?reason=${encodeURIComponent(REASON)}`,

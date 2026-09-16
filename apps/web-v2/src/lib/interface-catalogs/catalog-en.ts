@@ -658,6 +658,13 @@ const en = {
   'admin.conv.title': 'Conversations',
   'admin.conv.empty': 'No conversations',
   'admin.conv.members': '{count} members',
+  'admin.nav.conversations': 'Conversations',
+  'admin.convList.search': 'Search a conversation',
+  'admin.convList.count': '{count} conversation(s)',
+  'admin.convList.empty': 'No conversation matches.',
+  'admin.convList.unavailable': 'List unavailable right now.',
+  'admin.convList.members': '{count} members',
+  'admin.convList.sovereign': 'Reading is reserved to the sovereign rank.',
 
 } satisfies InterfaceCatalog;
 

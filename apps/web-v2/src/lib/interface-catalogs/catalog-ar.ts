@@ -656,6 +656,13 @@ const ar = {
   'admin.conv.title': 'المحادثات',
   'admin.conv.empty': 'لا توجد محادثات',
   'admin.conv.members': '{count} عضوًا',
+  'admin.nav.conversations': 'المحادثات',
+  'admin.convList.search': 'البحث عن محادثة',
+  'admin.convList.count': '{count} محادثة',
+  'admin.convList.empty': 'لا توجد محادثة مطابقة.',
+  'admin.convList.unavailable': 'القائمة غير متاحة حالياً.',
+  'admin.convList.members': '{count} عضواً',
+  'admin.convList.sovereign': 'القراءة محصورة بالرتبة السيادية.',
 
 } satisfies InterfaceCatalog;
 

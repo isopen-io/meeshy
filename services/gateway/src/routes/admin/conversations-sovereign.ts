@@ -61,7 +61,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
-import { requireSovereign } from '../../middleware/authorize';
+import { requireAdminRank, requirePermission } from '../../middleware/authorize';
 import { validatePagination } from '../../utils/pagination';
 import { sendPaginatedSuccess, sendInternalError } from '../../utils/response';
 import { conversationActiveMemberCountSelect } from '../conversations/utils/active-member-count';
@@ -86,7 +86,24 @@ export function registerConversationsSovereignRoute(fastify: FastifyInstance): v
       createdBefore?: string;
     };
   }>('/admin/conversations', {
-    onRequest: [fastify.authenticate, requireSovereign()],
+    /**
+     * DEUX gardes, et chacune répond à une question que l'autre ne pose pas.
+     *
+     * `requirePermission('canManageConversations')` dit **quelle permission**
+     * — et c'est elle que `route-manifest/collect.ts` reconnaît, ce qui range
+     * la route en `permission-gated` plutôt qu'en « authentifiée seulement »
+     * (la garde d'inventaire `admin-route-level-guard` refuse la seconde pour
+     * toute adresse `/admin`).
+     *
+     * `requireAdminRank()` dit **quel rang** — BIGBOSS ou ADMIN. Elle est
+     * nécessaire parce que la permission ci-dessus est aussi portée par
+     * MODERATOR (matrice centrale) : seule, elle ouvrirait l'inventaire des
+     * conversations à un rôle que la directive ne nomme pas.
+     *
+     * Directive porteur du 2026-09-16 : « permettre aussi aux ADMIN de pouvoir
+     * accéder à ces informations pour le moment ».
+     */
+    onRequest: [fastify.authenticate, requirePermission('canManageConversations'), requireAdminRank()],
     schema: {
       description:
         "Liste les conversations de l'instance — MÉTADONNÉES seules, aucun contenu de message. Rang souverain " +
