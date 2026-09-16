@@ -3,6 +3,7 @@ import { useState, type ReactNode } from 'react';
 import { auth } from '@/lib/api/auth';
 import { isEmailValid } from '@/lib/signup-form';
 import { useOnline } from '@/lib/net/online';
+import { safeNextPath } from '@/lib/session-guard';
 import { secondClock, type IntervalClock } from '@/lib/view/interval-clock';
 import {
   formatCountdown,
@@ -86,9 +87,17 @@ export type MagicLinkPanelProps = {
    * panneau partage `/login` avec d'autres contrôles (voler le focus y
    * déplacerait le défilement sans que personne ne l'ait demandé). */
   readonly autoFocus?: boolean;
+  /**
+   * OÙ REVENIR une fois connecté (#6742) — la valeur BRUTE de `?next=`,
+   * clampée ICI (`safeNextPath`), là où elle sert, jamais crue en amont
+   * (même doctrine que `LoginDoors`). Portée jusqu'au lien envoyé par
+   * e-mail (`MagicLinkService.sendMagicLinkEmail`, gateway), que
+   * `MagicLinkValidation` relit en `returnUrl` à l'arrivée.
+   */
+  readonly next?: string | null;
 };
 
-export function MagicLinkPanel({ deps = defaultMagicLinkDeps, footer, onCancel, autoFocus = false }: MagicLinkPanelProps) {
+export function MagicLinkPanel({ deps = defaultMagicLinkDeps, footer, onCancel, autoFocus = false, next = null }: MagicLinkPanelProps) {
   const online = useOnline();
   const [step, setStep] = useState<'input' | 'waiting'>('input');
   const [email, setEmail] = useState('');
@@ -105,7 +114,8 @@ export function MagicLinkPanel({ deps = defaultMagicLinkDeps, footer, onCancel, 
     if (!isEmailValid(email) || submitting || !online) return;
     setSubmitting(true);
     setOutcome(null);
-    const result = await deps.request({ email });
+    const returnUrl = safeNextPath(next);
+    const result = await deps.request({ email, ...(returnUrl !== null ? { returnUrl } : {}) });
     setSubmitting(false);
     const resolved = resolveMagicLinkRequest(result);
     if (resolved.kind === 'sent') {

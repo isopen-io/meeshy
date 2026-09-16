@@ -219,6 +219,39 @@ describe('MagicLink Routes', () => {
       );
     });
 
+    // ────────────────────────────────────────────────────────────────────────
+    // Le retour après connexion par e-mail (#6742) — `returnUrl` est porté par
+    // la DEMANDE jusqu'au service, qui l'embarque dans le lien envoyé.
+    // ────────────────────────────────────────────────────────────────────────
+
+    it('passes returnUrl to the service when provided', async () => {
+      mockRequestMagicLink.mockResolvedValue({ success: true, message: 'ok' });
+
+      await app.inject({
+        method: 'POST',
+        url: '/magic-link/request',
+        payload: { email: 'test@example.com', returnUrl: '/chat/mshy_equipe_7f3a' },
+      });
+
+      expect(mockRequestMagicLink).toHaveBeenCalledWith(
+        expect.objectContaining({ returnUrl: '/chat/mshy_equipe_7f3a' })
+      );
+    });
+
+    it('passes returnUrl=undefined to the service when absent', async () => {
+      mockRequestMagicLink.mockResolvedValue({ success: true, message: 'ok' });
+
+      await app.inject({
+        method: 'POST',
+        url: '/magic-link/request',
+        payload: { email: 'test@example.com' },
+      });
+
+      expect(mockRequestMagicLink).toHaveBeenCalledWith(
+        expect.objectContaining({ returnUrl: undefined })
+      );
+    });
+
     it('returns 400 when email is missing', async () => {
       // Missing required field is caught by Fastify JSON-schema validation before the handler
       const response = await app.inject({
