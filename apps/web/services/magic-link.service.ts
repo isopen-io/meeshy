@@ -69,6 +69,8 @@ export interface MagicLinkRequestResponse {
   success: boolean;
   message?: string;
   error?: string;
+  /** Ex. `RATE_LIMITED` sur un 429 (`sendError(..., { code })` côté gateway) — voir #6665 */
+  code?: string;
 }
 
 // Interface pour la réponse de validation Magic Link
