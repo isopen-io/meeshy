@@ -272,7 +272,24 @@ export const parseCatalogBlock = (blockLines) => {
 // n'est pas morte), et ce script ne balaie que `apps/web` (legacy gelé) et
 // `packages/shared` — pas `apps/web-v2`. Même forme que
 // `posts.byPostIdTranslate`, déjà sans appelant ici pour la même raison.
-const BASELINE_DEAD_ENTRIES = 277;
+// 277 → 278 (#6861) : `admin.conversations` — le listing de l'instance
+// (`GET /admin/conversations`). Jumelle EXACTE de `AdminEndpoint.conversations`
+// dans le cliquet Swift, et pour la même raison : l'entrée est GÉNÉRÉE
+// mécaniquement depuis `route-manifest.json` (par `generate-api-endpoints.ts`
+// ici, `generate-ios-endpoints.ts` là-bas), donc la « retirer » est impossible
+// sans casser le générateur — elle réapparaîtrait à la prochaine régénération.
+//
+// Elle est morte PAR CONSTRUCTION le temps que l'écran qui la consomme soit
+// livré : `apps/web-v2` appelle cette route par son chemin littéral dans
+// `lib/api/admin-conversations.ts` (#6862), pas encore par le catalogue.
+// Brancher les appels v2 sur le catalogue est un travail à part, non ouvert
+// par ce lot.
+//
+// NOTE DE MÉTHODE : ce relèvement a été trouvé en jouant le cliquet JUMEAU par
+// précaution après avoir corrigé le Swift. Une régénération qui touche DEUX
+// dérivés fait bouger DEUX cliquets — n'en corriger qu'un laisse l'autre
+// rouge, et la CI le dit un aller-retour plus tard.
+const BASELINE_DEAD_ENTRIES = 278;
 
 export const readWorld = (root) => {
   const source = readFileSync(join(root, CATALOG_FILE), 'utf8');
