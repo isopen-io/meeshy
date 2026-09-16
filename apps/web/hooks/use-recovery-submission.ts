@@ -3,6 +3,7 @@
 import { toast } from 'sonner';
 import { magicLinkService } from '@/services/magic-link.service';
 import { phonePasswordResetService } from '@/services/phone-password-reset.service';
+import { resolveMagicLinkRequestOutcome } from '@/lib/auth/magic-link-request-outcome';
 import type { RecoveryMethod } from './use-recovery-flow';
 
 interface UseRecoverySubmissionProps {
@@ -57,7 +58,7 @@ export function useRecoverySubmission({
         setStep('success');
       } else {
         console.error('[AccountRecovery] Magic link error:', result.error);
-        if (result.error === 'RATE_LIMITED') {
+        if (resolveMagicLinkRequestOutcome(result).kind === 'rate-limited') {
           setError(t('magicLink.errors.rateLimited', 'Too many attempts. Please try again in about an hour.'));
         } else {
           setError(result.error || t('magicLink.errors.requestFailed'));
