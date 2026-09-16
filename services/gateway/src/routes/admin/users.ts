@@ -41,7 +41,6 @@ import { withAnonymousParticipantCounts } from '../../utils/share-link-participa
 import { sendSuccess, sendInternalError, sendNotFound, sendForbidden, sendBadRequest, sendPaginatedSuccess } from '../../utils/response';
 import { validatePasswordStrength } from '../../utils/password-strength';
 import { EmailService } from '../../services/EmailService';
-import { recipientLanguage } from '../../utils/recipient-language';
 import { conversationActiveMemberCountSelect } from '../conversations/utils/active-member-count';
 import { logError, logWarn } from '../../utils/logger.js';
 
@@ -99,18 +98,19 @@ function deactivatedUserSessionRevoker(fastify: FastifyInstance): SessionRevoker
 /**
  * #6831 — `sendEmail` promettait une notification sans jamais en envoyer une.
  * Le même gabarit « mot de passe modifié » que `getAlertTypeLabel('password_changed', …)`
- * sert déjà dans les 6 langues d'`EmailService` (`SupportedLanguage`), langue
- * de cadrage résolue par la même SSOT que le reste de la passerelle
- * (`utils/recipient-language.ts`). Fonction pure, exportée pour être testée
+ * sert déjà dans les 6 langues d'`EmailService` (`SupportedLanguage`). La
+ * langue est déjà résolue par l'appelant (`UserManagementService.resetPassword`,
+ * seul site qui tient encore la ligne Prisma non projetée) — cette fonction
+ * ne fait plus que composer le transport. Pure et exportée pour être testée
  * sans enregistrer la route.
  */
 export function passwordResetNotifier(emailService: EmailService): PasswordResetNotifier {
-  return (user) => emailService.sendSecurityAlertEmail({
-    to: user.email,
-    name: `${user.firstName} ${user.lastName}`,
+  return (target) => emailService.sendSecurityAlertEmail({
+    to: target.to,
+    name: target.name,
     alertType: 'password_changed',
     details: '',
-    language: recipientLanguage(user, 'en'),
+    language: target.language,
   });
 }
 

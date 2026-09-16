@@ -11,6 +11,7 @@ import {
 } from '@meeshy/shared/types';
 import { hashPassword, verifyPassword } from '../../utils/password-hash';
 import { logger, logWarn } from '../../utils/logger';
+import { recipientLanguage } from '../../utils/recipient-language';
 import { searchTokensFor } from '../../utils/search-tokens';
 import {
   ensureGlobalConversationMembership,
@@ -46,12 +47,26 @@ const resolveSortOrder = (sortOrder: unknown): 'asc' | 'desc' =>
 export type SessionRevoker = (userId: string) => Promise<unknown>;
 
 /**
- * Envoie la notification « votre mot de passe a été réinitialisé » à la
- * cible d'un `resetPassword` administrateur (#6831) — injecté, comme
- * `SessionRevoker` : ce service ignore tout du transport (e-mail, langue de
- * cadrage) et ne fait que décider QUAND l'appeler.
+ * Ce qu'un `resetPassword` administrateur sait de sa cible pour la notifier
+ * (#6831) — pas le `FullUser` entier : `to`/`name` sont ce qu'un transport
+ * e-mail a besoin d'adresser, `language` est déjà résolue (`recipientLanguage`,
+ * SSOT de `utils/recipient-language.ts`) là où `user` est encore lié SANS
+ * `select` à la ligne que `resetPassword` vient d'écrire — jamais recalculée
+ * plus bas, où la projection ne serait plus garantie complète.
  */
-export type PasswordResetNotifier = (user: FullUser) => Promise<unknown>;
+export type PasswordResetNotificationTarget = {
+  readonly to: string;
+  readonly name: string;
+  readonly language: string;
+};
+
+/**
+ * Envoie la notification « votre mot de passe a été réinitialisé » à la
+ * cible d'un `resetPassword` administrateur — injecté, comme `SessionRevoker` :
+ * ce service ignore tout du transport (e-mail) et ne fait que décider QUAND
+ * l'appeler.
+ */
+export type PasswordResetNotifier = (target: PasswordResetNotificationTarget) => Promise<unknown>;
 
 export type UserManagementServiceDeps = {
   readonly revokeSessions?: SessionRevoker;
@@ -406,13 +421,16 @@ export class UserManagementService {
    * Best-effort comme `revokeSessionsBestEffort` : la ligne est déjà écrite,
    * un envoi qui échoue ne doit pas faire échouer la réinitialisation.
    */
-  private async notifyPasswordResetBestEffort(user: FullUser): Promise<void> {
+  private async notifyPasswordResetBestEffort(
+    target: PasswordResetNotificationTarget,
+    userId: string
+  ): Promise<void> {
     const notify = this.deps.notifyPasswordReset;
     if (!notify) return;
     try {
-      await notify(user);
+      await notify(target);
     } catch (error) {
-      logWarn(logger, `[UserManagement] Password reset notification failed for user ${user.id}`, error);
+      logWarn(logger, `[UserManagement] Password reset notification failed for user ${userId}`, error);
     }
   }
 
@@ -441,9 +459,16 @@ export class UserManagementService {
 
     // #6831 — `sendEmail` est un OPT-IN explicite de l'admin, jamais le
     // défaut : un administrateur qui répond à un incident sur un compte
-    // compromis ne veut pas nécessairement alerter son détenteur.
+    // compromis ne veut pas nécessairement alerter son détenteur. La langue
+    // se résout ICI, sur `user` tel que `prisma.user.update` vient de le
+    // rendre SANS `select` (donc avec les quatre colonnes du Prisme) — pas
+    // dans le notificateur, qui ne reverrait qu'un objet déjà découpé.
     if (data.sendEmail) {
-      await this.notifyPasswordResetBestEffort(user as unknown as FullUser);
+      await this.notifyPasswordResetBestEffort({
+        to: user.email,
+        name: `${user.firstName} ${user.lastName}`,
+        language: recipientLanguage(user, 'en'),
+      }, userId);
     }
 
     return user as unknown as FullUser;

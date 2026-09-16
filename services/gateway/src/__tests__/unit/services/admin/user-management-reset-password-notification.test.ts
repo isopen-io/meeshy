@@ -21,8 +21,8 @@ import { logger } from '../../../../utils/logger';
 import { makeUser, makePrisma } from './user-management-mocks';
 
 describe('UserManagementService.resetPassword — notification e-mail', () => {
-  it('sendEmail: true ⇒ notifie la cible AVEC la ligne écrite', async () => {
-    const written = makeUser({ email: 'target@example.com' });
+  it('sendEmail: true ⇒ notifie la cible, langue résolue depuis la ligne écrite', async () => {
+    const written = makeUser({ email: 'target@example.com', firstName: 'Jane', lastName: 'Roe', systemLanguage: 'es' });
     const update = jest.fn().mockResolvedValue(written);
     const notifyPasswordReset = jest.fn().mockResolvedValue(undefined);
     const svc = new UserManagementService(makePrisma({ update }), { notifyPasswordReset });
@@ -30,7 +30,11 @@ describe('UserManagementService.resetPassword — notification e-mail', () => {
     await svc.resetPassword('user-id', { newPassword: 'newpass', sendEmail: true });
 
     expect(notifyPasswordReset).toHaveBeenCalledTimes(1);
-    expect(notifyPasswordReset).toHaveBeenCalledWith(written);
+    expect(notifyPasswordReset).toHaveBeenCalledWith({
+      to: 'target@example.com',
+      name: 'Jane Roe',
+      language: 'es',
+    });
   });
 
   it('sendEmail omis ⇒ aucune notification (opt-in, jamais le défaut)', async () => {
@@ -63,7 +67,7 @@ describe('UserManagementService.resetPassword — notification e-mail', () => {
     const result = await svc.resetPassword('user-id', { newPassword: 'newpass', sendEmail: true });
 
     expect(result).toBe(written);
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining(String(written.id)));
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('user-id'));
     warn.mockRestore();
   });
 
