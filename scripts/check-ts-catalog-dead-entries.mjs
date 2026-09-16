@@ -272,7 +272,15 @@ export const parseCatalogBlock = (blockLines) => {
 // n'est pas morte), et ce script ne balaie que `apps/web` (legacy gelé) et
 // `packages/shared` — pas `apps/web-v2`. Même forme que
 // `posts.byPostIdTranslate`, déjà sans appelant ici pour la même raison.
-const BASELINE_DEAD_ENTRIES = 277;
+// 277 → 278 (#6822) : `admin.usersByUserIdRestore`
+// (`POST /admin/users/:userId/restore`, l'inverse du soft-delete). Morte à la
+// naissance DANS CE COMPTAGE, même raison que les dizaines d'autres entrées
+// `admin.usersByUserId*` déjà mortes ci-dessus : ce script ne balaie pas
+// `apps/web-v2`, seul client de l'administration — voir la note sur
+// `posts.mediaByMediaIdCaptionTranslate`. `restoreUser` existait côté
+// service sans aucun appelant AVANT cette issue ; il en gagne un ici (la
+// route), la console n'ayant pas encore d'action « restaurer ».
+const BASELINE_DEAD_ENTRIES = 278;
 
 export const readWorld = (root) => {
   const source = readFileSync(join(root, CATALOG_FILE), 'utf8');
