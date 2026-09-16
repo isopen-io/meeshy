@@ -629,6 +629,14 @@ const en = {
   'admin.edit.confirm': 'Confirm',
   'admin.edit.saved': 'Changes saved',
   'admin.edit.failed': 'Could not save',
+  'admin.password.title': 'Reset password',
+  'admin.password.warn': 'This ends all their open sessions.',
+  'admin.password.generated': 'Copy it now — it will not be shown again.',
+  'admin.password.copy': 'Copy',
+  'admin.password.copied': 'Copied',
+  'admin.password.apply': 'Reset',
+  'admin.password.done': 'Password reset',
+  'admin.password.failed': 'Reset failed',
 
 } satisfies InterfaceCatalog;
 

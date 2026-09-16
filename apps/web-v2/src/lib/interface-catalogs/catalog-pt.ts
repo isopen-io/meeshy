@@ -633,6 +633,14 @@ const pt = {
   'admin.edit.confirm': 'Confirmar',
   'admin.edit.saved': 'Alterações guardadas',
   'admin.edit.failed': 'Não foi possível guardar',
+  'admin.password.title': 'Repor a palavra-passe',
+  'admin.password.warn': 'Isto encerra todas as sessões abertas.',
+  'admin.password.generated': 'Copie-a agora: não será mostrada novamente.',
+  'admin.password.copy': 'Copiar',
+  'admin.password.copied': 'Copiada',
+  'admin.password.apply': 'Repor',
+  'admin.password.done': 'Palavra-passe reposta',
+  'admin.password.failed': 'Não foi possível repor',
 
 } satisfies InterfaceCatalog;
 

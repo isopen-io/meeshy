@@ -13,6 +13,7 @@ import { ActionButton } from '@/routes/link-page-parts';
 
 import { AdminAnnouncement, AdminDenied, AdminScreenFrame, AdminSkeleton } from './admin-parts';
 import { AdminUserEditSheet } from './admin-user-edit-sheet';
+import { AdminUserPasswordSheet } from './admin-user-password-sheet';
 
 /**
  * **LE DÉTAIL D'UN MEMBRE** (#6819) — `/admin/users/$user` et `/adm/users/$user`,
@@ -51,6 +52,7 @@ export default function AdminUserScreen() {
   const fiche = useQuery({ ...adminUserDetailQueryOptions(apiDeps, userId), enabled: autorise });
 
   const [edition, setEdition] = useState(false);
+  const [motDePasse, setMotDePasse] = useState(false);
   const annonceur = useLiveAnnouncer();
   const client = useQueryClient();
 
@@ -110,7 +112,15 @@ export default function AdminUserScreen() {
           />
         </Section>
 
-        <ActionButton onClick={() => setEdition(true)}>{translate(language, 'admin.edit.open')}</ActionButton>
+        <div className="grid gap-2">
+          <ActionButton onClick={() => setEdition(true)}>{translate(language, 'admin.edit.open')}</ActionButton>
+          {/* Ton `danger` : le geste révoque les sessions ouvertes de la cible,
+              qui se retrouve déconnectée partout. La couleur le dit avant que
+              la feuille ne l'écrive. */}
+          <ActionButton tone="danger" onClick={() => setMotDePasse(true)}>
+            {translate(language, 'admin.password.title')}
+          </ActionButton>
+        </div>
       </div>
 
       {edition ? (
@@ -126,6 +136,15 @@ export default function AdminUserScreen() {
            * l'écran afficher l'état d'AVANT pendant qu'il revient.
            */
           onSaved={(aJour) => client.setQueryData(adminUserDetailQueryKey(userId), aJour)}
+        />
+      ) : null}
+
+      {motDePasse ? (
+        <AdminUserPasswordSheet
+          userId={membre.id}
+          language={language}
+          onClose={() => setMotDePasse(false)}
+          onAnnounce={annonceur.announce}
         />
       ) : null}
 

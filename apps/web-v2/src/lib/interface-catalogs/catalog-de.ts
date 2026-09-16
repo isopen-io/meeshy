@@ -629,6 +629,14 @@ const de = {
   'admin.edit.confirm': 'Bestätigen',
   'admin.edit.saved': 'Änderungen gespeichert',
   'admin.edit.failed': 'Speichern fehlgeschlagen',
+  'admin.password.title': 'Passwort zurücksetzen',
+  'admin.password.warn': 'Damit enden alle offenen Sitzungen.',
+  'admin.password.generated': 'Jetzt kopieren — es wird nicht erneut angezeigt.',
+  'admin.password.copy': 'Kopieren',
+  'admin.password.copied': 'Kopiert',
+  'admin.password.apply': 'Zurücksetzen',
+  'admin.password.done': 'Passwort zurückgesetzt',
+  'admin.password.failed': 'Zurücksetzen fehlgeschlagen',
 
 } satisfies InterfaceCatalog;
 

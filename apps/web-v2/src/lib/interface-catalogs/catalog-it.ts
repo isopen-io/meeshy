@@ -629,6 +629,14 @@ const it = {
   'admin.edit.confirm': 'Conferma',
   'admin.edit.saved': 'Modifiche salvate',
   'admin.edit.failed': 'Salvataggio non riuscito',
+  'admin.password.title': 'Reimposta la password',
+  'admin.password.warn': 'Questo chiude tutte le sessioni aperte.',
+  'admin.password.generated': 'Copiala ora: non verrà più mostrata.',
+  'admin.password.copy': 'Copia',
+  'admin.password.copied': 'Copiata',
+  'admin.password.apply': 'Reimposta',
+  'admin.password.done': 'Password reimpostata',
+  'admin.password.failed': 'Reimpostazione non riuscita',
 
 } satisfies InterfaceCatalog;
 

@@ -658,6 +658,14 @@ const fr = {
   'admin.edit.confirm': 'Confirmer',
   'admin.edit.saved': 'Modifications enregistrées',
   'admin.edit.failed': 'Échec de l’enregistrement',
+  'admin.password.title': 'Réinitialiser le mot de passe',
+  'admin.password.warn': 'Cette action ferme toutes ses sessions ouvertes.',
+  'admin.password.generated': 'Copiez-le maintenant : il ne sera plus affiché.',
+  'admin.password.copy': 'Copier',
+  'admin.password.copied': 'Copié',
+  'admin.password.apply': 'Réinitialiser',
+  'admin.password.done': 'Mot de passe réinitialisé',
+  'admin.password.failed': 'Échec de la réinitialisation',
 
 } as const;
 

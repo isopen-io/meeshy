@@ -629,6 +629,14 @@ const es = {
   'admin.edit.confirm': 'Confirmar',
   'admin.edit.saved': 'Cambios guardados',
   'admin.edit.failed': 'No se pudo guardar',
+  'admin.password.title': 'Restablecer la contraseña',
+  'admin.password.warn': 'Esto cierra todas sus sesiones abiertas.',
+  'admin.password.generated': 'Cópiala ahora: no volverá a mostrarse.',
+  'admin.password.copy': 'Copiar',
+  'admin.password.copied': 'Copiada',
+  'admin.password.apply': 'Restablecer',
+  'admin.password.done': 'Contraseña restablecida',
+  'admin.password.failed': 'No se pudo restablecer',
 
 } satisfies InterfaceCatalog;
 

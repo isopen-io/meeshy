@@ -627,6 +627,14 @@ const ar = {
   'admin.edit.confirm': 'تأكيد',
   'admin.edit.saved': 'تم حفظ التغييرات',
   'admin.edit.failed': 'تعذّر الحفظ',
+  'admin.password.title': 'إعادة تعيين كلمة المرور',
+  'admin.password.warn': 'هذا ينهي جميع جلساته المفتوحة.',
+  'admin.password.generated': 'انسخها الآن: لن تُعرض مرة أخرى.',
+  'admin.password.copy': 'نسخ',
+  'admin.password.copied': 'تم النسخ',
+  'admin.password.apply': 'إعادة التعيين',
+  'admin.password.done': 'تم إعادة تعيين كلمة المرور',
+  'admin.password.failed': 'تعذّرت إعادة التعيين',
 
 } satisfies InterfaceCatalog;
 
