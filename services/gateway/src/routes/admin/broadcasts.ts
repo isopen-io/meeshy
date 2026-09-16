@@ -8,7 +8,7 @@ import { broadcastTargetLanguages } from '../../jobs/broadcast-recipients';
 import { BroadcastSenderJob } from '../../jobs/broadcast-sender';
 import { BroadcastInAppSenderJob } from '../../jobs/broadcast-inapp-sender';
 import { EmailService } from '../../services/EmailService';
-import { emailChannelRecipientConstraint, resolveSystemLanguageVariants, type BroadcastTargeting } from '../../jobs/broadcast-recipients';
+import { activityWindow, emailChannelRecipientConstraint, resolveSystemLanguageVariants, type BroadcastTargeting } from '../../jobs/broadcast-recipients';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { UnifiedAuthRequest } from '../../middleware/auth';
@@ -293,33 +293,10 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
         where.registrationCountry = { in: targeting.countries };
       }
 
-      if (targeting.activityStatus) {
-        const now = new Date();
-        switch (targeting.activityStatus) {
-          case 'active': {
-            // Active in last 30 days
-            const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-            where.lastActiveAt = { gte: thirtyDaysAgo };
-            break;
-          }
-          case 'inactive': {
-            // No activity in last 30 days
-            const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-            where.OR = [
-              { lastActiveAt: { lt: thirtyDaysAgo } },
-              { lastActiveAt: null },
-            ];
-            break;
-          }
-          case 'new': {
-            // Registered in last 7 days
-            const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-            where.createdAt = { gte: sevenDaysAgo };
-            break;
-          }
-          // 'all' or unrecognized -> no additional filter
-        }
-      }
+      // Même SSOT que l'envoi réel (#6777) — `activityWindow` est la SEULE
+      // fonction qui décide de la fenêtre d'ancienneté/activité, pour les
+      // quatre valeurs de `activityStatus`.
+      Object.assign(where, activityWindow(targeting, new Date()));
 
       // Count total recipients
       const recipientCount = await fastify.prisma.user.count({ where });

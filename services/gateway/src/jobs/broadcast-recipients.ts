@@ -6,25 +6,43 @@ import { undeliverableSeedEmails } from '../services/seed-accounts';
 export type BroadcastTargeting = {
   readonly languages?: readonly string[];
   readonly countries?: readonly string[];
-  // 'new' est un quatrième régime, décodé et appliqué par la PREVIEW
-  // (`routes/admin/broadcasts.ts`, POST /:id/preview) mais pas ici — cette
-  // fonction ne filtre que 'active'/'inactive', donc un envoi RÉEL ciblant
-  // 'new' n'applique aucune fenêtre de date malgré ce que la preview a promis.
-  // Découvert en retirant un `as any` qui masquait le désaccord de type entre
-  // les deux sites (#6777) ; corriger le filtre d'envoi est hors périmètre ici.
   readonly activityStatus?: 'active' | 'inactive' | 'all' | 'new';
-  readonly inactiveSinceDays?: number;
+  readonly inactiveDays?: number;
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const ACTIVE_WINDOW_DAYS = 30;
+const DEFAULT_INACTIVE_WINDOW_DAYS = 30;
+const NEW_REGISTRATION_WINDOW_DAYS = 7;
 
-const activityWindow = (targeting: BroadcastTargeting, now: Date): Prisma.UserWhereInput => {
+/**
+ * Le filtre d'ANCIENNETÉ/ACTIVITÉ d'une diffusion admin — SOURCE UNIQUE pour
+ * la preview (`routes/admin/broadcasts.ts`, POST /:id/preview) et l'envoi
+ * réel (`buildBroadcastRecipientFilter` ci-dessous, consommé par
+ * `BroadcastSenderJob`/`BroadcastInAppSenderJob`). Avant #6777, la preview
+ * réimplémentait ce commutateur localement — le 4e régime ('new') n'y
+ * existait que dans SA copie, `inactiveDays` (le champ que l'UI admin écrit
+ * réellement) y était ignoré au profit d'un `inactiveSinceDays` que personne
+ * n'écrit jamais, et le régime 'inactive' de l'envoi omettait les comptes
+ * sans AUCUNE activité (`lastActiveAt: null`) que la preview comptait. Un
+ * admin ciblant « nouveaux inscrits » ou une fenêtre d'inactivité personnalisée
+ * voyait donc un compte juste à la preview et un envoi réel plus large,
+ * silencieusement.
+ */
+export const activityWindow = (targeting: BroadcastTargeting, now: Date): Prisma.UserWhereInput => {
   if (targeting.activityStatus === 'active') {
-    return { lastActiveAt: { gte: new Date(now.getTime() - 30 * DAY_MS) } };
+    return { lastActiveAt: { gte: new Date(now.getTime() - ACTIVE_WINDOW_DAYS * DAY_MS) } };
   }
   if (targeting.activityStatus === 'inactive') {
-    const days = targeting.inactiveSinceDays || 30;
-    return { lastActiveAt: { lt: new Date(now.getTime() - days * DAY_MS) } };
+    const days = targeting.inactiveDays || DEFAULT_INACTIVE_WINDOW_DAYS;
+    const cutoff = new Date(now.getTime() - days * DAY_MS);
+    // Un compte qui n'a JAMAIS été actif (`lastActiveAt` non défini) est
+    // inactif au même titre qu'un compte inactif depuis la fenêtre — sans
+    // ce second membre, `{ lt: cutoff }` seul l'exclut du ciblage.
+    return { OR: [{ lastActiveAt: { lt: cutoff } }, { lastActiveAt: null }] };
+  }
+  if (targeting.activityStatus === 'new') {
+    return { createdAt: { gte: new Date(now.getTime() - NEW_REGISTRATION_WINDOW_DAYS * DAY_MS) } };
   }
   return {};
 };
