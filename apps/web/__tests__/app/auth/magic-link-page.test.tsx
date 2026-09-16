@@ -21,8 +21,12 @@ jest.mock('next/navigation', () => ({
 
 jest.mock('framer-motion', () => ({
   motion: {
-    div: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-    p: ({ children, ...props }: any) => <p {...props}>{children}</p>,
+    div: ({ children, ...props }: { children?: React.ReactNode } & Record<string, unknown>) => (
+      <div {...props}>{children}</div>
+    ),
+    p: ({ children, ...props }: { children?: React.ReactNode } & Record<string, unknown>) => (
+      <p {...props}>{children}</p>
+    ),
   },
 }));
 
@@ -56,9 +60,10 @@ jest.mock('@/components/branding', () => ({
   LargeLogo: () => <div data-testid="logo" />,
 }));
 
-const getToastMock = () => require('sonner').toast;
-
+import { toast } from 'sonner';
 import MagicLinkPage from '@/app/auth/magic-link/page';
+
+const mockToast = toast as unknown as { success: jest.Mock; error: jest.Mock };
 
 describe('MagicLinkPage — requestMagicLink refusé par débit (#6665)', () => {
   beforeEach(() => {
@@ -78,7 +83,7 @@ describe('MagicLinkPage — requestMagicLink refusé par débit (#6665)', () => 
     await waitFor(() => {
       expect(screen.getByText('Check Your Email')).toBeInTheDocument();
     });
-    expect(getToastMock().success).toHaveBeenCalledTimes(1);
+    expect(mockToast.success).toHaveBeenCalledTimes(1);
   });
 
   it('still shows the generic "email sent" step on an unrelated failure — no enumeration', async () => {
@@ -115,7 +120,7 @@ describe('MagicLinkPage — requestMagicLink refusé par débit (#6665)', () => 
     });
     // La régression visée : jamais l'écran/toast de succès sur un 429.
     expect(screen.queryByText('Check Your Email')).not.toBeInTheDocument();
-    expect(getToastMock().success).not.toHaveBeenCalled();
+    expect(mockToast.success).not.toHaveBeenCalled();
   });
 
   it('resend: reports rate-limiting instead of a fake "link resent" toast', async () => {
@@ -145,11 +150,11 @@ describe('MagicLinkPage — requestMagicLink refusé par débit (#6665)', () => 
     await user.click(resendButton);
 
     await waitFor(() => {
-      expect(getToastMock().error).toHaveBeenCalledWith(
+      expect(mockToast.error).toHaveBeenCalledWith(
         'Too many attempts. Please try again in about an hour.'
       );
     });
-    expect(getToastMock().success).not.toHaveBeenCalledWith('New link sent!');
+    expect(mockToast.success).not.toHaveBeenCalledWith('New link sent!');
 
     jest.useRealTimers();
   });
