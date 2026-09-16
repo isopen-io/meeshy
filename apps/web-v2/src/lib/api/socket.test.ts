@@ -271,6 +271,44 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
   });
 
   /**
+   * `conversation:new` (#6799) — LA CONVERSATION QUI N'EST PAS ENCORE DANS LE
+   * CACHE. `patchConversation` ne modifie qu'une page qui porte DÉJÀ la ligne
+   * (`conversations.ts:172-188`) : pour un premier DM reçu, un ajout à un
+   * groupe ou un DM réinitié, le `message:new` qui suit arrive bien et ne
+   * patche RIEN, en silence. L'aperçu n'apparaît qu'au prochain rechargement
+   * complet (`staleTime` 30 s, `refetchOnWindowFocus`) — d'où le symptôme
+   * rapporté : le dernier message « ne remonte pas NÉCESSAIREMENT ».
+   *
+   * La passerelle émet pourtant l'évènement à TROIS sites de production
+   * (`core-lifecycle.ts:239` et `:410`, `participants-writes.ts:420`) et le
+   * legacy l'écoute (`presence.service.ts:150`) : c'est une régression de
+   * PARITÉ, jamais un choix de périmètre.
+   *
+   * Pourquoi REDEMANDER plutôt que fabriquer la ligne : le payload est
+   * MINIMAL par contrat (`ConversationNewEventData` ne porte ni dernier
+   * message ni participants complets), et son doc-comment renvoie à
+   * `/conversations/:id`. Une ligne fabriquée depuis ce payload afficherait un
+   * DM SANS NOM — le titre d'un direct se déduit des participants. La liste se
+   * redemande donc au serveur, exactement comme le fait déjà `onAuthenticated`.
+   */
+  test('`conversation:new` redemande la liste — une conversation neuve porte son aperçu sans rechargement manuel', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    queryClient.setQueryData(CONVERSATIONS_QUERY_KEY, { pages: [], pageParams: [] });
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.CONVERSATION_NEW, {
+      conversationId: 'c-neuve',
+      conversationType: 'direct',
+      title: null,
+      creatorId: 'u-other',
+      participantIds: ['u-other', 'u-viewer'],
+      createdAt: '2026-09-16T10:00:00.000Z',
+    });
+
+    expect(queryClient.getQueryState(CONVERSATIONS_QUERY_KEY)?.isInvalidated).toBe(true);
+  });
+
+  /**
    * `message:translation` (revue-correction #5793, défaut MAJEUR 2) — le
    * pipeline traduit APRÈS la création : sans ce câblage, un message reçu
    * reste dans la langue de l'expéditeur jusqu'au prochain

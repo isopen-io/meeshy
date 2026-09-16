@@ -487,13 +487,15 @@ struct ConversationMediaGalleryView: View {
     /// #6789 pour le voile).
     ///
     /// Deux façons de n'avoir aucun contrôle à l'écran, et elles ne se
-    /// confondent pas : le plein cadre a RENDU la place du plateau, la rangée de
-    /// réactions la VOILE — sa place reste réservée, pour que le média ne bouge
-    /// pas sous le doigt qui vise un émoji. `MediaStageReactionVeil` tient les
-    /// deux d'un seul verdict.
+    /// confondent pas : le plein cadre a RENDU la place du plateau, une
+    /// ouverture la VOILE — sa place reste réservée, pour que le média ne bouge
+    /// pas sous le doigt qui vise un émoji, ni sous le clavier qui monte.
+    /// `MediaStageVeil` tient les deux d'un seul verdict, et il en connaît
+    /// DEUX : la traînée d'émojis (#6789) et la barre de réponse (#6817).
     private var overlayLayer: some View {
-        let chrome = MediaStageReactionVeil.showsChrome(presentation: stagePresentation,
-                                                        pickerOpen: reactionBarOpen)
+        let overlays = stageOverlays
+        let chrome = MediaStageVeil.showsChrome(presentation: stagePresentation,
+                                                overlays: overlays)
         return ZStack {
             if chrome {
                 // Le plateau ENTIER — les deux couloirs et ce qui se pose sur le
@@ -505,7 +507,20 @@ struct ConversationMediaGalleryView: View {
         }
         .allowsHitTesting(chrome)
         .animation(.easeInOut(duration: 0.2), value: stagePresentation)
-        .animation(.easeInOut(duration: 0.2), value: reactionBarOpen)
+        .animation(.easeInOut(duration: 0.2), value: overlays)
+    }
+
+    /// **Ce que le visualiseur a monté au-dessus de la scène — site UNIQUE**
+    /// (#6817).
+    ///
+    /// Deux surfaces montent pour qu'on PARLE de la pièce : la traînée d'émojis
+    /// et la barre de réponse. Elles exigent la même chose — le silence autour —
+    /// et c'est ce que le voile lit. Composer la disjonction ici plutôt que dans
+    /// `MediaStageVeil.Overlays.isOpen` aurait remis la loi dans un `body`,
+    /// injouable en XCTest ; ce site ne fait que NOMMER les deux états de la vue.
+    var stageOverlays: MediaStageVeil.Overlays {
+        MediaStageVeil.Overlays(reactionRow: reactionBarOpen,
+                                replyBar: replyTarget != nil)
     }
 
     // MARK: - Pager
@@ -971,6 +986,15 @@ struct ConversationMediaGalleryView: View {
                 switch route {
                 case .composeInPlace:
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                        // **Les deux ouvertures ne partagent pas le bas de
+                        // l'écran** (#6817). Elles vivent dans deux `@State`
+                        // indépendants : rien dans le type ne les empêche
+                        // d'être montées ensemble, et la traînée d'émojis
+                        // flotterait alors au-dessus du champ de saisie. Le
+                        // voile ne peut pas trancher cela — il ne fait que
+                        // constater ce qui est monté ; c'est au geste qui ouvre
+                        // la seconde de congédier la première.
+                        reactionBarOpen = false
                         replyTarget = att
                     }
                 case .handOffToThread:
