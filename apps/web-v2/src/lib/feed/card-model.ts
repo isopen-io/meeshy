@@ -5,7 +5,7 @@ import type { FeedPost } from '@/lib/api/feed-pages';
 import { shortRelativeTime } from '@/lib/relative-time';
 import { initialsOf } from '@/lib/view/conversation';
 
-import { resolveMediaCaption } from '@/lib/api/prism';
+import { resolveMediaCaption, type Served } from '@/lib/api/prism';
 
 import { feedMediaKindOf, postMediaRatio, reelCardRatio, type FeedMediaKind } from './layout';
 import { resolveMosaicLayout, type MosaicLayoutMode } from './mosaic-layout';
@@ -39,9 +39,26 @@ export type FeedCardMedia = {
    * ne sait pas QUI l'affiche, dans quelle langue). Absente seulement quand
    * ni `captionLanguage` ni le Prisme n'ont pu la dire. */
   readonly captionLanguage?: string;
-  /** Vrai quand `caption` est une TRADUCTION de `PostMedia.caption`, jamais
-   * la légende source. */
+  /** Vrai quand `caption` est une TRADUCTION de sa source, jamais la source
+   * elle-même. QUELLE source, c'est `captionOrigin` qui le dit — depuis
+   * #6864 une légende peut venir du média OU du post, et ce drapeau seul ne
+   * permettait plus de savoir ce qu'il qualifiait. */
   readonly captionTranslated?: boolean;
+  /**
+   * **D'OÙ VIENT LA LÉGENDE** (#6864) — `'media'` : la légende PROPRE du
+   * média (`PostMedia.caption`) ; `'post'` : le contenu du post, servi en
+   * l'absence de légende propre ET seulement sur un média UNIQUE.
+   *
+   * Ce marqueur n'est pas décoratif : les deux provenances portent des
+   * traductions DIFFÉRENTES — `PostMedia.captionTranslations` d'un côté,
+   * `Post.translations` de l'autre. Servir les unes sur l'autre est
+   * exactement ce que #4904 a coûté, et une chaîne nue ne dit pas laquelle
+   * des deux on affiche. Miroir de `SceneCaption.Origin` côté iOS
+   * (`SceneCaption.swift`, `mediaCaption` / `carrierText`).
+   *
+   * Absent quand `caption` l'est.
+   */
+  readonly captionOrigin?: 'media' | 'post';
   /** LE TEXTE D'ACCESSIBILITÉ SERVI PAR LA PASSERELLE — `PostMedia.alt`
    * (`schema.prisma:3618`, « Accessibilité »). Il était DÉCLARÉ sur le wire
    * (`FeedMedia.alt`) et jeté par le modèle : chaque image du fil partait en
@@ -108,13 +125,46 @@ function resolveAuthorSrc(avatar: string | null | undefined): string | undefined
   return url === undefined ? undefined : attachmentSrc(url);
 }
 
+/**
+ * **LE CONTENU DU POST N'EST PAS LA LÉGENDE DE SES MÉDIAS** (#6864, directive
+ * porteur 2026-09-16) — l'ordre de priorité, en trois temps :
+ *
+ * 1. la légende PROPRE du média gagne TOUJOURS, quel que soit leur nombre ;
+ * 2. à défaut, le contenu du post, **et seulement si le post ne porte qu'UN
+ *    média** ;
+ * 3. sinon, aucune légende.
+ *
+ * Le texte d'un post décrit le LOT ; le coller sous chaque pièce ferait mentir
+ * la légende — et sur un post à média unique, une implémentation fautive et une
+ * juste rendent le MÊME résultat. C'est le vecteur à deux médias dont l'un
+ * seulement porte sa légende qui les sépare.
+ *
+ * PORTAGE de la loi iOS, qui l'applique déjà aux deux conditions :
+ * `SocialMediaCaption.map` / `.serving` (`CommentMediaGallery.swift:36,141`) —
+ * `let fallback = visuals.count == 1 ? carrierText : nil`, puis
+ * `resolve(own:carrierText:)` qui essaie la légende propre d'abord.
+ *
+ * **ÉCART ASSUMÉ avec iOS sur ce qui COMPTE** : iOS ne compte que les visuels
+ * paginables (`isPageable`), ce module compte TOUS les médias. La directive dit
+ * « plusieurs contenu (image, vidéo **et autre**) » — un post portant une image
+ * et un document porte bien deux contenus, et son texte les décrit tous deux.
+ *
+ * `carrier` est le texte DÉJÀ SERVI par le Prisme (`resolveFeedText`, calculé
+ * une fois par `resolveFeedCardModel`), jamais `post.content` brut : le
+ * redescendre ici ferait une SECONDE descente, exactement le défaut que le
+ * cycle 128 a fermé sur trois clients.
+ */
 function resolveMedia(
   post: FeedPost,
   isReel: boolean,
   preferredLanguages: readonly string[],
+  carrier: FeedCardText | undefined,
 ): readonly FeedCardMedia[] {
   const media = post.media ?? [];
   const ordered = [...media].sort((a, b) => (numberOrUndefined(a.order) ?? 0) - (numberOrUndefined(b.order) ?? 0));
+  // Calculé UNE fois, hors de la boucle : c'est une propriété du POST, pas de
+  // la pièce. À l'intérieur du `map`, la tentation serait de tester `index`.
+  const carrierApplies = ordered.length === 1 && carrier !== undefined;
   return ordered.map((m) => {
     // Capturé UNE fois : `exactOptionalPropertyTypes` narrove `string |
     // undefined` en `string` seulement quand le test et l'usage portent sur
@@ -136,7 +186,18 @@ function resolveMedia(
             captionTranslations: m.captionTranslations,
             caption: rawCaption,
           });
-    const captionLanguage = resolvedCaption === undefined ? undefined : textOrUndefined(resolvedCaption.language);
+    /* LA LÉGENDE SERVIE ET SON ORIGINE (#6864) — la propre d'abord, le porteur
+       ensuite et seulement s'il s'applique. Une seule valeur compose les
+       quatre champs : `caption`, `captionLanguage`, `captionTranslated` et
+       `captionOrigin` ne peuvent donc pas se contredire, quelle que soit la
+       branche prise. */
+    const legende: { readonly served: Served; readonly origin: 'media' | 'post' } | undefined =
+      resolvedCaption !== undefined
+        ? { served: resolvedCaption, origin: 'media' }
+        : carrierApplies && carrier !== undefined
+          ? { served: { text: carrier.full, language: carrier.language, translated: carrier.translated }, origin: 'post' }
+          : undefined;
+    const captionLanguage = legende === undefined ? undefined : textOrUndefined(legende.served.language);
     const altText = textOrUndefined(m.alt);
     const durationMs = numberOrUndefined(m.duration);
     const width = numberOrUndefined(m.width);
@@ -149,7 +210,9 @@ function resolveMedia(
       ...(placeholder !== undefined ? { placeholder } : {}),
       ratio: isReel ? reelCardRatio(width, height) : postMediaRatio(width, height),
       ...(durationMs !== undefined ? { durationMs } : {}),
-      ...(resolvedCaption !== undefined ? { caption: resolvedCaption.text, captionTranslated: resolvedCaption.translated } : {}),
+      ...(legende !== undefined
+        ? { caption: legende.served.text, captionTranslated: legende.served.translated, captionOrigin: legende.origin }
+        : {}),
       ...(captionLanguage !== undefined ? { captionLanguage } : {}),
       ...(altText !== undefined ? { altText } : {}),
     };
@@ -200,7 +263,7 @@ export function resolveFeedCardModel(
     relativeTime: shortRelativeTime(new Date(post.createdAt), params.now),
     ...(repostOfHandle !== undefined ? { repostOfHandle } : {}),
     ...(text !== undefined ? { text } : {}),
-    media: resolveMedia(post, isReel, params.preferredLanguages),
+    media: resolveMedia(post, isReel, params.preferredLanguages, text),
     layout: resolveMosaicLayout(post.storyEffects),
     stats: {
       likeCount: numberOrUndefined(post.likeCount) ?? 0,
