@@ -272,7 +272,14 @@ export const parseCatalogBlock = (blockLines) => {
 // n'est pas morte), et ce script ne balaie que `apps/web` (legacy gelé) et
 // `packages/shared` — pas `apps/web-v2`. Même forme que
 // `posts.byPostIdTranslate`, déjà sans appelant ici pour la même raison.
-const BASELINE_DEAD_ENTRIES = 277;
+//
+// 277 → 280 (#6821) : `admin.usersByUserIdSessions`,
+// `.usersByUserIdSessionsBySessionId`, `.usersByUserIdSecurityEvents` —
+// même trio que son miroir Swift ci-dessus (255 → 258), même raison :
+// l'historique de connexion et sa révocation, exposés côté passerelle,
+// sans consommateur web (legacy gelé) ni `packages/shared` pour l'instant.
+// L'écran d'administration qui les consommera vit sous #6819.
+const BASELINE_DEAD_ENTRIES = 280;
 
 export const readWorld = (root) => {
   const source = readFileSync(join(root, CATALOG_FILE), 'utf8');
