@@ -180,10 +180,39 @@ final class MediaGalleryActionColumnTests: XCTestCase {
         )
     }
 
-    /// **La colonne est dimensionnée par le cadre COURANT**, jamais par une cote
-    /// recopiée : elle est montée DANS `cadreRegion`, à l'intérieur du cadrage
-    /// et du clip que le solveur a rendus.
-    func test_laColonne_sePoseSurLeCadre_dansSonCadrageEtSonClip() throws {
+    /// **La colonne se pose sur le PLATEAU, jamais sur le cadre du média**
+    /// (#6760, directive porteur : « le plateau EST la scène — le chrome
+    /// s'aligne sur lui, jamais sur le média qu'il porte »).
+    ///
+    /// Ce témoin a porté la doctrine INVERSE jusqu'au #6771 : il exigeait que
+    /// `cadreActionColumn` précède le `.frame(currentStage.frame)`, c'est-à-dire
+    /// qu'elle en soit un ENFANT. #6760 l'en a SORTIE, et pour une raison
+    /// mesurée — sur une pièce 900 × 3 600, la colonne se posait à x ≈ 615, le
+    /// bord du média, quand le plateau s'arrête à 690 : le repère que
+    /// l'utilisateur apprend bougeait d'un média à l'autre. Le témoin est donc
+    /// resté ROUGE sur `dev` en décrivant une loi que le produit avait
+    /// abandonnée — et une garde qui décrit l'ancienne loi ne garde plus rien,
+    /// elle réclame la régression.
+    ///
+    /// ## La loi d'aujourd'hui est un ORDRE à trois jalons
+    ///
+    /// ```
+    /// .frame(width: currentStage.frame.width…)   ← le cadre du MÉDIA se referme
+    ///     cadreActionColumn                      ← la colonne vient APRÈS
+    /// .frame(width: stageChromeWidth)            ← et DANS la pile du plateau
+    /// ```
+    ///
+    /// C'est cet encadrement qui rend le témoin sensible à la mutation : remettre
+    /// la colonne dans le cadre du média la ferait repasser AVANT le premier
+    /// jalon, et l'en sortir tout à fait la ferait passer APRÈS le troisième.
+    /// Un seul `XCTAssertLessThan` n'attraperait qu'une moitié.
+    ///
+    /// **Ce témoin ne rouvre pas la réserve latérale abandonnée** (#4561,
+    /// #4633) : il dit où la colonne est DÉCLARÉE, jamais qu'elle prend de la
+    /// largeur au cadre. C'est
+    /// `test_laColonne_nePrendAucuneLargeurAuCadre`, juste au-dessus, qui garde
+    /// cette moitié-là — et il est resté vert tout du long.
+    func test_laColonne_sePoseSurLePlateau_pasSurLeCadreDuMedia() throws {
         let code = try unit()
         guard let region = corps("var cadreRegion: some View {", dans: code) else {
             return XCTFail("`cadreRegion` introuvable")
@@ -197,13 +226,38 @@ final class MediaGalleryActionColumnTests: XCTestCase {
                         && plat.contains("currentStage.frame.height"),
                       "et cette région reste dimensionnée par le solveur")
 
-        guard let colonne = plat.range(of: "cadreActionColumn"),
-              let cadrage = plat.range(of: ".frame(width:currentStage.frame.width") else {
-            return XCTFail("l'ordre de la région ne se lit pas")
+        guard let cadreDuMedia = plat.range(of: ".frame(width:currentStage.frame.width"),
+              let colonne = plat.range(of: "cadreActionColumn"),
+              let cadreDuPlateau = plat.range(of: ".frame(width:stageChromeWidth)") else {
+            return XCTFail(
+                "les trois jalons de la région ne se lisent pas — le cadre du média, la "
+                    + "colonne, et le cadre du plateau qui la porte"
+            )
         }
-        XCTAssertLessThan(colonne.lowerBound, cadrage.lowerBound,
-                          "la colonne est un ENFANT du cadre, donc déclarée avant le `.frame` "
-                              + "qui le dimensionne — sinon elle déborderait le clip")
+
+        XCTAssertLessThan(
+            cadreDuMedia.lowerBound, colonne.lowerBound,
+            "la colonne n'est PLUS un enfant du cadre du média : le cadre se referme AVANT "
+                + "elle, sinon le chrome se déplacerait avec la forme du fichier (#6760)"
+        )
+        XCTAssertLessThan(
+            colonne.lowerBound, cadreDuPlateau.lowerBound,
+            "et elle est déclarée DANS la pile que `stageChromeWidth` dimensionne — c'est "
+                + "le plateau qui lui donne son bord, pas le média"
+        )
+    }
+
+    /// **La largeur du chrome est DÉRIVÉE, jamais recopiée.** `stageChromeWidth`
+    /// projette `StageChromeAlignment.chromeBounds` ; un nombre écrit à la main
+    /// aurait la même valeur aujourd'hui et cesserait de suivre la loi demain.
+    func test_laLargeurDuChrome_vientDeLaLoi_pasDUnNombre() throws {
+        let code = try unit()
+        guard let largeur = corps("var stageChromeWidth: CGFloat {", dans: code) else {
+            return XCTFail("`stageChromeWidth` introuvable — la colonne n'aurait plus de bord")
+        }
+        XCTAssertTrue(compact(largeur).contains("StageChromeAlignment.chromeBounds("),
+                      "la largeur du chrome se DEMANDE à la loi partagée (#6760), elle ne se "
+                          + "recalcule pas chez l'hôte")
     }
 
     /// **Ce qui RESTE en bas, sous son voile** — le porteur l'a explicitement

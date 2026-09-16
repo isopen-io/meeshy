@@ -49,6 +49,35 @@ nonisolated struct GallerySceneItem: Equatable {
         document.scenes.indices.contains(sceneIndex) ? document.scenes[sceneIndex] : nil
     }
 
+    /// **Le canvas repeint-il le fond que la galerie peint déjà ?** (#6791,
+    /// directive porteur 2026-09-16).
+    ///
+    /// > « Il faut utiliser le fond comme canvas une fois plutôt que de refaire
+    /// > un cadre de canvas […] on a deux fonds thumbHash au lieu d'en avoir
+    /// > qu'une »
+    ///
+    /// La page pose déjà le ThumbHash sous le cadre (`MediaStageBackdrop`,
+    /// #6143). Quand la scène n'est QU'UNE image, elle se présente au rapport de
+    /// cette image (`PostGalleryLot.sceneAspect`) : ses bandes sortent alors du
+    /// cadre présenté, et le calque que le canvas y peint
+    /// (`StoryLetterboxFill`) n'ajoute aucun pixel visible — il ajoute un
+    /// SECOND dégradé du même hachage, étiré dans un autre cadre. Mesuré au
+    /// simulateur : deux teintes distinctes au-dessus du même média.
+    ///
+    /// C'est la règle de #6636 — « si rien ne sort des cadres de l'image, il ne
+    /// faut pas afficher le canvas » — que le lecteur de stories porte depuis ce
+    /// jour-là (`imageOnlyRect(of:)`) et que cette page, née après, n'avait
+    /// jamais reçue.
+    ///
+    /// **La MÊME question décide du rapport et du fond**, et c'est voulu : un
+    /// second prédicat à tenir d'accord avec `sceneAspect` divergerait le jour
+    /// où l'un des deux changerait. Quand un objet sort de l'image, la bande
+    /// redevient une surface de composition (#4519) — l'auteur y a posé quelque
+    /// chose — et elle reste peinte.
+    var servesLetterboxFill: Bool {
+        scene.flatMap(SceneFraming.imageAspect(scene:)) == nil
+    }
+
     static func == (gauche: GallerySceneItem, droite: GallerySceneItem) -> Bool {
         gauche.id == droite.id
             && gauche.postId == droite.postId
