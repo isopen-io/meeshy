@@ -54,6 +54,7 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
     case broadcastsByIdSend(id: String)
     case broadcastsByIdSendInapp(id: String)
     case communities
+    case conversations
     case conversationsByConversationIdMessages(conversationId: String)
     case conversationsByConversationIdParticipants(conversationId: String)
     case dashboard
@@ -154,6 +155,7 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
         case .broadcastsByIdSend(let id): return "/api/v1/admin/broadcasts/\(id)/send"
         case .broadcastsByIdSendInapp(let id): return "/api/v1/admin/broadcasts/\(id)/send-inapp"
         case .communities: return "/api/v1/admin/communities"
+        case .conversations: return "/api/v1/admin/conversations"
         case .conversationsByConversationIdMessages(let conversationId): return "/api/v1/admin/conversations/\(conversationId)/messages"
         case .conversationsByConversationIdParticipants(let conversationId): return "/api/v1/admin/conversations/\(conversationId)/participants"
         case .dashboard: return "/api/v1/admin/dashboard"
