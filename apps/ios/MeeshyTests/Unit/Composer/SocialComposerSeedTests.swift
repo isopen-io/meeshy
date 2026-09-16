@@ -321,9 +321,10 @@ final class SocialComposerSeedTests: XCTestCase {
     /// passer par la porte et recopie son envoi ». Les deux se lisent dans un
     /// diff ; un compte ne dit ni l'un ni l'autre.
     ///
-    /// Quatre fichiers pour trois surfaces : le fil en a DEUX pleins écrans —
-    /// la galerie qui feuillette, et le player qui rejoue une scène. Un post
-    /// composé passe par le second, et c'est le cas le plus courant du fil.
+    /// Trois fichiers pour trois surfaces. Le fil a eu DEUX pleins écrans — la
+    /// galerie qui feuillette, et un player qui rejouait une scène — jusqu'à
+    /// #6709 : une scène de post est désormais une page de la galerie, et la
+    /// porte n'a plus qu'un hôte côté fil.
     ///
     /// Côté story, c'est le CONTENEUR qui monte la porte, pas l'en-tête qui
     /// porte l'entrée de menu : l'en-tête est reconstruit à chaque tick de la
@@ -333,11 +334,10 @@ final class SocialComposerSeedTests: XCTestCase {
         let porteurs = try sourcesContenant("MediaComposerDoor(")
         XCTAssertEqual(
             porteurs,
-            ["ConversationView.swift", "SocialMediaGalleryPresentation.swift",
-             "SocialSceneFullscreenView.swift", "StoryViewerContainer.swift"],
-            "« Composer » doit s'ouvrir par UNE porte (critère 3 de #6085) : la conversation, les deux "
-                + "pleins écrans du fil et le lecteur de stories. Un nom en moins = une surface muette ; "
-                + "un nom en plus = un montage qui n'est pas passé par la revue."
+            ["ConversationView.swift", "SocialMediaGalleryPresentation.swift", "StoryViewerContainer.swift"],
+            "« Composer » doit s'ouvrir par UNE porte (critère 3 de #6085) : la conversation, le plein "
+                + "écran du fil (scènes comprises depuis #6709) et le lecteur de stories. Un nom en moins = "
+                + "une surface muette ; un nom en plus = un montage qui n'est pas passé par la revue."
         )
     }
 

@@ -91,6 +91,20 @@ nonisolated extension ComposableAttachment {
         seedPlan(for: .post(post))
     }
 
+    /// **Ce qu'UNE pièce d'un post sème** (#6709) — la pièce qu'une page du plein
+    /// écran montre.
+    ///
+    /// La règle d'offre répond au PORTEUR (« exactement une pièce composable ») : un
+    /// post à plusieurs médias n'en offre aucun, parce qu'un lot mentirait sur ce qui
+    /// part. Le plein écran, lui, désigne la pièce qu'on REGARDE — et c'est elle que
+    /// « Créer avec CE média » promet. La conjonction ne change pas d'une ligne : la
+    /// source ne porte que cette pièce, le texte servi et l'absence de protection du
+    /// post. `nil` quand le post ne porte pas ce média.
+    static func seedPlan(inPost post: FeedPost, mediaId: String) -> SeedPlan? {
+        guard let source = SeedSource.post(post, mediaId: mediaId) else { return nil }
+        return seedPlan(for: source)
+    }
+
     /// **Ce qu'une SLIDE de story sème** (#6085).
     ///
     /// `preferredLanguages` descend le Prisme du lecteur par la fonction du SDK
@@ -113,6 +127,16 @@ nonisolated extension ComposableAttachment.SeedSource {
         Self(pieces: post.media.map { $0.toMessageAttachment() },
              text: post.displayContent,
              carrierIsProtected: false)
+    }
+
+    /// **La source d'UNE pièce du post** (#6709) — même texte servi et même absence
+    /// de protection que le post entier, une seule pièce : celle que la page montre.
+    /// `nil` quand le post ne porte pas ce média.
+    static func post(_ post: FeedPost, mediaId: String) -> Self? {
+        guard let media = post.media.first(where: { $0.id == mediaId }) else { return nil }
+        return Self(pieces: [media.toMessageAttachment()],
+                    text: post.displayContent,
+                    carrierIsProtected: false)
     }
 
     /// Idem pour une story : `StoryItem` porte une EXPIRATION, jamais un masque.

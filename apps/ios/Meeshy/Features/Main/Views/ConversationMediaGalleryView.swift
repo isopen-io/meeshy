@@ -147,6 +147,32 @@ struct ConversationMediaGalleryView: View {
     /// affichent pas.
     var onReactToMedia: ((MessageAttachment, String) -> Void)?
 
+    /// **La publication dont la galerie montre les SCÈNES** (#6709) — `nil` hors
+    /// d'un post. Une pièce dont l'identité est dans `scenes` est une page scène
+    /// (`+ScenePage.swift`) ; toutes les autres restent des pièces jointes.
+    var sceneContext: GallerySceneContext?
+
+    /// **« Répondre » existe-t-il sur CETTE pièce ?** (#6710) `nil` ⇒ sur toutes.
+    /// Un média joint à un commentaire ne se cite pas depuis un post : le geste
+    /// n'y existe pas (loi 4), au lieu d'un bouton qui ne ferait rien.
+    var replyableMedia: ((MessageAttachment) -> Bool)?
+
+    /// **« Créer avec ce média » existe-t-il sur CETTE pièce ?** (#6709) `nil` ⇒ sur
+    /// toutes. Un post offre la pièce qu'on REGARDE — une scène et son média, jamais
+    /// un média de commentaire : sans cible, pas de bouton (loi 4).
+    var composableMedia: ((MessageAttachment) -> Bool)?
+
+    /// **Où la colonne d'actions est posée sur le plateau** (#6709) — mesurée, parce
+    /// que la hauteur du bloc auteur et légende qui la porte change avec la page.
+    /// Elle décide du fond que la colonne a sous elle
+    /// (`MediaGalleryStage.columnBackdrop`). `internal` : `+Geometry.swift` la lit.
+    @State var actionColumnFrame: CGRect = .zero
+
+    /// **La région du plateau où elle se mesure** (#6709, #6760) — celle qui porte le
+    /// cadre et le chrome. Le cadre et son média y sont posés au milieu : sa taille
+    /// dit où ils sont peints. `internal` : `+Geometry.swift` l'écrit.
+    @State var cadreRegionSize: CGSize = .zero
+
     /// `id → position`, construite une fois à la présentation. Remplace les
     /// `firstIndex(where:)` linéaires qui tournaient à chaque changement de page
     /// ET à chaque fermeture (`stopActiveVideoAudio`).
@@ -211,6 +237,12 @@ struct ConversationMediaGalleryView: View {
     /// #6751 — la transition clavier ANNONCÉE, seule source de sa hauteur.
     @State private var replyKeyboard: KeyboardTransition?
 
+    /// **La commande de lecture de la scène ouverte** (#6709) — l'équivalent,
+    /// pour une scène, de l'état de lecture du player partagé. Levée à chaque
+    /// page : un plein écran est une demande de voir, y compris ce qui bouge.
+    /// `internal` — `+Presentation.swift` et `+Transport.swift` l'écrivent.
+    @State var scenePlaying = true
+
     init(
         allAttachments: [MessageAttachment],
         startAttachmentId: String,
@@ -222,7 +254,10 @@ struct ConversationMediaGalleryView: View {
         onReplyToMedia: ((MessageAttachment) -> Void)? = nil,
         onSendReplyToMedia: ((MessageAttachment, String, String) -> Void)? = nil,
         replyCitation: ((MessageAttachment) -> ReplyReference?)? = nil,
-        onReactToMedia: ((MessageAttachment, String) -> Void)? = nil
+        onReactToMedia: ((MessageAttachment, String) -> Void)? = nil,
+        replyableMedia: ((MessageAttachment) -> Bool)? = nil,
+        composableMedia: ((MessageAttachment) -> Bool)? = nil,
+        sceneContext: GallerySceneContext? = nil
     ) {
         self.allAttachments = allAttachments
         self.startAttachmentId = startAttachmentId
@@ -235,6 +270,9 @@ struct ConversationMediaGalleryView: View {
         self.onSendReplyToMedia = onSendReplyToMedia
         self.replyCitation = replyCitation
         self.onReactToMedia = onReactToMedia
+        self.replyableMedia = replyableMedia
+        self.composableMedia = composableMedia
+        self.sceneContext = sceneContext
         let positions = Dictionary(
             allAttachments.enumerated().map { ($0.element.id, $0.offset) },
             uniquingKeysWith: { first, _ in first }
@@ -498,6 +536,12 @@ struct ConversationMediaGalleryView: View {
         // au-dessus, et pour la même raison.
         if oldID != newID, reactionBarOpen { reactionBarOpen = false }
 
+        // **Une scène atteinte au glissement se LIT** (#6709) : la commande se
+        // relève à chaque page, comme une vidéo active part d'elle-même
+        // (`GalleryVideoPage`). La pause posée sur la scène précédente ne suit pas
+        // le lecteur sur la suivante.
+        if oldID != newID, !scenePlaying { scenePlaying = true }
+
         if let oldID, oldID != newID, let oldIndex = indexByID[oldID] {
             let oldAtt = allAttachments[oldIndex]
             if oldAtt.type == .video && videoManager.activeURL == oldAtt.fileUrl {
@@ -553,7 +597,15 @@ struct ConversationMediaGalleryView: View {
             .equatable()
 
         default:
-            Color.black
+            // **Une scène de post est une pièce SYNTHÉTIQUE** (#6709) : son MIME
+            // n'est ni image ni vidéo, donc elle arrive ici. Sa nature se lit sur
+            // `sceneContext`, jamais sur le MIME ; toute autre pièce reste noire.
+            if let scene = sceneContext?.scenes[attachment.id] {
+                scenePage(scene, attachment: attachment, distance: distance,
+                          onDismiss: { dismissGallery() })
+            } else {
+                Color.black
+            }
         }
     }
 
@@ -737,7 +789,28 @@ struct ConversationMediaGalleryView: View {
                 // par l'ombre de `MediaCaptionOverlay`, jamais par la place
                 // qu'on prendrait à quelqu'un d'autre.
                 bottomMetadataOverlay(att)
-                if let caption = servedCaption(att.id) {
+                // **La légende d'une SCÈNE se traduit par sa propre source**
+                // (#6709, #6504) : texte du post ou légende du média, chacun par
+                // sa route, avec LA feuille de traduction des messages. Montée
+                // avec l'identité de la pièce : la langue choisie ne suit pas le
+                // lecteur sur la page suivante, qui porte un autre contenu.
+                if let context = sceneContext, let anchor = context.captions[att.id],
+                   let texte = captionMap[att.id] {
+                    GallerySceneCaptionBlock(
+                        post: context.post,
+                        anchor: anchor,
+                        fallbackText: texte,
+                        preferredLanguages: context.captionLanguages,
+                        isExpanded: captionExpanded,
+                        maxExpandedHeight: cadreCaptionMaxHeight,
+                        onToggle: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                captionExpanded.toggle()
+                            }
+                        }
+                    )
+                    .id(att.id)
+                } else if let caption = servedCaption(att.id) {
                     captionLanguageRow(att.id)
                     captionOverlay(caption)
                 }
@@ -790,14 +863,26 @@ struct ConversationMediaGalleryView: View {
                 mediaActions(allAttachments[currentIndex])
             }
         }
+        // #6709 — la colonne MESURE sa place sur le plateau : c'est elle, et non le
+        // média de la page, qui dit ce qui est peint sous ses boutons.
+        .onGeometryChange(for: CGRect.self) { proxy in
+            proxy.frame(in: .named(MediaGalleryStage.cadreSpace))
+        } action: { cadre in
+            actionColumnFrame = cadre
+        }
         .frame(maxWidth: .infinity, alignment: .trailing)
         .padding(.trailing, MediaGalleryStage.gutter)
-        // #6693 — la colonne est POSÉE sur le média (#6161) : sa teinte suit la
-        // luminance de la pièce affichée, et non le blanc d'office (1,83:1 sur une
-        // vidéo violette).
+        // #6693 — la colonne est POSÉE sur le plateau (#6161, #6760) : sa teinte suit
+        // la luminance de ce qu'elle a SOUS elle (#6709) — le média, la bande du
+        // hors-champ, ou le sol noir sous un cadre plus court —, jamais le blanc
+        // d'office (1,83:1 sur une vidéo violette).
         .mediaChromeTinted()
         .mediaChromeScheme(for: currentIndex < allAttachments.count
-                           ? .attachment(allAttachments[currentIndex]) : nil)
+                           ? MediaGalleryStage.columnBackdrop(for: allAttachments[currentIndex],
+                                                              stage: currentStage,
+                                                              region: cadreRegionSize,
+                                                              columnFrame: actionColumnFrame)
+                           : nil)
     }
 
     /// Les trois actions, chacune derrière sa propre closure optionnelle : un
@@ -865,7 +950,9 @@ struct ConversationMediaGalleryView: View {
         let route = FullscreenReplyRoute.route(
             isProtected: ComposableAttachment.isProtected(att),
             hasInPlaceComposer: onSendReplyToMedia != nil && replyCitation != nil,
-            hasThreadHandOff: onReplyToMedia != nil
+            // `replyableMedia` (#6710) : un hôte de post ne relaie que ce qu'il
+            // sait citer — jamais un média joint à un commentaire.
+            hasThreadHandOff: onReplyToMedia != nil && (replyableMedia?(att) ?? true)
         )
         if route != .none {
             Button {
@@ -899,7 +986,9 @@ struct ConversationMediaGalleryView: View {
                          defaultValue: "Cite le message qui porte ce média et revient au composer.",
                          bundle: .main))
         }
-        if let onComposeWithMedia {
+        // `composableMedia` (#6709) : un hôte de post n'offre « Créer avec ce média »
+        // que sur une pièce qui a sa cible — jamais un bouton qui n'armerait rien.
+        if let onComposeWithMedia, composableMedia?(att) ?? true {
             Button {
                 HapticFeedback.light()
                 onComposeWithMedia(att)
@@ -952,30 +1041,35 @@ struct ConversationMediaGalleryView: View {
                 }
                 .accessibilityElement(children: .contain)
             }
-            HStack(spacing: 8) {
-                // Glyphe de type média décoratif (apparié aux dimensions) —
-                // scale avec le texte mais masqué de VoiceOver.
-                Image(systemName: att.type == .video ? "video.fill" : "photo")
-                    .font(MeeshyFont.relative(11))
-                    .foregroundColor(.white.opacity(0.6))
-                    .accessibilityHidden(true)
-                if let w = att.width, let h = att.height, w > 0, h > 0 {
-                    Text("\(w) \u{00D7} \(h)")
-                        .font(MeeshyFont.relative(11, weight: .medium, design: .monospaced))
+            // **Une scène n'a ni format, ni dimensions, ni poids** (#6709) : sa
+            // pièce est synthétique, et la ligne n'y montrerait qu'un glyphe
+            // « photo » qui ment sur ce qu'on regarde. L'auteur et sa date restent.
+            if sceneContext?.scenes[att.id] == nil {
+                HStack(spacing: 8) {
+                    // Glyphe de type média décoratif (apparié aux dimensions) —
+                    // scale avec le texte mais masqué de VoiceOver.
+                    Image(systemName: att.type == .video ? "video.fill" : "photo")
+                        .font(MeeshyFont.relative(11))
                         .foregroundColor(.white.opacity(0.6))
+                        .accessibilityHidden(true)
+                    if let w = att.width, let h = att.height, w > 0, h > 0 {
+                        Text("\(w) \u{00D7} \(h)")
+                            .font(MeeshyFont.relative(11, weight: .medium, design: .monospaced))
+                            .foregroundColor(.white.opacity(0.6))
+                    }
+                    if att.fileSize > 0 {
+                        Text(att.fileSizeFormatted)
+                            .font(MeeshyFont.relative(11, weight: .medium))
+                            .foregroundColor(.white.opacity(0.5))
+                    }
+                    Spacer()
                 }
-                if att.fileSize > 0 {
-                    Text(att.fileSizeFormatted)
-                        .font(MeeshyFont.relative(11, weight: .medium))
-                        .foregroundColor(.white.opacity(0.5))
-                }
-                Spacer()
+                // Regroupe dimensions + poids en un seul arrêt VoiceOver et
+                // remplace le « × » (lu « multiplication ») par un « par » localisé.
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(mediaMetadataAccessibilityLabel(att))
+                .accessibilityHidden(mediaMetadataAccessibilityLabel(att).isEmpty)
             }
-            // Regroupe dimensions + poids en un seul arrêt VoiceOver et remplace
-            // le « × » (lu « multiplication ») par un « par » localisé.
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(mediaMetadataAccessibilityLabel(att))
-            .accessibilityHidden(mediaMetadataAccessibilityLabel(att).isEmpty)
         }
         .padding(.horizontal, 16)
         .padding(.top, 12)

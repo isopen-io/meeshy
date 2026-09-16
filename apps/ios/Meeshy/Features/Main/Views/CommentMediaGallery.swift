@@ -250,11 +250,15 @@ enum CommentMediaGallery {
     /// Site UNIQUE de la règle pour les commentaires : la galerie partagée ET le
     /// repli solo de `CommentMediaView` l'appellent, faute de quoi le MÊME média
     /// porterait deux légendes selon que l'hôte a câblé la liste ou non.
-    static func caption(of media: FeedMedia, carrierText: String?, preferredLanguages: [String] = []) -> String? {
+    ///
+    /// **`nonisolated`** (#6710) : le lot du plein écran d'un post
+    /// (`PostGalleryLot`, pur) l'appelle pour les médias des commentaires — même
+    /// raison que `isPageable` plus haut.
+    nonisolated static func caption(of media: FeedMedia, carrierText: String?, preferredLanguages: [String] = []) -> String? {
         SocialMediaCaption.resolve(own: media.resolvedCaption(preferredLanguages: preferredLanguages), carrierText: carrierText)
     }
 
-    static func caption(of media: FeedMedia, in comment: FeedComment, preferredLanguages: [String] = []) -> String? {
+    nonisolated static func caption(of media: FeedMedia, in comment: FeedComment, preferredLanguages: [String] = []) -> String? {
         caption(of: media, carrierText: comment.displayContent, preferredLanguages: preferredLanguages)
     }
 
