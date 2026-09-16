@@ -102,6 +102,9 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
     case usersByUserIdResetPassword(userId: String)
     case usersByUserIdRole(userId: String)
     case usersByUserIdSecurity(userId: String)
+    case usersByUserIdSecurityEvents(userId: String)
+    case usersByUserIdSessions(userId: String)
+    case usersByUserIdSessionsBySessionId(userId: String, sessionId: String)
     case usersByUserIdStatus(userId: String)
     case usersByUserIdUnlock(userId: String)
     case usersByUserIdVerifications(userId: String)
@@ -202,6 +205,9 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
         case .usersByUserIdResetPassword(let userId): return "/api/v1/admin/users/\(userId)/reset-password"
         case .usersByUserIdRole(let userId): return "/api/v1/admin/users/\(userId)/role"
         case .usersByUserIdSecurity(let userId): return "/api/v1/admin/users/\(userId)/security"
+        case .usersByUserIdSecurityEvents(let userId): return "/api/v1/admin/users/\(userId)/security-events"
+        case .usersByUserIdSessions(let userId): return "/api/v1/admin/users/\(userId)/sessions"
+        case .usersByUserIdSessionsBySessionId(let userId, let sessionId): return "/api/v1/admin/users/\(userId)/sessions/\(sessionId)"
         case .usersByUserIdStatus(let userId): return "/api/v1/admin/users/\(userId)/status"
         case .usersByUserIdUnlock(let userId): return "/api/v1/admin/users/\(userId)/unlock"
         case .usersByUserIdVerifications(let userId): return "/api/v1/admin/users/\(userId)/verifications"
