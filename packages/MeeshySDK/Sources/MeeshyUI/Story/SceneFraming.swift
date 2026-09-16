@@ -98,8 +98,22 @@ public nonisolated enum SceneFraming {
         return false
     }
 
+    /// **Le fond est l'objet qui porte l'IMAGE** (#6708, recette staging du
+    /// 2026-09-15).
+    ///
+    /// `CanvasV3.migratedScene` émet en TÊTE de scène un porteur `plane: bg`
+    /// dès que le fond a un cadrage — et #6125 en pose un sur chaque fond neuf.
+    /// Ce porteur n'a ni adresse ni forme ; le vrai fond suit, en
+    /// `plane: content`. Élire le premier objet de fond élisait le porteur : la
+    /// bande restait inconnue, et le vrai fond entrait parmi les objets
+    /// ordinaires, où sa boîte d'ancre montait au plancher. Une scène au fond
+    /// portrait plein cadre rendait une carte de 338 × 252 pt qui en coupait le
+    /// haut et le bas.
+    ///
+    /// Sans image, le porteur reste le fond : c'est lui qui porte la couleur.
     public static func backgroundMedia(in scene: SceneV3) -> ObjectV3? {
-        scene.objects.first(where: isBackground)
+        scene.objects.first { isBackground($0) && carriesPicture($0) }
+            ?? scene.objects.first(where: isBackground)
     }
 
     /// **Cette scène montre-t-elle quelque chose ?**
@@ -186,9 +200,13 @@ public nonisolated enum SceneFraming {
         // `plane: content`, et le filtrer sur `.bg` l'aurait laissé entrer ici
         // comme un objet ordinaire — sa boîte d'ancre aurait alors élargi le
         // cadre autour du centre, annulant le resserrement sur sa bande.
+        //
+        // Un objet qui ne PEINT rien n'y entre pas davantage (#6708) : le
+        // porteur du cadrage d'un fond, compté ici, élargirait la bande d'une
+        // photo 16:9 de 0,32 à 0,42 par le plancher.
         var objets: CGRect?
         for objet in scene.objects
-        where isVisible(objet) && objet.id != fond?.id {
+        where showsPixels(objet) && objet.id != fond?.id {
             let boite = anchorBox(of: objet)
             objets = objets.map { $0.union(boite) } ?? boite
         }
@@ -284,7 +302,7 @@ public nonisolated enum SceneFraming {
     /// montrer l'image à tort déferait un cadrage que l'auteur a posé.
     public static func imageAspect(scene: SceneV3) -> CGFloat? {
         guard scene.carrierAspect == nil,
-              let fond = scene.objects.first(where: { isBackground($0) && carriesPicture($0) }),
+              let fond = backgroundMedia(in: scene), carriesPicture(fond),
               let rapport = declaredAspect(of: fond), rapport > sceneAspect,
               isUntouched(fond),
               scene.objects.allSatisfy({ $0.id == fond.id || !showsPixels($0) })
@@ -321,6 +339,29 @@ public nonisolated enum SceneFraming {
     /// en montrait le milieu, jamais l'image.
     public static func cardFocus(scene: SceneV3) -> CGRect? {
         imageAspect(scene: scene) == nil ? focus(scene: scene) : nil
+    }
+
+    /// **Où poser la scène entière pour que sa zone COUVRE une boîte** : le
+    /// rectangle de la scène agrandie, dans le repère de la boîte.
+    /// `SceneFocusFrame` l'applique ; il est pur pour qu'on vérifie sans écran ce
+    /// qu'une carte laisse voir (#6708).
+    ///
+    /// L'échelle est le MAXIMUM des deux contraintes et la zone est CENTRÉE : ce
+    /// qui dépasse se répartit des deux côtés. Quand la boîte a le rapport de la
+    /// zone, les deux termes s'égalisent — rien ne dépasse, et la scène garde la
+    /// largeur de la boîte. Quand la boîte est plus HAUTE que la zone, la scène
+    /// est agrandie et ses côtés sortent : c'est ce que
+    /// `SceneCarouselLayout.pageAspect` évite aux pages d'un carrousel.
+    public static func placement(of focus: CGRect, covering box: CGSize) -> CGRect {
+        let largeur = max(box.width / focus.width, box.height * sceneAspect / focus.height)
+        let hauteur = largeur / sceneAspect
+        // Le décalage se compte sur la scène AGRANDIE, pas sur la boîte —
+        // l'erreur qui ferait dériver le cadrage proportionnellement au zoom.
+        let debordX = focus.width * largeur - box.width
+        let debordY = focus.height * hauteur - box.height
+        return CGRect(x: -focus.minX * largeur - debordX / 2,
+                      y: -focus.minY * hauteur - debordY / 2,
+                      width: largeur, height: hauteur)
     }
 
     /// Un objet qui PEINT quelque chose par-dessus le fond : visible, et pas un
@@ -476,12 +517,23 @@ public nonisolated enum SceneCarouselLayout {
     /// Une scène SANS exigence ne vote donc pas. Les autres gardent le dernier
     /// mot, et c'est ce qui empêche ce correctif de devenir un rognage.
     public static func cardAspect(document: CanvasV3) -> CGFloat {
-        let rapports = document.scenes.compactMap { scene -> CGFloat? in
-            if let propre = SceneFraming.cardAspect(scene: scene) { return propre }
-            // Pas de cadrage : la scène impose le gabarit SEULEMENT si elle
-            // montre quelque chose. Sinon elle s'abstient.
-            return SceneFraming.showsSomething(scene) ? SceneFraming.sceneAspect : nil
-        }
-        return rapports.min() ?? SceneFraming.sceneAspect
+        document.scenes.compactMap { pageAspect(scene: $0) }.min() ?? SceneFraming.sceneAspect
+    }
+
+    /// **Le rapport d'UNE page : ce qu'elle vote, et le cadre où elle se
+    /// présente** (#6708, recette staging du 2026-09-15).
+    ///
+    /// Une page qui se cadre vote son rapport. Une page qui montre quelque
+    /// chose sans pouvoir se resserrer vote le gabarit. Une page qui ne montre
+    /// rien s'abstient (`nil`) — voir ci-dessus.
+    ///
+    /// Le même rapport sert à la PRÉSENTER : une page plus courte que la boîte
+    /// s'y pose AJUSTÉE à son rapport, centrée, et sa fenêtre la remplit à
+    /// l'échelle 1. Posée sur la boîte entière, la fenêtre la COUVRAIT
+    /// (`SceneFraming.placement`) : une page de texte dans une boîte 9:16 était
+    /// dessinée sur 805 pt dans une carte de 338, et rognée sur les côtés.
+    public static func pageAspect(scene: SceneV3) -> CGFloat? {
+        if let propre = SceneFraming.cardAspect(scene: scene) { return propre }
+        return SceneFraming.showsSomething(scene) ? SceneFraming.sceneAspect : nil
     }
 }

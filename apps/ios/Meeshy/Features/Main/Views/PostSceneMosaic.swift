@@ -376,16 +376,23 @@ struct PostSceneMosaic: View {
             ? document.scenes[tuile.sceneIndex] : nil
         let bouge = scene.map(SceneMotion.isCinematic) ?? false
         ZStack {
-            if let scene, MosaicLayout.isPaged(mode: mode),
-               let image = SceneFraming.imageAspect(scene: scene) {
-                // **Une PAGE qui n'est qu'une image se montre entière** (#6697).
-                // La boîte du carrousel prend la forme de sa page la plus haute :
-                // un canvas 9:16 rempli y rognait l'image sur ses deux côtés.
-                // Au rapport de l'image, elle tient dans la page, comme dans la
-                // carte à scène unique.
-                scenePlayer(sceneIndex: tuile.sceneIndex, joue: joue && bouge)
-                    .preferredContentLanguages(preferredContentLanguages)
-                    .aspectRatio(image, contentMode: .fit)
+            if let scene, MosaicLayout.isPaged(mode: mode) {
+                // **Une PAGE montre son contenu ENTIER, à son propre rapport**
+                // (#6697, #6708).
+                //
+                // La boîte du carrousel a la forme de sa page la plus HAUTE. Une
+                // page plus courte s'y pose ajustée au rapport qu'elle vote
+                // (`SceneCarouselLayout.pageAspect`), centrée : sa fenêtre
+                // (`cardFocus`, nulle pour une scène qui n'est qu'une image) la
+                // remplit alors à l'échelle 1. Posée sur la boîte entière, la
+                // fenêtre la COUVRAIT — scène agrandie jusqu'à la hauteur de la
+                // boîte, et rognée sur les côtés.
+                SceneFocusFrame(focus: SceneFraming.cardFocus(scene: scene)) {
+                    scenePlayer(sceneIndex: tuile.sceneIndex, joue: joue && bouge)
+                        .preferredContentLanguages(preferredContentLanguages)
+                }
+                .aspectRatio(SceneCarouselLayout.pageAspect(scene: scene) ?? Self.boxAspect(document: document),
+                             contentMode: .fit)
             } else if scene != nil {
                 // **Une TUILE montre la scène ENTIÈRE, réduite** (directive
                 // porteur 2026-09-06 : « la mise à l'échelle d'une scène doit
@@ -407,12 +414,8 @@ struct PostSceneMosaic: View {
                 // > Il n'y a d'ailleurs aucun vide à gagner dans une tuile : le
                 // > cadrage sert à RACCOURCIR une carte, et une tuile impose
                 // > déjà son propre rapport.
-                SceneFocusFrame(focus: MosaicLayout.isPaged(mode: mode)
-                                ? scene.flatMap { SceneFraming.focus(scene: $0) }
-                                : nil) {
-                    scenePlayer(sceneIndex: tuile.sceneIndex, joue: joue && bouge)
-                        .preferredContentLanguages(preferredContentLanguages)
-                }
+                scenePlayer(sceneIndex: tuile.sceneIndex, joue: joue && bouge)
+                    .preferredContentLanguages(preferredContentLanguages)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

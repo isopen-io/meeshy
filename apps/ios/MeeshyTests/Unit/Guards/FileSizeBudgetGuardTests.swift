@@ -409,7 +409,19 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // Les cinq lots se cumulent : 54 450 − 31 = 54 419. Seul #6701 retire de
     // `StoryViewerView+Canvas.swift` : son retrait s'additionne sans
     // recouvrement.
-    private static let legacyLineCeiling = 54_419
+    // #6708 — 54 419 → 54 403 (−16). La mesure du détail passe par
+    // `onGeometryChange` : dans `PostDetailView.swift`, le couple
+    // `GeometryReader` + préférence de la zone de défilement devient une ligne, et
+    // les deux clés de préférence orphelines partent (1 810 → 1 794). Rien n'y est
+    // ajouté ; le plafond baisse d'exactement ce que le lot retire.
+    //
+    // Les six lots se cumulent : 54 450 − 31 − 16 = 54 403. #6701 retire de
+    // `StoryViewerView+Canvas.swift`, #6708 de `PostDetailView.swift` — deux hôtes
+    // distincts, donc les deux baisses s'additionnent. Cumul MESURÉ sur les 26 noms
+    // après fusion : 54 034, soit le même mou de 369 lignes qu'avant (#6016) —
+    // compté comme la règle 3 le fait, `components(separatedBy: .newlines)` sur la
+    // racine `apps/ios/Meeshy`.
+    private static let legacyLineCeiling = 54_403
 
     // MARK: - Règle 1 — pas de 43ᵉ
 
