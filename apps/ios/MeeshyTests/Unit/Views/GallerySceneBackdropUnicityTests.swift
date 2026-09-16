@@ -83,6 +83,9 @@ final class GallerySceneBackdropUnicityTests: XCTestCase {
             carrier: StoryItem(id: "p1", createdAt: Date(timeIntervalSince1970: 0)),
             mediaId: "m1",
             aspect: PostGalleryLot.sceneAspect(document, sceneIndex: 0),
+            // Le rapport du CANVAS voyage à côté de celui de la carte (#6806) :
+            // la même scène ne se présente pas pareil selon la surface.
+            canvasAspect: SceneFullscreenFraming.ratio(of: document, sceneIndex: 0),
             moves: false,
             thumbHash: "hachage",
             thumbnailURL: nil
@@ -142,7 +145,20 @@ final class GallerySceneBackdropUnicityTests: XCTestCase {
 
         XCTAssertTrue(suite.contains("servesLetterboxFill:"),
                       "la page scène doit DIRE au player si la bande se peint")
-        XCTAssertTrue(suite.contains("item.servesLetterboxFill"),
+        XCTAssertTrue(suite.contains("item.surface(inFullFrame:"),
                       "et la valeur vient de la loi de la page, jamais d'un littéral")
+
+        // **Et c'est la réponse de SA présentation, pas la cardée** (#6806).
+        //
+        // `item.servesLetterboxFill` est la réponse CARDÉE. La servir en plein
+        // cadre est exactement le défaut du 2026-09-16 13:50 : le cadre passait
+        // au rapport du canvas pendant que le fond restait sur la réponse d'une
+        // carte, et la scène montrait du vide là où le canvas devait peindre.
+        XCTAssertFalse(suite.contains("servesLetterboxFill: item.servesLetterboxFill"),
+                       """
+                       La page ne peut pas servir la réponse CARDÉE : son cadre \
+                       dépend de sa présentation, et le fond doit en dépendre \
+                       avec lui. Servir `item.surface(inFullFrame: presentation.isFull)`.
+                       """)
     }
 }

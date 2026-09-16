@@ -145,7 +145,11 @@ struct GalleryScenePage: View, Equatable {
             // mesuré au simulateur, deux teintes au-dessus d'un même média.
             // La décision vit avec la page (`GallerySceneItem`), qui la tient de
             // la loi qui décide aussi de son rapport.
-            servesLetterboxFill: item.servesLetterboxFill
+            // **Le fond vient de la MÊME réponse que le cadre** (#6806).
+            // `servesLetterboxFill` seul est la réponse CARDÉE ; en plein cadre
+            // les bandes entrent dans le cadre présenté, et sans elles la scène
+            // montre du vide là où le canvas devrait peindre.
+            servesLetterboxFill: item.surface(inFullFrame: presentation.isFull).paintsLetterbox
         )
         .frame(width: stage.media.width, height: stage.media.height)
         .accessibilityElement(children: .contain)

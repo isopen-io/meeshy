@@ -18,6 +18,20 @@ import MeeshyUI
 /// écrit pour les médias. Il ne commence ni par `image/` ni par `video/`, donc
 /// aucune extraction de poster, aucun préchauffage, aucune libération du player
 /// partagé ne s'arme sur une scène.
+/// **Ce qu'une scène présente sur UNE surface** — son cadre et son fond, rendus
+/// ensemble (#6806).
+///
+/// Deux valeurs dans un type plutôt que deux propriétés voisines : voisines,
+/// elles se lisent séparément, et c'est exactement ainsi qu'un lot a changé
+/// l'une en laissant l'autre.
+nonisolated struct SceneSurface: Equatable {
+    /// Le rapport largeur / hauteur du CADRE présenté.
+    let aspect: CGFloat
+    /// Le canvas habille-t-il ses bandes ? Vrai exactement quand elles entrent
+    /// dans le cadre ci-dessus.
+    let paintsLetterbox: Bool
+}
+
 nonisolated struct GallerySceneItem: Equatable {
     static let mimeType = "application/x-meeshy-scene"
 
@@ -32,9 +46,19 @@ nonisolated struct GallerySceneItem: Equatable {
     /// `nil` pour une scène de texte, de dessin ou de couleur. C'est lui qu'une
     /// citation désigne, et lui qu'une citation rouvre.
     let mediaId: String?
-    /// Le rapport largeur / hauteur auquel la scène se cadre — voir
-    /// `PostGalleryLot.sceneAspect`.
+    /// Le rapport largeur / hauteur auquel la scène se cadre SUR UNE CARTE —
+    /// voir `PostGalleryLot.sceneAspect`. Une scène qui n'est qu'une image y
+    /// prend le rapport de son image : on y ouvre la photo.
     let aspect: CGFloat
+
+    /// **Le rapport du CANVAS lui-même** (#6806) — celui auquel la scène se
+    /// présente en PLEIN CADRE, où ce qu'on ouvre est la scène et non la photo.
+    ///
+    /// Les deux voyagent ensemble parce que la question n'a pas UNE réponse :
+    /// elle en a une par SURFACE. Ne porter que `aspect` obligeait le plein
+    /// écran à se contenter du rapport d'une carte — et une scène-image carrée
+    /// y laissait 237,7 pt de sol en haut et en bas, mesurés au simulateur.
+    let canvasAspect: CGFloat
     /// La scène a-t-elle quelque chose à jouer — vidéo, son, animation,
     /// transition, ou le son de fond du document ? Seule une scène qui bouge
     /// porte un play/pause et répond à l'appui long par une pause (loi 4).
@@ -75,7 +99,37 @@ nonisolated struct GallerySceneItem: Equatable {
     /// redevient une surface de composition (#4519) — l'auteur y a posé quelque
     /// chose — et elle reste peinte.
     var servesLetterboxFill: Bool {
-        scene.flatMap(SceneFraming.imageAspect(scene:)) == nil
+        surface(inFullFrame: false).paintsLetterbox
+    }
+
+    /// **Ce qu'une scène PRÉSENTE, et ce n'est pas la même chose selon la
+    /// surface qui la porte** (#6806 + #6791, tenus par UNE réponse).
+    ///
+    /// Le rapport du cadre et le fond que le canvas peint sont la MÊME
+    /// question — le doc-comment de `servesLetterboxFill` le disait déjà : « un
+    /// second prédicat à tenir d'accord avec `sceneAspect` divergerait le jour
+    /// où l'un des deux changerait ». Ce jour est arrivé le 2026-09-16 : un lot
+    /// a fait passer le plein cadre au rapport du canvas **sans** toucher au
+    /// fond. Géométrie exacte (`media = 402 × 714,7`, le sol divisé par trois),
+    /// rendu PIRE — la photo ne grandissait pas, elle glissait vers le haut en
+    /// laissant ~340 pt de vide. Ce vide était la bande du canvas, que plus
+    /// personne ne peignait.
+    ///
+    /// La règle, une fois les deux moitiés ensemble :
+    /// - **cardée**, on ouvre la PHOTO : le cadre prend le rapport de l'image,
+    ///   ses bandes SORTENT du cadre, le canvas ne les peint pas (#6791) ;
+    /// - **en plein cadre**, on ouvre la SCÈNE : le cadre prend le rapport du
+    ///   canvas, ses bandes entrent DANS le cadre, le canvas les habille.
+    ///
+    /// Rendre les deux d'un seul appel est ce qui interdit la divergence : on
+    /// ne peut plus changer le cadre en oubliant le fond.
+    func surface(inFullFrame: Bool) -> SceneSurface {
+        let imageAspect = scene.flatMap(SceneFraming.imageAspect(scene:))
+        if inFullFrame {
+            return SceneSurface(aspect: canvasAspect, paintsLetterbox: true)
+        }
+        return SceneSurface(aspect: imageAspect ?? canvasAspect,
+                            paintsLetterbox: imageAspect == nil)
     }
 
     static func == (gauche: GallerySceneItem, droite: GallerySceneItem) -> Bool {
@@ -317,6 +371,7 @@ nonisolated struct PostGalleryLot {
             carrier: carrier,
             mediaId: media?.id,
             aspect: sceneAspect(document, sceneIndex: index),
+            canvasAspect: SceneFullscreenFraming.ratio(of: document, sceneIndex: index),
             // Le son de fond appartient au DOCUMENT, pas à une scène : il fait
             // jouer chacune d'elles.
             moves: SceneMotion.isCinematic(scene) || document.sound != nil,

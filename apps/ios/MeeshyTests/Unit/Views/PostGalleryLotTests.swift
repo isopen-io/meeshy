@@ -33,21 +33,31 @@ final class PostGalleryLotTests: XCTestCase {
                   caption: caption)
     }
 
-    private func mediaObject(_ postMediaId: String) -> ObjectV3 {
-        ObjectV3(id: "objet-\(postMediaId)", kind: .media,
-                 anchor: .free(x: 0.5, y: 0.5),
-                 plane: .content, z: 1,
-                 transform: TransformV3(),
-                 payload: ["postMediaId": .string(postMediaId)])
+    private func mediaObject(_ postMediaId: String, aspectRatio: Double? = nil) -> ObjectV3 {
+        var payload: [String: CanvasJSONValue] = ["postMediaId": .string(postMediaId)]
+        // **Ce qu'il faut pour qu'une scène soit vue comme UNE IMAGE** (#6806).
+        // `SceneFraming.imageAspect` exige les deux ensemble : un objet reconnu
+        // comme FOND (`isBackground` ⇒ `plane == .bg`) ET un rapport DÉCLARÉ
+        // (`declaredAspect` ⇒ la clé `aspectRatio` du payload). Il manquait les
+        // deux : la scène passait pour un canvas ordinaire, les deux surfaces
+        // servaient le même rapport, et le témoin qui les comparait ne mesurait
+        // plus rien — vert par omission.
+        if let aspectRatio { payload["aspectRatio"] = .number(aspectRatio) }
+        return ObjectV3(id: "objet-\(postMediaId)", kind: .media,
+                        anchor: .free(x: 0.5, y: 0.5),
+                        plane: aspectRatio == nil ? .content : .bg, z: 1,
+                        transform: TransformV3(),
+                        payload: payload)
     }
 
     private func scene(_ id: String,
                        media mediaId: String? = nil,
+                       mediaAspectRatio: Double? = nil,
                        opening: [String: CanvasJSONValue]? = nil,
                        thumbHash: String? = nil,
                        carrierAspect: Double? = nil) -> SceneV3 {
         SceneV3(id: id,
-                objects: mediaId.map { [mediaObject($0)] } ?? [],
+                objects: mediaId.map { [mediaObject($0, aspectRatio: mediaAspectRatio)] } ?? [],
                 opening: opening,
                 thumbHash: thumbHash,
                 carrierAspect: carrierAspect)
@@ -227,6 +237,69 @@ final class PostGalleryLotTests: XCTestCase {
         XCTAssertEqual(compose(photos).quotation(for: "a", in: photos)?.postMediaId, "a")
     }
 
+    /// **En PLEIN CADRE, une scène se présente comme une SCÈNE** (#6806,
+    /// directive porteur 2026-09-16 : « il faut pas afficher une troisieme couche
+    /// en plein plein écran, mais juste agrandir le canvas à sa taille total du
+    /// viewport »).
+    ///
+    /// `SceneFraming.presentationAspect` rend `imageAspect ?? canvasAspect` :
+    /// une scène qui n'est qu'une image se présente au rapport de son IMAGE.
+    /// C'est juste sur une carte de fil — on y ouvre une photo, et une fenêtre
+    /// posée sur un canvas 9:16 en montrerait le milieu. **C'est faux en plein
+    /// écran**, où ce qu'on ouvre est la scène.
+    ///
+    /// Mesuré au simulateur avant ce lot, sur une scène-image quasi carrée :
+    /// `media = 402 × 398,6` dans un cadre de 402 × 874 — le média touchait
+    /// gauche et droite, et laissait **237,7 pt de sol en haut ET en bas**, soit
+    /// 54 % de l'écran en fond flou. Au rapport du CANVAS, il reste 79,6 pt de
+    /// chaque côté : le même défaut divisé par trois, sans rien rogner.
+    @MainActor
+    func test_enPleinCadre_uneSceneImage_sePresenteAuRapportDeSonCanvas() throws {
+        // Une scène qui n'est QU'UNE image, déclarée en 0,8 — plus large que le
+        // 9:16 du canvas, donc `imageAspect` la reconnaît (sans `carrierAspect`,
+        // qui ferait de la scène un cadre et non une photo).
+        let lot = compose(post(media: [media("photo")],
+                               scenes: [scene("s", media: "photo", mediaAspectRatio: 0.8)]))
+        let page = try XCTUnwrap(lot.attachments.first)
+
+        let cardé = try XCTUnwrap(MediaGalleryStage.mediaRatio(of: page, scenes: lot.scenes,
+                                                              presentation: .carded))
+        let plein = try XCTUnwrap(MediaGalleryStage.mediaRatio(of: page, scenes: lot.scenes,
+                                                              presentation: .full(pausedOnEntry: false)))
+
+        XCTAssertEqual(cardé, 1_080.0 / 1_350.0, accuracy: 0.0001,
+                       "cardée, la scène-image garde le rapport de son image — on y ouvre la photo")
+        XCTAssertEqual(plein, CanvasGeometry.portraitRatio, accuracy: 0.0001,
+                       """
+                       En plein cadre, la scène se présente au rapport de son CANVAS : \
+                       c'est une scène qu'on ouvre, pas une photo.
+                       """)
+    }
+
+    /// **Le sol restant, mesuré des deux côtés** — la règle ne vaut que par ce
+    /// qu'elle retire à l'écran.
+    @MainActor
+    func test_enPleinCadre_leRapportDuCanvas_diviseLeSolParTrois() throws {
+        let viewport = CGSize(width: 402, height: 874)
+        func sol(_ ratio: CGFloat) -> CGFloat {
+            let cadre = MediaGalleryStage.resolve(
+                viewport: viewport, mediaRatio: ratio,
+                presentation: .full,
+                corridors: MediaGalleryStage.corridors(safeTop: 59, safeBottom: 34, attachments: []))
+            return (cadre.frame.height - cadre.media.height) / 2
+        }
+
+        let avant = sol(1.0)                              // rapport de l'IMAGE, carrée
+        let après = sol(CanvasGeometry.portraitRatio)     // rapport du CANVAS
+
+        // 236,0 pour un carré EXACT. Au simulateur la scène mesurée était en
+        // 1,0086 et rendait 237,7 : le même ordre, sur une image réelle.
+        XCTAssertEqual(avant, 236.0, accuracy: 0.5)
+        XCTAssertEqual(après, 79.6, accuracy: 0.5)
+        XCTAssertLessThan(après, avant / 2.5,
+                          "la scène se présente au rapport de son canvas ⇒ trois fois moins de sol")
+    }
+
     /// **Le cadre d'une page scène prend le rapport de la scène** — c'est la
     /// question que le solveur pose à chaque page. Une pièce synthétique n'a pas
     /// de dimensions : sans cette réponse, le cadre prendrait toute la zone libre.
@@ -237,9 +310,9 @@ final class PostGalleryLotTests: XCTestCase {
         let page = try XCTUnwrap(lot.attachments.first)
         let photo = MessageAttachment(id: "photo", mimeType: "image/jpeg", width: 1_600, height: 1_200)
 
-        let rapport = try XCTUnwrap(MediaGalleryStage.mediaRatio(of: page, scenes: lot.scenes))
+        let rapport = try XCTUnwrap(MediaGalleryStage.mediaRatio(of: page, scenes: lot.scenes, presentation: .carded))
         XCTAssertEqual(rapport, paysage, accuracy: 0.0001)
-        XCTAssertEqual(try XCTUnwrap(MediaGalleryStage.mediaRatio(of: photo, scenes: lot.scenes)),
+        XCTAssertEqual(try XCTUnwrap(MediaGalleryStage.mediaRatio(of: photo, scenes: lot.scenes, presentation: .carded)),
                        4.0 / 3.0, accuracy: 0.0001)
 
         let cadre = MediaGalleryStage.resolve(
@@ -423,4 +496,87 @@ final class PostGalleryLotTests: XCTestCase {
         XCTAssertNil(sansMedia.attachments.first.flatMap { sansMedia.composeTarget(for: $0.id, in: texte) },
                      "« Créer avec CE média » promet une pièce : une scène sans média n'en a pas")
     }
+
+    /// **Le fond se peint EXACTEMENT quand le cadre n'est pas celui de l'image.**
+    ///
+    /// C'est la loi que la tentative du 2026-09-16 13:50 a violée sans le voir :
+    /// elle a fait passer le plein cadre au rapport du canvas — géométrie juste,
+    /// `media = 402 × 714,7` — en laissant le fond sur sa réponse CARDÉE. La
+    /// scène montrait alors du vide là où le canvas aurait dû peindre, et la
+    /// photo semblait « glisser vers le haut ».
+    ///
+    /// Le témoin interroge les DEUX surfaces pour CHAQUE rapport : il ne peut
+    /// donc pas verdir par omission sur l'une d'elles, ce qui est précisément
+    /// comment le défaut est passé.
+    @MainActor
+    func test_leFond_suitLeCadre_surLesDeuxSurfaces() throws {
+        for rapport in [0.8, 1.0, 1.7778] {
+            let lot = compose(post(media: [media("photo")],
+                                   scenes: [scene("s", media: "photo",
+                                                  mediaAspectRatio: rapport)]))
+            let item = try XCTUnwrap(lot.scenes.values.first)
+
+            let cardée = item.surface(inFullFrame: false)
+            XCTAssertFalse(cardée.paintsLetterbox,
+                           "cardée, la scène-image est la PHOTO : ses bandes sortent du cadre")
+
+            let pleine = item.surface(inFullFrame: true)
+            XCTAssertEqual(pleine.aspect, item.canvasAspect, accuracy: 0.0001,
+                           "en plein cadre, le cadre prend le rapport du CANVAS")
+            XCTAssertTrue(pleine.paintsLetterbox,
+                          "ses bandes entrent dans le cadre — le canvas DOIT les peindre")
+            XCTAssertNotEqual(pleine.aspect, cardée.aspect, accuracy: 0.0001,
+                              "les deux surfaces ne présentent pas la même chose (rapport \(rapport))")
+        }
+    }
+
+    /// Une scène qui n'est PAS qu'une image ne change pas de comportement : son
+    /// cadre est déjà celui du canvas, et son fond était déjà peint (#4519 — la
+    /// bande est une surface de composition dès que l'auteur y pose quelque
+    /// chose).
+    @MainActor
+    func test_uneSceneComposee_presenteLaMemeChoseSurLesDeuxSurfaces() throws {
+        let lot = compose(post(media: [media("photo")],
+                               scenes: [scene("s", media: "photo")]))
+        let item = try XCTUnwrap(lot.scenes.values.first)
+
+        XCTAssertEqual(item.surface(inFullFrame: false), item.surface(inFullFrame: true),
+                       "sans image de fond déclarée, la surface ne dépend plus de la présentation")
+        XCTAssertTrue(item.surface(inFullFrame: false).paintsLetterbox)
+    }
+
+    /// `servesLetterboxFill` — que quatre surfaces lisent déjà (#6791) — reste
+    /// EXACTEMENT la réponse cardée. Le lot ne déplace rien de ce qui existait.
+    @MainActor
+    func test_servesLetterboxFill_resteLaReponseCardee() throws {
+        for rapport in [nil, 0.8, 1.0] as [Double?] {
+            let lot = compose(post(media: [media("photo")],
+                                   scenes: [scene("s", media: "photo",
+                                                  mediaAspectRatio: rapport)]))
+            let item = try XCTUnwrap(lot.scenes.values.first)
+            XCTAssertEqual(item.servesLetterboxFill,
+                           item.surface(inFullFrame: false).paintsLetterbox)
+        }
+    }
+
+    /// **La page scène lit la réponse de SA présentation, pas la cardée.**
+    ///
+    /// Garde de source : c'est le site qui a manqué au lot précédent, et rien
+    /// d'autre ne le mesure — la page est une vue SwiftUI dont le canvas est un
+    /// `UIViewRepresentable`.
+    func test_laPageScene_sertLeFondDeSaPresentation() throws {
+        let source = try String(contentsOfFile: Self.cheminPageScene, encoding: .utf8)
+        XCTAssertTrue(
+            source.contains("item.surface(inFullFrame: presentation.isFull).paintsLetterbox"),
+            """
+            La page scène doit servir le fond de SA présentation. Servir             `item.servesLetterboxFill` — la réponse cardée — laisse le plein             cadre sans fond dès que son rapport change.
+            """)
+    }
+
+    private static let cheminPageScene = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
+        .appendingPathComponent("Meeshy/Features/Main/Views/ConversationMediaGalleryView+ScenePage.swift")
+        .path
+
 }
