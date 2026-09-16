@@ -409,7 +409,19 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // Les cinq lots se cumulent : 54 450 − 31 = 54 419. Seul #6701 retire de
     // `StoryViewerView+Canvas.swift` : son retrait s'additionne sans
     // recouvrement.
-    // #6704 — 54 450 → 54 321 (−129). Le rail du lecteur de story devait teinter
+    // #6708 — 54 419 → 54 403 (−16). La mesure du détail passe par
+    // `onGeometryChange` : dans `PostDetailView.swift`, le couple
+    // `GeometryReader` + préférence de la zone de défilement devient une ligne, et
+    // les deux clés de préférence orphelines partent (1 810 → 1 794). Rien n'y est
+    // ajouté ; le plafond baisse d'exactement ce que le lot retire.
+    //
+    // Les six lots se cumulent : 54 450 − 31 − 16 = 54 403. #6701 retire de
+    // `StoryViewerView+Canvas.swift`, #6708 de `PostDetailView.swift` — deux hôtes
+    // distincts, donc les deux baisses s'additionnent. Cumul MESURÉ sur les 26 noms
+    // après fusion : 54 034, soit le même mou de 369 lignes qu'avant (#6016) —
+    // compté comme la règle 3 le fait, `components(separatedBy: .newlines)` sur la
+    // racine `apps/ios/Meeshy`.
+    // #6704 — 54 403 → 54 274 (−129). Le rail du lecteur de story devait teinter
     // son glyphe et son libellé depuis la luminance de la slide, et le bouton qui
     // les peint vivait dans `StoryViewerView+Content.swift`, hôte en dette. Il en
     // est d'abord sorti, tel quel, vers `StoryViewerView+ActionButton.swift` (−126) ;
@@ -419,12 +431,18 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // branche en une ligne (−3). Les deux hôtes RESTENT en dette ; le plafond baisse
     // d'exactement ce que le lot retire.
     //
-    // **Les six lots se CUMULENT : 54 450 − 31 − 129 = 54 290.** #6701 retire de
-    // `StoryViewerView+Canvas.swift`, #6704 de `StoryViewerView+Content.swift` et de
-    // `ReelsPlayerView.swift` : aucun recouvrement, donc les deux retraits
-    // s'additionnent. Garder l'un des deux plafonds à la fusion aurait laissé la
-    // moitié du travail non comptée — le mode de panne déjà payé le 2026-08-30.
-    private static let legacyLineCeiling = 54_290
+    // **Les SEPT lots se CUMULENT : 54 450 − 31 (#6701) − 16 (#6708) − 129 (#6704)
+    // = 54 274.** Les trois retirent de trois hôtes DISTINCTS —
+    // `StoryViewerView+Canvas.swift`, `PostDetailView.swift`,
+    // `StoryViewerView+Content.swift` + `ReelsPlayerView.swift` — donc aucun
+    // recouvrement et les baisses s'additionnent. Garder l'un des plafonds à la
+    // fusion aurait laissé l'autre moitié du travail non comptée : le mode de panne
+    // déjà payé le 2026-08-30, et rejoué deux fois sur cette branche.
+    //
+    // Cumul MESURÉ après cette fusion : **53 905** — soit les 54 034 de #6708 moins
+    // les 129 de ce lot, et le même mou de 369 lignes (#6016), qui n'est pas repris
+    // ici.
+    private static let legacyLineCeiling = 54_274
 
     // MARK: - Règle 1 — pas de 43ᵉ
 
