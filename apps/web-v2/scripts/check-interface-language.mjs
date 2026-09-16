@@ -142,6 +142,14 @@ async function measure({ name, locale, stored, want }, viewport, scheme) {
   await page.goto(`${BASE}/links`, { waitUntil: 'load' });
   await page.locator('header h1').waitFor({ state: 'visible', timeout: 10_000 });
   await page.locator('[data-floating-menu]').waitFor({ state: 'visible', timeout: 10_000 });
+  /* Le NOM du bouton dit le compte de la cloche (#6288) : il naît SANS compte
+     et se met à jour quand `GET /notifications/counts` répond — une requête
+     asynchrone que le montage du bouton ne garantit pas terminée. Lire
+     `aria-label` juste après « visible » est une COURSE (#6874, mesurée en
+     CI : deux verdicts opposés sur le même commit). La pastille de coin
+     (`UnreadCornerBadge`) naît du MÊME état que le nom du bouton, dans le
+     même rendu : l'attendre revient à attendre la VALEUR, pas le rendu. */
+  await page.waitForSelector('.floating-menus [data-unread]', { timeout: 10_000 });
 
   expect((await page.evaluate(() => document.documentElement.lang)) === want.lang, `${tag} : <html lang="${want.lang}">`);
   expect((await page.locator('header h1').innerText()).trim() === want.title, `${tag} : titre « ${want.title} »`);
