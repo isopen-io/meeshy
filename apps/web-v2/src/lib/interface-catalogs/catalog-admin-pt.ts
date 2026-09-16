@@ -84,6 +84,22 @@ const pt = {
   'admin.conv.title': 'Conversas',
   'admin.conv.empty': 'Sem conversas',
   'admin.conv.members': '{count} membros',
+  'admin.nav.conversations': 'Conversas',
+  'admin.convList.search': 'Procurar uma conversa',
+  'admin.convList.count': '{count} conversa(s)',
+  'admin.convList.empty': 'Nenhuma conversa corresponde.',
+  'admin.convList.unavailable': 'Lista indisponível no momento.',
+  'admin.convList.members': '{count} membros',
+  'admin.convList.sovereign': 'Reservado ao nível de administração.',
+  'admin.convDetail.title': 'Leitura de uma conversa',
+  'admin.convDetail.reasonLabel': 'Motivo da leitura',
+  'admin.convDetail.reasonHint': 'Dez caracteres mínimo, registado com o seu nome.',
+  'admin.convDetail.read': 'Ler a conversa',
+  'admin.convDetail.empty': 'Nenhuma mensagem',
+  'admin.convDetail.protected': 'Protegido: existe, não se mostra',
+  'admin.convDetail.attachmentProtected': 'anexo protegido',
+  'admin.convDetail.edited': 'editado',
+  'admin.convDetail.attachments': '{count} anexo(s)',
 } satisfies AdminInterfaceCatalog;
 
 export default pt;

@@ -84,6 +84,22 @@ const de = {
   'admin.conv.title': 'Unterhaltungen',
   'admin.conv.empty': 'Keine Unterhaltungen',
   'admin.conv.members': '{count} Mitglieder',
+  'admin.nav.conversations': 'Unterhaltungen',
+  'admin.convList.search': 'Unterhaltung suchen',
+  'admin.convList.count': '{count} Unterhaltung(en)',
+  'admin.convList.empty': 'Keine Unterhaltung gefunden.',
+  'admin.convList.unavailable': 'Liste derzeit nicht verfügbar.',
+  'admin.convList.members': '{count} Mitglieder',
+  'admin.convList.sovereign': 'Dem Admin-Rang vorbehalten.',
+  'admin.convDetail.title': 'Eine Unterhaltung lesen',
+  'admin.convDetail.reasonLabel': 'Grund des Lesens',
+  'admin.convDetail.reasonHint': 'Mindestens zehn Zeichen, mit Ihrem Namen protokolliert.',
+  'admin.convDetail.read': 'Unterhaltung lesen',
+  'admin.convDetail.empty': 'Keine Nachricht',
+  'admin.convDetail.protected': 'Geschützt: vorhanden, nicht sichtbar',
+  'admin.convDetail.attachmentProtected': 'geschützter Anhang',
+  'admin.convDetail.edited': 'bearbeitet',
+  'admin.convDetail.attachments': '{count} Anhang/Anhänge',
 } satisfies AdminInterfaceCatalog;
 
 export default de;
