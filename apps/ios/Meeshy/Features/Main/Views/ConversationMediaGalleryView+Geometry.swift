@@ -352,16 +352,28 @@ extension ConversationMediaGalleryView {
         )
     }
 
+    /// **L'état que le SOLVEUR reçoit — site unique** (#6789).
+    ///
+    /// Le voile de la rangée de réactions efface le CHROME sans libérer sa
+    /// place : `MediaStageReactionVeil.geometryPresentation` prend `pickerOpen`
+    /// et ne le lit pas, et c'est toute la règle. Elle passe par une fonction
+    /// plutôt que par un appel qu'on s'abstient d'écrire, parce qu'une règle
+    /// qu'on respecte en NE FAISANT RIEN ne se teste pas — et se perd au premier
+    /// lot qui ajoute un site.
+    var stageGeometryPresentation: StagePresentation {
+        MediaStageReactionVeil.geometryPresentation(stagePresentation, pickerOpen: reactionBarOpen)
+    }
+
     /// Le pager s'en sert pour se poser exactement dans la zone libre que le
     /// solveur a mesurée ; sans ce partage, le cadre dessiné et le cadre calculé
     /// diffèreraient d'une bande. En plein cadre, les deux valent zéro et le
     /// pager reprend l'écran entier.
     var plateauTopInset: CGFloat {
-        MediaGalleryStage.topInset(presentation: stagePresentation, corridors: stageCorridors)
+        MediaGalleryStage.topInset(presentation: stageGeometryPresentation, corridors: stageCorridors)
     }
 
     var plateauBottomInset: CGFloat {
-        MediaGalleryStage.bottomInset(presentation: stagePresentation, corridors: stageCorridors)
+        MediaGalleryStage.bottomInset(presentation: stageGeometryPresentation, corridors: stageCorridors)
     }
 
     /// Le cadre de CE média. Chaque page a le sien : une vidéo 16:9 et une scène
@@ -377,7 +389,7 @@ extension ConversationMediaGalleryView {
         MediaGalleryStage.resolve(
             viewport: DeviceLayout.windowSize,
             mediaRatio: MediaGalleryStage.mediaRatio(of: attachment, scenes: sceneContext?.scenes ?? [:]),
-            presentation: stagePresentation.framing,
+            presentation: stageGeometryPresentation.framing,
             corridors: stageCorridors
         )
     }
@@ -387,7 +399,7 @@ extension ConversationMediaGalleryView {
         guard currentIndex < allAttachments.count else {
             return MediaGalleryStage.resolve(viewport: DeviceLayout.windowSize,
                                              mediaRatio: nil,
-                                             presentation: stagePresentation.framing,
+                                             presentation: stageGeometryPresentation.framing,
                                              corridors: stageCorridors)
         }
         return stage(for: allAttachments[currentIndex])
@@ -450,6 +462,7 @@ extension ConversationMediaGalleryView {
 
             VStack(spacing: 0) {
                 Spacer(minLength: 0)
+                cadreReactionBadge
                 cadreActionColumn
                 cadreOverlay
             }
@@ -466,6 +479,41 @@ extension ConversationMediaGalleryView {
         }
         .coordinateSpace(name: MediaGalleryStage.cadreSpace)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// **CE QUE LA PIÈCE A RÉCOLTÉ, VISIBLE SANS REFERMER** (#6789, directive
+    /// porteur 2026-09-16 : « lorsqu'on choisi la réaction, ce doit s'afficher
+    /// sur l'attachement en plein ecran et dans la conversation »).
+    ///
+    /// Le résumé arrivait déjà jusqu'ici — `reactionSummary` et
+    /// `currentUserReactions` sont des champs de la MÊME pièce que la bulle rend
+    /// —, et aucun site du visualiseur ne les lisait. On réagissait, l'écran ne
+    /// changeait pas, et il fallait refermer pour voir que le geste avait
+    /// marché : un contrôle dont l'effet n'atteint aucun pixel (loi 4, lue à
+    /// l'envers).
+    ///
+    /// **Alignée sur le PLATEAU, pas sur le média** (#6760) : elle rejoint la
+    /// pile qui porte déjà la colonne d'actions et le bloc auteur, dans la
+    /// largeur `stageChromeWidth`. Posée sur le cadre du média, elle aurait
+    /// changé de place d'une pièce à l'autre — et se serait cognée au bloc
+    /// auteur dès qu'une pièce haute remplit la région.
+    ///
+    /// **C'est du CHROME**, donc elle part avec lui : la rangée d'émojis
+    /// ouverte l'efface comme elle efface le reste, et le choix de l'émoji la
+    /// ramène — ce qui est exactement l'enchaînement que la directive décrit.
+    @ViewBuilder
+    var cadreReactionBadge: some View {
+        if currentIndex < allAttachments.count,
+           let modèle = AttachmentReactionBadgeModel.make(
+                summary: allAttachments[currentIndex].reactionSummary,
+                currentUserReactions: allAttachments[currentIndex].currentUserReactions) {
+            AttachmentReactionBadge(model: modèle, accent: Color(hex: accentColor))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, MediaGalleryStage.gutter)
+                .padding(.bottom, MediaStageActionColumn.spacing)
+                .transition(.scale(scale: 0.6).combined(with: .opacity))
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: modèle)
+        }
     }
 
     /// La largeur du PLATEAU — celle que le chrome prend, quelle que soit la

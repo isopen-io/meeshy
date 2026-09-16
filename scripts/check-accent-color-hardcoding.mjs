@@ -107,8 +107,27 @@
 // 2026-09-14 (#6482) — variables inconnues 445 → 444. La section Bêta de
 // Réglages part avec son interrupteur : `Color(hex: MeeshyColors.successHex)`
 // quitte `SettingsView`. Aucun littéral ne bouge (118).
+//
+// 2026-09-16 (#6793, relevé par #6802) — variables inconnues 444 → 445. UN
+// seul appel neuf : la pastille de réactions d'une pièce jointe arrive sur la
+// rangée focale, et `FocalAttachmentBlock` la teinte par son `accentHex`.
+// L'argument EST l'accent de la conversation : la vue le reçoit de ses
+// appelants (`BubbleStandardLayout+Media.swift` lui passe le `contactColor`
+// de la bulle) et le relaie elle-même sous le label `accentColor:` à ses
+// sous-vues. C'est l'application de la règle, pas son contournement.
+//
+// Pourquoi RELEVER plutôt que renommer, puisque le §ADMITTED refuse la
+// ressemblance : `accentHex` n'est pas un à-peu-près d'`accentColor`, c'est
+// une convention ÉTABLIE de l'app — la CHAÎNE hexadécimale, par opposition à
+// la COULEUR. `CallDetailSheet` tient les deux côte à côte, `accentHex:
+// String` puis `accentColor: Color` dérivée de la première. Renommer aurait
+// cassé ce vocabulaire ; interposer une propriété calculée aurait DÉPLACÉ
+// l'appel sans le supprimer (solde nul), c'est-à-dire contourné le garde au
+// lieu de lui répondre. Le §ADMITTED reste donc volontairement étroit, et
+// c'est bien ici — dans le registre daté qu'il exige — que l'appel se
+// justifie. Aucun littéral ne bouge (118).
 const REFERENCE_LITERAL_COLOR_COUNT = 118;
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 444;
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 445;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';

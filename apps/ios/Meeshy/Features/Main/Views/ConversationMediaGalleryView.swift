@@ -483,9 +483,19 @@ struct ConversationMediaGalleryView: View {
         }
     }
 
+    /// **Le chrome du plateau, et ce qui l'efface** (#6142 pour l'immersion,
+    /// #6789 pour le voile).
+    ///
+    /// Deux façons de n'avoir aucun contrôle à l'écran, et elles ne se
+    /// confondent pas : le plein cadre a RENDU la place du plateau, la rangée de
+    /// réactions la VOILE — sa place reste réservée, pour que le média ne bouge
+    /// pas sous le doigt qui vise un émoji. `MediaStageReactionVeil` tient les
+    /// deux d'un seul verdict.
     private var overlayLayer: some View {
-        ZStack {
-            if stagePresentation.showsPlateau {
+        let chrome = MediaStageReactionVeil.showsChrome(presentation: stagePresentation,
+                                                        pickerOpen: reactionBarOpen)
+        return ZStack {
+            if chrome {
                 // Le plateau ENTIER — les deux couloirs et ce qui se pose sur le
                 // cadre, transport vidéo compris (#6141) : il commande le média,
                 // donc il vit sur le cadre, plus dans une couche flottante à lui.
@@ -493,8 +503,9 @@ struct ConversationMediaGalleryView: View {
                     .transition(.opacity)
             }
         }
-        .allowsHitTesting(stagePresentation.showsPlateau)
+        .allowsHitTesting(chrome)
         .animation(.easeInOut(duration: 0.2), value: stagePresentation)
+        .animation(.easeInOut(duration: 0.2), value: reactionBarOpen)
     }
 
     // MARK: - Pager

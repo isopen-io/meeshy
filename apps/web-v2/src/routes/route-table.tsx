@@ -107,6 +107,10 @@ export const ROUTES = {
   accountDeletion: { pattern: '/account/deletion', screen: () => import('@/routes/account-deletion') },
   verifyEmailChange: { pattern: '/settings/verify-email-change', screen: () => import('@/routes/verify-email-change') },
   settingsNotifications: { pattern: '/settings/notifications', screen: () => import('@/routes/settings-notifications') },
+  /* L'EXPORT DE DONNÉES (#6725) — la rangée « Exporter mes données » des
+     réglages, masquée depuis la décommission du legacy (#6335, #6702) et qui
+     revient à une adresse propre à la v2. */
+  dataExport: { pattern: '/settings/data-export', screen: () => import('@/routes/data-export') },
   /* LES HUIT DESTINATIONS DES MENUS FLOTTANTS (#6214) — le Flux pour le bouton
      de gauche, les six barreaux de l'échelle de droite, et le profil qu'ouvre
      l'avatar. Leurs libellés, teintes et glyphes vivent dans UNE table

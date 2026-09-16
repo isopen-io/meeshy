@@ -198,9 +198,8 @@ try {
       check((await textOf(page, 'h1')) === 'Réglages', `${label} : le titre (« ${await textOf(page, 'h1')} »)`);
       const sections = await page.$$eval('#contenu section h2', (els) => els.map((el) => (el.textContent ?? '').trim()));
       check(
-        ['COMPTE', 'CONFIDENTIALITÉ', 'APPARENCE', 'NOTIFICATIONS', 'OUTILS', 'À PROPOS'].every((title) => sections.includes(title)) &&
-          !sections.includes('DONNÉES'),
-        `${label} : les sections d'iOS, sans « Données » que plus rien ne remplit (${JSON.stringify(sections)})`,
+        ['COMPTE', 'CONFIDENTIALITÉ', 'APPARENCE', 'NOTIFICATIONS', 'DONNÉES', 'OUTILS', 'À PROPOS'].every((title) => sections.includes(title)),
+        `${label} : les sections d'iOS, « Données » comprise depuis que l'export y mène (#6725) (${JSON.stringify(sections)})`,
       );
       check((await page.$$('[role="switch"]')).length === 6, `${label} : six bascules que la passerelle obéit`);
       check(((await textOf(page, '[data-settings-profile]')) ?? '').includes('@awa'), `${label} : la carte de profil porte la session`);
@@ -217,6 +216,11 @@ try {
       check(
         deletion.length === 1 && deletion[0].target === null,
         `${label} : la suppression de compte ouvre sa page de la v2, dans le même onglet — ${JSON.stringify(deletion)}`,
+      );
+      const dataExport = links.filter((l) => l.href === '/settings/data-export');
+      check(
+        dataExport.length === 1 && dataExport[0].target === null,
+        `${label} : l'export de données ouvre sa page de la v2, dans le même onglet (#6725) — ${JSON.stringify(dataExport)}`,
       );
       check((await textOf(page, '[data-settings-version]')) === VERSION, `${label} : la version servie est celle du paquet (${VERSION})`);
       await capture(page, `reglages-${suffix}`);
@@ -242,9 +246,10 @@ try {
       check(rest.texts.length >= 4 && stolen.length === 0, `${label} : aucun texte n'est volé à son centre au repos (${rest.texts.length}) — ${JSON.stringify(stolen)}`);
       const scrolled = await reachScrolled(page);
       const unreachable = scrolled.filter((c) => !c.ok || c.hauteur < TAP_FLOOR);
-      // Dix-sept contrôles au moins depuis le masquage des six entrées non portées (#6702) : profil 1,
-      // compte 1, confidentialité 4, apparence 5, notifications 2, outils 1, à propos 2, déconnexion 1.
-      check(scrolled.length >= 17 && unreachable.length === 0, `${label} : chaque contrôle s'atteint et fait ${TAP_FLOOR} px (${scrolled.length}) — ${JSON.stringify(unreachable)}`);
+      // Dix-huit contrôles au moins depuis le retour de l'export de données (#6725) : profil 1,
+      // compte 1, confidentialité 4, apparence 5, notifications 2, données 1, outils 1, à propos 2,
+      // déconnexion 1. Médias et messages restent masqués (#6723, #6724).
+      check(scrolled.length >= 18 && unreachable.length === 0, `${label} : chaque contrôle s'atteint et fait ${TAP_FLOOR} px (${scrolled.length}) — ${JSON.stringify(unreachable)}`);
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
       check(overflow <= 0, `${label} : aucun débordement horizontal (${overflow} px)`);
 

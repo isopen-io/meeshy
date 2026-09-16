@@ -398,33 +398,38 @@ final class FullscreenAttachmentReactionTests: XCTestCase {
         )
     }
 
-    /// La traînée flotte au-dessus des DEUX bandes du couloir bas, jamais
-    /// dessus : ce sont les seuls contrôles du bas qui servent à PARCOURIR — le
-    /// rail parcourt la série, la bande de transport parcourt le média — et les
-    /// couvrir enfermerait le lecteur sur l'instant courant de la pièce
-    /// courante.
+    /// **La traînée ne dodge plus les deux bandes du couloir : elles ne sont
+    /// plus là** (#6789, directive porteur 2026-09-16 : « Lorsqu'on affiche les
+    /// reactions, les autres controlleurs doivent disparaitre »).
     ///
-    /// **La marge se LIT sur les couloirs, elle ne les recompose pas.** Elle
-    /// recopiait la conjonction du rail (`count > 1 ? …`) et ignorait
-    /// purement la bande réservée par #6162 : le bas de la traînée tombait alors
-    /// 8 pt au-dessus du rail, c'est-à-dire exactement dans les 48 pt du
-    /// transport — scrubber, muet et menu ⋯ couverts pendant que la traînée est
-    /// ouverte, `allowsHitTesting(reactionBarOpen)` rendant la couche opaque au
-    /// doigt. La garde précédente ne pouvait pas l'attraper : écrite avant
-    /// #6162, elle n'exigeait que la présence de la hauteur de la pellicule.
-    func test_laTrainee_laisseLesDeuxBandesDuCouloirLibres() throws {
+    /// Ce témoin exigeait l'INVERSE jusqu'à cette date, et pour une bonne
+    /// raison : le rail parcourt la série, la bande de transport parcourt le
+    /// média, et les couvrir enfermait le lecteur sur l'instant courant de la
+    /// pièce courante. **La directive retire la raison en même temps que les
+    /// bandes** — la même ouverture qui monte la traînée efface tout le chrome,
+    /// et une marge qui éviterait des bandes absentes laisserait une centaine de
+    /// points de vide sous les émojis.
+    ///
+    /// La règle vit désormais dans `MediaStageReactionVeil`, avec son témoin
+    /// d'invariance (`MediaStageReactionVeilTests`). Ce site ne garde que
+    /// l'essentiel : la marge se LIT sur la loi, elle ne recompose pas les
+    /// couloirs — ce qu'elle avait déjà fait une fois, en oubliant le transport.
+    func test_laTrainee_seLitSurLaLoiDuVoile() throws {
         let code = try gallerieSource()
-        guard let marge = corps("private var reactionBarBottomInset: CGFloat {", dans: code) else {
+        guard let marge = corps("var reactionBarBottomInset: CGFloat {", dans: code) else {
             return XCTFail("`reactionBarBottomInset` introuvable")
         }
         let plat = compact(marge)
         XCTAssertTrue(
-            plat.contains("stageCorridors.rail"),
-            "La marge basse doit dégager la pellicule — et la lire là où elle est RÉSERVÉE."
+            plat.contains("MediaStageReactionVeil.rowBottomInset("),
+            "La marge basse se lit sur la loi du voile, jamais sur une somme recopiée."
         )
-        XCTAssertTrue(
-            plat.contains("stageCorridors.transport"),
-            "La marge basse doit dégager la bande de progression du #6162, sinon la traînée la couvre."
+        XCTAssertFalse(
+            plat.contains("stageCorridors.rail+stageCorridors.transport"),
+            """
+            L'ancienne somme survit : la traînée flotterait au-dessus de bandes \
+            qui ne sont plus peintes.
+            """
         )
     }
 
