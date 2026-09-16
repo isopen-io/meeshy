@@ -27,6 +27,8 @@ import {
   isDrag,
 } from '@/lib/stories/gesture';
 import { resolveStoryCaption } from '@/lib/stories/caption';
+
+import { StoryMediaLayer } from './story-parts';
 import {
   DEFAULT_SLIDE_DURATION_MS,
   currentStoryAt,
@@ -214,22 +216,6 @@ function ProgressBars({
           )}
         </span>
       ))}
-    </div>
-  );
-}
-
-/** Le média d'une story dont la source est INEXPLOITABLE (absente, ou dont le
- * téléchargement a échoué) — un état DESSINÉ, jamais un `<img src="">` : le
- * navigateur y peint son icône de lien brisé sur fond noir et redemande le
- * document courant au passage. Mesuré sur `story-image-light.png` du premier
- * jet (§ A de la revue). */
-function MediaUnavailable() {
-  return (
-    <div className="grid gap-2 justify-items-center px-8 text-center">
-      <Glyph name="image" size={38} style={{ color: 'rgba(255,255,255,0.7)' }} />
-      <p className="text-body" style={{ color: 'rgba(255,255,255,0.75)' }}>
-        Média indisponible
-      </p>
     </div>
   );
 }
@@ -600,36 +586,20 @@ export default function StoryScreen() {
           onPointerCancel={clearHoldTimer}
           onPointerLeave={clearHoldTimer}
         >
-          {showsImage ? (
-            <img
-              key={currentStory.id}
-              src={mediaSrc}
-              alt=""
-              className="absolute inset-0 size-full object-cover"
-              onLoad={() => setContentReady(true)}
-              onError={() => {
-                setMediaFailed(true);
-                setContentReady(true);
-              }}
-            />
-          ) : (
-            <div
-              className="absolute inset-0 grid place-items-center px-8"
-              style={sceneBackground(currentStory.storyEffects?.background)}
-            >
-              {hasMedia ? (
-                <MediaUnavailable />
-              ) : resolvedContent !== null ? (
-                <p
-                  className="text-center text-title font-semibold"
-                  style={{ fontSize: 28, lineHeight: 1.3 }}
-                  lang={resolvedContent.language || undefined}
-                >
-                  {resolvedContent.text}
-                </p>
-              ) : null}
-            </div>
-          )}
+          <StoryMediaLayer
+            storyId={currentStory.id}
+            mediaSrc={mediaSrc}
+            mimeType={media?.mimeType}
+            showsMedia={showsImage}
+            hasMedia={hasMedia}
+            background={sceneBackground(currentStory.storyEffects?.background)}
+            caption={resolvedContent}
+            onReady={() => setContentReady(true)}
+            onFailed={() => {
+              setMediaFailed(true);
+              setContentReady(true);
+            }}
+          />
 
           <div
             className="pointer-events-none absolute inset-x-0 top-0 flex flex-col gap-2 px-3"

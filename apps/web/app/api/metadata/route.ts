@@ -108,7 +108,7 @@ async function generateConversationMetadata(
       if (shareLink) {
         return {
           title: `${shareLink.conversation?.title || 'Conversation Meeshy'} - Rejoignez la discussion`,
-          description: shareLink.description || `Rejoignez cette conversation sur Meeshy et discutez en temps réel avec traduction automatique dans plus de 100 langues.`,
+          description: shareLink.description || `Rejoignez cette conversation sur Meeshy et discutez en temps réel avec traduction automatique dans 76 langues.`,
           image: getOgImageUrl('default', frontendUrl),
           url: buildShareLinkUrl(linkId, frontendUrl),
           type: 'website',
@@ -165,7 +165,7 @@ async function generateJoinMetadata(
 function generateDefaultMetadata(frontendUrl: string = 'https://meeshy.me'): MetadataResponse {
   return {
     title: 'Meeshy - Messagerie Multilingue en Temps Réel',
-    description: 'Connectez-vous avec le monde entier grâce à Meeshy, la plateforme de messagerie multilingue avec traduction automatique en temps réel. Plus de 100 langues supportées, conversations globales et partage de fichiers.',
+    description: 'Connectez-vous avec le monde entier grâce à Meeshy, la plateforme de messagerie multilingue avec traduction automatique en temps réel. 76 langues traduisibles, conversations globales et partage de fichiers.',
     image: getOgImageUrl('default', frontendUrl),
     url: frontendUrl,
     type: 'website',

@@ -410,8 +410,8 @@ final class FullscreenAttachmentReactionTests: XCTestCase {
     /// et une marge qui éviterait des bandes absentes laisserait une centaine de
     /// points de vide sous les émojis.
     ///
-    /// La règle vit désormais dans `MediaStageReactionVeil`, avec son témoin
-    /// d'invariance (`MediaStageReactionVeilTests`). Ce site ne garde que
+    /// La règle vit désormais dans `MediaStageVeil`, avec son témoin
+    /// d'invariance (`MediaStageVeilTests`). Ce site ne garde que
     /// l'essentiel : la marge se LIT sur la loi, elle ne recompose pas les
     /// couloirs — ce qu'elle avait déjà fait une fois, en oubliant le transport.
     func test_laTrainee_seLitSurLaLoiDuVoile() throws {
@@ -421,7 +421,7 @@ final class FullscreenAttachmentReactionTests: XCTestCase {
         }
         let plat = compact(marge)
         XCTAssertTrue(
-            plat.contains("MediaStageReactionVeil.rowBottomInset("),
+            plat.contains("MediaStageVeil.rowBottomInset("),
             "La marge basse se lit sur la loi du voile, jamais sur une somme recopiée."
         )
         XCTAssertFalse(

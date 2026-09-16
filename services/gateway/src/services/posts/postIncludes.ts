@@ -115,6 +115,13 @@ export const mediaSelect = Prisma.validator<Prisma.PostMediaSelect>()({
   // traduites, jamais sa légende. Voir `packages/shared/decisions.md` § 2026-09-14.
   captionLanguage: true,
   captionTranslations: true,
+  // Traduction du texte ALTERNATIF d'accessibilité (#6737) — jumelle exacte
+  // de `captionLanguage`/`captionTranslations` ci-dessus, sur `alt` plutôt que
+  // `caption`. Les colonnes existent depuis PR #6747 (schéma + service) mais
+  // n'avaient jamais rejoint CE select — sans elles, `MediaAltTranslationService`
+  // traduit dans le vide : rien ne peut jamais atteindre un client.
+  altLanguage: true,
+  altTranslations: true,
   language: true,
   variantOf: true,
   transcription: true,

@@ -18,6 +18,7 @@ const publicationScreen = () => import('@/routes/post');
    diverger d'écran. Voir le commentaire de `adm` plus bas (#6795). */
 const adminScreen = () => import('@/routes/admin');
 const adminUsersScreen = () => import('@/routes/admin-users');
+const adminUserScreen = () => import('@/routes/admin-user');
 
 export const ROUTES = {
   list: { pattern: '/', screen: () => import('@/routes/conversations') },
@@ -177,6 +178,12 @@ export const ROUTES = {
      le rôle, que `SessionUser` ne projette pas. */
   admin: { pattern: '/admin', screen: adminScreen },
   adminUsers: { pattern: '/admin/users', screen: adminUsersScreen },
+  /* LE DÉTAIL D'UN MEMBRE (#6819) — trois segments, là où la liste en a deux :
+     aucune ambiguïté de résolution entre les deux, et l'ordre naturel les
+     garde lisibles. Déclarée AUSSI dans `session-guard.ts` — sans quoi elle
+     serait publique par défaut, et cet écran-ci porte l'édition, la
+     réinitialisation de mot de passe et le bannissement. */
+  adminUser: { pattern: '/admin/users/$user', screen: adminUserScreen },
   /* LES DEUX CHEMINS DE L'ADMINISTRATION (#6795, directive porteur 2026-09-16 :
      « tu peux même avoir les deux chemins dans la v2, `/adm/` pour la route
      d'administration nouvelle qui implémentera petit à petit les vues de
@@ -195,6 +202,7 @@ export const ROUTES = {
      vers elle et ce commentaire disparaît. */
   adm: { pattern: '/adm', screen: adminScreen },
   admUsers: { pattern: '/adm/users', screen: adminUsersScreen },
+  admUser: { pattern: '/adm/users/$user', screen: adminUserScreen },
 } as const;
 
 /**

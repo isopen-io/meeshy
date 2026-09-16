@@ -40,15 +40,29 @@ import { directoryPeopleRoutes } from '../../../routes/directory/people';
 const PREFIXE = '/api/v1/directory';
 const VIEWER = '507f1f77bcf86cd799439011';
 
-function buildApp(lignes: Array<Record<string, unknown>> = []) {
-  const findMany = jest.fn<any>(async () => lignes);
+function buildApp(
+  lignes: Array<Record<string, unknown>> = [],
+  blocage: { bloqueurs?: string[]; bloquesParLAppelant?: string[] } = {}
+) {
+  // Le double DISTINGUE les deux requêtes que la route émet : « qui m'a
+  // bloqué ? » (`blockedUserIds: { has }`, la requête POSITIVE de
+  // `blockedIdsAroundViewer`) et la RECHERCHE elle-même. Un double qui rend les
+  // mêmes lignes aux deux ferait passer tout l'annuaire pour des bloqueurs.
+  const findMany = jest.fn<any>(async (args: any) =>
+    args?.where?.blockedUserIds ? (blocage.bloqueurs ?? []).map((id) => ({ id })) : lignes
+  );
   const prisma = {
     user: {
       findMany,
-      findUnique: jest.fn<any>(async () => ({ blockedUserIds: [] })),
+      findUnique: jest.fn<any>(async () => ({
+        blockedUserIds: blocage.bloquesParLAppelant ?? [],
+      })),
     },
   };
-  return { prisma, findMany };
+  /** Les arguments de la RECHERCHE — la seconde requête, jamais la première. */
+  const argsRecherche = () =>
+    (findMany.mock.calls as any[]).filter((c) => !c[0]?.where?.blockedUserIds).at(-1)![0];
+  return { prisma, findMany, argsRecherche };
 }
 
 async function monter(prisma: unknown): Promise<FastifyInstance> {
@@ -77,12 +91,12 @@ const comptes = (n: number) =>
 
 describe('La recherche interroge l’INDEX, jamais cinq colonnes', () => {
   it('cherche par égalité exacte sur un jeton — pas par `contains`', async () => {
-    const { prisma, findMany } = buildApp();
+    const { prisma, argsRecherche } = buildApp();
     const app = await monter(prisma);
 
     await chercher(app, 'q=Jean');
 
-    const where = findMany.mock.calls[1][0].where as Record<string, any>;
+    const where = argsRecherche().where as Record<string, any>;
     // L'égalité sur un élément de tableau est ce que le multikey sert. Un
     // `contains` non ancré retomberait en balayage complet, quel que soit
     // l'index posé.
@@ -93,12 +107,12 @@ describe('La recherche interroge l’INDEX, jamais cinq colonnes', () => {
   });
 
   it('n’interroge NI ne rend l’adresse ou le numéro', async () => {
-    const { prisma, findMany } = buildApp();
+    const { prisma, argsRecherche } = buildApp();
     const app = await monter(prisma);
 
     await chercher(app, 'q=jean');
 
-    const args = findMany.mock.calls[1][0] as { where: unknown; select: Record<string, unknown> };
+    const args = argsRecherche() as { where: unknown; select: Record<string, unknown> };
     // Joindre quelqu'un par son adresse a sa PROPRE porte, authentifiée et
     // bornée (#4160). Chercher par fragment de nom n'a pas à y toucher.
     expect(JSON.stringify(args.where)).not.toContain('email');
@@ -110,25 +124,28 @@ describe('La recherche interroge l’INDEX, jamais cinq colonnes', () => {
   });
 
   it('applique la portée de contact — actif, non supprimé, blocage dans les deux sens', async () => {
-    const { prisma, findMany } = buildApp();
+    const { prisma, argsRecherche } = buildApp([], {
+      bloqueurs: ['507f1f77bcf86cd7994390aa'],
+      bloquesParLAppelant: ['507f1f77bcf86cd7994390bb'],
+    });
     const app = await monter(prisma);
 
     await chercher(app, 'q=jean');
 
-    const where = findMany.mock.calls[1][0].where as Record<string, any>;
+    const where = argsRecherche().where as Record<string, any>;
     expect(where.isActive).toBe(true);
-    // Le filtre anti-suppression vit dans `AND`, sous la forme « absent vs
-    // null » (#6452) : un `deletedAt: null` nu écarterait aussi les comptes
-    // qui n'ont jamais écrit cette colonne.
+    // `isSet` ne vaut que pour `deletedAt`, champ OPTIONNEL. Sur la liste
+    // scalaire REQUISE `blockedUserIds`, Prisma ne le génère pas et refuse la
+    // requête — d'où le 500 de #6811. Le blocage passe donc par une LISTE,
+    // dans les deux directions, ce qui ferme aussi le piège « absent vs
+    // null » de #6452 : un compte qui n'a jamais écrit la colonne reste rendu.
+    expect(JSON.stringify(where.AND)).toContain('deletedAt');
+    expect(JSON.stringify(where.AND)).toContain('isSet');
     expect(where.NOT).toBeUndefined();
-    expect(where.AND).toContainEqual({ OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }] });
-    // Le blocage, lui, ne construit plus aucun filtre sur `blockedUserIds`
-    // ici : la garde bidirectionnelle est résolue AVANT cette requête, par
-    // `getBlockRelatedUserIds` (requête POSITIVE indexée, premier appel à
-    // `findMany`), jamais par un filtre de tableau NIÉ que le client Prisma
-    // généré refuse sur cette liste scalaire REQUISE (#6811).
     expect(JSON.stringify(where)).not.toContain('blockedUserIds');
-    expect(findMany.mock.calls[0][0].where).toEqual({ blockedUserIds: { has: VIEWER } });
+    expect(where.id.notIn).toEqual(
+      expect.arrayContaining(['507f1f77bcf86cd7994390aa', '507f1f77bcf86cd7994390bb'])
+    );
 
     await app.close();
   });
@@ -136,24 +153,24 @@ describe('La recherche interroge l’INDEX, jamais cinq colonnes', () => {
 
 describe('La projection est MINIMALE, et la présence se demande', () => {
   it('ne rend que quatre champs par défaut', async () => {
-    const { prisma, findMany } = buildApp();
+    const { prisma, argsRecherche } = buildApp();
     const app = await monter(prisma);
 
     await chercher(app, 'q=jean');
 
-    const select = findMany.mock.calls[1][0].select as Record<string, unknown>;
+    const select = argsRecherche().select as Record<string, unknown>;
     expect(Object.keys(select).sort()).toEqual(['avatar', 'displayName', 'id', 'username']);
 
     await app.close();
   });
 
   it('n’ajoute la présence que sur `?expand=presence`', async () => {
-    const { prisma, findMany } = buildApp();
+    const { prisma, argsRecherche } = buildApp();
     const app = await monter(prisma);
 
     await chercher(app, 'q=jean&expand=presence');
 
-    const select = findMany.mock.calls[1][0].select as Record<string, unknown>;
+    const select = argsRecherche().select as Record<string, unknown>;
     expect(select.isOnline).toBe(true);
     expect(select.lastActiveAt).toBe(true);
 
@@ -192,12 +209,12 @@ describe('La pagination dit enfin s’il reste une page', () => {
   });
 
   it('pagine par CURSEUR — plus de `count()` ni d’`offset`', async () => {
-    const { prisma, findMany } = buildApp(comptes(3));
+    const { prisma, argsRecherche } = buildApp(comptes(3));
     const app = await monter(prisma);
 
     await chercher(app, 'q=jean&cursor=user010');
 
-    const args = findMany.mock.calls[1][0] as Record<string, any>;
+    const args = argsRecherche() as Record<string, any>;
     expect(args.cursor).toEqual({ username: 'user010' });
     expect(args.skip).toBe(1);
     // L'ordre stable s'applique EN BASE, donc avant la découpe de page : deux
@@ -221,12 +238,12 @@ describe('Le contrat', () => {
   });
 
   it('plafonne la taille de page', async () => {
-    const { prisma, findMany } = buildApp();
+    const { prisma, argsRecherche } = buildApp();
     const app = await monter(prisma);
 
     await chercher(app, 'q=jean&limit=5000');
 
-    expect(findMany.mock.calls[1][0].take).toBeLessThanOrEqual(51);
+    expect(argsRecherche().take).toBeLessThanOrEqual(51);
 
     await app.close();
   });

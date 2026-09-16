@@ -207,8 +207,7 @@ function makePrisma(overrides: Record<string, any> = {}) {
     user: {
       findFirst: jest.fn<any>().mockResolvedValue(mockUser),
       findUnique: jest.fn<any>().mockResolvedValue(mockUser),
-      // `getBlockRelatedUserIds` (#6811) interroge « qui a bloqué l'appelant »
-      // par cette méthode, AVANT `findFirst`, sur `getUserByEmail`/`getUserByPhone`.
+      // « qui m'a bloqué ? » — la requête POSITIVE de `blockedIdsAroundViewer`.
       findMany: jest.fn<any>().mockResolvedValue([]),
       update: jest.fn<any>().mockResolvedValue(mockUser),
       updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),

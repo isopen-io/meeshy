@@ -170,9 +170,27 @@ enum MediaGalleryStage {
     /// lieu du rapport de la scène. Le rapport d'une scène vient donc de sa
     /// valeur (`GallerySceneItem.aspect`, dont `PostGalleryLot.sceneAspect` est
     /// le site unique) ; celui d'une image ou d'une vidéo, de ses dimensions.
+    /// **Le rapport d'une page — et il dépend de la SURFACE** (#6806).
+    ///
+    /// Une scène qui n'est qu'une image se présente au rapport de son IMAGE
+    /// (`SceneFraming.presentationAspect`), et c'est juste sur une carte : on y
+    /// ouvre la photo, et une fenêtre posée sur un canvas 9:16 en montrerait le
+    /// milieu. **En plein cadre, ce qu'on ouvre est la scène** — elle se
+    /// présente donc au rapport de son canvas.
+    ///
+    /// Mesuré au simulateur (iPhone 16 Pro, témoin de position posé dans la
+    /// page) : au rapport de l'IMAGE, une scène carrée rendait
+    /// `media = 402 × 398,6` dans un cadre de 402 × 874 — **237,7 pt de sol en
+    /// haut et en bas, 54 % de l'écran en fond flou**. Au rapport du CANVAS il
+    /// en reste 79,6 : le même sol divisé par trois, sans rien rogner.
+    ///
+    /// Une pièce jointe ordinaire ne connaît pas cette question : son rapport
+    /// est celui de ses pixels, sur toutes les surfaces.
     static func mediaRatio(of attachment: MessageAttachment,
-                           scenes: [String: GallerySceneItem]) -> CGFloat? {
-        scenes[attachment.id]?.aspect ?? ratio(of: attachment)
+                           scenes: [String: GallerySceneItem],
+                           presentation: StagePresentation) -> CGFloat? {
+        guard let scène = scenes[attachment.id] else { return ratio(of: attachment) }
+        return scène.surface(inFullFrame: presentation.isFull).aspect
     }
 
     /// **Un ratio inconnu prend toute la zone libre — il ne se devine pas.**
@@ -354,14 +372,18 @@ extension ConversationMediaGalleryView {
 
     /// **L'état que le SOLVEUR reçoit — site unique** (#6789).
     ///
-    /// Le voile de la rangée de réactions efface le CHROME sans libérer sa
-    /// place : `MediaStageReactionVeil.geometryPresentation` prend `pickerOpen`
-    /// et ne le lit pas, et c'est toute la règle. Elle passe par une fonction
-    /// plutôt que par un appel qu'on s'abstient d'écrire, parce qu'une règle
-    /// qu'on respecte en NE FAISANT RIEN ne se teste pas — et se perd au premier
-    /// lot qui ajoute un site.
+    /// Le voile d'une ouverture efface le CHROME sans libérer sa place :
+    /// `MediaStageVeil.geometryPresentation` prend les ouvertures et ne les lit
+    /// pas, et c'est toute la règle. Elle passe par une fonction plutôt que par
+    /// un appel qu'on s'abstient d'écrire, parce qu'une règle qu'on respecte en
+    /// NE FAISANT RIEN ne se teste pas — et se perd au premier lot qui ajoute un
+    /// site.
+    ///
+    /// **Les DEUX ouvertures y entrent** (#6817) : une barre de réponse qui
+    /// libérerait la place du plateau ferait changer le média de taille à chaque
+    /// montée du clavier, pendant qu'on écrit à son sujet.
     var stageGeometryPresentation: StagePresentation {
-        MediaStageReactionVeil.geometryPresentation(stagePresentation, pickerOpen: reactionBarOpen)
+        MediaStageVeil.geometryPresentation(stagePresentation, overlays: stageOverlays)
     }
 
     /// Le pager s'en sert pour se poser exactement dans la zone libre que le
@@ -388,7 +410,9 @@ extension ConversationMediaGalleryView {
     func stage(for attachment: MessageAttachment) -> MediaStageFraming.Result {
         MediaGalleryStage.resolve(
             viewport: DeviceLayout.windowSize,
-            mediaRatio: MediaGalleryStage.mediaRatio(of: attachment, scenes: sceneContext?.scenes ?? [:]),
+            mediaRatio: MediaGalleryStage.mediaRatio(of: attachment,
+                                                     scenes: sceneContext?.scenes ?? [:],
+                                                     presentation: stageGeometryPresentation),
             presentation: stageGeometryPresentation.framing,
             corridors: stageCorridors
         )

@@ -18,6 +18,7 @@ import type { Post } from '@meeshy/shared/types/post';
 import type { PostReference } from '@meeshy/shared/types/post-reference';
 import type { BackgroundSoundV3 } from '@meeshy/shared/types/canvas-v3';
 import { authorAccentColor } from '@meeshy/shared/utils/conversation-colors';
+import { resolveMediaAltText } from '@/hooks/use-post-translation';
 
 type PostCardMedia = {
   id: string;
@@ -25,6 +26,8 @@ type PostCardMedia = {
   fileUrl: string;
   thumbnailUrl?: string | null;
   alt?: string | null;
+  altLanguage?: string | null;
+  altTranslations?: unknown;
   duration?: number | null;
 };
 
@@ -135,6 +138,7 @@ function PostMediaTile({
   onDownload,
   downloadLabel,
   t,
+  preferredLanguages,
   testIdPrefix = 'post-card',
 }: {
   media: PostCardMedia;
@@ -142,8 +146,10 @@ function PostMediaTile({
   onDownload?: (media: PostCardMedia) => void;
   downloadLabel: string;
   t: (key: string, paramsOrFallback?: Record<string, unknown> | string) => string;
+  preferredLanguages?: readonly string[];
   testIdPrefix?: string;
 }) {
+  const resolvedAlt = resolveMediaAltText(media, preferredLanguages ?? []);
   return (
     <div className="group relative bg-[var(--gp-parchment)] aspect-square overflow-hidden">
       {onDownload && (
@@ -164,7 +170,7 @@ function PostMediaTile({
       {media.mimeType.startsWith('image/') && (
         <img
           src={buildAttachmentUrl(media.thumbnailUrl ?? media.fileUrl) ?? undefined}
-          alt={media.alt ?? t('post.imageAlt', { index: String(index + 1) })}
+          alt={resolvedAlt || t('post.imageAlt', { index: String(index + 1) })}
           className="w-full h-full object-cover"
           loading="lazy"
         />
@@ -500,6 +506,7 @@ function PostCard({
                 index={i}
                 downloadLabel={t('post.download', 'Download')}
                 t={t}
+                preferredLanguages={preferredLanguages}
                 onDownload={
                   onDownloadMedia
                     ? (mm) => {
@@ -589,6 +596,7 @@ function PostCard({
                     index={i}
                     downloadLabel={t('post.repostDownload', 'Download original media')}
                     t={t}
+                    preferredLanguages={preferredLanguages}
                     testIdPrefix="post-card-repost"
                     onDownload={handleDownloadRepostMedia}
                   />

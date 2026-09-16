@@ -111,8 +111,7 @@ function prismaPartage() {
     user: {
       findFirst: findFirstConscientDuSelect(),
       findUnique: jest.fn<any>(async () => ({ blockedUserIds: [] })),
-      // `getBlockRelatedUserIds` (#6811) interroge « qui m'a bloqué » par
-      // cette méthode — vide par défaut : personne n'a bloqué le viewer.
+      // « qui m'a bloqué ? » — la seconde moitié de `blockedIdsAroundViewer`.
       findMany: jest.fn<any>(async () => []),
     },
     friendRequest: { findFirst: jest.fn<any>(async () => null) },
@@ -165,16 +164,16 @@ describe("`where` — servirProfilPublic n'applique JAMAIS la portée de contact
     const where = prisma.user.findFirst.mock.calls[0][0].where as Record<string, unknown>;
     expect(where.email).toBe('cible@example.com');
     expect(where.isActive).toBe(true);
-    // Le filtre anti-suppression vit dans `AND`, sous la forme « absent vs
-    // null » — un `deletedAt: null` nu écarterait aussi les comptes qui n'ont
-    // jamais écrit cette colonne (#6452). Le blocage, lui, ne construit plus
-    // aucun filtre sur `blockedUserIds` ici : la garde bidirectionnelle est
-    // résolue par l'appelant via la requête POSITIVE indexée
-    // `getBlockRelatedUserIds`, jamais par un filtre de tableau NIÉ que le
-    // client Prisma généré refuse sur cette liste scalaire REQUISE (#6811).
+    // Le blocage vit dans une LISTE (`blockedIdsAroundViewer`), jamais dans un
+    // filtre de tableau NIÉ : `NOT: { blockedUserIds: { has } }` écarte aussi
+    // les comptes qui n'ont jamais écrit la colonne (#6452), et l'`isSet` posé
+    // pour y répondre n'existe pas sur une liste scalaire — Prisma refusait la
+    // requête, donc 500 (#6811). Seul `deletedAt`, champ OPTIONNEL, le porte.
     expect(where.NOT).toBeUndefined();
-    expect(where.AND).toContainEqual({ OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }] });
     expect(JSON.stringify(where)).not.toContain('blockedUserIds');
+    expect(where.id).toMatchObject({ notIn: expect.any(Array) });
+    expect(JSON.stringify(where.AND)).toContain('deletedAt');
+    expect(JSON.stringify(where.AND)).toContain('isSet');
 
     await app.close();
   });
@@ -189,8 +188,8 @@ describe("`where` — servirProfilPublic n'applique JAMAIS la portée de contact
     expect(where.phoneNumber).toBeDefined();
     expect(where.isActive).toBe(true);
     expect(where.NOT).toBeUndefined();
-    expect(where.AND).toContainEqual({ OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }] });
     expect(JSON.stringify(where)).not.toContain('blockedUserIds');
+    expect(where.id).toMatchObject({ notIn: expect.any(Array) });
 
     await app.close();
   });
