@@ -1,5 +1,81 @@
 # @meeshy/gateway
 
+## 1.55.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - le cliquet des couleurs d'accent enregistre la pastille de réactions focale (#6802)
+  - le port de la sécurité du compte — sessions, appareils, second facteur (#6720)
+  - les réactions d'un média remontent du serveur et se voient sur le média dans la conversation (#6793)
+  - l'administration a deux adresses — /adm pour la nouvelle, /admin réservée à l'ancienne
+  - créer un GROUPE depuis /conversations/new, une adresse et deux modes
+  - rejoindre un lien sans compte, et un direct porte le nom de l'autre
+  - la rangée de réactions est seule sur la scène, et la réaction choisie se voit sur la pièce (#6789)
+  - le verrou de build de meeshy.sh est scopé au worktree
+  - l'export de données revient dans les réglages (#6725)
+  - les QUATRE surfaces du plateau partagent sa loi — le reader de story centre enfin ses scènes portrait (#6760)
+  - next survives login by magic link (#6742)
+  - un glyphe nu sur un média se lit sur ce qu'il a sous lui (#6704, #6693) (run test)
+  - use assertIsDisplayed in the new alt-text Compose test
+  - PostMedia.alt gains a producer and a consumer (#6739)
+  - la colonne d'une page se lit sur le sol noir quand elle tombe sous le cadre (run test)
+  - le détail mesure sa scène par onGeometryChange, la mosaïque 9:16 tient au-dessus du composer (#6708) (run test)
+  - la colonne d'une page se lit sur ce qui est peint sous elle, et une page de post offre « Créer avec ce média » (#6709) (run test)
+  - safeReturnPath refuse les mêmes caractères de contrôle que safeNextPath
+  - la pellicule du plein écran montre sa vignette courante à l'ouverture, sur n'importe quel média (run test)
+  - les rails posés nus sur un média se lisent sur ce qu'ils ont sous eux
+  - une scène au fond portrait garde sa carte 9:16, chaque page du carrousel se lit entière (#6708) (run test)
+  - le plateau EST la scène — le chrome s'aligne sur lui, jamais sur le média qu'il porte (#6760)
+  - le bouton du rail de story quitte l'hôte en dette, tel quel (#6704)
+  - en lecture immersive, les voiles de lisibilité s'effacent avec les contrôles (#6701)
+  - en pause, la vidéo d'une story reste sur son image et le spinner de chargement ne s'y pose plus (#6757)
+  - une scène de post s'ouvre dans la galerie des pièces jointes, et sa pellicule montre les médias de ses commentaires (#6709, #6710) (run test)
+  - une scène qui n'est qu'une image paysage se cadre au rapport de son image dans la galerie (#6709)
+  - une citation rouvre la scène qui montre son média, et une page scène se cadre au rapport de sa scène (#6709, #6710)
+  - le plein écran d'un post compose un lot — ses scènes ou ses médias, puis ceux de ses commentaires (#6709, #6710)
+  - le contrôleur du splash déclare sa deinit — la garde iOS 26.1 que le lot n'avait pas jouée (#6744)
+  - l'horloge de scène d'un réel déclare sa deinit, et le lecteur de réels se déclare hors du fil (#6745)
+  - l'inset clavier se neutralise à la RACINE — mesuré au simulateur, la pose par couche ne protégeait rien (#6751)
+  - CommentQuotationStore déclare sa deinit non isolée, le septième rouge de #6578 tombe (#6749) (run test)
+  - la barre de réponse se pose AU-DESSUS du clavier, et l'envoi rend l'écran au média (#6751)
+  - la citation de média se juge sur la table française, plus sur la langue du simulateur (#6749) (run test)
+  - PostMedia.alt se traduit — pipeline partagé de #6280 réutilisé (#6747)
+  - quatre gardes de source suivent le code que #6578 a déplacé (#6749)
+  - le splash tombe dès que la session et la liste sont prêtes — aucune attente du démarrage ne peut plus le retenir (#6744)
+  - un réel composé se rejoue comme sa scène — son de fond sur la timeline, bouclé, vidéo coupée par l'auteur (#6745)
+  - la v2 sert les dernières adresses du legacy, liens suivis et pages des e-mails de compte, et ne renvoie plus jamais vers lui (#6714, #6715, #6335)
+  - les règles pures de lecture d'un réel sortent de ReelsPlayerView.swift, telles quelles (#6745)
+  - l'écran de lancement sort de MeeshyApp.swift, tel quel (#6744)
+  - PostMedia.alt se traduit — pipeline partagé de #6280 réutilisé
+  - rejoindre une conversation par /chat/:lien dans la v2, pour un compte connecté ou après connexion (#5561)
+  - la bascule ne déconnecte personne, la v2 reprend la session laissée par le legacy (#6716)
+  - le service worker de la v2 efface les caches privés du legacy et laisse au réseau les adresses que nginx redirige (#6716)
+  - un bouton posé sur un média se lit sur une image claire comme sombre (#6693) (run test)
+  - la v2 sert elle-même les fichiers et les anciennes adresses du domaine, avant la décommission du legacy (#6713)
+  - une image très haute garde un cadre assez large pour son auteur et ses actions dans la galerie (#6692) (#6699)
+  - « Inviter des amis » partage le lien de parrainage de l'utilisateur, jamais le site nu (#6707)
+  - Nouvelle conversation montre les amis d'abord, depuis le cache persisté, sans rien taper (#6705)
+  - « Modifier » regarde le TYPE du post — une story ouvre le meuble, plus l'ancien éditeur (#6700)
+  - les quatre gardes d'INVENTAIRE que seule l'intégration de #6578 pouvait faire tomber
+  - commenter EN NOMMANT le média du post, et l'écrire avant d'écrire (#6578)
+  - un commentaire CITE le média du post dont il parle, et peut y joindre les siens (#6578)
+  - diffusion admin — activityStatus compte pareil à la preview et à l'envoi (#6777)
+  - routes/admin/broadcasts.ts passe à zéro `any` (#3679) (#6778)
+  - GET /links/:identifier refuse l'aperçu public d'un lien expiré ou d'une conversation fermée (#6740)
+  - changer d'e-mail révoque les liens de réinitialisation encore valides (#6661)
+  - un Bearer présenté et refusé rend 401 sur POST /links/:key/members (#6741)
+  - PostCommentService.test.ts repasse sous son budget de taille hérité (#6735)
+  - résorbe la régression pré-existante du cliquet de dette any
+  - ne pas grossir utils/languages.ts au-delà de sa dette gelée (#4532)
+  - supportsTranslation reflète LANGUAGE_MAPPINGS pour les 7 codes camerounais sans NLLB
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.21.2
+
 ## 1.54.0
 
 ### Minor Changes
