@@ -121,16 +121,14 @@ export function StoryMediaLayer({
              plancher, puis changerait sa durée en cours de route ; la barre
              sauterait en arrière au premier tour d'horloge.
 
-             `duration` vaut `NaN` tant que le décodeur n'a rien, et `Infinity`
-             sur un flux — les deux traversent sans dommage : `slideDurationMs`
-             rabat toute durée absurde sur le plancher. On filtre quand même
-             ici, pour ne pas poser un état React à chaque valeur inutile. */
-          onLoadedMetadata={(event) => {
-            if (onDurationKnown === undefined) return;
-            const seconds = event.currentTarget.duration;
-            if (!Number.isFinite(seconds) || seconds <= 0) return;
-            onDurationKnown(Math.round(seconds * 1000));
-          }}
+             AUCUNE VALIDATION ICI, et c'est délibéré : `duration` vaut `NaN`
+             tant que le décodeur n'a rien et `Infinity` sur un flux, mais
+             `slideDurationMs` rabat déjà toute durée absurde sur le plancher —
+             quatre vecteurs le gardent (`playback.test.ts`). Filtrer une
+             seconde fois ici ferait DEUX sites à tenir d'accord sur ce qu'est
+             une durée utile, pour la seule économie d'un état React que
+             `Object.is` dédoublonne de toute façon. */
+          onLoadedMetadata={(event) => onDurationKnown?.(event.currentTarget.duration * 1000)}
           onError={onFailed}
         />
       );
