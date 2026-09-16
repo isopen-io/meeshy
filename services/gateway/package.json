@@ -31,7 +31,7 @@
     "@fastify/cors": "^11.3.0",
     "@fastify/helmet": "^13.1.1",
     "@fastify/jwt": "^10.2.1",
-    "@fastify/multipart": "^10.1.0",
+    "@fastify/multipart": "^10.1.1",
     "@fastify/rate-limit": "^11.2.0",
     "@fastify/sensible": "^6.0.4",
     "@fastify/static": "^10.1.3",
