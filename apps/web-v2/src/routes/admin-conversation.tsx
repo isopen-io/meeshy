@@ -12,7 +12,7 @@ import {
 } from '@/lib/api/admin-conversations';
 import { apiDeps } from '@/lib/api/deps';
 import { visibleAdminSections } from '@/lib/admin/sections';
-import { translate } from '@/lib/i18n-catalog';
+import { translateAdmin } from '@/lib/i18n-admin-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useRoute } from '@/lib/router';
 import { AdminDenied, AdminScreenFrame, AdminSkeleton } from '@/routes/admin-parts';
@@ -94,7 +94,7 @@ function Piece({
           {piece.originalName === '' ? piece.id : piece.originalName}
         </span>
         <span className="shrink-0 text-caption" style={{ color: 'var(--color-danger)' }}>
-          {translate(language, 'admin.convDetail.attachmentProtected')}
+          {translateAdmin(language, 'admin.convDetail.attachmentProtected')}
         </span>
       </li>
     );
@@ -140,13 +140,13 @@ function Message({
         </span>
         <span className="shrink-0 text-caption" style={{ color: INK2 }}>
           {message.createdAt ?? ''}
-          {message.isEdited ? ` · ${translate(language, 'admin.convDetail.edited')}` : ''}
+          {message.isEdited ? ` · ${translateAdmin(language, 'admin.convDetail.edited')}` : ''}
         </span>
       </div>
 
       {message.isProtected ? (
         <p className="text-caption italic" style={{ color: 'var(--color-danger)' }} data-admin-message-protected>
-          {translate(language, 'admin.convDetail.protected')}
+          {translateAdmin(language, 'admin.convDetail.protected')}
         </p>
       ) : message.content === null ? null : (
         <p className="whitespace-pre-wrap text-body" style={{ color: INK }}>
@@ -199,7 +199,7 @@ export default function AdminConversationScreen() {
     gcTime: 0,
   });
 
-  const titre = translate(language, 'admin.convDetail.title');
+  const titre = translateAdmin(language, 'admin.convDetail.title');
   const motifSuffisant = saisie.trim().length >= MOTIF_LONGUEUR_MINIMALE;
 
   if (identite.isPending) {
@@ -223,7 +223,7 @@ export default function AdminConversationScreen() {
       <AdminScreenFrame language={language} title={titre} back="admin">
         <label className="grid gap-1 pb-2">
           <span className="text-caption" style={{ color: INK2 }}>
-            {translate(language, 'admin.convDetail.reasonLabel')}
+            {translateAdmin(language, 'admin.convDetail.reasonLabel')}
           </span>
           <textarea
             value={saisie}
@@ -234,7 +234,7 @@ export default function AdminConversationScreen() {
             style={{ backgroundColor: 'var(--color-ios-surface)', border: '1px solid var(--color-edge)', color: INK }}
           />
           <span className="text-caption" style={{ color: INK2 }}>
-            {translate(language, 'admin.convDetail.reasonHint')}
+            {translateAdmin(language, 'admin.convDetail.reasonHint')}
           </span>
         </label>
         <button
@@ -245,7 +245,7 @@ export default function AdminConversationScreen() {
           className="rounded-chip px-4 text-body font-semibold disabled:opacity-40"
           style={{ minHeight: 44, backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 16%, transparent)', color: INK }}
         >
-          {translate(language, 'admin.convDetail.read')}
+          {translateAdmin(language, 'admin.convDetail.read')}
         </button>
       </AdminScreenFrame>
     );
@@ -259,11 +259,11 @@ export default function AdminConversationScreen() {
         <AdminSkeleton rows={6} />
       ) : lot === undefined ? (
         <p className="text-caption" style={{ color: INK2 }}>
-          {translate(language, 'admin.convList.unavailable')}
+          {translateAdmin(language, 'admin.convList.unavailable')}
         </p>
       ) : lot.messages.length === 0 ? (
         <p className="text-caption" style={{ color: INK2 }}>
-          {translate(language, 'admin.convDetail.empty')}
+          {translateAdmin(language, 'admin.convDetail.empty')}
         </p>
       ) : (
         <>
@@ -281,7 +281,7 @@ export default function AdminConversationScreen() {
               className="rounded-chip px-4 text-body font-semibold disabled:opacity-40"
               style={{ minHeight: 44, backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 16%, transparent)', color: INK }}
             >
-              {translate(language, 'admin.users.previous')}
+              {translateAdmin(language, 'admin.users.previous')}
             </button>
             <button
               type="button"
@@ -291,7 +291,7 @@ export default function AdminConversationScreen() {
               className="rounded-chip px-4 text-body font-semibold disabled:opacity-40"
               style={{ minHeight: 44, backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 16%, transparent)', color: INK }}
             >
-              {translate(language, 'admin.users.next')}
+              {translateAdmin(language, 'admin.users.next')}
             </button>
           </div>
         </>

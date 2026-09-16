@@ -1,3 +1,4 @@
+import { loadAdminInterfaceCatalog } from '@/lib/i18n-admin-catalog';
 import { loadInterfaceCatalog, suspendForInterfaceCatalog, translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { createRouter } from '@/lib/router';
@@ -15,14 +16,32 @@ const publicationScreen = () => import('@/routes/post');
 
 /* L'ADMINISTRATION DE LA v2 — UN seul `import()` pour ses DEUX adresses
    (`/adm` et, le temps du pont, `/admin`), pour qu'elles ne puissent jamais
-   diverger d'écran. Voir le commentaire de `adm` plus bas (#6795). */
-const adminScreen = () => import('@/routes/admin');
-const adminUsersScreen = () => import('@/routes/admin-users');
-const adminUserScreen = () => import('@/routes/admin-user');
+   diverger d'écran. Voir le commentaire de `adm` plus bas (#6795).
+
+   CHACUN charge AUSSI le catalogue d'interface d'ADMINISTRATION (#6871,
+   #6834), en PARALLÈLE de son chunk d'écran — même discipline que
+   `screenPrerequisite` plus bas pour le catalogue commun, mais scopée aux
+   seules routes d'administration : c'est ce qui sort ces clés de la somme
+   que TOUT lecteur téléchargerait sinon (`i18n-admin-catalog.ts`). */
+const adminScreen = () =>
+  Promise.all([import('@/routes/admin'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+const adminUsersScreen = () =>
+  Promise.all([import('@/routes/admin-users'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+const adminUserScreen = () =>
+  Promise.all([import('@/routes/admin-user'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 /* LA LECTURE SOUVERAINE DES CONVERSATIONS (#6862) — mêmes DEUX adresses, même
-   `import()` unique, pour la même raison que les comptes. */
-const adminConversationsScreen = () => import('@/routes/admin-conversations');
-const adminConversationScreen = () => import('@/routes/admin-conversation');
+   `import()` unique, pour la même raison que les comptes.
+
+   Et le MÊME chargement du catalogue d'administration que ses voisins : ces
+   deux écrans appellent `translateAdmin`, et un catalogue lu avant d'être
+   chargé LÈVE (`i18n-admin-catalog.ts`). Les laisser en `import()` nu — ce
+   qu'ils étaient avant que #6871 ne sorte les clés `admin.*` — produirait un
+   écran qui plante à l'ouverture, un défaut qu'aucun gate ne voit : ni `tsc`
+   (les deux formes typent pareil), ni les témoins (aucun ne monte la route). */
+const adminConversationsScreen = () =>
+  Promise.all([import('@/routes/admin-conversations'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+const adminConversationScreen = () =>
+  Promise.all([import('@/routes/admin-conversation'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 
 export const ROUTES = {
   list: { pattern: '/', screen: () => import('@/routes/conversations') },

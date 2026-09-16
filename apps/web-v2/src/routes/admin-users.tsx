@@ -10,7 +10,7 @@ import {
 } from '@/lib/api/admin';
 import { apiDeps } from '@/lib/api/deps';
 import { visibleAdminSections } from '@/lib/admin/sections';
-import { translate } from '@/lib/i18n-catalog';
+import { translateAdmin } from '@/lib/i18n-admin-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useRoute } from '@/lib/router';
 import { AdminDenied, AdminScreenFrame, AdminSkeleton } from '@/routes/admin-parts';
@@ -89,7 +89,7 @@ function UserRow({
       </span>
       {compte.isActive ? null : (
         <span className="shrink-0 text-caption" style={{ color: 'var(--color-danger)' }}>
-          {translate(language, 'admin.users.inactive')}
+          {translateAdmin(language, 'admin.users.inactive')}
         </span>
       )}
       </Link>
@@ -123,7 +123,7 @@ export default function AdminUsersScreen() {
     retry: false,
   });
 
-  const titre = translate(language, 'admin.nav.users');
+  const titre = translateAdmin(language, 'admin.nav.users');
 
   if (identite.isPending) {
     return (
@@ -147,7 +147,7 @@ export default function AdminUsersScreen() {
     <AdminScreenFrame language={language} title={titre} back="admin">
       <label className="grid gap-1 pb-4">
         <span className="text-caption" style={{ color: INK2 }}>
-          {translate(language, 'admin.users.search')}
+          {translateAdmin(language, 'admin.users.search')}
         </span>
         <input
           type="search"
@@ -174,16 +174,16 @@ export default function AdminUsersScreen() {
         <AdminSkeleton rows={6} />
       ) : page === undefined ? (
         <p className="text-caption" style={{ color: INK2 }}>
-          {translate(language, 'admin.users.unavailable')}
+          {translateAdmin(language, 'admin.users.unavailable')}
         </p>
       ) : page.users.length === 0 ? (
         <p className="text-caption" style={{ color: INK2 }}>
-          {translate(language, 'admin.users.empty')}
+          {translateAdmin(language, 'admin.users.empty')}
         </p>
       ) : (
         <>
           <p className="pb-2 text-caption" style={{ color: INK2 }}>
-            {translate(language, 'admin.users.count', { count: String(page.total) })}
+            {translateAdmin(language, 'admin.users.count', { count: String(page.total) })}
           </p>
           <ul className="grid gap-2">
             {page.users.map((compte) => (
@@ -199,7 +199,7 @@ export default function AdminUsersScreen() {
               className="rounded-chip px-4 text-body font-semibold disabled:opacity-40"
               style={{ minHeight: 44, backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 16%, transparent)', color: INK }}
             >
-              {translate(language, 'admin.users.previous')}
+              {translateAdmin(language, 'admin.users.previous')}
             </button>
             <button
               type="button"
@@ -209,7 +209,7 @@ export default function AdminUsersScreen() {
               className="rounded-chip px-4 text-body font-semibold disabled:opacity-40"
               style={{ minHeight: 44, backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 16%, transparent)', color: INK }}
             >
-              {translate(language, 'admin.users.next')}
+              {translateAdmin(language, 'admin.users.next')}
             </button>
           </div>
         </>

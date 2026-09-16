@@ -6,6 +6,7 @@ import { sensitiveChangesOf } from '@/lib/admin/user-edit-guard';
 import { updateAdminUser, type AdminUserEdit } from '@/lib/api/admin-user-actions';
 import type { AdminUserDetail } from '@/lib/api/admin-user-detail';
 import { apiDeps } from '@/lib/api/deps';
+import { translateAdmin } from '@/lib/i18n-admin-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { ActionButton } from '@/routes/link-page-parts';
@@ -128,20 +129,20 @@ export function AdminUserEditSheet({
     setEnvoi(false);
 
     if (!resultat.ok) {
-      onAnnounce(translate(language, 'admin.edit.failed'));
+      onAnnounce(translateAdmin(language, 'admin.edit.failed'));
       return;
     }
-    onAnnounce(translate(language, 'admin.edit.saved'));
+    onAnnounce(translateAdmin(language, 'admin.edit.saved'));
     onSaved(resultat.data);
     onClose();
   }
 
   return (
-    <Sheet title={translate(language, 'admin.edit.title')} onClose={onClose}>
+    <Sheet title={translateAdmin(language, 'admin.edit.title')} onClose={onClose}>
       <div className="grid gap-4 px-4 pb-6">
         <Texte
           id="admin-edit-displayName"
-          label={translate(language, 'admin.edit.displayName')}
+          label={translateAdmin(language, 'admin.edit.displayName')}
           valeur={brouillon.displayName}
           focus={focus === 'displayName'}
           onFocus={() => setFocus('displayName')}
@@ -150,7 +151,7 @@ export function AdminUserEditSheet({
         />
         <Texte
           id="admin-edit-email"
-          label={translate(language, 'admin.edit.email')}
+          label={translateAdmin(language, 'admin.edit.email')}
           valeur={brouillon.email}
           type="email"
           focus={focus === 'email'}
@@ -160,7 +161,7 @@ export function AdminUserEditSheet({
         />
         <Texte
           id="admin-edit-bio"
-          label={translate(language, 'admin.edit.bio')}
+          label={translateAdmin(language, 'admin.edit.bio')}
           valeur={brouillon.bio}
           focus={focus === 'bio'}
           onFocus={() => setFocus('bio')}
@@ -170,7 +171,7 @@ export function AdminUserEditSheet({
 
         <label className="grid gap-1">
           <span className="text-caption" style={{ color: INK2 }}>
-            {translate(language, 'admin.user.role')}
+            {translateAdmin(language, 'admin.user.role')}
           </span>
           <select
             data-admin-edit-role
@@ -196,13 +197,13 @@ export function AdminUserEditSheet({
             style={{ minHeight: 24, minWidth: 24 }}
           />
           <span className="text-body" style={{ color: INK }}>
-            {translate(language, 'admin.edit.active')}
+            {translateAdmin(language, 'admin.edit.active')}
           </span>
         </label>
 
         <Texte
           id="admin-edit-reason"
-          label={translate(language, 'admin.edit.reason')}
+          label={translateAdmin(language, 'admin.edit.reason')}
           valeur={motif}
           focus={focus === 'reason'}
           onFocus={() => setFocus('reason')}
@@ -217,7 +218,7 @@ export function AdminUserEditSheet({
             className="rounded-card px-4 py-3 text-caption"
             style={{ backgroundColor: 'color-mix(in srgb, var(--color-danger) 10%, transparent)', color: 'var(--color-danger)' }}
           >
-            {translate(language, sensible === 'role' ? 'admin.edit.warnRole' : 'admin.edit.warnDeactivate')}
+            {translateAdmin(language, sensible === 'role' ? 'admin.edit.warnRole' : 'admin.edit.warnDeactivate')}
           </p>
         ))}
 
@@ -227,7 +228,7 @@ export function AdminUserEditSheet({
             disabled={champs.length === 0 || envoi}
             onClick={() => void enregistrer()}
           >
-            {translate(language, doitConfirmer ? 'admin.edit.confirm' : 'admin.edit.save')}
+            {translateAdmin(language, doitConfirmer ? 'admin.edit.confirm' : 'admin.edit.save')}
           </ActionButton>
           <ActionButton tone="secondary" onClick={onClose}>
             {translate(language, 'common.cancel')}

@@ -10,7 +10,7 @@ import {
 } from '@/lib/api/admin-conversations';
 import { apiDeps } from '@/lib/api/deps';
 import { visibleAdminSections } from '@/lib/admin/sections';
-import { translate } from '@/lib/i18n-catalog';
+import { translateAdmin } from '@/lib/i18n-admin-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useRoute } from '@/lib/router';
 import { AdminDenied, AdminScreenFrame, AdminSkeleton } from '@/routes/admin-parts';
@@ -103,7 +103,7 @@ function ConversationRow({
           <p className="truncate text-caption" style={{ color: INK2 }}>
             {conversation.type}
             {' · '}
-            {translate(language, 'admin.convList.members', { count: String(conversation.memberCount) })}
+            {translateAdmin(language, 'admin.convList.members', { count: String(conversation.memberCount) })}
           </p>
         </div>
       </Link>
@@ -145,7 +145,7 @@ export default function AdminConversationsScreen() {
     gcTime: 0,
   });
 
-  const titre = translate(language, 'admin.nav.conversations');
+  const titre = translateAdmin(language, 'admin.nav.conversations');
 
   if (identite.isPending) {
     return (
@@ -160,7 +160,7 @@ export default function AdminConversationsScreen() {
       <AdminScreenFrame language={language} title={titre} back="admin">
         {dansLEspace ? (
           <p className="text-caption" style={{ color: INK2 }} data-admin-sovereign-denied>
-            {translate(language, 'admin.convList.sovereign')}
+            {translateAdmin(language, 'admin.convList.sovereign')}
           </p>
         ) : (
           <AdminDenied language={language} />
@@ -175,7 +175,7 @@ export default function AdminConversationsScreen() {
     <AdminScreenFrame language={language} title={titre} back="admin">
       <label className="grid gap-1 pb-4">
         <span className="text-caption" style={{ color: INK2 }}>
-          {translate(language, 'admin.convList.search')}
+          {translateAdmin(language, 'admin.convList.search')}
         </span>
         <input
           type="search"
@@ -202,16 +202,16 @@ export default function AdminConversationsScreen() {
         <AdminSkeleton rows={6} />
       ) : page === undefined ? (
         <p className="text-caption" style={{ color: INK2 }}>
-          {translate(language, 'admin.convList.unavailable')}
+          {translateAdmin(language, 'admin.convList.unavailable')}
         </p>
       ) : page.conversations.length === 0 ? (
         <p className="text-caption" style={{ color: INK2 }}>
-          {translate(language, 'admin.convList.empty')}
+          {translateAdmin(language, 'admin.convList.empty')}
         </p>
       ) : (
         <>
           <p className="pb-2 text-caption" style={{ color: INK2 }}>
-            {translate(language, 'admin.convList.count', { count: String(page.total) })}
+            {translateAdmin(language, 'admin.convList.count', { count: String(page.total) })}
           </p>
           <ul className="grid gap-2">
             {page.conversations.map((conversation) => (
@@ -232,7 +232,7 @@ export default function AdminConversationsScreen() {
               className="rounded-chip px-4 text-body font-semibold disabled:opacity-40"
               style={{ minHeight: 44, backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 16%, transparent)', color: INK }}
             >
-              {translate(language, 'admin.users.previous')}
+              {translateAdmin(language, 'admin.users.previous')}
             </button>
             <button
               type="button"
@@ -242,7 +242,7 @@ export default function AdminConversationsScreen() {
               className="rounded-chip px-4 text-body font-semibold disabled:opacity-40"
               style={{ minHeight: 44, backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 16%, transparent)', color: INK }}
             >
-              {translate(language, 'admin.users.next')}
+              {translateAdmin(language, 'admin.users.next')}
             </button>
           </div>
         </>

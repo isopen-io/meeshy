@@ -11,6 +11,7 @@ import {
   type AdminBan,
 } from '@/lib/api/admin-user-bans';
 import { apiDeps } from '@/lib/api/deps';
+import { translateAdmin } from '@/lib/i18n-admin-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { ActionButton } from '@/routes/link-page-parts';
@@ -96,7 +97,7 @@ export function AdminUserBanSheet({
     const resultat = await action();
     setEnvoi(false);
 
-    onAnnounce(translate(language, resultat.ok ? 'admin.ban.done' : 'admin.ban.failed'));
+    onAnnounce(translateAdmin(language, resultat.ok ? 'admin.ban.done' : 'admin.ban.failed'));
     if (resultat.ok) void client.invalidateQueries({ queryKey: adminUserBansQueryKey(userId) });
   }
 
@@ -116,9 +117,9 @@ export function AdminUserBanSheet({
     });
 
   return (
-    <Sheet title={translate(language, 'admin.ban.title')} onClose={onClose}>
+    <Sheet title={translateAdmin(language, 'admin.ban.title')} onClose={onClose}>
       <div className="grid gap-4 px-4 pb-6">
-        <Field id="admin-ban-reason" label={translate(language, 'admin.ban.reason')} tint={BRAND} focused={focus}>
+        <Field id="admin-ban-reason" label={translateAdmin(language, 'admin.ban.reason')} tint={BRAND} focused={focus}>
           {({ id, describedBy }) => (
             <input
               id={id}
@@ -137,7 +138,7 @@ export function AdminUserBanSheet({
 
         <label className="grid gap-1">
           <span className="text-caption" style={{ color: INK2 }}>
-            {translate(language, jusquAu === '' ? 'admin.ban.permanent' : 'admin.ban.until')}
+            {translateAdmin(language, jusquAu === '' ? 'admin.ban.permanent' : 'admin.ban.until')}
           </span>
           <input
             type="date"
@@ -150,15 +151,15 @@ export function AdminUserBanSheet({
         </label>
 
         <ActionButton tone="danger" disabled={!motifPret || envoi} onClick={() => void bannir()}>
-          {translate(language, 'admin.ban.apply')}
+          {translateAdmin(language, 'admin.ban.apply')}
         </ActionButton>
 
-        <section className="grid gap-2 pt-2" aria-label={translate(language, 'admin.ban.title')}>
+        <section className="grid gap-2 pt-2" aria-label={translateAdmin(language, 'admin.ban.title')}>
           {historique.isPending ? (
             <AdminSkeleton rows={2} />
           ) : (historique.data ?? []).length === 0 ? (
             <p className="text-caption" style={{ color: INK2 }}>
-              {translate(language, 'admin.ban.none')}
+              {translateAdmin(language, 'admin.ban.none')}
             </p>
           ) : (
             (historique.data ?? []).map((ban) => (
@@ -209,12 +210,12 @@ function BanRow({
           className="shrink-0 text-caption"
           style={{ color: etat === 'active' ? 'var(--color-danger)' : INK2 }}
         >
-          {translate(language, etat === 'active' ? 'admin.ban.active' : etat === 'lifted' ? 'admin.ban.lifted' : 'admin.ban.expired')}
+          {translateAdmin(language, etat === 'active' ? 'admin.ban.active' : etat === 'lifted' ? 'admin.ban.lifted' : 'admin.ban.expired')}
         </span>
       </div>
       {etat === 'active' ? (
         <ActionButton tone="secondary" disabled={envoi} onClick={onLift}>
-          {translate(language, 'admin.ban.lift')}
+          {translateAdmin(language, 'admin.ban.lift')}
         </ActionButton>
       ) : null}
     </div>
