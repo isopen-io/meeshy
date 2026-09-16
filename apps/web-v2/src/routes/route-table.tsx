@@ -22,6 +22,7 @@ const adminUserScreen = () => import('@/routes/admin-user');
 /* LA LECTURE SOUVERAINE DES CONVERSATIONS (#6862) — mêmes DEUX adresses, même
    `import()` unique, pour la même raison que les comptes. */
 const adminConversationsScreen = () => import('@/routes/admin-conversations');
+const adminConversationScreen = () => import('@/routes/admin-conversation');
 
 export const ROUTES = {
   list: { pattern: '/', screen: () => import('@/routes/conversations') },
@@ -213,6 +214,12 @@ export const ROUTES = {
      conversations de l'instance. */
   adminConversations: { pattern: '/admin/conversations', screen: adminConversationsScreen },
   admConversations: { pattern: '/adm/conversations', screen: adminConversationsScreen },
+  /* LA LECTURE D'UNE CONVERSATION (#6862) — trois segments là où la liste en a
+     deux, comme `adminUser` face à `adminUsers` : aucune ambiguïté de
+     résolution, et l'ordre naturel les garde lisibles. C'est l'écran qui
+     OUVRE le contenu, sous motif écrit et geste tracé. */
+  adminConversation: { pattern: '/admin/conversations/$conversation', screen: adminConversationScreen },
+  admConversation: { pattern: '/adm/conversations/$conversation', screen: adminConversationScreen },
 } as const;
 
 /**

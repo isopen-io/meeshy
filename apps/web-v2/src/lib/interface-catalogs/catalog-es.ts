@@ -664,7 +664,16 @@ const es = {
   'admin.convList.empty': 'Ninguna conversación coincide.',
   'admin.convList.unavailable': 'Lista no disponible por ahora.',
   'admin.convList.members': '{count} miembros',
-  'admin.convList.sovereign': 'La lectura está reservada al rango soberano.',
+  'admin.convList.sovereign': 'Reservado al rango de administración.',
+  'admin.convDetail.title': 'Lectura de una conversación',
+  'admin.convDetail.reasonLabel': 'Motivo de la lectura',
+  'admin.convDetail.reasonHint': 'Diez caracteres mínimo, registrado con su nombre.',
+  'admin.convDetail.read': 'Leer la conversación',
+  'admin.convDetail.empty': 'Ningún mensaje',
+  'admin.convDetail.protected': 'Protegido: existe, no se muestra',
+  'admin.convDetail.attachmentProtected': 'adjunto protegido',
+  'admin.convDetail.edited': 'editado',
+  'admin.convDetail.attachments': '{count} adjunto(s)',
 
 } satisfies InterfaceCatalog;
 

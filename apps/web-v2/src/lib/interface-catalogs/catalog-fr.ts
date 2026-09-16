@@ -693,7 +693,16 @@ const fr = {
   'admin.convList.empty': 'Aucune conversation ne correspond.',
   'admin.convList.unavailable': 'Liste indisponible pour le moment.',
   'admin.convList.members': '{count} membres',
-  'admin.convList.sovereign': 'Lecture réservée au rang souverain.',
+  'admin.convList.sovereign': 'Réservé au rang d\'administration.',
+  'admin.convDetail.title': "Lecture d'une conversation",
+  'admin.convDetail.reasonLabel': 'Motif de la lecture',
+  'admin.convDetail.reasonHint': 'Dix caractères minimum, consigné avec votre nom.',
+  'admin.convDetail.read': 'Lire la conversation',
+  'admin.convDetail.empty': 'Aucun message',
+  'admin.convDetail.protected': 'Protégé : existe, ne se montre pas',
+  'admin.convDetail.attachmentProtected': 'pièce protégée',
+  'admin.convDetail.edited': 'modifié',
+  'admin.convDetail.attachments': '{count} pièce(s)',
 
 } as const;
 

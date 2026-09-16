@@ -668,7 +668,16 @@ const pt = {
   'admin.convList.empty': 'Nenhuma conversa corresponde.',
   'admin.convList.unavailable': 'Lista indisponível no momento.',
   'admin.convList.members': '{count} membros',
-  'admin.convList.sovereign': 'A leitura é reservada ao nível soberano.',
+  'admin.convList.sovereign': 'Reservado ao nível de administração.',
+  'admin.convDetail.title': 'Leitura de uma conversa',
+  'admin.convDetail.reasonLabel': 'Motivo da leitura',
+  'admin.convDetail.reasonHint': 'Dez caracteres mínimo, registado com o seu nome.',
+  'admin.convDetail.read': 'Ler a conversa',
+  'admin.convDetail.empty': 'Nenhuma mensagem',
+  'admin.convDetail.protected': 'Protegido: existe, não se mostra',
+  'admin.convDetail.attachmentProtected': 'anexo protegido',
+  'admin.convDetail.edited': 'editado',
+  'admin.convDetail.attachments': '{count} anexo(s)',
 
 } satisfies InterfaceCatalog;
 
