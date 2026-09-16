@@ -412,7 +412,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       }
 
       // Supprimer l'utilisateur (soft delete)
-      await userManagementService.deleteUser(request.params.userId);
+      await userManagementService.deleteUser(request.params.userId, authContext.registeredUser!.id);
 
       // Log d'audit
       await userAuditService.logDeleteUser(
@@ -427,6 +427,49 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
     } catch (error) {
       logError(fastify.log, 'Error deleting user', error);
       sendInternalError(reply, 'Internal server error', { message: 'Failed to delete user' });
+    }
+  });
+
+  /**
+   * POST /admin/users/:userId/restore - Restaurer un utilisateur supprimé
+   * (BIGBOSS & ADMIN uniquement) — la JUMELLE du DELETE ci-dessus (#6822) :
+   * `UserManagementService.restoreUser` existait sans aucun appelant.
+   */
+  fastify.post<{
+    Params: { userId: string };
+  }>('/admin/users/:userId/restore', {
+    preHandler: [fastify.authenticate, requireUserDeleteAccess, requireHierarchy({ param: 'userId' })]
+  }, async (request, reply) => {
+    try {
+      const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
+      const adminRole = authContext.registeredUser!.role as UserRoleEnum;
+
+      const targetUser = await userManagementService.getUserById(request.params.userId);
+
+      if (!targetUser) {
+        sendNotFound(reply, 'User not found', { message: 'The requested user does not exist' });
+        return;
+      }
+
+      if (!permissionsService.canModifyUser(adminRole, targetUser.role as UserRoleEnum)) {
+        sendForbidden(reply, 'Insufficient permissions to restore this user', { message: 'Access denied' });
+        return;
+      }
+
+      const restored = await userManagementService.restoreUser(request.params.userId);
+
+      await userAuditService.logRestoreUser(
+        authContext.registeredUser!.id,
+        request.params.userId,
+        undefined,
+        request.ip,
+        request.headers['user-agent']
+      );
+
+      sendSuccess(reply, sanitizationService.sanitizeUser(restored, adminRole), { message: 'User restored successfully' });
+    } catch (error) {
+      logError(fastify.log, 'Error restoring user', error);
+      sendInternalError(reply, 'Internal server error', { message: 'Failed to restore user' });
     }
   });
 
