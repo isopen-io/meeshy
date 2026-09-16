@@ -132,7 +132,7 @@ final class MediaGalleryStagePresentationTests: XCTestCase {
         // de réactions. `showsChrome` la porte tout entière, et c'est elle que la
         // couche consulte désormais — l'immersion n'a rien perdu, elle n'est plus
         // la seule à pouvoir retirer le chrome.
-        XCTAssertTrue(couche.contains("MediaStageReactionVeil.showsChrome(presentation: stagePresentation,"),
+        XCTAssertTrue(couche.contains("MediaStageVeil.showsChrome(presentation: stagePresentation,"),
                       "le plateau n'appartient qu'à l'état cadré, et la rangée ouverte l'efface aussi")
         XCTAssertTrue(couche.contains(".allowsHitTesting(chrome)"),
                       "pendant le fondu, la couche est encore là : sans cette ligne elle répond")
