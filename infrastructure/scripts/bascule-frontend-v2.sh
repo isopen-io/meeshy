@@ -109,6 +109,16 @@ attendre_sain() {
 
 recette_publique() {
   local base=https://meeshy.me echec=0 obtenu
+  # Traefik peut mettre quelques secondes à router vers le conteneur recréé : sans
+  # cette attente, la recette lirait encore une coupure et ferait revenir en
+  # arrière une bascule saine. `/healthz` n'existe que dans la v2 (le legacy y
+  # rend 404) : 200 dit exactement que la v2 est routée.
+  local attente
+  for attente in $(seq 1 30); do
+    [ "$(curl -s -o /dev/null -w '%{http_code}' "$base/healthz" || true)" = "200" ] && break
+    sleep 2
+  done
+  echo "v2 routée par Traefik après ~$((attente * 2)) s"
   verifier_ligne() {
     obtenu=$(curl -s -o /dev/null -w "$2" "$base$1" || true)
     # Le motif attendu est un GLOB voulu (`200 text/html*` : nginx ajoute

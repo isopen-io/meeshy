@@ -399,6 +399,16 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // #6693 et #6745 retirent tous deux de `ReelsPlayerView.swift`, par des parties
     // que la fusion applique sans conflit ; l'hôte reste en dette, donc les deux
     // retraits s'additionnent.
+    // #6701 — 56 077 → 56 046 (−31). Les voiles de lisibilité du lecteur de
+    // story devaient suivre le chrome dans `StoryViewerView+Canvas.swift`
+    // (2 313 lignes), hôte en dette. La couche en est d'abord sortie, entière,
+    // dans `StoryViewerView+CanvasScrims.swift` ; la règle s'y pose ensuite,
+    // hors de l'hôte. L'hôte RESTE en dette (2 282) ; le plafond baisse
+    // d'exactement ce que le lot retire.
+    //
+    // Les cinq lots se cumulent : 54 450 − 31 = 54 419. Seul #6701 retire de
+    // `StoryViewerView+Canvas.swift` : son retrait s'additionne sans
+    // recouvrement.
     // #6704 — 54 450 → 54 321 (−129). Le rail du lecteur de story devait teinter
     // son glyphe et son libellé depuis la luminance de la slide, et le bouton qui
     // les peint vivait dans `StoryViewerView+Content.swift`, hôte en dette. Il en
@@ -408,7 +418,13 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // dégradé littéral de `ReelsPlayerView.swift` cède sa place, et le rail s'y
     // branche en une ligne (−3). Les deux hôtes RESTENT en dette ; le plafond baisse
     // d'exactement ce que le lot retire.
-    private static let legacyLineCeiling = 54_321
+    //
+    // **Les six lots se CUMULENT : 54 450 − 31 − 129 = 54 290.** #6701 retire de
+    // `StoryViewerView+Canvas.swift`, #6704 de `StoryViewerView+Content.swift` et de
+    // `ReelsPlayerView.swift` : aucun recouvrement, donc les deux retraits
+    // s'additionnent. Garder l'un des deux plafonds à la fusion aurait laissé la
+    // moitié du travail non comptée — le mode de panne déjà payé le 2026-08-30.
+    private static let legacyLineCeiling = 54_290
 
     // MARK: - Règle 1 — pas de 43ᵉ
 
