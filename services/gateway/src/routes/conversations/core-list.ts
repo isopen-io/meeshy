@@ -5,6 +5,7 @@
  * d'entrée `registerCoreRoutes` qui appelle ce registrar.
  */
 import { FastifyInstance, FastifyRequest } from 'fastify';
+import { conversationListQuerystringSchema } from './list-querystring';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { resolveParticipantAvatar, resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
@@ -65,18 +66,7 @@ export function registerConversationListRoute(
       description: 'Get all conversations for the authenticated user with pagination support',
       tags: ['conversations'],
       summary: 'List user conversations',
-      querystring: {
-        type: 'object',
-        properties: {
-          limit: { type: 'string', description: 'Maximum number of conversations to return (max 50, default 15)' },
-          offset: { type: 'string', description: 'Number of conversations to skip for pagination (default 0)' },
-          before: { type: 'string', description: 'Cursor for pagination: get conversations before this conversation ID (by lastMessageAt)' },
-          includeCount: { type: 'string', enum: ['true', 'false'], description: 'Include total count of conversations' },
-          type: { type: 'string', enum: ['direct', 'group', 'public', 'global', 'broadcast'], description: 'Filter by conversation type' },
-          withUserId: { type: 'string', description: 'Filter direct conversations that include this user ID as a participant' },
-          updatedSince: { type: 'string', description: 'ISO8601 timestamp — return only conversations updated after this time' }
-        }
-      },
+      querystring: conversationListQuerystringSchema,
       // `403` a été RETIRÉ de cette liste avec le correctif ci-dessous : plus
       // aucun refus de cette route ne le sert. Sa garde `optionalAuth` est
       // construite `{ requireAuth: false, allowAnonymous: true }`
@@ -87,6 +77,12 @@ export function registerConversationListRoute(
       // rien n'émet.
       response: {
         200: conversationListResponseSchema,
+        // #6857 — la route ÉMET désormais un 400 : le `pattern` du curseur
+        // `before` est appliqué par Fastify avant le handler. Le déclarer suit
+        // la règle que le commentaire du 403 ci-dessus énonce à l'envers — on
+        // ne décrit que des corps que la route produit, et celui-ci, elle le
+        // produit.
+        400: errorResponseSchema,
         401: errorResponseSchema,
         500: errorResponseSchema
       }
