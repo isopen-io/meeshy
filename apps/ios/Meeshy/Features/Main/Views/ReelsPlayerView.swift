@@ -578,13 +578,9 @@ struct ReelPageView: View {
                 .onTapGesture { handleContentTap() }
                 .onLongPressGesture(minimumDuration: 0.3) { enterImmersive() }
 
-            LinearGradient(
-                colors: [.clear, .clear, .black.opacity(0.6)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
-            .allowsHitTesting(false)
+            MediaChromeVeil.reelPlayer.gradient
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
 
             // **Le seul chemin vers les AUTRES médias d'un réel** (#4927).
             // `mediaLayer` aiguille sur le média primaire — la vidéo gagne — donc
@@ -671,9 +667,10 @@ struct ReelPageView: View {
             // Sit the description / action rail / scrub lower, closer to the
             // bottom edge (just clearing the home indicator).
             .padding(.bottom, 44)
-            // #6693 — la luminance du réel AFFICHÉ commande le rail et la lisibilité de
-            // l'auteur : une mesure par média (`ReelsPlayerView+ActionRail.swift`).
+            // #6693 — la luminance du réel AFFICHÉ commande la lisibilité de l'auteur ;
+            // #6704 — chaque glyphe du rail se lit sur SA part du réel, voile compris.
             .mediaChromeScheme(for: .reel(reel, visibleMediaId: visibleCarouselMediaId))
+            .mediaChromeRail(for: .reel(reel, visibleMediaId: visibleCarouselMediaId), stage: .reelPlayer)
             // The whole chrome stack (info + rail + scrub) fades out together in
             // immersive mode and stops taking touches so the restoring tap and
             // long-press reach the content zone underneath.

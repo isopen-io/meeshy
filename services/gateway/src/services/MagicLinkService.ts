@@ -67,6 +67,34 @@ export interface MagicLinkRequest {
   ipAddress: string;
   userAgent: string;
   rememberDevice?: boolean; // Stored server-side for security
+  /**
+   * OÙ REVENIR une fois connecté (#6742) — `/login?next=` clampé côté client
+   * (`safeNextPath`, web-v2), jamais crue ici pour autant : embarquée dans un
+   * lien envoyé PAR E-MAIL, elle est reclampée à la sortie
+   * (`clampMagicLinkReturnUrl`) avant d'atteindre `sendMagicLinkEmail`.
+   */
+  returnUrl?: string;
+}
+
+/**
+ * `returnUrl` clampé à un chemin MÊME-ORIGINE, jamais une URL absolue ni un
+ * chemin protocole-relatif (#6742) — même doctrine que le web
+ * (`apps/web-v2/src/lib/view/magic-link.ts:safeReturnPath`, la garde qui lit
+ * `returnUrl` en sortie du lien de digest, `jobs/notification-digest.ts`).
+ * Une valeur suspecte est ABSENTE du lien envoyé, jamais recopiée telle
+ * quelle : la valeur vient du CLIENT et n'est jamais crue avant d'être
+ * embarquée dans un lien qui quitte l'application.
+ */
+export function clampMagicLinkReturnUrl(raw: string | null | undefined): string | undefined {
+  if (raw === null || raw === undefined || raw === '') return undefined;
+  if (!raw.startsWith('/')) return undefined;
+  if (raw.startsWith('//')) return undefined;
+  if (raw.includes('\\')) return undefined;
+  for (const character of raw) {
+    const code = character.charCodeAt(0);
+    if (character.trim() === '' || code < 0x20 || code === 0x7f) return undefined;
+  }
+  return raw;
 }
 
 export interface MagicLinkValidation {
@@ -99,8 +127,9 @@ export class MagicLinkService {
   async requestMagicLink(
     request: MagicLinkRequest
   ): Promise<{ success: boolean; message: string; expiresInSeconds?: number; error?: string }> {
-    const { email, deviceFingerprint, ipAddress, userAgent, rememberDevice } = request;
+    const { email, deviceFingerprint, ipAddress, userAgent, rememberDevice, returnUrl } = request;
     const normalizedEmail = email.toLowerCase().trim();
+    const clampedReturnUrl = clampMagicLinkReturnUrl(returnUrl);
 
     try {
       // 1. Check rate limit
@@ -198,7 +227,7 @@ export class MagicLinkService {
         username: user.username,
         displayName: user.displayName ?? user.username,
         hasPassword: user.password !== null && user.password !== undefined,
-      });
+      }, clampedReturnUrl);
 
       // 8. Log security event
       await this.logSecurityEvent(user.id, 'MAGIC_LINK_REQUESTED', 'LOW', {
@@ -567,9 +596,13 @@ export class MagicLinkService {
      * « qu'est-ce qui part À CÔTÉ ? » posée à un argument.
      */
     identite: { username: string; displayName: string; hasPassword: boolean },
+    /** Déjà clampé par l'appelant (`clampMagicLinkReturnUrl`) — absent quand la
+     * demande n'en portait aucun, ou qu'il sortait de la même origine. */
+    returnUrl?: string,
   ): Promise<void> {
     const baseUrl = process.env.FRONTEND_URL || 'https://meeshy.me';
-    const magicLinkUrl = `${baseUrl}/auth/magic-link?token=${encodeURIComponent(token)}`;
+    const returnUrlParam = returnUrl ? `&returnUrl=${encodeURIComponent(returnUrl)}` : '';
+    const magicLinkUrl = `${baseUrl}/auth/magic-link?token=${encodeURIComponent(token)}${returnUrlParam}`;
 
     await this.emailService.sendMagicLinkEmail({
       to: user.email,

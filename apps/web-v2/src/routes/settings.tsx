@@ -26,6 +26,7 @@ import {
   AboutSection,
   AccountSection,
   AppearanceSection,
+  DataSection,
   LogoutButton,
   NotificationsSection,
   PrivacySection,
@@ -225,6 +226,7 @@ export default function SettingsScreen() {
             onToggle={toggle}
             onRetry={() => void query.refetch()}
           />
+          <DataSection language={language} />
           <ToolsSection language={language} showAdmin={peutAdministrer} />
           <AboutSection language={language} version={__APP_VERSION__} />
           <LogoutButton language={language} busy={loggingOut} onPress={() => setConfirming(true)} />

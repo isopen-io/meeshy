@@ -101,6 +101,60 @@ describe('titleOf — customName PRIME (#5559 T11)', () => {
 });
 
 /**
+ * **UN DIRECT PORTE LE NOM DE L'AUTRE, MÊME S'IL A UN TITRE STOCKÉ** (#6790).
+ *
+ * Le legacy composait un titre CÔTÉ CLIENT et l'envoyait
+ * (`apps/web/components/conversations/create-conversation-modal.tsx:102-130`,
+ * chaîne `« {user1} et {user2} »`) : des milliers de directs portent en base un
+ * titre qui n'est pas un nom de conversation, mais la liste de ses deux
+ * membres. La v2 n'en écrit aucun, et doit maintenant les IGNORER.
+ *
+ * Le témoin porte sur la PRÉCÉDENCE, pas sur la chaîne : il ne cherche pas
+ * « et », il vérifie que le nom du pair GAGNE. Chercher la chaîne verdirait sur
+ * un titre stocké d'une autre forme (« X and Y », « X y Y ») que le même défaut
+ * produit dans les quatre langues du legacy.
+ */
+describe('titleOf — un DIRECT ignore son titre stocké (#6790)', () => {
+  const withPeer = (partial: Partial<Conversation>): Conversation =>
+    conversation({
+      participants: [participant({ userId: 'u-viewer', displayName: 'Vous' }), participant({ userId: 'u1', displayName: 'Fatou Bâ' })],
+      ...partial,
+    });
+
+  test('direct + titre stocké + pair ⇒ le NOM DU PAIR, jamais le titre', () => {
+    expect(titleOf(withPeer({ type: 'direct', title: 'J. Charles et Fatou Bâ' }), 'u-viewer')).toBe('Fatou Bâ');
+  });
+
+  test('un GROUPE garde son titre — la règle dépend du type, pas du hasard', () => {
+    expect(titleOf(withPeer({ type: 'group', title: 'Équipe déploiement' }), 'u-viewer')).toBe('Équipe déploiement');
+  });
+
+  test('customName PRIME toujours, y compris sur le nom du pair d’un direct', () => {
+    const c = withPeer({ type: 'direct', title: 'J. Charles et Fatou Bâ', userPreferences: [{ customName: 'Sany' }] });
+    expect(titleOf(c, 'u-viewer')).toBe('Sany');
+  });
+
+  test('direct SANS pair servi ⇒ le titre stocké reste un dernier recours, jamais une ligne vide', () => {
+    expect(titleOf(conversation({ type: 'direct', title: 'J. Charles et Fatou Bâ' }), 'u-viewer')).toBe('J. Charles et Fatou Bâ');
+  });
+
+  test('direct sans pair ni titre ⇒ l’identifiant ferme la marche', () => {
+    expect(titleOf(conversation({ type: 'direct', identifier: 'mshy_duo' }), 'u-viewer')).toBe('mshy_duo');
+  });
+
+  /**
+   * `peerOf` ne résout QUE les directs, délibérément : `participants` est
+   * tronqué à cinq par la passerelle, donc « un membre servi » n'est pas « le
+   * membre » d'un groupe — s'en servir comme nom afficherait la première des
+   * cinq lignes reçues, au hasard de l'ordre. Un groupe sans titre retombe donc
+   * sur son identifiant, et c'est la règle d'avant ce lot, inchangée.
+   */
+  test('un GROUPE sans titre retombe sur son IDENTIFIANT, jamais sur un membre pris au hasard', () => {
+    expect(titleOf(withPeer({ type: 'group', identifier: 'mshy_equipe' }), 'u-viewer')).toBe('mshy_equipe');
+  });
+});
+
+/**
  * `previewKindOf` — miroir de `LastMessageSummaryKind.swift:22-36` (D-23,
  * #5676) : l'ordre expired → hidden → view-once → ephemeral → standard.
  */

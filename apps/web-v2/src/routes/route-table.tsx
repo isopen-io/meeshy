@@ -13,6 +13,12 @@ import { createRouter } from '@/lib/router';
    adresses, pour qu'elles ne puissent jamais diverger d'écran. */
 const publicationScreen = () => import('@/routes/post');
 
+/* L'ADMINISTRATION DE LA v2 — UN seul `import()` pour ses DEUX adresses
+   (`/adm` et, le temps du pont, `/admin`), pour qu'elles ne puissent jamais
+   diverger d'écran. Voir le commentaire de `adm` plus bas (#6795). */
+const adminScreen = () => import('@/routes/admin');
+const adminUsersScreen = () => import('@/routes/admin-users');
+
 export const ROUTES = {
   list: { pattern: '/', screen: () => import('@/routes/conversations') },
   thread: { pattern: '/c/$conversation', screen: () => import('@/routes/thread') },
@@ -101,6 +107,10 @@ export const ROUTES = {
   accountDeletion: { pattern: '/account/deletion', screen: () => import('@/routes/account-deletion') },
   verifyEmailChange: { pattern: '/settings/verify-email-change', screen: () => import('@/routes/verify-email-change') },
   settingsNotifications: { pattern: '/settings/notifications', screen: () => import('@/routes/settings-notifications') },
+  /* L'EXPORT DE DONNÉES (#6725) — la rangée « Exporter mes données » des
+     réglages, masquée depuis la décommission du legacy (#6335, #6702) et qui
+     revient à une adresse propre à la v2. */
+  dataExport: { pattern: '/settings/data-export', screen: () => import('@/routes/data-export') },
   /* LES HUIT DESTINATIONS DES MENUS FLOTTANTS (#6214) — le Flux pour le bouton
      de gauche, les six barreaux de l'échelle de droite, et le profil qu'ouvre
      l'avatar. Leurs libellés, teintes et glyphes vivent dans UNE table
@@ -165,8 +175,26 @@ export const ROUTES = {
      session, et le DROIT se lit au serveur (`GET /me/permissions`) dans
      l'écran lui-même. Une garde de route qui déciderait ici devrait connaître
      le rôle, que `SessionUser` ne projette pas. */
-  admin: { pattern: '/admin', screen: () => import('@/routes/admin') },
-  adminUsers: { pattern: '/admin/users', screen: () => import('@/routes/admin-users') },
+  admin: { pattern: '/admin', screen: adminScreen },
+  adminUsers: { pattern: '/admin/users', screen: adminUsersScreen },
+  /* LES DEUX CHEMINS DE L'ADMINISTRATION (#6795, directive porteur 2026-09-16 :
+     « tu peux même avoir les deux chemins dans la v2, `/adm/` pour la route
+     d'administration nouvelle qui implémentera petit à petit les vues de
+     l'ancienne, et brancher toute l'ancienne dans `/admin` »).
+
+     `/adm` est l'adresse de la NOUVELLE administration — celle que la v2 sert
+     aujourd'hui, et qui absorbera les vues du legacy une à une. `/admin` est
+     réservée à l'ANCIENNE, portée dans ce même bundle (un seul conteneur
+     derrière Traefik, cf. #6795).
+
+     Tant que ce portage n'est pas livré, `/admin` sert les MÊMES écrans que
+     `/adm` — un seul `import()` pour les deux, comme `post`/`postDeepLink`.
+     C'est un PONT, pas la cible : déplacer `/admin` avant que l'ancienne
+     n'arrive laisserait une adresse morte, et un signet d'administrateur mène
+     aujourd'hui à `/admin`. Le jour où l'ancienne est portée, `/admin` bascule
+     vers elle et ce commentaire disparaît. */
+  adm: { pattern: '/adm', screen: adminScreen },
+  admUsers: { pattern: '/adm/users', screen: adminUsersScreen },
 } as const;
 
 /**

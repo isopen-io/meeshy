@@ -125,6 +125,13 @@ final class StoryImageOnlyCaptureTests: XCTestCase {
     }
 
     /// Le cadrage du lecteur (`StoryCardView.readerCanvasFraming`), à l'identique.
+    ///
+    /// **Ce double RECOPIE un choix de production**, et c'est sa faiblesse
+    /// connue : il ne rougit pas quand le lecteur change d'avis, il DÉRIVE. Son
+    /// alignement vient donc de la même loi que le lecteur consulte
+    /// (`StageChromeAlignment.verticalAlignment`, #6760) plutôt que d'un
+    /// littéral — il portait `.top`, que la directive du 2026-09-15 a
+    /// supplanté, et rien ici ne l'aurait signalé.
     private static func cadrage(viewport: CGSize) -> StoryCanvasFraming.Result {
         StoryCanvasFraming.resolve(.init(viewport: viewport,
                                          headerInset: 59 + 72,
@@ -132,7 +139,8 @@ final class StoryImageOnlyCaptureTests: XCTestCase {
                                          sideInset: 8,
                                          state: .carded,
                                          cardedCornerRadius: 22,
-                                         verticalAlignment: .top,
+                                         verticalAlignment: StageChromeAlignment.verticalAlignment(
+                                             canvasRatio: CanvasGeometry.portraitRatio),
                                          canvasRatio: CanvasGeometry.portraitRatio))
     }
 

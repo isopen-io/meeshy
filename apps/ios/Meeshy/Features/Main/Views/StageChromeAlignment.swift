@@ -1,4 +1,5 @@
 import CoreGraphics
+import MeeshyUI
 
 /// **LE PLATEAU EST LA SCÈNE** (#6760, directive porteur 2026-09-15).
 ///
@@ -55,6 +56,36 @@ nonisolated enum StageChromeAlignment {
     /// collerait en haut et rendrait le hors-champ asymétrique — le défaut que
     /// #6717 a mesuré sur la scène, une bande de fond visible en haut et rien en
     /// bas.
+    /// **L'alignement vertical du plateau : TOUJOURS centré** (#6760).
+    ///
+    /// ## Deux directives, et la postérieure gagne
+    ///
+    /// Le reader de story décidait seul, par un ternaire sur le rapport :
+    /// `.center` en paysage (directive porteur 2026-07-13, « la position des
+    /// vidéos landscape doit être au centre ») et `.top` en PORTRAIT (directive
+    /// porteur 2026-07-04, « la carte se place DIRECTEMENT sous la ligne
+    /// d'expiration ») — c'est-à-dire dans le cas NOMINAL.
+    ///
+    /// La directive du **2026-09-15** les supplante : « Ce qui est construit se
+    /// pose donc sur la plateau au milieu et le plateau est la scene ! Il faut
+    /// reprendre la même logique dans le reader de story ».
+    ///
+    /// **Ce bloc de commentaire EST la garde de cette valeur.** Une valeur posée
+    /// sur directive porteur ne peut pas avoir de témoin qui la justifie — un
+    /// témoin fige ce qu'elle vaut, jamais pourquoi. Sans les trois dates
+    /// ci-dessus, le prochain lecteur qui retrouvera la directive de juillet
+    /// « re-corrigera » ce centrage en croyant réparer une régression.
+    ///
+    /// Le paramètre `canvasRatio` est pris et non lu, pour la même raison que
+    /// `media` dans `chromeBounds` : la signature est le lieu où la règle se
+    /// dit, et le témoin du rang PORTRAIT — le seul qui puisse tomber, le
+    /// paysage rendant déjà `.center` sous l'ancienne règle — ne pourrait pas
+    /// s'écrire sans lui.
+    static func verticalAlignment(canvasRatio: CGFloat) -> StoryCanvasFraming.VerticalAlignment {
+        _ = canvasRatio
+        return .center
+    }
+
     static func mediaOrigin(stage: CGRect, mediaSize: CGSize) -> CGPoint {
         CGPoint(x: stage.midX - mediaSize.width / 2,
                 y: stage.midY - mediaSize.height / 2)

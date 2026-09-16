@@ -399,7 +399,50 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // #6693 et #6745 retirent tous deux de `ReelsPlayerView.swift`, par des parties
     // que la fusion applique sans conflit ; l'hôte reste en dette, donc les deux
     // retraits s'additionnent.
-    private static let legacyLineCeiling = 54_450
+    // #6701 — 56 077 → 56 046 (−31). Les voiles de lisibilité du lecteur de
+    // story devaient suivre le chrome dans `StoryViewerView+Canvas.swift`
+    // (2 313 lignes), hôte en dette. La couche en est d'abord sortie, entière,
+    // dans `StoryViewerView+CanvasScrims.swift` ; la règle s'y pose ensuite,
+    // hors de l'hôte. L'hôte RESTE en dette (2 282) ; le plafond baisse
+    // d'exactement ce que le lot retire.
+    //
+    // Les cinq lots se cumulent : 54 450 − 31 = 54 419. Seul #6701 retire de
+    // `StoryViewerView+Canvas.swift` : son retrait s'additionne sans
+    // recouvrement.
+    // #6708 — 54 419 → 54 403 (−16). La mesure du détail passe par
+    // `onGeometryChange` : dans `PostDetailView.swift`, le couple
+    // `GeometryReader` + préférence de la zone de défilement devient une ligne, et
+    // les deux clés de préférence orphelines partent (1 810 → 1 794). Rien n'y est
+    // ajouté ; le plafond baisse d'exactement ce que le lot retire.
+    //
+    // Les six lots se cumulent : 54 450 − 31 − 16 = 54 403. #6701 retire de
+    // `StoryViewerView+Canvas.swift`, #6708 de `PostDetailView.swift` — deux hôtes
+    // distincts, donc les deux baisses s'additionnent. Cumul MESURÉ sur les 26 noms
+    // après fusion : 54 034, soit le même mou de 369 lignes qu'avant (#6016) —
+    // compté comme la règle 3 le fait, `components(separatedBy: .newlines)` sur la
+    // racine `apps/ios/Meeshy`.
+    // #6704 — 54 403 → 54 274 (−129). Le rail du lecteur de story devait teinter
+    // son glyphe et son libellé depuis la luminance de la slide, et le bouton qui
+    // les peint vivait dans `StoryViewerView+Content.swift`, hôte en dette. Il en
+    // est d'abord sorti, tel quel, vers `StoryViewerView+ActionButton.swift` (−126) ;
+    // la teinte s'y ajoute ensuite. Côté Réels, le voile bas de la page se peint
+    // désormais depuis la valeur que la mesure compose (`MediaChromeVeil`) : le
+    // dégradé littéral de `ReelsPlayerView.swift` cède sa place, et le rail s'y
+    // branche en une ligne (−3). Les deux hôtes RESTENT en dette ; le plafond baisse
+    // d'exactement ce que le lot retire.
+    //
+    // **Les SEPT lots se CUMULENT : 54 450 − 31 (#6701) − 16 (#6708) − 129 (#6704)
+    // = 54 274.** Les trois retirent de trois hôtes DISTINCTS —
+    // `StoryViewerView+Canvas.swift`, `PostDetailView.swift`,
+    // `StoryViewerView+Content.swift` + `ReelsPlayerView.swift` — donc aucun
+    // recouvrement et les baisses s'additionnent. Garder l'un des plafonds à la
+    // fusion aurait laissé l'autre moitié du travail non comptée : le mode de panne
+    // déjà payé le 2026-08-30, et rejoué deux fois sur cette branche.
+    //
+    // Cumul MESURÉ après cette fusion : **53 905** — soit les 54 034 de #6708 moins
+    // les 129 de ce lot, et le même mou de 369 lignes (#6016), qui n'est pas repris
+    // ici.
+    private static let legacyLineCeiling = 54_274
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

@@ -168,3 +168,45 @@ describe("la CHARGE de l'e-mail de lien magique", () => {
     expect(charge).not.toHaveProperty('password');
   });
 });
+
+/**
+ * LE RETOUR APRÈS CONNEXION PAR E-MAIL (#6742).
+ *
+ * Le mot de passe, la double authentification et l'inscription honorent déjà
+ * `next` — la connexion par lien magique ne le pouvait pas : l'e-mail vise
+ * `/auth/magic-link?token=` SANS aucun retour, et la demande n'a pas de champ
+ * de retour. `returnUrl` porte cette valeur, DEPUIS la demande, jusque dans le
+ * lien envoyé — `magic-link.tsx` (web) le lit déjà en sortie
+ * (`MagicLinkValidation`, `safeReturnPath`) ; ce lot manquait le SEUL bout
+ * absent, l'entrée côté service.
+ */
+describe("le retour après connexion par e-mail (#6742)", () => {
+  it('embarque returnUrl, clampé, dans le lien envoyé par e-mail', async () => {
+    const { service, emailService } = harnais(compte());
+
+    await service.requestMagicLink({ ...REQUETE, returnUrl: '/chat/mshy_equipe_7f3a' });
+    const charge = emailService.sendMagicLinkEmail.mock.calls[0]?.[0];
+
+    expect(charge?.magicLink).toContain(`returnUrl=${encodeURIComponent('/chat/mshy_equipe_7f3a')}`);
+  });
+
+  it('ne pose PAS returnUrl dans le lien quand la demande n’en porte aucun', async () => {
+    const { service, emailService } = harnais(compte());
+
+    await service.requestMagicLink(REQUETE);
+    const charge = emailService.sendMagicLinkEmail.mock.calls[0]?.[0];
+
+    expect(charge?.magicLink).not.toContain('returnUrl=');
+  });
+
+  for (const hostile of ['https://evil.com/chat/x', '//evil.com', '/\\evil.com']) {
+    it(`rejette un returnUrl hors même-origine (${hostile}) — absent du lien, jamais recopié`, async () => {
+      const { service, emailService } = harnais(compte());
+
+      await service.requestMagicLink({ ...REQUETE, returnUrl: hostile });
+      const charge = emailService.sendMagicLinkEmail.mock.calls[0]?.[0];
+
+      expect(charge?.magicLink).not.toContain('returnUrl=');
+    });
+  }
+});

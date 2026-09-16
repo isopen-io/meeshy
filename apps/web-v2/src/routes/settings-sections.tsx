@@ -35,10 +35,11 @@ import { Link } from '@/routes/route-table';
  * la passerelle l'obéit (`lib/api/app-preferences.ts`). Ce que la v2.0 ne
  * porte pas encore menait au legacy ; il est décommissionné (#6702), et ces
  * rangées sont MASQUÉES jusqu'à leur portage — sécurité, options fines de
- * confidentialité et de notification, et la section « Données » entière
- * (médias, messages, export), que plus rien ne remplissait. La suppression de
- * compte mène à sa page de la v2 (`routes/account-deletion.tsx`, #6715) :
- * aucun contrôle des réglages ne vise plus une autre origine.
+ * confidentialité et de notification, et deux rangées de la section
+ * « Données » (médias #6723, messages #6724). La suppression de compte mène à
+ * sa page de la v2 (`routes/account-deletion.tsx`, #6715) et l'export de
+ * données à la sienne (`routes/data-export.tsx`, #6725) : aucun contrôle des
+ * réglages ne vise plus une autre origine.
  *
  * **Divergence assumée : la confidentialité est une SECTION, pas une feuille.**
  * iOS la range derrière une rangée de « Compte » (`PrivacySettingsView`) parce
@@ -159,6 +160,25 @@ export function AccountSection({ language }: { readonly language: InterfaceLangu
           <IconOf icon={{ set: 'ecran', name: 'userMinus' }} size={15} />
         </RowIcon>
         <RowText label={translate(language, 'settings.delete_account')} />
+        <Chevron />
+      </Link>
+    </GroupedSection>
+  );
+}
+
+/* La section « Données » (#6335) — MÉDIAS et MESSAGES restent MASQUÉS, chacun
+   derrière sa propre issue de portage (#6723, #6724) : une rangée n'entre ici
+   que le jour où sa destination existe (loi 4). L'EXPORT est la première à
+   revenir (#6725), à une adresse propre à la v2 — `/settings/data-export`,
+   jamais l'ancienne `meeshy.me/settings#privacy`. */
+export function DataSection({ language }: { readonly language: InterfaceLanguage }) {
+  return (
+    <GroupedSection id="settings-data" title={upper(language, 'settings.section.data')} icon={SECTION_ICON({ set: 'ecran', name: 'export' })}>
+      <Link to="dataExport" data-settings-export className={ROW_CLASS} style={ROW_STYLE}>
+        <RowIcon tint="var(--color-warning)">
+          <IconOf icon={{ set: 'ecran', name: 'export' }} size={15} />
+        </RowIcon>
+        <RowText label={translate(language, 'settings.export_data')} />
         <Chevron />
       </Link>
     </GroupedSection>

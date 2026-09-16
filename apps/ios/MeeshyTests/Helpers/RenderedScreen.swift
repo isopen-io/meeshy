@@ -194,6 +194,16 @@ final class RenderedScreen {
         return pose
     }
 
+    /// Le cadre ANNONCÉ du premier nœud posé dont le libellé COMMENCE par
+    /// `prefixe` — pour les éléments que SwiftUI ne marque d'aucun identifiant
+    /// (une tuile de scène, un bouton du composer), et dont le libellé porte un
+    /// suffixe variable (« Scène 1, vidéo »).
+    func frame(labeledPrefix prefixe: String) -> CGRect? {
+        RenderedScreen.noeuds(root)
+            .first { ($0.label ?? "").hasPrefix(prefixe) && $0.frame.width > 0 }?
+            .frame
+    }
+
     /// L'écran prononce-t-il ce fragment, où que ce soit ?
     func says(_ fragment: String) -> Bool {
         labels.contains { $0.contains(fragment) }

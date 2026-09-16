@@ -70,6 +70,24 @@ nonisolated struct MediaChromeBackdrop: Hashable, Sendable {
         }
     }
 
+    /// **La slide du lecteur de story** : son fond média — l'empreinte de la slide d'abord,
+    /// celle du média de fond ensuite, la cascade du fond flouté du lecteur
+    /// (`resolvedBackdropImage`). `nil` pour une slide sans média de fond : sa couleur se
+    /// lit par la loi du fond uni.
+    static func story(_ story: StoryItem?) -> MediaChromeBackdrop? {
+        guard let story else { return nil }
+        let effets = story.storyEffects
+        let objets = effets?.mediaObjects ?? []
+        guard let fondId = effets?.resolvedBackgroundMedia?.postMediaId
+                ?? (objets.isEmpty ? story.media.first?.id : nil) else { return nil }
+        let fond = story.media.first { $0.id == fondId && ($0.type == .image || $0.type == .video) }
+        guard effets?.resolvedBackgroundMedia != nil || fond != nil else { return nil }
+        let empreinte = [effets?.thumbHash, fond?.thumbHash].compactMap { $0 }.first { !$0.isEmpty }
+        return MediaChromeBackdrop(key: "\(story.id)#\(fondId)",
+                                   thumbHash: empreinte,
+                                   bitmapURL: fond.flatMap { $0.thumbnailUrl ?? ($0.type == .image ? $0.url : nil) })
+    }
+
     private static func visual(_ media: FeedMedia) -> MediaChromeBackdrop? {
         MediaChromeBackdrop(key: media.id,
                             thumbHash: media.thumbHash,
@@ -94,6 +112,13 @@ nonisolated enum MediaChromeScheme {
         return CanvasChromeScheme.scheme(background: nil, hasMediaBackground: true,
                                          mediaLuminance: luminance)
     }
+
+    /// **Le schéma d'un glyphe NU** (#6704) : la luminance de ce qu'il a SOUS LUI, à la
+    /// frontière du glyphe nu. Une mesure faite pour une autre cellule n'entre pas.
+    static func glyphScheme(for probe: MediaChromeProbe?, sample: MediaChromeSample?) -> ColorScheme {
+        let luminance = probe.flatMap { cible in sample?.key == cible.key ? sample?.luminance : nil }
+        return CanvasChromeScheme.scheme(forBareGlyphOver: luminance)
+    }
 }
 
 /// **Une mesure par média, hors du fil principal, servie ensuite sans recalcul.**
@@ -113,32 +138,47 @@ nonisolated enum MediaLuminanceSampler {
     }()
 
     static func memoized(_ backdrop: MediaChromeBackdrop?) -> MediaChromeSample? {
-        guard let backdrop,
-              let valeur = memoire.object(forKey: backdrop.key as NSString) else { return nil }
-        return MediaChromeSample(key: backdrop.key, luminance: valeur.doubleValue)
+        backdrop.flatMap { memo($0.key) }
     }
 
     static func sample(_ backdrop: MediaChromeBackdrop?) async -> MediaChromeSample? {
         guard let backdrop else { return nil }
-        if let connue = memoized(backdrop) { return connue }
+        return await mesurer(backdrop.key, backdrop) { CanvasChromeScheme.averageRelativeLuminance(of: $0) }
+    }
+
+    /// **La luminance SOUS un contrôle** (#6704) : une mesure par média ET par cellule, sur
+    /// la même source que la moyenne — l'empreinte, sinon le bitmap déjà en mémoire.
+    static func memoized(_ probe: MediaChromeProbe?) -> MediaChromeSample? {
+        probe.flatMap { memo($0.key) }
+    }
+
+    static func sample(_ probe: MediaChromeProbe?) async -> MediaChromeSample? {
+        guard let probe else { return nil }
+        let placement = probe.placement
+        return await mesurer(probe.key, probe.backdrop) { placement.luminance(of: $0) }
+    }
+
+    private static func memo(_ key: String) -> MediaChromeSample? {
+        memoire.object(forKey: key as NSString).map { MediaChromeSample(key: key, luminance: $0.doubleValue) }
+    }
+
+    private static func mesurer(_ key: String, _ backdrop: MediaChromeBackdrop,
+                                _ loi: @escaping @Sendable (UIImage) -> Double?) async -> MediaChromeSample? {
+        if let connue = memo(key) { return connue }
         let empreinte = backdrop.thumbHash
         let bitmap = backdrop.bitmapURL
         let mesure = await Task.detached(priority: .utility) {
-            luminance(thumbHash: empreinte, bitmapURL: bitmap)
+            source(thumbHash: empreinte, bitmapURL: bitmap).flatMap(loi)
         }.value
         guard let mesure else { return nil }
-        memoire.setObject(NSNumber(value: mesure), forKey: backdrop.key as NSString)
-        return MediaChromeSample(key: backdrop.key, luminance: mesure)
+        memoire.setObject(NSNumber(value: mesure), forKey: key as NSString)
+        return MediaChromeSample(key: key, luminance: mesure)
     }
 
-    private static func luminance(thumbHash: String?, bitmapURL: String?) -> Double? {
-        if let thumbHash,
-           let empreinte = UIImage.fromThumbHash(thumbHash),
-           let valeur = CanvasChromeScheme.averageRelativeLuminance(of: empreinte) {
-            return valeur
-        }
-        guard let bitmapURL, let bitmap = DiskCacheStore.cachedImage(for: bitmapURL) else { return nil }
-        return CanvasChromeScheme.averageRelativeLuminance(of: bitmap)
+    private static func source(thumbHash: String?, bitmapURL: String?) -> UIImage? {
+        if let thumbHash, let empreinte = UIImage.fromThumbHash(thumbHash) { return empreinte }
+        guard let bitmapURL else { return nil }
+        return DiskCacheStore.cachedImage(for: bitmapURL)
     }
 }
 
@@ -216,6 +256,101 @@ private struct MediaChromeLegible: ViewModifier {
     }
 }
 
+// MARK: - Glyphes NUS d'un rail (#6704)
+
+private struct MediaChromeRailKey: EnvironmentKey {
+    static let defaultValue: MediaChromeRail? = nil
+}
+
+extension EnvironmentValues {
+    /// Le rail de la surface : ce que ses glyphes NUS lisent pour savoir ce qu'ils ont
+    /// sous eux.
+    var mediaChromeRail: MediaChromeRail? {
+        get { self[MediaChromeRailKey.self] }
+        set { self[MediaChromeRailKey.self] = newValue }
+    }
+}
+
+private struct MediaChromeRailProvider: ViewModifier {
+    let backdrop: MediaChromeBackdrop?
+    let stage: MediaChromeStage
+    let flatBackground: String?
+    @State private var container: CGRect?
+    @State private var footprintSample: MediaChromeSample?
+
+    func body(content: Content) -> some View {
+        let empreinte = footprintProbe
+        content
+            .environment(\.mediaChromeRail, MediaChromeRail(
+                backdrop: backdrop, stage: stage, container: container,
+                sharedScheme: MediaChromeRail.sharedScheme(stage: stage, backdrop: backdrop,
+                                                           sample: courant(empreinte),
+                                                           flatBackground: flatBackground)))
+            .coordinateSpace(name: MediaChromeRail.space)
+            .onGeometryChange(for: CGRect.self) { proxy in
+                MediaChromeRail.fullBleed(size: proxy.size, insets: proxy.safeAreaInsets)
+            } action: { cadre in
+                container = cadre
+            }
+            .task(id: empreinte) {
+                guard let empreinte else { return }
+                let mesure = await MediaLuminanceSampler.sample(empreinte)
+                guard !Task.isCancelled else { return }
+                footprintSample = mesure
+            }
+    }
+
+    /// L'empreinte DÉCLARÉE se mesure ici, une fois pour tous les glyphes du rail.
+    private var footprintProbe: MediaChromeProbe? {
+        guard case .declared = stage else { return nil }
+        return MediaChromeRail(backdrop: backdrop, stage: stage, container: nil, sharedScheme: nil).probe(for: nil)
+    }
+
+    private func courant(_ probe: MediaChromeProbe?) -> MediaChromeSample? {
+        if let footprintSample, footprintSample.key == probe?.key { return footprintSample }
+        return MediaLuminanceSampler.memoized(probe)
+    }
+}
+
+private struct MediaChromeGlyph: ViewModifier {
+    @Environment(\.mediaChromeRail) private var rail
+    @Environment(\.mediaChromeScheme) private var surfaceScheme
+    @State private var frame: CGRect?
+    @State private var sample: MediaChromeSample?
+
+    func body(content: Content) -> some View {
+        let probe = rail?.probe(for: frame)
+        content
+            .environment(\.colorScheme, scheme(probe))
+            .onGeometryChange(for: CGRect.self) { proxy in
+                proxy.frame(in: .named(MediaChromeRail.space))
+            } action: { cadre in
+                frame = cadre
+            }
+            .task(id: probe) {
+                guard let probe, rail?.sharedScheme == nil else { return }
+                let mesure = await MediaLuminanceSampler.sample(probe)
+                guard !Task.isCancelled else { return }
+                sample = mesure
+            }
+    }
+
+    private func scheme(_ probe: MediaChromeProbe?) -> ColorScheme {
+        guard let rail else { return surfaceScheme }
+        if let partage = rail.sharedScheme { return partage }
+        let mesure = sample?.key == probe?.key ? sample : MediaLuminanceSampler.memoized(probe)
+        return MediaChromeScheme.glyphScheme(for: probe, sample: mesure)
+    }
+}
+
+private struct MediaChromeHalo: ViewModifier {
+    @Environment(\.colorScheme) private var scheme
+
+    func body(content: Content) -> some View {
+        content.legibleOverCanvas(on: scheme)
+    }
+}
+
 extension View {
 
     /// Mesure le média sur lequel ce chrome se pose et en rend le schéma à ses
@@ -238,5 +373,25 @@ extension View {
     /// légende porte déjà (`legibleOverCanvas`, SDK).
     func mediaChromeLegible() -> some View {
         modifier(MediaChromeLegible())
+    }
+
+    /// **Le rail d'une surface qui pose des glyphes NUS sur son média** (#6704) : le média
+    /// affiché, comment la surface le cadre et le voile, et — à défaut de média — la couleur
+    /// de son fond. Les glyphes marqués `mediaChromeGlyph()` s'y lisent.
+    func mediaChromeRail(for backdrop: MediaChromeBackdrop?, stage: MediaChromeStage,
+                         flatBackground: String? = nil) -> some View {
+        modifier(MediaChromeRailProvider(backdrop: backdrop, stage: stage, flatBackground: flatBackground))
+    }
+
+    /// Un glyphe NU du rail — verre absent : il prend, glyphe ET libellé, la teinte que
+    /// la part du média SOUS LUI commande. Hors d'un rail, le schéma de la surface.
+    func mediaChromeGlyph() -> some View {
+        modifier(MediaChromeGlyph())
+    }
+
+    /// Le plancher de lisibilité d'un glyphe nu : l'ombre de la légende, dans la polarité
+    /// opposée à sa teinte.
+    func mediaChromeHalo() -> some View {
+        modifier(MediaChromeHalo())
     }
 }

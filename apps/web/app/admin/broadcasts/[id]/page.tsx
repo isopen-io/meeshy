@@ -19,7 +19,7 @@ type BroadcastDetail = {
   body: string;
   sourceLanguage: string;
   status: string;
-  targeting?: { languages?: string[]; countries?: string[]; activityStatus?: string; inactiveSinceDays?: number; inactiveDays?: number } | null;
+  targeting?: { languages?: string[]; countries?: string[]; activityStatus?: string; inactiveDays?: number } | null;
   translatedSubjects?: Record<string, string> | null;
   translatedBodies?: Record<string, string> | null;
   recipientsByLanguage?: Record<string, number> | null;

@@ -30,6 +30,13 @@ import CoreGraphics
 /// plus fréquente — le portrait. Un défaut qui n'apparaît que sur la minorité
 /// des cas ne se voit pas en relecture ; il se voit à l'usage, et c'est ainsi
 /// qu'il a été trouvé.
+///
+/// ## Qui consomme la loi, depuis #6709
+///
+/// La vue a été retirée : une scène de post est une page de la galerie. Le
+/// témoin de SOURCE qui vérifiait qu'elle appelait la loi est remplacé par un
+/// témoin de COMPORTEMENT — le cadre d'une page scène reçoit le rapport de la
+/// scène (`PostGalleryLotTests.test_leCadreDUnePageScene_prendLeRapportDeLaScene`).
 final class SceneFullscreenRatioTests: XCTestCase {
 
     private func scene(carrierAspect: Double?) -> SceneV3 {
@@ -68,21 +75,5 @@ final class SceneFullscreenRatioTests: XCTestCase {
                            CanvasGeometry.portraitRatio, accuracy: 0.0001,
                            "ratio \(aberrante) devrait retomber sur le portrait")
         }
-    }
-
-    /// LE TÉMOIN DE SOURCE, et il garde ce que le témoin de loi ne peut pas
-    /// atteindre : que la VUE consomme bien la loi. Sans lui, `ratio(of:)`
-    /// pourrait être juste et le littéral rester dans la vue — exactement
-    /// l'état d'avant ce lot.
-    func test_theFullscreenView_noLongerHardcodesPortrait() throws {
-        var url = URL(fileURLWithPath: #filePath)
-        for _ in 0..<4 { url.deleteLastPathComponent() }
-        let source = try String(
-            contentsOf: url.appendingPathComponent("Meeshy/Features/Main/Views/SocialSceneFullscreenView.swift"),
-            encoding: .utf8)
-        XCTAssertFalse(source.contains("aspectRatio(9.0 / 16.0"),
-                       "le ratio est de nouveau codé en dur — une scène paysage débordera")
-        XCTAssertTrue(source.contains("SceneFullscreenFraming.ratio"),
-                      "la vue n'appelle plus la loi de cadrage")
     }
 }

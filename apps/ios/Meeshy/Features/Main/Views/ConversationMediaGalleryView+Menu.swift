@@ -137,6 +137,12 @@ extension ConversationMediaGalleryView {
     var currentSaveRequest: MediaSaveRequest? {
         guard currentIndex < allAttachments.count else { return nil }
         let attachment = allAttachments[currentIndex]
+        // **Une scène ne s'enregistre pas par ce menu** (#6709). Sa pièce est
+        // SYNTHÉTIQUE : sa seule URL est la vignette de son média, et
+        // l'enregistrer ferait sortir un fond sans le texte ni les stickers que
+        // l'auteur a posés — l'œuvre composée n'est pas ce fichier. Sans
+        // requête, le menu n'est pas monté (loi 4).
+        guard sceneContext?.scenes[attachment.id] == nil else { return nil }
         let urlString = attachment.fileUrl.isEmpty
             ? (attachment.thumbnailUrl ?? "")
             : attachment.fileUrl

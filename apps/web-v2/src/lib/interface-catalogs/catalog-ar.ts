@@ -195,6 +195,14 @@ const ar = {
   'emailNotifications.resubscribe': 'تلقي هذه الرسائل مجددًا',
   'emailNotifications.failed': 'لم يتم تطبيق التغيير. حاول مرة أخرى.',
 
+  'dataExport.title': 'تصدير بياناتي',
+  'dataExport.info.body': 'وفقًا للائحة العامة لحماية البيانات (RGPD)، احصل على ملف يضم ملفك الشخصي ورسائلك وجهات اتصالك ومنشوراتك.',
+  'dataExport.action.start': 'تصدير بياناتي',
+  'dataExport.action.exporting': 'التصدير قيد التنفيذ…',
+  'dataExport.action.again': 'تصدير مرة أخرى',
+  'dataExport.done.title': 'اكتمل التصدير',
+  'dataExport.done.body': 'تم تنزيل الملف على هذا الجهاز.',
+
   'profile.title': 'الملف الشخصي',
   'profile.edit': 'تعديل',
   'profile.cancel': 'إلغاء',

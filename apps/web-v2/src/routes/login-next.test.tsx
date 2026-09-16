@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import { sessionStore } from '@/lib/api/session';
+import { defaultMagicLinkDeps, type MagicLinkPanelDeps } from '@/components/magic-link-panel';
 import { LoginDoors } from '@/routes/login';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -42,15 +43,34 @@ afterEach(() => {
   container.remove();
 });
 
-function mount(next: string | null, method: 'lien' | 'password' = 'password'): HTMLDivElement {
+function mount(
+  next: string | null,
+  method: 'lien' | 'password' = 'password',
+  magicLinkDeps?: MagicLinkPanelDeps,
+): HTMLDivElement {
   window.history.replaceState({}, '', next === null ? '/login' : `/login?next=${encodeURIComponent(next)}`);
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
   act(() => {
-    root.render(<LoginDoors method={method} next={next} />);
+    root.render(<LoginDoors method={method} next={next} {...(magicLinkDeps === undefined ? {} : { magicLinkDeps })} />);
   });
   return container;
+}
+
+function fillMagicLinkEmail(el: HTMLDivElement, value: string) {
+  const input = el.querySelector('#magic-link-email') as HTMLInputElement;
+  act(() => {
+    input.value = value;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
+function submitMagicLinkForm(el: HTMLDivElement) {
+  const form = el.querySelector('form') as HTMLFormElement;
+  act(() => {
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  });
 }
 
 const signIn = () =>
@@ -124,5 +144,61 @@ describe('/login?next= — passer d’une porte à l’autre garde l’invitatio
     const el = mount('/chat/mshy_equipe_7f3a', 'password');
     const retour = [...el.querySelectorAll('a')].find((a) => (a.textContent ?? '').trim() === 'Se connecter par e-mail');
     expect(nextAndMethodOf(retour)).toEqual({ methode: null, next: '/chat/mshy_equipe_7f3a' });
+  });
+});
+
+/**
+ * LA CONNEXION PAR E-MAIL SURVIT À L'ALLER-RETOUR (#6742) — la porte par
+ * défaut de `/login` (#6404) est `MagicLinkPanel` : demander le lien doit
+ * porter `next`, clampé, jusqu'à la gateway (`auth.requestMagicLink`), qui
+ * l'embarque dans le lien envoyé par e-mail.
+ */
+describe('/login?next= — la connexion par e-mail porte `next` en `returnUrl` (#6742)', () => {
+  function magicLinkDepsCapturing() {
+    const calls: { email: string; returnUrl?: string }[] = [];
+    const request: MagicLinkPanelDeps['request'] = async (body) => {
+      calls.push(body);
+      return { ok: true, status: 200, data: { expiresInSeconds: 600 } };
+    };
+    return { calls, deps: { ...defaultMagicLinkDeps, request } };
+  }
+
+  test('un `next` sûr voyage en `returnUrl` dans la demande de lien', async () => {
+    const { calls, deps } = magicLinkDepsCapturing();
+    const el = mount('/chat/mshy_equipe_7f3a', 'lien', deps);
+    fillMagicLinkEmail(el, 'ada@meeshy.example');
+
+    await act(async () => {
+      submitMagicLinkForm(el);
+      await Promise.resolve();
+    });
+
+    expect(calls).toEqual([{ email: 'ada@meeshy.example', returnUrl: '/chat/mshy_equipe_7f3a' }]);
+  });
+
+  test('sans `next` : aucune clé `returnUrl`', async () => {
+    const { calls, deps } = magicLinkDepsCapturing();
+    const el = mount(null, 'lien', deps);
+    fillMagicLinkEmail(el, 'ada@meeshy.example');
+
+    await act(async () => {
+      submitMagicLinkForm(el);
+      await Promise.resolve();
+    });
+
+    expect(calls).toEqual([{ email: 'ada@meeshy.example' }]);
+  });
+
+  test('un `next` hostile ne voyage pas', async () => {
+    const { calls, deps } = magicLinkDepsCapturing();
+    const el = mount('//evil.com', 'lien', deps);
+    fillMagicLinkEmail(el, 'ada@meeshy.example');
+
+    await act(async () => {
+      submitMagicLinkForm(el);
+      await Promise.resolve();
+    });
+
+    expect(calls).toEqual([{ email: 'ada@meeshy.example' }]);
   });
 });

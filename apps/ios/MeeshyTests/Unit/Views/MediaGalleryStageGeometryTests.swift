@@ -408,9 +408,112 @@ final class MediaGalleryStageGeometryTests: XCTestCase {
                       "le rayon vient du solveur : il tombe à 0 en plein cadre")
     }
 
+    // MARK: - Ce que la colonne d'actions a SOUS elle (#6709)
+
+    /// **La colonne se teinte sur ce qui est PEINT sous elle, pas sur le média de
+    /// la page.** Recette du 2026-09-16 (Meeshy-iOS26, PR #6761) : depuis #6760 le
+    /// chrome s'aligne sur le PLATEAU, et sur la page panorama 4:1 d'un post la
+    /// colonne tombe SOUS le cadre (cadre arrêté à y ≈ 598, colonne à y 649), sur le
+    /// sol noir de la galerie ; teintée d'après la luminance CLAIRE du panorama, son
+    /// glyphe sombre se lisait à 1,16:1. **Même quand la pièce porte une empreinte** :
+    /// aucune page ne la peint hors de son cadre.
+    func test_laColonneSousLeCadre_surLeSolDuPlateau_seLitSurLeNoir_memeAvecEmpreinte() {
+        let panorama = resolve(ratio: 4)
+        let piece = makeAttachment(width: 1_600, height: 400, thumbHash: "empreinte")
+        let region = Self.region(autour: panorama)
+
+        XCTAssertNil(
+            MediaGalleryStage.columnBackdrop(for: piece, stage: panorama, region: region,
+                                             columnFrame: Self.colonne(sousLeCadreDe: panorama, dans: region)),
+            "hors du cadre, le sol est noir : ni la vignette ni l'empreinte ne sont sous la colonne"
+        )
+        XCTAssertEqual(MediaChromeScheme.scheme(for: nil, sample: nil), .dark,
+                       "sur le noir, le glyphe reste clair")
+    }
+
+    /// Dans la bande NUE du cadre — une pièce sans empreinte —, le fond est noir aussi.
+    func test_laColonneDansLaBandeDUnPanorama_sansEmpreinte_seLitSurLeNoir() {
+        let panorama = resolve(ratio: 4)
+        let piece = makeAttachment(width: 1_600, height: 400)
+        let region = Self.region(autour: panorama)
+
+        XCTAssertNil(
+            MediaGalleryStage.columnBackdrop(for: piece, stage: panorama, region: region,
+                                             columnFrame: Self.colonne(dansLaBandeDe: panorama, dans: region)),
+            "la bande est noire : la vignette claire du panorama n'est pas sous la colonne"
+        )
+    }
+
+    /// La bande HABILLÉE peint l'empreinte floutée (#6143) : c'est elle, et elle
+    /// seule, que la colonne doit lire — jamais la vignette nette du média.
+    func test_laColonneDansLaBande_avecEmpreinte_suitLEmpreinteSeule() throws {
+        let panorama = resolve(ratio: 4)
+        let piece = makeAttachment(width: 1_600, height: 400, thumbHash: "empreinte")
+        let region = Self.region(autour: panorama)
+        let fond = try XCTUnwrap(MediaGalleryStage.columnBackdrop(
+            for: piece, stage: panorama, region: region,
+            columnFrame: Self.colonne(dansLaBandeDe: panorama, dans: region)))
+
+        XCTAssertEqual(fond.thumbHash, "empreinte")
+        XCTAssertNil(fond.bitmapURL, "la bande peint l'empreinte, jamais la vignette nette")
+    }
+
+    /// Posée SUR le média, la colonne garde la règle de #6693 : la luminance du média.
+    /// Le média se lit là où la région le POSE — au milieu —, jamais à son origine :
+    /// une colonne au bas d'un portrait est sur lui.
+    func test_laColonnePoseeSurLeMedia_suitLeMedia() {
+        let portrait = resolve(ratio: 0.8)
+        let piece = makeAttachment(width: 1_600, height: 2_000)
+        let region = Self.region(autour: portrait)
+        let basDuMedia = (region.height + portrait.media.height) / 2
+        let surLeMedia = CGRect(x: (region.width + portrait.media.width) / 2 - 56, y: basDuMedia - 60,
+                                width: 44, height: 44)
+
+        XCTAssertEqual(MediaGalleryStage.columnBackdrop(for: piece, stage: portrait, region: region,
+                                                        columnFrame: surLeMedia),
+                       .attachment(piece))
+    }
+
+    /// Avant la première mesure — de la colonne ou de sa région —, rien ne dit où est
+    /// la colonne : elle garde le fond du média plutôt que de basculer au noir le
+    /// temps d'une passe.
+    func test_avantSaMesure_laColonneGardeLeFondDuMedia() {
+        let panorama = resolve(ratio: 4)
+        let piece = makeAttachment(width: 1_600, height: 400)
+        let region = Self.region(autour: panorama)
+
+        XCTAssertEqual(MediaGalleryStage.columnBackdrop(for: piece, stage: panorama, region: region,
+                                                        columnFrame: .zero),
+                       .attachment(piece))
+        XCTAssertEqual(MediaGalleryStage.columnBackdrop(for: piece, stage: panorama, region: .zero,
+                                                        columnFrame: Self.colonne(sousLeCadreDe: panorama,
+                                                                                  dans: region)),
+                       .attachment(piece))
+    }
+
+    /// La région du plateau autour d'un cadre plus court qu'elle — celle où #6760 pose
+    /// le chrome. Le cadre y est au milieu : 16 pt de chaque côté, 120 pt dessus et dessous.
+    private static func region(autour stage: MediaStageFraming.Result) -> CGSize {
+        CGSize(width: stage.frame.width + 32, height: stage.frame.height + 240)
+    }
+
+    /// Une colonne d'une action au bord droit, 12 pt sous le bas du média : dans la
+    /// bande du cadre.
+    private static func colonne(dansLaBandeDe stage: MediaStageFraming.Result, dans region: CGSize) -> CGRect {
+        let basDuMedia = (region.height + stage.media.height) / 2
+        return CGRect(x: region.width - 56, y: basDuMedia + 12, width: 44, height: 44)
+    }
+
+    /// Une colonne d'une action 51 pt sous le bas du CADRE — l'écart que la recette a
+    /// mesuré sur le panorama (cadre arrêté à y ≈ 598, colonne à y 649).
+    private static func colonne(sousLeCadreDe stage: MediaStageFraming.Result, dans region: CGSize) -> CGRect {
+        let basDuCadre = (region.height + stage.frame.height) / 2
+        return CGRect(x: region.width - 56, y: basDuCadre + 51, width: 44, height: 44)
+    }
+
     // MARK: - Fabrique
 
-    private func makeAttachment(width: Int?, height: Int?) -> MessageAttachment {
+    private func makeAttachment(width: Int?, height: Int?, thumbHash: String? = nil) -> MessageAttachment {
         MessageAttachment(
             id: "a-\(width ?? -1)x\(height ?? -1)",
             mimeType: "image/jpeg",
@@ -418,6 +521,7 @@ final class MediaGalleryStageGeometryTests: XCTestCase {
             fileUrl: "https://cdn.meeshy.me/a.jpg",
             width: width,
             height: height,
+            thumbHash: thumbHash,
             uploadedBy: "u-1"
         )
     }

@@ -213,17 +213,24 @@ extension PostDetailView {
     /// **Le suivi d'une scène du détail** — sa visibilité (pause hors écran) et
     /// le haut qu'elle occupe au repos, que la loi de taille consomme. Posé sur
     /// les deux chemins, mono-scène et mosaïque.
+    ///
+    /// **Mesuré par `onGeometryChange`, jamais par une préférence** (#6708).
+    /// Monté dans le détail, le couple `GeometryReader` + `onPreferenceChange`
+    /// ne délivrait QUE la valeur par défaut : un cadre `.zero` ici, une zone de
+    /// défilement `.zero` dans `PostDetailView`. La loi de taille rendait alors
+    /// `nil`, aucune borne n'atteignait la scène, et une scène 9:16 prenait
+    /// 370 × 658 pt sous le composer. Relevé par sondes sur le témoin hébergé
+    /// `PostDetailSceneFramingTests` : la loi était juste, sa mesure n'arrivait
+    /// jamais.
+    ///
+    /// L'action suit le défilement : chaque écriture est gardée, pour qu'une
+    /// valeur inchangée n'invalide pas le détail à chaque image.
     func trackingDetailScene<Scene: View>(_ scene: Scene) -> some View {
         scene
-            .background(
-                GeometryReader { geo in
-                    Color.clear.preference(key: StoryCanvasFrameKey.self,
-                                           value: geo.frame(in: .named(Self.scrollSpace)))
-                }
-            )
-            .onPreferenceChange(StoryCanvasFrameKey.self) { frame in
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.scrollSpace)) } action: { frame in
                 let h = sceneMeasures.viewport.height > 0 ? sceneMeasures.viewport.height : frame.maxY + 1
-                storyCanvasVisible = StoryCanvasVisibility.isVisible(canvasFrame: frame, viewportHeight: h)
+                let visible = StoryCanvasVisibility.isVisible(canvasFrame: frame, viewportHeight: h)
+                if visible != storyCanvasVisible { storyCanvasVisible = visible }
                 let relevees = sceneMeasures.recordingSceneTop(frame.minY,
                                                                scrollOffset: headerScrollRelay.offset)
                 if relevees != sceneMeasures { sceneMeasures = relevees }

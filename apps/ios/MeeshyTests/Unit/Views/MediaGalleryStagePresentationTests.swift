@@ -91,9 +91,17 @@ final class MediaGalleryStagePresentationTests: XCTestCase {
     /// Le corps d'une déclaration, borné par SES accolades — jamais par un
     /// nombre de caractères : une fenêtre fixe se remplit des retraits laissés
     /// par les commentaires retirés et rougit sur un code juste.
+    ///
+    /// **L'accolade ouvrante se cherche depuis le DÉBUT du marqueur** (#6709).
+    /// Cherchée après lui, elle sautait celle qu'un marqueur de fonction porte
+    /// déjà (`func applyTransport(…) {`) : le compte partait du PREMIER bloc
+    /// imbriqué, et la garde lisait ce bloc seul. Elle tombait juste tant que ce
+    /// bloc était le `switch` — une branche placée avant lui l'a fait lire la
+    /// branche, c'est-à-dire exactement la lecture partielle que cette fonction
+    /// existe pour refuser.
     private func declarationBody(startingAt marker: String, in code: String) -> String? {
         guard let start = code.range(of: marker),
-              let open = code[start.upperBound...].firstIndex(of: "{") else { return nil }
+              let open = code[start.lowerBound...].firstIndex(of: "{") else { return nil }
         var depth = 0
         var index = open
         while index < code.endIndex {
@@ -120,9 +128,13 @@ final class MediaGalleryStagePresentationTests: XCTestCase {
             XCTFail("`overlayLayer` introuvable"); return
         }
 
-        XCTAssertTrue(couche.contains("if stagePresentation.showsPlateau {"),
-                      "le plateau n'appartient qu'à l'état cadré")
-        XCTAssertTrue(couche.contains(".allowsHitTesting(stagePresentation.showsPlateau)"),
+        // #6789 — la conjonction a gagné un second terme : le VOILE de la rangée
+        // de réactions. `showsChrome` la porte tout entière, et c'est elle que la
+        // couche consulte désormais — l'immersion n'a rien perdu, elle n'est plus
+        // la seule à pouvoir retirer le chrome.
+        XCTAssertTrue(couche.contains("MediaStageReactionVeil.showsChrome(presentation: stagePresentation,"),
+                      "le plateau n'appartient qu'à l'état cadré, et la rangée ouverte l'efface aussi")
+        XCTAssertTrue(couche.contains(".allowsHitTesting(chrome)"),
                       "pendant le fondu, la couche est encore là : sans cette ligne elle répond")
     }
 

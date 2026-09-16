@@ -65,6 +65,42 @@ describe('resolveViewer', () => {
     expect('avatar' in viewer).toBe(false);
   });
 
+  /**
+   * L'INVITÉ D'UN LIEN (#5561) — il n'a pas de compte (`isAnonymous: true`),
+   * mais il a bien une IDENTITÉ : un participant. `id` non nul est ce qui fait
+   * que ses propres bulles sont les siennes dans le fil (`isMineOf`) — le
+   * confondre avec un visiteur sans session lui ferait lire ses propres
+   * messages comme ceux d'un autre.
+   */
+  test('source gateway + session guest ⇒ son participant et son pseudo, isAnonymous vrai', () => {
+    const viewer = resolveViewer({
+      source: 'gateway',
+      session: {
+        status: 'guest',
+        sessionToken: 'anon_abc',
+        expiresAt: 1,
+        guest: { participantId: 'p-invitee', nickname: 'Awa', conversationId: 'c1', link: 'mshy_x', mayWrite: true },
+      },
+    });
+    expect(viewer).toEqual({ id: 'p-invitee', handle: null, displayName: 'Awa', isAnonymous: true });
+  });
+
+  /** Un lien peut ne PAS exiger de pseudo : la passerelle en génère alors un
+   * qu'elle ne remet pas à la jonction. On nomme le RÔLE plutôt que d'inventer
+   * un nom ou d'en afficher un vide. */
+  test('un invité SANS pseudo est nommé par son rôle, jamais par une chaîne vide', () => {
+    const viewer = resolveViewer({
+      source: 'gateway',
+      session: {
+        status: 'guest',
+        sessionToken: 'anon_abc',
+        expiresAt: 1,
+        guest: { participantId: null, nickname: '  ', conversationId: 'c1', link: 'mshy_x', mayWrite: false },
+      },
+    });
+    expect(viewer).toEqual({ id: null, handle: null, displayName: 'Invité', isAnonymous: true });
+  });
+
   test('source gateway + session pending2fa ⇒ anonyme', () => {
     const viewer = resolveViewer({
       source: 'gateway',

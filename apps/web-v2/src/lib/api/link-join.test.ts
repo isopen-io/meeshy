@@ -1,7 +1,18 @@
 import { describe, expect, test } from 'bun:test';
 
 import type { ApiResult, HttpRequest, HttpTransport } from './http';
-import { decodeLinkInvitation, joinLinkAsMember, linkRefusalOf, loadLinkInvitation } from './link-join';
+import {
+  decodeLinkInvitation,
+  guestRefusalOf,
+  joinLinkAsGuest,
+  joinLinkAsMember,
+  linkRefusalOf,
+  loadLinkInvitation,
+  NICKNAME_TAKEN,
+  validateGuestDraft,
+  type GuestDraft,
+  type GuestTerms,
+} from './link-join';
 
 /**
  * LE PORT DE LA JONCTION PAR LIEN (#5561) — ce que ces témoins gardent, dans
@@ -85,13 +96,25 @@ describe('decodeLinkInvitation — une invitation, et rien de la conversation', 
       kind: 'group',
       inviter: { name: 'Awa D.', avatar: '2026/09/awa/photo.png' },
       readsHistory: true,
+      /* Les CONDITIONS de la porte anonyme (#5561) — ce que l'écran doit
+         connaître avant d'offrir quoi que ce soit. Rien de la conversation :
+         ni compteur, ni membre, ni langue PARLÉE (`stats.spokenLanguages`),
+         seulement les langues que le lien ACCEPTE. */
+      guest: {
+        allowed: true,
+        nicknameRequired: true,
+        emailRequired: false,
+        birthdayRequired: false,
+        languages: ['fr'],
+        mayWrite: true,
+      },
     });
   });
 
   test('une charge qui porte messages, membres et invités : le décodeur les JETTE', () => {
     const decoded = decodeLinkInvitation(poisonedPreview());
     expect(decoded).not.toBeNull();
-    expect(Object.keys(decoded ?? {}).sort()).toEqual(['inviter', 'kind', 'readsHistory', 'title']);
+    expect(Object.keys(decoded ?? {}).sort()).toEqual(['guest', 'inviter', 'kind', 'readsHistory', 'title']);
     const carried = JSON.stringify(decoded);
     for (const secret of [SECRET_MESSAGE, SECRET_MEMBER, SECRET_GUEST, CONVERSATION_ID, 'Nos échanges internes', 'wo', 'bruno']) {
       expect({ secret, carried: carried.includes(secret) }).toEqual({ secret, carried: false });
@@ -251,4 +274,219 @@ describe('linkRefusalOf — le CODE d’abord', () => {
   test('un 410 sans code ne se devine pas', () => {
     expect(linkRefusalOf({ status: 410 })).toBe('unavailable');
   });
+});
+
+/* ========================================================================= *
+ *  REJOINDRE SANS COMPTE (#5561)
+ * ========================================================================= */
+
+const TERMS: GuestTerms = {
+  allowed: true,
+  nicknameRequired: true,
+  emailRequired: false,
+  birthdayRequired: false,
+  languages: [],
+  mayWrite: true,
+};
+
+const draft = (partial: Partial<GuestDraft> = {}): GuestDraft => ({
+  nickname: 'Awa',
+  email: '',
+  birthday: '',
+  language: 'fr',
+  ...partial,
+});
+
+describe('validateGuestDraft — le refus de SAISIE se connaît AVANT l’aller-retour', () => {
+  test('le corps n’envoie que ce qui est rempli : aucune clé vide', () => {
+    const validated = validateGuestDraft(draft(), TERMS);
+    expect(validated).toEqual({ ok: true, body: { language: 'fr', nickname: 'Awa' } });
+  });
+
+  test('un pseudo EXIGÉ et absent désigne son champ, et rien ne part', () => {
+    expect(validateGuestDraft(draft({ nickname: '   ' }), TERMS)).toEqual({ ok: false, field: 'nickname' });
+  });
+
+  test('un pseudo FACULTATIF et absent laisse la passerelle en générer un', () => {
+    const validated = validateGuestDraft(draft({ nickname: '' }), { ...TERMS, nicknameRequired: false });
+    expect(validated).toEqual({ ok: true, body: { language: 'fr' } });
+  });
+
+  test('un e-mail exigé et absent, puis mal formé, désignent leur champ', () => {
+    const exige = { ...TERMS, emailRequired: true };
+    expect(validateGuestDraft(draft({ email: '' }), exige)).toEqual({ ok: false, field: 'email' });
+    expect(validateGuestDraft(draft({ email: 'awa@' }), exige)).toEqual({ ok: false, field: 'email' });
+  });
+
+  test('un e-mail FACULTATIF mais mal formé est refusé quand même — le serveur le refuserait', () => {
+    expect(validateGuestDraft(draft({ email: 'pas une adresse' }), TERMS)).toEqual({ ok: false, field: 'email' });
+  });
+
+  /**
+   * L'ÉCRAN PARLE EN JOURS (`<input type="date">`), LA PASSERELLE EN INSTANTS
+   * (`z.iso.datetime()`). La conversion vit ICI, une fois — un champ de date qui
+   * enverrait sa propre valeur au format serveur serait la jumelle qui diverge
+   * au premier écran de plus.
+   */
+  test('une date de naissance part en INSTANT ISO, jamais en jour nu', () => {
+    const validated = validateGuestDraft(draft({ birthday: '1994-03-17' }), { ...TERMS, birthdayRequired: true });
+    expect(validated.ok && validated.body.birthday).toBe('1994-03-17T00:00:00.000Z');
+  });
+
+  test('une date exigée et absente, ou d’une autre forme, désigne son champ', () => {
+    const exige = { ...TERMS, birthdayRequired: true };
+    expect(validateGuestDraft(draft({ birthday: '' }), exige)).toEqual({ ok: false, field: 'birthday' });
+    expect(validateGuestDraft(draft({ birthday: '17/03/1994' }), exige)).toEqual({ ok: false, field: 'birthday' });
+  });
+
+  test('une langue HORS de celles que le lien accepte désigne son champ', () => {
+    const restreint = { ...TERMS, languages: ['fr', 'en'] };
+    expect(validateGuestDraft(draft({ language: 'de' }), restreint)).toEqual({ ok: false, field: 'language' });
+    expect(validateGuestDraft(draft({ language: 'en' }), restreint).ok).toBe(true);
+  });
+
+  test('une liste de langues VIDE signifie « toutes », jamais « aucune »', () => {
+    expect(validateGuestDraft(draft({ language: 'wo' }), TERMS).ok).toBe(true);
+  });
+});
+
+describe('joinLinkAsGuest — POST /api/v1/links/:key/members, corps d’invité', () => {
+  const served = (extra: Record<string, unknown> = {}) => ({
+    ok: true as const,
+    data: {
+      conversationId: CONVERSATION_ID,
+      participantId: 'p-invitee',
+      sessionToken: 'anon_abc',
+      entry: { outcome: 'new', canViewHistory: true, rights: { canSendMessages: true } },
+      ...extra,
+    },
+  });
+
+  test('la porte CANONIQUE, jamais l’alias déprécié `/anonymous/join/:linkId`', async () => {
+    const { transport, requests } = fakeTransport(served());
+    const result = await joinLinkAsGuest(
+      { source: 'gateway', transport },
+      { link: 'mshy_équipe 7f3a', body: { language: 'fr', nickname: 'Awa' } },
+    );
+    expect(requests.map((r) => [r.method, r.path, r.body])).toEqual([
+      ['POST', '/api/v1/links/mshy_%C3%A9quipe%207f3a/members', { language: 'fr', nickname: 'Awa' }],
+    ]);
+    expect(result).toEqual({
+      ok: true,
+      data: { conversationId: CONVERSATION_ID, participantId: 'p-invitee', sessionToken: 'anon_abc', readsHistory: true, mayWrite: true },
+    });
+  });
+
+  test('les droits ABSENTS ne se promettent pas', async () => {
+    const { transport } = fakeTransport(served({ entry: { outcome: 'new' } }));
+    const result = await joinLinkAsGuest({ source: 'gateway', transport }, { link: 'mshy_x', body: { language: 'fr' } });
+    expect(result.ok).toBe(true);
+    expect(result.ok ? result.data.readsHistory : null).toBe(false);
+    expect(result.ok ? result.data.mayWrite : null).toBe(false);
+  });
+
+  /**
+   * La porte est en authentification OPTIONNELLE : un Bearer encore valide dans
+   * le transport ferait entrer le COMPTE sous son nom pendant que l'écran croit
+   * créer un invité. Une réponse SANS jeton de session n'est donc pas une
+   * jonction d'invité — le port refuse plutôt que de rendre une session qui
+   * n'existe pas. C'est la SYMÉTRIE exacte de `JOINED_AS_GUEST`.
+   */
+  test('servie sous un COMPTE (aucun jeton de session) ⇒ échec nommé, jamais une session inventée', async () => {
+    const { transport } = fakeTransport({
+      ok: true,
+      data: { conversationId: CONVERSATION_ID, participantId: 'p9', entry: { outcome: 'new' } },
+    });
+    const result = await joinLinkAsGuest({ source: 'gateway', transport }, { link: 'mshy_x', body: { language: 'fr' } });
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.code).toBe('MEMBER_NOT_GUEST');
+  });
+
+  test('une charge illisible est un échec NOMMÉ', async () => {
+    const { transport } = fakeTransport({ ok: true, data: { sessionToken: 'anon_abc' } });
+    const result = await joinLinkAsGuest({ source: 'gateway', transport }, { link: 'mshy_x', body: { language: 'fr' } });
+    expect(!result.ok && result.code).toBe('UNREADABLE_GUEST_JOIN');
+  });
+
+  test('un refus traverse tel quel, sa suggestion comprise', async () => {
+    const { transport } = fakeTransport({
+      ok: false,
+      status: 409,
+      error: 'pseudo pris',
+      code: NICKNAME_TAKEN,
+      suggestedNickname: 'awa2',
+    });
+    const result = await joinLinkAsGuest({ source: 'gateway', transport }, { link: 'mshy_x', body: { language: 'fr', nickname: 'awa' } });
+    expect(!result.ok && result.suggestedNickname).toBe('awa2');
+  });
+
+  test('en fixtures : rejoindre en invité n’ouvre aucune requête', async () => {
+    const { transport, requests } = fakeTransport({ ok: false, status: 0, error: 'jamais appelé' });
+    const result = await joinLinkAsGuest(
+      { source: 'fixtures', transport },
+      { link: 'mshy_equipe-deploiement_7f3a', body: { language: 'fr', nickname: 'Awa' } },
+    );
+    expect(result.ok).toBe(true);
+    expect(requests).toHaveLength(0);
+  });
+});
+
+/**
+ * LES DEUX FAMILLES DE REFUS (#5561) — les confondre fait réessayer quelqu'un
+ * dont le lien est mort, ou abandonner quelqu'un dont le pseudo était juste
+ * pris. Ce témoin garde la FRONTIÈRE, pas les phrases.
+ */
+describe('guestRefusalOf — saisie corrigeable ICI, ou lien mort', () => {
+  test('pseudo pris ⇒ SAISIE, sur son champ, avec le pseudo libre proposé', () => {
+    expect(guestRefusalOf({ status: 409, code: NICKNAME_TAKEN, suggestedNickname: 'awa2' })).toEqual({
+      on: 'input',
+      field: 'nickname',
+      suggestion: 'awa2',
+    });
+  });
+
+  test('pseudo pris SANS suggestion ⇒ toujours une saisie, sans remède inventé', () => {
+    expect(guestRefusalOf({ status: 409, code: NICKNAME_TAKEN })).toEqual({ on: 'input', field: 'nickname', suggestion: null });
+  });
+
+  /* Un 403, et pourtant une SAISIE : la langue est un champ de ce formulaire,
+     et le visiteur peut en choisir une autre. Le ranger avec les refus du lien
+     retirerait le formulaire au moment précis où il suffit d'y toucher. */
+  test('langue refusée ⇒ SAISIE sur le champ langue, malgré son 403', () => {
+    expect(guestRefusalOf({ status: 403, code: 'LANGUAGE_NOT_ALLOWED' })).toEqual({
+      on: 'input',
+      field: 'language',
+      suggestion: null,
+    });
+  });
+
+  test('400 qui NOMME son champ ⇒ ce champ', () => {
+    expect(guestRefusalOf({ status: 400, field: 'email' })).toEqual({ on: 'input', field: 'email', suggestion: null });
+  });
+
+  test('400 qui ne nomme rien ⇒ saisie SANS champ : le message se pose au-dessus, jamais sous un champ deviné', () => {
+    expect(guestRefusalOf({ status: 400 })).toEqual({ on: 'input', field: null, suggestion: null });
+  });
+
+  test('400 qui nomme un champ INCONNU de ce formulaire ⇒ saisie sans champ', () => {
+    expect(guestRefusalOf({ status: 400, field: 'deviceFingerprint' })).toEqual({ on: 'input', field: null, suggestion: null });
+  });
+
+  const DU_LIEN: ReadonlyArray<readonly [number, string | undefined, string]> = [
+    [410, 'LINK_EXPIRED', 'expired'],
+    [410, 'CONVERSATION_CLOSED', 'closed'],
+    [409, 'LINK_EXHAUSTED', 'full'],
+    [403, 'ACCOUNT_REQUIRED', 'account-required'],
+    [403, 'BANNED', 'banned'],
+    [403, 'REGION_NOT_ALLOWED', 'region'],
+    [404, undefined, 'not-found'],
+    [429, undefined, 'rate-limited'],
+    [0, undefined, 'offline'],
+  ];
+
+  for (const [status, code, refusal] of DU_LIEN) {
+    test(`${status} ${code ?? '(sans code)'} ⇒ refus du LIEN (${refusal}) : le formulaire est retiré`, () => {
+      expect(guestRefusalOf(code === undefined ? { status } : { status, code })).toEqual({ on: 'link', refusal });
+    });
+  }
 });

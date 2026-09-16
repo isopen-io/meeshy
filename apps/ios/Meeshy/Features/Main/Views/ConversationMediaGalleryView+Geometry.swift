@@ -163,6 +163,18 @@ enum MediaGalleryStage {
         return CGFloat(width) / CGFloat(height)
     }
 
+    /// **Le rapport que le solveur reçoit pour une PAGE** (#6709).
+    ///
+    /// Une page scène est une pièce SYNTHÉTIQUE, sans dimensions : lui demander
+    /// `ratio(of:)` rendrait `nil`, et le cadre prendrait toute la zone libre au
+    /// lieu du rapport de la scène. Le rapport d'une scène vient donc de sa
+    /// valeur (`GallerySceneItem.aspect`, dont `PostGalleryLot.sceneAspect` est
+    /// le site unique) ; celui d'une image ou d'une vidéo, de ses dimensions.
+    static func mediaRatio(of attachment: MessageAttachment,
+                           scenes: [String: GallerySceneItem]) -> CGFloat? {
+        scenes[attachment.id]?.aspect ?? ratio(of: attachment)
+    }
+
     /// **Un ratio inconnu prend toute la zone libre — il ne se devine pas.**
     ///
     /// Deviner (4:3, 16:9, peu importe) ferait SAUTER le cadre à l'instant où
@@ -213,6 +225,55 @@ enum MediaGalleryStage {
                          thumbHash: String?) -> StoryLetterboxFill.Source {
         guard stage.letterboxes else { return .none }
         return StoryLetterboxFill.source(thumbHash: thumbHash)
+    }
+
+    /// **Le nom de l'espace du PLATEAU** — la région qui porte le cadre et le chrome
+    /// (#6760), où la colonne d'actions mesure sa place (#6709).
+    static let cadreSpace = "media.stage.cadre"
+
+    /// **Ce que la colonne d'actions a SOUS elle** (#6709, recette du 2026-09-16).
+    ///
+    /// Depuis #6760, le chrome s'aligne sur le PLATEAU, et non plus sur le cadre : la
+    /// colonne se pose au bas de la région. Sous un cadre plus court que la région — un
+    /// panorama —, elle tombe HORS du cadre, sur le sol noir de la galerie. Sa teinte
+    /// (#6693) doit suivre ce qui y est peint, jamais un média qu'elle ne couvre pas. Sur
+    /// la page panorama 4:1 d'un post, teintée d'après la vignette claire du panorama,
+    /// son glyphe sombre se lisait à 1,16:1 sur le noir (cadre arrêté à y ≈ 598, colonne
+    /// à y 649).
+    ///
+    /// La règle lit trois zones sur la région mesurée. Le cadre et son média y sont posés
+    /// au milieu, par la loi du plateau (`StageChromeAlignment.mediaOrigin`) :
+    /// - **sur le média** : le média ;
+    /// - **dans la bande du cadre** : l'empreinte seule, ou `nil` quand la bande est nue.
+    ///   C'est l'empreinte que la bande peint (`backdrop(stage:thumbHash:)`), jamais la
+    ///   vignette nette ;
+    /// - **hors du cadre** : `nil`. Le sol de la galerie est noir (`Color.black`), et
+    ///   aucune page n'y peint son empreinte.
+    ///
+    /// `nil` rend le schéma sombre de la loi : un glyphe clair sur le noir.
+    ///
+    /// Avant la première mesure — de la colonne ou de sa région —, rien ne dit où est la
+    /// colonne. Elle garde alors le fond du média, plutôt que de basculer le temps d'une
+    /// passe.
+    static func columnBackdrop(for attachment: MessageAttachment,
+                               stage: MediaStageFraming.Result,
+                               region: CGSize,
+                               columnFrame: CGRect) -> MediaChromeBackdrop? {
+        guard !columnFrame.isEmpty, region.width > 0, region.height > 0 else {
+            return .attachment(attachment)
+        }
+        let plateau = CGRect(origin: .zero, size: region)
+        let centre = CGPoint(x: columnFrame.midX, y: columnFrame.midY)
+        let media = CGRect(origin: StageChromeAlignment.mediaOrigin(stage: plateau, mediaSize: stage.media),
+                           size: stage.media)
+        guard !media.contains(centre) else { return .attachment(attachment) }
+        let cadre = CGRect(origin: StageChromeAlignment.mediaOrigin(stage: plateau, mediaSize: stage.frame),
+                           size: stage.frame)
+        guard cadre.contains(centre),
+              case .thumbHash(let empreinte) = backdrop(stage: stage, thumbHash: attachment.thumbHash) else {
+            return nil
+        }
+        return MediaChromeBackdrop(key: attachment.id, thumbHash: empreinte, bitmapURL: nil)
     }
 
     private static func freeRegionRatio(viewport: CGSize,
@@ -291,16 +352,28 @@ extension ConversationMediaGalleryView {
         )
     }
 
+    /// **L'état que le SOLVEUR reçoit — site unique** (#6789).
+    ///
+    /// Le voile de la rangée de réactions efface le CHROME sans libérer sa
+    /// place : `MediaStageReactionVeil.geometryPresentation` prend `pickerOpen`
+    /// et ne le lit pas, et c'est toute la règle. Elle passe par une fonction
+    /// plutôt que par un appel qu'on s'abstient d'écrire, parce qu'une règle
+    /// qu'on respecte en NE FAISANT RIEN ne se teste pas — et se perd au premier
+    /// lot qui ajoute un site.
+    var stageGeometryPresentation: StagePresentation {
+        MediaStageReactionVeil.geometryPresentation(stagePresentation, pickerOpen: reactionBarOpen)
+    }
+
     /// Le pager s'en sert pour se poser exactement dans la zone libre que le
     /// solveur a mesurée ; sans ce partage, le cadre dessiné et le cadre calculé
     /// diffèreraient d'une bande. En plein cadre, les deux valent zéro et le
     /// pager reprend l'écran entier.
     var plateauTopInset: CGFloat {
-        MediaGalleryStage.topInset(presentation: stagePresentation, corridors: stageCorridors)
+        MediaGalleryStage.topInset(presentation: stageGeometryPresentation, corridors: stageCorridors)
     }
 
     var plateauBottomInset: CGFloat {
-        MediaGalleryStage.bottomInset(presentation: stagePresentation, corridors: stageCorridors)
+        MediaGalleryStage.bottomInset(presentation: stageGeometryPresentation, corridors: stageCorridors)
     }
 
     /// Le cadre de CE média. Chaque page a le sien : une vidéo 16:9 et une scène
@@ -309,11 +382,14 @@ extension ConversationMediaGalleryView {
     /// **L'état d'immersion entre ici** (#6142) : `framing` le projette sur le
     /// solveur, donc franchir une porte change des COTES. Un état qui n'aurait
     /// commandé que du chrome aurait laissé la loi de cadrage sans interrupteur.
+    ///
+    /// **Une page scène reçoit le rapport de SA scène** (#6709) : sa pièce est
+    /// synthétique, sans dimensions — `mediaRatio(of:scenes:)` le sait.
     func stage(for attachment: MessageAttachment) -> MediaStageFraming.Result {
         MediaGalleryStage.resolve(
             viewport: DeviceLayout.windowSize,
-            mediaRatio: MediaGalleryStage.ratio(of: attachment),
-            presentation: stagePresentation.framing,
+            mediaRatio: MediaGalleryStage.mediaRatio(of: attachment, scenes: sceneContext?.scenes ?? [:]),
+            presentation: stageGeometryPresentation.framing,
             corridors: stageCorridors
         )
     }
@@ -323,7 +399,7 @@ extension ConversationMediaGalleryView {
         guard currentIndex < allAttachments.count else {
             return MediaGalleryStage.resolve(viewport: DeviceLayout.windowSize,
                                              mediaRatio: nil,
-                                             presentation: stagePresentation.framing,
+                                             presentation: stageGeometryPresentation.framing,
                                              corridors: stageCorridors)
         }
         return stage(for: allAttachments[currentIndex])
@@ -386,12 +462,58 @@ extension ConversationMediaGalleryView {
 
             VStack(spacing: 0) {
                 Spacer(minLength: 0)
+                cadreReactionBadge
                 cadreActionColumn
                 cadreOverlay
             }
             .frame(width: stageChromeWidth)
         }
+        // L'espace où la colonne mesure sa place (#6709) : la région du plateau, qui
+        // porte à la fois le cadre et le chrome. Sa taille suffit à dire où le cadre
+        // et son média sont peints — tous deux posés au milieu — et
+        // `MediaGalleryStage.columnBackdrop` y lit ce qui est sous la colonne.
+        .onGeometryChange(for: CGSize.self) { proxy in
+            proxy.size
+        } action: { taille in
+            cadreRegionSize = taille
+        }
+        .coordinateSpace(name: MediaGalleryStage.cadreSpace)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// **CE QUE LA PIÈCE A RÉCOLTÉ, VISIBLE SANS REFERMER** (#6789, directive
+    /// porteur 2026-09-16 : « lorsqu'on choisi la réaction, ce doit s'afficher
+    /// sur l'attachement en plein ecran et dans la conversation »).
+    ///
+    /// Le résumé arrivait déjà jusqu'ici — `reactionSummary` et
+    /// `currentUserReactions` sont des champs de la MÊME pièce que la bulle rend
+    /// —, et aucun site du visualiseur ne les lisait. On réagissait, l'écran ne
+    /// changeait pas, et il fallait refermer pour voir que le geste avait
+    /// marché : un contrôle dont l'effet n'atteint aucun pixel (loi 4, lue à
+    /// l'envers).
+    ///
+    /// **Alignée sur le PLATEAU, pas sur le média** (#6760) : elle rejoint la
+    /// pile qui porte déjà la colonne d'actions et le bloc auteur, dans la
+    /// largeur `stageChromeWidth`. Posée sur le cadre du média, elle aurait
+    /// changé de place d'une pièce à l'autre — et se serait cognée au bloc
+    /// auteur dès qu'une pièce haute remplit la région.
+    ///
+    /// **C'est du CHROME**, donc elle part avec lui : la rangée d'émojis
+    /// ouverte l'efface comme elle efface le reste, et le choix de l'émoji la
+    /// ramène — ce qui est exactement l'enchaînement que la directive décrit.
+    @ViewBuilder
+    var cadreReactionBadge: some View {
+        if currentIndex < allAttachments.count,
+           let modèle = AttachmentReactionBadgeModel.make(
+                summary: allAttachments[currentIndex].reactionSummary,
+                currentUserReactions: allAttachments[currentIndex].currentUserReactions) {
+            AttachmentReactionBadge(model: modèle, accent: Color(hex: accentColor))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, MediaGalleryStage.gutter)
+                .padding(.bottom, MediaStageActionColumn.spacing)
+                .transition(.scale(scale: 0.6).combined(with: .opacity))
+                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: modèle)
+        }
     }
 
     /// La largeur du PLATEAU — celle que le chrome prend, quelle que soit la

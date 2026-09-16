@@ -394,38 +394,18 @@ fileprivate struct BubbleGridCell: View {
 
     /// BUG2 A' — pastille des réactions par-image (emojis + total) en coin bas-gauche
     /// (le download badge occupe le bas-droite, le viewCount le haut-droite).
+    ///
+    /// **Le dessin a quitté ce site pour `AttachmentReactionBadge`** (#6789) :
+    /// le plein écran devait montrer la MÊME pastille, et la recopier aurait
+    /// donné deux règles qui se ressemblent jusqu'au jour où l'une bouge. La
+    /// première divergence aurait été le renfort « j'ai réagi », que ce site a
+    /// mis un lot entier à gagner.
     @ViewBuilder private var reactionsBadge: some View {
-        if let summary = attachment.reactionSummary, !summary.isEmpty {
-            let total = summary.values.reduce(0, +)
-            // « J'ai réagi à CE média » — la donnée existait sur le modèle
-            // (`MessageAttachment.currentUserReactions`, décodée et mappée) mais
-            // ce site ne lisait que `reactionSummary` : sur une photo où j'avais
-            // posé un ❤️ parmi trois 👍 d'autres personnes, la pastille affichait
-            // « ❤️👍 4 » sans rien qui distingue le mien.
-            //
-            // Le renfort emprunte le langage DÉJÀ en place pour les réactions de
-            // bulle (`BubbleReactionsOverlay`) : contour épais à l'accent, et non
-            // le contour-sur-glyphe des actions à symbole — un emoji n'a pas de
-            // tracé qu'on puisse retracer.
-            let iReacted = !(attachment.currentUserReactions ?? []).isEmpty
-            let accent = Color(hex: contactColor)
-            HStack(spacing: 1) {
-                ForEach(summary.keys.sorted().prefix(3), id: \.self) { emoji in
-                    Text(emoji).font(MeeshyFont.relative(11))
-                }
-                if total > 1 {
-                    Text("\(total)").font(MeeshyFont.relative(9, weight: .semibold)).foregroundColor(.white)
-                }
-            }
-            .padding(.horizontal, 5).padding(.vertical, 2)
-            .background(
-                Capsule().fill(iReacted ? accent.opacity(0.55) : Color.black.opacity(0.55))
-            )
-            .overlay(
-                Capsule().strokeBorder(iReacted ? accent : .clear, lineWidth: iReacted ? 2 : 0)
-            )
-            .shadow(color: iReacted ? accent.opacity(0.4) : .clear, radius: iReacted ? 4 : 0)
-            .padding(5)
+        if let modèle = AttachmentReactionBadgeModel.make(
+            summary: attachment.reactionSummary,
+            currentUserReactions: attachment.currentUserReactions) {
+            AttachmentReactionBadge(model: modèle, accent: Color(hex: contactColor))
+                .padding(5)
         }
     }
 

@@ -14,7 +14,11 @@ const logger = enhancedLogger.child({ module: 'MagicLinkRoutes' });
 // Validation schemas
 const requestMagicLinkSchema = z.object({
   email: z.email('Invalid email address').max(255),
-  rememberDevice: z.boolean().optional().default(false) // Stored server-side for security
+  rememberDevice: z.boolean().optional().default(false), // Stored server-side for security
+  /** OÙ REVENIR une fois connecté (#6742) — clampé côté SERVICE
+   * (`clampMagicLinkReturnUrl`), jamais cru ici : une valeur hostile n'échoue
+   * pas la requête, elle est simplement absente du lien envoyé. */
+  returnUrl: z.string().max(2048).optional()
 });
 
 const validateMagicLinkSchema = z.object({
@@ -61,6 +65,11 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
             type: 'boolean',
             description: 'Remember device for long session (365 days). Stored server-side for security.',
             default: false
+          },
+          returnUrl: {
+            type: 'string',
+            description: 'Internal path to return to after a successful login (#6742). Clamped server-side to a same-origin path; a suspect value is dropped, never trusted.',
+            example: '/chat/mshy_equipe_7f3a'
           }
         }
       },
@@ -100,7 +109,7 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
         return sendBadRequest(reply, validationResult.error.issues[0]?.message || 'Invalid email address');
       }
 
-      const { email, rememberDevice } = validationResult.data;
+      const { email, rememberDevice, returnUrl } = validationResult.data;
 
       // Get request context
       const requestContext = await getRequestContext(request);
@@ -111,7 +120,8 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
         ipAddress: requestContext.ip,
         userAgent: requestContext.userAgent,
         deviceFingerprint: (request.body as any)?.deviceFingerprint,
-        rememberDevice // Stored server-side for security
+        rememberDevice, // Stored server-side for security
+        returnUrl // Clamped server-side (MagicLinkService.clampMagicLinkReturnUrl) — #6742
       });
 
       /**
