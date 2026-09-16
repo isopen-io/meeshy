@@ -90,6 +90,7 @@ export function MagicLinkValidation({
             <Link
               to="magicLink"
               replace
+              search={{ next: returnUrl ?? undefined }}
               className="grid place-items-center rounded-[14px] font-bold text-white"
               style={{ minHeight: 52, background: 'linear-gradient(90deg, var(--ios-indigo-600), var(--ios-indigo-400))' }}
             >
@@ -97,6 +98,7 @@ export function MagicLinkValidation({
             </Link>
             <Link
               to="login"
+              search={{ next: returnUrl ?? undefined }}
               replace
               className="grid place-items-center rounded-[14px] font-semibold"
               style={{

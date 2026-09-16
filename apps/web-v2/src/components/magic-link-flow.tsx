@@ -22,11 +22,11 @@ import { MagicLinkPanel, type MagicLinkPanelDeps } from './magic-link-panel';
 
 export type MagicLinkFlowDeps = MagicLinkPanelDeps;
 
-export function MagicLinkFlow({ deps }: { deps?: MagicLinkFlowDeps }) {
+export function MagicLinkFlow({ deps, next = null }: { deps?: MagicLinkFlowDeps; readonly next?: string | null }) {
   return (
     <AuthColumn>
       <AuthColumnBar to="login" title="Connexion par e-mail" />
-      <MagicLinkPanel {...(deps === undefined ? {} : { deps })} autoFocus />
+      <MagicLinkPanel {...(deps === undefined ? {} : { deps })} autoFocus next={next} />
       <AuthBrandFooter />
     </AuthColumn>
   );

@@ -78,25 +78,25 @@ function fakeClock() {
 }
 
 function requestStub(responses: ReadonlyArray<ApiResult<MagicLinkRequestData>>) {
-  const calls: ReadonlyArray<{ email: string; rememberDevice?: boolean }>[] = [];
+  const calls: ReadonlyArray<{ email: string; rememberDevice?: boolean; returnUrl?: string }>[] = [];
   let i = 0;
   const request = async (
-    body: { email: string; rememberDevice?: boolean },
+    body: { email: string; rememberDevice?: boolean; returnUrl?: string },
   ): Promise<ApiResult<MagicLinkRequestData>> => {
-    (calls as unknown as { email: string; rememberDevice?: boolean }[]).push(body);
+    (calls as unknown as { email: string; rememberDevice?: boolean; returnUrl?: string }[]).push(body);
     const r = responses[Math.min(i, responses.length - 1)];
     i += 1;
     return r ?? { ok: false, status: 0, error: 'aucune réponse programmée' };
   };
-  return { calls: calls as unknown as { email: string; rememberDevice?: boolean }[], request };
+  return { calls: calls as unknown as { email: string; rememberDevice?: boolean; returnUrl?: string }[], request };
 }
 
-function mount(deps: MagicLinkFlowDeps): HTMLDivElement {
+function mount(deps: MagicLinkFlowDeps, next: string | null = null): HTMLDivElement {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
   act(() => {
-    root.render(<MagicLinkFlow deps={deps} />);
+    root.render(<MagicLinkFlow deps={deps} next={next} />);
   });
   return container;
 }
@@ -157,6 +157,43 @@ describe('MagicLinkFlow — (c) envoi', () => {
 
     expect(stub.calls).toEqual([{ email: 'ada@meeshy.example' }]);
   });
+});
+
+/**
+ * LE RETOUR APRÈS CONNEXION (#6742) — `/auth/magic-link?next=` (la SAISIE)
+ * porte le même paramètre que `/login` et `/signup` ; la demande l'envoie en
+ * `returnUrl`, clampé (`safeNextPath`), jamais cru.
+ */
+describe('MagicLinkFlow — retour après connexion (#6742)', () => {
+  test('un `next` sûr voyage en `returnUrl` dans la demande', async () => {
+    const { clock, now } = fakeClock();
+    const stub = requestStub([{ ok: true, data: { expiresInSeconds: 600 }, status: 200 }]);
+    const el = mount({ request: stub.request, clock, now }, '/chat/mshy_equipe_7f3a');
+    fill(el, 'ada@meeshy.example');
+
+    await act(async () => {
+      submit(el);
+      await Promise.resolve();
+    });
+
+    expect(stub.calls).toEqual([{ email: 'ada@meeshy.example', returnUrl: '/chat/mshy_equipe_7f3a' }]);
+  });
+
+  for (const hostile of ['//evil.com', 'https://evil.com/chat/x', '/\\evil.com']) {
+    test(`un \`next\` hors même-origine (${hostile}) ne voyage pas`, async () => {
+      const { clock, now } = fakeClock();
+      const stub = requestStub([{ ok: true, data: { expiresInSeconds: 600 }, status: 200 }]);
+      const el = mount({ request: stub.request, clock, now }, hostile);
+      fill(el, 'ada@meeshy.example');
+
+      await act(async () => {
+        submit(el);
+        await Promise.resolve();
+      });
+
+      expect(stub.calls).toEqual([{ email: 'ada@meeshy.example' }]);
+    });
+  }
 });
 
 /**

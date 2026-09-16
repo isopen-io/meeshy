@@ -259,6 +259,7 @@ export function LoginDoors({
            personne ne l'ait demandé. */
         <MagicLinkPanel
           {...(magicLinkDeps === undefined ? {} : { deps: magicLinkDeps })}
+          next={next}
           footer={
             <div className="mt-1 grid justify-items-center gap-2">
               <Link
