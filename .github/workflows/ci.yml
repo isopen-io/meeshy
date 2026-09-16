@@ -764,6 +764,16 @@ jobs:
           cd apps/web-v2
           node scripts/check-reels.mjs
 
+      # #6807 — LES MÉDIAS DU FIL ET DES STORIES SE JOUENT. Mesure l'EFFET, pas
+      # la présence d'une balise : le temps doit AVANCER quand on demande la
+      # lecture. Porte ses deux contre-épreuves — l'affiche d'un RÉEL ne monte
+      # aucun élément média (#6457), une story IMAGE reste une image.
+      - name: Gate médias du fil (une vidéo, un son et une story vidéo SE JOUENT)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-feed-media.mjs
+
       - name: Gate états du fil (vide, coupure, échec d'envoi rejouable)
         if: ${{ !cancelled() }}
         run: |

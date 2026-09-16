@@ -13,6 +13,7 @@ import {
   REEL_PORTRAIT,
   pageOfFeed,
 } from './fixtures-feed';
+import { feedMediaKindOf } from '@/lib/feed/layout';
 import { resolveMosaicLayout } from '@/lib/feed/mosaic-layout';
 import { wordCountOf } from '@/lib/feed/text';
 
@@ -58,6 +59,33 @@ describe('FEED_POSTS — le corpus exerce chaque famille du § 3.4', () => {
     expect(media?.mimeType?.startsWith('video/')).toBe(true);
     expect(media?.fileUrl.startsWith('data:video/webm;base64,')).toBe(true);
     expect(media?.height).toBeGreaterThan(media?.width ?? 0);
+  });
+
+  /**
+   * **LE FIL DOIT PORTER DE QUOI JOUER** (#6807, volet médias).
+   *
+   * `FeedMediaSurface` monte un `<video>` ou un `<audio>` dès que son hôte le
+   * déclare `playable` (#6800, gardé par `components/feed-media-surface.test.tsx`)
+   * — mais le corpus ne porte AUCUN son et une seule vidéo, celle de
+   * `REEL_PORTRAIT`, dont la décision #6457 veut justement qu'elle reste une
+   * affiche IMMOBILE dans le fil. Mesuré au navigateur le 2026-09-16 sur le
+   * serveur de développement : `/feed` monte 13 `<img>`, zéro `<video>`, zéro
+   * `<audio>`.
+   *
+   * La règle de #6800 est donc juste, testée, et exercée par aucune recette.
+   * Ce témoin garde la DONNÉE : le rendu a déjà les siens.
+   */
+  test('un post VIDÉO et un post SONORE existent — hors REEL, dont l’affiche reste immobile dans le fil (#6457)', () => {
+    const mediasDePost = FEED_POSTS.filter((post) => post.type === 'POST').flatMap((post) => post.media ?? []);
+    const familles = mediasDePost.map((media) => feedMediaKindOf(media.mimeType));
+
+    expect(familles.filter((famille) => famille === 'video').length).toBeGreaterThanOrEqual(1);
+    expect(familles.filter((famille) => famille === 'audio').length).toBeGreaterThanOrEqual(1);
+
+    const video = mediasDePost.find((media) => feedMediaKindOf(media.mimeType) === 'video');
+    const son = mediasDePost.find((media) => feedMediaKindOf(media.mimeType) === 'audio');
+    expect(video?.fileUrl ?? '(aucune vidéo de post)').toMatch(/^data:video\//);
+    expect(son?.fileUrl ?? '(aucun son de post)').toMatch(/^data:audio\//);
   });
 
   test('POST_NO_DIMENSIONS porte un média SANS largeur ni hauteur', () => {

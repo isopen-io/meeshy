@@ -2,7 +2,9 @@ import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names'
 
 import type { SocketClient, SocketFactory, SocketHandler } from '@/lib/net/socket';
 
-import { CONVERSATION_ID, VIEWER_ID } from './fixtures-base';
+import type { Conversation } from './types';
+import { CONVERSATION_ID, VIEWER_ID, conversationDefaults, kwame, viewer } from './fixtures-base';
+import { recordSurgedConversation } from './fixtures';
 import { LIVE_1, LIVE_CONVERSATION_ID } from './fixtures-live';
 
 /**
@@ -175,6 +177,42 @@ const SCHEDULE: readonly ScheduledFixtureEvent[] = [
   ...LIVE_SCHEDULE,
 ];
 
+/**
+ * L'EFFET D'UNE ENTRÉE TIRÉE, HORS DE L'HORLOGE (#6807) — extraite pour être
+ * testable : l'entrée `conversation:new` est à `atMs: 14000`, et un témoin qui
+ * l'attendrait paierait 14 s RÉELLES (le bouchon arme de vrais `setTimeout` ;
+ * seul le gate navigateur avance sur une horloge simulée). Appelée par
+ * `connect()` AVANT `fire`, jamais après : le client réagit à l'évènement en
+ * invalidant la liste, donc la conversation doit déjà être dans le corpus
+ * quand le refetch part — sinon la page revient sans elle et le gate mesure
+ * une course plutôt qu'une règle.
+ */
+export function recordSurgedFromEntry(entry: ScheduledFixtureEvent): void {
+  if (entry.event !== SERVER_EVENTS.CONVERSATION_NEW) return;
+  const payload = entry.payload as { readonly conversationId: string; readonly createdAt: string };
+  const at = new Date(payload.createdAt);
+
+  /* Les TROIS dates portent la même valeur : sans message, le serveur ne
+     touche plus `lastMessageAt` après la création (même raisonnement que
+     `c-nouvelle` dans le corpus). `updatedAt` explicite car
+     `conversationDefaults` le pose à « maintenant », ce qui ferait remonter
+     cette ligne au-dessus de conversations plus vivantes quand
+     `orderConversations` l'emploie en repli. */
+  recordSurgedConversation({
+    ...conversationDefaults,
+    id: payload.conversationId,
+    type: 'direct',
+    memberCount: 2,
+    /* Le LECTEUR est participant : une ligne servie à quelqu'un qui
+       n'appartient pas à la conversation serait une fuite, pas une fixture. */
+    participants: [viewer, kwame],
+    unreadCount: 0,
+    createdAt: at,
+    updatedAt: at,
+    lastMessageAt: at,
+  } as Conversation);
+}
+
 export const createFixturesSocketClient: SocketFactory = () => {
   const handlers = new Map<string, Set<SocketHandler>>();
   let connected = false;
@@ -206,7 +244,17 @@ export const createFixturesSocketClient: SocketFactory = () => {
         if (entry.kind === 'repeat') {
           intervals.push(setInterval(() => fire(entry.event, entry.payload), entry.everyMs));
         } else {
-          timeouts.push(setTimeout(() => fire(entry.event, entry.payload), entry.atMs));
+          timeouts.push(
+            setTimeout(() => {
+              /* AVANT `fire`, jamais après : le client réagit à
+                 `conversation:new` en INVALIDANT la liste, donc la conversation
+                 doit déjà être dans le corpus quand le refetch part. L'ordre
+                 inverse rendrait une page sans elle, et le gate mesurerait une
+                 course au lieu d'une règle. */
+              recordSurgedFromEntry(entry);
+              fire(entry.event, entry.payload);
+            }, entry.atMs),
+          );
         }
       }
     },

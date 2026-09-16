@@ -160,6 +160,13 @@ function FeedMediaCarousel({ media }: { readonly media: readonly FeedCardMedia[]
       <FeedMediaSurface media={current} playable />
       {current.caption !== undefined ? (
         <p
+          /* MARQUÉE comme celle de la mosaïque (#6864) — et c'est ici que ça
+             compte le plus : le carrousel est le layout PAR DÉFAUT, donc le
+             cas le plus fréquent était aussi le seul qu'aucune recette ne
+             pouvait viser. La valeur dit d'OÙ vient la légende : `media` pour
+             la légende propre du média, `post` pour le contenu du post servi
+             en l'absence de légende propre sur un média UNIQUE. */
+          data-feed-carousel-caption={current.captionOrigin ?? 'media'}
           className="absolute inset-x-0 bottom-0 px-3 py-2 text-check text-white"
           style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.6), transparent)' }}
           /* La langue SERVIE (#6280, `resolveMediaCaption`), jamais la
@@ -302,6 +309,11 @@ function FeedReelCard({ model, ...hosts }: { readonly model: FeedCardModel } & C
       className="relative overflow-hidden"
       style={{ borderRadius: 18, aspectRatio: `1 / ${ratio}` }}
       data-feed-card="reel"
+      /* MÊME identité que la carte de post (#6864) : un marqueur posé sur une
+         seule des deux natures est une asymétrie silencieuse — le jour où une
+         recette vise un réel par son id, elle trouverait le vide et conclurait
+         à l'absence de la carte plutôt qu'à l'absence de l'attribut. */
+      data-feed-card-id={model.id}
     >
       {poster !== undefined ? (
         <FeedMediaSurface media={poster} />
@@ -385,6 +397,12 @@ export function FeedPostCard({ model, ...hosts }: { readonly model: FeedCardMode
       className="flex flex-col gap-2 pb-3"
       style={{ backgroundColor: 'var(--color-ios-card)', borderRadius: 18, border: '0.5px solid var(--color-edge)' }}
       data-feed-card="post"
+      /* L'IDENTITÉ DU POST, pour que la recette puisse viser UNE carte (#6864).
+         `key={model.id}` existe déjà côté route, mais une clé de réconciliation
+         n'est pas un attribut rendu : rien dans le DOM ne distinguait deux
+         cartes. Un gate devait alors cibler par le TEXTE attendu — fragile, et
+         incapable de dire de quelle publication il parle. */
+      data-feed-card-id={model.id}
     >
       <FeedPostHeader model={model} />
       {bodyText !== undefined ? <FeedPostText text={bodyText} /> : null}

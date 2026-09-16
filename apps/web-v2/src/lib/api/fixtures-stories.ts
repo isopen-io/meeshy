@@ -1,4 +1,5 @@
 import { VIEWER_ID } from './fixtures-base';
+import { REEL_CLIP_RGB, STORY_CLIP_LONG } from './fixtures-reel-clips';
 import type { StatusMoodPost, StoryFeedPost, StoryTrayPost } from './stories';
 
 /**
@@ -103,6 +104,55 @@ export const STORY_TRAY: readonly StoryTrayPost[] = [
     author: { id: VIEWER_ID, username: 'vous', displayName: 'Moi' },
     media: [{ id: 'm4', thumbnailUrl: '', mimeType: 'image/jpeg' }],
   },
+  /**
+   * **LA STORY VIDÉO** (#6807) — la seule du corpus, et le seul chemin par
+   * lequel `StoryMediaLayer` peut élire un `<video>` en recette (#6801).
+   *
+   * DÉJÀ VUE et la PLUS ANCIENNE, délibérément : le rail range les non-vues
+   * d'abord, puis par date. Une story neuve et non vue prendrait la TÊTE du
+   * rail et déplacerait chaque tuile existante — un gate qui atteint « la
+   * première pastille » basculerait sans que rien de sa règle ait changé.
+   * Son auteur est NOUVEAU pour la même raison : ajouter cette story à
+   * Camille ou à Inès ferait passer leur compteur de « 1 story » à
+   * « 2 stories », un libellé que la recette d'internationalisation lit.
+   */
+  {
+    id: 'st-video',
+    type: 'STORY',
+    createdAt: hoursAgo(9),
+    expiresAt: hoursFromNow(11),
+    viewCount: 21,
+    isViewedByMe: true,
+    author: { id: 'u-tarek', username: 'tarek', firstName: 'Tarek', lastName: 'Amrani' },
+    media: [{ id: 'm5', thumbnailUrl: '', mimeType: 'video/webm' }],
+  },
+  /**
+   * **LA STORY VIDÉO LONGUE** (#6836) — 9 s, au-dessus du plancher de 6 s.
+   *
+   * Elle existe pour UNE raison : `st-video` ne peut pas faire tomber un
+   * lecteur qui aurait gardé la constante au dénominateur. Son clip dure 3 s,
+   * donc `slideDurationMs` et `DEFAULT_SLIDE_DURATION_MS` rendent la MÊME
+   * valeur (6 s) — la loi juste et la loi absente sont indiscernables sur ce
+   * vecteur. À 9 s elles divergent : 9 s contre 6 s, et la diapositive coupe
+   * le média au tiers restant.
+   *
+   * Même précaution de RANG que sa jumelle courte : déjà vue et plus ancienne
+   * qu'elle, chez le MÊME auteur. Un nouvel auteur ajouterait une tuile au
+   * rail ; chez Tarek, son compteur passe de « 1 story » à « 2 stories » —
+   * libellé que la recette d'internationalisation lit — mais sa tuile reste
+   * à sa place et aucune autre ne bouge. C'est le moindre des deux
+   * déplacements, et le seul qui ne touche pas un gate de géographie.
+   */
+  {
+    id: 'st-video-long',
+    type: 'STORY',
+    createdAt: hoursAgo(10),
+    expiresAt: hoursFromNow(10),
+    viewCount: 14,
+    isViewedByMe: true,
+    author: { id: 'u-tarek', username: 'tarek', firstName: 'Tarek', lastName: 'Amrani' },
+    media: [{ id: 'm6', thumbnailUrl: '', mimeType: 'video/webm' }],
+  },
 ];
 
 /**
@@ -165,6 +215,39 @@ export const STORY_FEED: readonly StoryFeedPost[] = [
     author: { id: VIEWER_ID, username: 'vous', displayName: 'Moi' },
     content: 'Ma story à moi.',
     originalLanguage: 'fr',
+  },
+  /** LA STORY VIDÉO (#6807) — `url` porte un clip VP8 réellement décodable
+   * (`REEL_CLIP_RGB`), jamais une image servie sous un `mimeType` vidéo : le
+   * lecteur peindrait « Média indisponible » sur la seule story censée
+   * prouver qu'une vidéo se joue. Voir la tuile jumelle dans `STORY_TRAY`
+   * pour le choix de la date et de l'auteur. */
+  {
+    id: 'st-video',
+    type: 'STORY',
+    createdAt: hoursAgo(9),
+    expiresAt: hoursFromNow(11),
+    viewCount: 21,
+    isViewedByMe: true,
+    author: { id: 'u-tarek', username: 'tarek', firstName: 'Tarek', lastName: 'Amrani' },
+    content: 'Le marché, en mouvement.',
+    originalLanguage: 'fr',
+    media: [{ id: 'm5', url: REEL_CLIP_RGB, thumbnailUrl: STORY_PHOTO_STAND_IN, mimeType: 'video/webm' }],
+  },
+  /** LA STORY VIDÉO LONGUE (#6836) — 9 s, le SEUL vecteur du corpus sur lequel
+   * `slideDurationMs` et `DEFAULT_SLIDE_DURATION_MS` donnent des réponses
+   * DIFFÉRENTES (9 s contre 6 s). Voir la tuile jumelle dans `STORY_TRAY` pour
+   * le choix de la date et de l'auteur. */
+  {
+    id: 'st-video-long',
+    type: 'STORY',
+    createdAt: hoursAgo(10),
+    expiresAt: hoursFromNow(10),
+    viewCount: 14,
+    isViewedByMe: true,
+    author: { id: 'u-tarek', username: 'tarek', firstName: 'Tarek', lastName: 'Amrani' },
+    content: 'La répétition, en entier.',
+    originalLanguage: 'fr',
+    media: [{ id: 'm6', url: STORY_CLIP_LONG, thumbnailUrl: STORY_PHOTO_STAND_IN, mimeType: 'video/webm' }],
   },
 ];
 
