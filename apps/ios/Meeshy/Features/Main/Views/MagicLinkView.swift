@@ -21,12 +21,51 @@ struct MagicLinkView: View {
     @State private var linkExpired = false
     @State private var countdownTask: Task<Void, Never>?
     @FocusState private var isEmailFocused: Bool
+    /// Le (i) DÉPLIÉ — un seul à la fois, comme à l'inscription (#6626).
+    @State private var expandedHint: Hint?
 
     private static let logger = Logger(subsystem: "me.meeshy.app", category: "magic-link")
 
     private enum Step {
         case emailInput
         case waiting
+    }
+
+    /// UNE ligne visible par étape dit ce qu'on fait ; le COMMENT vit derrière
+    /// un (i) (directive porteur 2026-09-15, #6626) — le même que celui des
+    /// champs de l'inscription.
+    private enum Hint {
+        case howItWorks
+        case nothingReceived
+    }
+
+    private var howItWorksHint: AuthInfoHint {
+        AuthInfoHint(
+            text: String(
+                localized: "auth.magiclink.email.subtitle",
+                defaultValue: "Pas de mot de passe à retenir : nous vous envoyons un lien par e-mail. Ouvrez-le et vous êtes connecté.",
+                bundle: .main
+            ),
+            buttonLabel: String(localized: "auth.magiclink.email.hintLabel", defaultValue: "Comment ça marche", bundle: .main)
+        )
+    }
+
+    private var nothingReceivedHint: AuthInfoHint {
+        AuthInfoHint(
+            text: String(
+                localized: "auth.magiclink.sent.spamHint",
+                defaultValue: "Regardez vos indésirables (spam) : le message peut y être tombé.",
+                bundle: .main
+            ),
+            buttonLabel: String(localized: "auth.magiclink.sent.hintLabel", defaultValue: "Rien reçu ?", bundle: .main)
+        )
+    }
+
+    private func expansion(of hint: Hint) -> Binding<Bool> {
+        Binding(
+            get: { expandedHint == hint },
+            set: { expandedHint = $0 ? hint : nil }
+        )
     }
 
     private var isValidEmail: Bool {
@@ -49,6 +88,11 @@ struct MagicLinkView: View {
                     }
                 }
                 .padding(.horizontal, MeeshySpacing.xxxl)
+                // La colonne se borne comme celle de la connexion (#6644).
+                // Présentée en feuille-formulaire sur iPad (579 pt mesurés),
+                // elle y tenait déjà ; la borne est portée par l'écran pour ne
+                // plus dépendre de la façon dont on le présente.
+                .iPadFormWidth()
             }
             .onDisappear {
                 countdownTask?.cancel()
@@ -69,7 +113,7 @@ struct MagicLinkView: View {
                     .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
                 }
                 ToolbarItem(placement: .principal) {
-                    Text(String(localized: "auth.magiclink.title", defaultValue: "Connexion par lien magique", bundle: .main))
+                    Text(String(localized: "auth.magiclink.title", defaultValue: "Connexion par e-mail", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                 }
@@ -96,15 +140,23 @@ struct MagicLinkView: View {
                 .padding(.bottom, MeeshySpacing.lg)
                 .accessibilityHidden(true)
 
-            Text(String(localized: "auth.magiclink.email.title", defaultValue: "Entrez votre adresse email", bundle: .main))
-                .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
-                .foregroundColor(theme.textPrimary)
-                .multilineTextAlignment(.center)
+            VStack(spacing: MeeshySpacing.sm) {
+                HStack(spacing: MeeshySpacing.xs) {
+                    Text(String(localized: "auth.magiclink.email.title", defaultValue: "Votre adresse e-mail", bundle: .main))
+                        .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
+                        .foregroundColor(theme.textPrimary)
+                        .multilineTextAlignment(.center)
 
-            Text(String(localized: "auth.magiclink.email.subtitle", defaultValue: "Nous vous enverrons un lien de connexion sécurisé", bundle: .main))
-                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
-                .foregroundColor(theme.textMuted)
-                .multilineTextAlignment(.center)
+                    AuthInfoHintButton(hint: howItWorksHint, isExpanded: expansion(of: .howItWorks), tint: theme.textMuted)
+                }
+
+                AuthInfoHintText(
+                    hint: howItWorksHint,
+                    isExpanded: expandedHint == .howItWorks,
+                    color: theme.textMuted,
+                    alignment: .center
+                )
+            }
 
             // Email field
             HStack(spacing: MeeshySpacing.md) {
@@ -123,6 +175,9 @@ struct MagicLinkView: View {
                     .onSubmit { sendMagicLink() }
                     .accessibilityLabel(String(localized: "auth.magiclink.email.a11yLabel",
                                                defaultValue: "Adresse email", bundle: .main))
+                    // REPLIÉ ne veut pas dire ABSENT : VoiceOver énonce le
+                    // fonctionnement sur le champ, sans avoir à trouver le (i).
+                    .accessibilityHint(howItWorksHint.text)
             }
             .padding(.horizontal, MeeshySpacing.lg)
             .padding(.vertical, MeeshySpacing.md + 2)
@@ -167,7 +222,7 @@ struct MagicLinkView: View {
                         ProgressView()
                             .tint(.white)
                     } else {
-                        Text(String(localized: "auth.magiclink.send", defaultValue: "Envoyer le lien magique", bundle: .main))
+                        Text(String(localized: "auth.magiclink.send", defaultValue: "Recevoir le lien", bundle: .main))
                             .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold))
                             .foregroundColor(.white)
                     }
@@ -175,6 +230,7 @@ struct MagicLinkView: View {
             }
             .disabled(isLoading || !isValidEmail)
             .opacity(!isValidEmail ? 0.6 : 1)
+            .accessibilityIdentifier("auth.magiclink.submit")
 
             Spacer()
             Spacer()
@@ -213,12 +269,12 @@ struct MagicLinkView: View {
             .padding(.bottom, MeeshySpacing.md)
             .accessibilityHidden(true)
 
-            Text(String(localized: "auth.magiclink.sent.title", defaultValue: "Lien envoyé !", bundle: .main))
+            Text(String(localized: "auth.magiclink.sent.title", defaultValue: "E-mail envoyé", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
                 .foregroundColor(theme.textPrimary)
 
             VStack(spacing: MeeshySpacing.xs) {
-                Text(String(localized: "auth.magiclink.sent.subtitle", defaultValue: "Un lien de connexion a été envoyé à", bundle: .main))
+                Text(String(localized: "auth.magiclink.sent.subtitle", defaultValue: "Ouvrez le lien reçu à", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
                     .foregroundColor(theme.textMuted)
                     .multilineTextAlignment(.center)
@@ -236,12 +292,6 @@ struct MagicLinkView: View {
                     .multilineTextAlignment(.center)
                     .padding(.top, MeeshySpacing.sm)
             } else {
-                Text(String(localized: "auth.magiclink.instructions", defaultValue: "Ouvrez votre email et cliquez sur le lien", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
-                    .foregroundColor(theme.textMuted)
-                    .multilineTextAlignment(.center)
-                    .padding(.top, MeeshySpacing.sm)
-
                 if countdownRemaining > 0 {
                     Text(formattedCountdown)
                         .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold).monospacedDigit())
@@ -254,19 +304,34 @@ struct MagicLinkView: View {
                 }
             }
 
-            // Resend button
-            Button(action: sendMagicLink) {
-                HStack(spacing: MeeshySpacing.sm) {
-                    Image(systemName: "arrow.clockwise")
-                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                    Text(String(localized: "auth.magiclink.resend", defaultValue: "Renvoyer", bundle: .main))
+            // Renvoyer, et à côté le (i) « Rien reçu ? » : il reste actif
+            // pendant le compte à rebours — c'est précisément quand le renvoi
+            // est bloqué que regarder les indésirables sert.
+            VStack(spacing: MeeshySpacing.xs) {
+                HStack(spacing: MeeshySpacing.xs) {
+                    Button(action: sendMagicLink) {
+                        HStack(spacing: MeeshySpacing.sm) {
+                            Image(systemName: "arrow.clockwise")
+                                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                            Text(String(localized: "auth.magiclink.resend", defaultValue: "Renvoyer", bundle: .main))
+                        }
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                        .foregroundColor(countdownRemaining > 0 ? theme.textMuted : MeeshyColors.indigo400)
+                    }
+                    .accessibilityLabel(String(localized: "auth.magiclink.resendLabel",
+                                                defaultValue: "Renvoyer le lien", bundle: .main))
+                    .disabled(countdownRemaining > 0 || isLoading)
+
+                    AuthInfoHintButton(hint: nothingReceivedHint, isExpanded: expansion(of: .nothingReceived), tint: theme.textMuted)
                 }
-                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                .foregroundColor(countdownRemaining > 0 ? theme.textMuted : MeeshyColors.indigo400)
+
+                AuthInfoHintText(
+                    hint: nothingReceivedHint,
+                    isExpanded: expandedHint == .nothingReceived,
+                    color: theme.textMuted,
+                    alignment: .center
+                )
             }
-            .accessibilityLabel(String(localized: "auth.magiclink.resendLabel",
-                                        defaultValue: "Renvoyer le lien magique", bundle: .main))
-            .disabled(countdownRemaining > 0 || isLoading)
             .padding(.top, MeeshySpacing.md)
 
             // Cancel button
@@ -274,6 +339,7 @@ struct MagicLinkView: View {
                 withAnimation(MeeshyAnimation.springDefault) {
                     step = .emailInput
                     errorMessage = nil
+                    expandedHint = nil
                 }
             } label: {
                 Text(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
@@ -316,6 +382,7 @@ struct MagicLinkView: View {
                 withAnimation(MeeshyAnimation.springDefault) {
                     step = .waiting
                     isLoading = false
+                    expandedHint = nil
                 }
 
                 startCountdown(expiresInSeconds)

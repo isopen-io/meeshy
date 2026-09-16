@@ -70,13 +70,29 @@ export type AdminUsersPage = {
   readonly hasMore: boolean;
 };
 
-const asRecord = (value: unknown): Readonly<Record<string, unknown>> | null =>
+/**
+ * LES TROIS LECTURES PRUDENTES DU PORT D'ADMINISTRATION, exportées pour le
+ * détail d'un membre (#6819) — et pour lui seul tant qu'aucun autre port n'en
+ * a besoin.
+ *
+ * Elles sortent d'ici plutôt que d'être recopiées ailleurs : une seconde
+ * définition serait une jumelle divergente (CLAUDE.md § Single Source of
+ * Truth), et c'est précisément sur des helpers de trois lignes que la
+ * divergence passe inaperçue — l'un tolérerait un jour `NaN` ou une chaîne
+ * numérique que l'autre refuse, sans qu'aucun témoin ne rougisse.
+ *
+ * Elles ne rejoignent PAS `./decode` : ce module-là décode les DATES DU FIL
+ * pour le cache TanStack (`toDate`, `decodeMessage`, `decodeConversation`) et
+ * n'a aucun helper de ce genre. Les deux outils sont distincts, pas
+ * redondants — vérifié avant d'extraire.
+ */
+export const asRecord = (value: unknown): Readonly<Record<string, unknown>> | null =>
   typeof value === 'object' && value !== null ? (value as Readonly<Record<string, unknown>>) : null;
 
-const asCount = (value: unknown): number =>
+export const asCount = (value: unknown): number =>
   typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0;
 
-const asText = (value: unknown): string => (typeof value === 'string' ? value : '');
+export const asText = (value: unknown): string => (typeof value === 'string' ? value : '');
 
 /**
  * `false` par DÉFAUT sur chaque clé — une permission absente de la charge est
@@ -119,6 +135,30 @@ export async function loadAdminIdentity(
       role: asText(charge.role) || 'USER',
       permissions: decodeAdminPermissions(charge.permissions),
     },
+  };
+}
+
+/**
+ * **LA LECTURE DES PERMISSIONS, écrite UNE fois** (#6458) — l'écran `/admin`,
+ * la liste des comptes, la rangée des Réglages et le barreau du menu flottant
+ * la partagent. Quatre `queryFn` recopiés sous la même clé auraient pu
+ * diverger sur la façon de lire un refus ; ici un refus LÈVE, et chaque site
+ * le lit comme l'absence du droit.
+ *
+ * Une matrice de permissions ne bouge pas pendant qu'on regarde un écran :
+ * cinq minutes de fraîcheur, et aucun nouvel essai — un 403 relancé trois fois
+ * remplirait les journaux d'audit de refus.
+ */
+export function adminIdentityQueryOptions(deps: AdminDeps) {
+  return {
+    queryKey: ADMIN_PERMISSIONS_QUERY_KEY,
+    queryFn: async ({ signal }: { readonly signal?: AbortSignal }): Promise<AdminIdentity> => {
+      const resultat = await loadAdminIdentity({ ...deps, ...(signal === undefined ? {} : { signal }) });
+      if (!resultat.ok) throw new Error(resultat.error);
+      return resultat.data;
+    },
+    staleTime: 5 * 60 * 1000,
+    retry: false,
   };
 }
 

@@ -6,6 +6,8 @@ import { TrackingLinkService } from './TrackingLinkService';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { parseSharedPlace } from './location/sharedPlace';
 import { claimableMediaWhere, describeClaimShortfall } from './posts/mediaOwnership';
+import { applyCommentMediaOrder } from './posts/mediaOrder';
+import type { QuotedPostMedia } from './posts/quotedPostMediaSnapshot';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { getSharedNotificationService } from './notifications/notification-service-registry';
 import type { RetractedNotificationAnnouncer } from './notifications/retractedNotifications';
@@ -28,23 +30,56 @@ export class PostCommentService {
     this.trackingLinkService = trackingLinkService ?? new TrackingLinkService(prisma);
   }
 
+  /**
+   * Crée un commentaire.
+   *
+   * La QUEUE des paramètres est un objet d'options (#6578) : elle en portait
+   * neuf, positionnels, et le lot y ajoutait le dixième — un site d'appel ne
+   * pouvait plus dire ce qu'il passait sans compter les virgules. CLAUDE.md
+   * § Code Style le prescrit ; les trois premiers restent positionnels parce
+   * qu'ils sont l'identité même de l'écriture.
+   */
   async addComment(
     postId: string,
     authorId: string,
     content: string,
-    parentId?: string,
-    effectFlags?: number,
-    originalLanguage?: string,
-    /// PostMedia déjà uploadé (pending) à rattacher au commentaire via `commentId`.
-    /// Un commentaire ne porte QU'UN SEUL média.
-    mediaId?: string,
-    /// Transcription Whisper mobile pour un média audio — persistée sur le PostMedia
-    /// (évite la re-transcription serveur, même mécanisme que les posts).
-    mobileTranscription?: MobileTranscription,
-    /// Lieu partagé — champ dédié, jamais un `metadata` brut. Validé par
-    /// `parseSharedPlace` ci-dessous avant écriture.
-    location?: unknown,
+    options: {
+      parentId?: string;
+      effectFlags?: number;
+      originalLanguage?: string;
+      /// PostMedia déjà uploadés (pending) à rattacher au commentaire via
+      /// `commentId`. **PLURIEL depuis #6578** — la relation Prisma est
+      /// `PostMedia[]`, le bandeau du composer affiche un TABLEAU, et la
+      /// directive porteur du 2026-09-14 dit « ajouter d'autres média ».
+      mediaIds?: readonly string[];
+      /// Transcription Whisper mobile pour un média audio — persistée sur le
+      /// PostMedia (évite la re-transcription serveur, même mécanisme que les
+      /// posts). Elle décrit UNE piste : elle se pose sur le média AUDIO du
+      /// lot, jamais sur tous — un commentaire à trois photos et un vocal ne
+      /// doit pas se retrouver avec la même transcription gravée quatre fois.
+      mobileTranscription?: MobileTranscription;
+      /// Lieu partagé — champ dédié, jamais un `metadata` brut. Validé par
+      /// `parseSharedPlace` ci-dessous avant écriture.
+      location?: unknown;
+      /// Le média du POST COMMENTÉ que ce commentaire CITE (#6578), déjà ADMIS
+      /// par `admitQuotedPostMedia` — ce service ne revalide pas l'appartenance,
+      /// il n'en a pas les moyens (il ne reçoit que l'instantané). La garde vit
+      /// au transport, site unique.
+      quotedPostMedia?: QuotedPostMedia | null;
+    } = {},
   ) {
+    const {
+      parentId,
+      effectFlags,
+      originalLanguage,
+      mediaIds,
+      mobileTranscription,
+      location,
+      quotedPostMedia,
+    } = options;
+    // Un id répété ne doit consommer qu'une place — `Set` préserve l'ordre de
+    // première apparition, exactement comme `applyMediaOrder`.
+    const demandes = [...new Set(mediaIds ?? [])];
     // Verify post exists
     const post = await this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED },
@@ -60,12 +95,16 @@ export class PostCommentService {
     }
 
     // Verify the pending media belongs to no post/comment yet (anti-hijack) before linking.
-    if (mediaId) {
-      const media = await this.prisma.postMedia.findUnique({
-        where: { id: mediaId },
+    // Un SEUL média indisponible refuse tout le lot : publier un commentaire
+    // amputé d'une de ses photos, en silence, est pire que le refus — c'est la
+    // même règle que `describeClaimShortfall` rend visible plus bas.
+    if (demandes.length > 0) {
+      const libres = await this.prisma.postMedia.findMany({
+        where: { id: { in: demandes } },
         select: { id: true, postId: true, commentId: true },
       });
-      if (!media || media.postId || media.commentId) {
+      const disponibles = libres.filter((m) => !m.postId && !m.commentId);
+      if (disponibles.length !== demandes.length) {
         throw new Error('MEDIA_NOT_AVAILABLE');
       }
     }
@@ -91,7 +130,18 @@ export class PostCommentService {
           originalLanguage != null
             ? (normalizeLanguageCode(originalLanguage) ?? originalLanguage)
             : null,
-        ...(sharedPlace ? { metadata: { location: sharedPlace } as unknown as Prisma.InputJsonValue } : {}),
+        // `metadata` porte TROIS choses aujourd'hui — le lieu, les liens tracés
+        // (écrits plus bas) et le média CITÉ. Composé en une fois : deux
+        // écritures séparées se seraient écrasées l'une l'autre, `metadata`
+        // étant un document remplacé en bloc et non fusionné.
+        ...(sharedPlace || quotedPostMedia
+          ? {
+              metadata: {
+                ...(sharedPlace ? { location: sharedPlace } : {}),
+                ...(quotedPostMedia ? { quotedPostMedia } : {}),
+              } as unknown as Prisma.InputJsonValue,
+            }
+          : {}),
       },
       select: {
         id: true,
@@ -104,6 +154,11 @@ export class PostCommentService {
         parentId: true,
         createdAt: true,
         metadata: true,
+        // `postId` est REQUIS par le service de la citation (#6578) : la
+        // re-lecture du média cité revérifie son appartenance au post commenté
+        // sur la LIGNE relue — une garde d'écriture ne dit rien des lignes
+        // écrites avant elle.
+        postId: true,
         author: { select: authorSelect },
       },
     });
@@ -118,30 +173,47 @@ export class PostCommentService {
     // Porter la condition dans le `where` de l'écriture règle les deux : la
     // base tranche en une opération. `updateMany` est obligatoire pour ça —
     // `update` n'accepte qu'un critère unique, pas une clause composée.
-    if (mediaId) {
+    if (demandes.length > 0) {
       const linked = await this.prisma.postMedia.updateMany({
-        where: { id: mediaId, ...claimableMediaWhere(authorId) },
-        data: {
-          commentId: comment.id,
-          // La charge du fil ne se persiste pas telle quelle : le document a sa
-          // propre graphie, et un seul site la produit
-          // (`attachmentTranscriptionFromMobile`).
-          ...(mobileTranscription
-            ? {
-                transcription: attachmentTranscriptionFromMobile(
-                  mobileTranscription,
-                ) as Prisma.InputJsonValue,
-              }
-            : {}),
-        },
+        where: { id: { in: demandes }, ...claimableMediaWhere(authorId) },
+        data: { commentId: comment.id },
       });
-      const shortfall = describeClaimShortfall([mediaId], linked.count);
+      const shortfall = describeClaimShortfall(demandes, linked.count);
       if (shortfall) {
         // Le commentaire existe déjà et reste publié : refuser le média sans
         // trace donnerait un commentaire vide inexplicable.
         enhancedLogger.warn(`[PostCommentService] createComment: ${shortfall}`, {
-          commentId: comment.id, authorId, mediaId,
+          commentId: comment.id, authorId, mediaIds: demandes,
         });
+      }
+
+      // Le RANG suit l'ordre de la requête — c'est le seul endroit qui porte
+      // l'ordre voulu par l'utilisateur. Même raison, et même garde, que
+      // `applyMediaOrder` côté post : sans lui, `orderBy: { order: 'asc' }`
+      // rendrait l'ordre d'ACHÈVEMENT des téléversements.
+      await applyCommentMediaOrder(this.prisma, comment.id, demandes);
+
+      // La transcription mobile décrit UNE piste. Elle se pose sur le média
+      // AUDIO effectivement rattaché — pas sur « le premier », qui peut être
+      // une photo dès que le commentaire en porte plusieurs.
+      if (mobileTranscription) {
+        const piste = await this.prisma.postMedia.findFirst({
+          where: { commentId: comment.id, mimeType: { startsWith: 'audio/' } },
+          select: { id: true },
+        });
+        if (piste) {
+          await this.prisma.postMedia.update({
+            where: { id: piste.id },
+            data: {
+              // La charge du fil ne se persiste pas telle quelle : le document
+              // a sa propre graphie, et un seul site la produit
+              // (`attachmentTranscriptionFromMobile`).
+              transcription: attachmentTranscriptionFromMobile(
+                mobileTranscription,
+              ) as Prisma.InputJsonValue,
+            },
+          });
+        }
       }
     }
 
@@ -160,7 +232,7 @@ export class PostCommentService {
 
     // Le média lié est renvoyé top-level (`media: [PostMedia]`) — même forme que les
     // posts, décodé identiquement par les clients (viewers inline + plein écran).
-    const media = mediaId
+    const media = demandes.length > 0
       ? await this.prisma.postMedia.findMany({
           where: { commentId: comment.id },
           ...commentMediaInclude,
@@ -208,7 +280,7 @@ export class PostCommentService {
   async updateComment(
     commentId: string,
     userId: string,
-    data: { content?: string; effectFlags?: number },
+    data: { content?: string; effectFlags?: number; originalLanguage?: string },
   ) {
     const existing = await this.prisma.postComment.findFirst({
       where: { id: commentId, deletedAt: NOT_DELETED },
@@ -232,13 +304,15 @@ export class PostCommentService {
     if (contentChanged) updateData.isEdited = true;
     if (data.content !== undefined) updateData.content = data.content;
     if (data.effectFlags !== undefined) updateData.effectFlags = data.effectFlags;
-    // Texte changé → les traductions ET la langue d'origine décrivaient
-    // l'ANCIEN contenu. On purge les deux ; le pipeline de retraduction
-    // redétecte la langue du nouveau texte (originalLanguage absent =
-    // auto-détection, même contrat qu'une création sans claim client).
+    // Texte changé → les traductions décrivaient l'ANCIEN contenu, purgées
+    // dans tous les cas. La langue d'origine suit `data.originalLanguage` —
+    // la déclaration du composer (pastille de langue), même contrat que
+    // `UpdatePostSchema.originalLanguage` — quand l'appelant la fournit ;
+    // sans déclaration, `null` relance l'auto-détection du nouveau texte par
+    // le pipeline de retraduction (comportement inchangé).
     if (contentChanged) {
       updateData.translations = {};
-      updateData.originalLanguage = null;
+      updateData.originalLanguage = data.originalLanguage ?? null;
     }
 
     const comment = await this.prisma.postComment.update({
@@ -256,6 +330,11 @@ export class PostCommentService {
         parentId: true,
         createdAt: true,
         metadata: true,
+        // `postId` est REQUIS par le service de la citation (#6578) : la
+        // re-lecture du média cité revérifie son appartenance au post commenté
+        // sur la LIGNE relue — une garde d'écriture ne dit rien des lignes
+        // écrites avant elle.
+        postId: true,
         author: { select: authorSelect },
       },
     });
@@ -358,6 +437,11 @@ export class PostCommentService {
         parentId: true,
         createdAt: true,
         metadata: true,
+        // `postId` est REQUIS par le service de la citation (#6578) : la
+        // re-lecture du média cité revérifie son appartenance au post commenté
+        // sur la LIGNE relue — une garde d'écriture ne dit rien des lignes
+        // écrites avant elle.
+        postId: true,
         author: { select: authorSelect },
         media: commentMediaInclude,
       },
@@ -436,6 +520,11 @@ export class PostCommentService {
         parentId: true,
         createdAt: true,
         metadata: true,
+        // `postId` est REQUIS par le service de la citation (#6578) : la
+        // re-lecture du média cité revérifie son appartenance au post commenté
+        // sur la LIGNE relue — une garde d'écriture ne dit rien des lignes
+        // écrites avant elle.
+        postId: true,
         author: { select: authorSelect },
         media: commentMediaInclude,
       },

@@ -4946,53 +4946,6 @@
         }
       }
     },
-    "auth.forgot.sent_message": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "إذا كان هناك حساب مرتبط بـ %@، فقد تم إرسال رابط إعادة التعيين."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Wenn ein Konto für %@ existiert, wurde ein Link zum Zurücksetzen gesendet."
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "If an account exists for %@, a reset link has been sent."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Si existe una cuenta con %@, se ha enviado un enlace de restablecimiento."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Si un compte existe avec %@, un lien de réinitialisation a été envoyé."
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Se esiste un account con %@, è stato inviato un link di reimpostazione."
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Se existir uma conta com %@, um link de redefinição foi enviado."
-          }
-        }
-      }
-    },
     "auth.forgotPassword.accountFound": {
       "extractionState": "extracted_with_value",
       "localizations": {
@@ -5022,8 +4975,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Compte trouve"
+            "state": "translated",
+            "value": "Compte trouvé"
           }
         },
         "it": {
@@ -5210,8 +5163,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Email"
+            "state": "translated",
+            "value": "E-mail"
           }
         },
         "it": {
@@ -5234,90 +5187,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "أدخل بريدك الإلكتروني لتلقّي رابط إعادة التعيين."
+            "value": "استلم عبر البريد الإلكتروني رابطًا لاختيار كلمة مرور جديدة."
           }
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "E-Mail eingeben für einen Zurücksetzungslink."
+            "state": "translated",
+            "value": "Erhalte per E-Mail einen Link, um ein neues Passwort festzulegen."
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Enter your email to receive a reset link."
+            "state": "translated",
+            "value": "Get a link by email to choose a new password."
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Introduce tu correo para recibir un enlace."
+            "state": "translated",
+            "value": "Recibe por correo un enlace para elegir una nueva contraseña."
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Entrez votre email pour recevoir un lien de reinitialisation."
+            "state": "translated",
+            "value": "Recevez par e-mail un lien pour choisir un nouveau mot de passe."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Inserisci la tua email per ricevere un link di reimpostazione."
+            "value": "Ricevi via email un link per scegliere una nuova password."
           }
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Digite seu e-mail para receber um link de redefinição."
-          }
-        }
-      }
-    },
-    "auth.forgotPassword.emailSent": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
             "state": "translated",
-            "value": "تم إرسال البريد الإلكتروني!"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "E-Mail gesendet!"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Email sent!"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "¡Correo enviado!"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Email envoye !"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Email inviata!"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "E-mail enviado!"
+            "value": "Receba por e-mail um link para escolher uma nova senha."
           }
         }
       }
@@ -5351,8 +5257,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Email complet"
+            "state": "translated",
+            "value": "E-mail complet"
           }
         },
         "it": {
@@ -5586,8 +5492,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Email"
+            "state": "translated",
+            "value": "E-mail"
           }
         },
         "it": {
@@ -5633,8 +5539,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Telephone"
+            "state": "translated",
+            "value": "Téléphone"
           }
         },
         "it": {
@@ -5821,8 +5727,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Aucun compte trouve avec ce numero"
+            "state": "translated",
+            "value": "Aucun compte trouvé avec ce numéro"
           }
         },
         "it": {
@@ -5835,6 +5741,100 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "Nenhuma conta encontrada com este número"
+          }
+        }
+      }
+    },
+    "auth.forgotPassword.noPassword.hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يتيح لك الرابط نفسه إنشاء واحدة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mit demselben Link kannst du eines erstellen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The same link lets you create one."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El mismo enlace te permite crear una."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce même lien vous permet d'en créer un."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lo stesso link ti permette di crearne una."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O mesmo link permite criar uma."
+          }
+        }
+      }
+    },
+    "auth.forgotPassword.noPassword.hintLabel": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم تكن لديك كلمة مرور من قبل؟"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch nie ein Passwort gehabt?"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Never had a password?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Nunca has tenido contraseña?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jamais eu de mot de passe ?"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non hai mai avuto una password?"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nunca teve uma senha?"
           }
         }
       }
@@ -5915,8 +5915,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Entrez votre numero de telephone pour retrouver votre compte."
+            "state": "translated",
+            "value": "Entrez votre numéro de téléphone pour retrouver votre compte."
           }
         },
         "it": {
@@ -5939,43 +5939,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "إعادة تعيين"
+            "value": "حفظ كلمة المرور"
           }
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Zurücksetzen"
+            "state": "translated",
+            "value": "Passwort speichern"
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Reset"
+            "state": "translated",
+            "value": "Save password"
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Restablecer"
+            "state": "translated",
+            "value": "Guardar contraseña"
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Reinitialiser"
+            "state": "translated",
+            "value": "Enregistrer le mot de passe"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Reimposta"
+            "value": "Salva password"
           }
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Redefinir"
+            "state": "translated",
+            "value": "Salvar senha"
           }
         }
       }
@@ -5986,43 +5986,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "خطأ أثناء إعادة التعيين"
+            "value": "تعذّر حفظ كلمة المرور"
           }
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Fehler beim Zurücksetzen"
+            "state": "translated",
+            "value": "Das Passwort konnte nicht gespeichert werden"
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Reset error"
+            "state": "translated",
+            "value": "The password couldn't be saved"
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Error al restablecer"
+            "state": "translated",
+            "value": "No se pudo guardar la contraseña"
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Erreur lors de la reinitialisation"
+            "state": "translated",
+            "value": "Le mot de passe n'a pas pu être enregistré"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Errore durante la reimpostazione"
+            "value": "Impossibile salvare la password"
           }
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Erro ao redefinir"
+            "state": "translated",
+            "value": "Não foi possível salvar a senha"
           }
         }
       }
@@ -6033,43 +6033,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تمت إعادة تعيين كلمة المرور!"
+            "value": "تم حفظ كلمة المرور"
           }
         },
         "de": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Passwort zurückgesetzt!"
+            "state": "translated",
+            "value": "Passwort gespeichert"
           }
         },
         "en": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Password reset!"
+            "state": "translated",
+            "value": "Password saved"
           }
         },
         "es": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "¡Contraseña restablecida!"
+            "state": "translated",
+            "value": "Contraseña guardada"
           }
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Mot de passe reinitialise !"
+            "state": "translated",
+            "value": "Mot de passe enregistré"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Password reimpostata!"
+            "value": "Password salvata"
           }
         },
         "pt-BR": {
           "stringUnit": {
-            "state": "needs_review",
-            "value": "Senha redefinida!"
+            "state": "translated",
+            "value": "Senha salva"
           }
         }
       }
@@ -6121,53 +6121,6 @@
         }
       }
     },
-    "auth.forgotPassword.send": {
-      "extractionState": "extracted_with_value",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "إرسال"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Senden"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Send"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Enviar"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "new",
-            "value": "Envoyer"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Invia"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "needs_review",
-            "value": "Enviar"
-          }
-        }
-      }
-    },
     "auth.forgotPassword.smsCodeSent": {
       "extractionState": "extracted_with_value",
       "localizations": {
@@ -6197,8 +6150,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Un code SMS a ete envoye a votre telephone."
+            "state": "translated",
+            "value": "Un code SMS a été envoyé à votre téléphone."
           }
         },
         "it": {
@@ -6244,8 +6197,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Mot de passe oublie"
+            "state": "translated",
+            "value": "Mot de passe oublié"
           }
         },
         "it": {
@@ -6291,8 +6244,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Code a 6 chiffres"
+            "state": "translated",
+            "value": "Code à 6 chiffres"
           }
         },
         "it": {
@@ -6338,8 +6291,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Verifier"
+            "state": "translated",
+            "value": "Vérifier"
           }
         },
         "it": {
@@ -6385,8 +6338,8 @@
         },
         "fr": {
           "stringUnit": {
-            "state": "new",
-            "value": "Pour verifier votre identite, entrez votre nom d'utilisateur et email complets."
+            "state": "translated",
+            "value": "Pour vérifier votre identité, entrez votre nom d'utilisateur et votre e-mail complets."
           }
         },
         "it": {

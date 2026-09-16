@@ -41,6 +41,7 @@ import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.theme.formColumnWidth
 
 private val GUEST_LANGUAGES = listOf(
     "fr" to "Français",
@@ -100,6 +101,7 @@ fun GuestJoinScreen(
                     .padding(padding)
                     .imePadding()
                     .verticalScroll(rememberScrollState())
+                    .formColumnWidth()
                     .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
                 verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
             ) {

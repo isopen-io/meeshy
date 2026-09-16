@@ -13,4 +13,7 @@ declare module 'bun:test' {
   export const mock: {
     module(name: string, factory: () => unknown): void;
   };
+  export const jest: {
+    requireActual: (id: string) => unknown;
+  };
 }

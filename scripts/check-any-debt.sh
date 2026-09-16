@@ -61,33 +61,45 @@
 # with `check-type-debt.sh` accepting a analogous gap for `.next/` typed
 # output rather than pretending a text-based count can be exact.
 #
-# WHY GATEWAY AND SHARED HAVE DIFFERENT BASELINES
+# WHY GATEWAY, SHARED AND WEB HAVE DIFFERENT BASELINES
 #
 # `packages/shared` measures 0 today: production `any` there is already
 # clean. Held at 0 rather than given a budget — CLAUDE.md already says "NO
 # `any` in shared package - use `unknown` with validation" for exactly this
-# package. `services/gateway/src` measures 650: real, scattered debt that
-# this lot does not attempt to pay down (see below), so its baseline pins the
-# CURRENT count rather than pretending to a number nobody has earned.
+# package. `services/gateway/src` measures 651 and `apps/web` measures 451:
+# real, scattered debt that this lot does not attempt to pay down (see
+# below), so each baseline pins the CURRENT count rather than pretending to a
+# number nobody has earned.
+#
+# WHY `apps/web` IS MEASURED BY THIS SCRIPT TOO, DESPITE HAVING ITS OWN ESLINT
+#
+# `apps/web` already has `check-lint-debt.sh`, a real AST-aware ESLint
+# ratchet — but its config (`apps/web/eslint.config.mjs`) carries no
+# `@typescript-eslint/no-explicit-any` override, and the Next.js presets it
+# extends set that rule to `warn`, not `error`. `check-lint-debt.sh` counts
+# ERRORS only (by its own design, matching its twin's convention) — so a file
+# that trades an unrelated lint ERROR for a new `any` `warn` can lower the
+# lint-debt total while `any` usage itself grows, and nothing before this lot
+# would have noticed. Reusing THIS script's regex counter for web — rather
+# than standing up a second, ESLint-based `any` ratchet — keeps the "what
+# counts as `any`" definition in exactly one place for the three TypeScript
+# packages this repo builds without duplicating it across two tools with
+# potentially different edge cases.
 #
 # WHAT THIS LOT DELIBERATELY DOES NOT DO
 #
-# It does not reduce the 650 gateway sites. Several of the heaviest carriers
-# (`services/notifications/NotificationService.ts`, 6119 lines;
-# `services/message-translation/MessageTranslationService.ts`, 3303 lines)
-# are already OVER the repo's 1000–1200 line budget (#4426) — adding a
-# `unknown` + a type guard to either would add lines to a file the budget
-# already forbids touching without extracting first. Reducing the 650 is real
-# work for a separate lot, once those files are split. This ratchet's job is
-# narrower and immediate: stop the number from growing while nobody is
-# watching it.
+# It does not reduce the 651 gateway sites or the 451 web sites. Several of
+# the heaviest gateway carriers (`services/notifications/NotificationService.ts`,
+# 6119 lines; `services/message-translation/MessageTranslationService.ts`,
+# 3303 lines) are already OVER the repo's 1000–1200 line budget (#4426) —
+# adding a `unknown` + a type guard to either would add lines to a file the
+# budget already forbids touching without extracting first. Reducing either
+# baseline is real work for a separate lot. This ratchet's job is narrower
+# and immediate: stop the numbers from growing while nobody is watching them.
 #
-# `apps/web` (827 at the source issue's 2026-08-26 measurement) and iOS's
-# `try?` count are OUT OF SCOPE for this script — no ESLint-free regex
-# ratchet was built for web (it already has a real ESLint-based one, a
-# different tool would fork the "what counts" definition in two places for no
-# reason), and iOS is unreachable from this environment (no Xcode). Issue
-# #3679 stays open for both.
+# iOS's `try?` count is OUT OF SCOPE for this script — it is unreachable from
+# this environment (no Xcode) and is a different rule on a different
+# language. Issue #3679 stays open for it.
 #
 # --self-test: exercises `count_any_usages`, the actual counting mechanism
 # used below, against throwaway fixture files: one with real `any` usage in
@@ -122,7 +134,38 @@ readonly SHARED_BASELINE=0
 # indépendante sur ce MÊME commit — avant tout autre changement gateway —
 # rend 651. Le self-test du script passe ; c'est la valeur enregistrée qui
 # était fausse dès l'introduction, pas une dérive de dette réelle depuis.
-readonly GATEWAY_BASELINE=651
+#
+# 639, pas 651 (#3679, premier lot de RÉDUCTION plutôt que de simple gel) :
+# `services/notifications/NotificationFormatter.ts` (182 lignes, dans le
+# budget de taille) typait ses douze usages sur des `any` nus — les quatre
+# champs `Json` Prisma (`actor`/`context`/`metadata`/`delivery`) castés en
+# `unknown` puis vers leur type de domaine (`NotificationActor` etc.), les
+# entrées de méthode contre la forme réellement servie par les appelants
+# (`RawNotificationInput`/`RawNotificationRow`). Aucun `unknown` nu laissé :
+# chaque champ a désormais le type que son producteur (Prisma) ou son
+# consommateur (`@meeshy/shared/types/notification`) déclare.
+#
+# 624, pas 639 (#3679, second lot de RÉDUCTION) :
+# `routes/admin/broadcasts.ts` (577 lignes, dans le budget de taille) typait
+# ses quinze usages sur des `any` nus — huit `catch (error: any)` jamais lus
+# dans leur corps (repris en `unknown`, sans changement de comportement), deux
+# `targeting?: any` et un `(broadcast.targeting || {}) as any` repris sur le
+# type déjà partagé `BroadcastTargeting` (`jobs/broadcast-recipients.ts`), deux
+# `where`/`updateData` Prisma nus repris sur `Prisma.AdminBroadcastWhereInput` /
+# `Prisma.UserWhereInput` / `Prisma.AdminBroadcastUpdateInput`, et un
+# `(err: any)` de callback de job repris en `unknown` avec narrowing
+# `instanceof Error` (même patron que son jumeau `send-inapp`, déjà correct).
+# Le typage honnête de `targeting.activityStatus` a fait échouer la
+# compilation sur la valeur `'new'`, absente du type partagé — révélant que le
+# filtre d'ENVOI réel (`activityWindow()`) ne l'implémente pas alors que la
+# PREVIEW si : #6777, hors périmètre de ce lot de dette `any`.
+readonly GATEWAY_BASELINE=624
+
+# `apps/web` — dette réelle, jamais gardée avant ce lot (cf. en-tête « WHY
+# `apps/web` IS MEASURED… »). Mesurée sur un checkout NON construit (pas de
+# `.next/`) ; `.next` est exclu de `find_source_files` pour que la mesure
+# reste identique une fois `apps/web` construit en CI.
+readonly WEB_BASELINE=451
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly REPO_ROOT
@@ -143,10 +186,20 @@ readonly REPO_ROOT
 # n'exclut que celui-là. Trouvé en lançant ce garde une fois `packages/shared`
 # construit : la baseline à zéro mesurée sans le client généré est restée
 # fausse jusqu'à cette exclusion.
+#
+# `.next` : ajouté pour `apps/web`, dont ce garde n'a la charge que depuis ce
+# lot. `.github/workflows/ci.yml` lance `bun run build` AVANT cette étape —
+# `apps/web/.next/types/**/*.ts` existe donc au moment où ce script tourne en
+# CI, même s'il est absent d'un checkout non construit comme celui qui a
+# mesuré la baseline ci-dessous. `check-type-debt.sh` exclut la même sortie
+# générée pour la même raison (cf. son en-tête « .next/ »). Sans cette
+# exclusion, la baseline `apps/web` mesurée LOCALEMENT (checkout non construit)
+# ne pourrait jamais correspondre à ce que CI mesure (checkout construit) —
+# le cliquet rougirait au premier run, pas sur une vraie régression.
 find_source_files() {
   local target_dir="$1"
   find "$target_dir" \
-    \( -name node_modules -o -name dist -o -name generated -o -path '*/prisma/client' \) -prune \
+    \( -name node_modules -o -name dist -o -name generated -o -name .next -o -path '*/prisma/client' \) -prune \
     -o \( -name '*.ts' -o -name '*.tsx' \) -type f -print0
 }
 
@@ -250,6 +303,14 @@ export const ok: number = 1;
 EOF
   assert_eq "un any en commentaire est exclu" "0" "$(count_any_usages "$tmp/commented")"
 
+  # 5. Un usage réel, mais sous `.next/` (sortie générée par `next build`,
+  #    présente en CI après l'étape de build qui précède ce garde) : exclu —
+  #    cf. en-tête « `.next` : ajouté pour `apps/web` ».
+  mkdir -p "$tmp/withnext/.next/types"
+  echo 'export const ok = 1;' > "$tmp/withnext/fine.ts"
+  echo 'export const generated = {} as any;' > "$tmp/withnext/.next/types/gen.ts"
+  assert_eq "un usage sous .next/ est exclu" "0" "$(count_any_usages "$tmp/withnext")"
+
   rm -rf "$tmp"
 
   if [ "$failures" -ne 0 ]; then
@@ -298,18 +359,19 @@ main() {
     return $?
   fi
 
-  echo "any debt ratchet — gateway + shared"
+  echo "any debt ratchet — gateway + shared + web"
 
   local status=0
   check_package "packages/shared" "$REPO_ROOT/packages/shared" "$SHARED_BASELINE" "SHARED_BASELINE" || status=1
   check_package "services/gateway/src" "$REPO_ROOT/services/gateway/src" "$GATEWAY_BASELINE" "GATEWAY_BASELINE" || status=1
+  check_package "apps/web" "$REPO_ROOT/apps/web" "$WEB_BASELINE" "WEB_BASELINE" || status=1
 
   if [ "$status" -eq 0 ]; then
-    echo -e "${GREEN}✓ la dette \`any\` de gateway et shared n'a pas bougé.${NC}"
+    echo -e "${GREEN}✓ la dette \`any\` de gateway, shared et web n'a pas bougé.${NC}"
   else
     echo ""
-    echo "La dette \`any\` de gateway et shared ne peut que DESCENDRE. Corriger"
-    echo "les usages introduits, ou — si la mesure a changé de forme —"
+    echo "La dette \`any\` de gateway, shared et web ne peut que DESCENDRE."
+    echo "Corriger les usages introduits, ou — si la mesure a changé de forme —"
     echo "expliquer la hausse dans le message de commit avant de relever une"
     echo "baseline."
   fi

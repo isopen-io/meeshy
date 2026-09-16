@@ -1,4 +1,5 @@
 import {
+  buildPostTranslationRecord,
   buildTranslationRecord,
   resolvePrismTranslation,
 } from '@meeshy/shared/utils/conversation-helpers';
@@ -92,6 +93,34 @@ export function served(params: {
   // DÉJÀ écrit dans une de ses langues, à son rang.
   if (resolved === null) return { text: original, language: originalLanguage ?? '', translated: false };
   return { text: resolved.text, language: resolved.language, translated: true };
+}
+
+/**
+ * LA LÉGENDE D'UN MÉDIA (#6280) — même dispositif que `resolveFeedText`
+ * (`lib/feed/text.ts`, pour `Post.content`), appliqué à `PostMedia.caption`.
+ * DEUX COUPLES distincts, jamais mélangés : `captionLanguage`/
+ * `captionTranslations` décrivent la LÉGENDE, `Post.originalLanguage`/
+ * `Post.translations` décrivent le CORPS du post — trois contenus que la
+ * directive porteur #6280 interdit de confondre même à chaînes égales
+ * (`Post.content`, la légende, `alt`).
+ *
+ * `captionTranslations` partage la forme `{ langue: { text, … } }` de
+ * `Post.translations` (jamais celle, tableau, de `Message.translations`) :
+ * `buildPostTranslationRecord` (@meeshy/shared) est donc le dépouillement
+ * juste, pas `buildTranslationRecord`.
+ */
+export function resolveMediaCaption(params: {
+  readonly preferredLanguages: readonly string[];
+  readonly captionLanguage: string | null | undefined;
+  readonly captionTranslations: unknown;
+  readonly caption: string;
+}): Served {
+  return served({
+    preferredLanguages: params.preferredLanguages,
+    originalLanguage: params.captionLanguage,
+    translations: buildPostTranslationRecord(params.captionTranslations),
+    original: params.caption,
+  });
 }
 
 /**

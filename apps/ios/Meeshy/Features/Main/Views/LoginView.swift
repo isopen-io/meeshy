@@ -164,6 +164,11 @@ struct LoginView: View {
                 // la page et décolle la signature du bord bas.
                 Spacer()
             }
+            // La colonne se borne ICI, pas chez l'hôte (#6644) : posée par
+            // `MeeshyApp` autour de l'écran entier, la borne rétrécissait aussi
+            // le fond et les halos à 600 pt, et `LoginView` montée seule — la
+            // seule façon de mesurer son étape 2FA — s'étirait sur l'iPad.
+            .iPadFormWidth()
         }
         .sheet(isPresented: $showForgotPassword) {
             MeeshyForgotPasswordView()
@@ -476,18 +481,24 @@ struct LoginView: View {
             loginButton(action: attemptLogin, disabled: username.isEmpty || password.isEmpty)
 
             VStack(spacing: MeeshySpacing.sm) {
-                // « Connexion sans mot de passe » en premier (action mise en avant),
+                // « Se connecter par e-mail » en premier (action mise en avant),
                 // « Mot de passe oublié » en dessous — empilés, plus côte à côte.
+                // Le libellé dit CE QU'ON FAIT, jamais la technique : la baguette
+                // reste le signe, le mot « magique » est parti (#6626).
                 Button { showMagicLink = true } label: {
-                    Text(String(localized: "auth.login.passwordless", bundle: .main))
-                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [MeeshyColors.purple500, MeeshyColors.indigo400],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
+                    HStack(spacing: MeeshySpacing.xs) {
+                        Image(systemName: "wand.and.stars")
+                            .accessibilityHidden(true)
+                        Text(String(localized: "auth.login.passwordless", bundle: .main))
+                    }
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [MeeshyColors.purple500, MeeshyColors.indigo400],
+                            startPoint: .leading,
+                            endPoint: .trailing
                         )
+                    )
                 }
                 .bounceOnTap(scale: 0.94)
                 .accessibilityLabel(String(localized: "auth.login.passwordless", bundle: .main))
@@ -549,6 +560,7 @@ struct LoginView: View {
         .bounceOnTap()
         .padding(.top, MeeshySpacing.sm)
         .accessibilityLabel(String(localized: "auth.login.submit", bundle: .main))
+        .accessibilityIdentifier("auth.login.submit")
     }
 
     private func accountAvatar(_ account: SavedAccount, size: CGFloat) -> some View {

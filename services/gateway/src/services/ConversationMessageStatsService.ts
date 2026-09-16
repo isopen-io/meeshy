@@ -1,4 +1,5 @@
 import { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
+import { withOrphanedSenderRepair } from './messaging/withOrphanedSenderRepair';
 
 interface ParticipantStatEntry {
   messageCount: number;
@@ -390,7 +391,7 @@ export class ConversationMessageStatsService {
   }
 
   async recompute(prisma: PrismaClient, conversationId: string): Promise<Record<string, unknown>> {
-    const messages = await prisma.message.findMany({
+    const messages = await withOrphanedSenderRepair({ prisma, conversationIds: [conversationId] }, () => prisma.message.findMany({
       where: { conversationId, deletedAt: null },
       select: {
         content: true,
@@ -401,7 +402,7 @@ export class ConversationMessageStatsService {
         sender: { select: { userId: true } },
         attachments: { select: { mimeType: true } },
       },
-    });
+    }));
 
     let totalMessages = 0;
     let totalWords = 0;

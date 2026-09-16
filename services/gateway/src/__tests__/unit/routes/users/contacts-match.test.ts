@@ -64,11 +64,21 @@ const MATCHED_USER = {
 function makePrisma(users: any[] = []) {
   return {
     user: {
-      findMany: jest.fn<any>().mockResolvedValue(users),
+      // Le double DISTINGUE « qui m'a bloqué ? » (`blockedUserIds: { has }`,
+      // la requête POSITIVE de `blockedIdsAroundViewer`) des CANDIDATS du
+      // carnet — un double qui rend les mêmes lignes aux deux ferait passer
+      // tout candidat pour un bloqueur.
+      findMany: jest.fn<any>().mockImplementation(async (args: any) =>
+        args?.where?.blockedUserIds ? [] : users
+      ),
       findUnique: jest.fn<any>().mockResolvedValue({ blockedUserIds: [] }),
     },
   } as any;
 }
+
+/** Les arguments de la requête CANDIDATS — jamais celle des bloqueurs. */
+const argsCandidats = (prisma: any) =>
+  (prisma.user.findMany.mock.calls as any[]).filter((c) => !c[0]?.where?.blockedUserIds).at(-1)![0];
 
 async function buildApp(opts: {
   auth?: 'authenticated' | 'unauthenticated';
@@ -221,7 +231,7 @@ describe('POST /users/me/contacts/match — excludes self', () => {
       url: '/users/me/contacts/match',
       payload: { contacts: [{ phoneNumbers: ['+33612345678'] }] },
     });
-    const where = prisma.user.findMany.mock.calls[0][0].where;
+    const where = argsCandidats(prisma).where;
     expect(where.id.notIn).toContain(CURRENT_USER_ID);
     await app.close();
   });
@@ -420,7 +430,13 @@ describe('POST /users/me/contacts/match — gate de présence', () => {
 describe('POST /users/me/contacts/match — database error', () => {
   it('returns 500 when the query fails', async () => {
     const prisma = {
-      user: { findMany: jest.fn<any>().mockRejectedValue(new Error('DB down')) },
+      user: {
+        findMany: jest.fn<any>().mockRejectedValue(new Error('DB down')),
+        // `blockedIdsAroundViewer` lit AUSSI la ligne du demandeur : sans
+        // cette moitié, le double lève une `TypeError` au lieu de l'erreur de
+        // base qu'on veut éprouver.
+        findUnique: jest.fn<any>().mockResolvedValue({ blockedUserIds: [] }),
+      },
     } as any;
     const { app } = await buildApp({ prisma });
     const res = await app.inject({

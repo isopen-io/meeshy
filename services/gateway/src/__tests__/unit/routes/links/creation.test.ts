@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, jest } from '@jest/globals';
-import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
+import Fastify, { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -20,10 +20,28 @@ jest.mock('../../../../utils/sanitize', () => ({
   },
 }));
 
+// #6437 — le double reproduit désormais les deux refus PRÉCOCES de la vraie
+// `createUnifiedAuthMiddleware` (requireAuth / allowAnonymous), pour que
+// `requireEmailVerification` — montée juste après sur la route réelle — ne
+// voie jamais un appelant anonyme : c'est `authRequired` qui le refuse
+// d'abord, exactement comme en production.
 jest.mock('../../../../middleware/auth', () => ({
-  createUnifiedAuthMiddleware: jest.fn(() => async (req: FastifyRequest) => {
-    (req as any).authContext = (req as any)._testAuthContext;
-  }),
+  ...(jest.requireActual('../../../../middleware/auth') as object),
+  createUnifiedAuthMiddleware: jest.fn(
+    (_prisma: unknown, options: { requireAuth?: boolean; allowAnonymous?: boolean } = {}) =>
+      async (req: FastifyRequest, reply: FastifyReply) => {
+        const ctx = (req as any)._testAuthContext;
+        if (options.requireAuth && !ctx?.isAuthenticated) {
+          reply.status(401).send({ error: 'Authentication required', code: 'AUTH_REQUIRED' });
+          return;
+        }
+        if (!options.allowAnonymous && ctx?.isAnonymous && ctx?.type !== 'user') {
+          reply.status(403).send({ error: 'Registered user required', code: 'REGISTERED_USER_REQUIRED' });
+          return;
+        }
+        (req as any).authContext = ctx;
+      }
+  ),
   isRegisteredUser: jest.fn((ctx: any) => ctx?.registeredUser != null),
   UnifiedAuthRequest: {},
 }));
@@ -52,7 +70,7 @@ const USER_ID = '507f1f77bcf86cd799439011';
 const CONV_ID = '507f1f77bcf86cd799439022';
 const LINK_ID = 'link-001';
 
-const mockUser = { id: USER_ID, role: 'USER', username: 'alice', displayName: 'Alice' };
+const mockUser = { id: USER_ID, role: 'USER', username: 'alice', displayName: 'Alice', emailVerifiedAt: new Date() };
 
 const mockShareLink = {
   id: LINK_ID,
@@ -92,8 +110,9 @@ async function buildApp(opts: {
   role?: string;
   prisma?: ReturnType<typeof makePrisma>;
   socketIOHandler?: { getManager: jest.Mock<any> } | null;
+  emailVerified?: boolean;
 } = {}): Promise<{ app: FastifyInstance; prisma: ReturnType<typeof makePrisma> }> {
-  const { auth = 'registered', role = 'USER', prisma = makePrisma(), socketIOHandler = null } = opts;
+  const { auth = 'registered', role = 'USER', prisma = makePrisma(), socketIOHandler = null, emailVerified = true } = opts;
 
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   app.decorate('prisma', prisma);
@@ -106,12 +125,15 @@ async function buildApp(opts: {
         isAuthenticated: true,
         isAnonymous: false,
         userId: USER_ID,
-        registeredUser: { ...mockUser, role },
+        registeredUser: { ...mockUser, role, emailVerifiedAt: emailVerified ? new Date() : null },
         hasFullAccess: true,
       };
     } else if (auth === 'anonymous') {
+      // #6437 — forme RÉELLE d'une session anonyme valide (`middleware/auth.ts`,
+      // `createAuthContext`) : `isAuthenticated: true` ; c'est `isAnonymous`
+      // qui la distingue d'un inscrit, jamais l'absence de session.
       (req as any)._testAuthContext = {
-        isAuthenticated: false,
+        isAuthenticated: true,
         isAnonymous: true,
         userId: 'anon-1',
         registeredUser: null,
@@ -133,6 +155,18 @@ describe('POST /links — anonymous user', () => {
     const { app } = await buildApp({ auth: 'anonymous' });
     const res = await app.inject({ method: 'POST', url: '/links', payload: {} });
     expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+});
+
+// #6437 — un lien de partage peut être suivi par n'importe qui : le créer
+// sort du compte vers d'autres personnes, donc exige un e-mail confirmé.
+describe('POST /links — email not verified', () => {
+  it('returns 403 EMAIL_NOT_VERIFIED when the sender has not confirmed their e-mail', async () => {
+    const { app } = await buildApp({ emailVerified: false });
+    const res = await app.inject({ method: 'POST', url: '/links', payload: {} });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('EMAIL_NOT_VERIFIED');
     await app.close();
   });
 });

@@ -27,14 +27,16 @@ import {
   isDrag,
 } from '@/lib/stories/gesture';
 import { resolveStoryCaption } from '@/lib/stories/caption';
+
+import { StoryMediaLayer } from './story-parts';
 import {
-  DEFAULT_SLIDE_DURATION_MS,
   currentStoryAt,
   groupForPlayback,
   nextPosition,
   previousPosition,
   resolvePlayablePosition,
   resolvePosition,
+  slideDurationMs,
   stableGroupOrder,
   type StoryPlaybackGroup,
   type StoryPlaybackStory,
@@ -218,22 +220,6 @@ function ProgressBars({
   );
 }
 
-/** Le média d'une story dont la source est INEXPLOITABLE (absente, ou dont le
- * téléchargement a échoué) — un état DESSINÉ, jamais un `<img src="">` : le
- * navigateur y peint son icône de lien brisé sur fond noir et redemande le
- * document courant au passage. Mesuré sur `story-image-light.png` du premier
- * jet (§ A de la revue). */
-function MediaUnavailable() {
-  return (
-    <div className="grid gap-2 justify-items-center px-8 text-center">
-      <Glyph name="image" size={38} style={{ color: 'rgba(255,255,255,0.7)' }} />
-      <p className="text-body" style={{ color: 'rgba(255,255,255,0.75)' }}>
-        Média indisponible
-      </p>
-    </div>
-  );
-}
-
 export default function StoryScreen() {
   const { post } = useParams<'/story/$post'>();
   const [currentId, setCurrentId] = useState(post);
@@ -348,6 +334,11 @@ export default function StoryScreen() {
   const [mediaFailed, setMediaFailed] = useState(false);
   const showsImage = mediaSrc !== '' && !mediaFailed;
   const [contentReady, setContentReady] = useState(mediaSrc === '');
+  /** LA DURÉE DU MÉDIA COURANT (#6836) — `null` tant que le décodeur ne l'a pas
+   * annoncée, et pour toute story qui n'en porte pas. `slideDurationMs` traite
+   * `null` comme « pas de média » et rend le plancher : une story de texte garde
+   * donc exactement les 6 s qu'elle avait. */
+  const [mediaDurationMs, setMediaDurationMs] = useState<number | null>(null);
   const elapsedRef = useRef(0);
   const startTsRef = useRef(0);
   const markedRef = useRef<Set<string>>(new Set());
@@ -371,6 +362,11 @@ export default function StoryScreen() {
     setChromeHidden(false);
     setMediaFailed(false);
     setContentReady(mediaSrc === '');
+    /* REMISE À ZÉRO À CHAQUE STORY — sans elle, la durée du clip précédent
+       gouvernerait la diapositive suivante : une story de texte qui suit un
+       clip de 9 s durerait 9 s, et l'inverse couperait le clip. La durée est
+       une propriété du MÉDIA COURANT, jamais du lecteur. */
+    setMediaDurationMs(null);
     paintProgress(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStory?.id]);
@@ -399,9 +395,16 @@ export default function StoryScreen() {
   useEffect(() => {
     if (currentStory === undefined || paused || !contentReady) return;
     let raf = 0;
+    /* UNE SEULE VALEUR POUR LA BARRE ET POUR L'AVANCE (#6836) — calculée une
+       fois par diapositive, hors de la boucle. iOS l'exige explicitement
+       (« Garantit que progress bar et auto-advance utilisent la MÊME valeur »,
+       `StoryViewerView+Content.swift`) : deux sources donneraient une barre qui
+       ment sur ce qui reste. Ici c'est structurel — `ratio` gouverne les deux,
+       donc mesurer la barre mesure aussi le moment où la story avance. */
+    const dureeMs = slideDurationMs({ mediaDurationMs });
     const tick = () => {
       const elapsed = elapsedRef.current + (performance.now() - startTsRef.current);
-      const ratio = Math.min(1, elapsed / DEFAULT_SLIDE_DURATION_MS);
+      const ratio = Math.min(1, elapsed / dureeMs);
       paintProgress(ratio);
       if (ratio >= 1) {
         advance('next');
@@ -411,7 +414,7 @@ export default function StoryScreen() {
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [currentStory, paused, contentReady, advance, paintProgress]);
+  }, [currentStory, paused, contentReady, mediaDurationMs, advance, paintProgress]);
 
   /* LES GESTES (§ 1.3) — trois bandes, appui posé = pause, le relâchement ne
      reprend pas, le tap suivant reprend sans naviguer. */
@@ -600,36 +603,21 @@ export default function StoryScreen() {
           onPointerCancel={clearHoldTimer}
           onPointerLeave={clearHoldTimer}
         >
-          {showsImage ? (
-            <img
-              key={currentStory.id}
-              src={mediaSrc}
-              alt=""
-              className="absolute inset-0 size-full object-cover"
-              onLoad={() => setContentReady(true)}
-              onError={() => {
-                setMediaFailed(true);
-                setContentReady(true);
-              }}
-            />
-          ) : (
-            <div
-              className="absolute inset-0 grid place-items-center px-8"
-              style={sceneBackground(currentStory.storyEffects?.background)}
-            >
-              {hasMedia ? (
-                <MediaUnavailable />
-              ) : resolvedContent !== null ? (
-                <p
-                  className="text-center text-title font-semibold"
-                  style={{ fontSize: 28, lineHeight: 1.3 }}
-                  lang={resolvedContent.language || undefined}
-                >
-                  {resolvedContent.text}
-                </p>
-              ) : null}
-            </div>
-          )}
+          <StoryMediaLayer
+            storyId={currentStory.id}
+            mediaSrc={mediaSrc}
+            mimeType={media?.mimeType}
+            showsMedia={showsImage}
+            hasMedia={hasMedia}
+            background={sceneBackground(currentStory.storyEffects?.background)}
+            caption={resolvedContent}
+            onReady={() => setContentReady(true)}
+            onDurationKnown={setMediaDurationMs}
+            onFailed={() => {
+              setMediaFailed(true);
+              setContentReady(true);
+            }}
+          />
 
           <div
             className="pointer-events-none absolute inset-x-0 top-0 flex flex-col gap-2 px-3"

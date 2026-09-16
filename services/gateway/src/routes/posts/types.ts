@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { OBJECT_ID_REGEX } from '@meeshy/shared/utils/object-id';
+import { OBJECT_ID_REGEX, OBJECT_ID_PATTERN } from '@meeshy/shared/utils/object-id';
 import { MAX_POST_MEDIA } from '@meeshy/shared/types/attachment';
 import { EMOJI_MAX_LENGTH } from '@meeshy/shared/types/reaction';
 import { utf16Bounded } from '@meeshy/shared/utils/validation-primitives';
@@ -436,9 +436,23 @@ export const CreateCommentSchema = z.object({
   /// from the content as a fallback.
   originalLanguage: z.string().min(2).max(16).optional(),
   /// IDs de PostMedia déjà uploadés (uploadcontext=comment, postId/commentId=null
-  /// pending) à attacher. Wire aligné sur le contrat message-with-attachments
-  /// (tableau), MAIS un commentaire ne porte QU'UN SEUL média → borné à 1.
-  attachmentIds: z.array(z.string()).max(1).optional(),
+  /// pending) à attacher. Wire aligné sur le contrat message-with-attachments.
+  ///
+  /// **BORNÉ À `MAX_POST_MEDIA`, PAS À 1 (#6578).** La directive porteur du
+  /// 2026-09-14 dit « ajouter d'autres média » au PLURIEL, la relation Prisma
+  /// est déjà `PostMedia[]`, et `CommentAttachmentsTray` affiche déjà un
+  /// TABLEAU de vignettes : borner à 1 faisait de ce bandeau un contrôle qui
+  /// ment — il montrait N pièces pour n'en envoyer qu'une. Le plafond RÉUTILISE
+  /// celui des médias d'un post : deux plafonds seraient deux vérités, et la
+  /// seconde dériverait au premier ajustement.
+  attachmentIds: z.array(z.string()).max(MAX_POST_MEDIA).optional(),
+  /// Le média du POST COMMENTÉ que ce commentaire cite (#6578) — voie
+  /// `metadata.quotedPostMedia`, AUCUNE colonne. `z.unknown()` parce que la
+  /// forme est tranchée par `admitQuotedPostMedia`, seul site de la règle : la
+  /// NATURE y est DÉRIVÉE du MIME relu et jamais crue sur parole, et un
+  /// `postMediaId` étranger au post y est REFUSÉ. Un schéma qui validerait la
+  /// forme ici donnerait l'illusion d'une garde là où il n'y a qu'une syntaxe.
+  quotedPostMedia: z.unknown().optional(),
   /// Transcription Whisper produite côté mobile pour un média audio (évite la
   /// re-transcription serveur). Même structure que pour les posts.
   mobileTranscription: MobileTranscriptionSchema.optional(),
@@ -459,6 +473,11 @@ export const UpdateCommentSchema = z.object({
   /// Prisma `Int` est un int32 Mongo, et iOS reconstruit un `UInt32` depuis
   /// cette valeur — un flag hors borne casserait les deux côtés.
   effectFlags: z.number().int().min(0).max(0x7FFFFFFF).optional(),
+  // ISO 639-1 (or BCP-47) source language, déclarée par le composer — même
+  // contrat que `UpdatePostSchema.originalLanguage`. N'a d'effet QUE si
+  // `content` change aussi (garde métier dans `PostCommentService.updateComment`) ;
+  // absente sur un changement de texte, la redétection reprend la main.
+  originalLanguage: z.string().min(2).max(16).optional(),
 }).refine(
   (data) => data.content !== undefined || data.effectFlags !== undefined,
   { message: 'Nothing to update' },
@@ -614,6 +633,27 @@ export interface SingleResponse<T> {
 export interface PostParams {
   postId: string;
 }
+
+/**
+ * `schema.params` Ajv partagé par toute route `/posts/:postId…` de ce module
+ * (#6853). Sans lui, un `postId` non conforme — `"stories"`, un slug, une
+ * chaîne vide — n'est rejeté par aucune couche avant le handler ; il retombe
+ * sur un cast Prisma non gardé qui remonte en 500 générique, opaque pour
+ * l'appelant. Posé en `schema.params`, Ajv refuse la requête AVANT le
+ * handler et le gestionnaire d'erreurs global (`schemaValidationErrorResponse`)
+ * la traduit en 400 nommant le champ fautif.
+ *
+ * `additionalProperties: true` (défaut) : ce schéma ne se prononce QUE sur
+ * `postId` — les routes imbriquées (`:commentId`, `:objectId`, `:mediaId`)
+ * gardent leur propre forme, ou son absence, sans qu'on la redéclare ici.
+ */
+export const postIdParamsSchema = {
+  type: 'object',
+  properties: {
+    postId: { type: 'string', pattern: OBJECT_ID_PATTERN },
+  },
+  required: ['postId'],
+} as const;
 
 export interface CommentParams extends PostParams {
   commentId: string;

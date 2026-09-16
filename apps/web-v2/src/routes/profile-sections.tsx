@@ -17,6 +17,7 @@ import {
   SECTION_INK_2,
 } from '@/components/grouped-section';
 import type { PendingRequests } from '@/lib/api/friend-requests';
+import { attachmentSrc } from '@/lib/api/media-url';
 import type { MaskedContact, MyProfile, MyStats, ProfileImageKind } from '@/lib/api/profile';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -294,7 +295,9 @@ export function ProfileHero({
             }}
           />
         ) : (
-          <img src={banner} alt="" className="block size-full object-cover" />
+          /* Une RÉFÉRENCE de média, jamais une adresse (#6388) — et l'aperçu
+             local d'un téléversement en cours (`blob:`) traverse intact. */
+          <img src={attachmentSrc(banner)} alt="" className="block size-full object-cover" />
         )}
         {editing && pending.banner === undefined ? (
           <PickButton

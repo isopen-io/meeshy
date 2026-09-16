@@ -466,6 +466,153 @@ final class PermissionGateSourceGuardTests: XCTestCase {
         )
     }
 
+    // MARK: - Langue d'écriture d'un commentaire (#6587)
+    //
+    // La pastille de langue du composer de commentaires était un CONTRÔLE QUI
+    // MENT sur les trois surfaces : l'auteur choisissait une langue, et le
+    // serveur la DEVINAIT par heuristique de mots (`detectLanguage`) parce que
+    // `CreateCommentPayload` ne la portait pas. `PostComment.originalLanguage`
+    // est la langue SOURCE depuis laquelle TOUT lecteur descend son prisme —
+    // une devinette à la place d'une déclaration fausse la résolution pour
+    // tous les lecteurs, sur les trois clients.
+    //
+    // Le compilateur impose désormais le champ à la CONSTRUCTION du payload,
+    // mais il ne peut pas dire QUELLE valeur : il accepterait `nil` partout,
+    // ce qui rendrait la pastille muette à nouveau. Ces gardes épinglent la
+    // valeur SERVIE sur chacun des deux chemins de chaque surface — direct
+    // (REST) et durable (outbox) — qui doivent porter la MÊME langue : ils
+    // partagent le cmid, donc le premier atterri gagne.
+
+    func test_feedCommentsSheet_submitComment_declaresTheComposerLanguageOnBothPaths() throws {
+        let src = try source("Meeshy/Features/Main/Views/FeedCommentsSheet.swift")
+
+        let direct = try body(from: "let apiComment = try await PostService.shared.addComment(",
+                              to: "let feedComment = FeedComment(", in: src)
+        XCTAssertTrue(direct.contains("originalLanguage: lang"),
+                      "Le chemin direct doit déclarer la langue de la pastille, sinon le serveur la devine.")
+
+        let offline = try body(from: "let payload = CreateCommentPayload(",
+                               to: "try await OfflineQueue.shared.enqueue", in: src)
+        XCTAssertTrue(offline.contains("originalLanguage: lang"),
+                      "Le repli hors-ligne doit déclarer la MÊME langue — les deux chemins partagent le cmid.")
+    }
+
+    func test_storyViewer_submitComment_declaresTheComposerLanguageOnBothPaths() throws {
+        let src = try source("Meeshy/Features/Main/Views/StoryViewerView+Content.swift")
+
+        let offline = try body(from: "payload: CreateCommentPayload(",
+                               to: "conversationId: story.id", in: src)
+        XCTAssertTrue(offline.contains("originalLanguage: language"),
+                      "Le repli hors-ligne d'un commentaire de story doit porter la langue déclarée.")
+
+        // SCOPÉE au seul appel REST (#6587) : `src.contains(…)` sur le fichier
+        // ENTIER était satisfaite par le repli qu'on vient de vérifier — la
+        // garde restait VERTE sur un chemin direct neutralisé, donc elle
+        // n'assurait rien. Une garde de source ne vaut que par sa fenêtre.
+        let direct = try body(from: "try await StoryInteractionService().postComment(",
+                              to: "effectFlags: effectFlags", in: src)
+        XCTAssertTrue(direct.contains("originalLanguage: language,"),
+                      "Le chemin direct de la story doit déclarer la même langue que son repli.")
+    }
+
+    /// `PostDetailView` montait la pastille (`selectedLanguage: composerLanguage`)
+    /// et ne la transmettait à AUCUNE de ses trois portes d'envoi : le contrôle
+    /// existait, il était sans effet. Les trois doivent recevoir la valeur
+    /// capturée — jamais `nil`, qui rendrait la pastille décorative.
+    func test_postDetailView_submitComment_declaresTheComposerLanguageOnItsThreeDoors() throws {
+        // #6578 — `submitComment` a quitté `PostDetailView.swift` pour l'extension du composer.
+        let src = try source("Meeshy/Features/Main/Views/PostDetailView+CommentComposer.swift")
+        let fn = try body(from: "let effectFlags = flags > 0 ? Int(flags) : nil",
+                          to: "private func startCommentRecording", in: src)
+
+        XCTAssertTrue(fn.contains("let lang = composerLanguage"),
+                      "La langue doit être CAPTURÉE avant le Task, comme le lieu.")
+        for door in ["submitCommentWithMedia(trimmed, originalLanguage: lang",
+                     "sendReply(trimmed, originalLanguage: lang",
+                     "sendComment(trimmed, originalLanguage: lang"] {
+            XCTAssertTrue(fn.contains(door),
+                          "Porte d'envoi sans la langue déclarée : \(door)")
+        }
+    }
+
+    // MARK: - La LIGNE OPTIMISTE porte la langue, elle aussi (#6587)
+    //
+    // Les deux rangées suivantes sont des gardes de SOURCE assumées, faute
+    // d'hôte interrogeable : l'une vit dans une `View` SwiftUI, l'autre derrière
+    // un téléversement réseau dont l'échec ANNULE l'insert qu'on voudrait
+    // observer. Les trois portes qu'un modèle expose (`sendComment`,
+    // `sendReply` côté détail, `sendComment` côté fil) sont, elles, épinglées
+    // par des témoins de COMPORTEMENT — `PostDetailViewModelTests` et
+    // `FeedViewModelTests` appellent, puis lisent `originalLanguage` sur la
+    // ligne rendue. Une garde de source ne prouve pas qu'une valeur arrive ;
+    // elle empêche seulement un futur lot de la retirer en silence.
+
+    /// La ligne optimiste du fil de commentaires d'un post, et la ligne SERVEUR
+    /// qui la remplace à la réponse REST. Sans la seconde, la pastille
+    /// apparaîtrait puis disparaîtrait dans la même seconde sur le chemin
+    /// nominal EN LIGNE — un correctif dont la valeur n'atteint aucun lecteur.
+    func test_feedCommentsSheet_optimisticRow_carriesTheAuthoredLanguage() throws {
+        let src = try source("Meeshy/Features/Main/Views/FeedCommentsSheet.swift")
+
+        let optimistic = try body(from: "let tempId = ClientMutationId.generate()",
+                                  to: "if let parentId {", in: src)
+        XCTAssertTrue(optimistic.contains("originalLanguage: lang"),
+                      "La ligne optimiste doit porter la langue de la pastille : son auteur la LIT.")
+
+        let served = try body(from: "originalLanguage: lang, location: place, clientMutationId: tempId",
+                              to: "// Swap the optimistic temp", in: src)
+        XCTAssertTrue(served.contains("originalLanguage: apiComment.originalLanguage"),
+                      "La ligne serveur qui remplace l'optimiste doit garder la langue, sinon la pastille clignote.")
+    }
+
+    /// Même paire pour la porte MÉDIA du détail de post — celle dont l'insert
+    /// optimiste n'est pas observable (`CommentMediaUploader.upload` précède la
+    /// première frontière testable, et son échec annule l'insert).
+    func test_postDetailViewModel_mediaDoor_carriesTheAuthoredLanguage() throws {
+        // #6578 — la porte média a quitté `PostDetailViewModel.swift` pour l'extension d'envoi.
+        let src = try source("Meeshy/Features/Main/ViewModels/PostDetailViewModel+CommentSend.swift")
+
+        let optimistic = try body(from: "func submitCommentWithMedia(",
+                                  to: "let snapshotComments = comments", in: src)
+        XCTAssertTrue(optimistic.contains("originalLanguage: originalLanguage"),
+                      "La ligne optimiste d'un commentaire AVEC MÉDIA doit porter la langue déclarée.")
+
+        let served = try body(from: "let server = FeedComment(",
+                              to: "if let parentId {", in: src)
+        XCTAssertTrue(served.contains("originalLanguage: apiComment.originalLanguage"),
+                      "La ligne serveur qui la remplace doit garder la langue.")
+    }
+
+    /// Le corollaire d'asymétrie du champ REQUIS : `FeedView` portait une
+    /// SECONDE porte de langue (`composerLanguage` + `showComposerLanguagePicker`
+    /// + sa feuille) que rien n'ouvrait jamais — le feed délègue à
+    /// `FeedComposerSheet`, qui possède la sienne, branchée jusqu'à
+    /// `createPost(originalLanguage:)`. Câbler les deux fabriquerait DEUX
+    /// vérités pour une même composition.
+    func test_feedView_carriesNoSecondLanguageDoor() throws {
+        let src = try source("Meeshy/Features/Main/Views/FeedView.swift")
+
+        XCTAssertFalse(src.contains("composerLanguage"),
+                       "FeedView ne doit porter aucune pastille de langue : la porte vivante est celle de FeedComposerSheet.")
+        XCTAssertFalse(src.contains("showComposerLanguagePicker"),
+                       "Un sélecteur que rien n'ouvre est un contrôle qui ment.")
+    }
+
+    /// `UniversalComposerBar.onRecordingChange` était déclaré et affecté par
+    /// `StoryViewerView+CanvasComposerBar`, mais JAMAIS invoqué par la barre.
+    /// Le câbler tel quel écraserait `isComposerEngaged` à false en fin
+    /// d'enregistrement et relâcherait une pause posée par le focus — la pause
+    /// passe déjà par `onHasContentChange`. On retire, on ne câble pas.
+    func test_universalComposerBar_carriesNoDeadRecordingHook() throws {
+        let bar = try source("Meeshy/Features/Main/Components/UniversalComposerBar.swift")
+        XCTAssertFalse(bar.contains("onRecordingChange"),
+                       "Un rappel jamais invoqué ne doit pas rester déclaré.")
+
+        let host = try source("Meeshy/Features/Main/Views/StoryViewerView+CanvasComposerBar.swift")
+        XCTAssertTrue(host.contains("onHasContentChange:"),
+                      "La pause de story reste portée par onHasContentChange.")
+    }
+
     // MARK: - Mot de passe
 
     /// Sans `.newPassword`, iOS ne propose ni mot de passe fort ni — surtout —

@@ -117,9 +117,21 @@ extension ConversationMediaGalleryView {
     /// le jeu : `TransportLayout.showsSkip` les refuse à tout placement autre
     /// que `.stacked`. #6163 les remplace par un geste — un bouton de plus les
     /// aurait fait revenir par la porte de derrière.
+    ///
+    /// **Une scène a SON play/pause, au même endroit** (#6709). Elle ne passe
+    /// pas par le player partagé : sa lecture est la commande de la galerie
+    /// (`scenePlaying`), que le player de la page descend à son canvas. Le bouton
+    /// n'existe que si la scène BOUGE — sur une scène fixe, il mettrait en pause
+    /// une image (loi 4).
     @ViewBuilder
     var cadreCenterPlayPause: some View {
-        if currentAttachmentIsActiveTrack {
+        if let scene = currentScene {
+            if scene.moves {
+                GalleryScenePlayPause(isPlaying: scenePlaying, accentColor: accentColor) {
+                    scenePlaying.toggle()
+                }
+            }
+        } else if currentAttachmentIsActiveTrack {
             VideoTransportControls(
                 manager: videoManager,
                 accentColor: accentColor,

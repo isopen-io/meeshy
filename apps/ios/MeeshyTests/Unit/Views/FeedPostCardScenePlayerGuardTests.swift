@@ -159,7 +159,8 @@ final class FeedPostCardScenePlayerGuardTests: XCTestCase {
 
     // MARK: - 3. Hauteur dérivée du ratio 9:16 sur la largeur RÉELLE (correctif rejet DoD rév. 15, constat 2)
 
-    /// **Le témoin garde la RÈGLE, plus le littéral** (révision 2026-09-06).
+    /// **Le témoin garde la RÈGLE, plus le littéral** (révision 2026-09-06,
+    /// puis #6767 le 2026-09-16).
     ///
     /// Il exigeait `.aspectRatio(9.0 / 16.0, …)` au caractère près. Sa raison
     /// écrite, elle, n'a jamais porté sur le nombre : « dériver la hauteur d'un
@@ -172,17 +173,25 @@ final class FeedPostCardScenePlayerGuardTests: XCTestCase {
     /// bande. Épingler `9.0 / 16.0` interdisait donc la feature au nom d'une
     /// règle qu'elle respecte.
     ///
+    /// **#6767 rejoue le même renversement une marche plus haut.** Le ratio
+    /// n'est plus appliqué directement par un `.aspectRatio(…)` sur le corps
+    /// de la carte : il passe par `SceneCardHeightCap`, qui le PLAFONNE en
+    /// hauteur (1,4 × la largeur) sans jamais rogner ni zoomer le contenu.
+    /// Épingler l'ancien `.aspectRatio(…, contentMode: .fit)` littéral aurait
+    /// rougi sur ce correctif légitime.
+    ///
     /// > Un témoin qui épingle une VALEUR là où sa raison parle d'une FORME
     /// > rougit sur le premier changement légitime — et pousse à l'affaiblir
-    /// > au lieu de le repointer. Il garde désormais les deux moitiés qui
-    /// > comptent : un ratio est appliqué, et aucune hauteur n'est figée.
+    /// > au lieu de le repointer. Il garde désormais les moitiés qui
+    /// > comptent : un ratio est appliqué (plafonné), et aucune hauteur n'est
+    /// > figée en points.
     func test_scenePlayer_usesAspectRatioNineBySixteen() throws {
         let text = try sceneSource()
         let block = try cardScenePlayerBlock(in: text)
         XCTAssertTrue(
-            block.contains(".aspectRatio(") && block.contains("contentMode: .fit"),
-            "La scène de carte doit dériver sa hauteur d'un RATIO appliqué à la largeur " +
-            "réellement proposée par le parent — même patron que le voisin StoryRepostEmbedCell."
+            block.contains("SceneCardHeightCap(naturalAspect:"),
+            "La scène de carte doit dériver sa hauteur d'un RATIO — plafonné en hauteur par " +
+            "SceneCardHeightCap (#6767) — jamais une hauteur en points figée."
         )
         XCTAssertFalse(
             block.contains(".frame(height:"),
@@ -193,8 +202,9 @@ final class FeedPostCardScenePlayerGuardTests: XCTestCase {
         )
         XCTAssertTrue(
             block.contains("9.0 / 16.0"),
-            "Le 9:16 doit rester le REPLI : sans cadrage à appliquer, la carte garde le " +
-            "gabarit de composition de la scène."
+            "Le 9:16 doit rester le REPLI du rapport NATUREL : sans cadrage à appliquer, la " +
+            "carte part du gabarit de composition de la scène avant que SceneCardHeightCap ne " +
+            "le plafonne."
         )
     }
 

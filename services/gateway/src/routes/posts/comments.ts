@@ -17,6 +17,8 @@ import { createSocialTranslateRateLimitConfig } from './socialRateLimit';
 import { withMutationLog, MutationResultGone } from '../../utils/withMutationLog';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { hoistLocationOnto } from '../../services/location/sharedPlace';
+import { admitQuotedPostMedia } from '../../services/posts/quotedPostMediaSnapshot';
+import { serveCitedPostMedia } from '../../services/posts/citedPostMediaBackfill';
 import {
   loadCommentPostAcl,
   canUserConsumePost,
@@ -104,7 +106,14 @@ export function registerCommentRoutes(
         : [];
 
       reply.header('Cache-Control', 'private, no-cache');
-      return sendSuccess(reply, result.items.map((c) => hoistCommentLocation(c as unknown as Record<string, unknown>)), {
+      // #6578 — la citation d'un média : l'ancre FIGÉE hissée en top-level, et
+      // le média RELU. Une requête pour toute la page, aucune quand personne ne
+      // cite.
+      const servis = await serveCitedPostMedia(
+        prisma,
+        result.items.map((c) => hoistCommentLocation(c as unknown as Record<string, unknown>)),
+      );
+      return sendSuccess(reply, servis, {
         pagination: { limit, hasMore: result.hasMore, nextCursor: result.nextCursor },
         meta: { mentionedUsers },
       });
@@ -152,7 +161,11 @@ export function registerCommentRoutes(
         : [];
 
       reply.header('Cache-Control', 'private, no-cache');
-      return sendSuccess(reply, result.items.map((r) => hoistCommentLocation(r as unknown as Record<string, unknown>)), {
+      const reponsesServies = await serveCitedPostMedia(
+        prisma,
+        result.items.map((r) => hoistCommentLocation(r as unknown as Record<string, unknown>)),
+      );
+      return sendSuccess(reply, reponsesServies, {
         pagination: { limit, hasMore: result.hasMore, nextCursor: result.nextCursor },
         meta: { mentionedUsers: replyMentionedUsers },
       });
@@ -203,6 +216,25 @@ export function registerCommentRoutes(
         return sendForbidden(reply, 'Comments are disabled on this post', { code: 'COMMENTS_DISABLED' });
       }
 
+      // #6578 — LA GARDE D'ÉCRITURE DE LA CITATION, avant toute écriture.
+      //
+      // Elle précède `withMutationLog` à dessein : un `postMediaId` étranger au
+      // post commenté est une FUITE (on citerait le média d'une publication
+      // qu'on ne lit pas), et refuser APRÈS avoir inséré la ligne laisserait le
+      // commentaire publié. `targetPostId` — la CIBLE réelle, donc la racine
+      // pour un repost simple — et jamais le `:postId` du chemin : commenter
+      // un repost atterrit sur le fil de sa racine, donc citer y vise les
+      // médias de la racine.
+      const citation = await admitQuotedPostMedia(prisma, {
+        postId: targetPostId,
+        quotedPostMedia: parsed.data.quotedPostMedia,
+      });
+      if (!citation.ok) {
+        return sendBadRequest(reply, citation.reason ?? 'Invalid quoted media', {
+          code: 'QUOTED_MEDIA_INVALID',
+        });
+      }
+
       // Idempotent via clientMutationId — replays return the same comment.
       type CommentResult = NonNullable<Awaited<ReturnType<typeof commentService.addComment>>>;
       const comment = await withMutationLog<CommentResult>({
@@ -219,13 +251,17 @@ export function registerCommentRoutes(
             targetPostId,
             authContext.registeredUser.id,
             SecuritySanitizer.sanitizeText(parsed.data.content),
-            parsed.data.parentId,
-            parsed.data.effectFlags,
-            parsed.data.originalLanguage,
-            // Un seul média par commentaire : on lie le premier id du tableau.
-            parsed.data.attachmentIds?.[0],
-            parsed.data.mobileTranscription,
-            parsed.data.location,
+            {
+              parentId: parsed.data.parentId,
+              effectFlags: parsed.data.effectFlags,
+              originalLanguage: parsed.data.originalLanguage,
+              // TOUS les médias joints (#6578) — le bandeau du composer en
+              // affiche plusieurs, et il n'en envoyait qu'un.
+              mediaIds: parsed.data.attachmentIds,
+              mobileTranscription: parsed.data.mobileTranscription,
+              location: parsed.data.location,
+              quotedPostMedia: citation.snapshot,
+            },
           );
           if (!c) throw new Error('POST_NOT_FOUND');
           return c as CommentResult & { id: string };
@@ -243,6 +279,15 @@ export function registerCommentRoutes(
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
 
+      // #6578 — la citation se sert UNE fois, pour les DEUX surfaces : la
+      // réponse REST et l'écho Socket.IO. Deux appels coûteraient deux lectures
+      // du même média, et surtout laisseraient les deux diverger — c'est la
+      // forme exacte du défaut que `hoistCommentTrackingLinks` avait déjà
+      // (hissé sur l'écho, absent de la réponse).
+      const [commentCite] = await serveCitedPostMedia(prisma, [
+        hoistCommentLocation(comment as unknown as Record<string, unknown>),
+      ]);
+
       // Broadcast comment added via Socket.IO — porte l'id de la CIBLE réelle
       // (`targetPostId`, la racine pour un repost simple) : les clients
       // patchent l'original partout où il apparaît.
@@ -254,7 +299,7 @@ export function registerCommentRoutes(
       if (socialEvents && post) {
         socialEvents.broadcastCommentAdded({
           postId: targetPostId,
-          comment: hoistCommentLocation(hoistCommentTrackingLinks(comment as unknown as Record<string, unknown>)) as unknown as typeof comment,
+          comment: hoistCommentTrackingLinks(commentCite) as unknown as typeof comment,
           commentCount: post.commentCount,
           // L'écho porte le cmid du créateur : l'émetteur remplace sa ligne
           // optimiste (id local = cmid) au lieu d'en insérer un doublon.
@@ -424,7 +469,7 @@ export function registerCommentRoutes(
         ? await resolveMentionedUsers(prisma, [parsed.data.content])
         : [];
 
-      return sendSuccess(reply, hoistCommentLocation(comment as unknown as Record<string, unknown>), { statusCode: 201, meta: { mentionedUsers: newCommentMentionedUsers } });
+      return sendSuccess(reply, commentCite, { statusCode: 201, meta: { mentionedUsers: newCommentMentionedUsers } });
     } catch (error) {
       // Le cmid a bien été appliqué, mais son résultat n'est plus relisible
       // (contenu supprimé, expiré, ou hors de la tranche ACL du lecteur) et
@@ -507,6 +552,7 @@ export function registerCommentRoutes(
           const c = await commentService.updateComment(commentId, authContext.registeredUser.id, {
             content: sanitizedContent,
             effectFlags: parsed.data.effectFlags,
+            originalLanguage: parsed.data.originalLanguage,
           });
           if (!c) throw new Error('COMMENT_NOT_FOUND');
           return c as UpdateResult & { id: string };
@@ -526,6 +572,13 @@ export function registerCommentRoutes(
         return sendNotFound(reply, 'Comment not found', { code: 'COMMENT_NOT_FOUND' });
       }
 
+      // Une ÉDITION ne touche pas la citation — elle vit dans `metadata`, que
+      // `updateComment` conserve. Le média, lui, se RELIT : entre la création et
+      // l'édition il a pu être recadré, relégendé ou supprimé.
+      const [commentEditeCite] = await serveCitedPostMedia(prisma, [
+        hoistCommentLocation(comment as unknown as Record<string, unknown>),
+      ]);
+
       // Broadcast comment:updated — mêmes rooms et même filtrage de visibilité
       // que comment:added ; visibilité passée BRUTE (jamais de défaut permissif).
       const socialEvents = fastify.socialEvents;
@@ -536,7 +589,7 @@ export function registerCommentRoutes(
       if (socialEvents && post) {
         socialEvents.broadcastCommentUpdated({
           postId: comment.postId,
-          comment: hoistCommentLocation(hoistCommentTrackingLinks(comment as unknown as Record<string, unknown>)) as unknown as typeof comment,
+          comment: hoistCommentTrackingLinks(commentEditeCite) as unknown as typeof comment,
         }, post.authorId, post.visibility, post.visibilityUserIds ?? []).catch((err) => enhancedLogger.warn('[PATCH /posts/:postId/comments/:commentId]: broadcast comment updated failed', { err }));
       }
 
@@ -556,7 +609,7 @@ export function registerCommentRoutes(
         }
       }
 
-      return sendSuccess(reply, hoistCommentLocation(comment as unknown as Record<string, unknown>));
+      return sendSuccess(reply, commentEditeCite);
     } catch (error) {
       if (error instanceof Error && error.message === 'FORBIDDEN') {
         return sendForbidden(reply, 'Not authorized to edit this comment', { code: 'FORBIDDEN' });

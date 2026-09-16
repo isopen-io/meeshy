@@ -55,6 +55,16 @@ public struct APIPostMedia: Codable, Sendable {
     public let language: String?
     public let variantOf: String?
 
+    /// Langue SOURCE de `caption` (`PostMedia.captionLanguage`, #6280) — DISTINCTE
+    /// de `language` ci-dessus, qui porte la langue du MÉDIA (variantes TTS), pas
+    /// celle de sa légende. `nil` tant que le pipeline de traduction de légende
+    /// n'a pas encore détecté de langue source.
+    public let captionLanguage: String?
+    /// Traductions de `caption` (`PostMedia.captionTranslations`, #6280) —
+    /// DISTINCTE de `translations` ci-dessous, DÉJÀ prise par les pistes
+    /// audio/transcriptions traduites. Même forme que `Post.translations`.
+    public let captionTranslations: [String: APIMediaCaptionTranslationEntry]?
+
     public let transcription: APIAttachmentTranscription?
     public let translations: [String: APIAttachmentTranslation]?
 
@@ -141,6 +151,30 @@ public struct APIPostComment: Decodable, Sendable {
     /// `CodingKeys` custom sur ce type). `var`/`= nil` : source-compatible
     /// avec le memberwise init déjà utilisé par les tests existants.
     public var location: SharedPlace? = nil
+    /// L'ANCRE FIGÉE du média cité (#6578), hissée depuis
+    /// `metadata.quotedPostMedia` — même geste que `location` ci-dessus.
+    public var quotedPostMedia: APIQuotedPostMediaRef? = nil
+    /// Le média cité, RELU par la passerelle à chaque service. Absent quand il
+    /// n'existe plus ou qu'il a quitté le post commenté — la citation reste,
+    /// portée par `quotedPostMedia`.
+    public var quotedMedia: APIPostMedia? = nil
+
+    /// **Le recollement des deux moitiés, site UNIQUE.**
+    ///
+    /// Une vue ne doit jamais avoir à savoir que la citation voyage sous deux
+    /// clés : c'est exactement le genre de détail qu'un deuxième lecteur
+    /// recopie de travers. `nil` ⇒ ce commentaire parle du POST, pas d'un média
+    /// en particulier.
+    public var quotedCitation: CommentQuotedMedia? {
+        guard let ancre = quotedPostMedia else { return nil }
+        return CommentQuotedMedia(
+            postMediaId: ancre.postMediaId,
+            // Une nature inconnue vaut « une pièce jointe » — vrai, et sans
+            // effet sur le décodage du commentaire.
+            kind: CommentQuotedMedia.Kind(rawValue: ancre.kind) ?? .file,
+            media: quotedMedia?.toFeedMedia()
+        )
+    }
 }
 
 public struct APIPostTranslationEntry: Codable, Sendable {
@@ -148,6 +182,18 @@ public struct APIPostTranslationEntry: Codable, Sendable {
     public let translationModel: String?
     public let confidenceScore: Double?
     public let createdAt: String?
+}
+
+/// Une entrée de `APIPostMedia.captionTranslations` (#6280) — même forme que
+/// `APIPostTranslationEntry`, déclarée séparément parce qu'elle qualifie une
+/// LÉGENDE de média, jamais `Post.content`. Voir
+/// `packages/shared/types/media-caption-translation.ts` (SSOT du contrat).
+public struct APIMediaCaptionTranslationEntry: Codable, Sendable {
+    public let text: String
+    public let translationModel: String?
+    public let confidenceScore: Double?
+    public let createdAt: String?
+    public let updatedAt: String?
 }
 
 public struct APIPost: Sendable {
@@ -410,6 +456,17 @@ extension APIPostMedia {
                 segments: segments
             )
         }
+        // Aplatit `captionTranslations` (carte → objet riche) en `langue → texte` —
+        // la forme qu'attend `PrismTranslationResolver`, même dialecte que
+        // `MeeshyConversation.lastMessageTranslations`. Une traduction VIDE
+        // n'en est pas une (règle #3 du Prisme) : elle est sautée ici, jamais
+        // portée jusqu'au résolveur.
+        let flatCaptionTranslations: [String: String]? = captionTranslations.map { entries in
+            entries.reduce(into: [String: String]()) { acc, pair in
+                guard !pair.value.text.isEmpty else { return }
+                acc[pair.key] = pair.value.text
+            }
+        }
         return FeedMedia(
             id: id, type: mediaType, url: fileUrl,
             thumbnailUrl: thumbnailUrl, thumbHash: thumbHash,
@@ -419,6 +476,8 @@ extension APIPostMedia {
             fileName: originalName ?? fileName,
             fileSize: fileSize.map { formatFileSize($0) },
             caption: caption,
+            captionLanguage: captionLanguage,
+            captionTranslations: flatCaptionTranslations,
             transcription: transcription,
             translatedAudios: translatedAudios,
             imageVariants: imageVariants
@@ -472,7 +531,8 @@ extension APIPost {
                         originalLanguage: c.originalLanguage, translatedContent: commentTranslatedContent,
                         currentUserReactions: c.currentUserReactions,
                         media: (c.media ?? []).map { $0.toFeedMedia() },
-                        location: c.location)
+                        location: c.location,
+                        quotedMedia: c.quotedCitation)
         }
 
         let repost: RepostContent? = repostOf?.toRepostContent()

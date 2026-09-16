@@ -227,7 +227,7 @@ final class StoryViewerReactionFlowTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+Content.swift")
+            .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+ActionButton.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 

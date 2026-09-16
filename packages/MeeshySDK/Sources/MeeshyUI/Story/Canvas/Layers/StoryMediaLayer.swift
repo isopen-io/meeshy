@@ -168,6 +168,16 @@ public final class StoryMediaLayer: CALayer {
         }
     }
 
+    /// **Le clip a-t-il joué jusqu'à sa FIN ?** (#6757) — posé par l'observer de
+    /// fin en lecture (`.play`), remis à `false` à chaque nouvel item.
+    ///
+    /// Un clip fini n'attend plus rien. Il ne pilote plus la timeline :
+    /// `StoryCanvasUIView.primaryMediaPlayer()` l'écarte, sinon sa pause de fin se
+    /// lisait comme un stall — spinner et timeline gelée jusqu'au watchdog. Et il
+    /// ne se rejoue pas : `alignToTimelineThenPlay()` le laisse sur sa dernière
+    /// image, là où le recalage sur un playhead en retard rejouait sa fin.
+    @MainActor public private(set) var hasPlayedToEnd = false
+
     /// Playhead unifié de la slide (secondes), poussé par le canvas à chaque
     /// rebuild + aux transitions de lecture (GO, resume). Sert au CALAGE
     /// timeline : quand la vidéo foreground (re)démarre, on la positionne à
@@ -321,20 +331,10 @@ public final class StoryMediaLayer: CALayer {
         // promesse de la planche `4c` au niveau du rendu — « aucun ne
         // ré-encode » — et la seule écriture qui la tienne sans toucher au
         // fichier.
-        let effectiveRatio = MediaCropRule.effectiveRatio(
-            sourceRatio: media.aspectRatio, crop: media.crop)
-        // Design-space frame (1080-référentiel) → render-space via geometry.
-        let baseDesignSize = Self.baseMediaDesignSize(aspectRatio: effectiveRatio)
         applyCrop(media.crop)
-        let scaledDesignSize = CGSize(
-            width: baseDesignSize.width * CGFloat(media.scale),
-            height: baseDesignSize.height * CGFloat(media.scale)
-        )
-        let renderedSize = geometry.render(scaledDesignSize)
-
-        let designCenterX = geometry.designLength(forNormalized: CGFloat(media.x))
-        let designCenterY = geometry.designHeightLength(forNormalized: CGFloat(media.y))
-        let renderedCenter = geometry.render(CGPoint(x: designCenterX, y: designCenterY))
+        let pose = Self.renderedPose(for: media, geometry: geometry)
+        let renderedSize = pose.size
+        let renderedCenter = pose.center
 
         bounds = CGRect(origin: .zero, size: renderedSize)
         position = renderedCenter
@@ -417,6 +417,22 @@ public final class StoryMediaLayer: CALayer {
         let borné = MediaCropRule.clamped(crop)
         contentsRect = CGRect(x: borné.x, y: borné.y,
                               width: borné.width, height: borné.height)
+    }
+
+    /// **La taille et le centre qu'un média pose dans le canvas** — la moitié
+    /// géométrique de `configure`, sortie pour que le mesureur de l'image seule
+    /// (`StorySceneFootprint`, #6636) lise la MÊME pose que le calque, jamais une
+    /// jumelle. Le recadrage change les proportions de l'objet (#5085).
+    static func renderedPose(for media: StoryMediaObject,
+                             geometry: CanvasGeometry) -> (size: CGSize, center: CGPoint) {
+        let effectiveRatio = MediaCropRule.effectiveRatio(
+            sourceRatio: media.aspectRatio, crop: media.crop)
+        let baseDesignSize = baseMediaDesignSize(aspectRatio: effectiveRatio)
+        let scaledDesignSize = CGSize(width: baseDesignSize.width * CGFloat(media.scale),
+                                      height: baseDesignSize.height * CGFloat(media.scale))
+        let designCenter = CGPoint(x: geometry.designLength(forNormalized: CGFloat(media.x)),
+                                   y: geometry.designHeightLength(forNormalized: CGFloat(media.y)))
+        return (geometry.render(scaledDesignSize), geometry.render(designCenter))
     }
 
     internal static func baseMediaDesignSize(aspectRatio: Double) -> CGSize {
@@ -698,6 +714,7 @@ public final class StoryMediaLayer: CALayer {
             return
         }
         attachedURL = url
+        hasPlayedToEnd = false
 
         let item = AVPlayerItem(url: url)
         // Buffer modéré : 2 s suffit pour la plupart des vidéos courtes sans
@@ -805,16 +822,16 @@ public final class StoryMediaLayer: CALayer {
             }
         } else {
             // Reader / preview (`.play`) : une vidéo foreground est un composant
-            // de timeline. Elle joue UNE seule fois puis s'arrête et DISPARAÎT
-            // du canvas (le layer se masque), tout comme les autres composants
-            // foreground apparaissent/disparaissent selon leur fenêtre. Seule la
-            // vidéo de FOND boucle pour remplir la durée de la slide.
+            // de timeline. Elle joue UNE seule fois puis s'arrête, et quitte la
+            // scène avec sa FENÊTRE, comme les autres composants foreground
+            // (cf. `clipDidPlayToEnd`, #6757). Seule la vidéo de FOND boucle pour
+            // remplir la durée de la slide.
             player.actionAtItemEnd = .pause
             // `self` (StoryMediaLayer) est `nonisolated` donc non-Sendable : on le
             // capture via une boîte faible `@unchecked Sendable` pour satisfaire le
             // contrôle Sendable du bloc `@Sendable` de l'observer. Sûr car le bloc
-            // fire toujours sur `queue: .main` — mêmes garanties main-thread que
-            // les accès `isHidden`/`CATransaction` qui suivent.
+            // fire toujours sur `queue: .main` — la garantie main-thread que
+            // `MainActor.assumeIsolated` exige ci-dessous.
             let weakSelf = StoryMediaLayerWeakBox(self)
             loopObserver = NotificationCenter.default.addObserver(
                 forName: .AVPlayerItemDidPlayToEndTime,
@@ -822,13 +839,11 @@ public final class StoryMediaLayer: CALayer {
                 queue: .main
             ) { [weak player] _ in
                 player?.pause()
-                // Masque sans animation implicite (le rebuild 60 Hz réutilise
-                // ce même layer via le StoryRendererCache, donc l'état masqué
-                // persiste jusqu'au changement de slide).
-                CATransaction.begin()
-                CATransaction.setDisableActions(true)
-                weakSelf.value?.isHidden = true
-                CATransaction.commit()
+                // La couche y décide de rester sur sa dernière image ou de
+                // partir. Le rebuild 60 Hz la réutilise via le
+                // StoryRendererCache : la décision persiste jusqu'au changement
+                // de slide.
+                MainActor.assumeIsolated { weakSelf.value?.clipDidPlayToEnd() }
             }
         }
 
@@ -878,7 +893,7 @@ public final class StoryMediaLayer: CALayer {
 
     @MainActor
     private func alignToTimelineThenPlay() {
-        guard let player = avPlayer else { return }
+        guard let player = avPlayer, !hasPlayedToEnd else { return }
         let target = Self.trimmedSeekTarget(
             bounds: currentTrimBounds,
             slidePlayheadSeconds: slidePlayheadSeconds,
@@ -989,6 +1004,33 @@ public final class StoryMediaLayer: CALayer {
         }
     }
 
+    /// **Ce que devient un clip arrivé à la fin de son item en lecture** (#6757).
+    ///
+    /// Sa disparition appartient à sa FENÊTRE (`StoryRenderer.shouldRender`,
+    /// `startTime ..< startTime + duration`), pas à l'horloge du player. Les deux
+    /// divergent dès que la timeline de la slide gèle — chargement du fond,
+    /// stall — pendant que l'AVPlayer roule : masquer à la fin de l'item
+    /// escamotait la vidéo avant l'heure. La story de recette, clip de 6 s posé
+    /// sur un panorama, montrait le fond seul pendant la pause (capture 244).
+    ///
+    /// Sans durée déclarée, la fenêtre est infinie et rien d'autre ne retirerait
+    /// le clip : il part à la fin de son item, comme depuis 09cfcf95f0.
+    nonisolated static func leavesAtItemEnd(declaredDuration: Double?) -> Bool {
+        declaredDuration == nil
+    }
+
+    /// Fin d'item d'un clip en lecture : il reste sur sa dernière image tant que
+    /// sa fenêtre est ouverte, et ne part que s'il n'en déclare aucune.
+    @MainActor
+    func clipDidPlayToEnd() {
+        hasPlayedToEnd = true
+        guard Self.leavesAtItemEnd(declaredDuration: media?.duration) else { return }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        isHidden = true
+        CATransaction.commit()
+    }
+
     // MARK: - ThumbHash placeholder
 
     @MainActor
@@ -1055,6 +1097,7 @@ public final class StoryMediaLayer: CALayer {
         avPlayerLayer?.player = nil
         avPlayer = nil
         attachedURL = nil
+        hasPlayedToEnd = false
         currentTrimBounds = nil
         placeholderLayer?.removeFromSuperlayer()
         placeholderLayer = nil

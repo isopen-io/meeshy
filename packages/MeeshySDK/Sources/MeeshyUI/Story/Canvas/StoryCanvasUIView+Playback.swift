@@ -93,6 +93,7 @@ extension StoryCanvasUIView {
             backgroundLayer.isPlaybackActive = false
             audioMixer.pause()
             displayLink?.isPaused = true
+            settlePlaybackHealthUnderUserPause()
         } else {
             // Resume in place. Réveille le displayLink et les players
             // depuis leur dernière position — pas de re-init coûteuse. Fond,
@@ -114,6 +115,76 @@ extension StoryCanvasUIView {
                 startAudioPlayback()
             }
         }
+    }
+
+    /// **Ouvre la slide à `seconds` plutôt qu'à zéro (#6580).**
+    ///
+    /// Le porteur : « lorsqu'on a un son de fond, ouverture en détail on joue le
+    /// son directement aligné, correctement ». La carte publiait déjà sa
+    /// position (`onPlaybackTime`) et personne ne la lisait — une loi qui
+    /// calcule une valeur que personne ne consomme. Ce point d'entrée la rend
+    /// consommable, sans fabriquer une horloge de plus : il SÈME
+    /// `currentTime`, la seule position que la vidéo suit déjà
+    /// (`alignToTimelineThenPlay` lit `slidePlayheadSeconds`, poussé depuis
+    /// elle), et que `captureSlideTimelineAnchor()` remet au mixer.
+    ///
+    /// À appeler AVANT toute lecture — `makeUIView` le fait avant
+    /// `setReaderContext`, qui est le premier site qui démarre quoi que ce
+    /// soit. Semé plus tard, il ferait sauter l'image et redémarrerait l'audio.
+    ///
+    /// N'ÉMET PAS `onPlaybackTime` : le site d'appel est l'évaluation du body
+    /// SwiftUI de l'hôte, et lui rendre un état pendant sa propre mise à jour
+    /// est exactement ce que SwiftUI interdit. Le premier tick du displayLink
+    /// l'émettra.
+    public func seedPlayhead(_ seconds: Double) {
+        guard seconds.isFinite, seconds > 0 else { return }
+        let clamped = min(seconds, effectiveSlideTotalDuration)
+        guard clamped > 0 else { return }
+        currentTime = CMTime(seconds: clamped, preferredTimescale: 600_000)
+        pushSlidePlayheadToLayers()
+    }
+
+    /// **Re-sème la position APRÈS le montage (#6580).**
+    ///
+    /// `seedPlayhead` ne s'exécute qu'à `makeUIView`, et la position d'ouverture
+    /// est une valeur ASYNCHRONE : l'hôte du détail la tient de la carte. Un
+    /// hôte monté avant qu'elle soit connue restait à ZÉRO pour toujours — il
+    /// n'existait aucun second chemin de semis. La moitié « ouvrir à la bonne
+    /// seconde » n'était donc servie qu'aux hôtes assez chanceux pour la
+    /// connaître avant leur premier rendu.
+    ///
+    /// **Re-semer n'est pas semer.** La passe audio est déjà planifiée contre
+    /// l'ANCIENNE origine : déplacer le playhead sans la refaire partir ferait
+    /// sauter la vidéo à `t` sous un son resté à zéro — le défaut que ce lot
+    /// corrige, à l'envers. `realignAudioToPlayhead()` solde la clé
+    /// d'idempotence du mixer pour que le funnel replanifie depuis la NOUVELLE
+    /// ancre.
+    ///
+    /// L'idempotence (« ne pas recaler à chaque rendu ») appartient à
+    /// l'APPELANT, qui seul sait ce qu'il a déjà demandé :
+    /// `StoryReaderRepresentable.shouldReseed(requested:seeded:)`. Ici, le
+    /// playhead COURANT ne peut pas servir de référence — il avance en
+    /// permanence, et le comparer à la position d'ouverture ferait reculer la
+    /// lecture une image sur deux.
+    @discardableResult
+    public func reseedPlayhead(_ seconds: Double) -> Bool {
+        guard seconds.isFinite, seconds > 0 else { return false }
+        let clamped = min(seconds, effectiveSlideTotalDuration)
+        guard clamped > 0 else { return false }
+        seedPlayhead(clamped)
+        realignAudioToPlayhead()
+        return true
+    }
+
+    /// Fait repartir la passe audio depuis l'ancre courante. No-op tant que le
+    /// mixer n'a rien planifié pour CETTE slide : la passe à venir lira la
+    /// nouvelle position d'elle-même, et un `stop()` prématuré ne ferait que
+    /// retarder son démarrage.
+    private func realignAudioToPlayhead() {
+        guard mode == .play else { return }
+        guard audioMixer.hasStartedPlayback(slideKey: currentSlideKey) else { return }
+        audioMixer.stop()
+        startAudioPlayback()
     }
 
     func forEachAVPlayer(_ block: (AVPlayer) -> Void) {
@@ -295,6 +366,10 @@ extension StoryCanvasUIView {
     /// Le player média « primaire » de la slide qui pilote la timeline : vidéo
     /// de fond en priorité, sinon première vidéo foreground. `nil` pour une
     /// slide sans vidéo (image / couleur / audio-only) → jamais gatée.
+    ///
+    /// Un clip de premier plan joué jusqu'au bout n'en est plus un (#6757) : il
+    /// n'attend plus rien, et sa pause de fin se lisait comme un stall — spinner
+    /// et timeline gelée jusqu'au watchdog, puis relances qui rejouaient sa fin.
     func primaryMediaPlayer() -> AVPlayer? {
         if case .video = backgroundLayer.kind, let player = backgroundLayer.avPlayer {
             return player
@@ -303,6 +378,7 @@ extension StoryCanvasUIView {
             if let media = sub as? StoryMediaLayer,
                media.media?.isBackground == false,
                media.media?.kind == .video,
+               !media.hasPlayedToEnd,
                let player = media.avPlayer {
                 return player
             }
@@ -315,12 +391,35 @@ extension StoryCanvasUIView {
     /// content-ready et la vidéo bg n'a pas démarré).
     func refreshPlaybackHealth(now: CFTimeInterval) {
         guard contentReadyFired else { return }
+        probePlaybackHealth(now: now)
+    }
+
+    func probePlaybackHealth(now: CFTimeInterval) {
         let player = primaryMediaPlayer()
         applyPlaybackHealth(status: player?.timeControlStatus,
                             failed: player?.currentItem?.status == .failed,
                             audioPending: isSlideAudioPending(),
                             mediaPending: isBackgroundImagePending(),
                             now: now)
+    }
+
+    /// **Une pause utilisateur n'est pas un stall, même lu juste avant elle (#6757).**
+    ///
+    /// La pause gèle `displayLink`, dont le tick est le SEUL site qui sonde la
+    /// santé. Un stall lu à l'image d'avant — un clip arrivé à sa fin, un
+    /// buffering — restait donc émis pendant toute la pause : le spinner de l'hôte
+    /// ne tombait jamais, et le watchdog comptait le temps de pause comme un stall,
+    /// si bien que la reprise forçait « progresse » sur une vidéo encore bloquée.
+    ///
+    /// Le solde rejoue la sonde SOUS la pause, où `StoryPlaybackHealth` rend
+    /// « progresse » et où le watchdog repart de zéro. Il passe par la file
+    /// principale : l'hôte appelle `setPaused` depuis `updateUIView`, où lui rendre
+    /// un état est interdit. Une reprise survenue entre-temps le rend caduc.
+    func settlePlaybackHealthUnderUserPause() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.mode == .play, self.isPlaybackPaused else { return }
+            self.probePlaybackHealth(now: CACurrentMediaTime())
+        }
     }
 
     /// R2 — image de fond dont le bitmap FINAL n'est pas encore stampé : le
@@ -368,6 +467,11 @@ extension StoryCanvasUIView {
             isPrimaryMediaPending: mediaPending
         )
         isPlaybackStalled = !progressing
+        // R1 s'applique aussi aux AVPLAYER (#6580). Le watchdog gouverne la
+        // retenue comme il gouverne le gel du playhead : une fois expiré,
+        // `progressing` redevient vrai et l'image ne doit pas rester figée sur
+        // un audio qui n'arrivera jamais.
+        holdVideosWhileAudioPending(audioPending && !watchdogExpired)
 
         // C-DIR3 — self-heal : un player `.paused` alors que rien ne le pause
         // (ni user, ni échec) ne se relancera JAMAIS seul — les didSet
@@ -397,6 +501,46 @@ extension StoryCanvasUIView {
         onPlaybackProgressing?(progressing)
     }
 
+    /// **R1 étendu aux AVPlayer (#6580).** La porte R1 attend que le fichier
+    /// audio de la slide soit téléchargé et schedulé ; elle gelait le PLAYHEAD
+    /// (`isPlaybackStalled` coupe `advancePlayheadIfActive`) et laissait les
+    /// `AVPlayer` rouler. La vidéo prenait donc une avance qu'aucun recalage ne
+    /// rattrape — le recalage vise `slidePlayheadSeconds`, c'est-à-dire le
+    /// playhead gelé.
+    ///
+    /// **Une SUSPENSION, pas une re-décision.** On mémorise l'état des deux
+    /// portes et on le restaure à l'identique ; rejouer les gates du « GO »
+    /// ici lèverait des portes que d'autres conditions (fenêtre absente,
+    /// préemption d'un autre canvas) tenaient délibérément fermées.
+    ///
+    /// L'audio n'est PAS ajouté à `contentReadyFired`, par conception : l'image
+    /// ne doit pas attendre le son, et l'y ajouter rallongerait l'ouverture.
+    /// On gèle ce qui doit rester EN PHASE ; on ne retarde pas l'affichage.
+    func holdVideosWhileAudioPending(_ pending: Bool) {
+        guard mode == .play else { return }
+        guard pending else {
+            guard let held = videoGatesHeldForAudio else { return }
+            videoGatesHeldForAudio = nil
+            // Une pause utilisateur posée PENDANT la retenue gouverne : la
+            // relâche rendrait la lecture sous une slide gelée. Le marqueur est
+            // soldé quand même — `setStoryPlaybackPaused(false)` reprendra par
+            // son propre chemin.
+            guard !isPlaybackPaused else { return }
+            pushSlidePlayheadToLayers()
+            backgroundLayer.isPlaybackActive = held.background
+            foregroundVideosPlaybackActive = held.foreground
+            forEachMediaLayer { $0.startAlignedIfActive() }
+            return
+        }
+        guard videoGatesHeldForAudio == nil else { return }
+        // Rien qui roule ⇒ rien à retenir, et surtout aucun marqueur posé :
+        // sans ça, la relâche RELÈVERAIT des portes que personne n'avait levées.
+        guard backgroundLayer.isPlaybackActive || foregroundVideosPlaybackActive else { return }
+        videoGatesHeldForAudio = (backgroundLayer.isPlaybackActive, foregroundVideosPlaybackActive)
+        backgroundLayer.isPlaybackActive = false
+        foregroundVideosPlaybackActive = false
+    }
+
     /// C-DIR3 — re-drive la lecture par le chemin canonique du resume en
     /// FORÇANT les didSet (flip false→true) : exactement ce que le cycle
     /// long-press/relâcher réparait à la main sur device. Loggé pour le
@@ -420,6 +564,9 @@ extension StoryCanvasUIView {
         playbackStallSince = nil
         playbackPausedProbeSince = nil
         playbackSelfHealKicks = 0
+        // Une nouvelle session de lecture ne doit pas hériter d'une retenue R1
+        // de la session précédente : son état restauré n'aurait plus de sens.
+        videoGatesHeldForAudio = nil
     }
 
     /// Test-only seam : drive the health core with an injected `timeControlStatus`

@@ -21,7 +21,7 @@ import { useTypistNames } from '@/lib/api/use-typists';
 import { resolveViewer } from '@/lib/api/viewer';
 import { conversationStore, effectiveFlagsOf, effectiveUnreadOf } from '@/lib/conversation-store';
 import { applyFilter, emptinessOf, FILTER_LABELS, LIST_FILTERS, orderConversations, type ListFilter } from '@/lib/lens/filters';
-import { partagerInvitation, RETOUR_INVITATION } from '@/lib/view/invitation';
+import { memoriserLienParLecteur, partagerInvitationParrainee, retourInvitationParrainee } from '@/lib/view/invitation';
 import { useStoryRailProps } from '@/lib/view/use-story-rail';
 import { QuickActions, type QuickAction } from '@/components/quick-actions';
 import { resolveLensSections } from '@/lib/lens/sections';
@@ -139,6 +139,26 @@ function ListError({ online, onRetry }: { readonly online: boolean; readonly onR
 }
 
 /**
+ * **LE LIEN DE PARRAINAGE DU LECTEUR** (#6707) — « Inviter des amis » partage
+ * son code, jamais le site nu. Le port est chargé AU GESTE (`import()`) : il
+ * décode par `zod`, que cet écran n'atteint par aucun import statique. La
+ * mémoire est tenue au niveau du MODULE pour survivre au démontage de l'écran
+ * (`Screen key={routeKey}`) : revenir sur la liste ne rouvre pas l'attente.
+ */
+const lienDeParrainage = memoriserLienParLecteur(async () => {
+  const { loadShareableReferralLink } = await import('@/lib/api/referral-link');
+  const result = await loadShareableReferralLink({ origin: window.location.origin, now: new Date(), deps: apiDeps });
+  return result.ok ? result.data : null;
+});
+
+/** Lu AU GESTE, jamais capturé au montage : un changement de compte dans
+ * l'onglet doit changer le lien partagé. */
+function lecteurCourant(): string | null {
+  const session = sessionStore.getState().session;
+  return session.status === 'authenticated' ? session.user.id : null;
+}
+
+/**
  * **Les portes RÉELLES du démarrage — et elles seules.**
  *
  * iOS en peint NEUF (`ConversationListQuickActions`) : chercher des membres,
@@ -170,7 +190,8 @@ const ACTIONS_DE_DEMARRAGE: readonly QuickAction[] = [
     // directive demande un gros bouton. Le jour où les trois héros arrivent,
     // celui-ci reprend son rang de tuile.
     hero: true,
-    run: async () => RETOUR_INVITATION[await partagerInvitation(window.location.origin)],
+    run: async () =>
+      retourInvitationParrainee(await partagerInvitationParrainee({ chargerLien: () => lienDeParrainage(lecteurCourant()) })),
   },
 ];
 

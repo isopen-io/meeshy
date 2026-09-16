@@ -27,6 +27,7 @@
 import { readFileSync } from 'node:fs';
 
 import { mediaGridCurveFailures } from './lib/curve-media-grid.mjs';
+import { MOSAIC_LAYOUT_COTES, mosaicLayoutCurveFailures } from './lib/curve-mosaic-layout.mjs';
 
 const ROOT = new URL('../../..', import.meta.url).pathname;
 const UPSTREAM = `${ROOT}packages/shared/utils/focus-curve.ts`;
@@ -118,6 +119,8 @@ const SWIFT_MAPPINGS = [
    * lirait alors le premier trouvé, pas nécessairement celui de `Muted`.
    */
   ['opacity', 'MUTED_OPACITY', 'opacité d’une rangée en sourdine (Muted.opacity, #5559)'],
+  ['loupeGain', 'LOUPE_GAIN', 'gain de loupe de la rangée qui traverse la bande (FocusCard.loupeGain, #6588)'],
+  ['marginHorizontal', 'ROW_MARGIN_HORIZONTAL', 'écrêtage horizontal de la loupe (Row.marginHorizontal, #6588)'],
 ];
 
 /**
@@ -208,6 +211,9 @@ const FOCAL_MAPPINGS = [
   ['edgeTravel', 'HIDDEN_CHROME_EDGE_TRAVEL', "course de l'escamotage vers le bord (HiddenChrome.edgeTravel)"],
   // --- #5936 : le sticker de la rangée plate (Sticker.side).
   ['side', 'STICKER_SIDE', 'côté du sticker en rangée plate (Sticker.side)'],
+  // --- #6588 : la LOUPE du message élu (Focus.loupeGain / FocusCard.marginVertical).
+  ['loupeGain', 'FOCUS_LOUPE_GAIN', 'gain de loupe du message élu (Focus.loupeGain, #6588)'],
+  ['marginVertical', 'FOCUS_CARD_MARGIN_VERTICAL', 'écrêtage vertical de la loupe du message élu (FocusCard.marginVertical, #6588)'],
 ];
 
 for (const [swiftName, downstreamName, what] of FOCAL_MAPPINGS) {
@@ -796,6 +802,7 @@ for (const [swiftSource, swiftName, downstreamName, what] of MENU_MAPPINGS) {
 }
 
 failures.push(...mediaGridCurveFailures({ root: ROOT, count }));
+failures.push(...mosaicLayoutCurveFailures({ root: ROOT, count }));
 
 if (failures.length > 0) {
   console.error('\n  La loi de la Lentille a DÉRIVÉ de packages/shared/utils/focus-curve.ts :\n');
@@ -827,5 +834,7 @@ console.log(
     ` (3 tailles d'emoji seul + 2 cotes de sticker en bulle).` +
     `\n  Le seuil du tirer-pour-rafraîchir est conforme à MeeshyRefreshableScroll.swift (1 cote).` +
     `\n  La grille de médias du Fil est conforme à FocalAttachmentBlock.swift/BubbleStandardLayout+Media.swift/` +
-    `ConversationMediaFilmstrip.swift/+Geometry.swift/+Pages.swift (21 cotes).`,
+    `ConversationMediaFilmstrip.swift/+Geometry.swift/+Pages.swift (21 cotes).` +
+    `\n  L'agencement d'une publication est conforme à CanvasV3.swift/MosaicLayout.swift/PostSceneMosaic.swift` +
+    ` et à canvas-v3.ts (${MOSAIC_LAYOUT_COTES} cotes ; les valeurs sont gardées par mosaic-layout.test.ts).`,
 );

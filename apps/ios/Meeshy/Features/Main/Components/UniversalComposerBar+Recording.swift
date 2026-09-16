@@ -68,13 +68,23 @@ extension UniversalComposerBar {
                     // le bouton d'envoi rond douze points plus loin : deux
                     // chemins vers le même geste ne doivent pas avoir deux
                     // couleurs.
-                    .submitLabel(.send)
+                    // AU-DELÀ DE SEPT MOTS, la touche PASSE À LA LIGNE (#6537).
+                    // Le libellé suit la fonction : annoncer « envoi » sur une
+                    // touche qui insère un retour mentirait, et c'est le genre
+                    // de mensonge qu'on ne remarque qu'après avoir perdu un
+                    // paragraphe.
+                    .submitLabel(ComposerActionSlot.exceedsTextStickerLimit(text) ? .return : .send)
                     .tint(Color(hex: accentColor))
                     // `.onSubmit` est posé POUR les versions qui l'honorent sur
                     // un champ à axe vertical ; il ne suffit pas, et la règle
                     // ci-dessous dit pourquoi. Les deux chemins mènent au même
                     // `handleSend`, qui est idempotent sur un texte vide.
-                    .onSubmit { handleSend() }
+                    .onSubmit {
+                        // Rien à envoyer au-delà de la borne : la touche y est
+                        // un saut de ligne, et `onSubmit` ne doit pas la doubler.
+                        guard !ComposerActionSlot.exceedsTextStickerLimit(text) else { return }
+                        handleSend()
+                    }
                     .accessibilityLabel(String(localized: "a11y.composer.textField", defaultValue: "Champ de message", bundle: .main))
                     .accessibilityValue(text.isEmpty ? resolvedPlaceholder : text)
                     .accessibilityIdentifier(MeeshyA11yID.composerTextField)
@@ -86,7 +96,13 @@ extension UniversalComposerBar {
                         // La règle regarde ce que le champ observe toujours :
                         // son propre texte. Elle refuse un collage
                         // multi-lignes, dont l'envoi serait irréversible.
-                        if ComposerReturnKey.submits(previous: oldValue, current: newValue) {
+                        // La BORNE se lit sur le texte d'AVANT la frappe : celui
+                        // d'après porte déjà le saut de ligne que la touche vient
+                        // d'insérer, et un retour ne fait pas un mot de plus —
+                        // mais lire `oldValue` dit sans ambiguïté ce que l'auteur
+                        // avait sous les yeux en appuyant (#6537).
+                        let passeALaLigne = ComposerActionSlot.exceedsTextStickerLimit(oldValue)
+                        if !passeALaLigne, ComposerReturnKey.submits(previous: oldValue, current: newValue) {
                             // Le texte SANS son saut de ligne est poussé à
                             // l'hôte AVANT l'envoi : `onCustomSend` lit la
                             // source de l'hôte SYNCHRONEMENT, alors que la

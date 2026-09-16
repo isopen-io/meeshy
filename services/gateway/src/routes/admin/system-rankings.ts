@@ -8,6 +8,7 @@ import { sendSuccess, sendBadRequest, sendInternalError } from '../../utils/resp
 import { permissionsService } from '../../services/admin/permissions.service';
 import type { UserRoleEnum } from '@meeshy/shared/types';
 import { requirePermission } from '../../middleware/authorize';
+import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
 
 // `requireAdmin` était une garde LOCALE : elle rejouait une liste de rôles en dur
 // (#4153). Elle nomme désormais la permission qu'elle exige, et la matrice
@@ -684,21 +685,27 @@ async function rankMessages(fastify: FastifyInstance, criterion: string, startDa
     entries: Array<{ messageId: string; count: number }>
   ) {
     const messageIds = entries.map(e => e.messageId);
-    const messages = await fastify.prisma.message.findMany({
-      where: { id: { in: messageIds } },
-      select: {
-        id: true,
-        content: true,
-        messageType: true,
-        createdAt: true,
-        sender: {
-          select: { id: true, userId: true, displayName: true, avatar: true, user: { select: { username: true } } }
-        },
-        conversation: {
-          select: { id: true, identifier: true, title: true, type: true }
-        }
-      }
-    });
+    // Un classement platefome-entière ne connaît aucune conversation d'avance
+    // (#6516) : la portée se DÉCOUVRE depuis les mêmes ids, jamais `sender`.
+    const messages = await withOrphanedSenderRepair(
+      { prisma: fastify.prisma, conversationIds: discoverConversationIdsByMessageIds(fastify.prisma, messageIds) },
+      () =>
+        fastify.prisma.message.findMany({
+          where: { id: { in: messageIds } },
+          select: {
+            id: true,
+            content: true,
+            messageType: true,
+            createdAt: true,
+            sender: {
+              select: { id: true, userId: true, displayName: true, avatar: true, user: { select: { username: true } } }
+            },
+            conversation: {
+              select: { id: true, identifier: true, title: true, type: true }
+            }
+          }
+        })
+    );
     const msgMap = new Map(messages.map(m => [m.id, m]));
     return entries.map(e => {
       const msg = msgMap.get(e.messageId);

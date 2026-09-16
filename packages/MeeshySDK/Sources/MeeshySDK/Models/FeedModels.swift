@@ -67,6 +67,13 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
     /// `toMessageAttachment()` : le décodeur la jetait, et le plein écran d'un
     /// média de post ou de commentaire ne pouvait structurellement rien montrer.
     public var caption: String?
+    /// Langue SOURCE de `caption` (`PostMedia.captionLanguage`, #6280).
+    public var captionLanguage: String?
+    /// Traductions de `caption`, aplaties `langue → texte` — même dialecte que
+    /// `MeeshyConversation.lastMessageTranslations` (`PostMedia.captionTranslations`,
+    /// #6280). DISTINCTE de `translatedAudios` ci-dessous, qui traduit les PISTES
+    /// audio, jamais le texte de la légende.
+    public var captionTranslations: [String: String]?
     public var transcription: MessageTranscription?
     /// Per-language TTS variants of an audio media (Prisme Linguistique).
     /// Each carries the translated transcription text + the synthesized audio
@@ -97,6 +104,8 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
                 width: Int? = nil, height: Int? = nil, duration: Int? = nil,
                 fileName: String? = nil, fileSize: String? = nil, pageCount: Int? = nil,
                 caption: String? = nil,
+                captionLanguage: String? = nil,
+                captionTranslations: [String: String]? = nil,
                 transcription: MessageTranscription? = nil,
                 translatedAudios: [MessageTranslatedAudio] = [],
                 imageVariants: [MeeshyImageVariant]? = nil) {
@@ -104,9 +113,25 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
         self.width = width; self.height = height; self.duration = duration
         self.fileName = fileName; self.fileSize = fileSize; self.pageCount = pageCount
         self.caption = caption
+        self.captionLanguage = captionLanguage
+        self.captionTranslations = captionTranslations
         self.transcription = transcription
         self.translatedAudios = translatedAudios
         self.imageVariants = imageVariants
+    }
+
+    /// La descente du Prisme sur LA LÉGENDE de ce média (#6280) — projection de
+    /// `PrismTranslationResolver`, même règle que
+    /// `MeeshyConversation.resolvedLastMessagePreview`. `nil` ⇒ servir `caption`
+    /// TEL QUEL (règle #1 du Prisme : absence de traduction vers une langue
+    /// préférée ⇒ le contenu original, jamais `translations.first`).
+    public func resolvedCaption(preferredLanguages: [String]) -> String? {
+        guard let captionTranslations, !captionTranslations.isEmpty else { return caption }
+        return PrismTranslationResolver.resolve(
+            originalLanguage: captionLanguage,
+            translations: captionTranslations,
+            preferredLanguages: preferredLanguages
+        )?.text ?? caption
     }
 
     public static func image(color: String = "4ECDC4") -> FeedMedia {
@@ -141,7 +166,7 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
     private enum CodingKeys: String, CodingKey {
         case id, type, url, thumbnailUrl, thumbHash, thumbnailColor
         case width, height, duration, fileName, fileSize, pageCount
-        case caption
+        case caption, captionLanguage, captionTranslations
         case transcription, translatedAudios, imageVariants
     }
 
@@ -160,6 +185,8 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
         fileSize = try c.decodeIfPresent(String.self, forKey: .fileSize)
         pageCount = try c.decodeIfPresent(Int.self, forKey: .pageCount)
         caption = try c.decodeIfPresent(String.self, forKey: .caption)
+        captionLanguage = try c.decodeIfPresent(String.self, forKey: .captionLanguage)
+        captionTranslations = try c.decodeIfPresent([String: String].self, forKey: .captionTranslations)
         transcription = try c.decodeIfPresent(MessageTranscription.self, forKey: .transcription)
         translatedAudios = try c.decodeIfPresent([MessageTranslatedAudio].self, forKey: .translatedAudios) ?? []
         _imageVariants = try c.decode(LossyImageVariants.self, forKey: .imageVariants)
@@ -180,6 +207,8 @@ public struct FeedMedia: Identifiable, Sendable, Codable {
         try c.encodeIfPresent(fileSize, forKey: .fileSize)
         try c.encodeIfPresent(pageCount, forKey: .pageCount)
         try c.encodeIfPresent(caption, forKey: .caption)
+        try c.encodeIfPresent(captionLanguage, forKey: .captionLanguage)
+        try c.encodeIfPresent(captionTranslations, forKey: .captionTranslations)
         try c.encodeIfPresent(transcription, forKey: .transcription)
         if !translatedAudios.isEmpty {
             try c.encode(translatedAudios, forKey: .translatedAudios)
@@ -417,6 +446,11 @@ public struct FeedComment: Identifiable, Sendable {
     /// gateway depuis `metadata.location`). Était décodé puis JETÉ au passage
     /// domaine — même panne que `FeedPost.location`, corrigée le 2026-07-30.
     public var location: SharedPlace? = nil
+    /// **Le média du POST que ce commentaire CITE** (#6578) — distinct de
+    /// `media` ci-dessus, qui porte les pièces JOINTES au commentaire. Les deux
+    /// peuvent coexister : « regarde la deuxième photo » + ses propres clichés.
+    /// `nil` ⇒ le commentaire parle du post, pas d'un média en particulier.
+    public var quotedMedia: CommentQuotedMedia? = nil
 
     public var displayContent: String { translatedContent ?? content }
 
@@ -437,7 +471,10 @@ public struct FeedComment: Identifiable, Sendable {
             parentId: parentId, effectFlags: newFlags,
             originalLanguage: originalLanguage,
             translatedContent: newContent == content ? translatedContent : nil,
-            currentUserReactions: currentUserReactions, media: media, location: location
+            currentUserReactions: currentUserReactions, media: media, location: location,
+            // Une ÉDITION ne change pas ce dont le commentaire PARLE : la
+            // citation survit au nouveau texte, comme elle survit en base.
+            quotedMedia: quotedMedia
         )
     }
 
@@ -447,7 +484,7 @@ public struct FeedComment: Identifiable, Sendable {
                 parentId: String? = nil, effectFlags: Int = 0,
                 originalLanguage: String? = nil, translatedContent: String? = nil,
                 currentUserReactions: [String]? = nil, media: [FeedMedia] = [],
-                location: SharedPlace? = nil) {
+                location: SharedPlace? = nil, quotedMedia: CommentQuotedMedia? = nil) {
         self.id = id; self.author = author; self.authorId = authorId; self.authorUsername = authorUsername
         self.authorColor = DynamicColorGenerator.colorForName(authorId.isEmpty ? author : authorId)
         self.authorAvatarURL = authorAvatarURL; self.parentId = parentId
@@ -457,6 +494,7 @@ public struct FeedComment: Identifiable, Sendable {
         self.currentUserReactions = currentUserReactions
         self.media = media
         self.location = location
+        self.quotedMedia = quotedMedia
     }
 }
 
@@ -466,6 +504,7 @@ extension FeedComment: Codable {
     enum CodingKeys: String, CodingKey {
         case id, author, authorId, authorUsername, authorAvatarURL, parentId, content, timestamp, likes, replies
         case effectFlags, originalLanguage, translatedContent, currentUserReactions, media, location
+        case quotedMedia
     }
 
     public init(from decoder: Decoder) throws {
@@ -486,6 +525,9 @@ extension FeedComment: Codable {
         currentUserReactions = try c.decodeIfPresent([String].self, forKey: .currentUserReactions)
         media = try c.decodeIfPresent([FeedMedia].self, forKey: .media) ?? []
         location = try c.decodeIfPresent(SharedPlace.self, forKey: .location)
+        // `decodeIfPresent` : les blobs de cache gravés AVANT le champ se
+        // relisent sans perte — un commentaire d'avant #6578 ne cite rien.
+        quotedMedia = try c.decodeIfPresent(CommentQuotedMedia.self, forKey: .quotedMedia)
         authorColor = DynamicColorGenerator.colorForName(authorId.isEmpty ? author : authorId)
     }
 
@@ -509,6 +551,7 @@ extension FeedComment: Codable {
             try c.encode(media, forKey: .media)
         }
         try c.encodeIfPresent(location, forKey: .location)
+        try c.encodeIfPresent(quotedMedia, forKey: .quotedMedia)
     }
 }
 

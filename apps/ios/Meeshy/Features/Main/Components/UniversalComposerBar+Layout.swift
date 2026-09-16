@@ -399,6 +399,22 @@ extension UniversalComposerBar {
                 onDismiss: { textAnalyzer.showLanguagePicker = false }
             )
         }
+        // **LA PASTILLE TOURNE** (#6537, directive porteur : « il faut que le
+        // sticker tourne et change régulièrement »).
+        //
+        // Un `TimelineView` aurait redessiné la barre ENTIÈRE à chaque battement,
+        // frappe comprise — le § « Zero Unnecessary Re-render » l'interdit. Le
+        // minuteur ne touche qu'un entier, et seule la pastille en dépend.
+        //
+        // `reduceMotion` ne le ralentit pas : il l'ARRÊTE. Une rotation est un
+        // mouvement qu'on subit, pas une information qu'on perd — le cadre de
+        // tête reste celui que l'auteur emploie, donc rien ne manque.
+        .onReceive(
+            Timer.publish(every: UniversalComposerBar.stickerRotationPeriod, on: .main, in: .common).autoconnect()
+        ) { _ in
+            guard !reduceMotion else { return }
+            withAnimation(.easeInOut(duration: 0.28)) { stickerRotationStep += 1 }
+        }
         // **Les dix cadres à mots, ouverts par un appui long sur la pastille**
         // (#5326). La feuille est montée ICI, sur la barre, et pas chez l'hôte :
         // le texte qu'elle rend est celui du champ, qui vit dans la barre.

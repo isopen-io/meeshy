@@ -15,14 +15,14 @@
 //
 // Il ne distingue pas un contournement de la règle d'accent (illégitime) d'un
 // usage de couleur sémantique statique (légitime — `MeeshyColors` elle-même
-// appelle `Color(hex:)` en interne) : cette classification est une revue au
-// cas par cas, hors de portée d'un cliquet mécanique. Il rend seulement le
-// VOLUME visible en continu, sur le modèle des cliquets de dette déjà en
-// place (`check-swift-catalog-dead-entries.mjs`) : il échoue si le compte
-// grossit sans qu'on l'ait décidé, et il échoue aussi si le compte baisse
-// sans que la référence ne suive dans le MÊME commit — sinon une régression
-// future repasserait sous une référence périmée sans qu'aucun garde ne la
-// voie.
+// appelle `Color(hex:)` en interne) : cette classification reste, pour la
+// forme VARIABLE inconnue, une revue au cas par cas, hors de portée d'un
+// cliquet mécanique. Il rend seulement le VOLUME visible en continu, sur le
+// modèle des cliquets de dette déjà en place (`check-swift-catalog-dead-entries.mjs`) :
+// il échoue si un compte grossit sans qu'on l'ait décidé, et il échoue aussi
+// si un compte baisse sans que sa référence ne suive dans le MÊME commit —
+// sinon une régression future repasserait sous une référence périmée sans
+// qu'aucun garde ne la voie.
 //
 // MÉTHODOLOGIE
 //
@@ -34,27 +34,36 @@
 //    `Color(hex:)` DOIT vivre, en tant qu'implémentation de la palette ; le
 //    compter là ferait rougir le garde chaque fois qu'on l'agrandit
 //    correctement).
-// 2. Compte les OCCURRENCES littérales de `Color(hex:` (pas les fichiers) :
-//    un fichier qui accumule cinq appels au lieu d'un est une régression cinq
-//    fois plus grosse qu'un fichier qui en gagne un seul, et un compte par
-//    fichier l'aurait masquée.
-// 3. Cliquet à DEUX SENS, même patron que les cliquets de catalogue : il
-//    échoue si le compte DÉPASSE la référence enregistrée (régression — une
-//    couleur en dur de plus qu'on a cessé de remarquer), et il échoue aussi
-//    si le compte BAISSE sans que la référence ne soit abaissée dans le même
-//    commit (amélioration non enregistrée).
+// 2. Pour chaque appel `Color(hex: …)` trouvé (après retrait des commentaires,
+//    §5883), lit l'ARGUMENT jusqu'à sa virgule ou parenthèse fermante de
+//    niveau zéro (`parseColorHexArgument` — un mini-analyseur, pas une regex,
+//    pour rester correct sur les appels imbriqués comme
+//    `Color(hex: LanguageDisplay.colorHex(for: code))`) et le classe en trois
+//    FORMES (#6511) :
+//      - `literal`   : `Color(hex: "#RRGGBB")` — le codage en dur que le garde
+//        annonce. C'est la SEULE forme qui compte pour le cliquet historique.
+//      - `admitted-variable` : l'argument est (ou se termine par) exactement
+//        `accentColor` ou `colorPalette.primary` / `.secondary` / `.accent` —
+//        les deux points d'accès que CLAUDE.md § Accent Color documente. Ces
+//        appels sont l'APPLICATION de la règle, jamais son contournement ; ils
+//        ne pèsent sur AUCUN cliquet, à dessein — en ajouter ne doit jamais
+//        faire rougir un garde qui prétend défendre cette règle.
+//      - `unknown-variable` : toute autre variable/expression (`color`,
+//        `contactColor`, `tag.color`, `resolvedAccent`, `MeeshyColors.foo`…).
+//        Ni prouvée conforme ni prouvée en dur : elle reste sous un second
+//        cliquet, séparé, pour rester visible sans prétendre la classer.
+// 3. Deux cliquets à DEUX SENS indépendants, même patron que
+//    `check-swift-catalog-dead-entries.mjs` : chacun échoue si son compte
+//    DÉPASSE sa référence (régression) et échoue aussi si son compte BAISSE
+//    sans que sa référence ne soit abaissée dans le même commit (amélioration
+//    non enregistrée).
 //
-// --self-test : vérifie le comptage (fonction pure, sur un monde en mémoire)
-// et le cliquet à deux sens, même patron que `check-swift-catalog-dead-entries.mjs`
-// (qui ne rejoue pas non plus son propre parcours de fichiers réel en
-// self-test — seule sa logique de décision l'est). Un cliquet qui n'a jamais
-// été vu échouer sur les deux formes de dérive n'est pas un garde (leçon de
-// #5366/#4764).
-//
-// Référence initiale : 957 occurrences, mesurées par CE script au
-// 2026-09-08 (méthodologie propre à ce script — #3678 en mesurait 583 avec
-// une méthode non tracée ailleurs ; la référence ci-dessous est ancrée sur ce
-// script, pas sur la mesure manuelle de l'issue).
+// --self-test : vérifie le comptage (fonctions pures, sur un monde en
+// mémoire), la classification à trois formes et les deux cliquets à deux
+// sens, même patron que `check-swift-catalog-dead-entries.mjs` (qui ne rejoue
+// pas non plus son propre parcours de fichiers réel en self-test — seule sa
+// logique de décision l'est). Un cliquet qui n'a jamais été vu échouer sur les
+// deux formes de dérive n'est pas un garde (leçon de #5366/#4764).
 //
 // #5883 — le comptage était TEXTUEL : `Color(hex:` matchait aussi bien un
 // APPEL qu'un doc-comment qui le CITE pour expliquer un correctif voisin. Le
@@ -64,16 +73,61 @@
 // écrire la phrase ». Les commentaires sont désormais retirés AVANT comptage
 // (`stripComments`, même machine à états que `AppSourceGuard.stripComments`
 // côté Swift — quatre modes : code, littéral de chaîne, commentaire de
-// ligne, commentaire de bloc). Effet de bord révélateur : la référence de
-// 956 comptait ONZE mentions qui n'étaient que des commentaires ; elle est
-// réancrée à 945, qui est le nombre d'usages RÉELS.
+// ligne, commentaire de bloc).
 //
 // 2026-09-10 (#6016) — 945 → 943. Deux usages sont partis avec le composer
 // inline du fil : les vignettes `feedAttachmentTile` et `feedPlaceTile`
-// peignaient chacune leur pastille en `Color(hex:)`. Le cliquet à DEUX SENS a
-// exigé l'enregistrement, et c'est sa moitié la moins évidente qui a raison :
-// une amélioration non consignée se laisse reperdre en silence au lot suivant.
-const BASELINE_HARDCODED_COLOR_COUNT = 943;
+// peignaient chacune leur pastille en `Color(hex:)`.
+// 2026-09-14 (#6481, lot « Réglages en verre ») — 943 → 946 (référence
+// textuelle, avant #6511). Trois usages neufs, tous de la forme
+// `Color(hex: accentColor)` dans `VoiceProfileManageView` (5 → 7) et
+// `VoiceProfileWizardView` (9 → 10) : la flèche de retour en verre prend la
+// teinte de la conversation — l'application de la règle, pas son
+// contournement.
+//
+// 2026-09-14 (#6511) — LE CLIQUET COMPTAIT L'APPEL, PAS LE CODAGE EN DUR. Sur
+// les 946 occurrences textuelles, l'estimation manuelle de l'issue (grep sur
+// `Color(hex: "`, sans retrait des commentaires) situait le littéral à ~163 ;
+// les 836 autres passaient une variable, la plupart de la forme
+// `Color(hex: accentColor)` ci-dessus — exactement ce que la règle exige. Un
+// vrai littéral neuf ne déplaçait donc le compte que de 1 sur 946, aussi
+// discrètement qu'un usage légitime : le cliquet ne discriminait plus.
+// Corrigé en classant chaque appel (littéral / variable admise / variable
+// inconnue, §MÉTHODOLOGIE), par un ANALYSEUR conscient des commentaires
+// (§5883) et des appels imbriqués — pas une regex sur le texte brut. Le
+// relevé PRÉCIS diffère donc de l'estimation manuelle : 118 littéraux réels
+// (les autres occurrences de `Color(hex: "` que le grep de l'issue voyait
+// n'étaient que des mentions en commentaire, déjà hors compte depuis #5883),
+// 383 variables admises (hors cliquet, §MÉTHODOLOGIE) et 445 variables
+// inconnues. Le cliquet historique ne porte donc plus que sur les littéraux,
+// réancré à leur compte réel ; les variables inconnues restent sous un second
+// cliquet, séparé, sans prétendre les classer une à une — cette
+// classification reste une revue humaine, hors de portée d'un script.
+//
+// 2026-09-14 (#6482) — variables inconnues 445 → 444. La section Bêta de
+// Réglages part avec son interrupteur : `Color(hex: MeeshyColors.successHex)`
+// quitte `SettingsView`. Aucun littéral ne bouge (118).
+//
+// 2026-09-16 (#6793, relevé par #6802) — variables inconnues 444 → 445. UN
+// seul appel neuf : la pastille de réactions d'une pièce jointe arrive sur la
+// rangée focale, et `FocalAttachmentBlock` la teinte par son `accentHex`.
+// L'argument EST l'accent de la conversation : la vue le reçoit de ses
+// appelants (`BubbleStandardLayout+Media.swift` lui passe le `contactColor`
+// de la bulle) et le relaie elle-même sous le label `accentColor:` à ses
+// sous-vues. C'est l'application de la règle, pas son contournement.
+//
+// Pourquoi RELEVER plutôt que renommer, puisque le §ADMITTED refuse la
+// ressemblance : `accentHex` n'est pas un à-peu-près d'`accentColor`, c'est
+// une convention ÉTABLIE de l'app — la CHAÎNE hexadécimale, par opposition à
+// la COULEUR. `CallDetailSheet` tient les deux côte à côte, `accentHex:
+// String` puis `accentColor: Color` dérivée de la première. Renommer aurait
+// cassé ce vocabulaire ; interposer une propriété calculée aurait DÉPLACÉ
+// l'appel sans le supprimer (solde nul), c'est-à-dire contourné le garde au
+// lieu de lui répondre. Le §ADMITTED reste donc volontairement étroit, et
+// c'est bien ici — dans le registre daté qu'il exige — que l'appel se
+// justifie. Aucun littéral ne bouge (118).
+const REFERENCE_LITERAL_COLOR_COUNT = 118;
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 445;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -93,6 +147,27 @@ const SEARCH_ROOTS = [
 const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests', 'Theme']);
 
 const HARDCODED_COLOR_RE = /Color\(hex:/g;
+
+// Les deux points d'accès que CLAUDE.md § Conversation Accent Color documente
+// ( `conversation.accentColor`, `conversation.colorPalette` avec
+// `.primary`/`.secondary`/`.accent` ) : un argument qui EST, ou se TERMINE
+// par, l'un de ces chemins est l'application de la règle, jamais son
+// contournement. Volontairement étroit — élargir cette liste par ressemblance
+// (`accentHex`, `resolvedAccent`…) redeviendrait la revue au cas par cas que
+// ce garde ne peut pas faire.
+const ADMITTED_ACCENT_ARGUMENTS = [
+  'accentColor',
+  'colorPalette.primary',
+  'colorPalette.secondary',
+  'colorPalette.accent',
+];
+
+export const isAdmittedAccentArgument = (argumentText) => {
+  const normalized = argumentText.trim();
+  return ADMITTED_ACCENT_ARGUMENTS.some(
+    (suffix) => normalized === suffix || normalized.endsWith(`.${suffix}`),
+  );
+};
 
 // Port fidèle de `AppSourceGuard.stripComments` (apps/ios/MeeshyTests/Helpers/
 // AppSourceGuard.swift), lui-même un port de `ComposerSourceGuard.stripComments`
@@ -172,20 +247,89 @@ export const listSwiftFiles = (absRoot, relRoot) => {
   return out;
 };
 
-// Fonction pure : compte les occurrences dans un monde DÉJÀ LU (path →
-// source), indépendamment du parcours de fichiers réel — c'est elle que
-// --self-test exerce.
-export const countHardcodedColors = (files) => {
-  const perFile = [];
-  let total = 0;
-  for (const { path, source } of files) {
-    const matches = stripComments(source).match(HARDCODED_COLOR_RE);
-    if (matches && matches.length > 0) {
-      perFile.push({ path, count: matches.length });
-      total += matches.length;
+// Lit l'ARGUMENT d'un appel `Color(hex: …)` à partir de `start` (juste après
+// `Color(hex:`), sur du source DÉJÀ débarrassé de ses commentaires. Un
+// littéral de chaîne est reconnu par sa guillemet ouvrante et lu jusqu'à sa
+// fermeture (échappements gérés) ; toute autre forme est lue jusqu'à la
+// première virgule ou parenthèse fermante de PROFONDEUR ZÉRO — en comptant la
+// profondeur des parenthèses/crochets/accolades imbriqués (et en sautant les
+// chaînes imbriquées comme des blocs opaques) pour rester correct sur un appel
+// tel que `Color(hex: LanguageDisplay.colorHex(for: code))`, où la première
+// parenthèse fermante NE clôt PAS l'appel `Color(hex:`.
+export const parseColorHexArgument = (source, start) => {
+  let i = start;
+  while (i < source.length && /\s/.test(source[i])) i++;
+
+  if (source[i] === '"') {
+    let j = i + 1;
+    while (j < source.length) {
+      if (source[j] === '\\') { j += 2; continue; }
+      if (source[j] === '"') { j++; break; }
+      j++;
     }
+    return { kind: 'literal', text: source.slice(i, j) };
   }
-  return { total, perFile };
+
+  let depth = 0;
+  let j = i;
+  while (j < source.length) {
+    const c = source[j];
+    if (c === '(' || c === '[' || c === '{') { depth++; j++; continue; }
+    if (c === ')' || c === ']' || c === '}') {
+      if (depth === 0) break;
+      depth--; j++; continue;
+    }
+    if (c === '"') {
+      j++;
+      while (j < source.length) {
+        if (source[j] === '\\') { j += 2; continue; }
+        if (source[j] === '"') { j++; break; }
+        j++;
+      }
+      continue;
+    }
+    if (c === ',' && depth === 0) break;
+    j++;
+  }
+  return { kind: 'variable', text: source.slice(i, j).trim() };
+};
+
+// Classe chaque appel `Color(hex:` d'un monde DÉJÀ LU (path → source) en
+// trois formes (littéral / variable admise / variable inconnue, §MÉTHODOLOGIE)
+// — fonction pure, indépendante du parcours de fichiers réel, exercée par
+// --self-test.
+export const classifyColorHexOccurrences = (files) => {
+  let literalTotal = 0;
+  let admittedVariableTotal = 0;
+  let unknownVariableTotal = 0;
+  const perFileLiteral = [];
+  const perFileUnknownVariable = [];
+
+  for (const { path, source } of files) {
+    const stripped = stripComments(source);
+    let literalCount = 0;
+    let unknownCount = 0;
+
+    HARDCODED_COLOR_RE.lastIndex = 0;
+    let match;
+    while ((match = HARDCODED_COLOR_RE.exec(stripped)) !== null) {
+      const argument = parseColorHexArgument(stripped, match.index + match[0].length);
+      if (argument.kind === 'literal') {
+        literalCount++;
+        continue;
+      }
+      if (isAdmittedAccentArgument(argument.text)) {
+        admittedVariableTotal++;
+        continue;
+      }
+      unknownCount++;
+    }
+
+    if (literalCount > 0) { perFileLiteral.push({ path, count: literalCount }); literalTotal += literalCount; }
+    if (unknownCount > 0) { perFileUnknownVariable.push({ path, count: unknownCount }); unknownVariableTotal += unknownCount; }
+  }
+
+  return { literalTotal, admittedVariableTotal, unknownVariableTotal, perFileLiteral, perFileUnknownVariable };
 };
 
 export const readWorld = (root, roots) =>
@@ -202,6 +346,37 @@ export const evaluateRatchet = (count, baseline) => {
   if (count > baseline) return RESULT.REGRESSION;
   if (count < baseline) return RESULT.UNRECORDED_IMPROVEMENT;
   return RESULT.OK;
+};
+
+const reportRatchet = (label, count, baseline, perFile, constantName) => {
+  const verdict = evaluateRatchet(count, baseline);
+  if (verdict === RESULT.OK) {
+    console.log(`${label} : ${count} occurrence(s), conforme à la référence (${baseline}).`);
+    return true;
+  }
+  if (verdict === RESULT.REGRESSION) {
+    const added = count - baseline;
+    console.error(`RÉGRESSION — ${label} : ${count} occurrence(s), ${added} de plus que la référence (${baseline}).`);
+    console.error(
+      `Remplacez le nouvel appel par accentColor/colorPalette (CLAUDE.md § Conversation Accent Color), ` +
+        `ou documentez ici pourquoi il est légitime et relevez ${constantName} dans ce script.`,
+    );
+    if (perFile.length > 0) {
+      console.error(
+        `Fichiers les plus chargés : ${perFile
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 10)
+          .map((f) => `${f.path} (${f.count})`)
+          .join(', ')}`,
+      );
+    }
+    return false;
+  }
+  console.error(
+    `AMÉLIORATION NON ENREGISTRÉE — ${label} : ${count} occurrence(s), en dessous de la référence (${baseline}). ` +
+      `Abaissez ${constantName} à ${count} dans ce script.`,
+  );
+  return false;
 };
 
 const selfTest = () => {
@@ -223,7 +398,26 @@ const selfTest = () => {
         '  /* ancien code, retiré :',
         '     let g = Color(hex: "#111111")',
         '  */',
-        '  let h = accentHex.isEmpty ? MeeshyColors.indigo400 : Color(hex: accentHex)', // ← seul usage RÉEL de ce fichier
+        '  let h = accentHex.isEmpty ? MeeshyColors.indigo400 : Color(hex: accentHex)', // ← seul usage RÉEL de ce fichier (variable INCONNUE)
+        '}',
+      ].join('\n'),
+    },
+    // #6511 — les trois FORMES : littéral (déjà couvert ci-dessus), variable
+    // ADMISE (l'application de la règle CLAUDE.md, ne doit peser sur AUCUN
+    // cliquet) et variable INCONNUE (ni prouvée conforme ni prouvée en dur).
+    {
+      path: 'App/AccentUsage.swift',
+      source: [
+        'struct AccentUsage: View {',
+        '  var body: some View {',
+        '    VStack {',
+        '      Rectangle().fill(Color(hex: accentColor))', // variable ADMISE (nom exact)
+        '      Rectangle().fill(Color(hex: conversation.accentColor))', // variable ADMISE (chemin se terminant par accentColor)
+        '      Rectangle().fill(Color(hex: conversation.colorPalette.primary))', // variable ADMISE (colorPalette.primary)
+        '      Rectangle().fill(Color(hex: contactColor))', // variable INCONNUE
+        '      Rectangle().fill(Color(hex: LanguageDisplay.colorHex(for: code)))', // variable INCONNUE, appel imbriqué
+        '    }',
+        '  }',
         '}',
       ].join('\n'),
     },
@@ -231,56 +425,118 @@ const selfTest = () => {
   // Le monde ne contient déjà que des fichiers RETENUS par listSwiftFiles
   // (l'exclusion Theme/Tests est un filtre de CHEMIN, testé par lecture du
   // code — `EXCLUDED_DIR_NAMES.has(name)` est une comparaison d'ensemble
-  // triviale). Ce que ce garde doit prouver, c'est que son COMPTAGE est
-  // juste sur ce qu'on lui donne à compter : 2 + 1 + 2 + 1 = 6, `Empty.swift`
-  // absent du détail par fichier — et `DocOnly.swift` n'y compte QUE son
-  // unique usage réel, pas les trois mentions portées par ses commentaires.
-  const { total, perFile } = countHardcodedColors(world);
-  if (total !== 6) {
-    console.error(`AVEUGLE : total attendu 6, obtenu ${total}.`);
+  // triviale). Ce que ce garde doit prouver, c'est que son COMPTAGE et sa
+  // CLASSIFICATION sont justes sur ce qu'on lui donne à compter.
+  const {
+    literalTotal,
+    admittedVariableTotal,
+    unknownVariableTotal,
+    perFileLiteral,
+    perFileUnknownVariable,
+  } = classifyColorHexOccurrences(world);
+
+  // Littéraux : 2 + 1 + 2 = 5 (Palette, Card, Screen) — DocOnly et
+  // AccentUsage n'en portent aucun.
+  if (literalTotal !== 5) {
+    console.error(`AVEUGLE : total littéral attendu 5, obtenu ${literalTotal}.`);
     return 1;
   }
-  if (perFile.length !== 4 || perFile.some((f) => f.path === 'App/Empty.swift')) {
-    console.error(`AVEUGLE : un fichier sans occurrence ne doit pas figurer dans le détail, obtenu ${JSON.stringify(perFile)}.`);
+  if (perFileLiteral.length !== 3 || perFileLiteral.some((f) => f.path === 'App/Empty.swift')) {
+    console.error(`AVEUGLE : un fichier sans littéral ne doit pas figurer dans le détail, obtenu ${JSON.stringify(perFileLiteral)}.`);
     return 1;
   }
-  const docOnly = perFile.find((f) => f.path === 'App/DocOnly.swift');
-  if (!docOnly || docOnly.count !== 1) {
+  const docOnlyLiteral = perFileLiteral.find((f) => f.path === 'App/DocOnly.swift');
+  if (docOnlyLiteral) {
     console.error(
-      `AVEUGLE : DocOnly.swift ne doit compter que son unique usage réel (les mentions en commentaire ne comptent pas), obtenu ${JSON.stringify(docOnly)}.`,
+      `AVEUGLE : DocOnly.swift n'a aucun littéral RÉEL (son unique usage réel est une variable) — les mentions en commentaire ne comptent pas, obtenu ${JSON.stringify(docOnlyLiteral)}.`,
     );
     return 1;
   }
+
   // Un cliquet qui ne compte QUE le texte — la régression exacte de #5883 —
   // doit être distingué explicitement : rejouer le comptage textuel brut sur
-  // DocOnly.swift doit rendre PLUS que le comptage conscient des commentaires.
+  // DocOnly.swift doit rendre PLUS que son unique usage réel.
   const textualDocOnlyMatches = world.find((f) => f.path === 'App/DocOnly.swift').source.match(HARDCODED_COLOR_RE);
-  if (!textualDocOnlyMatches || textualDocOnlyMatches.length <= docOnly.count) {
+  if (!textualDocOnlyMatches || textualDocOnlyMatches.length <= 1) {
     console.error('AVEUGLE : le monde de test ne distingue pas un comptage conscient des commentaires d\'un comptage textuel.');
     return 1;
   }
-  const screen = perFile.find((f) => f.path === 'App/Screen.swift');
-  if (!screen || screen.count !== 2) {
-    console.error(`AVEUGLE : App/Screen.swift doit compter 2 occurrences, obtenu ${JSON.stringify(screen)}.`);
+
+  // Variables ADMISES (#6511) : les trois formes de AccentUsage.swift —
+  // aucune ne doit peser sur un cliquet.
+  if (admittedVariableTotal !== 3) {
+    console.error(`AVEUGLE : total de variables admises attendu 3, obtenu ${admittedVariableTotal}.`);
+    return 1;
+  }
+  if (!isAdmittedAccentArgument('accentColor') || !isAdmittedAccentArgument('conversation.accentColor')) {
+    console.error('AVEUGLE : accentColor (nu ou qualifié) doit être une variable admise.');
+    return 1;
+  }
+  if (!isAdmittedAccentArgument('conversation.colorPalette.primary')) {
+    console.error('AVEUGLE : colorPalette.primary (qualifié) doit être une variable admise.');
+    return 1;
+  }
+  if (isAdmittedAccentArgument('accentHex') || isAdmittedAccentArgument('resolvedAccent')) {
+    console.error('AVEUGLE : un nom qui ne fait QUE ressembler à accentColor (accentHex, resolvedAccent) ne doit pas être admis — la ressemblance n\'est pas l\'identité.');
     return 1;
   }
 
-  if (evaluateRatchet(957, 957) !== RESULT.OK) {
-    console.error('AVEUGLE : un compte égal à la référence doit être OK.');
+  // Variables INCONNUES (#6511) : DocOnly (1, `accentHex`) + AccentUsage (2,
+  // `contactColor` et l'appel imbriqué) = 3.
+  if (unknownVariableTotal !== 3) {
+    console.error(`AVEUGLE : total de variables inconnues attendu 3, obtenu ${unknownVariableTotal}.`);
     return 1;
   }
-  if (evaluateRatchet(958, 957) !== RESULT.REGRESSION) {
-    console.error('AVEUGLE : une régression (+1 couleur en dur) doit être détectée.');
+  const docOnlyUnknown = perFileUnknownVariable.find((f) => f.path === 'App/DocOnly.swift');
+  if (!docOnlyUnknown || docOnlyUnknown.count !== 1) {
+    console.error(`AVEUGLE : DocOnly.swift doit compter 1 variable inconnue (accentHex), obtenu ${JSON.stringify(docOnlyUnknown)}.`);
     return 1;
   }
-  if (evaluateRatchet(956, 957) !== RESULT.UNRECORDED_IMPROVEMENT) {
-    console.error('AVEUGLE : une amélioration non enregistrée (-1) doit être détectée.');
+  const accentUsageUnknown = perFileUnknownVariable.find((f) => f.path === 'App/AccentUsage.swift');
+  if (!accentUsageUnknown || accentUsageUnknown.count !== 2) {
+    console.error(
+      `AVEUGLE : AccentUsage.swift doit compter 2 variables inconnues (contactColor, l'appel imbriqué), obtenu ${JSON.stringify(accentUsageUnknown)}.`,
+    );
     return 1;
   }
 
-  // stripComments elle-même, isolée de countHardcodedColors : une chaîne
-  // contenant un `//` (URL) ne doit PAS être tronquée — c'est le piège que le
-  // doc-comment de `AppSourceGuard.stripComments` nomme explicitement.
+  // Analyseur d'argument : un appel imbriqué (`Color(hex: LanguageDisplay.colorHex(for: code))`)
+  // ne doit pas se refermer sur la première parenthèse rencontrée.
+  const nestedArgument = parseColorHexArgument('Color(hex: LanguageDisplay.colorHex(for: code))', 'Color(hex:'.length);
+  if (nestedArgument.kind !== 'variable' || nestedArgument.text !== 'LanguageDisplay.colorHex(for: code)') {
+    console.error(`AVEUGLE : l'analyseur d'argument a mal géré un appel imbriqué, obtenu ${JSON.stringify(nestedArgument)}.`);
+    return 1;
+  }
+
+  // Les deux cliquets, chacun à DEUX SENS, indépendamment.
+  if (evaluateRatchet(163, 163) !== RESULT.OK) {
+    console.error('AVEUGLE : un compte littéral égal à la référence doit être OK.');
+    return 1;
+  }
+  if (evaluateRatchet(164, 163) !== RESULT.REGRESSION) {
+    console.error('AVEUGLE : une régression littérale (+1) doit être détectée.');
+    return 1;
+  }
+  if (evaluateRatchet(162, 163) !== RESULT.UNRECORDED_IMPROVEMENT) {
+    console.error('AVEUGLE : une amélioration littérale non enregistrée (-1) doit être détectée.');
+    return 1;
+  }
+  if (evaluateRatchet(380, 380) !== RESULT.OK) {
+    console.error('AVEUGLE : un compte de variables inconnues égal à la référence doit être OK.');
+    return 1;
+  }
+  if (evaluateRatchet(381, 380) !== RESULT.REGRESSION) {
+    console.error('AVEUGLE : une régression de variables inconnues (+1) doit être détectée.');
+    return 1;
+  }
+  if (evaluateRatchet(379, 380) !== RESULT.UNRECORDED_IMPROVEMENT) {
+    console.error('AVEUGLE : une amélioration de variables inconnues non enregistrée (-1) doit être détectée.');
+    return 1;
+  }
+
+  // stripComments elle-même, isolée de classifyColorHexOccurrences : une
+  // chaîne contenant un `//` (URL) ne doit PAS être tronquée — c'est le piège
+  // que le doc-comment de `AppSourceGuard.stripComments` nomme explicitement.
   const withUrl = stripComments('let url = "https://meeshy.me/x" // vrai commentaire\nlet n = 1');
   if (!withUrl.includes('"https://meeshy.me/x"') || withUrl.includes('vrai commentaire')) {
     console.error(`AVEUGLE : stripComments a tronqué un littéral contenant //, obtenu ${JSON.stringify(withUrl)}.`);
@@ -292,48 +548,42 @@ const selfTest = () => {
     return 1;
   }
 
-  console.log('self-test : 9/9 vérifications passées (stripComments, comptage par fichier, total, cliquet à deux sens).');
+  console.log('self-test : 15/15 vérifications passées (stripComments, classification à trois formes, analyseur d\'argument, deux cliquets à deux sens).');
   return 0;
 };
 
 const main = () => {
   if (process.argv.includes('--self-test')) return selfTest();
 
-  const { total, perFile } = countHardcodedColors(readWorld(REPO_ROOT, SEARCH_ROOTS));
-  const verdict = evaluateRatchet(total, BASELINE_HARDCODED_COLOR_COUNT);
+  const {
+    literalTotal,
+    admittedVariableTotal,
+    unknownVariableTotal,
+    perFileLiteral,
+    perFileUnknownVariable,
+  } = classifyColorHexOccurrences(readWorld(REPO_ROOT, SEARCH_ROOTS));
 
-  if (verdict === RESULT.OK) {
-    console.log(
-      `Couleurs en dur hors Theme (iOS) : ${total} occurrence(s) de Color(hex:), conforme à la référence (${BASELINE_HARDCODED_COLOR_COUNT}).`,
-    );
-    return 0;
-  }
-
-  if (verdict === RESULT.REGRESSION) {
-    const added = total - BASELINE_HARDCODED_COLOR_COUNT;
-    console.error(
-      `RÉGRESSION : ${total} occurrences de Color(hex:) hors Theme, ${added} de plus que la référence (${BASELINE_HARDCODED_COLOR_COUNT}).`,
-    );
-    console.error(
-      "Un composant lié au contexte d'une conversation doit utiliser accentColor/colorPalette, jamais une couleur en dur " +
-        '(CLAUDE.md § Conversation Accent Color) : remplacez le nouvel appel, ou documentez ici pourquoi il est légitime ' +
-        '(couleur sémantique statique) et relevez BASELINE_HARDCODED_COLOR_COUNT dans ce script.',
-    );
-    console.error(
-      `Fichiers les plus chargés : ${perFile
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 10)
-        .map((f) => `${f.path} (${f.count})`)
-        .join(', ')}`,
-    );
-    return 1;
-  }
-
-  console.error(
-    `AMÉLIORATION NON ENREGISTRÉE : ${total} occurrences de Color(hex:) hors Theme, en dessous de la référence (${BASELINE_HARDCODED_COLOR_COUNT}). ` +
-      `Abaissez BASELINE_HARDCODED_COLOR_COUNT à ${total} dans ce script.`,
+  console.log(
+    `Couleurs en dur hors Theme (iOS) : ${literalTotal} littéral(aux), ${admittedVariableTotal} variable(s) admise(s) ` +
+      `(accentColor/colorPalette — hors cliquet), ${unknownVariableTotal} variable(s) inconnue(s).`,
   );
-  return 1;
+
+  const literalOk = reportRatchet(
+    'Littéraux Color(hex: "…")',
+    literalTotal,
+    REFERENCE_LITERAL_COLOR_COUNT,
+    perFileLiteral,
+    'REFERENCE_LITERAL_COLOR_COUNT',
+  );
+  const unknownOk = reportRatchet(
+    'Variables inconnues Color(hex: …)',
+    unknownVariableTotal,
+    REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT,
+    perFileUnknownVariable,
+    'REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT',
+  );
+
+  return literalOk && unknownOk ? 0 : 1;
 };
 
 if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {

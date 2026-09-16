@@ -542,35 +542,10 @@ struct OutboxDispatcher: OutboxDispatching {
     /// `{ content, parentId? }`.
     private func dispatchCreateComment(_ record: OutboxRecord) async throws {
         let payload = try decodePayload(record, as: CreateCommentPayload.self)
-        struct CreateCommentBody: Encodable {
-            let content: String
-            let parentId: String?
-            /// Lieu partagé — même clé `location` que le chemin direct
-            /// (`PostService.addComment`), hissée par le gateway depuis
-            /// `metadata.location`.
-            let location: SharedPlace?
-            let effectFlags: Int?
-
-            enum CodingKeys: String, CodingKey { case content, parentId, location, effectFlags }
-
-            func encode(to encoder: Encoder) throws {
-                var container = encoder.container(keyedBy: CodingKeys.self)
-                try container.encode(content, forKey: .content)
-                if let parentId { try container.encode(parentId, forKey: .parentId) }
-                try container.encodeIfPresent(location, forKey: .location)
-                try container.encodeIfPresent(effectFlags, forKey: .effectFlags)
-            }
-        }
-        let body = CreateCommentBody(
-            content: payload.content,
-            parentId: payload.parentCommentId,
-            location: payload.location,
-            effectFlags: payload.effectFlags
-        )
         let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
             PostsEndpoint.byPostIdComments(postId: payload.postId),
             method: "POST",
-            body: try JSONEncoder().encode(body),
+            body: try CreateCommentBody.encoded(for: payload),
             queryItems: nil,
             headers: ["X-Client-Mutation-Id": payload.clientMutationId]
         )
@@ -655,6 +630,73 @@ nonisolated struct ToggleLikePostBody: Encodable {
     /// `nil` sans emoji : un like simple ne change pas de forme sur le fil.
     static func encoded(for payload: ToggleLikePostPayload) throws -> Data? {
         try payload.emoji.map { try JSONEncoder().encode(ToggleLikePostBody(emoji: $0)) }
+    }
+}
+
+// MARK: - createComment wire body
+
+/// Corps de `POST /posts/:postId/comments` — la forme que `CreateCommentSchema`
+/// lit côté gateway, et l'ULTIME saut d'un commentaire rejoué depuis la file
+/// durable.
+///
+/// Il vivait NESTÉ dans `dispatchCreateComment`, donc hors d'atteinte de tout
+/// témoin : retirer une clé de cet encodeur ne faisait rougir nulle part, et le
+/// voyage de la langue d'écriture (#6587) s'arrêtait au dernier mètre sans un
+/// seul signal. Hissé au fichier, `nonisolated` et `internal` comme
+/// `MarkAsReadBody` et `ToggleLikePostBody` — le dispatch hérite de l'isolation
+/// de son appelant, et le contrat d'encodage se lit depuis `MeeshyTests`.
+nonisolated struct CreateCommentBody: Encodable {
+    let content: String
+    let parentId: String?
+    /// Lieu partagé — même clé `location` que le chemin direct
+    /// (`PostService.addComment`), hissée par le gateway depuis
+    /// `metadata.location`.
+    let location: SharedPlace?
+    let effectFlags: Int?
+    /// Langue d'ÉCRITURE déclarée par l'auteur (#6587) — `CreateCommentSchema`
+    /// l'accepte côté gateway, et `PostTranslationService.translateComment`
+    /// ne retombe sur son heuristique de mots QUE si la clé est absente.
+    /// Encodée en `encodeIfPresent` : une ligne gravée avant le champ rejoue
+    /// sans la clé, donc sous le repli, exactement comme avant.
+    let originalLanguage: String?
+    /// **L'ANCRE du média cité** (#6578) — l'ULTIME saut d'une citation rejouée
+    /// depuis la file durable. Le serveur attend un OBJET
+    /// (`quotedPostMedia: { postMediaId }`) et REFUSE en 400 un média étranger
+    /// au post commenté : encoder une chaîne plate ferait échouer l'envoi
+    /// entier, pas seulement la citation.
+    let quotedPostMediaId: String?
+
+    enum CodingKeys: String, CodingKey {
+        case content, parentId, location, effectFlags, originalLanguage, quotedPostMedia
+    }
+
+    private struct QuotedPostMediaAnchor: Encodable { let postMediaId: String }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(content, forKey: .content)
+        if let parentId { try container.encode(parentId, forKey: .parentId) }
+        try container.encodeIfPresent(location, forKey: .location)
+        try container.encodeIfPresent(effectFlags, forKey: .effectFlags)
+        try container.encodeIfPresent(originalLanguage, forKey: .originalLanguage)
+        // `encodeIfPresent` : une ligne gravée avant le champ rejoue SANS la
+        // clé, donc exactement comme avant.
+        try container.encodeIfPresent(
+            quotedPostMediaId.map { QuotedPostMediaAnchor(postMediaId: $0) },
+            forKey: .quotedPostMedia
+        )
+    }
+
+    /// SEUL site qui traduit un `CreateCommentPayload` persisté en octets HTTP.
+    static func encoded(for payload: CreateCommentPayload) throws -> Data {
+        try JSONEncoder().encode(CreateCommentBody(
+            content: payload.content,
+            parentId: payload.parentCommentId,
+            location: payload.location,
+            effectFlags: payload.effectFlags,
+            originalLanguage: payload.originalLanguage,
+            quotedPostMediaId: payload.quotedPostMediaId
+        ))
     }
 }
 

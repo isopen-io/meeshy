@@ -1,4 +1,5 @@
 import type { SessionState } from './api/session';
+import { safeReturnPath } from './view/magic-link';
 
 /**
  * LA GARDE DE ROUTE (#5555, E6) — pure. Elle décide, elle ne navigue pas :
@@ -47,12 +48,85 @@ export type RouteKey =
   | 'settings'
   | 'admin'
   | 'adminUsers'
+  /**
+   * LA NOUVELLE ADMINISTRATION (#6795) — `/adm`, qui absorbera les vues de
+   * l'ancienne une à une pendant que `/admin` lui reste réservée.
+   *
+   * Elle est déclarée ICI et pas seulement dans la table : une route que cette
+   * loi ne connaît pas est PUBLIQUE par défaut (voir `routeKey` plus bas), et
+   * une porte d'administration publique s'ouvrirait à un visiteur sans session
+   * — l'exact contraire de ce que `admin`/`adminUsers` obtiennent deux lignes
+   * plus haut. L'oubli ne rougirait nulle part : l'écran se peindrait, puis le
+   * serveur refuserait.
+   */
+  | 'adm'
+  | 'admUsers'
+  /**
+   * LE DÉTAIL D'UN MEMBRE (#6819) — `/admin/users/$user` et `/adm/users/$user`,
+   * les deux adresses d'un même écran, comme leurs listes.
+   *
+   * Elles sont déclarées ici pour la raison écrite juste au-dessus, et elle
+   * pèse davantage sur un DÉTAIL que sur une liste : cet écran porte l'édition,
+   * la réinitialisation de mot de passe, la désactivation et le bannissement.
+   * Oubliée, l'adresse serait publique — un visiteur sans session la peindrait
+   * avant que le serveur ne refuse, et lirait au passage l'identifiant qu'il a
+   * tapé dans un écran d'administration.
+   */
+  | 'adminUser'
+  | 'admUser'
+  /**
+   * LES CONVERSATIONS DE L'INSTANCE (#6862) — `/admin/conversations` et
+   * `/adm/conversations`.
+   *
+   * Déclarées ici pour la raison écrite plus haut, et elle pèse ici autant que
+   * sur le détail d'un membre : cet écran ouvre l'INVENTAIRE des conversations
+   * — qui parle à qui, dans quels groupes. Oubliée, l'adresse serait PUBLIQUE
+   * par défaut, et un visiteur sans session la peindrait avant que le serveur
+   * ne refuse.
+   */
+  | 'adminConversations'
+  | 'admConversations'
+  /**
+   * LA LECTURE D'UNE CONVERSATION (#6862) — l'écran qui OUVRE le contenu,
+   * sous motif écrit et trace. De toutes les adresses d'administration, c'est
+   * celle dont l'oubli coûterait le plus : publique par défaut, elle se
+   * peindrait pour un visiteur sans session, qui y lirait au passage
+   * l'identifiant de conversation qu'il a tapé.
+   */
+  | 'adminConversation'
+  | 'admConversation'
   | 'login'
   | 'signup'
   | 'welcome'
   | 'magicLink'
   | 'magicLinkValidate'
-  | 'forgotPassword';
+  | 'forgotPassword'
+  /**
+   * LA JONCTION PAR LIEN (#5561) — dans AUCUN ensemble, comme
+   * `magicLinkValidate`. `/chat/:link` est la seule adresse de conversation
+   * qui sert quelqu'un sans compte, et la seule où un compte connecté
+   * REJOINT : privée, elle renverrait l'invité vers la connexion avant qu'il
+   * sache à quoi il est invité ; d'authentification, elle renverrait le
+   * membre vers `/` avant qu'il ait pu rejoindre. L'écran lit la session
+   * lui-même pour choisir entre « Rejoindre » et ses deux sorties.
+   */
+  | 'chatJoin'
+  /**
+   * LES LIENS REÇUS (#6714, #6715) — dans AUCUN ensemble, comme
+   * `magicLinkValidate` et `chatJoin` : un lien reçu s'ouvre quel que soit le
+   * statut. `/l/:token` et `/account/deletion?token=` sont PUBLICS par nature
+   * — la passerelle ne les authentifie pas, et annuler sa suppression ne doit
+   * pas exiger l'accès au compte. `/settings/verify-email-change` et
+   * `/settings/notifications` agissent sur le compte CONNECTÉ, mais une
+   * redirection d'ici vers `/login` PERDRAIT le jeton de l'e-mail, faute de
+   * chemin de retour : leurs écrans lisent la session eux-mêmes, ne dépensent
+   * rien sans elle, et disent qu'il faut se connecter.
+   */
+  | 'trackingLink'
+  | 'trackingLinkExpired'
+  | 'accountDeletion'
+  | 'verifyEmailChange'
+  | 'settingsNotifications';
 
 export type RouteAccessDecision = 'allow' | 'redirect-login' | 'redirect-home' | 'redirect-welcome';
 
@@ -114,6 +188,14 @@ const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
   'settings',
   'admin',
   'adminUsers',
+  'adminUser',
+  'adm',
+  'admUsers',
+  'admUser',
+  'adminConversations',
+  'admConversations',
+  'adminConversation',
+  'admConversation',
 ]);
 const AUTH_ROUTES: ReadonlySet<string> = new Set<RouteKey>(['login', 'signup', 'welcome', 'magicLink', 'forgotPassword']);
 
@@ -138,6 +220,23 @@ export function resolveRouteAccess(input: {
 
   if (PRIVATE_ROUTES.has(input.routeKey)) {
     if (input.sessionStatus === 'authenticated') return 'allow';
+    /**
+     * L'INVITÉ D'UN LIEN N'ENTRE QUE DANS SON FIL (#5561).
+     *
+     * Il a une session, donc une créance — mais elle n'ouvre qu'UNE
+     * conversation : `GET /links/:identifier/messages` rend 403 à la session
+     * d'un autre lien, et toutes les autres routes privées (la liste, le Flux,
+     * les réglages, le profil, l'administration) exigent un COMPTE. L'y laisser
+     * entrer ouvrirait des écrans qui se peignent puis reçoivent un 401 en
+     * silence — la classe de défaut que les commentaires ci-dessus décrivent
+     * pour `stories`, `feed` et `settings`.
+     *
+     * L'accueil (`redirect-welcome`) n'est PAS proposé à un invité : il a déjà
+     * franchi une porte d'entrée, et le renvoyer à « bienvenue » effacerait ce
+     * qu'il vient de faire. Il va à la connexion, qui est le seul chemin vers
+     * les écrans qu'il demande.
+     */
+    if (input.sessionStatus === 'guest') return input.routeKey === 'thread' ? 'allow' : 'redirect-login';
     return (input.welcomeCompleted ?? true) ? 'redirect-login' : 'redirect-welcome';
   }
 
@@ -146,4 +245,39 @@ export function resolveRouteAccess(input: {
   }
 
   return 'allow';
+}
+
+/**
+ * `next` — OÙ REVENIR APRÈS S'ÊTRE CONNECTÉ (#5561), ou `null`.
+ *
+ * La valeur vient de l'ADRESSE, donc de quiconque a fabriqué le lien. La garde
+ * de même origine — y compris le refus des blancs et caractères de contrôle
+ * que le parseur d'URL efface (#6743 : `/\t/evil.com` devient `//evil.com`,
+ * et `history.replaceState` LÈVE sur une autre origine, faisant tomber
+ * `SessionGate`, `main.tsx`) — est celle de `safeReturnPath`
+ * (`view/magic-link.ts`, le retour d'un lien magique) : UNE SEULE garde,
+ * réemployée, jamais recopiée. Deux clampages d'une même valeur hostile
+ * divergeraient au premier correctif.
+ *
+ * `null` plutôt que `'/'` : un appelant doit pouvoir savoir qu'il n'y a RIEN à
+ * transmettre (le lien « Créer un compte » ne porte pas un `next=/` inventé).
+ */
+export function safeNextPath(raw: string | null): string | null {
+  if (raw === null || raw === '') return null;
+  return safeReturnPath(raw) === raw ? raw : null;
+}
+
+/**
+ * LA DESTINATION D'UNE SESSION QUI VIENT DE S'OUVRIR — `next` s'il est sûr,
+ * l'accueil sinon. L'accueil est FOURNI par l'appelant (`href('list')`) : ce
+ * module décide, il ne connaît pas le routeur.
+ *
+ * Elle sert les TROIS sites qui naviguent quand une session s'établit sur un
+ * écran d'authentification — `SessionGate` (`redirect-home`), la connexion et
+ * l'inscription. Ils partent du même rendu : si l'un seulement honorait
+ * `next`, le parent (`SessionGate`, dont l'effet s'exécute APRÈS celui de
+ * l'écran) le recouvrirait par `/`.
+ */
+export function landingAfterSession(next: string | null, home: string): string {
+  return safeNextPath(next) ?? home;
 }

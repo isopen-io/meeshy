@@ -44,3 +44,38 @@ export function parseWaveformField(raw: unknown): number[] {
     return [];
   }
 }
+
+/**
+ * Nombre d'échantillons rendus par la capture SERVEUR (#6602) — assez pour un
+ * sélecteur de zone lisible, très en-deçà de `MAX_WAVEFORM_SAMPLES`.
+ */
+export const COMPUTED_WAVEFORM_SAMPLES = 100;
+
+/**
+ * Réduit un flux PCM 16 bits signé, MONO, en `targetSamples` amplitudes de
+ * crête normalisées dans `[0, 1]` — une valeur par tranche égale du flux.
+ *
+ * Fonction PURE, sans E/S : c'est le décodage (ffmpeg, cf. `SoundCaptureService`)
+ * qui produit ce buffer, jamais cette fonction — elle reste testable sans
+ * binaire externe. Un buffer vide ou plus court qu'un seul échantillon 16 bits
+ * rend `[]`, jamais une division par zéro.
+ */
+export function pcm16ToWaveform(pcm: Buffer, targetSamples: number = COMPUTED_WAVEFORM_SAMPLES): number[] {
+  const sampleCount = Math.floor(pcm.length / 2);
+  if (sampleCount === 0 || targetSamples <= 0) return [];
+
+  const bucketSize = Math.max(1, Math.floor(sampleCount / targetSamples));
+  const result: number[] = [];
+
+  for (let start = 0; start < sampleCount && result.length < targetSamples; start += bucketSize) {
+    const end = Math.min(start + bucketSize, sampleCount);
+    let peak = 0;
+    for (let i = start; i < end; i++) {
+      const amplitude = Math.abs(pcm.readInt16LE(i * 2));
+      if (amplitude > peak) peak = amplitude;
+    }
+    result.push(Math.min(1, peak / 32768));
+  }
+
+  return result;
+}

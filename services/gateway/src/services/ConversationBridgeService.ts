@@ -110,6 +110,7 @@ import {
   type PersonalHistoryHiding,
 } from './personalHistoryFilter';
 import { resolveAttachmentType } from './ConversationMessageStatsService';
+import { withOrphanedSenderRepair } from './messaging/withOrphanedSenderRepair';
 import { logger } from '../utils/logger';
 
 /**
@@ -431,25 +432,30 @@ export class ConversationBridgeService {
       // conversation entre en premier. Si le plafond global tronque, ce sont
       // les messages les plus RÉCENTS qui manquent — la fenêtre reste ancrée
       // sur le premier non-lu, et sa partialité se déclare.
-      const rows: WindowMessageRow[] = await this.prisma.message.findMany({
-        where: { OR: clauses },
-        orderBy: { createdAt: 'asc' },
-        take,
-        select: {
-          id: true,
-          conversationId: true,
-          senderId: true,
-          messageType: true,
-          sender: {
-            select: {
-              displayName: true,
-              nickname: true,
-              user: { select: { displayName: true } },
+      // Un expéditeur disparu faisait rejeter la fenêtre ENTIÈRE, et le lot
+      // perdait tous ses ponts (#6501) : la passe répare ce qu'elle lit, puis
+      // rejoue UNE fois. Toute autre erreur garde la posture d'échec ci-dessous.
+      const rows: WindowMessageRow[] = await withOrphanedSenderRepair({ prisma: this.prisma, conversationIds }, () =>
+        this.prisma.message.findMany({
+          where: { OR: clauses },
+          orderBy: { createdAt: 'asc' },
+          take,
+          select: {
+            id: true,
+            conversationId: true,
+            senderId: true,
+            messageType: true,
+            sender: {
+              select: {
+                displayName: true,
+                nickname: true,
+                user: { select: { displayName: true } },
+              },
             },
+            attachments: { select: { mimeType: true } },
           },
-          attachments: { select: { mimeType: true } },
-        },
-      });
+        })
+      );
 
       // ── Regroupement puis appel de la LOI, une fois par conversation ──────
       const windowByConversation = new Map<string, BridgeMessage[]>();
@@ -699,30 +705,34 @@ export class ConversationBridgeService {
       // Ni `senderId` ni `id.notIn` ici : les deux coupes sont par lecteur
       // (cf. doc-comment). `id` est sélectionné parce que le masquage
       // individuel se lit dessus.
-      const rows: ViewerWindowMessageRow[] = await this.prisma.message.findMany({
-        where: {
-          conversationId: params.conversationId,
-          deletedAt: null,
-          ...(minFloorMs !== null ? { createdAt: { gt: new Date(minFloorMs) } } : {}),
-        },
-        orderBy: { createdAt: 'asc' },
-        take,
-        select: {
-          id: true,
-          conversationId: true,
-          createdAt: true,
-          senderId: true,
-          messageType: true,
-          sender: {
-            select: {
-              displayName: true,
-              nickname: true,
-              user: { select: { displayName: true } },
+      const rows: ViewerWindowMessageRow[] = await withOrphanedSenderRepair(
+        { prisma: this.prisma, conversationIds: [params.conversationId] },
+        () =>
+          this.prisma.message.findMany({
+            where: {
+              conversationId: params.conversationId,
+              deletedAt: null,
+              ...(minFloorMs !== null ? { createdAt: { gt: new Date(minFloorMs) } } : {}),
             },
-          },
-          attachments: { select: { mimeType: true } },
-        },
-      });
+            orderBy: { createdAt: 'asc' },
+            take,
+            select: {
+              id: true,
+              conversationId: true,
+              createdAt: true,
+              senderId: true,
+              messageType: true,
+              sender: {
+                select: {
+                  displayName: true,
+                  nickname: true,
+                  user: { select: { displayName: true } },
+                },
+              },
+              attachments: { select: { mimeType: true } },
+            },
+          })
+      );
 
       // ── Resserrement PAR LECTEUR, puis appel de la LOI ───────────────────
       for (const viewerWindow of windows) {

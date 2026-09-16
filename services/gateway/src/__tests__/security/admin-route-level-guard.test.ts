@@ -97,7 +97,17 @@ describe('Chaque route /admin/* montée déclare une garde de permission', () =>
     ]);
 
     const sansGarde = adminRoutes
-      .filter((r) => r.securityBasisKey !== 'permission-gated' && r.securityBasisKey !== 'sovereign')
+      // `admin-rank` (#6862) rejoint les deux bases déjà admises : elle GARDE,
+      // et plus strictement qu'une permission seule — BIGBOSS ou ADMIN, quand
+      // `permission-gated` laisserait passer tout porteur de la permission,
+      // MODERATOR compris. L'omettre ici aurait fait passer une route MIEUX
+      // gardée pour une route sans garde.
+      .filter(
+        (r) =>
+          r.securityBasisKey !== 'permission-gated' &&
+          r.securityBasisKey !== 'sovereign' &&
+          r.securityBasisKey !== 'admin-rank',
+      )
       .map((r) => ({ key: `${r.method} ${r.path}`, ligne: `${r.method} ${r.path}  (${r.securityBasisKey}, module ${r.module})` }))
       .filter(({ key }) => !EXCEPTIONS_JUSTIFIEES.has(key))
       .map(({ ligne }) => ligne);
@@ -116,31 +126,80 @@ describe('Chaque route /admin/* montée déclare une garde de permission', () =>
     expect(new Set(exceptionsEncoreValides)).toEqual(EXCEPTIONS_JUSTIFIEES);
   });
 
-  // #4157, critère 2 : trois gestes montent en S6 (souverain, BIGBOSS seul).
-  // Les deux premiers (`agent.ts` — `PUT /llm`, `DELETE /reset`) sont livrés
-  // depuis #4157 ; le troisième (lecture d'une conversation privée,
-  // `GET /admin/conversations/:id/messages`) restait délibérément hors de ce
-  // test — la garde ci-dessous existait, mais n'était pas encore `sovereign`
-  // (#4333 c.3 l'y a fait monter ; la route vit dans
-  // `admin/conversation-messages-sovereign.ts`, appelée depuis
-  // `userAdminRoutes`, jamais dans un `admin/messages.ts` qui n'existe pas).
-  it('PUT /admin/agent/llm, DELETE /admin/agent/reset et GET /admin/conversations/:id/messages montent en S6 (souverain)', async () => {
+  // #4157, critère 2 : DEUX gestes restent en S6 (souverain, BIGBOSS seul) —
+  // `agent.ts` : `PUT /llm`, `DELETE /reset`. Ils touchent à la configuration
+  // du service lui-même : « qui POSSÈDE ce service » plutôt que « qui
+  // l'administre », et aucune permission de domaine ne doit pouvoir le
+  // déléguer.
+  it('PUT /admin/agent/llm et DELETE /admin/agent/reset montent en S6 (souverain)', async () => {
     const artifact = await buildRouteManifest();
     const cible = (method: string, path: string) =>
       artifact.routes.find((r) => r.method === method && r.path === path);
 
     const putLlm = cible('PUT', '/api/v1/admin/agent/llm');
     const deleteReset = cible('DELETE', '/api/v1/admin/agent/reset');
-    const conversationMessages = cible('GET', '/api/v1/admin/conversations/:conversationId/messages');
 
     expect(putLlm).toBeDefined();
     expect(deleteReset).toBeDefined();
-    expect(conversationMessages).toBeDefined();
     expect(putLlm!.securityLevel).toBe('S6');
     expect(putLlm!.securityBasisKey).toBe('sovereign');
     expect(deleteReset!.securityLevel).toBe('S6');
     expect(deleteReset!.securityBasisKey).toBe('sovereign');
-    expect(conversationMessages!.securityLevel).toBe('S6');
-    expect(conversationMessages!.securityBasisKey).toBe('sovereign');
+  });
+
+  /**
+   * **LA LECTURE D'UNE CONVERSATION PRIVÉE A CHANGÉ DE SEUIL** — directive
+   * porteur du 2026-09-16 : « permettre aussi aux ADMIN de pouvoir accéder à
+   * ces informations **pour le moment** ».
+   *
+   * `GET /admin/conversations/:id/messages` était le TROISIÈME geste S6 de
+   * #4157 c.2 (#4333 c.3 l'y avait fait monter). Elle descend en
+   * `permission-gated`, et ce témoin change AVEC elle plutôt que d'être
+   * supprimé : un cliquet qu'on retire cesse de garder, un cliquet qu'on
+   * déplace garde le nouveau seuil.
+   *
+   * Ce qui est exigé désormais, et qui n'est pas moins précis :
+   *
+   * - la route reste **gardée** (`permission-gated`, jamais
+   *   « authenticated-only ») — c'est ce que le premier test de ce fichier
+   *   balaie pour TOUTES les adresses `/admin` ;
+   * - son seuil de RANG (BIGBOSS ou ADMIN, jamais MODERATOR bien qu'il porte
+   *   `canManageConversations`) est gardé par les témoins comportementaux de
+   *   `admin-user-conversations.test.ts`, seuls capables de le voir — ce
+   *   fichier-ci ne lit que la BASE de la garde, jamais le rang qu'elle exige.
+   *
+   * Ce que la directive n'a PAS demandé, et qui n'a donc pas bougé : le motif
+   * écrit obligatoire et la trace `AdminAuditLog`. Un ADMIN lit ; sa lecture
+   * laisse la même empreinte qu'un BIGBOSS.
+   */
+  it("GET /admin/conversations/:id/messages reste GARDÉE après son passage en rang d'administration", async () => {
+    const artifact = await buildRouteManifest();
+    const conversationMessages = artifact.routes.find(
+      (r) => r.method === 'GET' && r.path === '/api/v1/admin/conversations/:conversationId/messages',
+    );
+
+    expect(conversationMessages).toBeDefined();
+    // `admin-rank` et non `permission-gated` : la route porte les DEUX gardes,
+    // et c'est la plus stricte qui la qualifie. Le collecteur la détecte par
+    // `UserRoleEnum.ADMIN`, testé avant le marqueur souverain — sans cet
+    // ordre, l'artefact annoncerait encore S6 une route qu'un ADMIN franchit.
+    expect(conversationMessages!.securityBasisKey).toBe('admin-rank');
+    // Le contraste qui donne sa valeur au témoin : une route qui perdrait sa
+    // garde retomberait ici, et non sur une valeur voisine.
+    expect(conversationMessages!.securityBasisKey).not.toBe('authenticated-only');
+  });
+
+  /**
+   * LE LISTING DE L'INSTANCE (#6861) porte le MÊME régime que la lecture de
+   * contenu : permission de domaine + rang d'administration. Ce témoin est
+   * distinct du précédent parce que les deux routes peuvent diverger — elles
+   * vivent dans deux fichiers, et rien d'autre ne les tient d'accord.
+   */
+  it('GET /admin/conversations monte en rang d\'administration', async () => {
+    const artifact = await buildRouteManifest();
+    const listing = artifact.routes.find((r) => r.method === 'GET' && r.path === '/api/v1/admin/conversations');
+
+    expect(listing).toBeDefined();
+    expect(listing!.securityBasisKey).toBe('admin-rank');
   });
 });

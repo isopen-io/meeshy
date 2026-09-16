@@ -2149,6 +2149,12 @@ n'affirme rien qu'il ne tienne pas.
 
 **Suivi #6308 — la mesure ci-dessus est désormais un GATE, pas seulement une prose.** `scripts/lib/glass-contrast.mjs` REJOUE la formule depuis les fichiers réels (`packages/design-tokens/ios.css` pour les tons/encres, `styles/glass.css` pour les densités) — aucune valeur recopiée, un jeton régénéré ou une densité modifiée change le résultat au prochain `bun test`. `glass-contrast.test.ts` reproduit d'abord le tableau ci-dessus à 70/78/80/92 % sur des valeurs fabriquées (la formule, falsifiée indépendamment du dépôt : baisser à 78 % fait tomber la pilule sous AA en clair), puis audite l'INVENTAIRE NOMMÉ des couples (ton, encre) réellement servis par une surface `glass*` (`GLASS_CONTRAST_INVENTORY` — pilule de jour, en-tête, l'annonce du presse-papiers, la loupe de la recherche flottante ; `--glass-accent` en est exclu, sa valeur variant par conversation). **L'audit a trouvé un défaut réel en cours d'écriture** : le sous-titre de l'en-tête (`thread-header.tsx`, « N participants » / « Chiffré de bout en bout ») peignait `--color-ios-ink-2` — semi-transparente, `color-mix(in srgb, #4338ca 80%, transparent)` en clair — sur la bande de verre à 80 %, pire cas : 3,58:1, sous la barre AA. Corrigé par `--color-ios-ink` (la hiérarchie visuelle reste par la taille, `text-mini`, pas par l'opacité) — la mesure de D-51 ne portait que sur DEUX encres (day-ink, l'encre primaire de l'en-tête) ; ce sous-titre n'y avait jamais figuré.
 
+**Suivi #6367 — l'inventaire était NOMMÉ à la main, jamais DÉRIVÉ des usages : sa clôture reconnaissait déjà « pas d'issue de suivi ouverte », rendant tout futur couple `glass*`/`ink*` invisible tant que personne ne se souvenait d'ajouter son entrée.** `glassInkUsages(text)` rejoue désormais, DEPUIS le JSX réel, la même relation d'héritage que `--glass-tone` en CSS : un tag qui porte `glass`/`glass-prominent` (+ `glass-card` pour le ton, `glass-accent` exclu comme au site) ouvre un CADRE hérité par ses descendants jusqu'à sa fermeture ; toute encre peinte dans ce cadre — sur le tag lui-même ou n'importe quel descendant — forme un couple avec lui. L'alias `--color-*` employé dans le JSX se résout vers le jeton `--ios-*` mesuré via `loadColorAliasMap()`, qui LIT `src/styles/ios.css` (son bloc `@theme inline`) au lieu de recopier la table : un alias absent de ce bloc (`--accent`, `--color-ok/warn/error`) n'est pas un jeton iOS fixe, il sort de la dérivation sans liste d'exclusion à la main. `derivedGlassInkPairs()` balaie tout `apps/web-v2/src/**/*.tsx` et `glassContrastCoverage()` est le GATE : tout couple dérivé absent de `GLASS_CONTRAST_INVENTORY` fait tomber `bun test` — c'est lui qui rougit sur un couple neuf, là où l'inventaire seul ne pouvait que garder ce qu'on y avait déjà écrit.
+
+**Comment un couple NEUF entre sous la garde** — poser une classe `glass`/`glass-prominent` avec une encre `--color-ios-*` fait ROUGIR `glassContrastCoverage` au prochain `bun test`, le message nommant le ton/l'encre/la densité et le(s) fichier(s) : (1) mesurer le ratio au pire cas (`glassWorstCaseContrast`, ou en composant depuis `loadIosSchemes()`/`loadGlassDensities()`) dans les DEUX schémas ; (2) s'il tient AA (texte ≥ 4,5, non-texte ≥ 3), ajouter l'entrée à `GLASS_CONTRAST_INVENTORY` avec son `site`, sa `kind` et, en commentaire, la mesure qui la justifie ; (3) sinon, changer l'encre pour une qui tient (voir le sous-titre de l'en-tête ci-dessus) — jamais assouplir le seuil ni exclure le couple par son nom. **L'audit dérivé a trouvé un second défaut réel en écrivant ce gate** : `thread-states.tsx` (`MinimalHeader`, l'en-tête minimal des écrans refusé/erreur, D-6) peignait le chevron de retour en `--color-ios-brand` nu sur la bande de verre par défaut — 2,78:1 en clair / 2,53:1 en sombre au pire cas, sous la barre AA non-texte (3:1) ; `--color-ios-brand` était déjà connu insuffisant pour du texte lisible ailleurs (`routes/notifications.tsx`, commentaire `BRAND_INK`), jamais mesuré ici parce que cette surface n'avait jamais figuré dans l'audit manuel du 2026-09-13. Corrigé par `--color-ios-ink`, même ton/densité que `thread-header.tsx` (mesuré ≥ 9,9:1 dans les deux schémas à 80 %).
+
+**Portée assumée** : la dérivation lit le JSX (`.tsx`), pas les feuilles CSS — les trois sites de `GLASS_INVENTORY` (`glass-site.mjs`) n'y peignent aucune encre `--ios-ink*`, donc ce n'est pas encore un usage réel à couvrir ; un couple posé un jour depuis une règle CSS (`.foo.glass { color: var(--ios-…) }`) échapperait à `glassInkUsages`, à rouvrir si ce cas apparaît.
+
 ## D-52 · L'interface a UN catalogue, sept langues, un chunk par langue — et aucun repli — 2026-09-13 (#6206)
 
 **Le constat.** web-v2 n'avait qu'un embryon de catalogue (`fr`/`en`, trois annonces). Tout le reste de l'interface était en français en dur, y compris le roster de frappe. Ce dernier était déjà rendu injectable par un formateur, mais aucun catalogue ne savait l'alimenter : `translate()` ne rendait que des chaînes plates, et une forme « un nom » ou « deux noms » ne pouvait pas s'y exprimer.
@@ -2281,6 +2287,8 @@ Le poids : `first_paint` était mesuré à 40,5 Ko (plafond 41, D-53) avant ce t
 **Le port** (`lib/api/app-preferences.ts`) lit `GET /api/v1/me/preferences?fields=…` pour ces sept valeurs et rien d'autre : le cache de requêtes est persisté, et un type faux rend la lecture ILLISIBLE plutôt qu'une valeur devinée — une bascule de confidentialité affichée à tort « désactivée » ferait croire au lecteur qu'il est caché. L'écriture `PATCH /api/v1/me/preferences` se range par catégorie. **Le geste est optimiste** (`app-preferences-actions.ts`) et **le retour arrière ne défait que les clés du geste refusé** : deux bascules rapprochées gardent chacune leur effet. Hors ligne, les bascules sont désactivées (#6325) ; le thème et la langue, qui ne dépendent d'aucun réseau, restent actifs.
 
 **Le legacy** (`lib/view/legacy-link.ts`) : origine ABSOLUE `https://meeshy.me` — une adresse relative mène à la page introuvable sur staging (qui ne sert que la v2.0) et dans les coques ; les onglets s'ouvrent par leur fragment (`/settings#security`, `#privacy`, `#notification`, `#media`, `#message`), la suppression de compte par `/account/deletion`. Nouvel onglet, et la rangée le DIT (« Version classique, nouvel onglet »). À la bascule, les fragments de `/settings` tomberont sous l'adresse que la v2.0 réclame (#6335).
+
+> **Mise à jour 2026-09-15 : le legacy est DÉCOMMISSIONNÉ (#6702), et ce paragraphe décrit un état qui n'existe plus.** Rien ne sert plus `https://meeshy.me/settings#…` hors de la v2. `lib/view/legacy-link.ts` est supprimé, et les entrées non portées (sécurité, confidentialité fine, notifications fines, médias, messages, export) sont **masquées** plutôt que laissées vers une adresse morte, chacune avec son issue de portage (#6720 à #6725). « Supprimer le compte » mène à `/account/deletion`, servie par la v2 (#6715), dans le même onglet. `settings.test.tsx` et `check-settings.mjs` exigent zéro lien vers une autre origine.
 
 **Le couloir.** `SETTINGS_TOP_RESERVE = FLOATING_CORRIDOR_BOTTOM − SETTINGS_HEADER_HEIGHT` : au repos, la carte de profil commence sous les deux disques, comme la cloche et le Flux. Mesuré à la première capture : sans cette réserve, les disques couvraient l'avatar et le chevron de la carte, et le test d'atteignabilité restait vert parce que le CENTRE de la carte était libre.
 
@@ -2451,3 +2459,423 @@ La route dépréciée `/friend-requests` n'est jamais appelée.
 **Mesuré.** `check-discover`, `check-links` et `check-calls` rejouent le double tap (deux clics au même point, 120 ms) et la coupure à cache froid telle qu'une coque la voit (`navigator.onLine`, événement `offline`, chunks disponibles). Sur un build où la porte vaut 0 ms et la pause se lit « chargement », `check-calls` rompt 8 invariants et `check-discover` / `check-links` échouent ; sur l'arbre livré, les trois sont verts. Catalogues 40,25 Ko (plafond 42), `calls` 4,85 Ko (6), `discover` 9,3 Ko (11).
 
 **Suivi hors lot.** Relations au-delà de la première page de cent (#6421). Onglets au clavier (#6422). Pastille « Hors ligne » sur la bande des onglets et filtres (#6401).
+
+## D-65 · Le menu flottant droit mène à l'administration pour qui en a la permission SERVIE ; le barreau vient EN DERNIER ; l'échelle resserre son pas plutôt que de sortir de l'écran — 2026-09-14 (#6458)
+
+**Directive porteur (2026-09-14)** : « Le menu droite doit avoir un élément pour accéder à l'espace administration qui a été intégré à présent ! » L'espace est servi depuis #6432 (`/admin`, `/admin/users`) ; l'échelle n'avait aucun barreau qui y mène.
+
+**Extension web assumée.** iOS n'a pas d'administration : `RootMenuLadderEntry.swift` garde ses six `case`, et `MENU_LADDER` reste leur miroir exact (le témoin d'ordre n'a pas bougé). Le septième barreau vit à part (`ADMIN_DESTINATION`, `lib/view/floating-menu.ts`) et `menuLadderFor({ canAccessAdmin })` rend l'échelle du lecteur : `MENU_LADDER` lui-même sans le droit, les six puis l'administration avec. Il n'est jamais monté puis masqué — un lien caché resterait dans le parcours de tabulation.
+
+**La place : la DERNIÈRE.** Les six barreaux d'iOS gardent leur rang, donc leur place sous le doigt : un administrateur qui passe de l'app native au web retrouve « Réglages » là où il l'a laissé, et un lecteur sans le droit voit exactement iOS. La destination la plus rare est la plus lointaine du disque. L'insérer avant « Réglages » aurait déplacé la roue dentée pour les seuls administrateurs — deux géographies selon le rôle.
+
+**Même mot, même icône** (dimension 6). Le nom est `admin.title` — celui de l'écran et de la rangée des Réglages, déjà dans les sept catalogues : une clé `root.menu.admin` aurait été une seconde écriture du même mot. Le glyphe est `key`, celui de la même rangée ; il vit au socle, zéro octet de glyphe. La teinte est un JETON de la palette dérivée d'iOS, `--ios-indigo-800` : la famille de la marque que la rangée porte, assez sombre pour ne pas se confondre au coin de l'œil avec « Appels » (indigo 500).
+
+**La garde : la matrice SERVIE, fail-closed.** `useAdminAccess` (`lib/view/use-admin-access.ts`) rend `true` seulement pour une session ouverte dont `GET /me/permissions` a été servi avec `canAccessAdmin` — le prédicat `canEnterAdmin` (`lib/admin/sections.ts`), que l'écran et la rangée des Réglages lisent aussi. Inconnue, en vol, 403, panne, matrice sans le droit, session refermée : aucun barreau, et rien ne le dit (une erreur affichée apprendrait à un visiteur ordinaire qu'un espace lui est refusé). Le barreau n'est qu'une DÉCOUVERTE : `/admin` refait sa garde, on y entre aussi par un lien profond. Aucune lecture sans session (un 401 fermerait une session inexistante) ni sous `fixtures` (l'administration n'a volontairement pas de démonstration).
+
+**Une seule lecture.** Les quatre `useQuery` de la matrice — écran, liste des comptes, rangée des Réglages, barreau — partagent `adminIdentityQueryOptions` (`lib/api/admin.ts`) : même clé, cinq minutes de fraîcheur, aucun nouvel essai. Une matrice déjà lue ouvre le barreau sans requête ; la persistance du cache la rend dès le démarrage suivant ; le client vide ce cache à chaque changement d'identité (`query-client.ts`), la matrice d'un compte ne survit pas à sa déconnexion.
+
+**Sept barreaux ne tenaient pas à 320 × 568 au pas d'iOS.** Depuis la pose par défaut : 152 + 61 + 6 × 58 + 23 = 584 > 568 — le dernier barreau sortait de l'écran EN SILENCE, le clavier y menant un focus invisible. `ladderPitch` (`lib/view/floating-pose.ts`) garde le pas d'iOS (58) tant que l'échelle tient et le RESSERRE sinon, jamais sous un air de quatre (50) ; la place est mesurée à l'ouverture et à la rotation (`ladderRooms`, du centre du disque au bord du cadre, marge 8, barre d'état lue sur le témoin de position `start`). Six barreaux gardent 58 partout où la charte mesure. Sept à 320 × 568 : 54 en descendant, 56 en montant ; 50 et 53 sous une barre d'état de 20.
+
+**Ce que la loi ne sauve pas, et où c'est suivi.** Un disque DÉPLACÉ à mi-hauteur d'un écran court (320 × 568, `y` ≈ 0,5) n'a d'aucun côté la place de six barreaux, même à l'air minimal : l'échelle y sortait déjà de l'écran avant ce lot, hérité de la loi de la moitié d'iOS. Suivi par une issue dédiée.
+
+**Mesuré.** `scripts/check-admin-rung.mjs` (`check:admin-rung`, composite et CI) sur un `dist` gateway, la matrice interceptée et toute autre requête abandonnée : sans session aucune lecture ; avec le droit, deux schémas × deux gabarits, sept barreaux entièrement dans l'écran aux deux poses, atteignables en leur centre, quatre d'air au moins ; `Entrée` ouvre, `Fin` pose le focus sur l'administration, `Bas` revient au premier, `Entrée` mène à `/admin` et referme l'échelle sur UNE seule lecture de la matrice ; sans le droit, sur 403 et en vol, les six d'iOS.
+
+## D-66 · Les Réels sont une ADRESSE (`/reels?seed=`) servie par la route unifiée ; l'ordre du fil est gelé à l'ouverture ; le défilement est celui du navigateur ; un seul lecteur joue — 2026-09-14 (#6457)
+
+**Directive porteur (2026-09-14)** : les Réels « sont aussi accessibles dans l'entête de la page des feeds par un bouton en haut à droite », « parmi les postes il y a les réels », et « en touchant un réel on ouvre le feed de réel avec balayage haut bas pour passer au réel suivant comme sous iOS ». Référence : `ReelsPlayerView.swift`, `ReelsViewModel.swift`, `ReelsPresenter`.
+
+**Une adresse, deux intentions.** `/reels` est `ReelsPresenter.presentFresh()` (le bouton de l'en-tête du Flux, `feed.header.reels`, glyphe `monitor-play` pour `play.rectangle.on.rectangle.fill`) ; `/reels?seed=<id>` est `present(posts:startId:)` (toucher une carte de réel). Une route plutôt qu'une couche : le retour du navigateur et le retour matériel d'Android (qui recule l'historique de la WebView) la quittent sans code dédié ; le bouton retour recule s'il y a un historique et remplace l'adresse par `/feed` sinon (lien profond ouvert seul). Les disques flottants n'y sont pas : `floating-gate.ts` est une liste fermée, `reels` n'y entre pas — iOS présente les Réels par-dessus toute la navigation. La carte du Flux devient un LIEN couvrant la carte (`draggable={false}`) sous le voile, la puce et l'identité (`pointer-events-none`), la rangée des gestes restant au-dessus : aimer ne l'ouvre pas.
+
+**La route unifiée, pas l'alias.** `GET /social/posts?scope=reels&seed=` et non `/posts/feed/reels` : les deux lisent `chargerReels`, mais le second porte `Deprecation` — un client neuf n'adopte pas une adresse que la passerelle annonce en retrait. La page est filtrée à la frontière (`servedReels`, `lib/api/reels.ts`) : un élément sans identifiant, sans date ou d'un autre type que `REEL` ne passe pas, comme `FeedPost.reels(from:)` le fait sur iOS.
+
+**L'ordre est gelé à l'ouverture, la donnée reste vivante — et c'est un écart ASSUMÉ avec iOS.** `ReelsViewModel.fetch(reset:)` remplace sa liste au premier retour de la passerelle, or le fil d'affinité EXCLUT la graine (`PostFeedService.getReels`, « le seed est déjà affiché par le client ») : la liste remplacée ne la contient plus et le lecteur saute au premier réel servi, sous le doigt. Ici `composeReelThread` (`lib/reels/thread.ts`) pose l'ENTRÉE — la graine, puis les réels déjà reçus par le Flux — et AJOUTE la suite servie derrière, dédoublonnée : rien ne bouge au-dessus du réel regardé. Chaque réel se peint depuis sa donnée la plus récente (Flux observé sans être rechargé, détail de la graine, pages servies). Une graine inconnue du cache (lien profond) montre le squelette le temps d'être lue : la poser en tête après coup déplacerait le réel regardé. Le fil des réels ne se relit ni au retour du focus ni à la reconnexion ; il se relit à l'ouverture, où le réel regardé est l'entrée.
+
+**Cache d'abord.** Un réel touché dans le Flux se peint au premier rendu, sans requête (mesuré : aucun squelette observé, 50 ms clic → réel, chunk compris). Les gestes (aimer, enregistrer) passent par l'UNIQUE `performPostGesture` : il lit l'état et bascule le Flux, TOUS les fils de réels (`REELS_QUERY_ROOT`, toutes graines) et le détail ensemble, et les défait ensemble sur refus — le « J'aime » posé dans les Réels se voit au retour dans le Flux.
+
+**Le défilement est celui du navigateur.** `scroll-snap-type: y mandatory` et `scroll-snap-stop: always` : le geste reste sur le compositeur, l'élan porte au réel suivant et l'arrêt l'y retient (mesuré au gate par un balayage tactile LANCÉ d'un tiers de page : exactement une page, aucune tâche longue). Aucun suivi du doigt réécrit en JavaScript, aucune transition sur une transformation. Le réel visible se lit sur la position (`activeIndexOf`), une fois par image. Au clavier, flèches et Page haut/bas valent le balayage, le réel atteint prend le focus (son nom annonce « Réel de <auteur>, n sur N ») ; sous `prefers-reduced-motion` le déplacement est instantané ; Échap referme.
+
+**Un seul lecteur joue, trois au plus sont montés.** `useReelPlayback` (`lib/view/use-reel-playback.ts`) compose `useMediaPlayback` et le coordinateur de l'application — sans une ligne de lecture recopiée : le réel qui DEVIENT visible joue, celui qui sort se met en pause, la décision ne se prend qu'au changement de visibilité (une pause voulue par un tap survit aux rendus), un échec de lecture ne se relance jamais seul, l'onglet masqué suspend. `pageModeOf` monte le `<video>` du réel visible et de ses deux voisins ; les autres ne portent qu'une affiche ; un démontage relâche le coordinateur et coupe l'élément (témoin happy-dom, et au gate : zéro lecteur après le retour). La vidéo n'est pas recadrée (`object-contain`, `.resizeAspect` côté iOS). Le son part COUPÉ tant que la page n'a reçu aucune activation (`navigator.userActivation`) — un navigateur refuse une lecture sonore sans geste, jamais une lecture muette — et ouvert après un tap dans le Flux ; le rail le commande.
+
+**Le rail n'offre que ce qui a un effet** (loi 4) : aimer, enregistrer, partager (`usePostGesture`), le son pour un réel qui se lit, et le tap sur la scène (lecture/pause). Commenter et repartager n'ont pas d'effet sur le web : ils ne sont pas montés. Les images d'un réel se parcourent d'un balayage horizontal, leurs points disent la page lue. L'auteur, la légende (Prisme, `resolveFeedCardModel`) et les compteurs sont blancs sur un voile bas mesuré AU PIXEL sur la mire du corpus : 10,4 à 12,6 (AA 4,5).
+
+**Hors ligne.** Avec des réels, la pastille de synchronisation de la coquille dit la coupure, seule : une annonce propre à l'écran s'y superposait (mesuré à 320 × 568) — elle a été retirée. À cache froid, l'état est dessiné (« Hors ligne », « Les réels se chargeront dès le retour du réseau. »), ni squelette ni `aria-busy`, et le fil se charge seul au retour du réseau.
+
+**Plein écran sous l'encoche.** La racine `h-dvh` ne porte pas `pt-safe` (exemption motivée dans `safe-area.test.ts`) : le média court sous l'encoche comme `.ignoresSafeArea()`, chaque chrome porte son propre inset.
+
+**Mesuré.** `scripts/check-reels.mjs` (`check:reels`, composite et CI), 125 invariants sur le `dist` fixtures, deux schémas × deux gabarits : bouton de l'en-tête en haut à droite et atteignable ; toucher ouvre SUR le réel, sans squelette ni disque ; un seul réel joue, deux ou trois lecteurs montés ; balayage tactile suivant/précédent à une page exacte, sans tâche longue ; flèches ; « J'aime » au geste et au retour dans le Flux ; AA au pixel ; cibles 44 ; hors ligne chaud et froid ; retour navigateur et bouton retour, aucun lecteur orphelin ; lien profond sur sa graine (légende servie en français, rang 1) ; mouvement réduit. Poids : chunk `reels` 4,99 Ko (plafond 7), `post_gestures` 2,75 Ko (plafond 4, sorti du chunk `feed` qui passe à 4,06), catalogues 42,58 Ko (plafond 44), première peinture 43,56 Ko.
+
+**Ce qui reste, et où c'est suivi.** Le mode immersif à l'appui long (#6483), les commentaires et le repartage depuis le rail (#6484), le temps réel du lecteur — `post:liked`, `post:deleted` (#6485) —, l'engagement — vue, impression, temps regardé (#6486) — et l'appui long du disque du Flux qui ouvre ce même lecteur sans graine (#6456).
+
+## D-67 · Hors production, les rangées non portées des réglages deviennent INERTES plutôt que de mener vers la production réelle — 2026-09-13 (#6354, décision-produit)
+
+**Le constat mesuré.** Recette sur staging (`gate.staging.meeshy.me`), émulateur Android, coque web-v2 2.0.2 : un toucher sur « Delete account — Classic version, new tab » ouvrait Chrome sur `https://meeshy.me/account/deletion` — la suppression de compte de la PRODUCTION, potentiellement sous un compte qui n'est pas celui de staging. `legacyHref()` (`lib/view/legacy-link.ts`) pose `LEGACY_ORIGIN` en constante ABSOLUE, pour une bonne raison (une adresse relative mènerait à la page introuvable sur staging et dans les coques) — mais sans regarder QUEL environnement l'ouvre.
+
+**Les trois voies posées par l'issue, et pourquoi la troisième est retenue.**
+1. *Staging reçoit un legacy à lui* — écartée : aucun hôte n'existe (`legacy.staging.meeshy.me` / `app.staging.meeshy.me` / `v1.staging.meeshy.me` ne répondent pas, mesuré par `curl`, code 000), et en créer un redéploierait toute l'ancienne stack pour sept liens de repli. Un coût d'infra pour une fonctionnalité que la v2.0 va, par construction, remplacer écran par écran.
+2. *L'origine du legacy se déclare au build comme `VITE_API_BASE`* — écartée : il n'existe littéralement rien à déclarer côté staging (voie 1 rejetée), donc une variable de plus n'aurait aucune valeur non-production à prendre.
+3. **Un build hors production ne rend aucun lien vers le legacy — retenue.** C'est la seule réponse qui ne suppose PAS l'existence d'un legacy de staging, et elle suit la loi 4 déjà en vigueur sur cette section (« rien n'est offert qui n'a un effet ») : une rangée qui mènerait ailleurs qu'où elle le dit n'a pas un effet, elle a le MAUVAIS effet.
+
+**Le test est `apiConfig.base`, jamais un nom d'hôte lu à la volée.** `legacyReachable(apiBase)` (`lib/view/legacy-link.ts`) compare l'origine de la passerelle du build à `PRODUCTION_ORIGIN` (`https://gate.meeshy.me`, exportée de `lib/api/config.ts`) — une loi PURE, testable sans construction, même motif que `resolveApiConfig(env)`. `SettingsScreen` la résout une fois (`legacyReachable(apiConfig.base)`) et la descend en prop à `AccountSection`, `PrivacySection`, `NotificationsSection`, `DataSection` : chaque section reste un composant PUR (primitives en props), rien n'y relit `import.meta.env`.
+
+**La rangée reste NOMMÉE, elle perd seulement son effet.** Hors production, `LegacyRow` rend le même libellé et la même icône dans un `<div aria-disabled="true" data-legacy-unavailable>` — jamais un `<a href>` — avec une légende qui le dit (`settings.legacy.unavailable`, sept langues) au lieu de « Version classique, nouvel onglet ». Un réglage qui disparaîtrait purement et simplement rejouerait exactement le défaut que la section entière corrige depuis #5563 (« un réglage qu'on ne trouve plus est un réglage perdu ») — ici la bonne réponse n'est pas de le rendre introuvable, mais de dire pourquoi il ne mène nulle part.
+
+**Vérifié par construction, pas seulement par témoin.** `bun run build` avec `VITE_API_BASE=https://gate.staging.meeshy.me` puis un navigateur réel sur `/settings` : zéro `a[data-legacy]`, sept rangées `[data-legacy-unavailable]`, et **aucune occurrence de `meeshy.me` dans le texte affiché**. Le gate `check-settings.mjs` (construction PAR DÉFAUT, `apiConfig.base` de production) reste vert à l'identique : les sept rangées continuent de mener au legacy dans un nouvel onglet — cette décision ne change rien pour la production, qui reste servie par `apps/web` jusqu'à la bascule.
+
+> **Mise à jour 2026-09-15 : décision close par la décommission du legacy (#6702).** Plus aucun build, de production ou non, ne rend de lien vers le legacy. `legacyReachable` et `lib/view/legacy-link.ts` sont supprimés, et les rangées non portées sont masquées, chacune avec son issue de portage (#6720 à #6734, #6335). La suppression de compte est servie par la v2 (`/account/deletion`, #6715). La question « quel environnement ouvre ce lien ? » ne se pose plus, puisqu'aucun lien ne quitte la v2.
+
+**Ce que ce lot ne fait pas.** Aucun nouvel hôte de staging n'est créé (voie 1, écartée ci-dessus). La recette manuelle sur l'émulateur Android (mentionnée dans l'issue) reste à rejouer par le porteur avec ce correctif ; la preuve automatisée ici est le build ciblé + navigateur réel décrit au paragraphe précédent, qui reproduit exactement les conditions mesurées (origine de passerelle non-production, aucune adresse relative en jeu).
+
+## D-68 · Le disque du Flux est une BASCULE dont le nom suit la destination ; son appui long ouvre les Réels ; le clic du relâché est avalé à la fenêtre ; le clavier a son appui long — 2026-09-14 (#6456)
+
+**Directive porteur (2026-09-14)** : « Le menu menant vers les feed est un menu toggle (affiche le feed ou le chat, l'icône change en fonction), le longpress dessus affiche les réels directement ! » Référence : `RootView.draggableFloatingButtons` (`onLeftTap: showFeed.toggle()`, `onLeftLongPress: ReelsPresenter.shared.presentFresh()`), `FreeFloatingButton` (`LongPressGesture(minimumDuration: 0.5)`).
+
+**La bascule est une loi pure sur la route.** `feedDiscDestination(routeKey)` (`lib/view/floating-menu.ts`) rend `CONVERSATIONS_DESTINATION` (route `list`) sur le Flux et `FEED_DESTINATION` partout ailleurs où les disques paraissent. La coquille passe sa clé de route aux menus (`<FloatingMenus routeKey>`), qui restent montés d'une route à l'autre : le disque ne quitte jamais le document et ne bouge pas d'un pixel pendant la bascule (mesuré). Le disque reste un LIEN : son `href`, son nom et son glyphe sont ceux de la destination du tap, jamais de l'écran courant. Un disque « Flux » posé sur le Flux annoncerait un geste sans effet.
+
+**Le glyphe du retour est la marque.** iOS peint `AnimatedLogoView` dans ce disque quand le Flux est ouvert ; le web peint `BrandMark` (les trois traits, 28 de côté, trait de 3), au repos, sans la respiration continue, pour la raison que `brand-mark.tsx` donne déjà. Le nom est `root.menu.conversations`, avec les valeurs de `tab.conversations` d'iOS dans les sept langues. `MenuGlyph` gagne un troisième jeu, `marque`, et la marque vit dans son propre chunk partagé (0,35 Ko), jamais dans celui des menus.
+
+**Un seul seuil pour trois gestes.** L'appui long est décidé par la machine PURE de `long-press.ts` (`pressReducer` : 500 ms, 6 px), la même que le menu d'un message ; le glisser part au-delà de `FLOATING_DRAG_THRESHOLD`, et un témoin garde l'égalité des deux seuils (`floating-drag.test.ts`), plutôt qu'un import qui aurait tiré React dans la loi pure lue par le chrome du Flux. Au-delà de 6 px, l'appui long est annulé ET le glisser commence : aucune bande de distances où le disque ne ferait rien. Déclenché, l'appui long abandonne la course (le disque ne bouge plus) et navigue.
+
+**Le clic du relâché est avalé à la FENÊTRE.** Mesuré au navigateur sur un appui tactile : l'appui long a déjà changé d'écran sous le doigt, le disque est démonté, et le clic que Chromium synthétise au relâché, une milliseconde après `pointerup` mais dans une tâche séparée, retombait sur la scène des Réels, dont le tap met la lecture en pause. `consumeClick` ne pouvait rien pour lui : il n'est interrogé que par un élément qui n'existe plus. `swallowReleaseClick` (`use-floating-drag.ts`) arme, en capture sur la fenêtre, l'avalement du SEUL clic qui suit le relâché de ce geste, dans une fenêtre de 350 ms ; un nouvel appui, une annulation ou une touche désarme. Un clic volontaire suivant n'est jamais mangé (témoin). Le gate a rougi quatre fois sur le `dist` d'avant ce correctif, une par gabarit, sur ce seul invariant.
+
+**Le menu contextuel du système.** Un lien tenu au doigt ouvre, sur Android, la bulle « ouvrir dans un onglet ». Pendant un appui principal, `contextmenu` VAUT l'appui long et il est avalé ; pendant ou juste après un geste, il est avalé ; hors de tout appui (clic droit de la souris), le menu du navigateur reste, avec l'ouverture en nouvel onglet. Chromium sans tête n'émet pas de `contextmenu` pour un appui tactile synthétique : le gate PUBLIE le compte (0) au lieu de s'en prévaloir, la loi est prouvée par `floating-menus.test.tsx`.
+
+**Le clavier a son appui long, parce que l'indice l'annonce.** L'indice (`a11y.floating.feed.hint`, « Appui long pour lancer les Réels », relié par `aria-describedby`, hors du lien pour ne pas entrer dans son nom) décrirait sinon au clavier un geste qu'il ne peut pas faire. `Maj+F10` et la touche de menu ouvrent les Réels (`aria-keyshortcuts="Shift+F10"`) : ce sont les deux déclencheurs de l'appui long du menu d'un message, écrits une fois (`isContextMenuKey`, `long-press.ts`). Même geste, même effet (dimension 6). Le bouton « Lancer les Réels » de l'en-tête du Flux (#6457) reste la porte découvrable : un seul bouton, réutilisé.
+
+**Ce qui diverge d'iOS, assumé.** iOS garde le libellé « Flux » et l'indice « Ouvre le flux d'actualité » quel que soit l'état, et ne donne à VoiceOver aucune action nommée pour l'appui long. Le web ne recopie pas ce défaut ; iOS le corrige par #6494. Aucun retour haptique : le web n'en a pas.
+
+**Mesuré.** `scripts/check-feed-disc.mjs` (`check:feed-disc`, composite et CI), 212 invariants sur le `dist` fixtures, deux schémas × deux gabarits : face « Flux » sur la liste (adresse, nom, indice, raccourci, glyphe, 44 atteignables) ; tap tremblé de 2 px ⇒ Flux, disque jamais retiré du document, même place, face « Conversations » avec la marque ; tap sur le Flux ⇒ liste ; appui long souris depuis la liste ET depuis le Flux ⇒ `/reels` pendant l'appui, une seule adresse empilée, aucun clic au relâché, place mémorisée intacte, retour à la même place ; appui long tactile ⇒ `/reels` sans clic au relâché ; `Maj+F10` ⇒ `/reels` ; glisser tenu 750 ms ⇒ rien d'empilé, disque sous le pointeur à 1,5 px près, accroché au bord droit, place retrouvée au rechargement ET après la bascule ; « Lancer les Réels » en haut à droite de l'en-tête ; un réel ouvert depuis une carte ramène au Flux au même défilement, disque « Conversations » ; aucune erreur de page, aucun défilement horizontal. `check-floating-clearance` reste vert. Poids, sur l'arbre rebasé : chunk `floating_menus` 6,00 Ko (plafond porté de 6 à 7), catalogues 42,99 Ko (plafond 44), première peinture 43,66 Ko.
+
+## D-69 · `/login` s'ouvre sur le lien magique et l'inscription se déplie barreau par barreau — la porte et les champs suivent la directive du 2026-09-13/14 (#6404, #6405)
+
+**Directive porteur, en trois temps.** « Avec connexion par magic link comme connexion par défaut pour le moment ! On met l'e-mail on reçoit un email (préciser dans l'interface de regarder les spams si aucun email ne parvient dans la minute) !! Proposer l'option se connecter avec identifiant (email, téléphone, pseudo) et mot de passe ! » Puis, sur l'inscription : « Normalement c'est déjà développé, facilite juste la mise en place et modification des champs calculés automatiquement, assure-toi d'avoir un composant moderne et agréable à voir, les champs apparaissent uniquement au fur et à mesure ! »
+
+**La porte vit dans l'ADRESSE.** `/login` nu rend le lien magique ; `/login?methode=motdepasse` rend le formulaire identifiant + mot de passe, second facteur compris ; une valeur inconnue retombe sur la porte par défaut. Le retour arrière rend le choix, un lien le partage, une recette ouvre l'une ou l'autre — la même règle que la catégorie de la cloche. `loginMethodFromSearch` est la loi, `LoginDoors` le rendu : l'écran exporté n'ajoute que la lecture de l'adresse, ce qui rend les deux portes prouvables sans monter le routeur, ses chunks paresseux et son préalable de catalogue.
+
+**UNE machine pour deux hôtes.** `MagicLinkPanel` (`components/magic-link-panel.tsx`) porte la saisie, l'envoi, le compte à rebours, le renvoi et les erreurs ; `magic-link-flow.tsx` n'est plus que le chrome de l'écran plein `/auth/magic-link` — l'adresse que l'e-mail vise (`MagicLinkService.ts:548`) et que les liens déjà envoyés ouvrent, donc jamais retirée. Recopier la machine dans l'écran de connexion en aurait fait deux, divergentes au premier correctif.
+
+**Les indésirables sont NOMMÉS pendant l'attente.** `POST /auth/magic-link/request` rend 200 même pour une adresse inconnue (`MagicLinkService.ts:133-137`, anti-énumération) : l'écran ne peut ni promettre l'envoi ni le démentir. Ce qu'il peut, et ce que la directive demande mot pour mot, c'est nommer la première cause d'un e-mail jamais reçu et dire au bout de combien de temps s'en inquiéter. La note est à l'étape d'ATTENTE, jamais derrière un (i) : c'est le seul moment où l'on attend quelque chose qui peut ne jamais paraître. *(Supplanté le 2026-09-15 par D-71 : la note reste à l'étape d'attente, repliée derrière un (i) « Rien reçu ? ».)*
+
+**L'identifiant DIT ce qu'il accepte** — « E-mail, téléphone ou pseudo ». `AuthService.authenticate` cherchait déjà par les trois (`AuthService.ts:155-158`) ; seul le libellé, qui disait « Identifiant », empêchait de le savoir. Rien n'est ajouté côté passerelle : une capacité existante devient visible.
+
+**L'inscription se déplie, et ne se replie JAMAIS.** Trois barreaux (`lib/view/signup-rungs.ts`) : l'ADRESSE ouvre le formulaire (tout en découle — l'identité dérivée de #6479, le lien de validation) ; une adresse valide ouvre le NUMÉRO ; le numéro RÉPONDU ouvre le reste (identité, mot de passe facultatif, langue, bouton, mentions). **« Répondu » n'est pas « rempli »** : le numéro est facultatif, et exiger des chiffres en ferait une obligation déguisée — taper, quitter le champ ou toucher « Je continue sans numéro » valent réponse. La loi est MONOTONE : revenir corriger son adresse ne fait pas s'effondrer la moitié du formulaire sous les doigts, ce qui serait le contraire de ce que la directive demande. Elle rend l'objet précédent à l'identique quand rien ne s'ouvre, ce qui permet à l'écran de dériver l'état PENDANT le rendu — un effet aurait peint une image de plus avec l'ancien état, et le barreau serait paru un battement après la frappe qui l'ouvre.
+
+**Ce qui n'est pas un champ n'est pas un barreau.** Le « X » et « Déjà un compte ? Se connecter » restent visibles dès la première seconde : ce sont des SORTIES, et remplir une adresse pour faire paraître le lien qui mène ailleurs serait absurde. La jauge de trois segments et « Étape N sur 3 » rachètent le prix du dépliage : un formulaire qui s'ouvre sans dire combien il reste a l'air sans fin.
+
+**`RungReveal` ne monte rien tant que le barreau n'est pas paru** — un bloc replié mais monté laisserait ses champs dans la tabulation, dans l'envoi et dans l'arbre d'accessibilité. L'animation est une ENTRÉE (la loi étant monotone, il n'y a pas de sortie à animer) et emploie le ressort déjà en place (`.signup-spring`, grille `0fr → 1fr`, coupée par `prefers-reduced-motion`).
+
+**`onChange` → `onInput` sur les trois champs de l'inscription et la saisie de `DerivedIdentity`** : sous `happy-dom`, React ne voit pas un `input.value = X` suivi d'un événement `input` quand le champ pose `onChange` (leçon 603, qui annonçait ce jour : « le jour où il gagne un témoin interactif, il tombera dans le même panneau »).
+
+**Mesuré.** `bun test` 3757 verts (288 fichiers) ; `type-check` et `build` verts ; première peinture 43,76 Ko ; navigateur réel (390×844, sombre) sur `dist` : trois états de l'inscription et les deux portes capturés, zéro erreur de page.
+
+**Ce que ce lot ne fait pas.** L'inscription SANS mot de passe à partir de l'e-mail et du numéro seuls (la « simplifiée » de la directive) demande une route que la passerelle n'a pas : `registerRequestSchema` exige `email` + `password` et un nom, et le lien magique ne crée aucun compte. La décision de produit et son implémentation sont portées par #6405.
+
+## D-70 · Une publication s'affiche dans l'agencement choisi par son auteur ; le fil et le détail annoncent `X-Canvas-Caps: 3` pour le recevoir — 2026-09-15 (#6514)
+
+**Le choix est à l'AUTEUR, et il voyage.** iOS (#6502) laisse choisir, au moment de publier, entre carrousel, défilement continu (`reel`), hero, vague (`wave`) et sinusoïde (`sine`). La valeur vit dans le document canvas v3 (`storyEffects.layout`, `MosaicLayoutModeSchema`), sans champ serveur. La calculer chez le lecteur, d'après le nombre de médias ou la largeur, donnerait deux mises en page pour un même post.
+
+**La loi est DÉRIVÉE, et un gate la tient.** `lib/feed/mosaic-layout.ts` reprend `MosaicLayoutMode` (`CanvasV3.swift`) et la géométrie `MosaicLayout` (`MosaicLayout.swift`) en fractions de la boîte : plafond de quatre tuiles, « +N » sur la dernière seule, rapports de boîte déclarés par mode, légende là où la place le permet (grande tuile du hero, tuiles du défilement), bornée en MOTS. `scripts/lib/curve-mosaic-layout.mjs` (PARTIE 12 de `check-curve`) confronte 19 cotes aux trois sources Swift et au schéma partagé. Une mutation de quatre cotes dérivées produit 5 défauts et une sortie 1.
+
+**Le repli est le carrousel, qui était le rendu d'avant.** `layout` absent (tout le corpus antérieur au 2026-09-06), inconnu (écrit par un client plus récent), ou blob non marqué `v >= 3` : carrousel. Un média seul reste un carrousel, même en hero, parce qu'une mosaïque d'un élément n'en est pas une.
+
+**Une tuile montre un MÉDIA, pas une scène.** iOS monte le player de la scène dans chaque tuile ; ce client ne rend pas encore les scènes. Le média de la publication, dans l'ordre servi, est ce qu'il sait peindre. `FeedMediaSurface` sort de la carte : la page d'un carrousel, l'affiche d'un réel et la tuile d'une mosaïque sont trois hôtes pour une seule surface. Le défilement continu déborde volontairement à droite ; son conteneur défile, reçoit le focus clavier et porte un nom (`feed.post.media.mosaic`).
+
+**Pourquoi l'en-tête.** Sans `X-Canvas-Caps`, la passerelle traite le lecteur en client ancien (table O17, `negotiateWireStoryEffects`). Elle omet `storyEffects` d'un post à média et remplace celui d'un post sans média par une sentinelle v1. L'agencement n'arriverait donc jamais. Le fil (`loadFeedPage`) et le détail (`loadPost`) annoncent le niveau 3, comme iOS et Android. Le lecteur de stories ne l'annonce PAS : il lit encore la forme v1 (`storyEffects.background`), et l'annoncer lui retirerait ses fonds. CORS n'a rien à ouvrir, puisque `@fastify/cors` reflète les en-têtes demandés quand `allowedHeaders` n'est pas posé.
+
+**Mesuré.** `bun test` : 3849 verts (294 fichiers). `type-check`, `build`, `check-curve`, `measure-weight`, `check-utilities`, `check-git-tracking`, `check-feed-disc` (220 invariants), `check-floating-clearance` et `check-reels` sont verts. Poids : première peinture 43,78 Ko ; catalogues 45,6 Ko pour un plafond de 46 ; chunk `feed` 4,48 Ko. En navigateur réel sur `dist` (390 et 320 px de large), `POST_HERO` pose une grande tuile de 0,62 et deux satellites de 0,366 × 0,493, soit exactement les cotes Swift. La boîte mesure 0,82, aucun défilement horizontal, zéro erreur de page.
+
+**Ce que ce lot ne fait pas.** Android. Son décodeur (`CanvasV3.kt`) ne déclare pas `layout`, et le pont v3 → v1 (`StoryEffectsWireSerializer` → `StoryEffects.rendering`) le perd. Le fil pose donc toujours `MediaCollage.solve(images.size)`. Le suivi est tenu par #6514, qui reste ouverte.
+
+## D-71 · La connexion et l'inscription disent « par e-mail » : la baguette reste, le mot « magique » part, le « comment » passe derrière un (i) — 2026-09-15 (#6626)
+
+**Directive porteur.** « Moins de détails sur la page de connexion et d'enregistrement ; utiliser des (i) pour pouvoir informer sur le mode de fonctionnement si naturellement ce n'est pas clair. L'utilisateur a besoin de savoir qu'il va se connecter par email et non de savoir que c'est magic-mail… Garder la baguette magic mais être clair et simple. » Elle supplante deux choix antérieurs, écrits pour de bonnes raisons : la note des indésirables en clair pendant l'attente (D-69, #6404) et l'avertissement de validation en clair sous l'adresse de l'inscription (#6479).
+
+**Le vocabulaire est celui des trois clients, pas une improvisation web.** Porte mot de passe : « Se connecter par e-mail », baguette en tête. En-tête de l'écran plein : « Connexion par e-mail ». Panneau : « Votre adresse e-mail », bouton « Recevoir le lien », renvoi « Renvoyer le lien ». Attente : « E-mail envoyé », « Ouvrez le lien reçu à » + l'adresse. Les (i) : « Comment ça marche », « Rien reçu ? », « Pourquoi un lien ». L'écran d'un lien invalide dit « Un lien de connexion expire après 10 minutes ». Les routes (`/auth/magic-link`), les fichiers et les identifiants ne changent pas : le mot disparaît de ce que l'utilisateur LIT ou ENTEND, pas du code.
+
+**Un (i), un seul composant.** `components/info-hint.tsx` : `useInfoHint` (l'identifiant qui relie le bouton à sa note, et l'état ouvert), `InfoHintButton`, `InfoHintText`. Le (i) vivait dans `Field` et, recopié à la main, sous le téléphone de l'inscription. La connexion en demandait deux de plus HORS de tout champ : à côté du titre, et sous le compte à rebours. Une troisième et une quatrième copie auraient dérivé au premier correctif. `Field` et le téléphone passent donc par lui. Replié ne veut pas dire absent : la note reste dans le DOM en `sr-only`, et un champ la cite par `aria-describedby`.
+
+**« Rien reçu ? » garde son libellé LU à côté du glyphe** (`showsLabel`). Posé seul sous le compte à rebours, loin de tout champ ou titre, un (i) muet ne dirait pas de quoi il parle. Les deux autres (i) sont collés à ce qu'ils expliquent (un titre, un champ), et restent muets. Le texte de la note abandonne « après une minute » : c'est le texte imposé, identique sur les trois clients.
+
+**Défaut trouvé en posant le (i) de l'adresse : `aria-invalid` se déduisait de `aria-describedby`.** L'adresse et le mot de passe de l'inscription posaient `aria-invalid={describedBy !== undefined}`. Tant que seul le refus était cité, c'était juste. Dès qu'un champ cite aussi la note de son (i), il s'annonce « invalide » avant la première lettre. Le mot de passe, qui a son (i) depuis #6441, le faisait déjà. `aria-invalid` suit désormais le REFUS du champ. Deux témoins le tiennent (`signup-identity.test.tsx`, `signup-rungs.test.tsx`).
+
+**Le témoin lit ce qui est PERÇU, pas seulement le texte.** `test-support/perceivable-text.ts` joint le `textContent` et les `aria-label`/`title` : un « magique » retiré du texte mais resté dans un nom accessible serait encore dit à voix haute. Il court sur les deux portes de `/login`, l'écran plein, l'attente, le lien invalide et l'inscription.
+
+---
+
+## D-72 · L'inscription montre le contact d'emblée et n'a plus d'étapes ; `/login` se réduit à la baguette ; `?methode=password` ; `/forgot-password` prend la forme de `/login` ; un code de parrainage s'entre et un lien le pose — 2026-09-14 (#6582, #6583, #6584)
+
+**Cette décision REDÉCOUPE D-69, elle ne l'annule pas.** La porte par défaut
+reste le lien magique, la machine reste unique (`MagicLinkPanel`), la note sur
+les indésirables reste, la monotonie du dépliage reste. Ce qui change, ce sont
+trois choix de D-69 que le porteur a relus le lendemain.
+
+### L'inscription — deux barreaux, et plus aucune étape
+
+Directive : « il faut mettre dès le départ le numéro et l'e-mail à montrer, et
+lorsqu'on a fini de mettre l'e-mail, faire apparaître les détails de son
+identité DIRECTEMENT […] En gros pas d'étape 1 sur N à afficher : tout se fait
+intuitivement dans la page de création de compte. »
+
+`SIGNUP_RUNGS` passe de trois à deux : `contact` (l'adresse ET le numéro, dès
+l'ouverture) puis `identity` (identité dérivée, mot de passe, parrainage,
+langue, bouton, mentions) dès que l'adresse est valide. **Le numéro remonte
+parce que le replier en faisait une ÉTAPE à franchir plutôt qu'un champ à
+laisser vide** — avec, en prime, un bouton « Je continue sans numéro » pour
+sortir d'une porte qu'on venait soi-même de fermer. Il disparaît avec lui.
+
+La jauge de trois segments et « Étape N sur N » tombent aussi, et c'est
+cohérent : elles avaient été ajoutées pour RACHETER l'impression de formulaire
+sans fin que le dépliage créait. Un dispositif dont il faut compenser l'effet
+coûte plus qu'il ne rapporte (leçon 612).
+
+`SignupAnswers` n'a plus qu'une observation (`emailValid`) : le numéro ne
+conditionne plus rien, donc `phoneAnswered` — et les trois gestes qui le
+levaient — n'ont plus de raison d'être. La loi reste PURE, MONOTONE, et rend
+l'objet précédent à l'identique quand rien ne s'ouvre, ce qui permet toujours
+de dériver l'état pendant le rendu.
+
+### Le mot de passe se PROUVE facultatif, et dit ce qu'il change
+
+« (facultatif) » quitte le libellé : *le fait que le bouton créer mon compte
+fonctionne est suffisant pour dire qu'on peut créer le compte sans mot de
+passe*. La mention décrivait ce que le contrôle montre déjà. Ce qui la remplace
+n'est pas une mention mais une CONSÉQUENCE, VISIBLE et non derrière un (i),
+parce qu'elle CHANGE selon l'état : mot de passe valide ⇒ « votre compte sera
+actif immédiatement, il restera seulement à valider votre adresse » ; champ
+vide ⇒ « votre compte restera à configurer ».
+
+Un mot de passe qui tient `PASSWORD_MIN` entoure son champ de
+`var(--color-success)` — le jeton de la table PARTAGÉE, qui porte déjà une
+valeur par schéma (`#10b981` sombre, `#047857` clair) : aucune couleur n'est
+fabriquée et aucune variante `light:` n'est nécessaire. Mesuré sur la carte :
+7,3:1 en sombre, 5,3:1 en clair. Le signal ne tient pas à la seule couleur
+(règle 17) : le bord épaissit comme au focus, et la phrase ci-dessus paraît
+avec lui. `Field` porte la nouvelle prop `valid` et l'expose en
+`data-field-state`, mesurable sans lire une chaîne de style ; un refus gagne
+toujours sur elle.
+
+### `/login` — la baguette, une phrase, un champ, un bouton
+
+Directive : « à la connexion la page doit être sans titre sauf la baguette
+magique ; laisser juste "nous vous enverrons un lien de connexion sécurisé par
+mail", le champ e-mail et le bouton. » Le blason « Meeshy » et le titre
+« Entrez votre adresse email » disaient deux fois ce que la page EST, à
+quelqu'un qui vient de cliquer « Se connecter ». Ils tombent — sur cette porte
+seulement : la porte du MOT DE PASSE garde son blason (elle n'a pas de
+baguette) et le second facteur aussi (savoir de QUI vient une demande de code
+n'est pas un ornement).
+
+Le bouton dit « Recevoir le lien » sur les deux hôtes.
+
+*(À LA FUSION avec `dev`, le 2026-09-15 : ce paragraphe est tenu à MOITIÉ. Le
+BLASON tombe, comme écrit ci-dessus — D-71 ne le redemande pas. Le TITRE DE
+SECTION revient : D-71, d'une directive POSTÉRIEURE d'un jour, en a fait
+« Votre adresse e-mail » et lui a accroché le (i) « Comment ça marche », qui
+porte désormais tout le mode de fonctionnement — y compris la phrase « nous
+vous enverrons un lien… » que ce lot voulait garder en clair. Un titre qui
+HÉBERGE la mécanique ne redit plus le champ, et cette directive-là a été relue
+deux fois sur ce titre même (la place du (i), la césure de « e-mail ») : elle
+a été vue, pas subie. `MagicLinkPanel` avait gagné une prop `heading` pour
+taire ce titre sur `/login` ; plus personne ne la posait à faux, donc elle est
+retirée plutôt que laissée morte.)*
+
+### `?methode=password` — ce qu'on cesse d'écrire, on ne cesse pas de le lire
+
+`motdepasse` a été l'adresse de cette porte pendant toute la vie de #6404 :
+elle est dans des signets, des liens partagés et la recette. La valeur ÉMISE
+devient `password` ; la valeur LUE s'élargit aux deux. La retirer de la lecture
+renverrait ces adresses sur le lien magique, c'est-à-dire sur un écran que
+personne n'a demandé.
+
+### `/forgot-password` prend la forme de `/login`
+
+L'écran portait une barre de titre — un « X » et « Mot de passe oublié » —
+héritée de la feuille modale iOS. Sur le web ce n'est pas une feuille mais une
+PAGE, atteinte par un lien de `/login`, d'où le bouton « retour » du navigateur
+ramène déjà : la barre disait son nom à qui venait de cliquer son nom. Il prend
+le halo, la colonne centrée, une enveloppe pour toute en-tête, la phrase, le
+champ, le bouton, puis le retour en pied. Sa TEINTE reste `--color-ios-brand`
+(`MeeshyForgotPasswordView.swift:309`) : les deux écrans ne font pas la même
+promesse. Il gagne la note sur les indésirables — même attente qu'un lien
+magique — et la constante devient PARTAGÉE (`lib/view/auth-copy.ts`) plutôt que
+recopiée. Sa demande est INJECTABLE (`ForgotPasswordDeps`), comme celle du
+panneau du lien magique.
+
+*(À LA FUSION avec `dev`, le 2026-09-15, puis SOLDÉ dans le même mouvement :
+D-71 a replié la note du panneau derrière le (i) « Rien reçu ? » et en a changé
+le texte — deux phrases pour une même attente avaient donc commencé à diverger,
+l'une disant « après une minute » que l'autre venait d'abandonner. La question
+de produit n'en était pas une : les deux écrans attendent le MÊME e-mail, et
+« moins de détails » ne peut pas vouloir dire replié ici et en clair là.
+`/forgot-password` porte donc le même (i), et `lib/view/auth-copy.ts` ne tient
+plus une phrase mais des CHAÎNES (`HOW_IT_WORKS_*`, `NOTHING_RECEIVED_*`) que
+les deux hôtes composent — jamais un `InfoHint`, qui porte un tracé et ferait
+descendre `lib/view` dans `components`.)*
+
+### Le parrainage — entrer un code, et un lien qui le pose
+
+Question porteur : « Qu'en est-il de la page référer ? Ou de la possibilité
+d'entrer le code du référer lors de l'inscription ? »
+
+**Relevé d'abord : la passerelle porte déjà tout, `apps/web-v2` n'en consommait
+rien.** `GET /affiliate/validate/:token` (public), `POST /affiliate/register`
+(authentifié, qui noue la relation sur l'APPELANT — le `referredUserId` du
+corps est explicitement ignoré, c'est la garde anti-forge), le code intrinsèque
+`ref_…` de chaque compte (#3690) et la page d'atterrissage legacy
+`/signup/affiliate/[token]`.
+
+**`POST /auth/register` n'est pas touché, et c'est le point d'appui.** La
+relation se noue APRÈS le compte, sur la session que l'inscription vient
+d'établir (#4264) — donc sans qu'une ligne de la passerelle change.
+
+Le champ est REPLIÉ derrière « J'ai un code de parrainage » : la très grande
+majorité des inscriptions n'en ont pas, et un champ de plus imposé à tout le
+monde est la surcharge que le porteur a déjà refusée (#6441). Un lien
+d'invitation l'ouvre tout seul, rempli — `/signup/affiliate/:token` REDIRIGE
+vers `/signup?ref=…` plutôt que de rendre un second écran d'inscription, qui
+serait la jumelle divergente que le legacy paie déjà. `?ref=` et `?parrain=`
+sont lus dans cet ORDRE, fixé pour que deux clés présentes donnent le même
+résultat à tout le monde. Le code est lu sur `window.location` à
+l'initialisation d'un état, jamais par `useSearch()` : ce dernier exige le
+contexte du routeur, et l'inscription est montée telle quelle par ses témoins.
+
+**La règle de fond : un code d'invitation n'est JAMAIS une condition d'entrée.**
+Un jeton expiré, une limite atteinte, une passerelle qui répond 500 — aucun ne
+doit empêcher de créer un compte : ce serait punir l'invité de la défaillance
+de l'hôte. Le refus se dit en encre ordinaire, sans `role="alert"` ni teinte
+d'erreur, le bouton reste actif, et un échec RÉSEAU retombe au silence plutôt
+que d'accuser un jeton dont on ne sait rien. La conversion part sans être
+attendue.
+
+**Ce que le LEGACY avait déjà, et qui est repris** (retour porteur 2026-09-15 :
+« la version legacy avait déjà des développements dans ce sens, il faut veiller
+à réutiliser ou simplement ne rien perdre »). Trois trouvailles dans `apps/web` :
+
+1. **Le jeton SURVIT à la navigation.** `app/signup/affiliate/[token]/page.tsx`
+   l'écrit en `localStorage` et en cookie 30 jours ;
+   `use-registration-submit.ts` le relit au moment de créer le compte. Sans
+   cette moitié, seul le cas RARE comptait — s'inscrire sans jamais quitter la
+   page d'arrivée — et le cas NOMINAL d'un lien partagé (cliquer, regarder,
+   s'inscrire le lendemain) perdait le parrainage. `lib/view/referral-memory.ts`
+   le reprend sous LA MÊME CLÉ (`meeshy_affiliate_token`) : le jour où
+   `apps/web-v2` prend la place d'`apps/web`, les jetons déjà posés dans les
+   navigateurs sont relus plutôt que jetés, et une ligne écrite par le legacy —
+   le jeton NU, sans objet ni date — est comprise telle quelle. L'ÉCHÉANCE, en
+   revanche, est corrigée : le legacy borne son cookie à 30 jours et laisse la
+   copie locale sans date, donc un jeton y survit indéfiniment ; ici la date est
+   portée par la valeur, il n'y a qu'un support à faire périr. L'adresse gagne
+   toujours sur la mémoire — un nouveau lien remplace un ancien.
+2. **`?affiliate=` est la clé du legacy** (`middleware.ts:63` la capte sur
+   n'importe quelle adresse). Des liens la portant sont déjà dans la nature :
+   elle rejoint `ref` et `parrain` dans `REFERRAL_SEARCH_KEYS`.
+3. **Ce que le legacy fait pour RIEN n'est pas recopié** :
+   `use-registration-submit.ts` pose `body.affiliateToken` sur
+   `POST /auth/register`. Mesuré — ni la route, ni `registration.service.ts`, ni
+   `registerRequestSchema` ne lisent ce champ ; seul `POST /affiliate/register`,
+   après le compte, noue quoi que ce soit. Reprendre la ligne aurait recopié une
+   croyance, pas un comportement.
+
+**Deux parcours du legacy restent SANS équivalent**, inventoriés plutôt que
+perdus : la récupération de compte par TÉLÉPHONE (six étapes, `components/auth/recovery/`)
+et la reprise d'un numéro déjà rattaché (`phoneTransferToken`, que la passerelle
+sert déjà par `routes/auth/phone-transfer.ts`, et devant quoi le chantier
+s'arrête sur une phrase). #6650 les porte — bloquants pour la bascule.
+
+**Ce que ce lot ne fait pas** : la page depuis laquelle on INVITE (son code,
+ses jetons de campagne, ses filleuls, ses statistiques) n'existe toujours pas
+dans `apps/web-v2` — c'est un écran avec ses quatre états et ses trois lectures
+de passerelle, porté par #6585.
+
+### Ce que D-69 disait et qui n'est plus vrai
+
+Sa dernière ligne annonçait l'inscription sans mot de passe comme bloquée par
+la passerelle. C'est FAUX depuis #6424/#6441 : `registerRequestSchema` porte
+`required: ['email']` — ni nom, ni téléphone, ni mot de passe ne sont exigés,
+et `composeRegisterBody` OMET les clés absentes. L'inscription simplifiée de la
+directive du 2026-09-13 est donc livrée ; #6405 se ferme avec ce lot.
+
+### Mesuré
+
+`bun test` 3815 verts (294 fichiers) ; `type-check` et `build` verts ; gate
+composite vert.
+
+## D-73 · Les pages d'accès montent UNE colonne, celle de la connexion ; la croix des pages qui en gardent une vit dans la colonne ; « Mot de passe oublié » sert aussi à créer un mot de passe — 2026-09-15 (#6643)
+
+**Directive porteur.** « Les pages doivent être responsives et même sur tablette ou ordinateur avoir le style de la page de connexion (au centre), la page de récupération de mot de passe doit permettre de setter le mot de passe même si on a jamais eu de mot de passe ! Les pages d'inscription, reset de mot de passe 2FA, MFA doivent être centrés même hors smartphone ! »
+
+**Mesuré avant**, sur `dev` b6b7e227ca, à 1440×900 et 834×1194 : la connexion (ses deux portes et le second facteur), l'accueil et le mot de passe oublié (depuis D-72) tenaient une colonne de 384 px centrée. L'inscription, le nouveau mot de passe, l'écran plein du lien par e-mail (demande, envoyé, validation, lien invalide) et la vérification d'e-mail s'étalaient sur toute la largeur. Les trois écrans centrés RECOPIAIENT la même racine ; les autres ne l'avaient jamais eue.
+
+**UNE géométrie.** `components/auth-column.tsx` : `AuthColumn` porte le FOND (plein écran, halo d'ambiance, marges de sécurité, défilement) et la COLONNE (`w-full max-w-sm`, centrée). L'écran ne passe que l'agencement DANS la colonne. La connexion, l'accueil et le mot de passe oublié y migrent sans changement visuel : mêmes classes, même halo. Les autres pages y gagnent le halo, parce que la directive demande le STYLE de la connexion, pas seulement sa largeur.
+
+**La croix vit DANS la colonne.** D-72 a retiré la barre du mot de passe oublié : c'est une page atteinte par un lien, que le retour du navigateur referme, et elle garde sa forme. Les quatre pages qui gardent une croix — inscription, nouveau mot de passe, lien par e-mail, vérification d'e-mail — la posent dans la colonne (`AuthColumnBar`). iOS la pose au bord de l'écran (`safeAreaInset(edge: .top)`), au-dessus d'un formulaire que `iPadFormWidth()` borne. Sur un écran de 1 440 px, la même pose la mettrait à plus de 500 px de ce qu'elle ferme, seule dans un coin. Dans la colonne, elle se lit avec son titre et la page entière tient au centre. Sur téléphone la colonne occupe l'écran, donc la croix ne bouge pas. L'inscription est la seule page d'accès qui dépasse un écran : sa colonne borne sa hauteur (`min-h-0`) et le formulaire défile sous la barre. La croix reste en place, comme sur iOS et comme avant.
+
+**Le témoin mesure la géométrie, pas un marqueur.** `scripts/check-access-column.mjs` (gate composite et job « Peaux web-v2 ») prend pour colonne le plus petit ancêtre commun de ce qui se lit ou se touche, hors `aria-hidden` et hors texte `sr-only`. Il couvre 18 pages et états, dont le second facteur, « E-mail envoyé », le mot de passe enregistré et la validation d'un lien, servis par des réponses simulées. À 1440×900 et 834×1194, chaque colonne est centrée à 1 px près et jamais plus large que celle de la connexion. À 390×844, elle garde sa largeur de tablette. La connexion elle-même ne dépasse pas 384 px. Rouge sur `dev` b6b7e227ca (36 échecs), vert après. Les témoins DOM (`test-support/auth-column.ts`) tiennent la moitié structurelle : une colonne par écran, et tout dedans, croix comprise. Le gate navigateur ne lit pas `data-auth-column`.
+
+**« Mot de passe oublié » dit qu'il sert aussi à créer un mot de passe.** La passerelle envoie le lien à un compte qui n'en a jamais eu (#6642). L'écran garde la forme de D-72 (enveloppe, phrase, champ, bouton, retour en pied) et change sa phrase : « Recevez par e-mail un lien pour choisir un nouveau mot de passe. » Un (i) « Jamais eu de mot de passe ? » la suit, dont la question se LIT à côté du glyphe : c'est exactement celle que se pose la personne concernée. Il déplie « Ce même lien vous permet d’en créer un. ». L'envoi rend l'écran de la connexion par e-mail (`components/email-sent-notice.tsx` : « E-mail envoyé », « Ouvrez le lien reçu à … », « Rien reçu ? ») au lieu de « Si un compte existe avec …, un lien de réinitialisation vient d’être envoyé » : deux phrases pour le même fait, et la seconde parlait de réinitialiser à qui n'avait rien à réinitialiser. La page du lien dit « Nouveau mot de passe », « Enregistrer le mot de passe », « Mot de passe enregistré ». Aucun texte perçu, noms accessibles compris, ne dit « réinitialisation » ni « magique ». Vocabulaire commun avec iOS (#6644) et Android (#6645).
+
+**Ce que ce lot ne fait pas.** Ces écrans restent en français en dur, quelle que soit la langue d'interface : ils n'entrent dans aucun catalogue, et #6310 tient ces chaînes avec les autres. Le comportement serveur est porté par #6642.
+
+## D-74 · Rejoindre sans compte passe par la porte CANONIQUE, et un invité est une SESSION, pas un état d'écran — 2026-09-16 (#5561)
+
+**Directive porteur.** « Il faut implementer rejoindre en anonyme […] en priorité ! »
+
+**La porte.** `POST /api/v1/links/:key/members`, en authentification OPTIONNELLE — la MÊME que celle d'un compte, avec un autre corps. L'alias `POST /anonymous/join/:linkId` n'est PAS appelé : déprécié depuis le 2026-08-30, il exige en plus un prénom et un nom (`linkJoinProfileSchema`) que la porte canonique ne demande pas. Deux champs de moins à faire remplir à quelqu'un qui veut lire un fil.
+
+**Le jeton d'invité est la PREUVE du régime, dans les deux sens.** `joinLinkAsMember` refusait déjà une réponse PORTANT un `sessionToken` (`JOINED_AS_GUEST` : la passerelle est retombée en invité sur un Bearer expiré). Son miroir existe désormais : `joinLinkAsGuest` refuse une réponse qui n'en porte PAS (`MEMBER_NOT_GUEST`). La porte étant en auth optionnelle, un Bearer encore valide dans le transport ferait entrer le COMPTE sous son nom pendant que l'écran croit créer un invité — rendre une session d'invité qui n'existe pas mènerait le lecteur dans un fil où il n'est pas celui qu'il croit.
+
+**Un invité est une branche du magasin de session** (`status: 'guest'`), pas un drapeau d'écran. Il porte `sessionToken` (régime `X-Session-Token`, jamais `Authorization`), son participant, son pseudo, sa conversation et SON lien — ce dernier parce que `GET /links/:identifier/messages` rend 403 à la session d'un autre lien. `credentialFromSession` sert donc les deux régimes, `resolveViewer` rend une identité (id non nul : ses propres bulles sont les siennes), et la garde de route ne l'admet que sur `thread` — toutes les autres routes privées exigent un COMPTE, et l'y laisser entrer peindrait des écrans qu'un 401 défait en silence.
+
+**L'horizon d'une session d'invité est posé côté CLIENT** (`GUEST_SESSION_HOURS = 24`, la valeur du legacy). La porte ne sert aucun `expiresIn` ; sans horizon l'entrée serait CORROMPUE au sens du module (règle 2). C'est une GARDE, jamais une vérité : le serveur reste l'autorité, un 401 ferme la session avant l'échéance.
+
+**Les deux familles de refus ne se confondent pas**, et c'est le cœur de l'issue. `input` — corrigeable ICI : le formulaire est GARDÉ, le message se pose sur son champ, et un pseudo libre proposé par la passerelle (`suggestedNickname`, 409) est PRÉ-REMPLI. `link` — rien ne le corrigera : le formulaire est RETIRÉ, un bandeau dit la cause, les deux sorties restent avec leur `next`. Les confondre fait réessayer quelqu'un dont le lien est mort, ou abandonner quelqu'un dont le pseudo était juste pris. **`LANGUAGE_NOT_ALLOWED` est rangé dans `input` malgré son 403** : la langue est un champ de ce formulaire, et le visiteur peut en choisir une autre.
+
+**Le refus de SAISIE se connaît AVANT l'aller-retour** (`validateGuestDraft`, miroir `validateCommunityDraft`). La passerelle rend un 400 sans nommer le champ quand une exigence n'est pas satisfaite : deviner lequel après coup serait faux une fois sur trois.
+
+**La projection de l'invitation s'élargit de six valeurs, et c'est une exception RAISONNÉE.** `GuestTerms` porte `requireAccount`, les trois `require*`, `allowedLanguages` et `allowAnonymousMessages`. Le reste du port retient tout ce que la charge transporte parce que rien de la CONVERSATION ne doit atteindre le client avant le choix ; ces six-là ne disent rien de la conversation — elles décrivent la PORTE. Compteurs, membres, identifiants et langues PARLÉES restent dehors. Fail-closed dans les deux sens, et les deux sens n'ont pas la même direction : une EXIGENCE absente est supposée (on demande le pseudo), une PERMISSION absente est refusée (on ne promet ni l'entrée ni l'écriture) — demander un champ de trop coûte une frappe, promettre une porte fermée coûte le visiteur.
+
+**Mesuré.** `meeshy.me/chat/mshy_IM3PNq5H` servait déjà l'invitation avant ce lot (200, deux visites avec service worker, aucune erreur de page) : il ne manquait que la porte sans compte.
+
+## D-75 · Un direct porte le nom de l'autre, même s'il a un titre stocké — 2026-09-16 (#6790)
+
+**Signalement porteur.** « Actuellement les conversations direct ont pour titre X & Y au lieu d'avoir le display name de l'interlocuteur (cette erreur est sur iOS aussi). »
+
+**Aucune concaténation `&` n'existe dans le dépôt** — balayage de `packages/`, `services/gateway/src`, `apps/web-v2/src`, `apps/web/`, `apps/ios`, `packages/MeeshySDK`, `apps/android`. `generateDefaultConversationTitle` est juste. Le titre est **stocké**, et les clients l'affichent fidèlement.
+
+**La cause est le LEGACY** : `apps/web/components/conversations/create-conversation-modal.tsx:102-130` composait un titre CÔTÉ CLIENT et l'envoyait — chaîne `autoGeneratedTitles.betweenTwoUsers`, soit « {user1} et {user2} » (fr), « {user1} and {user2} » (en), « {user1} y {user2} » (es), « {user1} e {user2} » (pt). La v2 n'en écrit aucun (`createDirectConversation` poste `{ type, participantIds }`). Le legacy étant décommissionné (#6702), le stock existant demeure mais ne grossit plus.
+
+**La précédence dépend désormais du TYPE.** Un GROUPE a un titre propre ; un DIRECT n'en a pas — il porte le nom de l'autre. `titleOf` lit donc, pour un direct : nom du pair, puis titre stocké en dernier recours ; pour un groupe : titre stocké, puis nom d'un membre servi. `customName` (renommage local du lecteur) prime toujours sur les deux, `identifier` ferme la marche. Le doc-comment d'origine affirmait déjà « elle porte le nom de l'autre » ; la règle ne le faisait pas.
+
+**Ignorer plutôt que nettoyer.** Le correctif ne touche aucune donnée : il change une précédence d'affichage. Nettoyer les titres en base éviterait qu'un quatrième client réintroduise le défaut, et reste porté par #6790.
+
+**Le témoin porte sur la PRÉCÉDENCE, pas sur la chaîne.** Chercher « et » verdirait sur un titre stocké d'une autre forme — le même défaut produit quatre chaînes différentes selon la langue du legacy.
+
+## D-76 · L'administration a DEUX adresses : `/adm` pour la nouvelle, `/admin` réservée à l'ancienne — 2026-09-16 (#6795)
+
+**Directive porteur.** « On ne s'occupe pas des limites quand il s'agit d'intégrer les commandes admin d'avant, tu peux même avoir les deux chemins dans la v2 `/adm/` pour la route d'administration nouvelle qui implémentera petit à petit les vues de l'ancienne et brancher toute l'ancienne dans `/admin` ! » puis « N'est-ce pas possible de copier dans v2 tous les composants requis par admin de legacy et monter sur Traefik qu'un seul container ? »
+
+**UN SEUL CONTENEUR, et c'est la bonne option.** Le double montage (v2 + legacy derrière Traefik) a été instruit puis écarté sur deux mesures : le legacy authentifie son administration par un **cookie** `meeshy_session` (base64 de `{role, canAccessAdmin, userId}`, posé par `auth-manager.service.ts:360`) que la v2 ne pose pas — son middleware redirige vers `/signup` sans lui ; et il est en `output: 'standalone'` **sans `basePath`**, donc il sert `/_next/*` à la RACINE, ce qu'un routeur `PathPrefix(/admin)` seul casserait. Porter les composants dans la v2 supprime les deux : le droit s'y lit déjà par `GET /me/permissions`.
+
+**`/adm` est la NOUVELLE administration ; `/admin` est réservée à l'ANCIENNE.** Les deux vivent dans le même bundle. La route KEY reste `admin`/`adminUsers` pour la première, `adm`/`admUsers` pour la seconde : le déplacement ne touche donc ni la garde de session, ni la table des barreaux, ni `lib/admin/sections.ts`, qui raisonnent tous par CLÉ et non par chemin.
+
+**Aujourd'hui `/admin` sert les mêmes écrans que `/adm` — c'est un PONT, pas la cible.** Déplacer `/admin` avant que l'ancienne n'y soit portée laisserait une adresse morte, et un signet d'administrateur mène aujourd'hui à `/admin`. Un seul `import()` alimente les deux (motif `post`/`postDeepLink`), pour qu'elles ne puissent pas diverger d'écran le temps du pont.
+
+**Les quatre routes sont PRIVÉES, déclarées dans `session-guard.ts`.** Une route que cette loi ne connaît pas est publique par défaut : `/adm` ajoutée à la seule table aurait ouvert une porte d'administration à un visiteur sans session, sans qu'aucun témoin ne rougisse — l'écran se serait peint, puis le serveur aurait refusé.
+
+**Ce que le portage coûte, mesuré le 2026-09-16** : 99 fichiers, 25 551 lignes hors témoins, 82 en `'use client'` ; 21 primitives Radix/shadcn, 83 imports `lucide-react`, 35 `sonner`, 4 `recharts` — la v2 n'en a AUCUNE. Seuls 34 imports sont réellement liés à Next (22 `next/navigation`, 12 `next/dynamic`), c'est-à-dire la partie mécanique. **Le point dur est le RUNTIME** : la v2 est construite sur Preact (`preact/compat`), et il faut trancher entre amener Radix tel quel ou réécrire les 21 primitives contre le design system dérivé d'iOS. Arbitrage ouvert sur #6795.
+
+**Ce qui ne se porte PAS tel quel** : 2 884 lignes de page — 24 % de la surface — n'appellent aucune API (`/admin/moderation`, `/admin/audit-logs`, `/admin/analytics`, `/admin/reports`, `/admin/invitations` rendent des données en dur ; `/admin/settings` ne sauvegarde rien). Elles se rebâtissent contre les endpoints RÉELS, qui existent et n'ont jamais eu de consommateur. Et **les journaux d'audit n'ont aucune API de LECTURE** : `AdminAuditLog` n'est qu'écrit, `canViewAuditLogs` ne garde aucune route.
+
+## D-77 · L'administration se RÉÉCRIT sur le design system v2, et les membres passent en premier — 2026-09-16 (#6819)
+
+**Directive porteur, qui tranche l'arbitrage laissé ouvert par D-76.** « il faut réecrire toutes les pages d'administration sur la v2 en commencant par la gestion des membres, edition reset de mot de passe, suppression soft et hard, suivi des medias crées, des conversations, historique de connexion ! »
+
+**RÉÉCRIRE, et non importer Radix.** D-76 posait deux voies et n'en choisissait aucune : amener les 21 primitives Radix/shadcn et les faire tenir sur `preact/compat`, ou les réécrire contre le design system dérivé d'iOS. La seconde est retenue. Elle coûte plus cher à l'écriture et moins cher ensuite : la v2 n'acquiert aucune dépendance dont la compatibilité avec son socle devrait être re-prouvée à chaque montée, et l'administration finit par ressembler au reste de l'application au lieu de former un îlot visuel importé d'un autre cadre.
+
+**Les MEMBRES d'abord**, avec sept capacités nommées par le porteur : éditer un membre, réinitialiser son mot de passe, le supprimer en DOUX puis en DÉFINITIF, suivre ses médias, suivre ses conversations, lire son historique de connexion.
+
+**La règle de périmètre, qui gouverne tout ce lot : une capacité que la passerelle ne sert pas n'est pas dessinée.** Trois mesures la fondent, toutes faites avant d'écrire quoi que ce soit — 24 % de l'ancienne administration n'appelle aucune API (D-76) ; les journaux d'audit n'ont aucune route de lecture (D-76) ; et sur les 135 clés de préférences déclarées, **86 n'ont aucun lecteur, nulle part** (#6721 à #6724, dont `message` 0/16, `document` 0/16 et `video` 0/17). Un geste sans effet est PIRE qu'un geste absent : le second se voit, le premier se croit rendu. Chaque capacité est donc instruite — route, rôle requis, forme servie, effet réel — et celle qui n'est pas servie devient une issue de passerelle, jamais un bouton inerte.
+
+**Ce que la v2 sert déjà, et qui borne le reste à écrire** : trois lectures seulement — `GET /me/permissions` (l'adresse CANONIQUE ; `/admin/me/permissions` en est l'alias déprécié, #4350), `GET /admin/dashboard` et `GET /admin/users?offset=&limit=&search=`. La LISTE des membres existe donc ; c'est le DÉTAIL d'un membre qui manque, et avec lui les sept gestes.
+
+**Un indice de contrat à ne pas perdre** : `AdminUserRow` décode `isActive` mais **aucun `deletedAt`**. La suppression douce n'a aujourd'hui aucune existence dans la forme que la v2 lit — si la passerelle la sert, le décodeur devra l'admettre ; si elle ne la sert pas, c'est la passerelle qu'il faut ouvrir, pas l'écran qu'il faut peindre.
+
+**Le découpage se décide maintenant, pas quand le fichier débordera.** Les trois fichiers d'administration totalisent 558 lignes, loin du plafond de 1 200 ; le détail d'un membre et ses sept capacités le consommeront. Une extension par surface, un type par fichier, les sous-vues chez elles — ajouter à un fichier déjà hors budget est interdit, donc on extrait avant d'ajouter.

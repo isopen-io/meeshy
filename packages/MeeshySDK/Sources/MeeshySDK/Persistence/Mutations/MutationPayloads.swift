@@ -650,21 +650,65 @@ public struct CreateCommentPayload: Codable, Sendable, Equatable {
     /// Effets visuels du commentaire (bitmask) — porté par le chemin durable
     /// pour ne pas être perdu à l'enfilement, comme le chemin direct le porte.
     public let effectFlags: Int?
+    /// Langue d'ÉCRITURE déclarée par l'auteur à la pastille du composer (#6587).
+    ///
+    /// `PostComment.originalLanguage` est la langue SOURCE depuis laquelle tout
+    /// lecteur descend son prisme : sans ce champ, le serveur la DEVINAIT par
+    /// heuristique de mots (`detectLanguage`), et la pastille était un contrôle
+    /// qui ment. Une devinette à la place d'une déclaration fausse la résolution
+    /// pour TOUS les lecteurs, sur les trois clients.
+    ///
+    /// REQUIS à la construction (aucune valeur par défaut) : c'est le
+    /// COMPILATEUR, jamais la discipline de l'appelant, qui impose les sites —
+    /// `location` et `effectFlags`, ajoutés AVEC défaut, manquaient encore à
+    /// `FeedViewModel.sendComment`. TOLÉRANT au décodage (`String?` +
+    /// `decodeIfPresent`) : `FeedPersistenceActor` relit ces blobs en `try?`,
+    /// donc un champ requis à la relecture ferait disparaître SANS ERREUR
+    /// toute la file hors-ligne gravée avant la mise à jour de l'app.
+    public let originalLanguage: String?
+    /// **L'ANCRE du média du post que ce commentaire CITE** (#6578).
+    ///
+    /// L'ancre SEULE : la nature est dérivée du MIME par le serveur, et tout ce
+    /// qui décrit le média est relu à chaque service. Graver ici une vignette
+    /// ferait ressusciter, au rejeu d'une file vieille de plusieurs jours, un
+    /// média que son auteur a pu retirer entre-temps.
+    ///
+    /// TOLÉRANT au décodage (`String?` + `decodeIfPresent`), comme ses voisins :
+    /// `FeedPersistenceActor` relit ces blobs en `try?`, donc un champ requis à
+    /// la relecture ferait disparaître SANS ERREUR toute la file gravée avant la
+    /// mise à jour de l'app.
+    public let quotedPostMediaId: String?
 
     public init(
         clientMutationId: String,
         postId: String,
         parentCommentId: String?,
         content: String,
+        originalLanguage: String?,
         location: SharedPlace? = nil,
-        effectFlags: Int? = nil
+        effectFlags: Int? = nil,
+        quotedPostMediaId: String? = nil
     ) {
         self.clientMutationId = clientMutationId
         self.postId = postId
         self.parentCommentId = parentCommentId
         self.content = content
+        self.originalLanguage = originalLanguage
         self.location = location
         self.effectFlags = effectFlags
+        self.quotedPostMediaId = quotedPostMediaId
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        clientMutationId = try c.decode(String.self, forKey: .clientMutationId)
+        postId = try c.decode(String.self, forKey: .postId)
+        parentCommentId = try c.decodeIfPresent(String.self, forKey: .parentCommentId)
+        content = try c.decode(String.self, forKey: .content)
+        originalLanguage = try c.decodeIfPresent(String.self, forKey: .originalLanguage)
+        location = try c.decodeIfPresent(SharedPlace.self, forKey: .location)
+        effectFlags = try c.decodeIfPresent(Int.self, forKey: .effectFlags)
+        quotedPostMediaId = try c.decodeIfPresent(String.self, forKey: .quotedPostMediaId)
     }
 }
 

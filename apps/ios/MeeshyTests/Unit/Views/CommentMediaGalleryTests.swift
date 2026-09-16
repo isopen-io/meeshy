@@ -295,20 +295,38 @@ final class CommentMediaGalleryWiringGuardTests: XCTestCase {
         try MyStoriesSourceCorpus.text(of: path)
     }
 
-    func test_everyCommentHost_declaresTheSharedGallery() throws {
-        for path in [
+    /// Les DEUX moitiés de la règle ne vivent pas au même étage, et #6578 l'a
+    /// rendu visible : la GALERIE se déclare chez l'hôte qui présente le plein
+    /// écran, la LÉGENDE DE REPLI se passe là où la ligne d'un commentaire est
+    /// rendue. Tant que `FeedCommentsSheet` rendait sa propre ligne, un seul
+    /// fichier portait les deux ; l'extraction de `CommentRowView` les a
+    /// séparées sans rien changer au comportement.
+    ///
+    /// La garde interroge donc un hôte ET les fichiers où sa ligne vit — pas un
+    /// fichier unique, qui ferait rougir toute extraction future et pousserait
+    /// à re-fusionner ce qu'un budget vient de séparer.
+    private static let commentHosts: [(galerie: String, ligne: [String])] = [
+        (
             "Meeshy/Features/Main/Views/FeedCommentsSheet.swift",
-            "Meeshy/Features/Main/Views/FeedPostCard.swift",
-            "Meeshy/Features/Main/Views/StoryViewerView+Content.swift",
-        ] {
-            let text = try source(path)
+            ["Meeshy/Features/Main/Views/CommentRowView.swift"]
+        ),
+        ("Meeshy/Features/Main/Views/FeedPostCard.swift", []),
+        ("Meeshy/Features/Main/Views/StoryViewerView+Content.swift", []),
+    ]
+
+    func test_everyCommentHost_declaresTheSharedGallery() throws {
+        for hote in Self.commentHosts {
+            let galerie = try source(hote.galerie)
             XCTAssertTrue(
-                text.contains(".commentMediaGallery("),
-                "\(path) : sans cette déclaration, le plein écran d'un commentaire retombe sur une page unique."
+                galerie.contains(".commentMediaGallery("),
+                "\(hote.galerie) : sans cette déclaration, le plein écran d'un commentaire retombe sur une page unique."
             )
+
+            let portees = try ([hote.galerie] + hote.ligne).map { try source($0) }
             XCTAssertTrue(
-                text.contains("carrierText: comment.displayContent"),
-                "\(path) : le texte du commentaire est la légende de repli de son média."
+                portees.contains { $0.contains("carrierText: comment.displayContent") },
+                "\(hote.galerie) : le texte du commentaire est la légende de repli de son média — "
+                + "introuvable chez lui ni chez sa ligne (\(hote.ligne.joined(separator: ", ")))."
             )
         }
     }

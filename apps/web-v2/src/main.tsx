@@ -12,7 +12,7 @@ import { sessionStore } from '@/lib/api/session';
 import { currentInterfaceLanguage, subscribeInterfaceLanguage } from '@/lib/interface-language';
 import { useRoute } from '@/lib/router';
 import { followSystem } from '@/lib/scheme';
-import { resolveRouteAccess } from '@/lib/session-guard';
+import { landingAfterSession, resolveRouteAccess } from '@/lib/session-guard';
 import { Router, href, navigate } from '@/routes/route-table';
 
 /**
@@ -64,14 +64,19 @@ if (import.meta.env.DEV) void import('@/lib/api/dev-harness');
  * est déjà là, pas à ajouter.
  */
 function SessionGate({ children }: { children: ReactNode }) {
-  const { key } = useRoute();
+  const { key, search } = useRoute();
   const status = useStore(sessionStore, (s) => s.session.status);
   const decision = resolveRouteAccess({ sessionStatus: status, source: apiDeps.source, routeKey: key });
+  /* `next` (#5561) — une session qui s'ouvre sur `/login?next=/chat/<lien>`
+     fait naviguer l'écran ET cette garde, dans le MÊME rendu. L'effet du
+     parent s'exécute APRÈS celui de l'enfant : si la garde ne lisait pas
+     `next`, son `/` recouvrirait le retour à l'invitation. */
+  const next = search.get('next');
 
   useEffect(() => {
     if (decision === 'redirect-login') navigate(href('login'), true);
-    if (decision === 'redirect-home') navigate(href('list'), true);
-  }, [decision]);
+    if (decision === 'redirect-home') navigate(landingAfterSession(next, href('list')), true);
+  }, [decision, next]);
 
   return decision === 'allow' ? children : <Skeleton />;
 }

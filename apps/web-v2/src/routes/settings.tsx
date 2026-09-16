@@ -2,7 +2,8 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from 'zustand/react';
 
-import { ADMIN_PERMISSIONS_QUERY_KEY, loadAdminIdentity } from '@/lib/api/admin';
+import { adminIdentityQueryOptions } from '@/lib/api/admin';
+import { canEnterAdmin } from '@/lib/admin/sections';
 import { performPreferenceEdit, type PreferenceActionDeps } from '@/lib/api/app-preferences-actions';
 import { appPreferencesQueryOptions, type PreferencesPatch, type ThemeMode } from '@/lib/api/app-preferences';
 import { logout } from '@/lib/api/auth';
@@ -145,17 +146,8 @@ export default function SettingsScreen() {
    * lui-même. Une erreur affichée ici apprendrait à un visiteur ordinaire
    * qu'il existe un espace qu'on lui refuse.
    */
-  const droits = useQuery({
-    queryKey: ADMIN_PERMISSIONS_QUERY_KEY,
-    queryFn: async ({ signal }) => {
-      const resultat = await loadAdminIdentity({ ...apiDeps, signal });
-      if (!resultat.ok) throw new Error(resultat.error);
-      return resultat.data;
-    },
-    staleTime: 5 * 60 * 1000,
-    retry: false,
-  });
-  const peutAdministrer = droits.data?.permissions.canAccessAdmin === true;
+  const droits = useQuery(adminIdentityQueryOptions(apiDeps));
+  const peutAdministrer = canEnterAdmin(droits.data?.permissions ?? null);
   const online = useOnline();
   const sessionUser = useStore(sessionStore, (state) => (state.session.status === 'authenticated' ? state.session.user : null));
   const enabled = apiDeps.source === 'fixtures' || sessionUser !== null;
@@ -227,7 +219,13 @@ export default function SettingsScreen() {
             onInterfaceLanguage={chooseInterfaceLanguage}
             primaryLanguage={sessionUser?.systemLanguage ?? null}
           />
-          <NotificationsSection language={language} view={view} disabled={!online} onToggle={toggle} onRetry={() => void query.refetch()} />
+          <NotificationsSection
+            language={language}
+            view={view}
+            disabled={!online}
+            onToggle={toggle}
+            onRetry={() => void query.refetch()}
+          />
           <DataSection language={language} />
           <ToolsSection language={language} showAdmin={peutAdministrer} />
           <AboutSection language={language} version={__APP_VERSION__} />

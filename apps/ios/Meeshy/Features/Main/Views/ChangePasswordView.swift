@@ -37,9 +37,16 @@ struct ChangePasswordView: View {
         ZStack {
             theme.backgroundGradient.ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                header
-                scrollContent
+            // L'en-tête partagé porte le retour en verre (#6481) ; la page
+            // possède le défilement, l'écran ne fournit que son formulaire.
+            CollapsibleHeaderPage(
+                title: String(localized: "auth.password.change.title", defaultValue: "Mot de passe", bundle: .main),
+                onBack: { dismiss() },
+                titleColor: theme.textPrimary,
+                backArrowColor: Color(hex: accentColor),
+                backgroundColor: theme.backgroundPrimary
+            ) {
+                formContent
             }
 
             if showSuccess {
@@ -48,54 +55,20 @@ struct ChangePasswordView: View {
         }
     }
 
-    // MARK: - Header
+    // MARK: - Form Content
 
-    private var header: some View {
-        HStack {
-            Button {
-                HapticFeedback.light()
-                dismiss()
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "chevron.backward")
-                        .font(.subheadline.weight(.semibold))
-                    Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
-                        .font(.subheadline.weight(.medium))
-                }
-                .foregroundColor(Color(hex: accentColor))
-            }
-            .accessibilityLabel(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
+    private var formContent: some View {
+        VStack(spacing: 24) {
+            currentPasswordSection
+            newPasswordSection
+            validationHints
+            saveButton
 
-            Spacer()
-
-            Text(String(localized: "auth.password.change.title", defaultValue: "Mot de passe", bundle: .main))
-                .font(.headline.weight(.bold))
-                .foregroundColor(theme.textPrimary)
-                .accessibilityAddTraits(.isHeader)
-
-            Spacer()
-
-            Color.clear.frame(width: 60, height: 24)
+            Spacer().frame(height: 40)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-    }
-
-    // MARK: - Scroll Content
-
-    private var scrollContent: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: 24) {
-                currentPasswordSection
-                newPasswordSection
-                validationHints
-                saveButton
-
-                Spacer().frame(height: 40)
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 16)
-        }
+        .padding(.top, 16)
+        .iPadFormWidth()
     }
 
     // MARK: - Current Password
@@ -246,6 +219,7 @@ struct ChangePasswordView: View {
                 )
             }
             .disabled(!isValid || isSaving)
+            .accessibilityIdentifier("auth.password.change.submit")
         }
     }
 

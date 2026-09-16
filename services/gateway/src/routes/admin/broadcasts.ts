@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import type { Prisma } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { SecuritySanitizer } from '../../utils/sanitize';
 import { sendSuccess, sendInternalError, sendNotFound, sendBadRequest } from '../../utils/response';
@@ -7,7 +8,7 @@ import { broadcastTargetLanguages } from '../../jobs/broadcast-recipients';
 import { BroadcastSenderJob } from '../../jobs/broadcast-sender';
 import { BroadcastInAppSenderJob } from '../../jobs/broadcast-inapp-sender';
 import { EmailService } from '../../services/EmailService';
-import { resolveSystemLanguageVariants } from '../../jobs/broadcast-recipients';
+import { activityWindow, emailChannelRecipientConstraint, resolveSystemLanguageVariants, type BroadcastTargeting } from '../../jobs/broadcast-recipients';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { UnifiedAuthRequest } from '../../middleware/auth';
@@ -83,7 +84,7 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
       const offsetNum = Math.max(0, parseInt(offset, 10) || 0);
       const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || /* istanbul ignore next -- Zod always provides a valid limit */ 20), 100);
 
-      const where: any = {};
+      const where: Prisma.AdminBroadcastWhereInput = {};
       if (status) {
         where.status = status;
       }
@@ -108,7 +109,7 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
           hasMore: offsetNum + limitNum < total,
         },
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error listing broadcasts');
       return sendInternalError(reply, 'Erreur lors de la recuperation des broadcasts');
     }
@@ -131,7 +132,7 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
         subject: string;
         body: string;
         sourceLanguage: string;
-        targeting?: any;
+        targeting?: BroadcastTargeting;
       };
 
       /* istanbul ignore next -- Zod CreateBroadcastBodySchema enforces all required fields; guard unreachable */
@@ -166,7 +167,7 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
       });
 
       return sendSuccess(reply, broadcast, { statusCode: 201 });
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error creating broadcast');
       return sendInternalError(reply, 'Erreur lors de la creation du broadcast');
     }
@@ -192,7 +193,7 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
       }
 
       return sendSuccess(reply, broadcast);
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error fetching broadcast');
       return sendInternalError(reply, 'Erreur lors de la recuperation du broadcast');
     }
@@ -226,10 +227,10 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
         subject?: string;
         body?: string;
         sourceLanguage?: string;
-        targeting?: any;
+        targeting?: BroadcastTargeting;
       };
 
-      const updateData: any = {};
+      const updateData: Prisma.AdminBroadcastUpdateInput = {};
       if (name !== undefined) updateData.name = SecuritySanitizer.sanitizeText(name);
       if (subject !== undefined) updateData.subject = SecuritySanitizer.sanitizeText(subject);
       if (body !== undefined) updateData.body = SecuritySanitizer.sanitizeText(body);
@@ -242,7 +243,7 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
       });
 
       return sendSuccess(reply, broadcast);
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error updating broadcast');
       return sendInternalError(reply, 'Erreur lors de la mise a jour du broadcast');
     }
@@ -268,10 +269,14 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
       }
 
       // Build recipient filter (same logic as BroadcastSenderJob)
-      const targeting = (broadcast.targeting || {}) as any;
+      const targeting = (broadcast.targeting || {}) as BroadcastTargeting;
 
-      const where: any = {
-        emailVerifiedAt: { not: null },
+      // La contrainte du CANAL e-mail vient du MÊME site que le job d'envoi
+      // (#6581) : l'aperçu ne doit pas annoncer un destinataire que l'envoi
+      // écarte — ni compter les trois adresses de bootstrap, vérifiées d'office
+      // justement parce qu'elles ne reçoivent aucun courrier.
+      const where: Prisma.UserWhereInput = {
+        ...emailChannelRecipientConstraint(),
         isActive: true,
         deletedAt: null,
       };
@@ -288,33 +293,10 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
         where.registrationCountry = { in: targeting.countries };
       }
 
-      if (targeting.activityStatus) {
-        const now = new Date();
-        switch (targeting.activityStatus) {
-          case 'active': {
-            // Active in last 30 days
-            const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-            where.lastActiveAt = { gte: thirtyDaysAgo };
-            break;
-          }
-          case 'inactive': {
-            // No activity in last 30 days
-            const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-            where.OR = [
-              { lastActiveAt: { lt: thirtyDaysAgo } },
-              { lastActiveAt: null },
-            ];
-            break;
-          }
-          case 'new': {
-            // Registered in last 7 days
-            const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-            where.createdAt = { gte: sevenDaysAgo };
-            break;
-          }
-          // 'all' or unrecognized -> no additional filter
-        }
-      }
+      // Même SSOT que l'envoi réel (#6777) — `activityWindow` est la SEULE
+      // fonction qui décide de la fenêtre d'ancienneté/activité, pour les
+      // quatre valeurs de `activityStatus`.
+      Object.assign(where, activityWindow(targeting, new Date()));
 
       // Count total recipients
       const recipientCount = await fastify.prisma.user.count({ where });
@@ -392,14 +374,14 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
           language,
           count,
         })),
-        recipientsByCountry: recipientsByCountry.map((g: any) => ({
+        recipientsByCountry: recipientsByCountry.map((g) => ({
           country: g.registrationCountry,
           count: g._count,
         })),
         translations,
         broadcast: updatedBroadcast,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error previewing broadcast');
       return sendInternalError(reply, 'Erreur lors de la preview du broadcast');
     }
@@ -457,12 +439,12 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
       // Launch BroadcastSenderJob fire-and-forget
       const emailService = new EmailService();
       const job = new BroadcastSenderJob(fastify.prisma, emailService);
-      job.execute(id).catch((err: any) => {
-        logger.error(`Broadcast job failed for id=${id}: ${err.message}`);
+      job.execute(id).catch((err: unknown) => {
+        logger.error(`Broadcast job failed for id=${id}: ${err instanceof Error ? err.message : 'Unknown error'}`);
       });
 
       return sendSuccess(reply, undefined, { message: 'Envoi en cours' });
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error sending broadcast');
       return sendInternalError(reply, 'Erreur lors du lancement de l\'envoi du broadcast');
     }
@@ -565,7 +547,7 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
       });
 
       return sendSuccess(reply, undefined, { message: 'Broadcast supprime' });
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Error deleting broadcast');
       return sendInternalError(reply, 'Erreur lors de la suppression du broadcast');
     }

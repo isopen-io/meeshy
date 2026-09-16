@@ -27,6 +27,13 @@ data class CanvasV3(
     val v: Int = 3,
     val scenes: List<SceneV3> = emptyList(),
     val sound: BackgroundSoundV3? = null,
+    /**
+     * La disposition choisie par l'auteur (`CanvasV3.layout`, #6514) ; `null`
+     * pour toute publication antérieure au 2026-09-06. Décodée tolérante
+     * ([MosaicLayoutModeSerializer]) : une valeur inconnue ne fait pas échouer
+     * le document.
+     */
+    val layout: MosaicLayoutMode? = null,
 )
 
 @Serializable

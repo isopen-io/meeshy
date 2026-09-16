@@ -130,6 +130,90 @@ final class MediaGalleryStageGeometryTests: XCTestCase {
                        accuracy: 0.5)
     }
 
+    // MARK: - Le plancher de LARGEUR se dérive aussi (#6692)
+
+    /// **Le jumeau du plancher de hauteur n'est pas un nombre non plus.** Ce qui
+    /// se pose sur le cadre a une LARGEUR : la colonne réagir · répondre ·
+    /// composer, décollée du bord par une gouttière et du milieu par une autre,
+    /// tient dans le TIERS latéral du cadre — les tiers que la loi du double tap
+    /// découpe déjà (`MediaStageSeek.lateralFraction`). Le témoin porte sur les
+    /// IDENTITÉS : si la cible, la gouttière ou le tiers changent, le plancher
+    /// suit sans qu'on y touche.
+    func test_theWidthFloor_isTheActionColumnBandInTheLateralThird_neverAChosenNumber() {
+        XCTAssertEqual(
+            MediaGalleryStage.minimumFrameWidth,
+            (MediaGalleryStage.gutter + MediaStageActionColumn.width + MediaGalleryStage.gutter)
+                / MediaStageSeek.lateralFraction,
+            accuracy: 0.001
+        )
+    }
+
+    /// **L'image de la recette : 900 × 3 600.** Sans plancher de largeur, son
+    /// cadre ne gardait que la largeur du média ajusté : l'auteur, la date et la
+    /// ligne de format passaient chacun sur deux lignes, la dernière débordait
+    /// sous le coin arrondi, et la colonne d'actions se posait au milieu de
+    /// l'image. Le cadre s'arrête désormais au plancher ; le média garde sa
+    /// taille et flotte dedans, sur son hors-champ habillé.
+    func test_carded_veryTallImage_keepsTheWidthFloor_andItsMediaFloats() {
+        let resolved = resolve(ratio: 900.0 / 3_600.0)
+
+        XCTAssertEqual(resolved.media.height, 603, accuracy: 0.5,
+                       "contrainte par la hauteur libre")
+        XCTAssertEqual(resolved.media.width, 150.75, accuracy: 0.5,
+                       "603 × 0,25 — le média n'est ni rogné ni étiré")
+        XCTAssertEqual(resolved.frame.width, MediaGalleryStage.minimumFrameWidth, accuracy: 0.5,
+                       "le CADRE s'arrête au plancher de largeur")
+        XCTAssertEqual(resolved.frame.height, resolved.media.height, accuracy: 0.5)
+        XCTAssertTrue(resolved.letterboxes,
+                      "deux bandes latérales, que le ThumbHash habille (#6143)")
+    }
+
+    /// **Aucun ratio courant ne change de cadre**, pas même sur le cadre le plus
+    /// ÉTROIT qu'un média courant puisse recevoir : la 9:16 d'un lot qui réserve
+    /// à la fois le rail et la bande de progression (555 × 0,5625 ≈ 312 pt sur
+    /// 390 × 844, 582 × 0,5625 ≈ 327 pt sur l'iPhone 16 Pro réel de la recette).
+    ///
+    /// Vert des deux côtés du diff, et c'est dit : ce qu'il attrape est le lot
+    /// qui REMONTERAIT le plancher. Recopier les 330 du plancher de hauteur
+    /// élargirait déjà cette scène de 18 pt.
+    func test_theWidthFloor_changesNoCommonRatio_evenOnTheNarrowestCadre() {
+        let video = MessageAttachment(
+            id: "fixture-video",
+            mimeType: "video/mp4",
+            fileSize: 4_204_800,
+            fileUrl: "https://cdn.meeshy.me/fixture.mp4",
+            width: 1_080,
+            height: 1_920,
+            duration: 12_000,
+            uploadedBy: "u-fixture"
+        )
+        let lots = [MediaGalleryLot.imagesOnly(6), MediaGalleryLot.imagesOnly(5) + [video]]
+        let ecrans: [(viewport: CGSize, safeTop: CGFloat, safeBottom: CGFloat)] = [
+            (CGSize(width: 390, height: 844), 59, 34),
+            (CGSize(width: 402, height: 874), 62, 34),
+        ]
+
+        XCTAssertGreaterThan(MediaGalleryStage.corridors(safeTop: 59, safeBottom: 34, attachments: lots[1]).transport, 0,
+                             "le second lot réserve bien la bande : c'est lui qui rend le cadre le plus étroit")
+
+        for ecran in ecrans {
+            for lot in lots {
+                for ratio in [0.8, 0.5625, 16.0 / 9.0] {
+                    let resolved = MediaGalleryStage.resolve(
+                        viewport: ecran.viewport,
+                        mediaRatio: ratio,
+                        presentation: .carded,
+                        corridors: MediaGalleryStage.corridors(safeTop: ecran.safeTop,
+                                                               safeBottom: ecran.safeBottom,
+                                                               attachments: lot)
+                    )
+                    XCTAssertEqual(resolved.frame.width, resolved.media.width, accuracy: 0.5,
+                                   "ratio \(ratio) sur \(ecran.viewport) : le plancher de largeur ne doit pas mordre")
+                }
+            }
+        }
+    }
+
     // MARK: - Un média sans proportions connues
 
     /// Beaucoup de pièces jointes arrivent sans `width` ni `height`. Le cadre ne
@@ -324,9 +408,112 @@ final class MediaGalleryStageGeometryTests: XCTestCase {
                       "le rayon vient du solveur : il tombe à 0 en plein cadre")
     }
 
+    // MARK: - Ce que la colonne d'actions a SOUS elle (#6709)
+
+    /// **La colonne se teinte sur ce qui est PEINT sous elle, pas sur le média de
+    /// la page.** Recette du 2026-09-16 (Meeshy-iOS26, PR #6761) : depuis #6760 le
+    /// chrome s'aligne sur le PLATEAU, et sur la page panorama 4:1 d'un post la
+    /// colonne tombe SOUS le cadre (cadre arrêté à y ≈ 598, colonne à y 649), sur le
+    /// sol noir de la galerie ; teintée d'après la luminance CLAIRE du panorama, son
+    /// glyphe sombre se lisait à 1,16:1. **Même quand la pièce porte une empreinte** :
+    /// aucune page ne la peint hors de son cadre.
+    func test_laColonneSousLeCadre_surLeSolDuPlateau_seLitSurLeNoir_memeAvecEmpreinte() {
+        let panorama = resolve(ratio: 4)
+        let piece = makeAttachment(width: 1_600, height: 400, thumbHash: "empreinte")
+        let region = Self.region(autour: panorama)
+
+        XCTAssertNil(
+            MediaGalleryStage.columnBackdrop(for: piece, stage: panorama, region: region,
+                                             columnFrame: Self.colonne(sousLeCadreDe: panorama, dans: region)),
+            "hors du cadre, le sol est noir : ni la vignette ni l'empreinte ne sont sous la colonne"
+        )
+        XCTAssertEqual(MediaChromeScheme.scheme(for: nil, sample: nil), .dark,
+                       "sur le noir, le glyphe reste clair")
+    }
+
+    /// Dans la bande NUE du cadre — une pièce sans empreinte —, le fond est noir aussi.
+    func test_laColonneDansLaBandeDUnPanorama_sansEmpreinte_seLitSurLeNoir() {
+        let panorama = resolve(ratio: 4)
+        let piece = makeAttachment(width: 1_600, height: 400)
+        let region = Self.region(autour: panorama)
+
+        XCTAssertNil(
+            MediaGalleryStage.columnBackdrop(for: piece, stage: panorama, region: region,
+                                             columnFrame: Self.colonne(dansLaBandeDe: panorama, dans: region)),
+            "la bande est noire : la vignette claire du panorama n'est pas sous la colonne"
+        )
+    }
+
+    /// La bande HABILLÉE peint l'empreinte floutée (#6143) : c'est elle, et elle
+    /// seule, que la colonne doit lire — jamais la vignette nette du média.
+    func test_laColonneDansLaBande_avecEmpreinte_suitLEmpreinteSeule() throws {
+        let panorama = resolve(ratio: 4)
+        let piece = makeAttachment(width: 1_600, height: 400, thumbHash: "empreinte")
+        let region = Self.region(autour: panorama)
+        let fond = try XCTUnwrap(MediaGalleryStage.columnBackdrop(
+            for: piece, stage: panorama, region: region,
+            columnFrame: Self.colonne(dansLaBandeDe: panorama, dans: region)))
+
+        XCTAssertEqual(fond.thumbHash, "empreinte")
+        XCTAssertNil(fond.bitmapURL, "la bande peint l'empreinte, jamais la vignette nette")
+    }
+
+    /// Posée SUR le média, la colonne garde la règle de #6693 : la luminance du média.
+    /// Le média se lit là où la région le POSE — au milieu —, jamais à son origine :
+    /// une colonne au bas d'un portrait est sur lui.
+    func test_laColonnePoseeSurLeMedia_suitLeMedia() {
+        let portrait = resolve(ratio: 0.8)
+        let piece = makeAttachment(width: 1_600, height: 2_000)
+        let region = Self.region(autour: portrait)
+        let basDuMedia = (region.height + portrait.media.height) / 2
+        let surLeMedia = CGRect(x: (region.width + portrait.media.width) / 2 - 56, y: basDuMedia - 60,
+                                width: 44, height: 44)
+
+        XCTAssertEqual(MediaGalleryStage.columnBackdrop(for: piece, stage: portrait, region: region,
+                                                        columnFrame: surLeMedia),
+                       .attachment(piece))
+    }
+
+    /// Avant la première mesure — de la colonne ou de sa région —, rien ne dit où est
+    /// la colonne : elle garde le fond du média plutôt que de basculer au noir le
+    /// temps d'une passe.
+    func test_avantSaMesure_laColonneGardeLeFondDuMedia() {
+        let panorama = resolve(ratio: 4)
+        let piece = makeAttachment(width: 1_600, height: 400)
+        let region = Self.region(autour: panorama)
+
+        XCTAssertEqual(MediaGalleryStage.columnBackdrop(for: piece, stage: panorama, region: region,
+                                                        columnFrame: .zero),
+                       .attachment(piece))
+        XCTAssertEqual(MediaGalleryStage.columnBackdrop(for: piece, stage: panorama, region: .zero,
+                                                        columnFrame: Self.colonne(sousLeCadreDe: panorama,
+                                                                                  dans: region)),
+                       .attachment(piece))
+    }
+
+    /// La région du plateau autour d'un cadre plus court qu'elle — celle où #6760 pose
+    /// le chrome. Le cadre y est au milieu : 16 pt de chaque côté, 120 pt dessus et dessous.
+    private static func region(autour stage: MediaStageFraming.Result) -> CGSize {
+        CGSize(width: stage.frame.width + 32, height: stage.frame.height + 240)
+    }
+
+    /// Une colonne d'une action au bord droit, 12 pt sous le bas du média : dans la
+    /// bande du cadre.
+    private static func colonne(dansLaBandeDe stage: MediaStageFraming.Result, dans region: CGSize) -> CGRect {
+        let basDuMedia = (region.height + stage.media.height) / 2
+        return CGRect(x: region.width - 56, y: basDuMedia + 12, width: 44, height: 44)
+    }
+
+    /// Une colonne d'une action 51 pt sous le bas du CADRE — l'écart que la recette a
+    /// mesuré sur le panorama (cadre arrêté à y ≈ 598, colonne à y 649).
+    private static func colonne(sousLeCadreDe stage: MediaStageFraming.Result, dans region: CGSize) -> CGRect {
+        let basDuCadre = (region.height + stage.frame.height) / 2
+        return CGRect(x: region.width - 56, y: basDuCadre + 51, width: 44, height: 44)
+    }
+
     // MARK: - Fabrique
 
-    private func makeAttachment(width: Int?, height: Int?) -> MessageAttachment {
+    private func makeAttachment(width: Int?, height: Int?, thumbHash: String? = nil) -> MessageAttachment {
         MessageAttachment(
             id: "a-\(width ?? -1)x\(height ?? -1)",
             mimeType: "image/jpeg",
@@ -334,6 +521,7 @@ final class MediaGalleryStageGeometryTests: XCTestCase {
             fileUrl: "https://cdn.meeshy.me/a.jpg",
             width: width,
             height: height,
+            thumbHash: thumbHash,
             uploadedBy: "u-1"
         )
     }

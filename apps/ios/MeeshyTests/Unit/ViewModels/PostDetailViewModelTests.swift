@@ -78,13 +78,25 @@ final class PostDetailViewModelTests: XCTestCase {
         XCTAssertEqual(mock.getPostCallCount, 1)
     }
 
-    func test_loadPost_error_setsError() async {
+    /// #6508 — le ViewModel retient la CAUSE, pas une phrase : c'est elle qui
+    /// décide si l'écran parle de connexion, du serveur ou d'indisponibilité.
+    func test_loadPost_serverError_recordsTheServerCause() async {
         let (sut, mock) = makeSUT()
-        mock.getPostResult = .failure(NSError(domain: "test", code: 404, userInfo: [NSLocalizedDescriptionKey: "Not found"]))
+        mock.getPostResult = .failure(MeeshyError.server(statusCode: 500, message: "Erreur serveur"))
 
         await sut.loadPost("p1")
 
-        XCTAssertNotNil(sut.error)
+        XCTAssertEqual(sut.loadFailure, .server)
+        XCTAssertNil(sut.post)
+    }
+
+    func test_loadPost_notFound_recordsTheAbsence() async {
+        let (sut, mock) = makeSUT()
+        mock.getPostResult = .failure(MeeshyError.server(statusCode: 404, message: "Post not found"))
+
+        await sut.loadPost("p1")
+
+        XCTAssertEqual(sut.loadFailure, .notFound)
         XCTAssertNil(sut.post)
     }
 
@@ -384,7 +396,7 @@ final class PostDetailViewModelTests: XCTestCase {
         mock.getPostResult = .success(apiPost)
         await sut.loadPost("p1")
 
-        await sut.sendComment("New comment")
+        await sut.sendComment("New comment", originalLanguage: "en")
 
         // sendComment inserts an optimistic comment carrying a `cmid` id and
         // enqueues a createComment outbox op; the authoritative server id
@@ -403,9 +415,58 @@ final class PostDetailViewModelTests: XCTestCase {
         mock.getPostResult = .success(apiPost)
         await sut.loadPost("p1")
 
-        await sut.sendComment("Failing comment")
+        await sut.sendComment("Failing comment", originalLanguage: "en")
 
         XCTAssertTrue(sut.comments.isEmpty)
+    }
+
+    // MARK: - Langue d'écriture sur la LIGNE OPTIMISTE (#6587)
+    //
+    // `FeedComment.originalLanguage` n'est pas décoratif : il alimente la
+    // descente du prisme (`resolveCommentTranslation`) et la pastille
+    // `LanguageFlagChip`. Le lot #6587 a fait voyager la langue déclarée
+    // jusqu'au serveur ; la ligne que l'auteur VOIT pendant ce temps ne la
+    // portait pas — il lisait donc son propre commentaire frais SANS pastille,
+    // et la ligne était PERSISTÉE ainsi (`savePreservingFreshness` suit
+    // l'enfilement), donc l'écart survivait à un redémarrage jusqu'à l'écho
+    // socket. C'est « qui AFFICHE ce que tu résous » appliqué à la valeur que
+    // le lot venait de rendre disponible.
+    //
+    // La langue déclarée est délibérément DIFFÉRENTE de celle que le contenu
+    // suggère : un témoin qui déclarerait « fr » sur du français ne pourrait
+    // pas distinguer une déclaration servie d'une devinette.
+
+    func test_sendComment_stampsTheAuthoredLanguageOnTheOptimisticRow() async {
+        let queue = MockOfflineQueue()
+        let (sut, mock) = makeSUT(offlineQueue: queue)
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+
+        await sut.sendComment("Ceci a tout l'air d'être du français", originalLanguage: "de")
+
+        XCTAssertEqual(sut.comments.first?.originalLanguage, "de",
+                       "la ligne optimiste doit porter la langue de la pastille, pas nil")
+        let payload = queue.enqueueCalls.first?.payload as? CreateCommentPayload
+        XCTAssertEqual(payload?.originalLanguage, sut.comments.first?.originalLanguage,
+                       "la ligne AFFICHÉE et la ligne ENVOYÉE déclarent la même langue")
+    }
+
+    func test_sendReply_stampsTheAuthoredLanguageOnTheOptimisticReply() async {
+        let queue = MockOfflineQueue()
+        let (sut, mock) = makeSUT(offlineQueue: queue)
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+        let root = FeedComment(id: "c1", author: "alice", authorId: "a1", content: "Top", replies: 0)
+        sut.comments = [root]
+        sut.replyingTo = root
+
+        await sut.sendReply("Ceci a tout l'air d'être du français", originalLanguage: "de")
+
+        XCTAssertEqual(sut.repliesMap["c1"]?.first?.originalLanguage, "de",
+                       "la réponse optimiste doit porter la langue de la pastille, pas nil")
+        let payload = queue.enqueueCalls.first?.payload as? CreateCommentPayload
+        XCTAssertEqual(payload?.originalLanguage, sut.repliesMap["c1"]?.first?.originalLanguage,
+                       "la réponse AFFICHÉE et la réponse ENVOYÉE déclarent la même langue")
     }
 
     // MARK: - likePost
@@ -547,7 +608,7 @@ final class PostDetailViewModelTests: XCTestCase {
         mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
         await sut.loadPost("p1")
 
-        await sut.sendComment("doomed comment")
+        await sut.sendComment("doomed comment", originalLanguage: "en")
         XCTAssertEqual(sut.comments.count, 1, "optimistic comment inserted")
         XCTAssertEqual(sut.comments[0].content, "doomed comment")
 
@@ -673,7 +734,7 @@ final class PostDetailViewModelTests: XCTestCase {
         sut.comments = [root]
         sut.replyingTo = root
 
-        await sut.sendReply("Coucou", effectFlags: 4)
+        await sut.sendReply("Coucou", originalLanguage: "en", effectFlags: 4)
 
         XCTAssertEqual(queue.enqueueCalls.first?.kind, .createComment,
                        "une réponse texte transite par l'outbox durable, pas par un appel direct")
@@ -694,7 +755,7 @@ final class PostDetailViewModelTests: XCTestCase {
         // Répondre à une réponse de niveau 2 …
         sut.replyingTo = reply
 
-        await sut.sendReply("@bob ok")
+        await sut.sendReply("@bob ok", originalLanguage: "en")
 
         // … reste plat au niveau 2 : rattaché au MÊME parent racine (c1), pas à r1.
         let payload = queue.enqueueCalls.first?.payload as? CreateCommentPayload
@@ -715,7 +776,7 @@ final class PostDetailViewModelTests: XCTestCase {
         sut.comments = [root]
         sut.replyingTo = root
 
-        await sut.sendReply("Coucou")
+        await sut.sendReply("Coucou", originalLanguage: "en")
 
         XCTAssertEqual(sut.repliesMap["c1"]?.first?.id.hasPrefix("cmid") ?? false, true,
                        "la réponse optimiste est keyée par cmid, pas par un id serveur")
@@ -735,7 +796,7 @@ final class PostDetailViewModelTests: XCTestCase {
         sut.comments = [root]
         sut.replyingTo = root
 
-        await sut.sendReply("Coucou")
+        await sut.sendReply("Coucou", originalLanguage: "en")
 
         XCTAssertEqual(sut.repliesMap["c1"]?.isEmpty ?? true, true,
                        "l'enfilement refusé doit retirer la réponse optimiste")
@@ -758,7 +819,7 @@ final class PostDetailViewModelTests: XCTestCase {
         await sut.loadPost("p1")
         sut.subscribeToSocket("p1")
 
-        await sut.sendComment("Hello")
+        await sut.sendComment("Hello", originalLanguage: "en")
         guard let cmid = (queue.enqueueCalls.first?.payload as? CreateCommentPayload)?.clientMutationId else {
             return XCTFail("no createComment enqueue")
         }
@@ -790,7 +851,7 @@ final class PostDetailViewModelTests: XCTestCase {
         sut.comments = [root]
         sut.replyingTo = root
 
-        await sut.sendReply("Coucou")
+        await sut.sendReply("Coucou", originalLanguage: "en")
         guard let cmid = (queue.enqueueCalls.first?.payload as? CreateCommentPayload)?.clientMutationId else {
             return XCTFail("no createComment enqueue")
         }
@@ -846,7 +907,7 @@ final class PostDetailViewModelTests: XCTestCase {
                                    translatedContent: "Before", currentUserReactions: nil)
         sut.comments = [original]
 
-        await sut.updateComment(original, content: "Après", effectFlags: 65536)
+        await sut.updateComment(original, content: "Après", effectFlags: 65536, originalLanguage: nil)
 
         XCTAssertEqual(sut.comments.count, 1, "édition = remplacement, jamais d'insertion")
         XCTAssertEqual(sut.comments.first?.content, "Après")
@@ -867,9 +928,42 @@ final class PostDetailViewModelTests: XCTestCase {
         let original = FeedComment(id: "c1", author: "moi", authorId: "me", content: "Avant")
         sut.comments = [original]
 
-        await sut.updateComment(original, content: "Après", effectFlags: 0)
+        await sut.updateComment(original, content: "Après", effectFlags: 0, originalLanguage: nil)
 
         XCTAssertEqual(sut.comments.first?.content, "Avant", "refus serveur → rollback complet")
+    }
+
+    /// #6600 — la langue de la pastille traverse le ViewModel jusqu'au service :
+    /// corriger un commentaire la DÉCLARE, la passerelle ne la remet plus à null.
+    func test_updateComment_withDeclaredLanguage_forwardsItToTheService() async {
+        let mock = MockPostService()
+        mock.updateCommentResult = .success(Self.stubComment)
+        let (sut, _) = makeSUT(postService: mock)
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+        let original = FeedComment(id: "c1", author: "moi", authorId: "me", content: "Hola", originalLanguage: "es")
+        sut.comments = [original]
+
+        await sut.updateComment(original, content: "Hola a todos", effectFlags: 0, originalLanguage: "es")
+
+        XCTAssertEqual(mock.updateCommentCallCount, 1)
+        XCTAssertEqual(mock.lastUpdateCommentOriginalLanguage, "es")
+    }
+
+    /// Repli : une édition sans langue déclarée n'en invente aucune.
+    func test_updateComment_withoutDeclaredLanguage_sendsNone() async {
+        let mock = MockPostService()
+        mock.updateCommentResult = .success(Self.stubComment)
+        let (sut, _) = makeSUT(postService: mock)
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+        let original = FeedComment(id: "c1", author: "moi", authorId: "me", content: "Avant")
+        sut.comments = [original]
+
+        await sut.updateComment(original, content: "Après", effectFlags: 0, originalLanguage: nil)
+
+        XCTAssertEqual(mock.updateCommentCallCount, 1)
+        XCTAssertNil(mock.lastUpdateCommentOriginalLanguage)
     }
 
     /// L'écho `comment:updated` d'un AUTRE appareil remplace la ligne en place.
@@ -1344,5 +1438,66 @@ final class PostDetailViewModelTests: XCTestCase {
 
         XCTAssertEqual(writes.first?.comments.map(\.id), ["c1"],
                        "une ligne optimiste persistée resterait en cache pour toujours : le serveur ne la renverra jamais")
+    }
+
+    // MARK: - applyCommentTranslationUpdate (#6531 — jumelle de FeedViewModel.applyCommentTranslation)
+
+    func test_applyCommentTranslationUpdate_originalLanguageAtHigherRank_isNotOverwritten() {
+        let (sut, _) = makeSUT(preferredLanguages: ["fr", "en"])
+        sut.comments = [FeedComment(id: "c1", author: "bob", content: "Salut", originalLanguage: "fr")]
+
+        sut.applyCommentTranslationUpdate(commentId: "c1", language: "en", text: "Hi")
+
+        XCTAssertNil(sut.comments.first?.translatedContent,
+                      "le français (rang 1, langue d'origine) doit primer sur l'anglais reçu")
+    }
+
+    func test_applyCommentTranslationUpdate_translationRankedAboveOriginal_isApplied() {
+        let (sut, _) = makeSUT(preferredLanguages: ["en", "fr"])
+        sut.comments = [FeedComment(id: "c1", author: "bob", content: "Salut", originalLanguage: "fr")]
+
+        sut.applyCommentTranslationUpdate(commentId: "c1", language: "en", text: "Hi")
+
+        XCTAssertEqual(sut.comments.first?.translatedContent, "Hi")
+    }
+
+    func test_applyCommentTranslationUpdate_appliesToAReply_whenOriginalDoesNotOutrankIt() {
+        let (sut, _) = makeSUT(preferredLanguages: ["en", "fr"])
+        sut.comments = [FeedComment(id: "root", author: "alice", content: "Top")]
+        sut.repliesMap = ["root": [FeedComment(id: "r1", author: "bob", content: "Salut", parentId: "root", originalLanguage: "fr")]]
+
+        sut.applyCommentTranslationUpdate(commentId: "r1", language: "en", text: "Hi")
+
+        XCTAssertEqual(sut.repliesMap["root"]?.first?.translatedContent, "Hi")
+    }
+
+    // MARK: - subscribeToSocket → post:translation-updated (#6531)
+
+    /// Deuxième reproduction de l'issue : l'écran de DÉTAIL a son propre sink
+    /// `post:translation-updated` dans `subscribeToSocket`, indépendant de
+    /// `FeedViewModel`. Même défaut (la première traduction dont la langue
+    /// figure dans le Prisme devenait le texte affiché, sans tenir compte du
+    /// rang), même correctif : re-résoudre via `FeedPost.resolved`.
+    func test_subscribeToSocket_postTranslationUpdated_originalLanguageAtItsRank_winsOverLowerRankTranslation() async {
+        let mock = MockPostService()
+        let apiPost: APIPost = JSONStub.decode("""
+        {"id":"p1","type":"POST","content":"Bonjour","originalLanguage":"fr","createdAt":"2026-01-01T00:00:00.000Z","author":{"id":"a1","username":"alice"}}
+        """)
+        mock.getPostResult = .success(apiPost)
+        let socket = MockSocialSocket()
+        let (sut, _) = makeSUT(postService: mock, preferredLanguages: ["fr", "pt"], socialSocket: socket)
+        await sut.loadPost("p1")
+        sut.subscribeToSocket("p1")
+
+        let translationData: SocketPostTranslationUpdatedData = JSONStub.decode("""
+        {"postId":"p1","language":"pt","translation":{"text":"Olá","translationModel":"nllb-200","confidenceScore":0.9,"createdAt":"2026-01-15T12:00:00.000Z"}}
+        """)
+        socket.postTranslationUpdated.send(translationData)
+        await Task.yield()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertNil(sut.post?.translatedContent,
+                      "le français (rang 1, langue d'origine) doit primer sur le portugais reçu")
+        XCTAssertEqual(sut.post?.translations?["pt"]?.text, "Olá")
     }
 }

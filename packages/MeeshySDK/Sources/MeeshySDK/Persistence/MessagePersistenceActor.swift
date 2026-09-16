@@ -1630,6 +1630,12 @@ public actor MessagePersistenceActor {
                             thumbnailColor: thumbColor,
                             transcription: embeddedTranscription,
                             audioTranslations: embeddedAudioTranslations,
+                            // #6793 — ce qui se GRAVE doit porter les réactions de
+                            // la pièce, sans quoi le fil ROUVERT les perd même
+                            // quand le serveur les sert. C'est cette projection-ci
+                            // que la liste des bulles relit.
+                            reactionSummary: apiAtt.reactionSummary,
+                            currentUserReactions: apiAtt.currentUserReactions,
                             deliveredToAllAt: apiAtt.deliveredToAllAt,
                             viewedByAllAt: apiAtt.viewedByAllAt,
                             downloadedByAllAt: apiAtt.downloadedByAllAt,

@@ -4,7 +4,7 @@
   "pages": {
     "home": {
       "title": "Meeshy - Mensajería multilingüe en tiempo real",
-      "description": "Chatea con todo el mundo en tu propio idioma. Traducción automática en tiempo real para más de 100 idiomas. Únete a conversaciones globales sin barreras lingüísticas.",
+      "description": "Chatea con todo el mundo en tu propio idioma. Traducción automática en tiempo real para 76 idiomas. Únete a conversaciones globales sin barreras lingüísticas.",
       "ogImageAlt": "Meeshy - Bienvenido a la mensajería multilingüe"
     },
     "notifications": {
@@ -118,7 +118,7 @@
       "ogImageAlt": "Meeshy - Mensajería multilingüe",
       "imageTitle": "Únete a Meeshy",
       "imageSubtitle": "Mensajería multilingüe en tiempo real",
-      "imageUserName": "Más de 100 idiomas admitidos",
+      "imageUserName": "76 idiomas admitidos",
       "keywords": [
         "mensajería multilingüe",
         "traducción en tiempo real",

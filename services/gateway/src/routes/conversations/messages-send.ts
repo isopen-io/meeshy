@@ -31,6 +31,8 @@ import {
   toEncryptedPayload,
 } from '../../validation/encryption-envelope.js';
 import { MENTIONED_USER_IDS_SHAPE } from '../../validation/mention-list.js';
+import { admitAttachmentReply } from '../../services/messaging/attachmentReplySnapshot';
+import { admitMessageAttachments } from '../../services/messaging/attachmentSendAdmission';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { logger } from './messages-shared';
 
@@ -58,6 +60,13 @@ export const SendMessageBodySchema = z.object({
   originalLanguage: CommonSchemas.language.optional(),
   messageType: CommonSchemas.messageType.optional(),
   replyToId: z.string().optional(),
+  // #6164 — la PIÈCE NOMMÉE que cette réponse vise. Champ DÉDIÉ, jamais un
+  // `metadata` brut (même doctrine que `location` / `sticker`) : le serveur
+  // seul le range sous `metadata.attachmentReplyTo`, après l'avoir ADMIS.
+  // Seul `attachmentId` voyage — la NATURE est dérivée du MIME relu
+  // (`admitAttachmentReply`), pour qu'un client ne puisse pas forger le seul
+  // fait descriptif qui survive à une protection posée plus tard.
+  attachmentReplyTo: z.object({ attachmentId: z.string().min(1) }).optional(),
   storyReplyToId: z.string().optional(),
   forwardedFromId: z.string().optional(),
   forwardedFromConversationId: z.string().optional(),
@@ -141,6 +150,11 @@ export function registerSendMessageRoute(
           originalLanguage: { type: 'string', description: 'Language code (e.g., fr, en)', default: 'fr' },
           messageType: { type: 'string', enum: ['text', 'image', 'file', 'audio', 'video'], default: 'text' },
           replyToId: { type: 'string', description: 'ID of message being replied to' },
+          attachmentReplyTo: {
+            type: 'object',
+            properties: { attachmentId: { type: 'string' } },
+            description: 'Pièce jointe NOMMÉE du message cité (#6164). REFUSÉ si elle n’appartient pas à replyToId, ou si replyToId ne désigne pas un message vivant de cette conversation (#6601).',
+          },
           storyReplyToId: { type: 'string', description: 'ID of story being replied to' },
           forwardedFromId: { type: 'string', description: 'ID of original forwarded message' },
           forwardedFromConversationId: { type: 'string', description: 'ID of source conversation for cross-conversation forwarding' },
@@ -188,6 +202,7 @@ export function registerSendMessageRoute(
         400: errorResponseSchema,
         401: errorResponseSchema,
         403: errorResponseSchema,
+        404: errorResponseSchema,
         500: errorResponseSchema
       }
     },
@@ -214,6 +229,7 @@ export function registerSendMessageRoute(
         originalLanguage,
         messageType = 'text',
         replyToId,
+        attachmentReplyTo,
         storyReplyToId,
         forwardedFromId,
         forwardedFromConversationId,
@@ -291,6 +307,25 @@ export function registerSendMessageRoute(
         }
       }
 
+      // #6870 — une pièce inconnue, déjà volée, ou pas encore visible par ce
+      // chemin (jamais confirmée : `associateAttachmentsToMessage` est un
+      // `updateMany` muet en aval) ne doit ni se perdre en silence ni faire
+      // échouer l'envoi sans nom. Même vérification que le transport WS
+      // (`MessageHandler.handleMessageSendWithAttachments`), AVANT que le
+      // message n'existe.
+      if (attachmentIds && attachmentIds.length > 0) {
+        const attachmentAdmission = await admitMessageAttachments(prisma, {
+          attachmentIds,
+          ownerId: userId ?? participantId,
+        });
+        if (!attachmentAdmission.ok) {
+          return sendNotFound(reply, 'Attachment not found', {
+            code: 'ATTACHMENT_NOT_FOUND',
+            message: `Attachment ${attachmentAdmission.invalidAttachmentId} not found`
+          });
+        }
+      }
+
       const corr: Record<string, any> = {
         clientMessageId,
         conversationId,
@@ -304,6 +339,17 @@ export function registerSendMessageRoute(
 
       // MessagingService unifié — instance partagée construite une seule fois
       const messagingService = getMessagingService();
+
+      // #6164 / #6601 — CITER UN MESSAGE, ET SA PIÈCE NOMMÉE. `replyToId` est
+      // refusé s'il ne désigne pas un message vivant de CETTE conversation ;
+      // une pièce citée en plus est refusée si elle n'appartient pas à ce
+      // message. Les deux bornes vivent au site unique `admitAttachmentReply` —
+      // tout transport qui porte ces champs passe par elle, jamais par une
+      // transcription locale.
+      const citation = await admitAttachmentReply(prisma, { conversationId, replyToId, attachmentReplyTo });
+      if (!citation.ok) {
+        return sendBadRequest(reply, citation.reason ?? 'Pièce jointe citée invalide');
+      }
 
       const messageRequest = {
         conversationId,
@@ -334,6 +380,11 @@ export function registerSendMessageRoute(
         // `MessageProcessor.saveMessage`.
         location,
         sticker,
+        // L'instantané ADMIS, jamais ce que le client a envoyé : `kind` est
+        // celui du MIME relu en base. `MessageProcessor.saveMessage` le range
+        // sous `metadata.attachmentReplyTo` par le site unique de composition
+        // (`clientDeclaredMetadata`).
+        attachmentReplyTo: citation.snapshot ?? undefined,
         // Le FAIT du chiffrement, c'est la présence du chiffré — pas un booléen
         // posé à côté. Gater sur `isEncrypted` perdait dans les DEUX sens : un
         // chiffré sans le drapeau était jeté (alors que le `.refine()` ci-dessus

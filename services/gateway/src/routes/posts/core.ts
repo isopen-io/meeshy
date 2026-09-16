@@ -1,7 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { Post } from '@meeshy/shared/types/post';
-import { UnifiedAuthRequest } from '../../middleware/auth';
+import { UnifiedAuthRequest, requireEmailVerification } from '../../middleware/auth';
 import { PostService } from '../../services/PostService';
 import { storyContentEditRequested } from '../../services/posts/storyEditPolicy';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
@@ -13,7 +13,7 @@ import {
   type PublishedPostRow,
   type PublishedPostType,
 } from './publication';
-import { CreatePostSchema, UpdatePostSchema, TranslatePostSchema, PostParams, PublishAttachmentSchema } from './types';
+import { CreatePostSchema, UpdatePostSchema, TranslatePostSchema, PostParams, PublishAttachmentSchema, postIdParamsSchema } from './types';
 import { MediaService } from '../../services/MediaService';
 import {
   planAttachmentPublication,
@@ -216,7 +216,8 @@ export function registerCoreRoutes(
   // PARTAGÉ que POST /posts et POST /posts/:postId/repost
   // (`sharedWriteRateLimit`, cf. définition ci-dessus).
   fastify.post('/posts/from-attachment', {
-    preValidation: [requiredAuth],
+    // #6437 — même porte de publication que POST /posts ci-dessus.
+    preValidation: [requiredAuth, requireEmailVerification],
     preHandler: [sharedWriteRateLimit],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
@@ -367,7 +368,9 @@ export function registerCoreRoutes(
   // éviter le plafond de création » vit dans ce partage, pas dans un
   // plafond individuel supplémentaire.
   fastify.post('/posts', {
-    preValidation: [requiredAuth],
+    // #6437 — publier (post ou story) sort du compte vers d'autres personnes ;
+    // avant le budget d'écriture partagé pour ne pas le consommer en pure perte.
+    preValidation: [requiredAuth, requireEmailVerification],
     preHandler: [sharedWriteRateLimit],
     bodyLimit: 1 * 1024 * 1024,
   }, async (request: FastifyRequest, reply: FastifyReply) => {
@@ -474,6 +477,7 @@ export function registerCoreRoutes(
 
   // GET /posts/:postId — Get post by ID
   fastify.get('/posts/:postId', {
+    schema: { params: postIdParamsSchema },
     preValidation: [requiredAuth],
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
@@ -507,6 +511,7 @@ export function registerCoreRoutes(
   // PUT /posts/:postId — Update a post (author only)
   // Per-route bodyLimit 1MB — voir POST /posts pour la justification.
   fastify.put('/posts/:postId', {
+    schema: { params: postIdParamsSchema },
     preValidation: [requiredAuth],
     bodyLimit: 1 * 1024 * 1024,
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
@@ -669,6 +674,7 @@ export function registerCoreRoutes(
 
   // DELETE /posts/:postId — Soft delete (auteur, ou modérateur et plus avec audit)
   fastify.delete('/posts/:postId', {
+    schema: { params: postIdParamsSchema },
     preValidation: [requiredAuth],
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
@@ -713,6 +719,7 @@ export function registerCoreRoutes(
   // pipeline de traduction protégé est le même, qu'on traduise un post ou un
   // commentaire.
   fastify.post('/posts/:postId/translate', {
+    schema: { params: postIdParamsSchema },
     preValidation: [requiredAuth],
     config: { rateLimit: createSocialTranslateRateLimitConfig() },
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {

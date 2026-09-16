@@ -5,6 +5,7 @@ import { placeMagicLinkValidationFailure } from '@/lib/view/auth-feedback';
 import { safeReturnPath } from '@/lib/view/magic-link';
 import { href, Link, navigate } from '@/routes/route-table';
 
+import { AuthColumn } from './auth-column';
 import { AUTH_GLYPHS } from './glyphs-auth';
 import { Glyph, GlyphSvg } from './glyph';
 
@@ -66,7 +67,7 @@ export function MagicLinkValidation({
   }
 
   return (
-    <div className="grid h-dvh content-center gap-6 px-8 pt-safe pb-safe text-center">
+    <AuthColumn className="justify-center gap-6 px-8 text-center">
       {state === 'validating' ? (
         <>
           <span aria-hidden="true" className="mx-auto" style={{ color: 'var(--ios-indigo-500)' }}>
@@ -84,11 +85,12 @@ export function MagicLinkValidation({
           <h1 className="text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
             Lien invalide ou expiré
           </h1>
-          <p style={{ color: 'var(--color-ios-ink-2)' }}>Un lien magique expire après 10 minutes et ne sert qu’une fois.</p>
+          <p style={{ color: 'var(--color-ios-ink-2)' }}>Un lien de connexion expire après 10 minutes et ne sert qu’une fois.</p>
           <div className="grid gap-3">
             <Link
               to="magicLink"
               replace
+              search={{ next: returnUrl ?? undefined }}
               className="grid place-items-center rounded-[14px] font-bold text-white"
               style={{ minHeight: 52, background: 'linear-gradient(90deg, var(--ios-indigo-600), var(--ios-indigo-400))' }}
             >
@@ -96,6 +98,7 @@ export function MagicLinkValidation({
             </Link>
             <Link
               to="login"
+              search={{ next: returnUrl ?? undefined }}
               replace
               className="grid place-items-center rounded-[14px] font-semibold"
               style={{
@@ -125,6 +128,6 @@ export function MagicLinkValidation({
           </button>
         </>
       ) : null}
-    </div>
+    </AuthColumn>
   );
 }

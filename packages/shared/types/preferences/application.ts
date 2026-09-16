@@ -49,10 +49,17 @@ export const LEGACY_APPLICATION_CONSENT_KEYS = [
  * déclarée) les avaler en silence : un client qui tente encore d'écrire l'un
  * de ces noms doit voir un ÉCHEC net, pas un 200 qui lui laisse croire que
  * son consentement a été enregistré alors qu'il vient d'être ignoré.
+ *
+ * Le refus NOMME `PUT /me/consents/{purpose}` (#4348, `services/gateway/src/
+ * routes/me/consents.ts`) — l'adresse CANONIQUE d'un consentement depuis
+ * #4348, celle que le web appelle et que l'app iOS a rejointe (#6624) — et non
+ * `POST /voice/profile/consent`, l'écrivain HISTORIQUE que #4348 a vocation à
+ * retirer. Un client qui suivrait ce refus à la lettre partirait vers la route
+ * en sursis (#6641).
  */
 const LEGACY_CONSENT_ERROR =
   'Ce champ ne se règle plus via PATCH/PUT /me/preferences/application (#4180) — ' +
-  'le consentement est horodaté par le serveur via POST /voice/profile/consent.';
+  'le consentement est horodaté par le serveur via PUT /me/consents/{purpose}.';
 
 export const ApplicationPreferenceSchema = z.object({
   // Thème

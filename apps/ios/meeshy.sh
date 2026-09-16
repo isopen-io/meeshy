@@ -36,6 +36,17 @@ PROJECT="Meeshy.xcodeproj"
 # `build.db`, avec la précaution en place. Les trois surcharges ci-dessous sont
 # ce qui rend la séparation RÉELLE.
 DERIVED_DATA="${MEESHY_DERIVED_DATA:-Build}"
+# Résolu en chemin ABSOLU (#3949) : un `DERIVED_DATA` relatif ("Build") rend le
+# motif `pgrep -f "xcodebuild.*-derivedDataPath.*$DERIVED_DATA"` de
+# `is_build_running`/`kill_all_builds` indiscriminant entre worktrees — chacun
+# passe `-derivedDataPath Build`, donc chacun attend et peut tuer les builds
+# des AUTRES worktrees, qui ne partagent pourtant aucun fichier avec lui. Le
+# `cd` de la ligne 3 place déjà le script dans `apps/ios/` : `$(pwd)` y désigne
+# ce worktree, jamais un autre.
+case "$DERIVED_DATA" in
+    /*) : ;;
+    *) DERIVED_DATA="$(pwd)/$DERIVED_DATA" ;;
+esac
 if [ -n "${MEESHY_DERIVED_DATA:-}" ]; then
     BUILD_LOCATION_OVERRIDES=(
         "SYMROOT=${MEESHY_DERIVED_DATA}/Products"
@@ -188,7 +199,7 @@ pick_device() {
             dev_ids+=("$did")
             dev_names+=("$dname")
             dev_labels+=("📱 $dname ${DIM}(Simulator — Booted)${NC}")
-        done < <(xcrun simctl list devices | grep -E "iPhone.*\(Booted\)" 2>/dev/null || true)
+        done < <(./scripts/list_simulators.py iPhone | awk -F'\t' '$3 == "Booted" { print $2 " (" $1 ")" }')
 
         # Available (not booted) simulators
         while IFS= read -r line; do
@@ -206,7 +217,7 @@ pick_device() {
             dev_ids+=("$did")
             dev_names+=("$dname")
             dev_labels+=("📱 $dname ${DIM}(Simulator)${NC}")
-        done < <(xcrun simctl list devices available | grep -E "iPhone" | grep -v "unavailable" 2>/dev/null || true)
+        done < <(./scripts/list_simulators.py iPhone | awk -F'\t' '{ print $2 " (" $1 ")" }')
     fi
 
     local count=${#dev_ids[@]}
@@ -441,7 +452,30 @@ ensure_project_is_current() {
 
     local drifted
     drifted=$(unreferenced_sources)
-    [ -z "$drifted" ] && return 0
+    # **Le pbxproj local concorde — mais le COMMITTÉ ?** (#6839)
+    #
+    # Cette fonction compare le disque au pbxproj de l'ARBRE DE TRAVAIL, et
+    # régénère. Elle dit ensuite « committer les références ajoutées » — une
+    # phrase en prose, que rien ne fait respecter. Mesuré le 2026-09-16 :
+    # `GallerySceneBackdropUnicityTests.swift` (148 lignes, 6 cas, témoin de
+    # #6791) n'était inscrit sur AUCUNE ref, dev compris. Chaque build local le
+    # compilait, chaque `git checkout` l'oubliait, et `verify_test_classes_are_
+    # compiled` — qui lit le bundle PRODUIT — ne pouvait rien en dire.
+    #
+    # On avertit ici, à chaque build, pour que l'oubli ait un coût visible sans
+    # bloquer l'itération ; `scripts/check_test_registration.sh` est la même
+    # mesure en version ROUGE, pour la CI et l'avant-push.
+    if [ -z "$drifted" ]; then
+        local non_committes
+        non_committes=$(./scripts/check_test_registration.sh 2>&1 >/dev/null | grep '^  • ' || true)
+        if [ -n "$non_committes" ]; then
+            warn "Fichiers de test compilés ICI mais absents du $PROJECT COMMITTÉ —"
+            warn "ailleurs (CI, autre worktree, collègue) leurs cas ne s'exécutent pas :"
+            printf '%s\n' "$non_committes"
+            warn "Committer $PROJECT."
+        fi
+        return 0
+    fi
 
     warn "Fichiers absents de $PROJECT — le pbxproj committé est périmé :"
     printf '  • %s\n' $drifted
@@ -603,30 +637,36 @@ detect_simulator() {
     local device_family="iPhone"
     [ "$PLATFORM" = "ipad" ] && device_family="iPad"
 
-    # Priority 1: Already booted device of the right family
-    local booted
-    booted=$(xcrun simctl list devices | grep -E "$device_family.*\(Booted\)" | head -n 1 || true)
-    if [ -n "$booted" ]; then
-        DEVICE_ID=$(echo "$booted" | grep -oE '[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}')
-        DEVICE_NAME=$(echo "$booted" | sed 's/ (.*//' | xargs)
-        ok "Booted: ${BOLD}$DEVICE_NAME${NC}"
-        return 0
-    fi
-
-    # Priority 2: Any available device of the right family (prefer Pro models)
-    local available
-    available=$(xcrun simctl list devices available | grep -E "$device_family" | grep -v "unavailable" || true)
-    if [ -z "$available" ]; then
+    # **La FAMILLE décide, jamais le NOM** (#6838).
+    #
+    # Le nom d'un simulateur est libre ; son type ne l'est pas. Élire par
+    # `grep -E "iPhone"` marchait tant qu'il restait au moins une machine du
+    # catalogue Apple : le jour où le nettoyage demandé par le porteur n'a laissé
+    # que `Meeshy-iOS26`, tout build local est mort sur « No iPhone simulators
+    # found » — alors que la machine existait ET tournait. Le commentaire
+    # ci-dessus AVOUAIT déjà le défaut (« aucune des priorités suivantes ne peut
+    # les élire, même démarrés ») ; `MEESHY_DEVICE_ID` en était l'échappatoire,
+    # pas la correction.
+    #
+    # `list_simulators.py` rend « UDID<TAB>NOM<TAB>ÉTAT » dans l'ordre d'essai :
+    # démarrés d'abord (on ne redémarre pas ce qui tourne), puis les modèles
+    # « Pro », puis le reste. Les deux priorités se lisent donc dans UNE liste,
+    # et l'ordre est gardé par `scripts/check_simulator_election.sh`.
+    local candidats chosen
+    candidats=$(./scripts/list_simulators.py "$device_family" || true)
+    if [ -z "$candidats" ]; then
         err "No $device_family simulators found. Install via Xcode > Settings > Platforms."
         exit 1
     fi
 
-    local chosen
-    chosen=$(echo "$available" | grep -E "Pro" | head -n 1)
-    [ -z "$chosen" ] && chosen=$(echo "$available" | head -n 1)
+    chosen=$(echo "$candidats" | head -n 1)
+    DEVICE_ID=$(echo "$chosen" | cut -f1)
+    DEVICE_NAME=$(echo "$chosen" | cut -f2)
 
-    DEVICE_ID=$(echo "$chosen" | grep -oE '[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}')
-    DEVICE_NAME=$(echo "$chosen" | sed 's/ (.*//' | xargs)
+    if [ "$(echo "$chosen" | cut -f3)" = "Booted" ]; then
+        ok "Booted: ${BOLD}$DEVICE_NAME${NC}"
+        return 0
+    fi
 
     if [ -z "$DEVICE_ID" ]; then
         err "Could not parse simulator device ID."
@@ -684,20 +724,23 @@ is_build_running() {
 }
 
 kill_all_builds() {
-    log "Killing all xcodebuild processes..."
-    pkill -f "xcodebuild" 2>/dev/null || true
+    # Restreint au même motif que is_build_running (#3949) : un `pkill -f
+    # "xcodebuild"` sans filtre de chemin tue les builds de TOUS les
+    # worktrees, y compris ceux d'autres sessions en cours.
+    log "Killing xcodebuild processes for this worktree ($DERIVED_DATA)..."
+    pkill -f "xcodebuild.*-derivedDataPath.*$DERIVED_DATA" 2>/dev/null || true
     sleep 2
     # Verify killed
-    if pgrep -f "xcodebuild" >/dev/null 2>&1; then
+    if is_build_running; then
         warn "Processes still alive, sending SIGKILL..."
-        pkill -9 -f "xcodebuild" 2>/dev/null || true
+        pkill -9 -f "xcodebuild.*-derivedDataPath.*$DERIVED_DATA" 2>/dev/null || true
         sleep 1
     fi
-    if pgrep -f "xcodebuild" >/dev/null 2>&1; then
-        err "Failed to kill all xcodebuild processes"
+    if is_build_running; then
+        err "Failed to kill xcodebuild processes for this worktree"
         exit 1
     fi
-    ok "All xcodebuild processes killed"
+    ok "xcodebuild processes for this worktree killed"
 }
 
 wait_for_existing_build() {

@@ -127,6 +127,39 @@ final class SyncDeltaClientTests: XCTestCase {
         XCTAssertEqual(parametre(transport, "fields"), "conversations.id,conversations.lastMessageAt")
     }
 
+    // MARK: - La base, telle que la production la passe (#6539)
+
+    /// Le moteur construit le client avec `api.baseURL`, soit
+    /// `MeeshyConfig.apiBaseURL` — une base qui PORTE déjà `/api/v1`. Les
+    /// témoins d'URL ci-dessus passaient une ORIGINE nue (`https://gate.test`) :
+    /// ils restaient verts pendant que l'app appelait `/api/v1/api/v1/sync`
+    /// (82 × 404 en deux heures dans le Traefik de production, 2026-09-14).
+    /// Un témoin d'URL se construit donc COMME le site d'appel réel.
+    private func urlServie(base: String) async -> String {
+        let transport = MockSyncDeltaTransport()
+        transport.resultat = .success((corpsDeDelta(), reponse(200)))
+        let client = SyncDeltaClient(baseURL: base, transport: transport)
+        _ = await client.demandeLeDelta(
+            SyncDeltaRequest(since: "s", collections: ["conversations"]),
+            creance: .membre(jeton: "JWT.sonde"),
+            rangeant: LigneDeTest.self
+        )
+        return transport.requetes.first?.url?.absoluteString ?? "<aucune requête partie>"
+    }
+
+    func test_url_surLaBaseDApiDeProduction_neDoubleJamaisLePrefixe() async {
+        let url = await urlServie(base: "https://gate.meeshy.me/api/v1")
+
+        XCTAssertTrue(url.hasPrefix("https://gate.meeshy.me/api/v1/sync?"), "URL servie : \(url)")
+        XCTAssertEqual(url.components(separatedBy: "/api/v1").count - 1, 1, "un seul préfixe d'API — URL servie : \(url)")
+    }
+
+    func test_url_surUneBaseDApiAvecPort_garderLOrigineEtUnSeulPrefixe() async {
+        let url = await urlServie(base: "http://localhost:3000/api/v1")
+
+        XCTAssertTrue(url.hasPrefix("http://localhost:3000/api/v1/sync?"), "URL servie : \(url)")
+    }
+
     // MARK: - Les créances et le validateur
 
     func test_creanceDuMembre_partEnBearer_etLInviteEnSessionToken() async {

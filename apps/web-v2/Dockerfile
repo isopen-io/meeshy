@@ -114,19 +114,53 @@ ENV VITE_DATA_SOURCE=${VITE_DATA_SOURCE}
 ARG VITE_READING_MODES=""
 ENV VITE_READING_MODES=${VITE_READING_MODES}
 
+# **LA RÉVISION SERVIE DOIT ÊTRE LISIBLE DE L'EXTÉRIEUR, comme pour le gateway
+# (#6551).** `VCS_REF`/`BUILD_DATE` sont déjà poussés à CHAQUE image du
+# workflow (`docker.yml`, § build-args de `Build and push` — le bloc n'est
+# pas conditionné par service), mais cette image ne les DÉCLARAIT pas : des
+# `--build-arg` sans `ARG` correspondant sont silencieusement ignorés. Sans
+# ça, un gate de dérive ne peut confronter que la passerelle à sa branche —
+# jamais le frontend, qui peut pourtant rester périmé SEUL (c'est l'incident
+# que #6551 documente : `gateway-staging` recréé, `frontend-staging` non).
+#
+# Contrairement au gateway, il n'y a ici AUCUN process au runtime pour lire
+# une variable d'environnement — nginx sert des fichiers. La révision est
+# donc gravée en fichier STATIQUE au build, dans la même forme que
+# `resolveBuildInfo()` (`packages/shared/utils/build-info.ts`) sert sous
+# `/health` côté gateway : `{ build: { commit, commitShort, builtAt } }`. Le
+# gate de dérive (`revision-drift-check.yml`) lit `.build.commit` sur les
+# deux sans distinguer leur origine.
+ARG VCS_REF=""
+ARG BUILD_DATE=""
+
 # Le build EST le préchauffage : le greffon de `vite.config.ts` écrit les cinq
 # documents avant que `vite-plugin-pwa` ne scelle son manifeste de précache.
 RUN bun run build
 
-# La preuve que les cinq documents sont là — ici, pas en production. Sans elle,
-# une régression du greffon donnerait une image qui démarre, sert
-# l'application, et rend une page blanche sur /about au deuxième passage.
+# Aucune valeur de repli fabriquée : une image construite sans `VCS_REF` (un
+# `bun run build` local, hors CI) rend `commit: null`, jamais une chaîne
+# plausible qui se lirait comme une révision réelle — même règle que
+# `resolveBuildInfo()` côté gateway.
+RUN bun -e "\
+  const fs = require('fs'); \
+  const commit = (process.env.VCS_REF || '').trim() || null; \
+  const info = { build: { commit, commitShort: commit ? commit.slice(0, 7) : null, builtAt: (process.env.BUILD_DATE || '').trim() || null } }; \
+  fs.writeFileSync('dist/build-info.json', JSON.stringify(info)); \
+"
+
+# La preuve que les cinq documents ET la révision sont là — ici, pas en
+# production. Sans elle, une régression du greffon donnerait une image qui
+# démarre, sert l'application, et rend une page blanche sur /about au
+# deuxième passage ; sans la seconde, le gate de dérive rougirait sur CHAQUE
+# image plutôt que sur une seule périmée.
 RUN set -eu; for p in about contact partners privacy terms; do \
       test -s "/app/dist/$p.html" || { echo "MANQUE dist/$p.html"; exit 1; }; \
       test -s "/app/dist/$p/index.html" || { echo "MANQUE dist/$p/index.html"; exit 1; }; \
     done; \
     grep -q 'about.html' /app/dist/sw.js || { echo "sw.js ne precache pas les pages"; exit 1; }; \
-    echo "les cinq pages sont presentes et precachees"
+    test -s /app/dist/build-info.json \
+      || { echo "MANQUE dist/build-info.json"; exit 1; }; \
+    echo "les cinq pages sont presentes et precachees, build-info.json ecrit"
 
 # ===== SERVICE =====
 FROM docker.io/nginx:1.29-alpine AS runner
@@ -135,6 +169,13 @@ RUN apk add --no-cache tini curl
 
 COPY apps/web-v2/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/dist/ /usr/share/nginx/html/
+
+# LES ADRESSES PUBLIQUES DU DOMAINE (#6713) — le legacy est décommissionné
+# (#6702) : liens universels, robots, logo des e-mails, anciens formats de lien
+# et redirections relatives. Prouvées ICI, sur le serveur construit : une image
+# dont une adresse est fausse ne se construit pas.
+COPY apps/web-v2/scripts/check-nginx-public.sh /tmp/check-nginx-public.sh
+RUN sh /tmp/check-nginx-public.sh && rm /tmp/check-nginx-public.sh
 
 # 3400 : 3100 est au legacy, 3300 à l'ancienne refonte. Les trois peuvent
 # tourner côte à côte pendant la bascule.

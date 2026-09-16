@@ -1830,6 +1830,13 @@ class ConversationListViewModel: ObservableObject {
 
         paginationState = .loadingMore
 
+        // Le curseur RÉELLEMENT envoyé, hissé hors du `do` pour que le journal
+        // d'échec nomme la valeur qui a échoué. Il disait `nextCursor`, qui
+        // vaut `nil` sur le chemin du repli — donc « cursor=nil » alors qu'un
+        // curseur partait bel et bien (#6857). Un diagnostic qui désigne une
+        // AUTRE variable que celle de la requête envoie chercher ailleurs.
+        var envoye: String?
+
         do {
             let userId = currentUserId
             // Curseur de secours quand aucun `nextCursor` n'est connu (full
@@ -1840,8 +1847,14 @@ class ConversationListViewModel: ObservableObject {
             // déjà affichée et le zero-progress guard ci-dessous forcerait
             // `.exhausted`, bloquant l'infinite scroll sur les comptes dont
             // le full sync s'est arrêté en cours de route.
-            let previousCursor = nextCursor
-                ?? conversations.min(by: { $0.lastMessageAt < $1.lastMessageAt })?.id
+            // #6857 — un repli que le CLIENT fabrique doit ressembler à ce
+            // que la passerelle sert. `conv-hydrate`, fixture de témoin gravée
+            // dans le cache disque, partait sinon en `before=` et faisait
+            // rendre 500 à la route, définitivement.
+            let previousCursor = ConversationListPaginationCursor.resolve(
+                nextCursor: nextCursor,
+                oldestLocalId: conversations.min(by: { $0.lastMessageAt < $1.lastMessageAt })?.id)
+            envoye = previousCursor
             let knownIds = Set(conversations.map(\.id))
             let page = try await conversationService.listPage(
                 before: previousCursor,
@@ -1927,7 +1940,7 @@ class ConversationListViewModel: ObservableObject {
             // `hasMore = true` so the next scroll attempt can retry.
             // We surface the error in the published state so the view
             // can show a discreet retry prompt at the tail.
-            Logger.messages.error("[ConversationListVM] loadMore error cursor=\(self.nextCursor ?? "nil"): \(error.localizedDescription)")
+            Logger.messages.error("[ConversationListVM] loadMore error cursor=\(envoye ?? "<aucun>"): \(error.localizedDescription)")
             paginationState = .error(error.localizedDescription)
         }
     }

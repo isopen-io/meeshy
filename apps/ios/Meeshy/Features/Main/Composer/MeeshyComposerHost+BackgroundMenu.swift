@@ -65,7 +65,11 @@ extension MeeshyComposerHost {
             // c'est le faire SORTIR du plan de fond.
             viewModel.toggleBackground(id: id)
         case .delete:
-            viewModel.deleteElement(id: id)
+            // **Le retrait du MEUBLE, jamais la primitive du SDK** (#6577).
+            // Ce menu est la TROISIÈME porte de suppression, et elle est
+            // arrivée après l'inventaire des deux autres : elle a hérité du
+            // défaut sans figurer nulle part.
+            retractMedia(objectIds: [id])
         }
         HapticFeedback.medium()
     }

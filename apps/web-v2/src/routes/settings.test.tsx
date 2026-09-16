@@ -7,7 +7,6 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 import type { AppPreferences } from '@/lib/api/app-preferences';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { FLOATING_CORRIDOR_BOTTOM } from '@/lib/view/floating-corridor';
-import { legacyHref } from '@/lib/view/legacy-link';
 
 import {
   AboutSection,
@@ -103,18 +102,28 @@ describe('la carte de profil', () => {
   });
 });
 
-describe('le compte — ce que la v2.0 ne porte pas reste atteignable', () => {
-  test('Sécurité et suppression du compte ouvrent le legacy, dans un nouvel onglet, et le disent', () => {
+describe('le compte — seule la suppression reste offerte', () => {
+  /* #6715 : la page de suppression est portée dans la v2, à l'adresse que les
+     e-mails visent. La rangée y mène dans le MÊME onglet, sans légende « version
+     classique » — et, son adresse étant relative, chaque environnement ouvre SA
+     page : un testeur de staging n'atterrit plus sur la production (#6354). */
+  test('la suppression du compte ouvre sa page de la v2, dans le même onglet', () => {
     const host = dom(<AccountSection language="fr" />);
-    for (const destination of ['security', 'accountDeletion'] as const) {
-      const link = linkTo(host, legacyHref(destination));
-      expect(link).not.toBeNull();
-      expect(link?.getAttribute('target')).toBe('_blank');
-      expect(link?.getAttribute('rel')).toBe('noopener noreferrer');
-      expect(link?.textContent).toContain('Version classique, nouvel onglet');
-    }
-    expect(host.textContent).toContain('Sécurité');
-    expect(host.textContent).toContain('Supprimer le compte');
+    const link = linkTo(host, '/account/deletion');
+    expect(link).not.toBeNull();
+    expect(link?.hasAttribute('target')).toBe(false);
+    expect(link?.textContent).toContain('Supprimer le compte');
+    expect(host.textContent).not.toContain('Version classique');
+    expect(host.textContent).not.toContain('Indisponible sur cet environnement');
+  });
+
+  /* Le legacy est décommissionné (#6702) : la sécurité, que la v2 ne porte pas
+     encore, n'a plus aucune adresse où mener. Elle est MASQUÉE — ni lien, ni
+     rangée inerte (loi 4). */
+  test('la sécurité, non portée, n’est pas offerte', () => {
+    const host = dom(<AccountSection language="fr" />);
+    expect(host.textContent).not.toContain('Sécurité');
+    expect(host.querySelectorAll('a')).toHaveLength(1);
   });
 });
 
@@ -123,7 +132,13 @@ describe('la confidentialité — quatre bascules que la passerelle obéit', () 
 
   test('chaque bascule annonce son état réel', () => {
     const host = dom(
-      <PrivacySection language="fr" view={ready({ showOnlineStatus: false, showTypingIndicator: false })} disabled={false} onToggle={noop} onRetry={noop} />,
+      <PrivacySection
+        language="fr"
+        view={ready({ showOnlineStatus: false, showTypingIndicator: false })}
+        disabled={false}
+        onToggle={noop}
+        onRetry={noop}
+      />,
     );
     expect(NAMES.map((name) => switchNamed(host, name)?.getAttribute('aria-checked'))).toEqual(['false', 'true', 'true', 'false']);
   });
@@ -150,8 +165,35 @@ describe('la confidentialité — quatre bascules que la passerelle obéit', () 
     expect([...host.querySelectorAll('button')].map((button) => button.textContent)).toContain('Réessayer');
   });
 
-  test('les autres options de confidentialité restent au legacy', () => {
-    expect(linkTo(dom(<PrivacySection language="fr" view={ready()} disabled={false} onToggle={noop} onRetry={noop} />), legacyHref('privacy'))).not.toBeNull();
+  /* Le legacy est décommissionné (#6702) : les options fines de
+     confidentialité n'ont plus d'adresse où mener. MASQUÉES — ni lien, ni
+     rangée inerte (loi 4). */
+  test('les options fines, non portées, ne sont pas offertes', () => {
+    const host = dom(<PrivacySection language="fr" view={ready()} disabled={false} onToggle={noop} onRetry={noop} />);
+    expect(host.querySelectorAll('a')).toHaveLength(0);
+    expect(host.textContent).not.toContain("Plus d'options");
+  });
+});
+
+describe('les données — seul l’export reste offert', () => {
+  /* #6725 : l'export de données est porté dans la v2, à l'adresse dédiée
+     `/settings/data-export`. La rangée y mène dans le MÊME onglet. */
+  test('exporter mes données ouvre sa page de la v2, dans le même onglet', () => {
+    const host = dom(<DataSection language="fr" />);
+    const link = linkTo(host, '/settings/data-export');
+    expect(link).not.toBeNull();
+    expect(link?.hasAttribute('target')).toBe(false);
+    expect(link?.textContent).toContain('Exporter mes données');
+  });
+
+  /* Le legacy est décommissionné (#6702) : médias et messages, que la v2 ne
+     porte pas encore, n'ont plus aucune adresse où mener. MASQUÉS — ni lien,
+     ni rangée inerte (loi 4). #6723, #6724. */
+  test('médias et messages, non portés, ne sont pas offerts', () => {
+    const host = dom(<DataSection language="fr" />);
+    expect(host.textContent).not.toContain('Médias');
+    expect(host.textContent).not.toContain('Messages');
+    expect(host.querySelectorAll('a')).toHaveLength(1);
   });
 });
 
@@ -222,18 +264,53 @@ describe('les notifications', () => {
     expect(switchNamed(host, 'Sons')?.getAttribute('aria-checked')).toBe('false');
   });
 
-  test('les options fines restent au legacy', () => {
+  /* Le legacy est décommissionné (#6702) : les options fines de notification
+     n'ont plus d'adresse où mener. MASQUÉES — ni lien, ni rangée inerte. */
+  test('les options fines, non portées, ne sont pas offertes', () => {
     const host = dom(<NotificationsSection language="fr" view={ready()} disabled={false} onToggle={noop} onRetry={noop} />);
-    expect(linkTo(host, legacyHref('notification'))?.textContent).toContain("Plus d'options");
+    expect(host.querySelectorAll('a')).toHaveLength(0);
+    expect(host.textContent).not.toContain("Plus d'options");
   });
 });
 
-describe('les données', () => {
-  test('médias, messages et export mènent au legacy', () => {
-    const host = dom(<DataSection language="fr" />);
-    expect(linkTo(host, legacyHref('media'))?.textContent).toContain('Médias');
-    expect(linkTo(host, legacyHref('message'))?.textContent).toContain('Messages');
-    expect(host.textContent).toContain('Exporter mes données');
+/**
+ * AUCUN CONTRÔLE DES RÉGLAGES NE VISE UNE AUTRE ORIGINE (#6702, #6715, #6725)
+ * — le legacy est décommissionné, la v2 sert tout le domaine. Médias et
+ * messages n'ont plus d'adresse et restent masqués (#6723, #6724). La
+ * suppression de compte et l'export de données, eux, mènent désormais à leur
+ * page de la v2.
+ */
+describe('les réglages ne mènent plus au legacy', () => {
+  const everySection = () =>
+    dom(
+      <>
+        <ProfileCard language="fr" user={{ username: 'awa', displayName: 'Awa Diallo', avatar: null }} />
+        <AccountSection language="fr" />
+        <PrivacySection language="fr" view={ready()} disabled={false} onToggle={noop} onRetry={noop} />
+        <AppearanceSection language="fr" theme="system" onTheme={noop} interfaceChoice={null} onInterfaceLanguage={noop} primaryLanguage="fr" />
+        <NotificationsSection language="fr" view={ready()} disabled={false} onToggle={noop} onRetry={noop} />
+        <DataSection language="fr" />
+        <ToolsSection language="fr" showAdmin />
+        <AboutSection language="fr" version="2.0.2" />
+      </>,
+    );
+
+  test('aucun lien ne vise une autre origine, ni n’ouvre un nouvel onglet — la suppression de compte et l’export compris', () => {
+    const host = everySection();
+    const hrefs = [...host.querySelectorAll('a[href]')].map((link) => link.getAttribute('href') ?? '');
+
+    expect(hrefs.filter((href) => /^(?:[a-z]+:)?\/\//i.test(href))).toEqual([]);
+    expect(host.querySelectorAll('a[target]')).toHaveLength(0);
+    expect(hrefs).toContain('/account/deletion');
+    expect(hrefs).toContain('/settings/data-export');
+  });
+
+  test('aucune rangée masquée n’est rendue, même inerte', () => {
+    const text = everySection().textContent ?? '';
+    for (const label of ['Sécurité', "Plus d'options", 'Médias', 'Messages']) {
+      expect({ label, present: text.includes(label) }).toEqual({ label, present: false });
+    }
+    expect(text).toContain('Exporter mes données');
   });
 });
 

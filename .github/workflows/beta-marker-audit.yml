@@ -1,0 +1,57 @@
+name: Beta marker conflict audit
+
+# Témoin périodique du piège documenté par l'issue #6351 : un commit poussé
+# sur `main` qui porte à la fois un marqueur (beta) et un marqueur de saut CI
+# ([skip ci], [ci skip], [no ci], [skip actions], [actions skip],
+# skip-checks:true) fait supprimer par GitHub TOUS les workflows du push qui
+# le porte — y compris « iOS (beta) → Xcode Cloud »
+# (.github/workflows/ios-beta-trigger.yml), qui ne peut alors pas se voir
+# lui-même démarrer, ni se voir manquer.
+#
+# Ce témoin tourne UNIQUEMENT sur schedule/workflow_dispatch, jamais sur push
+# ni pull_request : ce sont exactement les deux événements que le marqueur de
+# saut supprime. Un témoin qui s'y accrocherait serait aveugle au cas précis
+# qu'il doit surveiller — voir l'en-tête de
+# scripts/check-beta-skip-conflict.mjs pour le détail du piège et des deux
+# points d'ancrage qui y échappent (celui-ci, et le hook de commit local
+# .githooks/commit-msg).
+#
+# Ce job ne PRÉVIENT rien : il détecte, dans les commits déjà poussés sur
+# `main`, un message qui aurait dû être refusé par le hook local (installé
+# nulle part, ignoré via --no-verify, ou un clone où `bun install
+# --ignore-scripts` n'a jamais posé core.hooksPath). Sans lui, le silence
+# aurait duré jusqu'à la prochaine relecture manuelle — exactement ce qui
+# s'est produit pour 1.0.9, découvert par la mission #6348 après coup.
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: beta-marker-audit
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 100
+
+      - name: Beta/skip conflict guard self-test
+        run: node scripts/check-beta-skip-conflict.mjs --self-test
+
+      # Fenêtre volontairement large (100 derniers commits) plutôt qu'un état
+      # persisté entre exécutions : ce témoin est un balayage, pas un cliquet
+      # — le rejouer sur un commit déjà vu et déjà propre ne coûte qu'un
+      # `git log`, et une exécution manquée (maintenance du runner, quota)
+      # n'échappe alors à aucun commit.
+      - name: Scan the last 100 commits of main for a beta/skip conflict
+        run: node scripts/check-beta-skip-conflict.mjs --range 'HEAD~100..HEAD'

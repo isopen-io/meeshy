@@ -364,6 +364,18 @@ jest.mock('../../services/posts/PostTranslationService', () => ({
   },
 }));
 
+jest.mock('../../services/posts/MediaCaptionTranslationService', () => ({
+  MediaCaptionTranslationService: {
+    init: jest.fn(),
+  },
+}));
+
+jest.mock('../../services/posts/MediaAltTranslationService', () => ({
+  MediaAltTranslationService: {
+    init: jest.fn(),
+  },
+}));
+
 jest.mock('../../services/posts/StoryTextObjectTranslationService', () => ({
   StoryTextObjectTranslationService: {
     init: jest.fn(),
@@ -6345,6 +6357,40 @@ describe('MeeshySocketIOManager', () => {
       await m.initialize();
 
       expect(PostTranslationService.init).toHaveBeenCalledWith(
+        expect.anything(),
+        fakeZmqClient,
+        expect.anything()
+      );
+    });
+
+    it('calls MediaCaptionTranslationService.init when zmqClient is present (#6280)', async () => {
+      const fakeZmqClient = { send: jest.fn() };
+      const customTranslation = makeTranslationService();
+      (customTranslation.getZmqClient as any).mockReturnValue(fakeZmqClient);
+
+      const { MediaCaptionTranslationService } = jest.requireMock('../../services/posts/MediaCaptionTranslationService') as any;
+
+      const m = new MeeshySocketIOManager({} as any, prisma as any, customTranslation as any);
+      await m.initialize();
+
+      expect(MediaCaptionTranslationService.init).toHaveBeenCalledWith(
+        expect.anything(),
+        fakeZmqClient,
+        expect.anything()
+      );
+    });
+
+    it('calls MediaAltTranslationService.init when zmqClient is present (#6737)', async () => {
+      const fakeZmqClient = { send: jest.fn() };
+      const customTranslation = makeTranslationService();
+      (customTranslation.getZmqClient as any).mockReturnValue(fakeZmqClient);
+
+      const { MediaAltTranslationService } = jest.requireMock('../../services/posts/MediaAltTranslationService') as any;
+
+      const m = new MeeshySocketIOManager({} as any, prisma as any, customTranslation as any);
+      await m.initialize();
+
+      expect(MediaAltTranslationService.init).toHaveBeenCalledWith(
         expect.anything(),
         fakeZmqClient,
         expect.anything()

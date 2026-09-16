@@ -277,7 +277,7 @@ struct ProfileUserPostsList: View {
             // d'un poste OU d'un réel du profil commente sans quitter le profil.
             CommentsSheetView(post: post, accentColor: post.authorColor)
         }
-        .sheet(item: $editingPost) { post in
+        .postEditCover(item: $editingPost) { post in
             EditPostSheet(
                 originalContent: post.content,
                 originalLanguage: post.originalLanguage,
@@ -1203,11 +1203,11 @@ final class ProfileUserPostsViewModel: ObservableObject {
                     confidenceScore: data.translation.confidenceScore
                 )
                 post.translations = translations
-                if self.preferredLanguages.contains(where: { $0.caseInsensitiveCompare(data.language) == .orderedSame }),
-                   post.translatedContent == nil {
-                    post.translatedContent = data.translation.text
-                }
-                self.posts[index] = post
+                // #6531 — troisième site du même défaut (FeedViewModel,
+                // PostDetailViewModel) : re-résoudre par la descente unique du
+                // Prisme (`FeedPost.resolved`) plutôt que figer la première
+                // traduction dont la langue figurait n'importe où dans le Prisme.
+                self.posts[index] = post.resolved(preferredLanguages: self.preferredLanguages)
             }
             .store(in: &cancellables)
     }

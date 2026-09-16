@@ -290,3 +290,53 @@ enum CaptionExpansionSpace {
         max(0, (columnWidth - viewportWidth) / 2) + storyActionRailInset
     }
 }
+
+
+// MARK: - Ce que « répondre » FAIT, depuis le plein écran
+
+/// **La route du bouton « répondre » du plein écran** (#6165).
+///
+/// Jusqu'à ce lot, répondre depuis la galerie n'avait qu'un chemin : remonter
+/// la pièce à l'hôte, qui REFERMAIT le plein écran et armait le composer du
+/// fil. On perdait la pièce des yeux au moment précis où l'on voulait en
+/// parler — et la citation, faute de savoir nommer une pièce (#6164), montrait
+/// la PREMIÈRE du message alors qu'on regardait la troisième.
+///
+/// La directive porteur du 2026-09-12 demande l'inverse : « permettre de
+/// répondre ou commenter un attachement directement à partir de sa vue en
+/// plein écran, donc citer la pièce directement avec une universal composer bar
+/// qui apparaît ».
+///
+/// Les deux chemins COEXISTENT, et c'est volontaire : les hôtes SOCIAUX (post,
+/// story, réel, commentaire) ne câblent pas la barre — leur « porteur » est un
+/// commentaire, pas un message de conversation, et le composer qui le reçoit
+/// n'est pas le même. Ils gardent donc l'ancien chemin tant qu'ils ne
+/// l'adoptent pas, au lieu de perdre le geste.
+///
+/// **C'est une somme, pas deux booléens.** Un hôte qui lirait
+/// `hasInPlaceComposer` et `hasThreadHandOff` séparément pourrait déclencher
+/// les DEUX — la barre monterait pendant que la galerie se referme sous elle.
+/// La route rend UN cas, et il n'y a rien à combiner.
+enum FullscreenReplyRoute: Equatable {
+    /// La barre universelle monte AU-DESSUS du média. Rien ne se referme.
+    case composeInPlace
+    /// L'ancien chemin : l'hôte referme le plein écran et arme le composer.
+    case handOffToThread
+    /// Aucun bouton n'est rendu — loi 4, un contrôle existe s'il a un effet.
+    case none
+
+    /// `isProtected` — `ComposableAttachment.isProtected`, le prédicat que le
+    /// menu d'appui long lit déjà. Une pièce à vue unique, floutée ou chiffrée
+    /// n'a pas d'entrée vers le geste : la bannière de citation porterait sa
+    /// vignette, ce qui ferait sortir de la conversation ce que la protection y
+    /// retient. La garde est ici, au RANG DE L'EXISTENCE du bouton, plutôt
+    /// qu'au rang de la vignette — il n'y a alors plus qu'un endroit où la
+    /// protection puisse être oubliée.
+    static func route(isProtected: Bool,
+                      hasInPlaceComposer: Bool,
+                      hasThreadHandOff: Bool) -> FullscreenReplyRoute {
+        guard !isProtected else { return .none }
+        if hasInPlaceComposer { return .composeInPlace }
+        return hasThreadHandOff ? .handOffToThread : .none
+    }
+}

@@ -35,7 +35,7 @@ export type FocusCurveResult = {
  */
 export const FOCUS_CURVE_CONSTANTS = {
   thread: { maxDistance: 380, scaleDecay: 0.4, alphaDecay: 0.82 },
-  list: { maxDistance: 520, alphaDecay: 0.45, scaleDecay: 0.04 },
+  list: { maxDistance: 400, alphaDecay: 0.45, scaleDecay: 0.1 },
   belowBand: { distance: 160, alphaCap: 0.35 },
 } as const
 
@@ -50,7 +50,11 @@ export const THREAD_MAX_DISTANCE = FOCUS_CURVE_CONSTANTS.thread.maxDistance
 export const THREAD_SCALE_DECAY = FOCUS_CURVE_CONSTANTS.thread.scaleDecay
 export const THREAD_ALPHA_DECAY = FOCUS_CURVE_CONSTANTS.thread.alphaDecay
 
-/** Liste (Lentille) : `f = min(1, d/520)`, `alpha = 1 − 0.45f`, `scale = 1 − 0.04f`. */
+/**
+ * Liste (Lentille) : `f = min(1, d/400)`, `alpha = 1 − 0.45f`, `scale = 1 − 0.10f`.
+ * Loupe accentuée le 2026-09-15 (directive porteur, #6586) : l'ancien jeu
+ * `520 / 0.04` ne rétrécissait une voisine immédiate que de 0,7 %.
+ */
 export const LIST_MAX_DISTANCE = FOCUS_CURVE_CONSTANTS.list.maxDistance
 export const LIST_ALPHA_DECAY = FOCUS_CURVE_CONSTANTS.list.alphaDecay
 export const LIST_SCALE_DECAY = FOCUS_CURVE_CONSTANTS.list.scaleDecay
@@ -115,7 +119,7 @@ const clampUnit = (value: number): number => Math.min(1, Math.max(0, value))
  *     SOUS la bande (positive), soit `−distance` dans la convention de ce
  *     fichier. Le fondu total sous la bande est donc `1 + belowBandFade`,
  *     borné à `[0.65, 1]` — un fondu volontairement COURT (rayon d'action
- *     `160px` contre `520px` au-dessus de la bande), cohérent avec « la
+ *     `160px` contre `400px` au-dessus de la bande), cohérent avec « la
  *     carte de focus est déjà là, les quelques rangs sous elle ne doivent
  *     presque pas s'estomper ».
  *   - Le variant `thread` n'a pas d'amendement « sous la bande » dans le

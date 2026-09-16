@@ -41,10 +41,34 @@ const ecrire = (avant: Colonne, valeur: number | Increment): Colonne => {
 };
 const relire = (valeur: Colonne): number => (typeof valeur === 'number' ? valeur : 0);
 
-function fausseBase(params: { compte: Compte; points: number; registre?: LigneRegistre[] }) {
+type Palier = { milestoneType: string; milestoneKey: string; reachedAt: string };
+type FiltreCle = { in?: string[]; startsWith?: string };
+
+/** L'instant d'une gravure FAITE PAR LA FRAPPE — distinct de toute date de fixture. */
+const GRAVE_PAR_LA_FRAPPE = '2026-09-14T07:12:57.000Z';
+
+const conflitEcriture = () =>
+  Object.assign(new Error('Transaction failed due to a write conflict or a deadlock. Please retry your transaction'), {
+    code: 'P2034',
+  });
+
+function fausseBase(params: {
+  compte: Compte;
+  points: number;
+  registre?: LigneRegistre[];
+  paliers?: Palier[];
+  /** Nombre de `user.update` rejetés par un conflit d'écriture, comme MongoDB le fait (P2034). */
+  conflits?: number;
+}) {
   const compte: Compte = { ...params.compte };
   const registre: LigneRegistre[] = [...(params.registre ?? [])];
+  const paliers: Palier[] = [...(params.paliers ?? [])];
   const compteur = { axisKey: 'content.text_message', count: 400, points: params.points };
+  let conflitsRestants = params.conflits ?? 0;
+
+  const correspond = (cle: string, filtre: FiltreCle) =>
+    (filtre.in === undefined || filtre.in.includes(cle)) &&
+    (filtre.startsWith === undefined || cle.startsWith(filtre.startsWith));
 
   const client = {
     engagementCounter: {
@@ -57,15 +81,33 @@ function fausseBase(params: { compte: Compte; points: number; registre?: LigneRe
       findUnique: async () => ({ count: compteur.count }),
     },
     engagementMilestone: {
-      deleteMany: async () => ({ count: 0 }),
-      create: async () => ({}),
+      deleteMany: async (args: { where: { milestoneType: string; milestoneKey: FiltreCle } }) => {
+        const avant = paliers.length;
+        const gardes = paliers.filter(
+          (p) => !(p.milestoneType === args.where.milestoneType && correspond(p.milestoneKey, args.where.milestoneKey)),
+        );
+        paliers.splice(0, paliers.length, ...gardes);
+        return { count: avant - gardes.length };
+      },
+      create: async (args: { data: { milestoneType: string; milestoneKey: string } }) => {
+        paliers.push({ milestoneType: args.data.milestoneType, milestoneKey: args.data.milestoneKey, reachedAt: GRAVE_PAR_LA_FRAPPE });
+        return args.data;
+      },
     },
     user: {
       update: async (args: { data: Record<keyof Compte, number | Increment> }) => {
+        if (conflitsRestants > 0) {
+          conflitsRestants -= 1;
+          throw conflitEcriture();
+        }
         for (const cle of Object.keys(args.data) as (keyof Compte)[]) {
           compte[cle] = ecrire(compte[cle], args.data[cle]);
         }
-        return { meeshBalance: relire(compte.meeshBalance), meeshMintedLifetime: relire(compte.meeshMintedLifetime) };
+        return {
+          engagementScore: relire(compte.engagementScore),
+          meeshBalance: relire(compte.meeshBalance),
+          meeshMintedLifetime: relire(compte.meeshMintedLifetime),
+        };
       },
       findUnique: async () => ({
         meeshBalance: relire(compte.meeshBalance),
@@ -90,8 +132,31 @@ function fausseBase(params: { compte: Compte; points: number; registre?: LigneRe
     },
   };
 
-  const prisma = { ...client, $transaction: async <T>(fn: (tx: typeof client) => Promise<T>) => fn(client) };
-  return { prisma: prisma as unknown as PrismaClient, compte };
+  /**
+   * La transaction s'ANNULE en bloc sur une erreur, comme sur MongoDB : un faux
+   * qui garderait les écritures d'une tentative rejetée ferait passer une
+   * reprise pour une double frappe, ou cacherait qu'elle en est une.
+   */
+  const $transaction = async <T>(fn: (tx: typeof client) => Promise<T>): Promise<T> => {
+    const instantane = {
+      compte: { ...compte },
+      compteur: { ...compteur },
+      registre: [...registre],
+      paliers: [...paliers],
+    };
+    try {
+      return await fn(client);
+    } catch (err) {
+      Object.assign(compte, instantane.compte);
+      Object.assign(compteur, instantane.compteur);
+      registre.splice(0, registre.length, ...instantane.registre);
+      paliers.splice(0, paliers.length, ...instantane.paliers);
+      throw err;
+    }
+  };
+
+  const prisma = { ...client, $transaction };
+  return { prisma: prisma as unknown as PrismaClient, compte, registre, paliers, compteur };
 }
 
 const frappe = (requestId: string): LigneRegistre => ({ userId: USER_ID, requestId, delta: 1, reason: 'mint' });
@@ -146,5 +211,100 @@ describe('MeeshService.mint — le solde se lit au REGISTRE', () => {
 
     expect(issue).toMatchObject({ status: 'minted', balance: 4, mintedLifetime: 4 });
     expect(compte.engagementScore).toBe(5000 - 1221);
+  });
+});
+
+/**
+ * CE QUE LA FRAPPE ÉTEINT (#6465) — et seulement cela.
+ *
+ * Mesuré sur staging le 2026-09-14, juste après la première frappe réelle :
+ * « Niveau 3 · 1 point · Encore 9 points avant le niveau 4 », et « Dernier
+ * succès : 10 messages envoyés, obtenu aujourd'hui » pour un badge vieux de
+ * plusieurs mois. La frappe gardait les niveaux gravés au-dessus du score, et
+ * effaçait puis regravait les badges que le compteur couvrait encore.
+ */
+describe('MeeshService.mint — les paliers suivent la valeur RESTANTE', () => {
+  const badge = (seuil: number, reachedAt: string): Palier => ({
+    milestoneType: 'badge',
+    milestoneKey: `content.text_message:${seuil}`,
+    reachedAt,
+  });
+  const niveau = (seuil: number): Palier => ({
+    milestoneType: 'level',
+    milestoneKey: `level:${seuil}`,
+    reachedAt: '2026-03-01T00:00:00.000Z',
+  });
+
+  it('éteint les badges que le compteur restant ne couvre plus, et laisse les autres INTACTS, date comprise', async () => {
+    const { prisma, paliers, compteur } = fausseBase({
+      compte: { engagementScore: 1300, meeshBalance: 0, meeshMintedLifetime: 0 },
+      points: 1300,
+      paliers: [
+        badge(1, '2026-01-05T00:00:00.000Z'),
+        badge(10, '2026-02-10T00:00:00.000Z'),
+        badge(50, '2026-04-20T00:00:00.000Z'),
+        badge(100, '2026-06-30T00:00:00.000Z'),
+      ],
+    });
+
+    await new MeeshService(prisma).mint(USER_ID, 'frappe-badges');
+
+    expect(compteur.count).toBeGreaterThanOrEqual(10);
+    expect(compteur.count).toBeLessThan(50);
+    expect(paliers.filter((p) => p.milestoneType === 'badge')).toEqual([
+      badge(1, '2026-01-05T00:00:00.000Z'),
+      badge(10, '2026-02-10T00:00:00.000Z'),
+    ]);
+  });
+
+  it('éteint les niveaux que le score restant ne couvre plus — le niveau et sa barre lisent la même valeur', async () => {
+    const { prisma, paliers, compte } = fausseBase({
+      compte: { engagementScore: 1300, meeshBalance: 0, meeshMintedLifetime: 0 },
+      points: 1300,
+      paliers: [niveau(10), niveau(50), niveau(150), niveau(400), niveau(1000)],
+    });
+
+    await new MeeshService(prisma).mint(USER_ID, 'frappe-niveaux');
+
+    expect(compte.engagementScore).toBe(79);
+    expect(paliers.filter((p) => p.milestoneType === 'level')).toEqual([niveau(10), niveau(50)]);
+  });
+});
+
+/**
+ * UN CONFLIT D'ÉCRITURE SE REJOUE (#6467).
+ *
+ * Mesuré sur staging le 2026-09-14 : deux frappes rejetées, « Transaction
+ * failed due to a write conflict or a deadlock. Please retry your transaction »
+ * sur `user.update`, avant la troisième qui aboutit. D'autres écrivains touchent
+ * le document `User` pendant la transaction (activité, locale, pays) ; MongoDB
+ * annule, et personne ne rejouait.
+ */
+describe('MeeshService.mint — un conflit d’écriture ne coûte pas un geste', () => {
+  it('rejoue la frappe : elle aboutit, UNE ligne au registre, 1221 points débités une seule fois', async () => {
+    const { prisma, compte, registre } = fausseBase({
+      compte: { engagementScore: 1300, meeshBalance: 0, meeshMintedLifetime: 0 },
+      points: 1300,
+      conflits: 1,
+    });
+
+    const issue = await new MeeshService(prisma).mint(USER_ID, 'frappe-conflit');
+
+    expect(issue).toMatchObject({ status: 'minted', balance: 1, mintedLifetime: 1 });
+    expect(registre).toHaveLength(1);
+    expect(compte.engagementScore).toBe(1300 - 1221);
+  });
+
+  it('la reprise est BORNÉE : un conflit qui persiste remonte, et rien n’est écrit', async () => {
+    const { prisma, compte, registre } = fausseBase({
+      compte: { engagementScore: 1300, meeshBalance: 0, meeshMintedLifetime: 0 },
+      points: 1300,
+      conflits: 99,
+    });
+
+    await expect(new MeeshService(prisma).mint(USER_ID, 'frappe-bloquee')).rejects.toMatchObject({ code: 'P2034' });
+
+    expect(registre).toEqual([]);
+    expect(compte.engagementScore).toBe(1300);
   });
 });

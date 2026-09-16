@@ -25,6 +25,81 @@ const fr = {
   'typing.double': '{first} et {second} écrivent',
   'typing.several': 'Plusieurs personnes écrivent',
 
+  /* LES RÉELS (#6457) — le bouton de l'en-tête du Flux et le lecteur plein
+     écran ; `feed.header.reels`, `reels.back`, `reels.empty` et
+     `reels.action.*` reprennent les clés d'iOS. */
+  'feed.header.reels': 'Lancer les Réels',
+  'reels.title': 'Réels',
+  'reels.back': 'Retour',
+  'reels.open': 'Regarder le réel de {author}',
+  'reels.item': 'Réel de {author}, {index} sur {count}',
+  'reels.loading': 'Chargement des réels',
+  'reels.empty': 'Aucun réel pour le moment',
+  'reels.empty.hint': 'Les réels de vos contacts apparaîtront ici.',
+  'reels.error': 'Impossible de charger les réels',
+  'reels.error.hint': 'Réessayez dans un instant.',
+  'reels.retry': 'Réessayer',
+  'reels.offline': 'Hors ligne',
+  'reels.offline.cold': 'Les réels se chargeront dès le retour du réseau.',
+  'reels.action.like': 'J’aime',
+  'reels.action.bookmark': 'Enregistrer',
+  'reels.action.share': 'Partager',
+  'reels.sound.on': 'Activer le son',
+  'reels.sound.off': 'Couper le son',
+  'reels.play': 'Lire le réel',
+  'reels.pause': 'Mettre le réel en pause',
+  'reels.media.error': 'Lecture impossible — Réessayer',
+  'reels.image': 'Image {index} sur {count}',
+
+  /* TOUTES LES STORIES (#6547) — `routes/stories.tsx`, même patron que le Flux. */
+  'stories.title': 'Stories',
+  'stories.loading': 'Chargement des stories…',
+  'stories.error': "Les stories n'ont pas pu être chargées.",
+  'stories.empty.title': "Aucune story pour l'instant",
+  'stories.empty.subtitle': 'Les stories de vos contacts apparaîtront ici pendant vingt-quatre heures.',
+  'stories.create': 'Créer une story',
+  'stories.count.one': '{count} story',
+  'stories.count.other': '{count} stories',
+  /* LE LIBELLÉ DU GROUPE DU LECTEUR (#6550) — partagé par le rail
+     (`components/story-rail.tsx`) et la liste « Toutes les stories »
+     (`routes/stories.tsx`), via `storyAuthorLabel()`. */
+  'stories.mine': 'Votre story',
+
+  /* LA CARTE DU FIL ET SES GESTES (#6488) — `FeedPostCard`, l'en-tête et les
+     quatre états du Flux (`routes/feed.tsx`), et les échecs d'un geste
+     (`lib/api/feed-gestures.ts`, `lib/feed/share-url.ts`) : tous écrits en
+     dur en français jusqu'ici, alors qu'une coque branchée en anglais servait
+     déjà `reels.open` sur la même carte. */
+  'feed.post.action.like': 'Aimer',
+  'feed.post.action.comment': 'Commenter',
+  'feed.post.action.repost': 'Repartager',
+  'feed.post.action.bookmark': 'Enregistrer',
+  'feed.post.action.share': 'Partager',
+  'feed.post.media.video': 'Vidéo',
+  'feed.post.media.audio': 'Audio',
+  'feed.post.media.previous': 'Média précédent',
+  'feed.post.media.next': 'Média suivant',
+  'feed.post.media.mosaic': 'Mosaïque de {count} médias',
+  'feed.post.see_more': 'voir plus',
+  'feed.post.see_less': 'voir moins',
+  'feed.post.reel.chip': 'Réel',
+  'feed.post.reel.of': 'Réel de {author}',
+  'feed.error.title': 'Impossible de charger le fil',
+  'feed.error.body': 'Réessayez dans un instant.',
+  'feed.offline.title': 'Hors ligne',
+  'feed.offline.body': 'Le fil s’affichera à la reconnexion.',
+  'feed.retry': 'Réessayer',
+  'feed.empty.title': 'Aucune publication',
+  'feed.empty.subtitle': 'Les publications de vos contacts apparaîtront ici.',
+  'feed.loading': 'Chargement du fil',
+  'feed.allLoaded': 'Toutes les publications sont chargées',
+  'feed.like.error': 'Impossible d’aimer la publication',
+  'post.bookmark.error': 'Erreur lors de l’enregistrement',
+  'feed.gesture.pending': 'Geste non confirmé — hors ligne',
+  'feed.share.error': 'Impossible de partager la publication',
+  'feed.share.copied': 'Lien copié — il ne reste qu’à le coller.',
+  'feed.share.text': 'Une publication sur Meeshy',
+
   'root.menu.feed': 'Flux',
   'root.menu.links': 'Mes liens',
   'root.menu.notifications': 'Notifications',
@@ -33,6 +108,8 @@ const fr = {
   'root.menu.communities': 'Communautés',
   'root.menu.settings': 'Réglages',
   'root.menu.profile': 'Profil',
+  'root.menu.conversations': 'Conversations',
+  'a11y.floating.feed.hint': 'Appui long pour lancer les Réels',
   'a11y.floating.menu': 'Menu',
   'a11y.floating.menu.ladder': 'Navigation Meeshy',
   'a11y.floating.menu.unread.one': 'Menu, {count} notification non lue',
@@ -75,6 +152,81 @@ const fr = {
   'notFound.title': "Cette adresse n'existe pas.",
 
   'pending.back': 'Revenir aux conversations',
+
+  /* LES LIENS REÇUS (#6714, #6715) — les pages que visent les liens suivis
+     `/l/:token` et les e-mails de compte (suppression, changement d'adresse,
+     désabonnement). `linkPage.*` porte les états qu'elles partagent. */
+  'linkPage.home': 'Retour à Meeshy',
+  'linkPage.retry': 'Réessayer',
+  'linkPage.settings': 'Ouvrir les réglages',
+  'linkPage.signIn': 'Se connecter',
+  'linkPage.offline.title': 'Hors ligne',
+  'linkPage.offline.body': 'Reconnectez-vous à Internet, puis réessayez.',
+  'linkPage.unavailable.title': 'Meeshy ne répond pas',
+  'linkPage.unavailable.body': 'Le service est momentanément indisponible. Réessayez dans quelques instants.',
+  'linkPage.rateLimited': 'Trop de tentatives. Patientez un moment avant de réessayer.',
+  'linkPage.signedOut.title': 'Connectez-vous pour continuer',
+  'linkPage.signedOut.body': 'Ce lien agit sur votre compte. Connectez-vous, puis rouvrez-le depuis l’e-mail.',
+  'linkPage.expired': 'Ce lien a expiré. Refaites la demande depuis les réglages.',
+  'trackingLink.opening': 'Ouverture du lien…',
+  'trackingLink.dead.title': 'Ce lien n’est plus disponible',
+  'trackingLink.dead.body': 'Il a expiré, a été désactivé ou n’a jamais existé.',
+  'accountDeletion.incomplete.title': 'Lien incomplet',
+  'accountDeletion.incomplete.body': 'Ce lien ne porte pas les informations nécessaires. Connectez-vous pour demander la suppression de votre compte.',
+  'accountDeletion.confirm.title': 'Confirmer la suppression de votre compte',
+  'accountDeletion.confirm.body':
+    'Votre compte sera désactivé au terme d’une période de grâce de 30 jours. D’ici là, le lien « Annuler » de l’e-mail vous permet de revenir en arrière.',
+  'accountDeletion.confirm.action': 'Confirmer la suppression',
+  'accountDeletion.cancel.title': 'Annuler la suppression de votre compte',
+  'accountDeletion.cancel.body': 'Votre compte reste actif et la demande de suppression est abandonnée. Rien n’est perdu.',
+  'accountDeletion.cancel.action': 'Annuler la suppression',
+  'accountDeletion.purge.title': 'Supprimer votre compte maintenant',
+  'accountDeletion.purge.body': 'Votre compte sera désactivé sur-le-champ et toutes vos sessions seront fermées. Ce geste est définitif.',
+  'accountDeletion.purge.action': 'Supprimer maintenant',
+  'accountDeletion.dismiss': 'Ne rien faire',
+  'accountDeletion.working': 'Un instant…',
+  'accountDeletion.done.title': 'C’est fait',
+  'accountDeletion.done.confirmed': 'Votre demande est confirmée : votre compte sera désactivé le {date}. Vous pouvez annuler d’ici là.',
+  'accountDeletion.done.cancelled': 'Votre compte reste actif : la demande de suppression est abandonnée.',
+  'accountDeletion.done.completed': 'Votre compte est désactivé et toutes vos sessions ont été fermées.',
+  'accountDeletion.done.purged': 'Vos données ont été effacées.',
+  'accountDeletion.closed.title': 'Ce lien ne sert plus',
+  'accountDeletion.invalid': 'Ce lien est invalide ou a déjà servi.',
+  'accountDeletion.request.title': 'Supprimer votre compte',
+  'accountDeletion.request.body':
+    'Vos conversations, messages, médias, contacts et préférences seront supprimés. Un e-mail vous demandera de confirmer, puis une période de grâce de 30 jours vous laissera revenir en arrière.',
+  'accountDeletion.request.phrase': 'Tapez {phrase} pour confirmer',
+  'accountDeletion.request.password': 'Mot de passe actuel',
+  'accountDeletion.request.action': 'Demander la suppression',
+  'accountDeletion.request.sent.title': 'Un e-mail de confirmation vous a été envoyé',
+  'accountDeletion.request.sent.body': 'Ouvrez-le pour confirmer la suppression de votre compte.',
+  'accountDeletion.request.wrongPassword': 'Mot de passe incorrect.',
+  'accountDeletion.request.alreadyPending': 'Une demande est déjà en cours. Ouvrez l’e-mail reçu pour la confirmer ou l’annuler.',
+  'accountDeletion.request.noEmail': 'Ajoutez et vérifiez une adresse e-mail avant de demander la suppression.',
+  'emailChange.verifying': 'Confirmation de votre nouvelle adresse…',
+  'emailChange.done.title': 'Adresse e-mail modifiée',
+  'emailChange.done.body': 'Vous vous connectez désormais avec {email}.',
+  'emailChange.done.generic': 'Votre nouvelle adresse e-mail est confirmée.',
+  'emailChange.failed.title': 'Adresse non modifiée',
+  'emailChange.missing': 'Ce lien ne porte pas de code de confirmation. Ouvrez celui de l’e-mail le plus récent.',
+  'emailChange.invalid': 'Ce lien ne correspond à aucun changement en attente sur ce compte, ou il a déjà servi.',
+  'emailChange.taken': 'Cette adresse est désormais utilisée par un autre compte.',
+  'emailNotifications.title': 'E-mails de Meeshy',
+  'emailNotifications.loading': 'Lecture de votre préférence…',
+  'emailNotifications.on': 'Vous recevez les annonces, récapitulatifs et notifications de Meeshy par e-mail.',
+  'emailNotifications.off': 'Vous ne recevez plus les annonces, récapitulatifs ni notifications de Meeshy par e-mail.',
+  'emailNotifications.security': 'Les e-mails de sécurité de votre compte continuent d’arriver.',
+  'emailNotifications.unsubscribe': 'Ne plus recevoir ces e-mails',
+  'emailNotifications.resubscribe': 'Recevoir de nouveau ces e-mails',
+  'emailNotifications.failed': 'Le changement n’a pas abouti. Réessayez.',
+
+  'dataExport.title': 'Exporter mes données',
+  'dataExport.info.body': 'Conformément au RGPD, recevez un fichier reprenant votre profil, vos messages, vos contacts et vos publications.',
+  'dataExport.action.start': 'Exporter mes données',
+  'dataExport.action.exporting': 'Export en cours…',
+  'dataExport.action.again': 'Exporter à nouveau',
+  'dataExport.done.title': 'Export terminé',
+  'dataExport.done.body': 'Le fichier a été téléchargé sur cet appareil.',
 
   'profile.title': 'Profil',
   'profile.edit': 'Modifier',
@@ -125,6 +277,17 @@ const fr = {
   'profile.language.choose': 'Choisir',
   'profile.language.clear.regional': 'Retirer la langue régionale',
   'profile.language.clear.custom': 'Retirer la langue personnalisée',
+
+  /* LA FEUILLE DE CHOIX DE LANGUE, PARLÉE DANS LA LANGUE D'INTERFACE (#6328)
+     — titre par défaut (inscription), titre du composeur, recherche et état
+     vide de `language-sheet.tsx`. `title`/`selected` restent des props
+     explicites (#5828) : ces clés ne servent qu'à défaut d'un `title` fourni
+     par l'appelant, et toujours pour la recherche/l'état vide. */
+  'languageSheet.title.read': 'Langue de lecture',
+  'languageSheet.title.write': 'Langue d’écriture',
+  'languageSheet.search': 'Rechercher une langue',
+  'languageSheet.empty': 'Aucune langue ne correspond à « {search} ».',
+
   'profile.stats.messages': 'Messages',
   'profile.stats.translations': 'Traductions',
   'profile.stats.languages': 'Langues',
@@ -175,7 +338,6 @@ const fr = {
   'settings.logout.title': 'Déconnexion',
   'settings.logout.message': 'Voulez-vous vraiment vous déconnecter ?',
   'settings.logout.inprogress': 'Déconnexion en cours...',
-  'settings.legacy': 'Version classique, nouvel onglet',
   'settings.loading': 'Chargement des réglages',
   'settings.error.title': 'Impossible de charger vos réglages',
   'settings.retry': 'Réessayer',
@@ -187,6 +349,8 @@ const fr = {
   'media.video.play': 'Lire la vidéo',
   'media.video.pause': 'Pause',
   'media.video.position': 'Position de lecture',
+  'media.audio.position': 'Position de lecture',
+  'media.audio.speed': 'Vitesse de lecture',
   'media.video.position.value': '{elapsed} sur {total}',
   'media.video.mute': 'Couper le son',
   'media.video.unmute': 'Réactiver le son',
@@ -436,41 +600,16 @@ const fr = {
   'links.create.error.refused': 'Vous ne pouvez pas créer de lien pour cette conversation.',
   'links.create.error.default': 'Le lien n’a pas pu être créé. Réessayez.',
 
-  /* L'ESPACE D'ADMINISTRATION (#6432) — les onze sections reprennent les
-     libellés de la barre latérale du legacy (`AdminLayout.tsx`), pour qu'un
-     administrateur retrouve ses repères d'une application à l'autre. */
+  /* L'ESPACE D'ADMINISTRATION (#6432) — SEUL `admin.title` reste ici : la
+     rangée des Réglages et le barreau du menu flottant (#6458) le lisent
+     SANS jamais entrer dans `/adm`, donc sans jamais charger le catalogue
+     d'administration. Les 83 autres clés (`admin.nav.*`, `admin.users.*`,
+     `admin.user.*`, `admin.edit.*`, `admin.password.*`, `admin.ban.*`,
+     `admin.media.*`, `admin.conv.*`, `admin.counters.*`, `admin.sections.*`,
+     `admin.denied.*`, `admin.role`) ont déménagé dans
+     `catalog-admin-fr.ts` (#6871, #6834) : elles ne pesaient que pour un
+     lecteur qui n'ouvre jamais l'administration. */
   'admin.title': 'Administration',
-  'admin.role': 'Votre rôle : {role}',
-  'admin.denied.title': 'Espace réservé',
-  'admin.denied.message': 'Cet espace demande un droit d\'administration.',
-  'admin.counters.title': 'En un coup d\'œil',
-  'admin.counters.unavailable': 'Compteurs indisponibles pour le moment.',
-  'admin.counters.users': 'Comptes',
-  'admin.counters.activeUsers': 'Comptes actifs',
-  'admin.counters.messages': 'Messages',
-  'admin.counters.communities': 'Communautés',
-  'admin.counters.reports': 'Signalements',
-  'admin.counters.newUsers': 'Nouveaux (24 h)',
-  'admin.sections.title': 'Sections',
-  'admin.sections.legacy': 'ancienne interface',
-  'admin.nav.dashboard': 'Tableau de bord',
-  'admin.nav.users': 'Comptes',
-  'admin.nav.moderation': 'Modération',
-  'admin.nav.audit': 'Journaux d\'audit',
-  'admin.nav.analytics': 'Statistiques',
-  'admin.nav.trackingLinks': 'Liens de suivi',
-  'admin.nav.ranking': 'Classement',
-  'admin.nav.broadcasts': 'Diffusions',
-  'admin.nav.settings': 'Réglages',
-  'admin.nav.agent': 'Agent',
-  'admin.nav.monitoring': 'Supervision',
-  'admin.users.search': 'Rechercher un compte',
-  'admin.users.count': '{count} compte(s)',
-  'admin.users.empty': 'Aucun compte ne correspond.',
-  'admin.users.unavailable': 'Liste indisponible pour le moment.',
-  'admin.users.inactive': 'désactivé',
-  'admin.users.previous': 'Précédents',
-  'admin.users.next': 'Suivants',
 
 } as const;
 

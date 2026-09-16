@@ -67,6 +67,29 @@ export type ApiFailure = {
    * dur ou rester vague (#5912) : la fenêtre d'un limiteur est une donnée du
    * serveur, jamais une constante du client. */
   readonly retryAfter?: number;
+  /**
+   * Les pseudos LIBRES servis avec un refus `USERNAME_TAKEN` (#6479).
+   *
+   * `suggestionsDePseudo` (`registration.service.ts`) en rend trois, en UNE
+   * requête : proposer un remède coûte le même aller-retour que constater le
+   * problème. Depuis que l'écran ENVOIE le pseudo qu'il montre, une collision
+   * est un REFUS et non plus un renommage silencieux — sans ces trois valeurs,
+   * l'utilisateur se retrouverait devant un mur.
+   */
+  readonly suggestions?: readonly string[];
+  /**
+   * LE PSEUDO LIBRE servi avec un refus `USERNAME_TAKEN_IN_CONVERSATION`
+   * (#5561) — posé À LA RACINE de l'enveloppe par la porte de jonction, qui
+   * étend son schéma de réponse exprès pour le déclarer
+   * (`link-admission.ts:778-787` : sans cette déclaration,
+   * `fast-json-stringify` le supprimerait en silence).
+   *
+   * DISTINCT de `suggestions` ci-dessus, qui en rend TROIS à l'inscription : ici
+   * la passerelle en calcule UN, dans le contexte de CETTE conversation — deux
+   * conversations peuvent rendre deux pseudos différents pour le même visiteur.
+   * Les confondre ferait proposer un pseudo libre ailleurs, et repris ici.
+   */
+  readonly suggestedNickname?: string;
 };
 
 export type ApiSuccess<T> = {
@@ -220,6 +243,13 @@ function envelopeOf(payload: unknown): Record<string, unknown> {
  * `SignupViewModel.applyRejection` (iOS) : « le premier message qui vise un
  * champ gagne ».
  */
+/** Les pseudos de rechange, étalés à la racine par `sendError` comme `field`. */
+function suggestionsOf(envelope: Record<string, unknown>): readonly string[] {
+  const brut = envelope.suggestions;
+  if (!Array.isArray(brut)) return [];
+  return brut.filter((valeur): valeur is string => typeof valeur === 'string');
+}
+
 function fieldOf(envelope: Record<string, unknown>): string | undefined {
   if (typeof envelope.field === 'string') return envelope.field;
   if (Array.isArray(envelope.details)) {
@@ -346,6 +376,10 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
       ...(typeof envelope.code === 'string' ? { code: envelope.code } : {}),
       ...(field !== undefined ? { field } : {}),
       ...(typeof envelope.retryAfter === 'number' ? { retryAfter: envelope.retryAfter } : {}),
+      ...(suggestionsOf(envelope).length > 0 ? { suggestions: suggestionsOf(envelope) } : {}),
+      ...(typeof envelope.suggestedNickname === 'string' && envelope.suggestedNickname.trim() !== ''
+        ? { suggestedNickname: envelope.suggestedNickname }
+        : {}),
     };
   }
 

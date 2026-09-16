@@ -494,7 +494,6 @@ struct MessageListView: UIViewControllerRepresentable {
     /// Ce que le chrome flottant montre en ce moment (#6013) : en rangée
     /// plate, le fil s'efface sous l'en-tête et le composeur tant qu'ils sont
     /// posés, et retrouve le bord de l'écran quand le défilement les escamote.
-    var chromeVisibility: ThreadChromeFade.Visibility = .hidden
     /// Incremented from the parent SwiftUI view when the "scroll to latest"
     /// button is tapped. The bridge compares old vs. new to fire scrollToBottom.
     var scrollToBottomTrigger: Int = 0
@@ -730,7 +729,6 @@ struct MessageListView: UIViewControllerRepresentable {
         // conversation. Seul `updateUIViewController` suit une courbe.
         vc.applyBottomInset(bottomInset)
         vc.applyTopInset(topInset)
-        vc.applyChromeFade(chromeVisibility, transition: nil)
         return vc
     }
 
@@ -850,7 +848,6 @@ struct MessageListView: UIViewControllerRepresentable {
         // `transition == nil` retombe mot pour mot sur la pose sèche.
         vc.applyBottomInset(bottomInset, transition: bottomInsetTransition)
         vc.applyTopInset(topInset)
-        vc.applyChromeFade(chromeVisibility, transition: bottomInsetTransition)
     }
 
     // Filet de sécurité au démontage SwiftUI : coupe le CADisplayLink du
