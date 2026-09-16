@@ -113,6 +113,7 @@ public object BubbleContentBuilder {
                     thumbnailUrl = attachment.thumbnailUrl?.let { resolveMediaUrl(it, mediaBaseUrl) },
                     width = attachment.width,
                     height = attachment.height,
+                    alt = attachment.alt?.trim()?.ifBlank { null },
                 )
             }
         val locations = visibleAttachments

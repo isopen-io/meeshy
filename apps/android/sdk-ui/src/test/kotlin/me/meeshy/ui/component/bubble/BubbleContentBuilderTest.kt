@@ -792,6 +792,68 @@ class BubbleContentBuilderTest {
     }
 
     @Test
+    fun `an attachment's alt text becomes the bubble image's alt`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                attachments = listOf(
+                    ApiMessageAttachment(
+                        id = "a1",
+                        mimeType = "image/jpeg",
+                        fileUrl = "/files/photo.jpg",
+                        alt = "A red bicycle leaning on a brick wall",
+                    ),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+            mediaBaseUrl = "https://gate.meeshy.me",
+        )
+
+        assertThat(content.images.single().alt).isEqualTo("A red bicycle leaning on a brick wall")
+    }
+
+    @Test
+    fun `a blank attachment alt becomes no alt, not a blank announcement`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                attachments = listOf(
+                    ApiMessageAttachment(
+                        id = "a1",
+                        mimeType = "image/jpeg",
+                        fileUrl = "/files/photo.jpg",
+                        alt = "   ",
+                    ),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+            mediaBaseUrl = "https://gate.meeshy.me",
+        )
+
+        assertThat(content.images.single().alt).isNull()
+    }
+
+    @Test
+    fun `no attachment alt at all leaves the bubble image's alt null`() {
+        val content = BubbleContentBuilder.build(
+            message().copy(
+                attachments = listOf(
+                    ApiMessageAttachment(
+                        id = "a1",
+                        mimeType = "image/jpeg",
+                        fileUrl = "/files/photo.jpg",
+                    ),
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+            mediaBaseUrl = "https://gate.meeshy.me",
+        )
+
+        assertThat(content.images.single().alt).isNull()
+    }
+
+    @Test
     fun `an absolute attachment url is kept as-is`() {
         val content = BubbleContentBuilder.build(
             message().copy(

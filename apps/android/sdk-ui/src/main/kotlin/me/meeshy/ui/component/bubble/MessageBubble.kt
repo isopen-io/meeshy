@@ -604,7 +604,7 @@ private fun BubbleImageGrid(
             val ratio = imageAspectRatio(image)
             AsyncImage(
                 model = image.url,
-                contentDescription = stringResource(R.string.bubble_image_description),
+                contentDescription = bubbleImageContentDescription(image, stringResource(R.string.bubble_image_description)),
                 contentScale = ContentScale.Crop,
                 modifier = modifier
                     .width(252.dp)
@@ -643,7 +643,7 @@ private fun BubbleImageGrid(
                             ) {
                                 AsyncImage(
                                     model = image.thumbnailUrl ?: image.url,
-                                    contentDescription = stringResource(R.string.bubble_image_description),
+                                    contentDescription = bubbleImageContentDescription(image, stringResource(R.string.bubble_image_description)),
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier.size(124.dp),
                                 )
@@ -672,6 +672,14 @@ private fun BubbleImageGrid(
         }
     }
 }
+
+/**
+ * TalkBack description for a bubble image: the author-authored [BubbleImage.alt]
+ * (#6813) when present and non-blank, else the generic localized [fallback] —
+ * never a blank announcement.
+ */
+internal fun bubbleImageContentDescription(image: BubbleImage, fallback: String): String =
+    image.alt?.takeIf { it.isNotBlank() } ?: fallback
 
 private fun imageAspectRatio(image: BubbleImage): Float {
     val width = image.width ?: return 1f
