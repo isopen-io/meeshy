@@ -137,7 +137,15 @@ struct GalleryScenePage: View, Equatable {
             accentColorHex: accentColor,
             carrier: item.carrier,
             preferredContentLanguages: preferredContentLanguages,
-            startAt: isEntry ? openingPosition : 0
+            startAt: isEntry ? openingPosition : 0,
+            // **Le fond se peint UNE fois** (#6791). `MediaStageBackdrop`, juste
+            // au-dessus, habille déjà le hors-champ du cadre avec le hachage de
+            // la scène ; laisser le canvas repeindre le sien empilait deux
+            // dégradés du MÊME hachage, étirés dans deux cadres différents —
+            // mesuré au simulateur, deux teintes au-dessus d'un même média.
+            // La décision vit avec la page (`GallerySceneItem`), qui la tient de
+            // la loi qui décide aussi de son rapport.
+            servesLetterboxFill: item.servesLetterboxFill
         )
         .frame(width: stage.media.width, height: stage.media.height)
         .accessibilityElement(children: .contain)
