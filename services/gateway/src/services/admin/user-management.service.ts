@@ -237,20 +237,60 @@ export class UserManagementService {
 
   /**
    * Met à jour le profil d'un utilisateur
+   *
+   * Recalcule `searchTokens` dès que la donnée touche un champ de nom — la
+   * même règle que `createUser` et `PATCH /users/me/username`, jusqu'ici
+   * absente de ce site : un compte renommé par un administrateur restait
+   * indexé sous son ANCIEN nom et devenait introuvable sous le nouveau (#6823).
+   * Les champs de nom non touchés par `data` sont relus pour ne pas perdre
+   * leurs jetons — `searchTokensFor` ne connaît que ce qu'on lui passe.
    */
   async updateUser(
     userId: string,
     data: UpdateUserProfileDTO
   ): Promise<FullUser> {
+    const touchesName =
+      data.username !== undefined ||
+      data.displayName !== undefined ||
+      data.firstName !== undefined ||
+      data.lastName !== undefined;
+
+    const searchTokens = touchesName
+      ? searchTokensFor(await this.resolveNameFields(userId, data))
+      : undefined;
+
     const user = await this.prisma.user.update({
       where: { id: userId },
       data: {
         ...data,
+        ...(searchTokens ? { searchTokens } : {}),
         updatedAt: new Date()
       },
     });
 
     return user as unknown as FullUser;
+  }
+
+  private async resolveNameFields(
+    userId: string,
+    data: UpdateUserProfileDTO
+  ): Promise<{
+    username?: string | null;
+    displayName?: string | null;
+    firstName?: string | null;
+    lastName?: string | null;
+  }> {
+    const current = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { username: true, displayName: true, firstName: true, lastName: true }
+    });
+
+    return {
+      username: data.username !== undefined ? data.username : current?.username,
+      displayName: data.displayName !== undefined ? data.displayName : current?.displayName,
+      firstName: data.firstName !== undefined ? data.firstName : current?.firstName,
+      lastName: data.lastName !== undefined ? data.lastName : current?.lastName,
+    };
   }
 
   /**
