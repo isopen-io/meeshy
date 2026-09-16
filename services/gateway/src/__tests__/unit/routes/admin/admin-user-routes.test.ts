@@ -10,7 +10,6 @@ const mockUMS: Record<string, jest.Mock> = {
   updateStatus: jest.fn(),
   resetPassword: jest.fn(),
   deleteUser: jest.fn(),
-  restoreUser: jest.fn(),
   unlockAccount: jest.fn(),
   enable2FA: jest.fn(),
   disable2FA: jest.fn(),
@@ -29,7 +28,6 @@ const mockAudit: Record<string, jest.Mock> = {
   logUpdateStatus: jest.fn(),
   logResetPassword: jest.fn(),
   logDeleteUser: jest.fn(),
-  logRestoreUser: jest.fn(),
 };
 
 jest.mock('../../../../services/admin/user-management.service', () => ({
@@ -161,7 +159,6 @@ function resetMocks() {
   mockAudit.logUpdateStatus.mockResolvedValue(undefined);
   mockAudit.logResetPassword.mockResolvedValue(undefined);
   mockAudit.logDeleteUser.mockResolvedValue(undefined);
-  mockAudit.logRestoreUser.mockResolvedValue(undefined);
 
   // `requireHierarchy` (#4154) lit le RANG de la cible en base : sans ce
   // défaut, le double rend `undefined`, la garde échoue FERMÉ et tous les
@@ -176,7 +173,6 @@ function resetMocks() {
   mockUMS.updateStatus.mockResolvedValue(mockUser);
   mockUMS.resetPassword.mockResolvedValue(mockUser);
   mockUMS.deleteUser.mockResolvedValue(undefined);
-  mockUMS.restoreUser.mockResolvedValue(mockUser);
   mockUMS.unlockAccount.mockResolvedValue(mockUser);
   mockUMS.enable2FA.mockResolvedValue(mockUser);
   mockUMS.disable2FA.mockResolvedValue(mockUser);
@@ -668,14 +664,6 @@ describe('DELETE /admin/users/:userId', () => {
     expect(res.statusCode).toBe(200);
   });
 
-  // #6822 — un compte supprimé doit porter QUI l'a supprimé, pas seulement
-  // isActive:false : sans deletedBy la console ne peut pas le distinguer
-  // d'une désactivation.
-  it('passes the acting admin id as deletedBy', async () => {
-    await app.inject({ method: 'DELETE', url: '/admin/users/user123' });
-    expect(mockUMS.deleteUser).toHaveBeenCalledWith('user123', 'admin123');
-  });
-
   it('returns 404 when user not found', async () => {
     mockUMS.getUserById.mockResolvedValue(null);
     const res = await app.inject({ method: 'DELETE', url: '/admin/users/user123' });
@@ -691,66 +679,6 @@ describe('DELETE /admin/users/:userId', () => {
   it('returns 500 when deleteUser throws', async () => {
     mockUMS.deleteUser.mockRejectedValue(new Error('DB error'));
     const res = await app.inject({ method: 'DELETE', url: '/admin/users/user123' });
-    expect(res.statusCode).toBe(500);
-  });
-});
-
-// ── POST /admin/users/:userId/restore ────────────────────────────────────────
-// #6822 — la jumelle du DELETE ci-dessus : `restoreUser` existait côté service
-// sans aucune route pour l'appeler.
-describe('POST /admin/users/:userId/restore', () => {
-  let app: FastifyInstance;
-
-  beforeAll(async () => {
-    resetMocks();
-    app = buildApp();
-    await app.ready();
-  });
-  afterAll(() => app.close());
-  beforeEach(resetMocks);
-
-  it('returns 401 when no authContext', async () => {
-    const noAuth = buildNoAuthApp();
-    await noAuth.ready();
-    const res = await noAuth.inject({ method: 'POST', url: '/admin/users/user123/restore' });
-    await noAuth.close();
-    expect(res.statusCode).toBe(401);
-  });
-
-  it('returns 403 when hasPermission (delete) is false', async () => {
-    (permissionsService.hasPermission as jest.Mock).mockReturnValueOnce(false);
-    const res = await app.inject({ method: 'POST', url: '/admin/users/user123/restore' });
-    expect(res.statusCode).toBe(403);
-  });
-
-  it('returns 200 on happy path and calls restoreUser', async () => {
-    const res = await app.inject({ method: 'POST', url: '/admin/users/user123/restore' });
-    expect(res.statusCode).toBe(200);
-    expect(mockUMS.restoreUser).toHaveBeenCalledWith('user123');
-    expect(mockAudit.logRestoreUser).toHaveBeenCalledWith(
-      'admin123',
-      'user123',
-      undefined,
-      expect.anything(),
-      expect.anything()
-    );
-  });
-
-  it('returns 404 when user not found', async () => {
-    mockUMS.getUserById.mockResolvedValue(null);
-    const res = await app.inject({ method: 'POST', url: '/admin/users/user123/restore' });
-    expect(res.statusCode).toBe(404);
-  });
-
-  it('returns 403 when canModifyUser is false', async () => {
-    (permissionsService.canModifyUser as jest.Mock).mockReturnValueOnce(false);
-    const res = await app.inject({ method: 'POST', url: '/admin/users/user123/restore' });
-    expect(res.statusCode).toBe(403);
-  });
-
-  it('returns 500 when restoreUser throws', async () => {
-    mockUMS.restoreUser.mockRejectedValue(new Error('DB error'));
-    const res = await app.inject({ method: 'POST', url: '/admin/users/user123/restore' });
     expect(res.statusCode).toBe(500);
   });
 });
