@@ -21,7 +21,12 @@ on:
     branches: [main, dev]
     tags: ['v*.*.*']
     paths:
-      - 'apps/web/**'
+      # `apps/web` (LEGACY) ne déclenche plus ce workflow : son image n'y est
+      # plus construite (directive porteur 2026-09-16). meeshy.me sert
+      # `apps/web-v2` depuis le 2026-09-15, et staging ne servait déjà plus le
+      # legacy depuis #5609 — l'image était poussée au registry et déployée
+      # nulle part. Sa publication de PRODUCTION reste dans `release.yml`
+      # (tag `v*`), inchangée.
       - 'apps/web-v2/**'
       - 'packages/design-tokens/**'
       - 'services/gateway/**'
@@ -40,13 +45,10 @@ on:
         type: choice
         options:
           - all
-          - web
           - web-v31
           - gateway
           - translator
           - agent
-          - web,gateway
-          - web,translator
           - gateway,translator
       custom_services:
         description: 'Custom services (overrides above if set, e.g., "web,gateway")'
@@ -156,7 +158,6 @@ jobs:
             fi
 
             if [[ "$SERVICES" == "all" ]]; then
-              echo "web=true" >> $GITHUB_OUTPUT
               echo "web_v31=true" >> $GITHUB_OUTPUT
               echo "gateway=true" >> $GITHUB_OUTPUT
               echo "translator=true" >> $GITHUB_OUTPUT
@@ -165,9 +166,10 @@ jobs:
               # Sélection par JETON, pas par sous-chaîne. `*"web"*` répondait vrai
               # pour « web-v31 » : demander la v3.1 construisait AUSSI le legacy, et
               # rien dans le texte ne le disait. Les virgules encadrantes rendent
-              # « web » et « web-v31 » disjoints.
+              # « web » et « web-v31 » disjoints — le legacy n'étant plus construit
+              # (2026-09-16), la règle protège désormais `web-v31` d'un jeton voisin
+              # plutôt que du legacy, et reste donc nécessaire.
               SELECTED=",${SERVICES// /},"
-              echo "web=$([[ "$SELECTED" == *",web,"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
               echo "web_v31=$([[ "$SELECTED" == *",web-v31,"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
               echo "gateway=$([[ "$SELECTED" == *",gateway,"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
               echo "translator=$([[ "$SELECTED" == *",translator,"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
@@ -180,7 +182,6 @@ jobs:
             # application web en développement. Une omission dans une
             # énumération ne rougit nulle part : elle produit une release
             # complète en apparence, amputée en fait.
-            echo "web=true" >> $GITHUB_OUTPUT
             echo "web_v31=true" >> $GITHUB_OUTPUT
             echo "gateway=true" >> $GITHUB_OUTPUT
             echo "translator=true" >> $GITHUB_OUTPUT
@@ -221,13 +222,11 @@ jobs:
               CHANGED="__BASE_INTROUVABLE__"
             fi
             if [[ "$CHANGED" == "__BASE_INTROUVABLE__" ]]; then
-              echo "web=true" >> $GITHUB_OUTPUT
               echo "web_v31=true" >> $GITHUB_OUTPUT
               echo "gateway=true" >> $GITHUB_OUTPUT
               echo "translator=true" >> $GITHUB_OUTPUT
               echo "agent=true" >> $GITHUB_OUTPUT
             else
-            echo "web=$([[ "$CHANGED" == *"apps/web/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             echo "web_v31=$([[ "$CHANGED" == *"apps/web-v2/"* ]] || [[ "$CHANGED" == *"packages/design-tokens/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             echo "gateway=$([[ "$CHANGED" == *"services/gateway/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             echo "translator=$([[ "$CHANGED" == *"services/translator/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
@@ -247,13 +246,12 @@ jobs:
             TORCH_INPUT="cpu"
           fi
 
-          if [[ "${{ steps.changes.outputs.web }}" == "true" ]]; then
-            HAS_CHANGES=true
-            VERSION=$(cat apps/web/VERSION 2>/dev/null || echo "1.0.0")
-            [[ "$FIRST" == "false" ]] && SERVICES+=','
-            SERVICES+='{"service":"web","context":".","dockerfile":"./apps/web/Dockerfile","image":"meeshy-web","version":"'$VERSION'"}'
-            FIRST=false
-          fi
+          # LE LEGACY `web` (image `meeshy-web`) N'EST PLUS CONSTRUIT ICI
+          # (directive porteur 2026-09-16). Il n'était déployé nulle part
+          # depuis #5609 : l'image partait au registry et aucun compose ne la
+          # tirait. `release.yml` continue de la publier sur tag `v*`, donc un
+          # retour arrière garde une image à tirer — ce qui n'a jamais dépendu
+          # de ce workflow-ci.
 
           # LA v3.1 — image `meeshy-web-v31`. C'est le nom que le compose de
           # l'HÔTE de staging tire : le changer ici sans lui figerait staging en
@@ -528,7 +526,10 @@ jobs:
           # construite et servie nulle part pendant des jours.
           #
           # `web` n'a PAS de ligne, et c'est une décision : staging ne sert plus
-          # le legacy depuis #5609.
+          # le legacy depuis #5609. Depuis le 2026-09-16 il n'est même plus
+          # CONSTRUIT par ce workflow — un `custom_services: web` tomberait donc
+          # dans `INCONNUS` et se verrait, ce qui est le comportement voulu :
+          # demander un service qui n'existe plus doit avertir, pas se taire.
           CIBLES=""
           INCONNUS=""
           for SVC in $(echo "$SERVICES_JSON" | jq -r '.include[].service'); do
