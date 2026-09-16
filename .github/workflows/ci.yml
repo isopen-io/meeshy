@@ -1936,18 +1936,18 @@ jobs:
           cd services/agent
           pnpm run build
 
-      # Build web frontend (like in Dockerfiles)
-      - name: Build web frontend (bun)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: |
-          cd apps/web
-          bun run build
-
-      - name: Build web frontend (pnpm)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        run: |
-          cd apps/web
-          pnpm run build
+      # LE LEGACY `apps/web` N'EST PLUS CONSTRUIT ICI (directive porteur
+      # 2026-09-16). meeshy.me sert `apps/web-v2` depuis le 2026-09-15 : bâtir
+      # le legacy à chaque PR payait plusieurs minutes de CI pour un artefact
+      # que plus rien ne sert. Son image de production reste publiée par
+      # `release.yml` (tag `v*`) — le retour arrière garde donc une image, ce
+      # qui n'a jamais dépendu de cette étape-ci.
+      #
+      # Ce qui EXERCE encore `apps/web` reste en place et le doit : le job
+      # `Test web`, et les cliquets de dette `Lint (apps/web — debt ratchet)` et
+      # `Type-check (apps/web — debt ratchet)`. Ils mesurent une dette dont la
+      # référence ne doit pas dériver tant que le code vit dans le dépôt —
+      # retirer un cliquet est une décision distincte de retirer un build.
 
   # ===========================================================================
   # SUMMARY
