@@ -658,6 +658,22 @@ const en = {
   'admin.conv.title': 'Conversations',
   'admin.conv.empty': 'No conversations',
   'admin.conv.members': '{count} members',
+  'admin.nav.conversations': 'Conversations',
+  'admin.convList.search': 'Search a conversation',
+  'admin.convList.count': '{count} conversation(s)',
+  'admin.convList.empty': 'No conversation matches.',
+  'admin.convList.unavailable': 'List unavailable right now.',
+  'admin.convList.members': '{count} members',
+  'admin.convList.sovereign': 'Reserved to the admin rank.',
+  'admin.convDetail.title': 'Reading a conversation',
+  'admin.convDetail.reasonLabel': 'Reason for reading',
+  'admin.convDetail.reasonHint': 'Ten characters minimum, logged with your name.',
+  'admin.convDetail.read': 'Read the conversation',
+  'admin.convDetail.empty': 'No message',
+  'admin.convDetail.protected': 'Protected: exists, does not show',
+  'admin.convDetail.attachmentProtected': 'protected attachment',
+  'admin.convDetail.edited': 'edited',
+  'admin.convDetail.attachments': '{count} attachment(s)',
 
 } satisfies InterfaceCatalog;
 

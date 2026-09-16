@@ -658,6 +658,22 @@ const it = {
   'admin.conv.title': 'Conversazioni',
   'admin.conv.empty': 'Nessuna conversazione',
   'admin.conv.members': '{count} membri',
+  'admin.nav.conversations': 'Conversazioni',
+  'admin.convList.search': 'Cerca una conversazione',
+  'admin.convList.count': '{count} conversazione/i',
+  'admin.convList.empty': 'Nessuna conversazione corrisponde.',
+  'admin.convList.unavailable': 'Elenco non disponibile al momento.',
+  'admin.convList.members': '{count} membri',
+  'admin.convList.sovereign': 'Riservato al rango di amministrazione.',
+  'admin.convDetail.title': 'Lettura di una conversazione',
+  'admin.convDetail.reasonLabel': 'Motivo della lettura',
+  'admin.convDetail.reasonHint': 'Almeno dieci caratteri, registrato con il suo nome.',
+  'admin.convDetail.read': 'Leggere la conversazione',
+  'admin.convDetail.empty': 'Nessun messaggio',
+  'admin.convDetail.protected': 'Protetto: esiste, non si mostra',
+  'admin.convDetail.attachmentProtected': 'allegato protetto',
+  'admin.convDetail.edited': 'modificato',
+  'admin.convDetail.attachments': '{count} allegato/i',
 
 } satisfies InterfaceCatalog;
 

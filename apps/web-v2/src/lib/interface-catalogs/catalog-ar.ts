@@ -656,6 +656,22 @@ const ar = {
   'admin.conv.title': 'المحادثات',
   'admin.conv.empty': 'لا توجد محادثات',
   'admin.conv.members': '{count} عضوًا',
+  'admin.nav.conversations': 'المحادثات',
+  'admin.convList.search': 'البحث عن محادثة',
+  'admin.convList.count': '{count} محادثة',
+  'admin.convList.empty': 'لا توجد محادثة مطابقة.',
+  'admin.convList.unavailable': 'القائمة غير متاحة حالياً.',
+  'admin.convList.members': '{count} عضواً',
+  'admin.convList.sovereign': 'محصور برتبة الإدارة.',
+  'admin.convDetail.title': 'قراءة محادثة',
+  'admin.convDetail.reasonLabel': 'سبب القراءة',
+  'admin.convDetail.reasonHint': 'عشرة أحرف على الأقل، يُسجَّل مع اسمك.',
+  'admin.convDetail.read': 'قراءة المحادثة',
+  'admin.convDetail.empty': 'لا توجد رسائل',
+  'admin.convDetail.protected': 'محمي: موجود ولا يُعرض',
+  'admin.convDetail.attachmentProtected': 'مرفق محمي',
+  'admin.convDetail.edited': 'مُعدَّل',
+  'admin.convDetail.attachments': '{count} مرفق',
 
 } satisfies InterfaceCatalog;
 

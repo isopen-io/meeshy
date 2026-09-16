@@ -45,7 +45,7 @@
  */
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
-import { requireSovereign, withAudit } from '../../middleware/authorize';
+import { requireAdminRank, requirePermission, withAudit } from '../../middleware/authorize';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validatePagination } from '../../utils/pagination';
 import { sendPaginatedSuccess, sendNotFound, sendInternalError } from '../../utils/response';
@@ -55,7 +55,12 @@ import { sendPaginatedSuccess, sendNotFound, sendInternalError } from '../../uti
 // dupliqué. Il est déplacé à côté de son jumeau MÉDIA
 // (`mediaAttachmentIsProtected`), dans `routes/admin/media-protection.ts` —
 // voir son doc-comment pour le détail des six colonnes.
-import { messageContentIsProtected, messageContentProtectionSelect } from './media-protection';
+import {
+  attachmentProtectionSelect,
+  mediaAttachmentIsProtected,
+  messageContentIsProtected,
+  messageContentProtectionSelect,
+} from './media-protection';
 import { logError } from '../../utils/logger.js';
 import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
 
@@ -66,7 +71,29 @@ export function registerConversationMessagesSovereignRoute(fastify: FastifyInsta
     Params: { conversationId: string };
     Querystring: { offset?: string; limit?: string; reason: string };
   }>('/admin/conversations/:conversationId/messages', {
-    onRequest: [fastify.authenticate, requireSovereign()],
+    /**
+     * **LE RANG A BAISSÉ, LA TRACE N'A PAS BOUGÉ** — directive porteur du
+     * 2026-09-16 : « permettre aussi aux ADMIN de pouvoir accéder à ces
+     * informations **pour le moment** ».
+     *
+     * #4157 avait monté ce geste en S6 (`requireSovereign()`, BIGBOSS seul)
+     * avec un motif explicite : « aucune permission de domaine ne doit pouvoir
+     * déléguer la lecture de conversations privées en série ». La directive
+     * revient sur ce seuil, et le « pour le moment » qu'elle porte est repris
+     * tel quel — c'est un seuil ASSUMÉ comme révisable.
+     *
+     * Ce qui NE change pas, et c'est ce qui compte : le motif écrit reste
+     * obligatoire (refusé au schéma sous dix caractères) et `withAudit` écrit
+     * toujours sa ligne. Un ADMIN lit désormais, et sa lecture laisse la MÊME
+     * empreinte qu'un BIGBOSS. Abaisser le rang et effacer la trace auraient
+     * été deux décisions distinctes ; une seule est demandée.
+     *
+     * `requireAdminRank()` plutôt que la seule permission : `canManageConversations`
+     * est aussi portée par MODERATOR (matrice centrale), et l'élargissement
+     * obtenu de biais par une permission de domaine est exactement ce que
+     * #4157 fermait. La garde de rang dit « aussi les ADMIN », et rien de plus.
+     */
+    onRequest: [fastify.authenticate, requirePermission('canManageConversations'), requireAdminRank()],
     schema: {
       description:
         'Lit le contenu intégral des messages d\'une conversation privée. Rang souverain (BIGBOSS), motif écrit ' +
@@ -109,6 +136,24 @@ export function registerConversationMessagesSovereignRoute(fastify: FastifyInsta
                   createdAt: { type: 'string', format: 'date-time' },
                   attachmentCount: { type: 'number' },
                   isProtected: { type: 'boolean' },
+                  attachments: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        id: { type: 'string' },
+                        originalName: { type: 'string', nullable: true },
+                        mimeType: { type: 'string', nullable: true },
+                        fileSize: { type: 'number', nullable: true },
+                        width: { type: 'number', nullable: true },
+                        height: { type: 'number', nullable: true },
+                        duration: { type: 'number', nullable: true },
+                        fileUrl: { type: 'string', nullable: true },
+                        thumbnailUrl: { type: 'string', nullable: true },
+                        isProtected: { type: 'boolean' }
+                      }
+                    }
+                  },
                   sender: {
                     type: 'object',
                     nullable: true,
@@ -198,6 +243,39 @@ export function registerConversationMessagesSovereignRoute(fastify: FastifyInsta
                 user: { select: { id: true, username: true, displayName: true, avatar: true } }
               }
             },
+            // #6860 — LES PIÈCES VOYAGENT AVEC LE MESSAGE.
+            //
+            // Cette route rendait `attachmentCount` et rien d'autre : un
+            // administrateur souverain apprenait qu'un message portait trois
+            // pièces sans pouvoir en voir une seule. Sur un message VOCAL,
+            // dont le contenu utile n'est pas dans `content` mais dans sa
+            // pièce, la lecture rendait une ligne vide avec un compteur —
+            // l'information était annoncée et retenue.
+            //
+            // Les trois colonnes de protection PROPRES à la pièce
+            // (`attachmentProtectionSelect`) sont chargées ici parce que
+            // `mediaAttachmentIsProtected` les exige de son appelant. Celles
+            // du MESSAGE sont déjà là, par `messageContentProtectionSelect`.
+            attachments: {
+              select: {
+                id: true,
+                originalName: true,
+                mimeType: true,
+                fileSize: true,
+                width: true,
+                height: true,
+                duration: true,
+                fileUrl: true,
+                thumbnailUrl: true,
+                ...attachmentProtectionSelect
+              },
+              orderBy: { createdAt: 'asc' as const }
+            },
+            // Gardé À CÔTÉ de la liste, et ce n'est pas une redondance : le
+            // compteur porte sur TOUTES les pièces du message, la liste sur
+            // celles de cette page. Les deux coïncident aujourd'hui ; le jour
+            // où les pièces se pagineront, c'est le compteur qui dira la
+            // vérité.
             _count: { select: { attachments: true } }
           },
           orderBy: { createdAt: 'desc' },
@@ -222,6 +300,40 @@ export function registerConversationMessagesSovereignRoute(fastify: FastifyInsta
           sender: message.sender,
           attachmentCount: message._count?.attachments ?? 0,
           isProtected: protege,
+          /**
+           * La protection se lit aux DEUX niveaux qui la DÉCLARENT, et le
+           * verdict est leur OU — jamais une cascade. `MessageAttachment`
+           * porte ses propres `isViewOnce` / `isBlurred` / `effectFlags`,
+           * INDÉPENDANTS de ceux du message : une pièce à vue unique sur un
+           * message ordinaire doit être retenue, et toutes les pièces d'un
+           * message protégé le sont aussi. C'est exactement la composition que
+           * `routes/posts/core.ts` tient déjà — `protectedPreview(message) !==
+           * null || maskedAttachment(attachment)` — et son commentaire dit
+           * pourquoi : « une garde qui ne lisait que la pièce jointe laissait
+           * tout cela sortir EN CLAIR ».
+           *
+           * Une pièce protégée reste LISTÉE, `fileUrl` et `thumbnailUrl` à
+           * `null` : constater qu'une pièce existe (son nom, son poids, sa
+           * durée) n'ouvre pas son contenu. Masquer la ligne entière priverait
+           * l'administration d'un fait qu'elle a le droit de connaître ;
+           * servir l'URL la ferait sortir du produit par une porte que le
+           * reste du produit ferme. Même forme que `GET /admin/users/:userId/media`.
+           */
+          attachments: (message.attachments ?? []).map((piece) => {
+            const pieceProtegee = protege || mediaAttachmentIsProtected(piece);
+            return {
+              id: piece.id,
+              originalName: piece.originalName,
+              mimeType: piece.mimeType,
+              fileSize: piece.fileSize,
+              width: piece.width,
+              height: piece.height,
+              duration: piece.duration,
+              fileUrl: pieceProtegee ? null : piece.fileUrl,
+              thumbnailUrl: pieceProtegee ? null : piece.thumbnailUrl,
+              isProtected: pieceProtegee,
+            };
+          }),
         };
       });
 

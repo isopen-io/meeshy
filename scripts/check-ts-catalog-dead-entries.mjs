@@ -280,17 +280,33 @@ export const parseCatalogBlock = (blockLines) => {
 // `posts.mediaByMediaIdCaptionTranslate`. `restoreUser` existait côté
 // service sans aucun appelant AVANT cette issue ; il en gagne un ici (la
 // route), la console n'ayant pas encore d'action « restaurer ».
-// 278 → 281 (#6851) : `admin.usersByUserIdSessions`,
+// 278 → 279 (#6861) : `admin.conversations`
+// (`GET /admin/conversations`, le listing de l'instance au rang
+// d'administration). Morte à la naissance DANS CE COMPTAGE, même raison que
+// `admin.usersByUserIdRestore` juste au-dessus : ce script ne balaie que
+// `apps/web` (legacy gelé) et `packages/shared`, jamais `apps/web-v2` — seul
+// client de l'administration, et qui appelle cette route par son chemin
+// littéral (`lib/api/admin-conversations.ts`, #6862).
+//
+// NOTE DE RÉSOLUTION : ce lot et #6822 ont relevé cette référence EN PARALLÈLE,
+// chacun de 277 vers 278, pour des routes DIFFÉRENTES. Les deux valeurs étaient
+// identiques par coïncidence, pas par accord. La valeur ci-dessous est MESURÉE
+// sur l'arbre fusionné, jamais additionnée : additionner aurait donné 281 et
+// fait rougir le cliquet dans l'AUTRE sens (amélioration non enregistrée), ce
+// qu'un cliquet à deux sens sanctionne autant qu'une régression.
+// 279 → 282 (#6851) : `admin.usersByUserIdSessions`,
 // `admin.usersByUserIdSessionsBySessionId` et
 // `admin.usersByUserIdSecurityEvents` — l'historique de connexion d'un membre
 // (sessions listées, session révoquée, événements de sécurité). Mortes à la
 // naissance DANS CE COMPTAGE, même raison que les dizaines d'autres entrées
 // `admin.usersByUserId*` ci-dessus : ce script ne balaie que `apps/web`
 // (legacy gelé) et `packages/shared`, jamais `apps/web-v2` — seul client de
-// l'administration, et celui qui les appellera. La route est SERVIE et
-// testée (`admin/user-sessions.test.ts`) ; c'est son écran qui reste à
-// écrire, pas sa passerelle.
-const BASELINE_DEAD_ENTRIES = 281;
+// l'administration, et celui qui les appellera. La route est SERVIE et testée
+// (`admin/user-sessions.test.ts`) ; c'est son écran qui reste à écrire.
+//
+// Valeur MESURÉE sur l'arbre fusionné avec le dev qui porte déjà #6861, comme
+// la note de résolution ci-dessus l'impose — jamais additionnée.
+const BASELINE_DEAD_ENTRIES = 282;
 
 export const readWorld = (root) => {
   const source = readFileSync(join(root, CATALOG_FILE), 'utf8');

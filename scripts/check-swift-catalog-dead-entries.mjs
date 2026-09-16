@@ -213,15 +213,29 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // CONSTRUCTION, même raison que les dizaines d'autres `AdminEndpoint.*`
 // ci-dessus : l'administration n'a pas d'écran iOS, donc aucun de ses
 // endpoints n'a jamais d'appelant Swift.
-// 256 → 259 (#6851) : `AdminEndpoint.usersByUserIdSessions`,
+// 256 → 257 (#6861) : `AdminEndpoint.conversations`
+// (`GET /admin/conversations`). Morte à la naissance PAR CONSTRUCTION, même
+// raison que `usersByUserIdRestore` juste au-dessus : l'administration n'a pas
+// d'écran iOS, donc aucun de ses endpoints n'a jamais d'appelant Swift. Et
+// l'entrée est GÉNÉRÉE depuis `route-manifest.json` — la retirer est
+// impossible, elle reviendrait à la prochaine régénération.
+//
+// NOTE DE RÉSOLUTION : voir son jumeau TS. Ce lot et #6822 ont relevé cette
+// référence en parallèle vers la MÊME valeur (256) pour des routes
+// différentes ; la valeur ci-dessous est MESURÉE sur l'arbre fusionné, jamais
+// additionnée.
+// 257 → 260 (#6851) : `AdminEndpoint.usersByUserIdSessions`,
 // `AdminEndpoint.usersByUserIdSessionsBySessionId` et
-// `AdminEndpoint.usersByUserIdSecurityEvents` — l'historique de connexion
-// d'un membre. Mortes à la naissance PAR CONSTRUCTION, même raison que les
-// dizaines d'autres `AdminEndpoint.*` ci-dessus : l'administration n'a pas
-// d'écran iOS, donc aucun de ses endpoints n'a jamais d'appelant Swift. Le
-// catalogue Swift les porte parce qu'il est GÉNÉRÉ depuis le manifeste, pas
-// parce qu'un client les réclame.
-const BASELINE_DEAD_ENTRIES = 259;
+// `AdminEndpoint.usersByUserIdSecurityEvents` — l'historique de connexion d'un
+// membre. Mortes à la naissance PAR CONSTRUCTION, même raison que les dizaines
+// d'autres `AdminEndpoint.*` ci-dessus : l'administration n'a pas d'écran iOS,
+// donc aucun de ses endpoints n'a jamais d'appelant Swift. Et ces entrées sont
+// GÉNÉRÉES depuis `route-manifest.json` — les retirer est impossible, elles
+// reviendraient à la prochaine régénération.
+//
+// Valeur MESURÉE sur l'arbre fusionné avec le dev qui porte déjà #6861, comme
+// la note de résolution ci-dessus l'impose — jamais additionnée.
+const BASELINE_DEAD_ENTRIES = 260;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de
