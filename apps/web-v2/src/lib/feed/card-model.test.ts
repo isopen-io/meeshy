@@ -231,6 +231,98 @@ describe('resolveFeedCardModel — le SITE UNIQUE qui compose type, Prisme, acce
     expect('captionLanguage' in (model.media[0] ?? {})).toBe(false);
   });
 
+  /**
+   * LE REPLI SUR LE CONTENU DU POST (#6864, directive porteur 2026-09-16) —
+   * quatre vecteurs, chacun distinguable des autres :
+   * 1. un seul média AVEC légende propre ⇒ sa légende propre ;
+   * 2. un seul média SANS légende propre ⇒ le contenu du post ;
+   * 3. plusieurs médias, l'un AVEC légende propre ⇒ sa légende, et RIEN sur
+   *    les autres (jamais le contenu du post) ;
+   * 4. plusieurs médias, AUCUNE légende propre ⇒ AUCUNE légende nulle part.
+   */
+  describe('le repli sur le contenu du post — un média SEUL sans légende propre (#6864)', () => {
+    test('vecteur 1 — un média seul AVEC légende propre garde SA légende, jamais le contenu du post', () => {
+      const model = resolveFeedCardModel(
+        basePost({
+          content: 'Contenu du post',
+          originalLanguage: 'fr',
+          media: [{ id: 'm1', mimeType: 'image/jpeg', fileUrl: 'a.jpg', caption: 'Légende propre' }],
+        }),
+        { preferredLanguages: ['fr'], now: NOW },
+      );
+      expect(model.media[0]?.caption).toBe('Légende propre');
+    });
+
+    test('vecteur 2 — un média seul SANS légende propre reçoit le contenu du post', () => {
+      const model = resolveFeedCardModel(
+        basePost({
+          content: 'Contenu du post',
+          originalLanguage: 'fr',
+          media: [{ id: 'm1', mimeType: 'image/jpeg', fileUrl: 'a.jpg' }],
+        }),
+        { preferredLanguages: ['fr'], now: NOW },
+      );
+      expect(model.media[0]?.caption).toBe('Contenu du post');
+      expect(model.media[0]?.captionLanguage).toBe('fr');
+      expect(model.media[0]?.captionTranslated).toBe(false);
+    });
+
+    test('vecteur 2 bis — le repli descend le MÊME Prisme que le corps du post (rang ≠ 1)', () => {
+      const model = resolveFeedCardModel(
+        basePost({
+          content: 'Buenos días',
+          originalLanguage: 'es',
+          translations: { en: { text: 'Good morning' } },
+          media: [{ id: 'm1', mimeType: 'image/jpeg', fileUrl: 'a.jpg' }],
+        }),
+        { preferredLanguages: ['fr', 'en'], now: NOW },
+      );
+      expect(model.media[0]?.caption).toBe('Good morning');
+      expect(model.media[0]?.captionLanguage).toBe('en');
+      expect(model.media[0]?.captionTranslated).toBe(true);
+    });
+
+    test('vecteur 3 — à plusieurs médias, la légende propre d’UN média ne se propage jamais aux autres via le contenu du post', () => {
+      const model = resolveFeedCardModel(
+        basePost({
+          content: 'Contenu du post',
+          originalLanguage: 'fr',
+          media: [
+            { id: 'm1', mimeType: 'image/jpeg', fileUrl: 'a.jpg', order: 0, caption: 'Légende propre' },
+            { id: 'm2', mimeType: 'image/jpeg', fileUrl: 'b.jpg', order: 1 },
+          ],
+        }),
+        { preferredLanguages: ['fr'], now: NOW },
+      );
+      expect(model.media[0]?.caption).toBe('Légende propre');
+      expect('caption' in (model.media[1] ?? {})).toBe(false);
+    });
+
+    test('vecteur 4 — à plusieurs médias sans AUCUNE légende propre, aucune légende nulle part', () => {
+      const model = resolveFeedCardModel(
+        basePost({
+          content: 'Contenu du post',
+          originalLanguage: 'fr',
+          media: [
+            { id: 'm1', mimeType: 'image/jpeg', fileUrl: 'a.jpg', order: 0 },
+            { id: 'm2', mimeType: 'image/jpeg', fileUrl: 'b.jpg', order: 1 },
+          ],
+        }),
+        { preferredLanguages: ['fr'], now: NOW },
+      );
+      expect('caption' in (model.media[0] ?? {})).toBe(false);
+      expect('caption' in (model.media[1] ?? {})).toBe(false);
+    });
+
+    test('un média seul SANS légende propre et un post SANS contenu ⇒ toujours aucune légende', () => {
+      const model = resolveFeedCardModel(
+        basePost({ media: [{ id: 'm1', mimeType: 'image/jpeg', fileUrl: 'a.jpg' }] }),
+        { preferredLanguages: ['fr'], now: NOW },
+      );
+      expect('caption' in (model.media[0] ?? {})).toBe(false);
+    });
+  });
+
   test('une durée servie voyage en MILLISECONDES, sous un nom qui le dit (PostMedia.duration // ms)', () => {
     const model = resolveFeedCardModel(
       basePost({ media: [{ id: 'm1', mimeType: 'video/mp4', fileUrl: 'v.mp4', duration: 28_000 }] }),

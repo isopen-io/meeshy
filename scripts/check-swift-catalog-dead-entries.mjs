@@ -208,18 +208,23 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // aucun n'a besoin de migrer dans l'immédiat, le retrait de l'alias restant
 // gouverné par le compteur d'accès nul (#4275). Faire pointer iOS vers la
 // nouvelle adresse est un travail client à part, pas ouvert par ce lot.
-// 255 → 256 (#6861) : `AdminEndpoint.conversations` — le listing de l'instance
-// (`GET /admin/conversations`, rang d'administration, motif écrit non requis
-// puisqu'il ne sert que des métadonnées). Morte à la naissance PAR
-// CONSTRUCTION, exactement comme `usersByUserIdBan` (#5528) et les six gestes
-// de #4317 ci-dessus : l'entrée est GÉNÉRÉE mécaniquement depuis
-// `route-manifest.json` par `generate-ios-endpoints.ts`, donc la « retirer »
-// est impossible sans casser le générateur — elle réapparaîtrait à la
-// prochaine régénération. Et aucun client iOS ne l'appelle : la lecture
-// souveraine des conversations est servie par l'administration WEB (#6862),
-// l'app iOS n'ayant pas d'écran d'administration. Faire consommer cette route
-// par le SDK serait un travail client à part, non ouvert par ce lot.
-const BASELINE_DEAD_ENTRIES = 256;
+// 255 → 256 (#6822) : `AdminEndpoint.usersByUserIdRestore`
+// (`POST /admin/users/:userId/restore`). Morte à la naissance PAR
+// CONSTRUCTION, même raison que les dizaines d'autres `AdminEndpoint.*`
+// ci-dessus : l'administration n'a pas d'écran iOS, donc aucun de ses
+// endpoints n'a jamais d'appelant Swift.
+// 256 → 257 (#6861) : `AdminEndpoint.conversations`
+// (`GET /admin/conversations`). Morte à la naissance PAR CONSTRUCTION, même
+// raison que `usersByUserIdRestore` juste au-dessus : l'administration n'a pas
+// d'écran iOS, donc aucun de ses endpoints n'a jamais d'appelant Swift. Et
+// l'entrée est GÉNÉRÉE depuis `route-manifest.json` — la retirer est
+// impossible, elle reviendrait à la prochaine régénération.
+//
+// NOTE DE RÉSOLUTION : voir son jumeau TS. Ce lot et #6822 ont relevé cette
+// référence en parallèle vers la MÊME valeur (256) pour des routes
+// différentes ; la valeur ci-dessous est MESURÉE sur l'arbre fusionné, jamais
+// additionnée.
+const BASELINE_DEAD_ENTRIES = 257;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

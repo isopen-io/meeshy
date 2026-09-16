@@ -101,6 +101,7 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
     case usersByUserIdReportedMessages(userId: String)
     case usersByUserIdReports(userId: String)
     case usersByUserIdResetPassword(userId: String)
+    case usersByUserIdRestore(userId: String)
     case usersByUserIdRole(userId: String)
     case usersByUserIdSecurity(userId: String)
     case usersByUserIdStatus(userId: String)
@@ -202,6 +203,7 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
         case .usersByUserIdReportedMessages(let userId): return "/api/v1/admin/users/\(userId)/reported-messages"
         case .usersByUserIdReports(let userId): return "/api/v1/admin/users/\(userId)/reports"
         case .usersByUserIdResetPassword(let userId): return "/api/v1/admin/users/\(userId)/reset-password"
+        case .usersByUserIdRestore(let userId): return "/api/v1/admin/users/\(userId)/restore"
         case .usersByUserIdRole(let userId): return "/api/v1/admin/users/\(userId)/role"
         case .usersByUserIdSecurity(let userId): return "/api/v1/admin/users/\(userId)/security"
         case .usersByUserIdStatus(let userId): return "/api/v1/admin/users/\(userId)/status"

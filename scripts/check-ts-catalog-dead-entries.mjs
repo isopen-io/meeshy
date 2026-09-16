@@ -272,24 +272,29 @@ export const parseCatalogBlock = (blockLines) => {
 // n'est pas morte), et ce script ne balaie que `apps/web` (legacy gelé) et
 // `packages/shared` — pas `apps/web-v2`. Même forme que
 // `posts.byPostIdTranslate`, déjà sans appelant ici pour la même raison.
-// 277 → 278 (#6861) : `admin.conversations` — le listing de l'instance
-// (`GET /admin/conversations`). Jumelle EXACTE de `AdminEndpoint.conversations`
-// dans le cliquet Swift, et pour la même raison : l'entrée est GÉNÉRÉE
-// mécaniquement depuis `route-manifest.json` (par `generate-api-endpoints.ts`
-// ici, `generate-ios-endpoints.ts` là-bas), donc la « retirer » est impossible
-// sans casser le générateur — elle réapparaîtrait à la prochaine régénération.
+// 277 → 278 (#6822) : `admin.usersByUserIdRestore`
+// (`POST /admin/users/:userId/restore`, l'inverse du soft-delete). Morte à la
+// naissance DANS CE COMPTAGE, même raison que les dizaines d'autres entrées
+// `admin.usersByUserId*` déjà mortes ci-dessus : ce script ne balaie pas
+// `apps/web-v2`, seul client de l'administration — voir la note sur
+// `posts.mediaByMediaIdCaptionTranslate`. `restoreUser` existait côté
+// service sans aucun appelant AVANT cette issue ; il en gagne un ici (la
+// route), la console n'ayant pas encore d'action « restaurer ».
+// 278 → 279 (#6861) : `admin.conversations`
+// (`GET /admin/conversations`, le listing de l'instance au rang
+// d'administration). Morte à la naissance DANS CE COMPTAGE, même raison que
+// `admin.usersByUserIdRestore` juste au-dessus : ce script ne balaie que
+// `apps/web` (legacy gelé) et `packages/shared`, jamais `apps/web-v2` — seul
+// client de l'administration, et qui appelle cette route par son chemin
+// littéral (`lib/api/admin-conversations.ts`, #6862).
 //
-// Elle est morte PAR CONSTRUCTION le temps que l'écran qui la consomme soit
-// livré : `apps/web-v2` appelle cette route par son chemin littéral dans
-// `lib/api/admin-conversations.ts` (#6862), pas encore par le catalogue.
-// Brancher les appels v2 sur le catalogue est un travail à part, non ouvert
-// par ce lot.
-//
-// NOTE DE MÉTHODE : ce relèvement a été trouvé en jouant le cliquet JUMEAU par
-// précaution après avoir corrigé le Swift. Une régénération qui touche DEUX
-// dérivés fait bouger DEUX cliquets — n'en corriger qu'un laisse l'autre
-// rouge, et la CI le dit un aller-retour plus tard.
-const BASELINE_DEAD_ENTRIES = 278;
+// NOTE DE RÉSOLUTION : ce lot et #6822 ont relevé cette référence EN PARALLÈLE,
+// chacun de 277 vers 278, pour des routes DIFFÉRENTES. Les deux valeurs étaient
+// identiques par coïncidence, pas par accord. La valeur ci-dessous est MESURÉE
+// sur l'arbre fusionné, jamais additionnée : additionner aurait donné 281 et
+// fait rougir le cliquet dans l'AUTRE sens (amélioration non enregistrée), ce
+// qu'un cliquet à deux sens sanctionne autant qu'une régression.
+const BASELINE_DEAD_ENTRIES = 279;
 
 export const readWorld = (root) => {
   const source = readFileSync(join(root, CATALOG_FILE), 'utf8');

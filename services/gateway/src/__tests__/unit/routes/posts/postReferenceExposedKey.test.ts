@@ -288,14 +288,18 @@ describe('la relation `postMentions` ne quitte jamais le serveur sous son nom', 
    * client, qui linkifie n'importe quel `@handle` vers un profil inexistant.
    */
   it('aplatit les références de l\'ORIGINAL sur la route de détail', async () => {
+    // ObjectId VALIDE mais distinct de `POST_ID` — un `postId` non conforme
+    // (ex. `'repost-1'`) est désormais refusé en 400 par `postIdParamsSchema`
+    // avant d'atteindre `getPostById` (#6853).
+    const REPOST_ID = '507f1f77bcf86cd799439033';
     mockGetPostById.mockResolvedValue({
-      id: 'repost-1', type: 'POST', authorId: USER_ID, visibility: 'PUBLIC',
+      id: REPOST_ID, type: 'POST', authorId: USER_ID, visibility: 'PUBLIC',
       visibilityUserIds: [], mentions: [FLAT_MENTION],
       repostOf: { id: POST_ID, content: 'bravo @alice', postMentions: [MENTION_ROW] },
     });
     const { app } = await buildApp();
 
-    const res = await app.inject({ method: 'GET', url: '/posts/repost-1' });
+    const res = await app.inject({ method: 'GET', url: `/posts/${REPOST_ID}` });
 
     expect(res.statusCode).toBe(200);
     const nested = res.json().data.repostOf;
