@@ -1,4 +1,5 @@
-import { asCount, asRecord, asText } from './admin';
+import { type AdminDeps, asCount, asRecord, asText } from './admin';
+import type { ApiResult } from './http';
 
 /**
  * **LE DÉTAIL D'UN MEMBRE** (#6819) — `GET /api/v1/admin/users/:userId`,
@@ -151,5 +152,61 @@ export function decodeAdminUserDetail(raw: unknown): AdminUserDetail | null {
     lastActiveAt: asDate(charge.lastActiveAt),
     createdAt: asDate(charge.createdAt),
     updatedAt: asDate(charge.updatedAt),
+  };
+}
+
+export const adminUserDetailQueryKey = (userId: string) => ['admin', 'user', userId] as const;
+
+/**
+ * L'identifiant est ENCODÉ parce qu'il vient de l'URL que le visiteur a
+ * ouverte, jamais d'une liste : il traverse le routeur tel qu'il a été tapé.
+ * Sans encodage, un identifiant portant `/`, `?` ou `#` réécrirait le chemin
+ * demandé — au mieux une requête qui échoue, au pire une AUTRE route de
+ * l'administration atteinte avec les droits de celle-ci.
+ */
+export async function loadAdminUserDetail(
+  params: AdminDeps & { readonly userId: string; readonly signal?: AbortSignal },
+): Promise<ApiResult<AdminUserDetail>> {
+  const result = await params.transport.request<unknown>({
+    method: 'GET',
+    path: `/api/v1/admin/users/${encodeURIComponent(params.userId)}`,
+    ...(params.signal === undefined ? {} : { signal: params.signal }),
+  });
+  if (!result.ok) return result;
+
+  const membre = decodeAdminUserDetail(result.data);
+  /**
+   * La requête a RÉUSSI et la charge est illisible : ce n'est ni un 404 — qui
+   * dirait que le membre n'existe pas — ni une panne réseau. `status: 0` est
+   * la convention du port pour ce cas précis (`app-preferences.ts`,
+   * `communities.ts`), et la distinction compte : l'écran ne doit pas annoncer
+   * « ce membre n'existe pas » quand il veut dire « je n'ai pas su lire ».
+   */
+  return membre === null ? { ok: false, status: 0, error: 'Membre illisible' } : { ok: true, data: membre };
+}
+
+/**
+ * **CINQ SECONDES DE FRAÎCHEUR, ET AUCUN NOUVEL ESSAI.**
+ *
+ * La fraîcheur est courte — contrairement aux permissions, qui ne bougent pas
+ * pendant qu'on regarde un écran (`adminIdentityQueryOptions`, 5 min) : ici
+ * l'administrateur AGIT sur le membre affiché, et chaque geste invalide cette
+ * clé. Une fenêtre longue lui montrerait l'état d'avant son propre geste en
+ * revenant depuis la liste.
+ *
+ * `retry: false` pour la raison qu'`admin.ts` a déjà écrite : un 403 relancé
+ * trois fois remplirait les journaux d'audit de refus. Un refus de droit n'est
+ * pas une panne passagère — le rejouer ne le fera pas céder.
+ */
+export function adminUserDetailQueryOptions(deps: AdminDeps, userId: string) {
+  return {
+    queryKey: adminUserDetailQueryKey(userId),
+    queryFn: async ({ signal }: { readonly signal?: AbortSignal }): Promise<AdminUserDetail> => {
+      const resultat = await loadAdminUserDetail({ ...deps, userId, ...(signal === undefined ? {} : { signal }) });
+      if (!resultat.ok) throw new Error(resultat.error);
+      return resultat.data;
+    },
+    staleTime: 5 * 1000,
+    retry: false,
   };
 }

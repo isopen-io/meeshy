@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
-import { decodeAdminUserDetail } from './admin-user-detail';
+import { decodeAdminUserDetail, loadAdminUserDetail } from './admin-user-detail';
+import type { HttpTransport } from './http';
 
 /**
  * LE DÉTAIL D'UN MEMBRE (#6819) — et surtout ce qu'il ne doit PAS retenir.
@@ -168,5 +169,83 @@ describe('decodeAdminUserDetail — refus', () => {
     for (const charge of [null, undefined, 'ADMIN', 42, [], {}, { username: 'sans-id' }]) {
       expect(decodeAdminUserDetail(charge)).toBeNull();
     }
+  });
+});
+
+describe('loadAdminUserDetail — l’adresse demandée, et ce qu’un refus devient', () => {
+  const transportEspion = (reponse: unknown, ok = true) => {
+    const appels: { path: string; method: string }[] = [];
+    const transport = {
+      request: async (requete: { path: string; method: string }) => {
+        appels.push({ path: requete.path, method: requete.method });
+        return ok ? { ok: true as const, data: reponse } : reponse;
+      },
+    } as unknown as HttpTransport;
+    return { transport, appels };
+  };
+
+  const deps = (transport: HttpTransport) => ({ source: 'gateway' as const, transport });
+
+  test('vise /api/v1/admin/users/:userId, en GET', async () => {
+    const { transport, appels } = transportEspion(CHARGE_COMPLETE);
+
+    await loadAdminUserDetail({ ...deps(transport), userId: 'u-1' });
+
+    expect(appels).toHaveLength(1);
+    expect(appels[0]?.path).toBe('/api/v1/admin/users/u-1');
+    expect(appels[0]?.method).toBe('GET');
+  });
+
+  /**
+   * L'identifiant vient de l'URL que le visiteur a ouverte, jamais d'une
+   * liste : il traverse le routeur tel qu'il a été tapé. Sans encodage, un
+   * identifiant portant `?`, `#` ou `/` réécrirait le chemin demandé — au
+   * mieux une requête qui échoue, au pire une AUTRE route de l'administration
+   * atteinte avec les droits de celle-ci.
+   */
+  test('ENCODE l’identifiant — il vient de l’URL, pas d’une liste', async () => {
+    const { transport, appels } = transportEspion(CHARGE_COMPLETE);
+
+    await loadAdminUserDetail({ ...deps(transport), userId: 'u 1/../dashboard?x=1' });
+
+    expect(appels[0]?.path).toBe(`/api/v1/admin/users/${encodeURIComponent('u 1/../dashboard?x=1')}`);
+    expect(appels[0]?.path).not.toContain('/dashboard');
+  });
+
+  test('décode la charge SERVIE NUE — pas d’enveloppe à déballer', async () => {
+    const { transport } = transportEspion(CHARGE_COMPLETE);
+
+    const resultat = await loadAdminUserDetail({ ...deps(transport), userId: 'u-1' });
+
+    expect(resultat.ok).toBe(true);
+    expect(resultat.ok && resultat.data.username).toBe('amina');
+    expect(resultat.ok && Object.keys(resultat.data)).not.toContain('lastLoginIp');
+  });
+
+  test('propage un refus du transport TEL QUEL — un 404 reste un 404', async () => {
+    const refus = { ok: false as const, status: 404, error: 'User not found' };
+    const { transport } = transportEspion(refus, false);
+
+    const resultat = await loadAdminUserDetail({ ...deps(transport), userId: 'u-absent' });
+
+    expect(resultat.ok).toBe(false);
+    expect(!resultat.ok && resultat.status).toBe(404);
+    expect(!resultat.ok && resultat.error).toBe('User not found');
+  });
+
+  /**
+   * La requête a RÉUSSI et la charge est illisible : ce n'est ni un 404 ni une
+   * panne réseau. `status: 0` est la convention du port pour ce cas précis
+   * (`app-preferences.ts`, `communities.ts` — « Réglages illisibles »,
+   * « Communauté illisible »), et elle se distingue à dessein d'un 404, qui
+   * dirait que le membre n'existe pas.
+   */
+  test('une charge ILLISIBLE devient un échec à status 0 — jamais un membre fantôme', async () => {
+    const { transport } = transportEspion({ username: 'sans-id' });
+
+    const resultat = await loadAdminUserDetail({ ...deps(transport), userId: 'u-1' });
+
+    expect(resultat.ok).toBe(false);
+    expect(!resultat.ok && resultat.status).toBe(0);
   });
 });
