@@ -19,12 +19,20 @@
  * lecture de sa source. Aucune portée de contact.
  *
  * `getUserByEmail`/`getUserByPhone` (`routes/users/profile.ts:953,1080`)
- * ajoutent `...contactLookupScope({ viewerId, blockedByViewer })` :
- * `isActive: true`, un filtre anti-suppression, `id: { notIn }` et
- * `NOT: { blockedUserIds: { has } }` — une garde de confidentialité que ces
- * deux routes ont TOUJOURS eue (elles servent un annuaire INVERSÉ à partir
- * d'un identifiant de contact, #4160) et que `servirProfilPublic` n'applique
- * PAS. Router ces deux `findFirst` vers `servirProfilPublic` SANS porter cette
+ * ajoutent `...contactLookupScope({ blockedRelatedIds })` : `isActive: true`,
+ * un filtre anti-suppression et `id: { notIn }` — une garde de confidentialité
+ * que ces deux routes ont TOUJOURS eue (elles servent un annuaire INVERSÉ à
+ * partir d'un identifiant de contact, #4160) et que `servirProfilPublic`
+ * n'applique PAS.
+ *
+ * La forme de cette garde a changé DEUX fois sans que son intention bouge, et
+ * ce doc-comment décrivait encore la première : le blocage se portait par
+ * `NOT: { blockedUserIds: { has } }`, qui écartait aussi les comptes n'ayant
+ * jamais écrit la colonne (#6452), puis par l'`isSet` posé pour y répondre —
+ * inexistant sur une liste scalaire, donc 500 (#6811). Il vit désormais dans
+ * une LISTE résolue par l'appelant (`blockedIdsAroundViewer`), et le corps de
+ * ce témoin l'exige : `where.NOT` indéfini, et `blockedUserIds` absent du
+ * `where` tout entier. Router ces deux `findFirst` vers `servirProfilPublic` SANS porter cette
  * garde retirerait silencieusement le filtre anti-blocage/compte désactivé —
  * un changement de comportement de sécurité, pas une consolidation.
  *
