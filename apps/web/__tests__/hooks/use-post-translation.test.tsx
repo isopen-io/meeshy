@@ -1,5 +1,5 @@
 import { renderHook } from '@testing-library/react';
-import { usePostTranslation, usePreferredLanguage } from '@/hooks/use-post-translation';
+import { usePostTranslation, usePreferredLanguage, resolveMediaAltText } from '@/hooks/use-post-translation';
 
 const mockConfig: {
   systemLanguage: string;
@@ -342,5 +342,39 @@ describe('Prisme — codes région-tagués (parité normalizeLanguageForDedup)',
 
     expect(result.current.displayContent).toBe('Olá mundo');
     expect(result.current.isTranslated).toBe(true);
+  });
+});
+
+describe('resolveMediaAltText (#6737)', () => {
+  it('returns the original alt when no translation matches the preferred languages', () => {
+    const media = { alt: 'A cat on a windowsill', altLanguage: 'en', altTranslations: {} };
+    expect(resolveMediaAltText(media, ['fr'])).toBe('A cat on a windowsill');
+  });
+
+  it('returns the translated alt for the first matching preferred language', () => {
+    const media = {
+      alt: 'A cat on a windowsill',
+      altLanguage: 'en',
+      altTranslations: { fr: { text: 'Un chat sur le rebord de la fenêtre' } },
+    };
+    expect(resolveMediaAltText(media, ['fr'])).toBe('Un chat sur le rebord de la fenêtre');
+  });
+
+  it('returns the original when the reader prism is already the source language', () => {
+    const media = {
+      alt: 'A cat on a windowsill',
+      altLanguage: 'en',
+      altTranslations: { fr: { text: 'Un chat sur le rebord de la fenêtre' } },
+    };
+    expect(resolveMediaAltText(media, ['en', 'fr'])).toBe('A cat on a windowsill');
+  });
+
+  it('returns an empty string for a media with no alt at all', () => {
+    expect(resolveMediaAltText({ alt: null, altLanguage: null, altTranslations: null }, ['fr'])).toBe('');
+  });
+
+  it('returns an empty string when media is null/undefined', () => {
+    expect(resolveMediaAltText(null, ['fr'])).toBe('');
+    expect(resolveMediaAltText(undefined, ['fr'])).toBe('');
   });
 });

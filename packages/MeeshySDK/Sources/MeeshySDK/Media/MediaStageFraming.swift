@@ -201,6 +201,37 @@ public nonisolated enum MediaStageFraming {
         min(max(value, minimum), bound)
     }
 
+    /// **Le facteur qui fait COUVRIR un média déjà ajusté — la loi complémentaire
+    /// de `aspectFit`** (#6806).
+    ///
+    /// Directive porteur 2026-09-16 : « il faut pas afficher une troisieme couche
+    /// en plein plein écran, mais juste agrandir le canvas à sa taille total du
+    /// viewport ».
+    ///
+    /// `resolve` ajuste et centre, et son ajustement DOIT rester tel quel : une
+    /// pièce jointe est le CONTENU, la rogner retirerait ce que l'expéditeur a
+    /// envoyé. Une scène est autre chose — une surface de COMPOSITION —, et la
+    /// laisser en boîte aux lettres peint une surface que personne n'a composée :
+    /// le sol du visualiseur, puis le hors-champ du canvas, puis le média. Trois
+    /// couches pour une scène.
+    ///
+    /// **C'est donc une fonction EN PLUS, jamais un paramètre de `resolve`.**
+    /// Faire rendre le rognage au solveur a été essayé, et mesuré au simulateur :
+    /// les médias de post se posaient EN HAUT À GAUCHE, à leurs cotes cardées.
+    /// Le rognage appartient à qui SAIT ce qu'il compose ; le solveur ne le sait
+    /// pas, et une loi qui ne sait pas ne doit pas décider.
+    ///
+    /// Un seul facteur pour les deux axes : le rapport survit, et c'est le cadre
+    /// qui rogne ce qui dépasse. Plancher à 1 — un média qui remplit déjà ne se
+    /// touche pas, sans quoi une fonction nommée « couvrir » rouvrirait les
+    /// bandes qu'elle ferme. Cote nulle ⇒ identité : un `scaleEffect` infini ne
+    /// fait pas rougir un témoin, il fait disparaître l'écran.
+    public static func coverScale(frame: CGSize, media: CGSize) -> CGFloat {
+        guard media.width > 0, media.height > 0,
+              frame.width > 0, frame.height > 0 else { return 1 }
+        return max(1, max(frame.width / media.width, frame.height / media.height))
+    }
+
     /// **Ajuste au ratio puis centre — jamais de rognage, jamais d'étirement.**
     ///
     /// Conséquence à ne pas perdre de vue : en plein écran, même une scène 9:16

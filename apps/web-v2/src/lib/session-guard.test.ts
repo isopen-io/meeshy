@@ -25,6 +25,23 @@ const PRIVATE_ROUTES: readonly RouteKey[] = [
   'notifications',
   'profile',
   'settings',
+  /**
+   * LES QUATRE ADRESSES D'ADMINISTRATION (#6432, #6795) — absentes de cette
+   * liste jusqu'ici, donc leur confidentialité n'était affirmée NULLE PART.
+   *
+   * C'est le défaut exact que la loi garde : une route qu'elle ne connaît pas
+   * est PUBLIQUE par défaut. L'oubli ne rougit jamais — l'écran se peint, puis
+   * le serveur refuse. Les y mettre fait porter aux trois `describe` qui lisent
+   * cette liste (fixtures, visiteur anonyme, invité de lien) l'affirmation
+   * qu'aucune d'elles ne s'ouvre sans compte.
+   *
+   * `adm`/`admUsers` sont la NOUVELLE administration ; `admin`/`adminUsers`
+   * restent réservées à l'ancienne, portée dans le même bundle (D-76).
+   */
+  'admin',
+  'adminUsers',
+  'adm',
+  'admUsers',
 ];
 const PUBLIC_AUTH_ROUTES: readonly RouteKey[] = ['login', 'signup'];
 
@@ -94,6 +111,51 @@ describe('resolveRouteAccess — source gateway, session ACTIVE sur une route PR
  * (comportement inchangé, celui que les blocs ci-dessus vérifient SANS
  * fournir le champ) ; non soldé ⇒ `redirect-welcome`.
  */
+/**
+ * **L'INVITÉ D'UN LIEN N'ENTRE QUE DANS SON FIL** (#5561).
+ *
+ * Il a une session, donc une créance — mais elle n'ouvre qu'UNE conversation :
+ * `GET /links/:identifier/messages` rend 403 à la session d'un autre lien, et
+ * toutes les autres routes privées exigent un COMPTE. L'y laisser entrer
+ * peindrait des écrans qu'un 401 défait en silence, la classe de défaut que
+ * `stories`, `feed` et `settings` ont déjà payée.
+ */
+describe('resolveRouteAccess — l’invité d’un lien (#5561)', () => {
+  const invite = (routeKey: RouteKey, welcomeCompleted?: boolean) =>
+    resolveRouteAccess({
+      sessionStatus: 'guest',
+      source: 'gateway',
+      routeKey,
+      ...(welcomeCompleted === undefined ? {} : { welcomeCompleted }),
+    });
+
+  test('thread ⇒ allow : c’est la SEULE route privée qui le concerne', () => {
+    expect(invite('thread')).toBe('allow');
+  });
+
+  for (const route of PRIVATE_ROUTES.filter((key) => key !== 'thread')) {
+    test(`${route} ⇒ redirect-login : cette route exige un COMPTE`, () => {
+      expect(invite(route)).toBe('redirect-login');
+    });
+  }
+
+  /* L'accueil n'est PAS proposé à un invité : il a déjà franchi une porte
+     d'entrée, et le renvoyer à « bienvenue » effacerait ce qu'il vient de
+     faire. Il va à la connexion, seul chemin vers ce qu'il demande. */
+  test('jamais redirect-welcome, même si l’accueil n’a pas été soldé', () => {
+    expect(invite('list', false)).toBe('redirect-login');
+  });
+
+  test('login et signup ⇒ allow : se donner un compte est exactement ce qu’il peut faire', () => {
+    expect(invite('login')).toBe('allow');
+    expect(invite('signup')).toBe('allow');
+  });
+
+  test('chatJoin ⇒ allow : l’invitation reste lisible, quelle que soit la session', () => {
+    expect(invite('chatJoin')).toBe('allow');
+  });
+});
+
 describe('resolveRouteAccess — l’accueil (#5816)', () => {
   test('privée + anonyme + welcomeCompleted:false ⇒ redirect-welcome', () => {
     for (const routeKey of PRIVATE_ROUTES) {

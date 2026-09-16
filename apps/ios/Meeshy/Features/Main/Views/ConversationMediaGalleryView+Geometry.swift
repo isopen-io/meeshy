@@ -354,14 +354,18 @@ extension ConversationMediaGalleryView {
 
     /// **L'état que le SOLVEUR reçoit — site unique** (#6789).
     ///
-    /// Le voile de la rangée de réactions efface le CHROME sans libérer sa
-    /// place : `MediaStageReactionVeil.geometryPresentation` prend `pickerOpen`
-    /// et ne le lit pas, et c'est toute la règle. Elle passe par une fonction
-    /// plutôt que par un appel qu'on s'abstient d'écrire, parce qu'une règle
-    /// qu'on respecte en NE FAISANT RIEN ne se teste pas — et se perd au premier
-    /// lot qui ajoute un site.
+    /// Le voile d'une ouverture efface le CHROME sans libérer sa place :
+    /// `MediaStageVeil.geometryPresentation` prend les ouvertures et ne les lit
+    /// pas, et c'est toute la règle. Elle passe par une fonction plutôt que par
+    /// un appel qu'on s'abstient d'écrire, parce qu'une règle qu'on respecte en
+    /// NE FAISANT RIEN ne se teste pas — et se perd au premier lot qui ajoute un
+    /// site.
+    ///
+    /// **Les DEUX ouvertures y entrent** (#6817) : une barre de réponse qui
+    /// libérerait la place du plateau ferait changer le média de taille à chaque
+    /// montée du clavier, pendant qu'on écrit à son sujet.
     var stageGeometryPresentation: StagePresentation {
-        MediaStageReactionVeil.geometryPresentation(stagePresentation, pickerOpen: reactionBarOpen)
+        MediaStageVeil.geometryPresentation(stagePresentation, overlays: stageOverlays)
     }
 
     /// Le pager s'en sert pour se poser exactement dans la zone libre que le

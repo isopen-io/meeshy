@@ -77,6 +77,19 @@ export type ApiFailure = {
    * l'utilisateur se retrouverait devant un mur.
    */
   readonly suggestions?: readonly string[];
+  /**
+   * LE PSEUDO LIBRE servi avec un refus `USERNAME_TAKEN_IN_CONVERSATION`
+   * (#5561) — posé À LA RACINE de l'enveloppe par la porte de jonction, qui
+   * étend son schéma de réponse exprès pour le déclarer
+   * (`link-admission.ts:778-787` : sans cette déclaration,
+   * `fast-json-stringify` le supprimerait en silence).
+   *
+   * DISTINCT de `suggestions` ci-dessus, qui en rend TROIS à l'inscription : ici
+   * la passerelle en calcule UN, dans le contexte de CETTE conversation — deux
+   * conversations peuvent rendre deux pseudos différents pour le même visiteur.
+   * Les confondre ferait proposer un pseudo libre ailleurs, et repris ici.
+   */
+  readonly suggestedNickname?: string;
 };
 
 export type ApiSuccess<T> = {
@@ -364,6 +377,9 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
       ...(field !== undefined ? { field } : {}),
       ...(typeof envelope.retryAfter === 'number' ? { retryAfter: envelope.retryAfter } : {}),
       ...(suggestionsOf(envelope).length > 0 ? { suggestions: suggestionsOf(envelope) } : {}),
+      ...(typeof envelope.suggestedNickname === 'string' && envelope.suggestedNickname.trim() !== ''
+        ? { suggestedNickname: envelope.suggestedNickname }
+        : {}),
     };
   }
 

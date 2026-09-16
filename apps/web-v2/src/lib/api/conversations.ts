@@ -5,7 +5,7 @@ import type { ConversationsInfiniteData, ConversationsPage, ConversationsPagePar
 import { flattenConversationPages, nextConversationsCursor } from './conversations-pages';
 import type { DataSource } from './config';
 import { decodeConversation } from './decode';
-import { CONVERSATIONS } from './fixtures';
+import { conversationsWithSurged } from './fixtures';
 import { pageOfConversations } from './fixtures-pagination';
 import type { ApiResult, ApiSuccess, HttpTransport } from './http';
 import type { Conversation } from './types';
@@ -60,7 +60,12 @@ export async function loadConversationsPage(
   if (__FIXTURES__ && params.source === 'fixtures') {
     return {
       ok: true,
-      data: pageOfConversations(CONVERSATIONS, {
+      /* `conversationsWithSurged()`, jamais `CONVERSATIONS` (#6807) — le corpus
+         figé PLUS les conversations qu'un `conversation:new` a fait surgir.
+         Sans cela, l'invalidation que #6799 déclenche refaisait une page
+         IDENTIQUE : le correctif était inobservable sous fixtures, donc
+         gardable par aucun gate. Le corpus lui-même reste intouché. */
+      data: pageOfConversations(conversationsWithSurged(), {
         ...(params.before !== undefined ? { before: params.before } : {}),
         limit: PAGE_SIZE,
       }),
@@ -91,7 +96,9 @@ export async function loadConversation(
   params: ConversationsDeps & { readonly id: string; readonly signal?: AbortSignal },
 ): Promise<ApiResult<Conversation>> {
   if (__FIXTURES__ && params.source === 'fixtures') {
-    const found = CONVERSATIONS.find((c) => c.id === params.id);
+    /* Les survenues AUSSI : une conversation qui vient d'apparaître dans la
+       liste doit pouvoir s'OUVRIR, sans quoi la ligne mènerait à « introuvable ». */
+    const found = conversationsWithSurged().find((c) => c.id === params.id);
     return found === undefined
       ? { ok: false, status: 404, error: 'Conversation not found' }
       : { ok: true, data: found };
@@ -214,7 +221,11 @@ export function refreshConversations(queryClient: QueryClient, deps: Conversatio
  */
 export function createDirectConversation(deps: ConversationsDeps, participantId: string): Promise<ApiResult<Conversation>> {
   if (__FIXTURES__ && deps.source === 'fixtures') {
-    const found = CONVERSATIONS.find((c) => c.type === 'direct' && c.participants.some((p) => p.userId === participantId));
+    /* Les survenues AUSSI : un direct qui vient d'apparaître est un direct
+       EXISTANT, et le serveur est idempotent — le rendre plutôt que refuser. */
+    const found = conversationsWithSurged().find(
+      (c) => c.type === 'direct' && c.participants.some((p) => p.userId === participantId),
+    );
     if (found !== undefined) return Promise.resolve({ ok: true, data: found });
     return Promise.resolve({ ok: false, status: 501, error: 'Création de direct indisponible en fixtures' });
   }
@@ -222,6 +233,50 @@ export function createDirectConversation(deps: ConversationsDeps, participantId:
     method: 'POST',
     path: '/api/v1/conversations',
     body: { type: 'direct', participantIds: [participantId] },
+  });
+}
+
+/**
+ * **CRÉER UN GROUPE** (#6706) — la MÊME porte que le direct
+ * (`POST /api/v1/conversations`, `core-lifecycle.ts:77`), et c'est le champ
+ * `type` qui sépare tout le reste.
+ *
+ * **Ce que `group` change, mesuré côté passerelle** : aucune déduplication (un
+ * groupe n'est JAMAIS rouvert, contrairement à un direct idempotent), un
+ * identifiant LISIBLE dérivé du titre (`generateConversationIdentifier`) plutôt
+ * qu'opaque, `CONVERSATION_NEW` émis à TOUS les participants et non au seul
+ * créateur, et une notification d'invitation par invité. Le blocage entre
+ * comptes ne s'applique pas.
+ *
+ * **Le créateur n'est JAMAIS dans `participantIds`** : la passerelle l'ajoute
+ * elle-même en `role: 'creator'`, et l'y mettre rend **422**
+ * `INVALID_OPERATION` — un statut que la route ne déclare même pas dans ses
+ * réponses. L'écran ne propose donc jamais le lecteur (`candidatesFor` l'exclut
+ * déjà pour le direct, pour une raison différente : la passerelle refuse une
+ * conversation avec soi-même).
+ *
+ * **`title` n'est pas obligatoire côté serveur, et il l'est ICI.** Le schéma le
+ * dit en prose (« required for group/public ») sans l'imposer ; un groupe sans
+ * titre reçoit un titre DÉRIVÉ à l'affichage. Laisser partir un groupe sans nom
+ * produirait une conversation que personne ne sait nommer ensuite — la borne
+ * vit dans `validateGroupDraft` (`lib/conversation-new/group.ts`).
+ */
+export function createGroupConversation(
+  deps: ConversationsDeps,
+  body: { readonly title: string; readonly description?: string; readonly participantIds: readonly string[] },
+): Promise<ApiResult<Conversation>> {
+  if (__FIXTURES__ && deps.source === 'fixtures') {
+    return Promise.resolve({ ok: false, status: 501, error: 'Création de groupe indisponible en fixtures' });
+  }
+  return deps.transport.request<Conversation>({
+    method: 'POST',
+    path: '/api/v1/conversations',
+    body: {
+      type: 'group',
+      title: body.title,
+      ...(body.description === undefined || body.description === '' ? {} : { description: body.description }),
+      participantIds: [...body.participantIds],
+    },
   });
 }
 

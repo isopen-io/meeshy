@@ -157,7 +157,7 @@ function FeedMediaCarousel({ media }: { readonly media: readonly FeedCardMedia[]
 
   return (
     <div className="relative overflow-hidden" style={{ borderRadius: 12, aspectRatio: `1 / ${current.ratio}` }} data-feed-media data-feed-layout="carousel">
-      <FeedMediaSurface media={current} />
+      <FeedMediaSurface media={current} playable />
       {current.caption !== undefined ? (
         <p
           className="absolute inset-x-0 bottom-0 px-3 py-2 text-check text-white"

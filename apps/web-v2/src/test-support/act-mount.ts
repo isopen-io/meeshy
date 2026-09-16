@@ -18,12 +18,41 @@ import { createRoot, type Root } from 'react-dom/client';
  * chaîne : y chercher le setter ne trouvait rien, et le champ restait vide.
  */
 
-function writeNativeValue(input: HTMLInputElement, prototype: object | null, value: string): boolean {
+function writeNativeValue(input: HTMLElement, prototype: object | null, value: string): boolean {
   if (prototype === null) return false;
   const setter: unknown = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
   if (typeof setter !== 'function') return writeNativeValue(input, Object.getPrototypeOf(prototype), value);
   Reflect.apply(setter, input, [value]);
   return true;
+}
+
+/**
+ * SAISIR DANS UN CHAMP, hors du mouleur — pour un témoin qui monte ses écrans
+ * lui-même (`routes/chat-join.test.tsx`) et n'a pas besoin du reste.
+ *
+ * EXPOSÉ plutôt que recopié : cette fonction porte deux pièges déjà payés — le
+ * setter natif cherché sur la chaîne de prototypes DE L'ÉLÉMENT (le global
+ * `HTMLInputElement.prototype` n'y est pas sous happy-dom), et un `act`
+ * SYNCHRONE, sans lequel React ne rejoue pas le rendu avant la lecture qui
+ * suit. Une troisième écriture de la même règle aurait divergé au premier
+ * témoin qui n'en relit qu'une.
+ *
+ * `change` en plus d'`input` : c'est `change` que React écoute sur un `<select>`.
+ */
+export function typeInto(element: HTMLInputElement | HTMLSelectElement | null, value: string): void {
+  if (element === null) throw new Error('champ absent');
+  act(() => {
+    /* AFFECTATION DIRECTE d'abord — c'est l'idiome du dépôt
+       (`composer.test.tsx`, `login-next.test.tsx`), et le SEUL qui fonctionne
+       sur un `<select>` sous happy-dom : le setter natif y refuse une valeur
+       pourtant présente dans les options. Le setter natif ne sert que de
+       repli, pour un élément dont l'affectation ne prendrait pas. */
+    element.value = value;
+    if (element.value !== value) writeNativeValue(element, Object.getPrototypeOf(element), value);
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+    element.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  if (element.value !== value) throw new Error(`le champ n’a pas reçu « ${value} »`);
 }
 
 export function createActMounter() {
