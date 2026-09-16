@@ -2813,3 +2813,37 @@ composite vert.
 **« Mot de passe oublié » dit qu'il sert aussi à créer un mot de passe.** La passerelle envoie le lien à un compte qui n'en a jamais eu (#6642). L'écran garde la forme de D-72 (enveloppe, phrase, champ, bouton, retour en pied) et change sa phrase : « Recevez par e-mail un lien pour choisir un nouveau mot de passe. » Un (i) « Jamais eu de mot de passe ? » la suit, dont la question se LIT à côté du glyphe : c'est exactement celle que se pose la personne concernée. Il déplie « Ce même lien vous permet d’en créer un. ». L'envoi rend l'écran de la connexion par e-mail (`components/email-sent-notice.tsx` : « E-mail envoyé », « Ouvrez le lien reçu à … », « Rien reçu ? ») au lieu de « Si un compte existe avec …, un lien de réinitialisation vient d’être envoyé » : deux phrases pour le même fait, et la seconde parlait de réinitialiser à qui n'avait rien à réinitialiser. La page du lien dit « Nouveau mot de passe », « Enregistrer le mot de passe », « Mot de passe enregistré ». Aucun texte perçu, noms accessibles compris, ne dit « réinitialisation » ni « magique ». Vocabulaire commun avec iOS (#6644) et Android (#6645).
 
 **Ce que ce lot ne fait pas.** Ces écrans restent en français en dur, quelle que soit la langue d'interface : ils n'entrent dans aucun catalogue, et #6310 tient ces chaînes avec les autres. Le comportement serveur est porté par #6642.
+
+## D-74 · Rejoindre sans compte passe par la porte CANONIQUE, et un invité est une SESSION, pas un état d'écran — 2026-09-16 (#5561)
+
+**Directive porteur.** « Il faut implementer rejoindre en anonyme […] en priorité ! »
+
+**La porte.** `POST /api/v1/links/:key/members`, en authentification OPTIONNELLE — la MÊME que celle d'un compte, avec un autre corps. L'alias `POST /anonymous/join/:linkId` n'est PAS appelé : déprécié depuis le 2026-08-30, il exige en plus un prénom et un nom (`linkJoinProfileSchema`) que la porte canonique ne demande pas. Deux champs de moins à faire remplir à quelqu'un qui veut lire un fil.
+
+**Le jeton d'invité est la PREUVE du régime, dans les deux sens.** `joinLinkAsMember` refusait déjà une réponse PORTANT un `sessionToken` (`JOINED_AS_GUEST` : la passerelle est retombée en invité sur un Bearer expiré). Son miroir existe désormais : `joinLinkAsGuest` refuse une réponse qui n'en porte PAS (`MEMBER_NOT_GUEST`). La porte étant en auth optionnelle, un Bearer encore valide dans le transport ferait entrer le COMPTE sous son nom pendant que l'écran croit créer un invité — rendre une session d'invité qui n'existe pas mènerait le lecteur dans un fil où il n'est pas celui qu'il croit.
+
+**Un invité est une branche du magasin de session** (`status: 'guest'`), pas un drapeau d'écran. Il porte `sessionToken` (régime `X-Session-Token`, jamais `Authorization`), son participant, son pseudo, sa conversation et SON lien — ce dernier parce que `GET /links/:identifier/messages` rend 403 à la session d'un autre lien. `credentialFromSession` sert donc les deux régimes, `resolveViewer` rend une identité (id non nul : ses propres bulles sont les siennes), et la garde de route ne l'admet que sur `thread` — toutes les autres routes privées exigent un COMPTE, et l'y laisser entrer peindrait des écrans qu'un 401 défait en silence.
+
+**L'horizon d'une session d'invité est posé côté CLIENT** (`GUEST_SESSION_HOURS = 24`, la valeur du legacy). La porte ne sert aucun `expiresIn` ; sans horizon l'entrée serait CORROMPUE au sens du module (règle 2). C'est une GARDE, jamais une vérité : le serveur reste l'autorité, un 401 ferme la session avant l'échéance.
+
+**Les deux familles de refus ne se confondent pas**, et c'est le cœur de l'issue. `input` — corrigeable ICI : le formulaire est GARDÉ, le message se pose sur son champ, et un pseudo libre proposé par la passerelle (`suggestedNickname`, 409) est PRÉ-REMPLI. `link` — rien ne le corrigera : le formulaire est RETIRÉ, un bandeau dit la cause, les deux sorties restent avec leur `next`. Les confondre fait réessayer quelqu'un dont le lien est mort, ou abandonner quelqu'un dont le pseudo était juste pris. **`LANGUAGE_NOT_ALLOWED` est rangé dans `input` malgré son 403** : la langue est un champ de ce formulaire, et le visiteur peut en choisir une autre.
+
+**Le refus de SAISIE se connaît AVANT l'aller-retour** (`validateGuestDraft`, miroir `validateCommunityDraft`). La passerelle rend un 400 sans nommer le champ quand une exigence n'est pas satisfaite : deviner lequel après coup serait faux une fois sur trois.
+
+**La projection de l'invitation s'élargit de six valeurs, et c'est une exception RAISONNÉE.** `GuestTerms` porte `requireAccount`, les trois `require*`, `allowedLanguages` et `allowAnonymousMessages`. Le reste du port retient tout ce que la charge transporte parce que rien de la CONVERSATION ne doit atteindre le client avant le choix ; ces six-là ne disent rien de la conversation — elles décrivent la PORTE. Compteurs, membres, identifiants et langues PARLÉES restent dehors. Fail-closed dans les deux sens, et les deux sens n'ont pas la même direction : une EXIGENCE absente est supposée (on demande le pseudo), une PERMISSION absente est refusée (on ne promet ni l'entrée ni l'écriture) — demander un champ de trop coûte une frappe, promettre une porte fermée coûte le visiteur.
+
+**Mesuré.** `meeshy.me/chat/mshy_IM3PNq5H` servait déjà l'invitation avant ce lot (200, deux visites avec service worker, aucune erreur de page) : il ne manquait que la porte sans compte.
+
+## D-75 · Un direct porte le nom de l'autre, même s'il a un titre stocké — 2026-09-16 (#6790)
+
+**Signalement porteur.** « Actuellement les conversations direct ont pour titre X & Y au lieu d'avoir le display name de l'interlocuteur (cette erreur est sur iOS aussi). »
+
+**Aucune concaténation `&` n'existe dans le dépôt** — balayage de `packages/`, `services/gateway/src`, `apps/web-v2/src`, `apps/web/`, `apps/ios`, `packages/MeeshySDK`, `apps/android`. `generateDefaultConversationTitle` est juste. Le titre est **stocké**, et les clients l'affichent fidèlement.
+
+**La cause est le LEGACY** : `apps/web/components/conversations/create-conversation-modal.tsx:102-130` composait un titre CÔTÉ CLIENT et l'envoyait — chaîne `autoGeneratedTitles.betweenTwoUsers`, soit « {user1} et {user2} » (fr), « {user1} and {user2} » (en), « {user1} y {user2} » (es), « {user1} e {user2} » (pt). La v2 n'en écrit aucun (`createDirectConversation` poste `{ type, participantIds }`). Le legacy étant décommissionné (#6702), le stock existant demeure mais ne grossit plus.
+
+**La précédence dépend désormais du TYPE.** Un GROUPE a un titre propre ; un DIRECT n'en a pas — il porte le nom de l'autre. `titleOf` lit donc, pour un direct : nom du pair, puis titre stocké en dernier recours ; pour un groupe : titre stocké, puis nom d'un membre servi. `customName` (renommage local du lecteur) prime toujours sur les deux, `identifier` ferme la marche. Le doc-comment d'origine affirmait déjà « elle porte le nom de l'autre » ; la règle ne le faisait pas.
+
+**Ignorer plutôt que nettoyer.** Le correctif ne touche aucune donnée : il change une précédence d'affichage. Nettoyer les titres en base éviterait qu'un quatrième client réintroduise le défaut, et reste porté par #6790.
+
+**Le témoin porte sur la PRÉCÉDENCE, pas sur la chaîne.** Chercher « et » verdirait sur un titre stocké d'une autre forme — le même défaut produit quatre chaînes différentes selon la langue du legacy.

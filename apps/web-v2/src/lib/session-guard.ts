@@ -165,6 +165,23 @@ export function resolveRouteAccess(input: {
 
   if (PRIVATE_ROUTES.has(input.routeKey)) {
     if (input.sessionStatus === 'authenticated') return 'allow';
+    /**
+     * L'INVITÉ D'UN LIEN N'ENTRE QUE DANS SON FIL (#5561).
+     *
+     * Il a une session, donc une créance — mais elle n'ouvre qu'UNE
+     * conversation : `GET /links/:identifier/messages` rend 403 à la session
+     * d'un autre lien, et toutes les autres routes privées (la liste, le Flux,
+     * les réglages, le profil, l'administration) exigent un COMPTE. L'y laisser
+     * entrer ouvrirait des écrans qui se peignent puis reçoivent un 401 en
+     * silence — la classe de défaut que les commentaires ci-dessus décrivent
+     * pour `stories`, `feed` et `settings`.
+     *
+     * L'accueil (`redirect-welcome`) n'est PAS proposé à un invité : il a déjà
+     * franchi une porte d'entrée, et le renvoyer à « bienvenue » effacerait ce
+     * qu'il vient de faire. Il va à la connexion, qui est le seul chemin vers
+     * les écrans qu'il demande.
+     */
+    if (input.sessionStatus === 'guest') return input.routeKey === 'thread' ? 'allow' : 'redirect-login';
     return (input.welcomeCompleted ?? true) ? 'redirect-login' : 'redirect-welcome';
   }
 

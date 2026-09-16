@@ -41,6 +41,43 @@ export type InvitationKind = (typeof INVITATION_KINDS)[number];
 
 export type LinkInviter = { readonly name: string; readonly avatar: string | null };
 
+/**
+ * **CE QUE LE LIEN EXIGE ET CONCÈDE À QUI N'A PAS DE COMPTE** (#5561).
+ *
+ * Six valeurs que l'aperçu sert déjà (`anonymous.ts:714-743`) et que l'écran
+ * doit connaître AVANT de proposer quoi que ce soit : offrir « Continuer en
+ * anonyme » sur un lien qui exige un compte serait un contrôle qui ment (loi 4),
+ * et demander une date de naissance qu'aucun lien n'exige coûte un champ à tout
+ * le monde.
+ *
+ * **Elles s'ajoutent à la projection, et c'est une exception RAISONNÉE.** Le
+ * reste du fichier retient tout ce que la charge transporte, parce que rien de
+ * la CONVERSATION ne doit atteindre la mémoire du client avant le choix. Ces
+ * six-là ne disent rien de la conversation : elles décrivent la PORTE. Les
+ * compteurs, les langues parlées, les identifiants et les membres restent
+ * dehors.
+ *
+ * **Fail-closed dans les deux sens, et les deux sens n'ont pas la même
+ * direction** — une exigence absente est SUPPOSÉE (on demande le pseudo), une
+ * permission absente est REFUSÉE (on ne promet ni l'entrée ni l'écriture). La
+ * direction juste est celle qui ne fait pas promettre : demander un champ de
+ * trop coûte une frappe, promettre une porte fermée coûte le visiteur.
+ */
+export type GuestTerms = {
+  /** `requireAccount === false`, explicitement : sans cette valeur, aucune
+   * porte anonyme n'est offerte. */
+  readonly allowed: boolean;
+  readonly nicknameRequired: boolean;
+  readonly emailRequired: boolean;
+  readonly birthdayRequired: boolean;
+  /** `allowedLanguages` — VIDE signifie « toutes », jamais « aucune » : c'est
+   * ce que la passerelle applique (`link-admission.ts:445-450`). */
+  readonly languages: readonly string[];
+  /** `allowAnonymousMessages` — l'écran le DIT avant d'entrer ; le composeur du
+   * fil, lui, le relit sur les droits SERVIS (`entry.rights`). */
+  readonly mayWrite: boolean;
+};
+
 export type LinkInvitation = {
   readonly title: string | null;
   readonly kind: InvitationKind | null;
@@ -49,9 +86,10 @@ export type LinkInvitation = {
    * `allowViewHistory` — le SEUL droit qui distingue un compte entré par ce
    * lien d'un autre membre. Ses droits d'écriture sont pleins
    * (`joinAsRegistered`, `link-admission.ts:351-371`) ; les `allowAnonymous*`
-   * gouvernent un invité sans compte, que cet écran ne fait pas entrer.
+   * gouvernent un invité sans compte, et vivent dans `guest` ci-dessous.
    */
   readonly readsHistory: boolean;
+  readonly guest: GuestTerms;
 };
 
 export type LinkJoined = { readonly conversationId: string; readonly alreadyMember: boolean };
@@ -84,9 +122,17 @@ const JOINED_AS_GUEST = 'JOINED_AS_GUEST';
 
 const optionalText = z.optional(z.nullable(z.string()));
 
+const optionalFlag = z.optional(z.nullable(z.boolean()));
+
 const WireInvitation = z.object({
   name: optionalText,
-  allowViewHistory: z.optional(z.nullable(z.boolean())),
+  allowViewHistory: optionalFlag,
+  requireAccount: optionalFlag,
+  requireNickname: optionalFlag,
+  requireEmail: optionalFlag,
+  requireBirthday: optionalFlag,
+  allowAnonymousMessages: optionalFlag,
+  allowedLanguages: z.optional(z.nullable(z.array(z.string()))),
   conversation: z.object({ title: optionalText, type: optionalText }),
   creator: z.optional(
     z.nullable(
@@ -137,6 +183,17 @@ export function decodeLinkInvitation(raw: unknown): LinkInvitation | null {
     kind: INVITATION_KINDS.find((kind) => kind === wire.conversation.type) ?? null,
     inviter: inviterOf(wire.creator),
     readsHistory: wire.allowViewHistory === true,
+    guest: {
+      allowed: wire.requireAccount === false,
+      // Une EXIGENCE absente est supposée (le défaut serveur de
+      // `requireNickname` est vrai, `links/types.ts:548-564`) ; une PERMISSION
+      // absente est refusée. Voir le doc-comment de `GuestTerms`.
+      nicknameRequired: wire.requireNickname !== false,
+      emailRequired: wire.requireEmail === true,
+      birthdayRequired: wire.requireBirthday === true,
+      languages: (wire.allowedLanguages ?? []).map((code) => code.trim()).filter((code) => code !== ''),
+      mayWrite: wire.allowAnonymousMessages === true,
+    },
   };
 }
 
@@ -199,6 +256,205 @@ export async function joinLinkAsMember(
     ok: true,
     data: { conversationId: parsed.data.conversationId, alreadyMember: parsed.data.entry?.outcome === 'already-member' },
   };
+}
+
+/* ========================================================================= *
+ *  REJOINDRE SANS COMPTE (#5561)
+ * ========================================================================= */
+
+/**
+ * CE QUE LE VISITEUR SAISIT — le brouillon de l'écran, jamais le corps envoyé.
+ *
+ * `birthday` est un JOUR (`AAAA-MM-JJ`, ce que rend `<input type="date">`) ; la
+ * passerelle attend un INSTANT ISO (`z.iso.datetime()`,
+ * `link-admission.ts:629-635`). La conversion est faite ici, une fois, plutôt
+ * que par l'écran : un champ de date qui envoie sa propre valeur au format du
+ * serveur est la jumelle qui diverge au premier écran de plus.
+ */
+export type GuestDraft = {
+  readonly nickname: string;
+  readonly email: string;
+  readonly birthday: string;
+  readonly language: string;
+};
+
+export type GuestField = 'nickname' | 'email' | 'birthday' | 'language';
+
+/** Le corps EXACT de `POST /links/:key/members` pour un invité — `language` a
+ * un défaut serveur (`'fr'`), les trois autres sont OMIS quand ils sont vides,
+ * jamais envoyés à `''` : le schéma accepte `''` pour `email`/`birthday`, mais
+ * envoyer du vide là où la clé peut être absente demande au serveur de
+ * distinguer deux formes qui disent la même chose. */
+export type GuestJoinBody = {
+  readonly language: string;
+  readonly nickname?: string;
+  readonly email?: string;
+  readonly birthday?: string;
+};
+
+export type GuestDraftValidation =
+  | { readonly ok: true; readonly body: GuestJoinBody }
+  | { readonly ok: false; readonly field: GuestField };
+
+const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
+const DAY_SHAPE = /^\d{4}-\d{2}-\d{2}$/u;
+
+/**
+ * LE REFUS DE SAISIE SE CONNAÎT AVANT L'ALLER-RETOUR — miroir
+ * `validateCommunityDraft` (`api/communities.ts`).
+ *
+ * C'est ce qui permet à l'écran de tenir la promesse de #5561 : « un refus de
+ * SAISIE se pose SUR SON CHAMP ». La passerelle rend un 400 sans nommer le
+ * champ quand une exigence n'est pas satisfaite (`link-admission.ts:671-720`) ;
+ * deviner lequel après coup serait un mensonge une fois sur trois.
+ */
+export function validateGuestDraft(draft: GuestDraft, terms: GuestTerms): GuestDraftValidation {
+  const nickname = draft.nickname.trim();
+  const email = draft.email.trim();
+  const birthday = draft.birthday.trim();
+  const language = draft.language.trim();
+
+  if (terms.nicknameRequired && nickname === '') return { ok: false, field: 'nickname' };
+  if (terms.emailRequired && email === '') return { ok: false, field: 'email' };
+  if (email !== '' && !EMAIL_SHAPE.test(email)) return { ok: false, field: 'email' };
+  if (terms.birthdayRequired && birthday === '') return { ok: false, field: 'birthday' };
+  if (birthday !== '' && !DAY_SHAPE.test(birthday)) return { ok: false, field: 'birthday' };
+  if (language === '') return { ok: false, field: 'language' };
+  if (terms.languages.length > 0 && !terms.languages.includes(language)) return { ok: false, field: 'language' };
+
+  return {
+    ok: true,
+    body: {
+      language,
+      ...(nickname === '' ? {} : { nickname }),
+      ...(email === '' ? {} : { email }),
+      ...(birthday === '' ? {} : { birthday: `${birthday}T00:00:00.000Z` }),
+    },
+  };
+}
+
+/**
+ * CE QUE LA PASSERELLE REMET À UN INVITÉ — le jeton de session compris.
+ *
+ * `sessionToken` est le régime `X-Session-Token` (`http.ts § Credential`), remis
+ * UNE fois et jamais rejoué : le perdre, c'est perdre la participation.
+ */
+export type LinkGuestJoined = {
+  readonly conversationId: string;
+  readonly participantId: string | null;
+  readonly sessionToken: string;
+  readonly readsHistory: boolean;
+  readonly mayWrite: boolean;
+};
+
+const WireGuestJoined = z.object({
+  conversationId: z.string().check(z.minLength(1)),
+  participantId: optionalText,
+  sessionToken: z.string().check(z.minLength(1)),
+  entry: z.optional(
+    z.nullable(
+      z.object({
+        canViewHistory: optionalFlag,
+        rights: z.optional(z.nullable(z.object({ canSendMessages: optionalFlag }))),
+      }),
+    ),
+  ),
+});
+
+const UNREADABLE_GUEST_JOIN = 'UNREADABLE_GUEST_JOIN';
+const MEMBER_NOT_GUEST = 'MEMBER_NOT_GUEST';
+
+/**
+ * REJOINDRE EN INVITÉ — la MÊME porte que `joinLinkAsMember`
+ * (`POST /links/:key/members`, auth OPTIONNELLE), avec le corps de l'invité.
+ *
+ * **L'alias `POST /anonymous/join/:linkId` n'est PAS appelé** : il est déprécié
+ * depuis le 2026-08-30 au profit de celle-ci, et il exige en plus un prénom et
+ * un nom que la porte canonique ne demande pas — deux champs de moins à faire
+ * remplir à quelqu'un qui veut juste lire un fil.
+ *
+ * **Une réponse SANS jeton de session n'est pas une jonction d'invité**, exactement
+ * comme sa jumelle refuse l'inverse : la porte est en authentification
+ * optionnelle, donc un Bearer encore valide dans le transport ferait entrer le
+ * COMPTE sous son nom pendant que l'écran croit créer un invité. Le port refuse
+ * de s'en accommoder plutôt que de rendre une session d'invité qui n'existe pas.
+ */
+export async function joinLinkAsGuest(
+  deps: LinkJoinDeps,
+  params: { readonly link: string; readonly body: GuestJoinBody },
+): Promise<ApiResult<LinkGuestJoined>> {
+  if (__FIXTURES__ && deps.source === 'fixtures') {
+    const { fixtureJoinLinkAsGuest } = await import('./fixtures-link-join');
+    return fixtureJoinLinkAsGuest(params.link, params.body);
+  }
+  const result = await deps.transport.request<unknown>({
+    method: 'POST',
+    path: `/api/v1/links/${encodeURIComponent(params.link)}/members`,
+    body: params.body,
+  });
+  if (!result.ok) return result;
+  const parsed = WireGuestJoined.safeParse(result.data);
+  if (!parsed.success) {
+    const asMember = WireJoined.safeParse(result.data);
+    return asMember.success
+      ? { ok: false, status: 0, error: 'Rejoint sous un compte, pas en invité', code: MEMBER_NOT_GUEST }
+      : { ok: false, status: 0, error: 'Jonction illisible', code: UNREADABLE_GUEST_JOIN };
+  }
+  const wire = parsed.data;
+  return {
+    ok: true,
+    data: {
+      conversationId: wire.conversationId,
+      participantId: textOrNull(wire.participantId),
+      sessionToken: wire.sessionToken,
+      readsHistory: wire.entry?.canViewHistory === true,
+      mayWrite: wire.entry?.rights?.canSendMessages === true,
+    },
+  };
+}
+
+/** Le code du refus de pseudo, tel que la passerelle le pose (`link-admission.ts:778-787`). */
+export const NICKNAME_TAKEN = 'USERNAME_TAKEN_IN_CONVERSATION';
+
+/**
+ * **LES DEUX FAMILLES DE REFUS, ET POURQUOI ELLES NE SE CONFONDENT PAS** (#5561).
+ *
+ * - `input` — ce que le visiteur peut CORRIGER ici même : le formulaire est
+ *   GARDÉ, le message se pose sur le champ visé (`field`), et `suggestion`
+ *   pré-remplit un pseudo libre quand la passerelle en propose un.
+ * - `link` — ce que rien ne corrigera : le formulaire est RETIRÉ, un bandeau
+ *   dit la cause, et les deux sorties (se connecter, créer un compte) restent.
+ *
+ * Les confondre fait réessayer quelqu'un dont le lien est mort, ou abandonner
+ * quelqu'un dont le pseudo était juste pris.
+ *
+ * **`LANGUAGE_NOT_ALLOWED` est un refus de SAISIE**, bien qu'il arrive en 403 :
+ * la langue est un champ de ce formulaire, et le visiteur peut en choisir une
+ * autre. Le ranger avec les refus du lien retirerait le formulaire au moment
+ * précis où il suffit d'y toucher.
+ *
+ * **`field: null`** — un 400 que la passerelle ne rattache à aucun champ. Le
+ * formulaire reste (c'est bien une saisie qu'elle refuse), mais le message se
+ * pose AU-DESSUS : le placer sous un champ deviné serait faux une fois sur
+ * trois.
+ */
+export type GuestJoinRefusal =
+  | { readonly on: 'input'; readonly field: GuestField | null; readonly suggestion: string | null }
+  | { readonly on: 'link'; readonly refusal: LinkRefusal };
+
+const GUEST_FIELDS: readonly GuestField[] = ['nickname', 'email', 'birthday', 'language'];
+
+export function guestRefusalOf(
+  failure: Pick<ApiFailure, 'status' | 'code' | 'field' | 'suggestedNickname'>,
+): GuestJoinRefusal {
+  if (failure.code === NICKNAME_TAKEN) {
+    return { on: 'input', field: 'nickname', suggestion: textOrNull(failure.suggestedNickname) };
+  }
+  if (failure.code === 'LANGUAGE_NOT_ALLOWED') return { on: 'input', field: 'language', suggestion: null };
+  if (failure.status === 400) {
+    return { on: 'input', field: GUEST_FIELDS.find((name) => name === failure.field) ?? null, suggestion: null };
+  }
+  return { on: 'link', refusal: linkRefusalOf(failure) };
 }
 
 /** Une `Map` et non un objet littéral : un code inconnu comme `toString` ne
