@@ -415,7 +415,14 @@ export enum UserAuditAction {
    * ligne `Ban` (motif requis, échéance optionnelle) qui pilote ce même bascule.
    */
   BAN_USER = 'BAN_USER',
-  UNBAN_USER = 'UNBAN_USER'
+  UNBAN_USER = 'UNBAN_USER',
+
+  /**
+   * Révocation, par un administrateur, d'une session nommée d'un tiers
+   * (#6821) — distincte de `RESET_PASSWORD`, qui invalide TOUTES les
+   * sessions comme effet de bord d'un autre geste.
+   */
+  REVOKE_SESSION = 'REVOKE_SESSION'
 }
 
 /**
