@@ -679,6 +679,14 @@ const fr = {
   'admin.ban.none': 'Aucun bannissement',
   'admin.ban.done': 'Bannissement enregistré',
   'admin.ban.failed': 'Échec du bannissement',
+  'admin.media.title': 'Médias',
+  'admin.media.empty': 'Aucun média',
+  'admin.media.protected': 'protégé',
+  'admin.media.fromPost': 'publication',
+  'admin.media.fromMessage': 'message',
+  'admin.conv.title': 'Conversations',
+  'admin.conv.empty': 'Aucune conversation',
+  'admin.conv.members': '{count} membres',
 
 } as const;
 

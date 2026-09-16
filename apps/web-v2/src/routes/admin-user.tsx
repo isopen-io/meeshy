@@ -14,6 +14,7 @@ import { ActionButton } from '@/routes/link-page-parts';
 import { AdminAnnouncement, AdminDenied, AdminScreenFrame, AdminSkeleton } from './admin-parts';
 import { AdminUserEditSheet } from './admin-user-edit-sheet';
 import { AdminUserBanSheet } from './admin-user-ban-sheet';
+import { AdminUserConversationsSection, AdminUserMediaSection } from './admin-user-lists';
 import { AdminUserPasswordSheet } from './admin-user-password-sheet';
 
 /**
@@ -126,6 +127,12 @@ export default function AdminUserScreen() {
             {translate(language, 'admin.ban.open')}
           </ActionButton>
         </div>
+
+        {/* Ce que ce membre a créé, et où il parle — en LECTURE. Les deux
+            routes sont servies jusqu'à AUDIT, plus largement que les gestes
+            d'écriture ci-dessus qui exigent ADMIN+. */}
+        <AdminUserMediaSection userId={membre.id} language={language} />
+        <AdminUserConversationsSection userId={membre.id} language={language} />
       </div>
 
       {edition ? (

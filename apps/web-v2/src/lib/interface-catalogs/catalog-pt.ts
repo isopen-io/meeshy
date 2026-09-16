@@ -654,6 +654,14 @@ const pt = {
   'admin.ban.none': 'Sem banimentos',
   'admin.ban.done': 'Banimento registado',
   'admin.ban.failed': 'Não foi possível banir',
+  'admin.media.title': 'Média',
+  'admin.media.empty': 'Sem média',
+  'admin.media.protected': 'protegido',
+  'admin.media.fromPost': 'publicação',
+  'admin.media.fromMessage': 'mensagem',
+  'admin.conv.title': 'Conversas',
+  'admin.conv.empty': 'Sem conversas',
+  'admin.conv.members': '{count} membros',
 
 } satisfies InterfaceCatalog;
 

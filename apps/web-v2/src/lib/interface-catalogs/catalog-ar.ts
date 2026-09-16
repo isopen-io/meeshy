@@ -648,6 +648,14 @@ const ar = {
   'admin.ban.none': 'لا توجد حالات حظر',
   'admin.ban.done': 'تم تسجيل الحظر',
   'admin.ban.failed': 'تعذّر الحظر',
+  'admin.media.title': 'الوسائط',
+  'admin.media.empty': 'لا توجد وسائط',
+  'admin.media.protected': 'محمي',
+  'admin.media.fromPost': 'منشور',
+  'admin.media.fromMessage': 'رسالة',
+  'admin.conv.title': 'المحادثات',
+  'admin.conv.empty': 'لا توجد محادثات',
+  'admin.conv.members': '{count} عضوًا',
 
 } satisfies InterfaceCatalog;
 

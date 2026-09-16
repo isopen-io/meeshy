@@ -650,6 +650,14 @@ const en = {
   'admin.ban.none': 'No bans',
   'admin.ban.done': 'Ban recorded',
   'admin.ban.failed': 'Ban failed',
+  'admin.media.title': 'Media',
+  'admin.media.empty': 'No media',
+  'admin.media.protected': 'protected',
+  'admin.media.fromPost': 'post',
+  'admin.media.fromMessage': 'message',
+  'admin.conv.title': 'Conversations',
+  'admin.conv.empty': 'No conversations',
+  'admin.conv.members': '{count} members',
 
 } satisfies InterfaceCatalog;
 

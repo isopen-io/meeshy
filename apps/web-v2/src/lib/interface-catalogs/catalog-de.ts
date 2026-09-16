@@ -650,6 +650,14 @@ const de = {
   'admin.ban.none': 'Keine Sperren',
   'admin.ban.done': 'Sperre gespeichert',
   'admin.ban.failed': 'Sperren fehlgeschlagen',
+  'admin.media.title': 'Medien',
+  'admin.media.empty': 'Keine Medien',
+  'admin.media.protected': 'geschützt',
+  'admin.media.fromPost': 'Beitrag',
+  'admin.media.fromMessage': 'Nachricht',
+  'admin.conv.title': 'Unterhaltungen',
+  'admin.conv.empty': 'Keine Unterhaltungen',
+  'admin.conv.members': '{count} Mitglieder',
 
 } satisfies InterfaceCatalog;
 

@@ -650,6 +650,14 @@ const es = {
   'admin.ban.none': 'Sin bloqueos',
   'admin.ban.done': 'Bloqueo registrado',
   'admin.ban.failed': 'No se pudo bloquear',
+  'admin.media.title': 'Medios',
+  'admin.media.empty': 'Sin medios',
+  'admin.media.protected': 'protegido',
+  'admin.media.fromPost': 'publicación',
+  'admin.media.fromMessage': 'mensaje',
+  'admin.conv.title': 'Conversaciones',
+  'admin.conv.empty': 'Sin conversaciones',
+  'admin.conv.members': '{count} miembros',
 
 } satisfies InterfaceCatalog;
 

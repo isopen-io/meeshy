@@ -650,6 +650,14 @@ const it = {
   'admin.ban.none': 'Nessun blocco',
   'admin.ban.done': 'Blocco registrato',
   'admin.ban.failed': 'Blocco non riuscito',
+  'admin.media.title': 'Media',
+  'admin.media.empty': 'Nessun media',
+  'admin.media.protected': 'protetto',
+  'admin.media.fromPost': 'post',
+  'admin.media.fromMessage': 'messaggio',
+  'admin.conv.title': 'Conversazioni',
+  'admin.conv.empty': 'Nessuna conversazione',
+  'admin.conv.members': '{count} membri',
 
 } satisfies InterfaceCatalog;
 
