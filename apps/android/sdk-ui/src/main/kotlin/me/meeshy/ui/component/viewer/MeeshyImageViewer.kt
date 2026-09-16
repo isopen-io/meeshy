@@ -77,10 +77,11 @@ public fun MeeshyImageViewer(
      */
     thumbnailUrls: List<String?> = emptyList(),
     /**
-     * Per-page author-authored accessibility description (`PostMedia.alt`,
-     * #6739), positionally aligned with [imageUrls]. A page past the end of
-     * this list, or holding `null`/blank, falls back to the viewer's generic
-     * localized image label.
+     * Per-page author-authored accessibility description (`PostMedia.alt`
+     * for a post/story image, #6739; `MessageAttachment.alt` for a
+     * conversation image, #6813), positionally aligned with [imageUrls]. A
+     * page past the end of this list, or holding `null`/blank, falls back to
+     * the viewer's generic localized image label.
      */
     altTexts: List<String?> = emptyList(),
     onImageSaved: ((Result<Unit>) -> Unit)? = null,
