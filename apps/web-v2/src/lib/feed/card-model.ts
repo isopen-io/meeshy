@@ -5,7 +5,7 @@ import type { FeedPost } from '@/lib/api/feed-pages';
 import { shortRelativeTime } from '@/lib/relative-time';
 import { initialsOf } from '@/lib/view/conversation';
 
-import { resolveMediaCaption, type Served } from '@/lib/api/prism';
+import { resolveMediaCaption } from '@/lib/api/prism';
 
 import { feedMediaKindOf, postMediaRatio, reelCardRatio, type FeedMediaKind } from './layout';
 import { resolveMosaicLayout, type MosaicLayoutMode } from './mosaic-layout';
@@ -31,7 +31,14 @@ export type FeedCardMedia = {
   readonly durationMs?: number;
   /** LE TEXTE SERVI PAR LE PRISME (#6280, `resolveMediaCaption` — jamais
    * `PostMedia.caption` brut) : la langue résolue peut différer de la
-   * langue source dès qu'une traduction du lecteur existe. */
+   * langue source dès qu'une traduction du lecteur existe.
+   *
+   * **Repli sur le contenu du post (#6864)** — UNIQUEMENT quand ce média est
+   * seul (`post.media.length === 1`) ET ne porte aucune légende propre : le
+   * contenu du post, déjà résolu par le Prisme, en tient lieu. Un post à
+   * PLUSIEURS médias ne pose JAMAIS son texte sur un média qui n'a pas sa
+   * propre légende — le texte décrit le LOT, pas une pièce, et le poser
+   * dessous ferait mentir la légende sur les autres pièces du même post. */
   readonly caption?: string;
   /** La langue DANS LAQUELLE `caption` ci-dessus est servie — porte
    * l'attribut `lang` de la légende affichée (§ Prisme cycle 122 : un
@@ -158,13 +165,18 @@ function resolveMedia(
   post: FeedPost,
   isReel: boolean,
   preferredLanguages: readonly string[],
-  carrier: FeedCardText | undefined,
+  /** Le texte du post, DÉJÀ résolu par le Prisme (`resolveFeedCardModel`,
+   * même valeur que `model.text`) — jamais recalculé ici (D-14). Repli
+   * possible pour la légende d'un média SEUL (#6864), voir plus bas. */
+  soleMediaCaptionFallback: FeedCardText | undefined,
 ): readonly FeedCardMedia[] {
   const media = post.media ?? [];
   const ordered = [...media].sort((a, b) => (numberOrUndefined(a.order) ?? 0) - (numberOrUndefined(b.order) ?? 0));
-  // Calculé UNE fois, hors de la boucle : c'est une propriété du POST, pas de
-  // la pièce. À l'intérieur du `map`, la tentation serait de tester `index`.
-  const carrierApplies = ordered.length === 1 && carrier !== undefined;
+  // Le repli sur le contenu du post (#6864) ne s'applique QUE si ce média
+  // est SEUL : à plusieurs médias, le texte du post décrit le lot, jamais
+  // une pièce précise, et le coller sous l'une d'elles ferait mentir la
+  // légende sur ses voisines.
+  const fallback = ordered.length === 1 ? soleMediaCaptionFallback : undefined;
   return ordered.map((m) => {
     // Capturé UNE fois : `exactOptionalPropertyTypes` narrove `string |
     // undefined` en `string` seulement quand le test et l'usage portent sur
@@ -186,18 +198,28 @@ function resolveMedia(
             captionTranslations: m.captionTranslations,
             caption: rawCaption,
           });
-    /* LA LÉGENDE SERVIE ET SON ORIGINE (#6864) — la propre d'abord, le porteur
-       ensuite et seulement s'il s'applique. Une seule valeur compose les
-       quatre champs : `caption`, `captionLanguage`, `captionTranslated` et
-       `captionOrigin` ne peuvent donc pas se contredire, quelle que soit la
-       branche prise. */
-    const legende: { readonly served: Served; readonly origin: 'media' | 'post' } | undefined =
+    // Une légende PROPRE gagne toujours ; à défaut, et seulement pour un
+    // média seul, le contenu du post en tient lieu (#6864) — jamais l'inverse.
+    //
+    // `origin` voyage AVEC le texte, dans la même valeur : `caption`,
+    // `captionLanguage`, `captionTranslated` et `captionOrigin` sont alors
+    // composés d'une seule branche et ne peuvent pas se contredire. Sans lui,
+    // `captionTranslated` — documenté « une traduction de sa source » — ne
+    // dirait plus DE QUELLE source, et les deux provenances n'ont pas les
+    // mêmes traductions (`PostMedia.captionTranslations` contre
+    // `Post.translations`) : les mélanger est ce que #4904 a coûté.
+    const caption =
       resolvedCaption !== undefined
-        ? { served: resolvedCaption, origin: 'media' }
-        : carrierApplies && carrier !== undefined
-          ? { served: { text: carrier.full, language: carrier.language, translated: carrier.translated }, origin: 'post' }
+        ? {
+            text: resolvedCaption.text,
+            language: resolvedCaption.language,
+            translated: resolvedCaption.translated,
+            origin: 'media' as const,
+          }
+        : fallback !== undefined
+          ? { text: fallback.full, language: fallback.language, translated: fallback.translated, origin: 'post' as const }
           : undefined;
-    const captionLanguage = legende === undefined ? undefined : textOrUndefined(legende.served.language);
+    const captionLanguage = caption === undefined ? undefined : textOrUndefined(caption.language);
     const altText = textOrUndefined(m.alt);
     const durationMs = numberOrUndefined(m.duration);
     const width = numberOrUndefined(m.width);
@@ -210,8 +232,8 @@ function resolveMedia(
       ...(placeholder !== undefined ? { placeholder } : {}),
       ratio: isReel ? reelCardRatio(width, height) : postMediaRatio(width, height),
       ...(durationMs !== undefined ? { durationMs } : {}),
-      ...(legende !== undefined
-        ? { caption: legende.served.text, captionTranslated: legende.served.translated, captionOrigin: legende.origin }
+      ...(caption !== undefined
+        ? { caption: caption.text, captionTranslated: caption.translated, captionOrigin: caption.origin }
         : {}),
       ...(captionLanguage !== undefined ? { captionLanguage } : {}),
       ...(altText !== undefined ? { altText } : {}),
