@@ -199,11 +199,29 @@ nonisolated enum MediaChromeStage: Hashable, Sendable {
 
     /// **Le lecteur de story.** Le cadre du canvas ne descend pas jusqu'au rail — il vit
     /// dans `StoryViewerView+Canvas.swift` — donc le rail déclare son empreinte sur la
-    /// carte, que le fond remplit (`.fill`) : la colonne de droite (≈ 68 pt d'une carte
-    /// de ≈ 380, le rail étant collé à 16 pt du bord), sur les trois quarts bas, entre
-    /// l'en-tête et le composer.
+    /// carte, que le fond remplit (`.fill`).
+    ///
+    /// L'empreinte est CALCULÉE depuis la pose du rail (`StoryViewerView+Canvas.swift`,
+    /// Layer 8) sur un iPhone 16 Pro — 402 × 874, zone sûre 62 / 34, carte 9:16 donc
+    /// 402 × 715 centrée (y 80 → 795) :
+    ///
+    /// - en X : colonne de `56` (le bouton) + 2 × `6` de padding = 68 pt, collée à 16 pt
+    ///   du bord → 318 → 386, soit **0,79 → 0,96** de la carte ;
+    /// - en Y : le rail est borné par `topInset + 100` (barres de progression + en-tête)
+    ///   et `safeAreaInsets.bottom + 96` (composer) → 162 → 744 à l'écran, soit
+    ///   **0,115 → 0,93** de la carte.
+    ///
+    /// La première version de cette empreinte (0,78 / 0,25 / 0,22 / 0,70) mesurait une
+    /// bande décalée de 13 % vers le bas : elle prenait le composer et manquait le haut
+    /// du rail. `MediaChromeRailTests` la garde désormais par ses PROPRIÉTÉS — colonne de
+    /// droite, étroite, ouverte sous l'en-tête et fermée au-dessus du composer — et non
+    /// par ses quatre nombres, qu'un changement de gabarit doit pouvoir bouger.
+    ///
+    /// Ce qu'elle ne mesure PAS encore : les voiles de lecture (#6769, Layer 5) que le
+    /// rail a SOUS lui. Suivi en #6779 — le halo de polarité opposée tient ce cas comme
+    /// plancher, la décision reste fausse d'un cran sur les deux boutons du bas.
     static func storyRail(canvasAspect: Double) -> MediaChromeStage {
-        .declared(MediaChromePlacement(region: CGRect(x: 0.78, y: 0.25, width: 0.22, height: 0.70),
+        .declared(MediaChromePlacement(region: CGRect(x: 0.79, y: 0.115, width: 0.17, height: 0.815),
                                        containerAspect: canvasAspect, framing: .fill, veil: nil))
     }
 }

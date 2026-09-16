@@ -225,6 +225,28 @@ final class MediaChromeRailTests: XCTestCase {
         }
     }
 
+    /// **L'empreinte déclarée tombe là où le rail EST.** Une empreinte juste en forme et
+    /// fausse en place mesurerait le composer ou l'en-tête, et rien ne rougirait : la
+    /// décision resterait « une luminance », simplement pas celle-là. Gardée par ses
+    /// PROPRIÉTÉS — colonne de droite, étroite, traversant la carte — pour qu'un
+    /// changement de gabarit puisse bouger les nombres sans casser le témoin.
+    func test_story_lEmpreinteDeclaree_tombeSurLaColonneDuRail() throws {
+        guard case .declared(let empreinte) = MediaChromeStage.storyRail(canvasAspect: 9.0 / 16.0) else {
+            return XCTFail("le rail de story DÉCLARE son empreinte : le canvas ne la lui donne pas")
+        }
+        let zone = empreinte.region
+        XCTAssertGreaterThanOrEqual(zone.minX, 0.6, "le rail vit sur la colonne de DROITE")
+        XCTAssertLessThanOrEqual(zone.maxX, 1.0, "il ne sort pas de la carte")
+        XCTAssertLessThanOrEqual(zone.width, 0.25, "une colonne de ~68 pt, pas un quart de carte de plus")
+        XCTAssertGreaterThanOrEqual(zone.minY, 0.08, "il commence SOUS les barres de progression et l'en-tête")
+        XCTAssertLessThanOrEqual(zone.minY, 0.20,
+                                 "et il s'ouvre JUSTE sous elles (0,115), pas au quart de la carte : "
+                                     + "une empreinte trop basse prend le composer et manque le haut du rail")
+        XCTAssertLessThanOrEqual(zone.maxY, 0.94, "il s'arrête AU-DESSUS du composer")
+        XCTAssertGreaterThanOrEqual(zone.height, 0.75,
+                                    "le rail traverse la carte : une bande courte mesurerait une autre région que la sienne")
+    }
+
     /// Une slide sans média se lit par la loi du fond uni — la même que l'en-tête du lecteur.
     func test_story_uneSlideSansMedia_seLitParLaLoiDuFondUni() {
         let stage = MediaChromeStage.storyRail(canvasAspect: 9.0 / 16.0)
