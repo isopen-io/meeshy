@@ -28,21 +28,37 @@ export const isGroup = (conversation: Conversation): boolean => conversation.typ
 export const unreadOf = (conversation: Conversation): number => conversation.unreadCount ?? 0;
 
 /**
- * Une conversation directe n'a pas forcément de titre : elle porte le nom de
- * l'autre. `identifier` ferme la marche pour qu'une ligne ne soit jamais vide.
+ * **UNE CONVERSATION DIRECTE PORTE LE NOM DE L'AUTRE, ET RIEN D'AUTRE** (#6790).
  *
  * `customName` (préférence PAR LECTEUR, `flagsOf`/`customNameOf` §3.1) PRIME
  * sur tout le reste — c'est le nom que CE lecteur a choisi de donner à la
  * conversation, avant même le titre serveur (loi iOS `ConversationListView…`,
  * même précédence : un renommage local ne doit jamais être éclipsé par le
  * titre de groupe ou le nom du pair).
+ *
+ * **Ensuite, la précédence DÉPEND DU TYPE**, et c'est le correctif de #6790.
+ * Un GROUPE a un titre propre, qu'il faut servir ; un DIRECT n'en a pas — il
+ * porte le nom de l'autre. Jusqu'ici la règle lisait `conversation.title`
+ * d'abord dans les deux cas, ce que le doc-comment d'origine contredisait déjà
+ * en toutes lettres (« elle porte le nom de l'autre »).
+ *
+ * Le défaut ne vient PAS de la v2, qui ne pose aucun titre à la création d'un
+ * direct (`api/conversations.ts § createDirectConversation` : `{ type,
+ * participantIds }`, sans titre). Il vient du LEGACY, qui composait un titre
+ * CÔTÉ CLIENT et l'envoyait (`apps/web/components/conversations/
+ * create-conversation-modal.tsx:102-130`) — d'où les « X & Y » gravés sur des
+ * lignes créées avant la bascule. Les ignorer à l'affichage corrige le symptôme
+ * sans toucher une seule donnée ; le nettoyage en base, s'il est décidé, reste
+ * porté par #6790.
+ *
+ * `identifier` ferme la marche pour qu'une ligne ne soit jamais vide.
  */
-export const titleOf = (conversation: Conversation, viewerId: string): string =>
-  customNameOf(conversation) ??
-  conversation.title ??
-  peerOf(conversation, viewerId)?.displayName ??
-  conversation.identifier ??
-  '';
+export const titleOf = (conversation: Conversation, viewerId: string): string => {
+  const peerName = peerOf(conversation, viewerId)?.displayName ?? undefined;
+  const served =
+    conversation.type === 'direct' ? (peerName ?? conversation.title) : (conversation.title ?? peerName);
+  return customNameOf(conversation) ?? served ?? conversation.identifier ?? '';
+};
 
 /**
  * L'AUTRE, dans une conversation directe. `undefined` partout ailleurs — et

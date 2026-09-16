@@ -687,6 +687,16 @@ jobs:
           cd apps/web-v2
           node scripts/check-settings.mjs
 
+      # Le critère de fin de #5561 est une mesure de GÉOMÉTRIE : l'action
+      # primaire de `/chat/:lien` doit tenir dans le premier écran dans TOUS ses
+      # états, refus compris, à 360 et 390 px. Un témoin unitaire dit qu'un
+      # bouton est rendu ; il ne dit pas à quelle ordonnée il tombe.
+      - name: Gate jonction par lien (action primaire dans le premier écran, 360 et 390)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-join-first-screen.mjs
+
       # #6364 — ses communautés : la grille remplace l'écran d'attente, la
       # recherche se peint depuis le cache, une carte ouvre son détail et une
       # conversation son fil, la création refuse un identifiant pris sous son

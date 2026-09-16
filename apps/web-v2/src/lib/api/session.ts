@@ -64,9 +64,43 @@ export type SessionUser = Pick<User, 'id' | 'username' | 'displayName' | 'avatar
  * seuls les champs que `login.ts:145-158` sert avant vérification. */
 export type PendingUser = Pick<User, 'id' | 'username' | 'email' | 'firstName' | 'lastName' | 'displayName' | 'avatar'>;
 
+/**
+ * **QUI EST L'INVITÉ D'UN LIEN** (#5561) — tout ce que la v2 retient de
+ * quelqu'un qui n'a pas de compte, et rien de plus.
+ *
+ * Pas de `SessionUser` : un invité n'a ni identifiant de compte, ni e-mail, ni
+ * langues du Prisme à porter. Il a un pseudo affiché, un participant dans UNE
+ * conversation, et le lien par lequel il est entré — ce dernier parce que la
+ * session d'invité est liée à SON lien (`GET /links/:identifier/messages` rend
+ * 403 pour la session d'un autre lien) : sans lui, on ne saurait pas quelle
+ * porte rejouer.
+ *
+ * `mayWrite` est l'instantané SERVI à la jonction (`entry.rights.canSendMessages`).
+ * Il gouverne ce que l'écran OFFRE ; la passerelle reste l'autorité, et le fil
+ * relit les droits résolus (`PATCH /guest-sessions/me`).
+ */
+export type GuestIdentity = {
+  readonly participantId: string | null;
+  readonly nickname: string;
+  readonly conversationId: string;
+  readonly link: string;
+  readonly mayWrite: boolean;
+};
+
 export type SessionState =
   | { readonly status: 'anonymous' }
   | { readonly status: 'pending2fa'; readonly twoFactorToken: string; readonly user: PendingUser }
+  /**
+   * L'INVITÉ D'UN LIEN — le régime `X-Session-Token`, jamais `Authorization`
+   * (`http.ts § Credential` : présenter un jeton d'invité en Bearer fait
+   * répondre « Invalid JWT token »). Il ne porte AUCUN `token`.
+   */
+  | {
+      readonly status: 'guest';
+      readonly sessionToken: string;
+      readonly guest: GuestIdentity;
+      readonly expiresAt: number;
+    }
   | {
       readonly status: 'authenticated';
       readonly user: SessionUser;
@@ -114,6 +148,14 @@ export type SessionStoreState = {
      * qui la calculent divergeraient. */
     readonly expiresIn: number;
   }): void;
+  /**
+   * OUVRE UNE SESSION D'INVITÉ (#5561). Aucune `expiresIn` n'est servie par la
+   * porte de jonction : l'horizon est posé ICI, côté client
+   * ({@link GUEST_SESSION_HOURS}), et c'est une GARDE, jamais une vérité —
+   * le serveur reste l'autorité, un 401 ferme la session avant l'échéance.
+   * Sans horizon, l'entrée serait CORROMPUE au sens de ce module (règle 2).
+   */
+  establishGuest(payload: { readonly sessionToken: string; readonly guest: GuestIdentity }): void;
   beginTwoFactor(payload: { readonly user: PendingUser; readonly twoFactorToken: string }): void;
   /** Applique une édition de profil à la session TENUE, et la persiste —
    * projetée comme à l'`establish`. Sans effet hors d'une session
@@ -127,12 +169,31 @@ export type SessionStoreApi = StoreApi<SessionStoreState>;
 
 const STORAGE_KEY = 'meeshy.session';
 
-type PersistedSession = {
+/**
+ * L'HORIZON D'UNE SESSION D'INVITÉ — la valeur du legacy
+ * (`authManager.setAnonymousSession(token, id, 24)`), reprise pour que la
+ * bascule ne raccourcisse ni n'allonge ce que les invités connaissaient.
+ */
+export const GUEST_SESSION_HOURS = 24;
+
+/** Une entrée écrite AVANT #5561 ne porte pas `kind` : elle est un compte.
+ * L'absence est donc la valeur par défaut, jamais une corruption. */
+type PersistedAccount = {
+  readonly kind?: 'account';
   readonly token: string;
   readonly sessionToken: string;
   readonly user: SessionUser;
   readonly expiresAt: number;
 };
+
+type PersistedGuest = {
+  readonly kind: 'guest';
+  readonly sessionToken: string;
+  readonly guest: GuestIdentity;
+  readonly expiresAt: number;
+};
+
+type PersistedSession = PersistedAccount | PersistedGuest;
 
 /** La PROJECTION — un objet NEUF, jamais celui reçu du réseau : les champs
  * absents ne deviennent pas des clés `undefined`, et rien d'autre ne suit. */
@@ -147,6 +208,18 @@ function pickSessionUser(user: SessionUser): SessionUser {
     ...(user.customDestinationLanguage !== undefined
       ? { customDestinationLanguage: user.customDestinationLanguage }
       : {}),
+  };
+}
+
+/** La MÊME discipline pour l'invité (règle 1) : un objet NEUF, cinq champs, et
+ * rien de ce que la charge de jonction transporte à côté. */
+function pickGuest(guest: GuestIdentity): GuestIdentity {
+  return {
+    participantId: guest.participantId,
+    nickname: guest.nickname,
+    conversationId: guest.conversationId,
+    link: guest.link,
+    mayWrite: guest.mayWrite,
   };
 }
 
@@ -168,11 +241,28 @@ function pickPendingUser(user: PendingUser): PendingUser {
  * (JSON non-objet, jeton manquant, utilisateur non identifiable) rend
  * `false` — jamais une exception, jamais une session à moitié restaurée
  * (même doctrine que `preferenceEntryOf`, `api/preferences.ts:40-48`). */
+/** Un invité SANS conversation ni lien ne peut rien rejouer : l'entrée est
+ * corrompue, jamais une session à moitié restaurée. */
+function isGuestIdentity(value: unknown): value is GuestIdentity {
+  if (typeof value !== 'object' || value === null) return false;
+  const g = value as Record<string, unknown>;
+  if (typeof g.nickname !== 'string') return false;
+  if (typeof g.conversationId !== 'string' || g.conversationId === '') return false;
+  if (typeof g.link !== 'string' || g.link === '') return false;
+  if (typeof g.mayWrite !== 'boolean') return false;
+  return g.participantId === null || typeof g.participantId === 'string';
+}
+
 function isPersistedSession(value: unknown): value is PersistedSession {
   if (typeof value !== 'object' || value === null) return false;
   const v = value as Record<string, unknown>;
-  if (typeof v.token !== 'string' || typeof v.sessionToken !== 'string') return false;
+  if (typeof v.sessionToken !== 'string') return false;
   if (typeof v.expiresAt !== 'number' || !Number.isFinite(v.expiresAt)) return false;
+  /* Un invité EXIGE un jeton non vide : c'est sa seule créance. Un compte, lui,
+     peut en porter un vide — la reprise du legacy en écrit un quand le legacy
+     n'en avait pas (`legacy-session.ts:148`), et son `token` suffit. */
+  if (v.kind === 'guest') return v.sessionToken !== '' && isGuestIdentity(v.guest);
+  if (typeof v.token !== 'string') return false;
   if (typeof v.user !== 'object' || v.user === null) return false;
   const user = v.user as Record<string, unknown>;
   return typeof user.id === 'string' && typeof user.username === 'string';
@@ -264,6 +354,12 @@ export function createSessionStore(options: SessionStoreOptions = {}): SessionSt
       persist(storage, { user: projected, token, sessionToken, expiresAt });
       set({ session: { status: 'authenticated', user: projected, token, sessionToken, expiresAt } });
     },
+    establishGuest: ({ sessionToken, guest }) => {
+      const projected = pickGuest(guest);
+      const expiresAt = now() + GUEST_SESSION_HOURS * 60 * 60 * 1000;
+      persist(storage, { kind: 'guest', sessionToken, guest: projected, expiresAt });
+      set({ session: { status: 'guest', sessionToken, guest: projected, expiresAt } });
+    },
     beginTwoFactor: ({ user, twoFactorToken }) => {
       set({ session: { status: 'pending2fa', user: pickPendingUser(user), twoFactorToken } });
     },
@@ -280,6 +376,17 @@ export function createSessionStore(options: SessionStoreOptions = {}): SessionSt
       if (persisted === 'absent') return;
       if (persisted === 'corrupted' || persisted.expiresAt <= now()) {
         purge(storage);
+        return;
+      }
+      if (persisted.kind === 'guest') {
+        set({
+          session: {
+            status: 'guest',
+            sessionToken: persisted.sessionToken,
+            guest: pickGuest(persisted.guest),
+            expiresAt: persisted.expiresAt,
+          },
+        });
         return;
       }
       set({
