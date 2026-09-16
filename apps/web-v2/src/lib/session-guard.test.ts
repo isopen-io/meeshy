@@ -42,6 +42,25 @@ const PRIVATE_ROUTES: readonly RouteKey[] = [
   'adminUsers',
   'adm',
   'admUsers',
+  /**
+   * LE DÉTAIL D'UN MEMBRE (#6819) et LES CONVERSATIONS DE L'INSTANCE (#6862)
+   * — quatre adresses de plus, dans la même logique que les quatre au-dessus.
+   *
+   * `adminUser`/`admUser` étaient PRIVÉES dans la loi (`session-guard.ts`)
+   * sans qu'aucun témoin l'affirme : un manque ANTÉRIEUR à ce lot, comblé ici
+   * parce que c'est la même ligne de défense et qu'un témoin à trous garde
+   * moins bien qu'il n'en a l'air.
+   *
+   * Ces deux-là pèsent au moins autant que les listes : l'un porte l'édition,
+   * la réinitialisation de mot de passe et le bannissement ; l'autre ouvre
+   * l'inventaire des conversations — qui parle à qui, dans quels groupes.
+   */
+  'adminUser',
+  'admUser',
+  'adminConversations',
+  'admConversations',
+  'adminConversation',
+  'admConversation',
 ];
 const PUBLIC_AUTH_ROUTES: readonly RouteKey[] = ['login', 'signup'];
 

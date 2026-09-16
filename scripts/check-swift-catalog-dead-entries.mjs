@@ -213,7 +213,18 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // CONSTRUCTION, même raison que les dizaines d'autres `AdminEndpoint.*`
 // ci-dessus : l'administration n'a pas d'écran iOS, donc aucun de ses
 // endpoints n'a jamais d'appelant Swift.
-const BASELINE_DEAD_ENTRIES = 256;
+// 256 → 257 (#6861) : `AdminEndpoint.conversations`
+// (`GET /admin/conversations`). Morte à la naissance PAR CONSTRUCTION, même
+// raison que `usersByUserIdRestore` juste au-dessus : l'administration n'a pas
+// d'écran iOS, donc aucun de ses endpoints n'a jamais d'appelant Swift. Et
+// l'entrée est GÉNÉRÉE depuis `route-manifest.json` — la retirer est
+// impossible, elle reviendrait à la prochaine régénération.
+//
+// NOTE DE RÉSOLUTION : voir son jumeau TS. Ce lot et #6822 ont relevé cette
+// référence en parallèle vers la MÊME valeur (256) pour des routes
+// différentes ; la valeur ci-dessous est MESURÉE sur l'arbre fusionné, jamais
+// additionnée.
+const BASELINE_DEAD_ENTRIES = 257;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

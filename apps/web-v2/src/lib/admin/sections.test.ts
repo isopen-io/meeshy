@@ -55,7 +55,33 @@ describe('visibleAdminSections — fail-closed par construction', () => {
   });
 
   test('une matrice complète ne voit que les sections que la v2 SERT (#6702)', () => {
+    // SANS rôle : la section réservée au rang d'administration reste masquée —
+    // l'absence de rôle est FERMANTE (#6862).
     expect(visibleAdminSections(TOUTES).map((s) => s.id)).toEqual(['dashboard', 'users']);
+  });
+
+  /**
+   * LE RANG D'ADMINISTRATION (#6862) — directive porteur du 2026-09-16 :
+   * « permettre aussi aux ADMIN de pouvoir accéder à ces informations pour le
+   * moment ».
+   *
+   * `canManageConversations` est portée par BIGBOSS, ADMIN **et MODERATOR**
+   * (matrice centrale de la passerelle). Sans le filtre de rang, un MODERATOR
+   * verrait la tuile et n'obtiendrait que des 403 — un contrôle voué à
+   * l'échec. Ces trois témoins sont les seuls à pouvoir le voir.
+   */
+  test('la section réservée au rang reste masquée SANS rôle — l’absence est fermante', () => {
+    expect(visibleAdminSections(TOUTES).map((s) => s.id)).not.toContain('conversations');
+    expect(visibleAdminSections(TOUTES, null).map((s) => s.id)).not.toContain('conversations');
+  });
+
+  test('un MODERATOR ne la voit pas, bien qu’il PORTE la permission', () => {
+    expect(visibleAdminSections(TOUTES, 'MODERATOR').map((s) => s.id)).not.toContain('conversations');
+  });
+
+  test('un ADMIN et un BIGBOSS la voient', () => {
+    expect(visibleAdminSections(TOUTES, 'ADMIN').map((s) => s.id)).toContain('conversations');
+    expect(visibleAdminSections(TOUTES, 'BIGBOSS').map((s) => s.id)).toContain('conversations');
   });
 
   test('ne rend que les sections dont la permission est vraie', () => {
@@ -65,7 +91,12 @@ describe('visibleAdminSections — fail-closed par construction', () => {
   });
 
   test('conserve l’ORDRE de la table — un admin retrouve ses sections où il les cherche', () => {
-    expect(visibleAdminSections(TOUTES).map((s) => s.id)).toEqual(
+    // Le rôle est passé DÉLIBÉRÉMENT : ce témoin mesure l'ORDRE, pas la
+    // visibilité. Sans lui, une section conditionnée au rang (#6862) manque à
+    // la liste et l'écart se lit comme un désordre — deux questions
+    // différentes, dont une seule est celle de ce test. Les trois témoins de
+    // visibilité, eux, sont juste au-dessus.
+    expect(visibleAdminSections(TOUTES, 'BIGBOSS').map((s) => s.id)).toEqual(
       ADMIN_SECTIONS.filter((s) => s.route !== null).map((s) => s.id),
     );
   });
