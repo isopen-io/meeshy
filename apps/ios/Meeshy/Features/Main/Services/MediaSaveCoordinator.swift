@@ -317,7 +317,13 @@ struct AttachmentMediaSaveResolver: MediaSaveSourceResolving {
     /// `data(for:)` télécharge+cache sur miss ; le fichier disque du store est
     /// préféré, avec repli sur une écriture temporaire si le flush L2 n'a pas
     /// encore touché le disque (timing interne du store).
-    private func materialize(from store: DiskCacheStore, key: String, ext: String) async throws -> URL {
+    ///
+    /// **Interne, et non privée, pour être INTERROGEABLE** (#6810) : les quatre
+    /// suites qui traversent le chemin « Créer avec ce média » remplacent toutes
+    /// ce resolver par un double, de sorte que le resolver de production
+    /// n'était éprouvé nulle part. Ouvrir la visibilité ne change aucun
+    /// comportement — c'est ce qui permet au témoin de le mesurer.
+    func materialize(from store: DiskCacheStore, key: String, ext: String) async throws -> URL {
         let data = try await store.data(for: key)
         if let onDisk = await store.localFileURL(for: key) {
             return onDisk
