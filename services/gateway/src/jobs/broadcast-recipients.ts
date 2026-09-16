@@ -6,7 +6,13 @@ import { undeliverableSeedEmails } from '../services/seed-accounts';
 export type BroadcastTargeting = {
   readonly languages?: readonly string[];
   readonly countries?: readonly string[];
-  readonly activityStatus?: 'active' | 'inactive' | 'all';
+  // 'new' est un quatrième régime, décodé et appliqué par la PREVIEW
+  // (`routes/admin/broadcasts.ts`, POST /:id/preview) mais pas ici — cette
+  // fonction ne filtre que 'active'/'inactive', donc un envoi RÉEL ciblant
+  // 'new' n'applique aucune fenêtre de date malgré ce que la preview a promis.
+  // Découvert en retirant un `as any` qui masquait le désaccord de type entre
+  // les deux sites (#6777) ; corriger le filtre d'envoi est hors périmètre ici.
+  readonly activityStatus?: 'active' | 'inactive' | 'all' | 'new';
   readonly inactiveSinceDays?: number;
 };
 
