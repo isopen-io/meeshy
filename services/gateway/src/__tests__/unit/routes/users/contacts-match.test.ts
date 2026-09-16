@@ -221,7 +221,10 @@ describe('POST /users/me/contacts/match — excludes self', () => {
       url: '/users/me/contacts/match',
       payload: { contacts: [{ phoneNumbers: ['+33612345678'] }] },
     });
-    const where = prisma.user.findMany.mock.calls[0][0].where;
+    // `getBlockRelatedUserIds` (#6811) interroge « qui a bloqué l'appelant »
+    // AVANT la requête candidats — c'est donc le PREMIER appel à `findMany`,
+    // la requête candidats étant le second.
+    const where = prisma.user.findMany.mock.calls[1][0].where;
     expect(where.id.notIn).toContain(CURRENT_USER_ID);
     await app.close();
   });
@@ -420,7 +423,14 @@ describe('POST /users/me/contacts/match — gate de présence', () => {
 describe('POST /users/me/contacts/match — database error', () => {
   it('returns 500 when the query fails', async () => {
     const prisma = {
-      user: { findMany: jest.fn<any>().mockRejectedValue(new Error('DB down')) },
+      user: {
+        findMany: jest.fn<any>().mockRejectedValue(new Error('DB down')),
+        // Un double PARTIEL (`findUnique` absent) ferait lever la construction
+        // du `Promise.all` de `getBlockRelatedUserIds` (#6811) AVANT que son
+        // `findMany` ne soit attaché — une rejet non gardée, pas le 500 que ce
+        // test veut prouver. Une base réellement injoignable refuse les DEUX.
+        findUnique: jest.fn<any>().mockRejectedValue(new Error('DB down')),
+      },
     } as any;
     const { app } = await buildApp({ prisma });
     const res = await app.inject({

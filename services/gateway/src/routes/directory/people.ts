@@ -14,7 +14,8 @@ import {
 } from '../users/presence-gate';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
-import { contactLookupScope, blockedIdsOfViewer } from '../../services/ContactDirectoryService';
+import { contactLookupScope } from '../../services/ContactDirectoryService';
+import { getBlockRelatedUserIds } from '../../utils/blocking.js';
 
 const logger = enhancedLogger.child({ module: 'DirectoryPeople' });
 
@@ -181,8 +182,7 @@ export async function directoryPeopleRoutes(fastify: FastifyInstance) {
       const lignes = await fastify.prisma.user.findMany({
         where: {
           ...contactLookupScope({
-            viewerId,
-            blockedByViewer: await blockedIdsOfViewer(fastify.prisma, viewerId),
+            excludedUserIds: [...(await getBlockRelatedUserIds(fastify.prisma, viewerId))],
           }),
           // ÉGALITÉ EXACTE sur un élément du tableau — pas une regex.
           //

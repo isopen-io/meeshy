@@ -145,7 +145,7 @@ describe('GET /people?expand=… — l’ARGUMENT Prisma, pas seulement le corps
 
     await chercher(app, 'q=jean&expand=futur-client,presence');
 
-    const select = findMany.mock.calls[0][0].select as Record<string, unknown>;
+    const select = findMany.mock.calls[1][0].select as Record<string, unknown>;
     expect(select.isOnline).toBe(true);
     expect(select.lastActiveAt).toBe(true);
 
@@ -158,7 +158,7 @@ describe('GET /people?expand=… — l’ARGUMENT Prisma, pas seulement le corps
 
     await chercher(app, 'q=jean&expand=stats');
 
-    const select = findMany.mock.calls[0][0].select as Record<string, unknown>;
+    const select = findMany.mock.calls[1][0].select as Record<string, unknown>;
     expect('isOnline' in select).toBe(false);
     expect('lastActiveAt' in select).toBe(false);
 

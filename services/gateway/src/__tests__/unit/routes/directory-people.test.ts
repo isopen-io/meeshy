@@ -82,7 +82,7 @@ describe('La recherche interroge l’INDEX, jamais cinq colonnes', () => {
 
     await chercher(app, 'q=Jean');
 
-    const where = findMany.mock.calls[0][0].where as Record<string, any>;
+    const where = findMany.mock.calls[1][0].where as Record<string, any>;
     // L'égalité sur un élément de tableau est ce que le multikey sert. Un
     // `contains` non ancré retomberait en balayage complet, quel que soit
     // l'index posé.
@@ -98,7 +98,7 @@ describe('La recherche interroge l’INDEX, jamais cinq colonnes', () => {
 
     await chercher(app, 'q=jean');
 
-    const args = findMany.mock.calls[0][0] as { where: unknown; select: Record<string, unknown> };
+    const args = findMany.mock.calls[1][0] as { where: unknown; select: Record<string, unknown> };
     // Joindre quelqu'un par son adresse a sa PROPRE porte, authentifiée et
     // bornée (#4160). Chercher par fragment de nom n'a pas à y toucher.
     expect(JSON.stringify(args.where)).not.toContain('email');
@@ -115,16 +115,20 @@ describe('La recherche interroge l’INDEX, jamais cinq colonnes', () => {
 
     await chercher(app, 'q=jean');
 
-    const where = findMany.mock.calls[0][0].where as Record<string, any>;
+    const where = findMany.mock.calls[1][0].where as Record<string, any>;
     expect(where.isActive).toBe(true);
-    expect(JSON.stringify(where.AND)).toContain('isSet');
-    // Le blocage vit désormais DANS `AND`, sous la même forme « absent vs
-    // null » que `deletedAt` (#6452) : un `NOT` nu au premier niveau
-    // écarterait aussi les comptes qui n'ont jamais écrit `blockedUserIds`.
+    // Le filtre anti-suppression vit dans `AND`, sous la forme « absent vs
+    // null » (#6452) : un `deletedAt: null` nu écarterait aussi les comptes
+    // qui n'ont jamais écrit cette colonne.
     expect(where.NOT).toBeUndefined();
-    expect(where.AND).toContainEqual({
-      OR: [{ blockedUserIds: { isSet: false } }, { NOT: { blockedUserIds: { has: VIEWER } } }],
-    });
+    expect(where.AND).toContainEqual({ OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }] });
+    // Le blocage, lui, ne construit plus aucun filtre sur `blockedUserIds`
+    // ici : la garde bidirectionnelle est résolue AVANT cette requête, par
+    // `getBlockRelatedUserIds` (requête POSITIVE indexée, premier appel à
+    // `findMany`), jamais par un filtre de tableau NIÉ que le client Prisma
+    // généré refuse sur cette liste scalaire REQUISE (#6811).
+    expect(JSON.stringify(where)).not.toContain('blockedUserIds');
+    expect(findMany.mock.calls[0][0].where).toEqual({ blockedUserIds: { has: VIEWER } });
 
     await app.close();
   });
@@ -137,7 +141,7 @@ describe('La projection est MINIMALE, et la présence se demande', () => {
 
     await chercher(app, 'q=jean');
 
-    const select = findMany.mock.calls[0][0].select as Record<string, unknown>;
+    const select = findMany.mock.calls[1][0].select as Record<string, unknown>;
     expect(Object.keys(select).sort()).toEqual(['avatar', 'displayName', 'id', 'username']);
 
     await app.close();
@@ -149,7 +153,7 @@ describe('La projection est MINIMALE, et la présence se demande', () => {
 
     await chercher(app, 'q=jean&expand=presence');
 
-    const select = findMany.mock.calls[0][0].select as Record<string, unknown>;
+    const select = findMany.mock.calls[1][0].select as Record<string, unknown>;
     expect(select.isOnline).toBe(true);
     expect(select.lastActiveAt).toBe(true);
 
@@ -193,7 +197,7 @@ describe('La pagination dit enfin s’il reste une page', () => {
 
     await chercher(app, 'q=jean&cursor=user010');
 
-    const args = findMany.mock.calls[0][0] as Record<string, any>;
+    const args = findMany.mock.calls[1][0] as Record<string, any>;
     expect(args.cursor).toEqual({ username: 'user010' });
     expect(args.skip).toBe(1);
     // L'ordre stable s'applique EN BASE, donc avant la découpe de page : deux
@@ -222,7 +226,7 @@ describe('Le contrat', () => {
 
     await chercher(app, 'q=jean&limit=5000');
 
-    expect(findMany.mock.calls[0][0].take).toBeLessThanOrEqual(51);
+    expect(findMany.mock.calls[1][0].take).toBeLessThanOrEqual(51);
 
     await app.close();
   });
