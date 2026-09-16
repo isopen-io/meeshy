@@ -208,7 +208,15 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // aucun n'a besoin de migrer dans l'immédiat, le retrait de l'alias restant
 // gouverné par le compteur d'accès nul (#4275). Faire pointer iOS vers la
 // nouvelle adresse est un travail client à part, pas ouvert par ce lot.
-const BASELINE_DEAD_ENTRIES = 255;
+//
+// 255 → 258 (#6821) : `AdminEndpoint.usersByUserIdSessions`,
+// `.usersByUserIdSessionsBySessionId`, `.usersByUserIdSecurityEvents` —
+// l'historique de connexion et sa révocation, un geste d'ADMINISTRATION
+// exposé côté passerelle. Comme la quasi-totalité de `AdminEndpoint` déjà
+// dans la liste ci-dessus, la console d'administration n'a pas d'écran iOS ;
+// ces trois routes rejoignent leurs ~200 voisines, mortes CÔTÉ SWIFT pour la
+// même raison structurelle, pas par oubli.
+const BASELINE_DEAD_ENTRIES = 258;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de
