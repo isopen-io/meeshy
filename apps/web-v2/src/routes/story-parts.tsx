@@ -47,7 +47,11 @@ export type StoryMediaLayerProps = {
    * lecteur ne regardait jamais (#6801). Absent ⇒ image : la passerelle sert
    * l'absence en `null`, et retomber sur le repli rendrait illisibles les
    * stories qui marchaient. */
-  readonly mimeType?: string | null;
+  /* `| undefined` EXPLICITE — `exactOptionalPropertyTypes: true` distingue
+     « absente » de « présente à `undefined` », et l'hôte passe
+     `media?.mimeType`, dont le type EST `string | undefined`. Sans ce membre,
+     `tsc` refuse l'appel (TS2375) : le `?` seul n'autorise que l'ABSENCE. */
+  readonly mimeType?: string | null | undefined;
   readonly showsMedia: boolean;
   /** La story PORTE un média (même inexploitable) — départage « le
    * téléchargement a échoué » de « c'est une story de texte ». */
