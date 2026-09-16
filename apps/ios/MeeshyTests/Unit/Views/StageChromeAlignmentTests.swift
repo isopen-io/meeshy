@@ -74,6 +74,91 @@ final class StageChromeAlignmentTests: XCTestCase {
         XCTAssertEqual(haut, bas, accuracy: 0.001, "Une bande d'un seul côté se lit comme un défaut d'alignement.")
     }
 
+    // MARK: - L'alignement VERTICAL du plateau — le reader de story compris
+
+    /// **Le plateau centre, quel que soit le rapport de la scène** (#6760).
+    ///
+    /// Le reader de story décidait seul : `.center` en paysage (directive
+    /// 2026-07-13) et `.top` en PORTRAIT (directive 2026-07-04) — c'est-à-dire
+    /// dans le cas nominal. La directive du 2026-09-15 supplante la première :
+    /// « Ce qui est construit se pose donc sur la plateau au milieu […] Il faut
+    /// reprendre la même logique dans le reader de story ».
+    ///
+    /// Le rang qui compte est donc le PORTRAIT : en paysage, l'ancienne règle et
+    /// la nouvelle rendent le même verdict, et un témoin posé là ne pourrait pas
+    /// tomber (leçon 261).
+    func test_lePlateauCentre_memeUneScenePORTRAIT() {
+        XCTAssertEqual(StageChromeAlignment.verticalAlignment(canvasRatio: 9.0 / 16.0), .center)
+    }
+
+    func test_lePlateauCentre_aussiUneScenePaysage() {
+        XCTAssertEqual(StageChromeAlignment.verticalAlignment(canvasRatio: 16.0 / 9.0), .center)
+    }
+
+    func test_lePlateauCentre_uneSceneCarree() {
+        XCTAssertEqual(StageChromeAlignment.verticalAlignment(canvasRatio: 1), .center)
+    }
+
+    /// **Le câblage** : le reader ne décide plus seul. Garde de SOURCE — le
+    /// choix vit dans une vue, que seul un rendu réel exerce ; elle garde donc
+    /// l'appel, pas son effet, et le dit.
+    func test_leReaderDeStory_consulteLaLoi_plutotQueDeChoisirSeul() throws {
+        let texte = try MyStoriesSourceCorpus.text(
+            of: "Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift")
+
+        XCTAssertTrue(
+            texte.contains("StageChromeAlignment.verticalAlignment(canvasRatio: readerCanvasRatio)"),
+            "Le reader doit consulter la loi du plateau : sans elle, il rejouera son ternaire "
+            + "`readerCanvasRatio > 1 ? .center : .top`, qui colle toute scène PORTRAIT sous le header."
+        )
+        XCTAssertFalse(
+            texte.contains("readerCanvasRatio > 1 ? .center : .top"),
+            "L'ancien ternaire doit PARTIR avec son remplacement — une règle qui survit à côté de "
+            + "celle qui la remplace se fait recopier par le prochain lecteur."
+        )
+    }
+
+    // MARK: - Les QUATRE surfaces, et par quel chemin chacune tient la loi
+
+    /// **L'inventaire des surfaces du plateau** (directive porteur 2026-09-15 :
+    /// « reprendre la même logique dans le reader de story et des scenes de
+    /// poste en ouvert plein écran même sur les pieces jointes de
+    /// conversation »).
+    ///
+    /// Deux la tiennent en l'APPELANT, deux en HÉRITANT — et la distinction
+    /// compte : un héritage ne se voit pas, donc il s'oublie. Écrire les quatre
+    /// ici est ce qui empêche qu'une cinquième surface naisse en réécrivant la
+    /// règle, et ce qui fera rougir le jour où l'une des deux héritières cessera
+    /// de monter l'hôte commun.
+    func test_lesQuatreSurfaces_tiennentLaLoiDuPlateau() throws {
+        // Les deux qui APPELLENT.
+        for (chemin, quoi) in [
+            ("Meeshy/Features/Main/Views/ConversationMediaGalleryView+Geometry.swift",
+             "StageChromeAlignment."),
+            ("Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift",
+             "StageChromeAlignment.verticalAlignment(canvasRatio:"),
+        ] {
+            XCTAssertTrue(
+                try MyStoriesSourceCorpus.text(of: chemin).contains(quoi),
+                "\(chemin) doit consulter la loi du plateau, pas réécrire son alignement."
+            )
+        }
+
+        // Les deux qui HÉRITENT, chacune par son chemin mesuré.
+        XCTAssertTrue(
+            try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/ConversationMediaGalleryView+ScenePage.swift")
+                .contains("extension ConversationMediaGalleryView"),
+            "La page SCÈNE hérite du plateau en étant une extension de son hôte — si elle "
+            + "redevenait une vue à part, elle réécrirait son cadrage sans qu'on le voie."
+        )
+        XCTAssertTrue(
+            try MyStoriesSourceCorpus.text(of: "Meeshy/Features/Main/Views/CommentMediaView.swift")
+                .contains("ConversationMediaGalleryView("),
+            "Le média d'un commentaire s'ouvre dans la galerie partagée : c'est ce montage, et "
+            + "lui seul, qui lui donne le plateau."
+        )
+    }
+
     /// Un média PLUS GRAND que le plateau déborde symétriquement — le cadre le
     /// clippe. Sans cette borne, un `max(0, …)` bien intentionné le collerait en
     /// haut et rendrait le hors-champ asymétrique.

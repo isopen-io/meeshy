@@ -1184,13 +1184,15 @@ struct StoryCardView: View {
             sideInset: 8,                 // marges latérales ÷2 (it.48) — carte plus proche des bords L/R
             state: canvasPresentation,
             cardedCornerRadius: 22,
-            // Portrait : la carte se place DIRECTEMENT sous la ligne
-            // d'expiration (directive 2026-07-04) — le mou vertical va en bas.
-            // Paysage (16:9) : la carte est CENTRÉE dans la région libre
-            // (directive 2026-07-13 « la position des vidéos landscape doit
-            // être au centre ») — collée au header elle laissait tout le vide
-            // en bas de l'écran.
-            verticalAlignment: readerCanvasRatio > 1 ? .center : .top,
+            // #6760 — l'alignement n'est plus décidé ici : il appartient au
+            // PLATEAU, que les quatre surfaces partagent. La directive du
+            // 2026-09-15 (« ce qui est construit se pose sur le plateau au
+            // milieu […] reprendre la même logique dans le reader de story »)
+            // supplante celle du 2026-07-04, qui collait toute scène PORTRAIT
+            // sous la ligne d'expiration. Les trois dates et le raisonnement
+            // vivent chez `StageChromeAlignment.verticalAlignment` — pas ici,
+            // pour qu'une seule surface ne puisse pas les faire diverger.
+            verticalAlignment: StageChromeAlignment.verticalAlignment(canvasRatio: readerCanvasRatio),
             canvasRatio: readerCanvasRatio))
     }
 
