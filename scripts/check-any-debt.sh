@@ -159,7 +159,36 @@ readonly SHARED_BASELINE=0
 # compilation sur la valeur `'new'`, absente du type partagé — révélant que le
 # filtre d'ENVOI réel (`activityWindow()`) ne l'implémente pas alors que la
 # PREVIEW si : #6777, hors périmètre de ce lot de dette `any`.
-readonly GATEWAY_BASELINE=624
+#
+# 599, pas 624 (#3679, troisième lot de RÉDUCTION) :
+# `route-manifest/collect.ts` (962 lignes, dans le budget de taille) typait
+# ses 25 usages sur des `any` nus — le collecteur de manifeste de routes
+# (#4276), un module de TOOLING (construit un serveur Fastify assemblé sur des
+# stubs pour introspecter le graphe de routes réel), jamais un chemin de
+# production servant du trafic. Trois familles :
+# - `(routeOptions as any).schema/.prefix/.onRequest/.preValidation/
+#   .preHandler` (6 sites) étaient inutiles : le hook `onRoute` de Fastify
+#   type déjà `RouteOptions & { prefix, path, routePath }` — mesuré en les
+#   retirant, `tsc --noEmit` reste à 0 erreur.
+# - `makeCallableStub()`/`makeDeepStub(): any` (2 sites, + un `fn: any`
+#   interne) reprises en `unknown`, avec un unique cast `as PrismaClient` posé
+#   UNE fois à la déclaration de `prismaStub` plutôt que redit à ses trois
+#   sites d'usage (`createUnifiedAuthMiddleware`, `app.decorate('prisma', …)`,
+#   `deps.prisma`).
+# - Les 14 `{} as any` de décoration Fastify + du `deps: RouteRegistrationDeps`
+#   (mentionService, socketIOHandler, jobMappingCache, emailService,
+#   mutationLogService, callService, notificationService, socialEvents,
+#   translationService, messagingService, orphanMediaCleanup) reprises en
+#   `{} as unknown as <VraiType>` contre les types déjà déclarés par
+#   `types/fastify.d.ts` et `RouteRegistrationDeps` — seule leur PRÉSENCE
+#   compte pour que chaque module de routes se CONSTRUISE, jamais leur
+#   contenu (aucune n'est appelée par ce collecteur). `presenceChecker`
+#   satisfaisait déjà structurellement son type déclaré : cast retiré, pas
+#   remplacé.
+# `bodySchema?`/`querystringSchema?: any` sur `CollectedRoute` reprises en
+# `unknown` (JSON Schema opaque, dépouillé seulement par le double `any` déjà
+# existant de `route-auth-coverage.test.ts`, un fichier de test hors mesure).
+readonly GATEWAY_BASELINE=599
 
 # `apps/web` — dette réelle, jamais gardée avant ce lot (cf. en-tête « WHY
 # `apps/web` IS MEASURED… »). Mesurée sur un checkout NON construit (pas de
