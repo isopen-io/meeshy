@@ -139,27 +139,34 @@ struct PostSceneCard: View {
         sceneJouee.flatMap { SceneFraming.cardFocus(scene: $0) }
     }
 
+    /// Le rapport NATUREL de la carte — celui du cadrage par contenu, ou le
+    /// gabarit 9:16 à défaut. `SceneCardHeightCap` le plafonne en HAUTEUR
+    /// (#6767) sans jamais le rogner : le cadrage garde le dernier mot sur ce
+    /// qui est montré, ce plafond ne décide que de la boîte.
+    private var naturalCardAspect: CGFloat {
+        sceneJouee.flatMap { SceneFraming.cardAspect(scene: $0) } ?? (9.0 / 16.0)
+    }
+
     var body: some View {
         // **Le cadrage enveloppe le player, il ne le remplace pas** : la scène
         // rendue reste entière, c'est la fenêtre qui bouge. Sans cadre,
         // `SceneFocusFrame` s'efface et le rendu est celui d'avant, à
-        // l'identique.
-        SceneFocusFrame(focus: cadre) {
-            MeeshyScenePlayer(
-                document: document,
-                mode: .card,
-                sceneIndex: .constant(0),
-                isPlaying: .constant(isActive),
-                accentColorHex: accentColor,
-                carrier: carrier
-            )
-            .preferredContentLanguages(preferredContentLanguages)
+        // l'identique. `SceneCardHeightCap` plafonne ensuite la BOÎTE — jamais
+        // le cadrage — en hauteur (#6767) : au-delà de 1,4 × la largeur, ce
+        // qui dépasse laisse des bandes vides plutôt qu'un rognage.
+        SceneCardHeightCap(naturalAspect: naturalCardAspect) {
+            SceneFocusFrame(focus: cadre) {
+                MeeshyScenePlayer(
+                    document: document,
+                    mode: .card,
+                    sceneIndex: .constant(0),
+                    isPlaying: .constant(isActive),
+                    accentColorHex: accentColor,
+                    carrier: carrier
+                )
+                .preferredContentLanguages(preferredContentLanguages)
+            }
         }
-        // Le rapport SUIT le cadre — sinon la carte remplirait une boîte au
-        // mauvais rapport et rognerait de nouveau ce que le cadrage venait de
-        // choisir.
-        .aspectRatio(sceneJouee.flatMap { SceneFraming.cardAspect(scene: $0) } ?? (9.0 / 16.0),
-                     contentMode: .fit)
         .frame(maxWidth: Self.maxWidth)
         .frame(maxWidth: .infinity, alignment: .center)
         .clipShape(RoundedRectangle(cornerRadius: 16))

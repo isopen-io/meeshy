@@ -66,6 +66,151 @@ describe('createSessionStore — establish()', () => {
   });
 });
 
+/**
+ * L'INVITÉ D'UN LIEN (#5561) — une SESSION, pas un état d'écran. Ce qui se
+ * garde ici : sa créance est un jeton de session (jamais un JWT), son identité
+ * est PROJETÉE comme celle d'un compte, son horizon est posé côté client, et
+ * une entrée écrite AVANT ce lot (sans `kind`) reste un compte.
+ */
+const GUEST = {
+  participantId: 'p-invitee',
+  nickname: 'Awa',
+  conversationId: 'c-deploiement',
+  link: 'mshy_equipe_7f3a',
+  mayWrite: true,
+};
+
+const GUEST_HORIZON_MS = 24 * 60 * 60 * 1000;
+
+describe('createSessionStore — establishGuest() (#5561)', () => {
+  test('⇒ guest, jeton de session, et l’entrée persistée se DÉCLARE invitée', () => {
+    const storage = fakeStorage();
+    const store = createSessionStore({ storage, now: () => FIXED_NOW });
+
+    store.getState().establishGuest({ sessionToken: 'anon_abc', guest: GUEST });
+
+    expect(store.getState().session).toEqual({
+      status: 'guest',
+      sessionToken: 'anon_abc',
+      guest: GUEST,
+      expiresAt: FIXED_NOW + GUEST_HORIZON_MS,
+    });
+    expect(JSON.parse(storage.raw.get('meeshy.session')!)).toEqual({
+      kind: 'guest',
+      sessionToken: 'anon_abc',
+      guest: GUEST,
+      expiresAt: FIXED_NOW + GUEST_HORIZON_MS,
+    });
+  });
+
+  /** La MÊME discipline que `pickSessionUser` (règle 1) : un objet NEUF, cinq
+   * champs, et rien de ce que la charge de jonction transporte à côté. */
+  test('la projection : rien de la charge de jonction ne suit dans le stockage', () => {
+    const storage = fakeStorage();
+    const store = createSessionStore({ storage, now: () => FIXED_NOW });
+
+    store.getState().establishGuest({
+      sessionToken: 'anon_abc',
+      guest: { ...GUEST, entry: { rights: { canSendFiles: true } }, deviceFingerprint: 'Mozilla/5.0' } as never,
+    });
+
+    const session = store.getState().session;
+    if (session.status !== 'guest') throw new Error('unreachable');
+    expect(Object.keys(session.guest).sort()).toEqual(['conversationId', 'link', 'mayWrite', 'nickname', 'participantId']);
+    expect(storage.raw.get('meeshy.session')).not.toContain('Mozilla');
+  });
+
+  test('un invité restauré retrouve son lien et sa conversation — sans eux, rien ne se rejoue', () => {
+    const storage = fakeStorage({
+      'meeshy.session': JSON.stringify({ kind: 'guest', sessionToken: 'anon_abc', guest: GUEST, expiresAt: FIXED_NOW + 1_000 }),
+    });
+    const store = createSessionStore({ storage, now: () => FIXED_NOW });
+
+    store.getState().restoreSession();
+
+    expect(store.getState().session).toEqual({
+      status: 'guest',
+      sessionToken: 'anon_abc',
+      guest: GUEST,
+      expiresAt: FIXED_NOW + 1_000,
+    });
+  });
+
+  test('un invité PÉRIMÉ ⇒ anonymous et purgé, comme un compte', () => {
+    const storage = fakeStorage({
+      'meeshy.session': JSON.stringify({ kind: 'guest', sessionToken: 'anon_abc', guest: GUEST, expiresAt: FIXED_NOW - 1 }),
+    });
+    const store = createSessionStore({ storage, now: () => FIXED_NOW });
+
+    store.getState().restoreSession();
+
+    expect(store.getState().session).toEqual({ status: 'anonymous' });
+    expect(storage.raw.has('meeshy.session')).toBe(false);
+  });
+
+  const CORROMPUS: ReadonlyArray<readonly [string, Record<string, unknown>]> = [
+    ['jeton vide', { kind: 'guest', sessionToken: '', guest: GUEST, expiresAt: FIXED_NOW + 1_000 }],
+    ['sans conversation', { kind: 'guest', sessionToken: 'a', guest: { ...GUEST, conversationId: '' }, expiresAt: FIXED_NOW + 1_000 }],
+    ['sans lien', { kind: 'guest', sessionToken: 'a', guest: { ...GUEST, link: '' }, expiresAt: FIXED_NOW + 1_000 }],
+    ['sans identité', { kind: 'guest', sessionToken: 'a', expiresAt: FIXED_NOW + 1_000 }],
+  ];
+
+  for (const [cause, entree] of CORROMPUS) {
+    test(`invité ${cause} ⇒ anonymous et purgé — fail-closed`, () => {
+      const storage = fakeStorage({ 'meeshy.session': JSON.stringify(entree) });
+      const store = createSessionStore({ storage, now: () => FIXED_NOW });
+
+      store.getState().restoreSession();
+
+      expect(store.getState().session).toEqual({ status: 'anonymous' });
+      expect(storage.raw.has('meeshy.session')).toBe(false);
+    });
+  }
+
+  /** Une entrée écrite AVANT #5561 ne porte pas `kind` : l'absence est la
+   * valeur par défaut « compte », jamais une corruption. */
+  test('une entrée SANS `kind` reste un compte — la bascule ne déconnecte personne', () => {
+    const storage = fakeStorage({
+      'meeshy.session': JSON.stringify({
+        token: 'jwt-1',
+        sessionToken: 'sess-1',
+        user: { id: 'u-1', username: 'ada' },
+        expiresAt: FIXED_NOW + 1_000,
+      }),
+    });
+    const store = createSessionStore({ storage, now: () => FIXED_NOW });
+
+    store.getState().restoreSession();
+
+    expect(store.getState().session.status).toBe('authenticated');
+  });
+
+  test('clearSession() ferme une session d’invité comme une autre', () => {
+    const storage = fakeStorage();
+    const store = createSessionStore({ storage, now: () => FIXED_NOW });
+
+    store.getState().establishGuest({ sessionToken: 'anon_abc', guest: GUEST });
+    store.getState().clearSession();
+
+    expect(store.getState().session).toEqual({ status: 'anonymous' });
+    expect(storage.raw.has('meeshy.session')).toBe(false);
+  });
+
+  test('updateUser() reste sans effet sur un invité : il n’y a pas de soi à modifier', () => {
+    const store = createSessionStore({ storage: fakeStorage(), now: () => FIXED_NOW });
+    store.getState().establishGuest({ sessionToken: 'anon_abc', guest: GUEST });
+
+    store.getState().updateUser({ displayName: 'Autre' });
+
+    expect(store.getState().session).toEqual({
+      status: 'guest',
+      sessionToken: 'anon_abc',
+      guest: GUEST,
+      expiresAt: FIXED_NOW + GUEST_HORIZON_MS,
+    });
+  });
+});
+
 describe('createSessionStore — restoreSession()', () => {
   test('storage pré-rempli ⇒ authenticated avec les MÊMES jetons — la session est tenue', () => {
     const storage = fakeStorage({

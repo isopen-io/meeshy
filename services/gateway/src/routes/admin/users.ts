@@ -12,7 +12,7 @@ import {
   createUserValidationSchema,
   resetPasswordValidationSchema
 } from '@meeshy/shared/types/validation/admin-user';
-import { UserManagementService, type SessionRevoker } from '../../services/admin/user-management.service';
+import { UserManagementService, type SessionRevoker, type PasswordResetNotifier } from '../../services/admin/user-management.service';
 import { disconnectRevokedSessions } from '../../socketio/disconnectRevokedSessions';
 import { UserAuditService } from '../../services/admin/user-audit.service';
 import { sanitizationService } from '../../services/admin/user-sanitization.service';
@@ -40,6 +40,7 @@ import { validatePagination, buildPaginationMeta } from '../../utils/pagination'
 import { withAnonymousParticipantCounts } from '../../utils/share-link-participant-counts';
 import { sendSuccess, sendInternalError, sendNotFound, sendForbidden, sendBadRequest, sendPaginatedSuccess } from '../../utils/response';
 import { validatePasswordStrength } from '../../utils/password-strength';
+import { EmailService } from '../../services/EmailService';
 import { conversationActiveMemberCountSelect } from '../conversations/utils/active-member-count';
 import { logError, logWarn } from '../../utils/logger.js';
 
@@ -94,8 +95,28 @@ function deactivatedUserSessionRevoker(fastify: FastifyInstance): SessionRevoker
   });
 }
 
+/**
+ * #6831 — `sendEmail` promettait une notification sans jamais en envoyer une.
+ * Le même gabarit « mot de passe modifié » que `getAlertTypeLabel('password_changed', …)`
+ * sert déjà dans les 6 langues d'`EmailService` (`SupportedLanguage`). La
+ * langue est déjà résolue par l'appelant (`UserManagementService.resetPassword`,
+ * seul site qui tient encore la ligne Prisma non projetée) — cette fonction
+ * ne fait plus que composer le transport. Pure et exportée pour être testée
+ * sans enregistrer la route.
+ */
+export function passwordResetNotifier(emailService: EmailService): PasswordResetNotifier {
+  return (target) => emailService.sendSecurityAlertEmail({
+    to: target.to,
+    name: target.name,
+    alertType: 'password_changed',
+    details: '',
+    language: target.language,
+  });
+}
+
 export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
   // Initialiser les services
+  const emailService = new EmailService();
   const userManagementService = new UserManagementService(fastify.prisma, {
     revokeSessions: deactivatedUserSessionRevoker(fastify),
     // Résolu à l'appel, comme `deactivatedUserSessionRevoker` : le manager
@@ -103,6 +124,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
     // d'arrivée + l'effectif temps réel de `ensureGlobalConversationMembership`
     // (#3876) quand `createUser` ajoute le compte au salon global.
     resolveSocketManager: () => fastify.socketIOHandler?.getManager(),
+    notifyPasswordReset: passwordResetNotifier(emailService),
   });
   const userAuditService = new UserAuditService(fastify.prisma);
   const banService = new BanService(fastify.prisma, userManagementService);
@@ -412,7 +434,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       }
 
       // Supprimer l'utilisateur (soft delete)
-      await userManagementService.deleteUser(request.params.userId);
+      await userManagementService.deleteUser(request.params.userId, authContext.registeredUser!.id);
 
       // Log d'audit
       await userAuditService.logDeleteUser(
@@ -427,6 +449,49 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
     } catch (error) {
       logError(fastify.log, 'Error deleting user', error);
       sendInternalError(reply, 'Internal server error', { message: 'Failed to delete user' });
+    }
+  });
+
+  /**
+   * POST /admin/users/:userId/restore - Restaurer un utilisateur supprimé
+   * (BIGBOSS & ADMIN uniquement) — la JUMELLE du DELETE ci-dessus (#6822) :
+   * `UserManagementService.restoreUser` existait sans aucun appelant.
+   */
+  fastify.post<{
+    Params: { userId: string };
+  }>('/admin/users/:userId/restore', {
+    preHandler: [fastify.authenticate, requireUserDeleteAccess, requireHierarchy({ param: 'userId' })]
+  }, async (request, reply) => {
+    try {
+      const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
+      const adminRole = authContext.registeredUser!.role as UserRoleEnum;
+
+      const targetUser = await userManagementService.getUserById(request.params.userId);
+
+      if (!targetUser) {
+        sendNotFound(reply, 'User not found', { message: 'The requested user does not exist' });
+        return;
+      }
+
+      if (!permissionsService.canModifyUser(adminRole, targetUser.role as UserRoleEnum)) {
+        sendForbidden(reply, 'Insufficient permissions to restore this user', { message: 'Access denied' });
+        return;
+      }
+
+      const restored = await userManagementService.restoreUser(request.params.userId);
+
+      await userAuditService.logRestoreUser(
+        authContext.registeredUser!.id,
+        request.params.userId,
+        undefined,
+        request.ip,
+        request.headers['user-agent']
+      );
+
+      sendSuccess(reply, sanitizationService.sanitizeUser(restored, adminRole), { message: 'User restored successfully' });
+    } catch (error) {
+      logError(fastify.log, 'Error restoring user', error);
+      sendInternalError(reply, 'Internal server error', { message: 'Failed to restore user' });
     }
   });
 

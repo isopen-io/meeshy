@@ -31,7 +31,14 @@ export type FeedCardMedia = {
   readonly durationMs?: number;
   /** LE TEXTE SERVI PAR LE PRISME (#6280, `resolveMediaCaption` — jamais
    * `PostMedia.caption` brut) : la langue résolue peut différer de la
-   * langue source dès qu'une traduction du lecteur existe. */
+   * langue source dès qu'une traduction du lecteur existe.
+   *
+   * **Repli sur le contenu du post (#6864)** — UNIQUEMENT quand ce média est
+   * seul (`post.media.length === 1`) ET ne porte aucune légende propre : le
+   * contenu du post, déjà résolu par le Prisme, en tient lieu. Un post à
+   * PLUSIEURS médias ne pose JAMAIS son texte sur un média qui n'a pas sa
+   * propre légende — le texte décrit le LOT, pas une pièce, et le poser
+   * dessous ferait mentir la légende sur les autres pièces du même post. */
   readonly caption?: string;
   /** La langue DANS LAQUELLE `caption` ci-dessus est servie — porte
    * l'attribut `lang` de la légende affichée (§ Prisme cycle 122 : un
@@ -112,9 +119,18 @@ function resolveMedia(
   post: FeedPost,
   isReel: boolean,
   preferredLanguages: readonly string[],
+  /** Le texte du post, DÉJÀ résolu par le Prisme (`resolveFeedCardModel`,
+   * même valeur que `model.text`) — jamais recalculé ici (D-14). Repli
+   * possible pour la légende d'un média SEUL (#6864), voir plus bas. */
+  soleMediaCaptionFallback: FeedCardText | undefined,
 ): readonly FeedCardMedia[] {
   const media = post.media ?? [];
   const ordered = [...media].sort((a, b) => (numberOrUndefined(a.order) ?? 0) - (numberOrUndefined(b.order) ?? 0));
+  // Le repli sur le contenu du post (#6864) ne s'applique QUE si ce média
+  // est SEUL : à plusieurs médias, le texte du post décrit le lot, jamais
+  // une pièce précise, et le coller sous l'une d'elles ferait mentir la
+  // légende sur ses voisines.
+  const fallback = ordered.length === 1 ? soleMediaCaptionFallback : undefined;
   return ordered.map((m) => {
     // Capturé UNE fois : `exactOptionalPropertyTypes` narrove `string |
     // undefined` en `string` seulement quand le test et l'usage portent sur
@@ -136,7 +152,15 @@ function resolveMedia(
             captionTranslations: m.captionTranslations,
             caption: rawCaption,
           });
-    const captionLanguage = resolvedCaption === undefined ? undefined : textOrUndefined(resolvedCaption.language);
+    // Une légende PROPRE gagne toujours ; à défaut, et seulement pour un
+    // média seul, le contenu du post en tient lieu (#6864) — jamais l'inverse.
+    const caption =
+      resolvedCaption !== undefined
+        ? { text: resolvedCaption.text, language: resolvedCaption.language, translated: resolvedCaption.translated }
+        : fallback !== undefined
+          ? { text: fallback.full, language: fallback.language, translated: fallback.translated }
+          : undefined;
+    const captionLanguage = caption === undefined ? undefined : textOrUndefined(caption.language);
     const altText = textOrUndefined(m.alt);
     const durationMs = numberOrUndefined(m.duration);
     const width = numberOrUndefined(m.width);
@@ -149,7 +173,7 @@ function resolveMedia(
       ...(placeholder !== undefined ? { placeholder } : {}),
       ratio: isReel ? reelCardRatio(width, height) : postMediaRatio(width, height),
       ...(durationMs !== undefined ? { durationMs } : {}),
-      ...(resolvedCaption !== undefined ? { caption: resolvedCaption.text, captionTranslated: resolvedCaption.translated } : {}),
+      ...(caption !== undefined ? { caption: caption.text, captionTranslated: caption.translated } : {}),
       ...(captionLanguage !== undefined ? { captionLanguage } : {}),
       ...(altText !== undefined ? { altText } : {}),
     };
@@ -200,7 +224,7 @@ export function resolveFeedCardModel(
     relativeTime: shortRelativeTime(new Date(post.createdAt), params.now),
     ...(repostOfHandle !== undefined ? { repostOfHandle } : {}),
     ...(text !== undefined ? { text } : {}),
-    media: resolveMedia(post, isReel, params.preferredLanguages),
+    media: resolveMedia(post, isReel, params.preferredLanguages, text),
     layout: resolveMosaicLayout(post.storyEffects),
     stats: {
       likeCount: numberOrUndefined(post.likeCount) ?? 0,

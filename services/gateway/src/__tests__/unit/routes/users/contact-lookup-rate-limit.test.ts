@@ -46,6 +46,8 @@ function makePrisma() {
     user: {
       findFirst: jest.fn<any>(async () => CIBLE),
       findUnique: jest.fn<any>(async () => ({ blockedUserIds: [] })),
+      // « qui m'a bloqué ? » — la seconde moitié de `blockedIdsAroundViewer`.
+      findMany: jest.fn<any>(async () => []),
     },
   };
 }

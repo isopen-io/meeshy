@@ -541,4 +541,66 @@ final class SceneFramingTests: XCTestCase {
             }
         }
     }
+
+    // MARK: - Le plafond de hauteur d'une carte (#6767, décision « plafond 1,4 ajusté »)
+
+    /// Le plafond traduit 1,4 (hauteur / largeur) en 1/1,4 (largeur / hauteur,
+    /// la convention de ce fichier) — sans quoi les deux constantes divergent
+    /// en silence dès que l'une des deux change.
+    func test_minCardAspect_estLInverseDuPlafondDeHauteur() {
+        XCTAssertEqual(SceneFraming.minCardAspect * SceneFraming.maxCardHeightRatio, 1, accuracy: 0.0001)
+    }
+
+    /// **Un cadrage qui tient déjà dans le plafond n'est pas touché** — la
+    /// carte d'une photo paysage (rapport large, donc courte) reste inchangée.
+    func test_clampedCardAspect_neTouchePasUnRapportDejaCourt() {
+        XCTAssertEqual(SceneFraming.clampedCardAspect(paysage), paysage, accuracy: 0.001)
+        XCTAssertEqual(SceneFraming.clampedCardAspect(SceneFraming.minCardAspect),
+                       SceneFraming.minCardAspect, accuracy: 0.001)
+    }
+
+    /// **Une scène 9:16 entière — le cas nominal du porteur — est plafonnée.**
+    /// Sans cadrage à appliquer, `cardAspect` rend `nil` et l'appelant retombe
+    /// sur le gabarit 9:16 (0,5625) : plus haut que le plafond (1/1,4 ≈ 0,714),
+    /// c'est exactement le cas que #6767 ouvre.
+    func test_clampedCardAspect_plafonneLeGabaritEntier() {
+        let plafonne = SceneFraming.clampedCardAspect(SceneFraming.sceneAspect)
+        XCTAssertEqual(plafonne, SceneFraming.minCardAspect, accuracy: 0.001)
+        XCTAssertGreaterThan(plafonne, SceneFraming.sceneAspect, "plus court que le 9:16 non plafonné")
+    }
+
+    /// **Le contenu garde son rapport NATUREL, centré — jamais rogné, jamais
+    /// agrandi.** Une scène 9:16 posée dans la boîte plafonnée (1/1,4) est plus
+    /// ÉTROITE que la boîte à hauteur égale : des bandes vides de part et
+    /// d'autre, pas un rognage — c'est la différence avec le traitement des
+    /// cartes d'image, qui ROGNENT (`imageMediaView`, `.aspectRatio(contentMode: .fill)`).
+    func test_cappedCardContentSize_neRogneJamais_bandesLateralesSurUneScene916() {
+        let boite = CGSize(width: 338, height: 338 / SceneFraming.minCardAspect)
+        let taille = SceneFraming.cappedCardContentSize(naturalAspect: SceneFraming.sceneAspect, in: boite)
+        XCTAssertEqual(taille.height, boite.height, accuracy: 0.5, "la boîte plafonnée fixe la hauteur")
+        XCTAssertLessThan(taille.width, boite.width, "la scène 9:16 est plus étroite que la boîte 1,4 : bandes latérales")
+        XCTAssertEqual(taille.width / taille.height, SceneFraming.sceneAspect, accuracy: 0.001,
+                       "le contenu garde son rapport NATUREL — jamais déformé")
+    }
+
+    /// Un rapport déjà court REMPLIT la boîte plafonnée sans laisser de bande :
+    /// le plafond ne change rien à ce qui n'en avait pas besoin.
+    func test_cappedCardContentSize_rempliLaBoite_quandLeRapportEstDejaCourt() {
+        let boite = CGSize(width: 338, height: 338 / paysage)
+        let taille = SceneFraming.cappedCardContentSize(naturalAspect: paysage, in: boite)
+        XCTAssertEqual(taille.width, boite.width, accuracy: 0.5)
+        XCTAssertEqual(taille.height, boite.height, accuracy: 0.5)
+    }
+
+    /// **Une publication de trois scènes portrait** (le premier cas du tableau
+    /// de #6767 : « 3 scènes portrait — 338 × 601 pt, ≈ 70 % de l'écran ») —
+    /// la boîte du carrousel, plafonnée, ne dépasse plus 1,4 × sa largeur.
+    func test_carrouselDeScenesPortrait_laBoitePlafonneeNeDepassePlusUnPointQuatre() {
+        let pages = (0..<3).map { _ in sceneDeRecette(fond: 9.0 / 16.0) }
+        let rapportNaturel = SceneCarouselLayout.cardAspect(document: CanvasV3(scenes: pages))
+        let rapportPlafonne = SceneFraming.clampedCardAspect(rapportNaturel)
+        let hauteur = 338 / rapportPlafonne
+        XCTAssertLessThanOrEqual(hauteur, 338 * SceneFraming.maxCardHeightRatio + 0.5,
+                                 "601 pt (9:16 non plafonné) doit redescendre à ≤ 473 pt (338 × 1,4)")
+    }
 }

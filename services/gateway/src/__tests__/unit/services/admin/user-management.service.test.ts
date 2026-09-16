@@ -21,6 +21,7 @@ jest.mock('../../../../utils/password-hash', () => ({
 import { UserManagementService } from '../../../../services/admin/user-management.service';
 import { hashPassword, verifyPassword, BCRYPT_COST } from '../../../../utils/password-hash';
 import { logger } from '../../../../utils/logger';
+import { searchTokensFor } from '../../../../utils/search-tokens';
 import { makeUser, makePrisma, makeService } from './user-management-mocks';
 
 const mockHash = hashPassword as jest.Mock;
@@ -460,6 +461,48 @@ describe('UserManagementService.updateUser', () => {
     });
     expect((result as any).firstName).toBe('Updated');
   });
+
+  // #6823 — createUser recalculait déjà `searchTokens` ; updateUser écrivait
+  // `data` tel quel et laissait les anciens jetons en place, rendant le compte
+  // introuvable sous son nouveau nom.
+  it('recalculates searchTokens from the merged name when a name field changes', async () => {
+    const current = makeUser({ username: 'oldname', displayName: 'Old Name', firstName: 'Old', lastName: 'Name' });
+    const findUnique = jest.fn().mockResolvedValue(current);
+    const update = jest.fn().mockResolvedValue(makeUser({ username: 'newname' }));
+    const svc = makeService(makePrisma({ findUnique, update }));
+
+    await svc.updateUser('user-id', { username: 'newname' } as any);
+
+    expect(findUnique).toHaveBeenCalledWith({
+      where: { id: 'user-id' },
+      select: { username: true, displayName: true, firstName: true, lastName: true },
+    });
+    const expectedTokens = searchTokensFor({
+      username: 'newname',
+      displayName: 'Old Name',
+      firstName: 'Old',
+      lastName: 'Name',
+    });
+    expect(update).toHaveBeenCalledWith({
+      where: { id: 'user-id' },
+      data: expect.objectContaining({ searchTokens: expectedTokens }),
+    });
+    // Le nouveau nom est indexé, l'ancien ne l'est plus.
+    expect(expectedTokens).toContain('newname');
+    expect(expectedTokens).not.toContain('oldname');
+  });
+
+  it('does not recompute searchTokens when the update touches no name field', async () => {
+    const findUnique = jest.fn();
+    const update = jest.fn().mockResolvedValue(makeUser({ bio: 'new bio' }));
+    const svc = makeService(makePrisma({ findUnique, update }));
+
+    await svc.updateUser('user-id', { bio: 'new bio' } as any);
+
+    expect(findUnique).not.toHaveBeenCalled();
+    const writtenData = update.mock.calls[0][0].data;
+    expect(writtenData).not.toHaveProperty('searchTokens');
+  });
 });
 
 // ─── updateEmail ──────────────────────────────────────────────────────────────
@@ -625,11 +668,28 @@ describe('UserManagementService.deleteUser', () => {
     const update = jest.fn().mockResolvedValue(makeUser({ isActive: false }));
     const svc = makeService(makePrisma({ update }));
 
-    await svc.deleteUser('user-id');
+    await svc.deleteUser('user-id', 'admin-id');
 
     expect(update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ isActive: false }),
     }));
+  });
+
+  // #6822 — un compte « supprimé » n'écrivait que isActive:false, indistinguable
+  // d'une désactivation à la lecture de la console (deletedAt/deletedBy jamais
+  // posés). Les trois champs doivent porter la même date, comme updateStatus le
+  // fait déjà pour deactivatedAt seul.
+  it('writes deletedAt, deletedBy and deactivatedAt so a deletion is distinguishable from a deactivation', async () => {
+    const update = jest.fn().mockResolvedValue(makeUser({ isActive: false }));
+    const svc = makeService(makePrisma({ update }));
+
+    await svc.deleteUser('user-id', 'admin-id');
+
+    const data = update.mock.calls[0][0].data as Record<string, unknown>;
+    expect(data.deletedBy).toBe('admin-id');
+    expect(data.deletedAt).toBeInstanceOf(Date);
+    expect(data.deactivatedAt).toBeInstanceOf(Date);
+    expect(data.deletedAt).toEqual(data.deactivatedAt);
   });
 });
 
@@ -644,6 +704,23 @@ describe('UserManagementService.restoreUser', () => {
 
     expect(update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ isActive: true }),
+    }));
+  });
+
+  // #6822 — restoreUser est l'inverse EXACT de deleteUser : les trois champs
+  // qu'il pose doivent redevenir vides, pas seulement isActive.
+  it('clears deletedAt, deletedBy and deactivatedAt', async () => {
+    const update = jest.fn().mockResolvedValue(makeUser({ isActive: true }));
+    const svc = makeService(makePrisma({ update }));
+
+    await svc.restoreUser('user-id');
+
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        deletedAt: null,
+        deletedBy: null,
+        deactivatedAt: null,
+      }),
     }));
   });
 });
@@ -842,9 +919,9 @@ describe('UserManagementService.verifyAge', () => {
 });
 
 // ─── deleteUser — révocation des sockets (F9 bis) ─────────────────────────────
-// Un compte supprimé en douceur pose `isActive: false` sans `deactivatedAt` :
-// il est hors service au même titre qu'un compte désactivé, et ses sockets
-// doivent tomber de la même façon.
+// Un compte supprimé en douceur pose `isActive: false` ET `deactivatedAt`
+// (#6822) : il est hors service au même titre qu'un compte désactivé, et ses
+// sockets doivent tomber de la même façon.
 
 describe('UserManagementService.deleteUser — révocation des sockets du compte supprimé', () => {
   it("supprimer appelle la révocation avec l'id, APRÈS que l'écriture a abouti", async () => {
@@ -856,7 +933,7 @@ describe('UserManagementService.deleteUser — révocation des sockets du compte
     const revokeSessions = jest.fn(async (userId: string) => { order.push(`revoked:${userId}`); return 1; });
     const svc = new UserManagementService(makePrisma({ update }), { revokeSessions });
 
-    await svc.deleteUser('user-id');
+    await svc.deleteUser('user-id', 'admin-id');
 
     expect(revokeSessions).toHaveBeenCalledTimes(1);
     expect(revokeSessions).toHaveBeenCalledWith('user-id');
@@ -870,7 +947,7 @@ describe('UserManagementService.deleteUser — révocation des sockets du compte
     const warn = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
     const svc = new UserManagementService(makePrisma({ update }), { revokeSessions });
 
-    const result = await svc.deleteUser('user-id');
+    const result = await svc.deleteUser('user-id', 'admin-id');
 
     expect(update).toHaveBeenCalledTimes(1);
     expect(result).toBe(written);

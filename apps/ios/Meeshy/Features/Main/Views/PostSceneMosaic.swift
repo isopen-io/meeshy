@@ -193,29 +193,48 @@ struct PostSceneMosaic: View {
 
     private var carrousel: some View {
         VStack(spacing: Self.pageDotsSpacing) {
-            ZStack(alignment: .topTrailing) {
-                TabView(selection: $page) {
-                    ForEach(tuiles, id: \.sceneIndex) { tuile in
-                        vignette(tuile, joue: tuile.sceneIndex == page && isActive)
-                            .tag(tuile.sceneIndex)
-                    }
+            Group {
+                if host == .feed {
+                    // **La boîte plafonne sa hauteur** (#6767, décision
+                    // « plafond 1,4 ajusté ») : la page la plus haute fixe le
+                    // rapport naturel, `SceneCardHeightCap` centre le
+                    // carrousel dans une boîte qui ne dépasse jamais 1,4 × sa
+                    // largeur — jamais un rognage, jamais un zoom. Le détail
+                    // (branche `else`) n'y est PAS soumis : #6696 y veut la
+                    // scène entière, bornée par sa propre loi de taille
+                    // (`maxBoxHeight`), pas par ce plafond de carte.
+                    SceneCardHeightCap(naturalAspect: Self.boxAspect(document: document)) { pages }
+                } else {
+                    pages.aspectRatio(Self.boxAspect(document: document), contentMode: .fit)
                 }
-                .tabViewStyle(.page(indexDisplayMode: .never))
-                fleches
-                compteur
             }
-            // **La forme vient de la page la plus HAUTE**, pas de la mesure
-            // d'un conteneur qui n'a pas de taille intrinsèque : `TabView` n'en
-            // a aucune, et lui en demander une donne une bande de la hauteur du
-            // compteur à la première passe (défaut mesuré sur le carrousel des
-            // médias, dont ce fichier reprend la leçon plutôt que l'erreur).
-            .aspectRatio(Self.boxAspect(document: document), contentMode: .fit)
             .frame(maxWidth: largeurDeBoite)
             .frame(maxWidth: .infinity, alignment: .center)
             .clipShape(RoundedRectangle(cornerRadius: 16))
             .reportReelFrame(id: post.id, kind: .scene)
 
             pastilles
+        }
+    }
+
+    /// Les pages du carrousel — `TabView` + flèches + compteur.
+    ///
+    /// **La forme vient de la page la plus HAUTE**, pas de la mesure d'un
+    /// conteneur qui n'a pas de taille intrinsèque : `TabView` n'en a aucune,
+    /// et lui en demander une donne une bande de la hauteur du compteur à la
+    /// première passe (défaut mesuré sur le carrousel des médias, dont ce
+    /// fichier reprend la leçon plutôt que l'erreur).
+    private var pages: some View {
+        ZStack(alignment: .topTrailing) {
+            TabView(selection: $page) {
+                ForEach(tuiles, id: \.sceneIndex) { tuile in
+                    vignette(tuile, joue: tuile.sceneIndex == page && isActive)
+                        .tag(tuile.sceneIndex)
+                }
+            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            fleches
+            compteur
         }
     }
 

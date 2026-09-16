@@ -296,4 +296,81 @@ struct MediaStageFramingTests {
         #expect(sans == avec, "la bande ne change rien à un cadre qui n'a plus de couloirs")
         #expect(avec.frame == Self.viewport)
     }
+
+    // MARK: - Le facteur de COUVERTURE (#6806)
+
+    /// **La loi complémentaire de l'ajustement, et pourquoi elle vit ici.**
+    ///
+    /// `resolve` ajuste et centre — « jamais de rognage », et son doc-comment
+    /// nomme lui-même la conséquence : en plein cadre, même une scène 9:16 laisse
+    /// des bandes, parce que l'écran d'un iPhone 16 Pro est en 0,462, plus ÉTROIT
+    /// que le 0,5625 d'une scène. Une pièce jointe DOIT s'en accommoder : la
+    /// rogner retirerait ce que l'expéditeur a envoyé. Une SCÈNE, non — c'est une
+    /// surface de composition, et la laisser en boîte aux lettres peint une
+    /// surface que personne n'a composée.
+    ///
+    /// D'où une fonction EN PLUS, jamais un paramètre de `resolve` : le solveur
+    /// garde son contrat `media <= frame` intact. Lui faire rendre le rognage a
+    /// été essayé et mesuré au simulateur — les médias de post se posaient EN
+    /// HAUT À GAUCHE, à leurs cotes cardées. **Le rognage appartient à qui SAIT
+    /// ce qu'il compose**, et le solveur ne le sait pas.
+    @Test("Le facteur agrandit le canvas jusqu'à couvrir le cadre")
+    func coverScaleCouvreLeCadre() {
+        // iPhone 16 Pro, plein cadre : le cadre prend l'écran, le média est
+        // l'ajustement 9:16 que `resolve` en a tiré.
+        let cadre = CGSize(width: 402, height: 874)
+        let média = CGSize(width: 402, height: 402 / 0.5625)   // 402 × 714,67
+
+        let facteur = MediaStageFraming.coverScale(frame: cadre, media: média)
+
+        #expect(abs(facteur - 874 / (402 / 0.5625)) < 0.0001,
+                "le facteur est celui qui comble l'axe le PLUS court")
+        #expect(média.height * facteur >= cadre.height - 0.001,
+                "après couverture, plus un point de sol en haut ni en bas")
+        #expect(média.width * facteur >= cadre.width - 0.001,
+                "ni sur les côtés — ce qui dépasse sort de l'écran")
+    }
+
+    /// **Une couverture n'est jamais un étirement** : un seul facteur pour les
+    /// deux axes, donc le rapport du canvas est intact et c'est le CADRE qui
+    /// rogne.
+    @Test("La couverture préserve le rapport du canvas")
+    func coverScalePreserveLeRapport() {
+        let cadre = CGSize(width: 402, height: 874)
+        let média = CGSize(width: 402, height: 714.6667)
+
+        let facteur = MediaStageFraming.coverScale(frame: cadre, media: média)
+        let couvert = CGSize(width: média.width * facteur, height: média.height * facteur)
+
+        #expect(abs(couvert.width / couvert.height - média.width / média.height) < 0.0001,
+                "le rapport survit à la couverture — sinon les visages s'allongent")
+    }
+
+    /// **Un média qui remplit déjà ne se touche pas.** Le facteur ne descend
+    /// jamais sous 1 : sans ce plancher, une scène plus large que son cadre
+    /// serait RÉDUITE par une fonction qui s'appelle « couvrir », et rouvrirait
+    /// les bandes qu'elle est censée fermer.
+    @Test("La couverture ne rétrécit jamais")
+    func coverScaleNeRetrecitPas() {
+        let cadre = CGSize(width: 402, height: 874)
+
+        #expect(MediaStageFraming.coverScale(frame: cadre, media: cadre) == 1)
+        #expect(MediaStageFraming.coverScale(frame: cadre,
+                                             media: CGSize(width: 600, height: 1200)) == 1,
+                "un média DÉJÀ plus grand n'est pas rétréci")
+    }
+
+    /// Une cote nulle ne fabrique ni infini ni NaN : elle rend l'identité. Un
+    /// `scaleEffect(.infinity)` ne fait pas rougir un témoin — il fait
+    /// disparaître l'écran.
+    @Test("Une cote nulle rend l'identité, jamais un infini")
+    func coverScaleSurCoteNulle() {
+        let cadre = CGSize(width: 402, height: 874)
+
+        #expect(MediaStageFraming.coverScale(frame: cadre, media: .zero) == 1)
+        #expect(MediaStageFraming.coverScale(frame: cadre,
+                                             media: CGSize(width: 402, height: 0)) == 1)
+        #expect(MediaStageFraming.coverScale(frame: .zero, media: cadre) == 1)
+    }
+
 }

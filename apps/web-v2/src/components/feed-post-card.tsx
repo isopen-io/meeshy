@@ -157,7 +157,7 @@ function FeedMediaCarousel({ media }: { readonly media: readonly FeedCardMedia[]
 
   return (
     <div className="relative overflow-hidden" style={{ borderRadius: 12, aspectRatio: `1 / ${current.ratio}` }} data-feed-media data-feed-layout="carousel">
-      <FeedMediaSurface media={current} />
+      <FeedMediaSurface media={current} playable />
       {current.caption !== undefined ? (
         <p
           className="absolute inset-x-0 bottom-0 px-3 py-2 text-check text-white"
@@ -374,6 +374,12 @@ function FeedPostMedia({ media, layout }: { readonly media: readonly FeedCardMed
 export function FeedPostCard({ model, ...hosts }: { readonly model: FeedCardModel } & CardHosts) {
   if (model.isReel) return <FeedReelCard model={model} {...hostsOf(hosts)} />;
 
+  // Repli du contenu sur la légende d'un média SEUL (#6864, `resolveMedia`) :
+  // le texte du post est alors DÉJÀ peint comme légende par `FeedMediaCarousel`
+  // — le répéter ici peindrait deux fois la même phrase sur la même carte.
+  const soleMedia = model.media.length === 1 ? model.media[0] : undefined;
+  const bodyText = model.text !== undefined && soleMedia?.caption === model.text.full ? undefined : model.text;
+
   return (
     <article
       className="flex flex-col gap-2 pb-3"
@@ -381,7 +387,7 @@ export function FeedPostCard({ model, ...hosts }: { readonly model: FeedCardMode
       data-feed-card="post"
     >
       <FeedPostHeader model={model} />
-      {model.text !== undefined ? <FeedPostText text={model.text} /> : null}
+      {bodyText !== undefined ? <FeedPostText text={bodyText} /> : null}
       {model.media.length > 0 ? (
         <div className="px-3">
           <FeedPostMedia media={model.media} layout={model.layout} />

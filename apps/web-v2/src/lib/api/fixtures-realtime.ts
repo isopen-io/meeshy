@@ -79,7 +79,15 @@ const liveTyping = (userId: 'u-kwame' | 'u-fatou', isTyping: boolean) => ({
  *  7 500/10 500 ms — Fatou retape.
  *  13 000 ms — Fatou s'arrête EXPLICITEMENT.
  */
-const LIVE_SCHEDULE: readonly ScheduledFixtureEvent[] = [
+/**
+ * EXPORTÉE POUR ÊTRE INTERROGÉE (#6807) — cette table est de la DONNÉE, pas du
+ * comportement (voir le doc-comment du module). Un témoin qui voudrait prouver
+ * la présence d'une entrée tardive en ATTENDANT son minuteur paierait son
+ * `atMs` en secondes réelles : le gate navigateur, lui, avance sur une horloge
+ * simulée (`page.clock.runFor`) où 14 s ne coûtent rien. La donnée se lit, le
+ * comportement s'observe au navigateur — chacun son niveau.
+ */
+export const LIVE_SCHEDULE: readonly ScheduledFixtureEvent[] = [
   { kind: 'once', atMs: 2000, event: SERVER_EVENTS.MESSAGE_TRANSLATION, payload: liveTranslation({ atMs: 2000, targetLanguage: 'en', translatedContent: 'Hi, is the review still on Thursday?' }) },
   { kind: 'once', atMs: 3500, event: SERVER_EVENTS.MESSAGE_TRANSLATION, payload: liveTranslation({ atMs: 3500, targetLanguage: 'fr', translatedContent: 'Bonjour, la revue reste bien jeudi ?' }) },
   {
@@ -111,6 +119,44 @@ const LIVE_SCHEDULE: readonly ScheduledFixtureEvent[] = [
   { kind: 'once', atMs: 10500, event: SERVER_EVENTS.TYPING_START, payload: liveTyping('u-fatou', true) },
   { kind: 'once', atMs: 12000, event: SERVER_EVENTS.TYPING_START, payload: liveTyping('u-kwame', true) },
   { kind: 'once', atMs: 13000, event: SERVER_EVENTS.TYPING_STOP, payload: liveTyping('u-fatou', false) },
+  /**
+   * `conversation:new` (#6807, suite de #6799) — LA CONVERSATION QUI SURGIT.
+   *
+   * `socket.ts` s'y abonne depuis #6799 et invalide la liste ; sans une source
+   * capable d'émettre l'évènement, aucun gate ne peut prouver que cet
+   * abonnement sert à quelque chose — un correctif que rien n'exerce est
+   * indistinguable d'un correctif absent.
+   *
+   * La charge suit `ConversationNewEventData` MOT POUR MOT
+   * (`packages/shared/types/socketio-events/conversation.ts:67-74`) : le
+   * bouchon rejoue « aux MÊMES noms et aux MÊMES formes que la passerelle
+   * réelle », donc une forme approximative ferait passer un gate que la vraie
+   * passerelle ferait tomber.
+   *
+   * `c-surgie` est ABSENTE du corpus `CONVERSATIONS` (`fixtures.ts:458`) — et
+   * c'est le POINT : la ligne ne peut pas être patchée par
+   * `patchConversation`, qui ne touche qu'une page portant déjà l'id. C'est
+   * exactement la situation que #6799 corrige.
+   *
+   * DERNIER de la chronologie (`atMs: 14000`, après le `typing:stop` à 13 s) :
+   * l'invalidation qu'il déclenche refait `GET /conversations`, et placée plus
+   * tôt elle traverserait les assertions de `check-realtime-events.mjs` sur la
+   * ligne 2 de `c-live` (T+0,3 s → T+6,5 s), qui mesurent un cache que ce
+   * refetch reconstruirait sous elles.
+   */
+  {
+    kind: 'once',
+    atMs: 14000,
+    event: SERVER_EVENTS.CONVERSATION_NEW,
+    payload: {
+      conversationId: 'c-surgie',
+      conversationType: 'direct',
+      title: null,
+      creatorId: 'u-kwame',
+      participantIds: ['u-kwame', VIEWER_ID],
+      createdAt: new Date(LIVE_1.createdAt.getTime() + 14000).toISOString(),
+    },
+  },
 ];
 
 const SCHEDULE: readonly ScheduledFixtureEvent[] = [

@@ -2813,3 +2813,69 @@ composite vert.
 **« Mot de passe oublié » dit qu'il sert aussi à créer un mot de passe.** La passerelle envoie le lien à un compte qui n'en a jamais eu (#6642). L'écran garde la forme de D-72 (enveloppe, phrase, champ, bouton, retour en pied) et change sa phrase : « Recevez par e-mail un lien pour choisir un nouveau mot de passe. » Un (i) « Jamais eu de mot de passe ? » la suit, dont la question se LIT à côté du glyphe : c'est exactement celle que se pose la personne concernée. Il déplie « Ce même lien vous permet d’en créer un. ». L'envoi rend l'écran de la connexion par e-mail (`components/email-sent-notice.tsx` : « E-mail envoyé », « Ouvrez le lien reçu à … », « Rien reçu ? ») au lieu de « Si un compte existe avec …, un lien de réinitialisation vient d’être envoyé » : deux phrases pour le même fait, et la seconde parlait de réinitialiser à qui n'avait rien à réinitialiser. La page du lien dit « Nouveau mot de passe », « Enregistrer le mot de passe », « Mot de passe enregistré ». Aucun texte perçu, noms accessibles compris, ne dit « réinitialisation » ni « magique ». Vocabulaire commun avec iOS (#6644) et Android (#6645).
 
 **Ce que ce lot ne fait pas.** Ces écrans restent en français en dur, quelle que soit la langue d'interface : ils n'entrent dans aucun catalogue, et #6310 tient ces chaînes avec les autres. Le comportement serveur est porté par #6642.
+
+## D-74 · Rejoindre sans compte passe par la porte CANONIQUE, et un invité est une SESSION, pas un état d'écran — 2026-09-16 (#5561)
+
+**Directive porteur.** « Il faut implementer rejoindre en anonyme […] en priorité ! »
+
+**La porte.** `POST /api/v1/links/:key/members`, en authentification OPTIONNELLE — la MÊME que celle d'un compte, avec un autre corps. L'alias `POST /anonymous/join/:linkId` n'est PAS appelé : déprécié depuis le 2026-08-30, il exige en plus un prénom et un nom (`linkJoinProfileSchema`) que la porte canonique ne demande pas. Deux champs de moins à faire remplir à quelqu'un qui veut lire un fil.
+
+**Le jeton d'invité est la PREUVE du régime, dans les deux sens.** `joinLinkAsMember` refusait déjà une réponse PORTANT un `sessionToken` (`JOINED_AS_GUEST` : la passerelle est retombée en invité sur un Bearer expiré). Son miroir existe désormais : `joinLinkAsGuest` refuse une réponse qui n'en porte PAS (`MEMBER_NOT_GUEST`). La porte étant en auth optionnelle, un Bearer encore valide dans le transport ferait entrer le COMPTE sous son nom pendant que l'écran croit créer un invité — rendre une session d'invité qui n'existe pas mènerait le lecteur dans un fil où il n'est pas celui qu'il croit.
+
+**Un invité est une branche du magasin de session** (`status: 'guest'`), pas un drapeau d'écran. Il porte `sessionToken` (régime `X-Session-Token`, jamais `Authorization`), son participant, son pseudo, sa conversation et SON lien — ce dernier parce que `GET /links/:identifier/messages` rend 403 à la session d'un autre lien. `credentialFromSession` sert donc les deux régimes, `resolveViewer` rend une identité (id non nul : ses propres bulles sont les siennes), et la garde de route ne l'admet que sur `thread` — toutes les autres routes privées exigent un COMPTE, et l'y laisser entrer peindrait des écrans qu'un 401 défait en silence.
+
+**L'horizon d'une session d'invité est posé côté CLIENT** (`GUEST_SESSION_HOURS = 24`, la valeur du legacy). La porte ne sert aucun `expiresIn` ; sans horizon l'entrée serait CORROMPUE au sens du module (règle 2). C'est une GARDE, jamais une vérité : le serveur reste l'autorité, un 401 ferme la session avant l'échéance.
+
+**Les deux familles de refus ne se confondent pas**, et c'est le cœur de l'issue. `input` — corrigeable ICI : le formulaire est GARDÉ, le message se pose sur son champ, et un pseudo libre proposé par la passerelle (`suggestedNickname`, 409) est PRÉ-REMPLI. `link` — rien ne le corrigera : le formulaire est RETIRÉ, un bandeau dit la cause, les deux sorties restent avec leur `next`. Les confondre fait réessayer quelqu'un dont le lien est mort, ou abandonner quelqu'un dont le pseudo était juste pris. **`LANGUAGE_NOT_ALLOWED` est rangé dans `input` malgré son 403** : la langue est un champ de ce formulaire, et le visiteur peut en choisir une autre.
+
+**Le refus de SAISIE se connaît AVANT l'aller-retour** (`validateGuestDraft`, miroir `validateCommunityDraft`). La passerelle rend un 400 sans nommer le champ quand une exigence n'est pas satisfaite : deviner lequel après coup serait faux une fois sur trois.
+
+**La projection de l'invitation s'élargit de six valeurs, et c'est une exception RAISONNÉE.** `GuestTerms` porte `requireAccount`, les trois `require*`, `allowedLanguages` et `allowAnonymousMessages`. Le reste du port retient tout ce que la charge transporte parce que rien de la CONVERSATION ne doit atteindre le client avant le choix ; ces six-là ne disent rien de la conversation — elles décrivent la PORTE. Compteurs, membres, identifiants et langues PARLÉES restent dehors. Fail-closed dans les deux sens, et les deux sens n'ont pas la même direction : une EXIGENCE absente est supposée (on demande le pseudo), une PERMISSION absente est refusée (on ne promet ni l'entrée ni l'écriture) — demander un champ de trop coûte une frappe, promettre une porte fermée coûte le visiteur.
+
+**Mesuré.** `meeshy.me/chat/mshy_IM3PNq5H` servait déjà l'invitation avant ce lot (200, deux visites avec service worker, aucune erreur de page) : il ne manquait que la porte sans compte.
+
+## D-75 · Un direct porte le nom de l'autre, même s'il a un titre stocké — 2026-09-16 (#6790)
+
+**Signalement porteur.** « Actuellement les conversations direct ont pour titre X & Y au lieu d'avoir le display name de l'interlocuteur (cette erreur est sur iOS aussi). »
+
+**Aucune concaténation `&` n'existe dans le dépôt** — balayage de `packages/`, `services/gateway/src`, `apps/web-v2/src`, `apps/web/`, `apps/ios`, `packages/MeeshySDK`, `apps/android`. `generateDefaultConversationTitle` est juste. Le titre est **stocké**, et les clients l'affichent fidèlement.
+
+**La cause est le LEGACY** : `apps/web/components/conversations/create-conversation-modal.tsx:102-130` composait un titre CÔTÉ CLIENT et l'envoyait — chaîne `autoGeneratedTitles.betweenTwoUsers`, soit « {user1} et {user2} » (fr), « {user1} and {user2} » (en), « {user1} y {user2} » (es), « {user1} e {user2} » (pt). La v2 n'en écrit aucun (`createDirectConversation` poste `{ type, participantIds }`). Le legacy étant décommissionné (#6702), le stock existant demeure mais ne grossit plus.
+
+**La précédence dépend désormais du TYPE.** Un GROUPE a un titre propre ; un DIRECT n'en a pas — il porte le nom de l'autre. `titleOf` lit donc, pour un direct : nom du pair, puis titre stocké en dernier recours ; pour un groupe : titre stocké, puis nom d'un membre servi. `customName` (renommage local du lecteur) prime toujours sur les deux, `identifier` ferme la marche. Le doc-comment d'origine affirmait déjà « elle porte le nom de l'autre » ; la règle ne le faisait pas.
+
+**Ignorer plutôt que nettoyer.** Le correctif ne touche aucune donnée : il change une précédence d'affichage. Nettoyer les titres en base éviterait qu'un quatrième client réintroduise le défaut, et reste porté par #6790.
+
+**Le témoin porte sur la PRÉCÉDENCE, pas sur la chaîne.** Chercher « et » verdirait sur un titre stocké d'une autre forme — le même défaut produit quatre chaînes différentes selon la langue du legacy.
+
+## D-76 · L'administration a DEUX adresses : `/adm` pour la nouvelle, `/admin` réservée à l'ancienne — 2026-09-16 (#6795)
+
+**Directive porteur.** « On ne s'occupe pas des limites quand il s'agit d'intégrer les commandes admin d'avant, tu peux même avoir les deux chemins dans la v2 `/adm/` pour la route d'administration nouvelle qui implémentera petit à petit les vues de l'ancienne et brancher toute l'ancienne dans `/admin` ! » puis « N'est-ce pas possible de copier dans v2 tous les composants requis par admin de legacy et monter sur Traefik qu'un seul container ? »
+
+**UN SEUL CONTENEUR, et c'est la bonne option.** Le double montage (v2 + legacy derrière Traefik) a été instruit puis écarté sur deux mesures : le legacy authentifie son administration par un **cookie** `meeshy_session` (base64 de `{role, canAccessAdmin, userId}`, posé par `auth-manager.service.ts:360`) que la v2 ne pose pas — son middleware redirige vers `/signup` sans lui ; et il est en `output: 'standalone'` **sans `basePath`**, donc il sert `/_next/*` à la RACINE, ce qu'un routeur `PathPrefix(/admin)` seul casserait. Porter les composants dans la v2 supprime les deux : le droit s'y lit déjà par `GET /me/permissions`.
+
+**`/adm` est la NOUVELLE administration ; `/admin` est réservée à l'ANCIENNE.** Les deux vivent dans le même bundle. La route KEY reste `admin`/`adminUsers` pour la première, `adm`/`admUsers` pour la seconde : le déplacement ne touche donc ni la garde de session, ni la table des barreaux, ni `lib/admin/sections.ts`, qui raisonnent tous par CLÉ et non par chemin.
+
+**Aujourd'hui `/admin` sert les mêmes écrans que `/adm` — c'est un PONT, pas la cible.** Déplacer `/admin` avant que l'ancienne n'y soit portée laisserait une adresse morte, et un signet d'administrateur mène aujourd'hui à `/admin`. Un seul `import()` alimente les deux (motif `post`/`postDeepLink`), pour qu'elles ne puissent pas diverger d'écran le temps du pont.
+
+**Les quatre routes sont PRIVÉES, déclarées dans `session-guard.ts`.** Une route que cette loi ne connaît pas est publique par défaut : `/adm` ajoutée à la seule table aurait ouvert une porte d'administration à un visiteur sans session, sans qu'aucun témoin ne rougisse — l'écran se serait peint, puis le serveur aurait refusé.
+
+**Ce que le portage coûte, mesuré le 2026-09-16** : 99 fichiers, 25 551 lignes hors témoins, 82 en `'use client'` ; 21 primitives Radix/shadcn, 83 imports `lucide-react`, 35 `sonner`, 4 `recharts` — la v2 n'en a AUCUNE. Seuls 34 imports sont réellement liés à Next (22 `next/navigation`, 12 `next/dynamic`), c'est-à-dire la partie mécanique. **Le point dur est le RUNTIME** : la v2 est construite sur Preact (`preact/compat`), et il faut trancher entre amener Radix tel quel ou réécrire les 21 primitives contre le design system dérivé d'iOS. Arbitrage ouvert sur #6795.
+
+**Ce qui ne se porte PAS tel quel** : 2 884 lignes de page — 24 % de la surface — n'appellent aucune API (`/admin/moderation`, `/admin/audit-logs`, `/admin/analytics`, `/admin/reports`, `/admin/invitations` rendent des données en dur ; `/admin/settings` ne sauvegarde rien). Elles se rebâtissent contre les endpoints RÉELS, qui existent et n'ont jamais eu de consommateur. Et **les journaux d'audit n'ont aucune API de LECTURE** : `AdminAuditLog` n'est qu'écrit, `canViewAuditLogs` ne garde aucune route.
+
+## D-77 · L'administration se RÉÉCRIT sur le design system v2, et les membres passent en premier — 2026-09-16 (#6819)
+
+**Directive porteur, qui tranche l'arbitrage laissé ouvert par D-76.** « il faut réecrire toutes les pages d'administration sur la v2 en commencant par la gestion des membres, edition reset de mot de passe, suppression soft et hard, suivi des medias crées, des conversations, historique de connexion ! »
+
+**RÉÉCRIRE, et non importer Radix.** D-76 posait deux voies et n'en choisissait aucune : amener les 21 primitives Radix/shadcn et les faire tenir sur `preact/compat`, ou les réécrire contre le design system dérivé d'iOS. La seconde est retenue. Elle coûte plus cher à l'écriture et moins cher ensuite : la v2 n'acquiert aucune dépendance dont la compatibilité avec son socle devrait être re-prouvée à chaque montée, et l'administration finit par ressembler au reste de l'application au lieu de former un îlot visuel importé d'un autre cadre.
+
+**Les MEMBRES d'abord**, avec sept capacités nommées par le porteur : éditer un membre, réinitialiser son mot de passe, le supprimer en DOUX puis en DÉFINITIF, suivre ses médias, suivre ses conversations, lire son historique de connexion.
+
+**La règle de périmètre, qui gouverne tout ce lot : une capacité que la passerelle ne sert pas n'est pas dessinée.** Trois mesures la fondent, toutes faites avant d'écrire quoi que ce soit — 24 % de l'ancienne administration n'appelle aucune API (D-76) ; les journaux d'audit n'ont aucune route de lecture (D-76) ; et sur les 135 clés de préférences déclarées, **86 n'ont aucun lecteur, nulle part** (#6721 à #6724, dont `message` 0/16, `document` 0/16 et `video` 0/17). Un geste sans effet est PIRE qu'un geste absent : le second se voit, le premier se croit rendu. Chaque capacité est donc instruite — route, rôle requis, forme servie, effet réel — et celle qui n'est pas servie devient une issue de passerelle, jamais un bouton inerte.
+
+**Ce que la v2 sert déjà, et qui borne le reste à écrire** : trois lectures seulement — `GET /me/permissions` (l'adresse CANONIQUE ; `/admin/me/permissions` en est l'alias déprécié, #4350), `GET /admin/dashboard` et `GET /admin/users?offset=&limit=&search=`. La LISTE des membres existe donc ; c'est le DÉTAIL d'un membre qui manque, et avec lui les sept gestes.
+
+**Un indice de contrat à ne pas perdre** : `AdminUserRow` décode `isActive` mais **aucun `deletedAt`**. La suppression douce n'a aujourd'hui aucune existence dans la forme que la v2 lit — si la passerelle la sert, le décodeur devra l'admettre ; si elle ne la sert pas, c'est la passerelle qu'il faut ouvrir, pas l'écran qu'il faut peindre.
+
+**Le découpage se décide maintenant, pas quand le fichier débordera.** Les trois fichiers d'administration totalisent 558 lignes, loin du plafond de 1 200 ; le détail d'un membre et ses sept capacités le consommeront. Une extension par surface, un type par fichier, les sous-vues chez elles — ajouter à un fichier déjà hors budget est interdit, donc on extrait avant d'ajouter.

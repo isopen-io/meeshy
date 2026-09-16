@@ -1,0 +1,142 @@
+import { type AdminDeps, asCount, asRecord, asText } from './admin';
+import type { ApiResult } from './http';
+
+/**
+ * **LES CONVERSATIONS D'UN MEMBRE** (#6819) —
+ * `GET /api/v1/admin/users/:userId/conversations`, sous `canViewUsers`.
+ *
+ * **Métadonnées seules : aucun contenu de message.** La route sert le CADRE
+ * d'une conversation — titre, type, effectif, dates — jamais ce qui s'y dit.
+ * Ce décodeur n'invente donc aucun champ qui laisserait croire le contraire :
+ * un écran d'administration qui afficherait un aperçu de message ici ouvrirait
+ * une lecture que la passerelle n'accorde pas.
+ *
+ * ## Trois traits mesurés du contrat
+ *
+ * 1. **`memberCount` est RECALCULÉ** par la passerelle depuis `_count` — la
+ *    colonne du même nom n'est écrite par personne (même règle que
+ *    `GET /conversations`). On lit donc la valeur SERVIE, sans jamais
+ *    retomber sur une colonne morte.
+ * 2. **`membership` peut être `null`**, et cela ne dit pas que le membre est
+ *    absent. C'est sa ligne, extraite « pour convenance » parmi les
+ *    participants servis — or ceux-ci sont plafonnés à SIX, actifs seulement,
+ *    triés par date d'entrée. Un membre entré plus tard n'y figure pas.
+ * 3. **La pagination voyage à côté de `data`** (`sendPaginatedSuccess`), comme
+ *    pour les médias, et à l'inverse de `GET /admin/users` qui sert la sienne
+ *    DEDANS.
+ */
+export type AdminConversationParticipant = {
+  readonly userId: string;
+  readonly displayName: string;
+  readonly avatar: string | null;
+  readonly role: string;
+  readonly joinedAt: string | null;
+  readonly isActive: boolean;
+};
+
+export type AdminConversation = {
+  readonly id: string;
+  readonly identifier: string | null;
+  /** `null` quand la conversation n'a pas de titre propre — un direct, par
+   * exemple, qui porte le nom de l'autre et non un titre stocké (D-75). */
+  readonly title: string | null;
+  readonly type: string;
+  readonly isActive: boolean;
+  readonly memberCount: number;
+  readonly createdAt: string | null;
+  readonly lastMessageAt: string | null;
+  /** Six au plus, actifs, servis par la passerelle. */
+  readonly participants: readonly AdminConversationParticipant[];
+  /** La ligne du membre visé — `null` s'il n'est pas dans les six servis. */
+  readonly membership: AdminConversationParticipant | null;
+};
+
+export type AdminConversationPage = {
+  readonly conversations: readonly AdminConversation[];
+  readonly total: number;
+  readonly offset: number;
+  readonly hasMore: boolean;
+};
+
+export const ADMIN_CONVERSATIONS_PAGE_SIZE = 20;
+
+export const adminUserConversationsQueryKey = (userId: string, offset: number, type: string) =>
+  ['admin', 'user', userId, 'conversations', offset, type] as const;
+
+const asTextOrNull = (value: unknown): string | null =>
+  typeof value === 'string' && value !== '' ? value : null;
+
+function decodeParticipant(raw: unknown): AdminConversationParticipant | null {
+  const ligne = asRecord(raw);
+  if (ligne === null || typeof ligne.userId !== 'string' || ligne.userId === '') return null;
+
+  return {
+    userId: ligne.userId,
+    displayName: asText(ligne.displayName),
+    avatar: asTextOrNull(ligne.avatar),
+    role: asText(ligne.role),
+    joinedAt: asTextOrNull(ligne.joinedAt),
+    isActive: ligne.isActive !== false,
+  };
+}
+
+export function decodeAdminConversationPage(raw: unknown, offset: number): AdminConversationPage {
+  const charge = asRecord(raw) ?? {};
+  const brut = Array.isArray(charge.data) ? charge.data : Array.isArray(raw) ? raw : [];
+
+  const conversations = brut
+    .map((entree): AdminConversation | null => {
+      const ligne = asRecord(entree);
+      if (ligne === null || typeof ligne.id !== 'string' || ligne.id === '') return null;
+
+      const participants = (Array.isArray(ligne.participants) ? ligne.participants : [])
+        .map(decodeParticipant)
+        .filter((p): p is AdminConversationParticipant => p !== null);
+
+      return {
+        id: ligne.id,
+        identifier: asTextOrNull(ligne.identifier),
+        title: asTextOrNull(ligne.title),
+        type: asText(ligne.type),
+        isActive: ligne.isActive !== false,
+        memberCount: asCount(ligne.memberCount),
+        createdAt: asTextOrNull(ligne.createdAt),
+        lastMessageAt: asTextOrNull(ligne.lastMessageAt),
+        participants,
+        membership: decodeParticipant(ligne.membership),
+      };
+    })
+    .filter((conversation): conversation is AdminConversation => conversation !== null);
+
+  const meta = asRecord(charge.pagination) ?? {};
+  const total = asCount(meta.total);
+  const hasMore = typeof meta.hasMore === 'boolean' ? meta.hasMore : offset + conversations.length < total;
+
+  return { conversations, total: total || conversations.length, offset, hasMore };
+}
+
+export async function loadAdminUserConversations(
+  params: AdminDeps & {
+    readonly userId: string;
+    readonly offset: number;
+    readonly type?: string;
+    readonly signal?: AbortSignal;
+  },
+): Promise<ApiResult<AdminConversationPage>> {
+  const query = new URLSearchParams({
+    offset: String(params.offset),
+    limit: String(ADMIN_CONVERSATIONS_PAGE_SIZE),
+    // Un filtre VIDE n'est pas un filtre : `where.type = ''` ne rendrait
+    // aucune conversation, alors que l'appelant en voulait toutes.
+    ...(params.type === undefined || params.type === '' ? {} : { type: params.type }),
+  });
+
+  const result = await params.transport.request<unknown>({
+    method: 'GET',
+    path: `/api/v1/admin/users/${encodeURIComponent(params.userId)}/conversations?${query.toString()}`,
+    ...(params.signal === undefined ? {} : { signal: params.signal }),
+  });
+  if (!result.ok) return result;
+
+  return { ok: true, data: decodeAdminConversationPage(result.data, params.offset) };
+}

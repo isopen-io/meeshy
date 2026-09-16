@@ -9,7 +9,7 @@ import { useComposerRepost } from '@/hooks/composer/useComposerRepost';
 import { usePostRoom } from '@/hooks/social/use-post-room';
 import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
 import { postToStoryData } from '@/lib/story-transforms';
-import { usePreferredLanguage } from '@/hooks/use-post-translation';
+import { usePreferredLanguage, usePreferredLanguages } from '@/hooks/use-post-translation';
 import { useCommentTarget } from '@/hooks/use-comment-target';
 import { useAuthStore } from '@/stores/auth-store';
 import type { PostType } from '@meeshy/shared/types/post';
@@ -31,6 +31,7 @@ export default function StoryPage() {
   const params = useParams<{ postId: string }>();
   const postId = params?.postId;
   const userLanguage = usePreferredLanguage();
+  const preferredLanguages = usePreferredLanguages();
   const currentUserId = useAuthStore((s) => s.user?.id) ?? '';
   const toastCtx = useToast();
   const { t } = useI18n('story');
@@ -55,8 +56,8 @@ export default function StoryPage() {
   // is treated as unavailable rather than forced into the 24h-story chrome.
   const postIsStory = post?.type === 'STORY';
   const stories = useMemo(
-    () => (post && postIsStory ? [postToStoryData(post)] : []),
-    [post, postIsStory],
+    () => (post && postIsStory ? [postToStoryData(post, preferredLanguages)] : []),
+    [post, postIsStory, preferredLanguages],
   );
 
   const close = useCallback(() => {

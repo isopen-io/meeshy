@@ -3668,21 +3668,57 @@ final class ConversationListViewModelTests: XCTestCase {
         // le plus ancien, même sémantique que le curseur gateway `before` —
         // au lieu de refetcher la page 1 (dont le zero-progress guard
         // forcerait `.exhausted` et tuerait l'infinite scroll).
+        //
+        // #6857 — les identifiants sont ceux que la PASSERELLE sert, c'est-à-dire
+        // des ObjectId. Ce témoin posait « tail » et « newest », des chaînes
+        // qu'aucun serveur n'émet : il verdissait donc sur un repli que la
+        // passerelle aurait refusé en 500. La fixture irréaliste était ce qui
+        // laissait vivre le défaut — c'est elle qu'on corrige, pas la règle.
         await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        let queue = "68f3808baf186ffd9583b0fa"
         let conversationService = MockConversationService()
         conversationService.listPageResult = .success(
-            ConversationPage(items: [makeConversation(id: "older")], nextCursor: "older", hasMore: true)
+            ConversationPage(items: [makeConversation(id: "68f3808baf186ffd9583b0fb")],
+                             nextCursor: "68f3808baf186ffd9583b0fb", hasMore: true)
         )
         let (sut, _, _, _, _, _, _) = makeSUT(conversationService: conversationService)
         sut.conversations = [
-            makeConversation(id: "newest", lastMessageAt: Date()),
-            makeConversation(id: "tail", lastMessageAt: Date(timeIntervalSinceNow: -3_600)),
+            makeConversation(id: "68f3808baf186ffd9583b0fc", lastMessageAt: Date()),
+            makeConversation(id: queue, lastMessageAt: Date(timeIntervalSinceNow: -3_600)),
         ]
 
         await sut.loadMore()
 
-        XCTAssertEqual(conversationService.lastListPageCursor, "tail",
+        XCTAssertEqual(conversationService.lastListPageCursor, queue,
                        "Without a persisted cursor, loadMore must page from the oldest loaded conversation instead of refetching page 1")
+    }
+
+    /// **La moitié que la fixture irréaliste cachait** (#6857).
+    ///
+    /// Une entrée locale dont l'identifiant n'a jamais été servi — fixture de
+    /// témoin gravée dans le cache, conversation optimiste, sentinelle — ne doit
+    /// pas devenir un curseur. Mesuré au simulateur : `before=conv-hydrate`
+    /// faisait rendre 500 à la passerelle, et « Réessayer », qui rappelle
+    /// `loadMore()`, rejouait indéfiniment le même échec.
+    ///
+    /// Le repli à `nil` demande la PREMIÈRE page — ce qui est précisément la
+    /// récupération qui manquait : on réaffiche ce qu'on a plutôt que d'échouer.
+    func test_loadMore_withoutCursor_refusesALocalIdTheServerNeverServed() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        let conversationService = MockConversationService()
+        conversationService.listPageResult = .success(
+            ConversationPage(items: [makeConversation(id: "68f3808baf186ffd9583b0fb")],
+                             nextCursor: "68f3808baf186ffd9583b0fb", hasMore: true)
+        )
+        let (sut, _, _, _, _, _, _) = makeSUT(conversationService: conversationService)
+        sut.conversations = [
+            makeConversation(id: "conv-hydrate", lastMessageAt: Date(timeIntervalSinceNow: -3_600)),
+        ]
+
+        await sut.loadMore()
+
+        XCTAssertNil(conversationService.lastListPageCursor,
+                     "un identifiant que le serveur n'a jamais servi ne devient pas un curseur — il ferait rendre 500 à la route")
     }
 
     // MARK: - ThemedConversationRow timestamp color
