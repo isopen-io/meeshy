@@ -12,7 +12,7 @@ import {
   createUserValidationSchema,
   resetPasswordValidationSchema
 } from '@meeshy/shared/types/validation/admin-user';
-import { UserManagementService, type SessionRevoker } from '../../services/admin/user-management.service';
+import { UserManagementService, type SessionRevoker, type PasswordResetNotifier } from '../../services/admin/user-management.service';
 import { disconnectRevokedSessions } from '../../socketio/disconnectRevokedSessions';
 import { UserAuditService } from '../../services/admin/user-audit.service';
 import { sanitizationService } from '../../services/admin/user-sanitization.service';
@@ -40,6 +40,8 @@ import { validatePagination, buildPaginationMeta } from '../../utils/pagination'
 import { withAnonymousParticipantCounts } from '../../utils/share-link-participant-counts';
 import { sendSuccess, sendInternalError, sendNotFound, sendForbidden, sendBadRequest, sendPaginatedSuccess } from '../../utils/response';
 import { validatePasswordStrength } from '../../utils/password-strength';
+import { EmailService } from '../../services/EmailService';
+import { recipientLanguage } from '../../utils/recipient-language';
 import { conversationActiveMemberCountSelect } from '../conversations/utils/active-member-count';
 import { logError, logWarn } from '../../utils/logger.js';
 
@@ -94,8 +96,27 @@ function deactivatedUserSessionRevoker(fastify: FastifyInstance): SessionRevoker
   });
 }
 
+/**
+ * #6831 — `sendEmail` promettait une notification sans jamais en envoyer une.
+ * Le même gabarit « mot de passe modifié » que `getAlertTypeLabel('password_changed', …)`
+ * sert déjà dans les 6 langues d'`EmailService` (`SupportedLanguage`), langue
+ * de cadrage résolue par la même SSOT que le reste de la passerelle
+ * (`utils/recipient-language.ts`). Fonction pure, exportée pour être testée
+ * sans enregistrer la route.
+ */
+export function passwordResetNotifier(emailService: EmailService): PasswordResetNotifier {
+  return (user) => emailService.sendSecurityAlertEmail({
+    to: user.email,
+    name: `${user.firstName} ${user.lastName}`,
+    alertType: 'password_changed',
+    details: '',
+    language: recipientLanguage(user, 'en'),
+  });
+}
+
 export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
   // Initialiser les services
+  const emailService = new EmailService();
   const userManagementService = new UserManagementService(fastify.prisma, {
     revokeSessions: deactivatedUserSessionRevoker(fastify),
     // Résolu à l'appel, comme `deactivatedUserSessionRevoker` : le manager
@@ -103,6 +124,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
     // d'arrivée + l'effectif temps réel de `ensureGlobalConversationMembership`
     // (#3876) quand `createUser` ajoute le compte au salon global.
     resolveSocketManager: () => fastify.socketIOHandler?.getManager(),
+    notifyPasswordReset: passwordResetNotifier(emailService),
   });
   const userAuditService = new UserAuditService(fastify.prisma);
   const banService = new BanService(fastify.prisma, userManagementService);

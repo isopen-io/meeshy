@@ -45,6 +45,14 @@ const resolveSortOrder = (sortOrder: unknown): 'asc' | 'desc' =>
  */
 export type SessionRevoker = (userId: string) => Promise<unknown>;
 
+/**
+ * Envoie la notification « votre mot de passe a été réinitialisé » à la
+ * cible d'un `resetPassword` administrateur (#6831) — injecté, comme
+ * `SessionRevoker` : ce service ignore tout du transport (e-mail, langue de
+ * cadrage) et ne fait que décider QUAND l'appeler.
+ */
+export type PasswordResetNotifier = (user: FullUser) => Promise<unknown>;
+
 export type UserManagementServiceDeps = {
   readonly revokeSessions?: SessionRevoker;
   /**
@@ -54,6 +62,7 @@ export type UserManagementServiceDeps = {
    * `ensureGlobalConversationMembership`).
    */
   readonly resolveSocketManager?: () => GlobalMembershipSocketManager | null | undefined;
+  readonly notifyPasswordReset?: PasswordResetNotifier;
 };
 
 /**
@@ -392,6 +401,22 @@ export class UserManagementService {
   }
 
   /**
+   * #6831 — `sendEmail` promettait une notification sans jamais en envoyer
+   * une : le champ traversait la validation et n'était lu par aucun site.
+   * Best-effort comme `revokeSessionsBestEffort` : la ligne est déjà écrite,
+   * un envoi qui échoue ne doit pas faire échouer la réinitialisation.
+   */
+  private async notifyPasswordResetBestEffort(user: FullUser): Promise<void> {
+    const notify = this.deps.notifyPasswordReset;
+    if (!notify) return;
+    try {
+      await notify(user);
+    } catch (error) {
+      logWarn(logger, `[UserManagement] Password reset notification failed for user ${user.id}`, error);
+    }
+  }
+
+  /**
    * Réinitialise le mot de passe d'un utilisateur
    */
   async resetPassword(
@@ -413,6 +438,13 @@ export class UserManagementService {
     // ouvertes, exactement comme la réinitialisation libre-service
     // (`PasswordResetService.ts`) le fait déjà pour son propre chemin.
     await this.revokeSessionsBestEffort(userId, 'password reset');
+
+    // #6831 — `sendEmail` est un OPT-IN explicite de l'admin, jamais le
+    // défaut : un administrateur qui répond à un incident sur un compte
+    // compromis ne veut pas nécessairement alerter son détenteur.
+    if (data.sendEmail) {
+      await this.notifyPasswordResetBestEffort(user as unknown as FullUser);
+    }
 
     return user as unknown as FullUser;
   }
