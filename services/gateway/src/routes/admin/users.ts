@@ -35,6 +35,7 @@ import { registerConversationMessagesSovereignRoute } from './conversation-messa
 import { registerUserReportsRoutes } from './user-reports';
 import { registerUserWriteRoutes } from './users-write';
 import { registerUserBanRoutes } from './user-bans';
+import { registerUserSessionRoutes } from './user-sessions';
 import { BanService } from '../../services/admin/ban.service';
 import { validatePagination, buildPaginationMeta } from '../../utils/pagination';
 import { withAnonymousParticipantCounts } from '../../utils/share-link-participant-counts';
@@ -137,6 +138,10 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
   // Le bannissement (#3719) est un geste DISCRET, pas un champ du compte —
   // il ne rejoint pas la loi des champs, il porte sa propre adresse.
   registerUserBanRoutes(fastify, { banService, userManagementService, userAuditService });
+
+  // Historique de connexion (#6821) : `UserSession` / `SecurityEvent` étaient
+  // écrits à chaque connexion et n'avaient aucun lecteur sous `routes/admin/`.
+  registerUserSessionRoutes(fastify, { userAuditService });
 
   /**
    * GET /admin/users - Liste tous les utilisateurs (avec sanitization)
