@@ -282,4 +282,27 @@ export class UserAuditService {
     });
   }
 
+  /**
+   * Log d'une action de restauration d'un utilisateur supprimé — la JUMELLE
+   * de `logDeleteUser` (#6822) : `restoreUser` existait sans route ni ligne
+   * d'audit qui l'accompagne.
+   */
+  async logRestoreUser(
+    adminId: string,
+    userId: string,
+    reason?: string,
+    ipAddress?: string,
+    userAgent?: string
+  ): Promise<UserAuditLog> {
+    return this.createAuditLog({
+      userId,
+      adminId,
+      action: UserAuditAction.RESTORE_USER,
+      entityId: userId,
+      metadata: reason ? { reason } : null,
+      ipAddress,
+      userAgent
+    });
+  }
+
 }

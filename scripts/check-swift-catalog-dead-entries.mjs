@@ -208,15 +208,20 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // aucun n'a besoin de migrer dans l'immédiat, le retrait de l'alias restant
 // gouverné par le compteur d'accès nul (#4275). Faire pointer iOS vers la
 // nouvelle adresse est un travail client à part, pas ouvert par ce lot.
-//
-// 255 → 258 (#6821) : `AdminEndpoint.usersByUserIdSessions`,
-// `.usersByUserIdSessionsBySessionId`, `.usersByUserIdSecurityEvents` —
-// l'historique de connexion et sa révocation, un geste d'ADMINISTRATION
-// exposé côté passerelle. Comme la quasi-totalité de `AdminEndpoint` déjà
-// dans la liste ci-dessus, la console d'administration n'a pas d'écran iOS ;
-// ces trois routes rejoignent leurs ~200 voisines, mortes CÔTÉ SWIFT pour la
-// même raison structurelle, pas par oubli.
-const BASELINE_DEAD_ENTRIES = 258;
+// 255 → 256 (#6822) : `AdminEndpoint.usersByUserIdRestore`
+// (`POST /admin/users/:userId/restore`). Morte à la naissance PAR
+// CONSTRUCTION, même raison que les dizaines d'autres `AdminEndpoint.*`
+// ci-dessus : l'administration n'a pas d'écran iOS, donc aucun de ses
+// endpoints n'a jamais d'appelant Swift.
+// 256 → 259 (#6851) : `AdminEndpoint.usersByUserIdSessions`,
+// `AdminEndpoint.usersByUserIdSessionsBySessionId` et
+// `AdminEndpoint.usersByUserIdSecurityEvents` — l'historique de connexion
+// d'un membre. Mortes à la naissance PAR CONSTRUCTION, même raison que les
+// dizaines d'autres `AdminEndpoint.*` ci-dessus : l'administration n'a pas
+// d'écran iOS, donc aucun de ses endpoints n'a jamais d'appelant Swift. Le
+// catalogue Swift les porte parce qu'il est GÉNÉRÉ depuis le manifeste, pas
+// parce qu'un client les réclame.
+const BASELINE_DEAD_ENTRIES = 259;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

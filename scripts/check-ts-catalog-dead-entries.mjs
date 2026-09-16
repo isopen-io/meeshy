@@ -272,14 +272,25 @@ export const parseCatalogBlock = (blockLines) => {
 // n'est pas morte), et ce script ne balaie que `apps/web` (legacy gelé) et
 // `packages/shared` — pas `apps/web-v2`. Même forme que
 // `posts.byPostIdTranslate`, déjà sans appelant ici pour la même raison.
-//
-// 277 → 280 (#6821) : `admin.usersByUserIdSessions`,
-// `.usersByUserIdSessionsBySessionId`, `.usersByUserIdSecurityEvents` —
-// même trio que son miroir Swift ci-dessus (255 → 258), même raison :
-// l'historique de connexion et sa révocation, exposés côté passerelle,
-// sans consommateur web (legacy gelé) ni `packages/shared` pour l'instant.
-// L'écran d'administration qui les consommera vit sous #6819.
-const BASELINE_DEAD_ENTRIES = 280;
+// 277 → 278 (#6822) : `admin.usersByUserIdRestore`
+// (`POST /admin/users/:userId/restore`, l'inverse du soft-delete). Morte à la
+// naissance DANS CE COMPTAGE, même raison que les dizaines d'autres entrées
+// `admin.usersByUserId*` déjà mortes ci-dessus : ce script ne balaie pas
+// `apps/web-v2`, seul client de l'administration — voir la note sur
+// `posts.mediaByMediaIdCaptionTranslate`. `restoreUser` existait côté
+// service sans aucun appelant AVANT cette issue ; il en gagne un ici (la
+// route), la console n'ayant pas encore d'action « restaurer ».
+// 278 → 281 (#6851) : `admin.usersByUserIdSessions`,
+// `admin.usersByUserIdSessionsBySessionId` et
+// `admin.usersByUserIdSecurityEvents` — l'historique de connexion d'un membre
+// (sessions listées, session révoquée, événements de sécurité). Mortes à la
+// naissance DANS CE COMPTAGE, même raison que les dizaines d'autres entrées
+// `admin.usersByUserId*` ci-dessus : ce script ne balaie que `apps/web`
+// (legacy gelé) et `packages/shared`, jamais `apps/web-v2` — seul client de
+// l'administration, et celui qui les appellera. La route est SERVIE et
+// testée (`admin/user-sessions.test.ts`) ; c'est son écran qui reste à
+// écrire, pas sa passerelle.
+const BASELINE_DEAD_ENTRIES = 281;
 
 export const readWorld = (root) => {
   const source = readFileSync(join(root, CATALOG_FILE), 'utf8');

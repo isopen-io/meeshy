@@ -1,6 +1,6 @@
 import type { FeedAuthor, FeedPage, FeedPost } from './feed-pages';
 import { minutesAgo } from './fixtures-base';
-import { REEL_CLIP_BARS } from './fixtures-reel-clips';
+import { REEL_CLIP_BARS, REEL_CLIP_RGB, REEL_CLIP_VOICE } from './fixtures-reel-clips';
 
 /**
  * LE CORPUS DU FIL EN FIXTURES (#5893) — servi par le MÊME chemin que la
@@ -336,6 +336,147 @@ export const POST_WIRE_NULLS: FeedPost = {
   commentCount: null,
 };
 
+/**
+ * **`POST_VIDEO` — UNE VIDÉO DE POST, QUI SE JOUE DANS LE FIL** (#6807).
+ *
+ * Distincte de `REEL_PORTRAIT` par la DÉCISION qu'elle exerce : l'affiche
+ * d'un RÉEL reste immobile dans le fil (#6457, la lecture appartient au
+ * lecteur des Réels), tandis qu'une vidéo de POST se joue sur place
+ * (#6800, `FeedMediaSurface` montée `playable`). Le corpus ne portait que la
+ * première, donc la seconde règle n'était jouée par AUCUNE recette : mesuré
+ * au navigateur le 2026-09-16, `/feed` montait 13 `<img>` et zéro `<video>`.
+ *
+ * Le clip est RÉELLEMENT décodable (`REEL_CLIP_RGB`, VP8) : une image servie
+ * sous un `mimeType` vidéo peindrait « Lecture impossible » sur la seule
+ * carte censée prouver qu'une vidéo se joue.
+ */
+export const POST_VIDEO: FeedPost = {
+  ...feedPostDefaults,
+  id: 'post-video',
+  type: 'POST',
+  createdAt: minutesAgo(52),
+  author: SOFIA,
+  content: 'Le couloir du studio, en trois secondes.',
+  originalLanguage: 'fr',
+  media: [
+    {
+      id: 'media-video',
+      mimeType: 'video/webm',
+      fileUrl: REEL_CLIP_RGB,
+      thumbnailUrl: feedPhotoStandIn('#0f766e', '#14b8a6', 'square'),
+      width: 1920,
+      height: 1080,
+      /** MILLISECONDES (`FeedMedia.duration`) — trois secondes, la durée
+       * réelle du clip, pour que la pastille dise vrai. */
+      duration: 3000,
+      order: 0,
+    },
+  ],
+  likeCount: 17,
+  commentCount: 2,
+};
+
+/**
+ * **`POST_AUDIO` — UN SON DE POST** (#6807). Le corpus n'en portait AUCUN :
+ * la branche `audio` de `FeedMediaSurface` — forme d'onde et `<audio>` monté
+ * quand l'hôte la déclare `playable` — n'avait donc aucune donnée pour
+ * exister, ni en recette, ni sous un œil humain.
+ *
+ * SANS dimensions ni vignette, comme un son l'est : c'est `postMediaRatio`
+ * qui décide alors du cadre, exactement comme pour `POST_NO_DIMENSIONS`.
+ */
+export const POST_AUDIO: FeedPost = {
+  ...feedPostDefaults,
+  id: 'post-audio',
+  type: 'POST',
+  createdAt: minutesAgo(58),
+  author: LEA,
+  content: 'Deux secondes de la répétition, au casque.',
+  originalLanguage: 'fr',
+  media: [
+    {
+      id: 'media-audio',
+      mimeType: 'audio/webm',
+      fileUrl: REEL_CLIP_VOICE,
+      duration: 2008,
+      order: 0,
+    },
+  ],
+  likeCount: 9,
+};
+
+/**
+ * **LE VECTEUR QUI SÉPARE** une règle de légende juste d'un `?? post.content`
+ * naïf (#6864) — TROIS médias dont **un seul** porte sa légende propre.
+ *
+ * Aucun autre post du corpus ne l'exerce, et ce n'est pas un oubli :
+ * `POST_CAROUSEL` a trois médias et trois légendes (chacun garde la sienne, un
+ * repli fautif ne se verrait pas), `POST_HERO` en a trois pour une légende mais
+ * en layout `hero`, où `tileCarriesCaption` ne laisse peindre QUE la tuile 0 —
+ * les deux autres ne montreraient rien de toute façon, et le gate mesurerait la
+ * PLACE en croyant mesurer l'ORIGINE.
+ *
+ * D'où le layout `reel` : c'est le SEUL mode tuilé où `tileCarriesCaption`
+ * rend vrai pour TOUTES les tuiles (`hero` ne peint que la tuile 0, `wave` et
+ * `sine` aucune). Les trois pièces sont donc dans le DOM en même temps, et un
+ * repli non borné y poserait le contenu du post sous les pièces 2 et 3 quand
+ * la règle juste les laisse nues.
+ *
+ * Le `carousel` — le défaut — ne conviendrait PAS, et pour une raison qui n'a
+ * rien à voir avec la légende : il ne monte qu'UNE page à la fois
+ * (`FeedMediaCarousel`, `current = media[clamped]`). Les pièces 2 et 3
+ * n'existeraient pas dans le DOM au repos, et l'invariante mesurerait leur
+ * absence de légende sans rien prouver — elles sont absentes tout court.
+ *
+ * DATÉ `minutesAgo(68)`, dans l'interstice mesuré entre le dernier post nommé
+ * (66) et le premier remplissage (70) : il ne prend pas la tête du fil — que
+ * `check-floating-clearance` va chercher par `querySelector('[data-feed-card]')`
+ * — et ne déplace aucune carte existante. Auteur DÉJÀ présent, pour ne toucher
+ * aucun compteur d'auteur.
+ */
+export const POST_LEGENDE_MIXTE: FeedPost = {
+  ...feedPostDefaults,
+  id: 'post-legende-mixte',
+  type: 'POST',
+  createdAt: minutesAgo(68),
+  author: OMAR,
+  content: 'Trois prises du même plateau, une seule légendée.',
+  originalLanguage: 'fr',
+  storyEffects: { v: 3, layout: 'reel' },
+  media: [
+    {
+      id: 'media-mixte-1',
+      mimeType: 'image/svg+xml',
+      fileUrl: feedPhotoStandIn('#0ea5e9', '#6366f1', 'square'),
+      thumbnailUrl: feedPhotoStandIn('#0ea5e9', '#6366f1', 'square'),
+      width: 1080,
+      height: 1080,
+      caption: 'La première, au grand angle.',
+      order: 0,
+    },
+    {
+      id: 'media-mixte-2',
+      mimeType: 'image/svg+xml',
+      fileUrl: feedPhotoStandIn('#f59e0b', '#ef4444', 'square'),
+      thumbnailUrl: feedPhotoStandIn('#f59e0b', '#ef4444', 'square'),
+      width: 1080,
+      height: 1080,
+      order: 1,
+    },
+    {
+      id: 'media-mixte-3',
+      mimeType: 'image/svg+xml',
+      fileUrl: feedPhotoStandIn('#10b981', '#14b8a6', 'square'),
+      thumbnailUrl: feedPhotoStandIn('#10b981', '#14b8a6', 'square'),
+      width: 1080,
+      height: 1080,
+      order: 2,
+    },
+  ],
+  likeCount: 6,
+  commentCount: 1,
+};
+
 const NAMED_POSTS: readonly FeedPost[] = [
   POST_IMAGE_FR,
   POST_IMAGE_EN_TRANSLATED,
@@ -345,14 +486,24 @@ const NAMED_POSTS: readonly FeedPost[] = [
   POST_LONG_TEXT,
   POST_REPOST,
   REEL_PORTRAIT,
+  POST_VIDEO,
+  POST_AUDIO,
   POST_NO_DIMENSIONS,
   POST_WIRE_NULLS,
+  POST_LEGENDE_MIXTE,
 ];
 
 /**
  * DES POSTS DE REMPLISSAGE (#5893) — pour qu'une page 2 existe (limite 20) :
- * `NAMED_POSTS` (8) + 18 remplissages = 26, strictement plus vieux que le
- * dernier des `NAMED_POSTS` (`minutesAgo(63)`).
+ * `NAMED_POSTS` (13) + 18 remplissages = 31, strictement plus vieux que le
+ * dernier des `NAMED_POSTS` (`minutesAgo(68)`).
+ *
+ * Ces DEUX nombres avaient dérivé — la prose disait « (8) » et
+ * « `minutesAgo(63)` » alors que le corpus portait déjà douze posts nommés
+ * dont le plus ancien à 66 minutes. L'invariant qu'elle décrit restait vrai
+ * (70 > 66), mais sa justification était fausse : un doc-comment de CARDINALITÉ
+ * se périme en silence à chaque ajout, puisque rien ne le relit. Le recompter
+ * au moment d'ajouter est le seul instant où l'écart se voit.
  */
 const FILLER_POSTS: readonly FeedPost[] = Array.from({ length: 18 }, (_, i) => {
   const author = FILLER_AUTHORS[i % FILLER_AUTHORS.length]!;

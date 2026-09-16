@@ -61,6 +61,14 @@ export type StoryMediaLayerProps = {
   readonly caption: StoryCaption | null;
   readonly onReady: () => void;
   readonly onFailed: () => void;
+  /** LA DURÉE DU MÉDIA, en millisecondes, dès que le décodeur la connaît
+   * (#6836) — le seul chemin par lequel elle peut atteindre `slideDurationMs`.
+   *
+   * `StoryTrayMedia` n'en sert AUCUNE (`lib/api/stories.ts` : id, url,
+   * thumbnailUrl, mimeType), et la passerelle n'a pas de champ pour ça. La
+   * durée ne peut donc venir que de l'élément lui-même. Sans ce relais, la loi
+   * de durée reste juste, testée par 38 témoins, et APPELÉE PAR PERSONNE. */
+  readonly onDurationKnown?: ((durationMs: number) => void) | undefined;
 };
 
 /**
@@ -76,6 +84,7 @@ export function StoryMediaLayer({
   caption,
   onReady,
   onFailed,
+  onDurationKnown,
 }: StoryMediaLayerProps) {
   if (showsMedia) {
     /* `feedMediaKindOf` — LA LOI DÉJÀ PARTAGÉE par le fil
@@ -95,11 +104,53 @@ export function StoryMediaLayer({
           muted
           playsInline
           autoPlay
+          /* EN BOUCLE (#6836) — `slideDurationMs` donne à la diapositive une
+             durée en cycles ENTIERS du média ; `loop` est ce qui rend ces
+             cycles réels. Sans lui, un clip plus court que la diapositive
+             atteint `ended` et GÈLE sur sa dernière trame pendant que la barre
+             poursuit : mesuré sur `/story/st-video`, 3 s de gel sur 6. */
+          loop
           className="absolute inset-0 size-full object-cover"
           /* `onLoadedData`, pas `onLoad` : sur un élément média, `load` ne se
              déclenche pas comme sur une image — attendre le mauvais évènement
              laisserait la progression de la story bloquée à zéro. */
           onLoadedData={onReady}
+          /* `onLoadedMetadata`, PAS `onLoadedData` (#6836) : les métadonnées —
+             dont `duration` — arrivent AVANT la première trame décodable. Les
+             attendre sur `loadedData` ferait démarrer la diapositive sur le
+             plancher, puis changerait sa durée en cours de route ; la barre
+             sauterait en arrière au premier tour d'horloge.
+
+             AUCUNE VALIDATION ICI, et c'est délibéré : `duration` vaut `NaN`
+             tant que le décodeur n'a rien et `Infinity` sur un flux, mais
+             `slideDurationMs` rabat déjà toute durée absurde sur le plancher —
+             quatre vecteurs le gardent (`playback.test.ts`). Filtrer une
+             seconde fois ici ferait DEUX sites à tenir d'accord sur ce qu'est
+             une durée utile, pour la seule économie d'un état React que
+             `Object.is` dédoublonne de toute façon. */
+          onLoadedMetadata={(event) => onDurationKnown?.(event.currentTarget.duration * 1000)}
+          /* **ET AU MONTAGE, parce que l'évènement peut être DÉJÀ PASSÉ** (#6866).
+             Avec une source `data:` ou un cache chaud, le décodeur a fini avant
+             que Preact n'attache le gestionnaire : `loadedmetadata` ne tire
+             jamais, la durée n'atteint pas `slideDurationMs`, et la diapositive
+             coupe son clip.
+
+             Mesuré sur cinq ouvertures indépendantes de `/story/st-video-long` :
+             quatre à 34 % de barre à 3 s (9 s, juste), une à 50 % — soit
+             3000/6000 au centième, le dénominateur de la CONSTANTE — avec
+             pourtant `readyState === 4` et `duration === 9` au montage. La
+             donnée était là ; personne ne l'avait lue.
+
+             Une valeur déjà disponible se LIT, une valeur à venir s'ÉCOUTE : les
+             deux chemins alimentent la même loi, et aucun ne suffit seul.
+             L'asymétrie du filtre est voulue — ici `duration` vaut `NaN` tant
+             que rien n'est décodé, donc on ne remonte que ce qui est utile ;
+             au-dessus, l'évènement ne tire QUE lorsque la donnée existe. */
+          ref={(el) => {
+            if (el === null || onDurationKnown === undefined) return;
+            const seconds = el.duration;
+            if (Number.isFinite(seconds) && seconds > 0) onDurationKnown(seconds * 1000);
+          }}
           onError={onFailed}
         />
       );

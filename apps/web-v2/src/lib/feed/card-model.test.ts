@@ -342,4 +342,128 @@ describe('resolveFeedCardModel — le SITE UNIQUE qui compose type, Prisme, acce
     });
     expect(a.author.accentColor).not.toBe(b.author.accentColor);
   });
+
+  /**
+   * **LE CONTENU DU POST N'EST PAS LA LÉGENDE DE SES MÉDIAS** (#6864, directive
+   * porteur 2026-09-16) :
+   *
+   * > « Sur un poste lorsqu'on a plusieurs contenu on ne met pas en legende de
+   * > ces contenus le contenu du poste ! Le contenu du poste peut être affiché
+   * > comme texte de legende d'image/vidéo UNIQUEMENT que le poste ne porte
+   * > qu'un atachement media ou video SANS caption ! »
+   * > « Si un media unique a un caption il doit afficher sa caption et non pas
+   * > le content ! »
+   *
+   * L'ordre de priorité, en trois temps : la légende PROPRE gagne toujours ;
+   * à défaut, le contenu du post SI et seulement si le post ne porte qu'un
+   * média ; sinon rien. Le texte d'un post décrit le LOT — le coller sous
+   * chaque pièce ferait mentir la légende.
+   *
+   * PORTAGE de la loi iOS, qui l'applique déjà aux deux conditions :
+   * `SocialMediaCaption.map` / `.serving` (`CommentMediaGallery.swift:36,141`)
+   * — `let fallback = visuals.count == 1 ? carrierText : nil`, puis
+   * `resolve(own:carrierText:)` qui essaie `own` d'abord.
+   */
+  test('un média UNIQUE avec sa propre légende sert SA légende, jamais le contenu du post (#6864)', () => {
+    const model = resolveFeedCardModel(
+      basePost({
+        content: 'Le marché de ce matin, encore un peu endormi.',
+        originalLanguage: 'fr',
+        media: [{ id: 'm1', mimeType: 'image/jpeg', fileUrl: 'a.jpg', caption: 'Sept heures du matin.' }],
+      }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+    expect(model.media[0]?.caption).toBe('Sept heures du matin.');
+    expect(model.media[0]?.captionOrigin).toBe('media');
+  });
+
+  test('un média UNIQUE SANS légende propre reçoit le contenu du post (#6864)', () => {
+    const model = resolveFeedCardModel(
+      basePost({
+        content: 'Le marché de ce matin, encore un peu endormi.',
+        originalLanguage: 'fr',
+        media: [{ id: 'm1', mimeType: 'image/jpeg', fileUrl: 'a.jpg' }],
+      }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+    expect(model.media[0]?.caption).toBe('Le marché de ce matin, encore un peu endormi.');
+    expect(model.media[0]?.captionOrigin).toBe('post');
+  });
+
+  /**
+   * LE VECTEUR QUI SÉPARE une implémentation juste d'un `?? post.content` naïf :
+   * une pièce porte sa légende pendant que ses voisines n'en portent AUCUNE.
+   * Un repli posé sans borne de cardinalité rendrait ici trois légendes
+   * identiques — et personne ne le verrait sur un post à média unique.
+   */
+  test('à DEUX médias, celui qui a une légende la garde et l’autre n’en reçoit AUCUNE (#6864)', () => {
+    const model = resolveFeedCardModel(
+      basePost({
+        content: 'Trois vues du même sentier.',
+        originalLanguage: 'fr',
+        media: [
+          { id: 'm1', mimeType: 'image/jpeg', fileUrl: 'a.jpg', caption: 'Sept heures du matin.', order: 0 },
+          { id: 'm2', mimeType: 'image/jpeg', fileUrl: 'b.jpg', order: 1 },
+        ],
+      }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+    expect(model.media[0]?.caption).toBe('Sept heures du matin.');
+    expect(model.media[0]?.captionOrigin).toBe('media');
+    expect('caption' in (model.media[1] ?? {})).toBe(false);
+    expect('captionOrigin' in (model.media[1] ?? {})).toBe(false);
+  });
+
+  test('à DEUX médias sans aucune légende propre, AUCUN ne reçoit le contenu du post (#6864)', () => {
+    const model = resolveFeedCardModel(
+      basePost({
+        content: 'Trois vues du même sentier.',
+        originalLanguage: 'fr',
+        media: [
+          { id: 'm1', mimeType: 'image/jpeg', fileUrl: 'a.jpg', order: 0 },
+          { id: 'm2', mimeType: 'image/jpeg', fileUrl: 'b.jpg', order: 1 },
+        ],
+      }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+    expect('caption' in (model.media[0] ?? {})).toBe(false);
+    expect('caption' in (model.media[1] ?? {})).toBe(false);
+  });
+
+  /**
+   * **L'ORIGINE DÉCIDE DE CE QUI EST TRADUISIBLE** (#6280, #4904). Une légende
+   * propre porte SES traductions (`captionTranslations`) ; le contenu du post
+   * porte les SIENNES (`post.translations`). Servir les unes sur l'autre est
+   * exactement ce que #4904 a coûté — d'où un marqueur, jamais une chaîne nue :
+   * `caption` seul ne dit pas laquelle des deux on affiche.
+   *
+   * Et le contenu servi comme légende est celui que le PRISME sert, jamais
+   * `post.content` brut : le rendre brut rejouerait le cycle 122 (un résolveur
+   * dont la valeur n'atteint aucun lecteur).
+   */
+  test('le contenu servi comme légende descend le Prisme, et sa langue est celle SERVIE (#6864)', () => {
+    const model = resolveFeedCardModel(
+      basePost({
+        content: 'Buenos días a todos',
+        originalLanguage: 'es',
+        translations: { en: { text: 'Good morning everyone' } },
+        media: [{ id: 'm1', mimeType: 'image/jpeg', fileUrl: 'a.jpg' }],
+      }),
+      { preferredLanguages: ['fr', 'en'], now: NOW },
+    );
+    expect(model.media[0]?.caption).toBe('Good morning everyone');
+    expect(model.media[0]?.captionLanguage).toBe('en');
+    expect(model.media[0]?.captionOrigin).toBe('post');
+  });
+
+  /** Un post SANS contenu ne fabrique aucune légende — un bandeau vide
+   * occuperait la place d'une légende pour ne rien dire. */
+  test('un média unique sans légende ET sans contenu de post ne reçoit aucune légende (#6864)', () => {
+    const model = resolveFeedCardModel(
+      basePost({ content: '   ', media: [{ id: 'm1', mimeType: 'image/jpeg', fileUrl: 'a.jpg' }] }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+    expect('caption' in (model.media[0] ?? {})).toBe(false);
+    expect('captionOrigin' in (model.media[0] ?? {})).toBe(false);
+  });
 });
