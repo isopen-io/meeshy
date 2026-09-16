@@ -48,6 +48,19 @@ export type RouteKey =
   | 'settings'
   | 'admin'
   | 'adminUsers'
+  /**
+   * LA NOUVELLE ADMINISTRATION (#6795) — `/adm`, qui absorbera les vues de
+   * l'ancienne une à une pendant que `/admin` lui reste réservée.
+   *
+   * Elle est déclarée ICI et pas seulement dans la table : une route que cette
+   * loi ne connaît pas est PUBLIQUE par défaut (voir `routeKey` plus bas), et
+   * une porte d'administration publique s'ouvrirait à un visiteur sans session
+   * — l'exact contraire de ce que `admin`/`adminUsers` obtiennent deux lignes
+   * plus haut. L'oubli ne rougirait nulle part : l'écran se peindrait, puis le
+   * serveur refuserait.
+   */
+  | 'adm'
+  | 'admUsers'
   | 'login'
   | 'signup'
   | 'welcome'
@@ -141,6 +154,8 @@ const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
   'settings',
   'admin',
   'adminUsers',
+  'adm',
+  'admUsers',
 ]);
 const AUTH_ROUTES: ReadonlySet<string> = new Set<RouteKey>(['login', 'signup', 'welcome', 'magicLink', 'forgotPassword']);
 

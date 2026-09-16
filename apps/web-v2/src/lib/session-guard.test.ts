@@ -25,6 +25,23 @@ const PRIVATE_ROUTES: readonly RouteKey[] = [
   'notifications',
   'profile',
   'settings',
+  /**
+   * LES QUATRE ADRESSES D'ADMINISTRATION (#6432, #6795) — absentes de cette
+   * liste jusqu'ici, donc leur confidentialité n'était affirmée NULLE PART.
+   *
+   * C'est le défaut exact que la loi garde : une route qu'elle ne connaît pas
+   * est PUBLIQUE par défaut. L'oubli ne rougit jamais — l'écran se peint, puis
+   * le serveur refuse. Les y mettre fait porter aux trois `describe` qui lisent
+   * cette liste (fixtures, visiteur anonyme, invité de lien) l'affirmation
+   * qu'aucune d'elles ne s'ouvre sans compte.
+   *
+   * `adm`/`admUsers` sont la NOUVELLE administration ; `admin`/`adminUsers`
+   * restent réservées à l'ancienne, portée dans le même bundle (D-76).
+   */
+  'admin',
+  'adminUsers',
+  'adm',
+  'admUsers',
 ];
 const PUBLIC_AUTH_ROUTES: readonly RouteKey[] = ['login', 'signup'];
 

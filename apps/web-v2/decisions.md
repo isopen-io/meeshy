@@ -2847,3 +2847,19 @@ composite vert.
 **Ignorer plutôt que nettoyer.** Le correctif ne touche aucune donnée : il change une précédence d'affichage. Nettoyer les titres en base éviterait qu'un quatrième client réintroduise le défaut, et reste porté par #6790.
 
 **Le témoin porte sur la PRÉCÉDENCE, pas sur la chaîne.** Chercher « et » verdirait sur un titre stocké d'une autre forme — le même défaut produit quatre chaînes différentes selon la langue du legacy.
+
+## D-76 · L'administration a DEUX adresses : `/adm` pour la nouvelle, `/admin` réservée à l'ancienne — 2026-09-16 (#6795)
+
+**Directive porteur.** « On ne s'occupe pas des limites quand il s'agit d'intégrer les commandes admin d'avant, tu peux même avoir les deux chemins dans la v2 `/adm/` pour la route d'administration nouvelle qui implémentera petit à petit les vues de l'ancienne et brancher toute l'ancienne dans `/admin` ! » puis « N'est-ce pas possible de copier dans v2 tous les composants requis par admin de legacy et monter sur Traefik qu'un seul container ? »
+
+**UN SEUL CONTENEUR, et c'est la bonne option.** Le double montage (v2 + legacy derrière Traefik) a été instruit puis écarté sur deux mesures : le legacy authentifie son administration par un **cookie** `meeshy_session` (base64 de `{role, canAccessAdmin, userId}`, posé par `auth-manager.service.ts:360`) que la v2 ne pose pas — son middleware redirige vers `/signup` sans lui ; et il est en `output: 'standalone'` **sans `basePath`**, donc il sert `/_next/*` à la RACINE, ce qu'un routeur `PathPrefix(/admin)` seul casserait. Porter les composants dans la v2 supprime les deux : le droit s'y lit déjà par `GET /me/permissions`.
+
+**`/adm` est la NOUVELLE administration ; `/admin` est réservée à l'ANCIENNE.** Les deux vivent dans le même bundle. La route KEY reste `admin`/`adminUsers` pour la première, `adm`/`admUsers` pour la seconde : le déplacement ne touche donc ni la garde de session, ni la table des barreaux, ni `lib/admin/sections.ts`, qui raisonnent tous par CLÉ et non par chemin.
+
+**Aujourd'hui `/admin` sert les mêmes écrans que `/adm` — c'est un PONT, pas la cible.** Déplacer `/admin` avant que l'ancienne n'y soit portée laisserait une adresse morte, et un signet d'administrateur mène aujourd'hui à `/admin`. Un seul `import()` alimente les deux (motif `post`/`postDeepLink`), pour qu'elles ne puissent pas diverger d'écran le temps du pont.
+
+**Les quatre routes sont PRIVÉES, déclarées dans `session-guard.ts`.** Une route que cette loi ne connaît pas est publique par défaut : `/adm` ajoutée à la seule table aurait ouvert une porte d'administration à un visiteur sans session, sans qu'aucun témoin ne rougisse — l'écran se serait peint, puis le serveur aurait refusé.
+
+**Ce que le portage coûte, mesuré le 2026-09-16** : 99 fichiers, 25 551 lignes hors témoins, 82 en `'use client'` ; 21 primitives Radix/shadcn, 83 imports `lucide-react`, 35 `sonner`, 4 `recharts` — la v2 n'en a AUCUNE. Seuls 34 imports sont réellement liés à Next (22 `next/navigation`, 12 `next/dynamic`), c'est-à-dire la partie mécanique. **Le point dur est le RUNTIME** : la v2 est construite sur Preact (`preact/compat`), et il faut trancher entre amener Radix tel quel ou réécrire les 21 primitives contre le design system dérivé d'iOS. Arbitrage ouvert sur #6795.
+
+**Ce qui ne se porte PAS tel quel** : 2 884 lignes de page — 24 % de la surface — n'appellent aucune API (`/admin/moderation`, `/admin/audit-logs`, `/admin/analytics`, `/admin/reports`, `/admin/invitations` rendent des données en dur ; `/admin/settings` ne sauvegarde rien). Elles se rebâtissent contre les endpoints RÉELS, qui existent et n'ont jamais eu de consommateur. Et **les journaux d'audit n'ont aucune API de LECTURE** : `AdminAuditLog` n'est qu'écrit, `canViewAuditLogs` ne garde aucune route.
