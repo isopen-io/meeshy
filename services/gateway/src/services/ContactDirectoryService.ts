@@ -138,21 +138,15 @@ async function inBatches<T>(items: T[], size: number, run: (item: T) => Promise<
  *
  * Le blocage vaut dans les DEUX sens, et c'est le point : écarter seulement
  * « les comptes que j'ai bloqués » laisserait celui que j'ai bloqué me
- * retrouver. La symétrie n'est pas une politesse, c'est la protection — mais
- * elle ne se résout plus ICI. `excludedUserIds` est déjà la réunion des deux
- * directions, résolue par l'appelant via {@link getBlockRelatedUserIds} (une
- * requête POSITIVE sur `blockedUserIds`, indexée par `@@index([blockedUserIds])`),
- * jamais par un filtre de tableau NIÉ (#6811) : `blockedUserIds` est une liste
- * scalaire REQUISE (`String[] @default([])`), dont le client Prisma généré ne
- * déclare aucun opérateur `isSet` (`StringNullableListFilter` ne porte que
- * `equals` / `has` / `hasEvery` / `hasSome` / `isEmpty`) — l'ancienne forme
- * (`OR: [{ isSet: false }, { NOT: { has } }]`, posée par #6452 pour survivre au
- * piège « absent vs null » sur ce même champ) était rejetée par le client
- * AVANT tout aller-retour réseau (`PrismaClientValidationError`), et rendait
- * un 500 sur `GET /directory/people` en production.
+ * retrouver. La symétrie n'est pas une politesse, c'est la protection.
+ *
+ * Elle est portée par une LISTE, que l'appelant résout par
+ * {@link blockedIdsAroundViewer} — jamais par une clause de `where` sur
+ * `blockedUserIds`, le champ dont les deux tentatives précédentes ont chacune
+ * cassé quelque chose (#6452 puis #6811).
  */
 export function contactLookupScope(options: {
-  excludedUserIds: readonly string[];
+  blockedRelatedIds: readonly string[];
 }): Prisma.UserWhereInput {
   return {
     isActive: true,
@@ -164,12 +158,48 @@ export function contactLookupScope(options: {
     // colonne soit ajoutée — mesuré en intégration : les 222 comptes ont
     // `deletedAt` ABSENT. La clause seule écartait donc TOUT LE MONDE.
     //
+    // `isSet` est LÉGAL ici et seulement ici : Prisma ne le génère que pour
+    // les champs OPTIONNELS, et `deletedAt` est un `DateTime?`. Le champ
+    // VOISIN `blockedUserIds` est une liste REQUISE, dont le filtre généré
+    // (`StringNullableListFilter`) ne déclare que `equals`, `has`, `hasEvery`,
+    // `hasSome` et `isEmpty` — l'y poser rendait 500 sur les quatre appelants
+    // (#6811). Le type de retour est ce qui l'interdit désormais.
+    //
     // `AND` et non `OR` à la racine : l'appelant pose lui-même un `OR` pour sa
     // liste d'identifiants (`ContactDirectoryService.match`), et deux `OR`
     // frères s'écraseraient en silence.
     AND: [{ OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }] }],
-    id: { notIn: [...options.excludedUserIds] },
+    // Le blocage sort du `where` et devient une LISTE, dans les deux
+    // directions (`blockedIdsAroundViewer`).
+    //
+    // La direction « qui m'a bloqué » s'écrivait `NOT: { blockedUserIds: {
+    // has: viewerId } }`, et le connecteur MongoDB enveloppe un filtre de
+    // tableau d'un test d'existence : le `NOT` inversait cette absence en
+    // refus, écartant les 206 comptes sur 246 qui n'ont jamais écrit la
+    // colonne (#6452). Une requête POSITIVE `{ has: viewerId }`, servie par
+    // `@@index([blockedUserIds])`, répond à la même question sans jamais
+    // rencontrer le piège : un champ absent ne bloque personne, donc il ne
+    // figure pas dans la réponse, et c'est exactement ce qu'on veut.
+    id: { notIn: [...options.blockedRelatedIds] },
   };
+}
+
+/**
+ * Les identifiants à ÉCARTER d'une recherche d'annuaire : le blocage dans les
+ * DEUX directions, résolu par des requêtes positives.
+ *
+ * Le compagnon obligé de {@link contactLookupScope}, qui ne porte plus aucune
+ * clause de blocage. Lecture unique, réutilisable sur une requête.
+ */
+export async function blockedIdsAroundViewer(
+  prisma: PrismaClient,
+  viewerId: string
+): Promise<string[]> {
+  // Un `viewerId` vide n'a rien bloqué et n'est bloqué par personne — et le
+  // demander coûterait un `findUnique({ id: '' })`, que le connecteur MongoDB
+  // refuse (« Malformed ObjectID »), c'est-à-dire un 500 de plus.
+  if (!viewerId) return [];
+  return [...(await getBlockRelatedUserIds(prisma, viewerId))];
 }
 
 export class ContactDirectoryService {
@@ -191,17 +221,17 @@ export class ContactDirectoryService {
     const result = new Map<string, ContactMatch>();
     if (phones.length === 0 && emails.length === 0 && usernames.length === 0) return result;
 
-    // Réunion des deux sens du blocage, par la requête POSITIVE indexée
-    // (#6811) — jamais par un filtre de tableau NIÉ. `excludeUserId` rejoint
-    // la même liste : cette route exclut aussi le demandeur LUI-MÊME, une
-    // raison distincte du blocage que `contactLookupScope` n'a pas à connaître.
-    const blockRelated = await getBlockRelatedUserIds(this.prisma, excludeUserId);
+    const blockedUserIds = await blockedIdsAroundViewer(this.prisma, excludeUserId);
 
     const candidates = await this.prisma.user.findMany({
       where: {
-        // Même loi que les deux sœurs publiques (#6529, #6811) : `isActive`
-        // et le filtre anti-suppression « absent vs null ».
-        ...contactLookupScope({ excludedUserIds: [excludeUserId, ...blockRelated] }),
+        // Même loi que les trois sœurs publiques (#6529, #6452, #6811) :
+        // `isActive` et le filtre anti-suppression viennent de la portée, le
+        // blocage vient de la LISTE. `id` est réécrit ici parce que cette
+        // route écarte aussi le demandeur LUI-MÊME, que `contactLookupScope`
+        // n'a pas à connaître.
+        ...contactLookupScope({ blockedRelatedIds: blockedUserIds }),
+        id: { notIn: [excludeUserId, ...blockedUserIds] },
         OR: [
           ...(phones.length > 0 ? [{ phoneNumber: { in: phones } }] : []),
           ...(emails.length > 0 ? [{ email: { in: emails } }] : []),

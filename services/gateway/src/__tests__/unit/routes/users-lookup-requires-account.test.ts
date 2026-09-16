@@ -47,17 +47,25 @@ import { getUserByEmail, getUserByPhone } from '../../../routes/users/profile';
 const PREFIXE = '/api/v1';
 const VIEWER = '507f1f77bcf86cd799439011';
 
-type Reglages = { authentifie: boolean; cible?: Record<string, unknown> | null };
+type Reglages = {
+  authentifie: boolean;
+  cible?: Record<string, unknown> | null;
+  /** Qui a bloqué l'appelant — la requête POSITIVE de `blockedIdsAroundViewer`. */
+  bloqueurs?: string[];
+  /** Qui l'appelant a bloqué — sa propre liste. */
+  bloquesParLAppelant?: string[];
+};
 
 function buildApp(reglages: Reglages) {
   const findFirst = jest.fn<any>(async () => reglages.cible ?? null);
   const prisma = {
     user: {
       findFirst,
-      findUnique: jest.fn<any>(async () => ({ blockedUserIds: [] })),
-      // `getBlockRelatedUserIds` (#6811) interroge « qui a bloqué l'appelant »
-      // par cette méthode, AVANT le `findFirst` de la route.
-      findMany: jest.fn<any>(async () => []),
+      findUnique: jest.fn<any>(async () => ({
+        blockedUserIds: reglages.bloquesParLAppelant ?? [],
+      })),
+      // « qui m'a bloqué ? » — la seconde moitié de `blockedIdsAroundViewer`.
+      findMany: jest.fn<any>(async () => (reglages.bloqueurs ?? []).map((id) => ({ id }))),
     },
   };
   return { prisma, findFirst };
@@ -158,25 +166,30 @@ describe('… et les filtres que la jumelle authentifiée applique déjà', () =
   });
 
   it.each(PORTES)('$nom : écarte qui a bloqué l’appelant, et qui l’appelant a bloqué', async ({ url }) => {
-    const { prisma, findFirst } = buildApp({ authentifie: true, cible: null });
+    const { prisma, findFirst } = buildApp({
+      authentifie: true,
+      cible: null,
+      bloqueurs: ['507f1f77bcf86cd7994390aa'],
+      bloquesParLAppelant: ['507f1f77bcf86cd7994390bb'],
+    });
     const app = await monter(prisma, true);
 
     await app.inject({ method: 'GET', url });
 
+    const where = findFirst.mock.calls[0][0].where as Record<string, any>;
     // Le blocage vaut dans les DEUX sens : sans cela, un utilisateur bloqué
     // retrouvait le profil de qui l'a bloqué, s'il connaissait son adresse.
-    // La direction « qui a bloqué l'appelant » est désormais résolue AVANT le
-    // `findFirst`, par la requête POSITIVE indexée `getBlockRelatedUserIds`
-    // (#6811) — jamais par un filtre de tableau NIÉ que le client Prisma
-    // généré refuse sur cette liste scalaire REQUISE (`blockedUserIds`).
-    expect((prisma.user.findMany as jest.Mock).mock.calls[0][0].where).toEqual({
-      blockedUserIds: { has: VIEWER },
-    });
-
-    const where = findFirst.mock.calls[0][0].where as Record<string, any>;
+    //
+    // Il vit désormais dans une LISTE, jamais dans un filtre de tableau NIÉ :
+    // `NOT: { blockedUserIds: { has } }` écarte aussi les comptes qui n'ont
+    // jamais écrit la colonne (#6452), et l'`isSet` posé pour y répondre
+    // n'existe pas sur une liste scalaire — Prisma refusait la requête, donc
+    // 500 (#6811).
     expect(where.NOT).toBeUndefined();
     expect(JSON.stringify(where)).not.toContain('blockedUserIds');
-    expect(where.id).toMatchObject({ notIn: expect.any(Array) });
+    expect(where.id.notIn).toEqual(
+      expect.arrayContaining(['507f1f77bcf86cd7994390aa', '507f1f77bcf86cd7994390bb'])
+    );
 
     await app.close();
   });

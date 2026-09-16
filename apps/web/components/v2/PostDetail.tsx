@@ -19,6 +19,7 @@ import type { BackgroundSoundV3 } from '@meeshy/shared/types/canvas-v3';
 import { getLanguageName } from './flags';
 import { formatCompactNumber } from '@/utils/format-number';
 import { authorAccentColor } from '@meeshy/shared/utils/conversation-colors';
+import { resolveMediaAltText } from '@/hooks/use-post-translation';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -70,6 +71,8 @@ type RepostMediaItem = {
   fileUrl: string;
   thumbnailUrl?: string | null;
   alt?: string | null;
+  altLanguage?: string | null;
+  altTranslations?: unknown;
   duration?: number | null;
 };
 
@@ -83,11 +86,14 @@ function RepostMediaTile({
   media,
   onDownload,
   downloadLabel,
+  preferredLanguages,
 }: {
   media: RepostMediaItem;
   onDownload?: (media: RepostMediaItem) => void;
   downloadLabel: string;
+  preferredLanguages?: readonly string[];
 }) {
+  const resolvedAlt = resolveMediaAltText(media, preferredLanguages ?? []);
   return (
     <div className="group relative rounded-lg overflow-hidden bg-[var(--gp-parchment)] aspect-square">
       {onDownload && (
@@ -106,7 +112,7 @@ function RepostMediaTile({
       {media.mimeType.startsWith('image/') && (
         <img
           src={buildAttachmentUrl(media.thumbnailUrl ?? media.fileUrl) ?? undefined}
-          alt={media.alt ?? ''}
+          alt={resolvedAlt}
           className="w-full h-full object-cover"
           loading="lazy"
         />
@@ -452,7 +458,7 @@ function PostDetail({
                     </button>
                   )}
                   {m.mimeType.startsWith('image/') && (
-                    <img src={buildAttachmentUrl(m.fileUrl) ?? undefined} alt={m.alt ?? ''} className="w-full object-cover max-h-96" loading="lazy" />
+                    <img src={buildAttachmentUrl(m.fileUrl) ?? undefined} alt={resolveMediaAltText(m, preferredLanguages ?? [])} className="w-full object-cover max-h-96" loading="lazy" />
                   )}
                   {m.mimeType.startsWith('video/') && (
                     <video src={buildAttachmentUrl(m.fileUrl) ?? undefined} controls className="w-full max-h-96" />
@@ -534,6 +540,7 @@ function PostDetail({
                       key={m.id}
                       media={m}
                       downloadLabel={t('post.repostDownload', 'Download original media')}
+                      preferredLanguages={preferredLanguages}
                       onDownload={handleDownloadRepostMedia}
                     />
                   ))}

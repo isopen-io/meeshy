@@ -21,6 +21,7 @@ jest.mock('../../../../utils/password-hash', () => ({
 import { UserManagementService } from '../../../../services/admin/user-management.service';
 import { hashPassword, verifyPassword, BCRYPT_COST } from '../../../../utils/password-hash';
 import { logger } from '../../../../utils/logger';
+import { searchTokensFor } from '../../../../utils/search-tokens';
 import { makeUser, makePrisma, makeService } from './user-management-mocks';
 
 const mockHash = hashPassword as jest.Mock;
@@ -459,6 +460,48 @@ describe('UserManagementService.updateUser', () => {
       data: expect.objectContaining({ firstName: 'Updated', updatedAt: expect.any(Date) }),
     });
     expect((result as any).firstName).toBe('Updated');
+  });
+
+  // #6823 — createUser recalculait déjà `searchTokens` ; updateUser écrivait
+  // `data` tel quel et laissait les anciens jetons en place, rendant le compte
+  // introuvable sous son nouveau nom.
+  it('recalculates searchTokens from the merged name when a name field changes', async () => {
+    const current = makeUser({ username: 'oldname', displayName: 'Old Name', firstName: 'Old', lastName: 'Name' });
+    const findUnique = jest.fn().mockResolvedValue(current);
+    const update = jest.fn().mockResolvedValue(makeUser({ username: 'newname' }));
+    const svc = makeService(makePrisma({ findUnique, update }));
+
+    await svc.updateUser('user-id', { username: 'newname' } as any);
+
+    expect(findUnique).toHaveBeenCalledWith({
+      where: { id: 'user-id' },
+      select: { username: true, displayName: true, firstName: true, lastName: true },
+    });
+    const expectedTokens = searchTokensFor({
+      username: 'newname',
+      displayName: 'Old Name',
+      firstName: 'Old',
+      lastName: 'Name',
+    });
+    expect(update).toHaveBeenCalledWith({
+      where: { id: 'user-id' },
+      data: expect.objectContaining({ searchTokens: expectedTokens }),
+    });
+    // Le nouveau nom est indexé, l'ancien ne l'est plus.
+    expect(expectedTokens).toContain('newname');
+    expect(expectedTokens).not.toContain('oldname');
+  });
+
+  it('does not recompute searchTokens when the update touches no name field', async () => {
+    const findUnique = jest.fn();
+    const update = jest.fn().mockResolvedValue(makeUser({ bio: 'new bio' }));
+    const svc = makeService(makePrisma({ findUnique, update }));
+
+    await svc.updateUser('user-id', { bio: 'new bio' } as any);
+
+    expect(findUnique).not.toHaveBeenCalled();
+    const writtenData = update.mock.calls[0][0].data;
+    expect(writtenData).not.toHaveProperty('searchTokens');
   });
 });
 

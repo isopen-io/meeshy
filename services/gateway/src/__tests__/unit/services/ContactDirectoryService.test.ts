@@ -57,13 +57,27 @@ function makeUser(overrides: Record<string, unknown> = {}) {
 function makePrisma(options: {
   users?: unknown[];
   owner?: { blockedUserIds: string[] } | null;
+  /** Qui a BLOQUÉ le demandeur — la requête POSITIVE de `blockedIdsAroundViewer`. */
+  bloqueurs?: string[];
   existing?: unknown[];
   count?: number;
 } = {}) {
-  const { users = [], owner = { blockedUserIds: [] }, existing = [], count = existing.length } = options;
+  const {
+    users = [],
+    owner = { blockedUserIds: [] },
+    bloqueurs = [],
+    existing = [],
+    count = existing.length,
+  } = options;
   return {
     user: {
-      findMany: jest.fn<any>().mockResolvedValue(users),
+      // Le double DISTINGUE les deux requêtes : « qui m'a bloqué ? »
+      // (`blockedUserIds: { has }`) et les CANDIDATS du carnet. Un double qui
+      // rend les mêmes lignes aux deux ferait passer tout candidat pour un
+      // bloqueur.
+      findMany: jest.fn<any>().mockImplementation(async (args: any) =>
+        args?.where?.blockedUserIds ? bloqueurs.map((id: string) => ({ id })) : users
+      ),
       findUnique: jest.fn<any>().mockResolvedValue(owner),
     },
     userContact: {
@@ -74,6 +88,10 @@ function makePrisma(options: {
     },
   } as any;
 }
+
+/** Les arguments de la requête CANDIDATS — jamais celle des bloqueurs. */
+const argsCandidats = (prisma: any) =>
+  (prisma.user.findMany.mock.calls as any[]).filter((c) => !c[0]?.where?.blockedUserIds).at(-1)![0];
 
 describe('ContactDirectoryService.match', () => {
   it('matches a contact by normalized phone number', async () => {
@@ -130,35 +148,35 @@ describe('ContactDirectoryService.match', () => {
     );
   });
 
-  it('excludes users the owner has blocked', async () => {
-    const prisma = makePrisma({ users: [], owner: { blockedUserIds: [BOB_ID] } });
+  it('excludes users the owner has blocked — and those who blocked the owner', async () => {
+    const prisma = makePrisma({
+      users: [],
+      owner: { blockedUserIds: [BOB_ID] },
+      bloqueurs: [AWA_ID],
+    });
     const service = new ContactDirectoryService(prisma);
     const contacts = normalizeContacts([{ emails: ['bob@test.com'] }]);
 
     await service.match({ contacts, excludeUserId: OWNER_ID });
 
-    // La direction « qui a bloqué le propriétaire » est résolue AVANT la
-    // requête candidats, par la requête POSITIVE de `getBlockRelatedUserIds`
-    // (#6811) — c'est donc le PREMIER appel à `findMany`.
-    expect(prisma.user.findMany.mock.calls[0][0].where).toEqual({ blockedUserIds: { has: OWNER_ID } });
-
-    const where = prisma.user.findMany.mock.calls[1][0].where;
-    expect(where.id.notIn).toEqual(expect.arrayContaining([OWNER_ID, BOB_ID]));
-    // Plus aucun filtre sur `blockedUserIds` dans le `where` des candidats —
-    // la garde est désormais une LISTE D'IDS résolue par l'appelant, jamais un
-    // filtre de tableau NIÉ que le client Prisma généré refuse sur cette
-    // liste scalaire REQUISE (#6529, même défaut que #6452 pour
-    // `contactLookupScope`, réglé par #6811).
+    const where = argsCandidats(prisma).where;
+    expect(where.id.notIn).toEqual(expect.arrayContaining([OWNER_ID, BOB_ID, AWA_ID]));
+    // Le blocage vit dans une LISTE, jamais dans un filtre de tableau NIÉ :
+    // `NOT: { blockedUserIds: { has } }` écarte aussi les comptes qui n'ont
+    // jamais écrit la colonne (#6529, #6452), et l'`isSet` posé pour y
+    // répondre n'existe pas sur une liste scalaire — Prisma refusait la
+    // requête, donc 500 (#6811).
     expect(where.NOT).toBeUndefined();
     expect(JSON.stringify(where)).not.toContain('blockedUserIds');
   });
 
   /**
    * Preuve par ÉVALUATION contre un vrai document (#6529), pas seulement par
-   * inspection de la forme du `where` — la même famille de défaut que
-   * `contactLookupScope()` jusqu'à #6452/#6811 : une garde de blocage qui
-   * regarde `blockedUserIds` avec le mauvais opérateur se trompe précisément
-   * sur le compte qui n'a jamais écrit ce champ.
+   * inspection de la forme du `where` — c'est exactement ce qui a laissé
+   * passer le même défaut sur `contactLookupScope()` jusqu'à #6452 : la forme
+   * `NOT: { blockedUserIds: { has } }` a l'air juste, elle EST juste pour un
+   * champ posé, et ne l'est plus pour un champ ABSENT (ce que Prisma traduit
+   * sur le connecteur MongoDB — voir `__tests__/helpers/mongo-where.ts`).
    */
   it('rend un contact dont le compte Meeshy ne porte AUCUNE clé `blockedUserIds`', async () => {
     const prisma = makePrisma({ users: [] });
@@ -167,7 +185,7 @@ describe('ContactDirectoryService.match', () => {
 
     await service.match({ contacts, excludeUserId: OWNER_ID });
 
-    const where = prisma.user.findMany.mock.calls[1][0].where;
+    const where = argsCandidats(prisma).where;
     const compteSansBlocageDeclare = { id: AWA_ID, isActive: true, email: 'awa@test.com' };
 
     expect(matchesMongoWhere(compteSansBlocageDeclare, where)).toBe(true);
@@ -622,7 +640,7 @@ describe('ContactDirectoryService.list — blocage et présence', () => {
   });
 
   it('severs the Meeshy link of a contact who blocked the owner', async () => {
-    const prisma = makePrisma({ existing: [storedEntry], count: 1, users: [{ id: AWA_ID }] });
+    const prisma = makePrisma({ existing: [storedEntry], count: 1, bloqueurs: [AWA_ID] });
     const service = new ContactDirectoryService(prisma);
 
     const result = await service.list({ ownerId: OWNER_ID, viewer: OWNER_VIEWER, offset: 0, limit: 50 });

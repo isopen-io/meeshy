@@ -29,6 +29,7 @@
 import { execFileSync } from 'node:child_process';
 import { readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const APP = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 const ROOT = new URL('../../..', import.meta.url).pathname.replace(/\/$/, '');
@@ -49,40 +50,73 @@ const ROOT = new URL('../../..', import.meta.url).pathname.replace(/\/$/, '');
  */
 const OUT_OF_SCOPE = new Set(['dist', 'node_modules', 'android', 'ios', '.turbo', 'render', 'test-results', '.cache']);
 
+/**
+ * `isOutOfScope` — CE QUI N'EST PAS UNE SOURCE.
+ *
+ * **#6832 — le motif, jamais une liste de noms.** La seule appartenance au Set
+ * ci-dessus rendait le gate NON IDEMPOTENT : `check-git-tracking` est le 35ᵉ
+ * maillon de la chaîne `&&`, `check-admin-rung` le 38ᵉ, et ce dernier
+ * CONSTRUIT `dist-admin-rung/`. Au tour suivant, dans le même arbre, le témoin
+ * le trouvait et réclamait qu'on COMMITE des centaines de fichiers de build —
+ * un rouge FAUX, qui désigne des innocents et invite à réparer ce qui n'est
+ * pas cassé. La CI ne le voit jamais (elle clone frais) ; il ne mord qu'en
+ * local, et seulement chez qui relance le gate — donc au pire moment, quand on
+ * revérifie après un correctif.
+ *
+ * Trois scripts du gate écrivent des sorties `dist-*` (`dist-admin-rung`,
+ * `dist-gateway`, `dist-capacitor`). Les NOMMER toutes les trois rejouerait
+ * l'inventaire que #6080 et #6820 viennent de retirer ailleurs : la prochaine
+ * sortie rouvrirait le défaut en silence. On reconnaît donc le MOTIF que
+ * `.gitignore:3` déclare déjà — `dist-*` — le même que le message d'erreur de
+ * ce fichier cite lui-même quand il rougit.
+ *
+ * La raison d'être du témoin est INTACTE : il traque les SOURCES avalées par
+ * une règle générique (`src/bun-test.d.ts`,
+ * `scripts/lib/institutional-routes.d.mts`). Une sortie de construction n'en
+ * est pas une — c'est exactement ce que `dist`, exempté depuis toujours,
+ * affirme déjà.
+ */
+export const isOutOfScope = (name) => OUT_OF_SCOPE.has(name) || name.startsWith('dist-');
+
 const files = (dir) =>
   readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
-    if (OUT_OF_SCOPE.has(e.name)) return [];
+    if (isOutOfScope(e.name)) return [];
     const path = join(dir, e.name);
     return e.isDirectory() ? files(path) : [relative(ROOT, path)];
   });
 
-const tracked = new Set(
-  execFileSync('git', ['ls-files', '--', relative(ROOT, APP)], { cwd: ROOT, encoding: 'utf8' })
-    .split('\n')
-    .filter(Boolean),
-);
 
-const missing = files(APP).filter((f) => !tracked.has(f));
-
-if (missing.length > 0) {
-  console.error(
-    `\n  ${missing.length} fichier(s) de l'application ne sont PAS suivis par git —` +
-      " ils manqueront à tout clone frais (CI, image Docker, collègue) :\n",
+/* Le pilote ne tourne QUE si ce fichier est le point d'entrée : importé (par
+   son témoin), le module n'expose que `isOutOfScope`, sans marcher l'arbre ni
+   appeler git — même motif que `check-shell-dist.mjs:384-386`. */
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const tracked = new Set(
+    execFileSync('git', ['ls-files', '--', relative(ROOT, APP)], { cwd: ROOT, encoding: 'utf8' })
+      .split('\n')
+      .filter(Boolean),
   );
-  for (const f of missing) {
-    let par = '';
-    try {
-      par = execFileSync('git', ['check-ignore', '-v', '--', f], { cwd: ROOT, encoding: 'utf8' }).trim();
-    } catch {
-      par = '(non ignoré — simplement jamais ajouté)';
+  const missing = files(APP).filter((f) => !tracked.has(f));
+
+  if (missing.length > 0) {
+    console.error(
+      `\n  ${missing.length} fichier(s) de l'application ne sont PAS suivis par git —` +
+        " ils manqueront à tout clone frais (CI, image Docker, collègue) :\n",
+    );
+    for (const f of missing) {
+      let par = '';
+      try {
+        par = execFileSync('git', ['check-ignore', '-v', '--', f], { cwd: ROOT, encoding: 'utf8' }).trim();
+      } catch {
+        par = '(non ignoré — simplement jamais ajouté)';
+      }
+      console.error(`    · ${f}\n        ${par}`);
     }
-    console.error(`    · ${f}\n        ${par}`);
+    console.error(
+      "\n  Si le fichier est une SOURCE, ajouter une négation dans `.gitignore`" +
+        "\n  (`!chemin`) APRÈS la règle générique qui l'emporte, puis `git add`.\n",
+    );
+    process.exit(1);
   }
-  console.error(
-    "\n  Si le fichier est une SOURCE, ajouter une négation dans `.gitignore`" +
-      "\n  (`!chemin`) APRÈS la règle générique qui l'emporte, puis `git add`.\n",
-  );
-  process.exit(1);
-}
 
-console.log(`  Les ${tracked.size} fichiers de l'application sont suivis par git.`);
+  console.log(`  Les ${tracked.size} fichiers de l'application sont suivis par git.`);
+}

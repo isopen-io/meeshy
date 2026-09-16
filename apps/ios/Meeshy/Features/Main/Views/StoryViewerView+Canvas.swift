@@ -1174,7 +1174,11 @@ struct StoryCardView: View {
 
     /// `true` quand le canvas est étendu plein bord (`.free`) — pilote le voile,
     /// l'ombre et l'animation de la carte en phase avec le cadrage.
-    var canvasIsExpanded: Bool { canvasPresentation == .free } // internal : idem
+    /// **#6806 — `!= .carded`, et non `== .free`.** La session plein écran rend
+    /// désormais `.immersive` (le canvas couvre le viewport) ; un test sur
+    /// `.free` seul aurait laissé le voile, l'ombre et l'animation de carte
+    /// croire qu'on est encore cardé au moment le plus plein écran de tous.
+    var canvasIsExpanded: Bool { canvasPresentation != .carded } // internal : idem
 
     var readerCanvasFraming: StoryCanvasFraming.Result { // internal : idem
         StoryCanvasFraming.resolve(.init(
