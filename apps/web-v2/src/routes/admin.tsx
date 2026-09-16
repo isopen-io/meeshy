@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ADMIN_DASHBOARD_QUERY_KEY, adminIdentityQueryOptions, loadAdminDashboard } from '@/lib/api/admin';
 import { apiDeps } from '@/lib/api/deps';
 import { visibleAdminSections } from '@/lib/admin/sections';
+import { translateAdmin } from '@/lib/i18n-admin-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { AdminCounter, AdminDenied, AdminScreenFrame, AdminSkeleton } from '@/routes/admin-parts';
@@ -83,34 +84,34 @@ export default function AdminScreen() {
   return (
     <AdminScreenFrame language={language} title={titre} back="list">
       <p className="pb-3 text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-        {translate(language, 'admin.role', { role: identite.data?.role ?? '' })}
+        {translateAdmin(language, 'admin.role', { role: identite.data?.role ?? '' })}
       </p>
 
       <section aria-labelledby="admin-counters" className="grid gap-3">
         <h2 id="admin-counters" className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-          {translate(language, 'admin.counters.title')}
+          {translateAdmin(language, 'admin.counters.title')}
         </h2>
         {tableau.isPending ? (
           <AdminSkeleton rows={3} />
         ) : tableau.data === undefined ? (
           <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-            {translate(language, 'admin.counters.unavailable')}
+            {translateAdmin(language, 'admin.counters.unavailable')}
           </p>
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <AdminCounter label={translate(language, 'admin.counters.users')} value={nombre(tableau.data.totalUsers, language)} />
-            <AdminCounter label={translate(language, 'admin.counters.activeUsers')} value={nombre(tableau.data.activeUsers, language)} />
-            <AdminCounter label={translate(language, 'admin.counters.messages')} value={nombre(tableau.data.totalMessages, language)} />
-            <AdminCounter label={translate(language, 'admin.counters.communities')} value={nombre(tableau.data.totalCommunities, language)} />
-            <AdminCounter label={translate(language, 'admin.counters.reports')} value={nombre(tableau.data.totalReports, language)} />
-            <AdminCounter label={translate(language, 'admin.counters.newUsers')} value={nombre(tableau.data.newUsers24h, language)} />
+            <AdminCounter label={translateAdmin(language, 'admin.counters.users')} value={nombre(tableau.data.totalUsers, language)} />
+            <AdminCounter label={translateAdmin(language, 'admin.counters.activeUsers')} value={nombre(tableau.data.activeUsers, language)} />
+            <AdminCounter label={translateAdmin(language, 'admin.counters.messages')} value={nombre(tableau.data.totalMessages, language)} />
+            <AdminCounter label={translateAdmin(language, 'admin.counters.communities')} value={nombre(tableau.data.totalCommunities, language)} />
+            <AdminCounter label={translateAdmin(language, 'admin.counters.reports')} value={nombre(tableau.data.totalReports, language)} />
+            <AdminCounter label={translateAdmin(language, 'admin.counters.newUsers')} value={nombre(tableau.data.newUsers24h, language)} />
           </div>
         )}
       </section>
 
       <section aria-labelledby="admin-sections" className="grid gap-3 pt-6">
         <h2 id="admin-sections" className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-          {translate(language, 'admin.sections.title')}
+          {translateAdmin(language, 'admin.sections.title')}
         </h2>
         <ul className="grid gap-2">
           {sections
@@ -132,7 +133,7 @@ export default function AdminScreen() {
                   <span aria-hidden="true" className="text-body">
                     {section.glyph}
                   </span>
-                  <span className="min-w-0 flex-1 truncate text-body font-medium">{translate(language, section.labelKey)}</span>
+                  <span className="min-w-0 flex-1 truncate text-body font-medium">{translateAdmin(language, section.labelKey)}</span>
                 </Link>
               </li>
             ))}

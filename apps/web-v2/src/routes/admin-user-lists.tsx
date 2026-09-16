@@ -14,7 +14,7 @@ import {
   type AdminMedia,
 } from '@/lib/api/admin-user-media';
 import { apiDeps } from '@/lib/api/deps';
-import { translate } from '@/lib/i18n-catalog';
+import { translateAdmin } from '@/lib/i18n-admin-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
 import { AdminSkeleton } from './admin-parts';
@@ -67,10 +67,10 @@ function Pagination({
   return (
     <div className="flex justify-between gap-2 pt-2">
       <button type="button" disabled={offset === 0} onClick={() => onOffset(Math.max(0, offset - taille))} className={bouton} style={fond}>
-        {translate(language, 'admin.users.previous')}
+        {translateAdmin(language, 'admin.users.previous')}
       </button>
       <button type="button" disabled={!hasMore} onClick={() => onOffset(offset + taille)} className={bouton} style={fond}>
-        {translate(language, 'admin.users.next')}
+        {translateAdmin(language, 'admin.users.next')}
       </button>
     </div>
   );
@@ -91,14 +91,14 @@ export function AdminUserMediaSection({ userId, language }: { readonly userId: s
   return (
     <section className="grid gap-2" aria-labelledby="admin-media-title">
       <h2 id="admin-media-title" className="text-caption font-medium" style={{ color: INK2 }}>
-        {translate(language, 'admin.media.title')}
+        {translateAdmin(language, 'admin.media.title')}
       </h2>
 
       {page.isPending ? (
         <AdminSkeleton rows={3} />
       ) : (page.data?.medias ?? []).length === 0 ? (
         <p className="text-caption" style={{ color: INK2 }}>
-          {translate(language, 'admin.media.empty')}
+          {translateAdmin(language, 'admin.media.empty')}
         </p>
       ) : (
         <>
@@ -128,13 +128,13 @@ function MediaRow({ media, language }: { readonly media: AdminMedia; readonly la
           {media.originalName === '' ? media.id : media.originalName}
         </p>
         <p className="truncate text-caption" style={{ color: INK2 }}>
-          {translate(language, media.source === 'message' ? 'admin.media.fromMessage' : 'admin.media.fromPost')}
+          {translateAdmin(language, media.source === 'message' ? 'admin.media.fromMessage' : 'admin.media.fromPost')}
           {media.mimeType === '' ? '' : ` · ${media.mimeType}`}
         </p>
       </div>
       {media.isProtected ? (
         <span className="shrink-0 text-caption" style={{ color: 'var(--color-danger)' }}>
-          {translate(language, 'admin.media.protected')}
+          {translateAdmin(language, 'admin.media.protected')}
         </span>
       ) : null}
     </li>
@@ -156,14 +156,14 @@ export function AdminUserConversationsSection({ userId, language }: { readonly u
   return (
     <section className="grid gap-2" aria-labelledby="admin-conv-title">
       <h2 id="admin-conv-title" className="text-caption font-medium" style={{ color: INK2 }}>
-        {translate(language, 'admin.conv.title')}
+        {translateAdmin(language, 'admin.conv.title')}
       </h2>
 
       {page.isPending ? (
         <AdminSkeleton rows={3} />
       ) : (page.data?.conversations ?? []).length === 0 ? (
         <p className="text-caption" style={{ color: INK2 }}>
-          {translate(language, 'admin.conv.empty')}
+          {translateAdmin(language, 'admin.conv.empty')}
         </p>
       ) : (
         <>
@@ -204,7 +204,7 @@ function ConversationRow({
         <p className="truncate text-caption" style={{ color: INK2 }}>
           {conversation.type}
           {' · '}
-          {translate(language, 'admin.conv.members', { count: String(conversation.memberCount) })}
+          {translateAdmin(language, 'admin.conv.members', { count: String(conversation.memberCount) })}
         </p>
       </div>
     </li>

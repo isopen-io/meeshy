@@ -5,7 +5,7 @@ import { adminIdentityQueryOptions } from '@/lib/api/admin';
 import { adminUserDetailQueryKey, adminUserDetailQueryOptions, type AdminUserDetail } from '@/lib/api/admin-user-detail';
 import { apiDeps } from '@/lib/api/deps';
 import { visibleAdminSections } from '@/lib/admin/sections';
-import { translate } from '@/lib/i18n-catalog';
+import { translateAdmin } from '@/lib/i18n-admin-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useParams, useRoute } from '@/lib/router';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
@@ -59,7 +59,7 @@ export default function AdminUserScreen() {
   const annonceur = useLiveAnnouncer();
   const client = useQueryClient();
 
-  const titre = translate(language, 'admin.user.title');
+  const titre = translateAdmin(language, 'admin.user.title');
 
   if (identite.isPending) {
     return (
@@ -90,7 +90,7 @@ export default function AdminUserScreen() {
     return (
       <AdminScreenFrame language={language} title={titre} back={retour}>
         <p className="text-body" style={{ color: INK2 }}>
-          {translate(language, 'admin.user.unavailable')}
+          {translateAdmin(language, 'admin.user.unavailable')}
         </p>
       </AdminScreenFrame>
     );
@@ -100,31 +100,31 @@ export default function AdminUserScreen() {
     <AdminScreenFrame language={language} title={titre} back={retour}>
       <div className="grid gap-5" data-admin-user={membre.id}>
         <Entete membre={membre} language={language} />
-        <Section titre={translate(language, 'admin.user.identity')}>
+        <Section titre={translateAdmin(language, 'admin.user.identity')}>
           <Ligne label="@" valeur={membre.username} />
           <Ligne label="✉" valeur={membre.email} />
           {membre.phoneNumber === '' ? null : <Ligne label="☎" valeur={membre.phoneNumber} />}
         </Section>
-        <Section titre={translate(language, 'admin.user.account')}>
-          <Ligne label={translate(language, 'admin.user.role')} valeur={membre.role} />
-          <Ligne label={translate(language, 'admin.user.created')} valeur={membre.createdAt ?? '—'} />
-          <Ligne label={translate(language, 'admin.user.lastActive')} valeur={membre.lastActiveAt ?? '—'} />
+        <Section titre={translateAdmin(language, 'admin.user.account')}>
+          <Ligne label={translateAdmin(language, 'admin.user.role')} valeur={membre.role} />
+          <Ligne label={translateAdmin(language, 'admin.user.created')} valeur={membre.createdAt ?? '—'} />
+          <Ligne label={translateAdmin(language, 'admin.user.lastActive')} valeur={membre.lastActiveAt ?? '—'} />
           <Ligne
-            label={translate(language, 'admin.user.twoFactor')}
-            valeur={translate(language, membre.twoFactorEnabled ? 'admin.user.enabled' : 'admin.users.inactive')}
+            label={translateAdmin(language, 'admin.user.twoFactor')}
+            valeur={translateAdmin(language, membre.twoFactorEnabled ? 'admin.user.enabled' : 'admin.users.inactive')}
           />
         </Section>
 
         <div className="grid gap-2">
-          <ActionButton onClick={() => setEdition(true)}>{translate(language, 'admin.edit.open')}</ActionButton>
+          <ActionButton onClick={() => setEdition(true)}>{translateAdmin(language, 'admin.edit.open')}</ActionButton>
           {/* Ton `danger` : le geste révoque les sessions ouvertes de la cible,
               qui se retrouve déconnectée partout. La couleur le dit avant que
               la feuille ne l'écrive. */}
           <ActionButton tone="danger" onClick={() => setMotDePasse(true)}>
-            {translate(language, 'admin.password.title')}
+            {translateAdmin(language, 'admin.password.title')}
           </ActionButton>
           <ActionButton tone="danger" onClick={() => setBannissement(true)}>
-            {translate(language, 'admin.ban.open')}
+            {translateAdmin(language, 'admin.ban.open')}
           </ActionButton>
         </div>
 
@@ -203,7 +203,7 @@ function Entete({ membre, language }: { readonly membre: AdminUserDetail; readon
       </div>
       {etat === null ? null : (
         <span className="shrink-0 text-caption" style={{ color: 'var(--color-danger)' }}>
-          {translate(language, etat)}
+          {translateAdmin(language, etat)}
         </span>
       )}
     </div>
