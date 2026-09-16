@@ -61,6 +61,14 @@ export type StoryMediaLayerProps = {
   readonly caption: StoryCaption | null;
   readonly onReady: () => void;
   readonly onFailed: () => void;
+  /** LA DURÉE DU MÉDIA, en millisecondes, dès que le décodeur la connaît
+   * (#6836) — le seul chemin par lequel elle peut atteindre `slideDurationMs`.
+   *
+   * `StoryTrayMedia` n'en sert AUCUNE (`lib/api/stories.ts` : id, url,
+   * thumbnailUrl, mimeType), et la passerelle n'a pas de champ pour ça. La
+   * durée ne peut donc venir que de l'élément lui-même. Sans ce relais, la loi
+   * de durée reste juste, testée par 38 témoins, et APPELÉE PAR PERSONNE. */
+  readonly onDurationKnown?: ((durationMs: number) => void) | undefined;
 };
 
 /**
@@ -76,6 +84,7 @@ export function StoryMediaLayer({
   caption,
   onReady,
   onFailed,
+  onDurationKnown,
 }: StoryMediaLayerProps) {
   if (showsMedia) {
     /* `feedMediaKindOf` — LA LOI DÉJÀ PARTAGÉE par le fil
@@ -106,6 +115,22 @@ export function StoryMediaLayer({
              déclenche pas comme sur une image — attendre le mauvais évènement
              laisserait la progression de la story bloquée à zéro. */
           onLoadedData={onReady}
+          /* `onLoadedMetadata`, PAS `onLoadedData` (#6836) : les métadonnées —
+             dont `duration` — arrivent AVANT la première trame décodable. Les
+             attendre sur `loadedData` ferait démarrer la diapositive sur le
+             plancher, puis changerait sa durée en cours de route ; la barre
+             sauterait en arrière au premier tour d'horloge.
+
+             `duration` vaut `NaN` tant que le décodeur n'a rien, et `Infinity`
+             sur un flux — les deux traversent sans dommage : `slideDurationMs`
+             rabat toute durée absurde sur le plancher. On filtre quand même
+             ici, pour ne pas poser un état React à chaque valeur inutile. */
+          onLoadedMetadata={(event) => {
+            if (onDurationKnown === undefined) return;
+            const seconds = event.currentTarget.duration;
+            if (!Number.isFinite(seconds) || seconds <= 0) return;
+            onDurationKnown(Math.round(seconds * 1000));
+          }}
           onError={onFailed}
         />
       );

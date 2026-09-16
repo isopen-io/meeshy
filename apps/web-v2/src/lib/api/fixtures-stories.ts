@@ -1,5 +1,5 @@
 import { VIEWER_ID } from './fixtures-base';
-import { REEL_CLIP_RGB } from './fixtures-reel-clips';
+import { REEL_CLIP_RGB, STORY_CLIP_LONG } from './fixtures-reel-clips';
 import type { StatusMoodPost, StoryFeedPost, StoryTrayPost } from './stories';
 
 /**
@@ -126,6 +126,33 @@ export const STORY_TRAY: readonly StoryTrayPost[] = [
     author: { id: 'u-tarek', username: 'tarek', firstName: 'Tarek', lastName: 'Amrani' },
     media: [{ id: 'm5', thumbnailUrl: '', mimeType: 'video/webm' }],
   },
+  /**
+   * **LA STORY VIDÉO LONGUE** (#6836) — 9 s, au-dessus du plancher de 6 s.
+   *
+   * Elle existe pour UNE raison : `st-video` ne peut pas faire tomber un
+   * lecteur qui aurait gardé la constante au dénominateur. Son clip dure 3 s,
+   * donc `slideDurationMs` et `DEFAULT_SLIDE_DURATION_MS` rendent la MÊME
+   * valeur (6 s) — la loi juste et la loi absente sont indiscernables sur ce
+   * vecteur. À 9 s elles divergent : 9 s contre 6 s, et la diapositive coupe
+   * le média au tiers restant.
+   *
+   * Même précaution de RANG que sa jumelle courte : déjà vue et plus ancienne
+   * qu'elle, chez le MÊME auteur. Un nouvel auteur ajouterait une tuile au
+   * rail ; chez Tarek, son compteur passe de « 1 story » à « 2 stories » —
+   * libellé que la recette d'internationalisation lit — mais sa tuile reste
+   * à sa place et aucune autre ne bouge. C'est le moindre des deux
+   * déplacements, et le seul qui ne touche pas un gate de géographie.
+   */
+  {
+    id: 'st-video-long',
+    type: 'STORY',
+    createdAt: hoursAgo(10),
+    expiresAt: hoursFromNow(10),
+    viewCount: 14,
+    isViewedByMe: true,
+    author: { id: 'u-tarek', username: 'tarek', firstName: 'Tarek', lastName: 'Amrani' },
+    media: [{ id: 'm6', thumbnailUrl: '', mimeType: 'video/webm' }],
+  },
 ];
 
 /**
@@ -205,6 +232,22 @@ export const STORY_FEED: readonly StoryFeedPost[] = [
     content: 'Le marché, en mouvement.',
     originalLanguage: 'fr',
     media: [{ id: 'm5', url: REEL_CLIP_RGB, thumbnailUrl: STORY_PHOTO_STAND_IN, mimeType: 'video/webm' }],
+  },
+  /** LA STORY VIDÉO LONGUE (#6836) — 9 s, le SEUL vecteur du corpus sur lequel
+   * `slideDurationMs` et `DEFAULT_SLIDE_DURATION_MS` donnent des réponses
+   * DIFFÉRENTES (9 s contre 6 s). Voir la tuile jumelle dans `STORY_TRAY` pour
+   * le choix de la date et de l'auteur. */
+  {
+    id: 'st-video-long',
+    type: 'STORY',
+    createdAt: hoursAgo(10),
+    expiresAt: hoursFromNow(10),
+    viewCount: 14,
+    isViewedByMe: true,
+    author: { id: 'u-tarek', username: 'tarek', firstName: 'Tarek', lastName: 'Amrani' },
+    content: 'La répétition, en entier.',
+    originalLanguage: 'fr',
+    media: [{ id: 'm6', url: STORY_CLIP_LONG, thumbnailUrl: STORY_PHOTO_STAND_IN, mimeType: 'video/webm' }],
   },
 ];
 

@@ -174,6 +174,62 @@ check(
 );
 check(!story.indisponible, 'la story VIDÉO peint « Média indisponible » alors que son clip est décodable');
 
+/* ── LA DIAPOSITIVE SUIT SON MÉDIA (#6836) ──────────────────────────────── */
+/* On lit la BARRE plutôt que d'attendre que la story avance, parce que la
+   barre EST le ratio : `paintProgress(ratio)` et `if (ratio >= 1) advance()`
+   partagent la même variable dans la boucle de `story.tsx`. Mesurer la barre
+   mesure donc les deux — et prouve au passage ce qu'iOS exige explicitement
+   (« progress bar et auto-advance utilisent la MÊME valeur »), ce qu'une
+   attente de fin de diapositive ne dirait pas.
+
+   À 3 s sur un clip de 9 s : 33 % si le dénominateur suit le média, 50 % s'il
+   est resté `DEFAULT_SLIDE_DURATION_MS`. Le seuil est posé à 45 % — au-dessus
+   du vrai (33) avec de la marge pour le démarrage du décodage, au-dessous du
+   défaut (50) sans ambiguïté. */
+await page.goto(`${BASE}/story/st-video-long`, { waitUntil: 'load' });
+await page.waitForSelector('video');
+await page.waitForTimeout(3000);
+
+const lireScene = () =>
+  page.evaluate(() => {
+    const video = document.querySelector('video');
+    const barres = [...document.querySelectorAll('[aria-valuenow]')].map((b) =>
+      Number(b.getAttribute('aria-valuenow')),
+    );
+    const scene = document.querySelector('[data-story-scene]');
+    return {
+      scene: scene === null ? '' : scene.getAttribute('data-story-scene'),
+      progression: barres.length === 0 ? null : Math.max(...barres),
+      dureeMedia: video === null || !Number.isFinite(video.duration) ? null : Number(video.duration.toFixed(2)),
+    };
+  });
+
+const aTroisSecondes = await lireScene();
+
+check(
+  aTroisSecondes.dureeMedia !== null && aTroisSecondes.dureeMedia > 6,
+  `la story LONGUE : son clip ne dure pas plus que le plancher de 6 s — ${JSON.stringify(aTroisSecondes.dureeMedia)} s. ` +
+    'Sans un média plus long que le plancher, la troncature de #6836 est inobservable et ce gate ne prouve rien.',
+);
+check(
+  aTroisSecondes.progression !== null && aTroisSecondes.progression < 45,
+  `la story LONGUE : la barre est à ${aTroisSecondes.progression} % après 3 s d'un clip de 9 s — ` +
+    'la progression divise donc par la CONSTANTE de 6 s, pas par la durée du média (#6836).',
+);
+
+/* LA FACE GRAVE — à 7 s, une diapositive restée à 6 s a DÉJÀ avancé, coupant
+   le clip à son tiers restant. C'est le défaut que la boucle seule ne corrige
+   pas : `loop` empêche le gel d'un clip COURT, rien n'empêche la troncature
+   d'un clip LONG. */
+await page.waitForTimeout(4200);
+const aSeptSecondes = await lireScene();
+
+check(
+  aSeptSecondes.scene === 'st-video-long',
+  `la story LONGUE est COUPÉE : après 7 s, la scène affichée est « ${aSeptSecondes.scene} » et non « st-video-long » — ` +
+    'la diapositive s\'est terminée avant son média de 9 s (#6836).',
+);
+
 /* ── LA CONTRE-ÉPREUVE : UNE STORY IMAGE RESTE UNE IMAGE ────────────────── */
 await page.goto(`${BASE}/story/st-amie-2`, { waitUntil: 'load' });
 await page.waitForTimeout(600);
