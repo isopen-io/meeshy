@@ -137,25 +137,28 @@ describe('ContactDirectoryService.match', () => {
 
     await service.match({ contacts, excludeUserId: OWNER_ID });
 
-    const where = prisma.user.findMany.mock.calls[0][0].where;
+    // La direction « qui a bloqué le propriétaire » est résolue AVANT la
+    // requête candidats, par la requête POSITIVE de `getBlockRelatedUserIds`
+    // (#6811) — c'est donc le PREMIER appel à `findMany`.
+    expect(prisma.user.findMany.mock.calls[0][0].where).toEqual({ blockedUserIds: { has: OWNER_ID } });
+
+    const where = prisma.user.findMany.mock.calls[1][0].where;
     expect(where.id.notIn).toEqual(expect.arrayContaining([OWNER_ID, BOB_ID]));
-    // Le blocage vit dans `AND`, sous la même forme « absent vs null » que
-    // `deletedAt` juste au-dessus — un `NOT` nu au premier niveau écarterait
-    // aussi les comptes qui n'ont jamais écrit `blockedUserIds` (#6529, même
-    // défaut que #6452 pour `contactLookupScope`).
+    // Plus aucun filtre sur `blockedUserIds` dans le `where` des candidats —
+    // la garde est désormais une LISTE D'IDS résolue par l'appelant, jamais un
+    // filtre de tableau NIÉ que le client Prisma généré refuse sur cette
+    // liste scalaire REQUISE (#6529, même défaut que #6452 pour
+    // `contactLookupScope`, réglé par #6811).
     expect(where.NOT).toBeUndefined();
-    expect(where.AND).toContainEqual({
-      OR: [{ blockedUserIds: { isSet: false } }, { NOT: { blockedUserIds: { has: OWNER_ID } } }],
-    });
+    expect(JSON.stringify(where)).not.toContain('blockedUserIds');
   });
 
   /**
    * Preuve par ÉVALUATION contre un vrai document (#6529), pas seulement par
-   * inspection de la forme du `where` — c'est exactement ce qui a laissé
-   * passer le même défaut sur `contactLookupScope()` jusqu'à #6452 : la forme
-   * `NOT: { blockedUserIds: { has } }` a l'air juste, elle EST juste pour un
-   * champ posé, et ne l'est plus pour un champ ABSENT (ce que Prisma traduit
-   * sur le connecteur MongoDB — voir `__tests__/helpers/mongo-where.ts`).
+   * inspection de la forme du `where` — la même famille de défaut que
+   * `contactLookupScope()` jusqu'à #6452/#6811 : une garde de blocage qui
+   * regarde `blockedUserIds` avec le mauvais opérateur se trompe précisément
+   * sur le compte qui n'a jamais écrit ce champ.
    */
   it('rend un contact dont le compte Meeshy ne porte AUCUNE clé `blockedUserIds`', async () => {
     const prisma = makePrisma({ users: [] });
@@ -164,7 +167,7 @@ describe('ContactDirectoryService.match', () => {
 
     await service.match({ contacts, excludeUserId: OWNER_ID });
 
-    const where = prisma.user.findMany.mock.calls[0][0].where;
+    const where = prisma.user.findMany.mock.calls[1][0].where;
     const compteSansBlocageDeclare = { id: AWA_ID, isActive: true, email: 'awa@test.com' };
 
     expect(matchesMongoWhere(compteSansBlocageDeclare, where)).toBe(true);

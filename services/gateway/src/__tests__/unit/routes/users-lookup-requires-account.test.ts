@@ -55,6 +55,9 @@ function buildApp(reglages: Reglages) {
     user: {
       findFirst,
       findUnique: jest.fn<any>(async () => ({ blockedUserIds: [] })),
+      // `getBlockRelatedUserIds` (#6811) interroge « qui a bloqué l'appelant »
+      // par cette méthode, AVANT le `findFirst` de la route.
+      findMany: jest.fn<any>(async () => []),
     },
   };
   return { prisma, findFirst };
@@ -160,16 +163,19 @@ describe('… et les filtres que la jumelle authentifiée applique déjà', () =
 
     await app.inject({ method: 'GET', url });
 
-    const where = findFirst.mock.calls[0][0].where as Record<string, any>;
     // Le blocage vaut dans les DEUX sens : sans cela, un utilisateur bloqué
     // retrouvait le profil de qui l'a bloqué, s'il connaissait son adresse.
-    // Il vit dans `AND`, sous la même forme « absent vs null » que
-    // `deletedAt` — un `NOT` nu au premier niveau écarterait aussi les
-    // comptes qui n'ont jamais écrit `blockedUserIds` (#6452).
-    expect(where.NOT).toBeUndefined();
-    expect(where.AND).toContainEqual({
-      OR: [{ blockedUserIds: { isSet: false } }, { NOT: { blockedUserIds: { has: VIEWER } } }],
+    // La direction « qui a bloqué l'appelant » est désormais résolue AVANT le
+    // `findFirst`, par la requête POSITIVE indexée `getBlockRelatedUserIds`
+    // (#6811) — jamais par un filtre de tableau NIÉ que le client Prisma
+    // généré refuse sur cette liste scalaire REQUISE (`blockedUserIds`).
+    expect((prisma.user.findMany as jest.Mock).mock.calls[0][0].where).toEqual({
+      blockedUserIds: { has: VIEWER },
     });
+
+    const where = findFirst.mock.calls[0][0].where as Record<string, any>;
+    expect(where.NOT).toBeUndefined();
+    expect(JSON.stringify(where)).not.toContain('blockedUserIds');
     expect(where.id).toMatchObject({ notIn: expect.any(Array) });
 
     await app.close();

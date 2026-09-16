@@ -184,6 +184,16 @@ jobs:
           cd packages/shared
           pnpm run build
 
+      # #3658 — la feuille de langues que le translator (Python) reconnaît
+      # est GÉNÉRÉE depuis `packages/shared/utils/language-codes.ts` ; rien
+      # ne garantissait jusqu'ici que `generated_languages.py` n'avait pas
+      # dérivé de sa source (langue ajoutée d'un côté, pas régénérée de
+      # l'autre). Jumeau exact de `check:tokens` (palette dérivée de Swift).
+      - name: Translator language codes parity guard
+        run: |
+          cd packages/shared
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} translator-languages:check
+
       # #5442 : cette étape passe par le cache Turborepo (`bun run lint` sans
       # filtre), donc son verdict dépend de la température du cache — un run à
       # cache chaud rejoue d'anciens logs sans jamais relinter. Elle reste

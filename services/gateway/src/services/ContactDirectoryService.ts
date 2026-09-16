@@ -13,12 +13,12 @@
  * vCard) le plus faible — il n'intervient qu'à défaut des deux autres.
  */
 
-import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import type { PresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import type { NormalizedContact } from '../utils/contact-identifiers.js';
-import { getBlockedUserIdsAmong } from '../utils/blocking.js';
+import { getBlockedUserIdsAmong, getBlockRelatedUserIds } from '../utils/blocking.js';
 import { getPresenceVisibilityService, type PresenceViewer } from './PresenceVisibilityService.js';
 
 const logger = enhancedLogger.child({ module: 'ContactDirectory' });
@@ -138,12 +138,22 @@ async function inBatches<T>(items: T[], size: number, run: (item: T) => Promise<
  *
  * Le blocage vaut dans les DEUX sens, et c'est le point : écarter seulement
  * « les comptes que j'ai bloqués » laisserait celui que j'ai bloqué me
- * retrouver. La symétrie n'est pas une politesse, c'est la protection.
+ * retrouver. La symétrie n'est pas une politesse, c'est la protection — mais
+ * elle ne se résout plus ICI. `excludedUserIds` est déjà la réunion des deux
+ * directions, résolue par l'appelant via {@link getBlockRelatedUserIds} (une
+ * requête POSITIVE sur `blockedUserIds`, indexée par `@@index([blockedUserIds])`),
+ * jamais par un filtre de tableau NIÉ (#6811) : `blockedUserIds` est une liste
+ * scalaire REQUISE (`String[] @default([])`), dont le client Prisma généré ne
+ * déclare aucun opérateur `isSet` (`StringNullableListFilter` ne porte que
+ * `equals` / `has` / `hasEvery` / `hasSome` / `isEmpty`) — l'ancienne forme
+ * (`OR: [{ isSet: false }, { NOT: { has } }]`, posée par #6452 pour survivre au
+ * piège « absent vs null » sur ce même champ) était rejetée par le client
+ * AVANT tout aller-retour réseau (`PrismaClientValidationError`), et rendait
+ * un 500 sur `GET /directory/people` en production.
  */
 export function contactLookupScope(options: {
-  viewerId: string;
-  blockedByViewer: readonly string[];
-}): Record<string, unknown> {
+  excludedUserIds: readonly string[];
+}): Prisma.UserWhereInput {
   return {
     isActive: true,
     // `deletedAt: null` seul serait un PIÈGE, et le dépôt le documente
@@ -157,33 +167,9 @@ export function contactLookupScope(options: {
     // `AND` et non `OR` à la racine : l'appelant pose lui-même un `OR` pour sa
     // liste d'identifiants (`ContactDirectoryService.match`), et deux `OR`
     // frères s'écraseraient en silence.
-    AND: [
-      { OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }] },
-      // Même piège « absent vs null », sur le champ VOISIN : `NOT: {
-      // blockedUserIds: { has } }` seul écarte aussi les documents où
-      // `blockedUserIds` est ABSENT — sur le connecteur MongoDB, Prisma
-      // enveloppe le filtre de tableau d'un test d'existence, et `NOT`
-      // inverse cette absence en refus. Mesuré en production (#6452) : 206
-      // comptes actifs sur 246 n'ont jamais écrit ce champ (jamais bloqué
-      // personne) et disparaissaient de toute recherche. Un `OR` isSet
-      // couvre les deux cas : champ absent (rien à exclure) OU champ
-      // présent et ne contenant pas le viewer.
-      { OR: [{ blockedUserIds: { isSet: false } }, { NOT: { blockedUserIds: { has: options.viewerId } } }] },
-    ],
-    id: { notIn: [...options.blockedByViewer] },
+    AND: [{ OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }] }],
+    id: { notIn: [...options.excludedUserIds] },
   };
-}
-
-/** Les identifiants que `viewerId` a bloqués. Lecture unique, réutilisable. */
-export async function blockedIdsOfViewer(
-  prisma: { user: { findUnique: (args: unknown) => Promise<{ blockedUserIds?: string[] } | null> } },
-  viewerId: string
-): Promise<string[]> {
-  const owner = await prisma.user.findUnique({
-    where: { id: viewerId },
-    select: { blockedUserIds: true },
-  } as never);
-  return owner?.blockedUserIds ?? [];
 }
 
 export class ContactDirectoryService {
@@ -205,21 +191,17 @@ export class ContactDirectoryService {
     const result = new Map<string, ContactMatch>();
     if (phones.length === 0 && emails.length === 0 && usernames.length === 0) return result;
 
-    const blockedUserIds = await this.blockedIdsOf(excludeUserId);
+    // Réunion des deux sens du blocage, par la requête POSITIVE indexée
+    // (#6811) — jamais par un filtre de tableau NIÉ. `excludeUserId` rejoint
+    // la même liste : cette route exclut aussi le demandeur LUI-MÊME, une
+    // raison distincte du blocage que `contactLookupScope` n'a pas à connaître.
+    const blockRelated = await getBlockRelatedUserIds(this.prisma, excludeUserId);
 
     const candidates = await this.prisma.user.findMany({
       where: {
-        // Même loi que les deux sœurs publiques (#6529, même défaut que
-        // #6452) : `isActive`, le filtre anti-suppression et le filtre
-        // anti-blocage « absent vs null/vide » — `blockedUserIds` est un
-        // champ TABLEAU dont `isSet` n'est pas exposé au typage Prisma
-        // généré (`StringNullableListFilter` ne le déclare pas, alors que le
-        // connecteur MongoDB le sert), d'où le passage par cette fonction
-        // plutôt qu'un littéral typé directement contre `UserWhereInput`.
-        // `id` est réécrit juste après : cette route exclut aussi le
-        // demandeur LUI-MÊME, que `contactLookupScope` n'a pas à connaître.
-        ...contactLookupScope({ viewerId: excludeUserId, blockedByViewer: [] }),
-        id: { notIn: [excludeUserId, ...blockedUserIds] },
+        // Même loi que les deux sœurs publiques (#6529, #6811) : `isActive`
+        // et le filtre anti-suppression « absent vs null ».
+        ...contactLookupScope({ excludedUserIds: [excludeUserId, ...blockRelated] }),
         OR: [
           ...(phones.length > 0 ? [{ phoneNumber: { in: phones } }] : []),
           ...(emails.length > 0 ? [{ email: { in: emails } }] : []),
@@ -576,13 +558,5 @@ export class ContactDirectoryService {
       }
     }
     return null;
-  }
-
-  private async blockedIdsOf(userId: string): Promise<string[]> {
-    const owner = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { blockedUserIds: true },
-    });
-    return owner?.blockedUserIds ?? [];
   }
 }
