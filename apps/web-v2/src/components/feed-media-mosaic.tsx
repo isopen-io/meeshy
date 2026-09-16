@@ -48,6 +48,13 @@ function MosaicTileView({
         <FeedMediaSurface media={item} playable />
         {caption !== undefined ? (
           <p
+            /* MARQUÉE pour être mesurable (#6864) — la légende était le seul
+               élément de cette tuile sans attribut, alors que la tuile et le
+               « +N » en portent un. Un gate qui la ciblerait par `p` mesurerait
+               le premier paragraphe venu ; `captionOrigin` dit d'OÙ elle vient,
+               et c'est ce que la recette doit pouvoir lire à l'écran plutôt que
+               dans le modèle. */
+            data-feed-mosaic-caption={item.captionOrigin ?? 'media'}
             className="absolute inset-x-0 bottom-0 px-2 py-1.5 text-check text-white"
             style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.6), transparent)' }}
             {...(item.captionLanguage !== undefined ? { lang: item.captionLanguage } : {})}

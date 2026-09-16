@@ -405,6 +405,78 @@ export const POST_AUDIO: FeedPost = {
   likeCount: 9,
 };
 
+/**
+ * **LE VECTEUR QUI SÉPARE** une règle de légende juste d'un `?? post.content`
+ * naïf (#6864) — TROIS médias dont **un seul** porte sa légende propre.
+ *
+ * Aucun autre post du corpus ne l'exerce, et ce n'est pas un oubli :
+ * `POST_CAROUSEL` a trois médias et trois légendes (chacun garde la sienne, un
+ * repli fautif ne se verrait pas), `POST_HERO` en a trois pour une légende mais
+ * en layout `hero`, où `tileCarriesCaption` ne laisse peindre QUE la tuile 0 —
+ * les deux autres ne montreraient rien de toute façon, et le gate mesurerait la
+ * PLACE en croyant mesurer l'ORIGINE.
+ *
+ * D'où le layout `reel` : c'est le SEUL mode tuilé où `tileCarriesCaption`
+ * rend vrai pour TOUTES les tuiles (`hero` ne peint que la tuile 0, `wave` et
+ * `sine` aucune). Les trois pièces sont donc dans le DOM en même temps, et un
+ * repli non borné y poserait le contenu du post sous les pièces 2 et 3 quand
+ * la règle juste les laisse nues.
+ *
+ * Le `carousel` — le défaut — ne conviendrait PAS, et pour une raison qui n'a
+ * rien à voir avec la légende : il ne monte qu'UNE page à la fois
+ * (`FeedMediaCarousel`, `current = media[clamped]`). Les pièces 2 et 3
+ * n'existeraient pas dans le DOM au repos, et l'invariante mesurerait leur
+ * absence de légende sans rien prouver — elles sont absentes tout court.
+ *
+ * DATÉ `minutesAgo(68)`, dans l'interstice mesuré entre le dernier post nommé
+ * (66) et le premier remplissage (70) : il ne prend pas la tête du fil — que
+ * `check-floating-clearance` va chercher par `querySelector('[data-feed-card]')`
+ * — et ne déplace aucune carte existante. Auteur DÉJÀ présent, pour ne toucher
+ * aucun compteur d'auteur.
+ */
+export const POST_LEGENDE_MIXTE: FeedPost = {
+  ...feedPostDefaults,
+  id: 'post-legende-mixte',
+  type: 'POST',
+  createdAt: minutesAgo(68),
+  author: OMAR,
+  content: 'Trois prises du même plateau, une seule légendée.',
+  originalLanguage: 'fr',
+  storyEffects: { v: 3, layout: 'reel' },
+  media: [
+    {
+      id: 'media-mixte-1',
+      mimeType: 'image/svg+xml',
+      fileUrl: feedPhotoStandIn('#0ea5e9', '#6366f1', 'square'),
+      thumbnailUrl: feedPhotoStandIn('#0ea5e9', '#6366f1', 'square'),
+      width: 1080,
+      height: 1080,
+      caption: 'La première, au grand angle.',
+      order: 0,
+    },
+    {
+      id: 'media-mixte-2',
+      mimeType: 'image/svg+xml',
+      fileUrl: feedPhotoStandIn('#f59e0b', '#ef4444', 'square'),
+      thumbnailUrl: feedPhotoStandIn('#f59e0b', '#ef4444', 'square'),
+      width: 1080,
+      height: 1080,
+      order: 1,
+    },
+    {
+      id: 'media-mixte-3',
+      mimeType: 'image/svg+xml',
+      fileUrl: feedPhotoStandIn('#10b981', '#14b8a6', 'square'),
+      thumbnailUrl: feedPhotoStandIn('#10b981', '#14b8a6', 'square'),
+      width: 1080,
+      height: 1080,
+      order: 2,
+    },
+  ],
+  likeCount: 6,
+  commentCount: 1,
+};
+
 const NAMED_POSTS: readonly FeedPost[] = [
   POST_IMAGE_FR,
   POST_IMAGE_EN_TRANSLATED,
@@ -418,12 +490,20 @@ const NAMED_POSTS: readonly FeedPost[] = [
   POST_AUDIO,
   POST_NO_DIMENSIONS,
   POST_WIRE_NULLS,
+  POST_LEGENDE_MIXTE,
 ];
 
 /**
  * DES POSTS DE REMPLISSAGE (#5893) — pour qu'une page 2 existe (limite 20) :
- * `NAMED_POSTS` (8) + 18 remplissages = 26, strictement plus vieux que le
- * dernier des `NAMED_POSTS` (`minutesAgo(63)`).
+ * `NAMED_POSTS` (13) + 18 remplissages = 31, strictement plus vieux que le
+ * dernier des `NAMED_POSTS` (`minutesAgo(68)`).
+ *
+ * Ces DEUX nombres avaient dérivé — la prose disait « (8) » et
+ * « `minutesAgo(63)` » alors que le corpus portait déjà douze posts nommés
+ * dont le plus ancien à 66 minutes. L'invariant qu'elle décrit restait vrai
+ * (70 > 66), mais sa justification était fausse : un doc-comment de CARDINALITÉ
+ * se périme en silence à chaque ajout, puisque rien ne le relit. Le recompter
+ * au moment d'ajouter est le seul instant où l'écart se voit.
  */
 const FILLER_POSTS: readonly FeedPost[] = Array.from({ length: 18 }, (_, i) => {
   const author = FILLER_AUTHORS[i % FILLER_AUTHORS.length]!;

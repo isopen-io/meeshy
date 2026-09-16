@@ -145,6 +145,68 @@ check(
   `le fil : l'affiche d'un RÉEL monte ${fil.mediasDuReel} élément(s) média — la lecture appartient au lecteur des Réels (#6457)`,
 );
 
+/* ── LA LÉGENDE D'UN MÉDIA, ET SON ORIGINE (#6864) ──────────────────────────
+   Directive porteur : le contenu d'un post ne légende ses médias QUE s'il n'en
+   porte qu'un, ET que celui-ci n'a pas de légende propre.
+
+   On mesure ce qui est PEINT — `[data-feed-mosaic-caption]` porte l'origine
+   servie — jamais le modèle : les six témoins unitaires prouvent déjà le
+   calcul, les relire ici prouverait deux fois la même chose.
+
+   Les deux cartes sont amenées à l'écran avant lecture : le fil peut
+   virtualiser, et `post-legende-mixte` est daté 68 min, donc loin de la tête.
+   Supposer qu'une carte est montée parce qu'elle est dans le corpus est
+   exactement l'erreur qu'un gate doit refuser de commettre. */
+for (const id of ['post-legende-mixte', 'post-image-fr']) {
+  await page.locator(`[data-feed-card-id="${id}"]`).scrollIntoViewIfNeeded({ timeout: 5000 }).catch(() => {});
+}
+
+/* DEUX marqueurs, parce que DEUX composants rendent les médias d'un post selon
+   son agencement : `FeedMediaMosaic` pour les modes tuilés, `FeedMediaCarousel`
+   pour le défaut et pour un média seul (`feed-post-card.tsx:375`). Les
+   interroger tous les deux est ce qui évite de mesurer l'absence d'un composant
+   en croyant mesurer l'absence d'une légende — c'est l'erreur que ce gate a
+   attrapée sur sa première écriture. */
+const legendes = await page.evaluate(() => {
+  const lire = (postId) => {
+    const carte = document.querySelector(`[data-feed-card-id="${postId}"]`);
+    if (carte === null) return null;
+    const peintes = [...carte.querySelectorAll('[data-feed-mosaic-caption], [data-feed-carousel-caption]')].map((p) => ({
+      origine: p.getAttribute('data-feed-mosaic-caption') ?? p.getAttribute('data-feed-carousel-caption'),
+      texte: (p.textContent ?? '').trim(),
+    }));
+    return {
+      surface: carte.querySelector('[data-feed-mosaic-tile]') !== null ? 'mosaique' : 'carrousel',
+      tuiles: carte.querySelectorAll('[data-feed-mosaic-tile]').length,
+      legendes: peintes,
+    };
+  };
+  return { mixte: lire('post-legende-mixte'), unique: lire('post-image-fr') };
+});
+
+check(
+  legendes.mixte !== null && legendes.mixte.tuiles === 3,
+  `la légende : le repère à trois médias n'est pas monté — ${JSON.stringify(legendes.mixte)}`,
+);
+/* LE VECTEUR DÉCISIF — trois médias, UN seul légendé. Un repli non borné
+   poserait le contenu du post sous les deux autres ; la règle juste les laisse
+   nues. C'est le seul cas du corpus où une implémentation fautive et une juste
+   ne rendent pas la même image. */
+check(
+  legendes.mixte !== null && legendes.mixte.legendes.length === 1,
+  `la légende : ${legendes.mixte?.legendes.length ?? 0} légende(s) sur un post à TROIS médias dont un seul est légendé — ` +
+    `le contenu du post a débordé sur ses voisins (#6864) : ${JSON.stringify(legendes.mixte?.legendes)}`,
+);
+check(
+  legendes.mixte?.legendes[0]?.origine === 'media',
+  `la légende : celle du repère mixte vient de « ${legendes.mixte?.legendes[0]?.origine} » au lieu de « media » — ` +
+    'la légende PROPRE doit gagner sur le contenu du post (#6864)',
+);
+check(
+  legendes.unique !== null && legendes.unique.legendes.length === 1 && legendes.unique.legendes[0]?.origine === 'post',
+  `la légende : un média UNIQUE sans légende propre ne reçoit pas le contenu du post — ${JSON.stringify(legendes.unique)}`,
+);
+
 /* ── LA STORY VIDÉO ─────────────────────────────────────────────────────── */
 await page.goto(`${BASE}/story/st-video`, { waitUntil: 'load' });
 await page.waitForTimeout(800);
