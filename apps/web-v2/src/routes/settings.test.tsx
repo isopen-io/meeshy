@@ -12,6 +12,7 @@ import {
   AboutSection,
   AccountSection,
   AppearanceSection,
+  DataSection,
   LogoutButton,
   NotificationsSection,
   PrivacySection,
@@ -174,6 +175,28 @@ describe('la confidentialité — quatre bascules que la passerelle obéit', () 
   });
 });
 
+describe('les données — seul l’export reste offert', () => {
+  /* #6725 : l'export de données est porté dans la v2, à l'adresse dédiée
+     `/settings/data-export`. La rangée y mène dans le MÊME onglet. */
+  test('exporter mes données ouvre sa page de la v2, dans le même onglet', () => {
+    const host = dom(<DataSection language="fr" />);
+    const link = linkTo(host, '/settings/data-export');
+    expect(link).not.toBeNull();
+    expect(link?.hasAttribute('target')).toBe(false);
+    expect(link?.textContent).toContain('Exporter mes données');
+  });
+
+  /* Le legacy est décommissionné (#6702) : médias et messages, que la v2 ne
+     porte pas encore, n'ont plus aucune adresse où mener. MASQUÉS — ni lien,
+     ni rangée inerte (loi 4). #6723, #6724. */
+  test('médias et messages, non portés, ne sont pas offerts', () => {
+    const host = dom(<DataSection language="fr" />);
+    expect(host.textContent).not.toContain('Médias');
+    expect(host.textContent).not.toContain('Messages');
+    expect(host.querySelectorAll('a')).toHaveLength(1);
+  });
+});
+
 describe('l’apparence', () => {
   const appearance = (props: Partial<Parameters<typeof AppearanceSection>[0]> = {}) =>
     dom(
@@ -251,10 +274,10 @@ describe('les notifications', () => {
 });
 
 /**
- * AUCUN CONTRÔLE DES RÉGLAGES NE VISE UNE AUTRE ORIGINE (#6702, #6715) — le
- * legacy est décommissionné, la v2 sert tout le domaine. Médias, messages et
- * export n'ont plus d'adresse : la section « Données » disparaît entière, faute
- * de rangée. La suppression de compte, dernière exception, mène désormais à sa
+ * AUCUN CONTRÔLE DES RÉGLAGES NE VISE UNE AUTRE ORIGINE (#6702, #6715, #6725)
+ * — le legacy est décommissionné, la v2 sert tout le domaine. Médias et
+ * messages n'ont plus d'adresse et restent masqués (#6723, #6724). La
+ * suppression de compte et l'export de données, eux, mènent désormais à leur
  * page de la v2.
  */
 describe('les réglages ne mènent plus au legacy', () => {
@@ -266,25 +289,28 @@ describe('les réglages ne mènent plus au legacy', () => {
         <PrivacySection language="fr" view={ready()} disabled={false} onToggle={noop} onRetry={noop} />
         <AppearanceSection language="fr" theme="system" onTheme={noop} interfaceChoice={null} onInterfaceLanguage={noop} primaryLanguage="fr" />
         <NotificationsSection language="fr" view={ready()} disabled={false} onToggle={noop} onRetry={noop} />
+        <DataSection language="fr" />
         <ToolsSection language="fr" showAdmin />
         <AboutSection language="fr" version="2.0.2" />
       </>,
     );
 
-  test('aucun lien ne vise une autre origine, ni n’ouvre un nouvel onglet — la suppression de compte comprise', () => {
+  test('aucun lien ne vise une autre origine, ni n’ouvre un nouvel onglet — la suppression de compte et l’export compris', () => {
     const host = everySection();
     const hrefs = [...host.querySelectorAll('a[href]')].map((link) => link.getAttribute('href') ?? '');
 
     expect(hrefs.filter((href) => /^(?:[a-z]+:)?\/\//i.test(href))).toEqual([]);
     expect(host.querySelectorAll('a[target]')).toHaveLength(0);
     expect(hrefs).toContain('/account/deletion');
+    expect(hrefs).toContain('/settings/data-export');
   });
 
   test('aucune rangée masquée n’est rendue, même inerte', () => {
     const text = everySection().textContent ?? '';
-    for (const label of ['Sécurité', "Plus d'options", 'Médias', 'Messages', 'Exporter mes données']) {
+    for (const label of ['Sécurité', "Plus d'options", 'Médias', 'Messages']) {
       expect({ label, present: text.includes(label) }).toEqual({ label, present: false });
     }
+    expect(text).toContain('Exporter mes données');
   });
 });
 

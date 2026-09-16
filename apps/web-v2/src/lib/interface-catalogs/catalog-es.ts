@@ -196,6 +196,14 @@ const es = {
   'emailNotifications.resubscribe': 'Volver a recibir estos correos',
   'emailNotifications.failed': 'El cambio no se ha aplicado. Reinténtalo.',
 
+  'dataExport.title': 'Exportar mis datos',
+  'dataExport.info.body': 'De conformidad con el RGPD, recibe un archivo con tu perfil, tus mensajes, tus contactos y tus publicaciones.',
+  'dataExport.action.start': 'Exportar mis datos',
+  'dataExport.action.exporting': 'Exportando…',
+  'dataExport.action.again': 'Exportar de nuevo',
+  'dataExport.done.title': 'Exportación completada',
+  'dataExport.done.body': 'El archivo se ha descargado en este dispositivo.',
+
   'profile.title': 'Perfil',
   'profile.edit': 'Editar',
   'profile.cancel': 'Cancelar',
