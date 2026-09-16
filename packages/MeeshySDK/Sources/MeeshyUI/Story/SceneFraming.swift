@@ -63,6 +63,48 @@ public nonisolated enum SceneFraming {
     public static let bandTopY: CGFloat = 0.12
     public static let bandBottomY: CGFloat = 0.88
 
+    /// **La hauteur maximale d'une carte de fil, en fraction de sa largeur**
+    /// (#6767, décision « plafond 1,4 ajusté ») — même plafond que les cartes
+    /// d'image et de Réel voisines (`postCardMediaHeight`, `reelCardHeight`,
+    /// toutes deux `maxTallRatio: CGFloat = 1.4`). Une scène qui ne se
+    /// resserre à aucun cadrage — un fond qui couvre déjà tout le canvas —
+    /// imposait jusqu'ici sa hauteur de COMPOSITION : jusqu'à 601 pt sur un
+    /// iPhone 16 Pro (≈ 70 % de l'écran) pour une carte, et la hauteur de la
+    /// page la plus verticale pour un carrousel mêlant un panorama et une
+    /// scène portrait — la page panorama n'y occupait alors qu'une bande de
+    /// 338 × 85 pt au centre d'une boîte 338 × 601. « Des cartes courtes, sans
+    /// zoom » (directive porteur 2026-09-06) voulait la seconde moitié, pas
+    /// la première : ce plafond tient la première sans reprendre la seconde.
+    public static let maxCardHeightRatio: CGFloat = 1.4
+
+    /// Le rapport largeur/hauteur MINIMAL d'une carte — le plancher qui
+    /// traduit `maxCardHeightRatio` dans la convention largeur/hauteur des
+    /// fonctions de ce fichier (`cardAspect` rend un rapport LARGEUR/HAUTEUR,
+    /// jamais l'inverse).
+    public static let minCardAspect: CGFloat = 1 / maxCardHeightRatio
+
+    /// **Le rapport d'une carte, plafonné en hauteur — jamais en ROGNAGE ni en
+    /// ZOOM.** La scène garde son rapport NATUREL ; c'est la BOÎTE qui
+    /// s'arrête au plafond, et `SceneCardHeightCap` centre le contenu dedans,
+    /// laissant des bandes vides de part et d'autre plutôt que de rogner ou
+    /// d'agrandir (option 2 de #6767 : « la scène ENTIÈRE s'ajuste dans le
+    /// plafond »).
+    public static func clampedCardAspect(_ naturalAspect: CGFloat) -> CGFloat {
+        max(naturalAspect, minCardAspect)
+    }
+
+    /// **La taille du contenu CENTRÉ dans une carte plafonnée** — pure, pour
+    /// qu'on vérifie sans écran ce que `SceneCardHeightCap` affiche (#6767).
+    ///
+    /// `box` est déjà la boîte PLAFONNÉE (celle que
+    /// `clampedCardAspect(naturalAspect)` décrit) ; le résultat est le
+    /// contenu ajusté à son rapport NATUREL dedans — identique à `box` quand
+    /// le plafond n'a rien retranché, plus étroit qu'elle sinon, jamais plus
+    /// grand.
+    public static func cappedCardContentSize(naturalAspect: CGFloat, in box: CGSize) -> CGSize {
+        CanvasGeometry.aspectFitSize(in: box, ratio: naturalAspect)
+    }
+
     // MARK: - Ce qui compte comme VISIBLE
 
     /// **Un objet qui ne produit aucun pixel ne cadre rien.**
