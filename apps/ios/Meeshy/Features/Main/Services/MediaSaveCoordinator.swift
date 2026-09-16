@@ -314,16 +314,36 @@ struct AttachmentMediaSaveResolver: MediaSaveSourceResolving {
         }
     }
 
-    /// `data(for:)` télécharge+cache sur miss ; le fichier disque du store est
-    /// préféré, avec repli sur une écriture temporaire si le flush L2 n'a pas
-    /// encore touché le disque (timing interne du store).
+    /// **Le disque d'abord, le réseau seulement s'il n'y a rien** (#6810).
     ///
-    /// **Interne, et non privée, pour être INTERROGEABLE** (#6810) : les quatre
-    /// suites qui traversent le chemin « Créer avec ce média » remplacent toutes
-    /// ce resolver par un double, de sorte que le resolver de production
-    /// n'était éprouvé nulle part. Ouvrir la visibilité ne change aucun
-    /// comportement — c'est ce qui permet au témoin de le mesurer.
+    /// L'ordre comptait, et il était inversé : `data(for:)` était inconditionnel
+    /// et `localFileURL` venait après lui. L'ordre des `return` donnait le
+    /// change — ce doc-comment affirmait même que « le fichier disque du store
+    /// est préféré » — mais l'ordre des EFFETS disait l'inverse, et le payait
+    /// deux fois : une relecture intégrale en RAM sur un cache valide (des
+    /// pièces de l'ordre de 275 Mo pour une vidéo, cf. `CachePolicy`), et un
+    /// vrai retéléchargement sur une entrée périmée dont le fichier était
+    /// pourtant toujours là — `load` rend `.expired` sans rien supprimer.
+    ///
+    /// Le repli d'écriture temporaire reste en bas : il couvre le cas où le
+    /// store a les octets sans les avoir encore posés sur le disque.
+    ///
+    /// **Interne, et non privée, pour être INTERROGEABLE** : les quatre suites
+    /// qui traversent le chemin « Créer avec ce média » remplacent toutes ce
+    /// resolver par un double, de sorte que le resolver de production n'était
+    /// éprouvé nulle part.
     func materialize(from store: DiskCacheStore, key: String, ext: String) async throws -> URL {
+        // `cachedFileURL` est `nonisolated` et ne coûte qu'un `stat`. Il rend le
+        // fichier dès qu'il EXISTE, sans consulter sa fraîcheur — et c'est la
+        // bonne question ici : réutiliser un média qu'on vient de regarder ne
+        // doit dépendre d'aucun TTL. Il compte de surcroît l'ACCÈS pour le LRU,
+        // ce qui est juste — rouvrir un média EST un usage, et l'oublier ferait
+        // vieillir précisément ce qui sert le plus.
+        if let dejaSurLeDisque = store.cachedFileURL(for: key) {
+            return dejaSurLeDisque
+        }
+        // Vrai défaut de cache : c'est ici, et ici seulement, que le réseau a sa
+        // place.
         let data = try await store.data(for: key)
         if let onDisk = await store.localFileURL(for: key) {
             return onDisk
