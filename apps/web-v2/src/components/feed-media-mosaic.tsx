@@ -45,7 +45,7 @@ function MosaicTileView({
       style={{ left: percent(tile.x / span), top: percent(tile.y), width: percent(tile.width / span), height: percent(tile.height) }}
     >
       <div className="relative size-full overflow-hidden" style={{ borderRadius: MOSAIC_TILE_RADIUS, backgroundColor: 'var(--color-ios-card)' }}>
-        <FeedMediaSurface media={item} />
+        <FeedMediaSurface media={item} playable />
         {caption !== undefined ? (
           <p
             className="absolute inset-x-0 bottom-0 px-2 py-1.5 text-check text-white"
