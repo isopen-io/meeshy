@@ -61,6 +61,19 @@ export type RouteKey =
    */
   | 'adm'
   | 'admUsers'
+  /**
+   * LE DÉTAIL D'UN MEMBRE (#6819) — `/admin/users/$user` et `/adm/users/$user`,
+   * les deux adresses d'un même écran, comme leurs listes.
+   *
+   * Elles sont déclarées ici pour la raison écrite juste au-dessus, et elle
+   * pèse davantage sur un DÉTAIL que sur une liste : cet écran porte l'édition,
+   * la réinitialisation de mot de passe, la désactivation et le bannissement.
+   * Oubliée, l'adresse serait publique — un visiteur sans session la peindrait
+   * avant que le serveur ne refuse, et lirait au passage l'identifiant qu'il a
+   * tapé dans un écran d'administration.
+   */
+  | 'adminUser'
+  | 'admUser'
   | 'login'
   | 'signup'
   | 'welcome'
@@ -154,8 +167,10 @@ const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
   'settings',
   'admin',
   'adminUsers',
+  'adminUser',
   'adm',
   'admUsers',
+  'admUser',
 ]);
 const AUTH_ROUTES: ReadonlySet<string> = new Set<RouteKey>(['login', 'signup', 'welcome', 'magicLink', 'forgotPassword']);
 

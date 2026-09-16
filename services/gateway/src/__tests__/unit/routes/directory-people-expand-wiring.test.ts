@@ -61,14 +61,21 @@ const PREFIXE = '/api/v1/directory';
 const VIEWER = '507f1f77bcf86cd799439011';
 
 function buildApp(lignes: Array<Record<string, unknown>> = []) {
-  const findMany = jest.fn<any>(async () => lignes);
+  // Le double DISTINGUE « qui m'a bloqué ? » (`blockedUserIds: { has }`, la
+  // requête POSITIVE de `blockedIdsAroundViewer`) de la RECHERCHE elle-même.
+  const findMany = jest.fn<any>(async (args: any) =>
+    args?.where?.blockedUserIds ? [] : lignes
+  );
   const prisma = {
     user: {
       findMany,
       findUnique: jest.fn<any>(async () => ({ blockedUserIds: [] })),
     },
   };
-  return { prisma, findMany };
+  /** Les arguments de la RECHERCHE — la seconde requête, jamais la première. */
+  const argsRecherche = () =>
+    (findMany.mock.calls as any[]).filter((c) => !c[0]?.where?.blockedUserIds).at(-1)![0];
+  return { prisma, findMany, argsRecherche };
 }
 
 async function monter(prisma: unknown): Promise<FastifyInstance> {
@@ -140,12 +147,12 @@ describe('GET /people — sans paramètre, la réponse est INCHANGÉE (clés ET 
 
 describe('GET /people?expand=… — l’ARGUMENT Prisma, pas seulement le corps', () => {
   it("un jeton `expand` inconnu mêlé à `presence` active quand même la présence — jamais refusé", async () => {
-    const { prisma, findMany } = buildApp();
+    const { prisma, argsRecherche } = buildApp();
     const app = await monter(prisma);
 
     await chercher(app, 'q=jean&expand=futur-client,presence');
 
-    const select = findMany.mock.calls[0][0].select as Record<string, unknown>;
+    const select = argsRecherche().select as Record<string, unknown>;
     expect(select.isOnline).toBe(true);
     expect(select.lastActiveAt).toBe(true);
 
@@ -153,12 +160,12 @@ describe('GET /people?expand=… — l’ARGUMENT Prisma, pas seulement le corps
   });
 
   it("un `expand` qui ne nomme pas `presence` ne charge pas la présence", async () => {
-    const { prisma, findMany } = buildApp();
+    const { prisma, argsRecherche } = buildApp();
     const app = await monter(prisma);
 
     await chercher(app, 'q=jean&expand=stats');
 
-    const select = findMany.mock.calls[0][0].select as Record<string, unknown>;
+    const select = argsRecherche().select as Record<string, unknown>;
     expect('isOnline' in select).toBe(false);
     expect('lastActiveAt' in select).toBe(false);
 

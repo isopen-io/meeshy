@@ -173,6 +173,8 @@ function makePrisma(overrides: Record<string, any> = {}) {
     user: {
       findFirst:  jest.fn<any>().mockResolvedValue(mockUser),
       findUnique: jest.fn<any>().mockResolvedValue(mockUser),
+      // « qui m'a bloqué ? » — la requête POSITIVE de `blockedIdsAroundViewer`.
+      findMany:   jest.fn<any>().mockResolvedValue([]),
       update:     jest.fn<any>().mockResolvedValue(mockUser),
       updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
     },

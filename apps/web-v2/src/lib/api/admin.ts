@@ -70,13 +70,29 @@ export type AdminUsersPage = {
   readonly hasMore: boolean;
 };
 
-const asRecord = (value: unknown): Readonly<Record<string, unknown>> | null =>
+/**
+ * LES TROIS LECTURES PRUDENTES DU PORT D'ADMINISTRATION, exportées pour le
+ * détail d'un membre (#6819) — et pour lui seul tant qu'aucun autre port n'en
+ * a besoin.
+ *
+ * Elles sortent d'ici plutôt que d'être recopiées ailleurs : une seconde
+ * définition serait une jumelle divergente (CLAUDE.md § Single Source of
+ * Truth), et c'est précisément sur des helpers de trois lignes que la
+ * divergence passe inaperçue — l'un tolérerait un jour `NaN` ou une chaîne
+ * numérique que l'autre refuse, sans qu'aucun témoin ne rougisse.
+ *
+ * Elles ne rejoignent PAS `./decode` : ce module-là décode les DATES DU FIL
+ * pour le cache TanStack (`toDate`, `decodeMessage`, `decodeConversation`) et
+ * n'a aucun helper de ce genre. Les deux outils sont distincts, pas
+ * redondants — vérifié avant d'extraire.
+ */
+export const asRecord = (value: unknown): Readonly<Record<string, unknown>> | null =>
   typeof value === 'object' && value !== null ? (value as Readonly<Record<string, unknown>>) : null;
 
-const asCount = (value: unknown): number =>
+export const asCount = (value: unknown): number =>
   typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0;
 
-const asText = (value: unknown): string => (typeof value === 'string' ? value : '');
+export const asText = (value: unknown): string => (typeof value === 'string' ? value : '');
 
 /**
  * `false` par DÉFAUT sur chaque clé — une permission absente de la charge est
