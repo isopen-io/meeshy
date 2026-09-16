@@ -13,7 +13,7 @@ import {
   type PublishedPostRow,
   type PublishedPostType,
 } from './publication';
-import { CreatePostSchema, UpdatePostSchema, TranslatePostSchema, PostParams, PublishAttachmentSchema } from './types';
+import { CreatePostSchema, UpdatePostSchema, TranslatePostSchema, PostParams, PublishAttachmentSchema, postIdParamsSchema } from './types';
 import { MediaService } from '../../services/MediaService';
 import {
   planAttachmentPublication,
@@ -477,6 +477,7 @@ export function registerCoreRoutes(
 
   // GET /posts/:postId — Get post by ID
   fastify.get('/posts/:postId', {
+    schema: { params: postIdParamsSchema },
     preValidation: [requiredAuth],
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
@@ -510,6 +511,7 @@ export function registerCoreRoutes(
   // PUT /posts/:postId — Update a post (author only)
   // Per-route bodyLimit 1MB — voir POST /posts pour la justification.
   fastify.put('/posts/:postId', {
+    schema: { params: postIdParamsSchema },
     preValidation: [requiredAuth],
     bodyLimit: 1 * 1024 * 1024,
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
@@ -672,6 +674,7 @@ export function registerCoreRoutes(
 
   // DELETE /posts/:postId — Soft delete (auteur, ou modérateur et plus avec audit)
   fastify.delete('/posts/:postId', {
+    schema: { params: postIdParamsSchema },
     preValidation: [requiredAuth],
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
@@ -716,6 +719,7 @@ export function registerCoreRoutes(
   // pipeline de traduction protégé est le même, qu'on traduise un post ou un
   // commentaire.
   fastify.post('/posts/:postId/translate', {
+    schema: { params: postIdParamsSchema },
     preValidation: [requiredAuth],
     config: { rateLimit: createSocialTranslateRateLimitConfig() },
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {

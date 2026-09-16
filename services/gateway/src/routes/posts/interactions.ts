@@ -7,7 +7,7 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostService } from '../../services/PostService';
 import { MediaService } from '../../services/MediaService';
 import type { OrphanMediaCleanupService } from '../../services/storage/OrphanMediaCleanupService';
-import { LikeSchema, UnlikeSchema, RepostSchema, PostParams, EngagementBatchSchema, RecordDownloadsSchema } from './types';
+import { LikeSchema, UnlikeSchema, RepostSchema, PostParams, EngagementBatchSchema, RecordDownloadsSchema, postIdParamsSchema } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { sendSuccess, sendForbidden, sendUnauthorized, sendNotFound, sendInternalError, sendBadRequest, sendConflict, sendGone } from '../../utils/response';
 import { ConflictError } from '../../errors/custom-errors';
@@ -578,6 +578,7 @@ export function registerInteractionRoutes(
 
   // POST /posts/:postId/pin — Pin a post (author only)
   fastify.post('/posts/:postId/pin', {
+    schema: { params: postIdParamsSchema },
     preValidation: [requiredAuth],
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
@@ -604,6 +605,7 @@ export function registerInteractionRoutes(
 
   // DELETE /posts/:postId/pin — Unpin a post (author only)
   fastify.delete('/posts/:postId/pin', {
+    schema: { params: postIdParamsSchema },
     preValidation: [requiredAuth],
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
@@ -630,6 +632,7 @@ export function registerInteractionRoutes(
 
   // GET /posts/:postId/views — Story/post seen-by list (author only)
   fastify.get('/posts/:postId/views', {
+    schema: { params: postIdParamsSchema },
     preValidation: [requiredAuth],
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
@@ -663,6 +666,7 @@ export function registerInteractionRoutes(
 
   // GET /posts/:postId/interactions — Story viewers enriched with reactions & replies (author only)
   fastify.get('/posts/:postId/interactions', {
+    schema: { params: postIdParamsSchema },
     preValidation: [requiredAuth],
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
@@ -709,6 +713,7 @@ export function registerInteractionRoutes(
   // création, et le coupler bloquerait un usage nominal (prolonger une
   // story qui expire) sur le budget d'un autre.
   fastify.post('/posts/:postId/republish', {
+    schema: { params: postIdParamsSchema },
     preValidation: [requiredAuth],
     config: { rateLimit: createSocialWriteRateLimitConfig() },
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
@@ -808,6 +813,7 @@ export function registerInteractionRoutes(
   // (deux comptes, deux seaux distincts ; un seul compte, un budget commun
   // aux trois routes) — qui ferme le contournement.
   fastify.post('/posts/:postId/repost', {
+    schema: { params: postIdParamsSchema },
     preValidation: [requiredAuth],
     preHandler: [sharedWriteRateLimit],
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {

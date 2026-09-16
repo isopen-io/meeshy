@@ -237,6 +237,52 @@ jobs:
             echo "::notice title=Portée::Compilation seule. Pour exécuter la suite, mettre « smoke test », « run test » ou « to test » dans le SUJET du commit."
           fi
 
+  # ===========================================================================
+  # GARDES DE L'OUTILLAGE iOS — #6852
+  # ===========================================================================
+  # Les scripts de `apps/ios/scripts/check_*.sh` gardent l'outillage que TOUTE
+  # session iOS emprunte : l'élection du simulateur (#6838) et l'inscription
+  # des témoins au `project.pbxproj` committé (#6839). Ils étaient verts en
+  # local et exécutés par aucun workflow — une garde qui ne tourne nulle part
+  # reproduit exactement le défaut qu'elle corrige (leçon 619).
+  #
+  # Ici plutôt que sur le runner macOS : ces gardes lisent du TEXTE (un JSON de
+  # fixture, un `pbxproj` committé) et rendent leur verdict en une seconde. Les
+  # faire attendre le pool macOS — la ressource rare, cf. le job `scope` —
+  # retarderait de plusieurs dizaines de minutes une preuve qui n'en a pas
+  # besoin, et qui dit précisément si la suite d'en face va jouer ce qu'on croit.
+  #
+  # Pas d'exclusion des brouillons : un job ubuntu de deux secondes ne pèse sur
+  # aucun pool, et c'est sur un brouillon qu'un témoin non inscrit se corrige le
+  # moins cher. `ios-tests` garde la sienne, qui protège le pool macOS.
+  #
+  # Aucun `continue-on-error` : une étape qui tourne sans juger est une étape
+  # qui n'est pas inscrite. La parité de ce job avec le contenu du répertoire
+  # est gardée par `packages/shared/__tests__/ci/ios-gates-ci-parity.test.ts`,
+  # qui ÉNUMÈRE `apps/ios/scripts/` plutôt que d'en recopier la liste — une
+  # garde neuve fait donc rougir le jour où elle est écrite.
+  gardes-outillage:
+    name: Gardes de l'outillage iOS
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+
+      # La FAMILLE d'appareil décide, jamais le NOM : le simulateur du projet
+      # s'appelle `Meeshy-iOS26`, et un `grep iPhone` sur les noms ne le voyait
+      # pas. Le script porte sa propre fixture — il juge sans simulateur.
+      - name: Élection de simulateur — la famille décide, pas le nom
+        run: bash apps/ios/scripts/check_simulator_election.sh
+
+      # Un `.swift` de test présent sur disque mais absent du `pbxproj` COMMITTÉ
+      # n'entre dans aucune compilation : son rouge n'a jamais lieu, et l'issue
+      # se ferme sur une absence. Mesuré deux fois le 2026-09-16.
+      - name: Inscription des témoins au project.pbxproj committé
+        run: bash apps/ios/scripts/check_test_registration.sh
+
   ios-tests:
     needs: scope
     # Le nom du check DIT ce qui a tourné. C'est la seule chose qui distingue,

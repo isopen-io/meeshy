@@ -379,6 +379,24 @@ const FROZEN_MISSING_SUCCESS_SCHEMAS: readonly string[] = [
   // reponse reste a declarer : le deplacement ne repare rien, et le gel le dit.
   'posts/impressions.ts|post|/posts/:postId/impression|no-response-key',
   'posts/impressions.ts|post|/posts/impressions/batch|no-response-key',
+  // #6853 a posé `schema.params` (validation du FORMAT de `:postId`, un ObjectId
+  // non conforme rendait 500) sur ces dix routes, qui n'avaient jusque-là AUCUN
+  // bloc `schema` — donc invisibles à ce balayage. L'absence de `response` leur
+  // est ANTÉRIEURE au lot #6853 : poser un `schema.response` complet pour dix
+  // routes aux formes de succès hétérogènes est hors du périmètre d'un correctif
+  // de sécurité ciblé, et l'écrire à la légère rouvrirait exactement le piège que
+  // ce fichier documente (`fast-json-stringify` tronque tout champ non déclaré).
+  // Gelé, pas corrigé — comme les entrées `posts/impressions.ts` ci-dessus.
+  'posts/core.ts|get|/posts/:postId|no-response-key',
+  'posts/core.ts|put|/posts/:postId|no-response-key',
+  'posts/core.ts|delete|/posts/:postId|no-response-key',
+  'posts/core.ts|post|/posts/:postId/translate|no-response-key',
+  'posts/interactions.ts|post|/posts/:postId/pin|no-response-key',
+  'posts/interactions.ts|delete|/posts/:postId/pin|no-response-key',
+  'posts/interactions.ts|get|/posts/:postId/views|no-response-key',
+  'posts/interactions.ts|get|/posts/:postId/interactions|no-response-key',
+  'posts/interactions.ts|post|/posts/:postId/republish|no-response-key',
+  'posts/interactions.ts|post|/posts/:postId/repost|no-response-key',
 ];
 
 /** Compte les sites ouverts par (fichier, code de statut) — la clé stable. */
