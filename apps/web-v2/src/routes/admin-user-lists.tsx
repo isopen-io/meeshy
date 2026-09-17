@@ -19,9 +19,10 @@ import type { AdminDeps } from '@/lib/api/admin';
 import type { AdminUserDetail } from '@/lib/api/admin-user-detail';
 import { apiDeps } from '@/lib/api/deps';
 import type { Viewer } from '@/lib/api/viewer';
-import { prismeDuMembre } from '@/lib/admin/prisme-membre';
+import { usePrismeDuMembre } from '@/lib/view/use-prisme-membre';
 import { translateAdmin } from '@/lib/i18n-admin-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { useOnline } from '@/lib/net/online';
 
 import { AdminSkeleton } from './admin-parts';
 import { AdminConversationReading } from './admin-conversation-reading';
@@ -96,12 +97,42 @@ function Pagination({
   );
 }
 
-export function AdminUserMediaSection({ userId, language }: { readonly userId: string; readonly language: InterfaceLanguage }) {
+/**
+ * **UNE ABSENCE S'EXPLIQUE** (#6862, revue-correction) — un échec de requête
+ * rendait « ce membre n'a rien publié », c'est-à-dire un FAIT au lieu d'une
+ * panne. Un vide avalé ressemble trait pour trait à un vide légitime, et il se
+ * lit comme une réponse : l'administrateur classe le dossier.
+ *
+ * Hors ligne, c'est la coupure qu'on nomme ; en ligne, c'est la passerelle qui
+ * n'a pas répondu. Les confondre ferait chercher une panne là où il n'y a qu'un
+ * tunnel. Mêmes clés que la section Agent, qui portait déjà cette distinction.
+ */
+function Absence({ language, online }: { readonly language: InterfaceLanguage; readonly online: boolean }) {
+  return (
+    <p className="text-caption" style={{ color: INK2 }} data-admin-absence>
+      {translateAdmin(language, online ? 'admin.convList.unavailable' : 'admin.offline')}
+    </p>
+  );
+}
+
+export function AdminUserMediaSection({
+  userId,
+  language,
+  deps = apiDeps,
+}: {
+  readonly userId: string;
+  readonly language: InterfaceLanguage;
+  /** Le port, injectable — MÊME porte que la section des conversations : une
+   * asymétrie entre deux sections jumelles rend l'une mesurable et l'autre
+   * non, ce qui décide en silence de ce qui sera gardé. */
+  readonly deps?: AdminDeps;
+}) {
+  const online = useOnline();
   const [offset, setOffset] = useState(0);
   const page = useQuery({
     queryKey: adminUserMediaQueryKey(userId, offset),
     queryFn: async ({ signal }) => {
-      const resultat = await loadAdminUserMedia({ ...apiDeps, userId, offset, signal });
+      const resultat = await loadAdminUserMedia({ ...deps, userId, offset, signal });
       if (!resultat.ok) throw new Error(resultat.error);
       return resultat.data;
     },
@@ -112,21 +143,23 @@ export function AdminUserMediaSection({ userId, language }: { readonly userId: s
     <CollapsibleSection id="admin-media" title={translateAdmin(language, 'admin.media.title')} card={false}>
       {page.isPending ? (
         <AdminSkeleton rows={3} />
-      ) : (page.data?.medias ?? []).length === 0 ? (
+      ) : page.data === undefined ? (
+        <Absence language={language} online={online} />
+      ) : page.data.medias.length === 0 ? (
         <p className="text-caption" style={{ color: INK2 }}>
           {translateAdmin(language, 'admin.media.empty')}
         </p>
       ) : (
         <>
           <ul className="grid gap-2">
-            {(page.data?.medias ?? []).map((media) => (
+            {page.data.medias.map((media) => (
               <MediaRow key={media.id} media={media} language={language} />
             ))}
           </ul>
           <Pagination
             language={language}
             offset={offset}
-            hasMore={page.data?.hasMore ?? false}
+            hasMore={page.data.hasMore}
             taille={ADMIN_MEDIA_PAGE_SIZE}
             onOffset={setOffset}
           />
@@ -185,6 +218,7 @@ export function AdminUserConversationsSection({
   /** Le port, injectable — voir `AdminConversationReading`, même raison. */
   readonly deps?: AdminDeps;
 }) {
+  const online = useOnline();
   const [offset, setOffset] = useState(0);
   /** La conversation OUVERTE, `null` au repos — jamais un booléen : la modale
    * doit savoir LAQUELLE elle lit, et la remonter à chaque ouverture remet le
@@ -201,21 +235,23 @@ export function AdminUserConversationsSection({
     retry: false,
   });
 
-  const prisme = prismeDuMembre(membre);
+  const prisme = usePrismeDuMembre(membre);
 
   return (
     <>
       <CollapsibleSection id="admin-conv" title={translateAdmin(language, 'admin.conv.title')} card={false}>
         {page.isPending ? (
           <AdminSkeleton rows={3} />
-        ) : (page.data?.conversations ?? []).length === 0 ? (
+        ) : page.data === undefined ? (
+          <Absence language={language} online={online} />
+        ) : page.data.conversations.length === 0 ? (
           <p className="text-caption" style={{ color: INK2 }}>
             {translateAdmin(language, 'admin.conv.empty')}
           </p>
         ) : (
           <>
             <ul className="grid gap-2">
-              {(page.data?.conversations ?? []).map((conversation) => (
+              {page.data.conversations.map((conversation) => (
                 <ConversationRow
                   key={conversation.id}
                   conversation={conversation}
@@ -227,7 +263,7 @@ export function AdminUserConversationsSection({
             <Pagination
               language={language}
               offset={offset}
-              hasMore={page.data?.hasMore ?? false}
+              hasMore={page.data.hasMore}
               taille={ADMIN_CONVERSATIONS_PAGE_SIZE}
               onOffset={setOffset}
             />

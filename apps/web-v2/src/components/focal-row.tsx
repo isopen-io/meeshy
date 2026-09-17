@@ -739,18 +739,24 @@ export const FocalRow = memo(function FocalRow({
                 className="flex items-center gap-1 pt-1"
                 style={{ color: 'var(--color-meta)', visibility: elected ? 'hidden' : 'visible' }}
               >
+                {/* SANS CAPACITÉ DE LANGUE, AUCUN CONTRÔLE DE LANGUE (#6862) —
+                    voir la jumelle de `bubble.tsx`. */}
                 <PrismPastille
                   servedLanguage={naturalServedLanguage}
                   originalLanguage={message.originalLanguage}
                   active={activeLanguage}
-                  onToggle={() => onPickLanguage?.(message.originalLanguage)}
+                  {...(onPickLanguage === undefined
+                    ? {}
+                    : { onToggle: () => onPickLanguage(message.originalLanguage) })}
                 />
-                <Flags
-                  languages={footerLanguages}
-                  active={activeLanguage}
-                  onPick={(code) => onPickLanguage?.(code)}
-                  limit={FLAG_LIMIT_PLAIN}
-                />
+                {onPickLanguage === undefined ? null : (
+                  <Flags
+                    languages={footerLanguages}
+                    active={activeLanguage}
+                    onPick={onPickLanguage}
+                    limit={FLAG_LIMIT_PLAIN}
+                  />
+                )}
                 {reactions.map(([glyph, count]) => {
                   const mine = myReactions?.includes(glyph) ?? false;
                   return (
@@ -877,8 +883,12 @@ export const FocalRow = memo(function FocalRow({
                   originalLanguage={message.originalLanguage}
                   footerLanguages={footerLanguages}
                   active={activeLanguage}
-                  onToggleOriginal={() => onPickLanguage?.(message.originalLanguage)}
-                  onPickLanguage={(code) => onPickLanguage?.(code)}
+                  {...(onPickLanguage === undefined
+                    ? {}
+                    : {
+                        onToggleOriginal: () => onPickLanguage(message.originalLanguage),
+                        onPickLanguage,
+                      })}
                   reactions={reactions}
                 />
               ) : null}

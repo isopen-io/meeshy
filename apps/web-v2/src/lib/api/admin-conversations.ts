@@ -1,4 +1,4 @@
-import { type AdminDeps, asCount, asRecord, asText } from './admin';
+import { type AdminDeps, asCount, asRecord, asText, pageServie, type PageServie } from './admin';
 import { decodeMessage } from './decode';
 import type { ApiResult } from './http';
 import type { Message } from './types';
@@ -25,6 +25,12 @@ import type { Message } from './types';
  * qu'`AdminAuditLog` ne connaît pas et que personne ne révoque**. La trace dit
  * « il a lu », pas « il en garde une copie depuis six jours ».
  *
+ * **Les DEUX seaux sont fermés** (revue-correction) : le cache de requêtes par
+ * le préfixe ci-dessous, le service worker par `apiResponseMayBeCached`
+ * (`lib/net/api-runtime-cache.ts`), qui retire tout `/api/v1/admin/` du
+ * `runtimeCaching`. Fermer le premier seul laissait la charge partir entière
+ * par le second, et ce fichier le disait déjà en toutes lettres.
+ *
  * D'où {@link ADMIN_SOUVERAIN_PREFIXE} : toutes les clés de requête de ce
  * module en descendent, et c'est le SEUL prédicat que le filtre de
  * déshydratation ait à connaître. Une clé écrite à la main dans un écran
@@ -44,6 +50,13 @@ import type { Message } from './types';
  * **à côté** de `data`. `GET /admin/users` sert la sienne **dedans**. Lire au
  * mauvais niveau rendrait `total: 0` et `hasMore: false` — une liste qui
  * s'arrête à la première page **sans que rien n'échoue**.
+ *
+ * Ce paragraphe était écrit ici pendant que les deux décodeurs cherchaient
+ * `pagination` DANS la charge qu'ils recevaient — c'est-à-dire dans le tableau
+ * que le transport avait déjà dépaqueté. Énoncer une règle ne la fait pas
+ * appliquer : la lecture vit désormais dans `pageServie` (`./admin`), le site
+ * unique que les quatre listes d'administration partagent, et les décodeurs ne
+ * reçoivent plus une charge brute mais une {@link PageServie}.
  */
 
 /**
@@ -123,11 +136,8 @@ function decodeParticipant(raw: unknown): AdminInstanceParticipant | null {
   };
 }
 
-export function decodeAdminInstanceConversations(raw: unknown, offset: number): AdminInstanceConversationPage {
-  const charge = asRecord(raw) ?? {};
-  const brut = Array.isArray(charge.data) ? charge.data : Array.isArray(raw) ? raw : [];
-
-  const conversations = brut
+export function decodeAdminInstanceConversations(page: PageServie, offset: number): AdminInstanceConversationPage {
+  const conversations = page.lignes
     .map((entree): AdminInstanceConversation | null => {
       const ligne = asRecord(entree);
       if (ligne === null || typeof ligne.id !== 'string' || ligne.id === '') return null;
@@ -148,9 +158,9 @@ export function decodeAdminInstanceConversations(raw: unknown, offset: number): 
     })
     .filter((conversation): conversation is AdminInstanceConversation => conversation !== null);
 
-  const meta = asRecord(charge.pagination) ?? {};
-  const total = asCount(meta.total);
-  const hasMore = typeof meta.hasMore === 'boolean' ? meta.hasMore : offset + conversations.length < total;
+  const total = asCount(page.meta.total);
+  const hasMore =
+    typeof page.meta.hasMore === 'boolean' ? page.meta.hasMore : offset + conversations.length < total;
 
   return { conversations, total: total || conversations.length, offset, hasMore };
 }
@@ -179,7 +189,7 @@ export async function loadAdminInstanceConversations(
   });
   if (!result.ok) return result;
 
-  return { ok: true, data: decodeAdminInstanceConversations(result.data, params.offset) };
+  return { ok: true, data: decodeAdminInstanceConversations(pageServie(result), params.offset) };
 }
 
 // ---------------------------------------------------------------------------
@@ -288,12 +298,9 @@ function decodeThreadMessage(entree: unknown): Message | null {
  * supposent l'ASCENDANT — c'est l'ordre d'INDICE qui décide `head`/`tail`/
  * `opensDay`. `loadMessages` (`api/messages.ts`) renverse pour la même raison.
  */
-export function decodeAdminSovereignThread(raw: unknown, offset: number): AdminSovereignThreadPage {
-  const charge = asRecord(raw) ?? {};
-  const brut = Array.isArray(charge.data) ? charge.data : Array.isArray(raw) ? raw : [];
-
+export function decodeAdminSovereignThread(page: PageServie, offset: number): AdminSovereignThreadPage {
   const protectedIds = new Set<string>();
-  const messages = brut
+  const messages = page.lignes
     .map((entree): Message | null => {
       const message = decodeThreadMessage(entree);
       if (message === null) return null;
@@ -303,9 +310,8 @@ export function decodeAdminSovereignThread(raw: unknown, offset: number): AdminS
     .filter((message): message is Message => message !== null)
     .reverse();
 
-  const meta = asRecord(charge.pagination) ?? {};
-  const total = asCount(meta.total);
-  const hasMore = typeof meta.hasMore === 'boolean' ? meta.hasMore : offset + messages.length < total;
+  const total = asCount(page.meta.total);
+  const hasMore = typeof page.meta.hasMore === 'boolean' ? page.meta.hasMore : offset + messages.length < total;
 
   return { messages, protectedIds, total: total || messages.length, offset, hasMore };
 }
@@ -332,5 +338,5 @@ export async function loadAdminSovereignThread(
   });
   if (!result.ok) return result;
 
-  return { ok: true, data: decodeAdminSovereignThread(result.data, params.offset) };
+  return { ok: true, data: decodeAdminSovereignThread(pageServie(result), params.offset) };
 }

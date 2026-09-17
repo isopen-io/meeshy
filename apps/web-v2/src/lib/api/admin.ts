@@ -94,6 +94,41 @@ export const asCount = (value: unknown): number =>
 
 export const asText = (value: unknown): string => (typeof value === 'string' ? value : '');
 
+/** Une page SERVIE : ses lignes, et la pagination telle que le transport la remet. */
+export type PageServie = {
+  readonly lignes: readonly unknown[];
+  readonly meta: Readonly<Record<string, unknown>>;
+};
+
+/**
+ * **OÙ LA PAGINATION SE LIT VRAIMENT** (#6862, revue-correction) — le SITE
+ * UNIQUE, parce que quatre décodeurs d'administration s'étaient trompés de la
+ * même façon, doc-comment à l'appui.
+ *
+ * Les routes d'administration paginées passent par `sendPaginatedSuccess` :
+ * l'enveloppe vaut `{ success, data, pagination }`, la pagination À CÔTÉ de
+ * `data`. Chaque décodeur le DISAIT — et recevait ensuite `result.data`,
+ * c'est-à-dire le TABLEAU seul, où il cherchait `charge.pagination`. Le
+ * transport a déjà dépaqueté (`http.ts:355-366`) : `pagination` est un SIBLING
+ * de `ok`, sur l'`ApiResult`.
+ *
+ * Conséquence mesurée, et invisible : `total` retombait sur la longueur de la
+ * page, `hasMore` valait `false` pour toujours, et le bouton « Suivants »
+ * était ÉTEINT en production sur les quatre listes — un contrôle qui existe et
+ * n'a aucun effet (loi 4). Les témoins, eux, verdissaient : leur double rendait
+ * `{ ok: true, data: enveloppeEntière }`, où `data.pagination` existe.
+ *
+ * Le repli sur `data.pagination` reste, pour les charges qu'un appelant remet
+ * telles quelles (une fixture, une réponse non paginée) : il ne peut pas
+ * masquer le défaut ci-dessus, puisque le niveau SERVI gagne.
+ */
+export function pageServie(resultat: { readonly data: unknown; readonly pagination?: unknown }): PageServie {
+  const charge = asRecord(resultat.data);
+  const lignes = Array.isArray(resultat.data) ? resultat.data : Array.isArray(charge?.data) ? charge.data : [];
+  const meta = asRecord(resultat.pagination) ?? asRecord(charge?.pagination) ?? {};
+  return { lignes, meta };
+}
+
 /**
  * `false` par DÉFAUT sur chaque clé — une permission absente de la charge est
  * une permission qu'on n'a pas. Le `?? false` n'est pas de la prudence

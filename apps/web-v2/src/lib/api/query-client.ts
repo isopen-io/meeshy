@@ -115,9 +115,12 @@ export type AppQueryClient = QueryClient & { persist: () => void };
  * soit posée ou RETIRÉE. Un témoin vert des deux côtés d'une mutation ne
  * mesure pas la règle, il mesure la machine.
  *
- * Ne couvre PAS le cache du service worker (`caches.open('api')`, sept jours
- * sur le disque), qui retient les réponses HTTP par un autre chemin : voir
- * `purgeReaderCaches`, et le suivi de #6862.
+ * Ce prédicat ne couvre que le cache de REQUÊTES. Le service worker écrivait la
+ * même charge par un autre chemin — `caches.open('api')`, la réponse HTTP
+ * entière, sept jours sur le disque — et ce doc-comment l'AVOUAIT sans que rien
+ * ne le ferme. C'est fait : `apiResponseMayBeCached` (`lib/net/api-runtime-cache.ts`)
+ * sort tout `/api/v1/admin/` du `runtimeCaching`. Deux seaux, deux gardes, la
+ * même règle.
  */
 export function persistableQuery(query: {
   readonly state: { readonly status: string };

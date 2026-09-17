@@ -491,7 +491,7 @@ export function AdminAgentPanel({
    * ligne, c'est la passerelle qui n'a pas répondu. Les confondre ferait
    * chercher une panne là où il n'y a qu'un tunnel. */
   const absence = (): string =>
-    translateAdmin(language, online ? 'admin.convList.unavailable' : 'admin.agent.offline');
+    translateAdmin(language, online ? 'admin.convList.unavailable' : 'admin.offline');
 
   return (
     <div className="grid gap-6" data-admin-agent-panel>

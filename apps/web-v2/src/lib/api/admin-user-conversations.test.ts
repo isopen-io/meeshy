@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test';
 
 import { decodeAdminConversationPage, loadAdminUserConversations } from './admin-user-conversations';
 import type { HttpTransport } from './http';
+import { pageServie } from './admin';
+import { resultatServi } from '@/test-support/served-pagination';
 
 /**
  * LES CONVERSATIONS D'UN MEMBRE (#6819) —
@@ -51,10 +53,20 @@ const CONV = {
   membership: { userId: 'u-1', displayName: 'Amina', role: 'MEMBER', isActive: true },
 };
 
+/**
+ * LA PAGE TELLE QUE LE PRODUIT LA REÇOIT (#6862, revue-correction) — l'enveloppe
+ * de la passerelle passe par la MÊME conversion que `createHttpTransport`
+ * (`resultatServi`) puis par la MÊME lecture que les ports (`pageServie`).
+ * Passer l'enveloppe brute au décodeur laissait `pagination` là où la
+ * production ne la trouve jamais : le témoin verdissait sur un chemin
+ * inexistant.
+ */
+const servie = (enveloppe: unknown) => pageServie(resultatServi(enveloppe));
+
 describe('decodeAdminConversationPage — le cadre, jamais le contenu', () => {
   test('lit la pagination au niveau de l’ENVELOPPE, pas dans `data`', () => {
     const page = decodeAdminConversationPage(
-      { data: [CONV], pagination: { total: 37, offset: 20, limit: 20, hasMore: true } },
+      servie({ data: [CONV], pagination: { total: 37, offset: 20, limit: 20, hasMore: true } }),
       20,
     );
 
@@ -64,29 +76,29 @@ describe('decodeAdminConversationPage — le cadre, jamais le contenu', () => {
   });
 
   test('garde `memberCount` SERVI — la colonne du même nom n’est écrite par personne', () => {
-    expect(decodeAdminConversationPage({ data: [CONV] }, 0).conversations[0]?.memberCount).toBe(12);
+    expect(decodeAdminConversationPage(servie({ data: [CONV] }), 0).conversations[0]?.memberCount).toBe(12);
   });
 
   test('un `membership` ABSENT reste null — le membre peut être hors des six servis', () => {
-    const page = decodeAdminConversationPage({ data: [{ ...CONV, membership: null }] }, 0);
+    const page = decodeAdminConversationPage(servie({ data: [{ ...CONV, membership: null }] }), 0);
 
     expect(page.conversations[0]?.membership).toBeNull();
     expect(page.conversations[0]?.id).toBe('c-1');
   });
 
   test('conserve les participants servis, plafonnés côté serveur', () => {
-    expect(decodeAdminConversationPage({ data: [CONV] }, 0).conversations[0]?.participants).toHaveLength(1);
+    expect(decodeAdminConversationPage(servie({ data: [CONV] }), 0).conversations[0]?.participants).toHaveLength(1);
   });
 
   test('un titre absent devient null — jamais une chaîne vide affichable', () => {
-    const page = decodeAdminConversationPage({ data: [{ ...CONV, title: '' }] }, 0);
+    const page = decodeAdminConversationPage(servie({ data: [{ ...CONV, title: '' }] }), 0);
 
     expect(page.conversations[0]?.title).toBeNull();
   });
 
   test('écarte les entrées sans identifiant, tolère une charge illisible', () => {
-    expect(decodeAdminConversationPage({ data: [{ title: 'sans id' }] }, 0).conversations).toHaveLength(0);
-    expect(decodeAdminConversationPage(null, 0).conversations).toEqual([]);
+    expect(decodeAdminConversationPage(servie({ data: [{ title: 'sans id' }] }), 0).conversations).toHaveLength(0);
+    expect(decodeAdminConversationPage(servie(null), 0).conversations).toEqual([]);
   });
 });
 

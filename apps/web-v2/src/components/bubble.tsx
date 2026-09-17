@@ -540,17 +540,23 @@ export function Bubble({
                       voilé compris (`bulle.md` § 9 écart 5). */}
                   {showsBottomLine ? (
                     <>
+                      {/* SANS CAPACITÉ DE LANGUE, AUCUN CONTRÔLE DE LANGUE
+                          (#6862) — `onPickLanguage?.(…)` rendait ces deux
+                          boutons INERTES chez l'hôte qui ne la porte pas
+                          (l'administration) : cliquer ne changeait pas le
+                          texte lu. La pastille RESTE, en indicateur muet ; les
+                          drapeaux, eux, ne sont qu'un contrôle. */}
                       <PrismPastille
                         servedLanguage={naturalServedLanguage}
                         originalLanguage={message.originalLanguage}
                         active={activeLanguage}
-                        onToggle={() => onPickLanguage?.(message.originalLanguage)}
+                        {...(onPickLanguage === undefined
+                          ? {}
+                          : { onToggle: () => onPickLanguage(message.originalLanguage) })}
                       />
-                      <Flags
-                        languages={footerLanguages}
-                        active={activeLanguage}
-                        onPick={(code) => onPickLanguage?.(code)}
-                      />
+                      {onPickLanguage === undefined ? null : (
+                        <Flags languages={footerLanguages} active={activeLanguage} onPick={onPickLanguage} />
+                      )}
                     </>
                   ) : null}
                   <span className="flex-1" />

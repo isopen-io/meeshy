@@ -91,7 +91,9 @@ const DETAIL = {
 
 type Espion = { readonly transport: HttpTransport; readonly vues: HttpRequest[] };
 
-function transportAgent(options: { readonly scanEnCours?: boolean; readonly relanceEchoue?: boolean } = {}): Espion {
+function transportAgent(
+  options: { readonly scanEnCours?: boolean; readonly relanceEchoue?: boolean; readonly arretEchoue?: boolean } = {},
+): Espion {
   const vues: HttpRequest[] = [];
   const transport = (async () => ({ ok: false, status: 0, error: 'jamais appelé' })) as unknown as HttpTransport;
   transport.request = (async (requete: HttpRequest): Promise<ApiResult<unknown>> => {
@@ -104,7 +106,9 @@ function transportAgent(options: { readonly scanEnCours?: boolean; readonly rela
         : { ok: true, data: { conversationId: 'c-atelier', triggered: true, triggeredAt: 1758100000000 } };
     }
     if (method === 'POST' && path.endsWith('/stop')) {
-      return { ok: true, data: { conversationId: 'c-atelier', stopped: true } };
+      return options.arretEchoue === true
+        ? { ok: false, status: 500, error: 'Erreur serveur' }
+        : { ok: true, data: { conversationId: 'c-atelier', stopped: true } };
     }
     if (path.includes('/scan-logs/')) return { ok: true, data: DETAIL };
     if (path.includes('/scan-logs')) return { ok: true, data: JOURNAL.data, pagination: JOURNAL.pagination };
@@ -288,5 +292,66 @@ describe('LE LIBELLÉ DE RELANCE MENTIONNE LA PUBLICATION — dans les SEPT lang
     // Une clé traduite que personne ne rend n'avertit personne : c'est la
     // jumelle de « qui AFFICHE ce que tu résous ? ».
     expect(host.textContent).toContain(translateAdmin('fr', 'admin.agent.effect'));
+  });
+});
+
+/**
+ * **UN ÉCHEC NOMME L'ÉCHEC, JAMAIS UNE AUTRE ACTION** (#6733,
+ * revue-correction) — le libellé d'échec disait « Échec de la relance », et il
+ * était servi AUSSI quand c'est l'ARRÊT qui avait échoué.
+ *
+ * L'administrateur lisait donc, après avoir demandé un arrêt : « la relance a
+ * échoué ». Deux lectures fausses d'un coup — une action qu'il n'a pas
+ * demandée, et rien sur celle qu'il a demandée. Le scan, lui, continue.
+ *
+ * Le libellé est devenu NEUTRE plutôt que dédoublé : le catalogue
+ * d'administration tient sous un plafond de poids (11 Ko gzip), et une clé est
+ * payée SEPT fois. Une phrase qui ne nomme aucune des deux actions dit le vrai
+ * dans les deux cas — c'est la seule forme qui tienne dans le budget sans
+ * mentir.
+ */
+describe('le libellé d’échec ne nomme aucune des deux actions — dans les SEPT langues', () => {
+  /**
+   * LE RADICAL, JAMAIS LE MOT ENTIER — et c'est une leçon payée dans cette
+   * revue même : écrit sur des mots complets, ce témoin laissait passer
+   * « Échec de la relance » face à « Relancer l'agent » (relance ≠ relancer).
+   * Un témoin qui ne tombe pas sur le défaut qu'il est né pour attraper ne
+   * mesure rien. Trois lettres couvrent aussi l'arabe, dont les mots utiles
+   * sont plus courts que le seuil qu'une langue latine suggère.
+   */
+  const RADICAL = 3;
+
+  const radicauxDe = (phrase: string): readonly string[] =>
+    phrase
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/\p{M}+/gu, '')
+      .split(/[^\p{L}]+/u)
+      .filter((mot) => mot.length >= RADICAL)
+      .map((mot) => mot.slice(0, RADICAL));
+
+  test('aucun radical partagé avec « relancer » ni avec « arrêter »', async () => {
+    for (const langue of SUPPORTED_INTERFACE_LANGUAGES) {
+      await loadAdminInterfaceCatalog(langue);
+      const echec = radicauxDe(translateAdmin(langue, 'admin.agent.failed'));
+      const actions = [
+        ...radicauxDe(translateAdmin(langue, 'admin.agent.relaunch')),
+        ...radicauxDe(translateAdmin(langue, 'admin.agent.stop')),
+      ];
+
+      const partages = echec.filter((mot) => actions.includes(mot));
+      expect({ langue, partages }).toEqual({ langue, partages: [] });
+    }
+  });
+
+  test('un ARRÊT refusé est annoncé — et par ce libellé-là', async () => {
+    const espion = transportAgent({ scanEnCours: true, arretEchoue: true });
+    const host = await monter(espion);
+
+    await mounter.click(host.querySelector('[data-agent-stop="c-atelier"]') as HTMLElement | null);
+
+    expect(host.querySelector('[data-admin-announcement]')?.textContent).toBe(
+      translateAdmin('fr', 'admin.agent.failed'),
+    );
   });
 });

@@ -1,5 +1,5 @@
-import { type AdminDeps, asCount, asRecord, asText } from './admin';
-import type { ApiResult, ApiSuccess } from './http';
+import { type AdminDeps, asCount, asRecord, asText, pageServie } from './admin';
+import type { ApiResult } from './http';
 import { ADMIN_SOUVERAIN_PREFIXE } from './souverain';
 
 /**
@@ -89,21 +89,12 @@ const asTextOrNull = (value: unknown): string | null =>
   typeof value === 'string' && value !== '' ? value : null;
 
 /**
- * LA PAGE, LUE OÙ LE TRANSPORT LA POSE — et non là où le schéma la dessine.
- *
- * `result.pagination` est le chemin RÉEL (`http.ts` relève `envelope.pagination`
- * en sibling de `data`). Le repli sur `data.pagination` sert les charges
- * remises telles quelles par un appelant qui reproduit la forme du FIL, sans
- * quoi la même fonction lirait juste en production et faux sous témoin — ou
- * l'inverse, ce qui est pire.
+ * LA PAGE se lit par `pageServie` (`./admin`) — « où le transport la POSE, et
+ * non là où le schéma la dessine ». Cette lecture vivait ICI (#6733) pendant
+ * que quatre décodeurs voisins la faisaient FAUSSE au même moment (#6862) :
+ * une loi juste, dans un seul fichier, ne garde pas ses voisins. Elle a donc
+ * rejoint les trois helpers que toute l'administration partage déjà.
  */
-function pageDe(resultat: ApiSuccess<unknown>): { readonly lignes: readonly unknown[]; readonly meta: Readonly<Record<string, unknown>> } {
-  const charge = asRecord(resultat.data);
-  const lignes = Array.isArray(resultat.data) ? resultat.data : Array.isArray(charge?.data) ? charge.data : [];
-  const meta = asRecord(resultat.pagination) ?? asRecord(charge?.pagination) ?? {};
-  return { lignes, meta };
-}
-
 const totalEtSuite = (
   meta: Readonly<Record<string, unknown>>,
   page: number,
@@ -212,7 +203,7 @@ export async function loadAgentTracked(
   });
   if (!resultat.ok) return resultat;
 
-  const { lignes, meta } = pageDe(resultat);
+  const { lignes, meta } = pageServie(resultat);
   const conversations = lignes
     .map(decodeTracked)
     .filter((ligne): ligne is AgentTrackedConversation => ligne !== null);
@@ -377,7 +368,7 @@ export async function loadAgentScanLogs(
   });
   if (!resultat.ok) return resultat;
 
-  const { lignes, meta } = pageDe(resultat);
+  const { lignes, meta } = pageServie(resultat);
   const logs = lignes.map(decodeScanLog).filter((ligne): ligne is AgentScanLogRow => ligne !== null);
 
   return { ok: true, data: { logs, page: params.page, ...totalEtSuite(meta, params.page, logs.length) } };

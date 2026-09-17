@@ -31,6 +31,41 @@ import type { PaginationMeta } from '@meeshy/shared/types/api-responses';
  * vit dans `packages/shared`. Le resserrer depuis un dossier de témoins serait
  * réparer la mesure au lieu de la chose mesurée.
  */
+/**
+ * **CE QUE LE TRANSPORT REMET VRAIMENT** (#6862, revue-correction) — la
+ * conversion `enveloppe → ApiResult` que `createHttpTransport` fait
+ * (`http.ts:355-366`), reproduite ici pour les témoins de port.
+ *
+ * Un double qui rend `{ ok: true, data: enveloppe }` remet l'enveloppe ENTIÈRE
+ * dans `data` : un décodeur qui lirait `data.pagination` y trouve la
+ * pagination, et le témoin verdit. En production, le transport a DÉJÀ
+ * dépaqueté — `data` est le tableau, `pagination` est un SIBLING de `ok` — et
+ * le même décodeur ne trouve plus rien : `total` retombe sur la longueur de la
+ * page et `hasMore` est faux pour toujours. Le bouton « Suivants » est alors
+ * éteint en production, VERT sous témoin.
+ *
+ * C'est le défaut qu'a payé ce chantier sur quatre décodeurs d'administration
+ * à la fois. Tout témoin de port passe donc par ici plutôt que de fabriquer
+ * son `ApiResult` à la main.
+ */
+export function resultatServi(enveloppe: unknown): {
+  readonly ok: true;
+  readonly data: unknown;
+  readonly status: number;
+  readonly pagination?: PaginationMeta;
+} {
+  const charge = typeof enveloppe === 'object' && enveloppe !== null ? (enveloppe as Record<string, unknown>) : {};
+  const aUneEnveloppe = !Array.isArray(enveloppe) && 'data' in charge;
+  const pagination = charge.pagination;
+
+  return {
+    ok: true,
+    data: aUneEnveloppe ? charge.data : enveloppe,
+    status: 200,
+    ...(pagination === undefined ? {} : { pagination: pagination as PaginationMeta }),
+  };
+}
+
 export type ServedPagePagination = {
   readonly total: number;
   readonly page?: number;

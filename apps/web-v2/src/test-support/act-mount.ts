@@ -83,6 +83,21 @@ export function createActMounter() {
     return host;
   };
 
+  /**
+   * REND À NOUVEAU DANS LA MÊME RACINE (#6862, revue-correction) — un
+   * `mount` de plus créerait un second arbre, où tout `useMemo` repart de
+   * zéro : on ne mesurerait plus ce que React GARDE d'un rendu à l'autre, mais
+   * deux montages indépendants.
+   */
+  const rerender = async (host: HTMLDivElement, element: ReactElement): Promise<void> => {
+    const monte = mounted.find((entree) => entree.host === host);
+    if (monte === undefined) throw new Error('hôte non monté par ce mounter');
+    await act(async () => {
+      monte.root.render(element);
+    });
+    await settle();
+  };
+
   const unmountAll = (): void => {
     for (const { root, host } of mounted.splice(0)) {
       act(() => root.unmount());
@@ -121,7 +136,7 @@ export function createActMounter() {
     await settle();
   };
 
-  return { mount, settle, unmountAll, click, type, submit };
+  return { mount, rerender, settle, unmountAll, click, type, submit };
 }
 
 export const buttonNamed = (host: ParentNode, name: string): HTMLButtonElement | null =>

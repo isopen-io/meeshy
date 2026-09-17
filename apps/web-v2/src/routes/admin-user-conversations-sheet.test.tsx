@@ -4,11 +4,11 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import type { AdminUserDetail } from '@/lib/api/admin-user-detail';
 import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
 import { appQueryClient } from '@/lib/api/query-client';
-import { loadAdminInterfaceCatalog } from '@/lib/i18n-admin-catalog';
+import { loadAdminInterfaceCatalog, translateAdmin } from '@/lib/i18n-admin-catalog';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { AdminUserConversationsSection } from './admin-user-lists';
+import { AdminUserConversationsSection, AdminUserMediaSection } from './admin-user-lists';
 
 /**
  * **UNE LIGNE DE CONVERSATION OUVRE LA VRAIE VUE** (#6862, lot C).
@@ -201,5 +201,109 @@ describe('la section des conversations est REPLIABLE', () => {
 
     expect(host.querySelector('[data-collapsible-toggle="admin-conv"]')?.getAttribute('aria-expanded')).toBe('false');
     expect(host.querySelector('[data-admin-conversation="c-atelier"]')).toBe(null);
+  });
+});
+
+/**
+ * **UN ÉCHEC N'EST PAS UN VIDE** (#6862, revue-correction).
+ *
+ * La section rendait « Aucune conversation » dès que `page.data` manquait —
+ * c'est-à-dire aussi quand la requête avait ÉCHOUÉ. Un vide avalé ressemble
+ * trait pour trait à un vide légitime, sauf qu'il affirme un FAIT sur le
+ * membre : « il ne parle nulle part ». Un administrateur lit ça comme une
+ * réponse et classe le dossier.
+ *
+ * Le témoin porte sur la DISTINCTION, pas sur la présence d'un texte : les deux
+ * états rendaient déjà un paragraphe, et c'est bien pour ça que personne ne
+ * voyait le défaut.
+ */
+describe('une absence s’explique, elle ne se confond pas avec un vide', () => {
+  function transportQuiEchoue(): HttpTransport {
+    const transport = (async () => ({ ok: false, status: 0, error: 'jamais appelé' })) as unknown as HttpTransport;
+    transport.request = (async (): Promise<ApiResult<unknown>> => ({
+      ok: false,
+      status: 500,
+      error: 'Erreur serveur',
+    })) as HttpTransport['request'];
+    return transport;
+  }
+
+  function transportVide(): HttpTransport {
+    const transport = (async () => ({ ok: false, status: 0, error: 'jamais appelé' })) as unknown as HttpTransport;
+    transport.request = (async (): Promise<ApiResult<unknown>> => ({
+      ok: true,
+      data: [],
+      status: 200,
+      pagination: { total: 0, offset: 0, limit: 20, hasMore: false },
+    })) as unknown as HttpTransport['request'];
+    return transport;
+  }
+
+  const monterAvec = async (transport: HttpTransport): Promise<HTMLDivElement> =>
+    mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <AdminUserConversationsSection membre={MEMBRE} language="fr" deps={{ source: 'gateway', transport }} />
+      </QueryClientProvider>,
+    );
+
+  test('une requête REFUSÉE ne dit pas « aucune conversation »', async () => {
+    const host = await monterAvec(transportQuiEchoue());
+    expect(host.querySelector('[data-admin-absence]')).not.toBe(null);
+    expect(host.textContent ?? '').not.toContain(translateAdmin('fr', 'admin.conv.empty'));
+  });
+
+  test('CONTRASTE — une liste VRAIMENT vide dit bien qu’elle est vide', async () => {
+    const host = await monterAvec(transportVide());
+    expect(host.querySelector('[data-admin-absence]')).toBe(null);
+    expect(host.textContent ?? '').toContain(translateAdmin('fr', 'admin.conv.empty'));
+  });
+});
+
+/**
+ * LA MÊME LOI SUR LA SECTION JUMELLE (#6862, revue-correction) — les deux
+ * sections de la fiche sont écrites l'une à côté de l'autre, et un correctif
+ * porté sur une seule laisse l'autre mentir. La mutation « l'échec redevient un
+ * vide » a survécu ici tant que ce témoin n'existait pas, alors qu'elle mourait
+ * sur la section des conversations : deux surfaces, deux témoins.
+ */
+describe('les MÉDIAS aussi : un échec n’est pas « rien publié »', () => {
+  const transportRefus = (): HttpTransport => {
+    const transport = (async () => ({ ok: false, status: 0, error: 'jamais appelé' })) as unknown as HttpTransport;
+    transport.request = (async (): Promise<ApiResult<unknown>> => ({
+      ok: false,
+      status: 500,
+      error: 'Erreur serveur',
+    })) as HttpTransport['request'];
+    return transport;
+  };
+
+  const transportVideMedia = (): HttpTransport => {
+    const transport = (async () => ({ ok: false, status: 0, error: 'jamais appelé' })) as unknown as HttpTransport;
+    transport.request = (async (): Promise<ApiResult<unknown>> => ({
+      ok: true,
+      data: [],
+      status: 200,
+      pagination: { total: 0, offset: 0, limit: 20, hasMore: false },
+    })) as unknown as HttpTransport['request'];
+    return transport;
+  };
+
+  const monterMedias = async (transport: HttpTransport): Promise<HTMLDivElement> =>
+    mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <AdminUserMediaSection userId={MEMBRE.id} language="fr" deps={{ source: 'gateway', transport }} />
+      </QueryClientProvider>,
+    );
+
+  test('une requête REFUSÉE ne dit pas « aucun média »', async () => {
+    const host = await monterMedias(transportRefus());
+    expect(host.querySelector('[data-admin-absence]')).not.toBe(null);
+    expect(host.textContent ?? '').not.toContain(translateAdmin('fr', 'admin.media.empty'));
+  });
+
+  test('CONTRASTE — une galerie VRAIMENT vide le dit', async () => {
+    const host = await monterMedias(transportVideMedia());
+    expect(host.querySelector('[data-admin-absence]')).toBe(null);
+    expect(host.textContent ?? '').toContain(translateAdmin('fr', 'admin.media.empty'));
   });
 });

@@ -149,8 +149,45 @@ const CHARGE = {
         { id: 't-es', messageId: 'm-traduit', targetLanguage: 'es', translatedContent: 'Hola', createdAt: '2026-06-02T10:00:05.000Z' },
         { id: 't-fr', messageId: 'm-traduit', targetLanguage: 'fr', translatedContent: 'Bonjour', createdAt: '2026-06-02T10:00:05.000Z' },
       ],
-      attachmentCount: 0,
-      attachments: [],
+      /* IMAGE ET VOCAL — la consigne du porteur nomme les deux : « un
+         ADMIN/BIGBOSS lit toutes les conversations, images et audio ». Un fil
+         qui rendrait le TEXTE et jetterait les pièces satisferait chaque
+         témoin de Prisme et manquerait la moitié de la demande. */
+      attachmentCount: 2,
+      attachments: [
+        {
+          id: 'a-image',
+          messageId: 'm-traduit',
+          originalName: 'plan.png',
+          mimeType: 'image/png',
+          fileSize: 96,
+          fileUrl: 'data:image/png;base64,PIXEL-SOUVERAIN',
+          thumbnailUrl: null,
+          transcription: null,
+          translations: null,
+          imageVariants: null,
+          isProtected: false,
+          isViewOnce: false,
+          viewOnceCount: 0,
+          isBlurred: false,
+        },
+        {
+          id: 'a-vocal',
+          messageId: 'm-traduit',
+          originalName: 'note.m4a',
+          mimeType: 'audio/mp4',
+          fileSize: 2048,
+          fileUrl: 'data:audio/mp4;base64,VOCAL-SOUVERAIN',
+          thumbnailUrl: null,
+          transcription: { language: 'en', text: 'Hello team' },
+          translations: { es: { type: 'audio', transcription: 'Hola equipo', url: 'data:audio/mp4;base64,VOCAL-ES' } },
+          imageVariants: null,
+          isProtected: false,
+          isViewOnce: false,
+          viewOnceCount: 0,
+          isBlurred: false,
+        },
+      ],
       replyTo: null,
       createdAt: '2026-06-02T10:00:00.000Z',
       sender: {
@@ -328,5 +365,96 @@ describe('RIEN DE CE QUI EST LU NE TOUCHE LE DISQUE', () => {
 
     const etat = JSON.stringify(dehydrate(appQueryClient, { shouldDehydrateQuery: persistableQuery }));
     expect(etat).toContain('Hola-ordinaire');
+  });
+});
+
+/**
+ * **AUCUN CONTRÔLE INERTE DANS LA FENÊTRE DE LECTURE** (#6862,
+ * revue-correction) — la loi 4 suivie jusqu'au PIXEL, et non jusqu'au
+ * consommateur.
+ *
+ * Rendre les capacités OPTIONNELLES au type ne suffisait pas : les deux peaux
+ * appelaient `onPickLanguage?.(…)`, si bien que la pastille du Prisme et les
+ * drapeaux du pied restaient PEINTS, focalisables et annoncés — et que cliquer
+ * ne changeait pas le texte lu. C'est le défaut de `PostCard` (CLAUDE.md
+ * § Prisme, cycle 123) : « suivre une donnée jusqu'à son consommateur s'arrête
+ * un cran trop tôt ».
+ *
+ * Le témoin porte sur l'ÉCRAN, et non sur les peaux seules : c'est ici que se
+ * décide QUI monte quoi, et une jumelle par peau ne dirait rien de l'hôte.
+ */
+describe('la lecture souveraine ne peint AUCUN contrôle sans effet', () => {
+  test('aucun bouton de prise de langue — ni pastille, ni drapeau', async () => {
+    const { host } = await lire(['de', 'es'], 'de');
+    // Le message TRADUIT est bien à l'écran : sans lui, ce témoin verdirait
+    // sur une page vide (leçon 261 — un verdict qui ne peut pas tomber).
+    expect(host.textContent ?? '').toContain('Hola');
+    expect(host.querySelectorAll('[data-prism-toggle]').length).toBe(0);
+    expect(host.querySelectorAll('[data-prism-flag]').length).toBe(0);
+  });
+
+  test('mais le FAIT de la traduction reste dit — l’indicateur du Prisme survit', async () => {
+    const { host } = await lire(['de', 'es'], 'de');
+    expect(host.querySelectorAll('[data-prism-indicator]').length).toBeGreaterThan(0);
+  });
+
+  /**
+   * L'INVENTAIRE DES GESTES OFFERTS — la forme GÉNÉRALE de la loi 4, qui
+   * attrapera le prochain contrôle monté sans sa capacité ; un témoin nommé ne
+   * garde que ce qu'il nomme.
+   *
+   * Chaque entrée est un geste dont l'effet EXISTE ici : tourner la page, ouvrir
+   * une image, jouer un vocal, en changer la vitesse. Un bouton de plus fait
+   * rougir ce témoin, et c'est voulu — il faudra alors dire lequel, et prouver
+   * qu'il fait quelque chose.
+   */
+  const GESTES_OFFERTS = ['Précédents', 'Suivants', 'Ouvrir plan.png', "Lire l'audio", 'Vitesse de lecture'];
+
+  test('la fenêtre n’offre QUE les gestes dont l’effet existe', async () => {
+    const { host } = await lire(['de', 'es'], 'de');
+    const inconnus = [...host.querySelectorAll('button')]
+      .map((bouton) => (bouton.getAttribute('aria-label') ?? bouton.textContent ?? '').trim())
+      .filter((nom) => !GESTES_OFFERTS.includes(nom));
+
+    expect(inconnus).toEqual([]);
+  });
+});
+
+/**
+ * **LES IMAGES ET L'AUDIO, PAS SEULEMENT LE TEXTE** (#6862,
+ * revue-correction) — la consigne du porteur nomme les trois, et les témoins
+ * de Prisme ci-dessus verdiraient tous sur un fil qui rendrait le texte et
+ * jetterait les pièces : ils n'interrogent que des chaînes.
+ *
+ * Et la piste VOCALE suit le Prisme DU MEMBRE comme le texte : le cycle 128 du
+ * `CLAUDE.md` a coûté une bannière française au-dessus d'un vocal anglais
+ * parce qu'un correctif avait descendu le prisme du TEXTE et laissé l'URL de
+ * l'original partir douze lignes plus bas. Ici, le membre lit `de › es` : la
+ * piste servie doit être l'espagnole.
+ */
+describe('la lecture souveraine rend aussi ce qui n’est pas du texte', () => {
+  test('l’image du message atteint le DOM', async () => {
+    const { host } = await lire(['de', 'es'], 'de');
+    expect(host.querySelector('[data-attachment="a-image"]')).not.toBe(null);
+    expect(host.innerHTML).toContain('PIXEL-SOUVERAIN');
+  });
+
+  test('le vocal est JOUABLE — un <audio> avec sa source', async () => {
+    const { host } = await lire(['de', 'es'], 'de');
+    expect(host.querySelector('[data-attachment="a-vocal"] audio')).not.toBe(null);
+  });
+
+  test('et la piste servie suit le prisme DU MEMBRE, jamais l’original', async () => {
+    const { host } = await lire(['de', 'es'], 'de');
+    const audio = host.querySelector('[data-attachment="a-vocal"] audio');
+    expect(audio?.getAttribute('src') ?? '').toContain('VOCAL-ES');
+  });
+
+  test('CONTRASTE — au prisme de l’administrateur (fr), c’est l’ORIGINAL qui est servi', async () => {
+    // `fr` n'a aucune piste : la règle du Prisme est alors de servir
+    // l'original, jamais `translations.first` (règle critique 1).
+    const { host } = await lire(['fr'], 'fr');
+    const audio = host.querySelector('[data-attachment="a-vocal"] audio');
+    expect(audio?.getAttribute('src') ?? '').toContain('VOCAL-SOUVERAIN');
   });
 });
