@@ -571,6 +571,17 @@ const en = {
   'links.create.error.refused': 'You cannot create a link for this conversation.',
   'links.create.error.default': 'The link could not be created. Try again.',
 
+  'feed.scene.carousel.previous': 'Previous scene',
+  'feed.scene.carousel.next': 'Next scene',
+  'feed.scene.mosaic.tile': 'Scene {index}',
+  'feed.scene.mosaic.more': 'Scene {index}, and {count} more',
+  'feed.scene.mosaic.video': 'Scene {index}, video',
+  'feed.scene.shared_by': 'Scene shared by {author}',
+  'feed.scene.open.fullscreen': 'Double-tap to view fullscreen',
+  'feed.scene.open.post': 'Double-tap to open the post',
+  'feed.scene.sound.muted': 'Sound muted',
+  'feed.scene.count': '{count} scenes',
+
   'admin.title': 'Administration',
 
 } satisfies InterfaceCatalog;

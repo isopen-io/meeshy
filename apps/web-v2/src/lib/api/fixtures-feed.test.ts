@@ -8,13 +8,21 @@ import {
   POST_LONG_TEXT,
   POST_NO_DIMENSIONS,
   POST_REPOST,
+  POST_SCENE_CLIP_A,
+  POST_SCENE_CLIP_B,
+  POST_SCENE_TEXT,
+  POST_SCENES_MIXED,
+  POST_SCENES_WAVE,
   POST_TEXT_RANK2,
   POST_WIRE_NULLS,
   REEL_PORTRAIT,
   pageOfFeed,
 } from './fixtures-feed';
+import { carrierMediaIdentity } from '@/lib/canvas/carrier';
+import { parseCanvasDocument } from '@/lib/canvas/document';
 import { feedMediaKindOf } from '@/lib/feed/layout';
 import { resolveMosaicLayout } from '@/lib/feed/mosaic-layout';
+import { isDocumentAudible } from '@/lib/feed/scene-motion';
 import { wordCountOf } from '@/lib/feed/text';
 
 describe('FEED_POSTS — le corpus exerce chaque famille du § 3.4', () => {
@@ -140,5 +148,59 @@ describe('pageOfFeed — mime le keyset (createdAt desc, id desc)', () => {
     expect(p2.pagination.hasMore).toBe(false);
     expect(p2.pagination.nextCursor).toBeNull();
     expect(idsP1.size + p2.posts.length).toBe(FEED_POSTS.length);
+  });
+});
+
+/**
+ * T15 (#6898) — LE CORPUS PORTE DES SCÈNES. Chaque assertion mesure une
+ * PROPRIÉTÉ que le § 3.4 de la spécification `scenes-fil` réclame — jamais
+ * juste « l'id existe ».
+ */
+describe('le corpus du fil porte des scènes (§ 3.4)', () => {
+  test('les cinq ids existent dans FEED_POSTS', () => {
+    const ids = new Set(FEED_POSTS.map((p) => p.id));
+    for (const id of ['post-scene-text', 'post-scenes-mixed', 'post-scenes-wave', 'post-scene-clip-a', 'post-scene-clip-b']) {
+      expect(ids.has(id)).toBe(true);
+    }
+  });
+
+  test('post-scene-text : une traduction UNIQUEMENT pour un rang ≠ 1 (leçon 261)', () => {
+    const doc = parseCanvasDocument(POST_SCENE_TEXT.storyEffects);
+    const text = doc?.scenes[0]?.objects.find((o) => o.kind === 'text');
+    expect(text?.locale).toBe('es');
+    const translations = text?.payload.translations as Record<string, string> | undefined;
+    expect(translations?.fr).toBeUndefined();
+    expect(translations?.en).toBe('The scene speaks for itself.');
+  });
+
+  test('post-scenes-mixed : s2 n’adresse aucun média', () => {
+    const doc = parseCanvasDocument(POST_SCENES_MIXED.storyEffects);
+    expect(doc?.scenes.length).toBe(3);
+    expect(carrierMediaIdentity(doc!.scenes[1]!)).toBeNull();
+    expect(carrierMediaIdentity(doc!.scenes[0]!)).toBe('media-scene-pano');
+    expect(carrierMediaIdentity(doc!.scenes[2]!)).toBe('media-scene-portrait');
+  });
+
+  test('post-scenes-wave : 5 scènes, layout wave', () => {
+    const doc = parseCanvasDocument(POST_SCENES_WAVE.storyEffects);
+    expect(doc?.scenes.length).toBe(5);
+    expect(doc?.layout).toBe('wave');
+  });
+
+  test('post-scene-clip-a est audible, -b ne l’est pas', () => {
+    const a = parseCanvasDocument(POST_SCENE_CLIP_A.storyEffects);
+    const b = parseCanvasDocument(POST_SCENE_CLIP_B.storyEffects);
+    expect(a).not.toBeNull();
+    expect(b).not.toBeNull();
+    expect(isDocumentAudible(a!)).toBe(true);
+    expect(isDocumentAudible(b!)).toBe(false);
+  });
+
+  test('tous les cinq sont datés à moins de 70 minutes (avant le premier remplissage)', () => {
+    for (const id of ['post-scene-text', 'post-scenes-mixed', 'post-scenes-wave', 'post-scene-clip-a', 'post-scene-clip-b']) {
+      const post = FEED_POSTS.find((p) => p.id === id);
+      expect(post).toBeDefined();
+      expect(Date.now() - new Date(post!.createdAt).getTime()).toBeLessThan(70 * 60_000);
+    }
   });
 });

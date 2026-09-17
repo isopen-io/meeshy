@@ -408,3 +408,44 @@ describe('FeedPostCard — le RÉEL, affiche immobile plein cadre', () => {
     expect(html).not.toContain('<img');
   });
 });
+
+/**
+ * LE TEXTE DU POST NE DESCEND JAMAIS DANS LA SCÈNE (revue-correction #6898,
+ * `FeedPostCard.swift:378-382`, `SceneCaption.resolve(carrierFallback: false)`).
+ *
+ * `resolveMedia` prête le contenu du post à un média SEUL sans légende
+ * (#6864, `captionOrigin: 'post'`) — c'est juste pour `FeedMediaCarousel`, qui
+ * le peint en bandeau ET dont la carte s'abstient alors de le répéter. Sur une
+ * carte à SCÈNE, aucun `FeedMediaCarousel` n'est rendu : la première forme
+ * masquait donc le texte AU-DESSUS (même chaîne que la légende prêtée) et le
+ * peignait EN BANDEAU dans la scène, étiqueté `media` — le cas nominal d'un
+ * post vidéo à une scène.
+ */
+describe('FeedPostCard — le texte du post reste AU-DESSUS de la scène', () => {
+  const scenePostWithSoleMedia = basePost({
+    content: 'Le texte du post',
+    originalLanguage: 'fr',
+    media: [{ id: 'm1', mimeType: 'video/webm', fileUrl: 'a.webm', order: 0 }],
+    storyEffects: {
+      v: 3,
+      scenes: [
+        {
+          id: 's1',
+          objects: [
+            { id: 'bg', kind: 'media', anchor: { t: 'free', x: 0.5, y: 0.5 }, plane: 'bg', z: 0, transform: {}, payload: { postMediaId: 'm1', mediaType: 'video/webm' } },
+          ],
+        },
+      ],
+    },
+  });
+
+  test('un post à scène et à média SEUL sans légende rend son texte au-dessus', () => {
+    const html = renderToStaticMarkup(<FeedPostCard model={modelOf(scenePostWithSoleMedia)} />);
+    expect(html).toMatch(/<p class="whitespace-pre-wrap text-bubble"[^>]*>Le texte du post<\/p>/);
+  });
+
+  test('… et jamais en bandeau de légende dans la scène', () => {
+    const html = renderToStaticMarkup(<FeedPostCard model={modelOf(scenePostWithSoleMedia)} />);
+    expect(html).not.toContain('data-feed-scene-caption');
+  });
+});
