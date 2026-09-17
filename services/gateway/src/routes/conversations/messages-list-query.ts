@@ -450,10 +450,7 @@ export function buildMessageListSelect(options: {
 export async function loadMessageReadStatusMap(
   prisma: PrismaClient,
   conversationId: string,
-  // `readonly unknown[]`, pas un type de ligne nommé : l'appelant
-  // (`messages-list.ts`, hors périmètre de ce lot) construit `messages` via un
-  // `select` lui-même typé `any` — resserrer ce paramètre casse sa
-  // compilation pour une raison PRÉEXISTANTE, sans rapport avec ce fichier.
+  // `unknown[]` : l'appelant (`messages-list.ts`) construit `messages` via un `select` typé `any` — préexistant.
   messages: readonly unknown[],
   hasAuthenticatedUserId: boolean
 ): Promise<Map<string, {
@@ -533,9 +530,7 @@ export async function loadMessageReadStatusMap(
  */
 export async function loadCurrentUserConsumptionMap(
   prisma: PrismaClient,
-  // `readonly unknown[]` pour la même raison que `loadMessageReadStatusMap` :
-  // l'appelant construit `messages` via un `select` typé `any`, hors périmètre
-  // de ce lot.
+  // `unknown[]`, même raison que `loadMessageReadStatusMap` ci-dessus.
   messages: readonly unknown[],
   currentParticipantId: string | undefined
 ): Promise<Map<string, CurrentUserConsumption>> {
@@ -605,15 +600,7 @@ export type MessageRowMappingContext = {
   consumptionMap: Map<string, CurrentUserConsumption>;
 };
 
-/**
- * Le type de retour reste `any`, DÉLIBÉRÉMENT : `messages-list.ts` (l'appelant,
- * hors périmètre de ce lot) lit `mappedMessages` sans annotation propre
- * (`new Date(firstMsg.createdAt)`, entre autres) — un retour typé romprait sa
- * compilation pour un gain hors du fichier réservé ici. `mappedMessage`,
- * CONSTRUIT ci-dessous, est lui pleinement typé (`MappedMessageRow`) : cette
- * annotation de sortie ne fait que garder le contrat vu par l'appelant
- * inchangé, elle ne relâche plus aucune vérification interne.
- */
+/** Retour `any` DÉLIBÉRÉ : l'appelant (`messages-list.ts`) lit `mappedMessages` sans annotation propre. `mappedMessage`, construit ci-dessous, est lui pleinement typé. */
 export function mapMessageRowForList(message: RawMessageRow, ctx: MessageRowMappingContext): any {
   const {
     includeTranslations,
@@ -711,9 +698,7 @@ export function mapMessageRowForList(message: RawMessageRow, ctx: MessageRowMapp
 
           // Relations obligatoires
           sender: message.sender ? (() => {
-            // Capturé en local : la narrowing de `message.sender` (vérifié
-            // truthy juste au-dessus) ne traverse pas la fermeture de cette
-            // IIFE — `sender` la porte explicitement.
+            // Capturé en local : la narrowing ne traverse pas la fermeture de cette IIFE.
             const sender = message.sender as RawMessageSender;
             // PII : le profil de session (email/birthday) ne sort JAMAIS — on
             // en résout l'identité puis on le détruit avant le spread.
@@ -930,12 +915,7 @@ export async function enrichForwardedMessagesForList(
               // géolocalisé n'affiche jamais sa position dans l'aperçu.
               const forwardedPlace = sharedPlaceFromMetadata(original.metadata);
               const forwardedSticker = stickerFromMetadata(original.metadata);
-              // Le `select` de `forwardedMessages` ne demande que `user.username`
-              // (pas `.displayName`/`.avatar`) — plus étroit que ce que
-              // `DisplayNameBearingParticipant`/`AvatarBearingParticipant`
-              // déclarent. Un cast unique, plutôt que trois `as any` : le
-              // comportement est inchangé (les deux champs absents du `select`
-              // valaient déjà `undefined` à l'exécution).
+              // `select` plus étroit que les résolveurs partagés : un cast unique plutôt que trois `as any`, comportement inchangé.
               const originalSender = original.sender as
                 | (AvatarBearingParticipant & DisplayNameBearingParticipant & {
                     username?: string | null;
