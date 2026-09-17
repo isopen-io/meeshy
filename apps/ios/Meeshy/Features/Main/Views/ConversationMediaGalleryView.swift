@@ -375,6 +375,10 @@ struct ConversationMediaGalleryView: View {
             galleryPager
                 .ignoresSafeArea(.keyboard, edges: .bottom)
 
+            // **LE VOILE de lisibilité, sur TOUT l'écran** — doctrine et
+            // entrées dans `+Scrims.swift` (#6904 tour 5).
+            stageScrimsLayer
+
             overlayLayer
                 .ignoresSafeArea(.keyboard, edges: .bottom)
 

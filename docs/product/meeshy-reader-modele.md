@@ -709,6 +709,56 @@ que le sol peint : la matière de l'empreinte et non du noir, rien du tout sans
 empreinte, un voile qui assombrit vraiment, une page scène habillée là où une
 page image garde son noir.
 
+### Le VOILE, partagé comme la carte et le sol : `StoryReaderScrims` (tour 5, 2026-09-18)
+
+Ce qui se pose **PAR-DESSUS** la carte est partagé au même titre que ce qui se
+peint dedans (`SceneCard`) et autour (`SceneFloorView`) — directive porteur du
+2026-09-18 :
+
+> « Il faut bien faire attention à l'ombre dégradé pour rendre le texte lisible
+> qui doit être mis sur tous l'écran à partir du bas de l'écran. »
+
+Le composant est celui du lecteur de stories, **réutilisé tel quel** (#6701,
+`apps/ios/Meeshy/Features/Main/Views/StoryViewerView+CanvasScrims.swift`) : deux
+dégradés noirs **pleine largeur d'écran**, ancrés au haut et au **bas de
+l'ÉCRAN**, sourds au doigt, muets pour VoiceOver, et qui **suivent le chrome**
+(opacité 1 avec lui, 0 sans lui, au même ressort). Son nom garde « StoryReader »
+et c'est juste : c'est le voile de la story qu'on reproduit, comme sa carte et
+son sol.
+
+La galerie avait un dégradé **borné deux fois** — posé en fond du bloc bas du
+CADRE, il s'arrêtait au bord du bloc (au-dessus du couloir de la pellicule, donc
+pas au bas de l'écran) et ne prenait que la largeur de la carte (378 pt sur 402
+en cadré, donc pas les gouttières). Mesuré à la recette du tour 4 : la légende du
+repère F2 en cadré se lisait sur le bleu du média **sans voile visible**, quand
+la même légende, sur la story F7, se lisait sur un bas d'écran fondu au noir sur
+toute la largeur. Le réel n'avait qu'une ombre portée sur ses glyphes
+(`mediaChromeLegible()`). Le voile local est **parti**, il n'a pas été déplacé :
+deux voiles superposés noirciraient deux fois le bas.
+
+> **Un dégradé se pose sur la couche qu'il doit rendre LISIBLE**, et la légende
+> d'un plein écran se lit sur l'écran, pas sur le cadre. La couche juste ne se
+> déduit pas du composant qu'on habille — elle se déduit de ce qu'on veut lire.
+
+Ce qui reste à l'**hôte** : ce qui l'ALIMENTE. La galerie passe
+`DeviceLayout.safeAreaTop` (l'inset de la FENÊTRE, jamais le couloir du
+plateau — un voile ancré au plateau migrerait à chaque ouverture de légende) et
+`MediaStageVeil.showsChrome(presentation:overlays:)`, le **même verdict**
+qu'`overlayLayer` : deux verdicts se désynchroniseraient sur l'image même que
+l'utilisateur regarde. Le réel passe `chromeVisible: true` — il n'a pas de porte
+immersive, son chrome ne s'efface jamais, et c'est déjà pourquoi son sol porte le
+voile PLEIN. Et le voile est un **frère du pager**, jamais un enfant d'une page :
+le bloc de légende est le même pour les trois natures (photo, vidéo, scène), et
+un voile par type de média ferait de la lisibilité une propriété du MIME.
+
+Gardes : `MediaGalleryStageScrimsTests` (quatre témoins de **pixels** dans la
+géométrie de la galerie — dernière ligne de l'écran voilée hors carte *et* sous
+la carte, milieu d'écran intact, rien du tout sans chrome — et une garde de
+source sur le montage et son verdict), `StoryReaderScrimsTests` (le lecteur, qui
+continue de n'exiger qu'UN montage chez lui) et la liste nommée de
+`SceneShapeSourceGuardTests.test_lesSurfacesPleinEcran_montentLaCarteDeScene`,
+qui tient désormais les trois pièces ensemble : la carte, le sol, le voile.
+
 ### Où la loi vit
 
 `SceneShape` — `packages/MeeshySDK/Sources/MeeshySDK/Story/SceneShape.swift`.

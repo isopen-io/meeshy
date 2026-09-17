@@ -145,6 +145,33 @@ struct ReelSceneView: View {
                             clock.progress = ReelSceneProgress.fraction(elapsed: seconds, duration: duration)
                         }
                 }
+
+                // **LE VOILE de lisibilité — celui de la STORY** (#6904 tour 5,
+                // directive porteur du 2026-09-18 : « il faut bien faire
+                // attention à l'ombre dégradé pour rendre le texte lisible qui
+                // doit être mis sur tous l'écran à partir du bas de l'écran »).
+                //
+                // Un réel posait sa légende et sa ligne d'auteur à même le média,
+                // avec `mediaChromeLegible()` pour seule défense — une ombre
+                // portée sur le glyphe, qui tient sur un fond chargé et se perd
+                // sur un aplat clair. Le voile de l'écran est la réponse que la
+                // story donne depuis #6701, et c'est elle qu'on reproduit.
+                //
+                // `chromeVisible: true` — **un réel a TOUJOURS son chrome** :
+                // légende, auteur et rail d'actions ne s'effacent pas, il n'y a
+                // pas de porte immersive dans un réel. C'est la même raison qui
+                // donne à son sol le voile PLEIN au tour 4.
+                //
+                // Monté DERNIER de cette pile, donc au-dessus de la carte ; le
+                // chrome du réel (`ReelPageView+Info`, `ReelsPlayerView+ActionRail`)
+                // vit une couche PLUS HAUTE encore, chez l'hôte de la page — il
+                // reste donc au-dessus du voile, qu'il détache.
+                //
+                // **Les réels VIDÉO et IMAGE ne sont pas visés par ce lot** : ce
+                // fichier ne porte que le réel à SCÈNE, et le lot #6904 est la
+                // convergence des surfaces de SCÈNE (carte, sol, forme, voile).
+                StoryReaderScrims(topInset: DeviceLayout.safeAreaTop,
+                                  chromeVisible: true)
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }

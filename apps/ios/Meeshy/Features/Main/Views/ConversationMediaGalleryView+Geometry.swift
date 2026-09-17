@@ -603,31 +603,38 @@ extension ConversationMediaGalleryView {
     /// qu'on est venu regarder. Ce qui reste au cadre est ce qui DÉCRIT le
     /// média ; ce qui le PARCOURT est au plateau, avec le rail.
     ///
-    /// Le voile reste ici plutôt que sur le bloc bas lui-même : il n'a plus qu'un
-    /// étage à détacher depuis que le transport est parti, mais le poser un cran
-    /// plus bas ferait migrer la lisière chaque fois que le contenu du bloc
-    /// change — un dégradé se pose sur la COUCHE, pas sur ce qui l'occupe.
+    /// **LE VOILE A QUITTÉ CE BLOC** (#6904 tour 5, directive porteur du
+    /// 2026-09-18 : « il faut bien faire attention à l'ombre dégradé pour rendre
+    /// le texte lisible qui doit être mis sur tous l'écran à partir du bas de
+    /// l'écran »).
     ///
-    /// **Et il ne prend AUCUNE touche.** Un `LinearGradient` est une vue rendue,
-    /// donc testée aux touches au même titre qu'un `Color.clear` — c'est
-    /// exactement l'argument que `cadreRegion` écrit dix lignes plus haut pour
-    /// refuser une couleur transparente à la place de son `Spacer`. Posé en fond
-    /// d'un bloc monté dans une couche hit-testable AU-DESSUS du pager, il
-    /// faisait des ~110 pt du bas du cadre une zone morte : ni la porte du tap
-    /// (#6142) ni le glissement horizontal qui feuillette n'y atteignaient plus
-    /// le pager. Le composant de légende partagé refuse ce comportement pour
-    /// lui-même (« le canvas garde ses gestes de navigation sous la légende ») ;
-    /// l'hôte le réintroduisait une couche plus haut, hors de portée de sa garde.
+    /// Il était posé ici plutôt que sur le bloc bas lui-même, et l'argument
+    /// tenait pour ce qu'il visait — un dégradé se pose sur la COUCHE, pas sur ce
+    /// qui l'occupe. Mais la couche était encore le CADRE, donc le dégradé était
+    /// borné DEUX fois : il s'arrêtait au bord du bloc (au-dessus du couloir de la
+    /// pellicule, donc pas au bas de l'écran) et il ne prenait que la largeur de
+    /// la carte (378 pt sur 402 en cadré, donc pas les gouttières). La bonne
+    /// couche est l'ÉCRAN, et le composant qui la sert existe déjà : c'est celui
+    /// de la story (`StoryReaderScrims`, monté par `stageScrimsLayer` —
+    /// `+Scrims.swift`). Deux voiles superposés noirciraient deux fois le bas, et
+    /// la story n'en a qu'un : celui-ci est donc PARTI, pas déplacé.
+    ///
+    /// > Un dégradé se pose sur la couche qu'il doit RENDRE LISIBLE, et la
+    /// > légende d'un plein écran se lit sur l'écran, pas sur le cadre.
+    ///
+    /// L'exigence qu'il portait — **ne prendre AUCUNE touche** — n'est pas perdue
+    /// : un `LinearGradient` est une vue rendue, donc testée aux touches au même
+    /// titre qu'un `Color.clear`, et posé dans une couche hit-testable au-dessus
+    /// du pager il faisait des ~110 pt du bas du cadre une zone morte (ni la
+    /// porte du tap de #6142, ni le glissement horizontal qui feuillette n'y
+    /// atteignaient le pager). `StoryReaderScrims` la satisfait par
+    /// construction : `.allowsHitTesting(false)` et `.accessibilityHidden(true)`
+    /// sont DANS le composant, hors de portée d'un hôte qui les oublierait — ce
+    /// qui est strictement mieux que de la redemander à chaque site.
     @ViewBuilder
     var cadreOverlay: some View {
         if currentIndex < allAttachments.count {
             bottomOverlay
-                .background(
-                    LinearGradient(colors: [.clear, .black.opacity(0.75)],
-                                   startPoint: .top,
-                                   endPoint: .bottom)
-                        .allowsHitTesting(false)
-                )
         }
     }
 

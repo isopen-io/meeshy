@@ -210,6 +210,43 @@ final class SceneShapeSourceGuardTests: XCTestCase {
                        "un plein écran de scène monte AUSSI le sol partagé (SceneFloorView) : sans " +
                        "lui la surface peint du noir plat autour d'une carte que les autres " +
                        "habillent — c'est l'écart mesuré au tour 3 ter : \(sansSol)")
+
+        // **Et le VOILE avec le sol** (tour 5 du lot, directive porteur du
+        // 2026-09-18 : « il faut bien faire attention à l'ombre dégradé pour
+        // rendre le texte lisible qui doit être mis sur tous l'écran à partir du
+        // bas de l'écran »).
+        //
+        // Troisième pièce partagée de la même surface, et la troisième fois que
+        // la question se pose un cran plus loin : la CARTE a fermé la divergence
+        // DANS le cadre (tour 3), le SOL ce qui se peint AUTOUR (tour 4), le
+        // VOILE ce qui se pose PAR-DESSUS. La galerie avait un dégradé borné au
+        // bloc bas du cadre — ni pleine largeur, ni jusqu'au bas de l'écran — et
+        // le réel n'avait qu'une ombre portée sur ses glyphes
+        // (`mediaChromeLegible()`).
+        //
+        // La liste tient les mêmes SURFACES que le sol, à un fichier près : la
+        // galerie monte son voile dans `+Scrims.swift`, où vit sa doctrine, et
+        // non dans la page scène — le voile est une couche du VISUALISEUR,
+        // commune aux trois natures de page (photo, vidéo, scène), là où le sol
+        // n'habille qu'une page de scène.
+        let voilesAttendus = [
+            "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift",
+            "apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView+Scrims.swift",
+            "apps/ios/Meeshy/Features/Main/Views/ReelsPlayerView+Scene.swift",
+        ]
+
+        var sansVoile: [String] = []
+        for chemin in voilesAttendus {
+            let code = Self.stripComments(
+                try String(contentsOf: Self.repoRoot.appendingPathComponent(chemin), encoding: .utf8))
+            if !code.contains("StoryReaderScrims(") { sansVoile.append(chemin) }
+        }
+
+        XCTAssertEqual(sansVoile, [],
+                       "un plein écran de scène monte AUSSI le voile partagé (StoryReaderScrims) : " +
+                       "sans lui sa légende se lit à même le média, là où la story la lit sur un bas " +
+                       "d'écran fondu au noir — écart mesuré à la recette du tour 4 (F2 contre " +
+                       "F7) : \(sansVoile)")
     }
 
     // MARK: - Méta-tests de la garde
