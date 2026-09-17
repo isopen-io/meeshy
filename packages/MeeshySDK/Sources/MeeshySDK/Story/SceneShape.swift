@@ -122,11 +122,40 @@ public enum SceneShape {
     /// `payload.mediaId`, sans mode d'ajustement ni rapport (#6894, #6895).
     /// L'appelant qui tient le post connaît, lui, `media.width / media.height` :
     /// la loi le lui DEMANDE plutôt que d'inventer une forme que rien ne mesure.
+    ///
+    /// **Un fond posé en REMPLISSAGE explicite (`transform.videoFitMode ==
+    /// "fill"`, le double-tap fond) n'a pas de bande** — il couvre déjà toute
+    /// la scène, rognant ce qui dépasse plutôt que de laisser du fond visible.
+    /// Calculer une bande depuis son seul `aspectRatio` déclaré y montrerait
+    /// une zone que le renderer ne respecte pas : un hôte qui s'y resserrerait
+    /// rognerait un média qui, à l'écran, remplit le 9:16 en entier. `"fit"`
+    /// (le défaut du composer, `StoryBackgroundFraming.posedFitMode`) et
+    /// l'absence de valeur gardent le calcul habituel — seul le REMPLISSAGE
+    /// explicite change la réponse.
     public nonisolated static func mediaBand(scene: SceneV3,
                                              backgroundAspect: CGFloat? = nil) -> CGRect? {
         guard let rapport = resolvedBackgroundAspect(scene: scene, override: backgroundAspect)
         else { return nil }
+        if declaredFitMode(in: scene) == StoryBackgroundFraming.fill { return unitRect }
         return mediaBand(backgroundAspect: rapport)
+    }
+
+    /// **Le cadrage qu'un fond a REÇU** (`transform.videoFitMode`), tel que le
+    /// composer ou la passerelle l'a posé — `nil` si rien ne le dit.
+    ///
+    /// Le champ voyage sur l'objet qui porte l'adresse du média (forme
+    /// passerelle, un seul objet) OU sur le porteur `bg` réservé qui
+    /// l'accompagne (forme composer, deux objets — `CanvasV3Migration.
+    /// migratedScene`) : la loi regarde donc CHAQUE objet de fond de la scène,
+    /// jamais seulement celui que `backgroundMedia` élit pour ses pixels.
+    nonisolated static func declaredFitMode(in scene: SceneV3) -> String? {
+        for objet in scene.objects where isBackground(objet) {
+            if case .object(let transform)? = objet.payload["transform"],
+               case .string(let mode)? = transform["videoFitMode"] {
+                return mode
+            }
+        }
+        return nil
     }
 
     // MARK: - 3 · Ce qu'on montre — binaire
@@ -169,9 +198,8 @@ public enum SceneShape {
     public nonisolated static func frame(scene: SceneV3,
                                          backgroundAspect: CGFloat? = nil) -> Frame {
         guard let fond = backgroundMedia(in: scene),
-              let rapport = resolvedBackgroundAspect(scene: scene, override: backgroundAspect)
+              let zone = mediaBand(scene: scene, backgroundAspect: backgroundAspect)
         else { return .wholeScene }
-        let zone = mediaBand(backgroundAspect: rapport)
         let deborde = scene.objects.contains { objet in
             objet.id != fond.id && paintsPixels(objet) && !contains(zone, anchorBox(of: objet))
         }

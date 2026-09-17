@@ -78,10 +78,14 @@ final class SceneShapeSourceGuardTests: XCTestCase {
     /// réécrit — datée du 2026-09-17, et vide à la fin du lot.
     func test_toutHoteQuiMonteLePlayer_consulteLaLoi() throws {
         // **VIDE depuis le 2026-09-17** : les huit hôtes de la seconde moitié
-        // du lot #6904 consultent tous désormais `SceneShape`, en code ou en
-        // doc-comment substantiel (`PostSceneMosaic`, `ConversationMediaGalleryView
-        // +ScenePage`) là où le solveur qu'ils appellent (`MediaStageFraming`,
-        // `SceneCarouselLayout`) porte déjà la loi une couche plus bas.
+        // du lot #6904 consultent tous désormais `SceneShape`, en code — soit
+        // directement, soit par une délégation VÉRIFIÉE vers un solveur qui
+        // porte la loi une couche plus bas (`consultsSceneShape` ci-dessous).
+        // Un hôte qui ne ferait que CITER "SceneShape" dans un commentaire, sans
+        // appeler ni la loi ni un de ses solveurs connus, n'est plus reconnu :
+        // c'était le trou que `test_leDetecteurDeConsultation_ignoreUneCitationEnCommentaireSeul`
+        // ferme, trouvé sur `PostDetailView+RepostEmbed.swift` (une citation en
+        // commentaire, aucun appel réel dans le fichier).
         let exceptionsDatees: Set<String> = []
 
         let hotes = try Self.swiftSources(under: "packages/MeeshySDK/Sources")
@@ -91,7 +95,7 @@ final class SceneShapeSourceGuardTests: XCTestCase {
             .map { (path: "apps/ios/Meeshy/" + $0.path, code: $0.code) }
 
         let muets = hotes
-            .filter { Self.mountsThePlayer($0.code) && !$0.code.contains("SceneShape") }
+            .filter { Self.mountsThePlayer($0.code) && !Self.consultsSceneShape($0.code) }
             .map(\.path)
 
         XCTAssertEqual(Set(muets), exceptionsDatees,
@@ -121,6 +125,41 @@ final class SceneShapeSourceGuardTests: XCTestCase {
         XCTAssertFalse(Self.declaresTheRatio("/// le gabarit 9.0 / 16.0 de la composition"))
     }
 
+    /// `declaresTheRatio` couvre aussi l'orthographe la plus COURTE, sans
+    /// espaces — celle que le lot vient lui-même de retirer de
+    /// `StoryComposerView+SlideStrip.swift`. Sans cette forme, une copie
+    /// réintroduite ainsi ne ferait rougir aucune des deux listes.
+    func test_laGardeReconnaitLOrthographeCourteSansEspaces() {
+        XCTAssertTrue(Self.declaresTheRatio("let r: CGFloat = 9/16"))
+    }
+
+    /// **Le trou que `consultsSceneShape` ferme.** Avant ce correctif, le
+    /// troisième témoin comptait `$0.code.contains("SceneShape")` SANS retirer
+    /// les commentaires — un hôte qui ne fait que CITER le nom dans une
+    /// doc-comment passait la garde sans consulter la loi ni aucun de ses
+    /// solveurs. Mesuré sur `PostDetailView+RepostEmbed.swift` : une seule
+    /// mention, à la ligne d'un commentaire, zéro appel réel — et la garde le
+    /// laissait passer.
+    func test_leDetecteurDeConsultation_ignoreUneCitationEnCommentaireSeul() {
+        XCTAssertFalse(Self.consultsSceneShape("""
+            // qui le pose à `SceneShape.aspect` — TOUJOURS 9:16, lu ailleurs.
+            struct HoteMuet {}
+            """))
+    }
+
+    /// Contrôle positif jumeau : la consultation RÉELLE, directe ou par un
+    /// solveur CONNU, est reconnue — sinon le correctif ci-dessus ferait
+    /// rougir les trois hôtes qui délèguent légitimement une couche plus bas
+    /// (`PostSceneMosaic`, `ConversationMediaGalleryView+ScenePage`,
+    /// `PostDetailView+RepostEmbed`).
+    func test_leDetecteurDeConsultation_reconnaitLaLoiEtSesSolveursConnus() {
+        XCTAssertTrue(Self.consultsSceneShape("let ratio = SceneShape.aspect"))
+        XCTAssertTrue(Self.consultsSceneShape("SceneCarouselLayout.cardAspect(document: d)"))
+        XCTAssertTrue(Self.consultsSceneShape("let stage: MediaStageFraming.Result"))
+        XCTAssertTrue(Self.consultsSceneShape("storyCanvasContainer(reader, renderedItem: i)"))
+        XCTAssertTrue(Self.consultsSceneShape("storyCanvasOrPlaceholder(renderedItem: i) { r }"))
+    }
+
     // MARK: - Détecteurs
 
     /// **Le player lui-même n'est pas un hôte.** Ses deux répertoires
@@ -141,13 +180,35 @@ final class SceneShapeSourceGuardTests: XCTestCase {
             .contains { code.contains($0) }
     }
 
+    /// **Un hôte consulte-t-il la loi — en CODE, jamais en commentaire ?**
+    ///
+    /// Directement (`SceneShape.`), ou par une délégation VÉRIFIÉE vers un
+    /// solveur qui la porte une couche plus bas : `SceneCarouselLayout`
+    /// (`SceneFraming.swift`, projette `SceneFraming.sceneAspect ==
+    /// SceneShape.aspect`), `MediaStageFraming` (le type que
+    /// `MediaGalleryStage.mediaRatio` interroge, lui-même nourri par
+    /// `GallerySceneItem.surface(inFullFrame:)` → `SceneShape.aspect`), et les
+    /// deux portes partagées du détail (`storyCanvasContainer`,
+    /// `storyCanvasOrPlaceholder`, qui posent `let ratio = SceneShape.aspect`).
+    /// Une mention hors de ces cinq formes — fût-elle dans une doc-comment
+    /// « substantielle » — ne prouve aucun appel : elle a laissé passer
+    /// `PostDetailView+RepostEmbed.swift`, dont l'unique occurrence de
+    /// « SceneShape » vivait dans un commentaire, sans qu'aucun des cinq
+    /// marqueurs n'apparaisse en code.
+    static func consultsSceneShape(_ rawCode: String) -> Bool {
+        let code = stripComments(rawCode)
+        return ["SceneShape.", "SceneCarouselLayout.", "MediaStageFraming.",
+                "storyCanvasContainer(", "storyCanvasOrPlaceholder("]
+            .contains { code.contains($0) }
+    }
+
     /// Le rapport ÉCRIT, sous ses trois orthographes. `designWidth /
     /// designHeight` n'en est pas une : c'est une définition d'espace de
     /// design, pas du gabarit de scène — elle devient une projection sans
     /// cesser d'être une division.
     static func declaresTheRatio(_ rawCode: String) -> Bool {
         let code = stripComments(rawCode)
-        for forme in ["9.0 / 16.0", "9.0/16.0", "9 / 16", "0.5625"] where code.contains(forme) {
+        for forme in ["9.0 / 16.0", "9.0/16.0", "9 / 16", "9/16", "0.5625"] where code.contains(forme) {
             return true
         }
         return false

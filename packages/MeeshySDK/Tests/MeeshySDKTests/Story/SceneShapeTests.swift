@@ -46,6 +46,15 @@ final class SceneShapeTests: XCTestCase {
         objet(.media, plane: .bg, payload: ["mediaId": .string("6aaa972f3fd1f8a72d0e38ed")])
     }
 
+    /// Un fond qui DÉCLARE son rapport ET son cadrage EXPLICITE — le porteur
+    /// `.bg` séparé du contenu, forme F1-F7 des repères publiés. `cadrage`
+    /// est ce que le double-tap fond a posé (`StoryBackgroundFraming.fit` /
+    /// `.fill`).
+    private func fond(_ aspect: Double, cadrage: String) -> [ObjectV3] {
+        [objet(.media, plane: .bg, payload: ["transform": .object(["videoFitMode": .string(cadrage)])]),
+         fond(aspect)]
+    }
+
     private func scene(_ objets: [ObjectV3], id: String = "s1") -> SceneV3 {
         SceneV3(id: id, objects: objets)
     }
@@ -127,6 +136,39 @@ final class SceneShapeTests: XCTestCase {
     /// Une scène sans fond média n'a aucune zone de média.
     func test_uneSceneSansFondMedia_naAucuneZone() {
         XCTAssertNil(SceneShape.mediaBand(scene: scene([objet(.text)])))
+    }
+
+    /// **Un fond posé en `fill` REMPLIT la scène — aucune bande à peindre.**
+    ///
+    /// `mediaBand` ne lisait que `payload.aspectRatio`, jamais le cadrage
+    /// (`transform.videoFitMode`) que le double-tap fond choisit
+    /// (`StoryBackgroundFraming`). Pour un fond posé en REMPLISSAGE explicite,
+    /// elle calculait quand même une bande au rapport de l'image — une bande
+    /// que rien ne montre, puisque le renderer couvre déjà toute la scène. Un
+    /// hôte qui suivrait cette bande pour resserrer le cadre présenté
+    /// ROGNERAIT un média qui, à l'écran, couvre le 9:16 en entier.
+    func test_unFondPoseEnFill_neRendAucuneBande() {
+        let s = scene(fond(Double(paysage), cadrage: StoryBackgroundFraming.fill))
+        XCTAssertEqual(SceneShape.mediaBand(scene: s), SceneShape.unitRect)
+    }
+
+    /// Le même fond, explicitement en `fit`, garde sa bande normale — le
+    /// cadrage par défaut du composer (`posedFitMode`) n'est pas affecté.
+    func test_unFondPoseEnFit_gardeSaBande() throws {
+        let s = scene(fond(Double(paysage), cadrage: StoryBackgroundFraming.fit))
+        let bande = try XCTUnwrap(SceneShape.mediaBand(scene: s))
+        XCTAssertEqual(bande.height, 0.31640625, accuracy: 1e-6)
+    }
+
+    /// **`frame` hérite du même correctif** : resserrer sur la bande d'un fond
+    /// REMPLI ferait exactement le rognage que la loi doit refuser. Un fond en
+    /// `fill` rend donc `.mediaBand(unitRect)` — un cadre qui ne resserre rien,
+    /// pas `.wholeScene` : les deux sont visuellement identiques (§ `Frame.
+    /// tightensAnything`), mais `frame` reste dérivé de `mediaBand(scene:)`, un
+    /// site unique.
+    func test_unFondPoseEnFill_neConseillePasDeResserrer() {
+        let s = scene(fond(Double(paysage), cadrage: StoryBackgroundFraming.fill))
+        XCTAssertFalse(SceneShape.frame(scene: s).tightensAnything)
     }
 
     // MARK: - 3 · Déborde-t-il ? — BINAIRE
