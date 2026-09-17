@@ -42,6 +42,13 @@ const adminConversationsScreen = () =>
   Promise.all([import('@/routes/admin-conversations'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 const adminConversationScreen = () =>
   Promise.all([import('@/routes/admin-conversation'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+/* LE PILOTAGE DE L'AGENT (#6733) — mêmes DEUX adresses, même `import()`
+   unique, et le MÊME chargement du catalogue d'administration que ses voisins.
+   `admin-catalog-loading.test.ts` garde désormais cette discipline pour toute
+   route `/adm…` : un `import()` nu s'y voit nommé, là où il ne cassait
+   jusqu'ici qu'à l'exécution, chez le seul lecteur qui ouvre l'écran. */
+const adminAgentScreen = () =>
+  Promise.all([import('@/routes/admin-agent'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 
 export const ROUTES = {
   list: { pattern: '/', screen: () => import('@/routes/conversations') },
@@ -241,6 +248,16 @@ export const ROUTES = {
      OUVRE le contenu, sous motif écrit et geste tracé. */
   adminConversation: { pattern: '/admin/conversations/$conversation', screen: adminConversationScreen },
   admConversation: { pattern: '/adm/conversations/$conversation', screen: adminConversationScreen },
+  /* LE PILOTAGE DE L'AGENT (#6733) — deux segments, comme les deux autres
+     listes, et les deux espaces comme tout le reste de l'administration.
+     Déclarées AUSSI dans `session-guard.ts`.
+
+     L'ORDRE compte, et ici il est SANS DANGER : `/admin/agent` est littéral et
+     `/admin/users/$user` a trois segments — aucune adresse paramétrée à deux
+     segments n'existe sous `/admin`. Le jour où il en naîtrait une, celle-ci
+     devrait rester AVANT elle, comme `communityNew` avant `community`. */
+  adminAgent: { pattern: '/admin/agent', screen: adminAgentScreen },
+  admAgent: { pattern: '/adm/agent', screen: adminAgentScreen },
 } as const;
 
 /**

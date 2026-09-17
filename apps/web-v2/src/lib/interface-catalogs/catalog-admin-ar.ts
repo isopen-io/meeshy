@@ -97,6 +97,21 @@ const ar = {
   'admin.convDetail.read': 'قراءة المحادثة',
   'admin.convDetail.empty': 'لا توجد رسائل',
   'admin.convDetail.memberPrism': 'مقروء وفق منشور لغات العضو: {languages}',
+  'admin.agent.title': 'قيادة الوكيل',
+  'admin.agent.denied': 'هذه القيادة تتطلّب صلاحية خاصة.',
+  'admin.agent.users': 'أعضاء موجَّهون',
+  'admin.agent.tracked': 'محادثات متابَعة',
+  'admin.agent.empty': 'لا شيء للعرض.',
+  'admin.agent.offline': 'غير متصل.',
+  'admin.agent.scan': 'مسح جارٍ: {node}',
+  'admin.agent.relaunch': 'إعادة تشغيل الوكيل',
+  'admin.agent.effect': 'يعيد الدراسة وقد ينشر رسالة.',
+  'admin.agent.done': 'طُلب التشغيل',
+  'admin.agent.failed': 'تعذّر تشغيل الوكيل',
+  'admin.agent.stop': 'إيقاف المسح',
+  'admin.agent.halted': 'أُوقف المسح',
+  'admin.agent.down': 'خدمة الوكيل غير متاحة.',
+  'admin.agent.logs': 'سجلّ المسوح',
 } satisfies AdminInterfaceCatalog;
 
 export default ar;

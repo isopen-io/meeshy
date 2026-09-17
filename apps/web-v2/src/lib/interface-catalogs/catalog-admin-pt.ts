@@ -97,6 +97,21 @@ const pt = {
   'admin.convDetail.read': 'Ler a conversa',
   'admin.convDetail.empty': 'Nenhuma mensagem',
   'admin.convDetail.memberPrism': 'Lido no prisma do membro: {languages}',
+  'admin.agent.title': 'Controlo do agente',
+  'admin.agent.denied': 'Este controlo exige uma permissão própria.',
+  'admin.agent.users': 'Membros conduzidos',
+  'admin.agent.tracked': 'Conversas acompanhadas',
+  'admin.agent.empty': 'Nada a mostrar.',
+  'admin.agent.offline': 'Offline.',
+  'admin.agent.scan': 'Análise em curso: {node}',
+  'admin.agent.relaunch': 'Voltar a lançar o agente',
+  'admin.agent.effect': 'Refaz o estudo e pode publicar uma mensagem.',
+  'admin.agent.done': 'Lançamento pedido',
+  'admin.agent.failed': 'Não foi possível lançar o agente',
+  'admin.agent.stop': 'Parar a análise',
+  'admin.agent.halted': 'Análise parada',
+  'admin.agent.down': 'Serviço do agente inacessível.',
+  'admin.agent.logs': 'Registo de análises',
 } satisfies AdminInterfaceCatalog;
 
 export default pt;

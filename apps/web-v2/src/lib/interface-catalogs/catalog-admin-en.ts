@@ -97,6 +97,21 @@ const en = {
   'admin.convDetail.read': 'Read the conversation',
   'admin.convDetail.empty': 'No message',
   'admin.convDetail.memberPrism': 'Read in the member’s prism: {languages}',
+  'admin.agent.title': 'Agent control',
+  'admin.agent.denied': 'This control needs a dedicated permission.',
+  'admin.agent.users': 'Members driven',
+  'admin.agent.tracked': 'Tracked conversations',
+  'admin.agent.empty': 'Nothing to show.',
+  'admin.agent.offline': 'Offline.',
+  'admin.agent.scan': 'Scan running: {node}',
+  'admin.agent.relaunch': 'Run the agent again',
+  'admin.agent.effect': 'Re-runs the study and may publish a message.',
+  'admin.agent.done': 'Run requested',
+  'admin.agent.failed': 'Could not run the agent',
+  'admin.agent.stop': 'Stop the scan',
+  'admin.agent.halted': 'Scan stopped',
+  'admin.agent.down': 'Agent service unreachable.',
+  'admin.agent.logs': 'Scan log',
 } satisfies AdminInterfaceCatalog;
 
 export default en;

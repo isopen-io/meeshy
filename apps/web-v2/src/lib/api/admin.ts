@@ -115,6 +115,11 @@ export function decodeAdminPermissions(raw: unknown): AdminPermissions {
     canViewAuditLogs: lire('canViewAuditLogs'),
     canManageNotifications: lire('canManageNotifications'),
     canManageTranslations: lire('canManageTranslations'),
+    // La garde RÉELLE des routes `/admin/agent/*` (#6733). La passerelle la
+    // sert depuis le lot B ; ce décodeur ne la lisait pas, et la clé se
+    // perdait au décodage — silencieusement, puisqu'une clé absente d'un type
+    // rend `undefined` que personne ne lit.
+    canManageAgent: lire('canManageAgent'),
   };
 }
 

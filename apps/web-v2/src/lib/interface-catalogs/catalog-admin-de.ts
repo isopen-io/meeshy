@@ -97,6 +97,21 @@ const de = {
   'admin.convDetail.read': 'Unterhaltung lesen',
   'admin.convDetail.empty': 'Keine Nachricht',
   'admin.convDetail.memberPrism': 'Im Prisma des Mitglieds gelesen: {languages}',
+  'admin.agent.title': 'Agentensteuerung',
+  'admin.agent.denied': 'Diese Steuerung verlangt ein eigenes Recht.',
+  'admin.agent.users': 'Geführte Mitglieder',
+  'admin.agent.tracked': 'Begleitete Unterhaltungen',
+  'admin.agent.empty': 'Nichts zu zeigen.',
+  'admin.agent.offline': 'Offline.',
+  'admin.agent.scan': 'Lauf aktiv: {node}',
+  'admin.agent.relaunch': 'Agenten erneut starten',
+  'admin.agent.effect': 'Wiederholt die Auswertung und kann eine Nachricht veröffentlichen.',
+  'admin.agent.done': 'Start angefordert',
+  'admin.agent.failed': 'Start fehlgeschlagen',
+  'admin.agent.stop': 'Lauf anhalten',
+  'admin.agent.halted': 'Lauf angehalten',
+  'admin.agent.down': 'Agentendienst nicht erreichbar.',
+  'admin.agent.logs': 'Lauf-Protokoll',
 } satisfies AdminInterfaceCatalog;
 
 export default de;

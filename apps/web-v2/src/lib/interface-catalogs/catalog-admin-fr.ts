@@ -109,6 +109,36 @@ const fr = {
   'admin.convDetail.read': 'Lire la conversation',
   'admin.convDetail.empty': 'Aucun message',
   'admin.convDetail.memberPrism': 'Lu dans le prisme du membre : {languages}',
+  /* LE PILOTAGE DE L'AGENT (#6733). `admin.agent.effect` est la clé la plus
+     importante du groupe : elle DIT ce que la relance fait vraiment — refaire
+     l'analyse ET, par `strategist → generator → qualityGate`, publier un
+     message dans la vraie conversation. Elle est rendue à côté du bouton, et
+     les sept langues la portent (`admin-agent.test.tsx` vérifie que chacune
+     nomme la publication, et qu'aucun libellé de bouton ne dit « analyse »).
+
+     Les seconds segments sont COURTS (`effect`, `done`, `failed`, `down`) comme
+     ceux de leurs voisins (`admin.ban.done`, `admin.password.failed`) : un nom
+     de clé est payé SEPT fois dans le chunk des catalogues, et ce groupe a
+     été ramené de 28 à 15 clés pour tenir sous `interface_catalogs_admin`
+     (11 Ko). Ce qui manquait à l'appel a été EMPRUNTÉ plutôt que redit —
+     `admin.counters.title`, `admin.counters.messages`,
+     `admin.convList.unavailable`, `admin.user.enabled`,
+     `admin.users.inactive`. */
+  'admin.agent.title': 'Pilotage de l’agent',
+  'admin.agent.denied': 'Ce pilotage demande un droit dédié.',
+  'admin.agent.users': 'Membres pilotés',
+  'admin.agent.tracked': 'Conversations suivies',
+  'admin.agent.empty': 'Rien à afficher.',
+  'admin.agent.offline': 'Hors ligne.',
+  'admin.agent.scan': 'Scan en cours : {node}',
+  'admin.agent.relaunch': 'Relancer l’agent',
+  'admin.agent.effect': 'Refait l’analyse et peut publier un message.',
+  'admin.agent.done': 'Relance demandée',
+  'admin.agent.failed': 'Échec de la relance',
+  'admin.agent.stop': 'Arrêter le scan',
+  'admin.agent.halted': 'Scan arrêté',
+  'admin.agent.down': 'Service agent injoignable.',
+  'admin.agent.logs': 'Journal des scans',
 } as const;
 
 export default fr;

@@ -97,6 +97,21 @@ const it = {
   'admin.convDetail.read': 'Leggere la conversazione',
   'admin.convDetail.empty': 'Nessun messaggio',
   'admin.convDetail.memberPrism': 'Letto nel prisma del membro: {languages}',
+  'admin.agent.title': 'Governo dell’agente',
+  'admin.agent.denied': 'Questo governo richiede un diritto dedicato.',
+  'admin.agent.users': 'Membri guidati',
+  'admin.agent.tracked': 'Conversazioni seguite',
+  'admin.agent.empty': 'Nulla da mostrare.',
+  'admin.agent.offline': 'Offline.',
+  'admin.agent.scan': 'Scansione in corso: {node}',
+  'admin.agent.relaunch': 'Rilanciare l’agente',
+  'admin.agent.effect': 'Rifà lo studio e può pubblicare un messaggio.',
+  'admin.agent.done': 'Rilancio richiesto',
+  'admin.agent.failed': 'Rilancio non riuscito',
+  'admin.agent.stop': 'Fermare la scansione',
+  'admin.agent.halted': 'Scansione fermata',
+  'admin.agent.down': 'Servizio agente irraggiungibile.',
+  'admin.agent.logs': 'Registro delle scansioni',
 } satisfies AdminInterfaceCatalog;
 
 export default it;

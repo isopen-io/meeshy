@@ -45,7 +45,23 @@ export default function AdminScreen() {
   const identite = useQuery(adminIdentityQueryOptions(apiDeps));
 
   const permissions = identite.data?.permissions ?? null;
-  const sections = visibleAdminSections(permissions);
+  /**
+   * LE RÔLE EST PASSÉ, ET SON ABSENCE COÛTAIT UNE SECTION ENTIÈRE (#6733).
+   *
+   * `visibleAdminSections` filtre les sections `adminRankOnly` sur le rôle
+   * SERVI, et son absence est FERMANTE (#6862) — à raison : offrir la tuile
+   * pendant le chargement puis la retirer se lit comme un droit qu'on reprend.
+   * Mais ce site-ci ne le passait pas du tout, et la conséquence n'était pas
+   * un scintillement : la tuile « Conversations » n'apparaissait **jamais**
+   * dans le hub, pour personne. L'écran de lecture souveraine — écrit, testé,
+   * routé, déclaré privé — n'était atteignable qu'en tapant son adresse.
+   *
+   * C'est exactement le défaut que `liste-ouvre-sa-fiche.test.ts` est né pour
+   * attraper, remonté d'un étage : non plus une liste sans lien vers sa fiche,
+   * mais un HUB sans lien vers sa liste. Rien ne pouvait le voir — la loi était
+   * juste et testée, seul son appel était amputé.
+   */
+  const sections = visibleAdminSections(permissions, identite.data?.role);
   const autorise = sections.length > 0;
 
   const tableau = useQuery({

@@ -5,11 +5,13 @@ import { adminIdentityQueryOptions } from '@/lib/api/admin';
 import { apiDeps } from '@/lib/api/deps';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
+import { agentAccess } from '@/lib/admin/agent-access';
 import { visibleAdminSections } from '@/lib/admin/sections';
 import { translateAdmin } from '@/lib/i18n-admin-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useRoute } from '@/lib/router';
 import { useReaderLanguages } from '@/lib/view/use-reader';
+import { AgentConversationControl } from '@/routes/admin-agent-parts';
 import { AdminConversationReading } from '@/routes/admin-conversation-reading';
 import { AdminDenied, AdminScreenFrame, AdminSkeleton } from '@/routes/admin-parts';
 
@@ -56,6 +58,20 @@ export default function AdminConversationScreen() {
     (section) => section.id === 'conversations',
   );
 
+  /**
+   * LE PILOTAGE DE L'AGENT SUR CETTE CONVERSATION (#6733) — un droit DISTINCT
+   * de celui qui ouvre cet écran. `canManageConversations` + rang mène ici ;
+   * `canManageAgent` seul autorise à relancer l'agent. Un administrateur qui
+   * lit sans porter ce droit ne voit donc pas le geste — plutôt qu'un bouton
+   * voué au 403.
+   */
+  const pilotageAgent =
+    agentAccess({
+      permissions: identite.data?.permissions ?? null,
+      role: identite.data?.role,
+      chargement: identite.isPending,
+    }) === 'ouvert';
+
   const lecteur = useReaderLanguages();
   const session = useStore(sessionStore, (etat) => etat.session);
   const viewer = resolveViewer({ source: apiDeps.source, session });
@@ -80,6 +96,17 @@ export default function AdminConversationScreen() {
 
   return (
     <AdminScreenFrame language={language} title={titre} back="admin" fills>
+      {/* LE MÊME LIBELLÉ HONNÊTE QUE LA SECTION AGENT — `AgentRelaunchControl`
+          est le site UNIQUE du geste et de sa phrase d'effet : deux rédactions
+          du même avertissement divergeraient au premier lot qui n'en relit
+          qu'une. Le bloc ne se peint pas si la conversation n'a pas d'agent
+          configuré (`GET /configs/:id/live` échoue) : il n'y aurait rien à
+          relancer. */}
+      {pilotageAgent ? (
+        <div className="shrink-0 pb-3">
+          <AgentConversationControl conversationId={conversationId} language={language} deps={apiDeps} />
+        </div>
+      ) : null}
       <AdminConversationReading
         conversationId={conversationId}
         language={language}
