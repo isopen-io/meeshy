@@ -388,6 +388,41 @@ describe("la version appliquée par un AUTRE onglet", () => {
   });
 });
 
+describe("un navigateur qui REFUSE les service workers", () => {
+  /**
+   * MESURÉ, jamais supposé : sous `serviceWorkers: 'block'` (la politique que
+   * quatre gates du dépôt posent, `check-story-scene.mjs` en tête),
+   * `navigator.serviceWorker.register()` ne REJETTE pas — il résout avec
+   * `undefined`. La signature du DOM dit le contraire, et lire `.waiting` sur
+   * cette valeur levait un `TypeError` sur CHAQUE page (4 gates rouges, 16
+   * erreurs de page).
+   */
+  test("un conteneur qui résout SANS inscription ne lève pas, et n'annonce rien", async () => {
+    const h = harness();
+    const controller = createAppUpdateController({
+      ...h.env,
+      container: { ...h.env.container!, register: () => Promise.resolve(undefined) },
+    });
+
+    expect(await controller.register()).toBeNull();
+    expect(h.announcements).toEqual([]);
+    expect(h.errors).toEqual([]);
+  });
+
+  test("une vérification à la demande ne lève pas non plus, sans inscription", async () => {
+    const h = harness();
+    const controller = createAppUpdateController({
+      ...h.env,
+      container: { ...h.env.container!, register: () => Promise.resolve(undefined) },
+    });
+    await controller.register();
+
+    await controller.checkForUpdate();
+
+    expect(h.errors).toEqual([]);
+  });
+});
+
 describe("un navigateur sans service worker", () => {
   test("ne lève pas, et ne prétend pas avoir inscrit quoi que ce soit", async () => {
     const h = harness();
