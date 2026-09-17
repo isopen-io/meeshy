@@ -124,17 +124,35 @@ export function keyframeOverrides(keyframes: readonly CanvasKeyframe[] | undefin
 export type VisibilityWindow = { readonly start: number; readonly end: number };
 
 /**
+ * LA DURÉE POSÉE PAR L'AUTEUR — `undefined` sur un MÉDIA, dont
+ * `payload.duration` qualifie le FICHIER et non une fenêtre de scène (le
+ * contrat v3 ne porte aucun `duration` : `TimingSchema`, `canvas-v3.ts:21-33`,
+ * n'a que `start`/`end`/`keyframes`). SITE UNIQUE de cette exclusion, partagé
+ * avec `hasTimeWindow` (`lib/feed/scene-motion.ts`) : les deux la portaient
+ * séparément et se contredisaient — `hasTimeWindow` excluait le média,
+ * `visibilityWindow` le lisait —, donc un média posé disparaissait à la fin de
+ * son fichier dès qu'un AUTRE objet de la scène faisait tourner l'horloge
+ * (revue-correction #6901, T-D3b).
+ */
+export function authoredDuration(object: CanvasObject): number | undefined {
+  if (object.kind === 'media') return undefined;
+  const duration = object.payload.duration;
+  return typeof duration === 'number' && duration > 0 ? duration : undefined;
+}
+
+/**
  * `shouldRender` (`:442-454`) — `start = timing.start ?? 0`, `end =
- * timing.end ?? (payload.duration ? start + duration : Infinity)` : le
+ * timing.end ?? (authoredDuration ? start + duration : Infinity)` : le
  * contrat de fil porte `timing.end`, iOS lit `duration` — on lit les DEUX,
- * `end` déclaré en premier (§ Étape 4 de la spécification).
+ * `end` déclaré en premier (§ Étape 4 de la spécification). La durée n'est
+ * lue que lorsqu'elle est POSÉE par l'auteur (`authoredDuration`, T-D3b).
  */
 export function visibilityWindow(object: CanvasObject): VisibilityWindow {
   const start = object.timing?.start ?? 0;
   const explicitEnd = object.timing?.end;
   if (explicitEnd !== undefined) return { start, end: explicitEnd };
-  const duration = object.payload.duration;
-  if (typeof duration === 'number' && duration > 0) return { start, end: start + duration };
+  const duration = authoredDuration(object);
+  if (duration !== undefined) return { start, end: start + duration };
   return { start, end: Infinity };
 }
 

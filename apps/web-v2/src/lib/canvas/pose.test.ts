@@ -69,6 +69,27 @@ describe('objectPose — la fenêtre temporelle est une porte nette (T-D3)', () 
     expect(visibilityWindow({ ...base, timing: { start: 2 }, payload: { duration: 3 } })).toEqual({ start: 2, end: 5 });
     expect(visibilityWindow(base)).toEqual({ start: 0, end: Infinity });
   });
+
+  /* T-D3b (revue-correction #6901) — LA DURÉE D'UN MÉDIA QUALIFIE SON FICHIER,
+     PAS UNE FENÊTRE POSÉE PAR L'AUTEUR. `hasTimeWindow`
+     (`lib/feed/scene-motion.ts`) l'écrit depuis #6898 et l'EXCLUT
+     explicitement ; `visibilityWindow` la lisait pour TOUS les kinds. Les deux
+     lois se contredisaient, et le désaccord était VISIBLE : une scène où un
+     AUTRE objet est temporisé fait tourner l'horloge, et le média posé
+     disparaissait alors à la fin de son propre fichier, au milieu de la scène.
+     Le contrat v3 ne porte d'ailleurs aucun `duration` — `TimingSchema`
+     (`canvas-v3.ts:21-33`) n'a que `start`/`end`/`keyframes`. */
+  test('un MÉDIA à payload.duration n’a PAS de fenêtre (sa durée est celle du fichier)', () => {
+    const media: CanvasObject = { ...base, kind: 'media', timing: { start: 0 }, payload: { duration: 3, postMediaId: 'm' } };
+    expect(visibilityWindow(media)).toEqual({ start: 0, end: Infinity });
+    expect(isWithinWindow(media, 10)).toBe(true);
+    // Un `timing.end` DÉCLARÉ reste autoritaire, média compris.
+    expect(visibilityWindow({ ...media, timing: { start: 0, end: 3 } })).toEqual({ start: 0, end: 3 });
+  });
+
+  test('un TEXTE à payload.duration garde sa fenêtre (la durée y est posée par l’auteur)', () => {
+    expect(visibilityWindow({ ...base, kind: 'text', timing: { start: 1 }, payload: { duration: 3 } })).toEqual({ start: 1, end: 4 });
+  });
 });
 
 // T-D4 — les fondus.
