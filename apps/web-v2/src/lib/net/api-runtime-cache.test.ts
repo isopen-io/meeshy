@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 
-import { apiResponseMayBeCached } from './api-runtime-cache';
+import { API_RESPONSE_CACHE_PATTERN, apiResponseMayBeCached } from './api-runtime-cache';
 import {
   ADMIN_CONVERSATIONS_PAGE_SIZE,
   ADMIN_MESSAGES_PAGE_SIZE,
@@ -44,12 +44,32 @@ describe('une réponse d’administration ne va JAMAIS dans le cache du service 
    * TEXTE : l'importer exécuterait la configuration entière (greffons, lecture
    * de `git`, préchauffage des pages institutionnelles) pour une assertion
    * d'une ligne.
+   *
+   * Ce témoin ne suffit PAS, et c'est sa leçon : il verdissait pendant que le
+   * service worker livré ignorait la règle. Workbox stringifie le
+   * `urlPattern` ; seul `check-sw-api-cache.mjs`, qui fait décider
+   * `dist/sw.js`, juge. Les deux assertions ci-dessous gardent donc ce qui SE
+   * SÉRIALISE, pas ce qui se lit.
    */
-  test('`vite.config.ts` fait décider CE prédicat, et ne réécrit pas la condition', () => {
+  test('`vite.config.ts` reçoit une VALEUR sérialisable, jamais un prédicat importé', () => {
     const config = readFileSync(new URL('../../../vite.config.ts', import.meta.url), 'utf8');
-    expect(config).toContain('apiResponseMayBeCached');
-    // La forme qu'il REMPLACE — si elle revient, la charge d'administration
-    // repart sur le disque sans qu'aucun autre témoin ne le voie.
+    expect(config).toContain('urlPattern: API_RESPONSE_CACHE_PATTERN');
+    // La forme de `dev` — si elle revient, la charge d'administration repart
+    // sur le disque sans qu'aucun autre témoin ne le voie.
     expect(config).not.toContain("url.pathname.startsWith('/api/'),");
+    // La forme de la PREMIÈRE version de ce lot : juste, branchée, et perdue
+    // à la sérialisation — `apiResponseMayBeCached` n'existe pas dans sw.js.
+    expect(config).not.toContain('apiResponseMayBeCached');
+  });
+
+  test('la règle EST la valeur passée à Workbox — le prédicat n’en est qu’une projection', () => {
+    expect(API_RESPONSE_CACHE_PATTERN).toBeInstanceOf(RegExp);
+    expect(API_RESPONSE_CACHE_PATTERN.test('https://gate.meeshy.me/api/v1/admin/users')).toBe(false);
+    expect(API_RESPONSE_CACHE_PATTERN.test('https://gate.meeshy.me/api/v1/conversations')).toBe(true);
+    // Workbox n'accepte une expression régulière sur une URL d'origine
+    // ÉTRANGÈRE que si la correspondance commence à l'indice 0.
+    expect(
+      'https://gate.meeshy.me/api/v1/conversations'.match(API_RESPONSE_CACHE_PATTERN)?.index,
+    ).toBe(0);
   });
 });

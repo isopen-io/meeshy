@@ -11,7 +11,7 @@ import { INSTITUTIONAL_PATTERN } from './scripts/lib/institutional-routes.mjs';
 import { INLINE_INTERFACE_LANGUAGE_BOOTSTRAP } from './src/lib/inline-interface-language-bootstrap.js';
 import { INLINE_SCHEME_BOOTSTRAP } from './src/lib/inline-scheme-bootstrap.js';
 import { declaredBuildFlag } from './src/lib/build-flag';
-import { apiResponseMayBeCached } from './src/lib/net/api-runtime-cache';
+import { API_RESPONSE_CACHE_PATTERN } from './src/lib/net/api-runtime-cache';
 import { NETWORK_ONLY_NAVIGATIONS } from './src/lib/net/network-only-navigations';
 
 /**
@@ -515,11 +515,14 @@ export default defineConfig({
                */
               runtimeCaching: [
                 {
-                  /* PAS L'ADMINISTRATION (#6862) — `apiResponseMayBeCached`
+                  /* PAS L'ADMINISTRATION (#6862) — `API_RESPONSE_CACHE_PATTERN`
                      porte la règle et son motif : une conversation privée lue
                      en régime souverain ne doit pas rester sept jours sur le
-                     disque du poste, dans un seau qu'`AdminAuditLog` ignore. */
-                  urlPattern: ({ url }) => apiResponseMayBeCached(url.pathname),
+                     disque du poste, dans un seau qu'`AdminAuditLog` ignore.
+                     Une VALEUR, jamais un prédicat importé : Workbox stringifie
+                     ce champ dans `dist/sw.js`, où aucun import ne le suit —
+                     `check-sw-api-cache.mjs` fait décider l'artefact construit. */
+                  urlPattern: API_RESPONSE_CACHE_PATTERN,
                   handler: 'NetworkFirst',
                   options: {
                     cacheName: 'api',

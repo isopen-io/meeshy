@@ -291,6 +291,12 @@ jobs:
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
           node scripts/check-utilities.mjs
           node scripts/measure-weight.mjs
+          # #6862 — le seul gate qui fasse DÉCIDER le service worker construit.
+          # Workbox stringifie le `urlPattern` du seau `api` : un prédicat
+          # importé s'y perd, et la règle « aucune réponse /api/v1/admin/** sur
+          # le disque » était annoncée par `vite.config.ts` sans être appliquée
+          # par `dist/sw.js`. Lit `dist/sw.js`, donc après le build ci-dessus.
+          node scripts/check-sw-api-cache.mjs
           # #5910 — maillon du composite `bun run gate` qui ne s'exécutait
           # NULLE PART. Il lit `dist/index.html`, donc il vient après le build
           # ci-dessus ; il n'ouvre aucun navigateur, donc il a sa place ici et

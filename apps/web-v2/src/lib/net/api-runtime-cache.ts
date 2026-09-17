@@ -36,16 +36,38 @@
  * qui énumère se périme au premier ajout, en silence.
  */
 
-/** Le préfixe des routes d'administration, tel que les ports le composent. */
-const PREFIXE_ADMINISTRATION = '/api/v1/admin/';
+/**
+ * ## POURQUOI UNE EXPRESSION RÉGULIÈRE, ET PAS LE PRÉDICAT
+ *
+ * La première forme de ce lot donnait à `vite.config.ts` un PRÉDICAT importé.
+ * Workbox ne compile pas ce fichier : il STRINGIFIE le `urlPattern` reçu et
+ * pose ce texte dans `dist/sw.js`. Le service worker livré portait donc
+ * `({url:s})=>apiResponseMayBeCached(s.pathname)` sans la moindre définition
+ * de ce nom — la règle n'était pas appliquée, et le matcher jetait une
+ * `ReferenceError` à chaque requête GET, ce qui désarmait aussi le seau `medias`
+ * enregistré derrière lui.
+ *
+ * Une expression régulière, elle, se sérialise en LITTÉRAL : ce que le gate
+ * `check-sw-api-cache.mjs` fait décider depuis `dist/sw.js` est exactement
+ * cette valeur. Elle est donc la source de vérité, et le prédicat ci-dessous
+ * n'en est qu'une PROJECTION — deux boucles jumelles se seraient séparées au
+ * premier ajout de route.
+ *
+ * Ancrée sur l'origine : la v2 appelle une passerelle d'un AUTRE domaine
+ * (`gate.meeshy.me`), et Workbox n'accepte une expression régulière sur une
+ * URL d'origine étrangère que si la correspondance commence à l'indice 0.
+ */
+export const API_RESPONSE_CACHE_PATTERN = /^https?:\/\/[^/]+\/api\/(?!v1\/admin(?:[/?#]|$))/;
+
+/** L'origine de MESURE du prédicat : jamais servie, seulement composée. */
+const ORIGINE_DE_MESURE = 'https://meeshy.invalid';
 
 /**
  * `true` si le service worker peut garder cette réponse dans le seau `api`.
  *
- * Prend le PATHNAME seul — Workbox donne l'`URL` complète, et la décision ne
- * dépend d'aucun paramètre de requête : un `?offset=30` d'administration ne
- * doit pas plus être gardé que la première page.
+ * Prend le PATHNAME (avec sa requête éventuelle) — un `?offset=30`
+ * d'administration ne doit pas plus être gardé que la première page.
  */
 export function apiResponseMayBeCached(pathname: string): boolean {
-  return pathname.startsWith('/api/') && !pathname.startsWith(PREFIXE_ADMINISTRATION);
+  return API_RESPONSE_CACHE_PATTERN.test(new URL(pathname, ORIGINE_DE_MESURE).href);
 }
