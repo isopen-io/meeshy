@@ -52,6 +52,7 @@ private fun ApiPostMedia.toFeedMedia(): FeedMedia {
         height = height,
         duration = duration?.let { it / 1000 },
         caption = caption,
+        alt = alt,
         captionLanguage = captionLanguage,
         captionTranslations = flatCaptionTranslations,
     )

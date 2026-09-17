@@ -7,8 +7,8 @@ import org.junit.Test
 
 class ConversationMediaGalleryTest {
 
-    private fun img(id: String, url: String, thumbnailUrl: String? = null) =
-        BubbleImage(attachmentId = id, url = url, thumbnailUrl = thumbnailUrl)
+    private fun img(id: String, url: String, thumbnailUrl: String? = null, alt: String? = null) =
+        BubbleImage(attachmentId = id, url = url, thumbnailUrl = thumbnailUrl, alt = alt)
 
     private fun bubble(
         id: String,
@@ -552,5 +552,65 @@ class ConversationMediaGalleryTest {
         val gallery = ConversationMediaGallery.of(emptyList(), messageId = "m1", imageIndex = 0)
 
         assertThat(gallery.thumbnailUrls).isEmpty()
+    }
+
+    // #6813 — an attachment's own `alt` (author-authored accessibility
+    // description) travels alongside its URL, positionally aligned, distinct
+    // from the message's `caption` (its text body).
+
+    @Test
+    fun an_images_alt_text_travels_alongside_its_url() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(bubble("m1", listOf(img("a1", "u1", alt = "A sunset over the bay")))),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.imageUrls).containsExactly("u1")
+        assertThat(gallery.altTexts).containsExactly("A sunset over the bay")
+    }
+
+    @Test
+    fun an_image_without_alt_text_yields_null_never_a_fabricated_fallback() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(bubble("m1", listOf(img("a1", "u1")))),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.altTexts).containsExactly(null as String?)
+    }
+
+    @Test
+    fun alt_texts_align_positionally_with_image_urls_across_messages() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(
+                bubble("m1", listOf(img("a1", "u1", alt = "first"), img("a2", "u2"))),
+                bubble("m2", listOf(img("a3", "u3", alt = "third"))),
+            ),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.imageUrls).containsExactly("u1", "u2", "u3").inOrder()
+        assertThat(gallery.altTexts).containsExactly("first", null, "third").inOrder()
+    }
+
+    @Test
+    fun the_alt_texts_list_is_always_the_same_length_as_the_image_urls() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(bubble("m1", listOf(img("a1", "u1", alt = "first"), img("a2", "u2")))),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.altTexts).hasSize(gallery.imageUrls.size)
+    }
+
+    @Test
+    fun an_empty_gallery_has_no_alt_texts() {
+        val gallery = ConversationMediaGallery.of(emptyList(), messageId = "m1", imageIndex = 0)
+
+        assertThat(gallery.altTexts).isEmpty()
     }
 }

@@ -23,14 +23,19 @@ private val directConversationTypes = setOf("direct", "dm")
 
 /**
  * The name to show for a conversation. A group/community keeps its [title]; a direct
- * conversation has no title, so — like iOS `APIConversation.toConversation` — it
- * resolves the OTHER participant's name (excluding [currentUserId]) instead of the
- * bare "Conversation" fallback.
+ * conversation has no title of its own — like iOS `APIConversation.toConversation` and web
+ * `titleOf` (`apps/web-v2/src/lib/view/conversation.ts`) — so it resolves the OTHER
+ * participant's name (excluding [currentUserId]) and never the stored [title], which can
+ * carry a legacy artifact ("X et Y", composed client-side at creation, #6790) rather than a
+ * legitimate name. A local rename ([resolvedPreferences]'s `customName`) always wins first,
+ * for either kind of conversation.
  */
 fun ApiConversation.displayTitle(currentUserId: String? = null): String {
-    title?.takeIf { it.isNotBlank() }?.let { return it }
     resolvedPreferences?.customName?.takeIf { it.isNotBlank() }?.let { return it }
-    otherParticipantName(currentUserId)?.let { return it }
+    if (type.lowercase() in directConversationTypes) {
+        return otherParticipantName(currentUserId) ?: "Conversation"
+    }
+    title?.takeIf { it.isNotBlank() }?.let { return it }
     return "Conversation"
 }
 

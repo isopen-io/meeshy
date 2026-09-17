@@ -56,6 +56,8 @@ public data class BubbleImage(
     val thumbnailUrl: String? = null,
     val width: Int? = null,
     val height: Int? = null,
+    /** Author-authored accessibility description (`MessageAttachment.alt`, #6813). Read by TalkBack as `contentDescription`. */
+    val alt: String? = null,
 )
 
 @Immutable
