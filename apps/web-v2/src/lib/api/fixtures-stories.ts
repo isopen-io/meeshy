@@ -1,5 +1,5 @@
 import { VIEWER_ID } from './fixtures-base';
-import { REEL_CLIP_RGB, STORY_CLIP_LONG } from './fixtures-reel-clips';
+import { REEL_CLIP_RGB, REEL_CLIP_VOICE, STORY_CLIP_LONG } from './fixtures-reel-clips';
 import type { StatusMoodPost, StoryFeedPost, StoryTrayPost } from './stories';
 
 /**
@@ -156,6 +156,171 @@ export const STORY_TRAY: readonly StoryTrayPost[] = [
 ];
 
 /**
+ * **UNE VRAIE IMAGE PAYSAGE** (#6899) — 16:9, pour que le fond AJUSTÉ
+ * (`videoFitMode: "fit"`) d'une scène v3 laisse des BANDES dans la scène 9:16
+ * (`StoryLetterboxFill`) : `STORY_PHOTO_STAND_IN` ci-dessus est PORTRAIT
+ * (90×160, ~9:16) et ne laisserait aucune bande à habiller.
+ */
+const STORY_SCENE_LANDSCAPE_STAND_IN =
+  'data:image/svg+xml;utf8,' +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 90">' +
+      '<defs><linearGradient id="p" x1="0" y1="0" x2="1" y2="1">' +
+      '<stop offset="0" stop-color="#f97316"/><stop offset="1" stop-color="#7c2d12"/></linearGradient></defs>' +
+      '<rect width="160" height="90" fill="url(#p)"/>' +
+      '<circle cx="128" cy="24" r="10" fill="#fff7ed" opacity="0.9"/>' +
+      '</svg>',
+  );
+
+/** Deux ThumbHash de démonstration. DEUX, et c'est voulu : le composite de la
+ * SLIDE (`LHkC`, rose ambré `#dda09a`, la valeur de `THUMB_HASH_AMBER` dans
+ * `fixtures-feed.ts`) peint le fond flou du lecteur et le placeholder de la
+ * carte ; le MÉDIA de fond (`EHoC`, brun `#763913`, la teinte du paysage qu'il
+ * résume) peint la bande (`letterboxHashes`, fond d'abord). Deux teintes
+ * distinctes sont ce qui permet à `check-story-scene.mjs` de dire, au pixel,
+ * LEQUEL des deux est peint — et une bande SOMBRE est ce qui garde lisible le
+ * texte blanc que l'auteur y pose (la première valeur, `PAo8` = `#8affc5`,
+ * le rendait à peine visible sur la capture). */
+const STORY_SCENE_THUMB_HASH = 'LHkC';
+const STORY_SCENE_MEDIA_THUMB_HASH = 'EHoC';
+
+const sceneStoryAuthor = { id: 'u-nova', username: 'nova', firstName: 'Nova', lastName: 'Haddad' } as const;
+
+/** La pièce PAYSAGE, à la FORME que la passerelle sert (`mediaSelect`,
+ * `postIncludes.ts:98-120`) : `fileUrl`, dimensions, ThumbHash. */
+const scenePano = (id: string) =>
+  ({ id, fileUrl: STORY_SCENE_LANDSCAPE_STAND_IN, mimeType: 'image/svg+xml', width: 1600, height: 900, thumbHash: STORY_SCENE_MEDIA_THUMB_HASH }) as const;
+
+const identity = { scale: 1, rotation: 0, opacity: 1 } as const;
+
+const fitBackground = (postMediaId: string) => ({
+  id: 'bg',
+  kind: 'media',
+  anchor: { t: 'free', x: 0.5, y: 0.5 },
+  plane: 'bg',
+  z: 0,
+  transform: identity,
+  payload: { postMediaId, mediaType: 'image/svg+xml', aspectRatio: 16 / 9, thumbHash: STORY_SCENE_MEDIA_THUMB_HASH, transform: { videoFitMode: 'fit' } },
+});
+
+/**
+ * **LES STORIES DE SCÈNE v3** (#6899) — trois documents canvas `v:3`
+ * (`storyEffects`) rendus par le MÊME moteur que le fil (`ScenePlayer`, D-79),
+ * un par présentation du lecteur :
+ *
+ * - `st-scene` — fond paysage ajusté ET un texte posé sur la BANDE basse
+ *   (`y: 0.92`) ⇒ verdict `canvas` : la carte 9:16 entière, bandes habillées
+ *   au ThumbHash, son de fond (`REEL_CLIP_VOICE`, décodable), épingle de
+ *   timeline à 8 s ;
+ * - `st-scene-image-text` — le même fond, un texte DANS l'image ⇒ `imageOnly`,
+ *   moteur rogné au rectangle de l'image, le texte reste lisible ; épinglée à
+ *   3 s, SOUS le plancher de 6 s : c'est le seul vecteur où l'épingle
+ *   autoritaire (`computedTotalDuration`) et la loi du contenu divergent
+ *   (3 s contre 6 s) ;
+ * - `st-scene-image` — le fond seul ⇒ `imageOnly` sans moteur.
+ *
+ * Les textes sont en espagnol, traduits en anglais seulement : le lecteur de
+ * recette (`fr` puis la langue du navigateur) les lit donc au RANG 2 — un
+ * témoin de rang s'écrit sur un rang autre que le premier (leçon 261).
+ *
+ * ABSENTES de `STORY_TRAY` (délibérément) : un auteur NOUVEAU ajouterait une
+ * tuile au rail, et la géographie du rail est gardée ailleurs (voir
+ * `st-video`) ; ce corpus n'a besoin que d'être atteignable en DIRECT
+ * (`/story/st-scene`), la 3ᵉ marche de la cascade du lecteur. Déjà VUES et
+ * les plus ANCIENNES pour la même raison.
+ */
+export const SCENE_STORIES: readonly StoryFeedPost[] = [
+  {
+    id: 'st-scene',
+    type: 'STORY',
+    createdAt: hoursAgo(13),
+    expiresAt: hoursFromNow(7),
+    viewCount: 2,
+    isViewedByMe: true,
+    author: sceneStoryAuthor,
+    originalLanguage: 'es',
+    media: [scenePano('m-scene-pano'), { id: 'm-scene-track', fileUrl: REEL_CLIP_VOICE, mimeType: 'audio/webm' }],
+    storyEffects: {
+      v: 3,
+      scenes: [
+        {
+          id: 's1',
+          thumbHash: STORY_SCENE_THUMB_HASH,
+          timelineDuration: 8,
+          objects: [
+            fitBackground('m-scene-pano'),
+            {
+              id: 't1',
+              kind: 'text',
+              anchor: { t: 'free', x: 0.5, y: 0.92 },
+              plane: 'fg',
+              z: 1,
+              transform: identity,
+              locale: 'es',
+              payload: { text: 'La hora dorada, sobre las bandas', translations: { en: 'Golden hour, on the bands' }, textColor: '#FFFFFF', fontSize: 64 },
+            },
+            {
+              id: 'a1',
+              kind: 'audio',
+              anchor: { t: 'free', x: 0.5, y: 0.5 },
+              plane: 'bg',
+              z: 0,
+              transform: identity,
+              payload: { isBackground: true, postMediaId: 'm-scene-track', volume: 0.8, loop: true },
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    id: 'st-scene-image-text',
+    type: 'STORY',
+    createdAt: hoursAgo(12),
+    expiresAt: hoursFromNow(8),
+    viewCount: 2,
+    isViewedByMe: true,
+    author: sceneStoryAuthor,
+    originalLanguage: 'es',
+    media: [scenePano('m-scene-pano-2')],
+    storyEffects: {
+      v: 3,
+      scenes: [
+        {
+          id: 's1',
+          thumbHash: STORY_SCENE_THUMB_HASH,
+          timelineDuration: 3,
+          objects: [
+            fitBackground('m-scene-pano-2'),
+            {
+              id: 't1',
+              kind: 'text',
+              anchor: { t: 'free', x: 0.5, y: 0.5 },
+              plane: 'fg',
+              z: 1,
+              transform: identity,
+              locale: 'es',
+              payload: { text: 'Dentro de la imagen', translations: { en: 'Inside the picture' }, textColor: '#FFFFFF', fontSize: 48 },
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    id: 'st-scene-image',
+    type: 'STORY',
+    createdAt: hoursAgo(11),
+    expiresAt: hoursFromNow(9),
+    viewCount: 2,
+    isViewedByMe: true,
+    author: sceneStoryAuthor,
+    media: [scenePano('m-scene-pano-3')],
+    storyEffects: { v: 3, scenes: [{ id: 's1', thumbHash: STORY_SCENE_THUMB_HASH, objects: [fitBackground('m-scene-pano-3')] }] },
+  },
+];
+
+/**
  * **LE CORPUS COMPLET EN FIXTURES** (#5817) — MÊMES identifiants ET MÊMES
  * horodatages que `STORY_TRAY` (une tuile du rail pose l'id d'entrée que son
  * groupe porte, `group.entryStoryId`, dans le lien vers `/story/$post` : le lecteur
@@ -249,6 +414,7 @@ export const STORY_FEED: readonly StoryFeedPost[] = [
     originalLanguage: 'fr',
     media: [{ id: 'm6', url: STORY_CLIP_LONG, thumbnailUrl: STORY_PHOTO_STAND_IN, mimeType: 'video/webm' }],
   },
+  ...SCENE_STORIES,
 ];
 
 /**

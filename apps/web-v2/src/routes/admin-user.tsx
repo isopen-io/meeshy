@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { adminIdentityQueryOptions } from '@/lib/api/admin';
 import { adminUserDetailQueryKey, adminUserDetailQueryOptions, type AdminUserDetail } from '@/lib/api/admin-user-detail';
 import { apiDeps } from '@/lib/api/deps';
+import { adminMoment } from '@/lib/admin/format';
 import { visibleAdminSections } from '@/lib/admin/sections';
 import { translateAdmin } from '@/lib/i18n-admin-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
@@ -107,8 +108,15 @@ export default function AdminUserScreen() {
         </Section>
         <Section titre={translateAdmin(language, 'admin.user.account')}>
           <Ligne label={translateAdmin(language, 'admin.user.role')} valeur={membre.role} />
-          <Ligne label={translateAdmin(language, 'admin.user.created')} valeur={membre.createdAt ?? '—'} />
-          <Ligne label={translateAdmin(language, 'admin.user.lastActive')} valeur={membre.lastActiveAt ?? '—'} />
+          {/* UNE DATE SE LIT, ELLE NE SE RECOPIE PAS (#6819, recette au
+              navigateur) : ces deux lignes peignaient
+              « 2026-01-12T08:30:00.000Z ». Le champ, son décodage et le
+              libellé étaient justes — seul le RENDU ne l'était pas, et aucun
+              témoin ne pouvait tomber puisque la valeur affichée était
+              exactement la valeur servie. `adminMoment` est le site que cet
+              écran partage avec le pilotage de l'agent. */}
+          <Ligne label={translateAdmin(language, 'admin.user.created')} valeur={adminMoment(membre.createdAt, language)} />
+          <Ligne label={translateAdmin(language, 'admin.user.lastActive')} valeur={adminMoment(membre.lastActiveAt, language)} />
           <Ligne
             label={translateAdmin(language, 'admin.user.twoFactor')}
             valeur={translateAdmin(language, membre.twoFactorEnabled ? 'admin.user.enabled' : 'admin.users.inactive')}
@@ -132,7 +140,11 @@ export default function AdminUserScreen() {
             routes sont servies jusqu'à AUDIT, plus largement que les gestes
             d'écriture ci-dessus qui exigent ADMIN+. */}
         <AdminUserMediaSection userId={membre.id} language={language} />
-        <AdminUserConversationsSection userId={membre.id} language={language} />
+        {/* La fiche ENTIÈRE, et pas seulement son identifiant (#6862) : la
+            modale de lecture rend le fil dans le Prisme DU MEMBRE, qui se
+            compose de ses trois rangs de langue, et le montre de SON point de
+            vue, qui demande son identité. */}
+        <AdminUserConversationsSection membre={membre} language={language} />
       </div>
 
       {edition ? (

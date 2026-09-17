@@ -1,6 +1,7 @@
-import { httpTransport } from './client';
+import { currentCredential, httpTransport } from './client';
 import { apiConfig } from './config';
 import type { ConversationsDeps } from './conversations';
+import type { PostMediaUploadDeps } from './post-media-upload';
 
 /**
  * L'ADAPTATEUR UNIQUE (#6151) — le SEUL endroit du dépôt qui résout
@@ -20,3 +21,8 @@ import type { ConversationsDeps } from './conversations';
  * gate au lieu de diverger en silence.
  */
 export const apiDeps: ConversationsDeps = { source: apiConfig.source, transport: httpTransport };
+
+/** Les dépendances du client TUS (#6900) — DÉRIVÉES d'`apiDeps` (la source
+ * reste résolue une fois, ici) : ce transport-là parle en octets, hors du
+ * transport JSON, et relit le crédential de la session à chaque requête. */
+export const postMediaUploadDeps: PostMediaUploadDeps = { source: apiDeps.source, base: apiConfig.base, credential: currentCredential };

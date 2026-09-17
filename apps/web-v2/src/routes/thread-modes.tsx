@@ -48,17 +48,21 @@ const SummaryHost = lazy(() => import('@/components/summary/summary-host'));
  * c'est précisément pour qu'elle ait un fichier sous le budget où s'ajouter
  * que ce découpage précède son lot, plutôt que de le suivre.
  */
+export type ThreadSummaryCapability = {
+  readonly conversation: Conversation;
+  readonly messages: readonly Message[];
+  readonly windowCoversUnread: boolean;
+  readonly lang?: string;
+  readonly onReplyToPerson: (entry: FaceRampEntry) => void;
+  readonly onOpenEpisode: (episode: ConversationEpisode) => void;
+  readonly onResumeThread: () => void;
+};
+
 export function ThreadModes({
   mode,
-  conversation,
-  messages,
   viewer,
-  windowCoversUnread,
   readerLocale,
-  summaryLang,
-  onReplyToPerson,
-  onOpenEpisode,
-  onResumeThread,
+  summary,
   placed,
   virtualizer,
   scene,
@@ -76,25 +80,26 @@ export function ThreadModes({
   retry,
   displayLanguageOf,
   myReactionsOf,
+  contentWithheld,
   selection,
   onRowTap,
   longPress,
   onPickLanguage,
   onReact,
   typists,
-  accent,
+  accent = 'var(--color-ios-brand)',
 }: {
   readonly mode: ConversationReadingMode;
-  // Résumé Vivant (#5695)
-  readonly conversation: Conversation;
-  readonly messages: readonly Message[];
   readonly viewer: Viewer;
-  readonly windowCoversUnread: boolean;
   readonly readerLocale: string;
-  readonly summaryLang?: string;
-  readonly onReplyToPerson: (entry: FaceRampEntry) => void;
-  readonly onOpenEpisode: (episode: ConversationEpisode) => void;
-  readonly onResumeThread: () => void;
+  /**
+   * LE RÉSUMÉ VIVANT (#5695), en UNE capacité — ses sept valeurs n'ont aucun
+   * sens séparément, et les déclarer une à une obligeait tout hôte à en
+   * fournir sept même sans jamais monter ce mode. `undefined` ⇒ la surface
+   * n'a pas de résumé à montrer, et le mode `summary` RETOMBE sur le fil (la
+   * chose même que le résumé résume) plutôt que de rendre un écran muet.
+   */
+  readonly summary?: ThreadSummaryCapability;
   // Rangée plate/bulle virtualisée
   readonly placed: readonly PlacedMessage[];
   readonly virtualizer: Virtualizer<HTMLElement, Element>;
@@ -104,22 +109,46 @@ export function ThreadModes({
   readonly highlightedId: string | null;
   readonly expiredIds: ReadonlySet<string>;
   readonly jumpToMessage: (messageId: string) => void;
-  readonly consume: (messageId: string) => Promise<boolean>;
-  readonly onEphemeralExpired: (messageId: string) => void;
-  readonly deliveryOf: (messageId: string) => LocalDelivery | undefined;
-  readonly startedAtOf: (messageId: string) => number | undefined;
-  readonly reasonOf: (messageId: string) => string | undefined;
-  readonly permanentOf: (messageId: string) => boolean;
-  readonly retry: (messageId: string) => void;
-  readonly displayLanguageOf: (messageId: string) => string | undefined;
-  readonly myReactionsOf: (messageId: string) => readonly string[] | undefined;
-  readonly selection: SelectionState | null;
-  readonly onRowTap: (messageId: string) => void;
-  readonly longPress: ReturnType<typeof useLongPress>;
-  readonly onPickLanguage: (messageId: string, code: string) => void;
+  /**
+   * ## LES CAPACITÉS SONT OPTIONNELLES, ET UNE CAPACITÉ ABSENTE EST ABSENTE
+   *
+   * Ce composant est le SEUL du chantier qui rende une liste de messages, et
+   * il n'a longtemps eu qu'un hôte : le fil, où tout est interactif. La
+   * lecture souveraine de l'administration (#6862) en est un second, en
+   * LECTURE PURE — on n'y répond pas, on n'y réagit pas, on n'y consomme
+   * surtout pas la vue unique de quelqu'un d'autre.
+   *
+   * Les fonctions ci-dessous sont donc facultatives AU TYPE plutôt que
+   * bouchonnées chez l'appelant. Un bouchon silencieux (`() => {}`) rendrait
+   * un contrôle qui a l'air d'exister et ne fait rien — le défaut exact que la
+   * loi 4 interdit. Absentes, elles font DISPARAÎTRE le geste de l'arbre
+   * rendu : pas de `tabIndex` sans appui long, pas de `onClick` sans
+   * sélection, pas de bande de reprise sans accusé local.
+   */
+  readonly consume?: (messageId: string) => Promise<boolean>;
+  readonly onEphemeralExpired?: (messageId: string) => void;
+  readonly deliveryOf?: (messageId: string) => LocalDelivery | undefined;
+  readonly startedAtOf?: (messageId: string) => number | undefined;
+  readonly reasonOf?: (messageId: string) => string | undefined;
+  readonly permanentOf?: (messageId: string) => boolean;
+  readonly retry?: (messageId: string) => void;
+  readonly displayLanguageOf?: (messageId: string) => string | undefined;
+  readonly myReactionsOf?: (messageId: string) => readonly string[] | undefined;
+  /**
+   * LE CONTENU RETENU AU SERVEUR (#6862) — `true` ⇒ la charge ne porte PAS le
+   * texte de ce message, et la peau rend sa mention au lieu d'offrir un voile
+   * qui ne découvre rien (`ProtectedContent.revealable`). Le verdict vient de
+   * la passerelle (`isProtected`) et ne se recalcule pas ici : `protectionOf`
+   * ignore le chiffrement, que `messageContentIsProtected` compte.
+   */
+  readonly contentWithheld?: (messageId: string) => boolean;
+  readonly selection?: SelectionState | null;
+  readonly onRowTap?: (messageId: string) => void;
+  readonly longPress?: ReturnType<typeof useLongPress>;
+  readonly onPickLanguage?: (messageId: string, code: string) => void;
   /** Retire une réaction MIENNE en tapant sa capsule (#5865) — même geste
    * que `onPickLanguage`, une seule loi vers `useMessageMenu.onMenuReact`. */
-  readonly onReact: (messageId: string, emoji: string) => void;
+  readonly onReact?: (messageId: string, emoji: string) => void;
   /** LE ROSTER ENTIER (#6171, G1) — `[]` ⇒ aucun frappeur connu ⇒ aucune
    * cellule (`useThreadTyping`, `lib/view/use-thread-typing.ts`). Jamais
    * tronqué à un seul frappeur : `typingAnnouncement`/`typingLead`
@@ -127,11 +156,14 @@ export function ThreadModes({
    * ICI, pour que la loi reste PARTAGÉE avec les autres surfaces (bouton
    * « revenir en bas », Rivière). */
   readonly typists: readonly TypingEntry[];
-  readonly accent: string;
+  /** La teinte de la conversation — `--color-ios-brand` à défaut. SEULE la
+   * cellule de frappe la lit, et elle ne monte pas sans frappeur : une surface
+   * sans temps réel (`typists: []`) n'a donc rien à en dire. */
+  readonly accent?: string;
 }) {
   const viewerId = viewer.id ?? '';
 
-  if (mode === 'summary') {
+  if (mode === 'summary' && summary !== undefined) {
     return (
       /*
         LE RÉSUMÉ VIVANT (#5695) — SOUS l'en-tête (le `<main>` du fil est
@@ -144,16 +176,16 @@ export function ThreadModes({
       */
       <Suspense fallback={<SummarySkeleton />}>
         <SummaryHost
-          conversationId={conversation.id}
-          messages={messages}
-          participants={conversation.participants}
+          conversationId={summary.conversation.id}
+          messages={summary.messages}
+          participants={summary.conversation.participants}
           viewer={viewer}
-          windowCoversUnread={windowCoversUnread}
+          windowCoversUnread={summary.windowCoversUnread}
           locale={readerLocale}
-          {...(summaryLang !== undefined ? { lang: summaryLang } : {})}
-          onReplyToPerson={onReplyToPerson}
-          onOpenEpisode={onOpenEpisode}
-          onResumeThread={onResumeThread}
+          {...(summary.lang !== undefined ? { lang: summary.lang } : {})}
+          onReplyToPerson={summary.onReplyToPerson}
+          onOpenEpisode={summary.onOpenEpisode}
+          onResumeThread={summary.onResumeThread}
         />
       </Suspense>
     );
@@ -196,31 +228,40 @@ export function ThreadModes({
           /* L'opinion de CE client sur l'envoi (#5813) — UNE lecture par
              rangée, réutilisée pour les deux peaux et pour l'horloge des
              200 ms (`sendStartedAt`, § 5 étape 9). */
-          const rowDelivery = deliveryOf(p.message.id);
-          const rowStartedAt = startedAtOf(p.message.id);
-          const rowReason = reasonOf(p.message.id);
+          const rowDelivery = deliveryOf?.(p.message.id);
+          const rowStartedAt = startedAtOf?.(p.message.id);
+          const rowReason = reasonOf?.(p.message.id);
           /* UN REFUS PERMANENT N'OFFRE PAS DE REJEU (revue-correction
              #5813, défaut majeur 2) — 403/401 ne peuvent jamais aboutir en
              rejouant le MÊME appel ; `onRetry` disparaît, la cause reste.
              Hors ligne (`rowReason === undefined`, D-16) n'est jamais
              permanent : `permanentOf` lit `lastError`, absent tant qu'aucun
              appel n'est parti. */
-          const rowPermanent = rowDelivery === 'failed' && permanentOf(p.message.id);
+          const rowPermanent = rowDelivery === 'failed' && (permanentOf?.(p.message.id) ?? true);
           const sendProps =
             rowDelivery === undefined
               ? {}
               : {
                   localDelivery: rowDelivery,
-                  ...(rowPermanent ? {} : { onRetry: () => retry(p.message.id) }),
+                  /* PAS DE REPRISE SANS CAPACITÉ DE REPRISE (#6862) : `retry`
+                     absent ⇒ aucun `onRetry`, exactement comme un refus
+                     permanent. Le bouton disparaît ; la cause reste affichée.
+                     `permanentOf` absent retombe sur « permanent » pour la même
+                     raison — fail-closed sur l'affordance, jamais un bouton qui
+                     promet un rejeu que l'hôte ne sait pas jouer. */
+                  ...(rowPermanent || retry === undefined ? {} : { onRetry: () => retry(p.message.id) }),
                   ...(rowStartedAt === undefined ? {} : { sendStartedAt: rowStartedAt }),
                   ...(rowReason === undefined ? {} : { sendFailureReason: rowReason }),
                 };
           /* LE MENU DU MESSAGE (#5814) — trois lectures par rangée, motif
              `rowDelivery` ci-dessus : Traduire (langue explorée pour CE
              message), « la mienne » (réactions), et l'état de sélection. */
-          const rowDisplayLanguage = displayLanguageOf(p.message.id);
-          const rowMyReactions = myReactionsOf(p.message.id);
-          const rowSelected = selection === null ? undefined : selection.ids.includes(p.message.id);
+          const rowDisplayLanguage = displayLanguageOf?.(p.message.id);
+          const rowMyReactions = myReactionsOf?.(p.message.id);
+          const rowSelected =
+            selection === null || selection === undefined ? undefined : selection.ids.includes(p.message.id);
+          /* Le verdict SERVI, jamais recalculé (voir la prop). */
+          const rowWithheld = contentWithheld?.(p.message.id) ?? false;
           /*
            * LE LIBELLÉ D'ACCESSIBILITÉ (#5774, travail 2/3) — UN SEUL site,
            * partagé par la rangée plate ET la bulle : `composeMessageLabel`
@@ -250,6 +291,7 @@ export function ThreadModes({
             servedText: rowServed.text,
             delivery: checkStatusOf(p.message, rowDelivery),
             protection: rowProtection,
+            contentWithheld: rowWithheld,
           });
           return (
             <li
@@ -327,12 +369,21 @@ export function ThreadModes({
                   surface de gestes du message. `isSystemMessage` est le
                   SITE UNIQUE de cette loi (`lib/view/message-badges.ts`),
                   déjà consommé par `systemRowOf`/`composeMessageLabel`. */}
+              {/* `tabIndex` ET les gestionnaires d'appui long vont ENSEMBLE
+                  (#6862) : un `tabIndex={0}` sans geste est une halte de
+                  tabulation qui n'ouvre rien — le clavier s'arrêterait sur
+                  chaque rangée pour ne rien pouvoir faire. `data-row` reste
+                  posé sans eux : c'est aussi le CANDIDAT d'élection de la
+                  scène, qui n'a besoin d'aucun geste. */}
               <div
-                {...(isSystemMessage(p.message) ? {} : { 'data-row': p.message.id, tabIndex: 0, ...longPress })}
+                {...(isSystemMessage(p.message) ? {} : { 'data-row': p.message.id })}
+                {...(isSystemMessage(p.message) || longPress === undefined ? {} : { tabIndex: 0, ...longPress })}
                 role="article"
                 aria-label={rowLabel}
                 {...(rowServed.language === '' ? {} : { lang: rowServed.language })}
-                {...(rowSelected === undefined ? {} : { onClick: () => onRowTap(p.message.id) })}
+                {...(rowSelected === undefined || onRowTap === undefined
+                  ? {}
+                  : { onClick: () => onRowTap(p.message.id) })}
               >
                 {usesFlatRow(mode) ? (
                   <FocalRow
@@ -344,13 +395,18 @@ export function ThreadModes({
                     highlighted={highlightedId === p.message.id}
                     elected={isElected}
                     expired={expiredIds.has(p.message.id)}
-                    onConsumeViewOnce={consume}
-                    onEphemeralExpired={onEphemeralExpired}
+                    revealable={!rowWithheld}
+                    {...(consume === undefined ? {} : { onConsumeViewOnce: consume })}
+                    {...(onEphemeralExpired === undefined ? {} : { onEphemeralExpired })}
                     {...(rowDisplayLanguage === undefined ? {} : { displayLanguage: rowDisplayLanguage })}
-                    onPickLanguage={(code) => onPickLanguage(p.message.id, code)}
+                    {...(onPickLanguage === undefined
+                      ? {}
+                      : { onPickLanguage: (code: string) => onPickLanguage(p.message.id, code) })}
                     {...(rowMyReactions === undefined ? {} : { myReactions: rowMyReactions })}
-                    onReact={(emoji) => onReact(p.message.id, emoji)}
-                    {...(rowSelected === undefined ? {} : { selected: rowSelected, onToggleSelect: onRowTap })}
+                    {...(onReact === undefined ? {} : { onReact: (emoji: string) => onReact(p.message.id, emoji) })}
+                    {...(rowSelected === undefined || onRowTap === undefined
+                      ? {}
+                      : { selected: rowSelected, onToggleSelect: onRowTap })}
                     {...sendProps}
                   />
                 ) : (
@@ -362,13 +418,18 @@ export function ThreadModes({
                     onJumpToMessage={jumpToMessage}
                     highlighted={highlightedId === p.message.id}
                     expired={expiredIds.has(p.message.id)}
-                    onConsumeViewOnce={consume}
-                    onEphemeralExpired={onEphemeralExpired}
+                    revealable={!rowWithheld}
+                    {...(consume === undefined ? {} : { onConsumeViewOnce: consume })}
+                    {...(onEphemeralExpired === undefined ? {} : { onEphemeralExpired })}
                     {...(rowDisplayLanguage === undefined ? {} : { displayLanguage: rowDisplayLanguage })}
-                    onPickLanguage={(code) => onPickLanguage(p.message.id, code)}
+                    {...(onPickLanguage === undefined
+                      ? {}
+                      : { onPickLanguage: (code: string) => onPickLanguage(p.message.id, code) })}
                     {...(rowMyReactions === undefined ? {} : { myReactions: rowMyReactions })}
-                    onReact={(emoji) => onReact(p.message.id, emoji)}
-                    {...(rowSelected === undefined ? {} : { selected: rowSelected, onToggleSelect: onRowTap })}
+                    {...(onReact === undefined ? {} : { onReact: (emoji: string) => onReact(p.message.id, emoji) })}
+                    {...(rowSelected === undefined || onRowTap === undefined
+                      ? {}
+                      : { selected: rowSelected, onToggleSelect: onRowTap })}
                     {...sendProps}
                   />
                 )}

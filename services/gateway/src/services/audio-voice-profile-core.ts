@@ -6,9 +6,9 @@
  * diverger). Corps déplacé tel quel, sans changement de comportement.
  */
 
-import { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { PrismaClient, Prisma, UserVoiceModel } from '@meeshy/shared/prisma/client';
 
-export async function getVoiceProfile(prisma: PrismaClient, userId: string): Promise<any | null> {
+export async function getVoiceProfile(prisma: PrismaClient, userId: string): Promise<UserVoiceModel | null> {
   return prisma.userVoiceModel.findUnique({
     where: { userId }
   });
@@ -22,13 +22,16 @@ export async function saveVoiceProfile(
     qualityScore?: number;
     audioCount?: number;
     totalDurationMs?: number;
-    fingerprint?: Record<string, any>;
-    voiceCharacteristics?: Record<string, any>;
+    fingerprint?: Record<string, unknown>;
+    voiceCharacteristics?: Record<string, unknown>;
     chatterboxConditionals?: Buffer;
     referenceAudioId?: string;
     referenceAudioUrl?: string;
   }
-): Promise<any> {
+): Promise<UserVoiceModel> {
+  const fingerprint = profileData.fingerprint as Prisma.InputJsonValue | undefined;
+  const voiceCharacteristics = profileData.voiceCharacteristics as Prisma.InputJsonValue | undefined;
+
   return prisma.userVoiceModel.upsert({
     where: { userId },
     create: {
@@ -38,8 +41,8 @@ export async function saveVoiceProfile(
       qualityScore: profileData.qualityScore || 0,
       audioCount: profileData.audioCount || 1,
       totalDurationMs: profileData.totalDurationMs || 0,
-      fingerprint: profileData.fingerprint || null,
-      voiceCharacteristics: profileData.voiceCharacteristics || null,
+      fingerprint: fingerprint ?? null,
+      voiceCharacteristics: voiceCharacteristics ?? null,
       chatterboxConditionals: profileData.chatterboxConditionals ? Uint8Array.from(profileData.chatterboxConditionals) as Uint8Array<ArrayBuffer> : null,
       referenceAudioId: profileData.referenceAudioId || null,
       referenceAudioUrl: profileData.referenceAudioUrl || null,
@@ -50,8 +53,8 @@ export async function saveVoiceProfile(
       qualityScore: profileData.qualityScore,
       audioCount: profileData.audioCount,
       totalDurationMs: profileData.totalDurationMs,
-      fingerprint: profileData.fingerprint,
-      voiceCharacteristics: profileData.voiceCharacteristics,
+      fingerprint,
+      voiceCharacteristics,
       chatterboxConditionals: profileData.chatterboxConditionals ? Uint8Array.from(profileData.chatterboxConditionals) as Uint8Array<ArrayBuffer> : undefined,
       referenceAudioId: profileData.referenceAudioId,
       referenceAudioUrl: profileData.referenceAudioUrl,

@@ -57,6 +57,20 @@ export const STATUS_LABEL: Record<Delivery, string> = {
  * Le geste double celui du premier drapeau du pied, et c'est voulu :
  * l'exploration de l'original est l'affordance DISCRÈTE du Prisme, le pied
  * étant l'affordance EXHAUSTIVE (toutes les langues servies).
+ *
+ * ## SANS `onToggle`, ELLE INFORME ET NE PROMET RIEN (#6862, revue-correction)
+ *
+ * La lecture souveraine de l'administration est le premier hôte du dépôt qui
+ * n'a AUCUNE prise de langue : on ne change pas la langue lue au nom d'un
+ * tiers. Le bouton y restait pourtant peint, focalisable, annoncé « Afficher
+ * le message dans sa langue d'origine » — et son clic n'appelait rien. C'est
+ * le contrôle sans effet de la loi 4, sous la forme qui a déjà coûté au dépôt
+ * (`PostCard`, cycle 123 du `CLAUDE.md`) : cliquer ne changeait PAS le texte lu.
+ *
+ * Le FAIT reste dit — « ce texte est une traduction » est l'indicateur discret
+ * du Prisme (§ Transparence), et le retirer priverait le lecteur d'une
+ * information vraie. Seul le GESTE disparaît : une `<span>`, donc ni halte de
+ * tabulation, ni `aria-pressed`, ni verbe à l'infinitif.
  */
 export function PrismPastille({
   servedLanguage,
@@ -67,13 +81,29 @@ export function PrismPastille({
   servedLanguage: string;
   originalLanguage: string;
   active: string | null;
-  onToggle: () => void;
+  /** ABSENTE ⇒ l'hôte ne sait pas explorer une autre langue : aucun bouton. */
+  onToggle?: () => void;
 }) {
   if (servedLanguage === originalLanguage) return null;
   const isOpen = active === originalLanguage;
+
+  if (onToggle === undefined) {
+    return (
+      <span
+        data-prism-indicator
+        className="grid size-[22px] place-items-center rounded-menu"
+        style={{ color: 'var(--color-i400)' }}
+      >
+        <Glyph name="translate" size={12} />
+        <span className="offscreen">Message traduit</span>
+      </span>
+    );
+  }
+
   return (
     <button
       type="button"
+      data-prism-toggle
       onClick={onToggle}
       aria-pressed={isOpen}
       aria-label={
@@ -237,6 +267,14 @@ export function Check({
  * (`FocalMetrics.FocusStrip.flagLimitPlain/.flagLimitMagnified`,
  * gardées par `scripts/check-curve.mjs`) — deux cotes iOS, un seul
  * composant.
+ *
+ * `onPick` reste REQUIS, à l'inverse de `PrismPastille.onToggle` (#6862,
+ * revue-correction). Ces drapeaux sont un CONTRÔLE et rien d'autre — sans
+ * geste, ils n'informent de rien qu'un lecteur puisse utiliser. Un hôte sans
+ * prise de langue ne doit donc pas les monter du tout, et le type le lui dit :
+ * rendre `onPick` optionnel ferait DISPARAÎTRE la bande en silence chez un
+ * hôte qui a simplement oublié de la brancher — un contrôle absent ne se voit
+ * dans aucun témoin (`vue sans consommateur`).
  */
 export function Flags({
   languages,
@@ -264,6 +302,7 @@ export function Flags({
           <button
             key={code}
             type="button"
+            data-prism-flag={code}
             onClick={() => onPick(code)}
             aria-pressed={isActive}
             /* 22 px de DESSIN et non 44 : elargir cette cible grandirait

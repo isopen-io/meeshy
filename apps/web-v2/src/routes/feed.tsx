@@ -7,6 +7,7 @@ import { FEED_GLYPHS } from '@/components/glyphs-feed';
 import { LensPaginationFooter } from '@/components/lens-pagination-footer';
 import { PullIndicator } from '@/components/pull-indicator';
 import { RailTitleSlot } from '@/components/rail-title-slot';
+import { SceneFullscreenGallery } from '@/components/scene-fullscreen-gallery';
 import { StoryRail, type StoryRailProps } from '@/components/story-rail';
 import { apiDeps } from '@/lib/api/deps';
 import { FEED_PAGE_SIZE } from '@/lib/api/feed';
@@ -15,6 +16,8 @@ import { refreshFeedAction, useFeed } from '@/lib/api/query';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
 import { resolveFeedCardModel } from '@/lib/feed/card-model';
+import { useFeedAutoplayRoot } from '@/lib/feed/use-feed-autoplay';
+import { useSceneGallery } from '@/lib/feed/use-scene-gallery';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { loadMoreRootMargin, paginationStateOf, showsAllLoadedHint } from '@/lib/lens/pagination';
@@ -261,6 +264,15 @@ export default function FeedScreen() {
    * en boucle (même garde que `conversations.tsx`). */
   const { announcement, onGesture, onShare } = usePostGesture();
 
+  // L'ÉLECTION DE LA SCÈNE QUI JOUE (#6898 § 5.3) — UN SEUL
+  // `IntersectionObserver`, posé ici, pour toutes les cartes du fil.
+  const { registerScene } = useFeedAutoplayRoot(frame);
+  // LE PLEIN ÉCRAN D'UNE SCÈNE (#6902) — EN PLACE, jamais une navigation vers
+  // le détail (§ 0 de la spécification `scenes-plein-ecran`) : `useSceneGallery`
+  // est le MÊME hôte que `routes/post.tsx`, `SceneFullscreenGallery` compose
+  // le lot depuis les modèles déjà résolus par CE fil (jamais une seconde
+  // résolution, D-14).
+  const sceneGallery = useSceneGallery();
 
   const { observe: observeTail } = useLoadMoreSentinel({
     root: frame,
@@ -298,7 +310,14 @@ export default function FeedScreen() {
           <>
             {models.map((model) => (
               <li key={model.id}>
-                <FeedPostCard model={model} onGesture={onGesture} onShare={onShare} />
+                <FeedPostCard
+                  model={model}
+                  onGesture={onGesture}
+                  onShare={onShare}
+                  preferredLanguages={readerLanguages}
+                  onOpenScene={sceneGallery.onOpenScene}
+                  registerScene={registerScene}
+                />
               </li>
             ))}
             <LensPaginationFooter
@@ -311,6 +330,12 @@ export default function FeedScreen() {
           </>
         )}
       </ul>
+      <SceneFullscreenGallery
+        request={sceneGallery.open}
+        models={models}
+        preferredLanguages={readerLanguages}
+        onClose={sceneGallery.close}
+      />
     </div>
   );
 }

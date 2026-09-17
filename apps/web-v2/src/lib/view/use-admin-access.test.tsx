@@ -59,6 +59,7 @@ const AUCUNE: AdminPermissions = {
   canViewAnalytics: false,
   canModerateContent: false,
   canViewAuditLogs: false,
+  canManageAgent: false,
   canManageNotifications: false,
   canManageTranslations: false,
 };

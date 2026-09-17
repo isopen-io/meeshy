@@ -1,5 +1,7 @@
 import { QueryClient, dehydrate, hydrate, type DehydratedState } from '@tanstack/react-query';
 
+import { SW_RUNTIME_CACHE_NAMES } from '@/lib/sw-caches';
+
 import { ApiError } from './client';
 import { reactionStore } from './reaction-store';
 /* `souverain.ts` n'a AUCUNE dépendance — c'est ce qui le rend importable
@@ -90,7 +92,62 @@ function isPersistedCache(value: unknown): value is PersistedCache {
   return typeof value === 'object' && value !== null && typeof (value as { buster?: unknown }).buster === 'string';
 }
 
-export type AppQueryClient = QueryClient & { persist: () => void };
+export type AppQueryClient = QueryClient & {
+  persist: () => void;
+  /**
+   * JETER LE CACHE PERSISTÉ, ET NE PLUS RIEN ÉCRIRE (#6936).
+   *
+   * Appelée juste avant un rechargement de MISE À JOUR : la version qui s'en va
+   * ne doit pas laisser derrière elle le cache de ses propres formes de données.
+   *
+   * « Ne plus rien écrire » n'est pas un détail : `persist` est câblée sur
+   * `pagehide` et `visibilitychange` (§ AUTO-PERSISTANCE ci-dessous), tous deux
+   * déclenchés PAR le rechargement. Sans ce verrou, la clé effacée serait
+   * réécrite dans la milliseconde qui suit, avec le même `buster` — la purge
+   * n'aurait rien purgé. Le cache EN MÉMOIRE reste intact : la page qui part
+   * n'a aucune raison de se vider à l'écran avant de partir.
+   */
+  discardPersisted: () => void;
+};
+
+/**
+ * **CE QUI A LE DROIT D'ÊTRE ÉCRIT SUR LE DISQUE** (#6862) — le prédicat de
+ * déshydratation, NOMMÉ et EXPORTÉ plutôt qu'écrit en ligne dans `persist`.
+ *
+ * `dehydrate` écrivait TOUTE requête réussie. Le contenu d'une conversation
+ * privée, lu par un BIGBOSS sous motif écrit et geste tracé, y atterrissait
+ * donc comme le reste — et **survivait à la session**, sur le poste de
+ * l'administrateur. `AdminAuditLog` dit « il a lu » ; il ne dit pas « il en
+ * garde une copie depuis six jours », et personne ne peut révoquer celle-là.
+ *
+ * Le prédicat de reconnaissance vient de `souverain.ts` — un module sans
+ * dépendance — précisément pour que ce fichier, qui est dans le SOCLE de la
+ * première peinture, n'ait pas à importer les décodeurs d'administration et à
+ * les faire payer à tous les lecteurs (`budgets.json`).
+ *
+ * **Il est EXPORTÉ pour qu'un témoin puisse le jouer.** Écrit en ligne, la
+ * seule façon de le mesurer était de relire `localStorage` après un
+ * `persist()` — c'est-à-dire de mesurer aussi le STOCKAGE, qui sous `bun test`
+ * n'existe pas encore au moment où ce module est chargé : le `try/catch` de
+ * `persist` avalait alors l'écriture, et le témoin verdissait que la garde
+ * soit posée ou RETIRÉE. Un témoin vert des deux côtés d'une mutation ne
+ * mesure pas la règle, il mesure la machine.
+ *
+ * Ce prédicat ne couvre que le cache de REQUÊTES. Le service worker écrivait la
+ * même charge par un autre chemin — `caches.open('api')`, la réponse HTTP
+ * entière, sept jours sur le disque — et ce doc-comment l'AVOUAIT sans que rien
+ * ne le ferme. C'est fait : `API_RESPONSE_CACHE_PATTERN`
+ * (`lib/net/api-runtime-cache.ts`) sort tout `/api/v1/admin/` du
+ * `runtimeCaching`. Deux seaux, deux gardes, la même règle — et une VALEUR
+ * plutôt qu'un prédicat, parce que Workbox stringifie ce champ dans
+ * `dist/sw.js` : un prédicat importé s'y serait perdu, comme il l'a fait.
+ */
+export function persistableQuery(query: {
+  readonly state: { readonly status: string };
+  readonly queryKey: readonly unknown[];
+}): boolean {
+  return query.state.status === 'success' && !estClefSouveraine(query.queryKey);
+}
 
 export type CreateAppQueryClientOptions = {
   readonly storage?: StorageLike;
@@ -121,8 +178,14 @@ export type CacheStorageLike = {
  * (les images en CacheFirst, TRENTE jours). Le seau de PRÉCACHE
  * (`workbox-precache-*`) n'y est PAS : il ne contient que le shell, le même
  * pour tout le monde.
+ *
+ * **LU, jamais recopié** (#6936) : les mêmes noms sont créés par
+ * `vite.config.ts` et purgés par la mise à jour de l'application
+ * (`lib/app-update/service-worker.ts`). Trois littéraux auraient divergé au
+ * premier seau ajouté — et une purge qui ne nomme plus un seau existant est
+ * silencieuse.
  */
-const READER_SCOPED_SW_CACHES = ['api', 'medias'] as const;
+const READER_SCOPED_SW_CACHES = SW_RUNTIME_CACHE_NAMES;
 
 /**
  * `purgeReaderCaches` — CE QUI PART À CÔTÉ DU CACHE DE REQUÊTES (#5650,
@@ -204,30 +267,12 @@ export function createAppQueryClient(options: CreateAppQueryClientOptions): AppQ
     }
   }
 
+  let persistenceHalted = false;
+
   const persist = (): void => {
+    if (persistenceHalted) return;
     try {
-      /**
-       * **UNE LECTURE SOUVERAINE NE TOUCHE PAS LE DISQUE** (#6862).
-       *
-       * `dehydrate` écrivait ici TOUTE requête réussie. Le contenu d'une
-       * conversation privée, lu par un BIGBOSS sous motif écrit et geste
-       * tracé, y atterrissait donc comme le reste — et **survivait à la
-       * session**, sur le poste de l'administrateur. `AdminAuditLog` dit
-       * « il a lu » ; il ne dit pas « il en garde une copie depuis six
-       * jours », et personne ne peut révoquer celle-là.
-       *
-       * Le prédicat vient de `souverain.ts` — un module sans dépendance —
-       * précisément pour que ce fichier, qui est dans le SOCLE de la première
-       * peinture, n'ait pas à importer les décodeurs d'administration et à
-       * les faire payer à tous les lecteurs (`budgets.json`).
-       *
-       * Ne couvre PAS le cache du service worker (`caches.open('api')`, sept
-       * jours sur le disque), qui retient les réponses HTTP par un autre
-       * chemin : voir `purgeReaderCaches` ci-dessus, et le suivi de #6862.
-       */
-      const state = dehydrate(client, {
-        shouldDehydrateQuery: (q) => q.state.status === 'success' && !estClefSouveraine(q.queryKey),
-      });
+      const state = dehydrate(client, { shouldDehydrateQuery: persistableQuery });
       const reactions = reactionStore.getState().mine;
       storage.setItem(CACHE_KEY, JSON.stringify({ buster, state, reactions }));
     } catch {
@@ -245,6 +290,16 @@ export function createAppQueryClient(options: CreateAppQueryClientOptions): AppQ
     if (debounceHandle !== undefined) clearTimeout(debounceHandle);
     debounceHandle = setTimeout(persist, DEBOUNCE_MS);
   };
+  client.discardPersisted = (): void => {
+    persistenceHalted = true;
+    if (debounceHandle !== undefined) clearTimeout(debounceHandle);
+    try {
+      storage.removeItem(CACHE_KEY);
+    } catch {
+      /* Stockage refusé : il n'y a rien de persisté à jeter. */
+    }
+  };
+
   client.getQueryCache().subscribe(schedulePersist);
   // `reactionStore` DÉCLENCHE AUSSI (revue #5814, défaut majeur 5) — chaque
   // écriture de `performReaction` pose déjà un delta sur le cache des

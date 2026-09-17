@@ -88,8 +88,15 @@ export function FocusStrip({
   readonly originalLanguage: string;
   readonly footerLanguages: readonly string[];
   readonly active: string | null;
-  readonly onToggleOriginal: () => void;
-  readonly onPickLanguage: (code: string) => void;
+  /**
+   * LES DEUX PRISES DE LANGUE SONT OPTIONNELLES (#6862, revue-correction) —
+   * la bande de focus est montée par la rangée ÉLUE, y compris chez un hôte en
+   * LECTURE SEULE (l'administration). Sans elles, la pastille reste en
+   * indicateur muet et les drapeaux ne se montent pas : un drapeau qui ne
+   * change pas le texte lu est le contrôle sans effet de la loi 4.
+   */
+  readonly onToggleOriginal?: () => void;
+  readonly onPickLanguage?: (code: string) => void;
   readonly reactions: readonly (readonly [string, number])[];
 }) {
   /* `PrismPastille` rend `null` quand la langue servie EST la langue
@@ -108,11 +115,11 @@ export function FocusStrip({
             servedLanguage={servedLanguage}
             originalLanguage={originalLanguage}
             active={active}
-            onToggle={onToggleOriginal}
+            {...(onToggleOriginal === undefined ? {} : { onToggle: onToggleOriginal })}
           />
         </span>
       ) : null}
-      {footerLanguages.length > 0 ? (
+      {footerLanguages.length > 0 && onPickLanguage !== undefined ? (
         <span className="focus-chip">
           <Flags languages={footerLanguages} active={active} onPick={onPickLanguage} limit={FLAG_LIMIT_MAGNIFIED} />
         </span>

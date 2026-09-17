@@ -323,6 +323,13 @@ extension APIConversation {
 
         let displayName: String = {
             if convType == .direct {
+                // Un direct n'a pas de titre propre : il porte le nom de
+                // l'autre. `title` peut porter un artefact hérité du legacy
+                // (« X et Y », composé côté client à la création) — jamais un
+                // repli légitime, quel que soit son contenu. Quand ni le
+                // participant ni l'expéditeur du dernier message ne sont
+                // servis (`GET /sync`, qui ne charge pas `participants`), le
+                // repli est un nom générique honnête, jamais le titre stocké.
                 if let participant = otherParticipant {
                     return participant.user?.name ?? participant.name
                 }
@@ -330,6 +337,7 @@ extension APIConversation {
                    (sender.resolvedUserId ?? sender.id) != currentUserId {
                     return sender.name
                 }
+                return "Conversation"
             }
             if let t = title, !t.isEmpty { return t }
             return "Conversation"

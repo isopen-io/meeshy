@@ -291,6 +291,12 @@ jobs:
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
           node scripts/check-utilities.mjs
           node scripts/measure-weight.mjs
+          # #6862 — le seul gate qui fasse DÉCIDER le service worker construit.
+          # Workbox stringifie le `urlPattern` du seau `api` : un prédicat
+          # importé s'y perd, et la règle « aucune réponse /api/v1/admin/** sur
+          # le disque » était annoncée par `vite.config.ts` sans être appliquée
+          # par `dist/sw.js`. Lit `dist/sw.js`, donc après le build ci-dessus.
+          node scripts/check-sw-api-cache.mjs
           # #5910 — maillon du composite `bun run gate` qui ne s'exécutait
           # NULLE PART. Il lit `dist/index.html`, donc il vient après le build
           # ci-dessus ; il n'ouvre aucun navigateur, donc il a sa place ici et
@@ -774,6 +780,49 @@ jobs:
           cd apps/web-v2
           node scripts/check-feed-media.mjs
 
+      # #6898 — UNE PUBLICATION V:3 SE LIT DANS LE FIL AVEC TOUS SES OBJETS.
+      # Texte seul, image, cadrage plafonné à 1,4, une seule scène cinématique
+      # joue à la fois (`prefers-reduced-motion` en tient une hors du jeu), et
+      # chaque tuile d'un agencement montre la scène de SA slide.
+      - name: Gate scènes du fil (texte, cadrage 1,4, une seule lecture, tuiles)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-feed-scenes.mjs
+
+      # #6899 — LE LECTEUR DE STORY REND SES SCÈNES V3 PAR LE MOTEUR PARTAGÉ.
+      # Placeholder ThumbHash peint AVANT « prêt » (moteur retenu, mesure de
+      # pixels), carte 9:16 centrée dans le plateau aux deux tailles, texte au
+      # Prisme (rang 2), son de fond dont le bouton dit la vérité et a un effet,
+      # image seule sans moteur, épingle de timeline autoritaire, v1 intact.
+      - name: Gate scènes du lecteur de story (placeholder, plateau, son, image seule)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-story-scene.mjs
+
+      # #6900 — LE STUDIO DE STORY PEINT CE QU'IL PUBLIERA. Publier inerte sur
+      # un brouillon vide, un fond + un son posés font PEINDRE le moteur
+      # partagé (mesure de pixels, pas la présence d'une balise), la carte
+      # 9:16 est centrée dans son plateau aux deux gabarits, cinq cibles
+      # ≥ 44 px, le texte tapé survit à un rechargement (brouillon).
+      - name: Gate studio de story (moteur peint, carte 9:16, cibles, brouillon)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-story-studio.mjs
+
+      # #6150 — les DEUX portes de ma cellule du rail de stories : le (+) au
+      # début de ligne au-dessus de l'avatar, la pastille d'humeur en dessous à
+      # la fin, deux cibles de 44 px qui ne se recouvrent PAS (le piège de deux
+      # pastilles sur un même avatar), 💭 sans humeur et l'emoji animé avec,
+      # chaque porte ouverte par un VRAI clic — clair, sombre et RTL miroité.
+      - name: Gate rail « soi » (deux portes, cibles disjointes, 💭 / emoji, RTL)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-story-self-rail.mjs
+
       - name: Gate états du fil (vide, coupure, échec d'envoi rejouable)
         if: ${{ !cancelled() }}
         run: |
@@ -877,6 +926,18 @@ jobs:
           cd apps/web-v2
           node scripts/check-gateway-build.mjs
 
+      # #6936 — LE PARCOURS DE MISE À JOUR, de bout en bout : deux versions
+      # servies successivement sur la MÊME origine, la bannière qui s'annonce au
+      # retour au premier plan, le clic qui purge les caches de l'ancienne,
+      # active le worker en attente et recharge UNE fois — le lecteur restant
+      # connecté. Il construit sa propre sortie (`dist-app-update-a`, puis la
+      # version B qui en dérive) et ne touche pas au `dist` mesuré plus haut.
+      - name: Gate mise à jour de l'application (bannière, purge, session gardée)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-app-update.mjs
+
       # #6458 — le barreau « Administration » du menu flottant, sur un dist
       # gateway (l'administration n'a pas de fixtures) : sept barreaux dans
       # l'écran aux deux poses (deux schémas, 390×844 et 320×568), parcours
@@ -887,6 +948,19 @@ jobs:
         run: |
           cd apps/web-v2
           node scripts/check-admin-rung.mjs
+
+      # #6862 / #6733 — la lecture souveraine et la section Agent, sur un dist
+      # gateway : la tuile « Agent » selon `canManageAgent`, `/adm` ≡ `/admin`,
+      # les deux sections repliables à la souris ET au clavier, la ligne qui
+      # ouvre la modale, le motif écrit exigé AVANT toute requête `/messages`,
+      # le texte servi dans le Prisme du MEMBRE (jamais celui de l'administrateur),
+      # et aucune clé de contenu laissée dans `localStorage` après la lecture.
+      # Le gate construit son propre `dist-admin-souverain`, comme son voisin.
+      - name: Gate lecture souveraine et section Agent (#6862, #6733)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-admin-souverain.mjs
 
       # #6151 — un seul site résout `apiConfig.source` en dépendances d'appel
       # (`src/lib/api/deps.ts`). Un huitième site qui reconstruirait
@@ -911,11 +985,26 @@ jobs:
   # TEST: Unit Tests with Coverage (Parallel by package)
   # Minimum coverage threshold: 90%
   # ===========================================================================
+  # #6884 — `timeout-minutes` était UNIQUE (20) pour toute la matrice, alors
+  # que les paquets n'ont pas le même poids : `Test gateway` tenait avec
+  # moins de 2 min de marge sur 20 (18 min 05 s / 18 min 33 s mesurés sur
+  # `dev`), et toute variance (ex. #6477, montée de `vitest`) le fait
+  # franchir le seuil. Un dépassement de `timeout-minutes` DE JOB tue le job
+  # entier et TOUTES ses étapes en cours — GitHub rend alors `cancelled`,
+  # indiscernable d'une annulation par concurrence (`cancel-in-progress`
+  # ci-dessus). `timeout-minutes` posé sur une ÉTAPE, en revanche, échoue
+  # cette étape avec `failure` et un message explicite (« has timed out
+  # after Nm ») SANS attendre le budget de job — c'est déjà le patron des
+  # jobs `test-python`/`test-audio-pipeline` de ce fichier. `testTimeoutMinutes`
+  # ci-dessous porte donc le budget RÉEL (celui qu'on veut voir nommé), et
+  # `timeoutMinutes` (job) reste un plafond de secours nettement au-dessus —
+  # relevé pour `gateway` seul (30 au lieu de 20), les autres paquets gardant
+  # le budget historique.
   test:
     name: Test ${{ matrix.package.name }}
     runs-on: ubuntu-latest
     needs: quality
-    timeout-minutes: 20
+    timeout-minutes: ${{ matrix.package.timeoutMinutes }}
     strategy:
       fail-fast: false
       matrix:
@@ -923,18 +1012,28 @@ jobs:
           - name: shared
             path: packages/shared
             filter: '@meeshy/shared'
+            timeoutMinutes: 20
+            testTimeoutMinutes: 15
           - name: web
             path: apps/web
             filter: '@meeshy/web'
+            timeoutMinutes: 20
+            testTimeoutMinutes: 15
           - name: gateway
             path: services/gateway
             filter: '@meeshy/gateway'
+            timeoutMinutes: 30
+            testTimeoutMinutes: 25
           - name: agent
             path: services/agent
             filter: '@meeshy/agent'
+            timeoutMinutes: 20
+            testTimeoutMinutes: 15
           - name: web-v2
             path: apps/web-v2
             filter: '@meeshy/web-v2'
+            timeoutMinutes: 20
+            testTimeoutMinutes: 15
 
     steps:
       - name: Checkout
@@ -1009,6 +1108,7 @@ jobs:
 
       - name: Run tests with coverage (bun)
         if: env.PACKAGE_MANAGER == 'bun'
+        timeout-minutes: ${{ matrix.package.testTimeoutMinutes }}
         run: |
           # Web tests must use Jest (configured with Next.js)
           if [ "${{ matrix.package.name }}" = "web" ] || [ "${{ matrix.package.name }}" = "web-v2" ]; then
@@ -1021,6 +1121,7 @@ jobs:
 
       - name: Run tests with coverage (pnpm)
         if: env.PACKAGE_MANAGER == 'pnpm'
+        timeout-minutes: ${{ matrix.package.testTimeoutMinutes }}
         run: pnpm run test:coverage --filter=${{ matrix.package.filter }}
 
       - name: Upload coverage

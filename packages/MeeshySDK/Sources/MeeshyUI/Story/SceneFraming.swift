@@ -181,9 +181,15 @@ public nonisolated enum SceneFraming {
     /// Un objet porte-t-il des PIXELS à lui — une adresse, une identité de
     /// média, ou une forme déclarée ? Le porteur `bg` d'une couleur ou d'un
     /// cadrage n'en porte aucun.
+    ///
+    /// **Les deux orthographes d'une référence média comptent également**
+    /// (#6894) : `postMediaId` (le composer) et `mediaId` (la passerelle,
+    /// `payload.mediaId` sans porteur `content` associé) — `ObjectV3.mediaReference`
+    /// en est le site unique, lu par tout ce qui doit savoir si un objet
+    /// désigne un enregistrement du post.
     static func carriesPicture(_ object: ObjectV3) -> Bool {
         if case .string(let url)? = object.payload["mediaURL"], !url.isEmpty { return true }
-        if case .string(let identity)? = object.payload["postMediaId"], !identity.isEmpty { return true }
+        if object.mediaReference != nil { return true }
         return declaredAspect(of: object) != nil
     }
 

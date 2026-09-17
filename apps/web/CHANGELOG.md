@@ -1,5 +1,372 @@
 # @meeshy/web
 
+## 1.59.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - deux planchers ANNONCÉS par un doc-comment et posés par personne — trait legacy et glyphe de sticker (Refs #6901)
+  - la durée d'un MÉDIA qualifie son fichier, jamais une fenêtre de scène — une loi, un site (Refs #6901)
+  - un texte de scène ne dépend plus du schéma pour être lu, et decisions.md retire une conclusion fausse (Refs #6901)
+  - la boîte d'un texte de scène est bornée par la SCÈNE, et le fond sonore ne part plus deux fois (Refs #6901)
+  - le moteur de scène peint les six kinds, pose et keyframes — le mode ne change jamais la géométrie (Closes #6901)
+  - une nouvelle version s'annonce par une bannière et se charge sans perdre la session
+  - le studio de story compose fond, son et texte, publie en CanvasV3 comme iOS, brouillon conservé sur échec
+  - le témoin de la modale souveraine mesure le PRODUIT, plus l'ordonnancement (#6862)
+  - l'administration ne date plus en ISO et n'annonce plus le prisme d'un membre qu'elle ne lit pas (#6862, #6733)
+  - un appui long referme le clavier, et l'aperçu de liste retrouve son auteur (#6921)
+  - la règle du cache d'administration atteint le service worker LIVRÉ (#6862, #6733)
+  - l'administration ne peint plus de contrôle sans effet, et sa lecture souveraine ne survit ni sur le disque ni sur une pagination éteinte (#6862, #6733)
+  - le lecteur de story rend ses scènes v3 par le moteur partagé, montre une story-image comme l'image seule et joue son son de fond
+  - l'administration pilote l'agent, sous un libellé qui dit ce qu'il fait (#6733)
+  - les mémos de réémission vivent sur le tas, StoryViewerView garde son budget (run test)
+  - l'administration lit la VRAIE vue conversation, au Prisme du membre (#6862)
+  - une entrée de cache déjà mutilée ne survit pas à la mise à jour (#6893)
+  - le temoin de cache construit un StoryEffects reellement rendu
+  - la garde d'orphelins voit un fond referme par mediaId en scene >= 1
+  - un kind reserve, une mention et un fond referme survivent au cache
+  - corrige l'ordre des deux orthographes et le merge par identité du fond de scène
+  - un fond de scène référencé par mediaId se lit comme par postMediaId
+  - la scène 0 restitue son fond média par identité, plutôt que de le perdre au cache
+  - la lecture souveraine sert le fil ENTIER, gardé champ par champ (#6862)
+
+## 1.58.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - GET /conversations charge enfin description et réglages de conteneur (#6908)
+  - un message renvoyé avec une clé NEUVE ne se dédouble plus (#6910)
+  - une publication v:3 se lit dans le fil avec tous ses objets, chaque tuile montre la scène de sa slide
+  - core-list.ts passe de 12 à 0 usages de `any` (#3679) (#6909)
+  - AttachmentTranslateService.ts passe de 13 à 0 usages de `any` (#3679) (#6907)
+  - les cases de grille masquent l'image en échec, comme la tuile solo (#6882)
+  - la migration 013 balaie aussi PostMedia (#6390)
+  - /sync serves the direct peer's identity on the conversation row (#6827)
+
+## 1.57.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - la leçon 621 venue de main devient 622 — c'est toujours la même qui vit hors de la série continue
+  - donner à Test gateway un budget qui absorbe la variance des runners
+  - decodeConversation défait null sur tous les champs, sauf currentUserRole (#6826)
+  - check-interface-language attend le compte de la cloche, pas son montage
+  - rend déterministe le témoin de réception de notification WebSocket (#6858)
+  - les 16 clés des conversations souveraines rejoignent le catalogue d'administration (#6871, #6862)
+  - sort les clés admin.\* du catalogue commun (#6871, #6834)
+  - réaligne bun.lock après les fusions dependabot — c'est moi qui l'ai désaligné
+  - les DEUX cliquets d'entrées mortes suivent la route neuve (#6861)
+  - la liste des conversations ouvre la conversation — la ligne était INERTE (#6862)
+  - l'administration lit une conversation — messages, audio et images, sous motif écrit (#6862)
+  - les ADMIN accèdent aussi aux conversations — le rang baisse, la trace reste (#6862)
+  - un témoin n'écrit pas dans le magasin de l'app, et un curseur est un identifiant (#6857)
+  - la leçon 618 de main devient 621 — deux branches ne peuvent pas allouer le même identifiant
+  - les décodeurs de la lecture souveraine, et le préfixe qui les tient hors du disque (#6862)
+  - la durée d'un média se LIT au montage aussi, pas seulement à l'évènement (#6866)
+  - le contenu d'un post ne légende ses médias que s'il n'en porte qu'UN, sans légende propre (#6864)
+  - la légende d'un média unique retombe sur le contenu du post
+  - le plafond du lecteur de story retrouve sa marge, que le branchement de la loi consomme (#6836)
+  - la diapositive d'une story dure ce que dure son média (#6836)
+  - le gate des Réels compte les lecteurs de RÉEL, pas tous les médias de la page (#6807)
+  - une garde iOS ne garde rien tant qu'un workflow ne la joue pas (#6852)
+  - la durée d'une diapositive suit son média, et la vidéo boucle (#6836)
+  - plafonne la hauteur d'une carte à scènes du fil à 1,4 × sa largeur (#6767)
+  - déplace les témoins de restauration hors du fichier gelé par #4531 (#6822)
+  - régénère AdminEndpoint.swift et le cliquet Swift des entrées mortes (#6822)
+  - admin.usersByUserIdRestore rejoint le cliquet des entrées mortes (#6822)
+  - la garde de la colonne de galerie décrit le plateau, pas le cadre du média (#6847) (run test)
+  - en plein cadre une scène est une SCÈNE — le cadre ET le fond viennent d'une seule loi (#6806)
+  - le témoin de #6810 entre enfin dans la compilation — il n'a jamais pu rougir
+  - un simulateur s'élit par sa FAMILLE, et un témoin non inscrit se voit (#6838, #6839)
+  - la bulle pré-enregistrée par la NSE garde l'horloge du serveur (#6840) (run test)
+  - le fil porte une vidéo et un son, les stories une vidéo (#6807)
+  - ce qu'un membre a créé, et où il parle — en lecture (#6819)
+  - bannir, lever et consulter depuis la fiche — trois états à l'écran (#6819)
+  - lire l'historique des bannissements, et son vocabulaire en sept langues (#6819)
+  - les conversations d'un membre — le cadre, jamais le contenu (#6819)
+  - les médias d'un membre — pagination à côté de data, protégé reste listé (#6819)
+  - bannir et lever — trois états, et `active` vient du serveur (#6819)
+  - la réinitialisation s'ouvre depuis la fiche, secret affiché avant d'être appliqué (#6819)
+  - réinitialiser un mot de passe en le GÉNÉRANT, pas en le faisant saisir (#6819)
+  - modifier un membre, et ne confirmer que ce qui le mérite (#6819)
+  - deux changements seulement méritent une confirmation (#6819)
+  - éditer un membre — le corps est plat et son motif s'appelle reason (#6819)
+  - `bun run gate` redevient idempotent — l'exemption suit le motif `dist-*`, pas une liste de noms
+  - la fiche d'un membre s'ouvre depuis la liste, en lecture (#6819)
+  - le chargeur du détail d'un membre encode son identifiant et distingue illisible d'introuvable (#6819)
+  - a direct conversation never falls back to its stored title (#6790)
+  - le détail d'un membre se décode sans garder ce qui trace (#6819)
+  - ouvrir un fil qui porte une image ne fait plus tomber l'écran — la frontière cesse d'énumérer
+  - en plein cadre, le canvas d'une scène couvre le viewport — plus de troisième couche (#6806) (run test)
+  - modernize date parsing and concurrency sleep intervals
+  - répondre à un média en plein écran efface le chrome, comme la traînée de réactions (#6817) (run test)
+  - composer depuis un média déjà en cache n'appelle plus le réseau ni ne le relit en entier (#6810) (run test)
+  - le témoin de la colonne de la galerie décrit le plateau, pas le cadre du média (#6771)
+  - tirer l'entrée `conversation:new` enregistre la conversation SURVENUE (#6807)
+  - les fixtures savent servir une conversation qui SURGIT (#6807)
+  - le type de `mimeType` admet `undefined` — le typecheck de #6801 était ROUGE (#6801)
+  - supprime la dette ESLint introduite par le nouveau témoin (#6665)
+  - apps/web décode un lien magique refusé par le limiteur (#6665)
+  - le lecteur de story joue une story vidéo (#6801)
+  - une vidéo ou un son d'un post se lit depuis le fil (#6800)
+  - une conversation neuve porte son dernier message sans rechargement (#6799)
+  - une page scène ne fait plus repeindre au canvas le fond que la galerie peint (#6791)
+  - un seul chiffre de langues traduisibles, sur tous les supports
+  - PostMedia.alt sert sa traduction Prisme (#6737)
+  - messages-list.ts passe de 13 à 1 usage de `any` (#3679) (#6892)
+  - AudioTranslateService.ts passe de 15 à 0 usages de `any` (#3679) (#6891)
+  - messages-list-query.ts passe de 41 à 1 usage de `any` (#3679)
+  - route-manifest/collect.ts passe à zéro `any` (#3679) (#6881)
+  - POST /messages nomme sa pièce jointe invalide, jamais un 500 (#6870)
+  - un postId non conforme rend 400, jamais 500 (#6859)
+  - un administrateur souverain peut partir d'une conversation, pas seulement d'un membre (#6861)
+  - les pièces d'un message souverain voyagent avec lui, gardées comme son texte (#6860)
+  - CI — gèle l'inventaire de schémas de réponse et corrige un dernier fixture non-ObjectId (#6853)
+  - un postId non conforme rend 400, jamais 500 (#6853)
+  - regenerate api/endpoints.ts and AdminEndpoint.swift for the new session routes
+  - admin history of connection (UserSession/SecurityEvent) gains its route (#6821)
+  - la suppression douce d'un membre écrit deletedAt/deletedBy, et restoreUser gagne sa route (#6822)
+  - resetPassword resolves recipientLanguage on the unprojected row (#6831)
+  - reset-password admin — sendEmail notifie réellement, schéma strict (#6831)
+  - updateUser recalculates searchTokens on name change (#6823)
+  - chercher une personne ne rend plus 500 — `isSet` n'existe pas sur une liste scalaire
+  - les DÉRIVÉS du manifeste suivent la route neuve — catalogue d'endpoints et énumérations Swift (#6861)
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.21.3
+
+## 1.56.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - contactLookupScope no longer emits isSet on blockedUserIds
+  - garde de parité CI pour generated_languages.py (#3658)
+
+## 1.55.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - le cliquet des couleurs d'accent enregistre la pastille de réactions focale (#6802)
+  - le port de la sécurité du compte — sessions, appareils, second facteur (#6720)
+  - les réactions d'un média remontent du serveur et se voient sur le média dans la conversation (#6793)
+  - l'administration a deux adresses — /adm pour la nouvelle, /admin réservée à l'ancienne
+  - créer un GROUPE depuis /conversations/new, une adresse et deux modes
+  - rejoindre un lien sans compte, et un direct porte le nom de l'autre
+  - la rangée de réactions est seule sur la scène, et la réaction choisie se voit sur la pièce (#6789)
+  - le verrou de build de meeshy.sh est scopé au worktree
+  - l'export de données revient dans les réglages (#6725)
+  - les QUATRE surfaces du plateau partagent sa loi — le reader de story centre enfin ses scènes portrait (#6760)
+  - next survives login by magic link (#6742)
+  - un glyphe nu sur un média se lit sur ce qu'il a sous lui (#6704, #6693) (run test)
+  - use assertIsDisplayed in the new alt-text Compose test
+  - PostMedia.alt gains a producer and a consumer (#6739)
+  - la colonne d'une page se lit sur le sol noir quand elle tombe sous le cadre (run test)
+  - le détail mesure sa scène par onGeometryChange, la mosaïque 9:16 tient au-dessus du composer (#6708) (run test)
+  - la colonne d'une page se lit sur ce qui est peint sous elle, et une page de post offre « Créer avec ce média » (#6709) (run test)
+  - safeReturnPath refuse les mêmes caractères de contrôle que safeNextPath
+  - la pellicule du plein écran montre sa vignette courante à l'ouverture, sur n'importe quel média (run test)
+  - les rails posés nus sur un média se lisent sur ce qu'ils ont sous eux
+  - une scène au fond portrait garde sa carte 9:16, chaque page du carrousel se lit entière (#6708) (run test)
+  - le plateau EST la scène — le chrome s'aligne sur lui, jamais sur le média qu'il porte (#6760)
+  - le bouton du rail de story quitte l'hôte en dette, tel quel (#6704)
+  - en lecture immersive, les voiles de lisibilité s'effacent avec les contrôles (#6701)
+  - en pause, la vidéo d'une story reste sur son image et le spinner de chargement ne s'y pose plus (#6757)
+  - une scène de post s'ouvre dans la galerie des pièces jointes, et sa pellicule montre les médias de ses commentaires (#6709, #6710) (run test)
+  - une scène qui n'est qu'une image paysage se cadre au rapport de son image dans la galerie (#6709)
+  - une citation rouvre la scène qui montre son média, et une page scène se cadre au rapport de sa scène (#6709, #6710)
+  - le plein écran d'un post compose un lot — ses scènes ou ses médias, puis ceux de ses commentaires (#6709, #6710)
+  - le contrôleur du splash déclare sa deinit — la garde iOS 26.1 que le lot n'avait pas jouée (#6744)
+  - l'horloge de scène d'un réel déclare sa deinit, et le lecteur de réels se déclare hors du fil (#6745)
+  - l'inset clavier se neutralise à la RACINE — mesuré au simulateur, la pose par couche ne protégeait rien (#6751)
+  - CommentQuotationStore déclare sa deinit non isolée, le septième rouge de #6578 tombe (#6749) (run test)
+  - la barre de réponse se pose AU-DESSUS du clavier, et l'envoi rend l'écran au média (#6751)
+  - la citation de média se juge sur la table française, plus sur la langue du simulateur (#6749) (run test)
+  - PostMedia.alt se traduit — pipeline partagé de #6280 réutilisé (#6747)
+  - quatre gardes de source suivent le code que #6578 a déplacé (#6749)
+  - le splash tombe dès que la session et la liste sont prêtes — aucune attente du démarrage ne peut plus le retenir (#6744)
+  - un réel composé se rejoue comme sa scène — son de fond sur la timeline, bouclé, vidéo coupée par l'auteur (#6745)
+  - la v2 sert les dernières adresses du legacy, liens suivis et pages des e-mails de compte, et ne renvoie plus jamais vers lui (#6714, #6715, #6335)
+  - les règles pures de lecture d'un réel sortent de ReelsPlayerView.swift, telles quelles (#6745)
+  - l'écran de lancement sort de MeeshyApp.swift, tel quel (#6744)
+  - PostMedia.alt se traduit — pipeline partagé de #6280 réutilisé
+  - rejoindre une conversation par /chat/:lien dans la v2, pour un compte connecté ou après connexion (#5561)
+  - la bascule ne déconnecte personne, la v2 reprend la session laissée par le legacy (#6716)
+  - le service worker de la v2 efface les caches privés du legacy et laisse au réseau les adresses que nginx redirige (#6716)
+  - un bouton posé sur un média se lit sur une image claire comme sombre (#6693) (run test)
+  - la v2 sert elle-même les fichiers et les anciennes adresses du domaine, avant la décommission du legacy (#6713)
+  - une image très haute garde un cadre assez large pour son auteur et ses actions dans la galerie (#6692) (#6699)
+  - « Inviter des amis » partage le lien de parrainage de l'utilisateur, jamais le site nu (#6707)
+  - Nouvelle conversation montre les amis d'abord, depuis le cache persisté, sans rien taper (#6705)
+  - « Modifier » regarde le TYPE du post — une story ouvre le meuble, plus l'ancien éditeur (#6700)
+  - les quatre gardes d'INVENTAIRE que seule l'intégration de #6578 pouvait faire tomber
+  - commenter EN NOMMANT le média du post, et l'écrire avant d'écrire (#6578)
+  - un commentaire CITE le média du post dont il parle, et peut y joindre les siens (#6578)
+  - diffusion admin — activityStatus compte pareil à la preview et à l'envoi (#6777)
+  - routes/admin/broadcasts.ts passe à zéro `any` (#3679) (#6778)
+  - GET /links/:identifier refuse l'aperçu public d'un lien expiré ou d'une conversation fermée (#6740)
+  - changer d'e-mail révoque les liens de réinitialisation encore valides (#6661)
+  - un Bearer présenté et refusé rend 401 sur POST /links/:key/members (#6741)
+  - PostCommentService.test.ts repasse sous son budget de taille hérité (#6735)
+  - résorbe la régression pré-existante du cliquet de dette any
+  - ne pas grossir utils/languages.ts au-delà de sa dette gelée (#4532)
+  - supportsTranslation reflète LANGUAGE_MAPPINGS pour les 7 codes camerounais sans NLLB
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.21.2
+
+## 1.54.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - la vérification d'e-mail rend « Vérifier » à la largeur de sa colonne (#6679) (#6682)
+  - la barre de réponse du plein écran câble le dépôt et suit la taille du texte (run test) (#6680)
+  - les pages d'accès tiennent dans la colonne centrée de la connexion, et « Mot de passe oublié » sert aussi à créer un mot de passe (#6672)
+  - le réarmement de useLiveAnnouncer se prouve sans horloge réelle (#6668)
+  - les écrans d'accès tiennent au centre sur tablette, et « Mot de passe oublié » sert aussi à créer un mot de passe (#6645) (#6657)
+  - ComposerMediaPorterStore écrit sa deinit non isolée, la garde MainActorDeinit repasse au vert (#6577)
+  - le lecteur présente la story qui n'est qu'une image comme l'image seule (#6636)
+  - le mesureur lit la géométrie du rendu, et la bande de l'image seule ne se peint plus (#6636)
+  - le cliquet des entrées mortes du catalogue Swift enregistre la baisse à 255 (#6624)
+  - la loi de l'image seule est verte ; le mesureur et la bande suspendue rougissent (#6636)
+  - la purge des images du serveur final ne demande plus « y », et rien ne déploie la production toute seule (#6556)
+  - répondre à une pièce depuis son plein écran — et l'ancre qui le rend honnête (#6165)
+  - le consentement vocal part par PUT /me/consents, plus jamais par PATCH application (#6624)
+  - se connecter « par e-mail », la mécanique derrière un (i) (#6628)
+  - « e-mail » ne se coupe plus au trait d'union dans le titre du panneau (#6626)
+  - se connecter « par e-mail », le fonctionnement derrière un (i) — run test (#6626)
+  - la feuille de langue parle la langue d'interface (#6328)
+  - le (i) « Comment ça marche » suit le dernier mot du titre, jamais le bord de l'écran (#6626)
+  - se connecter et s'inscrire se lisent « par e-mail », la mécanique derrière un (i) (#6626)
+  - se connecter « par e-mail », la mécanique derrière un (i) (#6626)
+  - les dates du fil passent toutes par WireDate, les formateurs ISO 8601 jumeaux disparaissent (#6611)
+  - l'entrée en cours de piste est éprouvée à son APPLICATION, l'enveloppe de volume suit la position, et le détail ouvre où la carte en était (#6580)
+  - le fil et le détail rendent les cinq agencements de l'auteur (#6514)
+  - l'agencement de l'auteur voyage jusqu'à la présentation du fil (#6514)
+  - la grille des médias du fil sort de FeedScreen.kt (#6514)
+  - corriger un commentaire déclare la langue de la pastille (#6600)
+  - l'édition d'un commentaire quitte ses trois hôtes hors budget (#6600)
+  - une publication s'affiche dans l'agencement choisi par son auteur (#6514)
+  - le since du delta, les checkpoints et les curseurs repassent par une date-heure complète (#6609)
+  - WireDate, la source unique des dates du fil (#6609)
+  - la langue d'un commentaire atteint le serveur ET la ligne que l'auteur lit (#6587)
+  - les QUATRE transports servent la pièce citée, et le rattrapage a des témoins qui tombent (#6164)
+  - le retrait d'un média s'ÉPROUVE, et il emporte l'audio, le clone et la scène entière (#6577)
+  - la bande du haut se pose en overlay — mesuré, pas raisonné (#6579)
+  - la porte R1 gèle aussi les AVPlayer, pas seulement le playhead (#6580)
+  - la citation RENVOIE a la piece nommee, et le plein ecran l'OUVRE (#6164)
+  - une traduction de post reçue en direct ne détrône plus la langue d'origine (#6531)
+  - un déploiement annulé ne perd plus son diff, et le frontend expose sa révision
+  - la position de lecture peut voyager de la carte au détail (#6580)
+  - la langue d'écriture d'un commentaire voyage jusqu'au serveur (#6587)
+  - retirer la DERNIÈRE scène supprime ses objets, jamais rien (#6577)
+  - les bornes legacy du fond sonore rognent la SOURCE, pas la timeline (#6580)
+  - le média retiré du composer ne part plus à la publication (#6577)
+  - une reponse cite UNE PIECE NOMMEE, pas seulement son message (#6164)
+  - le mixer du lecteur sait entrer en cours de piste, et la pause ne compte plus comme du temps joué (#6580)
+  - la bande du haut a un seul propriétaire, et elle suit la barre active (#6579)
+  - l'inscription montre le contact d'emblée et n'a plus d'étapes, /login se réduit à la baguette, le parrainage s'entre (#6582, #6583, #6584)
+  - la loupe de la Lentille et du fil Focal est nettement plus prononcée — run test (#6586)
+  - la légende d'un attachement de conversation ne se traduit jamais sous protection (#6533)
+  - l'écran « Toutes les stories » parle la langue d'interface (#6547)
+  - fix-orphan-participants.ts ne laisse plus de messages sans expéditeur (#6518)
+  - retire MeeshHero, LevelCard, StreakCard et ElanBanner — exportés, testés, montés nulle part (#6497)
+  - le cliquet des couleurs d'accent redevient vert — le profil vocal convertit sa teinte une fois (#6481)
+  - Lentille, modes de lecture et Rivière quittent la bêta — actifs par défaut, trois interrupteurs dans Réglages (#6482)
+  - découvrir reconnaît un contact ou un bloqué au-delà de la première page de cent (#6421)
+  - les onglets de Découvrir se parcourent aux flèches (#6422)
+  - retire next-pwa, jamais importé, qui épinglait un sous-arbre next/react/playwright
+  - le vocal se parcourt au doigt, change de vitesse, et sa transcription suit la voix (#6306)
+  - les médias de la conversation, à plat et dans l'ordre du fil — loi pure (#6303)
+  - la transcription sait quel segment est prononcé — loi pure (#6306)
+  - la landing n'affirme plus « 200 languages » ni la confidentialité absolue de la traduction serveur
+  - la pellicule de la visionneuse défile dans les deux sens et réserve sa hauteur
+  - resserre WEB_BASELINE à 1128 — amélioration de #6192 jamais enregistrée
+  - les quatre gardes d'inventaire repassent au vert, chacune à sa cause (#6676)
+  - le balayage du cadrage remonte de nouveau recipientLanguage(user) dans PasswordResetService (#6673)
+  - « Mot de passe oublié » sert un compte sans mot de passe, qui y définit son premier (#6663)
+  - la garde de citation ne fait pas grossir MessagingService.test.ts
+  - centralise la garde de citation dans handleMessage, un site pour les trois transports
+  - MessageProcessor.ts repasse sous sa dette de taille (1113 → 1109) (#6639)
+  - replyToId est validé contre la conversation de l'envoi (#6601)
+  - le rattrapage d'une pièce citée se type au lieu de passer par any (#6164)
+  - un son sans image porte enfin une vignette de repli (#6605)
+  - trimmer PostService.ts sous le cliquet de budget de taille
+  - le compte semé qui naît vérifié n'est ni derrière une porte fermée ni un destinataire d'e-mail (#6581)
+  - un 201 de publication dit désormais si le son est entré en bibliothèque
+  - un compte semé naît vérifié, et un 201 ne prouve pas qu'un son est né (#6581)
+  - un refus CORS rend 403, plus jamais 500 ni une ligne ERROR (#6591)
+  - NotificationFormatter type ses champs Json plutôt que `any` (#3679)
+  - fixture uses a valid ObjectId postId (CI red on #6562)
+  - un postId malformé rend 404, jamais 500 (#6557)
+  - met à jour l'inventaire du garde de masquage personnel (#6516)
+  - chaque lecteur de sender orphelin est réparé ou exempté (#6516)
+  - ContactDirectoryService.match() ne perd plus un contact sans blockedUserIds (#6529)
+  - un repost réussi ne s'annonce plus comme un échec (#6524)
+  - un compte sans blockedUserIds redevient chercheable (#6452)
+  - ne pas faire grossir core.test.ts, déjà hors budget (#4531)
+  - monter requireEmailVerification sur la publication, l'invitation et la création de lien (#6437)
+  - mock SessionService/disconnectSession in profile-extended.test.ts (#6435)
+  - changer son mot de passe révoque les autres sessions (#6435)
+  - LEGACY_CONSENT_ERROR nomme PUT /me/consents/{purpose}
+  - message-deletion-single-source.test.ts tourne sous Vitest, pas bun:test
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.21.1
+
+## 1.53.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - un type de média refusé rend 415, jamais 500 (#6604)
+  - un son capturé à la publication calcule sa forme d'onde
+  - déplacer le témoin de langue dans un fichier séparé (budget de taille)
+  - make the Redis cross-instance test self-sufficient, not CI-excluded
+  - corriger le texte d'un commentaire ne remet plus sa langue à null (#6598)
+  - attach Socket.IO Redis adapter for cross-instance broadcast (#3723)
+  - une traduction de post reçue en direct ne détrône plus la langue d'origine (#6531) (#6596)
+  - le gate de contraste du verre dérive ses couples des usages réels (#6367)
+  - la loupe de la Lentille et du fil Focal est servie par le web (#6588)
+  - un déploiement annulé ne perd plus son diff, et le frontend expose sa révision (#6551) (#6593)
+  - un refus CORS rend 403, plus jamais 500 ni une ligne ERROR (#6591) (#6592)
+  - la loupe de la Lentille et du fil Focal est nettement plus prononcée — run test (#6586) (#6590)
+  - NotificationFormatter type ses champs Json plutôt que `any` (#3679)
+  - retire MeeshHero, LevelCard, StreakCard et ElanBanner — exportés, testés, montés nulle part (#6497) (#6515)
+  - l'écran « Toutes les stories » parle la langue d'interface (#6547) (#6549)
+  - le cliquet des couleurs d'accent redevient vert — le profil vocal convertit sa teinte une fois (#6481) (#6509)
+  - un postId malformé rend 404, jamais 500 (#6557) (#6562)
+  - chaque lecteur de sender orphelin est réparé ou exempté (#6516) (#6544)
+  - un repost réussi ne s'annonce plus comme un échec (#6524) (#6525)
+  - une collision du cache SwiftPM du runner ne fait plus tomber le run iOS (#6545)
+  - la légende d'un attachement de conversation ne se traduit jamais sous protection (#6533) (#6572)
+  - ouvrir un contenu depuis une notification dit la vraie cause d'un échec (#6508)
+  - la synchronisation delta atteint /api/v1/sync — le préfixe n'est plus doublé (#6539)
+  - l'audit du marqueur beta lit main en premier parent et acquitte le conflit déjà remédié (#6573)
+  - Publier propose le format et l'agencement quand la publication porte plusieurs médias — l'éventail du haut disparaît (#6502)
+  - storyAuthorLabel() traduit « Votre story » (#6550)
+  - une traduction arrivée pendant que le plein écran de scène est ouvert s'y affiche sans le fermer (#6560)
+  - la réception d'une légende traduite quitte le store hérité — le cliquet de taille redevient vert (#6560)
+  - une traduction de légende reçue en direct redessine la carte et son plein écran (#6560)
+  - une traduction de légende de média est réellement enregistrée — plus de $set pointé sur un null (#6558)
+
 ## 1.52.0
 
 ### Minor Changes

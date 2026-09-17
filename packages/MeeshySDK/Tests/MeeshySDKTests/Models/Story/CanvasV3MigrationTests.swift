@@ -537,6 +537,67 @@ struct CanvasV3MigrationTests {
         #expect(effets.unpaintableKinds == ["gif3d", "poll"])
     }
 
+    // MARK: - Un objet inconnu du runtime v1 SURVIT au cache du fil (revue 2026-09-17, #6893)
+
+    /// **Le mémo de kind ne suffisait pas à la restitution.** `unpaintableKinds`
+    /// ne portait que le NOM du kind — assez pour prévenir le lecteur, pas
+    /// assez pour que `migratedScene` réémette l'objet. Un objet `poll`/`gif3d`
+    /// de la scène 0 disparaissait donc ENTIÈREMENT au premier aller-retour
+    /// `StoryEffects` (`CanvasV3(migrating:keeping:)`) qu'exécute le cache du
+    /// fil (`GRDBCacheStore<String, FeedPost>`).
+    @Test func unKindReserve_survitAuCacheDuFil() throws {
+        let json = #"{"v":3,"scenes":[{"id":"s1","objects":[{"id":"sondage","kind":"poll","anchor":{"t":"free","x":0.5,"y":0.5},"plane":"fg","z":3,"transform":{"scale":1,"rotation":0,"opacity":1},"payload":{"question":"?"}},{"id":"t1","kind":"text","anchor":{"t":"free","x":0.5,"y":0.5},"plane":"fg","z":0,"transform":{"scale":1,"rotation":0,"opacity":1},"payload":{"text":"Bonjour"}}]}]}"#
+        let document = try JSONDecoder().decode(CanvasV3.self, from: Data(json.utf8))
+        let effets = StoryEffects(rendering: document, sceneIndex: 0)
+        let regrave = CanvasV3(migrating: effets, keeping: document)
+
+        let objets = regrave.scenes.first?.objects ?? []
+        #expect(objets.contains { $0.id == "sondage" && $0.kind == .reserved("poll") })
+        #expect(objets.first { $0.id == "sondage" }?.payload["question"] == .string("?"))
+        #expect(objets.contains { $0.id == "t1" && $0.kind == .text })
+    }
+
+    /// Une MENTION est une métadonnée, pas une rupture — mais elle reste un
+    /// OBJET du document, et doit lui aussi survivre au cache du fil : sans
+    /// mémo, `case .mention: continue` la jetait sans laisser de trace.
+    @Test func uneMention_survitAuCacheDuFil() throws {
+        let json = #"{"v":3,"scenes":[{"id":"s1","objects":[{"id":"m1","kind":"mention","anchor":{"t":"free","x":0.5,"y":0.5},"plane":"fg","z":0,"transform":{"scale":1,"rotation":0,"opacity":1},"payload":{"userId":"u1"}}]}]}"#
+        let document = try JSONDecoder().decode(CanvasV3.self, from: Data(json.utf8))
+        let effets = StoryEffects(rendering: document, sceneIndex: 0)
+        let regrave = CanvasV3(migrating: effets, keeping: document)
+
+        let objets = regrave.scenes.first?.objects ?? []
+        #expect(objets.contains { $0.id == "m1" && $0.kind == .mention })
+        #expect(objets.first { $0.id == "m1" }?.payload["userId"] == .string("u1"))
+    }
+
+    /// Un SECOND aller-retour ne perd rien de plus — la restitution n'est pas
+    /// un billet à usage unique.
+    @Test func unKindReserve_survitDeuxAllerRetoursSuccessifs() throws {
+        let json = #"{"v":3,"scenes":[{"id":"s1","objects":[{"id":"sondage","kind":"poll","anchor":{"t":"free","x":0.5,"y":0.5},"plane":"fg","z":0,"transform":{"scale":1,"rotation":0,"opacity":1},"payload":{}}]}]}"#
+        let document = try JSONDecoder().decode(CanvasV3.self, from: Data(json.utf8))
+        let premierPassage = CanvasV3(migrating: StoryEffects(rendering: document, sceneIndex: 0), keeping: document)
+        let deuxiemePassage = CanvasV3(migrating: StoryEffects(rendering: premierPassage, sceneIndex: 0),
+                                       keeping: premierPassage)
+
+        #expect(deuxiemePassage.scenes.first?.objects.contains { $0.id == "sondage" } == true)
+    }
+
+    /// Un objet réservé qu'un runtime ÉDITÉ remplace par un id identique
+    /// cède la place — la restitution ne s'applique qu'à ce qu'aucune famille
+    /// éditable ne revendique déjà.
+    @Test func unIdReserveRepriseParUnObjetEditable_neSeDedoublePas() throws {
+        let json = #"{"v":3,"scenes":[{"id":"s1","objects":[{"id":"x","kind":"poll","anchor":{"t":"free","x":0.5,"y":0.5},"plane":"fg","z":0,"transform":{"scale":1,"rotation":0,"opacity":1},"payload":{}}]}]}"#
+        let document = try JSONDecoder().decode(CanvasV3.self, from: Data(json.utf8))
+        var effets = StoryEffects(rendering: document, sceneIndex: 0)
+        effets.textObjects = [StoryTextObject(id: "x", text: "Bonjour")]
+        let regrave = CanvasV3(migrating: effets, keeping: document)
+
+        let objets = regrave.scenes.first?.objects ?? []
+        #expect(objets.filter { $0.id == "x" }.count == 1)
+        #expect(objets.first { $0.id == "x" }?.kind == .text)
+    }
+
     // MARK: - Rattrapage de revue B8b — le son vit au DOCUMENT
 
     @Test func soundWithoutAnyObject_survivesTheRoundTrip() throws {

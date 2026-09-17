@@ -50,29 +50,15 @@ final class CanvasV3SceneObjectDecodeTests: XCTestCase {
     /// (`StoryEffects(rendering: document, sceneIndex: 0)`) tout en gardant le
     /// document. `encode(to:)` le RECONSTRUIT par
     /// `CanvasV3(migrating: self, keeping: canvasV3)` : la scène 0 est rebâtie
-    /// depuis le runtime v1, les suivantes viennent du document gardé. Si le
-    /// runtime ne porte pas l'objet média, la scène 0 le perd — et SEULEMENT
-    /// elle, ce qui est exactement ce que le simulateur montre.
+    /// depuis le runtime v1, les suivantes viennent du document gardé.
+    ///
+    /// **CORRIGÉ par #6894** (auparavant #6846, ROUGE-DOCUMENTÉ ici). Un objet
+    /// média posé sur le plan de FOND et référençant un enregistrement
+    /// (`payload.mediaId` / `payload.postMediaId`) entre désormais dans
+    /// `mediaObjects` dès `StoryEffects.init(rendering:)` — `migratedScene`
+    /// (boucle `.media` ordinaire) le réémet donc lui-même, à IDENTITÉ égale,
+    /// sans qu'aucun merge par identité ne soit plus nécessaire pour ce cas.
     func test_lAllerRetourParLeCache_nePerdAucunObjetMedia() throws {
-        // **DÉFAUT CONNU, NON ENCORE CORRIGÉ (#6846).** Le témoin est gardé
-        // ROUGE-DOCUMENTÉ plutôt que retiré : il porte la reproduction exacte,
-        // sans simulateur, et rougira le jour où le correctif arrive — c'est
-        // lui qui dira qu'il a marché.
-        //
-        // Cause, à la ligne près (`CanvasV3Migration.swift:775`) :
-        //
-        //     case .media where object.plane == .bg:
-        //         background = object.payload.string("background")
-        //
-        // Un objet média posé sur le plan de FOND est projeté en v1 comme une
-        // simple couleur : son `mediaId` est jeté. `init(migrating:keeping:)`
-        // ne rebâtit QUE la scène 0 depuis ce runtime amputé (les suivantes
-        // viennent du document gardé), d'où un défaut qui ne frappe que la
-        // PREMIÈRE scène. Le modèle v1 sait pourtant porter un fond média —
-        // `StoryEffects.resolvedBackgroundMedia` le cherche dans
-        // `mediaObjects` — mais la projection ne l'y range jamais.
-        XCTExpectFailure("#6846 — la scène 0 perd son fond à l'aller-retour")
-
         let effets = try JSONDecoder().decode(StoryEffects.self, from: charge())
         XCTAssertEqual(effets.canvasV3?.scenes.count, 3, "les trois scènes au premier décodage")
 

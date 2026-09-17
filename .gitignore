@@ -215,6 +215,8 @@ post-*
 !apps/web/__tests__/components/post-card-repost-attribution.test.tsx
 !apps/web/__tests__/components/post-detail-repost-attribution.test.tsx
 !apps/web/__tests__/components/post-detail-background-sound.test.tsx
+!apps/web-v2/src/lib/api/post-media-upload.ts
+!apps/web-v2/src/lib/api/post-media-upload.test.ts
 
 # Development runtime (dev.sh)
 .pids/

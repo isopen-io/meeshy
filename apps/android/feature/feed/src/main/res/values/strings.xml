@@ -116,6 +116,8 @@
     <string name="feed_composer_location_unavailable">Location unavailable — check your location settings and try again</string>
     <string name="feed_composer_media_limit">You can attach up to %1$d items</string>
     <string name="feed_composer_media_unusable">That media couldn\'t be attached</string>
+    <string name="feed_composer_media_alt_label">Describe this photo or video for screen readers (%1$d)</string>
+    <string name="feed_composer_media_alt_placeholder">e.g. A red bicycle leaning on a brick wall</string>
     <string name="feed_composer_type_reel">Reel</string>
     <string name="feed_composer_type_post">Post</string>
     <string name="feed_composer_type_hint">Switch between reel and post</string>

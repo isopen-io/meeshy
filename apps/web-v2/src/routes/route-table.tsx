@@ -42,6 +42,13 @@ const adminConversationsScreen = () =>
   Promise.all([import('@/routes/admin-conversations'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 const adminConversationScreen = () =>
   Promise.all([import('@/routes/admin-conversation'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+/* LE PILOTAGE DE L'AGENT (#6733) — mêmes DEUX adresses, même `import()`
+   unique, et le MÊME chargement du catalogue d'administration que ses voisins.
+   `admin-catalog-loading.test.ts` garde désormais cette discipline pour toute
+   route `/adm…` : un `import()` nu s'y voit nommé, là où il ne cassait
+   jusqu'ici qu'à l'exécution, chez le seul lecteur qui ouvre l'écran. */
+const adminAgentScreen = () =>
+  Promise.all([import('@/routes/admin-agent'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 
 export const ROUTES = {
   list: { pattern: '/', screen: () => import('@/routes/conversations') },
@@ -84,6 +91,12 @@ export const ROUTES = {
      filtre, jamais deux écrans à faire diverger. */
   stories: { pattern: '/stories', screen: () => import('@/routes/stories') },
   storyCompose: { pattern: '/stories/new', screen: () => import('@/routes/story-compose') },
+  /* MON HUMEUR (#6150) — la SECONDE porte de ma cellule du rail. Adresse
+     PROPRE, pas un mode de `/stories/new` : une humeur n'est pas une story
+     (`Post.type = 'STATUS'`, corpus distinct côté passerelle,
+     `?scope=statuses`), elle n'a ni scène ni durée, et le bouton système
+     « retour » doit refermer la composition d'humeur seule. */
+  statusCompose: { pattern: '/status/new', screen: () => import('@/routes/status-compose') },
   /* LE LECTEUR PLEIN ÉCRAN (#5817) — nomenclature legacy `/story/:postId`
      (D-5, `parity.md:310`). Une story NOMMÉE ouvre directement CETTE
      adresse (intention `targetingStory`, `StoryViewerRequestOrigin.swift`) ;
@@ -160,7 +173,12 @@ export const ROUTES = {
      (`PostService.ts:1742`) et que le legacy sert (`apps/web/app/post/[postId]`,
      D-5) ; `/feeds/post/$post` est celle des liens profonds d'iOS
      (`DeepLinkRouter.swift:106`) et l'adresse que le partage émet
-     (`lib/feed/share-url.ts`). UN seul `import()` pour les deux portes. */
+     (`lib/feed/share-url.ts`). UN seul `import()` pour les deux portes.
+     `?scene=N` (#6898, HONORÉ depuis #6902) : le lien profond vers une scène
+     précise — le détail l'ouvre en plein écran À L'ENTRÉE (`routes/post.tsx`,
+     `useSceneGallery` + `SceneFullscreenGallery`), l'index étant BORNÉ au
+     nombre de scènes du post (`boundedSceneIndex`, `lib/feed/gallery-lot.ts`)
+     plutôt que de planter sur un lien périmé. */
   post: { pattern: '/post/$post', screen: publicationScreen },
   postDeepLink: { pattern: '/feeds/post/$post', screen: publicationScreen },
   links: { pattern: '/links', screen: () => import('@/routes/links') },
@@ -239,6 +257,16 @@ export const ROUTES = {
      OUVRE le contenu, sous motif écrit et geste tracé. */
   adminConversation: { pattern: '/admin/conversations/$conversation', screen: adminConversationScreen },
   admConversation: { pattern: '/adm/conversations/$conversation', screen: adminConversationScreen },
+  /* LE PILOTAGE DE L'AGENT (#6733) — deux segments, comme les deux autres
+     listes, et les deux espaces comme tout le reste de l'administration.
+     Déclarées AUSSI dans `session-guard.ts`.
+
+     L'ORDRE compte, et ici il est SANS DANGER : `/admin/agent` est littéral et
+     `/admin/users/$user` a trois segments — aucune adresse paramétrée à deux
+     segments n'existe sous `/admin`. Le jour où il en naîtrait une, celle-ci
+     devrait rester AVANT elle, comme `communityNew` avant `community`. */
+  adminAgent: { pattern: '/admin/agent', screen: adminAgentScreen },
+  admAgent: { pattern: '/adm/agent', screen: adminAgentScreen },
 } as const;
 
 /**

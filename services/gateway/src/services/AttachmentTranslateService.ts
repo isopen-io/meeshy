@@ -8,7 +8,7 @@
  * - application/pdf, text/* → DocumentTranslateService (stub)
  */
 
-import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { PrismaClient, type Prisma } from '@meeshy/shared/prisma/client';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { AudioTranslateService } from './AudioTranslateService';
@@ -190,7 +190,7 @@ export class AttachmentTranslateService {
   async getTranslationStatus(
     userId: string,
     jobId: string
-  ): Promise<ServiceResult<{ status: string; progress?: number; result?: any }>> {
+  ): Promise<ServiceResult<{ status: string; progress?: number; result?: VoiceTranslationResult }>> {
     try {
       // Delegate to audio service for now (only audio supports async)
       const job = await this.audioTranslateService.getJobStatus(userId, jobId);
@@ -202,10 +202,10 @@ export class AttachmentTranslateService {
           result: job.result
         }
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         success: false,
-        error: error.message || 'Failed to get job status',
+        error: error instanceof Error ? error.message : 'Failed to get job status',
         errorCode: 'JOB_STATUS_ERROR'
       };
     }
@@ -224,10 +224,10 @@ export class AttachmentTranslateService {
         success: true,
         data: { cancelled: result.success }
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         success: false,
-        error: error.message || 'Failed to cancel job',
+        error: error instanceof Error ? error.message : 'Failed to cancel job',
         errorCode: 'JOB_CANCEL_ERROR'
       };
     }
@@ -245,7 +245,7 @@ export class AttachmentTranslateService {
     return 'unknown';
   }
 
-  private async verifyUserAccess(userId: string, attachment: any): Promise<boolean> {
+  private async verifyUserAccess(userId: string, attachment: AttachmentTranslateRowPayload): Promise<boolean> {
     // User uploaded the attachment
     if (attachment.uploadedBy === userId) {
       return true;
@@ -277,7 +277,7 @@ export class AttachmentTranslateService {
 
   private async translateAudio(
     userId: string,
-    attachment: any,
+    attachment: AttachmentTranslateRowPayload,
     options: TranslateOptions
   ): Promise<ServiceResult<TranslationResult>> {
     // =========================================================================
@@ -428,7 +428,7 @@ export class AttachmentTranslateService {
             language: existingTranscription.language,
             confidence: existingTranscription.confidence,
             source: existingTranscription.source,
-            segments: existingTranscription.segments as any
+            segments: existingTranscription.segments
           } : undefined
         });
 
@@ -468,7 +468,7 @@ export class AttachmentTranslateService {
           language: existingTranscription.language,
           confidence: existingTranscription.confidence,
           source: existingTranscription.source,
-          segments: existingTranscription.segments as any
+          segments: existingTranscription.segments
         } : undefined
       });
 
@@ -501,10 +501,10 @@ export class AttachmentTranslateService {
           result: fullResult
         }
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         success: false,
-        error: error.message || 'Translation failed',
+        error: error instanceof Error ? error.message : 'Translation failed',
         errorCode: 'TRANSLATION_ERROR'
       };
     }
@@ -664,7 +664,7 @@ export class AttachmentTranslateService {
 
         await this.prisma.messageAttachment.update({
           where: { id: targetAttachmentId },
-          data: { transcription: transcriptionData as any }
+          data: { transcription: transcriptionData as unknown as Prisma.InputJsonValue }
         });
 
         logger.debug('Transcription copiée depuis original');
@@ -675,7 +675,7 @@ export class AttachmentTranslateService {
       if (sourceTranslations) {
         await this.prisma.messageAttachment.update({
           where: { id: targetAttachmentId },
-          data: { translations: sourceTranslations as any }
+          data: { translations: sourceTranslations as unknown as Prisma.InputJsonValue }
         });
 
         const translationCount = Object.keys(sourceTranslations).length;
@@ -688,7 +688,7 @@ export class AttachmentTranslateService {
 
   private async translateImage(
     _userId: string,
-    _attachment: any,
+    _attachment: AttachmentTranslateRowPayload,
     _options: TranslateOptions
   ): Promise<ServiceResult<TranslationResult>> {
     // STUB: Image translation not yet implemented
@@ -701,7 +701,7 @@ export class AttachmentTranslateService {
 
   private async translateVideo(
     _userId: string,
-    _attachment: any,
+    _attachment: AttachmentTranslateRowPayload,
     _options: TranslateOptions
   ): Promise<ServiceResult<TranslationResult>> {
     // STUB: Video translation not yet implemented
@@ -714,7 +714,7 @@ export class AttachmentTranslateService {
 
   private async translateDocument(
     _userId: string,
-    _attachment: any,
+    _attachment: AttachmentTranslateRowPayload,
     _options: TranslateOptions
   ): Promise<ServiceResult<TranslationResult>> {
     // STUB: Document translation not yet implemented

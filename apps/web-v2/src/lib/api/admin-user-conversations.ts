@@ -1,4 +1,4 @@
-import { type AdminDeps, asCount, asRecord, asText } from './admin';
+import { type AdminDeps, asCount, asRecord, asText, pageServie, type PageServie } from './admin';
 import type { ApiResult } from './http';
 
 /**
@@ -80,11 +80,8 @@ function decodeParticipant(raw: unknown): AdminConversationParticipant | null {
   };
 }
 
-export function decodeAdminConversationPage(raw: unknown, offset: number): AdminConversationPage {
-  const charge = asRecord(raw) ?? {};
-  const brut = Array.isArray(charge.data) ? charge.data : Array.isArray(raw) ? raw : [];
-
-  const conversations = brut
+export function decodeAdminConversationPage(page: PageServie, offset: number): AdminConversationPage {
+  const conversations = page.lignes
     .map((entree): AdminConversation | null => {
       const ligne = asRecord(entree);
       if (ligne === null || typeof ligne.id !== 'string' || ligne.id === '') return null;
@@ -108,9 +105,8 @@ export function decodeAdminConversationPage(raw: unknown, offset: number): Admin
     })
     .filter((conversation): conversation is AdminConversation => conversation !== null);
 
-  const meta = asRecord(charge.pagination) ?? {};
-  const total = asCount(meta.total);
-  const hasMore = typeof meta.hasMore === 'boolean' ? meta.hasMore : offset + conversations.length < total;
+  const total = asCount(page.meta.total);
+  const hasMore = typeof page.meta.hasMore === 'boolean' ? page.meta.hasMore : offset + conversations.length < total;
 
   return { conversations, total: total || conversations.length, offset, hasMore };
 }
@@ -138,5 +134,5 @@ export async function loadAdminUserConversations(
   });
   if (!result.ok) return result;
 
-  return { ok: true, data: decodeAdminConversationPage(result.data, params.offset) };
+  return { ok: true, data: decodeAdminConversationPage(pageServie(result), params.offset) };
 }

@@ -446,8 +446,12 @@ emit({
  * d'ecran qui porte le triangle de lecture, la meme idee que le symbole iOS.
  * Le lecteur des Reels relit ce MEME jeu (coeur, signet, partage, onde) plutot
  * que d'en recopier les traces dans un jeu a lui.
+ *
+ * `speaker-slash` (#6898) : l'indicateur « son coupe » d'une scene elue du fil,
+ * miroir de `BackgroundSoundBadge.muteIconName` (`FeedSceneAutoplay.swift:186-200`)
+ * -- jusqu'ici un trace RECOPIE a la main dans `scene-player.tsx`.
  */
-const FEED = ['heart', 'heart-fill', 'chat-circle', 'arrows-clockwise', 'bookmark', 'bookmark-fill', 'share-network', 'waveform', 'caret-right', 'monitor-play'];
+const FEED = ['heart', 'heart-fill', 'chat-circle', 'arrows-clockwise', 'bookmark', 'bookmark-fill', 'share-network', 'waveform', 'caret-right', 'monitor-play', 'speaker-slash'];
 
 emit({
   ids: FEED,

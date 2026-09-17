@@ -221,6 +221,29 @@ public struct ObjectV3: Equatable, Codable, Sendable {
     }
 }
 
+/// **La référence média d'un objet, quelle que soit son orthographe** (#6894).
+///
+/// Deux écritures coexistent pour dire « cet objet montre le média X » : le
+/// composer iOS pose `postMediaId` ; la passerelle ACCEPTE et RÉÉCRIT aussi
+/// `mediaId` (`CLAIM_PAYLOAD_KEYS`, `storyEffectsV3.ts`), et les documents
+/// qu'elle sert sous cette forme (fonds `plane: bg` sans porteur `content`)
+/// n'ont jamais de `postMediaId`. `postMediaId` est la forme de RÉFÉRENCE —
+/// c'est elle que le contrat partagé documente (`canvas-v3.ts`) — `mediaId`
+/// n'est lu qu'en second.
+///
+/// **Site unique.** Tout consommateur qui doit savoir si un objet DÉSIGNE un
+/// enregistrement du post appelle cette propriété plutôt que de relire les
+/// deux clés lui-même — une seconde lecture ad hoc est comment le SDK
+/// (`carriesPicture`) et l'app (`SceneCaption.mediaIdentity`) ont pu diverger
+/// sur la même question.
+public extension ObjectV3 {
+    var mediaReference: String? {
+        if case .string(let id)? = payload["postMediaId"], !id.isEmpty { return id }
+        if case .string(let id)? = payload["mediaId"], !id.isEmpty { return id }
+        return nil
+    }
+}
+
 /// Les 7 kinds actifs de v1 ; tout autre kind est décodé `.reserved(raw)` et
 /// ré-encodé tel quel — le SDK ne perd jamais un kind qu'un futur serveur accepterait.
 public enum ObjectKind: Equatable, Codable, Sendable {

@@ -141,10 +141,23 @@
 
 import Fastify, { type FastifyInstance } from 'fastify';
 import { EventEmitter } from 'events';
+import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { registerAllRoutes, type RouteRegistrationDeps } from '../route-registration';
 import { createUnifiedAuthMiddleware, AUTH_REGIME, type AuthRegime } from '../middleware/auth';
 import { socketIOAdminRoutes } from '../socketio/socketio-admin-routes';
 import { apiPath } from '@meeshy/shared/api/prefix';
+import type { MessageTranslationService } from '../services/message-translation/MessageTranslationService';
+import type { ZmqTranslationClient } from '../services/zmq-translation/ZmqTranslationClient';
+import type { MentionService } from '../services/MentionService';
+import type { MeeshySocketIOHandler } from '../socketio/MeeshySocketIOHandler';
+import type { MultiLevelJobMappingCache } from '../services/MultiLevelJobMappingCache';
+import type { EmailService } from '../services/EmailService';
+import type { MutationLogService } from '../services/MutationLogService';
+import type { CallService } from '../services/CallService';
+import type { NotificationService } from '../services/notifications/NotificationService';
+import type { SocialEventsHandler } from '../socketio/handlers/SocialEventsHandler';
+import type { MessagingService } from '../services/messaging/MessagingService';
+import type { OrphanMediaCleanupService } from '../services/storage/OrphanMediaCleanupService';
 
 // ---------------------------------------------------------------------------
 // Stub Prisma "profond" — IDENTIQUE à celui que portait
@@ -169,12 +182,12 @@ import { apiPath } from '@meeshy/shared/api/prefix';
 // plugin enregistré.
 const STUB_EXCLUDED_PROPS = new Set(['then', 'catch', 'finally', 'getter', 'setter']);
 
-function makeCallableStub(): any {
+function makeCallableStub(): unknown {
   // `[]` plutôt que `undefined` : plusieurs chemins d'enregistrement (ex.
   // `EncryptionService.ServerKeyVault.initialize()`) font `for (const x of
   // await prisma.model.findMany(...))` — un stub générique doit rester
   // itérable pour ne pas faire planter la CONSTRUCTION des routes.
-  const fn: any = (..._args: unknown[]) => Promise.resolve([]);
+  const fn = (..._args: unknown[]) => Promise.resolve([]);
   return new Proxy(fn, {
     get(_target, prop) {
       if (typeof prop === 'symbol') return undefined;
@@ -195,7 +208,7 @@ function makeCallableStub(): any {
  * Seuls les niveaux enfants (`prisma.model.method(...)`) doivent être
  * appelables ; eux ne passent jamais par `fastify.decorate`.
  */
-function makeDeepStub(): any {
+function makeDeepStub(): unknown {
   return new Proxy({}, {
     get(_target, prop) {
       if (typeof prop === 'symbol') return undefined;
@@ -229,8 +242,10 @@ export interface CollectedRoute {
    */
   preValidation?: unknown;
   preHandler?: unknown;
-  bodySchema?: any;
-  querystringSchema?: any;
+  /** JSON Schema brut de `schema.body` — opaque ici, seul `route-auth-coverage.test.ts` en dépouille la forme pour synthétiser une requête. */
+  bodySchema?: unknown;
+  /** JSON Schema brut de `schema.querystring` — même statut que `bodySchema`. */
+  querystringSchema?: unknown;
   /**
    * Vraie quand la route hérite d'une garde d'authentification posée par un
    * hook d'INSTANCE (`fastify.addHook('preHandler', authMiddleware)`) plutôt
@@ -380,7 +395,12 @@ function instrumentEncapsulatedAuthHooks(
         return original(name, fn);
       };
 
-    original('onRoute', (routeOptions: any) => {
+    original('onRoute', (routeOptionsRaw: unknown) => {
+      // `original` a effacé la surcharge Fastify de `addHook` (§ commentaire de
+      // `original` ci-dessus, "ce module n'a besoin que du comportement
+      // RUNTIME") — `onRoute` livre toujours { method, url, ... }, seuls les
+      // deux champs lus ici sont affirmés.
+      const routeOptions = routeOptionsRaw as { method: string | string[]; url: string };
       const methods = Array.isArray(routeOptions.method) ? routeOptions.method : [routeOptions.method];
       for (const method of methods) {
         contexte.clesDeRoute.add(`${method} ${routeOptions.url}`);
@@ -428,7 +448,12 @@ export async function buildAssembledApp(): Promise<{ app: FastifyInstance; route
 
   const currentModuleLabel = instrumentRegistrationForModuleLabels(app);
 
-  const prismaStub = makeDeepStub();
+  // `makeDeepStub()` rend un Proxy dont la FORME n'a rien d'un `PrismaClient` —
+  // seule sa présence (jamais son contenu) importe à la construction des
+  // modules de routes (voir le doc-comment de `makeDeepStub`). L'assertion
+  // déclare l'INTENTION une seule fois, ici, plutôt que de la redire à chacun
+  // de ses trois sites d'usage.
+  const prismaStub = makeDeepStub() as PrismaClient;
 
   // `fastify.authenticate` = EXACT même middleware que la production
   // (`createUnifiedAuthMiddleware(prisma, {requireAuth:true,
@@ -450,34 +475,38 @@ export async function buildAssembledApp(): Promise<{ app: FastifyInstance; route
 
   app.decorate('prisma', prismaStub);
   app.decorate('redis', undefined);
-  app.decorate('mentionService', {} as any);
-  app.decorate('socketIOHandler', {} as any);
-  app.decorate('jobMappingCache', {} as any);
-  app.decorate('emailService', {} as any);
-  app.decorate('mutationLogService', {} as any);
-  app.decorate('callService', {} as any);
-  app.decorate('notificationService', {} as any);
-  app.decorate('socialEvents', {} as any);
+  // Décorations minimales : seule leur PRÉSENCE compte pour que chaque module
+  // de routes se CONSTRUISE (voir le doc-comment de `makeDeepStub` pour le
+  // même principe côté Prisma) — `{}` n'a besoin de satisfaire ni les
+  // méthodes ni les champs privés de la classe réelle, jamais appelée ici.
+  app.decorate('mentionService', {} as unknown as MentionService);
+  app.decorate('socketIOHandler', {} as unknown as MeeshySocketIOHandler);
+  app.decorate('jobMappingCache', {} as unknown as MultiLevelJobMappingCache);
+  app.decorate('emailService', {} as unknown as EmailService);
+  app.decorate('mutationLogService', {} as unknown as MutationLogService);
+  app.decorate('callService', {} as unknown as CallService);
+  app.decorate('notificationService', {} as unknown as NotificationService);
+  app.decorate('socialEvents', {} as unknown as SocialEventsHandler);
   app.decorate('presenceChecker', {
     isOnline: () => false,
     bulk: () => new Map(),
     listOnlineAmong: () => [],
-  } as any);
+  });
 
   const routes: CollectedRoute[] = [];
   app.addHook('onRoute', (routeOptions) => {
     const methods = Array.isArray(routeOptions.method) ? routeOptions.method : [routeOptions.method];
-    const schema = (routeOptions as any).schema;
+    const schema = routeOptions.schema;
     for (const method of methods) {
       if (method === 'HEAD' || method === 'OPTIONS') continue; // miroir mécanique de GET, pas une route distincte à garder
       routes.push({
         method,
         url: routeOptions.url,
-        prefix: (routeOptions as any).prefix ?? '',
+        prefix: routeOptions.prefix ?? '',
         module: currentModuleLabel(),
-        onRequest: (routeOptions as any).onRequest,
-        preValidation: (routeOptions as any).preValidation,
-        preHandler: (routeOptions as any).preHandler,
+        onRequest: routeOptions.onRequest,
+        preValidation: routeOptions.preValidation,
+        preHandler: routeOptions.preHandler,
         bodySchema: schema?.body,
         querystringSchema: schema?.querystring,
       });
@@ -496,11 +525,11 @@ export async function buildAssembledApp(): Promise<{ app: FastifyInstance; route
       // `zmqClient.on(...)` à la construction (écoute d'évènements) : un vrai
       // EventEmitter, pas un objet nu, pour que ces constructions ne plantent
       // pas au chargement des routes.
-      getZmqClient: () => new EventEmitter() as any,
-    } as any,
-    messagingService: {} as any,
-    mentionService: {} as any,
-    orphanMediaCleanup: {} as any,
+      getZmqClient: () => new EventEmitter() as unknown as ZmqTranslationClient,
+    } as unknown as MessageTranslationService,
+    messagingService: {} as unknown as MessagingService,
+    mentionService: {} as unknown as MentionService,
+    orphanMediaCleanup: {} as unknown as OrphanMediaCleanupService,
   };
 
   // `registerAllRoutes` n'est PAS le seul graphe que la production monte sur

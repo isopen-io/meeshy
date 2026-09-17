@@ -50,6 +50,17 @@ export type AdminPermissions = {
   readonly canViewAuditLogs: boolean;
   readonly canManageNotifications: boolean;
   readonly canManageTranslations: boolean;
+  /**
+   * **LA GARDE RÉELLE DES 35 ROUTES `/admin/agent/*`** (#6733) —
+   * `requirePermission('canManageAgent')`, `routes/admin/agent-shared.ts`.
+   *
+   * Servie depuis le lot B de ce chantier (`servedUserPermissions`,
+   * `services/admin/served-permissions.ts`). Avant elle, la tuile de l'agent
+   * se rabattait sur `canAccessAdmin` — le MAUVAIS seuil, vrai pour MODERATOR
+   * et AUDIT, à qui la matrice centrale refuse l'agent : un contrôle voué au
+   * 403, que la loi 4 interdit au même titre qu'un contrôle inerte.
+   */
+  readonly canManageAgent: boolean;
 };
 
 export type AdminPermissionKey = keyof AdminPermissions;
@@ -84,7 +95,7 @@ export type AdminSectionLabelKey =
  * compile que sur une route qui existe, et la tuile ne peut plus viser un autre
  * écran que le sien.
  */
-export type AdminRoute = 'admin' | 'adminUsers' | 'adminConversations';
+export type AdminRoute = 'admin' | 'adminUsers' | 'adminConversations' | 'adminAgent';
 
 export type AdminSection = {
   readonly id: string;
@@ -138,7 +149,10 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
   { id: 'ranking', labelKey: 'admin.nav.ranking', route: null, permission: 'canViewAnalytics', glyph: '🏆' },
   { id: 'broadcasts', labelKey: 'admin.nav.broadcasts', route: null, permission: 'canManageNotifications', glyph: '📣' },
   { id: 'settings', labelKey: 'admin.nav.settings', route: null, permission: 'canManageTranslations', glyph: '⚙️' },
-  { id: 'agent', labelKey: 'admin.nav.agent', route: null, permission: 'canAccessAdmin', glyph: '🤖' },
+  /* LE PILOTAGE DE L'AGENT (#6733) — `canManageAgent`, jamais `canAccessAdmin` :
+     la tuile porte le seuil de ce qu'elle OUVRE. Et aucun `adminRankOnly` —
+     sa garde serveur est une permission, pas un rang. */
+  { id: 'agent', labelKey: 'admin.nav.agent', route: 'adminAgent', permission: 'canManageAgent', glyph: '🤖' },
   { id: 'monitoring', labelKey: 'admin.nav.monitoring', route: null, permission: 'canAccessAdmin', glyph: '💓' },
 ];
 

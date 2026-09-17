@@ -28,7 +28,17 @@ export const userPermissionsSchema = {
     canModerateContent: { type: 'boolean', description: 'Can moderate content' },
     canViewAuditLogs: { type: 'boolean', description: 'Can view audit logs' },
     canManageNotifications: { type: 'boolean', description: 'Can manage notifications' },
-    canManageTranslations: { type: 'boolean', description: 'Can manage translations' }
+    canManageTranslations: { type: 'boolean', description: 'Can manage translations' },
+    // #6733 — la garde RÉELLE des routes `/admin/agent/*`. Elle est entrée dans
+    // la projection (`services/gateway/src/services/admin/served-permissions.ts`)
+    // et ce schéma, servi par CINQ autres portes du même producteur (connexion,
+    // `GET /me`, les trois éditions de profil, le changement de contact), ne la
+    // déclarait pas : fast-json-stringify l'y supprimait en silence, et le même
+    // serveur répondait deux formes selon la porte franchie. Un schéma se
+    // vérifie contre son PRODUCTEUR — témoin :
+    // `services/gateway/.../admin/me-permissions.test.ts` § « le schéma PARTAGÉ
+    // déclare les mêmes clés que la projection ».
+    canManageAgent: { type: 'boolean', description: 'Can manage the agent service' }
   }
 } as const;
 

@@ -206,6 +206,88 @@ describe('la session purge le cache', () => {
 });
 
 /**
+ * LA MISE À JOUR DE L'APPLICATION JETTE LE CACHE PERSISTÉ — et il ne revient
+ * pas (#6936).
+ *
+ * `discardPersisted()` est appelée juste avant le rechargement qui charge la
+ * version neuve. Le piège qu'elle doit fermer n'est pas l'effacement (une
+ * ligne) mais la RÉÉCRITURE : `persist` est câblée sur `pagehide` et
+ * `visibilitychange`, tous deux déclenchés PAR ce rechargement. Une purge qui
+ * n'arrête pas la persistance réécrit la même clé, avec le même `buster`,
+ * dans la milliseconde qui suit — elle n'a rien purgé.
+ *
+ * Et elle ne touche QUE cette clé : la session, les préférences et les
+ * brouillons vivent dans le même `localStorage` et doivent survivre à la mise
+ * à jour (« en préservant la session », directive porteur 2026-09-17).
+ */
+describe('la mise à jour de l’application jette le cache persisté, et la session survit', () => {
+  test('la clé du cache part, les autres clés du stockage restent', () => {
+    const storage = fakeStorage();
+    storage.setItem('meeshy.session', '{"user":"ada"}');
+    storage.setItem('meeshy.draft.u_a.c1', 'brouillon');
+
+    const client = createAppQueryClient({ storage, buster: '0.0.0-test:u-1' });
+    client.setQueryData(['conversations'], [{ id: 'c-1' }]);
+    client.persist();
+    expect(storage.raw.has('meeshy.query-cache')).toBe(true);
+
+    client.discardPersisted();
+
+    expect(storage.raw.has('meeshy.query-cache')).toBe(false);
+    expect(storage.getItem('meeshy.session')).toBe('{"user":"ada"}');
+    expect(storage.getItem('meeshy.draft.u_a.c1')).toBe('brouillon');
+  });
+
+  /* `persist()` EST ce que le `pagehide` du rechargement appelle
+     (`createAppQueryClient` § AUTO-PERSISTANCE) : l'appeler directement teste
+     la même porte sans dépendre d'un DOM. */
+  test('après elle, plus aucun `persist()` ne réécrit la clé — c’est ce que le `pagehide` du rechargement déclenche', () => {
+    const storage = fakeStorage();
+    const client = createAppQueryClient({ storage, buster: '0.0.0-test:u-1' });
+    client.setQueryData(['conversations'], [{ id: 'c-1' }]);
+    client.persist();
+
+    client.discardPersisted();
+    client.persist();
+
+    expect(storage.raw.has('meeshy.query-cache')).toBe(false);
+  });
+
+  test('une écriture de cache APRÈS elle ne rallume pas la persistance', async () => {
+    const storage = fakeStorage();
+    const client = createAppQueryClient({ storage, buster: '0.0.0-test:u-1' });
+
+    client.discardPersisted();
+    client.setQueryData(['conversations'], [{ id: 'c-2' }]);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    expect(storage.raw.has('meeshy.query-cache')).toBe(false);
+  });
+
+  test('le cache EN MÉMOIRE reste servi — la page qui part ne se vide pas à l’écran', () => {
+    const storage = fakeStorage();
+    const client = createAppQueryClient({ storage, buster: '0.0.0-test:u-1' });
+    client.setQueryData(['conversations'], [{ id: 'c-1' }]);
+
+    client.discardPersisted();
+
+    expect(client.getQueryData(['conversations'])).toEqual([{ id: 'c-1' }]);
+  });
+
+  test('la version NEUVE ne relit rien — le cache jeté ne se réhydrate pas', () => {
+    const storage = fakeStorage();
+    const ancienne = createAppQueryClient({ storage, buster: '0.0.0-test:u-1' });
+    ancienne.setQueryData(['conversations'], [{ id: 'c-1' }]);
+    ancienne.persist();
+    ancienne.discardPersisted();
+
+    const neuve = createAppQueryClient({ storage, buster: '0.0.0-test:u-1' });
+
+    expect(neuve.getQueryData(['conversations'])).toBeUndefined();
+  });
+});
+
+/**
  * REVUE-CORRECTION (#5650) — CE QUI PART À CÔTÉ DU CACHE DE REQUÊTES.
  *
  * Le `buster` par identité protège le cache TanStack et son entrée de

@@ -81,6 +81,29 @@ final class CanvasMediaAdoptionTests: XCTestCase {
     func test_unCanvasDeTexteSeul_estCoherent() {
         XCTAssertTrue(CanvasMediaAdoption.isCoherent(StoryEffects(), postMediaIds: []))
     }
+
+    // MARK: - La seconde orthographe (#6894) — revue tour 2
+
+    /// **`ObjectV3.mediaReference` est le site unique des deux orthographes**
+    /// (`postMediaId` OU `mediaId`) — `designatedIds` relisait `postMediaId`
+    /// seul sur les scènes du document mémorisé. Un fond `plane: bg` à
+    /// `mediaId` (forme servie par la passerelle) dans une scène ≥ 1 était
+    /// donc INVISIBLE à `orphanIds`/`isCoherent`, quelle que soit son
+    /// identité.
+    func test_unFondDesigneParMediaId_dansUneSceneGardeeVerbatim_estVuParLaGarde() {
+        var canvas = effects([media("bon", background: true)])
+        let sceneOrpheline = SceneV3(
+            id: "s2",
+            objects: [ObjectV3(id: "bg2", kind: .media,
+                               anchor: .free(x: 0.5, y: 0.5), plane: .bg,
+                               z: 0, transform: TransformV3(),
+                               payload: ["mediaId": .string("orphelin-via-mediaId")])])
+        canvas.canvasV3 = CanvasV3(scenes: [SceneV3(id: "s1", objects: []), sceneOrpheline])
+
+        XCTAssertEqual(CanvasMediaAdoption.orphanIds(in: canvas, postMediaIds: ["bon"]),
+                       ["orphelin-via-mediaId"],
+                       "un fond référencé par mediaId, dans une scène ≥ 1, doit être vu comme les autres")
+    }
 }
 
 private extension CanvasMediaAdoption {

@@ -134,3 +134,27 @@ createRoot(root).render(
  * `scripts/measure-weight.mjs`).
  */
 void import('@/lib/api/realtime');
+
+/**
+ * LE SERVICE WORKER S'INSCRIT APRÈS LA PREMIÈRE PEINTURE, ET SUR LE `load`
+ * (#6936) — l'installation précache tout le bundle : la lancer pendant le
+ * premier rendu ferait concurrence, sur la 3G visée, au rendu lui-même. C'est
+ * la même horloge que `registerSW.js` de `vite-plugin-pwa`, qu'on remplace
+ * (`vite.config.ts` § `injectRegister`), et que le legacy
+ * (`ServiceWorkerInitializer`, monté dans son layout).
+ *
+ * `__SHELL__` : la coque Capacitor n'émet AUCUN service worker
+ * (`scripts/check-shell-dist.mjs`) — elle embarque ses actifs et reçoit une
+ * version neuve par son magasin d'applications. `import.meta.env.PROD` : en
+ * développement, `vite` ne sert pas de `/sw.js` (les `devOptions` de VitePWA
+ * sont désactivées), et l'inscription échouerait à chaque rechargement.
+ */
+if (!__SHELL__ && import.meta.env.PROD && 'serviceWorker' in navigator) {
+  const inscrire = (): void => {
+    void import('@/lib/app-update/service-worker').then(({ appUpdateController }) =>
+      appUpdateController().register(),
+    );
+  };
+  if (document.readyState === 'complete') inscrire();
+  else window.addEventListener('load', inscrire, { once: true });
+}

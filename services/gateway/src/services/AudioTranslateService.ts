@@ -12,7 +12,8 @@
 import { EventEmitter } from 'events';
 import { randomUUID } from 'crypto';
 import * as path from 'path';
-import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { PrismaClient, Prisma } from '@meeshy/shared/prisma/client';
+import type { UserVoiceModel } from '@meeshy/shared/prisma/client';
 import { ZmqTranslationClient } from './zmq-translation';
 import {
   normalizeVoiceAnalysis,
@@ -72,11 +73,34 @@ const VOICE_TRANSLATE_SYNC_TIMEOUT = 16 * 60_000; // 16 minutes
 // ═══════════════════════════════════════════════════════════════════════════
 
 interface PendingRequest {
-  resolve: (value: any) => void;
-  reject: (reason: any) => void;
+  resolve: (value: unknown) => void;
+  reject: (reason: unknown) => void;
   timeout: NodeJS.Timeout;
   requestType: string;
   timestamp: number;
+}
+
+interface TranscriptionCompletedEvent {
+  taskId: string;
+  messageId: string;
+  attachmentId: string;
+  transcription: {
+    text: string;
+    language: string;
+    confidence: number;
+    durationMs: number;
+    source: string;
+    segments?: Array<{ text: string; startMs: number; endMs: number }>;
+  };
+  processingTimeMs: number;
+}
+
+interface TranscriptionErrorEvent {
+  taskId: string;
+  messageId: string;
+  attachmentId: string;
+  error: string;
+  errorCode: string;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -111,11 +135,11 @@ export class AudioTranslateService extends EventEmitter {
     });
 
     // Listen for transcription-only responses
-    this.zmqClient.on('transcriptionCompleted', (event: any) => {
+    this.zmqClient.on('transcriptionCompleted', (event: TranscriptionCompletedEvent) => {
       this._handleTranscriptionSuccess(event);
     });
 
-    this.zmqClient.on('transcriptionError', (event: any) => {
+    this.zmqClient.on('transcriptionError', (event: TranscriptionErrorEvent) => {
       this._handleTranscriptionError(event);
     });
 
@@ -127,20 +151,7 @@ export class AudioTranslateService extends EventEmitter {
   // EVENT HANDLERS
   // ═══════════════════════════════════════════════════════════════════════════
 
-  private _handleTranscriptionSuccess(event: {
-    taskId: string;
-    messageId: string;
-    attachmentId: string;
-    transcription: {
-      text: string;
-      language: string;
-      confidence: number;
-      durationMs: number;
-      source: string;
-      segments?: Array<{ text: string; startMs: number; endMs: number }>;
-    };
-    processingTimeMs: number;
-  }): void {
+  private _handleTranscriptionSuccess(event: TranscriptionCompletedEvent): void {
     const pending = this.pendingRequests.get(event.taskId);
     if (pending) {
       clearTimeout(pending.timeout);
@@ -160,13 +171,7 @@ export class AudioTranslateService extends EventEmitter {
     }
   }
 
-  private _handleTranscriptionError(event: {
-    taskId: string;
-    messageId: string;
-    attachmentId: string;
-    error: string;
-    errorCode: string;
-  }): void {
+  private _handleTranscriptionError(event: TranscriptionErrorEvent): void {
     const pending = this.pendingRequests.get(event.taskId);
     if (pending) {
       clearTimeout(pending.timeout);
@@ -294,8 +299,9 @@ export class AudioTranslateService extends EventEmitter {
           timestamp: Date.now()
         });
 
-      } catch (error: any) {
-        reject(new AudioTranslateError(`Failed to send transcription request: ${error.message}`, 'SEND_FAILED'));
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        reject(new AudioTranslateError(`Failed to send transcription request: ${message}`, 'SEND_FAILED'));
       }
     });
   }
@@ -321,7 +327,7 @@ export class AudioTranslateService extends EventEmitter {
             confidence: t.confidence,
             durationMs: t.durationMs,
             source: t.source,
-            segments: t.segments as any,
+            segments: t.segments,
             attachmentId,
             processingTimeMs: 0
           }
@@ -358,9 +364,10 @@ export class AudioTranslateService extends EventEmitter {
 
       return { success: true, data: result };
 
-    } catch (error: any) {
-      logger.error(`[AudioTranslateService] transcribeAttachment error: ${error.message}`);
-      return { success: false, error: error.message, errorCode: 'TRANSCRIPTION_FAILED' };
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error(`[AudioTranslateService] transcribeAttachment error: ${message}`);
+      return { success: false, error: message, errorCode: 'TRANSCRIPTION_FAILED' };
     }
   }
 
@@ -411,7 +418,7 @@ export class AudioTranslateService extends EventEmitter {
     options: AudioTranslationOptions & {
       webhookUrl?: string;
       priority?: number;
-      callbackMetadata?: Record<string, any>;
+      callbackMetadata?: Record<string, unknown>;
     }
   ): Promise<{ jobId: string; status: string }> {
     const request: VoiceTranslateAsyncRequest = {
@@ -536,9 +543,10 @@ export class AudioTranslateService extends EventEmitter {
 
       return { success: true, data: result };
 
-    } catch (error: any) {
-      logger.error(`[AudioTranslateService] translateAttachment error: ${error.message}`);
-      return { success: false, error: error.message, errorCode: 'TRANSLATION_FAILED' };
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error(`[AudioTranslateService] translateAttachment error: ${message}`);
+      return { success: false, error: message, errorCode: 'TRANSLATION_FAILED' };
     }
   }
 
@@ -639,7 +647,7 @@ export class AudioTranslateService extends EventEmitter {
   /**
    * Get voice profile for a user
    */
-  async getVoiceProfile(userId: string): Promise<any | null> {
+  async getVoiceProfile(userId: string): Promise<UserVoiceModel | null> {
     return getVoiceProfileCore(this.prisma, userId);
   }
 
@@ -653,13 +661,13 @@ export class AudioTranslateService extends EventEmitter {
       qualityScore?: number;
       audioCount?: number;
       totalDurationMs?: number;
-      fingerprint?: Record<string, any>;
-      voiceCharacteristics?: Record<string, any>;
+      fingerprint?: Record<string, unknown>;
+      voiceCharacteristics?: Record<string, unknown>;
       chatterboxConditionals?: Buffer;
       referenceAudioId?: string;
       referenceAudioUrl?: string;
     }
-  ): Promise<any> {
+  ): Promise<UserVoiceModel> {
     return saveVoiceProfileCore(this.prisma, userId, profileData);
   }
 
@@ -677,7 +685,7 @@ export class AudioTranslateService extends EventEmitter {
       rating: number;
       feedbackType?: 'quality' | 'accuracy' | 'voice_similarity' | 'other';
       comment?: string;
-      metadata?: Record<string, any>;
+      metadata?: Record<string, unknown>;
     }
   ): Promise<{ success: boolean; feedbackId: string }> {
     const request: VoiceFeedbackRequest = {
@@ -793,7 +801,7 @@ export class AudioTranslateService extends EventEmitter {
         confidence: result.confidence,
         source: result.source as 'mobile' | 'whisper' | 'voice_api',
         model: undefined,
-        segments: result.segments as any,
+        segments: result.segments,
         durationMs: result.durationMs
       };
 
@@ -801,13 +809,14 @@ export class AudioTranslateService extends EventEmitter {
       await this.prisma.messageAttachment.update({
         where: { id: attachmentId },
         data: {
-          transcription: transcriptionData as any
+          transcription: transcriptionData as unknown as Prisma.InputJsonValue
         }
       });
 
       logger.info(`[AudioTranslateService] Transcription saved for attachment ${attachmentId}`);
-    } catch (error: any) {
-      logger.error(`[AudioTranslateService] Failed to save transcription: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error(`[AudioTranslateService] Failed to save transcription: ${message}`);
     }
   }
 
@@ -860,14 +869,15 @@ export class AudioTranslateService extends EventEmitter {
       await this.prisma.messageAttachment.update({
         where: { id: attachmentId },
         data: {
-          transcription: transcriptionData as any,
-          translations: translationsData as any
+          transcription: transcriptionData as unknown as Prisma.InputJsonValue,
+          translations: translationsData as unknown as Prisma.InputJsonValue
         }
       });
 
       logger.info(`[AudioTranslateService] Translation saved for attachment ${attachmentId} (${result.translations.length} languages)`);
-    } catch (error: any) {
-      logger.error(`[AudioTranslateService] Failed to save translation: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.error(`[AudioTranslateService] Failed to save translation: ${message}`);
     }
   }
 

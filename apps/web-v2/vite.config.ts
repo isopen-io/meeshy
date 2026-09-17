@@ -11,7 +11,9 @@ import { INSTITUTIONAL_PATTERN } from './scripts/lib/institutional-routes.mjs';
 import { INLINE_INTERFACE_LANGUAGE_BOOTSTRAP } from './src/lib/inline-interface-language-bootstrap.js';
 import { INLINE_SCHEME_BOOTSTRAP } from './src/lib/inline-scheme-bootstrap.js';
 import { declaredBuildFlag } from './src/lib/build-flag';
+import { API_RESPONSE_CACHE_PATTERN } from './src/lib/net/api-runtime-cache';
 import { NETWORK_ONLY_NAVIGATIONS } from './src/lib/net/network-only-navigations';
+import { SW_RUNTIME_CACHES } from './src/lib/sw-caches';
 
 /**
  * `index.html` ne porte plus le TEXTE du script d'amorçage du schéma, mais un
@@ -415,7 +417,32 @@ export default defineConfig({
       ? []
       : [
           VitePWA({
-            registerType: 'autoUpdate',
+            /**
+             * `prompt`, ET NON `autoUpdate` (#6936) — LA VERSION NEUVE ATTEND
+             * QU'ON LA DEMANDE.
+             *
+             * Sous `autoUpdate`, `vite-plugin-pwa` posait `skipWaiting: true` +
+             * `clientsClaim: true` (`dist/index.js:874-877`) : un déploiement
+             * activait le worker neuf EN SILENCE sous une page qui continuait
+             * de faire tourner l'ancien JavaScript, et l'activation retirait du
+             * précache les chunks de cette ancienne version — un écran chargé à
+             * la demande pouvait alors ne plus se charger du tout. Le lecteur
+             * n'apprenait jamais qu'une version existait.
+             *
+             * Avec `prompt`, le worker neuf reste en attente, la page l'annonce
+             * (`lib/app-update/service-worker.ts` → bannière) et c'est le clic
+             * qui lui envoie `SKIP_WAITING` — le comportement du legacy
+             * (`apps/web/public/sw.js:233-238`).
+             */
+            registerType: 'prompt',
+            /**
+             * L'APPLICATION INSCRIT SON WORKER ELLE-MÊME, comme le legacy
+             * (`ServiceWorkerInitializer`). `registerSW.js` n'inscrivait que le
+             * script, sans détection ni annonce : garder les deux ferait deux
+             * inscriptions du même script, dont une seule écoute. Les en-têtes
+             * de `nginx.conf` suivent ce retrait.
+             */
+            injectRegister: false,
             includeAssets: ['favicon-48.png'],
             manifest: {
               name: 'Meeshy',
@@ -435,6 +462,17 @@ export default defineConfig({
               ],
             },
             workbox: {
+              /**
+               * LE WORKER NEUF PREND LA MAIN SUR LES PAGES DÉJÀ OUVERTES dès
+               * qu'il s'active (#6936) — sans quoi la page qui vient de cliquer
+               * « Mettre à jour » se rechargerait en restant servie par
+               * l'ANCIEN worker, et la première visite ne serait contrôlée par
+               * personne (`scripts/check-institutional.mjs` attend un
+               * contrôleur). `skipWaiting` reste FAUX, son défaut : c'est le
+               * clic qui l'appelle, par le message `SKIP_WAITING` que le
+               * modèle de Workbox câble précisément quand il est faux.
+               */
+              clientsClaim: true,
               /**
                * `brand/*.png` (#5606) : les DEUX actifs de marque servis par
                * les pages institutionnelles (le logo d'en-tête, le glyphe de
@@ -514,10 +552,17 @@ export default defineConfig({
                */
               runtimeCaching: [
                 {
-                  urlPattern: ({ url }) => url.pathname.startsWith('/api/'),
+                  /* PAS L'ADMINISTRATION (#6862) — `API_RESPONSE_CACHE_PATTERN`
+                     porte la règle et son motif : une conversation privée lue
+                     en régime souverain ne doit pas rester sept jours sur le
+                     disque du poste, dans un seau qu'`AdminAuditLog` ignore.
+                     Une VALEUR, jamais un prédicat importé : Workbox stringifie
+                     ce champ dans `dist/sw.js`, où aucun import ne le suit —
+                     `check-sw-api-cache.mjs` fait décider l'artefact construit. */
+                  urlPattern: API_RESPONSE_CACHE_PATTERN,
                   handler: 'NetworkFirst',
                   options: {
-                    cacheName: 'api',
+                    cacheName: SW_RUNTIME_CACHES.api,
                     networkTimeoutSeconds: 3,
                     expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 7 },
                   },
@@ -526,7 +571,7 @@ export default defineConfig({
                   urlPattern: ({ request }) => request.destination === 'image',
                   handler: 'CacheFirst',
                   options: {
-                    cacheName: 'medias',
+                    cacheName: SW_RUNTIME_CACHES.medias,
                     expiration: { maxEntries: 120, maxAgeSeconds: 60 * 60 * 24 * 30 },
                   },
                 },

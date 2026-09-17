@@ -2757,11 +2757,11 @@ describe('MessagingService - Edge Cases', () => {
     });
 
     it('returns success from deduplicated message when P2002 fires (lines 209-227)', async () => {
-      // Early dedup: miss (no existing message yet on first findFirst)
-      mockPrisma.message.findFirst.mockResolvedValueOnce(null);
-      // create throws P2002
+      // DEUX lectures manquent avant le `create` — dédup early, puis repli par
+      // contenu (#6910). Rendre un message à l'une des deux court-circuiterait la
+      // création : ce témoin attesterait le chemin P2002 sans plus le parcourir.
+      mockPrisma.message.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
       mockPrisma.message.create.mockRejectedValueOnce(p2002Error);
-      // MessageProcessor P2002 recovery findFirst returns existing message
       mockPrisma.message.findFirst.mockResolvedValueOnce(existingMsg());
 
       const response = await service.handleMessage(

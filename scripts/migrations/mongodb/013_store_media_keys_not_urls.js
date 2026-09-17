@@ -64,10 +64,18 @@ const MOTIF_A_MIGRER = new RegExp(
 );
 const SAUVEGARDE = 'MediaUrl_backup_013';
 
-/** Les champs qui portent l'adresse d'un média servi par NOUS. */
+/** Les champs qui portent l'adresse d'un média servi par NOUS.
+ *
+ * `PostMedia.fileUrl`/`thumbnailUrl` (#6390) manquaient à cette liste : la
+ * migration ne balayait ni ne comptait jamais les médias de post/story/status,
+ * alors que le producteur d'upload (`routes/uploads/tus-handler.ts`) écrit sur
+ * `PostMedia` exactement la même variable `fileUrl` (le `relPath` nu) que sur
+ * `MessageAttachment` — un chemin partagé, une seule des deux tables migrée. */
 const CIBLES = [
   { collection: 'MessageAttachment', champ: 'fileUrl' },
   { collection: 'MessageAttachment', champ: 'thumbnailUrl' },
+  { collection: 'PostMedia', champ: 'fileUrl' },
+  { collection: 'PostMedia', champ: 'thumbnailUrl' },
   { collection: 'Participant', champ: 'avatar' },
   { collection: 'User', champ: 'avatar' },
   { collection: 'Community', champ: 'avatar' },

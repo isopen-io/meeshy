@@ -6,6 +6,8 @@ import { shortRelativeTime } from '@/lib/relative-time';
 import { initialsOf } from '@/lib/view/conversation';
 
 import { resolveMediaCaption } from '@/lib/api/prism';
+import { parseCanvasDocument, type CanvasDocument } from '@/lib/canvas/document';
+import type { SceneCarrier } from '@/lib/canvas/carrier';
 
 import { feedMediaKindOf, postMediaRatio, reelCardRatio, type FeedMediaKind } from './layout';
 import { resolveMosaicLayout, type MosaicLayoutMode } from './mosaic-layout';
@@ -97,15 +99,29 @@ export type FeedCardStats = {
  * contrôle se peint vide plutôt que d'affirmer un geste jamais posé. */
 export type FeedCardViewer = { readonly liked: boolean; readonly bookmarked: boolean };
 
+/** LA SCÈNE D'UNE PUBLICATION (D-78, #6898) — le document canvas v3 déjà
+ * PARSÉ (`parseCanvasDocument`, `lib/canvas/document.ts`) et son PORTEUR : les
+ * médias déjà résolus par le Prisme (`FeedCardMedia[]` ci-dessus), jamais une
+ * seconde descente (cycle 128 du CLAUDE.md). `undefined` ⇒ repli média
+ * (D-78) : `v !== 3`, `scenes` absent/vide, ou pas de `storyEffects`. */
+export type FeedCardScene = { readonly document: CanvasDocument; readonly carrier: SceneCarrier };
+
 export type FeedCardModel = {
   readonly id: string;
   readonly viewer: FeedCardViewer;
   readonly isReel: boolean;
   readonly author: FeedCardAuthor;
   readonly relativeTime: string;
+  /** L'HORLOGE ISO du post, TELLE QUE SERVIE (#6902) — `relativeTime` ci-dessus
+   * est déjà la projection HUMAINE (« il y a 3 min »), qui se PÉRIME (`useMinute`)
+   * et ne porte pas de date absolue : le pied de la galerie plein écran
+   * (`CarrierFooter`, miroir `bottomMetadataOverlay`) a besoin de la date BRUTE
+   * pour son propre format (`toLocaleString`), comme `MediaCarrier.sentAt`. */
+  readonly createdAt: string;
   readonly repostOfHandle?: string;
   readonly text?: FeedCardText;
   readonly media: readonly FeedCardMedia[];
+  readonly scene?: FeedCardScene;
   /** L'agencement CHOISI par l'auteur (#6514, `resolveMosaicLayout`) —
    * `carousel` quand le document n'en dit rien. */
   readonly layout: MosaicLayoutMode;
@@ -271,6 +287,38 @@ export function resolveFeedCardModel(
 
   const avatarSrc = resolveAuthorSrc(post.author?.avatar);
   const repostOfHandle = textOrUndefined(post.repostOf?.author?.username);
+  const media = resolveMedia(post, isReel, params.preferredLanguages, text);
+  const document = parseCanvasDocument(post.storyEffects);
+  // Le PORTEUR d'une scène est fait des médias DÉJÀ résolus par le Prisme
+  // (`media` ci-dessus) — jamais une seconde descente (cycle 128 du
+  // CLAUDE.md racine).
+  const scene: FeedCardScene | undefined =
+    document === null
+      ? undefined
+      : {
+          document,
+          carrier: {
+            postId: post.id,
+            // `mimeType`/`width`/`height` ne sont PAS reportés ici : le
+            // player rend un objet `media` d'après SA PROPRE charge canvas
+            // (`payload.mediaType`, `payload.aspectRatio`), jamais d'après le
+            // porteur — le porteur ne sert qu'à l'IDENTITÉ, la LÉGENDE et,
+            // pour une vidéo de fond, la VIGNETTE (revue-correction #6898) :
+            // `thumbnailSrc ?? placeholder`, le MÊME repli que
+            // `FeedMediaSurface` pose en `poster` sur une vidéo de post.
+            media: media.map((m) => {
+              const poster = m.thumbnailSrc ?? m.placeholder;
+              return {
+                id: m.id,
+                src: m.src,
+                ...(m.caption !== undefined ? { caption: m.caption } : {}),
+                ...(m.captionLanguage !== undefined ? { captionLanguage: m.captionLanguage } : {}),
+                ...(m.captionOrigin !== undefined ? { captionOrigin: m.captionOrigin } : {}),
+                ...(poster !== undefined ? { poster } : {}),
+              };
+            }),
+          },
+        };
 
   return {
     id: post.id,
@@ -283,9 +331,11 @@ export function resolveFeedCardModel(
       ...(avatarSrc !== undefined ? { avatarSrc } : {}),
     },
     relativeTime: shortRelativeTime(new Date(post.createdAt), params.now),
+    createdAt: new Date(post.createdAt).toISOString(),
     ...(repostOfHandle !== undefined ? { repostOfHandle } : {}),
     ...(text !== undefined ? { text } : {}),
-    media: resolveMedia(post, isReel, params.preferredLanguages, text),
+    media,
+    ...(scene !== undefined ? { scene } : {}),
     layout: resolveMosaicLayout(post.storyEffects),
     stats: {
       likeCount: numberOrUndefined(post.likeCount) ?? 0,

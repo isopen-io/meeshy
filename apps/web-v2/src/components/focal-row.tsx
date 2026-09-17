@@ -115,6 +115,7 @@ export const FocalRow = memo(function FocalRow({
   sendStartedAt,
   sendFailureReason,
   onRetry,
+  revealable = true,
   onJumpToMessage,
   onOpenStory,
   highlighted = false,
@@ -174,6 +175,16 @@ export const FocalRow = memo(function FocalRow({
    * bande elle-même : `lastError` était capturé et lu par PERSONNE. */
   sendFailureReason?: string;
   onRetry?: () => void;
+  /**
+   * LE CONTENU EST-IL SEULEMENT LA ? (#6862) — `false` quand la charge ne
+   * PORTE PAS le texte : la lecture souveraine de l'administration retient
+   * `content`, `translations` et les URL des pieces AU SERVEUR. Le voile
+   * offrirait alors un tap qui decouvre une bulle VIDE (loi 4). `true` par
+   * defaut : le fil ordinaire recoit le texte, seulement masque a l'affichage.
+   * Couvre aussi le CHIFFREMENT, que `protectionOf` ne connait pas — d'ou le
+   * `|| !revealable` sur `isProtected` ci-dessous.
+   */
+  revealable?: boolean;
   /** Saute au message cité (défaut #5566 défaut 10 : le bouton ne faisait rien). */
   onJumpToMessage: (messageId: string) => void;
   /**
@@ -385,7 +396,7 @@ export const FocalRow = memo(function FocalRow({
 
   // `kind === 'veiled' | 'burned'` toutes deux passent par `ProtectedContent`
   // (voir le commentaire ci-dessus sur le tombstone plat).
-  const isProtected = kind !== 'standard';
+  const isProtected = kind !== 'standard' || !revealable;
 
   /**
    * LA LIGNE BASSE — miroir de `FocalMetaColumn.mountsBottomLine` (défaut 7) :
@@ -688,6 +699,7 @@ export const FocalRow = memo(function FocalRow({
                 contentLength={message.content.length}
                 attachmentCount={message.attachments?.length ?? 0}
                 surface="row"
+                revealable={revealable}
                 onConsumeViewOnce={onConsumeViewOnce}
                 now={now}
               >
@@ -727,18 +739,24 @@ export const FocalRow = memo(function FocalRow({
                 className="flex items-center gap-1 pt-1"
                 style={{ color: 'var(--color-meta)', visibility: elected ? 'hidden' : 'visible' }}
               >
+                {/* SANS CAPACITÉ DE LANGUE, AUCUN CONTRÔLE DE LANGUE (#6862) —
+                    voir la jumelle de `bubble.tsx`. */}
                 <PrismPastille
                   servedLanguage={naturalServedLanguage}
                   originalLanguage={message.originalLanguage}
                   active={activeLanguage}
-                  onToggle={() => onPickLanguage?.(message.originalLanguage)}
+                  {...(onPickLanguage === undefined
+                    ? {}
+                    : { onToggle: () => onPickLanguage(message.originalLanguage) })}
                 />
-                <Flags
-                  languages={footerLanguages}
-                  active={activeLanguage}
-                  onPick={(code) => onPickLanguage?.(code)}
-                  limit={FLAG_LIMIT_PLAIN}
-                />
+                {onPickLanguage === undefined ? null : (
+                  <Flags
+                    languages={footerLanguages}
+                    active={activeLanguage}
+                    onPick={onPickLanguage}
+                    limit={FLAG_LIMIT_PLAIN}
+                  />
+                )}
                 {reactions.map(([glyph, count]) => {
                   const mine = myReactions?.includes(glyph) ?? false;
                   return (
@@ -865,8 +883,12 @@ export const FocalRow = memo(function FocalRow({
                   originalLanguage={message.originalLanguage}
                   footerLanguages={footerLanguages}
                   active={activeLanguage}
-                  onToggleOriginal={() => onPickLanguage?.(message.originalLanguage)}
-                  onPickLanguage={(code) => onPickLanguage?.(code)}
+                  {...(onPickLanguage === undefined
+                    ? {}
+                    : {
+                        onToggleOriginal: () => onPickLanguage(message.originalLanguage),
+                        onPickLanguage,
+                      })}
                   reactions={reactions}
                 />
               ) : null}
