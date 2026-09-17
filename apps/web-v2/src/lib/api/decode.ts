@@ -124,10 +124,16 @@ function decodeAttachment(raw: Attachment): Attachment {
  * en TypeScript « je n'ai enlevé que des clés absentes du type » : le filtre ne
  * peut RIEN produire qui ne soit déjà assignable, puisqu'il ne fait que
  * soustraire des entrées que le type déclare optionnelles.
+ *
+ * `exceptions` NOMME les clés dont le `null` n'est PAS absent mais SIGNIFIANT
+ * — celles que le type déclare `?: T | null` plutôt que `?: T` (#6826). Leur
+ * soustraire un `null` violerait le type, puisque lui seul distingue « absent »
+ * de « la valeur est explicitement `null` ». `decodeMessage`/`decodeAttachment`
+ * n'en ont aucune : leurs champs optionnels ne déclarent jamais `| null`.
  */
-function sansNull<T extends object>(valeur: T): T {
+function sansNull<T extends object>(valeur: T, exceptions: ReadonlyArray<keyof T> = []): T {
   return Object.fromEntries(
-    Object.entries(valeur).filter(([, v]) => v !== null)
+    Object.entries(valeur).filter(([k, v]) => v !== null || (exceptions as readonly string[]).includes(k))
   ) as T;
 }
 
@@ -255,6 +261,21 @@ export function decodeMessages(raw: readonly Message[]): readonly Message[] {
  * `currentUserJoinedAt`, `lastMessage.createdAt` ; NE TOUCHE PAS
  * `userPreferences` (tableau opaque, `preferences.ts` en fait le narrowing)
  * ni `lastMessageTranslations` (déjà des chaînes, jamais des dates).
+ *
+ * #6826 — `...rest` NE PASSAIT PAR AUCUN `sansNull` : `lastMessage` était le
+ * SEUL champ défait, à la main. Les 37 autres champs optionnels de
+ * `Conversation` traversaient donc avec leur `null` intact dès que la
+ * passerelle en servait un — `title: null` pour un direct sans titre stocké,
+ * ou n'importe quel champ optionnel futur. `dateFieldOf('lastMessageAt',
+ * null)` rendait `{}`, qui ne RETIRE rien de ce que `...rest` avait déjà
+ * écrit trois lignes plus haut — le défaut 4 de #5668, jamais porté ici.
+ *
+ * `currentUserRole` est l'unique EXCEPTION : le type le déclare
+ * `?: string | null` (`conversation.ts:371`), `null` signifiant « le lecteur
+ * n'est pas membre » — une valeur, pas une absence. `sansNull` la laisse
+ * survivre ; toute AUTRE clé nullable de `Conversation` n'a aujourd'hui aucune
+ * signification déclarée pour `null` distincte de « absent » (relevé contre
+ * `conversation.ts`, seul champ à porter `| null`).
  */
 export function decodeConversation(raw: Conversation): Conversation {
   /**
@@ -271,7 +292,7 @@ export function decodeConversation(raw: Conversation): Conversation {
     readonly lastMessage?: Conversation['lastMessage'] | null;
   };
   return {
-    ...rest,
+    ...sansNull(rest, ['currentUserRole']),
     ...(rawLastMessage === undefined || rawLastMessage === null
       ? {}
       : { lastMessage: decodeMessage(rawLastMessage) }),
