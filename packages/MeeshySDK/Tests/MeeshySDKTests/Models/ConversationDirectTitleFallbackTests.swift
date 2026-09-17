@@ -6,12 +6,23 @@ import XCTest
 /// Le décodeur préférait déjà le pair quand `participants` est servi — c'est
 /// `GET /conversations` et `GET /conversations/:id`. `GET /sync`
 /// (`services/gateway/src/routes/sync/conversations.ts`), le chemin de
-/// rafraîchissement PRINCIPAL d'iOS, ne sert ni `participants` ni
+/// rafraîchissement PRINCIPAL d'iOS, ne servait ni `participants` ni
 /// `lastMessage` : une conversation directe qui apparaît pour la première
 /// fois sur un appareil par ce chemin (nouvelle installation, nouvel appareil,
 /// reconnexion) retombait sur le `title` STOCKÉ — un artefact du legacy
 /// composé "X et Y" à la création, qui nomme les deux interlocuteurs y
 /// compris le lecteur.
+///
+/// #6827 (suivi, RÉSOLU côté serveur) — `syncConversationSelect` embarque
+/// désormais l'AUTRE participant d'un direct, borné à deux lignes, DIRECTEMENT
+/// sur la ligne `conversations` de `/sync` (piste 2 de l'issue : l'alternative
+/// étroite, jamais le roster complet de la collection `participants`). Zéro
+/// changement de décodeur : `APIConversation.participants` existait déjà, et
+/// `test_toConversation_withParticipants_prefersThePeerOverTheStoredTitle`
+/// ci-dessous EST le témoin de ce chemin — un direct fraîchement découvert via
+/// `/sync` affiche donc le nom du pair, plus le libellé générique. Le test
+/// juste en dessous garde le repli pour ce que #6827 NE couvre pas : un type
+/// autre que `direct`, ou une requête dont `?fields=` exclut `participants`.
 final class ConversationDirectTitleFallbackTests: XCTestCase {
 
     private func decodeConversation(_ payload: [String: Any]) throws -> APIConversation {
