@@ -31,6 +31,16 @@ describe('createStudioDraftStore — le brouillon SURVIT à un échec de publica
     expect(createStudioDraftStore(backend).get(VIEWER)).toEqual(snapshot);
   });
 
+  test('aspectRatio et thumbHash (§0, défaut 7) SURVIVENT au round-trip, sans les deux ⇒ toujours accepté', () => {
+    const backend = fakeStorage();
+    const snapshot = {
+      text: 'Bonjour',
+      background: { postMediaId: 'pm-1', fileUrl: '2026/09/x.jpg', mediaType: 'image' as const, aspectRatio: 0.5625, thumbHash: 'abc123' },
+    };
+    createStudioDraftStore(backend).set(VIEWER, snapshot);
+    expect(createStudioDraftStore(backend).get(VIEWER)).toEqual(snapshot);
+  });
+
   test('UN brouillon par LECTEUR — un autre compte sur le même appareil ne relit NI le texte NI les médias montés du premier', () => {
     const backend = fakeStorage();
     const store = createStudioDraftStore(backend);

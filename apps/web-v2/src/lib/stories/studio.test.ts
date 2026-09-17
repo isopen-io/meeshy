@@ -10,6 +10,7 @@ import {
   isStudioDraftEmpty,
   readyAssetOf,
   withBackground,
+  withBackgroundAspectRatio,
   withBackgroundUpload,
   withoutBackground,
   withoutSound,
@@ -98,9 +99,37 @@ describe('canPublishStudioDraft — loi 4, un contrôle existe s’il a un effet
 describe('readyAssetOf', () => {
   test('phase ready ⇒ la référence', () =>
     expect(readyAssetOf({ phase: 'ready', postMediaId: 'pm-1', fileUrl: 'k' })).toEqual({ postMediaId: 'pm-1', fileUrl: 'k' }));
+  test('phase ready avec thumbHash (accusé TUS, §0 défaut 7) ⇒ recopié', () =>
+    expect(readyAssetOf({ phase: 'ready', postMediaId: 'pm-1', fileUrl: 'k', thumbHash: 'abc' })).toEqual({
+      postMediaId: 'pm-1',
+      fileUrl: 'k',
+      thumbHash: 'abc',
+    }));
   test('uploading/failed ⇒ null', () => {
     expect(readyAssetOf({ phase: 'uploading', progress: 0.5 })).toBeNull();
     expect(readyAssetOf({ phase: 'failed', reasonKey: 'story.studio.failure.network' })).toBeNull();
+  });
+});
+
+describe('withBackgroundAspectRatio — la mesure LOCALE (§0, défaut 7)', () => {
+  test('pose le rapport sur le fond COURANT', () => {
+    const draft = withBackground(emptyStudioDraft(), backgroundAsset());
+    const measured = withBackgroundAspectRatio(draft, 'blob:bg', 0.5625);
+    expect(measured.background?.aspectRatio).toBe(0.5625);
+  });
+
+  test('un fond déjà REMPLACÉ (autre `previewUrl`) le temps de la mesure n’hérite PAS le rapport de l’ancien fichier', () => {
+    const draft = withBackground(emptyStudioDraft(), backgroundAsset());
+    const replaced = withBackground(draft, { ...backgroundAsset(), previewUrl: 'blob:bg2' });
+    const stale = withBackgroundAspectRatio(replaced, 'blob:bg', 0.5625);
+    expect(stale).toBe(replaced);
+    expect(stale.background?.aspectRatio).toBeUndefined();
+  });
+
+  test('un fond RETIRÉ le temps de la mesure ne ressuscite pas', () => {
+    const draft = withBackground(emptyStudioDraft(), backgroundAsset());
+    const removed = withoutBackground(draft);
+    expect(withBackgroundAspectRatio(removed, 'blob:bg', 0.5625)).toBe(removed);
   });
 });
 
@@ -188,5 +217,17 @@ describe('studioSnapshotOf / studioDraftFromSnapshot — ce qui survit à un rem
 
   test('aucun brouillon ⇒ un studio vide', () => {
     expect(isStudioDraftEmpty(studioDraftFromSnapshot(null, (u) => u))).toBe(true);
+  });
+
+  test('aspectRatio (mesure locale) et thumbHash (accusé TUS) SURVIVENT au remontage (§0, défaut 7)', () => {
+    const withAspect = withBackgroundAspectRatio(withBackground(emptyStudioDraft(), backgroundAsset()), 'blob:bg', 0.5625);
+    const draft = withBackgroundUpload(withAspect, { phase: 'ready', postMediaId: 'pm-bg', fileUrl: '2026/09/bg.jpg', thumbHash: 'abc123' });
+
+    const snapshot = studioSnapshotOf(draft, 'fr');
+    expect(snapshot.background).toEqual({ postMediaId: 'pm-bg', fileUrl: '2026/09/bg.jpg', thumbHash: 'abc123', mediaType: 'image', aspectRatio: 0.5625 });
+
+    const restored = studioDraftFromSnapshot(snapshot, (fileUrl) => `https://cdn/${fileUrl}`);
+    expect(restored.background?.aspectRatio).toBe(0.5625);
+    expect(restored.background?.upload).toEqual({ phase: 'ready', postMediaId: 'pm-bg', fileUrl: '2026/09/bg.jpg', thumbHash: 'abc123' });
   });
 });

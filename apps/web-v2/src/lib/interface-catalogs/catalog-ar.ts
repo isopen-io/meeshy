@@ -597,6 +597,8 @@ const ar = {
   'story.studio.sound.add': 'إضافة صوت',
   'story.studio.sound.label': 'صوت الخلفية',
   'story.studio.sound.remove': 'إزالة الصوت',
+  'story.studio.sound.mute': 'كتم الصوت',
+  'story.studio.sound.unmute': 'تشغيل الصوت',
   'story.studio.upload.progress': 'جارٍ الإرسال… {percent}٪',
   'story.studio.upload.ready': 'جاهز',
   'story.studio.upload.retry': 'إعادة المحاولة',

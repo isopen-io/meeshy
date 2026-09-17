@@ -65,6 +65,18 @@ describe('publishStory — POST /api/v1/posts (core.ts:370-462)', () => {
     expect(calls).toHaveLength(0);
   });
 
+  test('un document AVEC texte de scène ⇒ corps POST SANS `content` (défaut 4, revue-correction)', async () => {
+    const effects = buildStoryCanvasEffects({ text: 'Bonjour', locale: 'fr' })!;
+    const { impl, calls } = fakeFetch({ status: 201, body: { success: true, data: { id: 'post-1' } } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+
+    await publishStory({ source: 'gateway', transport, originalLanguage: 'fr', storyEffects: effects, mediaIds: [] });
+
+    const body = JSON.parse(String(calls[0]!.init.body));
+    expect('content' in body).toBe(false);
+    expect(body.storyEffects.scenes[0].objects.some((o: { kind: string }) => o.kind === 'text')).toBe(true);
+  });
+
   test('un refus CANVAS_INVALID de la passerelle (core.ts:118-129) traverse tel quel', async () => {
     const effects = buildStoryCanvasEffects({ text: 'x', locale: 'fr' })!;
     const { impl } = fakeFetch({ status: 400, body: { success: false, error: 'Invalid canvas', code: 'CANVAS_INVALID' } });

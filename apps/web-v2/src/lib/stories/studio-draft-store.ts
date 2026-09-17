@@ -21,6 +21,9 @@ import type { StudioMediaKind } from './story-document';
 export type StudioDraftAssetRef = {
   readonly postMediaId: string;
   readonly fileUrl: string;
+  /** L'empreinte de l'accusé TUS (§ 0, défaut 7) — RELUE telle quelle, jamais
+   * remesurée : le fichier local n'existe plus après un rechargement. */
+  readonly thumbHash?: string;
 };
 
 export type StudioDraftSnapshot = {
@@ -30,7 +33,7 @@ export type StudioDraftSnapshot = {
    * restauré repartirait étiqueté dans la langue primaire du lecteur, et le
    * Prisme le traduirait depuis la mauvaise langue. */
   readonly language?: string;
-  readonly background?: StudioDraftAssetRef & { readonly mediaType: StudioMediaKind };
+  readonly background?: StudioDraftAssetRef & { readonly mediaType: StudioMediaKind; readonly aspectRatio?: number };
   readonly sound?: StudioDraftAssetRef;
 };
 
@@ -39,7 +42,8 @@ const keyOf = (viewerId: string): string => `meeshy.draft.story.${viewerId}`;
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
 
 function isAssetRef(value: unknown): value is StudioDraftAssetRef {
-  return isRecord(value) && typeof value.postMediaId === 'string' && typeof value.fileUrl === 'string';
+  if (!isRecord(value) || typeof value.postMediaId !== 'string' || typeof value.fileUrl !== 'string') return false;
+  return value.thumbHash === undefined || typeof value.thumbHash === 'string';
 }
 
 function isSnapshot(value: unknown): value is StudioDraftSnapshot {
@@ -47,7 +51,11 @@ function isSnapshot(value: unknown): value is StudioDraftSnapshot {
   if (value.language !== undefined && typeof value.language !== 'string') return false;
   const { background, sound } = value;
   const backgroundValid =
-    background === undefined || (isRecord(background) && (background.mediaType === 'image' || background.mediaType === 'video') && isAssetRef(background));
+    background === undefined ||
+    (isRecord(background) &&
+      (background.mediaType === 'image' || background.mediaType === 'video') &&
+      (background.aspectRatio === undefined || typeof background.aspectRatio === 'number') &&
+      isAssetRef(background));
   return backgroundValid && (sound === undefined || isAssetRef(sound));
 }
 

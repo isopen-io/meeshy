@@ -29,7 +29,15 @@ import type { ApiResult } from './http';
  * reste juge (`CANVAS_INVALID`, `core.ts:118-129`), et son refus se dit.
  */
 export type PublishStoryParams = ConversationsDeps & {
-  readonly content: string;
+  /**
+   * La LÉGENDE — distincte du texte de scène (`storyEffects`, § modèle § 3).
+   * Le studio (#6900) n'a AUCUN champ légende : il n'en envoie jamais. Un
+   * futur appelant qui en gagne un l'y pose ; tant qu'aucun n'existe, ce
+   * champ reste absent du corps (jamais une chaîne vide POSÉE quand même) —
+   * miroir du `content: nil` iOS quand le texte vit dans le canevas
+   * (`StoryViewModel+PublicationUpload.swift:378-391`).
+   */
+  readonly content?: string;
   readonly originalLanguage?: string;
   readonly storyEffects: CanvasV3;
   readonly mediaIds: readonly string[];
@@ -57,7 +65,7 @@ export async function publishStory(params: PublishStoryParams): Promise<ApiResul
     headers: CANVAS_CAPS_HEADERS,
     body: {
       type: 'STORY',
-      content: params.content,
+      ...(params.content !== undefined && params.content !== '' ? { content: params.content } : {}),
       ...(params.originalLanguage !== undefined ? { originalLanguage: params.originalLanguage } : {}),
       storyEffects: params.storyEffects,
       mediaIds: params.mediaIds,

@@ -600,6 +600,8 @@ const en = {
   'story.studio.sound.add': 'Add a sound',
   'story.studio.sound.label': 'Background sound',
   'story.studio.sound.remove': 'Remove sound',
+  'story.studio.sound.mute': 'Mute sound',
+  'story.studio.sound.unmute': 'Unmute sound',
   'story.studio.upload.progress': 'Uploading… {percent}%',
   'story.studio.upload.ready': 'Ready',
   'story.studio.upload.retry': 'Retry',

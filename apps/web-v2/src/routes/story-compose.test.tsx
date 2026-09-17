@@ -209,6 +209,51 @@ describe('StoryComposeScreen — l’aperçu par le moteur PARTAGÉ (D-79)', () 
     const el = mount(harness({}).deps);
     expect(el.querySelector('#story-studio-text')?.getAttribute('lang')).toBeTruthy();
   });
+
+  test('le texte tapé se DESSINE par le moteur ([data-scene-text]) — jamais SEULEMENT dans le champ de saisie (défaut 5, revue-correction)', () => {
+    const el = mount(harness({}).deps);
+    expect(el.querySelector('[data-scene-text]')).toBeNull();
+
+    typeText(el, 'Recette studio');
+    expect(el.querySelector('[data-scene-text]')?.textContent).toBe('Recette studio');
+  });
+
+  test('le champ de saisie est TRANSPARENT — le texte visible vient du moteur, pas d’une seconde peinture (défaut 5)', () => {
+    const el = mount(harness({}).deps);
+    const textarea = el.querySelector('#story-studio-text');
+    expect(textarea?.getAttribute('class')).toContain('text-transparent');
+    expect(textarea?.getAttribute('style') ?? '').not.toContain('text-shadow');
+  });
+});
+
+describe('StoryComposeScreen — le son de fond s’ÉCOUTE, avec un vrai bouton (défaut 6, revue-correction)', () => {
+  test('aucun son posé ⇒ ni lecteur audio ni bouton', () => {
+    const el = mount(harness({}).deps);
+    expect(el.querySelector('[data-story-studio-sound]')).toBeNull();
+    expect(el.querySelector('[data-story-studio-sound-toggle]')).toBeNull();
+  });
+
+  test('un son posé ⇒ un <audio> sur l’URL LOCALE et un bouton 44 px qui COUPE/RÉTABLIT effectivement le son', async () => {
+    const el = mount(harness({}).deps);
+    selectFile(el, 'sound', new File([new Uint8Array([1, 2, 3])], 'son.m4a', { type: 'audio/mp4' }));
+    await flush(() => el.querySelector('[data-asset-phase="ready"]') !== null);
+
+    const soundAudio = el.querySelector<HTMLAudioElement>('[data-story-studio-sound]');
+    expect(soundAudio?.getAttribute('src')?.startsWith('blob:')).toBe(true);
+
+    const toggle = el.querySelector<HTMLButtonElement>('[data-story-studio-sound-toggle]')!;
+    expect(toggle.getBoundingClientRect).toBeDefined();
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    expect(soundAudio?.muted).toBe(true);
+
+    act(() => toggle.click());
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
+    expect(el.querySelector<HTMLAudioElement>('[data-story-studio-sound]')?.muted).toBe(false);
+
+    act(() => toggle.click());
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    expect(el.querySelector<HTMLAudioElement>('[data-story-studio-sound]')?.muted).toBe(true);
+  });
 });
 
 describe('StoryComposeScreen — le brouillon SURVIT, et un média PRÊT n’est jamais remonté', () => {
@@ -286,7 +331,13 @@ describe('StoryComposeScreen — le brouillon SURVIT, et un média PRÊT n’est
 
     act(() => removeButton(el, 'Retirer le fond')!.click());
     await flush();
-    expect(el.querySelector('[data-scene-player]')).toBeNull();
+    // Le TEXTE reste : un document texte seul est un fond de COULEUR + texte
+    // (`composeStoryCanvas` — « une story sans visuel porte un fond de
+    // couleur »), donc le moteur continue de peindre — sans image, ni
+    // postMediaId (défaut 5, revue-correction : le texte se dessine par le
+    // moteur, y compris quand il est la SEULE forme posée).
+    expect(el.querySelector('[data-scene-player] img')).toBeNull();
+    expect(el.querySelector('[data-scene-text]')?.textContent).toBe('Sans fond finalement');
     expect(drafts.get(VIEWER_ID)?.background).toBeUndefined();
 
     act(() => publishButton(el)!.click());
@@ -324,7 +375,13 @@ describe('StoryComposeScreen — les états refus, hors-ligne et échec de mont�
     });
     await flush(() => bench.posts.length > 0);
     expect(bench.posts).toHaveLength(1);
-    expect(bench.posts[0]!.content).toBe('Écrit dans le métro');
+    // Défaut 4 (revue-correction) : le texte de scène ne se recopie JAMAIS
+    // dans `content` — le studio n'a pas de champ légende, et l'envoyer y
+    // ferait rendre le texte DEUX FOIS chez le lecteur.
+    expect('content' in bench.posts[0]!).toBe(false);
+    const effects = bench.posts[0]!.storyEffects as { scenes: Array<{ objects: Array<{ kind: string; payload: Record<string, unknown> }> }> };
+    const textObject = effects.scenes[0]!.objects.find((o) => o.kind === 'text');
+    expect(textObject?.payload.text).toBe('Écrit dans le métro');
   });
 
   test('une intention armée hors ligne puis VIDÉE ne ment pas au retour du réseau', async () => {

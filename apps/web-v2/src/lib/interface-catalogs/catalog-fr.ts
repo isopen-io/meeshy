@@ -635,6 +635,8 @@ const fr = {
   'story.studio.sound.add': 'Ajouter un son',
   'story.studio.sound.label': 'Son de fond',
   'story.studio.sound.remove': 'Retirer le son',
+  'story.studio.sound.mute': 'Couper le son',
+  'story.studio.sound.unmute': 'Écouter le son',
   'story.studio.upload.progress': 'Envoi… {percent} %',
   'story.studio.upload.ready': 'Prêt',
   'story.studio.upload.retry': 'Réessayer',

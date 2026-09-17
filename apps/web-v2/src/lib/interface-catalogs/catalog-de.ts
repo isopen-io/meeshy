@@ -600,6 +600,8 @@ const de = {
   'story.studio.sound.add': 'Ton hinzufügen',
   'story.studio.sound.label': 'Hintergrundton',
   'story.studio.sound.remove': 'Ton entfernen',
+  'story.studio.sound.mute': 'Ton stummschalten',
+  'story.studio.sound.unmute': 'Ton aktivieren',
   'story.studio.upload.progress': 'Wird gesendet… {percent} %',
   'story.studio.upload.ready': 'Bereit',
   'story.studio.upload.retry': 'Erneut versuchen',

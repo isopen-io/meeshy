@@ -31,18 +31,36 @@ export type StudioMediaKind = 'image' | 'video';
 export type StudioReadyAsset = {
   readonly postMediaId: string;
   readonly fileUrl: string;
+  /** L'empreinte de l'ACCUSÉ TUS (`tus-handler.ts:457-472`) — placeholder que
+   * les quatre surfaces du fil affichent avant l'arrivée du média (§ 0 de la
+   * spécification, défaut 7). Absente : la passerelle en génère une, mais un
+   * document publié SANS elle n'en profite jamais. */
+  readonly thumbHash?: string;
 };
 
-/** Où un média se LIT : `mediaURL` toujours, `postMediaId` une fois monté. */
+/** Où un média se LIT : `mediaURL` toujours, `postMediaId` une fois monté,
+ * `thumbHash` dès que l'accusé TUS en porte une — les trois clés que
+ * `SceneFraming.declaredAspect`/`scene-framing.ts#declaredAspect` et les
+ * quatre surfaces de placeholder relisent SANS rien télécharger. */
 export type StoryMediaAddress = {
   readonly mediaURL: string;
   readonly postMediaId?: string;
+  readonly thumbHash?: string;
 };
 
 export type StoryComposition = {
   readonly text: string;
   readonly locale: string;
-  readonly background?: { readonly address: StoryMediaAddress; readonly mediaType: StudioMediaKind };
+  readonly background?: {
+    readonly address: StoryMediaAddress;
+    readonly mediaType: StudioMediaKind;
+    /** Largeur / hauteur du FICHIER LOCAL (§ 0, défaut 7) — connu dès la
+     * sélection, IDENTIQUE dans l'aperçu et la publication (contrairement à
+     * `thumbHash`, qui n'existe qu'une fois l'accusé TUS reçu). Sans lui, un
+     * fond paysage n'est plus cadré sur sa bande côté lecteur
+     * (`declaredAspect`, `scene-framing.ts:57-61`). */
+    readonly aspectRatio?: number;
+  };
   readonly sound?: { readonly address: StoryMediaAddress };
 };
 
@@ -74,7 +92,11 @@ const CENTER = { t: 'free', x: 0.5, y: 0.5 } as const;
 const IDENTITY = { scale: 1, rotation: 0, opacity: 1 } as const;
 
 function addressPayload(address: StoryMediaAddress): Record<string, string> {
-  return { ...(address.postMediaId !== undefined ? { postMediaId: address.postMediaId } : {}), mediaURL: address.mediaURL };
+  return {
+    ...(address.postMediaId !== undefined ? { postMediaId: address.postMediaId } : {}),
+    mediaURL: address.mediaURL,
+    ...(address.thumbHash !== undefined ? { thumbHash: address.thumbHash } : {}),
+  };
 }
 
 /** L'objet TEXTE du studio — l'éditeur posé sur la carte en relit la couleur
@@ -111,6 +133,7 @@ function composeObjects(input: StoryComposition): ObjectV3[] {
               ...addressPayload(background.address),
               mediaType: background.mediaType,
               isBackground: true,
+              ...(background.aspectRatio !== undefined ? { aspectRatio: background.aspectRatio } : {}),
               ...(mutesVideo ? { muted: true, volume: 0 } : {}),
             },
           } satisfies ObjectV3,
@@ -159,14 +182,26 @@ export function composeStoryCanvas(input: StoryComposition): CanvasV3 | null {
 export function buildStoryCanvasEffects(params: {
   readonly text: string;
   readonly locale: string;
-  readonly background?: { readonly ready: StudioReadyAsset; readonly mediaType: StudioMediaKind };
+  readonly background?: { readonly ready: StudioReadyAsset; readonly mediaType: StudioMediaKind; readonly aspectRatio?: number };
   readonly sound?: { readonly ready: StudioReadyAsset };
 }): CanvasV3 | null {
-  const served = (ready: StudioReadyAsset): StoryMediaAddress => ({ postMediaId: ready.postMediaId, mediaURL: ready.fileUrl });
+  const served = (ready: StudioReadyAsset): StoryMediaAddress => ({
+    postMediaId: ready.postMediaId,
+    mediaURL: ready.fileUrl,
+    ...(ready.thumbHash !== undefined ? { thumbHash: ready.thumbHash } : {}),
+  });
   return composeStoryCanvas({
     text: params.text,
     locale: params.locale,
-    ...(params.background !== undefined ? { background: { address: served(params.background.ready), mediaType: params.background.mediaType } } : {}),
+    ...(params.background !== undefined
+      ? {
+          background: {
+            address: served(params.background.ready),
+            mediaType: params.background.mediaType,
+            ...(params.background.aspectRatio !== undefined ? { aspectRatio: params.background.aspectRatio } : {}),
+          },
+        }
+      : {}),
     ...(params.sound !== undefined ? { sound: { address: served(params.sound.ready) } } : {}),
   });
 }
@@ -179,14 +214,20 @@ export function buildStoryCanvasEffects(params: {
 export function buildPreviewCanvasDocument(params: {
   readonly text: string;
   readonly locale: string;
-  readonly background?: { readonly previewUrl: string; readonly mediaType: StudioMediaKind };
+  readonly background?: { readonly previewUrl: string; readonly mediaType: StudioMediaKind; readonly aspectRatio?: number };
   readonly sound?: { readonly previewUrl: string };
 }): CanvasDocument | null {
   const composed = composeStoryCanvas({
     text: params.text,
     locale: params.locale,
     ...(params.background !== undefined
-      ? { background: { address: { mediaURL: params.background.previewUrl }, mediaType: params.background.mediaType } }
+      ? {
+          background: {
+            address: { mediaURL: params.background.previewUrl },
+            mediaType: params.background.mediaType,
+            ...(params.background.aspectRatio !== undefined ? { aspectRatio: params.background.aspectRatio } : {}),
+          },
+        }
       : {}),
     ...(params.sound !== undefined ? { sound: { address: { mediaURL: params.sound.previewUrl } } } : {}),
   });

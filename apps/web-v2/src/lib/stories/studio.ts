@@ -31,7 +31,7 @@ export type StudioFailureKey =
 
 export type StudioUploadState =
   | { readonly phase: 'uploading'; readonly progress: number }
-  | { readonly phase: 'ready'; readonly postMediaId: string; readonly fileUrl: string }
+  | { readonly phase: 'ready'; readonly postMediaId: string; readonly fileUrl: string; readonly thumbHash?: string }
   | { readonly phase: 'failed'; readonly reasonKey: StudioFailureKey };
 
 export type StudioBackgroundAsset = {
@@ -39,6 +39,12 @@ export type StudioBackgroundAsset = {
   readonly previewUrl: string;
   readonly mediaType: StudioMediaKind;
   readonly upload: StudioUploadState;
+  /** Largeur / hauteur du FICHIER LOCAL (§ 0, défaut 7) — mesurée dès la
+   * sélection (`measureAspectRatio`), posée par `withBackgroundAspectRatio` une
+   * fois connue. `undefined` tant que la mesure est en vol : un document
+   * publié SANS elle laisse le lecteur cadrer sur le rapport 9:16 par défaut,
+   * jamais un blocage. */
+  readonly aspectRatio?: number;
 };
 
 export type StudioSoundAsset = {
@@ -81,6 +87,15 @@ export function withBackgroundUpload(draft: StudioDraft, upload: StudioUploadSta
   return { ...draft, background: { ...draft.background, upload } };
 }
 
+/** Posée dès que la mesure LOCALE du fichier aboutit (§ 0, défaut 7) — sans
+ * garde de course : un fond déjà RETIRÉ ou REMPLACÉ le temps de la mesure ne
+ * doit pas hériter le rapport d'un autre fichier (le remplaçant a déjà posé
+ * le sien à sa propre sélection). */
+export function withBackgroundAspectRatio(draft: StudioDraft, previewUrl: string, aspectRatio: number): StudioDraft {
+  if (draft.background === null || draft.background.previewUrl !== previewUrl) return draft;
+  return { ...draft, background: { ...draft.background, aspectRatio } };
+}
+
 export function withSound(draft: StudioDraft, asset: StudioSoundAsset): StudioDraft {
   return { ...draft, sound: asset };
 }
@@ -118,8 +133,11 @@ export function canPublishStudioDraft(draft: StudioDraft): boolean {
   return true;
 }
 
-export function readyAssetOf(upload: StudioUploadState): { readonly postMediaId: string; readonly fileUrl: string } | null {
-  return upload.phase === 'ready' ? { postMediaId: upload.postMediaId, fileUrl: upload.fileUrl } : null;
+export function readyAssetOf(
+  upload: StudioUploadState,
+): { readonly postMediaId: string; readonly fileUrl: string; readonly thumbHash?: string } | null {
+  if (upload.phase !== 'ready') return null;
+  return { postMediaId: upload.postMediaId, fileUrl: upload.fileUrl, ...(upload.thumbHash !== undefined ? { thumbHash: upload.thumbHash } : {}) };
 }
 
 /**
@@ -150,7 +168,15 @@ export function studioSnapshotOf(draft: StudioDraft, language: string): StudioDr
   return {
     text: draft.text,
     ...(draft.text.trim() !== '' ? { language } : {}),
-    ...(background !== null && draft.background !== null ? { background: { ...background, mediaType: draft.background.mediaType } } : {}),
+    ...(background !== null && draft.background !== null
+      ? {
+          background: {
+            ...background,
+            mediaType: draft.background.mediaType,
+            ...(draft.background.aspectRatio !== undefined ? { aspectRatio: draft.background.aspectRatio } : {}),
+          },
+        }
+      : {}),
     ...(sound !== null ? { sound } : {}),
   };
 }
@@ -170,11 +196,25 @@ export function studioDraftFromSnapshot(snapshot: StudioDraftSnapshot | null, re
         : {
             previewUrl: resolveUrl(background.fileUrl),
             mediaType: background.mediaType,
-            upload: { phase: 'ready', postMediaId: background.postMediaId, fileUrl: background.fileUrl },
+            ...(background.aspectRatio !== undefined ? { aspectRatio: background.aspectRatio } : {}),
+            upload: {
+              phase: 'ready',
+              postMediaId: background.postMediaId,
+              fileUrl: background.fileUrl,
+              ...(background.thumbHash !== undefined ? { thumbHash: background.thumbHash } : {}),
+            },
           },
     sound:
       sound === undefined
         ? null
-        : { previewUrl: resolveUrl(sound.fileUrl), upload: { phase: 'ready', postMediaId: sound.postMediaId, fileUrl: sound.fileUrl } },
+        : {
+            previewUrl: resolveUrl(sound.fileUrl),
+            upload: {
+              phase: 'ready',
+              postMediaId: sound.postMediaId,
+              fileUrl: sound.fileUrl,
+              ...(sound.thumbHash !== undefined ? { thumbHash: sound.thumbHash } : {}),
+            },
+          },
   };
 }

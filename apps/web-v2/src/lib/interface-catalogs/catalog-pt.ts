@@ -604,6 +604,8 @@ const pt = {
   'story.studio.sound.add': 'Adicionar um som',
   'story.studio.sound.label': 'Som de fundo',
   'story.studio.sound.remove': 'Remover o som',
+  'story.studio.sound.mute': 'Silenciar o som',
+  'story.studio.sound.unmute': 'Ativar o som',
   'story.studio.upload.progress': 'A enviar… {percent} %',
   'story.studio.upload.ready': 'Pronto',
   'story.studio.upload.retry': 'Tentar novamente',

@@ -63,6 +63,46 @@ describe('buildStoryCanvasEffects — le fond (§0 de la spécification, correct
   });
 });
 
+describe('buildStoryCanvasEffects — le rapport et l’empreinte du fond (§0, défaut 7)', () => {
+  test('aspectRatio (mesure LOCALE) et thumbHash (accusé TUS) voyagent dans payload — SceneFraming.declaredAspect les relit sans rien télécharger', () => {
+    const effects = buildStoryCanvasEffects({
+      text: '',
+      locale: 'fr',
+      background: { ready: { ...BACKGROUND, thumbHash: 'abc123' }, mediaType: 'image', aspectRatio: 0.5625 },
+    })!;
+    const object = effects.scenes![0]!.objects[0]!;
+    expect(object.payload.aspectRatio).toBe(0.5625);
+    expect(object.payload.thumbHash).toBe('abc123');
+  });
+
+  test('aucune mesure ⇒ aucun des deux champs (jamais une valeur inventée)', () => {
+    const effects = buildStoryCanvasEffects({ text: '', locale: 'fr', background: { ready: BACKGROUND, mediaType: 'image' } })!;
+    const object = effects.scenes![0]!.objects[0]!;
+    expect('aspectRatio' in object.payload).toBe(false);
+    expect('thumbHash' in object.payload).toBe(false);
+  });
+
+  test('passe CanvasV3Schema.safeParse avec les deux champs posés', () => {
+    const effects = buildStoryCanvasEffects({
+      text: '',
+      locale: 'fr',
+      background: { ready: { ...BACKGROUND, thumbHash: 'abc123' }, mediaType: 'image', aspectRatio: 1.777 },
+    });
+    expect(CanvasV3Schema.safeParse(effects).success).toBe(true);
+  });
+});
+
+describe('buildPreviewCanvasDocument — aspectRatio partagé avec la publication, thumbHash HORS de l’aperçu (§0, défaut 7)', () => {
+  test('aspectRatio local connu dès la sélection ⇒ porté par l’aperçu aussi', () => {
+    const document = buildPreviewCanvasDocument({
+      text: '',
+      locale: 'fr',
+      background: { previewUrl: 'blob:local-1', mediaType: 'image', aspectRatio: 0.5625 },
+    })!;
+    expect(document.scenes[0]!.objects[0]!.payload.aspectRatio).toBe(0.5625);
+  });
+});
+
 describe('buildStoryCanvasEffects — le son de fond', () => {
   test('kind audio, payload.isBackground + placement "background" (electBackgroundTrack le lit, background-sound.ts:59)', () => {
     const effects = buildStoryCanvasEffects({ text: '', locale: 'fr', sound: { ready: SOUND } });

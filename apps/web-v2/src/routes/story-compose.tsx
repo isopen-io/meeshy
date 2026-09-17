@@ -11,6 +11,7 @@ import { sessionStore } from '@/lib/api/session';
 import { STORIES_QUERY_PREFIX } from '@/lib/api/stories';
 import { publishStory } from '@/lib/api/stories-publish';
 import { backgroundCss } from '@/lib/canvas/background';
+import { electBackgroundTrack } from '@/lib/canvas/background-sound';
 import type { SceneCarrier } from '@/lib/canvas/carrier';
 import { parseCanvasDocument } from '@/lib/canvas/document';
 import { resolveSceneText } from '@/lib/canvas/text';
@@ -24,6 +25,7 @@ import {
   STORY_PLAIN_BACKGROUND,
   studioMediaIds,
   studioMediaKindOf,
+  type StudioMediaKind,
   type StudioReadyAsset,
 } from '@/lib/stories/story-document';
 import {
@@ -33,6 +35,7 @@ import {
   studioFailureKey,
   studioSnapshotOf,
   withBackground,
+  withBackgroundAspectRatio,
   withBackgroundUpload,
   withoutBackground,
   withoutSound,
@@ -47,7 +50,8 @@ import {
 import { studioDraftStore, type StudioDraftStore } from '@/lib/stories/studio-draft-store';
 import { useComposeLanguage } from '@/lib/view/use-compose-language';
 import { useReaderLanguages } from '@/lib/view/use-reader';
-import { Glyph } from '@/components/glyph';
+import { Glyph, GlyphSvg } from '@/components/glyph';
+import { MEDIA_TRANSPORT_GLYPHS } from '@/components/glyphs-media-transport';
 import { Link, href, navigate } from '@/routes/route-table';
 import { StudioAssetRow, StudioDoorButton, StudioRefusal } from '@/routes/story-compose-parts';
 
@@ -99,19 +103,60 @@ function revokeIfLocal(url: string | undefined): void {
 }
 
 function uploadStateOf(result: ApiResult<PostMediaUploadResult>): StudioUploadState | null {
-  if (result.ok) return { phase: 'ready', postMediaId: result.data.postMediaId, fileUrl: result.data.fileUrl };
+  if (result.ok) {
+    return {
+      phase: 'ready',
+      postMediaId: result.data.postMediaId,
+      fileUrl: result.data.fileUrl,
+      ...(result.data.thumbHash !== undefined ? { thumbHash: result.data.thumbHash } : {}),
+    };
+  }
   const reasonKey = studioFailureKey(result, 'upload');
   return reasonKey === null ? null : { phase: 'failed', reasonKey };
+}
+
+function readyAssetFromUpload(upload: Extract<StudioUploadState, { phase: 'ready' }>): StudioReadyAsset {
+  return { postMediaId: upload.postMediaId, fileUrl: upload.fileUrl, ...(upload.thumbHash !== undefined ? { thumbHash: upload.thumbHash } : {}) };
+}
+
+function readyAssetFromResult(data: PostMediaUploadResult): StudioReadyAsset {
+  return { postMediaId: data.postMediaId, fileUrl: data.fileUrl, ...(data.thumbHash !== undefined ? { thumbHash: data.thumbHash } : {}) };
 }
 
 /** Un média tel que la publication le LIT : prêt dans le brouillon, sinon
  * l'accusé de SA montée en vol — jamais un second envoi. */
 async function settle(upload: StudioUploadState | undefined, pending: PendingUpload | null): Promise<SettledAsset> {
   if (upload === undefined) return { kind: 'none' };
-  if (upload.phase === 'ready') return { kind: 'ready', ready: { postMediaId: upload.postMediaId, fileUrl: upload.fileUrl } };
+  if (upload.phase === 'ready') return { kind: 'ready', ready: readyAssetFromUpload(upload) };
   if (upload.phase === 'failed' || pending === null) return { kind: 'failed' };
   const result = await pending;
-  return result.ok ? { kind: 'ready', ready: { postMediaId: result.data.postMediaId, fileUrl: result.data.fileUrl } } : { kind: 'failed' };
+  return result.ok ? { kind: 'ready', ready: readyAssetFromResult(result.data) } : { kind: 'failed' };
+}
+
+/**
+ * LE RAPPORT DU FICHIER LOCAL (§ 0, défaut 7) — connu SANS réseau, dès la
+ * sélection : c'est lui, jamais une mesure serveur, que le document (aperçu
+ * ET publication) porte dans `payload.aspectRatio`. `null` sur tout échec de
+ * décodage (fichier corrompu, format non supporté par ce navigateur) — le
+ * document part alors SANS le champ, jamais avec une valeur inventée.
+ */
+function measureAspectRatio(previewUrl: string, mediaType: StudioMediaKind): Promise<number | null> {
+  return new Promise((resolve) => {
+    if (mediaType === 'video') {
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.onloadedmetadata = () => {
+        resolve(video.videoWidth > 0 && video.videoHeight > 0 ? video.videoWidth / video.videoHeight : null);
+      };
+      video.onerror = () => resolve(null);
+      video.src = previewUrl;
+      return;
+    }
+    const image = new Image();
+    image.onload = () => resolve(image.naturalWidth > 0 && image.naturalHeight > 0 ? image.naturalWidth / image.naturalHeight : null);
+    image.onerror = () => resolve(null);
+    image.src = previewUrl;
+  });
 }
 
 export default function StoryComposeScreen({ deps = defaultStoryStudioDeps }: { readonly deps?: StoryStudioDeps } = {}) {
@@ -220,7 +265,14 @@ function StoryStudio({ deps, viewerId }: { readonly deps: StoryStudioDeps; reado
     const uploading: StudioUploadState = { phase: 'uploading', progress: 0 };
     if (door === 'visual') {
       revokeIfLocal(draft.background?.previewUrl);
-      setDraft((current) => withBackground(current, { file, previewUrl, mediaType: studioMediaKindOf(file.type), upload: uploading }));
+      const mediaType = studioMediaKindOf(file.type);
+      setDraft((current) => withBackground(current, { file, previewUrl, mediaType, upload: uploading }));
+      // La mesure décode le fichier LOCAL, hors du chemin de montée — un
+      // format que ce navigateur ne sait pas décoder (§ 0, défaut 7) ne
+      // bloque ni l'aperçu ni la publication, il en prive seulement le cadrage.
+      void measureAspectRatio(previewUrl, mediaType).then((aspectRatio) => {
+        if (aspectRatio !== null) setDraft((current) => withBackgroundAspectRatio(current, previewUrl, aspectRatio));
+      });
     } else {
       revokeIfLocal(draft.sound?.previewUrl);
       setDraft((current) => withSound(current, { file, previewUrl, upload: uploading }));
@@ -279,7 +331,15 @@ function StoryStudio({ deps, viewerId }: { readonly deps: StoryStudioDeps; reado
     const storyEffects = buildStoryCanvasEffects({
       text,
       locale: language,
-      ...(backgroundReady !== undefined && current.background !== null ? { background: { ready: backgroundReady, mediaType: current.background.mediaType } } : {}),
+      ...(backgroundReady !== undefined && current.background !== null
+        ? {
+            background: {
+              ready: backgroundReady,
+              mediaType: current.background.mediaType,
+              ...(current.background.aspectRatio !== undefined ? { aspectRatio: current.background.aspectRatio } : {}),
+            },
+          }
+        : {}),
       ...(soundReady !== undefined ? { sound: { ready: soundReady } } : {}),
     });
     if (storyEffects === null) {
@@ -287,9 +347,17 @@ function StoryStudio({ deps, viewerId }: { readonly deps: StoryStudioDeps; reado
       return;
     }
 
+    // **AUCUN `content`** (défaut 4, revue-correction) : le studio n'a pas de
+    // champ légende distinct du texte de scène — l'envoyer ici le ferait
+    // rendre DEUX FOIS chez le lecteur (l'objet du canevas, puis sa copie en
+    // légende sous la carte), miroir du `content: nil` iOS quand le texte vit
+    // dans `storyEffects` (`StoryViewModel+PublicationUpload.swift:378-391`).
+    // Le serveur traduit alors les `textObjects` du canevas directement
+    // (`PostService.triggerStoryTextObjectTranslation`, jamais recopiés dans
+    // `content` depuis #4502) — `locale` sur l'objet texte porte déjà la
+    // langue source de CETTE traduction.
     const result = await publishStory({
       ...deps.api,
-      content: text,
       ...(text !== '' ? { originalLanguage: language } : {}),
       storyEffects,
       mediaIds: studioMediaIds({ background: backgroundReady, sound: soundReady }),
@@ -320,15 +388,28 @@ function StoryStudio({ deps, viewerId }: { readonly deps: StoryStudioDeps; reado
     void publishRef.current();
   }, [online, awaitingNetwork]);
 
+  /** LE TEXTE RÉEL, jamais `''` (défaut 5, revue-correction) : le moteur
+   * partagé (`ScenePlayer` → `TextLayer`) dessine ce que l'auteur publiera,
+   * au pixel près (même police, même largeur `cqw`) — l'éditeur posé
+   * par-dessus (ci-dessous) n'est plus qu'une SAISIE transparente, jamais une
+   * SECONDE peinture qui pouvait couper ses lignes autrement. */
   const previewDocument = useMemo(
     () =>
       buildPreviewCanvasDocument({
-        text: '',
+        text: draft.text,
         locale: language,
-        ...(draft.background !== null ? { background: { previewUrl: draft.background.previewUrl, mediaType: draft.background.mediaType } } : {}),
+        ...(draft.background !== null
+          ? {
+              background: {
+                previewUrl: draft.background.previewUrl,
+                mediaType: draft.background.mediaType,
+                ...(draft.background.aspectRatio !== undefined ? { aspectRatio: draft.background.aspectRatio } : {}),
+              },
+            }
+          : {}),
         ...(draft.sound !== null ? { sound: { previewUrl: draft.sound.previewUrl } } : {}),
       }),
-    [draft.background?.previewUrl, draft.background?.mediaType, draft.sound?.previewUrl, language],
+    [draft.text, draft.background?.previewUrl, draft.background?.mediaType, draft.background?.aspectRatio, draft.sound?.previewUrl, language],
   );
 
   /** Le texte se DESSINE par le résolveur du player (`resolveSceneText`) :
@@ -338,6 +419,28 @@ function StoryStudio({ deps, viewerId }: { readonly deps: StoryStudioDeps; reado
     const probe = parseCanvasDocument(composeStoryCanvas({ text: '·', locale: language }))?.scenes[0]?.objects.find((o) => o.kind === 'text');
     return probe === undefined ? null : resolveSceneText({ object: probe, preferredLanguages: [language] });
   }, [language]);
+
+  /** LE SON DE FOND S'ÉCOUTE (défaut 6, revue-correction) — la MÊME élection
+   * que le lecteur (`electBackgroundTrack`), sur l'URL locale : `ScenePlayer`
+   * ne joue AUCUN objet `audio` (il ne les rend même pas, `SceneCanvas` ne
+   * consomme que `text`/`media`) — c'est aux HÔTES de jouer le son, comme
+   * `StorySceneLayer` le fait déjà pour la lecture. */
+  const backgroundTrack = useMemo(
+    () => (previewDocument === null ? null : electBackgroundTrack({ document: previewDocument, sceneIndex: 0, carrier: PREVIEW_CARRIER })),
+    [previewDocument],
+  );
+  const [soundMuted, setSoundMuted] = useState(true);
+  const soundAudioRef = useRef<HTMLAudioElement | null>(null);
+  useEffect(() => {
+    const el = soundAudioRef.current;
+    if (el === null || backgroundTrack === null) return;
+    el.volume = backgroundTrack.volume;
+    void el.play().catch(() => {
+      // La politique de lecture automatique refuse le son NON coupé : le
+      // bouton — un vrai geste utilisateur — reste la seule voie, jamais un
+      // second essai silencieux qui masquerait le refus.
+    });
+  }, [backgroundTrack?.src]);
 
   const canPublish = canPublishStudioDraft(draft);
   const publishLabel = publishing
@@ -395,12 +498,35 @@ function StoryStudio({ deps, viewerId }: { readonly deps: StoryStudioDeps; reado
                   playing
                   carrier={PREVIEW_CARRIER}
                   preferredLanguages={reader.languages}
+                  muted={soundMuted}
                 />
               </Suspense>
+            ) : null}
+            {backgroundTrack !== null ? (
+              <>
+                {/* eslint-disable-next-line jsx-a11y/media-has-caption -- son de fond décoratif, aucun sous-titre à porter ici (P1) */}
+                <audio ref={soundAudioRef} data-story-studio-sound src={backgroundTrack.src} loop muted={soundMuted} />
+                <button
+                  type="button"
+                  data-story-studio-sound-toggle
+                  aria-label={translate(lang, soundMuted ? 'story.studio.sound.unmute' : 'story.studio.sound.mute')}
+                  aria-pressed={!soundMuted}
+                  onClick={() => setSoundMuted((current) => !current)}
+                  className="absolute start-2 bottom-2 grid place-items-center rounded-full"
+                  style={{ width: 44, height: 44, backgroundColor: 'rgba(0,0,0,0.45)', color: 'white' }}
+                >
+                  <GlyphSvg glyph={soundMuted ? MEDIA_TRANSPORT_GLYPHS.speakerSlash : MEDIA_TRANSPORT_GLYPHS.speakerHigh} size={20} />
+                </button>
+              </>
             ) : null}
             <label htmlFor="story-studio-text" className="offscreen">
               {translate(lang, 'story.studio.text.label')}
             </label>
+            {/* LA SAISIE, TRANSPARENTE (défaut 5, revue-correction) : le texte
+             * VISIBLE est peint par `TextLayer` au-dessous (même document,
+             * même police, même largeur `cqw`) — ce champ ne porte plus que le
+             * CURSEUR et le PLACEHOLDER, jamais une seconde peinture qui
+             * coupait ses lignes autrement que la publication. */}
             <textarea
               id="story-studio-text"
               data-story-text-input
@@ -416,12 +542,11 @@ function StoryStudio({ deps, viewerId }: { readonly deps: StoryStudioDeps; reado
               }}
               placeholder={translate(lang, 'story.studio.text.placeholder')}
               rows={3}
-              className="absolute top-1/2 left-1/2 w-[85%] resize-none bg-transparent text-center font-semibold placeholder:opacity-60"
+              className="absolute top-1/2 left-1/2 w-[85%] resize-none bg-transparent text-center font-semibold text-transparent caret-white placeholder:text-white placeholder:opacity-60"
               style={{
                 transform: 'translate(-50%, -50%)',
-                ...(textAppearance !== null ? { color: textAppearance.color, fontSize: `${textAppearance.widthFraction * 100}cqw` } : {}),
+                ...(textAppearance !== null ? { fontSize: `${textAppearance.widthFraction * 100}cqw` } : {}),
                 lineHeight: 1.2,
-                textShadow: '0 1px 4px rgba(0,0,0,0.45)',
               }}
             />
           </div>
