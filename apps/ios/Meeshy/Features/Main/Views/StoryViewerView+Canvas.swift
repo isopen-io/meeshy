@@ -686,7 +686,6 @@ struct StoryCardView: View {
     /// Cf. doc de `RenderableSlideCache` — partagé par les 3 lecteurs du
     /// slide renderable dans ce body (representable, fond média, backdrop).
     @State private var renderableSlideCache = RenderableSlideCache()
-    @State var imageOnlyVerdictCache = StoryImageOnlyVerdictCache() // #6636 — `+ImageOnly`
 
     // Story content
     let currentStory: StoryItem?
@@ -1041,7 +1040,7 @@ struct StoryCardView: View {
                               carrier: outgoing,
                               preferredContentLanguages: resolvedViewerLanguageChain,
                               isOutgoing: true,
-                              servesLetterboxFill: imageOnlyRect(of: outgoing) == nil,
+                              servesLetterboxFill: false,
                               preloadedImages: preloadedImages,
                               preloadedVideoURLs: preloadedVideoURLs,
                               preloadedAudioURLs: preloadedAudioURLs)
@@ -1053,7 +1052,7 @@ struct StoryCardView: View {
                                      preloadedVideoURLs: preloadedVideoURLs,
                                      preloadedAudioURLs: preloadedAudioURLs,
                                      isOutgoing: true,
-                                     servesLetterboxFill: imageOnlyRect(of: outgoing) == nil)
+                                     servesLetterboxFill: false)
         }
     }
 
@@ -1099,7 +1098,7 @@ struct StoryCardView: View {
                               carrier: story,
                               preferredContentLanguages: resolvedViewerLanguageChain,
                               isMuted: isGlobalMuted,
-                              servesLetterboxFill: imageOnlyRect(of: story) == nil,
+                              servesLetterboxFill: false,
                               preloadedImages: preloadedImages,
                               preloadedVideoURLs: preloadedVideoURLs,
                               preloadedAudioURLs: preloadedAudioURLs,
@@ -1118,7 +1117,7 @@ struct StoryCardView: View {
                                      preloadedAudioURLs: preloadedAudioURLs,
                                      mute: isGlobalMuted,
                                      isPaused: isCanvasPlaybackPaused,
-                                     servesLetterboxFill: imageOnlyRect(of: story) == nil,
+                                     servesLetterboxFill: false,
                                      onContentReady: { isContentReady = true },
                                      onContentProgress: { p in slideContentProgress = latchedContentProgress(p) },
                                      onPlaybackProgressing: { progressing in
@@ -1144,11 +1143,22 @@ struct StoryCardView: View {
             : progress
     }
 
+    /// **Les cotes de la SCÈNE dans ce viewport — la LOI, pas un ajustement
+    /// écrit ici** (#6904).
+    ///
+    /// `SceneShape.layout(.carded(…), in:)` rend exactement ce que
+    /// `CanvasGeometry.aspectFitSize(in:ratio: 9:16)` rendait (le témoin
+    /// `StoryReaderSceneCardTests.test_leCadreDuCanvas_estCeluiDeLaLoi` compare
+    /// les deux écritures) : le lecteur ne change pas de cotes, il change de
+    /// SOURCE. C'est ce qui garantit qu'il cadre la même scène que la galerie,
+    /// et qu'un changement de forme ne se livre plus qu'à un seul endroit.
+    ///
+    /// La PLACE de la carte dans le plateau reste au solveur du lecteur
+    /// (`readerCanvasFraming`) : la loi dit la forme, le plateau dit où elle se
+    /// pose et à quelle échelle elle s'anime.
     var canvasFitSize: CGSize { // internal : lu par `StoryViewerView+Sentinel`
-        // Source de vérité partagée avec le composer (`CanvasGeometry.aspectFitSize`)
-        // pour garantir la parité composer ↔ reader — même ratio (9:16 par défaut,
-        // 16:9 si l'auteur a importé un fond paysage).
-        CanvasGeometry.aspectFitSize(in: geometry.size, ratio: readerCanvasRatio)
+        SceneShape.layout(.carded(Self.readerSceneBackdrop), in: geometry.size)
+            .sceneFrame.size
     }
 
     /// Cadrage « carte → plein écran » du canvas reader, MUTUALISÉ avec le composer
@@ -1261,7 +1271,9 @@ struct StoryCardView: View {
                     .scaleEffect(closingScale)
                     // Canvas sortant suit la carte (même cadrage, même forme —
                     // l'image seule quand il n'est qu'une image, #6636).
-                    .readerCard(framing: readerCanvasFraming, imageRect: imageOnlyRect(of: outgoing))
+                    .readerCard(framing: readerCanvasFraming,
+                                backdrop: Self.readerSceneBackdrop,
+                                thumbHash: readerBackdropHash(of: outgoing))
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
@@ -1346,7 +1358,9 @@ struct StoryCardView: View {
                     // Carte → plein écran (mutualisé composer). Visuel pur (la frame
                     // reste `canvasFitSize` → projection design→render intacte) ;
                     // l'image seule quand la story n'est qu'une image (#6636).
-                    .readerCard(framing: readerCanvasFraming, imageRect: imageOnlyRect(of: story))
+                    .readerCard(framing: readerCanvasFraming,
+                                backdrop: Self.readerSceneBackdrop,
+                                thumbHash: readerBackdropHash(of: story))
                     // Ombre portée : la carte se détache du backdrop ThumbHash flou (même
                     // contenu) par son BORD arrondi + son ombre, pas par un voile sombre
                     // (demande user 2026-06-02 « bords arrondis + ThumbHash en fond »).
@@ -1411,7 +1425,9 @@ struct StoryCardView: View {
                     .clipped()
                     // Le loader suit la carte (même cadrage, même forme) → pas de
                     // saut entre le placeholder ThumbHash et le canvas.
-                    .readerCard(framing: readerCanvasFraming, imageRect: imageOnlyRect(of: story))
+                    .readerCard(framing: readerCanvasFraming,
+                                backdrop: Self.readerSceneBackdrop,
+                                thumbHash: readerBackdropHash(of: story))
                     .animation(.spring(response: 0.42, dampingFraction: 0.84), value: canvasIsExpanded)
                     .allowsHitTesting(false)
                     .transition(.opacity)
