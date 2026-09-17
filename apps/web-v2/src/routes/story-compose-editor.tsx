@@ -132,6 +132,7 @@ export function StudioObjectEditor({ lang, layer, onChange, onPose, onRemove }: 
               label={translate(lang, key)}
               pressed={layer.style === id}
               onPress={() => onChange((current) => ({ ...current, style: id }))}
+              probe={`style:${id}`}
               style={{
                 ...(look.fontFamily !== undefined ? { fontFamily: look.fontFamily } : {}),
                 ...(look.fontStyle !== undefined ? { fontStyle: look.fontStyle } : {}),
@@ -143,13 +144,14 @@ export function StudioObjectEditor({ lang, layer, onChange, onPose, onRemove }: 
       </Section>
 
       <Section label={translate(lang, 'story.studio.editor.effect')}>
-        <StudioChip label={none} pressed={layer.effect === 'none'} onPress={() => onChange((current) => ({ ...current, effect: 'none' }))} />
+        <StudioChip label={none} pressed={layer.effect === 'none'} onPress={() => onChange((current) => ({ ...current, effect: 'none' }))} probe="effect:none" />
         {EFFECTS.map(({ id, key }) => (
           <StudioChip
             key={id}
             label={translate(lang, key)}
             pressed={layer.effect === id}
             onPress={() => onChange((current) => ({ ...current, effect: id }))}
+            probe={`effect:${id}`}
             style={{ textShadow: sceneTextAppearance({ textEffect: id, fontSize: 16 }).textShadow }}
           />
         ))}
@@ -162,6 +164,7 @@ export function StudioObjectEditor({ lang, layer, onChange, onPose, onRemove }: 
             label={translate(lang, key)}
             pressed={layer.color === hex}
             onPress={() => onChange((current) => ({ ...current, color: hex }))}
+            probe={`color:${hex}`}
             style={{ backgroundColor: hexColorCss(hex), color: 'transparent', minWidth: 44, border: '1px solid var(--color-ios-separator)' }}
           >
             <span aria-hidden="true">·</span>
@@ -174,6 +177,7 @@ export function StudioObjectEditor({ lang, layer, onChange, onPose, onRemove }: 
           label={none}
           pressed={layer.background === null}
           onPress={() => onChange((current) => ({ ...current, background: null }))}
+          probe="textbg:none"
         />
         {COLORS.map(({ hex, key }) => (
           <StudioChip
@@ -181,6 +185,7 @@ export function StudioObjectEditor({ lang, layer, onChange, onPose, onRemove }: 
             label={translate(lang, key)}
             pressed={layer.background === hex}
             onPress={() => onChange((current) => ({ ...current, background: hex }))}
+            probe={`textbg:${hex}`}
             style={{ backgroundColor: hexColorCss(hex), color: 'transparent', minWidth: 44, border: '1px solid var(--color-ios-separator)' }}
           >
             <span aria-hidden="true">·</span>
@@ -190,7 +195,7 @@ export function StudioObjectEditor({ lang, layer, onChange, onPose, onRemove }: 
 
       <Section label={translate(lang, 'story.studio.editor.align')}>
         {ALIGNS.map(({ id, key, bars }) => (
-          <StudioChip key={id} label={translate(lang, key)} pressed={layer.align === id} onPress={() => onChange((current) => ({ ...current, align: id }))}>
+          <StudioChip key={id} label={translate(lang, key)} pressed={layer.align === id} onPress={() => onChange((current) => ({ ...current, align: id }))} probe={`align:${id}`}>
             <AlignGlyph align={id} bars={bars} />
           </StudioChip>
         ))}
@@ -206,6 +211,7 @@ export function StudioObjectEditor({ lang, layer, onChange, onPose, onRemove }: 
             label={code.toUpperCase()}
             pressed={layer.language === code}
             onPress={() => onChange((current) => ({ ...current, language: code }))}
+            probe={`language:${code}`}
           />
         ))}
       </Section>
@@ -217,6 +223,7 @@ export function StudioObjectEditor({ lang, layer, onChange, onPose, onRemove }: 
       <Section label={translate(lang, 'story.studio.pose.label')}>
         <StudioChip
           label={translate(lang, 'story.studio.pose.smaller')}
+          probe="pose:smaller"
           pressed={false}
           onPress={() => onPose({ ...layer.pose, scale: layer.pose.scale / 1.2 })}
         >
@@ -224,6 +231,7 @@ export function StudioObjectEditor({ lang, layer, onChange, onPose, onRemove }: 
         </StudioChip>
         <StudioChip
           label={translate(lang, 'story.studio.pose.bigger')}
+          probe="pose:bigger"
           pressed={false}
           onPress={() => onPose({ ...layer.pose, scale: layer.pose.scale * 1.2 })}
         >
@@ -231,6 +239,7 @@ export function StudioObjectEditor({ lang, layer, onChange, onPose, onRemove }: 
         </StudioChip>
         <StudioChip
           label={translate(lang, 'story.studio.pose.rotateLeft')}
+          probe="pose:rotateLeft"
           pressed={false}
           onPress={() => onPose({ ...layer.pose, rotation: layer.pose.rotation - 15 })}
         >
@@ -238,6 +247,7 @@ export function StudioObjectEditor({ lang, layer, onChange, onPose, onRemove }: 
         </StudioChip>
         <StudioChip
           label={translate(lang, 'story.studio.pose.rotateRight')}
+          probe="pose:rotateRight"
           pressed={false}
           onPress={() => onPose({ ...layer.pose, rotation: layer.pose.rotation + 15 })}
         >
@@ -245,6 +255,7 @@ export function StudioObjectEditor({ lang, layer, onChange, onPose, onRemove }: 
         </StudioChip>
         <StudioChip
           label={translate(lang, 'story.studio.pose.reset')}
+          probe="pose:reset"
           pressed={false}
           onPress={() => onPose({ x: 0.5, y: 0.5, scale: 1, rotation: 0 })}
         >
