@@ -123,6 +123,15 @@ function typeText(host: ParentNode, value: string): void {
   });
 }
 
+/** Un `DOMRect` complet — `happy-dom` ne peint rien (toutes ses boîtes sont
+ * `0,0,0,0`) : c'est en le SUBSTITUANT sur les deux nœuds réels (la carte,
+ * le texte peint) qu'on peut prouver, hors navigateur, que la saisie ADOPTE
+ * la boîte MESURÉE plutôt qu'une formule recopiée (défaut 1, revue-correction). */
+function fakeRect(box: { readonly top: number; readonly left: number; readonly width: number; readonly height: number }): DOMRect {
+  const { top, left, width, height } = box;
+  return { top, left, width, height, right: left + width, bottom: top + height, x: left, y: top, toJSON: () => ({}) } as DOMRect;
+}
+
 const publishButton = (host: ParentNode) => host.querySelector<HTMLButtonElement>('[data-story-publish]');
 const removeButton = (host: ParentNode, label: string) => host.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
 
@@ -223,6 +232,37 @@ describe('StoryComposeScreen — l’aperçu par le moteur PARTAGÉ (D-79)', () 
     const textarea = el.querySelector('#story-studio-text');
     expect(textarea?.getAttribute('class')).toContain('text-transparent');
     expect(textarea?.getAttribute('style') ?? '').not.toContain('text-shadow');
+  });
+
+  test('la saisie ADOPTE la boîte RÉELLEMENT peinte par [data-scene-text], au pixel près — jamais une largeur/hauteur fixes (défaut 1, revue-correction)', () => {
+    const el = mount(harness({}).deps);
+    typeText(el, 'Bonjour');
+    const stage = el.querySelector<HTMLElement>('[data-scene-stage]');
+    const textNode = el.querySelector<HTMLElement>('[data-scene-text]');
+    expect(stage).not.toBeNull();
+    expect(textNode).not.toBeNull();
+
+    // La carte occupe (50,100)-(350,600) sur l'écran ; le moteur peint le
+    // texte dans une boîte NARROW, décentrée verticalement — exactement ce
+    // qu'un texte court, shrink-to-fit, rend en pratique.
+    stage!.getBoundingClientRect = () => fakeRect({ top: 100, left: 50, width: 300, height: 500 });
+    textNode!.getBoundingClientRect = () => fakeRect({ top: 260, left: 140, width: 120, height: 30 });
+
+    // Un second caractère force `useLayoutEffect` (dépendance `draft.text`) à
+    // remesurer SYNCHRONEMENT, dans le MÊME tour — jamais un `flush` qui
+    // masquerait un défaut d'alignement d'un frame.
+    typeText(el, 'Bonjour!');
+
+    const textarea = el.querySelector<HTMLTextAreaElement>('#story-studio-text')!;
+    // Relatif à la carte : top 260-100=160, left 140-50=90.
+    expect(textarea.style.top).toBe('160px');
+    expect(textarea.style.left).toBe('90px');
+    expect(textarea.style.width).toBe('120px');
+    expect(textarea.style.height).toBe('30px');
+    // La forme centrée par défaut (translation à 50 %) ne doit PLUS gouverner
+    // une fois la boîte réelle connue — elle décalait le curseur d'une ligne
+    // entière au-dessus du texte (défaut 1).
+    expect(textarea.style.transform).toBe('');
   });
 });
 

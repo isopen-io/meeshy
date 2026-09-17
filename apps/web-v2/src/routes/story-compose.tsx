@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useStore } from 'zustand';
 
 import type { ConversationsDeps } from '@/lib/api/conversations';
@@ -100,6 +100,27 @@ type SettledAsset = { readonly kind: 'none' } | { readonly kind: 'ready'; readon
 
 function revokeIfLocal(url: string | undefined): void {
   if (url !== undefined && url.startsWith('blob:')) URL.revokeObjectURL(url);
+}
+
+/** La boîte RÉELLEMENT peinte par `[data-scene-text]` (`scene-player.tsx`),
+ * relative à la carte — ni recopiée ni recalculée : la saisie l'ADOPTE telle
+ * quelle (défaut 1, revue-correction), quel que soit le retour à la ligne ou
+ * la largeur que le moteur a effectivement rendus. `null` tant qu'aucun
+ * texte n'est peint (brouillon vide, ou chunk `ScenePlayer` pas encore
+ * résolu) — la saisie retombe alors sur sa position par défaut. */
+type SceneTextBox = { readonly top: number; readonly left: number; readonly width: number; readonly height: number };
+
+function measureSceneText(stage: HTMLElement): SceneTextBox | null {
+  const textEl = stage.querySelector<HTMLElement>('[data-scene-text]');
+  if (textEl === null) return null;
+  const stageRect = stage.getBoundingClientRect();
+  const textRect = textEl.getBoundingClientRect();
+  return { top: textRect.top - stageRect.top, left: textRect.left - stageRect.left, width: textRect.width, height: textRect.height };
+}
+
+function sameSceneTextBox(a: SceneTextBox | null, b: SceneTextBox | null): boolean {
+  if (a === null || b === null) return a === b;
+  return Math.abs(a.top - b.top) < 0.05 && Math.abs(a.left - b.left) < 0.05 && Math.abs(a.width - b.width) < 0.05 && Math.abs(a.height - b.height) < 0.05;
 }
 
 function uploadStateOf(result: ApiResult<PostMediaUploadResult>): StudioUploadState | null {
@@ -442,6 +463,40 @@ function StoryStudio({ deps, viewerId }: { readonly deps: StoryStudioDeps; reado
     });
   }, [backgroundTrack?.src]);
 
+  /** LA SAISIE ADOPTE LA BOÎTE DE `[data-scene-text]`, jamais une formule
+   * recopiée (défaut 1, revue-correction) — `stageRef` porte l'ancêtre
+   * positionné commun aux deux. */
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const [textBox, setTextBox] = useState<SceneTextBox | null>(null);
+
+  const remeasureText = useCallback(() => {
+    const stage = stageRef.current;
+    if (stage === null) return;
+    const next = measureSceneText(stage);
+    setTextBox((current) => (sameSceneTextBox(current, next) ? current : next));
+  }, []);
+
+  // Chemin RAPIDE, synchrone AVANT peinture : le texte ou la langue changent
+  // toujours par un état React — `useLayoutEffect` remesure dans le MÊME
+  // commit, jamais un instant de curseur désaligné.
+  useLayoutEffect(() => {
+    remeasureText();
+  }, [draft.text, language, textAppearance, remeasureText]);
+
+  // Chemin de SECOURS : le redimensionnement de la CARTE (rotation, fenêtre)
+  // change la police en `cqw` sans toucher `draft`/`language` — le seul cas
+  // que le chemin rapide ne voit pas venir. La résolution ASYNCHRONE du
+  // chunk `ScenePlayer` (`lazy()`, `Suspense` `fallback={null}`) est couverte
+  // par `onContentReady` PLUS BAS (le contrat déjà posé par le moteur pour un
+  // hôte qui attend sa scène), jamais par un observateur DOM séparé.
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (stage === null) return;
+    const resizeObserver = new ResizeObserver(remeasureText);
+    resizeObserver.observe(stage);
+    return () => resizeObserver.disconnect();
+  }, [remeasureText]);
+
   const canPublish = canPublishStudioDraft(draft);
   const publishLabel = publishing
     ? translate(lang, 'story.studio.publishing')
@@ -478,6 +533,7 @@ function StoryStudio({ deps, viewerId }: { readonly deps: StoryStudioDeps; reado
         <div className="grid min-w-0 flex-1 place-items-center" style={{ containerType: 'size' }}>
           <div
             data-scene-stage
+            ref={stageRef}
             role="group"
             aria-label={translate(lang, 'story.studio.stage')}
             className="relative overflow-hidden"
@@ -499,6 +555,7 @@ function StoryStudio({ deps, viewerId }: { readonly deps: StoryStudioDeps; reado
                   carrier={PREVIEW_CARRIER}
                   preferredLanguages={reader.languages}
                   muted={soundMuted}
+                  onContentReady={remeasureText}
                 />
               </Suspense>
             ) : null}
@@ -522,11 +579,14 @@ function StoryStudio({ deps, viewerId }: { readonly deps: StoryStudioDeps; reado
             <label htmlFor="story-studio-text" className="offscreen">
               {translate(lang, 'story.studio.text.label')}
             </label>
-            {/* LA SAISIE, TRANSPARENTE (défaut 5, revue-correction) : le texte
-             * VISIBLE est peint par `TextLayer` au-dessous (même document,
-             * même police, même largeur `cqw`) — ce champ ne porte plus que le
-             * CURSEUR et le PLACEHOLDER, jamais une seconde peinture qui
-             * coupait ses lignes autrement que la publication. */}
+            {/* LA SAISIE, TRANSPARENTE (défaut 5) ET ALIGNÉE AU PIXEL PRÈS SUR
+             * `[data-scene-text]` (défaut 1, revue-correction) : sa boîte
+             * (haut, gauche, largeur, hauteur) est celle MESURÉE sur le
+             * moteur (`textBox`), jamais une largeur/hauteur fixes qui
+             * coupaient les lignes ou décalaient le curseur d'une ligne
+             * entière quand `rows` dépassait le contenu réel. Sans texte
+             * peint encore (brouillon vide), elle retombe sur le centre par
+             * défaut, à la même ancre (0.5, 0.5) que l'objet texte publié. */}
             <textarea
               id="story-studio-text"
               data-story-text-input
@@ -541,10 +601,12 @@ function StoryStudio({ deps, viewerId }: { readonly deps: StoryStudioDeps; reado
                 }
               }}
               placeholder={translate(lang, 'story.studio.text.placeholder')}
-              rows={3}
-              className="absolute top-1/2 left-1/2 w-[85%] resize-none bg-transparent text-center font-semibold text-transparent caret-white placeholder:text-white placeholder:opacity-60"
+              rows={1}
+              className="absolute resize-none overflow-hidden border-0 bg-transparent p-0 text-center font-semibold text-transparent caret-white placeholder:text-white placeholder:opacity-60"
               style={{
-                transform: 'translate(-50%, -50%)',
+                ...(textBox !== null
+                  ? { top: textBox.top, left: textBox.left, width: textBox.width, height: textBox.height }
+                  : { top: '50%', left: '50%', width: '85%', transform: 'translate(-50%, -50%)' }),
                 ...(textAppearance !== null ? { fontSize: `${textAppearance.widthFraction * 100}cqw` } : {}),
                 lineHeight: 1.2,
               }}
