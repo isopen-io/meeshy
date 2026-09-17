@@ -3044,3 +3044,54 @@ Directive porteur du 2026-09-17, mot pour mot : « mettre le bouton (+) au dessu
 Les deux sont à relever, pas à corriger ici : un lot de rail qui « réparerait » une fixture de protection éphémère masquerait le vrai défaut, qui est que le témoin dépend du temps.
 
 **Et la cause est MESURÉE, pas déduite** (#6950) : deux runs de la suite complète, même arbre, même diff, à quelques minutes d'écart — **250 s machine chargée ⇒ 5 173 pass / 2 fail** ; **32 s machine libre ⇒ 5 286 pass / 0 fail**. À 32 s le témoin reste sous le seuil des 2 minutes, à 250 s il l'a franchi avant d'être atteint. Les deux échecs sont donc une fonction de la CHARGE, et ils passeront au rouge définitif le jour où la suite dépassera 2 minutes en CI. **Un rouge qui disparaît sur une machine libre n'est pas un rouge résolu** — c'est un témoin dont la borne a cessé de mesurer ce qu'il annonce.
+
+## D-84 — Le studio de story est un PLATEAU : plusieurs objets, des gestes, et AUCUNE police web (#6943, #6944)
+
+**Décision** — le studio livré par #6900 avait trois valeurs (un fond, un son de fond, UN texte d'`id` littéral `'text'`). Il porte désormais **N objets texte**, chacun avec sa **pose**, sa **langue** et son **style** ; **deux** portes visuelles (le fond, et un **calque** d'avant-plan en `plane: 'fg'`) ; **un son** dont le plan décide du rôle ; et une **légende par média**. La directive porteur du 2026-09-17 nommait ces cinq manques.
+
+### L'arbitrage qui gouverne tout le reste : aucune police web
+
+**Depuis #4850, un `textStyle` ne choisit QU'UNE POLICE** — ni couleur, ni fond, ni contour, ni lueur. Et seize des dix-huit familles de `StoryTextStyle.swift` nomment une police **embarquée dans l'app iOS** (Zapfino, Papyrus, Noteworthy, SnellRoundhand…). Les reproduire sur le web veut dire charger des WOFF2, et le poids de première peinture est déjà au-dessus de son plafond. **Ce lot ne télécharge aucun octet de police** : cinq familles sont servies parce qu'elles n'en exigent aucune — `bold` et `neon` (les DEUX qu'iOS rend déjà sur la police système, `fontName == nil`), `classic` et `italic` (Georgia), `typewriter` (Courier). Les treize autres attendent leur budget, une issue de suivi.
+
+**Ce que cet arbitrage n'a rien coûté.** L'axe qui porte tout le visuel — `textEffect`, vingt-cinq valeurs — est une **table d'ombres en `em`**, donc du CSS pur : `lib/canvas/text-effect.ts` en est la copie exacte du legacy `apps/web/lib/story-text-effect.ts`. S'y ajoutent à coût nul la couleur (la palette de quatorze d'iOS), la graisse, l'alignement, la pastille, le cadre et le contour des glyphes. **Le vocabulaire visuel d'iOS est donc servi presque entier ; c'est la TYPOGRAPHIE, et elle seule, qui attend.**
+
+> **La table est le QUATRIÈME miroir** (iOS `StoryTextEffect.swift`, Android `StoryTextEffect.kt`, `apps/web`, et celui-ci). Le mutualiser demanderait de toucher le legacy gelé ; il disparaîtra avec lui. Tant que les deux coexistent, toute évolution touche les quatre.
+
+### Un style ÉCRIT doit être PEINT — sinon il est pire qu'absent
+
+`scene-object-text.tsx` ne peignait que la couleur, la taille et une pastille. Un studio qui écrit `textEffect` dans un document que le moteur ignore **ANNONCE une apparence qu'il ne sert pas** — le défaut exact du cycle 123 (`StoryViewer`, la puce qui annonçait une langue que le corps ne rendait pas), et pire qu'une surface non câblée. D'où `lib/canvas/text-appearance.ts`, un module PUR `payload → CSS` que le moteur consomme, et un invariant du gate navigateur qui lit le `getComputedStyle` du texte peint, pas le document.
+
+### La géographie : les poignées sont la SEULE exception, et elle est nommée
+
+« Aucun contrôle ne se pose sur le canvas ; les rails vivent dans les couloirs » (`apps/ios/CLAUDE.md` § 1, #4561/#4633). Tenu : couloir GAUCHE = les trois portes et les objets posés ; couloir DROIT = les dimensions (ajouter un texte, ouvrir les contrôleurs) ; zone BASSE = les contrôleurs de l'outil ouvert, **fermés par défaut** pour que la scène garde sa hauteur. Les deux **poignées** (déplacer ; échelle + rotation) sont posées sur la scène, et c'est assumé : **une poignée de manipulation directe n'est pas un rail** — elle ne porte aucun réglage, elle EST l'objet qu'on saisit.
+
+**Tout ce que le pointeur fait, le clavier le fait** (dimension 5) : les poignées sont des `<button>` de 44 px, `keyboardPose` y traduit flèches (× 10 avec Maj), `+`/`−` et `[`/`]`, et le rail droit double ces gestes en cibles VISIBLES. Un plateau qui ne s'exploite qu'à la souris n'est pas livré.
+
+**60 fps pendant le geste** : la pose se peint directement en `style` sur l'élément que le moteur a rendu — **exactement les propriétés que `SceneObjectFrame.applyPose` écrit** (`left`, `top`, `transform`) —, et l'état n'est touché qu'au relâchement. Deux formules de pose auraient divergé au premier ajustement de bornes, et le geste aurait peint ailleurs que le rendu.
+
+### Trois pièges d'implémentation qu'aucun témoin unitaire ne voyait
+
+1. **Les effets de mise en page d'un ENFANT tournent avant ceux de son parent.** La poignée recevait d'abord une `ref` vers l'élément peint, que l'hôte remplissait dans son propre `useLayoutEffect` : elle mesurait donc `null` et **ne s'affichait jamais** tant qu'un second rendu n'était pas provoqué par ailleurs. Elle retrouve désormais son élément elle-même, par `[data-scene-object-id]` (attribut ajouté à `SceneObjectFrame` : avec un seul texte, `[data-scene-object]` suffisait ; avec plusieurs, il désigne le premier venu).
+2. **Playwright résout ses routes dans l'ORDRE INVERSE de leur enregistrement.** Un attrape-tout `**/api/v1/**` posé APRÈS la route de publication l'avalait, et le gate disait « aucun POST n'est parti » alors que l'écran publiait parfaitement — un faux rouge qui accuse le code.
+3. **`0.2 × 3` rend `0.6000000000000001`.** Une valeur CSS n'a pas à porter la queue binaire d'un produit ; le retrait de pastille est arrondi au millième.
+
+### La légende d'un média (#6944) — un TROISIÈME contenu
+
+`PostMedia.caption`, ni `Post.content` ni `alt`. Le contrat portait **tout le chemin sauf le rendu** : la passerelle l'accepte (`mediaCaption`), l'écrit et la traduit depuis #6280, et la SERT sur une story (`trayStorySelect` → `mediaInclude` → `mediaSelect`) ; `StoryTrayMedia` ne la DÉCLARAIT pas, donc le décodeur la jetait et **aucune légende n'atteignait aucun lecteur**. C'est la question du cycle 122 — « qui AFFICHE ce que le résolveur élit ? » — restée sans réponse pendant deux lots.
+
+Trois précautions tenues :
+- la descente passe par le site EXISTANT (`resolveMediaCaption`, `lib/api/prism.ts`), jamais réécrite, et le texte rendu porte son `lang=` — **deux contenus, deux langues**, sur deux lignes du pied du lecteur ;
+- **la règle de dérivation de `caption.ts` ne s'y applique PAS** : elle efface un `Post.content` qui n'est que la concaténation des calques ; une légende de média a SON sujet, et y redire le texte de la scène est un choix de l'auteur ;
+- un témoin prouve que **la carte du fil ne montre pas deux fois le même texte** — une story sans `content` et sans légende de média n'affiche AUCUNE légende, le repli de `709e35b51e` ne rendant rien.
+
+Et le commentaire de `stories-publish.ts` qui documentait `content` comme « **LA LÉGENDE** » est corrigé : c'était faux, et c'est précisément la confusion que le porteur a levée.
+
+### Les deux cliquets de poids, et ce que ça dit de #6949
+
+`interface_catalogs` 59 → **65** (mesure 63,40 : les 53 clés du vocabulaire d'un objet posé) ; `story_studio` 7 → **13** (mesure 11,62). La discipline du dépôt est suivie à la lettre — remesurer, porter à `ceil(mesure) + 1 Ko`, écrire la mesure et ce qui l'explique. La première peinture ne bouge pas : 48,13 Ko pour 90.
+
+**Ce lot valide l'inquiétude de D-83 et de #6949.** Le lot du rail « soi » laissait 70 octets de marge sur sept langues ; le lot suivant — celui-ci — a demandé 4,4 Ko d'un coup. **La piste est déjà ÉPROUVÉE** : #6871/#6834 a sorti les 83 clés `admin.*` vers un second catalogue à la demande (−6 Ko). Les 88 clés `story.studio.*` ne servent qu'à ceux qui COMPOSENT une story : le même geste s'y applique, et c'est une issue de suivi, pas quelque chose qu'un lot de feature tranche sous la pression de son propre diff.
+
+### Ce que ce lot NE fait PAS, assumé
+
+Un seul fond et un seul calque (pas N visuels) ; un seul son ; six effets NOMMÉS sur vingt-cinq et huit couleurs sur quatorze (une clé traduite se paie sept fois — les dix-neuf autres effets restent LISIBLES d'un document venu d'iOS, que le moteur peint déjà, ils ne sont simplement pas PROPOSÉS) ; treize familles typographiques ; les formes de cadre `diamond`/`cloud`/`speech` (un tracé SVG) ; `glass` (un compositing par texte, question produit ouverte depuis #6901) ; le pincement à deux doigts ; l'appui long ouvrant un menu contextuel d'objet (`StoryCanvasContextAction`, sept entrées) ; la timeline d'un objet. Chacun une issue de suivi.

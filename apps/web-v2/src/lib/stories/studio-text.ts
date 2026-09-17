@@ -52,6 +52,20 @@ export const STUDIO_TEXT_COLORS = [
  * CSS rendrait identiques à l'œil. */
 export const STUDIO_TEXT_BACKGROUNDS = ['000000', 'FFFFFF', '6366F1', 'F472B6', '34D399', 'FBBF24', 'F87171'] as const;
 
+/**
+ * **CE QU'UNE PASTILLE DE FOND PEUT VALOIR** — l'UNION des presets iOS et de la
+ * palette de texte, parce que le rail web offre la SECONDE pour les deux
+ * usages (l'encre et la pastille).
+ *
+ * Défaut trouvé en relisant le lot : le rail proposait un fond pris dans
+ * `STUDIO_TEXT_COLORS`, et la relecture du brouillon le validait contre
+ * `STUDIO_TEXT_BACKGROUNDS` seuls — six des huit fonds offerts étaient donc
+ * **effacés au rechargement**, en silence, sans qu'aucun témoin ne rougisse.
+ * C'est la forme d'un contrôle qui a l'air d'avoir un effet et n'en garde pas.
+ * Une liste OFFERTE et une liste ACCEPTÉE doivent avoir un seul site.
+ */
+export const STUDIO_TEXT_BACKGROUND_VALUES = [...STUDIO_TEXT_BACKGROUNDS, ...STUDIO_TEXT_COLORS] as const;
+
 export const STUDIO_TEXT_ALIGNS = ['left', 'center', 'right'] as const;
 
 /** Les styles SERVIS (cinq sur dix-huit) — voir l'arbitrage « aucune police
