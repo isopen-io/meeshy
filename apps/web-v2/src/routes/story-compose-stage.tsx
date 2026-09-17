@@ -49,9 +49,15 @@ export type StudioHandlesProps = {
   readonly pose: StudioPose;
   /** Le plateau, ancêtre positionné commun à la scène et aux poignées. */
   readonly stageRef: { readonly current: HTMLElement | null };
-  /** L'élément que le MOTEUR a peint pour cet objet — c'est lui que le geste
-   * repeint pendant le glissement. `null` tant que la scène n'est pas rendue. */
-  readonly paintedRef: { readonly current: HTMLElement | null };
+  /**
+   * L'IDENTIFIANT de l'objet, pas une `ref` vers son élément — et c'est un
+   * piège d'ORDRE qui l'impose : les effets de mise en page d'un ENFANT
+   * tournent AVANT ceux de son parent, donc une `ref` que l'hôte remplit dans
+   * son propre `useLayoutEffect` est encore `null` quand la poignée mesure.
+   * Elle ne se serait jamais affichée tant qu'un second rendu n'était pas
+   * provoqué par ailleurs. La poignée retrouve donc elle-même son élément.
+   */
+  readonly objectId: string;
   readonly onCommit: (pose: StudioPose) => void;
 };
 
@@ -60,7 +66,7 @@ export type StudioHandlesProps = {
  * (`pointer-events: none`) : il MONTRE la sélection, il ne la capture pas —
  * sinon il mangerait la frappe dans la saisie de texte posée au même endroit.
  */
-export function StudioObjectHandles({ lang, name, pose, stageRef, paintedRef, onCommit }: StudioHandlesProps) {
+export function StudioObjectHandles({ lang, name, pose, stageRef, objectId, onCommit }: StudioHandlesProps) {
   const frameRef = useRef<HTMLDivElement | null>(null);
   const [box, setBox] = useState<{ readonly width: number; readonly height: number } | null>(null);
   // La pose EN COURS de geste — une ref, jamais un état : la lire ne doit
@@ -68,36 +74,47 @@ export function StudioObjectHandles({ lang, name, pose, stageRef, paintedRef, on
   const live = useRef(pose);
   live.current = pose;
 
+  /** L'élément que le MOTEUR a peint pour CET objet — retrouvé à chaque
+   * mesure, jamais mémorisé : la scène se re-rend à chaque frappe, et un
+   * élément gardé serait détaché du document. */
+  const painted = useCallback(
+    (): HTMLElement | null => stageRef.current?.querySelector<HTMLElement>(`[data-scene-object-id="${CSS.escape(objectId)}"]`) ?? null,
+    [objectId, stageRef],
+  );
+
   /** La taille NON transformée de l'objet peint (`offsetWidth/Height`, avant
    * `scale`/`rotate`) : le cadre l'adopte puis subit la MÊME transformation,
    * donc il colle quelle que soit l'échelle. */
   const measure = useCallback(() => {
-    const painted = paintedRef.current;
-    if (painted === null) return;
-    const width = painted.offsetWidth;
-    const height = painted.offsetHeight;
+    const element = painted();
+    if (element === null) {
+      setBox((current) => (current === null ? current : null));
+      return;
+    }
+    const width = element.offsetWidth;
+    const height = element.offsetHeight;
     setBox((current) => (current !== null && current.width === width && current.height === height ? current : { width, height }));
-  }, [paintedRef]);
+  }, [painted]);
 
   useLayoutEffect(measure);
 
   useEffect(() => {
-    const painted = paintedRef.current;
-    if (painted === null || typeof ResizeObserver === 'undefined') return;
+    const element = painted();
+    if (element === null || typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver(measure);
-    observer.observe(painted);
+    observer.observe(element);
     return () => observer.disconnect();
-  }, [measure, paintedRef]);
+  }, [measure, painted]);
 
   const applyLive = useCallback(
     (next: StudioPose) => {
       live.current = next;
-      const painted = paintedRef.current;
+      const element = painted();
       const frame = frameRef.current;
-      if (painted !== null) paintPose(painted, next);
+      if (element !== null) paintPose(element, next);
       if (frame !== null) paintPose(frame, next);
     },
-    [paintedRef],
+    [painted],
   );
 
   const stageBox = () => {
