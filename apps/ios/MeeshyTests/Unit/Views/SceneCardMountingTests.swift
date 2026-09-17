@@ -45,10 +45,10 @@ final class SceneCardMountingTests: XCTestCase {
     /// coin laisse voir la sentinelle, celui du bord non.
     func test_cadree_laCarteALesCotesDeLaLoi_etSesCoinsSontArrondis() throws {
         let vue = viewport
-        let loi = SceneShape.layout(.carded(SceneShape.cardedBackdrop), in: vue)
+        let loi = SceneShape.layout(in: vue)
         let carte = loi.sceneFrame
 
-        let pixels = try monter(layout: loi, visible: nil, contenu: .plein)
+        let pixels = try monter(layout: loi, contenu: .plein)
         defer { pixels.dismount() }
 
         let milieuX = Int((vue.width / 2).rounded())
@@ -84,9 +84,9 @@ final class SceneCardMountingTests: XCTestCase {
     /// posée dessous. Sans empreinte, ce fond est le noir de `SceneBackdropView`.
     func test_cadree_leFondHabilleLaBandeDansLaCarte() throws {
         let vue = viewport
-        let loi = SceneShape.layout(.carded(SceneShape.cardedBackdrop), in: vue)
+        let loi = SceneShape.layout(in: vue)
 
-        let pixels = try monter(layout: loi, visible: nil, contenu: .bandeSeule)
+        let pixels = try monter(layout: loi, contenu: .bandeSeule)
         defer { pixels.dismount() }
 
         let x = Int((vue.width / 2).rounded())
@@ -104,33 +104,38 @@ final class SceneCardMountingTests: XCTestCase {
 
     // MARK: - Immersif
 
-    /// **La scène COUVRE le viewport, et personne ne peint autour.** Le coin de
-    /// l'écran porte le contenu (rayon 0), et là où le contenu ne peint pas, on
-    /// lit la sentinelle : `layout.backdrop` est `nil`, donc aucune couche de
-    /// fond n'est montée.
-    func test_immersive_laSceneCouvreLeViewport_etPersonneNePeintAutour() throws {
+    /// **L'immersif est la MÊME carte dans le viewport ENTIER** (directive
+    /// porteur du 2026-09-17, 3e message : « On préserve le même fond que pour
+    /// la story ! »).
+    ///
+    /// Il rendait auparavant un aspect-FILL sans fond — la seule surface du
+    /// produit qui RETIRAIT des pixels posés par l'auteur, et la seule dont le
+    /// hors-champ n'avait aucun peintre. Ce témoin mesure l'inverse : la scène
+    /// AJUSTE dans le viewport, son hors-champ est habillé DANS la carte, et
+    /// c'est le même fond que partout ailleurs.
+    func test_immersive_estLaMemeCarteDansLeViewportEntier() throws {
         let vue = viewport
-        let loi = SceneShape.layout(.immersive, in: vue)
-        XCTAssertNil(loi.backdrop, "l'immersif n'a pas de fond à choisir")
+        let loi = SceneShape.layout(in: vue)
+        XCTAssertEqual(loi.backdrop, SceneShape.cardedBackdrop,
+                       "l'immersif garde LE MÊME fond que la story")
+        XCTAssertEqual(loi.cornerRadius, SceneShape.cardedCornerRadius, "et les mêmes coins")
 
-        let plein = try monter(layout: loi, visible: vue, contenu: .plein)
-        XCTAssertTrue(plein.pixel(2, 2, matches: Self.bande, tolerance: 8),
-                      "coins DROITS et scène couvrante : le contenu atteint le coin de l'écran " +
-                      "(\(plein.hex(x: 2, y: 2)))")
-        XCTAssertTrue(plein.pixel(Int(vue.width) - 3, Int(vue.height) - 3,
-                                  matches: Self.bande, tolerance: 8),
-                      "jusqu'au coin opposé (\(plein.hex(x: Int(vue.width) - 3, y: Int(vue.height) - 3)))")
-        plein.dismount()
+        let pixels = try monter(layout: loi, contenu: .bandeSeule)
+        defer { pixels.dismount() }
 
-        let bande = try monter(layout: loi, visible: vue, contenu: .bandeSeule)
-        defer { bande.dismount() }
         let x = Int((vue.width / 2).rounded())
+        let milieu = Int((vue.height / 2).rounded())
         let horsBande = Int((vue.height / 2 - Self.bandeHauteur).rounded())
-        XCTAssertTrue(bande.pixel(x, Int(vue.height / 2), matches: Self.bande, tolerance: 8),
-                      "fusible : la bande est peinte (\(bande.hex(x: x, y: Int(vue.height / 2))))")
-        XCTAssertTrue(bande.pixel(x, horsBande, matches: Self.sentinelle, tolerance: 8),
-                      "PERSONNE ne peint autour d'une scène immersive " +
-                      "(\(bande.hex(x: x, y: horsBande)))")
+        let hautDeLaCarte = Int(loi.sceneFrame.minY.rounded())
+
+        XCTAssertTrue(pixels.pixel(x, milieu, matches: Self.bande, tolerance: 8),
+                      "fusible : la bande est peinte (\(pixels.hex(x: x, y: milieu)))")
+        XCTAssertFalse(pixels.pixel(x, horsBande, matches: Self.sentinelle, tolerance: 8),
+                       "le hors-champ de la scène est habillé DANS la carte, jamais laissé nu " +
+                       "(\(pixels.hex(x: x, y: horsBande)))")
+        XCTAssertTrue(pixels.pixel(x, hautDeLaCarte - 4, matches: Self.sentinelle, tolerance: 8),
+                      "et la carte AJUSTE : au-dessus de son bord haut, le viewport reste nu " +
+                      "(\(pixels.hex(x: x, y: hautDeLaCarte - 4)))")
     }
 
     // MARK: - Le montage
@@ -138,9 +143,8 @@ final class SceneCardMountingTests: XCTestCase {
     private enum Contenu { case plein, bandeSeule }
 
     private func monter(layout: SceneShape.Layout,
-                        visible: CGSize?,
                         contenu: Contenu) throws -> RenderedPixels {
-        let pixels = try RenderedPixels(Harnais(layout: layout, visible: visible, contenu: contenu))
+        let pixels = try RenderedPixels(Harnais(layout: layout, contenu: contenu))
         pixels.settle(borne: 3) { true }
         RunLoop.current.run(until: Date().addingTimeInterval(0.2))
         pixels.capture()
@@ -149,20 +153,19 @@ final class SceneCardMountingTests: XCTestCase {
 
     private struct Harnais: View {
         let layout: SceneShape.Layout
-        let visible: CGSize?
         let contenu: Contenu
 
         /// **Le harnais pose sa composition par `GeometryReader`, et non par un
         /// simple `ignoresSafeArea()`.** Mesuré : un `ZStack` centré se pose
         /// dans la zone SÛRE, donc la carte descendait de (59 − 34) / 2 = 12,5
-        /// pt — assez pour qu'une scène immersive n'atteigne plus le coin HAUT
-        /// de l'écran tout en couvrant le coin bas. Le témoin accusait alors la
-        /// carte pour un décalage du harnais.
+        /// pt — assez pour que le bord haut MESURÉ de la carte ne soit plus
+        /// celui que la loi prescrit. Le témoin accusait alors la carte pour un
+        /// décalage du harnais.
         var body: some View {
             GeometryReader { geo in
                 ZStack {
                     SceneCardMountingTests.sentinelle
-                    SceneCard(layout: layout, thumbHash: nil, visible: visible) {
+                    SceneCard(layout: layout, thumbHash: nil) {
                         ZStack {
                             Color.clear
                             switch contenu {

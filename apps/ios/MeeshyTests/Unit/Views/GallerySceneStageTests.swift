@@ -46,8 +46,8 @@ final class GallerySceneStageTests: XCTestCase {
         XCTAssertEqual(cadre.sceneSize.width / cadre.sceneSize.height,
                        SceneShape.aspect, accuracy: 0.0001,
                        "une scène est 9:16, quelle que soit la surface qui la porte")
-        XCTAssertEqual(cadre.visible, cadre.sceneSize,
-                       "cadrée, la scène tient entière : rien n'est rogné")
+        XCTAssertLessThanOrEqual(cadre.sceneSize.width, viewport.width,
+                                 "cadrée, la scène tient entière : rien n'est rogné")
     }
 
     func test_cadre_leFondEstPeintEtLaCarteEstArrondie() {
@@ -58,24 +58,35 @@ final class GallerySceneStageTests: XCTestCase {
         XCTAssertEqual(cadre.backdrop, SceneShape.cardedBackdrop,
                        "le fond d'une carte de scène est celui de la LOI, le même que le lecteur de stories")
         XCTAssertEqual(cadre.cornerRadius, SceneShape.cardedCornerRadius)
-        XCTAssertEqual(cadre.offscreenPainter, .stage,
-                       "le PLATEAU peint le hors-champ d'une scène cardée, et lui seul")
+        XCTAssertEqual(cadre.backdrop, StoryCardView.readerSceneBackdrop,
+                       "et c'est celui du lecteur de stories, parce qu'il n'y en a qu'un")
     }
 
     // MARK: - Immersif
 
-    func test_immersif_laSceneCouvreLeViewportEtDeborde() {
-        let cadre = GallerySceneStage.frame(viewport: viewport,
-                                            presentation: .full(pausedOnEntry: false),
-                                            corridors: corridors)
+    /// **L'immersif n'est plus une autre FORME, c'est un autre VIEWPORT**
+    /// (directive porteur du 2026-09-17, 3e message : « On préserve le même
+    /// fond que pour la story ! »).
+    ///
+    /// Il prenait la hauteur entière en DÉBORDANT en largeur — un aspect-FILL
+    /// qui retirait 44,8 pt de chaque côté de la scène, la seule surface du
+    /// produit qui rognait ce que l'auteur avait posé. Sans couloir de plateau,
+    /// la carte grandit ; elle ne se remplit pas.
+    func test_immersif_estLaMemeCarteSansLesCouloirsDuPlateau() {
+        let cadree = GallerySceneStage.frame(viewport: viewport, presentation: .carded,
+                                             corridors: corridors)
+        let immersif = GallerySceneStage.frame(viewport: viewport,
+                                               presentation: .full(pausedOnEntry: false),
+                                               corridors: corridors)
 
-        XCTAssertEqual(cadre.sceneSize.height, 874, accuracy: 0.5,
-                       "l'immersif prend la HAUTEUR entière — c'est le défaut mesuré sur F1 (672 pt)")
-        XCTAssertEqual(cadre.sceneSize.width, 874 * SceneShape.aspect, accuracy: 0.5)
-        XCTAssertGreaterThan(cadre.sceneSize.width, viewport.width,
-                             "une forme figée qui couvre un viewport plus étroit DÉBORDE")
-        XCTAssertEqual(cadre.visible, viewport,
-                       "ce qu'on voit, c'est le viewport entier")
+        XCTAssertEqual(immersif.sceneSize.width, viewport.width, accuracy: 0.5,
+                       "le viewport entier borne la carte par sa LARGEUR sur un iPhone")
+        XCTAssertEqual(immersif.sceneSize.height, viewport.width / SceneShape.aspect,
+                       accuracy: 0.5, "714,7 pt — la scène AJUSTÉE, jamais les 874 d'un remplissage")
+        XCTAssertGreaterThan(immersif.sceneSize.width, cadree.sceneSize.width,
+                             "sans couloir, la MÊME carte est plus grande")
+        XCTAssertEqual(immersif.sceneSize.width / immersif.sceneSize.height,
+                       SceneShape.aspect, accuracy: 0.0001)
     }
 
     func test_immersif_laSceneEstCentree() {
@@ -88,33 +99,17 @@ final class GallerySceneStageTests: XCTestCase {
         XCTAssertEqual(cadre.layout.sceneFrame.midY, viewport.height / 2, accuracy: 0.5)
     }
 
-    func test_immersif_personneNePeintAutour() {
+    /// **Le fond et les coins de la story, jusque dans l'immersif.** C'est le
+    /// 3e message de la directive, et c'est ce qui a retiré `Fullscreen` de la
+    /// loi : un second état n'aurait plus rien eu à dire.
+    func test_immersif_gardeLeFondEtLesCoinsDeLaStory() {
         let cadre = GallerySceneStage.frame(viewport: viewport,
                                             presentation: .full(pausedOnEntry: false),
                                             corridors: corridors)
 
-        XCTAssertNil(cadre.backdrop,
-                     "il ne reste rien à peindre : l'hôte ne choisit plus de fond")
-        XCTAssertEqual(cadre.offscreenPainter, .none)
-        XCTAssertEqual(cadre.cornerRadius, 0,
-                       "un coin arrondi sur un bord d'écran laisserait voir ce que personne ne peint")
-    }
-
-    /// **Qui peint les bandes de la scène elle-même** — la moitié que le
-    /// backdrop ne dit pas. Cardée, le plateau peint sous la carte et le canvas
-    /// se tait (#6791) ; immersive, le plateau n'est plus là et le canvas
-    /// redevient le seul peintre possible.
-    func test_lePeintreDesBandes_suitLaLoiEtChangeAvecLEtat() {
-        let cadree = GallerySceneStage.frame(viewport: viewport, presentation: .carded,
-                                             corridors: corridors)
-        let immersive = GallerySceneStage.frame(viewport: viewport,
-                                                presentation: .full(pausedOnEntry: false),
-                                                corridors: corridors)
-
-        XCTAssertFalse(cadree.paintsOwnLetterbox,
-                       "cardée, c'est le plateau qui peint — deux peintres empileraient deux dégradés")
-        XCTAssertTrue(immersive.paintsOwnLetterbox,
-                      "immersive, personne d'autre ne peint : sans le canvas, la bande est un trou noir")
+        XCTAssertEqual(cadre.backdrop, SceneShape.cardedBackdrop)
+        XCTAssertEqual(cadre.cornerRadius, SceneShape.cardedCornerRadius,
+                       "les coins de la story, même sans plateau autour")
     }
 
     /// **Le couloir du plateau ne mord PLUS en immersif** — c'est la moitié de

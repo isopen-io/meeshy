@@ -278,80 +278,81 @@ final class SceneShapeTests: XCTestCase {
         ])
     }
 
-    // MARK: - 4 · Les DEUX plein écrans
+    // MARK: - 4 · LA carte de la scène
 
     private let portraitViewport = CGSize(width: 402, height: 874)
     private let paysageViewport = CGSize(width: 874, height: 402)
 
-    /// **Cadré** : la scène est AJUSTÉE dans le viewport, arrondie, centrée —
-    /// et c'est le PLATEAU qui peint le hors-champ, jamais le canvas en plus.
-    func test_cadre_ajusteLaSceneEtLaisseLePlateauPeindreLeHorsChamp() {
-        let vue = SceneShape.layout(.carded(.thumbHashDominantColor), in: portraitViewport)
+    /// **La carte : la scène AJUSTÉE, centrée, sur le fond de la story**
+    /// (directive porteur du 2026-09-17, 3e message — « On préserve le même
+    /// fond que pour la story ! »).
+    func test_laCarte_ajusteLaSceneEtPorteLeFondDeLaStory() {
+        let vue = SceneShape.layout(in: portraitViewport)
         XCTAssertEqual(vue.sceneFrame.width, 402, accuracy: 0.01)
         XCTAssertEqual(vue.sceneFrame.height, 402 / SceneShape.aspect, accuracy: 0.01) // 714,67
         XCTAssertEqual(vue.sceneFrame.minX, 0, accuracy: 0.01)
         XCTAssertEqual(vue.sceneFrame.midY, 437, accuracy: 0.01)
-        XCTAssertEqual(vue.offscreenPainter, .stage)
-        XCTAssertEqual(vue.backdrop, .thumbHashDominantColor)
+        XCTAssertEqual(vue.backdrop, SceneShape.cardedBackdrop)
         XCTAssertEqual(vue.cornerRadius, SceneShape.cardedCornerRadius)
     }
 
-    /// Le même cadré sur un viewport PAYSAGE : la scène est bornée par la
+    /// La même carte sur un viewport PAYSAGE : la scène est bornée par la
     /// hauteur, et reste centrée.
-    func test_cadre_surUnViewportPaysage_estBorneParLaHauteur() {
-        let vue = SceneShape.layout(.carded(.black), in: paysageViewport)
+    func test_laCarte_surUnViewportPaysage_estBorneeParLaHauteur() {
+        let vue = SceneShape.layout(in: paysageViewport)
         XCTAssertEqual(vue.sceneFrame.height, 402, accuracy: 0.01)
         XCTAssertEqual(vue.sceneFrame.width, 402 * SceneShape.aspect, accuracy: 0.01) // 226,125
         XCTAssertEqual(vue.sceneFrame.midX, 437, accuracy: 0.01)
         XCTAssertEqual(vue.sceneFrame.minY, 0, accuracy: 0.01)
-        XCTAssertEqual(vue.offscreenPainter, .stage)
-        XCTAssertEqual(vue.backdrop, .black)
+        XCTAssertEqual(vue.backdrop, SceneShape.cardedBackdrop)
     }
 
-    /// **Immersif** : la scène occupe le viewport ENTIER, son contenu visible
-    /// centré. Rien ne reste à peindre autour — donc PERSONNE ne le peint, et
-    /// c'est ce qui retire la troisième couche de #6806.
-    func test_immersif_occupeLeViewportEntier_etPersonneNePeintAutour() {
-        let vue = SceneShape.layout(.immersive, in: portraitViewport)
-        XCTAssertEqual(vue.sceneFrame.height, 874, accuracy: 0.01)
-        XCTAssertEqual(vue.sceneFrame.width, 874 * SceneShape.aspect, accuracy: 0.01) // 491,625
-        XCTAssertEqual(vue.sceneFrame.midX, 201, accuracy: 0.01, "le contenu reste centré")
-        XCTAssertEqual(vue.sceneFrame.minY, 0, accuracy: 0.01)
-        XCTAssertEqual(vue.offscreenPainter, .none)
-        XCTAssertNil(vue.backdrop)
-        XCTAssertEqual(vue.cornerRadius, 0)
-    }
-
-    /// L'immersif sur un viewport PAYSAGE déborde en hauteur, centré.
-    func test_immersif_surUnViewportPaysage_debordeEnHauteurCentre() {
-        let vue = SceneShape.layout(.immersive, in: paysageViewport)
-        XCTAssertEqual(vue.sceneFrame.width, 874, accuracy: 0.01)
-        XCTAssertEqual(vue.sceneFrame.height, 874 / SceneShape.aspect, accuracy: 0.01) // 1553,78
-        XCTAssertEqual(vue.sceneFrame.midY, 201, accuracy: 0.01)
-        XCTAssertEqual(vue.sceneFrame.minX, 0, accuracy: 0.01)
-        XCTAssertEqual(vue.offscreenPainter, .none)
-    }
-
-    /// Le cadré couvre TOUJOURS moins que le viewport, l'immersif toujours
-    /// autant ou plus : c'est la différence entre les deux états, et elle se
-    /// dit sans regarder un pixel.
-    func test_lesDeuxEtatsSeDistinguentParCeQuIlsCouvrent() {
-        for viewport in [portraitViewport, paysageViewport] {
-            let cadre = SceneShape.layout(.carded(.thumbHash), in: viewport).sceneFrame
-            let immersif = SceneShape.layout(.immersive, in: viewport).sceneFrame
-            XCTAssertTrue(cadre.width <= viewport.width && cadre.height <= viewport.height)
-            XCTAssertTrue(immersif.width >= viewport.width - 0.01
-                          && immersif.height >= viewport.height - 0.01)
+    /// **La carte ne ROGNE jamais** — c'est ce que le second état faisait, et
+    /// c'est ce que la directive retire. Elle tient TOUJOURS dans le viewport
+    /// qu'on lui donne, au rapport de la scène, et jamais autrement.
+    ///
+    /// Un témoin qui ne regarderait qu'un viewport ne pourrait pas le dire :
+    /// sur un viewport exactement 9:16, la carte rognée et la carte ajustée
+    /// rendent le MÊME cadre — c'est la forme de la leçon 261 (« un témoin de
+    /// rang s'écrit sur un rang AUTRE que le premier »).
+    func test_laCarte_tientToujoursDansSonViewport_etGardeLeRapportDeLaScene() {
+        let viewports = [portraitViewport, paysageViewport,
+                         CGSize(width: 402, height: 402),
+                         CGSize(width: 402, height: 402 / SceneShape.aspect),
+                         CGSize(width: 1194, height: 834)]
+        for viewport in viewports {
+            let cadre = SceneShape.layout(in: viewport).sceneFrame
+            XCTAssertLessThanOrEqual(cadre.width, viewport.width + 0.01, "\(viewport)")
+            XCTAssertLessThanOrEqual(cadre.height, viewport.height + 0.01, "\(viewport)")
+            XCTAssertEqual(cadre.width / cadre.height, SceneShape.aspect, accuracy: 0.0001,
+                           "\(viewport)")
+            XCTAssertEqual(cadre.midX, viewport.width / 2, accuracy: 0.01, "\(viewport)")
+            XCTAssertEqual(cadre.midY, viewport.height / 2, accuracy: 0.01, "\(viewport)")
         }
+    }
+
+    /// **Un IMMERSIF n'est pas une autre forme : c'est un autre VIEWPORT.**
+    /// L'écran entier rend une carte PLUS GRANDE que la zone libre du plateau,
+    /// au même rapport, avec le même fond et les mêmes coins — c'est toute la
+    /// différence entre les deux plein écrans depuis la directive.
+    func test_unImmersif_estLaMemeCarte_dansUnViewportPlusGrand() {
+        let plateau = CGSize(width: portraitViewport.width - 32,
+                             height: portraitViewport.height - 200)
+        let cadre = SceneShape.layout(in: plateau)
+        let immersif = SceneShape.layout(in: portraitViewport)
+
+        XCTAssertGreaterThan(immersif.sceneFrame.width, cadre.sceneFrame.width)
+        XCTAssertEqual(immersif.backdrop, cadre.backdrop)
+        XCTAssertEqual(immersif.cornerRadius, cadre.cornerRadius)
     }
 
     /// Un viewport dégénéré ne fabrique pas un cadre non fini : la loi rend un
-    /// cadre vide plutôt qu'une division par zéro.
+    /// cadre vide plutôt qu'une division par zéro — et elle garde son fond,
+    /// pour qu'un hôte dégénéré ne devienne pas la surface sans peintre.
     func test_unViewportDegenere_neFabriquePasDeCadreNonFini() {
-        for mode in [SceneShape.Fullscreen.carded(.black), .immersive] {
-            let vue = SceneShape.layout(mode, in: .zero)
-            XCTAssertTrue(vue.sceneFrame.width.isFinite && vue.sceneFrame.height.isFinite)
-            XCTAssertEqual(vue.sceneFrame, .zero)
-        }
+        let vue = SceneShape.layout(in: .zero)
+        XCTAssertTrue(vue.sceneFrame.width.isFinite && vue.sceneFrame.height.isFinite)
+        XCTAssertEqual(vue.sceneFrame, .zero)
+        XCTAssertEqual(vue.backdrop, SceneShape.cardedBackdrop)
     }
 }

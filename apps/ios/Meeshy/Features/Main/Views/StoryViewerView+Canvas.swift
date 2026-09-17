@@ -1146,7 +1146,7 @@ struct StoryCardView: View {
     /// **Les cotes de la SCÈNE dans ce viewport — la LOI, pas un ajustement
     /// écrit ici** (#6904).
     ///
-    /// `SceneShape.layout(.carded(…), in:)` rend exactement ce que
+    /// `SceneShape.layout(in:)` rend exactement ce que
     /// `CanvasGeometry.aspectFitSize(in:ratio: 9:16)` rendait (le témoin
     /// `StoryReaderSceneCardTests.test_leCadreDuCanvas_estCeluiDeLaLoi` compare
     /// les deux écritures) : le lecteur ne change pas de cotes, il change de
@@ -1157,12 +1157,12 @@ struct StoryCardView: View {
     /// (`readerCanvasFraming`) : la loi dit la forme, le plateau dit où elle se
     /// pose et à quelle échelle elle s'anime.
     /// **La FORME que la loi donne à la scène du lecteur** — le cadre, le fond
-    /// et le rayon d'une scène CADRÉE dans ce viewport. C'est elle que la carte
-    /// reçoit, et c'est la même fonction que le plein écran cadré d'un post
-    /// appelle (`GallerySceneStage`, #6904) : les deux surfaces ne peuvent plus
-    /// cadrer deux scènes différentes.
+    /// et le rayon de LA carte de scène dans ce viewport. C'est elle que la
+    /// carte reçoit, et c'est la même fonction que le plein écran d'un post et
+    /// le RÉEL appellent (`GallerySceneStage`, `ReelSceneView`, #6904) : les
+    /// trois surfaces ne peuvent plus cadrer trois scènes différentes.
     var readerSceneLayout: SceneShape.Layout { // internal : lu par la carte
-        SceneShape.layout(.carded(Self.readerSceneBackdrop), in: geometry.size)
+        SceneShape.layout(in: geometry.size)
     }
 
     var canvasFitSize: CGSize { // internal : lu par `StoryViewerView+Sentinel`

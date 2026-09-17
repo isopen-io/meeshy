@@ -148,22 +148,21 @@ final class GallerySceneBackdropUnicityTests: XCTestCase {
         let page = try XCTUnwrap(code.range(of: "struct GalleryScenePage"))
         let suite = String(code[page.lowerBound...])
 
-        XCTAssertTrue(suite.contains("servesLetterboxFill: stage.paintsOwnLetterbox"),
-                      "la page scène tient sa décision de peinture de la LOI " +
-                      "(offscreenPainter), jamais d'un calcul par scène")
+        XCTAssertTrue(suite.contains("servesLetterboxFill: false"),
+                      "la page scène ne fait JAMAIS peindre le canvas : la carte peint, " +
+                      "et un seul état de carte ⇒ un seul peintre (directive du 2026-09-17, 3e message)")
         XCTAssertFalse(suite.contains("item.surface(inFullFrame"),
                        "le peintre ne se recalcule pas scène par scène : #6896 a fermé cette question")
     }
 
-    /// **Et le fond ne se peint QUE si la loi dit qu'il reste quelque chose à
-    /// peindre** (#6904, tour 3).
+    /// **Et le fond se peint DANS la carte, jamais par la page** (#6904,
+    /// tour 3 bis).
     ///
-    /// Le plateau peignait son fond INCONDITIONNELLEMENT, sous les deux états :
-    /// en plein cadre, la scène ne couvrait pas le viewport (le solveur des
-    /// pièces jointes l'y AJUSTAIT) et le fond habillait les deux bandes de
-    /// 79,7 pt qui restaient. La décision du 2026-09-17 supprime les bandes
-    /// plutôt que de les habiller — `SceneShape.layout(.immersive, in:)` rend
-    /// `backdrop: nil`, et la couche n'est alors pas montée du tout.
+    /// La page peignait son propre `SceneBackdropView` sous le player, et le
+    /// lecteur de stories le sien : deux assemblages, deux fonds. Le tour 3
+    /// avait conditionné le fond de la page au `backdrop` de la loi (`nil` en
+    /// immersif) ; le 3e message de la directive du 2026-09-17 retire la
+    /// condition elle-même : « On préserve le même fond que pour la story ! »
     func test_laPageScene_neMontrLeFondQueQuandLaLoiEnDonneUn() throws {
         let code = AppSourceGuard.stripComments(
             try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationMediaGalleryView+ScenePage.swift"))
@@ -175,7 +174,7 @@ final class GallerySceneBackdropUnicityTests: XCTestCase {
         // lecteur de stories montent tous deux. La page ne PEUT donc plus
         // peindre d'office — elle ne peint plus du tout.
         XCTAssertTrue(suite.contains("SceneCard(layout: stage.layout"),
-                      "la page monte LA carte de scène, qui conditionne le fond au backdrop de la loi")
+                      "la page monte LA carte de scène, seul peintre du hors-champ d'une scène")
         XCTAssertFalse(suite.contains("SceneBackdropView("),
                        "la page ne peint plus son fond elle-même : deux assemblages avaient divergé")
         XCTAssertFalse(suite.contains("MediaGalleryStage.backdrop("),

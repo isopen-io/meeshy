@@ -31,10 +31,11 @@ import MeeshySDK
 ///
 /// 1. elle DIMENSIONNE son contenu aux cotes que la loi donne à la scène
 ///    (`layout.sceneFrame.size`) — jamais un `.aspectRatio` réécrit à la main ;
-/// 2. elle PEINT le hors-champ, dans la carte et sous le contenu, **seulement
-///    si la loi dit qu'il reste quelque chose à peindre** (`layout.backdrop`,
-///    `nil` en immersif) ;
-/// 3. elle ROGNE à la zone visible, coins arrondis au rayon de la loi.
+/// 2. elle PEINT le hors-champ, dans la carte et sous le contenu
+///    (`layout.backdrop`) — **c'est elle le seul peintre, et c'est pourquoi
+///    `SceneShape.OffscreenPainter` n'existe plus** : le peintre se dit par la
+///    structure, pas par un champ ;
+/// 3. elle ROGNE aux coins de la loi.
 ///
 /// Ce qui reste à l'HÔTE : la PLACE et l'ANIMATION. Le lecteur de stories
 /// applique son `scaleEffect`/`offset` (`StoryCanvasFraming.Result`) ; la
@@ -44,10 +45,6 @@ import MeeshySDK
 ///
 /// ## Les deux compensations, et pourquoi elles sont des PARAMÈTRES
 ///
-/// - **`visible`** — la boîte que l'hôte montre. `nil` ⇒ la scène entière, ce
-///   qui est le cas CADRÉ (elle tient). En immersif la scène DÉBORDE : l'hôte
-///   dit la région, et le rognage de la carte est la définition même de
-///   « couvrir le viewport » pour une forme figée.
 /// - **`hostScale`** — l'échelle que l'hôte appliquera PAR-DESSUS la carte. Le
 ///   clip vit dans l'espace non mis à l'échelle : sans compensation, une carte
 ///   peinte à 0,5 rendrait un rayon de 10 là où la loi en veut 20. L'hôte
@@ -66,33 +63,20 @@ public struct SceneCard<Content: View>: View {
 
     private let layout: SceneShape.Layout
     private let thumbHash: String?
-    private let region: CGSize?
     private let cornerRadiusOverride: CGFloat?
     private let hostScale: CGFloat
     private let content: Content
 
     public init(layout: SceneShape.Layout,
                 thumbHash: String?,
-                visible: CGSize? = nil,
                 cornerRadius: CGFloat? = nil,
                 hostScale: CGFloat = 1,
                 @ViewBuilder content: () -> Content) {
         self.layout = layout
         self.thumbHash = thumbHash
-        self.region = visible
         self.cornerRadiusOverride = cornerRadius
         self.hostScale = hostScale
         self.content = content()
-    }
-
-    /// **La boîte VISIBLE d'une carte** — la scène quand elle tient, la région
-    /// quand elle déborde. Une seule écriture pour les deux états, plutôt qu'un
-    /// branchement qu'on oublierait d'un côté.
-    public nonisolated static func visibleSize(layout: SceneShape.Layout,
-                                               region: CGSize?) -> CGSize {
-        guard let region else { return layout.sceneFrame.size }
-        return CGSize(width: min(layout.sceneFrame.width, region.width),
-                      height: min(layout.sceneFrame.height, region.height))
     }
 
     /// **Le rayon à ROGNER, dans l'espace non mis à l'échelle de la carte.**
@@ -106,8 +90,6 @@ public struct SceneCard<Content: View>: View {
         return hostScale > 0 ? rayon / hostScale : rayon
     }
 
-    private var visible: CGSize { Self.visibleSize(layout: layout, region: region) }
-
     private var cornerRadius: CGFloat {
         Self.unscaledCornerRadius(layout: layout, override: cornerRadiusOverride,
                                   hostScale: hostScale)
@@ -115,17 +97,21 @@ public struct SceneCard<Content: View>: View {
 
     public var body: some View {
         ZStack {
-            // **Le fond n'existe que s'il reste quelque chose à peindre.** En
-            // immersif la scène couvre le viewport : la loi rend `nil`, cette
-            // couche n'est pas montée, et la troisième couche de #6806
-            // disparaît par construction plutôt que par consigne.
-            if let fond = layout.backdrop {
-                SceneBackdropView(backdrop: fond, thumbHash: thumbHash)
-            }
+            // **Le fond, TOUJOURS, et dans la carte.** Il n'y a plus d'état
+            // sans fond depuis la directive du 2026-09-17 (« On préserve le
+            // même fond que pour la story ! ») : l'immersif d'un post n'est pas
+            // une scène rognée sans hors-champ, c'est cette même carte dans le
+            // viewport entier.
+            SceneBackdropView(backdrop: layout.backdrop, thumbHash: thumbHash)
+            // Le cadre est posé sur le CONTENU aussi, et pas seulement sur la
+            // pile : un `UIViewRepresentable` proposé sans contrainte explicite
+            // débordait en largeur sur iPhone 16 Pro (`StoryViewerView+Canvas`,
+            // it. 48). Les deux cotes sont les mêmes — c'est une contrainte,
+            // pas une seconde décision de forme.
             content
                 .frame(width: layout.sceneFrame.width, height: layout.sceneFrame.height)
         }
-        .frame(width: visible.width, height: visible.height)
+        .frame(width: layout.sceneFrame.width, height: layout.sceneFrame.height)
         // `clipShape` AVANT toute transformation de l'hôte : appliqué après, le
         // clip resterait sur les bornes NON déplacées — le contenu décalé vers
         // le bas garderait un bord haut carré et se ferait rogner en bas par

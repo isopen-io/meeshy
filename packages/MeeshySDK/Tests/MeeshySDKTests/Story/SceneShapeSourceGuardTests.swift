@@ -202,8 +202,10 @@ final class SceneShapeSourceGuardTests: XCTestCase {
 
     /// **Un hôte consulte-t-il la loi — en CODE, jamais en commentaire ?**
     ///
-    /// Directement (`SceneShape.`), ou par une délégation VÉRIFIÉE vers un
-    /// solveur qui la porte une couche plus bas : `SceneCarouselLayout`
+    /// Directement (`SceneShape.`), en MONTANT la carte (`SceneCard(`, dont le
+    /// premier paramètre EST un `SceneShape.Layout` — un hôte ne peut pas la
+    /// monter sans avoir demandé sa forme à la loi), ou par une délégation
+    /// VÉRIFIÉE vers un solveur qui la porte une couche plus bas : `SceneCarouselLayout`
     /// (`SceneFraming.swift`, projette `SceneFraming.sceneAspect ==
     /// SceneShape.aspect`), `MediaStageFraming` (le type que
     /// `MediaGalleryStage.mediaRatio` interroge, lui-même nourri par
@@ -217,7 +219,7 @@ final class SceneShapeSourceGuardTests: XCTestCase {
     /// marqueurs n'apparaisse en code.
     static func consultsSceneShape(_ rawCode: String) -> Bool {
         let code = stripComments(rawCode)
-        return ["SceneShape.", "SceneCarouselLayout.", "MediaStageFraming.",
+        return ["SceneShape.", "SceneCard(", "SceneCarouselLayout.", "MediaStageFraming.",
                 "storyCanvasContainer(", "storyCanvasOrPlaceholder("]
             .contains { code.contains($0) }
     }

@@ -1,8 +1,9 @@
 import CoreGraphics
 import Foundation
 
-/// **Une scène a UNE forme — 9:16 — et le plein écran a DEUX états**
-/// (décision porteur du 2026-09-17 sur #6896, lot #6904).
+/// **Une scène a UNE forme — 9:16 — et UNE carte** (décision porteur du
+/// 2026-09-17 sur #6896, lot #6904 ; les deux plein écrans ramenés à une seule
+/// carte par la directive du même jour, 3e message).
 ///
 /// > « 9:16 figé, le fond lorsqu'on doit rogner est en 9:16 si des éléments en
 /// > plus de l'image/vidéo sortent de la zone de ce média. »
@@ -41,40 +42,63 @@ import Foundation
 /// quatrième forme possible d'un même document, et c'est précisément ce que
 /// onze hôtes ne peuvent pas garantir ensemble.
 ///
-/// ## Les deux plein écrans
+/// ## Le plein écran : UNE carte, deux viewports
 ///
-/// - **Cadré** (`Fullscreen.carded`) : la scène AJUSTÉE, arrondie, centrée, sur
-///   un fond que l'hôte choisit (noir, couleur dominante du ThumbHash, ou le
-///   ThumbHash lui-même comme le lecteur de story). Le chrome vit sur le
-///   PLATEAU (#6760), et **c'est le plateau qui peint le hors-champ**.
-/// - **Immersif** (`Fullscreen.immersive`) : la scène occupe le viewport
-///   ENTIER, son contenu visible et centré. Il ne reste rien à peindre autour —
-///   donc **personne ne le peint**, et la troisième couche de #6806 disparaît
-///   par construction plutôt que par consigne.
+/// La loi a porté DEUX états jusqu'au 2026-09-17 — cadré (scène ajustée, fond
+/// autour) et immersif (scène étendue, RIEN autour). La directive porteur du
+/// même jour les ramène à un seul :
 ///
-/// > **Un seul acteur peint le hors-champ.** Le défaut que l'audit nomme
-/// > « cause 5 » n'était pas un oubli d'hôte : c'était l'absence d'une loi
-/// > disant QUI peint autour du média. `offscreenPainter` la dit, et son
-/// > `.none` n'est pas un trou — c'est la réponse de l'immersif.
+/// > « Ce que je vois dans les stories me plaît ! Il faut reproduire exactement
+/// > la même chose partout ! » puis « On préserve le même fond que pour la
+/// > story ! »
 ///
-/// ## Ce que la loi FERME, et ce qu'elle DÉCLARE sans encore le câbler
+/// Il n'y a donc qu'une carte : la scène 9:16 AJUSTÉE, centrée, arrondie au
+/// rayon de la story, sur le fond de la story (`cardedBackdrop`). Ce qui
+/// distingue les surfaces n'est pas une forme, c'est le VIEWPORT qu'elles
+/// passent — la zone libre du plateau pour un cadré, l'écran ENTIER pour un
+/// immersif (aucun couloir, chrome masqué).
 ///
-/// **Seule la règle 1 (`aspect`, toujours 9:16) a un consommateur de
-/// production** — vérifié par `SceneShapeSourceGuardTests` sur onze hôtes.
-/// Les règles 2 à 4 (`mediaBand`, `frame`, `layout`/`Fullscreen`/
-/// `OffscreenPainter`/`Backdrop`/`cardedCornerRadius`) sont déclarées,
-/// testées en isolation (`SceneShapeTests`), et approuvées par la décision
-/// porteur du 2026-09-17 — mais AUCUN hôte ne les appelle encore : chaque
-/// surface qui montre aujourd'hui un canvas ne pose que le rapport fixe 9:16,
-/// jamais le resserrement binaire ni la distinction cadré/immersif. Deux
-/// mécanismes PLUS ANCIENS et INDÉPENDANTS couvrent une partie du même
-/// terrain sans consulter cette loi — `SceneFraming.imageAspect`/`cardFocus`
-/// (carte de fil et pages de carrousel, #6697/#6708) et
-/// `StoryImageOnlyPresentation`/`StorySceneFootprint` (lecteur de story,
-/// #6636) — et n'ont pas été mesurés CONTRE elle. Câbler `frame`/`layout`
-/// dans ces onze hôtes, ou converger les deux mécanismes existants vers eux,
-/// est un lot séparé : le préjuger ici romprait des surfaces déjà mesurées
-/// au simulateur sans nouvelle mesure.
+/// > **`Fullscreen` et `OffscreenPainter` ont disparu avec le second état.**
+/// > L'immersif était la seule surface qui ROGNAIT une scène, et son `.none`
+/// > la seule raison d'avoir une loi du peintre. Un seul état ⇒ un seul
+/// > peintre ⇒ il se dit par la STRUCTURE (`SceneCard` peint le fond dans la
+/// > carte), pas par un champ constant que plus personne ne peut contredire.
+///
+/// ## Ce que la loi FERME, ce qu'elle DÉCLARE, ce qui reste DEHORS
+///
+/// Mesuré le 2026-09-17, tour 3 bis du lot #6904 — l'état précédent de ce
+/// paragraphe (« AUCUN hôte ne les appelle encore ») était vrai au tour 2 et a
+/// cessé de l'être au tour 3 :
+///
+/// | règle | câblée en production ? |
+/// |---|---|
+/// | 1 · `aspect` (toujours 9:16) | OUI, sur tous les hôtes du player (garde de source) |
+/// | 4 · `layout` / `Backdrop` / `cardedBackdrop` / `cardedCornerRadius` | OUI — les QUATRE surfaces plein écran, par `SceneCard` |
+/// | 2 · `mediaBand` | non — déclarée et testée en isolation |
+/// | 3 · `frame` (le cadre binaire) | non — déclarée et testée en isolation |
+///
+/// Les quatre surfaces plein écran câblées : le plein écran **cadré** d'un
+/// post et son **immersif** (`GallerySceneStage` → `GalleryScenePage`), le
+/// **lecteur de stories** (`StoryCardView` → `readerCard`) et le **réel**
+/// composé (`ReelSceneView`). Le témoin
+/// `SceneShapeSourceGuardTests.test_lesSurfacesPleinEcran_montentLaCarteDeScene`
+/// les nomme une par une : c'est la seule forme qui empêche une cinquième
+/// surface de naître muette.
+///
+/// **Ce qui reste DEHORS, et par décision du porteur du 2026-09-17** : la
+/// CARTE DU FIL et les pages de carrousel gardent leur cadrage d'APERÇU
+/// (`SceneFraming.focus`, union des objets, plafond 1,4 — #6697/#6708). Ce
+/// n'est pas une dette : un aperçu n'est pas un plein écran, et les y faire
+/// entrer romprait des surfaces mesurées au simulateur.
+///
+/// **Ce qui reste déclaré sans appelant, et pourquoi il n'est pas retiré** :
+/// `SceneFraming.presentationAspect`/`presentedSize` n'ont plus de
+/// consommateur de production depuis #6896, mais une douzaine de témoins
+/// (`ScenePresentationTests`, `SceneFramingTests`) mesurent par eux la loi
+/// d'ÉCHELLE que les surfaces d'aperçu partagent — les retirer retirerait
+/// cette mesure, ce qui est un lot d'aperçus, pas un lot de plein écran.
+/// `StoryImageOnlyPresentation` et `StorySceneFootprint`, eux, sont partis
+/// avec ce tour : leurs seuls appelants étaient l'un l'autre.
 ///
 /// ## Où elle vit, et pourquoi
 ///
@@ -229,105 +253,89 @@ public enum SceneShape {
         return deborde ? .wholeScene : .mediaBand(zone)
     }
 
-    // MARK: - 4 · Les deux plein écrans
+    // MARK: - 4 · La carte de la scène
 
-    /// Ce sur quoi la scène cadrée se pose. L'hôte choisit ; la loi ne préjuge
-    /// pas d'une couleur qu'elle ne sait pas calculer.
+    /// Ce sur quoi une scène se pose. La loi en ÉLIT un (`cardedBackdrop`) ;
+    /// l'énumération reste le vocabulaire de `SceneBackdropView`, qui sait
+    /// peindre les trois — un hôte qui aurait une raison d'en nommer un autre
+    /// (un aperçu, un export) le nommerait, et le nommer se verrait.
     public enum Backdrop: Equatable, Sendable {
         case black
         /// La couleur dominante du ThumbHash — préférence du porteur.
         case thumbHashDominantColor
-        /// Le ThumbHash lui-même, comme le fait le lecteur de story.
+        /// Le ThumbHash lui-même, étiré.
         case thumbHash
     }
 
-    /// **Qui peint le hors-champ — un seul acteur, jamais deux.**
-    public enum OffscreenPainter: Equatable, Sendable {
-        /// Le plateau, et lui seul. Le canvas ne peint pas par-dessus.
-        case stage
-        /// Personne : il ne reste rien à peindre.
-        case none
-    }
-
-    /// Les deux états du plein écran.
-    public enum Fullscreen: Equatable, Sendable {
-        /// La scène en grand, arrondie, avec contrôleurs et détails.
-        case carded(Backdrop)
-        /// Rien que le contenu.
-        case immersive
-    }
-
-    /// Ce qu'un état de plein écran prescrit dans un viewport donné.
+    /// Ce qu'un plein écran de scène prescrit dans un viewport donné.
     public struct Layout: Equatable, Sendable {
-        /// Le cadre de la scène dans le repère du viewport. En immersif il
-        /// DÉBORDE du viewport — c'est ce que « occuper le viewport entier »
-        /// veut dire pour une forme figée.
+        /// Le cadre de la scène dans le repère du viewport — AJUSTÉ, centré,
+        /// donc toujours contenu dans le viewport.
         public let sceneFrame: CGRect
-        public let offscreenPainter: OffscreenPainter
-        /// `nil` en immersif : il n'y a pas de fond à choisir.
-        public let backdrop: Backdrop?
+        /// Ce qui habille le hors-champ, DANS la carte. Jamais `nil` : une
+        /// scène 9:16 ajustée laisse toujours quelque chose autour d'elle dès
+        /// que le viewport n'est pas exactement 9:16, et ce quelque chose est
+        /// une surface de COMPOSITION, pas un vide.
+        public let backdrop: Backdrop
         public let cornerRadius: CGFloat
     }
 
-    /// **L'arrondi de la scène cadrée — celui de la STORY, parce que c'est elle
-    /// la référence** (directive porteur du 2026-09-17 : « ce que je vois dans
-    /// les stories me plaît, il faut reproduire exactement la même chose
-    /// partout »). Zéro en immersif — un coin arrondi sur un bord d'écran
-    /// laisserait voir ce que personne ne peint.
+    /// **L'arrondi d'une scène — celui de la STORY, parce que c'est elle la
+    /// référence** (directive porteur du 2026-09-17 : « ce que je vois dans les
+    /// stories me plaît, il faut reproduire exactement la même chose
+    /// partout »).
     ///
     /// Il valait 20 ici et 22 chez le lecteur de stories comme chez le composer
     /// (`StoryComposerView+Canvas`), donc la même carte se reconnaissait à ses
     /// coins selon la surface qui l'ouvrait. Unifier VERS la loi aurait
     /// rectifié la story ; c'est l'inverse qui est demandé — la story est ce
-    /// qu'on reproduit, pas ce qu'on corrige. La loi adopte donc le 22 de la
-    /// surface de référence, et le plein écran cadré d'un post la rejoint.
+    /// qu'on reproduit, pas ce qu'on corrige.
     public nonisolated static let cardedCornerRadius: CGFloat = 22
 
-    /// **Le fond d'une scène cadrée — le MÊME sur toutes les surfaces**
-    /// (directive porteur du 2026-09-17 : « c'est EXACTEMENT le même lecteur et
-    /// le même comportement »).
+    /// **Le fond d'une scène — le MÊME sur toutes les surfaces** (directive
+    /// porteur du 2026-09-17 : « On préserve le même fond que pour la story ! »).
     ///
     /// La loi ne CHOISISSAIT pas, et chaque hôte élisait donc le sien : le
-    /// lecteur de stories la couleur dominante, la galerie le hachage étiré.
-    /// Deux fonds pour une même carte, chacun juste chez lui, aucun témoin
-    /// capable de rougir. La couleur PLATE l'emporte pour la raison de #6797 :
-    /// deux surfaces qui étirent le MÊME hachage dans deux cadres différents
-    /// rendent deux dégradés voisins mais distincts — ce qui se lit comme un
-    /// défaut de rendu —, alors qu'une couleur unie ne peut pas diverger d'un
-    /// cadre à l'autre.
-    ///
-    /// Elle reste une VALEUR du type somme, et non une quatrième branche : un
-    /// hôte qui a une raison de peindre autre chose (un aperçu, un export) la
-    /// nomme, et la nommer se voit.
+    /// lecteur de stories la couleur dominante, la galerie le hachage étiré,
+    /// l'immersif RIEN. Trois fonds pour une même carte, chacun juste chez lui,
+    /// aucun témoin capable de rougir. La couleur PLATE l'emporte pour la
+    /// raison de #6797 : deux surfaces qui étirent le MÊME hachage dans deux
+    /// cadres différents rendent deux dégradés voisins mais distincts — ce qui
+    /// se lit comme un défaut de rendu —, alors qu'une couleur unie ne peut pas
+    /// diverger d'un cadre à l'autre.
     public nonisolated static let cardedBackdrop: Backdrop = .thumbHashDominantColor
 
-    /// **Le cadre de la scène dans un viewport, et qui peint autour.**
+    /// **Le cadre de la scène dans un viewport — UN seul, pour toute surface
+    /// plein écran** (directive porteur du 2026-09-17, 3e message).
     ///
-    /// Cadré : la scène est AJUSTÉE (elle tient entière, centrée) et le plateau
-    /// habille ce qui reste. Immersif : la scène est ÉTENDUE jusqu'à couvrir le
-    /// viewport (centrée, donc son contenu visible reste au milieu) et il ne
-    /// reste rien à habiller.
-    public nonisolated static func layout(_ mode: Fullscreen, in viewport: CGSize) -> Layout {
+    /// La scène est AJUSTÉE (elle tient entière, centrée) et le fond habille ce
+    /// qui reste. Il n'y a plus de second état : l'immersif d'un post n'est pas
+    /// une autre FORME, c'est la même carte dans un AUTRE VIEWPORT — celui de
+    /// l'écran entier, sans couloir de plateau ni chrome. Le seul paramètre qui
+    /// distingue les surfaces est donc le viewport qu'elles passent, et c'est
+    /// l'hôte qui le sait.
+    ///
+    /// > **`Fullscreen`/`OffscreenPainter` ont DISPARU, et ce n'est pas un
+    /// > nettoyage : c'est la directive.** L'immersif rendait un aspect-FILL
+    /// > sans fond (`offscreenPainter == .none`) — une scène rognée, la seule
+    /// > surface du produit qui retirait des pixels que l'auteur avait posés.
+    /// > Avec un seul état, `offscreenPainter` vaudrait `.stage` partout : une
+    /// > loi qui calcule une valeur constante que personne ne peut plus lire
+    /// > autrement. Le peintre est désormais dit par la STRUCTURE — c'est
+    /// > `SceneCard`, et elle seule, qui peint le fond DANS la carte.
+    public nonisolated static func layout(in viewport: CGSize) -> Layout {
         guard viewport.width > 0, viewport.height > 0 else {
             return Layout(sceneFrame: .zero,
-                          offscreenPainter: mode == .immersive ? .none : .stage,
-                          backdrop: mode.backdrop,
-                          cornerRadius: mode == .immersive ? 0 : cardedCornerRadius)
+                          backdrop: cardedBackdrop,
+                          cornerRadius: cardedCornerRadius)
         }
-        let auGabarit = viewport.height * aspect
-        let largeur: CGFloat
-        switch mode {
-        case .carded: largeur = min(viewport.width, auGabarit)
-        case .immersive: largeur = max(viewport.width, auGabarit)
-        }
+        let largeur = min(viewport.width, viewport.height * aspect)
         let hauteur = largeur / aspect
-        let cadre = CGRect(x: (viewport.width - largeur) / 2,
-                           y: (viewport.height - hauteur) / 2,
-                           width: largeur, height: hauteur)
-        return Layout(sceneFrame: cadre,
-                      offscreenPainter: mode == .immersive ? .none : .stage,
-                      backdrop: mode.backdrop,
-                      cornerRadius: mode == .immersive ? 0 : cardedCornerRadius)
+        return Layout(sceneFrame: CGRect(x: (viewport.width - largeur) / 2,
+                                         y: (viewport.height - hauteur) / 2,
+                                         width: largeur, height: hauteur),
+                      backdrop: cardedBackdrop,
+                      cornerRadius: cardedCornerRadius)
     }
 
     // MARK: - Ce que la loi lit d'une scène
@@ -447,11 +455,30 @@ public enum SceneShape {
     }
 }
 
-private extension SceneShape.Fullscreen {
-    var backdrop: SceneShape.Backdrop? {
-        switch self {
-        case .carded(let fond): return fond
-        case .immersive: return nil
-        }
+
+// =============================================================================
+//  L'EMPREINTE avec laquelle le fond d'une carte se calcule
+// =============================================================================
+
+public extension StoryItem {
+
+    /// **L'empreinte que le fond d'une carte de scène étire ou moyenne.**
+    ///
+    /// `SceneShape.cardedBackdrop` dit QUOI peindre ; ce hachage dit avec quelle
+    /// matière. La cascade est celle du lecteur de stories depuis #6141 — la
+    /// scène d'abord, son premier média ensuite — et elle vit ici parce que
+    /// **le lecteur de stories n'est plus la seule surface à la descendre** :
+    /// le plein écran cadré d'un post et le RÉEL montent la même carte
+    /// (directive porteur du 2026-09-17). Elle est restée une extension de
+    /// `StoryItem` et non une méthode d'hôte pour cette seule raison : trois
+    /// hôtes qui la recopient sont trois fonds qui divergeront, et c'est
+    /// exactement ce que ce lot retire.
+    ///
+    /// Une chaîne VIDE ne compte pas pour une empreinte : `SceneBackdropView`
+    /// retombe alors sur son sol, ce qui est la réponse juste quand il n'y a
+    /// aucune matière — et non un repli honteux.
+    var sceneBackdropHash: String? {
+        if let hash = storyEffects?.thumbHash, !hash.isEmpty { return hash }
+        return media.compactMap(\.thumbHash).first { !$0.isEmpty }
     }
 }

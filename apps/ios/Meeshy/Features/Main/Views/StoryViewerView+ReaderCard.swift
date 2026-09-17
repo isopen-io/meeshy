@@ -50,9 +50,7 @@ extension StoryCardView {
     /// (`resolvedBackdropImage`), pour que les deux surfaces parlent du même
     /// contenu.
     func readerBackdropHash(of story: StoryItem?) -> String? {
-        guard let story else { return nil }
-        if let hash = story.storyEffects?.thumbHash, !hash.isEmpty { return hash }
-        return story.media.compactMap(\.thumbHash).first { !$0.isEmpty }
+        story?.sceneBackdropHash
     }
 }
 

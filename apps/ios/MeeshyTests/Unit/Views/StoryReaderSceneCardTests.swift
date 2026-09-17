@@ -14,7 +14,7 @@ import MeeshyUI
 /// restent au SDK avec leurs propres témoins ; le LECTEUR ne les consulte plus.
 ///
 /// Ce qu'il tient :
-/// - la carte a les cotes que `SceneShape.layout(.carded(…), in:)` donne ;
+/// - la carte a les cotes que `SceneShape.layout(in:)` donne ;
 /// - le rayon se compense pour l'échelle de la carte, comme avant ;
 /// - les trois couches du lecteur partagent la MÊME forme et le MÊME fond, et
 ///   les quatre montages du canvas la même décision de peinture.
@@ -31,7 +31,7 @@ final class StoryReaderSceneCardTests: XCTestCase {
     /// et celle de la loi. Elles doivent rendre la MÊME chose, sans quoi le
     /// lecteur et la galerie ne cadrent plus la même scène.
     func test_leCadreDuCanvas_estCeluiDeLaLoi() {
-        let parLaLoi = SceneShape.layout(.carded(.black), in: viewport).sceneFrame.size
+        let parLaLoi = SceneShape.layout(in: viewport).sceneFrame.size
         let parLeFit = CanvasGeometry.aspectFitSize(in: viewport, ratio: SceneShape.aspect)
 
         XCTAssertEqual(parLaLoi.width, parLeFit.width, accuracy: 0.01)
@@ -43,7 +43,7 @@ final class StoryReaderSceneCardTests: XCTestCase {
     /// ne bascule pas de cadre. La carte reste donc ajustée, jamais couvrante —
     /// et la loi le dit sans que le lecteur ait à le redire.
     func test_laCarteDuLecteur_neCouvreJamaisLeViewport() {
-        let carte = SceneShape.layout(.carded(.black), in: viewport).sceneFrame
+        let carte = SceneShape.layout(in: viewport).sceneFrame
 
         XCTAssertLessThanOrEqual(carte.width, viewport.width)
         XCTAssertLessThanOrEqual(carte.height, viewport.height)
@@ -57,7 +57,7 @@ final class StoryReaderSceneCardTests: XCTestCase {
     /// de faire la division. C'était la dernière ligne d'arithmétique de forme
     /// restée chez lui.
     func test_leRayon_seCompensePourLEchelleDeLaCarte() {
-        let loi = SceneShape.layout(.carded(StoryCardView.readerSceneBackdrop), in: viewport)
+        let loi = SceneShape.layout(in: viewport)
         XCTAssertEqual(SceneCard<EmptyView>.unscaledCornerRadius(layout: loi, override: nil,
                                                                  hostScale: 0.5),
                        SceneShape.cardedCornerRadius * 2)
@@ -93,7 +93,7 @@ final class StoryReaderSceneCardTests: XCTestCase {
     /// peut pas ressembler à un flou.
     func test_leFondDeLaCarte_estUneCouleurPlate() throws {
         let source = AppSourceGuard.stripComments(try String(contentsOf: canvasSource, encoding: .utf8))
-        XCTAssertTrue(source.contains("SceneShape.layout(.carded(Self.readerSceneBackdrop)"),
+        XCTAssertTrue(source.contains("SceneShape.layout(in: geometry.size)"),
                       "la forme remise à la carte porte le fond, et la carte le peint")
         XCTAssertEqual(StoryCardView.readerSceneBackdrop, .thumbHashDominantColor)
         XCTAssertEqual(StoryCardView.readerSceneBackdrop, SceneShape.cardedBackdrop,

@@ -47,7 +47,7 @@ final class SceneCardUnicityTests: XCTestCase {
     func test_leRayon_estCeluiDeLaLoi_surLesDeuxSurfaces() {
         let viewport = CGSize(width: 402, height: 874)
 
-        XCTAssertEqual(SceneShape.layout(.carded(SceneShape.cardedBackdrop), in: viewport).cornerRadius,
+        XCTAssertEqual(SceneShape.layout(in: viewport).cornerRadius,
                        SceneShape.cardedCornerRadius)
         XCTAssertEqual(GallerySceneStage.frame(viewport: viewport,
                                                presentation: .carded,
@@ -65,7 +65,7 @@ final class SceneCardUnicityTests: XCTestCase {
         let viewport = CGSize(width: 402, height: 874)
         let galerie = GallerySceneStage.frame(viewport: viewport, presentation: .carded,
                                               corridors: Self.corridors).sceneSize
-        let lecteur = SceneShape.layout(.carded(SceneShape.cardedBackdrop), in: viewport)
+        let lecteur = SceneShape.layout(in: viewport)
             .sceneFrame.size
 
         XCTAssertEqual(galerie.width / galerie.height, SceneShape.aspect, accuracy: 0.0001)
@@ -76,8 +76,7 @@ final class SceneCardUnicityTests: XCTestCase {
     /// carte à `scale` et déclare ce facteur ; il ne fait plus la division
     /// lui-même. Un facteur dégénéré ne divise rien.
     func test_leRayon_seCompensePourLEchelleQueLHoteDeclare() {
-        let loi = SceneShape.layout(.carded(SceneShape.cardedBackdrop),
-                                    in: CGSize(width: 402, height: 874))
+        let loi = SceneShape.layout(in: CGSize(width: 402, height: 874))
         XCTAssertEqual(SceneCard<EmptyView>.unscaledCornerRadius(layout: loi, override: nil,
                                                                  hostScale: 0.5),
                        SceneShape.cardedCornerRadius * 2)
@@ -89,19 +88,27 @@ final class SceneCardUnicityTests: XCTestCase {
                        "plein bord, l'hôte anime son rayon jusqu'à zéro — et zéro reste zéro")
     }
 
-    /// La boîte visible : la scène quand elle tient, la région quand elle
-    /// déborde. Une seule écriture pour les deux états.
-    func test_laBoiteVisible_estLaSceneOuLaRegion() {
+    /// **Les DEUX plein écrans d'un post sont la même carte, dans deux
+    /// viewports** (directive porteur du 2026-09-17, 3e message). L'immersif
+    /// n'a plus ni forme, ni fond, ni coins à lui : il n'a qu'un viewport plus
+    /// grand, parce que les couloirs du plateau n'y mordent pas.
+    func test_lesDeuxPleinEcransDUnPost_sontLaMemeCarte() {
         let viewport = CGSize(width: 402, height: 874)
-        let cadre = SceneShape.layout(.carded(SceneShape.cardedBackdrop), in: viewport)
-        let immersif = SceneShape.layout(.immersive, in: viewport)
+        let cadre = GallerySceneStage.frame(viewport: viewport, presentation: .carded,
+                                            corridors: Self.corridors)
+        let immersif = GallerySceneStage.frame(viewport: viewport, presentation: .full(pausedOnEntry: false),
+                                               corridors: Self.corridors)
 
-        XCTAssertEqual(SceneCard<EmptyView>.visibleSize(layout: cadre, region: nil),
-                       cadre.sceneFrame.size)
-        XCTAssertEqual(SceneCard<EmptyView>.visibleSize(layout: immersif, region: viewport),
-                       viewport)
-        XCTAssertGreaterThan(immersif.sceneFrame.width, viewport.width,
-                             "immersive, la scène DÉBORDE — c'est ce que la carte rogne")
+        XCTAssertEqual(immersif.backdrop, cadre.backdrop)
+        XCTAssertEqual(immersif.cornerRadius, cadre.cornerRadius)
+        XCTAssertGreaterThan(immersif.sceneSize.width, cadre.sceneSize.width,
+                             "sans couloir, la MÊME carte est plus grande")
+        for cote in [cadre.sceneSize, immersif.sceneSize] {
+            XCTAssertEqual(cote.width / cote.height, SceneShape.aspect, accuracy: 0.0001)
+            XCTAssertLessThanOrEqual(cote.width, viewport.width + 0.01,
+                                     "aucune des deux ne ROGNE la scène")
+            XCTAssertLessThanOrEqual(cote.height, viewport.height + 0.01)
+        }
     }
 
     // MARK: - Le montage
