@@ -586,6 +586,8 @@ const pt = {
   'feed.scene.sound.muted': 'Som mudo',
   'feed.scene.count': '{count} cenas',
 
+  'story.sound.off': 'Mudo',
+
   'admin.title': 'Administração',
 
 } satisfies InterfaceCatalog;

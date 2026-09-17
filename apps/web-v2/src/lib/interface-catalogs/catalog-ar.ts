@@ -580,6 +580,8 @@ const ar = {
   'feed.scene.sound.muted': 'الصوت مكتوم',
   'feed.scene.count': '{count} مشاهد',
 
+  'story.sound.off': 'صامت',
+
   'admin.title': 'الإدارة',
 
 } satisfies InterfaceCatalog;

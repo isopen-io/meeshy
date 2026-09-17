@@ -613,6 +613,12 @@ const fr = {
   'feed.scene.sound.muted': 'Son coupé',
   'feed.scene.count': '{count} scènes',
 
+  /* LE SON DE FOND DU LECTEUR DE STORY (T10, #6899) — bouton BASCULE dans la
+     ligne auteur (rail droit hors tranche, #5817) : UN libellé constant et
+     `aria-pressed`, jamais un libellé qui change avec l'état (« Son, non
+     enfoncé » se lit comme un son coupé). */
+  'story.sound.off': 'Muet',
+
   /* L'ESPACE D'ADMINISTRATION (#6432) — SEUL `admin.title` reste ici : la
      rangée des Réglages et le barreau du menu flottant (#6458) le lisent
      SANS jamais entrer dans `/adm`, donc sans jamais charger le catalogue

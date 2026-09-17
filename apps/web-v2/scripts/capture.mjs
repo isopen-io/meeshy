@@ -52,6 +52,13 @@ const SCREENS = [
   { name: 'feed', path: '/feed' },
   { name: 'story-text', path: '/story/st-amie-1' },
   { name: 'story-image', path: '/story/st-amie-2' },
+  /** LE LECTEUR DE SCÈNE (#6899) — un document canvas v:3 rendu par le MÊME
+      moteur que le fil (`ScenePlayer`, D-79), carte 9:16 sur le plateau :
+      verdict `canvas` (texte sur la bande, bandes au ThumbHash), image seule
+      AVEC un texte dedans (moteur rogné), image seule SANS moteur (#6636). */
+  { name: 'story-scene', path: '/story/st-scene' },
+  { name: 'story-scene-image-text', path: '/story/st-scene-image-text' },
+  { name: 'story-image-only', path: '/story/st-scene-image' },
   { name: 'welcome', path: '/welcome' },
   { name: 'magic-link', path: '/auth/magic-link' },
   { name: 'magic-link-validate', path: '/auth/magic-link/validate' },

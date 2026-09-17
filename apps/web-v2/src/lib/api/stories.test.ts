@@ -10,6 +10,7 @@ import {
   loadStoryTray,
   markStoryViewed,
 } from './stories';
+import { CANVAS_CAPS_HEADERS } from './feed-pages';
 import { createHttpTransport } from './http';
 
 /** Motif `conversations.test.ts` — un `fetchImpl` qui recopie la forme d'une
@@ -44,6 +45,39 @@ describe('STORIES_QUERY_PREFIX', () => {
     expect(STORY_FEED_QUERY_KEY.slice(0, STORIES_QUERY_PREFIX.length)).toEqual(STORIES_QUERY_PREFIX);
     expect(STORY_FEED_QUERY_KEY).not.toEqual(STORY_TRAY_QUERY_KEY);
     expect(STORY_FEED_QUERY_KEY).not.toEqual(STATUS_MOODS_QUERY_KEY);
+  });
+});
+
+/**
+ * `X-Canvas-Caps: 3` (T3, #6899, D-70) — les TROIS ports du lecteur
+ * l'annoncent désormais : sans lui, la négociation O17 (`storyEffectsV3.ts`)
+ * sert une SENTINELLE v1 à une story v3 sans média, ou omet `storyEffects`
+ * d'une story v3 à média — le moteur de scène ne recevrait jamais son
+ * document (§ 3 de la spécification `stories-lecteur`). Ce lot pose l'en-tête
+ * DANS LE MÊME commit que le rendu v3 du lecteur (détail 1) : l'en-tête seul
+ * ferait tomber le fond v1 sentinelle des stories v3 sans média.
+ */
+describe('X-Canvas-Caps — les trois ports du lecteur l’annoncent (T3, #6899)', () => {
+  /** L'en-tête lu SUR LE FIL (`fetch`), pas sur la requête du port : c'est ce
+   * que la passerelle reçoit qui gouverne la négociation. */
+  const capsSent = (init: RequestInit): string | null => new Headers(init.headers).get('X-Canvas-Caps');
+
+  test('loadStoryTray annonce X-Canvas-Caps', async () => {
+    const { impl, calls } = fakeFetch({ status: 200, body: { success: true, data: [] } });
+    await loadStoryTray({ source: 'gateway', transport: createHttpTransport({ base: '', fetchImpl: impl }) });
+    expect(capsSent(calls[0]?.init ?? {})).toBe(CANVAS_CAPS_HEADERS['X-Canvas-Caps'] ?? null);
+  });
+
+  test('loadStoryFeed annonce X-Canvas-Caps', async () => {
+    const { impl, calls } = fakeFetch({ status: 200, body: { success: true, data: [] } });
+    await loadStoryFeed({ source: 'gateway', transport: createHttpTransport({ base: '', fetchImpl: impl }) });
+    expect(capsSent(calls[0]?.init ?? {})).toBe(CANVAS_CAPS_HEADERS['X-Canvas-Caps'] ?? null);
+  });
+
+  test('loadStoryPost annonce X-Canvas-Caps', async () => {
+    const { impl, calls } = fakeFetch({ status: 200, body: { success: true, data: { id: 'p1', type: 'STORY', createdAt: '2026-09-01T00:00:00Z' } } });
+    await loadStoryPost({ source: 'gateway', transport: createHttpTransport({ base: '', fetchImpl: impl }), postId: 'p1' });
+    expect(capsSent(calls[0]?.init ?? {})).toBe(CANVAS_CAPS_HEADERS['X-Canvas-Caps'] ?? null);
   });
 });
 
