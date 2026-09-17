@@ -983,7 +983,8 @@ describe('AuthService', () => {
         canModerateContent: true,
         canViewAuditLogs: true,
         canManageNotifications: true,
-        canManageTranslations: true
+        canManageTranslations: true,
+        canManageAgent: true
       });
     });
 
@@ -1003,7 +1004,11 @@ describe('AuthService', () => {
         canManageNotifications: true,
         // La matrice UNIQUE accorde ce droit à ADMIN (#4152). Ce témoin gelait
         // la valeur de la copie manuscrite qu'il exerçait.
-        canManageTranslations: true
+        canManageTranslations: true,
+        // La garde RÉELLE des routes `/admin/agent/*` (#6733). ADMIN l'a ;
+        // MODERATOR et AUDIT, qui ont pourtant `canAccessAdmin: true`, ne
+        // l'ont pas — c'est là que ce droit se distingue du seuil d'accès.
+        canManageAgent: true
       });
     });
 
@@ -1023,7 +1028,8 @@ describe('AuthService', () => {
         canModerateContent: true,
         canViewAuditLogs: false, // ADMIN doesn't have audit logs
         canManageNotifications: true,
-        canManageTranslations: true
+        canManageTranslations: true,
+        canManageAgent: true
       });
     });
 
@@ -1043,7 +1049,11 @@ describe('AuthService', () => {
         canModerateContent: true,
         canViewAuditLogs: false,
         canManageNotifications: false,
-        canManageTranslations: false
+        canManageTranslations: false,
+        // Le rang qui DISCRIMINE : MODERATOR a `canAccessAdmin: true` et
+        // `canManageAgent: false`. Un client qui se rabat sur le seuil
+        // d'accès lui peint une tuile qui ne peut que prendre 403 (#6733).
+        canManageAgent: false
       });
     });
 
@@ -1061,7 +1071,8 @@ describe('AuthService', () => {
         canModerateContent: false,
         canViewAuditLogs: true,
         canManageNotifications: false,
-        canManageTranslations: false
+        canManageTranslations: false,
+        canManageAgent: false
       });
     });
 
@@ -1087,7 +1098,8 @@ describe('AuthService', () => {
         canModerateContent: false,
         canViewAuditLogs: false,
         canManageNotifications: false,
-        canManageTranslations: false
+        canManageTranslations: false,
+        canManageAgent: false
       });
     });
 
@@ -1105,7 +1117,8 @@ describe('AuthService', () => {
         canModerateContent: false,
         canViewAuditLogs: false,
         canManageNotifications: false,
-        canManageTranslations: false
+        canManageTranslations: false,
+        canManageAgent: false
       });
     });
 
@@ -1123,7 +1136,8 @@ describe('AuthService', () => {
         canModerateContent: false,
         canViewAuditLogs: false,
         canManageNotifications: false,
-        canManageTranslations: false
+        canManageTranslations: false,
+        canManageAgent: false
       });
     });
 

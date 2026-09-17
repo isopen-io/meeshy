@@ -2,12 +2,24 @@ import { UserRoleEnum } from '@meeshy/shared/types';
 import { permissionsService } from './permissions.service';
 
 /**
- * La forme des permissions SERVIES aux clients — neuf clés.
+ * La forme des permissions SERVIES aux clients — dix clés.
  *
- * Distincte d'`AdminPermissions` (dix-sept clés), qui est la loi. Celle-ci est
+ * Distincte d'`AdminPermissions` (dix-huit clés), qui est la loi. Celle-ci est
  * ce que le fil transporte, et son vocabulaire est celui d'avant les
  * communautés (`canManageGroups`). La séparer ne crée pas une seconde
  * matrice : c'est une PROJECTION, et il n'y a aucune valeur à y tenir à jour.
+ *
+ * ## Pourquoi `canManageAgent` y est entrée (#6733)
+ *
+ * Elle est la garde RÉELLE des 35 routes `/admin/agent/*`
+ * (`requirePermission('canManageAgent')`, `routes/admin/agent-shared.ts`), et
+ * la projection ne la portait pas : aucun client ne pouvait connaître ce
+ * droit. Ils se rabattaient sur `canAccessAdmin` — le MAUVAIS seuil, vrai pour
+ * MODERATOR et AUDIT, à qui la matrice refuse l'agent. Une tuile peinte sur ce
+ * repli ne peut que prendre 403.
+ *
+ * MODERATOR est le rang où les deux clés divergent : c'est là, et nulle part
+ * ailleurs, qu'un témoin sur ce droit peut tomber.
  */
 export type ServedPermissions = {
   readonly canAccessAdmin: boolean;
@@ -19,6 +31,7 @@ export type ServedPermissions = {
   readonly canViewAuditLogs: boolean;
   readonly canManageNotifications: boolean;
   readonly canManageTranslations: boolean;
+  readonly canManageAgent: boolean;
 };
 
 /**
@@ -65,6 +78,7 @@ export function servedUserPermissions(role: UserRoleEnum | string): ServedPermis
     canViewAuditLogs: central.canViewAuditLogs,
     canManageNotifications: central.canManageNotifications,
     canManageTranslations: central.canManageTranslations,
+    canManageAgent: central.canManageAgent,
   };
 }
 
@@ -81,5 +95,6 @@ export const servedPermissionsSchema = {
     canViewAuditLogs: { type: 'boolean' },
     canManageNotifications: { type: 'boolean' },
     canManageTranslations: { type: 'boolean' },
+    canManageAgent: { type: 'boolean' },
   },
 } as const;

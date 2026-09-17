@@ -55,12 +55,18 @@ import { sendPaginatedSuccess, sendNotFound, sendInternalError } from '../../uti
 // dupliqué. Il est déplacé à côté de son jumeau MÉDIA
 // (`mediaAttachmentIsProtected`), dans `routes/admin/media-protection.ts` —
 // voir son doc-comment pour le détail des six colonnes.
+// #6862 — LE `select`, LE SCHÉMA ET LA PROJECTION SONT TROIS ÉNONCÉS DE LA
+// MÊME FORME, et ils vivent ensemble dans `sovereign-message-projection.ts` :
+// un champ chargé sans être déclaré est supprimé par fast-json-stringify sans
+// qu'un témoin rougisse, un champ déclaré sans être chargé est la même dérive
+// dans l'autre sens. Les deux prédicats de `media-protection.ts` y sont
+// APPELÉS, jamais recopiés — ils rendent le verdict, la projection décide de la
+// forme du masquage.
 import {
-  attachmentProtectionSelect,
-  mediaAttachmentIsProtected,
-  messageContentIsProtected,
-  messageContentProtectionSelect,
-} from './media-protection';
+  mapSovereignMessageRow,
+  sovereignMessageSchema,
+  sovereignMessageSelect,
+} from './sovereign-message-projection';
 import { logError } from '../../utils/logger.js';
 import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
 
@@ -122,62 +128,7 @@ export function registerConversationMessagesSovereignRoute(fastify: FastifyInsta
             success: { type: 'boolean', example: true },
             data: {
               type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  id: { type: 'string' },
-                  content: { type: 'string', nullable: true },
-                  originalLanguage: { type: 'string', nullable: true },
-                  messageType: { type: 'string', nullable: true },
-                  messageSource: { type: 'string', nullable: true },
-                  isEdited: { type: 'boolean', nullable: true },
-                  editedAt: { type: 'string', format: 'date-time', nullable: true },
-                  replyToId: { type: 'string', nullable: true },
-                  createdAt: { type: 'string', format: 'date-time' },
-                  attachmentCount: { type: 'number' },
-                  isProtected: { type: 'boolean' },
-                  attachments: {
-                    type: 'array',
-                    items: {
-                      type: 'object',
-                      properties: {
-                        id: { type: 'string' },
-                        originalName: { type: 'string', nullable: true },
-                        mimeType: { type: 'string', nullable: true },
-                        fileSize: { type: 'number', nullable: true },
-                        width: { type: 'number', nullable: true },
-                        height: { type: 'number', nullable: true },
-                        duration: { type: 'number', nullable: true },
-                        fileUrl: { type: 'string', nullable: true },
-                        thumbnailUrl: { type: 'string', nullable: true },
-                        isProtected: { type: 'boolean' }
-                      }
-                    }
-                  },
-                  sender: {
-                    type: 'object',
-                    nullable: true,
-                    properties: {
-                      id: { type: 'string' },
-                      userId: { type: 'string', nullable: true },
-                      type: { type: 'string', nullable: true },
-                      displayName: { type: 'string', nullable: true },
-                      avatar: { type: 'string', nullable: true },
-                      nickname: { type: 'string', nullable: true },
-                      user: {
-                        type: 'object',
-                        nullable: true,
-                        properties: {
-                          id: { type: 'string' },
-                          username: { type: 'string', nullable: true },
-                          displayName: { type: 'string', nullable: true },
-                          avatar: { type: 'string', nullable: true }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
+              items: sovereignMessageSchema
             },
             pagination: {
               type: 'object',
@@ -218,66 +169,12 @@ export function registerConversationMessagesSovereignRoute(fastify: FastifyInsta
       const [messages, total] = await withOrphanedSenderRepair({ prisma: fastify.prisma, conversationIds: [conversationId] }, () => Promise.all([
         fastify.prisma.message.findMany({
           where,
-          select: {
-            id: true,
-            content: true,
-            originalLanguage: true,
-            messageType: true,
-            messageSource: true,
-            isEdited: true,
-            editedAt: true,
-            replyToId: true,
-            createdAt: true,
-            // #4388 — les six colonnes que `messageContentIsProtected` exige,
-            // désormais un select NOMMÉ et partagé avec `content.ts` plutôt
-            // que retapées ici à la main.
-            ...messageContentProtectionSelect,
-            sender: {
-              select: {
-                id: true,
-                userId: true,
-                type: true,
-                displayName: true,
-                avatar: true,
-                nickname: true,
-                user: { select: { id: true, username: true, displayName: true, avatar: true } }
-              }
-            },
-            // #6860 — LES PIÈCES VOYAGENT AVEC LE MESSAGE.
-            //
-            // Cette route rendait `attachmentCount` et rien d'autre : un
-            // administrateur souverain apprenait qu'un message portait trois
-            // pièces sans pouvoir en voir une seule. Sur un message VOCAL,
-            // dont le contenu utile n'est pas dans `content` mais dans sa
-            // pièce, la lecture rendait une ligne vide avec un compteur —
-            // l'information était annoncée et retenue.
-            //
-            // Les trois colonnes de protection PROPRES à la pièce
-            // (`attachmentProtectionSelect`) sont chargées ici parce que
-            // `mediaAttachmentIsProtected` les exige de son appelant. Celles
-            // du MESSAGE sont déjà là, par `messageContentProtectionSelect`.
-            attachments: {
-              select: {
-                id: true,
-                originalName: true,
-                mimeType: true,
-                fileSize: true,
-                width: true,
-                height: true,
-                duration: true,
-                fileUrl: true,
-                thumbnailUrl: true,
-                ...attachmentProtectionSelect
-              },
-              orderBy: { createdAt: 'asc' as const }
-            },
-            // Gardé À CÔTÉ de la liste, et ce n'est pas une redondance : le
-            // compteur porte sur TOUTES les pièces du message, la liste sur
-            // celles de cette page. Les deux coïncident aujourd'hui ; le jour
-            // où les pièces se pagineront, c'est le compteur qui dira la
-            // vérité.
-            _count: { select: { attachments: true } }
-          },
+          // #6862 — LE `select` EST NOMMÉ, et il vit avec le schéma qui le
+          // déclare et la projection qui le garde
+          // (`sovereign-message-projection.ts`). Retapé ici, il divergeait de
+          // l'un des deux au premier champ ajouté — et la divergence est
+          // SILENCIEUSE dans les deux sens.
+          select: sovereignMessageSelect,
           orderBy: { createdAt: 'desc' },
           skip: offsetNum,
           take: limitNum
@@ -285,57 +182,21 @@ export function registerConversationMessagesSovereignRoute(fastify: FastifyInsta
         fastify.prisma.message.count({ where })
       ]));
 
-      const data = messages.map((message) => {
-        const protege = messageContentIsProtected(message);
-        return {
-          id: message.id,
-          content: protege ? null : message.content,
-          originalLanguage: message.originalLanguage,
-          messageType: message.messageType,
-          messageSource: message.messageSource,
-          isEdited: message.isEdited,
-          editedAt: message.editedAt,
-          replyToId: message.replyToId,
-          createdAt: message.createdAt,
-          sender: message.sender,
-          attachmentCount: message._count?.attachments ?? 0,
-          isProtected: protege,
-          /**
-           * La protection se lit aux DEUX niveaux qui la DÉCLARENT, et le
-           * verdict est leur OU — jamais une cascade. `MessageAttachment`
-           * porte ses propres `isViewOnce` / `isBlurred` / `effectFlags`,
-           * INDÉPENDANTS de ceux du message : une pièce à vue unique sur un
-           * message ordinaire doit être retenue, et toutes les pièces d'un
-           * message protégé le sont aussi. C'est exactement la composition que
-           * `routes/posts/core.ts` tient déjà — `protectedPreview(message) !==
-           * null || maskedAttachment(attachment)` — et son commentaire dit
-           * pourquoi : « une garde qui ne lisait que la pièce jointe laissait
-           * tout cela sortir EN CLAIR ».
-           *
-           * Une pièce protégée reste LISTÉE, `fileUrl` et `thumbnailUrl` à
-           * `null` : constater qu'une pièce existe (son nom, son poids, sa
-           * durée) n'ouvre pas son contenu. Masquer la ligne entière priverait
-           * l'administration d'un fait qu'elle a le droit de connaître ;
-           * servir l'URL la ferait sortir du produit par une porte que le
-           * reste du produit ferme. Même forme que `GET /admin/users/:userId/media`.
-           */
-          attachments: (message.attachments ?? []).map((piece) => {
-            const pieceProtegee = protege || mediaAttachmentIsProtected(piece);
-            return {
-              id: piece.id,
-              originalName: piece.originalName,
-              mimeType: piece.mimeType,
-              fileSize: piece.fileSize,
-              width: piece.width,
-              height: piece.height,
-              duration: piece.duration,
-              fileUrl: pieceProtegee ? null : piece.fileUrl,
-              thumbnailUrl: pieceProtegee ? null : piece.thumbnailUrl,
-              isProtected: pieceProtegee,
-            };
-          }),
-        };
-      });
+      /**
+       * La protection se lit aux DEUX niveaux qui la DÉCLARENT — le MESSAGE et
+       * la PIÈCE, dont les colonnes homonymes sont INDÉPENDANTES — et le
+       * verdict est leur OU, jamais une cascade. La citation en ajoute un
+       * troisième, le sien : un message parfaitement libre peut citer un
+       * message à vue unique, et la citation est alors le seul endroit par où
+       * son texte sort.
+       *
+       * Et ce qui tombe n'est pas seulement la CHAÎNE : les traductions, la
+       * transcription, les pistes TTS, la vignette, le `thumbHash`, les
+       * variantes d'image et `metadata` restituent le même contenu par un autre
+       * médium (leçon 275). Le détail de chaque garde vit dans le doc-comment
+       * de `sovereign-message-projection.ts`.
+       */
+      const data = messages.map(mapSovereignMessageRow);
 
       const authContext = (request as UnifiedAuthRequest).authContext;
       // Best-effort, écrite APRÈS le succès de la lecture (cf. doc de
