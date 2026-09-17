@@ -88,6 +88,7 @@ export type RawMessageAttachment = {
   thumbnailUrl?: string | null;
   isForwarded?: boolean | null;
   forwardedFromAttachmentId?: string | null;
+  mimeType?: string | null;
   reactions?: ReadonlyArray<{ readonly emoji: string; readonly participantId: string }>;
   transcription?: TranscriptionBlob | null;
   translations?: Record<string, AttachmentAudioTranslationEntry> | null;
