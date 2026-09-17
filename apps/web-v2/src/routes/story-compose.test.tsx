@@ -263,6 +263,19 @@ describe('StoryComposeScreen — le brouillon SURVIT, et un média PRÊT n’est
     expect(drafts.get(VIEWER_ID)).toBeNull();
   });
 
+  test('une story PUBLIÉE ne peut pas repartir : Publier reste inerte jusqu’à la navigation', async () => {
+    const bench = harness({});
+    const el = mount(bench.deps);
+    typeText(el, 'Une seule fois');
+    act(() => publishButton(el)!.click());
+    await flush(() => bench.posts.length > 0);
+    await flush();
+    expect(publishButton(el)?.disabled).toBe(true);
+    act(() => publishButton(el)!.click());
+    await flush();
+    expect(bench.posts).toHaveLength(1);
+  });
+
   test('retirer le fond a un EFFET : plus de moteur, plus de postMediaId envoyé, et le retrait est persisté', async () => {
     const drafts = createStudioDraftStore(null);
     const bench = harness({ drafts });
@@ -312,6 +325,23 @@ describe('StoryComposeScreen — les états refus, hors-ligne et échec de mont�
     await flush(() => bench.posts.length > 0);
     expect(bench.posts).toHaveLength(1);
     expect(bench.posts[0]!.content).toBe('Écrit dans le métro');
+  });
+
+  test('une intention armée hors ligne puis VIDÉE ne ment pas au retour du réseau', async () => {
+    Object.defineProperty(window.navigator, 'onLine', { value: false, configurable: true });
+    const bench = harness({});
+    const el = mount(bench.deps);
+    typeText(el, 'Finalement non');
+    act(() => publishButton(el)!.click());
+    await flush();
+    typeText(el, '');
+    act(() => {
+      Object.defineProperty(window.navigator, 'onLine', { value: true, configurable: true });
+      window.dispatchEvent(new Event('online'));
+    });
+    await flush();
+    expect(bench.posts).toHaveLength(0);
+    expect(publishButton(el)?.textContent).toBe('Publier');
   });
 
   test('une image posée par la porte du SON est refusée, et rien ne part', async () => {

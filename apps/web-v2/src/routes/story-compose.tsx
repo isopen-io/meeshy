@@ -295,11 +295,15 @@ function StoryStudio({ deps, viewerId }: { readonly deps: StoryStudioDeps; reado
       mediaIds: studioMediaIds({ background: backgroundReady, sound: soundReady }),
     });
 
-    setPublishing(false);
     if (!result.ok) {
+      setPublishing(false);
       setPublishFailure(studioFailureKey(result, 'publish') ?? 'story.studio.failure.network');
       return;
     }
+
+    // `publishing` RESTE vrai jusqu'à la navigation : la relâcher ici rouvrait
+    // Publier le temps de l'invalidation, et un second geste publiait la même
+    // story deux fois.
 
     if (viewerId !== null) deps.drafts.clear(viewerId);
     revokeIfLocal(current.background?.previewUrl);
@@ -311,7 +315,9 @@ function StoryStudio({ deps, viewerId }: { readonly deps: StoryStudioDeps; reado
   const publishRef = useRef(publish);
   publishRef.current = publish;
   useEffect(() => {
-    if (online && awaitingNetwork) void publishRef.current();
+    if (!online || !awaitingNetwork) return;
+    setAwaitingNetwork(false);
+    void publishRef.current();
   }, [online, awaitingNetwork]);
 
   const previewDocument = useMemo(
