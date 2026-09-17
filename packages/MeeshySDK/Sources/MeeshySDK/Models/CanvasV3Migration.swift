@@ -225,7 +225,18 @@ public extension CanvasV3 {
         // rendait déjà en l'absence de porteur.
         let backgroundHex = nonEmpty(effects.background)
         let backgroundTransform = effects.backgroundTransform.flatMap { $0.isIdentity ? nil : $0 }
-        if backgroundHex != nil || backgroundTransform != nil {
+        // `"bg"` est l'id RÉSERVÉ de ce porteur couleur/transform. Un objet du
+        // document mémorisé qui référence un média peut, sur la forme servie
+        // par la passerelle, porter LUI-MÊME cet id (`payload.mediaId` +
+        // `payload.transform.videoFitMode` sur le MÊME objet) — la boucle
+        // `.media` ci-dessous le réémettrait alors sous le même id, en
+        // `plane: .content`. Sans cette garde, la scène porterait deux objets
+        // homonymes `"bg"` (un par plan), et toute carte clé-par-id
+        // (`wireBandEdge`, `zIndexMap`, `deleteElement`, …) confondrait les
+        // deux (revue 2026-09-17). Le cadrage cède alors la place à la
+        // référence média, déjà portée par l'objet `plane: .content`.
+        let backgroundCarrierIdIsTaken = (effects.mediaObjects ?? []).contains { $0.id == "bg" }
+        if !backgroundCarrierIdIsTaken, backgroundHex != nil || backgroundTransform != nil {
             let fallback = slot
             slot += 1
             var payload: [String: CanvasJSONValue] = [:]
@@ -437,70 +448,6 @@ public extension CanvasV3 {
         return sceneCarriesSomething ? scene : nil
     }
 
-    /// **Un objet du document mémorisé que le runtime v1 ne sait pas exprimer
-    /// est conservé, PAR IDENTITÉ** (#6893).
-    ///
-    /// `migratedScene` ci-dessus ne régénère un porteur `plane: .bg` que
-    /// depuis une couleur (`effects.background`) ou un `backgroundTransform` —
-    /// jamais depuis une RÉFÉRENCE média (`payload.mediaId` /
-    /// `payload.postMediaId`), que `StoryEffects.init(rendering:)` ne lit pas
-    /// non plus (cas `.media where plane == .bg`, plus haut). Un tel objet
-    /// disparaît donc ENTIÈREMENT à l'aller-retour decode → encode → decode
-    /// qu'exécute le CACHE DU FIL (`GRDBCacheStore<String, FeedPost>`, via
-    /// `StoryEffects.encode`) : la scène 0 perd son fond, `coversEveryVisual`
-    /// refuse la route scène, et le plein écran retombe sur les pages image
-    /// sans le texte de la scène (mesuré au simulateur, #6846).
-    ///
-    /// **Portée volontairement ÉTROITE.** Un merge générique par identité —
-    /// « tout id absent du résultat migré est restitué » — ressusciterait
-    /// aussi bien un texte, un sticker ou un média de contenu que l'auteur
-    /// vient de SUPPRIMER dans une session d'édition : ces familles sont déjà
-    /// modélisées aller-retour par le runtime v1, et leur absence dans
-    /// `migrated` dit une suppression délibérée, pas une incapacité du
-    /// modèle. Seul le fond `plane: .bg` à référence média n'a AUCUNE
-    /// affordance de retrait côté composer : cette forme n'est écrite que par
-    /// la passerelle (`storyEffectsV3.ts`, contrat des deux orthographes
-    /// #6894), jamais par une session d'édition iOS — la restituer ne peut
-    /// donc jamais annuler un geste de l'auteur.
-    ///
-    /// **Depuis #6894, ce merge ne s'active plus sur son propre cas nominal**
-    /// (`StoryEffects.init(rendering:)`, cas `.media where plane == .bg`, lit
-    /// désormais lui-même `mediaId`/`postMediaId` et fait entrer le fond dans
-    /// `mediaObjects` — dès lors couvert par la boucle `.media` ordinaire de
-    /// `migratedScene`, à IDENTITÉ égale). Il reste un FILET pour tout objet
-    /// futur que le runtime v1 ne saurait toujours pas exprimer — la garantie
-    /// qu'il porte (« aucun id du document mémorisé ne se perd en silence »)
-    /// vaut indépendamment de ce que #6894 sait déjà couvrir par ailleurs.
-    private static func mergingMemorizedBackgroundMedia(
-        _ migrated: SceneV3?,
-        with memorized: SceneV3?
-    ) -> SceneV3? {
-        guard let memorized else { return migrated }
-        let migratedIds = Set((migrated?.objects ?? []).map(\.id))
-        let preserved = memorized.objects.filter { object in
-            !migratedIds.contains(object.id)
-                && object.kind == .media && object.plane == .bg
-                && (object.payload["mediaId"] != nil || object.payload["postMediaId"] != nil)
-        }
-        guard !preserved.isEmpty else { return migrated }
-        guard let migrated else {
-            return SceneV3(id: memorized.id, objects: preserved,
-                           opening: memorized.opening, closing: memorized.closing,
-                           clipTransitions: memorized.clipTransitions,
-                           timelineDuration: memorized.timelineDuration,
-                           thumbHash: memorized.thumbHash,
-                           carrierAspect: memorized.carrierAspect)
-        }
-        // Le fond restitué reprend sa place en TÊTE de scène — c'est déjà là
-        // que `migratedScene` pose le sien quand le runtime en émet un.
-        return SceneV3(id: migrated.id, objects: preserved + migrated.objects,
-                       opening: migrated.opening, closing: migrated.closing,
-                       clipTransitions: migrated.clipTransitions,
-                       timelineDuration: migrated.timelineDuration,
-                       thumbHash: migrated.thumbHash,
-                       carrierAspect: migrated.carrierAspect)
-    }
-
     /// **Le son de fond appartient au DOCUMENT**, jamais à une scène — c'est ce
     /// que dit `CanvasV3.sound`, à la racine. Une publication de dix slides a
     /// une seule bande-son.
@@ -591,11 +538,21 @@ public extension CanvasV3 {
     /// La disposition (`layout`) vient elle aussi du document : le runtime v1
     /// ne l'exprime pas, et la jeter à chaque aller-retour ramènerait tout le
     /// monde au défaut sans qu'aucun témoin ne tombe.
+    ///
+    /// **La scène 0 n'est plus fusionnée avec le document mémorisé** (revue du
+    /// 2026-09-17, suivi #6893/#6894). Le merge par identité qui vivait ici ne
+    /// portait plus qu'UN cas : un fond `plane: .bg` à référence média — et
+    /// depuis #6894, `StoryEffects.init(rendering:)` fait déjà entrer ce fond
+    /// dans `mediaObjects`, d'où `migratedScene` ci-dessus le réémet lui-même,
+    /// à identité égale. Le merge ne s'activait donc plus que sur son cas
+    /// PATHOLOGIQUE : un fond que l'auteur vient de retirer par
+    /// `deleteElement` (désormais possible, précisément grâce à #6894) —
+    /// auquel cas il RESSUSCITAIT ce que l'auteur venait de supprimer à
+    /// l'autosave suivant. Le retirer ne perd rien que #6894 ne couvre déjà.
     init(migrating effects: StoryEffects, keeping document: CanvasV3?) {
         let migree = CanvasV3.migratedScene(effects, id: "s1")
-        let premiere = CanvasV3.mergingMemorizedBackgroundMedia(migree, with: document?.scenes.first)
         let suivantes = Array((document?.scenes ?? []).dropFirst())
-        let scenes = ([premiere].compactMap { $0 } + suivantes).prefix(CanvasV3.maxScenes)
+        let scenes = ([migree].compactMap { $0 } + suivantes).prefix(CanvasV3.maxScenes)
         self.init(v: 3,
                   scenes: Array(scenes),
                   sound: CanvasV3.migratedSound(effects) ?? document?.sound,

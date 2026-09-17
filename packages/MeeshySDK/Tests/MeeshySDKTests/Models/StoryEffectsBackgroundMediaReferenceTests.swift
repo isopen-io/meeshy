@@ -66,4 +66,16 @@ final class StoryEffectsBackgroundMediaReferenceTests: XCTestCase {
         XCTAssertNil(effects.resolvedBackgroundMedia)
         XCTAssertEqual(effects.background, "#FF0000")
     }
+
+    /// **L'ORDRE des deux orthographes fait foi** (`canvas-v3.ts` : « c'est
+    /// l'ordre de lecture — postMediaId, puis mediaId — qui fait foi »).
+    /// `postMediaId` est la forme de RÉFÉRENCE ; un objet qui porte les deux
+    /// doit résoudre sur elle, jamais sur `mediaId` (revue tour 1, #6893).
+    func test_unObjetAvecLesDeuxCles_resoutSurPostMediaIdEnPremier() throws {
+        let doc = try JSONDecoder().decode(CanvasV3.self,
+                                           from: documentUneScene(payload: #"{"mediaId": "perime", "postMediaId": "servi"}"#))
+        let objet = try XCTUnwrap(doc.scenes.first?.objects.first)
+        XCTAssertEqual(objet.mediaReference, "servi",
+                       "postMediaId est la forme de référence — mediaId n'est lu qu'en second")
+    }
 }

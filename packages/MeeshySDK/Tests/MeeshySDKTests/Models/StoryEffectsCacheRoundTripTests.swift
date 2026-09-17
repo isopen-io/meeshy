@@ -180,4 +180,50 @@ final class StoryEffectsCacheRoundTripTests: XCTestCase {
                        "un document déjà bien modélisé par le runtime v1 ne doit gagner ni perdre d'objet")
         XCTAssertEqual(scenesRegravees.flatMap { $0.objects.filter { $0.kind == .media } }.count, 2)
     }
+
+    // MARK: - Suppression du fond — le merge ne doit jamais l'annuler (revue tour 1)
+
+    /// **#6894 donne au fond référencé une affordance de retrait** (il entre
+    /// dans `mediaObjects`, `deleteElement` peut donc le viser) — la prémisse
+    /// du merge par identité (« cette forme n'a AUCUNE affordance de retrait »)
+    /// est désormais fausse. Sans correctif, l'auteur supprime le fond, et
+    /// l'autosave (`StoryDraftStore` → `StoryEffects.encode` →
+    /// `CanvasV3(migrating:keeping:)`) le REGRAVE depuis le `canvasV3` mémorisé.
+    func test_unFondExplicitementSupprime_neRessuscitePasAuReencodage() throws {
+        var effects = try JSONDecoder().decode(StoryEffects.self, from: chargeRecetteC())
+        effects.mediaObjects?.removeAll { $0.id == "bg1" }
+
+        let regrave = try roundTrip(effects)
+
+        let medias = regrave.canvasV3?.scenes.first?.objects.filter { $0.kind == .media } ?? []
+        XCTAssertTrue(medias.isEmpty,
+                       "un fond retiré par l'auteur (deleteElement) ne doit jamais être restitué par le merge")
+    }
+
+    // MARK: - Collision d'identifiant — le porteur couleur/transform et le média référencé (revue tour 1)
+
+    /// Un objet `plane: bg` qui porte À LA FOIS un cadrage non identité
+    /// (`transform.videoFitMode`) ET une référence média, sous l'id littéral
+    /// `"bg"` — le nom que le SDK réserve à son porteur couleur/transform —
+    /// ne doit jamais produire DEUX objets homonymes au réencodage : les
+    /// cartes clés-par-id (`wireBandEdge`, `zIndexMap`, `deleteElement`, …) les
+    /// confondraient.
+    func test_fondReferenceEtCadre_sousIdBg_neDedoubleNiNeCollisionne() throws {
+        let charge = Data("""
+        {"v": 3, "scenes": [{"id": "s1", "objects": [
+          {"id": "bg", "kind": "media", "anchor": {"t": "free", "x": 0.5, "y": 0.5},
+           "plane": "bg", "z": 0, "transform": {"scale": 1, "rotation": 0, "opacity": 1},
+           "payload": {"mediaId": "m-fond", "transform": {"videoFitMode": "fit"}}}
+        ]}]}
+        """.utf8)
+        let effects = try JSONDecoder().decode(StoryEffects.self, from: charge)
+        let regrave = try roundTrip(effects)
+
+        let objets = regrave.canvasV3?.scenes.first?.objects ?? []
+        let ids = objets.map(\.id)
+        XCTAssertEqual(Set(ids).count, ids.count,
+                       "aucun id ne doit se répéter dans une scène — \(ids)")
+        XCTAssertEqual(objets.filter { $0.kind == .media }.count, 1,
+                       "un seul fond en sortie pour un seul fond en entrée")
+    }
 }

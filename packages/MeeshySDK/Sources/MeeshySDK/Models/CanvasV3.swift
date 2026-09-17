@@ -238,8 +238,8 @@ public struct ObjectV3: Equatable, Codable, Sendable {
 /// sur la même question.
 public extension ObjectV3 {
     var mediaReference: String? {
-        if case .string(let id)? = payload["mediaId"], !id.isEmpty { return id }
         if case .string(let id)? = payload["postMediaId"], !id.isEmpty { return id }
+        if case .string(let id)? = payload["mediaId"], !id.isEmpty { return id }
         return nil
     }
 }

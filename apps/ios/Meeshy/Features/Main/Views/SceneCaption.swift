@@ -111,8 +111,9 @@ nonisolated enum SceneCaption {
                                                   in document: CanvasV3) -> String? {
         guard document.scenes.indices.contains(sceneIndex) else { return nil }
         return document.scenes[sceneIndex].objects
-            .first { $0.kind == .media && $0.plane == .bg }
-            .flatMap(\.mediaReference)
+            .filter { $0.kind == .media && $0.plane == .bg }
+            .compactMap(\.mediaReference)
+            .first
     }
 
     /// **Ce document désigne-t-il des enregistrements du post ?** La question se
