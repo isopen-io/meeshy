@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { backgroundFraming } from './background';
+import { backgroundCss, backgroundFraming } from './background';
 import type { CanvasObject, CanvasScene } from './document';
 
 const object = (overrides: Partial<CanvasObject>): CanvasObject => ({
@@ -36,5 +36,43 @@ describe('backgroundFraming — le fond REMPLIT, sauf cadrage « fit » déclar�
 
   test('un cadrage posé sur un objet qui n’est PAS un fond ne compte pas', () => {
     expect(backgroundFraming(scene([object({ plane: 'content', payload: { transform: { videoFitMode: 'fit' } } })]))).toBe('fill');
+  });
+});
+
+/**
+ * `backgroundCss` (T6, #6899) — LE SITE UNIQUE de validation d'une valeur de
+ * fond v1/v3 (`"RRGGBB"`, `"#RRGGBB"`, `"gradient:RRGGBB:RRGGBB"`), portée de
+ * `sceneBackground` (`routes/story.tsx`) : un fond illisible retombe sur le
+ * repli de l'APPELANT, jamais sur une valeur CSS invalide.
+ */
+describe('backgroundCss — la seule porte d’une valeur de fond vers le CSS (T6)', () => {
+  test('six chiffres hexadécimaux nus ⇒ `#RRGGBB`', () => {
+    expect(backgroundCss('4338CA', 'repli')).toBe('#4338CA');
+  });
+
+  test('déjà préfixé `#` ⇒ conservé tel quel', () => {
+    expect(backgroundCss('#4338CA', 'repli')).toBe('#4338CA');
+  });
+
+  test('`gradient:RRGGBB:RRGGBB` ⇒ un dégradé CSS 135deg', () => {
+    expect(backgroundCss('gradient:111111:222222', 'repli')).toBe('linear-gradient(135deg, #111111, #222222)');
+  });
+
+  test('un nom de couleur, un hex court, une chaîne vide ou `null`/`undefined` retombent sur le repli de l’appelant', () => {
+    expect(backgroundCss('red', 'repli')).toBe('repli');
+    expect(backgroundCss('#12', 'repli')).toBe('repli');
+    expect(backgroundCss('', 'repli')).toBe('repli');
+    expect(backgroundCss(null, 'repli')).toBe('repli');
+    expect(backgroundCss(undefined, 'repli')).toBe('repli');
+  });
+
+  test('un dégradé aux bornes invalides retombe aussi sur le repli', () => {
+    expect(backgroundCss('gradient:zzzzzz:222222', 'repli')).toBe('repli');
+    expect(backgroundCss('gradient:111111', 'repli')).toBe('repli');
+  });
+
+  test('une valeur non-chaîne (nombre, objet) retombe sur le repli', () => {
+    expect(backgroundCss(42, 'repli')).toBe('repli');
+    expect(backgroundCss({ background: '4338CA' }, 'repli')).toBe('repli');
   });
 });

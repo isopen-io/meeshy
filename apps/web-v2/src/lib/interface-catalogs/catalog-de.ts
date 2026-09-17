@@ -582,6 +582,8 @@ const de = {
   'feed.scene.sound.muted': 'Ton stumm',
   'feed.scene.count': '{count} Szenen',
 
+  'story.sound.off': 'Stumm',
+
   'admin.title': 'Verwaltung',
 
 } satisfies InterfaceCatalog;
