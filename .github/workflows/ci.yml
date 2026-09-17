@@ -795,6 +795,17 @@ jobs:
           cd apps/web-v2
           node scripts/check-story-scene.mjs
 
+      # #6900 — LE STUDIO DE STORY PEINT CE QU'IL PUBLIERA. Publier inerte sur
+      # un brouillon vide, un fond + un son posés font PEINDRE le moteur
+      # partagé (mesure de pixels, pas la présence d'une balise), la carte
+      # 9:16 est centrée dans son plateau aux deux gabarits, cinq cibles
+      # ≥ 44 px, le texte tapé survit à un rechargement (brouillon).
+      - name: Gate studio de story (moteur peint, carte 9:16, cibles, brouillon)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-story-studio.mjs
+
       - name: Gate états du fil (vide, coupure, échec d'envoi rejouable)
         if: ${{ !cancelled() }}
         run: |
