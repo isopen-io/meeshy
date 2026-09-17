@@ -59,7 +59,11 @@ export function readerCardFraming(params: {
 }): ReaderCardFraming {
   const { viewport, safeTop, presentation } = params;
   const size = fitScene({ viewport, ratio: SCENE_ASPECT });
-  const canvas = { x: (viewport.width - size.width) / 2, y: (viewport.height - size.height) / 2, width: size.width, height: size.height };
+  // Le CENTRAGE vient de `fitScene` (`offsetX`/`offsetY`, #6901) — c'est
+  // précisément pour ne pas le recopier ici que la primitive le rend
+  // (revue-correction #6901 : le lot avait ajouté les deux champs et laissé
+  // ce seul appelant les recalculer, une ligne plus bas).
+  const canvas = { x: size.offsetX, y: size.offsetY, width: size.width, height: size.height };
   const identity: ReaderCardFraming = { canvas, scale: 1, offsetY: 0, cornerRadius: 0 };
   if (presentation === 'free' || size.width <= 0 || size.height <= 0) return identity;
 

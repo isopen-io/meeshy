@@ -612,6 +612,7 @@ const fr = {
   'feed.scene.open.post': 'Touche deux fois pour ouvrir la publication',
   'feed.scene.sound.muted': 'Son coupé',
   'feed.scene.count': '{count} scènes',
+  'scene.place.here': 'Ici',
 
   /* LE SON DE FOND DU LECTEUR DE STORY (T10, #6899) — bouton BASCULE dans la
      ligne auteur (rail droit hors tranche, #5817) : UN libellé constant et
@@ -659,6 +660,17 @@ const fr = {
   'story.studio.failure.rateLimited': 'Trop de publications d’un coup — réessayez dans un instant.',
   'story.studio.failure.refused': 'Publication refusée.',
   'story.studio.failure.unavailable': 'La passerelle est indisponible.',
+
+  /* LA BANNIÈRE DE MISE À JOUR (#6936) — les libellés du legacy
+     (`updateAvailable`, `updateNow`, `wait`, dans les catalogues
+     `apps/web/locales`), plus l'état du clic et le nom de la région annoncée,
+     que le legacy n'avait pas. */
+  'appUpdate.available': 'Une nouvelle version de Meeshy est disponible !',
+  'appUpdate.hint': 'Rechargez pour avoir les dernières nouveautés.',
+  'appUpdate.action': 'Mettre à jour',
+  'appUpdate.dismiss': 'Attendre',
+  'appUpdate.applying': 'Mise à jour…',
+  'appUpdate.region': 'Mise à jour de l’application',
 
   /* L'ESPACE D'ADMINISTRATION (#6432) — SEUL `admin.title` reste ici : la
      rangée des Réglages et le barreau du menu flottant (#6458) le lisent

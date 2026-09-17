@@ -742,6 +742,140 @@ const sceneClip = (id: string, fileUrl: string, muted: boolean, sound: boolean) 
 export const POST_SCENE_CLIP_A: FeedPost = { ...sceneClip('post-scene-clip-a', REEL_CLIP_BARS, false, true), createdAt: minutesAgo(60) };
 export const POST_SCENE_CLIP_B: FeedPost = { ...sceneClip('post-scene-clip-b', REEL_CLIP_RGB, true, false), createdAt: minutesAgo(61) };
 
+/**
+ * `POST_SCENE_DECORATED` (#6901, T-F, D10) — UNE scène qui exerce CINQ des
+ * sept couches du moteur d'un coup : fond image (`fit`), texte à KEYFRAMES
+ * (`check-feed-scenes.mjs` prouve l'EFFET — deux relevés espacés de 700 ms
+ * diffèrent), sticker emoji, lieu et dessin. Les deux qui MANQUENT, et
+ * l'aveu se tient ici plutôt que dans un rapport (revue-correction #6901,
+ * le doc-comment disait « les SIX couches » et en listait cinq) : un média
+ * POSÉ (non-fond, 65 % du petit côté) — exercé par `media-size.test.ts` et
+ * par T-E3 au DOM, jamais au NAVIGATEUR, donc son rendu `cqw` réel n'a pas
+ * de témoin ; et un audio d'OVERLAY — exercé par T-E11 seulement. Datée PLUS
+ * RÉCENTE
+ * que `POST_LEGENDE_MIXTE` (`minutesAgo(68)`) et distincte des cinq autres
+ * scènes (`3`/`7`/`12`/`60`/`61`) — l'invariant du doc-comment de
+ * `FILLER_POSTS` (70 > 68 > tout post nommé) tient toujours.
+ */
+export const POST_SCENE_DECORATED: FeedPost = {
+  ...feedPostDefaults,
+  id: 'post-scene-decorated',
+  type: 'POST',
+  createdAt: minutesAgo(64),
+  author: MEI,
+  content: 'Une scène complète : fond, texte animé, sticker, lieu, dessin.',
+  originalLanguage: 'fr',
+  storyEffects: {
+    v: 3,
+    scenes: [
+      {
+        id: 's1',
+        objects: [
+          {
+            id: 'bg1',
+            kind: 'media',
+            anchor: { t: 'free', x: 0.5, y: 0.5 },
+            plane: 'bg',
+            z: 0,
+            transform: TRANSFORM_FULL,
+            payload: {
+              postMediaId: 'media-scene-decorated',
+              mediaType: 'image/svg+xml',
+              aspectRatio: 16 / 9,
+              // `thumbHash` (revue-correction #6901) — SANS lui, le fond
+              // AJUSTÉ (`videoFitMode: 'fit'`) ne laissait rien peindre les
+              // bandes : `letterboxHashes` ne trouvait AUCUNE source, et la
+              // scène laissait voir l'aplat de CARTE au lieu d'être un canvas
+              // opaque. Un média RÉEL en porte quasi toujours un (généré à
+              // l'upload) — cette fixture exerce donc le cas NOMINAL, celui
+              // qu'iOS sert par défaut (`servesLetterboxFill: true`).
+              thumbHash: THUMB_HASH_AMBER,
+              transform: { videoFitMode: 'fit' },
+            },
+          },
+          {
+            id: 't1',
+            kind: 'text',
+            anchor: { t: 'free', x: 0.2, y: 0.2 },
+            plane: 'fg',
+            z: 1,
+            transform: TRANSFORM_FULL,
+            locale: 'fr',
+            // `end: 2` (et non `timelineDuration` sur la scène) : la fin
+            // RÉSOLUE de cet objet EST la durée de la scène —
+            // `sceneDurationSeconds` (`lib/canvas/timeline.ts`) la retrouve
+            // sans qu'aucune durée ne soit posée au niveau de la scène (§ 8
+            // de la spécification #6901 : « pas de timelineDuration ⇒
+            // sceneDurationSeconds = max end = 2 s »). En mode `card`
+            // (boucle), le texte anime en continu entre les deux keyframes —
+            // c'est l'EFFET qu'un gate navigateur observe (deux relevés
+            // espacés de 700 ms qui diffèrent), jamais son seul câblage.
+            timing: { start: 0, end: 2, keyframes: [{ time: 0, x: 0.2, y: 0.2 }, { time: 2, x: 0.8, y: 0.2, easing: 'easeInOut' }] },
+            // `textBg` — la pastille SOLIDE derrière le texte
+            // (`scene-object-text.tsx`), le seul chemin du moteur qu'aucune
+            // fixture n'exerçait. Elle n'est pas là pour la couverture :
+            // SANS elle, un texte BLANC posé sur les bandes d'un fond
+            // `fit` se peignait sur l'aplat de carte — donc INVISIBLE en
+            // schéma CLAIR, parfaitement lisible en sombre (regardé au
+            // premier passage, revue-correction #6901). La cause profonde —
+            // les bandes d'un fond ajusté n'étaient pas habillées sur la
+            // carte de fil alors qu'iOS les sert par défaut
+            // (`servesLetterboxFill: true`, `FeedSceneAutoplay.swift:159`
+            // n'en passe aucune) — est désormais RÉSOLUE dans le moteur
+            // (`scene-player.tsx#SceneCanvas`, `bg1.payload.thumbHash`
+            // ci-dessus) ; la pastille RESTE, en défense en profondeur —
+            // le sol se peint à `LETTERBOX_FILL_OPACITY` (0,85), jamais 1.
+            payload: { text: 'Ça bouge !', textColor: '#FFFFFF', textBg: '#4338CA' },
+          },
+          {
+            id: 'sticker1',
+            kind: 'sticker',
+            anchor: { t: 'free', x: 0.8, y: 0.8 },
+            plane: 'fg',
+            z: 2,
+            transform: TRANSFORM_FULL,
+            payload: { emoji: '🔥', baseSize: 200 },
+          },
+          {
+            id: 'place1',
+            kind: 'place',
+            anchor: { t: 'band', edge: 'bottom' },
+            plane: 'fg',
+            z: 3,
+            transform: TRANSFORM_FULL,
+            payload: { place: { name: 'Café Central', address: '12 rue de la Paix' } },
+          },
+          {
+            id: 'drawing1',
+            kind: 'drawing',
+            anchor: { t: 'free', x: 0.5, y: 0.5 },
+            plane: 'fg',
+            z: 4,
+            transform: TRANSFORM_FULL,
+            payload: {
+              strokes: [
+                { points: [{ x: 100, y: 100 }, { x: 400, y: 300 }, { x: 700, y: 150 }], width: 6, tool: 'pen', colorHex: 'FF3B30' },
+                { points: [{ x: 200, y: 900 }, { x: 800, y: 1000 }], width: 10, tool: 'marker', colorHex: '4338CA' },
+              ],
+            },
+          },
+        ],
+      },
+    ],
+  },
+  media: [
+    {
+      id: 'media-scene-decorated',
+      mimeType: 'image/svg+xml',
+      fileUrl: feedPhotoStandIn('#f59e0b', '#ef4444', 'landscape'),
+      thumbHash: THUMB_HASH_AMBER,
+      width: 1600,
+      height: 900,
+      order: 0,
+    },
+  ],
+} satisfies FeedPost;
+
 const NAMED_POSTS: readonly FeedPost[] = [
   POST_IMAGE_FR,
   POST_IMAGE_EN_TRANSLATED,
@@ -761,15 +895,16 @@ const NAMED_POSTS: readonly FeedPost[] = [
   POST_SCENES_WAVE,
   POST_SCENE_CLIP_A,
   POST_SCENE_CLIP_B,
+  POST_SCENE_DECORATED,
 ];
 
 /**
  * DES POSTS DE REMPLISSAGE (#5893) — pour qu'une page 2 existe (limite 20) :
- * `NAMED_POSTS` (18, depuis #6898 — cinq scènes ajoutées) + 18 remplissages
- * = 36, strictement plus vieux que le dernier des `NAMED_POSTS`
- * (`minutesAgo(68)`, `POST_LEGENDE_MIXTE` — les cinq scènes du § 3.4 sont
- * toutes datées entre 3 et 61 minutes, donc plus RÉCENTES, jamais en tête de
- * ce calcul).
+ * `NAMED_POSTS` (19, depuis #6901 — la scène décorée aux six couches
+ * s'ajoute aux cinq scènes de #6898) + 18 remplissages = 37, strictement
+ * plus vieux que le dernier des `NAMED_POSTS` (`minutesAgo(68)`,
+ * `POST_LEGENDE_MIXTE` — les six scènes sont toutes datées entre 3 et 64
+ * minutes, donc plus RÉCENTES, jamais en tête de ce calcul).
  *
  * Ces DEUX nombres avaient dérivé — la prose disait « (8) » et
  * « `minutesAgo(63)` » alors que le corpus portait déjà douze posts nommés

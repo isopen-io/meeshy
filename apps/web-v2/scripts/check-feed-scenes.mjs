@@ -49,6 +49,67 @@ const check = (ok, what) => {
   if (!ok) failures.push(what);
 };
 
+/**
+ * La couleur MOYENNE d'un ThumbHash (spécification d'Evan Wallace, fonction
+ * `thumbHashToAverageRGBA`), recopiée ici — comme dans `check-story-scene.mjs`
+ * — pour que l'attendu ne soit pas lu dans `lib/media/thumbhash.ts`, le code
+ * mesuré. `THUMB_HASH_AMBER` (`fixtures-feed.ts`) est désormais posé sur
+ * `POST_SCENE_DECORATED.bg1.payload.thumbHash` (revue-correction #6901).
+ */
+function averageRgbOfThumbHash(base64) {
+  const bytes = Buffer.from(base64, 'base64');
+  const header = bytes[0] | (bytes[1] << 8) | (bytes[2] << 16);
+  const l = (header & 63) / 63;
+  const p = ((header >> 6) & 63) / 31.5 - 1;
+  const q = ((header >> 12) & 63) / 31.5 - 1;
+  const b = l - (2 / 3) * p;
+  const r = (3 * l - b + q) / 2;
+  const g = r - q;
+  const to255 = (v) => Math.round(Math.max(0, Math.min(1, v)) * 255);
+  return [to255(r), to255(g), to255(b)];
+}
+const LETTERBOX_AMBER_RGB = averageRgbOfThumbHash('LHkC');
+const distance = (a, b) => Math.max(...a.map((v, i) => Math.abs(v - b[i])));
+
+/** La couleur MOYENNE d'un petit clip, décodée par un `<canvas>` de la page —
+ * même patron que `dominantRgb` de `check-story-scene.mjs`, mais moyennée
+ * (pas la couleur DOMINANTE) : le clip est volontairement minuscule et le
+ * léger anti-aliasing d'un bord de bande ne doit pas faire basculer un pixel
+ * isolé au sommet du décompte. */
+async function averageRgbOfClip(page, clip) {
+  const shot = await page.screenshot({ clip });
+  return page.evaluate(async (data) => {
+    const bitmap = new Image();
+    await new Promise((ok, ko) => {
+      bitmap.onload = ok;
+      bitmap.onerror = ko;
+      bitmap.src = `data:image/png;base64,${data}`;
+    });
+    const canvasEl = document.createElement('canvas');
+    canvasEl.width = bitmap.width;
+    canvasEl.height = bitmap.height;
+    const context = canvasEl.getContext('2d');
+    context.drawImage(bitmap, 0, 0);
+    const pixels = context.getImageData(0, 0, canvasEl.width, canvasEl.height).data;
+    let r = 0;
+    let g = 0;
+    let b = 0;
+    let n = 0;
+    for (let i = 0; i < pixels.length; i += 4) {
+      r += pixels[i];
+      g += pixels[i + 1];
+      b += pixels[i + 2];
+      n += 1;
+    }
+    return [Math.round(r / n), Math.round(g / n), Math.round(b / n)];
+  }, shot.toString('base64'));
+}
+
+/** Un pixel de bande par schéma — pour prouver que le SOL ne dépend pas du
+ * schéma (`decoratedInvariants` tourne aussi sous `reducedMotion: 'reduce'` ;
+ * un seul relevé par schéma suffit, capturé au premier passage). */
+const bandeParScheme = {};
+
 const browser = await launchChromium();
 
 async function runScheme(colorScheme) {
@@ -338,9 +399,171 @@ async function runScheme(colorScheme) {
   check(pageErrors.length === 0, `[${colorScheme}] ${pageErrors.length} erreur(s) de page — ${pageErrors.slice(0, 3).join(' | ')}`);
 
   await context2.close();
+
+  /* ── 7. post-scene-decorated : les six couches, et l'EFFET des keyframes
+   * (#6901, T-F) — un contrôle/mécanisme se prouve par son EFFET, jamais son
+   * seul câblage : deux relevés de `style.left` espacés de 700 ms, PENDANT
+   * que la carte est élue (centrée), doivent DIFFÉRER. Les KINDS (sticker,
+   * lieu, dessin) se vérifient sous les DEUX réglages de mouvement ; le
+   * MOUVEMENT lui-même ne se vérifie que SANS `prefers-reduced-motion` — sous
+   * ce réglage, l'élection d'autoplay du fil (`autoplay-election.ts:14`,
+   * `reducedMotion ⇒ null`) n'élit AUCUNE carte, `playing` reste faux pour
+   * TOUTES les scènes cinématiques (loi DÉJÀ gardée par les invariants
+   * clip-a/clip-b ci-dessus, § 4) : une carte non élue n'anime rien, quel
+   * que soit son contenu — ce n'est pas un défaut de CE lot. */
+  const decoratedInvariants = async (colorSchemeCtx) => {
+    const context3 = await browser.newContext({
+      colorScheme,
+      locale: 'en-US',
+      viewport: { width: 420, height: 900 },
+      ...colorSchemeCtx,
+    });
+    const page3 = await context3.newPage();
+    await page3.goto(`${BASE}/feed`, { waitUntil: 'load' });
+    await page3.waitForSelector('[data-feed-card-id="post-scene-decorated"] [data-scene-object="text"]');
+    await page3.evaluate(() => {
+      document.querySelector('[data-feed-card-id="post-scene-decorated"]').scrollIntoView({ block: 'center' });
+    });
+    const kinds = await page3.evaluate(() => {
+      const carte = document.querySelector('[data-feed-card-id="post-scene-decorated"]');
+      return {
+        sticker: carte?.querySelector('[data-scene-object="sticker"]')?.textContent ?? null,
+        place: carte?.querySelector('[data-scene-object="place"]')?.textContent ?? null,
+        drawing: carte?.querySelectorAll('[data-scene-object="drawing"] polyline').length ?? -1,
+      };
+    });
+    const reduced = colorSchemeCtx.reducedMotion === 'reduce' ? ' (prefers-reduced-motion)' : '';
+    check(kinds.sticker === '🔥', `[${colorScheme}]${reduced} post-scene-decorated : sticker attendu « 🔥 » — reçu « ${kinds.sticker} »`);
+    check(
+      typeof kinds.place === 'string' && kinds.place.includes('Café Central'),
+      `[${colorScheme}]${reduced} post-scene-decorated : lieu attendu « Café Central » — reçu « ${kinds.place} »`,
+    );
+    check(kinds.drawing >= 2, `[${colorScheme}]${reduced} post-scene-decorated : ${kinds.drawing} trait(s) de dessin (attendu ≥ 2)`);
+
+    /* LA BOÎTE D'UN TEXTE EST BORNÉE PAR LA SCÈNE, JAMAIS PAR ELLE-MÊME
+     * (revue-correction #6901). `max-width` se résolvait contre
+     * `SceneObjectFrame`, dont la largeur est AUTO : la boîte peinte valait
+     * 85 % du TEXTE — mesuré 65,72 px pour un texte de 77,33 px — donc le
+     * texte débordait sa propre boîte de 15 % à chaque scène, et le studio,
+     * qui aligne sa saisie sur cette boîte, coupait un mot en deux lignes
+     * (`check-story-studio.mjs`, 4 échecs). L'invariant mesure la LOI : la
+     * boîte vaut le minimum entre la largeur INTRINSÈQUE du texte et 85 % de
+     * la scène. Aucun témoin `bun test` ne peut le porter — happy-dom rejette
+     * l'unité `cqw` à l'assignation, et la loi est un CALCUL de mise en page. */
+    /* UN TEXTE DE SCÈNE NE DÉPEND PAS DU SCHÉMA POUR ÊTRE LU
+     * (revue-correction #6901). Le texte blanc de cette scène se peignait sur
+     * les bandes d'un fond `fit`, donc sur l'aplat de CARTE : lisible en
+     * sombre, INVISIBLE en clair. Sa pastille (`textBg`) le rend
+     * indépendant du schéma — DÉFENSE EN PROFONDEUR, la cause profonde
+     * (le sol d'un fond ajusté) est désormais résolue ci-dessous. */
+    const pill = await page3.evaluate(() => {
+      const peint = document.querySelector('[data-feed-card-id="post-scene-decorated"] [data-scene-text]');
+      return peint === null ? null : getComputedStyle(peint).backgroundColor;
+    });
+    check(
+      typeof pill === 'string' && pill !== 'transparent' && !/rgba\([^)]*,\s*0\)$/.test(pill),
+      `[${colorScheme}]${reduced} post-scene-decorated : le texte n'a aucune pastille opaque derrière lui (backgroundColor="${pill}") — il dépendrait du schéma pour être lu`,
+    );
+
+    const textBox = await page3.evaluate(() => {
+      const peint = document.querySelector('[data-feed-card-id="post-scene-decorated"] [data-scene-object="text"] [data-scene-text]');
+      if (peint === null) return null;
+      const canvas = peint.closest('[data-scene-player]');
+      const clone = peint.cloneNode(true);
+      clone.style.maxWidth = 'none';
+      clone.style.whiteSpace = 'pre';
+      clone.style.visibility = 'hidden';
+      clone.style.position = 'absolute';
+      peint.parentElement.appendChild(clone);
+      const intrinsic = clone.getBoundingClientRect().width;
+      clone.remove();
+      return { box: peint.getBoundingClientRect().width, intrinsic, scene: canvas?.getBoundingClientRect().width ?? 0 };
+    });
+    check(textBox !== null, `[${colorScheme}]${reduced} post-scene-decorated : [data-scene-text] introuvable`);
+    if (textBox !== null) {
+      const attendu = Math.min(textBox.intrinsic, textBox.scene * 0.85);
+      check(
+        Math.abs(textBox.box - attendu) <= 1,
+        `[${colorScheme}]${reduced} post-scene-decorated : boîte du texte ${Math.round(textBox.box * 100) / 100} px — attendu min(intrinsèque ${Math.round(textBox.intrinsic * 100) / 100}, 85 % de la scène ${Math.round(textBox.scene * 85) / 100}) = ${Math.round(attendu * 100) / 100}`,
+      );
+    }
+
+    /* LE SOL D'UN FOND AJUSTÉ EST PEINT DANS LE MOTEUR, PAS DANS L'APLAT DE
+     * CARTE (revue-correction #6901, défaut 1). Le fond `fit` de cette scène
+     * (16:9) est plus LARGE que le canvas 9:16 : il laisse une bande
+     * horizontale en haut ET en bas. L'échantillon est pris au centre du bord
+     * HAUT — loin des deux coins arrondis (`data-feed-scene-box`,
+     * `borderRadius: 16`) et de tout occupant (texte à x∈[0,2;0,8] y=0,2 ;
+     * dessin dès (100,100) en design, ≈ 36 px rendus ; sticker/lieu en bas) —
+     * et exige la couleur MOYENNE du ThumbHash du fond (ambré), jamais celle
+     * de l'aplat de carte, qui CHANGE de schéma alors que le sol ne doit pas. */
+    if (colorSchemeCtx.reducedMotion !== 'reduce') {
+      const sceneRect = await page3.evaluate(() => {
+        const scene = document.querySelector('[data-feed-card-id="post-scene-decorated"] [data-scene-player]');
+        if (scene === null) return null;
+        const r = scene.getBoundingClientRect();
+        return { x: r.left, y: r.top, width: r.width, height: r.height };
+      });
+      check(sceneRect !== null, `[${colorScheme}] post-scene-decorated : [data-scene-player] introuvable pour l'échantillon de bande`);
+      if (sceneRect !== null) {
+        const clip = { x: Math.round(sceneRect.x + sceneRect.width / 2 - 4), y: Math.round(sceneRect.y + 4), width: 8, height: 6 };
+        const rgb = await averageRgbOfClip(page3, clip);
+        bandeParScheme[colorScheme] = rgb;
+        const ecart = distance(rgb, LETTERBOX_AMBER_RGB);
+        check(
+          ecart <= 40,
+          `[${colorScheme}] post-scene-decorated : bande du fond \`fit\` = rgb(${rgb.join(',')}) — attendu proche de l'ambré du ThumbHash rgb(${LETTERBOX_AMBER_RGB.join(',')}) (écart ${ecart}, ≤ 40), pas l'aplat de carte`,
+        );
+      }
+    }
+
+    if (colorSchemeCtx.reducedMotion !== 'reduce') {
+      const first = await page3.evaluate(
+        () => document.querySelector('[data-feed-card-id="post-scene-decorated"] [data-scene-object="text"]').style.left,
+      );
+      await page3.waitForTimeout(700);
+      const second = await page3.evaluate(
+        () => document.querySelector('[data-feed-card-id="post-scene-decorated"] [data-scene-object="text"]').style.left,
+      );
+      check(
+        first !== second,
+        `[${colorScheme}] post-scene-decorated : le texte à keyframes n'a pas bougé entre deux relevés à 700 ms (left="${first}" les deux fois)`,
+      );
+    }
+    await context3.close();
+  };
+  await decoratedInvariants({});
+  await decoratedInvariants({ reducedMotion: 'reduce' });
 }
 
 for (const scheme of ['light', 'dark']) await runScheme(scheme);
+
+/* LE SOL NE DÉPEND PAS DU SCHÉMA — LA CARTE, ELLE, EN DÉPEND (revue-correction
+ * #6901). Contre-épreuve de l'invariant ci-dessus : les DEUX relevés (clair,
+ * sombre) doivent se ressembler, alors que `var(--color-ios-card)` — l'aplat
+ * que la scène montrait avant ce lot — change bel et bien de valeur entre les
+ * deux schémas. Si cette épreuve rougissait sans que l'invariant par schéma
+ * rougisse, le sol dépendrait du schéma malgré tout (un dégradé qui matcherait
+ * l'ambré dans CHAQUE schéma par coïncidence, par exemple). */
+check(
+  bandeParScheme.light !== undefined && bandeParScheme.dark !== undefined,
+  `post-scene-decorated : bande de fond non relevée dans un des deux schémas (clair=${JSON.stringify(bandeParScheme.light)}, sombre=${JSON.stringify(bandeParScheme.dark)})`,
+);
+if (bandeParScheme.light !== undefined && bandeParScheme.dark !== undefined) {
+  // Le sol se peint à `LETTERBOX_FILL_OPACITY` (0,85, MÊME constante qu'iOS,
+  // `StoryLetterboxFill.fillOpacity`) : il laisse filtrer 15 % de ce qu'il y
+  // a DESSOUS, donc un écart RÉSIDUEL entre schémas est ATTENDU — mesuré ici
+  // à 34 (clair rgb(225,173,169), sombre rgb(191,139,135), calcul vérifié :
+  // 0,85 × ambré + 0,15 × `--color-ios-card` de chaque schéma). Le seuil
+  // borne ce résidu, PAS l'écart des deux aplats de carte eux-mêmes
+  // (`#f8f7ff` clair vs `#13111c` sombre : distance 229) — c'est CETTE
+  // distance-là que le sol doit éviter, pas atteindre zéro.
+  const ecartEntreSchemas = distance(bandeParScheme.light, bandeParScheme.dark);
+  check(
+    ecartEntreSchemas <= 40,
+    `post-scene-decorated : la bande diffère entre les schémas — clair rgb(${bandeParScheme.light.join(',')}), sombre rgb(${bandeParScheme.dark.join(',')}) (écart ${ecartEntreSchemas}, ≤ 40) — le sol dépendrait du thème comme l'aplat de carte qu'il remplace`,
+  );
+}
 
 await browser.close();
 server.close();

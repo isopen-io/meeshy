@@ -1,4 +1,5 @@
 import type { CanvasDocument, CanvasObject, CanvasScene } from '@/lib/canvas/document';
+import { authoredDuration } from '@/lib/canvas/pose';
 
 /**
  * LE MOUVEMENT D'UNE SCÈNE — miroir de `SceneMotion.swift`
@@ -20,15 +21,17 @@ export function objectSounds(object: CanvasObject): boolean {
 }
 
 /** Une fenêtre temporelle DÉCLARÉE — jamais sur un média, dont `duration`
- * qualifie le FICHIER, pas une animation posée par l'auteur. */
+ * qualifie le FICHIER, pas une animation posée par l'auteur. L'exclusion
+ * elle-même vit dans `authoredDuration` (`lib/canvas/pose.ts`), SITE UNIQUE
+ * qu'elle partage avec `visibilityWindow` : les deux la portaient séparément
+ * et se contredisaient (revue-correction #6901, T-D3b). */
 export function hasTimeWindow(object: CanvasObject): boolean {
   const timing = object.timing;
   if (timing !== undefined && (timing.start !== undefined || timing.end !== undefined || (timing.keyframes?.length ?? 0) > 0)) return true;
   const { payload } = object;
   if (typeof payload.fadeIn === 'number' && payload.fadeIn > 0) return true;
   if (typeof payload.fadeOut === 'number' && payload.fadeOut > 0) return true;
-  if (object.kind !== 'media' && typeof payload.duration === 'number' && payload.duration > 0) return true;
-  return false;
+  return authoredDuration(object) !== undefined;
 }
 
 /** Un objet BOUGE : audio, vidéo, sticker animé, ou toute fenêtre temporelle. */

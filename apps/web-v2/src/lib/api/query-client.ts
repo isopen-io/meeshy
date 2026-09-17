@@ -1,5 +1,7 @@
 import { QueryClient, dehydrate, hydrate, type DehydratedState } from '@tanstack/react-query';
 
+import { SW_RUNTIME_CACHE_NAMES } from '@/lib/sw-caches';
+
 import { ApiError } from './client';
 import { reactionStore } from './reaction-store';
 /* `souverain.ts` n'a AUCUNE dépendance — c'est ce qui le rend importable
@@ -90,7 +92,23 @@ function isPersistedCache(value: unknown): value is PersistedCache {
   return typeof value === 'object' && value !== null && typeof (value as { buster?: unknown }).buster === 'string';
 }
 
-export type AppQueryClient = QueryClient & { persist: () => void };
+export type AppQueryClient = QueryClient & {
+  persist: () => void;
+  /**
+   * JETER LE CACHE PERSISTÉ, ET NE PLUS RIEN ÉCRIRE (#6936).
+   *
+   * Appelée juste avant un rechargement de MISE À JOUR : la version qui s'en va
+   * ne doit pas laisser derrière elle le cache de ses propres formes de données.
+   *
+   * « Ne plus rien écrire » n'est pas un détail : `persist` est câblée sur
+   * `pagehide` et `visibilitychange` (§ AUTO-PERSISTANCE ci-dessous), tous deux
+   * déclenchés PAR le rechargement. Sans ce verrou, la clé effacée serait
+   * réécrite dans la milliseconde qui suit, avec le même `buster` — la purge
+   * n'aurait rien purgé. Le cache EN MÉMOIRE reste intact : la page qui part
+   * n'a aucune raison de se vider à l'écran avant de partir.
+   */
+  discardPersisted: () => void;
+};
 
 /**
  * **CE QUI A LE DROIT D'ÊTRE ÉCRIT SUR LE DISQUE** (#6862) — le prédicat de
@@ -160,8 +178,14 @@ export type CacheStorageLike = {
  * (les images en CacheFirst, TRENTE jours). Le seau de PRÉCACHE
  * (`workbox-precache-*`) n'y est PAS : il ne contient que le shell, le même
  * pour tout le monde.
+ *
+ * **LU, jamais recopié** (#6936) : les mêmes noms sont créés par
+ * `vite.config.ts` et purgés par la mise à jour de l'application
+ * (`lib/app-update/service-worker.ts`). Trois littéraux auraient divergé au
+ * premier seau ajouté — et une purge qui ne nomme plus un seau existant est
+ * silencieuse.
  */
-const READER_SCOPED_SW_CACHES = ['api', 'medias'] as const;
+const READER_SCOPED_SW_CACHES = SW_RUNTIME_CACHE_NAMES;
 
 /**
  * `purgeReaderCaches` — CE QUI PART À CÔTÉ DU CACHE DE REQUÊTES (#5650,
@@ -243,7 +267,10 @@ export function createAppQueryClient(options: CreateAppQueryClientOptions): AppQ
     }
   }
 
+  let persistenceHalted = false;
+
   const persist = (): void => {
+    if (persistenceHalted) return;
     try {
       const state = dehydrate(client, { shouldDehydrateQuery: persistableQuery });
       const reactions = reactionStore.getState().mine;
@@ -263,6 +290,16 @@ export function createAppQueryClient(options: CreateAppQueryClientOptions): AppQ
     if (debounceHandle !== undefined) clearTimeout(debounceHandle);
     debounceHandle = setTimeout(persist, DEBOUNCE_MS);
   };
+  client.discardPersisted = (): void => {
+    persistenceHalted = true;
+    if (debounceHandle !== undefined) clearTimeout(debounceHandle);
+    try {
+      storage.removeItem(CACHE_KEY);
+    } catch {
+      /* Stockage refusé : il n'y a rien de persisté à jeter. */
+    }
+  };
+
   client.getQueryCache().subscribe(schedulePersist);
   // `reactionStore` DÉCLENCHE AUSSI (revue #5814, défaut majeur 5) — chaque
   // écriture de `performReaction` pose déjà un delta sur le cache des

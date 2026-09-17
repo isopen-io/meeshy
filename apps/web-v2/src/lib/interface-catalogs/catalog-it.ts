@@ -581,6 +581,7 @@ const it = {
   'feed.scene.open.post': 'Tocca due volte per aprire il post',
   'feed.scene.sound.muted': 'Audio disattivato',
   'feed.scene.count': '{count} scene',
+  'scene.place.here': 'Qui',
 
   'story.sound.off': 'Muto',
 
@@ -624,6 +625,13 @@ const it = {
   'story.studio.failure.rateLimited': 'Troppe pubblicazioni in una volta — riprova tra un attimo.',
   'story.studio.failure.refused': 'Pubblicazione rifiutata.',
   'story.studio.failure.unavailable': 'Il server non è disponibile.',
+
+  'appUpdate.available': 'È disponibile una nuova versione di Meeshy!',
+  'appUpdate.hint': 'Ricarica per avere le ultime novità.',
+  'appUpdate.action': 'Aggiorna',
+  'appUpdate.dismiss': 'Attendi',
+  'appUpdate.applying': 'Aggiornamento…',
+  'appUpdate.region': 'Aggiornamento dell’app',
 
   'admin.title': 'Amministrazione',
 

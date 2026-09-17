@@ -579,6 +579,7 @@ const ar = {
   'feed.scene.open.post': 'اضغط مرتين لفتح المنشور',
   'feed.scene.sound.muted': 'الصوت مكتوم',
   'feed.scene.count': '{count} مشاهد',
+  'scene.place.here': 'هنا',
 
   'story.sound.off': 'صامت',
 
@@ -621,6 +622,13 @@ const ar = {
   'story.studio.failure.rateLimited': 'منشورات كثيرة دفعة واحدة — أعد المحاولة بعد لحظة.',
   'story.studio.failure.refused': 'تم رفض النشر.',
   'story.studio.failure.unavailable': 'الخادم غير متاح.',
+
+  'appUpdate.available': 'يتوفر إصدار جديد من Meeshy!',
+  'appUpdate.hint': 'أعد التحميل للحصول على أحدث المزايا.',
+  'appUpdate.action': 'تحديث',
+  'appUpdate.dismiss': 'انتظار',
+  'appUpdate.applying': 'جارٍ التحديث…',
+  'appUpdate.region': 'تحديث التطبيق',
 
   'admin.title': 'الإدارة',
 

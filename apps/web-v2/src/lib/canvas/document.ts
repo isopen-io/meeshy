@@ -9,15 +9,15 @@
  * peut donc porter un `transform` PARTIEL ou VIDE. `CanvasV3Schema` rejette
  * cette forme (`scale`/`rotation`/`opacity` requis) ; ce parseur applique les
  * mêmes défauts que `TransformV3.init` côté Swift (`CanvasV3.swift:328`) et ne
- * refuse QUE ce qu'aucun défaut ne peut réparer : `v !== 3` ou `scenes`
- * absent/vide.
+ * refuse QUE ce qu'aucun défaut ne peut réparer : un rang hors `v >= 3`
+ * (entier) ou `scenes` absent/vide.
  *
  * Ce module n'est PAS chargé à la demande (D-79 ne réserve le chargement
  * différé qu'au PLAYER, `scene-player.tsx`) : il tourne pour CHAQUE carte du
  * fil, à chaque page reçue — rester une fonction pure sans dépendance lourde
  * (aucun zod) est ce qui le garde bon marché.
  */
-import type { CanvasV3, ObjectV3, SceneV3 } from '@meeshy/shared/types/canvas-v3';
+import type { CanvasV3, KeyframeV3, ObjectV3, SceneV3 } from '@meeshy/shared/types/canvas-v3';
 
 export type CanvasAnchor =
   | { readonly t: 'free'; readonly x: number; readonly y: number }
@@ -29,10 +29,28 @@ export type CanvasTransform = {
   readonly opacity: number;
 };
 
+/**
+ * `KeyframeV3` (`canvas-v3.ts:12-19`), lu avec la même tolérance que le reste
+ * du document (D-79) : un `time` fini `>= 0` est la SEULE clé requise, les
+ * canaux (`x`,`y`,`scale`,`opacity`) sont optionnels et jetés individuellement
+ * s'ils ne sont pas des nombres finis. `easing` voyage tel quel, y compris
+ * `'spring'` — la loi de pose (`lib/canvas/pose.ts`) le lira comme `linear`
+ * (§ 9, Q3 de la spécification) : ce module ne DÉCIDE rien de la lecture.
+ */
+export type CanvasKeyframe = {
+  readonly time: number;
+  readonly x?: number;
+  readonly y?: number;
+  readonly scale?: number;
+  readonly opacity?: number;
+  readonly volume?: number;
+  readonly easing?: string;
+};
+
 export type CanvasTiming = {
   readonly start?: number;
   readonly end?: number;
-  readonly keyframes?: readonly unknown[];
+  readonly keyframes?: readonly CanvasKeyframe[];
 };
 
 export type CanvasObject = {
@@ -65,7 +83,18 @@ export type CanvasScene = {
 };
 
 export type CanvasDocument = {
-  readonly v: 3;
+  /**
+   * Un ENTIER `>= 3` — miroir `isCanvasV3OrNewer`
+   * (`services/gateway/src/services/posts/storyEffectsV3.ts:37-41`, `mark >=
+   * 3` sur un `number`). Un rang supérieur se lit à travers la même lentille
+   * v3 (rétrécissement optimiste) — c'est la tolérance au FUTUR ; la
+   * sévérité de l'ÉCRITURE vit ailleurs (`isCanvasV3Exactly`, jamais
+   * réimplémenté ici, D-79). `Number.isInteger` en plus de la passerelle
+   * (§ 9, Q1 de la spécification) : une version fractionnaire n'a jamais
+   * existé côté fil, et la garde de jumelage ci-dessous ne compare que les
+   * CLÉS — élargir `v` en `number` ne la fait pas rougir.
+   */
+  readonly v: number;
   readonly scenes: readonly CanvasScene[];
   readonly layout?: string;
   readonly sound?: unknown;
@@ -88,6 +117,7 @@ export type CanvasTypesFollowShared = [
   Assert<KeysWithin<CanvasObject, ObjectV3>>,
   Assert<KeysWithin<CanvasScene, SceneV3>>,
   Assert<KeysWithin<CanvasDocument, CanvasV3>>,
+  Assert<KeysWithin<CanvasKeyframe, KeyframeV3>>,
   Assert<Within<CanvasAnchor, ObjectV3['anchor']>>,
   Assert<Within<CanvasObject['plane'], ObjectV3['plane']>>,
   Assert<Within<CanvasTransform, ObjectV3['transform']>>,
@@ -121,11 +151,42 @@ function parseTransform(raw: unknown): CanvasTransform {
   };
 }
 
+const finiteOf = (value: unknown): number | undefined => (typeof value === 'number' && Number.isFinite(value) ? value : undefined);
+
+/** Un keyframe SANS `time` fini `>= 0` est jeté — jamais l'objet entier
+ * (T-A2) : un canal absent garde sa pose de base à la lecture (`pose.ts`). */
+function parseKeyframe(raw: unknown): CanvasKeyframe | null {
+  if (!isRecord(raw)) return null;
+  const time = finiteOf(raw.time);
+  if (time === undefined || time < 0) return null;
+  const x = finiteOf(raw.x);
+  const y = finiteOf(raw.y);
+  const scale = finiteOf(raw.scale);
+  const opacity = finiteOf(raw.opacity);
+  const volume = finiteOf(raw.volume);
+  const easing = typeof raw.easing === 'string' ? raw.easing : undefined;
+  return {
+    time,
+    ...(x !== undefined ? { x } : {}),
+    ...(y !== undefined ? { y } : {}),
+    ...(scale !== undefined ? { scale } : {}),
+    ...(opacity !== undefined ? { opacity } : {}),
+    ...(volume !== undefined ? { volume } : {}),
+    ...(easing !== undefined ? { easing } : {}),
+  };
+}
+
+function parseKeyframes(raw: unknown): readonly CanvasKeyframe[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const keyframes = raw.map(parseKeyframe).filter((k): k is CanvasKeyframe => k !== null);
+  return keyframes.length > 0 ? keyframes : undefined;
+}
+
 function parseTiming(raw: unknown): CanvasTiming | undefined {
   if (!isRecord(raw)) return undefined;
   const start = typeof raw.start === 'number' ? raw.start : undefined;
   const end = typeof raw.end === 'number' ? raw.end : undefined;
-  const keyframes = Array.isArray(raw.keyframes) ? raw.keyframes : undefined;
+  const keyframes = parseKeyframes(raw.keyframes);
   if (start === undefined && end === undefined && keyframes === undefined) return undefined;
   return {
     ...(start !== undefined ? { start } : {}),
@@ -185,20 +246,22 @@ function parseScene(raw: unknown, sceneIndex: number): CanvasScene | null {
 
 /**
  * `parseCanvasDocument` — `null` sur tout ce qu'aucun défaut ne peut
- * réparer : pas un objet, `v !== 3`, ou `scenes` absent/vide (O3 du contrat de
- * fil — un canvas sans scène n'est jamais un canvas, il tombe au repli média,
- * D-78).
+ * réparer : pas un objet, un rang hors `v >= 3` (entier — miroir
+ * `isCanvasV3OrNewer`, voir `CanvasDocument.v`), ou `scenes` absent/vide (O3
+ * du contrat de fil — un canvas sans scène n'est jamais un canvas, il tombe
+ * au repli média, D-78).
  */
 export function parseCanvasDocument(storyEffects: unknown): CanvasDocument | null {
   if (!isRecord(storyEffects)) return null;
-  if (storyEffects.v !== 3) return null;
+  const v = storyEffects.v;
+  if (typeof v !== 'number' || !Number.isInteger(v) || v < 3) return null;
   const rawScenes = storyEffects.scenes;
   if (!Array.isArray(rawScenes) || rawScenes.length === 0) return null;
   const scenes = rawScenes.map((s, i) => parseScene(s, i)).filter((s): s is CanvasScene => s !== null);
   if (scenes.length === 0) return null;
   const layout = typeof storyEffects.layout === 'string' ? storyEffects.layout : undefined;
   return {
-    v: 3,
+    v,
     scenes,
     ...(layout !== undefined ? { layout } : {}),
     ...(storyEffects.sound !== undefined ? { sound: storyEffects.sound } : {}),

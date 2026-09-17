@@ -14,9 +14,15 @@
  *     dans les DEUX schémas.
  *  4. Cinq cibles ≥ 44 px : les deux portes, Publier, Retirer (fond), le
  *     bouton son.
- *  5. Un texte tapé SURVIT à un rechargement (le brouillon, `studio-draft-
+ *  5. LA SAISIE EST ALIGNÉE SUR CE QU'ELLE FAIT PEINDRE (défaut 1,
+ *     revue-correction #6900) : pour un texte d'une ligne ET un texte long
+ *     (qui force plusieurs lignes dans le moteur), le haut et la hauteur de
+ *     `#story-studio-text` valent ceux de `[data-scene-text]` à ±1 px, et
+ *     `scrollHeight === clientHeight` — aucun défilement interne, jamais un
+ *     curseur une ligne au-dessus du texte peint.
+ *  6. Un texte tapé SURVIT à un rechargement (le brouillon, `studio-draft-
  *     store.ts`, clé par lecteur).
- *  6. Aucune erreur de page ; clair et sombre rendent la MÊME géométrie.
+ *  7. Aucune erreur de page ; clair et sombre rendent la MÊME géométrie.
  *
  * Sélecteurs préfixés `[data-story-studio*]`/`[data-story-text-input]`, comme
  * l'écran les pose (`story-compose.tsx`) — jamais un texte francophone en dur
@@ -241,7 +247,47 @@ async function runScheme(colorScheme) {
       );
     }
 
-    /* ── 5. un texte tapé SURVIT à un rechargement (brouillon) ──────────── */
+    /* ── 5. la saisie est ALIGNÉE sur ce qu'elle fait peindre (défaut 1) ─── */
+    const alignmentCases = [
+      ['une ligne', 'Bonjour'],
+      ['un texte long', 'Un texte suffisamment long pour forcer plusieurs lignes dans le moteur partagé et dans la saisie transparente qui le recouvre.'],
+    ];
+    for (const [label, text] of alignmentCases) {
+      await page.fill('#story-studio-text', text);
+      await twoFrames(page);
+      const alignement = await page.evaluate(() => {
+        const textarea = document.querySelector('#story-studio-text');
+        const peint = document.querySelector('[data-scene-text]');
+        if (textarea === null || peint === null) return null;
+        const t = textarea.getBoundingClientRect();
+        const p = peint.getBoundingClientRect();
+        return {
+          top: t.top,
+          height: t.height,
+          peintTop: p.top,
+          peintHeight: p.height,
+          scrollHeight: textarea.scrollHeight,
+          clientHeight: textarea.clientHeight,
+        };
+      });
+      check(alignement !== null, `${tag} : [data-scene-text] introuvable pour « ${label} »`);
+      if (alignement !== null) {
+        check(
+          Math.abs(alignement.top - alignement.peintTop) <= 1,
+          `${tag} : (${label}) haut de la saisie ${round(alignement.top)} — texte peint ${round(alignement.peintTop)}`,
+        );
+        check(
+          Math.abs(alignement.height - alignement.peintHeight) <= 1,
+          `${tag} : (${label}) hauteur de la saisie ${round(alignement.height)} — texte peint ${round(alignement.peintHeight)}`,
+        );
+        check(
+          alignement.scrollHeight - alignement.clientHeight <= 1,
+          `${tag} : (${label}) la saisie défile en interne (scrollHeight ${alignement.scrollHeight} / clientHeight ${alignement.clientHeight})`,
+        );
+      }
+    }
+
+    /* ── 6. un texte tapé SURVIT à un rechargement (brouillon) ──────────── */
     await page.fill('#story-studio-text', 'Recette du gate');
     await page.waitForTimeout(50); // l'effet qui persiste le brouillon n'est pas synchrone au frappé.
     await page.reload({ waitUntil: 'load' });
@@ -272,6 +318,7 @@ if (failures.length > 0) {
 }
 console.log(
   `check-story-studio : vert — ${invariants} invariants : Publier inerte sur un brouillon vide, un fond + un son posés font ` +
-    'PEINDRE le moteur partagé, la carte est 9:16 centrée dans son plateau aux deux gabarits, cinq cibles ≥ 44 px, le texte ' +
+    'PEINDRE le moteur partagé, la carte est 9:16 centrée dans son plateau aux deux gabarits, cinq cibles ≥ 44 px, la saisie ' +
+    'est alignée au pixel près sur ce que le moteur peint (une ligne et un texte long, sans défilement interne), le texte ' +
     'tapé survit à un rechargement — clair et sombre identiques.',
 );
