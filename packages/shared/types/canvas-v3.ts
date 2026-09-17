@@ -59,15 +59,20 @@ export const ObjectV3Schema = z.object({
   //
   // **Un objet `kind: media` référence un enregistrement du post par DEUX
   // clés acceptées, jamais contraintes ici pour la même raison (#6894)** :
-  // `postMediaId` est la forme de RÉFÉRENCE — celle qu'écrit le composer iOS,
-  // et celle que tout consommateur DEVRAIT lire en premier — `mediaId` est un
-  // ALIAS, accepté et réécrit par cette passerelle (`storyEffectsV3.ts`,
-  // `CLAIM_PAYLOAD_KEYS`) pour les documents qui n'adressent qu'un fond
-  // (`plane: bg`) sans porteur `content` associé. Les deux désignent le MÊME
-  // enregistrement ; aucune des deux ne prévaut sur l'autre au sens du
-  // contrat — c'est l'ORDRE de lecture (postMediaId, puis mediaId) qui fait
-  // foi, pas une préférence de forme. Site de lecture unique côté iOS :
-  // `ObjectV3.mediaReference` (`packages/MeeshySDK/Sources/MeeshySDK/Models/CanvasV3.swift`).
+  // `postMediaId` est la forme de RÉFÉRENCE — celle qu'écrit le composer iOS —
+  // et `mediaId` un ALIAS, forme servie par cette passerelle pour un fond
+  // `plane: bg` référencé sans porteur `content` associé. **Corrigé (revue
+  // 2026-09-17)** : `storyEffectsV3.ts` (`CLAIM_PAYLOAD_KEYS = ['mediaId',
+  // 'postMediaId']`) ne restreint ce couple à AUCUN plane ni kind particulier
+  // — `unclaimedCanvasMediaIds`/`remapCanvasV3MediaIds` lisent les deux clés
+  // sur tout objet pertinent, quel que soit son plan — et ne RENOMME jamais
+  // `mediaId` en `postMediaId` : `remapCanvasV3MediaIds` change la VALEUR
+  // sous la clé d'origine, jamais la clé elle-même. Les deux clés désignent
+  // le MÊME enregistrement ; c'est l'ORDRE de lecture côté consommateur
+  // (`postMediaId`, puis `mediaId`) qui fait foi pour ÉLIRE l'une des deux
+  // quand un objet porte les deux à la fois — pas une préférence de forme.
+  // Site de lecture unique côté iOS : `ObjectV3.mediaReference`
+  // (`packages/MeeshySDK/Sources/MeeshySDK/Models/CanvasV3.swift`).
   payload: z.record(z.string(), z.unknown()),
 }).superRefine((o, ctx) => {
   // **Le recadrage d'un média est DÉCLARÉ, même dans une charge permissive**
