@@ -6,7 +6,7 @@
  */
 import { FastifyInstance, FastifyRequest } from 'fastify';
 import { conversationListQuerystringSchema } from './list-querystring';
-import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { resolveParticipantAvatar, resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
 import { canViewExactMemberCount, presentMemberCount } from '@meeshy/shared/utils/member-visibility';
@@ -24,7 +24,6 @@ import {
   conversationListResponseSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
-import { conversationActiveMemberCountSelect } from './utils/active-member-count';
 import { loadConversationTombstones } from './utils/delta-tombstones';
 import { sendUnauthorized, sendInternalError } from '../../utils/response';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
@@ -44,9 +43,10 @@ import { resolveCapabilities } from '@meeshy/shared/utils/reading-modes';
 import { ReadingModePreferenceSchema, type ReadingModePreference } from '@meeshy/shared/types/reading-modes';
 import type { ConversationType } from '@meeshy/shared/types/conversation';
 import {
-  conversationListParticipantSelect,
-  conversationUserPreferencesSelect,
-  conversationLastMessagePreviewSelect
+  conversationListQuerySelect,
+  conversationLastMessagePreviewSelect,
+  type ConversationListRow,
+  type ConversationListPreviewSender
 } from './core-selects';
 
 const logger = enhancedLogger.child({ module: 'conversations/core' });
@@ -170,7 +170,7 @@ export function registerConversationListRoute(
       // meme apres pull-to-refresh. Le `NOT: { not: null }` precedent et le
       // `deletedForMe: null` simple ont la meme limite : ils ne matchent que
       // les champs presents avec valeur null.
-      const whereClause: any = {
+      const whereClause: Prisma.ConversationWhereInput = {
         participants: {
           some: {
             userId: userId,
@@ -322,53 +322,20 @@ export function registerConversationListRoute(
         : { lastMessageAt: 'desc' as const };
 
       t0 = performance.now();
-      const conversations = await prisma.conversation.findMany({
+      // Effectif compté par la base, PAS la colonne dénormalisée du même nom :
+      // voir `conversationActiveMemberCountSelect`. La ligne de liste en
+      // dépend visiblement (badge de groupe iOS `memberCount > 1`, saturation
+      // de la couleur d'accent `min(memberCount/100, 1) × 0.2`), et la colonne
+      // rendait `0` pour toute conversation créée depuis la migration
+      // héritée : badge absent, et couleur d'accent différente entre la liste
+      // et le fil ouvert, qui lui compte. Le `select` lui-même est extrait
+      // dans `core-selects.ts` (`conversationListQuerySelect`) pour porter un
+      // type Prisma nommé (#3679) — il compose `_count` en son sein.
+      const conversations: ConversationListRow[] = await prisma.conversation.findMany({
         where: whereClause,
         skip: beforeCursor ? 0 : offset,
         take: limit,
-        select: {
-          id: true,
-          title: true,
-          type: true,
-          identifier: true,
-          isActive: true,
-          createdAt: true,
-          updatedAt: true,
-          lastMessageAt: true,
-          banner: true,
-          avatar: true,
-          communityId: true,
-          // Effectif compté par la base, PAS la colonne dénormalisée du même
-          // nom : voir `conversationActiveMemberCountSelect`. La ligne de liste
-          // en dépend visiblement (badge de groupe iOS `memberCount > 1`,
-          // saturation de la couleur d'accent `min(memberCount/100, 1) × 0.2`),
-          // et la colonne rendait `0` pour toute conversation créée depuis la
-          // migration héritée : badge absent, et couleur d'accent différente
-          // entre la liste et le fil ouvert, qui lui compte.
-          _count: { select: conversationActiveMemberCountSelect },
-          isAnnouncementChannel: true,
-          participants: {
-            take: 5,
-            where: {
-              isActive: true
-            },
-            select: conversationListParticipantSelect
-          },
-          // User preferences (pin/mute/archive/tags/catégorie/customName/reaction)
-          userPreferences: {
-            where: { userId: userId },
-            take: 1,
-            select: conversationUserPreferencesSelect
-          },
-          messages: {
-            where: {
-              deletedAt: null
-            },
-            orderBy: { createdAt: 'desc' },
-            take: 1,
-            select: conversationLastMessagePreviewSelect
-          }
-        },
+        select: conversationListQuerySelect(userId),
         orderBy
       });
       perfTimings.conversationsQuery = performance.now() - t0;
@@ -420,11 +387,11 @@ export function registerConversationListRoute(
         // anonyme ne possède de ligne dans NI l'une NI l'autre table.
         userId: authRequest.authContext.type === 'anonymous' ? null : userId,
         candidates: conversations.map(c => {
-          const preview = (c as any).messages?.[0];
+          const preview = c.messages[0];
           return {
             conversationId: c.id,
             message: preview ? { id: preview.id, createdAt: preview.createdAt } : null,
-            clearHistoryBefore: (c as any).userPreferences?.[0]?.clearHistoryBefore ?? null
+            clearHistoryBefore: c.userPreferences[0]?.clearHistoryBefore ?? null
           };
         }),
         query: { select: conversationLastMessagePreviewSelect as unknown as Record<string, unknown> },
@@ -432,12 +399,20 @@ export function registerConversationListRoute(
       });
       for (const conversation of conversations) {
         if (unreadableFloors.has(conversation.id)) {
-          (conversation as any).messages = [];
+          conversation.messages = [];
           continue;
         }
         if (!visibleLastMessages.has(conversation.id)) continue;
         const replacement = visibleLastMessages.get(conversation.id);
-        (conversation as any).messages = replacement ? [replacement] : [];
+        // `resolveVisibleLastMessages` rend `unknown` par construction (§ son
+        // doc-comment) : elle sert aussi la recherche de conversations, dont le
+        // `query` est un `include` de forme différente. Le cast ci-dessous
+        // n'élargit rien — CETTE route lui passe `query.select ===
+        // conversationLastMessagePreviewSelect`, donc la ligne de remplacement a
+        // structurellement la même forme que `conversation.messages[0]`.
+        conversation.messages = replacement
+          ? [replacement as ConversationListRow['messages'][number]]
+          : [];
       }
       perfTimings.personalPreviewHiding = performance.now() - t0;
 
@@ -461,7 +436,7 @@ export function registerConversationListRoute(
       // même lecteur. D'où `isAnonymousViewer`, résolu plus haut.
       if (userId) {
         for (const conv of conversations) {
-          const found = (conv as any).participants.find((p: any) =>
+          const found = conv.participants.find((p) =>
             isAnonymousViewer ? p.id === userId : p.userId === userId
           );
           if (found) {
@@ -523,7 +498,7 @@ export function registerConversationListRoute(
       const presenceVis = await getPresenceVisibilityService(prisma).resolveForTargets(
         presenceViewer,
         conversations.flatMap((conversation) => [
-          ...conversation.participants.slice(0, 5).map((m: any) => m.userId),
+          ...conversation.participants.slice(0, 5).map((m) => m.userId),
           conversation.messages[0]?.sender?.userId,
         ]).filter((uid): uid is string => !!uid)
       );
@@ -648,7 +623,7 @@ export function registerConversationListRoute(
             if (!bridgeConvIds.has(conversation.id)) continue;
             if (!currentUserParticipantIdMap.has(conversation.id)) continue;
 
-            const prefs = (conversation as any).userPreferences?.[0];
+            const prefs = conversation.userPreferences[0];
             const parsedPreference = ReadingModePreferenceSchema.safeParse(prefs?.readingMode);
             const stickyChoice: ReadingModePreference = parsedPreference.success
               ? parsedPreference.data
@@ -714,7 +689,7 @@ export function registerConversationListRoute(
         const isDirect = conversation.type === 'direct';
         const membersWithUser = conversation.participants
           .slice(0, 5)
-          .map((m: any) => {
+          .map((m) => {
             const liveOnline = presenceChecker?.isOnline(m.userId ?? m.id);
             // Entrée absente (sans compte, ou inscrit non résolu) : UN site,
             // `presenceFor` — masqué, sauf ADMIN+. Jamais `undefined` ici.
@@ -748,7 +723,7 @@ export function registerConversationListRoute(
           : (conversation.title && conversation.title.trim() !== ''
               ? conversation.title
               : generateDefaultConversationTitle(
-                  membersWithUser.map((m: any) => ({
+                  membersWithUser.map((m) => ({
                     id: m.userId,
                     displayName: m.user?.displayName,
                     username: m.user?.username,
@@ -829,7 +804,7 @@ export function registerConversationListRoute(
             // dans le spread renverrait le blob complet à chaque ligne.
             const { translations: _rawTranslations, originalLanguage: _originalLanguage, ...msgRest } =
               msg as typeof msg & { translations?: unknown; originalLanguage?: string | null };
-            const sender = msg.sender as any;
+            const sender = msg.sender as ConversationListPreviewSender | null;
             const senderLiveOnline = sender
               ? presenceChecker?.isOnline(sender.userId ?? sender.id)
               : undefined;
