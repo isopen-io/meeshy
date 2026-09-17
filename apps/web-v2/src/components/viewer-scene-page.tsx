@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useState } from 'react';
 
 import { SCENE_RATIO } from '@/lib/canvas/fit';
 import { isDocumentAudible } from '@/lib/feed/scene-motion';
@@ -6,6 +6,14 @@ import type { SceneGalleryEntry } from '@/lib/feed/gallery-lot';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { fullStageBox } from '@/lib/view/media-stage';
+import {
+  initialScenePlayback,
+  scenePlaybackEnded,
+  scenePlaybackPaused,
+  scenePlaybackShowsPlay,
+  scenePlaybackToggled,
+  scenePlays,
+} from '@/lib/view/scene-playback';
 import { useElementSize } from '@/lib/view/use-element-size';
 
 import { Glyph, GlyphSvg } from './glyph';
@@ -70,13 +78,20 @@ export function ViewerScenePage({ entry, isActive, preferredLanguages, topInset,
   // La lecture est un ÉTAT DE PAGE, pas une valeur dérivée : un appui long
   // entre en pause, un bouton la reprend. Semée par `pausedOnEntry`, elle
   // suit ensuite les gestes — jamais recalculée sous le doigt du lecteur.
-  const [paused, setPaused] = useState(pausedOnEntry);
+  /**
+   * L'ÉTAT DE LECTURE VIT DANS UNE LOI PURE (`lib/view/scene-playback.ts`) —
+   * pause, fin et remise à zéro se lisent ENSEMBLE, et leur composition décide
+   * si le bouton a un EFFET. Sur une scène TERMINÉE, « dé-pauser » ne rejoue
+   * RIEN (`useSceneClock` garde son `elapsed`) : la loi REMONTE le player.
+   */
+  const [playback, setPlayback] = useState(() => initialScenePlayback(pausedOnEntry));
   useEffect(() => {
-    if (pausedOnEntry) setPaused(true);
+    if (pausedOnEntry) setPlayback(scenePlaybackPaused);
   }, [pausedOnEntry]);
+  const toggle = useCallback(() => setPlayback(scenePlaybackToggled), []);
 
   const audible = isDocumentAudible(entry.document);
-  const playing = isActive && entry.moves && !paused;
+  const playing = scenePlays({ state: playback, isActive, moves: entry.moves });
 
   useEffect(() => {
     if (onToggleRef === undefined) return;
@@ -84,9 +99,9 @@ export function ViewerScenePage({ entry, isActive, preferredLanguages, topInset,
       onToggleRef(null);
       return;
     }
-    onToggleRef(() => setPaused((p) => !p));
+    onToggleRef(toggle);
     return () => onToggleRef(null);
-  }, [onToggleRef, isActive, entry.moves]);
+  }, [onToggleRef, isActive, entry.moves, toggle]);
 
   // Le viewport ENTIER — `stage` n'est lu QUE comme déclencheur de remesure
   // (voir le doc-comment) : tant qu'il vaut 0 × 0, rien n'a encore été mesuré
@@ -104,6 +119,7 @@ export function ViewerScenePage({ entry, isActive, preferredLanguages, topInset,
       >
         <Suspense fallback={null}>
           <ScenePlayer
+            key={playback.run}
             document={entry.document}
             sceneIndex={entry.sceneIndex}
             mode="story"
@@ -111,6 +127,7 @@ export function ViewerScenePage({ entry, isActive, preferredLanguages, topInset,
             muted={muted}
             carrier={entry.carrier}
             preferredLanguages={preferredLanguages}
+            onEnded={() => setPlayback(scenePlaybackEnded)}
           />
         </Suspense>
       </div>
@@ -119,15 +136,15 @@ export function ViewerScenePage({ entry, isActive, preferredLanguages, topInset,
           {entry.moves ? (
             <button
               type="button"
-              data-scene-viewer-playpause={paused ? 'paused' : 'playing'}
-              aria-label={translate(language, paused ? 'scene.fullscreen.play' : 'scene.fullscreen.pause')}
+              data-scene-viewer-playpause={scenePlaybackShowsPlay(playback) ? 'paused' : 'playing'}
+              aria-label={translate(language, scenePlaybackShowsPlay(playback) ? 'scene.fullscreen.play' : 'scene.fullscreen.pause')}
               onClick={(e) => {
                 e.stopPropagation();
-                setPaused((p) => !p);
+                toggle();
               }}
               className="media-viewer-scene-control tap-target-34 grid place-items-center rounded-full text-white"
             >
-              {paused ? <Glyph name="fillPlay" size={15} /> : <GlyphSvg glyph={MEDIA_GLYPHS.pause} size={15} />}
+              {scenePlaybackShowsPlay(playback) ? <Glyph name="fillPlay" size={15} /> : <GlyphSvg glyph={MEDIA_GLYPHS.pause} size={15} />}
             </button>
           ) : null}
           {audible ? (
