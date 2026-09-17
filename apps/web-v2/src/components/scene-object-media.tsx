@@ -64,8 +64,10 @@ export function SceneObjectMedia({
   };
   const innerStyle = crop !== null ? { ...mediaCropStyle(crop), position: 'absolute' as const, objectFit: 'fill' as const } : {};
 
-  if (errored) return null;
-
+  // `hidden={errored}` sur l'élément lui-même (miroir `GridCellImage`,
+  // `media-grid.tsx:322-328`) — jamais un `return null` du composant ENTIER :
+  // le cadre vide ne peint pas une boîte grise (T-E3), mais la POSE et
+  // l'horloge de l'objet restent posées si un keyframe le concerne encore.
   return (
     <SceneObjectFrame object={object} kind="media" clock={clock} className="[&>*]:pointer-events-none">
       <span className="relative block" style={boxStyle}>
@@ -77,6 +79,7 @@ export function SceneObjectMedia({
             loop={loop}
             playsInline
             preload="none"
+            hidden={errored}
             {...(poster !== undefined ? { poster } : {})}
             className="size-full object-cover"
             style={crop !== null ? innerStyle : undefined}
@@ -89,6 +92,7 @@ export function SceneObjectMedia({
             alt=""
             aria-hidden="true"
             loading="lazy"
+            hidden={errored}
             className="size-full object-cover"
             style={crop !== null ? innerStyle : undefined}
             onError={() => setErrored(true)}
