@@ -613,7 +613,7 @@ suite non-`@MainActor` ne peut plus comparer ses valeurs.
 Elle rend quatre choses, et rien de plus : la **constante** 9:16 (site unique du
 dépôt) ; la **zone du média** posé en fit, `nil` quand aucun rapport n'est connu
 — *la loi ne devine rien, elle le DEMANDE à l'appelant* ; le **cadre binaire**
-(zone \| scène entière) ; et le **cadre de la scène dans un viewport** pour
+(zone du média, ou scène entière) ; et le **cadre de la scène dans un viewport** pour
 chacun des deux plein écrans, avec **qui peint autour**.
 
 Une garde de source (`SceneShapeSourceGuardTests`) tient les deux invariants :
