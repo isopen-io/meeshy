@@ -48,4 +48,35 @@ final class ScenePlayerMediaIdentityTests: XCTestCase {
         XCTAssertEqual(MeeshyScenePlayer.carrierMediaIdentity(in: document, sceneIndex: 0), "servi",
                        "postMediaId est la forme de référence — CanvasMediaAdoption ne pose que lui")
     }
+
+    // MARK: - Précédence entre plans (revue tour 2)
+
+    /// **Depuis que le filtre de plan a disparu, le plus bas Z gagne — QUEL
+    /// QUE SOIT son plan.** Un fond `bg` à z 0 doit ravir l'identité de
+    /// continuité à un média `content` de z supérieur : c'est le comportement
+    /// documenté du 722635a, jamais fixé par un témoin jusqu'ici.
+    func test_carrierMediaIdentity_leFondBgDeZPlusBas_lEmporteSurLeContenu() {
+        let fond = ObjectV3(id: "bg1", kind: .media, anchor: .free(x: 0.5, y: 0.5),
+                            plane: .bg, z: 0, transform: TransformV3(),
+                            payload: ["mediaId": .string("fond")])
+        let contenu = ObjectV3(id: "c1", kind: .media, anchor: .free(x: 0.5, y: 0.5),
+                               plane: .content, z: 1, transform: TransformV3(),
+                               payload: ["postMediaId": .string("contenu")])
+        let document = CanvasV3(scenes: [SceneV3(id: "s1", objects: [fond, contenu])])
+        XCTAssertEqual(MeeshyScenePlayer.carrierMediaIdentity(in: document, sceneIndex: 0), "fond")
+    }
+
+    /// **Un plus bas Z SANS référence ne bloque plus l'élection** — il est
+    /// écarté par `compactMap`, et le candidat suivant (Z supérieur, mais
+    /// référencé) porte l'identité. L'ancien code rendait `nil` dans ce cas.
+    func test_carrierMediaIdentity_sauteLePlusBasZSansReference() {
+        let sansReference = ObjectV3(id: "d1", kind: .media, anchor: .free(x: 0.5, y: 0.5),
+                                     plane: .content, z: 0, transform: TransformV3(),
+                                     payload: [:])
+        let reference = ObjectV3(id: "c1", kind: .media, anchor: .free(x: 0.5, y: 0.5),
+                                 plane: .content, z: 1, transform: TransformV3(),
+                                 payload: ["postMediaId": .string("servi")])
+        let document = CanvasV3(scenes: [SceneV3(id: "s1", objects: [sansReference, reference])])
+        XCTAssertEqual(MeeshyScenePlayer.carrierMediaIdentity(in: document, sceneIndex: 0), "servi")
+    }
 }

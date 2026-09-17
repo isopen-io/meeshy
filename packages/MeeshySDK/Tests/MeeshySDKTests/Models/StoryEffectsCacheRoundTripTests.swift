@@ -225,5 +225,55 @@ final class StoryEffectsCacheRoundTripTests: XCTestCase {
                        "aucun id ne doit se répéter dans une scène — \(ids)")
         XCTAssertEqual(objets.filter { $0.kind == .media }.count, 1,
                        "un seul fond en sortie pour un seul fond en entrée")
+        XCTAssertEqual(videoFitMode(objets.first { $0.kind == .media }), "fit",
+                       "le cadrage ne doit pas se perdre silencieusement derrière la garde d'id")
+    }
+
+    /// La MÊME collision, sous un id que la passerelle emploie RÉELLEMENT
+    /// (`bg1`/`bg2`/`bg3`, jamais le littéral `"bg"`) — revue tour 2. Sans
+    /// site unique pour l'identifier, la garde précédente (indexée sur
+    /// l'id `"bg"`) laissait passer un porteur SYNTHÉTIQUE en plus de l'objet
+    /// référencé : un objet en entrée devenait deux en sortie.
+    func test_fondReferenceEtCadre_sousUnIdOrdinaire_neSeDedoublePas() throws {
+        let charge = Data("""
+        {"v": 3, "scenes": [{"id": "s1", "objects": [
+          {"id": "bg1", "kind": "media", "anchor": {"t": "free", "x": 0.5, "y": 0.5},
+           "plane": "bg", "z": 0, "transform": {"scale": 1, "rotation": 0, "opacity": 1},
+           "payload": {"mediaId": "m-fond", "transform": {"videoFitMode": "fit"}}}
+        ]}]}
+        """.utf8)
+        let effects = try JSONDecoder().decode(StoryEffects.self, from: charge)
+        let regrave = try roundTrip(effects)
+
+        let objets = regrave.canvasV3?.scenes.first?.objects ?? []
+        XCTAssertEqual(objets.count, 1, "un objet en entrée doit rester un objet en sortie — \(objets.map(\.id))")
+        XCTAssertEqual(objets.first?.id, "bg1")
+        XCTAssertEqual(reference(objets[0]), "m-fond")
+        XCTAssertEqual(videoFitMode(objets.first), "fit")
+    }
+
+    /// Deux aller-retours successifs sur la même forme ne dérivent pas —
+    /// la restitution converge, elle ne réintroduit pas un second objet au
+    /// tour suivant.
+    func test_fondReferenceEtCadre_survitADeuxAllerRetoursSuccessifs() throws {
+        let charge = Data("""
+        {"v": 3, "scenes": [{"id": "s1", "objects": [
+          {"id": "bg1", "kind": "media", "anchor": {"t": "free", "x": 0.5, "y": 0.5},
+           "plane": "bg", "z": 0, "transform": {"scale": 1, "rotation": 0, "opacity": 1},
+           "payload": {"mediaId": "m-fond", "transform": {"videoFitMode": "fit"}}}
+        ]}]}
+        """.utf8)
+        let effects = try JSONDecoder().decode(StoryEffects.self, from: charge)
+        let deuxiemePassage = try roundTrip(roundTrip(effects))
+
+        let objets = deuxiemePassage.canvasV3?.scenes.first?.objects ?? []
+        XCTAssertEqual(objets.count, 1, "\(objets.map(\.id))")
+        XCTAssertEqual(videoFitMode(objets.first), "fit")
+    }
+
+    private func videoFitMode(_ object: ObjectV3?) -> String? {
+        guard case .object(let transform)? = object?.payload["transform"] else { return nil }
+        guard case .string(let mode)? = transform["videoFitMode"] else { return nil }
+        return mode
     }
 }

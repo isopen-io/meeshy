@@ -1108,10 +1108,32 @@ public struct StoryEffects: Codable, Sendable {
     /// ferait rougir la sentinelle sur toutes les stories mentionnant quelqu'un.
     var wireUnpaintableKinds: [String]?
 
+    /// **Les OBJETS eux-mêmes**, pas seulement le nom de leur kind — pour que
+    /// `CanvasV3.migratedScene` puisse les RÉÉMETTRE verbatim au lieu de se
+    /// contenter d'en dire l'absence au lecteur (revue 2026-09-17, suivi
+    /// #6893). Un kind réservé (document plus récent que ce build) et une
+    /// mention n'ont AUCUNE affordance de retrait côté composer — ce build ne
+    /// les édite pas — donc leur disparition à l'aller-retour ne peut jamais
+    /// dire un `deleteElement` de l'auteur : seulement l'incapacité du
+    /// runtime v1 à les loger. Les restituer par identité ne risque donc
+    /// jamais de ressusciter un objet supprimé, contrairement aux familles
+    /// éditables (texte, média, sticker, lieu, audio, dessin).
+    var wireUnpaintableObjects: [ObjectV3]?
+
     /// Les kinds que ce build ne sait pas peindre — vide quand la scène est
     /// intégralement rendue. Lecture PUBLIQUE du mémo ci-dessus : le lecteur
     /// vit app-side et doit pouvoir poser la question.
     public var unpaintableKinds: [String] { wireUnpaintableKinds ?? [] }
+
+    /// Wire-only : id de l'objet qui portait, sur SON PROPRE payload, à la
+    /// fois une référence média (`mediaId`/`postMediaId`) et le cadrage de
+    /// fond (`transform`/`background`) — un objet `plane: bg` servi par la
+    /// passerelle sous cette forme (revue 2026-09-17). Le réencodage replace
+    /// ces deux clés sur ce MÊME objet plutôt que sur un second objet
+    /// synthétique : les scinder en deux les dédouble (deux objets pour un),
+    /// ou perd le cadrage (quand l'id du synthétique collisionne avec le
+    /// porteur réservé `"bg"`) — les deux défauts que ce mémo évite.
+    var wireBackgroundTransformCarrierId: String?
 
     /// **La scène porte-t-elle du contenu que ce build ne sait pas peindre ?**
     ///
