@@ -104,4 +104,81 @@ describe('parseCanvasDocument — tolérant au wire réel (§ 3.3)', () => {
       expect(empty?.scenes[0]?.thumbHash).toBeUndefined();
     });
   });
+
+  // T-A (#6901) — la lecture tolère un rang SUPÉRIEUR, miroir
+  // `isCanvasV3OrNewer` (`storyEffectsV3.ts:37-41`, `mark >= 3` sur un
+  // `number`) — mais Number.isInteger en plus (§ 9, Q1) : une version
+  // fractionnaire ou textuelle n'a jamais existé côté fil.
+  describe('parseCanvasDocument — la lecture tolère un rang supérieur (miroir isCanvasV3OrNewer, T-A)', () => {
+    test('v: 4 avec scenes ⇒ un document, jamais rejeté', () => {
+      const doc = parseCanvasDocument({ v: 4, scenes: [{ id: 's1', objects: [] }] });
+      expect(doc).not.toBeNull();
+      expect(doc?.v).toBe(4);
+      expect(doc?.scenes.length).toBe(1);
+    });
+
+    test('v: 2 ⇒ null (sous le rang 3)', () => {
+      expect(parseCanvasDocument({ v: 2, scenes: [{ id: 's1', objects: [] }] })).toBeNull();
+    });
+
+    test("v: '3' (chaîne) ⇒ null", () => {
+      expect(parseCanvasDocument({ v: '3', scenes: [{ id: 's1', objects: [] }] })).toBeNull();
+    });
+
+    test('v: 3.5 (non entier) ⇒ null', () => {
+      expect(parseCanvasDocument({ v: 3.5, scenes: [{ id: 's1', objects: [] }] })).toBeNull();
+    });
+  });
+
+  // T-A2 — les keyframes sont typés à la lecture : un canal non fini est
+  // jeté, un keyframe sans `time` fini >= 0 est jeté ENTIER (jamais l'objet).
+  describe('parseCanvasDocument — les keyframes sont typés à la lecture (T-A2)', () => {
+    test("un keyframe sans time exploitable est jeté, les autres canaux conservés", () => {
+      const doc = parseCanvasDocument({
+        v: 3,
+        scenes: [
+          {
+            id: 's1',
+            objects: [
+              {
+                id: 't1',
+                kind: 'text',
+                anchor: { t: 'free', x: 0.5, y: 0.5 },
+                plane: 'fg',
+                z: 1,
+                transform: { scale: 1, rotation: 0, opacity: 1 },
+                payload: { text: 'x' },
+                timing: { keyframes: [{ time: 1, x: 0.2 }, { time: 'x' }, 'bad'] },
+              },
+            ],
+          },
+        ],
+      });
+      expect(doc?.scenes[0]?.objects[0]?.timing?.keyframes).toEqual([{ time: 1, x: 0.2 }]);
+    });
+
+    test("easing: 'spring' voyage tel quel — la loi de pose décide, pas ce module", () => {
+      const doc = parseCanvasDocument({
+        v: 3,
+        scenes: [
+          {
+            id: 's1',
+            objects: [
+              {
+                id: 't1',
+                kind: 'text',
+                anchor: { t: 'free', x: 0.5, y: 0.5 },
+                plane: 'fg',
+                z: 1,
+                transform: { scale: 1, rotation: 0, opacity: 1 },
+                payload: { text: 'x' },
+                timing: { keyframes: [{ time: 0, scale: 2, easing: 'spring' }] },
+              },
+            ],
+          },
+        ],
+      });
+      expect(doc?.scenes[0]?.objects[0]?.timing?.keyframes).toEqual([{ time: 0, scale: 2, easing: 'spring' }]);
+    });
+  });
 });
