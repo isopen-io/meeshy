@@ -30,14 +30,32 @@ import type { ApiResult } from './http';
  */
 export type PublishStoryParams = ConversationsDeps & {
   /**
-   * La LÉGENDE — distincte du texte de scène (`storyEffects`, § modèle § 3).
-   * Le studio (#6900) n'a AUCUN champ légende : il n'en envoie jamais. Un
-   * futur appelant qui en gagne un l'y pose ; tant qu'aucun n'existe, ce
-   * champ reste absent du corps (jamais une chaîne vide POSÉE quand même) —
-   * miroir du `content: nil` iOS quand le texte vit dans le canevas
-   * (`StoryViewModel+PublicationUpload.swift:378-391`).
+   * **LE CONTENU DE LA PUBLICATION** — `Post.content`, jamais « la légende »
+   * (commentaire corrigé, #6944 : il DISAIT « LA LÉGENDE », et c'est
+   * exactement la confusion que la directive porteur du 2026-09-17 a levée).
+   * Le dépôt tient TROIS contenus distincts, même à chaînes égales :
+   * `Post.content` (ci-dessous), `PostMedia.caption` ({@link mediaCaption}) et
+   * `PostMedia.alt`.
+   *
+   * Une story n'en a pas : son texte vit dans `storyEffects`, et l'envoyer
+   * ici le ferait rendre DEUX FOIS chez le lecteur (l'objet du canevas, puis
+   * sa copie sous la carte) — miroir du `content: nil` iOS
+   * (`StoryViewModel+PublicationUpload.swift:378-391`). Le champ reste absent
+   * du corps, jamais une chaîne vide POSÉE quand même.
    */
   readonly content?: string;
+  /**
+   * **LA LÉGENDE DE CHAQUE MÉDIA** — `PostMedia.caption`, la carte
+   * `{ postMediaId → texte }` que `POST /posts` attend
+   * (`CreatePostSchema.mediaCaption`, `routes/posts/types.ts:282`, bornée à
+   * 1000 caractères et IGNORÉE pour tout id absent de `mediaIds`).
+   * `PostService.applyMediaCaption` l'écrit et déclenche sa traduction
+   * (#6280) — c'est donc ELLE, et jamais `content`, qui porte « la légende de
+   * l'image ou de la vidéo de fond ». Composée par
+   * `storyMediaCaptionPayload` (`lib/stories/media-caption.ts`), jamais à la
+   * main : la borne et le rejet des entrées vides y vivent une fois.
+   */
+  readonly mediaCaption?: Record<string, string>;
   readonly originalLanguage?: string;
   readonly storyEffects: CanvasV3;
   readonly mediaIds: readonly string[];
@@ -67,6 +85,7 @@ export async function publishStory(params: PublishStoryParams): Promise<ApiResul
       type: 'STORY',
       ...(params.content !== undefined && params.content !== '' ? { content: params.content } : {}),
       ...(params.originalLanguage !== undefined ? { originalLanguage: params.originalLanguage } : {}),
+      ...(params.mediaCaption !== undefined ? { mediaCaption: params.mediaCaption } : {}),
       storyEffects: params.storyEffects,
       mediaIds: params.mediaIds,
     },

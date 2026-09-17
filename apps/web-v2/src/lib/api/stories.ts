@@ -60,6 +60,14 @@ export type StoryTrayMedia = {
   readonly width?: number | null;
   readonly height?: number | null;
   readonly thumbHash?: string | null;
+  /** LA LÉGENDE PROPRE DU MÉDIA et son Prisme (#6944) — `PostMedia.caption`,
+   * `captionLanguage`, `captionTranslations`, servis par `mediaSelect`
+   * (`postIncludes.ts:111-118`) sur les deux projections de story. Distincts
+   * de `Post.content`/`Post.translations`, qui décrivent la PUBLICATION :
+   * mélanger les deux couples est ce que #4904 a coûté. */
+  readonly caption?: string | null;
+  readonly captionLanguage?: string | null;
+  readonly captionTranslations?: unknown;
 };
 
 /** L'auteur, tel que `storyAuthorSelect` le sert. */

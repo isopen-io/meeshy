@@ -1,11 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 
 import { buildStoryCanvasEffects, studioMediaIds } from '@/lib/stories/story-document';
+import { newTextLayer } from '@/lib/stories/studio-text';
 
 import { createHttpTransport } from './http';
 import { publishStory } from './stories-publish';
 
 const BACKGROUND = { postMediaId: 'pm-bg', fileUrl: '2026/09/u1/bg.jpg' } as const;
+const texts = (text: string) => (text === '' ? [] : [newTextLayer({ id: 'text-1', language: 'fr', text })]);
 
 function fakeFetch(response: { readonly status: number; readonly body?: unknown }) {
   const calls: Array<{ readonly url: string; readonly init: RequestInit }> = [];
@@ -28,7 +30,7 @@ function headerOf(init: RequestInit, name: string): string | null {
 
 describe('publishStory — POST /api/v1/posts (core.ts:370-462)', () => {
   test('corps exact : type STORY, content, storyEffects, mediaIds ; X-Canvas-Caps posé (§3.3)', async () => {
-    const effects = buildStoryCanvasEffects({ text: 'Bonjour', locale: 'fr', background: { ready: BACKGROUND, mediaType: 'image' } })!;
+    const effects = buildStoryCanvasEffects({ texts: texts('Bonjour'), background: { source: BACKGROUND, mediaType: 'image' } })!;
     const { impl, calls } = fakeFetch({ status: 201, body: { success: true, data: { id: 'post-1' } } });
     const transport = createHttpTransport({ base: '', fetchImpl: impl });
 
@@ -54,7 +56,7 @@ describe('publishStory — POST /api/v1/posts (core.ts:370-462)', () => {
   });
 
   test('un média RÉFÉRENCÉ mais absent de mediaIds ⇒ le port refuse, AUCUN appel réseau', async () => {
-    const effects = buildStoryCanvasEffects({ text: '', locale: 'fr', background: { ready: BACKGROUND, mediaType: 'image' } })!;
+    const effects = buildStoryCanvasEffects({ texts: [], background: { source: BACKGROUND, mediaType: 'image' } })!;
     const { impl, calls } = fakeFetch({ status: 201, body: { success: true, data: { id: 'post-1' } } });
     const transport = createHttpTransport({ base: '', fetchImpl: impl });
 
@@ -66,7 +68,7 @@ describe('publishStory — POST /api/v1/posts (core.ts:370-462)', () => {
   });
 
   test('un document AVEC texte de scène ⇒ corps POST SANS `content` (défaut 4, revue-correction)', async () => {
-    const effects = buildStoryCanvasEffects({ text: 'Bonjour', locale: 'fr' })!;
+    const effects = buildStoryCanvasEffects({ texts: texts('Bonjour') })!;
     const { impl, calls } = fakeFetch({ status: 201, body: { success: true, data: { id: 'post-1' } } });
     const transport = createHttpTransport({ base: '', fetchImpl: impl });
 
@@ -77,8 +79,41 @@ describe('publishStory — POST /api/v1/posts (core.ts:370-462)', () => {
     expect(body.storyEffects.scenes[0].objects.some((o: { kind: string }) => o.kind === 'text')).toBe(true);
   });
 
+  /** **LA LÉGENDE D'UN MÉDIA VOYAGE, ET SÉPARÉMENT DE `content`** (#6944) —
+   * `mediaCaption` est la carte `{ postMediaId → texte }` que
+   * `CreatePostSchema` attend (`routes/posts/types.ts:282`) ; `content` est le
+   * contenu de la PUBLICATION, qu'une story n'a pas. Les confondre est la
+   * faute que la directive porteur du 2026-09-17 a levée. */
+  test('`mediaCaption` part dans le corps, et une story reste SANS `content`', async () => {
+    const effects = buildStoryCanvasEffects({ texts: texts('Bonjour'), background: { source: BACKGROUND, mediaType: 'image' } })!;
+    const { impl, calls } = fakeFetch({ status: 201, body: { success: true, data: { id: 'post-1' } } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+
+    await publishStory({
+      source: 'gateway',
+      transport,
+      originalLanguage: 'fr',
+      mediaCaption: { 'pm-bg': 'Au lever du jour' },
+      storyEffects: effects,
+      mediaIds: studioMediaIds({ background: BACKGROUND }),
+    });
+
+    const body = JSON.parse(String(calls[0]!.init.body));
+    expect(body.mediaCaption).toEqual({ 'pm-bg': 'Au lever du jour' });
+    expect('content' in body).toBe(false);
+  });
+
+  test('aucune légende ⇒ AUCUNE clé `mediaCaption` dans le corps', async () => {
+    const effects = buildStoryCanvasEffects({ texts: texts('Bonjour') })!;
+    const { impl, calls } = fakeFetch({ status: 201, body: { success: true, data: { id: 'post-1' } } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+
+    await publishStory({ source: 'gateway', transport, storyEffects: effects, mediaIds: [] });
+    expect('mediaCaption' in JSON.parse(String(calls[0]!.init.body))).toBe(false);
+  });
+
   test('un refus CANVAS_INVALID de la passerelle (core.ts:118-129) traverse tel quel', async () => {
-    const effects = buildStoryCanvasEffects({ text: 'x', locale: 'fr' })!;
+    const effects = buildStoryCanvasEffects({ texts: texts('x') })!;
     const { impl } = fakeFetch({ status: 400, body: { success: false, error: 'Invalid canvas', code: 'CANVAS_INVALID' } });
     const transport = createHttpTransport({ base: '', fetchImpl: impl });
 
@@ -91,7 +126,7 @@ describe('publishStory — POST /api/v1/posts (core.ts:370-462)', () => {
   });
 
   test('un échec serveur (429) traverse tel quel — le composeur affiche sa raison', async () => {
-    const effects = buildStoryCanvasEffects({ text: 'x', locale: 'fr' })!;
+    const effects = buildStoryCanvasEffects({ texts: texts('x') })!;
     const { impl } = fakeFetch({ status: 429, body: { success: false, error: 'Too many requests', retryAfter: 12 } });
     const transport = createHttpTransport({ base: '', fetchImpl: impl });
 
@@ -106,7 +141,7 @@ describe('publishStory — POST /api/v1/posts (core.ts:370-462)', () => {
 
 describe('publishStory — la source fixtures ne touche jamais le réseau', () => {
   test('source fixtures ⇒ un identifiant simulé, aucun fetch, le document toujours VALIDÉ', async () => {
-    const effects = buildStoryCanvasEffects({ text: 'Bonjour', locale: 'fr' })!;
+    const effects = buildStoryCanvasEffects({ texts: texts('Bonjour') })!;
     const { impl, calls } = fakeFetch({ status: 500 });
     const transport = createHttpTransport({ base: '', fetchImpl: impl });
 
@@ -119,7 +154,7 @@ describe('publishStory — la source fixtures ne touche jamais le réseau', () =
       source: 'fixtures',
       transport,
       content: '',
-      storyEffects: buildStoryCanvasEffects({ text: '', locale: 'fr', background: { ready: BACKGROUND, mediaType: 'image' } })!,
+      storyEffects: buildStoryCanvasEffects({ texts: [], background: { source: BACKGROUND, mediaType: 'image' } })!,
       mediaIds: [],
     });
     expect(refused.ok).toBe(false);
