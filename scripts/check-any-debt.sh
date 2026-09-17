@@ -233,7 +233,32 @@ readonly SHARED_BASELINE=0
 # importent ou exercent ce fichier et ses appelants (330 tests), la suite
 # `routes/conversations` complète (353 tests), `check-any-debt.sh` + son
 # self-test.
-readonly GATEWAY_BASELINE=559
+#
+# 2026-09-17 — `services/AudioTranslateService.ts` (16 usages) et son noyau
+# `services/audio-voice-profile-core.ts` (jamais compté par ce cliquet : ses
+# 4 usages n'ont qu'un seul match dans la regex — `Promise<any>` — les trois
+# autres étant `Record<string, any>` et `Promise<any | null>`, hors de la
+# forme surveillée). Les deux écouteurs ZMQ (`transcriptionCompleted`,
+# `transcriptionError`) et leurs deux handlers repris sur des interfaces
+# nommées (`TranscriptionCompletedEvent`, `TranscriptionErrorEvent`) plutôt
+# que le même littéral répété deux fois ; `PendingRequest.resolve`/`.reject`
+# en `unknown` (la valeur traverse la file d'attente sans être lue à ce
+# site) ; cinq `catch (error: any)` en `catch (error: unknown)` avec le
+# patron déjà établi (`error instanceof Error ? error.message : 'Unknown
+# error'`, cf. `routes/admin/broadcasts.ts`) ; les écritures Prisma sur les
+# champs `Json?` `transcription`/`translations` en `as unknown as
+# Prisma.InputJsonValue` (patron `PostService.ts`) ; `getVoiceProfile`/
+# `saveVoiceProfile` (service ET noyau) retypés sur `UserVoiceModel` généré
+# plutôt que `any`. Deux `segments: … as any` retirés PUREMENT : mesuré au
+# compilateur, `VoiceTranscriptionSegment[]` (3 champs requis) est déjà
+# structurellement assignable à `TranscriptionSegment[]` (mêmes 3 champs
+# requis, le reste optionnel) — aucun des deux sens n'avait besoin d'un
+# cast, l'un des deux directions ayant simplement été essayée sans vérifier
+# l'autre.
+#
+# Gates locaux verts : `tsc --noEmit` gateway (0 erreur), `bash
+# scripts/check-any-debt.sh` + son self-test.
+readonly GATEWAY_BASELINE=543
 
 # `apps/web` — dette réelle, jamais gardée avant ce lot (cf. en-tête « WHY
 # `apps/web` IS MEASURED… »). Mesurée sur un checkout NON construit (pas de
