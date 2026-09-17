@@ -474,4 +474,63 @@ describe('resolveFeedCardModel — la scène (D-78)', () => {
       { id: 'media-a', src: 'https://gate.meeshy.me/api/v1/attachments/file/a.jpg', caption: 'Bonjour', captionOrigin: 'media' },
     ]);
   });
+
+  /**
+   * LA CARTE D'UNE STORY NE MONTRE PAS DEUX FOIS LE MÊME TEXTE (#6944) — le
+   * repli de `709e35b51e` fait retomber la légende d'un média UNIQUE sur le
+   * `content` du post. Une story n'ayant PAS de `content` (son texte vit dans
+   * les objets de scène, `StoryViewModel+PublicationUpload.swift:378-391`),
+   * ce repli ne doit RIEN rendre — sans quoi le texte de la scène, peint par
+   * le moteur, serait redit en légende sous la carte.
+   *
+   * Le témoin porte sur le CAS RÉEL que le studio produit : des objets texte
+   * dans `storyEffects`, aucune légende de média, aucun `content`.
+   */
+  test('une story à texte de scène et SANS légende de média n’affiche aucune légende — jamais le texte redit', () => {
+    const model = resolveFeedCardModel(
+      basePost({
+        type: 'STORY',
+        content: '',
+        media: [{ id: 'media-a', mimeType: 'image/jpeg', fileUrl: 'a.jpg', order: 0 }],
+        storyEffects: {
+          v: 3,
+          scenes: [
+            {
+              id: 's1',
+              objects: [
+                {
+                  id: 'text-1',
+                  kind: 'text',
+                  anchor: { t: 'free', x: 0.5, y: 0.5 },
+                  plane: 'fg',
+                  z: 2,
+                  transform: { scale: 1, rotation: 0, opacity: 1 },
+                  payload: { text: 'Bonjour' },
+                },
+              ],
+            },
+          ],
+        },
+      }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+    expect(model.media[0]?.caption).toBeUndefined();
+    expect(model.media[0]?.captionOrigin).toBeUndefined();
+    expect(model.scene?.carrier.media[0]?.caption).toBeUndefined();
+  });
+
+  /** La légende PROPRE du média, elle, voyage — et s'annonce `media`, jamais
+   * `post` : les deux provenances n'ont pas les mêmes traductions. */
+  test('une story dont le média PORTE une légende la sert, à l’origine `media`', () => {
+    const model = resolveFeedCardModel(
+      basePost({
+        type: 'STORY',
+        content: '',
+        media: [{ id: 'media-a', mimeType: 'image/jpeg', fileUrl: 'a.jpg', caption: 'Au lever du jour', captionLanguage: 'fr', order: 0 }],
+      }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+    expect(model.media[0]?.caption).toBe('Au lever du jour');
+    expect(model.media[0]?.captionOrigin).toBe('media');
+  });
 });

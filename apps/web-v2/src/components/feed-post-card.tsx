@@ -353,12 +353,14 @@ function FeedReelCard({ model, ...hosts }: { readonly model: FeedCardModel } & C
 
 /**
  * `onOpenScene`/`registerScene` — LES DEUX HÔTES DE LA SCÈNE (D-78, #6898) :
- * le premier remet l'intention d'ouvrir une scène précise (le plein écran est
- * un AUTRE travail, `scenes-plein-ecran` — sans hôte, `FeedSceneSurface` mène
- * au détail, jamais un tap sans effet, loi 4) ; le second enregistre la
- * boîte de la carte auprès du magasin d'élection
- * (`useFeedAutoplayRoot.registerScene`, `lib/feed/use-feed-autoplay.ts`) —
- * une réf de rappel STABLE (voir son doc-comment), jamais une réf inline.
+ * le premier remet l'intention d'ouvrir une scène précise — `useSceneGallery`
+ * (#6902, `routes/feed.tsx`/`routes/post.tsx`) l'ouvre EN PLACE, à l'ÉCHELLE
+ * uniforme et centrée (`SceneFullscreenGallery`, `MediaViewer` réutilisée) ;
+ * sans hôte, `FeedSceneSurface` ne pose aucun bouton, jamais un tap sans
+ * effet (loi 4). Le second enregistre la boîte de la carte auprès du magasin
+ * d'élection (`useFeedAutoplayRoot.registerScene`, `lib/feed/use-feed-
+ * autoplay.ts`) — une réf de rappel STABLE (voir son doc-comment), jamais une
+ * réf inline.
  */
 type SceneHosts = {
   readonly preferredLanguages?: readonly string[];

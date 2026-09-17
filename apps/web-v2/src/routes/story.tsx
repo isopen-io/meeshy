@@ -31,6 +31,7 @@ import {
   isDrag,
 } from '@/lib/stories/gesture';
 import { resolveStoryCaption } from '@/lib/stories/caption';
+import { resolveStoryMediaCaption } from '@/lib/stories/media-caption';
 import { readerCardFraming } from '@/lib/stories/framing';
 
 import { SoundToggle, StoryMediaLayer } from './story-parts';
@@ -110,6 +111,16 @@ type GestureState = {
  */
 const CHROME_SCRIM_TOP = 'linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.28) 55%, rgba(0,0,0,0) 100%)';
 const CHROME_SCRIM_BOTTOM = 'linear-gradient(0deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.28) 55%, rgba(0,0,0,0) 100%)';
+/** Quatre lignes au plus, comme la légende du fil — partagé par les DEUX
+ * contenus du pied (`Post.content` et `PostMedia.caption`, #6944) : deux
+ * copies de ce style auraient divergé au premier ajustement. */
+const CLAMPED_CAPTION = {
+  color: '#fff',
+  display: '-webkit-box',
+  WebkitLineClamp: 4,
+  WebkitBoxOrient: 'vertical' as const,
+  overflow: 'hidden',
+} as const;
 
 /** `StoryBackgroundValue` (`StoryBackgroundValue.swift:1-38`) — `"RRGGBB"` ou
  * `"gradient:RRGGBB:RRGGBB"`, validée par le SITE UNIQUE `backgroundCss`
@@ -574,6 +585,24 @@ export default function StoryScreen() {
     });
   }, [currentStory, reader.languages]);
 
+  /**
+   * **LA LÉGENDE DU MÉDIA** (#6944) — `PostMedia.caption`, un contenu
+   * DISTINCT de `resolvedContent` ci-dessus (`Post.content`) : « une story
+   * n'a pas de `content` mais l'image ou la vidéo de fond peut avoir une
+   * légende » (directive porteur 2026-09-17). La passerelle la sert et la
+   * traduit depuis #6280 ; personne ne la RENDAIT — la question du cycle 122
+   * (« qui AFFICHE ce que le résolveur élit ? ») restée sans réponse.
+   *
+   * La descente passe par le site existant (`resolveStoryMediaCaption` →
+   * `resolveMediaCaption`, `lib/api/prism.ts`), jamais une boucle réécrite, et
+   * la règle de DÉRIVATION de `caption.ts` ne s'y applique pas : elle juge un
+   * `Post.content` qui redit les calques, pas une légende qui a son sujet.
+   */
+  const resolvedMediaCaption = useMemo(
+    () => resolveStoryMediaCaption({ media, preferredLanguages: reader.languages }),
+    [media, reader.languages],
+  );
+
   /* CACHE-FIRST : le squelette n'apparaît que sur un cache VIDE. Un échec de
      rafraîchissement EN ARRIÈRE-PLAN (le corpus est déjà là, la fenêtre
      reprend le focus, le réseau tombe) ne doit RIEN détruire — le premier jet
@@ -746,9 +775,9 @@ export default function StoryScreen() {
             </div>
           </div>
 
-          {hasMedia && resolvedContent !== null ? (
+          {hasMedia && (resolvedContent !== null || resolvedMediaCaption !== null) ? (
             <div
-              className="pointer-events-none absolute inset-x-0 bottom-0 px-4"
+              className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col gap-1 px-4"
               style={{
                 paddingTop: 40,
                 paddingBottom: 'calc(var(--safe-bottom, 0px) + 16px)',
@@ -758,19 +787,25 @@ export default function StoryScreen() {
               }}
               aria-hidden={chromeHidden ? true : undefined}
             >
-              <p
-                className="text-body"
-                style={{
-                  color: '#fff',
-                  display: '-webkit-box',
-                  WebkitLineClamp: 4,
-                  WebkitBoxOrient: 'vertical',
-                  overflow: 'hidden',
-                }}
-                lang={resolvedContent.language || undefined}
-              >
-                {resolvedContent.text}
-              </p>
+              {resolvedContent !== null ? (
+                <p className="text-body" style={CLAMPED_CAPTION} lang={resolvedContent.language || undefined}>
+                  {resolvedContent.text}
+                </p>
+              ) : null}
+              {/* La légende du MÉDIA, à sa propre ligne et avec sa propre
+                  langue : deux contenus, deux `lang=` — un lecteur d'écran qui
+                  prononcerait la seconde avec la voix de la première est le
+                  défaut du cycle 122 rendu audible. */}
+              {resolvedMediaCaption !== null ? (
+                <p
+                  data-story-media-caption
+                  className="text-body"
+                  style={CLAMPED_CAPTION}
+                  lang={resolvedMediaCaption.language || undefined}
+                >
+                  {resolvedMediaCaption.text}
+                </p>
+              ) : null}
             </div>
           ) : null}
         </div>
