@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 
 import { backgroundCss, backgroundFraming, type BackgroundFraming } from '@/lib/canvas/background';
 import { objectMediaIdentity, objectMediaSrc, type SceneCarrier } from '@/lib/canvas/carrier';
-import { playerConfig, type ScenePlayerMode } from '@/lib/canvas/config';
+import { hostMute, playerConfig, type ScenePlayerMode } from '@/lib/canvas/config';
 import type { CanvasDocument, CanvasObject, CanvasScene } from '@/lib/canvas/document';
 import { resolveSceneText } from '@/lib/canvas/text';
 import { backgroundMedia } from '@/lib/feed/scene-framing';
@@ -332,7 +332,7 @@ export default function ScenePlayer({
   const language = currentInterfaceLanguage();
   const audible = playing && isDocumentAudible(document);
   const callbacks = useLatest<SceneCallbacks>({ onContentReady, onDurationKnown, onPlaybackBlocked });
-  const isMuted = muted ?? config.isMuted;
+  const isMuted = hostMute({ config, requestedMute: muted });
 
   if (scene === undefined) return null;
 
