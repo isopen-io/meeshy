@@ -1,5 +1,101 @@
 # @meeshy/web
 
+## 1.57.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - la leçon 621 venue de main devient 622 — c'est toujours la même qui vit hors de la série continue
+  - donner à Test gateway un budget qui absorbe la variance des runners
+  - decodeConversation défait null sur tous les champs, sauf currentUserRole (#6826)
+  - check-interface-language attend le compte de la cloche, pas son montage
+  - rend déterministe le témoin de réception de notification WebSocket (#6858)
+  - les 16 clés des conversations souveraines rejoignent le catalogue d'administration (#6871, #6862)
+  - sort les clés admin.\* du catalogue commun (#6871, #6834)
+  - réaligne bun.lock après les fusions dependabot — c'est moi qui l'ai désaligné
+  - les DEUX cliquets d'entrées mortes suivent la route neuve (#6861)
+  - la liste des conversations ouvre la conversation — la ligne était INERTE (#6862)
+  - l'administration lit une conversation — messages, audio et images, sous motif écrit (#6862)
+  - les ADMIN accèdent aussi aux conversations — le rang baisse, la trace reste (#6862)
+  - un témoin n'écrit pas dans le magasin de l'app, et un curseur est un identifiant (#6857)
+  - la leçon 618 de main devient 621 — deux branches ne peuvent pas allouer le même identifiant
+  - les décodeurs de la lecture souveraine, et le préfixe qui les tient hors du disque (#6862)
+  - la durée d'un média se LIT au montage aussi, pas seulement à l'évènement (#6866)
+  - le contenu d'un post ne légende ses médias que s'il n'en porte qu'UN, sans légende propre (#6864)
+  - la légende d'un média unique retombe sur le contenu du post
+  - le plafond du lecteur de story retrouve sa marge, que le branchement de la loi consomme (#6836)
+  - la diapositive d'une story dure ce que dure son média (#6836)
+  - le gate des Réels compte les lecteurs de RÉEL, pas tous les médias de la page (#6807)
+  - une garde iOS ne garde rien tant qu'un workflow ne la joue pas (#6852)
+  - la durée d'une diapositive suit son média, et la vidéo boucle (#6836)
+  - plafonne la hauteur d'une carte à scènes du fil à 1,4 × sa largeur (#6767)
+  - déplace les témoins de restauration hors du fichier gelé par #4531 (#6822)
+  - régénère AdminEndpoint.swift et le cliquet Swift des entrées mortes (#6822)
+  - admin.usersByUserIdRestore rejoint le cliquet des entrées mortes (#6822)
+  - la garde de la colonne de galerie décrit le plateau, pas le cadre du média (#6847) (run test)
+  - en plein cadre une scène est une SCÈNE — le cadre ET le fond viennent d'une seule loi (#6806)
+  - le témoin de #6810 entre enfin dans la compilation — il n'a jamais pu rougir
+  - un simulateur s'élit par sa FAMILLE, et un témoin non inscrit se voit (#6838, #6839)
+  - la bulle pré-enregistrée par la NSE garde l'horloge du serveur (#6840) (run test)
+  - le fil porte une vidéo et un son, les stories une vidéo (#6807)
+  - ce qu'un membre a créé, et où il parle — en lecture (#6819)
+  - bannir, lever et consulter depuis la fiche — trois états à l'écran (#6819)
+  - lire l'historique des bannissements, et son vocabulaire en sept langues (#6819)
+  - les conversations d'un membre — le cadre, jamais le contenu (#6819)
+  - les médias d'un membre — pagination à côté de data, protégé reste listé (#6819)
+  - bannir et lever — trois états, et `active` vient du serveur (#6819)
+  - la réinitialisation s'ouvre depuis la fiche, secret affiché avant d'être appliqué (#6819)
+  - réinitialiser un mot de passe en le GÉNÉRANT, pas en le faisant saisir (#6819)
+  - modifier un membre, et ne confirmer que ce qui le mérite (#6819)
+  - deux changements seulement méritent une confirmation (#6819)
+  - éditer un membre — le corps est plat et son motif s'appelle reason (#6819)
+  - `bun run gate` redevient idempotent — l'exemption suit le motif `dist-*`, pas une liste de noms
+  - la fiche d'un membre s'ouvre depuis la liste, en lecture (#6819)
+  - le chargeur du détail d'un membre encode son identifiant et distingue illisible d'introuvable (#6819)
+  - a direct conversation never falls back to its stored title (#6790)
+  - le détail d'un membre se décode sans garder ce qui trace (#6819)
+  - ouvrir un fil qui porte une image ne fait plus tomber l'écran — la frontière cesse d'énumérer
+  - en plein cadre, le canvas d'une scène couvre le viewport — plus de troisième couche (#6806) (run test)
+  - modernize date parsing and concurrency sleep intervals
+  - répondre à un média en plein écran efface le chrome, comme la traînée de réactions (#6817) (run test)
+  - composer depuis un média déjà en cache n'appelle plus le réseau ni ne le relit en entier (#6810) (run test)
+  - le témoin de la colonne de la galerie décrit le plateau, pas le cadre du média (#6771)
+  - tirer l'entrée `conversation:new` enregistre la conversation SURVENUE (#6807)
+  - les fixtures savent servir une conversation qui SURGIT (#6807)
+  - le type de `mimeType` admet `undefined` — le typecheck de #6801 était ROUGE (#6801)
+  - supprime la dette ESLint introduite par le nouveau témoin (#6665)
+  - apps/web décode un lien magique refusé par le limiteur (#6665)
+  - le lecteur de story joue une story vidéo (#6801)
+  - une vidéo ou un son d'un post se lit depuis le fil (#6800)
+  - une conversation neuve porte son dernier message sans rechargement (#6799)
+  - une page scène ne fait plus repeindre au canvas le fond que la galerie peint (#6791)
+  - un seul chiffre de langues traduisibles, sur tous les supports
+  - PostMedia.alt sert sa traduction Prisme (#6737)
+  - messages-list.ts passe de 13 à 1 usage de `any` (#3679) (#6892)
+  - AudioTranslateService.ts passe de 15 à 0 usages de `any` (#3679) (#6891)
+  - messages-list-query.ts passe de 41 à 1 usage de `any` (#3679)
+  - route-manifest/collect.ts passe à zéro `any` (#3679) (#6881)
+  - POST /messages nomme sa pièce jointe invalide, jamais un 500 (#6870)
+  - un postId non conforme rend 400, jamais 500 (#6859)
+  - un administrateur souverain peut partir d'une conversation, pas seulement d'un membre (#6861)
+  - les pièces d'un message souverain voyagent avec lui, gardées comme son texte (#6860)
+  - CI — gèle l'inventaire de schémas de réponse et corrige un dernier fixture non-ObjectId (#6853)
+  - un postId non conforme rend 400, jamais 500 (#6853)
+  - regenerate api/endpoints.ts and AdminEndpoint.swift for the new session routes
+  - admin history of connection (UserSession/SecurityEvent) gains its route (#6821)
+  - la suppression douce d'un membre écrit deletedAt/deletedBy, et restoreUser gagne sa route (#6822)
+  - resetPassword resolves recipientLanguage on the unprojected row (#6831)
+  - reset-password admin — sendEmail notifie réellement, schéma strict (#6831)
+  - updateUser recalculates searchTokens on name change (#6823)
+  - chercher une personne ne rend plus 500 — `isSet` n'existe pas sur une liste scalaire
+  - les DÉRIVÉS du manifeste suivent la route neuve — catalogue d'endpoints et énumérations Swift (#6861)
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.21.3
+
 ## 1.56.0
 
 ### Minor Changes
