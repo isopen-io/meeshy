@@ -170,19 +170,17 @@ enum MediaGalleryStage {
     /// lieu du rapport de la scène. Le rapport d'une scène vient donc de sa
     /// valeur (`GallerySceneItem.aspect`, dont `PostGalleryLot.sceneAspect` est
     /// le site unique) ; celui d'une image ou d'une vidéo, de ses dimensions.
-    /// **Le rapport d'une page — et il dépend de la SURFACE** (#6806).
+    /// **Le rapport d'une page — TOUJOURS celui du canvas, cardée ou en plein
+    /// cadre** (#6806, superseded #6896/lot #6904).
     ///
-    /// Une scène qui n'est qu'une image se présente au rapport de son IMAGE
-    /// (`SceneFraming.presentationAspect`), et c'est juste sur une carte : on y
-    /// ouvre la photo, et une fenêtre posée sur un canvas 9:16 en montrerait le
-    /// milieu. **En plein cadre, ce qu'on ouvre est la scène** — elle se
-    /// présente donc au rapport de son canvas.
-    ///
-    /// Mesuré au simulateur (iPhone 16 Pro, témoin de position posé dans la
-    /// page) : au rapport de l'IMAGE, une scène carrée rendait
-    /// `media = 402 × 398,6` dans un cadre de 402 × 874 — **237,7 pt de sol en
-    /// haut et en bas, 54 % de l'écran en fond flou**. Au rapport du CANVAS il
-    /// en reste 79,6 : le même sol divisé par trois, sans rien rogner.
+    /// Avant #6896, une scène qui n'était qu'une image se présentait au
+    /// rapport de son IMAGE sur une CARTE (`SceneFraming.presentationAspect`,
+    /// désormais sans appelant hors tests) et à celui de son CANVAS en plein
+    /// cadre — deux réponses selon la surface. La décision porteur du
+    /// 2026-09-17 retire l'exception : la scène est TOUJOURS 9:16
+    /// (`SceneShape.aspect`, `PostGalleryLot.sceneAspect`, `surface(inFullFrame:)`
+    /// ignore désormais son paramètre) — mesurée une fois pour de bon par
+    /// `GallerySceneBackdropUnicityTests.test_cardeeEtPleinCadre_rendentExactementLaMemeSurface`.
     ///
     /// Une pièce jointe ordinaire ne connaît pas cette question : son rapport
     /// est celui de ses pixels, sur toutes les surfaces.

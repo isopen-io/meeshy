@@ -106,16 +106,50 @@ final class GallerySceneBackdropUnicityTests: XCTestCase {
         XCTAssertFalse(item([texteSurLaBande()]).servesLetterboxFill)
     }
 
+    /// **Le fusible qui remplace `test_unObjetPoseSurLaBande_gardeLeRemplissageDuCanvas`**
+    /// (l'ancien témoin POSITIF, sans objet depuis que `paintsLetterbox` est
+    /// une constante — voir la revue de #6904 : les quatre témoins ci-dessus
+    /// comparent tous `page.aspect`/`servesLetterboxFill` à des valeurs que
+    /// `PostGalleryLot.sceneAspect`/`surface(inFullFrame:)` rendent EN DUR,
+    /// sans lire leurs paramètres — la loi comparée à elle-même).
+    ///
+    /// Ce que #6896 décide littéralement (« la scène est TOUJOURS 9:16,
+    /// **cardée ou en plein cadre** ») est une ÉGALITÉ entre deux appels, pas
+    /// une valeur isolée : `surface(inFullFrame: true)` et `surface(inFullFrame:
+    /// false)` doivent rendre EXACTEMENT la même surface. C'est l'invariant
+    /// que la comparaison à soi-même ne peut pas trahir — une implémentation
+    /// qui recommencerait à varier par présentation (le comportement
+    /// PRÉ-#6904, voir l'historique de `PostGalleryLot.swift`) ferait rougir
+    /// CE témoin sans qu'aucun changement à `PostGalleryLot.sceneAspect` ne
+    /// soit nécessaire pour le tromper.
+    func test_cardeeEtPleinCadre_rendentExactementLaMemeSurface() {
+        let page = item([fond(aspect: Self.paysage), texteSurLaBande()], carrierAspect: Self.paysage)
+        XCTAssertEqual(page.surface(inFullFrame: true), page.surface(inFullFrame: false),
+                      "carte et plein cadre doivent rendre EXACTEMENT la même surface depuis #6896 " +
+                      "— toute divergence recréerait la dette (#6806) que le lot #6904 ferme")
+    }
+
     // MARK: - La décision atteint le player
 
-    /// **Une règle qui n'est pas TRANSMISE n'a corrigé personne.**
+    /// **Une règle qui n'est pas TRANSMISE n'a corrigé personne — et une règle
+    /// transmise avec N'IMPORTE QUELLE valeur n'en est pas la preuve.**
+    ///
+    /// L'ancienne version n'assertionnait que `suite.contains("servesLetterboxFill:")`
+    /// — vert quelle que soit la valeur transmise, y compris `true`, une
+    /// variable, ou l'ancien `item.surface(inFullFrame:).paintsLetterbox`.
+    /// Elle exige désormais la valeur LITTÉRALE : `servesLetterboxFill` est
+    /// une CONSTANTE depuis #6896 (`false`, le plateau peint seul le
+    /// hors-champ), pas une décision par scène — un site qui la recalcule,
+    /// même correctement pour le cas nominal, réintroduirait la question que
+    /// ce lot a fermée.
     func test_laPageScene_transmetLaDecisionAuPlayer() throws {
         let code = AppSourceGuard.stripComments(
             try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationMediaGalleryView+ScenePage.swift"))
         let page = try XCTUnwrap(code.range(of: "struct GalleryScenePage"))
         let suite = String(code[page.lowerBound...])
 
-        XCTAssertTrue(suite.contains("servesLetterboxFill:"),
-                      "la page scène doit DIRE au player si la bande se peint")
+        XCTAssertTrue(suite.contains("servesLetterboxFill: false"),
+                      "la page scène doit poser servesLetterboxFill À LA CONSTANTE false — " +
+                      "le plateau (MediaStageBackdrop) est l'unique peintre du hors-champ depuis #6896")
     }
 }

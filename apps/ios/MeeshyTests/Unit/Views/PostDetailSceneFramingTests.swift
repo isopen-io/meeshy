@@ -151,6 +151,52 @@ final class PostDetailSceneFramingTests: XCTestCase {
                           "le cadre ne doit plus suivre le rapport d'une image ou d'un porteur")
     }
 
+    /// **Témoin de régression au SITE réel** (`storyCanvasContainer`,
+    /// `PostDetailView+Canvas.swift`) — le témoin précédent n'interroge que la
+    /// CONSTANTE `SceneShape.aspect`, jamais l'appelant : il resterait vert si
+    /// `storyCanvasContainer` retombait sur le rapport d'une image ou d'un
+    /// porteur (`PostDetailSceneFraming.ratio`, `SceneFraming.
+    /// presentationAspect`, `imageAspect`), exactement le défaut que #6897 a
+    /// corrigé. Lecture de source plutôt qu'un rendu hébergé : le corps de
+    /// `storyCanvasContainer` ne peut pas se monter isolément (il attend un
+    /// `StoryReaderRepresentable` déjà construit et l'état privé de
+    /// `PostDetailView`), et le rendu complet est déjà couvert, pour le
+    /// document À PLUSIEURS scènes, par
+    /// `test_leDetailRenduDUnCarrouselPortrait_tientEntierAuDessusDuComposer`
+    /// ci-dessous.
+    func test_storyCanvasContainer_appliqueSceneShapeAspectSansIntermediaire() throws {
+        let source = try String(contentsOf: Self.postDetailCanvasSourceURL, encoding: .utf8)
+        guard let debut = source.range(of: "func storyCanvasContainer("),
+              let corpsDebut = source.range(of: "\n    }", range: debut.upperBound..<source.endIndex)
+        else { return XCTFail("storyCanvasContainer introuvable dans PostDetailView+Canvas.swift") }
+        // Le corps s'arrête à la PROCHAINE fermeture de fonction au niveau de
+        // l'extension (indentation à 4 espaces) : la première rencontrée après
+        // le début de la fonction.
+        // Les commentaires sont retirés avant de chercher les intermédiaires
+        // interdits : le corps porte lui-même, en commentaire, le RÉCIT du
+        // défaut #6897 (« poser PostDetailSceneFraming.ratio ici lisait
+        // encore… ») — une garde qui compterait ce commentaire se ferait
+        // rougir par sa propre documentation.
+        let corps = AppSourceGuard.stripComments(String(source[debut.lowerBound..<corpsDebut.lowerBound]))
+        XCTAssertTrue(corps.contains("let ratio = SceneShape.aspect"),
+                     "storyCanvasContainer doit poser son ratio depuis SceneShape.aspect, jamais " +
+                     "depuis une image ou un porteur — c'est le correctif de #6897.")
+        for intermediaire in ["PostDetailSceneFraming.ratio", "SceneFraming.presentationAspect",
+                              "SceneFullscreenFraming", "imageAspect", "carrierAspect"] {
+            XCTAssertFalse(corps.contains(intermediaire),
+                          "storyCanvasContainer relit \"\(intermediaire)\" — un cadre qui suit à " +
+                          "nouveau une image ou un porteur reproduirait #6897 (canvas rogné 1,5×).")
+        }
+    }
+
+    private static let postDetailCanvasSourceURL: URL = {
+        var url = URL(fileURLWithPath: #filePath)
+        // Unit/Views/<fichier> → MeeshyTests/Unit → MeeshyTests → apps/ios
+        for _ in 0..<4 { url.deleteLastPathComponent() }
+        return url.appendingPathComponent(
+            "Meeshy/Features/Main/Views/PostDetailView+Canvas.swift")
+    }()
+
     // MARK: - Une publication à plusieurs scènes (#6708)
 
     /// Une scène de la publication de recette n°1 : le porteur du cadrage, puis

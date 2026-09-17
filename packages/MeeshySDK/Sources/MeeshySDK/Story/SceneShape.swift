@@ -57,6 +57,25 @@ import Foundation
 /// > disant QUI peint autour du média. `offscreenPainter` la dit, et son
 /// > `.none` n'est pas un trou — c'est la réponse de l'immersif.
 ///
+/// ## Ce que la loi FERME, et ce qu'elle DÉCLARE sans encore le câbler
+///
+/// **Seule la règle 1 (`aspect`, toujours 9:16) a un consommateur de
+/// production** — vérifié par `SceneShapeSourceGuardTests` sur onze hôtes.
+/// Les règles 2 à 4 (`mediaBand`, `frame`, `layout`/`Fullscreen`/
+/// `OffscreenPainter`/`Backdrop`/`cardedCornerRadius`) sont déclarées,
+/// testées en isolation (`SceneShapeTests`), et approuvées par la décision
+/// porteur du 2026-09-17 — mais AUCUN hôte ne les appelle encore : chaque
+/// surface qui montre aujourd'hui un canvas ne pose que le rapport fixe 9:16,
+/// jamais le resserrement binaire ni la distinction cadré/immersif. Deux
+/// mécanismes PLUS ANCIENS et INDÉPENDANTS couvrent une partie du même
+/// terrain sans consulter cette loi — `SceneFraming.imageAspect`/`cardFocus`
+/// (carte de fil et pages de carrousel, #6697/#6708) et
+/// `StoryImageOnlyPresentation`/`StorySceneFootprint` (lecteur de story,
+/// #6636) — et n'ont pas été mesurés CONTRE elle. Câbler `frame`/`layout`
+/// dans ces onze hôtes, ou converger les deux mécanismes existants vers eux,
+/// est un lot séparé : le préjuger ici romprait des surfaces déjà mesurées
+/// au simulateur sans nouvelle mesure.
+///
 /// ## Où elle vit, et pourquoi
 ///
 /// Dans `MeeshySDK` et non `MeeshyUI`, pour la raison que `StoryLetterboxFill`
