@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { messagesOf } from '@/lib/api/fixtures';
+import { POST_SCENE_TEXT, POST_SCENES_MIXED } from '@/lib/api/fixtures-feed';
 import { MEDIA_CONVERSATION_ID } from '@/lib/api/fixtures-media';
 import {
   MEDIA_GRID_OVERFLOW_WITNESS_ID,
@@ -11,6 +12,8 @@ import {
   MEDIA_GRID_TRIPLE_WITNESS_ID,
 } from '@/lib/api/fixtures-media-grid';
 import type { Attachment } from '@/lib/api/types';
+import { resolveFeedCardModel } from '@/lib/feed/card-model';
+import { composeSceneGalleryLot } from '@/lib/feed/gallery-lot';
 
 import type { MediaCarrier } from '@/lib/view/media';
 
@@ -35,9 +38,13 @@ const attachmentsOf = (messageId: string): readonly Attachment[] => {
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
-beforeAll(() => {
+beforeAll(async () => {
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
+  // Le moteur de scène est chargé À LA DEMANDE (`lazy`, `viewer-scene-page.tsx`)
+  // — pré-chauffé ici pour que le PREMIER témoin de la nature scène ne paie
+  // pas seul la compilation (même motif que `feed-scene-surface.test.tsx`).
+  await import('./scene-player');
   // La page VIDÉO ACTIVE déclenche un `toggle()` (donc `element.play()`) DÈS
   // le montage (`ViewerVideoPage`, effet `isActive`) — jamais après un clic,
   // à la différence de `VideoTile`. Impossible de stubber l'ÉLÉMENT après
@@ -586,5 +593,99 @@ describe('MediaViewer — le pied porte le carrier, absent sans lui (#6169)', ()
     const items = attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID);
     const body = mount({ items, startIndex: 0, onClose: () => {} });
     expect(body.querySelector('[data-viewer-footer]')).toBeNull();
+  });
+});
+
+/**
+ * LA NATURE « SCÈNE » (#6902, § B de la spécification `scenes-plein-ecran`) —
+ * la MÊME visionneuse, une page de PLUS : `scenes.get(id)` fait peindre
+ * `ViewerScenePage` (le moteur `ScenePlayer`) plutôt que le repli
+ * image/vidéo, quel que soit le `mimeType` synthétique de la pièce
+ * (`composeSceneGalleryLot`, `lib/feed/gallery-lot.ts`).
+ */
+describe('MediaViewer — la nature « scène » (#6902)', () => {
+  async function mountScenes(params: { readonly startIndex: number; readonly onClose?: () => void }): Promise<HTMLElement> {
+    const model = resolveFeedCardModel(POST_SCENES_MIXED, { preferredLanguages: ['fr', 'en'], now: new Date('2026-09-17T12:00:00.000Z') });
+    const lot = composeSceneGalleryLot(model);
+    if (lot === undefined) throw new Error('lot attendu');
+
+    container = document.createElement('div');
+    container.id = 'root';
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <MediaViewer
+          items={lot.items}
+          scenes={lot.scenes}
+          startIndex={params.startIndex}
+          onClose={params.onClose ?? (() => {})}
+          languages={['fr']}
+          fallbackLanguage="fr"
+          carrier={{ sender: { displayName: 'Omar' }, sentAt: model.createdAt, caption: null }}
+        />,
+      );
+    });
+    return document.body;
+  }
+
+  test('la carte `scenes` fait peindre une page SCÈNE — le dialogue porte `data-scene-fullscreen`, l’index courant est celui touché', async () => {
+    const body = await mountScenes({ startIndex: 1 });
+    const dialog = body.querySelector('[data-media-viewer]')!;
+    expect(dialog.hasAttribute('data-scene-fullscreen')).toBe(true);
+    expect(dialog.getAttribute('data-viewer-index')).toBe('1');
+    expect(currentPage(body).querySelector('[data-scene-viewer-page]')).not.toBeNull();
+  });
+
+  test('une page SCÈNE porte une pièce SYNTHÉTIQUE et n’a ni <img>/<video> réel, ni marque « protégée »', async () => {
+    const body = await mountScenes({ startIndex: 0 });
+    const page = currentPage(body);
+    expect(page.querySelector('[data-protected-attachment]')).toBeNull();
+    expect(page.querySelector('[data-scene-viewer-page]')).not.toBeNull();
+  });
+
+  test('le pied N’AFFICHE JAMAIS de cotes/poids sur une page scène (miroir iOS : « une scène n’a ni format, ni dimensions, ni poids »)', async () => {
+    const body = await mountScenes({ startIndex: 0 });
+    const footer = body.querySelector('[data-viewer-footer]')!;
+    expect(footer).not.toBeNull();
+    expect(footer.textContent).toContain('Omar');
+    expect(footer.textContent).not.toContain('Ko');
+  });
+
+  test('un post à scène SANS AUCUN média (texte seul) s’ouvre aussi — la scène décide, pas le média', async () => {
+    const model = resolveFeedCardModel(POST_SCENE_TEXT, { preferredLanguages: ['fr', 'en'], now: new Date() });
+    const lot = composeSceneGalleryLot(model);
+    if (lot === undefined) throw new Error('lot attendu');
+    expect(lot.items.length).toBe(1);
+
+    container = document.createElement('div');
+    container.id = 'root';
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <MediaViewer
+          items={lot.items}
+          scenes={lot.scenes}
+          startIndex={0}
+          onClose={() => {}}
+          languages={['fr', 'en']}
+          fallbackLanguage="fr"
+        />,
+      );
+    });
+    const dialog = document.body.querySelector('[data-media-viewer]')!;
+    expect(dialog.hasAttribute('data-scene-fullscreen')).toBe(true);
+    expect(currentPage(document.body).querySelector('[data-scene-viewer-page]')).not.toBeNull();
+  });
+
+  test('Escape ferme la couche scène — même mécanisme que la visionneuse de médias', async () => {
+    let closed = 0;
+    const body = await mountScenes({ startIndex: 0, onClose: () => (closed += 1) });
+    const dialog = body.querySelector('[data-media-viewer]')!;
+    act(() => {
+      dialog.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }));
+    });
+    expect(closed).toBe(1);
   });
 });
