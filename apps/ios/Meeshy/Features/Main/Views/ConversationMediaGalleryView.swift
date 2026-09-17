@@ -359,6 +359,14 @@ struct ConversationMediaGalleryView: View {
         ZStack {
             Color.black.ignoresSafeArea()
 
+            // **LE SOL d'une page scène** (#6904, directive porteur du
+            // 2026-09-17 : « On préserve le même fond que pour la story ! »).
+            // Le noir ci-dessus reste le sol des pages image et vidéo ; une page
+            // SCÈNE reçoit par-dessus la MÊME matière que le lecteur de stories
+            // peint autour de sa carte. Le montage vit dans `+ScenePage.swift`,
+            // avec le reste de ce qui ne concerne que les scènes.
+            sceneFloorLayer
+
             // **Le clavier ne pousse pas le cadre hors de l'écran** (#6165) :
             // la scène et tout le plateau IGNORENT la zone sûre du clavier,
             // seule la couche de saisie la respecte. Sans cette asymétrie,

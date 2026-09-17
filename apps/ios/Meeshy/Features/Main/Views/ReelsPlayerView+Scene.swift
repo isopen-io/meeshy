@@ -107,23 +107,39 @@ struct ReelSceneView: View {
         // pas sa page : le pager lui donne sa place, et le chrome du réel vit
         // dans ses couloirs, PAR-DESSUS la carte (il ne la rétrécit pas).
         GeometryReader { geo in
-            SceneCard(layout: SceneShape.layout(in: geo.size),
-                      thumbHash: carrier.sceneBackdropHash) {
-                MeeshyScenePlayer(document: document,
-                                  mode: .reel,
-                                  sceneIndex: .constant(0),
-                                  isPlaying: .constant(isPlaying),
-                                  accentColorHex: reel.authorColor,
-                                  carrier: carrier,
-                                  preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
-                                  isMuted: isMuted,
-                                  // Le canvas ne peint jamais son hors-champ :
-                                  // la carte le peint, comme aux quatre
-                                  // montages du lecteur de stories (#6791).
-                                  servesLetterboxFill: false)
-                    .onPlaybackTime { seconds in
-                        clock.progress = ReelSceneProgress.fraction(elapsed: seconds, duration: duration)
-                    }
+            ZStack {
+                // **Le SOL — le même que la story et la galerie de post** (#6904,
+                // directive porteur du 2026-09-17 : « On préserve le même fond que
+                // pour la story ! »). Le réel posait `.background(Color.black)` sous
+                // son média (`ReelPageView.mediaLayer`) : la MÊME carte se retrouvait
+                // sur du noir pur là où le lecteur de stories l'entoure d'une teinte
+                // dérivée de son empreinte. Le voile est NUL — un réel est immersif
+                // par nature, il n'a pas de plateau à faire reculer —, et l'empreinte
+                // vient du même site que le fond DANS la carte, juste dessous.
+                SceneFloorView(thumbHash: carrier.sceneBackdropHash,
+                               veil: SceneFloorView.fullVeil)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+
+                SceneCard(layout: SceneShape.layout(in: geo.size),
+                          thumbHash: carrier.sceneBackdropHash) {
+                    MeeshyScenePlayer(document: document,
+                                      mode: .reel,
+                                      sceneIndex: .constant(0),
+                                      isPlaying: .constant(isPlaying),
+                                      accentColorHex: reel.authorColor,
+                                      carrier: carrier,
+                                      preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
+                                      isMuted: isMuted,
+                                      // Le canvas ne peint jamais son hors-champ :
+                                      // la carte le peint, comme aux quatre
+                                      // montages du lecteur de stories (#6791).
+                                      servesLetterboxFill: false)
+                        .onPlaybackTime { seconds in
+                            clock.progress = ReelSceneProgress.fraction(elapsed: seconds, duration: duration)
+                        }
+                }
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }

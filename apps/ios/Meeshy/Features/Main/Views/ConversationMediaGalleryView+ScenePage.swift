@@ -229,6 +229,66 @@ struct GalleryScenePage: View, Equatable {
     }
 }
 
+// MARK: - Le SOL d'une page scène
+
+/// **Le sol d'une page scène — celui de la story, pas du noir plat** (directive
+/// porteur du 2026-09-17, lot #6904 : « On préserve le même fond que pour la
+/// story ! »).
+///
+/// `SceneCard` a fermé la divergence DANS la carte ; la recette au simulateur a
+/// trouvé l'écart restant DEHORS. Le lecteur de stories peignait autour de sa
+/// carte une teinte sombre dérivée du ThumbHash ; cette galerie pose
+/// `Color.black.ignoresSafeArea()` sous TOUTES ses pages, et la même carte se
+/// retrouvait sur un fond noir pur, cadrée comme immersive.
+///
+/// **Cette vue est une vue à part, et non deux lignes dans le corps de la
+/// galerie**, pour une raison mesurable : c'est elle qu'un témoin de pixels
+/// monte. Un `@ViewBuilder` privé du fichier racine ne se mesurerait que par une
+/// galerie entière — donc par son contexte, ses messages et son réseau — et le
+/// témoin dériverait de la production au premier refactor.
+///
+/// **Une page IMAGE ou VIDÉO n'a pas de sol** (`scene == nil` ⇒ rien) : elle
+/// garde le noir de la galerie et son `MediaStageBackdrop`, qui habille le
+/// hors-champ d'une pièce jointe. Le sol de scène ne remplace pas ce fond-là :
+/// il se pose par-dessus le noir, et seulement pour une scène.
+struct GallerySceneFloor: View, Equatable {
+    /// La scène de la page COURANTE, ou `nil` pour une page image / vidéo.
+    let scene: GallerySceneItem?
+    let presentation: StagePresentation
+
+    static func == (lhs: GallerySceneFloor, rhs: GallerySceneFloor) -> Bool {
+        lhs.scene?.id == rhs.scene?.id
+            && lhs.scene?.thumbHash == rhs.scene?.thumbHash
+            && lhs.presentation == rhs.presentation
+    }
+
+    var body: some View {
+        ZStack {
+            if let scene {
+                // L'identité est celle de la PAGE : le glissement entre les
+                // scènes d'un même post (repère F5, trois scènes) fond le sol
+                // comme le lecteur de stories fond le sien d'une story à
+                // l'autre. Sans `.id`, SwiftUI garderait la même vue et
+                // remplacerait l'empreinte d'un coup sec.
+                SceneFloorView(thumbHash: scene.thumbHash,
+                               veil: presentation.isFull ? SceneFloorView.fullVeil
+                                                         : SceneFloorView.cardedVeil)
+                    .id(scene.id)
+                    .transition(.opacity)
+            }
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+        // Le voile suit la porte du plein cadre, et la fusion suit la page :
+        // deux `value:` distincts sur la MÊME couche — l'un anime une opacité,
+        // l'autre une transition d'identité. Les fusionner en un seul ferait
+        // sauter le sol au passage d'une scène à l'autre, ou figerait le voile.
+        .animation(.spring(response: 0.42, dampingFraction: 0.84), value: presentation.isFull)
+        .animation(.easeInOut(duration: 0.28), value: scene?.id)
+    }
+}
+
 // MARK: - Le play/pause d'une scène
 
 /// **Le play/pause d'une scène, au centre du cadre** — là où la galerie pose
@@ -301,6 +361,14 @@ extension ConversationMediaGalleryView {
             onDismiss: onDismiss
         )
         .equatable()
+    }
+
+    /// **Le SOL de la page courante** — monté par la galerie derrière son
+    /// pager, jamais par la page : une page vit dans le pager, et un sol qui
+    /// vivrait avec elle glisserait horizontalement avec elle au lieu de fondre.
+    var sceneFloorLayer: some View {
+        GallerySceneFloor(scene: currentScene, presentation: stagePresentation)
+            .equatable()
     }
 
     /// **La scène de la page OUVERTE, ou `nil`** — la seule question que le

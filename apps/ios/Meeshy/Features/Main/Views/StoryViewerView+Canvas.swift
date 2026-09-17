@@ -1226,34 +1226,36 @@ struct StoryCardView: View {
             // Color/gradient fallback (always present)
             storyBackground
 
-            // === Layer 1.5: Blurred backdrop derived from the slide ThumbHash ===
-            // Le canvas réel est contraint à 9:16 (fidélité au design composer).
-            // Sur un iPhone "plus haut que 9:16" (iPhone 16 Pro = 0.461 vs 9/16 = 0.5625),
-            // ~150pt restent libres au-dessus et en dessous ; on les habille
-            // d'un blur du contenu story (ThumbHash upscaled + flou + scale) pour
-            // une transition douce entre les letterbox et le canvas net.
+            // === Layer 1.5 : LE SOL — le même que la galerie de post et le réel ===
             //
-            // SINGLE BACKDROP : un seul `storyBlurredBackdrop(for: currentStory)`
-            // avec une `.id(currentStory?.id)` pour que SwiftUI swap natif
-            // (transition.opacity de defaut, gérée par `withAnimation` du
-            // `crossFadeStory`). Le pattern précédent (deux backdrops avec
-            // `outgoingOpacity` ET `contentOpacity` additifs) produisait un pic
-            // de luminosité au milieu de la transition car les deux blurs
-            // semi-transparents s'additionnaient dans le ZStack.
-            storyBlurredBackdrop(for: currentStory)
+            // **`SceneFloorView` (MeeshyUI) est la recette, et elle a quitté cet
+            // hôte** (directive porteur du 2026-09-17, lot #6904 : « On préserve
+            // le même fond que pour la story ! »). Le lecteur la portait seul —
+            // empreinte décodée, flou 60, échelle 1,18, opacité 0,85, voile — et
+            // la galerie de post peignait du NOIR PUR autour de la MÊME carte.
+            // Une convergence mesurée DANS la carte ne disait rien de ce qui se
+            // peint à côté d'elle.
+            //
+            // Ce qui reste ici est de l'ORCHESTRATION, et rien d'autre :
+            //
+            // - `.id(currentStory?.id)` + `.transition(.opacity)` — SINGLE
+            //   BACKDROP : un seul sol, que SwiftUI échange nativement sur
+            //   changement d'identité (fusion gérée par le `withAnimation` du
+            //   `crossFadeStory`). Le motif précédent — deux sols dont les
+            //   opacités s'ADDITIONNAIENT dans le ZStack — produisait un pic de
+            //   luminosité au milieu de la transition ;
+            // - le VOILE, dont la valeur suit l'état de la carte (0,18 cardé,
+            //   0 au plein bord) et dont le ressort est celui de la carte : une
+            //   décision de « quand », donc de l'hôte ;
+            // - `storyBackground` reste SOUS ce sol, inchangé : pour une story
+            //   sans média de fond, c'est le dégradé de l'auteur qu'on voit à
+            //   travers un sol sans empreinte (`SceneFloorView` ne peint aucun
+            //   noir inconditionnel, précisément pour cela).
+            SceneFloorView(thumbHash: currentStory?.sceneBackdropHash,
+                           veil: canvasIsExpanded ? SceneFloorView.fullVeil
+                                                  : SceneFloorView.cardedVeil)
                 .id(currentStory?.id ?? "no-story")
                 .transition(.opacity)
-                .ignoresSafeArea()
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-
-            // Voile LÉGER sur le backdrop ThumbHash flou : on GARDE le ThumbHash visible
-            // en fond (demande user 2026-06-02 « mettre en fond le ThumbHash »), juste un
-            // soupçon d'assombrissement pour séparer. La carte se distingue surtout par ses
-            // coins arrondis + son ombre (voir le canvas cardé). En plein écran → 0 (le
-            // backdrop habille les letterbox immersifs). Animé par le ressort de la carte.
-            Color.black
-                .opacity(canvasIsExpanded ? 0 : 0.18)
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
@@ -1341,8 +1343,8 @@ struct StoryCardView: View {
                     // Strict 9:16-fit (parité avec UnifiedPostComposer:324).
                     // Sans contrainte, `geometry.size.height` étirait le canvas
                     // hors ratio design et décalait visuellement le contenu.
-                    // Le letterbox au-dessus/en dessous est habillé par le
-                    // `storyBlurredBackdrop` (Layer 1.5).
+                    // Le hors-champ au-dessus/en dessous est habillé par le
+                    // SOL (`SceneFloorView`, Layer 1.5).
                     // Dimensions explicites 9:16 — cf. `canvasFitSize`. Le
                     // duo `.aspectRatio(.fit) + .frame(maxWidth/Height)`
                     // ne contraint pas correctement le UIViewRepresentable
@@ -1423,7 +1425,7 @@ struct StoryCardView: View {
                     // intrinsic/halo size could otherwise inflate the parent
                     // ZStack and push the sidebar/composer beyond the viewport.
                     // Aligné sur le canvas 9:16 (et non plein écran) pour ne pas
-                    // recouvrir le `storyBlurredBackdrop` en bandes letterbox.
+                    // recouvrir le SOL (`SceneFloorView`) en bandes letterbox.
                     // Dimensions explicites 9:16 — cf. `canvasFitSize`. Le
                     // duo `.aspectRatio(.fit) + .frame(maxWidth/Height)`
                     // ne contraint pas correctement le UIViewRepresentable
@@ -2039,7 +2041,7 @@ struct StoryCardView: View {
     // MARK: - Story Background
 
     /// `true` quand la slide courante a un vrai fond média (image/vidéo) : le canvas
-    /// peint alors ce média plein cadre et le `storyBlurredBackdrop` (Layer 1.5) habille
+    /// peint alors ce média plein cadre et le SOL (`SceneFloorView`, Layer 1.5) habille
     /// les letterbox d'un flou DÉRIVÉ du média. Dans ce cas le fond de canvas couleur/gradient
     /// (`storyBackground`, Layer 1) est redondant — pire, il bleed (~15 %) derrière le backdrop
     /// semi-transparent, teintant le média d'un voile indigo parasite. On le neutralise en noir
@@ -2098,63 +2100,24 @@ struct StoryCardView: View {
         .accessibilityHidden(true)
     }
 
-    // MARK: - Blurred backdrop (letterbox au-dessus/en dessous du canvas 9:16)
+    // MARK: - Le SOL du lecteur : plus aucune recette ici
 
-    /// Habille les bandes letterbox d'un blur du contenu story.
-    /// Cascade de sources (priorité descendante) :
-    ///   1. `slide.effects.thumbHash` — thumbHash explicite côté slide
-    ///   2. `media[backgroundId].thumbHash` — thumbHash du média de fond
-    ///      (couvre les vidéos uploadées qui portent leur thumbHash côté
-    ///      `FeedMedia` plutôt que sur le slide composite)
-    ///   3. Color.clear → le `storyBackground` gradient indigo se voit dans
-    ///      les bandes (fallback graceful, jamais de rectangle noir)
-    ///
-    /// Décodage ThumbHash < 0.5 ms (16×16 → upscaled), blur GPU SwiftUI < 1 ms.
-    @ViewBuilder
-    private func storyBlurredBackdrop(for story: StoryItem?) -> some View {
-        if let img = resolvedBackdropImage(for: story) {
-            Image(uiImage: img)
-                .resizable()
-                .scaledToFill()
-                .blur(radius: 60)
-                .scaleEffect(1.18)
-                .opacity(0.85)
-        } else {
-            Color.clear
-        }
-    }
-
-    /// Résout l'image-source du backdrop selon la cascade documentée plus haut.
-    /// Retourne `nil` si aucune source exploitable n'existe (Color.clear path).
-    private func resolvedBackdropImage(for story: StoryItem?) -> UIImage? {
-        guard let story else { return nil }
-        let slide = renderableSlideCache.slide(for: story, chain: resolvedViewerLanguageChain)
-        // (1) thumbHash slide-level
-        if let hash = slide.effects.thumbHash,
-           !hash.isEmpty,
-           let img = UIImage.fromThumbHash(hash) {
-            return img
-        }
-        // (2) thumbHash du media de fond — typique pour vidéo uploadée
-        let bgMediaId: String? = {
-            if let bg = slide.effects.resolvedBackgroundMedia {
-                return bg.postMediaId
-            }
-            // Fallback historique : premier média si pas de canvas mediaObjects
-            if (slide.effects.mediaObjects ?? []).isEmpty {
-                return story.media.first?.id
-            }
-            return nil
-        }()
-        if let bgMediaId,
-           let media = story.media.first(where: { $0.id == bgMediaId }),
-           let mediaHash = media.thumbHash,
-           !mediaHash.isEmpty,
-           let img = UIImage.fromThumbHash(mediaHash) {
-            return img
-        }
-        return nil
-    }
+    // **La recette du sol vit dans `SceneFloorView` (MeeshyUI), et son empreinte
+    // dans `StoryItem.sceneBackdropHash`** (lot #6904, 2026-09-17).
+    //
+    // Ce fichier portait les deux : `storyBlurredBackdrop(for:)` (flou 60,
+    // échelle 1,18, opacité 0,85) et `resolvedBackdropImage(for:)`, sa cascade
+    // d'empreinte — slide, puis média de fond, puis premier média. La cascade
+    // était déjà EN DOUBLE dans cet écran : la CARTE lisait
+    // `story.sceneBackdropHash` (`readerBackdropHash`) pendant que le sol
+    // descendait la sienne, si bien qu'une story à plusieurs médias pouvait
+    // peindre son sol avec une empreinte et sa carte avec une autre. Les deux
+    // lisent désormais le même site — le fond DANS la carte et le sol AUTOUR
+    // parlent du même contenu, ce qui est tout l'objet de #6797.
+    //
+    // L'étape 1 des deux cascades était identique (`toRenderableSlide` recopie
+    // `storyEffects` et n'écrit jamais `thumbHash`) ; elles ne divergeaient que
+    // lorsqu'un média de fond n'était pas le PREMIER média porteur d'empreinte.
 
     // MARK: - Background Audio Badge
 
