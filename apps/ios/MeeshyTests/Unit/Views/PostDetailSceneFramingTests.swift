@@ -133,33 +133,22 @@ final class PostDetailSceneFramingTests: XCTestCase {
         XCTAssertEqual(relevee.sceneTop, 156)
     }
 
-    // MARK: - Le rapport servi (#6697)
+    // MARK: - Le rapport servi (#6697, #6897)
 
-    private func effets(_ scene: SceneV3) -> StoryEffects {
-        var effets = StoryEffects()
-        effets.canvasV3 = CanvasV3(scenes: [scene])
-        return effets
-    }
-
-    private func fondPaysage() -> ObjectV3 {
-        ObjectV3(id: "fond", kind: .media, anchor: .free(x: 0.5, y: 0.5), plane: .content, z: 0,
-                 transform: TransformV3(),
-                 payload: ["isBackground": .bool(true), "aspectRatio": .number(16.0 / 9.0),
-                           "postMediaId": .string("m1"), "mediaType": .string("image")])
-    }
-
-    func test_leDetail_presenteUneImageSeuleAuRapportDeSonImage() {
-        let r = PostDetailSceneFraming.ratio(of: effets(SceneV3(id: "s1", objects: [fondPaysage()])))
-        XCTAssertEqual(r, paysage, accuracy: 0.0001)
-    }
-
-    /// La scène qui a logé son porteur se cadre comme en plein écran — par la
-    /// loi du porteur, jamais par un second littéral.
-    func test_leDetail_presenteUneSceneAuRapportDeSonPorteur() {
-        let porteuse = SceneV3(id: "s1", objects: [], carrierAspect: 16.0 / 9.0)
-        XCTAssertEqual(PostDetailSceneFraming.ratio(of: effets(porteuse)),
-                       SceneFullscreenFraming.ratio(of: porteuse), accuracy: 0.0001)
-        XCTAssertEqual(PostDetailSceneFraming.ratio(of: effets(porteuse)), paysage, accuracy: 0.0001)
+    /// **#6897 — le cadre du canvas mono-scène suit ce que le canvas RENDU,
+    /// jamais le rapport d'une image ou d'un porteur.**
+    ///
+    /// Avant ce correctif, une scène-image paysage (ou une scène qui logeait
+    /// un `carrierAspect` paysage) posait un cadre 16:9 autour d'un lecteur
+    /// dont le canvas rend TOUJOURS en 9:16 (`SceneShape.aspect`, #6896) : le
+    /// cadre et le rendu divergeaient, et le canvas apparaissait 1,5× la
+    /// boîte, rogné en haut à gauche. `storyCanvasContainer` pose désormais
+    /// directement `SceneShape.aspect` — plus de loi intermédiaire à
+    /// désynchroniser du player.
+    func test_leCadreDuCanvasMonoScene_estToujoursCeluiDuCanvasRendu() {
+        XCTAssertEqual(SceneShape.aspect, portrait, accuracy: 0.0001)
+        XCTAssertNotEqual(SceneShape.aspect, paysage, accuracy: 0.0001,
+                          "le cadre ne doit plus suivre le rapport d'une image ou d'un porteur")
     }
 
     // MARK: - Une publication à plusieurs scènes (#6708)
@@ -239,11 +228,4 @@ final class PostDetailSceneFramingTests: XCTestCase {
         XCTAssertLessThanOrEqual(j.maxY, c.minY + 0.5, "« J'aime » \(j) passe sous le composer \(c)")
     }
 
-    func test_uneScene9x16_nechangePasDeRapport() {
-        let texte = ObjectV3(id: "t", kind: .text, anchor: .free(x: 0.5, y: 0.5), plane: .content,
-                             z: 1, transform: TransformV3(), payload: ["text": .string("Bonjour")])
-        XCTAssertEqual(PostDetailSceneFraming.ratio(of: effets(SceneV3(id: "s1", objects: [texte]))),
-                       portrait, accuracy: 0.0001)
-        XCTAssertEqual(PostDetailSceneFraming.ratio(of: nil), portrait, accuracy: 0.0001)
-    }
 }

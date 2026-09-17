@@ -47,17 +47,17 @@ nonisolated struct GallerySceneItem: Equatable {
     /// citation désigne, et lui qu'une citation rouvre.
     let mediaId: String?
     /// Le rapport largeur / hauteur auquel la scène se cadre SUR UNE CARTE —
-    /// voir `PostGalleryLot.sceneAspect`. Une scène qui n'est qu'une image y
-    /// prend le rapport de son image : on y ouvre la photo.
+    /// TOUJOURS `SceneShape.aspect` depuis #6896/#6904 (voir
+    /// `PostGalleryLot.sceneAspect`) : une scène qui n'est qu'une image ne se
+    /// cadre plus au rapport de cette image.
     let aspect: CGFloat
 
     /// **Le rapport du CANVAS lui-même** (#6806) — celui auquel la scène se
-    /// présente en PLEIN CADRE, où ce qu'on ouvre est la scène et non la photo.
-    ///
-    /// Les deux voyagent ensemble parce que la question n'a pas UNE réponse :
-    /// elle en a une par SURFACE. Ne porter que `aspect` obligeait le plein
-    /// écran à se contenter du rapport d'une carte — et une scène-image carrée
-    /// y laissait 237,7 pt de sol en haut et en bas, mesurés au simulateur.
+    /// présente en PLEIN CADRE. Identique à `aspect` depuis #6896/#6904 (les
+    /// deux sont TOUJOURS `SceneShape.aspect`) : le champ survit pour que
+    /// `mediaRatio(of:scenes:presentation:)` garde un site unique par
+    /// présentation, `surface(inFullFrame:)`, plutôt que de brancher sur
+    /// `presentation.isFull` lui-même.
     let canvasAspect: CGFloat
     /// La scène a-t-elle quelque chose à jouer — vidéo, son, animation,
     /// transition, ou le son de fond du document ? Seule une scène qui bouge
@@ -98,6 +98,11 @@ nonisolated struct GallerySceneItem: Equatable {
     /// où l'un des deux changerait. Quand un objet sort de l'image, la bande
     /// redevient une surface de composition (#4519) — l'auteur y a posé quelque
     /// chose — et elle reste peinte.
+    ///
+    /// **Superseded le 2026-09-17 (#6896, lot #6904)** : la scène ne se cadre
+    /// plus jamais au rapport de son image, cardée ou en plein cadre — les
+    /// bandes n'en sortent donc plus, et cette propriété rend TOUJOURS
+    /// `false`. L'historique ci-dessus reste pour la trace du raisonnement.
     var servesLetterboxFill: Bool {
         surface(inFullFrame: false).paintsLetterbox
     }
@@ -124,12 +129,11 @@ nonisolated struct GallerySceneItem: Equatable {
     /// Rendre les deux d'un seul appel est ce qui interdit la divergence : on
     /// ne peut plus changer le cadre en oubliant le fond.
     func surface(inFullFrame: Bool) -> SceneSurface {
-        let imageAspect = scene.flatMap(SceneFraming.imageAspect(scene:))
-        if inFullFrame {
-            return SceneSurface(aspect: canvasAspect, paintsLetterbox: true)
-        }
-        return SceneSurface(aspect: imageAspect ?? canvasAspect,
-                            paintsLetterbox: imageAspect == nil)
+        // **La scène est TOUJOURS 9:16, cardée ou en plein cadre** (#6896,
+        // #6904) : `inFullFrame` ne fait plus varier le rapport présenté, et
+        // le canvas ne peint plus jamais de bandes — `SceneShape.layout(...)`
+        // dit qui peint le hors-champ (le plateau).
+        SceneSurface(aspect: SceneShape.aspect, paintsLetterbox: false)
     }
 
     static func == (gauche: GallerySceneItem, droite: GallerySceneItem) -> Bool {
@@ -310,20 +314,14 @@ nonisolated struct PostGalleryLot {
 
     /// **Le rapport auquel une scène se présente — point UNIQUE de la galerie.**
     ///
-    /// La loi partagée de présentation d'une scène (`SceneFraming.presentationAspect`,
-    /// #6697, fusionnée par #6736) : une scène qui n'est qu'une image PLUS LARGE
-    /// qu'elle se présente au rapport de son image, toute autre au rapport de son
-    /// canvas. Le canvas vient de la loi du porteur (`SceneFullscreenFraming.ratio`
-    /// — `carrierAspect`, sinon le portrait), comme le détail d'un post le lui
-    /// remet ; la règle n'est pas recopiée ici, elle est appelée.
-    ///
-    /// Un index hors du document garde le repli portrait de la loi du porteur :
-    /// un pager monte ses voisines, et une page hors bornes existe le temps d'une
-    /// transition.
+    /// TOUJOURS `SceneShape.aspect` (9:16, #6896/#6904) : la scène ne se
+    /// présente plus au rapport d'une image ni d'un `carrierAspect` logé —
+    /// ceux-là ne gouvernent que la manière dont un fond se POSE dans les
+    /// 9:16 (`SceneShape.mediaBand`), jamais le cadre présenté. L'index et le
+    /// document restent des paramètres pour que la signature ne change pas
+    /// au fil des surfaces qui l'appellent — aucun des deux n'est plus lu.
     static func sceneAspect(_ document: CanvasV3, sceneIndex: Int) -> CGFloat {
-        let canvas = SceneFullscreenFraming.ratio(of: document, sceneIndex: sceneIndex)
-        guard document.scenes.indices.contains(sceneIndex) else { return canvas }
-        return SceneFraming.presentationAspect(scene: document.scenes[sceneIndex], canvasAspect: canvas)
+        SceneShape.aspect
     }
 
     // MARK: - La publication
@@ -371,7 +369,7 @@ nonisolated struct PostGalleryLot {
             carrier: carrier,
             mediaId: media?.id,
             aspect: sceneAspect(document, sceneIndex: index),
-            canvasAspect: SceneFullscreenFraming.ratio(of: document, sceneIndex: index),
+            canvasAspect: SceneShape.aspect,
             // Le son de fond appartient au DOCUMENT, pas à une scène : il fait
             // jouer chacune d'elles.
             moves: SceneMotion.isCinematic(scene) || document.sound != nil,

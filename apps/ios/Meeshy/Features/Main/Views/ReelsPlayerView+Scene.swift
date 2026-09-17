@@ -100,8 +100,16 @@ struct ReelSceneView: View {
             .onPlaybackTime { seconds in
                 clock.progress = ReelSceneProgress.fraction(elapsed: seconds, duration: duration)
             }
-            .aspectRatio(SceneFullscreenFraming.ratio(of: document, sceneIndex: 0), contentMode: .fit)
+            // **Le réel est l'IMMERSIF** (`SceneShape.Fullscreen.immersive`,
+            // #6896/#6904) : la scène occupe le viewport ENTIER, son cadre en
+            // DÉBORDE au besoin — jamais de bande noire sur un réel. `.fit`
+            // sur le rapport du PORTEUR laissait des bandes dès que la scène
+            // n'avait pas le rapport de l'écran ; `.fill` sur le rapport FIXE
+            // de la scène (`SceneShape.aspect`) couvre toujours, et le
+            // contenu visible reste centré.
+            .aspectRatio(SceneShape.aspect, contentMode: .fill)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
             .onReceive(
                 CallManager.shared.$callState
                     .map(\.isActive)
