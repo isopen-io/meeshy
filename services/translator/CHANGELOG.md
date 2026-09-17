@@ -1,5 +1,20 @@
 # @meeshy/translator
 
+## 1.57.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - GET /conversations charge enfin description et réglages de conteneur (#6908)
+  - un message renvoyé avec une clé NEUVE ne se dédouble plus (#6910)
+  - une publication v:3 se lit dans le fil avec tous ses objets, chaque tuile montre la scène de sa slide
+  - core-list.ts passe de 12 à 0 usages de `any` (#3679) (#6909)
+  - AttachmentTranslateService.ts passe de 13 à 0 usages de `any` (#3679) (#6907)
+  - les cases de grille masquent l'image en échec, comme la tuile solo (#6882)
+  - la migration 013 balaie aussi PostMedia (#6390)
+  - /sync serves the direct peer's identity on the conversation row (#6827)
+
 ## 1.56.0
 
 ### Minor Changes
