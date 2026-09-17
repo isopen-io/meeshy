@@ -83,9 +83,12 @@ describe('useRecoverySubmission — anti-flash i18n (namespace unloaded)', () =>
   });
 
   it('surfaces the English rate-limit copy (never French, never raw key)', async () => {
+    // Forme RÉELLE d'un 429 côté gateway : `error` porte le message HUMAIN,
+    // le code de rate-limit voyage à part dans `code` (#6665).
     mockRequestMagicLink.mockResolvedValueOnce({
       success: false,
-      error: 'RATE_LIMITED',
+      error: 'Too many magic link requests. Please try again later.',
+      code: 'RATE_LIMITED',
     });
     const { submission, setError } = makeHook();
 

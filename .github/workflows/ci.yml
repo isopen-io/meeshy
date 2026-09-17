@@ -764,6 +764,16 @@ jobs:
           cd apps/web-v2
           node scripts/check-reels.mjs
 
+      # #6807 — LES MÉDIAS DU FIL ET DES STORIES SE JOUENT. Mesure l'EFFET, pas
+      # la présence d'une balise : le temps doit AVANCER quand on demande la
+      # lecture. Porte ses deux contre-épreuves — l'affiche d'un RÉEL ne monte
+      # aucun élément média (#6457), une story IMAGE reste une image.
+      - name: Gate médias du fil (une vidéo, un son et une story vidéo SE JOUENT)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-feed-media.mjs
+
       - name: Gate états du fil (vide, coupure, échec d'envoi rejouable)
         if: ${{ !cancelled() }}
         run: |
@@ -901,11 +911,26 @@ jobs:
   # TEST: Unit Tests with Coverage (Parallel by package)
   # Minimum coverage threshold: 90%
   # ===========================================================================
+  # #6884 — `timeout-minutes` était UNIQUE (20) pour toute la matrice, alors
+  # que les paquets n'ont pas le même poids : `Test gateway` tenait avec
+  # moins de 2 min de marge sur 20 (18 min 05 s / 18 min 33 s mesurés sur
+  # `dev`), et toute variance (ex. #6477, montée de `vitest`) le fait
+  # franchir le seuil. Un dépassement de `timeout-minutes` DE JOB tue le job
+  # entier et TOUTES ses étapes en cours — GitHub rend alors `cancelled`,
+  # indiscernable d'une annulation par concurrence (`cancel-in-progress`
+  # ci-dessus). `timeout-minutes` posé sur une ÉTAPE, en revanche, échoue
+  # cette étape avec `failure` et un message explicite (« has timed out
+  # after Nm ») SANS attendre le budget de job — c'est déjà le patron des
+  # jobs `test-python`/`test-audio-pipeline` de ce fichier. `testTimeoutMinutes`
+  # ci-dessous porte donc le budget RÉEL (celui qu'on veut voir nommé), et
+  # `timeoutMinutes` (job) reste un plafond de secours nettement au-dessus —
+  # relevé pour `gateway` seul (30 au lieu de 20), les autres paquets gardant
+  # le budget historique.
   test:
     name: Test ${{ matrix.package.name }}
     runs-on: ubuntu-latest
     needs: quality
-    timeout-minutes: 20
+    timeout-minutes: ${{ matrix.package.timeoutMinutes }}
     strategy:
       fail-fast: false
       matrix:
@@ -913,18 +938,28 @@ jobs:
           - name: shared
             path: packages/shared
             filter: '@meeshy/shared'
+            timeoutMinutes: 20
+            testTimeoutMinutes: 15
           - name: web
             path: apps/web
             filter: '@meeshy/web'
+            timeoutMinutes: 20
+            testTimeoutMinutes: 15
           - name: gateway
             path: services/gateway
             filter: '@meeshy/gateway'
+            timeoutMinutes: 30
+            testTimeoutMinutes: 25
           - name: agent
             path: services/agent
             filter: '@meeshy/agent'
+            timeoutMinutes: 20
+            testTimeoutMinutes: 15
           - name: web-v2
             path: apps/web-v2
             filter: '@meeshy/web-v2'
+            timeoutMinutes: 20
+            testTimeoutMinutes: 15
 
     steps:
       - name: Checkout
@@ -999,6 +1034,7 @@ jobs:
 
       - name: Run tests with coverage (bun)
         if: env.PACKAGE_MANAGER == 'bun'
+        timeout-minutes: ${{ matrix.package.testTimeoutMinutes }}
         run: |
           # Web tests must use Jest (configured with Next.js)
           if [ "${{ matrix.package.name }}" = "web" ] || [ "${{ matrix.package.name }}" = "web-v2" ]; then
@@ -1011,6 +1047,7 @@ jobs:
 
       - name: Run tests with coverage (pnpm)
         if: env.PACKAGE_MANAGER == 'pnpm'
+        timeout-minutes: ${{ matrix.package.testTimeoutMinutes }}
         run: pnpm run test:coverage --filter=${{ matrix.package.filter }}
 
       - name: Upload coverage
@@ -1926,18 +1963,18 @@ jobs:
           cd services/agent
           pnpm run build
 
-      # Build web frontend (like in Dockerfiles)
-      - name: Build web frontend (bun)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: |
-          cd apps/web
-          bun run build
-
-      - name: Build web frontend (pnpm)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        run: |
-          cd apps/web
-          pnpm run build
+      # LE LEGACY `apps/web` N'EST PLUS CONSTRUIT ICI (directive porteur
+      # 2026-09-16). meeshy.me sert `apps/web-v2` depuis le 2026-09-15 : bâtir
+      # le legacy à chaque PR payait plusieurs minutes de CI pour un artefact
+      # que plus rien ne sert. Son image de production reste publiée par
+      # `release.yml` (tag `v*`) — le retour arrière garde donc une image, ce
+      # qui n'a jamais dépendu de cette étape-ci.
+      #
+      # Ce qui EXERCE encore `apps/web` reste en place et le doit : le job
+      # `Test web`, et les cliquets de dette `Lint (apps/web — debt ratchet)` et
+      # `Type-check (apps/web — debt ratchet)`. Ils mesurent une dette dont la
+      # référence ne doit pas dériver tant que le code vit dans le dépôt —
+      # retirer un cliquet est une décision distincte de retirer un build.
 
   # ===========================================================================
   # SUMMARY

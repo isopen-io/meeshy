@@ -110,6 +110,67 @@ describe('decodeConversation', () => {
   });
 });
 
+/**
+ * #6826 — `decodeConversation` N'APPLIQUAIT AUCUN `sansNull` : le seul
+ * champ défait était `lastMessage` (destructuré à la main). Les 37 AUTRES
+ * champs optionnels de `Conversation` traversaient `...rest` avec leur
+ * `null` intact — y compris `title`, `currentUserJoinedAt` et `lastMessageAt`,
+ * dont le doc-comment du décodeur promettait pourtant qu'ils étaient
+ * « revit[s] ». `dateFieldOf('currentUserJoinedAt', null)` rend `{}`, qui ne
+ * RETIRE rien de ce que `...rest` a déjà écrit trois lignes plus haut — le
+ * même piège que #5668 sur `decodeMessage`, jamais porté à `decodeConversation`.
+ *
+ * `currentUserRole` est l'EXCEPTION, dérivée du type
+ * (`conversation.ts:371`, `?: string | null`) : `null` y signifie « le
+ * lecteur n'est pas membre », une distinction que le type pose exprès et que
+ * son décodage ne peut donc pas confondre avec « absent ».
+ */
+describe('decodeConversation — invariant sansNull, SAUF currentUserRole (#6826)', () => {
+  const base: Conversation = {
+    ...conversationDefaults,
+    id: CONVERSATION_ID,
+    type: 'direct',
+    memberCount: 2,
+    participants: [],
+    createdAt: '2026-09-01T08:00:00.000Z' as unknown as Date,
+    updatedAt: '2026-09-08T09:00:00.000Z' as unknown as Date,
+  };
+
+  test('title / currentUserJoinedAt / lastMessageAt servis `null` par la passerelle ⇒ ABSENTS, pas `null`', () => {
+    const withNulls = {
+      ...base,
+      title: null,
+      currentUserJoinedAt: null,
+      lastMessageAt: null,
+      description: null,
+      identifier: null,
+    } as unknown as Conversation;
+    const decoded = decodeConversation(withNulls);
+    expect('title' in decoded).toBe(false);
+    expect('currentUserJoinedAt' in decoded).toBe(false);
+    expect('lastMessageAt' in decoded).toBe(false);
+    expect('description' in decoded).toBe(false);
+    expect('identifier' in decoded).toBe(false);
+  });
+
+  test('currentUserRole: null (le lecteur n’est pas membre) SURVIT — jamais confondu avec absent', () => {
+    const notAMember = { ...base, currentUserRole: null } as unknown as Conversation;
+    const decoded = decodeConversation(notAMember);
+    expect('currentUserRole' in decoded).toBe(true);
+    expect(decoded.currentUserRole).toBeNull();
+  });
+
+  test('currentUserRole ABSENT (la route ne l’a pas calculé) reste ABSENT — pas confondu avec `null`', () => {
+    const decoded = decodeConversation(base);
+    expect('currentUserRole' in decoded).toBe(false);
+  });
+
+  test('currentUserRole avec une vraie valeur traverse intact', () => {
+    const admin = { ...base, currentUserRole: 'admin' } as unknown as Conversation;
+    expect(decodeConversation(admin).currentUserRole).toBe('admin');
+  });
+});
+
 describe('decodeMessage', () => {
   test('revit createdAt, updatedAt, editedAt, deletedAt, expiresAt, pinnedAt, deliveredToAllAt, readByAllAt', () => {
     const raw = {

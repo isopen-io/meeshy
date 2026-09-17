@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { OBJECT_ID_REGEX } from '@meeshy/shared/utils/object-id';
+import { OBJECT_ID_REGEX, OBJECT_ID_PATTERN } from '@meeshy/shared/utils/object-id';
 import { MAX_POST_MEDIA } from '@meeshy/shared/types/attachment';
 import { EMOJI_MAX_LENGTH } from '@meeshy/shared/types/reaction';
 import { utf16Bounded } from '@meeshy/shared/utils/validation-primitives';
@@ -633,6 +633,27 @@ export interface SingleResponse<T> {
 export interface PostParams {
   postId: string;
 }
+
+/**
+ * `schema.params` Ajv partagé par toute route `/posts/:postId…` de ce module
+ * (#6853). Sans lui, un `postId` non conforme — `"stories"`, un slug, une
+ * chaîne vide — n'est rejeté par aucune couche avant le handler ; il retombe
+ * sur un cast Prisma non gardé qui remonte en 500 générique, opaque pour
+ * l'appelant. Posé en `schema.params`, Ajv refuse la requête AVANT le
+ * handler et le gestionnaire d'erreurs global (`schemaValidationErrorResponse`)
+ * la traduit en 400 nommant le champ fautif.
+ *
+ * `additionalProperties: true` (défaut) : ce schéma ne se prononce QUE sur
+ * `postId` — les routes imbriquées (`:commentId`, `:objectId`, `:mediaId`)
+ * gardent leur propre forme, ou son absence, sans qu'on la redéclare ici.
+ */
+export const postIdParamsSchema = {
+  type: 'object',
+  properties: {
+    postId: { type: 'string', pattern: OBJECT_ID_PATTERN },
+  },
+  required: ['postId'],
+} as const;
 
 export interface CommentParams extends PostParams {
   commentId: string;

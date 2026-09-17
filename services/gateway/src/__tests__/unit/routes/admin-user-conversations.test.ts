@@ -389,8 +389,41 @@ describe('GET /admin/users/:userId/reported-messages', () => {
 describe('GET /admin/conversations/:conversationId/messages', () => {
   const REASON = 'Enquête sur un signalement de harcèlement (#9142)';
 
-  it('refuse un rôle non-souverain (ADMIN) — canViewUsers ne suffit plus', async () => {
-    const app = await buildApp(createMockPrisma({}), 'ADMIN');
+  /**
+   * LE SEUIL A CHANGÉ — directive porteur du 2026-09-16 : « permettre aussi
+   * aux ADMIN de pouvoir accéder à ces informations pour le moment ».
+   *
+   * Cette route était le TROISIÈME geste S6 de #4157 c.2 (BIGBOSS seul). Elle
+   * exige désormais la permission `canManageConversations` ET le rang
+   * d'administration (BIGBOSS ou ADMIN). Ce qui n'a PAS bougé : le motif écrit
+   * et la trace — voir les témoins plus bas, inchangés.
+   */
+  it('sert un ADMIN — directive porteur du 2026-09-16', async () => {
+    const app = await buildApp(createMockPrisma({ messages: [], messagesCount: 0 }), 'ADMIN');
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/admin/conversations/conv-1/messages?reason=${encodeURIComponent(REASON)}`,
+      headers: { authorization: 'Bearer x' },
+    });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it('refuse un MODERATOR — il PORTE canManageConversations, il n\'a pas le RANG', async () => {
+    // Le seul témoin qui distingue une garde de RANG d'une garde de
+    // PERMISSION : MODERATOR porte la permission dans la matrice centrale.
+    const app = await buildApp(createMockPrisma({}), 'MODERATOR');
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/admin/conversations/conv-1/messages?reason=${encodeURIComponent(REASON)}`,
+      headers: { authorization: 'Bearer x' },
+    });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it('refuse un AUDIT — ni permission ni rang', async () => {
+    const app = await buildApp(createMockPrisma({}), 'AUDIT');
     const res = await app.inject({
       method: 'GET',
       url: `/api/v1/admin/conversations/conv-1/messages?reason=${encodeURIComponent(REASON)}`,
@@ -463,6 +496,13 @@ describe('GET /admin/conversations/:conversationId/messages', () => {
         isEncrypted: false,
         encryptionMode: null,
         sender: { id: 'pt1', userId: 'u1', type: 'user', displayName: 'Alice', avatar: null, nickname: null, user: { id: 'u1', username: 'alice', displayName: 'Alice', avatar: null } },
+        // #6860 — deux pièces sur un message ORDINAIRE : une image libre, et
+        // un VOCAL déclaré à vue unique SUR LA PIÈCE. Le second cas est celui
+        // qu'une garde lisant le seul message laisserait sortir en clair.
+        attachments: [
+          { id: 'a1', originalName: 'photo.jpg', mimeType: 'image/jpeg', fileSize: 120000, width: 800, height: 600, duration: null, fileUrl: 'https://cdn.test/a1.jpg', thumbnailUrl: 'https://cdn.test/a1-t.jpg', isViewOnce: false, isBlurred: false, effectFlags: 0 },
+          { id: 'a2', originalName: 'note.m4a', mimeType: 'audio/mp4', fileSize: 48000, width: null, height: null, duration: 12, fileUrl: 'https://cdn.test/a2.m4a', thumbnailUrl: null, isViewOnce: true, isBlurred: false, effectFlags: 0 },
+        ],
         _count: { attachments: 2 },
       },
       {
@@ -483,7 +523,12 @@ describe('GET /admin/conversations/:conversationId/messages', () => {
         isEncrypted: false,
         encryptionMode: null,
         sender: { id: 'pt3', userId: 'u3', type: 'user', displayName: 'Carol', avatar: null, nickname: null, user: { id: 'u3', username: 'carol', displayName: 'Carol', avatar: null } },
-        _count: { attachments: 0 },
+        // #6860 — une pièce ORDINAIRE sur un message PROTÉGÉ. Elle ne déclare
+        // rien elle-même : seule la protection du MESSAGE doit la retenir.
+        attachments: [
+          { id: 'a3', originalName: 'joint.png', mimeType: 'image/png', fileSize: 9000, width: 100, height: 100, duration: null, fileUrl: 'https://cdn.test/a3.png', thumbnailUrl: 'https://cdn.test/a3-t.png', isViewOnce: false, isBlurred: false, effectFlags: 0 },
+        ],
+        _count: { attachments: 1 },
       },
       {
         id: 'm1',
@@ -570,6 +615,78 @@ describe('GET /admin/conversations/:conversationId/messages', () => {
     expect(body.data[0].attachmentCount).toBe(2);
     expect(body.pagination).toMatchObject({ total: 2, offset: 0, limit: 30, hasMore: false });
     await app.close();
+  });
+
+  /**
+   * #6860 — LES PIÈCES VOYAGENT, ET LEUR PROTECTION SE LIT AUX DEUX NIVEAUX.
+   *
+   * La route servait `attachmentCount` et rien d'autre. Ces trois témoins
+   * ferment les trois cas que la composition doit distinguer : la pièce libre
+   * sur un message libre, la pièce qui se protège ELLE-MÊME, et la pièce
+   * ordinaire qu'un message protégé retient.
+   */
+  async function piecesServies(): Promise<Record<string, Record<string, unknown>>> {
+    const prisma = createMockPrisma({ messages: messagesFixture(), messagesCount: 2 });
+    const app = await buildApp(prisma, 'BIGBOSS');
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/admin/conversations/conv-1/messages?reason=${encodeURIComponent(REASON)}`,
+      headers: { authorization: 'Bearer x' },
+    });
+    expect(res.statusCode).toBe(200);
+    const messages = res.json().data as Array<Record<string, unknown>>;
+    const parId: Record<string, Record<string, unknown>> = {};
+    for (const message of messages) {
+      for (const piece of (message.attachments ?? []) as Array<Record<string, unknown>>) {
+        parId[String(piece.id)] = piece;
+      }
+    }
+    await app.close();
+    return parId;
+  }
+
+  it('sert les PIÈCES de chaque message, et non plus leur seul compte', async () => {
+    const pieces = await piecesServies();
+
+    // Une image libre sur un message libre : elle voyage entière.
+    expect(pieces.a1).toMatchObject({
+      id: 'a1',
+      originalName: 'photo.jpg',
+      mimeType: 'image/jpeg',
+      fileUrl: 'https://cdn.test/a1.jpg',
+      thumbnailUrl: 'https://cdn.test/a1-t.jpg',
+      isProtected: false,
+    });
+    // La durée d'un vocal fait partie de ce qu'un administrateur constate.
+    expect(pieces.a2?.duration).toBe(12);
+  });
+
+  it("retient une pièce qui se déclare à vue unique SUR UN MESSAGE ORDINAIRE — le cas qu'une garde lisant le seul message laisse sortir", async () => {
+    const pieces = await piecesServies();
+
+    expect(pieces.a2).toBeDefined();
+    expect(pieces.a2?.isProtected).toBe(true);
+    expect(pieces.a2?.fileUrl).toBeNull();
+    expect(pieces.a2?.thumbnailUrl).toBeNull();
+    // La ligne RESTE : nom, poids et durée sont des faits que
+    // l'administration a le droit de constater sans ouvrir le fichier.
+    expect(pieces.a2?.originalName).toBe('note.m4a');
+    expect(pieces.a2?.fileSize).toBe(48000);
+
+    // Contraste indispensable : sans lui, ce témoin passerait aussi si la
+    // route masquait TOUTES les pièces.
+    expect(pieces.a1?.fileUrl).toBe('https://cdn.test/a1.jpg');
+  });
+
+  it('retient les pièces ORDINAIRES d\'un message protégé — la garde du message couvre ce qu\'il porte', async () => {
+    const pieces = await piecesServies();
+
+    // `a3` ne déclare aucune protection ; seul son message est à vue unique.
+    expect(pieces.a3).toBeDefined();
+    expect(pieces.a3?.isProtected).toBe(true);
+    expect(pieces.a3?.fileUrl).toBeNull();
+    expect(pieces.a3?.thumbnailUrl).toBeNull();
+    expect(pieces.a3?.originalName).toBe('joint.png');
   });
 
   it('trace le geste dans AdminAuditLog, APRÈS la lecture réussie, avec le motif écrit', async () => {

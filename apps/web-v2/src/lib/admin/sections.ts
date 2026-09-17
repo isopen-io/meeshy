@@ -67,6 +67,7 @@ export type AdminPermissionKey = keyof AdminPermissions;
 export type AdminSectionLabelKey =
   | 'admin.nav.dashboard'
   | 'admin.nav.users'
+  | 'admin.nav.conversations'
   | 'admin.nav.moderation'
   | 'admin.nav.audit'
   | 'admin.nav.analytics'
@@ -83,7 +84,7 @@ export type AdminSectionLabelKey =
  * compile que sur une route qui existe, et la tuile ne peut plus viser un autre
  * écran que le sien.
  */
-export type AdminRoute = 'admin' | 'adminUsers';
+export type AdminRoute = 'admin' | 'adminUsers' | 'adminConversations';
 
 export type AdminSection = {
   readonly id: string;
@@ -92,6 +93,26 @@ export type AdminSection = {
   /** La route que la v2 sert pour cette section, ou `null` : non portée, donc masquée. */
   readonly route: AdminRoute | null;
   readonly permission: AdminPermissionKey;
+  /**
+   * **RÉSERVÉE AU RANG D'ADMINISTRATION** (#6862) — une section dont la route
+   * exige BIGBOSS ou ADMIN côté passerelle (`requireAdminRank()`), en plus de
+   * sa permission.
+   *
+   * Directive porteur du 2026-09-16 : « permettre aussi aux ADMIN de pouvoir
+   * accéder à ces informations pour le moment ».
+   *
+   * Pourquoi un champ DE PLUS, quand une permission existe déjà : parce que
+   * `canManageConversations` est aussi portée par **MODERATOR** (matrice
+   * centrale de la passerelle). Filtrer sur la seule permission offrirait donc
+   * la tuile à un MODERATOR, que la passerelle refuserait ensuite — un
+   * contrôle voué au 403, que la loi 4 interdit au même titre qu'un contrôle
+   * inerte.
+   *
+   * Le rang vient de `GET /me/permissions`, qui sert `role` À CÔTÉ de la
+   * matrice : c'est le rôle SERVI, jamais déduit de la session (`SessionUser`
+   * ne projette pas `role`, délibérément).
+   */
+  readonly adminRankOnly?: boolean;
   readonly glyph: string;
 };
 
@@ -102,6 +123,14 @@ export type ServedAdminSection = AdminSection & { readonly route: AdminRoute };
 export const ADMIN_SECTIONS: readonly AdminSection[] = [
   { id: 'dashboard', labelKey: 'admin.nav.dashboard', route: 'admin', permission: 'canAccessAdmin', glyph: '📊' },
   { id: 'users', labelKey: 'admin.nav.users', route: 'adminUsers', permission: 'canManageUsers', glyph: '👥' },
+  {
+    id: 'conversations',
+    labelKey: 'admin.nav.conversations',
+    route: 'adminConversations',
+    permission: 'canManageConversations',
+    adminRankOnly: true,
+    glyph: '💬',
+  },
   { id: 'moderation', labelKey: 'admin.nav.moderation', route: null, permission: 'canModerateContent', glyph: '🛡️' },
   { id: 'audit', labelKey: 'admin.nav.audit', route: null, permission: 'canViewAuditLogs', glyph: '📜' },
   { id: 'analytics', labelKey: 'admin.nav.analytics', route: null, permission: 'canViewAnalytics', glyph: '📈' },
@@ -123,13 +152,45 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
  * de filtrer sa barre), et la seule qui empêche un rôle intermédiaire d'entrer
  * par une section isolée.
  */
-export function visibleAdminSections(permissions: AdminPermissions | null): readonly ServedAdminSection[] {
+export function visibleAdminSections(
+  permissions: AdminPermissions | null,
+  /**
+   * Le rôle **servi** par `GET /me/permissions`, à côté de la matrice — jamais
+   * déduit de la session, que `SessionUser` ne projette pas.
+   *
+   * OPTIONNEL, et son absence est FERMANTE : un appelant qui ne le passe pas
+   * (ou qui ne l'a pas encore reçu) ne voit aucune section souveraine. C'est
+   * le seul défaut sûr — l'inverse offrirait la tuile pendant le chargement,
+   * puis la retirerait, ce qu'un lecteur lit comme un droit qu'on lui reprend.
+   */
+  role?: string | null,
+): readonly ServedAdminSection[] {
   if (!canEnterAdmin(permissions)) return [];
 
+  const rangAdministration = RANGS_ADMINISTRATION.has(role ?? '');
+
   return ADMIN_SECTIONS.filter(
-    (section): section is ServedAdminSection => section.route !== null && permissions?.[section.permission] === true,
+    (section): section is ServedAdminSection =>
+      section.route !== null &&
+      permissions?.[section.permission] === true &&
+      // Une section de ce genre mène à une route qui exige AUSSI le rang :
+      // l'offrir à un MODERATOR, qui porte pourtant la permission, le
+      // conduirait à un écran qui ne peut lui rendre que des 403.
+      (section.adminRankOnly !== true || rangAdministration),
   );
 }
+
+/**
+ * Les rôles que la passerelle admet en rang d'administration
+ * (`requireAdminRank()`, `middleware/authorize.ts`).
+ *
+ * Écrits ici une fois, et comparés au rôle SERVI. Ce module ne connaît aucune
+ * autre hiérarchie : la matrice de permissions reste la seule loi d'accès,
+ * `adminRankOnly` en étant l'unique exception — parce qu'elle n'est PAS
+ * exprimable en permissions de domaine (MODERATOR porte
+ * `canManageConversations` sans avoir le rang).
+ */
+const RANGS_ADMINISTRATION: ReadonlySet<string> = new Set(['BIGBOSS', 'ADMIN']);
 
 /**
  * **LA PORTE DE L'ESPACE, et elle seule** — ce que l'écran `/admin`, la rangée

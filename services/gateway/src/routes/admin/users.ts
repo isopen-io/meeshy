@@ -32,9 +32,11 @@ import {
   type MessageProtectionContext
 } from './media-protection';
 import { registerConversationMessagesSovereignRoute } from './conversation-messages-sovereign';
+import { registerConversationsSovereignRoute } from './conversations-sovereign';
 import { registerUserReportsRoutes } from './user-reports';
 import { registerUserWriteRoutes } from './users-write';
 import { registerUserBanRoutes } from './user-bans';
+import { registerUserSessionRoutes } from './user-sessions';
 import { BanService } from '../../services/admin/ban.service';
 import { validatePagination, buildPaginationMeta } from '../../utils/pagination';
 import { withAnonymousParticipantCounts } from '../../utils/share-link-participant-counts';
@@ -137,6 +139,10 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
   // Le bannissement (#3719) est un geste DISCRET, pas un champ du compte —
   // il ne rejoint pas la loi des champs, il porte sa propre adresse.
   registerUserBanRoutes(fastify, { banService, userManagementService, userAuditService });
+
+  // Historique de connexion (#6821) : `UserSession` / `SecurityEvent` étaient
+  // écrits à chaque connexion et n'avaient aucun lecteur sous `routes/admin/`.
+  registerUserSessionRoutes(fastify, { userAuditService });
 
   /**
    * GET /admin/users - Liste tous les utilisateurs (avec sanitization)
@@ -434,7 +440,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       }
 
       // Supprimer l'utilisateur (soft delete)
-      await userManagementService.deleteUser(request.params.userId);
+      await userManagementService.deleteUser(request.params.userId, authContext.registeredUser!.id);
 
       // Log d'audit
       await userAuditService.logDeleteUser(
@@ -449,6 +455,49 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
     } catch (error) {
       logError(fastify.log, 'Error deleting user', error);
       sendInternalError(reply, 'Internal server error', { message: 'Failed to delete user' });
+    }
+  });
+
+  /**
+   * POST /admin/users/:userId/restore - Restaurer un utilisateur supprimé
+   * (BIGBOSS & ADMIN uniquement) — la JUMELLE du DELETE ci-dessus (#6822) :
+   * `UserManagementService.restoreUser` existait sans aucun appelant.
+   */
+  fastify.post<{
+    Params: { userId: string };
+  }>('/admin/users/:userId/restore', {
+    preHandler: [fastify.authenticate, requireUserDeleteAccess, requireHierarchy({ param: 'userId' })]
+  }, async (request, reply) => {
+    try {
+      const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
+      const adminRole = authContext.registeredUser!.role as UserRoleEnum;
+
+      const targetUser = await userManagementService.getUserById(request.params.userId);
+
+      if (!targetUser) {
+        sendNotFound(reply, 'User not found', { message: 'The requested user does not exist' });
+        return;
+      }
+
+      if (!permissionsService.canModifyUser(adminRole, targetUser.role as UserRoleEnum)) {
+        sendForbidden(reply, 'Insufficient permissions to restore this user', { message: 'Access denied' });
+        return;
+      }
+
+      const restored = await userManagementService.restoreUser(request.params.userId);
+
+      await userAuditService.logRestoreUser(
+        authContext.registeredUser!.id,
+        request.params.userId,
+        undefined,
+        request.ip,
+        request.headers['user-agent']
+      );
+
+      sendSuccess(reply, sanitizationService.sanitizeUser(restored, adminRole), { message: 'User restored successfully' });
+    } catch (error) {
+      logError(fastify.log, 'Error restoring user', error);
+      sendInternalError(reply, 'Internal server error', { message: 'Failed to restore user' });
     }
   });
 
@@ -901,4 +950,16 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
   // `conversation-messages-sovereign.ts`, une unité nommable à part entière
   // plutôt qu'une tranche de plus dans ce fichier déjà au plafond de taille.
   registerConversationMessagesSovereignRoute(fastify);
+
+  // GET /admin/conversations — le LISTING de l'instance (#6861), quatrième
+  // geste souverain du dépôt. Monté ici, à côté de son frère, parce que c'est
+  // ce module qui sert déjà `/admin/conversations/:id/participants` et
+  // `/admin/conversations/:id/messages` : les trois adresses d'un même
+  // préfixe se montent ensemble, sinon la prochaine se cherche.
+  //
+  // Le geste est SOUVERAIN pour une raison distincte de celle de son frère :
+  // celui-ci garde un CONTENU, celui-là garde un INVENTAIRE. Savoir qui parle
+  // à qui, depuis quand et dans quels groupes est une lecture de la vie privée
+  // de TOUS les membres — pas la fiche d'un seul, que `canViewUsers` ouvre.
+  registerConversationsSovereignRoute(fastify);
 }

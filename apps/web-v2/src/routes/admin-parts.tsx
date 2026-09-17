@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 
 import { CHROME_ACTION_HIT_CLASS, ChromeActionDisc } from '@/components/chrome-action';
 import { Glyph } from '@/components/glyph';
+import { translateAdmin } from '@/lib/i18n-admin-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { Link } from '@/routes/route-table';
@@ -73,10 +74,10 @@ export function AdminDenied({ language }: { readonly language: InterfaceLanguage
     <div className="grid flex-1 place-items-center p-6 text-center">
       <div className="grid gap-3">
         <p className="text-screen font-bold" style={{ color: INK }}>
-          {translate(language, 'admin.denied.title')}
+          {translateAdmin(language, 'admin.denied.title')}
         </p>
         <p className="text-caption" style={{ color: INK2 }}>
-          {translate(language, 'admin.denied.message')}
+          {translateAdmin(language, 'admin.denied.message')}
         </p>
         <Link
           to="list"

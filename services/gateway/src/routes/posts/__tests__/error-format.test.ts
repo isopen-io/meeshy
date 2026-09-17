@@ -168,6 +168,23 @@ async function buildApp(authenticated: boolean): Promise<FastifyInstance> {
   (app as any).socialEvents = null;
   (app as any).notificationService = null;
 
+  // Reproduit la SEULE branche de `server.ts#setErrorHandler` pertinente ici —
+  // le refus de schéma Ajv (#6853) — sans réimporter tout le gestionnaire
+  // global (CORS, hiérarchie d'erreurs typées…), hors du périmètre de ce
+  // fichier. Sans elle, un refus de `schema.params` échappe sous la forme PAR
+  // DÉFAUT de Fastify (`{statusCode, error:'Bad Request', message}`, sans
+  // `success`), que ce harnais léger ne pose jamais lui-même : le témoin
+  // attesterait un contrat que la production ne sert pas.
+  const { schemaValidationErrorResponse } = await import('../../../utils/schema-validation-error');
+  app.setErrorHandler(async (error, _request, reply) => {
+    const schemaRefusal = schemaValidationErrorResponse(error);
+    if (schemaRefusal) {
+      const { statusCode: refusStatus, ...corpsRefus } = schemaRefusal;
+      return reply.code(refusStatus).send(corpsRefus);
+    }
+    throw error;
+  });
+
   const requiredAuth = buildAuthMiddleware(authenticated ? 'user-123' : undefined);
   const optionalAuth = buildAuthMiddleware(authenticated ? 'user-123' : undefined);
 
@@ -233,7 +250,11 @@ describe('posts routes — error response format', () => {
   });
 
   it('core: should return structured error on 404 for unknown post (GET /posts/:postId)', async () => {
-    const resp = await authApp.inject({ method: 'GET', url: '/posts/nonexistent123456789012' });
+    // Forme ObjectId VALIDE mais inconnue (#6853) : le fixture historique
+    // (`nonexistent123456789012`, 23 caractères non-hex) est désormais rejeté
+    // en 400 par `postIdParamsSchema` avant d'atteindre le handler — ce test
+    // vise le 404 « post absent », pas le 400 « id malformé » couvert plus bas.
+    const resp = await authApp.inject({ method: 'GET', url: '/posts/aaaaaaaaaaaaaaaaaaaaaaaa' });
     expect(resp.statusCode).toBe(404);
     const body: ErrorBody = resp.json();
     assertErrorShape(body);
@@ -303,5 +324,51 @@ describe('posts routes — error response format', () => {
     const body: ErrorBody = resp.json();
     assertErrorShape(body);
     expect(body.error).toBe('Post not found');
+  });
+
+  // ── postId format validation (#6853) ─────────────────────────────────────
+  //
+  // `GET /posts/stories` tombait dans `/posts/:postId` avec `postId =
+  // "stories"` — une chaîne qui n'est pas un ObjectId de 24 caractères
+  // hexadécimaux — et le cast Prisma non gardé remontait en 500 générique.
+  // `postIdParamsSchema` (`routes/posts/types.ts`) le refuse désormais en 400
+  // AVANT le handler, sur `/posts/:postId` et ses voisins qui appellent
+  // directement Prisma/`PostService` sans passer par une porte d'audience
+  // déjà gardée par `isValidObjectId` (like/unlike, bookmark, share, les
+  // comptent parmi les « voisins » déjà sûrs et restent hors de ce témoin).
+  //
+  // La classe, pas seulement `"stories"` : un slug court, une chaîne trop
+  // longue, et une chaîne de la bonne LONGUEUR mais hors alphabet hexadécimal
+  // (24 caractères, un `g` non-hex) — celle-ci est le cas qu'un simple
+  // contrôle de longueur laisserait passer.
+  const MALFORMED_POST_IDS: readonly [id: string, why: string][] = [
+    ['stories', 'le cas mesuré en production'],
+    ['abc', 'trop court'],
+    ['a'.repeat(30), 'trop long'],
+    ['g'.repeat(24), '24 caractères mais hors alphabet hexadécimal'],
+  ];
+
+  const ROUTES_WITH_POST_ID: readonly [label: string, method: string, buildUrl: (id: string) => string, body: unknown][] = [
+    ['GET /posts/:postId', 'GET', (id) => `/posts/${id}`, undefined],
+    ['PUT /posts/:postId', 'PUT', (id) => `/posts/${id}`, {}],
+    ['DELETE /posts/:postId', 'DELETE', (id) => `/posts/${id}`, undefined],
+    ['POST /posts/:postId/translate', 'POST', (id) => `/posts/${id}/translate`, { targetLanguage: 'en' }],
+    ['POST /posts/:postId/pin', 'POST', (id) => `/posts/${id}/pin`, undefined],
+    ['DELETE /posts/:postId/pin', 'DELETE', (id) => `/posts/${id}/pin`, undefined],
+    ['GET /posts/:postId/views', 'GET', (id) => `/posts/${id}/views`, undefined],
+    ['GET /posts/:postId/interactions', 'GET', (id) => `/posts/${id}/interactions`, undefined],
+    ['POST /posts/:postId/republish', 'POST', (id) => `/posts/${id}/republish`, undefined],
+    ['POST /posts/:postId/repost', 'POST', (id) => `/posts/${id}/repost`, {}],
+  ];
+
+  describe.each(ROUTES_WITH_POST_ID)('%s — postId non conforme', (_label, method, buildUrl, body) => {
+    it.each(MALFORMED_POST_IDS)('rend 400 nommant le champ, jamais 500 (%s — %s)', async (malformedId) => {
+      const resp = await authApp.inject({ method: method as 'GET' | 'POST' | 'PUT' | 'DELETE', url: buildUrl(malformedId), body });
+      expect(resp.statusCode).toBe(400);
+      const parsed = resp.json();
+      expect(parsed.success).toBe(false);
+      expect(parsed.code).toBe('VALIDATION_ERROR');
+      expect(parsed.details?.some((d: { field: string }) => d.field === 'postId')).toBe(true);
+    });
   });
 });

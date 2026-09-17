@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Sheet } from '@/components/sheet';
 import { GENERATED_PASSWORD_LENGTH, generateStrongPassword, resetAdminUserPassword } from '@/lib/api/admin-user-password';
 import { apiDeps } from '@/lib/api/deps';
+import { translateAdmin } from '@/lib/i18n-admin-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { portailDuNavigateur, type PortailPartage } from '@/lib/view/invitation';
@@ -68,7 +69,7 @@ export function AdminUserPasswordSheet({
     try {
       await portail.copier(motDePasse);
       setCopie('copied');
-      onAnnounce(translate(language, 'admin.password.copied'));
+      onAnnounce(translateAdmin(language, 'admin.password.copied'));
     } catch {
       setCopie('failed');
     }
@@ -80,18 +81,18 @@ export function AdminUserPasswordSheet({
     const resultat = await resetAdminUserPassword({ ...apiDeps, userId, newPassword: motDePasse });
     setEnvoi(false);
 
-    onAnnounce(translate(language, resultat.ok ? 'admin.password.done' : 'admin.password.failed'));
+    onAnnounce(translateAdmin(language, resultat.ok ? 'admin.password.done' : 'admin.password.failed'));
     if (resultat.ok) onClose();
   }
 
   return (
-    <Sheet title={translate(language, 'admin.password.title')} onClose={onClose}>
+    <Sheet title={translateAdmin(language, 'admin.password.title')} onClose={onClose}>
       <div className="grid gap-4 px-4 pb-6">
         <p
           className="rounded-card px-4 py-3 text-caption"
           style={{ backgroundColor: 'color-mix(in srgb, var(--color-danger) 10%, transparent)', color: 'var(--color-danger)' }}
         >
-          {translate(language, 'admin.password.warn')}
+          {translateAdmin(language, 'admin.password.warn')}
         </p>
 
         <div className="grid gap-2">
@@ -103,17 +104,17 @@ export function AdminUserPasswordSheet({
             {motDePasse}
           </p>
           <p className="text-caption" style={{ color: INK2 }}>
-            {translate(language, 'admin.password.generated')}
+            {translateAdmin(language, 'admin.password.generated')}
           </p>
         </div>
 
         <ActionButton tone="secondary" onClick={() => void copier()}>
-          {translate(language, copie === 'copied' ? 'admin.password.copied' : 'admin.password.copy')}
+          {translateAdmin(language, copie === 'copied' ? 'admin.password.copied' : 'admin.password.copy')}
         </ActionButton>
 
         <div className="grid gap-2 pt-2">
           <ActionButton tone="danger" disabled={envoi} onClick={() => void appliquer()}>
-            {translate(language, 'admin.password.apply')}
+            {translateAdmin(language, 'admin.password.apply')}
           </ActionButton>
           <ActionButton tone="secondary" onClick={onClose}>
             {translate(language, 'common.cancel')}

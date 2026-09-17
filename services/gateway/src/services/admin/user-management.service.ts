@@ -475,14 +475,25 @@ export class UserManagementService {
   }
 
   /**
-   * Supprime un utilisateur (soft delete)
+   * Supprime un utilisateur (soft delete).
+   *
+   * `deletedBy` N'EST PAS le paramètre d'acteur retiré par #5331 : celui-là
+   * décrivait qui avait agi sans que la méthode le CONSOMME. Ici la valeur est
+   * ÉCRITE — c'est la colonne `User.deletedBy` elle-même, sans laquelle un
+   * compte supprimé serait indistinguable d'une désactivation (#6822).
+   * `deactivatedAt` est posé comme le fait `updateStatus` : un geste plus
+   * grave que « désactiver » ne peut pas laisser ce champ moins renseigné.
    */
-  async deleteUser(userId: string): Promise<FullUser> {
+  async deleteUser(userId: string, deletedBy: string): Promise<FullUser> {
+    const now = new Date();
     const user = await this.prisma.user.update({
       where: { id: userId },
       data: {
         isActive: false,
-        updatedAt: new Date()
+        deactivatedAt: now,
+        deletedAt: now,
+        deletedBy,
+        updatedAt: now
       },
     });
 
@@ -492,13 +503,17 @@ export class UserManagementService {
   }
 
   /**
-   * Restaure un utilisateur supprimé
+   * Restaure un utilisateur supprimé — l'inverse EXACT de `deleteUser` : les
+   * trois champs qu'elle pose sont effacés, pas seulement `isActive`.
    */
   async restoreUser(userId: string): Promise<FullUser> {
     const user = await this.prisma.user.update({
       where: { id: userId },
       data: {
         isActive: true,
+        deactivatedAt: null,
+        deletedAt: null,
+        deletedBy: null,
         updatedAt: new Date()
       },
     });

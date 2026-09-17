@@ -96,6 +96,47 @@ describe('FeedPostCard — le POST', () => {
     expect(html).toContain('>14<');
   });
 
+  /**
+   * LE REPLI SUR LE CONTENU DU POST (#6864) NE SE PEINT QU'UNE FOIS — un
+   * média seul sans légende propre reçoit le contenu du post comme légende
+   * (`resolveMedia`) ; le corps du post, lui, ne se peint alors PAS en plus
+   * au-dessus de la carte, sous peine d'afficher deux fois la même phrase.
+   */
+  test('un média seul sans légende propre : le contenu du post se peint UNE fois, comme légende — jamais aussi comme corps', () => {
+    const html = renderToStaticMarkup(
+      <FeedPostCard
+        model={modelOf(
+          basePost({
+            content: 'Vue depuis le sommet',
+            originalLanguage: 'fr',
+            media: [{ id: 'm1', mimeType: 'image/jpeg', fileUrl: 'a.jpg' }],
+          }),
+        )}
+      />,
+    );
+    expect(html.match(/Vue depuis le sommet/g)).toHaveLength(1);
+  });
+
+  /** À plusieurs médias, le repli ne s'applique jamais : le corps du post
+   * reste peint au-dessus de la carte, comme sans média. */
+  test('à plusieurs médias, le corps du post reste peint au-dessus de la carte', () => {
+    const html = renderToStaticMarkup(
+      <FeedPostCard
+        model={modelOf(
+          basePost({
+            content: 'Deux photos du voyage',
+            originalLanguage: 'fr',
+            media: [
+              { id: 'm1', mimeType: 'image/jpeg', fileUrl: 'a.jpg', order: 0 },
+              { id: 'm2', mimeType: 'image/jpeg', fileUrl: 'b.jpg', order: 1 },
+            ],
+          }),
+        )}
+      />,
+    );
+    expect(html.match(/Deux photos du voyage/g)).toHaveLength(1);
+  });
+
   /** Le texte d'accessibilité SERVI atteint le `alt` ; la légende, elle, est
    * déjà rendue en texte visible et ne s'y répète pas (revue-correction #5893). */
   test('une image porte le `alt` SERVI par la passerelle, jamais sa légende visible', () => {
