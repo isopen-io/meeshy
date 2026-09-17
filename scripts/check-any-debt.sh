@@ -288,7 +288,31 @@ readonly SHARED_BASELINE=0
 #
 # Gates locaux verts : `tsc --noEmit` gateway (0 erreur), `bash
 # scripts/check-any-debt.sh` + son self-test.
-readonly GATEWAY_BASELINE=531
+#
+# 518, pas 531 (#3679, sixième lot de RÉDUCTION) :
+# `services/AttachmentTranslateService.ts` (727 lignes, dans le budget de
+# taille, 13 usages) — le dispatcher de traduction de pièces jointes
+# (audio/image/vidéo/document). `attachment: any`, répété sur cinq méthodes
+# (`verifyUserAccess`, `translateAudio`, les trois stubs image/vidéo/
+# document), repris sur `AttachmentTranslateRowPayload` — le type déjà dérivé
+# du `select` unique de ce service (`attachmentTranslateSelect`,
+# `attachments/attachmentIncludes.ts`), déjà importé par ce fichier mais
+# jamais utilisé sur ces paramètres. Quatre `catch (error: any)` repris en
+# `unknown` avec le patron déjà établi (`error instanceof Error ? … :
+# '…'`). `result?: any` (le retour de `getTranslationStatus`) repris sur
+# `VoiceTranslationResult`, le type réel de `TranslationJob.result` que ce
+# champ recopie. Deux `segments: … as any` retirés PUREMENT : mesuré au
+# compilateur, `AttachmentTranscription['segments']` (`TranscriptionSegment[]`)
+# est déjà structurellement assignable à `VoiceTranscriptionSegment[]` — même
+# mesure, dans le sens inverse, que celle qui a retiré les deux `as any`
+# analogues d'`AudioTranslateService.ts`. Deux écritures Prisma sur les
+# champs `Json?` `transcription`/`translations` de `MessageAttachment` en
+# `as unknown as Prisma.InputJsonValue` (patron `PostService.ts`).
+#
+# Gates locaux verts : `tsc --noEmit` gateway (0 erreur), les 70 tests des
+# suites `AttachmentTranslateService.test.ts` + `attachmentIncludes.test.ts`,
+# `bash scripts/check-any-debt.sh` + son self-test.
+readonly GATEWAY_BASELINE=518
 
 # `apps/web` — dette réelle, jamais gardée avant ce lot (cf. en-tête « WHY
 # `apps/web` IS MEASURED… »). Mesurée sur un checkout NON construit (pas de
