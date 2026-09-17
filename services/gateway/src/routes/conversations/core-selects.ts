@@ -206,28 +206,31 @@ export const conversationDetailInclude = {
  * **CE QUE LA LIGNE DE LISTE CHARGE — et le schéma wire dit ce qu'elle doit
  * charger** (audit de cohérence iOS ↔ passerelle, 2026-09-11).
  *
- * Extraite de `core-list.ts` pour une raison qui n'est pas cosmétique : tant
- * qu'elle était un littéral anonyme au milieu d'un `findMany`, aucun témoin ne
- * pouvait la lire, et le seul témoin qui prétendait mesurer la ligne de liste
- * (`conversation-wire-fields.test.ts`) mesurait un objet FABRIQUÉ dans le test.
- * Il était donc vert sur quatre champs que la base ne chargeait pas.
+ * Extrait de `core-list.ts` pour porter un type nommé (#3679, réduction de
+ * dette `any`) — jusque-là dupliqué en littéral anonyme dans le `findMany`,
+ * ce qui empêchait Prisma d'en dériver quoi que ce soit d'utilisable au site
+ * d'appel, et empêchait tout témoin de lire ce que la requête charge vraiment.
  *
  * `description`, `defaultWriteRole`, `slowModeSeconds` et `autoTranslateEnabled`
- * étaient DÉCLARÉS par `conversationMinimalSchema` et absents d'ici : servis
- * `undefined` à chaque ligne, pour toujours. Côté iOS, l'écran de réglages d'un
- * groupe compose ses valeurs « originales » depuis la conversation de la LISTE
- * (`ConversationSettingsView`, ouvert depuis `ConversationListView`) — il
- * affichait donc une description VIDE sur un groupe qui en a une, « tout le
- * monde peut écrire » sur un salon restreint, et le mode lent DÉSACTIVÉ sur une
- * conversation qui l'impose. Quatre colonnes du même document : les charger ne
- * coûte ni jointure ni requête.
+ * sont DÉCLARÉS par `conversationMinimalSchema` : côté iOS, l'écran de
+ * réglages d'un groupe compose ses valeurs « originales » depuis la
+ * conversation de la LISTE (`ConversationSettingsView`, ouvert depuis
+ * `ConversationListView`). Un lot antérieur (2026-09-11) les avait ajoutés à
+ * une fonction distincte, `conversationListSelect`, jamais appelée par
+ * aucune route — #6908 : la ligne de liste servait donc une description VIDE
+ * sur un groupe qui en a une, « tout le monde peut écrire » sur un salon
+ * restreint, et le mode lent DÉSACTIVÉ sur une conversation qui l'impose, le
+ * correctif documenté n'ayant jamais été branché sur le point d'appel réel.
+ * Les quatre champs sont désormais ICI, dans le `select` que la route
+ * exécute — quatre colonnes du même document, qui ne coûtent ni jointure ni
+ * requête.
  *
  * La loi est gardée par `conversation-list-select-parity.test.ts` : tout champ
  * que le schéma wire déclare ET que `Conversation` porte en colonne doit être
  * ici. `memberCount` en est la SEULE exception, et pour une raison écrite —
  * voir `_count` ci-dessous.
  */
-export const conversationListSelect = (viewerId: string) => ({
+export const conversationListQuerySelect = (viewerId: string) => ({
   id: true,
   title: true,
   description: true,
@@ -263,56 +266,6 @@ export const conversationListSelect = (viewerId: string) => ({
     select: conversationListParticipantSelect
   },
   // User preferences (pin/mute/archive/tags/catégorie/customName/reaction)
-  userPreferences: {
-    where: { userId: viewerId },
-    take: 1,
-    select: conversationUserPreferencesSelect
-  },
-  messages: {
-    where: {
-      deletedAt: null
-    },
-    orderBy: { createdAt: 'desc' as const },
-    take: 1,
-    select: conversationLastMessagePreviewSelect
-  }
-}) as const;
-
-/**
- * Le `select` RÉEL de `GET /conversations` (`core-list.ts`), extrait verbatim
- * pour porter un type nommé (#3679, réduction de dette `any`) — jusque-là
- * dupliqué en littéral anonyme dans le handler, ce qui empêchait Prisma d'en
- * dériver quoi que ce soit d'utilisable au site d'appel.
- *
- * **Volontairement DISTINCT de `conversationListSelect` ci-dessus.** Les deux
- * sont structurellement identiques à quatre champs près
- * (`description`/`defaultWriteRole`/`slowModeSeconds`/`autoTranslateEnabled`),
- * et cet écart n'est pas anodin : voir #6908, qui documente que
- * `conversationListSelect` n'est appelé par AUCUNE route. Les fusionner ici
- * changerait ce que `GET /conversations` sert réellement — hors périmètre
- * d'un lot de typage pur.
- */
-export const conversationListQuerySelect = (viewerId: string) => ({
-  id: true,
-  title: true,
-  type: true,
-  identifier: true,
-  isActive: true,
-  createdAt: true,
-  updatedAt: true,
-  lastMessageAt: true,
-  banner: true,
-  avatar: true,
-  communityId: true,
-  _count: { select: conversationActiveMemberCountSelect },
-  isAnnouncementChannel: true,
-  participants: {
-    take: 5,
-    where: {
-      isActive: true
-    },
-    select: conversationListParticipantSelect
-  },
   userPreferences: {
     where: { userId: viewerId },
     take: 1,

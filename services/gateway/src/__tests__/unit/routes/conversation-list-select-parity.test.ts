@@ -1,6 +1,6 @@
 /**
  * **CE QUE LE SCHÉMA DÉCLARE, LA REQUÊTE DOIT LE CHARGER** — audit de cohérence
- * iOS ↔ passerelle, 2026-09-11.
+ * iOS ↔ passerelle, 2026-09-11, réparé pour de bon au #6908.
  *
  * ## Le défaut, et pourquoi un test VERT le couvrait
  *
@@ -15,6 +15,16 @@
  * étaient déclarés par `conversationMinimalSchema`, présents dans le littéral du
  * test, verts à chaque exécution… et absents du `select` Prisma de la liste. Le
  * handler ne les avait jamais : ils partaient `undefined` sur chaque ligne.
+ *
+ * **Ce fichier lui-même portait la moitié du défaut** (#6908) : il importait
+ * `conversationListSelect`, une fonction QUI N'ÉTAIT APPELÉE PAR AUCUNE ROUTE.
+ * `registerConversationListRoute` (`core-list.ts`) exécute
+ * `conversationListQuerySelect` — un littéral SÉPARÉ, qui ne portait pas les
+ * quatre champs. Ce témoin vérifiait donc que la bonne fonction existe, jamais
+ * que la route l'appelle — exactement le piège que `conversation-wire-fields.test.ts`
+ * documente pour son propre littéral, rejoué un cran plus haut. Les deux
+ * fonctions sont désormais UNE SEULE (`conversationListQuerySelect`), celle que
+ * `core-list.ts` importe et passe à `findMany`.
  *
  * Symétrie exacte du piège d'origine, dans l'autre sens :
  *
@@ -31,7 +41,12 @@
  * déclare et que la table `Conversation` porte en colonne doit figurer dans le
  * `select` de la liste.* Les colonnes viennent de `schema.prisma` — la source de
  * vérité, lue à l'exécution, pas recopiée ici : un miroir statique aurait la
- * même faiblesse que le littéral qu'on corrige.
+ * même faiblesse que le littéral qu'on corrige. Et la fonction confrontée est
+ * `conversationListQuerySelect`, importée du MÊME chemin que `core-list.ts` —
+ * pas un objet voisin qui porterait la bonne forme sans être appelé.
+ * `conversation-list-container-settings.test.ts` referme la boucle par une
+ * route COMPLÈTE (`app.inject`), qui prouve que les champs atteignent le
+ * payload HTTP réel.
  *
  * @jest-environment node
  */
@@ -42,7 +57,7 @@ import path from 'node:path';
 import { describe, it, expect } from '@jest/globals';
 import { conversationMinimalSchema } from '@meeshy/shared/types/api-schemas';
 
-import { conversationListSelect } from '../../../routes/conversations/core-selects';
+import { conversationListQuerySelect } from '../../../routes/conversations/core-selects';
 
 const SCHEMA_PRISMA = path.resolve(
   __dirname,
@@ -85,7 +100,7 @@ function colonnesScalairesDeConversation(): ReadonlySet<string> {
  */
 const SERVIS_AUTREMENT = new Set(['memberCount']);
 
-const clefsDuSelect = new Set(Object.keys(conversationListSelect('507f1f77bcf86cd7994390bb')));
+const clefsDuSelect = new Set(Object.keys(conversationListQuerySelect('507f1f77bcf86cd7994390bb')));
 
 describe('GET /conversations — la requête charge ce que le schéma promet', () => {
   it('aucun champ déclaré et porté par une colonne ne manque au select', () => {
@@ -132,7 +147,7 @@ describe('GET /conversations — la requête charge ce que le schéma promet', (
    * premier venu à tout le monde — d'où la fonction plutôt que l'objet.
    */
   it('filtre les préférences de conversation sur le lecteur', () => {
-    const select = conversationListSelect('68bf0000000000000000000a');
+    const select = conversationListQuerySelect('68bf0000000000000000000a');
     expect(select.userPreferences.where).toEqual({ userId: '68bf0000000000000000000a' });
   });
 });
