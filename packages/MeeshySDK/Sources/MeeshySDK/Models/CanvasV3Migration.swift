@@ -437,6 +437,61 @@ public extension CanvasV3 {
         return sceneCarriesSomething ? scene : nil
     }
 
+    /// **Un objet du document mémorisé que le runtime v1 ne sait pas exprimer
+    /// est conservé, PAR IDENTITÉ** (#6893).
+    ///
+    /// `migratedScene` ci-dessus ne régénère un porteur `plane: .bg` que
+    /// depuis une couleur (`effects.background`) ou un `backgroundTransform` —
+    /// jamais depuis une RÉFÉRENCE média (`payload.mediaId` /
+    /// `payload.postMediaId`), que `StoryEffects.init(rendering:)` ne lit pas
+    /// non plus (cas `.media where plane == .bg`, plus haut). Un tel objet
+    /// disparaît donc ENTIÈREMENT à l'aller-retour decode → encode → decode
+    /// qu'exécute le CACHE DU FIL (`GRDBCacheStore<String, FeedPost>`, via
+    /// `StoryEffects.encode`) : la scène 0 perd son fond, `coversEveryVisual`
+    /// refuse la route scène, et le plein écran retombe sur les pages image
+    /// sans le texte de la scène (mesuré au simulateur, #6846).
+    ///
+    /// **Portée volontairement ÉTROITE.** Un merge générique par identité —
+    /// « tout id absent du résultat migré est restitué » — ressusciterait
+    /// aussi bien un texte, un sticker ou un média de contenu que l'auteur
+    /// vient de SUPPRIMER dans une session d'édition : ces familles sont déjà
+    /// modélisées aller-retour par le runtime v1, et leur absence dans
+    /// `migrated` dit une suppression délibérée, pas une incapacité du
+    /// modèle. Seul le fond `plane: .bg` à référence média n'a AUCUNE
+    /// affordance de retrait côté composer : cette forme n'est écrite que par
+    /// la passerelle (`storyEffectsV3.ts`, contrat des deux orthographes
+    /// #6894), jamais par une session d'édition iOS — la restituer ne peut
+    /// donc jamais annuler un geste de l'auteur.
+    private static func mergingMemorizedBackgroundMedia(
+        _ migrated: SceneV3?,
+        with memorized: SceneV3?
+    ) -> SceneV3? {
+        guard let memorized else { return migrated }
+        let migratedIds = Set((migrated?.objects ?? []).map(\.id))
+        let preserved = memorized.objects.filter { object in
+            !migratedIds.contains(object.id)
+                && object.kind == .media && object.plane == .bg
+                && (object.payload["mediaId"] != nil || object.payload["postMediaId"] != nil)
+        }
+        guard !preserved.isEmpty else { return migrated }
+        guard let migrated else {
+            return SceneV3(id: memorized.id, objects: preserved,
+                           opening: memorized.opening, closing: memorized.closing,
+                           clipTransitions: memorized.clipTransitions,
+                           timelineDuration: memorized.timelineDuration,
+                           thumbHash: memorized.thumbHash,
+                           carrierAspect: memorized.carrierAspect)
+        }
+        // Le fond restitué reprend sa place en TÊTE de scène — c'est déjà là
+        // que `migratedScene` pose le sien quand le runtime en émet un.
+        return SceneV3(id: migrated.id, objects: preserved + migrated.objects,
+                       opening: migrated.opening, closing: migrated.closing,
+                       clipTransitions: migrated.clipTransitions,
+                       timelineDuration: migrated.timelineDuration,
+                       thumbHash: migrated.thumbHash,
+                       carrierAspect: migrated.carrierAspect)
+    }
+
     /// **Le son de fond appartient au DOCUMENT**, jamais à une scène — c'est ce
     /// que dit `CanvasV3.sound`, à la racine. Une publication de dix slides a
     /// une seule bande-son.
@@ -528,7 +583,8 @@ public extension CanvasV3 {
     /// ne l'exprime pas, et la jeter à chaque aller-retour ramènerait tout le
     /// monde au défaut sans qu'aucun témoin ne tombe.
     init(migrating effects: StoryEffects, keeping document: CanvasV3?) {
-        let premiere = CanvasV3.migratedScene(effects, id: "s1")
+        let migree = CanvasV3.migratedScene(effects, id: "s1")
+        let premiere = CanvasV3.mergingMemorizedBackgroundMedia(migree, with: document?.scenes.first)
         let suivantes = Array((document?.scenes ?? []).dropFirst())
         let scenes = ([premiere].compactMap { $0 } + suivantes).prefix(CanvasV3.maxScenes)
         self.init(v: 3,
