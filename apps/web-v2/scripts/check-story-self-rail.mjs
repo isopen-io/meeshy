@@ -1,0 +1,283 @@
+#!/usr/bin/env node
+/**
+ * VÉRIFIE LES DEUX PORTES DE MA CELLULE DU RAIL DE STORIES (#6150).
+ *
+ * Directive porteur du 2026-09-17, mot pour mot : « mettre le bouton (+) au
+ * dessus de gauche de l'avatar de l'auteur pour créer une nouvelle story et
+ * (bulle pensant) en bas droite pour créer un mood ou afficher le smiley animé
+ * du mood en cours comme sous iOS ».
+ *
+ * CE QU'IL MESURE, ET POURQUOI UN NAVIGATEUR RÉEL
+ *
+ *  1. LA GÉOGRAPHIE. Le (+) est au-dessus ET au DÉBUT de ligne par rapport au
+ *     centre de l'avatar ; la pastille d'humeur est en dessous ET à la FIN.
+ *     C'est une mesure de PIXELS : les témoins unitaires ne voient que des
+ *     classes, et une classe juste sur un parent non positionné peint les deux
+ *     pastilles au même endroit — un défaut qu'aucune assertion de DOM
+ *     n'attrape.
+ *  2. LES DEUX CIBLES NE SE RECOUVRENT PAS. Deux pastilles sur un même avatar,
+ *     c'est LE piège : deux boutons dont les zones de 44 px se chevauchent sont
+ *     un seul bouton du point de vue du doigt, et le lecteur d'écran en annonce
+ *     deux. On mesure l'intersection des rectangles, pas leur existence.
+ *  3. CHAQUE PORTE MÈNE OÙ ELLE DIT. Le (+) ouvre le studio, la pastille ouvre
+ *     la composition d'humeur — par un VRAI clic, jamais par la lecture d'un
+ *     `href` (un lien peut porter la bonne adresse et être couvert par un
+ *     voisin : c'est ce que le point 2 empêche, et ce clic qui le prouve).
+ *  4. 💭 SANS HUMEUR, L'EMOJI AVEC — et l'emoji apparaît au retour de la
+ *     composition, ce qui mesure la CHAÎNE entière (pastille → écran → choix →
+ *     publication → rail) plutôt que deux états posés à la main.
+ *  5. LE RAIL EXISTE QUAND PERSONNE D'AUTRE N'A PUBLIÉ. Miroir
+ *     `LentilleRailPolicy.shouldRender(selfEntry:entries:)` — sans lui, un
+ *     compte neuf n'aurait AUCUN chemin vers ses deux composeurs.
+ *  6. RTL MIROITE LA GÉOGRAPHIE. « haut-gauche » et « bas-droite » nomment un
+ *     DÉBUT et une FIN de ligne : en arabe, le (+) doit passer à droite. Une
+ *     pose en `left`/`right` passerait les points 1 et 2 et échouerait ici.
+ *  7. CLAIR ET SOMBRE RENDENT LA MÊME GÉOMÉTRIE.
+ *
+ * MUTATION DE CONTRÔLE — remplacer `start-0`/`end-0` par `left-0`/`right-0`
+ * dans `story-rail-self-tile.tsx` fait rougir le point 6 et lui seul ;
+ * remplacer `absolute` par `static` fait rougir 1 et 2 ensemble.
+ */
+import { createServer } from 'node:http';
+import { readFile, stat } from 'node:fs/promises';
+import { extname, join, normalize } from 'node:path';
+
+import { launchChromium } from './lib/browser.mjs';
+
+const DIST = new URL('../dist/', import.meta.url).pathname;
+const TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript',
+  '.css': 'text/css',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.webmanifest': 'application/manifest+json',
+};
+
+const server = createServer(async (req, res) => {
+  const p = normalize(new URL(req.url, 'http://x').pathname).replace(/^\/+/, '');
+  for (const f of [join(DIST, p), join(DIST, `${p}.html`), join(DIST, p, 'index.html'), join(DIST, 'index.html')]) {
+    try {
+      if (!(await stat(f)).isFile()) continue;
+      res.writeHead(200, { 'content-type': TYPES[extname(f)] ?? 'application/octet-stream' });
+      res.end(await readFile(f));
+      return;
+    } catch {
+      /* candidat suivant */
+    }
+  }
+  res.writeHead(404).end('404');
+});
+await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
+const BASE = `http://127.0.0.1:${server.address().port}`;
+
+const failures = [];
+let invariants = 0;
+const check = (ok, what) => {
+  invariants += 1;
+  if (!ok) failures.push(what);
+};
+
+const MIN_TARGET = 44;
+const round = (v) => Math.round(v * 100) / 100;
+
+/** La session SEMÉE — le rail n'offre ses deux portes qu'à un lecteur
+ * IDENTIFIÉ, et `main.tsx` lit `localStorage` à l'IMPORT : sans elle, aucune
+ * cellule à mesurer (et le gate serait vert par ABSENCE). */
+const SEEDED_SESSION = JSON.stringify({
+  token: 'gate-token',
+  sessionToken: 'gate-session',
+  user: { id: 'u-viewer', username: 'viewer-gate' },
+  expiresAt: Date.now() + 3_600_000,
+});
+
+const boxOf = (page, selector) =>
+  page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    if (el === null) return null;
+    const r = el.getBoundingClientRect();
+    return { x: r.x, y: r.y, width: r.width, height: r.height, cx: r.x + r.width / 2, cy: r.y + r.height / 2 };
+  }, selector);
+
+const overlap = (a, b) => {
+  const w = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
+  const h = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
+  return w > 0 && h > 0 ? round(w * h) : 0;
+};
+
+const browser = await launchChromium();
+
+const CELL = 'li[data-story-self]';
+const CREATE = '[data-self-create]';
+const MOOD = '[data-self-mood]';
+
+async function openList(context) {
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  await page.goto(`${BASE}/`, { waitUntil: 'load' });
+  await page.waitForSelector(CELL, { timeout: 8000 });
+  return { page, errors };
+}
+
+async function runScheme({ colorScheme, locale, dir }) {
+  const tag = `[${colorScheme} ${locale}]`;
+  const context = await browser.newContext({
+    colorScheme,
+    locale,
+    viewport: { width: 390, height: 844 },
+    serviceWorkers: 'block',
+  });
+  await context.addInitScript((session) => {
+    localStorage.setItem('meeshy.session', session);
+  }, SEEDED_SESSION);
+  const { page, errors } = await openList(context);
+
+  /* ── 1. LA GÉOGRAPHIE, EN PIXELS ───────────────────────────────────────── */
+  const anneau = await boxOf(page, `${CELL} [data-anneau]`);
+  const plus = await boxOf(page, CELL + ' ' + CREATE);
+  const humeur = await boxOf(page, CELL + ' ' + MOOD);
+
+  check(anneau !== null, `${tag} : aucun anneau dans ma cellule`);
+  check(plus !== null, `${tag} : aucun badge de création [data-self-create]`);
+  check(humeur !== null, `${tag} : aucune pastille d'humeur [data-self-mood]`);
+
+  if (anneau !== null && plus !== null && humeur !== null) {
+    check(plus.cy < anneau.cy, `${tag} : le (+) doit être AU-DESSUS du centre de l'avatar — ${round(plus.cy)} / ${round(anneau.cy)}`);
+    check(
+      humeur.cy > anneau.cy,
+      `${tag} : la pastille d'humeur doit être EN DESSOUS du centre — ${round(humeur.cy)} / ${round(anneau.cy)}`,
+    );
+
+    /* DÉBUT / FIN de ligne, jamais gauche / droite : c'est ce qui rend la
+       mesure valable dans les deux sens d'écriture (point 6). */
+    const versLaFin = dir === 'rtl' ? -1 : 1;
+    check(
+      (plus.cx - anneau.cx) * versLaFin < 0,
+      `${tag} : le (+) doit être au DÉBUT de ligne (${dir}) — ${round(plus.cx)} / ${round(anneau.cx)}`,
+    );
+    check(
+      (humeur.cx - anneau.cx) * versLaFin > 0,
+      `${tag} : la pastille d'humeur doit être à la FIN de ligne (${dir}) — ${round(humeur.cx)} / ${round(anneau.cx)}`,
+    );
+
+    /* ── 2. DEUX CIBLES, ET ELLES NE SE TOUCHENT PAS ──────────────────── */
+    check(
+      plus.width >= MIN_TARGET && plus.height >= MIN_TARGET,
+      `${tag} : le (+) doit se toucher sur ${MIN_TARGET} px — ${round(plus.width)}×${round(plus.height)}`,
+    );
+    check(
+      humeur.width >= MIN_TARGET && humeur.height >= MIN_TARGET,
+      `${tag} : l'humeur doit se toucher sur ${MIN_TARGET} px — ${round(humeur.width)}×${round(humeur.height)}`,
+    );
+    check(overlap(plus, humeur) === 0, `${tag} : les deux cibles se recouvrent sur ${overlap(plus, humeur)} px²`);
+  }
+
+  /* ── 3. DEUX LIBELLÉS DISTINCTS, ET AUCUN VIDE ────────────────────────── */
+  const labels = await page.evaluate(
+    ([c, m]) => [
+      document.querySelector(c)?.getAttribute('aria-label') ?? null,
+      document.querySelector(m)?.getAttribute('aria-label') ?? null,
+    ],
+    [CREATE, MOOD],
+  );
+  check(labels[0] !== null && labels[0] !== '', `${tag} : le (+) n'a pas d'aria-label`);
+  check(labels[1] !== null && labels[1] !== '', `${tag} : l'humeur n'a pas d'aria-label`);
+  check(labels[0] !== labels[1], `${tag} : les deux pastilles portent le MÊME libellé — « ${labels[0]} »`);
+
+  /* ── 4. 💭 TANT QU'AUCUNE HUMEUR N'EST POSÉE ──────────────────────────── */
+  const avant = await page.evaluate(
+    (m) => ({
+      mood: document.querySelector(m)?.getAttribute('data-mood') ?? null,
+      texte: document.querySelector(m)?.textContent ?? '',
+      anime: document.querySelector(`${m} [data-mood-animates]`) !== null,
+    }),
+    MOOD,
+  );
+  check(avant.mood === null, `${tag} : aucune humeur n'est posée, data-mood devrait être absent — « ${avant.mood} »`);
+  check(avant.texte.includes('\u{1F4AD}'), `${tag} : sans humeur, la pastille doit rendre 💭 — « ${avant.texte} »`);
+  check(!avant.anime, `${tag} : rien ne doit respirer quand il n'y a pas d'humeur`);
+
+  /* ── 5. CHAQUE PORTE MÈNE OÙ ELLE DIT — par un VRAI clic ──────────────── */
+  await page.click(CELL + ' ' + CREATE);
+  await page.waitForFunction(() => location.pathname === '/stories/new', { timeout: 8000 });
+  check(true, `${tag} : le (+) ouvre le studio de story`);
+
+  await page.goBack();
+  await page.waitForSelector(CELL, { timeout: 8000 });
+  await page.click(CELL + ' ' + MOOD);
+  await page.waitForFunction(() => location.pathname === '/status/new', { timeout: 8000 });
+  check(true, `${tag} : la pastille ouvre la composition d'humeur`);
+
+  /* ── 6. LA CHAÎNE COMPLÈTE — choisir, publier, revoir l'emoji ─────────── */
+  await page.waitForSelector('[data-mood-grid]', { timeout: 8000 });
+  await page.click('[data-mood-choice="\u{1F389}"]');
+  const publishable = await page.evaluate(() => document.querySelector('[data-mood-publish]')?.disabled ?? null);
+  check(publishable === false, `${tag} : Publier doit s'activer une fois l'humeur choisie — ${publishable}`);
+  await page.click('[data-mood-publish]');
+
+  await page.waitForSelector(`${MOOD}[data-mood]`, { timeout: 8000 });
+  const apres = await page.evaluate(
+    (m) => ({
+      mood: document.querySelector(m)?.getAttribute('data-mood') ?? null,
+      anime: document.querySelector(`${m} [data-mood-animates="true"]`) !== null,
+    }),
+    MOOD,
+  );
+  check(apres.mood === '\u{1F389}', `${tag} : l'humeur posée doit apparaître sur ma pastille — « ${apres.mood} »`);
+  check(apres.anime, `${tag} : l'emoji de l'humeur EN COURS doit respirer (directive porteur)`);
+
+  check(errors.length === 0, `${tag} : erreurs de page — ${errors.join(' | ')}`);
+
+  const geometry =
+    anneau === null || plus === null || humeur === null
+      ? null
+      : {
+          plus: { dx: round(plus.cx - anneau.cx), dy: round(plus.cy - anneau.cy) },
+          humeur: { dx: round(humeur.cx - anneau.cx), dy: round(humeur.cy - anneau.cy) },
+        };
+
+  await context.close();
+  return geometry;
+}
+
+const clair = await runScheme({ colorScheme: 'light', locale: 'fr-FR', dir: 'ltr' });
+const sombre = await runScheme({ colorScheme: 'dark', locale: 'fr-FR', dir: 'ltr' });
+check(
+  JSON.stringify(clair) === JSON.stringify(sombre),
+  `clair et sombre ne rendent pas la même géométrie — ${JSON.stringify(clair)} / ${JSON.stringify(sombre)}`,
+);
+
+/* LE MIROIR RTL — en arabe, « haut-gauche » devient haut-DROITE. Les deux
+   décalages horizontaux doivent s'inverser exactement ; une pose en
+   `left`/`right` les laisserait identiques, et ce gate le dirait. */
+const rtl = await runScheme({ colorScheme: 'light', locale: 'ar', dir: 'rtl' });
+if (clair !== null && rtl !== null) {
+  check(
+    Math.sign(rtl.plus.dx) === -Math.sign(clair.plus.dx),
+    `RTL : le (+) n'a pas miroité — ltr ${clair.plus.dx} / rtl ${rtl.plus.dx}`,
+  );
+  check(
+    Math.sign(rtl.humeur.dx) === -Math.sign(clair.humeur.dx),
+    `RTL : la pastille d'humeur n'a pas miroité — ltr ${clair.humeur.dx} / rtl ${rtl.humeur.dx}`,
+  );
+  check(
+    rtl.plus.dy === clair.plus.dy && rtl.humeur.dy === clair.humeur.dy,
+    `RTL : la VERTICALE ne doit pas bouger — ltr ${JSON.stringify(clair)} / rtl ${JSON.stringify(rtl)}`,
+  );
+}
+
+await browser.close();
+server.close();
+
+if (failures.length > 0) {
+  console.error(`check-story-self-rail : ${failures.length} échec(s) sur ${invariants} invariants`);
+  for (const f of failures) console.error(`  ✗ ${f}`);
+  process.exit(1);
+}
+console.log(
+  `check-story-self-rail : vert — ${invariants} invariants : ma cellule porte DEUX pastilles distinctes, le (+) au-dessus au ` +
+    "début de ligne et l'humeur en dessous à la fin, deux cibles de 44 px qui ne se recouvrent pas, deux aria-label distincts, " +
+    '💭 tant qu\'aucune humeur n\'est posée, le (+) ouvre le studio et la pastille la composition d\'humeur (vrais clics), ' +
+    "l'humeur choisie revient sur la pastille et y respire — clair, sombre et RTL miroité.",
+);

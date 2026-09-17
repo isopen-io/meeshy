@@ -65,6 +65,29 @@ const fr = {
      (`routes/stories.tsx`), via `storyAuthorLabel()`. */
   'stories.mine': 'Votre story',
 
+  /* LES DEUX PORTES DE MA CELLULE (#6150) — le (+) haut-gauche et la pastille
+     d'humeur bas-droite, miroir `LentilleRailSelfEntryView`
+     (`StoriesVivantsRail.swift`) et de ses deux libellés `StoryTrayCopy`
+     (`addStory`, `changeMood`). `{emoji}` est ANNONCÉ, jamais dessiné : sans
+     lui, un lecteur d'écran entendrait deux fois le même bouton. */
+  'stories.self.addStory': 'Ajouter une story',
+  'stories.self.mood.add': 'Poser une humeur',
+  'stories.self.mood.change': 'Changer mon humeur, {emoji}',
+
+  /* MON HUMEUR (#6150) — l'écran de composition, `routes/status-compose.tsx`.
+     MINIMAL, comme la directive porteur le demande : un emoji, un mot, on
+     publie. Le composeur d'humeur complet d'iOS (`ComposerMoodSurface.swift`)
+     reste hors tranche. */
+  'status.compose.title': 'Mon humeur',
+  'status.compose.back': 'Retour',
+  'status.compose.pick': 'Choisir une humeur',
+  'status.compose.note': 'Un mot, si vous voulez',
+  'status.compose.publish': 'Publier',
+  'status.compose.publishing': 'Publication…',
+  'status.compose.published': 'Humeur publiée',
+  'status.compose.error': "Votre humeur n'a pas pu être publiée.",
+  'status.compose.offline': 'Hors ligne — votre humeur partira au retour du réseau.',
+
   /* LA CARTE DU FIL ET SES GESTES (#6488) — `FeedPostCard`, l'en-tête et les
      quatre états du Flux (`routes/feed.tsx`), et les échecs d'un geste
      (`lib/api/feed-gestures.ts`, `lib/feed/share-url.ts`) : tous écrits en

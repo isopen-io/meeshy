@@ -49,6 +49,21 @@ const en = {
   'stories.count.other': '{count} stories',
   'stories.mine': 'Your story',
 
+  /* #6150 — the two doors of my own rail cell. */
+  'stories.self.addStory': 'Add a story',
+  'stories.self.mood.add': 'Set a mood',
+  'stories.self.mood.change': 'Change my mood, {emoji}',
+
+  'status.compose.title': 'My mood',
+  'status.compose.back': 'Back',
+  'status.compose.pick': 'Pick a mood',
+  'status.compose.note': 'A word, if you like',
+  'status.compose.publish': 'Publish',
+  'status.compose.publishing': 'Publishing…',
+  'status.compose.published': 'Mood published',
+  'status.compose.error': 'Your mood could not be published.',
+  'status.compose.offline': 'Offline — your mood will go out when the network returns.',
+
   'feed.post.action.like': 'Like',
   'feed.post.action.comment': 'Comment',
   'feed.post.action.repost': 'Repost',

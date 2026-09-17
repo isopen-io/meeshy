@@ -49,6 +49,21 @@ const it = {
   'stories.count.other': '{count} storie',
   'stories.mine': 'La tua storia',
 
+  /* #6150 — le due porte della mia cella nella barra. */
+  'stories.self.addStory': 'Aggiungi una storia',
+  'stories.self.mood.add': 'Imposta un umore',
+  'stories.self.mood.change': 'Cambia il mio umore, {emoji}',
+
+  'status.compose.title': 'Il mio umore',
+  'status.compose.back': 'Indietro',
+  'status.compose.pick': 'Scegli un umore',
+  'status.compose.note': 'Una parola, se vuoi',
+  'status.compose.publish': 'Pubblica',
+  'status.compose.publishing': 'Pubblicazione…',
+  'status.compose.published': 'Umore pubblicato',
+  'status.compose.error': 'Non è stato possibile pubblicare il tuo umore.',
+  'status.compose.offline': 'Offline — il tuo umore partirà al ritorno della rete.',
+
   'feed.post.action.like': 'Mi piace',
   'feed.post.action.comment': 'Commenta',
   'feed.post.action.repost': 'Ripubblica',
