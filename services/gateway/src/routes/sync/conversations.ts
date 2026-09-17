@@ -22,6 +22,38 @@ import { selectForFields, restrictFields, type ColumnPlan, type FieldSet } from 
  */
 
 /**
+ * Identité minimale de l'AUTRE participant d'un direct (issue #6827, piste 2
+ * — l'alternative étroite, pas le roster complet de la collection
+ * `participants`). Bornée à DEUX lignes (`take: 2`), sans AUCUN champ de
+ * présence (`isOnline`/`lastActiveAt`) — cette ligne ne sert pas un profil de
+ * tiers au sens de la règle du dépôt (`services/gateway/CLAUDE.md` § « Toute
+ * porte qui sort un profil de TIERS filtre sa présence »), elle sert une
+ * IDENTITÉ, jamais un état. `servir()` plus bas vide ce champ pour tout type
+ * autre que `direct` — le select tourne pour toutes les lignes (Prisma ne
+ * conditionne pas un `select` par la valeur d'une colonne sœur dans un même
+ * `findMany`), mais rien n'en sort côté groupe/communauté.
+ */
+const syncConversationOtherParticipantSelect = {
+  where: { isActive: true },
+  orderBy: { joinedAt: 'asc' as const },
+  take: 2,
+  select: {
+    id: true,
+    userId: true,
+    displayName: true,
+    avatar: true,
+    user: {
+      select: {
+        id: true,
+        username: true,
+        displayName: true,
+        avatar: true,
+      },
+    },
+  },
+} satisfies Prisma.ParticipantFindManyArgs;
+
+/**
  * Ce qu'un client doit recevoir pour afficher une entrée de liste de
  * conversations sans second appel : les champs de rendu de base (titre,
  * avatar, effectif, dernière activité) et le régime d'écriture/chiffrement
@@ -50,6 +82,7 @@ export const syncConversationSelect = Prisma.validator<Prisma.ConversationSelect
   autoTranslateEnabled: true,
   createdAt: true,
   updatedAt: true,
+  participants: syncConversationOtherParticipantSelect,
 });
 
 type SyncConversation = Prisma.ConversationGetPayload<{ select: typeof syncConversationSelect }>;
@@ -100,6 +133,35 @@ const syncConversationSchema = {
     autoTranslateEnabled: { type: 'boolean' },
     createdAt: { type: 'string', format: 'date-time' },
     updatedAt: { type: 'string', format: 'date-time' },
+    /**
+     * L'AUTRE participant d'un direct (issue #6827) — vide (`[]`) pour tout
+     * autre type, jamais le roster complet. Décodée sans changement côté iOS :
+     * `APIConversation.participants` existe déjà et `toConversation` en dérive
+     * déjà `displayName`/`otherParticipant` — ce lot ne fait que le PEUPLER
+     * pour le chemin `/sync`, qui ne le servait jamais.
+     */
+    participants: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          userId: { type: 'string', nullable: true },
+          displayName: { type: 'string', nullable: true },
+          avatar: { type: 'string', nullable: true },
+          user: {
+            type: 'object',
+            nullable: true,
+            properties: {
+              id: { type: 'string' },
+              username: { type: 'string', nullable: true },
+              displayName: { type: 'string', nullable: true },
+              avatar: { type: 'string', nullable: true },
+            },
+          },
+        },
+      },
+    },
   },
 } as const;
 
@@ -231,7 +293,7 @@ export async function syncConversations(opts: {
   }
   const { conversationIds } = membership;
 
-  const changedRows = await prisma.conversation.findMany({
+  const changedRowsRaw = await prisma.conversation.findMany({
     where: {
       id: { in: [...conversationIds] },
       ...(cursor?.c
@@ -247,6 +309,17 @@ export async function syncConversations(opts: {
     orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     take: cap + 1,
   });
+  // `participants` ci-dessus tourne pour CHAQUE ligne (Prisma ne conditionne
+  // pas un `select` par une colonne sœur) — vidé ici, AVANT le budget
+  // d'octets, pour tout type autre que `direct` : ni la troncature ni la page
+  // ne doivent compter des octets qu'aucun client ne recevra jamais. `row.participants`
+  // est `undefined` quand `?fields=` l'a exclu de la requête (voir
+  // `selectForFields`) — un type déclaré ne garantit pas la présence RUNTIME.
+  const changedRows = changedRowsRaw.map((row) =>
+    row.type === 'direct' || row.participants === undefined
+      ? row
+      : { ...row, participants: [] as typeof row.participants },
+  );
   const capTruncated = changedRows.length > cap;
   const cappedRows = capTruncated ? changedRows.slice(0, cap) : changedRows;
 
