@@ -166,7 +166,17 @@ export default function StatusComposeScreen() {
 
   const selection = choisi ?? courante;
   const viewerId = viewer.id ?? undefined;
-  const publiable = selection !== undefined && viewerId !== undefined && !enVol;
+  /**
+   * **HORS LIGNE, PUBLIER EST INERTE — loi 4, un contrôle existe s'il a un
+   * effet.** `performMoodPost` refuse hors ligne (rien qu'on ne puisse tenir) :
+   * laisser le bouton ACTIF donnait un clic qui ne produisait strictement rien
+   * de visible — ni humeur, ni message, ni mouvement. Le bouton s'éteint donc
+   * avec le réseau, et l'état hors ligne dessiné juste au-dessus dit pourquoi ;
+   * l'inverse — un bouton vif au-dessus d'un message « hors ligne » — aurait
+   * fait porter l'explication par un texte que personne ne lit avant d'avoir
+   * cliqué.
+   */
+  const publiable = selection !== undefined && viewerId !== undefined && !enVol && online;
 
   const publier = async () => {
     if (selection === undefined || viewerId === undefined) return;
