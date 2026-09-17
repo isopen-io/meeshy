@@ -145,6 +145,23 @@ describe('ScenePlayer — `muted`, la demande de l’hôte gouverne le muet du m
     expect(el.querySelector('video')?.muted).toBe(false);
   });
 
+  // T-E7 (#6901, D5) — le verrou du muet : `card` VERROUILLE le son quel que
+  // soit ce que l'hôte demande (miroir `MeeshyScenePlayer.hostMute`).
+  test('mode="card" + muted={false} ⇒ la vidéo de fond reste muette (le verrou de la carte)', () => {
+    const el = mount(
+      <ScenePlayer
+        document={documentOf([fond({ postMediaId: 'vid', mediaType: 'video/mp4' })])}
+        sceneIndex={0}
+        mode="card"
+        playing={false}
+        muted={false}
+        carrier={carrier}
+        preferredLanguages={['fr']}
+      />,
+    );
+    expect(el.querySelector('video')?.muted).toBe(true);
+  });
+
   test('une entrée de porteur SANS adresse ne masque pas le `mediaURL` de l’objet', () => {
     const el = mount(
       <ScenePlayer

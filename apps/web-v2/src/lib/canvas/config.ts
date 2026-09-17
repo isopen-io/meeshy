@@ -33,3 +33,16 @@ const CONFIG: Readonly<Record<ScenePlayerMode, ScenePlayerConfig>> = {
 export function playerConfig(mode: ScenePlayerMode): ScenePlayerConfig {
   return CONFIG[mode];
 }
+
+/**
+ * `hostMute` — miroir `MeeshyScenePlayer.hostMute(config:requestedMute:)`
+ * (`MeeshyScenePlayer.swift:151-158`, D5/#6901) : le mode `card` VERROUILLE le
+ * muet (`locksMute`) — aucune demande d'hôte ne peut l'ouvrir tant qu'une
+ * tuile n'est pas passée plein écran. Un mode qui ne verrouille pas laisse la
+ * demande de l'hôte gouverner, avec le muet du mode en repli.
+ */
+export function hostMute(params: { readonly config: ScenePlayerConfig; readonly requestedMute: boolean | undefined }): boolean {
+  const { config, requestedMute } = params;
+  if (config.locksMute) return true;
+  return requestedMute ?? config.isMuted;
+}
