@@ -123,6 +123,18 @@ export type StoryPlaybackMedia = {
   readonly width?: number | null;
   readonly height?: number | null;
   readonly thumbHash?: string | null;
+  /**
+   * **LA LÉGENDE PROPRE DU MÉDIA** (#6944) — `PostMedia.caption`, avec sa
+   * langue source et ses traductions. Le TROISIÈME contenu du dépôt : ni
+   * `Post.content` (que `caption.ts` résout déjà pour cette même story), ni
+   * `alt`. La passerelle les SERT depuis toujours sur une story
+   * (`trayStorySelect` → `mediaInclude` → `mediaSelect`,
+   * `postIncludes.ts:111-118`) ; c'est ce type qui ne les déclarait pas, donc
+   * le décodeur les jetait et aucune légende de média n'atteignait le lecteur.
+   */
+  readonly caption?: string | null;
+  readonly captionLanguage?: string | null;
+  readonly captionTranslations?: unknown;
 };
 
 /** L'adresse d'un média de story — `fileUrl` (la passerelle), sinon `url`
