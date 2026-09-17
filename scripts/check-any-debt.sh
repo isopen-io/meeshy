@@ -258,7 +258,37 @@ readonly SHARED_BASELINE=0
 #
 # Gates locaux verts : `tsc --noEmit` gateway (0 erreur), `bash
 # scripts/check-any-debt.sh` + son self-test.
-readonly GATEWAY_BASELINE=543
+#
+# 2026-09-17 — `routes/conversations/messages-list.ts` (12 des 13 usages, 836
+# lignes, appelant unique de `messages-list-query.ts` explicitement laissé
+# hors périmètre par le lot précédent). `whereClause`/`messageSelect` repris
+# sur `Prisma.MessageWhereInput`/`Prisma.MessageSelect`, `beforeFilter` sur
+# `Prisma.DateTimeFilter`. Le `select` de cette route est composé
+# DYNAMIQUEMENT (`buildMessageListSelect`, selon includeTranslations/
+# includeReplies) : Prisma ne peut donc pas dériver un type de ligne unique de
+# ce `select` — un cast UNIQUE (`rawMessages as unknown as RawMessageRow[]`,
+# le type déjà nommé par `messages-list-query-types.ts`) remplace les six
+# `any`/`as any` scattered sur `messages`/`msg`/`att`/`message`. `mimeType`
+# ajouté aux champs NOMMÉS de `RawMessageAttachment` (chargé par
+# `attachmentMediaSelect`, lu par le diagnostic audio, jusqu'ici couvert par
+# son seul index `[key: string]: unknown`). `responsePayload` reçoit un type
+# structurel local (`pagination`/`hasNewer` optionnels, posés après coup par
+# la route) plutôt qu'un `any`.
+#
+# Ce que ce lot NE fait PAS, et pourquoi : `mappedMessages` reste implicite
+# (`any[]`, hérité du retour `any` DÉLIBÉRÉ de `mapMessageRowForList` — son
+# propre doc-comment) — mesuré au compilateur, `MappedMessageRow.createdAt`
+# est un `Date` NON optionnel, et `new Date(firstMsg.createdAt)` (deux sites,
+# mode `around`) n'a pas de surcharge acceptant un `Date` déjà construit ;
+# annoter `mappedMessages` aurait cassé ces deux sites pour un gain hors du
+# fichier réservé. `optionalAuth: any` (le SEUL restant, sur les 13) est
+# partagé avec `messages.ts` et sa dizaine de registrars frères — le typer
+# ICI SEUL aurait été inconsistant avec le reste du fichier appelant, hors du
+# périmètre de ce lot.
+#
+# Gates locaux verts : `tsc --noEmit` gateway (0 erreur), `bash
+# scripts/check-any-debt.sh` + son self-test.
+readonly GATEWAY_BASELINE=531
 
 # `apps/web` — dette réelle, jamais gardée avant ce lot (cf. en-tête « WHY
 # `apps/web` IS MEASURED… »). Mesurée sur un checkout NON construit (pas de
