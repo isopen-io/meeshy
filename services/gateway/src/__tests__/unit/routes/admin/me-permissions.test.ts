@@ -106,6 +106,70 @@ describe('La route est la PROJECTION de la matrice, jamais une composition', () 
   });
 });
 
+describe('`canManageAgent` est SERVI — la garde réelle des routes `/admin/agent/*` (#6733)', () => {
+  it("sert `canManageAgent: true` à un ADMIN", async () => {
+    const app = await monter('ADMIN');
+
+    expect((await lire(app)).json().data.permissions.canManageAgent).toBe(true);
+    await app.close();
+  });
+
+  it("sert `canManageAgent: false` à un MODERATOR — le rang qui DISCRIMINE", async () => {
+    // MODERATOR a `canAccessAdmin: true` et `canManageAgent: false` : c'est le
+    // seul rang où les deux clés divergent, donc le seul où un client qui se
+    // rabat sur `canAccessAdmin` peint une tuile qui ne peut que prendre 403.
+    // Un témoin posé sur ADMIN ou sur USER ne pourrait pas tomber.
+    const app = await monter('MODERATOR');
+
+    const permissions = (await lire(app)).json().data.permissions;
+
+    expect(permissions.canAccessAdmin).toBe(true);
+    expect(permissions.canManageAgent).toBe(false);
+    await app.close();
+  });
+
+  it('la clé TRAVERSE le schéma servi — la projection et le schéma ne peuvent pas diverger', async () => {
+    // `servedPermissionsSchema` est un schéma de RÉPONSE : une clé que la
+    // projection produit et qu'il ne déclare pas est SUPPRIMÉE par
+    // fast-json-stringify, sans erreur. Comparer les jeux de clés des deux
+    // côtés du sérialiseur est ce qui attrape l'oubli du troisième site.
+    const app = await monter('BIGBOSS');
+
+    const servi = (await lire(app)).json().data.permissions;
+
+    expect(Object.keys(servi).sort()).toEqual(Object.keys(servedUserPermissions('BIGBOSS')).sort());
+    expect(servi.canManageAgent).toBe(true);
+    await app.close();
+  });
+
+  /**
+   * LE SECOND SCHÉMA DE CE PRODUCTEUR, ET IL VIT DANS `packages/shared`.
+   *
+   * `servedUserPermissions` a SIX sites d'appel de production : `/me/permissions`
+   * (qui déclare `servedPermissionsSchema`) et cinq autres — connexion,
+   * `GET /me`, les trois éditions de profil, le changement de contact — qui
+   * servent leurs permissions sous `userSchema.permissions`, c'est-à-dire
+   * `userPermissionsSchema` (`packages/shared/types/api-schemas/user.ts`).
+   *
+   * Ajouter une clé à la projection sans la déclarer LÀ AUSSI fabrique
+   * exactement la « quatrième famille » que le dépôt dit non outillée : une
+   * déclaration présente, bien formée, et FAUSSE contre son producteur. Le fil
+   * n'échoue pas — fast-json-stringify supprime la clé en silence, et le même
+   * serveur répond deux formes différentes à la même question selon la porte.
+   *
+   * Ce témoin compare les jeux de clés plutôt qu'un nom : il tombera pour la
+   * PROCHAINE clé, que personne n'aura pensé à nommer ici.
+   */
+  it('le schéma PARTAGÉ déclare les mêmes clés que la projection — cinq portes le servent aussi', async () => {
+    const { userPermissionsSchema } = await import('@meeshy/shared/types/api-schemas');
+
+    const declarees = Object.keys(userPermissionsSchema.properties).sort();
+    const produites = Object.keys(servedUserPermissions('BIGBOSS')).sort();
+
+    expect(declarees).toEqual(produites);
+  });
+});
+
 describe("Éditer son profil ne change AUCUNE permission", () => {
   it('la projection ne dépend que du RÔLE — rien de ce qu\'une édition touche', async () => {
     // Les trois sites de `profile.ts` recomposaient les permissions à la main

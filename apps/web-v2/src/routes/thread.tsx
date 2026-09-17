@@ -812,15 +812,13 @@ export default function ThreadScreen() {
         */}
         <ThreadModes
           mode={readingDecision.mode}
-          conversation={conversation}
-          messages={messages}
           viewer={viewer}
-          windowCoversUnread={windowCoversUnread}
           readerLocale={readerLocale}
-          {...(summaryLang !== undefined ? { summaryLang } : {})}
-          onReplyToPerson={onReplyToPerson}
-          onOpenEpisode={onOpenEpisode}
-          onResumeThread={onResumeThread}
+          summary={{
+            conversation, messages, windowCoversUnread,
+            onReplyToPerson, onOpenEpisode, onResumeThread,
+            ...(summaryLang !== undefined ? { lang: summaryLang } : {}),
+          }}
           placed={placed}
           virtualizer={virtualizer}
           scene={scene}

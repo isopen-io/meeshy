@@ -41,9 +41,16 @@ extension ConversationViewModel {
     /// L'absence de cette helper laissait `replyToJson` à nil dans le chemin
     /// avec attachements, ce qui faisait que la quoted-reply card n'apparaissait
     /// jamais dans la bulle optimiste pour les replies audio/video/image/galerie.
+    ///
+    /// `citingAttachmentId` — l'ANCRE que l'envoi porte (#6165). La bulle
+    /// optimiste doit citer la MÊME pièce que le corps REST, sans quoi elle
+    /// montrerait la première photo du carrousel jusqu'à l'écho serveur, puis
+    /// « sauterait » sur la troisième : le saut de citation que #4945 a
+    /// justement fermé, rouvert par un autre bout.
     func makeReplyReference(
         storyReplyReference: ReplyReference?,
-        replyToId: String?
+        replyToId: String?,
+        citingAttachmentId: String? = nil
     ) -> ReplyReference? {
         if let storyRef = storyReplyReference {
             return storyRef
@@ -52,7 +59,8 @@ extension ConversationViewModel {
               let quoted = messages.first(where: { $0.id == rid }) else {
             return nil
         }
-        return optimisticReplyReference(quoting: quoted)
+        let named = citingAttachmentId.flatMap { id in quoted.attachments.first { $0.id == id } }
+        return optimisticReplyReference(quoting: quoted, citing: named)
     }
 
     // MARK: - La fabrique unique
@@ -81,8 +89,44 @@ extension ConversationViewModel {
     /// seule (vue unique posée sur la photo, message en clair) masque sa
     /// vignette sans masquer le texte — la même lecture à deux niveaux que
     /// `mediaMayTravel` côté passerelle.
-    func optimisticReplyReference(quoting quoted: Message) -> ReplyReference {
-        let representative = quoted.attachments.quotedRepresentative
+    ///
+    /// **L'ANCRE est GRAVÉE (#6164).** Cette fabrique décrivait la pièce
+    /// (vignette, faits, protection) sans jamais NOMMER celle qu'elle décrit,
+    /// pendant que le constructeur serveur (`APIMessageReplyTo
+    /// .toReplyReference`) pose `attachmentId` depuis l'instantané du fil. Les
+    /// deux références décrivaient donc la même pièce par deux dérivations
+    /// INDÉPENDANTES, et contre deux sources différentes : le tableau tenu en
+    /// mémoire à la composition d'un côté, celui du magasin au moment du tap de
+    /// l'autre. `citedAttachment(among:)` — le site UNIQUE que `openQuotedMedia`
+    /// interroge — retombait sur `quotedRepresentative` de la liste COURANTE :
+    /// la pièce décrite ayant disparu, la citation ouvrait sa VOISINE, c'est-à-dire
+    /// une photo que cette réponse ne cite pas. Avec l'ancre, les deux ne font
+    /// qu'une résolution, et le troisième cas de `citedAttachment` s'applique
+    /// enfin ici aussi : pièce nommée INTROUVABLE ⇒ `nil`, jamais un emprunt.
+    ///
+    /// L'ancre est posée MÊME sur un média protégé : elle n'est pas un secret —
+    /// le verrou vit dans `openQuotedMedia`, qui refuse d'ouvrir une pièce à vue
+    /// unique après relecture du message RÉEL dans le magasin.
+    /// `citing` — la pièce que le lecteur REGARDE (#6165). Elle l'emporte sur
+    /// le représentatif : répondre à la troisième photo d'un carrousel de cinq
+    /// depuis son plein écran doit citer CELLE-LÀ.
+    ///
+    /// Nommer une pièce qui n'appartient PAS au message cité retombe sur le
+    /// représentatif, sans faire d'histoire : c'est une ancre que
+    /// `admitAttachmentReply` REFUSERAIT (« la pièce jointe citée n'appartient
+    /// pas au message cité »), donc un envoi rejeté plutôt qu'une citation
+    /// pauvre. Le filtre passe par le tableau du message CITÉ, jamais par ce
+    /// que l'appelant tient en main — la galerie de la conversation montre les
+    /// pièces de TOUS les messages, et sa page courante peut donc désigner un
+    /// autre porteur que celui qu'on cite.
+    ///
+    /// `nil` (le défaut) ⇒ le représentatif, la règle d'avant ce lot, à quoi
+    /// aucun appelant existant ne touche.
+    func optimisticReplyReference(quoting quoted: Message,
+                                  citing named: MessageAttachment? = nil) -> ReplyReference {
+        let representative = named
+            .flatMap { piece in quoted.attachments.first { $0.id == piece.id } }
+            ?? quoted.attachments.quotedRepresentative
         let messageIsProtected = quoted.isViewOnce || quoted.isBlurred || quoted.isEncrypted
         let representativeIsProtected = representative.map { $0.isViewOnce || $0.isBlurred } ?? false
         let mediaMayTravel = !messageIsProtected && !representativeIsProtected
@@ -99,6 +143,7 @@ extension ConversationViewModel {
             // la photo au premier refresh serveur.
             authorAvatarUrl: quoted.senderAvatarURL,
             attachmentType: representative?.type.rawValue,
+            attachmentId: representative?.id,
             attachmentThumbnailUrl: mediaMayTravel ? Self.quotedThumbnailUrl(of: representative) : nil,
             // Le message cité est en mémoire : sa protection est CONNUE, pas
             // déclarée par le fil. Sans ce report, la bulle optimiste d'une

@@ -4,8 +4,12 @@ import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostMedia
+import me.meeshy.sdk.model.MosaicLayoutMode
 import me.meeshy.sdk.model.displayContent
 import me.meeshy.sdk.model.isTranslated
+import me.meeshy.sdk.model.resolvedLayout
+import me.meeshy.sdk.model.resolvedCaption
+import me.meeshy.sdk.lang.LanguageResolver.preferredContentLanguages
 import me.meeshy.ui.component.bubble.LanguageChip
 import me.meeshy.ui.component.bubble.PostLanguageStrip
 
@@ -18,6 +22,20 @@ data class FeedPostImage(
     val width: Int?,
     val height: Int?,
     val thumbHash: String?,
+    /**
+     * The media's caption, Prisme-resolved to the viewer's preferred language
+     * (#6280) — `null` when the media carries no caption at all. Distinct from
+     * [FeedPostPresentation.content] (`Post.content`) and from any alt text:
+     * three separate contents, never confused even at equal strings.
+     */
+    val caption: String? = null,
+    /**
+     * Author-authored accessibility description (`PostMedia.alt`, #6739), served
+     * verbatim (no Prisme resolution — unlike [caption], it carries no
+     * translation pipeline on the wire). `null`/blank means the author wrote
+     * none; consumers fall back to a generic localized label in that case.
+     */
+    val alt: String? = null,
 )
 
 /**
@@ -58,6 +76,8 @@ data class FeedPostPresentation(
     val location: FeedLocationPresentation? = null,
     /** Distance in meters from the viewer — only present on the Nearby feed. */
     val distanceMeters: Double? = null,
+    /** The author's layout (#6514), already resolved — the carousel when the post declares none. */
+    val layout: MosaicLayoutMode = MosaicLayoutMode.FALLBACK,
 )
 
 object FeedPostBuilder {
@@ -79,6 +99,7 @@ object FeedPostBuilder {
         activeLanguageCode: String? = null,
         currentUserId: String? = null,
     ): FeedPostPresentation {
+        val preferredLanguages = preferredContentLanguages(preferences)
         val images = post.media
             .orEmpty()
             .filter { it.isImage && it.fileUrl != null }
@@ -91,6 +112,8 @@ object FeedPostBuilder {
                     width = media.width,
                     height = media.height,
                     thumbHash = media.thumbHash,
+                    caption = media.resolvedCaption(preferredLanguages),
+                    alt = media.alt,
                 )
             }
         val originalCode = post.originalLanguage.normalizedCode()
@@ -133,6 +156,7 @@ object FeedPostBuilder {
             isAuthor = currentUserId != null && post.author?.id == currentUserId,
             location = FeedPostLocationBuilder.build(post.location),
             distanceMeters = post.distanceMeters,
+            layout = post.storyEffects.resolvedLayout,
         )
     }
 

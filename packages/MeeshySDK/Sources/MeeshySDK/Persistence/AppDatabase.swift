@@ -14,11 +14,50 @@ public final class AppDatabase: @unchecked Sendable {
     private let logger = Logger(subsystem: "com.meeshy.sdk", category: "grdb")
 
     private init() {
+        // **UN HARNAIS DE TEST N'ÉCRIT PAS DANS LE MAGASIN DE L'APP** (#6857).
+        //
+        // 68 écritures de témoins, sur 31 fichiers, visent
+        // `CacheCoordinator.shared` sous des clés de PRODUCTION. Le magasin
+        // étant sur disque, jouer la suite sur un simulateur y gravait des
+        // fixtures durables : après la suite, la liste de conversations de
+        // l'app ne montrait plus que `conv-hydrate` / « Alice & Bob », et son
+        // repli de curseur envoyait cet identifiant à la passerelle.
+        //
+        // La garde est posée ICI, à la racine, plutôt que dans les 68 appels :
+        // un magasin en mémoire n'a rien à oublier, tandis qu'une discipline
+        // de nettoyage se perd au premier témoin écrit distraitement — ce
+        // défaut avait déjà été diagnostiqué une fois, et corrigé chez un seul
+        // consommateur.
+        //
+        // La suite y gagne aussi son ISOLEMENT : chaque processus de test
+        // démarre sur un magasin vierge, donc aucune suite n'hérite plus de ce
+        // qu'une autre a semé. La dépendance à l'ORDRE que
+        // `ForwardPickerViewModel` décrit dans son doc-comment disparaît avec.
+        if Self.runsUnderTestHarness(environment: ProcessInfo.processInfo.environment) {
+            let (writer, _) = Self.inMemoryWriter()
+            self.databaseWriter = writer
+            self.isEphemeral = true
+            return
+        }
         // makeWriter opens, migrates, AND recovers from corruption internally,
         // so the writer it returns is always a fully-migrated, usable store.
         let (writer, ephemeral) = Self.makeWriter()
         self.databaseWriter = writer
         self.isEphemeral = ephemeral
+    }
+
+    /// **Ce processus est-il un harnais de test ?** Pure, et prenant son
+    /// environnement en PARAMÈTRE : sans ça, la règle ne s'éprouve que dans le
+    /// processus qui l'habite, donc jamais sur son verdict négatif — et un
+    /// prédicat qui rend toujours `true` rendrait le magasin de l'app livrée
+    /// éphémère sans que rien ne rougisse.
+    ///
+    /// XCTest exporte ses propres variables dans le processus hôte
+    /// (`XCTestConfigurationFilePath` pour un bundle unitaire,
+    /// `XCTestBundlePath` pour l'exécution sans hôte). Le préfixe les couvre
+    /// toutes les deux, et celles qu'Apple ajoutera.
+    public static func runsUnderTestHarness(environment: [String: String]) -> Bool {
+        environment.keys.contains { $0.hasPrefix("XCTest") }
     }
 
     /// Build a fully-migrated GRDB writer that never crashes the host app.
@@ -150,6 +189,17 @@ public final class AppDatabase: @unchecked Sendable {
     }
 
     static func runMigrations(on writer: any DatabaseWriter) throws {
+        try migrator().migrate(writer)
+    }
+
+    /// Arrête la chaîne APRÈS `identifier` : sert aux témoins qui doivent
+    /// peupler la base dans l'état d'AVANT une migration de données, puis
+    /// rejouer la chaîne entière pour mesurer ce que cette migration en fait.
+    static func runMigrations(on writer: any DatabaseWriter, upTo identifier: String) throws {
+        try migrator().migrate(writer, upTo: identifier)
+    }
+
+    private static func migrator() -> DatabaseMigrator {
         var migrator = DatabaseMigrator()
 
         migrator.registerMigration("v1_create_tables") { db in
@@ -289,6 +339,28 @@ public final class AppDatabase: @unchecked Sendable {
             }
         }
 
-        try migrator.migrate(writer)
+        // #6893 — jusqu'à ce lot, `StoryEffects.encode` réencodait tout
+        // document v3 par le runtime v1, et la première scène perdait ce que
+        // v1 ne modélise pas (fond référencé par `mediaId`, kinds réservés,
+        // mentions, plan). Le correctif n'empêche que les écritures NEUVES de
+        // mutiler ; une ligne déjà mutilée resterait servie À FROID — route
+        // IMAGE sans texte — jusqu'au prochain rafraîchissement, que rien ne
+        // garantit avant l'ouverture d'un post (lien profond, notification).
+        // Purge UNIQUE des deux stores qui portent un canvas, et d'eux seuls :
+        // un démarrage à froid après mise à jour relit le réseau une fois.
+        migrator.registerMigration("v10_purge_canvas_reencoded_by_v1") { db in
+            for prefix in ["feed:", "stories:"] {
+                try db.execute(
+                    sql: "DELETE FROM cache_entries WHERE substr(key, 1, ?) = ?",
+                    arguments: [prefix.count, prefix]
+                )
+                try db.execute(
+                    sql: "DELETE FROM cache_metadata WHERE substr(key, 1, ?) = ?",
+                    arguments: [prefix.count, prefix]
+                )
+            }
+        }
+
+        return migrator
     }
 }

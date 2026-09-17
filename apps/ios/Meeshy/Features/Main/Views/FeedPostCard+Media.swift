@@ -57,7 +57,10 @@ extension FeedPostCard {
                 // s'il n'y a qu'un visuel — donc jamais ici, où il y en a
                 // plusieurs. Le carrousel consulte la règle, il ne la réécrit
                 // pas.
-                captions: SocialMediaCaption.map(for: mediaList, carrierText: post.displayContent),
+                captions: SocialMediaCaption.map(
+                    for: mediaList, carrierText: post.displayContent,
+                    preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser)
+                ),
                 accentColor: accentColor,
                 onOpen: { openFullscreen($0) }
             )
@@ -147,7 +150,9 @@ extension FeedPostCard {
     /// 2026-09-05, avec un `lineLimit(3)` qui rendait une longueur différente
     /// selon la largeur et le corps de texte.
     func singleMediaCaption(_ media: FeedMedia) -> some View {
-        FeedCaptionOverlay(caption: media.caption)
+        FeedCaptionOverlay(caption: media.resolvedCaption(
+            preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser)
+        ))
     }
 
     @ViewBuilder
@@ -342,5 +347,37 @@ private struct FeedVideoMediaCell: View {
         }
         .fittedMediaHeight(mediaWidth: media.width, mediaHeight: media.height)
         .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+// MARK: - Ce qui se traduit, vu par l'égalité de la carte
+extension FeedPostCard {
+    /// **Tout ce que la carte affiche et qui peut changer de langue** (#6560).
+    ///
+    /// `FeedPostCard.==` gouverne `.equatable()` : ce qu'il ne compare pas ne se
+    /// redessine pas. Il comptait les traductions du POST et rien des médias —
+    /// une traduction de légende arrivée par `media:caption-translation-updated`
+    /// atteignait le store sans jamais atteindre la carte ni le plein écran de
+    /// scène qu'elle monte. La légende d'un média est un contenu DISTINCT du
+    /// post : elle entre ici avec sa langue et ses traductions.
+    nonisolated struct TranslatableSignature: Equatable {
+        nonisolated struct Caption: Equatable {
+            let mediaId: String
+            let text: String?
+            let language: String?
+            let translations: [String: String]?
+        }
+
+        let postTranslationCount: Int
+        let captions: [Caption]
+    }
+
+    nonisolated static func translatableSignature(of post: FeedPost) -> TranslatableSignature {
+        TranslatableSignature(
+            postTranslationCount: post.translations?.count ?? 0,
+            captions: post.media.map {
+                .init(mediaId: $0.id, text: $0.caption, language: $0.captionLanguage, translations: $0.captionTranslations)
+            }
+        )
     }
 }

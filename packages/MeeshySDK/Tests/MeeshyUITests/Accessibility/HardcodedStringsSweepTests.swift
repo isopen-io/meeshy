@@ -28,7 +28,9 @@ final class HardcodedStringsSweepTests: XCTestCase {
     /// reuses rather than duplicating (`media.video.play`,
     /// `community.settings.color`).
     private static let sweptKeys: [String] = [
-        "auth.forgot.sent_message",
+        // #6644 — `auth.forgot.sent_message` a quitté l'écran ET le catalogue :
+        // « un lien de réinitialisation a été envoyé » est remplacé par les mots
+        // de la connexion par e-mail (« E-mail envoyé », « Ouvrez le lien reçu à »).
         "avatar.menu.view_profile",
         "avatar.menu.view_story",
         "category.create",

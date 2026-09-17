@@ -198,6 +198,29 @@ export class TooManyLoginAttemptsError extends RateLimitError {
   }
 }
 
+// ========== TÉLÉVERSEMENT (#6604) ==========
+//
+// Un fichier refusé (type ou taille) est une erreur de DEMANDE, jamais de
+// SERVEUR — même famille que #6557 (`postId` malformé → 404, jamais 500).
+// `UploadProcessor.validateFile` rendait un verdict `{valid:false, error}`
+// sans code HTTP ; `uploadFile`/`uploadEncryptedFile` le traduisaient en
+// `throw new Error(...)` NU. Tout appelant qui n'avale pas cette exception
+// (contrairement à `uploadMultiple`, qui l'avale PAR FICHIER pour rester
+// résilient à un échec de traitement isolé) la laissait dégénérer en 500
+// générique au gestionnaire global, faute de `err.statusCode`.
+
+export class UnsupportedMediaTypeError extends BaseAppError {
+  constructor(message: string) {
+    super(message, 415, 'UNSUPPORTED_MEDIA_TYPE');
+  }
+}
+
+export class PayloadTooLargeError extends BaseAppError {
+  constructor(message: string) {
+    super(message, 413, 'FILE_TOO_LARGE');
+  }
+}
+
 // ========== TRADUCTION ==========
 
 export class TranslationError extends BaseAppError {

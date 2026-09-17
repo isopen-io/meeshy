@@ -196,6 +196,7 @@ extension ConversationViewModel {
         }
         messages[mIdx].attachments[aIdx].reactionSummary = summary.isEmpty ? nil : summary
         messages[mIdx].attachments[aIdx].currentUserReactions = mine.isEmpty ? nil : mine
+        invalidateVisualAttachmentsProjection()
         // Persist the optimistic attachment-reaction through GRDB so it survives
         // a cold reload of the conversation — parité avec les réactions
         // message-level (appendReaction/removeReaction). Sans ce write-through la
@@ -212,9 +213,31 @@ extension ConversationViewModel {
         guard let mIdx = messages.firstIndex(where: { $0.attachments.contains { $0.id == attachmentId } }),
               let aIdx = messages[mIdx].attachments.firstIndex(where: { $0.id == attachmentId }) else { return }
         messages[mIdx].attachments[aIdx].reactionSummary = reactionSummary.isEmpty ? nil : reactionSummary
+        invalidateVisualAttachmentsProjection()
         // Le delta serveur est lui aussi persisté pour que le compte autoritaire
         // soit servi tel quel au prochain cold-load (sans attendre un refetch REST).
         persistAttachmentReactions(messageId: messages[mIdx].id, attachments: messages[mIdx].attachments)
+    }
+
+    /// **La projection PLEIN ÉCRAN doit oublier ce qu'elle a mis en cache**
+    /// (#6789).
+    ///
+    /// `allVisualAttachments` — la seule source des pièces que le visualiseur
+    /// affiche — est mémoïsée, et son invalidation est gouvernée par
+    /// `structureChanged` : nombre de messages, identité du premier, identité du
+    /// dernier. **Une réaction ne change aucun des trois.** La projection
+    /// reservait donc indéfiniment un tableau de pièces d'AVANT la réaction :
+    /// la bulle se mettait à jour (elle lit `message.attachments` en direct), le
+    /// plein écran non — on réagissait, l'écran ne bougeait pas, et il fallait
+    /// refermer pour voir que le geste avait marché.
+    ///
+    /// L'invalidation est POSÉE ICI, aux deux sites qui écrivent une réaction de
+    /// pièce, plutôt qu'élargie dans `invalidateCaches` : recalculer la
+    /// projection à chaque mutation de `messages` reviendrait à refaire un
+    /// `flatMap` sur tout le fil à chaque accusé de lecture — exactement ce que
+    /// la mémoïsation existe pour éviter.
+    private func invalidateVisualAttachmentsProjection() {
+        _allVisualAttachments = nil
     }
 
     /// Write-through des réactions par-image vers GRDB. Encode l'array

@@ -7,14 +7,18 @@ import { GeoIPService, getRequestContext } from '../services/GeoIPService';
 import { initSessionService, markSessionTrusted } from '../services/SessionService';
 import { rememberPendingDeviceTrust } from './auth/pending-device-trust';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
-import { sendSuccess, sendBadRequest, sendInternalError } from '../utils/response.js';
+import { sendSuccess, sendBadRequest, sendError, sendInternalError } from '../utils/response.js';
 import { userSchema, sessionSchema, errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 const logger = enhancedLogger.child({ module: 'MagicLinkRoutes' });
 
 // Validation schemas
 const requestMagicLinkSchema = z.object({
   email: z.email('Invalid email address').max(255),
-  rememberDevice: z.boolean().optional().default(false) // Stored server-side for security
+  rememberDevice: z.boolean().optional().default(false), // Stored server-side for security
+  /** OÙ REVENIR une fois connecté (#6742) — clampé côté SERVICE
+   * (`clampMagicLinkReturnUrl`), jamais cru ici : une valeur hostile n'échoue
+   * pas la requête, elle est simplement absente du lien envoyé. */
+  returnUrl: z.string().max(2048).optional()
 });
 
 const validateMagicLinkSchema = z.object({
@@ -61,6 +65,11 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
             type: 'boolean',
             description: 'Remember device for long session (365 days). Stored server-side for security.',
             default: false
+          },
+          returnUrl: {
+            type: 'string',
+            description: 'Internal path to return to after a successful login (#6742). Clamped server-side to a same-origin path; a suspect value is dropped, never trusted.',
+            example: '/chat/mshy_equipe_7f3a'
           }
         }
       },
@@ -82,6 +91,11 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
         400: {
           description: 'Invalid request',
           ...errorResponseSchema
+        },
+        429: {
+          description:
+            'Rate limited. Distinct from the 200 above: the refusal concerns the CALLER, not the existence of the address — the limiter is checked BEFORE the account lookup, so saying it enumerates nothing.',
+          ...errorResponseSchema
         }
       },
       security: []
@@ -95,7 +109,7 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
         return sendBadRequest(reply, validationResult.error.issues[0]?.message || 'Invalid email address');
       }
 
-      const { email, rememberDevice } = validationResult.data;
+      const { email, rememberDevice, returnUrl } = validationResult.data;
 
       // Get request context
       const requestContext = await getRequestContext(request);
@@ -106,8 +120,31 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
         ipAddress: requestContext.ip,
         userAgent: requestContext.userAgent,
         deviceFingerprint: (request.body as any)?.deviceFingerprint,
-        rememberDevice // Stored server-side for security
+        rememberDevice, // Stored server-side for security
+        returnUrl // Clamped server-side (MagicLinkService.clampMagicLinkReturnUrl) — #6742
       });
+
+      /**
+       * UN REFUS DU LIMITEUR SE DIT (#6655).
+       *
+       * La route rendait `sendSuccess` quoi que le service ait répondu. Sur un
+       * refus de débit, elle servait donc `{"success":true,"message":"Too many
+       * requests…"}` en HTTP 200 : un client qui branche sur `success` annonce
+       * « regardez votre boîte mail » alors qu'aucun courriel n'est parti.
+       *
+       * Pour un compte SANS mot de passe (#6424), ce lien est la SEULE porte —
+       * l'annoncer ouverte quand elle ne l'est pas laisse la personne dehors
+       * sans qu'elle sache pourquoi.
+       *
+       * Cela ne rouvre AUCUNE énumération, et le service le dit déjà dans son
+       * propre commentaire : le débit est vérifié AVANT la recherche du
+       * compte, donc le refus parle de l'APPELANT, jamais de l'existence de
+       * l'adresse. C'est la raison pour laquelle il peut se dire, là où
+       * « aucun compte » ne le peut pas.
+       */
+      if (result.success === false) {
+        return sendError(reply, 429, result.message, { code: result.error ?? 'RATE_LIMITED' });
+      }
 
       return sendSuccess(reply, { expiresInSeconds: (result as any).expiresInSeconds }, { message: result.message });
 

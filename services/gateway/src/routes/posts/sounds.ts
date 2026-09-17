@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { apiPath } from '@meeshy/shared/api/prefix';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { authorAccentColor } from '@meeshy/shared/utils/conversation-colors';
 import { z } from 'zod';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { createSoundRouteRateLimitConfig } from '../../middleware/rate-limiter';
@@ -65,6 +66,10 @@ const PatchBodySchema = z.object({
  */
 export function toDTO(s: Record<string, unknown>, stats: SoundStats = EMPTY_SOUND_STATS) {
   const uploader = s['uploader'] as Record<string, unknown> | null | undefined;
+  const uploaderId = uploader?.['id'] as string | undefined;
+  const uploaderName = (uploader?.['displayName'] as string | undefined)
+    ?? (uploader?.['username'] as string | undefined)
+    ?? '';
   return {
     id: s['id'], title: s['title'], fileUrl: s['fileUrl'],
     durationMs: s['durationMs'] ?? null, waveform: s['waveform'] ?? [],
@@ -76,6 +81,16 @@ export function toDTO(s: Record<string, unknown>, stats: SoundStats = EMPTY_SOUN
     // n'ait jamais à faire un second appel pour remplir un cercle.
     coverUrl: s['coverUrl'] ?? null,
     coverThumbHash: s['coverThumbHash'] ?? null,
+    // Dernier palier de la cascade, TOUJOURS non vide (#6605) : un son né d'un
+    // post vocal n'a ni `coverUrl` ni `coverThumbHash` (pas d'image/vidéo dans
+    // le post source), et `User.avatar` est nullable sans défaut à
+    // l'inscription — les trois marches précédentes peuvent donc sortir vides
+    // ensemble. `authorAccentColor` est la MÊME graine que sur les
+    // posts/commentaires/réels (`@meeshy/shared/utils/conversation-colors`,
+    // consommée telle quelle par `apps/web-v2`) : un son sans image porte la
+    // teinte de son auteur plutôt qu'un rectangle vide. Repli du repli si la
+    // relation `uploader` elle-même n'a pas été chargée : semé sur l'id du son.
+    coverColor: authorAccentColor(uploaderId, uploaderName || (s['id'] as string ?? '')),
     createdAt: s['createdAt'] ?? null,
     uploader: uploader
       ? {

@@ -17,11 +17,12 @@
       "no-standard-auth-hook": "Aucune garde d'authentification standard détectée (ni référence directe à fastify.authenticate dans onRequest/preHandler, ni enrobage connu qui l'appelle) — public par construction, donc S0 ou S1. Les deux ne se distinguent pas depuis le serveur assemblé : le limiteur de débit global (registerGlobalRateLimiter, middleware/rate-limiter.ts) est monté par server.ts, hors du graphe que registerAllRoutes — et donc ce collecteur — construit.",
       "optional-identity": "Un résolveur d'identité OPTIONNEL est monté (createUnifiedAuthMiddleware avec requireAuth: false, qui DÉCLARE son régime sur la fonction rendue — voir AUTH_REGIME dans middleware/auth.ts) et aucune garde ne l'accompagne. Ce HOOK ne refuse donc jamais un appelant sans jeton : il sert l'anonyme et enrichit la réponse si un jeton est présent. Le niveau reste inconnu sur TOUTE l'échelle S0–S3, et c'est une affirmation, pas un aveu : la mesure montre que la moitié de ces routes sont réellement publiques (GET /u/:username, /links/:identifier, /tracking-links/*) et que l'autre moitié est gardée DANS le handler (GET /conversations, POST /conversations/:id/messages — l'appartenance au fil, que le hook ne peut pas connaître). Les annoncer publiques serait le défaut de #4318 à l'envers ; les annoncer S2/S3 était le défaut de #4489. Cette clé dit ce qui est SU : le hook ne garde pas, le handler peut. Sans la déclaration AUTH_REGIME, les deux régimes de la fabrique étaient indistinguables — l'appel a la même source compilée, `options` étant une variable capturée.",
       "sovereign": "requireSovereign() détecté (middleware/authorize.ts) — sans ambiguïté possible : cette garde n'admet que BIGBOSS, par définition (aucune route ne l'utilise au 2026-08-29 ; la détection reste structurelle et vaudra dès la première adoption).",
+      "admin-rank": "requireAdminRank() détecté (middleware/authorize.ts) — la garde admet BIGBOSS ou ADMIN, et personne d'autre : un MODERATOR qui PORTE la permission de domaine est refusé par elle. Détectée AVANT requireSovereign() parce que sa source contient les deux constantes de rôle ; l'ordre inverse annoncerait S6 une route qu'un ADMIN franchit. Le niveau exact reste inconnu (S4-S6) : la permission qui ACCOMPAGNE cette garde est une variable capturée, invisible depuis le serveur assemblé.",
       "permission-gated": "Authentifié + requirePermission(...) détecté (middleware/authorize.ts), donc S4 ou S5. Les deux ne se distinguent pas mécaniquement : le NOM de la permission exigée est une variable capturée dans la fermeture, invisible depuis le serveur assemblé (voir Function.prototype.toString() en tête de fichier).",
       "authenticated-only": "Authentifié (onRequest/preHandler référence fastify.authenticate) sans requirePermission/requireHierarchy/requireSovereign détecté, donc S2 ou S3. Les deux ne se distinguent pas mécaniquement : l'appartenance à la ressource (S3) peut être vérifiée à l'intérieur du corps du handler, invisible depuis le serveur assemblé."
     }
   },
-  "routeCount": 566,
+  "routeCount": 572,
   "routes": [
     {
       "method": "DELETE",
@@ -207,6 +208,20 @@
     {
       "method": "DELETE",
       "path": "/api/v1/admin/users/:userId",
+      "module": "userAdminRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": true,
+      "adminPrefixed": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/admin/users/:userId/sessions/:sessionId",
       "module": "userAdminRoutes",
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
@@ -1454,14 +1469,31 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/admin/conversations",
+      "module": "userAdminRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5",
+        "S6"
+      ],
+      "securityBasisKey": "admin-rank",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/admin/conversations/:conversationId/messages",
       "module": "userAdminRoutes",
       "mountPrefix": "/api/v1",
-      "securityLevel": "S6",
+      "securityLevel": "inconnu",
       "securityLevelCandidates": [
+        "S4",
+        "S5",
         "S6"
       ],
-      "securityBasisKey": "sovereign",
+      "securityBasisKey": "admin-rank",
       "hierarchyGated": false,
       "adminPrefixed": true
     },
@@ -1944,6 +1976,34 @@
     {
       "method": "GET",
       "path": "/api/v1/admin/users/:userId/reports",
+      "module": "userAdminRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/users/:userId/security-events",
+      "module": "userAdminRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/users/:userId/sessions",
       "module": "userAdminRoutes",
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
@@ -5510,6 +5570,20 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/admin/users/:userId/restore",
+      "module": "userAdminRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": true,
+      "adminPrefixed": true
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/admin/users/:userId/unlock",
       "module": "userAdminRoutes",
       "mountPrefix": "/api/v1",
@@ -7075,6 +7149,20 @@
     {
       "method": "POST",
       "path": "/api/v1/posts/impressions/batch",
+      "module": "anonyme~10",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/posts/media/:mediaId/caption/translate",
       "module": "anonyme~10",
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",

@@ -15,6 +15,8 @@ import type {
   CommentDeletedEventData,
   CommentLikedEventData,
   CommentMediaUpdatedEventData,
+  MediaCaptionTranslationUpdatedEventData,
+  MediaAltTranslationUpdatedEventData,
   CommentReactionSyncEventData,
   CommentReactionUpdateEventData,
   CommentTranslationUpdatedEventData,
@@ -323,6 +325,8 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.POST_TRANSLATION_UPDATED]: (data: PostTranslationUpdatedEventData) => void;
   [SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED]: (data: CommentTranslationUpdatedEventData) => void;
   [SERVER_EVENTS.COMMENT_MEDIA_UPDATED]: (data: CommentMediaUpdatedEventData) => void;
+  [SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED]: (data: MediaCaptionTranslationUpdatedEventData) => void;
+  [SERVER_EVENTS.MEDIA_ALT_TRANSLATION_UPDATED]: (data: MediaAltTranslationUpdatedEventData) => void;
 
   // User Preferences
   [SERVER_EVENTS.USER_PREFERENCES_UPDATED]: (data: UserPreferencesUpdatedEventData) => void;

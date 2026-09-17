@@ -2,6 +2,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
+import { authColumnIn, strayFromAuthColumn } from '@/test-support/auth-column';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import type { ApiResult } from '@/lib/api/http';
 import { createIntervalClock, type IntervalClockScheduler } from '@/lib/view/interval-clock';
@@ -102,6 +103,40 @@ function submit(el: HTMLDivElement) {
   });
 }
 
+/**
+ * L'ÉTAPE DE CODE TIENT DANS LA COLONNE DE LA CONNEXION (#6643) — directive
+ * porteur 2026-09-15 : les étapes d'inscription et de vérification « doivent
+ * être centrées même hors smartphone ». La largeur se mesure en navigateur
+ * (`check-access-column.mjs`) ; ici, que tout vive dans UNE colonne.
+ */
+describe('VerifyEmailFlow — tout tient dans UNE colonne, la puce « Fermer » comprise (#6643)', () => {
+  test('saisie du code', () => {
+    const { clock, now } = fakeClock();
+    const el = mount('ada@meeshy.example', {
+      verifyEmail: verifyStub([]).verifyEmail,
+      resendVerification: resendStub().resendVerification,
+      clock,
+      now,
+    });
+    const column = authColumnIn(el);
+    expect(column?.querySelector('#verify-email-code')).not.toBeNull();
+    expect(column?.querySelector('a[aria-label="Fermer"]')).not.toBeNull();
+    expect(strayFromAuthColumn(el)).toEqual([]);
+  });
+
+  test('sans adresse', () => {
+    const { clock, now } = fakeClock();
+    const el = mount(null, {
+      verifyEmail: verifyStub([]).verifyEmail,
+      resendVerification: resendStub().resendVerification,
+      clock,
+      now,
+    });
+    expect(authColumnIn(el)).not.toBeNull();
+    expect(strayFromAuthColumn(el)).toEqual([]);
+  });
+});
+
 describe('VerifyEmailFlow — `?email=` absent', () => {
   test('état dédié, AUCUN formulaire, aucun appel possible', () => {
     const { clock, now } = fakeClock();
@@ -150,7 +185,7 @@ describe('VerifyEmailFlow — code juste', () => {
     });
 
     expect(stub.calls).toEqual([{ email: 'ada@meeshy.example', code: '123456' }]);
-    expect(el.textContent).toContain('Email vérifié !');
+    expect(el.textContent).toContain('E-mail vérifié !');
     const anchors = Array.from(el.querySelectorAll('a'));
     expect(anchors.some((a) => a.textContent === 'Continuer')).toBe(true);
   });
@@ -166,7 +201,7 @@ describe('VerifyEmailFlow — code juste', () => {
       await Promise.resolve();
     });
 
-    expect(el.textContent).toContain('Email vérifié !');
+    expect(el.textContent).toContain('E-mail vérifié !');
   });
 });
 
@@ -183,7 +218,7 @@ describe('VerifyEmailFlow — code faux', () => {
     });
 
     expect(el.querySelector('#verify-email-code-error')?.textContent).toBe('Code invalide ou expiré');
-    expect(el.textContent).not.toContain('Email vérifié');
+    expect(el.textContent).not.toContain('E-mail vérifié');
   });
 });
 

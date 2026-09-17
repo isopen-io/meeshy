@@ -264,6 +264,20 @@ public struct SocketCommentMediaUpdatedData: Decodable, Sendable {
     public let comment: APIPostComment
 }
 
+/// `media:caption-translation-updated` — émis quand le pipeline ZMQ a traduit la
+/// LÉGENDE (`PostMedia.caption`) d'un média, post OU commentaire (#6280).
+/// DISTINCT de `SocketPostTranslationUpdatedData` (traduit `Post.content`) et de
+/// `SocketCommentMediaUpdatedData` (recharge le commentaire ENTIER pour une
+/// transcription audio prête). `commentId` est absent quand le média appartient
+/// directement à un post.
+public struct SocketMediaCaptionTranslationUpdatedData: Decodable, Sendable {
+    public let mediaId: String
+    public let postId: String
+    public let commentId: String?
+    public let language: String
+    public let translation: SocketTranslationPayload
+}
+
 // MARK: - Protocol
 
 public protocol SocialSocketProviding: Sendable {
@@ -301,6 +315,7 @@ public protocol SocialSocketProviding: Sendable {
     var postTranslationUpdated: PassthroughSubject<SocketPostTranslationUpdatedData, Never> { get }
     var commentTranslationUpdated: PassthroughSubject<SocketCommentTranslationUpdatedData, Never> { get }
     var commentMediaUpdated: PassthroughSubject<SocketCommentMediaUpdatedData, Never> { get }
+    var mediaCaptionTranslationUpdated: PassthroughSubject<SocketMediaCaptionTranslationUpdatedData, Never> { get }
     /// Fires on every reconnect (a `.connect` that follows a previous one).
     /// App-side feed handlers (FeedViewModel) observe this to backfill posts /
     /// reactions missed while the social socket was down.
@@ -361,6 +376,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     public let postTranslationUpdated = PassthroughSubject<SocketPostTranslationUpdatedData, Never>()
     public let commentTranslationUpdated = PassthroughSubject<SocketCommentTranslationUpdatedData, Never>()
     public let commentMediaUpdated = PassthroughSubject<SocketCommentMediaUpdatedData, Never>()
+    public let mediaCaptionTranslationUpdated = PassthroughSubject<SocketMediaCaptionTranslationUpdatedData, Never>()
 
     @Published public var isConnected = false
     @Published public var connectionState: ConnectionState = .disconnected
@@ -384,19 +400,6 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     public let didReconnect = PassthroughSubject<Void, Never>()
     private var lifecycleCancellables = Set<AnyCancellable>()
 
-    // Cached formatters — ISO8601DateFormatter is expensive to allocate.
-    // Safe to share: options are set once during init and never mutated after.
-    private nonisolated(unsafe) static let isoFormatterWithFractional: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
-    private nonisolated(unsafe) static let isoFormatterBasic: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
-
     /// Factory UNIQUE des décodeurs de payloads socket. La gateway émet ses
     /// dates en ISO 8601 (avec ou sans fractions) — un `JSONDecoder()` nu
     /// (stratégie par défaut = Double epoch) fait échouer TOUT payload
@@ -411,8 +414,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         d.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
             let dateStr = try container.decode(String.self)
-            if let date = SocialSocketManager.isoFormatterWithFractional.date(from: dateStr) { return date }
-            if let date = SocialSocketManager.isoFormatterBasic.date(from: dateStr) { return date }
+            if let date = WireDate.date(from: dateStr) { return date }
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(dateStr)")
         }
         return d
@@ -1230,6 +1232,16 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
             guard let self else { return }
             self.decode(SocketCommentMediaUpdatedData.self, from: data) { [weak self] payload in
                 self?.commentMediaUpdated.send(payload)
+            }
+        }
+
+        // Source de vérité : `packages/shared/types/socketio-events/event-names.ts`
+        // → `MEDIA_CAPTION_TRANSLATION_UPDATED: 'media:caption-translation-updated'`
+        // (#6280).
+        socket.on("media:caption-translation-updated") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(SocketMediaCaptionTranslationUpdatedData.self, from: data) { [weak self] payload in
+                self?.mediaCaptionTranslationUpdated.send(payload)
             }
         }
 

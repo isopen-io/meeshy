@@ -53,6 +53,12 @@ export interface EmailTranslations {
     expiry: string;
     ignoreNote: string;
   };
+  passwordSet: {
+    subject: string;
+    title: string;
+    intro: string;
+    buttonText: string;
+  };
   passwordChanged: {
     subject: string;
     title: string;
@@ -115,6 +121,12 @@ export const translations: Record<SupportedLanguage, EmailTranslations> = {
       expiry: 'Ce lien expire dans {minutes} minutes.',
       ignoreNote: "Si vous n'avez pas fait cette demande, ignorez cet email"
     },
+    passwordSet: {
+      subject: 'Définissez votre mot de passe - Meeshy',
+      title: 'Définir votre mot de passe',
+      intro: 'Vous avez demandé à définir un mot de passe pour votre compte Meeshy :',
+      buttonText: 'Définir mon mot de passe'
+    },
     passwordChanged: {
       subject: 'Votre mot de passe a été modifié - Meeshy',
       title: 'Mot de passe modifié',
@@ -174,6 +186,12 @@ export const translations: Record<SupportedLanguage, EmailTranslations> = {
       buttonText: 'Reset password',
       expiry: 'This link expires in {minutes} minutes.',
       ignoreNote: 'If you did not make this request, please ignore this email'
+    },
+    passwordSet: {
+      subject: 'Set your password - Meeshy',
+      title: 'Set your password',
+      intro: 'You have requested to set a password for your Meeshy account:',
+      buttonText: 'Set my password'
     },
     passwordChanged: {
       subject: 'Your password has been changed - Meeshy',
@@ -235,6 +253,12 @@ export const translations: Record<SupportedLanguage, EmailTranslations> = {
       expiry: 'Este enlace expira en {minutes} minutos.',
       ignoreNote: 'Si no hiciste esta solicitud, ignora este correo'
     },
+    passwordSet: {
+      subject: 'Establece tu contraseña - Meeshy',
+      title: 'Establecer tu contraseña',
+      intro: 'Has solicitado establecer una contraseña para tu cuenta de Meeshy:',
+      buttonText: 'Establecer mi contraseña'
+    },
     passwordChanged: {
       subject: 'Tu contraseña ha sido cambiada - Meeshy',
       title: 'Contraseña cambiada',
@@ -294,6 +318,12 @@ export const translations: Record<SupportedLanguage, EmailTranslations> = {
       buttonText: 'Redefinir senha',
       expiry: 'Este link expira em {minutes} minutos.',
       ignoreNote: 'Se você não fez esta solicitação, ignore este email'
+    },
+    passwordSet: {
+      subject: 'Defina sua senha - Meeshy',
+      title: 'Definir sua senha',
+      intro: 'Você solicitou definir uma senha para sua conta Meeshy:',
+      buttonText: 'Definir minha senha'
     },
     passwordChanged: {
       subject: 'Sua senha foi alterada - Meeshy',
@@ -355,6 +385,12 @@ export const translations: Record<SupportedLanguage, EmailTranslations> = {
       expiry: 'Questo link scade tra {minutes} minuti.',
       ignoreNote: 'Se non hai fatto questa richiesta, ignora questa email'
     },
+    passwordSet: {
+      subject: 'Imposta la tua password - Meeshy',
+      title: 'Imposta la tua password',
+      intro: 'Hai richiesto di impostare una password per il tuo account Meeshy:',
+      buttonText: 'Imposta la mia password'
+    },
     passwordChanged: {
       subject: 'La tua password è stata modificata - Meeshy',
       title: 'Password Modificata',
@@ -414,6 +450,12 @@ export const translations: Record<SupportedLanguage, EmailTranslations> = {
       buttonText: 'Passwort zurücksetzen',
       expiry: 'Dieser Link läuft in {minutes} Minuten ab.',
       ignoreNote: 'Wenn du diese Anfrage nicht gestellt hast, ignoriere diese E-Mail'
+    },
+    passwordSet: {
+      subject: 'Lege dein Passwort fest - Meeshy',
+      title: 'Passwort festlegen',
+      intro: 'Du hast angefordert, ein Passwort für dein Meeshy-Konto festzulegen:',
+      buttonText: 'Mein Passwort festlegen'
     },
     passwordChanged: {
       subject: 'Dein Passwort wurde geändert - Meeshy',

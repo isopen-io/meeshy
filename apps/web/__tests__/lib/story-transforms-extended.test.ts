@@ -538,6 +538,49 @@ describe('postToStoryData - mediaById lookup', () => {
     }));
     expect(withoutEither.mediaById?.get('pm-2')?.aspectRatio).toBeUndefined();
   });
+
+  // #6737 — `alt` doit descendre le Prisme du lecteur, pas voyager brut :
+  // `MediaObject` (CanvasV3Scene) sert tel quel ce que `mediaById` lui remet,
+  // donc c'est ICI, au site qui construit la carte, que la traduction se joue.
+  it('serves the original alt when no preferred language is given', () => {
+    const post = createPost({
+      media: [{ id: 'pm-1', mimeType: 'image/jpeg', fileUrl: 'https://a.jpg', order: 0, alt: 'A cat' }],
+    });
+    const result = postToStoryData(post);
+    expect(result.mediaById?.get('pm-1')?.alt).toBe('A cat');
+  });
+
+  it('serves the Prisme-translated alt for the preferred language', () => {
+    const post = createPost({
+      media: [{
+        id: 'pm-1',
+        mimeType: 'image/jpeg',
+        fileUrl: 'https://a.jpg',
+        order: 0,
+        alt: 'A cat',
+        altLanguage: 'en',
+        altTranslations: { fr: { text: 'Un chat' } },
+      }],
+    });
+    const result = postToStoryData(post, ['fr']);
+    expect(result.mediaById?.get('pm-1')?.alt).toBe('Un chat');
+  });
+
+  it('falls back to the original alt when no translation matches the preferred languages', () => {
+    const post = createPost({
+      media: [{
+        id: 'pm-1',
+        mimeType: 'image/jpeg',
+        fileUrl: 'https://a.jpg',
+        order: 0,
+        alt: 'A cat',
+        altLanguage: 'en',
+        altTranslations: { es: { text: 'Un gato' } },
+      }],
+    });
+    const result = postToStoryData(post, ['fr']);
+    expect(result.mediaById?.get('pm-1')?.alt).toBe('A cat');
+  });
 });
 
 // Constat 12 — la sentinelle v3 doit tolérer `v >= 3` (spec, storyEffectsV3.ts,

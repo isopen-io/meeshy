@@ -50,7 +50,6 @@ struct ComposerSceneSurface: View {
     /// bas. La surface ne décide de rien — elle ne peut simplement pas
     /// interroger `ComposerSceneFloatingRail` sans dire pour quoi elle compose.
     let format: ComposerFormat
-    let formatFan: AnyView?
     let overflowMenu: AnyView?
     let onClose: () -> Void
 
@@ -582,7 +581,6 @@ struct ComposerSceneSurface: View {
         VStack(alignment: .leading, spacing: 0) {
             ComposerTopBar(
                 slideRailSlot: slideRailSlot,
-                formatFan: formatFan,
                 overflowMenu: overflowMenu,
                 onClose: onClose,
             )

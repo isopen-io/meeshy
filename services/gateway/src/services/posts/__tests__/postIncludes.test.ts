@@ -96,12 +96,34 @@ describe('posts/postIncludes — canonical shared selects', () => {
         'order',
         'caption',
         'alt',
+        'captionLanguage',
+        'captionTranslations',
+        'altLanguage',
+        'altTranslations',
         'language',
         'variantOf',
         'transcription',
         'translations',
       ];
       expect(Object.keys(mediaSelect).sort()).toEqual(expectedKeys.sort());
+    });
+
+    it('exposes the caption translation fields (#6280) — distinct from the audio-track translations', () => {
+      expect(mediaSelect).toEqual(
+        expect.objectContaining({
+          captionLanguage: true,
+          captionTranslations: true,
+        }),
+      );
+    });
+
+    it('exposes the alt-text translation fields (#6737) — distinct from the caption translations', () => {
+      expect(mediaSelect).toEqual(
+        expect.objectContaining({
+          altLanguage: true,
+          altTranslations: true,
+        }),
+      );
     });
   });
 

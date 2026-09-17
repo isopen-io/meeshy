@@ -978,6 +978,20 @@ model MessageAttachment {
   /// Caption/legend displayed with the attachment
   caption String?
 
+  // Légende — traduction (Prisme), champs ADDITIFS, même forme que
+  // `PostMedia.captionLanguage` / `.captionTranslations` (#6280) — réutilise
+  // `MediaCaptionTranslations` (packages/shared/types/media-caption-translation.ts)
+  // SANS modification. DISTINCTE de `translations` (pistes audio/transcriptions,
+  // déjà occupée) et de `language` — voir schema PostMedia pour le même garde-fou.
+  //
+  // GUARDÉES fail-closed : un attachement à vue unique (`isViewOnce`), flouté
+  // (`isBlurred`) ou chiffré (`isEncrypted`) ne déclenche JAMAIS de traduction
+  // de légende — décision #6533, packages/shared/decisions.md § 2026-09-14.
+  // `MessageAttachmentCaptionTranslationService` (services/gateway) est le seul
+  // écrivain de ces deux colonnes.
+  captionLanguage     String? // langue source détectée/déclarée de `caption`
+  captionTranslations Json? // { [lang]: { text, translationModel, confidenceScore, createdAt, updatedAt? } } — voir MediaCaptionTranslations
+
   // =====================================================
   // FORWARDING FIELDS
   // =====================================================
@@ -3630,6 +3644,34 @@ model PostMedia {
   // Description
   caption      String?
   alt          String?  // Accessibilité
+
+  /// Langue SOURCE de `caption` (ISO 639-1, détectée à l'écriture). DISTINCTE
+  /// de `language` ci-dessous, qui décrit la langue du MÉDIA (variantes
+  /// TTS/sous-titres) — pas celle de sa légende. `null` tant que `caption` est
+  /// vide ou n'a pas encore été traduite (#6280).
+  captionLanguage String?
+  /// Traductions de `caption`, MÊME forme que `Post.translations`
+  /// (`{ "fr": { text, translationModel, confidenceScore?, createdAt, updatedAt? } }`).
+  /// DISTINCTE de `translations` ci-dessous, déjà prise par les pistes
+  /// audio/transcriptions traduites — n'y range JAMAIS une légende, et
+  /// inversement. Voir `packages/shared/types/media-caption-translation.ts`
+  /// et `packages/shared/decisions.md` § 2026-09-14 (#6280).
+  captionTranslations Json?
+
+  /// Langue SOURCE de `alt` (ISO 639-1, détectée à l'écriture). Jumelle exacte
+  /// de `captionLanguage`, appliquée au texte alternatif d'accessibilité
+  /// plutôt qu'à la légende éditoriale (#6737, suite de la décision #6534 :
+  /// le web a un producteur ET un consommateur réels pour `alt`, contrairement
+  /// à iOS — écrit sans jamais être rendu à VoiceOver, #6738 — et Android —
+  /// sans producteur ni consommateur, #6739). `null` tant que `alt` est vide
+  /// ou n'a pas encore été traduit.
+  altLanguage String?
+  /// Traductions de `alt`, MÊME forme que `captionTranslations` — réutilise
+  /// `MediaCaptionTranslationEntry`/`mediaCaptionTranslationsSchema`
+  /// (`packages/shared/types/media-caption-translation.ts`, écrit pour ce cas
+  /// précis) SANS modification. DISTINCTE de `captionTranslations` (traduit
+  /// `caption`, pas `alt`) et de `translations` ci-dessous (pistes audio).
+  altTranslations Json?
 
   // Transcription audio (même structure que Attachment.transcription)
   /// Structure: {

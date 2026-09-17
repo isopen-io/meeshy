@@ -41,6 +41,14 @@ public struct MeeshyScenePlayer: View {
     private let contentProgressHandler: ((Double) -> Void)?
     private let playbackProgressingHandler: ((Bool) -> Void)?
     private var playbackTimeHandler: ((Double) -> Void)?
+    /// **La position à laquelle la scène s'OUVRE** (#6580) — la moitié
+    /// manquante d'`onPlaybackTime`. La carte publie sa position ; l'hôte du
+    /// détail la rend ici, et la scène reprend à la bonne seconde au lieu de
+    /// tout recommencer. Elle voyage par l'INIT, comme les autres fils du
+    /// contrat B4 et pour la même raison (E4) : un fil chaîné sort de la
+    /// fenêtre équilibrée qu'une garde de couture relit.
+    private let startAt: Double
+    private let servesLetterboxFill: Bool
     @Binding private var sceneIndex: Int
     @Binding private var isPlaying: Bool
     /// `startsPaused` réalisé : la commande de lecture n'est honorée qu'À PARTIR
@@ -67,6 +75,8 @@ public struct MeeshyScenePlayer: View {
                 preferredContentLanguages: [String] = [],
                 isMuted: Bool? = nil,
                 isOutgoing: Bool = false,
+                startAt: Double = 0,
+                servesLetterboxFill: Bool = true,
                 preloadedImages: [String: UIImage] = [:],
                 preloadedVideoURLs: [String: URL] = [:],
                 preloadedAudioURLs: [String: URL] = [:],
@@ -82,6 +92,8 @@ public struct MeeshyScenePlayer: View {
         self.languages = preferredContentLanguages
         self.requestedMute = isMuted
         self.isOutgoing = isOutgoing
+        self.startAt = startAt
+        self.servesLetterboxFill = servesLetterboxFill
         self.preloadedImages = preloadedImages
         self.preloadedVideoURLs = preloadedVideoURLs
         self.preloadedAudioURLs = preloadedAudioURLs
@@ -119,12 +131,19 @@ public struct MeeshyScenePlayer: View {
     public nonisolated static func carrierMediaIdentity(in document: CanvasV3,
                                                         sceneIndex: Int) -> String? {
         guard document.scenes.indices.contains(sceneIndex) else { return nil }
-        guard let carrier = document.scenes[sceneIndex].objects
-                .filter({ $0.kind == .media && $0.plane == .content })
-                .min(by: { $0.z < $1.z }) else { return nil }
-        guard case .string(let identity)? = carrier.payload["postMediaId"],
-              !identity.isEmpty else { return nil }
-        return identity
+        // Aucune restriction de PLAN : un fond `plane: bg` référencé (forme
+        // servie par la passerelle, contrat des deux orthographes #6894) est
+        // tout autant le porteur de la scène qu'un média `plane: content` —
+        // c'est même, sur un tel document, son SEUL média. `mediaReference`
+        // est le site unique des deux orthographes ; le relire ici a divergé
+        // du contrat une fois déjà (#6894).
+        return document.scenes[sceneIndex].objects
+            .filter { $0.kind == .media }
+            .compactMap { object -> (z: Int, identity: String)? in
+                guard let identity = object.mediaReference else { return nil }
+                return (object.z, identity)
+            }
+            .min { $0.z < $1.z }?.identity
     }
 
     /// La naissance est en pause dans les trois modes ; la commande du viewer ne
@@ -194,8 +213,7 @@ public struct MeeshyScenePlayer: View {
         let scene = document.scenes[sceneIndex]
         let addressed = scene.objects
             .compactMap { object -> (z: Int, identity: String)? in
-                guard case .string(let identity)? = object.payload["postMediaId"],
-                      !identity.isEmpty else { return nil }
+                guard let identity = object.mediaReference else { return nil }
                 return (object.z, identity)
             }
             .min { $0.z < $1.z }?.identity
@@ -224,6 +242,19 @@ public struct MeeshyScenePlayer: View {
                                                              hasAppeared: hasAppeared,
                                                              isPlaying: isPlaying),
                                  isOutgoing: isOutgoing,
+                                 startAt: startAt,
+                                 // #6636 — le lecteur qui présente l'image
+                                 // seule ne fait plus peindre la bande.
+                                 servesLetterboxFill: servesLetterboxFill,
+                                 // **La position se LÈGUE d'une surface à la
+                                 // suivante** (#6580) : la carte du fil joue,
+                                 // le plein écran qu'elle ouvre reprend là. La
+                                 // clé est celle du PORTEUR + du rang de scène,
+                                 // la seule que les deux surfaces partagent —
+                                 // l'identité d'hôte, elle, porte le n° de
+                                 // boucle, qui leur est propre.
+                                 positionKey: ScenePlaybackPositions.key(
+                                    carrierId: carrier?.id, sceneIndex: sceneIndex),
                                  onCompletion: loopHandler,
                                  onContentReady: contentReadyHandler,
                                  onContentProgress: contentProgressHandler,

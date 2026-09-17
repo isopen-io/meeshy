@@ -1,3 +1,4 @@
+import { useId, useState } from 'react';
 import { useStore } from 'zustand/react';
 
 import '@/styles/floating-menus.css';
@@ -11,7 +12,8 @@ import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interfac
 import { useNotificationCounts } from '@/lib/view/use-notification-counts';
 import { usePendingFriendRequestCount } from '@/lib/view/use-pending-friend-requests';
 import { initialsOf } from '@/lib/view/conversation';
-import { FEED_DESTINATION, MENU_LADDER, PROFILE_DESTINATION, type FloatingDestination } from '@/lib/view/floating-menu';
+import { PROFILE_DESTINATION, feedDiscDestination, menuLadderFor, type FloatingDestination } from '@/lib/view/floating-menu';
+import { isContextMenuKey } from '@/lib/view/long-press';
 import {
   FEED_DEFAULT,
   FLOATING_BUTTON,
@@ -22,8 +24,12 @@ import {
   floatingLeft,
   floatingTop,
   ladderExpandsDown,
+  ladderPitch,
+  ladderRooms,
   ladderRungOffset,
+  type LadderRooms,
 } from '@/lib/view/floating-pose';
+import { useAdminAccess } from '@/lib/view/use-admin-access';
 import { useFloatingDrag } from '@/lib/view/use-floating-drag';
 import { useRovingMenu } from '@/lib/view/roving-menu';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
@@ -36,9 +42,10 @@ import { Link, href, navigate } from '@/routes/route-table';
  * `RootView.draggableFloatingButtons` (`apps/ios/.../RootView.swift:1550`).
  *
  * **Les deux boutons ne sont PAS symétriques, et c'est le fait qui gouverne ce
- * fichier.** Celui de gauche ne déplie rien : il OUVRE le Flux, et c'est donc
- * un lien. Celui de droite porte le visage de la personne et déplie une
- * échelle de six barreaux. Les traiter comme deux instances d'un même objet
+ * fichier.** Celui de gauche ne déplie rien : il NAVIGUE, et c'est donc un
+ * lien — vers le Flux, ou vers les conversations depuis le Flux, et vers les
+ * Réels à l'appui long (#6456). Celui de droite porte le visage de la personne et déplie une
+ * échelle de six barreaux — sept pour qui administre (#6458). Les traiter comme deux instances d'un même objet
  * aurait demandé une abstraction qui n'aurait servi qu'à les rendre pareils —
  * ils ne le sont pas.
  *
@@ -111,17 +118,60 @@ function rungLabel(language: InterfaceLanguage, destination: FloatingDestination
   return translate(language, count === 1 ? labels.one : labels.other, { count: labels.text(count) });
 }
 
-export function FloatingMenus() {
+/**
+ * **LA PLACE DE L'ÉCHELLE, MESURÉE** (#6458) — le centre du disque et le cadre
+ * de la couche, lus au navigateur ; la barre d'état se lit sur le témoin de
+ * position `start`, posé par la même loi que le disque (`top` du couloir =
+ * barre d'état + 126). Aucune cote n'est recopiée : c'est le motif de
+ * `use-floating-drag.ts`.
+ *
+ * Un cadre DÉGÉNÉRÉ (hors mise en page, ou un document de témoin) rend
+ * `null` : le pas d'iOS s'applique, jamais un pas calculé depuis des zéros.
+ */
+function measureLadderRooms(button: HTMLElement | null): LadderRooms | null {
+  const couche = button?.closest('.floating-menus') ?? null;
+  const sonde = couche?.querySelector('[data-floating-probe="start"]') ?? null;
+  if (button === null || couche === null || sonde === null) return null;
+
+  const cadre = couche.getBoundingClientRect();
+  if (cadre.height <= 0) return null;
+  const disque = button.getBoundingClientRect();
+
+  return ladderRooms({
+    center: disque.top + disque.height / 2,
+    frameTop: cadre.top,
+    frameBottom: cadre.bottom,
+    safeTop: sonde.getBoundingClientRect().top - cadre.top - FLOATING_TOP,
+  });
+}
+
+/** Les Réels sans graine — `ReelsPresenter.presentFresh()`, le geste de l'appui long. */
+const ouvrirReels = () => navigate(href('reels'));
+
+export function FloatingMenus({ routeKey }: { readonly routeKey: string }) {
   const session = useStore(sessionStore, (s) => s.session);
   const unread = useNotificationCounts().data?.unread ?? 0;
   const pendingFriendRequests = usePendingFriendRequestCount();
   const counts: RungCounts = { unreadNotifications: unread, pendingFriendRequests };
-  const flux = useFloatingDrag('feed', FEED_DEFAULT);
+  /* LA BASCULE (#6456) : où le tap mène, lu sur la route que la coquille sert. */
+  const disque = feedDiscDestination(routeKey);
+  const indiceDisque = useId();
+  const flux = useFloatingDrag('feed', FEED_DEFAULT, { onLongPress: ouvrirReels });
   const menu = useFloatingDrag('menu', MENU_DEFAULT);
   const expandsDown = ladderExpandsDown(menu.position.y);
 
-  const roving = useRovingMenu({ itemCount: MENU_LADDER.length });
+  /* L'ÉCHELLE DE CE LECTEUR (#6458) : le barreau d'administration n'existe que
+     sur une matrice SERVIE portant le droit — jamais monté puis masqué. */
+  const ladder = menuLadderFor({ canAccessAdmin: useAdminAccess() });
+  const [rooms, setRooms] = useState<LadderRooms | null>(null);
+
+  const roving = useRovingMenu({
+    itemCount: ladder.length,
+    /* Une rotation échelle ouverte change la place : le pas se remesure. */
+    onResize: () => setRooms(measureLadderRooms(roving.buttonRef.current)),
+  });
   const { open, setOpen, closeAndFocusButton, activeIndex, buttonRef, menuRef, itemRefs, onMenuKeyDown } = roving;
+  const pitch = ladderPitch({ count: ladder.length, room: rooms === null ? null : expandsDown ? rooms.down : rooms.up });
 
   /* La langue d'INTERFACE, lue au rendu : son catalogue est chargé avec le
      chunk de ce composant (`shell.tsx`, #6206). */
@@ -148,6 +198,9 @@ export function FloatingMenus() {
       navigate(href('profile'));
       return;
     }
+    /* La place se mesure AVANT de monter l'échelle : ses barreaux naissent à
+       leur pas définitif, jamais à celui d'iOS pour sauter à la suivante. */
+    setRooms(measureLadderRooms(buttonRef.current));
     setOpen(true);
   };
 
@@ -183,16 +236,39 @@ export function FloatingMenus() {
         style={{ left: floatingLeft({ x: 1, y: 1 }), top: floatingTop({ x: 1, y: 1 }), width: 0, height: 0 }}
       />
 
-      {/* LE BOUTON DE GAUCHE — un LIEN, parce qu'il navigue et rien d'autre. */}
+      {/* L'INDICE DU GESTE INVISIBLE — `leftA11yHint` d'iOS : un appui long que
+          rien ne signale à l'écran doit au moins être ANNONCÉ. Hors du lien,
+          pour ne pas entrer dans son nom ; `hidden`, pour n'être lu QUE comme
+          sa description (#6499) — un `sr-only` restait un texte que le
+          balayage de VoiceOver et TalkBack lisait seul. `aria-describedby`
+          lit un élément masqué qu'il référence directement. */}
+      <span id={indiceDisque} hidden>
+        {translate(langue, 'a11y.floating.feed.hint')}
+      </span>
+
+      {/* LE BOUTON DE GAUCHE — un LIEN, parce qu'il navigue et rien d'autre.
+          Son adresse, son nom et son glyphe sont ceux de la destination du tap
+          (#6456) : Flux, ou Conversations quand on est sur le Flux. */}
       <Link
-        to="feed"
+        to={disque.route}
         data-floating-feed
+        data-disc-face={disque.key}
         data-dragging={flux.dragging ? 'true' : undefined}
-        aria-label={translate(langue, FEED_DESTINATION.labelKey)}
+        aria-label={translate(langue, disque.labelKey)}
+        aria-describedby={indiceDisque}
+        aria-keyshortcuts="Shift+F10"
         onPointerDown={flux.onPointerDown}
         onPointerMove={flux.onPointerMove}
         onPointerUp={flux.onPointerUp}
         onPointerCancel={flux.onPointerCancel}
+        onContextMenu={flux.onContextMenu}
+        /* L'APPUI LONG AU CLAVIER — les deux touches du menu d'un message
+           (`long-press.ts`) : même geste, même effet. */
+        onKeyDown={(event) => {
+          if (!isContextMenuKey(event)) return;
+          event.preventDefault();
+          ouvrirReels();
+        }}
         /* **UN LIEN EST NATIVEMENT DÉPLAÇABLE**, et c'est ce qui cassait le
            geste : le glisser-déposer du navigateur démarrait au premier
            mouvement, emportait la suite des événements de pointeur, et le
@@ -223,7 +299,7 @@ export function FloatingMenus() {
             : { transform: `translate(${flux.offset.x}px, ${flux.offset.y}px) scale(1.15)` }),
         }}
       >
-        <MenuGlyph glyph={FEED_DESTINATION.glyph} size={22} />
+        <MenuGlyph glyph={disque.glyph} size={22} />
       </Link>
 
       {/* LE BOUTON DE DROITE ET SON ÉCHELLE — un seul bloc positionné, pour que
@@ -248,7 +324,7 @@ export function FloatingMenus() {
             onKeyDown={onMenuKeyDown}
             className="pointer-events-none absolute inset-0"
           >
-            {MENU_LADDER.map((destination, index) => (
+            {ladder.map((destination, index) => (
               <Link
                 key={destination.key}
                 to={destination.route}
@@ -264,7 +340,7 @@ export function FloatingMenus() {
                   {
                     '--rung': index,
                     left: '50%',
-                    top: `calc(50% + ${ladderRungOffset(index, expandsDown)}px)`,
+                    top: `calc(50% + ${ladderRungOffset(index, expandsDown, pitch)}px)`,
                     width: LADDER_RUNG,
                     height: LADDER_RUNG,
                     backgroundImage: `linear-gradient(135deg, ${destination.tint}, color-mix(in srgb, ${destination.tint} 70%, #000))`,

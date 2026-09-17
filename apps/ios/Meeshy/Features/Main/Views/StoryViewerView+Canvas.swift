@@ -686,6 +686,7 @@ struct StoryCardView: View {
     /// Cf. doc de `RenderableSlideCache` — partagé par les 3 lecteurs du
     /// slide renderable dans ce body (representable, fond média, backdrop).
     @State private var renderableSlideCache = RenderableSlideCache()
+    @State var imageOnlyVerdictCache = StoryImageOnlyVerdictCache() // #6636 — `+ImageOnly`
 
     // Story content
     let currentStory: StoryItem?
@@ -1041,6 +1042,7 @@ struct StoryCardView: View {
                               carrier: outgoing,
                               preferredContentLanguages: resolvedViewerLanguageChain,
                               isOutgoing: true,
+                              servesLetterboxFill: imageOnlyRect(of: outgoing) == nil,
                               preloadedImages: preloadedImages,
                               preloadedVideoURLs: preloadedVideoURLs,
                               preloadedAudioURLs: preloadedAudioURLs)
@@ -1051,7 +1053,8 @@ struct StoryCardView: View {
                                      preloadedImages: preloadedImages,
                                      preloadedVideoURLs: preloadedVideoURLs,
                                      preloadedAudioURLs: preloadedAudioURLs,
-                                     isOutgoing: true)
+                                     isOutgoing: true,
+                                     servesLetterboxFill: imageOnlyRect(of: outgoing) == nil)
         }
     }
 
@@ -1097,6 +1100,7 @@ struct StoryCardView: View {
                               carrier: story,
                               preferredContentLanguages: resolvedViewerLanguageChain,
                               isMuted: isGlobalMuted,
+                              servesLetterboxFill: imageOnlyRect(of: story) == nil,
                               preloadedImages: preloadedImages,
                               preloadedVideoURLs: preloadedVideoURLs,
                               preloadedAudioURLs: preloadedAudioURLs,
@@ -1115,6 +1119,7 @@ struct StoryCardView: View {
                                      preloadedAudioURLs: preloadedAudioURLs,
                                      mute: isGlobalMuted,
                                      isPaused: isCanvasPlaybackPaused,
+                                     servesLetterboxFill: imageOnlyRect(of: story) == nil,
                                      onContentReady: { isContentReady = true },
                                      onContentProgress: { p in slideContentProgress = latchedContentProgress(p) },
                                      onPlaybackProgressing: { progressing in
@@ -1169,7 +1174,11 @@ struct StoryCardView: View {
 
     /// `true` quand le canvas est étendu plein bord (`.free`) — pilote le voile,
     /// l'ombre et l'animation de la carte en phase avec le cadrage.
-    var canvasIsExpanded: Bool { canvasPresentation == .free } // internal : idem
+    /// **#6806 — `!= .carded`, et non `== .free`.** La session plein écran rend
+    /// désormais `.immersive` (le canvas couvre le viewport) ; un test sur
+    /// `.free` seul aurait laissé le voile, l'ombre et l'animation de carte
+    /// croire qu'on est encore cardé au moment le plus plein écran de tous.
+    var canvasIsExpanded: Bool { canvasPresentation != .carded } // internal : idem
 
     var readerCanvasFraming: StoryCanvasFraming.Result { // internal : idem
         StoryCanvasFraming.resolve(.init(
@@ -1179,13 +1188,15 @@ struct StoryCardView: View {
             sideInset: 8,                 // marges latérales ÷2 (it.48) — carte plus proche des bords L/R
             state: canvasPresentation,
             cardedCornerRadius: 22,
-            // Portrait : la carte se place DIRECTEMENT sous la ligne
-            // d'expiration (directive 2026-07-04) — le mou vertical va en bas.
-            // Paysage (16:9) : la carte est CENTRÉE dans la région libre
-            // (directive 2026-07-13 « la position des vidéos landscape doit
-            // être au centre ») — collée au header elle laissait tout le vide
-            // en bas de l'écran.
-            verticalAlignment: readerCanvasRatio > 1 ? .center : .top,
+            // #6760 — l'alignement n'est plus décidé ici : il appartient au
+            // PLATEAU, que les quatre surfaces partagent. La directive du
+            // 2026-09-15 (« ce qui est construit se pose sur le plateau au
+            // milieu […] reprendre la même logique dans le reader de story »)
+            // supplante celle du 2026-07-04, qui collait toute scène PORTRAIT
+            // sous la ligne d'expiration. Les trois dates et le raisonnement
+            // vivent chez `StageChromeAlignment.verticalAlignment` — pas ici,
+            // pour qu'une seule surface ne puisse pas les faire diverger.
+            verticalAlignment: StageChromeAlignment.verticalAlignment(canvasRatio: readerCanvasRatio),
             canvasRatio: readerCanvasRatio))
     }
 
@@ -1249,21 +1260,9 @@ struct StoryCardView: View {
                     .clipped()
                     .opacity(outgoingOpacity)
                     .scaleEffect(closingScale)
-                    // Canvas sortant suit la carte (même cadrage) pendant le cross-fade.
-                    // clipShape AVANT scale/offset : appliqué après, le clip
-                    // restait sur les bounds NON déplacés — le contenu décalé
-                    // vers le bas gardait un bord HAUT brut (coins carrés) et
-                    // se faisait rogner en bas par les coins arrondis du rect
-                    // d'origine (bug user 2026-07-11 « haut carré, bas à
-                    // moitié arrondi »). Rayon compensé : le clip vit en
-                    // espace non-scalé.
-                    .clipShape(RoundedRectangle(
-                        cornerRadius: readerCanvasFraming.scale > 0
-                            ? readerCanvasFraming.cornerRadius / readerCanvasFraming.scale
-                            : readerCanvasFraming.cornerRadius,
-                        style: .continuous))
-                    .scaleEffect(readerCanvasFraming.scale)
-                    .offset(y: readerCanvasFraming.offset.height)
+                    // Canvas sortant suit la carte (même cadrage, même forme —
+                    // l'image seule quand il n'est qu'une image, #6636).
+                    .readerCard(framing: readerCanvasFraming, imageRect: imageOnlyRect(of: outgoing))
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
@@ -1346,16 +1345,9 @@ struct StoryCardView: View {
                         RevealCircleShape(progress: isRevealActive ? 1.0 : (currentStory?.storyEffects?.opening == .reveal ? 0.001 : 1.0))
                     )
                     // Carte → plein écran (mutualisé composer). Visuel pur (la frame
-                    // reste `canvasFitSize` → projection design→render intacte).
-                    // clipShape AVANT scale/offset (cf. canvas sortant ci-dessus :
-                    // après, le haut restait carré et le bas à moitié arrondi).
-                    .clipShape(RoundedRectangle(
-                        cornerRadius: readerCanvasFraming.scale > 0
-                            ? readerCanvasFraming.cornerRadius / readerCanvasFraming.scale
-                            : readerCanvasFraming.cornerRadius,
-                        style: .continuous))
-                    .scaleEffect(readerCanvasFraming.scale)
-                    .offset(y: readerCanvasFraming.offset.height)
+                    // reste `canvasFitSize` → projection design→render intacte) ;
+                    // l'image seule quand la story n'est qu'une image (#6636).
+                    .readerCard(framing: readerCanvasFraming, imageRect: imageOnlyRect(of: story))
                     // Ombre portée : la carte se détache du backdrop ThumbHash flou (même
                     // contenu) par son BORD arrondi + son ombre, pas par un voile sombre
                     // (demande user 2026-06-02 « bords arrondis + ThumbHash en fond »).
@@ -1418,16 +1410,9 @@ struct StoryCardView: View {
                     .frame(width: canvasFitSize.width,
                            height: canvasFitSize.height)
                     .clipped()
-                    // Le loader suit la carte (même cadrage) → pas de saut entre le
-                    // placeholder ThumbHash carté et le canvas carté.
-                    // clipShape AVANT scale/offset (même correctif que le canvas).
-                    .clipShape(RoundedRectangle(
-                        cornerRadius: readerCanvasFraming.scale > 0
-                            ? readerCanvasFraming.cornerRadius / readerCanvasFraming.scale
-                            : readerCanvasFraming.cornerRadius,
-                        style: .continuous))
-                    .scaleEffect(readerCanvasFraming.scale)
-                    .offset(y: readerCanvasFraming.offset.height)
+                    // Le loader suit la carte (même cadrage, même forme) → pas de
+                    // saut entre le placeholder ThumbHash et le canvas.
+                    .readerCard(framing: readerCanvasFraming, imageRect: imageOnlyRect(of: story))
                     .animation(.spring(response: 0.42, dampingFraction: 0.84), value: canvasIsExpanded)
                     .allowsHitTesting(false)
                     .transition(.opacity)
@@ -1461,39 +1446,8 @@ struct StoryCardView: View {
             // rail (`StoryActionSidebarView`, via `displayedLanguageCode`), au
             // point d'entrée des traductions. Plus de badge flottant ici.
 
-            // === Layer 5: Gradient scrims for readability over photos ===
-            VStack {
-                LinearGradient(
-                    stops: [
-                        .init(color: .black.opacity(0.7), location: 0),
-                        .init(color: .black.opacity(0.4), location: 0.5),
-                        .init(color: .black.opacity(0.0), location: 1)
-                    ],
-                    startPoint: .top, endPoint: .bottom
-                )
-                .frame(height: topInset + 110)
-                Spacer()
-                // Scrim bottom plus opaque + plus haut — assure que le caption
-                // texte d'une slide (rendu par le canvas à y≈0.95 en design
-                // coords) ne déborde plus visuellement sur la zone composer
-                // « Commenter... ». Le canvas du reader est positionné au
-                // centre du geometry (9:16 fit-to-width), donc un text
-                // positioné bas du slide tombe juste au-dessus du composer.
-                // Sans ce scrim fort, les deux se superposent — symptôme
-                // user-reporté 2026-05-27.
-                LinearGradient(
-                    stops: [
-                        .init(color: .black.opacity(0.0), location: 0),
-                        .init(color: .black.opacity(0.55), location: 0.45),
-                        .init(color: .black.opacity(0.92), location: 1)
-                    ],
-                    startPoint: .top, endPoint: .bottom
-                )
-                .frame(height: 240)
-            }
-            .ignoresSafeArea()
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
+            // === Layer 5: voiles de lisibilité — ils suivent le chrome (#6701) ===
+            StoryReaderScrims(topInset: topInset, chromeVisible: chromeVisible)
 
             // === Layer 6: Gesture overlay (tap left/right, long press) ===
             StoryGestureOverlayView(

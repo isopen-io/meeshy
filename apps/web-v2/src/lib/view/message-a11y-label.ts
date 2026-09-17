@@ -52,11 +52,15 @@ import type { Attachment, Message } from '@/lib/api/types';
  * vocabulaire ferait dire deux choses différentes à l'œil et à l'oreille
  * pour un même état.
  */
-const PROTECTED_LABEL: Readonly<Record<Exclude<ProtectionKind, 'standard'>, string>> = {
+const PROTECTED_LABEL: Readonly<Record<Exclude<ProtectionKind, 'standard'> | 'withheld', string>> = {
   deleted: 'Message supprimé',
   burned: 'Message vu et supprimé',
   expired: 'Message éphémère expiré',
   veiled: 'Contenu masqué',
+  /** Le contenu N'EST PAS dans la charge — voir `ProtectedContent.revealable`
+   * (#6862). Distinct de `veiled`, où le texte est là et se révèle : annoncer
+   * « masqué » ferait attendre un geste qui n'existe pas. */
+  withheld: 'Contenu retenu',
 };
 
 const pluralize = (count: number, singular: string, plural: string): string =>
@@ -120,13 +124,28 @@ export type MessageLabelInput = {
    * appelant qui l'oublie.
    */
   readonly protection: ProtectionKind;
+  /**
+   * LE CONTENU N'EST PAS DANS LA CHARGE (#6862) — le même verdict SERVI que
+   * `ProtectedContent.revealable` consomme, et pour la même raison : le
+   * libellé lu doit dire ce que la rangée PEINT. Sans lui, un lecteur d'écran
+   * annonçait le nom de l'auteur puis rien du tout, là où l'œil voit
+   * « Contenu retenu ».
+   */
+  readonly contentWithheld?: boolean;
 };
 
 /**
  * Compose le libellé complet d'une rangée de message — appelé UNE fois par
  * rangée montée (Focal, Script ou Bulles), jamais recalculé par sous-partie.
  */
-export function composeMessageLabel({ message, isMine, servedText, delivery, protection }: MessageLabelInput): string {
+export function composeMessageLabel({
+  message,
+  isMine,
+  servedText,
+  delivery,
+  protection,
+  contentWithheld = false,
+}: MessageLabelInput): string {
   /**
    * UN MESSAGE SYSTÈME EST SYSTÈME AVANT D'ÊTRE SUPPRIMÉ (#5936, même loi que
    * `systemRowOf` — « un message système est système AVANT d'être
@@ -184,7 +203,9 @@ export function composeMessageLabel({ message, isMine, servedText, delivery, pro
    * LE VOILE remplace le TEXTE **et** l'inventaire des pièces jointes : « 1
    * image » sur un message à vue unique dit déjà ce que le flou cache.
    */
-  if (protection === 'veiled') {
+  if (contentWithheld) {
+    segments.push(PROTECTED_LABEL.withheld);
+  } else if (protection === 'veiled') {
     segments.push(PROTECTED_LABEL.veiled);
   } else {
     /**

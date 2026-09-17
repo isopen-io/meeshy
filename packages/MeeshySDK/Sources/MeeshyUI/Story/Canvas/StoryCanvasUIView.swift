@@ -438,6 +438,17 @@ public final class StoryCanvasUIView: UIView {
     /// `StoryBackgroundLayer` (no overlay) since the 2026-06-03 pivot.
     var composerImageRevision: UInt64 = 0
 
+    /// **L'hôte présente-t-il le canvas ENTIER ?** (#6636) — `false` quand le
+    /// lecteur rogne la carte au rectangle de l'image : la bande sort du cadre
+    /// visible et ne se peint plus. Posé sur le calque de fond, qui le garde à
+    /// travers chaque `rebuildLayers`.
+    public var servesLetterboxFill: Bool = true {
+        didSet {
+            guard oldValue != servesLetterboxFill else { return }
+            backgroundLayer.setLetterboxFillSuppressed(!servesLetterboxFill)
+        }
+    }
+
     /// Two-pass backdrop snapshot helper. Drives the MPS path on
     /// `StoryGlassBackdropLayer` by capturing the canvas-minus-glass tree
     /// once per `rebuildLayers()` tick and serving cropped regions to each
@@ -1047,6 +1058,18 @@ public final class StoryCanvasUIView: UIView {
     /// pour que la sonde 60 Hz `isSlideAudioPending()` ne recalcule pas la
     /// résolution d'effets à chaque tick.
     var slideHasSchedulableAudio: Bool = false
+
+    /// Ce que valaient les deux portes vidéo AVANT la retenue R1 (#6580),
+    /// `nil` hors retenue.
+    ///
+    /// `isSlideAudioPending()` gelait le playhead sans geler les `AVPlayer` :
+    /// la vidéo roulait pendant l'attente du fichier audio et prenait une
+    /// avance qu'aucun recalage ne rattrape — le recalage vise justement le
+    /// playhead gelé. On SUSPEND donc les deux portes, et on les RESTAURE
+    /// telles quelles : rejouer les gates du « GO » à la relâche ferait
+    /// démarrer des players que d'autres portes (fenêtre absente, préemption)
+    /// tenaient délibérément fermés.
+    var videoGatesHeldForAudio: (background: Bool, foreground: Bool)?
 
     /// Présence d'une piste audio par identifiant de média vidéo, sondée une
     /// seule fois par clip puis mémorisée.

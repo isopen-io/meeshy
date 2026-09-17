@@ -48,8 +48,9 @@ export function makePrisma(methods: Partial<{
   create: jest.Mock;
   update: jest.Mock;
   count: jest.Mock;
+  passwordResetTokenUpdateMany: jest.Mock;
 }> = {}) {
-  return {
+  const prisma: unknown = {
     user: {
       findMany: methods.findMany ?? jest.fn(),
       findUnique: methods.findUnique ?? jest.fn(),
@@ -71,7 +72,15 @@ export function makePrisma(methods: Partial<{
     message: {
       create: jest.fn().mockResolvedValue({ id: 'msg-1' }),
     },
-  } as unknown as PrismaClient;
+    // `updateEmail` révoque les jetons de réinitialisation encore valides dans
+    // la MÊME transaction (#6661) — `$transaction` rejoue le callback avec ce
+    // même double, comme `PostService.mediaByteReclamation.test.ts`.
+    passwordResetToken: {
+      updateMany: methods.passwordResetTokenUpdateMany ?? jest.fn().mockResolvedValue({ count: 0 }),
+    },
+    $transaction: jest.fn((cb: (tx: unknown) => unknown) => cb(prisma)),
+  };
+  return prisma as unknown as PrismaClient;
 }
 
 export function makeService(prisma?: PrismaClient, deps?: { revokeSessions?: unknown; resolveSocketManager?: unknown }) {

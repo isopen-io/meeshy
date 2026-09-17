@@ -374,6 +374,12 @@ private struct ConditionalBubbleLongPress: ViewModifier {
                 LongPressGesture(minimumDuration: 0.35, maximumDistance: 6)
                     .onEnded { _ in
                         HapticFeedback.medium()
+                        // Le menu de ce chemin s'ouvre en SURCOUCHE : clavier
+                        // levé, il paraît derrière lui. La fermeture est ici, et
+                        // pas au DÉBUT de l'appui, pour ne jamais baisser le
+                        // clavier sur un appui annulé — ce geste-ci a atteint
+                        // sa durée, le menu s'ouvre à coup sûr.
+                        MessageMenuKeyboard.dismiss()
                         action()
                     }
             )
@@ -447,6 +453,12 @@ struct MessageMenuPreviewContainer<Content: View>: View {
                 width: naturalSize.width > 0 ? naturalSize.width * fitScale : nil,
                 height: naturalSize.height > 0 ? naturalSize.height * fitScale : nil
             )
+            // Le `.contextMenu` natif n'offre AUCUN rappel de présentation.
+            // Son aperçu, lui, paraît exactement quand le menu s'ouvre — et
+            // seulement alors : un appui long annulé ne le monte jamais. C'est
+            // donc le seul point du chemin iOS 26 qui se déclenche à
+            // l'ouverture RÉELLE, sans baisser le clavier pour rien.
+            .onAppear { MessageMenuKeyboard.dismiss() }
     }
 }
 
@@ -494,7 +506,6 @@ struct MessageListView: UIViewControllerRepresentable {
     /// Ce que le chrome flottant montre en ce moment (#6013) : en rangée
     /// plate, le fil s'efface sous l'en-tête et le composeur tant qu'ils sont
     /// posés, et retrouve le bord de l'écran quand le défilement les escamote.
-    var chromeVisibility: ThreadChromeFade.Visibility = .hidden
     /// Incremented from the parent SwiftUI view when the "scroll to latest"
     /// button is tapped. The bridge compares old vs. new to fire scrollToBottom.
     var scrollToBottomTrigger: Int = 0
@@ -730,7 +741,6 @@ struct MessageListView: UIViewControllerRepresentable {
         // conversation. Seul `updateUIViewController` suit une courbe.
         vc.applyBottomInset(bottomInset)
         vc.applyTopInset(topInset)
-        vc.applyChromeFade(chromeVisibility, transition: nil)
         return vc
     }
 
@@ -850,7 +860,6 @@ struct MessageListView: UIViewControllerRepresentable {
         // `transition == nil` retombe mot pour mot sur la pose sèche.
         vc.applyBottomInset(bottomInset, transition: bottomInsetTransition)
         vc.applyTopInset(topInset)
-        vc.applyChromeFade(chromeVisibility, transition: bottomInsetTransition)
     }
 
     // Filet de sécurité au démontage SwiftUI : coupe le CADisplayLink du

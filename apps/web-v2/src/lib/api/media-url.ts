@@ -36,26 +36,107 @@ import type { ImageVariant } from './types';
  * `200 image/png` sur la clé nue — la MÊME route, avec le MÊME encodage, que
  * la passerelle sérialise déjà pour l'autre moitié de ses lignes.
  *
- * CE QU'IL NE TOUCHE PAS : une URL déjà ABSOLUE (`https://…`, servie par une
- * passerelle future ou un CDN) et une URL D'OBJET LOCAL (`blob:`/`data:`,
+ * LA SIXIÈME FORME, MESURÉE LE 2026-09-13 (#6388) : l'ADRESSE HÉRITÉE QUI PORTE
+ * UNE CLÉ SANS SA ROUTE — `https://gate.meeshy.me/2026/09/<id>/harbor_<uuid>.png`,
+ * vue sur `staging.meeshy.me/notifications` (`net::ERR_FAILED`, puis
+ * `workbox … no-response`). Voir `storageKeyOfLegacyUrl` plus bas : elle est
+ * réparée contre la base CONFIGURÉE, l'hôte qu'elle porte étant justement faux.
+ *
+ * CE QU'IL NE TOUCHE PAS : une URL absolue qui ne porte PAS de clé de stockage
+ * (un CDN, le magasin STATIQUE) et une URL D'OBJET LOCAL (`blob:`/`data:`,
  * l'aperçu optimiste d'une pièce pas encore envoyée — `attachmentPreviewOf`,
  * `send/attachments.ts`) traversent INCHANGÉES : les préfixer romprait la
  * vignette locale. Une chaîne VIDE (les fixtures sans image, `fixtures.ts`)
  * traverse INCHANGÉE aussi — c'est déjà le signal « pas d'image » que
  * `message-blocks.tsx` lit pour ne rendre aucune `<img>`.
  */
-const ABSOLUTE_OR_LOCAL_OBJECT_URL_PATTERN = /^(https?:|blob:|data:)/i;
+const LOCAL_OBJECT_URL_PATTERN = /^(blob:|data:)/i;
+const ABSOLUTE_URL_PATTERN = /^https?:/i;
 
 /** Le chemin de la route de flux, écrit UNE fois — `download.ts:273`. */
 const ATTACHMENT_STREAM_PATH = '/api/v1/attachments/file';
 
+/**
+ * LA FORME D'UNE CLÉ DE STOCKAGE, telle que l'écrivent les DEUX producteurs de
+ * la passerelle — `tus-handler.ts` (`path.join(year, month, userId, nom)`) et
+ * `UploadProcessor.generateFilePath` : `YYYY/MM/…`. C'est la même forme que la
+ * migration 013 reconnaît, et la même que le legacy emploie pour réparer une
+ * adresse héritée (`apps/web/utils/attachment-url.ts`).
+ */
+const STORAGE_KEY_PATH_PATTERN = /^\/\d{4}\/\d{2}\//;
+
+/**
+ * LA SIXIÈME FORME (#6388) — UNE ADRESSE QUI PORTE UNE CLÉ, SANS SA ROUTE.
+ *
+ * `https://gate.meeshy.me/2026/09/<id>/harbor_<uuid>.png` : un hôte, puis la
+ * clé NUE. La racine de la passerelle ne sert aucun fichier, donc le navigateur
+ * rend `ERR_FAILED` et le service worker `no-response` — mesuré le 2026-09-13
+ * sur `staging.meeshy.me/notifications`.
+ *
+ * La migration 013 ne réécrit que les valeurs portant `/attachments/file/` :
+ * celle-ci lui échappe et reste en base. Le legacy la répare depuis toujours ;
+ * le chantier la laissait passer parce qu'une chaîne `https://…` y valait
+ * « déjà résolue » — un test de FORME (le schéma) là où il fallait un test de
+ * CIBLE (la route existe-t-elle ?).
+ *
+ * Rend la clé, ou `null` quand l'adresse n'en porte pas : une URL externe
+ * (`https://cdn.example.com/photo.png`) et le magasin STATIQUE
+ * (`https://static.meeshy.me/u/i/2025/11/…`, #4625) ne se réécrivent JAMAIS —
+ * leurs fichiers ne sont pas sur la passerelle.
+ */
+function storageKeyOfLegacyUrl(fileUrl: string): string | null {
+  try {
+    return storageKeyOfPath(new URL(fileUrl).pathname);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * LA MÊME FORME SANS SON HÔTE — `/2026/09/<id>/photo.png`. Une barre initiale
+ * n'en fait pas une ROUTE : posée derrière la base, elle rend l'adresse que la
+ * console de staging montrait. Le legacy la répare au même titre
+ * (`apps/web/utils/attachment-url.ts`, § « chemin de date »).
+ *
+ * Rend `null` pour tout ce qui n'a pas la forme d'une clé — au premier chef
+ * `/api/v1/attachments/file/…`, la route de flux elle-même, qui ne se
+ * réécrit pas (c'est en lui posant une SECONDE route qu'on fabrique
+ * `…/attachments/file/api/v1/attachments/file/…`, `media-ref.ts`).
+ */
+function storageKeyOfPath(pathname: string): string | null {
+  if (!STORAGE_KEY_PATH_PATTERN.test(pathname)) return null;
+  const encoded = pathname.slice(1);
+  try {
+    return decodeURIComponent(encoded);
+  } catch {
+    return encoded;
+  }
+}
+
 /** PURE — prend la base en paramètre (même motif que `resolveApiConfig`,
- * `config.ts`) : testable sans dépendre de `import.meta.env`. */
+ * `config.ts`) : testable sans dépendre de `import.meta.env`.
+ *
+ * **L'hôte que porte une adresse héritée ne sert à RIEN** : la clé identifie le
+ * fichier, l'hôte est une décision de déploiement (#4324). La réparation vise
+ * donc `base` — sans quoi une page de staging irait chercher ses médias sur la
+ * passerelle de PRODUCTION, l'hôte qu'un dump restauré a laissé en base. */
 export function resolveAttachmentSrc(fileUrl: string, base: string): string {
   if (fileUrl === '') return fileUrl;
-  if (ABSOLUTE_OR_LOCAL_OBJECT_URL_PATTERN.test(fileUrl)) return fileUrl;
-  if (fileUrl.startsWith('/')) return `${base}${fileUrl}`;
-  return `${base}${ATTACHMENT_STREAM_PATH}/${encodeURIComponent(fileUrl)}`;
+  if (LOCAL_OBJECT_URL_PATTERN.test(fileUrl)) return fileUrl;
+  if (ABSOLUTE_URL_PATTERN.test(fileUrl)) {
+    const key = storageKeyOfLegacyUrl(fileUrl);
+    return key === null ? fileUrl : streamSrc(key, base);
+  }
+  if (fileUrl.startsWith('/')) {
+    const key = storageKeyOfPath(fileUrl);
+    return key === null ? `${base}${fileUrl}` : streamSrc(key, base);
+  }
+  return streamSrc(fileUrl, base);
+}
+
+/** L'UNIQUE composition de la route de flux — clé encodée UNE fois. */
+function streamSrc(key: string, base: string): string {
+  return `${base}${ATTACHMENT_STREAM_PATH}/${encodeURIComponent(key)}`;
 }
 
 /** L'UNIQUE évaluation contre `apiConfig.base` — tout consommateur importe

@@ -66,13 +66,15 @@ nonisolated enum CanvasMediaAdoption {
     /// ne voit pas la moitié du document certifie l'autre moitié.**
     static func designatedIds(in effects: StoryEffects) -> [String] {
         let runtime = (effects.mediaObjects ?? []).map(\.postMediaId)
+        // **`mediaReference` — le site unique des deux orthographes** (#6894) :
+        // relire `payload["postMediaId"]` seul rendait un fond `plane: bg` à
+        // `mediaId` (forme servie par la passerelle) invisible à cette garde,
+        // dans toute scène ≥ 1 (gardée verbatim, jamais migrée par le
+        // runtime) — revue 2026-09-17.
         let scenes = (effects.canvasV3?.scenes ?? [])
             .flatMap(\.objects)
             .filter { $0.kind == .media }
-            .compactMap { objet -> String? in
-                guard case .string(let id)? = objet.payload["postMediaId"] else { return nil }
-                return id
-            }
+            .compactMap(\.mediaReference)
         return runtime + scenes
     }
 
@@ -211,6 +213,12 @@ nonisolated extension CanvasMediaAdoption {
                           let servi = servisParObjet[objet.id] else { return objet }
                     var charge = objet.payload
                     charge["postMediaId"] = .string(servi.id)
+                    // Un `mediaId` préexistant (forme servie par la passerelle)
+                    // est RETIRÉ, pas seulement supplanté : le laisser sur le
+                    // fil offrait à `unclaimedCanvasMediaIds`
+                    // (`storyEffectsV3.ts`, qui lit les deux clés) un id périmé
+                    // à réclamer comme non adopté (revue 2026-09-17).
+                    charge.removeValue(forKey: "mediaId")
                     // L'URL n'est réécrite que si le dispatch en a servi une :
                     // un objet dont le fichier est déjà en ligne garde la sienne.
                     if let url = servi.url { charge["mediaURL"] = .string(url) }

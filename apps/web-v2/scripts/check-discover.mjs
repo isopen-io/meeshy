@@ -36,8 +36,9 @@
  *  8. chaque texte tient AA dans les deux schémas — capsules et pastille
  *     d'onglet comprises ;
  *  9. AUCUN point de présence n'est peint, dans aucun état ;
- * 10. hors ligne, les demandes restent lisibles et le disent ; aucune erreur de
- *     page.
+ * 10. hors ligne, les demandes restent lisibles et le disent ; la pastille de
+ *     synchronisation ne recouvre aucun onglet du barreau (#6401) ; aucune
+ *     erreur de page.
  *
  * `CAPTURE_DIR=<dossier>` écrit les captures de recette.
  */
@@ -47,6 +48,7 @@ import { extname, join, normalize } from 'node:path';
 
 import { launchChromium } from './lib/browser.mjs';
 import { contrastOf } from './lib/contrast.mjs';
+import { syncPillOverlap } from './lib/sync-pill-clearance.mjs';
 
 const DIST = new URL('../dist/', import.meta.url).pathname;
 const TYPES = {
@@ -396,6 +398,16 @@ try {
       await page.click('[data-request="fx-fr-fatou"] [data-request-reject]');
       await page.waitForTimeout(150);
       check((await page.$('[data-request="fx-fr-fatou"]')) !== null, `${label} : hors ligne, un geste ne retire rien — rien ne part`);
+
+      // -------------------------------- 10 bis. la pastille ne recouvre pas le barreau (#6401)
+      await page.waitForSelector('.sync-pill');
+      const discoverOverlap = await syncPillOverlap(page, ['[data-discover-tab]']);
+      check(discoverOverlap.pill !== null, `${label} : hors ligne, la pastille de synchronisation est posée`);
+      check(
+        discoverOverlap.covers.length === 0,
+        `${label} : hors ligne, la pastille ne recouvre aucun onglet du barreau — ${JSON.stringify(discoverOverlap.covers)}`,
+      );
+
       await capture(page, `decouvrir-hors-ligne-${slug}`);
       await context.setOffline(false);
 

@@ -34,6 +34,8 @@ import me.meeshy.sdk.net.api.TranslateRequest
 import me.meeshy.sdk.net.api.TranslationApi
 import me.meeshy.sdk.net.api.UpdatePostRequest
 import me.meeshy.sdk.model.PostTranslationMerge
+import me.meeshy.sdk.model.MediaCaptionTranslationMerge
+import me.meeshy.sdk.model.ApiMediaCaptionTranslationEntry
 import me.meeshy.sdk.model.PostUpdateMerge
 import me.meeshy.sdk.net.apiCall
 import me.meeshy.sdk.net.rawApiCall
@@ -318,6 +320,7 @@ class PostRepository @Inject constructor(
         mobileTranscription: MobileTranscriptionPayload? = null,
         repostOfId: String? = null,
         location: SharedPlace? = null,
+        mediaAlt: Map<String, String>? = null,
     ): NetworkResult<ApiPost> =
         apiCall {
             postApi.create(
@@ -333,6 +336,7 @@ class PostRepository @Inject constructor(
                     mobileTranscription = mobileTranscription,
                     repostOfId = repostOfId,
                     location = location,
+                    mediaAlt = mediaAlt,
                 ),
             )
         }
@@ -539,6 +543,32 @@ class PostRepository @Inject constructor(
     fun applyTranslationUpdate(postId: String, language: String, entry: ApiPostTranslationEntry): Boolean {
         val post = _feedCache.value?.firstOrNull { it.id == postId } ?: return false
         val merged = PostTranslationMerge.mergeTranslation(post, language, entry) ?: return false
+        _feedCache.value = _feedCache.value?.map { if (it.id == postId) merged else it }
+        return true
+    }
+
+    /**
+     * Realtime media caption translation (Prisme, push side, #6280): the gateway
+     * translated a `PostMedia.caption` server-side and broadcast the finished [entry]
+     * over `media:caption-translation-updated`. Folds it into the in-memory feed cache
+     * via [MediaCaptionTranslationMerge] so an open card re-renders the media's caption
+     * in the reader's preferred language the instant it lands — the media-caption
+     * sibling of [applyTranslationUpdate].
+     *
+     * Returns `true` only when the cache actually changed. Inert (`false`, nothing
+     * stored) when the post is not in the cache, [commentId] is non-null (comment-level
+     * media isn't modeled on Android yet), or the merge is a no-op (blank language,
+     * blank text, unknown [mediaId], or the identical entry already present).
+     */
+    fun applyMediaCaptionTranslationUpdate(
+        postId: String,
+        mediaId: String,
+        commentId: String?,
+        language: String,
+        entry: ApiMediaCaptionTranslationEntry,
+    ): Boolean {
+        val post = _feedCache.value?.firstOrNull { it.id == postId } ?: return false
+        val merged = MediaCaptionTranslationMerge.merge(post, mediaId, commentId, language, entry) ?: return false
         _feedCache.value = _feedCache.value?.map { if (it.id == postId) merged else it }
         return true
     }

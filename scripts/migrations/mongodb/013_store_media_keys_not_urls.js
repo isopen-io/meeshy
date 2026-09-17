@@ -29,16 +29,53 @@
  * Sans `APPLIQUER`, rien n'est écrit : le script COMPTE et montre des exemples.
  * Chaque valeur d'origine est sauvegardée dans `MediaUrl_backup_013` avant
  * écriture — une seule fois, la migration étant idempotente.
+ *
+ * ## La forme HÉRITÉE, ajoutée le 2026-09-13 (#6390, suivi de #6388)
+ *
+ * Cette migration ne reconnaissait qu'une adresse portant le segment
+ * `/attachments/file/`. Une valeur de la forme
+ * `https://gate.meeshy.me/2026/09/<id>/photo.png` — un hôte (ou rien) suivi
+ * directement de la clé NUE, sans la route de flux — lui échappait tout
+ * entière : ni comptée, ni sauvegardée, ni réécrite, la requête MongoDB
+ * elle-même ne la sélectionnant pas. C'est exactement l'adresse que la
+ * console de `staging.meeshy.me/notifications` a rendue le 2026-09-13, et
+ * que `apps/web-v2/src/lib/api/media-url.ts` (`storageKeyOfLegacyUrl` /
+ * `storageKeyOfPath`, #6388) répare désormais À LA LECTURE, côté client —
+ * un correctif de lecture qui achète le temps de CETTE migration, pas un
+ * substitut. `MOTIF_A_MIGRER` et `cleDepuisAdresse` ci-dessous en sont le
+ * MIROIR côté base : même forme de clé reconnue (`YYYY/MM/…`), même
+ * exclusion du magasin STATIQUE (`/u/i/2025/11/…`, qui ne commence pas par
+ * une date et ne matche donc jamais) et de toute URL externe.
  */
 
 const APPLIQUER_ECRITURE = typeof APPLIQUER !== 'undefined' && APPLIQUER === true;
 const SEGMENT = '/attachments/file/';
+/** La forme d'une clé de stockage NUE, telle que l'écrivent les producteurs
+ * de la passerelle et que la lisent les clients — `YYYY/MM/…`. Ancrée en
+ * tête : une adresse EXTERNE ou le magasin STATIQUE (`/u/i/…`) ne commencent
+ * jamais par une date et ne matchent donc jamais ce motif. */
+const CHEMIN_DATE = /^\/\d{4}\/\d{2}\//;
+/** Le filtre MongoDB : soit l'ancienne forme (route de flux), soit la forme
+ * héritée (hôte, ou rien, puis la clé datée nue) — substring, non ancré,
+ * sauf la troisième alternative qui doit porter la date dès le début du
+ * chemin relatif. */
+const MOTIF_A_MIGRER = new RegExp(
+  SEGMENT.replace(/\//g, '\\/') + '|:\\/\\/[^\\/]+\\/\\d{4}\\/\\d{2}\\/|^\\/\\d{4}\\/\\d{2}\\/'
+);
 const SAUVEGARDE = 'MediaUrl_backup_013';
 
-/** Les champs qui portent l'adresse d'un média servi par NOUS. */
+/** Les champs qui portent l'adresse d'un média servi par NOUS.
+ *
+ * `PostMedia.fileUrl`/`thumbnailUrl` (#6390) manquaient à cette liste : la
+ * migration ne balayait ni ne comptait jamais les médias de post/story/status,
+ * alors que le producteur d'upload (`routes/uploads/tus-handler.ts`) écrit sur
+ * `PostMedia` exactement la même variable `fileUrl` (le `relPath` nu) que sur
+ * `MessageAttachment` — un chemin partagé, une seule des deux tables migrée. */
 const CIBLES = [
   { collection: 'MessageAttachment', champ: 'fileUrl' },
   { collection: 'MessageAttachment', champ: 'thumbnailUrl' },
+  { collection: 'PostMedia', champ: 'fileUrl' },
+  { collection: 'PostMedia', champ: 'thumbnailUrl' },
   { collection: 'Participant', champ: 'avatar' },
   { collection: 'User', champ: 'avatar' },
   { collection: 'Community', champ: 'avatar' },
@@ -47,7 +84,10 @@ const CIBLES = [
 /**
  * Rend la clé de stockage, ou null quand la valeur n'est pas une adresse de nos
  * fichiers — une URL EXTERNE (`TrackingLink.originalUrl`, une photo distante)
- * est une donnée métier et ne doit jamais être réécrite.
+ * est une donnée métier et ne doit jamais être réécrite. Le magasin STATIQUE
+ * (`https://static.meeshy.me/u/i/2025/11/…`, #4625) n'est pas non plus une de
+ * nos adresses relayées par `/attachments/file/` — son chemin ne commence pas
+ * par une date, il ne matche donc `CHEMIN_DATE` sous aucune des deux formes.
  */
 function cleDepuisAdresse(valeur) {
   if (typeof valeur !== 'string' || valeur.length === 0) return null;
@@ -61,15 +101,32 @@ function cleDepuisAdresse(valeur) {
   }
 
   const i = chemin.indexOf(SEGMENT);
-  if (i === -1) return null;
-
-  const encode = chemin.substring(i + SEGMENT.length);
-  if (encode.length === 0) return null;
-  try {
-    return decodeURIComponent(encode);
-  } catch (e) {
-    return encode;
+  if (i !== -1) {
+    const encode = chemin.substring(i + SEGMENT.length);
+    if (encode.length === 0) return null;
+    try {
+      return decodeURIComponent(encode);
+    } catch (e) {
+      return encode;
+    }
   }
+
+  // Forme HÉRITÉE (#6390) : l'hôte (ou rien pour un chemin déjà relatif) est
+  // suivi DIRECTEMENT de la clé nue et datée — jamais de route de flux.
+  // L'hôte qu'une adresse héritée porte est une décision de déploiement
+  // (#4324), jamais la vérité — seul le chemin qui suit compte, qu'il y ait
+  // eu un hôte ou non.
+  if (CHEMIN_DATE.test(chemin)) {
+    const encode = chemin.substring(1); // retire la barre initiale
+    if (encode.length === 0) return null;
+    try {
+      return decodeURIComponent(encode);
+    } catch (e) {
+      return encode;
+    }
+  }
+
+  return null;
 }
 
 print('=== Migration 013 : la base porte la clé, pas l\'adresse ===');
@@ -83,7 +140,7 @@ let totalReecrits = 0;
 CIBLES.forEach(function (cible) {
   const col = db.getCollection(cible.collection);
   const filtre = {};
-  filtre[cible.champ] = new RegExp(SEGMENT.replace(/\//g, '\\/'));
+  filtre[cible.champ] = MOTIF_A_MIGRER;
 
   const curseur = col.find(filtre, { _id: 1, [cible.champ]: 1 });
   let vus = 0;

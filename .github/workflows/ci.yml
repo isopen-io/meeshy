@@ -133,7 +133,7 @@ jobs:
 
       # pnpm is always needed for turborepo (version from package.json packageManager)
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
+        uses: pnpm/action-setup@v6.1.0
 
       - name: Setup Node.js (with pnpm cache)
         if: env.PACKAGE_MANAGER == 'pnpm'
@@ -183,6 +183,16 @@ jobs:
         run: |
           cd packages/shared
           pnpm run build
+
+      # #3658 — la feuille de langues que le translator (Python) reconnaît
+      # est GÉNÉRÉE depuis `packages/shared/utils/language-codes.ts` ; rien
+      # ne garantissait jusqu'ici que `generated_languages.py` n'avait pas
+      # dérivé de sa source (langue ajoutée d'un côté, pas régénérée de
+      # l'autre). Jumeau exact de `check:tokens` (palette dérivée de Swift).
+      - name: Translator language codes parity guard
+        run: |
+          cd packages/shared
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} translator-languages:check
 
       # #5442 : cette étape passe par le cache Turborepo (`bun run lint` sans
       # filtre), donc son verdict dépend de la température du cache — un run à
@@ -281,6 +291,12 @@ jobs:
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
           node scripts/check-utilities.mjs
           node scripts/measure-weight.mjs
+          # #6862 — le seul gate qui fasse DÉCIDER le service worker construit.
+          # Workbox stringifie le `urlPattern` du seau `api` : un prédicat
+          # importé s'y perd, et la règle « aucune réponse /api/v1/admin/** sur
+          # le disque » était annoncée par `vite.config.ts` sans être appliquée
+          # par `dist/sw.js`. Lit `dist/sw.js`, donc après le build ci-dessus.
+          node scripts/check-sw-api-cache.mjs
           # #5910 — maillon du composite `bun run gate` qui ne s'exécutait
           # NULLE PART. Il lit `dist/index.html`, donc il vient après le build
           # ci-dessus ; il n'ouvre aucun navigateur, donc il a sa place ici et
@@ -296,12 +312,17 @@ jobs:
       # #3679 — jumeau des deux cliquets ci-dessus, appliqué à l'usage
       # explicite de `any` plutôt qu'aux erreurs de compilation ou de lint.
       # `services/gateway/src` et `packages/shared` n'ont pas de config
-      # ESLint (rien à demander à `@typescript-eslint/no-explicit-any`), donc
-      # ce script mesure par motif plutôt que par AST — cf. son en-tête pour
-      # ce que ça couvre et ce que ça ne couvre pas. `packages/shared` est
-      # tenu à zéro (CLAUDE.md l'exige déjà pour ce paquet) ; `gateway` porte
-      # une baseline qui ne peut que descendre.
-      - name: any debt ratchet (gateway + shared)
+      # ESLint (rien à demander à `@typescript-eslint/no-explicit-any`), et
+      # `apps/web` en a une mais règle cette directive en `warn` — jamais
+      # comptée par le cliquet ESLint jumeau (`check-lint-debt.sh`), qui ne
+      # garde que les erreurs. Ce script mesure donc par motif plutôt que par
+      # AST sur les trois paquets, pour une seule définition de « ce qui
+      # compte comme `any` » — cf. son en-tête pour le détail et pour
+      # pourquoi il tourne APRÈS le build web ci-dessus (`.next/` exclu).
+      # `packages/shared` est tenu à zéro (CLAUDE.md l'exige déjà pour ce
+      # paquet) ; `gateway` et `web` portent chacun une baseline qui ne peut
+      # que descendre.
+      - name: any debt ratchet (gateway + shared + web)
         run: bash scripts/check-any-debt.sh --self-test && bash scripts/check-any-debt.sh
 
       # #5372, suite de #4889 — une entrée de catalogue d'endpoints CLIENT
@@ -343,6 +364,17 @@ jobs:
       # sans l'arbre qu'il décrit.
       - name: Lockfile alignment guard
         run: node scripts/check-lockfile-alignment.mjs --self-test && node scripts/check-lockfile-alignment.mjs
+
+      # #6351 — filet de sécurité pour la CI ordinaire : un commit qui porte à
+      # la fois un marqueur (beta) et un marqueur de saut CI fait supprimer
+      # TOUS les workflows du push par GitHub, ios-beta-trigger.yml compris.
+      # Cette étape ne verra donc jamais ce cas précis (un push affecté par le
+      # piège ne fait justement tourner aucune CI) ; elle attrape le même
+      # défaut sur un commit de PR normal, avant qu'il n'atteigne `main`. Le
+      # témoin qui couvre le cas que GitHub supprime est périodique, sur
+      # schedule — .github/workflows/beta-marker-audit.yml.
+      - name: Beta/skip commit-message conflict guard
+        run: node scripts/check-beta-skip-conflict.mjs --self-test && node scripts/check-beta-skip-conflict.mjs
 
       # Même raison de placement que le garde ci-dessus : l'invariant porte sur
       # le `Makefile` de la RACINE, donc il est appelé ici et non depuis les
@@ -411,6 +443,16 @@ jobs:
       - name: CI summary coverage guard
         run: node scripts/check-ci-summary-coverage.mjs --self-test && node scripts/check-ci-summary-coverage.mjs
 
+      # Pas de mode « balayage du dépôt » ici : `resolve-docker-detect-base.mjs`
+      # est une fonction de décision PURE (docker.yml § job `detect`, #6551),
+      # invoquée à l'exécution avec le SHA du dernier run réussi et
+      # `github.event.before` en entrée — rien à confronter au repos qu'elle
+      # pourrait scanner. Son `--self-test` EST le témoin : sept scénarios,
+      # dont celui qui a ouvert #6551 (un push annulé par le suivant ne doit
+      # plus faire perdre le diff des commits qu'il portait).
+      - name: Docker detect-base resolver guard
+        run: node scripts/resolve-docker-detect-base.mjs --self-test
+
       # Même placement, même raison : la surface est le DÉPÔT — les workflows qui
       # publient `isopen/meeshy-<image>:latest` sur `main`. Il ferme #6442 :
       # `docker.yml` construisait `linux/amd64`, `release.yml`
@@ -457,6 +499,19 @@ jobs:
       - name: Tracked symlinks guard
         run: node scripts/check-tracked-symlinks.mjs --self-test && node scripts/check-tracked-symlinks.mjs
 
+      # #6545 — le run iOS déclenché sur `promote/main-39224d5fc9` est tombé
+      # avant toute compilation : `xcodebuild -resolvePackageDependencies`
+      # échouait quatre fois avec la MÊME erreur (« already exists in file
+      # system », une entrée du cache d'artefacts SwiftPM DU RUNNER), et la
+      # boucle de reprise — qui n'attendait et rejouait que pour une panne
+      # réseau — ne pouvait pas en sortir. La logique a quitté `ios.yml` pour
+      # `scripts/ci/resolve-spm-packages.sh`, rejouable ici (faux
+      # `xcodebuild`/`sleep` sur PATH) sans macOS : collision purgée sans
+      # dormir, panne réseau toujours retentée avec attente, échec réel
+      # toujours définitif après 4 essais.
+      - name: iOS SPM resolve retry guard
+        run: node scripts/check-ios-spm-resolve-retry.mjs --self-test && node scripts/check-ios-spm-resolve-retry.mjs
+
       # #4544 — le validateur de déploiement ne tient plus de liste : il DÉRIVE
       # ses variables exigées de la garde ci-dessus. Un témoin qui comparerait
       # les deux listes ne prouverait rien, deux copies coïncidant toujours le
@@ -467,6 +522,17 @@ jobs:
       # exigible, il a été dérivé.
       - name: Deployment validator derivation witness
         run: bash scripts/deployment/deploy-validate-config.sh --self-test
+
+      # #6556 — une purge qui demande `y/N` au bout d'un `ssh` lit une entrée
+      # vide, comprend « N » et ne retire rien : l'hôte de staging se remplit
+      # jusqu'au `no space left on device`, le déploiement s'arrête et staging
+      # sert une version périmée que rien n'annonce. Ce garde exige le drapeau
+      # non interactif sur CHAQUE purge du dépôt, une purge AVANT chaque `pull`
+      # distant, et — seconde moitié de la directive porteur du 2026-09-15 —
+      # que tout job porteur d'une clé SSH de déploiement reste épinglé à
+      # `refs/heads/dev` : la production ne se déploie jamais toute seule.
+      - name: Docker prune & deploy-only-on-dev guard
+        run: node scripts/check-docker-prune-noninteractive.mjs --self-test && node scripts/check-docker-prune-noninteractive.mjs
 
       # Casse de compilation Swift détectable sans compilateur. Ici (ubuntu,
       # quelques secondes) plutôt que sur le runner macOS : `xcodebuild` coûte
@@ -509,7 +575,7 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
+        uses: pnpm/action-setup@v6.1.0
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -593,6 +659,17 @@ jobs:
           cd apps/web-v2
           node scripts/check-floating-clearance.mjs
 
+      # #6456 — le disque du Flux bascule Flux ↔ conversations sans saut (nom,
+      # adresse et marque suivent la destination), son appui long (souris,
+      # doigt, Maj+F10) ouvre les Réels sans navigation ni clic au relâché, un
+      # glisser tenu n'ouvre rien et suit le pointeur sans retard, la place
+      # survit au rechargement, un réel de carte ramène au même défilement.
+      - name: Gate disque du Flux (bascule, appui long, glisser)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-feed-disc.mjs
+
       # #6288 — la cloche : la pastille du bouton flottant porte le compte servi
       # et disparaît à zéro ; une catégorie filtre ; ouvrir une ligne la marque
       # lue et mène à sa cible ; « Tout lire » a un effet ; aucun texte ni
@@ -625,6 +702,16 @@ jobs:
         run: |
           cd apps/web-v2
           node scripts/check-settings.mjs
+
+      # Le critère de fin de #5561 est une mesure de GÉOMÉTRIE : l'action
+      # primaire de `/chat/:lien` doit tenir dans le premier écran dans TOUS ses
+      # états, refus compris, à 360 et 390 px. Un témoin unitaire dit qu'un
+      # bouton est rendu ; il ne dit pas à quelle ordonnée il tombe.
+      - name: Gate jonction par lien (action primaire dans le premier écran, 360 et 390)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-join-first-screen.mjs
 
       # #6364 — ses communautés : la grille remplace l'écran d'attente, la
       # recherche se peint depuis le cache, une carte ouvre son détail et une
@@ -670,6 +757,71 @@ jobs:
         run: |
           cd apps/web-v2
           node scripts/check-links.mjs
+
+      # #6457 — les Réels : le bouton de l'en-tête du Flux, un réel touché ouvre
+      # le lecteur SUR lui depuis le cache (sans squelette, sans disque), un seul
+      # réel joue, un balayage tactile accroche le suivant puis le précédent, le
+      # clavier aussi, « J'aime » se voit au retour dans le Flux, le texte blanc
+      # tient AA au pixel, le retour ne laisse aucun lecteur ; hors ligne chaud
+      # et froid, lien profond, mouvement réduit (deux schémas, deux gabarits).
+      - name: Gate Réels (lecteur plein écran, balayage, lecture unique, retour)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-reels.mjs
+
+      # #6807 — LES MÉDIAS DU FIL ET DES STORIES SE JOUENT. Mesure l'EFFET, pas
+      # la présence d'une balise : le temps doit AVANCER quand on demande la
+      # lecture. Porte ses deux contre-épreuves — l'affiche d'un RÉEL ne monte
+      # aucun élément média (#6457), une story IMAGE reste une image.
+      - name: Gate médias du fil (une vidéo, un son et une story vidéo SE JOUENT)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-feed-media.mjs
+
+      # #6898 — UNE PUBLICATION V:3 SE LIT DANS LE FIL AVEC TOUS SES OBJETS.
+      # Texte seul, image, cadrage plafonné à 1,4, une seule scène cinématique
+      # joue à la fois (`prefers-reduced-motion` en tient une hors du jeu), et
+      # chaque tuile d'un agencement montre la scène de SA slide.
+      - name: Gate scènes du fil (texte, cadrage 1,4, une seule lecture, tuiles)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-feed-scenes.mjs
+
+      # #6899 — LE LECTEUR DE STORY REND SES SCÈNES V3 PAR LE MOTEUR PARTAGÉ.
+      # Placeholder ThumbHash peint AVANT « prêt » (moteur retenu, mesure de
+      # pixels), carte 9:16 centrée dans le plateau aux deux tailles, texte au
+      # Prisme (rang 2), son de fond dont le bouton dit la vérité et a un effet,
+      # image seule sans moteur, épingle de timeline autoritaire, v1 intact.
+      - name: Gate scènes du lecteur de story (placeholder, plateau, son, image seule)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-story-scene.mjs
+
+      # #6900 — LE STUDIO DE STORY PEINT CE QU'IL PUBLIERA. Publier inerte sur
+      # un brouillon vide, un fond + un son posés font PEINDRE le moteur
+      # partagé (mesure de pixels, pas la présence d'une balise), la carte
+      # 9:16 est centrée dans son plateau aux deux gabarits, cinq cibles
+      # ≥ 44 px, le texte tapé survit à un rechargement (brouillon).
+      - name: Gate studio de story (moteur peint, carte 9:16, cibles, brouillon)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-story-studio.mjs
+
+      # #6150 — les DEUX portes de ma cellule du rail de stories : le (+) au
+      # début de ligne au-dessus de l'avatar, la pastille d'humeur en dessous à
+      # la fin, deux cibles de 44 px qui ne se recouvrent PAS (le piège de deux
+      # pastilles sur un même avatar), 💭 sans humeur et l'emoji animé avec,
+      # chaque porte ouverte par un VRAI clic — clair, sombre et RTL miroité.
+      - name: Gate rail « soi » (deux portes, cibles disjointes, 💭 / emoji, RTL)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-story-self-rail.mjs
 
       - name: Gate états du fil (vide, coupure, échec d'envoi rejouable)
         if: ${{ !cancelled() }}
@@ -742,6 +894,17 @@ jobs:
           cd apps/web-v2
           node scripts/check-field-focus.mjs
 
+      # #6643 — chaque page et état d'accès (connexion et second facteur,
+      # accueil, inscription, mot de passe oublié, nouveau mot de passe, lien
+      # par e-mail, vérification d'e-mail) tient dans la colonne centrée de la
+      # connexion à 1440×900 et 834×1194, et garde la colonne de la tablette à
+      # 390×844 (plus petit ancêtre commun du contenu perceptible).
+      - name: Gate colonne des pages d'accès (centrée, jamais plus large que la connexion)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-access-column.mjs
+
       - name: Gate dist de la coque Capacitor (variante B)
         if: ${{ !cancelled() }}
         run: |
@@ -762,6 +925,42 @@ jobs:
         run: |
           cd apps/web-v2
           node scripts/check-gateway-build.mjs
+
+      # #6936 — LE PARCOURS DE MISE À JOUR, de bout en bout : deux versions
+      # servies successivement sur la MÊME origine, la bannière qui s'annonce au
+      # retour au premier plan, le clic qui purge les caches de l'ancienne,
+      # active le worker en attente et recharge UNE fois — le lecteur restant
+      # connecté. Il construit sa propre sortie (`dist-app-update-a`, puis la
+      # version B qui en dérive) et ne touche pas au `dist` mesuré plus haut.
+      - name: Gate mise à jour de l'application (bannière, purge, session gardée)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-app-update.mjs
+
+      # #6458 — le barreau « Administration » du menu flottant, sur un dist
+      # gateway (l'administration n'a pas de fixtures) : sept barreaux dans
+      # l'écran aux deux poses (deux schémas, 390×844 et 320×568), parcours
+      # clavier et navigation vers /admin sur UNE lecture de la matrice ; six
+      # barreaux sans le droit, sur 403 et en vol ; aucune lecture sans session.
+      - name: Gate barreau Administration du menu flottant (#6458)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-admin-rung.mjs
+
+      # #6862 / #6733 — la lecture souveraine et la section Agent, sur un dist
+      # gateway : la tuile « Agent » selon `canManageAgent`, `/adm` ≡ `/admin`,
+      # les deux sections repliables à la souris ET au clavier, la ligne qui
+      # ouvre la modale, le motif écrit exigé AVANT toute requête `/messages`,
+      # le texte servi dans le Prisme du MEMBRE (jamais celui de l'administrateur),
+      # et aucune clé de contenu laissée dans `localStorage` après la lecture.
+      # Le gate construit son propre `dist-admin-souverain`, comme son voisin.
+      - name: Gate lecture souveraine et section Agent (#6862, #6733)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-admin-souverain.mjs
 
       # #6151 — un seul site résout `apiConfig.source` en dépendances d'appel
       # (`src/lib/api/deps.ts`). Un huitième site qui reconstruirait
@@ -786,11 +985,26 @@ jobs:
   # TEST: Unit Tests with Coverage (Parallel by package)
   # Minimum coverage threshold: 90%
   # ===========================================================================
+  # #6884 — `timeout-minutes` était UNIQUE (20) pour toute la matrice, alors
+  # que les paquets n'ont pas le même poids : `Test gateway` tenait avec
+  # moins de 2 min de marge sur 20 (18 min 05 s / 18 min 33 s mesurés sur
+  # `dev`), et toute variance (ex. #6477, montée de `vitest`) le fait
+  # franchir le seuil. Un dépassement de `timeout-minutes` DE JOB tue le job
+  # entier et TOUTES ses étapes en cours — GitHub rend alors `cancelled`,
+  # indiscernable d'une annulation par concurrence (`cancel-in-progress`
+  # ci-dessus). `timeout-minutes` posé sur une ÉTAPE, en revanche, échoue
+  # cette étape avec `failure` et un message explicite (« has timed out
+  # after Nm ») SANS attendre le budget de job — c'est déjà le patron des
+  # jobs `test-python`/`test-audio-pipeline` de ce fichier. `testTimeoutMinutes`
+  # ci-dessous porte donc le budget RÉEL (celui qu'on veut voir nommé), et
+  # `timeoutMinutes` (job) reste un plafond de secours nettement au-dessus —
+  # relevé pour `gateway` seul (30 au lieu de 20), les autres paquets gardant
+  # le budget historique.
   test:
     name: Test ${{ matrix.package.name }}
     runs-on: ubuntu-latest
     needs: quality
-    timeout-minutes: 20
+    timeout-minutes: ${{ matrix.package.timeoutMinutes }}
     strategy:
       fail-fast: false
       matrix:
@@ -798,18 +1012,28 @@ jobs:
           - name: shared
             path: packages/shared
             filter: '@meeshy/shared'
+            timeoutMinutes: 20
+            testTimeoutMinutes: 15
           - name: web
             path: apps/web
             filter: '@meeshy/web'
+            timeoutMinutes: 20
+            testTimeoutMinutes: 15
           - name: gateway
             path: services/gateway
             filter: '@meeshy/gateway'
+            timeoutMinutes: 30
+            testTimeoutMinutes: 25
           - name: agent
             path: services/agent
             filter: '@meeshy/agent'
+            timeoutMinutes: 20
+            testTimeoutMinutes: 15
           - name: web-v2
             path: apps/web-v2
             filter: '@meeshy/web-v2'
+            timeoutMinutes: 20
+            testTimeoutMinutes: 15
 
     steps:
       - name: Checkout
@@ -823,7 +1047,7 @@ jobs:
 
       # pnpm is always needed for turborepo (version from package.json packageManager)
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
+        uses: pnpm/action-setup@v6.1.0
 
       - name: Setup Node.js (with pnpm cache)
         if: env.PACKAGE_MANAGER == 'pnpm'
@@ -884,6 +1108,7 @@ jobs:
 
       - name: Run tests with coverage (bun)
         if: env.PACKAGE_MANAGER == 'bun'
+        timeout-minutes: ${{ matrix.package.testTimeoutMinutes }}
         run: |
           # Web tests must use Jest (configured with Next.js)
           if [ "${{ matrix.package.name }}" = "web" ] || [ "${{ matrix.package.name }}" = "web-v2" ]; then
@@ -896,6 +1121,7 @@ jobs:
 
       - name: Run tests with coverage (pnpm)
         if: env.PACKAGE_MANAGER == 'pnpm'
+        timeout-minutes: ${{ matrix.package.testTimeoutMinutes }}
         run: pnpm run test:coverage --filter=${{ matrix.package.filter }}
 
       - name: Upload coverage
@@ -938,7 +1164,7 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
+        uses: pnpm/action-setup@v6.1.0
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -1078,7 +1304,7 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
+        uses: pnpm/action-setup@v6.1.0
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -1230,7 +1456,7 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
+        uses: pnpm/action-setup@v6.1.0
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -1393,7 +1619,7 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
+        uses: pnpm/action-setup@v6.1.0
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -1550,7 +1776,7 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
+        uses: pnpm/action-setup@v6.1.0
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -1622,7 +1848,7 @@ jobs:
           severity: 'CRITICAL,HIGH'
 
       - name: Upload results
-        uses: github/codeql-action/upload-sarif@v4.37.9
+        uses: github/codeql-action/upload-sarif@v4.38.0
         if: always()
         continue-on-error: true
         with:
@@ -1647,7 +1873,7 @@ jobs:
 
       # pnpm is always needed for turborepo (version from package.json packageManager)
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
+        uses: pnpm/action-setup@v6.1.0
 
       - name: Setup Node.js (with pnpm cache)
         if: env.PACKAGE_MANAGER == 'pnpm'
@@ -1726,7 +1952,7 @@ jobs:
 
       # pnpm is always needed for turborepo (version from package.json packageManager)
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6.0.10
+        uses: pnpm/action-setup@v6.1.0
 
       - name: Setup Node.js (with pnpm cache)
         if: env.PACKAGE_MANAGER == 'pnpm'
@@ -1811,18 +2037,18 @@ jobs:
           cd services/agent
           pnpm run build
 
-      # Build web frontend (like in Dockerfiles)
-      - name: Build web frontend (bun)
-        if: env.PACKAGE_MANAGER == 'bun'
-        run: |
-          cd apps/web
-          bun run build
-
-      - name: Build web frontend (pnpm)
-        if: env.PACKAGE_MANAGER == 'pnpm'
-        run: |
-          cd apps/web
-          pnpm run build
+      # LE LEGACY `apps/web` N'EST PLUS CONSTRUIT ICI (directive porteur
+      # 2026-09-16). meeshy.me sert `apps/web-v2` depuis le 2026-09-15 : bâtir
+      # le legacy à chaque PR payait plusieurs minutes de CI pour un artefact
+      # que plus rien ne sert. Son image de production reste publiée par
+      # `release.yml` (tag `v*`) — le retour arrière garde donc une image, ce
+      # qui n'a jamais dépendu de cette étape-ci.
+      #
+      # Ce qui EXERCE encore `apps/web` reste en place et le doit : le job
+      # `Test web`, et les cliquets de dette `Lint (apps/web — debt ratchet)` et
+      # `Type-check (apps/web — debt ratchet)`. Ils mesurent une dette dont la
+      # référence ne doit pas dériver tant que le code vit dans le dépôt —
+      # retirer un cliquet est une décision distincte de retirer un build.
 
   # ===========================================================================
   # SUMMARY

@@ -147,14 +147,16 @@ final class ModePreferenceRoundTripTests: XCTestCase {
         await withIsolatedStore { store in
             LentilleModeMenuActions.select(.script, conversationId: "conv-1", store: store)
 
-            // `select` lance une `Task` détachée (comme au site d'appel
-            // réel) : quelques cessions de l'exécuteur suffisent à la laisser
-            // courir sur une écriture `UserDefaults` synchrone en pratique.
+            // `select` lance une `Task` non structurée (comme au site d'appel
+            // réel) : son écriture s'attend par une ÉCHÉANCE, jamais par un
+            // nombre de cessions. Sur un runner chargé, cinquante `yield`
+            // s'épuisaient avant que la tâche soit seulement planifiée (#6680).
             var observed: ReadingModeOrchestrator.ReadingModePreference = .auto
-            for _ in 0..<50 {
+            let deadline = ContinuousClock.now + .seconds(5)
+            while ContinuousClock.now < deadline {
                 observed = await store.get(conversationId: "conv-1")
                 if observed == .script { break }
-                await Task.yield()
+                try? await Task.sleep(for: .milliseconds(10))
             }
             XCTAssertEqual(observed, .script)
         }

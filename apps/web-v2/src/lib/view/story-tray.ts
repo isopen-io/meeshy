@@ -1,4 +1,6 @@
 import type { StatusMoodPost, StoryTrayAuthor, StoryTrayPost } from '@/lib/api/stories';
+import { translate } from '@/lib/i18n-catalog';
+import type { InterfaceLanguage } from '@/lib/interface-language';
 
 /**
  * **LE GROUPEMENT PAR AUTEUR EST UN TRAVAIL DE VUE** (#6080).
@@ -149,11 +151,21 @@ export function withMoods(
   });
 }
 
-/** Le nom affiché, dans l'ordre de repli d'iOS — jamais un identifiant brut. */
-export function storyAuthorLabel(group: StoryTrayGroup): string {
+/**
+ * Le nom affiché, dans l'ordre de repli d'iOS — jamais un identifiant brut.
+ *
+ * **PARTAGÉE PAR LE RAIL ET LA LISTE « TOUTES LES STORIES »** (#6550, relevé
+ * pendant la revue-correction de #6547) : `'Votre story'` restait écrit en
+ * dur, le seul libellé de l'écran que le catalogue d'interface (#6547) ne
+ * couvrait pas — parce qu'il vit dans cette fonction PARTAGÉE plutôt que dans
+ * `routes/stories.tsx`. `language` est une primitive, comme le reste du
+ * catalogue (`translate(language, …)`) : cette fonction reste éprouvable sans
+ * DOM ni magasin.
+ */
+export function storyAuthorLabel(group: StoryTrayGroup, language: InterfaceLanguage): string {
   const a = group.author;
   if (a === undefined) return '';
-  if (group.isMine) return 'Votre story';
+  if (group.isMine) return translate(language, 'stories.mine');
   const complet = [a.firstName, a.lastName].filter((p) => p !== undefined && p !== '').join(' ');
   return a.displayName ?? (complet !== '' ? complet : (a.username ?? ''));
 }

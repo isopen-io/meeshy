@@ -22,7 +22,12 @@ final class MediaSaveLabelGuardTests: XCTestCase {
     }
 
     func test_reelsPlayerView_saveMediaMenuItem_usesSauvegarderLabel() throws {
+        // #6693 — le rail d'actions, son menu « … » et son bouton bookmark ont quitté
+        // l'hôte pour `ReelsPlayerView+ActionRail.swift`. Les deux fichiers sont lus
+        // ENSEMBLE, comme `FeedPostCard` au #4078 : sur l'hôte seul, la garde ne
+        // verrait plus aucune des deux étiquettes qu'elle oppose.
         let source = try sourceWithoutComments("Meeshy/Features/Main/Views/ReelsPlayerView.swift")
+            + sourceWithoutComments("Meeshy/Features/Main/Views/ReelsPlayerView+ActionRail.swift")
         XCTAssertTrue(source.contains(#"String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main)"#),
             "Le téléchargement média du menu « … » du lecteur plein écran doit afficher « Sauvegarder »")
         XCTAssertTrue(source.contains(#"String(localized: "reels.action.bookmark", defaultValue: "Enregistrer", bundle: .main)"#),

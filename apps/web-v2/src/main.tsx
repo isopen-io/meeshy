@@ -12,7 +12,7 @@ import { sessionStore } from '@/lib/api/session';
 import { currentInterfaceLanguage, subscribeInterfaceLanguage } from '@/lib/interface-language';
 import { useRoute } from '@/lib/router';
 import { followSystem } from '@/lib/scheme';
-import { resolveRouteAccess } from '@/lib/session-guard';
+import { landingAfterSession, resolveRouteAccess } from '@/lib/session-guard';
 import { Router, href, navigate } from '@/routes/route-table';
 
 /**
@@ -64,14 +64,19 @@ if (import.meta.env.DEV) void import('@/lib/api/dev-harness');
  * est déjà là, pas à ajouter.
  */
 function SessionGate({ children }: { children: ReactNode }) {
-  const { key } = useRoute();
+  const { key, search } = useRoute();
   const status = useStore(sessionStore, (s) => s.session.status);
   const decision = resolveRouteAccess({ sessionStatus: status, source: apiDeps.source, routeKey: key });
+  /* `next` (#5561) — une session qui s'ouvre sur `/login?next=/chat/<lien>`
+     fait naviguer l'écran ET cette garde, dans le MÊME rendu. L'effet du
+     parent s'exécute APRÈS celui de l'enfant : si la garde ne lisait pas
+     `next`, son `/` recouvrirait le retour à l'invitation. */
+  const next = search.get('next');
 
   useEffect(() => {
     if (decision === 'redirect-login') navigate(href('login'), true);
-    if (decision === 'redirect-home') navigate(href('list'), true);
-  }, [decision]);
+    if (decision === 'redirect-home') navigate(landingAfterSession(next, href('list')), true);
+  }, [decision, next]);
 
   return decision === 'allow' ? children : <Skeleton />;
 }
@@ -129,3 +134,27 @@ createRoot(root).render(
  * `scripts/measure-weight.mjs`).
  */
 void import('@/lib/api/realtime');
+
+/**
+ * LE SERVICE WORKER S'INSCRIT APRÈS LA PREMIÈRE PEINTURE, ET SUR LE `load`
+ * (#6936) — l'installation précache tout le bundle : la lancer pendant le
+ * premier rendu ferait concurrence, sur la 3G visée, au rendu lui-même. C'est
+ * la même horloge que `registerSW.js` de `vite-plugin-pwa`, qu'on remplace
+ * (`vite.config.ts` § `injectRegister`), et que le legacy
+ * (`ServiceWorkerInitializer`, monté dans son layout).
+ *
+ * `__SHELL__` : la coque Capacitor n'émet AUCUN service worker
+ * (`scripts/check-shell-dist.mjs`) — elle embarque ses actifs et reçoit une
+ * version neuve par son magasin d'applications. `import.meta.env.PROD` : en
+ * développement, `vite` ne sert pas de `/sw.js` (les `devOptions` de VitePWA
+ * sont désactivées), et l'inscription échouerait à chaque rechargement.
+ */
+if (!__SHELL__ && import.meta.env.PROD && 'serviceWorker' in navigator) {
+  const inscrire = (): void => {
+    void import('@/lib/app-update/service-worker').then(({ appUpdateController }) =>
+      appUpdateController().register(),
+    );
+  };
+  if (document.readyState === 'complete') inscrire();
+  else window.addEventListener('load', inscrire, { once: true });
+}

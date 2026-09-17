@@ -27,6 +27,13 @@ public final class UserPreferencesManager: ObservableObject {
     @Published public private(set) var document: DocumentPreferences
     @Published public private(set) var application: ApplicationPreferences
 
+    /// Les consentements que la passerelle a CONFIRMÉS (#6624) — rendus par
+    /// `PUT /me/consents/{purpose}` à l'octroi, relus par `GET /me/consents` à
+    /// chaque `fetchFromBackend()`. Jamais déduits d'un blob de préférences :
+    /// seule la colonne `User` fait foi (#4180). `internal(set)` pour les
+    /// témoins `@testable`.
+    @Published public internal(set) var grantedConsents: Set<ConsentPurpose>
+
     @Published public private(set) var isSyncing = false
     @Published public private(set) var lastSyncDate: Date?
 
@@ -38,6 +45,8 @@ public final class UserPreferencesManager: ObservableObject {
     /// tests that drive `fetchFromBackend()`/`applyRemote` end-to-end
     /// without hitting the real network.
     internal var service: PreferenceServiceProviding = PreferenceService.shared
+    /// Même couture que `service`, pour `GET`/`PUT /me/consents`.
+    internal var consentService: ConsentServiceProviding = ConsentService.shared
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
     private var syncTasks: [PreferenceCategory: Task<Void, Never>] = [:]
@@ -73,6 +82,7 @@ public final class UserPreferencesManager: ObservableObject {
     private nonisolated static let keyPrefix = "meeshy_prefs_"
     private static let lastSyncKey = "meeshy_prefs_last_sync"
     private static let pendingCategoriesKey = "meeshy_prefs_pending_categories"
+    private static let grantedConsentsKey = "meeshy_prefs_granted_consents"
     /// Suite App Group partagée avec les extensions (NSE, widgets). La clé
     /// miroir des préférences de notification est
     /// `appGroupNotificationPrefsKey` — lue par `NSEPreferencesGate` depuis le
@@ -96,6 +106,7 @@ public final class UserPreferencesManager: ObservableObject {
         video = (Self.load(.video) as VideoPreferences?) ?? .defaults
         document = (Self.load(.document) as DocumentPreferences?) ?? .defaults
         application = (Self.load(.application) as ApplicationPreferences?) ?? .defaults
+        grantedConsents = Self.loadGrantedConsents()
 
         if let ts = UserDefaults.standard.object(forKey: Self.lastSyncKey) as? Date {
             lastSyncDate = ts
@@ -172,34 +183,31 @@ public final class UserPreferencesManager: ObservableObject {
         scheduleSyncToBackend(.application)
     }
 
-    // MARK: - Convenience: Voice Consent (espace de préférences)
+    // MARK: - Convenience: Voice Consent (#6624 — PUT /me/consents)
 
-    /// Consentement de définition du profil vocal accordé — lu depuis
-    /// l'espace de préférences (`application.voiceProfileConsentAt`), la même
-    /// source que le gateway (`ConsentValidationService`, priorité
-    /// `UserPreferences.application` > `User`).
-    public var voiceConsentGranted: Bool { application.voiceProfileConsentAt != nil }
+    /// Consentement de définition du profil vocal CONFIRMÉ par la passerelle.
+    public var voiceConsentGranted: Bool { grantedConsents.contains(.voiceProfile) }
 
-    /// Traduction vocale utilisant le profil (clonage) consentie.
-    public var voiceCloningConsentGranted: Bool { application.voiceCloningConsentAt != nil }
+    /// Traduction vocale utilisant le profil (clonage) CONFIRMÉE par la passerelle.
+    public var voiceCloningConsentGranted: Bool { grantedConsents.contains(.voiceCloning) }
 
-    /// Accorde en un geste, via la MÊME API préférences que le reste
-    /// (PATCH `/me/preferences/application` + `/me/preferences/audio`,
-    /// synchronisés par l'outbox) :
-    /// 1. la chaîne de consentements vocaux (traitement des données →
-    ///    données vocales → profil vocal → clonage) ;
-    /// 2. les features audio correspondantes (transcription, traduction
-    ///    audio, génération TTS, profil vocal).
-    /// Idempotent : un timestamp déjà posé n'est jamais réécrit.
-    public func grantVoiceAutoTranslationConsent(now: Date = Date()) {
-        let iso = now.formatted(.iso8601)
-        updateApplication { app in
-            if app.dataProcessingConsentAt == nil { app.dataProcessingConsentAt = iso }
-            if app.voiceDataConsentAt == nil { app.voiceDataConsentAt = iso }
-            if app.voiceProfileConsentAt == nil { app.voiceProfileConsentAt = iso }
-            if app.voiceCloningConsentAt == nil { app.voiceCloningConsentAt = iso }
-            if app.voiceCloningEnabledAt == nil { app.voiceCloningEnabledAt = iso }
-        }
+    /// Accorde en un geste la traduction vocale :
+    /// 1. le consentement `voice-cloning` par `PUT /me/consents/voice-cloning`
+    ///    — la passerelle horodate et pose chaque ancêtre manquant (profil
+    ///    vocal, données vocales, traitement des données) ;
+    /// 2. PUIS les features audio (transcription, traduction audio, TTS,
+    ///    profil vocal), par `PATCH /me/preferences/audio`.
+    ///
+    /// Plus rien ne passe par `PATCH /me/preferences/application` : la
+    /// passerelle y refuse les clés de consentement (#4180), et leur envoi
+    /// rendait la catégorie entière inenregistrable (#6624).
+    ///
+    /// Un octroi refusé LÈVE avant toute écriture locale : ni consentement
+    /// supposé, ni feature audio activée.
+    public func grantVoiceAutoTranslationConsent() async throws {
+        let entry = try await consentService.setConsent(.voiceCloning, granted: true)
+        guard entry.granted else { throw ConsentServiceError.notGranted(.voiceCloning) }
+        recordGrantedConsents(grantedConsents.union(ConsentPurpose.voiceCloning.lineage))
         updateAudio { audio in
             audio.transcriptionEnabled = true
             audio.audioTranslationEnabled = true
@@ -223,6 +231,7 @@ public final class UserPreferencesManager: ObservableObject {
         } catch {
             // Network failure: local values remain authoritative
         }
+        await refreshGrantedConsents()
     }
 
     public func resetToDefaults() {
@@ -250,6 +259,7 @@ public final class UserPreferencesManager: ObservableObject {
         video = .defaults
         document = .defaults
         application = .defaults
+        grantedConsents = []
         isSyncing = false
         lastSyncDate = nil
 
@@ -268,6 +278,7 @@ public final class UserPreferencesManager: ObservableObject {
         }
         UserDefaults.standard.removeObject(forKey: Self.lastSyncKey)
         UserDefaults.standard.removeObject(forKey: Self.pendingCategoriesKey)
+        UserDefaults.standard.removeObject(forKey: Self.grantedConsentsKey)
         // Purge du miroir App Group (privacy) : un user B sur le même device
         // ne doit pas hériter du gating notifications du user A dans la NSE.
         UserDefaults(suiteName: Self.appGroupSuiteName)?
@@ -321,6 +332,26 @@ public final class UserPreferencesManager: ObservableObject {
     static func loadPendingCategories() -> Set<PreferenceCategory>? {
         guard let rawValues = UserDefaults.standard.stringArray(forKey: pendingCategoriesKey) else { return nil }
         return Set(rawValues.compactMap { PreferenceCategory(rawValue: $0) })
+    }
+
+    // MARK: - Private: Granted Consents
+
+    private func recordGrantedConsents(_ consents: Set<ConsentPurpose>) {
+        grantedConsents = consents
+        UserDefaults.standard.set(consents.map(\.rawValue).sorted(), forKey: Self.grantedConsentsKey)
+    }
+
+    private static func loadGrantedConsents() -> Set<ConsentPurpose> {
+        let rawValues = UserDefaults.standard.stringArray(forKey: grantedConsentsKey) ?? []
+        return Set(rawValues.compactMap(ConsentPurpose.init(rawValue:)))
+    }
+
+    /// Relecture du serveur, qui fait foi : un retrait fait ailleurs (web,
+    /// assistant du profil vocal) retire l'octroi local. Un échec réseau ne
+    /// touche à rien.
+    private func refreshGrantedConsents() async {
+        guard let served = try? await consentService.consents() else { return }
+        recordGrantedConsents(Set(served.filter(\.granted).compactMap(\.consentPurpose)))
     }
 
     // MARK: - Private: Debounced Backend Sync

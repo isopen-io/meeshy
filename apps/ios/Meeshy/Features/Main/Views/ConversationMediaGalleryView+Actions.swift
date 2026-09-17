@@ -127,29 +127,24 @@ extension ConversationMediaGalleryView {
         }
     }
 
-    /// Marge basse de la traînée : elle flotte AU-DESSUS du couloir bas, donc
-    /// par-dessus le bloc auteur / dimensions — c'est le recouvrement que la
-    /// précision porteur demande de montrer. **Le couloir, lui, reste libre en
-    /// ENTIER** : ses deux bandes sont les seuls contrôles du bas qui servent à
-    /// PARCOURIR — le rail parcourt la série, la bande de transport parcourt le
-    /// média (#6162) — et les couvrir enfermerait le lecteur sur l'instant
-    /// courant de la pièce courante.
+    /// **Marge basse de la traînée : la gouttière du plateau, et rien d'autre**
+    /// (#6789).
     ///
-    /// **Elle se LIT sur les couloirs, elle ne les recompose pas.** La marge
-    /// recopiait la conjonction du rail (`count > 1 ? …`) et ignorait purement la
-    /// bande réservée depuis #6162 : son bas tombait 8 pt au-dessus du rail,
-    /// c'est-à-dire exactement dans les 48 pt du transport — scrubber, muet et
-    /// menu ⋯ couverts pendant que la traînée est ouverte, puisque
-    /// `allowsHitTesting(reactionBarOpen)` rend alors la couche opaque au doigt.
-    /// C'était le défaut que le commentaire de ce site prétendait éviter, mot
-    /// pour mot. `stageCorridors` porte déjà les deux hauteurs, chacune avec sa
-    /// condition ; une seconde conjonction ici serait une seconde loi.
+    /// Elle valait `rail + transport + 8` jusqu'au 2026-09-16, pour ne pas
+    /// couvrir les deux bandes qui servent à PARCOURIR — le rail parcourt la
+    /// série, la bande de transport parcourt le média (#6162). **La directive du
+    /// jour a retiré la raison en même temps que les bandes** : la même
+    /// ouverture qui monte la traînée efface tout le chrome, et une marge qui
+    /// éviterait des bandes absentes laisserait une centaine de points de vide
+    /// sous les émojis.
     ///
+    /// La règle — et l'INVARIANCE aux couloirs qui la dit — vit dans
+    /// `MediaStageVeil` ; ceci n'en est que la projection sur cet hôte.
     /// La couche respecte la zone sûre alors que les couloirs la réservent à
-    /// part — `safeBottom` n'entre donc PAS dans cette somme, sans quoi la
+    /// part : `safeBottom` n'entre donc pas dans cette somme, sans quoi la
     /// traînée flotterait une encoche trop haut.
-    private var reactionBarBottomInset: CGFloat {
-        stageCorridors.rail + stageCorridors.transport + 8
+    var reactionBarBottomInset: CGFloat {
+        MediaStageVeil.rowBottomInset(corridors: stageCorridors)
     }
 
     // MARK: - Réaction sur la pièce

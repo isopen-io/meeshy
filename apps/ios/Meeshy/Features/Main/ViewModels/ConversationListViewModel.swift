@@ -1109,14 +1109,23 @@ class ConversationListViewModel: ObservableObject {
                     // retour réseau/cache), pour que la ligne affiche l'auteur dès
                     // ce bump au lieu d'attendre la prochaine synchro. Les groupes
                     // n'ont pas cette info en local — comportement neutre inchangé.
-                    let resolvedSenderName: String?
-                    if self.conversations[index].type == .direct,
-                       let senderId = event.senderId,
-                       senderId == self.conversations[index].participantUserId {
-                        resolvedSenderName = self.conversations[index].participantUsername
-                    } else {
-                        resolvedSenderName = nil
-                    }
+                    // #6921 — la règle a QUITTÉ ce site pour `ConversationListAuthor`.
+                    // Le repli DM ci-dessus était juste et incomplet : il ne
+                    // couvrait pas MON PROPRE message (`senderId == moi`, donc
+                    // jamais le pair ⇒ `nil`), ce qui retirait le préfixe de la
+                    // ligne à chaque envoi. Et il ignorait `lastMessageSenderName`,
+                    // que la passerelle sert et que le décodeur jetait.
+                    // Message NEUF : « rien d'affirmé » vaut « aucun auteur » —
+                    // celui de l'ancien message ne s'hérite pas (garde anti-périmé).
+                    let resolvedSenderName = ConversationListAuthor.resolve(
+                        eventSenderId: event.senderId,
+                        eventSenderName: event.lastMessageSenderName,
+                        currentUserId: self.currentUserId,
+                        conversationType: self.conversations[index].type,
+                        peerUserId: self.conversations[index].participantUserId,
+                        peerUsername: self.conversations[index].participantUsername,
+                        youLabel: Self.youAuthorLabel
+                    ).displayedNameForNewMessage
                     self.bumpToTop(
                         conversationId: event.conversationId,
                         facet: LastMessageFacet(
@@ -1177,6 +1186,28 @@ class ConversationListViewModel: ObservableObject {
                     }
                     if let preview = event.lastMessagePreview {
                         self.conversations[index].lastMessagePreview = preview.meeshyPreviewTruncated
+                    }
+                    // L'auteur est REPOSÉ au même titre que l'aperçu, et pour la
+                    // même raison (#6921) : `adoptLastMessage` vient de l'effacer
+                    // — à raison, un nouveau message n'ayant pas l'auteur de
+                    // l'ancien — et rien ne le remettait. La ligne montrait alors
+                    // le texte sans son préfixe. `nil` reste `nil` : quand
+                    // l'événement n'affirme aucun auteur, la garde anti-périmé
+                    // s'applique inchangée.
+                    // MÊME message (édition, traduction) : « rien d'affirmé »
+                    // vaut GARDER. Écrire `nil` ici effaçait l'auteur à chaque
+                    // édition de légende — ce que le témoin
+                    // `…editingTheSameMessage_keepsItsDescription` a attrapé.
+                    if case .display(let auteur) = ConversationListAuthor.resolve(
+                        eventSenderId: event.senderId,
+                        eventSenderName: event.lastMessageSenderName,
+                        currentUserId: self.currentUserId,
+                        conversationType: self.conversations[index].type,
+                        peerUserId: self.conversations[index].participantUserId,
+                        peerUsername: self.conversations[index].participantUsername,
+                        youLabel: Self.youAuthorLabel
+                    ) {
+                        self.conversations[index].lastMessageSenderName = auteur
                     }
                     // Appliquée AU MÊME TITRE que l'aperçu, et au même endroit :
                     // la paire doit rester cohérente, sinon on recrée le mélange
@@ -1830,6 +1861,13 @@ class ConversationListViewModel: ObservableObject {
 
         paginationState = .loadingMore
 
+        // Le curseur RÉELLEMENT envoyé, hissé hors du `do` pour que le journal
+        // d'échec nomme la valeur qui a échoué. Il disait `nextCursor`, qui
+        // vaut `nil` sur le chemin du repli — donc « cursor=nil » alors qu'un
+        // curseur partait bel et bien (#6857). Un diagnostic qui désigne une
+        // AUTRE variable que celle de la requête envoie chercher ailleurs.
+        var envoye: String?
+
         do {
             let userId = currentUserId
             // Curseur de secours quand aucun `nextCursor` n'est connu (full
@@ -1840,8 +1878,14 @@ class ConversationListViewModel: ObservableObject {
             // déjà affichée et le zero-progress guard ci-dessous forcerait
             // `.exhausted`, bloquant l'infinite scroll sur les comptes dont
             // le full sync s'est arrêté en cours de route.
-            let previousCursor = nextCursor
-                ?? conversations.min(by: { $0.lastMessageAt < $1.lastMessageAt })?.id
+            // #6857 — un repli que le CLIENT fabrique doit ressembler à ce
+            // que la passerelle sert. `conv-hydrate`, fixture de témoin gravée
+            // dans le cache disque, partait sinon en `before=` et faisait
+            // rendre 500 à la route, définitivement.
+            let previousCursor = ConversationListPaginationCursor.resolve(
+                nextCursor: nextCursor,
+                oldestLocalId: conversations.min(by: { $0.lastMessageAt < $1.lastMessageAt })?.id)
+            envoye = previousCursor
             let knownIds = Set(conversations.map(\.id))
             let page = try await conversationService.listPage(
                 before: previousCursor,
@@ -1927,7 +1971,7 @@ class ConversationListViewModel: ObservableObject {
             // `hasMore = true` so the next scroll attempt can retry.
             // We surface the error in the published state so the view
             // can show a discreet retry prompt at the tail.
-            Logger.messages.error("[ConversationListVM] loadMore error cursor=\(self.nextCursor ?? "nil"): \(error.localizedDescription)")
+            Logger.messages.error("[ConversationListVM] loadMore error cursor=\(envoye ?? "<aucun>"): \(error.localizedDescription)")
             paginationState = .error(error.localizedDescription)
         }
     }
@@ -2487,6 +2531,13 @@ class ConversationListViewModel: ObservableObject {
     private var currentUserId: String {
         authManager.currentUser?.id ?? ""
     }
+
+    /// Le mot qui me désigne dans le préfixe d'auteur d'une ligne de liste
+    /// (#6921). La clé est celle du fil (`focal.row.you`) et non une clé neuve :
+    /// c'est le MÊME mot produit, déjà traduit dans les sept langues — en créer
+    /// une seconde n'aurait ajouté qu'une occasion de la laisser partiellement
+    /// traduite, et le français serait alors servi aux six autres.
+    static let youAuthorLabel = String(localized: "focal.row.you", bundle: .main)
 
     /// `currentUserId` retombe sur `""` tant que l'auth n'est pas résolue.
     /// Comparer par `==` sans écarter ce cas ferait d'un payload au `userId`

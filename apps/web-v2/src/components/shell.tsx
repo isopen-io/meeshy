@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, type ReactNode } from 'react';
 
+import { useAppUpdateAnnounced } from '@/lib/app-update/pending-store';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { showsFloatingMenus } from '@/lib/view/floating-gate';
@@ -77,9 +78,34 @@ const chargerMenus = () =>
   }));
 const FloatingMenus = lazy(chargerMenus);
 
+/**
+ * ...ET LA BANNIÈRE DE MISE À JOUR (#6936), troisième exception à la minceur,
+ * sur la MÊME fondation que les deux autres : iOS pose ses annonces vivantes
+ * dans sa couche de chrome flottant, au-dessus de tous les écrans.
+ *
+ * **À la demande, et SANS préchargement** — contrairement à la pastille et aux
+ * menus, dont les raisons de préchargement ne valent pas ici : la pastille sert
+ * au moment où le réseau tombe, les menus sont le seul chemin vers sept écrans.
+ * Une bannière de mise à jour, elle, ne peut apparaître QUE si le réseau vient
+ * de répondre — c'est une version neuve qui vient d'être téléchargée. La payer
+ * à chaque chargement de page pour une annonce qui n'arrive qu'aux
+ * déploiements serait le contraire d'un budget tenu.
+ *
+ * `useAppUpdateAnnounced` seul reste en statique, exactement comme
+ * `useSyncPillArmed` : il répond OUI ou NON, et c'est son OUI qui va chercher
+ * la bannière, ses libellés et le contrôleur de mise à jour.
+ */
+const chargerBanniereMaj = () =>
+  Promise.all([import('./app-update-banner'), loadInterfaceCatalog(currentInterfaceLanguage())]).then(([m]) => ({
+    default: m.AppUpdateBanner,
+  }));
+const AppUpdateBanner = lazy(chargerBanniereMaj);
+
 export default function Shell({ children }: { children: ReactNode }) {
   const pastilleArmee = useSyncPillArmed();
-  const menusArmes = showsFloatingMenus(useRoute().key);
+  const majAnnoncee = useAppUpdateAnnounced();
+  const routeKey = useRoute().key;
+  const menusArmes = showsFloatingMenus(routeKey);
 
   /* APRÈS le premier pixel, pendant qu'on est encore en ligne. L'effet ne
      s'exécute pas au rendu serveur, donc le préchauffage institutionnel n'en
@@ -106,13 +132,18 @@ export default function Shell({ children }: { children: ReactNode }) {
           <SyncPill />
         </Suspense>
       ) : null}
+      {majAnnoncee ? (
+        <Suspense fallback={null}>
+          <AppUpdateBanner />
+        </Suspense>
+      ) : null}
       {children}
       {/* APRÈS `children` : à z-index égal, c'est l'ordre du document qui
           tranche, et un menu recouvert par l'écran qu'il commande serait le
           défaut le plus bête du lot. */}
       {menusArmes ? (
         <Suspense fallback={null}>
-          <FloatingMenus />
+          <FloatingMenus routeKey={routeKey} />
         </Suspense>
       ) : null}
     </div>

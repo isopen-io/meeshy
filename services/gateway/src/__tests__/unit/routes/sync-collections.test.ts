@@ -205,6 +205,54 @@ describe('GET /sync — collection conversations', () => {
     await app.close();
   });
 
+  // ── issue #6827 : l'AUTRE participant d'un direct découvert via /sync ──
+  //
+  // Piste 2 de l'issue (l'alternative étroite) : `syncConversationSelect`
+  // embarque désormais jusqu'à DEUX lignes `participants` par conversation —
+  // le mécanisme existant (`participants` collection) ne servait jamais le
+  // chemin `/sync` PRINCIPAL d'iOS, qui ne demande que `collections=conversations`.
+  // `APIConversation.participants` et `toConversation` décodent déjà cette
+  // forme (même shape que `GET /conversations`) — zéro changement client.
+  const directParticipants = [
+    { id: 'p-me', userId: USER_ID, displayName: null, avatar: null,
+      user: { id: USER_ID, username: 'me', displayName: 'Me', avatar: null } },
+    { id: 'p-peer', userId: 'peer-user-id', displayName: null, avatar: null,
+      user: { id: 'peer-user-id', username: 'peer', displayName: 'Peer Person', avatar: null } },
+  ];
+
+  it("sert l'autre participant d'un direct découvert pour la première fois via /sync (#6827)", async () => {
+    const prisma = makePrisma({
+      conversation: { findMany: scopedStore(
+        [{ ...conv(CONV_MINE, '2026-07-02T00:00:00Z', '2026-07-02T10:00:00Z'), type: 'direct', participants: directParticipants }],
+        'id',
+      ) },
+    });
+    const app = await buildApp(prisma);
+
+    const res = await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=conversations` });
+    const c = res.json().data.collections.conversations;
+    expect(c.added[0].participants).toEqual(directParticipants);
+    await app.close();
+  });
+
+  it('vide `participants` pour tout type AUTRE que direct — jamais le roster complet', async () => {
+    const prisma = makePrisma({
+      conversation: { findMany: scopedStore(
+        // `type: 'group'` porteur d'un `participants` peuplé malgré tout —
+        // preuve que c'est la route, et pas seulement le `select` Prisma, qui
+        // ferme la porte pour les types non-directs.
+        [{ ...conv(CONV_MINE, '2026-07-02T00:00:00Z', '2026-07-02T10:00:00Z'), participants: directParticipants }],
+        'id',
+      ) },
+    });
+    const app = await buildApp(prisma);
+
+    const res = await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=conversations` });
+    const c = res.json().data.collections.conversations;
+    expect(c.added[0].participants).toEqual([]);
+    await app.close();
+  });
+
   it('partage le MÊME budget de poids que messages — une ligne surdimensionnée tronque', async () => {
     const { SYNC_MAX_PAGE_BYTES } = await import('../../../routes/sync');
     // Quatre conversations dont le lecteur est RÉELLEMENT membre (une ligne

@@ -38,6 +38,7 @@ struct EmailVerificationView: View {
                     Spacer()
                 }
                 .padding(.horizontal, 24)
+                .iPadFormWidth()
 
                 successOverlay
             }
@@ -178,6 +179,7 @@ struct EmailVerificationView: View {
             )
         }
         .disabled(!isCodeComplete || viewModel.isVerifying || viewModel.verificationSuccess)
+        .accessibilityIdentifier("emailVerification.submit")
         .padding(.horizontal, 8)
         // Pendant la vérification le label se réduit à un spinner (aucun texte) →
         // VoiceOver lirait un bouton anonyme. Label stable et explicite dans les

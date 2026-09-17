@@ -55,7 +55,12 @@ extension ReelPageView {
             // conservée) — l'icône et le libellé a11y suivent
             // `audioPlayer.isPlaying`, jamais un état local séparé qui
             // pourrait diverger du son réellement audible.
-            if BackgroundSoundBadge.showsMuteButton(for: announcement), borrowedSoundTrack != nil {
+            //
+            // Réel COMPOSÉ (#6745) : le son de fond est joué par le PLAYER de
+            // la scène, et c'est son muet que le bouton pilote.
+            if BackgroundSoundBadge.showsMuteButton(for: announcement), isSceneReel {
+                sceneSoundMuteButton
+            } else if BackgroundSoundBadge.showsMuteButton(for: announcement), borrowedSoundTrack != nil {
                 Button {
                     audioPlayer.togglePlayPause()
                     HapticFeedback.light()
@@ -115,6 +120,10 @@ extension ReelPageView {
                             .foregroundColor(.white)
                         authorMetaLine
                     }
+                    // #6693 — sur un réel clair, le nom blanc passait sans voile sur les
+                    // bandes jaune et verte : il reçoit l'ombre de la légende quand la loi
+                    // dit le fond clair.
+                    .mediaChromeLegible()
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(String(localized: "reels.author.profile", defaultValue: "Profil de l'auteur", bundle: .main))

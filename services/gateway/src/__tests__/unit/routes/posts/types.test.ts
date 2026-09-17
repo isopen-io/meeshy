@@ -477,9 +477,18 @@ describe('CreateCommentSchema', () => {
     expect(result.success).toBe(true);
   });
 
-  it('rejects attachmentIds with more than 1 entry', () => {
-    const result = CreateCommentSchema.safeParse({ attachmentIds: ['media-001', 'media-002'] });
-    expect(result.success).toBe(false);
+  // #6578 — « ajouter d'AUTRES média » : le bornage à 1 est LEVÉ. Le bandeau
+  // du composer affichait déjà un TABLEAU de vignettes pour n'en envoyer qu'une
+  // — un contrôle qui ment.
+  it('accepte PLUSIEURS médias joints à un commentaire', () => {
+    const result = CreateCommentSchema.safeParse({ attachmentIds: ['media-001', 'media-002', 'media-003'] });
+    expect(result.success).toBe(true);
+  });
+
+  it('borne au plafond des médias d’un post — pas un nombre neuf', () => {
+    const onze = Array.from({ length: MAX_POST_MEDIA + 1 }, (_, i) => `media-${i}`);
+    expect(CreateCommentSchema.safeParse({ attachmentIds: onze }).success).toBe(false);
+    expect(CreateCommentSchema.safeParse({ attachmentIds: onze.slice(0, MAX_POST_MEDIA) }).success).toBe(true);
   });
 });
 

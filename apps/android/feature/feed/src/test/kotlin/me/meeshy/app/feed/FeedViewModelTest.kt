@@ -26,6 +26,7 @@ import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.ApiRepostOf
 import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.ApiPostTranslationEntry
+import me.meeshy.sdk.model.ApiMediaCaptionTranslationEntry
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.model.SocketCommentAddedData
@@ -35,6 +36,7 @@ import me.meeshy.sdk.model.SocketPostCreatedData
 import me.meeshy.sdk.model.SocketPostDeletedData
 import me.meeshy.sdk.model.SocketPostLikedData
 import me.meeshy.sdk.model.SocketPostRepostedData
+import me.meeshy.sdk.model.SocketMediaCaptionTranslationUpdatedData
 import me.meeshy.sdk.model.SocketPostTranslationUpdatedData
 import me.meeshy.sdk.model.SocketPostUnlikedData
 import me.meeshy.sdk.model.SocketPostUpdatedData
@@ -79,6 +81,8 @@ class FeedViewModelTest {
     private val commentDeleted = MutableSharedFlow<SocketCommentDeletedData>(extraBufferCapacity = 64)
     private val postTranslationUpdated =
         MutableSharedFlow<SocketPostTranslationUpdatedData>(extraBufferCapacity = 64)
+    private val mediaCaptionTranslationUpdated =
+        MutableSharedFlow<SocketMediaCaptionTranslationUpdatedData>(extraBufferCapacity = 64)
     private val postUpdated = MutableSharedFlow<SocketPostUpdatedData>(extraBufferCapacity = 64)
     private val postReposted = MutableSharedFlow<SocketPostRepostedData>(extraBufferCapacity = 64)
     private val config = MeeshyConfig()
@@ -96,6 +100,7 @@ class FeedViewModelTest {
         every { socialSocket.commentAdded } returns commentAdded
         every { socialSocket.commentDeleted } returns commentDeleted
         every { socialSocket.postTranslationUpdated } returns postTranslationUpdated
+        every { socialSocket.mediaCaptionTranslationUpdated } returns mediaCaptionTranslationUpdated
         every { socialSocket.postUpdated } returns postUpdated
         every { socialSocket.postReposted } returns postReposted
         return FeedViewModel(repository, session, socialSocket, config, feedMediaUploader, reportRepository, workManager)
@@ -442,6 +447,7 @@ class FeedViewModelTest {
         every { socialSocket.commentAdded } returns commentAdded
         every { socialSocket.commentDeleted } returns commentDeleted
         every { socialSocket.postTranslationUpdated } returns postTranslationUpdated
+        every { socialSocket.mediaCaptionTranslationUpdated } returns mediaCaptionTranslationUpdated
         every { socialSocket.postUpdated } returns postUpdated
         every { socialSocket.postReposted } returns postReposted
         return FeedViewModel(repository, session, socialSocket, config, feedMediaUploader, reportRepository, workManager)
@@ -772,6 +778,18 @@ class FeedViewModelTest {
         )
 
         verify { repository.applyTranslationUpdate("1", "es", entry) }
+    }
+
+    @Test
+    fun `a realtime media-caption-translation-updated folds the pushed entry via the repository (#6280)`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(post("1")), 0L)))
+        val entry = ApiMediaCaptionTranslationEntry(text = "Hola", translationModel = "nllb", confidenceScore = 0.97)
+
+        mediaCaptionTranslationUpdated.emit(
+            SocketMediaCaptionTranslationUpdatedData(mediaId = "m1", postId = "1", language = "es", translation = entry),
+        )
+
+        verify { repository.applyMediaCaptionTranslationUpdate("1", "m1", null, "es", entry) }
     }
 
     @Test
@@ -1185,6 +1203,51 @@ class FeedViewModelTest {
 
         coVerify(exactly = 1) {
             repository.create(content = "check this out", type = "REEL", visibility = "PUBLIC", mediaIds = listOf("m1"))
+        }
+    }
+
+    @Test
+    fun `publishPost forwards the author's per-media alt text to the repository`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Empty))
+        coEvery {
+            repository.create(
+                content = "hi",
+                type = "POST",
+                visibility = "PUBLIC",
+                mediaIds = listOf("m1"),
+                mediaAlt = mapOf("m1" to "A red bicycle"),
+            )
+        } returns NetworkResult.Success(post("new"))
+
+        vm.publishPost(
+            content = "hi",
+            visibility = "PUBLIC",
+            mediaIds = listOf("m1"),
+            mediaAlt = mapOf("m1" to "A red bicycle"),
+        )
+
+        coVerify(exactly = 1) {
+            repository.create(
+                content = "hi",
+                type = "POST",
+                visibility = "PUBLIC",
+                mediaIds = listOf("m1"),
+                mediaAlt = mapOf("m1" to "A red bicycle"),
+            )
+        }
+    }
+
+    @Test
+    fun `publishPost with no alt text forwards a null mediaAlt, never an empty map`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Empty))
+        coEvery {
+            repository.create(content = "hi", type = "POST", visibility = "PUBLIC", mediaAlt = null)
+        } returns NetworkResult.Success(post("new"))
+
+        vm.publishPost(content = "hi", visibility = "PUBLIC")
+
+        coVerify(exactly = 1) {
+            repository.create(content = "hi", type = "POST", visibility = "PUBLIC", mediaAlt = null)
         }
     }
 

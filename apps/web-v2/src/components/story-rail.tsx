@@ -12,7 +12,10 @@ import {
   railRingBox,
   railStroke,
 } from '@/components/rail-tile';
+import { StoryRailSelfTile } from '@/components/story-rail-self-tile';
+import type { InterfaceLanguage } from '@/lib/interface-language';
 import { initialsOf } from '@/lib/view/conversation';
+import { railGroupsWithoutSelf, type StoryRailSelfEntry } from '@/lib/view/story-rail-self';
 import { storyAuthorLabel, type StoryTrayGroup } from '@/lib/view/story-tray';
 import { Link } from '@/routes/route-table';
 
@@ -113,8 +116,18 @@ const RAIL = {
  * grand plateau. Y remettre un libellé ferait déborder la barre ; y remettre
  * les disques d'action doublerait deux contrôles déjà atteignables.
  */
-function StoryTile({ group, size, showsLabel }: { readonly group: StoryTrayGroup; readonly size: number; readonly showsLabel: boolean }) {
-  const label = storyAuthorLabel(group);
+function StoryTile({
+  group,
+  size,
+  showsLabel,
+  language,
+}: {
+  readonly group: StoryTrayGroup;
+  readonly size: number;
+  readonly showsLabel: boolean;
+  readonly language: InterfaceLanguage;
+}) {
+  const label = storyAuthorLabel(group, language);
   const combien = group.stories.length;
   const anneau = railRingBox(size);
   const cellule = railCellWidth(size, showsLabel);
@@ -311,10 +324,21 @@ function RailActions() {
  */
 export type StoryRailProps = {
   readonly groups: readonly StoryTrayGroup[];
+  /** **MOI, ET MES DEUX PORTES** (#6150) — l'entrée du LECTEUR, séparée des
+   * groupes parce qu'elle existe même sans story (`selfRailEntry`,
+   * `lib/view/story-rail-self.ts`, miroir `LentilleRailSelfEntry`).
+   * `undefined` ⇒ aucun lecteur identifié : aucune cellule, jamais un (+) qui
+   * ne mène nulle part. */
+  readonly self?: StoryRailSelfEntry;
   /** Cache VIDE, première tentative en vol — jamais « une requête est en
    * cours » : c'est `railTientLaPlace` (`lib/view/story-tray.ts`) qui l'arbitre,
    * chez l'écran, avec ses témoins. */
   readonly loading: boolean;
+  /** La langue d'interface, calculée UNE FOIS par écran avec le reste de
+   * `StoryRailProps` (`lib/view/use-story-rail.ts`, #6550) — jamais relue ici,
+   * pour la même raison que `groups` : les deux géographies du rail doivent
+   * voir la MÊME valeur. */
+  readonly language: InterfaceLanguage;
 };
 
 export const StoryRail = forwardRef<
@@ -325,9 +349,25 @@ export const StoryRail = forwardRef<
      * — voir la garde d'accessibilité ci-dessous. */
     readonly inert?: boolean;
   }
->(function StoryRail({ groups, loading, variant, inert = false }, ref) {
+>(function StoryRail({ groups, loading, language, variant, self, inert = false }, ref) {
   const grande = variant === 'grande';
   const size = grande ? RAIL_TILE_GRANDE : RAIL_TILE_COMPACT;
+
+  /**
+   * **MA CELLULE N'EXISTE QUE SUR LE GRAND PLATEAU** (#6150) — et son retrait
+   * de la bande épinglée n'est pas une économie, c'est la décision d'iOS déjà
+   * écrite plus haut : « LA BANDE ÉPINGLÉE NE PORTE NI LÉGENDE NI BOUTONS »
+   * (`PinnedStoryTrailBand` rend des anneaux seuls dans une barre repliée de
+   * 60 pt). Deux pastilles de plus y doubleraient deux contrôles déjà
+   * atteignables, dans une barre qui n'a pas la place de les toucher.
+   *
+   * **Et c'est pourquoi le retrait de mon groupe est LIÉ à la cellule, jamais
+   * inconditionnel** : la bande ne peignant pas ma cellule, retirer mon groupe
+   * là-bas ferait DISPARAÎTRE ma story de la bande épinglée — le rail
+   * montrerait moins que lui-même en défilant.
+   */
+  const moi = grande ? self : undefined;
+  const autres = moi === undefined ? groups : railGroupsWithoutSelf(groups);
 
   /* Rien à montrer ET rien en vol : ni bande blanche, ni région étiquetée vide
      pour le lecteur d'écran. La loi de la place — et la borne qui empêche le
@@ -339,10 +379,16 @@ export const StoryRail = forwardRef<
      elle ne matérialise rien (miroir `StoryTrayView.swift:739-747`), et elle
      n'existe de toute façon qu'une fois le grand plateau déjà résolu. */
   const chargement = grande && loading;
-  const rienÀMontrer = grande ? !chargement && groups.length === 0 : groups.length === 0;
+  /* « VIDE » VEUT DIRE NI MOI NI PERSONNE (#6150) — miroir littéral de
+     `LentilleRailPolicy.shouldRender(selfEntry:entries:)`, dont le commentaire
+     porte la raison : « faire disparaître le seul chemin vers "mes stories" et
+     "mon statut" parce que personne d'autre n'a publié serait une régression,
+     pas une épure ». */
+  const rienÀMontrer =
+    moi === undefined && (grande ? !chargement && autres.length === 0 : autres.length === 0);
   if (rienÀMontrer) return null;
 
-  const visibles = groups.slice(0, RAIL.maxEntries);
+  const visibles = autres.slice(0, RAIL.maxEntries);
 
   /**
    * LA GARDE D'ACCESSIBILITÉ, portée de #6103 — tant que la bande épinglée le
@@ -384,6 +430,12 @@ export const StoryRail = forwardRef<
           : {}),
       }}
     >
+      {/* MA CELLULE OUVRE LE RAIL, et elle survit au squelette : c'est l'ordre
+          d'iOS (`selfEntry` avant le `ForEach(visible)`), et c'est aussi la
+          seule chose du rail qui ne dépend d'aucune requête — la montrer
+          pendant que le corpus charge, c'est offrir les deux portes au premier
+          pixel plutôt qu'après le réseau (Cache-First, dimension 2). */}
+      {moi === undefined ? null : <StoryRailSelfTile entry={moi} size={size} language={language} />}
       {chargement
         ? [0, 1, 2, 3].map((i) => (
             <li
@@ -397,7 +449,7 @@ export const StoryRail = forwardRef<
               }}
             />
           ))
-        : visibles.map((g) => <StoryTile key={g.authorId} group={g} size={size} showsLabel={grande} />)}
+        : visibles.map((g) => <StoryTile key={g.authorId} group={g} size={size} showsLabel={grande} language={language} />)}
     </ul>
   );
 

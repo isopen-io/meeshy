@@ -159,13 +159,18 @@ public struct CreatePostRequest: Encodable {
 
 /// Corps de `PATCH /posts/:postId/comments/:commentId` — édition par l'auteur.
 /// `nil` = champ inchangé ; `effectFlags: 0` retire tous les effets.
+/// `originalLanguage` DÉCLARE la langue du texte corrigé (#6600) : absent, la
+/// passerelle la remet à null et la redétecte (#6598). Un `nil` n'est jamais
+/// encodé — l'`Encodable` synthétisé omet la clé, il n'écrit pas `null`.
 public struct UpdateCommentRequest: Encodable {
     public let content: String?
     public let effectFlags: Int?
+    public let originalLanguage: String?
 
-    public init(content: String? = nil, effectFlags: Int? = nil) {
+    public init(content: String? = nil, effectFlags: Int? = nil, originalLanguage: String? = nil) {
         self.content = content
         self.effectFlags = effectFlags
+        self.originalLanguage = originalLanguage
     }
 }
 
@@ -174,9 +179,12 @@ public struct CreateCommentRequest: Encodable {
     public let parentId: String?
     public let effectFlags: Int?
     /// IDs des PostMedia déjà uploadés (uploadContext=comment) à attacher au
-    /// commentaire. Wire aligné sur le contrat message-with-attachments (tableau),
-    /// MAIS un commentaire ne porte QU'UN SEUL média : le gateway borne à 1.
-    /// Omis du payload quand vide (endpoint texte-seul inchangé).
+    /// commentaire. Wire aligné sur le contrat message-with-attachments.
+    ///
+    /// **PLUSIEURS depuis #6578** — le bornage à 1 du gateway est levé
+    /// (`MAX_POST_MEDIA`) : le bandeau du composer affichait déjà un TABLEAU de
+    /// vignettes pour n'en envoyer qu'une. Omis du payload quand vide
+    /// (endpoint texte-seul inchangé).
     public let attachmentIds: [String]?
     /// Transcription Whisper produite côté mobile pour un média audio (skip
     /// re-transcription serveur). Même structure que pour les posts.
@@ -185,12 +193,28 @@ public struct CreateCommentRequest: Encodable {
     /// Lieu partagé (picker → `SharedPlace`) — même clé `location` que pour un
     /// message ou un post, hissée par le gateway depuis `metadata.location`.
     public let location: SharedPlace?
+    /// **Le média du POST que ce commentaire CITE** (#6578) — l'ANCRE seule.
+    ///
+    /// On n'envoie QUE `postMediaId` : la NATURE est dérivée par le serveur du
+    /// MIME qu'il relit, jamais crue sur parole. Un client qui pourrait la
+    /// déclarer pourrait faire dire « un fichier » à une vidéo, pour toujours.
+    /// Le serveur REFUSE (400) un média qui n'appartient pas au post commenté.
+    public let quotedPostMedia: QuotedPostMediaAnchor?
+
+    /// L'ancre, et rien qu'elle. Un type à elle plutôt qu'une chaîne nue :
+    /// le contrat serveur est un OBJET, et une clé plate `quotedPostMediaId`
+    /// obligerait chaque nouveau client à deviner l'emballage.
+    public struct QuotedPostMediaAnchor: Encodable {
+        public let postMediaId: String
+        public init(postMediaId: String) { self.postMediaId = postMediaId }
+    }
 
     public init(content: String, parentId: String? = nil, effectFlags: Int? = nil,
                 attachmentIds: [String]? = nil,
                 mobileTranscription: MobileTranscriptionPayload? = nil,
                 originalLanguage: String? = nil,
-                location: SharedPlace? = nil) {
+                location: SharedPlace? = nil,
+                quotedPostMediaId: String? = nil) {
         self.content = content
         self.parentId = parentId
         self.effectFlags = effectFlags
@@ -198,6 +222,7 @@ public struct CreateCommentRequest: Encodable {
         self.mobileTranscription = mobileTranscription
         self.originalLanguage = originalLanguage
         self.location = location
+        self.quotedPostMedia = quotedPostMediaId.map { QuotedPostMediaAnchor(postMediaId: $0) }
     }
 }
 

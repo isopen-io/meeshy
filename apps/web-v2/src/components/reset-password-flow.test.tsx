@@ -2,7 +2,9 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
+import { authColumnIn, strayFromAuthColumn } from '@/test-support/auth-column';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { perceivableText } from '@/test-support/perceivable-text';
 import type { ApiResult } from '@/lib/api/http';
 
 import { ResetPasswordFlow, type ResetPasswordFlowDeps } from './reset-password-flow';
@@ -86,6 +88,49 @@ function submit(el: HTMLDivElement) {
   });
 }
 
+/**
+ * « NOUVEAU MOT DE PASSE », JAMAIS « RÉINITIALISER » (#6643). Le même lien sert
+ * à un compte qui n'a JAMAIS eu de mot de passe (#6642) : pour lui, rien n'est
+ * « réinitialisé », il en CHOISIT un. Le vocabulaire est celui des trois
+ * clients : titre « Nouveau mot de passe », bouton « Enregistrer le mot de
+ * passe », succès « Mot de passe enregistré ».
+ */
+describe('ResetPasswordFlow — « Nouveau mot de passe », dans la colonne de la connexion (#6643)', () => {
+  const valid = () => ({
+    verifyResetToken: verifyTokenStub({ ok: true, data: { valid: true }, status: 200 }).verifyResetToken,
+    resetPassword: resetStub([{ ok: true, data: { message: 'ok' }, status: 200 }]).resetPassword,
+  });
+
+  test('saisie : le titre dit « Nouveau mot de passe », le bouton « Enregistrer le mot de passe »', async () => {
+    const el = await mount('abc123', valid());
+    expect(el.querySelector('h1')?.textContent).toBe('Nouveau mot de passe');
+    expect(el.querySelector('button[type="submit"]')?.textContent).toBe('Enregistrer le mot de passe');
+    expect(perceivableText(el)).not.toMatch(/r[ée]initialis/iu);
+    expect(authColumnIn(el)?.querySelector('a[aria-label="Fermer"]')).not.toBeNull();
+    expect(strayFromAuthColumn(el)).toEqual([]);
+  });
+
+  test('enregistré : « Mot de passe enregistré », sans « réinitialisé »', async () => {
+    const el = await mount('abc123', valid());
+    fill(el, 'reset-password', 'Sup3r!Secret1');
+    fill(el, 'reset-password-confirm', 'Sup3r!Secret1');
+    await act(async () => {
+      submit(el);
+      await Promise.resolve();
+    });
+    expect(el.querySelector('h2')?.textContent).toBe('Mot de passe enregistré');
+    expect(perceivableText(el)).not.toMatch(/r[ée]initialis/iu);
+    expect(strayFromAuthColumn(el)).toEqual([]);
+  });
+
+  test('lien invalide : aucun « réinitialisation » perçu', async () => {
+    const el = await mount(null, valid());
+    expect(el.textContent).toContain('Lien invalide ou expiré');
+    expect(perceivableText(el)).not.toMatch(/r[ée]initialis/iu);
+    expect(strayFromAuthColumn(el)).toEqual([]);
+  });
+});
+
 describe('ResetPasswordFlow — `?token=` absent', () => {
   test('état invalide dès le montage, AUCUN appel réseau', async () => {
     const verify = verifyTokenStub({ ok: true, data: { valid: true }, status: 200 });
@@ -156,7 +201,7 @@ describe('ResetPasswordFlow — soumission', () => {
     });
 
     expect(reset.calls).toEqual([{ token: 'abc123', newPassword: 'Sup3r!Secret1', confirmPassword: 'Sup3r!Secret1' }]);
-    expect(el.textContent).toContain('Mot de passe réinitialisé');
+    expect(el.textContent).toContain('Mot de passe enregistré');
     expect(el.querySelector('form')).toBeNull();
   });
 

@@ -16,6 +16,7 @@ import { resolveSyncMembership } from './membership';
 import { trimToByteBudget, SYNC_MAX_PAGE_BYTES } from './budget';
 import { makeSyncCollectionSchema, type SyncCollectionResult } from './schema-shared';
 import { selectForFields, restrictFields, type ColumnPlan, type FieldSet } from '../../utils/sparse-fieldset';
+import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
 
 /**
  * Collection `messages` de `/sync` — extrait tel quel de `routes/sync.ts`
@@ -455,24 +456,30 @@ export async function syncMessages(opts: {
   // CHANGED — non supprimés modifiés depuis `since`. Keyset `(updatedAt, id)` :
   // à la 1re page on part du floor `since` ; ensuite on reprend STRICTEMENT après
   // la position du cursor (le tiebreaker `id` évite trou/doublon sur updatedAt égal).
-  const changedRows = await prisma.message.findMany({
-    where: {
-      conversationId: { in: [...conversationIds] },
-      deletedAt: null,
-      ...historyFloor,
-      ...(cursor?.c
-        ? {
-            OR: [
-              { updatedAt: { gt: new Date(cursor.c.u) } },
-              { updatedAt: new Date(cursor.c.u), id: { gt: cursor.c.i } },
-            ],
-          }
-        : { updatedAt: { gt: sinceDate } }),
-    },
-    select: selectForFields(syncMessagePlan, fields),
-    orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
-    take: cap + 1,
-  });
+  // Le delta `changed` sélectionne `sender` par défaut (`selectForFields`
+  // rend `syncMessageSelect` entier quand `?fields=` est absent) : un
+  // expéditeur disparu dans n'importe laquelle des conversations de la
+  // portée faisait rejeter TOUTE la page de synchro (#6516).
+  const changedRows = await withOrphanedSenderRepair({ prisma, conversationIds }, () =>
+    prisma.message.findMany({
+      where: {
+        conversationId: { in: [...conversationIds] },
+        deletedAt: null,
+        ...historyFloor,
+        ...(cursor?.c
+          ? {
+              OR: [
+                { updatedAt: { gt: new Date(cursor.c.u) } },
+                { updatedAt: new Date(cursor.c.u), id: { gt: cursor.c.i } },
+              ],
+            }
+          : { updatedAt: { gt: sinceDate } }),
+      },
+      select: selectForFields(syncMessagePlan, fields),
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+      take: cap + 1,
+    })
+  );
   const capTruncated = changedRows.length > cap;
   const cappedRows = capTruncated ? changedRows.slice(0, cap) : changedRows;
 

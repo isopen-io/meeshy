@@ -4,6 +4,10 @@ import { ApiError } from './client';
 import { CACHE_SCHEMA, createAppQueryClient, purgeReaderCaches, shouldRetry, type StorageLike } from './query-client';
 import { reactionStore } from './reaction-store';
 import { createSessionStore } from './session';
+/* La CONSTANTE, jamais son littéral : un `'admin-souverain'` recopié ici
+   laisserait ce témoin vert après un renommage — vert pour la mauvaise
+   raison, sur une garde de confidentialité. */
+import { ADMIN_SOUVERAIN_PREFIXE } from './souverain';
 
 function fakeStorage(): StorageLike & { readonly raw: Map<string, string> } {
   const raw = new Map<string, string>();
@@ -68,6 +72,65 @@ describe('persistence — round trip', () => {
 
     const b = createAppQueryClient({ storage, buster: '0.0.0-test:u1' });
     expect(b.getQueryData(['conversations'])).toEqual([{ id: 'c-1' }]);
+  });
+
+  /**
+   * **UNE LECTURE SOUVERAINE NE TOUCHE PAS LE DISQUE** (#6862).
+   *
+   * `estClefSouveraine` est testé isolément dans `souverain`/`admin-conversations` ;
+   * ces témoins-ci gardent la seule chose qui compte vraiment — que `persist()`
+   * l'APPLIQUE. Un prédicat juste que le filtre n'appelle pas laisserait le
+   * contenu d'une conversation privée sur le poste de l'administrateur, où il
+   * survivrait à la session : une copie qu'`AdminAuditLog` ne connaît pas et
+   * que personne ne révoque.
+   *
+   * Ce qui est écrit est lu depuis la Map du faux stockage plutôt que par une
+   * clé de cache recopiée : le nom du seau est un détail d'implémentation, et
+   * un troisième site qui le déclare finirait par diverger.
+   */
+  const CLEF_SOUVERAINE = [ADMIN_SOUVERAIN_PREFIXE, 'messages', 'conv-1', 0] as const;
+  const SECRET = 'texte-prive-que-rien-ne-doit-ecrire-sur-le-disque';
+
+  test('le contenu d’une lecture souveraine n’entre PAS dans le stockage', () => {
+    const storage = fakeStorage();
+    const client = createAppQueryClient({ storage, buster: '0.0.0-test:u1' });
+
+    client.setQueryData(['conversations'], [{ id: 'c-1' }]);
+    client.setQueryData(CLEF_SOUVERAINE, { messages: [{ id: 'm-1', content: SECRET }] });
+    client.persist();
+
+    const ecrit = [...storage.raw.values()].join('');
+    expect(ecrit).not.toContain(SECRET);
+    expect(ecrit).not.toContain(ADMIN_SOUVERAIN_PREFIXE);
+
+    // LE CONTRASTE, sans lequel ce témoin passerait aussi sur un filtre qui
+    // n'écrirait plus RIEN — c'est-à-dire sur une v2 qui aurait perdu tout son
+    // cache persisté sans que personne ne s'en aperçoive.
+    expect(ecrit).toContain('conversations');
+    expect(ecrit).toContain('c-1');
+  });
+
+  test('exclure du DISQUE n’est pas jeter : la donnée reste en mémoire pour l’écran qui la lit', () => {
+    const storage = fakeStorage();
+    const client = createAppQueryClient({ storage, buster: '0.0.0-test:u1' });
+
+    client.setQueryData(CLEF_SOUVERAINE, { secret: SECRET });
+    client.persist();
+
+    expect(client.getQueryData(CLEF_SOUVERAINE)).toEqual({ secret: SECRET });
+  });
+
+  test('un rechargement ne la restaure pas — elle n’a jamais été écrite', () => {
+    const storage = fakeStorage();
+    const avant = createAppQueryClient({ storage, buster: '0.0.0-test:u1' });
+    avant.setQueryData(['conversations'], [{ id: 'c-1' }]);
+    avant.setQueryData(CLEF_SOUVERAINE, { secret: SECRET });
+    avant.persist();
+
+    const apres = createAppQueryClient({ storage, buster: '0.0.0-test:u1' });
+    expect(apres.getQueryData(CLEF_SOUVERAINE)).toBeUndefined();
+    // Et le reste du cache a bien survécu : la garde est CIBLÉE, pas générale.
+    expect(apres.getQueryData(['conversations'])).toEqual([{ id: 'c-1' }]);
   });
 
   test('buster différent ⇒ undefined ET l’entrée est purgée', () => {
@@ -139,6 +202,88 @@ describe('la session purge le cache', () => {
 
     expect(client.getQueryData(['conversations'])).toBeUndefined();
     expect(storage.raw.has('meeshy.query-cache')).toBe(false);
+  });
+});
+
+/**
+ * LA MISE À JOUR DE L'APPLICATION JETTE LE CACHE PERSISTÉ — et il ne revient
+ * pas (#6936).
+ *
+ * `discardPersisted()` est appelée juste avant le rechargement qui charge la
+ * version neuve. Le piège qu'elle doit fermer n'est pas l'effacement (une
+ * ligne) mais la RÉÉCRITURE : `persist` est câblée sur `pagehide` et
+ * `visibilitychange`, tous deux déclenchés PAR ce rechargement. Une purge qui
+ * n'arrête pas la persistance réécrit la même clé, avec le même `buster`,
+ * dans la milliseconde qui suit — elle n'a rien purgé.
+ *
+ * Et elle ne touche QUE cette clé : la session, les préférences et les
+ * brouillons vivent dans le même `localStorage` et doivent survivre à la mise
+ * à jour (« en préservant la session », directive porteur 2026-09-17).
+ */
+describe('la mise à jour de l’application jette le cache persisté, et la session survit', () => {
+  test('la clé du cache part, les autres clés du stockage restent', () => {
+    const storage = fakeStorage();
+    storage.setItem('meeshy.session', '{"user":"ada"}');
+    storage.setItem('meeshy.draft.u_a.c1', 'brouillon');
+
+    const client = createAppQueryClient({ storage, buster: '0.0.0-test:u-1' });
+    client.setQueryData(['conversations'], [{ id: 'c-1' }]);
+    client.persist();
+    expect(storage.raw.has('meeshy.query-cache')).toBe(true);
+
+    client.discardPersisted();
+
+    expect(storage.raw.has('meeshy.query-cache')).toBe(false);
+    expect(storage.getItem('meeshy.session')).toBe('{"user":"ada"}');
+    expect(storage.getItem('meeshy.draft.u_a.c1')).toBe('brouillon');
+  });
+
+  /* `persist()` EST ce que le `pagehide` du rechargement appelle
+     (`createAppQueryClient` § AUTO-PERSISTANCE) : l'appeler directement teste
+     la même porte sans dépendre d'un DOM. */
+  test('après elle, plus aucun `persist()` ne réécrit la clé — c’est ce que le `pagehide` du rechargement déclenche', () => {
+    const storage = fakeStorage();
+    const client = createAppQueryClient({ storage, buster: '0.0.0-test:u-1' });
+    client.setQueryData(['conversations'], [{ id: 'c-1' }]);
+    client.persist();
+
+    client.discardPersisted();
+    client.persist();
+
+    expect(storage.raw.has('meeshy.query-cache')).toBe(false);
+  });
+
+  test('une écriture de cache APRÈS elle ne rallume pas la persistance', async () => {
+    const storage = fakeStorage();
+    const client = createAppQueryClient({ storage, buster: '0.0.0-test:u-1' });
+
+    client.discardPersisted();
+    client.setQueryData(['conversations'], [{ id: 'c-2' }]);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    expect(storage.raw.has('meeshy.query-cache')).toBe(false);
+  });
+
+  test('le cache EN MÉMOIRE reste servi — la page qui part ne se vide pas à l’écran', () => {
+    const storage = fakeStorage();
+    const client = createAppQueryClient({ storage, buster: '0.0.0-test:u-1' });
+    client.setQueryData(['conversations'], [{ id: 'c-1' }]);
+
+    client.discardPersisted();
+
+    expect(client.getQueryData(['conversations'])).toEqual([{ id: 'c-1' }]);
+  });
+
+  test('la version NEUVE ne relit rien — le cache jeté ne se réhydrate pas', () => {
+    const storage = fakeStorage();
+    const ancienne = createAppQueryClient({ storage, buster: '0.0.0-test:u-1' });
+    ancienne.setQueryData(['conversations'], [{ id: 'c-1' }]);
+    ancienne.persist();
+    ancienne.discardPersisted();
+
+    const neuve = createAppQueryClient({ storage, buster: '0.0.0-test:u-1' });
+
+    expect(neuve.getQueryData(['conversations'])).toBeUndefined();
   });
 });
 

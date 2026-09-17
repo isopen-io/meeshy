@@ -1,10 +1,11 @@
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 
 import { FeedPostCard } from '@/components/feed-post-card';
 import { Glyph } from '@/components/glyph';
 import { ApiError } from '@/lib/api/client';
 import { usePost } from '@/lib/api/query';
 import { resolveFeedCardModel } from '@/lib/feed/card-model';
+import { useFeedAutoplayRoot } from '@/lib/feed/use-feed-autoplay';
 import { useOnline } from '@/lib/net/online';
 import { useParams } from '@/lib/router';
 import { useMinute } from '@/lib/view/use-minute';
@@ -102,6 +103,13 @@ export default function PostDetailScreen() {
   const { languages: readerLanguages } = useReaderLanguages();
   const minute = useMinute();
   const { announcement, onGesture, onShare } = usePostGesture();
+  const frame = useRef<HTMLElement | null>(null);
+  // MÊME élection que le fil (#6898 § 5.3) — un `IntersectionObserver`
+  // dédié à ce scrollport. `onOpenScene` reste ABSENT ici : le plein écran
+  // est un AUTRE travail (`scenes-plein-ecran`), et le détail est DÉJÀ la
+  // destination du tap sans hôte (§ 1.3.2) — lui en donner un mènerait
+  // nulle part, un tap sans effet (loi 4).
+  const { registerScene } = useFeedAutoplayRoot(frame);
 
   const model = useMemo(
     () => (post.data === undefined ? undefined : resolveFeedCardModel(post.data, { preferredLanguages: readerLanguages, now: new Date() })),
@@ -116,9 +124,9 @@ export default function PostDetailScreen() {
       <p role="status" aria-live="polite" className="sr-only">
         {announcement}
       </p>
-      <main id="contenu" className="scrollbar-none flex flex-1 flex-col overflow-y-auto px-3 pb-safe">
+      <main ref={frame} id="contenu" className="scrollbar-none flex flex-1 flex-col overflow-y-auto px-3 pb-safe">
         {model !== undefined ? (
-          <FeedPostCard model={model} onGesture={onGesture} onShare={onShare} />
+          <FeedPostCard model={model} onGesture={onGesture} onShare={onShare} preferredLanguages={readerLanguages} registerScene={registerScene} />
         ) : isRefusal(post.error) ? (
           <PostDetailRefused />
         ) : post.isError ? (

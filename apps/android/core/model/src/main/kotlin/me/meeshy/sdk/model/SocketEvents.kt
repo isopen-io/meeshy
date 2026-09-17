@@ -591,6 +591,27 @@ data class SocketCommentTranslationUpdatedData(
 )
 
 /**
+ * `media:caption-translation-updated` — the gateway translated a
+ * `PostMedia.caption` server-side and broadcasts the finished entry (#6280).
+ * DISTINCT of [SocketPostTranslationUpdatedData] (translates `Post.content`) and
+ * of any audio-track translation event: this one targets a MEDIA's caption,
+ * never `Post.content` or a transcription. [commentId] is set when the media
+ * belongs to a comment rather than the post itself — `null` for a post-level
+ * media, mirroring iOS `SocketMediaCaptionTranslationUpdatedData`.
+ * [translation] has the same shape as [ApiMediaCaptionTranslationEntry] — text
+ * plus optional model/confidence/timestamps — so it decodes straight into one;
+ * a blank text is a no-op the merge ignores.
+ */
+@Serializable
+data class SocketMediaCaptionTranslationUpdatedData(
+    val mediaId: String,
+    val postId: String,
+    val commentId: String? = null,
+    val language: String,
+    val translation: ApiMediaCaptionTranslationEntry,
+)
+
+/**
  * `status:unreacted` — a user removed their reaction from a mood status. Same shape as
  * [SocketStatusReactedData] (mirror of the shared `StatusUnreactedEventData`): it carries
  * no aggregate count, so the bar decrements the emoji by one (clamped ≥0, dropping the

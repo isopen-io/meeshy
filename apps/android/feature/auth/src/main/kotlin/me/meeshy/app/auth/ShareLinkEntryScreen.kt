@@ -33,6 +33,7 @@ import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.theme.formColumnWidth
 
 /**
  * The share-link deep-link route. Instead of always presenting the anonymous join
@@ -118,6 +119,7 @@ private fun EntryScaffold(onBack: () -> Unit, content: @Composable () -> Unit) {
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
+                    .formColumnWidth()
                     .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
                 verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
             ) {

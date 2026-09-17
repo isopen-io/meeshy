@@ -50,7 +50,21 @@ function isTwoFactorResponse(data: LoginResponseData): data is LoginTwoFactorDat
  * (#5218). Composée par `composeRegisterBody()` (`signup-form.ts`).
  */
 export type RegisterBody = {
-  readonly displayName: string;
+  /**
+   * ABSENT ⇒ la passerelle le DÉRIVE de la partie locale de l'adresse (#6441,
+   * `displayNameDepuisEmail`). La clé est OMISE, jamais posée à `''` : même
+   * raison que `password` ci-dessous — `displayNameProperty` porte
+   * `minLength: 1`, une chaîne vide serait refusée.
+   */
+  /**
+   * Le pseudo que l'écran MONTRE et donc ENVOIE (#6479). `resoudreUsername`
+   * (`registration.service.ts`) l'emploie tel quel — la passerelle ne génère
+   * que si la clé est ABSENTE. Une collision devient alors un refus
+   * `USERNAME_TAKEN` servi avec trois pseudos libres, jamais un renommage
+   * silencieux.
+   */
+  readonly username?: string;
+  readonly displayName?: string;
   readonly email: string;
   /**
    * ABSENT ⇒ le compte naît sans mot de passe (#6424), et sa seule porte est
@@ -206,14 +220,22 @@ export function createAuthClient({ transport, store }: AuthDeps) {
    * `rememberDevice` suit la même règle que `login()` — omis si non fourni,
    * jamais envoyé à `false` par défaut (iOS ne l'envoie pas du tout,
    * `AuthService.swift:89` — § 9 Q7 de la spécification).
+   *
+   * `returnUrl` — OÙ REVENIR une fois connecté (#6742), déjà clampé par
+   * l'appelant (`MagicLinkPanel`, `safeNextPath`) — omis si absent, jamais
+   * envoyé vide : la gateway l'embarque dans le lien envoyé par e-mail
+   * (`MagicLinkService.sendMagicLinkEmail`), que `/auth/magic-link` relit en
+   * `returnUrl` à l'arrivée.
    */
   async function requestMagicLink(request: {
     readonly email: string;
     readonly rememberDevice?: boolean;
+    readonly returnUrl?: string;
   }): Promise<ApiResult<MagicLinkRequestData>> {
     const body = {
       email: request.email,
       ...(request.rememberDevice !== undefined ? { rememberDevice: request.rememberDevice } : {}),
+      ...(request.returnUrl !== undefined ? { returnUrl: request.returnUrl } : {}),
     };
     return transport.request<MagicLinkRequestData>({ method: 'POST', path: '/api/v1/auth/magic-link/request', body });
   }

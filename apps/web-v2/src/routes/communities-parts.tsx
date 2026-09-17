@@ -6,6 +6,7 @@ import { Glyph, GlyphSvg } from '@/components/glyph';
 import { COMMUNITIES_GLYPHS, type CommunitiesGlyphName } from '@/components/glyphs-communities';
 import { GroupedSection, SECTION_CARD_STYLE, SECTION_INK, SECTION_INK_2 } from '@/components/grouped-section';
 import type { CommunityConversation, CommunityDraft, CommunitySummary } from '@/lib/api/communities';
+import { attachmentSrc } from '@/lib/api/media-url';
 import { communityAccent, compactCount, conversationTitleOf, initialsOf } from '@/lib/communities/view';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -130,7 +131,8 @@ function CommunityBanner({ accent, banner }: { readonly accent: string; readonly
       <span aria-hidden="true" className="absolute inset-0" style={{ background: bannerBackground(accent) }} />
       {banner === null ? null : (
         <img
-          src={banner}
+          /* Une RÉFÉRENCE de média, jamais une adresse (#6388) — cf. `media-url.ts`. */
+          src={attachmentSrc(banner)}
           alt=""
           loading="lazy"
           decoding="async"
@@ -319,7 +321,8 @@ function EntityAvatar({ name, avatar, accent }: { readonly name: string; readonl
       {initialsOf(name)}
       {avatar === null ? null : (
         <img
-          src={avatar}
+          /* Idem la bannière : la clé (ou l'adresse héritée) passe par la route de flux (#6388). */
+          src={attachmentSrc(avatar)}
           alt=""
           className="absolute inset-0 size-full object-cover"
           onError={(event) => {

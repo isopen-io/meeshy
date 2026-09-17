@@ -54,6 +54,7 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
     case broadcastsByIdSend(id: String)
     case broadcastsByIdSendInapp(id: String)
     case communities
+    case conversations
     case conversationsByConversationIdMessages(conversationId: String)
     case conversationsByConversationIdParticipants(conversationId: String)
     case dashboard
@@ -100,8 +101,12 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
     case usersByUserIdReportedMessages(userId: String)
     case usersByUserIdReports(userId: String)
     case usersByUserIdResetPassword(userId: String)
+    case usersByUserIdRestore(userId: String)
     case usersByUserIdRole(userId: String)
     case usersByUserIdSecurity(userId: String)
+    case usersByUserIdSecurityEvents(userId: String)
+    case usersByUserIdSessions(userId: String)
+    case usersByUserIdSessionsBySessionId(userId: String, sessionId: String)
     case usersByUserIdStatus(userId: String)
     case usersByUserIdUnlock(userId: String)
     case usersByUserIdVerifications(userId: String)
@@ -154,6 +159,7 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
         case .broadcastsByIdSend(let id): return "/api/v1/admin/broadcasts/\(id)/send"
         case .broadcastsByIdSendInapp(let id): return "/api/v1/admin/broadcasts/\(id)/send-inapp"
         case .communities: return "/api/v1/admin/communities"
+        case .conversations: return "/api/v1/admin/conversations"
         case .conversationsByConversationIdMessages(let conversationId): return "/api/v1/admin/conversations/\(conversationId)/messages"
         case .conversationsByConversationIdParticipants(let conversationId): return "/api/v1/admin/conversations/\(conversationId)/participants"
         case .dashboard: return "/api/v1/admin/dashboard"
@@ -200,8 +206,12 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
         case .usersByUserIdReportedMessages(let userId): return "/api/v1/admin/users/\(userId)/reported-messages"
         case .usersByUserIdReports(let userId): return "/api/v1/admin/users/\(userId)/reports"
         case .usersByUserIdResetPassword(let userId): return "/api/v1/admin/users/\(userId)/reset-password"
+        case .usersByUserIdRestore(let userId): return "/api/v1/admin/users/\(userId)/restore"
         case .usersByUserIdRole(let userId): return "/api/v1/admin/users/\(userId)/role"
         case .usersByUserIdSecurity(let userId): return "/api/v1/admin/users/\(userId)/security"
+        case .usersByUserIdSecurityEvents(let userId): return "/api/v1/admin/users/\(userId)/security-events"
+        case .usersByUserIdSessions(let userId): return "/api/v1/admin/users/\(userId)/sessions"
+        case .usersByUserIdSessionsBySessionId(let userId, let sessionId): return "/api/v1/admin/users/\(userId)/sessions/\(sessionId)"
         case .usersByUserIdStatus(let userId): return "/api/v1/admin/users/\(userId)/status"
         case .usersByUserIdUnlock(let userId): return "/api/v1/admin/users/\(userId)/unlock"
         case .usersByUserIdVerifications(let userId): return "/api/v1/admin/users/\(userId)/verifications"

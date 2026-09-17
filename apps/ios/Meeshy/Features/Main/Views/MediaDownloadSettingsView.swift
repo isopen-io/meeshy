@@ -23,74 +23,42 @@ struct MediaDownloadSettingsView: View {
         ZStack {
             theme.backgroundGradient.ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                header
-                scrollContent
-            }
+            CollapsibleHeaderPage(
+                title: String(localized: "settings.media.download.title", defaultValue: "Téléchargement auto", bundle: .main),
+                onBack: { dismiss() },
+                titleColor: theme.textPrimary,
+                backArrowColor: Color(hex: accentColor),
+                backgroundColor: theme.backgroundPrimary,
+                content: { pageContent }
+            )
         }
     }
 
-    // MARK: - Header
+    // MARK: - Content
 
-    private var header: some View {
-        HStack {
-            Button {
-                HapticFeedback.light()
-                dismiss()
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "chevron.backward")
-                        .font(MeeshyFont.relative(14, weight: .semibold))
-                    Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
-                        .font(MeeshyFont.relative(15, weight: .medium))
-                }
-                .foregroundColor(Color(hex: accentColor))
-            }
-            .accessibilityLabel(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
-
-            Spacer()
-
-            Text(String(localized: "settings.media.download.title", defaultValue: "Téléchargement auto", bundle: .main))
-                .font(MeeshyFont.relative(17, weight: .bold))
-                .foregroundColor(theme.textPrimary)
-                .accessibilityAddTraits(.isHeader)
-
-            Spacer()
-
-            Color.clear.frame(width: 60, height: 24)
-                .accessibilityHidden(true)
+    private var pageContent: some View {
+        VStack(spacing: 20) {
+            infoSection
+            policyPicker(
+                title: String(localized: "settings.media.download.images", defaultValue: "Images", bundle: .main), icon: "photo.fill", color: MeeshyColors.brandPrimaryHex,
+                binding: $store.preferences.image
+            )
+            policyPicker(
+                title: String(localized: "settings.media.download.audio", defaultValue: "Audio", bundle: .main), icon: "waveform", color: MeeshyColors.indigo600Hex,
+                binding: $store.preferences.audio
+            )
+            policyPicker(
+                title: String(localized: "settings.media.download.audio_translation", defaultValue: "Traductions audio", bundle: .main), icon: "character.bubble.fill", color: MeeshyColors.indigo400Hex,
+                binding: $store.preferences.audioTranslation
+            )
+            policyPicker(
+                title: String(localized: "settings.media.download.video", defaultValue: "Vidéo", bundle: .main), icon: "play.rectangle.fill", color: MeeshyColors.indigo300Hex,
+                binding: $store.preferences.video
+            )
+            Spacer().frame(height: 40)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-    }
-
-    // MARK: - Scroll Content
-
-    private var scrollContent: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: 20) {
-                infoSection
-                policyPicker(
-                    title: String(localized: "settings.media.download.images", defaultValue: "Images", bundle: .main), icon: "photo.fill", color: MeeshyColors.brandPrimaryHex,
-                    binding: $store.preferences.image
-                )
-                policyPicker(
-                    title: String(localized: "settings.media.download.audio", defaultValue: "Audio", bundle: .main), icon: "waveform", color: MeeshyColors.indigo600Hex,
-                    binding: $store.preferences.audio
-                )
-                policyPicker(
-                    title: String(localized: "settings.media.download.audio_translation", defaultValue: "Traductions audio", bundle: .main), icon: "character.bubble.fill", color: MeeshyColors.indigo400Hex,
-                    binding: $store.preferences.audioTranslation
-                )
-                policyPicker(
-                    title: String(localized: "settings.media.download.video", defaultValue: "Vidéo", bundle: .main), icon: "play.rectangle.fill", color: MeeshyColors.indigo300Hex,
-                    binding: $store.preferences.video
-                )
-                Spacer().frame(height: 40)
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 16)
-        }
+        .padding(.top, 16)
     }
 
     // MARK: - Info Section

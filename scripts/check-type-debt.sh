@@ -251,6 +251,13 @@ NC='\033[0m'
 # compte que parce que les deux autres la confirment — dans l'autre sens, une
 # valeur annoncée par un commit et jamais remesurée est précisément ce qui a
 # produit le `WEB_BASELINE=0` de l'épisode précédent.
+#
+# QUATRIÈME source, apportée par #6203 : une session parallèle a diagnostiqué le
+# même rouge et resserré à la même valeur, ancrée sur un AUTRE run et une AUTRE
+# tête — run 34700349484, job « Quality (bun) », tête `e7c8916a`. Deux relevés
+# CI indépendants, à des états différents de `dev`, rendent 1128 ; c'est la
+# corroboration la plus forte que ce fichier ait enregistrée pour une baseline,
+# et elle est gardée alors même que le correctif, lui, faisait doublon.
 readonly WEB_BASELINE=1128
 
 # Le compilateur DU DÉPÔT, en chemin absolu — jamais `npx tsc`.

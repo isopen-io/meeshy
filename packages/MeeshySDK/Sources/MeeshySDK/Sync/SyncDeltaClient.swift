@@ -155,6 +155,8 @@ public final class SyncDeltaClient: SyncDeltaClientProviding, Sendable {
     private let baseURL: String
     private let transport: any SyncDeltaTransporting
 
+    /// `baseURL` est la base d'API telle que le moteur la tient (`api.baseURL`,
+    /// qui PORTE `/api/v1`) ; l'URL se compose depuis son origine (#6539).
     public init(baseURL: String, transport: any SyncDeltaTransporting = URLSessionSyncDeltaTransport()) {
         self.baseURL = baseURL
         self.transport = transport
@@ -202,7 +204,7 @@ public final class SyncDeltaClient: SyncDeltaClientProviding, Sendable {
 
     /// L'URL, composée comme le client web la compose — même ordre, mêmes absences.
     private func urlDeSync(_ demande: SyncDeltaRequest) -> URL? {
-        guard var composants = URLComponents(string: baseURL + SyncEndpoint.root.path) else { return nil }
+        guard var composants = URLComponents(string: SyncEndpoint.root.absoluteURLString(apiBaseURL: baseURL)) else { return nil }
         var elements: [URLQueryItem] = [
             URLQueryItem(name: "since", value: demande.since),
             URLQueryItem(name: "collections", value: demande.collections.joined(separator: ",")),

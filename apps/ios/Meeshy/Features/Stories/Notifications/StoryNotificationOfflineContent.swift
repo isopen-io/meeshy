@@ -3,20 +3,23 @@ import MeeshyUI
 
 // MARK: - StoryNotificationOfflineContent
 //
-// Shown when `StoryNotificationTargetViewModel.load()` fails for any reason
-// OTHER than a confirmed 404 (no connectivity, timeout, 5xx). Distinct from
-// `StoryExpiredContent`: the story may still exist, so this offers a retry
-// instead of a "Create a story" CTA that implies the original is gone for
-// good. Reuses the existing `connection.offline`/`story.viewer.retry`
-// catalog keys rather than minting new ones.
+// Shown when `StoryNotificationTargetViewModel.load()` got no answer: the
+// request never arrived (`.network`) or the server failed (`.server`).
+// Distinct from `StoryExpiredContent`: the story may still exist, so this
+// offers a retry instead of a "Create a story" CTA that implies the original
+// is gone for good. The words come from `ContentFetchFailure+Copy`, shared
+// with the post detail and the reel reader: a server failure no longer says
+// "offline" (#6508).
 
 public struct StoryNotificationOfflineContent: View {
 
+    let cause: ContentFetchFailure
     public let onRetry: () -> Void
 
     @Environment(\.dismiss) private var dismiss
 
-    public init(onRetry: @escaping () -> Void) {
+    init(cause: ContentFetchFailure, onRetry: @escaping () -> Void) {
+        self.cause = cause
         self.onRetry = onRetry
     }
 
@@ -25,12 +28,20 @@ public struct StoryNotificationOfflineContent: View {
             Color.black.opacity(0.85).ignoresSafeArea()
 
             VStack(spacing: 20) {
-                Image(systemName: "wifi.slash")
+                Image(systemName: cause.symbolName)
                     .font(.system(size: 40))
                     .foregroundStyle(.white.opacity(0.85))
-                Text(String(localized: "connection.offline", defaultValue: "Hors ligne", bundle: .main))
-                    .font(.title3.bold())
-                    .foregroundStyle(.white)
+                    .accessibilityHidden(true)
+                VStack(spacing: 8) {
+                    Text(cause.title)
+                        .font(.title3.bold())
+                        .foregroundStyle(.white)
+                    Text(cause.message)
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.75))
+                }
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
 
                 Button {
                     HapticFeedback.light()

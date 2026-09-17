@@ -53,21 +53,14 @@ public struct SceneFocusFrame<Contenu: View>: View {
                 // > `.fit` laisse du vide, et du vide dans un cadrage est
                 // > exactement ce qu'on venait retirer.
                 //
-                // L'échelle est donc le MAXIMUM des deux contraintes, et la
-                // zone est CENTRÉE : ce qui dépasse se répartit également des
-                // deux côtés plutôt que de tomber d'un seul.
-                let largeurScene = max(geo.size.width / focus.width,
-                                       geo.size.height * SceneFraming.sceneAspect / focus.height)
-                let hauteurScene = largeurScene / SceneFraming.sceneAspect
-                let debordX = focus.width * largeurScene - geo.size.width
-                let debordY = focus.height * hauteurScene - geo.size.height
+                // L'arithmétique est `SceneFraming.placement` : pure, pour
+                // qu'une carte se vérifie sans écran (#6708). Une boîte plus
+                // HAUTE que la zone agrandit la scène — l'hôte doit donc lui
+                // donner le rapport de la zone.
+                let scene = SceneFraming.placement(of: focus, covering: geo.size)
                 contenu()
-                    .frame(width: largeurScene, height: hauteurScene)
-                    // Le décalage se compte sur la scène AGRANDIE, pas sur la
-                    // boîte — l'erreur qui ferait dériver le cadrage
-                    // proportionnellement au zoom.
-                    .offset(x: -focus.minX * largeurScene - debordX / 2,
-                            y: -focus.minY * hauteurScene - debordY / 2)
+                    .frame(width: scene.width, height: scene.height)
+                    .offset(x: scene.minX, y: scene.minY)
                     .frame(width: geo.size.width, height: geo.size.height,
                            alignment: .topLeading)
                     .clipped()

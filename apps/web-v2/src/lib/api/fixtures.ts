@@ -702,6 +702,44 @@ export function resetViewOnceConsumptionForTests(): void {
   consumedViewOnceIds.clear();
 }
 
+/**
+ * LES CONVERSATIONS QUI SURGISSENT (#6807, suite de #6799) — même patron que
+ * `consumedViewOnceIds` ci-dessus : un registre de MODULE, muté par un
+ * évènement, remis à zéro par les témoins.
+ *
+ * Pourquoi un registre À CÔTÉ plutôt qu'un `CONVERSATIONS` mutable : le corpus
+ * est importé par 7 modules et 18 gates nomment une de ses conversations. Le
+ * faire grandir sous eux ferait dépendre leurs comptes d'un évènement
+ * temps réel — un couplage que rien ne rendrait visible avant l'intégration.
+ * Ici le corpus reste `readonly` et intact ; ce sont les survenues qui
+ * s'ajoutent, à un seul site de lecture (`conversations.ts`).
+ *
+ * Ce registre est ce qui rend le correctif de #6799 OBSERVABLE sous fixtures :
+ * l'invalidation qu'il déclenche refait une page, et cette page doit pouvoir
+ * porter une conversation que le corpus figé ne connaît pas.
+ */
+const surgedConversations: Conversation[] = [];
+
+/** Appelé par le bouchon temps réel quand `conversation:new` est rejoué. */
+export function recordSurgedConversation(conversation: Conversation): void {
+  if (surgedConversations.some((c) => c.id === conversation.id)) return;
+  surgedConversations.push(conversation);
+}
+
+/** LA LECTURE — corpus figé D'ABORD, survenues ENSUITE ; le tri par
+ * `lastMessageAt` de `pageOfConversations` décide seul de l'ordre servi. */
+export function conversationsWithSurged(): readonly Conversation[] {
+  return surgedConversations.length === 0 ? CONVERSATIONS : [...CONVERSATIONS, ...surgedConversations];
+}
+
+/** TÉMOIN SEUL — même raison que `resetViewOnceConsumptionForTests` : ce
+ * registre vit pour la durée du PROCESSUS, donc sans remise à zéro un témoin
+ * qui fait surgir une conversation ferait dépendre les autres fichiers de
+ * l'ORDRE d'exécution. */
+export function resetSurgedConversationsForTests(): void {
+  surgedConversations.length = 0;
+}
+
 const withConsumption = (messages: readonly Message[]): readonly Message[] => {
   if (consumedViewOnceIds.size === 0) return messages;
   return messages.map((m) => {

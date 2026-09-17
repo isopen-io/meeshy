@@ -46,6 +46,16 @@ environment:
 ```
 The `docker-entrypoint.sh` uses `sed` to replace `__RUNTIME_*__` placeholders. Quoted values cause `""value""` in JS = syntax error.
 
+### Release des images sur le serveur final — purge non interactive, et DEV seulement (#6556, directive porteur 2026-09-15)
+
+**Toute purge Docker du dépôt porte un drapeau non interactif** (`-f`, `-af`, `--force`). `docker image prune` demande `y/N` : au bout d'un `ssh` ou dans un job de CI il n'y a pas de terminal, l'entrée vide se lit « N », **rien n'est retiré, et on croit avoir purgé**. C'est ainsi que l'hôte de staging s'est rempli jusqu'au `no space left on device` du 2026-09-14 — le `pull` a échoué et staging a continué de servir la version précédente sans que rien ne le dise.
+
+**Et la purge PRÉCÈDE le `pull`** : après, elle arrive trop tard, puisque c'est l'écriture des couches téléchargées qui manque de place. `docker image prune -a` n'ôte jamais une image portée par un conteneur — la version servie survit ; la fenêtre `--filter "until=168h"` garde de quoi revenir en arrière d'une semaine. Les volumes ne se purgent pas au passage (`system prune --volumes` emporterait des données qu'on croit anonymes).
+
+**Le déploiement automatique s'arrête à `dev` → staging. La production ne part JAMAIS toute seule** — ni sur une poussée dans `main`, ni sur un tag : elle se déploie à la main, par un humain qui l'a décidé.
+
+Sites : `infrastructure/scripts/meeshy-deploy-staging.sh` (**la source de `/usr/local/bin/meeshy-deploy-staging.sh`**, ce que la clé SSH contrainte de la CI exécute sur l'hôte — son installation reste un geste manuel, documenté en tête du fichier), les scripts de release de `infrastructure/scripts/` et `scripts/`, et le job `deploy-staging` de `.github/workflows/docker.yml`. Garde : `scripts/check-docker-prune-noninteractive.mjs` (job `quality` de `ci.yml`), qui tient les trois règles ensemble.
+
 ### Production vs Repo Differences
 | | Repo | Production |
 |---|---|---|

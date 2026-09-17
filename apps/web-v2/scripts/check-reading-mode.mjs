@@ -670,7 +670,19 @@ const noRowCarriesContinuousPerspective = (page) =>
     return { height: r.height, avatarWidth: a ? a.width : null };
   });
   expect(identity.height >= 34, `le chip d'identité de l'élue mesure au moins 34 px de haut (${identity.height})`);
-  expect(identity.avatarWidth === 26, `l'avatar du chip d'identité mesure 26 px (${identity.avatarWidth})`);
+  /**
+   * `IDENTITY_AVATAR_SIZE` (26) est la cote NOMINALE, NON transformée — la
+   * rangée élue GRANDIT désormais de `FOCUS_LOUPE_GAIN` (0,05, #6586/#6588),
+   * chip d'identité compris : la loupe grandit la CELLULE entière, comme
+   * `FocalScrollPerspective.magnify` côté iOS (`cell.contentView.layer`,
+   * pas seulement son texte). L'avatar rendu mesure donc entre 26 px (aucun
+   * gain) et 26 × 1,05 px (gain plein) — jamais davantage, la loupe ne fait
+   * QUE grandir.
+   */
+  expect(
+    identity.avatarWidth !== null && identity.avatarWidth >= 26 && identity.avatarWidth <= 26 * 1.05 + 0.01,
+    `l'avatar du chip d'identité mesure entre 26 et 27,3 px — nominal, ou grandi par la loupe de l'élue (#6588) (${identity.avatarWidth})`,
+  );
 
   const stampText = await elected.locator('.focus-stamp').first().innerText();
   expect(

@@ -1,11 +1,23 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 
 import { Avatar } from './avatar';
-import { Glyph, GlyphSvg } from './glyph';
+import { FeedCarouselChrome, FeedCarouselDots } from './feed-carousel-chrome';
+import { FeedMediaMosaic } from './feed-media-mosaic';
+import { FeedMediaSurface } from './feed-media-surface';
+import { FeedSceneCarousel } from './feed-scene-carousel';
+import { FeedSceneMosaic } from './feed-scene-mosaic';
+import { FeedSceneSurface } from './feed-scene-surface';
+import { GlyphSvg } from './glyph';
 import { FEED_GLYPHS } from './glyphs-feed';
 import type { FeedCardMedia, FeedCardModel, FeedCardStats, FeedCardText, FeedCardViewer } from '@/lib/feed/card-model';
 import type { PostToggleKind } from '@/lib/feed/interactions';
+import { isPagedLayout, type TiledLayoutMode } from '@/lib/feed/mosaic-layout';
+import { SCENE_ASPECT, cardAspect, clampedCardAspect } from '@/lib/feed/scene-framing';
+import { useIsActiveScene } from '@/lib/feed/use-feed-autoplay';
 import { FEED_TEXT_TRUNCATION_LIMIT, truncateWords } from '@/lib/feed/text';
+import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { Link } from '@/routes/route-table';
 
 /**
  * `FeedPostCard` (#5893) — la carte de publication du fil, DEUX FORMES,
@@ -37,13 +49,18 @@ const FILLED_GLYPH: Partial<Record<keyof typeof FEED_GLYPHS, keyof typeof FEED_G
   bookmark: 'bookmarkFill',
 };
 
-const STAT_ITEMS: readonly { readonly key: keyof FeedCardStats; readonly glyph: keyof typeof FEED_GLYPHS; readonly label: string }[] = [
-  { key: 'likeCount', glyph: 'heart', label: 'Aimer' },
-  { key: 'commentCount', glyph: 'chatCircle', label: 'Commenter' },
-  { key: 'repostCount', glyph: 'arrowsClockwise', label: 'Repartager' },
-  { key: 'bookmarkCount', glyph: 'bookmark', label: 'Enregistrer' },
-  { key: 'shareCount', glyph: 'shareNetwork', label: 'Partager' },
-];
+/* `as const satisfies` plutôt qu'une annotation `InterfaceCatalogKey` large
+   (revue-correction #6488) : une clé de catalogue TYPÉE LARGE force
+   `translate()` à exiger des paramètres pour CHAQUE clé possible du
+   catalogue, y compris celles qui en portent — `as const` garde le type
+   LITTÉRAL de chacune des cinq clés ci-dessous, aucune desquelles n'en prend. */
+const STAT_ITEMS = [
+  { key: 'likeCount', glyph: 'heart', labelKey: 'feed.post.action.like' },
+  { key: 'commentCount', glyph: 'chatCircle', labelKey: 'feed.post.action.comment' },
+  { key: 'repostCount', glyph: 'arrowsClockwise', labelKey: 'feed.post.action.repost' },
+  { key: 'bookmarkCount', glyph: 'bookmark', labelKey: 'feed.post.action.bookmark' },
+  { key: 'shareCount', glyph: 'shareNetwork', labelKey: 'feed.post.action.share' },
+] as const satisfies readonly { readonly key: keyof FeedCardStats; readonly glyph: keyof typeof FEED_GLYPHS; readonly labelKey: InterfaceCatalogKey }[];
 
 /**
  * La rangée des cinq statistiques — `tone` bascule l'encre entre la carte
@@ -74,9 +91,11 @@ function FeedActionsRow({
   readonly onShare?: ShareHandler;
 }) {
   const ink = tone === 'onDark' ? 'rgba(255,255,255,0.92)' : 'var(--color-ios-ink-2)';
+  const language = currentInterfaceLanguage();
   return (
     <div className="flex items-center justify-between" data-feed-actions>
       {STAT_ITEMS.map((item) => {
+        const label = translate(language, item.labelKey);
         /* « Partager » est un geste PONCTUEL, pas une bascule : un bouton
            simple, sans `aria-pressed` — et seulement si l'hôte sait partager. */
         if (item.key === 'shareCount' && onShare !== undefined) {
@@ -89,7 +108,7 @@ function FeedActionsRow({
               className="flex items-center gap-1.5 rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
               style={{ color: ink, minHeight: 44, minWidth: 44, outlineColor: 'var(--color-ios-brand)' }}
             >
-              <GlyphSvg glyph={FEED_GLYPHS[item.glyph]} size={19} title={item.label} />
+              <GlyphSvg glyph={FEED_GLYPHS[item.glyph]} size={19} title={label} />
               <span className="text-check font-medium">{stats[item.key]}</span>
             </button>
           );
@@ -98,7 +117,7 @@ function FeedActionsRow({
         if (kind === undefined || onGesture === undefined) {
           return (
             <span key={item.key} className="flex items-center gap-1.5" style={{ color: ink, minHeight: 44 }}>
-              <GlyphSvg glyph={FEED_GLYPHS[item.glyph]} size={19} title={item.label} />
+              <GlyphSvg glyph={FEED_GLYPHS[item.glyph]} size={19} title={label} />
               <span className="text-check font-medium">{stats[item.key]}</span>
             </span>
           );
@@ -119,7 +138,7 @@ function FeedActionsRow({
             style={{ color: pressed ? pressedInk : ink, minHeight: 44, minWidth: 44, outlineColor: 'var(--color-ios-brand)' }}
           >
             <span className="grid place-items-center" {...(pressed ? { 'data-feed-glyph-filled': '' } : {})}>
-              <GlyphSvg glyph={FEED_GLYPHS[pressed ? (FILLED_GLYPH[item.glyph] ?? item.glyph) : item.glyph]} size={19} title={item.label} />
+              <GlyphSvg glyph={FEED_GLYPHS[pressed ? (FILLED_GLYPH[item.glyph] ?? item.glyph) : item.glyph]} size={19} title={label} />
             </span>
             <span className="text-check font-medium">{stats[item.key]}</span>
           </button>
@@ -130,132 +149,55 @@ function FeedActionsRow({
 }
 
 /**
- * LA SURFACE D'UN MÉDIA — image (ThumbHash peint AVANT toute requête, puis
- * `loading="lazy"`) ou repli plein cadre pour vidéo (`fillPlay`) / audio
- * (`waveform`), dont la LECTURE reste hors tranche (D-42, § 1.5 de la
- * spécification).
- */
-function FeedMediaSurface({ media }: { readonly media: FeedCardMedia }) {
-  const [loaded, setLoaded] = useState(false);
-
-  if (media.kind === 'video' || media.kind === 'audio') {
-    const poster = media.thumbnailSrc ?? media.placeholder;
-    return (
-      <div
-        className="absolute inset-0 grid place-items-center"
-        style={{
-          backgroundColor: 'var(--color-ios-card)',
-          /**
-           * `url("...")`, GUILLEMETÉ (défaut bloquant relevé à la capture,
-           * #5893) — un `data:image/svg+xml` peut contenir un `)` NON
-           * échappé : `encodeURIComponent` échappe `#` mais PAS `(`/`)`
-           * (MDN), et le SVG des fixtures référence son dégradé par
-           * `fill="url(#g)"`. Sans guillemets, le PREMIER `)` rencontré —
-           * celui de cette référence interne, pas la fin de l'URI — clôt le
-           * `url()` CSS prématurément ; le navigateur rejette alors la
-           * valeur ENTIÈRE en silence (`backgroundImage` retombe à `none`,
-           * aucune erreur console) et le repli plein cadre restait BLANC.
-           * Guillemeter est la forme CSS qui admet `)` sans ambiguïté,
-           * quelle que soit la source de l'URL.
-           */
-          ...(poster !== undefined ? { backgroundImage: `url("${poster}")`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}),
-        }}
-      >
-        {media.kind === 'video' ? (
-          <Glyph name="fillPlay" size={44} style={{ color: 'rgba(255,255,255,0.85)' }} title="Vidéo" />
-        ) : (
-          <GlyphSvg glyph={FEED_GLYPHS.waveform} size={72} style={{ color: 'rgba(255,255,255,0.55)' }} title="Audio" />
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <>
-      {media.placeholder !== undefined ? (
-        <img src={media.placeholder} alt="" aria-hidden="true" className="absolute inset-0 size-full object-cover" />
-      ) : null}
-      <img
-        src={media.src}
-        /* `PostMedia.alt` SERVI, jamais la légende (déjà rendue en texte
-           visible sous le média) : la répéter la ferait lire deux fois.
-           Sans texte d'accessibilité, l'image est DÉCORATIVE (`alt=""`) —
-           c'est la forme juste quand rien n'en décrit le contenu. */
-        alt={media.altText ?? ''}
-        loading="lazy"
-        onLoad={() => setLoaded(true)}
-        className="absolute inset-0 size-full object-cover transition-opacity duration-300"
-        style={{ opacity: media.placeholder === undefined || loaded ? 1 : 0 }}
-      />
-    </>
-  );
-}
-
-/**
  * LE CARROUSEL — vue 3f de la planche : « un lot de médias se PARCOURT, il
  * ne se contemple pas ». L'index de page vit ICI (`useState`), jamais dans
  * `FeedPostCard`, pour ne pas invalider toute la carte à chaque page
  * (`FeedPostCardCarousel.swift:20-25`).
  */
-function FeedMediaCarousel({ media }: { readonly media: readonly FeedCardMedia[] }) {
+function FeedMediaCarousel({ media, accent }: { readonly media: readonly FeedCardMedia[]; readonly accent: string }) {
   const [page, setPage] = useState(0);
   const clamped = Math.min(page, media.length - 1);
   const current = media[clamped];
+  const language = currentInterfaceLanguage();
   if (current === undefined) return null;
 
   return (
-    <div className="relative overflow-hidden" style={{ borderRadius: 12, aspectRatio: `1 / ${current.ratio}` }} data-feed-media>
-      <FeedMediaSurface media={current} />
-      {current.caption !== undefined ? (
-        <p
-          className="absolute inset-x-0 bottom-0 px-3 py-2 text-check text-white"
-          style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.6), transparent)' }}
-        >
-          {current.caption}
-        </p>
-      ) : null}
-      {media.length > 1 ? (
-        <>
-          <span
-            data-feed-media-counter
-            className="absolute top-2 right-2 rounded-chip px-2 py-0.5 text-check font-semibold text-white"
-            style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
+    <div>
+      <div className="relative overflow-hidden" style={{ borderRadius: 12, aspectRatio: `1 / ${current.ratio}` }} data-feed-media data-feed-layout="carousel">
+        <FeedMediaSurface media={current} playable />
+        {current.caption !== undefined ? (
+          <p
+            /* MARQUÉE comme celle de la mosaïque (#6864) — et c'est ici que ça
+               compte le plus : le carrousel est le layout PAR DÉFAUT, donc le
+               cas le plus fréquent était aussi le seul qu'aucune recette ne
+               pouvait viser. La valeur dit d'OÙ vient la légende : `media` pour
+               la légende propre du média, `post` pour le contenu du post servi
+               en l'absence de légende propre sur un média UNIQUE. */
+            data-feed-carousel-caption={current.captionOrigin ?? 'media'}
+            className="absolute inset-x-0 bottom-0 px-3 py-2 text-check text-white"
+            style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.6), transparent)' }}
+            /* La langue SERVIE (#6280, `resolveMediaCaption`), jamais la
+               langue d'interface : un lecteur d'écran qui prononce une
+               traduction française avec une voix anglaise est le défaut du
+               cycle 122 (CLAUDE.md § Prisme), rendu audible sur une légende. */
+            {...(current.captionLanguage !== undefined ? { lang: current.captionLanguage } : {})}
           >
-            {clamped + 1} / {media.length}
-          </span>
-          {clamped > 0 ? (
-            <button
-              type="button"
-              aria-label="Média précédent"
-              onClick={() => setPage(clamped - 1)}
-              className="absolute inset-y-0 left-0 grid place-items-center"
-              style={{ width: 44 }}
-            >
-              <Glyph name="caretLeft" size={18} style={{ color: 'white' }} />
-            </button>
-          ) : null}
-          {clamped < media.length - 1 ? (
-            <button
-              type="button"
-              aria-label="Média suivant"
-              onClick={() => setPage(clamped + 1)}
-              className="absolute inset-y-0 right-0 grid place-items-center"
-              style={{ width: 44 }}
-            >
-              <GlyphSvg glyph={FEED_GLYPHS.caretRight} size={18} style={{ color: 'white' }} />
-            </button>
-          ) : null}
-          <div className="absolute inset-x-0 bottom-2 flex items-center justify-center gap-1" aria-hidden="true">
-            {media.map((m, i) => (
-              <span
-                key={m.id}
-                className="rounded-full"
-                style={{ width: 5, height: 5, backgroundColor: i === clamped ? 'white' : 'rgba(255,255,255,0.5)' }}
-              />
-            ))}
-          </div>
-        </>
-      ) : null}
+            {current.caption}
+          </p>
+        ) : null}
+        {/* LE MÊME CHROME que le carrousel de scènes (`FeedCarouselChrome`,
+            revue-correction #6898) : compteur, flèches à effet, pastilles
+            SOUS la boîte — « que ce soit mosaïque de média ou de scène c'est
+            la même chose » (`PostSceneMosaic.swift`, `fleches`). */}
+        <FeedCarouselChrome
+          page={clamped}
+          count={media.length}
+          labels={{ previous: translate(language, 'feed.post.media.previous'), next: translate(language, 'feed.post.media.next') }}
+          onPrevious={() => setPage(clamped - 1)}
+          onNext={() => setPage(clamped + 1)}
+        />
+      </div>
+      <FeedCarouselDots page={clamped} count={media.length} accent={accent} />
     </div>
   );
 }
@@ -291,6 +233,7 @@ function FeedPostText({ text }: { readonly text: FeedCardText }) {
   const [expanded, setExpanded] = useState(false);
   const truncated = truncateWords(text.full, FEED_TEXT_TRUNCATION_LIMIT);
   const shown = !truncated.truncated || expanded ? text.full : truncated.text;
+  const language = currentInterfaceLanguage();
 
   return (
     <div className="px-3">
@@ -313,7 +256,7 @@ function FeedPostText({ text }: { readonly text: FeedCardText }) {
           className="pb-1.5 text-left text-check font-semibold"
           style={{ color: 'var(--color-ios-brand)', minHeight: 44 }}
         >
-          {expanded ? 'voir moins' : 'voir plus'}
+          {translate(language, expanded ? 'feed.post.see_less' : 'feed.post.see_more')}
         </button>
       ) : null}
     </div>
@@ -335,21 +278,44 @@ const hostsOf = ({ onGesture, onShare }: CardHosts): CardHosts => ({
 function FeedReelCard({ model, ...hosts }: { readonly model: FeedCardModel } & CardHosts) {
   const poster = model.media[0];
   const ratio = poster?.ratio ?? 1.25;
+  const language = currentInterfaceLanguage();
 
   return (
     <div
       role="group"
-      aria-label={`Réel de ${model.author.name}`}
+      aria-label={translate(language, 'feed.post.reel.of', { author: model.author.name })}
       className="relative overflow-hidden"
       style={{ borderRadius: 18, aspectRatio: `1 / ${ratio}` }}
       data-feed-card="reel"
+      /* MÊME identité que la carte de post (#6864) : un marqueur posé sur une
+         seule des deux natures est une asymétrie silencieuse — le jour où une
+         recette vise un réel par son id, elle trouverait le vide et conclurait
+         à l'absence de la carte plutôt qu'à l'absence de l'attribut. */
+      data-feed-card-id={model.id}
     >
       {poster !== undefined ? (
         <FeedMediaSurface media={poster} />
       ) : (
         <div className="absolute inset-0" style={{ backgroundColor: 'var(--color-ios-card)' }} />
       )}
-      <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.6), transparent 55%)' }} aria-hidden="true" />
+      {/* TOUCHER LE RÉEL L'OUVRE (#6457) — miroir `ReelFeedCard.onTapMedia` ⇒
+          `ReelsPresenter.present(posts:startId:)`. Le lien couvre la carte
+          SOUS tout le reste : le voile, la puce et l'identité le laissent
+          passer (`pointer-events-none`), seule la rangée des gestes le
+          recouvre. `draggable={false}` : le glisser natif d'une ancre volerait
+          le défilement du fil. */}
+      <Link
+        to="reels"
+        search={{ seed: model.id }}
+        aria-label={translate(language, 'reels.open', { author: model.author.name })}
+        draggable={false}
+        data-feed-reel-open
+        className="absolute inset-0 focus-visible:outline-2 focus-visible:-outline-offset-4"
+        style={{ borderRadius: 18, outlineColor: 'white' }}
+      >
+        {null}
+      </Link>
+      <div className="pointer-events-none absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.6), transparent 55%)' }} aria-hidden="true" />
       {/* LA PUCE « RÉEL » (§ 1.5 de la spécification, manquante à la première
           forme) — la carte est rendue en AFFICHE IMMOBILE, et un réel dont la
           pièce de tête est une IMAGE (la moitié du corpus de recette de
@@ -358,12 +324,12 @@ function FeedReelCard({ model, ...hosts }: { readonly model: FeedCardModel } & C
           tranche (D-42). */}
       <span
         data-feed-reel-chip
-        className="absolute top-3 left-3 rounded-chip px-2 py-0.5 text-check font-semibold text-white"
+        className="pointer-events-none absolute top-3 left-3 rounded-chip px-2 py-0.5 text-check font-semibold text-white"
         style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
       >
-        Réel
+        {translate(language, 'feed.post.reel.chip')}
       </span>
-      <div className="absolute inset-x-0 bottom-0 flex flex-col gap-2 p-3">
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col gap-2 p-3">
         <div className="flex items-center gap-2">
           <Avatar initials={model.author.initials} color={model.author.accentColor} size={34} {...(model.author.avatarSrc !== undefined ? { src: model.author.avatarSrc } : {})} />
           <span className="text-body font-semibold text-white">{model.author.name}</span>
@@ -377,26 +343,165 @@ function FeedReelCard({ model, ...hosts }: { readonly model: FeedCardModel } & C
             {model.text.full}
           </p>
         ) : null}
-        <FeedActionsRow postId={model.id} stats={model.stats} viewer={model.viewer} tone="onDark" {...hostsOf(hosts)} />
+        <div className="pointer-events-auto">
+          <FeedActionsRow postId={model.id} stats={model.stats} viewer={model.viewer} tone="onDark" {...hostsOf(hosts)} />
+        </div>
       </div>
     </div>
   );
 }
 
-export function FeedPostCard({ model, ...hosts }: { readonly model: FeedCardModel } & CardHosts) {
+/**
+ * `onOpenScene`/`registerScene` — LES DEUX HÔTES DE LA SCÈNE (D-78, #6898) :
+ * le premier remet l'intention d'ouvrir une scène précise (le plein écran est
+ * un AUTRE travail, `scenes-plein-ecran` — sans hôte, `FeedSceneSurface` mène
+ * au détail, jamais un tap sans effet, loi 4) ; le second enregistre la
+ * boîte de la carte auprès du magasin d'élection
+ * (`useFeedAutoplayRoot.registerScene`, `lib/feed/use-feed-autoplay.ts`) —
+ * une réf de rappel STABLE (voir son doc-comment), jamais une réf inline.
+ */
+type SceneHosts = {
+  readonly preferredLanguages?: readonly string[];
+  readonly onOpenScene?: (postId: string, sceneIndex: number) => void;
+  readonly registerScene?: (id: string, node: Element | null) => void;
+};
+
+/**
+ * LE VISUEL D'UN POST (D-78, #6898) — LA SCÈNE d'abord (`model.scene`), le
+ * MÉDIA en repli (`model.media`, D-70) quand `storyEffects` est absent,
+ * invalide, ou `v < 3`. La forme (mono-scène / carrousel / mosaïque) suit
+ * exactement celle du média (§ 1.3 de la spécification `scenes-fil`) : seule
+ * la SOURCE de la tuile change.
+ */
+function FeedPostVisual({
+  model,
+  active,
+  preferredLanguages,
+  onOpenScene,
+  registerScene,
+}: {
+  readonly model: FeedCardModel;
+  readonly active: boolean;
+} & SceneHosts) {
+  // **RÉFS DE RAPPEL STABLES** (motif `use-out-of-view.ts`/`use-feed-autoplay.ts`)
+  // — appelées AVANT tout retour anticipé (règle des Hooks). Une réf inline
+  // (`ref={(n) => registerScene(model.id, n)}` recréée à CHAQUE rendu) fait
+  // désinscrire puis réinscrire la boîte à CHAQUE bascule d'élection (le
+  // rendu déclenché par `useIsActiveScene`) : la réinscription relance
+  // l'observation, dont la notification relance l'élection, qui relance le
+  // rendu — une BOUCLE SANS FIN, mesurée : deux scènes cinématiques
+  // adjacentes jouaient alors SIMULTANÉMENT, chacune alternant `playing`
+  // à la fréquence des trames (§ 5.7 de la spécification, gate rouge avant
+  // ce correctif).
+  const registerBox = useCallback(
+    (node: Element | null) => registerScene?.(model.id, node),
+    [registerScene, model.id],
+  );
+  const openScene = useCallback((index: number) => onOpenScene?.(model.id, index), [onOpenScene, model.id]);
+
+  const scene = model.scene;
+  if (scene !== undefined) {
+    const { document, carrier } = scene;
+    const languages = preferredLanguages ?? [];
+    const openHost = onOpenScene !== undefined ? { onOpenScene } : {};
+
+    if (document.scenes.length === 1) {
+      const firstScene = document.scenes[0]!;
+      const boxAspect = clampedCardAspect(cardAspect(firstScene) ?? SCENE_ASPECT);
+      return (
+        <div
+          {...(registerScene !== undefined ? { ref: registerBox } : {})}
+          data-feed-scene-box
+          className="relative overflow-hidden"
+          style={{ aspectRatio: String(boxAspect), borderRadius: 16 }}
+        >
+          <FeedSceneSurface
+            document={document}
+            sceneIndex={0}
+            carrier={carrier}
+            preferredLanguages={languages}
+            active={active}
+            frame="page"
+            authorName={model.author.name}
+            {...(onOpenScene !== undefined ? { onOpen: openScene } : {})}
+          />
+        </div>
+      );
+    }
+
+    return isPagedLayout(model.layout) ? (
+      <FeedSceneCarousel
+        document={document}
+        carrier={carrier}
+        preferredLanguages={languages}
+        accent={model.author.accentColor}
+        active={active}
+        authorName={model.author.name}
+        {...openHost}
+        {...(registerScene !== undefined ? { registerRef: registerBox } : {})}
+      />
+    ) : (
+      <FeedSceneMosaic
+        document={document}
+        carrier={carrier}
+        preferredLanguages={languages}
+        layout={model.layout as TiledLayoutMode}
+        authorName={model.author.name}
+        {...openHost}
+      />
+    );
+  }
+
+  if (model.media.length === 0) return null;
+  return isPagedLayout(model.layout) || model.media.length < 2 ? (
+    <FeedMediaCarousel media={model.media} accent={model.author.accentColor} />
+  ) : (
+    <FeedMediaMosaic media={model.media} layout={model.layout as TiledLayoutMode} />
+  );
+}
+
+export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerScene, ...hosts }: { readonly model: FeedCardModel } & CardHosts & SceneHosts) {
+  // La lecture est une VALEUR REÇUE du magasin d'élection (#6898 § 5.3) —
+  // JAMAIS un état local : seules les deux cartes dont le booléen bascule se
+  // re-rendent (Zero Unnecessary Re-render).
+  const active = useIsActiveScene(model.id);
+
   if (model.isReel) return <FeedReelCard model={model} {...hostsOf(hosts)} />;
+
+  // Repli du contenu sur la légende d'un média SEUL (#6864, `resolveMedia`) :
+  // le texte du post est alors DÉJÀ peint comme légende par `FeedMediaCarousel`
+  // — le répéter ici peindrait deux fois la même phrase sur la même carte.
+  // Une carte à SCÈNE ne monte pas `FeedMediaCarousel` et ne descend jamais le
+  // texte du post en légende (`resolveSceneCaption`) : son texte reste ICI.
+  const soleMedia = model.scene === undefined && model.media.length === 1 ? model.media[0] : undefined;
+  const bodyText = model.text !== undefined && soleMedia?.caption === model.text.full ? undefined : model.text;
 
   return (
     <article
       className="flex flex-col gap-2 pb-3"
       style={{ backgroundColor: 'var(--color-ios-card)', borderRadius: 18, border: '0.5px solid var(--color-edge)' }}
       data-feed-card="post"
+      /* L'IDENTITÉ DU POST, pour que la recette puisse viser UNE carte (#6864).
+         `key={model.id}` existe déjà côté route, mais une clé de réconciliation
+         n'est pas un attribut rendu : rien dans le DOM ne distinguait deux
+         cartes. Un gate devait alors cibler par le TEXTE attendu — fragile, et
+         incapable de dire de quelle publication il parle. */
+      data-feed-card-id={model.id}
     >
       <FeedPostHeader model={model} />
-      {model.text !== undefined ? <FeedPostText text={model.text} /> : null}
-      {model.media.length > 0 ? (
+      {bodyText !== undefined ? <FeedPostText text={bodyText} /> : null}
+      {/* Un post à SCÈNES SANS média (cas réel, § 3 de la spécification) ne
+          doit plus rester nu sous son texte (D-78) : la condition porte donc
+          sur `model.scene` autant que sur `model.media.length`. */}
+      {model.scene !== undefined || model.media.length > 0 ? (
         <div className="px-3">
-          <FeedMediaCarousel media={model.media} />
+          <FeedPostVisual
+            model={model}
+            active={active}
+            {...(preferredLanguages !== undefined ? { preferredLanguages } : {})}
+            {...(onOpenScene !== undefined ? { onOpenScene } : {})}
+            {...(registerScene !== undefined ? { registerScene } : {})}
+          />
         </div>
       ) : null}
       <div className="px-3">

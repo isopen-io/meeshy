@@ -101,7 +101,30 @@ public enum CanvasChromeScheme {
             guard let mediaLuminance else { return .dark }
             return mediaLuminance < mediaDarkThreshold ? .dark : .light
         }
-        guard let lum = backgroundLuminance(background) else { return .dark }
-        return lum < darkThreshold ? .dark : .light
+        return scheme(forBareGlyphOver: backgroundLuminance(background))
+    }
+
+    /// **Scheme d'un glyphe posé NU** — sans verre ni pastille (#6704, #6693) : les rails
+    /// du lecteur de story et du lecteur de Réels, et un fond uni.
+    ///
+    /// Le biais de `mediaDarkThreshold` s'appuie sur le contraste local du verre dépoli ;
+    /// un glyphe nu ne l'a pas. Il bascule donc à l'équilibre WCAG, `darkThreshold` — la
+    /// frontière d'un fond uni —, où chaque teinte de `glassControlForeground()` tient
+    /// 3:1 sur toute luminance uniforme : au pire 3,49:1 (indigo950 sur L 0,179) et
+    /// 4,59:1 (blanc juste en dessous). Au seuil média, un glyphe blanc sur L 0,35 tombait
+    /// à 2,63:1 — Enregistrer mesuré à 2,62:1 sur la mire de la vérification du
+    /// 2026-09-15. Sans luminance mesurable : la convention `.dark`.
+    public nonisolated static func scheme(forBareGlyphOver luminance: Double?) -> ColorScheme {
+        guard let luminance else { return .dark }
+        return luminance < darkThreshold ? .dark : .light
+    }
+
+    /// **Le halo, plancher de lisibilité d'un glyphe nu** : de la polarité OPPOSÉE au
+    /// glyphe — noir sous un glyphe blanc, blanc sous un glyphe sombre. Sous des bandes
+    /// alternées (cyan et bleu sous un même glyphe), aucune teinte ne tient 3:1 sur les
+    /// deux (blanc 1,25:1 sur cyan, indigo 1,86:1 sur bleu) : c'est le halo qui détache
+    /// alors le bord du glyphe.
+    public nonisolated static func legibilityHalo(for scheme: ColorScheme) -> Color {
+        scheme == .dark ? .black : .white
     }
 }

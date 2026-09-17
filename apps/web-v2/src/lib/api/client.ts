@@ -22,14 +22,26 @@ import { sessionStore, type SessionState } from './session';
  */
 
 /**
- * Le crédential COURANT. Un `pending2fa` ne porte PAS de crédential : son
- * `twoFactorToken` n'ouvre que `POST /auth/login/2fa`, et le présenter en
- * `Authorization` ferait répondre « Invalid JWT token »
- * (`APIClient.swift:480-483`). Un `anonymous` non plus — le régime
- * `X-Session-Token` est celui d'un invité de LIEN, qui n'existe pas encore.
+ * Le crédential COURANT — LES DEUX RÉGIMES, jamais mélangés.
+ *
+ * - `authenticated` ⇒ `Authorization: Bearer <JWT>` ;
+ * - `guest` ⇒ `X-Session-Token: <jeton d'invité>` (#5561), le régime de
+ *   quelqu'un entré par un lien sans compte.
+ *
+ * Un `pending2fa` ne porte PAS de crédential : son `twoFactorToken` n'ouvre que
+ * `POST /auth/login/2fa`, et le présenter en `Authorization` ferait répondre
+ * « Invalid JWT token » (`APIClient.swift:480-483`). Un `anonymous` non plus :
+ * il n'a aucune créance.
+ *
+ * **Un invité ne présente JAMAIS de Bearer**, et c'est ce qui rend la jonction
+ * lisible : la porte `POST /links/:key/members` est en authentification
+ * OPTIONNELLE, donc un Bearer qui traînerait ferait entrer le COMPTE sous son
+ * nom là où l'écran croit créer un invité (`link-join.ts § joinLinkAsGuest`).
  */
 export function credentialFromSession(session: SessionState): Credential | null {
-  return session.status === 'authenticated' ? { kind: 'registered', token: session.token } : null;
+  if (session.status === 'authenticated') return { kind: 'registered', token: session.token };
+  if (session.status === 'guest') return { kind: 'anonymous', sessionToken: session.sessionToken };
+  return null;
 }
 
 /** Rang 4 du Prisme Linguistique — la locale de l'APPAREIL, jamais une
@@ -39,9 +51,14 @@ export function currentDeviceLocale(): string | null {
   return typeof navigator === 'object' && navigator !== null ? (navigator.language ?? null) : null;
 }
 
+/** Le crédential de la session COURANTE, relu à chaque appel — la même
+ * valeur que le transport JSON présente, nommée pour les transports qui n'en
+ * sont pas (le client TUS, `post-media-upload.ts`). */
+export const currentCredential = (): Credential | null => credentialFromSession(sessionStore.getState().session);
+
 export const httpTransport: HttpTransport = createHttpTransport({
   base: apiConfig.base,
-  credential: () => credentialFromSession(sessionStore.getState().session),
+  credential: currentCredential,
   deviceLocale: currentDeviceLocale,
   onUnauthorized: () => sessionStore.getState().clearSession(),
 });

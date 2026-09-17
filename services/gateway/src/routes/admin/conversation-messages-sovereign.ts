@@ -45,7 +45,7 @@
  */
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
-import { requireSovereign, withAudit } from '../../middleware/authorize';
+import { requireAdminRank, requirePermission, withAudit } from '../../middleware/authorize';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validatePagination } from '../../utils/pagination';
 import { sendPaginatedSuccess, sendNotFound, sendInternalError } from '../../utils/response';
@@ -55,8 +55,20 @@ import { sendPaginatedSuccess, sendNotFound, sendInternalError } from '../../uti
 // dupliqué. Il est déplacé à côté de son jumeau MÉDIA
 // (`mediaAttachmentIsProtected`), dans `routes/admin/media-protection.ts` —
 // voir son doc-comment pour le détail des six colonnes.
-import { messageContentIsProtected, messageContentProtectionSelect } from './media-protection';
+// #6862 — LE `select`, LE SCHÉMA ET LA PROJECTION SONT TROIS ÉNONCÉS DE LA
+// MÊME FORME, et ils vivent ensemble dans `sovereign-message-projection.ts` :
+// un champ chargé sans être déclaré est supprimé par fast-json-stringify sans
+// qu'un témoin rougisse, un champ déclaré sans être chargé est la même dérive
+// dans l'autre sens. Les deux prédicats de `media-protection.ts` y sont
+// APPELÉS, jamais recopiés — ils rendent le verdict, la projection décide de la
+// forme du masquage.
+import {
+  mapSovereignMessageRow,
+  sovereignMessageSchema,
+  sovereignMessageSelect,
+} from './sovereign-message-projection';
 import { logError } from '../../utils/logger.js';
+import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
 
 const REASON_MIN_LENGTH = 10;
 
@@ -65,7 +77,29 @@ export function registerConversationMessagesSovereignRoute(fastify: FastifyInsta
     Params: { conversationId: string };
     Querystring: { offset?: string; limit?: string; reason: string };
   }>('/admin/conversations/:conversationId/messages', {
-    onRequest: [fastify.authenticate, requireSovereign()],
+    /**
+     * **LE RANG A BAISSÉ, LA TRACE N'A PAS BOUGÉ** — directive porteur du
+     * 2026-09-16 : « permettre aussi aux ADMIN de pouvoir accéder à ces
+     * informations **pour le moment** ».
+     *
+     * #4157 avait monté ce geste en S6 (`requireSovereign()`, BIGBOSS seul)
+     * avec un motif explicite : « aucune permission de domaine ne doit pouvoir
+     * déléguer la lecture de conversations privées en série ». La directive
+     * revient sur ce seuil, et le « pour le moment » qu'elle porte est repris
+     * tel quel — c'est un seuil ASSUMÉ comme révisable.
+     *
+     * Ce qui NE change pas, et c'est ce qui compte : le motif écrit reste
+     * obligatoire (refusé au schéma sous dix caractères) et `withAudit` écrit
+     * toujours sa ligne. Un ADMIN lit désormais, et sa lecture laisse la MÊME
+     * empreinte qu'un BIGBOSS. Abaisser le rang et effacer la trace auraient
+     * été deux décisions distinctes ; une seule est demandée.
+     *
+     * `requireAdminRank()` plutôt que la seule permission : `canManageConversations`
+     * est aussi portée par MODERATOR (matrice centrale), et l'élargissement
+     * obtenu de biais par une permission de domaine est exactement ce que
+     * #4157 fermait. La garde de rang dit « aussi les ADMIN », et rien de plus.
+     */
+    onRequest: [fastify.authenticate, requirePermission('canManageConversations'), requireAdminRank()],
     schema: {
       description:
         'Lit le contenu intégral des messages d\'une conversation privée. Rang souverain (BIGBOSS), motif écrit ' +
@@ -94,44 +128,7 @@ export function registerConversationMessagesSovereignRoute(fastify: FastifyInsta
             success: { type: 'boolean', example: true },
             data: {
               type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  id: { type: 'string' },
-                  content: { type: 'string', nullable: true },
-                  originalLanguage: { type: 'string', nullable: true },
-                  messageType: { type: 'string', nullable: true },
-                  messageSource: { type: 'string', nullable: true },
-                  isEdited: { type: 'boolean', nullable: true },
-                  editedAt: { type: 'string', format: 'date-time', nullable: true },
-                  replyToId: { type: 'string', nullable: true },
-                  createdAt: { type: 'string', format: 'date-time' },
-                  attachmentCount: { type: 'number' },
-                  isProtected: { type: 'boolean' },
-                  sender: {
-                    type: 'object',
-                    nullable: true,
-                    properties: {
-                      id: { type: 'string' },
-                      userId: { type: 'string', nullable: true },
-                      type: { type: 'string', nullable: true },
-                      displayName: { type: 'string', nullable: true },
-                      avatar: { type: 'string', nullable: true },
-                      nickname: { type: 'string', nullable: true },
-                      user: {
-                        type: 'object',
-                        nullable: true,
-                        properties: {
-                          id: { type: 'string' },
-                          username: { type: 'string', nullable: true },
-                          displayName: { type: 'string', nullable: true },
-                          avatar: { type: 'string', nullable: true }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
+              items: sovereignMessageSchema
             },
             pagination: {
               type: 'object',
@@ -169,60 +166,37 @@ export function registerConversationMessagesSovereignRoute(fastify: FastifyInsta
       // les lectures non-admin. Auparavant sélectionné (`deletedAt: true`)
       // mais jamais filtré : un message effacé restait lisible en entier.
       const where = { conversationId, deletedAt: null };
-      const [messages, total] = await Promise.all([
+      const [messages, total] = await withOrphanedSenderRepair({ prisma: fastify.prisma, conversationIds: [conversationId] }, () => Promise.all([
         fastify.prisma.message.findMany({
           where,
-          select: {
-            id: true,
-            content: true,
-            originalLanguage: true,
-            messageType: true,
-            messageSource: true,
-            isEdited: true,
-            editedAt: true,
-            replyToId: true,
-            createdAt: true,
-            // #4388 — les six colonnes que `messageContentIsProtected` exige,
-            // désormais un select NOMMÉ et partagé avec `content.ts` plutôt
-            // que retapées ici à la main.
-            ...messageContentProtectionSelect,
-            sender: {
-              select: {
-                id: true,
-                userId: true,
-                type: true,
-                displayName: true,
-                avatar: true,
-                nickname: true,
-                user: { select: { id: true, username: true, displayName: true, avatar: true } }
-              }
-            },
-            _count: { select: { attachments: true } }
-          },
+          // #6862 — LE `select` EST NOMMÉ, et il vit avec le schéma qui le
+          // déclare et la projection qui le garde
+          // (`sovereign-message-projection.ts`). Retapé ici, il divergeait de
+          // l'un des deux au premier champ ajouté — et la divergence est
+          // SILENCIEUSE dans les deux sens.
+          select: sovereignMessageSelect,
           orderBy: { createdAt: 'desc' },
           skip: offsetNum,
           take: limitNum
         }),
         fastify.prisma.message.count({ where })
-      ]);
+      ]));
 
-      const data = messages.map((message) => {
-        const protege = messageContentIsProtected(message);
-        return {
-          id: message.id,
-          content: protege ? null : message.content,
-          originalLanguage: message.originalLanguage,
-          messageType: message.messageType,
-          messageSource: message.messageSource,
-          isEdited: message.isEdited,
-          editedAt: message.editedAt,
-          replyToId: message.replyToId,
-          createdAt: message.createdAt,
-          sender: message.sender,
-          attachmentCount: message._count?.attachments ?? 0,
-          isProtected: protege,
-        };
-      });
+      /**
+       * La protection se lit aux DEUX niveaux qui la DÉCLARENT — le MESSAGE et
+       * la PIÈCE, dont les colonnes homonymes sont INDÉPENDANTES — et le
+       * verdict est leur OU, jamais une cascade. La citation en ajoute un
+       * troisième, le sien : un message parfaitement libre peut citer un
+       * message à vue unique, et la citation est alors le seul endroit par où
+       * son texte sort.
+       *
+       * Et ce qui tombe n'est pas seulement la CHAÎNE : les traductions, la
+       * transcription, les pistes TTS, la vignette, le `thumbHash`, les
+       * variantes d'image et `metadata` restituent le même contenu par un autre
+       * médium (leçon 275). Le détail de chaque garde vit dans le doc-comment
+       * de `sovereign-message-projection.ts`.
+       */
+      const data = messages.map(mapSovereignMessageRow);
 
       const authContext = (request as UnifiedAuthRequest).authContext;
       // Best-effort, écrite APRÈS le succès de la lecture (cf. doc de

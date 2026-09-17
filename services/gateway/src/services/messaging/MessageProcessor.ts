@@ -34,6 +34,7 @@ import { clientDeclaredMetadata } from './clientDeclaredMetadata';
 import { LIVE_MESSAGE_MARK } from './liveMessage';
 import { unsetOrNull } from '../../utils/prisma-unset';
 import { mapWithConcurrency } from '@meeshy/shared/utils/concurrency';
+import { findExistingMessage, findContentWindowDuplicate } from './messageDedupProjection';
 
 // Logger dédié pour MessageProcessor
 const logger = enhancedLogger.child({ module: 'MessageProcessor' });
@@ -306,6 +307,8 @@ export class MessageProcessor {
     location?: unknown;
     /** Sticker (#4823) — champ dédié, même doctrine. Validé par `parseMessageSticker`. */
     sticker?: unknown;
+    /** Pièce NOMMÉE citée (#6164) — même doctrine : admise par `admitAttachmentReply`, forme gardée par `parseAttachmentReplyTo`. */
+    attachmentReplyTo?: unknown;
   }): Promise<Message> {
     const corr: Record<string, any> = {
       clientMessageId: data.clientMessageId,
@@ -429,6 +432,36 @@ export class MessageProcessor {
       ...(data.clientMessageId ? { clientMessageId: data.clientMessageId } : {})
     } as const;
 
+    // #6910 — REPLI de déduplication, en amont de l'INSERT.
+    //
+    // La garde nominale est `(conversationId, clientMessageId)` quelques lignes
+    // plus bas, et elle est correcte. Son angle mort est un producteur qui
+    // REFABRIQUE sa clé à chaque ré-émission : la clé neuve ne matche rien, donc
+    // la contrainte n'a rien à reconnaître. Mesuré en production le 2026-09-17 —
+    // sur 28 groupes de messages dupliqués, 28 portaient une clé par copie et
+    // AUCUN n'en partageait une.
+    //
+    // La sortie est celle du chemin P2002, à l'identique : on rend le message
+    // EXISTANT avec `isDuplicate`, jamais une erreur. Les trois gardes
+    // `!isDuplicate` des appelants sautent alors la re-diffusion, et
+    // l'expéditeur voit son message — une seule fois.
+    const alreadySent = await findContentWindowDuplicate({
+      prisma: this.prisma,
+      candidate: {
+        conversationId: messageData.conversationId,
+        senderId: messageData.senderId,
+        content: messageData.content,
+        ...(data.attachmentIds ? { attachmentIds: data.attachmentIds } : {})
+      },
+      ...(data.clientMessageId ? { clientMessageId: data.clientMessageId } : {}),
+      corr
+    });
+
+    if (alreadySent) {
+      (alreadySent as Message & { isDuplicate?: boolean }).isDuplicate = true;
+      return { ...alreadySent, timestamp: alreadySent.createdAt } as Message;
+    }
+
     let message: Message;
     let isDuplicate = false;
     try {
@@ -503,50 +536,13 @@ export class MessageProcessor {
       // a Prisma `@@unique` directive — so the `findUnique` compound
       // type is not generated. The compound `@@index` declared in the
       // schema still backs this query for performance.
-      const existing = await performanceLogger.withTiming(
-        'messaging.dedupFindFirst',
-        () => this.prisma.message.findFirst({
-          where: {
-            conversationId: data.conversationId,
-            clientMessageId: data.clientMessageId
-          },
-          include: {
-            sender: {
-              select: {
-                id: true, displayName: true, avatar: true, type: true,
-                nickname: true, userId: true,
-                user: {
-                  select: {
-                    id: true, username: true, displayName: true,
-                    firstName: true, lastName: true, avatar: true
-                  }
-                }
-              }
-            },
-            attachments: true,
-            replyTo: {
-              include: {
-                sender: {
-                  select: {
-                    id: true, displayName: true, avatar: true, type: true,
-                    nickname: true, userId: true,
-                    user: {
-                      select: {
-                        id: true, username: true, displayName: true,
-                        firstName: true, lastName: true, avatar: true
-                      }
-                    }
-                  }
-                },
-                // Parité REST : porter les pièces jointes du message cité
-                // (sinon l'aperçu de citation est vide via le dédup socket).
-                attachments: { select: attachmentFullSelect, take: 4 }
-              }
-            }
-          }
-        }),
+      const existing = await findExistingMessage({
+        prisma: this.prisma,
+        where: { conversationId: data.conversationId, clientMessageId: data.clientMessageId },
+        conversationId: data.conversationId,
+        timingLabel: 'messaging.dedupFindFirst',
         corr
-      );
+      });
       if (!existing) {
         // Race condition we cannot reconcile — bubble up the original error.
         logger.error('P2002 raised but no existing record found for clientMessageId', {

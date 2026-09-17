@@ -21,20 +21,6 @@ public final class MessageService: MessageServiceProviding, @unchecked Sendable 
     public static let shared = MessageService()
     private let api: APIClientProviding
 
-    /// ISO8601 with fractional seconds so a millisecond-precise watermark is
-    /// not truncated to the whole second on the wire — the gateway compares
-    /// with strict `createdAt > after`, so losing the milliseconds would
-    /// re-surface (or, worse, skip) boundary messages.
-    /// `nonisolated(unsafe)` is safe here: the formatter is configured once and
-    /// only ever read from (`string(from:)`), which Foundation guarantees is
-    /// thread-safe for ISO8601DateFormatter. Same pattern as other shared
-    /// read-only statics in the SDK.
-    nonisolated(unsafe) private static let watermarkFormatter: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter
-    }()
-
     init(api: APIClientProviding = APIClient.shared) {
         self.api = api
     }
@@ -95,7 +81,7 @@ public final class MessageService: MessageServiceProviding, @unchecked Sendable 
     /// round trip.
     public func listAfter(conversationId: String, after: Date, limit: Int = 30, includeReplies: Bool = true, includeTranslations: Bool = true, languages: [String]? = nil) async throws -> MessagesAPIResponse {
         var items: [URLQueryItem] = [
-            URLQueryItem(name: "after", value: Self.watermarkFormatter.string(from: after)),
+            URLQueryItem(name: "after", value: WireDate.string(from: after)),
             URLQueryItem(name: "limit", value: "\(limit)"),
             URLQueryItem(name: "include_replies", value: "\(includeReplies)"),
             URLQueryItem(name: "include_translations", value: "\(includeTranslations)"),

@@ -1,5 +1,11 @@
 import { personNamePatternSource, registerRequestSchema } from '@meeshy/shared/types/api-schemas/auth';
 import { isSupportedLanguage } from '@meeshy/shared/utils/languages';
+import { phoneImplausibility, type PhoneImplausibility } from '@meeshy/shared/utils/phone-plausibility';
+import {
+  PSEUDO_DE_SECOURS,
+  displayNameDepuisEmail,
+  pseudoRacine,
+} from '@meeshy/shared/utils/registration-identity';
 
 import type { RegisterBody } from './api/auth';
 import { countryOf, type Country } from './countries';
@@ -18,6 +24,15 @@ import { countryOf, type Country } from './countries';
  */
 
 export type SignupFormState = {
+  /**
+   * Le pseudo TAPÉ, vide tant que l'utilisateur n'a rien changé (#6479).
+   *
+   * Distinct de `effectiveUsername(form)`, qui rend celui qui PARTIRA — dérivé
+   * de l'adresse à défaut de saisie. L'écran montre le second et écrit dans le
+   * premier : sans cette séparation, taper une lettre dans l'adresse écraserait
+   * un pseudo choisi à la main.
+   */
+  readonly username: string;
   readonly displayName: string;
   readonly email: string;
   /** Les chiffres SEULS, sans indicatif — l'indicatif vient de `country`. */
@@ -43,10 +58,31 @@ export const PASSWORD_MIN = registerRequestSchema.properties.password.minLength;
  * serveur et le Zod de `AuthSchemas.register` compilent tous deux. */
 const PERSON_NAME_PATTERN = new RegExp(personNamePatternSource, 'u');
 
+/**
+ * Un nom affiché FOURNI doit tenir le pattern et la borne ; un champ VIDE est
+ * valide, parce qu'il est LÉGITIME (#6441, suite de #6424) — la passerelle le
+ * DÉRIVE alors de la partie locale de l'adresse (`displayNameDepuisEmail`,
+ * `services/gateway/src/services/auth/registration-identity.ts`).
+ *
+ * C'est MOT POUR MOT l'arbitrage rendu pour le mot de passe trente lignes plus
+ * bas, et le doc-comment de `DISPLAY_NAME_MAX` nomme déjà le défaut qu'il
+ * écarte : garder l'ancienne règle rendrait le client plus STRICT que le
+ * serveur — un refus local pour une charge que la passerelle ACCEPTE, et rien
+ * ne rougit nulle part. La moitié « mot de passe » de #6424 a été livrée sans
+ * celle-ci : l'écran annonçait « adresse seule » et exigeait toujours un nom.
+ */
 export function isDisplayNameValid(value: string): boolean {
   const trimmed = value.trim();
-  if (trimmed.length === 0 || trimmed.length > DISPLAY_NAME_MAX) return false;
+  if (trimmed.length === 0) return true;
+  if (trimmed.length > DISPLAY_NAME_MAX) return false;
   return PERSON_NAME_PATTERN.test(trimmed);
+}
+
+/** `true` quand un nom affiché a réellement été TAPÉ. Distinct de
+ * `isDisplayNameValid`, qui répond « cette saisie est-elle acceptable » :
+ * c'est celle-ci qui décide si la clé part dans la charge. */
+export function hasDisplayName(value: string): boolean {
+  return value.trim().length > 0;
 }
 
 /** Rapprochement du `z.email`/`format: 'email'` serveur : « a@b » (pas de TLD)
@@ -76,12 +112,67 @@ export function hasPassword(value: string): boolean {
   return value.length > 0;
 }
 
-/** Le bouton s'active dès que le nom et l'adresse sont valides — et que le mot
- * de passe, s'il a été tapé, atteint sa borne (#6424). Ni le téléphone ni le
- * mot de passe n'y figurent comme EXIGENCES : la passerelle n'en requiert
- * aucun (§ SignupForm.swift). */
+/** Le bouton s'active dès que l'ADRESSE est valide — et que le nom affiché, le
+ * mot de passe et le NUMÉRO, s'ils ont été tapés, tiennent leurs bornes
+ * (#6441, #6479).
+ * L'adresse est le SEUL champ requis, comme `required: ['email']` du schéma
+ * partagé : ni le nom, ni le téléphone, ni le mot de passe ne sont exigés par
+ * la passerelle (§ SignupForm.swift, le miroir qui porte la même loi). */
 export function canSubmit(form: SignupFormState): boolean {
-  return isDisplayNameValid(form.displayName) && isEmailValid(form.email) && isPasswordValid(form.password);
+  return (
+    isDisplayNameValid(form.displayName) &&
+    isEmailValid(form.email) &&
+    isPasswordValid(form.password) &&
+    isPhoneValid(form.phoneDigits)
+  );
+}
+
+/**
+ * Un numéro FOURNI doit être plausible (#6479) ; un champ VIDE reste valide —
+ * le numéro n'est pas requis (#6424). Troisième champ à porter cette forme,
+ * après le mot de passe et le nom affiché.
+ *
+ * La loi vit dans `@meeshy/shared/utils/phone-plausibility`, jamais ici : la
+ * passerelle devra la partager pour que le refus soit le MÊME des deux côtés,
+ * et une jumelle locale rendrait cette convergence impossible.
+ */
+export function isPhoneValid(phoneDigits: string): boolean {
+  return phoneImplausibility(phoneDigits) === null;
+}
+
+/** Le MOTIF du refus, pour que l'écran dise quoi corriger — « numéro
+ * invalide » n'apprend rien à qui a tapé le sien de travers. */
+export function phoneRefusal(phoneDigits: string): PhoneImplausibility | null {
+  return phoneImplausibility(phoneDigits);
+}
+
+/**
+ * LE PSEUDO QUI PARTIRA — tapé s'il l'a été, dérivé de l'adresse sinon (#6479).
+ *
+ * Directive porteur : « à partir du moment où un champ username est rempli, la
+ * passerelle n'a plus rien à créer ; elle crée quand aucune valeur n'est
+ * disponible. Ici on a des données et la passerelle doit utiliser ces
+ * données. » C'est exactement ce que fait `resoudreUsername`
+ * (`registration.service.ts`) : un pseudo fourni traverse `normalizeUsername`
+ * et rien n'est généré.
+ *
+ * Rend `''` quand la dérivation retombe sur le RECOURS (`user`) : là, on n'a
+ * justement AUCUNE donnée, et envoyer `user` garantirait une collision. C'est
+ * le seul cas où laisser la passerelle chercher un pseudo libre est la bonne
+ * réponse — la règle du porteur lue jusqu'au bout, pas seulement sa première
+ * moitié.
+ */
+export function effectiveUsername(form: SignupFormState): string {
+  const tape = form.username.trim();
+  if (tape !== '') return tape;
+  const derive = pseudoRacine({ displayName: form.displayName, email: form.email });
+  return derive === PSEUDO_DE_SECOURS ? '' : derive;
+}
+
+/** Le nom affiché qui partira — tapé s'il l'a été, dérivé de l'adresse sinon. */
+export function effectiveDisplayName(form: SignupFormState): string {
+  const tape = form.displayName.trim();
+  return tape !== '' ? tape : displayNameDepuisEmail(form.email);
 }
 
 /** Les chiffres saisis, débarrassés de tout ce qui n'en est pas. */
@@ -99,7 +190,14 @@ export function composeRegisterBody(form: SignupFormState): RegisterBody {
   const digits = normalizedPhoneDigits(form.phoneDigits);
   const hasPhone = digits.length > 0;
   return {
-    displayName: form.displayName.trim(),
+    // OMISE quand le champ est vide, jamais `''` : `displayNameProperty` porte
+    // `minLength: 1` — une chaîne vide serait une VALEUR, refusée par la borne,
+    // et l'inscription échouerait dans le cas même qu'elle ouvre (#6441).
+    // Ce que l'écran MONTRE est ce qu'il ENVOIE (#6479) — dérivé ou tapé, peu
+    // importe : dès qu'une valeur existe, la passerelle n'a plus à en inventer
+    // une. Les deux clés restent OMISES quand il n'y a réellement rien.
+    ...(effectiveUsername(form) !== '' ? { username: effectiveUsername(form) } : {}),
+    ...(effectiveDisplayName(form) !== '' ? { displayName: effectiveDisplayName(form) } : {}),
     email: form.email.trim().toLowerCase(),
     // `undefined` par OMISSION, jamais `''` (#6424) — même raison que le couple
     // téléphone une ligne plus bas : une clé présente à valeur vide décrit
@@ -178,6 +276,7 @@ export function defaultCountry(locale: string): Country {
 export function emptySignupForm(locale: string): SignupFormState {
   const { systemLanguage, regionalLanguage } = defaultLanguages(locale);
   return {
+    username: '',
     displayName: '',
     email: '',
     phoneDigits: '',

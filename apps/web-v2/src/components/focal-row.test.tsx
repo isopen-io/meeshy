@@ -70,6 +70,12 @@ const placeOf = (message: Message, tail = true, head = true): PlacedMessage => (
   opensDay: null,
 });
 
+/**
+ * `onPickLanguage` EST FOURNI ICI, comme le fil le fournit toujours (#6862,
+ * revue-correction) : c'est la CAPACITÉ d'explorer une autre langue, et les
+ * contrôles du pied n'existent que par elle. Sans elle, ce témoin mesurerait
+ * une surface qu'aucun hôte du produit ne monte — voir `renderSansPrise`.
+ */
 const render = (message: Message, opts: { tail?: boolean; head?: boolean; now?: () => number } = {}) =>
   renderToStaticMarkup(
     <FocalRow
@@ -78,7 +84,33 @@ const render = (message: Message, opts: { tail?: boolean; head?: boolean; now?: 
       languages={['fr', 'en']}
       viewerId="u-viewer"
       onJumpToMessage={() => {}}
+      onPickLanguage={() => {}}
       {...(opts.now ? { now: opts.now } : {})}
+    />,
+  );
+
+/** LA LECTURE SEULE — l'administration (#6862) : aucune langue à explorer. */
+const renderSansPrise = (message: Message, opts: { elected?: boolean } = {}) =>
+  renderToStaticMarkup(
+    <FocalRow
+      mode="focal"
+      place={placeOf(message, true, true)}
+      languages={['fr', 'en']}
+      viewerId="u-viewer"
+      onJumpToMessage={() => {}}
+      {...(opts.elected === true ? { elected: true } : {})}
+    />,
+  );
+
+const renderRetenu = (message: Message) =>
+  renderToStaticMarkup(
+    <FocalRow
+      mode="focal"
+      place={placeOf(message, true, true)}
+      languages={['fr', 'en']}
+      viewerId="u-viewer"
+      onJumpToMessage={() => {}}
+      revealable={false}
     />,
   );
 
@@ -939,5 +971,111 @@ describe('FocalRow — la grille de médias en cases arrondies (revue #6169)', (
     const html = render(quad);
     expect(html).toContain('data-media-frame="tiles"');
     expect(html).not.toContain('data-media-frame="box"');
+  });
+});
+
+/**
+ * **LE CONTENU RETENU AU SERVEUR** (#6862) — `revealable={false}`.
+ *
+ * Distinct des quatre protections que `protectionOf` connaît : ici le texte
+ * n'est pas MASQUÉ à l'affichage, il n'est PAS DANS LA CHARGE. La lecture
+ * souveraine de l'administration le retient au serveur
+ * (`messageContentIsProtected`) et sert `isProtected` à la place.
+ *
+ * Deux choses à garder, et la seconde est la vraie :
+ *
+ * 1. la mention est PEINTE — sans elle, un message chiffré rend une bulle VIDE,
+ *    puisque la loi CLIENT ne connaît ni `isEncrypted` ni `encryptionMode` et
+ *    le classe « standard » ;
+ * 2. AUCUN voile à toucher — « Toucher pour révéler le contenu » découvrirait
+ *    une bulle vide. C'est le contrôle sans effet que la loi 4 interdit, sous
+ *    sa forme la plus trompeuse : un bouton qui promet ce que personne ne lui a
+ *    donné.
+ *
+ * Jumelle dans ``bubble.test.tsx`` — la loi a DEUX hôtes, et `thread-modes.tsx` ne monte
+ * qu'UN mode à la fois : un témoin d'écran ne peut donc en couvrir qu'un seul.
+ */
+describe('FocalRow — contenu retenu au serveur (#6862)', () => {
+  test('rend la mention, jamais une bulle vide — même quand la loi client dit « standard »', () => {
+    const html = renderRetenu({ ...BASE_MESSAGE, content: '', translations: [], isEncrypted: true });
+    expect(html).toContain('Contenu retenu');
+  });
+
+  test('n’offre AUCUN voile à toucher : il n’y a rien à révéler', () => {
+    const html = renderRetenu({ ...BASE_MESSAGE, content: '', translations: [], isEncrypted: true });
+    expect(html).not.toContain('data-protected="hidden"');
+    expect(html).not.toContain('Toucher pour révéler');
+  });
+
+  test('et il PRIME sur le voile ordinaire — un message flouté SANS son texte ne promet pas de le rendre', () => {
+    const html = renderRetenu({ ...BASE_MESSAGE, content: '', translations: [], isBlurred: true });
+    expect(html).toContain('Contenu retenu');
+    expect(html).not.toContain('data-protected="hidden"');
+  });
+
+  test('CONTRASTE — `revealable` par défaut laisse le voile ordinaire intact', () => {
+    const html = render({ ...BASE_MESSAGE, isBlurred: true, content: 'SECRET-4817', translations: [] });
+    expect(html).toContain('data-protected="hidden"');
+    expect(html).not.toContain('Contenu retenu');
+  });
+});
+
+/**
+ * **AUCUN CONTRÔLE DE LANGUE SANS CAPACITÉ DE LANGUE** (#6862,
+ * revue-correction) — la pastille du Prisme et les drapeaux du pied sont de
+ * vrais `<button aria-pressed>` ; ils étaient rendus dès que la ligne basse
+ * monte, et leur `onClick` était un `onPickLanguage?.(…)` — c'est-à-dire
+ * RIEN quand l'hôte n'a pas cette capacité.
+ *
+ * La lecture souveraine de l'administration est le premier hôte du dépôt qui
+ * ne la porte pas (on ne change pas la langue lue au nom d'un tiers). Elle
+ * peignait donc, sur chaque message traduit, un bouton focalisable, annoncé
+ * « Afficher le message dans sa langue d'origine », et qui ne changeait PAS le
+ * texte lu : le défaut de `PostCard` (CLAUDE.md § Prisme, cycle 123) à
+ * l'identique, doublé d'une promesse faite au lecteur d'écran.
+ *
+ * Ce que le correctif NE fait pas : retirer l'INFORMATION. « Ce texte est une
+ * traduction » reste dit — c'est l'indicateur discret du Prisme (§
+ * Transparence). Seul le GESTE disparaît, faute de quelqu'un pour l'exécuter.
+ */
+describe('FocalRow — la prise de langue absente retire le GESTE, pas le fait (#6862)', () => {
+  const TRADUIT: Message = {
+    ...BASE_MESSAGE,
+    originalLanguage: 'en',
+    content: 'Hello there!',
+    translations: [
+      {
+        id: 't1',
+        messageId: BASE_MESSAGE.id,
+        targetLanguage: 'fr',
+        translatedContent: 'Bonjour !',
+        translationModel: 'medium',
+        createdAt: new Date('2026-09-08T09:00:00.000Z'),
+      },
+    ],
+  };
+
+  test('sans `onPickLanguage` : AUCUN bouton de prise de langue', () => {
+    const html = renderSansPrise(TRADUIT);
+    expect(html).not.toContain('data-prism-toggle');
+    expect(html).not.toContain('data-prism-flag');
+    expect(html).not.toContain('langue d’origine');
+  });
+
+  test('sans `onPickLanguage` : le FAIT de la traduction reste dit', () => {
+    const html = renderSansPrise(TRADUIT);
+    expect(html).toContain('data-prism-indicator');
+  });
+
+  test('la rangée ÉLUE non plus ne peint de drapeau sans capacité (la bande de focus)', () => {
+    const html = renderSansPrise(TRADUIT, { elected: true });
+    expect(html).not.toContain('data-prism-flag');
+    expect(html).not.toContain('data-prism-toggle');
+  });
+
+  test('CONTRASTE — le fil, lui, porte la capacité : les deux contrôles sont là', () => {
+    const html = render(TRADUIT, { tail: true });
+    expect(html).toContain('data-prism-toggle');
+    expect(html).toContain('data-prism-flag');
   });
 });
