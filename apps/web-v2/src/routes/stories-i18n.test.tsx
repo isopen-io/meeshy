@@ -19,7 +19,7 @@ const LABELS_FR = [
   'Chargement des stories…',
   "Les stories n'ont pas pu être chargées.",
   "Aucune story pour l'instant",
-  'Les stories de vos contacts apparaîtront ici pendant vingt-quatre heures.',
+  'Les stories de vos contacts apparaîtront ici pendant vingt heures.',
   'Créer une story',
 ];
 
@@ -59,7 +59,7 @@ describe('routes/stories.tsx — le catalogue d’interface, pas le français en
     expect(html).toContain('Loading stories…');
     expect(html).toContain('Stories could not be loaded.');
     expect(html).toContain('No stories yet');
-    expect(html).toContain('Stories from your contacts will appear here for twenty-four hours.');
+    expect(html).toContain('Stories from your contacts will appear here for twenty hours.');
     expect(html).toContain('Create a story');
     expect(html).toContain('2 stories');
   });

@@ -22,6 +22,8 @@ data class FeedGalleryPage(
     val caption: String? = null,
     val authorName: String? = null,
     val createdAtIso: String? = null,
+    /** This page's own [FeedPostImage.alt] (#6739) — unlike [caption], per-image, not shared across pages. */
+    val alt: String? = null,
 )
 
 /**
@@ -50,6 +52,13 @@ data class FeedGallery(
      * caption holds `null` (the viewer shows no overlay for it).
      */
     val captions: List<String?> get() = pages.map { it.caption }
+
+    /**
+     * The per-page accessibility descriptions, positionally aligned with
+     * [imageUrls] (#6739); a page with no author-authored alt text holds `null`
+     * (the viewer falls back to its own generic label).
+     */
+    val altTexts: List<String?> get() = pages.map { it.alt }
 
     /**
      * The per-page author names, positionally aligned with [imageUrls]; `null` when
@@ -96,6 +105,7 @@ object FeedMediaGallery {
                 caption = caption,
                 authorName = authorName,
                 createdAtIso = createdAtIso,
+                alt = image.alt,
             )
         }
         return FeedGallery(pages, imageIndex.coerceIn(0, pages.lastIndex))

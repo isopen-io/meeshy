@@ -160,7 +160,9 @@ export const ROUTES = {
      (`PostService.ts:1742`) et que le legacy sert (`apps/web/app/post/[postId]`,
      D-5) ; `/feeds/post/$post` est celle des liens profonds d'iOS
      (`DeepLinkRouter.swift:106`) et l'adresse que le partage émet
-     (`lib/feed/share-url.ts`). UN seul `import()` pour les deux portes. */
+     (`lib/feed/share-url.ts`). UN seul `import()` pour les deux portes.
+     `?scene=N` (#6898) : la scène touchée dans le fil, RÉSERVÉ au plein écran
+     de scène (`scenes-plein-ecran`) — le détail l'ignore aujourd'hui. */
   post: { pattern: '/post/$post', screen: publicationScreen },
   postDeepLink: { pattern: '/feeds/post/$post', screen: publicationScreen },
   links: { pattern: '/links', screen: () => import('@/routes/links') },

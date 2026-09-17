@@ -46,6 +46,37 @@
 > legacy — l'union ne bouge pas, ces deux adresses existaient déjà côté
 > legacy et changent seulement de verdict.
 
+> **Correction du 2026-09-17.** Ce tableau était resté à « 31 » depuis le
+> 2026-09-13 alors que douze lots (D-60 à D-77 : communautés, appels,
+> découverte, liens, réels, disque du Flux, administration `/adm`…) avaient
+> chacun ajouté leurs adresses sans reprojeter ce document — le mode de
+> dérive déjà nommé par les corrections du 2026-09-09 et du 2026-09-13, à sa
+> quatrième récidive. Mesure du jour, `node scripts/route-inventory.mjs` :
+> **57** routes v3.1 (52 écrans + 5 documents pré-rendus) / **113** adresses
+> distinctes en union avec le legacy (toujours 80, inchangé). `apps/web-old-
+> version3` est tombé à **0** : le répertoire a quitté le dépôt (#5994,
+> directive porteur 2026-09-07/09-10) — la section « Les 48 routes de la v3 »
+> plus bas décrit un répertoire qui n'existe plus et n'a plus de coût
+> d'aucune sorte, ni de portage ni d'archivage.
+>
+> Les **26 adresses** que la v3.1 sert sans équivalent legacy (`legacy=false`
+> dans `--json`, en plus des dix déjà connues au 2026-09-09) sont
+> `/adm`, `/adm/conversations(+:conversation)`, `/adm/users(+:user)`,
+> `/admin/conversations(+:conversation)`, `/admin/users/:user` (D-76 : les
+> deux adresses de l'administration), `/c/:conversation`, `/calls` (D-61),
+> `/chat/:link`, `/communities/:community`, `/communities/new` (D-60),
+> `/discover` (D-62), `/feeds/post/:post`, `/post/:post` (D-70),
+> `/l/:token`, `/l/:token/expired`, `/links/share(+:link,+new)` (D-63),
+> `/me/progression` + ses trois sous-vues, `/reels` (D-66),
+> `/settings/data-export`, `/settings/notifications`,
+> `/signup/affiliate/:token`, `/stories`, `/stories/new`, `/story/:post`,
+> `/welcome`. Aucun gate ne tient ce delta à jour automatiquement
+> (`route-inventory.test.ts` protège la TABLE des routes, jamais CE
+> document) : la dérive reprendra au prochain lot qui ajoute une adresse
+> sans reprojeter — le correctif structurel resterait de faire lire ce
+> fichier par un script plutôt que de le régénérer à la main, non fait ici
+> faute de mandat sur ce tour.
+
 > **Correction du 2026-09-08 (#5669).** Ce tableau a porté « `apps/web-v2` — 0 —
 > nulle part encore » pendant tout le cadrage de #5492, et c'était FAUX : la
 > v3.1 servait déjà quatre écrans et cinq documents. Le script n'énumérait que

@@ -230,17 +230,57 @@ test('une clé déjà nue (cible finale) ne matche plus rien', () => {
   assert.equal(db.getCollection('Participant').docs[0].avatar, '2026/09/p1/avatar.png');
 });
 
-test('les cinq champs cibles sont balayés, même sans aucune ligne à migrer', () => {
+test('les sept champs cibles sont balayés, même sans aucune ligne à migrer', () => {
   const { printed } = runMigration({ docs: {}, appliquer: false });
   for (const ligne of [
     'MessageAttachment.fileUrl',
     'MessageAttachment.thumbnailUrl',
+    'PostMedia.fileUrl',
+    'PostMedia.thumbnailUrl',
     'Participant.avatar',
     'User.avatar',
     'Community.avatar',
   ]) {
     assert.ok(printed.some((l) => l.startsWith(`  ${ligne} : 0 à réécrire`)), `manquant : ${ligne}`);
   }
+});
+
+// ---------------------------------------------------------------------------
+// PostMedia (#6390) : le producteur d'upload écrit la MÊME variable `fileUrl`
+// que MessageAttachment — cette collection ne peut pas se comporter autrement.
+// ---------------------------------------------------------------------------
+
+test('écriture : un média de post à adresse héritée devient la clé nue, sauvegardée sous PostMedia', () => {
+  const { db } = runMigration({
+    docs: {
+      PostMedia: [
+        { _id: 'pm1', fileUrl: 'https://gate.meeshy.me/2026/09/pm1/photo.png' },
+      ],
+    },
+    appliquer: true,
+  });
+
+  assert.equal(db.getCollection('PostMedia').docs[0].fileUrl, '2026/09/pm1/photo.png');
+
+  const sauvegarde = db.getCollection('MediaUrl_backup_013').docs;
+  assert.equal(sauvegarde.length, 1);
+  assert.equal(sauvegarde[0].collection, 'PostMedia');
+  assert.equal(sauvegarde[0].champ, 'fileUrl');
+});
+
+test('écriture : la vignette d\'un média de post à adresse héritée devient aussi la clé nue', () => {
+  const { db } = runMigration({
+    docs: {
+      PostMedia: [
+        { _id: 'pm2', fileUrl: '2026/09/pm2/video.mp4', thumbnailUrl: 'https://gate.meeshy.me/2026/09/pm2/video-thumb.jpg' },
+      ],
+    },
+    appliquer: true,
+  });
+
+  const doc = db.getCollection('PostMedia').docs[0];
+  assert.equal(doc.fileUrl, '2026/09/pm2/video.mp4', 'déjà nue, ne doit pas être touchée par la clause thumbnailUrl');
+  assert.equal(doc.thumbnailUrl, '2026/09/pm2/video-thumb.jpg');
 });
 
 // ---------------------------------------------------------------------------

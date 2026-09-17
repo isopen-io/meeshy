@@ -51,9 +51,14 @@ export function currentDeviceLocale(): string | null {
   return typeof navigator === 'object' && navigator !== null ? (navigator.language ?? null) : null;
 }
 
+/** Le crédential de la session COURANTE, relu à chaque appel — la même
+ * valeur que le transport JSON présente, nommée pour les transports qui n'en
+ * sont pas (le client TUS, `post-media-upload.ts`). */
+export const currentCredential = (): Credential | null => credentialFromSession(sessionStore.getState().session);
+
 export const httpTransport: HttpTransport = createHttpTransport({
   base: apiConfig.base,
-  credential: () => credentialFromSession(sessionStore.getState().session),
+  credential: currentCredential,
   deviceLocale: currentDeviceLocale,
   onUnauthorized: () => sessionStore.getState().clearSession(),
 });

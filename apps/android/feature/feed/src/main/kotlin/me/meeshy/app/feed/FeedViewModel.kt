@@ -593,6 +593,7 @@ class FeedViewModel @Inject constructor(
         type: String = PostType.POST.name,
         location: SharedPlace? = null,
         language: String? = null,
+        mediaAlt: Map<String, String> = emptyMap(),
     ) {
         viewModelScope.launch {
             try {
@@ -603,6 +604,7 @@ class FeedViewModel @Inject constructor(
                     mediaIds = mediaIds.ifEmpty { null },
                     location = location,
                     originalLanguage = language,
+                    mediaAlt = mediaAlt.ifEmpty { null },
                 )
                 when (result) {
                     is NetworkResult.Success ->

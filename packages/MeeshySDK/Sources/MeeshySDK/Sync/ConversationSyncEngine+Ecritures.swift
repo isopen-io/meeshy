@@ -18,7 +18,10 @@ extension ConversationSyncEngine {
     /// from a pre-read snapshot. The pre-read exists only to skip the write —
     /// and the `_conversationsDidChange` fan-out — when nothing changed.
     /* partagé entre les fichiers du moteur (#4172) */ func handleConversationUpdated(_ event: ConversationUpdatedEvent) async {
-        let storeEvent = ConversationStoreSocketBridge.mapConversationUpdated(event)
+        // Le lecteur décide si l'auteur du dernier message se dit « Toi »
+        // (#6921) — ce chemin-ci écrit le CACHE DISQUE, donc son verdict
+        // survit au redémarrage.
+        let storeEvent = ConversationStoreSocketBridge.mapConversationUpdated(event, readerId: await currentUserId())
         let list = await cache.conversations.load(for: "list").snapshot() ?? []
         guard Self.applyingConversationUpdate(storeEvent, to: list) != nil else { return }
         await cache.conversations.update(for: "list") { conversations in

@@ -15,6 +15,7 @@ import { refreshFeedAction, useFeed } from '@/lib/api/query';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
 import { resolveFeedCardModel } from '@/lib/feed/card-model';
+import { useFeedAutoplayRoot } from '@/lib/feed/use-feed-autoplay';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { loadMoreRootMargin, paginationStateOf, showsAllLoadedHint } from '@/lib/lens/pagination';
@@ -30,7 +31,7 @@ import { usePullToRefresh } from '@/lib/view/use-pull-to-refresh';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { useScrollportMemory } from '@/lib/view/use-scrollport-memory';
 import { useStoryRailProps } from '@/lib/view/use-story-rail';
-import { Link } from '@/routes/route-table';
+import { href, navigate, Link } from '@/routes/route-table';
 
 /**
  * LE FIL DES PUBLICATIONS (#5893, #6104, #6277) — destination du bouton
@@ -261,6 +262,13 @@ export default function FeedScreen() {
    * en boucle (même garde que `conversations.tsx`). */
   const { announcement, onGesture, onShare } = usePostGesture();
 
+  // L'ÉLECTION DE LA SCÈNE QUI JOUE (#6898 § 5.3) — UN SEUL
+  // `IntersectionObserver`, posé ici, pour toutes les cartes du fil.
+  // Sans hôte de plein écran (`scenes-plein-ecran`, autre travail), un tap
+  // sur une scène navigue vers le détail — jamais un tap sans effet (loi 4).
+  const { registerScene } = useFeedAutoplayRoot(frame);
+  const onOpenScene = (postId: string, sceneIndex: number): void =>
+    navigate(href('post', { post: postId }, { scene: String(sceneIndex) }));
 
   const { observe: observeTail } = useLoadMoreSentinel({
     root: frame,
@@ -298,7 +306,14 @@ export default function FeedScreen() {
           <>
             {models.map((model) => (
               <li key={model.id}>
-                <FeedPostCard model={model} onGesture={onGesture} onShare={onShare} />
+                <FeedPostCard
+                  model={model}
+                  onGesture={onGesture}
+                  onShare={onShare}
+                  preferredLanguages={readerLanguages}
+                  onOpenScene={onOpenScene}
+                  registerScene={registerScene}
+                />
               </li>
             ))}
             <LensPaginationFooter

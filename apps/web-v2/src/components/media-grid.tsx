@@ -268,6 +268,16 @@ function OverflowVeil({
  * pièce — `object-cover` la recadre, comme `BubbleGridImageView` (`+Media
  * .swift:629-676`). Fond ThumbHash (moyenne, `thumbHashPlaceholder`) avant
  * décodage, repli teinte d'accent 12 % sans hash.
+ *
+ * `onError` (#6882) — GAP retrouvé en investiguant « des pièces jointes en
+ * base sont absentes du stockage » : `ImageTile` (case SOLO, lignes
+ * ci-dessus) masque l'`<img>` en échec et affiche un glyphe de repli depuis
+ * #5805 ; cette case, montée pour toute grille 2/3/4+, n'avait AUCUNE prise
+ * sur `onError` — un message à plusieurs pièces dont une manque au stockage
+ * rendait l'icône « image brisée » native du navigateur, exactement ce que
+ * l'enveloppe SOLO existe pour éviter. Même traitement ici : `<img hidden>`
+ * à l'échec, `Glyph` de repli DÉCOUVERT (jamais recouvert que par une image
+ * qui a réellement décodé) — parité avec `ImageTile`, pas une nouvelle règle.
  */
 function GridCellImage({
   attachment,
@@ -286,6 +296,7 @@ function GridCellImage({
 }) {
   const described = electDescription({ attachment, readerLanguages: languages, displayLanguage, fallbackLanguage });
   const lang = described.language !== READER_LOCALE ? described.language : undefined;
+  const [failed, setFailed] = useState(false);
   const srcSet = attachmentSrcSet(attachment.imageVariants);
   const placeholder = thumbHashPlaceholder(attachment.thumbHash);
 
@@ -302,16 +313,19 @@ function GridCellImage({
         ...(placeholder !== undefined ? { backgroundImage: `url("${placeholder}")`, backgroundSize: 'cover' } : {}),
       }}
     >
+      <Glyph name="image" size={28} className="absolute inset-0 m-auto opacity-40" />
       {attachment.fileUrl === '' ? null : (
         <img
           data-attachment-image={attachment.id}
           src={attachmentSrc(attachment.fileUrl)}
           {...(srcSet !== undefined ? { srcSet: srcSet, sizes: sizesFor(widthPx) } : {})}
           alt={described.text}
+          hidden={failed}
           {...(lang !== undefined ? { lang } : {})}
           loading="lazy"
           decoding="async"
           className="absolute inset-0 size-full object-cover"
+          onError={() => setFailed(true)}
         />
       )}
     </button>

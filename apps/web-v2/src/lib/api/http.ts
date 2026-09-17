@@ -209,7 +209,10 @@ function namesAnIdentity(headers: Readonly<Record<string, string>> | undefined):
   });
 }
 
-function credentialHeaders(credential: Credential | null): Record<string, string> {
+/** « Quel en-tête pour quel régime » — le SITE UNIQUE, que le transport JSON
+ * et le client TUS (`post-media-upload.ts`, corps binaires hors de ce
+ * transport) partagent : un second site divergerait au premier régime ajouté. */
+export function credentialHeaders(credential: Credential | null): Record<string, string> {
   if (credential === null) return {};
   if (credential.kind === 'registered') return { Authorization: `Bearer ${credential.token}` };
   return { 'X-Session-Token': credential.sessionToken };

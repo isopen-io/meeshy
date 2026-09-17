@@ -774,6 +774,38 @@ jobs:
           cd apps/web-v2
           node scripts/check-feed-media.mjs
 
+      # #6898 — UNE PUBLICATION V:3 SE LIT DANS LE FIL AVEC TOUS SES OBJETS.
+      # Texte seul, image, cadrage plafonné à 1,4, une seule scène cinématique
+      # joue à la fois (`prefers-reduced-motion` en tient une hors du jeu), et
+      # chaque tuile d'un agencement montre la scène de SA slide.
+      - name: Gate scènes du fil (texte, cadrage 1,4, une seule lecture, tuiles)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-feed-scenes.mjs
+
+      # #6899 — LE LECTEUR DE STORY REND SES SCÈNES V3 PAR LE MOTEUR PARTAGÉ.
+      # Placeholder ThumbHash peint AVANT « prêt » (moteur retenu, mesure de
+      # pixels), carte 9:16 centrée dans le plateau aux deux tailles, texte au
+      # Prisme (rang 2), son de fond dont le bouton dit la vérité et a un effet,
+      # image seule sans moteur, épingle de timeline autoritaire, v1 intact.
+      - name: Gate scènes du lecteur de story (placeholder, plateau, son, image seule)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-story-scene.mjs
+
+      # #6900 — LE STUDIO DE STORY PEINT CE QU'IL PUBLIERA. Publier inerte sur
+      # un brouillon vide, un fond + un son posés font PEINDRE le moteur
+      # partagé (mesure de pixels, pas la présence d'une balise), la carte
+      # 9:16 est centrée dans son plateau aux deux gabarits, cinq cibles
+      # ≥ 44 px, le texte tapé survit à un rechargement (brouillon).
+      - name: Gate studio de story (moteur peint, carte 9:16, cibles, brouillon)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-story-studio.mjs
+
       - name: Gate états du fil (vide, coupure, échec d'envoi rejouable)
         if: ${{ !cancelled() }}
         run: |

@@ -56,7 +56,7 @@ const fr = {
   'stories.loading': 'Chargement des stories…',
   'stories.error': "Les stories n'ont pas pu être chargées.",
   'stories.empty.title': "Aucune story pour l'instant",
-  'stories.empty.subtitle': 'Les stories de vos contacts apparaîtront ici pendant vingt-quatre heures.',
+  'stories.empty.subtitle': 'Les stories de vos contacts apparaîtront ici pendant vingt heures.',
   'stories.create': 'Créer une story',
   'stories.count.one': '{count} story',
   'stories.count.other': '{count} stories',
@@ -599,6 +599,66 @@ const fr = {
   'links.create.error.offline': 'Hors ligne : le lien n’a pas été créé.',
   'links.create.error.refused': 'Vous ne pouvez pas créer de lien pour cette conversation.',
   'links.create.error.default': 'Le lien n’a pas pu être créé. Réessayez.',
+
+  /* LES SCÈNES DU FIL (#6898) — carrousel, mosaïque et lecture d'une
+     publication v:3. */
+  'feed.scene.carousel.previous': 'Scène précédente',
+  'feed.scene.carousel.next': 'Scène suivante',
+  'feed.scene.mosaic.tile': 'Scène {index}',
+  'feed.scene.mosaic.more': 'Scène {index}, et {count} de plus',
+  'feed.scene.mosaic.video': 'Scène {index}, vidéo',
+  'feed.scene.shared_by': 'Scène partagée par {author}',
+  'feed.scene.open.fullscreen': 'Touche deux fois pour voir en plein écran',
+  'feed.scene.open.post': 'Touche deux fois pour ouvrir la publication',
+  'feed.scene.sound.muted': 'Son coupé',
+  'feed.scene.count': '{count} scènes',
+
+  /* LE SON DE FOND DU LECTEUR DE STORY (T10, #6899) — bouton BASCULE dans la
+     ligne auteur (rail droit hors tranche, #5817) : UN libellé constant et
+     `aria-pressed`, jamais un libellé qui change avec l'état (« Son, non
+     enfoncé » se lit comme un son coupé). */
+  'story.sound.off': 'Muet',
+
+  /* LE STUDIO DE STORY (#6900) — créer une story avec un fond, un son de
+     fond et un texte, aperçu par le moteur partagé, publiée en CanvasV3
+     comme iOS. */
+  'story.studio.title': 'Nouvelle story',
+  'story.studio.cancel': 'Annuler',
+  'story.studio.publish': 'Publier',
+  'story.studio.publishing': 'Publication…',
+  'story.studio.publish.waiting': 'En attente du réseau…',
+  'story.studio.offline': 'Hors ligne — la publication partira au retour du réseau.',
+  'story.studio.stage': 'Aperçu de la story',
+  'story.studio.background.add': 'Ajouter une photo ou une vidéo',
+  'story.studio.background.label': 'Fond',
+  'story.studio.background.remove': 'Retirer le fond',
+  'story.studio.sound.add': 'Ajouter un son',
+  'story.studio.sound.label': 'Son de fond',
+  'story.studio.sound.remove': 'Retirer le son',
+  'story.studio.sound.mute': 'Couper le son',
+  'story.studio.sound.unmute': 'Écouter le son',
+  'story.studio.upload.progress': 'Envoi… {percent} %',
+  'story.studio.upload.ready': 'Prêt',
+  'story.studio.upload.retry': 'Réessayer',
+  'story.studio.text.label': 'Texte de la story',
+  'story.studio.text.placeholder': 'Ajouter du texte',
+  'story.studio.hint.duration': 'Une story reste visible vingt heures.',
+  'story.studio.error.upload': 'Le fichier n’a pas pu être envoyé.',
+  'story.studio.error.publish': 'La story n’a pas pu être publiée.',
+  'story.studio.refusal.title': 'Un compte est nécessaire pour créer une story.',
+  'story.studio.refusal.login': 'Se connecter',
+  'story.studio.refusal.door.visual': 'Choisissez une image ou une vidéo.',
+  'story.studio.refusal.door.sound': 'Choisissez un fichier audio.',
+  'story.studio.failure.network': 'Réseau indisponible.',
+  'story.studio.failure.timeout': 'La passerelle n’a pas répondu.',
+  'story.studio.failure.session': 'Session expirée — reconnectez-vous.',
+  'story.studio.failure.account': 'Un compte est nécessaire pour publier un média.',
+  'story.studio.failure.forbidden': 'Action refusée pour ce compte.',
+  'story.studio.failure.tooLarge': 'Fichier trop lourd.',
+  'story.studio.failure.fileRefused': 'Fichier refusé : son type ne correspond pas à son contenu.',
+  'story.studio.failure.rateLimited': 'Trop de publications d’un coup — réessayez dans un instant.',
+  'story.studio.failure.refused': 'Publication refusée.',
+  'story.studio.failure.unavailable': 'La passerelle est indisponible.',
 
   /* L'ESPACE D'ADMINISTRATION (#6432) — SEUL `admin.title` reste ici : la
      rangée des Réglages et le barreau du menu flottant (#6458) le lisent
