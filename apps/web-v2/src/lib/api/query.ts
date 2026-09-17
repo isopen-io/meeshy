@@ -77,7 +77,7 @@ export function refreshListAction(): Promise<void> {
  * **LE RAIL DE STORIES** (#6080) — même adaptateur, même `apiDeps`, donc la
  * même règle de source : fixtures ou passerelle, résolu à la CONSTRUCTION.
  *
- * `staleTime` de 60 s : une story vit vingt-quatre heures et le plateau n'a
+ * `staleTime` de 60 s : une story vit vingt heures et le plateau n'a
  * aucune raison d'être refetché à chaque retour sur la liste. Au-delà, c'est
  * le socket qui doit prévenir — issue compagnon, comme pour les messages.
  */

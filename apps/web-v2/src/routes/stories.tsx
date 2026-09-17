@@ -53,7 +53,7 @@ export function StoriesHeader({ language, title }: { readonly language: Interfac
       >
         <span aria-hidden="true" className="text-lg leading-none">‹</span>
       </Link>
-      <h1 className="text-body font-semibold" style={{ color: 'var(--color-ios-ink-1)' }}>
+      <h1 className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
         {title}
       </h1>
     </header>
@@ -79,7 +79,7 @@ export function StoriesLoadError({ language }: { readonly language: InterfaceLan
 export function StoriesEmpty({ language }: { readonly language: InterfaceLanguage }) {
   return (
     <div className="grid flex-1 content-center justify-items-center gap-3 px-6 py-12 text-center">
-      <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink-1)' }}>
+      <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
         {translate(language, 'stories.empty.title')}
       </p>
       <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
@@ -120,7 +120,7 @@ export function StoryRow({ language, group }: { readonly language: InterfaceLang
         <Avatar initials={initialsOf(label)} color={'var(--color-ios-brand)'} size={44} />
       </span>
       <span className="flex min-w-0 flex-col">
-        <span className="truncate text-body font-semibold" style={{ color: 'var(--color-ios-ink-1)' }}>
+        <span className="truncate text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
           {label}
         </span>
         <span className="text-check" style={{ color: 'var(--color-ios-ink-2)' }}>
