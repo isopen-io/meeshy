@@ -218,13 +218,14 @@ function transportSouverain(): { readonly transport: HttpTransport; readonly cal
 
 const VIEWER: Viewer = { id: 'u-membre', handle: 'membre', displayName: 'Le membre', isAnonymous: false };
 
-async function lire(readerLanguages: readonly string[], readerLocale: string) {
+async function lire(readerLanguages: readonly string[], readerLocale: string, prisme: 'membre' | 'lecteur' = 'membre') {
   const { transport, calls } = transportSouverain();
   const host = await mounter.mount(
     <QueryClientProvider client={appQueryClient}>
       <AdminConversationReading
         conversationId={CONVERSATION}
         language="fr"
+        prisme={prisme}
         readerLanguages={readerLanguages}
         readerLocale={readerLocale}
         viewer={VIEWER}
@@ -249,6 +250,7 @@ describe('le motif écrit précède la requête, et il est FIGÉ', () => {
         <AdminConversationReading
           conversationId={CONVERSATION}
           language="fr"
+          prisme="membre"
           readerLanguages={['de', 'es']}
           readerLocale="de"
           viewer={VIEWER}
@@ -300,6 +302,25 @@ describe('LA VRAIE VUE, AU PRISME DU MEMBRE', () => {
   test('DIT dans quelle langue il sert — un administrateur ne doit pas prendre une traduction pour l’original', async () => {
     const { host } = await lire(['de', 'es'], 'de');
     expect(host.querySelector('[data-admin-reading-prism]')?.textContent).toContain('de › es');
+  });
+
+  /**
+   * **ET IL NE LE DIT QUE QUAND C'EST VRAI** (#6862, recette au navigateur).
+   *
+   * `/adm/conversations/:id` n'administre AUCUN membre : son prisme est celui
+   * du lecteur, comme partout ailleurs dans l'application. Le bandeau y
+   * annonçait pourtant « Lu dans le prisme du membre : fr › en » — une phrase
+   * fausse sur la langue servie, qui fait prendre sa propre traduction pour
+   * celle d'un tiers. Aucun témoin ne pouvait tomber : le composant rendait la
+   * MÊME phrase dans les deux cas, et le seul témoin existant la lisait depuis
+   * le cas où elle est juste.
+   */
+  test('mais PAS quand le prisme est celui du lecteur — il n’y a aucun membre à annoncer', async () => {
+    const { host } = await lire(['fr'], 'fr', 'lecteur');
+    // Le fil EST peint : sans ce constat, l'absence du bandeau se confondrait
+    // avec un écran vide (leçon 261 — un verdict qui ne peut pas tomber).
+    expect(host.textContent ?? '').toContain('Bonjour');
+    expect(host.querySelector('[data-admin-reading-prism]')).toBe(null);
   });
 });
 

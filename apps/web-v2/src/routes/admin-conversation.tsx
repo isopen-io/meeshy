@@ -110,6 +110,9 @@ export default function AdminConversationScreen() {
       <AdminConversationReading
         conversationId={conversationId}
         language={language}
+        /* AUCUN membre administré ici : le prisme est celui du LECTEUR, et le
+           bandeau « prisme du membre » n'a donc rien à annoncer. */
+        prisme="lecteur"
         readerLanguages={lecteur.languages}
         readerLocale={lecteur.locale}
         viewer={viewer}

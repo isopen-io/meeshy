@@ -281,6 +281,7 @@ export function AdminUserConversationsSection({
             <AdminConversationReading
               conversationId={ouverte.id}
               language={language}
+              prisme="membre"
               readerLanguages={prisme.languages}
               readerLocale={prisme.locale}
               viewer={viewerDuMembre(membre)}

@@ -22,6 +22,7 @@ import {
   type AgentTrackedConversation,
 } from '@/lib/api/admin-agent';
 import { ADMIN_SOUVERAIN_PREFIXE } from '@/lib/api/souverain';
+import { adminMoment } from '@/lib/admin/format';
 import { translateAdmin } from '@/lib/i18n-admin-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
@@ -83,8 +84,10 @@ const nombre = (valeur: number, langue: string): string => new Intl.NumberFormat
 const secondes = (ms: number, langue: string): string =>
   `${new Intl.NumberFormat(langue, { maximumFractionDigits: 1 }).format(ms / 1000)} s`;
 
-const moment = (iso: string | null, langue: string): string =>
-  iso === null ? '—' : new Intl.DateTimeFormat(langue, { dateStyle: 'short', timeStyle: 'short' }).format(new Date(iso));
+/* `adminMoment` (`lib/admin/format.ts`) — la fiche d'un membre peignait ses
+   dates BRUTES pendant que cet écran les formatait ici, en privé. Le formateur
+   a quitté ce fichier pour le site que les deux partagent. */
+const moment = adminMoment;
 
 /**
  * **LE GESTE DE RELANCE, ÉCRIT UNE FOIS** — la section Agent et l'écran de

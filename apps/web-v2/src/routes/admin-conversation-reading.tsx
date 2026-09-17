@@ -92,6 +92,7 @@ const EMPTY_IDS: ReadonlySet<string> = new Set();
 export function AdminConversationReading({
   conversationId,
   language,
+  prisme,
   readerLanguages,
   readerLocale,
   viewer,
@@ -100,6 +101,26 @@ export function AdminConversationReading({
   readonly conversationId: string;
   /** La langue de l'INTERFACE d'administration (motif, boutons) — jamais celle du contenu. */
   readonly language: InterfaceLanguage;
+  /**
+   * **LE PRISME DE QUI** — et donc s'il y a quelque chose à ANNONCER.
+   *
+   * Le bandeau existe parce que le prisme n'est PAS celui du lecteur : sur la
+   * fiche d'un membre, l'administrateur lit dans les langues de QUELQU'UN
+   * D'AUTRE, et rien d'autre à l'écran ne le lui dirait. Sur
+   * `/adm/conversations/:id`, il n'y a aucun membre administré — le prisme y
+   * est le sien, comme partout ailleurs dans l'application.
+   *
+   * Le bandeau y annonçait pourtant « Lu dans le prisme du membre : fr › en »
+   * (recette au navigateur, #6862) : une phrase FAUSSE sur la langue servie,
+   * qui fait prendre sa propre traduction pour celle d'un tiers. Là où le
+   * prisme est celui du lecteur, il n'y a rien à annoncer — la mention par
+   * rangée (`data-prism-indicator`) dit déjà qu'un texte est traduit, et c'est
+   * exactement ce que le produit dit partout ailleurs.
+   *
+   * REQUIS, sans défaut : un hôte qui oublierait de le poser hériterait
+   * silencieusement de l'affirmation la plus forte des deux.
+   */
+  readonly prisme: 'membre' | 'lecteur';
   /** LE PRISME DU MEMBRE (ou de l'administrateur hors fiche membre) — face CONTENU. */
   readonly readerLanguages: readonly string[];
   /** La face CADRAGE du même prisme : libellés de jour, dates relatives. */
@@ -280,13 +301,18 @@ export function AdminConversationReading({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-admin-reading={conversationId}>
-      {/* LE PRISME SERVI, DIT À VOIX HAUTE — un administrateur doit savoir dans
-          quelle langue il lit, sinon il prend une traduction pour l'original.
-          `lang` sur le conteneur : le fil est rendu dans la langue du membre,
-          et un lecteur d'écran doit le prononcer avec la bonne voix. */}
-      <p className="shrink-0 px-4 pb-1 text-caption" style={{ color: INK2 }} data-admin-reading-prism>
-        {translateAdmin(language, 'admin.convDetail.memberPrism', { languages: readerLanguages.join(' › ') })}
-      </p>
+      {/* LE PRISME D'UN AUTRE, DIT À VOIX HAUTE — un administrateur qui lit
+          dans les langues de quelqu'un d'autre doit le savoir, sinon il prend
+          la traduction d'un tiers pour ce qu'il lirait lui-même. Le bandeau ne
+          se peint QUE dans ce cas : voir le doc-comment de `prisme`.
+          `lang` sur le conteneur reste posé dans les deux cas — le fil est
+          rendu dans une langue, et un lecteur d'écran doit le prononcer avec
+          la bonne voix, que cette langue soit celle du membre ou la sienne. */}
+      {prisme === 'membre' ? (
+        <p className="shrink-0 px-4 pb-1 text-caption" style={{ color: INK2 }} data-admin-reading-prism>
+          {translateAdmin(language, 'admin.convDetail.memberPrism', { languages: readerLanguages.join(' › ') })}
+        </p>
+      ) : null}
 
       {/* `<section>` et non `<div>` : React type le `ref` d'une balise
           sectionnante en `HTMLElement`, le type même qu'attendent
