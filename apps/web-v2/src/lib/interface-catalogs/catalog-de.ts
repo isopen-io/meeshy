@@ -55,12 +55,10 @@ const de = {
   'stories.self.mood.change': 'Meine Stimmung ändern, {emoji}',
 
   'status.compose.title': 'Meine Stimmung',
-  'status.compose.back': 'Zurück',
   'status.compose.pick': 'Stimmung wählen',
   'status.compose.note': 'Ein Wort, wenn du magst',
   'status.compose.publish': 'Veröffentlichen',
   'status.compose.publishing': 'Wird veröffentlicht…',
-  'status.compose.published': 'Stimmung veröffentlicht',
   'status.compose.error': 'Deine Stimmung konnte nicht veröffentlicht werden.',
   'status.compose.offline': 'Offline — deine Stimmung geht raus, sobald das Netz zurück ist.',
 

@@ -55,12 +55,10 @@ const en = {
   'stories.self.mood.change': 'Change my mood, {emoji}',
 
   'status.compose.title': 'My mood',
-  'status.compose.back': 'Back',
   'status.compose.pick': 'Pick a mood',
   'status.compose.note': 'A word, if you like',
   'status.compose.publish': 'Publish',
   'status.compose.publishing': 'Publishing…',
-  'status.compose.published': 'Mood published',
   'status.compose.error': 'Your mood could not be published.',
   'status.compose.offline': 'Offline — your mood will go out when the network returns.',
 

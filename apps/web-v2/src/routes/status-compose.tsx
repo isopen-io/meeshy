@@ -71,7 +71,12 @@ export function StatusComposeHeader({ language }: { readonly language: Interface
     <header className="flex shrink-0 items-center gap-3 px-4 pt-3 pb-2">
       <Link
         to="list"
-        aria-label={translate(language, 'status.compose.back')}
+        /* `pending.back` — PAS une clé à moi : « Revenir aux conversations »
+           dit exactement ce que ce lien fait (`to="list"`), et c'est déjà celle
+           que `StoriesHeader` emploie pour le même retour. Une clé de plus
+           n'aurait ajouté que du poids au catalogue et une seconde vérité à
+           traduire dans sept langues. */
+        aria-label={translate(language, 'pending.back')}
         className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{ outlineColor: 'var(--color-ios-brand)' }}
       >

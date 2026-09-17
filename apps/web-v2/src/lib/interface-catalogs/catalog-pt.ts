@@ -59,12 +59,10 @@ const pt = {
   'stories.self.mood.change': 'Mudar meu humor, {emoji}',
 
   'status.compose.title': 'Meu humor',
-  'status.compose.back': 'Voltar',
   'status.compose.pick': 'Escolher um humor',
   'status.compose.note': 'Uma palavra, se quiser',
   'status.compose.publish': 'Publicar',
   'status.compose.publishing': 'Publicando…',
-  'status.compose.published': 'Humor publicado',
   'status.compose.error': 'Não foi possível publicar seu humor.',
   'status.compose.offline': 'Offline — seu humor sairá quando a rede voltar.',
 

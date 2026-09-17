@@ -55,12 +55,10 @@ const it = {
   'stories.self.mood.change': 'Cambia il mio umore, {emoji}',
 
   'status.compose.title': 'Il mio umore',
-  'status.compose.back': 'Indietro',
   'status.compose.pick': 'Scegli un umore',
   'status.compose.note': 'Una parola, se vuoi',
   'status.compose.publish': 'Pubblica',
   'status.compose.publishing': 'Pubblicazione…',
-  'status.compose.published': 'Umore pubblicato',
   'status.compose.error': 'Non è stato possibile pubblicare il tuo umore.',
   'status.compose.offline': 'Offline — il tuo umore partirà al ritorno della rete.',
 

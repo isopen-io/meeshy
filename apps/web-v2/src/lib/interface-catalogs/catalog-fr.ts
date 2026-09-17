@@ -79,12 +79,10 @@ const fr = {
      publie. Le composeur d'humeur complet d'iOS (`ComposerMoodSurface.swift`)
      reste hors tranche. */
   'status.compose.title': 'Mon humeur',
-  'status.compose.back': 'Retour',
   'status.compose.pick': 'Choisir une humeur',
   'status.compose.note': 'Un mot, si vous voulez',
   'status.compose.publish': 'Publier',
   'status.compose.publishing': 'Publication…',
-  'status.compose.published': 'Humeur publiée',
   'status.compose.error': "Votre humeur n'a pas pu être publiée.",
   'status.compose.offline': 'Hors ligne — votre humeur partira au retour du réseau.',
 
