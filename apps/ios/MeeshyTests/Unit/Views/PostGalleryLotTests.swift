@@ -514,18 +514,20 @@ final class PostGalleryLotTests: XCTestCase {
         XCTAssertFalse(item.surface(inFullFrame: false).paintsLetterbox)
     }
 
-    /// `servesLetterboxFill` reste EXACTEMENT la réponse cardée — TOUJOURS
-    /// `false` depuis #6904.
+    /// **Le canvas ne peint JAMAIS ses bandes**, quel que soit le rapport du
+    /// média — la propriété `GallerySceneItem.servesLetterboxFill` qui portait
+    /// cette réponse a été RETIRÉE au lot #6904 (plus aucun consommateur : la
+    /// carte peint, et un seul état de carte ⇒ un seul peintre). Ce qui reste
+    /// mesurable, et ce qui compte, est la surface elle-même.
     @MainActor
-    func test_servesLetterboxFill_resteLaReponseCardee() throws {
+    func test_leCanvasNePeintJamaisSesBandes() throws {
         for rapport in [nil, 0.8, 1.0] as [Double?] {
             let lot = compose(post(media: [media("photo")],
                                    scenes: [scene("s", media: "photo",
                                                   mediaAspectRatio: rapport)]))
             let item = try XCTUnwrap(lot.scenes.values.first)
-            XCTAssertEqual(item.servesLetterboxFill,
-                           item.surface(inFullFrame: false).paintsLetterbox)
-            XCTAssertFalse(item.servesLetterboxFill)
+            XCTAssertFalse(item.surface(inFullFrame: false).paintsLetterbox)
+            XCTAssertFalse(item.surface(inFullFrame: true).paintsLetterbox)
         }
     }
 

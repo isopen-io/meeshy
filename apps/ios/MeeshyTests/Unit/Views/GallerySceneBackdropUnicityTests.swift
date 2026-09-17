@@ -78,8 +78,6 @@ final class GallerySceneBackdropUnicityTests: XCTestCase {
     func test_uneSceneQuiNestQuUneImage_gardeLeGabarit9sur16() {
         let page = item([fond()])
         XCTAssertEqual(page.aspect, SceneShape.aspect, accuracy: 0.0001)
-        XCTAssertFalse(page.servesLetterboxFill,
-                       "le canvas ne peint plus ses bandes : c'est le plateau qui peint le hors-champ")
     }
 
     /// Un objet posé sur la bande ne change plus rien : le gabarit était déjà
@@ -87,7 +85,6 @@ final class GallerySceneBackdropUnicityTests: XCTestCase {
     func test_unObjetPoseSurLaBande_neChangeRien() {
         let page = item([fond(), texteSurLaBande()])
         XCTAssertEqual(page.aspect, SceneShape.aspect, accuracy: 0.0001)
-        XCTAssertFalse(page.servesLetterboxFill)
     }
 
     /// **`carrierAspect` ne décide plus d'aucune forme** (décision porteur du
@@ -97,13 +94,12 @@ final class GallerySceneBackdropUnicityTests: XCTestCase {
         let page = item([fond()], carrierAspect: Self.paysage)
         XCTAssertEqual(page.aspect, SceneShape.aspect, accuracy: 0.0001,
                        "la forme vient de la loi, jamais du porteur")
-        XCTAssertFalse(page.servesLetterboxFill)
     }
 
     /// Une scène sans fond image — du texte sur une couleur — n'a jamais rien
-    /// eu de spécial : le canvas ne peint pas non plus.
-    func test_uneSceneSansImage_neFaitPasPeindreLeCanvasNonPlus() {
-        XCTAssertFalse(item([texteSurLaBande()]).servesLetterboxFill)
+    /// eu de spécial : elle garde le gabarit, comme toutes les autres.
+    func test_uneSceneSansImage_gardeLeGabaritAussi() {
+        XCTAssertEqual(item([texteSurLaBande()]).aspect, SceneShape.aspect, accuracy: 0.0001)
     }
 
     /// **Le fusible qui remplace `test_unObjetPoseSurLaBande_gardeLeRemplissageDuCanvas`**
@@ -159,8 +155,9 @@ final class GallerySceneBackdropUnicityTests: XCTestCase {
     /// tour 3 bis).
     ///
     /// La page peignait son propre `SceneBackdropView` sous le player, et le
-    /// lecteur de stories le sien : deux assemblages, deux fonds. Le tour 3
-    /// avait conditionné le fond de la page au `backdrop` de la loi (`nil` en
+    /// lecteur de stories le sien : deux assemblages, deux fonds — la couleur
+    /// dominante d'un côté, le hachage étiré de l'autre. Le tour 3 avait
+    /// conditionné le fond de la page au `backdrop` de la loi (`nil` en
     /// immersif) ; le 3e message de la directive du 2026-09-17 retire la
     /// condition elle-même : « On préserve le même fond que pour la story ! »
     func test_laPageScene_neMontrLeFondQueQuandLaLoiEnDonneUn() throws {

@@ -93,27 +93,15 @@ nonisolated struct GallerySceneItem: Equatable {
     /// jour-là (`imageOnlyRect(of:)`) et que cette page, née après, n'avait
     /// jamais reçue.
     ///
-    /// **La MÊME question décide du rapport et du fond**, et c'est voulu : un
-    /// second prédicat à tenir d'accord avec `sceneAspect` divergerait le jour
-    /// où l'un des deux changerait. Quand un objet sort de l'image, la bande
-    /// redevient une surface de composition (#4519) — l'auteur y a posé quelque
-    /// chose — et elle reste peinte.
-    ///
-    /// **Superseded le 2026-09-17 (#6896, lot #6904)** : la scène ne se cadre
-    /// plus jamais au rapport de son image, cardée ou en plein cadre — les
-    /// bandes n'en sortent donc plus, et cette propriété rend TOUJOURS
-    /// `false`. L'historique ci-dessus reste pour la trace du raisonnement.
-    var servesLetterboxFill: Bool {
-        surface(inFullFrame: false).paintsLetterbox
-    }
-
     /// **Ce qu'une scène PRÉSENTE, et ce n'est pas la même chose selon la
     /// surface qui la porte** (#6806 + #6791, tenus par UNE réponse).
     ///
     /// Le rapport du cadre et le fond que le canvas peint sont la MÊME
-    /// question — le doc-comment de `servesLetterboxFill` le disait déjà : « un
-    /// second prédicat à tenir d'accord avec `sceneAspect` divergerait le jour
-    /// où l'un des deux changerait ». Ce jour est arrivé le 2026-09-16 : un lot
+    /// question — le doc-comment de l'ancienne `servesLetterboxFill` (retirée
+    /// au lot #6904, sans consommateur depuis que la CARTE peint seule) le
+    /// disait déjà : « un second prédicat à tenir d'accord avec `sceneAspect`
+    /// divergerait le jour où l'un des deux changerait ». Ce jour est arrivé
+    /// le 2026-09-16 : un lot
     /// a fait passer le plein cadre au rapport du canvas **sans** toucher au
     /// fond. Géométrie exacte (`media = 402 × 714,7`, le sol divisé par trois),
     /// rendu PIRE — la photo ne grandissait pas, elle glissait vers le haut en

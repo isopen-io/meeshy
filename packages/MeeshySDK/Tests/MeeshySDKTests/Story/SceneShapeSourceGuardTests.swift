@@ -32,17 +32,20 @@ import XCTest
 /// `storyCanvasContainer`, `storyCanvasOrPlaceholder`) dont elle a vérifié
 /// qu'il la porte une couche plus bas.
 ///
-/// **Elle ne prouve PAS que ces hôtes appliquent le CADRE binaire (règle 3,
-/// `frame`) ni les DEUX plein écrans (règle 4, `layout`/`Fullscreen`).** Deux
-/// des solveurs connus (`SceneCarouselLayout` → `SceneFraming.cardAspect`,
-/// `SceneFraming.focus`) rendent un rapport CONTINU — la « quatrième forme »
-/// que la règle 3 exclut précisément — et `StoryViewerView+Canvas` décide sa
-/// forme VISIBLE ailleurs (`StoryImageOnlyPresentation`), sans jamais
-/// consulter `frame`/`layout`. Consulter la constante n'est pas appliquer le
-/// cadre binaire : les deux mécanismes plus anciens que cite le doc-comment
-/// de `SceneShape` restent NON convergés, et cette garde ne les couvre pas —
-/// leur convergence est un lot séparé (voir `SceneShape.swift`, § « Ce que la
-/// loi FERME, et ce qu'elle DÉCLARE sans encore le câbler »).
+/// **Ce qu'elle ne prouve PAS : le CADRE binaire (règle 3, `frame`).** Aucun
+/// hôte ne l'appelle, et le dire est la moitié honnête de cette garde.
+///
+/// **La règle 4 (`layout`), elle, EST câblée depuis le 2026-09-17** — et par
+/// un témoin SÉPARÉ, `test_lesSurfacesPleinEcran_montentLaCarteDeScene`, parce
+/// que le balayage ci-dessus ne peut pas l'exiger : il accepte une
+/// consultation par SOLVEUR (`MediaStageFraming`, `SceneCarouselLayout`), ce
+/// qui convient à un aperçu et jamais à un plein écran — ces solveurs rendent
+/// un rapport CONTINU, la « quatrième forme » que la règle 3 exclut. Les cinq
+/// fichiers des quatre surfaces plein écran (galerie cadré/immersif, lecteur
+/// de stories, réel) doivent donc LIRE `SceneShape.layout` ou MONTER
+/// `SceneCard`. La carte du FIL et les pages de carrousel restent hors loi
+/// **par décision du porteur** : ce sont des aperçus (`SceneFraming.focus`,
+/// union, plafond 1,4), pas des plein écrans.
 final class SceneShapeSourceGuardTests: XCTestCase {
 
     /// **La constante 9:16 n'a qu'un site.** Toute autre écriture du rapport
@@ -123,6 +126,54 @@ final class SceneShapeSourceGuardTests: XCTestCase {
                        "a été réécrite sans vider cette liste). Manquants : " +
                        "\(Set(muets).subtracting(exceptionsDatees).sorted()) ; " +
                        "exceptions périmées : \(exceptionsDatees.subtracting(Set(muets)).sorted())")
+    }
+
+    /// **Les surfaces PLEIN ÉCRAN d'une scène montent LA carte — nommées une
+    /// par une** (directive porteur du 2026-09-17, lot #6904).
+    ///
+    /// Le témoin précédent est un balayage : il attrape tout hôte qui monte le
+    /// player sans consulter la loi, mais il accepte une consultation par
+    /// SOLVEUR (`MediaStageFraming`, `SceneCarouselLayout`…) — ce qui est juste
+    /// pour une carte de fil ou une page de carrousel, et FAUX pour un plein
+    /// écran : ces solveurs rendent un rapport CONTINU, la « quatrième forme »
+    /// que la règle 3 exclut.
+    ///
+    /// > **Une énumération de sites porte deux affirmations, et la seconde ne
+    /// > se vérifie presque jamais** (leçon 261) : « ces sites appliquent la
+    /// > règle » ET « ce sont les sites où la règle s'applique ». La liste
+    /// > ci-dessous est la SECONDE, écrite à la main, et c'est pourquoi elle
+    /// > est courte et datée : quatre surfaces montrent une scène en grand.
+    ///
+    /// Ce qui n'y est PAS, et par DÉCISION du porteur (2026-09-17) : la CARTE
+    /// DU FIL et les pages de carrousel gardent leur cadrage d'aperçu
+    /// (`SceneFraming.focus`, union, plafond 1,4) — ce sont des aperçus, pas
+    /// des plein écrans, et les y faire entrer romprait des surfaces mesurées.
+    func test_lesSurfacesPleinEcran_montentLaCarteDeScene() throws {
+        let pleinEcran = [
+            // le plein écran cadré ET immersif d'un post
+            "apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView+ScenePage.swift",
+            "apps/ios/Meeshy/Features/Main/Views/GallerySceneStage.swift",
+            // le lecteur de stories — la surface de RÉFÉRENCE
+            "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift",
+            "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+ReaderCard.swift",
+            // le réel composé
+            "apps/ios/Meeshy/Features/Main/Views/ReelsPlayerView+Scene.swift",
+        ]
+
+        var muettes: [String] = []
+        for chemin in pleinEcran {
+            let code = Self.stripComments(
+                try String(contentsOf: Self.repoRoot.appendingPathComponent(chemin), encoding: .utf8))
+            guard code.contains("SceneShape.layout") || code.contains("SceneCard(")
+                    || code.contains("readerCard(layout:") else {
+                muettes.append(chemin)
+                continue
+            }
+        }
+
+        XCTAssertEqual(muettes, [],
+                       "un plein écran de scène doit LIRE SceneShape.layout ou MONTER SceneCard — " +
+                       "une consultation par solveur de rapport continu n'y suffit pas : \(muettes)")
     }
 
     // MARK: - Méta-tests de la garde

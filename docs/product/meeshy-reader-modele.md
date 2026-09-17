@@ -589,22 +589,68 @@ décidé onze fois.
    — est une quatrième forme possible du même document, et c'est exactement ce
    que onze hôtes ne peuvent pas garantir ensemble.
 
-### Les deux plein écrans
+### Le plein écran : UNE carte, deux viewports
 
-| état | ce qu'on voit | le cadre | qui peint le hors-champ |
-|---|---|---|---|
-| **cadré** | la scène en grand, avec contrôleurs, informations et détails | la scène AJUSTÉE dans le viewport, arrondie, centrée, sur un fond choisi par l'hôte : noir, couleur dominante du ThumbHash (préférence du porteur), ou le ThumbHash lui-même comme le lecteur de story | le **PLATEAU**, et lui seul — le chrome y vit aussi ([#6760](https://github.com/isopen-io/meeshy/issues/6760)) |
-| **immersif** | rien que le contenu | la scène occupe le viewport **entier**, son contenu visible et centré | **personne** : il ne reste rien à peindre |
+La loi a porté **deux** états jusqu'au 2026-09-17 — cadré (scène ajustée, fond
+autour) et immersif (scène ÉTENDUE jusqu'à couvrir le viewport, **rien** autour).
+Trois directives porteur du même jour les ont ramenés à un seul :
 
-Le `personne` de la seconde ligne n'est pas un trou, c'est la réponse : la
-troisième couche de [#6806](https://github.com/isopen-io/meeshy/issues/6806)
-disparaît **par construction** plutôt que par consigne, et le défaut que l'audit
+> 1. « POURQUOI ne reproduisons-nous pas la même chose que la scène des stories
+>    sur les scènes de POST ? C'est EXACTEMENT le même lecteur et le même
+>    comportement qu'il faut appliquer. »
+> 2. « Ce que je vois dans les stories me plaît ! Il faut reproduire exactement
+>    la même chose partout ! Tout simplement ! Partir du fait que le composant
+>    est déjà fait et le réutiliser pour les scènes de posts et les Réels ! »
+> 3. « On préserve le même fond que pour la story ! »
+
+**Il n'y a donc qu'UNE carte de scène**, et c'est celle du lecteur de stories :
+la scène 9:16 **AJUSTÉE** (elle tient entière, rien n'est rogné), centrée,
+arrondie à **22 pt**, sur la **couleur dominante du ThumbHash** peinte DANS la
+carte. Ce qui distingue les surfaces n'est pas une forme, c'est le **viewport**
+qu'elles passent à la loi :
+
+| état | le viewport passé à `SceneShape.layout(in:)` | ce qu'on voit de plus |
+|---|---|---|
+| **cadré** | la zone libre que les couloirs du plateau laissent | le chrome, les informations, les détails |
+| **immersif** | l'écran **entier**, aucun couloir, chrome masqué | la même carte, plus grande |
+
+`Fullscreen` et `OffscreenPainter` ont **disparu** de la loi avec le second
+état, et ce n'est pas un nettoyage : l'immersif était la seule surface du
+produit qui **ROGNAIT** une scène (mesuré : 44,8 pt retirés de chaque côté sur
+un iPhone 402×874, soit 18,2 % de sa largeur — des pixels que l'auteur avait
+posés), et son `offscreenPainter == .none` la seule raison d'avoir une loi du
+peintre. Un seul état ⇒ un seul peintre ⇒ il se dit par la **structure** :
+`SceneCard` peint le fond dans la carte, et elle seule. Le défaut que l'audit
 nomme « deux acteurs peignent le hors-champ »
-([#6797](https://github.com/isopen-io/meeshy/issues/6797)) n'aura plus où se
-poser **une fois `layout`/`Fullscreen` câblés dans un hôte** — voir le
-paragraphe suivant : au 2026-09-17, aucun hôte n'appelle encore `layout`, donc
-le défaut de #6797 n'a pas encore disparu du réel, seulement de la loi qui le
-rendra impossible dès qu'un plein écran la consultera.
+([#6797](https://github.com/isopen-io/meeshy/issues/6797)) et la troisième
+couche de [#6806](https://github.com/isopen-io/meeshy/issues/6806) n'ont plus
+où se poser.
+
+### Le composant : `SceneCard`
+
+`packages/MeeshySDK/Sources/MeeshyUI/Story/ScenePlayer/SceneCard.swift`. Il fait
+**tout** ce qu'une carte de scène fait, et les hôtes n'en refont rien :
+
+1. il **dimensionne** son contenu aux cotes que la loi donne à la scène ;
+2. il **peint** le hors-champ, `SceneBackdropView` dans la carte et sous le
+   contenu ;
+3. il **rogne** aux coins de la loi, en compensant l'échelle que l'hôte
+   *déclare* (le clip vit dans l'espace non mis à l'échelle).
+
+Ce qui reste à l'hôte : la **place** et l'**animation**. Le lecteur de stories
+applique le `scaleEffect`/`offset` de `StoryCanvasFraming` et anime son rayon
+jusqu'à 0 au plein bord ; la galerie pose la carte dans la région du plateau et
+lui donne ses gestes ; le réel la centre dans sa page et garde son chrome dans
+ses couloirs.
+
+Avant ce lot, **deux assemblages équivalents** coexistaient — `readerCard(…)`
+pour le lecteur, un `ZStack` pour la page scène de galerie — et ils avaient déjà
+divergé sur les deux seules choses qu'un œil voit : le **fond** (couleur
+dominante d'un côté, ThumbHash étiré de l'autre) et le **rayon** (22 et 20).
+Aucun témoin ne pouvait rougir : chacun était juste chez lui.
+
+> **Une convergence de COMPORTEMENT ne se prouve pas en comparant deux
+> écritures ; elle se prouve en n'en gardant qu'une.**
 
 ### Où la loi vit
 
@@ -617,34 +663,52 @@ suite non-`@MainActor` ne peut plus comparer ses valeurs.
 Elle rend quatre choses, et rien de plus : la **constante** 9:16 (site unique du
 dépôt) ; la **zone du média** posé en fit, `nil` quand aucun rapport n'est connu
 — *la loi ne devine rien, elle le DEMANDE à l'appelant* ; le **cadre binaire**
-(zone du média, ou scène entière) ; et le **cadre de la scène dans un viewport** pour
-chacun des deux plein écrans, avec **qui peint autour**.
+(zone du média, ou scène entière) ; et la **carte de la scène dans un viewport**,
+avec son fond et son rayon.
 
-Une garde de source (`SceneShapeSourceGuardTests`) tient les deux invariants :
-le rapport 9:16 n'a qu'un site, et tout fichier qui monte `MeeshyScenePlayer` /
-`StoryReaderRepresentable` / `StoryCanvasUIView` **projette la constante**
-9:16 — en direct, ou par un solveur connu vérifié la porter une couche plus
-bas. Ses deux listes d'exceptions sont **VIDES depuis le 2026-09-17** (seconde
-moitié du lot #6904) ; un hôte qui y entre après cette date n'est pas une
-exception, c'est une régression.
+### Ce qui est CÂBLÉ, et ce qui reste dehors (mesuré le 2026-09-17, tour 3 bis)
 
-**Cette garde ne prouve PAS que ces hôtes appliquent le cadre binaire ni les
-deux plein écrans** — seule la constante (règle 1) a un consommateur de
-production, vérifié par cette garde. Les règles 2 à 4 (`mediaBand`, `frame`,
-`layout`/`Fullscreen`/`OffscreenPainter`/`Backdrop`) sont déclarées et testées
-en isolation (`SceneShapeTests`) mais **aucun hôte ne les appelle encore** :
-`SceneShape.swift` l'écrit lui-même en tête de fichier (§ « Ce que la loi
-FERME, et ce qu'elle DÉCLARE sans encore le câbler »). Deux mécanismes plus
-anciens et indépendants couvrent une partie du même terrain sans consulter
-cette loi — `SceneFraming.imageAspect`/`cardFocus` (carte de fil et pages de
-carrousel, rapport CONTINU, #6697/#6708) et
-`StoryImageOnlyPresentation`/`StorySceneFootprint` (lecteur de story, #6636) —
-et n'ont pas été mesurés CONTRE elle. Câbler `frame`/`layout` dans ces hôtes,
-ou converger les deux mécanismes existants vers eux, est un **lot séparé** :
-tant qu'il n'est pas fait, une scène peut continuer à se présenter en trois
-formes selon la surface (détail/galerie en 9:16, carte de fil et carrousel en
-rapport continu dérivé de `focus`), et ce n'est pas une régression de #6904 —
-c'est le périmètre que #6904 a délibérément laissé à un lot suivant.
+| règle | câblée en production ? |
+|---|---|
+| 1 · `aspect` (toujours 9:16) | **oui**, sur tous les hôtes du player |
+| 4 · `layout` / `Backdrop` / `cardedBackdrop` / `cardedCornerRadius` | **oui** — les quatre surfaces plein écran, par `SceneCard` |
+| 2 · `mediaBand` | non — déclarée et testée en isolation |
+| 3 · `frame` (le cadre binaire) | non — déclarée et testée en isolation |
+
+Les **quatre surfaces plein écran** câblées : le plein écran **cadré** d'un post
+et son **immersif** (`GallerySceneStage` → `GalleryScenePage`), le **lecteur de
+stories** (`StoryCardView` → `readerCard`) et le **réel** composé
+(`ReelSceneView`).
+
+Deux gardes de source les tiennent, et elles ne disent pas la même chose :
+
+- `SceneShapeSourceGuardTests.test_toutHoteQuiMonteLePlayer_consulteLaLoi`
+  **balaie l'arbre** : tout fichier qui monte `MeeshyScenePlayer` /
+  `StoryReaderRepresentable` / `StoryCanvasUIView` consulte la loi — en direct,
+  en montant `SceneCard`, ou par un solveur connu vérifié la porter une couche
+  plus bas. Ses deux listes d'exceptions sont **vides** depuis le 2026-09-17.
+- `test_lesSurfacesPleinEcran_montentLaCarteDeScene` **nomme les cinq
+  fichiers** des quatre surfaces et exige d'eux `SceneShape.layout` ou
+  `SceneCard` — une consultation par solveur n'y suffit pas, ces solveurs
+  rendant un rapport *continu*, la « quatrième forme » que la règle 3 exclut.
+  Le balayage ne pouvait pas l'exiger ; c'est pourquoi le témoin est séparé.
+
+**Ce qui reste DEHORS, par décision du porteur du 2026-09-17** : la **carte du
+fil** et les **pages de carrousel** gardent leur cadrage d'**aperçu**
+(`SceneFraming.focus`, union des objets, plafond 1,4 — #6697/#6708). Ce n'est
+pas une dette : un aperçu n'est pas un plein écran, et les y faire entrer
+romprait des surfaces mesurées au simulateur. Une scène peut donc encore se
+présenter en deux formes selon la surface — 9:16 partout où on l'ouvre en
+grand, rapport continu là où on l'aperçoit — et c'est le périmètre assumé.
+
+**Ce qui reste déclaré sans appelant, et pourquoi** :
+`SceneFraming.presentationAspect`/`presentedSize` n'ont plus de consommateur de
+production depuis #6896, mais une douzaine de témoins
+(`ScenePresentationTests`, `SceneFramingTests`) mesurent par eux la loi
+d'ÉCHELLE que les surfaces d'aperçu partagent — les retirer retirerait cette
+mesure, ce qui relève du lot des aperçus. `StoryImageOnlyPresentation`,
+`StorySceneFootprint` et `GallerySceneItem.servesLetterboxFill` sont partis avec
+ce tour : leurs seuls appelants étaient l'un l'autre, ou plus personne.
 
 ## 5. Ce que ce document ne couvre pas
 
