@@ -26,6 +26,11 @@
  *  4. 💭 SANS HUMEUR, L'EMOJI AVEC — et l'emoji apparaît au retour de la
  *     composition, ce qui mesure la CHAÎNE entière (pastille → écran → choix →
  *     publication → rail) plutôt que deux états posés à la main.
+ *  4 bis. HORS LIGNE, PUBLIER EST INERTE. `performMoodPost` refuse hors ligne ;
+ *     un bouton resté ACTIF donnerait un clic sans le moindre effet visible —
+ *     ni humeur, ni message, ni mouvement. Le réseau est vraiment coupé
+ *     (`context.setOffline`), pas simulé par un drapeau : c'est la seule façon
+ *     de mesurer ce que le lecteur vivrait.
  *  5. LE RAIL EXISTE QUAND PERSONNE D'AUTRE N'A PUBLIÉ. Miroir
  *     `LentilleRailPolicy.shouldRender(selfEntry:entries:)` — sans lui, un
  *     compte neuf n'aurait AUCUN chemin vers ses deux composeurs.
@@ -237,6 +242,21 @@ async function runScheme({ colorScheme, locale, dir }) {
   await page.click('[data-mood-choice="\u{1F389}"]');
   const publishable = await page.evaluate(() => document.querySelector('[data-mood-publish]')?.disabled ?? null);
   check(publishable === false, `${tag} : Publier doit s'activer une fois l'humeur choisie — ${publishable}`);
+
+  /* ── 6 bis. HORS LIGNE, PUBLIER EST INERTE (loi 4) ────────────────────
+     `performMoodPost` refuse hors ligne : un bouton resté ACTIF donnerait un
+     clic sans effet visible. On coupe le réseau, on vérifie que le bouton
+     s'éteint et que l'état hors ligne est DESSINÉ, puis on rebranche. */
+  await context.setOffline(true);
+  await page.waitForFunction(() => document.querySelector('[data-mood-publish]')?.disabled === true, { timeout: 8000 });
+  check(
+    await page.evaluate(() => document.querySelector('[data-mood-offline]') !== null),
+    `${tag} : hors ligne, l'état doit être DESSINÉ, pas seulement subi`,
+  );
+  await context.setOffline(false);
+  await page.waitForFunction(() => document.querySelector('[data-mood-publish]')?.disabled === false, { timeout: 8000 });
+  check(true, `${tag} : le réseau revenu, Publier se rallume`);
+
   await page.click('[data-mood-publish]');
 
   await page.waitForSelector(`${MOOD}[data-mood]`, { timeout: 8000 });
@@ -302,5 +322,6 @@ console.log(
   `check-story-self-rail : vert — ${invariants} invariants : ma cellule porte DEUX pastilles distinctes, le (+) au-dessus au ` +
     "début de ligne et l'humeur en dessous à la fin, deux cibles de 44 px qui ne se recouvrent pas, deux aria-label distincts, " +
     '💭 tant qu\'aucune humeur n\'est posée, le (+) ouvre le studio et la pastille la composition d\'humeur (vrais clics), ' +
-    "l'humeur choisie revient sur la pastille et y respire — clair, sombre et RTL miroité.",
+    "Publier s'éteint quand le réseau tombe et se rallume à son retour, l'humeur choisie revient sur la pastille et y " +
+    'respire — clair, sombre et RTL miroité.',
 );
