@@ -176,6 +176,44 @@ describe('MediaGrid — `sizes` porté par chaque case, dérivé de `mediaGridSl
 });
 
 /**
+ * `GridCellImage` — l'ÉCHEC de décodage d'une case de grille (#6882).
+ *
+ * Avant ce lot, seule `ImageTile` (la case SOLO) masquait l'`<img>` en échec
+ * pour révéler un glyphe de repli (#5805, `attachment-blocks.test.tsx`) ;
+ * `GridCellImage`, montée pour TOUTE grille 2/3/4+, n'avait aucune prise sur
+ * `onError` — un message à plusieurs pièces dont une manque au stockage
+ * (staging, #6882 : trois pièces jointes référencées en base mais absentes
+ * du stockage) rendait l'icône « image brisée » native du navigateur au
+ * lieu du glyphe de repli. Ce témoin verrouille la parité.
+ */
+describe('MediaGrid — l’image en ÉCHEC de décodage dans une case de grille (#6882)', () => {
+  test('onError masque l’<img> de la case en échec et découvre son glyphe de repli, sans toucher aux cases saines', () => {
+    const el = mount(attachmentsOf(MEDIA_GRID_PAIR_WITNESS_ID), () => {});
+    const tiles = Array.from(el.querySelectorAll('[data-media-tile]'));
+    expect(tiles.length).toBe(2);
+    const [failingTile, healthyTile] = tiles as [HTMLElement, HTMLElement];
+    const failingImg = failingTile.querySelector('img')!;
+    const healthyImg = healthyTile.querySelector('img')!;
+
+    expect(failingImg.hidden).toBe(false);
+    expect(failingTile.querySelector('svg') !== null).toBe(true);
+
+    act(() => {
+      failingImg.dispatchEvent(new Event('error'));
+    });
+
+    expect(failingImg.hidden).toBe(true);
+    expect(failingTile.querySelector('svg') !== null).toBe(true);
+    // La tuile reste ouvrable — perdre le fichier n'éteint pas l'accès à la visionneuse.
+    expect(failingTile.tagName).toBe('BUTTON');
+    expect(failingTile.getAttribute('aria-label')).not.toBeNull();
+
+    // Contre-épreuve : la case saine, à côté, n'a pas bougé.
+    expect(healthyImg.hidden).toBe(false);
+  });
+});
+
+/**
  * U4 (#6169) — LA BOÎTE PORTE SES COTES DÉRIVÉES, AU STYLE (ce que G1 mesure
  * au pixel dans un vrai navigateur, ici au `style` posé par `mediaGridSlots`
  * — un témoin unitaire qui rougirait AVANT tout gate DOM si l'arithmétique
