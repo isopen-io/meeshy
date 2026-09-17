@@ -778,7 +778,20 @@ export const POST_SCENE_DECORATED: FeedPost = {
             plane: 'bg',
             z: 0,
             transform: TRANSFORM_FULL,
-            payload: { postMediaId: 'media-scene-decorated', mediaType: 'image/svg+xml', aspectRatio: 16 / 9, transform: { videoFitMode: 'fit' } },
+            payload: {
+              postMediaId: 'media-scene-decorated',
+              mediaType: 'image/svg+xml',
+              aspectRatio: 16 / 9,
+              // `thumbHash` (revue-correction #6901) — SANS lui, le fond
+              // AJUSTÉ (`videoFitMode: 'fit'`) ne laissait rien peindre les
+              // bandes : `letterboxHashes` ne trouvait AUCUNE source, et la
+              // scène laissait voir l'aplat de CARTE au lieu d'être un canvas
+              // opaque. Un média RÉEL en porte quasi toujours un (généré à
+              // l'upload) — cette fixture exerce donc le cas NOMINAL, celui
+              // qu'iOS sert par défaut (`servesLetterboxFill: true`).
+              thumbHash: THUMB_HASH_AMBER,
+              transform: { videoFitMode: 'fit' },
+            },
           },
           {
             id: 't1',
@@ -803,13 +816,15 @@ export const POST_SCENE_DECORATED: FeedPost = {
             // fixture n'exerçait. Elle n'est pas là pour la couverture :
             // SANS elle, un texte BLANC posé sur les bandes d'un fond
             // `fit` se peignait sur l'aplat de carte — donc INVISIBLE en
-            // schéma CLAIR, parfaitement lisible en sombre (regardé,
-            // revue-correction #6901). La cause profonde est que les bandes
-            // d'un fond ajusté ne sont pas habillées sur la carte de fil
-            // alors qu'iOS les sert par défaut (`servesLetterboxFill: true`,
-            // `FeedSceneAutoplay.swift:159` n'en passe aucune) — un lot
-            // d'hôte, rapporté à part ; une fixture ne doit pas dépendre du
-            // schéma pour être lisible.
+            // schéma CLAIR, parfaitement lisible en sombre (regardé au
+            // premier passage, revue-correction #6901). La cause profonde —
+            // les bandes d'un fond ajusté n'étaient pas habillées sur la
+            // carte de fil alors qu'iOS les sert par défaut
+            // (`servesLetterboxFill: true`, `FeedSceneAutoplay.swift:159`
+            // n'en passe aucune) — est désormais RÉSOLUE dans le moteur
+            // (`scene-player.tsx#SceneCanvas`, `bg1.payload.thumbHash`
+            // ci-dessus) ; la pastille RESTE, en défense en profondeur —
+            // le sol se peint à `LETTERBOX_FILL_OPACITY` (0,85), jamais 1.
             payload: { text: 'Ça bouge !', textColor: '#FFFFFF', textBg: '#4338CA' },
           },
           {
@@ -853,6 +868,7 @@ export const POST_SCENE_DECORATED: FeedPost = {
       id: 'media-scene-decorated',
       mimeType: 'image/svg+xml',
       fileUrl: feedPhotoStandIn('#f59e0b', '#ef4444', 'landscape'),
+      thumbHash: THUMB_HASH_AMBER,
       width: 1600,
       height: 900,
       order: 0,

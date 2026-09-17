@@ -198,6 +198,113 @@ const textObject = (overrides: Record<string, unknown>) => ({
   ...overrides,
 });
 
+// Revue-correction #6901 (défaut 1) — le SOL d'un fond AJUSTÉ : les bandes
+// qu'un média `videoFitMode: 'fit'` laisse dans le canvas 9:16 ne peuvent plus
+// être un vide (directive porteur 2026-08-31). Le moteur les habille désormais
+// LUI-MÊME (`SceneCanvas`, miroir `MeeshyScenePlayer.servesLetterboxFill`),
+// que l'hôte soit le fil ou la story — un seul site, jamais un par hôte.
+const FIT_HASH = 'LHkC';
+describe('ScenePlayer — le sol d’un fond AJUSTÉ, peint DANS le moteur (revue-correction #6901)', () => {
+  test('fond `fit` + thumbHash ⇒ une bande peinte, SOUS le média, à l’opacité de la loi', () => {
+    const el = mount(
+      <ScenePlayer
+        document={documentOf([fond({ postMediaId: 'img', thumbHash: FIT_HASH, transform: { videoFitMode: 'fit' } })])}
+        sceneIndex={0}
+        mode="card"
+        playing={false}
+        carrier={carrier}
+        preferredLanguages={['fr']}
+      />,
+    );
+    const letterbox = el.querySelector('[data-scene-letterbox]') as HTMLImageElement | null;
+    expect(letterbox).not.toBeNull();
+    expect(letterbox?.style.opacity).toBe('0.85');
+    expect(letterbox?.getAttribute('src')).toContain('data:image/svg+xml');
+    // SOUS le média : le média (`<img>` sans attribut `data-scene-letterbox`)
+    // vient APRÈS dans le DOM (`BackgroundLayer`, aucun z-index explicite —
+    // l'ORDRE fait la pile).
+    const media = el.querySelector('img:not([data-scene-letterbox])');
+    const position = letterbox !== null && media !== null ? letterbox.compareDocumentPosition(media) : 0;
+    expect((position & Node.DOCUMENT_POSITION_FOLLOWING) !== 0).toBe(true);
+  });
+
+  test('fond `fill` (le défaut) : le média couvre déjà le canvas, aucune bande', () => {
+    const el = mount(
+      <ScenePlayer
+        document={documentOf([fond({ postMediaId: 'img', thumbHash: FIT_HASH })])}
+        sceneIndex={0}
+        mode="card"
+        playing={false}
+        carrier={carrier}
+        preferredLanguages={['fr']}
+      />,
+    );
+    expect(el.querySelector('[data-scene-letterbox]')).toBeNull();
+  });
+
+  test('fond `fit` SANS aucun ThumbHash ni ailleurs dans la scène : aucune source, aucune bande peinte (parité iOS assumée, `StoryLetterboxFill.Source.none`)', () => {
+    const el = mount(
+      <ScenePlayer
+        document={documentOf([fond({ postMediaId: 'img', transform: { videoFitMode: 'fit' } })])}
+        sceneIndex={0}
+        mode="card"
+        playing={false}
+        carrier={carrier}
+        preferredLanguages={['fr']}
+      />,
+    );
+    expect(el.querySelector('[data-scene-letterbox]')).toBeNull();
+  });
+
+  // Miroir `MeeshyScenePlayer.servesLetterboxFill = false` : le lecteur de
+  // story le coupe en verdict `imageOnly` (#6636) — le seul hôte qui déroge.
+  test('`servesLetterboxFill={false}` coupe le sol même avec fit + thumbHash', () => {
+    const el = mount(
+      <ScenePlayer
+        document={documentOf([fond({ postMediaId: 'img', thumbHash: FIT_HASH, transform: { videoFitMode: 'fit' } })])}
+        sceneIndex={0}
+        mode="reader"
+        playing={false}
+        carrier={carrier}
+        preferredLanguages={['fr']}
+        servesLetterboxFill={false}
+      />,
+    );
+    expect(el.querySelector('[data-scene-letterbox]')).toBeNull();
+  });
+
+  test('`servesLetterboxFill` omis ⇒ `true` par défaut (miroir iOS, servi sans que l’hôte le demande)', () => {
+    const el = mount(
+      <ScenePlayer
+        document={documentOf([fond({ postMediaId: 'img', thumbHash: FIT_HASH, transform: { videoFitMode: 'fit' } })])}
+        sceneIndex={0}
+        mode="reader"
+        playing={false}
+        carrier={carrier}
+        preferredLanguages={['fr']}
+      />,
+    );
+    expect(el.querySelector('[data-scene-letterbox]')).not.toBeNull();
+  });
+
+  test('LES CINQ modes peignent la MÊME bande — `mode` ne gouverne jamais le sol, comme il ne gouverne jamais la géométrie (T-E13)', () => {
+    const modes: readonly ScenePlayerMode[] = ['card', 'reel', 'reader', 'preview', 'story'];
+    for (const mode of modes) {
+      const el = mount(
+        <ScenePlayer
+          document={documentOf([fond({ postMediaId: 'img', thumbHash: FIT_HASH, transform: { videoFitMode: 'fit' } })])}
+          sceneIndex={0}
+          mode={mode}
+          playing={false}
+          carrier={carrier}
+          preferredLanguages={['fr']}
+        />,
+      );
+      expect(el.querySelector('[data-scene-letterbox]')).not.toBeNull();
+    }
+  });
+});
+
 // T-E1 — le Prisme d'un texte de scène, au DOM.
 describe('ScenePlayer — le Prisme d’un texte de scène, au DOM (T-E1)', () => {
   test("locale:'en', translations:{fr:'Bonjour'}, prisme ['fr','en'] ⇒ « Bonjour », lang=\"fr\"", () => {

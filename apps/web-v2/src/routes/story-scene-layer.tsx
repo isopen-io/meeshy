@@ -1,7 +1,6 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 
 import { objectMediaIdentity, objectMediaSrc } from '@/lib/canvas/carrier';
-import { backgroundFraming } from '@/lib/canvas/background';
 import { electBackgroundTrack, sceneHasControllableSound, type BackgroundTrack } from '@/lib/canvas/background-sound';
 import type { CanvasDocument } from '@/lib/canvas/document';
 import { backgroundMedia, declaredAspect } from '@/lib/feed/scene-framing';
@@ -16,7 +15,6 @@ import {
   type ReaderCardFraming,
 } from '@/lib/stories/framing';
 import { imageOnlyPresentation, sceneOccupants, type Footprint, type ImageOnlyVerdict, type Rect } from '@/lib/stories/image-only';
-import { LETTERBOX_FILL_OPACITY, letterboxBands, letterboxHashes, letterboxIsServed } from '@/lib/stories/letterbox';
 import type { StoryPlaybackStory } from '@/lib/stories/playback';
 import { verdictKey } from '@/lib/stories/verdict-cache';
 
@@ -38,11 +36,15 @@ const ScenePlayer = lazy(() => import('@/components/scene-player'));
  * une bande.
  *
  * **LES DEUX VERDICTS** (`imageOnlyPresentation`, #6636) :
- * - `canvas` — la carte entière, bandes habillées (`StoryLetterboxFill`) ;
+ * - `canvas` — la carte entière, bandes habillées PAR LE MOTEUR
+ *   (`ScenePlayer`/`BackgroundLayer`, revue-correction #6901 : le double-peint
+ *   d'un `data-scene-letterbox` posé ICI en plus a été retiré) ;
  * - `imageOnly` — la carte RONGÉE au rectangle de l'image, « le canvas garde
  *   sa taille : les objets posés dans l'image restent à leur place »
  *   (`StoryViewerView+ImageOnly.swift:13-21`). Le moteur reste donc monté et
- *   seul son CLIP change. Une story qui n'est QU'une image fixe (aucun
+ *   seul son CLIP change — `servesLetterboxFill={false}` lui coupe le sol
+ *   (#6636 : rogner un calque qu'on continue de peindre paierait un flou que
+ *   personne ne voit). Une story qui n'est QU'une image fixe (aucun
  *   occupant, `sceneOccupants`) monte l'image seule, sans moteur : c'est la
  *   même peinture, sans en charger le code.
  *
@@ -281,14 +283,6 @@ export function StorySceneLayer({
   const imageRect = verdict?.verdict === 'imageOnly' ? verdict.rect : null;
   const placeholderSrc = thumbHashPlaceholder(backdropHash);
 
-  const bands = mediaAspect === null ? null : letterboxBands({ media: { width: mediaAspect, height: 1 }, canvas });
-  const fillHash = letterboxHashes(scene)[0];
-  const servesFill =
-    verdict?.verdict === 'canvas' &&
-    bands !== null &&
-    bands.side !== 'none' &&
-    letterboxIsServed({ fitMode: backgroundFraming(scene), hasSource: fillHash !== undefined });
-
   const boxStyle: CSSProperties = {
     position: 'absolute',
     left: framing.canvas.x,
@@ -324,6 +318,11 @@ export function StorySceneLayer({
           muted={muted}
           carrier={carrier}
           preferredLanguages={preferredLanguages}
+          // Le rectangle `imageOnly` ROGNE la carte au rectangle de l'image —
+          // le sol d'un fond ajusté n'y a plus rien à peindre, seulement un
+          // flou que personne ne voit (#6636, miroir
+          // `StoryViewerView+ImageOnly.swift:19-21`).
+          servesLetterboxFill={verdict.verdict !== 'imageOnly'}
           onContentReady={markReady}
           onDurationKnown={(ms) => reportDuration('video', ms)}
           onPlaybackBlocked={onPlaybackBlocked}
@@ -351,17 +350,6 @@ export function StorySceneLayer({
         {...(ready ? { 'data-story-ready': '' } : {})}
         style={boxStyle}
       >
-        {servesFill && fillHash !== undefined ? (
-          // eslint-disable-next-line jsx-a11y/alt-text
-          <img
-            data-scene-letterbox
-            src={thumbHashPlaceholder(fillHash)}
-            alt=""
-            aria-hidden="true"
-            className="absolute inset-0 size-full object-cover"
-            style={{ opacity: LETTERBOX_FILL_OPACITY }}
-          />
-        ) : null}
         {imageRect !== null && pureImageSrc !== undefined ? (
           // eslint-disable-next-line jsx-a11y/alt-text
           <img

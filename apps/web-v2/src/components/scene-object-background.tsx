@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import { backgroundCss, type BackgroundFraming } from '@/lib/canvas/background';
 import { objectMediaIdentity, objectMediaSrc, type SceneCarrier } from '@/lib/canvas/carrier';
 import type { CanvasObject } from '@/lib/canvas/document';
+import { LETTERBOX_FILL_OPACITY } from '@/lib/stories/letterbox';
 
 export type SceneCallbacks = {
   readonly onContentReady: (() => void) | undefined;
@@ -36,6 +37,7 @@ export function BackgroundLayer({
   playing,
   muted,
   framing,
+  letterboxFillSrc,
   callbacks,
 }: {
   readonly object: CanvasObject;
@@ -43,6 +45,13 @@ export function BackgroundLayer({
   readonly playing: boolean;
   readonly muted: boolean;
   readonly framing: BackgroundFraming;
+  /** LE SOL d'un fond AJUSTÉ (`framing === 'fit'`) — un placeholder ThumbHash
+   * déjà résolu par l'appelant (`SceneCanvas`, SITE UNIQUE de la loi
+   * `letterboxIsServed`), ou `undefined` quand aucune bande ne se peint.
+   * Peint SOUS le média, en `object-cover` : la bande doit être PLEINE, un
+   * `object-contain` y laisserait ses propres bandes (un letterbox dans un
+   * letterbox — miroir `StoryBackgroundLayer+LetterboxFill.swift:54-56`). */
+  readonly letterboxFillSrc: string | undefined;
   readonly callbacks: { readonly current: SceneCallbacks };
 }) {
   const { payload } = object;
@@ -93,37 +102,60 @@ export function BackgroundLayer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing, muted, src]);
 
+  // Peint AVANT le média (donc dessous, à défaut d'ordre-z explicite) —
+  // « une SURFACE de composition, jamais un vide » (directive porteur
+  // 2026-08-31) : les bandes qu'un fond AJUSTÉ laisse sur les trois plateformes
+  // (revue-correction #6901, `MeeshyScenePlayer.servesLetterboxFill`).
+  const letterboxFill =
+    letterboxFillSrc !== undefined ? (
+      // eslint-disable-next-line jsx-a11y/alt-text
+      <img
+        data-scene-letterbox
+        src={letterboxFillSrc}
+        alt=""
+        aria-hidden="true"
+        className="absolute inset-0 size-full object-cover"
+        style={{ opacity: LETTERBOX_FILL_OPACITY }}
+      />
+    ) : null;
+
   if (isVideo) {
     return (
-      <video
-        ref={videoRef}
-        key={src}
-        src={src}
-        muted={muted}
-        loop
-        playsInline
-        preload={awaitsContent ? 'auto' : 'none'}
-        {...(poster !== undefined ? { poster } : {})}
-        onLoadedMetadata={(event) => callbacks.current.onDurationKnown?.(event.currentTarget.duration * 1000)}
-        onLoadedData={ready}
-        onError={ready}
-        className={`absolute inset-0 size-full ${fit}`}
-      />
+      <>
+        {letterboxFill}
+        <video
+          ref={videoRef}
+          key={src}
+          src={src}
+          muted={muted}
+          loop
+          playsInline
+          preload={awaitsContent ? 'auto' : 'none'}
+          {...(poster !== undefined ? { poster } : {})}
+          onLoadedMetadata={(event) => callbacks.current.onDurationKnown?.(event.currentTarget.duration * 1000)}
+          onLoadedData={ready}
+          onError={ready}
+          className={`absolute inset-0 size-full ${fit}`}
+        />
+      </>
     );
   }
   if (src !== undefined) {
     return (
-      // eslint-disable-next-line jsx-a11y/alt-text
-      <img
-        ref={imageRef}
-        src={src}
-        alt=""
-        aria-hidden="true"
-        loading={awaitsContent ? 'eager' : 'lazy'}
-        onLoad={ready}
-        onError={ready}
-        className={`absolute inset-0 size-full ${fit}`}
-      />
+      <>
+        {letterboxFill}
+        {/* eslint-disable-next-line jsx-a11y/alt-text */}
+        <img
+          ref={imageRef}
+          src={src}
+          alt=""
+          aria-hidden="true"
+          loading={awaitsContent ? 'eager' : 'lazy'}
+          onLoad={ready}
+          onError={ready}
+          className={`absolute inset-0 size-full ${fit}`}
+        />
+      </>
     );
   }
   return <span className="absolute inset-0 block" style={{ backgroundColor: backgroundCss(background, 'var(--color-ios-card)') }} />;

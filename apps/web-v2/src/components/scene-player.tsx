@@ -10,6 +10,8 @@ import { backgroundMedia } from '@/lib/feed/scene-framing';
 import { isDocumentAudible } from '@/lib/feed/scene-motion';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { thumbHashPlaceholder } from '@/lib/media/thumbhash';
+import { letterboxHashes, letterboxIsServed } from '@/lib/stories/letterbox';
 
 import { GlyphSvg } from './glyph';
 import { FEED_GLYPHS } from './glyphs-feed';
@@ -36,6 +38,14 @@ import { SceneObjectText } from './scene-object-text';
  * (`scene-object-frame.tsx`), qui applique `objectPose` au montage et à
  * chaque tick de l'horloge (`scene-clock.ts`) SANS re-rendre React (Zero
  * Unnecessary Re-render).
+ *
+ * **LE SOL D'UN FOND AJUSTÉ** (`framing === 'fit'`, revue-correction #6901) se
+ * peint ICI, dans le moteur — `BackgroundLayer` reçoit le placeholder ThumbHash
+ * déjà résolu par `SceneCanvas` (`letterboxHashes` + `letterboxIsServed`,
+ * `lib/stories/letterbox.ts`), la MÊME cascade que le lecteur de story, qui ne
+ * la pose plus lui-même (double-peint évité). `servesLetterboxFill` (par
+ * défaut `true`, miroir `MeeshyScenePlayer.servesLetterboxFill`) est la SEULE
+ * dérogation — le lecteur de story la coupe en verdict `imageOnly` (#6636).
  */
 export type ScenePlayerFocus = { readonly x: number; readonly y: number; readonly width: number; readonly height: number };
 
@@ -64,6 +74,12 @@ export type ScenePlayerProps = {
   readonly onTime?: (t: number) => void;
   /** Émis UNE fois quand une scène SANS boucle atteint sa durée. */
   readonly onEnded?: () => void;
+  /** Le remplissage des bandes d'un fond AJUSTÉ (`fit`) — PEINT par défaut,
+   * miroir `MeeshyScenePlayer.servesLetterboxFill = true`
+   * (`MeeshyScenePlayer.swift:79`). Le lecteur de story le coupe en verdict
+   * `imageOnly` (#6636) : rogner un calque qu'on continue de peindre
+   * paierait un flou que personne ne voit. */
+  readonly servesLetterboxFill?: boolean;
 };
 
 /** Le rappel le plus RÉCENT d'un hôte, sans en faire une dépendance d'effet :
@@ -81,6 +97,7 @@ function SceneCanvas({
   preferredLanguages,
   playing,
   muted,
+  servesLetterboxFill,
   callbacks,
   clock,
 }: {
@@ -89,6 +106,7 @@ function SceneCanvas({
   readonly preferredLanguages: readonly string[];
   readonly playing: boolean;
   readonly muted: boolean;
+  readonly servesLetterboxFill: boolean;
   readonly callbacks: { readonly current: SceneCallbacks };
   readonly clock: SceneClockHandle | null;
 }) {
@@ -96,6 +114,16 @@ function SceneCanvas({
   // sinon le premier fond : la MÊME élection que la loi de cadrage, jamais
   // une seconde.
   const background = backgroundMedia(scene);
+  const framing = backgroundFraming(scene);
+  // LE SOL D'UN FOND AJUSTÉ (revue-correction #6901) — la cascade des
+  // ThumbHash (`letterboxHashes`, déjà écrite pour l'hôte de story) devient le
+  // SITE UNIQUE, dans le MOTEUR : `servesLetterboxFill` (miroir
+  // `MeeshyScenePlayer.servesLetterboxFill`, `false` en verdict `imageOnly`
+  // côté story) est la SEULE dérogation, jamais une seconde loi de cadrage.
+  // Aucun repli quand aucun hash n'existe (`Source.none` côté iOS non plus :
+  // ce cas reste un écart de PARITÉ assumé, pas une régression de ce lot).
+  const letterboxCandidate = servesLetterboxFill && background !== undefined ? thumbHashPlaceholder(letterboxHashes(scene)[0]) : undefined;
+  const letterboxFillSrc = letterboxIsServed({ fitMode: framing, hasSource: letterboxCandidate !== undefined }) ? letterboxCandidate : undefined;
   // Le fond VISUEL (`backgroundMedia`) et le fond SONORE (`electBackgroundTrack`,
   // `lib/canvas/background-sound.ts`) sont DEUX fonds, et l'un comme l'autre
   // est servi HORS des couches d'objet : le premier par `BackgroundLayer`
@@ -114,7 +142,8 @@ function SceneCanvas({
           carrier={carrier}
           playing={playing}
           muted={muted}
-          framing={backgroundFraming(scene)}
+          framing={framing}
+          letterboxFillSrc={letterboxFillSrc}
           callbacks={callbacks}
         />
       ) : (
@@ -167,6 +196,7 @@ export default function ScenePlayer({
   onPlaybackBlocked,
   onTime,
   onEnded,
+  servesLetterboxFill = true,
 }: ScenePlayerProps) {
   const scene = document.scenes[sceneIndex];
   const config = playerConfig(mode);
@@ -187,6 +217,7 @@ export default function ScenePlayer({
       preferredLanguages={preferredLanguages}
       playing={playing}
       muted={isMuted}
+      servesLetterboxFill={servesLetterboxFill}
       callbacks={callbacks}
       clock={timed ? clock : null}
     />
