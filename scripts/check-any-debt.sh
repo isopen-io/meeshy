@@ -188,7 +188,52 @@ readonly SHARED_BASELINE=0
 # `bodySchema?`/`querystringSchema?: any` sur `CollectedRoute` reprises en
 # `unknown` (JSON Schema opaque, dépouillé seulement par le double `any` déjà
 # existant de `route-auth-coverage.test.ts`, un fichier de test hors mesure).
-readonly GATEWAY_BASELINE=599
+#
+# 559, pas 599 (#3679, quatrième lot de RÉDUCTION) :
+# `routes/conversations/messages-list-query.ts` (980 lignes, dans le budget de
+# taille — les aides de `GET /conversations/:id/messages` extraites par
+# #4284) portait les 40 usages les plus concentrés du gateway. Trois familles :
+# - Les lignes brutes (`Message`, son `sender`, sa pièce jointe, son
+#   `replyTo`) reprises sur des types structurels NOMMÉS (`RawMessageRow`,
+#   `RawMessageSender`, `RawMessageAttachment`, `RawReplyToRow`) — même
+#   discipline que `MessageProtectionContext`/`MessageProtectionFields`
+#   (`routes/admin/media-protection.ts`) : le plancher qu'une fonction exige,
+#   jamais la forme Prisma exacte (le `select` de ce fichier se construit
+#   dynamiquement selon `includeTranslations`/`includeReplies`, donc n'a pas
+#   de type Prisma unique à dériver). `buildMessageListSelect` retourne
+#   `Prisma.MessageSelect` au lieu d'un `any` local.
+# - Le JSON de transcription/traduction audio (segments Whisper,
+#   `speakerAnalysis`, traductions du Prisme par pièce jointe) — opaque et
+#   profondément imbriqué — repris en `Record<string, unknown>` nommés
+#   (`TranscriptionBlob`, `TranscriptionSegment`, `TranscriptionSpeaker`,
+#   `AttachmentAudioTranslationEntry`) avec des `const` locaux capturant
+#   chaque niveau AVANT narrowing, jamais un `any` nu.
+# - Trois `original.sender as any` (l'aperçu d'un message TRANSFÉRÉ) repris en
+#   UN cast vers un type nommé (`AvatarBearingParticipant &
+#   DisplayNameBearingParticipant & {username, user.username}`) : le `select`
+#   de `forwardedMessages` ne charge que `user.username` — plus étroit que ce
+#   que les deux résolveurs partagés déclarent — donc un cast reste
+#   nécessaire, mais un seul plutôt que trois, et nommé plutôt que `any`.
+#
+# `mapMessageRowForList` GARDE `: any` en sortie, DÉLIBÉRÉMENT (documenté sur
+# place) : son unique appelant, `messages-list.ts` (hors périmètre de ce
+# lot), lit `mappedMessages` sans annotation propre (`new Date(firstMsg.
+# createdAt)`, entre autres) — un retour typé romprait sa compilation pour un
+# gain hors du fichier réservé. `mappedMessage`, la variable CONSTRUITE à
+# l'intérieur, est elle pleinement typée (`MappedMessageRow`) : l'annotation
+# de sortie ne relâche plus aucune vérification interne, elle ne fait que
+# garder le contrat vu par l'appelant inchangé. Même raison pour les
+# paramètres `messages` de `loadMessageReadStatusMap` /
+# `loadCurrentUserConsumptionMap` : `messages-list.ts` les construit via un
+# `select` lui-même typé `any` (préexistant, sans rapport avec ce lot), d'où
+# `readonly unknown[]` plutôt qu'une ligne nommée, avec un cast interne unique
+# à l'usage.
+#
+# Gates locaux verts : `tsc --noEmit` gateway (0 erreur), les 17 suites qui
+# importent ou exercent ce fichier et ses appelants (330 tests), la suite
+# `routes/conversations` complète (353 tests), `check-any-debt.sh` + son
+# self-test.
+readonly GATEWAY_BASELINE=559
 
 # `apps/web` — dette réelle, jamais gardée avant ce lot (cf. en-tête « WHY
 # `apps/web` IS MEASURED… »). Mesurée sur un checkout NON construit (pas de
