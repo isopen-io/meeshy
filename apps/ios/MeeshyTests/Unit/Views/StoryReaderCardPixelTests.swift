@@ -102,9 +102,10 @@ final class StoryReaderCardPixelTests: XCTestCase {
             .compactMap { ($0 as? UIWindowScene)?.screen.bounds.size }.first
             ?? CGSize(width: 402, height: 874)
         let cadrage = Self.cadrage(viewport: taille)
-        // Les cotes de la SCÈNE viennent de la loi, comme dans le lecteur.
-        let canvas = SceneShape.layout(.carded(StoryCardView.readerSceneBackdrop), in: taille)
-            .sceneFrame.size
+        // Les cotes de la SCÈNE viennent de la loi, comme dans le lecteur — et
+        // c'est la forme ENTIÈRE qui va à la carte, fond et rayon compris.
+        let forme = SceneShape.layout(.carded(StoryCardView.readerSceneBackdrop), in: taille)
+        let canvas = forme.sceneFrame.size
         // La zone que le média AJUSTÉ occupe dans le 9:16 — la loi la rend en
         // fractions, et c'est elle qui situe la bande.
         let bande = SceneShape.mediaBand(backgroundAspect: Self.photoSize(.paysage).width
@@ -113,7 +114,7 @@ final class StoryReaderCardPixelTests: XCTestCase {
                                      width: bande.width * canvas.width, height: bande.height * canvas.height)
 
         let vue = LecteurHarnais(story: story, photo: photo, cadrage: cadrage,
-                                 canvas: canvas, fondSentinelle: fondSentinelle,
+                                 layout: forme, canvas: canvas, fondSentinelle: fondSentinelle,
                                  onContentReady: { pret.valeur = true })
         let pixels = try RenderedPixels(vue)
         pixels.attendre(borne: 8) { pret.valeur }
@@ -145,7 +146,7 @@ final class StoryReaderCardPixelTests: XCTestCase {
                                          bottomInset: 64,
                                          sideInset: 8,
                                          state: .carded,
-                                         cardedCornerRadius: 22,
+                                         cardedCornerRadius: SceneShape.cardedCornerRadius,
                                          verticalAlignment: StageChromeAlignment.verticalAlignment(
                                              canvasRatio: CanvasGeometry.portraitRatio),
                                          canvasRatio: CanvasGeometry.portraitRatio))
@@ -155,6 +156,9 @@ final class StoryReaderCardPixelTests: XCTestCase {
         let story: StoryItem
         let photo: UIImage
         let cadrage: StoryCanvasFraming.Result
+        /// La FORME que le lecteur remet à sa carte — la même loi, le même
+        /// appel (`StoryCardView.readerSceneLayout`).
+        let layout: SceneShape.Layout
         let canvas: CGSize
         let fondSentinelle: Bool
         let onContentReady: () -> Void
@@ -169,11 +173,8 @@ final class StoryReaderCardPixelTests: XCTestCase {
                                              isPaused: true,
                                              servesLetterboxFill: false,
                                              onContentReady: onContentReady)
-                        .frame(width: canvas.width, height: canvas.height)
                         .clipped()
-                        .readerCard(framing: cadrage,
-                                    backdrop: StoryCardView.readerSceneBackdrop,
-                                    thumbHash: nil)
+                        .readerCard(layout: layout, framing: cadrage, thumbHash: nil)
                         .shadow(color: .black.opacity(fondSentinelle ? 0 : 0.4), radius: 20, y: 8)
                     if !fondSentinelle, let legende = story.content {
                         VStack(spacing: 0) {

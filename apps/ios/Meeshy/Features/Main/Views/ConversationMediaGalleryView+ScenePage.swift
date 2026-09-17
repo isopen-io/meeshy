@@ -99,24 +99,21 @@ struct GalleryScenePage: View, Equatable {
     private static let previewSize = CGSize(width: 320, height: 320)
 
     var body: some View {
-        ZStack {
-            // **Le fond n'existe que s'il reste quelque chose à peindre**
-            // (`SceneShape.OffscreenPainter`). En immersif la scène couvre le
-            // viewport : `layout.backdrop` rend `nil`, cette couche n'est pas
-            // montée, et la troisième couche de #6806 disparaît par
-            // construction plutôt que par consigne.
-            if let fond = stage.backdrop {
-                SceneBackdropView(backdrop: fond, thumbHash: item.thumbHash)
-            }
-
+        // **LA carte de scène — la même que le lecteur de stories monte**
+        // (directive porteur du 2026-09-17). Elle cadre le contenu aux cotes de
+        // la loi, peint le fond DANS la carte quand il reste quelque chose à
+        // peindre (`layout.backdrop`, `nil` en immersif) et rogne aux coins de
+        // la loi. Cette page n'en refait aucune des trois : elle donne la
+        // RÉGION que le plateau laisse, et ses gestes.
+        SceneCard(layout: stage.layout,
+                  thumbHash: item.thumbHash,
+                  visible: stage.visible) {
             if rendersPlayer {
                 player
             } else {
                 preview
             }
         }
-        .frame(width: stage.visible.width, height: stage.visible.height)
-        .clipShape(RoundedRectangle(cornerRadius: stage.cornerRadius, style: .continuous))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
         // **Le tap franchit la porte du plein cadre, et en revient** (#6142,
@@ -137,14 +134,15 @@ struct GalleryScenePage: View, Equatable {
         .onAppear(perform: resolveOpening)
     }
 
-    /// **Le player, aux cotes que la LOI donne à la scène** (#6904).
+    /// **Le player — et la CARTE le dimensionne** (#6904).
     ///
-    /// La taille est posée en dur depuis `stage.sceneSize`, jamais par un
-    /// `.aspectRatio` : c'est la leçon de `GalleryImagePage` (« la taille vient
-    /// du solveur »), et le cadre a exactement le rapport de la scène — le
-    /// canvas le remplit sans rogner ni déformer. En immersif il DÉBORDE de la
-    /// boîte visible, et le `clipShape` du corps rogne ce qui dépasse : c'est
-    /// la définition même de « couvrir le viewport » pour une forme figée.
+    /// Plus aucun `.frame` ici : `SceneCard` pose le contenu aux cotes que la
+    /// loi donne à la scène, jamais un `.aspectRatio` réécrit à la main —
+    /// c'est la leçon de `GalleryImagePage` (« la taille vient du solveur »),
+    /// et c'est aussi ce qui garantit que le lecteur de stories et cette page
+    /// cadrent la MÊME scène. En immersif le cadre DÉBORDE de la boîte visible,
+    /// et la carte rogne ce qui dépasse : c'est la définition même de
+    /// « couvrir le viewport » pour une forme figée.
     private var player: some View {
         MeeshyScenePlayer(
             document: item.document,
@@ -171,7 +169,6 @@ struct GalleryScenePage: View, Equatable {
             // de plus : c'est `offscreenPainter == .none` lu tel quel.
             servesLetterboxFill: stage.paintsOwnLetterbox
         )
-        .frame(width: stage.sceneSize.width, height: stage.sceneSize.height)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(accessibilityLabel)
     }
@@ -188,7 +185,6 @@ struct GalleryScenePage: View, Equatable {
             Color.black
         }
         .aspectRatio(contentMode: .fill)
-        .frame(width: stage.sceneSize.width, height: stage.sceneSize.height)
         .clipped()
         .accessibilityHidden(true)
     }

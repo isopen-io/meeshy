@@ -269,9 +269,37 @@ public enum SceneShape {
         public let cornerRadius: CGFloat
     }
 
-    /// L'arrondi de la scène cadrée. Zéro en immersif — un coin arrondi sur un
-    /// bord d'écran laisserait voir ce que personne ne peint.
-    public nonisolated static let cardedCornerRadius: CGFloat = 20
+    /// **L'arrondi de la scène cadrée — celui de la STORY, parce que c'est elle
+    /// la référence** (directive porteur du 2026-09-17 : « ce que je vois dans
+    /// les stories me plaît, il faut reproduire exactement la même chose
+    /// partout »). Zéro en immersif — un coin arrondi sur un bord d'écran
+    /// laisserait voir ce que personne ne peint.
+    ///
+    /// Il valait 20 ici et 22 chez le lecteur de stories comme chez le composer
+    /// (`StoryComposerView+Canvas`), donc la même carte se reconnaissait à ses
+    /// coins selon la surface qui l'ouvrait. Unifier VERS la loi aurait
+    /// rectifié la story ; c'est l'inverse qui est demandé — la story est ce
+    /// qu'on reproduit, pas ce qu'on corrige. La loi adopte donc le 22 de la
+    /// surface de référence, et le plein écran cadré d'un post la rejoint.
+    public nonisolated static let cardedCornerRadius: CGFloat = 22
+
+    /// **Le fond d'une scène cadrée — le MÊME sur toutes les surfaces**
+    /// (directive porteur du 2026-09-17 : « c'est EXACTEMENT le même lecteur et
+    /// le même comportement »).
+    ///
+    /// La loi ne CHOISISSAIT pas, et chaque hôte élisait donc le sien : le
+    /// lecteur de stories la couleur dominante, la galerie le hachage étiré.
+    /// Deux fonds pour une même carte, chacun juste chez lui, aucun témoin
+    /// capable de rougir. La couleur PLATE l'emporte pour la raison de #6797 :
+    /// deux surfaces qui étirent le MÊME hachage dans deux cadres différents
+    /// rendent deux dégradés voisins mais distincts — ce qui se lit comme un
+    /// défaut de rendu —, alors qu'une couleur unie ne peut pas diverger d'un
+    /// cadre à l'autre.
+    ///
+    /// Elle reste une VALEUR du type somme, et non une quatrième branche : un
+    /// hôte qui a une raison de peindre autre chose (un aperçu, un export) la
+    /// nomme, et la nommer se voit.
+    public nonisolated static let cardedBackdrop: Backdrop = .thumbHashDominantColor
 
     /// **Le cadre de la scène dans un viewport, et qui peint autour.**
     ///

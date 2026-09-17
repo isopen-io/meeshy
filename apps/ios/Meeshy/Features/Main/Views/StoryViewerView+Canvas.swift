@@ -1156,9 +1156,17 @@ struct StoryCardView: View {
     /// La PLACE de la carte dans le plateau reste au solveur du lecteur
     /// (`readerCanvasFraming`) : la loi dit la forme, le plateau dit où elle se
     /// pose et à quelle échelle elle s'anime.
-    var canvasFitSize: CGSize { // internal : lu par `StoryViewerView+Sentinel`
+    /// **La FORME que la loi donne à la scène du lecteur** — le cadre, le fond
+    /// et le rayon d'une scène CADRÉE dans ce viewport. C'est elle que la carte
+    /// reçoit, et c'est la même fonction que le plein écran cadré d'un post
+    /// appelle (`GallerySceneStage`, #6904) : les deux surfaces ne peuvent plus
+    /// cadrer deux scènes différentes.
+    var readerSceneLayout: SceneShape.Layout { // internal : lu par la carte
         SceneShape.layout(.carded(Self.readerSceneBackdrop), in: geometry.size)
-            .sceneFrame.size
+    }
+
+    var canvasFitSize: CGSize { // internal : lu par `StoryViewerView+Sentinel`
+        readerSceneLayout.sceneFrame.size
     }
 
     /// Cadrage « carte → plein écran » du canvas reader, MUTUALISÉ avec le composer
@@ -1196,7 +1204,10 @@ struct StoryCardView: View {
             bottomInset: 64,              // marge basse ÷2 (it.48) — carte plus proche du bord bas
             sideInset: 8,                 // marges latérales ÷2 (it.48) — carte plus proche des bords L/R
             state: canvasPresentation,
-            cardedCornerRadius: 22,
+            // **Le rayon de la loi, jamais un littéral** (#6904) : le lecteur
+            // arrondissait à 22 pendant que le plein écran cadré d'un post
+            // arrondissait à 20 — la même carte se reconnaissait à ses coins.
+            cardedCornerRadius: SceneShape.cardedCornerRadius,
             // #6760 — l'alignement n'est plus décidé ici : il appartient au
             // PLATEAU, que les quatre surfaces partagent. La directive du
             // 2026-09-15 (« ce qui est construit se pose sur le plateau au
@@ -1264,15 +1275,14 @@ struct StoryCardView: View {
                     // ne contraint pas correctement le UIViewRepresentable
                     // sur iPhone 16 Pro et le canvas débordait en largeur
                     // (sidebar droite hors écran).
-                    .frame(width: canvasFitSize.width,
-                           height: canvasFitSize.height)
                     .clipped()
                     .opacity(outgoingOpacity)
                     .scaleEffect(closingScale)
-                    // Canvas sortant suit la carte (même cadrage, même forme —
-                    // l'image seule quand il n'est qu'une image, #6636).
-                    .readerCard(framing: readerCanvasFraming,
-                                backdrop: Self.readerSceneBackdrop,
+                    // Canvas sortant suit la carte : MÊME composant, donc même
+                    // cadre, même fond et même coins que la couche courante —
+                    // et que le plein écran cadré d'un post (#6904).
+                    .readerCard(layout: readerSceneLayout,
+                                framing: readerCanvasFraming,
                                 thumbHash: readerBackdropHash(of: outgoing))
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
@@ -1338,8 +1348,6 @@ struct StoryCardView: View {
                     // ne contraint pas correctement le UIViewRepresentable
                     // sur iPhone 16 Pro et le canvas débordait en largeur
                     // (sidebar droite hors écran).
-                    .frame(width: canvasFitSize.width,
-                           height: canvasFitSize.height)
                     .clipped()
                     // Déplier la légende EFFACE la scène pour laisser remonter
                     // le fond ThumbHash déjà monté sous elle (Layer 1.5) — ou,
@@ -1355,11 +1363,12 @@ struct StoryCardView: View {
                     .clipShape(
                         RevealCircleShape(progress: isRevealActive ? 1.0 : (currentStory?.storyEffects?.opening == .reveal ? 0.001 : 1.0))
                     )
-                    // Carte → plein écran (mutualisé composer). Visuel pur (la frame
-                    // reste `canvasFitSize` → projection design→render intacte) ;
-                    // l'image seule quand la story n'est qu'une image (#6636).
-                    .readerCard(framing: readerCanvasFraming,
-                                backdrop: Self.readerSceneBackdrop,
+                    // Carte → plein écran. La carte POSE elle-même le cadre
+                    // `canvasFitSize` (projection design→render intacte), peint
+                    // le fond dedans et rogne aux coins de la loi ; le lecteur
+                    // ne lui donne que sa PLACE et son ANIMATION.
+                    .readerCard(layout: readerSceneLayout,
+                                framing: readerCanvasFraming,
                                 thumbHash: readerBackdropHash(of: story))
                     // Ombre portée : la carte se détache du backdrop ThumbHash flou (même
                     // contenu) par son BORD arrondi + son ombre, pas par un voile sombre
@@ -1420,13 +1429,12 @@ struct StoryCardView: View {
                     // ne contraint pas correctement le UIViewRepresentable
                     // sur iPhone 16 Pro et le canvas débordait en largeur
                     // (sidebar droite hors écran).
-                    .frame(width: canvasFitSize.width,
-                           height: canvasFitSize.height)
                     .clipped()
-                    // Le loader suit la carte (même cadrage, même forme) → pas de
-                    // saut entre le placeholder ThumbHash et le canvas.
-                    .readerCard(framing: readerCanvasFraming,
-                                backdrop: Self.readerSceneBackdrop,
+                    // Le loader suit la carte (même composant, donc même cadrage
+                    // et même forme) → pas de saut entre le placeholder
+                    // ThumbHash et le canvas.
+                    .readerCard(layout: readerSceneLayout,
+                                framing: readerCanvasFraming,
                                 thumbHash: readerBackdropHash(of: story))
                     .animation(.spring(response: 0.42, dampingFraction: 0.84), value: canvasIsExpanded)
                     .allowsHitTesting(false)

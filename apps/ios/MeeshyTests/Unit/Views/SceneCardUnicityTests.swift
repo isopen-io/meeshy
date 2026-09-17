@@ -1,0 +1,178 @@
+import XCTest
+import SwiftUI
+import CoreGraphics
+import MeeshySDK
+import MeeshyUI
+@testable import Meeshy
+
+/// **Le cadré d'un post et la carte d'une story sont LA MÊME carte** (directive
+/// porteur du 2026-09-17, lot #6904).
+///
+/// > « POURQUOI ne reproduisons-nous pas la même chose que la scène des stories
+/// > sur les scènes de POST ? C'est EXACTEMENT le même lecteur et le même
+/// > comportement qu'il faut appliquer. »
+///
+/// Avant ce lot, deux assemblages ÉQUIVALENTS coexistaient — `readerCard(…)`
+/// pour le lecteur, le `ZStack` de `GalleryScenePage` pour la galerie — et ils
+/// avaient déjà divergé sur les deux seules choses qu'un œil voit :
+///
+/// | | lecteur de story | plein écran cadré d'un post |
+/// |---|---|---|
+/// | fond | `.thumbHashDominantColor` (couleur plate) | `.thumbHash` (hachage étiré) |
+/// | rayon | 22 | 20 |
+///
+/// Aucun témoin ne pouvait rougir : chacun était juste chez lui. Ce fichier
+/// mesure donc la chose que ni l'un ni l'autre ne mesurait — leur ACCORD —, et
+/// il le fait sur les VALEURS avant de le faire sur la source.
+@MainActor
+final class SceneCardUnicityTests: XCTestCase {
+
+    // MARK: - Les valeurs
+
+    /// **Un seul fond.** La loi le nomme (`SceneShape.cardedBackdrop`) et les
+    /// deux surfaces le lisent — le lecteur par `readerSceneBackdrop`, la
+    /// galerie par son élection de plateau.
+    func test_leFond_estCeluiDeLaLoi_surLesDeuxSurfaces() {
+        XCTAssertEqual(SceneShape.cardedBackdrop, .thumbHashDominantColor,
+                       "une couleur PLATE ne peut pas diverger d'un cadre à l'autre (#6797)")
+        XCTAssertEqual(StoryCardView.readerSceneBackdrop, SceneShape.cardedBackdrop)
+        XCTAssertEqual(GallerySceneStage.frame(viewport: CGSize(width: 402, height: 874),
+                                               presentation: .carded,
+                                               corridors: Self.corridors).backdrop,
+                       SceneShape.cardedBackdrop)
+    }
+
+    /// **Un seul rayon.** Le lecteur l'animait depuis 22, la loi en dit 20 : la
+    /// carte d'une story et le cadré d'un post se reconnaissaient à leurs coins.
+    func test_leRayon_estCeluiDeLaLoi_surLesDeuxSurfaces() {
+        let viewport = CGSize(width: 402, height: 874)
+
+        XCTAssertEqual(SceneShape.layout(.carded(SceneShape.cardedBackdrop), in: viewport).cornerRadius,
+                       SceneShape.cardedCornerRadius)
+        XCTAssertEqual(GallerySceneStage.frame(viewport: viewport,
+                                               presentation: .carded,
+                                               corridors: Self.corridors).cornerRadius,
+                       SceneShape.cardedCornerRadius)
+        XCTAssertEqual(Self.cadrageDuLecteur(viewport: viewport).cornerRadius,
+                       SceneShape.cardedCornerRadius,
+                       "le lecteur anime SON rayon depuis celui de la loi, pas depuis un littéral")
+    }
+
+    /// **Un seul cadre.** Les deux surfaces cadrent le 9:16 dans une RÉGION
+    /// différente — le plateau de la galerie, la zone libre du lecteur — mais la
+    /// FORME qu'elles y posent est la même fonction.
+    func test_leCadre_estCeluiDeLaLoi_surLesDeuxSurfaces() {
+        let viewport = CGSize(width: 402, height: 874)
+        let galerie = GallerySceneStage.frame(viewport: viewport, presentation: .carded,
+                                              corridors: Self.corridors).sceneSize
+        let lecteur = SceneShape.layout(.carded(SceneShape.cardedBackdrop), in: viewport)
+            .sceneFrame.size
+
+        XCTAssertEqual(galerie.width / galerie.height, SceneShape.aspect, accuracy: 0.0001)
+        XCTAssertEqual(lecteur.width / lecteur.height, SceneShape.aspect, accuracy: 0.0001)
+    }
+
+    /// **La compensation d'échelle vit DANS la carte.** Le lecteur peint sa
+    /// carte à `scale` et déclare ce facteur ; il ne fait plus la division
+    /// lui-même. Un facteur dégénéré ne divise rien.
+    func test_leRayon_seCompensePourLEchelleQueLHoteDeclare() {
+        let loi = SceneShape.layout(.carded(SceneShape.cardedBackdrop),
+                                    in: CGSize(width: 402, height: 874))
+        XCTAssertEqual(SceneCard<EmptyView>.unscaledCornerRadius(layout: loi, override: nil,
+                                                                 hostScale: 0.5),
+                       SceneShape.cardedCornerRadius * 2)
+        XCTAssertEqual(SceneCard<EmptyView>.unscaledCornerRadius(layout: loi, override: nil,
+                                                                 hostScale: 0),
+                       SceneShape.cardedCornerRadius)
+        XCTAssertEqual(SceneCard<EmptyView>.unscaledCornerRadius(layout: loi, override: 0,
+                                                                 hostScale: 0.5), 0,
+                       "plein bord, l'hôte anime son rayon jusqu'à zéro — et zéro reste zéro")
+    }
+
+    /// La boîte visible : la scène quand elle tient, la région quand elle
+    /// déborde. Une seule écriture pour les deux états.
+    func test_laBoiteVisible_estLaSceneOuLaRegion() {
+        let viewport = CGSize(width: 402, height: 874)
+        let cadre = SceneShape.layout(.carded(SceneShape.cardedBackdrop), in: viewport)
+        let immersif = SceneShape.layout(.immersive, in: viewport)
+
+        XCTAssertEqual(SceneCard<EmptyView>.visibleSize(layout: cadre, region: nil),
+                       cadre.sceneFrame.size)
+        XCTAssertEqual(SceneCard<EmptyView>.visibleSize(layout: immersif, region: viewport),
+                       viewport)
+        XCTAssertGreaterThan(immersif.sceneFrame.width, viewport.width,
+                             "immersive, la scène DÉBORDE — c'est ce que la carte rogne")
+    }
+
+    // MARK: - Le montage
+
+    /// **Les deux hôtes montent `SceneCard`, et aucun ne refait ce qu'elle
+    /// fait.** Un fond posé à la main, un rayon de scène rogné à côté du
+    /// player : c'est exactement par là que les deux assemblages avaient
+    /// divergé.
+    ///
+    /// Le marqueur de montage diffère par hôte, et ce n'est pas une
+    /// complaisance : le lecteur monte la carte par `readerCard(layout:…)`, sa
+    /// ligne d'une ligne, qui porte AUSSI sa place et son animation. Exiger le
+    /// nom du composant dans chaque fichier obligerait à recopier le
+    /// `scaleEffect`/`offset` trois fois — l'inverse de ce lot.
+    func test_lesDeuxHotesPleinEcran_montentLaCarte_etNeLaRefontPas() throws {
+        for (fichier, montage) in Self.hotesPleinEcran {
+            let source = AppSourceGuard.stripComments(try Self.lire(fichier))
+            XCTAssertTrue(source.contains(montage),
+                          "\(fichier) doit MONTER la carte de scène (\(montage)), pas la reproduire")
+            XCTAssertFalse(source.contains("SceneBackdropView("),
+                           "\(fichier) ne peint plus son fond : la carte le fait")
+            for rayon in Self.rayonsDeScene {
+                XCTAssertFalse(source.contains(rayon),
+                               "\(fichier) ne rogne plus la scène à son rayon (\(rayon)) : la carte le fait")
+            }
+        }
+    }
+
+    private static let hotesPleinEcran: [(fichier: String, montage: String)] = [
+        ("Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift", ".readerCard(layout:"),
+        ("Meeshy/Features/Main/Views/StoryViewerView+ReaderCard.swift", "SceneCard(layout:"),
+        ("Meeshy/Features/Main/Views/ConversationMediaGalleryView+ScenePage.swift", "SceneCard(layout:"),
+    ]
+
+    /// **Les rayons par lesquels un hôte rognerait une SCÈNE.** On ne peut pas
+    /// interdire `clipShape(RoundedRectangle` tout court : le lecteur rogne
+    /// aussi ses deux FACES DE CUBE (la transition entre groupes de stories) et
+    /// sa révélation circulaire — des animations de plein écran, qui n'ont rien
+    /// à voir avec la forme d'une scène. Ce qui se garde, c'est le RAYON : dès
+    /// qu'un hôte écrit celui de la scène, il refait la carte.
+    private static let rayonsDeScene = ["stage.cornerRadius",
+                                        "readerCanvasFraming.cornerRadius",
+                                        "unscaledCornerRadius"]
+
+    private static func lire(_ relatif: String) throws -> String {
+        let racine = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        return try String(contentsOf: racine.appendingPathComponent(relatif), encoding: .utf8)
+    }
+
+    private static var corridors: MediaStageFraming.Corridors {
+        MediaStageFraming.Corridors(safeTop: 59,
+                                    top: MediaGalleryStage.topCorridorHeight,
+                                    rail: 0, transport: 0,
+                                    safeBottom: 34,
+                                    gutter: MediaGalleryStage.gutter)
+    }
+
+    /// Le cadrage du lecteur, aux entrées qu'il pose lui-même. Il RECOPIE un
+    /// choix de production — sa faiblesse connue — mais son rayon vient
+    /// désormais de la loi, et c'est précisément ce qu'on mesure.
+    private static func cadrageDuLecteur(viewport: CGSize) -> StoryCanvasFraming.Result {
+        StoryCanvasFraming.resolve(.init(viewport: viewport,
+                                         headerInset: 59 + 72,
+                                         bottomInset: 64,
+                                         sideInset: 8,
+                                         state: .carded,
+                                         cardedCornerRadius: SceneShape.cardedCornerRadius,
+                                         verticalAlignment: StageChromeAlignment.verticalAlignment(
+                                             canvasRatio: SceneShape.aspect),
+                                         canvasRatio: SceneShape.aspect))
+    }
+}

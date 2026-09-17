@@ -424,17 +424,22 @@ extension ConversationMediaGalleryView {
     /// viewport en débordant. `stage(for:)` reste la réponse des pages image et
     /// vidéo, et celle du CHROME du plateau, qui se pose sur la même zone.
     ///
-    /// **Le fond est élu ici, et l'hôte est le seul à pouvoir le faire** : la
-    /// loi ne sait pas s'il existe un hachage à étirer. Le hachage quand la
-    /// scène en porte un — c'est ce que la galerie pose déjà sous une pièce
-    /// jointe (#6143) — le noir sinon, qui est la réponse JUSTE quand il n'y a
-    /// aucune matière et non un repli honteux.
+    /// **Le fond n'est PLUS élu ici** (directive porteur du 2026-09-17, lot
+    /// #6904). La galerie choisissait le hachage étiré quand la scène en
+    /// portait un ; le lecteur de stories choisissait la couleur dominante. La
+    /// même carte avait donc deux fonds selon la surface qui l'ouvrait, et
+    /// aucun témoin ne pouvait rougir — chacun était juste chez lui. La loi le
+    /// nomme désormais (`SceneShape.cardedBackdrop`), et le sol noir d'une
+    /// scène sans empreinte vit dans `SceneBackdropView`, où il vaut pour les
+    /// trois fonds à la fois.
+    ///
+    /// Le paramètre reste : c'est la scène qui porte l'EMPREINTE avec laquelle
+    /// ce fond se calcule (`GallerySceneItem.thumbHash`, remis à la carte).
     func sceneStage(for scene: GallerySceneItem) -> GallerySceneStage.Frame {
         GallerySceneStage.frame(
             viewport: DeviceLayout.windowSize,
             presentation: stageGeometryPresentation,
-            corridors: stageCorridors,
-            backdrop: (scene.thumbHash?.isEmpty == false) ? .thumbHash : .black
+            corridors: stageCorridors
         )
     }
 

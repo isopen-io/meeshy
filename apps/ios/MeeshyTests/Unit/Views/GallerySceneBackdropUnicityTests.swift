@@ -170,8 +170,14 @@ final class GallerySceneBackdropUnicityTests: XCTestCase {
         let page = try XCTUnwrap(code.range(of: "struct GalleryScenePage"))
         let suite = String(code[page.lowerBound...])
 
-        XCTAssertTrue(suite.contains("if let fond = stage.backdrop"),
-                      "le fond d'une page scène est conditionné au backdrop de la LOI, jamais peint d'office")
+        // **La condition a DÉMÉNAGÉ avec le fond** (#6904, tour 3 bis) : elle
+        // vit dans `SceneCard`, le composant unique que cette page et le
+        // lecteur de stories montent tous deux. La page ne PEUT donc plus
+        // peindre d'office — elle ne peint plus du tout.
+        XCTAssertTrue(suite.contains("SceneCard(layout: stage.layout"),
+                      "la page monte LA carte de scène, qui conditionne le fond au backdrop de la loi")
+        XCTAssertFalse(suite.contains("SceneBackdropView("),
+                       "la page ne peint plus son fond elle-même : deux assemblages avaient divergé")
         XCTAssertFalse(suite.contains("MediaGalleryStage.backdrop("),
                        "le fond d'une scène ne se décide plus par le letterbox du solveur de pièces jointes")
     }

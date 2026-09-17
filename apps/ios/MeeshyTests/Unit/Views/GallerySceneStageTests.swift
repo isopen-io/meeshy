@@ -39,8 +39,7 @@ final class GallerySceneStageTests: XCTestCase {
     func test_cadre_laSceneTientEntiereDansLaZoneLibre() {
         let cadre = GallerySceneStage.frame(viewport: viewport,
                                             presentation: .carded,
-                                            corridors: corridors,
-                                            backdrop: .thumbHash)
+                                            corridors: corridors)
 
         XCTAssertEqual(cadre.sceneSize.width, 378, accuracy: 0.5)
         XCTAssertEqual(cadre.sceneSize.height, 672, accuracy: 0.5)
@@ -54,10 +53,10 @@ final class GallerySceneStageTests: XCTestCase {
     func test_cadre_leFondEstPeintEtLaCarteEstArrondie() {
         let cadre = GallerySceneStage.frame(viewport: viewport,
                                             presentation: .carded,
-                                            corridors: corridors,
-                                            backdrop: .thumbHash)
+                                            corridors: corridors)
 
-        XCTAssertEqual(cadre.backdrop, .thumbHash)
+        XCTAssertEqual(cadre.backdrop, SceneShape.cardedBackdrop,
+                       "le fond d'une carte de scène est celui de la LOI, le même que le lecteur de stories")
         XCTAssertEqual(cadre.cornerRadius, SceneShape.cardedCornerRadius)
         XCTAssertEqual(cadre.offscreenPainter, .stage,
                        "le PLATEAU peint le hors-champ d'une scène cardée, et lui seul")
@@ -68,8 +67,7 @@ final class GallerySceneStageTests: XCTestCase {
     func test_immersif_laSceneCouvreLeViewportEtDeborde() {
         let cadre = GallerySceneStage.frame(viewport: viewport,
                                             presentation: .full(pausedOnEntry: false),
-                                            corridors: corridors,
-                                            backdrop: .thumbHash)
+                                            corridors: corridors)
 
         XCTAssertEqual(cadre.sceneSize.height, 874, accuracy: 0.5,
                        "l'immersif prend la HAUTEUR entière — c'est le défaut mesuré sur F1 (672 pt)")
@@ -83,8 +81,7 @@ final class GallerySceneStageTests: XCTestCase {
     func test_immersif_laSceneEstCentree() {
         let cadre = GallerySceneStage.frame(viewport: viewport,
                                             presentation: .full(pausedOnEntry: false),
-                                            corridors: corridors,
-                                            backdrop: .thumbHash)
+                                            corridors: corridors)
 
         XCTAssertEqual(cadre.layout.sceneFrame.midX, viewport.width / 2, accuracy: 0.5,
                        "le contenu visible d'une scène est au MILIEU du viewport")
@@ -94,8 +91,7 @@ final class GallerySceneStageTests: XCTestCase {
     func test_immersif_personneNePeintAutour() {
         let cadre = GallerySceneStage.frame(viewport: viewport,
                                             presentation: .full(pausedOnEntry: false),
-                                            corridors: corridors,
-                                            backdrop: .thumbHash)
+                                            corridors: corridors)
 
         XCTAssertNil(cadre.backdrop,
                      "il ne reste rien à peindre : l'hôte ne choisit plus de fond")
@@ -110,10 +106,10 @@ final class GallerySceneStageTests: XCTestCase {
     /// redevient le seul peintre possible.
     func test_lePeintreDesBandes_suitLaLoiEtChangeAvecLEtat() {
         let cadree = GallerySceneStage.frame(viewport: viewport, presentation: .carded,
-                                             corridors: corridors, backdrop: .thumbHash)
+                                             corridors: corridors)
         let immersive = GallerySceneStage.frame(viewport: viewport,
                                                 presentation: .full(pausedOnEntry: false),
-                                                corridors: corridors, backdrop: .thumbHash)
+                                                corridors: corridors)
 
         XCTAssertFalse(cadree.paintsOwnLetterbox,
                        "cardée, c'est le plateau qui peint — deux peintres empileraient deux dégradés")
@@ -126,10 +122,10 @@ final class GallerySceneStageTests: XCTestCase {
     /// ajustait, donc il laissait des bandes même sur une scène au gabarit.
     func test_lesDeuxEtats_neRendentPasLeMemeCadre() {
         let cadree = GallerySceneStage.frame(viewport: viewport, presentation: .carded,
-                                             corridors: corridors, backdrop: .black)
+                                             corridors: corridors)
         let immersive = GallerySceneStage.frame(viewport: viewport,
                                                 presentation: .full(pausedOnEntry: false),
-                                                corridors: corridors, backdrop: .black)
+                                                corridors: corridors)
 
         XCTAssertGreaterThan(immersive.sceneSize.height, cadree.sceneSize.height)
         XCTAssertEqual(immersive.sceneSize.width / immersive.sceneSize.height,

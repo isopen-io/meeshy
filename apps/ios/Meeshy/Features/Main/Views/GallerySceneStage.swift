@@ -1,5 +1,7 @@
 import CoreGraphics
+import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 /// **Le cadre d'une PAGE SCÈNE — une projection de `SceneShape.layout`, jamais
 /// du solveur de pièces jointes** (décision porteur du 2026-09-17 sur #6896,
@@ -49,13 +51,15 @@ enum GallerySceneStage {
         /// c'est ce que « couvrir le viewport » veut dire pour une forme figée.
         var sceneSize: CGSize { layout.sceneFrame.size }
 
-        /// **La boîte VISIBLE** — ce que la page mesure et ce qu'elle clippe.
-        /// Cadrée, la scène tient entière et la boîte est la scène ; immersive,
-        /// la scène déborde et la boîte est la région. Une seule écriture pour
-        /// les deux, plutôt qu'un branchement que l'on oublierait d'un côté.
+        /// **La boîte VISIBLE** — ce que la page mesure et ce que la CARTE
+        /// rogne. Cadrée, la scène tient entière et la boîte est la scène ;
+        /// immersive, la scène déborde et la boîte est la région.
+        ///
+        /// L'écriture vit dans `SceneCard`, avec le rognage qu'elle gouverne :
+        /// la recopier ici ferait deux réponses à une même question, et c'est
+        /// exactement ce que ce lot retire.
         var visible: CGSize {
-            CGSize(width: min(layout.sceneFrame.width, region.width),
-                   height: min(layout.sceneFrame.height, region.height))
+            SceneCard<EmptyView>.visibleSize(layout: layout, region: region)
         }
 
         var cornerRadius: CGFloat { layout.cornerRadius }
@@ -95,15 +99,19 @@ enum GallerySceneStage {
 
     /// Le cadre d'une page scène dans cet état.
     ///
-    /// - Parameter backdrop: ce que l'hôte choisit de peindre SOUS une scène
-    ///   cardée — la loi ne préjuge pas d'une couleur qu'elle ne sait pas
-    ///   calculer. Ignoré en immersif, où elle rend `nil`.
+    /// **Le fond n'est plus une question d'hôte** (directive porteur du
+    /// 2026-09-17) : la galerie élisait le hachage étiré pendant que le lecteur
+    /// de stories élisait la couleur dominante — deux fonds pour une même
+    /// carte, chacun juste chez lui. La loi le nomme désormais
+    /// (`SceneShape.cardedBackdrop`), et une page scène le lit comme elle lit
+    /// sa forme. En immersif il n'y a rien à peindre, donc rien à élire.
     static func frame(viewport: CGSize,
                       presentation: StagePresentation,
-                      corridors: MediaStageFraming.Corridors,
-                      backdrop: SceneShape.Backdrop) -> Frame {
+                      corridors: MediaStageFraming.Corridors) -> Frame {
         let zone = region(viewport: viewport, presentation: presentation, corridors: corridors)
-        let mode: SceneShape.Fullscreen = presentation.isFull ? .immersive : .carded(backdrop)
+        let mode: SceneShape.Fullscreen = presentation.isFull
+            ? .immersive
+            : .carded(SceneShape.cardedBackdrop)
         return Frame(region: zone, layout: SceneShape.layout(mode, in: zone))
     }
 }

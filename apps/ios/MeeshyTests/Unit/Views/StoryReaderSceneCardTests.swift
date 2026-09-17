@@ -50,12 +50,20 @@ final class StoryReaderSceneCardTests: XCTestCase {
     }
 
     /// Le clip vit dans l'espace non mis à l'échelle : une carte peinte à 0,5
-    /// doit rogner à 44 pour montrer ses 22 pt de rayon.
+    /// doit rogner à 40 pour montrer les 20 pt de rayon de la loi.
+    ///
+    /// **La compensation a QUITTÉ le lecteur** (#6904) : elle vit dans
+    /// `SceneCard`, qui gouverne le clip — l'hôte DÉCLARE son facteur au lieu
+    /// de faire la division. C'était la dernière ligne d'arithmétique de forme
+    /// restée chez lui.
     func test_leRayon_seCompensePourLEchelleDeLaCarte() {
-        let cardee = StoryCanvasFraming.Result(scale: 0.5, offset: .zero, cornerRadius: 22)
-        XCTAssertEqual(StoryReaderCard.unscaledCornerRadius(for: cardee), 44)
-        let degeneree = StoryCanvasFraming.Result(scale: 0, offset: .zero, cornerRadius: 22)
-        XCTAssertEqual(StoryReaderCard.unscaledCornerRadius(for: degeneree), 22)
+        let loi = SceneShape.layout(.carded(StoryCardView.readerSceneBackdrop), in: viewport)
+        XCTAssertEqual(SceneCard<EmptyView>.unscaledCornerRadius(layout: loi, override: nil,
+                                                                 hostScale: 0.5),
+                       SceneShape.cardedCornerRadius * 2)
+        XCTAssertEqual(SceneCard<EmptyView>.unscaledCornerRadius(layout: loi, override: nil,
+                                                                 hostScale: 0),
+                       SceneShape.cardedCornerRadius)
     }
 
     // MARK: - Le montage
@@ -69,7 +77,7 @@ final class StoryReaderSceneCardTests: XCTestCase {
     func test_leLecteur_monteLaFormeEtLeFondSurChaqueCouche() throws {
         let source = AppSourceGuard.stripComments(try String(contentsOf: canvasSource, encoding: .utf8))
 
-        XCTAssertEqual(source.components(separatedBy: ".readerCard(framing: readerCanvasFraming").count - 1,
+        XCTAssertEqual(source.components(separatedBy: ".readerCard(layout: readerSceneLayout").count - 1,
                        3, "canvas sortant, canvas courant, chargeur")
         XCTAssertEqual(source.components(separatedBy: "servesLetterboxFill: false").count - 1,
                        4, "deux hôtes, sortant et courant")
@@ -85,9 +93,11 @@ final class StoryReaderSceneCardTests: XCTestCase {
     /// peut pas ressembler à un flou.
     func test_leFondDeLaCarte_estUneCouleurPlate() throws {
         let source = AppSourceGuard.stripComments(try String(contentsOf: canvasSource, encoding: .utf8))
-        XCTAssertTrue(source.contains("backdrop: Self.readerSceneBackdrop"),
-                      "les trois couches reçoivent le fond élu par le lecteur")
+        XCTAssertTrue(source.contains("SceneShape.layout(.carded(Self.readerSceneBackdrop)"),
+                      "la forme remise à la carte porte le fond, et la carte le peint")
         XCTAssertEqual(StoryCardView.readerSceneBackdrop, .thumbHashDominantColor)
+        XCTAssertEqual(StoryCardView.readerSceneBackdrop, SceneShape.cardedBackdrop,
+                       "le même fond que le plein écran cadré d'un post (#6904)")
     }
 
     private var canvasSource: URL {
