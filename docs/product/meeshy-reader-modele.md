@@ -618,9 +618,10 @@ chacun des deux plein écrans, avec **qui peint autour**.
 
 Une garde de source (`SceneShapeSourceGuardTests`) tient les deux invariants :
 le rapport 9:16 n'a qu'un site, et tout fichier qui monte `MeeshyScenePlayer` /
-`StoryReaderRepresentable` / `StoryCanvasUIView` consulte la loi. Sa liste
-d'exceptions est **datée** et se vide à la fin du lot ; un hôte qui y entre
-après cette date n'est pas une exception, c'est une régression.
+`StoryReaderRepresentable` / `StoryCanvasUIView` consulte la loi. Ses deux
+listes d'exceptions sont **VIDES depuis le 2026-09-17** (seconde moitié du lot
+#6904) ; un hôte qui y entre après cette date n'est pas une exception, c'est
+une régression.
 
 ## 5. Ce que ce document ne couvre pas
 

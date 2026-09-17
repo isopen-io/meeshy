@@ -143,13 +143,16 @@ struct GalleryScenePage: View, Equatable {
             // la scène ; laisser le canvas repeindre le sien empilait deux
             // dégradés du MÊME hachage, étirés dans deux cadres différents —
             // mesuré au simulateur, deux teintes au-dessus d'un même média.
-            // La décision vit avec la page (`GallerySceneItem`), qui la tient de
-            // la loi qui décide aussi de son rapport.
-            // **Le fond vient de la MÊME réponse que le cadre** (#6806).
-            // `servesLetterboxFill` seul est la réponse CARDÉE ; en plein cadre
-            // les bandes entrent dans le cadre présenté, et sans elles la scène
-            // montre du vide là où le canvas devrait peindre.
-            servesLetterboxFill: item.surface(inFullFrame: presentation.isFull).paintsLetterbox
+            // **La scène est TOUJOURS 9:16, cardée ou en plein cadre**
+            // (`SceneShape.aspect`, #6896/#6904) : le cadre PRÉSENTÉ
+            // (`item.aspect` / `item.canvasAspect`, lus par `MediaGalleryStage.
+            // mediaRatio`) et le gabarit du CANVAS sont désormais toujours
+            // identiques, ce qui était la condition posée par #6791 pour ne
+            // plus repeindre — elle est maintenant vraie en permanence. Un
+            // seul acteur peint le hors-champ, le PLATEAU
+            // (`MediaStageBackdrop`, juste au-dessus) ; le canvas ne le fait
+            // plus jamais.
+            servesLetterboxFill: false
         )
         .frame(width: stage.media.width, height: stage.media.height)
         .accessibilityElement(children: .contain)

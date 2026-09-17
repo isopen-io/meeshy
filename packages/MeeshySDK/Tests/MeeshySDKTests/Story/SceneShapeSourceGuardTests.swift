@@ -17,11 +17,12 @@ import XCTest
 /// > tient. C'est pourquoi la garde assertionne en ÉGALITÉ, jamais en
 /// > inclusion : une inclusion resterait verte au douzième hôte.
 ///
-/// ## Les deux exceptions, et leur date
+/// ## Les deux listes, VIDES depuis le 2026-09-17
 ///
-/// Les hôtes de `apps/ios/` sont réécrits par la seconde moitié du lot ; la
-/// liste d'exceptions est DATÉE et se vide à la fin du lot 2. Un hôte qui y
-/// entre après cette date n'est pas une exception, c'est une régression.
+/// La seconde moitié du lot #6904 a réécrit les hôtes de `apps/ios/` : les
+/// deux listes d'exceptions ci-dessous sont désormais VIDES, et le sont
+/// devenues le cliquet du lot. Un hôte qui y entre après cette date n'est pas
+/// une exception, c'est une régression.
 final class SceneShapeSourceGuardTests: XCTestCase {
 
     /// **La constante 9:16 n'a qu'un site.** Toute autre écriture du rapport
@@ -56,17 +57,11 @@ final class SceneShapeSourceGuardTests: XCTestCase {
     /// DATÉE du 2026-09-17 et se vide à la fin du lot ; un site qui y entre
     /// après n'est pas une exception, c'est une copie de plus.
     func test_leRapport9sur16_danssApp_tientDansUnInventaireDate() throws {
-        let detteDatee: Set<String> = [
-            "Features/Main/Views/StoryRepostEmbedCell.swift",          // .aspectRatio littéral
-            "Features/Main/Views/Bubble/BubbleStoryCitationCard.swift", // sceneAspectRatio
-            "Features/Main/Views/MyStoryCard.swift",                    // .aspectRatio littéral
-            "Features/Main/Composer/ComposerSlideRail.swift",           // vignette de diapositive
-            "Features/Main/Views/FeedSceneAutoplay.swift",              // repli de cardAspect
-            "Features/Main/Views/StoryViewerView+Sidebar.swift",        // repli de canvasAspect
-            "Features/Main/Views/ReelsPlayerView+Carousel.swift",       // repli d'un média sans dimensions
-            "Features/Main/Views/ReelsPlayerView+Video.swift",          // idem
-            "Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift", // repli de hauteur de média
-        ]
+        // **L'inventaire est VIDE depuis le 2026-09-17** (seconde moitié du
+        // lot #6904) : les neuf sites datés ont tous été convertis en
+        // projections de `SceneShape.aspect`. Toute réapparition du littéral
+        // dans `apps/ios` est une COPIE, pas une exception.
+        let detteDatee: Set<String> = []
 
         let porteurs = try Self.swiftSources(under: "apps/ios/Meeshy")
             .filter { Self.declaresTheRatio($0.code) }
@@ -82,19 +77,12 @@ final class SceneShapeSourceGuardTests: XCTestCase {
     /// porte les hôtes de `apps/ios/` que la seconde moitié du lot #6904
     /// réécrit — datée du 2026-09-17, et vide à la fin du lot.
     func test_toutHoteQuiMonteLePlayer_consulteLaLoi() throws {
-        let exceptionsDatees: Set<String> = [
-            // apps/ios — réécrits par la seconde moitié du lot #6904 (2026-09-17).
-            // Cette liste est VIDE à la fin du lot 2 ; un hôte qui y entre
-            // après cette date n'est pas une exception, c'est une régression.
-            "apps/ios/Meeshy/Features/Main/Views/PostSceneMosaic.swift",
-            "apps/ios/Meeshy/Features/Main/Views/PostDetailView+Canvas.swift",
-            "apps/ios/Meeshy/Features/Main/Views/PostDetailView+RepostEmbed.swift",
-            "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift",
-            "apps/ios/Meeshy/Features/Main/Views/ReelsPlayerView+Scene.swift",
-            "apps/ios/Meeshy/Features/Main/Views/StoryRepostEmbedCell.swift",
-            "apps/ios/Meeshy/Features/Main/Views/FeedSceneAutoplay.swift",
-            "apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView+ScenePage.swift",
-        ]
+        // **VIDE depuis le 2026-09-17** : les huit hôtes de la seconde moitié
+        // du lot #6904 consultent tous désormais `SceneShape`, en code ou en
+        // doc-comment substantiel (`PostSceneMosaic`, `ConversationMediaGalleryView
+        // +ScenePage`) là où le solveur qu'ils appellent (`MediaStageFraming`,
+        // `SceneCarouselLayout`) porte déjà la loi une couche plus bas.
+        let exceptionsDatees: Set<String> = []
 
         let hotes = try Self.swiftSources(under: "packages/MeeshySDK/Sources")
             .filter { !Self.isThePlayerItself($0.path) }

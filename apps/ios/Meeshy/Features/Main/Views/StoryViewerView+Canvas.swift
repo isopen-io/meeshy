@@ -969,13 +969,15 @@ struct StoryCardView: View {
     /// attendu). La sidebar droite tombait alors hors écran à x=389+w=46
     /// → out of 402 (bug 2026-05-27). On force ici les dimensions explicites
     /// par calcul direct du fit ratio.
-    /// Ratio (largeur / hauteur) du canvas de la story courante. L'auteur a figé
-    /// la forme à la composition (« l'import de l'image de fond impose le cadre et
-    /// forme du Canvas ») : un fond paysage → 16:9 horizontal, sinon 9:16 vertical
-    /// par défaut. Fallback portrait pour toutes les stories antérieures.
-    var readerCanvasRatio: CGFloat { // internal for cross-file extension access
-        CGFloat(currentStory?.storyEffects?.canvasAspect.ratio ?? Double(CanvasGeometry.portraitRatio))
-    }
+    /// **Ratio (largeur / hauteur) du canvas — TOUJOURS 9:16** (`SceneShape.aspect`,
+    /// décision porteur du 2026-09-17 sur #6896, lot #6904).
+    ///
+    /// La forme n'est plus discrétisée depuis le rapport du fond
+    /// (`StoryCanvasAspect.from(ratio:)`, portrait/paysage) : un panorama 4:1
+    /// s'y arrondissait en 16:9 et se retrouvait rogné — la scène est
+    /// composée ET restituée en 9:16, le média se posant SANS rognage dans ce
+    /// gabarit (`SceneShape.mediaBand`).
+    var readerCanvasRatio: CGFloat { SceneShape.aspect } // internal for cross-file extension access
 
     /// La PORTE du lecteur de scènes — écrite une fois, partagée par les DEUX
     /// canvas. `nil` = cette story n'a pas de document v3 natif, et se peint par
@@ -996,22 +998,19 @@ struct StoryCardView: View {
     ///
     /// Ce qui MAINTIENT la porte aujourd'hui n'est donc plus une perte, mais la
     /// prudence : la retirer change ce que le lecteur peint pour toute
-    /// l'archive v1 restante, et `readerCanvasRatio` encadre au ratio RÉEL de la
-    /// story. Ce changement de rendu se mesure et se livre pour lui-même.
+    /// l'archive v1 restante. Ce changement de rendu se mesure et se livre
+    /// pour lui-même.
     ///
     /// La porte rend les deux branches SELF-COHÉRENTES. L'archive v1 se peint
-    /// dans son propre cadre, exactement comme avant le swap E4. Une story
-    /// v3-native se peint elle aussi dans son cadre RÉEL, pas systématiquement
-    /// en 9:16 : `StoryEffects(rendering:)` restaure `canvasAspectRatio` depuis
-    /// `scene.carrierAspect` quand la scène l'a logé
-    /// (`CanvasV3Migration.swift:543`) — un fond paysage composé nativement en
-    /// v3 (le composer pose `carrierAspect` à l'écriture, cf.
-    /// `CanvasV3Migration.swift:338`) garde donc son 16:9 ; seule une scène qui
-    /// n'a jamais porté de `carrierAspect` (fond déjà portrait) retombe sur le
-    /// défaut portrait — et c'est alors le bon rendu. L'en-tête
-    /// `X-Canvas-Caps: 3` est posé depuis `cf05538d9` (2026-08-22,
-    /// `ClientInfoProvider.swift:77`) : la porte ci-dessus reste fermée
-    /// aujourd'hui par PRUDENCE (paragraphe précédent), plus faute de l'en-tête.
+    /// dans son propre cadre, exactement comme avant le swap E4.
+    ///
+    /// **Superseded le 2026-09-17 (#6896, lot #6904)** : une story v3-native
+    /// ne se peint PLUS dans le cadre RÉEL de son fond — `readerCanvasRatio`
+    /// est TOUJOURS `SceneShape.aspect` (9:16), que la scène ait ou non logé
+    /// un `carrierAspect`. Le paragraphe qui précède décrit le comportement
+    /// d'AVANT ce lot ; `carrierAspect` reste lu par `StoryEffects(rendering:)`
+    /// pour l'archive v1 (mémoire d'ÉDITION, contrat S8), mais plus aucun
+    /// lecteur ne s'en sert pour choisir un cadre.
     private func nativeSceneDocument(of story: StoryItem) -> CanvasV3? {
         story.storyEffects?.canvasV3
     }
