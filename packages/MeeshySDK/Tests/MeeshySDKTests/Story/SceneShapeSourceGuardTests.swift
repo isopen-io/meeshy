@@ -144,6 +144,13 @@ final class SceneShapeSourceGuardTests: XCTestCase {
     /// > ci-dessous est la SECONDE, écrite à la main, et c'est pourquoi elle
     /// > est courte et datée : quatre surfaces montrent une scène en grand.
     ///
+    /// **Elle exige DEUX choses depuis le tour 4 : la carte, et le SOL.** La
+    /// carte a fermé la divergence DANS le cadre ; la recette au simulateur a
+    /// trouvé l'écart restant DEHORS — une teinte dérivée du ThumbHash autour de
+    /// la carte du lecteur, du NOIR PUR autour de la même carte dans la galerie
+    /// de post. *Une convergence mesurée DANS un composant ne dit rien de ce qui
+    /// se peint à côté de lui.*
+    ///
     /// Ce qui n'y est PAS, et par DÉCISION du porteur (2026-09-17) : la CARTE
     /// DU FIL et les pages de carrousel gardent leur cadrage d'aperçu
     /// (`SceneFraming.focus`, union, plafond 1,4) — ce sont des aperçus, pas
@@ -174,6 +181,35 @@ final class SceneShapeSourceGuardTests: XCTestCase {
         XCTAssertEqual(muettes, [],
                        "un plein écran de scène doit LIRE SceneShape.layout ou MONTER SceneCard — " +
                        "une consultation par solveur de rapport continu n'y suffit pas : \(muettes)")
+
+        // **Et le SOL avec la carte** (tour 4 du lot, 2026-09-17). La carte a
+        // fermé la divergence DANS le cadre ; la recette au simulateur a trouvé
+        // l'écart restant DEHORS — teinte dérivée du ThumbHash chez le lecteur,
+        // NOIR PUR (0, 0, 0) dans la galerie de post, en cadré comme en
+        // immersif, et `.background(Color.black)` sur le réel.
+        //
+        // La liste est PLUS COURTE que celle de la carte, et ce n'est pas un
+        // oubli : le sol se monte une fois par SURFACE, pas une fois par
+        // fichier. `GallerySceneStage` est un solveur de géométrie (il ne peint
+        // rien) et `StoryViewerView+ReaderCard` une ligne de montage de la carte
+        // — le sol de la story vit chez son canvas, qui est l'hôte qui l'anime.
+        let solsAttendus = [
+            "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift",
+            "apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView+ScenePage.swift",
+            "apps/ios/Meeshy/Features/Main/Views/ReelsPlayerView+Scene.swift",
+        ]
+
+        var sansSol: [String] = []
+        for chemin in solsAttendus {
+            let code = Self.stripComments(
+                try String(contentsOf: Self.repoRoot.appendingPathComponent(chemin), encoding: .utf8))
+            if !code.contains("SceneFloorView(") { sansSol.append(chemin) }
+        }
+
+        XCTAssertEqual(sansSol, [],
+                       "un plein écran de scène monte AUSSI le sol partagé (SceneFloorView) : sans " +
+                       "lui la surface peint du noir plat autour d'une carte que les autres " +
+                       "habillent — c'est l'écart mesuré au tour 3 ter : \(sansSol)")
     }
 
     // MARK: - Méta-tests de la garde

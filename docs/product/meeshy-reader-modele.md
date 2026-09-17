@@ -652,6 +652,49 @@ Aucun témoin ne pouvait rougir : chacun était juste chez lui.
 > **Une convergence de COMPORTEMENT ne se prouve pas en comparant deux
 > écritures ; elle se prouve en n'en gardant qu'une.**
 
+### Le SOL, partagé comme la carte : `SceneFloorView` (tour 4, 2026-09-17)
+
+Ce qui se peint **AUTOUR** de la carte est partagé au même titre que ce qui se
+peint dedans — même directive porteur (« On préserve le même fond que pour la
+story ! »), même raison, autre couche :
+`packages/MeeshySDK/Sources/MeeshyUI/Story/ScenePlayer/SceneFloorView.swift`, à
+côté de `SceneCard`.
+
+La recette du tour 3 ter a mesuré au pixel l'écart que `SceneCard` ne pouvait pas
+fermer : le lecteur de stories peignait autour de sa carte une **teinte sombre
+dérivée du ThumbHash** (empreinte décodée, flou 60, échelle 1,18, opacité 0,85,
+voile noir 0,18 cardé / 0 immersif) ; la galerie de post peignait du **noir pur**
+(0, 0, 0), cadrée comme immersive ; le réel posait `.background(Color.black)`.
+
+> **Une convergence mesurée DANS un composant ne dit rien de ce qui se peint à
+> côté de lui.** La carte avait déjà convergé, et les deux pages ne se
+> ressemblaient toujours pas — parce que ce qu'un œil compare d'abord est la page
+> entière.
+
+Le sol ne peint **aucun noir inconditionnel**, et c'est ce qui permet à trois
+hôtes au sol différent de partager la même recette : sous un sol sans empreinte,
+le lecteur laisse voir le dégradé de l'auteur d'une story sans média de fond
+(`storyBackground`), la galerie et le réel leur noir. Il prend deux paramètres
+opaques — `thumbHash`, `veil` — et rien d'autre.
+
+Ce qui reste à l'**hôte**, parce que c'est une décision de « quand » : l'identité
+(`.id`), la fusion (`.transition(.opacity)`), le débord, la surdité au doigt, le
+silence pour VoiceOver, et l'**animation** du voile (le lecteur l'anime au
+ressort de sa carte, la galerie à la porte du plein cadre, le réel n'a pas de
+voile). L'**empreinte** vient du même site que le fond DANS la carte —
+`StoryItem.sceneBackdropHash` — si bien que le sol autour et le fond dedans
+parlent du même contenu, ce qui est tout l'objet de #6797. Le lecteur y a perdu
+sa cascade privée (`resolvedBackdropImage`), qui était **en double dans le même
+écran** : sa carte lisait déjà `sceneBackdropHash` pendant que son sol descendait
+la sienne.
+
+Les trois surfaces sont tenues par `SceneFloorTests` — une garde de source qui
+les **nomme une par une** (une surface qui ne monte rien ne peint rien, et « rien »
+ressemble à un fond noir légitime), et cinq témoins de **pixels** qui disent ce
+que le sol peint : la matière de l'empreinte et non du noir, rien du tout sans
+empreinte, un voile qui assombrit vraiment, une page scène habillée là où une
+page image garde son noir.
+
 ### Où la loi vit
 
 `SceneShape` — `packages/MeeshySDK/Sources/MeeshySDK/Story/SceneShape.swift`.
@@ -672,6 +715,7 @@ avec son fond et son rayon.
 |---|---|
 | 1 · `aspect` (toujours 9:16) | **oui**, sur tous les hôtes du player |
 | 4 · `layout` / `Backdrop` / `cardedBackdrop` / `cardedCornerRadius` | **oui** — les quatre surfaces plein écran, par `SceneCard` |
+| le SOL (`SceneFloorView`) | **oui** — lecteur de stories, galerie de post, réel (tour 4) |
 | 2 · `mediaBand` | non — déclarée et testée en isolation |
 | 3 · `frame` (le cadre binaire) | non — déclarée et testée en isolation |
 
@@ -692,6 +736,9 @@ Deux gardes de source les tiennent, et elles ne disent pas la même chose :
   `SceneCard` — une consultation par solveur n'y suffit pas, ces solveurs
   rendant un rapport *continu*, la « quatrième forme » que la règle 3 exclut.
   Le balayage ne pouvait pas l'exiger ; c'est pourquoi le témoin est séparé.
+  Depuis le tour 4, il exige aussi le **SOL** (`SceneFloorView`) de la galerie
+  et du réel — la carte et le sol se montent ENSEMBLE ou la surface ne
+  ressemble pas aux autres.
 
 **Ce qui reste DEHORS, par décision du porteur du 2026-09-17** : la **carte du
 fil** et les **pages de carrousel** gardent leur cadrage d'**aperçu**

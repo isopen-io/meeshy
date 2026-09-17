@@ -35,8 +35,34 @@ final class StoryReaderCardPixelTests: XCTestCase {
 
     enum Orientation: String, CaseIterable { case paysage, portrait }
 
+    /// **Ce que le harnais peint AUTOUR de la carte.** La sentinelle sert aux
+    /// témoins qui mesurent ce que la CARTE couvre ; le sol de production sert à
+    /// ceux qui mesurent le sol lui-même — et c'est la même vue que le lecteur
+    /// monte, jamais un double.
+    enum Sol { case sentinelle, solDeProduction }
+
     private static let sentinelle = Color(.sRGB, red: 1, green: 0, blue: 1, opacity: 1)
     private static let indigo = UIColor(red: 0.310, green: 0.275, blue: 0.898, alpha: 1)
+
+    /// **Le point de mesure du SOL** — celui que la recette au simulateur lit.
+    /// Le bord haut de la carte est à 131 pt (encart du chrome) : (30, 30) est
+    /// hors carte sur tout appareil que cette suite vise.
+    private static let horsCarte = (x: 30, y: 30)
+
+    /// L'empreinte d'un APLAT indigo, ENCODÉE par le SDK plutôt qu'écrite à la
+    /// main : la teinte du sol est alors prévisible, et l'assertion peut dire
+    /// quelle couleur elle a lue.
+    private static let empreinteIndigo: String = {
+        let taille = CGSize(width: 64, height: 64)
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        format.opaque = true
+        let aplat = UIGraphicsImageRenderer(size: taille, format: format).image { ctx in
+            StoryReaderCardPixelTests.indigo.setFill()
+            ctx.cgContext.fill(CGRect(origin: .zero, size: taille))
+        }
+        return aplat.toThumbHash() ?? ""
+    }()
 
     // MARK: - Le témoin de pixels
 
@@ -44,7 +70,7 @@ final class StoryReaderCardPixelTests: XCTestCase {
         let photo = Self.photo(.paysage, uni: Self.indigo)
         let story = Self.story(.paysage)
 
-        let monte = try mount(story: story, photo: photo, fondSentinelle: true)
+        let monte = try mount(story: story, photo: photo, sol: .sentinelle)
         defer { monte.pixels.dismount() }
 
         XCTAssertTrue(monte.pixels.pixel(monte.centreImage.x, monte.centreImage.y,
@@ -59,6 +85,51 @@ final class StoryReaderCardPixelTests: XCTestCase {
                       "et sans empreinte ce fond est noir (\(monte.pixels.hex(x: monte.bandeHaute.x, y: monte.bandeHaute.y)))")
     }
 
+
+    /// **LE SOL — ce que le lecteur peint AUTOUR de sa carte** (tour 4 du lot
+    /// #6904, directive porteur du 2026-09-17 : « On préserve le même fond que
+    /// pour la story ! »).
+    ///
+    /// Le témoin ci-dessus mesure ce que la carte COUVRE ; celui-ci mesure ce qui
+    /// reste de l'écran — et c'est là que la recette du tour 3 ter a trouvé le
+    /// dernier écart entre le lecteur de stories et la galerie de post : une
+    /// teinte sombre dérivée du ThumbHash ici, du NOIR PUR là-bas.
+    ///
+    /// La mesure se fait au point que la recette au simulateur lit — (30, 30),
+    /// bien au-dessus du bord haut de la carte, que l'encart du chrome pousse à
+    /// 131 pt. Elle est donc du SOL et de rien d'autre.
+    ///
+    /// Le FUSIBLE est la seconde moitié : une story SANS empreinte laisse voir le
+    /// noir que le lecteur pose dessous. Sans lui, un sol qui peindrait n'importe
+    /// quoi d'opaque passerait pour un sol qui peint la bonne matière — et le
+    /// témoin ne pourrait pas tomber si le sol redevenait noir.
+    func test_leSol_horsCarte_porteLaMatiereDuHachage_jamaisDuNoir() throws {
+        let photo = Self.photo(.paysage, uni: Self.indigo)
+
+        let avec = try mount(story: Self.story(.paysage, empreinte: Self.empreinteIndigo),
+                             photo: photo, sol: .solDeProduction)
+        let teinte = avec.pixels.rgb(x: Self.horsCarte.x, y: Self.horsCarte.y)
+        let hexAvec = avec.pixels.hex(x: Self.horsCarte.x, y: Self.horsCarte.y)
+        let noirAvec = avec.pixels.pixel(Self.horsCarte.x, Self.horsCarte.y,
+                                         matches: .black, tolerance: 24)
+        avec.pixels.dismount()
+
+        let sans = try mount(story: Self.story(.paysage), photo: photo, sol: .solDeProduction)
+        let hexSans = sans.pixels.hex(x: Self.horsCarte.x, y: Self.horsCarte.y)
+        let noirSans = sans.pixels.pixel(Self.horsCarte.x, Self.horsCarte.y,
+                                         matches: .black, tolerance: 8)
+        sans.pixels.dismount()
+
+        XCTAssertFalse(noirAvec,
+                       "le sol du lecteur porte la matière de l'empreinte, jamais du noir plat " +
+                       "(\(hexAvec))")
+        XCTAssertGreaterThan(teinte.b, teinte.r + 24,
+                            "et c'est bien l'EMPREINTE : l'aplat encodé est indigo (\(hexAvec))")
+        XCTAssertTrue(noirSans,
+                      "fusible : sans empreinte, le sol laisse voir le noir de l'hôte — c'est ce " +
+                      "qui rend la première assertion capable de tomber (\(hexSans))")
+    }
+
     // MARK: - Les captures du compte rendu
 
     func test_ecritLesCaptures() throws {
@@ -69,8 +140,9 @@ final class StoryReaderCardPixelTests: XCTestCase {
         let appareil = UIDevice.current.userInterfaceIdiom == .pad ? "ipad" : "iphone"
         for orientation in Orientation.allCases {
             do {
-                let monte = try mount(story: Self.story(orientation), photo: Self.photo(orientation),
-                                      fondSentinelle: false)
+                let monte = try mount(story: Self.story(orientation, empreinte: Self.empreinteIndigo),
+                                      photo: Self.photo(orientation),
+                                      sol: .solDeProduction)
                 let format = UIGraphicsImageRendererFormat.default()
                 format.opaque = true
                 let racine = monte.pixels.root
@@ -95,8 +167,7 @@ final class StoryReaderCardPixelTests: XCTestCase {
 
     private final class Pret { var valeur = false }
 
-    private func mount(story: StoryItem, photo: UIImage,
-                       fondSentinelle: Bool) throws -> Monte {
+    private func mount(story: StoryItem, photo: UIImage, sol: Sol) throws -> Monte {
         let pret = Pret()
         let taille = UIApplication.shared.connectedScenes
             .compactMap { ($0 as? UIWindowScene)?.screen.bounds.size }.first
@@ -114,7 +185,7 @@ final class StoryReaderCardPixelTests: XCTestCase {
                                      width: bande.width * canvas.width, height: bande.height * canvas.height)
 
         let vue = LecteurHarnais(story: story, photo: photo, cadrage: cadrage,
-                                 layout: forme, canvas: canvas, fondSentinelle: fondSentinelle,
+                                 layout: forme, canvas: canvas, sol: sol,
                                  onContentReady: { pret.valeur = true })
         let pixels = try RenderedPixels(vue)
         pixels.attendre(borne: 8) { pret.valeur }
@@ -160,7 +231,7 @@ final class StoryReaderCardPixelTests: XCTestCase {
         /// appel (`StoryCardView.readerSceneLayout`).
         let layout: SceneShape.Layout
         let canvas: CGSize
-        let fondSentinelle: Bool
+        let sol: Sol
         let onContentReady: () -> Void
 
         var body: some View {
@@ -175,8 +246,8 @@ final class StoryReaderCardPixelTests: XCTestCase {
                                              onContentReady: onContentReady)
                         .clipped()
                         .readerCard(layout: layout, framing: cadrage, thumbHash: nil)
-                        .shadow(color: .black.opacity(fondSentinelle ? 0 : 0.4), radius: 20, y: 8)
-                    if !fondSentinelle, let legende = story.content {
+                        .shadow(color: .black.opacity(sol == .sentinelle ? 0 : 0.4), radius: 20, y: 8)
+                    if sol == .solDeProduction, let legende = story.content {
                         VStack(spacing: 0) {
                             Spacer(minLength: 0)
                             MediaCaptionOverlay(caption: legende, isExpanded: false,
@@ -194,14 +265,29 @@ final class StoryReaderCardPixelTests: XCTestCase {
             .ignoresSafeArea()
         }
 
+        /// **Le fond du harnais : la SENTINELLE, ou le SOL de production.**
+        ///
+        /// Il recopiait la recette du sol — `blur(radius: 40)` et un voile écrit à
+        /// la main — et il avait déjà DÉRIVÉ : la production floutait à 60, pas à
+        /// 40. C'est exactement la faiblesse que ce fichier s'avoue pour son
+        /// cadrage (« ce double RECOPIE un choix de production »), et le lot #6904
+        /// la retire là où il peut : le sol est désormais `SceneFloorView`, la
+        /// MÊME vue que le lecteur monte, avec la MÊME empreinte
+        /// (`StoryItem.sceneBackdropHash`).
         @ViewBuilder
         private var fond: some View {
-            if fondSentinelle {
+            switch sol {
+            case .sentinelle:
                 StoryReaderCardPixelTests.sentinelle.ignoresSafeArea()
-            } else {
+            case .solDeProduction:
                 ZStack {
-                    Image(uiImage: photo).resizable().scaledToFill().blur(radius: 40)
-                    Color.black.opacity(0.18)
+                    // Le noir que le lecteur pose sous son sol pour une slide à
+                    // fond média (`storyBackground`) — `SceneFloorView` ne peint
+                    // aucun noir inconditionnel, précisément pour laisser voir ce
+                    // que l'hôte met dessous.
+                    Color.black
+                    SceneFloorView(thumbHash: story.sceneBackdropHash,
+                                   veil: SceneFloorView.cardedVeil)
                 }
                 .ignoresSafeArea()
             }
@@ -210,9 +296,10 @@ final class StoryReaderCardPixelTests: XCTestCase {
 
     // MARK: - Les fixtures
 
-    private static func story(_ orientation: Orientation) -> StoryItem {
+    private static func story(_ orientation: Orientation, empreinte: String? = nil) -> StoryItem {
         let taille = photoSize(orientation)
         var effets = StoryEffects()
+        effets.thumbHash = empreinte
         effets.mediaObjects = [StoryMediaObject(id: "fond", postMediaId: "pm-photo", kind: .image,
                                                 aspectRatio: nil, isBackground: true)]
         effets.backgroundTransform = StoryBackgroundTransform(videoFitMode: StoryBackgroundFraming.fit)
