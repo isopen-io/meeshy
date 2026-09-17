@@ -96,10 +96,7 @@ const ar = {
   'admin.convDetail.reasonHint': 'عشرة أحرف على الأقل، يُسجَّل مع اسمك.',
   'admin.convDetail.read': 'قراءة المحادثة',
   'admin.convDetail.empty': 'لا توجد رسائل',
-  'admin.convDetail.protected': 'محمي: موجود ولا يُعرض',
-  'admin.convDetail.attachmentProtected': 'مرفق محمي',
-  'admin.convDetail.edited': 'مُعدَّل',
-  'admin.convDetail.attachments': '{count} مرفق',
+  'admin.convDetail.memberPrism': 'مقروء وفق منشور لغات العضو: {languages}',
 } satisfies AdminInterfaceCatalog;
 
 export default ar;

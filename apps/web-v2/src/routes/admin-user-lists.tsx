@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 
+import { CollapsibleSection } from '@/components/collapsible-section';
+import { Sheet } from '@/components/sheet';
 import {
   ADMIN_CONVERSATIONS_PAGE_SIZE,
   adminUserConversationsQueryKey,
@@ -13,15 +15,20 @@ import {
   loadAdminUserMedia,
   type AdminMedia,
 } from '@/lib/api/admin-user-media';
+import type { AdminDeps } from '@/lib/api/admin';
+import type { AdminUserDetail } from '@/lib/api/admin-user-detail';
 import { apiDeps } from '@/lib/api/deps';
+import type { Viewer } from '@/lib/api/viewer';
+import { prismeDuMembre } from '@/lib/admin/prisme-membre';
 import { translateAdmin } from '@/lib/i18n-admin-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
 import { AdminSkeleton } from './admin-parts';
+import { AdminConversationReading } from './admin-conversation-reading';
 
 /**
- * **CE QU'UN MEMBRE A CRÉÉ, ET OÙ IL PARLE** (#6819) — les deux dernières
- * surfaces du lot, toutes deux en LECTURE.
+ * **CE QU'UN MEMBRE A CRÉÉ, ET OÙ IL PARLE** (#6819, étendu par #6862) — les
+ * deux dernières surfaces de la fiche, toutes deux en LECTURE.
  *
  * ## Pagination par OFFSET, comme le reste de l'administration
  *
@@ -38,6 +45,19 @@ import { AdminSkeleton } from './admin-parts';
  * absente est donc un état LÉGITIME — « ce média existe et ne se montre pas »
  * — et jamais un échec de chargement. Le rendre comme une image cassée
  * mentirait sur ce qui s'est passé.
+ *
+ * ## UNE LIGNE DE CONVERSATION OUVRE LA VRAIE VUE (#6862, lot C)
+ *
+ * Elle était INERTE : un `<li>` qui affichait un titre et rien de plus.
+ * C'est le défaut que `liste-ouvre-sa-fiche.test.ts` est né pour attraper, et
+ * la loi 4 sous sa forme la plus discrète — non pas un contrôle sans effet,
+ * mais un contrôle qui n'existe pas là où l'administrateur le cherche.
+ *
+ * Elle ouvre désormais une MODALE (`Sheet`, `<dialog>` natif : piège de focus,
+ * Échap, retour matériel Android) qui monte `AdminConversationReading` — le
+ * MÊME composant que `/adm/conversations/$id`, donc la même vue que le
+ * produit, avec **le Prisme DU MEMBRE** : on lit ce que ce membre-là a lu, pas
+ * la traduction que l'administrateur aurait vue.
  */
 
 const INK = 'var(--color-ios-ink)';
@@ -89,11 +109,7 @@ export function AdminUserMediaSection({ userId, language }: { readonly userId: s
   });
 
   return (
-    <section className="grid gap-2" aria-labelledby="admin-media-title">
-      <h2 id="admin-media-title" className="text-caption font-medium" style={{ color: INK2 }}>
-        {translateAdmin(language, 'admin.media.title')}
-      </h2>
-
+    <CollapsibleSection id="admin-media" title={translateAdmin(language, 'admin.media.title')} card={false}>
       {page.isPending ? (
         <AdminSkeleton rows={3} />
       ) : (page.data?.medias ?? []).length === 0 ? (
@@ -116,7 +132,7 @@ export function AdminUserMediaSection({ userId, language }: { readonly userId: s
           />
         </>
       )}
-    </section>
+    </CollapsibleSection>
   );
 }
 
@@ -141,72 +157,144 @@ function MediaRow({ media, language }: { readonly media: AdminMedia; readonly la
   );
 }
 
-export function AdminUserConversationsSection({ userId, language }: { readonly userId: string; readonly language: InterfaceLanguage }) {
+/**
+ * LE VIEWER DE LA MODALE EST LE MEMBRE, pas l'administrateur.
+ *
+ * `isMineOf` compare `message.senderId` à l'identifiant du lecteur : servir
+ * l'administrateur mettrait TOUTES les prises de parole du côté « reçu »,
+ * y compris celles du membre — une conversation qu'il n'a jamais vue ainsi.
+ * `isAnonymous: false` : on regarde un COMPTE, par définition.
+ */
+function viewerDuMembre(membre: AdminUserDetail): Viewer {
+  return {
+    id: membre.id,
+    handle: membre.username,
+    displayName: membre.displayName,
+    isAnonymous: false,
+    ...(membre.avatar === '' ? {} : { avatar: membre.avatar }),
+  };
+}
+
+export function AdminUserConversationsSection({
+  membre,
+  language,
+  deps = apiDeps,
+}: {
+  readonly membre: AdminUserDetail;
+  readonly language: InterfaceLanguage;
+  /** Le port, injectable — voir `AdminConversationReading`, même raison. */
+  readonly deps?: AdminDeps;
+}) {
   const [offset, setOffset] = useState(0);
+  /** La conversation OUVERTE, `null` au repos — jamais un booléen : la modale
+   * doit savoir LAQUELLE elle lit, et la remonter à chaque ouverture remet le
+   * motif à zéro, ce qui est voulu (un motif par lecture). */
+  const [ouverte, setOuverte] = useState<AdminConversation | null>(null);
+
   const page = useQuery({
-    queryKey: adminUserConversationsQueryKey(userId, offset, ''),
+    queryKey: adminUserConversationsQueryKey(membre.id, offset, ''),
     queryFn: async ({ signal }) => {
-      const resultat = await loadAdminUserConversations({ ...apiDeps, userId, offset, signal });
+      const resultat = await loadAdminUserConversations({ ...deps, userId: membre.id, offset, signal });
       if (!resultat.ok) throw new Error(resultat.error);
       return resultat.data;
     },
     retry: false,
   });
 
-  return (
-    <section className="grid gap-2" aria-labelledby="admin-conv-title">
-      <h2 id="admin-conv-title" className="text-caption font-medium" style={{ color: INK2 }}>
-        {translateAdmin(language, 'admin.conv.title')}
-      </h2>
+  const prisme = prismeDuMembre(membre);
 
-      {page.isPending ? (
-        <AdminSkeleton rows={3} />
-      ) : (page.data?.conversations ?? []).length === 0 ? (
-        <p className="text-caption" style={{ color: INK2 }}>
-          {translateAdmin(language, 'admin.conv.empty')}
-        </p>
-      ) : (
-        <>
-          <ul className="grid gap-2">
-            {(page.data?.conversations ?? []).map((conversation) => (
-              <ConversationRow key={conversation.id} conversation={conversation} language={language} />
-            ))}
-          </ul>
-          <Pagination
-            language={language}
-            offset={offset}
-            hasMore={page.data?.hasMore ?? false}
-            taille={ADMIN_CONVERSATIONS_PAGE_SIZE}
-            onOffset={setOffset}
-          />
-        </>
+  return (
+    <>
+      <CollapsibleSection id="admin-conv" title={translateAdmin(language, 'admin.conv.title')} card={false}>
+        {page.isPending ? (
+          <AdminSkeleton rows={3} />
+        ) : (page.data?.conversations ?? []).length === 0 ? (
+          <p className="text-caption" style={{ color: INK2 }}>
+            {translateAdmin(language, 'admin.conv.empty')}
+          </p>
+        ) : (
+          <>
+            <ul className="grid gap-2">
+              {(page.data?.conversations ?? []).map((conversation) => (
+                <ConversationRow
+                  key={conversation.id}
+                  conversation={conversation}
+                  language={language}
+                  onOpen={() => setOuverte(conversation)}
+                />
+              ))}
+            </ul>
+            <Pagination
+              language={language}
+              offset={offset}
+              hasMore={page.data?.hasMore ?? false}
+              taille={ADMIN_CONVERSATIONS_PAGE_SIZE}
+              onOffset={setOffset}
+            />
+          </>
+        )}
+      </CollapsibleSection>
+
+      {ouverte === null ? null : (
+        <Sheet
+          title={ouverte.title ?? ouverte.identifier ?? ouverte.id}
+          bodyAs="div"
+          onClose={() => setOuverte(null)}
+        >
+          <div className="flex min-h-0 flex-1 flex-col" data-admin-conversation-sheet={ouverte.id}>
+            <AdminConversationReading
+              conversationId={ouverte.id}
+              language={language}
+              readerLanguages={prisme.languages}
+              readerLocale={prisme.locale}
+              viewer={viewerDuMembre(membre)}
+              deps={deps}
+            />
+          </div>
+        </Sheet>
       )}
-    </section>
+    </>
   );
 }
 
+/**
+ * LA LIGNE EST UN BOUTON, pas un `<li>` cliquable : le clavier, le focus et le
+ * rôle viennent avec, et le lecteur d'écran annonce qu'il y a quelque chose à
+ * ouvrir. Un `onClick` posé sur le `<li>` aurait le même effet à la souris et
+ * aucun au clavier — la moitié des lecteurs, silencieusement.
+ */
 function ConversationRow({
   conversation,
   language,
+  onOpen,
 }: {
   readonly conversation: AdminConversation;
   readonly language: InterfaceLanguage;
+  readonly onOpen: () => void;
 }) {
   return (
-    <li data-admin-conversation={conversation.id} className="flex items-center gap-3 rounded-card px-4 py-3" style={CARTE}>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-body" style={{ color: INK }}>
-          {/* Un DIRECT n'a pas de titre propre (D-75) : il porte le nom de
-              l'autre, que cette route ne sert pas. On montre alors son
-              identifiant plutôt qu'une ligne vide. */}
-          {conversation.title ?? conversation.identifier ?? conversation.id}
-        </p>
-        <p className="truncate text-caption" style={{ color: INK2 }}>
-          {conversation.type}
-          {' · '}
-          {translateAdmin(language, 'admin.conv.members', { count: String(conversation.memberCount) })}
-        </p>
-      </div>
+    <li data-admin-conversation={conversation.id}>
+      <button
+        type="button"
+        data-admin-conversation-open={conversation.id}
+        onClick={onOpen}
+        className="flex w-full items-center gap-3 rounded-card px-4 py-3 text-start"
+        style={{ ...CARTE, minHeight: 44 }}
+      >
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-body" style={{ color: INK }}>
+            {/* Un DIRECT n'a pas de titre propre (D-75) : il porte le nom de
+                l'autre, que cette route ne sert pas. On montre alors son
+                identifiant plutôt qu'une ligne vide. */}
+            {conversation.title ?? conversation.identifier ?? conversation.id}
+          </p>
+          <p className="truncate text-caption" style={{ color: INK2 }}>
+            {conversation.type}
+            {' · '}
+            {translateAdmin(language, 'admin.conv.members', { count: String(conversation.memberCount) })}
+          </p>
+        </div>
+      </button>
     </li>
   );
 }

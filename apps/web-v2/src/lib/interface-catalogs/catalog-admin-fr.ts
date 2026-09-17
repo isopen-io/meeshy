@@ -108,10 +108,7 @@ const fr = {
   'admin.convDetail.reasonHint': 'Dix caractères minimum, consigné avec votre nom.',
   'admin.convDetail.read': 'Lire la conversation',
   'admin.convDetail.empty': 'Aucun message',
-  'admin.convDetail.protected': 'Protégé : existe, ne se montre pas',
-  'admin.convDetail.attachmentProtected': 'pièce protégée',
-  'admin.convDetail.edited': 'modifié',
-  'admin.convDetail.attachments': '{count} pièce(s)',
+  'admin.convDetail.memberPrism': 'Lu dans le prisme du membre : {languages}',
 } as const;
 
 export default fr;

@@ -96,10 +96,7 @@ const it = {
   'admin.convDetail.reasonHint': 'Almeno dieci caratteri, registrato con il suo nome.',
   'admin.convDetail.read': 'Leggere la conversazione',
   'admin.convDetail.empty': 'Nessun messaggio',
-  'admin.convDetail.protected': 'Protetto: esiste, non si mostra',
-  'admin.convDetail.attachmentProtected': 'allegato protetto',
-  'admin.convDetail.edited': 'modificato',
-  'admin.convDetail.attachments': '{count} allegato/i',
+  'admin.convDetail.memberPrism': 'Letto nel prisma del membro: {languages}',
 } satisfies AdminInterfaceCatalog;
 
 export default it;

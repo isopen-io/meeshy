@@ -96,10 +96,7 @@ const de = {
   'admin.convDetail.reasonHint': 'Mindestens zehn Zeichen, mit Ihrem Namen protokolliert.',
   'admin.convDetail.read': 'Unterhaltung lesen',
   'admin.convDetail.empty': 'Keine Nachricht',
-  'admin.convDetail.protected': 'Geschützt: vorhanden, nicht sichtbar',
-  'admin.convDetail.attachmentProtected': 'geschützter Anhang',
-  'admin.convDetail.edited': 'bearbeitet',
-  'admin.convDetail.attachments': '{count} Anhang/Anhänge',
+  'admin.convDetail.memberPrism': 'Im Prisma des Mitglieds gelesen: {languages}',
 } satisfies AdminInterfaceCatalog;
 
 export default de;

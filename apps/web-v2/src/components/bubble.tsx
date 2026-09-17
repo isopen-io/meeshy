@@ -73,6 +73,7 @@ export function Bubble({
   sendStartedAt,
   sendFailureReason,
   onRetry,
+  revealable = true,
   onJumpToMessage,
   onOpenStory,
   highlighted = false,
@@ -124,6 +125,16 @@ export function Bubble({
    * bande elle-même : `lastError` était capturé et lu par PERSONNE. */
   sendFailureReason?: string;
   onRetry?: () => void;
+  /**
+   * LE CONTENU EST-IL SEULEMENT LA ? (#6862) — `false` quand la charge ne
+   * PORTE PAS le texte : la lecture souveraine de l'administration retient
+   * `content`, `translations` et les URL des pieces AU SERVEUR. Le voile
+   * offrirait alors un tap qui decouvre une bulle VIDE (loi 4). `true` par
+   * defaut : le fil ordinaire recoit le texte, seulement masque a l'affichage.
+   * Couvre aussi le CHIFFREMENT, que `protectionOf` ne connait pas — d'ou le
+   * `|| !revealable` sur `isProtected` ci-dessous.
+   */
+  revealable?: boolean;
   /** Saute au message cité (#5566 défaut 10 : le bouton de citation ne faisait rien). */
   onJumpToMessage: (messageId: string) => void;
   /** Ouvre la story citée (#5936) — voir `focal-row.tsx`, même contrat. */
@@ -221,7 +232,7 @@ export function Bubble({
   const showsIdentity = isGrouped && !isMine && tail;
 
   // `kind === 'veiled' | 'burned'` toutes deux passent par `ProtectedContent`.
-  const isProtected = kind !== 'standard';
+  const isProtected = kind !== 'standard' || !revealable;
   /** LA LANGUE ACTIVE DU PIED (revue #5814, défaut majeur 12) — la langue
    * RÉELLEMENT servie par la rangée, jamais un état local. `servedRowLanguage`
    * (revue #5805) et non `rendered.language` : sur un message MÉDIA-SEUL le
@@ -325,6 +336,7 @@ export function Bubble({
       attachmentCount={message.attachments?.length ?? 0}
       surface="bubble"
       isMine={isMine}
+      revealable={revealable}
       onConsumeViewOnce={onConsumeViewOnce}
       now={now}
     >

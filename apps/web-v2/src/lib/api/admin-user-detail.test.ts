@@ -49,6 +49,7 @@ const CHARGE_COMPLETE = {
   timezone: 'Africa/Dakar',
   systemLanguage: 'fr',
   regionalLanguage: 'wo',
+  customDestinationLanguage: 'en',
   lastPasswordChange: '2026-06-01T09:00:00.000Z',
   failedLoginAttempts: 2,
   lockedUntil: null,
@@ -161,6 +162,32 @@ describe('decodeAdminUserDetail — ce qu’il sert', () => {
   test('le second facteur se lit comme un FAIT, pas comme une date à afficher', () => {
     expect(decodeAdminUserDetail(CHARGE_COMPLETE)?.twoFactorEnabled).toBe(true);
     expect(decodeAdminUserDetail({ id: 'u-3', username: 'k' })?.twoFactorEnabled).toBe(false);
+  });
+});
+
+describe('LES TROIS RANGS DU PRISME DU MEMBRE (#6862)', () => {
+  /**
+   * Le décodeur n'en déclarait que DEUX : `customDestinationLanguage` — le
+   * rang 3 — était servi par `sanitizeUser` et JETÉ ici. Tant que la fiche
+   * n'affichait que des libellés, l'absence ne se voyait nulle part. Elle se
+   * voit depuis que la modale de lecture rend le fil dans le Prisme DU MEMBRE :
+   * un prisme amputé de son rang 3 sert l'ORIGINAL là où une traduction
+   * existe, et le symptôme n'est pas une erreur — c'est une traduction qui a
+   * l'air manquante.
+   */
+  test('les trois rangs sont décodés — un prisme amputé sert l’original en silence', () => {
+    const membre = decodeAdminUserDetail(CHARGE_COMPLETE);
+
+    expect(membre?.systemLanguage).toBe('fr');
+    expect(membre?.regionalLanguage).toBe('wo');
+    expect(membre?.customDestinationLanguage).toBe('en');
+  });
+
+  test('un rang non servi devient la chaîne VIDE, jamais `undefined`', () => {
+    // `prismeDuMembre` filtre sur `code.trim() !== ''` : un `undefined` y
+    // passerait par `.trim()` et lèverait.
+    const membre = decodeAdminUserDetail({ ...CHARGE_COMPLETE, customDestinationLanguage: null });
+    expect(membre?.customDestinationLanguage).toBe('');
   });
 });
 

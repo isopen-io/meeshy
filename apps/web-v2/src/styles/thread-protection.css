@@ -114,6 +114,20 @@
   border: 0.5px solid color-mix(in srgb, var(--color-warn) 15%, transparent);
 }
 
+/* LE CONTENU RETENU AU SERVEUR (#6862) — la lecture souveraine de
+   l'administration ne REÇOIT pas le texte : la passerelle le garde
+   (`messageContentIsProtected`). La capsule reprend la grammaire NEUTRE du
+   tombstone supprimé — un fait constaté, pas une alerte — et jamais l'ambre de
+   `--burned`, qui raconte une consommation qui n'a pas eu lieu. */
+.protected-notice--withheld {
+  background-color: color-mix(in srgb, white 5%, transparent);
+  border: 0.5px solid color-mix(in srgb, white 8%, transparent);
+}
+:root.light .protected-notice--withheld {
+  background-color: color-mix(in srgb, black 3%, transparent);
+  border-color: color-mix(in srgb, black 5%, transparent);
+}
+
 /* LE BADGE ÉPHÉMÈRE — `error.opacity(isDark ? 0.15 : 0.1)`
    (`BubbleMetaBadges.swift:146-171`) : un SÉLECTEUR, jamais une lecture JS
    du schéma (même discipline que `.focus-card`/`.focus-chip`,

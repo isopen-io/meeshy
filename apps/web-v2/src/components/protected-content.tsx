@@ -43,6 +43,7 @@ export function ProtectedContent({
   attachmentCount,
   surface,
   isMine = false,
+  revealable = true,
   onConsumeViewOnce,
   now = defaultNow,
   children,
@@ -54,6 +55,22 @@ export function ProtectedContent({
   readonly attachmentCount: number;
   readonly surface: 'row' | 'bubble';
   readonly isMine?: boolean;
+  /**
+   * LE CONTENU EST-IL SEULEMENT LÀ ? (#6862, lot C) — `false` quand la charge
+   * ne PORTE PAS le texte masqué : la lecture souveraine de l'administration
+   * retient `content`, `translations` et les URL des pièces AU SERVEUR
+   * (`messageContentIsProtected`), et sert `isProtected` à la place.
+   *
+   * Sans ce drapeau, le voile offrait quand même son tap : « Toucher pour
+   * révéler le contenu » découvrait une bulle VIDE. C'est le contrôle sans
+   * effet que la loi 4 interdit, sous sa forme la plus trompeuse — non pas un
+   * bouton qui ne fait rien, mais un bouton qui prétend tenir ce que personne
+   * ne lui a donné.
+   *
+   * `true` par défaut : le fil ordinaire reçoit bien le texte, il est
+   * simplement masqué à l'affichage, et le tap le révèle pour de bon.
+   */
+  readonly revealable?: boolean;
   readonly onConsumeViewOnce?: ((messageId: string) => Promise<boolean>) | undefined;
   readonly now?: (() => number) | undefined;
   readonly children: ReactNode;
@@ -124,6 +141,20 @@ export function ProtectedContent({
 
   if (kind === 'deleted') return <ProtectionNotice kind="deleted" surface={surface} isMine={isMine} />;
   if (kind === 'expired') return null;
+
+  /**
+   * LE CONTENU RETENU AU SERVEUR (#6862) — testé AVANT `standard`, et c'est
+   * tout l'intérêt : la loi de protection du CLIENT (`protectionOf`) ne
+   * connaît ni `isEncrypted` ni `encryptionMode`, que `messageContentIsProtected`
+   * (passerelle) compte parmi ses quatre causes. Un message chiffré arrive donc
+   * ici en `standard` avec un texte VIDE — et rendrait une bulle vide, le
+   * défaut exact que cette mention existe pour empêcher.
+   *
+   * Placé avant `standard`, ce garde couvre les QUATRE causes d'un seul coup,
+   * parce qu'il lit le verdict SERVI et ne le recalcule pas.
+   */
+  if (!revealable) return <ProtectionNotice kind="withheld" surface={surface} isMine={isMine} />;
+
   if (kind === 'standard') return <>{children}</>;
 
   /**
@@ -235,12 +266,23 @@ export function ProtectionNotice({
   surface,
   isMine = false,
 }: {
-  readonly kind: 'deleted' | 'burned';
+  /**
+   * `withheld` (#6862) — le contenu n'est pas masqué À L'AFFICHAGE : il n'est
+   * PAS DANS LA CHARGE. Distinct de `burned` (« vu et supprimé », une histoire
+   * qui s'est produite) et de `deleted` (« l'auteur l'a retiré ») : ici le
+   * message EXISTE, entier, et c'est la passerelle qui refuse de le servir.
+   * Dire l'un des deux autres raconterait un fait qui n'a pas eu lieu.
+   */
+  readonly kind: 'deleted' | 'burned' | 'withheld';
   readonly surface: 'row' | 'bubble';
   readonly isMine?: boolean;
 }) {
-  const label = kind === 'deleted' ? 'Message supprimé' : 'Vu et supprimé';
-  const ariaLabel = kind === 'deleted' ? 'Message supprimé' : 'Message vu et supprimé';
+  const LABELS = {
+    deleted: { label: 'Message supprimé', aria: 'Message supprimé' },
+    burned: { label: 'Vu et supprimé', aria: 'Message vu et supprimé' },
+    withheld: { label: 'Contenu retenu', aria: 'Contenu retenu : ce message existe et ne se montre pas' },
+  } as const;
+  const { label, aria: ariaLabel } = LABELS[kind];
 
   if (surface === 'row') {
     return (
@@ -269,9 +311,9 @@ export function ProtectionNotice({
         aria-label={ariaLabel}
       >
         <Glyph
-          name={kind === 'deleted' ? 'prohibit' : 'flameFill'}
+          name={kind === 'burned' ? 'flameFill' : 'prohibit'}
           size={12}
-          style={{ color: kind === 'deleted' ? 'var(--color-ios-ink-2)' : 'var(--color-warn)' }}
+          style={{ color: kind === 'burned' ? 'var(--color-warn)' : 'var(--color-ios-ink-2)' }}
         />
         <span className="text-title italic" style={{ color: 'var(--color-ios-ink-2)' }}>
           {label}

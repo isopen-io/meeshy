@@ -60,6 +60,16 @@ export type AdminUserDetail = {
   readonly timezone: string;
   readonly systemLanguage: string;
   readonly regionalLanguage: string;
+  /**
+   * LE TROISIÈME RANG DU PRISME (#6862, lot C) — `sanitizeUser` le sert depuis
+   * toujours (`user-sanitization.service.ts`) ; ce décodeur ne le déclarait
+   * pas, donc il le JETAIT. Tant que la fiche n'affichait que des libellés,
+   * l'absence ne se voyait nulle part. Elle se voit maintenant : la modale de
+   * lecture rend le fil dans le Prisme DU MEMBRE, et un prisme amputé de son
+   * rang 3 sert l'original là où une traduction existe — le symptôme n'est pas
+   * une erreur, c'est une traduction qui a l'air manquante.
+   */
+  readonly customDestinationLanguage: string;
 
   readonly isActive: boolean;
   readonly isOnline: boolean;
@@ -125,6 +135,7 @@ export function decodeAdminUserDetail(raw: unknown): AdminUserDetail | null {
     timezone: asText(charge.timezone),
     systemLanguage: asText(charge.systemLanguage),
     regionalLanguage: asText(charge.regionalLanguage),
+    customDestinationLanguage: asText(charge.customDestinationLanguage),
 
     // `isActive` est VRAI sauf si la charge dit explicitement le contraire :
     // une clé absente ne doit pas désactiver un compte à l'écran. `isOnline`

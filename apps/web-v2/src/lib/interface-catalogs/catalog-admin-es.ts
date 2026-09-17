@@ -96,10 +96,7 @@ const es = {
   'admin.convDetail.reasonHint': 'Diez caracteres mínimo, registrado con su nombre.',
   'admin.convDetail.read': 'Leer la conversación',
   'admin.convDetail.empty': 'Ningún mensaje',
-  'admin.convDetail.protected': 'Protegido: existe, no se muestra',
-  'admin.convDetail.attachmentProtected': 'adjunto protegido',
-  'admin.convDetail.edited': 'editado',
-  'admin.convDetail.attachments': '{count} adjunto(s)',
+  'admin.convDetail.memberPrism': 'Leído en el prisma del miembro: {languages}',
 } satisfies AdminInterfaceCatalog;
 
 export default es;

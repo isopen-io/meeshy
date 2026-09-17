@@ -132,7 +132,11 @@ export default function AdminUserScreen() {
             routes sont servies jusqu'à AUDIT, plus largement que les gestes
             d'écriture ci-dessus qui exigent ADMIN+. */}
         <AdminUserMediaSection userId={membre.id} language={language} />
-        <AdminUserConversationsSection userId={membre.id} language={language} />
+        {/* La fiche ENTIÈRE, et pas seulement son identifiant (#6862) : la
+            modale de lecture rend le fil dans le Prisme DU MEMBRE, qui se
+            compose de ses trois rangs de langue, et le montre de SON point de
+            vue, qui demande son identité. */}
+        <AdminUserConversationsSection membre={membre} language={language} />
       </div>
 
       {edition ? (
