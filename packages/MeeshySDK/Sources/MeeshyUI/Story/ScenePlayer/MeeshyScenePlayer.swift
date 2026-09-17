@@ -131,12 +131,19 @@ public struct MeeshyScenePlayer: View {
     public nonisolated static func carrierMediaIdentity(in document: CanvasV3,
                                                         sceneIndex: Int) -> String? {
         guard document.scenes.indices.contains(sceneIndex) else { return nil }
-        guard let carrier = document.scenes[sceneIndex].objects
-                .filter({ $0.kind == .media && $0.plane == .content })
-                .min(by: { $0.z < $1.z }) else { return nil }
-        guard case .string(let identity)? = carrier.payload["postMediaId"],
-              !identity.isEmpty else { return nil }
-        return identity
+        // Aucune restriction de PLAN : un fond `plane: bg` référencé (forme
+        // servie par la passerelle, contrat des deux orthographes #6894) est
+        // tout autant le porteur de la scène qu'un média `plane: content` —
+        // c'est même, sur un tel document, son SEUL média. `mediaReference`
+        // est le site unique des deux orthographes ; le relire ici a divergé
+        // du contrat une fois déjà (#6894).
+        return document.scenes[sceneIndex].objects
+            .filter { $0.kind == .media }
+            .compactMap { object -> (z: Int, identity: String)? in
+                guard let identity = object.mediaReference else { return nil }
+                return (object.z, identity)
+            }
+            .min { $0.z < $1.z }?.identity
     }
 
     /// La naissance est en pause dans les trois modes ; la commande du viewer ne
@@ -206,8 +213,7 @@ public struct MeeshyScenePlayer: View {
         let scene = document.scenes[sceneIndex]
         let addressed = scene.objects
             .compactMap { object -> (z: Int, identity: String)? in
-                guard case .string(let identity)? = object.payload["postMediaId"],
-                      !identity.isEmpty else { return nil }
+                guard let identity = object.mediaReference else { return nil }
                 return (object.z, identity)
             }
             .min { $0.z < $1.z }?.identity

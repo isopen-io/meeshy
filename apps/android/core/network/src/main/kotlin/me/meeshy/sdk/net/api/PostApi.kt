@@ -36,6 +36,13 @@ data class CreatePostRequest(
      * (`services/gateway/src/services/location/sharedPlace.ts`).
      */
     val location: SharedPlace? = null,
+    /**
+     * Author-authored accessibility description, per media id (#6739) — same
+     * contract as web's `CreatePostRequest.mediaAlt`: key is one of the ids in
+     * [mediaIds], the gateway ignores any key absent from it
+     * (`services/gateway/src/routes/posts/types.ts`, `CreatePostSchema.mediaAlt`).
+     */
+    val mediaAlt: Map<String, String>? = null,
 )
 
 /** Mobile transcription payload — port of MobileTranscriptionPayload (ServiceModels.swift). */

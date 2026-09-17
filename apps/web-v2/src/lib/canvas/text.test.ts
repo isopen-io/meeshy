@@ -61,6 +61,22 @@ describe('resolveSceneText — le Prisme d’un objet texte de scène', () => {
     expect(result.color).toBe('#333333');
   });
 
+  /* LE CORPUS RÉEL écrit `textColor: "FFFFFF"` SANS dièse (relevé sur
+     `gate.staging.meeshy.me` le 2026-09-17, quatre stories v3 sur sept) : posé
+     tel quel, `color: FFFFFF` est une déclaration CSS INVALIDE, que le
+     navigateur ignore — le texte héritait alors la couleur de son hôte (blanc
+     dans le lecteur par hasard, sombre sur une carte du fil en clair). iOS lit
+     l'hexadécimal avec ou sans dièse (`Color(hex:)`). */
+  test('un hexadécimal SANS dièse (corpus réel) ⇒ une couleur CSS valide', () => {
+    const result = resolveSceneText({ object: textObject({ payload: { text: 'x', textColor: 'FF3B30' } }), preferredLanguages: [] });
+    expect(result.color).toBe('#FF3B30');
+  });
+
+  test('une couleur illisible ⇒ le blanc par défaut, jamais une déclaration invalide', () => {
+    const result = resolveSceneText({ object: textObject({ payload: { text: 'x', textColor: 'rouge vif' } }), preferredLanguages: [] });
+    expect(result.color).toBe('#FFFFFF');
+  });
+
   test('aucune couleur déclarée ⇒ blanc (défaut Swift, fontSize 64/textColor blanc)', () => {
     const result = resolveSceneText({ object: textObject({ payload: { text: 'x' } }), preferredLanguages: [] });
     expect(result.color).toBe('#FFFFFF');

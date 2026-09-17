@@ -54,6 +54,14 @@ export type CanvasScene = {
   readonly closing?: unknown;
   readonly clipTransitions?: readonly unknown[];
   readonly carrierAspect?: number;
+  /** `SceneV3.timelineDuration` (`canvas-v3.ts:146`) — secondes, AUTORITAIRE
+   * quand positif fini (#6899, T5) : gouverne `slideDurationForScene`
+   * (`lib/stories/playback.ts`), jamais lu ailleurs. */
+  readonly timelineDuration?: number;
+  /** `SceneV3.thumbHash` (`canvas-v3.ts:149`) — l'empreinte du CANVAS
+   * COMPOSITE, distincte du hash d'un média individuel (#6899, T5) : le
+   * dernier candidat de `letterboxHashes` (`lib/stories/letterbox.ts`). */
+  readonly thumbHash?: string;
 };
 
 export type CanvasDocument = {
@@ -158,6 +166,11 @@ function parseScene(raw: unknown, sceneIndex: number): CanvasScene | null {
   const id = typeof raw.id === 'string' && raw.id !== '' ? raw.id : `scene-${sceneIndex}`;
   const carrierAspect = typeof raw.carrierAspect === 'number' && raw.carrierAspect > 0 ? raw.carrierAspect : undefined;
   const clipTransitions = Array.isArray(raw.clipTransitions) ? raw.clipTransitions.filter(isRecord) : undefined;
+  const timelineDuration =
+    typeof raw.timelineDuration === 'number' && Number.isFinite(raw.timelineDuration) && raw.timelineDuration > 0
+      ? raw.timelineDuration
+      : undefined;
+  const thumbHash = typeof raw.thumbHash === 'string' && raw.thumbHash !== '' ? raw.thumbHash : undefined;
   return {
     id,
     objects,
@@ -165,6 +178,8 @@ function parseScene(raw: unknown, sceneIndex: number): CanvasScene | null {
     ...(isRecord(raw.closing) ? { closing: raw.closing } : {}),
     ...(clipTransitions !== undefined ? { clipTransitions } : {}),
     ...(carrierAspect !== undefined ? { carrierAspect } : {}),
+    ...(timelineDuration !== undefined ? { timelineDuration } : {}),
+    ...(thumbHash !== undefined ? { thumbHash } : {}),
   };
 }
 

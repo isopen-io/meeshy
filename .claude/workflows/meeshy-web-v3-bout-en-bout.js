@@ -3,7 +3,7 @@ export const meta = {
   description:
     'Developper la v3.1 web (apps/web-v2, Vite + Preact + Capacitor) a parite avec l app iOS, pour le web ET Android en une fois : dev resynchronise a chaque tour, etat des lieux ecran par ecran CONTRE apps/ios, issues, une SPECIFICATION par travail, TDD, revue-correction systematique, gates (gate composite + coques QEMU/simulateur), LIVRAISON INCREMENTALE (chaque travail vert part vers dev dans l heure, le staging suit pas a pas) — fable DECRIT et LIVRE, sonnet et haiku DEVELOPPENT, opus RELIT ET CORRIGE',
   whenToUse:
-    "Lancer un tour de developpement de la v3.1 web (apps/web-v2 — directive porteur 2026-09-07 soir : une application similaire a apps/ios pour le web et Android en une fois, en boucle jusqu'a maturite feature par feature). D'abord les coques et le reseau (assets, shells, staging), puis les ecrans dans l'ordre de l'app iOS : conversations, thread, composeur-du-fil, stories, feed, contacts, search, notifs, profile, settings. Args : { branche, depuis, focus, dabord, phares, plafond, tours, sans_issues, pr, base, date, attribution, modeles, repo, sauter }.",
+    "Lancer un tour de developpement de la v3.1 web (apps/web-v2 — directive porteur 2026-09-07 soir : une application similaire a apps/ios pour le web et Android en une fois, en boucle jusqu'a maturite feature par feature). D'abord les coques et le reseau (assets, shells, staging), puis les ecrans dans l'ordre de l'app iOS : conversations, thread, composeur-du-fil, stories, feed, contacts, search, notifs, profile, settings. Args : { branche, depuis, focus, dabord, phares, plafond, tours, sans_issues, pr, base, date, attribution, modeles, repo, sauter, continu, continu_sauf }.",
   phases: [
     { title: 'Synchroniser', detail: "fetch + merge origin/dev avant tout travail, et releve de ce que les autres sessions tiennent", model: 'haiku' },
     { title: 'Cadrer', detail: "etat des lieux surface par surface CONTRE apps/ios (parity.md, route-inventory), choix des travaux — fable DECRIT", model: 'fable' },
@@ -14,7 +14,7 @@ export const meta = {
     { title: 'Revue', detail: "SYSTEMATIQUE : opus relit surface ET conception, CORRIGE lui-meme, met en conformite (D-1..D-14, passerelle, Prisme, a11y) ; recette au navigateur sur les phares", model: 'opus' },
     { title: 'Gates', detail: 'bun run gate + check-offline + captures + coherence des coques (QEMU + simulateur) — corriger, jamais contourner', model: 'sonnet' },
     { title: 'Documenter', detail: 'decisions.md, parity.md (regenere), README (mesures avec leur commande), lessons.md', model: 'sonnet' },
-    { title: 'Livrer', detail: 'INCREMENTAL : chaque travail vert part tout de suite (commit, push, PR auto-merge) ; en fin de tour, fermeture des issues avec preuve — fable', model: 'fable' },
+    { title: 'Livrer', detail: 'CONTINU : chaque etape verte part vers dev par un point d etape pousse, le commit final ferme l issue ; en fin de tour, fermeture des issues avec preuve — fable', model: 'fable' },
     { title: 'Completude', detail: "ce qui manque encore par rapport a apps/ios — le prochain tour, decrit", model: 'fable' },
   ],
 }
@@ -87,6 +87,16 @@ const PHARES = new Set(Array.isArray(A.phares) ? A.phares : ['thread', 'conversa
 const DATE = typeof A.date === 'string' ? A.date : '(date non fournie — la lire avec `date -I`)'
 const PR = A.pr !== false
 const BASE = typeof A.base === 'string' && A.base ? A.base : 'dev'
+
+// LIVRAISON CONTINUE (directive porteur 2026-09-17 : « commit et push en dev au fur et a mesure »).
+// Mesure du tour qui l'a motivee : chaque travail dormait TROIS heures dans l'arbre entre sa
+// specification et sa livraison incrementale (scenes-fil 09:45 → 12:55, stories-lecteur 12:55 → 16:14).
+// Desormais chaque etape VERTE part vers `BASE` par un point d'etape pousse ; la PR disparait.
+// `continu: false` rend l'ancien regime. `continu_sauf` nomme les travaux qu'une REPRISE de run a deja
+// livres sous l'ancien regime : leurs prompts doivent rester identiques pour que le cache les rende.
+const CONTINU = A.continu !== false
+const CONTINU_SAUF = new Set(Array.isArray(A.continu_sauf) ? A.continu_sauf : [])
+const enContinu = (cle) => CONTINU && !CONTINU_SAUF.has(cle)
 
 // ---------------------------------------------------------------------------
 // LE SOCLE — ce que TOUT agent lit avant de travailler
@@ -972,6 +982,73 @@ GIT — ne commit PAS, ne pousse PAS, ne cree ni stash, ni branche, ni worktree 
 avec les autres agents du tour, et ce sont les phases Synchroniser (points d'etape) et Livrer
 (commits, push, PR) qui commitent pour tous. Un commit ou un push de ta part est un DEFAUT du tour.`
 
+  // LIVRAISON CONTINUE (voir CONTINU) — ce que recoit un agent qui ECRIT du code (implementation,
+  // revue-correction, corrections) quand son travail part au fil de l'eau. Le relecteur suivant perd
+  // alors `git diff` seul et `git show HEAD:` comme « etat d'avant » (les relecteurs du tour du
+  // 2026-09-17 ne lisaient QUE ces deux commandes) : SURFACE les lui rend depuis la BASE que
+  // l'implementeur grave avant sa premiere ecriture.
+  const fichierBase = (t) => `${dossierDeTravail}/base-${t.cle}`
+  const GRAVER_LA_BASE = (t) => `
+AVANT TA PREMIERE ECRITURE, grave l'etat d'avant du travail — les relecteurs en tireront leur diff :
+\`cd ${REPO} && mkdir -p ${dossierDeTravail} && git rev-parse HEAD > ${fichierBase(t)}\`.
+`
+  const POINT_D_ETAPE = (t, num) => `
+GIT — LIVRAISON CONTINUE (directive porteur 2026-09-17 : « commit et push en dev au fur et a mesure »).
+Tu es le SEUL agent qui ecrit dans l'arbre pendant ta mission. A CHAQUE etape VERTE et coherente (un
+temoin et le code qui le fait passer, une extraction finie — jamais un rouge TDD), et au plus tard
+toutes les 30 minutes de travail, pousse un POINT D'ETAPE vers \`${BASE}\` :
+  a. \`cd ${V3} && bun run type-check > ${dossierDeTravail}/tsc.log 2>&1; echo "tsc=$?"\` puis
+     \`cd ${V3} && bun test > ${dossierDeTravail}/test.log 2>&1; echo "test=$?"\` — le code de sortie,
+     JAMAIS a travers un pipe. Rouge ⇒ pas de point d'etape : va jusqu'a l'etape verte suivante.
+  b. \`cd ${REPO} && git status --short\` ; \`git add\` par CHEMINS, jamais les artefacts generes
+     (${V3}/dist/, ${V3}/rendu/, ${V3}/ios/App/Build/, ${V3}/android/app/build/, ${V3}/android/.gradle/,
+     .cache/) ; \`git commit\` au message \`wip(web-v2): <l'etape> (Refs #${num || 'n'})\`, termine par :
+${ATTRIBUTION}
+     puis \`git show --stat HEAD\` : le stat porte-t-il ce que le message annonce ?
+  c. \`git fetch origin ${BASE}\` ; si \`git log --oneline HEAD..origin/${BASE}\` n'est pas vide :
+     \`git merge --no-ff origin/${BASE}\` — JAMAIS de rebase ; --no-ff garde les commits des autres
+     sessions HORS de la ligne du travail (la surface du relecteur en depend). Conflit ⇒ garder les
+     deux apports, puis rejouer (a).
+  d. \`git push origin HEAD:${BASE}\` puis \`git push -u origin HEAD\` (4 essais sur echec RESEAU ;
+     rejet non fast-forward ⇒ retour en c).
+Jamais de stash, de branche ni de worktree. Rends dans ton rapport la liste de tes points d'etape
+(sha court + etape) — ou pourquoi aucun n'est parti.`
+  const SURFACE = (t, depart) => `
+LA SURFACE DE CE TRAVAIL — il part vers \`${BASE}\` par POINTS D'ETAPE : \`git diff\` seul ne montre que
+le reste non commite, et \`git show HEAD:<chemin>\` n'est PLUS l'etat d'avant. Depuis ${REPO} :
+  B=${depart || `$(cat ${fichierBase(t)})`}
+  git log --oneline --first-parent "$B"..HEAD            # les points d'etape
+  F=$( { git log --first-parent --no-merges --format= --name-only "$B"..HEAD; git diff --name-only HEAD; git ls-files --others --exclude-standard; } | sort -u | grep . )
+  git diff "$B" -- $F                                     # le diff du travail (commits + arbre)
+  git show "$B":<chemin>                                  # l'etat d'AVANT d'un fichier
+Un hunk qu'une AUTRE session a fusionne dans \`${BASE}\` se reconnait par \`git log --no-merges "$B"..HEAD -- <chemin>\` :
+il n'est pas du travail du lot.
+`
+  const LIVRER_EN_CONTINU = (t, num) => `1. LE TRAVAIL EST DEJA PARTI EN POINTS D'ETAPE (livraison continue). Ta mission : faire partir le
+   RESTE, fermer l'issue, et prouver que \`${BASE}\` reste sain. Un push sur \`${BASE}\` ne rejoue PAS en
+   CI les tests de web-v2 (seule une PR les jouait) : c'est ICI qu'ils jugent.
+   \`cd ${V3} && bun run gate > ${dossierDeTravail}/gate-${t.cle}.log 2>&1; echo "gate=$?"\` — le gate
+   COMPOSITE (type-check, bun test, build, measure-weight, check-*). Le code de sortie, JAMAIS a travers
+   un pipe ; ouvre le journal de chaque segment rouge.
+2. \`cd ${REPO} && git status --short\` : \`git add\` par CHEMINS, jamais les artefacts generes (dist/,
+   rendu/, ios/App/Build/, android/app/build/, android/.gradle/, .cache/).
+3. SI le gate est VERT et le verdict n'est pas « a-refaire » : commit \`feat(web-v2): <le resultat>\`
+   (ou fix/style selon la nature), corps bref (ce qui etait absent, la forme retenue, les points d'etape
+   qui l'ont porte)${num ? `, \`Closes #${num}\`` : ''} — avec \`--allow-empty\` si l'arbre est deja propre :
+   c'est CE commit qui ferme l'issue. Fin de message EXACTEMENT :
+${ATTRIBUTION}
+   SINON : \`wip(web-v2): <etat> (Refs #${num || 'n'})\` s'il reste du travail dans l'arbre, et dis pourquoi
+   l'issue reste ouverte (segments rouges, leur cause).
+4. \`git fetch origin ${BASE}\` ; s'il a avance, \`git merge --no-ff origin/${BASE}\` (JAMAIS de rebase) et
+   rejoue type-check + bun test. Puis \`git push origin HEAD:${BASE}\` et \`git push -u origin HEAD\`
+   (4 essais sur echec RESEAU ; rejet non fast-forward ⇒ refetch, refusion). EXCEPTION : un segment
+   rouge CAUSE par ce travail n'entre pas dans \`${BASE}\` — pousse alors la seule branche et dis-le ; un
+   rouge PREEXISTANT (deja rouge sur \`origin/${BASE}\`, ou sur une surface que le travail n'a pas
+   touchee) n'arrete pas la livraison — nomme-le.
+5. PAS DE PR : la directive pousse en \`${BASE}\` (pr_numero=0, auto_merge=false).${num ? ` Puis
+   \`gh issue view ${num} --json state\` : encore ouverte alors que le commit qui la ferme est sur
+   \`${BASE}\` ? ferme-la (\`gh issue close ${num} --comment <sha et gate>\`).` : ''}`
+
   const resynchroniser = async (moment) => {
     phase('Synchroniser')
     const s = await agent(`${SOCLE}
@@ -1018,6 +1095,7 @@ ${ATTRIBUTION}
       ? `\nLA CIBLE de cet ecran est l'ecran iOS : ${cheminCible ? `capture de reference ${cheminCible} (et sa jumelle sombre) — REGARDE-LA (outil Read)` : `pas de capture posee — lis les fichiers Swift de reference (${t.reference_ios || 'a retrouver dans Features/**'}) et, si tu peux, capture l'ecran au simulateur de REFERENCE ${SIM_REF} (app native, apres les trois verifications du socle — jamais ${SIM_CHANTIER}, qui porte la coque)`}. Elle fait foi sur la disposition, la hierarchie, les etats et les gestes ; les jetons derives de Swift font foi sur le style.`
       : ''
     const phare = PHARES.has(t.cle)
+    const continu = enContinu(t.cle)
 
     // ---------------------------------------------------------------- Specifier (decrire)
     phase('Specifier')
@@ -1098,7 +1176,7 @@ ${synchroApresSpec && synchroApresSpec.fichiers_touches_par_dev ? `\nCE QUE LES 
 LA SPECIFICATION (aussi dans ${dossierDeTravail}/specs/${t.cle}.md) :
 ${SPEC_TEXTE}
 
-METHODE, dans cet ordre :
+${continu ? GRAVER_LA_BASE(t) : ''}METHODE, dans cet ordre :
 1. Lis la specification en entier, puis CHAQUE fichier qu'elle cite (Swift compris). Si elle te
    semble FAUSSE sur un point, verifie dans le code, DIS-LE et suis le code REEL — jamais une
    divergence silencieuse. On FAIT EVOLUER le code existant, on ne le reecrit pas a cote.
@@ -1116,7 +1194,7 @@ METHODE, dans cet ordre :
    capture chaque coque et REGARDE. Les commandes exactes sont dans le socle.
 6. Fais tourner localement : \`cd ${V3} && bun run type-check && bun test\`, puis \`bun run build\`
    et \`node scripts/check-curve.mjs\` ; corrige AVANT de rendre.
-7.${SANS_COMMIT}
+7.${continu ? POINT_D_ETAPE(t, num) : SANS_COMMIT}
 
 Rends un rapport texte : chaque ETAPE de la specification (faite / non faite, et pourquoi), les
 fichiers touches, les commandes lancees et leurs sorties, les CAPTURES produites, ce que tu n'as
@@ -1141,7 +1219,7 @@ ${SPEC_TEXTE.slice(0, 14000)}
 RAPPORT DU DEVELOPPEUR :
 ${fait || '(aucun rapport rendu)'}
 
-A. PRENDRE EN DEFAUT — LA SURFACE (git diff, git status, fichiers) :
+A. PRENDRE EN DEFAUT — LA SURFACE (git diff, git status, fichiers) :${continu ? SURFACE(t) : ''}
 - le critere de fin est-il REELLEMENT atteint ? Rejoue la commande qu'il nomme.
 - la COHERENCE AVEC iOS : ouvre la capture cible ET la capture produite — meme disposition, meme
   hierarchie, memes etats, memes gestes ? (l'ecart typographique web/iOS est assume, pas l'ecart
@@ -1189,7 +1267,7 @@ C. CORRIGER ET METTRE EN CONFORMITE — toi-meme, maintenant :
 - ce que tu ne PEUX pas corriger (re-implementation, decision produit, endpoint absent) : rends-le
   dans \`restants\` avec gravite, constat, preuve et correctif propose.
 
-${SANS_COMMIT}
+${continu ? POINT_D_ETAPE(t, num) : SANS_COMMIT}
 
 Rends : verdict (l'etat APRES tes corrections), defauts_trouves (tous, avec preuve), corriges
 (nombre), restants (bloquant/majeur seulement), rapport, gates_rejoues (sorties tronquees),
@@ -1241,12 +1319,14 @@ ${SPEC_TEXTE.slice(0, 10000)}
 
 Tu corriges CHACUN, ou tu dis explicitement pourquoi un constat est FAUX — avec ta preuve. Un
 relecteur peut se tromper : ne corrige pas un defaut qui n'existe pas, refute-le. Chaque correction
-garde son test. Rejoue type-check, test, build.
+garde son test. Rejoue type-check, test, build.${continu ? `
+PREMIERE COMMANDE : \`cd ${REPO} && git rev-parse HEAD\` — rends ce sha en TETE de ton rapport, sous la
+forme \`DEPART=<sha>\` : la contre-revue en tirera le diff de tes corrections.${SURFACE(t)}` : ''}
 
 LES DEFAUTS :
 ${aCorriger.map((d, i) => `${i + 1}. [${d.gravite}] ${d.constat}\n   preuve: ${d.preuve}\n   correctif propose: ${d.correctif}`).join('\n\n')}
 
-${SANS_COMMIT}
+${continu ? POINT_D_ETAPE(t, num) : SANS_COMMIT}
 
 Rends : corriges (nombre), refutes (nombre), rapport.`,
         { label: `corriger:${t.cle}:${passe}`, phase: 'Implementer', schema: CORRECTION, model: MODELE.developper, effort: 'high' })
@@ -1259,7 +1339,7 @@ ${PASSERELLE}${DIRECTIVES}
 CONTRE-REVUE. Des defauts ont ete corriges ou refutes sur « ${t.titre_issue} ». Verifie que CHAQUE
 correction est reelle (git diff) et n'a rien casse (rejoue type-check, test sur le perimetre), et
 que chaque refutation est FONDEE — une refutation infondee redevient un defaut. Ne rends que ce
-qui reste BLOQUANT ou MAJEUR.
+qui reste BLOQUANT ou MAJEUR.${continu ? SURFACE(t, '<le sha DEPART= en tete du rapport de correction>') : ''}
 
 ${SANS_COMMIT}
 
@@ -1289,7 +1369,7 @@ pas la fin du tour).
 TRAVAIL LIVRE : ${t.titre_issue}${num ? ` (issue #${num})` : ''}
 VERDICT DE LA REVUE : ${revue ? revue.verdict : '(aucun)'} — ${aCorriger.length} defauts non mineurs restants.
 
-1. \`cd ${V3} && bun run type-check && bun test 2>&1 | tail -5\` — les gates RAPIDES seulement (le
+${continu ? LIVRER_EN_CONTINU(t, num) : `1. \`cd ${V3} && bun run type-check && bun test 2>&1 | tail -5\` — les gates RAPIDES seulement (le
    gate complet viendra en fin de tour).
 2. \`git status --short\` : retire des chemins a commiter tout artefact genere (dist/, rendu/,
    ios/App/Build/, android/app/build/, android/.gradle/, .cache/).
@@ -1305,7 +1385,7 @@ ${ATTRIBUTION}
 5. ${PR ? `La PR de la branche vers \`${BASE}\` : cree-la si elle n'existe pas encore
    (\`gh pr create --base ${BASE}\`, titre = le chantier du tour), arme l'auto-merge
    (\`gh pr merge --auto --merge\`) — chaque push suivant l'alimente et GitHub fusionne des que la
-   CI est verte : c'est ainsi que le staging recoit une version utilisable a chaque pas.` : `PR : pas de PR (pr=false) — le push suffit.`}
+   CI est verte : c'est ainsi que le staging recoit une version utilisable a chaque pas.` : `PR : pas de PR (pr=false) — le push suffit.`}`}
 6. Rends pousse (true/false), commits (les sha), et un rapport bref.
 
 ${aCorriger.length ? `DEFAUTS RESTANTS (ils voyagent avec le wip, dis-les dans le corps du commit) :\n${court(aCorriger, 2000)}` : ''}`,
@@ -1457,7 +1537,13 @@ SI TOUS LES GATES SONT VERTS OU NON-APPLICABLES, et dans le cas (b) :
 ${ATTRIBUTION}
    N'ecris aucun nom de modele ailleurs. Un travail deja porte par des POINTS D'ETAPE n'a plus de
    commit a lui : son \`Closes #n\` va dans le corps de la PR.
-3. \`git push -u origin ${REF_PUSH}\` (4 essais sur echec RESEAU). Sur rejet non fast-forward :
+${CONTINU ? `3. LIVRAISON CONTINUE (directive porteur 2026-09-17 : « commit et push en dev au fur et a mesure ») :
+   PAS DE PR. Un travail deja porte par des points d'etape dont l'issue n'est pas encore fermee recoit
+   son \`Closes #n\` dans un commit (\`--allow-empty\` si besoin). \`git fetch origin ${BASE}\` ; s'il a
+   avance, \`git merge --no-ff origin/${BASE}\` — JAMAIS de rebase — et rejoue type-check + test. Puis
+   \`git push origin HEAD:${BASE}\` et \`git push -u origin ${REF_PUSH}\` (4 essais sur echec RESEAU ;
+   rejet non fast-forward ⇒ refetch, refusion). Le cas (a) ci-dessus ne pousse RIEN vers \`${BASE}\`.
+   Rends pr_numero=0 et auto_merge=false.` : `3. \`git push -u origin ${REF_PUSH}\` (4 essais sur echec RESEAU). Sur rejet non fast-forward :
    \`git fetch origin ${NOM_SHELL} && git merge origin/${NOM_SHELL}\` — JAMAIS de rebase — puis rejoue
    type-check + test, et pousse a nouveau.
 3 bis. ${PR ? `LA PR, SANS INTERVENTION : ${NOM_DE_BRANCHE} doit avoir une PR OUVERTE vers \`${BASE}\`.
@@ -1471,7 +1557,7 @@ ${ATTRIBUTION}
        (auto_merge=false).
    (d) Si \`${BASE}\` a avance et que la PR est en CONFLIT : \`git merge origin/${BASE}\` dans la
        branche, resous, rejoue type-check + test, pousse a nouveau.
-   Rends pr_numero et auto_merge.` : 'PR : aucune a ouvrir dans ce tour (pr=false).'}
+   Rends pr_numero et auto_merge.` : 'PR : aucune a ouvrir dans ce tour (pr=false).'}`}
 4. Pour chaque issue livree DONT TU CONNAIS LE NUMERO : un commentaire de cloture
    (\`gh issue comment\`) — preuve (commit, gate, mesure), captures decrites, dimensions MURES et
    RESTANTES ; et une issue par dimension non mure (label web-v3, meme milestone). Termine chaque

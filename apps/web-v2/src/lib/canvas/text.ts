@@ -1,5 +1,6 @@
 import { served, type Served } from '@/lib/api/prism';
 
+import { hexColorCss } from './background';
 import type { CanvasObject } from './document';
 
 /**
@@ -53,7 +54,9 @@ export function resolveSceneText(params: {
 
   // §3.3.3 — le corpus texte-seul écrit `color`, iOS relit `textColor` :
   // le web lit les deux, `textColor` en tête.
-  const color = typeof payload.textColor === 'string' ? payload.textColor : typeof payload.color === 'string' ? payload.color : '#FFFFFF';
+  // Chaque valeur passe par `hexColorCss` : le corpus réel écrit « FFFFFF »
+  // sans dièse, qu'un navigateur ignore en silence (#6899).
+  const color = hexColorCss(payload.textColor) ?? hexColorCss(payload.color) ?? '#FFFFFF';
 
   const fontSize = typeof payload.fontSize === 'number' && payload.fontSize > 0 ? payload.fontSize : DEFAULT_FONT_SIZE;
 

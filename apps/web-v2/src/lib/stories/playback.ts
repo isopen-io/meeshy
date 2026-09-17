@@ -1,3 +1,5 @@
+import { parseCanvasDocument, type CanvasScene } from '@/lib/canvas/document';
+
 /**
  * LA LECTURE D'UNE STORY — lois PURES, miroir vecteur à vecteur de la
  * référence iOS (#5817, D-1) :
@@ -70,6 +72,29 @@ export function slideDurationMs(params: {
   return media === null ? plancher : Math.ceil(plancher / media) * media;
 }
 
+/**
+ * `slideDurationForScene` (T4, #6899) — la durée d'une diapositive de SCÈNE,
+ * miroir de `StorySlide.computedTotalDuration()` (`StoryModels.swift:862-872`) :
+ *
+ * - **PRIORITÉ 0, l'épingle de la timeline** — `timelineDuration` (SECONDES,
+ *   `canvas-v3.ts:146`) positif est AUTORITAIRE : « elle gagne sur le contenu
+ *   (un média plus long est rogné) ». Ni plancher de 6 s, ni arrondi aux
+ *   cycles : c'est la durée que l'auteur a posée dans l'éditeur.
+ * - sinon, la loi du CONTENU {@link slideDurationMs}, inchangée.
+ *
+ * Ce n'est PAS `configuredMs` : celui-ci porte la sémantique du LEGACY
+ * `slideDuration` (un plancher, arrondi aux cycles du média), qu'iOS a
+ * justement distinguée d'une épingle de timeline — les confondre faisait
+ * durer 30 s sur le web une story épinglée à 8 s sur une piste de 30 s.
+ */
+export function slideDurationForScene(params: {
+  readonly scene: Pick<CanvasScene, 'timelineDuration'>;
+  readonly mediaDurationMs?: number | null | undefined;
+}): number {
+  const pinned = dureeUtileOuNull(params.scene.timelineDuration);
+  return pinned !== null ? pinned * 1000 : slideDurationMs({ mediaDurationMs: params.mediaDurationMs });
+}
+
 /** `defaultExpiryInterval` (`StoryModels.swift:1731-1757`) — 20 heures,
  * utilisé seulement quand `expiresAt` est absent du corpus servi. */
 export const STORY_EXPIRY_MS = 20 * 60 * 60 * 1000;
@@ -85,10 +110,28 @@ export type StoryPlaybackAuthor = {
 
 export type StoryPlaybackMedia = {
   readonly id: string;
+  /** La clé que la passerelle SERT (`mediaSelect.fileUrl`,
+   * `services/posts/postIncludes.ts:104`, mesuré sur
+   * `gate.staging.meeshy.me` le 2026-09-17). `url` est l'ancienne clé des
+   * fixtures, qu'aucune réponse réelle ne porte : lue seule, elle laissait
+   * toute story à média SANS image hors fixtures. {@link storyMediaUrl} lit
+   * les deux. */
+  readonly fileUrl?: string | null;
   readonly url?: string;
-  readonly thumbnailUrl?: string;
-  readonly mimeType?: string;
+  readonly thumbnailUrl?: string | null;
+  readonly mimeType?: string | null;
+  readonly width?: number | null;
+  readonly height?: number | null;
+  readonly thumbHash?: string | null;
 };
+
+/** L'adresse d'un média de story — `fileUrl` (la passerelle), sinon `url`
+ * (fixtures historiques) ; `''` quand aucune n'est servie. SITE UNIQUE : le
+ * chemin v1 et le porteur de scène (`lib/stories/carrier.ts`) la lisent ici. */
+export function storyMediaUrl(media: Pick<StoryPlaybackMedia, 'fileUrl' | 'url'>): string {
+  if (typeof media.fileUrl === 'string' && media.fileUrl !== '') return media.fileUrl;
+  return typeof media.url === 'string' ? media.url : '';
+}
 
 /** La forme MINIMALE qu'une story doit porter pour se lire — un sous-ensemble
  * de `StoryFeedPost` (`lib/api/stories.ts`), pour que ce module reste
@@ -99,7 +142,11 @@ export type StoryPlaybackStory = {
   readonly content?: string | null;
   readonly originalLanguage?: string | null;
   readonly translations?: unknown;
-  readonly storyEffects?: { readonly background?: string | null } | null;
+  /** `unknown` (#6899, T8) — un fond v1 (`{ background }`) OU un document
+   * canvas v3 (`{ v: 3, scenes: […] }`) : `storyEffectsBackgroundOf` et
+   * `parseCanvasDocument` (`lib/canvas/document.ts`) sont les DEUX portes
+   * d'accès, jamais une lecture directe de champ. */
+  readonly storyEffects?: unknown;
   readonly media?: readonly StoryPlaybackMedia[];
   readonly createdAt: string | Date;
   readonly expiresAt?: string | Date | null;
@@ -137,16 +184,32 @@ export function isStoryExpired(story: Pick<StoryPlaybackStory, 'createdAt' | 'ex
   return timeOf(story.createdAt) + STORY_EXPIRY_MS <= now;
 }
 
+const isPlainRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
+
+/** Le fond v1 (`StoryFeedEffects.background`) d'un `storyEffects` de forme
+ * INCONNUE — `undefined` sur tout ce qui n'est pas un fond v1 exploitable
+ * (y compris un document v3, que {@link parseCanvasDocument} lit à sa place). */
+export function storyEffectsBackgroundOf(storyEffects: unknown): string | null | undefined {
+  if (!isPlainRecord(storyEffects)) return undefined;
+  const background = storyEffects.background;
+  return typeof background === 'string' || background === null ? background : undefined;
+}
+
 /** `StoryContentPresence.hasRenderableContent` (`StoryContentPresence.swift:28-52`)
- * — réduit au périmètre TEXTE + IMAGE de #5817 (`content`, `media`,
- * `storyEffects.background`) : les autres formes (audio, dessins, stickers)
- * sont des compagnons hors tranche. */
+ * — périmètre TEXTE + IMAGE de #5817 (`content`, `media`,
+ * `storyEffects.background`), ÉTENDU (#6899, T8) à une scène de document
+ * canvas v3 qui montre quelque chose : sans cette extension, une story dont
+ * la SEULE matière est un objet de scène (texte, media…) sans `content` de
+ * post ni `media` de post était jugée VIDE et SAUTÉE par
+ * {@link resolvePlayablePosition} — alors que `parseCanvasDocument` (O3) l'a
+ * déjà jugée non vide en refusant tout document sans scène. */
 export function hasRenderableStoryContent(
   story: Pick<StoryPlaybackStory, 'content' | 'media' | 'storyEffects'>,
 ): boolean {
   if (story.content !== undefined && story.content !== null && story.content.trim() !== '') return true;
   if (story.media !== undefined && story.media.length > 0) return true;
-  const background = story.storyEffects?.background;
+  if (parseCanvasDocument(story.storyEffects) !== null) return true;
+  const background = storyEffectsBackgroundOf(story.storyEffects);
   if (background !== undefined && background !== null && background !== '') return true;
   return false;
 }

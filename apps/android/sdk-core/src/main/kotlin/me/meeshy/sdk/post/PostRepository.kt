@@ -320,6 +320,7 @@ class PostRepository @Inject constructor(
         mobileTranscription: MobileTranscriptionPayload? = null,
         repostOfId: String? = null,
         location: SharedPlace? = null,
+        mediaAlt: Map<String, String>? = null,
     ): NetworkResult<ApiPost> =
         apiCall {
             postApi.create(
@@ -335,6 +336,7 @@ class PostRepository @Inject constructor(
                     mobileTranscription = mobileTranscription,
                     repostOfId = repostOfId,
                     location = location,
+                    mediaAlt = mediaAlt,
                 ),
             )
         }

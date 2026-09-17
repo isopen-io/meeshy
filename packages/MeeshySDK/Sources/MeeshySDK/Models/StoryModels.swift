@@ -1106,12 +1106,15 @@ public struct StoryEffects: Codable, Sendable {
     /// `.mention` n'y entre pas : c'est un kind CONNU que la scène ne peint
     /// délibérément pas (une mention est une métadonnée). Confondre les deux
     /// ferait rougir la sentinelle sur toutes les stories mentionnant quelqu'un.
-    var wireUnpaintableKinds: [String]?
 
     /// Les kinds que ce build ne sait pas peindre — vide quand la scène est
     /// intégralement rendue. Lecture PUBLIQUE du mémo ci-dessus : le lecteur
     /// vit app-side et doit pouvoir poser la question.
     public var unpaintableKinds: [String] { wireUnpaintableKinds ?? [] }
+
+    /// Wire-only : `wireUnpaintableKinds`, `wireUnpaintableObjects` et
+    /// `wireBackgroundTransformCarrierId`, sur le tas — `StoryEffects+WireRepaintMemo.swift`.
+    var wireRepaintMemo: WireRepaintMemo.Box?
 
     /// **La scène porte-t-elle du contenu que ce build ne sait pas peindre ?**
     ///

@@ -199,7 +199,7 @@ final class ForwardPickerViewModel: ObservableObject {
             return
         }
 
-        try? await Task.sleep(nanoseconds: Self.searchDebounceNanoseconds)
+        try? await Task.sleep(for: .milliseconds(300))
         guard token == searchToken else { return }
 
         let userId = currentUserId

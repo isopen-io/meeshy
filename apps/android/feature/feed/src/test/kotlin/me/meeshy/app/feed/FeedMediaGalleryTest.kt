@@ -5,8 +5,8 @@ import org.junit.Test
 
 class FeedMediaGalleryTest {
 
-    private fun image(id: String, url: String, thumb: String? = null) =
-        FeedPostImage(id = id, url = url, thumbnailUrl = thumb, width = null, height = null, thumbHash = null)
+    private fun image(id: String, url: String, thumb: String? = null, alt: String? = null) =
+        FeedPostImage(id = id, url = url, thumbnailUrl = thumb, width = null, height = null, thumbHash = null, alt = alt)
 
     private fun presentation(
         images: List<FeedPostImage>,
@@ -226,6 +226,34 @@ class FeedMediaGalleryTest {
         assertThat(gallery.thumbnailUrls)
             .containsExactly("https://cdn/a-thumb.jpg", null)
             .inOrder()
+    }
+
+    // #6739 — each page carries its OWN alt text (unlike caption, which is
+    // shared across all pages of a post), positionally aligned with imageUrls.
+
+    @Test
+    fun `an images alt text travels alongside its full-resolution url`() {
+        val gallery = FeedMediaGallery.of(
+            presentation(
+                listOf(
+                    image("a", url = "https://cdn/a-full.jpg", alt = "A red bicycle"),
+                    image("b", url = "https://cdn/b-full.jpg"),
+                ),
+            ),
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.altTexts).containsExactly("A red bicycle", null).inOrder()
+    }
+
+    @Test
+    fun `alt texts list is always the same size as image urls`() {
+        val gallery = FeedMediaGallery.of(
+            presentation(listOf(image("a", "a", alt = "alt a"), image("b", "b"))),
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.altTexts).hasSize(gallery.imageUrls.size)
     }
 
     @Test

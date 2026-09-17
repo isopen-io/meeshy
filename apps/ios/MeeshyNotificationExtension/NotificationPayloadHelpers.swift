@@ -340,6 +340,20 @@ nonisolated enum NotificationPayloadHelpers {
     /// `Date.toISOString()` (la passerelle) rend toujours des millisecondes ;
     /// la seconde passe couvre les émetteurs qui n'en mettent pas, plutôt que
     /// de rendre `nil` et de restamper le message à l'heure de la remise.
+    ///
+    /// **`Date.ParseStrategy` ne remplace PAS ces deux formateurs** (#6840).
+    /// Le remplacement a été tenté — `.iso8601.time(includingFractionalSeconds:
+    /// true)` puis `.iso8601` en repli — et il rend `nil` sur les DEUX passes
+    /// pour `"2026-08-24T09:15:30.123Z"` sur le runtime iOS 18.x que la suite
+    /// exécute : `iso8601Date` tombait alors sur le repli, et la bulle que la
+    /// NSE pré-enregistre repartait datée de l'heure de REMISE — un push remis
+    /// en retard (appareil rallumé, arriéré APNs) se rangeait au bas du fil.
+    /// C'est le défaut que le cycle 126 avait soldé en faisant voyager
+    /// `messageCreatedAt` sur le fil push.
+    ///
+    /// La modernisation reste souhaitable, mais elle passe par le site UNIQUE
+    /// `WireDate` (#6627), pas par une réécriture locale : dix fichiers du SDK
+    /// l'utilisent déjà, la NSE ne l'a pas encore rejoint.
     nonisolated static func iso8601Date(_ raw: Any?) -> Date? {
         guard let value = nonEmptyString(raw) else { return nil }
         let withFraction = ISO8601DateFormatter()

@@ -1,3 +1,5 @@
+import { attachmentSrc } from '@/lib/api/media-url';
+
 import type { CanvasObject, CanvasScene } from './document';
 
 /**
@@ -41,6 +43,24 @@ export function objectMediaIdentity(object: CanvasObject): string | null {
   // `CLAIM_BEARING_KINDS`) ; iOS ne lit que `postMediaId`, ce qui est le
   // défaut à rapporter (§ 9.6), pas à reproduire ici.
   return nonEmptyString(object.payload.postMediaId) ?? nonEmptyString(object.payload.mediaId);
+}
+
+/**
+ * **L'ADRESSE DES PIXELS D'UN OBJET** — la pièce du porteur qu'il désigne,
+ * sinon son propre `mediaURL` résolu par `attachmentSrc` (`lib/api/media-url.ts`,
+ * le site unique : un `mediaURL` hérité porte souvent une clé NUE, #5668).
+ * SITE UNIQUE partagé par le moteur (`scene-player.tsx`) et l'image seule du
+ * lecteur de story (`story-scene-layer.tsx`).
+ *
+ * Une entrée de porteur SANS adresse ne masque jamais celle que l'objet porte
+ * lui-même (#6899, corpus réel de staging) : elle rendait un `<img src="">`.
+ */
+export function objectMediaSrc(object: CanvasObject, carrier: SceneCarrier): string | undefined {
+  const identity = objectMediaIdentity(object);
+  const carried = identity === null ? undefined : carrier.media.find((m) => m.id === identity)?.src;
+  if (carried !== undefined && carried !== '') return carried;
+  const url = object.payload.mediaURL;
+  return typeof url === 'string' && url !== '' ? attachmentSrc(url) : undefined;
 }
 
 /**

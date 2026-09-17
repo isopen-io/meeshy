@@ -29,6 +29,7 @@ import { readFileSync } from 'node:fs';
 import { mediaGridCurveFailures } from './lib/curve-media-grid.mjs';
 import { MOSAIC_LAYOUT_COTES, mosaicLayoutCurveFailures } from './lib/curve-mosaic-layout.mjs';
 import { SCENE_FRAMING_COTES, sceneFramingCurveFailures } from './lib/curve-scene-framing.mjs';
+import { STORY_READER_COTES, storyReaderCurveFailures } from './lib/curve-story-reader.mjs';
 
 const ROOT = new URL('../../..', import.meta.url).pathname;
 const UPSTREAM = `${ROOT}packages/shared/utils/focus-curve.ts`;
@@ -805,6 +806,7 @@ for (const [swiftSource, swiftName, downstreamName, what] of MENU_MAPPINGS) {
 failures.push(...mediaGridCurveFailures({ root: ROOT, count }));
 failures.push(...mosaicLayoutCurveFailures({ root: ROOT, count }));
 failures.push(...sceneFramingCurveFailures({ root: ROOT }));
+failures.push(...storyReaderCurveFailures({ root: ROOT }));
 
 if (failures.length > 0) {
   console.error('\n  La loi de la Lentille a DÉRIVÉ de packages/shared/utils/focus-curve.ts :\n');
@@ -840,5 +842,7 @@ console.log(
     `\n  L'agencement d'une publication est conforme à CanvasV3.swift/MosaicLayout.swift/PostSceneMosaic.swift` +
     ` et à canvas-v3.ts (${MOSAIC_LAYOUT_COTES} cotes ; les valeurs sont gardées par mosaic-layout.test.ts).` +
     `\n  Le cadrage d'une scène de fil est conforme à SceneFraming.swift` +
-    ` (${SCENE_FRAMING_COTES} cotes ; les valeurs sont gardées par scene-framing.test.ts).`,
+    ` (${SCENE_FRAMING_COTES} cotes ; les valeurs sont gardées par scene-framing.test.ts).` +
+    `\n  Le plateau et l'image seule du lecteur de story sont conformes à StoryViewerView+Canvas.swift,` +
+    ` StoryLetterboxFill.swift et StoryImageOnlyPresentation.swift (${STORY_READER_COTES} cotes).`,
 );

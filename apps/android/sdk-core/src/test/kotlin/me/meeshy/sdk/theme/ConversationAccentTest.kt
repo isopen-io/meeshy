@@ -40,18 +40,44 @@ class ConversationAccentTest {
     }
 
     @Test
-    fun `displayTitle prefers the title then the custom name`() {
-        val titled = ApiConversation(id = "c1", title = "Team")
+    fun `displayTitle prefers the title then the custom name for a group`() {
+        val titled = ApiConversation(id = "c1", type = "group", title = "Team")
         val custom = ApiConversation(
             id = "c2",
+            type = "group",
             title = " ",
             preferences = ApiConversationPreferences(customName = "Mon groupe"),
         )
-        val bare = ApiConversation(id = "c3")
+        val bare = ApiConversation(id = "c3", type = "group")
 
         assertThat(titled.displayTitle()).isEqualTo("Team")
         assertThat(custom.displayTitle()).isEqualTo("Mon groupe")
         assertThat(bare.displayTitle()).isEqualTo("Conversation")
+    }
+
+    @Test
+    fun `displayTitle never falls back to a stored title for a direct conversation`() {
+        // #6790 — a legacy client composed a "X et Y" title at creation time
+        // for a DM. It must never surface, even when no participant is known
+        // (the shape GET /sync serves: no `participants` on the row).
+        val direct = ApiConversation(id = "c11", type = "direct", title = "Alice et Bob")
+
+        assertThat(direct.displayTitle(currentUserId = "me")).isEqualTo("Conversation")
+    }
+
+    @Test
+    fun `displayTitle prefers the other participant over a stored title for a direct conversation`() {
+        val direct = ApiConversation(
+            id = "c12",
+            type = "direct",
+            title = "Alice et Bob",
+            participants = listOf(
+                ApiParticipant(id = "p1", userId = "me", displayName = "Me"),
+                ApiParticipant(id = "p2", userId = "other", displayName = "Bob"),
+            ),
+        )
+
+        assertThat(direct.displayTitle(currentUserId = "me")).isEqualTo("Bob")
     }
 
     @Test

@@ -29,6 +29,13 @@ data class FeedPostImage(
      * three separate contents, never confused even at equal strings.
      */
     val caption: String? = null,
+    /**
+     * Author-authored accessibility description (`PostMedia.alt`, #6739), served
+     * verbatim (no Prisme resolution — unlike [caption], it carries no
+     * translation pipeline on the wire). `null`/blank means the author wrote
+     * none; consumers fall back to a generic localized label in that case.
+     */
+    val alt: String? = null,
 )
 
 /**
@@ -106,6 +113,7 @@ object FeedPostBuilder {
                     height = media.height,
                     thumbHash = media.thumbHash,
                     caption = media.resolvedCaption(preferredLanguages),
+                    alt = media.alt,
                 )
             }
         val originalCode = post.originalLanguage.normalizedCode()

@@ -11,7 +11,9 @@ import {
   previousPosition,
   resolvePlayablePosition,
   resolvePosition,
+  slideDurationForScene,
   slideDurationMs,
+  storyMediaUrl,
   stableGroupOrder,
   type StoryPlaybackStory,
 } from './playback';
@@ -94,6 +96,56 @@ describe('slideDurationMs — la durée d’une diapositive suit son média (#68
   });
 });
 
+/**
+ * `slideDurationForScene` (T4, #6899) — `timelineDuration` est AUTORITAIRE,
+ * miroir de `StorySlide.computedTotalDuration()` (`StoryModels.swift:862-872`,
+ * « PRIORITÉ 0 — autorité timeline : elle gagne sur le contenu (un média plus
+ * long est rogné) »). La première forme la passait en `configuredMs` de
+ * {@link slideDurationMs} — la loi du LEGACY `slideDuration`, qui prend le max
+ * puis arrondit aux cycles du média : une story épinglée à 8 s sur une piste
+ * de 30 s durait 30 s sur le web et 8 s sur iOS. Sans épingle, la loi du
+ * contenu (`slideDurationMs`) reste la seule réponse.
+ */
+describe('slideDurationForScene — timelineDuration gouverne la diapositive (T4, #6899)', () => {
+  test('timelineDuration seul, sans média ⇒ sa valeur en millisecondes', () => {
+    expect(slideDurationForScene({ scene: { timelineDuration: 9 } })).toBe(9000);
+  });
+
+  test('timelineDuration=4s sous le plancher de 6 s ⇒ 4000 : l’épingle de l’auteur gagne', () => {
+    expect(slideDurationForScene({ scene: { timelineDuration: 4 }, mediaDurationMs: 3000 })).toBe(4000);
+  });
+
+  test('timelineDuration=8s sur une piste de 30 s ⇒ 8000 : le média plus long est ROGNÉ, jamais la diapositive allongée', () => {
+    expect(slideDurationForScene({ scene: { timelineDuration: 8 }, mediaDurationMs: 30_000 })).toBe(8000);
+  });
+
+  test('scène SANS timelineDuration ⇒ loi actuelle inchangée (slideDurationMs)', () => {
+    expect(slideDurationForScene({ scene: {}, mediaDurationMs: 3000 })).toBe(slideDurationMs({ mediaDurationMs: 3000 }));
+    expect(slideDurationForScene({ scene: {} })).toBe(slideDurationMs({}));
+  });
+});
+
+/**
+ * `storyMediaUrl` (#6899, revue-correction) — la passerelle sert `fileUrl`
+ * (`mediaSelect`, `postIncludes.ts:104`, mesuré sur staging le 2026-09-17) ;
+ * les fixtures historiques portaient `url`, qu'aucune réponse réelle ne sert.
+ */
+describe('storyMediaUrl — la clé servie par la passerelle d’abord', () => {
+  test('`fileUrl` servi ⇒ c’est lui, même quand une vieille `url` traîne', () => {
+    expect(storyMediaUrl({ fileUrl: '2026/09/a/photo.jpg', url: 'ancienne.jpg' })).toBe('2026/09/a/photo.jpg');
+  });
+
+  test('`fileUrl` absent, `null` ou vide ⇒ `url` des fixtures', () => {
+    expect(storyMediaUrl({ url: 'fixture.jpg' })).toBe('fixture.jpg');
+    expect(storyMediaUrl({ fileUrl: null, url: 'fixture.jpg' })).toBe('fixture.jpg');
+    expect(storyMediaUrl({ fileUrl: '', url: 'fixture.jpg' })).toBe('fixture.jpg');
+  });
+
+  test('aucune des deux ⇒ chaîne vide, jamais `undefined`', () => {
+    expect(storyMediaUrl({})).toBe('');
+  });
+});
+
 describe('isStoryExpired', () => {
   test('une story sans expiresAt expire 20h après sa création', () => {
     const s = story({ id: 's', authorId: 'a', createdAt: '2026-09-12T15:00:00.000Z' });
@@ -130,6 +182,26 @@ describe('hasRenderableStoryContent', () => {
 
   test('rien de tout ça — pas restituable', () => {
     expect(hasRenderableStoryContent({ content: '' })).toBe(false);
+  });
+
+  // T8 (#6899) — un document v3 texte-seul (aucun `content` ni `media` de
+  // post, § O3 : « un canvas sans scène n'est jamais un canvas ») est
+  // RESTITUABLE — sans ce vecteur, `resolvePlayablePosition` SAUTE une story
+  // de scène texte-seul comme si elle était vide.
+  test('un document v3 dont une scène porte un objet visible est restituable, même sans content ni media', () => {
+    expect(
+      hasRenderableStoryContent({
+        content: '',
+        storyEffects: {
+          v: 3,
+          scenes: [{ id: 's1', objects: [{ id: 't1', kind: 'text', anchor: { t: 'free', x: 0.5, y: 0.5 }, plane: 'fg', z: 0, transform: { scale: 1, rotation: 0, opacity: 1 }, payload: { text: 'x' } }] }],
+        },
+      }),
+    ).toBe(true);
+  });
+
+  test('un document v3 sans scène (`scenes: []`) n’est pas restituable par lui-même', () => {
+    expect(hasRenderableStoryContent({ content: '', storyEffects: { v: 3, scenes: [] } })).toBe(false);
   });
 });
 

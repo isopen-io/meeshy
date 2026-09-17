@@ -790,6 +790,17 @@ jobs:
           cd apps/web-v2
           node scripts/check-feed-scenes.mjs
 
+      # #6899 — LE LECTEUR DE STORY REND SES SCÈNES V3 PAR LE MOTEUR PARTAGÉ.
+      # Placeholder ThumbHash peint AVANT « prêt » (moteur retenu, mesure de
+      # pixels), carte 9:16 centrée dans le plateau aux deux tailles, texte au
+      # Prisme (rang 2), son de fond dont le bouton dit la vérité et a un effet,
+      # image seule sans moteur, épingle de timeline autoritaire, v1 intact.
+      - name: Gate scènes du lecteur de story (placeholder, plateau, son, image seule)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-story-scene.mjs
+
       - name: Gate états du fil (vide, coupure, échec d'envoi rejouable)
         if: ${{ !cancelled() }}
         run: |
@@ -903,6 +914,19 @@ jobs:
         run: |
           cd apps/web-v2
           node scripts/check-admin-rung.mjs
+
+      # #6862 / #6733 — la lecture souveraine et la section Agent, sur un dist
+      # gateway : la tuile « Agent » selon `canManageAgent`, `/adm` ≡ `/admin`,
+      # les deux sections repliables à la souris ET au clavier, la ligne qui
+      # ouvre la modale, le motif écrit exigé AVANT toute requête `/messages`,
+      # le texte servi dans le Prisme du MEMBRE (jamais celui de l'administrateur),
+      # et aucune clé de contenu laissée dans `localStorage` après la lecture.
+      # Le gate construit son propre `dist-admin-souverain`, comme son voisin.
+      - name: Gate lecture souveraine et section Agent (#6862, #6733)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-admin-souverain.mjs
 
       # #6151 — un seul site résout `apiConfig.source` en dépendances d'appel
       # (`src/lib/api/deps.ts`). Un huitième site qui reconstruirait

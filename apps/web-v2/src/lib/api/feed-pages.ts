@@ -88,9 +88,14 @@ export type FeedRepostOf = { readonly author?: { readonly username?: string | nu
  * document, n'arriverait jamais. Le niveau est celui qu'annoncent iOS
  * (`ClientInfoProvider.swift`) et Android (`ClientCapabilitiesInterceptor.kt`).
  *
- * Il ne se pose QUE sur les routes dont les cartes lisent l'agencement (le fil
- * et le détail d'une publication) : le lecteur de stories lit encore la forme
- * v1 (`storyEffects.background`), et l'annoncer là lui retirerait ses fonds.
+ * Posé sur le fil, le détail d'une publication (l'agencement) ET, depuis
+ * #6899 (T3), les TROIS ports du lecteur de stories (`lib/api/stories.ts`) —
+ * ce dernier sait désormais rendre un document canvas v3 par le MÊME moteur
+ * de scène (`ScenePlayer`, D-79), plus seulement le fond v1
+ * (`storyEffects.background`). L'en-tête et le rendu v3 du lecteur partent
+ * dans le MÊME commit (§ 3 de la spécification `stories-lecteur`) : l'en-tête
+ * seul ferait tomber le fond v1 SENTINELLE d'une story v3 sans média (elle
+ * arriverait v3 et personne ne la peindrait).
  */
 export const CANVAS_CAPS_HEADERS: Readonly<Record<string, string>> = { 'X-Canvas-Caps': '3' };
 
