@@ -620,8 +620,9 @@ async function main() {
     await context.close();
   }
 
-  // --- 4. CORPUS VIDE : aucun rail peint, aucun trou au-dessus de l'état --
-  //        vide (revue-correction #5650) ------------------------------------
+  // --- 4. CORPUS VIDE : le rail porte mes DEUX portes et n'est pas une bande
+  //        VIDE, l'état vide tient dans le premier tiers du scrollport
+  //        (revue-correction #5650, règle réécrite par #6150) ---------------
   {
     const context = await browser.newContext();
     await context.addInitScript((session) => {
@@ -647,15 +648,41 @@ async function main() {
     await page.goto(`${base}/`, { waitUntil: 'networkidle' });
     await page.waitForSelector('#contenu:not([aria-busy])', { timeout: 5000 });
 
-    /* LE RAIL A CHANGÉ DE NOM ET D'OBJET (#6080) : « Accès rapide aux
-       conversations » n'existe plus — ce rail peignait des CONVERSATIONS sous
-       un anneau de story et a été remplacé par le rail des STORIES, région
-       « Stories ». Le gate interrogeait donc une étiquette morte : il passait
-       par ABSENCE, ce qui est la façon la plus discrète qu'a un témoin de
-       cesser de mesurer (leçon 560). L'invariant, lui, est inchangé — à corpus
-       vide, aucun rail ne prend de place au-dessus de l'état vide. */
+    /**
+     * LE RAIL A CHANGÉ DE NOM ET D'OBJET (#6080) : « Accès rapide aux
+     * conversations » n'existe plus — ce rail peignait des CONVERSATIONS sous
+     * un anneau de story et a été remplacé par le rail des STORIES, région
+     * « Stories ». Le gate interrogeait alors une étiquette morte : il passait
+     * par ABSENCE, ce qui est la façon la plus discrète qu'a un témoin de
+     * cesser de mesurer (leçon 560).
+     *
+     * **ET L'INVARIANT LUI-MÊME A CHANGÉ DE SENS AVEC #6150.** Il disait « à
+     * corpus vide, AUCUN rail ne prend de place » ; il dit désormais « à corpus
+     * vide, le rail est là et il n'est pas VIDE ». Ce n'est pas un
+     * assouplissement : c'est la règle d'iOS, mot pour mot —
+     * `LentilleRailPolicy.shouldRender(selfEntry:entries:)` : « faire
+     * disparaître le seul chemin vers "mes stories" et "mon statut" parce que
+     * personne d'autre n'a publié serait une régression, pas une épure ». Un
+     * corpus vide EST le cas où les deux portes du lecteur comptent le plus :
+     * compte neuf, zéro conversation, zéro story.
+     *
+     * Ce que l'ancien invariant protégeait vraiment — **aucune BANDE VIDE
+     * au-dessus de l'état vide** — se mesure donc autrement, et mieux : le rail
+     * est présent ET il porte au moins une pastille. Une région « Stories »
+     * sans aucune tuile serait exactement le trou blanc que #5650 a fermé.
+     */
     const rails = await page.locator('[aria-label="Stories"]').count();
-    check(rails === 0, `corpus VIDE : aucune région « Stories » peinte (obtenu : ${rails})`);
+    check(rails === 1, `corpus VIDE : la région « Stories » porte les deux portes du lecteur (obtenu : ${rails})`);
+    const railTiles = await page.locator('[aria-label="Stories"] [data-rail-tile]').count();
+    check(
+      railTiles >= 1,
+      `corpus VIDE : le rail n'est pas une bande VIDE — il porte ma cellule (tuiles : ${railTiles})`,
+    );
+    const selfDoors = await page.locator('[data-story-self] [data-self-create], [data-story-self] [data-self-mood]').count();
+    check(
+      selfDoors === 2,
+      `corpus VIDE : ma cellule porte bien ses DEUX portes — sinon le rail occupe la place sans rien offrir (obtenu : ${selfDoors})`,
+    );
 
     /**
      * RÉANCRÉ DANS LE SCROLLPORT (#6103) — le rail vivant désormais À
@@ -682,10 +709,60 @@ async function main() {
       return Math.round(empty.getBoundingClientRect().top - contenu.getBoundingClientRect().top);
     });
     check(emptyStateOffset !== null, "corpus VIDE : l'état « Aucune conversation pour l’instant. » est introuvable");
+    /**
+     * **CE QUI COMPTE EST QUE L'ÉTAT VIDE SE VOIE, pas qu'il remonte** (#6150).
+     *
+     * L'invariant comparait `emptyStateOffset < populatedFirstSectionOffset` :
+     * « à vide, on récupère la bande du rail ». Le rail existant désormais à
+     * corpus vide (il porte les deux portes du lecteur, voir plus haut), cette
+     * comparaison ne peut plus tenir — et il faut dire ce qu'elle mesurait
+     * VRAIMENT, plutôt que de la relâcher : que l'état vide ne soit pas poussé
+     * sous la ligne de flottaison par du chrome inutile.
+     *
+     * C'est le TROU qu'on mesure, et c'est exactement ce que le titre de ce
+     * bloc annonce depuis #5650 : l'état vide commence JUSTE APRÈS le dernier
+     * morceau de chrome (le rail ou la bande de filtres, selon lequel descend
+     * le plus bas), à une gouttière près. Deux décalages comparés ne disaient
+     * pas ça — `191 < 215` aurait pu être vrai avec les deux enfoncés à 600 px,
+     * et faux avec les deux confortablement hauts. Et une borne en « premier
+     * tiers du scrollport » passait à 4 px près (215 contre 219) : une borne
+     * qu'un changement de gouttière fait rougir ne mesure plus une règle, elle
+     * mesure une coïncidence.
+     */
+    const gap = await page.evaluate(() => {
+      const contenu = document.getElementById('contenu');
+      const empty = [...(contenu?.querySelectorAll('li') ?? [])].find((li) =>
+        (li.textContent ?? '').includes('Aucune conversation pour l’instant.'),
+      );
+      if (contenu === null || empty === undefined) return null;
+      /* Le chrome qui PRÉCÈDE la liste : le rail et la bande de filtres. On
+         prend le plus bas des deux — c'est lui qui borne le début légitime de
+         l'état vide. */
+      const chrome = [...contenu.querySelectorAll('[data-rail="grande"], nav[aria-label="Filtres"]')];
+      const bas = chrome.reduce((max, el) => Math.max(max, el.getBoundingClientRect().bottom), contenu.getBoundingClientRect().top);
+      return Math.round(empty.getBoundingClientRect().top - bas);
+    });
+    /**
+     * **CE QUE CETTE BORNE DOIT SÉPARER, et c'est ce qui la fixe** : une
+     * GOUTTIÈRE (l'air propre d'un état vide, mesuré à 32 px) d'une BANDE de
+     * chrome laissée vide — le défaut d'origine de #5650, où le rail rendait un
+     * conteneur sans contenu : **110 px et plus**, la cote d'un plateau de
+     * stories (`RAIL_TILE_GRANDE` 88 + anneau + air).
+     *
+     * 48 px est au milieu de ces deux ordres de grandeur : le double d'une
+     * gouttière, moins de la moitié d'une bande. La caler sur la mesure du jour
+     * (32) en ferait un cliquet qui rougit au premier réglage d'espacement ;
+     * l'ouvrir à 100 lui ferait rater ce qu'elle existe pour attraper.
+     *
+     * Et la bande VIDE elle-même n'est plus gardée ICI depuis #6150 : les trois
+     * invariants du rail ci-dessus (présent, au moins une tuile, deux portes)
+     * la mesurent à la source, ce qui est plus fort qu'un décalage.
+     */
+    const MAX_GAP = 48;
     check(
-      emptyStateOffset !== null && emptyStateOffset < populatedFirstSectionOffset,
-      'corpus VIDE : la bande du rail + des filtres est RÉCUPÉRÉE, jamais laissée vide au-dessus de l’état vide ' +
-        `(décalage peuplé ${populatedFirstSectionOffset} px, décalage vide ${emptyStateOffset} px)`,
+      gap !== null && gap <= MAX_GAP,
+      "corpus VIDE : aucun TROU entre le chrome et l'état vide — il commence juste après le rail et les filtres " +
+        `(écart ${gap} px, toléré ${MAX_GAP} px ; décalage vide ${emptyStateOffset} px, peuplé ${populatedFirstSectionOffset} px)`,
     );
     await context.close();
   }

@@ -3043,6 +3043,8 @@ Directive porteur du 2026-09-17, mot pour mot : « mettre le bouton (+) au dessu
 
 Les deux sont à relever, pas à corriger ici : un lot de rail qui « réparerait » une fixture de protection éphémère masquerait le vrai défaut, qui est que le témoin dépend du temps.
 
+**Et la cause est MESURÉE, pas déduite** (#6950) : deux runs de la suite complète, même arbre, même diff, à quelques minutes d'écart — **250 s machine chargée ⇒ 5 173 pass / 2 fail** ; **32 s machine libre ⇒ 5 286 pass / 0 fail**. À 32 s le témoin reste sous le seuil des 2 minutes, à 250 s il l'a franchi avant d'être atteint. Les deux échecs sont donc une fonction de la CHARGE, et ils passeront au rouge définitif le jour où la suite dépassera 2 minutes en CI. **Un rouge qui disparaît sur une machine libre n'est pas un rouge résolu** — c'est un témoin dont la borne a cessé de mesurer ce qu'il annonce.
+
 ## D-84 — Le studio de story est un PLATEAU : plusieurs objets, des gestes, et AUCUNE police web (#6943, #6944)
 
 **Décision** — le studio livré par #6900 avait trois valeurs (un fond, un son de fond, UN texte d'`id` littéral `'text'`). Il porte désormais **N objets texte**, chacun avec sa **pose**, sa **langue** et son **style** ; **deux** portes visuelles (le fond, et un **calque** d'avant-plan en `plane: 'fg'`) ; **un son** dont le plan décide du rôle ; et une **légende par média**. La directive porteur du 2026-09-17 nommait ces cinq manques.
