@@ -110,6 +110,45 @@ export type AppQueryClient = QueryClient & {
   discardPersisted: () => void;
 };
 
+/**
+ * **CE QUI A LE DROIT D'ÊTRE ÉCRIT SUR LE DISQUE** (#6862) — le prédicat de
+ * déshydratation, NOMMÉ et EXPORTÉ plutôt qu'écrit en ligne dans `persist`.
+ *
+ * `dehydrate` écrivait TOUTE requête réussie. Le contenu d'une conversation
+ * privée, lu par un BIGBOSS sous motif écrit et geste tracé, y atterrissait
+ * donc comme le reste — et **survivait à la session**, sur le poste de
+ * l'administrateur. `AdminAuditLog` dit « il a lu » ; il ne dit pas « il en
+ * garde une copie depuis six jours », et personne ne peut révoquer celle-là.
+ *
+ * Le prédicat de reconnaissance vient de `souverain.ts` — un module sans
+ * dépendance — précisément pour que ce fichier, qui est dans le SOCLE de la
+ * première peinture, n'ait pas à importer les décodeurs d'administration et à
+ * les faire payer à tous les lecteurs (`budgets.json`).
+ *
+ * **Il est EXPORTÉ pour qu'un témoin puisse le jouer.** Écrit en ligne, la
+ * seule façon de le mesurer était de relire `localStorage` après un
+ * `persist()` — c'est-à-dire de mesurer aussi le STOCKAGE, qui sous `bun test`
+ * n'existe pas encore au moment où ce module est chargé : le `try/catch` de
+ * `persist` avalait alors l'écriture, et le témoin verdissait que la garde
+ * soit posée ou RETIRÉE. Un témoin vert des deux côtés d'une mutation ne
+ * mesure pas la règle, il mesure la machine.
+ *
+ * Ce prédicat ne couvre que le cache de REQUÊTES. Le service worker écrivait la
+ * même charge par un autre chemin — `caches.open('api')`, la réponse HTTP
+ * entière, sept jours sur le disque — et ce doc-comment l'AVOUAIT sans que rien
+ * ne le ferme. C'est fait : `API_RESPONSE_CACHE_PATTERN`
+ * (`lib/net/api-runtime-cache.ts`) sort tout `/api/v1/admin/` du
+ * `runtimeCaching`. Deux seaux, deux gardes, la même règle — et une VALEUR
+ * plutôt qu'un prédicat, parce que Workbox stringifie ce champ dans
+ * `dist/sw.js` : un prédicat importé s'y serait perdu, comme il l'a fait.
+ */
+export function persistableQuery(query: {
+  readonly state: { readonly status: string };
+  readonly queryKey: readonly unknown[];
+}): boolean {
+  return query.state.status === 'success' && !estClefSouveraine(query.queryKey);
+}
+
 export type CreateAppQueryClientOptions = {
   readonly storage?: StorageLike;
   readonly buster: string;
@@ -233,28 +272,7 @@ export function createAppQueryClient(options: CreateAppQueryClientOptions): AppQ
   const persist = (): void => {
     if (persistenceHalted) return;
     try {
-      /**
-       * **UNE LECTURE SOUVERAINE NE TOUCHE PAS LE DISQUE** (#6862).
-       *
-       * `dehydrate` écrivait ici TOUTE requête réussie. Le contenu d'une
-       * conversation privée, lu par un BIGBOSS sous motif écrit et geste
-       * tracé, y atterrissait donc comme le reste — et **survivait à la
-       * session**, sur le poste de l'administrateur. `AdminAuditLog` dit
-       * « il a lu » ; il ne dit pas « il en garde une copie depuis six
-       * jours », et personne ne peut révoquer celle-là.
-       *
-       * Le prédicat vient de `souverain.ts` — un module sans dépendance —
-       * précisément pour que ce fichier, qui est dans le SOCLE de la première
-       * peinture, n'ait pas à importer les décodeurs d'administration et à
-       * les faire payer à tous les lecteurs (`budgets.json`).
-       *
-       * Ne couvre PAS le cache du service worker (`caches.open('api')`, sept
-       * jours sur le disque), qui retient les réponses HTTP par un autre
-       * chemin : voir `purgeReaderCaches` ci-dessus, et le suivi de #6862.
-       */
-      const state = dehydrate(client, {
-        shouldDehydrateQuery: (q) => q.state.status === 'success' && !estClefSouveraine(q.queryKey),
-      });
+      const state = dehydrate(client, { shouldDehydrateQuery: persistableQuery });
       const reactions = reactionStore.getState().mine;
       storage.setItem(CACHE_KEY, JSON.stringify({ buster, state, reactions }));
     } catch {

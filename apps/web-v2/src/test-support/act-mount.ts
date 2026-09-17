@@ -38,6 +38,13 @@ function writeNativeValue(input: HTMLElement, prototype: object | null, value: s
  * témoin qui n'en relit qu'une.
  *
  * `change` en plus d'`input` : c'est `change` que React écoute sur un `<select>`.
+ *
+ * PAS DE `<textarea>` ICI, et c'est mesuré (#6862) : l'ordre de cette fonction
+ * — affectation DIRECTE d'abord — met à jour le suivi de valeur de React, qui
+ * ne voit alors AUCUN changement à l'événement `input` et ne rappelle pas
+ * `onChange`. Le champ paraît rempli (`element.value` vaut la valeur, donc la
+ * garde ci-dessous ne lève pas) et le composant reste vide. Une `<textarea>`
+ * passe par `createActMounter().type`, dont l'ordre est l'inverse.
  */
 export function typeInto(element: HTMLInputElement | HTMLSelectElement | null, value: string): void {
   if (element === null) throw new Error('champ absent');
@@ -76,6 +83,21 @@ export function createActMounter() {
     return host;
   };
 
+  /**
+   * REND À NOUVEAU DANS LA MÊME RACINE (#6862, revue-correction) — un
+   * `mount` de plus créerait un second arbre, où tout `useMemo` repart de
+   * zéro : on ne mesurerait plus ce que React GARDE d'un rendu à l'autre, mais
+   * deux montages indépendants.
+   */
+  const rerender = async (host: HTMLDivElement, element: ReactElement): Promise<void> => {
+    const monte = mounted.find((entree) => entree.host === host);
+    if (monte === undefined) throw new Error('hôte non monté par ce mounter');
+    await act(async () => {
+      monte.root.render(element);
+    });
+    await settle();
+  };
+
   const unmountAll = (): void => {
     for (const { root, host } of mounted.splice(0)) {
       act(() => root.unmount());
@@ -91,9 +113,13 @@ export function createActMounter() {
     await settle();
   };
 
+  /** `<input>` ET `<textarea>` : le SETTER NATIF d'abord, seul ordre qui fasse
+   * rappeler `onChange` sur un champ contrôlé par React (#6862). */
   const type = (host: ParentNode, selector: string, value: string): void => {
     const input = host.querySelector(selector);
-    if (!(input instanceof HTMLInputElement)) throw new Error(`champ absent : ${selector}`);
+    if (!(input instanceof HTMLInputElement) && !(input instanceof HTMLTextAreaElement)) {
+      throw new Error(`champ absent : ${selector}`);
+    }
     act(() => {
       if (!writeNativeValue(input, Object.getPrototypeOf(input), value)) throw new Error(`aucun setter natif de value pour ${selector}`);
       input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -110,7 +136,7 @@ export function createActMounter() {
     await settle();
   };
 
-  return { mount, settle, unmountAll, click, type, submit };
+  return { mount, rerender, settle, unmountAll, click, type, submit };
 }
 
 export const buttonNamed = (host: ParentNode, name: string): HTMLButtonElement | null =>

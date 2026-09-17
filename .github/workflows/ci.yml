@@ -291,6 +291,12 @@ jobs:
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
           node scripts/check-utilities.mjs
           node scripts/measure-weight.mjs
+          # #6862 — le seul gate qui fasse DÉCIDER le service worker construit.
+          # Workbox stringifie le `urlPattern` du seau `api` : un prédicat
+          # importé s'y perd, et la règle « aucune réponse /api/v1/admin/** sur
+          # le disque » était annoncée par `vite.config.ts` sans être appliquée
+          # par `dist/sw.js`. Lit `dist/sw.js`, donc après le build ci-dessus.
+          node scripts/check-sw-api-cache.mjs
           # #5910 — maillon du composite `bun run gate` qui ne s'exécutait
           # NULLE PART. Il lit `dist/index.html`, donc il vient après le build
           # ci-dessus ; il n'ouvre aucun navigateur, donc il a sa place ici et
@@ -931,6 +937,19 @@ jobs:
         run: |
           cd apps/web-v2
           node scripts/check-admin-rung.mjs
+
+      # #6862 / #6733 — la lecture souveraine et la section Agent, sur un dist
+      # gateway : la tuile « Agent » selon `canManageAgent`, `/adm` ≡ `/admin`,
+      # les deux sections repliables à la souris ET au clavier, la ligne qui
+      # ouvre la modale, le motif écrit exigé AVANT toute requête `/messages`,
+      # le texte servi dans le Prisme du MEMBRE (jamais celui de l'administrateur),
+      # et aucune clé de contenu laissée dans `localStorage` après la lecture.
+      # Le gate construit son propre `dist-admin-souverain`, comme son voisin.
+      - name: Gate lecture souveraine et section Agent (#6862, #6733)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-admin-souverain.mjs
 
       # #6151 — un seul site résout `apiConfig.source` en dépendances d'appel
       # (`src/lib/api/deps.ts`). Un huitième site qui reconstruirait

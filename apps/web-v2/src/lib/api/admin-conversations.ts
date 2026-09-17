@@ -1,5 +1,7 @@
-import { type AdminDeps, asCount, asRecord, asText } from './admin';
+import { type AdminDeps, asCount, asRecord, asText, pageServie, type PageServie } from './admin';
+import { decodeMessage } from './decode';
 import type { ApiResult } from './http';
+import type { Message } from './types';
 
 /**
  * **LA LECTURE SOUVERAINE DES CONVERSATIONS** (#6862) — les décodeurs des deux
@@ -23,6 +25,12 @@ import type { ApiResult } from './http';
  * qu'`AdminAuditLog` ne connaît pas et que personne ne révoque**. La trace dit
  * « il a lu », pas « il en garde une copie depuis six jours ».
  *
+ * **Les DEUX seaux sont fermés** (revue-correction) : le cache de requêtes par
+ * le préfixe ci-dessous, le service worker par `apiResponseMayBeCached`
+ * (`lib/net/api-runtime-cache.ts`), qui retire tout `/api/v1/admin/` du
+ * `runtimeCaching`. Fermer le premier seul laissait la charge partir entière
+ * par le second, et ce fichier le disait déjà en toutes lettres.
+ *
  * D'où {@link ADMIN_SOUVERAIN_PREFIXE} : toutes les clés de requête de ce
  * module en descendent, et c'est le SEUL prédicat que le filtre de
  * déshydratation ait à connaître. Une clé écrite à la main dans un écran
@@ -42,6 +50,13 @@ import type { ApiResult } from './http';
  * **à côté** de `data`. `GET /admin/users` sert la sienne **dedans**. Lire au
  * mauvais niveau rendrait `total: 0` et `hasMore: false` — une liste qui
  * s'arrête à la première page **sans que rien n'échoue**.
+ *
+ * Ce paragraphe était écrit ici pendant que les deux décodeurs cherchaient
+ * `pagination` DANS la charge qu'ils recevaient — c'est-à-dire dans le tableau
+ * que le transport avait déjà dépaqueté. Énoncer une règle ne la fait pas
+ * appliquer : la lecture vit désormais dans `pageServie` (`./admin`), le site
+ * unique que les quatre listes d'administration partagent, et les décodeurs ne
+ * reçoivent plus une charge brute mais une {@link PageServie}.
  */
 
 /**
@@ -73,9 +88,6 @@ export const adminConversationMessagesQueryKey = (conversationId: string, offset
 
 const asTextOrNull = (value: unknown): string | null =>
   typeof value === 'string' && value !== '' ? value : null;
-
-const asNumberOrNull = (value: unknown): number | null =>
-  typeof value === 'number' && Number.isFinite(value) ? value : null;
 
 // ---------------------------------------------------------------------------
 // L'INVENTAIRE — GET /admin/conversations
@@ -124,11 +136,8 @@ function decodeParticipant(raw: unknown): AdminInstanceParticipant | null {
   };
 }
 
-export function decodeAdminInstanceConversations(raw: unknown, offset: number): AdminInstanceConversationPage {
-  const charge = asRecord(raw) ?? {};
-  const brut = Array.isArray(charge.data) ? charge.data : Array.isArray(raw) ? raw : [];
-
-  const conversations = brut
+export function decodeAdminInstanceConversations(page: PageServie, offset: number): AdminInstanceConversationPage {
+  const conversations = page.lignes
     .map((entree): AdminInstanceConversation | null => {
       const ligne = asRecord(entree);
       if (ligne === null || typeof ligne.id !== 'string' || ligne.id === '') return null;
@@ -149,9 +158,9 @@ export function decodeAdminInstanceConversations(raw: unknown, offset: number): 
     })
     .filter((conversation): conversation is AdminInstanceConversation => conversation !== null);
 
-  const meta = asRecord(charge.pagination) ?? {};
-  const total = asCount(meta.total);
-  const hasMore = typeof meta.hasMore === 'boolean' ? meta.hasMore : offset + conversations.length < total;
+  const total = asCount(page.meta.total);
+  const hasMore =
+    typeof page.meta.hasMore === 'boolean' ? page.meta.hasMore : offset + conversations.length < total;
 
   return { conversations, total: total || conversations.length, offset, hasMore };
 }
@@ -180,130 +189,134 @@ export async function loadAdminInstanceConversations(
   });
   if (!result.ok) return result;
 
-  return { ok: true, data: decodeAdminInstanceConversations(result.data, params.offset) };
+  return { ok: true, data: decodeAdminInstanceConversations(pageServie(result), params.offset) };
 }
 
 // ---------------------------------------------------------------------------
 // LE CONTENU — GET /admin/conversations/:id/messages
 // ---------------------------------------------------------------------------
 
-export type AdminSovereignAttachment = {
-  readonly id: string;
-  readonly originalName: string;
-  readonly mimeType: string;
-  readonly fileSize: number;
-  readonly width: number | null;
-  readonly height: number | null;
-  /** Secondes — la durée d'un vocal, que l'administration constate sans l'écouter. */
-  readonly duration: number | null;
-  /** `null` quand la pièce est protégée — jamais une URL à essayer quand même. */
-  readonly fileUrl: string | null;
-  readonly thumbnailUrl: string | null;
-  readonly isProtected: boolean;
-};
+/**
+ * **LE FIL SOUVERAIN, DANS LE TYPE PARTAGÉ** (#6862, lot C).
+ *
+ * Ce module portait une projection LOCALE — `AdminSovereignMessage`, dix
+ * champs, ses propres décodeurs de pièce et d'expéditeur. Elle a vécu le temps
+ * où la passerelle ne servait que dix champs ; elle en sert désormais
+ * trente-six, et l'écran d'administration monte LA VRAIE VUE conversation du
+ * produit (`routes/admin-conversation-reading.tsx`), qui ne connaît qu'un seul
+ * vocabulaire : `Message` de `@meeshy/shared`.
+ *
+ * **Une projection réseau → modèle locale est interdite par décision écrite**
+ * (`api/types.ts`) : « une projection ne coûte rien tant qu'elle reste juste, et
+ * rien ne la tient juste ». La preuve en est faite ici même — la projection
+ * réduite ne portait NI `replyTo`, NI `translations`, NI `isViewOnce`, donc
+ * aucun Prisme et aucune protection ne pouvaient être rendus depuis elle, sans
+ * qu'aucun témoin ne rougisse.
+ *
+ * Ce qui reste est une ADMISSION de ligne (l'identifiant et l'horloge, sans
+ * lesquels `place()` ne sait pas ranger la rangée) puis `decodeMessage` — le
+ * MÊME décodeur que le fil ordinaire, qui revit les dates et défait les `null`
+ * de la passerelle.
+ */
 
-export type AdminSovereignSender = {
-  readonly userId: string | null;
-  readonly displayName: string;
-  readonly avatar: string | null;
-};
+/**
+ * LES TROIS CHAMPS QUE LA ROUTE SOUVERAINE NE SERT PAS, et ce qu'on en fait.
+ *
+ * `Message` les déclare REQUIS ; la lecture souveraine ne les charge pas.
+ *
+ * | champ | valeur posée | pourquoi ce n'est pas une fabrication |
+ * |---|---|---|
+ * | `timestamp` | `createdAt` | alias de compatibilité déclaré par le type lui-même (`conversation.ts` § COMPATIBILITE), posé à l'identique par `fixtures-base.ts`, `realtime-apply.ts` et `local-message.ts` |
+ * | `deliveredCount` | `0` | le fil souverain ne porte AUCUN accusé de réception — `deliveryOf` rend alors `sent`, le PLANCHER vrai d'un message persisté, jamais « distribué » ni « lu », qu'on ne sait pas |
+ * | `readCount` | `0` | idem |
+ *
+ * `content` est le quatrième cas, et il est d'une autre nature : la passerelle
+ * le sert à `null` quand elle RETIENT le texte (vue unique, flou, expiration,
+ * chiffrement) et pose `isProtected: true` à côté. Le type partagé déclare
+ * `content: string`, et `decodeMessage` RETIRE les clés nulles — un `null`
+ * traversant deviendrait `undefined`, c'est-à-dire un type menti. La chaîne
+ * VIDE dit la vérité : il n'y a pas de texte ici. Ce qui dit POURQUOI voyage à
+ * côté, dans `protectedIds` — voir {@link AdminSovereignThreadPage}.
+ */
+type AdminThreadRawMessage = Readonly<Record<string, unknown>>;
 
-export type AdminSovereignMessage = {
-  readonly id: string;
-  /**
-   * `null` quand le message est protégé — vue unique, flou, expiration
-   * consommée ou chiffrement. Ce n'est NI un message vide NI une erreur de
-   * chargement : `isProtected` dit pourquoi, et l'écran doit le dire aussi.
-   */
-  readonly content: string | null;
-  readonly originalLanguage: string | null;
-  readonly messageType: string | null;
-  readonly isEdited: boolean;
-  readonly createdAt: string | null;
-  readonly sender: AdminSovereignSender | null;
-  /** Le compte de TOUTES les pièces, que la liste servie soit complète ou non. */
-  readonly attachmentCount: number;
-  readonly isProtected: boolean;
-  readonly attachments: readonly AdminSovereignAttachment[];
-};
-
-export type AdminSovereignMessagePage = {
-  readonly messages: readonly AdminSovereignMessage[];
+/**
+ * La PAGE du fil souverain.
+ *
+ * `protectedIds` porte le verdict que la passerelle a rendu (`isProtected`) et
+ * que le type partagé ne sait pas déclarer. Il ne se déduit PAS des colonnes de
+ * protection côté client : `protectionOf` (`reading-mode/protection.ts`) ignore
+ * le chiffrement, que `messageContentIsProtected` (passerelle) compte. Un
+ * message chiffré ressortirait donc « standard » — une bulle vide au lieu
+ * d'une mention. Le verdict SERVI est le seul qui couvre les quatre causes.
+ */
+export type AdminSovereignThreadPage = {
+  /** ASCENDANT — l'ordre de `place()`, jamais le `createdAt DESC` de la route. */
+  readonly messages: readonly Message[];
+  /** Les messages dont la passerelle a RETENU le contenu — rien à révéler. */
+  readonly protectedIds: ReadonlySet<string>;
   readonly total: number;
   readonly offset: number;
   readonly hasMore: boolean;
 };
 
-function decodeAttachment(raw: unknown): AdminSovereignAttachment | null {
-  const ligne = asRecord(raw);
-  if (ligne === null || typeof ligne.id !== 'string' || ligne.id === '') return null;
-
-  return {
-    id: ligne.id,
-    originalName: asText(ligne.originalName),
-    mimeType: asText(ligne.mimeType),
-    fileSize: asCount(ligne.fileSize),
-    width: asNumberOrNull(ligne.width),
-    height: asNumberOrNull(ligne.height),
-    duration: asNumberOrNull(ligne.duration),
-    fileUrl: asTextOrNull(ligne.fileUrl),
-    thumbnailUrl: asTextOrNull(ligne.thumbnailUrl),
-    // Fail-closed : une charge qui ne dit pas qu'une pièce est protégée ne dit
-    // pas non plus qu'elle est libre. Les URL sont déjà nulles côté serveur
-    // quand cela compte, mais l'écran s'appuie sur ce drapeau pour EXPLIQUER
-    // l'absence — et une explication manquante vaut mieux qu'une fausse.
-    isProtected: ligne.isProtected === true,
-  };
-}
-
-function decodeSender(raw: unknown): AdminSovereignSender | null {
-  const ligne = asRecord(raw);
+/**
+ * L'ADMISSION d'une ligne, puis le décodeur PARTAGÉ.
+ *
+ * Deux refus, et rien d'autre : sans identifiant il n'y a pas de rangée (`key`
+ * React, ancre du menu, cible d'un saut de citation) ; sans horloge `place()`
+ * ne sait ni grouper ni ouvrir un jour, et `toDate` rendrait une `Invalid Date`
+ * qui se propagerait jusqu'au libellé du séparateur.
+ */
+function decodeThreadMessage(entree: unknown): Message | null {
+  const ligne = asRecord(entree) as AdminThreadRawMessage | null;
   if (ligne === null) return null;
+  if (typeof ligne.id !== 'string' || ligne.id === '') return null;
+  if (typeof ligne.createdAt !== 'string' || ligne.createdAt === '') return null;
 
-  const compte = asRecord(ligne.user);
-  return {
-    userId: asTextOrNull(ligne.userId),
-    // Le nom du PARTICIPANT d'abord (il porte le surnom propre à la
-    // conversation), le compte en repli — même ordre que le fil.
-    displayName: asText(ligne.displayName) || asText(compte?.displayName) || asText(compte?.username),
-    avatar: asTextOrNull(ligne.avatar) ?? asTextOrNull(compte?.avatar),
+  const complete = {
+    ...ligne,
+    content: typeof ligne.content === 'string' ? ligne.content : '',
+    translations: Array.isArray(ligne.translations) ? ligne.translations : [],
+    deliveredCount: 0,
+    readCount: 0,
+    timestamp: ligne.createdAt,
   };
+
+  /* Le SEUL cast du module, et il est à la frontière : la charge est
+     `unknown`, le schéma de réponse de la route en est le contrat, et
+     `decodeMessage` est fail-closed sur tout ce qu'il ne reconnaît pas (il
+     RETIRE les `null` plutôt que de les recopier). Les quatre champs
+     complétés ci-dessus sont exactement ceux que le type déclare requis et
+     que la route ne sert pas — voir {@link AdminThreadRawMessage}. */
+  return decodeMessage(complete as unknown as Message);
 }
 
-export function decodeAdminSovereignMessages(raw: unknown, offset: number): AdminSovereignMessagePage {
-  const charge = asRecord(raw) ?? {};
-  const brut = Array.isArray(charge.data) ? charge.data : Array.isArray(raw) ? raw : [];
-
-  const messages = brut
-    .map((entree): AdminSovereignMessage | null => {
-      const ligne = asRecord(entree);
-      if (ligne === null || typeof ligne.id !== 'string' || ligne.id === '') return null;
-
-      return {
-        id: ligne.id,
-        content: asTextOrNull(ligne.content),
-        originalLanguage: asTextOrNull(ligne.originalLanguage),
-        messageType: asTextOrNull(ligne.messageType),
-        isEdited: ligne.isEdited === true,
-        createdAt: asTextOrNull(ligne.createdAt),
-        sender: decodeSender(ligne.sender),
-        attachmentCount: asCount(ligne.attachmentCount),
-        isProtected: ligne.isProtected === true,
-        attachments: (Array.isArray(ligne.attachments) ? ligne.attachments : [])
-          .map(decodeAttachment)
-          .filter((p): p is AdminSovereignAttachment => p !== null),
-      };
+/**
+ * DÉCODE ET RENVERSE. La route sert `createdAt DESC` (la page la plus récente
+ * d'abord, comme toute pagination par offset) ; `place()` et `continues()`
+ * supposent l'ASCENDANT — c'est l'ordre d'INDICE qui décide `head`/`tail`/
+ * `opensDay`. `loadMessages` (`api/messages.ts`) renverse pour la même raison.
+ */
+export function decodeAdminSovereignThread(page: PageServie, offset: number): AdminSovereignThreadPage {
+  const protectedIds = new Set<string>();
+  const messages = page.lignes
+    .map((entree): Message | null => {
+      const message = decodeThreadMessage(entree);
+      if (message === null) return null;
+      if (asRecord(entree)?.isProtected === true) protectedIds.add(message.id);
+      return message;
     })
-    .filter((message): message is AdminSovereignMessage => message !== null);
+    .filter((message): message is Message => message !== null)
+    .reverse();
 
-  const meta = asRecord(charge.pagination) ?? {};
-  const total = asCount(meta.total);
-  const hasMore = typeof meta.hasMore === 'boolean' ? meta.hasMore : offset + messages.length < total;
+  const total = asCount(page.meta.total);
+  const hasMore = typeof page.meta.hasMore === 'boolean' ? page.meta.hasMore : offset + messages.length < total;
 
-  return { messages, total: total || messages.length, offset, hasMore };
+  return { messages, protectedIds, total: total || messages.length, offset, hasMore };
 }
 
-export async function loadAdminSovereignMessages(
+export async function loadAdminSovereignThread(
   params: AdminDeps & {
     readonly conversationId: string;
     readonly offset: number;
@@ -311,7 +324,7 @@ export async function loadAdminSovereignMessages(
     readonly reason: string;
     readonly signal?: AbortSignal;
   },
-): Promise<ApiResult<AdminSovereignMessagePage>> {
+): Promise<ApiResult<AdminSovereignThreadPage>> {
   const query = new URLSearchParams({
     offset: String(params.offset),
     limit: String(ADMIN_MESSAGES_PAGE_SIZE),
@@ -325,5 +338,5 @@ export async function loadAdminSovereignMessages(
   });
   if (!result.ok) return result;
 
-  return { ok: true, data: decodeAdminSovereignMessages(result.data, params.offset) };
+  return { ok: true, data: decodeAdminSovereignThread(pageServie(result), params.offset) };
 }

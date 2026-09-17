@@ -95,6 +95,17 @@ export type RouteKey =
    */
   | 'adminConversation'
   | 'admConversation'
+  /**
+   * LE PILOTAGE DE L'AGENT (#6733) — `/admin/agent` et `/adm/agent`.
+   *
+   * Déclarées ici pour la raison écrite plus haut, et avec un motif de plus :
+   * cet écran ne fait pas que LIRE. Il porte la relance de l'agent, qui peut
+   * faire publier un message dans une vraie conversation. Oubliée, l'adresse
+   * serait PUBLIQUE par défaut — un visiteur sans session la peindrait, geste
+   * compris, avant que le serveur ne refuse.
+   */
+  | 'adminAgent'
+  | 'admAgent'
   | 'login'
   | 'signup'
   | 'welcome'
@@ -196,6 +207,12 @@ const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
   'admConversations',
   'adminConversation',
   'admConversation',
+  /* LE PILOTAGE DE L'AGENT (#6733) — privées comme le reste de
+     l'administration : sans cette déclaration elles seraient PUBLIQUES par
+     défaut, et cet écran porte la relance de l'agent, qui peut faire publier
+     un message dans une vraie conversation. */
+  'adminAgent',
+  'admAgent',
 ]);
 const AUTH_ROUTES: ReadonlySet<string> = new Set<RouteKey>(['login', 'signup', 'welcome', 'magicLink', 'forgotPassword']);
 

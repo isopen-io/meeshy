@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test';
 
 import { decodeAdminMediaPage, loadAdminUserMedia } from './admin-user-media';
 import type { HttpTransport } from './http';
+import { pageServie } from './admin';
+import { resultatServi } from '@/test-support/served-pagination';
 
 /**
  * LES MÉDIAS D'UN MEMBRE (#6819) — `GET /api/v1/admin/users/:userId/media`,
@@ -51,10 +53,20 @@ const MEDIA = {
   isProtected: false,
 };
 
+/**
+ * LA PAGE TELLE QUE LE PRODUIT LA REÇOIT (#6862, revue-correction) — l'enveloppe
+ * de la passerelle passe par la MÊME conversion que `createHttpTransport`
+ * (`resultatServi`) puis par la MÊME lecture que les ports (`pageServie`).
+ * Passer l'enveloppe brute au décodeur laissait `pagination` là où la
+ * production ne la trouve jamais : le témoin verdissait sur un chemin
+ * inexistant.
+ */
+const servie = (enveloppe: unknown) => pageServie(resultatServi(enveloppe));
+
 describe('decodeAdminMediaPage — la pagination est À CÔTÉ de data', () => {
   test('lit `pagination` au niveau de l’enveloppe, pas dans `data`', () => {
     const page = decodeAdminMediaPage(
-      { data: [MEDIA], pagination: { total: 42, offset: 20, limit: 20, hasMore: true } },
+      servie({ data: [MEDIA], pagination: { total: 42, offset: 20, limit: 20, hasMore: true } }),
       20,
     );
 
@@ -64,7 +76,7 @@ describe('decodeAdminMediaPage — la pagination est À CÔTÉ de data', () => {
   });
 
   test('sans pagination servie, `hasMore` se recalcule depuis l’offset et le rendu', () => {
-    const page = decodeAdminMediaPage({ data: [MEDIA] }, 0);
+    const page = decodeAdminMediaPage(servie({ data: [MEDIA] }), 0);
 
     expect(page.total).toBe(1);
     expect(page.hasMore).toBe(false);
@@ -73,8 +85,8 @@ describe('decodeAdminMediaPage — la pagination est À CÔTÉ de data', () => {
 
 describe('decodeAdminMediaPage — un média protégé reste listé', () => {
   test('garde l’entrée, avec ses URL à null et son drapeau', () => {
-    const page = decodeAdminMediaPage(
-      { data: [{ ...MEDIA, id: 'm-2', fileUrl: null, thumbnailUrl: null, isProtected: true }] },
+    const page = decodeAdminMediaPage(servie(
+      { data: [{ ...MEDIA, id: 'm-2', fileUrl: null, thumbnailUrl: null, isProtected: true }] }),
       0,
     );
 
@@ -84,20 +96,20 @@ describe('decodeAdminMediaPage — un média protégé reste listé', () => {
   });
 
   test('distingue la SOURCE — un média de post n’est pas un média de message', () => {
-    const page = decodeAdminMediaPage({ data: [MEDIA, { ...MEDIA, id: 'm-3', source: 'message' }] }, 0);
+    const page = decodeAdminMediaPage(servie({ data: [MEDIA, { ...MEDIA, id: 'm-3', source: 'message' }] }), 0);
 
     expect(page.medias.map((m) => m.source)).toEqual(['post', 'message']);
   });
 
   test('une source inconnue retombe sur `post` plutôt que d’écarter l’entrée', () => {
-    const page = decodeAdminMediaPage({ data: [{ ...MEDIA, source: 'autre' }] }, 0);
+    const page = decodeAdminMediaPage(servie({ data: [{ ...MEDIA, source: 'autre' }] }), 0);
 
     expect(page.medias[0]?.source).toBe('post');
   });
 
   test('écarte les entrées sans identifiant', () => {
-    expect(decodeAdminMediaPage({ data: [{ originalName: 'sans-id' }] }, 0).medias).toHaveLength(0);
-    expect(decodeAdminMediaPage(null, 0).medias).toEqual([]);
+    expect(decodeAdminMediaPage(servie({ data: [{ originalName: 'sans-id' }] }), 0).medias).toHaveLength(0);
+    expect(decodeAdminMediaPage(servie(null), 0).medias).toEqual([]);
   });
 });
 

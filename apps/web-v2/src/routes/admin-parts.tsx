@@ -127,6 +127,7 @@ export function AdminScreenFrame({
   language,
   title,
   back,
+  fills = false,
   children,
 }: {
   readonly language: InterfaceLanguage;
@@ -140,14 +141,35 @@ export function AdminScreenFrame({
    * que D-76 les tient séparées à dessein.
    */
   readonly back: 'list' | 'admin' | 'adminUsers' | 'admUsers';
+  /**
+   * L'ÉCRAN PORTE-T-IL SON PROPRE DÉFILEMENT ? (#6862, lot C)
+   *
+   * `false` (défaut) — le cadre défile, et son contenu grandit librement :
+   * c'est ce que font une fiche, une liste paginée, un tableau de bord.
+   *
+   * `true` — le contenu REMPLIT la hauteur et défile lui-même. La lecture
+   * souveraine d'une conversation monte un fil VIRTUALISÉ, qui a besoin de
+   * désigner son conteneur de défilement et que celui-ci ait une hauteur
+   * BORNÉE. Sous le cadre défilant, ce conteneur n'en a aucune : le
+   * virtualiseur mesure alors une fenêtre infinie et monte toutes les rangées
+   * — c'est-à-dire exactement ce que la virtualisation existe pour éviter, et
+   * sans qu'aucune erreur ne le signale.
+   */
+  readonly fills?: boolean;
   readonly children: ReactNode;
 }) {
   return (
     <div className="flex h-dvh flex-col overflow-hidden pt-safe">
       <AdminHeader language={language} title={title} back={back} />
-      <main id="contenu" className="flex flex-1 flex-col overflow-y-auto px-4 pb-safe">
-        <div className="mx-auto w-full max-w-3xl pb-24">{children}</div>
-      </main>
+      {fills ? (
+        <main id="contenu" className="flex min-h-0 flex-1 flex-col px-4 pb-safe">
+          <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col">{children}</div>
+        </main>
+      ) : (
+        <main id="contenu" className="flex flex-1 flex-col overflow-y-auto px-4 pb-safe">
+          <div className="mx-auto w-full max-w-3xl pb-24">{children}</div>
+        </main>
+      )}
     </div>
   );
 }

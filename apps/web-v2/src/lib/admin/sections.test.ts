@@ -27,6 +27,7 @@ const AUCUNE: AdminPermissions = {
   canViewAuditLogs: false,
   canManageNotifications: false,
   canManageTranslations: false,
+  canManageAgent: false,
 };
 
 const TOUTES: AdminPermissions = {
@@ -39,6 +40,7 @@ const TOUTES: AdminPermissions = {
   canViewAuditLogs: true,
   canManageNotifications: true,
   canManageTranslations: true,
+  canManageAgent: true,
 };
 
 describe('visibleAdminSections — fail-closed par construction', () => {
@@ -57,7 +59,50 @@ describe('visibleAdminSections — fail-closed par construction', () => {
   test('une matrice complète ne voit que les sections que la v2 SERT (#6702)', () => {
     // SANS rôle : la section réservée au rang d'administration reste masquée —
     // l'absence de rôle est FERMANTE (#6862).
-    expect(visibleAdminSections(TOUTES).map((s) => s.id)).toEqual(['dashboard', 'users']);
+    expect(visibleAdminSections(TOUTES).map((s) => s.id)).toEqual(['dashboard', 'users', 'agent']);
+  });
+
+  /**
+   * **LA TUILE DE L'AGENT SE LIT SUR `canManageAgent`, JAMAIS SUR L'ACCÈS**
+   * (#6733).
+   *
+   * Elle portait `permission: 'canAccessAdmin'` — le seuil de la PORTE, pas
+   * celui des routes qu'elle ouvre. Les 35 routes `/admin/agent/*` sont
+   * gardées par `requirePermission('canManageAgent')`
+   * (`routes/admin/agent-shared.ts`), et la matrice centrale refuse ce droit à
+   * MODERATOR comme à AUDIT, qui portent pourtant `canAccessAdmin`.
+   *
+   * **MODERATOR est le rang où les deux clés divergent** : c'est là, et nulle
+   * part ailleurs, qu'un témoin sur ce droit peut tomber. Un témoin écrit sur
+   * BIGBOSS aurait verdi sur les deux seuils sans rien prouver — c'est la
+   * leçon 261 (un témoin de RANG s'écrit sur un rang AUTRE que celui où les
+   * deux règles s'accordent).
+   */
+  test('un MODERATOR entre dans l’espace mais ne voit PAS la tuile de l’agent', () => {
+    const moderateur: AdminPermissions = {
+      ...AUCUNE,
+      canAccessAdmin: true,
+      canModerateContent: true,
+      canManageConversations: true,
+      canManageAgent: false,
+    };
+
+    expect(visibleAdminSections(moderateur, 'MODERATOR').length).toBeGreaterThan(0);
+    expect(visibleAdminSections(moderateur, 'MODERATOR').map((s) => s.id)).not.toContain('agent');
+  });
+
+  test('un porteur de `canManageAgent` la voit', () => {
+    const agent: AdminPermissions = { ...AUCUNE, canAccessAdmin: true, canManageAgent: true };
+
+    expect(visibleAdminSections(agent, 'ADMIN').map((s) => s.id)).toContain('agent');
+  });
+
+  test('la tuile de l’agent ne dépend PAS du rang — elle n’est pas `adminRankOnly`', () => {
+    // Sa garde serveur est une PERMISSION, pas un rang : y ajouter un filtre
+    // de rang retirerait la tuile à un rôle futur que la matrice autoriserait.
+    const agentSansRang: AdminPermissions = { ...AUCUNE, canAccessAdmin: true, canManageAgent: true };
+
+    expect(visibleAdminSections(agentSansRang).map((s) => s.id)).toContain('agent');
   });
 
   /**

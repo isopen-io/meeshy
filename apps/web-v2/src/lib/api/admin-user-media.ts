@@ -1,4 +1,4 @@
-import { type AdminDeps, asCount, asRecord, asText } from './admin';
+import { type AdminDeps, asCount, asRecord, asText, pageServie, type PageServie } from './admin';
 import type { ApiResult } from './http';
 
 /**
@@ -57,11 +57,8 @@ export const adminUserMediaQueryKey = (userId: string, offset: number) =>
 const asTextOrNull = (value: unknown): string | null =>
   typeof value === 'string' && value !== '' ? value : null;
 
-export function decodeAdminMediaPage(raw: unknown, offset: number): AdminMediaPage {
-  const charge = asRecord(raw) ?? {};
-  const brut = Array.isArray(charge.data) ? charge.data : Array.isArray(raw) ? raw : [];
-
-  const medias = brut
+export function decodeAdminMediaPage(page: PageServie, offset: number): AdminMediaPage {
+  const medias = page.lignes
     .map((entree): AdminMedia | null => {
       const ligne = asRecord(entree);
       if (ligne === null || typeof ligne.id !== 'string' || ligne.id === '') return null;
@@ -89,9 +86,8 @@ export function decodeAdminMediaPage(raw: unknown, offset: number): AdminMediaPa
     })
     .filter((media): media is AdminMedia => media !== null);
 
-  const meta = asRecord(charge.pagination) ?? {};
-  const total = asCount(meta.total);
-  const hasMore = typeof meta.hasMore === 'boolean' ? meta.hasMore : offset + medias.length < total;
+  const total = asCount(page.meta.total);
+  const hasMore = typeof page.meta.hasMore === 'boolean' ? page.meta.hasMore : offset + medias.length < total;
 
   return { medias, total: total || medias.length, offset, hasMore };
 }
@@ -111,5 +107,5 @@ export async function loadAdminUserMedia(
   });
   if (!result.ok) return result;
 
-  return { ok: true, data: decodeAdminMediaPage(result.data, params.offset) };
+  return { ok: true, data: decodeAdminMediaPage(pageServie(result), params.offset) };
 }
