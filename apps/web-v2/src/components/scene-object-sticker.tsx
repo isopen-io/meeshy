@@ -1,6 +1,6 @@
 import { objectMediaSrc, type SceneCarrier } from '@/lib/canvas/carrier';
 import type { CanvasObject } from '@/lib/canvas/document';
-import { stickerGlyph, stickerWidthFraction } from '@/lib/canvas/sticker';
+import { STICKER_MIN_PX, stickerGlyph, stickerWidthFraction } from '@/lib/canvas/sticker';
 import { cqw } from '@/lib/canvas/units';
 
 import type { SceneClockHandle } from './scene-clock';
@@ -26,7 +26,10 @@ export function SceneObjectSticker({
   if (glyph === null) return null;
   const baseSize = typeof payload.baseSize === 'number' ? payload.baseSize : undefined;
   const scale = object.transform.scale;
-  const fontSize = cqw(stickerWidthFraction(baseSize, scale));
+  // `max(8px, Ncqw)` — le plancher de `CanvasGeometry.stickerFontSize`, posé
+  // ICI parce qu'il est en PIXELS : `stickerWidthFraction` ne connaît que
+  // l'espace design (revue-correction #6901, T-D10c).
+  const fontSize = `max(${STICKER_MIN_PX}px, ${cqw(stickerWidthFraction(baseSize, scale))})`;
   const emoji = typeof payload.emoji === 'string' && payload.emoji !== '' ? payload.emoji : undefined;
   const imageSrc = emoji === undefined ? objectMediaSrc(object, carrier) : undefined;
 

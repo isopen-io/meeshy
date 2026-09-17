@@ -57,17 +57,28 @@ export function paintableStrokes(payload: Record<string, unknown>): readonly Str
   return raw.map(parseStroke).filter((s): s is Stroke => s !== null && s.tool !== 'eraser');
 }
 
+/** `StrokeWidthMapping.minWidth` — le plancher, en pixels de l'espace design
+ * 1080×1920 (`StrokeWidthMapping.swift:16`). */
+export const STROKE_MIN_WIDTH = 1;
+
 /**
- * `strokeWidth` — miroir `StrokeWidthMapping` : le plancher passe AVANT le
- * plafond (`min(base, max(1, base × facteur))`), même ordre que
+ * `strokeWidth` — miroir `StrokeWidthMapping.effectiveWidth`
+ * (`packages/MeeshySDK/.../StrokeWidthMapping.swift:22-27`) : le plancher
+ * passe AVANT le plafond (`min(base, max(1, base × facteur))`), même ordre que
  * `MediaCropRule.clamped` (leçon mémoire : deux planchers qui ne tiennent pas
  * au même endroit rendraient deux bandes différentes pour un même geste).
  * `captureVersion >= 1` module par la PRESSION moyenne (0.7 pour une pression
- * médiane) ; `captureVersion` absent/0 rend le trait TEL QUEL.
+ * médiane) ; `captureVersion` absent/0 rend la base CONSTANTE — mais **le
+ * plancher s'y applique aussi** (`guard captureVersion >= 1 else { return
+ * max(minWidth, base) }`, ligne 24 ; le legacy web le porte également,
+ * `CanvasV3Scene.tsx:778`). Le rendre nu peignait un trait legacy sub-unitaire
+ * plus fin ici que sur les deux autres plateformes (revue-correction #6901,
+ * T-D9b). La pression est bornée `[0,1]` — la seule liberté prise sur le
+ * miroir, et elle ne peut pas diverger pour une pression valide.
  */
 export function strokeWidth(stroke: Pick<Stroke, 'width' | 'tool' | 'captureVersion'>, pressure = 1): number {
   const base = stroke.tool === 'marker' ? stroke.width * 2 : stroke.width;
-  if ((stroke.captureVersion ?? 0) < 1) return base;
+  if ((stroke.captureVersion ?? 0) < 1) return Math.max(STROKE_MIN_WIDTH, base);
   const factor = 0.4 + 0.6 * Math.min(Math.max(pressure, 0), 1);
-  return Math.min(base, Math.max(1, base * factor));
+  return Math.min(base, Math.max(STROKE_MIN_WIDTH, base * factor));
 }
