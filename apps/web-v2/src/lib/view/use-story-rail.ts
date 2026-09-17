@@ -6,6 +6,7 @@ import { useStatusMoods, useStoryTray } from '@/lib/api/query';
 import type { StatusMoodPost } from '@/lib/api/stories';
 import { storyViewedStore } from '@/lib/api/story-viewed-store';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { selfRailEntry } from '@/lib/view/story-rail-self';
 import { groupStoriesByAuthor, railTientLaPlace, withMoods } from '@/lib/view/story-tray';
 
 const EMPTY_STATUS_MOODS: readonly StatusMoodPost[] = [];
@@ -50,5 +51,23 @@ export function useStoryRailProps(viewerId: string | undefined): StoryRailProps 
 
   const language = currentInterfaceLanguage();
 
-  return useMemo(() => ({ groups, loading: railTientLaPlace(tray), language }), [groups, tray, language]);
+  /**
+   * **MOI, ET MES DEUX PORTES** (#6150) — calculée ICI, avec le reste des
+   * props, pour la raison même qui a fait remonter `groups` : les deux
+   * géographies du rail doivent voir la MÊME valeur, sinon la tuile jumelle
+   * vers laquelle la bande rend le focus pourrait ne pas exister.
+   *
+   * Elle se calcule sur le corpus BRUT des humeurs, pas sur `groups` : un
+   * lecteur qui n'a publié aucune story n'a AUCUN groupe, et c'est précisément
+   * le cas où ses deux portes comptent le plus.
+   */
+  const self = useMemo(
+    () => selfRailEntry({ viewerId, groups, moods: moods.data ?? EMPTY_STATUS_MOODS }),
+    [viewerId, groups, moods.data],
+  );
+
+  return useMemo(
+    () => ({ groups, loading: railTientLaPlace(tray), language, ...(self === undefined ? {} : { self }) }),
+    [groups, tray, language, self],
+  );
 }

@@ -49,6 +49,21 @@ const ar = {
   'stories.count.other': '{count} قصص',
   'stories.mine': 'قصتك',
 
+  /* #6150 — بابا خليتي في الشريط. */
+  'stories.self.addStory': 'إضافة قصة',
+  'stories.self.mood.add': 'تعيين مزاج',
+  'stories.self.mood.change': 'تغيير مزاجي، {emoji}',
+
+  'status.compose.title': 'مزاجي',
+  'status.compose.back': 'رجوع',
+  'status.compose.pick': 'اختر مزاجًا',
+  'status.compose.note': 'كلمة، إن أردت',
+  'status.compose.publish': 'نشر',
+  'status.compose.publishing': 'جارٍ النشر…',
+  'status.compose.published': 'تم نشر المزاج',
+  'status.compose.error': 'تعذّر نشر مزاجك.',
+  'status.compose.offline': 'غير متصل — سيُنشر مزاجك عند عودة الشبكة.',
+
   'feed.post.action.like': 'إعجاب',
   'feed.post.action.comment': 'تعليق',
   'feed.post.action.repost': 'إعادة النشر',
