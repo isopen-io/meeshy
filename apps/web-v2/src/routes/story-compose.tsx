@@ -32,7 +32,6 @@ import {
 } from '@/lib/stories/story-document';
 import {
   canPublishStudioDraft,
-  emptyStudioDraft,
   selectedTextLayer,
   studioDoorAccepts,
   studioDraftFromSnapshot,
@@ -884,11 +883,3 @@ function StoryStudio({ deps, viewerId }: { readonly deps: StoryStudioDeps; reado
     </StudioShell>
   );
 }
-
-/** Les portes visuelles, dans l'ordre du couloir — le fond d'abord, le calque
- * ensuite, comme `mediaIds` les attend. */
-export const STUDIO_VISUAL_DOORS = VISUAL_DOORS;
-
-/** Le plateau NEUF, exposé pour les témoins : la graine d'un studio sans
- * brouillon. */
-export const newStudioDraft = emptyStudioDraft;

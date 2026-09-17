@@ -98,8 +98,6 @@ export type StudioDraft = {
  * par laquelle un fichier entre, et elle décide de son rôle. */
 export type StudioDoor = 'visual' | 'overlay' | 'sound';
 
-export const STUDIO_DOORS = ['visual', 'overlay', 'sound'] as const;
-
 export function emptyStudioDraft(language: string): StudioDraft {
   const seed = newTextLayer({ id: 'text-1', language });
   // UN objet texte VIDE dès l'ouverture : c'est lui que la saisie du plateau
