@@ -225,7 +225,27 @@ public extension CanvasV3 {
         // rendait déjà en l'absence de porteur.
         let backgroundHex = nonEmpty(effects.background)
         let backgroundTransform = effects.backgroundTransform.flatMap { $0.isIdentity ? nil : $0 }
-        if backgroundHex != nil || backgroundTransform != nil {
+        // **Un objet référencé peut avoir porté LUI-MÊME le cadrage** —
+        // `payload.mediaId`/`postMediaId` ET `payload.transform.videoFitMode`
+        // sur le MÊME objet, forme servie par la passerelle (revue
+        // 2026-09-17). `wireBackgroundTransformCarrierId` mémorise son id ;
+        // tant que ce même id existe encore parmi `mediaObjects`, le cadrage
+        // lui est replacé PLUS BAS (boucle `.media`) plutôt qu'ici — le
+        // scinder en deux objets le dédoublerait (id neuf) ou l'effacerait
+        // (id `"bg"`, déjà pris par le porteur réservé ci-dessous), les deux
+        // défauts que ce détour évite. L'id n'existant plus (l'auteur a
+        // supprimé l'objet référencé) retombe sur le porteur synthétique
+        // habituel.
+        let backgroundCarrierId = effects.wireBackgroundTransformCarrierId
+        let backgroundCarrierStillPresent = backgroundCarrierId != nil
+            && (effects.mediaObjects ?? []).contains { $0.id == backgroundCarrierId }
+        // `"bg"` reste l'id RÉSERVÉ du porteur synthétique couleur/transform,
+        // en garde de sécurité : aucun objet `mediaObjects` ne doit porter cet
+        // id littéral quand ce porteur est émis, sans quoi la scène aurait
+        // deux objets homonymes `"bg"`.
+        let backgroundCarrierIdIsTaken = (effects.mediaObjects ?? []).contains { $0.id == "bg" }
+        if !backgroundCarrierStillPresent, !backgroundCarrierIdIsTaken,
+           backgroundHex != nil || backgroundTransform != nil {
             let fallback = slot
             slot += 1
             var payload: [String: CanvasJSONValue] = [:]
@@ -257,6 +277,15 @@ public extension CanvasV3 {
         for media in effects.mediaObjects ?? [] {
             let fallback = slot
             slot += 1
+            var payload = Self.mediaPayload(media)
+            // Le cadrage revient sur l'objet qui le portait déjà — voir le
+            // commentaire de `backgroundCarrierStillPresent` plus haut.
+            if backgroundCarrierStillPresent, media.id == backgroundCarrierId {
+                if let backgroundHex { payload["background"] = .string(backgroundHex) }
+                if let backgroundTransform {
+                    payload["transform"] = wireObject(backgroundTransform).map(CanvasJSONValue.object) ?? .null
+                }
+            }
             objects.append(ObjectV3(id: media.id, kind: .media,
                                     anchor: wireAnchor(effects.wireBandEdge, media.id, x: media.x, y: media.y),
                                     plane: .content,
@@ -266,7 +295,7 @@ public extension CanvasV3 {
                                                      end: effects.wireTimingEnd?[media.id],
                                                      keyframes: media.keyframes),
                                     locale: nonEmpty(media.sourceLanguage),
-                                    payload: Self.mediaPayload(media)))
+                                    payload: payload))
         }
 
         for sticker in effects.stickerObjects ?? [] {
@@ -411,9 +440,23 @@ public extension CanvasV3 {
             remapped = objects
         }
 
+        // **Ce que le runtime v1 ne sait pas exprimer est réémis VERBATIM**
+        // (revue 2026-09-17, #6893) : un kind réservé ou une mention n'entre
+        // dans aucune famille ci-dessus (`init(rendering:)` les saute), donc
+        // rien ne les régénère depuis `effects` — ils ne survivent que par
+        // cette restitution par IDENTITÉ. Déjà en coordonnées WIRE (jamais
+        // dé-remappés à la lecture), ils rejoignent la scène APRÈS le remap
+        // ci-dessus, pas avant, pour ne jamais subir une seconde transformation
+        // affine. Un id déjà couvert par le runtime (l'auteur l'a remplacé)
+        // cède la place — la restitution ne s'applique qu'à ce qu'aucune
+        // famille éditable ne revendique.
+        let knownIds = Set(objects.map(\.id))
+        let preserved = (effects.wireUnpaintableObjects ?? []).filter { !knownIds.contains($0.id) }
+        let finalObjects = remapped + preserved
+
         let scene = SceneV3(
             id: id,
-            objects: remapped,
+            objects: finalObjects,
             opening: effects.openingWire ?? effects.opening.map { ["type": .string($0.rawValue)] },
             closing: effects.closingWire ?? effects.closing.map { ["type": .string($0.rawValue)] },
             clipTransitions: effects.clipTransitions.map { $0.compactMap(wireObject) },
@@ -428,7 +471,7 @@ public extension CanvasV3 {
         // O3 — un cadre n'existe que s'il PORTE quelque chose : objet, empreinte
         // (thumbHash calculé en aval du persist par la file hors-ligne), durée
         // ou transition. Un canvas réellement vide n'émet toujours aucune scène.
-        let sceneCarriesSomething = !remapped.isEmpty
+        let sceneCarriesSomething = !finalObjects.isEmpty
             || scene.thumbHash != nil
             || scene.timelineDuration != nil
             || scene.opening != nil
@@ -527,10 +570,21 @@ public extension CanvasV3 {
     /// La disposition (`layout`) vient elle aussi du document : le runtime v1
     /// ne l'exprime pas, et la jeter à chaque aller-retour ramènerait tout le
     /// monde au défaut sans qu'aucun témoin ne tombe.
+    ///
+    /// **La scène 0 n'est plus fusionnée avec le document mémorisé** (revue du
+    /// 2026-09-17, suivi #6893/#6894). Le merge par identité qui vivait ici ne
+    /// portait plus qu'UN cas : un fond `plane: .bg` à référence média — et
+    /// depuis #6894, `StoryEffects.init(rendering:)` fait déjà entrer ce fond
+    /// dans `mediaObjects`, d'où `migratedScene` ci-dessus le réémet lui-même,
+    /// à identité égale. Le merge ne s'activait donc plus que sur son cas
+    /// PATHOLOGIQUE : un fond que l'auteur vient de retirer par
+    /// `deleteElement` (désormais possible, précisément grâce à #6894) —
+    /// auquel cas il RESSUSCITAIT ce que l'auteur venait de supprimer à
+    /// l'autosave suivant. Le retirer ne perd rien que #6894 ne couvre déjà.
     init(migrating effects: StoryEffects, keeping document: CanvasV3?) {
-        let premiere = CanvasV3.migratedScene(effects, id: "s1")
+        let migree = CanvasV3.migratedScene(effects, id: "s1")
         let suivantes = Array((document?.scenes ?? []).dropFirst())
-        let scenes = ([premiere].compactMap { $0 } + suivantes).prefix(CanvasV3.maxScenes)
+        let scenes = ([migree].compactMap { $0 } + suivantes).prefix(CanvasV3.maxScenes)
         self.init(v: 3,
                   scenes: Array(scenes),
                   sound: CanvasV3.migratedSound(effects) ?? document?.sound,
@@ -749,6 +803,7 @@ public extension StoryEffects {
         var audios: [StoryAudioPlayerObject] = []
         var bandEdges: [String: ObjectAnchor.Edge] = [:]
         var unpaintable: [String] = []
+        var unpaintableObjects: [ObjectV3] = []
         var timingEnds: [String: Double] = [:]
         var anchorPoints: [String: String] = [:]
 
@@ -776,8 +831,47 @@ public extension StoryEffects {
                 background = object.payload.string("background")
                 backgroundTransform = decodeWire(StoryBackgroundTransform.self,
                                                  from: object.payload.object("transform"))
+                // **Un fond RÉFÉRENCÉ (mediaId/postMediaId) entre dans le
+                // runtime v1 comme un média de fond** (#6894) — sans ce
+                // ramage, un canvas qui adresse un enregistrement réel du
+                // post par cette forme (`payload.mediaId`, servie par la
+                // passerelle, jamais écrite par le composer) n'avait aucun
+                // représentant v1, et le LECTEUR (`StoryReaderRepresentable`,
+                // via `resolvedBackgroundMedia`) n'avait rien à peindre.
+                // `Self.mediaObject` normalise déjà les deux orthographes
+                // (`ObjectV3.mediaReference`) sur `postMediaId` — le seul
+                // champ que le résolveur du lecteur lit.
+                if object.mediaReference != nil {
+                    var fond = Self.mediaObject(object, at: position)
+                    fond.isBackground = true
+                    medias.append(fond)
+                    // **Le collision guard (revue 2026-09-17)** : ce MÊME
+                    // objet porte à la fois la référence et le cadrage — le
+                    // mémoriser permet au réencodage de replacer les deux sur
+                    // lui plutôt que de fabriquer un second objet.
+                    if object.payload.string("background") != nil || object.payload.object("transform") != nil {
+                        wireBackgroundTransformCarrierId = object.id
+                    }
+                }
             case .media:
-                medias.append(Self.mediaObject(object, at: position))
+                let media = Self.mediaObject(object, at: position)
+                medias.append(media)
+                // **Second passage** (revue 2026-09-17) : après un premier
+                // réencodage, l'objet élu ci-dessus revient en `plane:
+                // content` et porte désormais lui-même `transform`/`background`
+                // dans son payload — le décoder ici referme la boucle sans
+                // perdre le cadrage à chaque aller-retour supplémentaire.
+                if media.isBackground {
+                    if background == nil, let hex = object.payload.string("background") { background = hex }
+                    if backgroundTransform == nil,
+                       let transform = decodeWire(StoryBackgroundTransform.self,
+                                                  from: object.payload.object("transform")) {
+                        backgroundTransform = transform
+                    }
+                    if object.payload.string("background") != nil || object.payload.object("transform") != nil {
+                        wireBackgroundTransformCarrierId = object.id
+                    }
+                }
             case .text:
                 if let text = Self.textObject(object, at: position) { texts.append(text) }
             case .sticker:
@@ -794,7 +888,11 @@ public extension StoryEffects {
                 // Kind CONNU que la scène ne peint pas : une mention est une
                 // métadonnée, pas un objet. Ne JAMAIS le compter comme une
                 // rupture — la sentinelle rougirait sur toute story qui cite
-                // quelqu'un.
+                // quelqu'un. Mémorisé quand même (revue 2026-09-17, #6893) :
+                // sans `unpaintableObjects`, cette métadonnée ne survivait à
+                // AUCUN aller-retour par le cache du fil — `migratedScene`
+                // n'avait rien à réémettre.
+                unpaintableObjects.append(object)
                 continue
             case .reserved(let raw):
                 // **Un kind d'un document plus récent que ce build** (#4088).
@@ -802,6 +900,12 @@ public extension StoryEffects {
                 // Sans ce mémo, le lecteur peindrait la scène AMPUTÉE comme si
                 // c'était la composition de l'auteur.
                 unpaintable.append(raw)
+                // **L'objet lui-même est mémorisé** (revue 2026-09-17,
+                // #6893) : `wireUnpaintableKinds` ne nommait que le KIND, pas
+                // assez pour que `migratedScene` le réémette — un tel objet
+                // (poll, gif3d, …) disparaissait ENTIÈREMENT à chaque
+                // aller-retour par le cache du fil.
+                unpaintableObjects.append(object)
                 continue
             }
         }
@@ -812,6 +916,7 @@ public extension StoryEffects {
         stickerObjects = stickerFamily.isEmpty ? nil : stickerFamily
         audioPlayerObjects = audios.isEmpty ? nil : audios
         wireUnpaintableKinds = unpaintable.isEmpty ? nil : Array(Set(unpaintable)).sorted()
+        wireUnpaintableObjects = unpaintableObjects.isEmpty ? nil : unpaintableObjects
         wireBandEdge = bandEdges.isEmpty ? nil : bandEdges
         wireTimingEnd = timingEnds.isEmpty ? nil : timingEnds
         wireAnchorPoint = anchorPoints.isEmpty ? nil : anchorPoints
@@ -918,7 +1023,9 @@ public extension StoryEffects {
         }()
         var media = StoryMediaObject(
             id: object.id,
-            postMediaId: object.payload.string("postMediaId") ?? "",
+            // Site unique des deux orthographes (#6894) : `postMediaId`
+            // (composer) et `mediaId` (passerelle) résolvent au MÊME champ v1.
+            postMediaId: object.mediaReference ?? "",
             mediaURL: object.payload.string("mediaURL"),
             mediaType: object.payload.string("mediaType") ?? "image",
             placement: object.payload.string("placement") ?? "media",

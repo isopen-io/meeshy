@@ -237,4 +237,54 @@ final class SceneCaptionTests: XCTestCase {
             SceneCaption.resolveWithOrigin(sceneIndex: 0, in: document, post: publication, carrierFallback: true)?.text
         )
     }
+
+    // MARK: - Le contrat des deux orthographes d'un média (#6894)
+
+    /// Une scène dont le fond RÉFÉRENCE un média par `payload.mediaId`
+    /// (`plane: bg`) — la forme que la passerelle sert et qu'aucun composer
+    /// iOS n'écrit (`storyEffectsV3.ts`, `CLAIM_PAYLOAD_KEYS`).
+    private func sceneBg(_ id: String, mediaId: String) -> SceneV3 {
+        SceneV3(id: id, objects: [
+            ObjectV3(id: "bg-\(mediaId)", kind: .media,
+                    anchor: .free(x: 0.5, y: 0.5), plane: .bg, z: 0,
+                    transform: TransformV3(), payload: ["mediaId": .string(mediaId)])
+        ])
+    }
+
+    /// **`mediaIdentity` résout un fond `plane: bg` à `mediaId`** — le même
+    /// résultat qu'un porteur `plane: content` à `postMediaId`.
+    func test_mediaIdentity_resoutUnFondBgAMediaId() {
+        let publication = post(media: [media("m1", caption: "la plage")])
+        let document = CanvasV3(scenes: [sceneBg("s1", mediaId: "m1")])
+        XCTAssertEqual(SceneCaption.mediaIdentity(sceneIndex: 0, in: document, post: publication), "m1")
+    }
+
+    /// **Le témoin discriminant, rejoué sur l'autre orthographe.** Un post de
+    /// PLUSIEURS scènes, chacune un fond `mediaId` distinct : la légende de la
+    /// scène 2 doit suivre SON média, pas rester sur le premier (le même
+    /// défaut que le témoin `postMediaId` ci-dessus, sur la forme que la
+    /// passerelle sert).
+    func test_surUnDocumentDeFondsBgAMediaId_chaqueSceneGardeSaPropreLegende() {
+        let publication = post(media: [media("m1", caption: "la plage"),
+                                       media("m2", caption: "la montagne")])
+        let document = CanvasV3(scenes: [sceneBg("s1", mediaId: "m1"),
+                                         sceneBg("s2", mediaId: "m2")])
+
+        XCTAssertEqual(
+            SceneCaption.resolve(sceneIndex: 1, in: document, post: publication, carrierFallback: false),
+            "la montagne",
+            "la légende doit suivre le fond mediaId de LA scène affichée")
+        XCTAssertEqual(
+            SceneCaption.resolve(sceneIndex: 0, in: document, post: publication, carrierFallback: false),
+            "la plage")
+    }
+
+    /// `addressesAnyMedia` doit reconnaître un document dont TOUTES les
+    /// scènes portent un fond `mediaId` — sans quoi le repli sur le premier
+    /// visuel (`unDocumentQuiNAdressseAucunMedia_retombeSurLePremierVisuel`)
+    /// s'arme à tort et fige chaque scène sur `post.media.first`.
+    func test_addressesAnyMedia_reconnaitUnDocumentDeFondsBgAMediaId() {
+        let document = CanvasV3(scenes: [sceneBg("s1", mediaId: "m1")])
+        XCTAssertTrue(SceneCaption.addressesAnyMedia(document))
+    }
 }

@@ -603,4 +603,60 @@ final class SceneFramingTests: XCTestCase {
         XCTAssertLessThanOrEqual(hauteur, 338 * SceneFraming.maxCardHeightRatio + 0.5,
                                  "601 pt (9:16 non plafonné) doit redescendre à ≤ 473 pt (338 × 1,4)")
     }
+
+    // MARK: - Le contrat des deux orthographes d'un média (#6894)
+
+    /// Un fond de scène `{plane: bg, payload.mediaId}` — la forme que la
+    /// PASSERELLE sert et qu'aucun composer iOS n'écrit (`storyEffectsV3.ts`,
+    /// `CLAIM_PAYLOAD_KEYS`).
+    private func fondReferenceMediaId(_ mediaId: String = "6aaa972c3fd1f8a72d0e38e6",
+                                      aspectRatio: Double? = nil) -> ObjectV3 {
+        var payload: [String: CanvasJSONValue] = ["mediaId": .string(mediaId)]
+        if let aspectRatio { payload["aspectRatio"] = .number(aspectRatio) }
+        return ObjectV3(id: "bg1", kind: .media, anchor: .free(x: 0.5, y: 0.5),
+                        plane: .bg, z: 0, transform: TransformV3(), payload: payload)
+    }
+
+    /// **`carriesPicture` reconnaît la référence `mediaId`** — sans elle,
+    /// `backgroundMedia(in:)` retombe sur son second repli (n'importe quel
+    /// porteur `plane: bg`) plutôt que d'élire ce fond comme LE média, et
+    /// `showsSomething`/`imageAspect` le traitent comme un porteur nu.
+    func test_carriesPicture_reconnaitUneReferenceMediaId() {
+        XCTAssertTrue(SceneFraming.carriesPicture(fondReferenceMediaId()),
+                     "un objet qui porte payload.mediaId désigne un enregistrement du post")
+    }
+
+    /// `carriesPicture` continue de rendre `false` sur un porteur nu — la
+    /// couleur ou le seul cadrage d'un fond, qu'aucune des deux clés ne référence.
+    func test_carriesPicture_neSeDeclencheJamaisSurUnPorteurNu() {
+        let porteur = ObjectV3(id: "bg", kind: .media, anchor: .free(x: 0.5, y: 0.5),
+                               plane: .bg, z: 0, transform: TransformV3(), payload: [:])
+        XCTAssertFalse(SceneFraming.carriesPicture(porteur))
+    }
+
+    /// **`backgroundAspect(in:)` lit le rapport DÉCLARÉ d'un fond à `mediaId`,
+    /// quand ce rapport est connu** — la scène ne devine rien, elle lit
+    /// `payload.aspectRatio` une fois le fond correctement élu.
+    func test_backgroundAspect_litLeRapportDunFondAMediaId_quandIlEstDeclare() throws {
+        let s = scene([fondReferenceMediaId(aspectRatio: Double(paysage))])
+        let rapport = try XCTUnwrap(SceneFraming.backgroundAspect(in: s))
+        XCTAssertEqual(rapport, paysage, accuracy: 0.001)
+    }
+
+    /// Sans rapport déclaré, `backgroundAspect(in:)` rend `nil` plutôt que de
+    /// fabriquer une valeur — c'est à l'appelant, qui connaît `post.media`, de
+    /// le fournir via le paramètre `backgroundAspect:` de `focus`/`cardAspect`.
+    func test_backgroundAspect_neDevineRien_sansRapportDeclare() {
+        let s = scene([fondReferenceMediaId()])
+        XCTAssertNil(SceneFraming.backgroundAspect(in: s))
+    }
+
+    /// **`imageAspect(scene:)` traite un fond à `mediaId` comme une image**
+    /// dès que son rapport est connu et qu'elle est seule et intouchée — le
+    /// même chemin qu'une image posée par le composer (`postMediaId`).
+    func test_imageAspect_reconnaitUnFondAMediaId_quandLeRapportEstConnu() throws {
+        let s = scene([fondReferenceMediaId(aspectRatio: Double(paysage))])
+        let rapport = try XCTUnwrap(SceneFraming.imageAspect(scene: s))
+        XCTAssertEqual(rapport, paysage, accuracy: 0.001)
+    }
 }
