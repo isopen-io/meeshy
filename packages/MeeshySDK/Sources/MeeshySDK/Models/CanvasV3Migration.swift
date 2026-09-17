@@ -462,6 +462,15 @@ public extension CanvasV3 {
     /// la passerelle (`storyEffectsV3.ts`, contrat des deux orthographes
     /// #6894), jamais par une session d'édition iOS — la restituer ne peut
     /// donc jamais annuler un geste de l'auteur.
+    ///
+    /// **Depuis #6894, ce merge ne s'active plus sur son propre cas nominal**
+    /// (`StoryEffects.init(rendering:)`, cas `.media where plane == .bg`, lit
+    /// désormais lui-même `mediaId`/`postMediaId` et fait entrer le fond dans
+    /// `mediaObjects` — dès lors couvert par la boucle `.media` ordinaire de
+    /// `migratedScene`, à IDENTITÉ égale). Il reste un FILET pour tout objet
+    /// futur que le runtime v1 ne saurait toujours pas exprimer — la garantie
+    /// qu'il porte (« aucun id du document mémorisé ne se perd en silence »)
+    /// vaut indépendamment de ce que #6894 sait déjà couvrir par ailleurs.
     private static func mergingMemorizedBackgroundMedia(
         _ migrated: SceneV3?,
         with memorized: SceneV3?
@@ -832,6 +841,21 @@ public extension StoryEffects {
                 background = object.payload.string("background")
                 backgroundTransform = decodeWire(StoryBackgroundTransform.self,
                                                  from: object.payload.object("transform"))
+                // **Un fond RÉFÉRENCÉ (mediaId/postMediaId) entre dans le
+                // runtime v1 comme un média de fond** (#6894) — sans ce
+                // ramage, un canvas qui adresse un enregistrement réel du
+                // post par cette forme (`payload.mediaId`, servie par la
+                // passerelle, jamais écrite par le composer) n'avait aucun
+                // représentant v1, et le LECTEUR (`StoryReaderRepresentable`,
+                // via `resolvedBackgroundMedia`) n'avait rien à peindre.
+                // `Self.mediaObject` normalise déjà les deux orthographes
+                // (`ObjectV3.mediaReference`) sur `postMediaId` — le seul
+                // champ que le résolveur du lecteur lit.
+                if object.mediaReference != nil {
+                    var fond = Self.mediaObject(object, at: position)
+                    fond.isBackground = true
+                    medias.append(fond)
+                }
             case .media:
                 medias.append(Self.mediaObject(object, at: position))
             case .text:
@@ -974,7 +998,9 @@ public extension StoryEffects {
         }()
         var media = StoryMediaObject(
             id: object.id,
-            postMediaId: object.payload.string("postMediaId") ?? "",
+            // Site unique des deux orthographes (#6894) : `postMediaId`
+            // (composer) et `mediaId` (passerelle) résolvent au MÊME champ v1.
+            postMediaId: object.mediaReference ?? "",
             mediaURL: object.payload.string("mediaURL"),
             mediaType: object.payload.string("mediaType") ?? "image",
             placement: object.payload.string("placement") ?? "media",

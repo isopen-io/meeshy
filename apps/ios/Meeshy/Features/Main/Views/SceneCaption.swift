@@ -93,8 +93,26 @@ nonisolated enum SceneCaption {
                                                                sceneIndex: sceneIndex) {
             return propre
         }
+        if let fond = backgroundMediaReference(sceneIndex: sceneIndex, in: document) {
+            return fond
+        }
         guard !addressesAnyMedia(document) else { return nil }
         return post.media.first { $0.type == .image || $0.type == .video }?.id
+    }
+
+    /// **Le fond d'une scène, quand il RÉFÉRENCE un média** (#6894, contrat des
+    /// deux orthographes) — `MeeshyScenePlayer.carrierMediaIdentity` ne
+    /// regarde que le plan `content` (l'identité de CONTINUITÉ de lecture,
+    /// O16) ; un canvas dont l'UNIQUE média est un fond `plane: bg` à
+    /// `payload.mediaId` (forme servie par la passerelle, jamais écrite par le
+    /// composer) n'a alors AUCUN porteur `content` à élire. `ObjectV3.mediaReference`
+    /// est le site unique des deux orthographes — appelé ici, jamais relu.
+    private static func backgroundMediaReference(sceneIndex: Int,
+                                                  in document: CanvasV3) -> String? {
+        guard document.scenes.indices.contains(sceneIndex) else { return nil }
+        return document.scenes[sceneIndex].objects
+            .first { $0.kind == .media && $0.plane == .bg }
+            .flatMap(\.mediaReference)
     }
 
     /// **Ce document désigne-t-il des enregistrements du post ?** La question se
@@ -104,6 +122,7 @@ nonisolated enum SceneCaption {
     static func addressesAnyMedia(_ document: CanvasV3) -> Bool {
         document.scenes.indices.contains {
             MeeshyScenePlayer.carrierMediaIdentity(in: document, sceneIndex: $0) != nil
+                || backgroundMediaReference(sceneIndex: $0, in: document) != nil
         }
     }
 }

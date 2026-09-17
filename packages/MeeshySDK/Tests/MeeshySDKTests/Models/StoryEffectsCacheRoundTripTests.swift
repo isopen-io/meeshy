@@ -136,15 +136,25 @@ final class StoryEffectsCacheRoundTripTests: XCTestCase {
     /// IDENTITÉ : le même id, le même kind, le même plan — le document n'a
     /// jamais été touché par une édition, rien n'a de raison d'en changer la
     /// forme.
-    func test_laPremiereScene_restitueSonFondParIdentite() throws {
+    ///
+    /// **Mise à jour #6894** — depuis que `StoryEffects.init(rendering:)` fait
+    /// entrer une référence `mediaId` dans `mediaObjects` (pour que le LECTEUR
+    /// la peigne), le fond de la scène 0 est désormais COUVERT par la famille
+    /// média de contenu ordinaire dès le premier décodage : il ne relève plus
+    /// du merge par identité de ce fichier (`id` "bg1" apparaît dans
+    /// `migratedIds`), et se réencode donc sous la forme `plane: content` +
+    /// `postMediaId` — la forme que le composer écrit déjà. L'IDENTITÉ (id) et
+    /// la RÉFÉRENCE (mediaId ⇔ postMediaId) sont ce que ce lot garantit ; la
+    /// forme du wire, elle, converge vers l'orthographe unique de #6894.
+    func test_laPremiereScene_restitueSonFondParIdentiteEtParReference() throws {
         let original = try JSONDecoder().decode(StoryEffects.self, from: chargeRecetteC())
         let regravee = try roundTrip(original)
 
         let fondOriginal = original.canvasV3?.scenes.first?.objects.first { $0.kind == .media }
         let fondRegrave = regravee.canvasV3?.scenes.first?.objects.first { $0.kind == .media }
-        XCTAssertEqual(fondRegrave?.id, fondOriginal?.id)
-        XCTAssertEqual(fondRegrave?.plane, fondOriginal?.plane)
-        XCTAssertEqual(fondRegrave?.payload, fondOriginal?.payload)
+        XCTAssertEqual(fondRegrave?.id, fondOriginal?.id, "la scène ne doit jamais changer l'IDENTITÉ de son fond")
+        XCTAssertEqual(fondRegrave.flatMap(reference), fondOriginal.flatMap(reference),
+                       "la RÉFÉRENCE média (mediaId ⇔ postMediaId) doit survivre, quelle que soit sa forme")
     }
 
     /// Un SECOND aller-retour (deux lectures successives du cache) ne doit
