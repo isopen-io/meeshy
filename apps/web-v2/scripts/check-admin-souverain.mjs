@@ -689,11 +689,23 @@ async function main() {
         await attendre(() => present(page, `[data-admin-conversation-sheet="${CONVERSATION_ID}"]`)),
         'la ligne OUVRE la modale (elle n’est pas inerte)',
       );
-      const modale = await page.evaluate(() => {
-        const d = document.querySelector('dialog');
-        return { existe: d !== null, ouverte: d instanceof HTMLDialogElement ? d.open : false };
-      });
-      check(modale.existe && modale.ouverte, '`<dialog>` natif, réellement ouvert (showModal)');
+      /* La fiche d'un membre monte PLUSIEURS `Sheet` (mot de passe, édition,
+       * bannissement, conversation) : `document.querySelector('dialog')` rend
+       * le PREMIER du document, pas celui qu'on vient d'ouvrir. Et `showModal()`
+       * vit dans un effet — sur un exécuteur lent, l'interroger juste après le
+       * clic mesure l'ORDONNANCEMENT, pas le produit. On cherche donc le dialog
+       * qui CONTIENT la feuille attendue, et on lui laisse le temps de s'ouvrir.
+       *
+       * `:modal` est vrai pour `showModal()` et FAUX pour `<dialog open>` : ce
+       * témoin est plus strict que `.open`, il ne se contente pas d'un panneau
+       * visible qui ne piégerait ni le focus ni Échap. */
+      const modaleEstNative = () =>
+        page.evaluate((id) => {
+          const feuille = document.querySelector(`[data-admin-conversation-sheet="${id}"]`);
+          const d = feuille?.closest('dialog') ?? null;
+          return d !== null && d.open && d.matches(':modal');
+        }, CONVERSATION_ID);
+      check(await attendre(modaleEstNative), '`<dialog>` natif, réellement MODAL (showModal)');
       check(await present(page, '[data-admin-reading-gate]'), 'le MOTIF est demandé avant toute lecture');
       await page.waitForTimeout(500);
       check(
