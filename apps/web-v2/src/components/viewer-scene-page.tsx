@@ -125,7 +125,7 @@ export function ViewerScenePage({ entry, isActive, preferredLanguages, topInset,
                 e.stopPropagation();
                 setPaused((p) => !p);
               }}
-              className="media-viewer-close tap-target-34 grid place-items-center rounded-full text-white"
+              className="media-viewer-scene-control tap-target-34 grid place-items-center rounded-full text-white"
             >
               {paused ? <Glyph name="fillPlay" size={15} /> : <GlyphSvg glyph={MEDIA_GLYPHS.pause} size={15} />}
             </button>
@@ -139,7 +139,7 @@ export function ViewerScenePage({ entry, isActive, preferredLanguages, topInset,
                 e.stopPropagation();
                 setMuted((m) => !m);
               }}
-              className="media-viewer-close tap-target-34 grid place-items-center rounded-full text-white"
+              className="media-viewer-scene-control tap-target-34 grid place-items-center rounded-full text-white"
             >
               <GlyphSvg glyph={muted ? MEDIA_TRANSPORT_GLYPHS.speakerSlash : MEDIA_TRANSPORT_GLYPHS.speakerHigh} size={15} />
             </button>
