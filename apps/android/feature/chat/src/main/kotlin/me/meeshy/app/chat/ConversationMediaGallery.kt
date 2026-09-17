@@ -23,6 +23,8 @@ public data class GalleryPage(
     val caption: String? = null,
     val senderName: String? = null,
     val createdAtIso: String? = null,
+    /** Author-authored accessibility description (`MessageAttachment.alt`, #6813); `null` falls back to the viewer's generic label. */
+    val alt: String? = null,
 )
 
 /**
@@ -66,6 +68,13 @@ public data class ConversationGallery(
      * [imageUrls]; a page whose owning message has no timestamp holds `null`.
      */
     val createdAtIsos: List<String?> get() = pages.map { it.createdAtIso }
+
+    /**
+     * The per-page author-authored accessibility descriptions, positionally
+     * aligned with [imageUrls]; a page with no alt text holds `null` (the
+     * viewer falls back to its generic localized image label).
+     */
+    val altTexts: List<String?> get() = pages.map { it.alt }
 
     /** True when the conversation carries no showable image — nothing to open. */
     val isEmpty: Boolean get() = pages.isEmpty()
@@ -118,6 +127,7 @@ public object ConversationMediaGallery {
                         caption = caption,
                         senderName = senderName,
                         createdAtIso = createdAtIso,
+                        alt = it.alt,
                     ),
                 )
             }

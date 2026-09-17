@@ -588,6 +588,11 @@ fun FeedComposerSheet(
                     onAddLocation = ::requestDeviceLocation,
                     onRemove = ::removeMedia,
                 )
+                MediaAltTextFields(
+                    media = attachedMedia,
+                    altById = draft.mediaAlt,
+                    onAltChange = { mediaId, text -> draft = draft.withAlt(mediaId, text) },
+                )
             }
         }
     }
@@ -951,6 +956,34 @@ private fun MediaAttachmentsRow(
         }
     }
 }
+
+/**
+ * One accessibility-description field per attached [media] item (#6739) —
+ * the Android port of web's `MediaAccessibilityFields`. Pure Compose glue:
+ * [altById]/[onAltChange] mirror [FeedComposerDraft.mediaAlt]/[FeedComposerDraft.
+ * withAlt] exactly, and the 1-based index in the label (never the item's own
+ * [UploadedMedia.id], which carries no human-readable filename on Android
+ * unlike web's `originalName`) is the only per-row decision made here.
+ */
+@Composable
+private fun MediaAltTextFields(media: List<UploadedMedia>, altById: Map<String, String>, onAltChange: (String, String) -> Unit) {
+    if (media.isEmpty()) return
+    Column(verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
+        media.forEachIndexed { index, item ->
+            OutlinedTextField(
+                value = altById[item.id] ?: "",
+                onValueChange = { value -> onAltChange(item.id, value.take(MEDIA_ALT_MAX_LENGTH)) },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text(stringResource(R.string.feed_composer_media_alt_label, index + 1)) },
+                placeholder = { Text(stringResource(R.string.feed_composer_media_alt_placeholder)) },
+                singleLine = true,
+            )
+        }
+    }
+}
+
+/** Gateway cap on `CreatePostRequest.mediaAlt` values (`CreatePostSchema.mediaAlt`, #6739) — same bound web enforces client-side. */
+private const val MEDIA_ALT_MAX_LENGTH = 1000
 
 /**
  * Reads the picked content into a [MediaUploadItem] (bytes + advertised

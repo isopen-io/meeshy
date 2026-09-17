@@ -41,6 +41,8 @@ data class FeedMedia(
     val longitude: Double? = null,
     /** The media's caption text, in its original language (`PostMedia.caption`, #6280). */
     val caption: String? = null,
+    /** Author-authored accessibility description (`PostMedia.alt`, #6739). Read by TalkBack as `contentDescription`. */
+    val alt: String? = null,
     /** Langue SOURCE de [caption] (`PostMedia.captionLanguage`, #6280). */
     val captionLanguage: String? = null,
     /**
