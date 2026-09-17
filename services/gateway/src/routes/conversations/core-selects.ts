@@ -4,6 +4,7 @@
  * découpage #4284. Aucune logique de route ici : uniquement les constantes
  * `select`/`include` et leurs doc-comments d'origine, déplacés verbatim.
  */
+import type { Prisma } from '@meeshy/shared/prisma/client';
 import { conversationActiveMemberCountSelect } from './utils/active-member-count';
 
 /**
@@ -276,3 +277,87 @@ export const conversationListSelect = (viewerId: string) => ({
     select: conversationLastMessagePreviewSelect
   }
 }) as const;
+
+/**
+ * Le `select` RÉEL de `GET /conversations` (`core-list.ts`), extrait verbatim
+ * pour porter un type nommé (#3679, réduction de dette `any`) — jusque-là
+ * dupliqué en littéral anonyme dans le handler, ce qui empêchait Prisma d'en
+ * dériver quoi que ce soit d'utilisable au site d'appel.
+ *
+ * **Volontairement DISTINCT de `conversationListSelect` ci-dessus.** Les deux
+ * sont structurellement identiques à quatre champs près
+ * (`description`/`defaultWriteRole`/`slowModeSeconds`/`autoTranslateEnabled`),
+ * et cet écart n'est pas anodin : voir #6908, qui documente que
+ * `conversationListSelect` n'est appelé par AUCUNE route. Les fusionner ici
+ * changerait ce que `GET /conversations` sert réellement — hors périmètre
+ * d'un lot de typage pur.
+ */
+export const conversationListQuerySelect = (viewerId: string) => ({
+  id: true,
+  title: true,
+  type: true,
+  identifier: true,
+  isActive: true,
+  createdAt: true,
+  updatedAt: true,
+  lastMessageAt: true,
+  banner: true,
+  avatar: true,
+  communityId: true,
+  _count: { select: conversationActiveMemberCountSelect },
+  isAnnouncementChannel: true,
+  participants: {
+    take: 5,
+    where: {
+      isActive: true
+    },
+    select: conversationListParticipantSelect
+  },
+  userPreferences: {
+    where: { userId: viewerId },
+    take: 1,
+    select: conversationUserPreferencesSelect
+  },
+  messages: {
+    where: {
+      deletedAt: null
+    },
+    orderBy: { createdAt: 'desc' as const },
+    take: 1,
+    select: conversationLastMessagePreviewSelect
+  }
+}) as const;
+
+/** La forme d'une ligne rendue par `prisma.conversation.findMany({ select: conversationListQuerySelect(...) })`. */
+export type ConversationListRow = Prisma.ConversationGetPayload<{
+  select: ReturnType<typeof conversationListQuerySelect>;
+}>;
+
+type ConversationListPreviewSenderBase = NonNullable<
+  ConversationListRow['messages'][number]['sender']
+>;
+type ConversationListPreviewSenderUserBase = NonNullable<ConversationListPreviewSenderBase['user']>;
+
+/**
+ * L'expéditeur du dernier message d'aperçu, tel que `conversationLastMessagePreviewSelect`
+ * le charge — plus une poignée de replis qu'AUCUN `select` de ce fichier ne
+ * charge (`username`, `isOnline`, `lastActiveAt` au niveau participant ;
+ * `firstName`, `lastName`, `isOnline`, `lastActiveAt` au niveau `user`) (#3679).
+ * `core-list.ts` les lisait quand même sous un `as any` — ils évaluent
+ * structurellement à `undefined` à chaque ligne, jamais autre chose. Les
+ * garder ici EN TANT QUE TELS, plutôt que de les retirer, préserve le
+ * comportement exact du site tout en nommant le cast.
+ */
+export type ConversationListPreviewSender = Omit<ConversationListPreviewSenderBase, 'user'> & {
+  username?: string | null;
+  isOnline?: boolean | null;
+  lastActiveAt?: Date | null;
+  user?:
+    | (ConversationListPreviewSenderUserBase & {
+        firstName?: string | null;
+        lastName?: string | null;
+        isOnline?: boolean | null;
+        lastActiveAt?: Date | null;
+      })
+    | null;
+};
