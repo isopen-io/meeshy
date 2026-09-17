@@ -118,11 +118,22 @@ final class GallerySceneBackdropUnicityTests: XCTestCase {
                       "l'auteur a posé quelque chose dans la bande : elle reste peinte")
     }
 
-    /// Une scène qui porte son propre cadre (`carrierAspect`) n'est jamais
-    /// réinterprétée comme une image — `imageAspect` échoue FERMÉE — donc elle
-    /// garde ses bandes.
-    func test_uneSceneQuiPorteSonCadre_gardeSesBandes() {
-        XCTAssertTrue(item([fond()], carrierAspect: Self.paysage).servesLetterboxFill)
+    /// **`carrierAspect` ne décide plus d'aucune forme** (décision porteur du
+    /// 2026-09-17 sur #6896, lot #6904).
+    ///
+    /// Le témoin disait l'inverse — « une scène qui porte son propre cadre
+    /// n'est jamais réinterprétée comme une image » — et c'était la règle de
+    /// juillet que la directive du 31 août avait déjà retirée du composer.
+    /// `carrierAspect` redevient une mémoire d'ÉDITION pour la migration v1
+    /// (contrat S8) : une scène qui en porte un se présente comme toute autre,
+    /// donc sa bande est peinte par la GALERIE, une fois, et le canvas ne la
+    /// repeint pas.
+    func test_uneSceneQuiPorteSonCadre_sePresenteCommeLesAutres() {
+        let page = item([fond()], carrierAspect: Self.paysage)
+        XCTAssertEqual(page.aspect, CGFloat(Self.paysage), accuracy: 0.0001,
+                       "la forme vient de ce que la scène MONTRE, jamais de son porteur")
+        XCTAssertFalse(page.servesLetterboxFill,
+                       "un seul acteur peint le hors-champ : la galerie")
     }
 
     /// Une scène sans fond image — du texte sur une couleur — n'a aucune image

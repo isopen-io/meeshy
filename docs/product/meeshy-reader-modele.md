@@ -557,6 +557,71 @@ passerelle ne refuse PAS le non-v3, son refus est derrière
 `CANVAS_V3_WRITE_STRICT`, armé dans aucun fichier de configuration du dépôt —
 détail à l'encadré du § 1 bis-2 de `meeshy-composer-modele.md`).
 
+## 4 quater. La FORME d'une scène, et les DEUX plein écrans (2026-09-17)
+
+Décision porteur du 2026-09-17 sur [#6896](https://github.com/isopen-io/meeshy/issues/6896),
+livrée par le lot [#6904](https://github.com/isopen-io/meeshy/issues/6904). Elle
+tranche ce que l'audit du même jour avait mesuré : **onze montages du player,
+quatorze fichiers de loi, trois lois de ratio qui ne s'accordent pas** — un même
+document prenait trois formes selon la surface (1,3 rognée dans le fil, 4:1
+entière au détail, 16:9 rognée dans le lecteur). Le moteur ne connaît aucun
+rapport : il peint dans les bounds qu'on lui donne, et onze hôtes ont donc
+décidé onze fois.
+
+### Les trois règles de forme
+
+1. **La scène est TOUJOURS 9:16.** Gabarit de composition ET de restitution.
+   Personne ne la recalcule — ni depuis le média, ni depuis `carrierAspect`, qui
+   redevient ce que le contrat S8 en dit : une **mémoire d'ÉDITION** pour la
+   migration v1, que **plus aucun lecteur ne consulte**. La directive du
+   2026-08-31 (`d75c471d78`) avait déjà retiré son écriture du composer ; les
+   lois du 13 septembre l'avaient réintroduit comme rapport de PEINTURE.
+   [#6869](https://github.com/isopen-io/meeshy/issues/6869) est sans objet.
+2. **Le média se pose dans le 9:16 sans être rogné.** Un panorama occupe une
+   bande au milieu ; un portrait remplit la hauteur ; un média plus vertical
+   encore que la scène occupe une colonne. Le fond de scène (ThumbHash ou
+   couleur) habille le reste — ce sont des pixels que la publication emporte,
+   pas un défaut de cadrage.
+3. **Ce qu'on MONTRE est BINAIRE.** Rien d'autre que l'image/vidéo, ou des
+   objets qui restent DANS sa zone ⇒ on peut resserrer sur la zone du média.
+   Un texte, un sticker, un dessin qui en SORT ⇒ on garde le **9:16 entier**,
+   avec son fond. Jamais de cadre intermédiaire : l'union — qu'une loi calculait
+   — est une quatrième forme possible du même document, et c'est exactement ce
+   que onze hôtes ne peuvent pas garantir ensemble.
+
+### Les deux plein écrans
+
+| état | ce qu'on voit | le cadre | qui peint le hors-champ |
+|---|---|---|---|
+| **cadré** | la scène en grand, avec contrôleurs, informations et détails | la scène AJUSTÉE dans le viewport, arrondie, centrée, sur un fond choisi par l'hôte : noir, couleur dominante du ThumbHash (préférence du porteur), ou le ThumbHash lui-même comme le lecteur de story | le **PLATEAU**, et lui seul — le chrome y vit aussi ([#6760](https://github.com/isopen-io/meeshy/issues/6760)) |
+| **immersif** | rien que le contenu | la scène occupe le viewport **entier**, son contenu visible et centré | **personne** : il ne reste rien à peindre |
+
+Le `personne` de la seconde ligne n'est pas un trou, c'est la réponse : la
+troisième couche de [#6806](https://github.com/isopen-io/meeshy/issues/6806)
+disparaît **par construction** plutôt que par consigne, et le défaut que l'audit
+nomme « deux acteurs peignent le hors-champ »
+([#6797](https://github.com/isopen-io/meeshy/issues/6797)) n'a plus où se poser.
+
+### Où la loi vit
+
+`SceneShape` — `packages/MeeshySDK/Sources/MeeshySDK/Story/SceneShape.swift`.
+Dans le SDK **core** et non `MeeshyUI`, pour la raison que `StoryLetterboxFill`
+écrit déjà : `MeeshyUI` compile sous `defaultIsolation: MainActor`, donc la
+conformance `Equatable` d'un type qui y naît est isolée au `MainActor` et une
+suite non-`@MainActor` ne peut plus comparer ses valeurs.
+
+Elle rend quatre choses, et rien de plus : la **constante** 9:16 (site unique du
+dépôt) ; la **zone du média** posé en fit, `nil` quand aucun rapport n'est connu
+— *la loi ne devine rien, elle le DEMANDE à l'appelant* ; le **cadre binaire**
+(zone \| scène entière) ; et le **cadre de la scène dans un viewport** pour
+chacun des deux plein écrans, avec **qui peint autour**.
+
+Une garde de source (`SceneShapeSourceGuardTests`) tient les deux invariants :
+le rapport 9:16 n'a qu'un site, et tout fichier qui monte `MeeshyScenePlayer` /
+`StoryReaderRepresentable` / `StoryCanvasUIView` consulte la loi. Sa liste
+d'exceptions est **datée** et se vide à la fin du lot ; un hôte qui y entre
+après cette date n'est pas une exception, c'est une régression.
+
 ## 5. Ce que ce document ne couvre pas
 
 - **Le rendu lui-même** (`StoryCanvasUIView`, les couches, les dessinateurs) —
