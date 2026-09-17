@@ -936,6 +936,27 @@ public enum LastMessageIdentity: Sendable, Hashable {
     case replaced(String?)
 }
 
+/// L'AUTEUR du dernier message, tel que la ligne de liste le préfixe
+/// (« `<Auteur>` : `<message>` »).
+///
+/// Même distinction à trois états que `LastMessageIdentity`, et pour la même
+/// raison — mais elle vaut ici davantage, parce que la fusion EFFACE l'auteur
+/// par défaut : un `Optional` nu ne saurait pas séparer « cet événement ne
+/// parle pas de l'auteur » (ne touche à rien) de « il n'y a pas d'auteur à
+/// afficher » (efface), et les deux se produisent.
+///
+/// La passerelle sert ce champ depuis toujours (`lastMessageSenderName`,
+/// `socketio-events/conversation.ts`, calculé par `lastMessagePreviewPrism`) ;
+/// ce décodeur ne le déclarait pas, donc le client JETAIT une donnée qu'il
+/// recevait déjà, puis reposait l'aperçu sans son auteur. D'où le symptôme :
+/// le texte est là, l'auteur a disparu.
+public enum LastMessageSenderName: Sendable, Hashable {
+    /// Clé absente : cet événement ne dit rien de l'auteur.
+    case unchanged
+    /// Clé présente. `nil` = aucun auteur à afficher.
+    case replaced(String?)
+}
+
 public struct ConversationUpdatedEvent: Decodable, Sendable {
     public let conversationId: String
     public let title: String?
@@ -963,6 +984,8 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
     /// `emitConversationPreviewUpdate` sur les recalculs.
     public let lastMessage: LastMessageIdentity
     public let lastMessagePreview: String?
+    /// L'auteur du dernier message, pour le préfixe de la ligne de liste.
+    public let lastMessageSenderName: LastMessageSenderName
     /// Prisme de la ligne de liste, résolu par le gateway POUR CE destinataire.
     /// Sans lui, une édition laissait la ligne afficher le texte D'AVANT : le
     /// résolveur PRÉFÈRE la traduction hydratée par `GET /conversations` à
@@ -1006,6 +1029,7 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         case conversationId, title, description, avatar, banner
         case defaultWriteRole, isAnnouncementChannel, slowModeSeconds, autoTranslateEnabled
         case lastMessageAt, lastMessageId, lastMessagePreview, senderId, updatedBy, updatedAt
+        case lastMessageSenderName
         case location
         case lastMessageTranslations, lastMessageOriginalLanguage
         case previewRecalculated
@@ -1032,6 +1056,14 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
             lastMessage = .unchanged
         }
         lastMessagePreview = try container.decodeIfPresent(String.self, forKey: .lastMessagePreview)
+        // `contains`, comme l'identité du dernier message ci-dessus : la
+        // PRÉSENCE de la clé sépare « cet événement ne dit rien de l'auteur »
+        // de « il n'y a pas d'auteur à afficher ».
+        if container.contains(.lastMessageSenderName) {
+            lastMessageSenderName = .replaced(try container.decodeIfPresent(String.self, forKey: .lastMessageSenderName))
+        } else {
+            lastMessageSenderName = .unchanged
+        }
         // `contains` et non `decodeIfPresent` : c'est la PRÉSENCE de la clé qui
         // distingue « cet événement ne parle pas d'aperçu » de « la carte est
         // périmée ». `decodeIfPresent` rend `nil` dans les deux cas et perdrait
@@ -1063,6 +1095,7 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         lastMessageAt: Date? = nil,
         lastMessage: LastMessageIdentity = .unchanged,
         lastMessagePreview: String? = nil,
+        lastMessageSenderName: LastMessageSenderName = .unchanged,
         lastMessageTranslations: LastMessagePreviewTranslations = .unchanged,
         lastMessageOriginalLanguage: String? = nil,
         location: SharedPlace? = nil,
@@ -1083,6 +1116,7 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         self.lastMessageAt = lastMessageAt
         self.lastMessage = lastMessage
         self.lastMessagePreview = lastMessagePreview
+        self.lastMessageSenderName = lastMessageSenderName
         self.lastMessageTranslations = lastMessageTranslations
         self.lastMessageOriginalLanguage = lastMessageOriginalLanguage
         self.location = location

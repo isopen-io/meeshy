@@ -583,6 +583,27 @@ public actor ConversationStore {
                     changed = true
                 }
                 if let v = event.lastMessagePreview { conv.lastMessagePreview = v.meeshyPreviewTruncated; changed = true }
+                // L'AUTEUR appartient au même groupe monotone que l'aperçu, et
+                // se repose au même endroit (#6921). `adoptLastMessage` vient de
+                // l'effacer — à raison — et rien ne le remettait : la ligne
+                // gardait le texte et perdait son préfixe, y compris dans le
+                // cache disque, donc jusqu'au prochain rechargement complet.
+                // `nil` reste `nil` : la garde anti-périmé est intacte.
+                // Comme au ViewModel : seul ce que l'événement AFFIRME s'écrit.
+                // `.unchanged` laisse l'auteur en place — `adoptLastMessage` a
+                // déjà tranché le cas du message neuf juste au-dessus.
+                if case .display(let auteur) = ConversationListAuthor.resolve(
+                    eventSenderId: event.senderId,
+                    eventSenderName: event.lastMessageSenderName,
+                    currentUserId: event.readerId,
+                    conversationType: conv.type,
+                    peerUserId: conv.participantUserId,
+                    peerUsername: conv.participantUsername,
+                    youLabel: event.youLabel
+                ), auteur != conv.lastMessageSenderName {
+                    conv.lastMessageSenderName = auteur
+                    changed = true
+                }
                 // Le Prisme fait partie du MÊME groupe monotone : le résolveur
                 // préfère la traduction à l'aperçu brut, donc poser l'un sans
                 // l'autre laisse la ligne rendre l'ANCIEN texte traduit.
@@ -998,6 +1019,22 @@ public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
     /// visible pour ce lecteur ») ne sont pas le même ordre.
     public let lastMessage: LastMessageIdentity
     public let lastMessagePreview: String?
+    /// L'AUTEUR du dernier message, et de quoi décider comment le nommer
+    /// (#6921). Tri-état pour la même raison que les deux voisins : `.unchanged`
+    /// (clé absente) ne doit pas effacer, `.replaced(nil)` le doit.
+    public let lastMessageSenderName: LastMessageSenderName
+    /// L'émetteur, pour le repli « nom du pair » d'un direct quand l'événement
+    /// ne porte pas de nom.
+    public let senderId: String?
+    /// **Qui LIT.** Ce store est, par construction, le cache des conversations
+    /// d'UN utilisateur : le préfixe d'auteur dépend de lui (« Toi » plutôt que
+    /// mon propre nom d'affichage), et le lui cacher obligerait à trancher
+    /// ailleurs, donc à tenir deux règles. Vide tant que l'authentification
+    /// n'est pas résolue — le résolveur l'écarte alors.
+    public let readerId: String?
+    /// Le mot qui désigne le lecteur, déjà localisé — le SDK ne lit pas le
+    /// catalogue de l'app.
+    public let youLabel: String
     /// Prisme de la ligne de liste. Tri-état — voir
     /// `LastMessagePreviewTranslations` : `.unchanged` (clé absente) et
     /// `.replaced([:])` (carte périmée par le serveur) ne sont PAS le même
@@ -1031,6 +1068,10 @@ public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
         lastMessageAt: Date? = nil,
         lastMessage: LastMessageIdentity = .unchanged,
         lastMessagePreview: String? = nil,
+        lastMessageSenderName: LastMessageSenderName = .unchanged,
+        senderId: String? = nil,
+        readerId: String? = nil,
+        youLabel: String = "",
         lastMessageTranslations: LastMessagePreviewTranslations = .unchanged,
         lastMessageOriginalLanguage: String? = nil,
         location: SharedPlace? = nil,
@@ -1048,6 +1089,10 @@ public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
         self.lastMessageAt = lastMessageAt
         self.lastMessage = lastMessage
         self.lastMessagePreview = lastMessagePreview
+        self.lastMessageSenderName = lastMessageSenderName
+        self.senderId = senderId
+        self.readerId = readerId
+        self.youLabel = youLabel
         self.lastMessageTranslations = lastMessageTranslations
         self.lastMessageOriginalLanguage = lastMessageOriginalLanguage
         self.location = location
