@@ -148,7 +148,13 @@ public final class ConversationStoreSocketBridge {
         let currentUserId = self.currentUserId
 
         conversationUpdated.sink { event in
-            Task { await store.applyConversationUpdated(Self.mapConversationUpdated(event)) }
+            // Le lecteur est résolu DANS la tâche : `currentUserId` est
+            // asynchrone, et c'est lui qui décide si l'auteur du dernier
+            // message se dit « Toi » (#6921).
+            Task {
+                let reader = await currentUserId()
+                await store.applyConversationUpdated(Self.mapConversationUpdated(event, readerId: reader))
+            }
         }.store(in: &cancellables)
 
         conversationDeleted.sink { event in
@@ -300,13 +306,22 @@ public final class ConversationStoreSocketBridge {
     /// type. Pure + `nonisolated` so the sink can build it before hopping to
     /// the store actor.
     nonisolated static func mapConversationUpdated(
-        _ event: ConversationUpdatedEvent
+        _ event: ConversationUpdatedEvent,
+        readerId: String? = nil
     ) -> ConversationUpdatedStoreEvent {
         ConversationUpdatedStoreEvent(
             conversationId: event.conversationId,
             lastMessageAt: event.lastMessageAt,
             lastMessage: event.lastMessage,
             lastMessagePreview: event.lastMessagePreview,
+            // #6921 — décodé ET mappé. Le champ voisin `location` porte la
+            // leçon juste en dessous : un champ décodé et non mappé est aussi
+            // inerte qu'un champ absent du fil. `lastMessageSenderName` l'était
+            // doublement — ni décodé, ni mappé.
+            lastMessageSenderName: event.lastMessageSenderName,
+            senderId: event.senderId,
+            readerId: readerId,
+            youLabel: ConversationListAuthor.readerLabel,
             lastMessageTranslations: event.lastMessageTranslations,
             lastMessageOriginalLanguage: event.lastMessageOriginalLanguage,
             // Décodée par `ConversationUpdatedEvent` depuis le cycle 50, mais

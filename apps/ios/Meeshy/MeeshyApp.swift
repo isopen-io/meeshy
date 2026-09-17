@@ -51,6 +51,17 @@ struct MeeshyApp: App {
         // appareil), ne crashe jamais.
         UILanguageOverride.applyIfNeeded()
 
+        // Le mot qui me désigne dans le préfixe d'auteur d'une ligne de liste
+        // (#6921). Posé APRÈS `applyIfNeeded()`, jamais avant : c'est cette
+        // ligne-là qui décide dans quelle langue le catalogue va répondre, et
+        // lire la chaîne plus tôt la figerait dans la locale appareil.
+        //
+        // Le SDK ne lit pas le catalogue de l'app ; il reçoit ce mot une fois,
+        // et ses chemins (pont socket, moteur de synchro) le relaient.
+        ConversationListAuthor.configureReaderLabel(
+            String(localized: "focal.row.you", bundle: .main)
+        )
+
         // Sortie de bêta (2026-09-14, #6482) : la préférence « Activer les
         // bêta » ne gouverne plus rien — sa clé est retirée de l'appareil.
         LentilleFeatureFlag.removeRetiredBetaPreference()
