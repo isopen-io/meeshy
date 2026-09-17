@@ -189,6 +189,17 @@ public final class AppDatabase: @unchecked Sendable {
     }
 
     static func runMigrations(on writer: any DatabaseWriter) throws {
+        try migrator().migrate(writer)
+    }
+
+    /// Arrête la chaîne APRÈS `identifier` : sert aux témoins qui doivent
+    /// peupler la base dans l'état d'AVANT une migration de données, puis
+    /// rejouer la chaîne entière pour mesurer ce que cette migration en fait.
+    static func runMigrations(on writer: any DatabaseWriter, upTo identifier: String) throws {
+        try migrator().migrate(writer, upTo: identifier)
+    }
+
+    private static func migrator() -> DatabaseMigrator {
         var migrator = DatabaseMigrator()
 
         migrator.registerMigration("v1_create_tables") { db in
@@ -328,6 +339,28 @@ public final class AppDatabase: @unchecked Sendable {
             }
         }
 
-        try migrator.migrate(writer)
+        // #6893 — jusqu'à ce lot, `StoryEffects.encode` réencodait tout
+        // document v3 par le runtime v1, et la première scène perdait ce que
+        // v1 ne modélise pas (fond référencé par `mediaId`, kinds réservés,
+        // mentions, plan). Le correctif n'empêche que les écritures NEUVES de
+        // mutiler ; une ligne déjà mutilée resterait servie À FROID — route
+        // IMAGE sans texte — jusqu'au prochain rafraîchissement, que rien ne
+        // garantit avant l'ouverture d'un post (lien profond, notification).
+        // Purge UNIQUE des deux stores qui portent un canvas, et d'eux seuls :
+        // un démarrage à froid après mise à jour relit le réseau une fois.
+        migrator.registerMigration("v10_purge_canvas_reencoded_by_v1") { db in
+            for prefix in ["feed:", "stories:"] {
+                try db.execute(
+                    sql: "DELETE FROM cache_entries WHERE substr(key, 1, ?) = ?",
+                    arguments: [prefix.count, prefix]
+                )
+                try db.execute(
+                    sql: "DELETE FROM cache_metadata WHERE substr(key, 1, ?) = ?",
+                    arguments: [prefix.count, prefix]
+                )
+            }
+        }
+
+        return migrator
     }
 }
