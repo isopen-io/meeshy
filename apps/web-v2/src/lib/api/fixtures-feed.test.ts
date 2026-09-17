@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
+import { hasTimedObjects } from '@/lib/canvas/timeline';
+
 import {
   FEED_POSTS,
   POST_CAROUSEL,
@@ -10,6 +12,7 @@ import {
   POST_REPOST,
   POST_SCENE_CLIP_A,
   POST_SCENE_CLIP_B,
+  POST_SCENE_DECORATED,
   POST_SCENE_TEXT,
   POST_SCENES_MIXED,
   POST_SCENES_WAVE,
@@ -202,5 +205,30 @@ describe('le corpus du fil porte des scènes (§ 3.4)', () => {
       expect(post).toBeDefined();
       expect(Date.now() - new Date(post!.createdAt).getTime()).toBeLessThan(70 * 60_000);
     }
+  });
+});
+
+// T-F (#6901) — POST_SCENE_DECORATED exerce les six kinds.
+describe('POST_SCENE_DECORATED — les six couches d’un coup (T-F)', () => {
+  test('parseCanvasDocument la lit ; les six kinds visibles sont présents', () => {
+    const doc = parseCanvasDocument(POST_SCENE_DECORATED.storyEffects);
+    expect(doc).not.toBeNull();
+    const kinds = new Set(doc!.scenes[0]!.objects.map((o) => o.kind));
+    expect(kinds).toEqual(new Set(['media', 'text', 'sticker', 'place', 'drawing']));
+  });
+
+  test('hasTimedObjects est vrai (le texte porte des keyframes)', () => {
+    const doc = parseCanvasDocument(POST_SCENE_DECORATED.storyEffects);
+    expect(hasTimedObjects(doc!.scenes[0]!)).toBe(true);
+  });
+
+  test('elle est dans NAMED_POSTS (FEED_POSTS)', () => {
+    expect(FEED_POSTS.some((p) => p.id === 'post-scene-decorated')).toBe(true);
+  });
+
+  test('createdAt est strictement plus récent que le premier post de remplissage', () => {
+    const decorated = FEED_POSTS.find((p) => p.id === 'post-scene-decorated')!;
+    const firstFiller = FEED_POSTS.find((p) => p.id === 'post-filler-01')!;
+    expect(new Date(decorated.createdAt).getTime()).toBeGreaterThan(new Date(firstFiller.createdAt).getTime());
   });
 });
