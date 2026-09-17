@@ -619,6 +619,25 @@ const fr = {
      enfoncé » se lit comme un son coupé). */
   'story.sound.off': 'Muet',
 
+  /* LE STUDIO DE STORY (#6900) — créer une story avec un fond, un son de
+     fond et un texte, aperçu par le moteur partagé, publiée en CanvasV3
+     comme iOS. */
+  'story.studio.title': 'Nouvelle story',
+  'story.studio.cancel': 'Annuler',
+  'story.studio.publish': 'Publier',
+  'story.studio.publishing': 'Publication…',
+  'story.studio.offline': 'Hors ligne — la story partira à la reconnexion.',
+  'story.studio.background.add': 'Ajouter une photo ou une vidéo',
+  'story.studio.sound.add': 'Ajouter un son',
+  'story.studio.asset.remove': 'Retirer',
+  'story.studio.upload.uploading': 'Envoi…',
+  'story.studio.upload.retry': 'Réessayer',
+  'story.studio.text.label': 'Texte de la story',
+  'story.studio.text.placeholder': 'Ajouter du texte',
+  'story.studio.hint.duration': 'Une story reste visible vingt-quatre heures.',
+  'story.studio.error.upload': 'Le fichier n’a pas pu être envoyé.',
+  'story.studio.error.publish': 'La story n’a pas pu être publiée.',
+
   /* L'ESPACE D'ADMINISTRATION (#6432) — SEUL `admin.title` reste ici : la
      rangée des Réglages et le barreau du menu flottant (#6458) le lisent
      SANS jamais entrer dans `/adm`, donc sans jamais charger le catalogue

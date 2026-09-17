@@ -584,6 +584,25 @@ const en = {
 
   'story.sound.off': 'Muted',
 
+  /* THE STORY STUDIO (#6900) — create a story with a background, a
+     background sound and text, previewed by the shared engine, published
+     as CanvasV3 like iOS. */
+  'story.studio.title': 'New story',
+  'story.studio.cancel': 'Cancel',
+  'story.studio.publish': 'Publish',
+  'story.studio.publishing': 'Publishing…',
+  'story.studio.offline': 'Offline — the story will send once reconnected.',
+  'story.studio.background.add': 'Add a photo or video',
+  'story.studio.sound.add': 'Add a sound',
+  'story.studio.asset.remove': 'Remove',
+  'story.studio.upload.uploading': 'Uploading…',
+  'story.studio.upload.retry': 'Retry',
+  'story.studio.text.label': 'Story text',
+  'story.studio.text.placeholder': 'Add text',
+  'story.studio.hint.duration': 'A story stays visible for twenty-four hours.',
+  'story.studio.error.upload': 'The file could not be sent.',
+  'story.studio.error.publish': 'The story could not be published.',
+
   'admin.title': 'Administration',
 
 } satisfies InterfaceCatalog;

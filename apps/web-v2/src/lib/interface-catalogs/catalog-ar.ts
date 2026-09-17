@@ -582,6 +582,24 @@ const ar = {
 
   'story.sound.off': 'صامت',
 
+  /* استوديو القصص (#6900) — إنشاء قصة بخلفية وصوت خلفية ونص، مع معاينة
+     بواسطة المحرك المشترك، تُنشر بصيغة CanvasV3 مثل iOS. */
+  'story.studio.title': 'قصة جديدة',
+  'story.studio.cancel': 'إلغاء',
+  'story.studio.publish': 'نشر',
+  'story.studio.publishing': 'جارٍ النشر…',
+  'story.studio.offline': 'غير متصل — ستُرسل القصة عند إعادة الاتصال.',
+  'story.studio.background.add': 'إضافة صورة أو فيديو',
+  'story.studio.sound.add': 'إضافة صوت',
+  'story.studio.asset.remove': 'إزالة',
+  'story.studio.upload.uploading': 'جارٍ الإرسال…',
+  'story.studio.upload.retry': 'إعادة المحاولة',
+  'story.studio.text.label': 'نص القصة',
+  'story.studio.text.placeholder': 'إضافة نص',
+  'story.studio.hint.duration': 'تبقى القصة مرئية لمدة أربع وعشرين ساعة.',
+  'story.studio.error.upload': 'تعذّر إرسال الملف.',
+  'story.studio.error.publish': 'تعذّر نشر القصة.',
+
   'admin.title': 'الإدارة',
 
 } satisfies InterfaceCatalog;

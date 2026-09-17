@@ -584,6 +584,25 @@ const de = {
 
   'story.sound.off': 'Stumm',
 
+  /* DAS STORY-STUDIO (#6900) — eine Story mit Hintergrund, Hintergrundton
+     und Text erstellen, Vorschau über die gemeinsame Engine, veröffentlicht
+     als CanvasV3 wie unter iOS. */
+  'story.studio.title': 'Neue Story',
+  'story.studio.cancel': 'Abbrechen',
+  'story.studio.publish': 'Veröffentlichen',
+  'story.studio.publishing': 'Wird veröffentlicht…',
+  'story.studio.offline': 'Offline — die Story wird bei erneuter Verbindung gesendet.',
+  'story.studio.background.add': 'Foto oder Video hinzufügen',
+  'story.studio.sound.add': 'Ton hinzufügen',
+  'story.studio.asset.remove': 'Entfernen',
+  'story.studio.upload.uploading': 'Wird gesendet…',
+  'story.studio.upload.retry': 'Erneut versuchen',
+  'story.studio.text.label': 'Story-Text',
+  'story.studio.text.placeholder': 'Text hinzufügen',
+  'story.studio.hint.duration': 'Eine Story bleibt vierundzwanzig Stunden sichtbar.',
+  'story.studio.error.upload': 'Die Datei konnte nicht gesendet werden.',
+  'story.studio.error.publish': 'Die Story konnte nicht veröffentlicht werden.',
+
   'admin.title': 'Verwaltung',
 
 } satisfies InterfaceCatalog;

@@ -584,6 +584,25 @@ const es = {
 
   'story.sound.off': 'Silenciado',
 
+  /* EL ESTUDIO DE HISTORIAS (#6900) — crear una historia con un fondo, un
+     sonido de fondo y texto, previsualizada por el motor compartido,
+     publicada en CanvasV3 como en iOS. */
+  'story.studio.title': 'Nueva historia',
+  'story.studio.cancel': 'Cancelar',
+  'story.studio.publish': 'Publicar',
+  'story.studio.publishing': 'Publicando…',
+  'story.studio.offline': 'Sin conexión — la historia se enviará al reconectar.',
+  'story.studio.background.add': 'Añadir una foto o un vídeo',
+  'story.studio.sound.add': 'Añadir un sonido',
+  'story.studio.asset.remove': 'Quitar',
+  'story.studio.upload.uploading': 'Enviando…',
+  'story.studio.upload.retry': 'Reintentar',
+  'story.studio.text.label': 'Texto de la historia',
+  'story.studio.text.placeholder': 'Añadir texto',
+  'story.studio.hint.duration': 'Una historia permanece visible veinticuatro horas.',
+  'story.studio.error.upload': 'No se pudo enviar el archivo.',
+  'story.studio.error.publish': 'No se pudo publicar la historia.',
+
   'admin.title': 'Administración',
 
 } satisfies InterfaceCatalog;
