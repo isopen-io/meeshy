@@ -389,6 +389,21 @@ async function runScheme(colorScheme) {
      * boîte vaut le minimum entre la largeur INTRINSÈQUE du texte et 85 % de
      * la scène. Aucun témoin `bun test` ne peut le porter — happy-dom rejette
      * l'unité `cqw` à l'assignation, et la loi est un CALCUL de mise en page. */
+    /* UN TEXTE DE SCÈNE NE DÉPEND PAS DU SCHÉMA POUR ÊTRE LU
+     * (revue-correction #6901). Le texte blanc de cette scène se peignait sur
+     * les bandes d'un fond `fit`, donc sur l'aplat de CARTE : lisible en
+     * sombre, INVISIBLE en clair. Sa pastille (`textBg`) le rend
+     * indépendant du schéma ; l'habillage des bandes, lui, est un lot d'hôte
+     * (iOS les sert par défaut, `servesLetterboxFill: true`). */
+    const pill = await page3.evaluate(() => {
+      const peint = document.querySelector('[data-feed-card-id="post-scene-decorated"] [data-scene-text]');
+      return peint === null ? null : getComputedStyle(peint).backgroundColor;
+    });
+    check(
+      typeof pill === 'string' && pill !== 'transparent' && !/rgba\([^)]*,\s*0\)$/.test(pill),
+      `[${colorScheme}]${reduced} post-scene-decorated : le texte n'a aucune pastille opaque derrière lui (backgroundColor="${pill}") — il dépendrait du schéma pour être lu`,
+    );
+
     const textBox = await page3.evaluate(() => {
       const peint = document.querySelector('[data-feed-card-id="post-scene-decorated"] [data-scene-object="text"] [data-scene-text]');
       if (peint === null) return null;

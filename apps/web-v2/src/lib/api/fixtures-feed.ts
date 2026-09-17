@@ -798,7 +798,19 @@ export const POST_SCENE_DECORATED: FeedPost = {
             // c'est l'EFFET qu'un gate navigateur observe (deux relevés
             // espacés de 700 ms qui diffèrent), jamais son seul câblage.
             timing: { start: 0, end: 2, keyframes: [{ time: 0, x: 0.2, y: 0.2 }, { time: 2, x: 0.8, y: 0.2, easing: 'easeInOut' }] },
-            payload: { text: 'Ça bouge !', textColor: '#FFFFFF' },
+            // `textBg` — la pastille SOLIDE derrière le texte
+            // (`scene-object-text.tsx`), le seul chemin du moteur qu'aucune
+            // fixture n'exerçait. Elle n'est pas là pour la couverture :
+            // SANS elle, un texte BLANC posé sur les bandes d'un fond
+            // `fit` se peignait sur l'aplat de carte — donc INVISIBLE en
+            // schéma CLAIR, parfaitement lisible en sombre (regardé,
+            // revue-correction #6901). La cause profonde est que les bandes
+            // d'un fond ajusté ne sont pas habillées sur la carte de fil
+            // alors qu'iOS les sert par défaut (`servesLetterboxFill: true`,
+            // `FeedSceneAutoplay.swift:159` n'en passe aucune) — un lot
+            // d'hôte, rapporté à part ; une fixture ne doit pas dépendre du
+            // schéma pour être lisible.
+            payload: { text: 'Ça bouge !', textColor: '#FFFFFF', textBg: '#4338CA' },
           },
           {
             id: 'sticker1',
