@@ -911,11 +911,26 @@ jobs:
   # TEST: Unit Tests with Coverage (Parallel by package)
   # Minimum coverage threshold: 90%
   # ===========================================================================
+  # #6884 — `timeout-minutes` était UNIQUE (20) pour toute la matrice, alors
+  # que les paquets n'ont pas le même poids : `Test gateway` tenait avec
+  # moins de 2 min de marge sur 20 (18 min 05 s / 18 min 33 s mesurés sur
+  # `dev`), et toute variance (ex. #6477, montée de `vitest`) le fait
+  # franchir le seuil. Un dépassement de `timeout-minutes` DE JOB tue le job
+  # entier et TOUTES ses étapes en cours — GitHub rend alors `cancelled`,
+  # indiscernable d'une annulation par concurrence (`cancel-in-progress`
+  # ci-dessus). `timeout-minutes` posé sur une ÉTAPE, en revanche, échoue
+  # cette étape avec `failure` et un message explicite (« has timed out
+  # after Nm ») SANS attendre le budget de job — c'est déjà le patron des
+  # jobs `test-python`/`test-audio-pipeline` de ce fichier. `testTimeoutMinutes`
+  # ci-dessous porte donc le budget RÉEL (celui qu'on veut voir nommé), et
+  # `timeoutMinutes` (job) reste un plafond de secours nettement au-dessus —
+  # relevé pour `gateway` seul (30 au lieu de 20), les autres paquets gardant
+  # le budget historique.
   test:
     name: Test ${{ matrix.package.name }}
     runs-on: ubuntu-latest
     needs: quality
-    timeout-minutes: 20
+    timeout-minutes: ${{ matrix.package.timeoutMinutes }}
     strategy:
       fail-fast: false
       matrix:
@@ -923,18 +938,28 @@ jobs:
           - name: shared
             path: packages/shared
             filter: '@meeshy/shared'
+            timeoutMinutes: 20
+            testTimeoutMinutes: 15
           - name: web
             path: apps/web
             filter: '@meeshy/web'
+            timeoutMinutes: 20
+            testTimeoutMinutes: 15
           - name: gateway
             path: services/gateway
             filter: '@meeshy/gateway'
+            timeoutMinutes: 30
+            testTimeoutMinutes: 25
           - name: agent
             path: services/agent
             filter: '@meeshy/agent'
+            timeoutMinutes: 20
+            testTimeoutMinutes: 15
           - name: web-v2
             path: apps/web-v2
             filter: '@meeshy/web-v2'
+            timeoutMinutes: 20
+            testTimeoutMinutes: 15
 
     steps:
       - name: Checkout
@@ -1009,6 +1034,7 @@ jobs:
 
       - name: Run tests with coverage (bun)
         if: env.PACKAGE_MANAGER == 'bun'
+        timeout-minutes: ${{ matrix.package.testTimeoutMinutes }}
         run: |
           # Web tests must use Jest (configured with Next.js)
           if [ "${{ matrix.package.name }}" = "web" ] || [ "${{ matrix.package.name }}" = "web-v2" ]; then
@@ -1021,6 +1047,7 @@ jobs:
 
       - name: Run tests with coverage (pnpm)
         if: env.PACKAGE_MANAGER == 'pnpm'
+        timeout-minutes: ${{ matrix.package.testTimeoutMinutes }}
         run: pnpm run test:coverage --filter=${{ matrix.package.filter }}
 
       - name: Upload coverage
