@@ -174,8 +174,11 @@ export const ROUTES = {
      D-5) ; `/feeds/post/$post` est celle des liens profonds d'iOS
      (`DeepLinkRouter.swift:106`) et l'adresse que le partage émet
      (`lib/feed/share-url.ts`). UN seul `import()` pour les deux portes.
-     `?scene=N` (#6898) : la scène touchée dans le fil, RÉSERVÉ au plein écran
-     de scène (`scenes-plein-ecran`) — le détail l'ignore aujourd'hui. */
+     `?scene=N` (#6898, HONORÉ depuis #6902) : le lien profond vers une scène
+     précise — le détail l'ouvre en plein écran À L'ENTRÉE (`routes/post.tsx`,
+     `useSceneGallery` + `SceneFullscreenGallery`), l'index étant BORNÉ au
+     nombre de scènes du post (`boundedSceneIndex`, `lib/feed/gallery-lot.ts`)
+     plutôt que de planter sur un lien périmé. */
   post: { pattern: '/post/$post', screen: publicationScreen },
   postDeepLink: { pattern: '/feeds/post/$post', screen: publicationScreen },
   links: { pattern: '/links', screen: () => import('@/routes/links') },
