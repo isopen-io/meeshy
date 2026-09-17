@@ -99,7 +99,9 @@ legacy (`/`, `/login`, `/signup`, `/about`, `/contact`, `/partners`,
 `/privacy`, `/terms`, `/forgot-password`, `/auth/magic-link` (+ `/validate`)).
 Les adresses que la v3.1 introduit sans équivalent legacy (`legacy=false`
 dans l'inventaire) sont `/c/:conversation` (le fil), `/conversations/new`
-(#5652), `/stories` et `/stories/new` (le rail de la Lentille, #5652), `/welcome`
+(#5652), `/stories` et `/stories/new` (le rail de la Lentille, #5652),
+`/status/new` (poser une humeur, #6150 — la seconde porte de ma cellule du
+rail ; le legacy n'a aucune adresse d'écriture de statut), `/welcome`
 et `/me/progression` + ses trois sous-vues `badges`/`defis`/`succes` (niveau,
 série, succès). La parité d'URL n'est donc pas le chantier ; c'est la parité
 d'ÉCRANS qui l'est, et l'écart se compte sur les **80** routes du legacy, pas

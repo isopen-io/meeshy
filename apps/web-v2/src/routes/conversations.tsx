@@ -26,6 +26,7 @@ import { useStoryRailProps } from '@/lib/view/use-story-rail';
 import { QuickActions, type QuickAction } from '@/components/quick-actions';
 import { resolveLensSections } from '@/lib/lens/sections';
 import { useOnline } from '@/lib/net/online';
+import { navigate } from '@/lib/router';
 import { useLoadMoreSentinel } from '@/lib/view/use-load-more-sentinel';
 import { useOutOfView } from '@/lib/view/use-out-of-view';
 import { useScrollportMemory } from '@/lib/view/use-scrollport-memory';
@@ -163,19 +164,24 @@ function lecteurCourant(): string | null {
  *
  * iOS en peint NEUF (`ConversationListQuickActions`) : chercher des membres,
  * voir ses contacts, ses affiliations, écrire, story, mood, post, inviter,
- * lien raccourci. La v3.1 n'a de route pour AUCUNE d'entre elles
- * (`route-table.tsx` : `list`, `thread`, `login`, `signup`, `progression`) —
- * les porter toutes ici peindrait huit contrôles qui mentent, c'est-à-dire
- * exactement ce que la revue #5559 a dû DÉFAIRE sur l'en-tête de cet écran.
+ * lien raccourci. Quand cette constante s'est écrite, la v3.1 n'avait de route
+ * pour AUCUNE d'entre elles — les porter toutes aurait peint huit contrôles qui
+ * mentent, exactement ce que la revue #5559 a dû DÉFAIRE sur l'en-tête de cet
+ * écran. Restait celle qui n'a besoin d'aucune route pour AGIR : inviter.
  *
- * Reste celle qui n'a besoin d'aucune route pour AGIR : inviter. C'est aussi
- * la seule des quatre que l'état vide promettait (« un message, une story, un
- * mood, un post — ou invitez vos amis ») qu'on puisse tenir aujourd'hui ; la
- * phrase a donc été réécrite pour ne plus promettre les trois autres.
+ * **TROIS portes, depuis #6150 — et c'est la règle de sortie que ce
+ * doc-comment s'était donnée qui s'applique** : « elles arriveront avec leurs
+ * écrans et s'ajouteront ICI — une ligne par porte, impossible à ajouter sans
+ * son effet puisque `run` n'est pas optionnel ». `storyCompose` (#6080) et
+ * `statusCompose` (#6150) existent ; les DEUX portes que l'état vide promettait
+ * sans les montrer (« un message, une story, un mood, un post ») sont donc
+ * tenues, et leur `run` NAVIGUE vers une adresse réelle.
  *
- * Les huit portes manquantes sont un chantier de parité, pas un oubli : elles
- * arriveront avec leurs écrans et s'ajouteront ICI — une ligne par porte,
- * impossible à ajouter sans son effet puisque `run` n'est pas optionnel.
+ * Les six portes manquantes restent un chantier de parité, pas un oubli. Ni
+ * story ni humeur ne prend le rang de HÉROS : iOS les range en tuiles, et le
+ * seul héros de la v2 tient un rang TEMPORAIRE faute des trois vrais (voir
+ * `inviter`) — le remplir avec un mauvais candidat rendrait cet écart
+ * impossible à solder.
  */
 const ACTIONS_DE_DEMARRAGE: readonly QuickAction[] = [
   {
@@ -192,6 +198,26 @@ const ACTIONS_DE_DEMARRAGE: readonly QuickAction[] = [
     hero: true,
     run: async () =>
       retourInvitationParrainee(await partagerInvitationParrainee({ chargerLien: () => lienDeParrainage(lecteurCourant()) })),
+  },
+  {
+    key: 'story',
+    label: 'Créer une story',
+    hint: 'Une image, un son, quelques mots — visibles vingt heures.',
+    glyph: 'image',
+    run: () => {
+      navigate('/stories/new');
+      return null;
+    },
+  },
+  {
+    key: 'humeur',
+    label: 'Poser une humeur',
+    hint: 'Un emoji dit où vous en êtes, sans écrire un message.',
+    glyph: 'smiley',
+    run: () => {
+      navigate('/status/new');
+      return null;
+    },
   },
 ];
 
