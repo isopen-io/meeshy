@@ -782,7 +782,16 @@ export const POST_SCENE_DECORATED: FeedPost = {
             z: 1,
             transform: TRANSFORM_FULL,
             locale: 'fr',
-            timing: { start: 0, keyframes: [{ time: 0, x: 0.2, y: 0.2 }, { time: 2, x: 0.8, y: 0.2, easing: 'easeInOut' }] },
+            // `end: 2` (et non `timelineDuration` sur la scène) : la fin
+            // RÉSOLUE de cet objet EST la durée de la scène —
+            // `sceneDurationSeconds` (`lib/canvas/timeline.ts`) la retrouve
+            // sans qu'aucune durée ne soit posée au niveau de la scène (§ 8
+            // de la spécification #6901 : « pas de timelineDuration ⇒
+            // sceneDurationSeconds = max end = 2 s »). En mode `card`
+            // (boucle), le texte anime en continu entre les deux keyframes —
+            // c'est l'EFFET qu'un gate navigateur observe (deux relevés
+            // espacés de 700 ms qui diffèrent), jamais son seul câblage.
+            timing: { start: 0, end: 2, keyframes: [{ time: 0, x: 0.2, y: 0.2 }, { time: 2, x: 0.8, y: 0.2, easing: 'easeInOut' }] },
             payload: { text: 'Ça bouge !', textColor: '#FFFFFF' },
           },
           {

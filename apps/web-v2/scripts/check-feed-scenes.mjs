@@ -338,6 +338,64 @@ async function runScheme(colorScheme) {
   check(pageErrors.length === 0, `[${colorScheme}] ${pageErrors.length} erreur(s) de page — ${pageErrors.slice(0, 3).join(' | ')}`);
 
   await context2.close();
+
+  /* ── 7. post-scene-decorated : les six couches, et l'EFFET des keyframes
+   * (#6901, T-F) — un contrôle/mécanisme se prouve par son EFFET, jamais son
+   * seul câblage : deux relevés de `style.left` espacés de 700 ms, PENDANT
+   * que la carte est élue (centrée), doivent DIFFÉRER. Les KINDS (sticker,
+   * lieu, dessin) se vérifient sous les DEUX réglages de mouvement ; le
+   * MOUVEMENT lui-même ne se vérifie que SANS `prefers-reduced-motion` — sous
+   * ce réglage, l'élection d'autoplay du fil (`autoplay-election.ts:14`,
+   * `reducedMotion ⇒ null`) n'élit AUCUNE carte, `playing` reste faux pour
+   * TOUTES les scènes cinématiques (loi DÉJÀ gardée par les invariants
+   * clip-a/clip-b ci-dessus, § 4) : une carte non élue n'anime rien, quel
+   * que soit son contenu — ce n'est pas un défaut de CE lot. */
+  const decoratedInvariants = async (colorSchemeCtx) => {
+    const context3 = await browser.newContext({
+      colorScheme,
+      locale: 'en-US',
+      viewport: { width: 420, height: 900 },
+      ...colorSchemeCtx,
+    });
+    const page3 = await context3.newPage();
+    await page3.goto(`${BASE}/feed`, { waitUntil: 'load' });
+    await page3.waitForSelector('[data-feed-card-id="post-scene-decorated"] [data-scene-object="text"]');
+    await page3.evaluate(() => {
+      document.querySelector('[data-feed-card-id="post-scene-decorated"]').scrollIntoView({ block: 'center' });
+    });
+    const kinds = await page3.evaluate(() => {
+      const carte = document.querySelector('[data-feed-card-id="post-scene-decorated"]');
+      return {
+        sticker: carte?.querySelector('[data-scene-object="sticker"]')?.textContent ?? null,
+        place: carte?.querySelector('[data-scene-object="place"]')?.textContent ?? null,
+        drawing: carte?.querySelectorAll('[data-scene-object="drawing"] polyline').length ?? -1,
+      };
+    });
+    const reduced = colorSchemeCtx.reducedMotion === 'reduce' ? ' (prefers-reduced-motion)' : '';
+    check(kinds.sticker === '🔥', `[${colorScheme}]${reduced} post-scene-decorated : sticker attendu « 🔥 » — reçu « ${kinds.sticker} »`);
+    check(
+      typeof kinds.place === 'string' && kinds.place.includes('Café Central'),
+      `[${colorScheme}]${reduced} post-scene-decorated : lieu attendu « Café Central » — reçu « ${kinds.place} »`,
+    );
+    check(kinds.drawing >= 2, `[${colorScheme}]${reduced} post-scene-decorated : ${kinds.drawing} trait(s) de dessin (attendu ≥ 2)`);
+
+    if (colorSchemeCtx.reducedMotion !== 'reduce') {
+      const first = await page3.evaluate(
+        () => document.querySelector('[data-feed-card-id="post-scene-decorated"] [data-scene-object="text"]').style.left,
+      );
+      await page3.waitForTimeout(700);
+      const second = await page3.evaluate(
+        () => document.querySelector('[data-feed-card-id="post-scene-decorated"] [data-scene-object="text"]').style.left,
+      );
+      check(
+        first !== second,
+        `[${colorScheme}] post-scene-decorated : le texte à keyframes n'a pas bougé entre deux relevés à 700 ms (left="${first}" les deux fois)`,
+      );
+    }
+    await context3.close();
+  };
+  await decoratedInvariants({});
+  await decoratedInvariants({ reducedMotion: 'reduce' });
 }
 
 for (const scheme of ['light', 'dark']) await runScheme(scheme);

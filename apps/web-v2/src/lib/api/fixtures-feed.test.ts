@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { hasTimedObjects } from '@/lib/canvas/timeline';
+import { hasTimedObjects, sceneDurationSeconds } from '@/lib/canvas/timeline';
 
 import {
   FEED_POSTS,
@@ -220,6 +220,15 @@ describe('POST_SCENE_DECORATED — les six couches d’un coup (T-F)', () => {
   test('hasTimedObjects est vrai (le texte porte des keyframes)', () => {
     const doc = parseCanvasDocument(POST_SCENE_DECORATED.storyEffects);
     expect(hasTimedObjects(doc!.scenes[0]!)).toBe(true);
+  });
+
+  // Pas de `timelineDuration` posé sur la scène : `sceneDurationSeconds` le
+  // retrouve depuis la fin RÉSOLUE du texte (`timing.end: 2`) — § 8 de la
+  // spécification #6901.
+  test('sceneDurationSeconds = 2 s (dérivé de la fin du texte, sans timelineDuration)', () => {
+    const doc = parseCanvasDocument(POST_SCENE_DECORATED.storyEffects);
+    expect(doc!.scenes[0]!.timelineDuration).toBeUndefined();
+    expect(sceneDurationSeconds(doc!.scenes[0]!)).toBe(2);
   });
 
   test('elle est dans NAMED_POSTS (FEED_POSTS)', () => {
