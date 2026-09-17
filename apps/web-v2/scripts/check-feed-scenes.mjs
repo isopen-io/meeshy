@@ -672,6 +672,45 @@ await fullscreenInvariants({ width: 320, height: 568 });
   await context.close();
 }
 
+/* -- 11. `?scene=N` — LE LIEN PROFOND DU DETAIL (revue-correction #6902,
+ * item F de la specification). Livre SANS aucun temoin : ni test, ni section
+ * de gate ne l'exercait, alors que la specification en annoncait deux (T5 et
+ * « gate 10 »). Trois mesures : l'index demande est bien celui qui s'ouvre,
+ * un index HORS BORNES tombe sur la derniere scene (`boundedSceneIndex`) au
+ * lieu d'une page vide, et `history.back()` rend l'ecran du detail INTACT --
+ * l'entree de la couche est consommee, jamais celle de l'ecran. */
+for (const [asked, expected] of [
+  ['1', '1'],
+  ['9', '2'],
+  ['-3', '0'],
+]) {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'en-US' });
+  const page = await context.newPage();
+  const pageErrors = [];
+  page.on('pageerror', (e) => pageErrors.push(String(e)));
+
+  await page.goto(`${BASE}/post/post-scenes-mixed?scene=${asked}`, { waitUntil: 'load' });
+  await page.waitForSelector('[data-scene-fullscreen] [data-scene-viewer-page]', { timeout: 10000 }).catch(() => {});
+  const index = await page.evaluate(() => document.querySelector('[data-scene-fullscreen]')?.getAttribute('data-viewer-index') ?? null);
+  check(index === expected, `#6902 : /post/post-scenes-mixed?scene=${asked} — index courant attendu "${expected}", recu "${index}"`);
+
+  if (asked === '1') {
+    await page.goBack();
+    await page.waitForTimeout(120);
+    const after = await page.evaluate(() => ({
+      dialog: document.querySelector('[data-scene-fullscreen]') !== null,
+      card: document.querySelector('[data-feed-card-id="post-scenes-mixed"]') !== null,
+      path: location.pathname,
+    }));
+    check(!after.dialog, '#6902 : la couche du lien profond survit a history.back()');
+    check(after.card, "#6902 : history.back() a quitte le DETAIL au lieu de ne fermer que la couche");
+    check(after.path === '/post/post-scenes-mixed', `#6902 : /post/post-scenes-mixed attendu apres history.back() — recu "${after.path}"`);
+  }
+
+  check(pageErrors.length === 0, `#6902 (?scene=${asked}) : ${pageErrors.length} erreur(s) de page — ${pageErrors.slice(0, 3).join(' | ')}`);
+  await context.close();
+}
+
 await browser.close();
 server.close();
 
