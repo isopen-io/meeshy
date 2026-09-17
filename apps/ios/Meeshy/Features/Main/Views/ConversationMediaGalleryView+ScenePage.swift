@@ -23,18 +23,28 @@ import MeeshyUI
 /// Elle ne peint rien elle-même : `MeeshyScenePlayer(mode: .reader)` est le
 /// moteur unique de rendu d'un canvas — le même que la carte du fil monte en
 /// `.card` et que le viewer de story monte en `.reader`. Elle pose ce moteur
-/// dans le CADRE du solveur, à la taille `stage.media` que le solveur a ajustée
-/// au rapport de la scène, et elle répond aux trois portes du plateau (#6142)
-/// exactement comme ses sœurs image et vidéo : le tap, l'appui long, le
-/// glissement.
+/// aux cotes que la LOI de forme donne à la scène (`GallerySceneStage`, une
+/// projection de `SceneShape.layout(_:in:)`, #6904), et elle répond aux trois
+/// portes du plateau (#6142) exactement comme ses sœurs image et vidéo : le
+/// tap, l'appui long, le glissement.
+///
+/// **Elle ne passe PLUS par `MediaStageFraming`**, et c'est la décision du
+/// 2026-09-17 : ce solveur cadre des pièces JOINTES — il ajuste, donc il laisse
+/// des bandes même sur une scène au gabarit, et son plein cadre n'était pas
+/// plein (402 × 714,67 mesuré dans un viewport de 402 × 874). Les pages image
+/// et vidéo, elles, y restent : leur contenu est reçu, et le rogner retirerait
+/// ce que l'expéditeur a envoyé.
 ///
 /// `Equatable` et montée en `.equatable()`, pour la raison que la galerie écrit
 /// en tête de son fichier : une réévaluation de la racine ne re-rend que les
 /// pages dont la position relative a changé.
 struct GalleryScenePage: View, Equatable {
     let item: GallerySceneItem
-    /// Le cadre de cette page — voir `GalleryImagePage.stage` (#6141).
-    let stage: MediaStageFraming.Result
+    /// **Le cadre de cette page — la LOI de forme, pas le solveur des pièces
+    /// jointes** (#6904). `GallerySceneStage` projette
+    /// `SceneShape.layout(_:in:)` : cadrée, la scène tient entière dans la zone
+    /// libre ; immersive, elle couvre le viewport et déborde.
+    let stage: GallerySceneStage.Frame
     /// Voir `GalleryImagePage.presentation` (#6142).
     let presentation: StagePresentation
     let accentColor: String
@@ -90,9 +100,14 @@ struct GalleryScenePage: View, Equatable {
 
     var body: some View {
         ZStack {
-            MediaStageBackdrop(
-                source: MediaGalleryStage.backdrop(stage: stage, thumbHash: item.thumbHash)
-            )
+            // **Le fond n'existe que s'il reste quelque chose à peindre**
+            // (`SceneShape.OffscreenPainter`). En immersif la scène couvre le
+            // viewport : `layout.backdrop` rend `nil`, cette couche n'est pas
+            // montée, et la troisième couche de #6806 disparaît par
+            // construction plutôt que par consigne.
+            if let fond = stage.backdrop {
+                SceneBackdropView(backdrop: fond, thumbHash: item.thumbHash)
+            }
 
             if rendersPlayer {
                 player
@@ -100,7 +115,7 @@ struct GalleryScenePage: View, Equatable {
                 preview
             }
         }
-        .frame(width: stage.frame.width, height: stage.frame.height)
+        .frame(width: stage.visible.width, height: stage.visible.height)
         .clipShape(RoundedRectangle(cornerRadius: stage.cornerRadius, style: .continuous))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
@@ -122,12 +137,14 @@ struct GalleryScenePage: View, Equatable {
         .onAppear(perform: resolveOpening)
     }
 
-    /// **Le player, à la taille que le solveur a ajustée au rapport de la scène.**
+    /// **Le player, aux cotes que la LOI donne à la scène** (#6904).
     ///
-    /// La taille est posée en dur depuis `stage.media`, jamais par un
+    /// La taille est posée en dur depuis `stage.sceneSize`, jamais par un
     /// `.aspectRatio` : c'est la leçon de `GalleryImagePage` (« la taille vient
-    /// du solveur ») — le cadre proposé a exactement le rapport de la scène, donc
-    /// le canvas le remplit sans rogner ni déformer.
+    /// du solveur »), et le cadre a exactement le rapport de la scène — le
+    /// canvas le remplit sans rogner ni déformer. En immersif il DÉBORDE de la
+    /// boîte visible, et le `clipShape` du corps rogne ce qui dépasse : c'est
+    /// la définition même de « couvrir le viewport » pour une forme figée.
     private var player: some View {
         MeeshyScenePlayer(
             document: item.document,
@@ -138,23 +155,23 @@ struct GalleryScenePage: View, Equatable {
             carrier: item.carrier,
             preferredContentLanguages: preferredContentLanguages,
             startAt: isEntry ? openingPosition : 0,
-            // **Le fond se peint UNE fois** (#6791). `MediaStageBackdrop`, juste
-            // au-dessus, habille déjà le hors-champ du cadre avec le hachage de
-            // la scène ; laisser le canvas repeindre le sien empilait deux
-            // dégradés du MÊME hachage, étirés dans deux cadres différents —
-            // mesuré au simulateur, deux teintes au-dessus d'un même média.
-            // **La scène est TOUJOURS 9:16, cardée ou en plein cadre**
-            // (`SceneShape.aspect`, #6896/#6904) : le cadre PRÉSENTÉ
-            // (`item.aspect` / `item.canvasAspect`, lus par `MediaGalleryStage.
-            // mediaRatio`) et le gabarit du CANVAS sont désormais toujours
-            // identiques, ce qui était la condition posée par #6791 pour ne
-            // plus repeindre — elle est maintenant vraie en permanence. Un
-            // seul acteur peint le hors-champ, le PLATEAU
-            // (`MediaStageBackdrop`, juste au-dessus) ; le canvas ne le fait
-            // plus jamais.
-            servesLetterboxFill: false
+            // **Le fond se peint UNE fois** (#6791), et depuis #6904 la LOI
+            // dit qui : `SceneShape.layout(...).offscreenPainter`. Cardée,
+            // c'est le plateau (`SceneBackdropView`, juste au-dessus) ;
+            // immersive, c'est PERSONNE — la scène couvre le viewport, il ne
+            // reste rien à peindre. Laisser le canvas peindre le sien empilait
+            // deux dégradés du MÊME hachage, étirés dans deux cadres
+            // différents : mesuré au simulateur, deux teintes au-dessus d'un
+            // même média. Cardée, le canvas ne peint donc plus rien.
+            //
+            // **Immersive, c'est l'INVERSE, et par la même loi** : le plateau
+            // n'est plus là, donc le canvas redevient le seul peintre possible
+            // de ses bandes — sans quoi la bande d'un panorama devient le sol
+            // NOIR de la galerie. `paintsOwnLetterbox` n'est pas une décision
+            // de plus : c'est `offscreenPainter == .none` lu tel quel.
+            servesLetterboxFill: stage.paintsOwnLetterbox
         )
-        .frame(width: stage.media.width, height: stage.media.height)
+        .frame(width: stage.sceneSize.width, height: stage.sceneSize.height)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(accessibilityLabel)
     }
@@ -171,7 +188,7 @@ struct GalleryScenePage: View, Equatable {
             Color.black
         }
         .aspectRatio(contentMode: .fill)
-        .frame(width: stage.media.width, height: stage.media.height)
+        .frame(width: stage.sceneSize.width, height: stage.sceneSize.height)
         .clipped()
         .accessibilityHidden(true)
     }
@@ -279,7 +296,7 @@ extension ConversationMediaGalleryView {
                    onDismiss: @escaping () -> Void) -> some View {
         GalleryScenePage(
             item: scene,
-            stage: stage(for: attachment),
+            stage: sceneStage(for: scene),
             presentation: stagePresentation,
             accentColor: accentColor,
             preferredContentLanguages: sceneContext?.playerLanguages ?? [],

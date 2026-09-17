@@ -416,6 +416,28 @@ extension ConversationMediaGalleryView {
         )
     }
 
+    /// **Le cadre d'une page SCÈNE — la loi de forme, pas le solveur** (#6904).
+    ///
+    /// Une scène ne se cadre pas comme une pièce jointe : `GallerySceneStage`
+    /// projette `SceneShape.layout(_:in:)`, qui tient les DEUX états — la carte
+    /// qui tient entière dans la zone libre, et l'immersif qui couvre le
+    /// viewport en débordant. `stage(for:)` reste la réponse des pages image et
+    /// vidéo, et celle du CHROME du plateau, qui se pose sur la même zone.
+    ///
+    /// **Le fond est élu ici, et l'hôte est le seul à pouvoir le faire** : la
+    /// loi ne sait pas s'il existe un hachage à étirer. Le hachage quand la
+    /// scène en porte un — c'est ce que la galerie pose déjà sous une pièce
+    /// jointe (#6143) — le noir sinon, qui est la réponse JUSTE quand il n'y a
+    /// aucune matière et non un repli honteux.
+    func sceneStage(for scene: GallerySceneItem) -> GallerySceneStage.Frame {
+        GallerySceneStage.frame(
+            viewport: DeviceLayout.windowSize,
+            presentation: stageGeometryPresentation,
+            corridors: stageCorridors,
+            backdrop: (scene.thumbHash?.isEmpty == false) ? .thumbHash : .black
+        )
+    }
+
     /// Le cadre de la page OUVERTE — celui que l'overlay habille.
     var currentStage: MediaStageFraming.Result {
         guard currentIndex < allAttachments.count else {

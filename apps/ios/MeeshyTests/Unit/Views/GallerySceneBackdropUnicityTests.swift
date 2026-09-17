@@ -148,8 +148,47 @@ final class GallerySceneBackdropUnicityTests: XCTestCase {
         let page = try XCTUnwrap(code.range(of: "struct GalleryScenePage"))
         let suite = String(code[page.lowerBound...])
 
-        XCTAssertTrue(suite.contains("servesLetterboxFill: false"),
-                      "la page scène doit poser servesLetterboxFill À LA CONSTANTE false — " +
-                      "le plateau (MediaStageBackdrop) est l'unique peintre du hors-champ depuis #6896")
+        XCTAssertTrue(suite.contains("servesLetterboxFill: stage.paintsOwnLetterbox"),
+                      "la page scène tient sa décision de peinture de la LOI " +
+                      "(offscreenPainter), jamais d'un calcul par scène")
+        XCTAssertFalse(suite.contains("item.surface(inFullFrame"),
+                       "le peintre ne se recalcule pas scène par scène : #6896 a fermé cette question")
+    }
+
+    /// **Et le fond ne se peint QUE si la loi dit qu'il reste quelque chose à
+    /// peindre** (#6904, tour 3).
+    ///
+    /// Le plateau peignait son fond INCONDITIONNELLEMENT, sous les deux états :
+    /// en plein cadre, la scène ne couvrait pas le viewport (le solveur des
+    /// pièces jointes l'y AJUSTAIT) et le fond habillait les deux bandes de
+    /// 79,7 pt qui restaient. La décision du 2026-09-17 supprime les bandes
+    /// plutôt que de les habiller — `SceneShape.layout(.immersive, in:)` rend
+    /// `backdrop: nil`, et la couche n'est alors pas montée du tout.
+    func test_laPageScene_neMontrLeFondQueQuandLaLoiEnDonneUn() throws {
+        let code = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationMediaGalleryView+ScenePage.swift"))
+        let page = try XCTUnwrap(code.range(of: "struct GalleryScenePage"))
+        let suite = String(code[page.lowerBound...])
+
+        XCTAssertTrue(suite.contains("if let fond = stage.backdrop"),
+                      "le fond d'une page scène est conditionné au backdrop de la LOI, jamais peint d'office")
+        XCTAssertFalse(suite.contains("MediaGalleryStage.backdrop("),
+                       "le fond d'une scène ne se décide plus par le letterbox du solveur de pièces jointes")
+    }
+
+    /// **La page consulte la LOI de forme, jamais le solveur des pièces
+    /// jointes** (#6904, tour 3) — c'est la moitié GÉOMÉTRIE de la même
+    /// décision : `MediaStageFraming` ajuste (donc laisse des bandes), la loi
+    /// COUVRE en immersif et tient entière en cardé.
+    func test_laPageScene_seCadreParLaLoi() throws {
+        let code = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationMediaGalleryView+ScenePage.swift"))
+        let page = try XCTUnwrap(code.range(of: "struct GalleryScenePage"))
+        let suite = String(code[page.lowerBound...])
+
+        XCTAssertTrue(suite.contains("GallerySceneStage.Frame"),
+                      "la page scène reçoit le cadre de GallerySceneStage (projection de SceneShape.layout)")
+        XCTAssertFalse(suite.contains("MediaStageFraming.Result"),
+                       "une page scène ne se cadre plus par le solveur des pièces jointes")
     }
 }
