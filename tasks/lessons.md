@@ -32690,9 +32690,9 @@ Prolonge [[reference_a_red_on_both_sides_of_the_diff_also_measures_the_machine]]
 celle-là disait qu'un rouge des deux côtés mesure la machine ; celle-ci dit
 comment le PROUVER sans démonter le produit.
 
-## Leçon 621 — `isSet` n'existe que sur les champs OPTIONNELS ; un double qui honore MongoDB ne le sait pas
+## Leçon 622 — `isSet` n'existe que sur les champs OPTIONNELS ; un double qui honore MongoDB ne le sait pas
 
-*(Numérotée 618 sur `main`, renumérotée 621 à la promotion `dev → main` : `dev` portait déjà une 618 dans sa série continue 617-618-619-620, et deux branches ne peuvent pas allouer le même identifiant sans se voir. La garde `lessons-numbering-single-key-guard` a nommé la collision — « 618 : lignes 32693, 32747 » — ce qu'aucune fusion n'aurait signalé toute seule : `tasks/lessons.md` s'auto-fusionne sans conflit.)*
+*(Numérotée 618 sur `main`, renumérotée 621 à la promotion `dev → main` du 2026-09-16, puis 622 à celle du 2026-09-17 : `dev` portait déjà une 618 dans sa série continue 617-618-619-620, puis a alloué 621 dans cette même série pendant que `main` occupait le numéro. La garde `lessons-numbering-single-key-guard` a nommé les deux collisions — « 618 : lignes 32693, 32747 », puis « 621 : lignes 32693, 32935 » — ce qu'aucune fusion n'aurait signalé toute seule : `tasks/lessons.md` s'auto-fusionne sans conflit. **Un identifiant qui ne s'alloue pas ne collisionne pas (#5102) : c'est la MÊME leçon qui se fait renuméroter à chaque promotion, parce que c'est elle qui vit hors de la série continue.**)*
 
 #6811. Le correctif de #6452 (« un compte sans `blockedUserIds` doit rester
 cherchable ») a remplacé `NOT: { blockedUserIds: { has } }` par
