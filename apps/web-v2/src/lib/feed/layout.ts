@@ -1,3 +1,5 @@
+import { MAX_CARD_HEIGHT_RATIO } from './scene-framing';
+
 /**
  * LA GÉOMÉTRIE DU MÉDIA D'UNE CARTE (#5893) — miroir
  * `FeedPostCardLayout.swift:26-38` (`postCardMediaHeight`) et
@@ -11,7 +13,13 @@ export function clampRatio(ratio: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, ratio));
 }
 
-const POST_MEDIA_RATIO_BOUNDS = { min: 0.75, max: 1.4 } as const;
+/**
+ * `1.4` est le MÊME plafond que `MAX_CARD_HEIGHT_RATIO` (`scene-framing.ts`,
+ * #6898 § 5.2) : une carte de scène et une carte d'image voisines ne peuvent
+ * pas plafonner à deux hauteurs différentes — SOURCE UNIQUE, importée plutôt
+ * que recopiée.
+ */
+const POST_MEDIA_RATIO_BOUNDS = { min: 0.75, max: MAX_CARD_HEIGHT_RATIO } as const;
 const REEL_CARD_RATIO_BOUNDS = { min: 0.75, max: 1.25 } as const;
 
 /** UNE CÔTE UTILISABLE — la passerelle sert `width`/`height` en `null` quand

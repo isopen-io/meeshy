@@ -575,6 +575,17 @@ const pt = {
   'links.create.error.refused': 'Você não pode criar um link para esta conversa.',
   'links.create.error.default': 'Não foi possível criar o link. Tente novamente.',
 
+  'feed.scene.carousel.previous': 'Cena anterior',
+  'feed.scene.carousel.next': 'Próxima cena',
+  'feed.scene.mosaic.tile': 'Cena {index}',
+  'feed.scene.mosaic.more': 'Cena {index} e mais {count}',
+  'feed.scene.mosaic.video': 'Cena {index}, vídeo',
+  'feed.scene.shared_by': 'Cena compartilhada por {author}',
+  'feed.scene.open.fullscreen': 'Toque duas vezes para ver em tela cheia',
+  'feed.scene.open.post': 'Toque duas vezes para abrir a publicação',
+  'feed.scene.sound.muted': 'Som mudo',
+  'feed.scene.count': '{count} cenas',
+
   'admin.title': 'Administração',
 
 } satisfies InterfaceCatalog;

@@ -569,6 +569,17 @@ const ar = {
   'links.create.error.refused': 'لا يمكنك إنشاء رابط لهذه المحادثة.',
   'links.create.error.default': 'تعذّر إنشاء الرابط. أعد المحاولة.',
 
+  'feed.scene.carousel.previous': 'المشهد السابق',
+  'feed.scene.carousel.next': 'المشهد التالي',
+  'feed.scene.mosaic.tile': 'المشهد {index}',
+  'feed.scene.mosaic.more': 'المشهد {index}، و{count} أخرى',
+  'feed.scene.mosaic.video': 'المشهد {index}، فيديو',
+  'feed.scene.shared_by': 'مشهد شاركه {author}',
+  'feed.scene.open.fullscreen': 'اضغط مرتين للعرض بملء الشاشة',
+  'feed.scene.open.post': 'اضغط مرتين لفتح المنشور',
+  'feed.scene.sound.muted': 'الصوت مكتوم',
+  'feed.scene.count': '{count} مشاهد',
+
   'admin.title': 'الإدارة',
 
 } satisfies InterfaceCatalog;

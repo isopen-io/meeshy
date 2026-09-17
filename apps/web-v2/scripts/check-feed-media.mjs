@@ -108,8 +108,15 @@ await page.goto(`${BASE}/feed`, { waitUntil: 'load' });
 await page.waitForSelector('[data-feed-card]');
 
 const fil = await page.evaluate(async () => {
-  const video = document.querySelector('[data-feed-card="post"] video');
-  const audio = document.querySelector('[data-feed-card="post"] audio');
+  // PRÉFIXÉ par `[data-feed-media]` (leçon 621, #6898) : une carte de post à
+  // SCÈNES monte aussi un `<video>` (`ScenePlayer`, `data-scene-player`),
+  // sous `[data-feed-scene-box]`/`[data-feed-scene-track]`/
+  // `[data-feed-scene-mosaic]` — jamais sous `[data-feed-media]`, la marque
+  // posée par `FeedMediaCarousel`/`FeedMediaMosaic` SEULES. Un sélecteur non
+  // préfixé mesurerait la première scène venue dès qu'elle précède le média
+  // visé dans le document.
+  const video = document.querySelector('[data-feed-card="post"] [data-feed-media] video');
+  const audio = document.querySelector('[data-feed-card="post"] [data-feed-media] audio');
   return {
     videoSrc: video === null ? '' : video.currentSrc || video.src || '',
     videoPoster: video === null ? '' : video.poster || '',
