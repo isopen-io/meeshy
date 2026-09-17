@@ -50,10 +50,18 @@ final class SocialFullscreenRouteCacheRoundTripTests: XCTestCase {
 
     /// `RECETTE C` : trois visuels déclarés au post, un canvas de trois scènes
     /// qui les porte chacune — le cas nominal de `coversEveryVisual`.
+    ///
+    /// **Décodé par `StoryEffects.init(from:)`, jamais construit à la main**
+    /// (revue tour 2, 2026-09-17) : ce décodeur, sur un document `v >= 3`, pose
+    /// TOUJOURS `self = StoryEffects(rendering: document, sceneIndex: 0)` avant
+    /// `canvasV3 = document` — les deux ENSEMBLE, jamais l'un sans l'autre. Une
+    /// construction manuelle qui pose `canvasV3` sur un `StoryEffects()` vierge
+    /// produit un état qu'AUCUN décodage réel ne produit (le runtime ignore le
+    /// document qu'il est censé représenter) — `CanvasV3(migrating:keeping:)`
+    /// reconstruit alors la scène 0 depuis un runtime VIDE et la perd, un défaut
+    /// du montage du témoin, pas du pont qu'il prétend éprouver.
     private func recetteC() throws -> FeedPost {
-        let canvas = try JSONDecoder().decode(CanvasV3.self, from: chargeRecetteC())
-        var effects = StoryEffects()
-        effects.canvasV3 = canvas
+        let effects = try JSONDecoder().decode(StoryEffects.self, from: chargeRecetteC())
         var post = FeedPost(id: "recette-c", author: "demo", authorId: "demo-id",
                             content: "", timestamp: Date())
         post.storyEffects = effects
