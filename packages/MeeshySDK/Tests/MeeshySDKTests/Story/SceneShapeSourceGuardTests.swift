@@ -47,6 +47,37 @@ final class SceneShapeSourceGuardTests: XCTestCase {
                        "une copie. Trouvé : \(porteurs.sorted())")
     }
 
+    /// **Le rapport 9:16 écrit à la main dans `apps/ios` — l'inventaire que la
+    /// seconde moitié du lot #6904 solde.**
+    ///
+    /// Il est SÉPARÉ du précédent, et pas par commodité : le SDK est converge,
+    /// l'app ne l'est pas encore, et deux verdicts distincts empêchent qu'une
+    /// régression du SDK se cache derrière une dette de l'app. La liste est
+    /// DATÉE du 2026-09-17 et se vide à la fin du lot ; un site qui y entre
+    /// après n'est pas une exception, c'est une copie de plus.
+    func test_leRapport9sur16_danssApp_tientDansUnInventaireDate() throws {
+        let detteDatee: Set<String> = [
+            "Features/Main/Views/StoryRepostEmbedCell.swift",          // .aspectRatio littéral
+            "Features/Main/Views/Bubble/BubbleStoryCitationCard.swift", // sceneAspectRatio
+            "Features/Main/Views/MyStoryCard.swift",                    // .aspectRatio littéral
+            "Features/Main/Composer/ComposerSlideRail.swift",           // vignette de diapositive
+            "Features/Main/Views/FeedSceneAutoplay.swift",              // repli de cardAspect
+            "Features/Main/Views/StoryViewerView+Sidebar.swift",        // repli de canvasAspect
+            "Features/Main/Views/ReelsPlayerView+Carousel.swift",       // repli d'un média sans dimensions
+            "Features/Main/Views/ReelsPlayerView+Video.swift",          // idem
+            "Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift", // repli de hauteur de média
+        ]
+
+        let porteurs = try Self.swiftSources(under: "apps/ios/Meeshy")
+            .filter { Self.declaresTheRatio($0.code) }
+            .map(\.path)
+
+        XCTAssertEqual(Set(porteurs), detteDatee,
+                       "Le rapport 9:16 se lit dans SceneShape.aspect. Nouveaux sites : " +
+                       "\(Set(porteurs).subtracting(detteDatee).sorted()) ; dette soldée sans " +
+                       "mise à jour de cette liste : \(detteDatee.subtracting(Set(porteurs)).sorted())")
+    }
+
     /// **Tout hôte qui monte le player consulte la loi.** La liste d'exceptions
     /// porte les hôtes de `apps/ios/` que la seconde moitié du lot #6904
     /// réécrit — datée du 2026-09-17, et vide à la fin du lot.
