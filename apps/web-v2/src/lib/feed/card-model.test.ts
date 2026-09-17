@@ -396,3 +396,82 @@ describe('resolveFeedCardModel — le SITE UNIQUE qui compose type, Prisme, acce
     expect('captionOrigin' in (nue.media[1] ?? {})).toBe(false);
   });
 });
+
+/** T1 (#6898) — `model.scene` : le document canvas v3 déjà PARSÉ, ou absent
+ * (repli média, D-78). */
+describe('resolveFeedCardModel — la scène (D-78)', () => {
+  test('storyEffects v3 avec scenes ⇒ model.scene.document.scenes.length', () => {
+    const model = resolveFeedCardModel(
+      basePost({
+        storyEffects: {
+          v: 3,
+          scenes: [
+            { id: 's1', objects: [] },
+            { id: 's2', objects: [] },
+          ],
+        },
+      }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+    expect(model.scene?.document.scenes.length).toBe(2);
+    expect(model.scene?.carrier.postId).toBe('p1');
+  });
+
+  test('v: 3 SANS scenes (POST_HERO) ⇒ scene absent (repli média, D-78)', () => {
+    const model = resolveFeedCardModel(basePost({ storyEffects: { v: 3, layout: 'hero' } }), {
+      preferredLanguages: ['fr'],
+      now: NOW,
+    });
+    expect(model.scene).toBeUndefined();
+  });
+
+  test('transform: {} (copie de 6a9d0ad5) ⇒ parsé, scene présent', () => {
+    const model = resolveFeedCardModel(
+      basePost({
+        storyEffects: {
+          v: 3,
+          scenes: [
+            {
+              id: 's1',
+              objects: [
+                {
+                  id: 'bg1',
+                  kind: 'media',
+                  anchor: { t: 'free', x: 0.5, y: 0.5 },
+                  plane: 'bg',
+                  z: 0,
+                  transform: {},
+                  payload: { background: '#4338CA' },
+                },
+              ],
+            },
+          ],
+        },
+      }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+    expect(model.scene).toBeDefined();
+    expect(model.scene?.document.scenes[0]?.objects[0]?.transform).toEqual({ scale: 1, rotation: 0, opacity: 1 });
+  });
+
+  test('v: 1 ⇒ scene absent', () => {
+    const model = resolveFeedCardModel(basePost({ storyEffects: { v: 1, background: '#fff' } }), {
+      preferredLanguages: ['fr'],
+      now: NOW,
+    });
+    expect(model.scene).toBeUndefined();
+  });
+
+  test('le porteur reprend les médias DÉJÀ résolus par le Prisme — jamais une seconde descente', () => {
+    const model = resolveFeedCardModel(
+      basePost({
+        media: [{ id: 'media-a', mimeType: 'image/jpeg', fileUrl: 'a.jpg', caption: 'Bonjour', order: 0 }],
+        storyEffects: { v: 3, scenes: [{ id: 's1', objects: [] }] },
+      }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+    expect(model.scene?.carrier.media).toEqual([
+      { id: 'media-a', src: 'https://gate.meeshy.me/api/v1/attachments/file/a.jpg', caption: 'Bonjour', captionOrigin: 'media' },
+    ]);
+  });
+});

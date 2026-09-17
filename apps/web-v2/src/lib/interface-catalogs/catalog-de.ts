@@ -571,6 +571,17 @@ const de = {
   'links.create.error.refused': 'Du kannst für diese Unterhaltung keinen Link erstellen.',
   'links.create.error.default': 'Der Link konnte nicht erstellt werden. Versuche es erneut.',
 
+  'feed.scene.carousel.previous': 'Vorherige Szene',
+  'feed.scene.carousel.next': 'Nächste Szene',
+  'feed.scene.mosaic.tile': 'Szene {index}',
+  'feed.scene.mosaic.more': 'Szene {index}, und {count} weitere',
+  'feed.scene.mosaic.video': 'Szene {index}, Video',
+  'feed.scene.shared_by': 'Szene geteilt von {author}',
+  'feed.scene.open.fullscreen': 'Doppelt tippen für Vollbild',
+  'feed.scene.open.post': 'Doppelt tippen, um den Beitrag zu öffnen',
+  'feed.scene.sound.muted': 'Ton stumm',
+  'feed.scene.count': '{count} Szenen',
+
   'admin.title': 'Verwaltung',
 
 } satisfies InterfaceCatalog;

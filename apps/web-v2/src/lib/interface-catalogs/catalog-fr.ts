@@ -600,6 +600,19 @@ const fr = {
   'links.create.error.refused': 'Vous ne pouvez pas créer de lien pour cette conversation.',
   'links.create.error.default': 'Le lien n’a pas pu être créé. Réessayez.',
 
+  /* LES SCÈNES DU FIL (#6898) — carrousel, mosaïque et lecture d'une
+     publication v:3. */
+  'feed.scene.carousel.previous': 'Scène précédente',
+  'feed.scene.carousel.next': 'Scène suivante',
+  'feed.scene.mosaic.tile': 'Scène {index}',
+  'feed.scene.mosaic.more': 'Scène {index}, et {count} de plus',
+  'feed.scene.mosaic.video': 'Scène {index}, vidéo',
+  'feed.scene.shared_by': 'Scène partagée par {author}',
+  'feed.scene.open.fullscreen': 'Touche deux fois pour voir en plein écran',
+  'feed.scene.open.post': 'Touche deux fois pour ouvrir la publication',
+  'feed.scene.sound.muted': 'Son coupé',
+  'feed.scene.count': '{count} scènes',
+
   /* L'ESPACE D'ADMINISTRATION (#6432) — SEUL `admin.title` reste ici : la
      rangée des Réglages et le barreau du menu flottant (#6458) le lisent
      SANS jamais entrer dans `/adm`, donc sans jamais charger le catalogue

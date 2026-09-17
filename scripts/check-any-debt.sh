@@ -288,7 +288,56 @@ readonly SHARED_BASELINE=0
 #
 # Gates locaux verts : `tsc --noEmit` gateway (0 erreur), `bash
 # scripts/check-any-debt.sh` + son self-test.
-readonly GATEWAY_BASELINE=531
+#
+# 518, pas 531 (#3679, sixième lot de RÉDUCTION) :
+# `services/AttachmentTranslateService.ts` (727 lignes, dans le budget de
+# taille, 13 usages) — le dispatcher de traduction de pièces jointes
+# (audio/image/vidéo/document). `attachment: any`, répété sur cinq méthodes
+# (`verifyUserAccess`, `translateAudio`, les trois stubs image/vidéo/
+# document), repris sur `AttachmentTranslateRowPayload` — le type déjà dérivé
+# du `select` unique de ce service (`attachmentTranslateSelect`,
+# `attachments/attachmentIncludes.ts`), déjà importé par ce fichier mais
+# jamais utilisé sur ces paramètres. Quatre `catch (error: any)` repris en
+# `unknown` avec le patron déjà établi (`error instanceof Error ? … :
+# '…'`). `result?: any` (le retour de `getTranslationStatus`) repris sur
+# `VoiceTranslationResult`, le type réel de `TranslationJob.result` que ce
+# champ recopie. Deux `segments: … as any` retirés PUREMENT : mesuré au
+# compilateur, `AttachmentTranscription['segments']` (`TranscriptionSegment[]`)
+# est déjà structurellement assignable à `VoiceTranscriptionSegment[]` — même
+# mesure, dans le sens inverse, que celle qui a retiré les deux `as any`
+# analogues d'`AudioTranslateService.ts`. Deux écritures Prisma sur les
+# champs `Json?` `transcription`/`translations` de `MessageAttachment` en
+# `as unknown as Prisma.InputJsonValue` (patron `PostService.ts`).
+#
+# Gates locaux verts : `tsc --noEmit` gateway (0 erreur), les 70 tests des
+# suites `AttachmentTranslateService.test.ts` + `attachmentIncludes.test.ts`,
+# `bash scripts/check-any-debt.sh` + son self-test.
+#
+# 507, pas 518 (#3679, septième lot de RÉDUCTION) :
+# `routes/conversations/core-list.ts` (12 des 13 usages, 945 lignes avant ce
+# lot — le treizième, `optionalAuth: any`, reste partagé avec `core.ts` /
+# `core-detail.ts` / `core-lifecycle.ts` et leurs registrars frères, même
+# raison de périmètre que `messages-list.ts`). Le `select` littéral du
+# `findMany` — jusque-là dupliqué en anonyme, donc sans type Prisma
+# exploitable au site d'appel — est extrait dans `core-selects.ts`
+# (`conversationListQuerySelect`, DISTINCT de `conversationListSelect` déjà
+# présent : #6908 documente que ce dernier n'est appelé par aucune route,
+# fusionner les deux aurait changé ce que la route sert réellement, hors
+# périmètre d'un lot de typage). `conversations` porte désormais le type dérivé
+# `ConversationListRow` (`Prisma.ConversationGetPayload<{ select: ReturnType<…> }>`),
+# ce qui retype gratuitement onze accès `as any` en aval (`c.messages[0]`,
+# `c.userPreferences[0]`, `conv.participants.find(...)`, les `.map` de
+# `membersWithUser`). `whereClause` passe de `any` à `Prisma.ConversationWhereInput`.
+# Le seul cast restant, `ConversationListPreviewSender`, NOMME plutôt que
+# masque : `msg.sender` lit `username`/`isOnline`/`lastActiveAt` (participant)
+# et `firstName`/`lastName`/`isOnline`/`lastActiveAt` (`user`) qu'AUCUN select
+# de ce fichier ne charge — des replis qui évaluaient déjà `undefined` sous
+# le `any` nu, et continuent de le faire sous le type nommé (zéro changement
+# de comportement).
+#
+# Gates locaux verts : `tsc --noEmit` gateway (0 erreur), `bash
+# scripts/check-any-debt.sh` + son self-test.
+readonly GATEWAY_BASELINE=507
 
 # `apps/web` — dette réelle, jamais gardée avant ce lot (cf. en-tête « WHY
 # `apps/web` IS MEASURED… »). Mesurée sur un checkout NON construit (pas de

@@ -774,6 +774,16 @@ jobs:
           cd apps/web-v2
           node scripts/check-feed-media.mjs
 
+      # #6898 — UNE PUBLICATION V:3 SE LIT DANS LE FIL AVEC TOUS SES OBJETS.
+      # Texte seul, image, cadrage plafonné à 1,4, une seule scène cinématique
+      # joue à la fois (`prefers-reduced-motion` en tient une hors du jeu), et
+      # chaque tuile d'un agencement montre la scène de SA slide.
+      - name: Gate scènes du fil (texte, cadrage 1,4, une seule lecture, tuiles)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-feed-scenes.mjs
+
       - name: Gate états du fil (vide, coupure, échec d'envoi rejouable)
         if: ${{ !cancelled() }}
         run: |

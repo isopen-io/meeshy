@@ -571,6 +571,17 @@ const es = {
   'links.create.error.refused': 'No puedes crear un enlace para esta conversación.',
   'links.create.error.default': 'No se pudo crear el enlace. Vuelve a intentarlo.',
 
+  'feed.scene.carousel.previous': 'Escena anterior',
+  'feed.scene.carousel.next': 'Escena siguiente',
+  'feed.scene.mosaic.tile': 'Escena {index}',
+  'feed.scene.mosaic.more': 'Escena {index}, y {count} más',
+  'feed.scene.mosaic.video': 'Escena {index}, vídeo',
+  'feed.scene.shared_by': 'Escena compartida por {author}',
+  'feed.scene.open.fullscreen': 'Toca dos veces para ver en pantalla completa',
+  'feed.scene.open.post': 'Toca dos veces para abrir la publicación',
+  'feed.scene.sound.muted': 'Sonido silenciado',
+  'feed.scene.count': '{count} escenas',
+
   'admin.title': 'Administración',
 
 } satisfies InterfaceCatalog;
