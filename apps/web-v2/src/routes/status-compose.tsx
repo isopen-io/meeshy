@@ -71,7 +71,12 @@ export function StatusComposeHeader({ language }: { readonly language: Interface
     <header className="flex shrink-0 items-center gap-3 px-4 pt-3 pb-2">
       <Link
         to="list"
-        aria-label={translate(language, 'status.compose.back')}
+        /* `pending.back` — PAS une clé à moi : « Revenir aux conversations »
+           dit exactement ce que ce lien fait (`to="list"`), et c'est déjà celle
+           que `StoriesHeader` emploie pour le même retour. Une clé de plus
+           n'aurait ajouté que du poids au catalogue et une seconde vérité à
+           traduire dans sept langues. */
+        aria-label={translate(language, 'pending.back')}
         className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{ outlineColor: 'var(--color-ios-brand)' }}
       >
@@ -161,7 +166,17 @@ export default function StatusComposeScreen() {
 
   const selection = choisi ?? courante;
   const viewerId = viewer.id ?? undefined;
-  const publiable = selection !== undefined && viewerId !== undefined && !enVol;
+  /**
+   * **HORS LIGNE, PUBLIER EST INERTE — loi 4, un contrôle existe s'il a un
+   * effet.** `performMoodPost` refuse hors ligne (rien qu'on ne puisse tenir) :
+   * laisser le bouton ACTIF donnait un clic qui ne produisait strictement rien
+   * de visible — ni humeur, ni message, ni mouvement. Le bouton s'éteint donc
+   * avec le réseau, et l'état hors ligne dessiné juste au-dessus dit pourquoi ;
+   * l'inverse — un bouton vif au-dessus d'un message « hors ligne » — aurait
+   * fait porter l'explication par un texte que personne ne lit avant d'avoir
+   * cliqué.
+   */
+  const publiable = selection !== undefined && viewerId !== undefined && !enVol && online;
 
   const publier = async () => {
     if (selection === undefined || viewerId === undefined) return;

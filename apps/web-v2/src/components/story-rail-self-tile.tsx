@@ -3,6 +3,7 @@ import { Glyph } from '@/components/glyph';
 import { MIN_TOUCH_TARGET, railCellWidth, railRingBox, railStroke } from '@/components/rail-tile';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { initialsOf } from '@/lib/view/conversation';
 import type { StoryRailSelfEntry } from '@/lib/view/story-rail-self';
 import { Link } from '@/routes/route-table';
 
@@ -113,7 +114,10 @@ export function StoryRailSelfTile({ entry, size, language }: SelfTileProps) {
         }`,
       }}
     >
-      <Avatar initials={translate(language, 'stories.mine').slice(0, 2)} color={'var(--color-ios-brand)'} size={size} />
+      {/* `initialsOf`, jamais un `slice(0, 2)` maison : c'est la MÊME fonction
+          que `StoryTile` sur la tuile voisine, et deux façons de réduire un
+          libellé à deux lettres divergent au premier nom composé. */}
+      <Avatar initials={initialsOf(translate(language, 'stories.mine'))} color={'var(--color-ios-brand)'} size={size} />
     </span>
   );
 

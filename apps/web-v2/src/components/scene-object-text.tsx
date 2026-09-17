@@ -1,6 +1,6 @@
-import { hexColorCss } from '@/lib/canvas/background';
 import type { CanvasObject } from '@/lib/canvas/document';
 import { resolveSceneText } from '@/lib/canvas/text';
+import { sceneTextAppearance } from '@/lib/canvas/text-appearance';
 
 import type { SceneClockHandle } from './scene-clock';
 import { SceneObjectFrame } from './scene-object-frame';
@@ -22,17 +22,15 @@ export function SceneObjectText({
 }) {
   const resolved = resolveSceneText({ object, preferredLanguages });
   if (resolved.text === '') return null;
-  const { payload } = object;
-  const textAlign = typeof payload.textAlign === 'string' ? payload.textAlign : 'center';
-  // `textBg`/`backgroundStyle.solid(hex)` — une pastille SOLIDE derrière le
-  // texte ; `glass` (backdrop-filter) est HORS TRANCHE (§ 9, Q7 : un
-  // compositing par texte, question produit ouverte).
-  const backgroundStyle = payload.backgroundStyle;
-  const solidHex =
-    typeof backgroundStyle === 'object' && backgroundStyle !== null && 'solid' in backgroundStyle
-      ? (backgroundStyle as { solid?: unknown }).solid
-      : payload.textBg;
-  const pillColor = hexColorCss(solidHex);
+  // **CE QUE L'AUTEUR A CHOISI EST PEINT ICI, ou nulle part** (#6943) — famille
+  // (les cinq qui ne coûtent aucun octet), graisse, alignement, effet
+  // (`text-effect.ts`, les vingt-cinq ombres en `em`), contour des glyphes,
+  // pastille et liseré de boîte. Un style ÉCRIT par le studio et non RENDU
+  // ici serait une apparence annoncée et non servie — pire qu'une surface non
+  // câblée (CLAUDE.md § Prisme, cycle 123). `glass` reste hors tranche (§ 9,
+  // Q7 : un compositing par texte, question produit ouverte).
+  const look = sceneTextAppearance(object.payload);
+  const { webkitTextStroke, ...boxStyle } = look;
   return (
     <SceneObjectFrame object={object} kind="text" clock={clock}>
       <span
@@ -40,7 +38,8 @@ export function SceneObjectText({
         {...(resolved.language !== '' ? { lang: resolved.language } : {})}
         className="block whitespace-pre-wrap font-semibold"
         style={{
-          textAlign: textAlign as 'left' | 'center' | 'right',
+          ...boxStyle,
+          ...(webkitTextStroke !== undefined ? { WebkitTextStroke: webkitTextStroke } : {}),
           color: resolved.color,
           // 85 % DE LA SCÈNE, pas du cadre (revue-correction #6901). Un
           // `max-w-[85%]` résolvait contre `SceneObjectFrame`, dont la
@@ -57,7 +56,6 @@ export function SceneObjectText({
           // (`CanvasGeometry.scaleFactor`), en unités de conteneur.
           fontSize: `${resolved.widthFraction * 100}cqw`,
           lineHeight: 1.2,
-          ...(pillColor !== undefined ? { backgroundColor: pillColor, borderRadius: '0.25em', padding: '0.2em 0.5em' } : {}),
         }}
       >
         {resolved.text}
