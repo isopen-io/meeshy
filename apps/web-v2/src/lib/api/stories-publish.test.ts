@@ -33,6 +33,7 @@ describe('publishStory — POST /api/v1/posts (core.ts:370-462)', () => {
     const transport = createHttpTransport({ base: '', fetchImpl: impl });
 
     const result = await publishStory({
+      source: 'gateway',
       transport,
       content: 'Bonjour',
       originalLanguage: 'fr',
@@ -57,27 +58,24 @@ describe('publishStory — POST /api/v1/posts (core.ts:370-462)', () => {
     const { impl, calls } = fakeFetch({ status: 201, body: { success: true, data: { id: 'post-1' } } });
     const transport = createHttpTransport({ base: '', fetchImpl: impl });
 
-    const result = await publishStory({ transport, content: '', storyEffects: effects, mediaIds: [] });
+    const result = await publishStory({ source: 'gateway', transport, content: '', storyEffects: effects, mediaIds: [] });
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.code).toBe('MEDIA_NOT_CLAIMED');
     expect(calls).toHaveLength(0);
   });
 
-  test('un document qui ne passe pas CanvasV3Schema ⇒ refusé sans appel réseau', async () => {
-    const { impl, calls } = fakeFetch({ status: 201, body: { success: true, data: { id: 'post-1' } } });
+  test('un refus CANVAS_INVALID de la passerelle (core.ts:118-129) traverse tel quel', async () => {
+    const effects = buildStoryCanvasEffects({ text: 'x', locale: 'fr' })!;
+    const { impl } = fakeFetch({ status: 400, body: { success: false, error: 'Invalid canvas', code: 'CANVAS_INVALID' } });
     const transport = createHttpTransport({ base: '', fetchImpl: impl });
 
-    const result = await publishStory({
-      transport,
-      content: '',
-      storyEffects: { v: 3, scenes: [{ id: 's', objects: [{ id: 'x', kind: 'unknown-kind', anchor: { t: 'free', x: 0.5, y: 0.5 }, plane: 'fg', z: 0, transform: { scale: 1, rotation: 0, opacity: 1 }, payload: {} }] }] } as never,
-      mediaIds: [],
-    });
-
+    const result = await publishStory({ source: 'gateway', transport, content: 'x', storyEffects: effects, mediaIds: [] });
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.code).toBe('CANVAS_INVALID');
-    expect(calls).toHaveLength(0);
+    if (!result.ok) {
+      expect(result.status).toBe(400);
+      expect(result.code).toBe('CANVAS_INVALID');
+    }
   });
 
   test('un échec serveur (429) traverse tel quel — le composeur affiche sa raison', async () => {
@@ -85,11 +83,33 @@ describe('publishStory — POST /api/v1/posts (core.ts:370-462)', () => {
     const { impl } = fakeFetch({ status: 429, body: { success: false, error: 'Too many requests', retryAfter: 12 } });
     const transport = createHttpTransport({ base: '', fetchImpl: impl });
 
-    const result = await publishStory({ transport, content: 'x', storyEffects: effects, mediaIds: [] });
+    const result = await publishStory({ source: 'gateway', transport, content: 'x', storyEffects: effects, mediaIds: [] });
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.status).toBe(429);
       expect(result.retryAfter).toBe(12);
     }
+  });
+});
+
+describe('publishStory — la source fixtures ne touche jamais le réseau', () => {
+  test('source fixtures ⇒ un identifiant simulé, aucun fetch, le document toujours VALIDÉ', async () => {
+    const effects = buildStoryCanvasEffects({ text: 'Bonjour', locale: 'fr' })!;
+    const { impl, calls } = fakeFetch({ status: 500 });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+
+    const result = await publishStory({ source: 'fixtures', transport, content: 'Bonjour', storyEffects: effects, mediaIds: [] });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.data.id.startsWith('fx-story-')).toBe(true);
+    expect(calls).toHaveLength(0);
+
+    const refused = await publishStory({
+      source: 'fixtures',
+      transport,
+      content: '',
+      storyEffects: buildStoryCanvasEffects({ text: '', locale: 'fr', background: { ready: BACKGROUND, mediaType: 'image' } })!,
+      mediaIds: [],
+    });
+    expect(refused.ok).toBe(false);
   });
 });

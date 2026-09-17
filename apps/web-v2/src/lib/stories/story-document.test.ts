@@ -5,6 +5,7 @@ import { CanvasV3Schema } from '@meeshy/shared/types/canvas-v3';
 import { backgroundMedia, isBackground } from '@/lib/feed/scene-framing';
 import { electBackgroundTrack } from '@/lib/canvas/background-sound';
 import { parseCanvasDocument } from '@/lib/canvas/document';
+import { resolveSceneText } from '@/lib/canvas/text';
 
 import {
   buildPreviewCanvasDocument,
@@ -74,7 +75,7 @@ describe('buildStoryCanvasEffects — le son de fond', () => {
 describe('buildStoryCanvasEffects — le texte', () => {
   test('kind text, plane fg, textColor SANS dièse, fontSize 96, locale portée', () => {
     const effects = buildStoryCanvasEffects({ text: '  Bonjour le monde  ', locale: 'es' });
-    const object = effects!.scenes![0]!.objects[0]!;
+    const object = effects!.scenes![0]!.objects.find((o) => o.kind === 'text')!;
     expect(object.kind).toBe('text');
     expect(object.plane).toBe('fg');
     expect(object.locale).toBe('es');
@@ -148,5 +149,98 @@ describe('buildPreviewCanvasDocument — l’aperçu, sur des URL LOCALES (§1.4
       sound: { previewUrl: 'blob:snd' },
     })!;
     expect(document.scenes[0]!.objects.map((o) => o.kind)).toEqual(['media', 'audio', 'text']);
+  });
+});
+
+describe('l’aperçu et la publication sortent du MÊME composeur — jamais deux constructions qui divergent', () => {
+  test('mêmes objets, mêmes charges ; seules les ADRESSES diffèrent (URL locale contre identité serveur)', () => {
+    const published = buildStoryCanvasEffects({
+      text: 'Bonjour',
+      locale: 'fr',
+      background: { ready: BACKGROUND, mediaType: 'video' },
+      sound: { ready: SOUND },
+    })!;
+    const preview = buildPreviewCanvasDocument({
+      text: 'Bonjour',
+      locale: 'fr',
+      background: { previewUrl: 'blob:bg', mediaType: 'video' },
+      sound: { previewUrl: 'blob:snd' },
+    })!;
+    const withoutAddress = (payload: Readonly<Record<string, unknown>>) =>
+      Object.fromEntries(Object.entries(payload).filter(([key]) => key !== 'postMediaId' && key !== 'mediaURL'));
+    const publishedObjects = published.scenes![0]!.objects;
+    const previewObjects = preview.scenes[0]!.objects;
+    expect(previewObjects.map((o) => o.id)).toEqual(publishedObjects.map((o) => o.id));
+    previewObjects.forEach((object, index) => {
+      const twin = publishedObjects[index]!;
+      expect(object.plane).toBe(twin.plane);
+      expect(object.z).toBe(twin.z);
+      expect(withoutAddress(object.payload)).toEqual(withoutAddress(twin.payload));
+    });
+    expect(previewObjects[0]!.payload.mediaURL).toBe('blob:bg');
+    expect('postMediaId' in previewObjects[0]!.payload).toBe(false);
+  });
+});
+
+describe('une vidéo de fond sous un son de fond joue MUETTE (question 9.10, CanvasV3Migration.swift:549-552)', () => {
+  test('vidéo + son ⇒ muted true, volume 0 ; vidéo seule ⇒ aucune consigne de muet', () => {
+    const withSound = buildStoryCanvasEffects({ text: '', locale: 'fr', background: { ready: BACKGROUND, mediaType: 'video' }, sound: { ready: SOUND } })!;
+    expect(withSound.scenes![0]!.objects[0]!.payload.muted).toBe(true);
+    expect(withSound.scenes![0]!.objects[0]!.payload.volume).toBe(0);
+    const alone = buildStoryCanvasEffects({ text: '', locale: 'fr', background: { ready: BACKGROUND, mediaType: 'video' } })!;
+    expect('muted' in alone.scenes![0]!.objects[0]!.payload).toBe(false);
+  });
+});
+
+describe('le texte composé se RELIT au Prisme du lecteur (leçon 261 : un rang AUTRE que le premier)', () => {
+  test('texte écrit en es, lecteur [fr, es], aucune traduction ⇒ servi en es, au rang 2', () => {
+    const document = parseCanvasDocument(buildStoryCanvasEffects({ text: 'Hola a todos', locale: 'es' }))!;
+    const served = resolveSceneText({ object: document.scenes[0]!.objects.find((o) => o.kind === 'text')!, preferredLanguages: ['fr', 'es'] });
+    expect(served.text).toBe('Hola a todos');
+    expect(served.language).toBe('es');
+  });
+});
+
+describe('une story SANS visuel porte un fond de COULEUR — un texte blanc ne se pose jamais sur l’aplat clair d’une carte', () => {
+  test('texte seul ⇒ un objet bg de couleur (la forme que CanvasV3Migration.swift:830-833 relit) puis le texte ; valide au schéma', () => {
+    const effects = buildStoryCanvasEffects({ text: 'Bonjour', locale: 'fr' })!;
+    const [plain, text] = effects.scenes![0]!.objects;
+    expect(plain!.plane).toBe('bg');
+    expect(plain!.kind).toBe('media');
+    expect(typeof plain!.payload.background).toBe('string');
+    expect(text!.kind).toBe('text');
+    expect(CanvasV3Schema.safeParse(effects).success).toBe(true);
+    expect(referencedStoryMediaIds(effects)).toEqual([]);
+  });
+
+  test('un visuel posé ⇒ AUCUN fond de couleur (le fond est le visuel) ; rien posé ⇒ aucun document', () => {
+    const withVisual = buildStoryCanvasEffects({ text: 'Bonjour', locale: 'fr', background: { ready: BACKGROUND, mediaType: 'image' } })!;
+    expect(withVisual.scenes![0]!.objects.some((o) => o.plane === 'bg')).toBe(false);
+    expect(buildPreviewCanvasDocument({ text: '', locale: 'fr' })).toBeNull();
+  });
+});
+
+describe('CHAQUE forme que le composeur peut produire passe CanvasV3Schema — la preuve qui remplace une validation à l’exécution', () => {
+  const forms: Readonly<Record<string, Parameters<typeof buildStoryCanvasEffects>[0]>> = {
+    'texte seul': { text: 'Bonjour', locale: 'fr' },
+    'son seul': { text: '', locale: 'fr', sound: { ready: SOUND } },
+    'son et texte': { text: 'Bonjour', locale: 'fr', sound: { ready: SOUND } },
+    'image seule': { text: '', locale: 'fr', background: { ready: BACKGROUND, mediaType: 'image' as const } },
+    'vidéo et son': { text: '', locale: 'fr', background: { ready: BACKGROUND, mediaType: 'video' as const }, sound: { ready: SOUND } },
+    'image, son et texte': { text: 'Bonjour', locale: 'ar', background: { ready: BACKGROUND, mediaType: 'image' as const }, sound: { ready: SOUND } },
+  };
+  for (const [name, input] of Object.entries(forms)) {
+    test(name, () => {
+      const effects = buildStoryCanvasEffects(input);
+      expect(effects).not.toBeNull();
+      const parsed = CanvasV3Schema.safeParse(effects);
+      expect(parsed.success).toBe(true);
+      expect(unclaimedStoryMediaIds(effects!, studioMediaIds({ background: input.background?.ready, sound: input.sound?.ready }))).toEqual([]);
+    });
+  }
+
+  test('image, son et texte ⇒ exactement TROIS objets (critère de recette : scenes[0].objects.length === 3)', () => {
+    const effects = buildStoryCanvasEffects(forms['image, son et texte']!)!;
+    expect(effects.scenes![0]!.objects).toHaveLength(3);
   });
 });
