@@ -117,11 +117,11 @@ final class SceneShapeTests: XCTestCase {
     /// `nil` et demande le rapport à l'appelant (`post.media` width/height) —
     /// c'est la forme passerelle des repères RECETTE C, et la deviner
     /// fabriquerait un cadrage que rien ne mesure.
-    func test_unFondSansRapportDeclare_neSeDevinePas() {
+    func test_unFondSansRapportDeclare_neSeDevinePas() throws {
         XCTAssertNil(SceneShape.mediaBand(scene: scene([fondSansRapport])))
-        XCTAssertEqual(SceneShape.mediaBand(scene: scene([fondSansRapport]),
-                                            backgroundAspect: paysage)?.height,
-                       0.31640625, accuracy: 1e-6)
+        let fournie = try XCTUnwrap(SceneShape.mediaBand(scene: scene([fondSansRapport]),
+                                                         backgroundAspect: paysage))
+        XCTAssertEqual(fournie.height, 0.31640625, accuracy: 1e-6)
     }
 
     /// Une scène sans fond média n'a aucune zone de média.

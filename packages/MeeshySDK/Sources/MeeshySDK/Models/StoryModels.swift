@@ -979,8 +979,8 @@ public enum StoryCanvasAspect: String, Codable, Sendable, CaseIterable {
     /// Ratio largeur / hauteur du canvas (portrait 0.5625, paysage 1.7778).
     public var ratio: Double {
         switch self {
-        case .portrait:  return 9.0 / 16.0
-        case .landscape: return 16.0 / 9.0
+        case .portrait:  return Double(SceneShape.aspect)
+        case .landscape: return 1 / Double(SceneShape.aspect)
         }
     }
 

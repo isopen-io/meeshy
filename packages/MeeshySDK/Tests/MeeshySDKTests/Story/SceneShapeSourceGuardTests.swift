@@ -32,7 +32,17 @@ final class SceneShapeSourceGuardTests: XCTestCase {
             .filter { Self.declaresTheRatio($0.code) }
             .map(\.path)
 
-        XCTAssertEqual(Set(porteurs), ["MeeshySDK/Story/SceneShape.swift"],
+        let deliberes: Set<String> = [
+            "MeeshySDK/Story/SceneShape.swift",   // la loi
+            // Les deux tables de RECADRAGE proposées à l'auteur : `9:16` y est
+            // un choix parmi d'autres (1:1, 4:5, 16:9…), pas le gabarit d'une
+            // scène. Les faire projeter la loi ferait dire à la loi qu'elle
+            // gouverne un menu de recadrage — elle ne gouverne que la scène.
+            "MeeshyUI/Media/MediaTypes.swift",
+            "MeeshySDK/Models/MediaCrop.swift",
+        ]
+
+        XCTAssertEqual(Set(porteurs), deliberes,
                        "Le rapport 9:16 se lit dans SceneShape.aspect ; toute autre écriture est " +
                        "une copie. Trouvé : \(porteurs.sorted())")
     }
@@ -42,7 +52,9 @@ final class SceneShapeSourceGuardTests: XCTestCase {
     /// réécrit — datée du 2026-09-17, et vide à la fin du lot.
     func test_toutHoteQuiMonteLePlayer_consulteLaLoi() throws {
         let exceptionsDatees: Set<String> = [
-            // apps/ios — réécrits par la seconde moitié du lot #6904 (2026-09-17)
+            // apps/ios — réécrits par la seconde moitié du lot #6904 (2026-09-17).
+            // Cette liste est VIDE à la fin du lot 2 ; un hôte qui y entre
+            // après cette date n'est pas une exception, c'est une régression.
             "apps/ios/Meeshy/Features/Main/Views/PostSceneMosaic.swift",
             "apps/ios/Meeshy/Features/Main/Views/PostDetailView+Canvas.swift",
             "apps/ios/Meeshy/Features/Main/Views/PostDetailView+RepostEmbed.swift",
@@ -51,11 +63,10 @@ final class SceneShapeSourceGuardTests: XCTestCase {
             "apps/ios/Meeshy/Features/Main/Views/StoryRepostEmbedCell.swift",
             "apps/ios/Meeshy/Features/Main/Views/FeedSceneAutoplay.swift",
             "apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView+ScenePage.swift",
-            // SDK — l'aperçu du composer, qui rend le document en cours d'édition
-            "packages/MeeshySDK/Sources/MeeshyUI/Story/UnifiedPostComposer.swift",
         ]
 
         let hotes = try Self.swiftSources(under: "packages/MeeshySDK/Sources")
+            .filter { !Self.isThePlayerItself($0.path) }
             .map { (path: "packages/MeeshySDK/Sources/" + $0.path, code: $0.code) }
             + Self.swiftSources(under: "apps/ios/Meeshy")
             .map { (path: "apps/ios/Meeshy/" + $0.path, code: $0.code) }
@@ -92,6 +103,16 @@ final class SceneShapeSourceGuardTests: XCTestCase {
     }
 
     // MARK: - Détecteurs
+
+    /// **Le player lui-même n'est pas un hôte.** Ses deux répertoires
+    /// d'implémentation se montent entre eux — `StoryReaderRepresentable`
+    /// construit `StoryCanvasUIView`, le préchargeur le construit hors écran —
+    /// et leur demander de consulter la loi reviendrait à demander au moteur de
+    /// décider la forme : exactement ce que cette loi retire.
+    static func isThePlayerItself(_ relativePath: String) -> Bool {
+        relativePath.hasPrefix("MeeshyUI/Story/Canvas/")
+            || relativePath.hasPrefix("MeeshyUI/Story/ScenePlayer/")
+    }
 
     /// Un montage, et non une mention : le nom SUIVI d'une parenthèse
     /// ouvrante, commentaires retirés.

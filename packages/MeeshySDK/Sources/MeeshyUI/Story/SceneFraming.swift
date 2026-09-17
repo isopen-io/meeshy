@@ -46,8 +46,11 @@ import MeeshySDK
 /// absurde sur un dixième de scène.
 public nonisolated enum SceneFraming {
 
-    /// Le rapport largeur / hauteur d'une scène — le 9:16 de la composition.
-    public static let sceneAspect: CGFloat = 9.0 / 16.0
+    /// Le rapport largeur / hauteur d'une scène — PROJECTION de la loi de
+    /// forme (`SceneShape.aspect`, #6904). Le littéral vivait ici ; il vit
+    /// désormais à un seul endroit du dépôt, et ce nom reste pour les appelants
+    /// de la carte de fil.
+    public static let sceneAspect: CGFloat = SceneShape.aspect
 
     /// La marge ajoutée autour d'une ancre d'objet, faute de connaître sa
     /// taille rendue. Voir « L'approximation » ci-dessus.
@@ -344,13 +347,20 @@ public nonisolated enum SceneFraming {
     ///
     /// **Elle échoue FERMÉE.** Un objet visible posé sur l'image, un fond que
     /// l'auteur a zoomé, tourné, déplacé, recadré ou animé, une forme non
-    /// déclarée, une image pas plus large que la scène, ou une scène qui porte
-    /// déjà son cadre (`carrierAspect`) : `nil`, et la scène se présente comme
-    /// avant. Montrer la scène à tort coûte un rognage qui existait déjà ;
-    /// montrer l'image à tort déferait un cadrage que l'auteur a posé.
+    /// déclarée, ou une image pas plus large que la scène : `nil`, et la scène
+    /// se présente comme avant. Montrer la scène à tort coûte un rognage qui
+    /// existait déjà ; montrer l'image à tort déferait un cadrage que l'auteur
+    /// a posé.
+    ///
+    /// **`carrierAspect` n'est plus lu ici** (décision #6896, lot #6904) : il
+    /// redevient ce que le contrat S8 en dit, une mémoire d'ÉDITION pour la
+    /// migration v1. Une scène qui en porte un se présente comme les autres —
+    /// sa forme vient de ce qu'elle MONTRE, jamais du porteur dont elle est
+    /// née. C'est ce qui rend cette règle équivalente à
+    /// `SceneShape.frame(scene:) == .mediaBand(…)` pour un média plus large que
+    /// la scène.
     public static func imageAspect(scene: SceneV3) -> CGFloat? {
-        guard scene.carrierAspect == nil,
-              let fond = backgroundMedia(in: scene), carriesPicture(fond),
+        guard let fond = backgroundMedia(in: scene), carriesPicture(fond),
               let rapport = declaredAspect(of: fond), rapport > sceneAspect,
               isUntouched(fond),
               scene.objects.allSatisfy({ $0.id == fond.id || !showsPixels($0) })
@@ -456,10 +466,12 @@ public nonisolated enum SceneFraming {
     /// Un média plus ÉTROIT remplit la scène : il n'y a pas de bande, donc
     /// rien à resserrer. C'est le cas du portrait, que le porteur décrit comme
     /// prenant « toute la scène ».
+    /// PROJECTION de `SceneShape.mediaBand(backgroundAspect:)` (#6904) : la
+    /// zone qu'occupe le média posé sans rognage. La loi décrit AUSSI la
+    /// colonne d'un média plus vertical que la scène ; le cadrage de carte n'en
+    /// retient que la hauteur (`fullWidth`), ce qui rend le même verdict.
     public static func backgroundBand(aspect: CGFloat) -> CGRect {
-        guard aspect > sceneAspect else { return CGRect(x: 0, y: 0, width: 1, height: 1) }
-        let hauteur = sceneAspect / aspect
-        return CGRect(x: 0, y: (1 - hauteur) / 2, width: 1, height: hauteur)
+        SceneShape.mediaBand(backgroundAspect: aspect)
     }
 
     /// La boîte d'un objet, autour de son ancre et à la marge près.

@@ -13,7 +13,7 @@ enum CanvasBandAnchorY {
     static let bottom: Double = 0.92
 }
 
-private let sceneAspect = 9.0 / 16.0
+private let sceneAspect = Double(SceneShape.aspect)
 private let centerPivot = CGPoint(x: 0.5, y: 0.5)
 
 /// `Double(Float(0.6))` vaudrait 0.6000000238… — la représentation décimale la
