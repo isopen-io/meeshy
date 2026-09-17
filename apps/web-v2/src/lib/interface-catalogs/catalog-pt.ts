@@ -598,6 +598,10 @@ const pt = {
   'feed.scene.open.post': 'Toque duas vezes para abrir a publicação',
   'feed.scene.sound.muted': 'Som mudo',
   'feed.scene.count': '{count} cenas',
+  'scene.fullscreen.play': 'Retomar tudo',
+  'scene.fullscreen.pause': 'Pausar tudo',
+  'scene.fullscreen.sound.on': 'Ativar o som',
+  'scene.fullscreen.sound.off': 'Silenciar o som',
   'scene.place.here': 'Aqui',
 
   'story.sound.off': 'Mudo',

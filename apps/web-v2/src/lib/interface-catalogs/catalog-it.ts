@@ -594,6 +594,10 @@ const it = {
   'feed.scene.open.post': 'Tocca due volte per aprire il post',
   'feed.scene.sound.muted': 'Audio disattivato',
   'feed.scene.count': '{count} scene',
+  'scene.fullscreen.play': 'Riprendi tutto',
+  'scene.fullscreen.pause': 'Metti tutto in pausa',
+  'scene.fullscreen.sound.on': "Attiva l'audio",
+  'scene.fullscreen.sound.off': "Disattiva l'audio",
   'scene.place.here': 'Qui',
 
   'story.sound.off': 'Muto',

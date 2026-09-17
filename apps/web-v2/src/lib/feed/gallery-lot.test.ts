@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { maskedAttachment } from '@meeshy/shared/utils/attachment-protection';
 
-import { POST_IMAGE_FR, POST_SCENE_CLIP_A, POST_SCENES_MIXED } from '@/lib/api/fixtures-feed';
+import { POST_IMAGE_FR, POST_SCENE_CLIP_A, POST_SCENE_TEXT, POST_SCENES_MIXED } from '@/lib/api/fixtures-feed';
 import type { FeedPost } from '@/lib/api/feed-pages';
 import { kindOf } from '@/lib/view/message';
 
@@ -64,6 +64,33 @@ describe('composeSceneGalleryLot — le lot d’un post à scènes (miroir PostG
     const clipModel = modelOf(POST_SCENE_CLIP_A);
     const clipLot = composeSceneGalleryLot(clipModel);
     expect(clipLot?.scenes.get(sceneItemId('post-scene-clip-a', 0))?.moves).toBe(true);
+  });
+
+  test("la vignette d'une page scène est celle du média MONTRÉ — son URL sert de repli pour une IMAGE (miroir PostGalleryLot)", () => {
+    const model = modelOf(POST_SCENES_MIXED);
+    const lot = composeSceneGalleryLot(model);
+    if (lot === undefined) throw new Error('lot attendu');
+
+    // Les scènes qui adressent un média d'IMAGE portent une vignette — sans ce
+    // repli, la pellicule rendait des carrés NOIRS identiques (mesuré au
+    // navigateur : `filmstripWithImage: 0` sur un post à DEUX images).
+    const withThumb = lot.items.filter((i) => i.thumbnailUrl !== undefined);
+    expect(withThumb.length).toBeGreaterThan(0);
+    for (const item of withThumb) expect(item.thumbnailUrl).not.toBe('');
+
+    // La scène de TEXTE SEUL n'adresse aucun média : aucune vignette inventée.
+    const textOnly = composeSceneGalleryLot(modelOf(POST_SCENE_TEXT));
+    expect(textOnly?.items[0]?.thumbnailUrl).toBeUndefined();
+  });
+
+  test("une vignette n'est JAMAIS l'URL d'une VIDÉO — un fichier vidéo dans un <img> ne peint rien", () => {
+    const model = modelOf(POST_SCENE_CLIP_A);
+    const lot = composeSceneGalleryLot(model);
+    if (lot === undefined) throw new Error('lot attendu');
+    const videoIds = new Set(model.media.filter((m) => m.kind === 'video').map((m) => m.src));
+    for (const item of lot.items) {
+      if (item.thumbnailUrl !== undefined) expect(videoIds.has(item.thumbnailUrl)).toBe(false);
+    }
   });
 
   test('sans scène (repli média, D-78) ⇒ undefined', () => {
