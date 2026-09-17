@@ -1,6 +1,8 @@
 import { appQueryClient } from '@/lib/api/query-client';
 import { isAppOwnedCache } from '@/lib/sw-caches';
 
+import { SW_UPDATE_AVAILABLE_EVENT } from './event';
+
 /**
  * LA MISE À JOUR DE L'APPLICATION — LE COMPORTEMENT ET L'API DU LEGACY (#6936).
  *
@@ -50,7 +52,10 @@ import { isAppOwnedCache } from '@/lib/sw-caches';
  */
 
 export const SW_SCRIPT_URL = '/sw.js';
-export const SW_UPDATE_AVAILABLE_EVENT = 'sw-update-available';
+
+/* RÉEXPORTÉ pour que ce module reste l'API lisible du legacy ; il VIT dans
+   `event.ts`, sans dépendance — voir son doc-comment (chunks séparés). */
+export { SW_UPDATE_AVAILABLE_EVENT };
 
 /** Le message que le service worker généré par Workbox attend pour `skipWaiting()`. */
 export const SKIP_WAITING_MESSAGE = { type: 'SKIP_WAITING' } as const;

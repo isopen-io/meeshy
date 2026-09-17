@@ -626,6 +626,13 @@ const de = {
   'story.studio.failure.refused': 'Veröffentlichung abgelehnt.',
   'story.studio.failure.unavailable': 'Der Server ist nicht verfügbar.',
 
+  'appUpdate.available': 'Eine neue Version von Meeshy ist verfügbar!',
+  'appUpdate.hint': 'Neu laden, um die neuesten Funktionen zu erhalten.',
+  'appUpdate.action': 'Aktualisieren',
+  'appUpdate.dismiss': 'Warten',
+  'appUpdate.applying': 'Wird aktualisiert…',
+  'appUpdate.region': 'App-Aktualisierung',
+
   'admin.title': 'Verwaltung',
 
 } satisfies InterfaceCatalog;

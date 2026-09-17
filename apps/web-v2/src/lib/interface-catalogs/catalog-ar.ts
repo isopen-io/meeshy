@@ -623,6 +623,13 @@ const ar = {
   'story.studio.failure.refused': 'تم رفض النشر.',
   'story.studio.failure.unavailable': 'الخادم غير متاح.',
 
+  'appUpdate.available': 'يتوفر إصدار جديد من Meeshy!',
+  'appUpdate.hint': 'أعد التحميل للحصول على أحدث المزايا.',
+  'appUpdate.action': 'تحديث',
+  'appUpdate.dismiss': 'انتظار',
+  'appUpdate.applying': 'جارٍ التحديث…',
+  'appUpdate.region': 'تحديث التطبيق',
+
   'admin.title': 'الإدارة',
 
 } satisfies InterfaceCatalog;
