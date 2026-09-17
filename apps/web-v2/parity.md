@@ -414,3 +414,8 @@ adresse.
 Deux exceptions qui ne sont pas des pages et qui se portent :
 `/healthz` (sonde) et `/sw` (service worker) — la v4 a déjà le second, par
 `vite-plugin-pwa`.
+
+Le service worker porte AUSSI, depuis #6936, le comportement de MISE À JOUR du
+legacy, qui n'est pas une route et manquait donc à cet inventaire : une version
+neuve reste en attente, s'annonce par une bannière, et le clic purge les caches
+de l'ancienne avant de recharger — session préservée (décision D-82).

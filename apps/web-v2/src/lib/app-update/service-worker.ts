@@ -85,10 +85,20 @@ export type RegistrationLike = {
 
 export type ContainerLike = {
   readonly controller: unknown;
+  /**
+   * **`undefined` EST UNE RÉPONSE POSSIBLE, et la signature du DOM le nie.**
+   * Sous une politique qui REFUSE les service workers — celle que quatre gates
+   * du dépôt posent (`serviceWorkers: 'block'`, `check-story-scene.mjs` en
+   * tête), et que des navigateurs appliquent aussi en navigation privée —
+   * `register()` ne rejette pas : il résout SANS inscription. Lire `.waiting`
+   * sur cette valeur levait un `TypeError` sur chaque page (mesuré : 4 gates
+   * rouges, 16 erreurs de page). Le type dit donc la vérité plutôt que le
+   * contrat officiel.
+   */
   register(
     url: string,
     options: { readonly scope: string; readonly updateViaCache: 'none' },
-  ): Promise<RegistrationLike>;
+  ): Promise<RegistrationLike | undefined>;
   addEventListener(type: 'controllerchange', listener: () => void): void;
 };
 
@@ -200,13 +210,19 @@ export function createAppUpdateController(env: AppUpdateEnvironment): AppUpdateC
          plus de réponse fiable. */
       const wasControlled = container.controller != null;
 
+      let inscrite: RegistrationLike | undefined;
       try {
-        registration = await container.register(SW_SCRIPT_URL, { scope: '/', updateViaCache: 'none' });
+        inscrite = await container.register(SW_SCRIPT_URL, { scope: '/', updateViaCache: 'none' });
       } catch (error) {
         env.onError(error);
         return null;
       }
-      const active = registration;
+      /* PAS une erreur, PAS une inscription : la politique du navigateur a
+         refusé (voir `ContainerLike.register`). Rien à surveiller, rien à
+         annoncer, et surtout rien à journaliser — ce n'est pas un défaut. */
+      if (inscrite === undefined) return null;
+      registration = inscrite;
+      const active = inscrite;
 
       if (active.waiting !== null && wasControlled) announce(env, active);
 

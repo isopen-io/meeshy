@@ -909,6 +909,18 @@ jobs:
           cd apps/web-v2
           node scripts/check-gateway-build.mjs
 
+      # #6936 — LE PARCOURS DE MISE À JOUR, de bout en bout : deux versions
+      # servies successivement sur la MÊME origine, la bannière qui s'annonce au
+      # retour au premier plan, le clic qui purge les caches de l'ancienne,
+      # active le worker en attente et recharge UNE fois — le lecteur restant
+      # connecté. Il construit sa propre sortie (`dist-app-update-a`, puis la
+      # version B qui en dérive) et ne touche pas au `dist` mesuré plus haut.
+      - name: Gate mise à jour de l'application (bannière, purge, session gardée)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-app-update.mjs
+
       # #6458 — le barreau « Administration » du menu flottant, sur un dist
       # gateway (l'administration n'a pas de fixtures) : sept barreaux dans
       # l'écran aux deux poses (deux schémas, 390×844 et 320×568), parcours
