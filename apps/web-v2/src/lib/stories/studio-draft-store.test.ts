@@ -2,6 +2,10 @@ import { describe, expect, test } from 'bun:test';
 
 import { createStudioDraftStore } from './studio-draft-store';
 
+/** Un objet texte tel que le brouillon le porte — le plateau en pose au moins
+ * un dès l'ouverture (#6943), donc le cas nominal en a un. */
+const layer = (text: string, partial: Record<string, unknown> = {}) => ({ id: 'text-1', text, ...partial });
+
 const VIEWER = 'a'.repeat(24);
 const OTHER_VIEWER = 'b'.repeat(24);
 
@@ -23,9 +27,10 @@ describe('createStudioDraftStore — le brouillon SURVIT à un échec de publica
   test('set puis get sur un NOUVEAU store branché au même backend rend EXACTEMENT ce qui a été posé', () => {
     const backend = fakeStorage();
     const snapshot = {
-      text: 'Bonjour',
-      background: { postMediaId: 'pm-1', fileUrl: '2026/09/x.jpg', mediaType: 'image' as const },
-      sound: { postMediaId: 'pm-2', fileUrl: '2026/09/x.m4a' },
+      texts: [layer('Bonjour', { language: 'fr', pose: { x: 0.25, y: 0.75, scale: 2, rotation: 30 } })],
+      background: { postMediaId: 'pm-1', fileUrl: '2026/09/x.jpg', mediaType: 'image' as const, caption: 'Au marché' },
+      overlay: { postMediaId: 'pm-3', fileUrl: '2026/09/y.png', mediaType: 'image' as const, pose: { x: 0.1, y: 0.9, scale: 1, rotation: 0 } },
+      sound: { postMediaId: 'pm-2', fileUrl: '2026/09/x.m4a', plane: 'foreground' },
     };
     createStudioDraftStore(backend).set(VIEWER, snapshot);
     expect(createStudioDraftStore(backend).get(VIEWER)).toEqual(snapshot);
@@ -34,7 +39,7 @@ describe('createStudioDraftStore — le brouillon SURVIT à un échec de publica
   test('aspectRatio et thumbHash (§0, défaut 7) SURVIVENT au round-trip, sans les deux ⇒ toujours accepté', () => {
     const backend = fakeStorage();
     const snapshot = {
-      text: 'Bonjour',
+      texts: [layer('Bonjour')],
       background: { postMediaId: 'pm-1', fileUrl: '2026/09/x.jpg', mediaType: 'image' as const, aspectRatio: 0.5625, thumbHash: 'abc123' },
     };
     createStudioDraftStore(backend).set(VIEWER, snapshot);
@@ -44,7 +49,7 @@ describe('createStudioDraftStore — le brouillon SURVIT à un échec de publica
   test('UN brouillon par LECTEUR — un autre compte sur le même appareil ne relit NI le texte NI les médias montés du premier', () => {
     const backend = fakeStorage();
     const store = createStudioDraftStore(backend);
-    store.set(VIEWER, { text: 'Brouillon privé', background: { postMediaId: 'pm-1', fileUrl: '2026/09/x.jpg', mediaType: 'image' } });
+    store.set(VIEWER, { texts: [layer('Brouillon privé')], background: { postMediaId: 'pm-1', fileUrl: '2026/09/x.jpg', mediaType: 'image' } });
     expect(store.get(OTHER_VIEWER)).toBeNull();
     expect(createStudioDraftStore(backend).get(OTHER_VIEWER)).toBeNull();
     expect([...backend.map.keys()]).toEqual([`meeshy.draft.story.${VIEWER}`]);
@@ -52,7 +57,7 @@ describe('createStudioDraftStore — le brouillon SURVIT à un échec de publica
 
   test('clear retire le brouillon (succès de publication)', () => {
     const store = createStudioDraftStore(fakeStorage());
-    store.set(VIEWER, { text: 'x' });
+    store.set(VIEWER, { texts: [layer('x')] });
     store.clear(VIEWER);
     expect(store.get(VIEWER)).toBeNull();
   });
@@ -60,10 +65,19 @@ describe('createStudioDraftStore — le brouillon SURVIT à un échec de publica
   test('un brouillon VIDE est PURGÉ, jamais écrit', () => {
     const backend = fakeStorage();
     const store = createStudioDraftStore(backend);
-    store.set(VIEWER, { text: 'x' });
-    store.set(VIEWER, { text: '   ' });
+    store.set(VIEWER, { texts: [layer('x')] });
+    store.set(VIEWER, { texts: [layer('   ')] });
     expect(store.get(VIEWER)).toBeNull();
     expect(backend.map.size).toBe(0);
+  });
+
+  /** LA FORME A CHANGÉ (#6943) — un brouillon écrit par le studio à UN texte
+   * (`{ text: string }`) n'est plus compris : il est relu `null`, et l'auteur
+   * repart d'un plateau vide plutôt que d'un état à moitié interprété. */
+  test('un brouillon de la forme PRÉCÉDENTE est relu null, jamais à moitié', () => {
+    const backend = fakeStorage();
+    backend.setItem(`meeshy.draft.story.${VIEWER}`, JSON.stringify({ text: 'Ancien', language: 'fr' }));
+    expect(createStudioDraftStore(backend).get(VIEWER)).toBeNull();
   });
 
   test('une valeur CORROMPUE en backend ⇒ null, jamais une exception', () => {
@@ -85,7 +99,7 @@ describe('createStudioDraftStore — le brouillon SURVIT à un échec de publica
       },
     };
     const store = createStudioDraftStore(throwing);
-    expect(() => store.set(VIEWER, { text: 'x' })).not.toThrow();
-    expect(store.get(VIEWER)).toEqual({ text: 'x' });
+    expect(() => store.set(VIEWER, { texts: [layer('x')] })).not.toThrow();
+    expect(store.get(VIEWER)).toEqual({ texts: [layer('x')] });
   });
 });

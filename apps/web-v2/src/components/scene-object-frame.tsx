@@ -61,7 +61,17 @@ export function SceneObjectFrame({ object, kind, clock, children, className, lay
   const positionClass = layout === 'fullBleed' ? 'absolute inset-0 size-full' : 'absolute';
 
   return (
-    <span ref={ref} data-scene-object={kind} className={`pointer-events-none ${positionClass} ${className ?? ''}`.trim()}>
+    // `data-scene-object-id` NOMME l'objet peint (#6943) : le studio doit
+    // pouvoir retrouver LEQUEL des objets de la scène sa sélection désigne,
+    // pour aligner sa saisie dessus et y poser ses poignées. Avec un seul
+    // objet texte, `[data-scene-object]` suffisait ; avec plusieurs, il
+    // désigne le premier venu.
+    <span
+      ref={ref}
+      data-scene-object={kind}
+      data-scene-object-id={object.id}
+      className={`pointer-events-none ${positionClass} ${className ?? ''}`.trim()}
+    >
       {children}
     </span>
   );
