@@ -26,15 +26,51 @@ export type StudioDraftAssetRef = {
   readonly thumbHash?: string;
 };
 
+/** Une LÉGENDE de média conservée avec sa référence (#6944) — elle est le
+ * travail de l'auteur autant que le fichier, et la perdre à un échec de
+ * publication reviendrait à lui demander de la réécrire. */
+type StudioDraftCaption = { readonly caption?: string };
+
 export type StudioDraftSnapshot = {
-  readonly text: string;
-  /** La langue dans laquelle le texte a été COMPOSÉ — relue comme graine
-   * (`useComposeLanguage({ initialLanguage })`) : sans elle, un texte espagnol
-   * restauré repartirait étiqueté dans la langue primaire du lecteur, et le
+  /**
+   * LES OBJETS TEXTE, tels que l'auteur les a posés — texte, langue, style et
+   * POSE. Le brouillon de #6900 ne portait qu'une chaîne `text` ; un plateau
+   * qui restaure le texte mais pas sa place, sa taille ou son inclinaison
+   * rendrait un brouillon MENTEUR.
+   *
+   * **La forme a changé** : un brouillon écrit par la version précédente ne
+   * passe plus `isSnapshot` et est relu `null` — l'auteur repart d'un plateau
+   * vide plutôt que d'un état à moitié compris. Une migration de forme n'a
+   * pas sa place pour une valeur qui vit quelques minutes.
+   */
+  readonly texts: readonly StudioTextLayerSnapshot[];
+  /** La langue de COMPOSITION par défaut — relue comme graine
+   * (`useComposeLanguage({ initialLanguage })`) : sans elle, un nouvel objet
+   * texte repartirait étiqueté dans la langue primaire du lecteur, et le
    * Prisme le traduirait depuis la mauvaise langue. */
   readonly language?: string;
-  readonly background?: StudioDraftAssetRef & { readonly mediaType: StudioMediaKind; readonly aspectRatio?: number };
-  readonly sound?: StudioDraftAssetRef;
+  readonly background?: StudioDraftAssetRef &
+    StudioDraftCaption & { readonly mediaType: StudioMediaKind; readonly aspectRatio?: number };
+  /** LE CALQUE d'avant-plan et SA pose (#6943). */
+  readonly overlay?: StudioDraftAssetRef &
+    StudioDraftCaption & { readonly mediaType: StudioMediaKind; readonly aspectRatio?: number; readonly pose?: unknown };
+  readonly sound?: StudioDraftAssetRef & { readonly plane?: unknown };
+};
+
+/** Ce que le stockage porte pour UN objet texte — volontairement LÂCHE : la
+ * relecture (`studioDraftFromSnapshot`) normalise chaque champ contre les
+ * tables du studio, donc un JSON abîmé ou écrit par une version antérieure
+ * rend un objet valide plutôt qu'une exception. */
+export type StudioTextLayerSnapshot = {
+  readonly id: string;
+  readonly text: string;
+  readonly language?: unknown;
+  readonly style?: unknown;
+  readonly effect?: unknown;
+  readonly color?: unknown;
+  readonly align?: unknown;
+  readonly background?: unknown;
+  readonly pose?: unknown;
 };
 
 const keyOf = (viewerId: string): string => `meeshy.draft.story.${viewerId}`;
@@ -46,21 +82,32 @@ function isAssetRef(value: unknown): value is StudioDraftAssetRef {
   return value.thumbHash === undefined || typeof value.thumbHash === 'string';
 }
 
+const isLayerSnapshot = (value: unknown): value is StudioTextLayerSnapshot =>
+  isRecord(value) && typeof value.id === 'string' && value.id !== '' && typeof value.text === 'string';
+
+const isVisualRef = (value: unknown): boolean =>
+  isRecord(value) &&
+  (value.mediaType === 'image' || value.mediaType === 'video') &&
+  (value.aspectRatio === undefined || typeof value.aspectRatio === 'number') &&
+  (value.caption === undefined || typeof value.caption === 'string') &&
+  isAssetRef(value);
+
 function isSnapshot(value: unknown): value is StudioDraftSnapshot {
-  if (!isRecord(value) || typeof value.text !== 'string') return false;
+  if (!isRecord(value) || !Array.isArray(value.texts) || !value.texts.every(isLayerSnapshot)) return false;
   if (value.language !== undefined && typeof value.language !== 'string') return false;
-  const { background, sound } = value;
-  const backgroundValid =
-    background === undefined ||
-    (isRecord(background) &&
-      (background.mediaType === 'image' || background.mediaType === 'video') &&
-      (background.aspectRatio === undefined || typeof background.aspectRatio === 'number') &&
-      isAssetRef(background));
-  return backgroundValid && (sound === undefined || isAssetRef(sound));
+  const { background, overlay, sound } = value;
+  if (background !== undefined && !isVisualRef(background)) return false;
+  if (overlay !== undefined && !isVisualRef(overlay)) return false;
+  return sound === undefined || isAssetRef(sound);
 }
 
 export function isStudioSnapshotEmpty(snapshot: StudioDraftSnapshot): boolean {
-  return snapshot.text.trim() === '' && snapshot.background === undefined && snapshot.sound === undefined;
+  return (
+    snapshot.texts.every((layer) => layer.text.trim() === '') &&
+    snapshot.background === undefined &&
+    snapshot.overlay === undefined &&
+    snapshot.sound === undefined
+  );
 }
 
 function resolveBrowserStorage(): StorageLike | null {

@@ -2,11 +2,15 @@ import type { CanvasV3, ObjectV3 } from '@meeshy/shared/types/canvas-v3';
 
 import { parseCanvasDocument, type CanvasDocument } from '@/lib/canvas/document';
 
+import type { StudioPose } from './studio-pose';
+import { textLayerPayload, type StudioTextLayer } from './studio-text';
+
 /**
- * LE DOCUMENT D'UNE STORY COMPOSÉE (#6900, § 0 et § 1.6 de la spécification)
- * — le studio n'a qu'UN fond (image/vidéo), UN son de fond et UN texte
- * (P1, « un début, pas les 31 vues ») : trois objets au plus, une seule
- * scène. `composeStoryCanvas` en écrit la forme EXACTE que
+ * LE DOCUMENT D'UNE STORY COMPOSÉE (#6900, élargi au PLATEAU par #6943) — le
+ * studio pose désormais **plusieurs objets texte** (chacun avec sa pose, sa
+ * langue et son style), **un fond**, **un calque d'avant-plan** et **un son**
+ * qui se place en fond OU sur la scène. `composeStoryCanvas` en écrit la
+ * forme EXACTE que
  * `StoryViewModel+PublicationUpload.swift:330-391` publie, corrigée des deux
  * faits mesurés au § 0 de la spécification :
  *
@@ -48,20 +52,39 @@ export type StoryMediaAddress = {
   readonly thumbHash?: string;
 };
 
+/** LE PLAN D'UN MÉDIA — le vocabulaire du modèle (`meeshy-composer-modele.md`
+ * § « Les trois plans ») : `background` est le FOND (un visuel, un son),
+ * `foreground` ce qui se POSE dessus. Le fil abrège en `bg | content | fg`,
+ * mais un fond IMAGE voyage en `content` avec `payload.isBackground`, jamais
+ * en `bg` — `CanvasV3Migration.swift:776-780` ne lit un objet `bg` que comme
+ * une COULEUR. */
+export type StudioPlane = 'background' | 'foreground';
+
+export type StoryVisual = {
+  readonly address: StoryMediaAddress;
+  readonly mediaType: StudioMediaKind;
+  /** Largeur / hauteur du FICHIER LOCAL (§ 0, défaut 7) — connu dès la
+   * sélection, IDENTIQUE dans l'aperçu et la publication (contrairement à
+   * `thumbHash`, qui n'existe qu'une fois l'accusé TUS reçu). Sans lui, un
+   * fond paysage n'est plus cadré sur sa bande côté lecteur
+   * (`declaredAspect`, `scene-framing.ts:57-61`). */
+  readonly aspectRatio?: number;
+};
+
 export type StoryComposition = {
-  readonly text: string;
-  readonly locale: string;
-  readonly background?: {
-    readonly address: StoryMediaAddress;
-    readonly mediaType: StudioMediaKind;
-    /** Largeur / hauteur du FICHIER LOCAL (§ 0, défaut 7) — connu dès la
-     * sélection, IDENTIQUE dans l'aperçu et la publication (contrairement à
-     * `thumbHash`, qui n'existe qu'une fois l'accusé TUS reçu). Sans lui, un
-     * fond paysage n'est plus cadré sur sa bande côté lecteur
-     * (`declaredAspect`, `scene-framing.ts:57-61`). */
-    readonly aspectRatio?: number;
-  };
-  readonly sound?: { readonly address: StoryMediaAddress };
+  /** Les objets TEXTE, dans leur ordre de pose — leur `z` en découle, comme
+   * `zIndex = 0` signifie « ordre d'insertion » côté iOS. Un texte VIDE ne
+   * devient jamais un objet : il n'aurait rien à peindre ni à traduire. */
+  readonly texts: readonly StudioTextLayer[];
+  readonly background?: StoryVisual;
+  /** LE CALQUE D'AVANT-PLAN — un second visuel, posé SUR le fond, avec sa
+   * propre pose. C'est lui qui répond à « ajouter des images en fond **ou
+   * front** » (directive porteur 2026-09-17). */
+  readonly overlay?: StoryVisual & { readonly pose: StudioPose };
+  /** LE SON — `background` : la bande-son de la scène, élue par
+   * `electBackgroundTrack` (`payload.isBackground === true`) ; `foreground` :
+   * un son POSÉ, que cette élection ignore. Deux rôles, un seul fichier. */
+  readonly sound?: { readonly address: StoryMediaAddress; readonly plane: StudioPlane };
 };
 
 export function studioMediaKindOf(mimeType: string): StudioMediaKind {
@@ -69,17 +92,8 @@ export function studioMediaKindOf(mimeType: string): StudioMediaKind {
 }
 
 /**
- * Le TEXTE hex SANS dièse (`StoryTextObject.swift:114`) — `resolveSceneText`
- * (`lib/canvas/text.ts:59`) le relit par `hexColorCss`, qui accepte les deux
- * formes ; on écrit celle que le corpus réel porte, jamais une jumelle.
- */
-const TEXT_COLOR = 'FFFFFF';
-/** Le défaut du COMPOSER iOS (`StoryTextObject.swift:109`), dans le
- * référentiel 1080 — le décodeur, lui, retombe sur 64 quand la clé manque. */
-const TEXT_FONT_SIZE = 96;
-/**
- * LE FOND D'UNE STORY SANS VISUEL — le texte du studio est BLANC
- * (`TEXT_COLOR`, le défaut du composer iOS) ; sans fond, le lecteur web peint
+ * LE FOND D'UNE STORY SANS VISUEL — le texte du studio naît BLANC
+ * (`newTextLayer`, le défaut du composer iOS) ; sans fond, le lecteur web peint
  * l'aplat de carte (`BlankBackground`, `--color-ios-card`), CLAIR en schéma
  * clair : une story texte seul y devenait illisible. La couleur est la
  * première de la palette de fonds d'iOS (`StoryBackgroundPalette.colors[0]`,
@@ -99,25 +113,39 @@ function addressPayload(address: StoryMediaAddress): Record<string, string> {
   };
 }
 
-/** L'objet TEXTE du studio — l'éditeur posé sur la carte en relit la couleur
- * et la taille par le MÊME résolveur que le player (`resolveSceneText` sur
- * un document composé ici), jamais par une seconde règle de dimensionnement. */
-function storyTextObject(text: string, locale: string): ObjectV3 {
+/** L'ANCRE et le TRANSFORM d'un objet POSÉ — la pose du studio, telle que
+ * `CanvasV3` la porte : l'ancre sur l'enveloppe, l'échelle et la rotation à
+ * côté. Une seule conversion, partagée par les textes et le calque : deux
+ * copies auraient divergé dès le premier ajustement de bornes. */
+function posed(pose: StudioPose): Pick<ObjectV3, 'anchor' | 'transform'> {
   return {
-    id: 'text',
+    anchor: { t: 'free', x: pose.x, y: pose.y },
+    transform: { scale: pose.scale, rotation: pose.rotation, opacity: 1 },
+  };
+}
+
+/** UN objet TEXTE du studio — l'éditeur posé sur la carte en relit la couleur
+ * et la taille par le MÊME résolveur que le player (`resolveSceneText` sur un
+ * document composé ici), jamais par une seconde règle de dimensionnement.
+ *
+ * La LANGUE part en `locale` sur l'ENVELOPPE, jamais dans le `payload` : c'est
+ * la place que `CanvasV3Migration.swift:273` lui donne pour `sourceLanguage`,
+ * et celle que `resolveSceneText` relit (`object.locale`). */
+function storyTextObject(layer: StudioTextLayer, z: number): ObjectV3 {
+  return {
+    id: layer.id,
     kind: 'text',
-    anchor: CENTER,
+    ...posed(layer.pose),
     plane: 'fg',
-    z: 2,
-    transform: IDENTITY,
-    locale,
-    payload: { text, textStyle: 'classic', textColor: TEXT_COLOR, fontSize: TEXT_FONT_SIZE, fontFamily: 'system', textAlign: 'center' },
+    z,
+    locale: layer.language,
+    payload: textLayerPayload(layer),
   };
 }
 
 function composeObjects(input: StoryComposition): ObjectV3[] {
-  const { background, sound } = input;
-  const text = input.text.trim();
+  const { background, overlay, sound } = input;
+  const texts = input.texts.filter((layer) => layer.text.trim() !== '');
   const mutesVideo = background?.mediaType === 'video' && sound !== undefined;
   const content = [
     ...(background !== undefined
@@ -145,14 +173,48 @@ function composeObjects(input: StoryComposition): ObjectV3[] {
             id: 'sound',
             kind: 'audio',
             anchor: CENTER,
-            plane: 'content',
+            // Le PLAN suit le rôle : un son de fond reste sur le porteur
+            // (`content`), un son POSÉ monte en `fg` comme tout ce qui se pose.
+            plane: sound.plane === 'background' ? 'content' : 'fg',
             z: 1,
             transform: IDENTITY,
-            payload: { ...addressPayload(sound.address), isBackground: true, placement: 'background', volume: 1 },
+            payload: {
+              ...addressPayload(sound.address),
+              // **LE SEUL DISCRIMINANT QUI COMPTE** : `electBackgroundTrack`
+              // (`lib/canvas/background-sound.ts:59`) élit l'audio dont
+              // `payload.isBackground === true`, et `placement` est déclaré
+              // legacy côté iOS (« kept for backward compat; no longer drives
+              // rendering », `StoryModels.swift:141`). On l'écrit quand même,
+              // à la valeur COHÉRENTE — un corpus qui se contredirait sur deux
+              // clés est pire qu'un corpus qui n'en porte qu'une.
+              isBackground: sound.plane === 'background',
+              placement: sound.plane,
+              volume: 1,
+            },
           } satisfies ObjectV3,
         ]
       : []),
-    ...(text !== '' ? [storyTextObject(text, input.locale)] : []),
+    ...(overlay !== undefined
+      ? [
+          {
+            id: 'overlay',
+            kind: 'media',
+            ...posed(overlay.pose),
+            // `fg` SANS `isBackground` : `isBackground()`
+            // (`lib/feed/scene-framing.ts:51-52`) rend alors faux, donc ce
+            // visuel ne vole ni le cadrage ni la bande du fond.
+            plane: 'fg',
+            z: 2,
+            payload: {
+              ...addressPayload(overlay.address),
+              mediaType: overlay.mediaType,
+              ...(overlay.aspectRatio !== undefined ? { aspectRatio: overlay.aspectRatio } : {}),
+            },
+          } satisfies ObjectV3,
+        ]
+      : []),
+    // Les textes PAR-DESSUS tout le reste, dans leur ordre de pose.
+    ...texts.map((layer, index) => storyTextObject(layer, 3 + index)),
   ];
   if (content.length === 0 || background !== undefined) return content;
   const plain: ObjectV3 = {
@@ -179,31 +241,48 @@ export function composeStoryCanvas(input: StoryComposition): CanvasV3 | null {
  * type exige (`StudioReadyAsset`). Validé par `publishStory`
  * (`CanvasV3Schema.safeParse`, `lib/api/stories-publish.ts`) AVANT tout envoi.
  */
+/** Un emplacement du studio, tel que les DEUX constructeurs le décrivent —
+ * seule l'ADRESSE change entre eux (identité serveur ou URL locale), d'où le
+ * paramètre. C'est la loi 6 relue « le PLAYER est l'aperçu » : une seconde
+ * description aurait divergé, et ce que l'auteur voit ne serait plus ce qui
+ * part (le texte d'aperçu y avait déjà perdu `textStyle` et `fontFamily`). */
+type VisualSlot<A> = { readonly source: A; readonly mediaType: StudioMediaKind; readonly aspectRatio?: number };
+type OverlaySlot<A> = VisualSlot<A> & { readonly pose: StudioPose };
+type SoundSlot<A> = { readonly source: A; readonly plane: StudioPlane };
+
+function compose<A>(
+  params: {
+    readonly texts: readonly StudioTextLayer[];
+    readonly background?: VisualSlot<A>;
+    readonly overlay?: OverlaySlot<A>;
+    readonly sound?: SoundSlot<A>;
+  },
+  addressOf: (source: A) => StoryMediaAddress,
+): CanvasV3 | null {
+  const visual = (slot: VisualSlot<A>): StoryVisual => ({
+    address: addressOf(slot.source),
+    mediaType: slot.mediaType,
+    ...(slot.aspectRatio !== undefined ? { aspectRatio: slot.aspectRatio } : {}),
+  });
+  return composeStoryCanvas({
+    texts: params.texts,
+    ...(params.background !== undefined ? { background: visual(params.background) } : {}),
+    ...(params.overlay !== undefined ? { overlay: { ...visual(params.overlay), pose: params.overlay.pose } } : {}),
+    ...(params.sound !== undefined ? { sound: { address: addressOf(params.sound.source), plane: params.sound.plane } } : {}),
+  });
+}
+
 export function buildStoryCanvasEffects(params: {
-  readonly text: string;
-  readonly locale: string;
-  readonly background?: { readonly ready: StudioReadyAsset; readonly mediaType: StudioMediaKind; readonly aspectRatio?: number };
-  readonly sound?: { readonly ready: StudioReadyAsset };
+  readonly texts: readonly StudioTextLayer[];
+  readonly background?: VisualSlot<StudioReadyAsset>;
+  readonly overlay?: OverlaySlot<StudioReadyAsset>;
+  readonly sound?: SoundSlot<StudioReadyAsset>;
 }): CanvasV3 | null {
-  const served = (ready: StudioReadyAsset): StoryMediaAddress => ({
+  return compose(params, (ready) => ({
     postMediaId: ready.postMediaId,
     mediaURL: ready.fileUrl,
     ...(ready.thumbHash !== undefined ? { thumbHash: ready.thumbHash } : {}),
-  });
-  return composeStoryCanvas({
-    text: params.text,
-    locale: params.locale,
-    ...(params.background !== undefined
-      ? {
-          background: {
-            address: served(params.background.ready),
-            mediaType: params.background.mediaType,
-            ...(params.background.aspectRatio !== undefined ? { aspectRatio: params.background.aspectRatio } : {}),
-          },
-        }
-      : {}),
-    ...(params.sound !== undefined ? { sound: { address: served(params.sound.ready) } } : {}),
-  });
+  }));
 }
 
 /**
@@ -212,25 +291,12 @@ export function buildStoryCanvasEffects(params: {
  * player (`parseCanvasDocument`), jamais par une troisième forme.
  */
 export function buildPreviewCanvasDocument(params: {
-  readonly text: string;
-  readonly locale: string;
-  readonly background?: { readonly previewUrl: string; readonly mediaType: StudioMediaKind; readonly aspectRatio?: number };
-  readonly sound?: { readonly previewUrl: string };
+  readonly texts: readonly StudioTextLayer[];
+  readonly background?: VisualSlot<string>;
+  readonly overlay?: OverlaySlot<string>;
+  readonly sound?: SoundSlot<string>;
 }): CanvasDocument | null {
-  const composed = composeStoryCanvas({
-    text: params.text,
-    locale: params.locale,
-    ...(params.background !== undefined
-      ? {
-          background: {
-            address: { mediaURL: params.background.previewUrl },
-            mediaType: params.background.mediaType,
-            ...(params.background.aspectRatio !== undefined ? { aspectRatio: params.background.aspectRatio } : {}),
-          },
-        }
-      : {}),
-    ...(params.sound !== undefined ? { sound: { address: { mediaURL: params.sound.previewUrl } } } : {}),
-  });
+  const composed = compose(params, (previewUrl) => ({ mediaURL: previewUrl }));
   return composed === null ? null : parseCanvasDocument(composed);
 }
 
@@ -251,12 +317,19 @@ export function unclaimedStoryMediaIds(effects: CanvasV3, mediaIds: readonly str
   return referencedStoryMediaIds(effects).filter((id) => !mediaIds.includes(id));
 }
 
-/** L'ORDRE que `POST /posts` attend — le fond D'ABORD, le son ENSUITE
- * (miroir `mediaIds: [uploadResult.id] + foregroundMediaIds`,
- * `StoryViewModel+PublicationUpload.swift:336-338`). */
+/** L'ORDRE que `POST /posts` attend — le fond D'ABORD, puis ce qui se pose
+ * dessus (miroir `mediaIds: [uploadResult.id] + foregroundMediaIds`,
+ * `StoryViewModel+PublicationUpload.swift:336-338`).
+ *
+ * **Le calque d'avant-plan DOIT y figurer** : un objet qui adresse un
+ * `postMediaId` absent de cette liste fait refuser la publication entière
+ * (`MEDIA_NOT_CLAIMED`, `core.ts:146-158`, rejouée par `publishStory`). */
 export function studioMediaIds(params: {
   readonly background?: StudioReadyAsset | undefined;
+  readonly overlay?: StudioReadyAsset | undefined;
   readonly sound?: StudioReadyAsset | undefined;
 }): readonly string[] {
-  return [params.background?.postMediaId, params.sound?.postMediaId].filter((id): id is string => id !== undefined);
+  return [params.background?.postMediaId, params.overlay?.postMediaId, params.sound?.postMediaId].filter(
+    (id): id is string => id !== undefined,
+  );
 }
