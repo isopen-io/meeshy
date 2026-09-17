@@ -630,7 +630,25 @@ export default function MediaViewer({
       </div>
 
       {/* Couloir bas — AU-DESSUS d'une page scène en plein viewport (`zIndex`, #6902). */}
-      <div className="media-viewer-chrome relative flex flex-col" style={{ opacity: isFull ? 0 : 1, paddingBottom: insets.bottom, zIndex: 10 }}>
+      <div
+        className="media-viewer-chrome relative flex flex-col"
+        style={{
+          opacity: isFull ? 0 : 1,
+          paddingBottom: insets.bottom,
+          zIndex: 10,
+          /* LE VOILE BAS (revue-correction #6902) — une page SCÈNE prend le
+             viewport ENTIER : l'auteur, la date (70 % d'opacité) et la légende
+             ne tombent plus sur le NOIR du plateau mais sur la couleur de la
+             scène, quelle qu'elle soit. Mesuré sur la cible iOS, qui peint le
+             MÊME voile sous ce bloc (capture cible `scenes-plein-ecran.light`) ;
+             sans lui, une scène claire ramènerait la date sous AA. Posé
+             UNIQUEMENT sur une page scène : le rendu image/vidéo, dont deux
+             gates de conversation lisent la mise en page, ne bouge pas. */
+          ...(currentSceneEntry !== undefined
+            ? { background: 'linear-gradient(to top, rgba(0,0,0,0.78), rgba(0,0,0,0.5) 60%, transparent)' }
+            : {}),
+        }}
+      >
         <CarrierFooter attachment={current} carrier={carrier} {...(currentSceneEntry !== undefined ? { sceneEntry: currentSceneEntry } : {})} />
         {/* La place de la barre de lecture (#6359) : la page vidéo ACTIVE y rend `MediaTransport` par un portail ; vide sur une image. */}
         <div ref={setTransportSlot} data-viewer-transport-slot />

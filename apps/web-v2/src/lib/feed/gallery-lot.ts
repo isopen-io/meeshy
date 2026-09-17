@@ -1,8 +1,9 @@
 import type { Attachment } from '@/lib/api/types';
-import { carrierMediaIdentity } from '@/lib/canvas/carrier';
+import { carrierMediaIdentity, type SceneCarrierMedia } from '@/lib/canvas/carrier';
 import { letterboxHashes } from '@/lib/stories/letterbox';
 
 import type { FeedCardModel, FeedCardScene } from './card-model';
+import type { FeedMediaKind } from './layout';
 import { isSceneCinematic } from './scene-motion';
 import { resolveSceneCaption } from './scene-caption';
 
@@ -89,7 +90,27 @@ function syntheticSceneAttachment(params: {
   };
 }
 
-export function composeSceneGalleryLot(model: Pick<FeedCardModel, 'id' | 'scene' | 'text'>): SceneGalleryLot | undefined {
+/**
+ * LA VIGNETTE D'UNE PAGE SCÈNE — miroir `PostGalleryLot.swift:358-407` :
+ * « vignette du média montré sinon son URL (image) ». La première forme de
+ * #6902 ne lisait que `poster` (`thumbnailSrc ?? placeholder`, souvent ABSENT
+ * sur une image de fixture comme de passerelle) : la pellicule d'un lot de
+ * scènes rendait alors trois carrés NOIRS identiques, sur une publication qui
+ * porte deux vraies images (mesuré au navigateur, `filmstripWithImage: 0`).
+ * L'URL du média N'EST un repli que pour une IMAGE — la poser pour une vidéo
+ * mettrait un fichier vidéo dans un `<img>`.
+ */
+function sceneThumbnail(params: {
+  readonly media: SceneCarrierMedia | undefined;
+  readonly kinds: ReadonlyMap<string, FeedMediaKind>;
+}): string | undefined {
+  const { media, kinds } = params;
+  if (media === undefined) return undefined;
+  if (media.poster !== undefined) return media.poster;
+  return kinds.get(media.id) === 'image' && media.src !== '' ? media.src : undefined;
+}
+
+export function composeSceneGalleryLot(model: Pick<FeedCardModel, 'id' | 'scene' | 'text' | 'media'>): SceneGalleryLot | undefined {
   const scene = model.scene;
   if (scene === undefined) return undefined;
   const { document, carrier } = scene;
@@ -97,11 +118,16 @@ export function composeSceneGalleryLot(model: Pick<FeedCardModel, 'id' | 'scene'
 
   const items: Attachment[] = [];
   const scenes = new Map<string, SceneGalleryEntry>();
+  // La NATURE d'un média du porteur ne voyage pas dans `SceneCarrierMedia`
+  // (`card-model.ts:302-308` : « `mimeType` n'est PAS reporté ici ») — elle se
+  // relit sur le modèle, seul site qui la porte, jamais devinée d'une URL.
+  const kinds = new Map<string, FeedMediaKind>(model.media.map((m) => [m.id, m.kind]));
 
   document.scenes.forEach((s, sceneIndex) => {
     const id = sceneItemId(model.id, sceneIndex);
     const identity = carrierMediaIdentity(s);
     const media = identity === null ? undefined : carrier.media.find((m) => m.id === identity);
+    const thumbnailUrl = sceneThumbnail({ media, kinds });
     const caption = resolveSceneCaption({ sceneIndex, document, carrier, ...(carrierFallback !== undefined ? { carrierFallback } : {}) });
     const moves = isSceneCinematic(s) || document.sound !== undefined;
 
@@ -109,8 +135,8 @@ export function composeSceneGalleryLot(model: Pick<FeedCardModel, 'id' | 'scene'
       syntheticSceneAttachment({
         id,
         postId: model.id,
-        ...(media?.poster !== undefined ? { thumbnailUrl: media.poster } : {}),
-        ...(media?.poster === undefined ? { thumbHash: letterboxHashes(s)[0] } : {}),
+        ...(thumbnailUrl !== undefined ? { thumbnailUrl } : {}),
+        ...(thumbnailUrl === undefined ? { thumbHash: letterboxHashes(s)[0] } : {}),
       }),
     );
 
