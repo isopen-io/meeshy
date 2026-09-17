@@ -148,7 +148,11 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   'ConversationBridgeService.ts': { kind: 'applies', reads: 2, applications: 2 },
   'ConversationMessageStatsService.ts': { kind: 'applies', reads: 1, applications: 1 },
   'messaging/copyAttachments.ts': { kind: 'applies', reads: 1, applications: 1 },
-  'messaging/MessageProcessor.ts': { kind: 'applies', reads: 1, applications: 1 },
+  // #6910 — la relecture de dédoublonnage a QUITTÉ `MessageProcessor.ts` pour
+  // `messageDedupProjection.ts` : elle y sert désormais les DEUX gardes (la clé
+  // `clientMessageId` et le repli par contenu), et la réparation du `sender`
+  // orphelin l'a suivie. `MessageProcessor.ts` ne lit plus `Message` du tout.
+  'messaging/messageDedupProjection.ts': { kind: 'applies', reads: 1, applications: 1 },
   'messaging/MessagingService.ts': { kind: 'applies', reads: 1, applications: 1 },
 
   'AttachmentReactionService.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
