@@ -86,6 +86,14 @@ nonisolated enum SceneCaption {
 
     /// Le média que la scène MONTRE — demandé à la scène, puis, pour un document
     /// qui n'adresse rien, au post.
+    ///
+    /// **`MeeshyScenePlayer.carrierMediaIdentity` couvre déjà le fond référencé**
+    /// (revue 2026-09-17) : depuis 722635a, il n'a plus de restriction de plan
+    /// — un fond `plane: bg` à `mediaId`/`postMediaId` (forme servie par la
+    /// passerelle, #6894) y est éligible au même titre qu'un média `plane:
+    /// content`. Un second appel dédié à ce seul cas (`backgroundMediaReference`)
+    /// ne pouvait donc plus jamais s'exécuter — retiré (mutation vérifiée :
+    /// les témoins de ce fichier restent verts sans lui).
     static func mediaIdentity(sceneIndex: Int,
                               in document: CanvasV3,
                               post: FeedPost) -> String? {
@@ -93,27 +101,8 @@ nonisolated enum SceneCaption {
                                                                sceneIndex: sceneIndex) {
             return propre
         }
-        if let fond = backgroundMediaReference(sceneIndex: sceneIndex, in: document) {
-            return fond
-        }
         guard !addressesAnyMedia(document) else { return nil }
         return post.media.first { $0.type == .image || $0.type == .video }?.id
-    }
-
-    /// **Le fond d'une scène, quand il RÉFÉRENCE un média** (#6894, contrat des
-    /// deux orthographes) — `MeeshyScenePlayer.carrierMediaIdentity` ne
-    /// regarde que le plan `content` (l'identité de CONTINUITÉ de lecture,
-    /// O16) ; un canvas dont l'UNIQUE média est un fond `plane: bg` à
-    /// `payload.mediaId` (forme servie par la passerelle, jamais écrite par le
-    /// composer) n'a alors AUCUN porteur `content` à élire. `ObjectV3.mediaReference`
-    /// est le site unique des deux orthographes — appelé ici, jamais relu.
-    private static func backgroundMediaReference(sceneIndex: Int,
-                                                  in document: CanvasV3) -> String? {
-        guard document.scenes.indices.contains(sceneIndex) else { return nil }
-        return document.scenes[sceneIndex].objects
-            .filter { $0.kind == .media && $0.plane == .bg }
-            .compactMap(\.mediaReference)
-            .first
     }
 
     /// **Ce document désigne-t-il des enregistrements du post ?** La question se
@@ -123,7 +112,6 @@ nonisolated enum SceneCaption {
     static func addressesAnyMedia(_ document: CanvasV3) -> Bool {
         document.scenes.indices.contains {
             MeeshyScenePlayer.carrierMediaIdentity(in: document, sceneIndex: $0) != nil
-                || backgroundMediaReference(sceneIndex: $0, in: document) != nil
         }
     }
 }
