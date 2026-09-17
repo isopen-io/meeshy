@@ -581,6 +581,7 @@ const es = {
   'feed.scene.open.post': 'Toca dos veces para abrir la publicación',
   'feed.scene.sound.muted': 'Sonido silenciado',
   'feed.scene.count': '{count} escenas',
+  'scene.place.here': 'Aquí',
 
   'story.sound.off': 'Silenciado',
 

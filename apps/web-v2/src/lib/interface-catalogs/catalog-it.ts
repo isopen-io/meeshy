@@ -581,6 +581,7 @@ const it = {
   'feed.scene.open.post': 'Tocca due volte per aprire il post',
   'feed.scene.sound.muted': 'Audio disattivato',
   'feed.scene.count': '{count} scene',
+  'scene.place.here': 'Qui',
 
   'story.sound.off': 'Muto',
 
