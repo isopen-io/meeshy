@@ -12,7 +12,8 @@
  * (`registerMessagesRoutes`), qui appelle `registerMessagesListRoute`.
  */
 import { FastifyInstance } from 'fastify';
-import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
+import type { MentionedUser } from '@meeshy/shared/types';
 import { sharedPlaceFromMetadata } from '../../services/location/sharedPlace';
 import { stickerFromMetadata } from '../../services/stickers/messageSticker';
 import {
@@ -45,6 +46,7 @@ import type {
 } from './types';
 import { sendBadRequest, sendForbidden, sendInternalError } from '../../utils/response.js';
 import { sendWithETag } from '../../utils/etag';
+import type { PaginationMeta } from '../../utils/pagination';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { presenceMissingEntryPolicy, viewerFromRequest } from '../users/presence-gate';
 import { logger } from './messages-shared';
@@ -68,6 +70,7 @@ import {
   enrichPostReplyMessagesForList,
   parseLanguageFilterParam
 } from './messages-list-query';
+import type { RawMessageRow } from './messages-list-query-types';
 
 /**
  * LES DEUX REFUS DE CETTE ROUTE NE SONT PAS LE MÊME REFUS (#4792).
@@ -345,7 +348,7 @@ export function registerMessagesListRoute(
       }
 
       // Construire la requête avec pagination
-      const whereClause: any = {
+      const whereClause: Prisma.MessageWhereInput = {
         conversationId: conversationId, // Utiliser l'ID résolu
         deletedAt: null,
         // Le prédicat de la vue s'AJOUTE, il ne remplace rien — et il est posé
@@ -362,7 +365,11 @@ export function registerMessagesListRoute(
 
       // Forward watermark filter: createdAt > after (merged with any history gte).
       if (afterMode && afterClause) {
-        whereClause.createdAt = { ...whereClause.createdAt, ...afterClause.createdAt };
+        // `createdAt` n'a jamais porté qu'un filtre objet à ce stade (jamais
+        // un littéral `Date`/`string`) — narrowing local pour permettre le
+        // spread, que l'union déclarée par `Prisma.MessageWhereInput` interdit.
+        const priorCreatedAt = whereClause.createdAt as Prisma.DateTimeFilter | undefined;
+        whereClause.createdAt = { ...priorCreatedAt, ...afterClause.createdAt };
       }
 
       if (before) {
@@ -382,8 +389,9 @@ export function registerMessagesListRoute(
         });
 
         if (beforeMessage) {
+          const priorCreatedAt = whereClause.createdAt as Prisma.DateTimeFilter | undefined;
           whereClause.createdAt = {
-            ...whereClause.createdAt,
+            ...priorCreatedAt,
             lt: beforeMessage.createdAt
           };
         }
@@ -412,7 +420,7 @@ export function registerMessagesListRoute(
           // Get half before and half after the target message
           const halfLimit = Math.floor(limit / 2);
 
-          const beforeFilter: any = { lt: aroundMessage.createdAt };
+          const beforeFilter: Prisma.DateTimeFilter = { lt: aroundMessage.createdAt };
           if (historyStartDate) beforeFilter.gte = historyStartDate;
 
           // Les deux moitiés sont filtrées ICI et pas seulement à la fin : sans
@@ -475,7 +483,7 @@ export function registerMessagesListRoute(
         };
       }
 
-      const messageSelect: any = buildMessageListSelect({ includeTranslations, includeReplies });
+      const messageSelect: Prisma.MessageSelect = buildMessageListSelect({ includeTranslations, includeReplies });
 
       // ===== OPTIMISATION: Exécuter les requêtes en parallèle =====
       // Évite le problème N+1 séquentiel (count -> messages -> user)
@@ -484,7 +492,7 @@ export function registerMessagesListRoute(
       t0 = performance.now();
       const personalWhereClause = applyPersonalHistoryHiding(whereClause, personalHiding);
 
-      const [totalCount, messages, userPrefs] = await Promise.all([
+      const [totalCount, rawMessages, userPrefs] = await Promise.all([
         // 1. Compter le total des messages (pour pagination) - skip when using cursor, around, or forward watermark
         (before || isAroundMode || afterMode || searchMode)
           ? Promise.resolve(0)
@@ -541,6 +549,16 @@ export function registerMessagesListRoute(
       ]);
       timings.mainQuery = performance.now() - t0;
 
+      // Le `select` de cette route est composé DYNAMIQUEMENT
+      // (`buildMessageListSelect`, selon includeTranslations/includeReplies) :
+      // Prisma ne peut donc pas dériver un type de ligne unique de ce `select`.
+      // `RawMessageRow` nomme le plancher que ce handler et
+      // `messages-list-query.ts` lisent réellement (même patron que
+      // `MessageProtectionContext`/`MessageProtectionFields`,
+      // `routes/admin/media-protection.ts`) — cast unique, ici, plutôt qu'un
+      // `any` répété à chaque site d'usage.
+      const messages = rawMessages as unknown as RawMessageRow[];
+
       // #4177 — travail mort retiré : ce bloc calculait `currentUserReactions`
       // (message-level, via `reaction.findMany`) ET `currentUserConsumption`
       // (par pièce jointe, via `attachmentStatusEntry.findMany`) — deux
@@ -573,9 +591,9 @@ export function registerMessagesListRoute(
         let audioWithTranscriptionCount = 0;
         let audioWithTranslatedAudiosCount = 0;
 
-        (messages as any[]).forEach((msg) => {
+        messages.forEach((msg) => {
           if (msg.attachments && msg.attachments.length > 0) {
-            msg.attachments.forEach((att: any) => {
+            msg.attachments.forEach((att) => {
               // Vérifier si c'est un audio
               if (att.mimeType && att.mimeType.startsWith('audio/')) {
                 audioAttachmentCount++;
@@ -590,10 +608,10 @@ export function registerMessagesListRoute(
                   let speakerAnalysisInfo = '';
                   if (att.transcription.speakerAnalysis) {
                     const speakers = att.transcription.speakerAnalysis.speakers || [];
-                    const withVoiceChars = speakers.filter((s: any) => s.voiceCharacteristics).length;
+                    const withVoiceChars = speakers.filter((s) => s.voiceCharacteristics).length;
                     speakerAnalysisInfo = ` | speakerAnalysis: ${speakers.length} speaker(s), voiceChars: ${withVoiceChars}/${speakers.length}`;
                     if (withVoiceChars > 0) {
-                      const firstSpeaker = speakers.find((s: any) => s.voiceCharacteristics);
+                      const firstSpeaker = speakers.find((s) => s.voiceCharacteristics);
                       speakerAnalysisInfo += `, firstSpeaker: sid=${firstSpeaker.sid}, pitch=${firstSpeaker.voiceCharacteristics.pitch?.mean_hz}Hz, gender=${firstSpeaker.voiceCharacteristics.classification?.estimated_gender}`;
                     }
                   } else {
@@ -638,7 +656,7 @@ export function registerMessagesListRoute(
       const senderPresenceVis = await getPresenceVisibilityService(prisma).resolveForTargets(
         listPresenceViewer,
         messages
-          .map((message: any) => message.sender?.userId)
+          .map((message) => message.sender?.userId)
           .filter((uid: string | null | undefined): uid is string => !!uid)
       );
 
@@ -651,7 +669,12 @@ export function registerMessagesListRoute(
       );
 
       // Mapper les messages avec les champs alignés au type GatewayMessage de @meeshy/shared/types
-      const mappedMessages = messages.map((message: any) => mapMessageRowForList(message, {
+      // `mappedMessages` reste non annoté (any[], hérité du retour `any` DÉLIBÉRÉ
+      // de `mapMessageRowForList` — voir son doc-comment) : `firstMsg`/`lastMsg`
+      // plus bas alimentent `new Date(...)`, qui n'a pas de surcharge acceptant
+      // un `Date` déjà construit — un typage `MappedMessageRow[]` casserait ces
+      // deux sites pour un gain hors du fichier réservé par ce lot.
+      const mappedMessages = messages.map((message) => mapMessageRowForList(message, {
         includeTranslations,
         includeReplies,
         hasLanguageFilter,
@@ -731,7 +754,7 @@ export function registerMessagesListRoute(
       // instead of advancing. Forward reads resume from the `after` watermark,
       // which the client already holds — there is no `before` continuation to
       // publish, and claiming one was the lie.
-      const lastMessageId = messages.length > 0 ? String((messages[messages.length - 1] as any).id) : null;
+      const lastMessageId = messages.length > 0 ? String(messages[messages.length - 1].id) : null;
       const cursorPaginationMeta = {
         limit,
         hasMore: cursorHasMore,
@@ -747,13 +770,20 @@ export function registerMessagesListRoute(
       // (MessagesListResponse / MessagesAPIResponse) and web parse at root level.
       // Migration to sendSuccess requires a coordinated client update (breaking change).
       const mentionContents = mappedMessages
-        .map((m: any) => m.content as string)
+        .map((m) => m.content as string)
         .filter(Boolean);
       const mentionedUsers = mentionContents.length > 0
         ? await resolveMentionedUsers(prisma, mentionContents)
         : [];
 
-      const responsePayload: any = {
+      const responsePayload: {
+        success: true;
+        data: unknown[];
+        cursorPagination: typeof cursorPaginationMeta;
+        meta: { userLanguage: string; mentionedUsers: MentionedUser[] };
+        pagination?: PaginationMeta;
+        hasNewer?: boolean;
+      } = {
         success: true,
         data: mappedMessages,
         cursorPagination: cursorPaginationMeta,
