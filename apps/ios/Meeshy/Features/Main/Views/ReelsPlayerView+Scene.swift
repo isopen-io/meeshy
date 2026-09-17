@@ -72,8 +72,10 @@ struct ReelSceneView: View {
     @State private var isCallActive = MediaSessionCoordinator.shared.isCallActive
 
     /// Même porteur que la carte du fil et le plein écran d'un post : sans lui,
-    /// une scène de MÉDIA se peindrait vide (#4926).
-    private var carrier: StoryItem {
+    /// une scène de MÉDIA se peindrait vide (#4926). `internal` depuis #6904 :
+    /// c'est LUI qui porte l'empreinte du fond de la carte, et le témoin la
+    /// mesure.
+    var carrier: StoryItem {
         StoryItem(id: reel.id,
                   content: reel.content,
                   media: reel.media,
@@ -89,27 +91,42 @@ struct ReelSceneView: View {
 
     var body: some View {
         let duration = carrier.toRenderableSlide(preferredLanguages: []).computedTotalDuration()
-        MeeshyScenePlayer(document: document,
-                          mode: .reel,
-                          sceneIndex: .constant(0),
-                          isPlaying: .constant(isPlaying),
-                          accentColorHex: reel.authorColor,
-                          carrier: carrier,
-                          preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
-                          isMuted: isMuted)
-            .onPlaybackTime { seconds in
-                clock.progress = ReelSceneProgress.fraction(elapsed: seconds, duration: duration)
+        // **Un réel qui porte une scène montre LA carte de la story** —
+        // le même composant, la même forme, le même fond (directive porteur du
+        // 2026-09-17 : « Partir du fait que le composant est déjà fait et le
+        // réutiliser pour les scènes de posts et les Réels ! »).
+        //
+        // Il posait `.aspectRatio(SceneShape.aspect, contentMode: .fill)` +
+        // `.clipped()` : un remplissage qui RETIRAIT 44,8 pt de chaque côté de
+        // la scène sur un iPhone 402×874 — 18,2 % de sa largeur, des pixels que
+        // l'auteur avait posés. Le 3e message de la directive (« On préserve le
+        // même fond que pour la story ! ») tranche l'inverse : la scène est
+        // AJUSTÉE, et le fond dominant habille ce qui reste.
+        //
+        // Le viewport vient d'un `GeometryReader` parce qu'un réel ne connaît
+        // pas sa page : le pager lui donne sa place, et le chrome du réel vit
+        // dans ses couloirs, PAR-DESSUS la carte (il ne la rétrécit pas).
+        GeometryReader { geo in
+            SceneCard(layout: SceneShape.layout(in: geo.size),
+                      thumbHash: carrier.sceneBackdropHash) {
+                MeeshyScenePlayer(document: document,
+                                  mode: .reel,
+                                  sceneIndex: .constant(0),
+                                  isPlaying: .constant(isPlaying),
+                                  accentColorHex: reel.authorColor,
+                                  carrier: carrier,
+                                  preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
+                                  isMuted: isMuted,
+                                  // Le canvas ne peint jamais son hors-champ :
+                                  // la carte le peint, comme aux quatre
+                                  // montages du lecteur de stories (#6791).
+                                  servesLetterboxFill: false)
+                    .onPlaybackTime { seconds in
+                        clock.progress = ReelSceneProgress.fraction(elapsed: seconds, duration: duration)
+                    }
             }
-            // **Le réel est l'IMMERSIF** (`SceneShape.Fullscreen.immersive`,
-            // #6896/#6904) : la scène occupe le viewport ENTIER, son cadre en
-            // DÉBORDE au besoin — jamais de bande noire sur un réel. `.fit`
-            // sur le rapport du PORTEUR laissait des bandes dès que la scène
-            // n'avait pas le rapport de l'écran ; `.fill` sur le rapport FIXE
-            // de la scène (`SceneShape.aspect`) couvre toujours, et le
-            // contenu visible reste centré.
-            .aspectRatio(SceneShape.aspect, contentMode: .fill)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .clipped()
+            .frame(width: geo.size.width, height: geo.size.height)
+        }
             .onReceive(
                 CallManager.shared.$callState
                     .map(\.isActive)
