@@ -403,6 +403,27 @@ describe('studioSnapshotOf / studioDraftFromSnapshot — ce qui survit à un rem
     expect(layer.pose).toEqual(IDENTITY_POSE);
   });
 
+  /** DÉFAUT TROUVÉ EN RELECTURE : le rail offre les fonds de pastille dans la
+   * palette de TEXTE (huit couleurs), et la relecture les validait contre les
+   * presets iOS seuls — six des huit étaient effacés au rechargement, en
+   * silence. Une liste OFFERTE et une liste ACCEPTÉE ont un seul site
+   * (`STUDIO_TEXT_BACKGROUND_VALUES`). */
+  test('une pastille de fond prise dans la palette de TEXTE survit au remontage', () => {
+    const draft = withTextLayer(typed('Bonjour'), 'text-1', (layer) => ({ ...layer, background: 'FF2E63' }));
+    const restored = studioDraftFromSnapshot(studioSnapshotOf(draft, 'fr'), (u) => u, 'fr');
+    expect(restored.texts[0]!.background).toBe('FF2E63');
+  });
+
+  test('un preset iOS de fond survit aussi — les deux listes valent', () => {
+    const draft = withTextLayer(typed('Bonjour'), 'text-1', (layer) => ({ ...layer, background: '6366F1' }));
+    expect(studioDraftFromSnapshot(studioSnapshotOf(draft, 'fr'), (u) => u, 'fr').texts[0]!.background).toBe('6366F1');
+  });
+
+  test('une valeur de fond INCONNUE est refusée, jamais peinte au hasard', () => {
+    const restored = studioDraftFromSnapshot({ texts: [{ id: 'text-1', text: 'a', background: 'licorne' }] }, (u) => u, 'fr');
+    expect(restored.texts[0]!.background).toBeNull();
+  });
+
   test('aspectRatio (mesure locale) et thumbHash (accusé TUS) SURVIVENT au remontage (§0, défaut 7)', () => {
     const withAspect = withVisualAspectRatio(withVisual(empty(), 'visual', visualAsset()), 'visual', 'blob:bg', 0.5625);
     const draft = withVisualUpload(withAspect, 'visual', { phase: 'ready', postMediaId: 'pm-bg', fileUrl: '2026/09/bg.jpg', thumbHash: 'abc123' });

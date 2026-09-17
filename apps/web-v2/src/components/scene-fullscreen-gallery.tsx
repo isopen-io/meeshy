@@ -1,4 +1,4 @@
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, useMemo } from 'react';
 
 import type { FeedCardModel } from '@/lib/feed/card-model';
 import { boundedSceneIndex, composeSceneGalleryLot } from '@/lib/feed/gallery-lot';
@@ -27,12 +27,30 @@ export type SceneFullscreenGalleryProps = {
 };
 
 export function SceneFullscreenGallery({ request, models, preferredLanguages, onClose }: SceneFullscreenGalleryProps) {
-  if (request === null) return null;
-  const model = models.find((m) => m.id === request.postId);
-  const lot = model === undefined ? undefined : composeSceneGalleryLot(model);
-  if (model === undefined || lot === undefined || lot.items.length === 0) return null;
+  /**
+   * LE LOT SE COMPOSE UNE FOIS PAR PUBLICATION, PAS À CHAQUE RENDU DE L'HÔTE
+   * (revue-correction #6902, Zero Unnecessary Re-render) — `composeSceneGallery
+   * Lot` alloue un tableau, une carte et UNE PIÈCE PAR SCÈNE : sans ce mémo,
+   * chaque rendu du fil (défilement, tirage, élection d'autoplay, et la
+   * réévaluation à la MINUTE de `models`) rendait une nouvelle identité
+   * d'`items`, de `scenes` et d'`entry` — donc un re-rendu des TROIS
+   * `ScenePlayer` vivants de la fenêtre, pour un contenu identique. `models`
+   * est la seule dépendance qui peut changer le lot ; `sceneIndex` n'entre
+   * pas (la page courante est un état de la visionneuse, semé à l'entrée).
+   */
+  const postId = request?.postId;
+  const composed = useMemo(() => {
+    if (postId === undefined) return undefined;
+    const found = models.find((m) => m.id === postId);
+    if (found === undefined) return undefined;
+    const lot = composeSceneGalleryLot(found);
+    if (lot === undefined || lot.items.length === 0) return undefined;
+    const carrier: MediaCarrier = { sender: { displayName: found.author.name }, sentAt: found.createdAt, caption: null };
+    return { lot, carrier };
+  }, [models, postId]);
 
-  const carrier: MediaCarrier = { sender: { displayName: model.author.name }, sentAt: model.createdAt, caption: null };
+  if (request === null || composed === undefined) return null;
+  const { lot, carrier } = composed;
 
   return (
     <Suspense fallback={null}>

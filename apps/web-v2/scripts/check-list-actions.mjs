@@ -638,11 +638,13 @@ await shortContext.close();
  * déclaré peut ouvrir une feuille qui ne se monte pas, une route peut ne pas
  * être inscrite à la table. D'où la mesure DANS le navigateur.
  *
- * Le rail, lui, est mesuré par l'inverse : ses pastilles ne doivent porter
- * AUCUN contrôle tant que le viewer `/story/:postId` n'existe pas (règle
- * #5765 — un bouton sans porte est un bouton mort). CLIQUET : le jour où la
- * porte arrive, cette assertion rougit et impose de mesurer l'effet du tap,
- * plutôt que de laisser passer une pastille cliquable qui ne mène nulle part.
+ * Le rail, lui, était mesuré par l'inverse : ses pastilles ne devaient porter
+ * AUCUN contrôle tant que le viewer `/story/:postId` n'existait pas (règle
+ * #5765 — un bouton sans porte est un bouton mort). Le CLIQUET a joué deux
+ * fois, comme il devait : d'abord à l'arrivée de la porte de story (#6080),
+ * qui a imposé de mesurer l'effet du tap ; puis à celle des deux portes de la
+ * cellule « soi » (#6150), qui a imposé de reformuler le compte — voir
+ * l'invariant lui-même plus bas.
  */
 const enTeteContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
 const enTetePage = await enTeteContext.newPage();
@@ -650,23 +652,68 @@ await enTetePage.goto(`${BASE}/`, { waitUntil: 'load' });
 await enTetePage.waitForSelector('[data-row]');
 await enTetePage.waitForTimeout(300);
 
-const railControles = await enTetePage.evaluate(() => {
+/**
+ * **`:not([tabindex="-1"])` SUR CHAQUE BRANCHE, et c'est une correction**
+ * (#6150). Le sélecteur s'écrivait `a[href],button,[tabindex]:not([tabindex=
+ * "-1"]),[role="button"]` : la garde ne portait que sur la branche `[tabindex]`,
+ * donc un `<a href>` ou un `<button>` posé à `tabindex="-1"` — retiré de
+ * l'ordre de tabulation, donc INATTEIGNABLE au clavier — était compté comme
+ * atteignable. Mesuré par mutation : poser `tabIndex={-1}` sur les trois
+ * contrôles de la cellule « soi » laissait le gate VERT.
+ *
+ * L'ancienne formulation (`focalisables === pastilles`) cachait le trou : elle
+ * comparait deux totaux, et un total ne change pas quand un contrôle cesse
+ * d'être atteignable sans cesser d'exister.
+ */
+const FOCUSABLE =
+  'a[href]:not([tabindex="-1"]),button:not([tabindex="-1"]),[tabindex]:not([tabindex="-1"]),[role="button"]:not([tabindex="-1"])';
+
+const railControles = await enTetePage.evaluate((focusable) => {
   const rail = document.querySelector('[data-rail="grande"]');
   if (rail === null) return null;
+  const pastilles = [...rail.querySelectorAll('[data-rail-tile]')];
+  const focalisables = [...rail.querySelectorAll(focusable)];
   return {
-    pastilles: rail.querySelectorAll('[data-rail-tile]').length,
-    focalisables: rail.querySelectorAll('a[href],button,[tabindex]:not([tabindex="-1"]),[role="button"]').length,
+    pastilles: pastilles.length,
+    focalisables: focalisables.length,
+    /* CHAQUE pastille porte AU MOINS un contrôle — mesuré pastille par
+       pastille, jamais par un total. */
+    muettes: pastilles.filter((p) => p.querySelector(focusable) === null).length,
+    /* Et AUCUN contrôle ne vit hors d'une pastille : un bouton orphelin dans
+       le rail serait invisible à la mesure ci-dessus. Les DEUX boutons
+       flottants (`RailActions`) vivent hors du `<ul>`, donc hors de ce
+       décompte — la requête part de `[data-rail="grande"]`, qui EST le `<ul>`. */
+    orphelins: focalisables.filter((f) => f.closest('[data-rail-tile]') === null).length,
   };
-});
+}, FOCUSABLE);
 check(railControles !== null, 'le rail de stories est PRÉSENT dans la Lentille — ses contrôles sont mesurables');
 check(
   railControles !== null && railControles.pastilles > 0,
   `le rail de stories rend ses pastilles (${JSON.stringify(railControles)})`,
 );
+/**
+ * **CHAQUE PASTILLE PORTE AU MOINS UN CONTRÔLE, ET AUCUN N'EST ORPHELIN.**
+ *
+ * L'invariant s'écrivait `focalisables === pastilles` — une pastille, un
+ * contrôle. Il a rougi sur #6150, qui donne à la cellule « soi » TROIS
+ * contrôles frères : l'avatar (ma story), le (+) haut-début (le studio) et la
+ * pastille d'humeur bas-fin. Le gate avait raison de rougir — un compte a
+ * changé — et sa FORMULATION avait tort : un total ne dit pas si c'est la
+ * bonne pastille qui a gagné un contrôle.
+ *
+ * Elle était même plus FAIBLE qu'elle n'en avait l'air : une pastille MUETTE
+ * compensée par une voisine à deux contrôles passait le test. La paire
+ * `muettes === 0` + `orphelins === 0` mesure la règle telle qu'elle se dit —
+ * « chaque pastille est atteignable, et rien d'atteignable ne flotte à côté » —
+ * et elle survit à une cellule qui porte plusieurs portes.
+ */
 check(
-  railControles !== null && railControles.focalisables === railControles.pastilles,
-  `chaque pastille du rail est ATTEIGNABLE — la porte de story existe désormais (\`routes/stories.tsx\`, #6080) ` +
-    `(${JSON.stringify(railControles)})`,
+  railControles !== null && railControles.muettes === 0,
+  `chaque pastille du rail est ATTEIGNABLE — aucune ne doit être muette (${JSON.stringify(railControles)})`,
+);
+check(
+  railControles !== null && railControles.orphelins === 0,
+  `aucun contrôle du rail ne flotte hors d'une pastille (${JSON.stringify(railControles)})`,
 );
 
 /** Le rail SERT ce que ses ports résolvent (#5652, revue) : une couverture ou

@@ -565,6 +565,152 @@ if (bandeParScheme.light !== undefined && bandeParScheme.dark !== undefined) {
   );
 }
 
+/**
+ * ── 8-10. #6902 : TOUCHER UNE SCÈNE DU FIL L'OUVRE EN PLEIN ÉCRAN, LA MÊME
+ * SCÈNE, À L'ÉCHELLE UNIFORME ET CENTRÉE ────────────────────────────────────
+ *
+ * La visionneuse est RÉUTILISÉE (`MediaViewer`, D-54/D-59) — jamais un second
+ * plein écran (la leçon d'iOS #6709) : `[data-scene-fullscreen]` est le MÊME
+ * dialogue que la galerie de médias, une page de plus.
+ *
+ * La comparaison de rapport se fait contre `[data-feed-scene-index="N"]`
+ * LUI-MÊME — le CADRE de la scène sur la carte (mesuré : 267,75 × 476, exactement
+ * 9:16), PAS `[data-feed-scene-box]` (la boîte EXTÉRIEURE du carrousel,
+ * PLAFONNÉE à 1,4 par `clampedCardAspect` — un cadrage de carte hors
+ * périmètre de ce lot, § 0) ni `[data-scene-player]` (le CONTENU ajusté à
+ * l'intérieur du cadre, qui pour une scène TEXTE SEUL retombe sur le
+ * PLANCHER 0,42 de `pageAspect` — mesuré 267,75 × 199,9, ≈ 1,34 — une loi de
+ * carte, pas la forme de la SCÈNE). Le cadre, lui, dérive de `naturalAspect`
+ * (`carouselAspect`, la page la plus haute du lot) qui, D-80 aidant, vaut
+ * 9:16 — LA MÊME forme que `SCENE_RATIO` en plein écran : c'est CETTE
+ * égalité que le critère vise, et elle est vraie PAR CONSTRUCTION.
+ */
+async function fullscreenInvariants(viewport) {
+  const context = await browser.newContext({ viewport, locale: 'en-US' });
+  const page = await context.newPage();
+  const pageErrors = [];
+  page.on('pageerror', (e) => pageErrors.push(String(e)));
+
+  await page.goto(`${BASE}/feed`, { waitUntil: 'load' });
+  await page.waitForSelector('[data-feed-card-id="post-scenes-mixed"] [data-feed-scene-index="1"] [data-scene-player]');
+
+  const sceneBoxBefore = await page.evaluate(() => {
+    const el = document.querySelector('[data-feed-card-id="post-scenes-mixed"] [data-feed-scene-index="1"]');
+    const r = el.getBoundingClientRect();
+    return { width: r.width, height: r.height };
+  });
+
+  // ── 8. le tap ouvre EN PLACE, sur la scène TOUCHÉE (jamais la première) ──
+  await page.click('[data-feed-card-id="post-scenes-mixed"] [data-feed-scene-index="1"] button');
+  await page.waitForSelector('[data-scene-fullscreen] [data-scene-viewer-page]');
+  await page.waitForTimeout(120); // `ResizeObserver`/`fitScene` peint la boîte après le montage
+
+  const fullscreen = await page.evaluate(() => {
+    const dialog = document.querySelector('[data-scene-fullscreen]');
+    // La fenêtre de rendu (±1, `rendersFullPixels`) monte AUSSI les scènes
+    // VOISINES — `[data-scene-viewer-page]` existe donc pour PLUSIEURS pages
+    // à la fois ; seule celle à `translateX(0%)` est la page COURANTE (même
+    // repère que `currentPage()`, `media-viewer.test.tsx`).
+    const activePage = [...dialog.querySelectorAll('[data-viewer-page]')].find((p) => p.style.transform === 'translateX(0%)');
+    const box = activePage.querySelector('[data-scene-viewer-page] > div');
+    const r = box.getBoundingClientRect();
+    return { index: dialog.getAttribute('data-viewer-index'), width: r.width, height: r.height, centerX: r.left + r.width / 2, centerY: r.top + r.height / 2 };
+  });
+
+  check(fullscreen.index === '1', `[${viewport.width}×${viewport.height}] #6902 : index courant attendu "1" (la scène TOUCHÉE) — reçu "${fullscreen.index}"`);
+
+  const ratioCard = sceneBoxBefore.width / sceneBoxBefore.height;
+  const ratioFullscreen = fullscreen.width / fullscreen.height;
+  check(
+    Math.abs(ratioCard - ratioFullscreen) <= 0.01,
+    `[${viewport.width}×${viewport.height}] #6902 : rapport largeur/hauteur — carte ${ratioCard.toFixed(4)} vs plein écran ${ratioFullscreen.toFixed(4)} (écart ${Math.abs(ratioCard - ratioFullscreen).toFixed(4)}, ≤ 0,01)`,
+  );
+  check(
+    Math.abs(fullscreen.centerX - viewport.width / 2) <= 1,
+    `[${viewport.width}×${viewport.height}] #6902 : centre X ${fullscreen.centerX.toFixed(2)} — attendu ${(viewport.width / 2).toFixed(2)} (±1 px)`,
+  );
+  check(
+    Math.abs(fullscreen.centerY - viewport.height / 2) <= 1,
+    `[${viewport.width}×${viewport.height}] #6902 : centre Y ${fullscreen.centerY.toFixed(2)} — attendu ${(viewport.height / 2).toFixed(2)} (±1 px)`,
+  );
+
+  // ── 9. `history.back()` ferme la couche, sans entrée fantôme ni vidéo en lecture ──
+  await page.goBack();
+  await page.waitForTimeout(100);
+  const afterBack = await page.evaluate(() => ({
+    dialog: document.querySelector('[data-scene-fullscreen]') !== null,
+    playing: [...document.querySelectorAll('video')].some((v) => !v.paused),
+    path: location.pathname,
+  }));
+  check(!afterBack.dialog, `[${viewport.width}×${viewport.height}] #6902 : [data-scene-fullscreen] encore présent après history.back()`);
+  check(!afterBack.playing, `[${viewport.width}×${viewport.height}] #6902 : une <video> encore en lecture après history.back()`);
+  check(afterBack.path === '/feed', `[${viewport.width}×${viewport.height}] #6902 : /feed attendu après history.back() — reçu "${afterBack.path}"`);
+
+  check(pageErrors.length === 0, `[${viewport.width}×${viewport.height}] #6902 : ${pageErrors.length} erreur(s) de page — ${pageErrors.slice(0, 3).join(' | ')}`);
+  await context.close();
+}
+
+await fullscreenInvariants({ width: 390, height: 844 });
+await fullscreenInvariants({ width: 320, height: 568 });
+
+/* ── 10. un post à SCÈNE SANS AUCUN MÉDIA (texte seul) s'ouvre AUSSI — la
+ * SCÈNE décide, jamais le média (`post-scene-text`, une seule scène, aucun
+ * `PostMedia`). */
+{
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'en-US' });
+  const page = await context.newPage();
+  const pageErrors = [];
+  page.on('pageerror', (e) => pageErrors.push(String(e)));
+
+  await page.goto(`${BASE}/feed`, { waitUntil: 'load' });
+  await page.waitForSelector('[data-feed-card-id="post-scene-text"] [data-feed-scene] button');
+  await page.click('[data-feed-card-id="post-scene-text"] [data-feed-scene] button');
+  await page.waitForSelector('[data-scene-fullscreen]');
+  const opened = await page.evaluate(() => document.querySelector('[data-scene-fullscreen] [data-scene-viewer-page]') !== null);
+  check(opened, "#6902 : post-scene-text (aucun média) ne s'ouvre pas en plein écran — la scène doit décider, pas le média");
+  check(pageErrors.length === 0, `#6902 (post-scene-text) : ${pageErrors.length} erreur(s) de page — ${pageErrors.slice(0, 3).join(' | ')}`);
+  await context.close();
+}
+
+/* -- 11. `?scene=N` — LE LIEN PROFOND DU DETAIL (revue-correction #6902,
+ * item F de la specification). Livre SANS aucun temoin : ni test, ni section
+ * de gate ne l'exercait, alors que la specification en annoncait deux (T5 et
+ * « gate 10 »). Trois mesures : l'index demande est bien celui qui s'ouvre,
+ * un index HORS BORNES tombe sur la derniere scene (`boundedSceneIndex`) au
+ * lieu d'une page vide, et `history.back()` rend l'ecran du detail INTACT --
+ * l'entree de la couche est consommee, jamais celle de l'ecran. */
+for (const [asked, expected] of [
+  ['1', '1'],
+  ['9', '2'],
+  ['-3', '0'],
+]) {
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'en-US' });
+  const page = await context.newPage();
+  const pageErrors = [];
+  page.on('pageerror', (e) => pageErrors.push(String(e)));
+
+  await page.goto(`${BASE}/post/post-scenes-mixed?scene=${asked}`, { waitUntil: 'load' });
+  await page.waitForSelector('[data-scene-fullscreen] [data-scene-viewer-page]', { timeout: 10000 }).catch(() => {});
+  const index = await page.evaluate(() => document.querySelector('[data-scene-fullscreen]')?.getAttribute('data-viewer-index') ?? null);
+  check(index === expected, `#6902 : /post/post-scenes-mixed?scene=${asked} — index courant attendu "${expected}", recu "${index}"`);
+
+  if (asked === '1') {
+    await page.goBack();
+    await page.waitForTimeout(120);
+    const after = await page.evaluate(() => ({
+      dialog: document.querySelector('[data-scene-fullscreen]') !== null,
+      card: document.querySelector('[data-feed-card-id="post-scenes-mixed"]') !== null,
+      path: location.pathname,
+    }));
+    check(!after.dialog, '#6902 : la couche du lien profond survit a history.back()');
+    check(after.card, "#6902 : history.back() a quitte le DETAIL au lieu de ne fermer que la couche");
+    check(after.path === '/post/post-scenes-mixed', `#6902 : /post/post-scenes-mixed attendu apres history.back() — recu "${after.path}"`);
+  }
+
+  check(pageErrors.length === 0, `#6902 (?scene=${asked}) : ${pageErrors.length} erreur(s) de page — ${pageErrors.slice(0, 3).join(' | ')}`);
+  await context.close();
+}
+
 await browser.close();
 server.close();
 

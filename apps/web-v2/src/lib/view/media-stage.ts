@@ -6,6 +6,7 @@
  * `longPressArmed` (`:157-159`) — et les cotes de `ConversationMediaGalleryView
  * +Geometry.swift` / `ConversationMediaFilmstrip.swift`.
  */
+import { fitScene, type ViewportSize } from '@/lib/canvas/fit';
 
 /** `StageEntry` — la porte par laquelle le plateau change de présentation. */
 export type StageDoor = 'tap' | 'longPress' | 'swipeUp';
@@ -90,6 +91,44 @@ export function prefetchRange(index: number, count: number): readonly [number, n
   const start = Math.max(0, index - RENDER_WINDOW_RADIUS);
   const end = Math.min(count - 1, index + RENDER_WINDOW_RADIUS);
   return [start, end];
+}
+
+/**
+ * `fullStageBox` (#6902, revue-correction) — LA BOÎTE D'UNE PAGE QUI PREND LE
+ * VIEWPORT ENTIER, rendue dans le repère de SA PAGE (le plateau, RÉDUIT par
+ * les couloirs). Miroir `MediaStageFraming.full`
+ * (`MediaStageFraming.swift:162-190` : `frame = viewport`, `media =
+ * aspectFit(ratio, in: viewport)`, coins 0) — une SEULE échelle, JAMAIS de
+ * rognage (`:235-246`), donc des bandes assumées même sur une scène 9:16.
+ *
+ * **POURQUOI UN DÉCALAGE, ET JAMAIS `position: fixed`.** Le plateau reçoit un
+ * `transform` pendant un glissement de fermeture (`media-viewer.tsx#
+ * onPointerMove`), et un ancêtre TRANSFORMÉ devient le bloc conteneur de tout
+ * descendant `fixed` : mesuré sur la première forme de #6902, la boîte passait
+ * de 390 × 693 à 371 × 660 et remontait de 16 px dès le PREMIER pixel de
+ * glissement — puis revenait d'un coup au relâchement. Une page restée EN FLUX
+ * suit le doigt SANS changer de taille, ce que le geste veut.
+ *
+ * `topInset` est le haut de la page dans le repère du viewport (la hauteur du
+ * couloir haut) : le décalage vertical rendu est donc `offsetY − topInset`,
+ * et le centre de la boîte retombe au centre du VIEWPORT, jamais au centre de
+ * la région entre couloirs (le critère de #6902, ±1 px).
+ */
+export type FullStageBox = {
+  readonly width: number;
+  readonly height: number;
+  readonly left: number;
+  readonly top: number;
+};
+
+export function fullStageBox(params: {
+  readonly viewport: ViewportSize;
+  readonly ratio: number;
+  readonly topInset: number;
+}): FullStageBox {
+  const { viewport, ratio, topInset } = params;
+  const box = fitScene({ viewport, ratio });
+  return { width: box.width, height: box.height, left: box.offsetX, top: box.offsetY - topInset };
 }
 
 /** `+Geometry.swift` — la géométrie du CHROME de la visionneuse. */
