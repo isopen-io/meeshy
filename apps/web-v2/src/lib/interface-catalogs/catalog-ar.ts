@@ -579,6 +579,7 @@ const ar = {
   'feed.scene.open.post': 'اضغط مرتين لفتح المنشور',
   'feed.scene.sound.muted': 'الصوت مكتوم',
   'feed.scene.count': '{count} مشاهد',
+  'scene.place.here': 'هنا',
 
   'story.sound.off': 'صامت',
 

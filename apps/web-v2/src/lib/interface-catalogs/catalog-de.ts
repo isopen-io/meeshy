@@ -581,6 +581,7 @@ const de = {
   'feed.scene.open.post': 'Doppelt tippen, um den Beitrag zu öffnen',
   'feed.scene.sound.muted': 'Ton stumm',
   'feed.scene.count': '{count} Szenen',
+  'scene.place.here': 'Hier',
 
   'story.sound.off': 'Stumm',
 

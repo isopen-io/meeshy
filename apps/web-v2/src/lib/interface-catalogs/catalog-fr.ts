@@ -612,6 +612,7 @@ const fr = {
   'feed.scene.open.post': 'Touche deux fois pour ouvrir la publication',
   'feed.scene.sound.muted': 'Son coupé',
   'feed.scene.count': '{count} scènes',
+  'scene.place.here': 'Ici',
 
   /* LE SON DE FOND DU LECTEUR DE STORY (T10, #6899) — bouton BASCULE dans la
      ligne auteur (rail droit hors tranche, #5817) : UN libellé constant et
