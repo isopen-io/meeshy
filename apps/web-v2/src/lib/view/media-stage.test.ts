@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   CARDED_STAGE,
   FILMSTRIP_RESERVED_HEIGHT,
+  fullStageBox,
   filmstripIndexAtPlayhead,
   filmstripLeadingInset,
   filmstripMaxScrollOffset,
@@ -136,5 +137,51 @@ describe('la pellicule — FilmstripMetrics', () => {
     expect(prefetchRange(0, 6)).toEqual([0, 1]);
     expect(prefetchRange(5, 6)).toEqual([4, 5]);
     expect(prefetchRange(3, 0)).toBeNull();
+  });
+});
+
+/**
+ * `fullStageBox` (revue-correction #6902) — LE CENTRE DE LA BOÎTE RETOMBE AU
+ * CENTRE DU VIEWPORT, quelle que soit la hauteur du couloir haut. Le témoin
+ * s'écrit sur un `topInset` NON NUL : à zéro, la loi juste et un simple
+ * `fitScene` rendent le même verdict, donc le témoin ne pourrait pas tomber.
+ */
+describe('fullStageBox — une page qui prend le VIEWPORT, décalée de son couloir', () => {
+  const RATIO = 9 / 16;
+
+  test('390 × 844, couloir haut de 56 : la boîte est celle du viewport, remontée de 56', () => {
+    const box = fullStageBox({ viewport: { width: 390, height: 844 }, ratio: RATIO, topInset: 56 });
+    expect(Math.round(box.width)).toBe(390);
+    expect(Math.round(box.height)).toBe(693);
+    expect(Math.round(box.left)).toBe(0);
+    // offsetY = (844 − 693,33) / 2 = 75,33 ; moins le couloir ⇒ 19,33
+    expect(Math.round(box.top)).toBe(19);
+  });
+
+  test('le centre de la boîte, RAMENÉ dans le repère du viewport, est le centre du viewport', () => {
+    for (const topInset of [0, 44, 56, 103]) {
+      for (const viewport of [
+        { width: 390, height: 844 },
+        { width: 320, height: 568 },
+        { width: 844, height: 390 },
+      ]) {
+        const box = fullStageBox({ viewport, ratio: RATIO, topInset });
+        const centerX = box.left + box.width / 2;
+        const centerY = topInset + box.top + box.height / 2;
+        expect(Math.abs(centerX - viewport.width / 2)).toBeLessThanOrEqual(0.001);
+        expect(Math.abs(centerY - viewport.height / 2)).toBeLessThanOrEqual(0.001);
+      }
+    }
+  });
+
+  test('une seule échelle, jamais de rognage — la boîte TIENT dans le viewport', () => {
+    const box = fullStageBox({ viewport: { width: 844, height: 390 }, ratio: RATIO, topInset: 56 });
+    expect(box.width).toBeLessThanOrEqual(844);
+    expect(box.height).toBeLessThanOrEqual(390);
+    expect(Math.abs(box.width / box.height - RATIO)).toBeLessThan(0.001);
+  });
+
+  test('un viewport non mesuré (0 × 0) ⇒ boîte nulle, jamais une division par zéro', () => {
+    expect(fullStageBox({ viewport: { width: 0, height: 0 }, ratio: RATIO, topInset: 56 })).toEqual({ width: 0, height: 0, left: 0, top: -56 });
   });
 });

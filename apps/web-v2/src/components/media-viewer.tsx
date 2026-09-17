@@ -103,6 +103,18 @@ function clampIndex(index: number, count: number): number {
 }
 
 /**
+ * LE NOM D'UNE PAGE SCÈNE POUR UN LECTEUR D'ÉCRAN (revue-correction #6902) —
+ * sa LÉGENDE, sinon « Scène partagée par … » (miroir `ConversationMedia
+ * GalleryView.swift:294-309`). La clé `feed.scene.shared_by` existe déjà dans
+ * les sept catalogues, posée par #6898 pour la carte du fil : la page plein
+ * écran en est le SECOND lecteur, jamais une seconde formulation.
+ */
+function scenePageLabel(entry: SceneGalleryEntry, carrier: MediaCarrier | undefined, language: InterfaceLanguage): string {
+  if (entry.caption !== undefined && entry.caption !== '') return entry.caption;
+  return translate(language, 'feed.scene.shared_by', { author: carrier?.sender?.displayName ?? '' });
+}
+
+/**
  * `bottomMetadataOverlay` (auteur, date, `w × h`, poids, légende) — ABSENT
  * sans `carrier` (loi 4).
  *
@@ -125,12 +137,13 @@ function CarrierFooter({
 }) {
   if (carrier === undefined) return null;
   const captionText = sceneEntry !== undefined ? sceneEntry.caption : carrier.caption !== null ? carrier.caption.text : undefined;
-  const captionLang =
-    sceneEntry !== undefined
-      ? sceneEntry.captionLanguage
-      : carrier.caption !== null && carrier.caption.language !== READER_LOCALE
-        ? carrier.caption.language
-        : undefined;
+  // UNE SEULE RÈGLE POUR `lang`, quelle que soit la nature de la page
+  // (revue-correction #6902) : l'attribut ne se pose que sur un texte servi
+  // dans une AUTRE langue que le document — la première forme du lot le posait
+  // inconditionnellement sur une légende de scène, y compris `lang="fr"` sur
+  // une page française.
+  const captionSource = sceneEntry !== undefined ? sceneEntry.captionLanguage : (carrier.caption?.language ?? undefined);
+  const captionLang = captionSource !== undefined && captionSource !== READER_LOCALE ? captionSource : undefined;
   const kind = kindOf(attachment);
   const sizeLabel = attachment.width !== undefined && attachment.height !== undefined ? `${attachment.width} × ${attachment.height}` : undefined;
   const weightLabel = `${Math.max(1, Math.round(attachment.fileSize / 1024))} Ko`;
@@ -383,7 +396,7 @@ export default function MediaViewer({
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const previouslyFocusedRef = useRef<HTMLElement | null>(null);
-  const activeVideoToggleRef = useRef<(() => void) | null>(null);
+  const activePlayToggleRef = useRef<(() => void) | null>(null);
   const dragRef = useRef<{ readonly startX: number; readonly startY: number; dx: number; dy: number } | null>(null);
   const trackRef = useRef<HTMLDivElement | null>(null);
 
@@ -395,6 +408,10 @@ export default function MediaViewer({
   const current = items[index];
   const currentSceneEntry = current === undefined ? undefined : scenes?.get(current.id);
   const insets = safeAreaInsets();
+  // La hauteur du couloir HAUT — le haut du plateau dans le repère du
+  // viewport, que `fullStageBox` retranche pour recentrer une page scène
+  // sur le viewport ENTIER (revue-correction #6902).
+  const topCorridorHeight = STAGE.topCorridorHeight + insets.top;
 
   // #root INERT le temps de l'ouverture — même dispositif que le clone du
   // menu de message (`message-menu.tsx:380-391`), porté ICI au NIVEAU DE LA
@@ -435,9 +452,9 @@ export default function MediaViewer({
       return;
     }
     if (e.key === ' ') {
-      if (activeVideoToggleRef.current !== null) {
+      if (activePlayToggleRef.current !== null) {
         e.preventDefault();
-        activeVideoToggleRef.current();
+        activePlayToggleRef.current();
       }
       return;
     }
@@ -505,7 +522,7 @@ export default function MediaViewer({
       ref={dialogRef}
       role="dialog"
       aria-modal="true"
-      aria-label={`Média ${index + 1} sur ${items.length}`}
+      aria-label={`${scenes !== undefined ? 'Scène' : 'Média'} ${index + 1} sur ${items.length}`}
       data-media-viewer
       data-viewer-index={index}
       {...(scenes !== undefined ? { 'data-scene-fullscreen': '' } : {})}
@@ -516,7 +533,7 @@ export default function MediaViewer({
       {/* Couloir haut — AU-DESSUS d'une page scène en plein viewport (`zIndex`, #6902). */}
       <div
         className="media-viewer-chrome relative flex items-center justify-between px-3"
-        style={{ height: STAGE.topCorridorHeight + insets.top, paddingTop: insets.top, opacity: isFull ? 0 : 1, zIndex: 10 }}
+        style={{ height: topCorridorHeight, paddingTop: insets.top, opacity: isFull ? 0 : 1, zIndex: 10 }}
       >
         <button
           ref={closeButtonRef}
@@ -561,24 +578,31 @@ export default function MediaViewer({
               data-viewer-page
               data-full-pixels={fullPixels}
               className="media-viewer-page absolute inset-0"
-              style={{
-                transform: `translateX(${distance * 100}%)`,
-                display: Math.abs(distance) > 1 ? 'none' : 'block',
-                /* LE VIEWPORT ENTIER, PAS LA RÉGION ENTRE COULOIRS (#6902, § E
-                   de la spécification) — le critère du gate exige un centre
-                   au centre du VIEWPORT (±1 px), là où `absolute inset-0`
-                   dans le TRACK (`flex-1`) ne couvre que la région RÉDUITE par
-                   les couloirs. `position: fixed` échappe au flux du track
-                   pour une page SCÈNE seulement — une page image/vidéo garde
-                   `absolute` (rendu STRICTEMENT inchangé). Les couloirs
-                   (`zIndex` ci-dessous) restent AU-DESSUS de ce plein viewport. */
-                ...(sceneEntry !== undefined ? { position: 'fixed' as const } : {}),
-              }}
+              style={{ transform: `translateX(${distance * 100}%)`, display: Math.abs(distance) > 1 ? 'none' : 'block' }}
             >
               {!fullPixels ? (
                 <ViewerBackdropPage attachment={attachment} />
               ) : sceneEntry !== undefined ? (
-                <ViewerScenePage entry={sceneEntry} isActive={i === index} preferredLanguages={languages} />
+                /* UNE PAGE SCÈNE PREND LE VIEWPORT ENTIER, SANS QUITTER LE FLUX
+                   (revue-correction #6902) — c'est `fullStageBox`
+                   (`lib/view/media-stage.ts`) qui décale sa boîte de `topInset`
+                   pour que son centre retombe au centre du VIEWPORT, jamais un
+                   `position: fixed` sur la page : le plateau reçoit un
+                   `transform` pendant un glissement de fermeture, et un ancêtre
+                   transformé aurait alors RÉANCRÉ la page (mesuré : 390 × 693 →
+                   371 × 660 au premier pixel de doigt). Les couloirs
+                   (`zIndex: 10`) restent AU-DESSUS de cette boîte. */
+                <ViewerScenePage
+                  entry={sceneEntry}
+                  isActive={i === index}
+                  preferredLanguages={languages}
+                  topInset={topCorridorHeight}
+                  label={scenePageLabel(sceneEntry, carrier, language)}
+                  pausedOnEntry={presentation.kind === 'full' && presentation.pausedOnEntry}
+                  onToggleRef={(fn) => {
+                    if (i === index) activePlayToggleRef.current = fn;
+                  }}
+                />
               ) : isMasked ? (
                 <ViewerMaskedPage attachment={attachment} />
               ) : kindOf(attachment) === 'video' ? (
@@ -587,7 +611,7 @@ export default function MediaViewer({
                   isActive={i === index}
                   presentation={presentation}
                   onToggleRef={(fn) => {
-                    if (i === index) activeVideoToggleRef.current = fn;
+                    if (i === index) activePlayToggleRef.current = fn;
                   }}
                   corridorSlot={transportSlot}
                   language={language}

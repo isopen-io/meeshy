@@ -594,6 +594,10 @@ const en = {
   'feed.scene.open.post': 'Double-tap to open the post',
   'feed.scene.sound.muted': 'Sound muted',
   'feed.scene.count': '{count} scenes',
+  'scene.fullscreen.play': 'Resume all',
+  'scene.fullscreen.pause': 'Pause all',
+  'scene.fullscreen.sound.on': 'Turn sound on',
+  'scene.fullscreen.sound.off': 'Mute sound',
   'scene.place.here': 'Here',
 
   'story.sound.off': 'Muted',
