@@ -150,7 +150,18 @@ export async function loadStatusMoods(
 ): Promise<ApiResult<readonly StatusMoodPost[]>> {
   if (__FIXTURES__ && params.source === 'fixtures') {
     const { STATUS_MOODS } = await import('./fixtures-stories');
-    return { ok: true, data: STATUS_MOODS };
+    /* CE QUE J'AI POSÉ DANS CET ONGLET PASSE DEVANT (#6150) — le corpus servi
+       est trié `createdAt desc`, et l'humeur qu'on vient de poser est la plus
+       récente. Sans ce préfixe, poser une humeur hors réseau l'affichait puis
+       la faisait DISPARAÎTRE à la première invalidation : l'écriture optimiste
+       était correcte, le corpus qui la remplaçait ne la connaissait pas. */
+    const { fixtureMoods } = await import('./status');
+    const posted: readonly StatusMoodPost[] = fixtureMoods().map((m, i) => ({
+      id: `st-local-${i}`,
+      authorId: m.authorId,
+      moodEmoji: m.moodEmoji,
+    }));
+    return { ok: true, data: [...posted, ...STATUS_MOODS] };
   }
   return params.transport.request<readonly StatusMoodPost[]>({
     method: 'GET',

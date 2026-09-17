@@ -53,6 +53,19 @@ const pt = {
   'stories.count.other': '{count} stories',
   'stories.mine': 'Seu story',
 
+  /* #6150 — as duas portas da minha própria célula do carrossel. */
+  'stories.self.addStory': 'Adicionar um story',
+  'stories.self.mood.add': 'Definir um humor',
+  'stories.self.mood.change': 'Mudar meu humor, {emoji}',
+
+  'status.compose.title': 'Meu humor',
+  'status.compose.pick': 'Escolher um humor',
+  'status.compose.note': 'Uma palavra, se quiser',
+  'status.compose.publish': 'Publicar',
+  'status.compose.publishing': 'Publicando…',
+  'status.compose.error': 'Não foi possível publicar seu humor.',
+  'status.compose.offline': 'Offline — seu humor sairá quando a rede voltar.',
+
   'feed.post.action.like': 'Curtir',
   'feed.post.action.comment': 'Comentar',
   'feed.post.action.repost': 'Republicar',

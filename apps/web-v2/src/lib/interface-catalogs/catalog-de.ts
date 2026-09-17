@@ -49,6 +49,19 @@ const de = {
   'stories.count.other': '{count} Storys',
   'stories.mine': 'Deine Story',
 
+  /* #6150 — die beiden Türen meiner eigenen Zelle in der Leiste. */
+  'stories.self.addStory': 'Story hinzufügen',
+  'stories.self.mood.add': 'Stimmung setzen',
+  'stories.self.mood.change': 'Meine Stimmung ändern, {emoji}',
+
+  'status.compose.title': 'Meine Stimmung',
+  'status.compose.pick': 'Stimmung wählen',
+  'status.compose.note': 'Ein Wort, wenn du magst',
+  'status.compose.publish': 'Veröffentlichen',
+  'status.compose.publishing': 'Wird veröffentlicht…',
+  'status.compose.error': 'Deine Stimmung konnte nicht veröffentlicht werden.',
+  'status.compose.offline': 'Offline — deine Stimmung geht raus, sobald das Netz zurück ist.',
+
   'feed.post.action.like': 'Gefällt mir',
   'feed.post.action.comment': 'Kommentieren',
   'feed.post.action.repost': 'Erneut teilen',

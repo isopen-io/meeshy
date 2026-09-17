@@ -112,6 +112,12 @@ export type FeedCardModel = {
   readonly isReel: boolean;
   readonly author: FeedCardAuthor;
   readonly relativeTime: string;
+  /** L'HORLOGE ISO du post, TELLE QUE SERVIE (#6902) — `relativeTime` ci-dessus
+   * est déjà la projection HUMAINE (« il y a 3 min »), qui se PÉRIME (`useMinute`)
+   * et ne porte pas de date absolue : le pied de la galerie plein écran
+   * (`CarrierFooter`, miroir `bottomMetadataOverlay`) a besoin de la date BRUTE
+   * pour son propre format (`toLocaleString`), comme `MediaCarrier.sentAt`. */
+  readonly createdAt: string;
   readonly repostOfHandle?: string;
   readonly text?: FeedCardText;
   readonly media: readonly FeedCardMedia[];
@@ -325,6 +331,7 @@ export function resolveFeedCardModel(
       ...(avatarSrc !== undefined ? { avatarSrc } : {}),
     },
     relativeTime: shortRelativeTime(new Date(post.createdAt), params.now),
+    createdAt: new Date(post.createdAt).toISOString(),
     ...(repostOfHandle !== undefined ? { repostOfHandle } : {}),
     ...(text !== undefined ? { text } : {}),
     media,

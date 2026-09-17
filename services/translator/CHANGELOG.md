@@ -1,5 +1,36 @@
 # @meeshy/translator
 
+## 1.58.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - deux planchers ANNONCÉS par un doc-comment et posés par personne — trait legacy et glyphe de sticker (Refs #6901)
+  - la durée d'un MÉDIA qualifie son fichier, jamais une fenêtre de scène — une loi, un site (Refs #6901)
+  - un texte de scène ne dépend plus du schéma pour être lu, et decisions.md retire une conclusion fausse (Refs #6901)
+  - la boîte d'un texte de scène est bornée par la SCÈNE, et le fond sonore ne part plus deux fois (Refs #6901)
+  - le moteur de scène peint les six kinds, pose et keyframes — le mode ne change jamais la géométrie (Closes #6901)
+  - une nouvelle version s'annonce par une bannière et se charge sans perdre la session
+  - le studio de story compose fond, son et texte, publie en CanvasV3 comme iOS, brouillon conservé sur échec
+  - le témoin de la modale souveraine mesure le PRODUIT, plus l'ordonnancement (#6862)
+  - l'administration ne date plus en ISO et n'annonce plus le prisme d'un membre qu'elle ne lit pas (#6862, #6733)
+  - un appui long referme le clavier, et l'aperçu de liste retrouve son auteur (#6921)
+  - la règle du cache d'administration atteint le service worker LIVRÉ (#6862, #6733)
+  - l'administration ne peint plus de contrôle sans effet, et sa lecture souveraine ne survit ni sur le disque ni sur une pagination éteinte (#6862, #6733)
+  - le lecteur de story rend ses scènes v3 par le moteur partagé, montre une story-image comme l'image seule et joue son son de fond
+  - l'administration pilote l'agent, sous un libellé qui dit ce qu'il fait (#6733)
+  - les mémos de réémission vivent sur le tas, StoryViewerView garde son budget (run test)
+  - l'administration lit la VRAIE vue conversation, au Prisme du membre (#6862)
+  - une entrée de cache déjà mutilée ne survit pas à la mise à jour (#6893)
+  - le temoin de cache construit un StoryEffects reellement rendu
+  - la garde d'orphelins voit un fond referme par mediaId en scene >= 1
+  - un kind reserve, une mention et un fond referme survivent au cache
+  - corrige l'ordre des deux orthographes et le merge par identité du fond de scène
+  - un fond de scène référencé par mediaId se lit comme par postMediaId
+  - la scène 0 restitue son fond média par identité, plutôt que de le perdre au cache
+  - la lecture souveraine sert le fil ENTIER, gardé champ par champ (#6862)
+
 ## 1.57.0
 
 ### Minor Changes

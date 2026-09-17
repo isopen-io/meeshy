@@ -91,6 +91,12 @@ export const ROUTES = {
      filtre, jamais deux écrans à faire diverger. */
   stories: { pattern: '/stories', screen: () => import('@/routes/stories') },
   storyCompose: { pattern: '/stories/new', screen: () => import('@/routes/story-compose') },
+  /* MON HUMEUR (#6150) — la SECONDE porte de ma cellule du rail. Adresse
+     PROPRE, pas un mode de `/stories/new` : une humeur n'est pas une story
+     (`Post.type = 'STATUS'`, corpus distinct côté passerelle,
+     `?scope=statuses`), elle n'a ni scène ni durée, et le bouton système
+     « retour » doit refermer la composition d'humeur seule. */
+  statusCompose: { pattern: '/status/new', screen: () => import('@/routes/status-compose') },
   /* LE LECTEUR PLEIN ÉCRAN (#5817) — nomenclature legacy `/story/:postId`
      (D-5, `parity.md:310`). Une story NOMMÉE ouvre directement CETTE
      adresse (intention `targetingStory`, `StoryViewerRequestOrigin.swift`) ;
@@ -168,8 +174,11 @@ export const ROUTES = {
      D-5) ; `/feeds/post/$post` est celle des liens profonds d'iOS
      (`DeepLinkRouter.swift:106`) et l'adresse que le partage émet
      (`lib/feed/share-url.ts`). UN seul `import()` pour les deux portes.
-     `?scene=N` (#6898) : la scène touchée dans le fil, RÉSERVÉ au plein écran
-     de scène (`scenes-plein-ecran`) — le détail l'ignore aujourd'hui. */
+     `?scene=N` (#6898, HONORÉ depuis #6902) : le lien profond vers une scène
+     précise — le détail l'ouvre en plein écran À L'ENTRÉE (`routes/post.tsx`,
+     `useSceneGallery` + `SceneFullscreenGallery`), l'index étant BORNÉ au
+     nombre de scènes du post (`boundedSceneIndex`, `lib/feed/gallery-lot.ts`)
+     plutôt que de planter sur un lien périmé. */
   post: { pattern: '/post/$post', screen: publicationScreen },
   postDeepLink: { pattern: '/feeds/post/$post', screen: publicationScreen },
   links: { pattern: '/links', screen: () => import('@/routes/links') },

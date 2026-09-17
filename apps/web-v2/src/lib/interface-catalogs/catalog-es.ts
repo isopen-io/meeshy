@@ -49,6 +49,19 @@ const es = {
   'stories.count.other': '{count} historias',
   'stories.mine': 'Tu historia',
 
+  /* #6150 — las dos puertas de mi propia celda del carril. */
+  'stories.self.addStory': 'Añadir una historia',
+  'stories.self.mood.add': 'Poner un estado de ánimo',
+  'stories.self.mood.change': 'Cambiar mi estado de ánimo, {emoji}',
+
+  'status.compose.title': 'Mi estado de ánimo',
+  'status.compose.pick': 'Elegir un estado de ánimo',
+  'status.compose.note': 'Una palabra, si quieres',
+  'status.compose.publish': 'Publicar',
+  'status.compose.publishing': 'Publicando…',
+  'status.compose.error': 'No se pudo publicar tu estado de ánimo.',
+  'status.compose.offline': 'Sin conexión — tu estado de ánimo saldrá cuando vuelva la red.',
+
   'feed.post.action.like': 'Me gusta',
   'feed.post.action.comment': 'Comentar',
   'feed.post.action.repost': 'Republicar',
