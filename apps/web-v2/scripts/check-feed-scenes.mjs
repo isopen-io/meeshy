@@ -379,6 +379,39 @@ async function runScheme(colorScheme) {
     );
     check(kinds.drawing >= 2, `[${colorScheme}]${reduced} post-scene-decorated : ${kinds.drawing} trait(s) de dessin (attendu ≥ 2)`);
 
+    /* LA BOÎTE D'UN TEXTE EST BORNÉE PAR LA SCÈNE, JAMAIS PAR ELLE-MÊME
+     * (revue-correction #6901). `max-width` se résolvait contre
+     * `SceneObjectFrame`, dont la largeur est AUTO : la boîte peinte valait
+     * 85 % du TEXTE — mesuré 65,72 px pour un texte de 77,33 px — donc le
+     * texte débordait sa propre boîte de 15 % à chaque scène, et le studio,
+     * qui aligne sa saisie sur cette boîte, coupait un mot en deux lignes
+     * (`check-story-studio.mjs`, 4 échecs). L'invariant mesure la LOI : la
+     * boîte vaut le minimum entre la largeur INTRINSÈQUE du texte et 85 % de
+     * la scène. Aucun témoin `bun test` ne peut le porter — happy-dom rejette
+     * l'unité `cqw` à l'assignation, et la loi est un CALCUL de mise en page. */
+    const textBox = await page3.evaluate(() => {
+      const peint = document.querySelector('[data-feed-card-id="post-scene-decorated"] [data-scene-object="text"] [data-scene-text]');
+      if (peint === null) return null;
+      const canvas = peint.closest('[data-scene-player]');
+      const clone = peint.cloneNode(true);
+      clone.style.maxWidth = 'none';
+      clone.style.whiteSpace = 'pre';
+      clone.style.visibility = 'hidden';
+      clone.style.position = 'absolute';
+      peint.parentElement.appendChild(clone);
+      const intrinsic = clone.getBoundingClientRect().width;
+      clone.remove();
+      return { box: peint.getBoundingClientRect().width, intrinsic, scene: canvas?.getBoundingClientRect().width ?? 0 };
+    });
+    check(textBox !== null, `[${colorScheme}]${reduced} post-scene-decorated : [data-scene-text] introuvable`);
+    if (textBox !== null) {
+      const attendu = Math.min(textBox.intrinsic, textBox.scene * 0.85);
+      check(
+        Math.abs(textBox.box - attendu) <= 1,
+        `[${colorScheme}]${reduced} post-scene-decorated : boîte du texte ${Math.round(textBox.box * 100) / 100} px — attendu min(intrinsèque ${Math.round(textBox.intrinsic * 100) / 100}, 85 % de la scène ${Math.round(textBox.scene * 85) / 100}) = ${Math.round(attendu * 100) / 100}`,
+      );
+    }
+
     if (colorSchemeCtx.reducedMotion !== 'reduce') {
       const first = await page3.evaluate(
         () => document.querySelector('[data-feed-card-id="post-scene-decorated"] [data-scene-object="text"]').style.left,

@@ -1,5 +1,5 @@
 import type { CanvasObject } from '@/lib/canvas/document';
-import { parsePlace, placeLabel, PLACE_FONT_SIZE, PLACE_H_PAD, PLACE_ICON_GAP, PLACE_V_PAD } from '@/lib/canvas/place';
+import { parsePlace, placeLabel, PLACE_FONT_SIZE, PLACE_H_PAD, PLACE_ICON_EM, PLACE_ICON_GAP, PLACE_V_PAD } from '@/lib/canvas/place';
 import { cqw } from '@/lib/canvas/units';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -30,11 +30,20 @@ export function SceneObjectPlace({ object, clock }: { readonly object: CanvasObj
           padding: `${cqw(PLACE_V_PAD / 1080)} ${cqw(PLACE_H_PAD / 1080)}`,
           borderRadius: 9999,
           fontSize: cqw(PLACE_FONT_SIZE / 1080),
+          // `lineHeight: 1` et `fontWeight: 600` — les deux cotes du gabarit
+          // que le legacy pose aussi (`CanvasV3Scene.tsx:735-737`) : sans
+          // elles la pastille prenait la hauteur de ligne du document, donc
+          // une hauteur qui ne suit plus l'espace design.
+          lineHeight: 1,
+          fontWeight: 600,
           backgroundColor: 'color-mix(in srgb, var(--ios-indigo-50) 94%, transparent)',
           color: 'var(--ios-indigo-900)',
         }}
       >
-        <GlyphSvg glyph={FEED_GLYPHS.mapPinCircle} size={14} style={{ color: 'var(--ios-error)', flexShrink: 0 }} />
+        <GlyphSvg
+          glyph={FEED_GLYPHS.mapPin}
+          style={{ width: `${PLACE_ICON_EM}em`, height: `${PLACE_ICON_EM}em`, color: 'var(--ios-error)', flexShrink: 0 }}
+        />
         {label}
       </span>
     </SceneObjectFrame>

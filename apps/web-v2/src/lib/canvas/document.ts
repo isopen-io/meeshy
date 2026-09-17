@@ -9,8 +9,8 @@
  * peut donc porter un `transform` PARTIEL ou VIDE. `CanvasV3Schema` rejette
  * cette forme (`scale`/`rotation`/`opacity` requis) ; ce parseur applique les
  * mêmes défauts que `TransformV3.init` côté Swift (`CanvasV3.swift:328`) et ne
- * refuse QUE ce qu'aucun défaut ne peut réparer : `v !== 3` ou `scenes`
- * absent/vide.
+ * refuse QUE ce qu'aucun défaut ne peut réparer : un rang hors `v >= 3`
+ * (entier) ou `scenes` absent/vide.
  *
  * Ce module n'est PAS chargé à la demande (D-79 ne réserve le chargement
  * différé qu'au PLAYER, `scene-player.tsx`) : il tourne pour CHAQUE carte du
@@ -246,9 +246,10 @@ function parseScene(raw: unknown, sceneIndex: number): CanvasScene | null {
 
 /**
  * `parseCanvasDocument` — `null` sur tout ce qu'aucun défaut ne peut
- * réparer : pas un objet, `v !== 3`, ou `scenes` absent/vide (O3 du contrat de
- * fil — un canvas sans scène n'est jamais un canvas, il tombe au repli média,
- * D-78).
+ * réparer : pas un objet, un rang hors `v >= 3` (entier — miroir
+ * `isCanvasV3OrNewer`, voir `CanvasDocument.v`), ou `scenes` absent/vide (O3
+ * du contrat de fil — un canvas sans scène n'est jamais un canvas, il tombe
+ * au repli média, D-78).
  */
 export function parseCanvasDocument(storyEffects: unknown): CanvasDocument | null {
   if (!isRecord(storyEffects)) return null;

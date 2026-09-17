@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { MEDIA_IMAGE_DATA_URI } from '@/lib/api/fixtures-media';
 import type { SceneCarrier } from '@/lib/canvas/carrier';
+import type { ScenePlayerMode } from '@/lib/canvas/config';
 import { parseCanvasDocument, type CanvasDocument } from '@/lib/canvas/document';
 
 import ScenePlayer from './scene-player';
@@ -637,6 +638,116 @@ describe('ScenePlayer — le lieu et le sticker (T-E10)', () => {
       />,
     );
     expect(el.querySelector('[data-scene-object="sticker"] img')).not.toBeNull();
+  });
+});
+
+/* T-E12 (revue-correction #6901) — LE FOND SONORE N'EST PAS JOUÉ DEUX FOIS.
+ * `electBackgroundTrack` (`lib/canvas/background-sound.ts:59`) élit l'objet
+ * `audio` qui porte `payload.isBackground === true`, et ce sont les HÔTES qui
+ * le jouent (`story-scene-layer.tsx:278`, `story-compose.tsx:450`) — hors du
+ * player. `SceneCanvas` rendait pourtant une couche `SceneObjectAudio` pour
+ * TOUT objet `audio`, celui-là compris : la même piste partait deux fois, en
+ * écho, dès qu'un auteur posait un son de fond. Le doc-comment de la couche
+ * AFFIRMAIT le filtre (« `isBackground` est filtré par l'appelant,
+ * `SceneCanvas` ») ; il n'existait pas. */
+describe('ScenePlayer — le fond SONORE n’est pas doublé par une couche d’objet (T-E12)', () => {
+  const audioObject = (payload: Record<string, unknown>) => ({
+    id: 'a1',
+    kind: 'audio',
+    anchor: { t: 'free', x: 0.5, y: 0.5 },
+    plane: 'fg',
+    z: 1,
+    transform: { scale: 1, rotation: 0, opacity: 1 },
+    payload,
+  });
+  const soundCarrier: SceneCarrier = { postId: 'p1', media: [{ id: 'clip', src: 'clip.mp3' }] };
+
+  test('un audio isBackground:true ⇒ AUCUNE couche audio (l’hôte le joue déjà)', () => {
+    const el = mount(
+      <ScenePlayer
+        document={sceneDocumentOf([audioObject({ postMediaId: 'clip', isBackground: true })])}
+        sceneIndex={0}
+        mode="story"
+        playing={false}
+        carrier={soundCarrier}
+        preferredLanguages={['fr']}
+      />,
+    );
+    expect(el.querySelector('[data-scene-object="audio"]')).toBeNull();
+  });
+
+  test('un audio overlay (sans isBackground) ⇒ la couche existe', () => {
+    const el = mount(
+      <ScenePlayer
+        document={sceneDocumentOf([audioObject({ postMediaId: 'clip', placement: 'overlay' })])}
+        sceneIndex={0}
+        mode="story"
+        playing={false}
+        carrier={soundCarrier}
+        preferredLanguages={['fr']}
+      />,
+    );
+    expect(el.querySelector('[data-scene-object="audio"]')).not.toBeNull();
+  });
+});
+
+/* T-E13 (revue-correction #6901) — LE MODE NE CHANGE JAMAIS LA GÉOMÉTRIE :
+ * c'est le titre de l'issue, et le critère de fin l'exige explicitement
+ * (« la géométrie rendue (`fitScene`) est identique pour les 5 modes »).
+ * Aucun témoin ne le portait : `config.test.ts` prouve la table des modes,
+ * `fit.test.ts` l'ajustement — personne ne prouvait que les DEUX ne se
+ * touchent pas. Le témoin compare la POSE RENDUE de chaque objet (left, top,
+ * transform) et la boîte de cadrage (`aspect-ratio`, `translateY`) entre les
+ * cinq modes, sur le MÊME document. */
+describe('ScenePlayer — la géométrie rendue est identique pour les CINQ modes (T-E13)', () => {
+  const geometryOf = (el: HTMLElement) => {
+    const player = el.querySelector('[data-scene-player]') as HTMLElement | null;
+    const frame = player?.firstElementChild as HTMLElement | null;
+    return {
+      cadre: frame === null || frame === undefined ? null : { aspectRatio: frame.style.aspectRatio, transform: frame.style.transform },
+      objets: Array.from(el.querySelectorAll('[data-scene-object]')).map((node) => {
+        const o = node as HTMLElement;
+        return { kind: o.dataset.sceneObject, left: o.style.left, top: o.style.top, transform: o.style.transform, opacity: o.style.opacity, hidden: o.hidden };
+      }),
+    };
+  };
+
+  const objects = [
+    textObject({ id: 't1', transform: { scale: 1.25, rotation: 12, opacity: 0.9 } }),
+    { id: 'm1', kind: 'media', anchor: { t: 'free', x: 0.2, y: 0.2 }, plane: 'content', z: 2, transform: { scale: 1, rotation: 0, opacity: 1 }, payload: { postMediaId: 'img', aspectRatio: 2 } },
+    { id: 'k1', kind: 'sticker', anchor: { t: 'band', edge: 'top' }, plane: 'fg', z: 3, transform: { scale: 1.5, rotation: 0, opacity: 1 }, payload: { emoji: '🔥', baseSize: 200 } },
+    { id: 'p1', kind: 'place', anchor: { t: 'band', edge: 'bottom' }, plane: 'fg', z: 4, transform: { scale: 1, rotation: 0, opacity: 1 }, payload: { place: { name: 'Café Central' } } },
+  ];
+
+  test('les cinq modes rendent la MÊME pose pour chaque objet, avec et sans fenêtre de cadrage', () => {
+    const modes: readonly ScenePlayerMode[] = ['card', 'reader', 'story', 'preview', 'reel'];
+    for (const focus of [undefined, { x: 0, y: 0.12, width: 1, height: 0.76 }] as const) {
+      const geometries = modes.map((mode) => {
+        const el = mount(
+          <ScenePlayer
+            document={sceneDocumentOf(objects)}
+            sceneIndex={0}
+            mode={mode}
+            playing={false}
+            carrier={carrier}
+            preferredLanguages={['fr']}
+            {...(focus !== undefined ? { focus } : {})}
+          />,
+        );
+        const measured = geometryOf(el);
+        act(() => {
+          root.unmount();
+        });
+        container.remove();
+        // `afterEach` démonte la DERNIÈRE racine ; on la remonte vide pour
+        // qu'il trouve toujours quelque chose à démonter.
+        mount(<span />);
+        return measured;
+      });
+      const first = geometries[0];
+      expect(first?.objets.length).toBe(4);
+      for (const geometry of geometries) expect(geometry).toEqual(first);
+    }
   });
 });
 

@@ -9,6 +9,14 @@ export const PLACE_FONT_SIZE = 42;
 export const PLACE_H_PAD = 22;
 export const PLACE_V_PAD = 14;
 export const PLACE_ICON_GAP = 10;
+/**
+ * L'épingle, en FRACTION de la taille du libellé (`0.82em`, miroir legacy
+ * `CanvasV3Scene.tsx:744`) — jamais une taille en PIXELS. La pastille entière
+ * est projetée en `cqw` depuis l'espace design 1080 : un glyphe en px y
+ * grossissait relativement à mesure que la scène RÉTRÉCIT (14 px contre un
+ * libellé de 3,9 px sur une tuile de 100 px de large) et rétrécissait
+ * relativement sur un plein écran large (revue-correction #6901). */
+export const PLACE_ICON_EM = 0.82;
 
 export type SharedPlace = { readonly name?: string; readonly address?: string };
 

@@ -4,6 +4,7 @@ import { hostMute, playerConfig, type ScenePlayerMode } from '@/lib/canvas/confi
 import type { CanvasDocument, CanvasScene } from '@/lib/canvas/document';
 import type { SceneCarrier } from '@/lib/canvas/carrier';
 import { backgroundFraming } from '@/lib/canvas/background';
+import { sceneRatio } from '@/lib/canvas/fit';
 import { hasTimedObjects, sceneDurationSeconds } from '@/lib/canvas/timeline';
 import { backgroundMedia } from '@/lib/feed/scene-framing';
 import { isDocumentAudible } from '@/lib/feed/scene-motion';
@@ -95,7 +96,15 @@ function SceneCanvas({
   // sinon le premier fond : la MÊME élection que la loi de cadrage, jamais
   // une seconde.
   const background = backgroundMedia(scene);
-  const foreground = scene.objects.filter((o) => o.id !== background?.id).sort((a, b) => a.z - b.z);
+  // Le fond VISUEL (`backgroundMedia`) et le fond SONORE (`electBackgroundTrack`,
+  // `lib/canvas/background-sound.ts`) sont DEUX fonds, et l'un comme l'autre
+  // est servi HORS des couches d'objet : le premier par `BackgroundLayer`
+  // ci-dessous, le second par l'hôte (`story-scene-layer.tsx`,
+  // `story-compose.tsx`). Rendre une couche pour l'objet `audio` qui porte
+  // `isBackground` jouait la MÊME piste deux fois, en écho (T-E12).
+  const foreground = scene.objects
+    .filter((o) => o.id !== background?.id && !(o.kind === 'audio' && o.payload.isBackground === true))
+    .sort((a, b) => a.z - b.z);
   return (
     <span className="absolute inset-0 block" style={{ containerType: 'inline-size' }}>
       {background !== undefined ? (
@@ -194,12 +203,21 @@ export default function ScenePlayer({
         // `SceneFraming.placement` sans aucune mesure de pixels.
         <span
           className="absolute top-0 left-0 block w-full"
-          style={{ aspectRatio: '9 / 16', transform: `translateY(${-focus.y * 100}%)` }}
+          // `sceneRatio(scene)` (`lib/canvas/fit.ts`) — la loi D-80 (9:16
+          // FIGÉ, `carrierAspect` lu par personne au rendu) appliquée à son
+          // SEUL site de peinture, jamais un « 9 / 16 » réécrit ici
+          // (revue-correction #6901 : le lot posait la loi et laissait le
+          // littéral à côté — une loi sans consommateur n'est pas livrée).
+          style={{ aspectRatio: `${sceneRatio(scene)}`, transform: `translateY(${-focus.y * 100}%)` }}
         >
           {canvas}
         </span>
       )}
-      {audible && config.isMuted ? (
+      {/* `isMuted` — le muet RÉSOLU (`hostMute`), pas celui que le mode
+          PROPOSE : un lecteur de story qui tient son muet viewant
+          (`muted: true` sur un mode sonore) coupait bien le son et
+          n'affichait AUCUNE pastille pour le dire (revue-correction #6901). */}
+      {audible && isMuted ? (
         <span
           data-scene-sound="muted"
           className="pointer-events-none absolute end-2.5 bottom-2.5 grid place-items-center rounded-full"

@@ -743,10 +743,16 @@ export const POST_SCENE_CLIP_A: FeedPost = { ...sceneClip('post-scene-clip-a', R
 export const POST_SCENE_CLIP_B: FeedPost = { ...sceneClip('post-scene-clip-b', REEL_CLIP_RGB, true, false), createdAt: minutesAgo(61) };
 
 /**
- * `POST_SCENE_DECORATED` (#6901, T-F, D10) — UNE scène qui exerce les SIX
- * couches d'objet du moteur d'un coup : fond image (`fit`), texte à
- * KEYFRAMES (`check-feed-scenes.mjs` prouve l'EFFET — deux relevés espacés
- * de 700 ms diffèrent), sticker emoji, lieu et dessin. Datée PLUS RÉCENTE
+ * `POST_SCENE_DECORATED` (#6901, T-F, D10) — UNE scène qui exerce CINQ des
+ * sept couches du moteur d'un coup : fond image (`fit`), texte à KEYFRAMES
+ * (`check-feed-scenes.mjs` prouve l'EFFET — deux relevés espacés de 700 ms
+ * diffèrent), sticker emoji, lieu et dessin. Les deux qui MANQUENT, et
+ * l'aveu se tient ici plutôt que dans un rapport (revue-correction #6901,
+ * le doc-comment disait « les SIX couches » et en listait cinq) : un média
+ * POSÉ (non-fond, 65 % du petit côté) — exercé par `media-size.test.ts` et
+ * par T-E3 au DOM, jamais au NAVIGATEUR, donc son rendu `cqw` réel n'a pas
+ * de témoin ; et un audio d'OVERLAY — exercé par T-E11 seulement. Datée PLUS
+ * RÉCENTE
  * que `POST_LEGENDE_MIXTE` (`minutesAgo(68)`) et distincte des cinq autres
  * scènes (`3`/`7`/`12`/`60`/`61`) — l'invariant du doc-comment de
  * `FILLER_POSTS` (70 > 68 > tout post nommé) tient toujours.

@@ -84,9 +84,34 @@ describe('objectPose — les fondus (T-D4)', () => {
     expect(objectPose(object, 4).opacity).toBeCloseTo(1, 9);
   });
 
-  test('fadeFactor rend undefined hors fenêtre de fondu', () => {
+  test('fadeFactor rend undefined SANS enveloppe déclarée (`fadeIn == nil && fadeOut == nil`)', () => {
     const object: CanvasObject = { ...objectOf({ anchor: { t: 'free', x: 0.5, y: 0.5 } }), timing: { start: 0 }, payload: { duration: 10 } };
     expect(fadeFactor(object, 5)).toBeUndefined();
+  });
+
+  /* T-D4b (revue-correction #6901) — `StoryRenderer.fadeOpacity` rend `1.0`,
+     JAMAIS `nil`, dès qu'une enveloppe est déclarée et que `t` est DANS la
+     fenêtre : c'est ce qui fait que « l'enveloppe REMPLACE l'opacité keyframe
+     quand elle existe » (doc-comment de `pose.ts`, `StoryRenderer.swift:227`
+     — « fade envelope (écrase) > opacité keyframes > 1 »). Rendre `undefined`
+     au MILIEU laissait la descente retomber sur l'opacité KEYFRAME, donc
+     l'enveloppe ne remplaçait que pendant ses RAMPES — la moitié de la loi
+     que le commentaire affirmait. Le témoin porte sur un objet qui a les
+     DEUX : sans keyframe d'opacité, les deux lois rendent le même verdict et
+     rien ne peut tomber (leçon 261, un témoin s'écrit là où les deux lois
+     DIVERGENT). */
+  test('enveloppe déclarée + keyframe d’opacité ⇒ au MILIEU c’est l’enveloppe (1), jamais le keyframe', () => {
+    const object: CanvasObject = {
+      ...objectOf({ anchor: { t: 'free', x: 0.5, y: 0.5 }, transform: { scale: 1, rotation: 0, opacity: 1 } }),
+      timing: { start: 0, keyframes: [{ time: 0, opacity: 0.2 }] },
+      payload: { duration: 10, fadeIn: 1 },
+    };
+    expect(fadeFactor(object, 5)).toBe(1);
+    expect(objectPose(object, 5).opacity).toBeCloseTo(1, 9);
+    // La rampe d'entrée garde sa valeur propre, et HORS fenêtre il n'y a
+    // aucune enveloppe à poser (`shouldRender` fait tomber la couche).
+    expect(fadeFactor(object, 0.5)).toBeCloseTo(0.5, 9);
+    expect(fadeFactor(object, 11)).toBeUndefined();
   });
 });
 

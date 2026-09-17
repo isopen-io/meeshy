@@ -38,10 +38,21 @@ export function SceneObjectText({
       <span
         data-scene-text
         {...(resolved.language !== '' ? { lang: resolved.language } : {})}
-        className="block max-w-[85%] whitespace-pre-wrap font-semibold"
+        className="block whitespace-pre-wrap font-semibold"
         style={{
           textAlign: textAlign as 'left' | 'center' | 'right',
           color: resolved.color,
+          // 85 % DE LA SCÈNE, pas du cadre (revue-correction #6901). Un
+          // `max-w-[85%]` résolvait contre `SceneObjectFrame`, dont la
+          // largeur est AUTO (shrink-to-fit sur ce texte même) : la boîte
+          // peinte valait alors 85 % du texte — mesuré 65,72 px pour un
+          // texte de 77,33 px — et le texte DÉBORDAIT sa propre boîte de
+          // 15 %, à chaque scène. Le studio, qui aligne sa saisie sur cette
+          // boîte (`story-compose.tsx`, `textBox`), coupait « Bonjour » en
+          // deux lignes (`check-story-studio.mjs`). `cqw` se résout contre le
+          // CONTENEUR (`SceneCanvas`, `container-type: inline-size`), donc
+          // contre la scène — le même référentiel que `fontSize` ci-dessous.
+          maxWidth: '85cqw',
           // Un texte se dimensionne sur la LARGEUR de la scène rendue
           // (`CanvasGeometry.scaleFactor`), en unités de conteneur.
           fontSize: `${resolved.widthFraction * 100}cqw`,

@@ -31,6 +31,21 @@ export function SceneObjectMedia({
   const src = objectMediaSrc(object, carrier);
   const [errored, setErrored] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  // TOUS LES HOOKS AVANT LE RETOUR ANTICIPÉ (revue-correction #6901, même
+  // raison que `scene-object-audio.tsx`) : `src` dépend du PORTEUR, qui
+  // change au rafraîchissement du fil.
+  useEffect(() => {
+    const el = videoRef.current;
+    if (el === null) return;
+    if (!playing) {
+      el.pause();
+      return;
+    }
+    void el.play().catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playing, src]);
+
   if (src === undefined) return null;
   const { payload } = object;
   const identity = objectMediaIdentity(object);
@@ -44,17 +59,6 @@ export function SceneObjectMedia({
   const mediaType = typeof payload.mediaType === 'string' ? payload.mediaType : undefined;
   const isVideo = mediaType?.startsWith('video') === true;
   const loop = payload.loop === true;
-
-  useEffect(() => {
-    const el = videoRef.current;
-    if (el === null) return;
-    if (!playing) {
-      el.pause();
-      return;
-    }
-    void el.play().catch(() => undefined);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playing, src]);
 
   const boxStyle = {
     width: cqw(size.width / DESIGN_WIDTH),

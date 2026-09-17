@@ -145,17 +145,26 @@ export function isWithinWindow(object: CanvasObject, t: number): boolean {
 }
 
 /**
- * `fadeOpacity` (`:1174-1197`) — `undefined` hors fenêtre de fondu ou sans
- * fondu déclaré : l'enveloppe de fondu REMPLACE l'opacité keyframe quand elle
- * existe (`StoryRenderer.swift:227`, § Étape 4) — jamais un produit des deux.
+ * `fadeOpacity` (`:1174-1197`) — `undefined` SANS enveloppe déclarée ou HORS
+ * de la fenêtre de visibilité ; `1` partout ailleurs DANS la fenêtre. C'est
+ * ce dernier point qui fait que « l'enveloppe REMPLACE l'opacité keyframe
+ * quand elle existe » (`StoryRenderer.swift:227` — « fade envelope (écrase) >
+ * opacité keyframes > 1 ») : rendre `undefined` au MILIEU laissait la
+ * descente retomber sur l'opacité KEYFRAME, donc l'enveloppe ne remplaçait
+ * que pendant ses RAMPES — la moitié de la loi (revue-correction #6901,
+ * T-D4b). Jamais un produit des deux.
  */
 export function fadeFactor(object: CanvasObject, t: number): number | undefined {
   const { start, end } = visibilityWindow(object);
   const fadeIn = object.payload.fadeIn;
   const fadeOut = object.payload.fadeOut;
-  if (typeof fadeIn === 'number' && fadeIn > 0 && t >= start && t < start + fadeIn) return (t - start) / fadeIn;
-  if (typeof fadeOut === 'number' && fadeOut > 0 && end !== Infinity && t > end - fadeOut && t < end) return (end - t) / fadeOut;
-  return undefined;
+  const hasFadeIn = typeof fadeIn === 'number' && fadeIn > 0;
+  const hasFadeOut = typeof fadeOut === 'number' && fadeOut > 0;
+  if (!hasFadeIn && !hasFadeOut) return undefined;
+  if (t < start || t >= end) return undefined;
+  if (hasFadeIn && t < start + fadeIn) return (t - start) / fadeIn;
+  if (hasFadeOut && end !== Infinity && t > end - fadeOut) return (end - t) / fadeOut;
+  return 1;
 }
 
 export type ObjectPose = {

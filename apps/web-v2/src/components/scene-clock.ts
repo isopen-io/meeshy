@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 
 /**
  * L'HORLOGE D'UN PLAYER DE SCÈNE (#6901, D6, Étape 4) — UNE boucle
@@ -92,13 +92,23 @@ export function useSceneClock(params: SceneClockParams): SceneClockHandle {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, playing, loops, durationSeconds]);
 
-  return {
-    subscribe(listener: (t: number) => void) {
-      listeners.current.add(listener);
-      listener(elapsed.current);
-      return () => {
-        listeners.current.delete(listener);
-      };
-    },
-  };
+  // UNE SEULE POIGNÉE POUR LA VIE DU PLAYER (revue-correction #6901) : elle
+  // ne ferme que sur des `ref`, donc rien ne justifie de la recréer — et son
+  // IDENTITÉ est une dépendance d'effet chez chaque abonné
+  // (`SceneObjectFrame`, `[object, timed, clock, layout]`). Un objet neuf par
+  // rendu désabonnait puis réabonnait les SIX couches à chaque rendu du
+  // player, en réécrivant leur pose au passage — l'inverse de ce que
+  // l'horloge existe pour éviter (Zero Unnecessary Re-render).
+  return useMemo<SceneClockHandle>(
+    () => ({
+      subscribe(listener: (t: number) => void) {
+        listeners.current.add(listener);
+        listener(elapsed.current);
+        return () => {
+          listeners.current.delete(listener);
+        };
+      },
+    }),
+    [],
+  );
 }
