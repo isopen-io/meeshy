@@ -32,16 +32,23 @@ final class SceneShapeTests: XCTestCase {
                  payload: payload)
     }
 
-    /// Un fond à la forme du composer : un objet média qui DÉCLARE son rapport.
+    /// Un fond à la forme du composer : un objet média qui DÉCLARE son rapport
+    /// ET son cadrage explicite (`fit`) — ce que #6125 pose sur chaque fond
+    /// neuf. Les témoins de containment (§ 3) portent sur le débordement, pas
+    /// sur la résolution du cadrage : la déclarer ici les en découple, pour
+    /// que `test_unFondSansCadrageDeclare_estTraiteCommeUnRemplissage`
+    /// ci-dessous reste la SEULE source de vérité sur l'absence de cadrage.
     private func fond(_ aspect: Double) -> ObjectV3 {
         objet(.media, plane: .content, payload: [
             "isBackground": .bool(true),
             "mediaURL": .string("https://exemple/f.jpg"),
             "aspectRatio": .number(aspect),
+            "transform": .object(["videoFitMode": .string(StoryBackgroundFraming.fit)]),
         ])
     }
 
-    /// Un fond à la forme passerelle : `bg` + `mediaId`, AUCUN rapport déclaré.
+    /// Un fond à la forme passerelle : `bg` + `mediaId`, AUCUN rapport déclaré,
+    /// AUCUN cadrage déclaré — le repère RECETTE C.
     private var fondSansRapport: ObjectV3 {
         objet(.media, plane: .bg, payload: ["mediaId": .string("6aaa972f3fd1f8a72d0e38ed")])
     }
@@ -126,11 +133,29 @@ final class SceneShapeTests: XCTestCase {
     /// `nil` et demande le rapport à l'appelant (`post.media` width/height) —
     /// c'est la forme passerelle des repères RECETTE C, et la deviner
     /// fabriquerait un cadrage que rien ne mesure.
-    func test_unFondSansRapportDeclare_neSeDevinePas() throws {
+    func test_unFondSansRapportDeclare_neSeDevinePas() {
         XCTAssertNil(SceneShape.mediaBand(scene: scene([fondSansRapport])))
-        let fournie = try XCTUnwrap(SceneShape.mediaBand(scene: scene([fondSansRapport]),
-                                                         backgroundAspect: paysage))
-        XCTAssertEqual(fournie.height, 0.31640625, accuracy: 1e-6)
+    }
+
+    /// **L'absence de cadrage suit le même défaut que le RENDERER : REMPLIR —
+    /// pas ajuster** (revue #6904, tour 2).
+    ///
+    /// `StoryBackgroundFraming.rendersFilled` est le site unique du dépôt qui
+    /// le dit : « `nil` n'est pas un état, c'est un ALIAS de "remplir" », et
+    /// « le défaut du RENDERER reste "remplir" ». Avant ce correctif,
+    /// `mediaBand(scene:)` ne comparait `declaredFitMode` qu'à `"fill"` —
+    /// une ABSENCE tombait dans le même chemin que `"fit"` et calculait une
+    /// bande que le renderer ne peint jamais (il remplit et rogne, sans
+    /// laisser de fond visible). Un hôte qui s'y resserrerait ROGNERAIT le
+    /// média — exactement le défaut que le correctif précédent (c042fdbf84)
+    /// visait, reproduit un cran plus loin sur le repère RECETTE C
+    /// (`bg{mediaId}` seul, sans `videoFitMode`) et tout le publié d'avant
+    /// #6125.
+    func test_unFondSansCadrageDeclare_estTraiteCommeUnRemplissage() {
+        let s = scene([fondSansRapport])
+        XCTAssertEqual(SceneShape.mediaBand(scene: s, backgroundAspect: paysage),
+                       SceneShape.unitRect)
+        XCTAssertFalse(SceneShape.frame(scene: s, backgroundAspect: paysage).tightensAnything)
     }
 
     /// Une scène sans fond média n'a aucune zone de média.

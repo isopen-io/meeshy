@@ -142,20 +142,24 @@ public enum SceneShape {
     /// L'appelant qui tient le post connaît, lui, `media.width / media.height` :
     /// la loi le lui DEMANDE plutôt que d'inventer une forme que rien ne mesure.
     ///
-    /// **Un fond posé en REMPLISSAGE explicite (`transform.videoFitMode ==
-    /// "fill"`, le double-tap fond) n'a pas de bande** — il couvre déjà toute
-    /// la scène, rognant ce qui dépasse plutôt que de laisser du fond visible.
-    /// Calculer une bande depuis son seul `aspectRatio` déclaré y montrerait
-    /// une zone que le renderer ne respecte pas : un hôte qui s'y resserrerait
-    /// rognerait un média qui, à l'écran, remplit le 9:16 en entier. `"fit"`
-    /// (le défaut du composer, `StoryBackgroundFraming.posedFitMode`) et
-    /// l'absence de valeur gardent le calcul habituel — seul le REMPLISSAGE
-    /// explicite change la réponse.
+    /// **Un fond REMPLI n'a pas de bande** — il couvre déjà toute la scène,
+    /// rognant ce qui dépasse plutôt que de laisser du fond visible. Calculer
+    /// une bande depuis son seul `aspectRatio` déclaré y montrerait une zone
+    /// que le renderer ne respecte pas : un hôte qui s'y resserrerait
+    /// rognerait un média qui, à l'écran, remplit le 9:16 en entier.
+    ///
+    /// **Ce qui compte comme « rempli » est `StoryBackgroundFraming.
+    /// rendersFilled`, jamais une égalité locale à `"fill"`** (revue #6904,
+    /// tour 2) : `nil` en est un ALIAS, pas un troisième état — c'est le
+    /// défaut du RENDERER pour tout ce qui n'a jamais reçu de cadrage,
+    /// composer comme passerelle. Seul un cadrage explicite `"fit"` garde le
+    /// calcul habituel ; l'ABSENCE de valeur suit désormais le même défaut que
+    /// le renderer, pas celui du geste de composition.
     public nonisolated static func mediaBand(scene: SceneV3,
                                              backgroundAspect: CGFloat? = nil) -> CGRect? {
         guard let rapport = resolvedBackgroundAspect(scene: scene, override: backgroundAspect)
         else { return nil }
-        if declaredFitMode(in: scene) == StoryBackgroundFraming.fill { return unitRect }
+        if StoryBackgroundFraming.rendersFilled(declaredFitMode(in: scene)) { return unitRect }
         return mediaBand(backgroundAspect: rapport)
     }
 

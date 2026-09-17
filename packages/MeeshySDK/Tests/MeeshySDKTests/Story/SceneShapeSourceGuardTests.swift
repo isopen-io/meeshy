@@ -23,6 +23,26 @@ import XCTest
 /// deux listes d'exceptions ci-dessous sont désormais VIDES, et le sont
 /// devenues le cliquet du lot. Un hôte qui y entre après cette date n'est pas
 /// une exception, c'est une régression.
+///
+/// ## Ce que cette garde PROUVE, et ce qu'elle NE PROUVE PAS (revue #6904, tour 2)
+///
+/// Elle prouve que la **constante 9:16** (règle 1, `SceneShape.aspect`) a un
+/// site unique et que tout hôte qui monte le player la projette — en direct,
+/// ou par un solveur CONNU (`SceneCarouselLayout`, `MediaStageFraming`,
+/// `storyCanvasContainer`, `storyCanvasOrPlaceholder`) dont elle a vérifié
+/// qu'il la porte une couche plus bas.
+///
+/// **Elle ne prouve PAS que ces hôtes appliquent le CADRE binaire (règle 3,
+/// `frame`) ni les DEUX plein écrans (règle 4, `layout`/`Fullscreen`).** Deux
+/// des solveurs connus (`SceneCarouselLayout` → `SceneFraming.cardAspect`,
+/// `SceneFraming.focus`) rendent un rapport CONTINU — la « quatrième forme »
+/// que la règle 3 exclut précisément — et `StoryViewerView+Canvas` décide sa
+/// forme VISIBLE ailleurs (`StoryImageOnlyPresentation`), sans jamais
+/// consulter `frame`/`layout`. Consulter la constante n'est pas appliquer le
+/// cadre binaire : les deux mécanismes plus anciens que cite le doc-comment
+/// de `SceneShape` restent NON convergés, et cette garde ne les couvre pas —
+/// leur convergence est un lot séparé (voir `SceneShape.swift`, § « Ce que la
+/// loi FERME, et ce qu'elle DÉCLARE sans encore le câbler »).
 final class SceneShapeSourceGuardTests: XCTestCase {
 
     /// **La constante 9:16 n'a qu'un site.** Toute autre écriture du rapport

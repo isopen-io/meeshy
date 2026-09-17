@@ -600,7 +600,11 @@ Le `personne` de la seconde ligne n'est pas un trou, c'est la réponse : la
 troisième couche de [#6806](https://github.com/isopen-io/meeshy/issues/6806)
 disparaît **par construction** plutôt que par consigne, et le défaut que l'audit
 nomme « deux acteurs peignent le hors-champ »
-([#6797](https://github.com/isopen-io/meeshy/issues/6797)) n'a plus où se poser.
+([#6797](https://github.com/isopen-io/meeshy/issues/6797)) n'aura plus où se
+poser **une fois `layout`/`Fullscreen` câblés dans un hôte** — voir le
+paragraphe suivant : au 2026-09-17, aucun hôte n'appelle encore `layout`, donc
+le défaut de #6797 n'a pas encore disparu du réel, seulement de la loi qui le
+rendra impossible dès qu'un plein écran la consultera.
 
 ### Où la loi vit
 
@@ -618,10 +622,29 @@ chacun des deux plein écrans, avec **qui peint autour**.
 
 Une garde de source (`SceneShapeSourceGuardTests`) tient les deux invariants :
 le rapport 9:16 n'a qu'un site, et tout fichier qui monte `MeeshyScenePlayer` /
-`StoryReaderRepresentable` / `StoryCanvasUIView` consulte la loi. Ses deux
-listes d'exceptions sont **VIDES depuis le 2026-09-17** (seconde moitié du lot
-#6904) ; un hôte qui y entre après cette date n'est pas une exception, c'est
-une régression.
+`StoryReaderRepresentable` / `StoryCanvasUIView` **projette la constante**
+9:16 — en direct, ou par un solveur connu vérifié la porter une couche plus
+bas. Ses deux listes d'exceptions sont **VIDES depuis le 2026-09-17** (seconde
+moitié du lot #6904) ; un hôte qui y entre après cette date n'est pas une
+exception, c'est une régression.
+
+**Cette garde ne prouve PAS que ces hôtes appliquent le cadre binaire ni les
+deux plein écrans** — seule la constante (règle 1) a un consommateur de
+production, vérifié par cette garde. Les règles 2 à 4 (`mediaBand`, `frame`,
+`layout`/`Fullscreen`/`OffscreenPainter`/`Backdrop`) sont déclarées et testées
+en isolation (`SceneShapeTests`) mais **aucun hôte ne les appelle encore** :
+`SceneShape.swift` l'écrit lui-même en tête de fichier (§ « Ce que la loi
+FERME, et ce qu'elle DÉCLARE sans encore le câbler »). Deux mécanismes plus
+anciens et indépendants couvrent une partie du même terrain sans consulter
+cette loi — `SceneFraming.imageAspect`/`cardFocus` (carte de fil et pages de
+carrousel, rapport CONTINU, #6697/#6708) et
+`StoryImageOnlyPresentation`/`StorySceneFootprint` (lecteur de story, #6636) —
+et n'ont pas été mesurés CONTRE elle. Câbler `frame`/`layout` dans ces hôtes,
+ou converger les deux mécanismes existants vers eux, est un **lot séparé** :
+tant qu'il n'est pas fait, une scène peut continuer à se présenter en trois
+formes selon la surface (détail/galerie en 9:16, carte de fil et carrousel en
+rapport continu dérivé de `focus`), et ce n'est pas une régression de #6904 —
+c'est le périmètre que #6904 a délibérément laissé à un lot suivant.
 
 ## 5. Ce que ce document ne couvre pas
 
