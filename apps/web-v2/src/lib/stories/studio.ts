@@ -6,7 +6,7 @@ import type { StudioDraftSnapshot, StudioTextLayerSnapshot } from './studio-draf
 import { IDENTITY_POSE, clampPose, type StudioPose } from './studio-pose';
 import {
   STUDIO_TEXT_ALIGNS,
-  STUDIO_TEXT_BACKGROUNDS,
+  STUDIO_TEXT_BACKGROUND_VALUES,
   STUDIO_TEXT_COLORS,
   STUDIO_TEXT_EFFECTS,
   STUDIO_TEXT_STYLES,
@@ -329,9 +329,10 @@ function textLayerFromSnapshot(snapshot: StudioTextLayerSnapshot, language: stri
     effect: oneOf(STUDIO_TEXT_EFFECTS, snapshot.effect, 'none'),
     color: oneOf(STUDIO_TEXT_COLORS, snapshot.color, 'FFFFFF'),
     align: oneOf(STUDIO_TEXT_ALIGNS, snapshot.align, 'center'),
-    background: typeof snapshot.background === 'string' && (STUDIO_TEXT_BACKGROUNDS as readonly string[]).includes(snapshot.background)
-      ? snapshot.background
-      : null,
+    background:
+      typeof snapshot.background === 'string' && (STUDIO_TEXT_BACKGROUND_VALUES as readonly string[]).includes(snapshot.background)
+        ? snapshot.background
+        : null,
     pose: poseOf(snapshot.pose),
   };
 }
