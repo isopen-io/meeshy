@@ -21,7 +21,12 @@ on:
     branches: [main, dev]
     tags: ['v*.*.*']
     paths:
-      - 'apps/web/**'
+      # `apps/web` (LEGACY) ne déclenche plus ce workflow : son image n'y est
+      # plus construite (directive porteur 2026-09-16). meeshy.me sert
+      # `apps/web-v2` depuis le 2026-09-15, et staging ne servait déjà plus le
+      # legacy depuis #5609 — l'image était poussée au registry et déployée
+      # nulle part. Sa publication de PRODUCTION reste dans `release.yml`
+      # (tag `v*`), inchangée.
       - 'apps/web-v2/**'
       - 'packages/design-tokens/**'
       - 'services/gateway/**'
@@ -40,13 +45,10 @@ on:
         type: choice
         options:
           - all
-          - web
           - web-v31
           - gateway
           - translator
           - agent
-          - web,gateway
-          - web,translator
           - gateway,translator
       custom_services:
         description: 'Custom services (overrides above if set, e.g., "web,gateway")'
@@ -113,6 +115,9 @@ jobs:
   detect:
     name: Detect Changes
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read # requis par `gh run list` — lire le dernier run réussi de CE workflow (#6551)
     outputs:
       services: ${{ steps.services.outputs.result }}
       has_changes: ${{ steps.services.outputs.has_changes }}
@@ -122,8 +127,29 @@ jobs:
         with:
           fetch-depth: 0
 
+      # #6551 — la base de diff ne doit plus être la poussée IMMÉDIATEMENT
+      # précédente (`github.event.before`), qui disparaît avec son diff quand
+      # `concurrency: cancel-in-progress` annule le run qui l'aurait traitée.
+      # C'est le dernier run RÉUSSI de ce workflow sur cette branche qui sert de
+      # repère : tout ce qui s'est accumulé depuis — cancels compris — rentre
+      # dans le diff du prochain run qui aboutit.
+      - name: Résoudre le dernier run réussi de ce workflow sur cette branche
+        id: last_success
+        if: github.event_name != 'workflow_dispatch' && !startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          SHA=$(gh run list --repo "${{ github.repository }}" --workflow docker.yml \
+            --branch "${{ github.ref_name }}" --status success --limit 1 \
+            --json headSha --jq '.[0].headSha // empty' 2>/dev/null) || SHA=""
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
       - name: Detect changes
         id: changes
+        env:
+          LAST_SUCCESSFUL_SHA: ${{ steps.last_success.outputs.sha }}
+          EVENT_BEFORE: ${{ github.event.before }}
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             SERVICES="${{ github.event.inputs.custom_services }}"
@@ -132,7 +158,6 @@ jobs:
             fi
 
             if [[ "$SERVICES" == "all" ]]; then
-              echo "web=true" >> $GITHUB_OUTPUT
               echo "web_v31=true" >> $GITHUB_OUTPUT
               echo "gateway=true" >> $GITHUB_OUTPUT
               echo "translator=true" >> $GITHUB_OUTPUT
@@ -141,9 +166,10 @@ jobs:
               # Sélection par JETON, pas par sous-chaîne. `*"web"*` répondait vrai
               # pour « web-v31 » : demander la v3.1 construisait AUSSI le legacy, et
               # rien dans le texte ne le disait. Les virgules encadrantes rendent
-              # « web » et « web-v31 » disjoints.
+              # « web » et « web-v31 » disjoints — le legacy n'étant plus construit
+              # (2026-09-16), la règle protège désormais `web-v31` d'un jeton voisin
+              # plutôt que du legacy, et reste donc nécessaire.
               SELECTED=",${SERVICES// /},"
-              echo "web=$([[ "$SELECTED" == *",web,"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
               echo "web_v31=$([[ "$SELECTED" == *",web-v31,"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
               echo "gateway=$([[ "$SELECTED" == *",gateway,"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
               echo "translator=$([[ "$SELECTED" == *",translator,"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
@@ -156,7 +182,6 @@ jobs:
             # application web en développement. Une omission dans une
             # énumération ne rougit nulle part : elle produit une release
             # complète en apparence, amputée en fait.
-            echo "web=true" >> $GITHUB_OUTPUT
             echo "web_v31=true" >> $GITHUB_OUTPUT
             echo "gateway=true" >> $GITHUB_OUTPUT
             echo "translator=true" >> $GITHUB_OUTPUT
@@ -176,10 +201,20 @@ jobs:
             # un build de trop coûte quelques minutes de runner ; un build
             # manquant coûte une livraison silencieusement absente, qu'on ne
             # découvre qu'en constatant que staging sert l'ancien.
-            BASE="${{ github.event.before }}"
-            if ! git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
-              echo "::warning::base de comparaison introuvable ($BASE) — construction de TOUS les services plutôt qu'une détection devinée"
-              BASE=""
+            #
+            # #6551 — la base n'est plus `github.event.before` en premier
+            # choix : c'est le dernier run RÉUSSI (résolu à l'étape
+            # précédente), avec `event.before` en repli si aucun run réussi
+            # n'est connu ou que son SHA a disparu de l'historique (force-push).
+            # `resolve-docker-detect-base.mjs` porte la décision et son
+            # `--self-test` — ne pas réécrire cette logique ici.
+            RESOLVED=$(node scripts/resolve-docker-detect-base.mjs)
+            BASE=$(echo "$RESOLVED" | sed -n 's/^base=//p')
+            SOURCE=$(echo "$RESOLVED" | sed -n 's/^source=//p')
+            if [[ -z "$BASE" ]]; then
+              echo "::warning::base de comparaison introuvable (ni dernier run réussi, ni event.before valides) — construction de TOUS les services plutôt qu'une détection devinée"
+            else
+              echo "::notice::base de détection = $BASE (source: $SOURCE)"
             fi
             if [[ -n "$BASE" ]]; then
               CHANGED=$(git diff --name-only "$BASE" "${{ github.sha }}")
@@ -187,13 +222,11 @@ jobs:
               CHANGED="__BASE_INTROUVABLE__"
             fi
             if [[ "$CHANGED" == "__BASE_INTROUVABLE__" ]]; then
-              echo "web=true" >> $GITHUB_OUTPUT
               echo "web_v31=true" >> $GITHUB_OUTPUT
               echo "gateway=true" >> $GITHUB_OUTPUT
               echo "translator=true" >> $GITHUB_OUTPUT
               echo "agent=true" >> $GITHUB_OUTPUT
             else
-            echo "web=$([[ "$CHANGED" == *"apps/web/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             echo "web_v31=$([[ "$CHANGED" == *"apps/web-v2/"* ]] || [[ "$CHANGED" == *"packages/design-tokens/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             echo "gateway=$([[ "$CHANGED" == *"services/gateway/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             echo "translator=$([[ "$CHANGED" == *"services/translator/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
@@ -213,13 +246,12 @@ jobs:
             TORCH_INPUT="cpu"
           fi
 
-          if [[ "${{ steps.changes.outputs.web }}" == "true" ]]; then
-            HAS_CHANGES=true
-            VERSION=$(cat apps/web/VERSION 2>/dev/null || echo "1.0.0")
-            [[ "$FIRST" == "false" ]] && SERVICES+=','
-            SERVICES+='{"service":"web","context":".","dockerfile":"./apps/web/Dockerfile","image":"meeshy-web","version":"'$VERSION'"}'
-            FIRST=false
-          fi
+          # LE LEGACY `web` (image `meeshy-web`) N'EST PLUS CONSTRUIT ICI
+          # (directive porteur 2026-09-16). Il n'était déployé nulle part
+          # depuis #5609 : l'image partait au registry et aucun compose ne la
+          # tirait. `release.yml` continue de la publier sur tag `v*`, donc un
+          # retour arrière garde une image à tirer — ce qui n'a jamais dépendu
+          # de ce workflow-ci.
 
           # LA v3.1 — image `meeshy-web-v31`. C'est le nom que le compose de
           # l'HÔTE de staging tire : le changer ici sans lui figerait staging en
@@ -444,6 +476,19 @@ jobs:
   #
   # Ce job ne recrée QUE les services dont l'image vient d'être construite —
   # jamais `up -d` nu, qui toucherait les huit autres services de staging.
+  #
+  # **DEV ET RIEN D'AUTRE** (directive porteur 2026-09-15). Le déploiement
+  # automatique s'arrête à staging : la production ne part JAMAIS toute seule,
+  # ni sur une poussée dans `main`, ni sur un tag `v*` — elle se déploie à la
+  # main, par un humain qui l'a décidé. Le `if:` ci-dessous est la garde, et
+  # `scripts/check-docker-prune-noninteractive.mjs` (job `quality` de `ci.yml`)
+  # interdit qu'un futur job porteur d'une clé SSH s'en dispense.
+  #
+  # **CE QUE FAIT L'HÔTE** est écrit dans `infrastructure/scripts/meeshy-deploy-staging.sh` —
+  # la source de `/usr/local/bin/meeshy-deploy-staging.sh`, que cette clé
+  # contrainte exécute. Il PURGE les images obsolètes avant de tirer (#6556) ;
+  # sa mise à jour sur la machine reste un geste manuel, documenté en tête de
+  # ce script.
   deploy-staging:
     name: Deploy to staging
     runs-on: ubuntu-latest
@@ -481,7 +526,10 @@ jobs:
           # construite et servie nulle part pendant des jours.
           #
           # `web` n'a PAS de ligne, et c'est une décision : staging ne sert plus
-          # le legacy depuis #5609.
+          # le legacy depuis #5609. Depuis le 2026-09-16 il n'est même plus
+          # CONSTRUIT par ce workflow — un `custom_services: web` tomberait donc
+          # dans `INCONNUS` et se verrait, ce qui est le comportement voulu :
+          # demander un service qui n'existe plus doit avertir, pas se taire.
           CIBLES=""
           INCONNUS=""
           for SVC in $(echo "$SERVICES_JSON" | jq -r '.include[].service'); do

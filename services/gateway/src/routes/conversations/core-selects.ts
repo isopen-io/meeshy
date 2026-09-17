@@ -4,6 +4,7 @@
  * découpage #4284. Aucune logique de route ici : uniquement les constantes
  * `select`/`include` et leurs doc-comments d'origine, déplacés verbatim.
  */
+import type { Prisma } from '@meeshy/shared/prisma/client';
 import { conversationActiveMemberCountSelect } from './utils/active-member-count';
 
 /**
@@ -205,28 +206,31 @@ export const conversationDetailInclude = {
  * **CE QUE LA LIGNE DE LISTE CHARGE — et le schéma wire dit ce qu'elle doit
  * charger** (audit de cohérence iOS ↔ passerelle, 2026-09-11).
  *
- * Extraite de `core-list.ts` pour une raison qui n'est pas cosmétique : tant
- * qu'elle était un littéral anonyme au milieu d'un `findMany`, aucun témoin ne
- * pouvait la lire, et le seul témoin qui prétendait mesurer la ligne de liste
- * (`conversation-wire-fields.test.ts`) mesurait un objet FABRIQUÉ dans le test.
- * Il était donc vert sur quatre champs que la base ne chargeait pas.
+ * Extrait de `core-list.ts` pour porter un type nommé (#3679, réduction de
+ * dette `any`) — jusque-là dupliqué en littéral anonyme dans le `findMany`,
+ * ce qui empêchait Prisma d'en dériver quoi que ce soit d'utilisable au site
+ * d'appel, et empêchait tout témoin de lire ce que la requête charge vraiment.
  *
  * `description`, `defaultWriteRole`, `slowModeSeconds` et `autoTranslateEnabled`
- * étaient DÉCLARÉS par `conversationMinimalSchema` et absents d'ici : servis
- * `undefined` à chaque ligne, pour toujours. Côté iOS, l'écran de réglages d'un
- * groupe compose ses valeurs « originales » depuis la conversation de la LISTE
- * (`ConversationSettingsView`, ouvert depuis `ConversationListView`) — il
- * affichait donc une description VIDE sur un groupe qui en a une, « tout le
- * monde peut écrire » sur un salon restreint, et le mode lent DÉSACTIVÉ sur une
- * conversation qui l'impose. Quatre colonnes du même document : les charger ne
- * coûte ni jointure ni requête.
+ * sont DÉCLARÉS par `conversationMinimalSchema` : côté iOS, l'écran de
+ * réglages d'un groupe compose ses valeurs « originales » depuis la
+ * conversation de la LISTE (`ConversationSettingsView`, ouvert depuis
+ * `ConversationListView`). Un lot antérieur (2026-09-11) les avait ajoutés à
+ * une fonction distincte, `conversationListSelect`, jamais appelée par
+ * aucune route — #6908 : la ligne de liste servait donc une description VIDE
+ * sur un groupe qui en a une, « tout le monde peut écrire » sur un salon
+ * restreint, et le mode lent DÉSACTIVÉ sur une conversation qui l'impose, le
+ * correctif documenté n'ayant jamais été branché sur le point d'appel réel.
+ * Les quatre champs sont désormais ICI, dans le `select` que la route
+ * exécute — quatre colonnes du même document, qui ne coûtent ni jointure ni
+ * requête.
  *
  * La loi est gardée par `conversation-list-select-parity.test.ts` : tout champ
  * que le schéma wire déclare ET que `Conversation` porte en colonne doit être
  * ici. `memberCount` en est la SEULE exception, et pour une raison écrite —
  * voir `_count` ci-dessous.
  */
-export const conversationListSelect = (viewerId: string) => ({
+export const conversationListQuerySelect = (viewerId: string) => ({
   id: true,
   title: true,
   description: true,
@@ -276,3 +280,37 @@ export const conversationListSelect = (viewerId: string) => ({
     select: conversationLastMessagePreviewSelect
   }
 }) as const;
+
+/** La forme d'une ligne rendue par `prisma.conversation.findMany({ select: conversationListQuerySelect(...) })`. */
+export type ConversationListRow = Prisma.ConversationGetPayload<{
+  select: ReturnType<typeof conversationListQuerySelect>;
+}>;
+
+type ConversationListPreviewSenderBase = NonNullable<
+  ConversationListRow['messages'][number]['sender']
+>;
+type ConversationListPreviewSenderUserBase = NonNullable<ConversationListPreviewSenderBase['user']>;
+
+/**
+ * L'expéditeur du dernier message d'aperçu, tel que `conversationLastMessagePreviewSelect`
+ * le charge — plus une poignée de replis qu'AUCUN `select` de ce fichier ne
+ * charge (`username`, `isOnline`, `lastActiveAt` au niveau participant ;
+ * `firstName`, `lastName`, `isOnline`, `lastActiveAt` au niveau `user`) (#3679).
+ * `core-list.ts` les lisait quand même sous un `as any` — ils évaluent
+ * structurellement à `undefined` à chaque ligne, jamais autre chose. Les
+ * garder ici EN TANT QUE TELS, plutôt que de les retirer, préserve le
+ * comportement exact du site tout en nommant le cast.
+ */
+export type ConversationListPreviewSender = Omit<ConversationListPreviewSenderBase, 'user'> & {
+  username?: string | null;
+  isOnline?: boolean | null;
+  lastActiveAt?: Date | null;
+  user?:
+    | (ConversationListPreviewSenderUserBase & {
+        firstName?: string | null;
+        lastName?: string | null;
+        isOnline?: boolean | null;
+        lastActiveAt?: Date | null;
+      })
+    | null;
+};

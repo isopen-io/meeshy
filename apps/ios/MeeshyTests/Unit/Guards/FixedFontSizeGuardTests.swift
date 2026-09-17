@@ -158,7 +158,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         // C'est le pendant de la leçon 347 pour un cliquet : une liste qui
         // nomme des FICHIERS se périme au premier découpage.
         "Features/Main/Components/UniversalComposerBar+Send.swift",
-        "Features/Main/Composer/ComposerFormatFan.swift",
         "Features/Main/Composer/ComposerMoodSurface.swift",
         "Features/Main/Composer/ComposerTopBar.swift",
         // #4102 — RELOCALISATION pure : le meuble est découpé, ses sites figés
@@ -261,6 +260,10 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/ParticipantProfileSheet.swift",
         "Features/Main/Views/ReelAudioBackdrop.swift",
         "Features/Main/Views/ReelRepostEmbedCell.swift",
+        // #6693 — RELOCALISATION pure : les glyphes figés du rail d'actions (26 pt dans
+        // une colonne fixe de 48, doctrine 86i) quittent l'hôte avec le rail. La
+        // POPULATION ne bouge pas ; l'hôte en garde d'autres et reste dans la liste.
+        "Features/Main/Views/ReelsPlayerView+ActionRail.swift",
         "Features/Main/Views/ReelsPlayerView.swift",
         "Features/Main/Views/ShareLinkIdentitySheet.swift",
         "Features/Main/Views/ShareLinksView.swift",
@@ -271,6 +274,12 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/StoryReactionFlightView.swift",
         "Features/Main/Views/StoryTrayView.swift",
         "Features/Main/Views/StoryViewerContainer.swift",
+        // #6704 — RELOCALISATION pure : `StoryActionButton` quitte
+        // `StoryViewerView+Content.swift` et emporte ses trois sites figés — le
+        // glyphe de 20 pt (deux passes) et le libellé de 10 pt d'une colonne fixe
+        // de 56, doctrine 82i. La POPULATION ne bouge pas ; l'hôte en garde deux
+        // autres et reste dans la liste.
+        "Features/Main/Views/StoryViewerView+ActionButton.swift",
         // 2026-09-02 — RELOCALISATION pure, même forme qu'au #4084 : le SEUL site
         // figé de `StoryViewerView+Canvas.swift` (la croix 22×22 de la bannière
         // « Réponse à ») vit dans `StoryComposerBarView`, qui a quitté le canvas
@@ -377,7 +386,12 @@ final class FixedFontSizeGuardTests: XCTestCase {
     // 226 → 214 (#6481, 2026-09-14) : les pages ouvertes depuis Réglages montent
     // l'en-tête partagé, et leurs chevrons, croix et (+) faits main à taille figée
     // sont partis avec lui. `VoiceProfileManageView` sort de `bearingFiles`.
-    private static let totalCeiling = 214
+    // 214 → 213 (#6502) : l'éventail du haut est retiré, et avec lui le chevron
+    // `.font(.system(size: 9, weight: .bold))` de son chip, un GLYPHE (le texte
+    // figé ne bouge donc pas). `ComposerFormatFan.swift` sort de `bearingFiles`
+    // dans le même commit (règle 4) ; `ComposerPublishMenu.swift`, qui le
+    // remplace, n'emploie que des polices relatives.
+    private static let totalCeiling = 213
 
     // MARK: - Règle 1 — aucun écran neuf n'introduit de taille figée
 

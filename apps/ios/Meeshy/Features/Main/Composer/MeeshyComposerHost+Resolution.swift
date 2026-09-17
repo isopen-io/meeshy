@@ -4,7 +4,7 @@ import MeeshyUI
 
 /// **Ce que le meuble RÉSOUT de sa composition et de sa porte** — les deux
 /// gates, le profil, le format qui GOUVERNE, la surface MONTÉE, qui peint le
-/// chrome, où l'éventail se peint et quelles audiences sont offertes.
+/// chrome et quelles audiences sont offertes.
 ///
 /// Extrait de `MeeshyComposerHost.swift` le 2026-09-02 — RELOCALISATION pure,
 /// même forme qu'aux #4084 et #4102 : le fichier principal franchissait le
@@ -98,14 +98,6 @@ extension MeeshyComposerHost {
         )
     }
 
-    /// Ce que l'éventail écrit. La LECTURE passe par la règle de repli, sinon
-    /// un éventail dont l'offre vient de se refermer ne marquerait plus aucun
-    /// chip ; l'ÉCRITURE va droit au champ, parce qu'un tap ne vise jamais
-    /// qu'un format offert.
-    var formatSelection: Binding<ComposerFormat> {
-        Binding(get: { self.selectedFormat }, set: { self.currentFormat = $0 })
-    }
-
     /// La surface MONTÉE — l'unique lecture de la règle de routage dans ce
     /// fichier. Le corps la consomme pour choisir sa vue, le chrome pour savoir
     /// qui peint la publication, le gate pour savoir ce qui fait matière. Trois
@@ -147,7 +139,7 @@ extension MeeshyComposerHost {
     }
 
 
-    // MARK: - Qui peint le chrome, où se peint l'éventail, ce qui est offert
+    // MARK: - Qui peint le chrome, ce qui est offert
     /// QUI peint la publication — audience, aperçu, flèche. UNE source, lue deux
     /// fois : passée à l'atelier pour qu'il assemble ou non sa rangée haute, et
     /// lue ici pour que le socle peigne ou non les mêmes zones.
@@ -217,66 +209,6 @@ extension MeeshyComposerHost {
     /// l'un en ouvrant l'autre) ; ce qui est demandé ici est leur UNION, pas
     /// leur arbitrage.
     var writesText: Bool { editsSceneDescription || editsPostContent }
-
-    /// **OÙ le plateau — donc l'éventail — a le droit de se peindre.**
-    ///
-    /// Une RÈGLE nommée, jamais une expression écrite dans le `body` : une
-    /// condition posée là est invisible aux tests, et c'est ainsi qu'une règle
-    /// produit se met à exister en deux exemplaires.
-    ///
-    /// **La loi 5 impose de surcroît que rien dans le `body` ne conditionne
-    /// l'affichage sur la PORTE, et il faut lire ce que cela interdit
-    /// exactement.** Ce n'est pas « ne rien lire qui vienne de la porte » : le
-    /// PROFIL vient d'elle, et `mountedSurface` comme `offeredAudiences` le
-    /// remontent aussi. Ce qui est interdit est de tester son IDENTITÉ — un
-    /// `if profile` / `if origin` écrit ici, ce que
-    /// `test_theSocleYieldsToTheAtelier_andNeverToTheDoor` refuse en toutes
-    /// lettres. Cette propriété ne lit que des CAPACITÉS — la surface montée,
-    /// l'ouverture, l'offre —, si bien que deux portes aux mêmes capacités y
-    /// obtiennent la même réponse. C'est cela, la loi 5.
-    ///
-    /// Jusqu'au lot 4.7, le plateau était monté par `composerSurface` : la SCÈNE
-    /// seule le portait, et le chip « Post » d'une republication de mood
-    /// n'existait sur aucun écran. Le descendre en bloc aurait livré le défaut
-    /// symétrique sous `.feedComposer`. `ComposerFormatFanPlacement` est ce qui
-    /// sépare les deux cas — et c'est une règle, non un accident de montage.
-    ///
-    /// **Elle lit les DEUX règles de l'éventail, et leur CONJONCTION n'est pas
-    /// écrite ici.** Le plateau ne porte plus qu'une chose ; sans le test de
-    /// VISIBILITÉ, une création de mood (`.moodChip`, qui n'offre qu'un format)
-    /// monterait une rangée VIDE — un `HStack` réduit à ses 16 points de
-    /// remplissage vertical, en haut d'un écran livré. Loi 4 : ce qui n'a rien à
-    /// montrer est absent, pas transparent. La scène, elle, n'en change pas :
-    /// sa seule porte de production (`.storyTray`) offre toujours au moins deux
-    /// formats.
-    ///
-    /// Le `&&` a d'abord été écrit ICI, et c'était la même faute d'un cran plus
-    /// haut : la composition EST la règle, et posée dans une propriété privée
-    /// elle n'était exercée par aucune assertion. Mutation mesurée — remplacer
-    /// ce `&&` par un `||` laissait passer les quatre gardes de source qui
-    /// l'entouraient. `ComposerFormatFanPlacement.mounts` la porte désormais, et
-    /// cette propriété n'est plus que sa LECTURE.
-    var mountsFormatFan: Bool {
-        ComposerFormatFanPlacement.mounts(
-            surface: mountedSurface,
-            opening: profile.opensWith,
-            offeredFormats: profile.offeredFormats
-        )
-    }
-
-    /// **La RANGÉE du plateau le peint-elle ?** — `mountsFormatFan` dit QUE
-    /// l'éventail est servi, `place` dit OÙ, et cette propriété joint les deux.
-    ///
-    /// La jonction est ici, dans une propriété NOMMÉE, jamais dans le `body` :
-    /// une condition écrite dans un `body` est invisible aux tests, et c'est
-    /// exactement la faute que la note ci-dessus raconte avoir déjà commise un
-    /// cran plus haut. Sa jumelle vit au site d'appel de la surface document
-    /// (`place == .documentHeader`), et l'exhaustivité du `switch` de `place`
-    /// interdit qu'elles soient vraies ensemble.
-    var paintsFormatFan: Bool {
-        mountsFormatFan
-            && ComposerFormatFanPlacement.place(for: mountedSurface) == .plateauRow
-    }
 
     /// **Les audiences que le meuble a le droit de proposer**, lues UNE fois et
     /// remises telles quelles à ses deux formes de sélecteur — le menu du socle

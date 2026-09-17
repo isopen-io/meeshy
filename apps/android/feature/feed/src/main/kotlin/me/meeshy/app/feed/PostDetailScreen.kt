@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -56,7 +55,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -252,18 +250,9 @@ private fun PostDetailContent(
                     DetailLanguageStrip(chips = post.languageStrip, onChipTap = onFlagTap)
                 }
 
-                post.images.firstOrNull()?.let { image ->
+                if (post.images.isNotEmpty()) {
                     Spacer(Modifier.height(MeeshySpacing.md))
-                    AsyncImage(
-                        model = image.url,
-                        contentDescription = stringResource(R.string.feed_image_description),
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(1.4f)
-                            .clip(RoundedCornerShape(MeeshyRadius.md))
-                            .background(MeeshyPalette.Indigo500.copy(alpha = 0.08f)),
-                    )
+                    PostImageLayout(images = post.images, layout = post.layout, onImageTap = null)
                 }
 
                 post.repostEmbed?.let { embed ->

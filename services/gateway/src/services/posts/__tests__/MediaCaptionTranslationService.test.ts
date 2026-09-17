@@ -48,7 +48,7 @@ const makeMockPrisma = ({
   post: {
     findUnique: jest.fn<any>(async () => post),
   },
-  $runCommandRaw: jest.fn<any>(async () => ({ ok: 1 })),
+  $runCommandRaw: jest.fn<any>(async () => ({ ok: 1, n: 1, nModified: 1 })),
 });
 
 const makeMockSocialEvents = () => ({
@@ -201,7 +201,20 @@ describe('MediaCaptionTranslationService', () => {
           update: 'PostMedia',
           updates: [expect.objectContaining({
             q: { _id: { $oid: 'media-1' } },
-            u: { $set: expect.objectContaining({ 'captionTranslations.en': expect.objectContaining({ text: 'Hello world' }) }) },
+            // Pipeline (#6558) : `$set` pointé sur un `captionTranslations` null
+            // échouait en silence ; la fusion part d'une carte vide si le champ
+            // est null ou absent, et la valeur voyage en `$literal` (un texte
+            // traduit qui commence par `$` serait sinon lu comme un chemin).
+            u: [{
+              $set: {
+                captionTranslations: {
+                  $mergeObjects: [
+                    { $ifNull: ['$captionTranslations', {}] },
+                    { en: { $literal: expect.objectContaining({ text: 'Hello world' }) } },
+                  ],
+                },
+              },
+            }],
           })],
         }),
       );
@@ -209,6 +222,33 @@ describe('MediaCaptionTranslationService', () => {
         expect.objectContaining({ mediaId: 'media-1', postId: 'post-1', language: 'en' }),
         'author-1', 'PUBLIC', [],
       );
+    });
+
+    it('does not broadcast when Mongo reports a write error for the update (#6558)', async () => {
+      const { zmqClient, prisma, socialEvents } = makeService();
+      prisma.$runCommandRaw.mockResolvedValueOnce({
+        ok: 1, n: 0, nModified: 0,
+        writeErrors: [{ index: 0, code: 28, errmsg: 'Cannot create field \'en\' in element {captionTranslations: null}' }],
+      });
+      zmqClient.emit('translationCompleted', {
+        targetLanguage: 'en',
+        result: { messageId: 'media-caption:media-1', translatedText: 'Hello world', confidenceScore: 0.95, translatorModel: 'nllb' },
+      });
+      await flushPromises();
+
+      expect(socialEvents.broadcastMediaCaptionTranslationUpdated).not.toHaveBeenCalled();
+    });
+
+    it('does not broadcast when the update matched no media (#6558)', async () => {
+      const { zmqClient, prisma, socialEvents } = makeService();
+      prisma.$runCommandRaw.mockResolvedValueOnce({ ok: 1, n: 0, nModified: 0 });
+      zmqClient.emit('translationCompleted', {
+        targetLanguage: 'en',
+        result: { messageId: 'media-caption:media-1', translatedText: 'Hello world', confidenceScore: 0.95, translatorModel: 'nllb' },
+      });
+      await flushPromises();
+
+      expect(socialEvents.broadcastMediaCaptionTranslationUpdated).not.toHaveBeenCalled();
     });
 
     it('resolves the owning post through the comment when the media belongs to a comment', async () => {

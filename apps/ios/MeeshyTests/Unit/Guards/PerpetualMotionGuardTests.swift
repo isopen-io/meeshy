@@ -77,7 +77,7 @@ final class PerpetualMotionGuardTests: XCTestCase {
     func test_lEcranDeDemarrageDecideDuMouvement() throws {
         try assertDeclarationDecidesAboutMotion(
             marker: "struct SplashScreen",
-            file: "MeeshyApp.swift",
+            file: "SplashScreen.swift",
             because: "les orbes de l'écran de démarrage bouclent sans fin"
         )
     }

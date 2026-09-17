@@ -34,7 +34,7 @@ final class SocialAudioSurfaceWiringGuardTests: XCTestCase {
     /// Le fichier qui MONTE le lecteur audio de chaque surface.
     private static let files: [SocialAudioSurface: String] = [
         .feedPostCard:       "Meeshy/Features/Main/Views/FeedPostCard+Media.swift",
-        .postDetail:         "Meeshy/Features/Main/Views/PostDetailView.swift",
+        .postDetail:         "Meeshy/Features/Main/Views/PostDetailView+Media.swift",
         .comment:            "Meeshy/Features/Main/Views/CommentMediaView.swift",
         .reel:               "Meeshy/Features/Main/Views/ReelsPlayerView.swift",
         .audioFullscreen:    "Meeshy/Features/Main/Views/AudioFullscreenView.swift",

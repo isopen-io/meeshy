@@ -13,6 +13,9 @@
     <string name="feed_unbookmark">Retirer l\'enregistrement</string>
     <string name="feed_hidden_images">+%1$d</string>
     <string name="feed_open_media">Ouvrir l’image</string>
+    <string name="feed_media_page_counter">%1$d / %2$d</string>
+    <string name="feed_media_previous">Image précédente</string>
+    <string name="feed_media_next">Image suivante</string>
     <string name="feed_media_saved">Enregistré dans la galerie</string>
     <string name="feed_media_save_failed">Échec de l’enregistrement</string>
     <string name="feed_pinned">Épinglé</string>
@@ -114,6 +117,8 @@
     <string name="feed_composer_location_unavailable">Position indisponible — vérifiez vos paramètres de localisation et réessayez</string>
     <string name="feed_composer_media_limit">Vous pouvez joindre jusqu\'à %1$d éléments</string>
     <string name="feed_composer_media_unusable">Ce média n\'a pas pu être joint</string>
+    <string name="feed_composer_media_alt_label">Décrivez cette photo ou vidéo pour les lecteurs d\'écran (%1$d)</string>
+    <string name="feed_composer_media_alt_placeholder">ex. Un vélo rouge appuyé contre un mur en briques</string>
     <string name="feed_composer_type_reel">Réel</string>
     <string name="feed_composer_type_post">Publier</string>
     <string name="feed_composer_type_hint">Bascule entre réel et post</string>

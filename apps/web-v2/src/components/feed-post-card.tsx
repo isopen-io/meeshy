@@ -1,10 +1,19 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 
 import { Avatar } from './avatar';
-import { Glyph, GlyphSvg } from './glyph';
+import { FeedCarouselChrome, FeedCarouselDots } from './feed-carousel-chrome';
+import { FeedMediaMosaic } from './feed-media-mosaic';
+import { FeedMediaSurface } from './feed-media-surface';
+import { FeedSceneCarousel } from './feed-scene-carousel';
+import { FeedSceneMosaic } from './feed-scene-mosaic';
+import { FeedSceneSurface } from './feed-scene-surface';
+import { GlyphSvg } from './glyph';
 import { FEED_GLYPHS } from './glyphs-feed';
 import type { FeedCardMedia, FeedCardModel, FeedCardStats, FeedCardText, FeedCardViewer } from '@/lib/feed/card-model';
 import type { PostToggleKind } from '@/lib/feed/interactions';
+import { isPagedLayout, type TiledLayoutMode } from '@/lib/feed/mosaic-layout';
+import { SCENE_ASPECT, cardAspect, clampedCardAspect } from '@/lib/feed/scene-framing';
+import { useIsActiveScene } from '@/lib/feed/use-feed-autoplay';
 import { FEED_TEXT_TRUNCATION_LIMIT, truncateWords } from '@/lib/feed/text';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -140,80 +149,12 @@ function FeedActionsRow({
 }
 
 /**
- * LA SURFACE D'UN MÉDIA — image (ThumbHash peint AVANT toute requête, puis
- * `loading="lazy"`) ou repli plein cadre pour vidéo (`fillPlay`) / audio
- * (`waveform`), dont la LECTURE reste hors tranche (D-42, § 1.5 de la
- * spécification).
- */
-function FeedMediaSurface({ media }: { readonly media: FeedCardMedia }) {
-  const [loaded, setLoaded] = useState(false);
-
-  if (media.kind === 'video' || media.kind === 'audio') {
-    const language = currentInterfaceLanguage();
-    const poster = media.thumbnailSrc ?? media.placeholder;
-    return (
-      <div
-        className="absolute inset-0 grid place-items-center"
-        style={{
-          backgroundColor: 'var(--color-ios-card)',
-          /**
-           * `url("...")`, GUILLEMETÉ (défaut bloquant relevé à la capture,
-           * #5893) — un `data:image/svg+xml` peut contenir un `)` NON
-           * échappé : `encodeURIComponent` échappe `#` mais PAS `(`/`)`
-           * (MDN), et le SVG des fixtures référence son dégradé par
-           * `fill="url(#g)"`. Sans guillemets, le PREMIER `)` rencontré —
-           * celui de cette référence interne, pas la fin de l'URI — clôt le
-           * `url()` CSS prématurément ; le navigateur rejette alors la
-           * valeur ENTIÈRE en silence (`backgroundImage` retombe à `none`,
-           * aucune erreur console) et le repli plein cadre restait BLANC.
-           * Guillemeter est la forme CSS qui admet `)` sans ambiguïté,
-           * quelle que soit la source de l'URL.
-           */
-          ...(poster !== undefined ? { backgroundImage: `url("${poster}")`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}),
-        }}
-      >
-        {media.kind === 'video' ? (
-          <Glyph name="fillPlay" size={44} style={{ color: 'rgba(255,255,255,0.85)' }} title={translate(language, 'feed.post.media.video')} />
-        ) : (
-          <GlyphSvg
-            glyph={FEED_GLYPHS.waveform}
-            size={72}
-            style={{ color: 'rgba(255,255,255,0.55)' }}
-            title={translate(language, 'feed.post.media.audio')}
-          />
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <>
-      {media.placeholder !== undefined ? (
-        <img src={media.placeholder} alt="" aria-hidden="true" className="absolute inset-0 size-full object-cover" />
-      ) : null}
-      <img
-        src={media.src}
-        /* `PostMedia.alt` SERVI, jamais la légende (déjà rendue en texte
-           visible sous le média) : la répéter la ferait lire deux fois.
-           Sans texte d'accessibilité, l'image est DÉCORATIVE (`alt=""`) —
-           c'est la forme juste quand rien n'en décrit le contenu. */
-        alt={media.altText ?? ''}
-        loading="lazy"
-        onLoad={() => setLoaded(true)}
-        className="absolute inset-0 size-full object-cover transition-opacity duration-300"
-        style={{ opacity: media.placeholder === undefined || loaded ? 1 : 0 }}
-      />
-    </>
-  );
-}
-
-/**
  * LE CARROUSEL — vue 3f de la planche : « un lot de médias se PARCOURT, il
  * ne se contemple pas ». L'index de page vit ICI (`useState`), jamais dans
  * `FeedPostCard`, pour ne pas invalider toute la carte à chaque page
  * (`FeedPostCardCarousel.swift:20-25`).
  */
-function FeedMediaCarousel({ media }: { readonly media: readonly FeedCardMedia[] }) {
+function FeedMediaCarousel({ media, accent }: { readonly media: readonly FeedCardMedia[]; readonly accent: string }) {
   const [page, setPage] = useState(0);
   const clamped = Math.min(page, media.length - 1);
   const current = media[clamped];
@@ -221,63 +162,42 @@ function FeedMediaCarousel({ media }: { readonly media: readonly FeedCardMedia[]
   if (current === undefined) return null;
 
   return (
-    <div className="relative overflow-hidden" style={{ borderRadius: 12, aspectRatio: `1 / ${current.ratio}` }} data-feed-media>
-      <FeedMediaSurface media={current} />
-      {current.caption !== undefined ? (
-        <p
-          className="absolute inset-x-0 bottom-0 px-3 py-2 text-check text-white"
-          style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.6), transparent)' }}
-          /* La langue SERVIE (#6280, `resolveMediaCaption`), jamais la
-             langue d'interface : un lecteur d'écran qui prononce une
-             traduction française avec une voix anglaise est le défaut du
-             cycle 122 (CLAUDE.md § Prisme), rendu audible sur une légende. */
-          {...(current.captionLanguage !== undefined ? { lang: current.captionLanguage } : {})}
-        >
-          {current.caption}
-        </p>
-      ) : null}
-      {media.length > 1 ? (
-        <>
-          <span
-            data-feed-media-counter
-            className="absolute top-2 right-2 rounded-chip px-2 py-0.5 text-check font-semibold text-white"
-            style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
+    <div>
+      <div className="relative overflow-hidden" style={{ borderRadius: 12, aspectRatio: `1 / ${current.ratio}` }} data-feed-media data-feed-layout="carousel">
+        <FeedMediaSurface media={current} playable />
+        {current.caption !== undefined ? (
+          <p
+            /* MARQUÉE comme celle de la mosaïque (#6864) — et c'est ici que ça
+               compte le plus : le carrousel est le layout PAR DÉFAUT, donc le
+               cas le plus fréquent était aussi le seul qu'aucune recette ne
+               pouvait viser. La valeur dit d'OÙ vient la légende : `media` pour
+               la légende propre du média, `post` pour le contenu du post servi
+               en l'absence de légende propre sur un média UNIQUE. */
+            data-feed-carousel-caption={current.captionOrigin ?? 'media'}
+            className="absolute inset-x-0 bottom-0 px-3 py-2 text-check text-white"
+            style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.6), transparent)' }}
+            /* La langue SERVIE (#6280, `resolveMediaCaption`), jamais la
+               langue d'interface : un lecteur d'écran qui prononce une
+               traduction française avec une voix anglaise est le défaut du
+               cycle 122 (CLAUDE.md § Prisme), rendu audible sur une légende. */
+            {...(current.captionLanguage !== undefined ? { lang: current.captionLanguage } : {})}
           >
-            {clamped + 1} / {media.length}
-          </span>
-          {clamped > 0 ? (
-            <button
-              type="button"
-              aria-label={translate(language, 'feed.post.media.previous')}
-              onClick={() => setPage(clamped - 1)}
-              className="absolute inset-y-0 left-0 grid place-items-center"
-              style={{ width: 44 }}
-            >
-              <Glyph name="caretLeft" size={18} style={{ color: 'white' }} />
-            </button>
-          ) : null}
-          {clamped < media.length - 1 ? (
-            <button
-              type="button"
-              aria-label={translate(language, 'feed.post.media.next')}
-              onClick={() => setPage(clamped + 1)}
-              className="absolute inset-y-0 right-0 grid place-items-center"
-              style={{ width: 44 }}
-            >
-              <GlyphSvg glyph={FEED_GLYPHS.caretRight} size={18} style={{ color: 'white' }} />
-            </button>
-          ) : null}
-          <div className="absolute inset-x-0 bottom-2 flex items-center justify-center gap-1" aria-hidden="true">
-            {media.map((m, i) => (
-              <span
-                key={m.id}
-                className="rounded-full"
-                style={{ width: 5, height: 5, backgroundColor: i === clamped ? 'white' : 'rgba(255,255,255,0.5)' }}
-              />
-            ))}
-          </div>
-        </>
-      ) : null}
+            {current.caption}
+          </p>
+        ) : null}
+        {/* LE MÊME CHROME que le carrousel de scènes (`FeedCarouselChrome`,
+            revue-correction #6898) : compteur, flèches à effet, pastilles
+            SOUS la boîte — « que ce soit mosaïque de média ou de scène c'est
+            la même chose » (`PostSceneMosaic.swift`, `fleches`). */}
+        <FeedCarouselChrome
+          page={clamped}
+          count={media.length}
+          labels={{ previous: translate(language, 'feed.post.media.previous'), next: translate(language, 'feed.post.media.next') }}
+          onPrevious={() => setPage(clamped - 1)}
+          onNext={() => setPage(clamped + 1)}
+        />
+      </div>
+      <FeedCarouselDots page={clamped} count={media.length} accent={accent} />
     </div>
   );
 }
@@ -367,6 +287,11 @@ function FeedReelCard({ model, ...hosts }: { readonly model: FeedCardModel } & C
       className="relative overflow-hidden"
       style={{ borderRadius: 18, aspectRatio: `1 / ${ratio}` }}
       data-feed-card="reel"
+      /* MÊME identité que la carte de post (#6864) : un marqueur posé sur une
+         seule des deux natures est une asymétrie silencieuse — le jour où une
+         recette vise un réel par son id, elle trouverait le vide et conclurait
+         à l'absence de la carte plutôt qu'à l'absence de l'attribut. */
+      data-feed-card-id={model.id}
     >
       {poster !== undefined ? (
         <FeedMediaSurface media={poster} />
@@ -426,20 +351,159 @@ function FeedReelCard({ model, ...hosts }: { readonly model: FeedCardModel } & C
   );
 }
 
-export function FeedPostCard({ model, ...hosts }: { readonly model: FeedCardModel } & CardHosts) {
+/**
+ * `onOpenScene`/`registerScene` — LES DEUX HÔTES DE LA SCÈNE (D-78, #6898) :
+ * le premier remet l'intention d'ouvrir une scène précise — `useSceneGallery`
+ * (#6902, `routes/feed.tsx`/`routes/post.tsx`) l'ouvre EN PLACE, à l'ÉCHELLE
+ * uniforme et centrée (`SceneFullscreenGallery`, `MediaViewer` réutilisée) ;
+ * sans hôte, `FeedSceneSurface` ne pose aucun bouton, jamais un tap sans
+ * effet (loi 4). Le second enregistre la boîte de la carte auprès du magasin
+ * d'élection (`useFeedAutoplayRoot.registerScene`, `lib/feed/use-feed-
+ * autoplay.ts`) — une réf de rappel STABLE (voir son doc-comment), jamais une
+ * réf inline.
+ */
+type SceneHosts = {
+  readonly preferredLanguages?: readonly string[];
+  readonly onOpenScene?: (postId: string, sceneIndex: number) => void;
+  readonly registerScene?: (id: string, node: Element | null) => void;
+};
+
+/**
+ * LE VISUEL D'UN POST (D-78, #6898) — LA SCÈNE d'abord (`model.scene`), le
+ * MÉDIA en repli (`model.media`, D-70) quand `storyEffects` est absent,
+ * invalide, ou `v < 3`. La forme (mono-scène / carrousel / mosaïque) suit
+ * exactement celle du média (§ 1.3 de la spécification `scenes-fil`) : seule
+ * la SOURCE de la tuile change.
+ */
+function FeedPostVisual({
+  model,
+  active,
+  preferredLanguages,
+  onOpenScene,
+  registerScene,
+}: {
+  readonly model: FeedCardModel;
+  readonly active: boolean;
+} & SceneHosts) {
+  // **RÉFS DE RAPPEL STABLES** (motif `use-out-of-view.ts`/`use-feed-autoplay.ts`)
+  // — appelées AVANT tout retour anticipé (règle des Hooks). Une réf inline
+  // (`ref={(n) => registerScene(model.id, n)}` recréée à CHAQUE rendu) fait
+  // désinscrire puis réinscrire la boîte à CHAQUE bascule d'élection (le
+  // rendu déclenché par `useIsActiveScene`) : la réinscription relance
+  // l'observation, dont la notification relance l'élection, qui relance le
+  // rendu — une BOUCLE SANS FIN, mesurée : deux scènes cinématiques
+  // adjacentes jouaient alors SIMULTANÉMENT, chacune alternant `playing`
+  // à la fréquence des trames (§ 5.7 de la spécification, gate rouge avant
+  // ce correctif).
+  const registerBox = useCallback(
+    (node: Element | null) => registerScene?.(model.id, node),
+    [registerScene, model.id],
+  );
+  const openScene = useCallback((index: number) => onOpenScene?.(model.id, index), [onOpenScene, model.id]);
+
+  const scene = model.scene;
+  if (scene !== undefined) {
+    const { document, carrier } = scene;
+    const languages = preferredLanguages ?? [];
+    const openHost = onOpenScene !== undefined ? { onOpenScene } : {};
+
+    if (document.scenes.length === 1) {
+      const firstScene = document.scenes[0]!;
+      const boxAspect = clampedCardAspect(cardAspect(firstScene) ?? SCENE_ASPECT);
+      return (
+        <div
+          {...(registerScene !== undefined ? { ref: registerBox } : {})}
+          data-feed-scene-box
+          className="relative overflow-hidden"
+          style={{ aspectRatio: String(boxAspect), borderRadius: 16 }}
+        >
+          <FeedSceneSurface
+            document={document}
+            sceneIndex={0}
+            carrier={carrier}
+            preferredLanguages={languages}
+            active={active}
+            frame="page"
+            authorName={model.author.name}
+            {...(onOpenScene !== undefined ? { onOpen: openScene } : {})}
+          />
+        </div>
+      );
+    }
+
+    return isPagedLayout(model.layout) ? (
+      <FeedSceneCarousel
+        document={document}
+        carrier={carrier}
+        preferredLanguages={languages}
+        accent={model.author.accentColor}
+        active={active}
+        authorName={model.author.name}
+        {...openHost}
+        {...(registerScene !== undefined ? { registerRef: registerBox } : {})}
+      />
+    ) : (
+      <FeedSceneMosaic
+        document={document}
+        carrier={carrier}
+        preferredLanguages={languages}
+        layout={model.layout as TiledLayoutMode}
+        authorName={model.author.name}
+        {...openHost}
+      />
+    );
+  }
+
+  if (model.media.length === 0) return null;
+  return isPagedLayout(model.layout) || model.media.length < 2 ? (
+    <FeedMediaCarousel media={model.media} accent={model.author.accentColor} />
+  ) : (
+    <FeedMediaMosaic media={model.media} layout={model.layout as TiledLayoutMode} />
+  );
+}
+
+export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerScene, ...hosts }: { readonly model: FeedCardModel } & CardHosts & SceneHosts) {
+  // La lecture est une VALEUR REÇUE du magasin d'élection (#6898 § 5.3) —
+  // JAMAIS un état local : seules les deux cartes dont le booléen bascule se
+  // re-rendent (Zero Unnecessary Re-render).
+  const active = useIsActiveScene(model.id);
+
   if (model.isReel) return <FeedReelCard model={model} {...hostsOf(hosts)} />;
+
+  // Repli du contenu sur la légende d'un média SEUL (#6864, `resolveMedia`) :
+  // le texte du post est alors DÉJÀ peint comme légende par `FeedMediaCarousel`
+  // — le répéter ici peindrait deux fois la même phrase sur la même carte.
+  // Une carte à SCÈNE ne monte pas `FeedMediaCarousel` et ne descend jamais le
+  // texte du post en légende (`resolveSceneCaption`) : son texte reste ICI.
+  const soleMedia = model.scene === undefined && model.media.length === 1 ? model.media[0] : undefined;
+  const bodyText = model.text !== undefined && soleMedia?.caption === model.text.full ? undefined : model.text;
 
   return (
     <article
       className="flex flex-col gap-2 pb-3"
       style={{ backgroundColor: 'var(--color-ios-card)', borderRadius: 18, border: '0.5px solid var(--color-edge)' }}
       data-feed-card="post"
+      /* L'IDENTITÉ DU POST, pour que la recette puisse viser UNE carte (#6864).
+         `key={model.id}` existe déjà côté route, mais une clé de réconciliation
+         n'est pas un attribut rendu : rien dans le DOM ne distinguait deux
+         cartes. Un gate devait alors cibler par le TEXTE attendu — fragile, et
+         incapable de dire de quelle publication il parle. */
+      data-feed-card-id={model.id}
     >
       <FeedPostHeader model={model} />
-      {model.text !== undefined ? <FeedPostText text={model.text} /> : null}
-      {model.media.length > 0 ? (
+      {bodyText !== undefined ? <FeedPostText text={bodyText} /> : null}
+      {/* Un post à SCÈNES SANS média (cas réel, § 3 de la spécification) ne
+          doit plus rester nu sous son texte (D-78) : la condition porte donc
+          sur `model.scene` autant que sur `model.media.length`. */}
+      {model.scene !== undefined || model.media.length > 0 ? (
         <div className="px-3">
-          <FeedMediaCarousel media={model.media} />
+          <FeedPostVisual
+            model={model}
+            active={active}
+            {...(preferredLanguages !== undefined ? { preferredLanguages } : {})}
+            {...(onOpenScene !== undefined ? { onOpenScene } : {})}
+            {...(registerScene !== undefined ? { registerScene } : {})}
+          />
         </div>
       ) : null}
       <div className="px-3">

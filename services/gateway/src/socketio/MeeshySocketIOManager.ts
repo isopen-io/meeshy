@@ -71,6 +71,7 @@ import { isGlobalAdmin } from '@meeshy/shared/types/role-types';
 import { PostAudioService } from '../services/posts/PostAudioService';
 import { PostTranslationService } from '../services/posts/PostTranslationService';
 import { MediaCaptionTranslationService } from '../services/posts/MediaCaptionTranslationService';
+import { MediaAltTranslationService } from '../services/posts/MediaAltTranslationService';
 import { StoryTextObjectTranslationService } from '../services/posts/StoryTextObjectTranslationService';
 import type {
   ServerToClientEvents,
@@ -104,6 +105,7 @@ import type { QueuedPayloadFor, QueuedVariantFor } from './queuedEventContract';
 import { drainedEventName, isAddressableConversationId, isDeliverableQueuedPayload } from './queuedEventContract';
 import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 import { syncConversationListOnNewMessage } from './postMessageSyncFanOut';
+import { attachSocketIORedisAdapter, type SocketIORedisAdapterHandle } from './redis-adapter';
 
 // Logger dédié pour SocketIOManager
 const logger = enhancedLogger.child({ module: 'SocketIOManager' });
@@ -202,6 +204,12 @@ export interface TranslationNotification {
 
 export class MeeshySocketIOManager {
   private io: SocketIOServer<ClientToServerEvents, ServerToClientEvents>;
+
+  // Fan-out des broadcasts entre instances gateway quand REDIS_URL est posée
+  // (#3723) — `null` tant qu'aucune instance Redis n'est configurée, auquel
+  // cas Socket.IO garde son adapter en mémoire (comportement mono-instance
+  // actuel, inchangé).
+  private redisAdapterHandle: SocketIORedisAdapterHandle | null = null;
 
   /// Exposes the underlying Socket.IO server. Used by background services
   /// (e.g. CallCleanupService) that need to broadcast events without going
@@ -409,6 +417,10 @@ export class MeeshySocketIOManager {
         threshold: 256,
       },
     });
+
+    // Adapter Redis (#3723) — additif : sans REDIS_URL, `io` garde son
+    // adapter en mémoire par défaut, comportement mono-instance inchangé.
+    this.redisAdapterHandle = attachSocketIORedisAdapter(this.io);
 
     // Initialiser le SocialEventsHandler pour les broadcasts feed
     this.socialEventsHandler = new SocialEventsHandler({
@@ -1662,6 +1674,9 @@ export class MeeshySocketIOManager {
         // Traduction de la LÉGENDE d'un média (#6280) — même pipeline, même
         // discipline d'init, namespace ZMQ distinct (`media-caption:`).
         MediaCaptionTranslationService.init(this.prisma, zmqClient, this.socialEventsHandler);
+        // Traduction du texte ALTERNATIF d'accessibilité d'un média (#6737) —
+        // jumelle exacte, namespace ZMQ distinct (`media-alt:`).
+        MediaAltTranslationService.init(this.prisma, zmqClient, this.socialEventsHandler);
       }
 
       // Initialiser le service de notifications avec Socket.IO
@@ -3418,6 +3433,7 @@ export class MeeshySocketIOManager {
       // que ce manager possède encore ; non désarmées, elles retiendraient la
       // boucle d'événements jusqu'à 8 heures après l'arrêt.
       this.locationHandler.dispose();
+      await this.redisAdapterHandle?.close();
       this.io.close();
     } catch (error) {
       logger.error(`❌ Erreur fermeture MeeshySocketIOManager: ${error}`);

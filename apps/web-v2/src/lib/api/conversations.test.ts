@@ -15,7 +15,7 @@ import {
 } from './conversations';
 import type { ConversationsInfiniteData } from './conversations-pages';
 import { createHttpTransport } from './http';
-import { CONVERSATIONS } from './fixtures';
+import { CONVERSATIONS, recordSurgedConversation, resetSurgedConversationsForTests } from './fixtures';
 import { PAGINATION_CONVERSATIONS } from './fixtures-pagination';
 
 /** Motif `http.test.ts` — un `fetchImpl` qui recopie la forme d'une route
@@ -86,6 +86,61 @@ describe('loadConversationsPage — source fixtures', () => {
     const page2 = await loadConversationsPage({ source: 'fixtures', transport, before: cursor });
     expect(page2.ok).toBe(true);
     if (page2.ok) expect(page2.data.conversations).toHaveLength(15);
+  });
+
+  /**
+   * LA CONVERSATION QUI SURGIT (#6807, suite de #6799) — SANS elle, le
+   * correctif de #6799 n'est exerçable par AUCUN gate.
+   *
+   * #6799 abonne `socket.ts` à `conversation:new` et INVALIDE la liste ; il ne
+   * fabrique pas la ligne (la charge est minimale par contrat, une ligne
+   * fabriquée afficherait un direct SANS NOM). L'effet attendu est donc :
+   * refetch, puis la conversation neuve arrive de la source.
+   *
+   * Or sous fixtures la source était FIGÉE — `pageOfConversations` relit
+   * `CONVERSATIONS`, un `readonly` immuable — donc l'invalidation refaisait
+   * une page IDENTIQUE : rien n'apparaissait, et il n'y avait même aucune
+   * requête à compter (la branche fixtures ne touche pas le réseau). Un gate
+   * écrit sur cet état n'aurait pu asserter que des non-événements.
+   *
+   * Le corpus reste intouché — 7 modules l'importent et 18 gates nomment une
+   * de ses conversations. Ce sont les conversations SURVENUES qui s'ajoutent,
+   * au patron de `recordViewOnceConsumption` (registre de module + remise à
+   * zéro pour les témoins, `fixtures.ts`).
+   */
+  test('une conversation SURVENUE est servie par la page, en tête (tri par lastMessageAt)', async () => {
+    resetSurgedConversationsForTests();
+    const surged = { ...CONVERSATIONS[0]!, id: 'c-surgie', lastMessageAt: new Date('2099-01-01T00:00:00.000Z') };
+    recordSurgedConversation(surged);
+
+    const { impl, calls } = fakeFetch({ status: 200, body: PAGE_BODY(['x']) });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+    const result = await loadConversationsPage({ source: 'fixtures', transport });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.conversations[0]?.id).toBe('c-surgie');
+      expect(result.data.conversations.some((c) => c.id === 'c-surgie')).toBe(true);
+    }
+    /* La branche fixtures ne touche JAMAIS le réseau — c'est ce qui rendait
+       l'invalidation inobservable, et ce que ce témoin doit préserver. */
+    expect(calls.length).toBe(0);
+
+    resetSurgedConversationsForTests();
+  });
+
+  /** Le corpus figé reste INTACT — une conversation survenue s'ajoute, elle ne
+   * remplace ni ne réordonne le corpus que 18 gates nomment. */
+  test('sans conversation survenue, la page est celle du corpus, inchangée', async () => {
+    resetSurgedConversationsForTests();
+    const transport = createHttpTransport({ base: '', fetchImpl: fakeFetch({ status: 200 }).impl });
+    const result = await loadConversationsPage({ source: 'fixtures', transport });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.conversations).toHaveLength(30);
+      expect(result.data.conversations.some((c) => c.id === 'c-surgie')).toBe(false);
+    }
   });
 });
 

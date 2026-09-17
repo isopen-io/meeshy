@@ -1,19 +1,25 @@
+@file:OptIn(ExperimentalLayoutApi::class)
+
 package me.meeshy.app.auth
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.FilterChip
@@ -43,6 +49,7 @@ import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.MeeshyPrimaryButton
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.ui.theme.formColumnWidth
 
 @Composable
 fun LoginScreen(
@@ -69,6 +76,7 @@ fun LoginScreen(
                 // d'avant, le degrade en plus.
                 .systemBarsPadding()
                 .imePadding()
+                .formColumnWidth()
                 .padding(horizontal = MeeshySpacing.xl),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
@@ -114,10 +122,12 @@ fun LoginScreen(
             }
 
             // Recuperation de compte : les deux chemins sans mot de passe,
-            // juste sous le formulaire (parite iOS LoginView).
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(top = MeeshySpacing.sm),
+            // juste sous le formulaire (parite iOS LoginView). La connexion par
+            // e-mail garde sa baguette ; la rangee passe a la ligne plutot que de
+            // rogner un libelle sur un ecran etroit ou dans une langue longue.
+            FlowRow(
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxWidth().padding(top = MeeshySpacing.sm),
             ) {
                 TextButton(onClick = onForgotPassword, enabled = !state.isSubmitting) {
                     Text(
@@ -126,9 +136,15 @@ fun LoginScreen(
                     )
                 }
                 TextButton(onClick = onMagicLink, enabled = !state.isSubmitting) {
+                    Icon(
+                        imageVector = Icons.Filled.AutoFixHigh,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
                     Text(
                         text = stringResource(R.string.login_magic_link),
                         style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(start = MeeshySpacing.xs),
                     )
                 }
             }

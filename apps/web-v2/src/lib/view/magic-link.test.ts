@@ -114,4 +114,14 @@ describe('safeReturnPath', () => {
   test('// (schema-relative) ⇒ /', () => expect(safeReturnPath('//evil.example')).toBe('/'));
   test('\\ ⇒ /', () => expect(safeReturnPath('/\\evil')).toBe('/'));
   test('javascript: ⇒ /', () => expect(safeReturnPath('javascript:alert(1)')).toBe('/'));
+
+  /** #6743 — le parseur d'URL RETIRE tabulations et retours à la ligne :
+   * `/\t/evil.com` devient `//evil.com`, et `history.replaceState` LÈVE sur
+   * une adresse d'une autre origine. `safeNextPath` (`session-guard.ts`)
+   * refusait déjà ces caractères ; `safeReturnPath` les laissait passer. */
+  test('caractères de contrôle (tab, saut de ligne, DEL…) ⇒ /', () => {
+    for (const hostile of ['/\t/evil.com', '/\n/evil.com', '/\r/evil.com', '/chat/x ', `/chat/x${String.fromCharCode(0)}`, `/chat/x${String.fromCharCode(127)}`]) {
+      expect({ hostile: JSON.stringify(hostile), safe: safeReturnPath(hostile) }).toEqual({ hostile: JSON.stringify(hostile), safe: '/' });
+    }
+  });
 });

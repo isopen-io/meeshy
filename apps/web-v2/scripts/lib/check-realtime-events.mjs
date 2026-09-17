@@ -247,6 +247,40 @@ export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA
     `${label} liste, T+6,5 s : la frappe PRIME sur l'aperçu (Line2Kind)`,
   );
 
+  // ===== 5. conversation:new — LA CONVERSATION QUI SURGIT (#6807, preuve de #6799) =====
+  /**
+   * CE QUE CETTE SECTION GARDE, et pourquoi elle existe.
+   *
+   * #6799 a trouvé `conversation:new` écouté NULLE PART dans web-v2 : 0
+   * occurrence sur 766 fichiers, alors que la passerelle l'émet à trois sites
+   * et que le legacy l'écoute. Conséquence mesurée : `patchConversation` ne
+   * modifie qu'une page portant DÉJÀ l'id, donc pour un premier DM reçu ou un
+   * ajout à un groupe, le `message:new` suivant patchait le vide EN SILENCE.
+   *
+   * Le correctif INVALIDE la liste — il ne fabrique pas la ligne, la charge
+   * `ConversationNewEventData` étant minimale (une ligne fabriquée afficherait
+   * un direct SANS NOM). Sa valeur n'est donc visible que si la source peut
+   * rendre une conversation que le corpus ne connaissait pas : c'est le rôle
+   * du registre des survenues (`fixtures.ts`), alimenté au TIR de l'entrée.
+   *
+   * `c-surgie` est ABSENTE de `CONVERSATIONS` : sans l'abonnement, l'aperçu
+   * n'arrive qu'au prochain rechargement complet — jamais ici.
+   *
+   * L'ÉPREUVE DE CE TÉMOIN N'EST PAS SON VERT (le correctif le précède) mais
+   * sa MUTATION : retirer `socket.on(SERVER_EVENTS.CONVERSATION_NEW, …)` de
+   * `src/lib/api/socket.ts` doit le faire TOMBER. Un gate qu'on n'a pas vu
+   * rougir ne garde rien.
+   */
+  const rowsBefore = await listPage.locator('[data-row]').count();
+  await listPage.clock.runFor(8000); // T+14,5 s — l'entrée `conversation:new` a tiré.
+  const surgedRow = listPage.locator('[data-row="c-surgie"]');
+  await surgedRow.waitFor({ state: 'attached', timeout: 5000 }).catch(() => undefined);
+  const rowsAfter = await listPage.locator('[data-row]').count();
+  expect(
+    (await surgedRow.count()) === 1,
+    `${label} liste, T+14,5 s : la conversation SURGIE porte sa ligne — sans l'abonnement \`conversation:new\`, rien n'apparaît avant un rechargement complet (rangées ${rowsBefore} → ${rowsAfter}, c-surgie ${await surgedRow.count()})`,
+  );
+
   await listPage.close();
   await context.close();
 }

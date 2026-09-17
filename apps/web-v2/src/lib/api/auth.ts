@@ -220,14 +220,22 @@ export function createAuthClient({ transport, store }: AuthDeps) {
    * `rememberDevice` suit la même règle que `login()` — omis si non fourni,
    * jamais envoyé à `false` par défaut (iOS ne l'envoie pas du tout,
    * `AuthService.swift:89` — § 9 Q7 de la spécification).
+   *
+   * `returnUrl` — OÙ REVENIR une fois connecté (#6742), déjà clampé par
+   * l'appelant (`MagicLinkPanel`, `safeNextPath`) — omis si absent, jamais
+   * envoyé vide : la gateway l'embarque dans le lien envoyé par e-mail
+   * (`MagicLinkService.sendMagicLinkEmail`), que `/auth/magic-link` relit en
+   * `returnUrl` à l'arrivée.
    */
   async function requestMagicLink(request: {
     readonly email: string;
     readonly rememberDevice?: boolean;
+    readonly returnUrl?: string;
   }): Promise<ApiResult<MagicLinkRequestData>> {
     const body = {
       email: request.email,
       ...(request.rememberDevice !== undefined ? { rememberDevice: request.rememberDevice } : {}),
+      ...(request.returnUrl !== undefined ? { returnUrl: request.returnUrl } : {}),
     };
     return transport.request<MagicLinkRequestData>({ method: 'POST', path: '/api/v1/auth/magic-link/request', body });
   }

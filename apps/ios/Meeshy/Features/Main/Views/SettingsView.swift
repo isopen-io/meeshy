@@ -42,13 +42,12 @@ struct SettingsView: View {
     @State private var showVoiceProfileManage = false
     @State private var showMediaDownload = false
     @State private var scrollRelay = ScrollOffsetRelay()
-    /// Préférence « Activer les bêta » (`BetaFeaturesPreference`, défaut OFF
-    /// depuis le 2026-08-22). Lu UNE fois au montage (le même patron que
-    /// `interfaceLanguageChoice` ci-dessus) ; le toggle écrit
-    /// `BetaFeaturesPreference.setEnabled` ET ce `@State` en même temps — pas
-    /// de source de vérité seconde, juste un miroir local pour que la vue se
-    /// re-rende sans relire `UserDefaults` à chaque frame.
-    @State private var betaFeaturesEnabled: Bool = BetaFeaturesPreference.isEnabled
+    /// Miroirs des trois interrupteurs d'interface (#6482), lus UNE fois au
+    /// montage comme `interfaceLanguageChoice` : chaque bascule écrit le miroir
+    /// ET `LentilleFeatureFlag.setEnabled` — le drapeau reste la seule source.
+    @State private var lentilleListEnabled: Bool = LentilleFeatureFlag.isLentilleListEnabled
+    @State private var readingModesEnabled: Bool = LentilleFeatureFlag.isReadingModesEnabled
+    @State private var riviereModeEnabled: Bool = LentilleFeatureFlag.isRiviereModeEnabled
 
     private let accentColor = MeeshyColors.brandPrimaryHex
 
@@ -209,7 +208,6 @@ struct SettingsView: View {
                 notificationsSection
                 dataSection
                 meeshyToolsSection
-                betaSection
                 supportSection
                 aboutSection
                 switchAccountSection
@@ -369,6 +367,7 @@ struct SettingsView: View {
             // réellement la langue au lancement depuis le 2026-07-25 — c'était
             // le fil manquant, pas le contrôle qui était en trop.
             interfaceLanguageRow
+            interfaceFeatureRows
         }
     }
 
@@ -447,6 +446,67 @@ struct SettingsView: View {
         UILanguageOverride.applyIfNeeded()
         interfaceLanguageChoice = code
         showInterfaceLanguageRestartHint = true
+    }
+
+    // MARK: - Interface Features
+
+    /// Liste Lentille, modes de lecture et Rivière ont quitté la bêta le
+    /// 2026-09-14 (#6482) : actifs par défaut, réglés sur l'appareil comme la
+    /// langue de l'interface. La Rivière est un mode de lecture — modes coupés,
+    /// la loi ne l'ouvre jamais, d'où sa rangée désactivée et l'indice qui dit
+    /// pourquoi.
+    @ViewBuilder
+    private var interfaceFeatureRows: some View {
+        settingsRow(icon: "list.bullet.rectangle.fill", title: lentilleListTitle, color: MeeshyColors.trackingAccentHex) {
+            featureToggle(.lentilleList, title: lentilleListTitle, isOn: $lentilleListEnabled)
+        }
+
+        VStack(alignment: .leading, spacing: 0) {
+            settingsRow(icon: "text.book.closed.fill", title: readingModesTitle, color: MeeshyColors.indigo400Hex) {
+                featureToggle(.readingModes, title: readingModesTitle, isOn: $readingModesEnabled)
+            }
+            Text(String(localized: "settings.interface.reading_modes.subtitle",
+                        defaultValue: "Désactivé, les conversations s'ouvrent en Script.", bundle: .main))
+                .font(MeeshyFont.relative(12))
+                .foregroundColor(theme.textSecondary)
+                .padding(.horizontal, MeeshySpacing.md + 2)
+                .padding(.bottom, MeeshySpacing.sm + 2)
+        }
+
+        settingsRow(icon: "water.waves", title: riviereModeTitle, color: MeeshyColors.infoHex) {
+            featureToggle(.riviereMode, title: riviereModeTitle, isOn: $riviereModeEnabled)
+        }
+        .disabled(!readingModesEnabled)
+        .opacity(readingModesEnabled ? 1 : 0.45)
+        .accessibilityHint(readingModesEnabled ? "" : String(localized: "settings.interface.riviere_mode.hint",
+                                                             defaultValue: "Disponible quand le mode de lecture est activé.",
+                                                             bundle: .main))
+    }
+
+    private func featureToggle(_ flag: LentilleFeatureFlag, title: String, isOn: Binding<Bool>) -> some View {
+        Toggle("", isOn: Binding(
+            get: { isOn.wrappedValue },
+            set: { value in
+                isOn.wrappedValue = value
+                LentilleFeatureFlag.setEnabled(flag, enabled: value)
+            }
+        ))
+        .labelsHidden()
+        .tint(Color(hex: accentColor))
+        .accessibilityLabel(title)
+        .accessibilityValue(isOn.wrappedValue ? String(localized: "settings.value.active", bundle: .main) : String(localized: "settings.value.disabled", bundle: .main))
+    }
+
+    private var lentilleListTitle: String {
+        String(localized: "settings.interface.lentille_list", defaultValue: "Activer la liste Lentille", bundle: .main)
+    }
+
+    private var readingModesTitle: String {
+        String(localized: "settings.interface.reading_modes", defaultValue: "Activer le mode de lecture", bundle: .main)
+    }
+
+    private var riviereModeTitle: String {
+        String(localized: "settings.interface.riviere_mode", defaultValue: "Activer le mode Rivière", bundle: .main)
     }
 
     // MARK: - Notifications Section
@@ -674,77 +734,6 @@ struct SettingsView: View {
             }
             .accessibilityLabel(String(localized: "settings.tools.affiliate", bundle: .main))
             .accessibilityHint(String(localized: "settings.tools.affiliate.hint", bundle: .main))
-        }
-    }
-
-    // MARK: - Beta Section
-
-    /// « Activer les bêta » — toggle de PLEIN DROIT : il écrit
-    /// `BetaFeaturesPreference.setEnabled`, jamais `LentilleFeatureFlag
-    /// .setForDebug`. Défaut OFF (2026-08-22) : ce qu'il affiche est ce qu'il
-    /// applique.
-    ///
-    /// C'est le SEUL interrupteur bêta offert à l'utilisateur ; il gouverne
-    /// les drapeaux couverts par le programme (`LentilleFeatureFlag
-    /// .isCoveredByBetaProgramme`) : modes de lecture, liste Lentille, Rivière.
-    /// Une clé de drapeau posée explicitement prime sur ce réglage — c'est la
-    /// porte « une par une » de demain.
-    ///
-    /// La liste des fonctionnalités du programme n'apparaît QUE si l'option
-    /// est validée (condition produit) ; chaque ligne reflète l'état résolu
-    /// par `BetaFeaturesPreference.enabledFeatures`.
-    private var betaSection: some View {
-        settingsSection(title: String(localized: "settings.section.beta", bundle: .main), icon: "flask.fill", color: MeeshyColors.trackingAccentHex) {
-            VStack(alignment: .leading, spacing: 0) {
-                settingsRow(icon: "sparkles", title: String(localized: "settings.beta.toggle", bundle: .main), color: MeeshyColors.trackingAccentHex) {
-                    Toggle("", isOn: Binding(
-                        get: { betaFeaturesEnabled },
-                        set: { val in
-                            betaFeaturesEnabled = val
-                            BetaFeaturesPreference.setEnabled(val)
-                        }
-                    ))
-                    .labelsHidden()
-                    .tint(Color(hex: accentColor))
-                    .accessibilityLabel(String(localized: "settings.beta.toggle", bundle: .main))
-                    .accessibilityValue(betaFeaturesEnabled ? String(localized: "settings.value.active", bundle: .main) : String(localized: "settings.value.disabled", bundle: .main))
-                }
-
-                Text(String(localized: "settings.beta.toggle.subtitle", bundle: .main))
-                    .font(MeeshyFont.relative(12))
-                    .foregroundColor(theme.textSecondary)
-                    .padding(.horizontal, MeeshySpacing.md + 2)
-                    .padding(.bottom, MeeshySpacing.sm + 2)
-
-                if betaFeaturesEnabled {
-                    betaFeaturesList
-                }
-            }
-        }
-    }
-
-    /// Les fonctionnalités du programme, visibles seulement quand l'option est
-    /// validée. Tout-ou-rien aujourd'hui : chaque ligne porte l'état résolu
-    /// (coche = active) ; demain, une bascule par ligne.
-    private var betaFeaturesList: some View {
-        let enabled = Set(BetaFeaturesPreference.enabledFeatures())
-        return VStack(alignment: .leading, spacing: 0) {
-            Divider().padding(.horizontal, MeeshySpacing.md + 2)
-            Text(String(localized: "settings.beta.features.title", bundle: .main))
-                .font(MeeshyFont.relative(11, weight: .semibold))
-                .foregroundColor(theme.textMuted)
-                .padding(.horizontal, MeeshySpacing.md + 2)
-                .padding(.top, MeeshySpacing.sm + 2)
-            ForEach(LentilleFeatureFlag.allCases.filter(\.isCoveredByBetaProgramme), id: \.self) { flag in
-                let isOn = enabled.contains(flag)
-                settingsRow(icon: flag.settingsIcon, title: flag.settingsTitle, color: MeeshyColors.trackingAccentHex) {
-                    Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
-                        .font(MeeshyFont.relative(16, weight: .semibold))
-                        .foregroundColor(isOn ? Color(hex: MeeshyColors.successHex) : theme.textMuted)
-                        .accessibilityHidden(true)
-                }
-                .accessibilityValue(isOn ? String(localized: "settings.value.active", bundle: .main) : String(localized: "settings.value.disabled", bundle: .main))
-            }
         }
     }
 
@@ -984,25 +973,5 @@ struct SettingsView: View {
         .padding(.vertical, MeeshySpacing.sm + 2)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(title)
-    }
-}
-
-// MARK: - Présentation des fonctionnalités bêta (section « Bêta »)
-
-extension LentilleFeatureFlag {
-    var settingsTitle: String {
-        switch self {
-        case .readingModes: return String(localized: "settings.beta.feature.reading_modes", bundle: .main)
-        case .lentilleList: return String(localized: "settings.beta.feature.lentille_list", bundle: .main)
-        case .riviereMode: return String(localized: "settings.beta.feature.riviere_mode", bundle: .main)
-        }
-    }
-
-    var settingsIcon: String {
-        switch self {
-        case .readingModes: return "text.book.closed.fill"
-        case .lentilleList: return "list.bullet.rectangle.fill"
-        case .riviereMode: return "water.waves"
-        }
     }
 }

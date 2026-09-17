@@ -1,4 +1,6 @@
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -16,6 +18,8 @@ import { markStoryViewedAction, useStoryFeed, useStoryPost } from '@/lib/api/que
 import { attachmentSrc } from '@/lib/api/media-url';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
+import { backgroundCss } from '@/lib/canvas/background';
+import { parseCanvasDocument } from '@/lib/canvas/document';
 import { useOnline } from '@/lib/net/online';
 import { shortRelativeTime } from '@/lib/relative-time';
 import {
@@ -27,22 +31,33 @@ import {
   isDrag,
 } from '@/lib/stories/gesture';
 import { resolveStoryCaption } from '@/lib/stories/caption';
+import { readerCardFraming } from '@/lib/stories/framing';
+
+import { SoundToggle, StoryMediaLayer } from './story-parts';
 import {
-  DEFAULT_SLIDE_DURATION_MS,
   currentStoryAt,
   groupForPlayback,
   nextPosition,
   previousPosition,
   resolvePlayablePosition,
   resolvePosition,
+  slideDurationForScene,
+  slideDurationMs,
   stableGroupOrder,
+  storyEffectsBackgroundOf,
+  storyMediaUrl,
   type StoryPlaybackGroup,
   type StoryPlaybackStory,
 } from '@/lib/stories/playback';
 import { initialsOf } from '@/lib/view/conversation';
+import { useElementSize } from '@/lib/view/use-element-size';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { useParams } from '@/lib/router';
 import { Link, href, navigate } from '@/routes/route-table';
+
+/** L'hôte des scènes v3 (#6899) — chargé À LA DEMANDE, motif D-54 : une story
+ * v1 ne paie ni ses lois (image seule, bandes, son de fond), ni le moteur. */
+const StorySceneLayer = lazy(() => import('./story-scene-layer'));
 
 /**
  * **LE LECTEUR PLEIN ÉCRAN DE STORIES** (#5817, D-1) — la référence est le
@@ -96,29 +111,12 @@ type GestureState = {
 const CHROME_SCRIM_TOP = 'linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.28) 55%, rgba(0,0,0,0) 100%)';
 const CHROME_SCRIM_BOTTOM = 'linear-gradient(0deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.28) 55%, rgba(0,0,0,0) 100%)';
 
-/** `"RRGGBB"` — six chiffres hexadécimaux, rien d'autre. Ce qui vient du
- * corpus n'entre JAMAIS tel quel dans une déclaration CSS : `storyEffects`
- * est un `Json?` Prisma, donc une chaîne libre côté serveur. */
-const HEX_COLOR = /^[0-9a-fA-F]{6}$/;
-
 /** `StoryBackgroundValue` (`StoryBackgroundValue.swift:1-38`) — `"RRGGBB"` ou
- * `"gradient:RRGGBB:RRGGBB"`. Toute autre forme retombe sur le gradient de
- * marque, exactement comme une valeur absente (tableau § 1.7 de la
- * spécification) : un fond illisible vaut mieux servi par le défaut que par
- * une valeur non validée. */
+ * `"gradient:RRGGBB:RRGGBB"`, validée par le SITE UNIQUE `backgroundCss`
+ * (`lib/canvas/background.ts`, T6, #6899) que le moteur de scène partage
+ * désormais avec ce fond v1. */
 function sceneBackground(background: string | null | undefined): CSSProperties {
-  const fallback: CSSProperties = {
-    background: 'linear-gradient(135deg, var(--color-ios-brand), var(--color-ios-brand-deep))',
-  };
-  if (background === null || background === undefined || background === '') return fallback;
-  if (background.startsWith('gradient:')) {
-    const [, from, to] = background.split(':');
-    if (from !== undefined && to !== undefined && HEX_COLOR.test(from) && HEX_COLOR.test(to)) {
-      return { background: `linear-gradient(135deg, #${from}, #${to})` };
-    }
-    return fallback;
-  }
-  return HEX_COLOR.test(background) ? { background: `#${background}` } : fallback;
+  return { background: backgroundCss(background, 'linear-gradient(135deg, var(--color-ios-brand), var(--color-ios-brand-deep))') };
 }
 
 /** Le nom affiché — même repli qu'`storyAuthorLabel` (`lib/view/story-tray.ts`),
@@ -214,22 +212,6 @@ function ProgressBars({
           )}
         </span>
       ))}
-    </div>
-  );
-}
-
-/** Le média d'une story dont la source est INEXPLOITABLE (absente, ou dont le
- * téléchargement a échoué) — un état DESSINÉ, jamais un `<img src="">` : le
- * navigateur y peint son icône de lien brisé sur fond noir et redemande le
- * document courant au passage. Mesuré sur `story-image-light.png` du premier
- * jet (§ A de la revue). */
-function MediaUnavailable() {
-  return (
-    <div className="grid gap-2 justify-items-center px-8 text-center">
-      <Glyph name="image" size={38} style={{ color: 'rgba(255,255,255,0.7)' }} />
-      <p className="text-body" style={{ color: 'rgba(255,255,255,0.75)' }}>
-        Média indisponible
-      </p>
     </div>
   );
 }
@@ -336,8 +318,39 @@ export default function StoryScreen() {
   );
 
   const media = currentStory?.media?.[0];
-  const mediaSrc = media?.url === undefined || media.url === '' ? '' : attachmentSrc(media.url);
+  const mediaUrl = media === undefined ? '' : storyMediaUrl(media);
+  const mediaSrc = mediaUrl === '' ? '' : attachmentSrc(mediaUrl);
   const hasMedia = (currentStory?.media?.length ?? 0) > 0;
+
+  /**
+   * **LA PORTE v3** (§ 1.2 de la spécification `stories-lecteur`) — un
+   * document canvas v3 (`storyEffects`) se rend par le MÊME moteur que le
+   * fil (`StorySceneLayer` → `ScenePlayer`, D-79) ; `null` retombe sur le
+   * chemin v1 INCHANGÉ (`StoryMediaLayer`).
+   */
+  const sceneDocument = useMemo(() => parseCanvasDocument(currentStory?.storyEffects), [currentStory]);
+  const firstScene = sceneDocument?.scenes[0];
+  /** La scène a-t-elle un son à couper ? Appris de la couche de scène (chargée
+   * à la demande), qui seule connaît le porteur et l'élection de la piste.
+   * La réponse porte l'IDENTITÉ de la story qui l'a donnée : une remise à zéro
+   * « à chaque story » dans l'effet du lecteur s'exécuterait APRÈS l'effet de
+   * la couche (les effets d'un enfant passent avant ceux du parent) et
+   * effacerait la réponse de la story qu'on vient d'ouvrir. */
+  const [soundAvailability, setSoundAvailability] = useState<{ readonly storyId: string; readonly available: boolean } | null>(null);
+  const showsSound =
+    sceneDocument !== null && soundAvailability !== null && soundAvailability.storyId === currentStory?.id && soundAvailability.available;
+  const [observeScene, sceneSize] = useElementSize();
+  /* La zone sûre haute en PIXELS (`topInset` du plateau iOS) : une sonde de
+     hauteur `var(--safe-top)`, mesurée comme le reste — jamais une seconde
+     source de la valeur que la coque pose. */
+  const [observeSafeTop, safeTopSize] = useElementSize();
+  /** Muet VIEWER (`isGlobalMuted = false`, `StoryViewerView.swift:165`) — le
+   * son joue par défaut et le muet survit aux avances. Un refus de la
+   * politique de lecture automatique (ouverture par lien, sans geste) le
+   * pose à `true` : le bouton dit alors la vérité, et le toucher est le geste
+   * qui autorise le son. */
+  const [storySoundMuted, setStorySoundMuted] = useState(false);
+  const muteBlockedPlayback = useCallback(() => setStorySoundMuted(true), []);
 
   const [paused, setPaused] = useState(false);
   /* Le chrome se MASQUE pendant la pause par APPUI LONG et revient à la
@@ -347,7 +360,34 @@ export default function StoryScreen() {
   const [chromeHidden, setChromeHidden] = useState(false);
   const [mediaFailed, setMediaFailed] = useState(false);
   const showsImage = mediaSrc !== '' && !mediaFailed;
-  const [contentReady, setContentReady] = useState(mediaSrc === '');
+  /**
+   * « PRÊT » ET LA DURÉE APPARTIENNENT À UNE STORY, et portent son identité
+   * (#6899, revue-correction). Les remettre à zéro dans l'effet « à chaque
+   * story » ci-dessous était une COURSE : les effets d'un enfant passent avant
+   * ceux du parent, donc une couche de scène déjà chargée qui se déclare prête
+   * à son montage (un fond de couleur, une image en cache) était ÉCRASÉE par
+   * la remise à zéro de la story qu'elle venait d'ouvrir — la barre restait à
+   * 0. Une valeur étiquetée par story ne se remet jamais à zéro : elle cesse
+   * simplement de valoir pour la suivante.
+   */
+  const [readyStoryId, setReadyStoryId] = useState<string | null>(null);
+  const contentReady =
+    currentStory !== undefined && (readyStoryId === currentStory.id || (sceneDocument === null && mediaSrc === ''));
+  /** LA DURÉE DU MÉDIA COURANT (#6836) — `null` tant que le décodeur ne l'a pas
+   * annoncée, et pour toute story qui n'en porte pas. `slideDurationMs` traite
+   * `null` comme « pas de média » et rend le plancher : une story de texte garde
+   * donc exactement les 6 s qu'elle avait. Sans cette étiquette, la durée du
+   * clip précédent gouvernerait la diapositive suivante. */
+  const [mediaDuration, setMediaDuration] = useState<{ readonly storyId: string; readonly ms: number } | null>(null);
+  const mediaDurationMs = currentStory !== undefined && mediaDuration?.storyId === currentStory.id ? mediaDuration.ms : null;
+  /* L'ÉTAT PRÉCÉDENT est rendu tel quel quand rien ne change : `StoryMediaLayer`
+     annonce la durée depuis une réf de rappel EN LIGNE, rappelée à CHAQUE
+     rendu (#6866). Un objet neuf à chaque annonce relançait un rendu, qui
+     relançait l'annonce — une boucle sans fin, mesurée (`check-feed-media` figé
+     sur `/story/st-video`, moteur de rendu à 100 % pendant vingt minutes). */
+  const reportMediaDuration = useCallback((storyId: string, ms: number) => {
+    setMediaDuration((current) => (current !== null && current.storyId === storyId && current.ms === ms ? current : { storyId, ms }));
+  }, []);
   const elapsedRef = useRef(0);
   const startTsRef = useRef(0);
   const markedRef = useRef<Set<string>>(new Set());
@@ -370,7 +410,6 @@ export default function StoryScreen() {
     setPaused(false);
     setChromeHidden(false);
     setMediaFailed(false);
-    setContentReady(mediaSrc === '');
     paintProgress(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStory?.id]);
@@ -399,9 +438,19 @@ export default function StoryScreen() {
   useEffect(() => {
     if (currentStory === undefined || paused || !contentReady) return;
     let raf = 0;
+    /* UNE SEULE VALEUR POUR LA BARRE ET POUR L'AVANCE (#6836) — calculée une
+       fois par diapositive, hors de la boucle. iOS l'exige explicitement
+       (« Garantit que progress bar et auto-advance utilisent la MÊME valeur »,
+       `StoryViewerView+Content.swift`) : deux sources donneraient une barre qui
+       ment sur ce qui reste. Ici c'est structurel — `ratio` gouverne les deux,
+       donc mesurer la barre mesure aussi le moment où la story avance. */
+    const dureeMs =
+      sceneDocument !== null
+        ? slideDurationForScene({ scene: firstScene ?? {}, mediaDurationMs })
+        : slideDurationMs({ mediaDurationMs });
     const tick = () => {
       const elapsed = elapsedRef.current + (performance.now() - startTsRef.current);
-      const ratio = Math.min(1, elapsed / DEFAULT_SLIDE_DURATION_MS);
+      const ratio = Math.min(1, elapsed / dureeMs);
       paintProgress(ratio);
       if (ratio >= 1) {
         advance('next');
@@ -411,7 +460,7 @@ export default function StoryScreen() {
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [currentStory, paused, contentReady, advance, paintProgress]);
+  }, [currentStory, paused, contentReady, mediaDurationMs, sceneDocument, firstScene, advance, paintProgress]);
 
   /* LES GESTES (§ 1.3) — trois bandes, appui posé = pause, le relâchement ne
      reprend pas, le tap suivant reprend sans naviguer. */
@@ -509,10 +558,11 @@ export default function StoryScreen() {
         if (paused) resume();
         else pause();
       } else if (e.key === 'Escape') closeViewer();
+      else if ((e.key === 'm' || e.key === 'M') && showsSound) setStorySoundMuted((m) => !m);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [advance, paused, pause, resume, closeViewer]);
+  }, [advance, paused, pause, resume, closeViewer, showsSound]);
 
   const resolvedContent = useMemo(() => {
     if (currentStory === undefined) return null;
@@ -592,6 +642,7 @@ export default function StoryScreen() {
         </div>
       ) : group !== undefined && currentStory !== undefined && playablePosition !== null && playablePosition !== 'close' ? (
         <div
+          ref={observeScene}
           className="relative flex flex-1 flex-col overflow-hidden select-none"
           data-story-scene={currentStory.id}
           data-story-paused={paused ? 'true' : undefined}
@@ -600,35 +651,55 @@ export default function StoryScreen() {
           onPointerCancel={clearHoldTimer}
           onPointerLeave={clearHoldTimer}
         >
-          {showsImage ? (
-            <img
-              key={currentStory.id}
-              src={mediaSrc}
-              alt=""
-              className="absolute inset-0 size-full object-cover"
-              onLoad={() => setContentReady(true)}
-              onError={() => {
+          <span
+            ref={observeSafeTop}
+            aria-hidden="true"
+            className="pointer-events-none absolute start-0 top-0 block w-px"
+            style={{ height: 'var(--safe-top, 0px)' }}
+          />
+          {sceneDocument !== null ? (
+            <Suspense fallback={null}>
+              <StorySceneLayer
+                key={currentStory.id}
+                story={currentStory}
+                document={sceneDocument}
+                sceneIndex={0}
+                preferredLanguages={reader.languages}
+                framing={readerCardFraming({
+                  viewport: sceneSize,
+                  safeTop: safeTopSize.height,
+                  presentation: chromeHidden ? 'free' : 'carded',
+                })}
+                playing={!paused}
+                muted={storySoundMuted}
+                onReady={() => setReadyStoryId(currentStory.id)}
+                onDurationKnown={(ms) => reportMediaDuration(currentStory.id, ms)}
+                onPlaybackBlocked={muteBlockedPlayback}
+                onSoundAvailability={(available) =>
+                  setSoundAvailability((current) =>
+                    current !== null && current.storyId === currentStory.id && current.available === available
+                      ? current
+                      : { storyId: currentStory.id, available },
+                  )
+                }
+              />
+            </Suspense>
+          ) : (
+            <StoryMediaLayer
+              storyId={currentStory.id}
+              mediaSrc={mediaSrc}
+              mimeType={media?.mimeType}
+              showsMedia={showsImage}
+              hasMedia={hasMedia}
+              background={sceneBackground(storyEffectsBackgroundOf(currentStory.storyEffects))}
+              caption={resolvedContent}
+              onReady={() => setReadyStoryId(currentStory.id)}
+              onDurationKnown={(ms) => reportMediaDuration(currentStory.id, ms)}
+              onFailed={() => {
                 setMediaFailed(true);
-                setContentReady(true);
+                setReadyStoryId(currentStory.id);
               }}
             />
-          ) : (
-            <div
-              className="absolute inset-0 grid place-items-center px-8"
-              style={sceneBackground(currentStory.storyEffects?.background)}
-            >
-              {hasMedia ? (
-                <MediaUnavailable />
-              ) : resolvedContent !== null ? (
-                <p
-                  className="text-center text-title font-semibold"
-                  style={{ fontSize: 28, lineHeight: 1.3 }}
-                  lang={resolvedContent.language || undefined}
-                >
-                  {resolvedContent.text}
-                </p>
-              ) : null}
-            </div>
           )}
 
           <div
@@ -668,6 +739,9 @@ export default function StoryScreen() {
                   {shortRelativeTime(new Date(currentStory.createdAt), new Date(), reader.locale)}
                 </span>
               </div>
+              {showsSound ? (
+                <SoundToggle muted={storySoundMuted} onToggle={() => setStorySoundMuted((m) => !m)} />
+              ) : null}
               <CloseButton onClose={closeViewer} />
             </div>
           </div>

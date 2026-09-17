@@ -125,18 +125,18 @@ describe('Frontend - Sans Firebase configuré', () => {
 
       mockSocket.on.mockImplementation((event: string, callback: Function) => {
         if (event === 'notification') {
-          // Simuler la réception d'une notification
-          setTimeout(() => {
-            const notification = {
-              id: 'notif123',
-              type: 'new_message',
-              title: 'Nouveau message',
-              content: 'Test WebSocket',
-              createdAt: new Date(),
-            };
-            notifications.push(notification);
-            callback(notification);
-          }, 100);
+          // Simuler la réception d'une notification — synchrone : un
+          // `setTimeout` réel mis en course contre le `waitFor` d'à côté
+          // rougissait par intermittence sous charge (#6858), sans qu'aucune
+          // ligne de production n'ait changé.
+          const notification = {
+            id: 'notif123',
+            type: 'new_message',
+            title: 'Nouveau message',
+            content: 'Test WebSocket',
+            createdAt: new Date(),
+          };
+          callback(notification);
         }
         return mockSocket;
       });
@@ -149,9 +149,7 @@ describe('Frontend - Sans Firebase configuré', () => {
         notifications.push(notif);
       });
 
-      await waitFor(() => {
-        expect(notifications.length).toBeGreaterThan(0);
-      }, { timeout: 500 });
+      expect(notifications.length).toBeGreaterThan(0);
 
       expect(notifications[0]).toMatchObject({
         id: 'notif123',
@@ -219,16 +217,16 @@ describe('Frontend - Avec Firebase configuré', () => {
 
       mockSocket.on.mockImplementation((event: string, callback: Function) => {
         if (event === 'notification') {
-          setTimeout(() => {
-            const notification = {
-              id: 'notif456',
-              type: 'new_message',
-              title: 'Message avec Firebase',
-              content: 'WebSocket toujours actif',
-              createdAt: new Date(),
-            };
-            callback(notification);
-          }, 100);
+          // Même correctif que le témoin jumeau ci-dessus (#6858) : synchrone,
+          // sans course entre un minuteur réel et le `waitFor` d'à côté.
+          const notification = {
+            id: 'notif456',
+            type: 'new_message',
+            title: 'Message avec Firebase',
+            content: 'WebSocket toujours actif',
+            createdAt: new Date(),
+          };
+          callback(notification);
         }
         return mockSocket;
       });
@@ -240,9 +238,7 @@ describe('Frontend - Avec Firebase configuré', () => {
         notifications.push(notif);
       });
 
-      await waitFor(() => {
-        expect(notifications.length).toBeGreaterThan(0);
-      }, { timeout: 500 });
+      expect(notifications.length).toBeGreaterThan(0);
 
       expect(notifications[0]).toMatchObject({
         id: 'notif456',

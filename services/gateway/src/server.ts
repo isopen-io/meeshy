@@ -40,7 +40,7 @@ import { createDeviceLocaleMiddleware } from './middleware/deviceLocale';
 import { createDeviceCountryMiddleware } from './middleware/deviceCountry';
 import { requestIdPlugin } from './middleware/request-id';
 import { CORS_METHODS, CORS_EXPOSED_HEADERS } from './config/cors-methods';
-import { fastifyCorsOrigin } from './config/cors-origins';
+import { fastifyCorsOrigin, isCorsRejection, CORS_REJECTION_MESSAGE } from './config/cors-origins';
 import { conditionalGetOnSend } from './utils/etag';
 import { resolveTrustProxy } from './config/trust-proxy';
 import { MutationLogService } from './services/MutationLogService';
@@ -51,6 +51,7 @@ import { MutationLogService } from './services/MutationLogService';
 import { registerAllRoutes } from './route-registration';
 import { canonicaliserCheminsOpenApi } from './utils/openapi-canonical-paths';
 import { InitService } from './services/InitService';
+import { bootstrapDatabase } from './services/database-bootstrap';
 import { MeeshySocketIOHandler } from './socketio/MeeshySocketIOHandler';
 import { CallCleanupService } from './services/CallCleanupService';
 import { shutdownEncryptionService } from './services/EncryptionService';
@@ -362,6 +363,124 @@ class MeeshyServer {
       }
     });
 
+    // Global error handler
+    this.server.setErrorHandler(async (error, request, reply) => {
+      // Un refus CORS n'est pas une panne serveur (#6591). `onRejected` l'a
+      // déjà journalisé en WARN au moment de la décision (`config/cors-origins.ts`) ;
+      // le relever ICI en ERROR, sous un 500, était tout le bruit mesuré en
+      // production — 64 lignes en 25 minutes, toutes depuis des outils locaux
+      // visant l'hôte de production, zéro utilisateur réel touché. Cette
+      // branche doit précéder le `logger.error` ci-dessous : c'est lui qui
+      // produisait la ligne ERROR.
+      if (isCorsRejection(error)) {
+        return reply.code(403).send({
+          success: false,
+          error: 'CORS Rejected',
+          message: CORS_REJECTION_MESSAGE,
+          code: 'CORS_REJECTED'
+        });
+      }
+
+      logger.error('Uncaught error in request handler', {
+        module: 'ErrorHandler',
+        func: 'setErrorHandler',
+        error: error instanceof Error ? {
+          message: error.message,
+          stack: error.stack,
+          name: error.name
+        } : error,
+        path: request.url,
+        method: request.method
+      });
+      // TypeScript may treat catch variables as 'unknown' (useUnknownInCatchVariables).
+      // Cast to `any` once to safely access error properties below.
+      const err: any = error as any;
+
+      // Ce gestionnaire ne pose plus AUCUN champ que `errorResponseSchema` ne
+      // DÉCLARE (#4689). Il y posait `timestamp` et `statusCode` sur les deux
+      // branches typées, `details` sur deux des trois 413, `stack` sur le
+      // repli. `fast-json-stringify` ne supprime que là où un schéma EXISTE :
+      // une route qui déclarait consciencieusement son 4xx servait donc MOINS
+      // qu'une route qui ne déclarait rien — le geste vertueux était celui qui
+      // faisait perdre des champs, sur 595 déclarations de statut. Mesuré
+      // avant de retirer : aucun des trois clients ne lit `statusCode` ni
+      // `timestamp` dans un corps d'erreur, et le statut HTTP porte déjà
+      // l'information de `statusCode` pour tout le monde, y compris pour qui
+      // ne décode pas le corps. Le lien « ce qui PART ⊆ ce qui est DÉCLARÉ »
+      // est gardé : `__tests__/security/global-error-handler-field-closure-guard.test.ts`.
+
+      // Refus de SCHÉMA (Ajv, avant le handler) : Fastify le marque par
+      // `err.validation`. Sans cette branche il tombait dans le repli
+      // générique et ressortait en « Internal Server Error / An unexpected
+      // error occurred » sous un code 400 — le client apprenait qu'il avait
+      // tort, jamais sur quoi. C'est ce qui rendait illisible le refus de
+      // `POST /auth/register` le 2026-08-18.
+      //
+      // Elle passe AVANT la branche typée : un refus d'Ajv n'est pas une
+      // `BaseAppError`, mais il porte `statusCode: 400` et serait donc happé
+      // par tout repli qui lit ce champ.
+      const schemaRefusal = schemaValidationErrorResponse(error);
+      if (schemaRefusal) {
+        const { statusCode: refusStatus, ...corpsRefus } = schemaRefusal;
+        return reply.code(refusStatus).send(corpsRefus);
+      }
+
+      // TOUTE la hiérarchie typée, en UNE branche (#4212).
+      //
+      // Trois sous-classes sur dix-neuf avaient la leur ; les seize autres
+      // tombaient dans le repli générique. Celui-ci lit bien `err.statusCode`
+      // — le CODE était donc juste — mais il REMPLACE le message par « An
+      // unexpected error occurred » et jette tout champ propre à la classe.
+      //
+      // Un compte verrouillé recevait ainsi `423` avec « Internal Server
+      // Error » et SANS `lockedUntil` : la personne apprenait qu'on la
+      // refusait, jamais quand elle pourrait revenir (#4138).
+      //
+      // > Un handler qui rend le bon CODE et le mauvais CORPS est plus
+      // > trompeur qu'un handler qui échoue franchement : le code juste fait
+      // > croire que la couche a compris l'erreur.
+      //
+      // La DÉCISION vit dans `typedErrorResponse`, une fonction pure : ce
+      // handler-ci ne peut s'exercer qu'en montant un serveur, et le critère
+      // demande un témoin par sous-classe.
+      const typed = typedErrorResponse(error);
+      if (typed) {
+        const { statusCode: typeStatus, ...corpsType } = typed;
+        return reply.code(typeStatus).send(corpsType);
+      }
+
+      // Gestion des erreurs de limite de fichiers multipart
+      if (err && err.code === 'FST_FILES_LIMIT') {
+        return reply.code(413).send({
+          error: 'Too Many Files',
+          message: `You can only upload a maximum of 30 files at once. Please reduce the number of files.`
+        });
+      }
+
+      // Gestion des erreurs de taille de fichier
+      if (err && err.code === 'FST_REQ_FILE_TOO_LARGE') {
+        return reply.code(413).send({
+          error: 'File Too Large',
+          message: `File size exceeds the allowed limit of 4 GB. Please reduce the file size.`
+        });
+      }
+
+      // Gestion des erreurs de limite de parties (parts) multipart
+      if (err && err.code === 'FST_PARTS_LIMIT') {
+        return reply.code(413).send({
+          error: 'Too Many Parts',
+          message: `Too many parts in the multipart request. Please reduce the number of elements.`
+        });
+      }
+
+      // Default error handling
+      const statusCode = (err && err.statusCode) || 500;
+      return reply.code(statusCode).send({
+        error: 'Internal Server Error',
+        message: config.isDev ? (err && err.message) : 'An unexpected error occurred'
+      });
+    });
+
     // CORS — la règle vit dans `config/cors-origins` (#4480), pas ici : la porte
     // WebSocket applique la MÊME, et deux littéraux jumeaux avaient divergé.
     // `exposedHeaders` : `ETag` n'est pas dans la safelist CORS — sans lui, le
@@ -599,108 +718,6 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     // Socket.IO will be configured after server initialization
     // No need to register a plugin as Socket.IO attaches directly to the HTTP server
 
-    // Global error handler
-    this.server.setErrorHandler(async (error, request, reply) => {
-      logger.error('Uncaught error in request handler', {
-        module: 'ErrorHandler',
-        func: 'setErrorHandler',
-        error: error instanceof Error ? {
-          message: error.message,
-          stack: error.stack,
-          name: error.name
-        } : error,
-        path: request.url,
-        method: request.method
-      });
-      // TypeScript may treat catch variables as 'unknown' (useUnknownInCatchVariables).
-      // Cast to `any` once to safely access error properties below.
-      const err: any = error as any;
-
-      // Ce gestionnaire ne pose plus AUCUN champ que `errorResponseSchema` ne
-      // DÉCLARE (#4689). Il y posait `timestamp` et `statusCode` sur les deux
-      // branches typées, `details` sur deux des trois 413, `stack` sur le
-      // repli. `fast-json-stringify` ne supprime que là où un schéma EXISTE :
-      // une route qui déclarait consciencieusement son 4xx servait donc MOINS
-      // qu'une route qui ne déclarait rien — le geste vertueux était celui qui
-      // faisait perdre des champs, sur 595 déclarations de statut. Mesuré
-      // avant de retirer : aucun des trois clients ne lit `statusCode` ni
-      // `timestamp` dans un corps d'erreur, et le statut HTTP porte déjà
-      // l'information de `statusCode` pour tout le monde, y compris pour qui
-      // ne décode pas le corps. Le lien « ce qui PART ⊆ ce qui est DÉCLARÉ »
-      // est gardé : `__tests__/security/global-error-handler-field-closure-guard.test.ts`.
-
-      // Refus de SCHÉMA (Ajv, avant le handler) : Fastify le marque par
-      // `err.validation`. Sans cette branche il tombait dans le repli
-      // générique et ressortait en « Internal Server Error / An unexpected
-      // error occurred » sous un code 400 — le client apprenait qu'il avait
-      // tort, jamais sur quoi. C'est ce qui rendait illisible le refus de
-      // `POST /auth/register` le 2026-08-18.
-      //
-      // Elle passe AVANT la branche typée : un refus d'Ajv n'est pas une
-      // `BaseAppError`, mais il porte `statusCode: 400` et serait donc happé
-      // par tout repli qui lit ce champ.
-      const schemaRefusal = schemaValidationErrorResponse(error);
-      if (schemaRefusal) {
-        const { statusCode: refusStatus, ...corpsRefus } = schemaRefusal;
-        return reply.code(refusStatus).send(corpsRefus);
-      }
-
-      // TOUTE la hiérarchie typée, en UNE branche (#4212).
-      //
-      // Trois sous-classes sur dix-neuf avaient la leur ; les seize autres
-      // tombaient dans le repli générique. Celui-ci lit bien `err.statusCode`
-      // — le CODE était donc juste — mais il REMPLACE le message par « An
-      // unexpected error occurred » et jette tout champ propre à la classe.
-      //
-      // Un compte verrouillé recevait ainsi `423` avec « Internal Server
-      // Error » et SANS `lockedUntil` : la personne apprenait qu'on la
-      // refusait, jamais quand elle pourrait revenir (#4138).
-      //
-      // > Un handler qui rend le bon CODE et le mauvais CORPS est plus
-      // > trompeur qu'un handler qui échoue franchement : le code juste fait
-      // > croire que la couche a compris l'erreur.
-      //
-      // La DÉCISION vit dans `typedErrorResponse`, une fonction pure : ce
-      // handler-ci ne peut s'exercer qu'en montant un serveur, et le critère
-      // demande un témoin par sous-classe.
-      const typed = typedErrorResponse(error);
-      if (typed) {
-        const { statusCode: typeStatus, ...corpsType } = typed;
-        return reply.code(typeStatus).send(corpsType);
-      }
-
-      // Gestion des erreurs de limite de fichiers multipart
-      if (err && err.code === 'FST_FILES_LIMIT') {
-        return reply.code(413).send({
-          error: 'Too Many Files',
-          message: `You can only upload a maximum of 30 files at once. Please reduce the number of files.`
-        });
-      }
-
-      // Gestion des erreurs de taille de fichier
-      if (err && err.code === 'FST_REQ_FILE_TOO_LARGE') {
-        return reply.code(413).send({
-          error: 'File Too Large',
-          message: `File size exceeds the allowed limit of 4 GB. Please reduce the file size.`
-        });
-      }
-
-      // Gestion des erreurs de limite de parties (parts) multipart
-      if (err && err.code === 'FST_PARTS_LIMIT') {
-        return reply.code(413).send({
-          error: 'Too Many Parts',
-          message: `Too many parts in the multipart request. Please reduce the number of elements.`
-        });
-      }
-
-      // Default error handling
-      const statusCode = (err && err.statusCode) || 500;
-      return reply.code(statusCode).send({
-        error: 'Internal Server Error',
-        message: config.isDev ? (err && err.message) : 'An unexpected error occurred'
-      });
-    });
-
     // Decorators for dependency injection
     this.server.decorate('prisma', this.prisma);
     this.server.decorate('redis', getCacheStore().getNativeClient());
@@ -811,31 +828,11 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       await this.prisma.user.findFirst();
       logger.info(`✓ Database connected successfully`);
 
-      // Initialize database with default data
-      const initService = new InitService(this.prisma);
-
-      // Invariant de schéma, à CHAQUE boot — avant la porte `shouldInitialize`,
-      // qui ne s'ouvre que sur une base vide. Derrière elle, une base déjà
-      // peuplée ne recevait jamais l'index géospatial (500 sur /posts/nearby).
-      await initService.ensurePostGeoIndex();
-      await initService.ensureFriendRequestIndexes();
-      await initService.ensureContactDeltaIndex();
-
-      // Check if initialization is needed
-      const shouldInit = await initService.shouldInitialize();
-
-      if (shouldInit) {
-        const forceReset = process.env.FORCE_DB_RESET === 'true';
-        if (forceReset) {
-          logger.info('🔄 FORCE_DB_RESET=true - Database will be completely reset and reinitialized');
-        } else {
-          logger.info('🔧 Database initialization required, starting...');
-        }
-        await initService.initializeDatabase();
-        logger.info('✅ Database initialization completed successfully');
-      } else {
-        logger.info('✅ Database already initialized, skipping initialization');
-      }
+      // Séquence de démarrage de la base — SSOT `bootstrapDatabase`, qui tient
+      // ensemble ce qui est un invariant de CHAQUE boot (index, comptes semés)
+      // et ce qui est un ensemencement (derrière `shouldInitialize()`, porte
+      // qui ne s'ouvre que sur une base VIDE).
+      await bootstrapDatabase(new InitService(this.prisma), logger);
 
     } catch (error) {
       logger.error('✗ Database connection failed:', error);

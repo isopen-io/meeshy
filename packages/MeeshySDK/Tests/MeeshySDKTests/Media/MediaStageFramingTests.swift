@@ -12,6 +12,10 @@ import CoreGraphics
 /// Zone libre : `844 − 59 − 56 − 80 − 34 − 12 = 603` de haut, `390 − 2×12 = 366`
 /// de large. Le rail vaut 80 parce que c'est ce que `FilmstripMetrics` réserve
 /// réellement, et l'app lui passe sa constante plutôt que de recopier le nombre.
+///
+/// Les deux planchers sont ceux que la galerie dérive : 330 de haut (trois fois
+/// son overlay), 204 de large (sa colonne d'actions et ses deux gouttières,
+/// `12 + 44 + 12`, tenue dans le tiers latéral du cadre — #6692).
 @Suite("MediaStageFraming — le plateau de lecture")
 struct MediaStageFramingTests {
 
@@ -28,7 +32,8 @@ struct MediaStageFramingTests {
         presentation: MediaStageFraming.Presentation,
         viewport: CGSize = MediaStageFramingTests.viewport,
         corridors: MediaStageFraming.Corridors = MediaStageFramingTests.corridors,
-        minimumFrameHeight: CGFloat = 330
+        minimumFrameHeight: CGFloat = 330,
+        minimumFrameWidth: CGFloat = 204
     ) -> MediaStageFraming.Input {
         MediaStageFraming.Input(
             viewport: viewport,
@@ -36,7 +41,8 @@ struct MediaStageFramingTests {
             corridors: corridors,
             presentation: presentation,
             cardedCornerRadius: 22,
-            minimumFrameHeight: minimumFrameHeight
+            minimumFrameHeight: minimumFrameHeight,
+            minimumFrameWidth: minimumFrameWidth
         )
     }
 
@@ -76,7 +82,8 @@ struct MediaStageFramingTests {
 
         #expect(Self.close(r.media.height, 205.875), "le MÉDIA garde son ratio : 366 × 9/16")
         #expect(Self.close(r.frame.height, 330), "le CADRE s'arrête au plancher")
-        #expect(Self.close(r.frame.width, r.media.width), "le plancher n'agit que sur la hauteur")
+        #expect(Self.close(r.frame.width, r.media.width),
+                "le plancher de LARGEUR ne mord pas : une 16:9 prend toute la largeur libre")
         #expect(r.letterboxes, "un cadre plus haut que son média laisse deux bandes à habiller")
     }
 
@@ -95,6 +102,62 @@ struct MediaStageFramingTests {
         )
 
         #expect(Self.close(r.frame.height, 603), "jamais de cadre qui pousserait le rail hors écran")
+    }
+
+    // MARK: - Le plancher de LARGEUR — le jumeau, sur l'autre axe (#6692)
+
+    /// **Ce témoin ne peut tomber que sur un cadre ÉTROIT.** Une 4:5 (366), une
+    /// 9:16 (339) et une 16:9 (366) sont toutes plus larges que le plancher : la
+    /// règle juste et la règle absente y rendent le même cadre. Il s'écrit donc
+    /// sur l'image très haute de la recette (900 × 3 600), dont le cadre ne
+    /// gardait qu'environ 128 pt sur l'appareil — trop peu pour l'auteur, sa
+    /// date, sa ligne de format et la colonne d'actions qui s'y posent.
+    @Test("Une 1:4 : le cadre s'arrête au plancher de largeur, le média non")
+    func carded_veryTallImage_frameStopsAtWidthFloor_mediaDoesNot() {
+        let r = MediaStageFraming.resolve(Self.input(ratio: 0.25, presentation: .carded))
+
+        #expect(Self.close(r.media.height, 603), "contrainte par la HAUTEUR libre")
+        #expect(Self.close(r.media.width, 150.75), "le MÉDIA garde son ratio : 603 × 0,25 — jamais étiré")
+        #expect(Self.close(r.frame.width, 204), "le CADRE s'arrête au plancher de largeur")
+        #expect(Self.close(r.frame.height, r.media.height), "ce plancher n'agit que sur la largeur")
+        #expect(r.letterboxes, "un cadre plus large que son média laisse deux bandes latérales à habiller")
+    }
+
+    /// Vert sans la règle, et c'est dit : ce qu'il attrape est l'écriture
+    /// inverse — un `min` à la place du `max`, qui ferait du plancher un PLAFOND
+    /// et raboterait chaque cadre plus large que lui.
+    @Test("Le plancher de largeur est un minimum, jamais un maximum")
+    func carded_widthFloorNeverShrinksAWideFrame() {
+        let r = MediaStageFraming.resolve(Self.input(ratio: 0.5625, presentation: .carded))
+
+        #expect(Self.close(r.frame.width, 339.1875), "603 × 0,5625 — plus large que le plancher, intacte")
+        #expect(r.media == r.frame)
+    }
+
+    @Test("Un plancher de largeur absurde reste borné par la zone libre")
+    func carded_widthFloorNeverExceedsTheFreeRegion() {
+        let r = MediaStageFraming.resolve(
+            Self.input(ratio: 0.25, presentation: .carded, minimumFrameWidth: 5_000)
+        )
+
+        #expect(Self.close(r.frame.width, 366), "jamais de cadre qui mordrait sur les gouttières")
+        #expect(Self.close(r.media.width, 150.75), "et le média n'en grandit pas pour autant")
+    }
+
+    /// **En plein cadre, aucun plancher ne mord.** Le cadre EST l'écran ; un
+    /// plancher qui s'y appliquerait encore ne pourrait que le pousser dehors.
+    @Test("En plein cadre, le plancher de largeur ne change rien")
+    func full_ignoresTheWidthFloor() {
+        let sans = MediaStageFraming.resolve(
+            Self.input(ratio: 0.25, presentation: .full, minimumFrameWidth: 0)
+        )
+        let avec = MediaStageFraming.resolve(
+            Self.input(ratio: 0.25, presentation: .full, minimumFrameWidth: 5_000)
+        )
+
+        #expect(sans == avec, "le plancher de largeur ne touche pas un cadre qui a pris l'écran")
+        #expect(avec.frame == Self.viewport)
+        #expect(Self.close(avec.media.width, 211), "844 × 0,25 — l'image entière, comme à la recette")
     }
 
     // MARK: - Plein cadre
@@ -233,4 +296,81 @@ struct MediaStageFramingTests {
         #expect(sans == avec, "la bande ne change rien à un cadre qui n'a plus de couloirs")
         #expect(avec.frame == Self.viewport)
     }
+
+    // MARK: - Le facteur de COUVERTURE (#6806)
+
+    /// **La loi complémentaire de l'ajustement, et pourquoi elle vit ici.**
+    ///
+    /// `resolve` ajuste et centre — « jamais de rognage », et son doc-comment
+    /// nomme lui-même la conséquence : en plein cadre, même une scène 9:16 laisse
+    /// des bandes, parce que l'écran d'un iPhone 16 Pro est en 0,462, plus ÉTROIT
+    /// que le 0,5625 d'une scène. Une pièce jointe DOIT s'en accommoder : la
+    /// rogner retirerait ce que l'expéditeur a envoyé. Une SCÈNE, non — c'est une
+    /// surface de composition, et la laisser en boîte aux lettres peint une
+    /// surface que personne n'a composée.
+    ///
+    /// D'où une fonction EN PLUS, jamais un paramètre de `resolve` : le solveur
+    /// garde son contrat `media <= frame` intact. Lui faire rendre le rognage a
+    /// été essayé et mesuré au simulateur — les médias de post se posaient EN
+    /// HAUT À GAUCHE, à leurs cotes cardées. **Le rognage appartient à qui SAIT
+    /// ce qu'il compose**, et le solveur ne le sait pas.
+    @Test("Le facteur agrandit le canvas jusqu'à couvrir le cadre")
+    func coverScaleCouvreLeCadre() {
+        // iPhone 16 Pro, plein cadre : le cadre prend l'écran, le média est
+        // l'ajustement 9:16 que `resolve` en a tiré.
+        let cadre = CGSize(width: 402, height: 874)
+        let média = CGSize(width: 402, height: 402 / 0.5625)   // 402 × 714,67
+
+        let facteur = MediaStageFraming.coverScale(frame: cadre, media: média)
+
+        #expect(abs(facteur - 874 / (402 / 0.5625)) < 0.0001,
+                "le facteur est celui qui comble l'axe le PLUS court")
+        #expect(média.height * facteur >= cadre.height - 0.001,
+                "après couverture, plus un point de sol en haut ni en bas")
+        #expect(média.width * facteur >= cadre.width - 0.001,
+                "ni sur les côtés — ce qui dépasse sort de l'écran")
+    }
+
+    /// **Une couverture n'est jamais un étirement** : un seul facteur pour les
+    /// deux axes, donc le rapport du canvas est intact et c'est le CADRE qui
+    /// rogne.
+    @Test("La couverture préserve le rapport du canvas")
+    func coverScalePreserveLeRapport() {
+        let cadre = CGSize(width: 402, height: 874)
+        let média = CGSize(width: 402, height: 714.6667)
+
+        let facteur = MediaStageFraming.coverScale(frame: cadre, media: média)
+        let couvert = CGSize(width: média.width * facteur, height: média.height * facteur)
+
+        #expect(abs(couvert.width / couvert.height - média.width / média.height) < 0.0001,
+                "le rapport survit à la couverture — sinon les visages s'allongent")
+    }
+
+    /// **Un média qui remplit déjà ne se touche pas.** Le facteur ne descend
+    /// jamais sous 1 : sans ce plancher, une scène plus large que son cadre
+    /// serait RÉDUITE par une fonction qui s'appelle « couvrir », et rouvrirait
+    /// les bandes qu'elle est censée fermer.
+    @Test("La couverture ne rétrécit jamais")
+    func coverScaleNeRetrecitPas() {
+        let cadre = CGSize(width: 402, height: 874)
+
+        #expect(MediaStageFraming.coverScale(frame: cadre, media: cadre) == 1)
+        #expect(MediaStageFraming.coverScale(frame: cadre,
+                                             media: CGSize(width: 600, height: 1200)) == 1,
+                "un média DÉJÀ plus grand n'est pas rétréci")
+    }
+
+    /// Une cote nulle ne fabrique ni infini ni NaN : elle rend l'identité. Un
+    /// `scaleEffect(.infinity)` ne fait pas rougir un témoin — il fait
+    /// disparaître l'écran.
+    @Test("Une cote nulle rend l'identité, jamais un infini")
+    func coverScaleSurCoteNulle() {
+        let cadre = CGSize(width: 402, height: 874)
+
+        #expect(MediaStageFraming.coverScale(frame: cadre, media: .zero) == 1)
+        #expect(MediaStageFraming.coverScale(frame: cadre,
+                                             media: CGSize(width: 402, height: 0)) == 1)
+        #expect(MediaStageFraming.coverScale(frame: .zero, media: cadre) == 1)
+    }
+
 }

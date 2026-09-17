@@ -70,6 +70,11 @@ const placeOf = (message: Message, tail = true): PlacedMessage => ({
   opensDay: null,
 });
 
+/**
+ * `onPickLanguage` EST FOURNI ICI, comme le fil le fournit toujours (#6862,
+ * revue-correction) — voir la jumelle de `focal-row.test.tsx` : les contrôles
+ * du pied n'existent que par cette capacité.
+ */
 const render = (message: Message, opts: { tail?: boolean; now?: () => number } = {}) =>
   renderToStaticMarkup(
     <Bubble
@@ -78,7 +83,32 @@ const render = (message: Message, opts: { tail?: boolean; now?: () => number } =
       isGrouped
       viewerId="u-viewer"
       onJumpToMessage={() => {}}
+      onPickLanguage={() => {}}
       {...(opts.now ? { now: opts.now } : {})}
+    />,
+  );
+
+/** LA LECTURE SEULE — l'administration (#6862) : aucune langue à explorer. */
+const renderSansPrise = (message: Message) =>
+  renderToStaticMarkup(
+    <Bubble
+      place={placeOf(message, true)}
+      languages={['fr', 'en']}
+      isGrouped
+      viewerId="u-viewer"
+      onJumpToMessage={() => {}}
+    />,
+  );
+
+const renderRetenu = (message: Message) =>
+  renderToStaticMarkup(
+    <Bubble
+      place={placeOf(message, true)}
+      languages={['fr', 'en']}
+      isGrouped
+      viewerId="u-viewer"
+      onJumpToMessage={() => {}}
+      revealable={false}
     />,
   );
 
@@ -868,5 +898,94 @@ describe('Bubble — la grille de médias en boîte unique (revue #6169)', () =>
     );
     expect(html).toContain('data-media-frame="box"');
     expect(html).not.toContain('data-media-frame="tiles"');
+  });
+});
+
+/**
+ * **LE CONTENU RETENU AU SERVEUR** (#6862) — `revealable={false}`.
+ *
+ * Distinct des quatre protections que `protectionOf` connaît : ici le texte
+ * n'est pas MASQUÉ à l'affichage, il n'est PAS DANS LA CHARGE. La lecture
+ * souveraine de l'administration le retient au serveur
+ * (`messageContentIsProtected`) et sert `isProtected` à la place.
+ *
+ * Deux choses à garder, et la seconde est la vraie :
+ *
+ * 1. la mention est PEINTE — sans elle, un message chiffré rend une bulle VIDE,
+ *    puisque la loi CLIENT ne connaît ni `isEncrypted` ni `encryptionMode` et
+ *    le classe « standard » ;
+ * 2. AUCUN voile à toucher — « Toucher pour révéler le contenu » découvrirait
+ *    une bulle vide. C'est le contrôle sans effet que la loi 4 interdit, sous
+ *    sa forme la plus trompeuse : un bouton qui promet ce que personne ne lui a
+ *    donné.
+ *
+ * Jumelle dans ``focal-row.test.tsx`` — la loi a DEUX hôtes, et `thread-modes.tsx` ne monte
+ * qu'UN mode à la fois : un témoin d'écran ne peut donc en couvrir qu'un seul.
+ */
+describe('Bubble — contenu retenu au serveur (#6862)', () => {
+  test('rend la mention, jamais une bulle vide — même quand la loi client dit « standard »', () => {
+    const html = renderRetenu({ ...BASE_MESSAGE, content: '', translations: [], isEncrypted: true });
+    expect(html).toContain('Contenu retenu');
+  });
+
+  test('n’offre AUCUN voile à toucher : il n’y a rien à révéler', () => {
+    const html = renderRetenu({ ...BASE_MESSAGE, content: '', translations: [], isEncrypted: true });
+    expect(html).not.toContain('data-protected="hidden"');
+    expect(html).not.toContain('Toucher pour révéler');
+  });
+
+  test('et il PRIME sur le voile ordinaire — un message flouté SANS son texte ne promet pas de le rendre', () => {
+    const html = renderRetenu({ ...BASE_MESSAGE, content: '', translations: [], isBlurred: true });
+    expect(html).toContain('Contenu retenu');
+    expect(html).not.toContain('data-protected="hidden"');
+  });
+
+  test('CONTRASTE — `revealable` par défaut laisse le voile ordinaire intact', () => {
+    const html = render({ ...BASE_MESSAGE, isBlurred: true, content: 'SECRET-4817', translations: [] });
+    expect(html).toContain('data-protected="hidden"');
+    expect(html).not.toContain('Contenu retenu');
+  });
+});
+
+/**
+ * **AUCUN CONTRÔLE DE LANGUE SANS CAPACITÉ DE LANGUE** (#6862,
+ * revue-correction) — jumelle du témoin de `focal-row.test.tsx`, la loi ayant
+ * DEUX peaux. La pastille et les drapeaux sont de vrais boutons ; sans
+ * `onPickLanguage`, leur clic appelait `undefined` et le texte lu ne changeait
+ * pas. L'administration est le premier hôte qui n'a pas cette capacité.
+ */
+describe('Bubble — la prise de langue absente retire le GESTE, pas le fait (#6862)', () => {
+  const TRADUIT: Message = {
+    ...BASE_MESSAGE,
+    originalLanguage: 'en',
+    content: 'Hello there!',
+    translations: [
+      {
+        id: 't1',
+        messageId: BASE_MESSAGE.id,
+        targetLanguage: 'fr',
+        translatedContent: 'Bonjour !',
+        translationModel: 'medium',
+        createdAt: new Date('2026-09-08T09:00:00.000Z'),
+      },
+    ],
+  };
+
+  test('sans `onPickLanguage` : AUCUN bouton de prise de langue', () => {
+    const html = renderSansPrise(TRADUIT);
+    expect(html).not.toContain('data-prism-toggle');
+    expect(html).not.toContain('data-prism-flag');
+    expect(html).not.toContain('langue d’origine');
+  });
+
+  test('sans `onPickLanguage` : le FAIT de la traduction reste dit', () => {
+    const html = renderSansPrise(TRADUIT);
+    expect(html).toContain('data-prism-indicator');
+  });
+
+  test('CONTRASTE — le fil, lui, porte la capacité : les deux contrôles sont là', () => {
+    const html = render(TRADUIT, { tail: true });
+    expect(html).toContain('data-prism-toggle');
+    expect(html).toContain('data-prism-flag');
   });
 });

@@ -67,11 +67,12 @@ export type ApiEnv = {
 };
 
 /**
- * Exportée pour `legacy-link.ts` (#6354) : le legacy (`https://meeshy.me`) ne
- * sert QUE la production — aucun hôte de staging ne l'héberge (mesuré :
- * `legacy.staging.meeshy.me` / `app.staging.meeshy.me` / `v1.staging.meeshy.me`
- * ne répondent pas). Comparer `apiConfig.base` à cette origine est donc le test
- * exact de « ce build parle-t-il à la passerelle qui a un legacy ? ».
+ * L'origine de la passerelle de PRODUCTION — celle qu'un build sans
+ * `VITE_API_BASE` vise, donc l'image construite sur `main` que meeshy.me sert
+ * depuis la décommission du legacy (#6702). `docker.yml` ne pose
+ * `VITE_API_BASE` que sur `dev` (`gate.staging.meeshy.me`). Elle servait aussi
+ * `legacy-link.ts` (#6354), supprimé avec les derniers renvois vers le legacy
+ * (#6335).
  */
 export const PRODUCTION_ORIGIN = 'https://gate.meeshy.me';
 const API_PREFIX_PATTERN = /\/api\/v1\/?$/;

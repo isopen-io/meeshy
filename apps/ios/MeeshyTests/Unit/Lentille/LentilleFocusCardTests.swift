@@ -555,6 +555,41 @@ final class LentilleFocusCardTests: XCTestCase {
         XCTAssertEqual(LentilleFocusBreathing.push(distance: far, level: 0, reduceMotion: false), 0, "au repos, rien")
     }
 
+    /// Loupe (directive porteur 2026-09-15, #6586 : « loupe plus prononcée ») :
+    /// la rangée qui traverse la bande GRANDIT, ses voisines non — même rampe
+    /// que la respiration, donc jamais de saut au passage.
+    func test_loupe_magnifiesTheRowInTheBand_neverItsNeighbours_andRampsSmoothly() {
+        let gain = LentilleMetrics.FocusCard.loupeGain
+        let wide: CGFloat = 390
+        let far = LentilleMetrics.FocusCard.breathingRampStart + LentilleMetrics.FocusCard.breathingRampLength + 1
+        let mid = LentilleMetrics.FocusCard.breathingRampStart + LentilleMetrics.FocusCard.breathingRampLength / 2
+        XCTAssertGreaterThan(gain, 0)
+        XCTAssertEqual(LentilleFocusBreathing.loupe(distance: 0, level: 1, reduceMotion: false, width: wide), 1 + gain, accuracy: 0.0001)
+        XCTAssertEqual(LentilleFocusBreathing.loupe(distance: 20, level: 1, reduceMotion: false, width: wide), 1 + gain, accuracy: 0.0001, "toute la demi-rangée : l'élue")
+        XCTAssertEqual(LentilleFocusBreathing.loupe(distance: far, level: 1, reduceMotion: false, width: wide), 1, "une voisine ne grandit pas")
+        XCTAssertEqual(LentilleFocusBreathing.loupe(distance: -mid, level: 1, reduceMotion: false, width: wide), 1 + gain / 2, accuracy: 0.0001)
+        XCTAssertEqual(LentilleFocusBreathing.loupe(distance: 0, level: 0.5, reduceMotion: false, width: wide), 1 + gain / 2, accuracy: 0.0001, "suit le niveau de scène")
+        XCTAssertEqual(LentilleFocusBreathing.loupe(distance: 0, level: 0, reduceMotion: false, width: wide), 1, "au repos, rien")
+        XCTAssertEqual(LentilleFocusBreathing.loupe(distance: 0, level: 1, reduceMotion: true, width: wide), 1)
+    }
+
+    /// Sur une liste large (iPad), la loupe ne pousse jamais la rangée hors
+    /// de sa marge horizontale : grandir au-delà la rognerait au bord.
+    func test_loupe_neverGrowsTheRowPastItsHorizontalMargin() {
+        let width: CGFloat = 1_000
+        let scale = LentilleFocusBreathing.loupe(distance: 0, level: 1, reduceMotion: false, width: width)
+        XCTAssertGreaterThan(scale, 1)
+        XCTAssertLessThanOrEqual((scale - 1) * width / 2, LentilleMetrics.Row.marginHorizontal + 0.0001)
+    }
+
+    func test_loupe_isMountedWithTheBreathing() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Lentille/Mode/LentilleFocusBreathing.swift")
+        let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        XCTAssertTrue(code.contains(".scaleEffect(Self.loupe("), "la loupe calculée doit être APPLIQUÉE à la rangée")
+    }
+
     /// Le pont ✦ ne remplace l'aperçu que s'il reste des non-lus — même règle
     /// que la rangée plate.
     func test_showsBridge_requiresUnreadAndABridge() {

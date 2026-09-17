@@ -174,3 +174,64 @@ final class CaptionTranslationOfferTests: XCTestCase {
         XCTAssertEqual(offre, .languages(codes: ["fr", "EN", "es"], active: nil))
     }
 }
+
+/// **Les traductions ARRIVÉES pendant que le plein écran est ouvert** (#6560).
+///
+/// Le plein écran couvre la carte qui le présente ; tant qu'il est ouvert, le
+/// post que l'hôte lui relaie ne change pas. Il plie donc lui-même, sur le post
+/// qu'il affiche, les traductions que la socket livre pour CE post — par les
+/// règles de pose du store, jamais une troisième.
+final class CaptionTranslationArrivalTests: XCTestCase {
+
+    private func post() -> FeedPost {
+        FeedPost(
+            id: "p1", author: "alice", authorId: "a1",
+            content: "Contenu du post",
+            media: [FeedMedia(id: "m1", type: .image, caption: "Caption test",
+                              captionLanguage: "en", captionTranslations: ["de": "Überschrift"])],
+            originalLanguage: "fr"
+        )
+    }
+
+    private func legende(postId: String = "p1", mediaId: String = "m1", langue: String, texte: String) throws -> CaptionTranslationArrival {
+        let json = #"{"mediaId":"\#(mediaId)","postId":"\#(postId)","language":"\#(langue)","translation":{"text":"\#(texte)"}}"#
+        return .mediaCaption(try JSONDecoder().decode(SocketMediaCaptionTranslationUpdatedData.self, from: Data(json.utf8)))
+    }
+
+    private func texteDuPost(postId: String = "p1", langue: String, texte: String) throws -> CaptionTranslationArrival {
+        let json = #"{"postId":"\#(postId)","language":"\#(langue)","translation":{"text":"\#(texte)"}}"#
+        return .post(try JSONDecoder().decode(SocketPostTranslationUpdatedData.self, from: Data(json.utf8)))
+    }
+
+    func test_uneLegendeArrivee_rejointLesTraductionsDuMedia() throws {
+        let affiche = CaptionTranslationArrival.applying([try legende(langue: "es", texte: "Prueba")], to: post())
+
+        XCTAssertEqual(affiche.media.first?.captionTranslations, ["de": "Überschrift", "es": "Prueba"])
+        XCTAssertNil(affiche.translations, "Une légende traduite n'est pas une traduction du post.")
+    }
+
+    func test_uneTraductionDuPostArrivee_rejointLesTraductionsDuPost() throws {
+        let affiche = CaptionTranslationArrival.applying([try texteDuPost(langue: "es", texte: "Contenido")], to: post())
+
+        XCTAssertEqual(affiche.translations?["es"]?.text, "Contenido")
+        XCTAssertEqual(affiche.media.first?.captionTranslations, ["de": "Überschrift"],
+                       "Une traduction du post n'est pas une légende traduite.")
+    }
+
+    func test_uneArriveePourUnAutrePost_estIgnoree() throws {
+        let affiche = CaptionTranslationArrival.applying(
+            [try legende(postId: "p2", langue: "es", texte: "Prueba"), try texteDuPost(postId: "p2", langue: "es", texte: "Otro")],
+            to: post()
+        )
+
+        XCTAssertEqual(affiche.media.first?.captionTranslations, ["de": "Überschrift"])
+        XCTAssertNil(affiche.translations)
+    }
+
+    func test_aucuneArrivee_rendLePostTelQuel() {
+        let affiche = CaptionTranslationArrival.applying([], to: post())
+
+        XCTAssertEqual(affiche.media.first?.captionTranslations, ["de": "Überschrift"])
+        XCTAssertNil(affiche.translations)
+    }
+}

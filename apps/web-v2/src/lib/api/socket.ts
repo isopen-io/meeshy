@@ -385,6 +385,31 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
     void deps.queryClient.invalidateQueries({ queryKey: FRIENDS_QUERY_PREFIX });
   };
 
+  /**
+   * `conversation:new` (#6799) — UNE CONVERSATION QUI N'EST PAS ENCORE DANS LE
+   * CACHE. `patchConversation` ne touche qu'une page qui porte DÉJÀ la ligne
+   * (`conversations.ts:172-188`) : sans ce handler, un premier DM reçu, un
+   * ajout à un groupe ou un DM réinitié laissait le `message:new` suivant
+   * patcher le VIDE, en silence — l'aperçu n'apparaissait qu'au prochain
+   * rechargement complet (`staleTime` 30 s, `refetchOnWindowFocus`), d'où le
+   * symptôme « le dernier message ne remonte pas NÉCESSAIREMENT ».
+   *
+   * INVALIDER plutôt qu'écrire la ligne, pour la même raison que
+   * `onFriendshipChanged` ci-dessus : la charge ne porte que des identifiants.
+   * `ConversationNewEventData` est MINIMALE par contrat — ni dernier message,
+   * ni participants complets — et son doc-comment renvoie à
+   * `/conversations/:id`. Une ligne fabriquée depuis cette charge afficherait
+   * un direct SANS NOM : le titre d'un DM se déduit de ses participants.
+   *
+   * La passerelle l'émet à TROIS sites (`core-lifecycle.ts:239` et `:410`,
+   * `participants-writes.ts:420`) et le legacy l'écoutait déjà
+   * (`presence.service.ts:150`) : ce câblage restaure une PARITÉ, il n'ouvre
+   * pas un périmètre.
+   */
+  const onConversationNew = (): void => {
+    void deps.queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
+  };
+
   /** Le MÊME geste qu'un 401 HTTP (§ doc-comment de `RealtimeDeps`) — les
    * DEUX motifs ferment la session, aucun ne tente de rafraîchir (D-26). */
   const onTokenExpired = (_payload: AuthTokenExpiredEventData): void => deps.onClearSession();
@@ -433,6 +458,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.TYPING_STOP, onTypingStop);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, onUnreadUpdated);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_UPDATED, onConversationUpdated);
+  socket.on<unknown>(SERVER_EVENTS.CONVERSATION_NEW, onConversationNew);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_TRANSLATION, onMessageTranslation);
   socket.on<unknown>(SERVER_EVENTS.STORY_CREATED, onStoryChanged);
   socket.on<unknown>(SERVER_EVENTS.STORY_UPDATED, onStoryChanged);

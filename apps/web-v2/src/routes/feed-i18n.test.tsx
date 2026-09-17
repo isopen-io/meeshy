@@ -13,7 +13,7 @@ import { FeedEmpty, FeedError, FeedHeader } from './feed';
  * dur en français. Miroir `feed-post-card-i18n.test.tsx`.
  */
 
-const RAIL_VIDE = { groups: [], loading: false } as const satisfies StoryRailProps;
+const RAIL_VIDE = { groups: [], loading: false, language: 'fr' } as const satisfies StoryRailProps;
 
 describe('les états du fil suivent la langue d’interface', () => {
   beforeAll(async () => {

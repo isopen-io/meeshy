@@ -4,8 +4,10 @@ import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostMedia
+import me.meeshy.sdk.model.MosaicLayoutMode
 import me.meeshy.sdk.model.displayContent
 import me.meeshy.sdk.model.isTranslated
+import me.meeshy.sdk.model.resolvedLayout
 import me.meeshy.sdk.model.resolvedCaption
 import me.meeshy.sdk.lang.LanguageResolver.preferredContentLanguages
 import me.meeshy.ui.component.bubble.LanguageChip
@@ -27,6 +29,13 @@ data class FeedPostImage(
      * three separate contents, never confused even at equal strings.
      */
     val caption: String? = null,
+    /**
+     * Author-authored accessibility description (`PostMedia.alt`, #6739), served
+     * verbatim (no Prisme resolution — unlike [caption], it carries no
+     * translation pipeline on the wire). `null`/blank means the author wrote
+     * none; consumers fall back to a generic localized label in that case.
+     */
+    val alt: String? = null,
 )
 
 /**
@@ -67,6 +76,8 @@ data class FeedPostPresentation(
     val location: FeedLocationPresentation? = null,
     /** Distance in meters from the viewer — only present on the Nearby feed. */
     val distanceMeters: Double? = null,
+    /** The author's layout (#6514), already resolved — the carousel when the post declares none. */
+    val layout: MosaicLayoutMode = MosaicLayoutMode.FALLBACK,
 )
 
 object FeedPostBuilder {
@@ -102,6 +113,7 @@ object FeedPostBuilder {
                     height = media.height,
                     thumbHash = media.thumbHash,
                     caption = media.resolvedCaption(preferredLanguages),
+                    alt = media.alt,
                 )
             }
         val originalCode = post.originalLanguage.normalizedCode()
@@ -144,6 +156,7 @@ object FeedPostBuilder {
             isAuthor = currentUserId != null && post.author?.id == currentUserId,
             location = FeedPostLocationBuilder.build(post.location),
             distanceMeters = post.distanceMeters,
+            layout = post.storyEffects.resolvedLayout,
         )
     }
 

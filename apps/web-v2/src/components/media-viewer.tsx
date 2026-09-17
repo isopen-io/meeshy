@@ -6,6 +6,7 @@ import { maskedAttachment } from '@meeshy/shared/utils/attachment-protection';
 
 import type { Attachment } from '@/lib/api/types';
 import { attachmentSrc } from '@/lib/api/media-url';
+import type { SceneGalleryEntry } from '@/lib/feed/gallery-lot';
 import { thumbHashPlaceholder } from '@/lib/media/thumbhash';
 import { nextFocusIndex } from '@/lib/view/focus-trap';
 import { useLongPress } from '@/lib/view/long-press';
@@ -35,6 +36,7 @@ import '@/styles/media-viewer.css';
 import { Glyph, GlyphSvg } from './glyph';
 import { MEDIA_GLYPHS } from './glyphs-media';
 import { MediaFilmstrip } from './media-filmstrip';
+import { ViewerScenePage } from './viewer-scene-page';
 
 /**
  * LA BARRE DE LECTURE EST UN CHUNK À PART (#6359) — elle ne sert qu'une
@@ -80,6 +82,17 @@ export type MediaViewerProps = {
   readonly displayLanguage?: string;
   readonly fallbackLanguage: string;
   readonly carrier?: MediaCarrier;
+  /**
+   * LA NATURE « SCÈNE » D'UNE PAGE (#6902, D-78, § B de la spécification
+   * `scenes-plein-ecran`) — miroir `GallerySceneContext` : une entrée de
+   * `items` dont l'id se trouve dans cette carte se peint par `ScenePlayer`
+   * (`ViewerScenePage`) plutôt que par le repli image/vidéo, quel que soit
+   * son `mimeType` (`composeSceneGalleryLot`, `lib/feed/gallery-lot.ts`) —
+   * **la nature d'une page se lit sur cette carte, jamais sur le MIME**
+   * (miroir `PostGalleryLot.swift:16-20`). `undefined` ⇒ visionneuse de
+   * médias ORDINAIRE, comportement STRICTEMENT inchangé.
+   */
+  readonly scenes?: ReadonlyMap<string, SceneGalleryEntry>;
 };
 
 /** Un seuil de balayage HORIZONTAL, indépendant du seuil vertical de fermeture — la pagination n'est pas un geste d'immersion. */
@@ -89,10 +102,35 @@ function clampIndex(index: number, count: number): number {
   return Math.max(0, Math.min(count - 1, index));
 }
 
-/** `bottomMetadataOverlay` (auteur, date, `w × h`, poids, légende) — ABSENT sans `carrier` (loi 4). */
-function CarrierFooter({ attachment, carrier }: { readonly attachment: Attachment; readonly carrier: MediaCarrier | undefined }) {
+/**
+ * `bottomMetadataOverlay` (auteur, date, `w × h`, poids, légende) — ABSENT
+ * sans `carrier` (loi 4).
+ *
+ * `sceneEntry` (#6902) — UNE SCÈNE N'A NI FORMAT, NI COTES, NI POIDS (miroir
+ * `ConversationMediaGalleryView.swift:1080-1084`, `« une scène n'a ni format,
+ * ni dimensions, ni poids »`) : la ligne `kind`/`sizeLabel`/`weightLabel` ne
+ * se peint JAMAIS sur une page scène, et sa légende vient de `sceneEntry`
+ * (`resolveSceneCaption`, PAR PAGE) plutôt que du `carrier` FIXE de toute la
+ * visionneuse — deux scènes voisines d'un même lot peuvent porter des
+ * légendes différentes, un `carrier.caption` unique ne le pourrait pas.
+ */
+function CarrierFooter({
+  attachment,
+  carrier,
+  sceneEntry,
+}: {
+  readonly attachment: Attachment;
+  readonly carrier: MediaCarrier | undefined;
+  readonly sceneEntry?: SceneGalleryEntry;
+}) {
   if (carrier === undefined) return null;
-  const lang = carrier.caption !== null && carrier.caption.language !== READER_LOCALE ? carrier.caption.language : undefined;
+  const captionText = sceneEntry !== undefined ? sceneEntry.caption : carrier.caption !== null ? carrier.caption.text : undefined;
+  const captionLang =
+    sceneEntry !== undefined
+      ? sceneEntry.captionLanguage
+      : carrier.caption !== null && carrier.caption.language !== READER_LOCALE
+        ? carrier.caption.language
+        : undefined;
   const kind = kindOf(attachment);
   const sizeLabel = attachment.width !== undefined && attachment.height !== undefined ? `${attachment.width} × ${attachment.height}` : undefined;
   const weightLabel = `${Math.max(1, Math.round(attachment.fileSize / 1024))} Ko`;
@@ -107,15 +145,17 @@ function CarrierFooter({ attachment, carrier }: { readonly attachment: Attachmen
           </time>
         </div>
       ) : null}
-      <div className="flex items-center gap-1.5 text-mini opacity-70">
-        <Glyph name={kind === 'video' ? 'fillPlay' : 'image'} size={12} />
-        {sizeLabel !== undefined ? <span>{sizeLabel}</span> : null}
-        <span>·</span>
-        <span>{weightLabel}</span>
-      </div>
-      {carrier.caption !== null && carrier.caption.text !== '' ? (
-        <p data-viewer-caption className="text-title" {...(lang !== undefined ? { lang } : {})}>
-          {carrier.caption.text}
+      {sceneEntry === undefined ? (
+        <div className="flex items-center gap-1.5 text-mini opacity-70">
+          <Glyph name={kind === 'video' ? 'fillPlay' : 'image'} size={12} />
+          {sizeLabel !== undefined ? <span>{sizeLabel}</span> : null}
+          <span>·</span>
+          <span>{weightLabel}</span>
+        </div>
+      ) : null}
+      {captionText !== undefined && captionText !== '' ? (
+        <p data-viewer-caption className="text-title" {...(captionLang !== undefined ? { lang: captionLang } : {})}>
+          {captionText}
         </p>
       ) : null}
     </div>
@@ -336,6 +376,7 @@ export default function MediaViewer({
   displayLanguage,
   fallbackLanguage,
   carrier,
+  scenes,
 }: MediaViewerProps) {
   const [index, setIndex] = useState(() => clampIndex(startIndex, items.length));
   const [presentation, setPresentation] = useState<StagePresentation>(CARDED_STAGE);
@@ -352,6 +393,7 @@ export default function MediaViewer({
   const language = currentInterfaceLanguage();
 
   const current = items[index];
+  const currentSceneEntry = current === undefined ? undefined : scenes?.get(current.id);
   const insets = safeAreaInsets();
 
   // #root INERT le temps de l'ouverture — même dispositif que le clone du
@@ -466,14 +508,15 @@ export default function MediaViewer({
       aria-label={`Média ${index + 1} sur ${items.length}`}
       data-media-viewer
       data-viewer-index={index}
+      {...(scenes !== undefined ? { 'data-scene-fullscreen': '' } : {})}
       className="media-viewer-layer fixed inset-0 flex flex-col bg-black"
       onKeyDown={onKeyDown}
       tabIndex={-1}
     >
-      {/* Couloir haut */}
+      {/* Couloir haut — AU-DESSUS d'une page scène en plein viewport (`zIndex`, #6902). */}
       <div
-        className="media-viewer-chrome flex items-center justify-between px-3"
-        style={{ height: STAGE.topCorridorHeight + insets.top, paddingTop: insets.top, opacity: isFull ? 0 : 1 }}
+        className="media-viewer-chrome relative flex items-center justify-between px-3"
+        style={{ height: STAGE.topCorridorHeight + insets.top, paddingTop: insets.top, opacity: isFull ? 0 : 1, zIndex: 10 }}
       >
         <button
           ref={closeButtonRef}
@@ -511,16 +554,31 @@ export default function MediaViewer({
           if (Math.abs(distance) > 1 && i !== index) return null; // hors fenêtre ET hors page courante : pas monté du tout
           const fullPixels = rendersFullPixels(distance);
           const isMasked = maskedAttachment(attachment);
+          const sceneEntry = scenes?.get(attachment.id);
           return (
             <div
               key={attachment.id}
               data-viewer-page
               data-full-pixels={fullPixels}
               className="media-viewer-page absolute inset-0"
-              style={{ transform: `translateX(${distance * 100}%)`, display: Math.abs(distance) > 1 ? 'none' : 'block' }}
+              style={{
+                transform: `translateX(${distance * 100}%)`,
+                display: Math.abs(distance) > 1 ? 'none' : 'block',
+                /* LE VIEWPORT ENTIER, PAS LA RÉGION ENTRE COULOIRS (#6902, § E
+                   de la spécification) — le critère du gate exige un centre
+                   au centre du VIEWPORT (±1 px), là où `absolute inset-0`
+                   dans le TRACK (`flex-1`) ne couvre que la région RÉDUITE par
+                   les couloirs. `position: fixed` échappe au flux du track
+                   pour une page SCÈNE seulement — une page image/vidéo garde
+                   `absolute` (rendu STRICTEMENT inchangé). Les couloirs
+                   (`zIndex` ci-dessous) restent AU-DESSUS de ce plein viewport. */
+                ...(sceneEntry !== undefined ? { position: 'fixed' as const } : {}),
+              }}
             >
               {!fullPixels ? (
                 <ViewerBackdropPage attachment={attachment} />
+              ) : sceneEntry !== undefined ? (
+                <ViewerScenePage entry={sceneEntry} isActive={i === index} preferredLanguages={languages} />
               ) : isMasked ? (
                 <ViewerMaskedPage attachment={attachment} />
               ) : kindOf(attachment) === 'video' ? (
@@ -547,9 +605,9 @@ export default function MediaViewer({
         })}
       </div>
 
-      {/* Couloir bas */}
-      <div className="media-viewer-chrome flex flex-col" style={{ opacity: isFull ? 0 : 1, paddingBottom: insets.bottom }}>
-        <CarrierFooter attachment={current} carrier={carrier} />
+      {/* Couloir bas — AU-DESSUS d'une page scène en plein viewport (`zIndex`, #6902). */}
+      <div className="media-viewer-chrome relative flex flex-col" style={{ opacity: isFull ? 0 : 1, paddingBottom: insets.bottom, zIndex: 10 }}>
+        <CarrierFooter attachment={current} carrier={carrier} {...(currentSceneEntry !== undefined ? { sceneEntry: currentSceneEntry } : {})} />
         {/* La place de la barre de lecture (#6359) : la page vidéo ACTIVE y rend `MediaTransport` par un portail ; vide sur une image. */}
         <div ref={setTransportSlot} data-viewer-transport-slot />
 

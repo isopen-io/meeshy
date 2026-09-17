@@ -392,6 +392,40 @@ que `routes/thread.tsx` importait `realtime` (donc `socket.io-client`) de
 façon statique via `view/use-typing-emitter.ts` — 17 Ko gzip de plus sur le
 chemin critique du fil pendant que `budgets.json` promettait le contraire.
 
+### La mise à jour de l'application — annoncée, appliquée au clic (#6936)
+
+Le service worker est en `registerType: 'prompt'` : une version neuve reste EN
+ATTENTE au lieu de s'activer en silence sous une page qui fait tourner l'ancien
+JavaScript. L'application inscrit son worker elle-même (`injectRegister: false`,
+donc plus de `registerSW.js`), vérifie au démarrage, au retour au premier plan et
+à l'heure, et annonce la version en attente par l'événement `sw-update-available`
+— le comportement et l'API du legacy (`apps/web/utils/service-worker.ts`).
+
+| pièce | rôle |
+|---|---|
+| `src/lib/app-update/event.ts` | le nom de l'événement, seul, sans dépendance (il traverse deux chunks) |
+| `src/lib/app-update/service-worker.ts` | l'inscription, les trois déclencheurs, la purge, `SKIP_WAITING`, UN rechargement |
+| `src/lib/app-update/pending-store.ts` | la version en attente + le portillon que la coquille lit en statique |
+| `src/components/app-update-banner.tsx` | la carte flottante (chargée à la demande), masquée hors ligne |
+| `src/lib/sw-caches.ts` | les noms de seaux, déclarés UNE fois — créés par `vite.config.ts`, purgés ici et par la session |
+
+Au clic : purge des seaux possédés (`api`, `medias`, `meeshy-cache-*`), retrait
+du cache de requêtes persisté **et arrêt de sa persistance** (le `pagehide` du
+rechargement le réécrivait sinon), `SKIP_WAITING`, puis un seul rechargement au
+`controllerchange`. **La session, le schéma, la langue et les brouillons ne sont
+jamais touchés** : la purge NOMME ce qu'elle efface. Le précache de Workbox n'en
+fait pas partie — c'est l'activation du worker neuf qui en retire les entrées de
+l'ancien (`src/lib/sw-caches.ts` porte la mesure).
+
+Rejouer le parcours complet, deux versions servies sur la même origine :
+
+```
+node scripts/check-app-update.mjs
+```
+
+La coque Capacitor n'a pas ce chemin : aucun service worker, actifs embarqués,
+version neuve par le magasin (décision D-82).
+
 ## L'interface
 
 Reprise de l'app iOS, relevée dans `apps/ios` et `packages/MeeshySDK` — pas des

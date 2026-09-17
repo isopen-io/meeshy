@@ -140,22 +140,75 @@ describe('useLiveAnnouncer — une région, la dernière annonce gagne (#5814, d
 
   test('une SECONDE annonce réarme le minuteur — elle ne s’efface pas au moment où la PREMIÈRE aurait dû s’effacer', async () => {
     const { el, announce } = monter();
-    act(() => {
-      announce('Message envoyé');
-    });
-    await laisserPasser(Math.round(SHORT_MS * 0.6));
-    act(() => {
-      announce('Message copié'); // réarmé AVANT que la première n'expire
-    });
-    /* On dépasse l'échéance de la PREMIÈRE (0,6 + 0,6 = 1,2 durée) sans
-       atteindre celle de la SECONDE : si le réarmement n'avait pas eu lieu,
-       la région serait déjà vide. */
-    await laisserPasser(Math.round(SHORT_MS * 0.6));
-    expect(liveOf(el)).toBe('Message copié');
-    /* Et on laisse la seconde expirer AVANT de rendre la main : c'est
-       exactement ce que l'ancienne version ne faisait pas. */
-    await laisserPasser(SHORT_MS + 40);
-    expect(liveOf(el)).toBe('');
+
+    /* Horloge simulée (#6668) — deux `laisserPasser` proportionnels à
+       SHORT_MS dérivent l'un par rapport à l'autre sous charge machine, et
+       l'assertion intermédiaire tombe alors que le produit est correct
+       (mesuré : 3887 pass / 1 fail sur la suite complète chargée, 0 fail au
+       repos). Le réarmement se prouve donc par son EFFET — le minuteur
+       PROGRAMMÉ — jamais par l'écoulement d'un temps, réel ou proportionnel :
+       `setTimeout`/`clearTimeout` sont remplacés par un registre en mémoire
+       que le témoin déclenche lui-même, à l'échéance qu'il choisit.
+       Remplacement DIRECT plutôt que `spyOn` : le shim réduit de `bun:test`
+       (`src/bun-test.d.ts`) ne déclare ni `spyOn` ni `toHaveBeenCalledWith`,
+       et le seul autre témoin qui s'en sert (`router.test.tsx`) n'est en
+       réalité jamais type-checké — collision `.ts`/`.tsx` sur le même nom de
+       module, hors scope de ce correctif. */
+    const pending = new Map<number, () => void>();
+    const cleared: number[] = [];
+    let nextId = 0;
+    const realSetTimeout = globalThis.setTimeout;
+    const realClearTimeout = globalThis.clearTimeout;
+    globalThis.setTimeout = ((cb: () => void) => {
+      nextId += 1;
+      pending.set(nextId, cb);
+      return nextId;
+      // La signature réelle de `setTimeout` est surchargée (DOM et Node) ;
+      // le registre ci-dessus n'a besoin que d'un identifiant opaque.
+    }) as unknown as typeof setTimeout;
+    globalThis.clearTimeout = ((id?: number) => {
+      if (id === undefined) return;
+      cleared.push(id);
+      pending.delete(id);
+    }) as unknown as typeof clearTimeout;
+
+    try {
+      act(() => {
+        announce('Message envoyé');
+      });
+      expect(pending.size).toBe(1);
+      const firstArmed = pending.keys().next();
+      if (firstArmed.done) throw new Error('aucun minuteur programmé après la première annonce');
+      const firstId = firstArmed.value;
+
+      act(() => {
+        announce('Message copié'); // réarmé — aucun temps ne s'écoule, ni réel ni simulé
+      });
+
+      // Le réarmement se lit dans le minuteur programmé : la PREMIÈRE
+      // échéance a été annulée et une SECONDE a pris sa place — jamais dans
+      // un texte qu'un minuteur en vol pourrait encore effacer par hasard.
+      expect(cleared).toContain(firstId);
+      expect(pending.has(firstId)).toBe(false);
+      expect(pending.size).toBe(1);
+      expect(liveOf(el)).toBe('Message copié');
+
+      const secondArmed = pending.entries().next();
+      if (secondArmed.done) throw new Error('aucun minuteur programmé après le réarmement');
+      const [secondId, secondCb] = secondArmed.value;
+      expect(secondId).not.toBe(firstId);
+
+      // Déclencher SON échéance — jamais celle de la première, déjà
+      // annulée — efface bien la région : le même effet qu'une horloge
+      // réelle aurait produit, obtenu sans dépendre d'aucune durée.
+      await act(async () => {
+        secondCb();
+      });
+      expect(liveOf(el)).toBe('');
+    } finally {
+      globalThis.setTimeout = realSetTimeout;
+      globalThis.clearTimeout = realClearTimeout;
+    }
   });
 
   test('la durée SERVIE en production est 1,5 s — épinglée, jamais attendue', () => {

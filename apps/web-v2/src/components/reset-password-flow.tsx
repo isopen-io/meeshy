@@ -7,6 +7,7 @@ import { resolveResetPasswordOutcome, resolveResetTokenState } from '@/lib/view/
 import { Link } from '@/routes/route-table';
 
 import { AuthBrandFooter, AuthSubmitButton } from './auth-chrome';
+import { AuthColumn, AuthColumnBar } from './auth-column';
 import { Field } from './field';
 import { Glyph } from './glyph';
 
@@ -100,21 +101,8 @@ export function ResetPasswordFlow({ token, deps = defaultDeps }: { token: string
   }
 
   return (
-    <div className="flex h-dvh flex-col pt-safe pb-safe">
-      <div className="flex shrink-0 items-center px-2 pt-1">
-        <Link
-          to="login"
-          replace
-          className="grid place-items-center rounded-chip"
-          style={{ minHeight: 44, minWidth: 44, color: 'var(--color-ios-ink-2)' }}
-          aria-label="Fermer"
-        >
-          <Glyph name="x" size={20} />
-        </Link>
-        <h1 className="flex-1 text-center text-title font-semibold" style={{ color: 'var(--color-ios-ink)', marginRight: 44 }}>
-          Réinitialiser le mot de passe
-        </h1>
-      </div>
+    <AuthColumn>
+      <AuthColumnBar to="login" title="Nouveau mot de passe" />
 
       {state === 'checking' ? (
         <div className="grid flex-1 place-items-center gap-4 px-8 text-center">
@@ -133,7 +121,7 @@ export function ResetPasswordFlow({ token, deps = defaultDeps }: { token: string
           <h2 className="text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
             Lien invalide ou expiré
           </h2>
-          <p style={{ color: 'var(--color-ios-ink-2)' }}>Demandez un nouveau lien de réinitialisation.</p>
+          <p style={{ color: 'var(--color-ios-ink-2)' }}>Demandez un nouveau lien pour choisir votre mot de passe.</p>
           <Link
             to="forgotPassword"
             replace
@@ -167,13 +155,13 @@ export function ResetPasswordFlow({ token, deps = defaultDeps }: { token: string
             <Glyph name="checks" size={48} />
           </span>
           <h2 className="text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
-            Mot de passe réinitialisé
+            Mot de passe enregistré
           </h2>
           <p style={{ color: 'var(--color-ios-ink-2)' }}>Vous pouvez maintenant vous connecter avec votre nouveau mot de passe.</p>
           <Link
             to="login"
             replace
-            className="grid place-items-center rounded-[14px] px-8 font-bold text-white"
+            className="grid w-full place-items-center rounded-[14px] px-8 font-bold text-white"
             style={{ minHeight: 52, background: RESET_TINT }}
           >
             Se connecter
@@ -243,11 +231,17 @@ export function ResetPasswordFlow({ token, deps = defaultDeps }: { token: string
             </p>
           ) : null}
 
-          <AuthSubmitButton disabled={!canSubmit} isSubmitting={submitting} label="Réinitialiser" busyLabel="Envoi…" background={RESET_TINT} />
+          <AuthSubmitButton
+            disabled={!canSubmit}
+            isSubmitting={submitting}
+            label="Enregistrer le mot de passe"
+            busyLabel="Enregistrement…"
+            background={RESET_TINT}
+          />
         </form>
       ) : null}
 
       <AuthBrandFooter />
-    </div>
+    </AuthColumn>
   );
 }

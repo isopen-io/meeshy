@@ -10,9 +10,15 @@ import {
 } from '@/lib/api/admin';
 import { apiDeps } from '@/lib/api/deps';
 import { visibleAdminSections } from '@/lib/admin/sections';
-import { translate } from '@/lib/i18n-catalog';
+import { translateAdmin } from '@/lib/i18n-admin-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { useRoute } from '@/lib/router';
 import { AdminDenied, AdminScreenFrame, AdminSkeleton } from '@/routes/admin-parts';
+/** `Link` vient de la TABLE, pas du module générique : `createRouter(table)` le
+ * fabrique typé sur elle, de sorte que `to` n'accepte qu'une clé réelle et
+ * `params` la forme exacte du motif. Même import que `admin-parts`,
+ * `links-parts` et `link-page-parts`. */
+import { Link } from '@/routes/route-table';
 
 /**
  * **LES COMPTES** (#6432) — la section d'administration la plus consultée,
@@ -37,13 +43,34 @@ import { AdminDenied, AdminScreenFrame, AdminSkeleton } from '@/routes/admin-par
 const INK = 'var(--color-ios-ink)';
 const INK2 = 'var(--color-ios-ink-2)';
 
-function UserRow({ compte, language }: { readonly compte: AdminUserRow; readonly language: InterfaceLanguage }) {
+/**
+ * LA LIGNE OUVRE LA FICHE (#6819) — `cible` vient de l'écran et vaut `admUser`
+ * ou `adminUser` selon l'espace d'où l'on parcourt la liste. La calculer ici
+ * obligerait chaque ligne à relire la route ; la recevoir la garde muette et
+ * cohérente avec le retour, qui suit la même règle (D-76 tient les deux
+ * administrations séparées).
+ *
+ * Le lien porte la mise en page, pas le `<li>` : une cible tactile doit être
+ * l'élément CLIQUABLE lui-même, sinon le pouce touche la carte sans rien
+ * ouvrir sur ses bords. `minHeight: 44` est le plancher du dépôt.
+ */
+function UserRow({
+  compte,
+  language,
+  cible,
+}: {
+  readonly compte: AdminUserRow;
+  readonly language: InterfaceLanguage;
+  readonly cible: 'adminUser' | 'admUser';
+}) {
   return (
-    <li
-      data-admin-user={compte.id}
-      className="flex items-center gap-3 rounded-card px-4 py-3"
-      style={{ backgroundColor: 'var(--color-ios-surface)', border: '1px solid var(--color-edge)' }}
-    >
+    <li data-admin-user={compte.id}>
+      <Link
+        to={cible}
+        params={{ user: compte.id }}
+        className="flex items-center gap-3 rounded-card px-4 py-3"
+        style={{ minHeight: 44, backgroundColor: 'var(--color-ios-surface)', border: '1px solid var(--color-edge)' }}
+      >
       <span
         aria-hidden="true"
         className="grid size-2 shrink-0 place-items-center rounded-full"
@@ -62,9 +89,10 @@ function UserRow({ compte, language }: { readonly compte: AdminUserRow; readonly
       </span>
       {compte.isActive ? null : (
         <span className="shrink-0 text-caption" style={{ color: 'var(--color-danger)' }}>
-          {translate(language, 'admin.users.inactive')}
+          {translateAdmin(language, 'admin.users.inactive')}
         </span>
       )}
+      </Link>
     </li>
   );
 }
@@ -73,6 +101,12 @@ export default function AdminUsersScreen() {
   const language = currentInterfaceLanguage();
   const [recherche, setRecherche] = useState('');
   const [offset, setOffset] = useState(0);
+
+  const { key } = useRoute();
+  /** On reste dans l'espace d'où l'on vient : `/adm/users` ouvre `/adm/users/$user`,
+   * `/admin/users` ouvre `/admin/users/$user`. Mélanger les deux ferait sauter
+   * l'administrateur d'une administration à l'autre au premier tap. */
+  const cible = key === 'admUsers' ? ('admUser' as const) : ('adminUser' as const);
 
   const identite = useQuery(adminIdentityQueryOptions(apiDeps));
 
@@ -89,7 +123,7 @@ export default function AdminUsersScreen() {
     retry: false,
   });
 
-  const titre = translate(language, 'admin.nav.users');
+  const titre = translateAdmin(language, 'admin.nav.users');
 
   if (identite.isPending) {
     return (
@@ -113,7 +147,7 @@ export default function AdminUsersScreen() {
     <AdminScreenFrame language={language} title={titre} back="admin">
       <label className="grid gap-1 pb-4">
         <span className="text-caption" style={{ color: INK2 }}>
-          {translate(language, 'admin.users.search')}
+          {translateAdmin(language, 'admin.users.search')}
         </span>
         <input
           type="search"
@@ -140,20 +174,20 @@ export default function AdminUsersScreen() {
         <AdminSkeleton rows={6} />
       ) : page === undefined ? (
         <p className="text-caption" style={{ color: INK2 }}>
-          {translate(language, 'admin.users.unavailable')}
+          {translateAdmin(language, 'admin.users.unavailable')}
         </p>
       ) : page.users.length === 0 ? (
         <p className="text-caption" style={{ color: INK2 }}>
-          {translate(language, 'admin.users.empty')}
+          {translateAdmin(language, 'admin.users.empty')}
         </p>
       ) : (
         <>
           <p className="pb-2 text-caption" style={{ color: INK2 }}>
-            {translate(language, 'admin.users.count', { count: String(page.total) })}
+            {translateAdmin(language, 'admin.users.count', { count: String(page.total) })}
           </p>
           <ul className="grid gap-2">
             {page.users.map((compte) => (
-              <UserRow key={compte.id} compte={compte} language={language} />
+              <UserRow key={compte.id} compte={compte} language={language} cible={cible} />
             ))}
           </ul>
           <div className="flex justify-between gap-2 pt-4">
@@ -165,7 +199,7 @@ export default function AdminUsersScreen() {
               className="rounded-chip px-4 text-body font-semibold disabled:opacity-40"
               style={{ minHeight: 44, backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 16%, transparent)', color: INK }}
             >
-              {translate(language, 'admin.users.previous')}
+              {translateAdmin(language, 'admin.users.previous')}
             </button>
             <button
               type="button"
@@ -175,7 +209,7 @@ export default function AdminUsersScreen() {
               className="rounded-chip px-4 text-body font-semibold disabled:opacity-40"
               style={{ minHeight: 44, backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 16%, transparent)', color: INK }}
             >
-              {translate(language, 'admin.users.next')}
+              {translateAdmin(language, 'admin.users.next')}
             </button>
           </div>
         </>

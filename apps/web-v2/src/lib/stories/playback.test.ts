@@ -11,6 +11,9 @@ import {
   previousPosition,
   resolvePlayablePosition,
   resolvePosition,
+  slideDurationForScene,
+  slideDurationMs,
+  storyMediaUrl,
   stableGroupOrder,
   type StoryPlaybackStory,
 } from './playback';
@@ -35,6 +38,111 @@ describe('constantes', () => {
 
   test('l\'expiration par défaut est 20 heures', () => {
     expect(STORY_EXPIRY_MS).toBe(20 * 60 * 60 * 1000);
+  });
+});
+
+/**
+ * **LA DURÉE D'UNE DIAPOSITIVE SUIT SON MÉDIA** (#6836).
+ *
+ * `DEFAULT_SLIDE_DURATION_MS` est un PLANCHER, jamais la réponse — mais
+ * `story.tsx` divise l'écoulé par la constante sans jamais consulter le
+ * média. Mesuré au navigateur sur `/story/st-video` : un clip de 3 s gèle sur
+ * sa dernière trame pendant que la barre poursuit jusqu'à 100 %, et un clip
+ * plus long que 6 s serait COUPÉ au milieu.
+ *
+ * La loi est celle d'iOS, déclarée source de vérité dans
+ * `StoryViewerView+Content.swift` — ce portage ne conçoit rien :
+ *
+ *     max(durée du média, durée configurée, 6 s),
+ *     puis arrondie au multiple SUPÉRIEUR de la période du média,
+ *     « pour que la vidéo/audio bg ne soit JAMAIS coupée au milieu d'un cycle »
+ *
+ * L'arrondi est ce qui distingue cette loi d'un simple `max` : un clip de 4 s
+ * sous un plancher de 6 s donne 8 s (deux cycles entiers), jamais 6 s — qui
+ * couperait la seconde boucle en plein milieu.
+ *
+ * La durée du média est REÇUE, jamais lue : `StoryTrayMedia` ne sert aucune
+ * durée (`stories.ts` — id, url, thumbnailUrl, mimeType), donc elle vient du
+ * `<video>` lui-même à `loadedmetadata`. Même discipline que `now` dans ce
+ * module : ce qui vient du monde est injecté par l'appelant.
+ */
+describe('slideDurationMs — la durée d’une diapositive suit son média (#6836)', () => {
+  test('une diapositive SANS média dure le plancher', () => {
+    expect(slideDurationMs({})).toBe(DEFAULT_SLIDE_DURATION_MS);
+  });
+
+  test('un clip PLUS COURT que le plancher tient le plancher, en cycles ENTIERS — 3 s ⇒ 6 s, deux boucles', () => {
+    expect(slideDurationMs({ mediaDurationMs: 3000 })).toBe(6000);
+  });
+
+  test('un clip de 4 s sous un plancher de 6 s dure 8 s — jamais coupé au milieu du second cycle', () => {
+    expect(slideDurationMs({ mediaDurationMs: 4000 })).toBe(8000);
+  });
+
+  test('un clip PLUS LONG que le plancher n’est JAMAIS tronqué', () => {
+    expect(slideDurationMs({ mediaDurationMs: 10_000 })).toBe(10_000);
+  });
+
+  test('une durée CONFIGURÉE prime sur le plancher, et s’arrondit elle aussi au cycle', () => {
+    expect(slideDurationMs({ configuredMs: 15_000 })).toBe(15_000);
+    expect(slideDurationMs({ mediaDurationMs: 4000, configuredMs: 15_000 })).toBe(16_000);
+  });
+
+  test('une durée de média ABSURDE (nulle, négative, non finie) se rabat sur le plancher, sans boucle infinie', () => {
+    expect(slideDurationMs({ mediaDurationMs: 0 })).toBe(DEFAULT_SLIDE_DURATION_MS);
+    expect(slideDurationMs({ mediaDurationMs: -1 })).toBe(DEFAULT_SLIDE_DURATION_MS);
+    expect(slideDurationMs({ mediaDurationMs: Number.NaN })).toBe(DEFAULT_SLIDE_DURATION_MS);
+    expect(slideDurationMs({ mediaDurationMs: Number.POSITIVE_INFINITY })).toBe(DEFAULT_SLIDE_DURATION_MS);
+  });
+});
+
+/**
+ * `slideDurationForScene` (T4, #6899) — `timelineDuration` est AUTORITAIRE,
+ * miroir de `StorySlide.computedTotalDuration()` (`StoryModels.swift:862-872`,
+ * « PRIORITÉ 0 — autorité timeline : elle gagne sur le contenu (un média plus
+ * long est rogné) »). La première forme la passait en `configuredMs` de
+ * {@link slideDurationMs} — la loi du LEGACY `slideDuration`, qui prend le max
+ * puis arrondit aux cycles du média : une story épinglée à 8 s sur une piste
+ * de 30 s durait 30 s sur le web et 8 s sur iOS. Sans épingle, la loi du
+ * contenu (`slideDurationMs`) reste la seule réponse.
+ */
+describe('slideDurationForScene — timelineDuration gouverne la diapositive (T4, #6899)', () => {
+  test('timelineDuration seul, sans média ⇒ sa valeur en millisecondes', () => {
+    expect(slideDurationForScene({ scene: { timelineDuration: 9 } })).toBe(9000);
+  });
+
+  test('timelineDuration=4s sous le plancher de 6 s ⇒ 4000 : l’épingle de l’auteur gagne', () => {
+    expect(slideDurationForScene({ scene: { timelineDuration: 4 }, mediaDurationMs: 3000 })).toBe(4000);
+  });
+
+  test('timelineDuration=8s sur une piste de 30 s ⇒ 8000 : le média plus long est ROGNÉ, jamais la diapositive allongée', () => {
+    expect(slideDurationForScene({ scene: { timelineDuration: 8 }, mediaDurationMs: 30_000 })).toBe(8000);
+  });
+
+  test('scène SANS timelineDuration ⇒ loi actuelle inchangée (slideDurationMs)', () => {
+    expect(slideDurationForScene({ scene: {}, mediaDurationMs: 3000 })).toBe(slideDurationMs({ mediaDurationMs: 3000 }));
+    expect(slideDurationForScene({ scene: {} })).toBe(slideDurationMs({}));
+  });
+});
+
+/**
+ * `storyMediaUrl` (#6899, revue-correction) — la passerelle sert `fileUrl`
+ * (`mediaSelect`, `postIncludes.ts:104`, mesuré sur staging le 2026-09-17) ;
+ * les fixtures historiques portaient `url`, qu'aucune réponse réelle ne sert.
+ */
+describe('storyMediaUrl — la clé servie par la passerelle d’abord', () => {
+  test('`fileUrl` servi ⇒ c’est lui, même quand une vieille `url` traîne', () => {
+    expect(storyMediaUrl({ fileUrl: '2026/09/a/photo.jpg', url: 'ancienne.jpg' })).toBe('2026/09/a/photo.jpg');
+  });
+
+  test('`fileUrl` absent, `null` ou vide ⇒ `url` des fixtures', () => {
+    expect(storyMediaUrl({ url: 'fixture.jpg' })).toBe('fixture.jpg');
+    expect(storyMediaUrl({ fileUrl: null, url: 'fixture.jpg' })).toBe('fixture.jpg');
+    expect(storyMediaUrl({ fileUrl: '', url: 'fixture.jpg' })).toBe('fixture.jpg');
+  });
+
+  test('aucune des deux ⇒ chaîne vide, jamais `undefined`', () => {
+    expect(storyMediaUrl({})).toBe('');
   });
 });
 
@@ -74,6 +182,26 @@ describe('hasRenderableStoryContent', () => {
 
   test('rien de tout ça — pas restituable', () => {
     expect(hasRenderableStoryContent({ content: '' })).toBe(false);
+  });
+
+  // T8 (#6899) — un document v3 texte-seul (aucun `content` ni `media` de
+  // post, § O3 : « un canvas sans scène n'est jamais un canvas ») est
+  // RESTITUABLE — sans ce vecteur, `resolvePlayablePosition` SAUTE une story
+  // de scène texte-seul comme si elle était vide.
+  test('un document v3 dont une scène porte un objet visible est restituable, même sans content ni media', () => {
+    expect(
+      hasRenderableStoryContent({
+        content: '',
+        storyEffects: {
+          v: 3,
+          scenes: [{ id: 's1', objects: [{ id: 't1', kind: 'text', anchor: { t: 'free', x: 0.5, y: 0.5 }, plane: 'fg', z: 0, transform: { scale: 1, rotation: 0, opacity: 1 }, payload: { text: 'x' } }] }],
+        },
+      }),
+    ).toBe(true);
+  });
+
+  test('un document v3 sans scène (`scenes: []`) n’est pas restituable par lui-même', () => {
+    expect(hasRenderableStoryContent({ content: '', storyEffects: { v: 3, scenes: [] } })).toBe(false);
   });
 });
 

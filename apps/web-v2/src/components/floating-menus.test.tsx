@@ -485,6 +485,10 @@ describe('le barreau « Administration » (#6458)', () => {
       canViewAuditLogs: false,
       canManageNotifications: false,
       canManageTranslations: false,
+      // #6733 — la matrice servie en porte DIX depuis le lot B. Le barreau ne
+      // dépend pas de cette clé : il mène au hub, dont la porte reste
+      // `canAccessAdmin`.
+      canManageAgent: false,
     },
   });
 

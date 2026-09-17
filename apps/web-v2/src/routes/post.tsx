@@ -1,12 +1,15 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 
 import { FeedPostCard } from '@/components/feed-post-card';
 import { Glyph } from '@/components/glyph';
+import { SceneFullscreenGallery } from '@/components/scene-fullscreen-gallery';
 import { ApiError } from '@/lib/api/client';
 import { usePost } from '@/lib/api/query';
 import { resolveFeedCardModel } from '@/lib/feed/card-model';
+import { useFeedAutoplayRoot } from '@/lib/feed/use-feed-autoplay';
+import { useSceneGallery } from '@/lib/feed/use-scene-gallery';
 import { useOnline } from '@/lib/net/online';
-import { useParams } from '@/lib/router';
+import { useParams, useSearch } from '@/lib/router';
 import { useMinute } from '@/lib/view/use-minute';
 import { usePostGesture } from '@/lib/view/use-post-gesture';
 import { useReaderLanguages } from '@/lib/view/use-reader';
@@ -102,6 +105,13 @@ export default function PostDetailScreen() {
   const { languages: readerLanguages } = useReaderLanguages();
   const minute = useMinute();
   const { announcement, onGesture, onShare } = usePostGesture();
+  const frame = useRef<HTMLElement | null>(null);
+  // MÊME élection que le fil (#6898 § 5.3) — un `IntersectionObserver`
+  // dédié à ce scrollport.
+  const { registerScene } = useFeedAutoplayRoot(frame);
+  // LE PLEIN ÉCRAN D'UNE SCÈNE (#6902) — MÊME hôte que le fil (`routes/feed.tsx`).
+  const sceneGallery = useSceneGallery();
+  const [search] = useSearch();
 
   const model = useMemo(
     () => (post.data === undefined ? undefined : resolveFeedCardModel(post.data, { preferredLanguages: readerLanguages, now: new Date() })),
@@ -110,15 +120,39 @@ export default function PostDetailScreen() {
     [post.data, readerLanguages, minute],
   );
 
+  // `?scene=N` — LE LIEN PROFOND (#6902, § F de la spécification) : l'ADRESSE
+  // que le carrousel de scène (`Next scene`, `share-url.ts`) et un lien reçu
+  // peuvent porter. HONORÉ À L'ENTRÉE, une seule fois par publication chargée
+  // — `boundedSceneIndex` (`gallery-lot.ts`) le BORNE dans
+  // `SceneFullscreenGallery`, jamais une page vide sur un index périmé.
+  useEffect(() => {
+    if (model === undefined || model.scene === undefined) return;
+    const raw = search.get('scene');
+    if (raw === null) return;
+    const parsed = Number.parseInt(raw, 10);
+    if (!Number.isFinite(parsed)) return;
+    sceneGallery.onOpenScene(model.id, parsed);
+    // N'ouvrir qu'À L'ENTRÉE de CETTE publication — jamais rejouer au clic
+    // d'un lecteur qui a déjà refermé la galerie sur le même écran.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model?.id, model?.scene !== undefined]);
+
   return (
     <div className="flex h-dvh flex-col overflow-hidden pt-safe">
       <PostDetailHeader />
       <p role="status" aria-live="polite" className="sr-only">
         {announcement}
       </p>
-      <main id="contenu" className="scrollbar-none flex flex-1 flex-col overflow-y-auto px-3 pb-safe">
+      <main ref={frame} id="contenu" className="scrollbar-none flex flex-1 flex-col overflow-y-auto px-3 pb-safe">
         {model !== undefined ? (
-          <FeedPostCard model={model} onGesture={onGesture} onShare={onShare} />
+          <FeedPostCard
+            model={model}
+            onGesture={onGesture}
+            onShare={onShare}
+            preferredLanguages={readerLanguages}
+            onOpenScene={sceneGallery.onOpenScene}
+            registerScene={registerScene}
+          />
         ) : isRefusal(post.error) ? (
           <PostDetailRefused />
         ) : post.isError ? (
@@ -129,6 +163,14 @@ export default function PostDetailScreen() {
           </div>
         )}
       </main>
+      {model !== undefined ? (
+        <SceneFullscreenGallery
+          request={sceneGallery.open}
+          models={[model]}
+          preferredLanguages={readerLanguages}
+          onClose={sceneGallery.close}
+        />
+      ) : null}
     </div>
   );
 }

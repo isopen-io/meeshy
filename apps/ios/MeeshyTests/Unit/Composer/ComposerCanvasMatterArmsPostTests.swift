@@ -59,7 +59,7 @@ final class ComposerCanvasMatterArmsPostTests: XCTestCase {
     func test_laMatiereDuCanvas_seLitAuCANAL_pasAUneListe() throws {
         let source = try socle()
         XCTAssertTrue(
-            source.contains("ComposerPublishChannel.channel(for: selectedFormat) != .unsupported"),
+            source.contains("ComposerPublishChannel.channel(for: format) != .unsupported"),
             "Ce qui décide est le canal — un format dont le canal ne livre rien ne doit pas armer " +
             "la flèche, et un format neuf ne peut pas se glisser dans une liste sans être décidé."
         )

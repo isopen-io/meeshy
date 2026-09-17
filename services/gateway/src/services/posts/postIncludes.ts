@@ -115,6 +115,13 @@ export const mediaSelect = Prisma.validator<Prisma.PostMediaSelect>()({
   // traduites, jamais sa légende. Voir `packages/shared/decisions.md` § 2026-09-14.
   captionLanguage: true,
   captionTranslations: true,
+  // Traduction du texte ALTERNATIF d'accessibilité (#6737) — jumelle exacte
+  // de `captionLanguage`/`captionTranslations` ci-dessus, sur `alt` plutôt que
+  // `caption`. Les colonnes existent depuis PR #6747 (schéma + service) mais
+  // n'avaient jamais rejoint CE select — sans elles, `MediaAltTranslationService`
+  // traduit dans le vide : rien ne peut jamais atteindre un client.
+  altLanguage: true,
+  altTranslations: true,
   language: true,
   variantOf: true,
   transcription: true,
@@ -163,6 +170,10 @@ export const commentsPreviewInclude = Prisma.validator<Prisma.Post$commentsArgs>
     likeCount: true,
     replyCount: true,
     createdAt: true,
+    // #6578 — `postId` est REQUIS par le service de la citation : la re-lecture
+    // du média cité revérifie son appartenance au post commenté SUR LA LIGNE
+    // relue. Sans lui, l'aperçu embarqué sert un `quotedMedia` non vérifié.
+    postId: true,
     // Rappel projet : tout champ lu par un resolver doit figurer dans son
     // `select`. Sans `metadata` ici, un commentaire portant un lieu partagé
     // (`metadata.location`) l'affiche dans la liste complète des commentaires

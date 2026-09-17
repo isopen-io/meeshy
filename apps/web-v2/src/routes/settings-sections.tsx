@@ -22,7 +22,6 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { ThemePreference } from '@/lib/scheme';
 import { initialsOf } from '@/lib/view/conversation';
 import { FLOATING_CORRIDOR_BOTTOM } from '@/lib/view/floating-corridor';
-import { legacyHref, type LegacyDestination } from '@/lib/view/legacy-link';
 import { Link } from '@/routes/route-table';
 
 /**
@@ -33,10 +32,14 @@ import { Link } from '@/routes/route-table';
  * TanStack Query, et l'écran (`routes/settings.tsx`) ne fait que les composer.
  *
  * **Rien n'est offert qui n'ait un effet** (loi 4). Une bascule n'existe que si
- * la passerelle l'obéit (`lib/api/app-preferences.ts`) ; ce que la v2.0 ne
- * porte pas encore mène au legacy par un lien qui DIT qu'il en sort
- * (`lib/view/legacy-link.ts`) — un réglage qu'on ne trouve plus est un réglage
- * perdu, pas un réglage reporté.
+ * la passerelle l'obéit (`lib/api/app-preferences.ts`). Ce que la v2.0 ne
+ * porte pas encore menait au legacy ; il est décommissionné (#6702), et ces
+ * rangées sont MASQUÉES jusqu'à leur portage — sécurité, options fines de
+ * confidentialité et de notification, et deux rangées de la section
+ * « Données » (médias #6723, messages #6724). La suppression de compte mène à
+ * sa page de la v2 (`routes/account-deletion.tsx`, #6715) et l'export de
+ * données à la sienne (`routes/data-export.tsx`, #6725) : aucun contrôle des
+ * réglages ne vise plus une autre origine.
  *
  * **Divergence assumée : la confidentialité est une SECTION, pas une feuille.**
  * iOS la range derrière une rangée de « Compte » (`PrivacySettingsView`) parce
@@ -95,53 +98,6 @@ function Chevron() {
   );
 }
 
-/**
- * **`reachable` (#6354, D-67) — hors production, aucun lien vers le legacy.**
- * Le legacy (`https://meeshy.me`) ne sert QUE la production ; un lecteur de
- * staging qui suivrait « Supprimer le compte » atterrirait sur la suppression
- * de la production, potentiellement sous un autre compte. Sans hôte legacy à
- * offrir à la place (aucun n'existe côté staging), la seule rangée
- * fail-closed est INERTE — même libellé et icône, aucun `href`, une légende
- * qui le dit (loi 4 : rien n'est offert qui n'a un effet).
- */
-function LegacyRow({
-  language,
-  destination,
-  label,
-  icon,
-  tint,
-  reachable,
-}: {
-  readonly language: InterfaceLanguage;
-  readonly destination: LegacyDestination;
-  readonly label: SettingsKey;
-  readonly icon: IconSpec;
-  readonly tint: string;
-  readonly reachable: boolean;
-}) {
-  if (!reachable) {
-    return (
-      <div aria-disabled="true" data-legacy-unavailable={destination} className={ROW_CLASS} style={{ ...ROW_STYLE, opacity: 0.5 }}>
-        <RowIcon tint={tint}>
-          <IconOf icon={icon} size={15} />
-        </RowIcon>
-        <RowText label={translate(language, label)} caption={translate(language, 'settings.legacy.unavailable')} />
-      </div>
-    );
-  }
-  return (
-    <a href={legacyHref(destination)} target="_blank" rel="noopener noreferrer" data-legacy={destination} className={ROW_CLASS} style={ROW_STYLE}>
-      <RowIcon tint={tint}>
-        <IconOf icon={icon} size={15} />
-      </RowIcon>
-      <RowText label={translate(language, label)} caption={translate(language, 'settings.legacy')} />
-      <span aria-hidden="true" className="shrink-0" style={{ color: SECTION_INK_2 }}>
-        <GlyphSvg glyph={SETTINGS_GLYPHS.arrowSquareOut} size={14} />
-      </span>
-    </a>
-  );
-}
-
 export function SettingsHeaderBar({ language }: { readonly language: InterfaceLanguage }) {
   return (
     <header className="flex shrink-0 items-center gap-1 px-2" style={{ height: SETTINGS_HEADER_HEIGHT }}>
@@ -187,25 +143,44 @@ export function ProfileCard({ language, user }: { readonly language: InterfaceLa
   );
 }
 
-export function AccountSection({ language, legacyReachable }: { readonly language: InterfaceLanguage; readonly legacyReachable: boolean }) {
+/* La SÉCURITÉ n'a plus d'adresse depuis le décommissionnement du legacy
+   (#6702) : MASQUÉE jusqu'à son portage.
+
+   La SUPPRESSION DE COMPTE mène à sa page de la v2 (`/account/deletion`,
+   #6715) — même onglet, même origine, sans légende. Elle y ouvre la demande
+   sous phrase et mot de passe, comme `DeleteAccountView.swift`. Hors
+   production, la rangée n'est plus inerte : #6354 (D-67) la désactivait parce
+   qu'elle visait la production réelle depuis staging ; une adresse RELATIVE
+   mène chaque environnement à sa propre page. */
+export function AccountSection({ language }: { readonly language: InterfaceLanguage }) {
   return (
     <GroupedSection id="settings-account" title={upper(language, 'settings.section.account')} icon={SECTION_ICON({ set: 'ecran', name: 'userCircle' })}>
-      <LegacyRow
-        language={language}
-        destination="security"
-        label="settings.security.title"
-        icon={{ set: 'ecran', name: 'shieldCheck' }}
-        tint="var(--ios-indigo-600)"
-        reachable={legacyReachable}
-      />
-      <LegacyRow
-        language={language}
-        destination="accountDeletion"
-        label="settings.delete_account"
-        icon={{ set: 'ecran', name: 'userMinus' }}
-        tint="var(--color-error)"
-        reachable={legacyReachable}
-      />
+      <Link to="accountDeletion" data-settings-account-deletion className={ROW_CLASS} style={ROW_STYLE}>
+        <RowIcon tint="var(--color-error)">
+          <IconOf icon={{ set: 'ecran', name: 'userMinus' }} size={15} />
+        </RowIcon>
+        <RowText label={translate(language, 'settings.delete_account')} />
+        <Chevron />
+      </Link>
+    </GroupedSection>
+  );
+}
+
+/* La section « Données » (#6335) — MÉDIAS et MESSAGES restent MASQUÉS, chacun
+   derrière sa propre issue de portage (#6723, #6724) : une rangée n'entre ici
+   que le jour où sa destination existe (loi 4). L'EXPORT est la première à
+   revenir (#6725), à une adresse propre à la v2 — `/settings/data-export`,
+   jamais l'ancienne `meeshy.me/settings#privacy`. */
+export function DataSection({ language }: { readonly language: InterfaceLanguage }) {
+  return (
+    <GroupedSection id="settings-data" title={upper(language, 'settings.section.data')} icon={SECTION_ICON({ set: 'ecran', name: 'export' })}>
+      <Link to="dataExport" data-settings-export className={ROW_CLASS} style={ROW_STYLE}>
+        <RowIcon tint="var(--color-warning)">
+          <IconOf icon={{ set: 'ecran', name: 'export' }} size={15} />
+        </RowIcon>
+        <RowText label={translate(language, 'settings.export_data')} />
+        <Chevron />
+      </Link>
     </GroupedSection>
   );
 }
@@ -377,37 +352,24 @@ type PreferenceSectionProps = {
   readonly disabled: boolean;
   readonly onToggle: (key: BooleanPreference, value: boolean) => void;
   readonly onRetry: () => void;
-  readonly legacyReachable: boolean;
 };
 
-export function PrivacySection({ language, view, disabled, onToggle, onRetry, legacyReachable }: PreferenceSectionProps) {
+/* Les options FINES de confidentialité et de notification n'ont plus
+   d'adresse depuis le décommissionnement du legacy (#6702) : leur rangée
+   « Plus d'options » est MASQUÉE jusqu'à leur portage — jamais une rangée qui
+   ne mène nulle part (loi 4). */
+export function PrivacySection({ language, view, disabled, onToggle, onRetry }: PreferenceSectionProps) {
   return (
     <GroupedSection id="settings-privacy" title={upper(language, 'settings.privacy.title')} icon={SECTION_ICON({ set: 'socle', name: 'lock' })}>
       <Toggles language={language} view={view} specs={PRIVACY_TOGGLES} disabled={disabled} onToggle={onToggle} onRetry={onRetry} />
-      <LegacyRow
-        language={language}
-        destination="privacy"
-        label="settings.notif.more_options"
-        icon={{ set: 'ecran', name: 'slidersHorizontal' }}
-        tint="var(--color-ios-brand)"
-        reachable={legacyReachable}
-      />
     </GroupedSection>
   );
 }
 
-export function NotificationsSection({ language, view, disabled, onToggle, onRetry, legacyReachable }: PreferenceSectionProps) {
+export function NotificationsSection({ language, view, disabled, onToggle, onRetry }: PreferenceSectionProps) {
   return (
     <GroupedSection id="settings-notifications" title={upper(language, 'settings.section.notifications')} icon={SECTION_ICON({ set: 'socle', name: 'bell' })}>
       <Toggles language={language} view={view} specs={NOTIFICATION_TOGGLES} disabled={disabled} onToggle={onToggle} onRetry={onRetry} />
-      <LegacyRow
-        language={language}
-        destination="notification"
-        label="settings.notif.more_options"
-        icon={{ set: 'ecran', name: 'slidersHorizontal' }}
-        tint="var(--color-error)"
-        reachable={legacyReachable}
-      />
     </GroupedSection>
   );
 }
@@ -516,37 +478,6 @@ export function AppearanceSection({
         )}
         <Chevron />
       </Link>
-    </GroupedSection>
-  );
-}
-
-export function DataSection({ language, legacyReachable }: { readonly language: InterfaceLanguage; readonly legacyReachable: boolean }) {
-  return (
-    <GroupedSection id="settings-data" title={upper(language, 'settings.section.data')} icon={SECTION_ICON({ set: 'ecran', name: 'hardDrives' })}>
-      <LegacyRow
-        language={language}
-        destination="media"
-        label="settings.media"
-        icon={{ set: 'socle', name: 'image' }}
-        tint="var(--color-warning)"
-        reachable={legacyReachable}
-      />
-      <LegacyRow
-        language={language}
-        destination="message"
-        label="settings.messages"
-        icon={{ set: 'ecran', name: 'chatText' }}
-        tint="var(--color-warning)"
-        reachable={legacyReachable}
-      />
-      <LegacyRow
-        language={language}
-        destination="privacy"
-        label="settings.export_data"
-        icon={{ set: 'ecran', name: 'export' }}
-        tint="var(--color-warning)"
-        reachable={legacyReachable}
-      />
     </GroupedSection>
   );
 }

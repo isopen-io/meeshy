@@ -7,7 +7,7 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostService } from '../../services/PostService';
 import { MediaService } from '../../services/MediaService';
 import type { OrphanMediaCleanupService } from '../../services/storage/OrphanMediaCleanupService';
-import { LikeSchema, UnlikeSchema, RepostSchema, PostParams, EngagementBatchSchema, RecordDownloadsSchema } from './types';
+import { LikeSchema, UnlikeSchema, RepostSchema, PostParams, EngagementBatchSchema, RecordDownloadsSchema, postIdParamsSchema } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { sendSuccess, sendForbidden, sendUnauthorized, sendNotFound, sendInternalError, sendBadRequest, sendConflict, sendGone } from '../../utils/response';
 import { ConflictError } from '../../errors/custom-errors';
@@ -578,6 +578,7 @@ export function registerInteractionRoutes(
 
   // POST /posts/:postId/pin — Pin a post (author only)
   fastify.post('/posts/:postId/pin', {
+    schema: { params: postIdParamsSchema },
     preValidation: [requiredAuth],
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
@@ -604,6 +605,7 @@ export function registerInteractionRoutes(
 
   // DELETE /posts/:postId/pin — Unpin a post (author only)
   fastify.delete('/posts/:postId/pin', {
+    schema: { params: postIdParamsSchema },
     preValidation: [requiredAuth],
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
@@ -630,6 +632,7 @@ export function registerInteractionRoutes(
 
   // GET /posts/:postId/views — Story/post seen-by list (author only)
   fastify.get('/posts/:postId/views', {
+    schema: { params: postIdParamsSchema },
     preValidation: [requiredAuth],
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
@@ -663,6 +666,7 @@ export function registerInteractionRoutes(
 
   // GET /posts/:postId/interactions — Story viewers enriched with reactions & replies (author only)
   fastify.get('/posts/:postId/interactions', {
+    schema: { params: postIdParamsSchema },
     preValidation: [requiredAuth],
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
@@ -709,6 +713,7 @@ export function registerInteractionRoutes(
   // création, et le coupler bloquerait un usage nominal (prolonger une
   // story qui expire) sur le budget d'un autre.
   fastify.post('/posts/:postId/republish', {
+    schema: { params: postIdParamsSchema },
     preValidation: [requiredAuth],
     config: { rateLimit: createSocialWriteRateLimitConfig() },
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
@@ -808,6 +813,7 @@ export function registerInteractionRoutes(
   // (deux comptes, deux seaux distincts ; un seul compte, un budget commun
   // aux trois routes) — qui ferme le contournement.
   fastify.post('/posts/:postId/repost', {
+    schema: { params: postIdParamsSchema },
     preValidation: [requiredAuth],
     preHandler: [sharedWriteRateLimit],
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
@@ -927,17 +933,24 @@ export function registerInteractionRoutes(
         }, authContext.registeredUser.id).catch((err) => enhancedLogger.warn('[POST /posts/:postId/repost]: broadcast post reposted failed', { err }));
       }
 
-      // Notify original post author
+      // Notifier l'auteur de l'original est un EFFET SECONDAIRE, comme le
+      // broadcast juste au-dessus : il part HORS du chemin de la réponse. La
+      // relecture de l'original était awaitée dans ce `try` ; quand elle jetait
+      // (#6503, `getPostById` refusé par Prisma), le `catch` rendait 500 pour
+      // un repost DÉJÀ créé, et l'app annonçait un échec au-dessus d'une
+      // écriture actée (#6524).
       const notifService = fastify.notificationService;
       if (notifService && repost.repostOfId && isFreshRepost) {
-        // Même garde que la route de traduction : sans le viewer, le lookup
-        // applique le filtre anonyme et ne retrouve pas une story réservée aux
-        // contacts — l'auteur d'une story repartagée n'était alors jamais
-        // notifié.
-        const original = await postService.getPostById(postId, authContext.registeredUser.id);
-        if (original?.authorId) {
-          notifService.createPostRepostNotification({
-            actorId: authContext.registeredUser.id,
+        const actorId = authContext.registeredUser.id;
+        void (async () => {
+          // Même garde que la route de traduction : sans le viewer, le lookup
+          // applique le filtre anonyme et ne retrouve pas une story réservée aux
+          // contacts — l'auteur d'une story repartagée n'était alors jamais
+          // notifié.
+          const original = await postService.getPostById(postId, actorId);
+          if (!original?.authorId) return;
+          await notifService.createPostRepostNotification({
+            actorId,
             originalPostId: postId,
             postAuthorId: original.authorId,
             repostId: repost.id,
@@ -945,8 +958,8 @@ export function registerInteractionRoutes(
             postPreview: (original as { content?: string | null }).content?.slice(0, 80) ?? undefined,
             postCreatedAt: (original as { createdAt?: Date | string | null }).createdAt ?? undefined,
             postExpiresAt: (original as { expiresAt?: Date | string | null }).expiresAt ?? undefined,
-          }).catch((err) => enhancedLogger.warn('[POST /posts/:postId/repost]: notify post repost failed', { err }));
-        }
+          });
+        })().catch((err) => enhancedLogger.warn('[POST /posts/:postId/repost]: notify post repost failed', { err }));
       }
 
       return sendSuccess(reply, payload, { statusCode: 201 });

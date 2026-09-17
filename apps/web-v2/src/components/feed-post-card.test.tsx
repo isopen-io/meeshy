@@ -96,6 +96,47 @@ describe('FeedPostCard — le POST', () => {
     expect(html).toContain('>14<');
   });
 
+  /**
+   * LE REPLI SUR LE CONTENU DU POST (#6864) NE SE PEINT QU'UNE FOIS — un
+   * média seul sans légende propre reçoit le contenu du post comme légende
+   * (`resolveMedia`) ; le corps du post, lui, ne se peint alors PAS en plus
+   * au-dessus de la carte, sous peine d'afficher deux fois la même phrase.
+   */
+  test('un média seul sans légende propre : le contenu du post se peint UNE fois, comme légende — jamais aussi comme corps', () => {
+    const html = renderToStaticMarkup(
+      <FeedPostCard
+        model={modelOf(
+          basePost({
+            content: 'Vue depuis le sommet',
+            originalLanguage: 'fr',
+            media: [{ id: 'm1', mimeType: 'image/jpeg', fileUrl: 'a.jpg' }],
+          }),
+        )}
+      />,
+    );
+    expect(html.match(/Vue depuis le sommet/g)).toHaveLength(1);
+  });
+
+  /** À plusieurs médias, le repli ne s'applique jamais : le corps du post
+   * reste peint au-dessus de la carte, comme sans média. */
+  test('à plusieurs médias, le corps du post reste peint au-dessus de la carte', () => {
+    const html = renderToStaticMarkup(
+      <FeedPostCard
+        model={modelOf(
+          basePost({
+            content: 'Deux photos du voyage',
+            originalLanguage: 'fr',
+            media: [
+              { id: 'm1', mimeType: 'image/jpeg', fileUrl: 'a.jpg', order: 0 },
+              { id: 'm2', mimeType: 'image/jpeg', fileUrl: 'b.jpg', order: 1 },
+            ],
+          }),
+        )}
+      />,
+    );
+    expect(html.match(/Deux photos du voyage/g)).toHaveLength(1);
+  });
+
   /** Le texte d'accessibilité SERVI atteint le `alt` ; la légende, elle, est
    * déjà rendue en texte visible et ne s'y répète pas (revue-correction #5893). */
   test('une image porte le `alt` SERVI par la passerelle, jamais sa légende visible', () => {
@@ -178,6 +219,97 @@ describe('FeedPostCard — le POST', () => {
     expect(html).not.toContain('Média précédent');
   });
 
+});
+
+/**
+ * L'AGENCEMENT CHOISI PAR L'AUTEUR (#6514) — iOS (#6502) laisse choisir, au
+ * moment de publier, entre carrousel, défilement continu, hero, vague et
+ * sinusoïde ; le choix voyage dans `storyEffects.layout` (document canvas v3).
+ * Les cotes attendues sont celles de `MosaicLayout.swift`, en pourcentage de
+ * la boîte.
+ */
+describe('FeedPostCard — l’agencement choisi par l’auteur (#6514)', () => {
+  const photos = (count: number) =>
+    Array.from({ length: count }, (_, i) => ({ id: `m${i + 1}`, mimeType: 'image/jpeg', fileUrl: `${i + 1}.jpg`, order: i }));
+
+  test('trois photos en `hero` ⇒ la disposition hero : une grande tuile de 62 %, deux satellites en colonne', () => {
+    const html = renderToStaticMarkup(
+      <FeedPostCard model={modelOf(basePost({ media: photos(3), storyEffects: { v: 3, scenes: [], layout: 'hero' } }))} />,
+    );
+    expect(html).toContain('data-feed-layout="hero"');
+    expect(html.match(/data-feed-mosaic-tile=/g)).toHaveLength(3);
+    expect(html).toContain('style="left:0%;top:0%;width:62%;height:100%"');
+    expect(html).toContain('style="left:63.4%;top:0%;width:36.6%;height:49.3%"');
+    expect(html).toContain('style="left:63.4%;top:50.7%;width:36.6%;height:49.3%"');
+    expect(html).not.toContain('data-feed-media-counter');
+  });
+
+  test('`layout` ABSENT ⇒ le carrousel, le rendu d’avant', () => {
+    const html = renderToStaticMarkup(<FeedPostCard model={modelOf(basePost({ media: photos(3), storyEffects: { v: 3, scenes: [] } }))} />);
+    expect(html).toContain('data-feed-layout="carousel"');
+    expect(html).toContain('1 / 3');
+    expect(html).not.toContain('data-feed-mosaic-tile');
+  });
+
+  test('aucun `storyEffects` servi ⇒ le carrousel', () => {
+    const html = renderToStaticMarkup(<FeedPostCard model={modelOf(basePost({ media: photos(2) }))} />);
+    expect(html).toContain('data-feed-layout="carousel"');
+  });
+
+  test('`layout` INCONNU ⇒ le carrousel, jamais une carte vide', () => {
+    const html = renderToStaticMarkup(
+      <FeedPostCard model={modelOf(basePost({ media: photos(3), storyEffects: { v: 3, layout: 'spiral' } }))} />,
+    );
+    expect(html).toContain('data-feed-layout="carousel"');
+    expect(html).toContain('1 / 3');
+  });
+
+  test('six photos en `wave` ⇒ quatre tuiles, et « +2 » sur la dernière seule', () => {
+    const html = renderToStaticMarkup(
+      <FeedPostCard model={modelOf(basePost({ media: photos(6), storyEffects: { v: 3, layout: 'wave' } }))} />,
+    );
+    expect(html).toContain('data-feed-layout="wave"');
+    expect(html.match(/data-feed-mosaic-tile=/g)).toHaveLength(4);
+    expect(html.match(/data-feed-mosaic-overflow/g)).toHaveLength(1);
+    expect(html).toContain('>+2<');
+  });
+
+  test('`sine` ⇒ une tuile en haut, une en bas', () => {
+    const html = renderToStaticMarkup(
+      <FeedPostCard model={modelOf(basePost({ media: photos(2), storyEffects: { v: 3, layout: 'sine' } }))} />,
+    );
+    expect(html).toContain('data-feed-layout="sine"');
+    expect(html).toContain('style="left:0%;top:0%;width:49.3%;height:62%"');
+    expect(html).toContain('style="left:50.7%;top:38%;width:49.3%;height:62%"');
+  });
+
+  /** Le défilement continu DÉFILE : un conteneur qu'on ne peut pas atteindre au
+   * clavier cacherait ses tuiles 2 et 3 à qui n'a pas de doigt. */
+  test('`reel` ⇒ un défilement horizontal, focalisable et nommé, dont le contenu déborde la boîte', () => {
+    const html = renderToStaticMarkup(
+      <FeedPostCard model={modelOf(basePost({ media: photos(3), storyEffects: { v: 3, layout: 'reel' } }))} />,
+    );
+    expect(html).toContain('data-feed-layout="reel"');
+    expect(html).toMatch(/data-feed-layout="reel"[^>]*tabindex="0"/);
+    expect(html).toContain('aria-label="Mosaïque de 3 médias"');
+    expect(html).toContain('width:185.6%');
+  });
+
+  test('la grande tuile d’un `hero` porte sa légende ; ses satellites, non', () => {
+    const media = photos(3).map((m, i) => ({ ...m, caption: `Légende ${i + 1}` }));
+    const html = renderToStaticMarkup(<FeedPostCard model={modelOf(basePost({ media, storyEffects: { v: 3, layout: 'hero' } }))} />);
+    expect(html).toContain('Légende 1');
+    expect(html).not.toContain('Légende 2');
+    expect(html).not.toContain('Légende 3');
+  });
+
+  test('une seule photo, même en `hero`, n’est pas une mosaïque', () => {
+    const html = renderToStaticMarkup(
+      <FeedPostCard model={modelOf(basePost({ media: photos(1), storyEffects: { v: 3, layout: 'hero' } }))} />,
+    );
+    expect(html).not.toContain('data-feed-mosaic-tile');
+    expect(html).toContain('data-feed-media');
+  });
 });
 
 describe('FeedPostCard — le RÉEL, affiche immobile plein cadre', () => {
@@ -274,5 +406,46 @@ describe('FeedPostCard — le RÉEL, affiche immobile plein cadre', () => {
       />,
     );
     expect(html).not.toContain('<img');
+  });
+});
+
+/**
+ * LE TEXTE DU POST NE DESCEND JAMAIS DANS LA SCÈNE (revue-correction #6898,
+ * `FeedPostCard.swift:378-382`, `SceneCaption.resolve(carrierFallback: false)`).
+ *
+ * `resolveMedia` prête le contenu du post à un média SEUL sans légende
+ * (#6864, `captionOrigin: 'post'`) — c'est juste pour `FeedMediaCarousel`, qui
+ * le peint en bandeau ET dont la carte s'abstient alors de le répéter. Sur une
+ * carte à SCÈNE, aucun `FeedMediaCarousel` n'est rendu : la première forme
+ * masquait donc le texte AU-DESSUS (même chaîne que la légende prêtée) et le
+ * peignait EN BANDEAU dans la scène, étiqueté `media` — le cas nominal d'un
+ * post vidéo à une scène.
+ */
+describe('FeedPostCard — le texte du post reste AU-DESSUS de la scène', () => {
+  const scenePostWithSoleMedia = basePost({
+    content: 'Le texte du post',
+    originalLanguage: 'fr',
+    media: [{ id: 'm1', mimeType: 'video/webm', fileUrl: 'a.webm', order: 0 }],
+    storyEffects: {
+      v: 3,
+      scenes: [
+        {
+          id: 's1',
+          objects: [
+            { id: 'bg', kind: 'media', anchor: { t: 'free', x: 0.5, y: 0.5 }, plane: 'bg', z: 0, transform: {}, payload: { postMediaId: 'm1', mediaType: 'video/webm' } },
+          ],
+        },
+      ],
+    },
+  });
+
+  test('un post à scène et à média SEUL sans légende rend son texte au-dessus', () => {
+    const html = renderToStaticMarkup(<FeedPostCard model={modelOf(scenePostWithSoleMedia)} />);
+    expect(html).toMatch(/<p class="whitespace-pre-wrap text-bubble"[^>]*>Le texte du post<\/p>/);
+  });
+
+  test('… et jamais en bandeau de légende dans la scène', () => {
+    const html = renderToStaticMarkup(<FeedPostCard model={modelOf(scenePostWithSoleMedia)} />);
+    expect(html).not.toContain('data-feed-scene-caption');
   });
 });

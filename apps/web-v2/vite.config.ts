@@ -11,6 +11,9 @@ import { INSTITUTIONAL_PATTERN } from './scripts/lib/institutional-routes.mjs';
 import { INLINE_INTERFACE_LANGUAGE_BOOTSTRAP } from './src/lib/inline-interface-language-bootstrap.js';
 import { INLINE_SCHEME_BOOTSTRAP } from './src/lib/inline-scheme-bootstrap.js';
 import { declaredBuildFlag } from './src/lib/build-flag';
+import { API_RESPONSE_CACHE_PATTERN } from './src/lib/net/api-runtime-cache';
+import { NETWORK_ONLY_NAVIGATIONS } from './src/lib/net/network-only-navigations';
+import { SW_RUNTIME_CACHES } from './src/lib/sw-caches';
 
 /**
  * `index.html` ne porte plus le TEXTE du script d'amorçage du schéma, mais un
@@ -241,25 +244,38 @@ const prerenderInstitutionalPages = (): Plugin => {
 };
 
 /**
- * LE SERVICE WORKER INSTITUTIONNEL N'ENTRE PAS DANS LA COQUE (#5604,
+ * LES SCRIPTS QUE LE SERVICE WORKER GÉNÉRÉ IMPORTE, déclarés UNE fois.
+ *
+ * Deux lecteurs : `importScripts` (variante A) et le retrait de la variante B
+ * ci-dessous. Une liste recopiée dans chacun aurait laissé partir dans l'APK
+ * le premier script ajouté d'un seul côté.
+ *
+ *  - `sw-institutional.js` ramène `/about/` sur `/about` (#5554) ;
+ *  - `sw-legacy-purge.js` efface, à l'activation, les caches `meeshy-cache-*`
+ *    que le service worker du legacy a laissés sur l'origine (#6702).
+ */
+const SERVICE_WORKER_SCRIPTS = ['sw-institutional.js', 'sw-legacy-purge.js'] as const;
+
+/**
+ * LES SCRIPTS DU SERVICE WORKER N'ENTRENT PAS DANS LA COQUE (#5604,
  * revue-correction).
  *
- * `sw-institutional.js` vit dans `public/`, donc Vite le RECOPIE tel quel dans
- * TOUTE construction — y compris la variante B, ou VitePWA est pourtant retire
- * et ou plus rien ne l'`importScripts`. Il partait donc dans l'APK et dans
- * l'IPA en fichier MORT, pendant que `capacitor.config.ts` et le gate
+ * Ils vivent dans `public/`, donc Vite les RECOPIE tels quels dans TOUTE
+ * construction — y compris la variante B, ou VitePWA est pourtant retire et ou
+ * plus rien ne les `importScripts`. Ils partaient donc dans l'APK et dans
+ * l'IPA en fichiers MORTS, pendant que `capacitor.config.ts` et le gate
  * `check-shell-dist.mjs` affirmaient tous deux « aucun service worker ». Une
  * affirmation qu'un fichier du dist contredit n'est pas une affirmation.
  *
  * `writeBundle` et non `generateBundle` : les actifs de `public/` sont copies
  * HORS du graphe de rollup, donc invisibles du second.
  */
-const dropInstitutionalServiceWorker = (): Plugin => ({
+const dropServiceWorkerScripts = (): Plugin => ({
   name: 'meeshy-drop-institutional-sw',
   apply: 'build',
   writeBundle(options) {
     if (options.dir === undefined) return;
-    rmSync(join(options.dir, 'sw-institutional.js'), { force: true });
+    for (const name of SERVICE_WORKER_SCRIPTS) rmSync(join(options.dir, name), { force: true });
   },
 });
 
@@ -391,7 +407,7 @@ export default defineConfig({
     inlineSchemeBootstrap(),
     inlineInterfaceLanguageBootstrap(),
     prerenderInstitutionalPages(),
-    ...(forCapacitor ? [dropInstitutionalServiceWorker()] : []),
+    ...(forCapacitor ? [dropServiceWorkerScripts()] : []),
     /**
      * VARIANTE A (PWA). Desactivee sous Capacitor : la coque native gere
      * elle-meme son cycle de vie, et un service worker par-dessus ferait deux
@@ -401,7 +417,32 @@ export default defineConfig({
       ? []
       : [
           VitePWA({
-            registerType: 'autoUpdate',
+            /**
+             * `prompt`, ET NON `autoUpdate` (#6936) — LA VERSION NEUVE ATTEND
+             * QU'ON LA DEMANDE.
+             *
+             * Sous `autoUpdate`, `vite-plugin-pwa` posait `skipWaiting: true` +
+             * `clientsClaim: true` (`dist/index.js:874-877`) : un déploiement
+             * activait le worker neuf EN SILENCE sous une page qui continuait
+             * de faire tourner l'ancien JavaScript, et l'activation retirait du
+             * précache les chunks de cette ancienne version — un écran chargé à
+             * la demande pouvait alors ne plus se charger du tout. Le lecteur
+             * n'apprenait jamais qu'une version existait.
+             *
+             * Avec `prompt`, le worker neuf reste en attente, la page l'annonce
+             * (`lib/app-update/service-worker.ts` → bannière) et c'est le clic
+             * qui lui envoie `SKIP_WAITING` — le comportement du legacy
+             * (`apps/web/public/sw.js:233-238`).
+             */
+            registerType: 'prompt',
+            /**
+             * L'APPLICATION INSCRIT SON WORKER ELLE-MÊME, comme le legacy
+             * (`ServiceWorkerInitializer`). `registerSW.js` n'inscrivait que le
+             * script, sans détection ni annonce : garder les deux ferait deux
+             * inscriptions du même script, dont une seule écoute. Les en-têtes
+             * de `nginx.conf` suivent ce retrait.
+             */
+            injectRegister: false,
             includeAssets: ['favicon-48.png'],
             manifest: {
               name: 'Meeshy',
@@ -421,6 +462,17 @@ export default defineConfig({
               ],
             },
             workbox: {
+              /**
+               * LE WORKER NEUF PREND LA MAIN SUR LES PAGES DÉJÀ OUVERTES dès
+               * qu'il s'active (#6936) — sans quoi la page qui vient de cliquer
+               * « Mettre à jour » se rechargerait en restant servie par
+               * l'ANCIEN worker, et la première visite ne serait contrôlée par
+               * personne (`scripts/check-institutional.mjs` attend un
+               * contrôleur). `skipWaiting` reste FAUX, son défaut : c'est le
+               * clic qui l'appelle, par le message `SKIP_WAITING` que le
+               * modèle de Workbox câble précisément quand il est faux.
+               */
+              clientsClaim: true,
               /**
                * `brand/*.png` (#5606) : les DEUX actifs de marque servis par
                * les pages institutionnelles (le logo d'en-tête, le glyphe de
@@ -454,13 +506,21 @@ export default defineConfig({
                * est ramenée sur `/about` par `sw-institutional.js`. Le motif
                * ne croise pas les `/`, donc l'`index.html` de la racine — la
                * coquille de l'application — n'est PAS exclu.
+               *
+               * Deux SERVICE WORKERS n'y entrent pas non plus (#6702) : le
+               * worker FCM du push web (`firebase-messaging-sw.js`), que le
+               * navigateur inscrit lui-même sous sa propre portée, et
+               * `sw-legacy-purge.js`, chargé par `importScripts` — le
+               * navigateur garde déjà les scripts importés avec le worker. Les
+               * précacher ferait payer leurs octets une seconde fois, à chaque
+               * installation, pour une copie que personne ne lit.
                */
-              globIgnores: ['*/index.html'],
+              globIgnores: ['*/index.html', 'firebase-messaging-sw.js', 'sw-legacy-purge.js'],
               /**
-               * Chargé EN TÊTE du service worker généré, donc son écouteur
-               * `fetch` passe avant ceux de Workbox.
+               * Chargés EN TÊTE du service worker généré, donc leurs écouteurs
+               * passent avant ceux de Workbox (`SERVICE_WORKER_SCRIPTS`).
                */
-              importScripts: ['sw-institutional.js'],
+              importScripts: [...SERVICE_WORKER_SCRIPTS],
               /**
                * LA CEINTURE, le précache étant les bretelles.
                *
@@ -475,8 +535,14 @@ export default defineConfig({
                * Sa source est partagée avec le préchauffage
                * (`scripts/lib/institutional-routes.mjs`) : deux listes
                * tenues à la main auraient divergé au premier ajout de page.
+               *
+               * La SECONDE source (#6702) : les adresses que nginx redirige ou
+               * sert lui-même depuis la bascule de meeshy.me — sans elles, un
+               * visiteur qui revient recevrait la coquille à la place d'une
+               * redirection 308 (`src/lib/net/network-only-navigations.ts`,
+               * confrontée à la table des routes par son témoin).
                */
-              navigateFallbackDenylist: [INSTITUTIONAL_PATTERN],
+              navigateFallbackDenylist: [INSTITUTIONAL_PATTERN, ...NETWORK_ONLY_NAVIGATIONS],
               /**
                * La zone rurale est la raison d'etre de ce cache : le shell est
                * precache une fois, puis JAMAIS retelecharge tant que son hash
@@ -486,10 +552,17 @@ export default defineConfig({
                */
               runtimeCaching: [
                 {
-                  urlPattern: ({ url }) => url.pathname.startsWith('/api/'),
+                  /* PAS L'ADMINISTRATION (#6862) — `API_RESPONSE_CACHE_PATTERN`
+                     porte la règle et son motif : une conversation privée lue
+                     en régime souverain ne doit pas rester sept jours sur le
+                     disque du poste, dans un seau qu'`AdminAuditLog` ignore.
+                     Une VALEUR, jamais un prédicat importé : Workbox stringifie
+                     ce champ dans `dist/sw.js`, où aucun import ne le suit —
+                     `check-sw-api-cache.mjs` fait décider l'artefact construit. */
+                  urlPattern: API_RESPONSE_CACHE_PATTERN,
                   handler: 'NetworkFirst',
                   options: {
-                    cacheName: 'api',
+                    cacheName: SW_RUNTIME_CACHES.api,
                     networkTimeoutSeconds: 3,
                     expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 7 },
                   },
@@ -498,7 +571,7 @@ export default defineConfig({
                   urlPattern: ({ request }) => request.destination === 'image',
                   handler: 'CacheFirst',
                   options: {
-                    cacheName: 'medias',
+                    cacheName: SW_RUNTIME_CACHES.medias,
                     expiration: { maxEntries: 120, maxAgeSeconds: 60 * 60 * 24 * 30 },
                   },
                 },

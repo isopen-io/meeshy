@@ -7,6 +7,11 @@
  *   npm run translator-languages:generate
  *   # ou, équivalent : npx tsx scripts/generate-translator-languages.ts
  *
+ * Vérifier  : npm run translator-languages:check   (le gate de CI ; échoue
+ * si `generated_languages.py` a dérivé de `language-codes.ts`) — jumeau exact
+ * de `generate-from-ios.mjs --check` (packages/design-tokens), qui pose la
+ * même garde pour la palette dérivée de Swift.
+ *
  * Jumeau de `generate-ios-endpoints.ts` : la RÈGLE reste que `packages/shared`
  * fait foi, ce script ne fait que lire, projeter et écrire.
  *
@@ -27,7 +32,7 @@ import { exigerNodeRecent } from '../../../scripts/node-guard/require-node-runti
 // AVANT tout autre import : voir generate-ios-endpoints.ts pour la raison.
 exigerNodeRecent('packages/shared/scripts/generate-translator-languages.ts');
 
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -60,13 +65,42 @@ ${lines}
 `;
 }
 
+function echoue(message: string): never {
+  console.error(`✗ ${message}`);
+  process.exit(1);
+}
+
+function check(expected: string): void {
+  let current: string;
+  try {
+    current = readFileSync(OUTPUT_PATH, 'utf8');
+  } catch {
+    echoue(`generated_languages.py absent — le régénérer : npm run translator-languages:generate`);
+  }
+  if (current !== expected) {
+    echoue(
+      `generated_languages.py a DÉRIVÉ de language-codes.ts.\n` +
+        `  C'est exactement ce que #3658 interdit : une langue ajoutée d'un côté\n` +
+        `  et pas de l'autre. Régénérer avec : npm run translator-languages:generate`
+    );
+  }
+  console.log('  generated_languages.py est conforme à language-codes.ts.');
+}
+
 function main(): void {
   if (SUPPORTED_LANGUAGE_CODES.length === 0) {
     throw new Error('SUPPORTED_LANGUAGE_CODES est vide — refus de générer un fichier creux.');
   }
 
+  const output = renderPython(SUPPORTED_LANGUAGE_CODES);
+
+  if (process.argv.includes('--check')) {
+    check(output);
+    return;
+  }
+
   mkdirSync(dirname(OUTPUT_PATH), { recursive: true });
-  writeFileSync(OUTPUT_PATH, renderPython(SUPPORTED_LANGUAGE_CODES), 'utf8');
+  writeFileSync(OUTPUT_PATH, output, 'utf8');
 
   console.log(
     `${SUPPORTED_LANGUAGE_CODES.length} codes de langue écrits dans ${OUTPUT_PATH}.`

@@ -935,6 +935,47 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertEqual(sut.messages.first?.attachments.first?.reactionSummary?["👍"], 3)
     }
 
+    /// **La pièce SERVIE AU PLEIN ÉCRAN porte la réaction** (#6789, directive
+    /// porteur 2026-09-16).
+    ///
+    /// `allVisualAttachments` est la seule source du visualiseur, et elle est
+    /// mémoïsée : son invalidation dépend de `structureChanged` — nombre de
+    /// messages, identité du premier, du dernier. **Une réaction ne change aucun
+    /// des trois.** La projection reservait donc un tableau d'AVANT la réaction :
+    /// la bulle se mettait à jour (elle lit `message.attachments` en direct), le
+    /// plein écran non.
+    ///
+    /// Le témoin LIT la projection une première fois — c'est ce qui arme le
+    /// cache, et sans cette lecture il serait vert sur le code fautif.
+    func test_toggleAttachmentReaction_refreshesTheFullscreenProjection() throws {
+        let pool = try makeInMemoryPool()
+        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: MessagePersistenceActor(dbWriter: pool)))
+        sut.messages = [makeImageMessage()]
+
+        XCTAssertNil(sut.allVisualAttachments.first?.reactionSummary,
+                     "lecture d'amorçage : c'est elle qui met le cache en place")
+
+        sut.toggleAttachmentReaction(attachmentId: "a1", messageId: "m1", emoji: "❤️")
+
+        XCTAssertEqual(sut.allVisualAttachments.first?.reactionSummary?["❤️"], 1,
+                       "le plein écran sert la pièce d'après la réaction, pas celle d'avant")
+        XCTAssertEqual(sut.allVisualAttachments.first?.currentUserReactions, ["❤️"])
+    }
+
+    /// Et le delta SERVEUR rafraîchit la même projection : sans lui, la réaction
+    /// d'un tiers n'atteindrait jamais le visualiseur ouvert.
+    func test_applyAttachmentReactionDelta_refreshesTheFullscreenProjection() throws {
+        let pool = try makeInMemoryPool()
+        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: MessagePersistenceActor(dbWriter: pool)))
+        sut.messages = [makeImageMessage()]
+
+        XCTAssertNil(sut.allVisualAttachments.first?.reactionSummary)
+
+        sut.applyAttachmentReactionDelta(attachmentId: "a1", reactionSummary: ["👍": 3])
+
+        XCTAssertEqual(sut.allVisualAttachments.first?.reactionSummary?["👍"], 3)
+    }
+
     // Regression guard (GAP #1): an attachment reaction must be written through
     // GRDB so it survives a cold reload. Before the fix the pill lived only in
     // the in-memory `messages` array and was lost on the next conversation load.

@@ -42,7 +42,8 @@ extension StoryBackgroundLayer {
 
         let source = StoryLetterboxFill.source(
             hasStampedBitmap: letterboxSourceImage != nil, hashes: hashes)
-        guard StoryLetterboxFill.isServed(fitMode: transform3D.videoFitMode,
+        guard !isLetterboxFillSuppressed,
+              StoryLetterboxFill.isServed(fitMode: transform3D.videoFitMode,
                                           hasSource: source != .none),
               let image = fillImage(for: source)
         else { return }
@@ -118,5 +119,19 @@ extension StoryBackgroundLayer {
     @MainActor
     func refreshLetterboxFillAfterFitChange() {
         refreshLetterboxFill(hashes: letterboxFillHashes)
+    }
+
+    /// **Le lecteur présente l'image SEULE : la bande ne se peint plus** (#6636).
+    ///
+    /// La carte est alors rognée au rectangle de l'image et la bande sort du
+    /// cadre visible. La peindre quand même paierait un calque et un bitmap
+    /// réduit que personne ne voit (loi 8). La décision survit aux
+    /// reconfigurations — `refreshLetterboxFill` la relit à chaque passe —, et
+    /// la lever repeint la bande sans attendre un `rebuildLayers`.
+    @MainActor
+    func setLetterboxFillSuppressed(_ suppressed: Bool) {
+        guard suppressed != isLetterboxFillSuppressed else { return }
+        isLetterboxFillSuppressed = suppressed
+        refreshLetterboxFillAfterFitChange()
     }
 }

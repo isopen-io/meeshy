@@ -51,6 +51,9 @@ final class RenderedScreen {
     struct Node {
         let identifier: String?
         let label: String?
+        /// Le cadre que VoiceOver entoure, en coordonnées d'écran — la fenêtre
+        /// du harnais est posée à l'origine, il se lit donc en points de fenêtre.
+        let frame: CGRect
     }
 
     /// La vue racine de l'hôte — le point d'entrée de toute descente.
@@ -165,9 +168,40 @@ final class RenderedScreen {
     /// Tous les identifiants POSÉS, dans l'ordre de l'arbre.
     var identifiers: [String] { RenderedScreen.noeuds(root).compactMap(\.identifier) }
 
+    /// Tout l'arbre rendu, cadres compris, dans l'ordre de l'arbre — pour les
+    /// témoins qui retrouvent un élément par son LIBELLÉ (une vignette annonce
+    /// sa position, elle ne porte pas d'identifiant).
+    var nodes: [Node] { RenderedScreen.noeuds(root) }
+
     /// Le nœud portant cet identifiant, s'il est rendu.
     func node(_ identifier: String) -> Node? {
         RenderedScreen.noeuds(root).first { $0.identifier == identifier }
+    }
+
+    /// Le cadre ANNONCÉ du nœud portant cet identifiant, attendu jusqu'à `borne`.
+    ///
+    /// Un écran qui charge d'abord (la configuration 2FA interroge son service
+    /// à l'apparition) ou qui s'anime à l'entrée (la connexion fait monter ses
+    /// champs depuis l'opacité nulle) ne pose son contenu qu'après quelques
+    /// tours : lire l'arbre une seule fois rendrait `nil` sur un écran juste.
+    /// Un cadre de largeur nulle n'est pas encore posé — il ne compte pas.
+    func frame(of identifier: String, borne: TimeInterval = 5) -> CGRect? {
+        var pose: CGRect?
+        _ = RenderedScreen.attendre(borne: borne) {
+            pose = node(identifier).map(\.frame).flatMap { $0.width > 0 ? $0 : nil }
+            return pose != nil
+        }
+        return pose
+    }
+
+    /// Le cadre ANNONCÉ du premier nœud posé dont le libellé COMMENCE par
+    /// `prefixe` — pour les éléments que SwiftUI ne marque d'aucun identifiant
+    /// (une tuile de scène, un bouton du composer), et dont le libellé porte un
+    /// suffixe variable (« Scène 1, vidéo »).
+    func frame(labeledPrefix prefixe: String) -> CGRect? {
+        RenderedScreen.noeuds(root)
+            .first { ($0.label ?? "").hasPrefix(prefixe) && $0.frame.width > 0 }?
+            .frame
     }
 
     /// L'écran prononce-t-il ce fragment, où que ce soit ?
@@ -195,7 +229,7 @@ final class RenderedScreen {
         let identifier: String? = objet.responds(to: Selector(("accessibilityIdentifier")))
             ? objet.value(forKey: "accessibilityIdentifier") as? String
             : nil
-        var trouves = [Node(identifier: identifier, label: objet.accessibilityLabel)]
+        var trouves = [Node(identifier: identifier, label: objet.accessibilityLabel, frame: objet.accessibilityFrame)]
         for element in elements(de: objet) {
             trouves.append(contentsOf: noeuds(element, profondeur: profondeur + 1))
         }

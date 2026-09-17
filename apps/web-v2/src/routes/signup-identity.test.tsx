@@ -17,20 +17,21 @@ import SignupScreen from './signup';
 const html = renderToStaticMarkup(<SignupScreen />);
 
 /**
- * LES BARREAUX (#6405, directive porteur 2026-09-14 : « les champs
- * apparaissent uniquement au fur et à mesure »).
+ * LES DEUX BARREAUX (#6405, REDÉCOUPÉ par #6582 — directive porteur
+ * 2026-09-14 : « il faut mettre dès le départ le numéro et l'e-mail à
+ * montrer »).
  *
- * L'ordre a changé avec eux : l'ADRESSE ouvre le formulaire, parce que tout en
- * découle — l'identité dérivée (#6479) n'a rien à montrer avant elle, et le
- * lien de validation part vers elle. Le téléphone la suit, le reste suit le
- * téléphone.
+ * L'ordre reste celui de #6479 : l'ADRESSE ouvre le formulaire, parce que tout
+ * en découle — l'identité dérivée n'a rien à montrer avant elle, et le lien de
+ * validation part vers elle. Ce qui change, c'est que le NUMÉRO ne se mérite
+ * plus : il paraît avec l'adresse, sur le même barreau de CONTACT.
  *
  * `renderToStaticMarkup` mesure l'état INITIAL : c'est exactement ce qu'il faut
  * pour prouver ce qui ne paraît PAS encore. L'ordre COMPLET, lui, se mesure sur
- * un formulaire qu'on remplit — `signup-rungs.test.ts` prouve la loi, ce témoin
- * prouve qu'elle atteint des pixels.
+ * un formulaire qu'on remplit — `signup-rungs.test.ts` prouve la loi,
+ * `signup-rungs.test.tsx` prouve qu'elle atteint des pixels.
  */
-describe('à l’ouverture, un seul champ', () => {
+describe('à l’ouverture, le CONTACT et lui seul', () => {
   const positions = {
     email: html.indexOf('signup-email'),
     telephone: html.indexOf('signup-phone-hint'),
@@ -38,10 +39,12 @@ describe('à l’ouverture, un seul champ', () => {
     motDePasse: html.indexOf('signup-password'),
   };
 
-  test('l’adresse est là', () => expect(positions.email).toBeGreaterThan(-1));
+  test('l’adresse est là, et le numéro AVEC elle', () => {
+    expect(positions.email).toBeGreaterThan(-1);
+    expect(positions.telephone).toBeGreaterThan(positions.email);
+  });
 
-  test('ni le téléphone, ni l’identité, ni le mot de passe ne sont rendus — pas même repliés', () => {
-    expect(positions.telephone).toBe(-1);
+  test('ni l’identité, ni le mot de passe ne sont rendus — pas même repliés', () => {
     expect(positions.identite).toBe(-1);
     expect(positions.motDePasse).toBe(-1);
   });
@@ -52,19 +55,40 @@ describe('à l’ouverture, un seul champ', () => {
 
 describe('l’avertissement de validation d’adresse', () => {
   /**
-   * Il n'est PAS derrière un (i) : ce n'est pas un détail qu'on consulte, c'est
-   * une CONDITION du compte. Un témoin sur sa présence VISIBLE, pas sur son
-   * existence dans le DOM.
+   * DERRIÈRE UN (i) « Pourquoi un lien » depuis #6626 (directive porteur
+   * 2026-09-15 : « moins de détails sur la page de connexion et
+   * d'enregistrement ; utiliser des (i) »). #6479 l'avait posé en clair ; la
+   * directive postérieure le supplante. Replié ne veut pas dire absent : le
+   * texte reste porté par `aria-describedby` du champ, donc un lecteur d'écran
+   * l'entend en entrant dans l'adresse.
    */
-  test('il est rendu, en clair, sous le champ', () => {
-    expect(html).toContain('data-signup-email-verification');
-    expect(html).toContain('valider votre compte');
+  const note = /<p id="([^"]+)" class="([^"]*)"[^>]*>Nous vous enverrons un lien à cette adresse : il faudra l’ouvrir pour valider votre compte\.<\/p>/u.exec(html);
+
+  test('le champ e-mail porte un (i) « Pourquoi un lien », replié', () => {
+    const bouton = /<button[^>]*aria-expanded="false"[^>]*aria-controls="([^"]+)"[^>]*aria-label="Pourquoi un lien"/u.exec(html);
+    expect(bouton).not.toBeNull();
+    expect(note?.[1]).toBe(bouton?.[1]);
   });
 
-  test('et il n’est pas replié — aucune classe sr-only ne le masque', () => {
-    const bloc = html.slice(html.indexOf('data-signup-email-verification'));
-    expect(bloc.slice(0, 120)).not.toContain('sr-only');
+  test('la note est rendue, mais repliée — `sr-only`, jamais en clair', () => {
+    expect(note).not.toBeNull();
+    expect(note?.[2]).toContain('sr-only');
   });
+
+  test('et le champ la cite dans `aria-describedby`', () => {
+    const champ = /<input id="signup-email"[^>]*aria-describedby="([^"]+)"/u.exec(html);
+    expect(champ).not.toBeNull();
+    expect(champ?.[1]).toBe(note?.[1]);
+  });
+
+  /** Citer une note n'est pas un refus : un champ qui déduirait `aria-invalid`
+   * de la seule présence d'un `aria-describedby` s'annoncerait « invalide »
+   * dès l'ouverture, sur une adresse que personne n'a encore tapée. */
+  test('le champ vide ne s’annonce pas invalide pour autant', () => {
+    expect(html).toMatch(/<input id="signup-email"[^>]*aria-invalid="false"/u);
+  });
+
+  test('aucun libellé ne dit « magique »', () => expect(html).not.toMatch(/magi(que|c)/iu));
 });
 
 describe('DerivedIdentity — ce que la passerelle recevra, affiché', () => {

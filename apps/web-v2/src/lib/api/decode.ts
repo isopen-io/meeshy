@@ -48,50 +48,55 @@ function dateFieldOf<K extends string>(key: K, value: Date | string | null | und
 
 /**
  * `decodeAttachment` — LE DÉCODEUR QUI MANQUAIT (défaut bloquant, revue
- * #5805). `decodeMessage` défait `null` sur ONZE clés du MESSAGE
- * (#5668, #6086) mais ne touchait JAMAIS `message.attachments` : chaque
- * pièce jointe traversait BRUTE.
+ * #5805). `decodeMessage` défait `null` sur les clés du MESSAGE (#5668,
+ * #6086, #6080) mais ne touchait JAMAIS `message.attachments` : chaque pièce
+ * jointe traversait BRUTE.
  *
  * Mesuré en direct sur `gate.staging.meeshy.me` (conv
  * `690d64275c50e29d3c0c6f29`) : TOUTE pièce jointe SANS transcription sert
  * `transcription: null`, `translations: null`, `alt: null`,
  * `thumbnailUrl: null` — EXPLICITES, jamais absents. Le type partagé
- * (`packages/shared/types/attachment.ts:284`) les déclare optionnelles SANS
- * `| null` : `tsc` est satisfait pendant que
- * `electDescription`/`electAudio` (`view/media.ts`, via
- * `transcriptionTextOf`, `api/prism.ts`) lèvent sur `transcription.type` —
- * le motif « un `Json?` Prisma sérialise `null` » déjà payé par le dépôt.
- * Sur un fil réel de 12 messages, UNE seule rangée survivait.
+ * (`packages/shared/types/attachment.ts:166`) déclare ses QUARANTE-CINQ
+ * champs optionnels en `?:` SANS `| null` : `tsc` est satisfait pendant que
+ * `electDescription`/`electAudio` (`view/media.ts`, via `transcriptionTextOf`,
+ * `api/prism.ts`) lèvent sur `transcription.type` — le motif « un `Json?`
+ * Prisma sérialise `null` » déjà payé par le dépôt. Sur un fil réel de 12
+ * messages, UNE seule rangée survivait.
  *
- * Même régime que `decodeMessage` : le `null` est DÉFAIT à LA FRONTIÈRE,
- * jamais reconnu au point d'usage — `fieldOf` est le même outil générique
- * que `#6086` a introduit pour `reactionSummary`/`forwardedFromId`.
+ * **#6820 — CETTE FRONTIÈRE ÉNUMÉRAIT, ET UNE ÉNUMÉRATION RETIENT EN
+ * SILENCE.** Elle défaisait CINQ clés (`transcription`, `translations`,
+ * `alt`, `thumbnailUrl`, `thumbHash`) là où `serializeAttachmentForSocket`
+ * (`:100-129`) en sert VINGT ET UNE à `null` ; les seize autres repassaient
+ * par `...rest`. La liste s'était déjà allongée deux fois — quatre clés à
+ * #5805, `thumbHash` à #6221 — une par incident, jamais par relevé.
+ *
+ * La sixième manquante fut `imageVariants` : servie `null` pour toute image
+ * sans variantes WebP (une image chiffrée, `UploadProcessor.ts:491`, ou toute
+ * pièce d'avant D4), elle atteignait `attachmentSrcSet` (`media-url.ts:159`)
+ * dont la garde ne connaît que `undefined` — « Cannot read properties of null
+ * (reading 'length') », et le fil ENTIER par terre. `width`/`height`
+ * donnaient le symptôme INVERSE, silencieux : `attachment.width !== undefined`
+ * rend `true` sur `null`, d'où un `aspect-ratio: "null / null"` (CSS
+ * invalide, ignoré) et un `width={null}` sur l'`<img>`.
+ *
+ * `sansNull` est le MÊME outil générique que #6080 a posé vingt lignes plus
+ * bas pour `decodeMessage`, et pour la même raison, écrite là-bas : « une
+ * énumération tenue à la main est un inventaire qui retient en silence chaque
+ * champ ajouté en amont ». La leçon avait été apprise et appliquée à UN des
+ * deux décodeurs de ce fichier ; elle vaut pour les deux.
+ *
+ * SOUSTRAIRE UN `null` NE PEUT VIOLER AUCUN TYPE ICI : les quarante-cinq
+ * champs sont optionnels, donc `undefined` leur est toujours assignable — y
+ * compris au seul qui déclare `| null` (`currentUserConsumption`), dont
+ * l'unique lecteur du chantier (`attachment-blocks.tsx:111`) teste déjà
+ * `?.` et `!= null`.
+ *
+ * Aucune clé de la pièce ne demande de TRANSFORMATION (pas de date à revivre :
+ * `createdAt` reste la chaîne que le cache tient, D-26) — le décodeur est donc
+ * `sansNull` et rien d'autre.
  */
 function decodeAttachment(raw: Attachment): Attachment {
-  const {
-    transcription: rawTranscription,
-    translations: rawTranslations,
-    alt: rawAlt,
-    thumbnailUrl: rawThumbnailUrl,
-    thumbHash: rawThumbHash,
-    ...rest
-  } = raw as Attachment & {
-    readonly transcription?: Attachment['transcription'] | null;
-    readonly translations?: Attachment['translations'] | null;
-    readonly alt?: Attachment['alt'] | null;
-    readonly thumbnailUrl?: Attachment['thumbnailUrl'] | null;
-    // #6221 — la passerelle sert `thumbHash: null`, EXPLICITE, jamais absent :
-    // même régime que `thumbnailUrl` deux lignes plus haut.
-    readonly thumbHash?: Attachment['thumbHash'] | null;
-  };
-  return {
-    ...rest,
-    ...fieldOf('transcription', rawTranscription),
-    ...fieldOf('translations', rawTranslations),
-    ...fieldOf('alt', rawAlt),
-    ...fieldOf('thumbnailUrl', rawThumbnailUrl),
-    ...fieldOf('thumbHash', rawThumbHash),
-  };
+  return sansNull(raw);
 }
 
 /**
@@ -119,10 +124,16 @@ function decodeAttachment(raw: Attachment): Attachment {
  * en TypeScript « je n'ai enlevé que des clés absentes du type » : le filtre ne
  * peut RIEN produire qui ne soit déjà assignable, puisqu'il ne fait que
  * soustraire des entrées que le type déclare optionnelles.
+ *
+ * `exceptions` NOMME les clés dont le `null` n'est PAS absent mais SIGNIFIANT
+ * — celles que le type déclare `?: T | null` plutôt que `?: T` (#6826). Leur
+ * soustraire un `null` violerait le type, puisque lui seul distingue « absent »
+ * de « la valeur est explicitement `null` ». `decodeMessage`/`decodeAttachment`
+ * n'en ont aucune : leurs champs optionnels ne déclarent jamais `| null`.
  */
-function sansNull<T extends object>(valeur: T): T {
+function sansNull<T extends object>(valeur: T, exceptions: ReadonlyArray<keyof T> = []): T {
   return Object.fromEntries(
-    Object.entries(valeur).filter(([, v]) => v !== null)
+    Object.entries(valeur).filter(([k, v]) => v !== null || (exceptions as readonly string[]).includes(k))
   ) as T;
 }
 
@@ -250,6 +261,21 @@ export function decodeMessages(raw: readonly Message[]): readonly Message[] {
  * `currentUserJoinedAt`, `lastMessage.createdAt` ; NE TOUCHE PAS
  * `userPreferences` (tableau opaque, `preferences.ts` en fait le narrowing)
  * ni `lastMessageTranslations` (déjà des chaînes, jamais des dates).
+ *
+ * #6826 — `...rest` NE PASSAIT PAR AUCUN `sansNull` : `lastMessage` était le
+ * SEUL champ défait, à la main. Les 37 autres champs optionnels de
+ * `Conversation` traversaient donc avec leur `null` intact dès que la
+ * passerelle en servait un — `title: null` pour un direct sans titre stocké,
+ * ou n'importe quel champ optionnel futur. `dateFieldOf('lastMessageAt',
+ * null)` rendait `{}`, qui ne RETIRE rien de ce que `...rest` avait déjà
+ * écrit trois lignes plus haut — le défaut 4 de #5668, jamais porté ici.
+ *
+ * `currentUserRole` est l'unique EXCEPTION : le type le déclare
+ * `?: string | null` (`conversation.ts:371`), `null` signifiant « le lecteur
+ * n'est pas membre » — une valeur, pas une absence. `sansNull` la laisse
+ * survivre ; toute AUTRE clé nullable de `Conversation` n'a aujourd'hui aucune
+ * signification déclarée pour `null` distincte de « absent » (relevé contre
+ * `conversation.ts`, seul champ à porter `| null`).
  */
 export function decodeConversation(raw: Conversation): Conversation {
   /**
@@ -266,7 +292,7 @@ export function decodeConversation(raw: Conversation): Conversation {
     readonly lastMessage?: Conversation['lastMessage'] | null;
   };
   return {
-    ...rest,
+    ...sansNull(rest, ['currentUserRole']),
     ...(rawLastMessage === undefined || rawLastMessage === null
       ? {}
       : { lastMessage: decodeMessage(rawLastMessage) }),

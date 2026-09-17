@@ -32393,3 +32393,741 @@ première localement, jamais en espérant qu'elle marche le jour où elle servir
 
 Voisine de [[reference_a_red_on_both_sides_of_the_diff_also_measures_the_machine]]
 et du piège inverse : ici, VERT d'un seul côté mesurait la machine.
+
+---
+
+## Leçon 611 — Un témoin qui lit le TEXTE SOURCE verdit sur un correctif ANNULÉ
+
+**Mesuré le 2026-09-15 sur trois lots indépendants** de la chaîne de publication (#6577, #6579, #6164).
+Trois relecteurs adverses, trois fois le même résultat : le correctif neutralisé **en conservant les chaînes
+que les greps cherchent**, et les témoins restent verts.
+
+| lot | mutation | verdict |
+|---|---|---|
+| #6577 | les 8 affectations de `retractMedia` rendues no-op (`documentLocalMedia = mediaPorters.localMedia`) | **241/241 verts** |
+| #6579 | `.opacity(0)` sur la bande ; puis `onDisplayedContextChange: { _ in }` | **13/13** puis **33/33 verts** |
+| #6164 | garde fail-closed annulée par `&& false` ; protection perdue par `servedQuotedAttachments({}, …)` | **27/27 verts** |
+
+Les trois correctifs étaient **plausiblement justes**. Aucun n'était **prouvé**.
+
+### La cause structurelle, qui rendait le défaut inévitable sur iOS
+
+Sur #6577, la raison n'était pas « le testeur a été paresseux » : **un `@State` a un setter `nonmutating` qui
+n'écrit nulle part tant que SwiftUI n'a pas installé la vue.** Aucun témoin ne *pouvait* distinguer
+« appliqué » de « calculé puis jeté » — la struct pure était testable, son application ne l'était pas.
+Le remède a été de sortir les huit porteurs du `@State` vers un store observable, puis de tester l'aller-retour
+porteurs → charge.
+
+> **Quand un correctif passe par un `@State`, poser la question AVANT d'écrire son témoin :
+> qu'est-ce qui, dans ce test, installe la vue ?** Sans réponse, le témoin mesurera le calcul, jamais l'écriture.
+
+### Le geste qui l'attrape
+
+**Neutraliser sa propre règle en conservant les chaînes que les greps cherchent, puis rejouer.**
+Si rien ne rougit, le témoin ne vaut rien. Un source-guard garde un *câblage* — il empêche un futur lot de
+re-poser un motif interdit — mais il ne peut jamais être la seule preuve qu'une feature marche.
+
+### Trois pièges de la neutralisation elle-même, payés dans la même vague
+
+1. `git checkout -- <fichier>` restaure **HEAD**, pas l'état de travail non commité : il a annulé un correctif
+   voisin pas encore commité. **Copier en `.bak` hors du dépôt** avant de muter, restaurer depuis la copie.
+2. Une assertion **non scopée** (`src.contains("originalLanguage: language,")` sur le fichier entier) est
+   satisfaite par n'importe quelle occurrence — y compris par la chaîne **citée dans un commentaire**.
+   Une fenêtre `body(from:to:)` ne distingue pas le code du commentaire.
+3. Un oracle peut rougir sur une mutation **et** sur un arbre intact. Le harnais de #6579 gardait
+   `window.safeAreaInsets.top` (sa fenêtre, toujours 62) au lieu de `DeviceLayout.safeAreaTop`, la seule
+   grandeur que la production lise : il accusait la bande quand la scène n'était pas `.foregroundActive`.
+   **C'est la présente leçon retournée contre son propre outil** — un témoin qui ne mesure pas la quantité
+   qui gouverne ce qu'il observe ne mesure rien. Et le défaut d'environnement rendait *le même verdict*
+   que la mutation `.opacity(0)` : 6 témoins, 27 assertions. D'où la nécessité de diagnostiquer l'environnement
+   à part, avec un message qui l'accuse **lui** et jamais la feature.
+
+Voir aussi la leçon sur le disque saturé : un rouge qui ne parle pas du code parle de la **machine**.
+
+## Leçon 612 — Un dépliage progressif n'est pas une vertu : ce qui se déplie doit être ce qu'on ne SAIT PAS ENCORE, jamais ce qu'on va sûrement donner (2026-09-14)
+
+**Ce qui s'est passé.** La directive du 2026-09-13 disait « les champs
+apparaissent uniquement au fur et à mesure » ; #6405 a livré TROIS barreaux —
+l'adresse, puis le numéro, puis le reste — avec une jauge « Étape N sur 3 ».
+Vingt-quatre heures plus tard, le porteur en retire deux tiers : « il faut
+mettre dès le départ le numéro et l'e-mail à montrer […] pas d'étape 1 sur N à
+afficher : tout se fait intuitivement dans la page de création de compte ».
+
+**Pourquoi la première lecture était fausse.** La règle avait été appliquée à
+la lettre — *un champ à la fois* — au lieu de sa raison : *ne pas mettre devant
+quelqu'un un formulaire dont il ne voit pas le bout*. Or l'adresse et le numéro
+forment UNE question (« comment vous joint-on ? »), et celui qui s'inscrit sait
+déjà ce qu'il va y répondre. Les replier n'a rien épargné : ça a transformé une
+donnée qu'on allait donner en une ÉTAPE à franchir — avec, en prime, un bouton
+« Je continue sans numéro » pour sortir d'une porte qu'on venait soi-même de
+fermer.
+
+**Le signe qu'on est dans ce piège : la compensation.** La jauge de trois
+segments et « Étape N sur 3 » avaient été ajoutées, en toute conscience, pour
+« rembourser » l'impression de formulaire sans fin que le dépliage créait. Un
+dispositif dont il faut compenser l'effet est un dispositif qui coûte plus
+qu'il ne rapporte. **Quand un lot ajoute un indicateur pour rassurer sur ce
+qu'un autre choix du même lot vient de rendre inquiétant, c'est l'autre choix
+qu'il faut relire** — pas l'indicateur qu'il faut peaufiner.
+
+**La règle qui reste.** Ce qui se déplie doit être ce que l'écran APPREND :
+l'identité dérivée n'existe pas avant l'adresse, donc elle paraît après elle.
+Ce qui est déjà connu de l'utilisateur se montre. Et la MONOTONIE, elle,
+survit intacte aux deux découpages : un champ paru ne se referme jamais, sans
+quoi corriger une faute de frappe ferait s'effondrer le formulaire sous les
+doigts.
+
+**Corollaire sur les étiquettes.** « (facultatif) » a disparu du mot de passe
+par la même directive, et pour la même raison : *le fait que le bouton créer
+mon compte fonctionne est suffisant pour le dire*. Une mention qui DÉCRIT ce
+qu'un contrôle MONTRE déjà est du bruit ; ce qu'elle doit dire à la place, si
+elle doit dire quelque chose, c'est la CONSÉQUENCE que l'utilisateur ne peut
+pas deviner — ici, qu'un compte sans mot de passe reste à configurer.
+
+Voisine de la leçon 603 (`onInput` sous happy-dom), payée dans le même écran, et
+du § Prisme « qui AFFICHE ce qu'il décide ? » : une loi de dépliage juste mais
+appliquée au mauvais découpage atteint bien des pixels — les mauvais.
+---
+
+## Leçon 613 — Une confirmation `y/N` non automatisée est un no-op SILENCIEUX : la purge « posée » ne retire rien, et on croit avoir purgé (2026-09-15)
+
+**Directive porteur, deux moitiés :** dans le code de release des images sur le serveur final, la purge
+(`docker image prune`) est obligatoire **et son `y` s'envoie tout seul** ; et le déploiement automatique
+**ne se fait qu'en DEV, jamais sur `main` en production**.
+
+### Ce qui rendait le défaut invisible
+
+`docker image prune` demande `y/N`. Au bout d'un `ssh`, dans un `heredoc`, dans un job de CI, **il n'y a
+pas de terminal** : `stdin` est vide ou fermé, la réponse vide vaut « N », la commande **rend 0** et
+n'affiche même pas d'erreur. Le script continue, vert. C'est le pire des verdicts — pas un échec, une
+**absence d'effet** que rien ne distingue du succès. L'hôte de staging a accumulé une image par service et
+par version jusqu'au `no space left on device` du 2026-09-14 (#6556) : le `pull` a échoué, le déploiement
+s'est arrêté là, et staging a continué de servir la version précédente **sans que rien à l'écran ne le dise**.
+
+> **Une commande interactive dans un chemin automatisé ne « demande » rien : elle abandonne.**
+> Devant tout `prune`, `rm -i`, `apt install`, `gh` interactif dans un script, la question n'est pas
+> « ai-je posé la commande ? » mais **« qui répond, et que vaut le silence ? »**.
+
+### Le second angle mort : l'ORDRE, pas seulement la présence
+
+Une purge POSTÉRIEURE au `pull` est aussi inutile qu'une purge refusée — ce qui manque de place, c'est
+l'écriture des couches téléchargées. Même forme que la leçon 275 (« une garde se mesure sur ce qui part »)
+appliquée au temps : **une garde juste, au mauvais moment, ne garde rien.**
+
+### Ce qui reste hors du dépôt, et qu'il faut dire
+
+Ce que la CI déclenche sur l'hôte était un script **non suivi** (`/usr/local/bin/meeshy-deploy-staging.sh`,
+contraint par `command=…,restrict` dans `authorized_keys`). Deux sessions successives ont conclu « bloqué,
+pas d'accès serveur » — et la conclusion était juste sur l'ACTION, fausse sur le LIVRABLE : on ne pouvait
+pas installer le script, on pouvait **le versionner**, avec sa purge, sa liste blanche et son self-test.
+**Un livrable inatteignable n'annule pas le livrable ATTEIGNABLE qui le précède.**
+
+### Le geste qui l'attrape
+
+`scripts/check-docker-prune-noninteractive.mjs` (job `quality` de `ci.yml`), trois règles et six mutations :
+chaque purge du dépôt porte `-f`/`-af`/`--force` ; chaque script qui tire des images sur un hôte distant
+purge **avant** de tirer ; tout job de workflow porteur d'une clé SSH de déploiement reste épinglé à
+`refs/heads/dev` et ne peut mentionner ni `refs/heads/main` ni `refs/tags/`.
+
+---
+
+## Leçon 614 — Les gardes d'INVENTAIRE sont celles qu'aucun lot parallèle ne joue : elles tombent à l'INTÉGRATION (2026-09-15)
+
+**Mesuré** : après la fusion de dix branches parallèles dans `dev`, `Test gateway`
+rouge — **4 suites, 5 témoins**, toutes des gardes d'inventaire, aucune de
+comportement.
+
+| garde | ce qu'elle mesure | ce qui l'a fait tomber |
+|---|---|---|
+| `gateway-file-size-budget` | un fichier hors budget n'a pas GROSSI | +14 lignes sur `MessageHandler.ts` (2336 → 2350) |
+| `orphaned-sender-repair-surface-guard` | la liste des fichiers qui lisent `Message` | un fichier NEUF, absent de l'inventaire |
+| `claude-md-paths-exist-guard` | les chemins cités par un `CLAUDE.md` existent | une adresse sur l'HÔTE distant, citée à raison |
+| `recipient-language-projection-sweep` | tout appelant du cadrage charge les 4 colonnes | une forme que le balayage ne savait pas remonter |
+
+**Pourquoi aucun worktree ne les avait vues.** Chaque lot joue le périmètre de SON
+lot : ses suites de comportement, son typecheck. Une garde d'inventaire
+n'appartient au périmètre de personne — elle mesure une SURFACE globale que seule
+l'UNION des lots déplace. Ce n'est pas un défaut de la garde : c'est sa raison
+d'être, et c'est pourquoi elle rougit à l'intégration et nulle part avant.
+
+> **Le geste** : après une fusion multi-branches, avant de POUSSER, rejouer les
+> gardes d'inventaire du dépôt — pas seulement le typecheck et les suites du
+> périmètre touché. Un « périmètre touché » calculé branche par branche ne
+> contient jamais l'effet de leur somme.
+
+**Deux corollaires, payés le même jour.**
+
+**(1) Un fichier hors budget se corrige par EXTRACTION, jamais par relèvement du
+plafond** — et la bonne extraction est celle que le code réclamait déjà. Les deux
+chemins socket refusaient une citation par douze lignes STRICTEMENT identiques
+chacun ; la loi est partie chez elle (`citationRefusee` dans
+`attachmentReplySnapshot.ts`), l'appelant n'a gardé que la décision. 2350 → 2336,
+sans rien perdre, et la duplication a disparu au passage.
+
+**(2) Un témoin qui ÉPELLE le nom d'un import rougit sur une extraction qui ne
+change rien à la règle.** Celui de #6601 cherchait `import { admitAttachmentReply }`
+et a accusé un renommage neutre. Le faire LIRE le nom délégué depuis l'import,
+puis compter ses appels, lui garde le pouvoir d'accuser un RETRAIT sans punir une
+extraction. Épreuve par neutralisation faite dans les deux sens (un appel
+court-circuité en gardant le nom visible ⇒ rouge ; restauré ⇒ vert) — et il reste
+ce qu'il est : un INVENTAIRE, jamais une preuve de comportement (leçon 611).
+
+## Leçon 615 — Un témoin de DÉCODAGE qui fabrique son décodeur mesure la tolérance du RUNTIME
+
+**Payée le 2026-09-15**, à l'intégration de #6578. Le lot rendait « Executed 16
+tests, with 0 failures » dans son worktree ; sur `dev`, six de ces seize
+tombaient — `dataCorrupted("Expected date string to be ISO8601-formatted")`.
+
+Rien n'avait changé : les fichiers du lot et ceux de `dev` étaient **identiques**
+(vérifié par `git diff` entre la branche et la fusion). Ce qui changeait était le
+SIMULATEUR — le lot avait mesuré sur **iOS 26.1**, l'intégration sur **iOS 18.2**.
+
+La cause : le témoin fabriquait son propre décodeur,
+
+```swift
+let decodeur = JSONDecoder()
+decodeur.dateDecodingStrategy = .iso8601   // PLUS STRICT que la production
+```
+
+alors que la passerelle émet ses dates **avec fractions de seconde**
+(`Date.toISOString()` → `…T10:00:00.000Z`), que `.iso8601` refuse. Le décodeur de
+PRODUCTION (`APIClient.makeAPIPayloadDecoder()`) porte une stratégie `.custom`
+qui les tolère — et il est `internal` plutôt que `private` **exactement pour que
+les tests l'utilisent** : son doc-comment le dit en toutes lettres, comme celui
+d'`APIMessage.init(from:)` (« la prod utilise une stratégie `.custom`, les tests
+`.iso8601` »).
+
+> **Un témoin qui reconstruit une pièce d'infrastructure ne teste plus le
+> produit : il teste sa propre reconstruction.** Et quand cette pièce est plus
+> STRICTE que la vraie, il ne rougit que là où le runtime est strict — donc il
+> est vert sur la machine de son auteur et rouge chez le suivant.
+
+Le geste : chercher si le dépôt EXPOSE déjà la pièce (un `internal` au lieu d'un
+`private` est un aveu — quelqu'un l'a ouverte pour les tests), et l'appeler.
+
+Corollaire de portée : le dépôt supporte **iOS 16→26**. Un témoin joué sur un
+seul runtime ne dit rien des quinze autres — et le runtime le plus récent est le
+plus permissif, donc le moins susceptible d'accuser. Voir
+[[reference_a_green_on_both_sides_of_the_diff_measures_the_machine]].
+
+## Leçon 616 — Après une EXTRACTION, les gardes qui NOMMENT le fichier d'origine tombent
+
+Même journée, même intégration. L'extraction de `CommentRowView` hors de
+`FeedCommentsSheet.swift` (2 519 → 2 127 lignes, pour respecter le budget) a fait
+rougir **deux** gardes qu'aucun témoin du lot ne jouait :
+
+| garde | ce qu'elle exigeait | pourquoi elle tombe |
+|---|---|---|
+| `CommentMediaGalleryWiringGuardTests` | `carrierText: comment.displayContent` dans `FeedCommentsSheet.swift` | la ligne est partie avec la vue |
+| `SheetEnvironmentObjectGuardTests` | le type `CommentRowView` DÉCLARÉ dans `FeedCommentsSheet.swift` | le type est parti avec la vue |
+
+Aucune des deux ne mesure un comportement de l'extraction : elles tiennent un
+INVENTAIRE indexé par **fichier**, quand le risque qu'elles gardent voyage avec
+le **type**.
+
+> **Une extraction ne change rien au comportement et fait pourtant rougir tout ce
+> qui indexe par fichier.** Avant d'extraire, `grep` le nom du fichier d'origine
+> ET le nom du type déplacé dans les témoins : ce que la recherche rend est la
+> liste exacte des gardes à faire suivre, et elle se fait DANS le commit
+> d'extraction.
+
+Le correctif juste n'est pas de rapatrier le code : c'est d'apprendre à la garde
+que la règle a deux étages (l'hôte déclare la galerie, la ligne passe la
+légende), ou de la faire suivre le TYPE. Une garde qui force à re-fusionner ce
+qu'un budget vient de séparer travaille contre la directive qu'elle sert.
+
+Prolonge [[reference_inventory_guards_are_the_ones_parallel_lots_never_play]] :
+la leçon 614 disait QUI ne les joue pas ; celle-ci dit QUAND elles tombent.
+
+## Leçon 617 — Un champ câblé en `onChange` se rend, se remplit… et ne rapporte jamais rien
+
+Lot #5561 (rejoindre en anonyme). Le formulaire d'invité était écrit, l'écran se
+rendait juste, le DOM portait les bonnes valeurs — et trois témoins d'écran
+échouaient sur « rien n'est parti », sans qu'aucun message ne dise pourquoi.
+
+J'ai supposé cinq fois, et corrigé cinq fois à côté : le setter natif de `value`,
+la chaîne de prototypes sous happy-dom, le clic sur un bouton `type="submit"`,
+l'ordre des imports face à l'enregistrement du DOM, le mouleur. Chaque
+correction était défendable ; aucune n'était la cause.
+
+**Ce qui a tranché est une sonde NEUTRE** — un fichier de témoin qui ne monte
+RIEN du produit et n'importe que l'enregistrement du DOM
+(`src/test-support/react-events-probe.test.tsx`) :
+
+| sonde sur un arbre nu | verdict |
+|---|---|
+| rendu d'un `<input>` | ✅ |
+| `onClick` d'un `<button>` | ✅ |
+| `onSubmit` d'un `<form>` | ✅ |
+| `onInput` d'un `<input>` | ✅ |
+| **`onChange` d'un `<input>`** | ❌ |
+| `onChange` d'un `<select>` (événement `change`) | ✅ |
+
+React fait normalement de `onChange` un synonyme de l'événement `input` pour un
+champ texte ; cette équivalence repose sur son suivi de valeur, que happy-dom ne
+satisfait pas. La convention du dépôt — `onInput` sur les champs texte
+(`components/composer.tsx:569`) — n'était donc pas un goût : c'était la seule
+qui fonctionne. Mon composant était l'outlier, **en code de production**, et le
+témoin avait raison.
+
+> **Quand plusieurs corrections plausibles échouent d'affilée, arrêter de
+> corriger et écrire une sonde qui n'importe RIEN du produit.** Elle coûte dix
+> minutes et rend un verdict binaire là où chaque correction rendait une
+> nouvelle hypothèse. Le signe qu'il est temps : la troisième cause « évidente »
+> qui ne change rien.
+
+Deux corollaires, payés dans le même lot :
+
+- **Un `expect` qui rend `undefined` plutôt que la valeur vide ne dit pas
+  « champ vide », il dit « élément absent ».** Lire les champs d'un formulaire
+  APRÈS un geste qui le démonte mesure autre chose que ce qu'on croit.
+- **Un élément CONTRÔLÉ dont le possesseur n'accepte pas le changement (un
+  espion, dans un témoin isolé) restaure sa valeur aussitôt.** On y mesure ce
+  qui est RAPPORTÉ, jamais ce que le champ retient — sinon le témoin échoue sur
+  une vérité qui ne dit rien du câblage.
+
+Prolonge [[reference_a_red_on_both_sides_of_the_diff_also_measures_the_machine]] :
+celle-là disait qu'un rouge des deux côtés mesure la machine ; celle-ci dit
+comment le PROUVER sans démonter le produit.
+
+## Leçon 622 — `isSet` n'existe que sur les champs OPTIONNELS ; un double qui honore MongoDB ne le sait pas
+
+*(Numérotée 618 sur `main`, renumérotée 621 à la promotion `dev → main` du 2026-09-16, puis 622 à celle du 2026-09-17 : `dev` portait déjà une 618 dans sa série continue 617-618-619-620, puis a alloué 621 dans cette même série pendant que `main` occupait le numéro. La garde `lessons-numbering-single-key-guard` a nommé les deux collisions — « 618 : lignes 32693, 32747 », puis « 621 : lignes 32693, 32935 » — ce qu'aucune fusion n'aurait signalé toute seule : `tasks/lessons.md` s'auto-fusionne sans conflit. **Un identifiant qui ne s'alloue pas ne collisionne pas (#5102) : c'est la MÊME leçon qui se fait renuméroter à chaque promotion, parce que c'est elle qui vit hors de la série continue.**)*
+
+#6811. Le correctif de #6452 (« un compte sans `blockedUserIds` doit rester
+cherchable ») a remplacé `NOT: { blockedUserIds: { has } }` par
+`OR: [{ blockedUserIds: { isSet: false } }, { NOT: { has } }]` — juste sur la
+sémantique MongoDB (absent ≠ null), et rejeté EN ENTIER par le client Prisma
+généré : `isSet` n'est exposé que pour les champs OPTIONNELS
+(`StringNullableListFilter`, le filtre d'une liste scalaire REQUISE
+`String[] @default([])`, ne le déclare pas). `PrismaClientValidationError`
+AVANT tout aller-retour réseau ⇒ 500 sur toute recherche de personne, en
+production, pendant toute la vie du correctif.
+
+Le témoin de #6452 était vert : il rejouait le `where` contre un DOUBLE écrit à
+la main (`mongo-where.ts`) qui implémente `isSet` sur un TABLEAU parce que
+MongoDB, lui, le ferait vraiment. **Le double honorait la sémantique du moteur ;
+il ne vérifiait à aucun moment que le CLIENT accepte la forme.** Et la
+signature aidait à ne rien voir : `contactLookupScope` rendait
+`Record<string, unknown>`, précisément pour échapper au typage Prisma — `tsc`
+ne pouvait donc rien dire non plus.
+
+> **Un double qui simule fidèlement le MOTEUR peut masquer un refus du CLIENT.**
+> Les deux couches ont des règles distinctes (le client valide la FORME avant
+> d'émettre, le moteur interprète le CONTENU une fois reçu), et un test qui ne
+> rejoue que la seconde ne peut pas voir un défaut de la première — même s'il a
+> été écrit spécifiquement pour un piège « absent vs null » déjà mesuré en
+> production.
+
+Le correctif change de FAMILLE, pas seulement de syntaxe : la direction
+« qui m'a bloqué » quitte le filtre de tableau NIÉ pour une requête POSITIVE
+déjà indexée (`getBlockRelatedUserIds`, `@@index([blockedUserIds])`),
+résolue par l'appelant et passée en `id: { notIn }` — la même forme qui gère
+déjà « les comptes que j'ai bloqués ». Une requête positive sur un champ absent
+rend naturellement `false` (« ne contient rien »), sans jamais avoir besoin de
+distinguer absence et négation ; c'est un filtre NIÉ qui a besoin de `isSet`
+pour ne pas se tromper sur ce cas, jamais l'inverse. **Devant un `NOT: {
+liste-scalaire: { has } }`, la question n'est pas « comment couvrir le cas
+absent ? » mais « ce filtre a-t-il besoin d'être nié ? »** — la version
+positive n'a pas le piège, et n'a pas besoin du témoin qui le couvre.
+
+**Pour qu'un témoin puisse voir CETTE classe de défaut**, il doit confronter la
+forme au client RÉEL, pas à un double — même un double « honnête » sur la
+sémantique visée. `contact-lookup-scope-prisma-client.test.ts` importe le
+client généré par un chemin RELATIF (`../../../../../../packages/shared/prisma/client`),
+en CONTOURNANT volontairement le `moduleNameMapper` qui stubbe
+`@meeshy/shared/prisma/client` pour le reste de la suite, et joue le `where`
+contre un hôte MongoDB injoignable à délai de sélection court : la validation
+de forme se fait AVANT la tentative réseau, donc `PrismaClientValidationError`
+signe un refus de forme sans qu'aucune base ne soit nécessaire — et le test
+« rougit sur le code d'hier » pour prouver qu'il peut vraiment tomber.
+
+Prolonge la note du dépôt (`services/gateway/CLAUDE.md` § « Tests — un témoin
+qui ne peut pas tomber n'est pas un témoin ») sur les doubles qui
+réimplémentent le corps d'une méthode : ici ce n'est pas la méthode qui était
+recopiée, c'est le MOTEUR — même défaut, une couche plus bas.
+## Leçon 618 — Une loi qui ne SAIT pas ce qu'elle cadre ne doit pas décider du rognage (2026-09-16)
+
+**Le fait.** Directive porteur : en plein écran, une scène de post ou de story ne
+doit plus laisser de bandes — « pas une troisième couche, juste agrandir le canvas
+à sa taille totale du viewport ». J'ai voulu faire rendre cela par le solveur de
+cadrage partagé, `MediaStageFraming`, en lui ajoutant un `Subject` : le cadre
+saurait s'il ajuste ou s'il couvre. Les témoins passaient. **Au simulateur, un
+média de post en plein cadre se posait EN HAUT À GAUCHE, à ses cotes CARDÉES
+(369 × 366), au lieu d'être centré.** Mesuré des deux côtés du diff : sans le
+sujet câblé, il est centré. J'ai sorti la moitié galerie de `dev` le jour même.
+
+**Ce qui l'explique.** Le solveur reçoit un viewport, un ratio et des couloirs. Il
+ne sait PAS ce qu'il cadre — et la règle à écrire dépend justement de cela :
+
+| ce que la page porte | ce que les bords valent | donc |
+|---|---|---|
+| une pièce jointe | **le contenu de l'expéditeur** | jamais rognée ; son hors-champ habillé est une finition |
+| une scène | **une surface de composition** | rognable ; la laisser en boîte aux lettres peint une surface que personne n'a composée |
+
+Deux natures, deux règles, une seule fonction pour les servir : le paramètre que
+j'ajoutais ne DONNAIT pas au solveur la connaissance qui lui manquait, il lui
+demandait de trancher une question dont la réponse vit chez l'appelant.
+
+> **Avant d'ajouter un paramètre à une loi partagée, demander si la loi pourrait
+> répondre SEULE à la question qu'il pose.** Si la réponse dépend de ce que
+> l'appelant est — et pas de ce qu'il passe —, le paramètre déplace la décision
+> sans déplacer le savoir, et la loi se met à décider pour des appelants qu'elle
+> ne connaît pas.
+
+**Le remède, et sa forme.** Le solveur garde son contrat `media <= frame` intact
+et gagne une fonction EN PLUS, `coverScale(frame:media:)` — pure, sans opinion,
+qui dit seulement « de combien faut-il agrandir pour couvrir ». **Qui l'appelle
+décide.** La page scène de la galerie l'appelle, la page image jamais ; le
+lecteur de story l'appelle pour son état `.immersive`, jamais pour le `.free` du
+composer — où couvrir rognerait la scène que l'auteur est en train de dessiner.
+
+**Le signe qui l'annonçait, et que je n'ai pas lu.** J'avais écrit moi-même sur
+l'issue, en constatant la régression : « le rognage appartient au canvas, qui
+sait ce qu'il compose ». La phrase juste était là, et j'ai quand même cherché la
+correction dans le solveur au tour suivant. **Une conclusion notée n'est pas une
+conclusion appliquée** — relire ses propres commentaires d'issue avant de
+reprendre un lot, au même titre qu'on relit les doc-comments (leçon 616).
+
+Sites : `MediaStageFraming.coverScale`, `StoryCanvasFraming.resolve(.immersive)`,
+`GalleryScenePage.canvasCoverScale`. Issue #6806.
+
+## Leçon 619
+
+**Un témoin ne garde que ce qu'une INSCRIPTION fait jouer — et la garde qui lit
+l'artefact LOCAL ne voit pas l'inscription manquante du dépôt.**
+
+`GallerySceneBackdropUnicityTests.swift` — le témoin de #6791, 148 lignes, 6 cas
+— n'était inscrit au `project.pbxproj` sur AUCUNE ref : ni sur les deux branches
+qui l'ont écrit, ni sur `dev`. Mesuré, pas déduit :
+`git show <ref>:apps/ios/Meeshy.xcodeproj/project.pbxproj | grep -c` rend **0 sur
+les quatre refs**. Il n'a donc jamais été compilé, jamais joué. Le code qu'il
+garde est juste ; le canal de statut dit vert ; personne ne ment.
+
+**Pourquoi la garde existante ne pouvait pas l'attraper.**
+`verify_test_classes_are_compiled()` (`meeshy.sh:1683`) est juste et bien placée :
+elle confronte les classes déclarées au bundle `MeeshyTests.xctest` RÉELLEMENT
+produit. Mais elle juge APRÈS le build — et le contrôle de fraîcheur
+(`meeshy.sh:389`) a déjà régénéré le `pbxproj` **sans le committer**. Au moment
+où elle lit le bundle, le fichier EST compilé. Elle rend vert, l'arbre de travail
+porte un `pbxproj` modifié que personne ne remarque, et le dépôt garde une
+référence manquante que le prochain `git checkout` emporte.
+
+> Une garde qui mesure l'artefact LOCAL ne peut rien dire de l'artefact COMMITTÉ.
+> Les deux se ressemblent tant qu'une étape silencieuse ne les sépare pas — ici
+> une régénération non committée, ailleurs une installation, un build, un cache.
+
+**La forme générale, trouvée le même jour sur l'autre substrat.** Une session
+voisine mesurait, sur `apps/web-v2`, deux règles livrées en TDD qu'AUCUNE donnée
+du corpus ne pouvait faire naître : `/feed` montait 13 `<img>`, zéro `<video>`,
+zéro `<audio>`. Deux surfaces, deux équipes, le même piège en 24 h. L'inscription
+manquante était le `pbxproj` chez l'un, le corpus et les deux listes
+(`package.json` + `ci.yml`) chez l'autre.
+
+**Ce qui rattrape n'est jamais la vigilance, c'est un témoin qui COMPTE les deux
+ensembles.** `check_test_registration.sh` confronte les `.swift` de
+`MeeshyTests/` au `pbxproj` **de `HEAD`**, avant tout build, et dit toujours ce
+qu'il a balayé — vert comme rouge : « 1028 fichiers de test balayés, 1 ABSENT ».
+Un compte est ce qui distingue une absence MESURÉE d'une absence déduite d'une
+recherche bornée.
+
+Sites : `apps/ios/scripts/check_test_registration.sh`, `meeshy.sh` (appel avant
+build). Issues #6839, #6791.
+## Leçon — un double qui honore la sémantique de la BASE n'atteste pas ce que le CLIENT accepte d'émettre (#6811)
+
+`contactLookupScope` a posé `blockedUserIds: { isSet: false }` pour répondre au
+piège « absent vs null » de #6452. `isSet` n'existe pas sur une liste scalaire
+REQUISE : Prisma ne le génère que pour les champs OPTIONNELS, et
+`StringNullableListFilter` ne déclare que `equals`, `has`, `hasEvery`,
+`hasSome`, `isEmpty`. Le client rejette la requête AVANT le moteur
+(`PrismaClientValidationError`), le `catch` de la route traduit en 500, et
+**les quatre appelants sont morts en production** — `GET /directory/people`,
+`GET /users/email/:email`, `GET /users/phone/:phone`, le matching du carnet.
+
+Trois gardes existaient, et aucune ne pouvait le voir :
+
+| garde | ce qu'elle atteste | pourquoi elle est restée verte |
+|---|---|---|
+| `contact-lookup-scope-blocked-absent.test.ts` | la forme SÉLECTIONNE les bons documents | son double (`mongo-where.ts`) implémente `isSet` sur un tableau, parce que MongoDB le ferait |
+| `tsc` | rien | la fonction rendait `Record<string, unknown>`, un type écrit POUR échapper à `UserWhereInput` |
+| la suite unitaire entière | rien | `moduleNameMapper` remplace `@meeshy/shared/prisma/client` par un STUB |
+
+> **Un double de base de données atteste la SÉMANTIQUE ; il n'atteste jamais
+> l'ACCEPTATION.** Ce sont deux questions disjointes — « ce `where` choisit-il
+> les bonnes lignes ? » et « le client consent-il à l'émettre ? » — et il faut
+> une garde pour chacune. L'issue #6452 le demandait explicitement à son critère
+> de fin (« un test d'intégration MongoDB ; un faux Prisma accepte toute
+> forme ») ; elle a été fermée avec un double plus fidèle, ce qui n'est pas la
+> même chose qu'un vrai client.
+
+Deux corollaires de méthode :
+
+- **Le type de retour EST la garde la moins chère.** `Prisma.UserWhereInput`
+  transforme la classe entière en erreur de compilation. Un `Record<string,
+  unknown>` sur un objet de requête est la MARQUE d'une déclaration manquante,
+  jamais une commodité — même famille que le `as any` qui NOMME le champ absent
+  (cycle 96).
+- **Un témoin peut interroger le vrai client sans base.** Une adresse morte
+  portant `serverSelectionTimeoutMS=50` rend le verdict du VALIDATEUR en
+  quelques millisecondes : refus ⇒ la forme est fausse, échec de connexion ⇒ la
+  forme est passée. C'est ce que fait
+  `contact-lookup-scope-prisma-accepts.test.ts`, et son premier cas est un
+  opérateur volontairement invalide — un témoin qui ne sait pas rougir n'atteste
+  rien.
+
+Le correctif ne réécrit pas la clause, il la SORT du `where` : le blocage, dans
+les deux directions, devient une LISTE (`blockedIdsAroundViewer`, bâtie sur la
+requête POSITIVE `blockedUserIds: { has: viewerId }` que sert
+`@@index([blockedUserIds])`). Un champ absent ne bloque personne, donc il ne
+figure pas dans la réponse — le piège de #6452 n'a plus de site où se poser.
+
+## Leçon — une leçon appliquée à UN des deux jumeaux du même fichier n'est pas apprise (#6820)
+
+`decode.ts` (`apps/web-v2`) porte DEUX décodeurs : `decodeMessage` et
+`decodeAttachment`, vingt lignes d'écart. #6080 a converti le PREMIER d'une
+énumération en un invariant, a posé l'outil générique (`sansNull`), a écrit la
+raison dans le code — « une énumération tenue à la main est un inventaire qui
+retient en silence chaque champ ajouté en amont » — et a laissé le SECOND
+énumérer cinq clés là où la passerelle en sert vingt et une.
+
+Le prix : `imageVariants: null` atteignait `attachmentSrcSet`, dont la garde ne
+connaît que `undefined`. « Cannot read properties of null (reading 'length') »,
+le fil ENTIER par terre dès qu'une image n'a pas de variantes WebP — donc toute
+image chiffrée, et toute pièce envoyée avant D4.
+
+Ce qui rend le motif coûteux, c'est que l'énumération ne se lit pas comme une
+dette : chacune de ses lignes est juste, et la liste s'allonge d'une clé par
+incident (#5805 en a ajouté quatre, #6221 une, celle-ci une sixième). Un
+correctif qui allonge la liste RESSEMBLE à un correctif, et laisse le défaut
+intact pour le champ suivant.
+
+> **Un correctif de CLASSE doit énumérer ses SITES avant de se déclarer fini.**
+> La question n'est pas « ai-je corrigé le site qui a levé ? » mais **« où
+> ailleurs cette même forme est-elle écrite ? »** — et le premier endroit à
+> regarder est le FICHIER qu'on vient de modifier : un jumeau à vingt lignes
+> échappe à la revue précisément parce qu'on croit avoir lu le fichier.
+
+Corollaire de témoin, vérifié ici : le témoin écrit pour la face que je croyais
+cassée (`thumbHash` → aplat de couleur arbitraire via `atob(null)`) est passé
+AVANT le correctif — `thumbHash` était l'une des cinq clés déjà défaites.
+**Un témoin qui passe au rouge-attendu est une mesure, pas une formalité** :
+c'est lui qui a corrigé mon analyse, et la face réellement silencieuse était
+l'autre (`width`/`height` → `aspect-ratio: "null / null"`, dont le témoin, lui,
+a rougi). Écrire le témoin de CHAQUE face supposée, puis lire lesquels rougissent,
+sépare le défaut mesuré du défaut raconté.
+
+Second corollaire, trouvé en appliquant cette leçon à elle-même : le TROISIÈME
+décodeur du fichier (`decodeConversation`) énumère lui aussi — une seule clé
+sur trente-huit champs optionnels. Mais **il ne se corrige PAS de la même
+ligne**, et c'est le point à retenir : ce qui rend `sansNull` sûr sur
+`Attachment` n'est pas une généralité, c'est un fait de TYPE — aucun de ses
+champs ne distingue « absent » de « null ». `Conversation` déclare au moins
+`currentUserRole?: string | null` où le type dit « `null` = le lecteur n'est
+pas membre ». Y passer `sansNull` effacerait cette distinction, et
+SILENCIEUSEMENT : son unique lecteur actuel fait `?? ''` et ne verrait rien.
+
+> **Reconnaître une forme n'autorise pas à rejouer le correctif.** Le correctif
+> d'une classe se justifie site par site, par l'argument qui le rend sûr
+> — ici : « tout champ optionnel dont `null` et `undefined` disent la même
+> chose ». Là où l'argument tombe, la ressemblance devient un piège, et le lot
+> honnête est une ISSUE (#6826), pas une ligne de plus.
+
+## Leçon 621
+
+**Un gate qui NOMME une surface et en MESURE une autre est indiscernable d'un
+gate juste — tant que la surface en trop reste vide.**
+
+`check-reels.mjs` portait l'invariante 9 : « le retour du navigateur quitte les
+Réels et ne laisse **AUCUN lecteur** ». Son implémentation :
+
+```js
+const players = (page) =>
+  page.evaluate(() => [...document.querySelectorAll('video, audio')].map((m) => ({
+    page: Number(m.closest('[data-reel-index]')?.getAttribute('data-reel-index') ?? -1),
+    playing: !m.paused && !m.ended,
+  })));
+// ... APRÈS un page.goBack() vers /feed :
+check(left.length === 0, `${label} : le retour ... aucun lecteur ne reste`);
+```
+
+Le sélecteur balaie **tout le document**, et le check s'évalue après un retour
+**vers le Flux** — il comptait donc les médias du FIL, l'écran même où l'on
+vient d'atterrir. L'invariante était juste tant qu'aucune carte du fil ne
+montait de `<video>` ni d'`<audio>`. #6807 en a posé deux (un post vidéo, un
+post sonore) : les **quatre** déclinaisons (clair/sombre × 390×844/320×568) ont
+rougi d'un coup, sur un lot qui ne touchait aucun fichier des Réels.
+
+**Le message d'échec portait déjà son diagnostic.** `page: -1` est la valeur de
+repli de `closest('[data-reel-index]') ?? -1` : elle DIT que ces éléments
+n'appartiennent à aucun réel. L'auteur avait anticipé le cas dans le repli et
+pas dans l'assertion. Lire la valeur de repli d'un message d'échec avant de
+chercher ailleurs coûte zéro seconde.
+
+**Jumelle de la 620, à un cran de distance.** La 620 dit qu'un témoin non
+inscrit est indiscernable d'un témoin vert ; celle-ci dit qu'un gate dont le
+sélecteur est plus large que sa phrase est indiscernable d'un gate juste. Dans
+les deux cas ce n'est pas le code qui ment — c'est la PREUVE qui ne mesure pas
+ce qu'elle annonce, et rien ne le signale tant que l'écart n'a pas de matière.
+
+**Ce qui a failli faire conclure faux.** Vert en local, rouge en CI : la pente
+naturelle est « la machine ». La mesure qui réfute cela en un appel, sans rien
+reconstruire — demander à `dev` le verdict du MÊME job :
+
+```bash
+gh api repos/<org>/<repo>/commits/$(git rev-parse origin/dev)/check-runs \
+  --jq '.check_runs[]|select(.name|test("<job>"))|"\(.name) :: \(.conclusion)"'
+```
+
+**Mais l'asymétrie ne prouve pas la causalité, et la prémisse est le
+DÉTERMINISME.** `succès(parent) ∧ échec(branche) ⇒ c'est le lot` n'est vrai que
+si le verdict est une FONCTION du code ; sur une suite qui contient un test
+temporel, c'est une variable aléatoire et un seul tirage ne distingue pas un lot
+fautif d'un tirage malheureux. Les deux mesures qui complètent, gratuites :
+**(1)** le diff touche-t-il un chemin dont dépend ce qui rougit (`git show
+--stat`, avant toute hypothèse) ; **(2)** rejouer le MÊME commit — deux verdicts
+sur un code identique et la question tombe.
+
+**How to apply.** Quand un lot fait apparaître un type d'élément sur une surface
+qui n'en avait pas, chercher les gates qui comptent ce type SANS le restreindre
+à leur propre surface :
+
+```bash
+grep -n "querySelectorAll('video\|querySelectorAll('audio\|querySelectorAll('\[role=" scripts/*.mjs
+```
+
+Un sélecteur non préfixé par le conteneur de sa surface est un faux positif en
+attente. Et jouer les gates VOISINS avant de pousser, pas seulement celui qu'on
+vient d'écrire : c'est la même famille que la leçon sur la chaîne de
+vérification locale qui rate l'étape qui juge.
+## Leçon 620
+
+**Une absence mesurée sur un CHEMIN ne mesure pas une FONCTION — et la garde
+qu'on vient d'écrire est elle-même un artefact qui attend son inscription.**
+
+Suite directe de la 619, un cran plus haut. `check_simulator_election.sh` et
+`check_test_registration.sh` (#6838, #6839) sont nés verts, avec leur fixture,
+et n'étaient exécutés par AUCUN workflow. Une garde qui ne tourne nulle part
+reproduit exactement le défaut qu'elle corrige : c'est la 619 dont le sujet
+n'est plus le témoin mais la garde.
+
+**La mesure qui a failli trancher à l'envers.** Une session voisine a mesuré
+« `ci.yml` ne cite aucun chemin sous `apps/ios/` » — exact, zéro occurrence — et
+en a conclu qu'aucune garde iOS n'y avait sa place. Or `ci.yml:536` exécute
+`scripts/check-swift-viewbuilder.sh`, **une garde iOS logée à la racine**, avec
+son propre commentaire qui dit pourquoi : « Ici (ubuntu, quelques secondes)
+plutôt que sur le runner macOS : `xcodebuild` coûte ~15 min et meurt à la
+première erreur ». Et `ios.yml` ne fait que la CITER en commentaire, sans jamais
+la jouer.
+
+> Un `grep` sur un RÉPERTOIRE répond « ce fichier ne parle pas de cet endroit ».
+> Il ne répond jamais « ce fichier ne fait pas cette chose ». Pour une garde, la
+> question est *qu'est-ce qui est GARDÉ*, pas *où habite le script* — et les deux
+> réponses divergent dès qu'un dépôt a plus d'une convention de rangement.
+
+**Ce qui ferme la boucle : un témoin qui ÉNUMÈRE au lieu de recopier.**
+`packages/shared/__tests__/ci/ios-gates-ci-parity.test.ts` lit le répertoire
+`apps/ios/scripts/` et exige de `ios.yml` qu'il exécute chaque `check_*.sh` —
+donc une garde neuve le fait rougir le jour où elle est écrite, sans que
+personne ait à penser à lui. Une liste recopiée aurait le défaut qu'elle
+surveille. Trois lois, parce qu'une inscription a trois façons de ne pas jouer :
+absente du YAML ; présente dans un job `continue-on-error` (qui TOURNE sans
+JUGER) ; présente mais suspendue au pool macOS, donc rendue trop tard pour
+servir. Plus une quatrième, sur l'énumération elle-même — **`[].every(...)` vaut
+`true`** : déplacer le répertoire verdirait le garde en ne vérifiant plus rien.
+
+**Le placement n'est pas un détail : le garde vit où il peut CONSTATER.** Ici
+dans la suite `shared`, la seule qui tourne sur CHAQUE PR — même raison que son
+voisin `ios-pr-compile-gate.test.ts`, né du même défaut en juillet (« le retrait
+du 2026-07-27 est passé inaperçu des semaines durant précisément parce que rien
+ne le surveillait »). Un garde hébergé dans le périmètre qu'il surveille se tait
+en même temps que lui.
+
+**Preuve, dans la minute.** Inscrite, la garde a immédiatement attrapé une
+troisième occurrence du défaut de la 619 :
+`PostSceneCardHeightCapGuardTests.swift`, le témoin de #6767 — le commit de TÊTE
+de `dev` — présent sur disque, absent du `pbxproj` committé. Trois en un jour
+(#6791, #6810, #6767). Le taux n'était pas connu avant d'avoir de quoi le
+compter : **une classe de défauts qu'on croit rare est souvent une classe qu'on
+n'a aucun moyen de voir.**
+
+## Leçon — un témoin VERT ici et ROUGE en CI, sur un constat que le produit satisfait, mesure la MACHINE (#6862, PR #6934)
+
+`check-admin-souverain` — le gate navigateur de la lecture souveraine — est passé
+**vert sur le poste** et **rouge en CI**, sur UN de ses cinquante constats :
+« `<dialog>` natif, réellement ouvert ». Les quarante-neuf autres, dont le Prisme
+du membre prouvé par contraste et l'absence de trace sur le disque, étaient verts
+des deux côtés.
+
+Le dépôt connaît déjà les deux formes symétriques : « ROUGE des deux côtés du diff
+mesure aussi la machine », « VERT des deux côtés mesure la machine ». **Celle-ci
+est la troisième, et c'est la plus instructive : vert d'un côté, rouge de l'autre,
+sur un produit INCHANGÉ.** Elle ne dit rien du produit — elle dit que le témoin a
+mesuré autre chose que sa règle. Deux défauts vivaient dans la même ligne :
+
+1. **`document.querySelector('dialog')` rend le PREMIER `<dialog>` du document.**
+   La fiche d'un membre en monte quatre (mot de passe, édition, bannissement,
+   conversation) et rien n'ordonne celui qu'on vient d'ouvrir en tête. Le témoin
+   interrogeait un voisin — et lequel dépendait de l'ordre de peinture.
+   *Un sélecteur non SCOPÉ dans une page qui monte plusieurs instances du même
+   élément est un tirage au sort déguisé en assertion.*
+2. **`showModal()` vit dans un effet.** L'interroger juste après le clic, sans
+   attendre, mesure l'ORDONNANCEMENT de l'exécuteur. Rapide sur un poste, chargé
+   sur un runner. Les constats voisins du même gate passaient tous par une boucle
+   d'attente ; celui-là, seul, ne l'avait pas.
+
+**La correction DURCIT, elle ne cède pas.** La condition passe de `.open` à
+`.open && matches(':modal')` — `:modal` est vrai pour `showModal()` et **faux**
+pour `<dialog open>`. Le témoin n'accepte plus un panneau simplement visible : il
+exige celui qui piège le focus et répond à Échap, ce que la doctrine de `Sheet`
+promet en toutes lettres.
+
+C'est le point décisif. Ce constat était la **seule** garde de ce comportement :
+`showModal()` ne piège rien sous happy-dom, donc aucun unitaire ne peut le rendre
+— tous les rapports du chantier le portaient en « reste ouvert ». Le faire verdir
+en l'affaiblissant aurait retiré la garde en laissant le libellé, c'est-à-dire
+**fabriqué le pire état possible : un témoin vert qui ne garde plus rien.**
+
+> Devant un témoin vert ici et rouge là-bas, la question n'est pas « comment le
+> faire passer ? » mais **« qu'a-t-il mesuré d'autre que sa règle ? »** — et la
+> réponse se cherche dans ce que l'assertion touche EN PLUS de son sujet :
+> l'ordre du document, l'ordonnancement, l'horloge, la locale de la machine.
+> Puis on resserre sur le sujet, et on en profite pour serrer la règle.
+
+Mutation jouée : `dialog.showModal()` → `dialog.show()` dans `sheet.tsx` ⇒ gate
+ROUGE, « 1 échec(s) sur 50 constats », sur ce constat exactement. Source
+restaurée, gate vert, 50/50.
+## Leçon 623 — Un témoin qui AMORCE l'état qu'il mesure peut RÉPARER ce que le produit détruit
+
+**Le gate navigateur de la mise à jour de web-v2 (#6936) devait prouver « la
+session survit à l'invalidation de tout le cache ».** Il pose la session dans le
+`localStorage` par un `addInitScript` de Playwright — qui s'exécute à CHAQUE
+document, donc aussi après le rechargement que le gate déclenche. Pour ne pas
+réécrire par-dessus ce que le produit vient de purger, l'amorçage était gardé
+par un drapeau… rangé dans le `localStorage` lui-même.
+
+**La mutation l'a révélé, la passe nominale ne pouvait pas.** Avec une purge
+fautive qui faisait `localStorage.clear()`, le drapeau partait AVEC la session,
+l'amorçage se rejouait au rechargement, et le gate affichait « `meeshy.session`
+est intacte après la mise à jour » — vert, sur un produit qui venait de
+déconnecter son lecteur. Au rang nominal, drapeau dedans ou dehors rendent le
+même verdict : le défaut du témoin n'est visible QUE sous la mutation qu'il est
+censé attraper.
+
+> **Le marqueur « déjà amorcé » d'un témoin ne doit jamais vivre dans le magasin
+> que le témoin mesure.** Ici `sessionStorage` (il survit au rechargement dans
+> le même onglet, et le produit n'y touche pas). La question à poser à tout
+> harnais qui (ré)installe une précondition : *si le produit détruit CE que je
+> mesure, mon harnais le remet-il en place sans le dire ?*
+
+**Corollaire, sur la même clé et dans le même lot : quand la version NEUVE
+réécrit légitimement ce que l'ancienne a purgé, l'état final n'est pas
+mesurable — c'est la SUITE des gestes qui l'est.** « `meeshy.query-cache` est
+absente après le rechargement » est faux par construction : le cache de requêtes
+se repersiste dans les 250 ms qui suivent la première requête de la nouvelle
+version. Le gate journalise donc chaque `setItem`/`removeItem` de cette clé (en
+`sessionStorage`, qui traverse le rechargement) et exige que le DERNIER geste
+avant le rechargement soit un retrait. Mutation : sans le verrou de persistance,
+trois écritures apparaissent après ce retrait — le `pagehide` du rechargement
+réécrivait ce que la purge venait d'effacer. Une assertion sur un ÉTAT aurait
+été soit toujours verte, soit instable ; une assertion sur un ORDRE nomme
+exactement le défaut.

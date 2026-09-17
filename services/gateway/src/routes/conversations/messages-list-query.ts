@@ -9,7 +9,7 @@
  * `messages-list.ts`. Voir `messages.ts` pour le composeur
  * (`registerMessagesRoutes`).
  */
-import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import { aggregateAttachmentReactions } from '../../socketio/serializeAttachmentForSocket';
 import {
   buildPostReplyTo,
@@ -23,13 +23,33 @@ import { redactForwardedAttachmentUrlsIn } from '../../services/preferences/forw
 import { loadPersonalHistoryHidingByConversation, NO_PERSONAL_HIDING } from '../../services/personalHistoryFilter';
 import { attachmentMediaSelect, attachmentFullSelect, attachmentForwardPreviewSelect } from '../../services/attachments/attachmentIncludes';
 import { attachmentProtectionSelect } from '../admin/media-protection';
-import { resolveParticipantAvatar, resolveParticipantDisplayName, resolveAnonymousSenderIdentity } from '@meeshy/shared/utils/participant-helpers';
-import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
+import {
+  resolveParticipantAvatar,
+  resolveParticipantDisplayName,
+  resolveAnonymousSenderIdentity,
+  type AvatarBearingParticipant,
+  type DisplayNameBearingParticipant,
+} from '@meeshy/shared/utils/participant-helpers';
+import { applyPresenceVisibilityAsOffline, type PresenceVisibility, type PresenceMissingEntryPolicy } from '@meeshy/shared/utils/presence-visibility';
 import { transformTranslationsToArray } from '../../utils/translation-transformer';
 import { normalizeLanguageForDedup, makeLanguageFilter } from '@meeshy/shared/utils/language-normalize';
 import { servedQuotedMessage } from '../../services/messaging/servedQuotedMessage';
+import { attachmentReplyToFromMetadata } from '../../services/messaging/attachmentReplySnapshot';
 import { messageSenderUserSelect } from './utils/message-sender-select';
 import { logger } from './messages-shared';
+import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
+import type {
+  AttachmentAudioTranslationEntry,
+  CurrentUserConsumption,
+  RawMessageAttachment,
+  CleanedAttachment,
+  RawMessageSender,
+  MessageProtectionRow,
+  RawMessageRow,
+  MappedMessageRow,
+} from './messages-list-query-types';
+
+export type { CurrentUserConsumption } from './messages-list-query-types';
 
 /// Un message cité PROTÉGÉ (vue unique, flouté, chiffré) ne fait voyager que
 /// son placeholder — ni texte, ni traduction, ni vignette, ni ThumbHash, ni
@@ -45,11 +65,11 @@ import { logger } from './messages-shared';
  * Fixe spécifiquement voiceSimilarityScore: false -> null pour compatibilité schéma
  */
 function cleanAttachmentsForApi(
-  attachments: any[],
+  attachments: readonly RawMessageAttachment[] | null | undefined,
   languageFilter?: readonly string[],
   currentParticipantId?: string,
   consumptionMap?: Map<string, CurrentUserConsumption>
-): any[] {
+): readonly CleanedAttachment[] | null | undefined {
   if (!attachments || !Array.isArray(attachments)) {
     return attachments;
   }
@@ -64,8 +84,8 @@ function cleanAttachmentsForApi(
     logger.debug(`🧹 [CLEAN] Nettoyage de ${attachments.length} attachment(s) pour l'API`);
   }
 
-  return attachments.map((att, attIndex) => {
-    const cleaned = { ...att };
+  return attachments.map((att, attIndex): CleanedAttachment => {
+    const cleaned: CleanedAttachment = { ...att };
 
     // BUG2 A' — agréger les réactions par-image en reactionSummary + currentUserReactions
     // (miroir des réactions message-level) et retirer les rows brutes.
@@ -79,55 +99,57 @@ function cleanAttachmentsForApi(
     // l'avait retirée parce qu'elle mourait à la sérialisation ; l'ordre
     // corrigé est déclaration → projection → lecteur. `null` = jamais consommé
     // par ce participant, ce qu'un lecteur doit distinguer de « position 0 ».
-    cleaned.currentUserConsumption = consumptionMap?.get(att.id) ?? null;
+    cleaned.currentUserConsumption = (att.id ? consumptionMap?.get(att.id) : undefined) ?? null;
 
     // Nettoyer la transcription
-    if (cleaned.transcription && cleaned.transcription.segments) {
-      const originalSegment = cleaned.transcription.segments[0];
+    const transcription = cleaned.transcription;
+    if (transcription && transcription.segments) {
+      const segments = transcription.segments;
+      const originalSegment = segments[0];
 
       // Log speakerAnalysis
       let speakerInfo = '';
-      if (cleaned.transcription.speakerAnalysis) {
-        const speakers = cleaned.transcription.speakerAnalysis.speakers || [];
-        const withVoiceChars = speakers.filter((s: any) => s.voiceCharacteristics).length;
+      if (transcription.speakerAnalysis) {
+        const speakers = transcription.speakerAnalysis.speakers || [];
+        const withVoiceChars = speakers.filter((s) => s.voiceCharacteristics).length;
         speakerInfo = `speakerAnalysis: ${speakers.length} speaker(s), voiceChars: ${withVoiceChars}/${speakers.length}`;
         if (withVoiceChars > 0) {
-          const firstSpeaker = speakers.find((s: any) => s.voiceCharacteristics);
-          speakerInfo += `, firstSpeaker: sid=${firstSpeaker.sid}, pitch=${firstSpeaker.voiceCharacteristics.pitch?.mean_hz}Hz`;
+          const firstSpeaker = speakers.find((s) => s.voiceCharacteristics);
+          speakerInfo += `, firstSpeaker: sid=${firstSpeaker?.sid}, pitch=${firstSpeaker?.voiceCharacteristics?.pitch?.mean_hz}Hz`;
         }
       } else {
         speakerInfo = '⚠️ AUCUN speakerAnalysis';
       }
 
-      logger.debug(`🧹 [CLEAN] Attachment ${attIndex} - Transcription: ${cleaned.transcription.segments.length} segments | ${speakerInfo} | segment[0]: hasStartMs=${'startMs' in originalSegment}, hasEndMs=${'endMs' in originalSegment}, hasSpeakerId=${'speakerId' in originalSegment}, voiceSimilarityScoreType=${typeof originalSegment.voiceSimilarityScore}, voiceSimilarityScoreValue=${originalSegment.voiceSimilarityScore}`);
+      logger.debug(`🧹 [CLEAN] Attachment ${attIndex} - Transcription: ${segments.length} segments | ${speakerInfo} | segment[0]: hasStartMs=${'startMs' in originalSegment}, hasEndMs=${'endMs' in originalSegment}, hasSpeakerId=${'speakerId' in originalSegment}, voiceSimilarityScoreType=${typeof originalSegment.voiceSimilarityScore}, voiceSimilarityScoreValue=${originalSegment.voiceSimilarityScore}`);
 
-      cleaned.transcription.segments = cleaned.transcription.segments.map((seg: any) => ({
+      transcription.segments = segments.map((seg) => ({
         ...seg,
         // Convertir false/true en null (schéma attend number | null)
         voiceSimilarityScore: typeof seg.voiceSimilarityScore === 'number' ? seg.voiceSimilarityScore : null
       }));
 
-      const cleanedSegment = cleaned.transcription.segments[0];
+      const cleanedSegment = transcription.segments[0];
       logger.debug(`🧹 [CLEAN] Segment nettoyé [0]: text="${cleanedSegment.text}", startMs=${cleanedSegment.startMs}, endMs=${cleanedSegment.endMs}, speakerId=${cleanedSegment.speakerId}, voiceSimilarityScore=${cleanedSegment.voiceSimilarityScore}, confidence=${cleanedSegment.confidence}`);
     }
 
     // Nettoyer les traductions
-    if (cleaned.translations && typeof cleaned.translations === 'object') {
-      const langs = Object.keys(cleaned.translations);
+    const translations = cleaned.translations;
+    if (translations && typeof translations === 'object') {
+      const langs = Object.keys(translations);
       const translationsInfo = langs.map(lang => {
-        const trans = cleaned.translations[lang] as any;
+        const trans = translations[lang];
         return `${lang}(url="${trans.url || '⚠️ VIDE'}", segments=${trans.segments?.length || 0})`;
       }).join(', ');
 
       logger.debug(`🧹 [CLEAN] Attachment ${attIndex} - Traductions: ${langs.length} langue(s) [${translationsInfo}]`);
 
-      const cleanedTranslations: any = {};
-      for (const [lang, translation] of Object.entries(cleaned.translations)) {
+      const cleanedTranslations: Record<string, AttachmentAudioTranslationEntry> = {};
+      for (const [lang, translation] of Object.entries(translations)) {
         if (matchesLanguage && !matchesLanguage(lang)) continue;
-        const trans = translation as any;
         cleanedTranslations[lang] = {
-          ...trans,
-          segments: trans.segments?.map((seg: any) => ({
+          ...translation,
+          segments: translation.segments?.map((seg) => ({
             ...seg,
             // Convertir false/true en null (schéma attend number | null)
             voiceSimilarityScore: typeof seg.voiceSimilarityScore === 'number' ? seg.voiceSimilarityScore : null
@@ -204,14 +226,7 @@ export const MESSAGE_PROTECTION_SELECT = {
 } as const;
 
 /** Projette les mêmes six champs depuis une ligne Prisma déjà chargée — le pendant servi de `MESSAGE_PROTECTION_SELECT`. */
-export function mapMessageProtectionFields(message: any): {
-  isViewOnce: any;
-  maxViewOnceCount: any;
-  viewOnceCount: any;
-  isBlurred: any;
-  effectFlags: any;
-  expiresAt: any;
-} {
+export function mapMessageProtectionFields(message: MessageProtectionRow): MessageProtectionRow {
   return {
     isViewOnce: message.isViewOnce,
     maxViewOnceCount: message.maxViewOnceCount,
@@ -229,11 +244,11 @@ export function mapMessageProtectionFields(message: any): {
 export function buildMessageListSelect(options: {
   includeTranslations: boolean;
   includeReplies: boolean;
-}): any {
+}): Prisma.MessageSelect {
   const { includeTranslations, includeReplies } = options;
       // Construire le select Prisma dynamiquement selon les paramètres d'inclusion
       // (avant les requêtes pour permettre la parallélisation)
-      const messageSelect: any = {
+      const messageSelect: Prisma.MessageSelect = {
         // ===== CHAMPS DE BASE =====
         id: true,
         // Idempotency key — exposed so clients reconcile optimistic rows by
@@ -397,7 +412,23 @@ export function buildMessageListSelect(options: {
                 }
               }
             },
-            attachments: { select: attachmentFullSelect, take: 4 },
+            // #6164 — l'ordre était ABSENT : « la première pièce » que toute
+            // citation rendait était donc ARBITRAIRE d'un appel à l'autre,
+            // MongoDB ne promettant aucun ordre sans `orderBy`. Un défaut pire
+            // que « la 1re au lieu de la 3e » : le même message ne se citait
+            // pas deux fois pareil. Les deux champs existent sur
+            // `MessageAttachment` ; `id` départage deux pièces jointes
+            // enregistrées dans la même milliseconde.
+            //
+            // Le `take` NE MONTE PAS à 10 : chaque message du fil le paierait,
+            // pour une citation qui n'en rend qu'une. La pièce NOMMÉE qui
+            // tombe hors de la fenêtre est rattrapée par son ID, en UNE requête
+            // par page (`backfillCitedAttachments`).
+            attachments: {
+              select: attachmentFullSelect,
+              orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+              take: 4,
+            },
             _count: {
               select: {
                 reactions: true
@@ -419,7 +450,8 @@ export function buildMessageListSelect(options: {
 export async function loadMessageReadStatusMap(
   prisma: PrismaClient,
   conversationId: string,
-  messages: any[],
+  // `unknown[]` : l'appelant (`messages-list.ts`) construit `messages` via un `select` typé `any` — préexistant.
+  messages: readonly unknown[],
   hasAuthenticatedUserId: boolean
 ): Promise<Map<string, {
   deliveredCount: number;
@@ -453,7 +485,7 @@ export async function loadMessageReadStatusMap(
           const readStatusService = new MessageReadStatusService(prisma);
           const statuses = await readStatusService.getConversationReadStatuses(
             conversationId,
-            (messages as any[]).map((m: any) => m.id)
+            (messages as ReadonlyArray<{ readonly id: string }>).map((m) => m.id)
           );
           for (const [messageId, status] of statuses) {
             readStatusMap.set(messageId, {
@@ -479,19 +511,6 @@ export async function loadMessageReadStatusMap(
 }
 
 /**
- * La progression PERSONNELLE de lecture d'un participant sur une pièce jointe.
- *
- * Sert la reprise cross-device : rouvrir un vocal ou une vidéo repart là où on
- * s'était arrêté, sur n'importe quel appareil (#3909).
- */
-export type CurrentUserConsumption = {
-  lastPlayPositionMs: number | null;
-  listenedComplete: boolean;
-  lastWatchPositionMs: number | null;
-  watchedComplete: boolean;
-};
-
-/**
  * Charge la progression du participant courant sur les pièces jointes de la
  * PAGE — une seule requête, bornée aux identifiants rendus, scopée au
  * participant. Miroir exact de `userReactionsMap`.
@@ -511,14 +530,16 @@ export type CurrentUserConsumption = {
  */
 export async function loadCurrentUserConsumptionMap(
   prisma: PrismaClient,
-  messages: readonly any[],
+  // `unknown[]`, même raison que `loadMessageReadStatusMap` ci-dessus.
+  messages: readonly unknown[],
   currentParticipantId: string | undefined
 ): Promise<Map<string, CurrentUserConsumption>> {
   const map = new Map<string, CurrentUserConsumption>();
   if (!currentParticipantId || messages.length === 0) return map;
 
-  const attachmentIds: string[] = messages.flatMap((m: any) =>
-    Array.isArray(m.attachments) ? m.attachments.map((a: any) => a.id) : []
+  const rows = messages as ReadonlyArray<{ readonly attachments?: ReadonlyArray<{ readonly id?: string | null }> | null }>;
+  const attachmentIds: string[] = rows.flatMap((m) =>
+    Array.isArray(m.attachments) ? m.attachments.map((a) => a.id).filter((id): id is string => !!id) : []
   );
   if (attachmentIds.length === 0) return map;
 
@@ -573,13 +594,14 @@ export type MessageRowMappingContext = {
     deliveredToAllAt: Date | null;
     readByAllAt: Date | null;
   }>;
-  senderPresenceVis: any;
-  listMissingEntry: any;
+  senderPresenceVis: Map<string, PresenceVisibility>;
+  listMissingEntry: PresenceMissingEntryPolicy;
   /** #3909 — la progression de lecture du participant, par pièce jointe. */
   consumptionMap: Map<string, CurrentUserConsumption>;
 };
 
-export function mapMessageRowForList(message: any, ctx: MessageRowMappingContext): any {
+/** Retour `any` DÉLIBÉRÉ : l'appelant (`messages-list.ts`) lit `mappedMessages` sans annotation propre. `mappedMessage`, construit ci-dessous, est lui pleinement typé. */
+export function mapMessageRowForList(message: RawMessageRow, ctx: MessageRowMappingContext): any {
   const {
     includeTranslations,
     includeReplies,
@@ -591,7 +613,7 @@ export function mapMessageRowForList(message: any, ctx: MessageRowMappingContext
     listMissingEntry,
   } = ctx;
         // Construire l'objet de réponse aligné avec GatewayMessage
-        const mappedMessage: any = {
+        const mappedMessage: MappedMessageRow = {
           // Identifiants
           id: message.id,
           // Idempotency key — lets clients reconcile an optimistic send with
@@ -676,29 +698,31 @@ export function mapMessageRowForList(message: any, ctx: MessageRowMappingContext
 
           // Relations obligatoires
           sender: message.sender ? (() => {
+            // Capturé en local : la narrowing ne traverse pas la fermeture de cette IIFE.
+            const sender = message.sender as RawMessageSender;
             // PII : le profil de session (email/birthday) ne sort JAMAIS — on
             // en résout l'identité puis on le détruit avant le spread.
-            const { anonymousSession: _anonymousSession, ...senderData } = message.sender;
-            const anonymousIdentity = message.sender.type === 'anonymous'
-              ? resolveAnonymousSenderIdentity(message.sender)
+            const { anonymousSession: _anonymousSession, ...senderData } = sender;
+            const anonymousIdentity = sender.type === 'anonymous'
+              ? resolveAnonymousSenderIdentity(sender)
               : null;
             return applyPresenceVisibilityAsOffline(
               {
                 ...senderData,
                 username: anonymousIdentity?.username
-                  ?? message.sender.user?.username ?? message.sender.username ?? null,
+                  ?? sender.user?.username ?? sender.username ?? null,
                 // T16 — firstName/lastName were serialized but read by no client and
                 // are no longer fetched (messageSenderUserSelect trims them).
                 // Auteur sans compte : le nom DONNÉ au formulaire prime, le pseudo
                 // ano_ descend en handle (`username` ci-dessus).
                 displayName: anonymousIdentity && anonymousIdentity.displayName
                   ? anonymousIdentity.displayName
-                  : resolveParticipantDisplayName(message.sender),
-                avatar: resolveParticipantAvatar(message.sender),
-                isOnline: message.sender.user?.isOnline ?? message.sender.isOnline ?? null,
-                lastActiveAt: message.sender.user?.lastActiveAt ?? message.sender.lastActiveAt ?? null,
+                  : resolveParticipantDisplayName(sender),
+                avatar: resolveParticipantAvatar(sender),
+                isOnline: sender.user?.isOnline ?? sender.isOnline ?? null,
+                lastActiveAt: sender.user?.lastActiveAt ?? sender.lastActiveAt ?? null,
               },
-              message.sender.userId ? senderPresenceVis.get(message.sender.userId) : undefined,
+              sender.userId ? senderPresenceVis.get(sender.userId) : undefined,
               { onMissingEntry: listMissingEntry },
             );
           })() : null,
@@ -711,12 +735,12 @@ export function mapMessageRowForList(message: any, ctx: MessageRowMappingContext
           // Transformer JSON vers array pour rétrocompatibilité frontend
           mappedMessage.translations = transformTranslationsToArray(
             message.id,
-            message.translations as Record<string, any>,
+            message.translations,
             hasLanguageFilter ? { languages: languageFilter } : undefined
           );
         }
         if (includeReplies && message.replyTo) {
-          const replySender = (message as any).replyTo.sender;
+          const replySender = message.replyTo.sender;
           // Lot 2 : hoistLocationOnto hisse metadata.location du message CITÉ
           // — sans lui, une citation d'un message géolocalisé n'affiche
           // jamais sa position, même si la liste principale la restitue.
@@ -732,6 +756,11 @@ export function mapMessageRowForList(message: any, ctx: MessageRowMappingContext
             ...servedQuotedMessage(message.replyTo, {
               includeTranslations,
               languages: hasLanguageFilter ? languageFilter : undefined,
+              // #6164 — l'instantané est gravé sur le message QUI CITE, pas sur
+              // le message cité : c'est `message.metadata`, jamais
+              // `message.replyTo.metadata` (qui porterait la pièce que le
+              // message CITÉ visait lui-même, un cran plus haut dans le fil).
+              attachmentReplyTo: attachmentReplyToFromMetadata(message.metadata),
             }),
             sender: replySender ? {
               ...replySender,
@@ -770,12 +799,12 @@ export function mapMessageRowForList(message: any, ctx: MessageRowMappingContext
 export async function enrichForwardedMessagesForList(
   prisma: PrismaClient,
   userId: string | null | undefined,
-  mappedMessages: any[]
+  mappedMessages: MappedMessageRow[]
 ): Promise<void> {
       // Charger les détails du message d'origine et de la conversation source
       const forwardedIds = mappedMessages
-        .filter((m: any) => m.forwardedFromId)
-        .map((m: any) => m.forwardedFromId);
+        .filter((m) => m.forwardedFromId)
+        .map((m) => m.forwardedFromId as string);
 
       if (forwardedIds.length > 0) {
         const uniqueForwardedIds = [...new Set(forwardedIds)] as string[];
@@ -795,29 +824,37 @@ export async function enrichForwardedMessagesForList(
           // la volonté compte, et c'est justement le NOM DE GROUPE que la
           // directive ajoute à la portée de la règle.
           mappedMessages
-            .filter((m: any) => m.forwardedFromId || m.forwardedFromConversationId)
-            .map((m: any) => m.sender?.userId ?? null)
+            .filter((m) => m.forwardedFromId || m.forwardedFromConversationId)
+            .map((m) => m.sender?.userId ?? null)
         );
 
-        const forwardedMessages = await prisma.message.findMany({
-          where: { id: { in: uniqueForwardedIds } },
-          select: {
-            id: true,
-            content: true,
-            senderId: true,
-            conversationId: true,
-            messageType: true,
-            createdAt: true,
-            // Lot 2 : le message d'ORIGINE transféré est un objet imbriqué —
-            // sans `metadata`, un message géolocalisé transféré n'affiche
-            // jamais sa position dans l'aperçu de transfert.
-            metadata: true,
-            sender: {
-              select: { id: true, userId: true, displayName: true, avatar: true, user: { select: { username: true } } }
-            },
-            attachments: { select: attachmentForwardPreviewSelect, take: 1 }
-          }
-        });
+        // Les sources d'une même page peuvent vivre dans PLUSIEURS
+        // conversations différentes (#6516) : la portée de la réparation ne
+        // peut donc pas être connue avant la lecture — elle se DÉCOUVRE, sur
+        // les mêmes ids, sans jamais sélectionner `sender`.
+        const forwardedMessages = await withOrphanedSenderRepair(
+          { prisma, conversationIds: discoverConversationIdsByMessageIds(prisma, uniqueForwardedIds) },
+          () =>
+            prisma.message.findMany({
+              where: { id: { in: uniqueForwardedIds } },
+              select: {
+                id: true,
+                content: true,
+                senderId: true,
+                conversationId: true,
+                messageType: true,
+                createdAt: true,
+                // Lot 2 : le message d'ORIGINE transféré est un objet imbriqué —
+                // sans `metadata`, un message géolocalisé transféré n'affiche
+                // jamais sa position dans l'aperçu de transfert.
+                metadata: true,
+                sender: {
+                  select: { id: true, userId: true, displayName: true, avatar: true, user: { select: { username: true } } }
+                },
+                attachments: { select: attachmentForwardPreviewSelect, take: 1 }
+              }
+            })
+        );
 
         // Masquage personnel du LECTEUR sur le message SOURCE (#3616) — voir
         // le doc-comment de la fonction. Une lecture groupée par conversation
@@ -842,9 +879,9 @@ export async function enrichForwardedMessagesForList(
 
         // Charger les conversations sources
         const convIds = mappedMessages
-          .filter((m: any) => m.forwardedFromConversationId)
-          .map((m: any) => m.forwardedFromConversationId);
-        const uniqueConvIds = [...new Set(convIds)] as string[];
+          .filter((m) => m.forwardedFromConversationId)
+          .map((m) => m.forwardedFromConversationId as string);
+        const uniqueConvIds = [...new Set(convIds)];
 
         let convMap = new Map<string, any>();
         if (uniqueConvIds.length > 0) {
@@ -876,18 +913,25 @@ export async function enrichForwardedMessagesForList(
               // Lot 2 : la position du message TRANSFÉRÉ (l'objet imbriqué),
               // pas celle de `msg` lui-même — sans elle, un message transféré
               // géolocalisé n'affiche jamais sa position dans l'aperçu.
-              const forwardedPlace = sharedPlaceFromMetadata((original as { metadata?: unknown }).metadata);
-              const forwardedSticker = stickerFromMetadata((original as { metadata?: unknown }).metadata);
+              const forwardedPlace = sharedPlaceFromMetadata(original.metadata);
+              const forwardedSticker = stickerFromMetadata(original.metadata);
+              // `select` plus étroit que les résolveurs partagés : un cast unique plutôt que trois `as any`, comportement inchangé.
+              const originalSender = original.sender as
+                | (AvatarBearingParticipant & DisplayNameBearingParticipant & {
+                    username?: string | null;
+                    user?: { username?: string | null } | null;
+                  })
+                | null;
               msg.forwardedFrom = {
                 id: original.id,
                 content: original.content,
                 messageType: original.messageType,
                 createdAt: original.createdAt,
-                sender: original.sender ? {
-                  ...original.sender,
-                  username: (original.sender as any).user?.username ?? (original.sender as any).username ?? null,
-                  displayName: resolveParticipantDisplayName(original.sender as any),
-                  avatar: resolveParticipantAvatar(original.sender as any),
+                sender: originalSender ? {
+                  ...originalSender,
+                  username: originalSender.user?.username ?? originalSender.username ?? null,
+                  displayName: resolveParticipantDisplayName(originalSender),
+                  avatar: resolveParticipantAvatar(originalSender),
                 } : null,
                 attachments: original.attachments,
                 ...(forwardedPlace ? { location: forwardedPlace } : {}),
@@ -913,7 +957,7 @@ export async function enrichForwardedMessagesForList(
 
 export async function enrichPostReplyMessagesForList(
   prisma: PrismaClient,
-  mappedMessages: any[]
+  mappedMessages: MappedMessageRow[]
 ): Promise<void> {
       // ===== ENRICHIR LES RÉPONSES À UN POST (status/story/reel/post) =====
       // Source de vérité : le SNAPSHOT figé dans `metadata.postReplyTo`, capturé
@@ -928,8 +972,8 @@ export async function enrichPostReplyMessagesForList(
       }
 
       const legacyPostReplyIds = mappedMessages
-        .filter((m: any) => m.storyReplyToId && !m.postReplyTo)
-        .map((m: any) => m.storyReplyToId as string);
+        .filter((m) => m.storyReplyToId && !m.postReplyTo)
+        .map((m) => m.storyReplyToId as string);
 
       if (legacyPostReplyIds.length > 0) {
         const uniquePostIds = [...new Set(legacyPostReplyIds)];
@@ -946,3 +990,4 @@ export async function enrichPostReplyMessagesForList(
         }
       }
 }
+

@@ -40,6 +40,7 @@ export function Sheet({
   searchPlaceholder,
   search,
   onSearchChange,
+  bodyAs = 'ul',
   onClose,
   children,
 }: {
@@ -48,6 +49,21 @@ export function Sheet({
   searchPlaceholder?: string;
   search?: string;
   onSearchChange?: (value: string) => void;
+  /**
+   * CE QUE LE CORPS DE LA FEUILLE **EST** (#6862, lot C).
+   *
+   * `'ul'` (défaut) — une LISTE de choix : pays, langue, réactions. La feuille
+   * porte la liste, elle défile, ses enfants sont des `<li>`.
+   *
+   * `'div'` — un ARBRE, qui apporte sa propre structure et son propre
+   * défilement. La lecture souveraine y monte le fil virtualisé, dont la
+   * racine est une `<ol>` : un `<ol>` enfant DIRECT d'un `<ul>` n'est pas du
+   * HTML valide, et le lecteur d'écran annonce alors « liste, 1 élément »
+   * par-dessus la vraie liste de messages. La feuille rend ici le CADRE
+   * (flex, hauteur), jamais le défilement — c'est le virtualiseur qui a besoin
+   * de désigner son propre conteneur de défilement.
+   */
+  bodyAs?: 'ul' | 'div';
   onClose: () => void;
   children: ReactNode;
 }) {
@@ -136,7 +152,11 @@ export function Sheet({
           </div>
         )}
 
-        <ul className="flex-1 overflow-y-auto pb-safe">{children}</ul>
+        {bodyAs === 'ul' ? (
+          <ul className="flex-1 overflow-y-auto pb-safe">{children}</ul>
+        ) : (
+          <div className="flex min-h-0 flex-1 flex-col pb-safe">{children}</div>
+        )}
       </div>
     </dialog>
   );

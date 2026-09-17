@@ -25,9 +25,13 @@ final class FeedTranslationPatchTests: XCTestCase {
         return post
     }
 
-    private func makeComment(id: String, translatedContent: String? = nil) -> FeedComment {
+    private func makeComment(
+        id: String,
+        originalLanguage: String? = nil,
+        translatedContent: String? = nil
+    ) -> FeedComment {
         FeedComment(id: id, author: "bob", authorId: "b1", content: "Salut",
-                    translatedContent: translatedContent)
+                    originalLanguage: originalLanguage, translatedContent: translatedContent)
     }
 
     // MARK: - Post
@@ -55,16 +59,53 @@ final class FeedTranslationPatchTests: XCTestCase {
         XCTAssertEqual(post.translatedContent, "Hello", "la comparaison de langue est insensible à la casse")
     }
 
-    func test_applyPostTranslation_neverOverwritesAnAlreadyDisplayedTranslation() {
+    /// Un choix MANUEL du lecteur (`setTranslationOverride`, tap d'un
+    /// drapeau) n'est jamais écrasé par une traduction qui arrive ensuite —
+    /// elle est mergée dans `translations`, l'affichage n'est pas retouché.
+    func test_applyPostTranslation_manualOverride_isNotOverwritten() {
         var post = makePost(translatedContent: "Déjà traduit")
 
         FeedViewModel.applyPostTranslation(
             PostTranslation(text: "Hello"), language: "en",
-            preferredLanguages: ["en"], to: &post
+            preferredLanguages: ["en"], preserveManualOverride: true, to: &post
         )
 
         XCTAssertEqual(post.translatedContent, "Déjà traduit")
         XCTAssertEqual(post.translations?["en"]?.text, "Hello")
+    }
+
+    /// #6531 — la langue d'origine concourt à SON rang, jamais en
+    /// court-circuit : Prisme `[fr, pt]`, original `fr`, une traduction `pt`
+    /// arrive (rang 2) → le français (rang 1, l'original) reste affiché.
+    func test_applyPostTranslation_originalLanguageAtItsRank_winsOverLowerRankTranslation() {
+        var post = makePost() // originalLanguage: "fr", pas encore de translatedContent
+
+        FeedViewModel.applyPostTranslation(
+            PostTranslation(text: "Olá"), language: "pt",
+            preferredLanguages: ["fr", "pt"], to: &post
+        )
+
+        XCTAssertNil(post.translatedContent, "le français (rang 1, langue d'origine) doit primer sur le portugais")
+        XCTAssertEqual(post.translations?["pt"]?.text, "Olá")
+    }
+
+    /// #6531 — l'ORDRE D'ARRIVÉE entre deux traductions ne doit pas décider du
+    /// rang affiché : Prisme `[en, pt]`, `pt` arrive puis `en` → `en` gagne,
+    /// car il occupe le rang 1, malgré son arrivée après `pt`.
+    func test_applyPostTranslation_arrivalOrderDoesNotDecideTheDisplayedRank() {
+        var post = makePost() // originalLanguage "fr", hors Prisme ["en", "pt"]
+
+        FeedViewModel.applyPostTranslation(
+            PostTranslation(text: "Olá"), language: "pt",
+            preferredLanguages: ["en", "pt"], to: &post
+        )
+        XCTAssertEqual(post.translatedContent, "Olá", "pt est seul disponible pour l'instant")
+
+        FeedViewModel.applyPostTranslation(
+            PostTranslation(text: "Hello"), language: "en",
+            preferredLanguages: ["en", "pt"], to: &post
+        )
+        XCTAssertEqual(post.translatedContent, "Hello", "en gagne car il occupe le rang 1")
     }
 
     func test_applyPostTranslation_isIdempotent() {
@@ -113,6 +154,31 @@ final class FeedTranslationPatchTests: XCTestCase {
         )
 
         XCTAssertFalse(changed)
+    }
+
+    /// #6531 — même garde que `applyPostTranslation` : la langue d'origine du
+    /// commentaire, quand elle occupe un rang au moins aussi prioritaire que
+    /// la traduction qui arrive, n'est pas détrônée.
+    func test_applyCommentTranslation_originalLanguageAtHigherRank_isNotOverwritten() {
+        var post = makePost(comments: [makeComment(id: "c1", originalLanguage: "fr")])
+
+        let changed = FeedViewModel.applyCommentTranslation(
+            "Hi", commentId: "c1", language: "en", preferredLanguages: ["fr", "en"], to: &post
+        )
+
+        XCTAssertFalse(changed)
+        XCTAssertNil(post.comments.first?.translatedContent)
+    }
+
+    func test_applyCommentTranslation_translationRankedAboveOriginal_isApplied() {
+        var post = makePost(comments: [makeComment(id: "c1", originalLanguage: "fr")])
+
+        let changed = FeedViewModel.applyCommentTranslation(
+            "Hi", commentId: "c1", language: "en", preferredLanguages: ["en", "fr"], to: &post
+        )
+
+        XCTAssertTrue(changed)
+        XCTAssertEqual(post.comments.first?.translatedContent, "Hi")
     }
 
     func test_applyCommentTranslation_alreadyTranslated_isANoOp() {

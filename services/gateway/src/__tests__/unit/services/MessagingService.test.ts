@@ -186,10 +186,10 @@ describe('MessagingService', () => {
         update: jest.fn(),
         findMany: jest.fn(),
         findFirst: jest.fn().mockResolvedValue(null),
-        // Lu par `admitMessageForward` pour connaître l'état de la SOURCE d'un
-        // transfert. Nul par défaut : sans `forwardedFromId` le garde ne lit
-        // rien, et un envoi ordinaire ne doit pas dépendre de ce double.
-        findUnique: jest.fn().mockResolvedValue(null)
+        // Lu par `admitMessageForward` (chaque test le surcharge) et par
+        // `admitAttachmentReply` (#6601) — vivant par défaut, dans CETTE
+        // conversation : un envoi sans forwardedFromId ni replyToId ne l'appelle jamais.
+        findUnique: jest.fn().mockResolvedValue({ conversationId: testConversationId, deletedAt: null })
       },
       trackingLink: {
         updateMany: jest.fn()
@@ -2757,11 +2757,11 @@ describe('MessagingService - Edge Cases', () => {
     });
 
     it('returns success from deduplicated message when P2002 fires (lines 209-227)', async () => {
-      // Early dedup: miss (no existing message yet on first findFirst)
-      mockPrisma.message.findFirst.mockResolvedValueOnce(null);
-      // create throws P2002
+      // DEUX lectures manquent avant le `create` — dédup early, puis repli par
+      // contenu (#6910). Rendre un message à l'une des deux court-circuiterait la
+      // création : ce témoin attesterait le chemin P2002 sans plus le parcourir.
+      mockPrisma.message.findFirst.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
       mockPrisma.message.create.mockRejectedValueOnce(p2002Error);
-      // MessageProcessor P2002 recovery findFirst returns existing message
       mockPrisma.message.findFirst.mockResolvedValueOnce(existingMsg());
 
       const response = await service.handleMessage(

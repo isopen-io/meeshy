@@ -106,6 +106,8 @@ data class ApiMessageAttachment(
     val duration: Int? = null,
     val latitude: Double? = null,
     val longitude: Double? = null,
+    /** Author-authored accessibility description (`MessageAttachment.alt`, #6813). Bare pass-through, no Prisme translation. */
+    val alt: String? = null,
     val transcription: ApiAttachmentTranscription? = null,
     val translations: Map<String, ApiAttachmentTranslation>? = null,
 )

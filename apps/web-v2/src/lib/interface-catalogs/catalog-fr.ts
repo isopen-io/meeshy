@@ -51,6 +51,41 @@ const fr = {
   'reels.media.error': 'Lecture impossible — Réessayer',
   'reels.image': 'Image {index} sur {count}',
 
+  /* TOUTES LES STORIES (#6547) — `routes/stories.tsx`, même patron que le Flux. */
+  'stories.title': 'Stories',
+  'stories.loading': 'Chargement des stories…',
+  'stories.error': "Les stories n'ont pas pu être chargées.",
+  'stories.empty.title': "Aucune story pour l'instant",
+  'stories.empty.subtitle': 'Les stories de vos contacts apparaîtront ici pendant vingt heures.',
+  'stories.create': 'Créer une story',
+  'stories.count.one': '{count} story',
+  'stories.count.other': '{count} stories',
+  /* LE LIBELLÉ DU GROUPE DU LECTEUR (#6550) — partagé par le rail
+     (`components/story-rail.tsx`) et la liste « Toutes les stories »
+     (`routes/stories.tsx`), via `storyAuthorLabel()`. */
+  'stories.mine': 'Votre story',
+
+  /* LES DEUX PORTES DE MA CELLULE (#6150) — le (+) haut-gauche et la pastille
+     d'humeur bas-droite, miroir `LentilleRailSelfEntryView`
+     (`StoriesVivantsRail.swift`) et de ses deux libellés `StoryTrayCopy`
+     (`addStory`, `changeMood`). `{emoji}` est ANNONCÉ, jamais dessiné : sans
+     lui, un lecteur d'écran entendrait deux fois le même bouton. */
+  'stories.self.addStory': 'Ajouter une story',
+  'stories.self.mood.add': 'Poser une humeur',
+  'stories.self.mood.change': 'Changer mon humeur, {emoji}',
+
+  /* MON HUMEUR (#6150) — l'écran de composition, `routes/status-compose.tsx`.
+     MINIMAL, comme la directive porteur le demande : un emoji, un mot, on
+     publie. Le composeur d'humeur complet d'iOS (`ComposerMoodSurface.swift`)
+     reste hors tranche. */
+  'status.compose.title': 'Mon humeur',
+  'status.compose.pick': 'Choisir une humeur',
+  'status.compose.note': 'Un mot, si vous voulez',
+  'status.compose.publish': 'Publier',
+  'status.compose.publishing': 'Publication…',
+  'status.compose.error': "Votre humeur n'a pas pu être publiée.",
+  'status.compose.offline': 'Hors ligne — votre humeur partira au retour du réseau.',
+
   /* LA CARTE DU FIL ET SES GESTES (#6488) — `FeedPostCard`, l'en-tête et les
      quatre états du Flux (`routes/feed.tsx`), et les échecs d'un geste
      (`lib/api/feed-gestures.ts`, `lib/feed/share-url.ts`) : tous écrits en
@@ -65,6 +100,7 @@ const fr = {
   'feed.post.media.audio': 'Audio',
   'feed.post.media.previous': 'Média précédent',
   'feed.post.media.next': 'Média suivant',
+  'feed.post.media.mosaic': 'Mosaïque de {count} médias',
   'feed.post.see_more': 'voir plus',
   'feed.post.see_less': 'voir moins',
   'feed.post.reel.chip': 'Réel',
@@ -138,6 +174,81 @@ const fr = {
 
   'pending.back': 'Revenir aux conversations',
 
+  /* LES LIENS REÇUS (#6714, #6715) — les pages que visent les liens suivis
+     `/l/:token` et les e-mails de compte (suppression, changement d'adresse,
+     désabonnement). `linkPage.*` porte les états qu'elles partagent. */
+  'linkPage.home': 'Retour à Meeshy',
+  'linkPage.retry': 'Réessayer',
+  'linkPage.settings': 'Ouvrir les réglages',
+  'linkPage.signIn': 'Se connecter',
+  'linkPage.offline.title': 'Hors ligne',
+  'linkPage.offline.body': 'Reconnectez-vous à Internet, puis réessayez.',
+  'linkPage.unavailable.title': 'Meeshy ne répond pas',
+  'linkPage.unavailable.body': 'Le service est momentanément indisponible. Réessayez dans quelques instants.',
+  'linkPage.rateLimited': 'Trop de tentatives. Patientez un moment avant de réessayer.',
+  'linkPage.signedOut.title': 'Connectez-vous pour continuer',
+  'linkPage.signedOut.body': 'Ce lien agit sur votre compte. Connectez-vous, puis rouvrez-le depuis l’e-mail.',
+  'linkPage.expired': 'Ce lien a expiré. Refaites la demande depuis les réglages.',
+  'trackingLink.opening': 'Ouverture du lien…',
+  'trackingLink.dead.title': 'Ce lien n’est plus disponible',
+  'trackingLink.dead.body': 'Il a expiré, a été désactivé ou n’a jamais existé.',
+  'accountDeletion.incomplete.title': 'Lien incomplet',
+  'accountDeletion.incomplete.body': 'Ce lien ne porte pas les informations nécessaires. Connectez-vous pour demander la suppression de votre compte.',
+  'accountDeletion.confirm.title': 'Confirmer la suppression de votre compte',
+  'accountDeletion.confirm.body':
+    'Votre compte sera désactivé au terme d’une période de grâce de 30 jours. D’ici là, le lien « Annuler » de l’e-mail vous permet de revenir en arrière.',
+  'accountDeletion.confirm.action': 'Confirmer la suppression',
+  'accountDeletion.cancel.title': 'Annuler la suppression de votre compte',
+  'accountDeletion.cancel.body': 'Votre compte reste actif et la demande de suppression est abandonnée. Rien n’est perdu.',
+  'accountDeletion.cancel.action': 'Annuler la suppression',
+  'accountDeletion.purge.title': 'Supprimer votre compte maintenant',
+  'accountDeletion.purge.body': 'Votre compte sera désactivé sur-le-champ et toutes vos sessions seront fermées. Ce geste est définitif.',
+  'accountDeletion.purge.action': 'Supprimer maintenant',
+  'accountDeletion.dismiss': 'Ne rien faire',
+  'accountDeletion.working': 'Un instant…',
+  'accountDeletion.done.title': 'C’est fait',
+  'accountDeletion.done.confirmed': 'Votre demande est confirmée : votre compte sera désactivé le {date}. Vous pouvez annuler d’ici là.',
+  'accountDeletion.done.cancelled': 'Votre compte reste actif : la demande de suppression est abandonnée.',
+  'accountDeletion.done.completed': 'Votre compte est désactivé et toutes vos sessions ont été fermées.',
+  'accountDeletion.done.purged': 'Vos données ont été effacées.',
+  'accountDeletion.closed.title': 'Ce lien ne sert plus',
+  'accountDeletion.invalid': 'Ce lien est invalide ou a déjà servi.',
+  'accountDeletion.request.title': 'Supprimer votre compte',
+  'accountDeletion.request.body':
+    'Vos conversations, messages, médias, contacts et préférences seront supprimés. Un e-mail vous demandera de confirmer, puis une période de grâce de 30 jours vous laissera revenir en arrière.',
+  'accountDeletion.request.phrase': 'Tapez {phrase} pour confirmer',
+  'accountDeletion.request.password': 'Mot de passe actuel',
+  'accountDeletion.request.action': 'Demander la suppression',
+  'accountDeletion.request.sent.title': 'Un e-mail de confirmation vous a été envoyé',
+  'accountDeletion.request.sent.body': 'Ouvrez-le pour confirmer la suppression de votre compte.',
+  'accountDeletion.request.wrongPassword': 'Mot de passe incorrect.',
+  'accountDeletion.request.alreadyPending': 'Une demande est déjà en cours. Ouvrez l’e-mail reçu pour la confirmer ou l’annuler.',
+  'accountDeletion.request.noEmail': 'Ajoutez et vérifiez une adresse e-mail avant de demander la suppression.',
+  'emailChange.verifying': 'Confirmation de votre nouvelle adresse…',
+  'emailChange.done.title': 'Adresse e-mail modifiée',
+  'emailChange.done.body': 'Vous vous connectez désormais avec {email}.',
+  'emailChange.done.generic': 'Votre nouvelle adresse e-mail est confirmée.',
+  'emailChange.failed.title': 'Adresse non modifiée',
+  'emailChange.missing': 'Ce lien ne porte pas de code de confirmation. Ouvrez celui de l’e-mail le plus récent.',
+  'emailChange.invalid': 'Ce lien ne correspond à aucun changement en attente sur ce compte, ou il a déjà servi.',
+  'emailChange.taken': 'Cette adresse est désormais utilisée par un autre compte.',
+  'emailNotifications.title': 'E-mails de Meeshy',
+  'emailNotifications.loading': 'Lecture de votre préférence…',
+  'emailNotifications.on': 'Vous recevez les annonces, récapitulatifs et notifications de Meeshy par e-mail.',
+  'emailNotifications.off': 'Vous ne recevez plus les annonces, récapitulatifs ni notifications de Meeshy par e-mail.',
+  'emailNotifications.security': 'Les e-mails de sécurité de votre compte continuent d’arriver.',
+  'emailNotifications.unsubscribe': 'Ne plus recevoir ces e-mails',
+  'emailNotifications.resubscribe': 'Recevoir de nouveau ces e-mails',
+  'emailNotifications.failed': 'Le changement n’a pas abouti. Réessayez.',
+
+  'dataExport.title': 'Exporter mes données',
+  'dataExport.info.body': 'Conformément au RGPD, recevez un fichier reprenant votre profil, vos messages, vos contacts et vos publications.',
+  'dataExport.action.start': 'Exporter mes données',
+  'dataExport.action.exporting': 'Export en cours…',
+  'dataExport.action.again': 'Exporter à nouveau',
+  'dataExport.done.title': 'Export terminé',
+  'dataExport.done.body': 'Le fichier a été téléchargé sur cet appareil.',
+
   'profile.title': 'Profil',
   'profile.edit': 'Modifier',
   'profile.cancel': 'Annuler',
@@ -187,6 +298,17 @@ const fr = {
   'profile.language.choose': 'Choisir',
   'profile.language.clear.regional': 'Retirer la langue régionale',
   'profile.language.clear.custom': 'Retirer la langue personnalisée',
+
+  /* LA FEUILLE DE CHOIX DE LANGUE, PARLÉE DANS LA LANGUE D'INTERFACE (#6328)
+     — titre par défaut (inscription), titre du composeur, recherche et état
+     vide de `language-sheet.tsx`. `title`/`selected` restent des props
+     explicites (#5828) : ces clés ne servent qu'à défaut d'un `title` fourni
+     par l'appelant, et toujours pour la recherche/l'état vide. */
+  'languageSheet.title.read': 'Langue de lecture',
+  'languageSheet.title.write': 'Langue d’écriture',
+  'languageSheet.search': 'Rechercher une langue',
+  'languageSheet.empty': 'Aucune langue ne correspond à « {search} ».',
+
   'profile.stats.messages': 'Messages',
   'profile.stats.translations': 'Traductions',
   'profile.stats.languages': 'Langues',
@@ -237,8 +359,6 @@ const fr = {
   'settings.logout.title': 'Déconnexion',
   'settings.logout.message': 'Voulez-vous vraiment vous déconnecter ?',
   'settings.logout.inprogress': 'Déconnexion en cours...',
-  'settings.legacy': 'Version classique, nouvel onglet',
-  'settings.legacy.unavailable': 'Indisponible sur cet environnement',
   'settings.loading': 'Chargement des réglages',
   'settings.error.title': 'Impossible de charger vos réglages',
   'settings.retry': 'Réessayer',
@@ -501,41 +621,88 @@ const fr = {
   'links.create.error.refused': 'Vous ne pouvez pas créer de lien pour cette conversation.',
   'links.create.error.default': 'Le lien n’a pas pu être créé. Réessayez.',
 
-  /* L'ESPACE D'ADMINISTRATION (#6432) — les onze sections reprennent les
-     libellés de la barre latérale du legacy (`AdminLayout.tsx`), pour qu'un
-     administrateur retrouve ses repères d'une application à l'autre. */
+  /* LES SCÈNES DU FIL (#6898) — carrousel, mosaïque et lecture d'une
+     publication v:3. */
+  'feed.scene.carousel.previous': 'Scène précédente',
+  'feed.scene.carousel.next': 'Scène suivante',
+  'feed.scene.mosaic.tile': 'Scène {index}',
+  'feed.scene.mosaic.more': 'Scène {index}, et {count} de plus',
+  'feed.scene.mosaic.video': 'Scène {index}, vidéo',
+  'feed.scene.shared_by': 'Scène partagée par {author}',
+  'feed.scene.open.fullscreen': 'Touche deux fois pour voir en plein écran',
+  'feed.scene.open.post': 'Touche deux fois pour ouvrir la publication',
+  'feed.scene.sound.muted': 'Son coupé',
+  'feed.scene.count': '{count} scènes',
+  'scene.place.here': 'Ici',
+
+  /* LE SON DE FOND DU LECTEUR DE STORY (T10, #6899) — bouton BASCULE dans la
+     ligne auteur (rail droit hors tranche, #5817) : UN libellé constant et
+     `aria-pressed`, jamais un libellé qui change avec l'état (« Son, non
+     enfoncé » se lit comme un son coupé). */
+  'story.sound.off': 'Muet',
+
+  /* LE STUDIO DE STORY (#6900) — créer une story avec un fond, un son de
+     fond et un texte, aperçu par le moteur partagé, publiée en CanvasV3
+     comme iOS. */
+  'story.studio.title': 'Nouvelle story',
+  'story.studio.cancel': 'Annuler',
+  'story.studio.publish': 'Publier',
+  'story.studio.publishing': 'Publication…',
+  'story.studio.publish.waiting': 'En attente du réseau…',
+  'story.studio.offline': 'Hors ligne — la publication partira au retour du réseau.',
+  'story.studio.stage': 'Aperçu de la story',
+  'story.studio.background.add': 'Ajouter une photo ou une vidéo',
+  'story.studio.background.label': 'Fond',
+  'story.studio.background.remove': 'Retirer le fond',
+  'story.studio.sound.add': 'Ajouter un son',
+  'story.studio.sound.label': 'Son de fond',
+  'story.studio.sound.remove': 'Retirer le son',
+  'story.studio.sound.mute': 'Couper le son',
+  'story.studio.sound.unmute': 'Écouter le son',
+  'story.studio.upload.progress': 'Envoi… {percent} %',
+  'story.studio.upload.ready': 'Prêt',
+  'story.studio.upload.retry': 'Réessayer',
+  'story.studio.text.label': 'Texte de la story',
+  'story.studio.text.placeholder': 'Ajouter du texte',
+  'story.studio.hint.duration': 'Une story reste visible vingt heures.',
+  'story.studio.error.upload': 'Le fichier n’a pas pu être envoyé.',
+  'story.studio.error.publish': 'La story n’a pas pu être publiée.',
+  'story.studio.refusal.title': 'Un compte est nécessaire pour créer une story.',
+  'story.studio.refusal.login': 'Se connecter',
+  'story.studio.refusal.door.visual': 'Choisissez une image ou une vidéo.',
+  'story.studio.refusal.door.sound': 'Choisissez un fichier audio.',
+  'story.studio.failure.network': 'Réseau indisponible.',
+  'story.studio.failure.timeout': 'La passerelle n’a pas répondu.',
+  'story.studio.failure.session': 'Session expirée — reconnectez-vous.',
+  'story.studio.failure.account': 'Un compte est nécessaire pour publier un média.',
+  'story.studio.failure.forbidden': 'Action refusée pour ce compte.',
+  'story.studio.failure.tooLarge': 'Fichier trop lourd.',
+  'story.studio.failure.fileRefused': 'Fichier refusé : son type ne correspond pas à son contenu.',
+  'story.studio.failure.rateLimited': 'Trop de publications d’un coup — réessayez dans un instant.',
+  'story.studio.failure.refused': 'Publication refusée.',
+  'story.studio.failure.unavailable': 'La passerelle est indisponible.',
+
+  /* LA BANNIÈRE DE MISE À JOUR (#6936) — les libellés du legacy
+     (`updateAvailable`, `updateNow`, `wait`, dans les catalogues
+     `apps/web/locales`), plus l'état du clic et le nom de la région annoncée,
+     que le legacy n'avait pas. */
+  'appUpdate.available': 'Une nouvelle version de Meeshy est disponible !',
+  'appUpdate.hint': 'Rechargez pour avoir les dernières nouveautés.',
+  'appUpdate.action': 'Mettre à jour',
+  'appUpdate.dismiss': 'Attendre',
+  'appUpdate.applying': 'Mise à jour…',
+  'appUpdate.region': 'Mise à jour de l’application',
+
+  /* L'ESPACE D'ADMINISTRATION (#6432) — SEUL `admin.title` reste ici : la
+     rangée des Réglages et le barreau du menu flottant (#6458) le lisent
+     SANS jamais entrer dans `/adm`, donc sans jamais charger le catalogue
+     d'administration. Les 83 autres clés (`admin.nav.*`, `admin.users.*`,
+     `admin.user.*`, `admin.edit.*`, `admin.password.*`, `admin.ban.*`,
+     `admin.media.*`, `admin.conv.*`, `admin.counters.*`, `admin.sections.*`,
+     `admin.denied.*`, `admin.role`) ont déménagé dans
+     `catalog-admin-fr.ts` (#6871, #6834) : elles ne pesaient que pour un
+     lecteur qui n'ouvre jamais l'administration. */
   'admin.title': 'Administration',
-  'admin.role': 'Votre rôle : {role}',
-  'admin.denied.title': 'Espace réservé',
-  'admin.denied.message': 'Cet espace demande un droit d\'administration.',
-  'admin.counters.title': 'En un coup d\'œil',
-  'admin.counters.unavailable': 'Compteurs indisponibles pour le moment.',
-  'admin.counters.users': 'Comptes',
-  'admin.counters.activeUsers': 'Comptes actifs',
-  'admin.counters.messages': 'Messages',
-  'admin.counters.communities': 'Communautés',
-  'admin.counters.reports': 'Signalements',
-  'admin.counters.newUsers': 'Nouveaux (24 h)',
-  'admin.sections.title': 'Sections',
-  'admin.sections.legacy': 'ancienne interface',
-  'admin.nav.dashboard': 'Tableau de bord',
-  'admin.nav.users': 'Comptes',
-  'admin.nav.moderation': 'Modération',
-  'admin.nav.audit': 'Journaux d\'audit',
-  'admin.nav.analytics': 'Statistiques',
-  'admin.nav.trackingLinks': 'Liens de suivi',
-  'admin.nav.ranking': 'Classement',
-  'admin.nav.broadcasts': 'Diffusions',
-  'admin.nav.settings': 'Réglages',
-  'admin.nav.agent': 'Agent',
-  'admin.nav.monitoring': 'Supervision',
-  'admin.users.search': 'Rechercher un compte',
-  'admin.users.count': '{count} compte(s)',
-  'admin.users.empty': 'Aucun compte ne correspond.',
-  'admin.users.unavailable': 'Liste indisponible pour le moment.',
-  'admin.users.inactive': 'désactivé',
-  'admin.users.previous': 'Précédents',
-  'admin.users.next': 'Suivants',
 
 } as const;
 

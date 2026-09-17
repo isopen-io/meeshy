@@ -501,3 +501,101 @@ describe('GET threads — drapeaux de protection (#4885)', () => {
     await app.close();
   });
 });
+
+// ─── #6164 — le fil sert la PIÈCE NOMMÉE de la citation ───────────────────────
+//
+// `maskThreadMessageQuote` appelait `servedQuotedMessage(quotedRow, { … })`
+// sans passer l'instantané, alors que `threadMessageSelect` charge `metadata`
+// sur la RACINE depuis le lot 1. L'aperçu du parent d'un fil désignait donc le
+// média REPRÉSENTATIF quand la liste du même fil désignait la pièce NOMMÉE :
+// ouvrir un fil faisait SAUTER la citation d'une vignette à l'autre.
+//
+// Le RANG est load-bearing (leçon 261) : la citation vise la TROISIÈME pièce
+// d'un message qui en porte cinq. Au rang 1, le court-circuit « la première »
+// et la règle juste « celle qu'on a nommée » rendraient le même verdict.
+
+describe('GET threads — la pièce NOMMÉE de la citation (#6164)', () => {
+  const MESSAGE_CITE = '507f1f77bcf86cd799439900';
+  const photo = (rang: number) => ({
+    id: `507f1f77bcf86cd79943990${rang}`,
+    messageId: MESSAGE_CITE,
+    mimeType: 'image/jpeg',
+    fileUrl: `/uploads/piece-${rang}.jpg`,
+    thumbnailUrl: `/uploads/piece-${rang}-thumb.jpg`,
+  });
+  const CINQ = [photo(1), photo(2), photo(3), photo(4), photo(5)];
+  const TROISIEME = CINQ[2].id;
+
+  const citation = (overrides: Record<string, unknown> = {}) => ({
+    id: MESSAGE_CITE,
+    content: 'regarde ces cinq photos',
+    originalLanguage: 'fr',
+    createdAt: new Date(),
+    senderId: 'part-2',
+    validatedMentions: [],
+    metadata: null,
+    isViewOnce: false,
+    isBlurred: false,
+    isEncrypted: false,
+    effectFlags: 0,
+    sender: null,
+    attachments: CINQ,
+    ...overrides,
+  });
+
+  const servedParent = async (root: Record<string, unknown>) => {
+    const prisma = makePrisma({
+      message: {
+        findFirst: jest.fn<any>().mockResolvedValue({ ...mockParentMessage, ...root }),
+        findMany: jest.fn<any>().mockResolvedValue([]),
+      },
+    });
+    const app = await buildApp({ prisma });
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/threads/${MSG_ID}` });
+    const { parent } = res.json().data;
+    await app.close();
+    return parent;
+  };
+
+  it('sert l’ancre de la TROISIÈME pièce, jamais celle de la première', async () => {
+    const parent = await servedParent({
+      metadata: { attachmentReplyTo: { attachmentId: TROISIEME, kind: 'image' } },
+      replyTo: citation(),
+    });
+
+    expect(parent.replyTo.attachmentReplyTo).toEqual({ attachmentId: TROISIEME, kind: 'image' });
+    expect(parent.replyTo.attachmentReplyTo.attachmentId).not.toBe(CINQ[0].id);
+  });
+
+  it('lit l’instantané sur le message QUI CITE, jamais sur le message CITÉ', async () => {
+    const parent = await servedParent({
+      metadata: { attachmentReplyTo: { attachmentId: TROISIEME, kind: 'image' } },
+      // Le message CITÉ visait lui-même une autre pièce, un cran plus haut dans
+      // le fil : son `metadata` ne doit gouverner AUCUNE citation d'ici.
+      replyTo: citation({
+        metadata: { attachmentReplyTo: { attachmentId: CINQ[0].id, kind: 'image' } },
+      }),
+    });
+
+    expect(parent.replyTo.attachmentReplyTo.attachmentId).toBe(TROISIEME);
+  });
+
+  it('sans instantané, la citation retombe sur le représentatif — aucun fil existant ne change', async () => {
+    const parent = await servedParent({ metadata: null, replyTo: citation() });
+
+    expect(parent.replyTo.attachmentReplyTo).toBeUndefined();
+    expect(parent.replyTo.attachments[0].thumbnailUrl).toBe('/uploads/piece-1-thumb.jpg');
+  });
+
+  it('un message cité PROTÉGÉ garde son ancre et sa nature, et perd tout ce qui DÉCRIT la pièce', async () => {
+    const parent = await servedParent({
+      metadata: { attachmentReplyTo: { attachmentId: TROISIEME, kind: 'image' } },
+      replyTo: citation({ isViewOnce: true, effectFlags: 1 }),
+    });
+
+    expect(parent.replyTo.attachmentReplyTo).toEqual({ attachmentId: TROISIEME, kind: 'image' });
+    const elue = parent.replyTo.attachments.find((a: any) => a.id === TROISIEME);
+    expect(elue).not.toHaveProperty('fileUrl');
+    expect(elue).not.toHaveProperty('thumbnailUrl');
+  });
+});

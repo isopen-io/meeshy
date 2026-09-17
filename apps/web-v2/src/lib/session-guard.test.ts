@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { resolveRouteAccess, type RouteKey } from './session-guard';
+import { landingAfterSession, resolveRouteAccess, safeNextPath, type RouteKey } from './session-guard';
 
 /**
  * LA PORTE (#5555, T7) — pure. Fixtures ⇒ toujours `allow` (les captures et le
@@ -25,6 +25,42 @@ const PRIVATE_ROUTES: readonly RouteKey[] = [
   'notifications',
   'profile',
   'settings',
+  /**
+   * LES QUATRE ADRESSES D'ADMINISTRATION (#6432, #6795) — absentes de cette
+   * liste jusqu'ici, donc leur confidentialité n'était affirmée NULLE PART.
+   *
+   * C'est le défaut exact que la loi garde : une route qu'elle ne connaît pas
+   * est PUBLIQUE par défaut. L'oubli ne rougit jamais — l'écran se peint, puis
+   * le serveur refuse. Les y mettre fait porter aux trois `describe` qui lisent
+   * cette liste (fixtures, visiteur anonyme, invité de lien) l'affirmation
+   * qu'aucune d'elles ne s'ouvre sans compte.
+   *
+   * `adm`/`admUsers` sont la NOUVELLE administration ; `admin`/`adminUsers`
+   * restent réservées à l'ancienne, portée dans le même bundle (D-76).
+   */
+  'admin',
+  'adminUsers',
+  'adm',
+  'admUsers',
+  /**
+   * LE DÉTAIL D'UN MEMBRE (#6819) et LES CONVERSATIONS DE L'INSTANCE (#6862)
+   * — quatre adresses de plus, dans la même logique que les quatre au-dessus.
+   *
+   * `adminUser`/`admUser` étaient PRIVÉES dans la loi (`session-guard.ts`)
+   * sans qu'aucun témoin l'affirme : un manque ANTÉRIEUR à ce lot, comblé ici
+   * parce que c'est la même ligne de défense et qu'un témoin à trous garde
+   * moins bien qu'il n'en a l'air.
+   *
+   * Ces deux-là pèsent au moins autant que les listes : l'un porte l'édition,
+   * la réinitialisation de mot de passe et le bannissement ; l'autre ouvre
+   * l'inventaire des conversations — qui parle à qui, dans quels groupes.
+   */
+  'adminUser',
+  'admUser',
+  'adminConversations',
+  'admConversations',
+  'adminConversation',
+  'admConversation',
 ];
 const PUBLIC_AUTH_ROUTES: readonly RouteKey[] = ['login', 'signup'];
 
@@ -94,6 +130,51 @@ describe('resolveRouteAccess — source gateway, session ACTIVE sur une route PR
  * (comportement inchangé, celui que les blocs ci-dessus vérifient SANS
  * fournir le champ) ; non soldé ⇒ `redirect-welcome`.
  */
+/**
+ * **L'INVITÉ D'UN LIEN N'ENTRE QUE DANS SON FIL** (#5561).
+ *
+ * Il a une session, donc une créance — mais elle n'ouvre qu'UNE conversation :
+ * `GET /links/:identifier/messages` rend 403 à la session d'un autre lien, et
+ * toutes les autres routes privées exigent un COMPTE. L'y laisser entrer
+ * peindrait des écrans qu'un 401 défait en silence, la classe de défaut que
+ * `stories`, `feed` et `settings` ont déjà payée.
+ */
+describe('resolveRouteAccess — l’invité d’un lien (#5561)', () => {
+  const invite = (routeKey: RouteKey, welcomeCompleted?: boolean) =>
+    resolveRouteAccess({
+      sessionStatus: 'guest',
+      source: 'gateway',
+      routeKey,
+      ...(welcomeCompleted === undefined ? {} : { welcomeCompleted }),
+    });
+
+  test('thread ⇒ allow : c’est la SEULE route privée qui le concerne', () => {
+    expect(invite('thread')).toBe('allow');
+  });
+
+  for (const route of PRIVATE_ROUTES.filter((key) => key !== 'thread')) {
+    test(`${route} ⇒ redirect-login : cette route exige un COMPTE`, () => {
+      expect(invite(route)).toBe('redirect-login');
+    });
+  }
+
+  /* L'accueil n'est PAS proposé à un invité : il a déjà franchi une porte
+     d'entrée, et le renvoyer à « bienvenue » effacerait ce qu'il vient de
+     faire. Il va à la connexion, seul chemin vers ce qu'il demande. */
+  test('jamais redirect-welcome, même si l’accueil n’a pas été soldé', () => {
+    expect(invite('list', false)).toBe('redirect-login');
+  });
+
+  test('login et signup ⇒ allow : se donner un compte est exactement ce qu’il peut faire', () => {
+    expect(invite('login')).toBe('allow');
+    expect(invite('signup')).toBe('allow');
+  });
+
+  test('chatJoin ⇒ allow : l’invitation reste lisible, quelle que soit la session', () => {
+    expect(invite('chatJoin')).toBe('allow');
+  });
+});
+
 describe('resolveRouteAccess — l’accueil (#5816)', () => {
   test('privée + anonyme + welcomeCompleted:false ⇒ redirect-welcome', () => {
     for (const routeKey of PRIVATE_ROUTES) {
@@ -172,4 +253,71 @@ describe("les routes d'administration sont PRIVÉES", () => {
       ).toBe('redirect-welcome');
     });
   }
+});
+
+/**
+ * LA JONCTION PAR LIEN (#5561) — `/chat/:link` est la SEULE adresse de
+ * conversation qui sert quelqu'un sans compte, et la seule où un compte
+ * connecté REJOINT. Elle n'entre donc dans aucun des deux ensembles : privée,
+ * elle renverrait l'invité vers la connexion avant qu'il ait vu à quoi il est
+ * invité ; d'authentification, elle renverrait le membre vers `/` avant qu'il
+ * ait pu rejoindre.
+ */
+describe('chatJoin — publique pour les TROIS statuts, accueil soldé ou non', () => {
+  for (const sessionStatus of ['anonymous', 'pending2fa', 'authenticated'] as const) {
+    for (const welcomeCompleted of [true, false]) {
+      test(`${sessionStatus}, accueil ${welcomeCompleted ? 'soldé' : 'non soldé'} ⇒ allow`, () => {
+        expect(resolveRouteAccess({ sessionStatus, source: 'gateway', routeKey: 'chatJoin', welcomeCompleted })).toBe('allow');
+      });
+    }
+  }
+});
+
+/**
+ * `next` — OÙ REVENIR APRÈS S'ÊTRE CONNECTÉ (#5561). La valeur vient de
+ * l'adresse, donc de quiconque a fabriqué le lien : elle ne sort jamais du
+ * domaine, et elle ne peut pas faire tomber l'application.
+ */
+describe('safeNextPath — un chemin INTERNE, ou rien', () => {
+  test('un chemin interne est gardé tel quel, requête comprise', () => {
+    expect(safeNextPath('/chat/mshy_equipe_7f3a')).toBe('/chat/mshy_equipe_7f3a');
+    // Les linkIds lisibles portent des TIRETS (`mshy_equipe-deploiement_7f3a`) :
+    // une classe de caractères mal bornée les refuserait sans bruit.
+    expect(safeNextPath('/chat/mshy_equipe-deploiement_7f3a')).toBe('/chat/mshy_equipe-deploiement_7f3a');
+    expect(safeNextPath('/chat/mshy_%C3%A9quipe%207f3a')).toBe('/chat/mshy_%C3%A9quipe%207f3a');
+    expect(safeNextPath('/c/64f1c2a9e8b7d6c5b4a39281?autour=m1')).toBe('/c/64f1c2a9e8b7d6c5b4a39281?autour=m1');
+  });
+
+  test('absent ou vide ⇒ rien', () => {
+    expect(safeNextPath(null)).toBeNull();
+    expect(safeNextPath('')).toBeNull();
+  });
+
+  test('refuse toute sortie du domaine : `//evil.com`, `https://…`, schémas, contre-obliques', () => {
+    for (const hostile of ['//evil.com', '//evil.com/chat/x', 'https://evil.com', 'http://evil.com/c/1', 'javascript:alert(1)', '/\\evil.com', '\\\\evil.com', 'evil.com']) {
+      expect({ hostile, next: safeNextPath(hostile) }).toEqual({ hostile, next: null });
+    }
+  });
+
+  /** Le parseur d'URL RETIRE tabulations et retours à la ligne : `/\t/evil.com`
+   * devient `//evil.com`, et `history.replaceState` LÈVE sur une adresse d'une
+   * autre origine — dans l'effet de `SessionGate`, c'est l'application entière
+   * qui tombe pour un lien forgé. */
+  test('refuse les caractères de contrôle que le parseur d’URL efface', () => {
+    for (const hostile of ['/\t/evil.com', '/\n/evil.com', '/\r/evil.com', '/chat/x ', `/chat/x${String.fromCharCode(0)}`, `/chat/x${String.fromCharCode(127)}`]) {
+      expect({ hostile: JSON.stringify(hostile), next: safeNextPath(hostile) }).toEqual({ hostile: JSON.stringify(hostile), next: null });
+    }
+  });
+});
+
+describe('landingAfterSession — `next` s’il est sûr, l’accueil sinon', () => {
+  test('un `next` interne gagne', () => {
+    expect(landingAfterSession('/chat/mshy_abc', '/')).toBe('/chat/mshy_abc');
+  });
+
+  test('un `next` absent ou hostile rend l’accueil fourni par l’appelant', () => {
+    expect(landingAfterSession(null, '/')).toBe('/');
+    expect(landingAfterSession('//evil.com', '/')).toBe('/');
+    expect(landingAfterSession('https://evil.com', '/accueil')).toBe('/accueil');
+  });
 });

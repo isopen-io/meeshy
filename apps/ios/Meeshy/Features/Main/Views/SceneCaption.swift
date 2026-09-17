@@ -86,6 +86,14 @@ nonisolated enum SceneCaption {
 
     /// Le média que la scène MONTRE — demandé à la scène, puis, pour un document
     /// qui n'adresse rien, au post.
+    ///
+    /// **`MeeshyScenePlayer.carrierMediaIdentity` couvre déjà le fond référencé**
+    /// (revue 2026-09-17) : depuis 722635a, il n'a plus de restriction de plan
+    /// — un fond `plane: bg` à `mediaId`/`postMediaId` (forme servie par la
+    /// passerelle, #6894) y est éligible au même titre qu'un média `plane:
+    /// content`. Un second appel dédié à ce seul cas (`backgroundMediaReference`)
+    /// ne pouvait donc plus jamais s'exécuter — retiré (mutation vérifiée :
+    /// les témoins de ce fichier restent verts sans lui).
     static func mediaIdentity(sceneIndex: Int,
                               in document: CanvasV3,
                               post: FeedPost) -> String? {

@@ -70,13 +70,64 @@ export type AdminUsersPage = {
   readonly hasMore: boolean;
 };
 
-const asRecord = (value: unknown): Readonly<Record<string, unknown>> | null =>
+/**
+ * LES TROIS LECTURES PRUDENTES DU PORT D'ADMINISTRATION, exportées pour le
+ * détail d'un membre (#6819) — et pour lui seul tant qu'aucun autre port n'en
+ * a besoin.
+ *
+ * Elles sortent d'ici plutôt que d'être recopiées ailleurs : une seconde
+ * définition serait une jumelle divergente (CLAUDE.md § Single Source of
+ * Truth), et c'est précisément sur des helpers de trois lignes que la
+ * divergence passe inaperçue — l'un tolérerait un jour `NaN` ou une chaîne
+ * numérique que l'autre refuse, sans qu'aucun témoin ne rougisse.
+ *
+ * Elles ne rejoignent PAS `./decode` : ce module-là décode les DATES DU FIL
+ * pour le cache TanStack (`toDate`, `decodeMessage`, `decodeConversation`) et
+ * n'a aucun helper de ce genre. Les deux outils sont distincts, pas
+ * redondants — vérifié avant d'extraire.
+ */
+export const asRecord = (value: unknown): Readonly<Record<string, unknown>> | null =>
   typeof value === 'object' && value !== null ? (value as Readonly<Record<string, unknown>>) : null;
 
-const asCount = (value: unknown): number =>
+export const asCount = (value: unknown): number =>
   typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0;
 
-const asText = (value: unknown): string => (typeof value === 'string' ? value : '');
+export const asText = (value: unknown): string => (typeof value === 'string' ? value : '');
+
+/** Une page SERVIE : ses lignes, et la pagination telle que le transport la remet. */
+export type PageServie = {
+  readonly lignes: readonly unknown[];
+  readonly meta: Readonly<Record<string, unknown>>;
+};
+
+/**
+ * **OÙ LA PAGINATION SE LIT VRAIMENT** (#6862, revue-correction) — le SITE
+ * UNIQUE, parce que quatre décodeurs d'administration s'étaient trompés de la
+ * même façon, doc-comment à l'appui.
+ *
+ * Les routes d'administration paginées passent par `sendPaginatedSuccess` :
+ * l'enveloppe vaut `{ success, data, pagination }`, la pagination À CÔTÉ de
+ * `data`. Chaque décodeur le DISAIT — et recevait ensuite `result.data`,
+ * c'est-à-dire le TABLEAU seul, où il cherchait `charge.pagination`. Le
+ * transport a déjà dépaqueté (`http.ts:355-366`) : `pagination` est un SIBLING
+ * de `ok`, sur l'`ApiResult`.
+ *
+ * Conséquence mesurée, et invisible : `total` retombait sur la longueur de la
+ * page, `hasMore` valait `false` pour toujours, et le bouton « Suivants »
+ * était ÉTEINT en production sur les quatre listes — un contrôle qui existe et
+ * n'a aucun effet (loi 4). Les témoins, eux, verdissaient : leur double rendait
+ * `{ ok: true, data: enveloppeEntière }`, où `data.pagination` existe.
+ *
+ * Le repli sur `data.pagination` reste, pour les charges qu'un appelant remet
+ * telles quelles (une fixture, une réponse non paginée) : il ne peut pas
+ * masquer le défaut ci-dessus, puisque le niveau SERVI gagne.
+ */
+export function pageServie(resultat: { readonly data: unknown; readonly pagination?: unknown }): PageServie {
+  const charge = asRecord(resultat.data);
+  const lignes = Array.isArray(resultat.data) ? resultat.data : Array.isArray(charge?.data) ? charge.data : [];
+  const meta = asRecord(resultat.pagination) ?? asRecord(charge?.pagination) ?? {};
+  return { lignes, meta };
+}
 
 /**
  * `false` par DÉFAUT sur chaque clé — une permission absente de la charge est
@@ -99,6 +150,11 @@ export function decodeAdminPermissions(raw: unknown): AdminPermissions {
     canViewAuditLogs: lire('canViewAuditLogs'),
     canManageNotifications: lire('canManageNotifications'),
     canManageTranslations: lire('canManageTranslations'),
+    // La garde RÉELLE des routes `/admin/agent/*` (#6733). La passerelle la
+    // sert depuis le lot B ; ce décodeur ne la lisait pas, et la clé se
+    // perdait au décodage — silencieusement, puisqu'une clé absente d'un type
+    // rend `undefined` que personne ne lit.
+    canManageAgent: lire('canManageAgent'),
   };
 }
 

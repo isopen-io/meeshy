@@ -1,5 +1,6 @@
 import { unwrap } from './client';
 import type { DataSource } from './config';
+import { CANVAS_CAPS_HEADERS } from './feed-pages';
 import type { ApiResult, HttpTransport } from './http';
 
 /**
@@ -38,12 +39,27 @@ import type { ApiResult, HttpTransport } from './http';
 export const STORIES_QUERY_PREFIX = ['stories'] as const;
 export const STORY_TRAY_QUERY_KEY = [...STORIES_QUERY_PREFIX, 'tray'] as const;
 
-/** Un média de story, réduit à ce que le rail PEINT. */
+/** Un média de story — la forme de `mediaSelect`
+ * (`services/gateway/src/services/posts/postIncludes.ts:98-120`), réduite à ce
+ * que le rail et le lecteur consomment. Un champ OPTIONNEL de la passerelle se
+ * déclare `?: T | null` (règle de `feed-pages.ts`).
+ *
+ * `fileUrl` est la clé que la passerelle SERT (mesuré sur
+ * `gate.staging.meeshy.me` le 2026-09-17, les deux projections) ; `url` est
+ * l'ancienne clé des fixtures, qu'aucune réponse réelle ne porte — lue seule,
+ * elle laissait sans image toute story à média hors fixtures
+ * (`storyMediaUrl`, `lib/stories/playback.ts`, lit les deux). `width`,
+ * `height` et `thumbHash` nourrissent le lecteur de scène (#6899) : rapport du
+ * fond, bandes, fond flou. */
 export type StoryTrayMedia = {
   readonly id: string;
+  readonly fileUrl?: string | null;
   readonly url?: string;
-  readonly thumbnailUrl?: string;
-  readonly mimeType?: string;
+  readonly thumbnailUrl?: string | null;
+  readonly mimeType?: string | null;
+  readonly width?: number | null;
+  readonly height?: number | null;
+  readonly thumbHash?: string | null;
 };
 
 /** L'auteur, tel que `storyAuthorSelect` le sert. */
@@ -89,6 +105,7 @@ export async function loadStoryTray(
   return params.transport.request<readonly StoryTrayPost[]>({
     method: 'GET',
     path: '/api/v1/social/posts?scope=stories&projection=tray&limit=50',
+    headers: CANVAS_CAPS_HEADERS,
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });
 }
@@ -125,7 +142,18 @@ export async function loadStatusMoods(
 ): Promise<ApiResult<readonly StatusMoodPost[]>> {
   if (__FIXTURES__ && params.source === 'fixtures') {
     const { STATUS_MOODS } = await import('./fixtures-stories');
-    return { ok: true, data: STATUS_MOODS };
+    /* CE QUE J'AI POSÉ DANS CET ONGLET PASSE DEVANT (#6150) — le corpus servi
+       est trié `createdAt desc`, et l'humeur qu'on vient de poser est la plus
+       récente. Sans ce préfixe, poser une humeur hors réseau l'affichait puis
+       la faisait DISPARAÎTRE à la première invalidation : l'écriture optimiste
+       était correcte, le corpus qui la remplaçait ne la connaissait pas. */
+    const { fixtureMoods } = await import('./status');
+    const posted: readonly StatusMoodPost[] = fixtureMoods().map((m, i) => ({
+      id: `st-local-${i}`,
+      authorId: m.authorId,
+      moodEmoji: m.moodEmoji,
+    }));
+    return { ok: true, data: [...posted, ...STATUS_MOODS] };
   }
   return params.transport.request<readonly StatusMoodPost[]>({
     method: 'GET',
@@ -159,10 +187,6 @@ export function statusMoodsQueryOptions(deps: StoriesDeps) {
  */
 export const STORY_FEED_QUERY_KEY = [...STORIES_QUERY_PREFIX, 'feed'] as const;
 
-/** Un fond d'effet de story — `StoryEffects.background`
- * (`"RRGGBB"` ou `"gradient:RRGGBB:RRGGBB"`, `schema.prisma`). */
-export type StoryFeedEffects = { readonly background?: string | null };
-
 /** Une story du corpus COMPLET — la forme que `storyPostInclude` sert,
  * réduite à ce que le lecteur (#5817, périmètre TEXTE + IMAGE) consomme. */
 export type StoryFeedPost = {
@@ -180,7 +204,11 @@ export type StoryFeedPost = {
    * sert (`schema.prisma:911`) — dépouillée par `lib/api/prism.ts`, JAMAIS
    * relue ici telle quelle (D-14, cycle 122 du CLAUDE.md racine). */
   readonly translations?: unknown;
-  readonly storyEffects?: StoryFeedEffects | null;
+  /** `unknown` (#6899, T8/T9) — un fond v1 (`{ background }`) OU un document
+   * canvas v3 (`{ v: 3, scenes: […] }`) selon la négociation O17
+   * (`storyEffectsV3.ts`, § 3 de la spécification `stories-lecteur`) : lu par
+   * `storyEffectsBackgroundOf`/`parseCanvasDocument`, jamais un champ direct. */
+  readonly storyEffects?: unknown;
 };
 
 export async function loadStoryFeed(
@@ -193,6 +221,7 @@ export async function loadStoryFeed(
   return params.transport.request<readonly StoryFeedPost[]>({
     method: 'GET',
     path: '/api/v1/social/posts?scope=stories&limit=50',
+    headers: CANVAS_CAPS_HEADERS,
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });
 }
@@ -246,6 +275,7 @@ export async function loadStoryPost(
     method: 'GET',
     path: `/api/v1/posts/${encodeURIComponent(params.postId)}`,
     timeoutMs: STORY_POST_FALLBACK_TIMEOUT_MS,
+    headers: CANVAS_CAPS_HEADERS,
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });
 }

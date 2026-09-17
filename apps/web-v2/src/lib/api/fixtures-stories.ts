@@ -1,4 +1,5 @@
 import { VIEWER_ID } from './fixtures-base';
+import { REEL_CLIP_RGB, REEL_CLIP_VOICE, STORY_CLIP_LONG } from './fixtures-reel-clips';
 import type { StatusMoodPost, StoryFeedPost, StoryTrayPost } from './stories';
 
 /**
@@ -103,6 +104,220 @@ export const STORY_TRAY: readonly StoryTrayPost[] = [
     author: { id: VIEWER_ID, username: 'vous', displayName: 'Moi' },
     media: [{ id: 'm4', thumbnailUrl: '', mimeType: 'image/jpeg' }],
   },
+  /**
+   * **LA STORY VIDÉO** (#6807) — la seule du corpus, et le seul chemin par
+   * lequel `StoryMediaLayer` peut élire un `<video>` en recette (#6801).
+   *
+   * DÉJÀ VUE et la PLUS ANCIENNE, délibérément : le rail range les non-vues
+   * d'abord, puis par date. Une story neuve et non vue prendrait la TÊTE du
+   * rail et déplacerait chaque tuile existante — un gate qui atteint « la
+   * première pastille » basculerait sans que rien de sa règle ait changé.
+   * Son auteur est NOUVEAU pour la même raison : ajouter cette story à
+   * Camille ou à Inès ferait passer leur compteur de « 1 story » à
+   * « 2 stories », un libellé que la recette d'internationalisation lit.
+   */
+  {
+    id: 'st-video',
+    type: 'STORY',
+    createdAt: hoursAgo(9),
+    expiresAt: hoursFromNow(11),
+    viewCount: 21,
+    isViewedByMe: true,
+    author: { id: 'u-tarek', username: 'tarek', firstName: 'Tarek', lastName: 'Amrani' },
+    media: [{ id: 'm5', thumbnailUrl: '', mimeType: 'video/webm' }],
+  },
+  /**
+   * **LA STORY VIDÉO LONGUE** (#6836) — 9 s, au-dessus du plancher de 6 s.
+   *
+   * Elle existe pour UNE raison : `st-video` ne peut pas faire tomber un
+   * lecteur qui aurait gardé la constante au dénominateur. Son clip dure 3 s,
+   * donc `slideDurationMs` et `DEFAULT_SLIDE_DURATION_MS` rendent la MÊME
+   * valeur (6 s) — la loi juste et la loi absente sont indiscernables sur ce
+   * vecteur. À 9 s elles divergent : 9 s contre 6 s, et la diapositive coupe
+   * le média au tiers restant.
+   *
+   * Même précaution de RANG que sa jumelle courte : déjà vue et plus ancienne
+   * qu'elle, chez le MÊME auteur. Un nouvel auteur ajouterait une tuile au
+   * rail ; chez Tarek, son compteur passe de « 1 story » à « 2 stories » —
+   * libellé que la recette d'internationalisation lit — mais sa tuile reste
+   * à sa place et aucune autre ne bouge. C'est le moindre des deux
+   * déplacements, et le seul qui ne touche pas un gate de géographie.
+   */
+  {
+    id: 'st-video-long',
+    type: 'STORY',
+    createdAt: hoursAgo(10),
+    expiresAt: hoursFromNow(10),
+    viewCount: 14,
+    isViewedByMe: true,
+    author: { id: 'u-tarek', username: 'tarek', firstName: 'Tarek', lastName: 'Amrani' },
+    media: [{ id: 'm6', thumbnailUrl: '', mimeType: 'video/webm' }],
+  },
+];
+
+/**
+ * **UNE VRAIE IMAGE PAYSAGE** (#6899) — 16:9, pour que le fond AJUSTÉ
+ * (`videoFitMode: "fit"`) d'une scène v3 laisse des BANDES dans la scène 9:16
+ * (`StoryLetterboxFill`) : `STORY_PHOTO_STAND_IN` ci-dessus est PORTRAIT
+ * (90×160, ~9:16) et ne laisserait aucune bande à habiller.
+ */
+const STORY_SCENE_LANDSCAPE_STAND_IN =
+  'data:image/svg+xml;utf8,' +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 90">' +
+      '<defs><linearGradient id="p" x1="0" y1="0" x2="1" y2="1">' +
+      '<stop offset="0" stop-color="#f97316"/><stop offset="1" stop-color="#7c2d12"/></linearGradient></defs>' +
+      '<rect width="160" height="90" fill="url(#p)"/>' +
+      '<circle cx="128" cy="24" r="10" fill="#fff7ed" opacity="0.9"/>' +
+      '</svg>',
+  );
+
+/** Deux ThumbHash de démonstration. DEUX, et c'est voulu : le composite de la
+ * SLIDE (`LHkC`, rose ambré `#dda09a`, la valeur de `THUMB_HASH_AMBER` dans
+ * `fixtures-feed.ts`) peint le fond flou du lecteur et le placeholder de la
+ * carte ; le MÉDIA de fond (`EHoC`, brun `#763913`, la teinte du paysage qu'il
+ * résume) peint la bande (`letterboxHashes`, fond d'abord). Deux teintes
+ * distinctes sont ce qui permet à `check-story-scene.mjs` de dire, au pixel,
+ * LEQUEL des deux est peint — et une bande SOMBRE est ce qui garde lisible le
+ * texte blanc que l'auteur y pose (la première valeur, `PAo8` = `#8affc5`,
+ * le rendait à peine visible sur la capture). */
+const STORY_SCENE_THUMB_HASH = 'LHkC';
+const STORY_SCENE_MEDIA_THUMB_HASH = 'EHoC';
+
+const sceneStoryAuthor = { id: 'u-nova', username: 'nova', firstName: 'Nova', lastName: 'Haddad' } as const;
+
+/** La pièce PAYSAGE, à la FORME que la passerelle sert (`mediaSelect`,
+ * `postIncludes.ts:98-120`) : `fileUrl`, dimensions, ThumbHash. */
+const scenePano = (id: string) =>
+  ({ id, fileUrl: STORY_SCENE_LANDSCAPE_STAND_IN, mimeType: 'image/svg+xml', width: 1600, height: 900, thumbHash: STORY_SCENE_MEDIA_THUMB_HASH }) as const;
+
+const identity = { scale: 1, rotation: 0, opacity: 1 } as const;
+
+const fitBackground = (postMediaId: string) => ({
+  id: 'bg',
+  kind: 'media',
+  anchor: { t: 'free', x: 0.5, y: 0.5 },
+  plane: 'bg',
+  z: 0,
+  transform: identity,
+  payload: { postMediaId, mediaType: 'image/svg+xml', aspectRatio: 16 / 9, thumbHash: STORY_SCENE_MEDIA_THUMB_HASH, transform: { videoFitMode: 'fit' } },
+});
+
+/**
+ * **LES STORIES DE SCÈNE v3** (#6899) — trois documents canvas `v:3`
+ * (`storyEffects`) rendus par le MÊME moteur que le fil (`ScenePlayer`, D-79),
+ * un par présentation du lecteur :
+ *
+ * - `st-scene` — fond paysage ajusté ET un texte posé sur la BANDE basse
+ *   (`y: 0.92`) ⇒ verdict `canvas` : la carte 9:16 entière, bandes habillées
+ *   au ThumbHash, son de fond (`REEL_CLIP_VOICE`, décodable), épingle de
+ *   timeline à 8 s ;
+ * - `st-scene-image-text` — le même fond, un texte DANS l'image ⇒ `imageOnly`,
+ *   moteur rogné au rectangle de l'image, le texte reste lisible ; épinglée à
+ *   3 s, SOUS le plancher de 6 s : c'est le seul vecteur où l'épingle
+ *   autoritaire (`computedTotalDuration`) et la loi du contenu divergent
+ *   (3 s contre 6 s) ;
+ * - `st-scene-image` — le fond seul ⇒ `imageOnly` sans moteur.
+ *
+ * Les textes sont en espagnol, traduits en anglais seulement : le lecteur de
+ * recette (`fr` puis la langue du navigateur) les lit donc au RANG 2 — un
+ * témoin de rang s'écrit sur un rang autre que le premier (leçon 261).
+ *
+ * ABSENTES de `STORY_TRAY` (délibérément) : un auteur NOUVEAU ajouterait une
+ * tuile au rail, et la géographie du rail est gardée ailleurs (voir
+ * `st-video`) ; ce corpus n'a besoin que d'être atteignable en DIRECT
+ * (`/story/st-scene`), la 3ᵉ marche de la cascade du lecteur. Déjà VUES et
+ * les plus ANCIENNES pour la même raison.
+ */
+export const SCENE_STORIES: readonly StoryFeedPost[] = [
+  {
+    id: 'st-scene',
+    type: 'STORY',
+    createdAt: hoursAgo(13),
+    expiresAt: hoursFromNow(7),
+    viewCount: 2,
+    isViewedByMe: true,
+    author: sceneStoryAuthor,
+    originalLanguage: 'es',
+    media: [scenePano('m-scene-pano'), { id: 'm-scene-track', fileUrl: REEL_CLIP_VOICE, mimeType: 'audio/webm' }],
+    storyEffects: {
+      v: 3,
+      scenes: [
+        {
+          id: 's1',
+          thumbHash: STORY_SCENE_THUMB_HASH,
+          timelineDuration: 8,
+          objects: [
+            fitBackground('m-scene-pano'),
+            {
+              id: 't1',
+              kind: 'text',
+              anchor: { t: 'free', x: 0.5, y: 0.92 },
+              plane: 'fg',
+              z: 1,
+              transform: identity,
+              locale: 'es',
+              payload: { text: 'La hora dorada, sobre las bandas', translations: { en: 'Golden hour, on the bands' }, textColor: '#FFFFFF', fontSize: 64 },
+            },
+            {
+              id: 'a1',
+              kind: 'audio',
+              anchor: { t: 'free', x: 0.5, y: 0.5 },
+              plane: 'bg',
+              z: 0,
+              transform: identity,
+              payload: { isBackground: true, postMediaId: 'm-scene-track', volume: 0.8, loop: true },
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    id: 'st-scene-image-text',
+    type: 'STORY',
+    createdAt: hoursAgo(12),
+    expiresAt: hoursFromNow(8),
+    viewCount: 2,
+    isViewedByMe: true,
+    author: sceneStoryAuthor,
+    originalLanguage: 'es',
+    media: [scenePano('m-scene-pano-2')],
+    storyEffects: {
+      v: 3,
+      scenes: [
+        {
+          id: 's1',
+          thumbHash: STORY_SCENE_THUMB_HASH,
+          timelineDuration: 3,
+          objects: [
+            fitBackground('m-scene-pano-2'),
+            {
+              id: 't1',
+              kind: 'text',
+              anchor: { t: 'free', x: 0.5, y: 0.5 },
+              plane: 'fg',
+              z: 1,
+              transform: identity,
+              locale: 'es',
+              payload: { text: 'Dentro de la imagen', translations: { en: 'Inside the picture' }, textColor: '#FFFFFF', fontSize: 48 },
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    id: 'st-scene-image',
+    type: 'STORY',
+    createdAt: hoursAgo(11),
+    expiresAt: hoursFromNow(9),
+    viewCount: 2,
+    isViewedByMe: true,
+    author: sceneStoryAuthor,
+    media: [scenePano('m-scene-pano-3')],
+    storyEffects: { v: 3, scenes: [{ id: 's1', thumbHash: STORY_SCENE_THUMB_HASH, objects: [fitBackground('m-scene-pano-3')] }] },
+  },
 ];
 
 /**
@@ -166,6 +381,40 @@ export const STORY_FEED: readonly StoryFeedPost[] = [
     content: 'Ma story à moi.',
     originalLanguage: 'fr',
   },
+  /** LA STORY VIDÉO (#6807) — `url` porte un clip VP8 réellement décodable
+   * (`REEL_CLIP_RGB`), jamais une image servie sous un `mimeType` vidéo : le
+   * lecteur peindrait « Média indisponible » sur la seule story censée
+   * prouver qu'une vidéo se joue. Voir la tuile jumelle dans `STORY_TRAY`
+   * pour le choix de la date et de l'auteur. */
+  {
+    id: 'st-video',
+    type: 'STORY',
+    createdAt: hoursAgo(9),
+    expiresAt: hoursFromNow(11),
+    viewCount: 21,
+    isViewedByMe: true,
+    author: { id: 'u-tarek', username: 'tarek', firstName: 'Tarek', lastName: 'Amrani' },
+    content: 'Le marché, en mouvement.',
+    originalLanguage: 'fr',
+    media: [{ id: 'm5', url: REEL_CLIP_RGB, thumbnailUrl: STORY_PHOTO_STAND_IN, mimeType: 'video/webm' }],
+  },
+  /** LA STORY VIDÉO LONGUE (#6836) — 9 s, le SEUL vecteur du corpus sur lequel
+   * `slideDurationMs` et `DEFAULT_SLIDE_DURATION_MS` donnent des réponses
+   * DIFFÉRENTES (9 s contre 6 s). Voir la tuile jumelle dans `STORY_TRAY` pour
+   * le choix de la date et de l'auteur. */
+  {
+    id: 'st-video-long',
+    type: 'STORY',
+    createdAt: hoursAgo(10),
+    expiresAt: hoursFromNow(10),
+    viewCount: 14,
+    isViewedByMe: true,
+    author: { id: 'u-tarek', username: 'tarek', firstName: 'Tarek', lastName: 'Amrani' },
+    content: 'La répétition, en entier.',
+    originalLanguage: 'fr',
+    media: [{ id: 'm6', url: STORY_CLIP_LONG, thumbnailUrl: STORY_PHOTO_STAND_IN, mimeType: 'video/webm' }],
+  },
+  ...SCENE_STORIES,
 ];
 
 /**

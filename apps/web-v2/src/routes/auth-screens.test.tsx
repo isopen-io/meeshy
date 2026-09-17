@@ -1,9 +1,14 @@
-import { describe, expect, test } from 'bun:test';
+import { act, type ReactNode } from 'react';
+import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import { CountrySheet } from '@/components/country-sheet';
 import { Field } from '@/components/field';
 import { LanguageSheet } from '@/components/language-sheet';
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { authColumnIn, strayFromAuthColumn } from '@/test-support/auth-column';
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { LoginDoors } from './login';
 import SignupScreen from './signup';
@@ -25,9 +30,9 @@ import WelcomeScreen from './welcome';
 
 describe('LoginScreen — la marque et la version', () => {
   // La porte du MOT DE PASSE (#6404) : c'est elle qui porte les deux champs
-  // que ce bloc mesure. La porte par défaut (lien magique) a ses propres
+  // que ce bloc mesure. La porte par défaut (connexion par e-mail) a ses propres
   // témoins dans `login-doors.test.tsx`.
-  const html = renderToStaticMarkup(<LoginDoors method="motdepasse" />);
+  const html = renderToStaticMarkup(<LoginDoors method="password" />);
 
   test('rend le GLYPHE des trois traits, jamais l’icône d’application', () => {
     expect(html.match(/<line/g)).toHaveLength(3);
@@ -66,10 +71,10 @@ describe('LoginScreen — la marque et la version', () => {
  * « Mot de passe oublié ? », comme iOS.
  */
 describe('LoginScreen — les deux portes', () => {
-  const html = renderToStaticMarkup(<LoginDoors method="motdepasse" />);
+  const html = renderToStaticMarkup(<LoginDoors method="password" />);
 
   test('le retour vers le lien (/login) précède « Mot de passe oublié ? » (/forgot-password)', () => {
-    const lienIndex = html.indexOf('Recevoir un lien de connexion par e-mail');
+    const lienIndex = html.indexOf('Se connecter par e-mail');
     const forgotPasswordIndex = html.indexOf('href="/forgot-password"');
     expect(lienIndex).toBeGreaterThan(-1);
     expect(forgotPasswordIndex).toBeGreaterThan(-1);
@@ -116,12 +121,12 @@ describe('SignupScreen — les navigations sont des ancres, la langue vient du c
   const html = renderToStaticMarkup(<SignupScreen />);
 
   /**
-   * L'ÉTAT INITIAL NE MONTRE PLUS QUE LE PREMIER BARREAU (#6405) — mais les
-   * deux SORTIES restent : le « X » et « Déjà un compte ? ». Elles ne sont pas
-   * des champs, et quelqu'un qui s'est trompé d'écran ne doit pas remplir une
-   * adresse pour faire paraître le lien qui l'emmène ailleurs. La pastille de
-   * langue et les deux pages légales, elles, vivent au troisième barreau —
-   * `signup-rungs.test.tsx` les mesure une fois dépliés.
+   * L'ÉTAT INITIAL NE MONTRE QUE LE BARREAU DE CONTACT (#6405, redécoupé par
+   * #6582) — mais les deux SORTIES restent : le « X » et « Déjà un compte ? ».
+   * Elles ne sont pas des champs, et quelqu'un qui s'est trompé d'écran ne
+   * doit pas remplir une adresse pour faire paraître le lien qui l'emmène
+   * ailleurs. La pastille de langue et les deux pages légales, elles, vivent
+   * au second barreau — `signup-rungs.test.tsx` les mesure une fois dépliés.
    */
   test('les deux sorties vers la connexion sont des ANCRES, dès la première seconde', () => {
     expect(html.match(/href="\/login"/g)).toHaveLength(2);
@@ -189,6 +194,41 @@ describe('Les feuilles sont de VRAIES modales — `<dialog>`, pas une annonce', 
   });
 });
 
+/**
+ * LA FEUILLE DE LANGUE PARLE LA LANGUE D'INTERFACE (#6328) — avant ce lot,
+ * le titre par défaut et la recherche étaient deux littéraux français, quelle
+ * que soit l'interface. `document.documentElement.lang` gouverne
+ * `currentInterfaceLanguage()` (`lib/interface-language.ts`) : ce bloc le
+ * pose explicitement, à la différence du bloc ci-dessus qui compte sur
+ * `document` absent (⇒ repli français) pour ses propres assertions. L'état
+ * vide (`languageSheet.empty`) est couvert par sa PARITÉ et sa traduction
+ * exacte dans `i18n-catalog.test.ts` — cette feuille n'a aucun moyen
+ * d'interaction pour filtrer sans saisie, hors de portée d'un rendu statique.
+ */
+describe('LanguageSheet — les textes système suivent l’interface, pas le français', () => {
+  const noop = () => undefined;
+
+  beforeAll(async () => {
+    ensureHappyDomRegistered();
+    await loadInterfaceCatalog('de');
+    document.documentElement.lang = 'de';
+  });
+
+  afterAll(async () => {
+    document.documentElement.lang = 'fr';
+    await releaseHappyDomIfRegistered();
+  });
+
+  test('interface allemande ⇒ titre par défaut et recherche en allemand, jamais en français', () => {
+    const html = renderToStaticMarkup(<LanguageSheet onSelect={noop} onClose={noop} />);
+    expect(html).toContain('>Lesesprache</h2>');
+    expect(html).toContain('aria-label="Sprache suchen"');
+    expect(html).toContain('placeholder="Sprache suchen"');
+    expect(html).not.toContain('Langue de lecture');
+    expect(html).not.toContain('Rechercher une langue');
+  });
+});
+
 describe('Field — le refus est DESSINÉ sous son champ, et le champ le DÉSIGNE', () => {
   const withError = renderToStaticMarkup(
     <Field id="essai" label="Adresse e-mail" tint="var(--ios-indigo-500)" focused={false} error="Cette adresse est déjà prise">
@@ -212,5 +252,61 @@ describe('Field — le refus est DESSINÉ sous son champ, et le champ le DÉSIGN
     );
     expect(clean).not.toContain('role="alert"');
     expect(clean).toContain('aria-invalid="false"');
+  });
+});
+
+/**
+ * LES ÉCRANS MONTÉS DANS UN VRAI DOM (#6643) — la colonne se lit sur l'arbre
+ * monté, pas sur une chaîne rendue. Le mot de passe oublié a ses témoins chez
+ * lui (`forgot-password.test.tsx`).
+ */
+const actGlobals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+const unmounts: Array<() => void> = [];
+
+function mount(node: ReactNode): HTMLDivElement {
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  const root = createRoot(container);
+  act(() => {
+    root.render(node);
+  });
+  unmounts.push(() => {
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+  return container;
+}
+
+function withMountedDom() {
+  beforeAll(() => {
+    ensureHappyDomRegistered({ url: 'http://localhost/' });
+    actGlobals.IS_REACT_ACT_ENVIRONMENT = true;
+  });
+  afterEach(() => {
+    unmounts.splice(0).forEach((unmount) => unmount());
+  });
+  afterAll(async () => {
+    delete actGlobals.IS_REACT_ACT_ENVIRONMENT;
+    await releaseHappyDomIfRegistered();
+  });
+}
+
+describe('Les pages d’accès tiennent dans UNE colonne, la puce « Fermer » comprise (#6643)', () => {
+  withMountedDom();
+
+  test('l’accueil : ses deux portes vivent dans la colonne', () => {
+    const el = mount(<WelcomeScreen />);
+    expect(authColumnIn(el)?.querySelector('a[href="/signup"]')).not.toBeNull();
+    expect(strayFromAuthColumn(el)).toEqual([]);
+  });
+
+  test('l’inscription : la puce « Fermer » vit DANS la colonne, jamais au bord de l’écran', () => {
+    const el = mount(<SignupScreen />);
+    const column = authColumnIn(el);
+    expect(column?.querySelector('a[aria-label="Fermer"]')?.getAttribute('href')).toBe('/login');
+    expect(column?.querySelector('#signup-email')).not.toBeNull();
+    expect(strayFromAuthColumn(el)).toEqual([]);
   });
 });

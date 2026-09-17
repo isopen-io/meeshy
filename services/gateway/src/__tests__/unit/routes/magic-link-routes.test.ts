@@ -219,6 +219,39 @@ describe('MagicLink Routes', () => {
       );
     });
 
+    // ────────────────────────────────────────────────────────────────────────
+    // Le retour après connexion par e-mail (#6742) — `returnUrl` est porté par
+    // la DEMANDE jusqu'au service, qui l'embarque dans le lien envoyé.
+    // ────────────────────────────────────────────────────────────────────────
+
+    it('passes returnUrl to the service when provided', async () => {
+      mockRequestMagicLink.mockResolvedValue({ success: true, message: 'ok' });
+
+      await app.inject({
+        method: 'POST',
+        url: '/magic-link/request',
+        payload: { email: 'test@example.com', returnUrl: '/chat/mshy_equipe_7f3a' },
+      });
+
+      expect(mockRequestMagicLink).toHaveBeenCalledWith(
+        expect.objectContaining({ returnUrl: '/chat/mshy_equipe_7f3a' })
+      );
+    });
+
+    it('passes returnUrl=undefined to the service when absent', async () => {
+      mockRequestMagicLink.mockResolvedValue({ success: true, message: 'ok' });
+
+      await app.inject({
+        method: 'POST',
+        url: '/magic-link/request',
+        payload: { email: 'test@example.com' },
+      });
+
+      expect(mockRequestMagicLink).toHaveBeenCalledWith(
+        expect.objectContaining({ returnUrl: undefined })
+      );
+    });
+
     it('returns 400 when email is missing', async () => {
       // Missing required field is caught by Fastify JSON-schema validation before the handler
       const response = await app.inject({
@@ -254,6 +287,72 @@ describe('MagicLink Routes', () => {
       expect(response.statusCode).toBe(400);
       const body = response.json();
       expect(body.success).toBe(false);
+    });
+
+    // ────────────────────────────────────────────────────────────────────────
+    // Un refus du limiteur se dit en 429 (#6655)
+    //
+    // La route rendait `sendSuccess` quoi que le service ait répondu : un
+    // refus de débit sortait donc en HTTP 200, indiscernable d'une adresse
+    // inconnue. Ce témoin rougit si l'on retire la branche
+    // `result.success === false` de la route.
+    // ────────────────────────────────────────────────────────────────────────
+
+    it('returns 429 with code RATE_LIMITED when the limiter refuses the request', async () => {
+      mockRequestMagicLink.mockResolvedValue({
+        success: false,
+        message: 'Too many requests. Please try again later.',
+        error: 'RATE_LIMITED',
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/magic-link/request',
+        payload: { email: 'test@example.com' },
+      });
+
+      expect(response.statusCode).toBe(429);
+      const body = response.json();
+      expect(body.success).toBe(false);
+      expect(body.code).toBe('RATE_LIMITED');
+      expect(body.error).toBe('Too many requests. Please try again later.');
+    });
+
+    it('falls back to RATE_LIMITED when the service refuses without an error code', async () => {
+      mockRequestMagicLink.mockResolvedValue({
+        success: false,
+        message: 'Too many requests. Please try again later.',
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/magic-link/request',
+        payload: { email: 'test@example.com' },
+      });
+
+      expect(response.statusCode).toBe(429);
+      expect(response.json().code).toBe('RATE_LIMITED');
+    });
+
+    it('returns 200 for an unknown address — no observable difference from a known one', async () => {
+      // Le refus du limiteur (429) est le SEUL success:false du service ; une
+      // adresse inconnue rend toujours success:true, pour ne rien énumérer.
+      mockRequestMagicLink.mockResolvedValue({
+        success: true,
+        message: 'If an account exists, a login link has been sent.',
+        expiresInSeconds: 600,
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/magic-link/request',
+        payload: { email: 'unknown@example.com' },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body.success).toBe(true);
+      expect(body.message).toBe('If an account exists, a login link has been sent.');
     });
 
     it('returns 500 and logs error when requestMagicLink throws', async () => {

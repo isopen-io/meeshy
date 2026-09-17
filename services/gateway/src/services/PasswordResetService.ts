@@ -35,6 +35,23 @@ const TOKEN_EXPIRY_MINUTES = 15;
 const MAX_RESET_ATTEMPTS_24H = 10;
 const PASSWORD_HISTORY_COUNT = 10;
 
+/**
+ * Le préfixe d'un jeton LIVRÉ PAR E-MAIL (#6642).
+ *
+ * `completePasswordReset` reçoit deux jetons du même format : celui que
+ * `requestPasswordReset` dépose dans la boîte, et celui que
+ * `PhonePasswordResetService.verifyCode` rend après un code SMS. Le premier
+ * prouve la possession de l'adresse, le second celle du téléphone — seul le
+ * premier a le droit de poser `emailVerifiedAt`.
+ *
+ * Le canal est lié au SECRET, pas à une colonne : le préfixe fait partie de la
+ * chaîne hachée, donc un jeton SMS ne se « promeut » pas en l'y ajoutant (son
+ * hash ne désignerait plus aucune ligne), et `.` n'appartient pas à l'alphabet
+ * base64url — aucun jeton SMS ne commence ainsi par hasard. Les clients
+ * transportent le jeton tel quel.
+ */
+const EMAIL_LINK_TOKEN_PREFIX = 'email.';
+
 export interface PasswordResetRequest {
   email: string;
   captchaToken?: string; // Optional - rate limiting provides protection
@@ -112,6 +129,7 @@ export class PasswordResetService {
           id: true,
           email: true,
           emailVerifiedAt: true,
+          password: true,
           lockedUntil: true,
           passwordResetAttempts: true,
           lastPasswordResetAttempt: true,
@@ -127,15 +145,24 @@ export class PasswordResetService {
         return this.genericSuccessResponse();
       }
 
-      // 5. Email not verified - return generic response
-      if (!user.emailVerifiedAt) {
+      // Le hash ne sert qu'à SAVOIR si le compte en a un : seul ce booléen en
+      // sort (témoin : `PasswordResetService.passwordless.test.ts`). `user` reste
+      // lié à sa requête — le balayage du cadrage (#4642) remonte
+      // `recipientLanguage(user)` jusqu'à `RECIPIENT_LANG_SELECT` par cette liaison.
+      const hasPassword = user.password !== null;
+
+      // 5. Email not verified — la garde ne vaut que pour un compte qui A un mot
+      // de passe (#6642). `MagicLinkService` livre déjà ses liens à une adresse
+      // non vérifiée : pour un compte sans mot de passe (inscription par e-mail
+      // seul, #6424), elle ne protégeait rien et le privait d'en définir un.
+      if (hasPassword && !user.emailVerifiedAt) {
         logger.info('[PasswordResetService] ❌ Email not verified - returning generic response');
         await this.logSecurityEvent(user.id, 'PASSWORD_RESET_UNVERIFIED_EMAIL', 'LOW', {
           email: user.email
         });
         return this.genericSuccessResponse();
       }
-      logger.info('[PasswordResetService] ✅ Email verified at:', user.emailVerifiedAt);
+      logger.info(`[PasswordResetService] ✅ Reset link admitted hasPassword=${hasPassword}`);
 
       // 6. Check account lockout
       const isLocked = await this.checkAccountLockout(user.id);
@@ -170,8 +197,8 @@ export class PasswordResetService {
         // 9. Revoke existing tokens
         await this.revokeExistingTokens(user.id);
 
-        // 10. Generate secure token
-        const token = crypto.randomBytes(32).toString('base64url');
+        // 10. Generate secure token — le canal voyage DANS le secret haché
+        const token = `${EMAIL_LINK_TOKEN_PREFIX}${crypto.randomBytes(32).toString('base64url')}`;
         const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
         // 11. Get geolocation
@@ -213,7 +240,8 @@ export class PasswordResetService {
           name: `${user.firstName} ${user.lastName}`,
           resetLink: `${process.env.FRONTEND_URL}/reset-password?token=${token}`,
           expiryMinutes: TOKEN_EXPIRY_MINUTES,
-          language: recipientLanguage(user, 'en')
+          language: recipientLanguage(user, 'en'),
+          intent: hasPassword ? 'reset' : 'set'
         });
 
       } finally {
@@ -283,6 +311,7 @@ export class PasswordResetService {
               firstName: true,
               lastName: true,
               password: true,
+              emailVerifiedAt: true,
               twoFactorSecret: true,
               twoFactorEnabledAt: true,
               ...RECIPIENT_LANG_SELECT
@@ -385,12 +414,18 @@ export class PasswordResetService {
       // 12. Hash new password — coût UNIQUE du dépôt (`utils/password-hash`)
       const hashedPassword = await hashPassword(newPassword);
 
-      // 13. Transaction: Update password, invalidate sessions, mark token used
+      // 13. Transaction: Update password, invalidate sessions, mark token used.
+      // Un lien DÉPOSÉ dans la boîte prouve qu'on la possède (#6642) : il pose
+      // `emailVerifiedAt` s'il manquait, sans quoi un compte qui vient de définir
+      // son premier mot de passe redeviendrait muet à sa prochaine demande. Un
+      // jeton du parcours SMS ne prouve que le téléphone (`EMAIL_LINK_TOKEN_PREFIX`).
+      const mailboxProven = token.startsWith(EMAIL_LINK_TOKEN_PREFIX) && !user.emailVerifiedAt;
       await this.prisma.$transaction(async (tx) => {
         // Update password
         await tx.user.update({
           where: { id: user.id },
           data: {
+            ...(mailboxProven ? { emailVerifiedAt: new Date() } : {}),
             password: hashedPassword,
             lastPasswordChange: new Date(),
             passwordResetAttempts: 0,

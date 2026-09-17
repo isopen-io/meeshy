@@ -10,7 +10,9 @@
  * schéma × gabarit (390 × 844, 320 × 568) :
  *
  *  1. l'écran d'attente a disparu ; les sections d'iOS sont là ; six bascules ;
- *     chaque entrée non portée mène au legacy (`https://meeshy.me`, nouvel onglet) ;
+ *     aucune entrée non portée n'est offerte — le legacy est décommissionné
+ *     (#6702) — et aucun contrôle ne vise une autre origine : la suppression
+ *     de compte ouvre sa page de la v2, dans le même onglet (#6715) ;
  *  2. chaque contrôle et chaque texte s'atteignent à leur centre (au repos et
  *     amenés au milieu), et chaque contrôle fait au moins 44 px ; aucun
  *     débordement horizontal ;
@@ -197,16 +199,29 @@ try {
       const sections = await page.$$eval('#contenu section h2', (els) => els.map((el) => (el.textContent ?? '').trim()));
       check(
         ['COMPTE', 'CONFIDENTIALITÉ', 'APPARENCE', 'NOTIFICATIONS', 'DONNÉES', 'OUTILS', 'À PROPOS'].every((title) => sections.includes(title)),
-        `${label} : les sections d'iOS (${JSON.stringify(sections)})`,
+        `${label} : les sections d'iOS, « Données » comprise depuis que l'export y mène (#6725) (${JSON.stringify(sections)})`,
       );
       check((await page.$$('[role="switch"]')).length === 6, `${label} : six bascules que la passerelle obéit`);
       check(((await textOf(page, '[data-settings-profile]')) ?? '').includes('@awa'), `${label} : la carte de profil porte la session`);
-      const legacy = await page.$$eval('a[data-legacy]', (els) => els.map((el) => ({ href: el.getAttribute('href'), target: el.getAttribute('target'), rel: el.getAttribute('rel') })));
-      check(
-        legacy.length === 7 && legacy.every((l) => l.href.startsWith('https://meeshy.me/') && l.target === '_blank' && l.rel === 'noopener noreferrer'),
-        `${label} : les sept entrées non portées mènent au legacy, dans un nouvel onglet — ${JSON.stringify(legacy)}`,
+      // Le legacy est décommissionné (#6702) : une entrée non portée est MASQUÉE,
+      // jamais marquée. La suppression de compte mène à SA page de la v2
+      // (#6715), sur la même origine et dans le même onglet : plus AUCUN
+      // contrôle des réglages ne vise une autre origine.
+      const links = await page.$$eval('#contenu a[href]', (els) =>
+        els.map((el) => ({ href: el.getAttribute('href') ?? '', target: el.getAttribute('target') })),
       );
-      check(legacy.some((l) => l.href === 'https://meeshy.me/account/deletion'), `${label} : la suppression de compte est atteignable`);
+      const external = links.filter((l) => /^(?:[a-z]+:)?\/\//i.test(l.href));
+      check(external.length === 0, `${label} : aucun contrôle ne vise une autre origine — ${JSON.stringify(external)}`);
+      const deletion = links.filter((l) => l.href === '/account/deletion');
+      check(
+        deletion.length === 1 && deletion[0].target === null,
+        `${label} : la suppression de compte ouvre sa page de la v2, dans le même onglet — ${JSON.stringify(deletion)}`,
+      );
+      const dataExport = links.filter((l) => l.href === '/settings/data-export');
+      check(
+        dataExport.length === 1 && dataExport[0].target === null,
+        `${label} : l'export de données ouvre sa page de la v2, dans le même onglet (#6725) — ${JSON.stringify(dataExport)}`,
+      );
       check((await textOf(page, '[data-settings-version]')) === VERSION, `${label} : la version servie est celle du paquet (${VERSION})`);
       await capture(page, `reglages-${suffix}`);
 
@@ -231,7 +246,10 @@ try {
       check(rest.texts.length >= 4 && stolen.length === 0, `${label} : aucun texte n'est volé à son centre au repos (${rest.texts.length}) — ${JSON.stringify(stolen)}`);
       const scrolled = await reachScrolled(page);
       const unreachable = scrolled.filter((c) => !c.ok || c.hauteur < TAP_FLOOR);
-      check(scrolled.length >= 20 && unreachable.length === 0, `${label} : chaque contrôle s'atteint et fait ${TAP_FLOOR} px (${scrolled.length}) — ${JSON.stringify(unreachable)}`);
+      // Dix-huit contrôles au moins depuis le retour de l'export de données (#6725) : profil 1,
+      // compte 1, confidentialité 4, apparence 5, notifications 2, données 1, outils 1, à propos 2,
+      // déconnexion 1. Médias et messages restent masqués (#6723, #6724).
+      check(scrolled.length >= 18 && unreachable.length === 0, `${label} : chaque contrôle s'atteint et fait ${TAP_FLOOR} px (${scrolled.length}) — ${JSON.stringify(unreachable)}`);
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
       check(overflow <= 0, `${label} : aucun débordement horizontal (${overflow} px)`);
 
@@ -335,4 +353,4 @@ if (failures.length > 0) {
   for (const f of failures) console.error(`    · ${f}`);
   process.exit(1);
 }
-console.log('\n  Les réglages ont un effet : thème et langue à chaud, bascules optimistes, legacy atteignable, déconnexion réelle.\n');
+console.log('\n  Les réglages ont un effet : thème et langue à chaud, bascules optimistes, suppression de compte sur la v2, déconnexion réelle.\n');

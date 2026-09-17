@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 
 import { CHROME_ACTION_HIT_CLASS, ChromeActionDisc } from '@/components/chrome-action';
 import { Glyph } from '@/components/glyph';
+import { translateAdmin } from '@/lib/i18n-admin-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { Link } from '@/routes/route-table';
@@ -22,17 +23,6 @@ const BRAND = 'var(--color-ios-brand)';
 const INK = 'var(--color-ios-ink)';
 const INK2 = 'var(--color-ios-ink-2)';
 
-/**
- * L'ORIGINE DU LEGACY — là où vivent les neuf sections que la v2 ne sert pas
- * encore.
- *
- * Une CONSTANTE, pas une variable de construction : le legacy sert
- * `meeshy.me` et c'est un fait d'exploitation, pas un réglage. Même doctrine
- * que `PRODUCTION_ORIGIN` dans `lib/api/config.ts` — un défaut qui marche
- * TOUJOURS plutôt qu'une valeur qu'un déploiement peut oublier de poser.
- */
-export const LEGACY_ADMIN_ORIGIN = 'https://meeshy.me';
-
 export function AdminHeader({
   language,
   title,
@@ -40,7 +30,15 @@ export function AdminHeader({
 }: {
   readonly language: InterfaceLanguage;
   readonly title: string;
-  readonly back: 'list' | 'admin';
+  /**
+   * Les DEUX listes de membres y figurent (#6819) : un écran de détail revient
+   * à la liste d'où l'on vient, jamais au tableau de bord — et il revient dans
+   * l'ESPACE d'où l'on vient. `/adm/users/$user` renvoie vers `admUsers`,
+   * `/admin/users/$user` vers `adminUsers` ; confondre les deux ferait sauter
+   * l'administrateur d'une administration à l'autre au premier retour, alors
+   * que D-76 les tient séparées à dessein.
+   */
+  readonly back: 'list' | 'admin' | 'adminUsers' | 'admUsers';
 }) {
   return (
     <header className="flex shrink-0 items-center gap-1 px-2" style={{ height: ADMIN_HEADER_HEIGHT }} lang={language}>
@@ -76,10 +74,10 @@ export function AdminDenied({ language }: { readonly language: InterfaceLanguage
     <div className="grid flex-1 place-items-center p-6 text-center">
       <div className="grid gap-3">
         <p className="text-screen font-bold" style={{ color: INK }}>
-          {translate(language, 'admin.denied.title')}
+          {translateAdmin(language, 'admin.denied.title')}
         </p>
         <p className="text-caption" style={{ color: INK2 }}>
-          {translate(language, 'admin.denied.message')}
+          {translateAdmin(language, 'admin.denied.message')}
         </p>
         <Link
           to="list"
@@ -129,19 +127,88 @@ export function AdminScreenFrame({
   language,
   title,
   back,
+  fills = false,
   children,
 }: {
   readonly language: InterfaceLanguage;
   readonly title: string;
-  readonly back: 'list' | 'admin';
+  /**
+   * Les DEUX listes de membres y figurent (#6819) : un écran de détail revient
+   * à la liste d'où l'on vient, jamais au tableau de bord — et il revient dans
+   * l'ESPACE d'où l'on vient. `/adm/users/$user` renvoie vers `admUsers`,
+   * `/admin/users/$user` vers `adminUsers` ; confondre les deux ferait sauter
+   * l'administrateur d'une administration à l'autre au premier retour, alors
+   * que D-76 les tient séparées à dessein.
+   */
+  readonly back: 'list' | 'admin' | 'adminUsers' | 'admUsers';
+  /**
+   * L'ÉCRAN PORTE-T-IL SON PROPRE DÉFILEMENT ? (#6862, lot C)
+   *
+   * `false` (défaut) — le cadre défile, et son contenu grandit librement :
+   * c'est ce que font une fiche, une liste paginée, un tableau de bord.
+   *
+   * `true` — le contenu REMPLIT la hauteur et défile lui-même. La lecture
+   * souveraine d'une conversation monte un fil VIRTUALISÉ, qui a besoin de
+   * désigner son conteneur de défilement et que celui-ci ait une hauteur
+   * BORNÉE. Sous le cadre défilant, ce conteneur n'en a aucune : le
+   * virtualiseur mesure alors une fenêtre infinie et monte toutes les rangées
+   * — c'est-à-dire exactement ce que la virtualisation existe pour éviter, et
+   * sans qu'aucune erreur ne le signale.
+   */
+  readonly fills?: boolean;
   readonly children: ReactNode;
 }) {
   return (
     <div className="flex h-dvh flex-col overflow-hidden pt-safe">
       <AdminHeader language={language} title={title} back={back} />
-      <main id="contenu" className="flex flex-1 flex-col overflow-y-auto px-4 pb-safe">
-        <div className="mx-auto w-full max-w-3xl pb-24">{children}</div>
-      </main>
+      {fills ? (
+        <main id="contenu" className="flex min-h-0 flex-1 flex-col px-4 pb-safe">
+          <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col">{children}</div>
+        </main>
+      ) : (
+        <main id="contenu" className="flex flex-1 flex-col overflow-y-auto px-4 pb-safe">
+          <div className="mx-auto w-full max-w-3xl pb-24">{children}</div>
+        </main>
+      )}
     </div>
+  );
+}
+
+/**
+ * CE QU'UN GESTE D'ADMINISTRATION A FAIT, DIT À VOIX HAUTE (#6819).
+ *
+ * Une écriture réussie ne change parfois qu'une ligne d'une fiche — un rôle,
+ * un interrupteur. Sans annonce, un lecteur d'écran ne signale RIEN : le geste
+ * a eu lieu, personne ne l'apprend. `role="status"` + `aria-live="polite"`
+ * énonce le résultat sans voler le focus.
+ *
+ * Jumeau de `LinksAnnouncement`, et non son import : celui-là vit dans les
+ * pièces des LIENS. Emprunter un composant à une autre famille pour son
+ * comportement crée une dépendance que son nom dément — et c'est le genre de
+ * lien qu'on ne défait plus.
+ *
+ * Le texte VIDE reste monté en `sr-only` : démonter la région la retirerait de
+ * l'arbre d'accessibilité, et la remonter avec du texte ne serait plus une
+ * MISE À JOUR de région vivante — beaucoup de lecteurs ne l'annonceraient pas.
+ */
+export function AdminAnnouncement({ text }: { readonly text: string }) {
+  return (
+    <p
+      role="status"
+      aria-live="polite"
+      data-admin-announcement
+      className={
+        text === ''
+          ? 'sr-only'
+          : 'pointer-events-none fixed inset-x-0 bottom-24 z-20 mx-auto w-fit max-w-[calc(100%-2rem)] rounded-chip px-4 py-2.5 text-center text-caption font-semibold'
+      }
+      style={
+        text === ''
+          ? undefined
+          : { backgroundColor: 'var(--color-ios-surface)', border: '1px solid var(--color-edge)', color: INK }
+      }
+    >
+      {text}
+    </p>
   );
 }

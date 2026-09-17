@@ -530,14 +530,27 @@ private struct PlafondDeHauteur: Layout {
 
 // MARK: - Lisibilité sur un fond quelconque
 
-private extension View {
+public extension View {
     /// L'ombre portée qui fait tenir du texte blanc sur une composition claire.
+    ///
+    /// `public` depuis #6693 : le nom de l'auteur d'un réel, posé sur la même image que
+    /// la légende, la réclame quand la luminance du média le demande — une seconde
+    /// recette d'ombre côté app aurait été une seconde règle.
     /// Deux passes : une courte et dense qui détache la lettre, une longue et
     /// douce qui pose le bloc. Une seule ne suffit pas sur un fond blanc.
     func legibleOverCanvas() -> some View {
-        self
-            .shadow(color: .black.opacity(0.75), radius: 2, x: 0, y: 1)
-            .shadow(color: .black.opacity(0.35), radius: 7, x: 0, y: 2)
+        legibleOverCanvas(on: .dark)
+    }
+
+    /// La même ombre, dans la polarité que le schéma du glyphe commande (#6704) :
+    /// noire sous un glyphe blanc, blanche sous un glyphe sombre. C'est le PLANCHER
+    /// des rails posés nus sur un média — là où des bandes alternées sous un même
+    /// glyphe ne laissent aucune teinte tenir 3:1 (`CanvasChromeScheme.legibilityHalo`).
+    func legibleOverCanvas(on scheme: ColorScheme) -> some View {
+        let halo = CanvasChromeScheme.legibilityHalo(for: scheme)
+        return self
+            .shadow(color: halo.opacity(0.75), radius: 2, x: 0, y: 1)
+            .shadow(color: halo.opacity(0.35), radius: 7, x: 0, y: 2)
     }
 }
 

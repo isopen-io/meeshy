@@ -307,6 +307,29 @@ describe('getLanguagesWithTranslation', () => {
   it('returns a non-empty subset', () => {
     expect(getLanguagesWithTranslation().length).toBeGreaterThan(0);
   });
+
+  // #6785: ces 7 langues camerounaises n'ont aucune entrée dans
+  // LANGUAGE_MAPPINGS (services/translator/src/config/settings.py, décision
+  // #3659) — TranslatorEngine lève une erreur explicite plutôt que d'inventer
+  // une traduction. getLanguagesWithTranslation() alimente directement
+  // PostAudioService.getPlatformTargetLanguages() : un `true` ici enverrait
+  // ces codes au translator, qui échouerait pour chacun d'eux.
+  const UNMAPPED_NLLB_CAMEROON_CODES = ['bas', 'ksf', 'nnh', 'dua', 'ewo', 'byv', 'fan'] as const;
+
+  it('excludes languages with no NLLB-200 mapping (Cameroonian codes, #3659/#6785)', () => {
+    const translatableCodes = new Set(getLanguagesWithTranslation().map(l => l.code));
+    for (const code of UNMAPPED_NLLB_CAMEROON_CODES) {
+      expect(translatableCodes.has(code)).toBe(false);
+    }
+  });
+
+  it('still offers the unmapped Cameroonian codes as languages (not removed from the catalog)', () => {
+    const allCodes = new Set(SUPPORTED_LANGUAGES.map(l => l.code));
+    for (const code of UNMAPPED_NLLB_CAMEROON_CODES) {
+      expect(allCodes.has(code)).toBe(true);
+      expect(getLanguageInfo(code).supportsTranslation).toBe(false);
+    }
+  });
 });
 
 describe('getLanguagesByRegion', () => {

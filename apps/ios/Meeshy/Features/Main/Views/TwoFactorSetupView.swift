@@ -57,6 +57,7 @@ struct TwoFactorSetupView: View {
                     }
                     .padding(.horizontal, MeeshySpacing.lg)
                     .padding(.top, MeeshySpacing.lg)
+                    .iPadFormWidth()
                 }
             }
             .navigationTitle(String(localized: "2fa_setup_title", defaultValue: "Configurer la 2FA"))
@@ -165,6 +166,7 @@ struct TwoFactorSetupView: View {
                     .padding(.vertical, 12)
                     .background(Capsule().fill(tfaColor))
             }
+            .accessibilityIdentifier("twoFactor.setup.next")
             .padding(.top, 8)
         }
     }
@@ -498,10 +500,12 @@ struct TwoFactorDisableView: View {
                         )
                     }
                     .disabled(disableCode.count != 6 || disablePassword.isEmpty || disabling)
+                    .accessibilityIdentifier("twoFactor.disable.submit")
                     .padding(.horizontal, MeeshySpacing.lg)
 
                     Spacer()
                 }
+                .iPadFormWidth()
             }
             .navigationTitle(String(localized: "2fa_disable_nav_title", defaultValue: "Désactiver la 2FA"))
             .navigationBarTitleDisplayMode(.inline)
@@ -651,6 +655,7 @@ struct TwoFactorBackupCodesView: View {
                     }
                     .padding(.horizontal, MeeshySpacing.lg)
                     .padding(.top, MeeshySpacing.lg)
+                    .iPadFormWidth()
                 }
             }
             .navigationTitle(String(localized: "2fa_backup_codes_title", defaultValue: "Codes de secours"))
@@ -717,6 +722,7 @@ struct TwoFactorBackupCodesView: View {
                     )
             }
             .disabled(verificationCode.count != 6)
+            .accessibilityIdentifier("twoFactor.backupCodes.submit")
         }
     }
 

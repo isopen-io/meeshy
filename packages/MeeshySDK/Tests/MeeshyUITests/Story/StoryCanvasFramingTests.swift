@@ -31,11 +31,42 @@ final class StoryCanvasFramingTests: XCTestCase {
         XCTAssertEqual(r.cornerRadius, 0, accuracy: 0.0001)
     }
 
-    func test_resolve_immersive_isIdentityNoCorners() {
+    /// **`.immersive` COUVRE le viewport depuis le 2026-09-16** (#6806, directive
+    /// porteur : « il faut pas afficher une troisieme couche en plein plein
+    /// écran, mais juste agrandir le canvas à sa taille total du viewport »).
+    ///
+    /// Ce témoin exigeait l'identité — et sur un état qui ne décidait alors
+    /// rien, c'était le verdict juste. Il est remplacé plutôt que retiré, avec
+    /// la date qui l'a renversé : sans elle, le prochain qui lit « `.free` et
+    /// `.immersive` court-circuitent tous deux vers l'identité » remettra
+    /// l'ancienne règle en croyant réparer.
+    ///
+    /// Le facteur est une COUVERTURE : le rapport du canvas est préservé, ce qui
+    /// dépasse sort de l'écran. Il ne rétrécit jamais (`max(1, …)`) — un canvas
+    /// PLUS LARGE que le viewport n'a rien à agrandir.
+    func test_resolve_immersive_coversTheViewport() {
         let r = StoryCanvasFraming.resolve(makeInput(state: .immersive))
-        XCTAssertEqual(r.scale, 1, accuracy: 0.0001)
+        XCTAssertGreaterThan(r.scale, 1, "le canvas doit grandir jusqu'à couvrir")
         XCTAssertEqual(r.offset, .zero)
         XCTAssertEqual(r.cornerRadius, 0, accuracy: 0.0001)
+
+        // La couverture, mesurée : le canvas 9:16 ajusté dans le viewport, puis
+        // agrandi jusqu'à ce que sa HAUTEUR atteigne celle du viewport.
+        let intrinsic = CanvasGeometry.aspectFitSize(in: viewport(),
+                                                     ratio: CanvasGeometry.portraitRatio)
+        XCTAssertEqual(intrinsic.height * r.scale, viewport().height, accuracy: 0.5,
+                       "plus un point de sol au-dessus ni au-dessous")
+        XCTAssertGreaterThanOrEqual(intrinsic.width * r.scale, viewport().width,
+                                    "et la largeur couvre, quitte à déborder")
+    }
+
+    /// **Le COMPOSER n'est pas touché**, et c'est la moitié qui protège
+    /// l'auteur : `.free` est aussi ce qu'il passe pendant le dessin et
+    /// l'édition de texte. Y couvrir le viewport rognerait la scène qu'il est en
+    /// train de composer — le contraire de « dessinable jusqu'aux angles ».
+    func test_resolve_free_staysIdentity_soTheComposerIsNeverCropped() {
+        let r = StoryCanvasFraming.resolve(makeInput(state: .free))
+        XCTAssertEqual(r.scale, 1, accuracy: 0.0001)
     }
 
     func test_resolve_carded_shrinksAndRoundsCorners() {
@@ -266,14 +297,30 @@ final class StoryCanvasFramingTests: XCTestCase {
         XCTAssertEqual(input.canvasRatio, CanvasGeometry.portraitRatio, accuracy: 0.0001)
     }
 
-    func test_readerPresentation_fullscreenSession_alwaysFree() {
-        // En session plein écran, le canvas reste plein bord même quand le chrome
-        // ré-apparaît temporairement (touch-and-hold peek) — pas de re-cardage.
+    /// **La session plein écran rend `.immersive` depuis le 2026-09-16** (#6806).
+    ///
+    /// Ce que le témoin gardait reste vrai et reste gardé : le canvas ne se
+    /// RE-CARDE pas quand le chrome réapparaît au touch-and-hold. Seul le nom de
+    /// l'état change — et il change parce que `.free` ne pouvait plus porter les
+    /// deux sens à la fois, le composer le passant lui aussi.
+    func test_readerPresentation_fullscreenSession_alwaysImmersive() {
         XCTAssertEqual(
             StoryCanvasFraming.readerPresentation(isFullscreenSession: true, chromeVisible: true),
-            .free)
+            .immersive)
         XCTAssertEqual(
             StoryCanvasFraming.readerPresentation(isFullscreenSession: true, chromeVisible: false),
+            .immersive)
+    }
+
+    /// **Hors session plein écran, rien ne bouge** : cardé au repos, plein bord
+    /// au peek. Le peek garde `.free` — un aperçu transitoire qui zoomerait
+    /// ferait respirer l'écran à chaque doigt posé.
+    func test_readerPresentation_outsideFullscreen_isUnchanged() {
+        XCTAssertEqual(
+            StoryCanvasFraming.readerPresentation(isFullscreenSession: false, chromeVisible: true),
+            .carded)
+        XCTAssertEqual(
+            StoryCanvasFraming.readerPresentation(isFullscreenSession: false, chromeVisible: false),
             .free)
     }
 

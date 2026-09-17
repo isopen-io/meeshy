@@ -228,6 +228,68 @@ class FeedComposerDraftTest {
         assertThat(request.mediaIds).containsExactly("m1")
     }
 
+    // --- accessibility description per media (#6739) ------------------------
+
+    @Test
+    fun `a fresh draft has no alt text for any media`() {
+        assertThat(FeedComposerDraft().mediaAlt).isEmpty()
+    }
+
+    @Test
+    fun `withAlt records the description for the given media id`() {
+        val draft = FeedComposerDraft().withMedia(listOf(media("m1"))).withAlt("m1", "A red bicycle")
+
+        assertThat(draft.mediaAlt).containsExactly("m1", "A red bicycle")
+    }
+
+    @Test
+    fun `withAlt on a blank text clears any previously recorded description`() {
+        val draft = FeedComposerDraft().withMedia(listOf(media("m1")))
+            .withAlt("m1", "A red bicycle")
+            .withAlt("m1", "   ")
+
+        assertThat(draft.mediaAlt).isEmpty()
+    }
+
+    @Test
+    fun `withAlt replaces rather than accumulates for the same media id`() {
+        val draft = FeedComposerDraft().withMedia(listOf(media("m1")))
+            .withAlt("m1", "first draft")
+            .withAlt("m1", "final wording")
+
+        assertThat(draft.mediaAlt).containsExactly("m1", "final wording")
+    }
+
+    @Test
+    fun `withoutMedia prunes that media's alt text so it never resurfaces on another id`() {
+        val draft = FeedComposerDraft().withMedia(listOf(media("m1"), media("m2")))
+            .withAlt("m1", "first")
+            .withAlt("m2", "second")
+            .withoutMedia("m1")
+
+        assertThat(draft.mediaAlt).containsExactly("m2", "second")
+    }
+
+    @Test
+    fun `publishRequest carries only alt entries for currently attached media ids`() {
+        val request = FeedComposerDraft()
+            .withMedia(listOf(media("m1")))
+            .withAlt("m1", "A red bicycle")
+            .withAlt("stale-id", "orphaned entry")
+            .publishRequest()
+
+        assertThat(request).isNotNull()
+        assertThat(request!!.mediaAlt).containsExactly("m1", "A red bicycle")
+    }
+
+    @Test
+    fun `a publish request with no alt text carries an empty map, never null-shaped surprises`() {
+        val request = FeedComposerDraft().withMedia(listOf(media("m1"))).publishRequest()
+
+        assertThat(request).isNotNull()
+        assertThat(request!!.mediaAlt).isEmpty()
+    }
+
     // --- reel classification (ReelComposition) ------------------------------
 
     @Test

@@ -42,21 +42,26 @@
 
     <!-- Account recovery -->
     <string name="login_forgot_password">Esqueceu a senha?</string>
-    <string name="login_magic_link">Link mágico</string>
+    <string name="login_magic_link">Entrar com e-mail</string>
     <string name="auth_back">Voltar</string>
     <string name="auth_back_to_login">Voltar ao login</string>
     <string name="auth_email_label">E-mail</string>
-    <string name="auth_forgot_title">Redefinir senha</string>
-    <string name="auth_forgot_subtitle">Digite seu e-mail e enviaremos um link de redefinição.</string>
-    <string name="auth_forgot_send">Enviar link</string>
-    <string name="auth_forgot_sent">Se existir uma conta para %1$s, um link foi enviado. Verifique sua caixa de entrada.</string>
-    <string name="auth_magic_title">Link mágico</string>
-    <string name="auth_magic_subtitle">Entre sem senha: enviaremos um link de acesso de uso único.</string>
-    <string name="auth_magic_send">Enviar link mágico</string>
-    <string name="auth_magic_sent">Link enviado para %1$s. Abra-o neste dispositivo para entrar.</string>
+    <string name="auth_forgot_title">Esqueci a senha</string>
+    <string name="auth_forgot_subtitle">Receba por e-mail um link para escolher uma nova senha.</string>
+    <string name="auth_forgot_never_had_label">Nunca teve uma senha?</string>
+    <string name="auth_forgot_never_had_text">Esse mesmo link permite criar uma.</string>
+    <string name="auth_magic_title">Login por e-mail</string>
+    <string name="auth_magic_header">Seu endereço de e-mail</string>
+    <string name="auth_magic_how_label">Como funciona</string>
+    <string name="auth_magic_subtitle">Nenhuma senha para lembrar: enviamos um link por e-mail. Abra-o e você estará conectado.</string>
+    <string name="auth_magic_send">Receber o link</string>
+    <string name="auth_magic_sent_title">E-mail enviado</string>
+    <string name="auth_magic_sent">Abra o link enviado para %1$s</string>
+    <string name="auth_magic_nothing_label">Não recebeu nada?</string>
+    <string name="auth_magic_nothing_text">Verifique sua pasta de spam: a mensagem pode ter ido parar lá.</string>
     <string name="auth_magic_countdown">Link válido por %1$s</string>
     <string name="auth_magic_expired">O link expirou. Envie um novo.</string>
-    <string name="auth_magic_resend">Reenviar link</string>
+    <string name="auth_magic_resend">Reenviar o link</string>
     <string name="auth_magic_validating">Entrando…</string>
     <string name="auth_magic_success">Login realizado!</string>
     <string name="auth_magic_invalid">Link inválido ou expirado</string>

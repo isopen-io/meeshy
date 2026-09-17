@@ -446,6 +446,11 @@ public struct FeedComment: Identifiable, Sendable {
     /// gateway depuis `metadata.location`). Était décodé puis JETÉ au passage
     /// domaine — même panne que `FeedPost.location`, corrigée le 2026-07-30.
     public var location: SharedPlace? = nil
+    /// **Le média du POST que ce commentaire CITE** (#6578) — distinct de
+    /// `media` ci-dessus, qui porte les pièces JOINTES au commentaire. Les deux
+    /// peuvent coexister : « regarde la deuxième photo » + ses propres clichés.
+    /// `nil` ⇒ le commentaire parle du post, pas d'un média en particulier.
+    public var quotedMedia: CommentQuotedMedia? = nil
 
     public var displayContent: String { translatedContent ?? content }
 
@@ -466,7 +471,10 @@ public struct FeedComment: Identifiable, Sendable {
             parentId: parentId, effectFlags: newFlags,
             originalLanguage: originalLanguage,
             translatedContent: newContent == content ? translatedContent : nil,
-            currentUserReactions: currentUserReactions, media: media, location: location
+            currentUserReactions: currentUserReactions, media: media, location: location,
+            // Une ÉDITION ne change pas ce dont le commentaire PARLE : la
+            // citation survit au nouveau texte, comme elle survit en base.
+            quotedMedia: quotedMedia
         )
     }
 
@@ -476,7 +484,7 @@ public struct FeedComment: Identifiable, Sendable {
                 parentId: String? = nil, effectFlags: Int = 0,
                 originalLanguage: String? = nil, translatedContent: String? = nil,
                 currentUserReactions: [String]? = nil, media: [FeedMedia] = [],
-                location: SharedPlace? = nil) {
+                location: SharedPlace? = nil, quotedMedia: CommentQuotedMedia? = nil) {
         self.id = id; self.author = author; self.authorId = authorId; self.authorUsername = authorUsername
         self.authorColor = DynamicColorGenerator.colorForName(authorId.isEmpty ? author : authorId)
         self.authorAvatarURL = authorAvatarURL; self.parentId = parentId
@@ -486,6 +494,7 @@ public struct FeedComment: Identifiable, Sendable {
         self.currentUserReactions = currentUserReactions
         self.media = media
         self.location = location
+        self.quotedMedia = quotedMedia
     }
 }
 
@@ -495,6 +504,7 @@ extension FeedComment: Codable {
     enum CodingKeys: String, CodingKey {
         case id, author, authorId, authorUsername, authorAvatarURL, parentId, content, timestamp, likes, replies
         case effectFlags, originalLanguage, translatedContent, currentUserReactions, media, location
+        case quotedMedia
     }
 
     public init(from decoder: Decoder) throws {
@@ -515,6 +525,9 @@ extension FeedComment: Codable {
         currentUserReactions = try c.decodeIfPresent([String].self, forKey: .currentUserReactions)
         media = try c.decodeIfPresent([FeedMedia].self, forKey: .media) ?? []
         location = try c.decodeIfPresent(SharedPlace.self, forKey: .location)
+        // `decodeIfPresent` : les blobs de cache gravés AVANT le champ se
+        // relisent sans perte — un commentaire d'avant #6578 ne cite rien.
+        quotedMedia = try c.decodeIfPresent(CommentQuotedMedia.self, forKey: .quotedMedia)
         authorColor = DynamicColorGenerator.colorForName(authorId.isEmpty ? author : authorId)
     }
 
@@ -538,6 +551,7 @@ extension FeedComment: Codable {
             try c.encode(media, forKey: .media)
         }
         try c.encodeIfPresent(location, forKey: .location)
+        try c.encodeIfPresent(quotedMedia, forKey: .quotedMedia)
     }
 }
 

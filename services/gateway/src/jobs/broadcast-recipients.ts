@@ -1,23 +1,48 @@
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import { resolvePrismTranslation } from '@meeshy/shared/utils/conversation-helpers';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
+import { undeliverableSeedEmails } from '../services/seed-accounts';
 
 export type BroadcastTargeting = {
   readonly languages?: readonly string[];
   readonly countries?: readonly string[];
-  readonly activityStatus?: 'active' | 'inactive' | 'all';
-  readonly inactiveSinceDays?: number;
+  readonly activityStatus?: 'active' | 'inactive' | 'all' | 'new';
+  readonly inactiveDays?: number;
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const ACTIVE_WINDOW_DAYS = 30;
+const DEFAULT_INACTIVE_WINDOW_DAYS = 30;
+const NEW_REGISTRATION_WINDOW_DAYS = 7;
 
-const activityWindow = (targeting: BroadcastTargeting, now: Date): Prisma.UserWhereInput => {
+/**
+ * Le filtre d'ANCIENNETÉ/ACTIVITÉ d'une diffusion admin — SOURCE UNIQUE pour
+ * la preview (`routes/admin/broadcasts.ts`, POST /:id/preview) et l'envoi
+ * réel (`buildBroadcastRecipientFilter` ci-dessous, consommé par
+ * `BroadcastSenderJob`/`BroadcastInAppSenderJob`). Avant #6777, la preview
+ * réimplémentait ce commutateur localement — le 4e régime ('new') n'y
+ * existait que dans SA copie, `inactiveDays` (le champ que l'UI admin écrit
+ * réellement) y était ignoré au profit d'un `inactiveSinceDays` que personne
+ * n'écrit jamais, et le régime 'inactive' de l'envoi omettait les comptes
+ * sans AUCUNE activité (`lastActiveAt: null`) que la preview comptait. Un
+ * admin ciblant « nouveaux inscrits » ou une fenêtre d'inactivité personnalisée
+ * voyait donc un compte juste à la preview et un envoi réel plus large,
+ * silencieusement.
+ */
+export const activityWindow = (targeting: BroadcastTargeting, now: Date): Prisma.UserWhereInput => {
   if (targeting.activityStatus === 'active') {
-    return { lastActiveAt: { gte: new Date(now.getTime() - 30 * DAY_MS) } };
+    return { lastActiveAt: { gte: new Date(now.getTime() - ACTIVE_WINDOW_DAYS * DAY_MS) } };
   }
   if (targeting.activityStatus === 'inactive') {
-    const days = targeting.inactiveSinceDays || 30;
-    return { lastActiveAt: { lt: new Date(now.getTime() - days * DAY_MS) } };
+    const days = targeting.inactiveDays || DEFAULT_INACTIVE_WINDOW_DAYS;
+    const cutoff = new Date(now.getTime() - days * DAY_MS);
+    // Un compte qui n'a JAMAIS été actif (`lastActiveAt` non défini) est
+    // inactif au même titre qu'un compte inactif depuis la fenêtre — sans
+    // ce second membre, `{ lt: cutoff }` seul l'exclut du ciblage.
+    return { OR: [{ lastActiveAt: { lt: cutoff } }, { lastActiveAt: null }] };
+  }
+  if (targeting.activityStatus === 'new') {
+    return { createdAt: { gte: new Date(now.getTime() - NEW_REGISTRATION_WINDOW_DAYS * DAY_MS) } };
   }
   return {};
 };
@@ -107,6 +132,45 @@ export async function buildBroadcastRecipientFilter(
       ? { registrationCountry: { in: [...targeting.countries] } }
       : {}),
     ...activityWindow(targeting, now),
+  };
+}
+
+/**
+ * La contrainte du CANAL e-mail — ce que le CIBLAGE ne dit pas (#6581).
+ *
+ * Deux clauses, deux raisons OPPOSÉES, et c'est la seconde qui manquait :
+ *
+ *  · `emailVerifiedAt: { not: null }` — on n'écrit qu'à une adresse prouvée.
+ *
+ *  · `NOT` sur les trois adresses de bootstrap — on ne leur écrit JAMAIS.
+ *    `InitService` pose leur `emailVerifiedAt` d'office
+ *    PARCE QU'ELLES NE REÇOIVENT AUCUN COURRIER ; sans cette seconde clause, ce
+ *    même champ déclare à l'envoyeur qu'elles en reçoivent. Le correctif de
+ *    publication (#6581) les ferait donc entrer dans le ciblage de TOUTE
+ *    diffusion, en REBONDS DURS garantis à chaque campagne — et un rebond dur
+ *    se paie sur la réputation d'expéditeur, donc sur la délivrabilité de
+ *    toutes les autres adresses.
+ *
+ * Un site UNIQUE pour les DEUX consommateurs du canal — le job d'envoi
+ * (`BroadcastSenderJob`) et l'APERÇU admin (`POST /admin/broadcasts/:id/preview`).
+ * Ils portaient la même clause dupliquée : un compte exclu d'un seul côté
+ * ferait mentir le décompte annoncé à l'administrateur avant l'envoi.
+ *
+ * Le canal IN-APP n'en veut rien : une notification interne à un compte de
+ * démonstration n'a ni boîte ni rebond. La contrainte est donc ici, et pas dans
+ * `buildBroadcastRecipientFilter`, qui reste le ciblage PUR partagé.
+ *
+ * La comparaison est INSENSIBLE À LA CASSE — `User.email` est persisté VERBATIM
+ * (le gateway ne le normalise qu'à la LECTURE, cf. `AuthService`), et la même
+ * indifférence à la casse gouverne déjà `maySeedEmailVerification`. Les deux
+ * moitiés de la règle doivent reconnaître la MÊME adresse : une ligne que le
+ * boot vérifie d'office et que le filtre n'exclut pas est précisément le rebond
+ * dur que ce lot évite.
+ */
+export function emailChannelRecipientConstraint(): Prisma.UserWhereInput {
+  return {
+    emailVerifiedAt: { not: null },
+    NOT: undeliverableSeedEmails().map((email) => ({ email: { equals: email, mode: 'insensitive' as const } })),
   };
 }
 
