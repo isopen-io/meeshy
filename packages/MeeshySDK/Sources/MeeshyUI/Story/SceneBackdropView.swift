@@ -2,14 +2,14 @@ import SwiftUI
 import UIKit
 import MeeshySDK
 
-/// **Le peintre du hors-champ d'une scène CADRÉE — un seul, jamais deux**
+/// **Le peintre du hors-champ d'une scène — un seul, sur les DEUX viewports**
 /// (#6904, décision porteur du 2026-09-17).
 ///
 /// `SceneShape.Backdrop` nomme les trois fonds qu'un plateau peut poser sous une
-/// scène ajustée ; cette vue les peint, et c'est tout ce qu'elle fait. La loi
-/// choisit QUI peint (`offscreenPainter`) et l'hôte choisit QUOI
-/// (`Backdrop`) — un immersif ne monte pas cette vue du tout, puisque son
-/// `backdrop` est `nil`.
+/// scène ajustée ; cette vue les peint, et c'est tout ce qu'elle fait.
+/// `SceneShape.Layout.backdrop` n'est PAS optionnel : `layout(in:)` élit
+/// toujours `cardedBackdrop`, cardé ou immersif — il n'y a plus qu'une carte,
+/// et cette vue la monte inconditionnellement dans les deux (`SceneCard`).
 ///
 /// ## Les trois fonds
 ///

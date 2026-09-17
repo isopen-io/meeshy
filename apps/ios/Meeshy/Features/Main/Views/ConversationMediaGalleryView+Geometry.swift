@@ -419,10 +419,12 @@ extension ConversationMediaGalleryView {
     /// **Le cadre d'une page SCÈNE — la loi de forme, pas le solveur** (#6904).
     ///
     /// Une scène ne se cadre pas comme une pièce jointe : `GallerySceneStage`
-    /// projette `SceneShape.layout(_:in:)`, qui tient les DEUX états — la carte
-    /// qui tient entière dans la zone libre, et l'immersif qui couvre le
-    /// viewport en débordant. `stage(for:)` reste la réponse des pages image et
-    /// vidéo, et celle du CHROME du plateau, qui se pose sur la même zone.
+    /// projette `SceneShape.layout(in:)`, qui tient les DEUX viewports d'UNE
+    /// même carte — cadrée, elle tient entière dans la zone libre du plateau ;
+    /// immersive, la MÊME carte occupe le viewport entier, sans couloir ni
+    /// chrome (elle grandit, elle ne se remplit pas — #6896, directive du
+    /// 2026-09-17). `stage(for:)` reste la réponse des pages image et vidéo, et
+    /// celle du CHROME du plateau, qui se pose sur la même zone.
     ///
     /// **Le fond n'est PLUS élu ici** (directive porteur du 2026-09-17, lot
     /// #6904). La galerie choisissait le hachage étiré quand la scène en
@@ -433,9 +435,13 @@ extension ConversationMediaGalleryView {
     /// scène sans empreinte vit dans `SceneBackdropView`, où il vaut pour les
     /// trois fonds à la fois.
     ///
-    /// Le paramètre reste : c'est la scène qui porte l'EMPREINTE avec laquelle
-    /// ce fond se calcule (`GallerySceneItem.thumbHash`, remis à la carte).
-    func sceneStage(for scene: GallerySceneItem) -> GallerySceneStage.Frame {
+    /// **Sans paramètre** (revue du tour 3) : la phrase qui en justifiait un
+    /// ici — « c'est la scène qui porte l'empreinte avec laquelle ce fond se
+    /// calcule » — décrivait `SceneCard(thumbHash: item.thumbHash)`, monté à
+    /// côté par l'appelant, jamais lu PAR cette fonction. Le cadre d'une scène
+    /// ne dépend que du plateau (viewport, présentation, couloirs) : deux
+    /// scènes ouvertes dans le même état reçoivent le même cadre.
+    func sceneStage() -> GallerySceneStage.Frame {
         GallerySceneStage.frame(
             viewport: DeviceLayout.windowSize,
             presentation: stageGeometryPresentation,

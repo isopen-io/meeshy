@@ -3,8 +3,8 @@ import CoreGraphics
 import MeeshySDK
 @testable import Meeshy
 
-/// **Les deux plein écrans d'une PAGE SCÈNE sont des projections de la loi**
-/// (décision porteur du 2026-09-17 sur #6896, lot #6904).
+/// **Les deux plein écrans d'une PAGE SCÈNE sont des projections de LA MÊME
+/// CARTE** (décision porteur du 2026-09-17 sur #6896, lot #6904, 3e message).
 ///
 /// La galerie résolvait une page scène par `MediaStageFraming` — le solveur des
 /// pièces jointes : `.carded` ajuste le média dans la zone libre, `.full` prend
@@ -12,11 +12,13 @@ import MeeshySDK
 /// laissait donc deux bandes de 79,7 pt (mesuré au simulateur sur F1) et un
 /// second peintre les habillait.
 ///
-/// La loi dit autre chose, et pour les deux états :
+/// La loi dit autre chose, et il n'y a plus qu'UN état de carte pour les deux
+/// viewports (`SceneShape.layout(in:)`, `cardedBackdrop`, `cardedCornerRadius`) :
 /// - **cadré** : la scène tient ENTIÈRE dans la zone libre du plateau, arrondie,
-///   sur un fond que le plateau peint ;
-/// - **immersif** : la scène COUVRE le viewport, déborde, et personne ne peint
-///   autour — il ne reste rien à peindre.
+///   sur le fond de la story ;
+/// - **immersif** : la MÊME carte, dans le viewport ENTIER (sans couloir de
+///   plateau ni chrome) — elle grandit, elle ne se remplit pas ; le fond et les
+///   coins de la story restent, un seul peintre (`SceneCard`).
 ///
 /// Les cotes ci-dessous sont celles du simulateur de recette (iPhone 16 Pro,
 /// 402 × 874, zone sûre 59 / 34, un seul média donc aucun rail).

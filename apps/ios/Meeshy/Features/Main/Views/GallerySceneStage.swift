@@ -47,9 +47,12 @@ import MeeshyUI
 enum GallerySceneStage {
 
     /// Ce qu'une page scène a besoin de savoir pour se poser.
+    ///
+    /// **`region` (la taille passée à la loi) a été RETIRÉE** (revue du tour
+    /// 3) : aucun lecteur, ni de production ni de témoin, ne la consultait —
+    /// `frame(...)` la calcule pour nourrir `SceneShape.layout(in:)` et n'a
+    /// aucune raison de la republier une fois la carte obtenue.
     struct Frame: Equatable {
-        /// Ce que la scène a le droit d'occuper — la zone libre, ou le viewport.
-        let region: CGSize
         /// La réponse de la loi, telle quelle.
         let layout: SceneShape.Layout
 
@@ -90,6 +93,6 @@ enum GallerySceneStage {
                       presentation: StagePresentation,
                       corridors: MediaStageFraming.Corridors) -> Frame {
         let zone = region(viewport: viewport, presentation: presentation, corridors: corridors)
-        return Frame(region: zone, layout: SceneShape.layout(in: zone))
+        return Frame(layout: SceneShape.layout(in: zone))
     }
 }

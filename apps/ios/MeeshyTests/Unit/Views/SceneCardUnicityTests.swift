@@ -32,6 +32,16 @@ final class SceneCardUnicityTests: XCTestCase {
     /// **Un seul fond.** La loi le nomme (`SceneShape.cardedBackdrop`) et les
     /// deux surfaces le lisent — le lecteur par `readerSceneBackdrop`, la
     /// galerie par son élection de plateau.
+    ///
+    /// **Ce témoin compare des VALEURS, et `cardedBackdrop` comme
+    /// `cardedCornerRadius` sont des constantes** (revue du tour 3) : les deux
+    /// côtés de chaque égalité rendent la MÊME chose pour TOUT viewport, donc
+    /// aucune mutation de `SceneShape.layout(in:)` ne peut les faire diverger
+    /// — le motif que `GallerySceneBackdropUnicityTests` nomme ailleurs dans
+    /// cette suite. Il reste utile contre une régression LOCALE (un site qui
+    /// recommencerait à ÉLIRE sa propre valeur au lieu de déléguer) ; le
+    /// témoin de SOURCE juste en dessous couvre cette régression-là par la
+    /// SOURCE, pas seulement par la valeur qu'elle produit aujourd'hui.
     func test_leFond_estCeluiDeLaLoi_surLesDeuxSurfaces() {
         XCTAssertEqual(SceneShape.cardedBackdrop, .thumbHashDominantColor,
                        "une couleur PLATE ne peut pas diverger d'un cadre à l'autre (#6797)")
@@ -56,6 +66,37 @@ final class SceneCardUnicityTests: XCTestCase {
         XCTAssertEqual(Self.cadrageDuLecteur(viewport: viewport).cornerRadius,
                        SceneShape.cardedCornerRadius,
                        "le lecteur anime SON rayon depuis celui de la loi, pas depuis un littéral")
+    }
+
+    /// **La délégation elle-même vit à la SOURCE, pas seulement dans la valeur
+    /// qu'elle produit aujourd'hui** (revue du tour 3, complément aux deux
+    /// témoins ci-dessus). Une VALEUR comparée ne peut pas distinguer « ce
+    /// site délègue à la loi » de « ce site a recopié la même constante à la
+    /// main » — les deux rendent le même verdict tant que personne ne change
+    /// rien. Ce témoin lit le TEXTE : `readerSceneBackdrop` doit contenir
+    /// `SceneShape.cardedBackdrop`, `GallerySceneStage` doit lire
+    /// `layout.backdrop` et `layout.cornerRadius` (jamais une valeur à lui),
+    /// et le lecteur doit passer `SceneShape.cardedCornerRadius` au cadrage
+    /// qu'il anime — un site qui recommencerait à ÉLIRE sa propre constante
+    /// (même identique aujourd'hui) le ferait rougir, ce qu'aucune comparaison
+    /// de valeurs ne peut faire.
+    func test_leFondEtLeRayon_sontDeleguesALaSource_pasElisLocalement() throws {
+        let lecteur = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView+ReaderCard.swift"))
+        XCTAssertTrue(lecteur.contains("readerSceneBackdrop") && lecteur.contains("SceneShape.cardedBackdrop"),
+                      "le lecteur délègue son fond à la loi, jamais un littéral")
+
+        let canvas = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift"))
+        XCTAssertTrue(canvas.contains("cardedCornerRadius: SceneShape.cardedCornerRadius"),
+                      "le lecteur anime SON cadrage depuis le rayon de la loi, jamais un littéral")
+
+        let galerie = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/GallerySceneStage.swift"))
+        XCTAssertTrue(galerie.contains("layout.backdrop"),
+                      "la galerie lit le fond DEPUIS la loi, jamais une élection à elle")
+        XCTAssertTrue(galerie.contains("layout.cornerRadius"),
+                      "la galerie lit le rayon DEPUIS la loi, jamais un littéral à elle")
     }
 
     /// **Un seul cadre.** Les deux surfaces cadrent le 9:16 dans une RÉGION

@@ -532,8 +532,9 @@ final class PostGalleryLotTests: XCTestCase {
     }
 
     /// **La page scène sert `false` — c'est le PLATEAU qui peint le
-    /// hors-champ, jamais plus le canvas** (`SceneShape.layout(...)
-    /// .offscreenPainter`, #6904).
+    /// hors-champ, jamais plus le canvas.** `OffscreenPainter` a disparu avec
+    /// le second état de la carte (#6904) : `servesLetterboxFill` est
+    /// désormais une CONSTANTE, jamais recalculée depuis la loi.
     func test_laPageScene_neFaitPlusPeindreLeCanvas() throws {
         let source = try String(contentsOfFile: Self.cheminPageScene, encoding: .utf8)
         XCTAssertTrue(source.contains("servesLetterboxFill: false"),

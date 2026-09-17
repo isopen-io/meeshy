@@ -24,7 +24,7 @@ import MeeshyUI
 /// moteur unique de rendu d'un canvas — le même que la carte du fil monte en
 /// `.card` et que le viewer de story monte en `.reader`. Elle pose ce moteur
 /// aux cotes que la LOI de forme donne à la scène (`GallerySceneStage`, une
-/// projection de `SceneShape.layout(_:in:)`, #6904), et elle répond aux trois
+/// projection de `SceneShape.layout(in:)`, #6904), et elle répond aux trois
 /// portes du plateau (#6142) exactement comme ses sœurs image et vidéo : le
 /// tap, l'appui long, le glissement.
 ///
@@ -42,8 +42,9 @@ struct GalleryScenePage: View, Equatable {
     let item: GallerySceneItem
     /// **Le cadre de cette page — la LOI de forme, pas le solveur des pièces
     /// jointes** (#6904). `GallerySceneStage` projette
-    /// `SceneShape.layout(_:in:)` : cadrée, la scène tient entière dans la zone
-    /// libre ; immersive, elle couvre le viewport et déborde.
+    /// `SceneShape.layout(in:)` : cadrée, la scène tient entière dans la zone
+    /// libre ; immersive, la MÊME carte occupe le viewport entier, sans couloir
+    /// ni chrome — elle grandit, elle ne se remplit pas.
     let stage: GallerySceneStage.Frame
     /// Voir `GalleryImagePage.presentation` (#6142).
     let presentation: StagePresentation
@@ -287,7 +288,7 @@ extension ConversationMediaGalleryView {
                    onDismiss: @escaping () -> Void) -> some View {
         GalleryScenePage(
             item: scene,
-            stage: sceneStage(for: scene),
+            stage: sceneStage(),
             presentation: stagePresentation,
             accentColor: accentColor,
             preferredContentLanguages: sceneContext?.playerLanguages ?? [],

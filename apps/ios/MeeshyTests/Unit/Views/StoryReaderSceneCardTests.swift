@@ -10,8 +10,9 @@ import MeeshyUI
 /// Ce témoin remplace `StoryImageOnlyReaderTests`, dont le sujet — la carte
 /// rognée au rectangle de l'image quand rien n'en sort (#6636) — est SUPPLANTÉ :
 /// une scène ne change plus de forme selon ce qu'elle contient. La loi
-/// (`StoryImageOnlyPresentation`) et son mesureur (`StorySceneFootprint`)
-/// restent au SDK avec leurs propres témoins ; le LECTEUR ne les consulte plus.
+/// (`StoryImageOnlyPresentation`) et son mesureur (`StorySceneFootprint`) sont
+/// partis AVEC ce tour (#6904) : leurs seuls appelants étaient l'un l'autre, et
+/// le lecteur ne les consultait déjà plus.
 ///
 /// Ce qu'il tient :
 /// - la carte a les cotes que `SceneShape.layout(in:)` donne ;
@@ -50,7 +51,8 @@ final class StoryReaderSceneCardTests: XCTestCase {
     }
 
     /// Le clip vit dans l'espace non mis à l'échelle : une carte peinte à 0,5
-    /// doit rogner à 40 pour montrer les 20 pt de rayon de la loi.
+    /// doit rogner à 44 pour montrer les 22 pt de rayon de la loi
+    /// (`SceneShape.cardedCornerRadius`, le rayon de la story — #6904).
     ///
     /// **La compensation a QUITTÉ le lecteur** (#6904) : elle vit dans
     /// `SceneCard`, qui gouverne le clip — l'hôte DÉCLARE son facteur au lieu
