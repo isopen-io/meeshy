@@ -121,7 +121,7 @@ async function openList(context) {
 }
 
 async function runScheme({ colorScheme, locale, dir }) {
-  const tag = `[${colorScheme} ${locale}]`;
+  const tag = `[${colorScheme} ${locale} ${dir}]`;
   const context = await browser.newContext({
     colorScheme,
     locale,
@@ -131,6 +131,29 @@ async function runScheme({ colorScheme, locale, dir }) {
   await context.addInitScript((session) => {
     localStorage.setItem('meeshy.session', session);
   }, SEEDED_SESSION);
+  /**
+   * `dir` EST POSÉ PAR CE GATE, ET C'EST UN AVEU À FAIRE À VOIX HAUTE :
+   * **web-v2 ne pose `dir="rtl"` NULLE PART** (mesuré le 2026-09-17 —
+   * `index.html` porte `<html lang="fr">` sans `dir`, et ni le script inline
+   * de langue ni `interface-language.ts` ne le touchent). Une locale `ar` seule
+   * laisse donc le document en LTR : sans cette pose, ce gate mesurerait la
+   * géographie LTR sous un nom arabe et rendrait un verdict sans rapport.
+   *
+   * Ce qu'il prouve reste donc exactement ce qu'il doit prouver ici : que MA
+   * géographie est écrite en propriétés LOGIQUES et miroite d'elle-même le jour
+   * où l'application posera `dir`. Que l'application ne le pose pas est une
+   * dette GLOBALE, à son issue — pas quelque chose qu'un lot de rail corrige en
+   * passant, et surtout pas quelque chose qu'un gate doit cacher.
+   */
+  await context.addInitScript((d) => {
+    /* `documentElement` est NULL au moment où un script d'initialisation
+       s'exécute (le document n'a pas encore d'élément racine) : la pose doit
+       attendre `DOMContentLoaded`, sinon elle lève — et une erreur de page est
+       un échec de ce gate, à juste titre. */
+    document.addEventListener('DOMContentLoaded', () => {
+      document.documentElement.dir = d;
+    });
+  }, dir);
   const { page, errors } = await openList(context);
 
   /* ── 1. LA GÉOGRAPHIE, EN PIXELS ───────────────────────────────────────── */
