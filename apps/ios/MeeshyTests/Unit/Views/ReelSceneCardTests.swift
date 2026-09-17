@@ -57,6 +57,26 @@ final class ReelSceneCardTests: XCTestCase {
                        "une scène de réel ne se remplit plus en rognant")
     }
 
+    /// **Un réel est IMMERSIF, donc sa carte n'a AUCUN rayon** (directive
+    /// porteur du 2026-09-18 : « lorsqu'on met en plein écran, il faut enlever
+    /// l'arrondi sur le composant et garder les bords angle exacte ! »).
+    ///
+    /// Le réel montait la carte sans déclarer d'état, donc avec les 22 pt de la
+    /// story — un arrondi sur une surface qui n'a pas de plateau autour d'elle,
+    /// par lequel on voyait le sol aux quatre coins. Le témoin lit la VALEUR que
+    /// la loi rend pour l'état que le réel déclare, et la SOURCE qui le déclare :
+    /// une valeur seule ne dirait pas que c'est bien CE réel qui la demande.
+    func test_laCarteDUnReel_naAucunRayon() throws {
+        let src = try source()
+        XCTAssertTrue(src.contains("SceneShape.layout(in: geo.size, immersive: true)"),
+                      "un réel DÉCLARE son immersif — la loi n'a pas de défaut à deviner")
+        XCTAssertEqual(SceneShape.layout(in: CGSize(width: 402, height: 874),
+                                         immersive: true).cornerRadius,
+                       SceneShape.immersiveCornerRadius)
+        XCTAssertEqual(SceneShape.immersiveCornerRadius, 0,
+                       "des angles droits EXACTS, pas un rayon discret")
+    }
+
     /// **Le fond est celui de la story, et par la MÊME cascade.** Le réel ne
     /// recopie pas l'élection d'empreinte du lecteur : les deux appellent
     /// `StoryItem.sceneBackdropHash`, seul site du dépôt.
@@ -64,7 +84,8 @@ final class ReelSceneCardTests: XCTestCase {
         let src = try source()
         XCTAssertTrue(src.contains("sceneBackdropHash"),
                       "l'empreinte du fond vient de la loi partagée, pas d'une cascade recopiée")
-        XCTAssertEqual(SceneShape.layout(in: CGSize(width: 402, height: 874)).backdrop,
+        XCTAssertEqual(SceneShape.layout(in: CGSize(width: 402, height: 874),
+                                         immersive: true).backdrop,
                        SceneShape.cardedBackdrop,
                        "et la loi ne connaît qu'un fond — celui de la story")
     }

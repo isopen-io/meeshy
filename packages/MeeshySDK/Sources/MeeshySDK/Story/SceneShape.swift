@@ -292,6 +292,24 @@ public enum SceneShape {
     /// qu'on reproduit, pas ce qu'on corrige.
     public nonisolated static let cardedCornerRadius: CGFloat = 22
 
+    /// **En PLEIN ÉCRAN, la carte n'a AUCUN rayon** (directive porteur du
+    /// 2026-09-18, verbatim) :
+    ///
+    /// > « Lorsqu'on met en plein écran, il faut enlever l'arrondi sur le
+    /// > composant et garder les bords angle exacte ! »
+    ///
+    /// Un angle droit EXACT n'a pas de rayon : la constante est 0, et elle
+    /// existe pour être NOMMÉE — un `cornerRadius: 0` écrit chez un hôte serait
+    /// le zéro de cet hôte, indiscernable d'un oubli. `layout(in:immersive:)`
+    /// est le seul site qui l'élit.
+    ///
+    /// Elle n'est pas le pendant d'un choix d'esthétique : c'est la
+    /// conséquence de ce qu'un plein écran EST. Une carte cadrée flotte dans un
+    /// plateau — ses coins la détachent ; une carte qui occupe le viewport
+    /// entier n'a plus rien de quoi se détacher, et ses coins arrondis y
+    /// laissaient voir le sol par quatre encoches.
+    public nonisolated static let immersiveCornerRadius: CGFloat = 0
+
     /// **Le fond d'une scène — le MÊME sur toutes les surfaces** (directive
     /// porteur du 2026-09-17 : « On préserve le même fond que pour la story ! »).
     ///
@@ -323,11 +341,25 @@ public enum SceneShape {
     /// > loi qui calcule une valeur constante que personne ne peut plus lire
     /// > autrement. Le peintre est désormais dit par la STRUCTURE — c'est
     /// > `SceneCard`, et elle seule, qui peint le fond DANS la carte.
-    public nonisolated static func layout(in viewport: CGSize) -> Layout {
+    ///
+    /// ## `immersive` — le SEUL état de la carte, et il est SANS défaut
+    ///
+    /// Il ne change ni le cadre, ni le fond : il ne change que le RAYON
+    /// (`immersiveCornerRadius` contre `cardedCornerRadius`), parce que c'est
+    /// tout ce que la directive B du 2026-09-18 demande — « lorsqu'on met en
+    /// plein écran, il faut enlever l'arrondi sur le composant et garder les
+    /// bords angle exacte ! ».
+    ///
+    /// **Aucune valeur par défaut, et c'est le fond du correctif.** Avec un
+    /// défaut, la galerie et le réel auraient continué à rendre 22 en immersif
+    /// sans qu'une seule ligne les dénonce — c'est exactement le défaut qu'ils
+    /// portaient avant ce tour. Sans défaut, chaque hôte DÉCLARE l'état de son
+    /// viewport, et un hôte qui en ajouterait un ne compile pas tant qu'il ne
+    /// l'a pas dit.
+    public nonisolated static func layout(in viewport: CGSize, immersive: Bool) -> Layout {
+        let rayon = immersive ? immersiveCornerRadius : cardedCornerRadius
         guard viewport.width > 0, viewport.height > 0 else {
-            return Layout(sceneFrame: .zero,
-                          backdrop: cardedBackdrop,
-                          cornerRadius: cardedCornerRadius)
+            return Layout(sceneFrame: .zero, backdrop: cardedBackdrop, cornerRadius: rayon)
         }
         let largeur = min(viewport.width, viewport.height * aspect)
         let hauteur = largeur / aspect
@@ -335,7 +367,7 @@ public enum SceneShape {
                                          y: (viewport.height - hauteur) / 2,
                                          width: largeur, height: hauteur),
                       backdrop: cardedBackdrop,
-                      cornerRadius: cardedCornerRadius)
+                      cornerRadius: rayon)
     }
 
     // MARK: - Ce que la loi lit d'une scène

@@ -32,7 +32,7 @@ final class StoryReaderSceneCardTests: XCTestCase {
     /// et celle de la loi. Elles doivent rendre la MÊME chose, sans quoi le
     /// lecteur et la galerie ne cadrent plus la même scène.
     func test_leCadreDuCanvas_estCeluiDeLaLoi() {
-        let parLaLoi = SceneShape.layout(in: viewport).sceneFrame.size
+        let parLaLoi = SceneShape.layout(in: viewport, immersive: false).sceneFrame.size
         let parLeFit = CanvasGeometry.aspectFitSize(in: viewport, ratio: SceneShape.aspect)
 
         XCTAssertEqual(parLaLoi.width, parLeFit.width, accuracy: 0.01)
@@ -44,7 +44,7 @@ final class StoryReaderSceneCardTests: XCTestCase {
     /// ne bascule pas de cadre. La carte reste donc ajustée, jamais couvrante —
     /// et la loi le dit sans que le lecteur ait à le redire.
     func test_laCarteDuLecteur_neCouvreJamaisLeViewport() {
-        let carte = SceneShape.layout(in: viewport).sceneFrame
+        let carte = SceneShape.layout(in: viewport, immersive: false).sceneFrame
 
         XCTAssertLessThanOrEqual(carte.width, viewport.width)
         XCTAssertLessThanOrEqual(carte.height, viewport.height)
@@ -59,7 +59,7 @@ final class StoryReaderSceneCardTests: XCTestCase {
     /// de faire la division. C'était la dernière ligne d'arithmétique de forme
     /// restée chez lui.
     func test_leRayon_seCompensePourLEchelleDeLaCarte() {
-        let loi = SceneShape.layout(in: viewport)
+        let loi = SceneShape.layout(in: viewport, immersive: false)
         XCTAssertEqual(SceneCard<EmptyView>.unscaledCornerRadius(layout: loi, override: nil,
                                                                  hostScale: 0.5),
                        SceneShape.cardedCornerRadius * 2)
@@ -95,11 +95,75 @@ final class StoryReaderSceneCardTests: XCTestCase {
     /// peut pas ressembler à un flou.
     func test_leFondDeLaCarte_estUneCouleurPlate() throws {
         let source = AppSourceGuard.stripComments(try String(contentsOf: canvasSource, encoding: .utf8))
-        XCTAssertTrue(source.contains("SceneShape.layout(in: geometry.size)"),
-                      "la forme remise à la carte porte le fond, et la carte le peint")
+        XCTAssertTrue(source.contains("SceneShape.layout(in: geometry.size, immersive: canvasIsExpanded)"),
+                      "la forme remise à la carte porte le fond, et la carte le peint — et le " +
+                      "lecteur DÉCLARE l'état de son viewport (directive B du 2026-09-18)")
         XCTAssertEqual(StoryCardView.readerSceneBackdrop, .thumbHashDominantColor)
         XCTAssertEqual(StoryCardView.readerSceneBackdrop, SceneShape.cardedBackdrop,
                        "le même fond que le plein écran cadré d'un post (#6904)")
+    }
+
+    // MARK: - Le rayon : DEUX lois, un seul verdict (directive B du 2026-09-18)
+
+    /// **Le rayon de la loi et celui du cadrage animé disent la MÊME chose,
+    /// dans les DEUX états — sinon deux lois diraient deux rayons.**
+    ///
+    /// Le lecteur est la seule surface où la question se pose deux fois :
+    /// `readerCard` transmet `framing.cornerRadius` en OVERRIDE à la carte,
+    /// pendant que `readerSceneLayout` porte déjà `layout.cornerRadius`. Tant
+    /// que la loi ignorait l'état, le lecteur était le seul plein écran à coins
+    /// droits — par son ANIMATION, pas par la forme ; la directive B fait
+    /// descendre la même règle dans la loi, et les deux doivent désormais
+    /// tomber d'accord.
+    ///
+    /// **L'override RESTE, et ce n'est pas une redondance** : `framing` est ce
+    /// que le ressort ANIME (`scale`, `offset`, et le rayon avec eux, dans un
+    /// seul mouvement). Le retirer ferait sauter le rayon d'un cran pendant que
+    /// l'échelle continue de glisser — la carte s'ouvrirait avec des coins déjà
+    /// droits au premier tour d'horloge. La loi dit la forme au REPOS ; le
+    /// cadrage la dit à CHAQUE image, et ce témoin garde leur accord aux deux
+    /// bouts de l'animation.
+    func test_leRayonDeLaLoi_etCeluiDuCadrageAnime_saccordentDansLesDeuxEtats() {
+        for (immersif, etat) in [(false, StoryCanvasFraming.Presentation.carded),
+                                 (true, .free),
+                                 (true, .immersive)] {
+            let loi = SceneShape.layout(in: viewport, immersive: immersif)
+            let cadrage = Self.cadrageDuLecteur(viewport: viewport, etat: etat)
+
+            XCTAssertEqual(loi.cornerRadius, cadrage.cornerRadius,
+                           "immersif=\(immersif), état=\(etat) : la loi et le cadrage animé " +
+                           "doivent dire le MÊME rayon")
+        }
+    }
+
+    /// **`canvasIsExpanded` est bien la question que la loi attend** — le
+    /// fusible du témoin ci-dessus : sans lui, un lecteur qui passerait
+    /// toujours `false` le laisserait vert (la carte cadrée étant l'état
+    /// nominal) et resterait arrondie au plein bord.
+    func test_lesDeuxEtatsDuLecteur_neRendentPasLeMemeRayon() {
+        XCTAssertEqual(SceneShape.layout(in: viewport, immersive: false).cornerRadius,
+                       SceneShape.cardedCornerRadius)
+        XCTAssertEqual(SceneShape.layout(in: viewport, immersive: true).cornerRadius, 0)
+        XCTAssertEqual(StoryCanvasFraming.readerPresentation(isFullscreenSession: false,
+                                                            chromeVisible: false),
+                       .free,
+                       "chrome effacé : le canvas est ÉTENDU, donc immersif pour la loi")
+    }
+
+    /// Le cadrage que le lecteur résout, dans l'état demandé — les mêmes
+    /// insets que `readerCanvasFraming`.
+    private static func cadrageDuLecteur(viewport: CGSize,
+                                         etat: StoryCanvasFraming.Presentation)
+    -> StoryCanvasFraming.Result {
+        StoryCanvasFraming.resolve(.init(viewport: viewport,
+                                         headerInset: 59 + 72,
+                                         bottomInset: 64,
+                                         sideInset: 8,
+                                         state: etat,
+                                         cardedCornerRadius: SceneShape.cardedCornerRadius,
+                                         verticalAlignment: StageChromeAlignment.verticalAlignment(
+                                             canvasRatio: SceneShape.aspect),
+                                         canvasRatio: SceneShape.aspect))
     }
 
     private var canvasSource: URL {

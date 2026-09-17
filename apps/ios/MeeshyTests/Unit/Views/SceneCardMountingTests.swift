@@ -67,7 +67,7 @@ final class SceneCardMountingTests: XCTestCase {
         let vue = viewport
         let region = GallerySceneStage.region(viewport: vue, presentation: .carded,
                                               corridors: corridors)
-        let loi = SceneShape.layout(in: region)
+        let loi = SceneShape.layout(in: region, immersive: false)
         let carte = loi.sceneFrame
 
         let pixels = try monter(layout: loi, region: region, contenu: .plein)
@@ -108,7 +108,7 @@ final class SceneCardMountingTests: XCTestCase {
         let vue = viewport
         let region = GallerySceneStage.region(viewport: vue, presentation: .carded,
                                               corridors: corridors)
-        let loi = SceneShape.layout(in: region)
+        let loi = SceneShape.layout(in: region, immersive: false)
 
         let pixels = try monter(layout: loi, region: region, contenu: .bandeSeule)
         defer { pixels.dismount() }
@@ -150,10 +150,11 @@ final class SceneCardMountingTests: XCTestCase {
                                               corridors: corridors)
         XCTAssertEqual(region, vue, "en plein cadre, le plateau n'est pas là : rien ne mord")
 
-        let loi = SceneShape.layout(in: region)
+        let loi = SceneShape.layout(in: region, immersive: true)
         XCTAssertEqual(loi.backdrop, SceneShape.cardedBackdrop,
                        "l'immersif garde LE MÊME fond que la story")
-        XCTAssertEqual(loi.cornerRadius, SceneShape.cardedCornerRadius, "et les mêmes coins")
+        XCTAssertEqual(loi.cornerRadius, SceneShape.immersiveCornerRadius,
+                       "mais PLUS ses coins — directive B du 2026-09-18")
 
         let pixels = try monter(layout: loi, region: region, contenu: .bandeSeule)
         defer { pixels.dismount() }
@@ -173,6 +174,53 @@ final class SceneCardMountingTests: XCTestCase {
                       "(\(pixels.hex(x: x, y: hautDeLaCarte - 4)))")
     }
 
+    /// **Les ANGLES DROITS du plein écran, lus AU PIXEL DU COIN** (directive
+    /// porteur du 2026-09-18, verbatim : « lorsqu'on met en plein écran, il faut
+    /// enlever l'arrondi sur le composant et garder les bords angle exacte ! »).
+    ///
+    /// Le pixel mesuré est `(sceneFrame.minX + 1, sceneFrame.minY + 1)` — le
+    /// tout premier pixel du coin haut-gauche de la carte. C'est LÀ, et nulle
+    /// part ailleurs, que les deux réponses diffèrent :
+    ///
+    /// | rayon | ce que ce pixel montre |
+    /// |---|---|
+    /// | 22 pt | la SENTINELLE : l'arrondi a mordu le coin, on voit dessous |
+    /// | 0 | le FOND de la carte : l'angle est exact, la carte va jusqu'au coin |
+    ///
+    /// **Le milieu du bord ne pourrait pas le dire** : à mi-hauteur, une carte
+    /// arrondie et une carte à angles droits peignent le même pixel — c'est la
+    /// forme de la leçon 261, le témoin d'un rayon s'écrit au COIN.
+    ///
+    /// Le jumeau CADRÉ vit dix lignes plus haut
+    /// (`test_cadree_laCarteALesCotesDeLaLoi_etSesCoinsSontArrondis`, qui lit la
+    /// sentinelle au même endroit) : les deux ensemble disent que le rayon suit
+    /// l'ÉTAT, et pas qu'il a simplement disparu partout.
+    func test_immersive_lesQuatreCoinsSontDesAnglesDroitsExacts() throws {
+        let vue = viewport
+        let region = GallerySceneStage.region(viewport: vue,
+                                              presentation: .full(pausedOnEntry: false),
+                                              corridors: corridors)
+        let loi = SceneShape.layout(in: region, immersive: true)
+        let carte = loi.sceneFrame
+
+        let pixels = try monter(layout: loi, region: region, contenu: .bandeSeule)
+        defer { pixels.dismount() }
+
+        let milieu = Int((region.height / 2).rounded())
+        XCTAssertTrue(pixels.pixel(Int((region.width / 2).rounded()), milieu,
+                                   matches: Self.bande, tolerance: 8),
+                      "fusible : la carte est bien montée et peinte")
+
+        let coinX = Int(carte.minX.rounded()) + 1
+        let coinY = Int(carte.minY.rounded()) + 1
+        XCTAssertFalse(pixels.pixel(coinX, coinY, matches: Self.sentinelle, tolerance: 8),
+                       "le coin haut-gauche est un ANGLE DROIT : la carte y peint, la " +
+                       "sentinelle n'y paraît pas (\(pixels.hex(x: coinX, y: coinY)))")
+        XCTAssertTrue(pixels.pixel(coinX, coinY, matches: .black, tolerance: 12),
+                      "et ce qu'on y lit est le FOND de la carte — noir sans empreinte " +
+                      "(\(pixels.hex(x: coinX, y: coinY)))")
+    }
+
     /// **Les deux régions sont RÉELLEMENT différentes** — le fusible qui manquait
     /// à ce fichier (revue du tour 3) : sans lui, un futur `GallerySceneStage`
     /// qui rendrait les deux présentations identiques ferait passer les deux
@@ -185,8 +233,8 @@ final class SceneCardMountingTests: XCTestCase {
 
         XCTAssertLessThan(cadree.width, immersive.width)
         XCTAssertLessThan(cadree.height, immersive.height)
-        XCTAssertNotEqual(SceneShape.layout(in: cadree).sceneFrame.size,
-                          SceneShape.layout(in: immersive).sceneFrame.size,
+        XCTAssertNotEqual(SceneShape.layout(in: cadree, immersive: false).sceneFrame.size,
+                          SceneShape.layout(in: immersive, immersive: true).sceneFrame.size,
                           "et la carte qu'elles produisent n'a pas la même taille")
     }
 

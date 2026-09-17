@@ -101,17 +101,46 @@ final class GallerySceneStageTests: XCTestCase {
         XCTAssertEqual(cadre.layout.sceneFrame.midY, viewport.height / 2, accuracy: 0.5)
     }
 
-    /// **Le fond et les coins de la story, jusque dans l'immersif.** C'est le
-    /// 3e message de la directive, et c'est ce qui a retiré `Fullscreen` de la
-    /// loi : un second état n'aurait plus rien eu à dire.
-    func test_immersif_gardeLeFondEtLesCoinsDeLaStory() {
+    /// **Le fond de la story jusque dans l'immersif — mais PLUS ses coins**
+    /// (directive porteur du 2026-09-18 : « lorsqu'on met en plein écran, il
+    /// faut enlever l'arrondi sur le composant et garder les bords angle
+    /// exacte ! »).
+    ///
+    /// Le fond, c'est le 3e message du 2026-09-17 et il tient : une carte
+    /// immersive AJUSTE, donc son hors-champ a un peintre. Les coins, non — et
+    /// ce témoin affirmait l'inverse jusqu'au 2026-09-18. Les deux moitiés
+    /// avaient l'air d'une seule (« la même carte partout ») : c'est la
+    /// directive qui les sépare, un plateau étant ce par rapport à quoi une
+    /// carte se DÉTACHE.
+    func test_immersif_gardeLeFondDeLaStory_maisPlusSesCoins() {
         let cadre = GallerySceneStage.frame(viewport: viewport,
                                             presentation: .full(pausedOnEntry: false),
                                             corridors: corridors)
 
         XCTAssertEqual(cadre.backdrop, SceneShape.cardedBackdrop)
-        XCTAssertEqual(cadre.cornerRadius, SceneShape.cardedCornerRadius,
-                       "les coins de la story, même sans plateau autour")
+        XCTAssertEqual(cadre.cornerRadius, SceneShape.immersiveCornerRadius,
+                       "plein écran : aucun arrondi, des angles droits exacts")
+    }
+
+    /// **Les deux états ne se distinguent pas seulement par la TAILLE — le
+    /// rayon les sépare aussi, et c'est la LOI qui le dit.**
+    ///
+    /// La galerie ne passait aucun état : elle rendait 22 pt dans ses deux
+    /// plein écrans, et le seul endroit du produit où une carte de scène avait
+    /// des coins droits était l'animation du lecteur de stories. Un témoin qui
+    /// ne regarderait qu'un état ne pourrait pas le dire.
+    func test_leRayon_suitLEtat_etLesDeuxEtatsNeLePartagentPas() {
+        let cadree = GallerySceneStage.frame(viewport: viewport, presentation: .carded,
+                                             corridors: corridors)
+        let immersive = GallerySceneStage.frame(viewport: viewport,
+                                               presentation: .full(pausedOnEntry: false),
+                                               corridors: corridors)
+
+        XCTAssertEqual(cadree.cornerRadius, SceneShape.cardedCornerRadius)
+        XCTAssertEqual(immersive.cornerRadius, 0)
+        XCTAssertNotEqual(cadree.cornerRadius, immersive.cornerRadius,
+                          "fusible : sans cet écart, les deux témoins ci-dessus " +
+                          "verdiraient sur une loi qui ignore son état")
     }
 
     /// **Le couloir du plateau ne mord PLUS en immersif** — c'est la moitié de

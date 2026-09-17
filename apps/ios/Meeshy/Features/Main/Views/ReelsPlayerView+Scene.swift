@@ -122,7 +122,12 @@ struct ReelSceneView: View {
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
 
-                SceneCard(layout: SceneShape.layout(in: geo.size),
+                // **Un réel est IMMERSIF par nature** (directive B du
+                // 2026-09-18) : il occupe le viewport entier, sans plateau à
+                // faire reculer — c'est déjà pourquoi son sol porte le voile
+                // PLEIN au tour 4. Sa carte n'a donc aucun rayon : « garder les
+                // bords angle exacte ».
+                SceneCard(layout: SceneShape.layout(in: geo.size, immersive: true),
                           thumbHash: carrier.sceneBackdropHash) {
                     MeeshyScenePlayer(document: document,
                                       mode: .reel,

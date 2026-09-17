@@ -1162,7 +1162,7 @@ struct StoryCardView: View {
     /// le RÉEL appellent (`GallerySceneStage`, `ReelSceneView`, #6904) : les
     /// trois surfaces ne peuvent plus cadrer trois scènes différentes.
     var readerSceneLayout: SceneShape.Layout { // internal : lu par la carte
-        SceneShape.layout(in: geometry.size)
+        SceneShape.layout(in: geometry.size, immersive: canvasIsExpanded)
     }
 
     var canvasFitSize: CGSize { // internal : lu par `StoryViewerView+Sentinel`

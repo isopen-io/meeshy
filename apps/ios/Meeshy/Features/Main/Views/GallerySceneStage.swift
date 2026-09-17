@@ -89,10 +89,18 @@ enum GallerySceneStage {
     /// de stories la couleur dominante, et l'immersif n'élisait RIEN en rognant
     /// la scène. Trois réponses pour une même carte, chacune juste chez elle.
     /// Cette fonction ne choisit plus qu'une chose — le VIEWPORT.
+    ///
+    /// **Et elle DÉCLARE l'état de ce viewport** (directive B du 2026-09-18 :
+    /// « lorsqu'on met en plein écran, il faut enlever l'arrondi sur le
+    /// composant et garder les bords angle exacte ! »). `presentation.isFull`
+    /// est déjà la question « le plateau est-il là ? » qui choisit la région :
+    /// c'est la MÊME question que « ce viewport est-il immersif ? », et la
+    /// laisser sans réponse rendait 22 pt d'arrondi sur une carte qui occupe
+    /// l'écran entier — quatre encoches par lesquelles on voyait le sol.
     static func frame(viewport: CGSize,
                       presentation: StagePresentation,
                       corridors: MediaStageFraming.Corridors) -> Frame {
         let zone = region(viewport: viewport, presentation: presentation, corridors: corridors)
-        return Frame(layout: SceneShape.layout(in: zone))
+        return Frame(layout: SceneShape.layout(in: zone, immersive: presentation.isFull))
     }
 }

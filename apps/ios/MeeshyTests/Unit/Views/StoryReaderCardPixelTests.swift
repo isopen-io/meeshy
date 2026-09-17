@@ -175,7 +175,7 @@ final class StoryReaderCardPixelTests: XCTestCase {
         let cadrage = Self.cadrage(viewport: taille)
         // Les cotes de la SCÈNE viennent de la loi, comme dans le lecteur — et
         // c'est la forme ENTIÈRE qui va à la carte, fond et rayon compris.
-        let forme = SceneShape.layout(in: taille)
+        let forme = SceneShape.layout(in: taille, immersive: false)
         let canvas = forme.sceneFrame.size
         // La zone que le média AJUSTÉ occupe dans le 9:16 — la loi la rend en
         // fractions, et c'est elle qui situe la bande.

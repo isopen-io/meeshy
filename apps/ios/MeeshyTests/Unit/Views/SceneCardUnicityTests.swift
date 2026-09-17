@@ -57,7 +57,7 @@ final class SceneCardUnicityTests: XCTestCase {
     func test_leRayon_estCeluiDeLaLoi_surLesDeuxSurfaces() {
         let viewport = CGSize(width: 402, height: 874)
 
-        XCTAssertEqual(SceneShape.layout(in: viewport).cornerRadius,
+        XCTAssertEqual(SceneShape.layout(in: viewport, immersive: false).cornerRadius,
                        SceneShape.cardedCornerRadius)
         XCTAssertEqual(GallerySceneStage.frame(viewport: viewport,
                                                presentation: .carded,
@@ -106,7 +106,7 @@ final class SceneCardUnicityTests: XCTestCase {
         let viewport = CGSize(width: 402, height: 874)
         let galerie = GallerySceneStage.frame(viewport: viewport, presentation: .carded,
                                               corridors: Self.corridors).sceneSize
-        let lecteur = SceneShape.layout(in: viewport)
+        let lecteur = SceneShape.layout(in: viewport, immersive: false)
             .sceneFrame.size
 
         XCTAssertEqual(galerie.width / galerie.height, SceneShape.aspect, accuracy: 0.0001)
@@ -117,7 +117,7 @@ final class SceneCardUnicityTests: XCTestCase {
     /// carte à `scale` et déclare ce facteur ; il ne fait plus la division
     /// lui-même. Un facteur dégénéré ne divise rien.
     func test_leRayon_seCompensePourLEchelleQueLHoteDeclare() {
-        let loi = SceneShape.layout(in: CGSize(width: 402, height: 874))
+        let loi = SceneShape.layout(in: CGSize(width: 402, height: 874), immersive: false)
         XCTAssertEqual(SceneCard<EmptyView>.unscaledCornerRadius(layout: loi, override: nil,
                                                                  hostScale: 0.5),
                        SceneShape.cardedCornerRadius * 2)
@@ -131,8 +131,9 @@ final class SceneCardUnicityTests: XCTestCase {
 
     /// **Les DEUX plein écrans d'un post sont la même carte, dans deux
     /// viewports** (directive porteur du 2026-09-17, 3e message). L'immersif
-    /// n'a plus ni forme, ni fond, ni coins à lui : il n'a qu'un viewport plus
-    /// grand, parce que les couloirs du plateau n'y mordent pas.
+    /// n'a plus ni forme ni fond à lui : il n'a qu'un viewport plus grand,
+    /// parce que les couloirs du plateau n'y mordent pas — **et des coins
+    /// DROITS**, par la directive B du 2026-09-18.
     func test_lesDeuxPleinEcransDUnPost_sontLaMemeCarte() {
         let viewport = CGSize(width: 402, height: 874)
         let cadre = GallerySceneStage.frame(viewport: viewport, presentation: .carded,
@@ -141,7 +142,13 @@ final class SceneCardUnicityTests: XCTestCase {
                                                corridors: Self.corridors)
 
         XCTAssertEqual(immersif.backdrop, cadre.backdrop)
-        XCTAssertEqual(immersif.cornerRadius, cadre.cornerRadius)
+        // **Le RAYON, lui, n'est plus partagé** (directive B du 2026-09-18) :
+        // « lorsqu'on met en plein écran, il faut enlever l'arrondi sur le
+        // composant et garder les bords angle exacte ! ». C'est la SEULE chose
+        // que l'état change — le cadre et le fond restent ceux de la story, et
+        // les assertions qui les tiennent ci-dessous n'ont pas bougé.
+        XCTAssertEqual(cadre.cornerRadius, SceneShape.cardedCornerRadius)
+        XCTAssertEqual(immersif.cornerRadius, SceneShape.immersiveCornerRadius)
         XCTAssertGreaterThan(immersif.sceneSize.width, cadre.sceneSize.width,
                              "sans couloir, la MÊME carte est plus grande")
         for cote in [cadre.sceneSize, immersif.sceneSize] {

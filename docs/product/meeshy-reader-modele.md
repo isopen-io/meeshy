@@ -614,6 +614,20 @@ qu'elles passent à la loi :
 | **cadré** | la zone libre que les couloirs du plateau laissent | le chrome, les informations, les détails |
 | **immersif** | l'écran **entier**, aucun couloir, chrome masqué | la même carte, plus grande |
 
+**Et le RAYON suit l'état — 22 pt cadré, 0 immersif, par la LOI** (directive
+porteur du 2026-09-18 : « lorsqu'on met en plein écran, il faut enlever
+l'arrondi sur le composant et garder les bords angle exacte ! »).
+`SceneShape.layout(in:immersive:)` prend l'état en second paramètre, **sans
+valeur par défaut** : c'est ce défaut absent qui rend le défaut de la veille
+impossible à réintroduire en silence — la galerie et le réel rendaient 22 pt sur
+une carte qui occupe l'écran entier, par quatre encoches desquelles on voyait le
+sol, faute de déclarer quoi que ce soit. Seul le rayon change avec l'état : le
+cadre et le fond restent ceux de la story (`SceneShapeTests.
+test_lEtat_neChangeQueLeRayon_jamaisLeCadreNiLeFond`), et le pixel du coin le
+mesure (`SceneCardMountingTests.
+test_immersive_lesQuatreCoinsSontDesAnglesDroitsExacts` — au milieu d'un bord,
+une carte arrondie et une carte à angle droit peignent le même pixel).
+
 `Fullscreen` et `OffscreenPainter` ont **disparu** de la loi avec le second
 état, et ce n'est pas un nettoyage : l'immersif était la seule surface du
 produit qui **ROGNAIT** une scène (mesuré : 44,8 pt retirés de chaque côté sur
