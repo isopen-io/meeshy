@@ -110,3 +110,37 @@ final class ConversationViewGlobalObserverSourceGuardTests: XCTestCase {
         }
     }
 }
+
+/// **Aucun décodage d'image PLEIN sur le fil principal dans la conversation**
+/// (#7006).
+///
+/// `UIImage(contentsOfFile:)` décode l'image entière, là où il est appelé. Dans
+/// l'`onAppear` d'un écran, c'est la PREMIÈRE FRAME qu'il retient — et la
+/// restauration d'un brouillon en appelait un PAR pièce jointe.
+final class ConversationDraftThumbnailSourceGuardTests: XCTestCase {
+
+    func test_conversationViewUnit_decodesNoFullImageOnTheMainActor() throws {
+        let code = AppSourceGuard.stripComments(try AppSourceGuard.conversationViewSource())
+        XCTAssertFalse(
+            code.contains("UIImage(contentsOfFile"),
+            "L'unité `ConversationView*` ne doit décoder aucune image en plein sur le MainActor : le décodage passe par `SOTAImageThumbnail.thumbnailAsync` (ImageIO, tâche détachée), comme le chemin nominal d'ajout de photo (#7006)."
+        )
+        XCTAssertTrue(
+            code.contains("SOTAImageThumbnail.thumbnailAsync"),
+            "Les vignettes du brouillon restauré doivent être décodées par `SOTAImageThumbnail.thumbnailAsync` (#7006)."
+        )
+    }
+
+    /// La borne de sous-échantillonnage doit rester CELLE du chemin nominal :
+    /// `pendingThumbnails` alimente aussi l'éditeur d'image, dont la sortie est
+    /// RÉENREGISTRÉE sur le fichier de la pièce jointe. Deux bornes différentes
+    /// feraient qu'un brouillon repris s'éditerait moins bien qu'un brouillon
+    /// frais — et rien ne le dirait.
+    @MainActor
+    func test_draftThumbnailBound_matchesTheNominalAttachmentPreview() throws {
+        XCTAssertEqual(
+            ConversationView.draftThumbnailMaxPixelSize, 1024,
+            "La borne des vignettes de brouillon doit rester alignée sur `AttachmentPreparationService.downsampledPreview` (1 024 px) — cf. #7006."
+        )
+    }
+}

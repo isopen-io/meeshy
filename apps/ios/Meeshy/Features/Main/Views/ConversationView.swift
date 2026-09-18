@@ -1212,7 +1212,7 @@ struct ConversationView: View {
                     // Pièces jointes du brouillon (copiées en durable au
                     // background) : restaure les survivantes dans le tray —
                     // un fichier purgé est sauté silencieusement, le texte
-                    // reste intact. Thumbnails régénérées pour les images.
+                    // reste intact. Vignettes régénérées HORS du MainActor (#7006).
                     if let refs = draft.attachments, !refs.isEmpty,
                        composerState.pendingAttachments.isEmpty,
                        let userId = AuthManager.shared.currentUser?.id {
@@ -1223,12 +1223,7 @@ struct ConversationView: View {
                         )
                         composerState.pendingAttachments = restored.attachments
                         composerState.pendingMediaFiles = restored.files
-                        for attachment in restored.attachments where attachment.kind == .image {
-                            if let url = restored.files[attachment.id],
-                               let thumb = UIImage(contentsOfFile: url.path) {
-                                composerState.pendingThumbnails[attachment.id] = thumb
-                            }
-                        }
+                        Task { await restoreDraftThumbnails(attachments: restored.attachments, files: restored.files) }
                     }
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { overlayState.longPressEnabled = true }
