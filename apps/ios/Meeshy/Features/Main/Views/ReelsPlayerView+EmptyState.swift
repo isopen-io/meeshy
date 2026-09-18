@@ -33,9 +33,13 @@ extension ReelsPlayerView {
 
     private var noReelsState: some View {
         VStack(spacing: 14) {
-            // Glyphe héros décoratif ≥40pt : figé (doctrine 74i/86i) + masqué VoiceOver (le texte porte le sens)
+            // Glyphe héros décoratif, masqué à VoiceOver (le texte porte le
+            // sens). La taille SCALE : rien ne l'entoure qui déborderait, et un
+            // fichier neuf n'a pas droit à une taille figée — la garde
+            // `FixedFontSizeGuardTests` ne connaît d'exception que pour la
+            // dette gelée du 264i, jamais pour un arrivant.
             Image(systemName: "play.rectangle.on.rectangle")
-                .font(.system(size: 44))
+                .font(MeeshyFont.relative(44))
                 .foregroundColor(.white.opacity(0.7))
                 .accessibilityHidden(true)
             Text(String(localized: "reels.empty", defaultValue: "Aucun réel pour le moment", bundle: .main))
@@ -51,7 +55,7 @@ extension ReelsPlayerView {
     private func loadFailureState(message: String) -> some View {
         VStack(spacing: 14) {
             Image(systemName: "exclamationmark.arrow.triangle.2.circlepath")
-                .font(.system(size: 44))
+                .font(MeeshyFont.relative(44))
                 .foregroundColor(.white.opacity(0.7))
                 .accessibilityHidden(true)
             Text(message)
