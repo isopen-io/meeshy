@@ -44,7 +44,7 @@ import { sharedPlaceFromMetadata, hoistLocationOnto } from '../../services/locat
 import { StatusService } from '../../services/StatusService';
 import { NotificationService } from '../../services/notifications/NotificationService';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
-import { attachmentForwardPreviewSelect, attachmentMediaSelect } from '../../services/attachments/attachmentIncludes';
+import { attachmentForwardPreviewSelect, attachmentSocketSelect } from '../../services/attachments/attachmentIncludes';
 import { serializeAttachmentForSocket } from '../serializeAttachmentForSocket';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';
 import { emitConversationPreviewUpdate } from '../emitConversationPreviewUpdate';
@@ -792,7 +792,13 @@ export class MessageHandler {
               // `location`.
               metadata: true,
               sender: { select: { id: true, userId: true, displayName: true, avatar: true, role: true } },
-              attachments: { select: attachmentMediaSelect },
+              // #7014 — `attachmentSocketSelect`, jamais `attachmentMediaSelect`
+              // nu : ce que cette requête charge repart par
+              // `serializeAttachmentForSocket` sur `message:edited`, et
+              // `attachmentMediaSelect` est délibérément SANS drapeau de
+              // protection. Sans les trois colonnes, l'édition d'un message
+              // rediffusait une pièce MUETTE sur sa propre protection.
+              attachments: { select: attachmentSocketSelect },
             },
           })
       );

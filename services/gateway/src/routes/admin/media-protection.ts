@@ -48,12 +48,21 @@
  */
 import { maskedAttachment } from '../../services/notifications/NotificationService';
 
-/** Fragment de `select` Prisma pour les trois colonnes de protection PROPRES à `MessageAttachment`. */
-export const attachmentProtectionSelect = {
-  isViewOnce: true,
-  isBlurred: true,
-  effectFlags: true,
-} as const;
+/**
+ * Fragment de `select` Prisma pour les colonnes de protection PROPRES à
+ * `MessageAttachment` — RÉ-EXPORTÉ depuis son domicile, jamais recopié (#7014).
+ *
+ * Il était DÉFINI ici, dans un module de ROUTE, ce qui le rendait inatteignable
+ * au canal SOCKET : l'importer depuis `socketio/` aurait traîné
+ * `NotificationService` (que ce fichier importe pour `maskedAttachment`) dans
+ * la couche temps réel. Un prédicat partagé défini dans une route est le même
+ * défaut qu'un prédicat recopié — c'est le raisonnement de #4388, appliqué
+ * cette fois au `select` plutôt qu'au prédicat. Ses quatre appelants
+ * d'administration continuent de l'importer d'ici ; l'OBJET, lui, est le même
+ * que celui du socket, et un témoin garde cette identité
+ * (`socketio/__tests__/serializeAttachmentForSocket.test.ts`).
+ */
+export { attachmentProtectionSelect } from '../../services/attachments/attachmentIncludes';
 
 /**
  * Fragment de `select` Prisma pour les colonnes de protection du `Message`
