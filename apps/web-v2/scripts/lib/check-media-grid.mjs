@@ -29,6 +29,8 @@ import { waitForRowSettled } from './check-media.mjs';
 const QUAD_ID = 'media-13';
 const OVERFLOW_ID = 'media-14';
 const TRIPLE_VIDEO_ID = 'media-12';
+/** `media-11` — LA PAIRE, le troisième agencement, qu'aucun gate ne visitait. */
+const PAIR_ID = 'media-11';
 /** `media-15` — LA VIDÉO SEULE (#7016) : la branche SOLO de `MediaGrid`, qu'aucun gate ne visitait. */
 const SOLO_VIDEO_ID = 'media-15';
 /** `media-16` — DEUX IMAGES DE MOI (#7018) : la branche `justify-end`, qu'aucune fixture n'atteignait. */
@@ -160,20 +162,31 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
     `[${skin}/${scheme}] la grille ne déborde jamais de la rangée (${JSON.stringify({ gridBox, quadRowBox })})`,
   );
   /**
-   * LE COROLLAIRE DU PLAFOND : une boîte qui rétrécit et des cases qui ne
-   * rétrécissent pas seraient COUPÉES (`overflow-hidden` en peau Bulles) —
-   * un défaut pire que le débord, parce qu'il se cache. Les cases suivent
-   * aujourd'hui (`flex-shrink` par défaut sur les paires et les triplets,
-   * `1fr 1fr` sur les quadruples) ; ce témoin le garde.
+   * LE COROLLAIRE DU PLAFOND, SUR LES QUATRE AGENCEMENTS.
+   *
+   * Plafonner la boîte (#7018) crée un risque que le débord n'avait pas : une
+   * boîte qui RÉTRÉCIT et des cases qui ne rétrécissent pas seraient COUPÉES.
+   * Et ce défaut-là se CACHE — la boîte porte `overflow: hidden` (mesuré),
+   * donc rien ne dépasse, rien ne déclenche le témoin de défilement, et
+   * l'image manquante ressemble à un cadrage voulu. C'est le pire des deux.
+   *
+   * Sur les QUATRE, jamais sur le seul quadruple : les trois agencements sont
+   * gouvernés par des mécanismes DIFFÉRENTS — `flex-shrink` par défaut sur la
+   * paire et le triplet (dont les cases portent une `width` EXPLICITE, ce qui
+   * a tout l'air d'une cote qui ne cédera pas), `1fr 1fr` sur le quadruple.
+   * Un témoin posé sur un seul d'entre eux ne dit rien des deux autres.
    */
-  const lastTileRight = await rowOf(QUAD_ID)
-    .locator('[data-media-tile]')
-    .last()
-    .evaluate((el) => el.getBoundingClientRect().right);
-  expect(
-    gridBox !== null && lastTileRight <= gridBox.x + gridBox.width + 0.5,
-    `[${skin}/${scheme}] aucune case n'est COUPÉE : la dernière finit dans la boîte (case ${lastTileRight.toFixed(1)}, boîte ${gridBox === null ? '?' : (gridBox.x + gridBox.width).toFixed(1)})`,
-  );
+  const expectNoTileClipped = async (id) => {
+    const box = await rowOf(id).locator('[data-media-grid]').first().boundingBox();
+    const tilesRight = await rowOf(id)
+      .locator('[data-media-tile]')
+      .evaluateAll((els) => Math.max(...els.map((el) => el.getBoundingClientRect().right)));
+    expect(
+      box !== null && tilesRight <= box.x + box.width + 0.5,
+      `[${skin}/${scheme}] ${id} : aucune case n'est COUPÉE par la boîte (case la plus à droite ${tilesRight.toFixed(1)}, boîte ${box === null ? '?' : (box.x + box.width).toFixed(1)})`,
+    );
+  };
+  await expectNoTileClipped(QUAD_ID);
 
   await scrollUntilMounted(page, scroller, OVERFLOW_ID);
   await waitForRowSettled(page, OVERFLOW_ID);
@@ -192,6 +205,7 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
     (await maskedTile.locator('img').count()) === 0,
     `[${skin}/${scheme}] le substitut masqué ne rend AUCUN <img>`,
   );
+  await expectNoTileClipped(OVERFLOW_ID);
 
   // ===== G2 — chaque tuile est décodée, aucune image perdue =====
   //
@@ -308,6 +322,18 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
     (await tripleRow.locator('video[poster]').count()) === 1,
     `[${skin}/${scheme}] la vidéo de media-12 porte un poster, jamais un <video> vide`,
   );
+  await expectNoTileClipped(TRIPLE_VIDEO_ID);
+
+  /* `media-11` n'était visitée par AUCUN gate — la PAIRE est pourtant le
+     troisième agencement, et le seul dont les deux cases se partagent la
+     largeur à parts égales sous `flex-shrink`. */
+  await scrollUntilMounted(page, scroller, PAIR_ID);
+  await waitForRowSettled(page, PAIR_ID);
+  expect(
+    (await rowOf(PAIR_ID).locator('[data-media-tile]').count()) === 2,
+    `[${skin}/${scheme}] media-11 (2 images) rend 2 [data-media-tile]`,
+  );
+  await expectNoTileClipped(PAIR_ID);
 
   /**
    * ===== G6 — LA VIDÉO SEULE OCCUPE UNE HAUTEUR (#7016) =====
