@@ -228,4 +228,8 @@ describe("le relevé des exclusions se LIT — sinon un gate redevient aveugle e
   test("aucun écarté se dit aussi — le silence est ce qui a coûté le défaut", () => {
     expect(resumeExclusions({ controls: [], texts: [], exclus: [] })).toBe('0 écarté');
   });
+
+  test('un seul écarté se dit au SINGULIER', () => {
+    expect(resumeExclusions({ controls: [], texts: [], exclus: [{ quoi: 'contrôle', nom: 'a', raison: 'inert' }] })).toBe('1 écarté : 1 inert');
+  });
 });

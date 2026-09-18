@@ -130,7 +130,7 @@ export const resumeExclusions = ({ exclus }) => {
   const parRaison = new Map();
   for (const e of exclus) parRaison.set(e.raison, (parRaison.get(e.raison) ?? 0) + 1);
   const detail = [...parRaison.entries()].map(([raison, n]) => `${n} ${raison}`).join(', ');
-  return `${exclus.length} écartés : ${detail}`;
+  return `${exclus.length} écarté${exclus.length > 1 ? 's' : ''} : ${detail}`;
 };
 
 /**
@@ -154,25 +154,40 @@ const relever = (page, { controls, texts, porteeTextes }) =>
       };
 
       /* Les cadres qui ÉCRÊTENT réellement l'élément, et sur quel axe un GESTE
-         y ramène ce qui en sort. La remontée s'arrête à `body` : `html`/`body`
-         en `overflow:hidden` est la règle de l'app, et les compter ici
-         ré-avalerait précisément le hors-viewport qu'on cherche — le cadre de
-         l'écran est jugé à part, et c'est sa seule juridiction. */
+         y ramène ce qui en sort.
+
+         DEUX BORNES À LA REMONTÉE, et toutes deux vont dans le sens SÛR — lister
+         un écrêteur DE TROP rendrait le gate aveugle à nouveau, ce qui est
+         exactement le défaut corrigé.
+
+          · elle s'arrête à `body` : `html`/`body` en `overflow:hidden` est la
+            règle de l'app, et les compter ré-avalerait le hors-viewport qu'on
+            cherche — le cadre de l'écran est jugé à part, seule sa juridiction ;
+          · elle s'arrête à un élément `position: fixed`, dont le BLOC CONTENEUR
+            est le viewport : aucun ancêtre ne l'écrête. Sans cette borne, la
+            croix d'un plein écran `fixed inset-0` monté SOUS un défileur serait
+            « écrêtée » par ce défileur dès qu'elle en sortirait — un contrôle
+            perdu, poliment écarté du relevé. */
       const ecransDe = (el) => {
         const out = [];
-        for (let p = el.parentElement; p !== null && p !== document.body; p = p.parentElement) {
+        let node = el;
+        while (getComputedStyle(node).position !== 'fixed') {
+          const p = node.parentElement;
+          if (p === null || p === document.body) break;
           const s = getComputedStyle(p);
-          if (s.overflowX === 'visible' && s.overflowY === 'visible') continue;
-          const r = p.getBoundingClientRect();
-          out.push({
-            nom: nomDe(p),
-            left: r.left,
-            top: r.top,
-            right: r.right,
-            bottom: r.bottom,
-            defileX: p.scrollWidth > p.clientWidth + 1,
-            defileY: p.scrollHeight > p.clientHeight + 1,
-          });
+          if (s.overflowX !== 'visible' || s.overflowY !== 'visible') {
+            const r = p.getBoundingClientRect();
+            out.push({
+              nom: nomDe(p),
+              left: r.left,
+              top: r.top,
+              right: r.right,
+              bottom: r.bottom,
+              defileX: p.scrollWidth > p.clientWidth + 1,
+              defileY: p.scrollHeight > p.clientHeight + 1,
+            });
+          }
+          node = p;
         }
         return out;
       };
