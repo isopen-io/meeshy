@@ -887,4 +887,70 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
     // Le minuteur de sécurité en attente a été annulé par `destroy`.
     expect(scheduler.scheduled.every((s) => s.cleared)).toBe(true);
   });
+
+  /**
+   * `message:attachment-updated` (#7017) — L'ABONNEMENT QUI MANQUAIT.
+   *
+   * L'inventaire des `socket.on` de ce module ne le portait pas : la
+   * transcription Whisper puis les traductions NLLB arrivent APRÈS le message,
+   * par cet évènement, et web-v2 ne l'écoutait pas — un vocal reçu restait
+   * SANS transcription et SANS drapeau de langue jusqu'à ce qu'on quitte et
+   * rouvre le fil. Le legacy l'écoute depuis toujours
+   * (`apps/web/hooks/queries/use-socket-cache-sync.ts:1565`).
+   *
+   * L'ÉPREUVE DE CE TÉMOIN N'EST PAS SON VERT mais sa MUTATION : retirer
+   * `socket.on(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, …)` doit le faire
+   * TOMBER.
+   */
+  test('`message:attachment-updated` est ÉCOUTÉ : la transcription atteint le cache du fil, sans requête', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    const attachment = { id: 'a-1', messageId: 'm-audio', mimeType: 'audio/wav', fileUrl: 'https://cdn/x.wav' };
+    queryClient.setQueryData(
+      messagesQueryKey('c-a'),
+      threadPages([{ id: 'm-audio', conversationId: 'c-a', attachments: [attachment] } as unknown as Message]),
+    );
+    let fetchCount = 0;
+    void queryClient.getQueryCache().build(queryClient, {
+      queryKey: messagesQueryKey('c-a'),
+      queryFn: async () => {
+        fetchCount += 1;
+        throw new Error('aucune requête ne doit partir');
+      },
+    });
+
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+    socket.fire(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, {
+      conversationId: 'c-a',
+      messageId: 'm-audio',
+      attachment: { ...attachment, transcription: { type: 'audio', text: 'Hola', language: 'es' } },
+    });
+
+    const served = threadOf(queryClient, 'c-a')?.messages[0]?.attachments?.[0] as unknown as
+      | { readonly transcription?: { readonly text?: string } }
+      | undefined;
+    expect(served?.transcription?.text).toBe('Hola');
+    expect(fetchCount).toBe(0);
+  });
+
+  test('`destroy` démonte AUSSI `message:attachment-updated`', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    const attachment = { id: 'a-1', messageId: 'm-audio', mimeType: 'audio/wav', fileUrl: 'https://cdn/x.wav' };
+    queryClient.setQueryData(
+      messagesQueryKey('c-a'),
+      threadPages([{ id: 'm-audio', conversationId: 'c-a', attachments: [attachment] } as unknown as Message]),
+    );
+
+    const connection = createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+    connection.destroy();
+    socket.fire(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, {
+      conversationId: 'c-a',
+      messageId: 'm-audio',
+      attachment: { ...attachment, transcription: { type: 'audio', text: 'Hola', language: 'es' } },
+    });
+
+    const served = threadOf(queryClient, 'c-a')?.messages[0]?.attachments?.[0] as unknown as
+      | { readonly transcription?: unknown }
+      | undefined;
+    expect(served?.transcription).toBeUndefined();
+  });
 });

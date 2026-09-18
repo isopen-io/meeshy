@@ -2,6 +2,7 @@ import { QueryClient } from '@tanstack/react-query';
 import { describe, expect, test } from 'bun:test';
 
 import type { SocketIOMessage } from '@meeshy/shared/types/socketio-events/message';
+import { maskedAttachment } from '@meeshy/shared/utils/attachment-protection';
 import { served } from './prism';
 
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
@@ -14,8 +15,10 @@ import type { MessagesInfiniteData } from './messages-pages';
 import {
   applyConversationUnreadUpdated,
   applyConversationUpdated,
+  applyMessageAttachmentUpdated,
   applyMessageNew,
   applyMessageTranslation,
+  isAttachmentUpdated,
   isConversationUpdated,
   isMessageTranslationEvent,
   isSocketMessage,
@@ -864,5 +867,209 @@ describe('applyMessageTranslation (#5793, revue-correction défaut 2) — le pip
 
     applyMessageTranslation(client, { messageId: 'm-1', translations: [translationEntry({ targetLanguage: 'en', translatedContent: 'Hi' })] });
     expect(readerServed()).toEqual({ text: 'Hi', language: 'en', translated: true });
+  });
+});
+
+/* ═══════════ message:attachment-updated (#7017) — L'ALIMENTATION ═══════════ */
+
+/**
+ * LA PIÈCE JOINTE TELLE QUE LE SOCKET LA SERT (#7017) — la forme de
+ * `serializeAttachmentForSocket` (`services/gateway/src/socketio/`), donc
+ * SANS les trois drapeaux de protection tant que #7014 n'a pas atterri :
+ * c'est exactement la fenêtre que ce lot ne doit pas rouvrir.
+ */
+const socketAttachment = (partial: Record<string, unknown>): Record<string, unknown> => ({
+  id: 'a-1',
+  messageId: 'm-audio',
+  mimeType: 'audio/wav',
+  fileSize: 16_044,
+  fileUrl: 'https://cdn.example/voice.wav',
+  capturedInApp: false,
+  transcription: null,
+  translations: null,
+  ...partial,
+});
+
+const cachedAudioMessage = (attachment: Record<string, unknown>): Message =>
+  localMessage({
+    id: 'm-audio',
+    conversationId: 'c-a',
+    content: '',
+    messageType: 'audio',
+    attachments: [attachment],
+  } as unknown as Partial<Message>);
+
+const attachmentOf = (client: QueryClient, conversationId: string, messageId: string): Record<string, unknown> => {
+  const message = threadOf(client, conversationId)?.messages.find((m) => m.id === messageId);
+  return (message?.attachments?.[0] ?? {}) as unknown as Record<string, unknown>;
+};
+
+describe('isAttachmentUpdated (#7017) — décodage FAIL-CLOSED', () => {
+  test('accepte la charge de la passerelle', () => {
+    expect(isAttachmentUpdated({ conversationId: 'c-a', messageId: 'm-audio', attachment: { id: 'a-1' } })).toBe(true);
+  });
+
+  test('rejette ce qui ne nomme ni la conversation, ni le message, ni la pièce', () => {
+    expect(isAttachmentUpdated(null)).toBe(false);
+    expect(isAttachmentUpdated('a-1')).toBe(false);
+    expect(isAttachmentUpdated({ messageId: 'm-audio', attachment: { id: 'a-1' } })).toBe(false);
+    expect(isAttachmentUpdated({ conversationId: 'c-a', attachment: { id: 'a-1' } })).toBe(false);
+    expect(isAttachmentUpdated({ conversationId: 'c-a', messageId: 'm-audio' })).toBe(false);
+    expect(isAttachmentUpdated({ conversationId: 'c-a', messageId: 'm-audio', attachment: null })).toBe(false);
+    /* Sans `id`, la pièce n'est PAS adressable : la remplacer au rang 0
+       écraserait une AUTRE pièce du même message (un message peut en porter
+       plusieurs, chacune transcrite par son propre passage Whisper — c'est la
+       raison pour laquelle l'éventail serveur déduplique sa file sur
+       `attachmentId`, `emitAttachmentUpdated.ts:104`). */
+    expect(isAttachmentUpdated({ conversationId: 'c-a', messageId: 'm-audio', attachment: { mimeType: 'audio/wav' } })).toBe(false);
+  });
+});
+
+describe('applyMessageAttachmentUpdated (#7017) — la transcription arrive SANS rechargement', () => {
+  test('la transcription Whisper atterrit sur la pièce du fil OUVERT, sans requête réseau', () => {
+    const client = new QueryClient();
+    const calls = { count: 0 };
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([cachedAudioMessage(socketAttachment({}))]));
+    void client.getQueryCache().build(client, { queryKey: messagesQueryKey('c-a'), queryFn: countingQueryFn(calls) });
+
+    applyMessageAttachmentUpdated(client, {
+      conversationId: 'c-a',
+      messageId: 'm-audio',
+      attachment: socketAttachment({
+        transcription: { type: 'audio', text: 'Hola, ¿seguimos el jueves?', language: 'es' },
+      }),
+    });
+
+    expect(attachmentOf(client, 'c-a', 'm-audio').transcription).toEqual({
+      type: 'audio',
+      text: 'Hola, ¿seguimos el jueves?',
+      language: 'es',
+    });
+    expect(calls.count).toBe(0);
+  });
+
+  test('un SECOND évènement greffe les traductions NLLB sans perdre la transcription', () => {
+    const client = new QueryClient();
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([cachedAudioMessage(socketAttachment({}))]));
+
+    const transcription = { type: 'audio', text: 'Hola', language: 'es' };
+    applyMessageAttachmentUpdated(client, { conversationId: 'c-a', messageId: 'm-audio', attachment: socketAttachment({ transcription }) });
+    applyMessageAttachmentUpdated(client, {
+      conversationId: 'c-a',
+      messageId: 'm-audio',
+      attachment: socketAttachment({ transcription, translations: { fr: { type: 'audio', transcription: 'Bonjour' } } }),
+    });
+
+    const attachment = attachmentOf(client, 'c-a', 'm-audio');
+    expect(attachment.transcription).toEqual(transcription);
+    expect(attachment.translations).toEqual({ fr: { type: 'audio', transcription: 'Bonjour' } });
+  });
+
+  /**
+   * LA CHARGE SOCKET EST UN SUR-ENSEMBLE INCERTAIN — ce que la passerelle
+   * n'énumère PAS ne doit pas être EFFACÉ. `currentUserConsumption` est servi
+   * par le REST et absent de `SocketAttachment` : un REMPLACEMENT sec ferait
+   * disparaître la barre de consommation d'un vocal déjà écouté au moment
+   * exact où sa transcription arrive.
+   */
+  test('les clés que la charge socket ne porte pas SURVIVENT (fusion, jamais remplacement sec)', () => {
+    const client = new QueryClient();
+    client.setQueryData(
+      messagesQueryKey('c-a'),
+      threadPages([cachedAudioMessage(socketAttachment({ duration: 12_000, currentUserConsumption: { playPositionMs: 4000 } }))]),
+    );
+
+    applyMessageAttachmentUpdated(client, {
+      conversationId: 'c-a',
+      messageId: 'm-audio',
+      attachment: { id: 'a-1', messageId: 'm-audio', transcription: { type: 'audio', text: 'Hola', language: 'es' } },
+    });
+
+    const attachment = attachmentOf(client, 'c-a', 'm-audio');
+    expect(attachment.duration).toBe(12_000);
+    expect(attachment.currentUserConsumption).toEqual({ playPositionMs: 4000 });
+  });
+
+  /**
+   * LA GARDE DE MASQUAGE (#7014, dépendance croisée) — `maskedAttachment`
+   * rend `false` sur une charge qui ne DÉCLARE rien, et le sérialiseur socket
+   * ne sert pas les trois drapeaux. Une pièce à VUE UNIQUE déjà connue du
+   * cache par le REST doit rester masquée quand son enrichissement arrive :
+   * sinon le voile tombe au moment précis où le pipeline finit son travail.
+   */
+  test('une pièce DÉJÀ masquée le reste quand la charge socket ne déclare aucun drapeau', () => {
+    const client = new QueryClient();
+    client.setQueryData(
+      messagesQueryKey('c-a'),
+      threadPages([cachedAudioMessage(socketAttachment({ isViewOnce: true, isBlurred: false }))]),
+    );
+
+    applyMessageAttachmentUpdated(client, {
+      conversationId: 'c-a',
+      messageId: 'm-audio',
+      attachment: socketAttachment({ transcription: { type: 'audio', text: 'Hola', language: 'es' } }),
+    });
+
+    expect(maskedAttachment(attachmentOf(client, 'c-a', 'm-audio') as never)).toBe(true);
+  });
+
+  test('une pièce DÉJÀ masquée le reste même si la charge socket DÉMENT la protection', () => {
+    const client = new QueryClient();
+    client.setQueryData(
+      messagesQueryKey('c-a'),
+      threadPages([cachedAudioMessage(socketAttachment({ isBlurred: true }))]),
+    );
+
+    applyMessageAttachmentUpdated(client, {
+      conversationId: 'c-a',
+      messageId: 'm-audio',
+      attachment: socketAttachment({ isViewOnce: false, isBlurred: false, effectFlags: 0 }),
+    });
+
+    expect(maskedAttachment(attachmentOf(client, 'c-a', 'm-audio') as never)).toBe(true);
+  });
+
+  test('une protection ANNONCÉE par la charge socket masque une pièce que le cache croyait ordinaire', () => {
+    const client = new QueryClient();
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([cachedAudioMessage(socketAttachment({}))]));
+
+    applyMessageAttachmentUpdated(client, {
+      conversationId: 'c-a',
+      messageId: 'm-audio',
+      attachment: socketAttachment({ isViewOnce: true }),
+    });
+
+    expect(maskedAttachment(attachmentOf(client, 'c-a', 'm-audio') as never)).toBe(true);
+  });
+
+  /**
+   * JAMAIS UN AJOUT — l'évènement dit « cette pièce a été ENRICHIE », jamais
+   * « voici une pièce de plus ». Ajouter une pièce inconnue ferait entrer dans
+   * le fil un média dont le cache n'a rien pour juger la protection : c'est la
+   * fenêtre du cycle 125, ouverte par un chemin neuf.
+   */
+  test('une pièce INCONNUE du message n’est jamais ajoutée', () => {
+    const client = new QueryClient();
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([cachedAudioMessage(socketAttachment({}))]));
+
+    applyMessageAttachmentUpdated(client, {
+      conversationId: 'c-a',
+      messageId: 'm-audio',
+      attachment: socketAttachment({ id: 'a-inconnue' }),
+    });
+
+    const message = threadOf(client, 'c-a')?.messages[0];
+    expect(message?.attachments).toHaveLength(1);
+    expect((message?.attachments?.[0] as unknown as Record<string, unknown>).id).toBe('a-1');
+  });
+
+  test('un fil NON ouvert, ou un message inconnu, ne lève pas et ne peint rien', () => {
+    const client = new QueryClient();
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([cachedAudioMessage(socketAttachment({}))]));
+
+    applyMessageAttachmentUpdated(client, { conversationId: 'c-jamais-ouverte', messageId: 'm-audio', attachment: socketAttachment({ transcription: { text: 'x' } }) });
+    applyMessageAttachmentUpdated(client, { conversationId: 'c-a', messageId: 'm-inconnu', attachment: socketAttachment({ transcription: { text: 'x' } }) });
+
+    expect(attachmentOf(client, 'c-a', 'm-audio').transcription).toBeNull();
   });
 });
