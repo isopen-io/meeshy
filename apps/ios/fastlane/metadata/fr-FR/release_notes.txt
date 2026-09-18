@@ -20,6 +20,7 @@ VOTRE VOIX, DANS LEUR LANGUE
 
 REGARDER
 • Le plein écran s'ouvre net sur l'image réelle, jamais sur une vignette floue
+• Une scène se présente partout de la même façon — dans une story comme dans une publication : même cadre, même sol, mêmes angles nets en plein écran
 • Parcourez les médias d'une publication puis ceux de ses commentaires, comme une pellicule
 • Réagissez, répondez ou créez une story sans quitter le plein écran
 • Double tap latéral sur une vidéo : dix secondes en arrière ou en avant

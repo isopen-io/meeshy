@@ -20,6 +20,7 @@ YOUR VOICE, IN THEIR LANGUAGE
 
 WATCH
 • Full screen opens sharp on the real image, never on a blurry thumbnail
+• A scene looks the same everywhere — in a story as in a post: same frame, same floor, same crisp corners in full screen
 • Swipe through a post's media, then through its comments' media, like a film roll
 • React, reply or create a story without leaving full screen
 • Double tap either side of a video: ten seconds back or forward

@@ -20,6 +20,7 @@ TU VOZ, EN SU IDIOMA
 
 VER
 • La pantalla completa abre nítida sobre la imagen real, nunca sobre una miniatura borrosa
+• Una escena se presenta igual en todas partes — en una historia como en una publicación: mismo marco, mismo suelo, mismas esquinas nítidas a pantalla completa
 • Recorre los archivos de una publicación y luego los de sus comentarios, como un carrete
 • Reacciona, responde o crea una historia sin salir de la pantalla completa
 • Doble toque a los lados de un vídeo: diez segundos atrás o adelante
