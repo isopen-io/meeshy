@@ -106,4 +106,88 @@ final class NotificationGapResyncCoordinatorTests: XCTestCase {
         let count = await waitForCount(counter, toReach: 1)
         XCTAssertEqual(count, 1, "un reconnect doit déclencher une resync des notifications")
     }
+
+    // MARK: - #7000 — le retour au PREMIER PLAN
+
+    /// La suspension est une fenêtre aveugle, exactement comme une coupure
+    /// socket : au retour, la boîte se RELIT. `MeeshyApp` y effaçait au
+    /// contraire toutes les bannières livrées, sans rien rafraîchir.
+    func test_foreground_whenAuthenticated_triggersResync() async {
+        let counter = ResyncCounter()
+        let sut = NotificationGapResyncCoordinator(
+            gapPublisher: Empty().eraseToAnyPublisher(),
+            reconnectPublisher: Empty().eraseToAnyPublisher(),
+            debounce: 0.05,
+            isAuthenticated: { true },
+            resync: { await counter.increment() }
+        )
+
+        sut.refreshOnForeground()
+
+        let count = await waitForCount(counter, toReach: 1)
+        XCTAssertEqual(count, 1, "revenir au premier plan doit relire la liste et le compteur")
+    }
+
+    /// `scenePhase == .active` arrive AUSSI sur l'écran de connexion et au
+    /// démarrage à froid d'une session expirée : une resync y serait un 401 et
+    /// un cache qu'on n'a pas le droit de peupler.
+    func test_foreground_whenSignedOut_doesNothing() async {
+        let counter = ResyncCounter()
+        let sut = NotificationGapResyncCoordinator(
+            gapPublisher: Empty().eraseToAnyPublisher(),
+            reconnectPublisher: Empty().eraseToAnyPublisher(),
+            debounce: 0.05,
+            isAuthenticated: { false },
+            resync: { await counter.increment() }
+        )
+
+        sut.refreshOnForeground()
+
+        try? await Task.sleep(nanoseconds: 250_000_000)
+        let count = await counter.count
+        XCTAssertEqual(count, 0, "sans session, le premier plan ne déclenche aucune lecture")
+    }
+
+    // MARK: - #7000 — garde de source sur MeeshyApp
+
+    /// **Le geste effacé, mesuré là où il vivait.**
+    ///
+    /// `removeAllDeliveredNotifications()` est un effet SYSTÈME sur
+    /// `UNUserNotificationCenter` : aucun témoin de comportement ne peut
+    /// l'observer depuis la racine SwiftUI, et son retrait ne fait rougir
+    /// aucun test. La seule mesure possible est la SOURCE. Le retrait de
+    /// bannières est désormais borné à ce qu'on vient de consommer
+    /// (`NotificationActionHandler.removeDeliveredNotifications(matching:)`),
+    /// jamais global.
+    func test_meeshyApp_neverClearsEveryDeliveredBanner() throws {
+        let source = try String(contentsOf: meeshyAppSourceURL(), encoding: .utf8)
+
+        XCTAssertFalse(
+            source.contains("removeAllDeliveredNotifications"),
+            """
+            `MeeshyApp` efface toutes les bannières livrées. Ce geste retire celles d'AUTRES \
+            conversations, s'exécute même sans session, et ne rafraîchit ni la cloche ni le badge : \
+            on vide le seul endroit où l'utilisateur peut encore lire ce qu'il a manqué. \
+            Le retrait doit être borné aux threads consommés (#6999).
+            """
+        )
+    }
+
+    func test_meeshyApp_refreshesNotificationsOnForeground() throws {
+        let source = try String(contentsOf: meeshyAppSourceURL(), encoding: .utf8)
+
+        XCTAssertTrue(
+            source.contains("NotificationGapResyncCoordinator.shared.refreshOnForeground()"),
+            "le retour au premier plan doit RELIRE la boîte — sinon cloche et badge restent périmés"
+        )
+    }
+
+    private func meeshyAppSourceURL() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()  // …/MeeshyTests/Unit/Services
+            .deletingLastPathComponent()  // …/MeeshyTests/Unit
+            .deletingLastPathComponent()  // …/MeeshyTests
+            .deletingLastPathComponent()  // …/apps/ios
+            .appendingPathComponent("Meeshy/MeeshyApp.swift")
+    }
 }
