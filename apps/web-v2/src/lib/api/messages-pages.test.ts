@@ -1,6 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 
-import { flattenMessagePages, nextMessagesCursor, pageOfMessages, type MessagesInfiniteData, type MessagesPage } from './messages-pages';
+import {
+  flattenMessagePages,
+  nextMessagesCursor,
+  pageOfMessages,
+  threadWindowOf,
+  type MessagesInfiniteData,
+  type MessagesPage,
+} from './messages-pages';
 import { message } from './fixtures-base';
 import type { Message } from './types';
 
@@ -76,6 +83,35 @@ describe('flattenMessagePages — l’ordre à la couture', () => {
 
   test('aucune page ⇒ liste vide (jamais une exception)', () => {
     expect(flattenMessagePages(data([], []))).toEqual([]);
+  });
+});
+
+/**
+ * `threadWindowOf` — **`hasOlder` ET « peut-on encore charger » SONT DEUX
+ * QUESTIONS** (#6972). La première est celle du Résumé Vivant (« Sur les N
+ * derniers messages ») ; elle se lit sur la page qui BORDE la fenêtre — la
+ * plus ANCIENNE chargée, donc la dernière reçue.
+ */
+describe('threadWindowOf — la fenêtre servie à l’écran', () => {
+  test('`hasOlder` vient de la page la plus ANCIENNE, jamais de la première', () => {
+    const recent = page([msg('m3', 3)], { hasOlder: true, nextCursor: 'm3' });
+    const older = page([msg('m1', 1)], { hasOlder: false, nextCursor: null });
+    const w = threadWindowOf(data([recent, older], [undefined, 'm3']));
+    expect(w.messages.map((m) => m.id)).toEqual(['m1', 'm3']);
+    expect(w.hasOlder).toBe(false);
+  });
+
+  test('un fil déclaré PARTIEL le reste même sans curseur — la fiction des fixtures ne se falsifie pas', () => {
+    const w = threadWindowOf(data([page([msg('m1', 1)], { hasOlder: true, nextCursor: null })], [undefined]));
+    expect(w.hasOlder).toBe(true);
+    /* … et la sentinelle reste DÉSARMÉE : deux questions, deux réponses. */
+    expect(nextMessagesCursor(page([msg('m1', 1)], { hasOlder: true, nextCursor: null }), [], undefined)).toBeUndefined();
+  });
+
+  test('aucune page ⇒ fenêtre vide, hasOlder faux (fail-closed)', () => {
+    const w = threadWindowOf(data([], []));
+    expect(w.messages).toEqual([]);
+    expect(w.hasOlder).toBe(false);
   });
 });
 

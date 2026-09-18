@@ -44,20 +44,24 @@ describe('loadMessages — fixtures', () => {
   /**
    * LA FICTION DE `hasOlderMessagesOf` SURVIT À LA PAGINATION (#6972) — le
    * corpus de `c-rattrapage` compte TRENTE messages, sous la limite de 50 :
-   * la loi de fenêtrage seule (`pageOfMessages`) rendrait donc `hasOlder`
-   * faux, et le Résumé Vivant perdrait « Sur les N derniers messages », le
-   * seul état que cette conversation existe pour rendre atteignable.
-   * La fiction est DÉCLARÉE par les fixtures et respectée ici ; elle doit
-   * venir avec un curseur, sinon le 2e refus de `nextMessagesCursor` la
-   * neutraliserait à la lecture.
+   * la loi de fenêtrage seule (`pageOfMessages`) rendrait `hasOlder` faux, et
+   * le Résumé Vivant perdrait « Sur les N derniers messages », le seul état
+   * que cette conversation existe pour rendre atteignable.
+   *
+   * `hasOlder` SANS CURSEUR : le fil DÉCLARE un historique et n'offre AUCUNE
+   * descente. Lui rendre le curseur du plus ancien message chargé faisait
+   * revenir une page VIDE, dont le `hasOlder` faux bordait alors la fenêtre —
+   * la fiction se falsifiait elle-même dès qu'on touchait le haut du fil.
    */
-  test('c-rattrapage ⇒ hasOlder DÉCLARÉ, avec un curseur (sans quoi la fiction serait muette)', async () => {
+  test('c-rattrapage ⇒ hasOlder DÉCLARÉ, SANS curseur — la fiction ne se falsifie pas elle-même', async () => {
     const transport = createHttpTransport({ base: '' });
     const result = await loadMessages({ source: 'fixtures', transport, conversationId: 'c-rattrapage' });
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.data.hasOlder).toBe(true);
-      expect(result.data.nextCursor).toBe(messagesOf('c-rattrapage')[0]?.id);
+      expect(result.data.nextCursor).toBe(null);
+      /* Et la sentinelle reste DÉSARMÉE : aucune requête ne part. */
+      expect(nextMessagesCursor(result.data, [result.data], undefined)).toBeUndefined();
     }
   });
 
@@ -71,7 +75,7 @@ describe('loadMessages — fixtures', () => {
     }
   });
 
-  test('`before` = le curseur de c-rattrapage ⇒ page VIDE (le corpus est épuisé)', async () => {
+  test('`before` = le plus ancien message ⇒ page VIDE, et la fiction ne s’y applique PAS', async () => {
     const transport = createHttpTransport({ base: '' });
     const oldest = messagesOf('c-rattrapage')[0]!.id;
     const result = await loadMessages({ source: 'fixtures', transport, conversationId: 'c-rattrapage', before: oldest });
@@ -159,14 +163,18 @@ describe('loadMessages — gateway', () => {
 });
 
 describe('messagesQuery — la fabrique', () => {
-  test('aplatit ET décode messages[].createdAt via select', () => {
+  test('aplatit ET décode messages[].createdAt via select ; `hasOlder` vient de la page qui BORDE la fenêtre', () => {
     const { queryKey, select } = messagesQuery({ source: 'fixtures', transport: createHttpTransport({ base: '' }) }, 'c-a');
     expect(queryKey).toEqual(['conversations', 'c-a', 'messages']);
-    const decoded = select({
-      pages: [{ messages: [{ ...messagesOf('c-deploiement')[0]!, createdAt: '2026-09-08T09:00:00.000Z' }], hasOlder: false, nextCursor: null }],
-      pageParams: [undefined],
+    const window = select({
+      pages: [
+        { messages: [{ ...messagesOf('c-deploiement')[0]!, createdAt: '2026-09-08T09:00:00.000Z' }], hasOlder: true, nextCursor: 'x' },
+        { messages: [], hasOlder: true, nextCursor: 'y' },
+      ],
+      pageParams: [undefined, 'x'],
     } as unknown as Parameters<typeof select>[0]);
-    expect(decoded[0]?.createdAt).toBeInstanceOf(Date);
+    expect(window.messages[0]?.createdAt).toBeInstanceOf(Date);
+    expect(window.hasOlder).toBe(true);
   });
 
   test('`select` est la MÊME référence entre deux fabriques (fonction de MODULE)', () => {

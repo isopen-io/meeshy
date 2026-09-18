@@ -29,6 +29,25 @@
  *    quand les mesures d'à côté arrivent. Le virtualiseur corrige `scrollTop`
  *    pour ça ; mesurer la hauteur totale l'aurait déclaré cassé alors qu'il
  *    fait précisément son travail.
+ * 5. **QUE LE CONTENU VISIBLE NE BOUGE PAS NON PLUS QUAND UNE PAGE PLUS
+ *    ANCIENNE S'INSÈRE EN TÊTE** (#6972). Le critère 4 mesurait déjà « une
+ *    cellule visible ne bouge pas de plus de 2 px » — mais seulement sous
+ *    l'effet de la MESURE des cellules, jamais d'une INSERTION : le corpus de
+ *    banc arrivait en UN SEUL bloc, il n'y avait pas de page à insérer.
+ *    Depuis que le fil pagine, préfixer cinquante rangées fait glisser toute
+ *    la fenêtre — et c'est le défaut qu'aucun témoin unitaire ne voit. Le fil
+ *    est donc chargé PAGE PAR PAGE, et la dérive est mesurée à CHAQUE couture.
+ *
+ * COMMENT LA DÉRIVE D'INSERTION EST MESURÉE, ET POURQUOI DANS LA PAGE.
+ * L'échantillon de référence doit être pris AVANT que la page ne s'insère,
+ * sinon le témoin est vert quoi qu'il arrive — « un vert des deux côtés d'une
+ * mutation mesure la machine, pas la règle ». Un aller-retour CDP par
+ * échantillon ne peut pas garantir cet ordre. La boucle vit donc DANS la page
+ * (`requestAnimationFrame`) : `main.scrollTop` est appliqué SYNCHRONEMENT,
+ * l'échantillon pris juste après reflète déjà la nouvelle position, et le
+ * rappel de l'`IntersectionObserver` ne peut pas avoir couru entre les deux.
+ * La rangée est repérée par son `data-row` (l'id du message) et jamais par son
+ * `data-index` : un préfixage décale TOUS les index.
  *
  * LA VARIANTE DE BANC. Le fil de 500 n'existe que dans une construction
  * `MEESHY_BENCH=500`, où `__BENCH__` est un littéral. Le build servi aux
@@ -134,6 +153,107 @@ expect(
   "le dernier message n'est pas rendu à l'ouverture",
 );
 
+/**
+ * --- 5 : LA PAGINATION DU HAUT (#6972). Le fil s'ouvre sur UNE page serveur
+ * (50 messages) : la sentinelle haute doit donc être ARMÉE, et chaque approche
+ * du haut doit poser une page plus ancienne SANS déplacer ce qu'on lit.
+ */
+const olderState = () =>
+  page.evaluate(() => document.querySelector('[data-thread-older]')?.getAttribute('data-thread-older') ?? null);
+
+expect(
+  (await olderState()) === 'idle',
+  `la sentinelle HAUTE est armée à l'ouverture d'un fil tronqué (état lu : ${await olderState()})`,
+);
+
+/** Un tour de pagination, mesuré DANS la page — voir le doc-comment du
+ * fichier § « COMMENT LA DÉRIVE D'INSERTION EST MESURÉE ». */
+const pullOlderPage = () =>
+  page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const main = document.querySelector('main#contenu');
+        const list = main?.querySelector('ol');
+        if (main === null || list === null || list === undefined) {
+          resolve({ loaded: false, reason: 'pas de défileur' });
+          return;
+        }
+        const sample = () => {
+          const box = main.getBoundingClientRect();
+          for (const el of main.querySelectorAll('[data-row]')) {
+            const r = el.getBoundingClientRect();
+            if (r.top >= box.top && r.bottom <= box.bottom) {
+              return { height: list.offsetHeight, row: el.getAttribute('data-row'), top: r.top };
+            }
+          }
+          return { height: list.offsetHeight, row: null, top: 0 };
+        };
+
+        /* HORS de la zone de déclenchement (`rootMargin` de cinq rangées) : on
+           s'assure qu'aucune page n'est en vol avant de repérer la rangée. */
+        main.scrollTop = 1500;
+        /* Puis DANS la zone, en UNE assignation — `scrollTop` est appliqué
+           synchronement, donc l'échantillon ci-dessous reflète déjà 100, et le
+           rappel de l'observateur n'a pas pu courir entre les deux. */
+        main.scrollTop = 100;
+        let last = sample();
+        const baseHeight = last.height;
+
+        let frames = 0;
+        const step = () => {
+          const now = sample();
+          if (now.height > baseHeight) {
+            const el = last.row === null ? null : main.querySelector(`[data-row="${last.row}"]`);
+            resolve({
+              loaded: true,
+              row: last.row,
+              drift: el === null ? null : Math.abs(el.getBoundingClientRect().top - last.top),
+            });
+            return;
+          }
+          last = now;
+          frames += 1;
+          if (frames > 240) {
+            resolve({ loaded: false, reason: 'aucune page en 240 images' });
+            return;
+          }
+          requestAnimationFrame(step);
+        };
+        requestAnimationFrame(step);
+      }),
+  );
+
+let insertionJump = 0;
+let olderPages = 0;
+let lostAnchor = 0;
+for (let turn = 0; turn < 20; turn += 1) {
+  if ((await olderState()) !== 'idle') break;
+  const pull = await pullOlderPage();
+  if (pull.loaded !== true) break;
+  olderPages += 1;
+  await page.waitForTimeout(150);
+  if (pull.drift === null) lostAnchor += 1;
+  else insertionJump = Math.max(insertionJump, pull.drift);
+  const r = await snapshot(`page ancienne ${olderPages}`);
+  expect(
+    r.cellCount < MAX_CELLS,
+    `${r.cellCount} cellules montées après ${olderPages} page(s) ancienne(s) (plafond ${MAX_CELLS}) — la fenêtre s'élargit au lieu de glisser`,
+  );
+}
+
+expect(olderPages >= 2, `au moins DEUX pages anciennes se chargent à l'approche du haut (mesuré ${olderPages})`);
+expect(lostAnchor === 0, `la rangée repérée reste MONTÉE après l'insertion (perdue ${lostAnchor} fois)`);
+/** Deux pixels : la marge d'arrondi du navigateur. Au-delà, l'historique
+ * inséré a fait glisser le fil sous les yeux du lecteur. */
+expect(
+  insertionJump <= 2,
+  `une cellule visible a bougé de ${Math.round(insertionJump)} px à l'insertion d'une page ancienne — l'historique pousse le fil sous les yeux`,
+);
+expect(
+  (await olderState()) === 'exhausted',
+  `l'historique ÉPUISÉ désarme la sentinelle haute (état lu : ${await olderState()})`,
+);
+
 // --- 3 : la remontée. La fenêtre GLISSE, elle ne s'élargit pas.
 let visualJump = 0;
 for (const fraction of [0.75, 0.5, 0.25, 0]) {
@@ -203,6 +323,8 @@ for (const r of readings) {
     `  ${r.label.padEnd(22)} ${String(r.cellCount).padStart(3)} cellules montées · ${Math.round(r.scrollHeight)} px de contenu`,
   );
 }
+console.log(`  pages anciennes chargées ${olderPages}`);
+console.log(`  saut à l'insertion      ${Math.round(insertionJump)} px`);
 console.log(`  saut du contenu visible ${Math.round(visualJump)} px\n`);
 
 if (failures.length > 0) {
@@ -211,4 +333,6 @@ if (failures.length > 0) {
   console.error('');
   process.exit(1);
 }
-console.log(`  Le fil de ${BENCH} messages ne monte jamais plus de ${MAX_CELLS} cellules, s'ouvre sur le dernier, et se remonte sans que le contenu visible bouge.\n`);
+console.log(
+  `  Le fil de ${BENCH} messages ne monte jamais plus de ${MAX_CELLS} cellules, s'ouvre sur le dernier, charge son historique en ${olderPages} pages, et se remonte sans que le contenu visible bouge.\n`,
+);

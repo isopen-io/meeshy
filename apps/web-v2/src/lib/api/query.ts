@@ -283,21 +283,17 @@ export function useThreadData(id: string) {
   return {
     conversationId,
     conversation: conversation.data,
-    messages: messages.data ?? NO_MESSAGES,
+    messages: messages.data?.messages ?? NO_MESSAGES,
     /**
-     * `hasOlder` — DÉSORMAIS `hasNextPage`, jamais le drapeau brut de la
-     * dernière page (#6972). C'est la même question posée honnêtement : « le
-     * fil peut-il encore charger plus ancien ? » — ce que `hasNextPage`
-     * répond en tenant compte des cinq refus de `nextMessagesCursor`, qu'un
-     * `cursorPagination.hasMore` seul ignore (la passerelle peut le poser à
-     * `true` sur une page qu'elle vient de resservir).
-     *
-     * Son unique lecteur reste `windowCoversUnread` (« Sur les N derniers
-     * messages » du Résumé Vivant, `routes/thread.tsx`) — mais il n'est plus
-     * le seul consommateur du curseur : `olderState` ci-dessous le rend
-     * ACTIONNABLE.
+     * `hasOlder` — « le serveur DÉCLARE-T-IL du plus ancien ? », lu sur la
+     * page qui borde la fenêtre (`threadWindowOf`, `messages-pages.ts`).
+     * JAMAIS `hasNextPage`, qui répond à l'autre question — « peut-on en
+     * demander davantage sans boucler ? » — et qui tombe à faux dès qu'un
+     * refus anti-boucle s'applique, alors que l'historique, lui, existe
+     * toujours. Son lecteur est `windowCoversUnread` (« Sur les N derniers
+     * messages » du Résumé Vivant, `routes/thread.tsx`).
      */
-    hasOlder: messages.hasNextPage,
+    hasOlder: messages.data?.hasOlder ?? false,
     /** L'état de pagination du HAUT du fil, quatre cas, la MÊME loi que la
      * Lentille (`paginationStateOf`, `lib/lens/pagination.ts`) — dérivé des
      * drapeaux de TanStack, jamais tenu à part. */

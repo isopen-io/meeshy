@@ -155,7 +155,7 @@ describe('useThreadData — la pagination du HAUT atteint bien l’écran (#6972
    * `messages-list.ts:386-397`) désarme la sentinelle : sans cela, le haut du
    * fil rechargerait son propre début sans fin.
    */
-  test('page RESSERVIE (hasOlder vrai, aucun id neuf) ⇒ `olderState` exhausted', () => {
+  test('page RESSERVIE (hasOlder vrai, aucun id neuf) ⇒ `olderState` exhausted, mais `hasOlder` RESTE vrai', () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     queryClient.setQueryData(conversationQueryKey('c-pagine'), thread());
     queryClient.setQueryData(messagesQueryKey('c-pagine'), {
@@ -169,6 +169,11 @@ describe('useThreadData — la pagination du HAUT atteint bien l’écran (#6972
     const html = probe(queryClient);
     expect(html).toContain('data-ids="m1,m2"');
     expect(html).toContain('data-older-state="exhausted"');
+    /* DEUX QUESTIONS, DEUX RÉPONSES : la descente est désarmée (on ne peut
+       plus demander sans boucler), mais l'historique EXISTE toujours — « Sur
+       les N derniers messages » doit continuer à le dire. Répondre à la
+       première question par la seconde faisait taire le Résumé Vivant. */
+    expect(html).toContain('data-has-older="true"');
   });
 });
 

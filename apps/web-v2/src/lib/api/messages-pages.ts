@@ -87,6 +87,40 @@ export function flattenMessagePages(data: MessagesInfiniteData): readonly Messag
 }
 
 /**
+ * LA FENÊTRE DU FIL — ce que `messagesQuery().select` sert à l'écran.
+ *
+ * **`hasOlder` ET « peut-on encore charger » SONT DEUX QUESTIONS.** La
+ * première est celle du Résumé Vivant (« Sur les N derniers messages ») : *le
+ * serveur déclare-t-il qu'il existe du plus ancien ?* — elle se lit sur la
+ * page la plus ANCIENNE chargée, la seule qui décrive le bord de la fenêtre.
+ * La seconde est celle de la sentinelle (`hasNextPage`, dérivé de
+ * `nextMessagesCursor`) : *peut-on en demander davantage sans boucler ?*
+ *
+ * Elles divergent, et c'est voulu : une page RESSERVIE par la passerelle
+ * (`before` inconnu) désarme la descente sans rendre l'historique inexistant.
+ * Répondre à la première par la seconde faisait taire « Sur les N derniers
+ * messages » dès qu'un refus anti-boucle tombait — le Résumé affirmait alors
+ * couvrir tout le non-lu sans rien en savoir.
+ */
+export type ThreadWindow = {
+  readonly messages: readonly Message[];
+  readonly hasOlder: boolean;
+};
+
+/**
+ * `threadWindowOf` — LE `select` du fil, fonction de MODULE (voir
+ * `flattenMessagePages` pour la mesure). `hasOlder` vient de la page la plus
+ * ANCIENNE (`pages[pages.length - 1]`) : les pages arrivent de la récente vers
+ * l'ancienne, donc c'est la DERNIÈRE reçue qui borde l'historique.
+ */
+export function threadWindowOf(data: MessagesInfiniteData): ThreadWindow {
+  return {
+    messages: flattenMessagePages(data),
+    hasOlder: data.pages[data.pages.length - 1]?.hasOlder ?? false,
+  };
+}
+
+/**
  * `nextMessagesCursor` — `getNextPageParam` du fil : les CINQ refus de
  * `nextConversationsCursor` (`conversations-pages.ts`), qui s'appliquent TELS
  * QUELS ici — `hasOlder` faux, `nextCursor` absent, curseur STAGNANT

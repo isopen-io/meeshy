@@ -4,7 +4,7 @@ import { unwrap } from './client';
 import type { ConversationsDeps } from './conversations';
 import { hasOlderMessagesOf, messagesOf, recordSentMessage } from './fixtures';
 import type { ApiResult, HttpTransport } from './http';
-import { flattenMessagePages, nextMessagesCursor, pageOfMessages } from './messages-pages';
+import { nextMessagesCursor, pageOfMessages, threadWindowOf } from './messages-pages';
 import type { MessagesInfiniteData, MessagesPage, MessagesPageParam } from './messages-pages';
 import type { Message } from './types';
 
@@ -53,14 +53,22 @@ export async function loadMessages(
      * perdrait « Sur les N derniers messages », le seul état que cette
      * conversation existe pour rendre atteignable (`fixtures.ts:919`).
      *
-     * La fiction vient avec un CURSEUR — sans lui, le 2e refus de
-     * `nextMessagesCursor` la rendrait muette. La page suivante sera VIDE
-     * (le corpus est épuisé) : c'est le 4e refus qui arrête la descente, et
-     * c'est exactement ce qu'il existe pour faire.
+     * **`hasOlder` SANS CURSEUR** — la seule forme cohérente ici, et une forme
+     * que la passerelle ne produit jamais (un `hasMore` vrai y vient toujours
+     * avec le `nextCursor` du dernier message servi). Le fil DÉCLARE donc un
+     * historique et n'offre AUCUNE descente : le 2e refus de
+     * `nextMessagesCursor` désarme la sentinelle, la fenêtre reste PARTIELLE,
+     * et aucune requête ne part.
+     *
+     * L'écriture précédente rendait le curseur du plus ancien message chargé.
+     * La page suivante revenait alors VIDE — le corpus étant épuisé — et
+     * `hasOlder` de cette page vide, qui borde désormais la fenêtre, valait
+     * FAUX : passer par le mode Résumé après avoir touché le haut du fil
+     * effaçait « Sur les N derniers messages » pour de bon. La fiction se
+     * falsifiait elle-même, et `check-reading-mode.mjs` l'a dit.
      */
     if (params.before === undefined && !page.hasOlder && hasOlderMessagesOf(params.conversationId)) {
-      const oldest = page.messages[0];
-      return { ok: true, data: { ...page, hasOlder: true, nextCursor: oldest === undefined ? null : oldest.id } };
+      return { ok: true, data: { ...page, hasOlder: true, nextCursor: null } };
     }
     return { ok: true, data: page };
   }
@@ -115,10 +123,10 @@ export function messagesInfiniteOptions(deps: ConversationsDeps, conversationId:
 }
 
 /** FABRIQUE (F3) — la même forme que `conversationsQuery`. `select` reste une
- * fonction de MODULE (`flattenMessagePages`), jamais une lambda écrite en
- * ligne : le doc-comment de `flattenMessagePages` porte la mesure. */
+ * fonction de MODULE (`threadWindowOf`), jamais une lambda écrite en ligne :
+ * le doc-comment de `flattenMessagePages` porte la mesure. */
 export function messagesQuery(deps: ConversationsDeps, conversationId: string) {
-  return { ...messagesInfiniteOptions(deps, conversationId), select: flattenMessagePages };
+  return { ...messagesInfiniteOptions(deps, conversationId), select: threadWindowOf };
 }
 
 export type { HttpTransport };
