@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
+import { parseCanvasDocument } from '@/lib/canvas/document';
+
 import type { ApiResult, HttpRequest, HttpTransport } from './http';
 import { loadReelsPage, reelsQueryKey, REELS_PAGE_SIZE } from './reels';
 
@@ -84,6 +86,24 @@ describe('loadReelsPage — fixtures', () => {
     const seedId = first.data.posts[0]?.id ?? '';
     const seeded = await loadReelsPage({ source: 'fixtures', transport, seed: seedId });
     expect(seeded.ok && seeded.data.posts.some((p) => p.id === seedId)).toBe(false);
+  });
+
+  /** T8 (#6903) — le corpus porte un réel COMPOSÉ, en DERNIÈRE position, et
+   * sa scène est un document canvas v3 VALIDE — pas une forme devinée. */
+  test('le corpus porte reel-scene-loop en DERNIÈRE position, avec un document v3 valide', async () => {
+    const { transport } = scripted({ ok: true, data: [] });
+    const page = await loadReelsPage({ source: 'fixtures', transport });
+    expect(page.ok).toBe(true);
+    if (!page.ok) return;
+    const last = page.data.posts[page.data.posts.length - 1];
+    expect(last?.id).toBe('reel-scene-loop');
+    const document = parseCanvasDocument(last?.storyEffects);
+    expect(document).not.toBeNull();
+    expect(document?.v).toBe(3);
+    expect((document?.sound as { readonly source?: { readonly t?: string } } | undefined)?.source?.t).toBe('original');
+    const media = last?.media ?? [];
+    expect(media.length).toBe(2);
+    expect(media.some((m) => m.mimeType === 'audio/webm')).toBe(true);
   });
 });
 

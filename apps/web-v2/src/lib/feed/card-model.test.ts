@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import type { FeedPost } from '@/lib/api/feed-pages';
+import { REEL_SCENE_LOOP, REEL_STUDIO } from '@/lib/api/fixtures-reels';
 
 import { resolveFeedCardModel } from './card-model';
 
@@ -497,6 +498,19 @@ describe('resolveFeedCardModel — la scène (D-78)', () => {
       { preferredLanguages: ['fr'], now: NOW },
     );
     expect(model.scene?.carrier.media.map((m) => m.mimeType)).toEqual(['video/webm', 'audio/webm']);
+  });
+
+  /** T9 (#6903) — un réel COMPOSÉ (fixture `REEL_SCENE_LOOP`) a bien
+   * `isReel: true` ET `scene` défini ; un réel de MÉDIAS (`REEL_STUDIO`) ne
+   * change PAS de comportement. */
+  test('un réel composé (REEL_SCENE_LOOP) a isReel ET scene ; un réel de médias (REEL_STUDIO) n’a pas de scène', () => {
+    const composed = resolveFeedCardModel(REEL_SCENE_LOOP, { preferredLanguages: ['fr'], now: NOW });
+    expect(composed.isReel).toBe(true);
+    expect(composed.scene).toBeDefined();
+
+    const media = resolveFeedCardModel(REEL_STUDIO, { preferredLanguages: ['fr'], now: NOW });
+    expect(media.isReel).toBe(true);
+    expect(media.scene).toBeUndefined();
   });
 
   /**

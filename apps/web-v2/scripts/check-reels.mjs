@@ -31,6 +31,10 @@
  * 11. à cache froid hors ligne, la coupure est dite — ni squelette, ni silence ;
  * 12. sous `prefers-reduced-motion`, le clavier déplace sans animation ;
  * 13. aucune erreur de page, aucun défilement horizontal.
+ * 14. un réel COMPOSÉ (#6903) se rejoue comme sa scène : `[data-scene-player]`
+ *     centré, jamais un `<video data-reel-media>` brut, muet à l'ouverture
+ *     (aucune activation) mais une lecture MUETTE qui AVANCE, et aucun
+ *     lecteur ni piste de son de fond ne survit au retour.
  *
  * `CAPTURE_DIR=<dossier>` écrit les captures de recette.
  */
@@ -80,6 +84,9 @@ const TAP_FLOOR = 44;
 const WCAG_AA = 4.5;
 const SEED = 'reel-portrait';
 const DEEP_SEED = 'reel-sunset-en';
+/** Le réel COMPOSÉ (#6903, `fixtures-reels.ts#REEL_SCENE_LOOP`) — DERNIER du
+ * corpus, jamais rencontré par les sections 1-13 dans leur fenêtre. */
+const SCENE_SEED = 'reel-scene-loop';
 /** Une tâche longue au-delà de ce seuil pendant un balayage est une image perdue visible. */
 const LONG_TASK_MS = 120;
 
@@ -547,6 +554,53 @@ try {
       check(resumed, `${label} : au retour du réseau, les réels se chargent seuls`);
       check(coldErrors.length === 0, `${label} : aucune erreur de page à cache froid — ${JSON.stringify(coldErrors)}`);
       await cold.close();
+
+      // ------------------------------------------------ 14. un réel COMPOSÉ (#6903)
+      const sceneCtx = await browser.newContext({ viewport: { width, height }, colorScheme: scheme, locale: 'fr-FR' });
+      const scenePage = await sceneCtx.newPage();
+      scenePage.setDefaultTimeout(10_000);
+      const sceneErrors = [];
+      scenePage.on('pageerror', (error) => sceneErrors.push(error.message));
+      await scenePage.goto(`${BASE}/reels?seed=${SCENE_SEED}`, { waitUntil: 'load' });
+      await scenePage.waitForSelector(`[data-reel-index="0"][data-reel="${SCENE_SEED}"] [data-reel-scene]`);
+
+      const scenePlayerPresent = (await scenePage.$('[data-reel-index="0"] [data-scene-player]')) !== null;
+      const rawVideoAbsent = (await scenePage.$('[data-reel-index="0"] [data-reel-media="video"]')) === null;
+      check(scenePlayerPresent && rawVideoAbsent, `${label} : un réel composé monte [data-scene-player], jamais un <video data-reel-media> brut`);
+
+      const stageBox = await scenePage.evaluate(() => {
+        const el = document.querySelector('[data-reel-index="0"] [data-reel-scene-stage]');
+        if (el === null) return null;
+        const r = el.getBoundingClientRect();
+        return { cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
+      });
+      check(
+        stageBox !== null && Math.abs(stageBox.cx - width / 2) <= 1 && Math.abs(stageBox.cy - height / 2) <= 1,
+        `${label} : la scène du réel composé est centrée au pixel près (${JSON.stringify(stageBox)})`,
+      );
+
+      const soundLabel = await scenePage.getAttribute('[data-reel-index="0"] [data-reel-gesture="sound"]', 'aria-label');
+      check(soundLabel === 'Activer le son', `${label} : sans activation, le son du réel composé démarre coupé`);
+      const sceneTime = (sel) => scenePage.evaluate((s) => document.querySelector(s)?.currentTime ?? -1, sel);
+      const t0Video = await sceneTime('[data-reel-index="0"] [data-scene-player] video');
+      const t0Track = await sceneTime('[data-reel-index="0"] [data-scene-sound-track]');
+      await scenePage.waitForTimeout(700);
+      const t1Video = await sceneTime('[data-reel-index="0"] [data-scene-player] video');
+      const t1Track = await sceneTime('[data-reel-index="0"] [data-scene-sound-track]');
+      check(
+        t0Video >= 0 && t1Video > t0Video && t0Track >= 0 && t1Track > t0Track,
+        `${label} : une lecture MUETTE de la scène et de son son de fond avance (vidéo ${t0Video} → ${t1Video}, piste ${t0Track} → ${t1Track})`,
+      );
+      await capture(scenePage, `reels-scene-${slug}`);
+
+      await scenePage.click('[data-reels-back]');
+      await scenePage.waitForURL('**/feed');
+      const anyScenePlaying = await scenePage.evaluate(() => [...document.querySelectorAll('video, audio')].some((m) => !m.paused && !m.ended));
+      const sceneTracksLeft = await scenePage.$$eval('[data-scene-sound-track]', (els) => els.length);
+      check(!anyScenePlaying && sceneTracksLeft === 0, `${label} : le retour depuis le réel composé ne laisse ni lecteur en marche ni piste de son de fond`);
+
+      check(sceneErrors.length === 0, `${label} : aucune erreur de page sur le réel composé — ${JSON.stringify(sceneErrors)}`);
+      await sceneCtx.close();
     }
   }
 

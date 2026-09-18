@@ -487,7 +487,9 @@ export const POST_LEGENDE_MIXTE: FeedPost = {
  * qui écrit les trois champs).
  */
 const TRANSFORM_EMPTY = {} as const;
-const TRANSFORM_FULL = { scale: 1, rotation: 0, opacity: 1 } as const;
+/** `export` (#6903) — `fixtures-reels.ts#REEL_SCENE_LOOP` en a besoin pour
+ * composer un document canvas v3 valide, sans dupliquer ce littéral. */
+export const TRANSFORM_FULL = { scale: 1, rotation: 0, opacity: 1 } as const;
 
 /**
  * `POST_SCENE_TEXT` — UNE SCÈNE, ZÉRO MÉDIA (#6898, § 3.4 T1/critère 1) :
