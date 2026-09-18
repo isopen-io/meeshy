@@ -24,11 +24,20 @@ import Foundation
 /// en vol. La forme d'une ligne de notification : pastille, avatar, titre,
 /// corps, horodatage.
 struct NotificationListSkeleton: View {
-    @ObservedObject private var theme = ThemeManager.shared
+    // Feuille : pas d'`@ObservedObject` sur un singleton global (Instant App
+    // Principles § Zero Unnecessary Re-render). L'hôte observe déjà le thème,
+    // et ces vues se re-rendent avec lui. Même forme que `SkeletonView.swift`.
+    private var theme: ThemeManager { ThemeManager.shared }
 
     /// Assez de lignes pour remplir un écran d'iPhone sans en dessiner pour
     /// l'iPad : au-delà, le squelette coûte plus qu'il ne rassure.
     private let rowCount = 7
+
+    /// `init` EXPLICITE, et pas par confort : `rowCount` est une propriété
+    /// STOCKÉE `private`, ce qui rend `private` l'initialiseur par membre que
+    /// Swift synthétise — donc inatteignable depuis `NotificationListView.swift`.
+    /// Même raison que l'`init()` de `SkeletonConversationRow`.
+    init() {}
 
     var body: some View {
         ScrollView {
@@ -92,10 +101,18 @@ struct NotificationListSkeleton: View {
 /// n'est en cache. Distinct de l'état vide, et doté du seul geste qui vaille :
 /// réessayer.
 struct NotificationListErrorState: View {
-    @ObservedObject private var theme = ThemeManager.shared
+    // Feuille : pas d'`@ObservedObject` sur un singleton global (Instant App
+    // Principles § Zero Unnecessary Re-render). L'hôte observe déjà le thème,
+    // et ces vues se re-rendent avec lui. Même forme que `SkeletonView.swift`.
+    private var theme: ThemeManager { ThemeManager.shared }
 
     let brandColor: Color
     let retry: () -> Void
+
+    init(brandColor: Color, retry: @escaping () -> Void) {
+        self.brandColor = brandColor
+        self.retry = retry
+    }
 
     var body: some View {
         VStack(spacing: 16) {
