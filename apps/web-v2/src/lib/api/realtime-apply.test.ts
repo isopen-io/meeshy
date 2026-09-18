@@ -9,8 +9,12 @@ import { conversationStore } from '@/lib/conversation-store';
 import { mergeTimeline } from '@/lib/grouping';
 import { createOutboxStore, entriesOf, type OutboxState } from '@/lib/send/outbox-store';
 import type { StoreApi } from 'zustand/vanilla';
+/* La forme `InfiniteData` du cache du fil et les fabriques qui la sèment
+   vivent en UN endroit depuis #7017 — deux copies seraient deux occasions de
+   la faire dériver le jour où elle change, ce que #6972 venait précisément de
+   retirer du code de production. */
+import { countingQueryFn, localMessage, threadOf, threadPages } from '@/test-support/thread-cache';
 import { messagesQueryKey } from './messages';
-import type { MessagesInfiniteData } from './messages-pages';
 import {
   applyConversationUnreadUpdated,
   applyConversationUpdated,
@@ -27,23 +31,6 @@ import type { Conversation, Message } from './types';
  * témoin qui la muterait laisserait une entrée à un autre fichier de témoins
  * (motif `createTypingStore()` dans `socket.test.ts`). */
 const freshOutbox = (): StoreApi<OutboxState> => createOutboxStore();
-
-/**
- * LA FORME `InfiniteData` DU CACHE DU FIL (#6972) — `threadPages` la POSE,
- * `threadOf` la RELIT APLATIE. Ce sont les deux SEULS endroits de ce fichier
- * qui la connaissent : les témoins mesurent la RÈGLE (dédoublonnage, fusion
- * de traductions, portée), jamais la structure du cache qui la porte.
- */
-const threadPages = (messages: readonly Message[]): MessagesInfiniteData =>
-  ({ pages: [{ messages, hasOlder: false, nextCursor: null }], pageParams: [undefined] }) as MessagesInfiniteData;
-
-const threadOf = (
-  client: QueryClient,
-  conversationId: string,
-): { readonly messages: readonly Message[] } | undefined => {
-  const data = client.getQueryData<MessagesInfiniteData>(messagesQueryKey(conversationId));
-  return data === undefined ? undefined : { messages: data.pages.flatMap((p) => [...p.messages]) };
-};
 
 /**
  * `seedConversations`/`readConversations` (#6195) — le cache de liste change
@@ -86,39 +73,6 @@ const conv = (partial: Partial<Conversation>): Conversation =>
     unreadCount: 0,
     ...partial,
   }) as Conversation;
-
-const localMessage = (partial: Partial<Message> & { readonly clientMessageId?: string }): Message =>
-  ({
-    id: 'local-1',
-    conversationId: 'c-a',
-    senderId: 'u-viewer',
-    content: 'en cours',
-    originalLanguage: 'fr',
-    messageType: 'text',
-    messageSource: 'user',
-    isEdited: false,
-    isViewOnce: false,
-    viewOnceCount: 0,
-    isBlurred: false,
-    deliveredCount: 0,
-    readCount: 0,
-    reactionCount: 0,
-    isEncrypted: false,
-    translations: [],
-    createdAt: new Date('2026-09-12T09:00:00.000Z'),
-    timestamp: new Date('2026-09-12T09:00:00.000Z'),
-    ...partial,
-  }) as Message;
-
-/** UNE fonction rendrait `queryFn` observable — un test qui interroge le
- * compteur d'appels PROUVE qu'aucune requête réseau n'a été déclenchée par
- * `setQueryData` (§ critère de l'issue #5793 : « sans requête réseau »). */
-function countingQueryFn(calls: { count: number }) {
-  return async () => {
-    calls.count += 1;
-    throw new Error('queryFn ne doit JAMAIS être appelée par applyMessageNew');
-  };
-}
 
 function socketMessage(partial: Partial<SocketIOMessage>): SocketIOMessage {
   return {
@@ -866,3 +820,4 @@ describe('applyMessageTranslation (#5793, revue-correction défaut 2) — le pip
     expect(readerServed()).toEqual({ text: 'Hi', language: 'en', translated: true });
   });
 });
+
