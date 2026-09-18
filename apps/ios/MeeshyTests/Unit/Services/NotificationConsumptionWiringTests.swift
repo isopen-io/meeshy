@@ -276,7 +276,9 @@ final class NotificationConsumptionWiringTests: XCTestCase {
             .deletingLastPathComponent()  // …/MeeshyTests
             .deletingLastPathComponent()  // …/apps/ios
             .appendingPathComponent("MeeshyNotificationExtension/NotificationService.swift")
-        let source = try String(contentsOf: url, encoding: .utf8)
+        // Dépouillé des commentaires : une garde de PRÉSENCE qui lit la source
+        // brute verdirait sur une composition mise en commentaire.
+        let source = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
 
         XCTAssertTrue(
             source.contains(#"threadIdentifier = "conversation:\(conversationId)""#),

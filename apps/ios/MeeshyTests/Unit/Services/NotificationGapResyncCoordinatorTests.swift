@@ -179,7 +179,13 @@ final class NotificationGapResyncCoordinatorTests: XCTestCase {
     }
 
     func test_meeshyApp_refreshesNotificationsOnForeground() throws {
-        let source = try String(contentsOf: meeshyAppSourceURL(), encoding: .utf8)
+        // Même dépouillement que sa jumelle ci-dessus, pour la raison
+        // SYMÉTRIQUE : une garde de PRÉSENCE lue sur la source brute verdirait
+        // sur un appel mis en commentaire — c'est-à-dire sur une intention,
+        // jamais sur un effet.
+        let source = AppSourceGuard.stripComments(
+            try String(contentsOf: meeshyAppSourceURL(), encoding: .utf8)
+        )
 
         XCTAssertTrue(
             source.contains("NotificationGapResyncCoordinator.shared.refreshOnForeground()"),
