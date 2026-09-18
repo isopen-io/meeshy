@@ -30,7 +30,14 @@ const INK_2 = SECTION_INK_2;
 const BRAND = 'var(--color-ios-brand)';
 const ROW_DIVIDER = '[&>*+*]:border-t [&>*+*]:border-[color-mix(in_srgb,var(--color-ios-ink-3)_18%,transparent)]';
 
-export type PickableConversation = { readonly id: string; readonly title: string };
+/**
+ * **LE TYPE JETAIT LA PHOTO** (#6975) — `{ id, title }` : deux champs, donc
+ * deux initiales, quelle que soit la richesse de la conversation projetée.
+ * `avatar` est OPTIONNEL parce que la plupart des conversations n'en ont pas,
+ * jamais parce que la valeur serait facultative à transporter : son producteur
+ * unique (`share-link-new.tsx`) la descend par `avatarOf`.
+ */
+export type PickableConversation = { readonly id: string; readonly title: string; readonly avatar?: string };
 
 type RuleKey = Extract<
   keyof ShareLinkDraft,
@@ -266,7 +273,12 @@ export function ConversationChoice({
         </span>
       ) : (
         <span aria-hidden="true">
-          <Avatar initials={initialsOf(conversation.title)} color={colorForName(conversation.title)} size={34} />
+          <Avatar
+            initials={initialsOf(conversation.title)}
+            color={colorForName(conversation.title)}
+            size={34}
+            {...(conversation.avatar === undefined ? {} : { src: conversation.avatar })}
+          />
         </span>
       )}
       <span className="min-w-0 flex-1 truncate text-body" style={{ color: conversation === null ? INK_2 : INK, fontWeight: conversation === null ? 400 : 600 }}>
@@ -306,7 +318,12 @@ export function ConversationPicker({
               style={{ minHeight: 52, outlineColor: BRAND }}
             >
               <span aria-hidden="true">
-                <Avatar initials={initialsOf(conversation.title)} color={colorForName(conversation.title)} size={34} />
+                <Avatar
+                  initials={initialsOf(conversation.title)}
+                  color={colorForName(conversation.title)}
+                  size={34}
+                  {...(conversation.avatar === undefined ? {} : { src: conversation.avatar })}
+                />
               </span>
               <span className="min-w-0 flex-1 truncate text-body font-medium" style={{ color: INK }}>
                 {conversation.title}

@@ -18,7 +18,7 @@ import { CONVERSATIONS_QUERY_KEY } from './conversations';
 import { FEED_QUERY_KEY } from './feed';
 import type { FeedInfiniteData } from './feed-pages';
 import { FRIENDS_QUERY_PREFIX } from './friends-keys';
-import { NOTIFICATIONS_QUERY_KEY } from './notifications';
+import { NOTIFICATION_COUNTS_QUERY_KEY, NOTIFICATION_LISTS_KEY } from './notifications';
 import {
   applyNotificationCounts,
   applyNotificationDeleted,
@@ -443,9 +443,26 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
        `['conversations', id, 'messages']` (la page du fil). Seules les requêtes
        ACTIVES sont re-jouées — un fil fermé se contente d'être marqué périmé. */
     void deps.queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
-    /* LA CLOCHE AUSSI (#6288) : une notification émise pendant la coupure n'a
-       jamais atteint ce socket, et `notification:counts` ne se rejoue pas. */
-    void deps.queryClient.invalidateQueries({ queryKey: NOTIFICATIONS_QUERY_KEY });
+    /* LA CLOCHE AUSSI (#6288), PAR FAMILLE NOMMÉE (#6974) : une notification
+       émise pendant la coupure n'a jamais atteint ce socket, et
+       `notification:counts` ne se rejoue pas.
+
+       Les DEUX lignes, et chacune pour sa propre raison — c'est ce que la
+       racine `['notifications']` disait en une seule sans le dire :
+       - les LISTES parce qu'aucun gestionnaire n'a vu les lignes de
+         l'intervalle. À la DIFFÉRENCE de `notifications-realtime.ts:92`
+         (`refetchType: 'none'`, qui a déjà écrit la ligne dans le cache), il
+         faut ici un vrai refetch : il n'y a rien d'écrit à réconcilier ;
+       - les COMPTES parce que rien d'autre ne les rafraîchit à cet instant
+         (mesuré : leur unique lecteur, `use-notification-counts.ts`, ne relit
+         que sur focus de fenêtre, et une coupure du SEUL socket n'en produit
+         aucun — le navigateur n'a jamais cessé d'être « en ligne »).
+
+       Nommer les deux plutôt que balayer leur racine, c'est refuser d'emporter
+       la prochaine requête qu'on rangera sous `['notifications']` sans l'avoir
+       décidé — la garde `socket.test.ts` y tient une sentinelle. */
+    void deps.queryClient.invalidateQueries({ queryKey: NOTIFICATION_LISTS_KEY });
+    void deps.queryClient.invalidateQueries({ queryKey: NOTIFICATION_COUNTS_QUERY_KEY });
     /* LES DEMANDES D'AMITIÉ AUSSI (#6321) : une demande reçue pendant la
        coupure n'a jamais atteint ce socket, et la pastille du barreau
        « Découvrir » la compterait trop tard. */

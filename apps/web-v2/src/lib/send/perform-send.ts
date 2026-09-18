@@ -5,7 +5,7 @@ import { uploadAttachments } from '@/lib/api/attachments';
 import { newClientMessageId } from '@/lib/api/client-message-id';
 import { patchConversation, type ConversationsDeps } from '@/lib/api/conversations';
 import type { ApiFailure } from '@/lib/api/http';
-import { messagesQueryKey, sendMessage, type MessagesPage, type SendMessageBody } from '@/lib/api/messages';
+import { messagesQueryKey, sendMessage, upsertThreadMessage, type SendMessageBody } from '@/lib/api/messages';
 import type { Message, Participant } from '@/lib/api/types';
 
 import { messageTypeOfPending, type PendingAttachment } from './attachments';
@@ -172,22 +172,6 @@ function declaredAttachmentType(
 }
 
 /**
- * REMPLACE par `id` OU `clientMessageId` s'il existe déjà dans la page (un
- * écho socket arrivé avant l'accusé REST, cas #5494), sinon APPEND en queue
- * — l'ordre ASCENDANT que `messages.ts` établit (§3.1/4.5 point 2 de la
- * spécification #5813).
- */
-function upsertConfirmed(messages: readonly Message[], confirmed: LocalMessage): readonly Message[] {
-  const index = messages.findIndex(
-    (m) =>
-      m.id === confirmed.id ||
-      (m as { readonly clientMessageId?: string }).clientMessageId === confirmed.clientMessageId,
-  );
-  if (index === -1) return [...messages, confirmed];
-  return messages.map((m, i) => (i === index ? confirmed : m));
-}
-
-/**
  * L'ENVOL, ET SA GARDE — `dispatch` ne rend JAMAIS un rejet, quoi qu'il
  * arrive à `attempt` (revue-correction).
  */
@@ -320,9 +304,12 @@ async function attempt(params: {
   // page déjà en cours écraserait le confirmé qu'on vient de poser
   // (témoin 4.5, point 11).
   await deps.queryClient.cancelQueries({ queryKey: messagesQueryKey(conversationId) });
-  deps.queryClient.setQueryData<MessagesPage>(messagesQueryKey(conversationId), (page) =>
-    page === undefined ? page : { ...page, messages: upsertConfirmed(page.messages, confirmed) },
-  );
+  /* `upsertThreadMessage` (#6972, étape 1) — le SITE UNIQUE qui porte
+     « remplace par id OU clientMessageId, sinon append » (`api/messages.ts`).
+     C'était `upsertConfirmed`, ici, jumelle de celle de `applyMessageNew`
+     (`api/realtime-apply.ts`) que leurs doc-comments déclaraient déjà être
+     « la MÊME règle » (D-11/D-28) — sans l'être tout à fait. */
+  upsertThreadMessage(deps.queryClient, conversationId, confirmed);
   patchConversation(deps.queryClient, conversationId, (c) => {
     // La clé RETIRÉE, jamais posée à `undefined` (`exactOptionalPropertyTypes`) —
     // un message texte confirmé n'a pas encore de traductions connues.

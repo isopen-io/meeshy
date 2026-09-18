@@ -1,4 +1,4 @@
-import { VIEWER_HANDLE, VIEWER_ID } from './fixtures-base';
+import { VIEWER_HANDLE, VIEWER_ID, portraitStandIn } from './fixtures-base';
 import type { DataSource } from './config';
 import type { SessionState } from './session';
 
@@ -28,7 +28,16 @@ export type Viewer = {
 
 export function resolveViewer(input: { readonly source: DataSource; readonly session: SessionState }): Viewer {
   if (__FIXTURES__ && input.source === 'fixtures') {
-    return { id: VIEWER_ID, handle: VIEWER_HANDLE, displayName: 'Vous', isAnonymous: false };
+    /* `avatar` (#6975) — le lecteur de fixture n'en portait AUCUN, donc la
+       pastille « moi » du rail n'avait aucune photo à peindre et le gate de
+       pixels mesurait un vide LÉGITIME : vert pour la mauvaise raison. */
+    return {
+      id: VIEWER_ID,
+      handle: VIEWER_HANDLE,
+      displayName: 'Vous',
+      isAnonymous: false,
+      avatar: portraitStandIn('#fb7185', '#7f1d1d'),
+    };
   }
   /**
    * L'INVITÉ D'UN LIEN (#5561) — il a une identité : un participant, un pseudo

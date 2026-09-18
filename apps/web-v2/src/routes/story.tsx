@@ -50,7 +50,7 @@ import {
   type StoryPlaybackGroup,
   type StoryPlaybackStory,
 } from '@/lib/stories/playback';
-import { initialsOf } from '@/lib/view/conversation';
+import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { useElementSize } from '@/lib/view/use-element-size';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { useParams } from '@/lib/router';
@@ -307,6 +307,9 @@ export default function StoryScreen() {
   }, [playablePosition, rawPosition, groups, closeViewer]);
 
   const group = playablePosition !== null && playablePosition !== 'close' ? groups[playablePosition.groupIndex] : undefined;
+  /* LA PHOTO DE L'AUTEUR, DÉRIVÉE UNE FOIS (#6975) — `participantAvatarOf`
+     accepte un auteur ABSENT, donc pas de garde à écrire ici. */
+  const authorPhoto = participantAvatarOf(group?.author);
   const currentStory: StoryPlaybackStory | undefined =
     playablePosition !== null && playablePosition !== 'close' ? currentStoryAt(groups, playablePosition) : undefined;
 
@@ -759,7 +762,16 @@ export default function StoryScreen() {
                 Même motif que la tuile du rail (leçon 575 : un composant sans
                 prise mesurable ne peut être gardé par rien). */}
             <div className="flex items-center gap-2 py-1" data-story-author={group.authorId}>
-              <Avatar initials={initialsOf(authorLabel(group))} color="var(--color-ios-brand)" size={32} />
+              {/* LA PHOTO DE L'AUTEUR (#6975) — même source et même loi que la
+                  tuile du rail qui a ouvert ce lecteur (`story-rail.tsx`) :
+                  passer d'un visage à des initiales en ouvrant la story
+                  serait un changement d'identité à mi-geste. */}
+              <Avatar
+                initials={initialsOf(authorLabel(group))}
+                color="var(--color-ios-brand)"
+                size={32}
+                {...(authorPhoto === undefined ? {} : { src: authorPhoto })}
+              />
               <div className="flex min-w-0 flex-1 items-baseline gap-2">
                 <span className="truncate text-body font-semibold" style={{ color: '#fff' }}>
                   {authorLabel(group)}

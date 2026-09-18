@@ -3,7 +3,7 @@ import { isReactionAllowed, REACTION_LIMIT_REACHED_MESSAGE } from '@meeshy/share
 import type { ReactionData } from '@meeshy/shared/types/reaction';
 
 import { fixtureAddReaction, fixtureRemoveReaction } from './fixtures-reactions';
-import { messagesQueryKey } from './messages';
+import { patchThreadMessages } from './messages';
 import { mineOf, reactionStore } from './reaction-store';
 import { outcomeOf } from './outcome';
 import type { ConversationsDeps } from './conversations';
@@ -138,11 +138,11 @@ export async function performReaction(params: {
   if (plan === 'refused') return { ok: false, message: REACTION_LIMIT_REACHED_MESSAGE };
 
   const delta: 1 | -1 = plan === 'add' ? 1 : -1;
-  const key = messagesQueryKey(conversationId);
+  /* `patchThreadMessages` (#6972, étape 1) — le SITE UNIQUE qui patche un fil
+     (`api/messages.ts`) : la forme de la page n'est plus recopiée ici. */
   const applyDelta = (d: 1 | -1) =>
-    deps.queryClient.setQueryData<{ readonly messages: readonly Message[]; readonly hasOlder: boolean }>(
-      key,
-      (page) => (page === undefined ? page : { ...page, messages: applyReactionDelta(page.messages, { messageId, emoji, delta: d }) }),
+    patchThreadMessages(deps.queryClient, conversationId, (messages) =>
+      applyReactionDelta(messages, { messageId, emoji, delta: d }),
     );
 
   applyDelta(delta);

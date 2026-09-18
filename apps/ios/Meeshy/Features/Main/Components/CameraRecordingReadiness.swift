@@ -55,4 +55,19 @@ nonisolated enum CameraRecordingReadiness {
                                   connectionIsEnabled: Bool) -> Bool {
         sessionIsRunning && hasVideoConnection && connectionIsActive && connectionIsEnabled
     }
+
+    /// **Le déclencheur PHOTO obéit à la même règle** (#6984).
+    /// `-[AVCapturePhotoOutput capturePhotoWithSettings:delegate:]` lève la même
+    /// exception ObjC sans connexion active — mesuré au simulateur le
+    /// 2026-09-12 (`CameraView.swift:493`). Second site, même prévention : la
+    /// garde suit l'appel, pas la fonction.
+    static func mayCapturePhoto(sessionIsRunning: Bool,
+                                hasVideoConnection: Bool,
+                                connectionIsActive: Bool,
+                                connectionIsEnabled: Bool) -> Bool {
+        mayStartRecording(sessionIsRunning: sessionIsRunning,
+                          hasVideoConnection: hasVideoConnection,
+                          connectionIsActive: connectionIsActive,
+                          connectionIsEnabled: connectionIsEnabled)
+    }
 }

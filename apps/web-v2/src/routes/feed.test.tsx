@@ -57,6 +57,12 @@ describe('les quatre états du fil sont DESSINÉS, jamais un écran blanc', () =
   /** Le squelette est un DÉCOR — l'annonce « Chargement » vit sur le
    * scrollport qui le porte (`FeedScreen`). Deux annonces pour un seul état
    * font lire deux fois la même chose. */
+  test('pagination : le fil demande DEUX cartes fantômes de la même forme (#6987)', () => {
+    const html = renderToStaticMarkup(<FeedSkeleton count={2} />);
+    expect(html).toContain('aria-hidden="true"');
+    expect(html.match(/border-radius:18px/g)?.length).toBe(2);
+  });
+
   test('chargement : trois cartes fantômes, masquées aux technologies d’assistance', () => {
     const html = renderToStaticMarkup(<FeedSkeleton />);
     expect(html).toContain('aria-hidden="true"');

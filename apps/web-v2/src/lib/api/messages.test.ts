@@ -1,9 +1,23 @@
+import { QueryClient } from '@tanstack/react-query';
 import { afterEach, describe, expect, test } from 'bun:test';
 
-import { loadMessages, messagesQuery, sendMessage } from './messages';
+import {
+  cachedThreadConversationIds,
+  findCachedThreadMessage,
+  loadMessages,
+  messagesInfiniteOptions,
+  messagesQuery,
+  messagesQueryKey,
+  patchThreadMessages,
+  sendMessage,
+  upsertThreadMessage,
+} from './messages';
+import { flattenMessagePages, nextMessagesCursor, type MessagesInfiniteData } from './messages-pages';
+import { CONVERSATIONS_QUERY_KEY, conversationQueryKey } from './conversations';
 import { createHttpTransport } from './http';
 import { hasOlderMessagesOf, messagesOf, resetSentMessagesForTests } from './fixtures';
-import { VIEWER_ID } from './fixtures-base';
+import { VIEWER_ID, message } from './fixtures-base';
+import type { Message } from './types';
 
 function fakeFetch(response: { readonly status: number; readonly body?: unknown }) {
   const calls: { readonly url: string; readonly init: RequestInit }[] = [];
@@ -27,11 +41,49 @@ describe('loadMessages — fixtures', () => {
     }
   });
 
+  /**
+   * LA FICTION DE `hasOlderMessagesOf` SURVIT À LA PAGINATION (#6972) — le
+   * corpus de `c-rattrapage` compte TRENTE messages, sous la limite de 50 :
+   * la loi de fenêtrage seule (`pageOfMessages`) rendrait `hasOlder` faux, et
+   * le Résumé Vivant perdrait « Sur les N derniers messages », le seul état
+   * que cette conversation existe pour rendre atteignable.
+   *
+   * `hasOlder` SANS CURSEUR : le fil DÉCLARE un historique et n'offre AUCUNE
+   * descente. Lui rendre le curseur du plus ancien message chargé faisait
+   * revenir une page VIDE, dont le `hasOlder` faux bordait alors la fenêtre —
+   * la fiction se falsifiait elle-même dès qu'on touchait le haut du fil.
+   */
+  test('c-rattrapage ⇒ hasOlder DÉCLARÉ, SANS curseur — la fiction ne se falsifie pas elle-même', async () => {
+    const transport = createHttpTransport({ base: '' });
+    const result = await loadMessages({ source: 'fixtures', transport, conversationId: 'c-rattrapage' });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.hasOlder).toBe(true);
+      expect(result.data.nextCursor).toBe(null);
+      /* Et la sentinelle reste DÉSARMÉE : aucune requête ne part. */
+      expect(nextMessagesCursor(result.data, [result.data], undefined)).toBeUndefined();
+    }
+  });
+
   test('c-deploiement ⇒ hasOlder false', async () => {
     const transport = createHttpTransport({ base: '' });
     const result = await loadMessages({ source: 'fixtures', transport, conversationId: 'c-deploiement' });
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.data.hasOlder).toBe(hasOlderMessagesOf('c-deploiement'));
+    if (result.ok) {
+      expect(result.data.hasOlder).toBe(hasOlderMessagesOf('c-deploiement'));
+      expect(result.data.nextCursor).toBe(null);
+    }
+  });
+
+  test('`before` = le plus ancien message ⇒ page VIDE, et la fiction ne s’y applique PAS', async () => {
+    const transport = createHttpTransport({ base: '' });
+    const oldest = messagesOf('c-rattrapage')[0]!.id;
+    const result = await loadMessages({ source: 'fixtures', transport, conversationId: 'c-rattrapage', before: oldest });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.messages).toEqual([]);
+      expect(result.data.hasOlder).toBe(false);
+    }
   });
 
   test('id inconnu ⇒ messages: []', async () => {
@@ -43,7 +95,7 @@ describe('loadMessages — fixtures', () => {
 });
 
 describe('loadMessages — gateway', () => {
-  test('data en DESC ⇒ messages ASCENDANT ; hasOlder = cursorPagination.hasMore ; URL ?limit=50', async () => {
+  test('data en DESC ⇒ messages ASCENDANT ; hasOlder ET nextCursor lus ; URL ?limit=50', async () => {
     const { impl, calls } = fakeFetch({
       status: 200,
       body: {
@@ -59,8 +111,32 @@ describe('loadMessages — gateway', () => {
     if (result.ok) {
       expect(result.data.messages.map((m: { readonly id: string }) => m.id)).toEqual(['m1', 'm2', 'm3']);
       expect(result.data.hasOlder).toBe(true);
+      /* LA MOITIÉ JETÉE (#6972) — `nextCursor` était LU dans la charge et
+         jamais porté : la moitié utile du curseur mourait ici. */
+      expect(result.data.nextCursor).toBe('m1');
     }
     expect(calls[0]?.url).toBe('/api/v1/conversations/c-a/messages?limit=50');
+  });
+
+  test('`before` est CONCATÉNÉ à l’URL (miroir `conversations.ts`)', async () => {
+    const { impl, calls } = fakeFetch({
+      status: 200,
+      body: { success: true, data: [], cursorPagination: { limit: 50, hasMore: false, nextCursor: null } },
+    });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+    await loadMessages({ source: 'gateway', transport, conversationId: 'c-a', before: 'm1' });
+    expect(calls[0]?.url).toBe('/api/v1/conversations/c-a/messages?limit=50&before=m1');
+  });
+
+  test('`cursorPagination` absent ⇒ hasOlder faux, aucun curseur (fail-closed)', async () => {
+    const { impl } = fakeFetch({ status: 200, body: { success: true, data: [{ id: 'm1' }] } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+    const result = await loadMessages({ source: 'gateway', transport, conversationId: 'c-a' });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.hasOlder).toBe(false);
+      expect(result.data.nextCursor).toBe(null);
+    }
   });
 
   test('401 (sans-session) propagé', async () => {
@@ -87,16 +163,90 @@ describe('loadMessages — gateway', () => {
 });
 
 describe('messagesQuery — la fabrique', () => {
-  test('décode messages[].createdAt via select', () => {
+  test('aplatit ET décode messages[].createdAt via select ; `hasOlder` vient de la page qui BORDE la fenêtre', () => {
     const { queryKey, select } = messagesQuery({ source: 'fixtures', transport: createHttpTransport({ base: '' }) }, 'c-a');
     expect(queryKey).toEqual(['conversations', 'c-a', 'messages']);
-    const page = {
-      messages: [{ ...messagesOf('c-deploiement')[0]!, createdAt: '2026-09-08T09:00:00.000Z' }],
-      hasOlder: false,
-    } as unknown as Parameters<typeof select>[0];
-    const decoded = select(page);
-    expect(decoded.messages[0]?.createdAt).toBeInstanceOf(Date);
-    expect(decoded.hasOlder).toBe(false);
+    const window = select({
+      pages: [
+        { messages: [{ ...messagesOf('c-deploiement')[0]!, createdAt: '2026-09-08T09:00:00.000Z' }], hasOlder: true, nextCursor: 'x' },
+        { messages: [], hasOlder: true, nextCursor: 'y' },
+      ],
+      pageParams: [undefined, 'x'],
+    } as unknown as Parameters<typeof select>[0]);
+    expect(window.messages[0]?.createdAt).toBeInstanceOf(Date);
+    expect(window.hasOlder).toBe(true);
+  });
+
+  test('`select` est la MÊME référence entre deux fabriques (fonction de MODULE)', () => {
+    const deps = { source: 'fixtures' as const, transport: createHttpTransport({ base: '' }) };
+    expect(messagesQuery(deps, 'c-a').select).toBe(messagesQuery(deps, 'c-b').select);
+  });
+
+  test('`initialPageParam` est undefined — la page 1 ne porte AUCUN `before`', () => {
+    const options = messagesInfiniteOptions({ source: 'fixtures', transport: createHttpTransport({ base: '' }) }, 'c-a');
+    expect(options.initialPageParam).toBeUndefined();
+    expect(options.getNextPageParam).toBe(nextMessagesCursor);
+  });
+});
+
+/**
+ * LE DÉFILEMENT INFINI DU FIL, DE BOUT EN BOUT (#6972) — `fetchInfiniteQuery`
+ * joue la MÊME mécanique que la sentinelle : `pages: 2` ⇒ deux requêtes, la
+ * seconde portant le `before` rendu par `getNextPageParam`. Motif
+ * `conversations.test.ts` § `conversationsInfiniteOptions`.
+ */
+describe('messagesInfiniteOptions par QueryClient.fetchInfiniteQuery', () => {
+  const pagedFetch = (byBefore: Readonly<Record<string, readonly string[]>>, hasMoreOf: Readonly<Record<string, string | null>>) => {
+    const calls: string[] = [];
+    const impl = (async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://x');
+      const before = url.searchParams.get('before') ?? '';
+      calls.push(before);
+      const ids = byBefore[before] ?? [];
+      const nextCursor = hasMoreOf[before] ?? null;
+      return new Response(
+        JSON.stringify({
+          success: true,
+          /* la passerelle sert DESC */
+          data: [...ids].reverse().map((id) => ({ id })),
+          cursorPagination: { limit: 50, hasMore: nextCursor !== null, nextCursor },
+        }),
+        { status: 200 },
+      );
+    }) as typeof fetch;
+    return { impl, calls };
+  };
+
+  test('deux pages ⇒ deux requêtes, la seconde avec `before`, et un fil ASCENDANT', async () => {
+    const { impl, calls } = pagedFetch(
+      { '': ['m3', 'm4', 'm5'], m3: ['m1', 'm2'] },
+      { '': 'm3', m3: null },
+    );
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+    const options = messagesInfiniteOptions({ source: 'gateway', transport }, 'c-a');
+    const client = new QueryClient();
+
+    const twoPages = await client.fetchInfiniteQuery({ ...options, pages: 2 });
+    expect(calls).toEqual(['', 'm3']);
+    expect(twoPages.pageParams).toEqual([undefined, 'm3']);
+    expect(flattenMessagePages(twoPages).map((m) => m.id)).toEqual(['m1', 'm2', 'm3', 'm4', 'm5']);
+    expect(options.getNextPageParam(twoPages.pages[1]!, twoPages.pages, twoPages.pageParams[1])).toBeUndefined();
+  });
+
+  test('`before` INCONNU resservi par la passerelle ⇒ le 5e refus ARRÊTE la boucle', async () => {
+    /* La passerelle ne valide pas `before` : elle ressert la page récente,
+       `hasMore: true` et le même curseur. Sans le refus « aucun message
+       neuf », `fetchInfiniteQuery({ pages: 3 })` rejouerait le début du fil
+       indéfiniment. */
+    const { impl, calls } = pagedFetch({ '': ['m2', 'm3'], m2: ['m2', 'm3'] }, { '': 'm2', m2: 'm2' });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+    const options = messagesInfiniteOptions({ source: 'gateway', transport }, 'c-a');
+    const client = new QueryClient();
+
+    const pages = await client.fetchInfiniteQuery({ ...options, pages: 5 });
+    expect(calls).toEqual(['', 'm2']);
+    expect(pages.pages).toHaveLength(2);
+    expect(flattenMessagePages(pages).map((m) => m.id)).toEqual(['m2', 'm3']);
   });
 });
 
@@ -134,26 +284,155 @@ describe('messagesQuery — identité du résultat entre deux rendus (source gat
     updatedAt: new Date(1_757_000_000_000 - i * 60_000).toISOString(),
   }));
 
-  test('deux rendus successifs rendent la MÊME référence de page', async () => {
-    const { QueryClient, QueryObserver } = await import('@tanstack/react-query');
+  test('deux rendus successifs rendent la MÊME référence de fil', async () => {
+    const { InfiniteQueryObserver } = await import('@tanstack/react-query');
     const { impl } = fakeFetch({
       status: 200,
-      body: { success: true, data: WIRE, cursorPagination: { limit: 50, hasMore: false } },
+      body: { success: true, data: WIRE, cursorPagination: { limit: 50, hasMore: false, nextCursor: null } },
     });
     const deps = { source: 'gateway' as const, transport: createHttpTransport({ base: '', fetchImpl: impl }) };
     const client = new QueryClient();
     const render = () => client.defaultQueryOptions(messagesQuery(deps, 'c-a') as never);
 
-    const observer = new QueryObserver(client, render());
+    const observer = new InfiniteQueryObserver(client, render() as never);
     const unsubscribe = observer.subscribe(() => {});
     await observer.refetch();
 
-    const first = observer.getOptimisticResult(render()).data;
-    const second = observer.getOptimisticResult(render()).data;
+    const first = observer.getOptimisticResult(render() as never).data;
+    const second = observer.getOptimisticResult(render() as never).data;
     unsubscribe();
 
     expect(first).toBeDefined();
     expect(second).toBe(first);
+  });
+});
+
+/**
+ * LES QUATRE ACCÈS AU CACHE DU FIL (#6972, étape 1) — le coût caché que la
+ * pagination devait solder AVANT de toucher au hook : la forme de la page
+ * était écrite EN DIRECT par six sites (`realtime-apply.ts` ×2,
+ * `reactions.ts`, `perform-send.ts`, `routes/thread.tsx`), donc le passage en
+ * `InfiniteData` les cassait tous. Motif D-44 (`findCachedConversation` /
+ * `patchConversation`) : **un site lit, un site patche**.
+ *
+ * `seedThread`/`readThread` sont les DEUX seuls endroits de ce fichier qui
+ * connaissent la forme — c'est délibéré : les témoins ci-dessous mesurent la
+ * RÈGLE (upsert, dédoublonnage, portée), jamais la structure, et survivent
+ * donc au changement de forme qu'ils existent pour protéger.
+ */
+const seedThread = (client: QueryClient, conversationId: string, messages: readonly Message[], hasOlder = false): void => {
+  client.setQueryData<MessagesInfiniteData>(messagesQueryKey(conversationId), {
+    pages: [{ messages, hasOlder, nextCursor: null }],
+    pageParams: [undefined],
+  });
+};
+
+/** Lit le fil du cache SANS passer par `flattenMessagePages` (qui décode et
+ * dédoublonne) : les témoins ci-dessous mesurent ce qui est ÉCRIT, pas ce qui
+ * est servi. */
+const readThread = (client: QueryClient, conversationId: string): readonly Message[] | undefined => {
+  const cached = client.getQueryData<MessagesInfiniteData>(messagesQueryKey(conversationId));
+  return cached === undefined ? undefined : cached.pages.flatMap((p) => [...p.messages]);
+};
+
+const msg = (id: string, extra: Partial<Message> = {}): Message =>
+  message({
+    id,
+    conversationId: 'c-a',
+    senderId: 'u1',
+    content: `contenu ${id}`,
+    originalLanguage: 'fr',
+    translations: [],
+    createdAt: new Date(1_757_000_000_000),
+    ...extra,
+  });
+
+describe('patchThreadMessages — le SITE UNIQUE qui patche un fil', () => {
+  test('applique le réducteur au fil visé ; les autres messages restent toBe-identiques', () => {
+    const client = new QueryClient();
+    const [m1, m2] = [msg('m1'), msg('m2')];
+    seedThread(client, 'c-a', [m1, m2]);
+
+    patchThreadMessages(client, 'c-a', (messages) =>
+      messages.map((m) => (m.id === 'm2' ? { ...m, content: 'patché' } : m)),
+    );
+
+    const after = readThread(client, 'c-a');
+    expect(after?.[0]).toBe(m1);
+    expect(after?.[1]?.content).toBe('patché');
+  });
+
+  test('fil ABSENT du cache ⇒ RIEN n’est créé (le fil n’est pas ouvert)', () => {
+    const client = new QueryClient();
+    patchThreadMessages(client, 'c-fermee', (messages) => [...messages, msg('m9')]);
+    expect(client.getQueryData(messagesQueryKey('c-fermee'))).toBeUndefined();
+  });
+
+  test('ne touche jamais un AUTRE fil', () => {
+    const client = new QueryClient();
+    seedThread(client, 'c-a', [msg('m1')]);
+    seedThread(client, 'c-b', [msg('m2')]);
+    patchThreadMessages(client, 'c-a', (messages) => messages.map((m) => ({ ...m, content: 'x' })));
+    expect(readThread(client, 'c-b')?.[0]?.content).toBe('contenu m2');
+  });
+});
+
+describe('upsertThreadMessage — id OU clientMessageId, une seule loi', () => {
+  test('id inconnu ⇒ APPEND en queue (l’ordre ASCENDANT du fil)', () => {
+    const client = new QueryClient();
+    seedThread(client, 'c-a', [msg('m1')]);
+    upsertThreadMessage(client, 'c-a', msg('m2'));
+    expect(readThread(client, 'c-a')?.map((m) => m.id)).toEqual(['m1', 'm2']);
+  });
+
+  test('même id ⇒ REMPLACE EN PLACE, sans doubler la rangée', () => {
+    const client = new QueryClient();
+    seedThread(client, 'c-a', [msg('m1'), msg('m2')]);
+    upsertThreadMessage(client, 'c-a', msg('m1', { content: 'écho' }));
+    const after = readThread(client, 'c-a');
+    expect(after?.map((m) => m.id)).toEqual(['m1', 'm2']);
+    expect(after?.[0]?.content).toBe('écho');
+  });
+
+  test('même clientMessageId ⇒ PROMEUT la rangée optimiste en place (D-11/D-28)', () => {
+    const client = new QueryClient();
+    const local = { ...msg('local-1'), clientMessageId: 'cid_abc' } as Message;
+    seedThread(client, 'c-a', [local]);
+    upsertThreadMessage(client, 'c-a', { ...msg('m-serveur'), clientMessageId: 'cid_abc' } as Message);
+    const after = readThread(client, 'c-a');
+    expect(after?.map((m) => m.id)).toEqual(['m-serveur']);
+  });
+
+  test('charge SANS clientMessageId ⇒ ne matche pas une rangée qui n’en porte pas (piège undefined === undefined)', () => {
+    const client = new QueryClient();
+    seedThread(client, 'c-a', [msg('m1')]);
+    upsertThreadMessage(client, 'c-a', msg('m2'));
+    expect(readThread(client, 'c-a')?.map((m) => m.id)).toEqual(['m1', 'm2']);
+  });
+
+  test('fil ABSENT du cache ⇒ RIEN n’est créé', () => {
+    const client = new QueryClient();
+    upsertThreadMessage(client, 'c-fermee', msg('m1'));
+    expect(client.getQueryData(messagesQueryKey('c-fermee'))).toBeUndefined();
+  });
+});
+
+describe('cachedThreadConversationIds / findCachedThreadMessage — le SITE UNIQUE qui lit', () => {
+  test('n’énumère QUE les fils, jamais la liste ni la case d’une conversation', () => {
+    const client = new QueryClient();
+    client.setQueryData(CONVERSATIONS_QUERY_KEY, { pages: [], pageParams: [] });
+    client.setQueryData(conversationQueryKey('c-a'), { id: 'c-a' });
+    seedThread(client, 'c-a', [msg('m1')]);
+    seedThread(client, 'c-b', [msg('m2')]);
+    expect([...cachedThreadConversationIds(client)].sort()).toEqual(['c-a', 'c-b']);
+  });
+
+  test('rend le message du fil, `undefined` s’il n’y est pas, `undefined` si le fil n’est pas ouvert', () => {
+    const client = new QueryClient();
+    seedThread(client, 'c-a', [msg('m1')]);
+    expect(findCachedThreadMessage(client, 'c-a', 'm1')?.id).toBe('m1');
+    expect(findCachedThreadMessage(client, 'c-a', 'm404')).toBeUndefined();
+    expect(findCachedThreadMessage(client, 'c-fermee', 'm1')).toBeUndefined();
   });
 });
 

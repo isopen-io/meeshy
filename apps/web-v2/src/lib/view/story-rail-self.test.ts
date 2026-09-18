@@ -123,3 +123,42 @@ describe('railGroupsWithoutSelf — la cellule « soi » ne se peint pas deux fo
     expect(railGroupsWithoutSelf(groups)).toEqual(groups);
   });
 });
+
+/**
+ * **MA PHOTO SUR MA PASTILLE** (#6975) — `StoryRailSelfEntry` JETAIT le champ :
+ * le type n'en portait aucun, donc la tuile ne pouvait servir que des
+ * initiales, alors même que `Viewer.avatar` (`lib/api/viewer.ts:26`) avait été
+ * AJOUTÉ pour elle — son doc-comment dit en toutes lettres « la pastille "moi"
+ * du rail de stories est la PREMIÈRE surface à en avoir besoin » — et que
+ * personne ne le lisait.
+ *
+ * DEUX SOURCES, dans cet ordre : l'avatar du LECTEUR (servi par la session,
+ * disponible même quand je n'ai rien publié — le cas pour lequel cette cellule
+ * existe) puis, à défaut, celui porté par MON groupe de stories.
+ */
+describe('selfRailEntry — ma photo (#6975)', () => {
+  test('`avatar` du lecteur servi ⇒ porté par l’entrée', () => {
+    const entry = selfRailEntry({ viewerId: 'u-moi', avatar: 'moi.png', groups: [], moods: [] });
+    expect(entry?.avatar).toBe('moi.png');
+  });
+
+  test('aucun `avatar` de lecteur ⇒ repli sur MON groupe de stories', () => {
+    const stories: readonly StoryTrayPost[] = [
+      { id: 's1', type: 'STORY', createdAt: '2026-09-01T10:00:00.000Z', author: { id: 'u-moi', username: 'moi', avatar: 'story.png' } },
+    ];
+    const entry = selfRailEntry({ viewerId: 'u-moi', groups: groupsOf(stories, 'u-moi'), moods: [] });
+    expect(entry?.avatar).toBe('story.png');
+  });
+
+  test('aucune photo NULLE PART ⇒ `undefined` (la tuile rend ses initiales)', () => {
+    expect(selfRailEntry({ viewerId: 'u-moi', groups: [], moods: [] })?.avatar).toBeUndefined();
+  });
+
+  test('un `avatar` BLANC ne masque pas celui de mon groupe', () => {
+    const stories: readonly StoryTrayPost[] = [
+      { id: 's1', type: 'STORY', createdAt: '2026-09-01T10:00:00.000Z', author: { id: 'u-moi', username: 'moi', avatar: 'story.png' } },
+    ];
+    const entry = selfRailEntry({ viewerId: 'u-moi', avatar: '  ', groups: groupsOf(stories, 'u-moi'), moods: [] });
+    expect(entry?.avatar).toBe('story.png');
+  });
+});

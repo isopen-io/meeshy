@@ -1175,11 +1175,10 @@ struct FeedView: View {
                             }
                     }
 
-                    // Loading more indicator
+                    // La page suivante arrive : des cartes fantômes, jamais un indicateur sur du fond nu (#6987)
                     if viewModel.isLoadingMore {
-                        ProgressView()
-                            .tint(MeeshyColors.indigo300)
-                            .padding()
+                        SkeletonFeedList(count: 2)
+                            .transition(.opacity)
                     }
                 }
                 .padding(.top, 12)

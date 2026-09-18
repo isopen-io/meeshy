@@ -109,7 +109,7 @@ function readConversations(client: QueryClient): readonly Conversation[] | undef
 
 function seededClient(): QueryClient {
   const queryClient = new QueryClient();
-  queryClient.setQueryData(messagesQueryKey('c-a'), { messages: [m1], hasOlder: false });
+  queryClient.setQueryData(messagesQueryKey('c-a'), threadPages([m1]));
   queryClient.setQueryData(CONVERSATIONS_QUERY_KEY, {
     pages: [
       {
@@ -139,6 +139,26 @@ function ackBody(id: string, clientMessageId: string, overrides: Record<string, 
   };
 }
 
+/**
+ * LA FORME `InfiniteData` DU CACHE DU FIL (#6972) — `threadPages` la POSE,
+ * `threadOf` la RELIT APLATIE. Les deux SEULS endroits de ce fichier qui la
+ * connaissent : les témoins mesurent la RÈGLE, jamais la structure.
+ */
+const threadPages = (messages: readonly Message[]) => ({
+  pages: [{ messages, hasOlder: false, nextCursor: null }],
+  pageParams: [undefined],
+});
+
+const threadOf = (
+  client: QueryClient,
+  conversationId: string,
+): { readonly messages: readonly Message[] } | undefined => {
+  const data = client.getQueryData<{ readonly pages: readonly { readonly messages: readonly Message[] }[] }>(
+    messagesQueryKey(conversationId),
+  );
+  return data === undefined ? undefined : { messages: data.pages.flatMap((p) => [...p.messages]) };
+};
+
 describe('performSend', () => {
   test('2xx : outbox VIDE, page = [m1, confirmé], confirmé.deliveredCount = celui de l’accusé, un seul appel', async () => {
     const { impl, calls } = fakeFetch({ status: 200, body: ackBody('m9', 'IGNORED') });
@@ -160,7 +180,7 @@ describe('performSend', () => {
     });
 
     expect(entriesOf(outbox.getState(), 'c-a')).toHaveLength(0);
-    const page = queryClient.getQueryData<{ readonly messages: readonly Message[] }>(messagesQueryKey('c-a'));
+    const page = threadOf(queryClient, 'c-a');
     expect(page?.messages).toHaveLength(2);
     expect(page?.messages[0]).toBe(m1);
     expect(page?.messages[1]?.id).toBe('m9');
@@ -203,7 +223,7 @@ describe('performSend', () => {
 
   test('pas de doublon : un message clientMessageId déjà présent (écho socket) est REMPLACÉ, jamais dupliqué', async () => {
     const queryClient = new QueryClient();
-    queryClient.setQueryData(messagesQueryKey('c-a'), { messages: [], hasOlder: false });
+    queryClient.setQueryData(messagesQueryKey('c-a'), threadPages([]));
     const outbox = createOutboxStore();
 
     // Le `fetchImpl` LIT le `clientMessageId` que `performSend` vient de
@@ -212,10 +232,7 @@ describe('performSend', () => {
     // `clientMessageId` au moment où le 2xx arrive.
     const impl = (async (_url: RequestInfo | URL, init?: RequestInit) => {
       const cid = JSON.parse(String(init?.body)).clientMessageId as string;
-      queryClient.setQueryData(messagesQueryKey('c-a'), {
-        messages: [{ ...m1, id: 'echo', clientMessageId: cid }],
-        hasOlder: false,
-      });
+      queryClient.setQueryData(messagesQueryKey('c-a'), threadPages([{ ...m1, id: 'echo', clientMessageId: cid } as Message]));
       return new Response(JSON.stringify(ackBody('m9', cid)), { status: 200 });
     }) as typeof fetch;
     const deps: SendDeps = {
@@ -233,7 +250,7 @@ describe('performSend', () => {
       deps,
     });
 
-    const page = queryClient.getQueryData<{ readonly messages: readonly Message[] }>(messagesQueryKey('c-a'));
+    const page = threadOf(queryClient, 'c-a');
     expect(page?.messages).toHaveLength(1);
     expect(page?.messages[0]?.id).toBe('m9');
   });
@@ -434,7 +451,7 @@ describe('performSend', () => {
     expect(secondBody.clientMessageId).toBe(firstBody.clientMessageId);
     expect(secondBody.originalLanguage).toBe('en');
     expect(entriesOf(outbox.getState(), 'c-a')).toHaveLength(0);
-    const page = queryClient.getQueryData<{ readonly messages: readonly Message[] }>(messagesQueryKey('c-a'));
+    const page = threadOf(queryClient, 'c-a');
     expect(page?.messages.some((m) => m.id === 'm9')).toBe(true);
   });
 
@@ -491,7 +508,7 @@ describe('performSend', () => {
 
     expect(calls).toBe(0);
     expect(entriesOf(outbox.getState(), 'c-a')).toHaveLength(0);
-    const page = queryClient.getQueryData<{ readonly messages: readonly Message[] }>(messagesQueryKey('c-a'));
+    const page = threadOf(queryClient, 'c-a');
     expect(page?.messages).toHaveLength(2);
     expect(page?.messages[1]?.id).toMatch(/^fx-sent-/);
   });

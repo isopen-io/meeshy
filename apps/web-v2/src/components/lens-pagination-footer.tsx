@@ -1,4 +1,4 @@
-import type { Ref } from 'react';
+import type { ReactNode, Ref } from 'react';
 
 import { TypingDots } from './typing-dots';
 import type { ListPaginationState } from '@/lib/lens/pagination';
@@ -19,6 +19,14 @@ export type LensPaginationFooterProps = {
    * INCHANGÉ pour tout appelant antérieur à ce lot.
    */
   readonly exhaustedLabel?: string;
+  /**
+   * CE QUI TIENT LA PLACE DE LA PAGE SUIVANTE (#6987) — PARAMÉTRÉ comme le
+   * libellé : la Lentille garde ses points, le fil des publications pose des
+   * cartes fantômes de la hauteur des vraies, là où les posts vont apparaître
+   * — jamais du fond nu sous un indicateur (même loi qu'iOS,
+   * `SkeletonFeedList` pendant `isLoadingMore`). Défaut INCHANGÉ : les points.
+   */
+  readonly loadingMoreContent?: ReactNode;
 };
 
 const DEFAULT_EXHAUSTED_LABEL = 'Toutes les conversations sont chargées';
@@ -54,6 +62,7 @@ export function LensPaginationFooter({
   onRetry,
   sentinelRef,
   exhaustedLabel = DEFAULT_EXHAUSTED_LABEL,
+  loadingMoreContent,
 }: LensPaginationFooterProps) {
   if (state === 'loading-more') {
     return (
@@ -66,9 +75,9 @@ export function LensPaginationFooter({
        * annonce son CONTENU qui change, pas son nom calculé — avec le seul
        * `aria-label`, l'arrivée du pied ne se disait pas.
        */
-      <li data-pagination-footer="loading-more" className="grid place-items-center py-4">
-        <span role="status" className={`inline-flex items-center ${FOOTER_INK}`}>
-          <TypingDots color="currentColor" />
+      <li data-pagination-footer="loading-more" className={loadingMoreContent ? 'py-1' : 'grid place-items-center py-4'}>
+        <span role="status" className={loadingMoreContent ? 'block' : `inline-flex items-center ${FOOTER_INK}`}>
+          {loadingMoreContent ?? <TypingDots color="currentColor" />}
           <span className="sr-only">Chargement de la suite</span>
         </span>
       </li>

@@ -9,15 +9,34 @@ import type { SocketClient, SocketFactory, SocketHandler } from '@/lib/net/socke
 import { createOutboxStore, entriesOf } from '@/lib/send/outbox-store';
 
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
-import { messagesQueryKey, type MessagesPage } from './messages';
+import { messagesQueryKey } from './messages';
+import type { MessagesInfiniteData } from './messages-pages';
 import { createRealtimeConnection, type RealtimeDeps } from './socket';
 import { FEED_QUERY_KEY } from './feed';
 import type { FeedInfiniteData, FeedPost } from './feed-pages';
 import { STORY_TRAY_QUERY_KEY } from './stories';
 import { BLOCKED_USERS_QUERY_KEY } from './blocks';
 import { friendRequestsQueryKey } from './friend-requests';
+import { NOTIFICATIONS_QUERY_KEY, NOTIFICATION_COUNTS_QUERY_KEY, notificationListKey } from './notifications';
 import { createTypingStore, typistsOf } from './typing-store';
 import type { Message } from './types';
+
+/**
+ * LA FORME `InfiniteData` DU CACHE DU FIL (#6972) — `threadPages` la POSE,
+ * `threadOf` la RELIT APLATIE. Ce sont les deux SEULS endroits de ce fichier
+ * qui la connaissent : les témoins mesurent la RÈGLE (dédoublonnage, fusion
+ * de traductions, portée), jamais la structure du cache qui la porte.
+ */
+const threadPages = (messages: readonly Message[]): MessagesInfiniteData =>
+  ({ pages: [{ messages, hasOlder: false, nextCursor: null }], pageParams: [undefined] }) as MessagesInfiniteData;
+
+const threadOf = (
+  client: QueryClient,
+  conversationId: string,
+): { readonly messages: readonly Message[] } | undefined => {
+  const data = client.getQueryData<MessagesInfiniteData>(messagesQueryKey(conversationId));
+  return data === undefined ? undefined : { messages: data.pages.flatMap((p) => [...p.messages]) };
+};
 
 /**
  * LE FAUX SOCKET (#5793) — implémente `SocketClient` sans réseau ni
@@ -145,7 +164,7 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
 
   test('`message:new` insère dans le cache du fil OUVERT — AUCUNE requête réseau (compteur de fetch = 0)', () => {
     const { deps, socket, queryClient } = buildDeps();
-    queryClient.setQueryData<MessagesPage>(messagesQueryKey('c-a'), { messages: [], hasOlder: false });
+    queryClient.setQueryData(messagesQueryKey('c-a'), threadPages([]));
     let fetchCount = 0;
     void queryClient.getQueryCache().build(queryClient, {
       queryKey: messagesQueryKey('c-a'),
@@ -158,7 +177,7 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
     createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
     socket.fire(SERVER_EVENTS.MESSAGE_NEW, socketMessage({}));
 
-    const page = queryClient.getQueryData<MessagesPage>(messagesQueryKey('c-a'));
+    const page = threadOf(queryClient, 'c-a');
     expect(page?.messages).toHaveLength(1);
     expect(page?.messages[0]?.id).toBe('m-remote-1');
     expect(fetchCount).toBe(0);
@@ -210,12 +229,12 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
       createdAt: new Date('2026-09-12T08:59:00.000Z'),
       timestamp: new Date('2026-09-12T08:59:00.000Z'),
     } as unknown as Message;
-    queryClient.setQueryData<MessagesPage>(messagesQueryKey('c-a'), { messages: [local], hasOlder: false });
+    queryClient.setQueryData(messagesQueryKey('c-a'), threadPages([local]));
 
     createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
     socket.fire(SERVER_EVENTS.MESSAGE_NEW, socketMessage({ id: 'm-server-9', clientMessageId: 'cid-1' }));
 
-    const page = queryClient.getQueryData<MessagesPage>(messagesQueryKey('c-a'));
+    const page = threadOf(queryClient, 'c-a');
     expect(page?.messages).toHaveLength(1);
     expect(page?.messages[0]?.id).toBe('m-server-9');
   });
@@ -316,10 +335,7 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
    */
   test('`message:translation` fusionne dans le fil OUVERT', () => {
     const { deps, socket, queryClient } = buildDeps();
-    queryClient.setQueryData<MessagesPage>(messagesQueryKey('c-a'), {
-      messages: [{ ...socketMessage({ id: 'm-1' }), translations: [] } as unknown as Message],
-      hasOlder: false,
-    });
+    queryClient.setQueryData(messagesQueryKey('c-a'), threadPages([{ ...socketMessage({ id: 'm-1' }), translations: [] } as unknown as Message]));
 
     createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
     socket.fire(SERVER_EVENTS.MESSAGE_TRANSLATION, {
@@ -338,7 +354,7 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
       ],
     });
 
-    const page = queryClient.getQueryData<MessagesPage>(messagesQueryKey('c-a'));
+    const page = threadOf(queryClient, 'c-a');
     const patched = page?.messages.find((m) => m.id === 'm-1');
     expect(patched?.translations.find((t) => t.targetLanguage === 'fr')?.translatedContent).toBe('Salut');
   });
@@ -401,6 +417,41 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
 
     socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
     expect(queryClient.getQueryState(friendRequestsQueryKey('received'))?.isInvalidated).toBe(true);
+  });
+
+  /**
+   * **LE REJEU DE LA CLOCHE, PAR FAMILLE NOMMÉE** (#6974) — le rejeu de
+   * reconnexion balayait la RACINE `['notifications']`, seule invalidation du
+   * dépôt à opérer sur un préfixe de domaine plutôt que sur les familles
+   * qu'elle vise (`notifications-realtime.ts:92` nomme déjà
+   * `NOTIFICATION_LISTS_KEY`).
+   *
+   * Les DEUX familles doivent rester couvertes, et ce témoin le fixe : les
+   * LISTES parce qu'une notification émise pendant la coupure n'a atteint
+   * aucun gestionnaire, les COMPTES parce que `notification:counts` ne se
+   * rejoue pas et que RIEN d'autre ne les rafraîchit à cet instant (mesuré :
+   * leur seul lecteur, `use-notification-counts.ts:34`, ne relit que sur focus
+   * de fenêtre, et une coupure du seul socket n'en produit aucun).
+   *
+   * La TROISIÈME clé est une SENTINELLE : elle n'existe pas dans
+   * l'application, elle tient la place de la prochaine requête qu'on rangera
+   * sous `['notifications']`. Une racine balayée l'emporterait sans que
+   * personne ne l'ait décidé.
+   */
+  test('une RE-authentification périme les LISTES et les COMPTES de la cloche, jamais la racine `[notifications]`', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    const sentinelle = [...NOTIFICATIONS_QUERY_KEY, 'sentinelle-hors-familles'] as const;
+    queryClient.setQueryData(notificationListKey('all'), { pages: [], pageParams: [] });
+    queryClient.setQueryData(NOTIFICATION_COUNTS_QUERY_KEY, { total: 0, unread: 0, byType: {} });
+    queryClient.setQueryData(sentinelle, { quoi: 'une requête future' });
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
+    socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
+
+    expect(queryClient.getQueryState(notificationListKey('all'))?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(NOTIFICATION_COUNTS_QUERY_KEY)?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(sentinelle)?.isInvalidated).toBe(false);
   });
 
   /**
@@ -672,10 +723,7 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
    */
   test('`message:translation` bascule le cache SANS AUCUNE requête (compteur de fetch = 0) (#6171, T2)', () => {
     const { deps, socket, queryClient } = buildDeps();
-    queryClient.setQueryData<MessagesPage>(messagesQueryKey('c-a'), {
-      messages: [{ ...socketMessage({ id: 'm-1', originalLanguage: 'es', content: 'Hola' }), translations: [] } as unknown as Message],
-      hasOlder: false,
-    });
+    queryClient.setQueryData(messagesQueryKey('c-a'), threadPages([{ ...socketMessage({ id: 'm-1', originalLanguage: 'es', content: 'Hola' }), translations: [] } as unknown as Message]));
     let fetchCount = 0;
     void queryClient.getQueryCache().build(queryClient, {
       queryKey: messagesQueryKey('c-a'),
@@ -702,7 +750,7 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
       ],
     });
 
-    const page = queryClient.getQueryData<MessagesPage>(messagesQueryKey('c-a'));
+    const page = threadOf(queryClient, 'c-a');
     expect(page?.messages.find((m) => m.id === 'm-1')?.translations.find((t) => t.targetLanguage === 'fr')?.translatedContent).toBe('Salut');
     expect(fetchCount).toBe(0);
   });
@@ -778,7 +826,7 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
       queryKey: messagesQueryKey('c-a'),
       queryFn: async () => {
         threadFetches += 1;
-        return { messages: [], hasOlder: false } as MessagesPage;
+        return threadPages([]);
       },
     });
     expect([listFetches, threadFetches]).toEqual([1, 1]);

@@ -6,7 +6,7 @@ import { served } from '@/lib/api/prism';
 import { accentOf, withAccent } from '@/lib/accent';
 import { MUTED_OPACITY } from '@/lib/lens/law';
 import type { RowActionId } from '@/lib/view/row-actions';
-import { initialsOf, isGroup, peerOf, previewKindOf, presenceOf, titleOf } from '@/lib/view/conversation';
+import { avatarOf, initialsOf, isGroup, peerOf, previewKindOf, presenceOf, titleOf } from '@/lib/view/conversation';
 import { kindOf } from '@/lib/view/message';
 import { Link } from '@/routes/route-table';
 
@@ -155,6 +155,7 @@ function LensRowImpl({
   const chromeFade = flags.isMuted ? MUTED_OPACITY : 1;
   const group = isGroup(conversation);
   const title = titleOf(conversation, viewerId);
+  const photo = avatarOf(conversation, viewerId);
   const accent = accentOf(conversation);
   const at = conversation.lastMessageAt ?? conversation.lastMessage?.createdAt;
 
@@ -305,12 +306,18 @@ function LensRowImpl({
             frappe reçue à l'instant. Le forçage est LOCAL et ne fabrique aucune
             donnée : il ne vaut que tant que le magasin de frappe a une entrée
             vivante. */}
+        {/* LA PHOTO PAR `avatarOf` (#6975) — le pair d'un direct, la
+            conversation elle-même pour un groupe, via la loi PARTAGÉE
+            `resolveParticipantAvatar`. Cette rangée appelait déjà
+            `peerOf(...)` juste en dessous pour la PRÉSENCE : la donnée était
+            là, sur la même ligne, et la photo n'était pas servie. */}
         <Avatar
           initials={initialsOf(title)}
           color={accent}
           size={44}
           name={title}
           opacity={chromeFade}
+          {...(photo === undefined ? {} : { src: photo })}
           {...(group ? {} : { presence: typist === undefined ? presenceOf(peerOf(conversation, viewerId)) : 'online' })}
         />
 
