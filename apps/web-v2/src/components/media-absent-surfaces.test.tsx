@@ -262,6 +262,83 @@ describe('la surface média d’une STORY — #7022', () => {
     expect(container.querySelector(`img[src="${vivante}"]`)).not.toBeNull();
     expect(container.querySelector('[data-media-unavailable]')).toBeNull();
   });
+
+  /**
+   * UNE ERREUR DE DÉCODAGE N'EST PAS UNE ABSENCE (#7022 suivi — revue
+   * adversariale 2026-09-18, défaut FRAGILE §2). `MediaError.code === 3`
+   * (`MEDIA_ERR_DECODE`) signifie que le NAVIGATEUR ne sait pas lire ce
+   * codec — HEVC sous Chrome, par exemple — pas que les octets manquent. Une
+   * story vidéo dans ce cas déclenche `onError` exactement comme un 404 ; la
+   * graver absente pour la SESSION est pire que la laisser réessayer, parce
+   * qu'un autre navigateur ou un autre appareil LIT ce fichier sans problème.
+   * `onFailed` reste appelé — l'hôte avance sur son carrousel — mais le
+   * registre, lui, ne doit RIEN retenir.
+   */
+  test('une erreur de DÉCODAGE (`MediaError.code === 3`) ne grave PAS l’absence — l’hôte avance quand même', () => {
+    const vidéo = 'https://gate.meeshy.me/api/v1/attachments/file/2026%2F09%2Fhevc-non-lu.mp4';
+    let échoué = false;
+
+    act(() => {
+      root.render(
+        <StoryMediaLayer
+          storyId="st-hevc"
+          mediaSrc={vidéo}
+          mimeType="video/mp4"
+          showsMedia
+          hasMedia
+          background={{}}
+          caption={null}
+          onReady={() => undefined}
+          onFailed={() => {
+            échoué = true;
+          }}
+        />,
+      );
+    });
+
+    const élément = container.querySelector('video')!;
+    act(() => {
+      Object.defineProperty(élément, 'error', { value: { code: 3, message: 'decode' }, configurable: true });
+      élément.dispatchEvent(new Event('error'));
+    });
+
+    expect(échoué).toBe(true);
+    expect(isMediaAbsent(vidéo)).toBe(false);
+  });
+
+  /**
+   * CONTRE-ÉPREUVE — un échec RÉSEAU ou de SOURCE (`code` 2 ou 4) est une
+   * vraie absence, et continue de s'enregistrer. Sans ce témoin, retirer
+   * l'enregistrement INCONDITIONNEL passerait au vert même si plus RIEN ne
+   * s'enregistrait jamais.
+   */
+  test('une erreur RÉSEAU (`MediaError.code === 2`) grave l’absence, elle', () => {
+    const vidéo = 'https://gate.meeshy.me/api/v1/attachments/file/2026%2F09%2Fcoupee-reseau.mp4';
+
+    act(() => {
+      root.render(
+        <StoryMediaLayer
+          storyId="st-reseau"
+          mediaSrc={vidéo}
+          mimeType="video/mp4"
+          showsMedia
+          hasMedia
+          background={{}}
+          caption={null}
+          onReady={() => undefined}
+          onFailed={() => undefined}
+        />,
+      );
+    });
+
+    const élément = container.querySelector('video')!;
+    act(() => {
+      Object.defineProperty(élément, 'error', { value: { code: 2, message: 'network' }, configurable: true });
+      élément.dispatchEvent(new Event('error'));
+    });
+
+    expect(isMediaAbsent(vidéo)).toBe(true);
+  });
 });
 
 /**

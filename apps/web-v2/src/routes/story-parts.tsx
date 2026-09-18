@@ -34,6 +34,14 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
  */
 export { MediaUnavailable } from '@/components/media-unavailable';
 
+/**
+ * `MediaError.NETWORK` (2) et `MediaError.SRC_NOT_SUPPORTED` (4) — les seuls
+ * codes qui disent que le FICHIER, pas le décodeur, est en cause (#7022
+ * suivi). `ABORTED` (1) et `DECODE` (3) ne prouvent rien sur son existence —
+ * voir `échecVidéo` ci-dessous.
+ */
+const NETWORK_OR_SOURCE_ERROR: ReadonlySet<number> = new Set([2, 4]);
+
 export type StoryCaption = {
   readonly text: string;
   readonly language: string;
@@ -112,6 +120,28 @@ export function StoryMediaLayer({
     onFailed();
   };
 
+  /**
+   * L'ÉCHEC D'UNE VIDÉO N'EST PAS TOUJOURS UNE ABSENCE (#7022 suivi — revue
+   * adversariale 2026-09-18, défaut FRAGILE §2). `<img onError>` n'a qu'une
+   * seule cause côté DOM ; `<video onError>` en a QUATRE, portées par
+   * `MediaError.code`, et deux d'entre elles ne disent RIEN sur l'existence
+   * du fichier :
+   * - `NETWORK` (2) et `SRC_NOT_SUPPORTED` (4) — le FICHIER est en cause :
+   *   le transfert a échoué, ou la source n'a jamais pu être identifiée ;
+   * - `ABORTED` (1) et `DECODE` (3) — le DÉCODEUR est en cause : la lecture a
+   *   été interrompue, ou ce navigateur ne sait pas lire ce codec (HEVC sous
+   *   Chrome, par exemple). Les octets existent, et un autre navigateur ou un
+   *   autre appareil les lit sans problème.
+   * Graver l'absence sur 1/3 masquerait une story vivante pour toute la
+   * session ; `onFailed()` reste appelé dans tous les cas — l'hôte avance sur
+   * son carrousel, que le média revienne un jour ou non.
+   */
+  const échecVidéo = (event: { currentTarget: HTMLVideoElement }): void => {
+    const code = event.currentTarget.error?.code;
+    if (code !== undefined && NETWORK_OR_SOURCE_ERROR.has(code)) noteMediaAbsent(mediaSrc);
+    onFailed();
+  };
+
   if (showsMedia && !isMediaAbsent(mediaSrc)) {
     /* `feedMediaKindOf` — LA LOI DÉJÀ PARTAGÉE par le fil
        (`lib/feed/layout.ts:43`), jamais un second test de préfixe MIME : deux
@@ -177,7 +207,7 @@ export function StoryMediaLayer({
             const seconds = el.duration;
             if (Number.isFinite(seconds) && seconds > 0) onDurationKnown(seconds * 1000);
           }}
-          onError={échec}
+          onError={échecVidéo}
         />
       );
     }
