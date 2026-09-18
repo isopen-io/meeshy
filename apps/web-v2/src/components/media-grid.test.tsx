@@ -7,6 +7,7 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 import { messagesOf } from '@/lib/api/fixtures';
 import { MEDIA_CONVERSATION_ID } from '@/lib/api/fixtures-media';
 import {
+  MEDIA_GRID_MINE_WITNESS_ID,
   MEDIA_GRID_OVERFLOW_WITNESS_ID,
   MEDIA_GRID_PAIR_WITNESS_ID,
   MEDIA_GRID_QUAD_WITNESS_ID,
@@ -246,5 +247,34 @@ describe('MediaGrid — la boîte porte ses cotes dérivées (U4, #6169)', () =>
     const grid = el.querySelector('[data-media-grid]') as HTMLElement;
     expect(grid.style.width).toBe('300px');
     expect(grid.style.height).toBe('240px');
+  });
+});
+
+/**
+ * #7018 — LA BOÎTE DE GRILLE NE SORT PLUS DE SON PORTEUR.
+ *
+ * `ImageTile` porte `max-w-full` depuis toujours ; la boîte de `MediaGrid`, à
+ * largeur FIXE de 300 px, ne le portait pas. Dans une bulle dont la largeur
+ * utile est 253,4 px (390 px de viewport, `max-w-[70%]` + gouttière de 50 px),
+ * elle débordait de 46,6 px — vers la gouttière sur un message REÇU (invisible),
+ * HORS DE L'ÉCRAN sur un message DE MOI (`justify-end`), rendant tout le fil
+ * défilable horizontalement (`scrollWidth` 437 pour `clientWidth` 390, mesuré).
+ */
+describe('MediaGrid — la boîte ne déborde jamais de son porteur (#7018)', () => {
+  const grilles: readonly (readonly [string, string])[] = [
+    ['media-11 (2 pièces)', MEDIA_GRID_PAIR_WITNESS_ID],
+    ['media-12 (3 pièces)', MEDIA_GRID_TRIPLE_WITNESS_ID],
+    ['media-13 (4 pièces)', MEDIA_GRID_QUAD_WITNESS_ID],
+    ['media-14 (6 pièces)', MEDIA_GRID_OVERFLOW_WITNESS_ID],
+    ['media-16 (2 pièces, DE MOI)', MEDIA_GRID_MINE_WITNESS_ID],
+  ];
+
+  grilles.forEach(([label, id]) => {
+    test(`${label} : la boîte est plafonnée à 100 % de son porteur`, () => {
+      const el = mount(attachmentsOf(id), () => {});
+      const grid = el.querySelector('[data-media-grid]') as HTMLElement;
+      expect(grid.style.width).toBe('300px');
+      expect(grid.style.maxWidth).toBe('100%');
+    });
   });
 });

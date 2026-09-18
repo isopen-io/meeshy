@@ -1,5 +1,5 @@
 import type { Attachment, Message } from './types';
-import { amina, attachmentDefaults, dayAt, kwame, message } from './fixtures-base';
+import { VIEWER_ID, amina, attachmentDefaults, dayAt, kwame, message, viewer } from './fixtures-base';
 
 /**
  * LE CORPUS DE LA GRILLE 2/3/4+ (#6221, § 5 étape 7 de la spécification
@@ -222,8 +222,44 @@ const media14 = mediaMessage({
   ),
 });
 
+/**
+ * ===== media-16 — DEUX IMAGES ENVOYÉES PAR LE VIEWER (09:29:30) =====
+ *
+ * L'ANGLE MORT DE CORPUS QUI A LAISSÉ PASSER #7018. Les cinq messages
+ * ci-dessus viennent TOUS d'un autre expéditeur (`u-amina`, `u-kwame`) : la
+ * branche `justify-end` de la bulle — celle qui la colle au bord DROIT, où un
+ * débord de la grille sort de l'écran et rend TOUT le fil défilable
+ * horizontalement — n'était donc STRUCTURELLEMENT jamais jouée. Le gate
+ * `check-media-grid.mjs` était juste ; il n'avait simplement aucune donnée qui
+ * l'exerce. Une garde ne peut pas rougir sur un cas que le corpus n'atteint
+ * pas : c'est la fixture qui manquait, pas l'assertion.
+ *
+ * DEUX pièces (jamais une) : `items.length === 1` court-circuite la boîte de
+ * grille (`MediaGrid`, branche SOLO) — seule une grille 2/3/4+ porte la boîte
+ * de largeur fixe dont le débord est mesuré.
+ *
+ * 09:29:30 — strictement ENTRE `media-14` (09:29) et `media-7` (09:30, le
+ * `lastMessage`, INCHANGÉ), `dayAt` ne descendant pas sous la minute.
+ */
+export const MEDIA_GRID_MINE_WITNESS_ID = 'media-16';
+const media16CreatedAt = new Date(dayAt(0, 9, 29).getTime() + 30_000);
+const media16 = mediaMessage({
+  id: MEDIA_GRID_MINE_WITNESS_ID,
+  senderId: VIEWER_ID,
+  sender: viewer,
+  content: '',
+  originalLanguage: 'fr',
+  messageType: 'image',
+  translations: [],
+  createdAt: media16CreatedAt,
+  attachments: [
+    gridImage({ id: `${MEDIA_GRID_MINE_WITNESS_ID}-a1`, createdAt: media16CreatedAt, alt: 'Ma photo du quai' }),
+    gridImage({ id: `${MEDIA_GRID_MINE_WITNESS_ID}-a2`, createdAt: media16CreatedAt, alt: 'Ma photo des voiliers' }),
+  ],
+});
+
 /** ORDRE CHRONOLOGIQUE, concaténé par `fixtures-media.ts` entre `media-6` (09:25) et `media-7` (09:30). */
-export const MEDIA_GRID_MESSAGES: readonly Message[] = [media11, media12, media13, media14];
+export const MEDIA_GRID_MESSAGES: readonly Message[] = [media11, media12, media13, media14, media16];
 
 /** `media-15` est ANTÉRIEUR à `media-6` (09:22 < 09:25) — exporté à part pour que `fixtures-media.ts` l'insère à SA place. */
 export const MEDIA_SOLO_VIDEO_MESSAGE: Message = media15;
