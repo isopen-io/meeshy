@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { Prisma } from '@meeshy/shared/prisma/client';
-import { attachmentMediaSelect } from '../../services/attachments/attachmentIncludes';
+import { attachmentSocketSelect } from '../../services/attachments/attachmentIncludes';
 import { messageSenderUserSelect } from '../conversations/utils/message-sender-select';
 import { serializeAttachmentForSocket } from '../../socketio/serializeAttachmentForSocket';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';
@@ -88,7 +88,7 @@ export const SYNC_MESSAGE_RENDERABLE_KEYS = [
  * un nom de champ périmé, là où un objet nu échouerait à l'exécution.
  *
  * `attachments` et le bloc `user` de l'expéditeur reprennent les formes
- * canoniques du dépôt (`attachmentMediaSelect`, `messageSenderUserSelect`)
+ * canoniques du dépôt (`attachmentSocketSelect`, `messageSenderUserSelect`)
  * plutôt que d'en recopier une variante — c'est exactement la dérive que
  * `attachmentIncludes.ts` documente en tête de fichier.
  */
@@ -115,7 +115,15 @@ export const syncMessageSelect = Prisma.validator<Prisma.MessageSelect>()({
   // (#4885 : c'est la recopie à la main qui avait laissé la recherche servir
   // un message à vue unique comme un message ordinaire).
   ...MESSAGE_PROTECTION_SELECT,
-  attachments: { select: attachmentMediaSelect },
+  // #7014 — `attachmentSocketSelect`, jamais `attachmentMediaSelect` : cette
+  // ligne part chez `serializeAttachmentForSocket` (plus bas dans ce fichier),
+  // désormais FAIL-CLOSED sur l'absence de drapeau. Or `attachmentMediaSelect`
+  // est délibérément SANS protection (« No consumption-tracking, no security
+  // flags »), si bien que TOUTE pièce servie par le delta-sync ressortait
+  // masquée — pour tout le monde, alors qu'aucune ne l'est. Un fail-closed
+  // protège des fuites ; il ne protège pas de l'oubli d'alimenter la garde, et
+  // transforme alors l'oubli en panne totale.
+  attachments: { select: attachmentSocketSelect },
   sender: {
     select: {
       id: true,
