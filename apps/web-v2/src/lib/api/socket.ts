@@ -30,8 +30,10 @@ import {
 import {
   applyConversationUnreadUpdated,
   applyConversationUpdated,
+  applyMessageAttachmentUpdated,
   applyMessageNew,
   applyMessageTranslation,
+  isAttachmentUpdated,
   isConversationUnreadUpdated,
   isConversationUpdated,
   isMessageTranslationEvent,
@@ -278,6 +280,26 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   };
 
   /**
+   * `message:attachment-updated` (#7017) — LE PENDANT DE `message:translation`
+   * POUR LES PIÈCES JOINTES.
+   *
+   * `message:translation` rattrape le TEXTE d'un message traduit APRÈS sa
+   * création ; celui-ci rattrape la TRANSCRIPTION Whisper, puis les traductions
+   * NLLB et les pistes TTS d'une pièce jointe, qui arrivent par le même retard
+   * de pipeline (`emitAttachmentUpdated.ts:77`, une émission par enrichissement).
+   * L'inventaire des `socket.on` de ce module ne le portait pas — le legacy
+   * l'écoute (`apps/web/hooks/queries/use-socket-cache-sync.ts:1565`) — si bien
+   * qu'un vocal reçu restait MUET, sans transcription et sans drapeau de langue,
+   * jusqu'à ce qu'on quitte et rouvre le fil.
+   *
+   * La règle vit dans `realtime-apply.ts` (D-40) : cette ligne la BRANCHE.
+   */
+  const onAttachmentUpdated = (payload: unknown): void => {
+    if (!isAttachmentUpdated(payload)) return;
+    applyMessageAttachmentUpdated(deps.queryClient, payload);
+  };
+
+  /**
    * `story:*` (#5652, bloc E ; #6080) — LE RAIL SUIT LE FIL EN DIRECT :
    * `story:created`/`story:updated`/`story:deleted`/`story:viewed` invalident
    * `STORY_TRAY_QUERY_KEY`. Miroir du motif `onAuthenticated` ci-dessous : UNE
@@ -477,6 +499,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_UPDATED, onConversationUpdated);
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_NEW, onConversationNew);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_TRANSLATION, onMessageTranslation);
+  socket.on<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
   socket.on<unknown>(SERVER_EVENTS.STORY_CREATED, onStoryChanged);
   socket.on<unknown>(SERVER_EVENTS.STORY_UPDATED, onStoryChanged);
   socket.on<unknown>(SERVER_EVENTS.STORY_DELETED, onStoryChanged);
@@ -527,6 +550,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, onUnreadUpdated);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_UPDATED, onConversationUpdated);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_TRANSLATION, onMessageTranslation);
+      socket.off<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
       socket.off<unknown>(SERVER_EVENTS.STORY_CREATED, onStoryChanged);
       socket.off<unknown>(SERVER_EVENTS.STORY_UPDATED, onStoryChanged);
       socket.off<unknown>(SERVER_EVENTS.STORY_DELETED, onStoryChanged);

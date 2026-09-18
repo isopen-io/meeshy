@@ -991,11 +991,19 @@ describe('applyMessageAttachmentUpdated (#7017) — la transcription arrive SANS
   });
 
   /**
-   * LA GARDE DE MASQUAGE (#7014, dépendance croisée) — `maskedAttachment`
-   * rend `false` sur une charge qui ne DÉCLARE rien, et le sérialiseur socket
-   * ne sert pas les trois drapeaux. Une pièce à VUE UNIQUE déjà connue du
-   * cache par le REST doit rester masquée quand son enrichissement arrive :
-   * sinon le voile tombe au moment précis où le pipeline finit son travail.
+   * LA FENÊTRE DE #7014 — le sérialiseur socket ne sert PAS les trois drapeaux
+   * de protection, et `maskedAttachment` rend `false` sur une charge qui ne
+   * DÉCLARE rien. Une pièce à VUE UNIQUE connue du cache par le REST doit
+   * rester masquée quand son enrichissement arrive : sinon le voile tombe au
+   * moment précis où le pipeline finit son travail.
+   *
+   * CE TÉMOIN EST GARDÉ EN PROFONDEUR, et il faut le dire : DEUX mécanismes le
+   * tiennent indépendamment — la FUSION (les clés absentes de la charge
+   * survivent) et la GARDE (une pièce masquée ne se démasque pas). Mesuré :
+   * il ne TOMBE que si les deux partent ensemble. C'est pourquoi les deux
+   * témoins qui l'encadrent existent — « fusion, jamais remplacement sec »
+   * fait tomber le premier mécanisme SEUL, « la charge DÉMENT la protection »
+   * fait tomber le second SEUL. Aucun des trois ne subsume les autres.
    */
   test('une pièce DÉJÀ masquée le reste quand la charge socket ne déclare aucun drapeau', () => {
     const client = new QueryClient();
