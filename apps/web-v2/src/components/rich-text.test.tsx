@@ -259,7 +259,9 @@ describe('RichText — l’arbre d’accessibilité de la rangée plate', () => 
 
 describe('RichText — le chemin nominal reste nu', () => {
   test('un texte SANS rien à enrichir ne monte ni lien ni balise d’emphase', () => {
-    const html = renderToStaticMarkup(<RichText text="Bonjour tout le monde" className="x" lang="fr" />);
-    expect(html).toBe('<p data-rich-text="" class="x" lang="fr">Bonjour tout le monde</p>');
+    const html = renderToStaticMarkup(
+      <RichText text="Bonjour tout le monde" className="text-bubble" lang="fr" />,
+    );
+    expect(html).toBe('<p data-rich-text="" class="text-bubble" lang="fr">Bonjour tout le monde</p>');
   });
 });

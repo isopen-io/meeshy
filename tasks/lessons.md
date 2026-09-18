@@ -33185,3 +33185,15 @@ Trois choses à retenir :
 - **Le premier correctif a fait tomber les faults de 258 à 99 — et le fil est resté vierge.** Le second publieur (`SharedAVPlayerManager`) n'apparaissait pas dans les piles du premier relevé parce qu'un fault n'est émis que pour un objet qu'une vue OBSERVE ; il est apparu dès que le premier s'est tu. Relire les piles APRÈS chaque correctif, pas seulement avant.
 
 > Preuve : même défilement en vidéo, sans correctif (258 faults, vierge ~10 s) puis avec (0 fault, aucune image vierge). Le contrôle « sans » est ce qui a prouvé que le correctif était la cause — une rafale de `simctl screenshot` pendant le geste mesurait le vierge plus fort qu'il n'était, la vidéo ne l'altère pas.
+
+## Leçon 628
+
+**Un gate en CHAÎNE (`&&`) ne prouve QUE les étapes avant celle qui rougit — une correction qui répare la première étape signalée peut en laisser une seconde, jamais jouée, derrière elle.**
+
+PR #7033 (texte enrichi, liens/mentions cliquables) : `Quality (bun)` rapportait UNE seule défaillance, `check-utilities.mjs` (une classe `x` de témoin sans règle CSS). Corrigée, `bun run gate` complet — jamais joué localement sur cette PR avant ce tour — a rougi une SECONDE fois, sur `check-reading-mode.mjs`, une étape que le premier échec avait empêché d'atteindre en CI (`&&` s'arrête au premier `exit 1`). 14 défauts : « le `<p>` de texte servi n'est pas `aria-hidden` ».
+
+Le défaut n'en était pas un — c'était le GATE qui datait. `focal-row.tsx` (même PR) était passé d'un masque de CONTENEUR (`aria-hidden` sur le `<p>` entier) à un masque FEUILLE PAR FEUILLE (`RichText`/`plainTextHidden`, un `<span aria-hidden>` par segment non interactif), précisément pour qu'un lien de mention sous ce paragraphe reste focusable et nommé — masquer le conteneur entier aurait recréé la violation ARIA inverse (`aria-hidden-focus`). Le gate `check-identity.mjs` (#5935), écrit pour l'ANCIEN masque, cherchait l'attribut au mauvais niveau : la garde mesurait une IMPLÉMENTATION, pas l'invariant qu'elle prétendait garder (« la phrase n'est jamais lue deux fois »).
+
+> **Un `&&` dans un script `gate` composite cache tout ce qui suit la première rougeur — corriger le défaut RAPPORTÉ ne prouve rien sur les étapes qu'il empêchait d'atteindre.** Jouer le gate ENTIER, jusqu'au bout, après CHAQUE correction — jamais seulement l'étape nommée par le CI. Et quand un gate écrit avant une refonte accuse le code QUE la refonte vient sciemment de changer (ici documenté dans le commit ET le doc-comment du composant), lire d'abord si c'est le CODE qui régresse ou le GATE qui a un cran de retard : ici la nouvelle stratégie ARIA était strictement MEILLEURE (liens atteignables) que celle que le gate réclamait — la corriger revenait à réintroduire le défaut que la PR venait de corriger.
+
+Discrimination : `git stash` sur `check-identity.mjs` seul → 14/14 défauts réapparaissent à l'identique (message, lignes) ; `git stash pop` → 0 défaut. Détail : `apps/web-v2/scripts/lib/check-identity.mjs`, `apps/web-v2/src/components/rich-text.tsx`, `apps/web-v2/src/components/focal-row.tsx`.
