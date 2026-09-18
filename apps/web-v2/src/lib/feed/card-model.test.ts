@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import type { FeedPost } from '@/lib/api/feed-pages';
+import { REEL_SCENE_LOOP, REEL_STUDIO } from '@/lib/api/fixtures-reels';
 
 import { resolveFeedCardModel } from './card-model';
 
@@ -471,8 +472,45 @@ describe('resolveFeedCardModel — la scène (D-78)', () => {
       { preferredLanguages: ['fr'], now: NOW },
     );
     expect(model.scene?.carrier.media).toEqual([
-      { id: 'media-a', src: 'https://gate.meeshy.me/api/v1/attachments/file/a.jpg', caption: 'Bonjour', captionOrigin: 'media' },
+      {
+        id: 'media-a',
+        mimeType: 'image/jpeg',
+        src: 'https://gate.meeshy.me/api/v1/attachments/file/a.jpg',
+        caption: 'Bonjour',
+        captionOrigin: 'media',
+      },
     ]);
+  });
+
+  /** T4 (#6903) — le porteur reporte le MIME : `electBackgroundTrack`
+   * (`document.sound: { source: 'original' }`) élit le premier média AUDIO
+   * du porteur PAR le MIME (`background-sound.ts:80`) — sans lui, aucun
+   * réel ni post composé du fil n'a jamais de son de fond. */
+  test('le porteur reporte le MIME de chaque média (#6903) — le son de fond en dépend', () => {
+    const model = resolveFeedCardModel(
+      basePost({
+        media: [
+          { id: 'media-video', mimeType: 'video/webm', fileUrl: 'clip.webm', order: 0 },
+          { id: 'media-audio', mimeType: 'audio/webm', fileUrl: 'son.webm', order: 1 },
+        ],
+        storyEffects: { v: 3, scenes: [{ id: 's1', objects: [] }] },
+      }),
+      { preferredLanguages: ['fr'], now: NOW },
+    );
+    expect(model.scene?.carrier.media.map((m) => m.mimeType)).toEqual(['video/webm', 'audio/webm']);
+  });
+
+  /** T9 (#6903) — un réel COMPOSÉ (fixture `REEL_SCENE_LOOP`) a bien
+   * `isReel: true` ET `scene` défini ; un réel de MÉDIAS (`REEL_STUDIO`) ne
+   * change PAS de comportement. */
+  test('un réel composé (REEL_SCENE_LOOP) a isReel ET scene ; un réel de médias (REEL_STUDIO) n’a pas de scène', () => {
+    const composed = resolveFeedCardModel(REEL_SCENE_LOOP, { preferredLanguages: ['fr'], now: NOW });
+    expect(composed.isReel).toBe(true);
+    expect(composed.scene).toBeDefined();
+
+    const media = resolveFeedCardModel(REEL_STUDIO, { preferredLanguages: ['fr'], now: NOW });
+    expect(media.isReel).toBe(true);
+    expect(media.scene).toBeUndefined();
   });
 
   /**

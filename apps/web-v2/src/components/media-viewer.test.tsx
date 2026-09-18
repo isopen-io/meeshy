@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { messagesOf } from '@/lib/api/fixtures';
-import { POST_SCENE_TEXT, POST_SCENES_MIXED } from '@/lib/api/fixtures-feed';
+import { POST_SCENE_CLIP_A, POST_SCENE_TEXT, POST_SCENES_MIXED } from '@/lib/api/fixtures-feed';
 import { MEDIA_CONVERSATION_ID } from '@/lib/api/fixtures-media';
 import {
   MEDIA_GRID_OVERFLOW_WITNESS_ID,
@@ -687,5 +687,109 @@ describe('MediaViewer — la nature « scène » (#6902)', () => {
       dialog.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }));
     });
     expect(closed).toBe(1);
+  });
+});
+
+/**
+ * CE QUE LA REVUE-CORRECTION DE #6902 A AJOUTÉ — la page scène ne s'ANCRE
+ * plus au viewport par `position: fixed` (le plateau reçoit un `transform`
+ * pendant un glissement, et la boîte rétrécissait de 390 × 693 à 371 × 660 au
+ * premier pixel de doigt), elle NOMME sa page pour un lecteur d'écran, elle
+ * s'ouvre MUETTE avec un bouton pour ouvrir le son, et un appui long l'entre
+ * EN PAUSE.
+ */
+describe('MediaViewer — la page scène : cadrage, nom, son et pause (revue-correction #6902)', () => {
+  async function mount(post: typeof POST_SCENES_MIXED, startIndex = 0): Promise<HTMLElement> {
+    const model = resolveFeedCardModel(post, { preferredLanguages: ['fr', 'en'], now: new Date('2026-09-17T12:00:00.000Z') });
+    const lot = composeSceneGalleryLot(model);
+    if (lot === undefined) throw new Error('lot attendu');
+    container = document.createElement('div');
+    container.id = 'root';
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <MediaViewer
+          items={lot.items}
+          scenes={lot.scenes}
+          startIndex={startIndex}
+          onClose={() => {}}
+          languages={['fr']}
+          fallbackLanguage="fr"
+          carrier={{ sender: { displayName: 'Omar' }, sentAt: model.createdAt, caption: null }}
+        />,
+      );
+    });
+    return document.body;
+  }
+
+  test("aucune page de la couche ne porte `position: fixed` — le plateau est TRANSFORMÉ pendant un glissement, un descendant fixe s'y réancrerait", async () => {
+    const body = await mount(POST_SCENES_MIXED, 1);
+    const pages = [...body.querySelectorAll<HTMLElement>('[data-viewer-page]')];
+    expect(pages.length).toBeGreaterThan(0);
+    for (const page of pages) expect(page.style.position).not.toBe('fixed');
+  });
+
+  test('la page scène NOMME son contenu : « Scène partagée par … » à défaut de légende', async () => {
+    const body = await mount(POST_SCENE_TEXT);
+    const page = currentPage(body).querySelector('[data-scene-viewer-page]')!;
+    expect(page.getAttribute('role')).toBe('group');
+    expect(page.getAttribute('aria-label')).toContain('Omar');
+  });
+
+  test('le dialogue dit « Scène », jamais « Média », sur un lot de scènes', async () => {
+    const body = await mount(POST_SCENES_MIXED, 1);
+    expect(body.querySelector('[data-media-viewer]')!.getAttribute('aria-label')).toBe('Scène 2 sur 3');
+  });
+
+  test("une scène SONORE s'ouvre MUETTE et son bouton OUVRE le son — jamais un son qui surprend", async () => {
+    const body = await mount(POST_SCENE_CLIP_A);
+    const sound = () => currentPage(body).querySelector<HTMLButtonElement>('[data-scene-viewer-sound]');
+    expect(sound()!.getAttribute('data-scene-viewer-sound')).toBe('muted');
+    expect(sound()!.getAttribute('aria-label')).toBe('Réactiver le son');
+    // L'EFFET, pas l'étiquette du bouton : `ScenePlayer` ne pose sa pastille
+    // `data-scene-sound="muted"` que sur le muet RÉSOLU (`hostMute`) d'un
+    // document SONORE qui joue — c'est donc elle qui prouve que le muet de
+    // l'hôte atteint bien le moteur.
+    expect(currentPage(body).querySelector('[data-scene-sound="muted"]')).not.toBeNull();
+    await act(async () => {
+      sound()!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(sound()!.getAttribute('data-scene-viewer-sound')).toBe('on');
+    expect(sound()!.getAttribute('aria-label')).toBe('Couper le son');
+    expect(currentPage(body).querySelector('[data-scene-sound="muted"]')).toBeNull();
+  });
+
+  test("une scène SANS son ne pose AUCUN bouton de son (loi 4 : un contrôle sans effet n'existe pas)", async () => {
+    const body = await mount(POST_SCENE_TEXT);
+    expect(currentPage(body).querySelector('[data-scene-viewer-sound]')).toBeNull();
+  });
+
+  test("une scène qui BOUGE porte lecture/pause, dont le libellé SUIT l'état ; une scène FIXE n'en porte pas", async () => {
+    const moving = await mount(POST_SCENE_CLIP_A);
+    const button = () => currentPage(moving).querySelector<HTMLButtonElement>('[data-scene-viewer-playpause]');
+    expect(button()!.getAttribute('data-scene-viewer-playpause')).toBe('playing');
+    expect(button()!.getAttribute('aria-label')).toBe('Tout mettre en pause');
+    await act(async () => {
+      button()!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(button()!.getAttribute('data-scene-viewer-playpause')).toBe('paused');
+    expect(button()!.getAttribute('aria-label')).toBe('Tout reprendre');
+  });
+
+  test('une scène FIXE ne porte ni lecture/pause ni son', async () => {
+    const body = await mount(POST_SCENES_MIXED, 0);
+    expect(currentPage(body).querySelector('[data-scene-viewer-playpause]')).toBeNull();
+  });
+
+  test("la barre d'ESPACE atteint la lecture d'une scène active, comme elle atteint une vidéo", async () => {
+    const body = await mount(POST_SCENE_CLIP_A);
+    const dialog = body.querySelector('[data-media-viewer]')!;
+    const button = () => currentPage(body).querySelector<HTMLButtonElement>('[data-scene-viewer-playpause]');
+    expect(button()!.getAttribute('data-scene-viewer-playpause')).toBe('playing');
+    await act(async () => {
+      dialog.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: ' ' }));
+    });
+    expect(button()!.getAttribute('data-scene-viewer-playpause')).toBe('paused');
   });
 });

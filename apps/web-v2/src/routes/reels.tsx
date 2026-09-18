@@ -263,9 +263,11 @@ export default function ReelsScreen() {
           mode={pageModeOf(index, active)}
           soundOn={soundOn}
           language={language}
+          preferredLanguages={readerLanguages}
           onToggleSound={() => setSoundOn((on) => !on)}
           onGesture={onGesture}
           onShare={onShare}
+          onSoundBlocked={() => setSoundOn(false)}
         />
       ))}
     </div>

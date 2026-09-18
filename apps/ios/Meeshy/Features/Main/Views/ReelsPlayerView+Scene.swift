@@ -72,8 +72,10 @@ struct ReelSceneView: View {
     @State private var isCallActive = MediaSessionCoordinator.shared.isCallActive
 
     /// Même porteur que la carte du fil et le plein écran d'un post : sans lui,
-    /// une scène de MÉDIA se peindrait vide (#4926).
-    private var carrier: StoryItem {
+    /// une scène de MÉDIA se peindrait vide (#4926). `internal` depuis #6904 :
+    /// c'est LUI qui porte l'empreinte du fond de la carte, et le témoin la
+    /// mesure.
+    var carrier: StoryItem {
         StoryItem(id: reel.id,
                   content: reel.content,
                   media: reel.media,
@@ -89,19 +91,90 @@ struct ReelSceneView: View {
 
     var body: some View {
         let duration = carrier.toRenderableSlide(preferredLanguages: []).computedTotalDuration()
-        MeeshyScenePlayer(document: document,
-                          mode: .reel,
-                          sceneIndex: .constant(0),
-                          isPlaying: .constant(isPlaying),
-                          accentColorHex: reel.authorColor,
-                          carrier: carrier,
-                          preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
-                          isMuted: isMuted)
-            .onPlaybackTime { seconds in
-                clock.progress = ReelSceneProgress.fraction(elapsed: seconds, duration: duration)
+        // **Un réel qui porte une scène montre LA carte de la story** —
+        // le même composant, la même forme, le même fond (directive porteur du
+        // 2026-09-17 : « Partir du fait que le composant est déjà fait et le
+        // réutiliser pour les scènes de posts et les Réels ! »).
+        //
+        // Il posait `.aspectRatio(SceneShape.aspect, contentMode: .fill)` +
+        // `.clipped()` : un remplissage qui RETIRAIT 44,8 pt de chaque côté de
+        // la scène sur un iPhone 402×874 — 18,2 % de sa largeur, des pixels que
+        // l'auteur avait posés. Le 3e message de la directive (« On préserve le
+        // même fond que pour la story ! ») tranche l'inverse : la scène est
+        // AJUSTÉE, et le fond dominant habille ce qui reste.
+        //
+        // Le viewport vient d'un `GeometryReader` parce qu'un réel ne connaît
+        // pas sa page : le pager lui donne sa place, et le chrome du réel vit
+        // dans ses couloirs, PAR-DESSUS la carte (il ne la rétrécit pas).
+        GeometryReader { geo in
+            ZStack {
+                // **Le SOL — le même que la story et la galerie de post** (#6904,
+                // directive porteur du 2026-09-17 : « On préserve le même fond que
+                // pour la story ! »). Le réel posait `.background(Color.black)` sous
+                // son média (`ReelPageView.mediaLayer`) : la MÊME carte se retrouvait
+                // sur du noir pur là où le lecteur de stories l'entoure d'une teinte
+                // dérivée de son empreinte. Le voile est NUL — un réel est immersif
+                // par nature, il n'a pas de plateau à faire reculer —, et l'empreinte
+                // vient du même site que le fond DANS la carte, juste dessous.
+                SceneFloorView(thumbHash: carrier.sceneBackdropHash,
+                               veil: SceneFloorView.fullVeil)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+
+                // **Un réel est IMMERSIF par nature** (directive B du
+                // 2026-09-18) : il occupe le viewport entier, sans plateau à
+                // faire reculer — c'est déjà pourquoi son sol porte le voile
+                // PLEIN au tour 4. Sa carte n'a donc aucun rayon : « garder les
+                // bords angle exacte ».
+                SceneCard(layout: SceneShape.layout(in: geo.size, immersive: true),
+                          thumbHash: carrier.sceneBackdropHash) {
+                    MeeshyScenePlayer(document: document,
+                                      mode: .reel,
+                                      sceneIndex: .constant(0),
+                                      isPlaying: .constant(isPlaying),
+                                      accentColorHex: reel.authorColor,
+                                      carrier: carrier,
+                                      preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
+                                      isMuted: isMuted,
+                                      // Le canvas ne peint jamais son hors-champ :
+                                      // la carte le peint, comme aux quatre
+                                      // montages du lecteur de stories (#6791).
+                                      servesLetterboxFill: false)
+                        .onPlaybackTime { seconds in
+                            clock.progress = ReelSceneProgress.fraction(elapsed: seconds, duration: duration)
+                        }
+                }
+
+                // **LE VOILE de lisibilité — celui de la STORY** (#6904 tour 5,
+                // directive porteur du 2026-09-18 : « il faut bien faire
+                // attention à l'ombre dégradé pour rendre le texte lisible qui
+                // doit être mis sur tous l'écran à partir du bas de l'écran »).
+                //
+                // Un réel posait sa légende et sa ligne d'auteur à même le média,
+                // avec `mediaChromeLegible()` pour seule défense — une ombre
+                // portée sur le glyphe, qui tient sur un fond chargé et se perd
+                // sur un aplat clair. Le voile de l'écran est la réponse que la
+                // story donne depuis #6701, et c'est elle qu'on reproduit.
+                //
+                // `chromeVisible: true` — **un réel a TOUJOURS son chrome** :
+                // légende, auteur et rail d'actions ne s'effacent pas, il n'y a
+                // pas de porte immersive dans un réel. C'est la même raison qui
+                // donne à son sol le voile PLEIN au tour 4.
+                //
+                // Monté DERNIER de cette pile, donc au-dessus de la carte ; le
+                // chrome du réel (`ReelPageView+Info`, `ReelsPlayerView+ActionRail`)
+                // vit une couche PLUS HAUTE encore, chez l'hôte de la page — il
+                // reste donc au-dessus du voile, qu'il détache.
+                //
+                // **Les réels VIDÉO et IMAGE ne sont pas visés par ce lot** : ce
+                // fichier ne porte que le réel à SCÈNE, et le lot #6904 est la
+                // convergence des surfaces de SCÈNE (carte, sol, forme, voile).
+                StoryReaderScrims(topInset: DeviceLayout.safeAreaTop,
+                                  chromeVisible: true)
             }
-            .aspectRatio(SceneFullscreenFraming.ratio(of: document, sceneIndex: 0), contentMode: .fit)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(width: geo.size.width, height: geo.size.height)
+        }
             .onReceive(
                 CallManager.shared.$callState
                     .map(\.isActive)

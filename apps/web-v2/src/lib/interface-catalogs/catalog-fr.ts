@@ -633,6 +633,10 @@ const fr = {
   'feed.scene.open.post': 'Touche deux fois pour ouvrir la publication',
   'feed.scene.sound.muted': 'Son coupé',
   'feed.scene.count': '{count} scènes',
+  'scene.fullscreen.play': 'Tout reprendre',
+  'scene.fullscreen.pause': 'Tout mettre en pause',
+  'scene.fullscreen.sound.on': 'Réactiver le son',
+  'scene.fullscreen.sound.off': 'Couper le son',
   'scene.place.here': 'Ici',
 
   /* LE SON DE FOND DU LECTEUR DE STORY (T10, #6899) — bouton BASCULE dans la

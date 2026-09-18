@@ -88,3 +88,18 @@
 .media-filmstrip-masked-glyph {
   color: rgb(255 255 255 / 60%);
 }
+
+/**
+ * LES CONTRÔLES D'UNE PAGE SCÈNE (revue-correction #6902) — lecture/pause et
+ * son. Ils vivent SUR la scène, jamais sur le noir du couloir comme le bouton
+ * « Fermer » : leur fond ne peut donc pas être le blanc translucide de
+ * `.media-viewer-close` (invisible, et son glyphe blanc avec lui, sur une
+ * scène CLAIRE). Fond SOMBRE, la même teinte que la pastille du moteur
+ * (`scene-player.tsx`) et que le glyphe de lecture d'une carte de fil
+ * (`feed-scene-surface.tsx`) — une seule valeur pour un même rôle.
+ */
+.media-viewer-scene-control {
+  width: 2.5rem;
+  height: 2.5rem;
+  background-color: rgb(0 0 0 / 55%);
+}

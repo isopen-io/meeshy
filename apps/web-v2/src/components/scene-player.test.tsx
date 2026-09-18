@@ -147,6 +147,46 @@ describe('ScenePlayer — `muted`, la demande de l’hôte gouverne le muet du m
     expect(el.querySelector('video')?.muted).toBe(false);
   });
 
+  /**
+   * Revue-correction #6903 — LE MUET DE L'AUTEUR EST DÉFINITIF : `payload.muted`
+   * est déjà la déclaration que lisent `sceneHasControllableSound` (« un fond
+   * VIDÉO NON DÉCLARÉ muet ») et `isDocumentAudible`. Le rendu ne lisait que
+   * le muet de l'HÔTE : une scène dont l'auteur a coupé le fond et qui ne
+   * porte aucune piste de fond sonnait dès l'ouverture d'un réel
+   * (`soundOn = hasUserActivation()`) sans qu'AUCUN bouton ne puisse la
+   * couper — la loi venait de dire au rail qu'il n'y avait rien à couper.
+   * Témoin de rang AUTRE que le premier : l'hôte demande EXPRESSÉMENT le son.
+   */
+  test('`payload.muted: true` ⇒ le fond reste muet même quand l’hôte OUVRE le son', () => {
+    const el = mount(
+      <ScenePlayer
+        document={documentOf([fond({ postMediaId: 'vid', mediaType: 'video/mp4', muted: true })])}
+        sceneIndex={0}
+        mode="reel"
+        playing
+        muted={false}
+        carrier={carrier}
+        preferredLanguages={['fr']}
+      />,
+    );
+    expect(el.querySelector('video')?.muted).toBe(true);
+  });
+
+  test('sans `payload.muted`, le même fond suit bien la demande de l’hôte (le témoin ci-dessus mesure la DÉCLARATION)', () => {
+    const el = mount(
+      <ScenePlayer
+        document={documentOf([fond({ postMediaId: 'vid', mediaType: 'video/mp4' })])}
+        sceneIndex={0}
+        mode="reel"
+        playing
+        muted={false}
+        carrier={carrier}
+        preferredLanguages={['fr']}
+      />,
+    );
+    expect(el.querySelector('video')?.muted).toBe(false);
+  });
+
   // T-E7 (#6901, D5) — le verrou du muet : `card` VERROUILLE le son quel que
   // soit ce que l'hôte demande (miroir `MeeshyScenePlayer.hostMute`).
   test('mode="card" + muted={false} ⇒ la vidéo de fond reste muette (le verrou de la carte)', () => {
@@ -162,6 +202,39 @@ describe('ScenePlayer — `muted`, la demande de l’hôte gouverne le muet du m
       />,
     );
     expect(el.querySelector('video')?.muted).toBe(true);
+  });
+
+  /**
+   * LA PASTILLE DE MUET SE DIT UNE FOIS PAR ÉCRAN (revue-correction #6903) —
+   * `config.showsMuteBadge` : le moteur la peint là où il est SEUL à pouvoir
+   * dire le muet (carte du fil, lecteur de story, aperçu du studio), et se
+   * tait en mode `reel`, où le rail des Réels porte déjà l'état sur son
+   * bouton son (`reel-page.tsx#ReelRail`). Un témoin de rang AUTRE que le
+   * premier : les quatre modes qui la gardent sont éprouvés en face du seul
+   * qui la perd.
+   */
+  test('un fond vidéo SONORE et muet : pastille en card/reader/story/preview, JAMAIS en reel', () => {
+    const audible = documentOf([fond({ postMediaId: 'vid', mediaType: 'video/mp4' })]);
+    const badgeFor = (mode: ScenePlayerMode): boolean => {
+      const box = window.document.createElement('div');
+      window.document.body.appendChild(box);
+      const own = createRoot(box);
+      act(() => {
+        own.render(<ScenePlayer document={audible} sceneIndex={0} mode={mode} playing muted carrier={carrier} preferredLanguages={['fr']} />);
+      });
+      const present = box.querySelector('[data-scene-sound="muted"]') !== null;
+      act(() => {
+        own.unmount();
+      });
+      box.remove();
+      return present;
+    };
+    expect(badgeFor('card')).toBe(true);
+    expect(badgeFor('reader')).toBe(true);
+    expect(badgeFor('story')).toBe(true);
+    expect(badgeFor('preview')).toBe(true);
+    expect(badgeFor('reel')).toBe(false);
+    mount(<ScenePlayer document={audible} sceneIndex={0} mode="card" playing={false} carrier={carrier} preferredLanguages={['fr']} />);
   });
 
   test('une entrée de porteur SANS adresse ne masque pas le `mediaURL` de l’objet', () => {
@@ -893,5 +966,166 @@ describe('ScenePlayer — l’audio non-fond suit lecture et muet (T-E11)', () =
       window.HTMLMediaElement.prototype.play = originalPlay;
       window.HTMLMediaElement.prototype.pause = originalPause;
     }
+  });
+});
+
+// T3 (#6903) — le mode `reel` accepte une durée de REPLI de l'hôte et
+// signale chaque tour de boucle (`onLoop`), pour une scène SANS objet
+// temporisé (un réel composé par le studio : fond vidéo + texte, sans
+// `timing` ni `timelineDuration`).
+describe('ScenePlayer — mode reel, l’horloge d’une scène SANS objet temporisé (T3, #6903)', () => {
+  function withMediaStubs<T>(run: () => T): T {
+    const originalPlay = window.HTMLMediaElement.prototype.play;
+    const originalPause = window.HTMLMediaElement.prototype.pause;
+    window.HTMLMediaElement.prototype.play = function play(this: HTMLMediaElement) {
+      return Promise.resolve();
+    };
+    window.HTMLMediaElement.prototype.pause = function pause(this: HTMLMediaElement) {
+      /* no-op */
+    };
+    try {
+      return run();
+    } finally {
+      window.HTMLMediaElement.prototype.play = originalPlay;
+      window.HTMLMediaElement.prototype.pause = originalPause;
+    }
+  }
+
+  const videoOnlyDoc = (overrides?: Record<string, unknown>) => sceneDocumentOf([fond({ postMediaId: 'vid', mediaType: 'video/webm' })], overrides);
+
+  test('(a) fallbackDurationSeconds ⇒ onTime avance, ≈1,5 après 1,5 s de trames', () => {
+    withMediaStubs(() =>
+      withRafQueue((flushTo) => {
+        const times: number[] = [];
+        mount(
+          <ScenePlayer
+            document={videoOnlyDoc()}
+            sceneIndex={0}
+            mode="reel"
+            playing
+            carrier={carrier}
+            preferredLanguages={['fr']}
+            fallbackDurationSeconds={3}
+            onTime={(t) => times.push(t)}
+          />,
+        );
+        flushTo(0);
+        flushTo(1500);
+        expect(times.length).toBeGreaterThan(0);
+        expect(times[times.length - 1]).toBeCloseTo(1.5, 1);
+      }),
+    );
+  });
+
+  test('(b) le wrap déclenche onLoop UNE fois ; onEnded jamais — le mode boucle', () => {
+    withMediaStubs(() =>
+      withRafQueue((flushTo) => {
+        let loops = 0;
+        let ended = 0;
+        const times: number[] = [];
+        mount(
+          <ScenePlayer
+            document={videoOnlyDoc()}
+            sceneIndex={0}
+            mode="reel"
+            playing
+            carrier={carrier}
+            preferredLanguages={['fr']}
+            fallbackDurationSeconds={3}
+            onTime={(t) => times.push(t)}
+            onLoop={() => (loops += 1)}
+            onEnded={() => (ended += 1)}
+          />,
+        );
+        flushTo(0);
+        flushTo(3100);
+        expect(loops).toBe(1);
+        expect(ended).toBe(0);
+        expect(times[times.length - 1]).toBeLessThan(1);
+      }),
+    );
+  });
+
+  test('(c) mode="card" ⇒ requestAnimationFrame jamais appelé, même avec un repli (T-E5 CONSERVÉ)', () => {
+    let called = 0;
+    const originalRaf = window.requestAnimationFrame;
+    window.requestAnimationFrame = ((_cb: FrameRequestCallback) => {
+      called += 1;
+      return 0;
+    }) as typeof window.requestAnimationFrame;
+    try {
+      withMediaStubs(() =>
+        mount(
+          <ScenePlayer document={videoOnlyDoc()} sceneIndex={0} mode="card" playing carrier={carrier} preferredLanguages={['fr']} fallbackDurationSeconds={3} />,
+        ),
+      );
+      expect(called).toBe(0);
+    } finally {
+      window.requestAnimationFrame = originalRaf;
+    }
+  });
+
+  test('(d) mode="reel" SANS repli ni objet temporisé ⇒ requestAnimationFrame jamais appelé', () => {
+    let called = 0;
+    const originalRaf = window.requestAnimationFrame;
+    window.requestAnimationFrame = ((_cb: FrameRequestCallback) => {
+      called += 1;
+      return 0;
+    }) as typeof window.requestAnimationFrame;
+    try {
+      withMediaStubs(() => mount(<ScenePlayer document={videoOnlyDoc()} sceneIndex={0} mode="reel" playing carrier={carrier} preferredLanguages={['fr']} />));
+      expect(called).toBe(0);
+    } finally {
+      window.requestAnimationFrame = originalRaf;
+    }
+  });
+
+  test('(e) timelineDuration DÉCLARÉE prime le repli de l’hôte', () => {
+    withMediaStubs(() =>
+      withRafQueue((flushTo) => {
+        let loops = 0;
+        mount(
+          <ScenePlayer
+            document={videoOnlyDoc({ timelineDuration: 2 })}
+            sceneIndex={0}
+            mode="reel"
+            playing
+            carrier={carrier}
+            preferredLanguages={['fr']}
+            fallbackDurationSeconds={9}
+            onLoop={() => (loops += 1)}
+          />,
+        );
+        flushTo(0);
+        flushTo(2100);
+        expect(loops).toBe(1);
+      }),
+    );
+  });
+
+  test('(f) mode="story" (le plein écran #6902) avec timelineDuration ⇒ onEnded UNE fois, onLoop jamais — inchangé', () => {
+    withRafQueue((flushTo) => {
+      let ended = 0;
+      let loops = 0;
+      mount(
+        <ScenePlayer
+          document={sceneDocumentOf(
+            [textObject({ timing: { start: 0, keyframes: [{ time: 0, x: 0.1, y: 0.1 }, { time: 1, x: 0.9, y: 0.9 }] } })],
+            { timelineDuration: 2 },
+          )}
+          sceneIndex={0}
+          mode="story"
+          playing
+          carrier={carrier}
+          preferredLanguages={['fr']}
+          onEnded={() => (ended += 1)}
+          onLoop={() => (loops += 1)}
+        />,
+      );
+      flushTo(0);
+      flushTo(2100);
+      expect(ended).toBe(1);
+      expect(loops).toBe(0);
+    });
   });
 });

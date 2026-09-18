@@ -1,7 +1,8 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 
+import { BackgroundTrackAudio } from '@/components/background-track-audio';
 import { objectMediaIdentity, objectMediaSrc } from '@/lib/canvas/carrier';
-import { electBackgroundTrack, sceneHasControllableSound, type BackgroundTrack } from '@/lib/canvas/background-sound';
+import { electBackgroundTrack, sceneHasControllableSound } from '@/lib/canvas/background-sound';
 import type { CanvasDocument } from '@/lib/canvas/document';
 import { backgroundMedia, declaredAspect } from '@/lib/feed/scene-framing';
 import { isVideoObject } from '@/lib/feed/scene-motion';
@@ -80,9 +81,6 @@ export type StorySceneLayerProps = {
   readonly measure?: (params: SceneFootprintParams) => Footprint | null;
 };
 
-/** `NotAllowedError` — le refus de la politique de lecture automatique. */
-const isAutoplayRefusal = (error: unknown): boolean => error instanceof Error && error.name === 'NotAllowedError';
-
 const isPlainRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
 
 /** L'aplat quand aucune empreinte n'existe — le voile du chrome du lecteur,
@@ -93,84 +91,6 @@ function clipInset(rect: Rect, canvas: { readonly width: number; readonly height
   const right = canvas.width - rect.x - rect.width;
   const bottom = canvas.height - rect.y - rect.height;
   return `inset(${rect.y}px ${right}px ${bottom}px ${rect.x}px round ${radius}px)`;
-}
-
-/**
- * LE SON DE FOND (`ReaderAudioMixer+Background.swift`) : une piste, qui part
- * `startOffsetMs` après le début de la diapositive (horloge de LECTURE : la
- * pause l'arrête), jouée dans sa fenêtre source (`bounds`, rebouclée dans la
- * fenêtre si `loop`), à son `volume`, sous le muet viewer. Fondus hors lot
- * (question 9.3 de la spécification).
- */
-function BackgroundTrackAudio({
-  track,
-  playing,
-  muted,
-  onDurationKnown,
-  onPlaybackBlocked,
-}: {
-  readonly track: BackgroundTrack;
-  readonly playing: boolean;
-  readonly muted: boolean;
-  readonly onDurationKnown: (durationMs: number) => void;
-  readonly onPlaybackBlocked: () => void;
-}) {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const playedMsRef = useRef(0);
-  const callbacks = useRef({ onDurationKnown, onPlaybackBlocked });
-  callbacks.current = { onDurationKnown, onPlaybackBlocked };
-  const { bounds } = track;
-
-  useEffect(() => {
-    const el = audioRef.current;
-    if (el !== null) el.volume = track.volume;
-  }, [track.volume]);
-
-  useEffect(() => {
-    const el = audioRef.current;
-    if (el === null) return;
-    if (!playing) {
-      el.pause();
-      return;
-    }
-    const startedAt = performance.now();
-    const start = () => {
-      void el.play().catch((error: unknown) => {
-        if (!el.muted && isAutoplayRefusal(error)) callbacks.current.onPlaybackBlocked();
-      });
-    };
-    const remaining = Math.max(0, track.startOffsetMs - playedMsRef.current);
-    const timer = remaining > 0 ? window.setTimeout(start, remaining) : null;
-    if (timer === null) start();
-    return () => {
-      playedMsRef.current += performance.now() - startedAt;
-      if (timer !== null) window.clearTimeout(timer);
-    };
-  }, [playing, muted, track.startOffsetMs]);
-
-  return (
-    <audio
-      ref={audioRef}
-      data-scene-sound-track
-      src={track.src}
-      preload="auto"
-      muted={muted}
-      loop={bounds === undefined && track.loop}
-      onLoadedMetadata={(event) => {
-        const el = event.currentTarget;
-        if (bounds !== undefined) el.currentTime = bounds.startMs / 1000;
-        const windowMs = bounds !== undefined ? bounds.endMs - bounds.startMs : el.duration * 1000;
-        callbacks.current.onDurationKnown(track.startOffsetMs + windowMs);
-      }}
-      onTimeUpdate={(event) => {
-        if (bounds === undefined) return;
-        const el = event.currentTarget;
-        if (el.currentTime * 1000 < bounds.endMs) return;
-        if (track.loop) el.currentTime = bounds.startMs / 1000;
-        else el.pause();
-      }}
-    />
-  );
 }
 
 export function StorySceneLayer({

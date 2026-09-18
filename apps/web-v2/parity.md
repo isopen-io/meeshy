@@ -421,3 +421,11 @@ Le service worker porte AUSSI, depuis #6936, le comportement de MISE À JOUR du
 legacy, qui n'est pas une route et manquait donc à cet inventaire : une version
 neuve reste en attente, s'annonce par une bannière, et le clic purge les caches
 de l'ancienne avant de recharger — session préservée (décision D-82).
+
+`/stories/new` n'est plus la porte à UN texte de #6900 : depuis #6943/#6944
+c'est un PLATEAU — plusieurs objets texte, chacun avec sa pose (déplacement,
+échelle, rotation, au pointeur ET au clavier), sa langue CHOISIE et son style ;
+un fond et un calque d'avant-plan ; un son en fond ou posé sur la scène ; et
+une LÉGENDE par média (`PostMedia.caption`), que le lecteur `/story/:post` rend
+désormais, résolue par le Prisme et portant son `lang=`. Ce qui reste à
+l'écart de la cible iOS y est nommé, avec sa raison : décision D-84.

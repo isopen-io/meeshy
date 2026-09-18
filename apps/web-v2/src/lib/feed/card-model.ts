@@ -24,6 +24,14 @@ import { thumbHashPlaceholder } from '@/lib/media/thumbhash';
 export type FeedCardMedia = {
   readonly id: string;
   readonly kind: FeedMediaKind;
+  /** LE MIME SERVI (#6903) — le porteur d'une scène (`FeedCardScene.carrier`,
+   * ci-dessous) en a besoin pour ÉLIRE son son de fond
+   * (`electBackgroundTrack`, `lib/canvas/background-sound.ts:80` :
+   * `document.sound: { source: 'original' }` élit « le premier média AUDIO
+   * du porteur », PAR le MIME). Sans lui, aucun réel ni post composé du fil
+   * n'a jamais de son de fond — le porteur de STORY le reporte déjà
+   * (`lib/stories/carrier.ts:37`), celui du fil ne le faisait pas. */
+  readonly mimeType?: string;
   readonly src: string;
   readonly thumbnailSrc?: string;
   readonly placeholder?: string;
@@ -240,9 +248,11 @@ function resolveMedia(
     const durationMs = numberOrUndefined(m.duration);
     const width = numberOrUndefined(m.width);
     const height = numberOrUndefined(m.height);
+    const mimeType = textOrUndefined(m.mimeType);
     return {
       id: m.id,
       kind: feedMediaKindOf(m.mimeType),
+      ...(mimeType !== undefined ? { mimeType } : {}),
       src: attachmentSrc(m.fileUrl),
       ...(thumbnail !== undefined ? { thumbnailSrc: attachmentSrc(thumbnail) } : {}),
       ...(placeholder !== undefined ? { placeholder } : {}),
@@ -299,18 +309,23 @@ export function resolveFeedCardModel(
           document,
           carrier: {
             postId: post.id,
-            // `mimeType`/`width`/`height` ne sont PAS reportés ici : le
-            // player rend un objet `media` d'après SA PROPRE charge canvas
+            // `width`/`height` ne sont PAS reportés ici : le player rend un
+            // objet `media` d'après SA PROPRE charge canvas
             // (`payload.mediaType`, `payload.aspectRatio`), jamais d'après le
-            // porteur — le porteur ne sert qu'à l'IDENTITÉ, la LÉGENDE et,
-            // pour une vidéo de fond, la VIGNETTE (revue-correction #6898) :
-            // `thumbnailSrc ?? placeholder`, le MÊME repli que
+            // porteur. `mimeType` Y ENTRE (#6903) parce que l'ÉLECTION du son
+            // de fond (`electBackgroundTrack`, `background-sound.ts:80`) lit
+            // LE PORTEUR, jamais le canvas — et le porteur de STORY le
+            // reporte déjà (`lib/stories/carrier.ts:37`). Le porteur sert
+            // donc l'IDENTITÉ, la LÉGENDE, le MIME (pour l'élection du son)
+            // et, pour une vidéo de fond, la VIGNETTE (revue-correction
+            // #6898) : `thumbnailSrc ?? placeholder`, le MÊME repli que
             // `FeedMediaSurface` pose en `poster` sur une vidéo de post.
             media: media.map((m) => {
               const poster = m.thumbnailSrc ?? m.placeholder;
               return {
                 id: m.id,
                 src: m.src,
+                ...(m.mimeType !== undefined ? { mimeType: m.mimeType } : {}),
                 ...(m.caption !== undefined ? { caption: m.caption } : {}),
                 ...(m.captionLanguage !== undefined ? { captionLanguage: m.captionLanguage } : {}),
                 ...(m.captionOrigin !== undefined ? { captionOrigin: m.captionOrigin } : {}),

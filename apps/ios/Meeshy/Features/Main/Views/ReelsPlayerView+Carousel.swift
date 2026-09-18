@@ -117,7 +117,9 @@ private struct ReelImageCell: View {
     /// it). With an explicit ratio the whole image shows, letterboxed over the
     /// blurred backdrop. Falls back to 9:16 when dimensions are missing.
     private var mediaAspect: CGFloat {
-        guard let w = media.width, let h = media.height, w > 0, h > 0 else { return 9.0 / 16.0 }
+        // Repli 9:16 — le même gabarit que la scène (`SceneShape.aspect`,
+        // #6896/#6904), site unique du rapport dans le dépôt.
+        guard let w = media.width, let h = media.height, w > 0, h > 0 else { return SceneShape.aspect }
         return CGFloat(w) / CGFloat(h)
     }
 

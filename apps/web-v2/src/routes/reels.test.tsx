@@ -1,10 +1,13 @@
-import { describe, expect, test } from 'bun:test';
+import { act } from 'react';
+import { createRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import { ReelPage } from '@/components/reel-page';
-import { REEL_MARKET_IMAGES, REEL_RANK2_ES, REEL_STUDIO, REEL_SUNSET_EN, REEL_VOICE } from '@/lib/api/fixtures-reels';
+import { REEL_MARKET_IMAGES, REEL_RANK2_ES, REEL_SCENE_LOOP, REEL_STUDIO, REEL_SUNSET_EN, REEL_VOICE } from '@/lib/api/fixtures-reels';
 import type { FeedPost } from '@/lib/api/feed-pages';
 import { resolveFeedCardModel } from '@/lib/feed/card-model';
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { showsFloatingMenus } from '@/lib/view/floating-gate';
 import { ROUTES } from '@/routes/route-table';
 
@@ -28,9 +31,11 @@ const page = (post: FeedPost, overrides: Partial<Parameters<typeof ReelPage>[0]>
       mode="active"
       soundOn={false}
       language="fr"
+      preferredLanguages={['fr']}
       onToggleSound={() => undefined}
       onGesture={() => undefined}
       onShare={() => undefined}
+      onSoundBlocked={() => undefined}
       {...overrides}
     />,
   );
@@ -99,7 +104,19 @@ describe('ReelPage — la légende passe par le Prisme', () => {
 
   test('rang 2 : aucune traduction française, l’anglais est servi — jamais l’espagnol', () => {
     const html = renderToStaticMarkup(
-      <ReelPage model={modelOf(REEL_RANK2_ES, ['fr', 'en'])} index={0} count={1} mode="active" soundOn={false} language="fr" onToggleSound={() => undefined} onGesture={() => undefined} onShare={() => undefined} />,
+      <ReelPage
+        model={modelOf(REEL_RANK2_ES, ['fr', 'en'])}
+        index={0}
+        count={1}
+        mode="active"
+        soundOn={false}
+        language="fr"
+        preferredLanguages={['fr', 'en']}
+        onToggleSound={() => undefined}
+        onGesture={() => undefined}
+        onShare={() => undefined}
+        onSoundBlocked={() => undefined}
+      />,
     );
     expect(html).toContain('Rehearsal starts at eight sharp.');
     expect(html).not.toContain('El ensayo');
@@ -174,5 +191,121 @@ describe('le cadre du lecteur', () => {
     const retour = html.indexOf('data-reels-back');
     expect(retour).toBeGreaterThan(-1);
     expect(retour).toBeLessThan(html.indexOf('data-reels-pager'));
+  });
+});
+
+/**
+ * T7 (#6903) — un réel COMPOSÉ (`REEL_SCENE_LOOP`) se rejoue comme sa scène,
+ * jamais comme une vidéo brute. `renderToStaticMarkup` (SSR, SYNCHRONE) ne
+ * résout JAMAIS un chunk chargé À LA DEMANDE (`lazy`) : la scène y rend le
+ * FALLBACK `Suspense` (`ReelPoster`) — ce que ces témoins prouvent est donc
+ * la DÉCISION prise en amont du chunk (la scène gagne sur le média, jamais
+ * de `<video>` brut ; le rail son suit `sceneHasControllableSound`, calculé
+ * par `ReelPage` lui-même, hors du `Suspense`). La résolution RÉELLE du
+ * chunk (`data-reel-scene` apparaissant après le chargement) est prouvée en
+ * rendu CLIENT ci-dessous.
+ */
+describe('ReelPage — un réel COMPOSÉ (#6903)', () => {
+  test('mode="active" ⇒ jamais data-reel-media="video" (la scène gagne, même en attendant son chunk)', () => {
+    const html = page(REEL_SCENE_LOOP, { mode: 'active' });
+    expect(html).toContain('data-reel-poster');
+    expect(html).toContain('Activer le son');
+    expect(html).not.toContain('data-reel-media="video"');
+  });
+
+  test('mode="far" ⇒ data-reel-poster (jamais le chunk du moteur chargé)', () => {
+    const html = page(REEL_SCENE_LOOP, { mode: 'far' });
+    expect(html).toContain('data-reel-poster');
+  });
+
+  test('un réel à scène SANS son (fond muet, aucun `sound`) ⇒ pas de bouton son (loi 4)', () => {
+    const silent: FeedPost = {
+      ...REEL_SCENE_LOOP,
+      id: 'reel-scene-silent',
+      storyEffects: {
+        v: 3,
+        scenes: [
+          {
+            id: 's1',
+            objects: [
+              {
+                id: 'bg1',
+                kind: 'media',
+                anchor: { t: 'free', x: 0.5, y: 0.5 },
+                plane: 'bg',
+                z: 0,
+                transform: { scale: 1, rotation: 0, opacity: 1 },
+                payload: { postMediaId: 'media-reel-scene-video', mediaType: 'video/webm', muted: true },
+              },
+            ],
+          },
+        ],
+      },
+    };
+    const html = page(silent, { mode: 'active' });
+    expect(html).not.toContain('Activer le son');
+    expect(html).not.toContain('Couper le son');
+  });
+
+  test('la légende passe par le Prisme comme avant', () => {
+    const html = page(REEL_SCENE_LOOP, { mode: 'active' });
+    expect(html).toContain('data-reel-caption');
+    expect(html).toContain('lang="fr"');
+    expect(html).toContain('Boucle de fin de répétition');
+  });
+});
+
+/**
+ * T7 bis (#6903) — LA RÉSOLUTION RÉELLE DU CHUNK : rendu CLIENT
+ * (`createRoot` + `act`, motif `reel-scene-stage.test.tsx`), happy-dom
+ * enregistré et libéré POUR CE SEUL bloc — les témoins `renderToStaticMarkup`
+ * ci-dessus n'en ont pas besoin.
+ */
+describe('ReelPage — un réel COMPOSÉ, la scène apparaît une fois son chunk résolu (T7 bis, #6903)', () => {
+  const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+
+  beforeAll(async () => {
+    ensureHappyDomRegistered();
+    globals.IS_REACT_ACT_ENVIRONMENT = true;
+    await import('@/components/scene-player');
+    await import('@/components/reel-scene-stage');
+  });
+
+  afterAll(async () => {
+    await act(async () => {});
+    delete globals.IS_REACT_ACT_ENVIRONMENT;
+    await releaseHappyDomIfRegistered();
+  });
+
+  test('mode="active" ⇒ data-reel-scene apparaît, jamais un <video data-reel-media>', async () => {
+    const container = window.document.createElement('div');
+    window.document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <ReelPage
+          model={modelOf(REEL_SCENE_LOOP)}
+          index={0}
+          count={1}
+          mode="active"
+          soundOn={false}
+          language="fr"
+          preferredLanguages={['fr']}
+          onToggleSound={() => undefined}
+          onGesture={() => undefined}
+          onShare={() => undefined}
+          onSoundBlocked={() => undefined}
+        />,
+      );
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(container.querySelector('[data-reel-scene]')).not.toBeNull();
+    expect(container.querySelector('[data-reel-media]')).toBeNull();
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
   });
 });

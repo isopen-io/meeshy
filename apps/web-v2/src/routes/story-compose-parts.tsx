@@ -100,16 +100,23 @@ export function StudioChip({
   onPress,
   children,
   style,
+  probe,
 }: {
   readonly label: string;
   readonly pressed: boolean;
   readonly onPress: () => void;
   readonly children?: ReactNode;
   readonly style?: CSSProperties;
+  /** LA PRISE DE MESURE — « un composant sans prise mesurable ne peut être
+   * gardé par rien » (leçon 575). Un gate navigateur doit pouvoir désigner CE
+   * réglage-ci sans passer par son libellé traduit, qui romprait au premier
+   * changement de catalogue. */
+  readonly probe?: string;
 }) {
   return (
     <button
       type="button"
+      {...(probe !== undefined ? { 'data-story-option': probe } : {})}
       aria-pressed={pressed}
       aria-label={label}
       title={label}
@@ -257,6 +264,7 @@ export function StudioSoundPlaneToggle({
           pressed={plane === value}
           onPress={() => onChange(value)}
           style={{ paddingInline: 10 }}
+          probe={`sound-plane:${value}`}
         />
       ))}
     </span>

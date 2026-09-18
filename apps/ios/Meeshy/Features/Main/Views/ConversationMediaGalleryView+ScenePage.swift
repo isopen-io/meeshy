@@ -23,18 +23,29 @@ import MeeshyUI
 /// Elle ne peint rien elle-même : `MeeshyScenePlayer(mode: .reader)` est le
 /// moteur unique de rendu d'un canvas — le même que la carte du fil monte en
 /// `.card` et que le viewer de story monte en `.reader`. Elle pose ce moteur
-/// dans le CADRE du solveur, à la taille `stage.media` que le solveur a ajustée
-/// au rapport de la scène, et elle répond aux trois portes du plateau (#6142)
-/// exactement comme ses sœurs image et vidéo : le tap, l'appui long, le
-/// glissement.
+/// aux cotes que la LOI de forme donne à la scène (`GallerySceneStage`, une
+/// projection de `SceneShape.layout(in:)`, #6904), et elle répond aux trois
+/// portes du plateau (#6142) exactement comme ses sœurs image et vidéo : le
+/// tap, l'appui long, le glissement.
+///
+/// **Elle ne passe PLUS par `MediaStageFraming`**, et c'est la décision du
+/// 2026-09-17 : ce solveur cadre des pièces JOINTES — il ajuste, donc il laisse
+/// des bandes même sur une scène au gabarit, et son plein cadre n'était pas
+/// plein (402 × 714,67 mesuré dans un viewport de 402 × 874). Les pages image
+/// et vidéo, elles, y restent : leur contenu est reçu, et le rogner retirerait
+/// ce que l'expéditeur a envoyé.
 ///
 /// `Equatable` et montée en `.equatable()`, pour la raison que la galerie écrit
 /// en tête de son fichier : une réévaluation de la racine ne re-rend que les
 /// pages dont la position relative a changé.
 struct GalleryScenePage: View, Equatable {
     let item: GallerySceneItem
-    /// Le cadre de cette page — voir `GalleryImagePage.stage` (#6141).
-    let stage: MediaStageFraming.Result
+    /// **Le cadre de cette page — la LOI de forme, pas le solveur des pièces
+    /// jointes** (#6904). `GallerySceneStage` projette
+    /// `SceneShape.layout(in:)` : cadrée, la scène tient entière dans la zone
+    /// libre ; immersive, la MÊME carte occupe le viewport entier, sans couloir
+    /// ni chrome — elle grandit, elle ne se remplit pas.
+    let stage: GallerySceneStage.Frame
     /// Voir `GalleryImagePage.presentation` (#6142).
     let presentation: StagePresentation
     let accentColor: String
@@ -89,19 +100,18 @@ struct GalleryScenePage: View, Equatable {
     private static let previewSize = CGSize(width: 320, height: 320)
 
     var body: some View {
-        ZStack {
-            MediaStageBackdrop(
-                source: MediaGalleryStage.backdrop(stage: stage, thumbHash: item.thumbHash)
-            )
-
+        // **LA carte de scène — la même que le lecteur de stories monte**
+        // (directive porteur du 2026-09-17). Elle cadre le contenu aux cotes de
+        // la loi, peint le fond DANS la carte et rogne aux coins de la loi.
+        // Cette page n'en refait aucune des trois : elle donne le VIEWPORT que
+        // le plateau laisse (`GallerySceneStage`), et ses gestes.
+        SceneCard(layout: stage.layout, thumbHash: item.thumbHash) {
             if rendersPlayer {
                 player
             } else {
                 preview
             }
         }
-        .frame(width: stage.frame.width, height: stage.frame.height)
-        .clipShape(RoundedRectangle(cornerRadius: stage.cornerRadius, style: .continuous))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
         // **Le tap franchit la porte du plein cadre, et en revient** (#6142,
@@ -122,12 +132,14 @@ struct GalleryScenePage: View, Equatable {
         .onAppear(perform: resolveOpening)
     }
 
-    /// **Le player, à la taille que le solveur a ajustée au rapport de la scène.**
+    /// **Le player — et la CARTE le dimensionne** (#6904).
     ///
-    /// La taille est posée en dur depuis `stage.media`, jamais par un
-    /// `.aspectRatio` : c'est la leçon de `GalleryImagePage` (« la taille vient
-    /// du solveur ») — le cadre proposé a exactement le rapport de la scène, donc
-    /// le canvas le remplit sans rogner ni déformer.
+    /// Plus aucun `.frame` ici : `SceneCard` pose le contenu aux cotes que la
+    /// loi donne à la scène, jamais un `.aspectRatio` réécrit à la main —
+    /// c'est la leçon de `GalleryImagePage` (« la taille vient du solveur »),
+    /// et c'est aussi ce qui garantit que le lecteur de stories et cette page
+    /// cadrent la MÊME scène. Elle tient TOUJOURS dans son viewport : depuis la
+    /// directive du 2026-09-17 (3e message), aucune surface ne rogne une scène.
     private var player: some View {
         MeeshyScenePlayer(
             document: item.document,
@@ -138,20 +150,21 @@ struct GalleryScenePage: View, Equatable {
             carrier: item.carrier,
             preferredContentLanguages: preferredContentLanguages,
             startAt: isEntry ? openingPosition : 0,
-            // **Le fond se peint UNE fois** (#6791). `MediaStageBackdrop`, juste
-            // au-dessus, habille déjà le hors-champ du cadre avec le hachage de
-            // la scène ; laisser le canvas repeindre le sien empilait deux
-            // dégradés du MÊME hachage, étirés dans deux cadres différents —
-            // mesuré au simulateur, deux teintes au-dessus d'un même média.
-            // La décision vit avec la page (`GallerySceneItem`), qui la tient de
-            // la loi qui décide aussi de son rapport.
-            // **Le fond vient de la MÊME réponse que le cadre** (#6806).
-            // `servesLetterboxFill` seul est la réponse CARDÉE ; en plein cadre
-            // les bandes entrent dans le cadre présenté, et sans elles la scène
-            // montre du vide là où le canvas devrait peindre.
-            servesLetterboxFill: item.surface(inFullFrame: presentation.isFull).paintsLetterbox
+            // **Le canvas ne peint JAMAIS son hors-champ** (#6791, #6904) :
+            // c'est la CARTE qui le peint, dans les deux plein écrans, comme
+            // aux quatre montages du lecteur de stories. Le laisser peindre le
+            // sien empilait deux dégradés du MÊME hachage, étirés dans deux
+            // cadres différents — mesuré au simulateur, deux teintes au-dessus
+            // d'un même média.
+            //
+            // La valeur était `stage.paintsOwnLetterbox` jusqu'au 3e message de
+            // la directive du 2026-09-17 : l'immersif n'avait alors pas de
+            // plateau, donc le canvas y redevenait le seul peintre possible.
+            // Un seul état de carte ⇒ un seul peintre, et il se dit par la
+            // STRUCTURE — `SceneCard` — plutôt que par un champ de loi devenu
+            // constant.
+            servesLetterboxFill: false
         )
-        .frame(width: stage.media.width, height: stage.media.height)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(accessibilityLabel)
     }
@@ -168,7 +181,6 @@ struct GalleryScenePage: View, Equatable {
             Color.black
         }
         .aspectRatio(contentMode: .fill)
-        .frame(width: stage.media.width, height: stage.media.height)
         .clipped()
         .accessibilityHidden(true)
     }
@@ -214,6 +226,66 @@ struct GalleryScenePage: View, Equatable {
     private var longPressGesture: some Gesture {
         LongPressGesture(minimumDuration: 0.4, maximumDistance: 10)
             .onEnded { _ in onEnterStage(.longPress) }
+    }
+}
+
+// MARK: - Le SOL d'une page scène
+
+/// **Le sol d'une page scène — celui de la story, pas du noir plat** (directive
+/// porteur du 2026-09-17, lot #6904 : « On préserve le même fond que pour la
+/// story ! »).
+///
+/// `SceneCard` a fermé la divergence DANS la carte ; la recette au simulateur a
+/// trouvé l'écart restant DEHORS. Le lecteur de stories peignait autour de sa
+/// carte une teinte sombre dérivée du ThumbHash ; cette galerie pose
+/// `Color.black.ignoresSafeArea()` sous TOUTES ses pages, et la même carte se
+/// retrouvait sur un fond noir pur, cadrée comme immersive.
+///
+/// **Cette vue est une vue à part, et non deux lignes dans le corps de la
+/// galerie**, pour une raison mesurable : c'est elle qu'un témoin de pixels
+/// monte. Un `@ViewBuilder` privé du fichier racine ne se mesurerait que par une
+/// galerie entière — donc par son contexte, ses messages et son réseau — et le
+/// témoin dériverait de la production au premier refactor.
+///
+/// **Une page IMAGE ou VIDÉO n'a pas de sol** (`scene == nil` ⇒ rien) : elle
+/// garde le noir de la galerie et son `MediaStageBackdrop`, qui habille le
+/// hors-champ d'une pièce jointe. Le sol de scène ne remplace pas ce fond-là :
+/// il se pose par-dessus le noir, et seulement pour une scène.
+struct GallerySceneFloor: View, Equatable {
+    /// La scène de la page COURANTE, ou `nil` pour une page image / vidéo.
+    let scene: GallerySceneItem?
+    let presentation: StagePresentation
+
+    static func == (lhs: GallerySceneFloor, rhs: GallerySceneFloor) -> Bool {
+        lhs.scene?.id == rhs.scene?.id
+            && lhs.scene?.thumbHash == rhs.scene?.thumbHash
+            && lhs.presentation == rhs.presentation
+    }
+
+    var body: some View {
+        ZStack {
+            if let scene {
+                // L'identité est celle de la PAGE : le glissement entre les
+                // scènes d'un même post (repère F5, trois scènes) fond le sol
+                // comme le lecteur de stories fond le sien d'une story à
+                // l'autre. Sans `.id`, SwiftUI garderait la même vue et
+                // remplacerait l'empreinte d'un coup sec.
+                SceneFloorView(thumbHash: scene.thumbHash,
+                               veil: presentation.isFull ? SceneFloorView.fullVeil
+                                                         : SceneFloorView.cardedVeil)
+                    .id(scene.id)
+                    .transition(.opacity)
+            }
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+        // Le voile suit la porte du plein cadre, et la fusion suit la page :
+        // deux `value:` distincts sur la MÊME couche — l'un anime une opacité,
+        // l'autre une transition d'identité. Les fusionner en un seul ferait
+        // sauter le sol au passage d'une scène à l'autre, ou figerait le voile.
+        .animation(.spring(response: 0.42, dampingFraction: 0.84), value: presentation.isFull)
+        .animation(.easeInOut(duration: 0.28), value: scene?.id)
     }
 }
 
@@ -276,7 +348,7 @@ extension ConversationMediaGalleryView {
                    onDismiss: @escaping () -> Void) -> some View {
         GalleryScenePage(
             item: scene,
-            stage: stage(for: attachment),
+            stage: sceneStage(),
             presentation: stagePresentation,
             accentColor: accentColor,
             preferredContentLanguages: sceneContext?.playerLanguages ?? [],
@@ -289,6 +361,14 @@ extension ConversationMediaGalleryView {
             onDismiss: onDismiss
         )
         .equatable()
+    }
+
+    /// **Le SOL de la page courante** — monté par la galerie derrière son
+    /// pager, jamais par la page : une page vit dans le pager, et un sol qui
+    /// vivrait avec elle glisserait horizontalement avec elle au lieu de fondre.
+    var sceneFloorLayer: some View {
+        GallerySceneFloor(scene: currentScene, presentation: stagePresentation)
+            .equatable()
     }
 
     /// **La scène de la page OUVERTE, ou `nil`** — la seule question que le

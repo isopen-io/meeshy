@@ -32,7 +32,6 @@ import {
 } from '@/lib/stories/story-document';
 import {
   canPublishStudioDraft,
-  emptyStudioDraft,
   selectedTextLayer,
   studioDoorAccepts,
   studioDraftFromSnapshot,
@@ -562,13 +561,11 @@ function StoryStudio({ deps, viewerId }: { readonly deps: StoryStudioDeps; reado
    * recopiée (défaut 1, revue-correction #6900) — `stageRef` porte l'ancêtre
    * positionné commun aux deux. */
   const stageRef = useRef<HTMLDivElement | null>(null);
-  const paintedRef = useRef<HTMLElement | null>(null);
   const [textBox, setTextBox] = useState<SceneTextBox | null>(null);
 
   const remeasureText = useCallback(() => {
     const stage = stageRef.current;
     if (stage === null) return;
-    paintedRef.current = paintedObject(stage, selectedId);
     const next = measureSceneText(stage, selectedId);
     setTextBox((current) => (sameSceneTextBox(current, next) ? current : next));
   }, [selectedId]);
@@ -653,6 +650,7 @@ function StoryStudio({ deps, viewerId }: { readonly deps: StoryStudioDeps; reado
                 })}
                 pressed={selectedId === layer.id}
                 onPress={() => setDraft((current) => withSelected(current, layer.id))}
+                probe={`select:${layer.id}`}
                 style={{ minWidth: 44, paddingInline: 0 }}
               >
                 <span aria-hidden="true">T{index + 1}</span>
@@ -663,6 +661,7 @@ function StoryStudio({ deps, viewerId }: { readonly deps: StoryStudioDeps; reado
                 label={translate(lang, 'story.studio.object.select', { name: translate(lang, 'story.studio.object.overlay') })}
                 pressed={selectedId === 'overlay'}
                 onPress={() => setDraft((current) => withSelected(current, 'overlay'))}
+                probe="select:overlay"
                 style={{ minWidth: 44, paddingInline: 0 }}
               >
                 <LayerMark size={16} />
@@ -762,7 +761,7 @@ function StoryStudio({ deps, viewerId }: { readonly deps: StoryStudioDeps; reado
                 name={objectName(selectedId)}
                 pose={selectedPose}
                 stageRef={stageRef}
-                paintedRef={paintedRef}
+                objectId={selectedId}
                 onCommit={commitPose}
               />
             ) : null}
@@ -776,6 +775,7 @@ function StoryStudio({ deps, viewerId }: { readonly deps: StoryStudioDeps; reado
             label={translate(lang, 'story.studio.text.add')}
             pressed={false}
             onPress={() => setDraft((current) => withAddedText(current, language))}
+            probe="add-text"
             style={{ minWidth: 44, paddingInline: 0 }}
           >
             <Glyph name="plus" size={18} />
@@ -784,6 +784,7 @@ function StoryStudio({ deps, viewerId }: { readonly deps: StoryStudioDeps; reado
             label={translate(lang, 'story.studio.editor.label')}
             pressed={editorOpen}
             onPress={() => setEditorOpen((open) => !open)}
+            probe="editor-toggle"
             style={{ minWidth: 44, paddingInline: 0 }}
           >
             <SlidersMark size={18} />
@@ -882,11 +883,3 @@ function StoryStudio({ deps, viewerId }: { readonly deps: StoryStudioDeps; reado
     </StudioShell>
   );
 }
-
-/** Les portes visuelles, dans l'ordre du couloir — le fond d'abord, le calque
- * ensuite, comme `mediaIds` les attend. */
-export const STUDIO_VISUAL_DOORS = VISUAL_DOORS;
-
-/** Le plateau NEUF, exposé pour les témoins : la graine d'un studio sans
- * brouillon. */
-export const newStudioDraft = emptyStudioDraft;

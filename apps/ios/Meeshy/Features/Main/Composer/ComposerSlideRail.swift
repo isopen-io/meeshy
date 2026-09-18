@@ -110,7 +110,8 @@ struct ComposerSlideRail: View {
             loadedImages: loadedImages,
             index: index
         )
-        .frame(width: cote * 9 / 16, height: cote)
+        // La diapositive est une scène : TOUJOURS 9:16 (`SceneShape.aspect`, #6896/#6904).
+        .frame(width: cote * SceneShape.aspect, height: cote)
         .clipShape(RoundedRectangle(cornerRadius: 4))
         .overlay(
             RoundedRectangle(cornerRadius: 4)

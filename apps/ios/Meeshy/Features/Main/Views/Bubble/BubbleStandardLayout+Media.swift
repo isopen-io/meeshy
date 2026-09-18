@@ -794,7 +794,8 @@ struct BubbleCarouselView: View {
             let r = att.videoAspectRatio ?? (16.0 / 9.0)
             return width / r
         }
-        return heights.max() ?? width * 9 / 16
+        // Repli 9:16 — `SceneShape.aspect` (#6896/#6904), site unique du rapport.
+        return heights.max() ?? width * SceneShape.aspect
     }
 
     var body: some View {

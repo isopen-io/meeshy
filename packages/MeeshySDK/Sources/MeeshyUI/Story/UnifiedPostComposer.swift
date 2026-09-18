@@ -324,7 +324,7 @@ public struct UnifiedPostComposer: View {
                 // image-attachment slot. The composer is interactive, so audio
                 // is desired (mute=false).
                 StoryReaderRepresentable(story: story, mute: false)
-                    .aspectRatio(9.0 / 16.0, contentMode: .fit)
+                    .aspectRatio(SceneShape.aspect, contentMode: .fit)
                     .frame(maxWidth: .infinity)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .padding(.horizontal, 16)
