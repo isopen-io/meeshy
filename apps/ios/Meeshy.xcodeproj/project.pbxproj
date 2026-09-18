@@ -432,6 +432,7 @@
 		3BAB7E2E63A2F74294AA42B1 /* ComposerSceneLegendInPlaceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF34C45719C7B1F3FDD10CCE /* ComposerSceneLegendInPlaceTests.swift */; };
 		3BDD2FFC96EC79E534064A1D /* AgentGrammarGateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9C1ACF8C1CBEAD516A279BB /* AgentGrammarGateTests.swift */; };
 		3C00B97DD694957395CC6C1A /* StoryActiveBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D2DAA42C53B06A427C23771 /* StoryActiveBridge.swift */; };
+		3C120C377529CD630BCA78BB /* ReelPrewarm.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FFB51CE386E34E06D2913DA /* ReelPrewarm.swift */; };
 		3C355D85E75D2DC54D1A8898 /* VoIPPushManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 431DA91335E0D99E752473B2 /* VoIPPushManagerTests.swift */; };
 		3C558C1682D9F701DBA2833C /* ConversationCreator.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDB91898D5F8E18EA46BD1A3 /* ConversationCreator.swift */; };
 		3C89EEACFE9EC6860222EF15 /* Router+StoryReply.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00AEF51F65120A67F7352D7 /* Router+StoryReply.swift */; };
@@ -2400,6 +2401,7 @@
 		2FA122D0EA58DA2D0C5B3064 /* StoryViewerCommentRollbackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryViewerCommentRollbackTests.swift; sourceTree = "<group>"; };
 		2FA13AE6A893D93AEDB5DC5F /* SplashScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplashScreen.swift; sourceTree = "<group>"; };
 		2FE95B17EA1071B7915E63F2 /* CallBannerContrast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallBannerContrast.swift; sourceTree = "<group>"; };
+		2FFB51CE386E34E06D2913DA /* ReelPrewarm.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReelPrewarm.swift; sourceTree = "<group>"; };
 		30160D74851F3D5C204FA59C /* ShareSenderFanoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareSenderFanoutTests.swift; sourceTree = "<group>"; };
 		303C8A844B0F98A92CE2CE52 /* IncomingCallViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IncomingCallViewTests.swift; sourceTree = "<group>"; };
 		306276D89CA204981399861F /* MessageEditsDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageEditsDetailView.swift; sourceTree = "<group>"; };
@@ -5824,6 +5826,7 @@
 				418A431363B3FF56D2FC5767 /* ReelOpenFailureView.swift */,
 				D1A500BC9F69027BD4087F7E /* ReelPageView+Info.swift */,
 				4C530E4F17FC849B1A8DD103 /* ReelPlaybackRules.swift */,
+				2FFB51CE386E34E06D2913DA /* ReelPrewarm.swift */,
 				7D1E6B9BF11CC5FC478865B1 /* ReelRepostEmbedCell.swift */,
 				3A2AF3F8064D43789A7B9275 /* ReelsPlayerView.swift */,
 				2894E4675CD701514F1890B9 /* ReelsPlayerView+ActionRail.swift */,
@@ -7650,6 +7653,7 @@
 				D39987B29B0F7537206CD4BE /* ReelOpenFailureView.swift in Sources */,
 				9E78683FFB46B90C43DA343B /* ReelPageView+Info.swift in Sources */,
 				A00A2358B3C928F95116FA17 /* ReelPlaybackRules.swift in Sources */,
+				3C120C377529CD630BCA78BB /* ReelPrewarm.swift in Sources */,
 				C0D3478A1B32814600A112C5 /* ReelRepostEmbedCell.swift in Sources */,
 				0AD8AC943E5807BC77434C33 /* ReelsPlayerView+ActionRail.swift in Sources */,
 				BFCE3183DD29CB75F570B98C /* ReelsPlayerView+Carousel.swift in Sources */,
