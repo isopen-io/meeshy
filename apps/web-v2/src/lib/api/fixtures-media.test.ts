@@ -20,6 +20,7 @@ import {
   wavDataUri,
 } from './fixtures-media';
 import {
+  MEDIA_GRID_MINE_WITNESS_ID,
   MEDIA_GRID_OVERFLOW_WITNESS_ID,
   MEDIA_GRID_PAIR_WITNESS_ID,
   MEDIA_GRID_QUAD_WITNESS_ID,
@@ -30,7 +31,7 @@ import {
 import { decodeMessages } from './decode';
 import { electDescription } from '../view/media';
 import { messagesOf } from './fixtures';
-import { dayAt } from './fixtures-base';
+import { VIEWER_ID, dayAt } from './fixtures-base';
 import { protectionOf } from '@/lib/reading-mode/protection';
 
 const attachmentOf = (id: string) => {
@@ -124,9 +125,9 @@ test('wavDataUri : deux tons différents rendent deux URIs différentes', () => 
   expect(wavDataUri({ seconds: 1, tone: 440 })).not.toBe(wavDataUri({ seconds: 1, tone: 523 }));
 });
 
-test('les QUINZE messages du corpus médias sont servis par messagesOf, dans l’ordre chronologique (#6221, +5)', () => {
+test('les SEIZE messages du corpus médias sont servis par messagesOf, dans l’ordre chronologique (#6221, +5 ; #7018, +1)', () => {
   const messages = messagesOf(MEDIA_CONVERSATION_ID);
-  expect(messages).toHaveLength(15);
+  expect(messages).toHaveLength(16);
   const times = messages.map((m) => new Date(m.createdAt).getTime());
   expect(times).toEqual([...times].sort((a, b) => a - b));
   expect(messages.some((m) => m.id === MEDIA_BROKEN_IMAGE_WITNESS_ID)).toBe(true);
@@ -140,6 +141,20 @@ test('les QUINZE messages du corpus médias sont servis par messagesOf, dans l�
   expect(messages.some((m) => m.id === MEDIA_GRID_TRIPLE_WITNESS_ID)).toBe(true);
   expect(messages.some((m) => m.id === MEDIA_GRID_QUAD_WITNESS_ID)).toBe(true);
   expect(messages.some((m) => m.id === MEDIA_GRID_OVERFLOW_WITNESS_ID)).toBe(true);
+  expect(messages.some((m) => m.id === MEDIA_GRID_MINE_WITNESS_ID)).toBe(true);
+});
+
+/**
+ * #7018 — L'ANGLE MORT DE CORPUS, PAS DE GATE. Les cinq fixtures de grille
+ * étaient TOUTES d'un autre expéditeur (`u-amina`, `u-kwame`) : en mode Bulles,
+ * la branche `justify-end` — celle qui colle la bulle au bord DROIT, là où un
+ * débord de la grille sort de l'écran — n'était STRUCTURELLEMENT jamais jouée.
+ * Aucun gate ne pouvait rougir sans cette donnée, si juste fût-il.
+ */
+test('media-16 : le corpus grille porte enfin un message DE MOI, à plusieurs pièces (#7018)', () => {
+  const mine = messagesOf(MEDIA_CONVERSATION_ID).find((m) => m.id === MEDIA_GRID_MINE_WITNESS_ID)!;
+  expect(mine.senderId).toBe(VIEWER_ID);
+  expect((mine.attachments ?? []).length).toBeGreaterThanOrEqual(2);
 });
 
 /**
@@ -162,6 +177,7 @@ test('les cinq messages neufs sont datés ENTRE media-5 (09:20) et media-7 (09:3
     MEDIA_GRID_TRIPLE_WITNESS_ID,
     MEDIA_GRID_QUAD_WITNESS_ID,
     MEDIA_GRID_OVERFLOW_WITNESS_ID,
+    MEDIA_GRID_MINE_WITNESS_ID,
   ]) {
     const found = messages.find((m) => m.id === id)!;
     const t = new Date(found.createdAt).getTime();
@@ -172,7 +188,13 @@ test('les cinq messages neufs sont datés ENTRE media-5 (09:20) et media-7 (09:3
 
 test('chaque pièce du corpus grille porte thumbHash, thumbnailUrl non vide, imageVariants', () => {
   const messages = messagesOf(MEDIA_CONVERSATION_ID);
-  for (const id of [MEDIA_GRID_PAIR_WITNESS_ID, MEDIA_GRID_TRIPLE_WITNESS_ID, MEDIA_GRID_QUAD_WITNESS_ID, MEDIA_GRID_OVERFLOW_WITNESS_ID]) {
+  for (const id of [
+    MEDIA_GRID_PAIR_WITNESS_ID,
+    MEDIA_GRID_TRIPLE_WITNESS_ID,
+    MEDIA_GRID_QUAD_WITNESS_ID,
+    MEDIA_GRID_OVERFLOW_WITNESS_ID,
+    MEDIA_GRID_MINE_WITNESS_ID,
+  ]) {
     const found = messages.find((m) => m.id === id)!;
     for (const attachment of found.attachments ?? []) {
       expect(attachment.thumbHash).toBe('pPMBAAA=');
