@@ -157,15 +157,32 @@ describe('applyMessageAttachmentUpdated (#7017) — la transcription arrive SANS
    * pipeline finit son travail — la fuite du cycle 125, rouverte par un chemin
    * neuf et sans qu'aucun gate ne rougisse.
    *
-   * CE TÉMOIN EST GARDÉ EN PROFONDEUR, et il faut le dire : DEUX mécanismes le
-   * tiennent indépendamment — la FUSION (les clés absentes de la charge
-   * survivent) et la GARDE (une pièce masquée ne se démasque pas). Mesuré :
-   * il ne TOMBE que si les deux partent ensemble. C'est pourquoi les deux
-   * témoins qui l'encadrent existent — « fusion, jamais remplacement sec »
-   * fait tomber le premier mécanisme SEUL, « la charge DÉMENT la protection »
-   * fait tomber le second SEUL. Aucun des trois ne subsume les autres.
+   * CE TÉMOIN EST GARDÉ EN PROFONDEUR PAR DEUX MÉCANISMES INDÉPENDANTS —
+   * chacun SEUL suffit à le tenir vert pour CE payload précis (la charge
+   * omet les trois drapeaux, elle ne les dément pas) : la FUSION (le spread
+   * `{ ...cached, ...incoming }` garde `isViewOnce` quand `incoming` ne le
+   * porte pas) et la GARDE (`mergedAttachment` restaure les clés de
+   * protection depuis `cached` dès que `maskedAttachment(cached)` est vrai et
+   * que la fusion l'a perdu). Il ne tombe donc QUE si les DEUX partent
+   * ensemble — révision-correction, mesuré par mutation :
+   *
+   *  - `mergedAttachment` réduit à `return incoming as Attachment` (aucun
+   *    repli sur `cached`, les DEUX mécanismes disparaissent d'un coup) ⇒ 4
+   *    échecs : CE témoin, « fusion, jamais remplacement sec », « démentit la
+   *    protection » et le témoin DOM ci-dessous — ROUGE.
+   *  - guard SEUL retiré (`return { ...cached, ...incoming } as unknown as
+   *    Attachment;`, la fusion reste) ⇒ CE témoin reste VERT (la fusion
+   *    seule suffit pour un payload qui ne fait que TAIRE la protection) ;
+   *    seul « démentit la protection » tombe — c'est pourquoi ce second
+   *    témoin existe : lui seul isole la garde, en faisant DÉCLARER par
+   *    `incoming` `isViewOnce: false` — une valeur que la fusion seule
+   *    laisserait GAGNER.
+   *
+   * Aucun des trois témoins (celui-ci, « fusion, jamais remplacement sec »,
+   * « démentit la protection ») ne subsume les autres : chacun meurt sous une
+   * mutation que les deux autres survivent.
    */
-  test('une pièce DÉJÀ masquée le reste quand la charge socket ne déclare aucun drapeau', () => {
+  test('une pièce DÉJÀ masquée le reste protégée même si le puits abandonne TOUT repli au cache (remplacement sec)', () => {
     const client = new QueryClient();
     client.setQueryData(
       messagesQueryKey('c-a'),
