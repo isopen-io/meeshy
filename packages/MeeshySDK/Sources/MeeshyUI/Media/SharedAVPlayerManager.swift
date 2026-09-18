@@ -322,7 +322,7 @@ public final class SharedAVPlayerManager: ObservableObject {
     public func stop() {
         stopPip()
         cleanup()
-        activeURL = ""
+        if !activeURL.isEmpty { activeURL = "" }
         // Désactivation via la source unique (call-aware) : ne coupe rien pendant
         // un appel — la session appartient alors à l'appel (RTCAudioSession).
         MediaSessionCoordinator.shared.deactivatePlaybackSync()
@@ -426,7 +426,7 @@ public final class SharedAVPlayerManager: ObservableObject {
             pipTeardownIsInternal = true
         }
         pipController?.stopPictureInPicture()
-        isPipActive = false
+        if isPipActive { isPipActive = false }
     }
 
     // MARK: - Watch Progress Reporting
@@ -603,6 +603,14 @@ public final class SharedAVPlayerManager: ObservableObject {
 
     // MARK: - Cleanup
 
+    /// Chaque `@Published` n'est ré-assigné QUE s'il change : `@Published`
+    /// publie sur `willSet`, valeur changée ou non, et ce `cleanup()` est
+    /// atteint par `PlaybackCoordinator.willStartPlaying` depuis le
+    /// `makeUIView` de CHAQUE canvas de scène que le fil construit — donc
+    /// pendant une mise à jour de vue SwiftUI. Un moteur déjà à l'arrêt
+    /// publiait neuf fois par carte, « Publishing changes from within view
+    /// updates », et SwiftUI abandonnait ses rendus : fil VIERGE au
+    /// défilement (#6977, jumeau de `AudioPlaybackManager.resetState`).
     private func cleanup() {
         // L'utilisateur quitte pendant la lecture : le visionnage en cours n'est
         // ni terminé ni mis en pause. Clos et envoyé AVANT toute remise à zéro,
@@ -618,11 +626,11 @@ public final class SharedAVPlayerManager: ObservableObject {
         timeObserver = nil
         cancellables.removeAll()
         player?.pause()
-        player = nil
-        isPlaying = false
-        currentTime = 0
-        duration = 0
-        playbackSpeed = .x1_0
+        if player != nil { player = nil }
+        if isPlaying { isPlaying = false }
+        if currentTime != 0 { currentTime = 0 }
+        if duration != 0 { duration = 0 }
+        if playbackSpeed != .x1_0 { playbackSpeed = .x1_0 }
         watchStartTime = nil
         watchClockStart = nil
         lastHeartbeat = 0
@@ -635,8 +643,8 @@ public final class SharedAVPlayerManager: ObservableObject {
         // isForceMuted reset : intention par-surface TRANSITOIRE, ne traverse
         // pas non plus un changement d'attachment/surface.
         // isMuted NON reset : préférence globale session utilisateur.
-        shouldLoop = false
-        isForceMuted = false
+        if shouldLoop { shouldLoop = false }
+        if isForceMuted { isForceMuted = false }
     }
 }
 

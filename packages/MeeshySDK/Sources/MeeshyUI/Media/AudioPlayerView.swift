@@ -265,9 +265,9 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
         player = nil
         timer?.invalidate()
         timer = nil
-        isPlaying = false
-        progress = 0
-        currentTime = 0
+        if isPlaying { isPlaying = false }
+        if progress != 0 { progress = 0 }
+        if currentTime != 0 { currentTime = 0 }
         // B2 fix — clear the listen analytics window so a fresh `play()` of a
         // different track does not inherit the prior track's start time and
         // post `reportListenProgress` against the wrong attachment. The new
@@ -284,7 +284,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
         loadTask = nil
         // Never carries across tracks — mirrors SharedAVPlayerManager.cleanup()
         // resetting shouldLoop=false; the caller re-opts-in per attachment.
-        shouldLoop = false
+        if shouldLoop { shouldLoop = false }
     }
 
     public func stop() {
