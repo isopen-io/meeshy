@@ -85,25 +85,24 @@ public struct SceneFloorView: View {
 
     public var body: some View {
         ZStack {
-            if let image = decoded {
-                // **Le sol PREND la place qu'on lui propose, il ne la DICTE
-                // jamais** (#7037).
-                //
-                // `scaledToFill()` seul REND les cotes agrandies de l'image, et
-                // les trois hôtes montent ce sol en FRÈRE de leur chrome dans un
-                // `ZStack` — qui adopte la taille de son plus grand enfant. Tout
-                // ce qui s'alignait sur un BORD partait donc avec le sol.
-                // Mesuré au simulateur dans une fenêtre de 402 pt : un hôte élargi
-                // à 1 383 pt sur une empreinte paysage, la croix « Fermer » de la
-                // galerie de post rejetée à x = −326,3, entièrement hors écran.
-                //
-                // `Color.clear` REND la proposition — c'est elle qui parle à
-                // l'hôte —, l'image remplit par-dessus, et `clipped()` retire ce
-                // qui dépasse. Rien ne change à l'écran : ce qui est retiré
-                // débordait déjà hors de la fenêtre. Ce qui change est ce que le
-                // sol RÉPOND quand on lui demande sa taille.
-                Color.clear
-                    .overlay {
+            // **Le sol ne DICTE pas la taille de son hôte** (#7037).
+            //
+            // `scaledToFill()` rend une vue qui REMPLIT la proposition : au
+            // moins une dimension déborde, et c'est cette taille débordante que
+            // la vue annonce. Posée nue dans un `ZStack`, l'empreinte d'une
+            // scène large mesurait 874 × 1,24 = 1082,7 pt et le plateau entier
+            // prenait cette largeur, puis se centrait — bord gauche à
+            // (402 − 1082,7) / 2 = −340,3. La croix « Fermer », alignée sur ce
+            // bord, tombait à −326,3 : hors de l'écran (mesuré au simulateur).
+            //
+            // L'image passe donc en `overlay` d'une couche neutre : un overlay
+            // ne participe JAMAIS au calcul de taille de son hôte. `Color.clear`
+            // prend la place proposée, l'image la remplit et `clipped()` retire
+            // ce qui dépasse. Rien ne change à l'écran ; seul le cadre annoncé
+            // redevient celui de l'écran.
+            Color.clear
+                .overlay {
+                    if let image = decoded {
                         Image(uiImage: image)
                             .resizable()
                             .scaledToFill()
@@ -111,8 +110,8 @@ public struct SceneFloorView: View {
                             .scaleEffect(Self.scale)
                             .opacity(Self.opacity)
                     }
-                    .clipped()
-            }
+                }
+                .clipped()
             Color.black.opacity(veil)
         }
         .accessibilityHidden(true)
