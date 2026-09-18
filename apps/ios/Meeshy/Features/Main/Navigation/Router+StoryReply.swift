@@ -10,10 +10,11 @@ extension Router {
     ///
     /// Centralized here (vs duplicated in RootView / iPadRootView / ConversationView /
     /// RootViewComponents) so all call sites share the exact same behavior.
-    @MainActor
+    ///
     /// `conversationList` est OPTIONNEL : c'est un CHEMIN RAPIDE (le DM déjà
     /// chargé), pas une dépendance. Son absence — hôte sans liste montée — fait
     /// simplement passer par l'API, qui est de toute façon le repli nominal.
+    @MainActor
     func navigateToStoryReply(_ context: ReplyContext, conversationList: ConversationListViewModel?) {
         let authId: String
         switch context {

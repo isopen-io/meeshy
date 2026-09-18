@@ -50,7 +50,10 @@ final class StoryLayerImageDecodingTests: XCTestCase {
     func test_decodedImage_doesNotResampleALargeImage() async throws {
         let url = try writeTemporary(try makePNG(width: 900, height: 1600))
 
-        let decoded = try XCTUnwrap(await StoryLayerImageDecoding.decodedImage(fileAt: url))
+        // L'`await` est HORS de `XCTUnwrap` : son argument est un
+        // `@autoclosure` qui ne porte pas la concurrence.
+        let image = await StoryLayerImageDecoding.decodedImage(fileAt: url)
+        let decoded = try XCTUnwrap(image)
 
         XCTAssertEqual(decoded.cgImage?.width, 900)
         XCTAssertEqual(decoded.cgImage?.height, 1600)
@@ -59,7 +62,8 @@ final class StoryLayerImageDecodingTests: XCTestCase {
     func test_decodedImage_fromBytes_matchesTheFilePath() async throws {
         let data = try makePNG(width: 8, height: 8)
 
-        let decoded = try XCTUnwrap(await StoryLayerImageDecoding.decodedImage(from: data))
+        let image = await StoryLayerImageDecoding.decodedImage(from: data)
+        let decoded = try XCTUnwrap(image)
 
         XCTAssertEqual(decoded.cgImage?.width, 8)
     }
