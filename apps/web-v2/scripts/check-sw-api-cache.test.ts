@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
+import { API_RESPONSE_CACHE_PATTERN } from '@/lib/net/api-runtime-cache';
+
 import {
   auditRoutage,
   auditSeauApi,
@@ -48,10 +50,25 @@ const AUTOUR = (...routes: string[]) =>
 const MATCHER_LIVRE_FAUTIF = '({url:s})=>apiResponseMayBeCached(s.pathname)';
 /** La forme de `dev` : autonome, et sans la règle d'administration. */
 const MATCHER_DE_DEV = '({url:s})=>s.pathname.startsWith("/api/")';
-/** La forme LIVRÉE le 2026-09-18 : l'administration exclue, les médias PAS. */
+/** La forme LIVRÉE le 2026-09-18 : l'administration exclue, les médias PAS.
+ * Forme HISTORIQUE, figée à dessein — elle documente un artefact PASSÉ, donc
+ * elle ne se dérive pas de la règle vivante. */
 const MATCHER_API_SANS_MEDIAS = String.raw`/^https?:\/\/[^/]+\/api\/(?!v1\/admin(?:[/?#]|$))/`;
-/** La forme retenue par #6973 : l'administration ET les médias exclus. */
-const MATCHER_JUSTE = String.raw`/^https?:\/\/[^/]+\/api\/(?!v1\/admin(?:[/?#]|$))(?!(?:v1\/)?attachments\/)/`;
+/**
+ * La forme JUSTE — **DÉRIVÉE de la règle de production**, jamais recopiée.
+ *
+ * Elle l'était (#6973), et la jumelle a divergé au premier ajout : #7015 a
+ * sorti `/api/v1/static/` du seau `api` en posant la règle dans
+ * `API_RESPONSE_CACHE_PATTERN` et l'attendu dans le pilote, laissant cette
+ * copie sur la forme d'avant. Les trois témoins qui montent `CONFORME`
+ * tombaient alors en accusant l'artefact SYNTHÉTIQUE — un rouge qui ne nomme
+ * aucun défaut du produit, la pire espèce.
+ *
+ * `String(regexp)` rend EXACTEMENT le littéral que Workbox sérialise dans
+ * `dist/sw.js` : la dérivation n'est donc pas une approximation de l'artefact,
+ * c'est sa forme.
+ */
+const MATCHER_JUSTE = String(API_RESPONSE_CACHE_PATTERN);
 
 /** L'artefact CONFORME, sur lequel toutes les fonctions doivent se taire. */
 const CONFORME = AUTOUR(SEAU_MEDIAS(), SEAU_API(MATCHER_JUSTE));

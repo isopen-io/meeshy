@@ -85,9 +85,33 @@
  * `fileUrl` persistées depuis des années (`download.ts`,
  * § `registerFileStreamRoute`). Une garde posée d'un côté ne protège pas
  * l'autre — c'est ce que ce fichier de la passerelle dit de lui-même.
+ *
+ * ## LA TROISIÈME ROUTE DE MÉDIA (#7015) — `/api/v1/static/`
+ *
+ * L'énumération ci-dessus portait DEUX affirmations, et seule la première
+ * était vérifiée : « ces montages sont exclus » (vrai) et « ce sont les
+ * montages de média de la passerelle » (jamais mesuré). Il en existait un
+ * troisième — `GET /api/v1/static/:filename`, les SONS DE FOND des stories et
+ * des réels (`routes/posts/audio.ts`, volume `/app/sounds` : 18 fichiers en
+ * production, jusqu'à 7 Mo pièce). Il n'est ni `admin` ni `attachments`, donc
+ * le seau `api` le prenait, avec les deux conséquences que #6973 venait de
+ * fermer sur les pièces jointes, plus une TROISIÈME qui lui est propre :
+ * **cette route-là est AUTHENTIFIÉE**. Un chargement sans en-tête échoue, et
+ * `NetworkFirst` sans cache traduit l'échec en `no-response` NON RATTRAPÉ —
+ * « The FetchEvent … resulted in a network error response: the promise was
+ * rejected », une erreur de console par lecture de story. Hors du seau, la
+ * requête retombe sur le réseau natif, dont le rejet est rattrapé par son
+ * appelant (`lib/api/protected-media.ts`).
+ *
+ * Elle reste hors du seau `medias` aussi, et par CONSTRUCTION : celui-ci
+ * matche `request.destination === 'image'`, et ces octets voyagent en `fetch`
+ * (destination vide). Une piste protégée n'a donc aucun seau — ce qui est la
+ * bonne réponse pour une réponse `private, max-age=3600` : le cache HTTP du
+ * navigateur la garde, et lui seul sait la reconjuguer avec l'identité qui
+ * l'a demandée.
  */
 export const API_RESPONSE_CACHE_PATTERN =
-  /^https?:\/\/[^/]+\/api\/(?!v1\/admin(?:[/?#]|$))(?!(?:v1\/)?attachments\/)/;
+  /^https?:\/\/[^/]+\/api\/(?!v1\/admin(?:[/?#]|$))(?!(?:v1\/)?attachments\/)(?!(?:v1\/)?static\/)/;
 
 /**
  * LA ROUTE DE FLUX DES MÉDIAS — le COMPLÉMENT du motif ci-dessus sur `/api/`.
