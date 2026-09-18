@@ -21,6 +21,18 @@ final class UserProfileViewModel: ObservableObject {
     @Published var isLoadingStats = false
     @Published var statsError: String?
 
+    /// Motif du dernier échec de chargement du PROFIL, `nil` quand le dernier
+    /// aller-retour a abouti. `statsError` couvrait déjà les statistiques ; le
+    /// profil lui-même n'avait que son journal, donc une panne y ressemblait à
+    /// un profil vide.
+    ///
+    /// ⚠️ Aucune vue de production ne monte ce ViewModel à ce jour (mesuré au
+    /// #7007 : le seul `UserProfileViewModel(...)` du dépôt est dans ses
+    /// témoins ; l'écran de profil est `UserProfileSheet`, qui charge par
+    /// lui-même). L'état est donc juste et testé, mais il n'atteint encore
+    /// aucun lecteur — c'est un suivi, pas une correction livrée.
+    @Published private(set) var profileError: String?
+
     private static let logger = Logger(subsystem: "me.meeshy.app", category: "profile")
 
     // MARK: - Dependencies
@@ -92,6 +104,7 @@ final class UserProfileViewModel: ObservableObject {
             await SearchIndex.shared.indexUsers([user])
             fullUser = user
             hydrateProfileUserIfNeeded(from: user)
+            if profileError != nil { profileError = nil }
         } catch MeeshyError.forbidden {
             // P1 — `APIClient` only ever throws `MeeshyError` (never the
             // legacy `APIError`, and 403 arrives as its own `.forbidden`
@@ -100,8 +113,16 @@ final class UserProfileViewModel: ObservableObject {
             // reflected being blocked by the viewed user.
             isBlockedByTarget = true
         } catch {
+            profileError = String(localized: "common.error.generic")
             UserProfileViewModel.logger.error("profile refresh failed: \(error.localizedDescription)")
         }
+    }
+
+    /// Rejoue le chargement du profil après une panne — ce que doit appeler le
+    /// bouton « Réessayer » de l'écran qui montrera `profileError`.
+    func retryLoadFullProfile() async {
+        profileError = nil
+        await loadFullProfile()
     }
 
     private func hydrateProfileUserIfNeeded(from user: MeeshyUser?) {
