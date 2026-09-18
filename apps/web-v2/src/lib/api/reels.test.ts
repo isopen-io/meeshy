@@ -34,6 +34,18 @@ describe('loadReelsPage — passerelle', () => {
     expect(requests[0]?.path).toBe('/api/v1/social/posts?scope=reels&limit=20&seed=r+1&cursor=opaque%3D%3D');
   });
 
+  test('annonce X-Canvas-Caps: 3 (#6903) — sans lui, un réel composé arrive sans sa scène', async () => {
+    const { requests, transport } = scripted({ ok: true, data: [], pagination: { limit: 20, hasMore: false, nextCursor: null } as never });
+    await loadReelsPage({ source: 'gateway', transport });
+    expect(requests[0]?.headers).toEqual({ 'X-Canvas-Caps': '3' });
+  });
+
+  test('graine + curseur : l’en-tête ne se perd pas sur la seconde page', async () => {
+    const { requests, transport } = scripted({ ok: true, data: [], pagination: { limit: 20, hasMore: false, nextCursor: null } as never });
+    await loadReelsPage({ source: 'gateway', transport, seed: 'r1', cursor: 'c2' });
+    expect(requests[0]?.headers).toEqual({ 'X-Canvas-Caps': '3' });
+  });
+
   test('ne garde que des RÉELS bien formés, et lit le curseur de la route unifiée', async () => {
     const { transport } = scripted({
       ok: true,
