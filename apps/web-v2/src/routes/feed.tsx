@@ -195,17 +195,22 @@ export function FeedEmpty() {
   );
 }
 
-const SKELETON_CARDS = [0, 1, 2] as const;
+const SKELETON_CARDS_COLD_START = 3;
+/** Pendant que la page SUIVANTE arrive (#6987) : deux cartes — assez pour
+ * couvrir ce que le défilement découvre, pas de quoi promettre une page. */
+const SKELETON_CARDS_LOAD_MORE = 2;
 
-/** Le squelette au démarrage à froid SEUL (cache vide, requête en vol) —
- * jamais sur un rafraîchissement de fond (§ Instant App Principles). */
-export function FeedSkeleton() {
+/** Le squelette au démarrage à froid (cache vide, requête en vol) — jamais sur
+ * un rafraîchissement de fond (§ Instant App Principles) — et, à `count: 2`,
+ * ce qui tient la place de la page suivante sous le dernier post (#6987) :
+ * la MÊME carte fantôme, jamais un indicateur sur du fond nu. */
+export function FeedSkeleton({ count = SKELETON_CARDS_COLD_START }: { readonly count?: number } = {}) {
   return (
     /* AUCUN `aria-busy` ICI — le scrollport qui PORTE ce squelette l'annonce
        déjà (`FeedScreen`) ; le poser deux fois faisait lire « Chargement du
        fil » deux fois de suite (revue-correction #5893). */
     <div aria-hidden="true" className="flex flex-col gap-3">
-      {SKELETON_CARDS.map((i) => (
+      {Array.from({ length: count }, (_, i) => i).map((i) => (
         <div key={i} className="flex flex-col gap-2 p-3" style={{ backgroundColor: 'var(--color-ios-card)', borderRadius: 18 }}>
           <div className="flex items-center gap-2.5">
             <div className="shrink-0 rounded-full" style={{ width: 40, height: 40, backgroundColor: 'var(--color-edge)' }} />
@@ -324,6 +329,7 @@ export default function FeedScreen() {
               state={paginationState}
               showsAllLoadedHint={showsAllLoadedHint(posts.length, FEED_PAGE_SIZE)}
               exhaustedLabel={translate(language, 'feed.allLoaded')}
+              loadingMoreContent={<FeedSkeleton count={SKELETON_CARDS_LOAD_MORE} />}
               onRetry={() => void feed.fetchNextPage()}
               sentinelRef={observeTail}
             />
