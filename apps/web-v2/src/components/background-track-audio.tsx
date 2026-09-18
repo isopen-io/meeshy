@@ -62,6 +62,18 @@ export function BackgroundTrackAudio({ track, playing, muted, onDurationKnown, o
     };
   }, [playing, muted, track.startOffsetMs]);
 
+  // Le DÉMONTAGE (un hôte qui REMONTE la piste à chaque tour de boucle,
+  // #6903 — `key` changée — ou qui quitte l'écran) arrête le son : effet
+  // dédié, à dépendances VIDES, pour ne pauser qu'à la disparition réelle de
+  // l'élément — jamais à chaque changement de `playing`/`muted`, déjà
+  // couvert par l'effet ci-dessus.
+  useEffect(() => {
+    const el = audioRef.current;
+    return () => {
+      el?.pause();
+    };
+  }, []);
+
   return (
     <audio
       ref={audioRef}

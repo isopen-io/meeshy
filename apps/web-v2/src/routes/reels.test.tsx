@@ -28,9 +28,11 @@ const page = (post: FeedPost, overrides: Partial<Parameters<typeof ReelPage>[0]>
       mode="active"
       soundOn={false}
       language="fr"
+      preferredLanguages={['fr']}
       onToggleSound={() => undefined}
       onGesture={() => undefined}
       onShare={() => undefined}
+      onSoundBlocked={() => undefined}
       {...overrides}
     />,
   );
@@ -99,7 +101,19 @@ describe('ReelPage — la légende passe par le Prisme', () => {
 
   test('rang 2 : aucune traduction française, l’anglais est servi — jamais l’espagnol', () => {
     const html = renderToStaticMarkup(
-      <ReelPage model={modelOf(REEL_RANK2_ES, ['fr', 'en'])} index={0} count={1} mode="active" soundOn={false} language="fr" onToggleSound={() => undefined} onGesture={() => undefined} onShare={() => undefined} />,
+      <ReelPage
+        model={modelOf(REEL_RANK2_ES, ['fr', 'en'])}
+        index={0}
+        count={1}
+        mode="active"
+        soundOn={false}
+        language="fr"
+        preferredLanguages={['fr', 'en']}
+        onToggleSound={() => undefined}
+        onGesture={() => undefined}
+        onShare={() => undefined}
+        onSoundBlocked={() => undefined}
+      />,
     );
     expect(html).toContain('Rehearsal starts at eight sharp.');
     expect(html).not.toContain('El ensayo');
