@@ -1,5 +1,42 @@
 # @meeshy/web
 
+## 1.60.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - toucher une scène du fil l'ouvre en plein écran — la MÊME scène, uniforme et centrée (Closes #6902)
+  - légender chaque image à l'envoi — la légende est le contenu du message (#6964)
+  - le réel composé se tape sur toute la page, sa barre se voit, et son muet se dit une fois (Refs #6903)
+  - un réel composé se rejoue comme sa scène, en boucle et avec son son de fond (Closes #6903)
+  - le gate courbe lit les cotes du lecteur là où #6904 les a mises (Refs #6904)
+  - le voile de lisibilité part du BAS DE L'ÉCRAN, sur toute la largeur (Refs #6904)
+  - une scène TERMINÉE se REJOUE — le bouton de lecture n'avait aucun effet dans cet état (Refs #6902)
+  - le studio de story est un PLATEAU, et la légende d'un média se rend enfin (Closes #6943, Closes #6944)
+  - la pellicule d'un lot de scènes MONTRE ses scènes, et le pied ne tombe plus à nu sur la couleur d'une scène (Refs #6902)
+  - en plein écran, la carte de scène garde des angles DROITS exacts (Refs #6904)
+  - la page scène plein écran ne s'ancre plus par `position: fixed`, s'ouvre MUETTE et NOMME son contenu (Refs #6902)
+  - ma cellule du rail porte le (+) au début et l'humeur à la fin, comme sous iOS (Closes #6150)
+  - six des huit fonds de pastille OFFERTS étaient effacés au rechargement, en silence (Refs #6943)
+  - check-list-actions comptait comme atteignable ce qui ne l'est pas (Refs #6150)
+  - hors ligne, Publier s'éteint au lieu de faire semblant (Refs #6150)
+  - les initiales de ma cellule passent par `initialsOf`, comme sa tuile voisine (Refs #6150)
+  - deux clés de trop sortent du catalogue — le cliquet de poids le disait (Refs #6150)
+  - le SOL d'une scène est partagé, comme sa carte (Refs #6904)
+  - la garde de source retrouve son compte, les doc-comments retrouvent leur loi (#6904)
+  - un réel qui porte une scène montre LA carte de la story (#6904)
+  - une scène a UNE carte, et l'immersif garde le fond de la story (#6904)
+  - il n'y a qu'UNE carte de scène, et les deux plein écrans la MONTENT (#6904)
+  - la carte du lecteur de stories est la scène, et un seul peintre l'habille (#6904)
+  - les deux plein écrans d'une scène de galerie sont des projections de la loi (#6904)
+  - un canvas qui change de cotes reprojette son fond (#6904)
+  - l'absence de cadrage suit le défaut du renderer, la loi n'est plus dupliquée, et le périmètre non câblé est dit honnêtement (revue #6904, tour 2)
+  - la garde de source ignore les comment(aire)s et mediaBand respecte le fill explicite (revue #6904)
+  - les huit derniers hôtes du player et l'inventaire 9:16 consultent SceneShape (#6904)
+  - les lois app de forme deviennent des projections de SceneShape (#6904)
+  - la forme d'une scène a UNE loi, et le plein écran DEUX états (#6904)
+
 ## 1.59.0
 
 ### Minor Changes
