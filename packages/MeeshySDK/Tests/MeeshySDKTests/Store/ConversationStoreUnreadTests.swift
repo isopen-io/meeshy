@@ -162,17 +162,24 @@ final class ConversationStoreUnreadTests: XCTestCase {
     /// disque : l'utilisateur la REGARDE, tout compteur non nul est un mensonge
     /// visuel. Les deux porteurs lisent LA MÊME valeur, donc ils ne peuvent pas
     /// diverger.
+    ///
+    /// `c2` est le TÉMOIN DE VIE du sink : sans lui, ce test passerait aussi
+    /// bien si le pont n'était branché à rien — un compteur jamais appliqué est
+    /// indiscernable d'un compteur gardé à zéro.
     func test_bridge_openConversation_isForcedToZero() async {
         let store = makeStore()
         await store.hydrate(makeConv(id: "c1", userState: ConversationUserState(unreadCount: 0)))
+        await store.hydrate(makeConv(id: "c2", userState: ConversationUserState(unreadCount: 0)))
         let env = UnreadBridgeEnv(store: store, openConversationId: "c1")
 
         env.unreadUpdated.send(UnreadUpdateEvent(conversationId: "c1", unreadCount: 6))
+        env.unreadUpdated.send(UnreadUpdateEvent(conversationId: "c2", unreadCount: 6))
 
-        let lit = await waitUntil(timeout: 0.5) {
-            (await store.conversation(id: "c1"))?.userState.unreadCount != 0
-        }
-        XCTAssertFalse(lit, "la conversation OUVERTE reste à 0, quel que soit le compte servi")
+        let sinkIsLive = await waitUntil { (await store.conversation(id: "c2"))?.userState.unreadCount == 6 }
+        XCTAssertTrue(sinkIsLive, "le sink doit appliquer le compteur d'une conversation NON ouverte")
+
+        let openCount = await store.conversation(id: "c1")?.userState.unreadCount
+        XCTAssertEqual(openCount, 0, "la conversation OUVERTE reste à 0, quel que soit le compte servi")
     }
 
     // MARK: Env
