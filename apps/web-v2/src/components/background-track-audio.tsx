@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react';
 
+import { protectedMediaDeps, type ProtectedMediaDeps } from '@/lib/api/protected-media';
+import { useProtectedMediaSrc } from '@/lib/api/use-protected-media';
 import type { BackgroundTrack } from '@/lib/canvas/background-sound';
 
 /**
@@ -23,12 +25,53 @@ export type BackgroundTrackAudioProps = {
   readonly muted: boolean;
   readonly onDurationKnown: (durationMs: number) => void;
   readonly onPlaybackBlocked: () => void;
+  /** Injectable pour les témoins UNIQUEMENT — la production prend
+   * `defaultMediaDeps`, dont l'identité est gardée par un témoin. */
+  readonly mediaDeps?: ProtectedMediaDeps;
 };
 
 /** `NotAllowedError` — le refus de la politique de lecture automatique. */
 export const isAutoplayRefusal = (error: unknown): boolean => error instanceof Error && error.name === 'NotAllowedError';
 
-export function BackgroundTrackAudio({ track, playing, muted, onDurationKnown, onPlaybackBlocked }: BackgroundTrackAudioProps) {
+/** Les dépendances de PRODUCTION du transport protégé — nommées pour qu'un
+ * témoin puisse prouver que le composant est BRANCHÉ dessus. */
+export const defaultMediaDeps = protectedMediaDeps;
+
+/**
+ * #7015 — LA PISTE N'EST PAS TOUJOURS POSABLE TELLE QUELLE.
+ *
+ * Un son de fond emprunté à la bibliothèque est servi par
+ * `GET /api/v1/static/:filename`, une route AUTHENTIFIÉE — et une balise
+ * `<audio src>` n'envoie aucun en-tête `Authorization` : mesuré en production,
+ * la requête part anonyme et rend **401**. `useProtectedMediaSrc` demande les
+ * octets par `fetch` (le seul transport du navigateur qui porte un en-tête) et
+ * rend une URL d'OBJET ; il rend la source INCHANGÉE, synchronement, pour tout
+ * le reste.
+ *
+ * `null` ⇒ **aucune balise** : une piste indisponible (refus, fichier absent,
+ * son coupé par la modération, réseau tombé) ne monte rien plutôt que de
+ * monter un élément qui échouera. C'est la dégradation propre exigée par
+ * l'issue — pas de son, pas de casse, aucune promesse rejetée.
+ *
+ * L'élément vit dans un composant SÉPARÉ pour que ses effets partent d'un
+ * élément RÉELLEMENT monté : monté dans ce composant-ci, l'effet de lecture
+ * aurait tourné une première fois sur un `ref` nul, sans jamais rejouer quand
+ * la résolution arrive.
+ */
+export function BackgroundTrackAudio({ mediaDeps = defaultMediaDeps, ...props }: BackgroundTrackAudioProps) {
+  const src = useProtectedMediaSrc(props.track.src, mediaDeps);
+  if (src === null) return null;
+  return <BackgroundTrackElement {...props} src={src} />;
+}
+
+function BackgroundTrackElement({
+  track,
+  playing,
+  muted,
+  onDurationKnown,
+  onPlaybackBlocked,
+  src,
+}: Omit<BackgroundTrackAudioProps, 'mediaDeps'> & { readonly src: string }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const playedMsRef = useRef(0);
   const callbacks = useRef({ onDurationKnown, onPlaybackBlocked });
@@ -78,7 +121,7 @@ export function BackgroundTrackAudio({ track, playing, muted, onDurationKnown, o
     <audio
       ref={audioRef}
       data-scene-sound-track
-      src={track.src}
+      src={src}
       preload="auto"
       muted={muted}
       loop={bounds === undefined && track.loop}

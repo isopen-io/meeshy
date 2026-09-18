@@ -4,8 +4,9 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import type { BackgroundTrack } from '@/lib/canvas/background-sound';
+import { protectedMediaDeps, type ProtectedMediaDeps } from '@/lib/api/protected-media';
 
-import { BackgroundTrackAudio } from './background-track-audio';
+import { BackgroundTrackAudio, defaultMediaDeps } from './background-track-audio';
 
 /**
  * T5 (#6903) — `BackgroundTrackAudio`, SITE UNIQUE du son de fond d'une
@@ -191,5 +192,122 @@ describe('BackgroundTrackAudio — le son de fond, site unique (T5, #6903)', () 
   test('(g) [data-scene-sound-track] posé — le gate de story le lit', () => {
     const el = mount(<BackgroundTrackAudio track={trackOf()} playing muted={false} onDurationKnown={() => {}} onPlaybackBlocked={() => {}} />);
     expect(el.querySelector('[data-scene-sound-track]')).not.toBeNull();
+  });
+});
+
+/**
+ * #7015 — LA PISTE SERVIE PAR LA ROUTE AUTHENTIFIÉE.
+ *
+ * Mesuré en production : `GET /api/v1/static/<uuid>.m4a` rend **401**, et une
+ * balise `<audio src>` n'envoie aucun en-tête. Poser l'URL protégée en `src`
+ * ne produit donc JAMAIS de son sur le web — seulement un `net::ERR_FAILED` et
+ * un `no-response` de service worker par lecture. Les octets passent désormais
+ * par `fetch` (le seul transport qui porte un en-tête) et l'élément reçoit une
+ * URL d'OBJET.
+ */
+const SON_PROTEGE = 'https://gate.meeshy.me/api/v1/static/d0bf39b7-cd47-4e70-8f1c-34b2d9b5ee4b.m4a';
+
+function depsDeTest(options: { readonly resolved?: string | null; readonly revoked?: string[] } = {}): ProtectedMediaDeps {
+  return {
+    credential: () => ({ kind: 'registered', token: 'jwt-1' }),
+    fetchImpl: (() =>
+      Promise.resolve(
+        options.resolved === null
+          ? new Response('', { status: 401 })
+          : new Response(new Blob(['octets']), { status: 200 }),
+      )) as typeof fetch,
+    createObjectURL: () => options.resolved ?? 'blob:meeshy/son',
+    revokeObjectURL: (url) => {
+      options.revoked?.push(url);
+    },
+  };
+}
+
+describe('BackgroundTrackAudio — la piste PROTÉGÉE (#7015)', () => {
+  test('(h) l’URL protégée n’est JAMAIS posée en `src` — l’élément reçoit une URL d’objet', async () => {
+    const el = mount(
+      <BackgroundTrackAudio
+        track={trackOf({ src: SON_PROTEGE })}
+        playing
+        muted={false}
+        onDurationKnown={() => {}}
+        onPlaybackBlocked={() => {}}
+        mediaDeps={depsDeTest()}
+      />,
+    );
+    // Avant résolution : aucune balise, donc aucune requête anonyme au 401.
+    expect(el.querySelector('[data-scene-sound-track]')).toBeNull();
+    await act(async () => {});
+    const audio = audioOf(el);
+    expect(audio.getAttribute('src')).toBe('blob:meeshy/son');
+    expect(audio.getAttribute('src')).not.toContain('/api/v1/static/');
+    // La piste joue : c'est le critère de fin de #7015.
+    expect(playCalls).toBe(1);
+  });
+
+  test('(i) refus de la passerelle ⇒ AUCUNE piste, aucune promesse rejetée', async () => {
+    const rejets: unknown[] = [];
+    const noter = (reason: unknown) => rejets.push(reason);
+    process.on('unhandledRejection', noter);
+    const el = mount(
+      <BackgroundTrackAudio
+        track={trackOf({ src: SON_PROTEGE })}
+        playing
+        muted={false}
+        onDurationKnown={() => {}}
+        onPlaybackBlocked={() => {}}
+        mediaDeps={depsDeTest({ resolved: null })}
+      />,
+    );
+    await act(async () => {});
+    await new Promise((resolve) => setImmediate(resolve));
+    process.off('unhandledRejection', noter);
+    expect(el.querySelector('[data-scene-sound-track]')).toBeNull();
+    expect(rejets).toEqual([]);
+  });
+
+  test('(j) démontage ⇒ l’URL d’objet est RÉVOQUÉE (les octets ne restent pas en mémoire)', async () => {
+    const revoked: string[] = [];
+    mount(
+      <BackgroundTrackAudio
+        track={trackOf({ src: SON_PROTEGE })}
+        playing
+        muted={false}
+        onDurationKnown={() => {}}
+        onPlaybackBlocked={() => {}}
+        mediaDeps={depsDeTest({ revoked })}
+      />,
+    );
+    await act(async () => {});
+    act(() => {
+      root.render(<span />);
+    });
+    expect(revoked).toEqual(['blob:meeshy/son']);
+  });
+
+  test('(k) CONTRASTE — une source non protégée reste posée TELLE QUELLE, sans requête', () => {
+    let appels = 0;
+    const el = mount(
+      <BackgroundTrackAudio
+        track={trackOf({ src: 'https://cdn.test/track.mp3' })}
+        playing
+        muted={false}
+        onDurationKnown={() => {}}
+        onPlaybackBlocked={() => {}}
+        mediaDeps={{
+          ...depsDeTest(),
+          fetchImpl: (() => {
+            appels += 1;
+            return Promise.resolve(new Response('', { status: 200 }));
+          }) as typeof fetch,
+        }}
+      />,
+    );
+    expect(audioOf(el).getAttribute('src')).toBe('https://cdn.test/track.mp3');
+    expect(appels).toBe(0);
+  });
+
+  test('(l) LA LOI EST BRANCHÉE — sans `mediaDeps`, le composant prend les dépendances de PRODUCTION', () => {
+    expect(defaultMediaDeps).toBe(protectedMediaDeps);
   });
 });
