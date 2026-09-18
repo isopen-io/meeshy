@@ -243,3 +243,80 @@ describe('attachmentRightFor / mayAttach', () => {
     expect(mayAttach(undefined, 'image/png')).toBe(true);
   });
 });
+
+/**
+ * **LA MÊME IMAGE NE PART PAS DEUX FOIS** (#6956) — directive porteur du
+ * 2026-09-18 : « ici on ne peut pas avoir deux fois la même image ».
+ *
+ * L'identité est celle que le NAVIGATEUR donne sans lire les octets — nom,
+ * poids, date de modification. Une empreinte de contenu serait plus honnête,
+ * mais elle demanderait de lire jusqu'à 50 Mo (`SMALL_FILE_THRESHOLD`) à chaque
+ * sélection pour trancher une question que ces trois champs tranchent déjà : le
+ * même fichier repris deux fois dans le sélecteur rend trois valeurs
+ * identiques.
+ *
+ * Le refus NOMME le fichier : « rien ne s'est passé » sur un second clic est
+ * exactement la forme d'un contrôle qui ment (loi 4).
+ */
+describe('la même image ne part pas deux fois (#6956)', () => {
+  function fichier(name: string, octets: number, lastModified: number): File {
+    return new File([new Uint8Array(octets)], name, { type: 'image/jpeg', lastModified });
+  }
+
+  test('le même fichier sélectionné deux fois n’entre qu’UNE fois', () => {
+    const chat = fichier('chat.jpg', 3, 1700000000000);
+    const { list, refusal } = acceptPendingFiles({ current: [], files: [chat, chat] });
+
+    expect(list).toHaveLength(1);
+    expect(refusal).toContain('chat.jpg');
+  });
+
+  test('un fichier DÉJÀ dans la sélection est refusé au second dépôt', () => {
+    const chat = fichier('chat.jpg', 3, 1700000000000);
+    const premier = acceptPendingFiles({ current: [], files: [chat] });
+    const second = acceptPendingFiles({ current: premier.list, files: [chat] });
+
+    expect(premier.refusal).toBeUndefined();
+    expect(second.list).toHaveLength(1);
+    expect(second.refusal).toContain('chat.jpg');
+  });
+
+  test('deux fichiers DIFFÉRENTS passent tous les deux', () => {
+    const { list, refusal } = acceptPendingFiles({
+      current: [],
+      files: [fichier('chat.jpg', 3, 1700000000000), fichier('chien.jpg', 3, 1700000000000)],
+    });
+
+    expect(list).toHaveLength(2);
+    expect(refusal).toBeUndefined();
+  });
+
+  test('même NOM mais poids différent : ce ne sont pas les mêmes octets, les deux passent', () => {
+    const { list } = acceptPendingFiles({
+      current: [],
+      files: [fichier('photo.jpg', 3, 1700000000000), fichier('photo.jpg', 9, 1700000000000)],
+    });
+
+    expect(list).toHaveLength(2);
+  });
+
+  test('même nom et même poids mais date différente : deux fichiers distincts', () => {
+    const { list } = acceptPendingFiles({
+      current: [],
+      files: [fichier('photo.jpg', 3, 1700000000000), fichier('photo.jpg', 3, 1800000000000)],
+    });
+
+    expect(list).toHaveLength(2);
+  });
+
+  test('le doublon n’empêche pas les AUTRES d’entrer — on écarte, on ne rejette pas le lot', () => {
+    const chat = fichier('chat.jpg', 3, 1700000000000);
+    const { list } = acceptPendingFiles({
+      current: [],
+      files: [chat, fichier('chien.jpg', 3, 1700000000000), chat],
+    });
+
+    expect(list).toHaveLength(2);
+    expect(list.map((p) => p.name)).toEqual(['chat.jpg', 'chien.jpg']);
+  });
+});

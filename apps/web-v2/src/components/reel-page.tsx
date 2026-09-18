@@ -1,16 +1,24 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import type { UIEvent } from 'react';
 
 import { Avatar } from './avatar';
 import { Glyph, GlyphSvg } from './glyph';
 import { FEED_GLYPHS } from './glyphs-feed';
 import { MEDIA_TRANSPORT_GLYPHS } from './glyphs-media-transport';
-import type { FeedCardMedia, FeedCardModel } from '@/lib/feed/card-model';
+import { RAIL_DISC, ReelPoster } from './reel-poster';
+import { carrierMediaIdentity } from '@/lib/canvas/carrier';
+import { sceneHasControllableSound } from '@/lib/canvas/background-sound';
+import type { FeedCardMedia, FeedCardModel, FeedCardScene } from '@/lib/feed/card-model';
 import type { PostToggleKind } from '@/lib/feed/interactions';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import { reelDisplayOf, type ReelPageMode } from '@/lib/reels/thread';
+import { reelStageOf } from '@/lib/reels/scene';
+import type { ReelPageMode } from '@/lib/reels/thread';
 import { useReelPlayback } from '@/lib/view/use-reel-playback';
+
+/** Chargé À LA DEMANDE (#6903, motif D-54) : un réel de MÉDIAS (vidéo, audio,
+ * images) ne paie jamais le moteur de scène. */
+const ReelSceneStage = lazy(() => import('./reel-scene-stage'));
 
 /**
  * UNE PAGE DU LECTEUR DES RÉELS (#6457) — miroir de `ReelPageView`
@@ -37,25 +45,17 @@ export type ReelPageProps = {
   readonly mode: ReelPageMode;
   readonly soundOn: boolean;
   readonly language: InterfaceLanguage;
+  readonly preferredLanguages: readonly string[];
   readonly onToggleSound: () => void;
   readonly onGesture: GestureHandler;
   readonly onShare: (postId: string) => void;
+  /** Un `play()` SONORE de la SCÈNE refusé par la politique de lecture
+   * automatique (#6903) — même politique que le réel vidéo (`soundOn =
+   * false`), câblée par l'écran (`routes/reels.tsx`). */
+  readonly onSoundBlocked: () => void;
 };
 
-/** Le disque sombre sous chaque glyphe du rail — `adaptiveGlass(tint: .black.opacity(0.35))`. */
-const RAIL_DISC = 'rgba(0,0,0,0.38)';
 const TEXT_SHADOW = '0 1px 2px rgba(0,0,0,0.7)';
-
-function ReelPoster({ src }: { readonly src: string | undefined }) {
-  return (
-    <div
-      data-reel-poster
-      aria-hidden="true"
-      className="absolute inset-0"
-      style={src !== undefined ? { backgroundImage: `url("${src}")`, backgroundSize: 'contain', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' } : {}}
-    />
-  );
-}
 
 function ReelPlayable({
   media,
@@ -115,11 +115,20 @@ function ReelPlayable({
         ) : null}
       </button>
       {/* La progression est ÉCRITE, jamais animée : une transition sur la
-          transformation amortirait le suivi de la lecture. */}
+          transformation amortirait le suivi de la lecture.
+
+          `z-10` (revue-correction #6903) — LE VOILE BAS EST PEINT APRÈS CETTE
+          BARRE, et il l'effaçait : mesuré au pixel sur la capture,
+          `rgb(15,15,36)` de rempli contre `rgb(12,12,12)` de piste, soit
+          ~15 % de la couleur voulue (le voile vaut 0,85 d'opacité à 2 px du
+          bas). Une barre de progression qu'on ne distingue pas ne dit rien
+          de la lecture — iOS la peint franchement
+          (`ReelsPlayerView.swift:656-664`). Le voile reste sur le MÉDIA,
+          où il sert la lisibilité du blanc ; la barre passe au-dessus. */}
       <span
         aria-hidden="true"
         data-reel-progress
-        className="pointer-events-none absolute inset-x-0 bottom-0 block h-[3px] origin-left"
+        className="pointer-events-none absolute inset-x-0 bottom-0 z-10 block h-[3px] origin-left"
         style={{ backgroundColor: 'rgba(255,255,255,0.85)', transform: `scaleX(${progress})` }}
       />
       {status === 'error' ? (
@@ -172,19 +181,58 @@ function ReelImages({ images, language }: { readonly images: readonly FeedCardMe
   );
 }
 
-function ReelStage({ model, mode, soundOn, language }: Pick<ReelPageProps, 'model' | 'mode' | 'soundOn' | 'language'>) {
-  const display = reelDisplayOf(model.media);
+/** `carrier.media.find(id === carrierMediaIdentity(scene))?.poster` (#6903) —
+ * la vignette du média de FOND, servie tant que le chunk `reel-scene-stage`
+ * n'est pas chargé (`Suspense`) et pour toute la fenêtre `far`. */
+function scenePosterOf(scene: FeedCardScene): string | undefined {
+  const first = scene.document.scenes[0];
+  if (first === undefined) return undefined;
+  const identity = carrierMediaIdentity(first);
+  return identity === null ? undefined : scene.carrier.media.find((m) => m.id === identity)?.poster;
+}
+
+function ReelStage({
+  model,
+  mode,
+  soundOn,
+  language,
+  preferredLanguages,
+  onSoundBlocked,
+}: Pick<ReelPageProps, 'model' | 'mode' | 'soundOn' | 'language' | 'preferredLanguages' | 'onSoundBlocked'>) {
+  const stage = reelStageOf(model);
   const accent = model.author.accentColor;
-  if (display.kind === 'video' || display.kind === 'audio') {
-    return mode === 'far' ? (
-      <ReelPoster src={display.media.thumbnailSrc ?? display.media.placeholder} />
-    ) : (
-      <ReelPlayable media={display.media} tag={display.kind} active={mode === 'active'} soundOn={soundOn} accent={accent} language={language} />
+  // LA SCÈNE DÉCIDE AVANT LE MÉDIA (#6903, miroir `ReelsPlayerView.swift:900-904`) :
+  // un réel composé la joue même si `media` porte aussi une vidéo.
+  if (stage.kind === 'scene') {
+    const poster = scenePosterOf(stage.scene);
+    // `far` ne charge JAMAIS le chunk du moteur — la même discipline que
+    // vidéo/audio ci-dessous.
+    if (mode === 'far') return <ReelPoster src={poster} />;
+    return (
+      <Suspense fallback={<ReelPoster src={poster} />}>
+        <ReelSceneStage
+          scene={stage.scene}
+          mode={mode}
+          soundOn={soundOn}
+          accent={accent}
+          language={language}
+          preferredLanguages={preferredLanguages}
+          {...(poster !== undefined ? { poster } : {})}
+          onSoundBlocked={onSoundBlocked}
+        />
+      </Suspense>
     );
   }
-  if (display.kind === 'images') {
-    const first = display.images[0];
-    return mode === 'far' ? <ReelPoster src={first?.thumbnailSrc ?? first?.src} /> : <ReelImages images={display.images} language={language} />;
+  if (stage.kind === 'video' || stage.kind === 'audio') {
+    return mode === 'far' ? (
+      <ReelPoster src={stage.media.thumbnailSrc ?? stage.media.placeholder} />
+    ) : (
+      <ReelPlayable media={stage.media} tag={stage.kind} active={mode === 'active'} soundOn={soundOn} accent={accent} language={language} />
+    );
+  }
+  if (stage.kind === 'images') {
+    const first = stage.images[0];
+    return mode === 'far' ? <ReelPoster src={first?.thumbnailSrc ?? first?.src} /> : <ReelImages images={stage.images} language={language} />;
   }
   return <div aria-hidden="true" className="absolute inset-0" style={{ background: `linear-gradient(160deg, ${accent}, black 75%)` }} />;
 }
@@ -282,8 +330,14 @@ function ReelRail({
 
 export function ReelPage(props: ReelPageProps) {
   const { model, index, count, mode, language } = props;
-  const display = reelDisplayOf(model.media);
-  const playable = display.kind === 'video' || display.kind === 'audio';
+  const stage = reelStageOf(model);
+  // Une scène JOUE toujours (elle est le fond) ; le bouton son n'existe que
+  // si elle a un son À COUPER (`sceneHasControllableSound`, miroir
+  // `BackgroundSoundBadge.showsMuteButton` — loi 4, #6903).
+  const playable =
+    stage.kind === 'video' ||
+    stage.kind === 'audio' ||
+    (stage.kind === 'scene' && sceneHasControllableSound({ document: stage.scene.document, sceneIndex: 0, carrier: stage.scene.carrier }));
 
   return (
     <article
@@ -295,7 +349,14 @@ export function ReelPage(props: ReelPageProps) {
       className="relative w-full snap-start snap-always overflow-hidden bg-black outline-none"
       style={{ height: '100%' }}
     >
-      <ReelStage model={model} mode={mode} soundOn={props.soundOn} language={language} />
+      <ReelStage
+        model={model}
+        mode={mode}
+        soundOn={props.soundOn}
+        language={language}
+        preferredLanguages={props.preferredLanguages}
+        onSoundBlocked={props.onSoundBlocked}
+      />
       {/* LE VOILE BAS tient le blanc de l'auteur, de la légende et des compteurs
           au-dessus de AA sur la PIRE image (une mire blanche) : mesuré au pixel
           par `scripts/check-reels.mjs`, jamais déduit d'une couleur calculée. */}

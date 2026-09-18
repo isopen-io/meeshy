@@ -557,6 +557,270 @@ passerelle ne refuse PAS le non-v3, son refus est derrière
 `CANVAS_V3_WRITE_STRICT`, armé dans aucun fichier de configuration du dépôt —
 détail à l'encadré du § 1 bis-2 de `meeshy-composer-modele.md`).
 
+## 4 quater. La FORME d'une scène, et les DEUX plein écrans (2026-09-17)
+
+Décision porteur du 2026-09-17 sur [#6896](https://github.com/isopen-io/meeshy/issues/6896),
+livrée par le lot [#6904](https://github.com/isopen-io/meeshy/issues/6904). Elle
+tranche ce que l'audit du même jour avait mesuré : **onze montages du player,
+quatorze fichiers de loi, trois lois de ratio qui ne s'accordent pas** — un même
+document prenait trois formes selon la surface (1,3 rognée dans le fil, 4:1
+entière au détail, 16:9 rognée dans le lecteur). Le moteur ne connaît aucun
+rapport : il peint dans les bounds qu'on lui donne, et onze hôtes ont donc
+décidé onze fois.
+
+### Les trois règles de forme
+
+1. **La scène est TOUJOURS 9:16.** Gabarit de composition ET de restitution.
+   Personne ne la recalcule — ni depuis le média, ni depuis `carrierAspect`, qui
+   redevient ce que le contrat S8 en dit : une **mémoire d'ÉDITION** pour la
+   migration v1, que **plus aucun lecteur ne consulte**. La directive du
+   2026-08-31 (`d75c471d78`) avait déjà retiré son écriture du composer ; les
+   lois du 13 septembre l'avaient réintroduit comme rapport de PEINTURE.
+   [#6869](https://github.com/isopen-io/meeshy/issues/6869) est sans objet.
+2. **Le média se pose dans le 9:16 sans être rogné.** Un panorama occupe une
+   bande au milieu ; un portrait remplit la hauteur ; un média plus vertical
+   encore que la scène occupe une colonne. Le fond de scène (ThumbHash ou
+   couleur) habille le reste — ce sont des pixels que la publication emporte,
+   pas un défaut de cadrage.
+3. **Ce qu'on MONTRE est BINAIRE.** Rien d'autre que l'image/vidéo, ou des
+   objets qui restent DANS sa zone ⇒ on peut resserrer sur la zone du média.
+   Un texte, un sticker, un dessin qui en SORT ⇒ on garde le **9:16 entier**,
+   avec son fond. Jamais de cadre intermédiaire : l'union — qu'une loi calculait
+   — est une quatrième forme possible du même document, et c'est exactement ce
+   que onze hôtes ne peuvent pas garantir ensemble.
+
+### Le plein écran : UNE carte, deux viewports
+
+La loi a porté **deux** états jusqu'au 2026-09-17 — cadré (scène ajustée, fond
+autour) et immersif (scène ÉTENDUE jusqu'à couvrir le viewport, **rien** autour).
+Trois directives porteur du même jour les ont ramenés à un seul :
+
+> 1. « POURQUOI ne reproduisons-nous pas la même chose que la scène des stories
+>    sur les scènes de POST ? C'est EXACTEMENT le même lecteur et le même
+>    comportement qu'il faut appliquer. »
+> 2. « Ce que je vois dans les stories me plaît ! Il faut reproduire exactement
+>    la même chose partout ! Tout simplement ! Partir du fait que le composant
+>    est déjà fait et le réutiliser pour les scènes de posts et les Réels ! »
+> 3. « On préserve le même fond que pour la story ! »
+
+**Il n'y a donc qu'UNE carte de scène**, et c'est celle du lecteur de stories :
+la scène 9:16 **AJUSTÉE** (elle tient entière, rien n'est rogné), centrée,
+arrondie à **22 pt**, sur la **couleur dominante du ThumbHash** peinte DANS la
+carte. Ce qui distingue les surfaces n'est pas une forme, c'est le **viewport**
+qu'elles passent à la loi :
+
+| état | le viewport passé à `SceneShape.layout(in:)` | ce qu'on voit de plus |
+|---|---|---|
+| **cadré** | la zone libre que les couloirs du plateau laissent | le chrome, les informations, les détails |
+| **immersif** | l'écran **entier**, aucun couloir, chrome masqué | la même carte, plus grande |
+
+**Et le RAYON suit l'état — 22 pt cadré, 0 immersif, par la LOI** (directive
+porteur du 2026-09-18 : « lorsqu'on met en plein écran, il faut enlever
+l'arrondi sur le composant et garder les bords angle exacte ! »).
+`SceneShape.layout(in:immersive:)` prend l'état en second paramètre, **sans
+valeur par défaut** : c'est ce défaut absent qui rend le défaut de la veille
+impossible à réintroduire en silence — la galerie et le réel rendaient 22 pt sur
+une carte qui occupe l'écran entier, par quatre encoches desquelles on voyait le
+sol, faute de déclarer quoi que ce soit. Seul le rayon change avec l'état : le
+cadre et le fond restent ceux de la story (`SceneShapeTests.
+test_lEtat_neChangeQueLeRayon_jamaisLeCadreNiLeFond`), et le pixel du coin le
+mesure (`SceneCardMountingTests.
+test_immersive_lesQuatreCoinsSontDesAnglesDroitsExacts` — au milieu d'un bord,
+une carte arrondie et une carte à angle droit peignent le même pixel).
+
+`Fullscreen` et `OffscreenPainter` ont **disparu** de la loi avec le second
+état, et ce n'est pas un nettoyage : l'immersif était la seule surface du
+produit qui **ROGNAIT** une scène (mesuré : 44,8 pt retirés de chaque côté sur
+un iPhone 402×874, soit 18,2 % de sa largeur — des pixels que l'auteur avait
+posés), et son `offscreenPainter == .none` la seule raison d'avoir une loi du
+peintre. Un seul état ⇒ un seul peintre ⇒ il se dit par la **structure** :
+`SceneCard` peint le fond dans la carte, et elle seule. Le défaut que l'audit
+nomme « deux acteurs peignent le hors-champ »
+([#6797](https://github.com/isopen-io/meeshy/issues/6797)) et la troisième
+couche de [#6806](https://github.com/isopen-io/meeshy/issues/6806) n'ont plus
+où se poser.
+
+### Le composant : `SceneCard`
+
+`packages/MeeshySDK/Sources/MeeshyUI/Story/ScenePlayer/SceneCard.swift`. Il fait
+**tout** ce qu'une carte de scène fait, et les hôtes n'en refont rien :
+
+1. il **dimensionne** son contenu aux cotes que la loi donne à la scène ;
+2. il **peint** le hors-champ, `SceneBackdropView` dans la carte et sous le
+   contenu ;
+3. il **rogne** aux coins de la loi, en compensant l'échelle que l'hôte
+   *déclare* (le clip vit dans l'espace non mis à l'échelle).
+
+Ce qui reste à l'hôte : la **place** et l'**animation**. Le lecteur de stories
+applique le `scaleEffect`/`offset` de `StoryCanvasFraming` et anime son rayon
+jusqu'à 0 au plein bord ; la galerie pose la carte dans la région du plateau et
+lui donne ses gestes ; le réel la centre dans sa page et garde son chrome dans
+ses couloirs.
+
+Avant ce lot, **deux assemblages équivalents** coexistaient — `readerCard(…)`
+pour le lecteur, un `ZStack` pour la page scène de galerie — et ils avaient déjà
+divergé sur les deux seules choses qu'un œil voit : le **fond** (couleur
+dominante d'un côté, ThumbHash étiré de l'autre) et le **rayon** (22 et 20).
+Aucun témoin ne pouvait rougir : chacun était juste chez lui.
+
+> **Une convergence de COMPORTEMENT ne se prouve pas en comparant deux
+> écritures ; elle se prouve en n'en gardant qu'une.**
+
+### Le SOL, partagé comme la carte : `SceneFloorView` (tour 4, 2026-09-17)
+
+Ce qui se peint **AUTOUR** de la carte est partagé au même titre que ce qui se
+peint dedans — même directive porteur (« On préserve le même fond que pour la
+story ! »), même raison, autre couche :
+`packages/MeeshySDK/Sources/MeeshyUI/Story/ScenePlayer/SceneFloorView.swift`, à
+côté de `SceneCard`.
+
+La recette du tour 3 ter a mesuré au pixel l'écart que `SceneCard` ne pouvait pas
+fermer : le lecteur de stories peignait autour de sa carte une **teinte sombre
+dérivée du ThumbHash** (empreinte décodée, flou 60, échelle 1,18, opacité 0,85,
+voile noir 0,18 cardé / 0 immersif) ; la galerie de post peignait du **noir pur**
+(0, 0, 0), cadrée comme immersive ; le réel posait `.background(Color.black)`.
+
+> **Une convergence mesurée DANS un composant ne dit rien de ce qui se peint à
+> côté de lui.** La carte avait déjà convergé, et les deux pages ne se
+> ressemblaient toujours pas — parce que ce qu'un œil compare d'abord est la page
+> entière.
+
+Le sol ne peint **aucun noir inconditionnel**, et c'est ce qui permet à trois
+hôtes au sol différent de partager la même recette : sous un sol sans empreinte,
+le lecteur laisse voir le dégradé de l'auteur d'une story sans média de fond
+(`storyBackground`), la galerie et le réel leur noir. Il prend deux paramètres
+opaques — `thumbHash`, `veil` — et rien d'autre.
+
+Ce qui reste à l'**hôte**, parce que c'est une décision de « quand » : l'identité
+(`.id`), la fusion (`.transition(.opacity)`), le débord, la surdité au doigt, le
+silence pour VoiceOver, et l'**animation** du voile (le lecteur l'anime au
+ressort de sa carte, la galerie à la porte du plein cadre, le réel n'a pas de
+voile). L'**empreinte** vient du même site que le fond DANS la carte —
+`StoryItem.sceneBackdropHash` — si bien que le sol autour et le fond dedans
+parlent du même contenu, ce qui est tout l'objet de #6797. Le lecteur y a perdu
+sa cascade privée (`resolvedBackdropImage`), qui était **en double dans le même
+écran** : sa carte lisait déjà `sceneBackdropHash` pendant que son sol descendait
+la sienne.
+
+Les trois surfaces sont tenues par `SceneFloorTests` — une garde de source qui
+les **nomme une par une** (une surface qui ne monte rien ne peint rien, et « rien »
+ressemble à un fond noir légitime), et cinq témoins de **pixels** qui disent ce
+que le sol peint : la matière de l'empreinte et non du noir, rien du tout sans
+empreinte, un voile qui assombrit vraiment, une page scène habillée là où une
+page image garde son noir.
+
+### Le VOILE, partagé comme la carte et le sol : `StoryReaderScrims` (tour 5, 2026-09-18)
+
+Ce qui se pose **PAR-DESSUS** la carte est partagé au même titre que ce qui se
+peint dedans (`SceneCard`) et autour (`SceneFloorView`) — directive porteur du
+2026-09-18 :
+
+> « Il faut bien faire attention à l'ombre dégradé pour rendre le texte lisible
+> qui doit être mis sur tous l'écran à partir du bas de l'écran. »
+
+Le composant est celui du lecteur de stories, **réutilisé tel quel** (#6701,
+`apps/ios/Meeshy/Features/Main/Views/StoryViewerView+CanvasScrims.swift`) : deux
+dégradés noirs **pleine largeur d'écran**, ancrés au haut et au **bas de
+l'ÉCRAN**, sourds au doigt, muets pour VoiceOver, et qui **suivent le chrome**
+(opacité 1 avec lui, 0 sans lui, au même ressort). Son nom garde « StoryReader »
+et c'est juste : c'est le voile de la story qu'on reproduit, comme sa carte et
+son sol.
+
+La galerie avait un dégradé **borné deux fois** — posé en fond du bloc bas du
+CADRE, il s'arrêtait au bord du bloc (au-dessus du couloir de la pellicule, donc
+pas au bas de l'écran) et ne prenait que la largeur de la carte (378 pt sur 402
+en cadré, donc pas les gouttières). Mesuré à la recette du tour 4 : la légende du
+repère F2 en cadré se lisait sur le bleu du média **sans voile visible**, quand
+la même légende, sur la story F7, se lisait sur un bas d'écran fondu au noir sur
+toute la largeur. Le réel n'avait qu'une ombre portée sur ses glyphes
+(`mediaChromeLegible()`). Le voile local est **parti**, il n'a pas été déplacé :
+deux voiles superposés noirciraient deux fois le bas.
+
+> **Un dégradé se pose sur la couche qu'il doit rendre LISIBLE**, et la légende
+> d'un plein écran se lit sur l'écran, pas sur le cadre. La couche juste ne se
+> déduit pas du composant qu'on habille — elle se déduit de ce qu'on veut lire.
+
+Ce qui reste à l'**hôte** : ce qui l'ALIMENTE. La galerie passe
+`DeviceLayout.safeAreaTop` (l'inset de la FENÊTRE, jamais le couloir du
+plateau — un voile ancré au plateau migrerait à chaque ouverture de légende) et
+`MediaStageVeil.showsChrome(presentation:overlays:)`, le **même verdict**
+qu'`overlayLayer` : deux verdicts se désynchroniseraient sur l'image même que
+l'utilisateur regarde. Le réel passe `chromeVisible: true` — il n'a pas de porte
+immersive, son chrome ne s'efface jamais, et c'est déjà pourquoi son sol porte le
+voile PLEIN. Et le voile est un **frère du pager**, jamais un enfant d'une page :
+le bloc de légende est le même pour les trois natures (photo, vidéo, scène), et
+un voile par type de média ferait de la lisibilité une propriété du MIME.
+
+Gardes : `MediaGalleryStageScrimsTests` (quatre témoins de **pixels** dans la
+géométrie de la galerie — dernière ligne de l'écran voilée hors carte *et* sous
+la carte, milieu d'écran intact, rien du tout sans chrome — et une garde de
+source sur le montage et son verdict), `StoryReaderScrimsTests` (le lecteur, qui
+continue de n'exiger qu'UN montage chez lui) et la liste nommée de
+`SceneShapeSourceGuardTests.test_lesSurfacesPleinEcran_montentLaCarteDeScene`,
+qui tient désormais les trois pièces ensemble : la carte, le sol, le voile.
+
+### Où la loi vit
+
+`SceneShape` — `packages/MeeshySDK/Sources/MeeshySDK/Story/SceneShape.swift`.
+Dans le SDK **core** et non `MeeshyUI`, pour la raison que `StoryLetterboxFill`
+écrit déjà : `MeeshyUI` compile sous `defaultIsolation: MainActor`, donc la
+conformance `Equatable` d'un type qui y naît est isolée au `MainActor` et une
+suite non-`@MainActor` ne peut plus comparer ses valeurs.
+
+Elle rend quatre choses, et rien de plus : la **constante** 9:16 (site unique du
+dépôt) ; la **zone du média** posé en fit, `nil` quand aucun rapport n'est connu
+— *la loi ne devine rien, elle le DEMANDE à l'appelant* ; le **cadre binaire**
+(zone du média, ou scène entière) ; et la **carte de la scène dans un viewport**,
+avec son fond et son rayon.
+
+### Ce qui est CÂBLÉ, et ce qui reste dehors (mesuré le 2026-09-17, tour 3 bis)
+
+| règle | câblée en production ? |
+|---|---|
+| 1 · `aspect` (toujours 9:16) | **oui**, sur tous les hôtes du player |
+| 4 · `layout` / `Backdrop` / `cardedBackdrop` / `cardedCornerRadius` | **oui** — les quatre surfaces plein écran, par `SceneCard` |
+| le SOL (`SceneFloorView`) | **oui** — lecteur de stories, galerie de post, réel (tour 4) |
+| 2 · `mediaBand` | non — déclarée et testée en isolation |
+| 3 · `frame` (le cadre binaire) | non — déclarée et testée en isolation |
+
+Les **quatre surfaces plein écran** câblées : le plein écran **cadré** d'un post
+et son **immersif** (`GallerySceneStage` → `GalleryScenePage`), le **lecteur de
+stories** (`StoryCardView` → `readerCard`) et le **réel** composé
+(`ReelSceneView`).
+
+Deux gardes de source les tiennent, et elles ne disent pas la même chose :
+
+- `SceneShapeSourceGuardTests.test_toutHoteQuiMonteLePlayer_consulteLaLoi`
+  **balaie l'arbre** : tout fichier qui monte `MeeshyScenePlayer` /
+  `StoryReaderRepresentable` / `StoryCanvasUIView` consulte la loi — en direct,
+  en montant `SceneCard`, ou par un solveur connu vérifié la porter une couche
+  plus bas. Ses deux listes d'exceptions sont **vides** depuis le 2026-09-17.
+- `test_lesSurfacesPleinEcran_montentLaCarteDeScene` **nomme les cinq
+  fichiers** des quatre surfaces et exige d'eux `SceneShape.layout` ou
+  `SceneCard` — une consultation par solveur n'y suffit pas, ces solveurs
+  rendant un rapport *continu*, la « quatrième forme » que la règle 3 exclut.
+  Le balayage ne pouvait pas l'exiger ; c'est pourquoi le témoin est séparé.
+  Depuis le tour 4, il exige aussi le **SOL** (`SceneFloorView`) de la galerie
+  et du réel — la carte et le sol se montent ENSEMBLE ou la surface ne
+  ressemble pas aux autres.
+
+**Ce qui reste DEHORS, par décision du porteur du 2026-09-17** : la **carte du
+fil** et les **pages de carrousel** gardent leur cadrage d'**aperçu**
+(`SceneFraming.focus`, union des objets, plafond 1,4 — #6697/#6708). Ce n'est
+pas une dette : un aperçu n'est pas un plein écran, et les y faire entrer
+romprait des surfaces mesurées au simulateur. Une scène peut donc encore se
+présenter en deux formes selon la surface — 9:16 partout où on l'ouvre en
+grand, rapport continu là où on l'aperçoit — et c'est le périmètre assumé.
+
+**Ce qui reste déclaré sans appelant, et pourquoi** :
+`SceneFraming.presentationAspect`/`presentedSize` n'ont plus de consommateur de
+production depuis #6896, mais une douzaine de témoins
+(`ScenePresentationTests`, `SceneFramingTests`) mesurent par eux la loi
+d'ÉCHELLE que les surfaces d'aperçu partagent — les retirer retirerait cette
+mesure, ce qui relève du lot des aperçus. `StoryImageOnlyPresentation`,
+`StorySceneFootprint` et `GallerySceneItem.servesLetterboxFill` sont partis avec
+ce tour : leurs seuls appelants étaient l'un l'autre, ou plus personne.
+
 ## 5. Ce que ce document ne couvre pas
 
 - **Le rendu lui-même** (`StoryCanvasUIView`, les couches, les dessinateurs) —

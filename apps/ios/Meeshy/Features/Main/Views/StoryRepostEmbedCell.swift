@@ -40,7 +40,8 @@ struct StoryRepostEmbedCell: View {
                 mute: true,
                 isPaused: !isActive
             )
-            .aspectRatio(9.0 / 16.0, contentMode: .fit)
+            // La scène est TOUJOURS 9:16 (`SceneShape.aspect`, #6896/#6904).
+            .aspectRatio(SceneShape.aspect, contentMode: .fit)
             // Cap the embed width so on iPad it doesn't stretch into
             // a giant vertical column when the feed sits in a wide pane.
             .frame(maxWidth: 420)

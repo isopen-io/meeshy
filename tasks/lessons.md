@@ -33131,3 +33131,42 @@ trois écritures apparaissent après ce retrait — le `pagehide` du rechargemen
 réécrivait ce que la purge venait d'effacer. Une assertion sur un ÉTAT aurait
 été soit toujours verte, soit instable ; une assertion sur un ORDRE nomme
 exactement le défaut.
+
+## Leçon 624
+
+**Les effets de mise en page d'un ENFANT tournent AVANT ceux de son parent — donc une `ref` que l'hôte remplit dans son propre `useLayoutEffect` est encore `null` quand l'enfant mesure.**
+
+Rencontré en posant les poignées de manipulation du plateau de story (#6943). L'hôte résolvait l'élément peint par le moteur (`stage.querySelector('[data-scene-object-id=…]')`) dans son `useLayoutEffect`, et le passait à la poignée par une `ref` ; la poignée mesurait cet élément dans le sien pour adopter sa taille, et rendait `null` tant qu'elle n'avait pas de mesure.
+
+Ordre réel : **enfant, puis parent**. La poignée mesurait donc `ref.current === null` au premier rendu, ne s'affichait pas, et ne se serait affichée qu'au prochain rendu provoqué **par ailleurs** — une frappe, un redimensionnement. Sur un plateau qu'on ouvre et où l'on saisit tout de suite un objet, il n'y en a pas.
+
+**Le défaut est INVISIBLE à tout témoin de composant** : un test qui monte la poignée avec une `ref` déjà remplie la voit s'afficher. Il ne se voit qu'au gate navigateur, et seulement si celui-ci saisit la poignée au lieu de vérifier sa présence.
+
+> **Un enfant ne doit pas dépendre d'une valeur que son parent calcule après lui.** Passer l'IDENTIFIANT plutôt que la référence — et laisser l'enfant résoudre lui-même — supprime l'ordre du problème. Le signe à reconnaître : une `prop` de type `ref` remplie par un effet du parent.
+
+## Leçon 625
+
+**Playwright résout ses routes dans l'ORDRE INVERSE de leur enregistrement : la dernière posée gagne. Un attrape-tout posé après une route précise l'avale, et le gate accuse le code.**
+
+Sur le gate du plateau (#6943), l'ordre était :
+
+```js
+await context.route('**/api/v1/posts', capture);   // la route qui MESURE
+await context.route('**/api/v1/**', vide);         // l'attrape-tout
+```
+
+Verdict : « AUCUN POST /api/v1/posts n'est parti — rien à relire ». L'écran publiait parfaitement ; l'attrape-tout, enregistré en dernier, servait `{data:null}` à la publication. **Quinze invariants sur seize étaient verts, et le seizième accusait la feature.**
+
+C'est la forme la plus coûteuse de faux rouge : il ne ressemble pas à un défaut d'outillage, il ressemble à la fonctionnalité qui ne marche pas — on va chercher dans le code de publication, qui est juste.
+
+> Devant un gate qui dit « rien ne s'est passé » là où l'écran fait visiblement la chose, **soupçonner l'ordre des interceptions avant le code**. Et poser l'attrape-tout EN PREMIER, avec un commentaire qui dit pourquoi cet ordre est l'inverse de l'intuition — sans quoi le prochain lot le « rangera » proprement et repaiera la demi-heure.
+
+## Leçon 626
+
+**Une liste OFFERTE et une liste ACCEPTÉE sont deux listes, et rien ne les accorde : le réglage se pose, part dans le document, et disparaît au rechargement.**
+
+Trouvé en relecture, pas par un témoin (#6943). Le rail d'édition offrait la pastille de fond d'un texte dans la palette de TEXTE (huit couleurs, réutilisée pour l'encre et pour le fond) ; la relecture du brouillon la validait contre les presets de fond d'iOS — sept valeurs, dont deux seulement communes avec la palette offerte. **Six des huit fonds offerts étaient donc effacés au rechargement, en silence.**
+
+La forme du défaut : un contrôle qui **a l'air** d'avoir un effet et n'en garde pas. Il change bien le rendu et le document publié dans la seconde ; il ne survit pas au brouillon. Aucun de mes témoins ne pouvait le voir — ils vérifiaient qu'une valeur INVALIDE est refusée (elle l'était), jamais qu'une valeur OFFERTE est acceptée.
+
+> **Le témoin qui l'attrape parcourt la liste OFFERTE et exige que chacune survive au tour complet** (poser → sérialiser → relire). Et le remède structurel est un site unique : la liste acceptée se DÉRIVE de la liste offerte, jamais écrite à côté. Voisin de la loi 4 (« un contrôle existe s'il a un effet ») avec une durée : *un contrôle existe si son effet SURVIT*.

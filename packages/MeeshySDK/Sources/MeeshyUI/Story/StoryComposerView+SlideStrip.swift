@@ -39,7 +39,7 @@ extension StoryComposerView {
 
     var addSlideThumb: some View {
         let thumbH: CGFloat = 42
-        let thumbW: CGFloat = thumbH * 9 / 16
+        let thumbW: CGFloat = thumbH * SceneShape.aspect
         return Button {
             // Même séquence que la sélection d'une vignette : figer le canvas
             // courant dans son slide AVANT de basculer, puis recharger le
@@ -70,7 +70,7 @@ extension StoryComposerView {
     func slideThumb(slide: StorySlide, index: Int) -> some View {
         let isSelected = viewModel.currentSlideIndex == index
         let thumbH: CGFloat = 42
-        let thumbW: CGFloat = thumbH * 9 / 16
+        let thumbW: CGFloat = thumbH * SceneShape.aspect
         let isCurrent = viewModel.currentSlideIndex == index
         let drawData = isCurrent ? viewModel.drawingData : slide.effects.drawingData
 

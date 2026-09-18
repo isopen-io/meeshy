@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
+import { parseCanvasDocument } from '@/lib/canvas/document';
+
 import type { ApiResult, HttpRequest, HttpTransport } from './http';
 import { loadReelsPage, reelsQueryKey, REELS_PAGE_SIZE } from './reels';
 
@@ -32,6 +34,18 @@ describe('loadReelsPage — passerelle', () => {
     const { requests, transport } = scripted({ ok: true, data: [], pagination: { limit: 20, hasMore: false, nextCursor: null } as never });
     await loadReelsPage({ source: 'gateway', transport, seed: 'r 1', cursor: 'opaque==' });
     expect(requests[0]?.path).toBe('/api/v1/social/posts?scope=reels&limit=20&seed=r+1&cursor=opaque%3D%3D');
+  });
+
+  test('annonce X-Canvas-Caps: 3 (#6903) — sans lui, un réel composé arrive sans sa scène', async () => {
+    const { requests, transport } = scripted({ ok: true, data: [], pagination: { limit: 20, hasMore: false, nextCursor: null } as never });
+    await loadReelsPage({ source: 'gateway', transport });
+    expect(requests[0]?.headers).toEqual({ 'X-Canvas-Caps': '3' });
+  });
+
+  test('graine + curseur : l’en-tête ne se perd pas sur la seconde page', async () => {
+    const { requests, transport } = scripted({ ok: true, data: [], pagination: { limit: 20, hasMore: false, nextCursor: null } as never });
+    await loadReelsPage({ source: 'gateway', transport, seed: 'r1', cursor: 'c2' });
+    expect(requests[0]?.headers).toEqual({ 'X-Canvas-Caps': '3' });
   });
 
   test('ne garde que des RÉELS bien formés, et lit le curseur de la route unifiée', async () => {
@@ -72,6 +86,24 @@ describe('loadReelsPage — fixtures', () => {
     const seedId = first.data.posts[0]?.id ?? '';
     const seeded = await loadReelsPage({ source: 'fixtures', transport, seed: seedId });
     expect(seeded.ok && seeded.data.posts.some((p) => p.id === seedId)).toBe(false);
+  });
+
+  /** T8 (#6903) — le corpus porte un réel COMPOSÉ, en DERNIÈRE position, et
+   * sa scène est un document canvas v3 VALIDE — pas une forme devinée. */
+  test('le corpus porte reel-scene-loop en DERNIÈRE position, avec un document v3 valide', async () => {
+    const { transport } = scripted({ ok: true, data: [] });
+    const page = await loadReelsPage({ source: 'fixtures', transport });
+    expect(page.ok).toBe(true);
+    if (!page.ok) return;
+    const last = page.data.posts[page.data.posts.length - 1];
+    expect(last?.id).toBe('reel-scene-loop');
+    const document = parseCanvasDocument(last?.storyEffects);
+    expect(document).not.toBeNull();
+    expect(document?.v).toBe(3);
+    expect((document?.sound as { readonly source?: { readonly t?: string } } | undefined)?.source?.t).toBe('original');
+    const media = last?.media ?? [];
+    expect(media.length).toBe(2);
+    expect(media.some((m) => m.mimeType === 'audio/webm')).toBe(true);
   });
 });
 

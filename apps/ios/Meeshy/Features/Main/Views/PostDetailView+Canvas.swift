@@ -190,7 +190,14 @@ extension PostDetailView {
     func storyCanvasContainer(_ reader: StoryReaderRepresentable,
                               renderedItem: StoryItem,
                               onOpen: (() -> Void)? = nil) -> some View {
-        let ratio = PostDetailSceneFraming.ratio(of: renderedItem.storyEffects)
+        // **La scène est TOUJOURS 9:16** (`SceneShape.aspect`, #6896/#6904) — le
+        // player qu'`onOpen`/`reader` monte rend son canvas à ce rapport, quel
+        // que soit le contenu. Poser `PostDetailSceneFraming.ratio` ici lisait
+        // encore le rapport de l'IMAGE pour une scène qui n'est qu'un fond :
+        // le cadre présenté (16:9, mesuré) et le canvas RENDU (9:16, fixe)
+        // divergeaient, et le canvas rendait 1,5× la boîte, rogné en haut à
+        // gauche (#6897). Le cadre suit désormais ce que le canvas rend RÉELLEMENT.
+        let ratio = SceneShape.aspect
         let taille = PostDetailSceneFraming.sceneSize(ratio: ratio, measures: sceneMeasures)
         return trackingDetailScene(
             reader

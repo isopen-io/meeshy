@@ -115,18 +115,22 @@ final class MediaGalleryLetterboxDressingTests: XCTestCase {
     /// sources vit dans `StoryLetterboxFill` ; la recopier ici ferait diverger
     /// les deux surfaces le jour où l'une changerait, sans que rien ne rougisse.
     ///
-    /// **Trois pages, un seul appel de règle chacune** (#6709) : la scène de post
-    /// est devenue une page de la galerie, et son hors-champ s'habille par la
-    /// MÊME règle que ses sœurs image et vidéo — c'est l'appel qui s'ajoute, jamais
-    /// une table. Un quatrième site devrait être une quatrième nature de page.
+    /// **Deux pages, un seul appel de règle chacune** — image et vidéo, les deux
+    /// pièces jointes que `MediaStageFraming` ajuste. La scène de post n'en fait
+    /// plus partie depuis #6904 : son hors-champ n'est plus le letterbox d'un
+    /// média ajusté dans son cadre, c'est le fond de `SceneCard` — la MÊME carte
+    /// que le lecteur de stories, couleur dominante du ThumbHash peinte par
+    /// `SceneBackdropView`, jamais par cette règle-ci (voir
+    /// `GallerySceneBackdropUnicityTests`). Un troisième site qui rappellerait
+    /// `MediaGalleryStage.backdrop(` referait diverger les deux fonds.
     func test_theRule_delegatesToTheSDKTable_neverACopy() throws {
         let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(Self.gallery))
 
         XCTAssertTrue(code.contains("StoryLetterboxFill.source(thumbHash:"),
                       "la règle d'app DÉLÈGUE la cascade au SDK")
         XCTAssertEqual(
-            code.components(separatedBy: "MediaGalleryStage.backdrop(").count - 1, 3,
-            "une page image, une page vidéo, une page scène — et aucun quatrième site pour en décider autrement"
+            code.components(separatedBy: "MediaGalleryStage.backdrop(").count - 1, 2,
+            "une page image, une page vidéo — la scène peint son fond par SceneCard, pas par cette règle"
         )
     }
 

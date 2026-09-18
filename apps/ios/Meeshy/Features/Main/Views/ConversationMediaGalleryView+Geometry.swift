@@ -170,19 +170,17 @@ enum MediaGalleryStage {
     /// lieu du rapport de la scène. Le rapport d'une scène vient donc de sa
     /// valeur (`GallerySceneItem.aspect`, dont `PostGalleryLot.sceneAspect` est
     /// le site unique) ; celui d'une image ou d'une vidéo, de ses dimensions.
-    /// **Le rapport d'une page — et il dépend de la SURFACE** (#6806).
+    /// **Le rapport d'une page — TOUJOURS celui du canvas, cardée ou en plein
+    /// cadre** (#6806, superseded #6896/lot #6904).
     ///
-    /// Une scène qui n'est qu'une image se présente au rapport de son IMAGE
-    /// (`SceneFraming.presentationAspect`), et c'est juste sur une carte : on y
-    /// ouvre la photo, et une fenêtre posée sur un canvas 9:16 en montrerait le
-    /// milieu. **En plein cadre, ce qu'on ouvre est la scène** — elle se
-    /// présente donc au rapport de son canvas.
-    ///
-    /// Mesuré au simulateur (iPhone 16 Pro, témoin de position posé dans la
-    /// page) : au rapport de l'IMAGE, une scène carrée rendait
-    /// `media = 402 × 398,6` dans un cadre de 402 × 874 — **237,7 pt de sol en
-    /// haut et en bas, 54 % de l'écran en fond flou**. Au rapport du CANVAS il
-    /// en reste 79,6 : le même sol divisé par trois, sans rien rogner.
+    /// Avant #6896, une scène qui n'était qu'une image se présentait au
+    /// rapport de son IMAGE sur une CARTE (`SceneFraming.presentationAspect`,
+    /// désormais sans appelant hors tests) et à celui de son CANVAS en plein
+    /// cadre — deux réponses selon la surface. La décision porteur du
+    /// 2026-09-17 retire l'exception : la scène est TOUJOURS 9:16
+    /// (`SceneShape.aspect`, `PostGalleryLot.sceneAspect`, `surface(inFullFrame:)`
+    /// ignore désormais son paramètre) — mesurée une fois pour de bon par
+    /// `GallerySceneBackdropUnicityTests.test_cardeeEtPleinCadre_rendentExactementLaMemeSurface`.
     ///
     /// Une pièce jointe ordinaire ne connaît pas cette question : son rapport
     /// est celui de ses pixels, sur toutes les surfaces.
@@ -418,6 +416,39 @@ extension ConversationMediaGalleryView {
         )
     }
 
+    /// **Le cadre d'une page SCÈNE — la loi de forme, pas le solveur** (#6904).
+    ///
+    /// Une scène ne se cadre pas comme une pièce jointe : `GallerySceneStage`
+    /// projette `SceneShape.layout(in:)`, qui tient les DEUX viewports d'UNE
+    /// même carte — cadrée, elle tient entière dans la zone libre du plateau ;
+    /// immersive, la MÊME carte occupe le viewport entier, sans couloir ni
+    /// chrome (elle grandit, elle ne se remplit pas — #6896, directive du
+    /// 2026-09-17). `stage(for:)` reste la réponse des pages image et vidéo, et
+    /// celle du CHROME du plateau, qui se pose sur la même zone.
+    ///
+    /// **Le fond n'est PLUS élu ici** (directive porteur du 2026-09-17, lot
+    /// #6904). La galerie choisissait le hachage étiré quand la scène en
+    /// portait un ; le lecteur de stories choisissait la couleur dominante. La
+    /// même carte avait donc deux fonds selon la surface qui l'ouvrait, et
+    /// aucun témoin ne pouvait rougir — chacun était juste chez lui. La loi le
+    /// nomme désormais (`SceneShape.cardedBackdrop`), et le sol noir d'une
+    /// scène sans empreinte vit dans `SceneBackdropView`, où il vaut pour les
+    /// trois fonds à la fois.
+    ///
+    /// **Sans paramètre** (revue du tour 3) : la phrase qui en justifiait un
+    /// ici — « c'est la scène qui porte l'empreinte avec laquelle ce fond se
+    /// calcule » — décrivait `SceneCard(thumbHash: item.thumbHash)`, monté à
+    /// côté par l'appelant, jamais lu PAR cette fonction. Le cadre d'une scène
+    /// ne dépend que du plateau (viewport, présentation, couloirs) : deux
+    /// scènes ouvertes dans le même état reçoivent le même cadre.
+    func sceneStage() -> GallerySceneStage.Frame {
+        GallerySceneStage.frame(
+            viewport: DeviceLayout.windowSize,
+            presentation: stageGeometryPresentation,
+            corridors: stageCorridors
+        )
+    }
+
     /// Le cadre de la page OUVERTE — celui que l'overlay habille.
     var currentStage: MediaStageFraming.Result {
         guard currentIndex < allAttachments.count else {
@@ -572,31 +603,38 @@ extension ConversationMediaGalleryView {
     /// qu'on est venu regarder. Ce qui reste au cadre est ce qui DÉCRIT le
     /// média ; ce qui le PARCOURT est au plateau, avec le rail.
     ///
-    /// Le voile reste ici plutôt que sur le bloc bas lui-même : il n'a plus qu'un
-    /// étage à détacher depuis que le transport est parti, mais le poser un cran
-    /// plus bas ferait migrer la lisière chaque fois que le contenu du bloc
-    /// change — un dégradé se pose sur la COUCHE, pas sur ce qui l'occupe.
+    /// **LE VOILE A QUITTÉ CE BLOC** (#6904 tour 5, directive porteur du
+    /// 2026-09-18 : « il faut bien faire attention à l'ombre dégradé pour rendre
+    /// le texte lisible qui doit être mis sur tous l'écran à partir du bas de
+    /// l'écran »).
     ///
-    /// **Et il ne prend AUCUNE touche.** Un `LinearGradient` est une vue rendue,
-    /// donc testée aux touches au même titre qu'un `Color.clear` — c'est
-    /// exactement l'argument que `cadreRegion` écrit dix lignes plus haut pour
-    /// refuser une couleur transparente à la place de son `Spacer`. Posé en fond
-    /// d'un bloc monté dans une couche hit-testable AU-DESSUS du pager, il
-    /// faisait des ~110 pt du bas du cadre une zone morte : ni la porte du tap
-    /// (#6142) ni le glissement horizontal qui feuillette n'y atteignaient plus
-    /// le pager. Le composant de légende partagé refuse ce comportement pour
-    /// lui-même (« le canvas garde ses gestes de navigation sous la légende ») ;
-    /// l'hôte le réintroduisait une couche plus haut, hors de portée de sa garde.
+    /// Il était posé ici plutôt que sur le bloc bas lui-même, et l'argument
+    /// tenait pour ce qu'il visait — un dégradé se pose sur la COUCHE, pas sur ce
+    /// qui l'occupe. Mais la couche était encore le CADRE, donc le dégradé était
+    /// borné DEUX fois : il s'arrêtait au bord du bloc (au-dessus du couloir de la
+    /// pellicule, donc pas au bas de l'écran) et il ne prenait que la largeur de
+    /// la carte (378 pt sur 402 en cadré, donc pas les gouttières). La bonne
+    /// couche est l'ÉCRAN, et le composant qui la sert existe déjà : c'est celui
+    /// de la story (`StoryReaderScrims`, monté par `stageScrimsLayer` —
+    /// `+Scrims.swift`). Deux voiles superposés noirciraient deux fois le bas, et
+    /// la story n'en a qu'un : celui-ci est donc PARTI, pas déplacé.
+    ///
+    /// > Un dégradé se pose sur la couche qu'il doit RENDRE LISIBLE, et la
+    /// > légende d'un plein écran se lit sur l'écran, pas sur le cadre.
+    ///
+    /// L'exigence qu'il portait — **ne prendre AUCUNE touche** — n'est pas perdue
+    /// : un `LinearGradient` est une vue rendue, donc testée aux touches au même
+    /// titre qu'un `Color.clear`, et posé dans une couche hit-testable au-dessus
+    /// du pager il faisait des ~110 pt du bas du cadre une zone morte (ni la
+    /// porte du tap de #6142, ni le glissement horizontal qui feuillette n'y
+    /// atteignaient le pager). `StoryReaderScrims` la satisfait par
+    /// construction : `.allowsHitTesting(false)` et `.accessibilityHidden(true)`
+    /// sont DANS le composant, hors de portée d'un hôte qui les oublierait — ce
+    /// qui est strictement mieux que de la redemander à chaque site.
     @ViewBuilder
     var cadreOverlay: some View {
         if currentIndex < allAttachments.count {
             bottomOverlay
-                .background(
-                    LinearGradient(colors: [.clear, .black.opacity(0.75)],
-                                   startPoint: .top,
-                                   endPoint: .bottom)
-                        .allowsHitTesting(false)
-                )
         }
     }
 

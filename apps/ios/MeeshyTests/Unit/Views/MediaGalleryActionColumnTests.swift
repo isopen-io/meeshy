@@ -262,12 +262,22 @@ final class MediaGalleryActionColumnTests: XCTestCase {
 
     /// **Ce qui RESTE en bas, sous son voile** — le porteur l'a explicitement
     /// validé, et un lot qui déplace les actions pourrait l'emporter au passage.
+    ///
+    /// **Le VOILE, lui, a changé de couche** (#6904 tour 5, directive porteur du
+    /// 2026-09-18 : « il faut bien faire attention à l'ombre dégradé pour rendre
+    /// le texte lisible qui doit être mis sur tous l'écran à partir du bas de
+    /// l'écran »). Ce que le porteur a validé est l'EFFET — une légende lisible
+    /// sur un bas d'écran fondu au noir —, jamais le site d'un `LinearGradient` :
+    /// le dégradé posé sur le bloc du cadre ne produisait cet effet ni sur les
+    /// gouttières (la carte est plus étroite que l'écran) ni jusqu'au bas de
+    /// l'écran (il s'arrêtait au bord du bloc). Le témoin garde donc l'effet à
+    /// son NOUVEAU site — `stageScrimsLayer`, le voile de la story —, et le
+    /// mesure au pixel dans `MediaGalleryStageScrimsTests`.
     func test_lAuteurLaDateLaLegendeEtLeFormat_restentEnBasSousLeurVoile() throws {
         let code = try unit()
         guard let blocBas = corps("var bottomOverlay: some View {", dans: code),
-              let overlay = corps("var cadreOverlay: some View {", dans: code),
               let ligneAuteur = corps("private func bottomMetadataOverlay(", dans: code) else {
-            return XCTFail("le bloc bas, l'overlay du cadre ou la rangée d'auteur sont introuvables")
+            return XCTFail("le bloc bas ou la rangée d'auteur sont introuvables")
         }
 
         XCTAssertTrue(compact(blocBas).contains("bottomMetadataOverlay(att)"),
@@ -276,8 +286,9 @@ final class MediaGalleryActionColumnTests: XCTestCase {
                       "la légende dépliable aussi")
         XCTAssertTrue(compact(ligneAuteur).contains("att.fileSizeFormatted"),
                       "et la ligne format / dimensions / poids avec elle")
-        XCTAssertTrue(compact(overlay).contains("LinearGradient("),
-                      "le voile reste : c'est l'effet que le porteur a validé")
+        XCTAssertTrue(compact(code).contains("StoryReaderScrims("),
+                      "et leur voile reste — celui de l'ÉCRAN désormais : c'est l'effet que le " +
+                      "porteur a validé, au site où il le produit vraiment")
     }
 
     // MARK: - 4 · La collision avec les gestes du plein cadre

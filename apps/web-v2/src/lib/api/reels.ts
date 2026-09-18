@@ -1,6 +1,6 @@
 import { unwrap } from './client';
 import type { DataSource } from './config';
-import { flattenFeedPages, nextFeedCursor, type FeedPage, type FeedPageParam, type FeedPost } from './feed-pages';
+import { CANVAS_CAPS_HEADERS, flattenFeedPages, nextFeedCursor, type FeedPage, type FeedPageParam, type FeedPost } from './feed-pages';
 import type { ApiResult, HttpTransport } from './http';
 
 /**
@@ -78,6 +78,10 @@ export async function loadReelsPage(
   const result = await params.transport.request<unknown>({
     method: 'GET',
     path: `/api/v1/social/posts?${query.toString()}`,
+    // `X-Canvas-Caps: 3` (#6903) : sans lui, la passerelle omet la scène
+    // d'un réel composé (table O17, `storyEffectsV3.ts:776-791`) — un réel
+    // à média arriverait SANS son `storyEffects`.
+    headers: CANVAS_CAPS_HEADERS,
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });
   if (!result.ok) return result;

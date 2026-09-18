@@ -161,6 +161,16 @@ struct PostSceneMosaic: View {
     /// Le rapport largeur / hauteur de la boîte des scènes : la page la plus
     /// haute du carrousel, ou la géométrie de la mosaïque. Un seul site, lu par
     /// la vue ET par l'hôte qui borne sa hauteur.
+    ///
+    /// **La forme de CHAQUE scène est `SceneShape.aspect`** (9:16, #6896,
+    /// lot #6904) : `SceneCarouselLayout.cardAspect`/`pageAspect` (SDK) en
+    /// sont déjà des projections (repli `SceneFraming.sceneAspect ==
+    /// SceneShape.aspect`). Ce que cette fonction vote n'est PAS la forme
+    /// d'une scène mais celle de la BOÎTE du carrousel — le minimum des pages
+    /// qui cadrent, pour que le défilement ne fasse jamais SAUTER la carte —
+    /// une question distincte, tenue ouverte par l'audit du lot #6904 : y
+    /// répondre en imposant `SceneShape.aspect` à chaque page romprait la
+    /// garantie « aucune hauteur ne bouge en glissant ».
     static func boxAspect(document: CanvasV3) -> CGFloat {
         let mode = document.resolvedLayout
         return MosaicLayout.isPaged(mode: mode)

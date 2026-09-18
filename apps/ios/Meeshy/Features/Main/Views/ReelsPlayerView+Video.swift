@@ -65,7 +65,9 @@ struct ReelVideoView: View {
     /// repli que `ReelImageView.mediaAspect`, pour que poster et image ne
     /// puissent pas diverger sur un média sans dimensions.
     private var mediaAspect: CGFloat {
-        guard let w = media.width, let h = media.height, w > 0, h > 0 else { return 9.0 / 16.0 }
+        // Repli 9:16 — `SceneShape.aspect` (#6896/#6904), même repli que
+        // `ReelImageView.mediaAspect`.
+        guard let w = media.width, let h = media.height, w > 0, h > 0 else { return SceneShape.aspect }
         return CGFloat(w) / CGFloat(h)
     }
 

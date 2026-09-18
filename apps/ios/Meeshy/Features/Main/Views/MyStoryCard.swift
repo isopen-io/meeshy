@@ -108,7 +108,8 @@ struct MyStoryCard: View {
     /// l'image ensuite, le rognage juste apres : la cellule impose sa taille.
     private var thumbnail: some View {
         Color.clear
-            .aspectRatio(9 / 16, contentMode: .fit)
+            // La scène est TOUJOURS 9:16 (`SceneShape.aspect`, #6896/#6904).
+            .aspectRatio(SceneShape.aspect, contentMode: .fit)
             .overlay(thumbnailLayers)
             .clipped()
             .overlay(alignment: .topTrailing) { selectionBadge }

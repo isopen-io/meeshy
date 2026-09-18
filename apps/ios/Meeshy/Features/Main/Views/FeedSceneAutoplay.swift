@@ -144,7 +144,7 @@ struct PostSceneCard: View {
     /// (#6767) sans jamais le rogner : le cadrage garde le dernier mot sur ce
     /// qui est montré, ce plafond ne décide que de la boîte.
     private var naturalCardAspect: CGFloat {
-        sceneJouee.flatMap { SceneFraming.cardAspect(scene: $0) } ?? (9.0 / 16.0)
+        sceneJouee.flatMap { SceneFraming.cardAspect(scene: $0) } ?? SceneShape.aspect
     }
 
     var body: some View {

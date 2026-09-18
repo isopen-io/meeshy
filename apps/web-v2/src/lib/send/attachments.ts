@@ -120,6 +120,10 @@ export function mayAttach(rights: ParticipantPermissions | undefined, mimeType: 
  *    REST de ce lot n'est PAS celui du dépôt : il faut la reprise TUS
  *    (`routes/uploads/tus-handler.ts`), issue compagnon.
  * 3. **Le nombre** — `MAX_ATTACHMENTS_PER_MESSAGE`.
+ * 4. **Le DOUBLON** (#6956) — directive porteur du 2026-09-18, « ici on ne peut
+ *    pas avoir deux fois la même image ». Il s'écarte AVANT le compte : sans
+ *    cela, reprendre deux fois la même photo rendrait « pas plus de 199 pièces
+ *    jointes », un refus qui parle d'autre chose.
  */
 export function acceptPendingFiles(params: {
   readonly current: readonly PendingAttachment[];
@@ -134,14 +138,49 @@ export function acceptPendingFiles(params: {
   if (tooLarge !== undefined) {
     return { list: params.current, refusal: `« ${tooLarge.name} » dépasse 50 Mo — trop lourd pour un envoi direct` };
   }
-  const list = params.files.reduce(
+
+  const tri = params.files.reduce<{
+    readonly retenus: readonly File[];
+    readonly vues: ReadonlySet<string>;
+    readonly doublon?: string;
+  }>(
+    (acc, file) => {
+      const signature = signatureDeFichier(file);
+      if (acc.vues.has(signature)) return { ...acc, doublon: acc.doublon ?? file.name };
+      return { ...acc, retenus: [...acc.retenus, file], vues: new Set([...acc.vues, signature]) };
+    },
+    { retenus: [], vues: new Set(params.current.map((piece) => signatureDeFichier(piece.file))) },
+  );
+
+  const list = tri.retenus.reduce(
     (acc, file) => addPendingAttachment(acc, pendingAttachmentOf(file)),
     params.current,
   );
-  if (list.length < params.current.length + params.files.length) {
+  if (list.length < params.current.length + tri.retenus.length) {
     return { list, refusal: `Pas plus de ${MAX_ATTACHMENTS_PER_MESSAGE} pièces jointes par message` };
   }
+  if (tri.doublon !== undefined) {
+    return { list, refusal: `« ${tri.doublon} » est déjà dans l’envoi — une même image ne part pas deux fois` };
+  }
   return { list };
+}
+
+/**
+ * L'IDENTITÉ D'UN FICHIER TELLE QUE LE NAVIGATEUR LA DONNE (#6956) — nom, poids,
+ * date de modification, sans lire un seul octet.
+ *
+ * Une empreinte de CONTENU (SHA-256) serait plus honnête : deux copies du même
+ * cliché sous deux noms passeraient ici. Mais elle demanderait de lire jusqu'à
+ * `SMALL_FILE_THRESHOLD` (50 Mo) à chaque sélection, sur le fil principal, pour
+ * trancher une question que ces trois champs tranchent déjà dans le cas qui se
+ * produit — **le même fichier repris deux fois dans le sélecteur**, qui rend
+ * trois valeurs identiques. Le coût ne se paie pas là où le défaut n'est pas.
+ *
+ * Le séparateur est un octet NUL parce qu'aucun nom de fichier n'en contient :
+ * « a.jpg » + 12 et « a.jpg1 » + 2 se confondraient sur une simple concaténation.
+ */
+function signatureDeFichier(file: File): string {
+  return `${file.name}\u0000${file.size}\u0000${file.lastModified}`;
 }
 
 export function removePendingAttachment(

@@ -420,9 +420,11 @@ public final class StoryMediaLayer: CALayer {
     }
 
     /// **La taille et le centre qu'un média pose dans le canvas** — la moitié
-    /// géométrique de `configure`, sortie pour que le mesureur de l'image seule
-    /// (`StorySceneFootprint`, #6636) lise la MÊME pose que le calque, jamais une
-    /// jumelle. Le recadrage change les proportions de l'objet (#5085).
+    /// géométrique de `configure`, isolée pour rester testable seule. Le
+    /// mesureur qui la consommait à distance (`StorySceneFootprint`, #6636)
+    /// est parti avec la carte unique (#6904, décision porteur du 2026-09-17) :
+    /// `configure` en reste l'unique appelant. Le recadrage change les
+    /// proportions de l'objet (#5085).
     static func renderedPose(for media: StoryMediaObject,
                              geometry: CanvasGeometry) -> (size: CGSize, center: CGPoint) {
         let effectiveRatio = MediaCropRule.effectiveRatio(

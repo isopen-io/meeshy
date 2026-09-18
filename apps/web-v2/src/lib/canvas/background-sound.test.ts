@@ -131,6 +131,19 @@ describe('electBackgroundTrack — le son du DOCUMENT (`document.sound`), sans o
     const track = electBackgroundTrack({ document, sceneIndex: 0, carrier: carrier([{ id: 'aud', src: 'clip.m4a', mimeType: 'audio/m4a' }]) });
     expect(track?.bounds).toEqual({ startMs: 2000, endMs: 6000 });
   });
+
+  /**
+   * T4 (#6903) — le témoin nomme le TROU qu'il ferme : un porteur SANS
+   * `mimeType` (la forme d'AVANT #6903, construite à la main ici — c'était
+   * la forme que `card-model.ts` produisait) ne peut élire AUCUN son de fond
+   * par `source.t === 'original'`, même quand un média audio existe bien
+   * dans le porteur.
+   */
+  test('un porteur SANS mimeType (la forme d’AVANT #6903) ⇒ null, même avec un média audio présent', () => {
+    const document = documentWith({ id: 's1', objects: [] }, { source: { t: 'original' }, volume: 1 });
+    const trou = carrier([{ id: 'aud', src: 'clip.m4a' }]);
+    expect(electBackgroundTrack({ document, sceneIndex: 0, carrier: trou })).toBeNull();
+  });
 });
 
 /**

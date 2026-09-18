@@ -65,8 +65,8 @@ struct BubbleStoryCitationCard: View, Equatable {
     /// colonne étroite au-dessus d'elle, comme sur la planche.
     static let cardWidth: CGFloat = 132
 
-    /// Rapport de la SCÈNE — celui d'une story, pour qu'elle tienne entière.
-    static let sceneAspectRatio: CGFloat = 9.0 / 16.0
+    /// Rapport de la SCÈNE — TOUJOURS 9:16 (`SceneShape.aspect`, #6896/#6904).
+    static let sceneAspectRatio: CGFloat = SceneShape.aspect
 
     static var sceneHeight: CGFloat { (cardWidth / sceneAspectRatio).rounded() }
 

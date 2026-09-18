@@ -69,11 +69,26 @@ export type ScenePlayerProps = {
   /** L'HORLOGE de la scène, en secondes, throttlée à ≤ 10 Hz — un transport
    * (barre, seek) la consomme sans rouvrir le moteur (§ 9, Q10 : hors
    * tranche, #6906). N'est JAMAIS émis pour une scène sans objet temporisé
-   * (D-5). AJOUTÉ, jamais un renommage (D-11 : on ne renomme pas
-   * `onContentReady`). */
+   * NI durée connue par un mode à CHROME (`fallbackDurationSeconds`
+   * ci-dessous, #6903). AJOUTÉ, jamais un renommage (D-11 : on ne renomme
+   * pas `onContentReady`). */
   readonly onTime?: (t: number) => void;
   /** Émis UNE fois quand une scène SANS boucle atteint sa durée. */
   readonly onEnded?: () => void;
+  /** LA DURÉE QUE L'HÔTE CONNAÎT quand le document ne déclare rien (#6903,
+   * miroir `computedTotalDuration()` `ReelsPlayerView+Scene.swift:91`) — un
+   * réel composé par le studio (fond vidéo + texte, sans `timing` ni
+   * `timelineDuration`) n'a pas d'objet TEMPORISÉ : sans ce repli, son
+   * horloge ne démarrerait jamais et sa piste de fond ne boucle jamais.
+   * IGNORÉE dès que `sceneDurationSeconds` rend une valeur (la durée
+   * DÉCLARÉE reste autoritaire), et ignorée hors d'un mode à CHROME
+   * (`showsChrome`) : une CARTE ne paie jamais cette horloge (T-E5). */
+  readonly fallbackDurationSeconds?: number;
+  /** Émis à CHAQUE tour d'un mode qui boucle (`loops`, miroir `loopPass`,
+   * #6903) — jamais pour un mode sans boucle. L'hôte y REMONTE sa piste de
+   * son de fond (`key` changée) pour la repartir depuis `startOffsetMs`,
+   * sans jamais remonter LE PLAYER (Zero Unnecessary Re-render). */
+  readonly onLoop?: () => void;
   /** Le remplissage des bandes d'un fond AJUSTÉ (`fit`) — PEINT par défaut,
    * miroir `MeeshyScenePlayer.servesLetterboxFill = true`
    * (`MeeshyScenePlayer.swift:79`). Le lecteur de story le coupe en verdict
@@ -196,6 +211,8 @@ export default function ScenePlayer({
   onPlaybackBlocked,
   onTime,
   onEnded,
+  fallbackDurationSeconds,
+  onLoop,
   servesLetterboxFill = true,
 }: ScenePlayerProps) {
   const scene = document.scenes[sceneIndex];
@@ -205,8 +222,14 @@ export default function ScenePlayer({
   const callbacks = useLatest<SceneCallbacks>({ onContentReady, onDurationKnown, onPlaybackBlocked });
   const isMuted = hostMute({ config, requestedMute: muted });
   const timed = scene !== undefined && hasTimedObjects(scene);
-  const durationSeconds = scene !== undefined ? sceneDurationSeconds(scene) : null;
-  const clock = useSceneClock({ enabled: timed, playing, loops: config.loops, durationSeconds, onTime, onEnded });
+  const declaredDurationSeconds = scene !== undefined ? sceneDurationSeconds(scene) : null;
+  // Le repli de l'HÔTE (#6903) n'a d'effet que dans un mode à CHROME : une
+  // CARTE (`showsChrome: false`) ne paie jamais cette horloge (T-E5, garde
+  // de la première peinture du fil), même si son hôte lui passe une durée.
+  const durationSeconds =
+    declaredDurationSeconds ?? (config.showsChrome && fallbackDurationSeconds !== undefined ? fallbackDurationSeconds : null);
+  const enabled = timed || (config.showsChrome && durationSeconds !== null);
+  const clock = useSceneClock({ enabled, playing, loops: config.loops, durationSeconds, onTime, onEnded, onLoop });
 
   if (scene === undefined) return null;
 
@@ -247,8 +270,10 @@ export default function ScenePlayer({
       {/* `isMuted` — le muet RÉSOLU (`hostMute`), pas celui que le mode
           PROPOSE : un lecteur de story qui tient son muet viewant
           (`muted: true` sur un mode sonore) coupait bien le son et
-          n'affichait AUCUNE pastille pour le dire (revue-correction #6901). */}
-      {audible && isMuted ? (
+          n'affichait AUCUNE pastille pour le dire (revue-correction #6901).
+          `config.showsMuteBadge` (revue-correction #6903) retire la pastille
+          là où l'hôte dit DÉJÀ le muet — le rail des Réels. */}
+      {audible && isMuted && config.showsMuteBadge ? (
         <span
           data-scene-sound="muted"
           className="pointer-events-none absolute end-2.5 bottom-2.5 grid place-items-center rounded-full"

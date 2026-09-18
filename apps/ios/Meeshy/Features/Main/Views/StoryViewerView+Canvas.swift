@@ -686,7 +686,6 @@ struct StoryCardView: View {
     /// Cf. doc de `RenderableSlideCache` — partagé par les 3 lecteurs du
     /// slide renderable dans ce body (representable, fond média, backdrop).
     @State private var renderableSlideCache = RenderableSlideCache()
-    @State var imageOnlyVerdictCache = StoryImageOnlyVerdictCache() // #6636 — `+ImageOnly`
 
     // Story content
     let currentStory: StoryItem?
@@ -969,13 +968,15 @@ struct StoryCardView: View {
     /// attendu). La sidebar droite tombait alors hors écran à x=389+w=46
     /// → out of 402 (bug 2026-05-27). On force ici les dimensions explicites
     /// par calcul direct du fit ratio.
-    /// Ratio (largeur / hauteur) du canvas de la story courante. L'auteur a figé
-    /// la forme à la composition (« l'import de l'image de fond impose le cadre et
-    /// forme du Canvas ») : un fond paysage → 16:9 horizontal, sinon 9:16 vertical
-    /// par défaut. Fallback portrait pour toutes les stories antérieures.
-    var readerCanvasRatio: CGFloat { // internal for cross-file extension access
-        CGFloat(currentStory?.storyEffects?.canvasAspect.ratio ?? Double(CanvasGeometry.portraitRatio))
-    }
+    /// **Ratio (largeur / hauteur) du canvas — TOUJOURS 9:16** (`SceneShape.aspect`,
+    /// décision porteur du 2026-09-17 sur #6896, lot #6904).
+    ///
+    /// La forme n'est plus discrétisée depuis le rapport du fond
+    /// (`StoryCanvasAspect.from(ratio:)`, portrait/paysage) : un panorama 4:1
+    /// s'y arrondissait en 16:9 et se retrouvait rogné — la scène est
+    /// composée ET restituée en 9:16, le média se posant SANS rognage dans ce
+    /// gabarit (`SceneShape.mediaBand`).
+    var readerCanvasRatio: CGFloat { SceneShape.aspect } // internal for cross-file extension access
 
     /// La PORTE du lecteur de scènes — écrite une fois, partagée par les DEUX
     /// canvas. `nil` = cette story n'a pas de document v3 natif, et se peint par
@@ -996,22 +997,19 @@ struct StoryCardView: View {
     ///
     /// Ce qui MAINTIENT la porte aujourd'hui n'est donc plus une perte, mais la
     /// prudence : la retirer change ce que le lecteur peint pour toute
-    /// l'archive v1 restante, et `readerCanvasRatio` encadre au ratio RÉEL de la
-    /// story. Ce changement de rendu se mesure et se livre pour lui-même.
+    /// l'archive v1 restante. Ce changement de rendu se mesure et se livre
+    /// pour lui-même.
     ///
     /// La porte rend les deux branches SELF-COHÉRENTES. L'archive v1 se peint
-    /// dans son propre cadre, exactement comme avant le swap E4. Une story
-    /// v3-native se peint elle aussi dans son cadre RÉEL, pas systématiquement
-    /// en 9:16 : `StoryEffects(rendering:)` restaure `canvasAspectRatio` depuis
-    /// `scene.carrierAspect` quand la scène l'a logé
-    /// (`CanvasV3Migration.swift:543`) — un fond paysage composé nativement en
-    /// v3 (le composer pose `carrierAspect` à l'écriture, cf.
-    /// `CanvasV3Migration.swift:338`) garde donc son 16:9 ; seule une scène qui
-    /// n'a jamais porté de `carrierAspect` (fond déjà portrait) retombe sur le
-    /// défaut portrait — et c'est alors le bon rendu. L'en-tête
-    /// `X-Canvas-Caps: 3` est posé depuis `cf05538d9` (2026-08-22,
-    /// `ClientInfoProvider.swift:77`) : la porte ci-dessus reste fermée
-    /// aujourd'hui par PRUDENCE (paragraphe précédent), plus faute de l'en-tête.
+    /// dans son propre cadre, exactement comme avant le swap E4.
+    ///
+    /// **Superseded le 2026-09-17 (#6896, lot #6904)** : une story v3-native
+    /// ne se peint PLUS dans le cadre RÉEL de son fond — `readerCanvasRatio`
+    /// est TOUJOURS `SceneShape.aspect` (9:16), que la scène ait ou non logé
+    /// un `carrierAspect`. Le paragraphe qui précède décrit le comportement
+    /// d'AVANT ce lot ; `carrierAspect` reste lu par `StoryEffects(rendering:)`
+    /// pour l'archive v1 (mémoire d'ÉDITION, contrat S8), mais plus aucun
+    /// lecteur ne s'en sert pour choisir un cadre.
     private func nativeSceneDocument(of story: StoryItem) -> CanvasV3? {
         story.storyEffects?.canvasV3
     }
@@ -1042,7 +1040,7 @@ struct StoryCardView: View {
                               carrier: outgoing,
                               preferredContentLanguages: resolvedViewerLanguageChain,
                               isOutgoing: true,
-                              servesLetterboxFill: imageOnlyRect(of: outgoing) == nil,
+                              servesLetterboxFill: false,
                               preloadedImages: preloadedImages,
                               preloadedVideoURLs: preloadedVideoURLs,
                               preloadedAudioURLs: preloadedAudioURLs)
@@ -1054,7 +1052,7 @@ struct StoryCardView: View {
                                      preloadedVideoURLs: preloadedVideoURLs,
                                      preloadedAudioURLs: preloadedAudioURLs,
                                      isOutgoing: true,
-                                     servesLetterboxFill: imageOnlyRect(of: outgoing) == nil)
+                                     servesLetterboxFill: false)
         }
     }
 
@@ -1100,7 +1098,7 @@ struct StoryCardView: View {
                               carrier: story,
                               preferredContentLanguages: resolvedViewerLanguageChain,
                               isMuted: isGlobalMuted,
-                              servesLetterboxFill: imageOnlyRect(of: story) == nil,
+                              servesLetterboxFill: false,
                               preloadedImages: preloadedImages,
                               preloadedVideoURLs: preloadedVideoURLs,
                               preloadedAudioURLs: preloadedAudioURLs,
@@ -1119,7 +1117,7 @@ struct StoryCardView: View {
                                      preloadedAudioURLs: preloadedAudioURLs,
                                      mute: isGlobalMuted,
                                      isPaused: isCanvasPlaybackPaused,
-                                     servesLetterboxFill: imageOnlyRect(of: story) == nil,
+                                     servesLetterboxFill: false,
                                      onContentReady: { isContentReady = true },
                                      onContentProgress: { p in slideContentProgress = latchedContentProgress(p) },
                                      onPlaybackProgressing: { progressing in
@@ -1145,11 +1143,30 @@ struct StoryCardView: View {
             : progress
     }
 
+    /// **Les cotes de la SCÈNE dans ce viewport — la LOI, pas un ajustement
+    /// écrit ici** (#6904).
+    ///
+    /// `SceneShape.layout(in:)` rend exactement ce que
+    /// `CanvasGeometry.aspectFitSize(in:ratio: 9:16)` rendait (le témoin
+    /// `StoryReaderSceneCardTests.test_leCadreDuCanvas_estCeluiDeLaLoi` compare
+    /// les deux écritures) : le lecteur ne change pas de cotes, il change de
+    /// SOURCE. C'est ce qui garantit qu'il cadre la même scène que la galerie,
+    /// et qu'un changement de forme ne se livre plus qu'à un seul endroit.
+    ///
+    /// La PLACE de la carte dans le plateau reste au solveur du lecteur
+    /// (`readerCanvasFraming`) : la loi dit la forme, le plateau dit où elle se
+    /// pose et à quelle échelle elle s'anime.
+    /// **La FORME que la loi donne à la scène du lecteur** — le cadre, le fond
+    /// et le rayon de LA carte de scène dans ce viewport. C'est elle que la
+    /// carte reçoit, et c'est la même fonction que le plein écran d'un post et
+    /// le RÉEL appellent (`GallerySceneStage`, `ReelSceneView`, #6904) : les
+    /// trois surfaces ne peuvent plus cadrer trois scènes différentes.
+    var readerSceneLayout: SceneShape.Layout { // internal : lu par la carte
+        SceneShape.layout(in: geometry.size, immersive: canvasIsExpanded)
+    }
+
     var canvasFitSize: CGSize { // internal : lu par `StoryViewerView+Sentinel`
-        // Source de vérité partagée avec le composer (`CanvasGeometry.aspectFitSize`)
-        // pour garantir la parité composer ↔ reader — même ratio (9:16 par défaut,
-        // 16:9 si l'auteur a importé un fond paysage).
-        CanvasGeometry.aspectFitSize(in: geometry.size, ratio: readerCanvasRatio)
+        readerSceneLayout.sceneFrame.size
     }
 
     /// Cadrage « carte → plein écran » du canvas reader, MUTUALISÉ avec le composer
@@ -1187,7 +1204,10 @@ struct StoryCardView: View {
             bottomInset: 64,              // marge basse ÷2 (it.48) — carte plus proche du bord bas
             sideInset: 8,                 // marges latérales ÷2 (it.48) — carte plus proche des bords L/R
             state: canvasPresentation,
-            cardedCornerRadius: 22,
+            // **Le rayon de la loi, jamais un littéral** (#6904) : le lecteur
+            // arrondissait à 22 pendant que le plein écran cadré d'un post
+            // arrondissait à 20 — la même carte se reconnaissait à ses coins.
+            cardedCornerRadius: SceneShape.cardedCornerRadius,
             // #6760 — l'alignement n'est plus décidé ici : il appartient au
             // PLATEAU, que les quatre surfaces partagent. La directive du
             // 2026-09-15 (« ce qui est construit se pose sur le plateau au
@@ -1206,34 +1226,36 @@ struct StoryCardView: View {
             // Color/gradient fallback (always present)
             storyBackground
 
-            // === Layer 1.5: Blurred backdrop derived from the slide ThumbHash ===
-            // Le canvas réel est contraint à 9:16 (fidélité au design composer).
-            // Sur un iPhone "plus haut que 9:16" (iPhone 16 Pro = 0.461 vs 9/16 = 0.5625),
-            // ~150pt restent libres au-dessus et en dessous ; on les habille
-            // d'un blur du contenu story (ThumbHash upscaled + flou + scale) pour
-            // une transition douce entre les letterbox et le canvas net.
+            // === Layer 1.5 : LE SOL — le même que la galerie de post et le réel ===
             //
-            // SINGLE BACKDROP : un seul `storyBlurredBackdrop(for: currentStory)`
-            // avec une `.id(currentStory?.id)` pour que SwiftUI swap natif
-            // (transition.opacity de defaut, gérée par `withAnimation` du
-            // `crossFadeStory`). Le pattern précédent (deux backdrops avec
-            // `outgoingOpacity` ET `contentOpacity` additifs) produisait un pic
-            // de luminosité au milieu de la transition car les deux blurs
-            // semi-transparents s'additionnaient dans le ZStack.
-            storyBlurredBackdrop(for: currentStory)
+            // **`SceneFloorView` (MeeshyUI) est la recette, et elle a quitté cet
+            // hôte** (directive porteur du 2026-09-17, lot #6904 : « On préserve
+            // le même fond que pour la story ! »). Le lecteur la portait seul —
+            // empreinte décodée, flou 60, échelle 1,18, opacité 0,85, voile — et
+            // la galerie de post peignait du NOIR PUR autour de la MÊME carte.
+            // Une convergence mesurée DANS la carte ne disait rien de ce qui se
+            // peint à côté d'elle.
+            //
+            // Ce qui reste ici est de l'ORCHESTRATION, et rien d'autre :
+            //
+            // - `.id(currentStory?.id)` + `.transition(.opacity)` — SINGLE
+            //   BACKDROP : un seul sol, que SwiftUI échange nativement sur
+            //   changement d'identité (fusion gérée par le `withAnimation` du
+            //   `crossFadeStory`). Le motif précédent — deux sols dont les
+            //   opacités s'ADDITIONNAIENT dans le ZStack — produisait un pic de
+            //   luminosité au milieu de la transition ;
+            // - le VOILE, dont la valeur suit l'état de la carte (0,18 cardé,
+            //   0 au plein bord) et dont le ressort est celui de la carte : une
+            //   décision de « quand », donc de l'hôte ;
+            // - `storyBackground` reste SOUS ce sol, inchangé : pour une story
+            //   sans média de fond, c'est le dégradé de l'auteur qu'on voit à
+            //   travers un sol sans empreinte (`SceneFloorView` ne peint aucun
+            //   noir inconditionnel, précisément pour cela).
+            SceneFloorView(thumbHash: currentStory?.sceneBackdropHash,
+                           veil: canvasIsExpanded ? SceneFloorView.fullVeil
+                                                  : SceneFloorView.cardedVeil)
                 .id(currentStory?.id ?? "no-story")
                 .transition(.opacity)
-                .ignoresSafeArea()
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-
-            // Voile LÉGER sur le backdrop ThumbHash flou : on GARDE le ThumbHash visible
-            // en fond (demande user 2026-06-02 « mettre en fond le ThumbHash »), juste un
-            // soupçon d'assombrissement pour séparer. La carte se distingue surtout par ses
-            // coins arrondis + son ombre (voir le canvas cardé). En plein écran → 0 (le
-            // backdrop habille les letterbox immersifs). Animé par le ressort de la carte.
-            Color.black
-                .opacity(canvasIsExpanded ? 0 : 0.18)
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
@@ -1255,14 +1277,15 @@ struct StoryCardView: View {
                     // ne contraint pas correctement le UIViewRepresentable
                     // sur iPhone 16 Pro et le canvas débordait en largeur
                     // (sidebar droite hors écran).
-                    .frame(width: canvasFitSize.width,
-                           height: canvasFitSize.height)
                     .clipped()
                     .opacity(outgoingOpacity)
                     .scaleEffect(closingScale)
-                    // Canvas sortant suit la carte (même cadrage, même forme —
-                    // l'image seule quand il n'est qu'une image, #6636).
-                    .readerCard(framing: readerCanvasFraming, imageRect: imageOnlyRect(of: outgoing))
+                    // Canvas sortant suit la carte : MÊME composant, donc même
+                    // cadre, même fond et même coins que la couche courante —
+                    // et que le plein écran cadré d'un post (#6904).
+                    .readerCard(layout: readerSceneLayout,
+                                framing: readerCanvasFraming,
+                                thumbHash: readerBackdropHash(of: outgoing))
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
@@ -1320,15 +1343,13 @@ struct StoryCardView: View {
                     // Strict 9:16-fit (parité avec UnifiedPostComposer:324).
                     // Sans contrainte, `geometry.size.height` étirait le canvas
                     // hors ratio design et décalait visuellement le contenu.
-                    // Le letterbox au-dessus/en dessous est habillé par le
-                    // `storyBlurredBackdrop` (Layer 1.5).
+                    // Le hors-champ au-dessus/en dessous est habillé par le
+                    // SOL (`SceneFloorView`, Layer 1.5).
                     // Dimensions explicites 9:16 — cf. `canvasFitSize`. Le
                     // duo `.aspectRatio(.fit) + .frame(maxWidth/Height)`
                     // ne contraint pas correctement le UIViewRepresentable
                     // sur iPhone 16 Pro et le canvas débordait en largeur
                     // (sidebar droite hors écran).
-                    .frame(width: canvasFitSize.width,
-                           height: canvasFitSize.height)
                     .clipped()
                     // Déplier la légende EFFACE la scène pour laisser remonter
                     // le fond ThumbHash déjà monté sous elle (Layer 1.5) — ou,
@@ -1344,10 +1365,13 @@ struct StoryCardView: View {
                     .clipShape(
                         RevealCircleShape(progress: isRevealActive ? 1.0 : (currentStory?.storyEffects?.opening == .reveal ? 0.001 : 1.0))
                     )
-                    // Carte → plein écran (mutualisé composer). Visuel pur (la frame
-                    // reste `canvasFitSize` → projection design→render intacte) ;
-                    // l'image seule quand la story n'est qu'une image (#6636).
-                    .readerCard(framing: readerCanvasFraming, imageRect: imageOnlyRect(of: story))
+                    // Carte → plein écran. La carte POSE elle-même le cadre
+                    // `canvasFitSize` (projection design→render intacte), peint
+                    // le fond dedans et rogne aux coins de la loi ; le lecteur
+                    // ne lui donne que sa PLACE et son ANIMATION.
+                    .readerCard(layout: readerSceneLayout,
+                                framing: readerCanvasFraming,
+                                thumbHash: readerBackdropHash(of: story))
                     // Ombre portée : la carte se détache du backdrop ThumbHash flou (même
                     // contenu) par son BORD arrondi + son ombre, pas par un voile sombre
                     // (demande user 2026-06-02 « bords arrondis + ThumbHash en fond »).
@@ -1401,18 +1425,19 @@ struct StoryCardView: View {
                     // intrinsic/halo size could otherwise inflate the parent
                     // ZStack and push the sidebar/composer beyond the viewport.
                     // Aligné sur le canvas 9:16 (et non plein écran) pour ne pas
-                    // recouvrir le `storyBlurredBackdrop` en bandes letterbox.
+                    // recouvrir le SOL (`SceneFloorView`) en bandes letterbox.
                     // Dimensions explicites 9:16 — cf. `canvasFitSize`. Le
                     // duo `.aspectRatio(.fit) + .frame(maxWidth/Height)`
                     // ne contraint pas correctement le UIViewRepresentable
                     // sur iPhone 16 Pro et le canvas débordait en largeur
                     // (sidebar droite hors écran).
-                    .frame(width: canvasFitSize.width,
-                           height: canvasFitSize.height)
                     .clipped()
-                    // Le loader suit la carte (même cadrage, même forme) → pas de
-                    // saut entre le placeholder ThumbHash et le canvas.
-                    .readerCard(framing: readerCanvasFraming, imageRect: imageOnlyRect(of: story))
+                    // Le loader suit la carte (même composant, donc même cadrage
+                    // et même forme) → pas de saut entre le placeholder
+                    // ThumbHash et le canvas.
+                    .readerCard(layout: readerSceneLayout,
+                                framing: readerCanvasFraming,
+                                thumbHash: readerBackdropHash(of: story))
                     .animation(.spring(response: 0.42, dampingFraction: 0.84), value: canvasIsExpanded)
                     .allowsHitTesting(false)
                     .transition(.opacity)
@@ -2016,7 +2041,7 @@ struct StoryCardView: View {
     // MARK: - Story Background
 
     /// `true` quand la slide courante a un vrai fond média (image/vidéo) : le canvas
-    /// peint alors ce média plein cadre et le `storyBlurredBackdrop` (Layer 1.5) habille
+    /// peint alors ce média plein cadre et le SOL (`SceneFloorView`, Layer 1.5) habille
     /// les letterbox d'un flou DÉRIVÉ du média. Dans ce cas le fond de canvas couleur/gradient
     /// (`storyBackground`, Layer 1) est redondant — pire, il bleed (~15 %) derrière le backdrop
     /// semi-transparent, teintant le média d'un voile indigo parasite. On le neutralise en noir
@@ -2075,63 +2100,24 @@ struct StoryCardView: View {
         .accessibilityHidden(true)
     }
 
-    // MARK: - Blurred backdrop (letterbox au-dessus/en dessous du canvas 9:16)
+    // MARK: - Le SOL du lecteur : plus aucune recette ici
 
-    /// Habille les bandes letterbox d'un blur du contenu story.
-    /// Cascade de sources (priorité descendante) :
-    ///   1. `slide.effects.thumbHash` — thumbHash explicite côté slide
-    ///   2. `media[backgroundId].thumbHash` — thumbHash du média de fond
-    ///      (couvre les vidéos uploadées qui portent leur thumbHash côté
-    ///      `FeedMedia` plutôt que sur le slide composite)
-    ///   3. Color.clear → le `storyBackground` gradient indigo se voit dans
-    ///      les bandes (fallback graceful, jamais de rectangle noir)
-    ///
-    /// Décodage ThumbHash < 0.5 ms (16×16 → upscaled), blur GPU SwiftUI < 1 ms.
-    @ViewBuilder
-    private func storyBlurredBackdrop(for story: StoryItem?) -> some View {
-        if let img = resolvedBackdropImage(for: story) {
-            Image(uiImage: img)
-                .resizable()
-                .scaledToFill()
-                .blur(radius: 60)
-                .scaleEffect(1.18)
-                .opacity(0.85)
-        } else {
-            Color.clear
-        }
-    }
-
-    /// Résout l'image-source du backdrop selon la cascade documentée plus haut.
-    /// Retourne `nil` si aucune source exploitable n'existe (Color.clear path).
-    private func resolvedBackdropImage(for story: StoryItem?) -> UIImage? {
-        guard let story else { return nil }
-        let slide = renderableSlideCache.slide(for: story, chain: resolvedViewerLanguageChain)
-        // (1) thumbHash slide-level
-        if let hash = slide.effects.thumbHash,
-           !hash.isEmpty,
-           let img = UIImage.fromThumbHash(hash) {
-            return img
-        }
-        // (2) thumbHash du media de fond — typique pour vidéo uploadée
-        let bgMediaId: String? = {
-            if let bg = slide.effects.resolvedBackgroundMedia {
-                return bg.postMediaId
-            }
-            // Fallback historique : premier média si pas de canvas mediaObjects
-            if (slide.effects.mediaObjects ?? []).isEmpty {
-                return story.media.first?.id
-            }
-            return nil
-        }()
-        if let bgMediaId,
-           let media = story.media.first(where: { $0.id == bgMediaId }),
-           let mediaHash = media.thumbHash,
-           !mediaHash.isEmpty,
-           let img = UIImage.fromThumbHash(mediaHash) {
-            return img
-        }
-        return nil
-    }
+    // **La recette du sol vit dans `SceneFloorView` (MeeshyUI), et son empreinte
+    // dans `StoryItem.sceneBackdropHash`** (lot #6904, 2026-09-17).
+    //
+    // Ce fichier portait les deux : `storyBlurredBackdrop(for:)` (flou 60,
+    // échelle 1,18, opacité 0,85) et `resolvedBackdropImage(for:)`, sa cascade
+    // d'empreinte — slide, puis média de fond, puis premier média. La cascade
+    // était déjà EN DOUBLE dans cet écran : la CARTE lisait
+    // `story.sceneBackdropHash` (`readerBackdropHash`) pendant que le sol
+    // descendait la sienne, si bien qu'une story à plusieurs médias pouvait
+    // peindre son sol avec une empreinte et sa carte avec une autre. Les deux
+    // lisent désormais le même site — le fond DANS la carte et le sol AUTOUR
+    // parlent du même contenu, ce qui est tout l'objet de #6797.
+    //
+    // L'étape 1 des deux cascades était identique (`toRenderableSlide` recopie
+    // `storyEffects` et n'écrit jamais `thumbHash`) ; elles ne divergeaient que
+    // lorsqu'un média de fond n'était pas le PREMIER média porteur d'empreinte.
 
     // MARK: - Background Audio Badge
 

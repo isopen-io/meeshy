@@ -14,8 +14,11 @@ import MeeshyUI
 ///
 /// ## La règle
 ///
-/// 1. Le rapport est celui auquel la scène se présente
-///    (`SceneFraming.presentationAspect`, #6697), jamais un littéral.
+/// 1. Le rapport est TOUJOURS `SceneShape.aspect` (9:16, #6896/#6904) — plus un
+///    littéral, et plus non plus le rapport d'une image seule (#6697 lu comme
+///    « resserrer sur l'image » contredisait la scène RENDUE : le canvas rend
+///    toujours son 9:16, jamais l'image cadrée, et poser un cadre plus large
+///    autour d'un rendu plus étroit zoomait et rognait #6897).
 /// 2. À l'ouverture, la scène ET sa rangée d'actions tiennent entre le haut de
 ///    la scène et le bas de la zone de défilement.
 /// 3. …sauf si elle devait pour cela passer sous la moitié de la largeur du
@@ -27,7 +30,7 @@ import MeeshyUI
 ///    rangée d'actions — aucun contrôle ne la couvre.
 ///
 /// Pure : ce que la page mesure entre, une taille sort. `nonisolated` pour
-/// être interrogée hors du `MainActor`, comme `SceneFullscreenFraming`.
+/// être interrogée hors du `MainActor`, comme `SceneShape`.
 nonisolated enum PostDetailSceneFraming {
 
     /// Plafond de largeur — celui du conteneur d'avant : un iPad n'étire pas la
@@ -79,17 +82,5 @@ nonisolated enum PostDetailSceneFraming {
         let ouverture = CanvasGeometry.aspectFitSize(in: CGSize(width: largeur, height: hauteurOuverture),
                                                      ratio: ratio)
         return ouverture.width >= largeur * minimumWidthFraction ? ouverture : lecture
-    }
-
-    /// **Le rapport auquel le détail présente la scène** (#6697) — la loi
-    /// partagée de `SceneFraming`, sur le canvas que la loi du porteur décrit
-    /// (`SceneFullscreenFraming.ratio`). Sans document v3, le rapport du canvas
-    /// que la story déclare, comme le lecteur (`readerCanvasRatio`).
-    static func ratio(of effects: StoryEffects?) -> CGFloat {
-        guard let scene = effects?.canvasV3?.scenes.first else {
-            return CGFloat(effects?.canvasAspect.ratio ?? Double(CanvasGeometry.portraitRatio))
-        }
-        return SceneFraming.presentationAspect(scene: scene,
-                                               canvasAspect: SceneFullscreenFraming.ratio(of: scene))
     }
 }

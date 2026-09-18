@@ -1,6 +1,6 @@
 import type { FeedAuthor, FeedPage, FeedPost } from './feed-pages';
 import { minutesAgo } from './fixtures-base';
-import { feedPhotoStandIn, pageOfFeed } from './fixtures-feed';
+import { feedPhotoStandIn, pageOfFeed, TRANSFORM_FULL } from './fixtures-feed';
 import { REEL_CLIP_BARS, REEL_CLIP_RGB, REEL_CLIP_VOICE } from './fixtures-reel-clips';
 
 /**
@@ -114,7 +114,73 @@ export const REEL_CITY_SILENT: FeedPost = {
   likeCount: 41,
 };
 
-export const REEL_POSTS: readonly FeedPost[] = [REEL_STUDIO, REEL_SUNSET_EN, REEL_MARKET_IMAGES, REEL_VOICE, REEL_RANK2_ES, REEL_CITY_SILENT];
+/**
+ * `REEL_SCENE_LOOP` (#6903) — UN RÉEL COMPOSÉ : une scène (fond vidéo COUPÉ
+ * par l'auteur — c'est le son de fond qui parle — + un texte), un son de
+ * fond `document.sound: original`, et AUCUNE durée déclarée (ni `timing` ni
+ * `timelineDuration`) : c'est la forme que le studio publie aujourd'hui
+ * (§ 2 de la spécification), donc le gate éprouve le chemin de REPLI de
+ * l'hôte (`fallbackDurationSeconds`) sur la fixture NOMINALE, jamais un cas
+ * d'école à part. Auteur NEUF (Selma Haddad) — jamais Kwame/Amina/Fatou/
+ * Bruno, les preuves « ceci est une fixture » du socle. DATÉ le plus ANCIEN
+ * du corpus (`minutesAgo(150)`) et posé EN DERNIER dans `REEL_POSTS` : les
+ * treize sections existantes du gate (`check-reels.mjs`) ne le rencontrent
+ * jamais dans leur fenêtre.
+ */
+export const REEL_SCENE_LOOP: FeedPost = {
+  ...counts,
+  id: 'reel-scene-loop',
+  type: 'REEL',
+  createdAt: minutesAgo(150),
+  author: reelAuthor('u-reel-selma', 'Selma Haddad', 'selma.haddad'),
+  content: 'Boucle de fin de répétition, avec le son de fond.',
+  originalLanguage: 'fr',
+  media: [
+    {
+      id: 'media-reel-scene-video',
+      mimeType: 'video/webm',
+      fileUrl: REEL_CLIP_RGB,
+      thumbnailUrl: feedPhotoStandIn('#7c2d12', '#f97316', 'portrait'),
+      duration: 3000,
+      order: 0,
+      ...portrait,
+    },
+    { id: 'media-reel-scene-sound', mimeType: 'audio/webm', fileUrl: REEL_CLIP_VOICE, duration: 2000, order: 1 },
+  ],
+  storyEffects: {
+    v: 3,
+    sound: { source: { t: 'original' }, volume: 1 },
+    scenes: [
+      {
+        id: 's1',
+        objects: [
+          {
+            id: 'bg1',
+            kind: 'media',
+            anchor: { t: 'free', x: 0.5, y: 0.5 },
+            plane: 'bg',
+            z: 0,
+            transform: TRANSFORM_FULL,
+            payload: { postMediaId: 'media-reel-scene-video', mediaType: 'video/webm', muted: true },
+          },
+          {
+            id: 't1',
+            kind: 'text',
+            anchor: { t: 'free', x: 0.5, y: 0.5 },
+            plane: 'fg',
+            z: 1,
+            transform: TRANSFORM_FULL,
+            locale: 'fr',
+            payload: { text: 'Boucle', textColor: '#FFFFFF' },
+          },
+        ],
+      },
+    ],
+  },
+  likeCount: 17,
+};
+
+export const REEL_POSTS: readonly FeedPost[] = [REEL_STUDIO, REEL_SUNSET_EN, REEL_MARKET_IMAGES, REEL_VOICE, REEL_RANK2_ES, REEL_CITY_SILENT, REEL_SCENE_LOOP];
 
 /** `pageOfReels` — la graine EXCLUE (`PostFeedService.getReels`), puis le même
  * keyset que le fil (`pageOfFeed`). */

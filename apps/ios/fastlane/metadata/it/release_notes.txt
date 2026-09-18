@@ -1,7 +1,44 @@
-Novità: «Nelle vicinanze»
-• Scopri i post intorno a te su una mappa: densità, punti o elenco, nel raggio che scegli
-• Rendi i tuoi post trovabili nelle vicinanze, con la precisione che decidi TU: esatta, quartiere, città o regione, mai più precisa della tua scelta
-• «Vedi cosa c'è qui vicino» da qualsiasi luogo mostrato su un post
+Il più grande aggiornamento di Meeshy finora. Creare, guardare e parlare: tutto è stato ripensato.
 
-E inoltre
-• Più stabilità: corretto un arresto imprevisto all'apertura di «Nelle vicinanze»
+CREARE — UN SOLO STUDIO
+• Storia, Reel o Post: cambia formato dall'interno, senza perdere quello che hai già scritto o aggiunto
+• Componi con il pollice — una pressione lunga apre la fotocamera dentro la scena, strumenti a sinistra, cronologia a destra, annulla e ripristina quando vuoi
+• Più scene, più contenuti, ognuno con la sua didascalia e la sua lingua: carosello, mosaico o diapositive, scegli tu
+• Ritaglia, ruota e accorcia senza perdere qualità. Parti da un messaggio ricevuto, da qualcosa condiviso da un'altra app, o da ciò che hai appena incollato
+
+DECORARE — 200 STICKER, 14 EFFETTI DI TESTO
+• Una ventina di famiglie — gioia, umore, saluti, festa, natura, viaggio, musica, sport — e molte sono animate
+• Ritaglia un soggetto da una foto: entra nella tua libreria personale
+• Il testo passa da 4 a 14 effetti (bagliore, ombra, rilievo, neon), con 18 stili e i loro caratteri
+• Una decorazione può portare un dato vivo: luogo, ora, meteo, le tue parole
+
+LA TUA VOCE, NELLA LORO LINGUA
+• Il tuo messaggio vocale viene trascritto sul dispositivo appena lasci il tasto: il testo è lì subito, senza aspettare il server
+• L'audio di un post, di un reel o di un commento ora suona nella lingua di chi ascolta
+• Una sola schermata per registrare, tagliare e collocare un suono: sfondo di scena, colonna sonora, o contenuto da ascoltare sotto il testo
+• Le didascalie di foto e video si leggono nella tua lingua, tradotte in diretta
+
+GUARDARE
+• Lo schermo intero si apre nitido sull'immagine vera, mai su una miniatura sfocata
+• Una scena si presenta uguale ovunque — in una storia come in un post: stessa cornice, stesso piano, stessi angoli nitidi a schermo intero
+• Scorri i contenuti di un post e poi quelli dei suoi commenti, come una pellicola
+• Reagisci, rispondi o crea una storia senza uscire dallo schermo intero
+• Doppio tocco ai lati di un video: dieci secondi indietro o avanti
+
+CONVERSAZIONI
+• Selezione multipla fino a 100 messaggi per inoltrarli o eliminarli in una volta sola
+• Doppio tocco per reagire, pressione lunga per il menu — che ora propone solo azioni con un effetto reale
+• Le citazioni mostrano la miniatura, la durata e la dimensione del contenuto a cui puntano
+• Modalità di lettura rinnovate, e «Fiume» — il tempo come asse verticale — debutta in beta
+
+IL TUO ACCOUNT
+• Registrazione in una sola schermata: email o telefono, password facoltativa, link magico
+• Il tuo stato «online» è visibile solo agli amici accettati — né una conversazione condivisa, né una community, né un link a una storia lo rivelano
+• Progressi, serie e quasi 120 obiettivi; il Meesh, la nostra moneta rara, ha ora la sua monetina
+
+INTORNO A TE
+• «Nelle vicinanze» passa a due livelli, quartiere e scoperta, in densità, punti o elenco
+• Un'etichetta di luogo porta la sua fascia oraria — e farsi trovare resta una scelta esplicita, con la precisione che imposti tu
+
+SOTTO IL COFANO
+Avvio a freddo con una manciata di richieste: le tue conversazioni compaiono senza aspettare la rete. Nove crash risolti alla radice. Una ventina di correzioni di accessibilità — VoiceOver, Dynamic Type, contrasti WCAG, target da 44 pt, interfaccia rovesciata per l'arabo. Sette lingue di interfaccia servite senza approssimazioni.

@@ -26,6 +26,12 @@ export type SceneClockParams = {
    * l'objet complet. */
   readonly onTime: ((t: number) => void) | undefined;
   readonly onEnded: (() => void) | undefined;
+  /** Émis UNE fois par tour de boucle (`loops: true`), APRÈS le modulo —
+   * miroir `loopPass` (`MeeshyScenePlayer.swift:58-60, 270-273`, #6903) : le
+   * son de fond d'un réel REPART avec chaque tour (l'hôte remonte sa piste
+   * sur ce signal), sans jamais remonter le PLAYER (Zero Unnecessary
+   * Re-render). Jamais émis pour une scène qui NE boucle pas. */
+  readonly onLoop: (() => void) | undefined;
 };
 
 export type SceneClockHandle = {
@@ -48,7 +54,7 @@ export function useSceneClock(params: SceneClockParams): SceneClockHandle {
   const rafId = useRef<number | null>(null);
   const lastOnTimeAt = useRef(0);
   const ended = useRef(false);
-  const callbacks = useLatestCallback({ onTime: params.onTime, onEnded: params.onEnded });
+  const callbacks = useLatestCallback({ onTime: params.onTime, onEnded: params.onEnded, onLoop: params.onLoop });
 
   useEffect(() => {
     if (!enabled || !playing) {
@@ -66,6 +72,7 @@ export function useSceneClock(params: SceneClockParams): SceneClockHandle {
       if (hasDuration && durationSeconds !== null && t >= durationSeconds) {
         if (loops) {
           t = t % durationSeconds;
+          callbacks.current.onLoop?.();
         } else {
           t = durationSeconds;
           if (!ended.current) {

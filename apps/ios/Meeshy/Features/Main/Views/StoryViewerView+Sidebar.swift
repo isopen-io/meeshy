@@ -397,8 +397,11 @@ struct StoryActionSidebarView: View {
         // #6704 — le glyphe et le libellé de chaque bouton se teintent depuis la slide
         // AFFICHÉE : son fond média lu sous l'empreinte du rail, ou sa couleur par la
         // loi du fond uni. Une mesure par slide, jamais par image.
+        // **Le canvas est TOUJOURS 9:16** (`SceneShape.aspect`, #6896/#6904) :
+        // le rail ne lit plus `canvasAspect.ratio`, qui décrivait un rendu
+        // que le lecteur ne produit plus.
         .mediaChromeRail(for: .story(currentStory),
-                         stage: .storyRail(canvasAspect: currentStory?.storyEffects?.canvasAspect.ratio ?? 9.0 / 16.0),
+                         stage: .storyRail(canvasAspect: SceneShape.aspect),
                          flatBackground: currentStory?.storyEffects?.background)
         // Plan figé posé à l'apparition puis re-résolu au CHANGEMENT de slide
         // uniquement — les mises à jour de compteurs mid-slide ne re-déclenchent

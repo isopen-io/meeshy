@@ -174,6 +174,13 @@ extension PostDetailView {
                 //
                 // `renderedItem` décrit bien CE contenu : `StoryItem(feedPost:)`
                 // retombe sur la SOURCE d'une republication (`hasOwnContent`).
+                //
+                // Le cadre de ce lecteur n'est PAS déclaré ici : c'est
+                // `storyCanvasContainer` (`PostDetailView+Canvas.swift`), le
+                // conteneur PARTAGÉ des deux chemins natif et republication,
+                // qui le pose à `SceneShape.aspect` — TOUJOURS 9:16 (#6896,
+                // lot #6904). Un second rapport déclaré ici divergerait du
+                // canvas qu'il rend réellement (#6897).
                 storyCanvasOrPlaceholder(renderedItem: renderedItem) {
                     StoryReaderRepresentable(
                         repost: repost,
