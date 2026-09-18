@@ -222,32 +222,75 @@ describe('MediaGrid — l’image en ÉCHEC de décodage dans une case de grille
  * dérivait).
  */
 describe('MediaGrid — la boîte porte ses cotes dérivées (U4, #6169)', () => {
-  test('media-11 (2 pièces) : 300 × 180', () => {
+  /**
+   * #7030 (relecture adversariale, PAS jouée avant fusion) — `height` FIXE
+   * était le défaut : la boîte est plafonnée à `100 %` de son porteur
+   * (#7018), donc sa largeur RENDUE rétrécit dès que le porteur est plus
+   * étroit que 300 px (223,4 px en Bulles, mesuré) — une `height` littérale
+   * ne suit pas, chaque case shrinkée par flex-shrink se retrouve sous une
+   * hauteur inchangée : `110,7 × 180` au lieu de `110,7 × 134,0`. Même motif
+   * que la vidéo SEULE (#7016, ci-dessus) : `width` + `aspectRatio`, JAMAIS
+   * `height`, pour que la hauteur DESCENDE avec la largeur plafonnée.
+   */
+  test('media-11 (2 pièces) : largeur 300, forme 300 / 180 — jamais une hauteur figée', () => {
     const el = mount(attachmentsOf(MEDIA_GRID_PAIR_WITNESS_ID), () => {});
     const grid = el.querySelector('[data-media-grid]') as HTMLElement;
     expect(grid.style.width).toBe('300px');
-    expect(grid.style.height).toBe('180px');
+    expect(grid.style.height).toBe('');
+    expect(grid.style.aspectRatio).toBe('300 / 180');
   });
 
-  test('media-12 (3 pièces) : 300 × 240', () => {
+  test('media-12 (3 pièces) : largeur 300, forme 300 / 240 — jamais une hauteur figée', () => {
     const el = mount(attachmentsOf(MEDIA_GRID_TRIPLE_WITNESS_ID), () => {});
     const grid = el.querySelector('[data-media-grid]') as HTMLElement;
     expect(grid.style.width).toBe('300px');
-    expect(grid.style.height).toBe('240px');
+    expect(grid.style.height).toBe('');
+    expect(grid.style.aspectRatio).toBe('300 / 240');
   });
 
-  test('media-13 (4 pièces) : 300 × 240', () => {
+  test('media-13 (4 pièces) : largeur 300, forme 300 / 240 — jamais une hauteur figée', () => {
     const el = mount(attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID), () => {});
     const grid = el.querySelector('[data-media-grid]') as HTMLElement;
     expect(grid.style.width).toBe('300px');
-    expect(grid.style.height).toBe('240px');
+    expect(grid.style.height).toBe('');
+    expect(grid.style.aspectRatio).toBe('300 / 240');
   });
 
-  test('media-14 (6 pièces, 4 rendues) : 300 × 240', () => {
+  test('media-14 (6 pièces, 4 rendues) : largeur 300, forme 300 / 240 — jamais une hauteur figée', () => {
     const el = mount(attachmentsOf(MEDIA_GRID_OVERFLOW_WITNESS_ID), () => {});
     const grid = el.querySelector('[data-media-grid]') as HTMLElement;
     expect(grid.style.width).toBe('300px');
-    expect(grid.style.height).toBe('240px');
+    expect(grid.style.height).toBe('');
+    expect(grid.style.aspectRatio).toBe('300 / 240');
+  });
+
+  /**
+   * LA CASE, PAS SEULEMENT LA BOÎTE. La boîte peut suivre sa forme sans que
+   * les cases suivent la LEUR : ce témoin compare le RATIO largeur/hauteur
+   * posé par chaque case (paire, et la case GAUCHE du triplet — les deux
+   * seules où `slots[i].height` EST la hauteur rendue, `mediaGridSlots`
+   * documentant que les cases EMPILÉES du triplet portent la hauteur de la
+   * BOÎTE entière, pas la leur) à celui de `mediaGridSlots`, jamais à un
+   * littéral recopié.
+   */
+  test('media-11 (paire) : chaque case porte le ratio largeur/hauteur de mediaGridSlots', () => {
+    const el = mount(attachmentsOf(MEDIA_GRID_PAIR_WITNESS_ID), () => {});
+    const slots = mediaGridSlots(2);
+    const wrappers = Array.from(el.querySelectorAll('[data-slot-width]')) as HTMLElement[];
+    expect(wrappers.length).toBe(2);
+    wrappers.forEach((wrapper, i) => {
+      expect(wrapper.getAttribute('data-slot-width')).toBe(String(slots[i]!.width));
+      expect(wrapper.getAttribute('data-slot-height')).toBe(String(slots[i]!.height));
+    });
+  });
+
+  test('media-12 (triplet) : la case GAUCHE porte le ratio de mediaGridSlots[0]', () => {
+    const el = mount(attachmentsOf(MEDIA_GRID_TRIPLE_WITNESS_ID), () => {});
+    const slots = mediaGridSlots(3);
+    const wrappers = Array.from(el.querySelectorAll('[data-slot-width]')) as HTMLElement[];
+    expect(wrappers.length).toBe(1);
+    expect(wrappers[0]!.getAttribute('data-slot-width')).toBe(String(slots[0]!.width));
+    expect(wrappers[0]!.getAttribute('data-slot-height')).toBe(String(slots[0]!.height));
   });
 });
 

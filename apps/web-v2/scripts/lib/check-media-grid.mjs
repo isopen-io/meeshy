@@ -153,9 +153,23 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
     gridBox !== null && gridBox.width <= 300.5,
     `[${skin}/${scheme}] la boîte ne dépasse JAMAIS MEDIA_GRID_MAX_WIDTH (obtenu ${gridBox?.width})`,
   );
+  /**
+   * `240` N'EST PLUS UNE COTE FIXE NON PLUS (#7030, relecture adversariale).
+   *
+   * Ce témoin exigeait `height === 240`, littéral — et restait VERT
+   * précisément parce que le défaut qu'il aurait dû attraper le rendait vrai
+   * PAR CONSTRUCTION : la boîte portait `height: 240` en dur, insensible au
+   * plafond de LARGEUR `maxWidth: 100 %` ci-dessus. La largeur RENDUE
+   * rétrécit dès que le porteur est plus étroit que 300 px (223,4 px en
+   * Bulles, mesuré) ; une hauteur qui ne suit pas DÉFORME chaque case — la
+   * régression que G8, plus bas, mesure au niveau de la CASE. La règle
+   * vérifiée est désormais celle que le style POSE — `aspectRatio: 300 /
+   * 240` — soit `expectedGridWidth * 240 / 300`, jamais un littéral.
+   */
+  const expectedGridHeight = (expectedGridWidth * 240) / 300;
   expect(
-    gridBox !== null && Math.abs(gridBox.height - 240) <= 0.5,
-    `[${skin}/${scheme}] la boîte de la grille mesure 240px de haut (obtenu ${gridBox?.height})`,
+    gridBox !== null && Math.abs(gridBox.height - expectedGridHeight) <= 0.5,
+    `[${skin}/${scheme}] la boîte de la grille mesure ${expectedGridHeight.toFixed(1)}px de haut = min(300, porteur) × 240/300 (obtenu ${gridBox?.height})`,
   );
   expect(
     gridBox !== null && quadRowBox !== null && gridBox.x + gridBox.width <= quadRowBox.x + quadRowBox.width + 0.5,
@@ -334,6 +348,69 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
     `[${skin}/${scheme}] media-11 (2 images) rend 2 [data-media-tile]`,
   );
   await expectNoTileClipped(PAIR_ID);
+
+  /**
+   * ===== G8 — LA BOÎTE PLAFONNÉE GARDE LA FORME DE mediaGridSlots (#7030,
+   * relecture adversariale — la revue de la PR n'avait jamais été JOUÉE) =====
+   *
+   * `expectNoTileClipped` (G1, ci-dessus) prouve que rien ne DÉBORDE quand la
+   * boîte rétrécit (#7018) ; il ne prouve PAS que la FORME de chaque case
+   * suit celle que `mediaGridSlots` élit. Or plafonner la LARGEUR
+   * (`maxWidth: 100 %`) sans plafonner la HAUTEUR déforme : une `height`
+   * littérale ne suit pas le rétrécissement, chaque case shrinkée par
+   * `flex-shrink` se retrouve sous une hauteur inchangée. Mesuré AVANT
+   * correctif, Bulles 390×844 : media-11 (paire) 223,4×180 au lieu de
+   * 223,4×134,0 ; media-12 (triplet) même défaut sur la boîte.
+   *
+   * Le ratio de la BOÎTE se lit sur `style.aspectRatio` — la valeur RÉELLE
+   * que le composant pose (`aspectRatio: \`\${MEDIA_GRID_MAX_WIDTH} /
+   * \${boxHeight}\`\`), jamais un littéral recopié ici : si la loi change de
+   * hauteur, ce témoin suit sans qu'on le retouche.
+   *
+   * Le ratio de CHAQUE CASE se lit sur `data-slot-width`/`data-slot-height`,
+   * posés par `media-grid.tsx` depuis `slots[i]` — la sortie RÉELLE de
+   * `mediaGridSlots()` à ce montage. Seules la paire (les deux cases) et la
+   * case GAUCHE du triplet portent ces attributs : `mediaGridSlots` documente
+   * que `slots[i].height`, pour les DEUX cases empilées à droite du triplet,
+   * porte la hauteur de la BOÎTE ENTIÈRE, pas leur hauteur rendue — un
+   * littéral juste pour la boîte y serait faux pour la case, un témoin qui ne
+   * peut QUE tomber ou QUE passer n'apporte rien.
+   */
+  const checkBoxAspectRatio = async (id) => {
+    const gridEl = rowOf(id).locator('[data-media-grid]').first();
+    const aspectRatioStyle = await gridEl.evaluate((el) => el.style.aspectRatio);
+    const parsed = /^([\d.]+)\s*\/\s*([\d.]+)$/.exec(aspectRatioStyle ?? '');
+    expect(
+      parsed !== null,
+      `[${skin}/${scheme}] ${id} : la boîte porte un \`aspectRatio\` posé (obtenu ${JSON.stringify(aspectRatioStyle)})`,
+    );
+    if (parsed === null) return;
+    const [, designWidth, designHeight] = parsed;
+    const expectedRatio = Number(designWidth) / Number(designHeight);
+    const box = await gridEl.boundingBox();
+    const actualRatio = box === null || box.height === 0 ? 0 : box.width / box.height;
+    expect(
+      box !== null && Math.abs(actualRatio - expectedRatio) / expectedRatio <= 0.02,
+      `[${skin}/${scheme}] ${id} : la boîte garde le ratio ${expectedRatio.toFixed(3)} posé par \`aspectRatio\` (obtenu ${actualRatio.toFixed(3)}, boîte ${JSON.stringify(box)})`,
+    );
+  };
+  const checkSlotRatio = async (id, tileIndex) => {
+    const wrapper = rowOf(id).locator('[data-slot-width]').nth(tileIndex);
+    const slotWidth = Number(await wrapper.getAttribute('data-slot-width'));
+    const slotHeight = Number(await wrapper.getAttribute('data-slot-height'));
+    const expectedRatio = slotWidth / slotHeight;
+    const tileBox = await wrapper.locator('[data-media-tile]').first().boundingBox();
+    const actualRatio = tileBox === null || tileBox.height === 0 ? 0 : tileBox.width / tileBox.height;
+    expect(
+      tileBox !== null && Math.abs(actualRatio - expectedRatio) / expectedRatio <= 0.02,
+      `[${skin}/${scheme}] ${id} case ${tileIndex} : ratio ${expectedRatio.toFixed(3)} (mediaGridSlots ${slotWidth}×${slotHeight}), obtenu ${actualRatio.toFixed(3)} (case ${JSON.stringify(tileBox)})`,
+    );
+  };
+  await checkBoxAspectRatio(PAIR_ID);
+  await checkSlotRatio(PAIR_ID, 0);
+  await checkSlotRatio(PAIR_ID, 1);
+  await checkBoxAspectRatio(TRIPLE_VIDEO_ID);
+  await checkSlotRatio(TRIPLE_VIDEO_ID, 0);
 
   /**
    * ===== G6 — LA VIDÉO SEULE OCCUPE UNE HAUTEUR (#7016) =====

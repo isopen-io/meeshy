@@ -211,20 +211,54 @@ export const MediaGrid = memo(function MediaGrid({
          `max-w-[70%]` + la gouttière de 50 px) débordait de 46,6 px : vers la
          GOUTTIÈRE sur un message reçu — invisible —, HORS DE L'ÉCRAN sur un
          message DE MOI (`justify-end`), rendant tout le fil défilable
-         horizontalement (`scrollWidth` 437 pour `clientWidth` 390, mesuré). */
-      style={{ width: MEDIA_GRID_MAX_WIDTH, maxWidth: '100%', height: boxHeight }}
+         horizontalement (`scrollWidth` 437 pour `clientWidth` 390, mesuré).
+
+         `aspectRatio`, JAMAIS `height` (#7030, relecture adversariale — la
+         régression que #7018 a introduite en se corrigeant à moitié) : le
+         plafond `100 %` fait RÉTRÉCIR la largeur RENDUE dès que le porteur
+         est plus étroit que 300 px (223,4 px en Bulles, mesuré), et une
+         `height` littérale ne suit pas — chaque case, shrinkée par
+         `flex-shrink` par défaut, se retrouvait sous une hauteur inchangée
+         (paire : 110,7 × 180 au lieu de 110,7 × 134,0). Même motif que la
+         vidéo SEULE (#7016, `soloVideoSlot`, ci-dessus dans ce fichier) :
+         `width` + `aspectRatio` fait DESCENDRE la hauteur avec la largeur
+         plafonnée, dans les trois agencements (paire, triplet, quadruple —
+         `1fr 1fr` y est déjà proportionnel en largeur, il ne l'était pas en
+         hauteur) sans toucher aux cotes des CASES, qui restent en px : le
+         partage `flex-shrink` par défaut (poids égaux à valeurs de départ
+         égales) les rétrécit déjà PROPORTIONNELLEMENT à la largeur de la
+         boîte — mesuré après correctif : écart ≤ 0,3 % avec le ratio de
+         `mediaGridSlots`, bien sous la tolérance de 2 % du gate. */
+      style={{ width: MEDIA_GRID_MAX_WIDTH, maxWidth: '100%', aspectRatio: `${MEDIA_GRID_MAX_WIDTH} / ${boxHeight}` }}
     >
       {items.length === 2 ? (
         <div className="flex size-full" style={{ gap: MEDIA_GRID_SPACING }}>
           {visible.map((a, i) => (
-            <div key={a.id} style={{ width: slots[i]!.width }}>
+            <div
+              key={a.id}
+              data-slot-width={slots[i]!.width}
+              data-slot-height={slots[i]!.height}
+              style={{ width: slots[i]!.width }}
+            >
               {cell(a, i, slots[i]!.width)}
             </div>
           ))}
         </div>
       ) : items.length === 3 ? (
         <div className="flex size-full" style={{ gap: MEDIA_GRID_SPACING }}>
-          <div style={{ width: slots[0]!.width }}>{cell(visible[0]!, 0, slots[0]!.width)}</div>
+          {/* Seule case GAUCHE à porter l'attribut de RATIO (gate #7030) :
+             `slots[1]`/`slots[2]` (colonne de droite) valent la hauteur de la
+             BOÎTE entière (doc de `mediaGridSlots`), pas la hauteur rendue de
+             CHAQUE case empilée — comparer leur `boundingBox` à ce littéral
+             comparerait deux choses différentes, un faux témoin plus nocif
+             qu'une absence de témoin. */}
+          <div
+            data-slot-width={slots[0]!.width}
+            data-slot-height={slots[0]!.height}
+            style={{ width: slots[0]!.width }}
+          >
+            {cell(visible[0]!, 0, slots[0]!.width)}
+          </div>
           <div className="flex flex-col" style={{ width: slots[1]!.width, gap: MEDIA_GRID_SPACING }}>
             <div style={{ flex: 1 }}>{cell(visible[1]!, 1, slots[1]!.width)}</div>
             <div style={{ flex: 1 }}>{cell(visible[2]!, 2, slots[2]!.width)}</div>
