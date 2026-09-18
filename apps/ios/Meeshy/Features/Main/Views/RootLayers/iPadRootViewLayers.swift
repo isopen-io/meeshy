@@ -25,7 +25,7 @@ struct iPadEnvironmentLayer: ViewModifier {
             .environmentObject(router)
             .environmentObject(storyViewModel)
             .environmentObject(statusViewModel)
-            .environmentObject(conversationViewModel)
+            .meeshyConversationList(conversationViewModel)
             .environmentObject(storyViewerCoordinator)
             // Humeur / anneau de story par EnvironmentValues : les feuilles (dont
             // la feuille de commentaires) en héritent, contrairement aux
@@ -161,7 +161,7 @@ struct iPadSheetsLayer: ViewModifier {
                             router.pendingShareContent = nil
                         }
                     )
-                    .environmentObject(conversationViewModel)
+                    .meeshyConversationList(conversationViewModel)
                     .environmentObject(router)
                     .environmentObject(statusViewModel)
                     .presentationDetents([.medium, .large])
@@ -189,7 +189,7 @@ struct iPadSheetsLayer: ViewModifier {
                 .environmentObject(router)
                 .environmentObject(storyViewModel)
                 .environmentObject(statusViewModel)
-                .environmentObject(conversationViewModel)
+                .meeshyConversationList(conversationViewModel)
                 .environmentObject(storyViewerCoordinator)
                 .presentationDetents([.large, .medium])
                 .presentationDragIndicator(.visible)
@@ -231,7 +231,7 @@ struct iPadCoversAndChromeLayer: ViewModifier {
                 )
                 .environmentObject(router)
                 .environmentObject(statusViewModel)
-                .environmentObject(conversationViewModel)
+                .meeshyConversationList(conversationViewModel)
                 .environment(\.isStoryViewerPresenting, true)
                 .zoomTransitionDestination(sourceID: selectedStoryUserIdFromConv ?? "", in: storyZoomNamespace)
             }
@@ -256,7 +256,7 @@ struct iPadCoversAndChromeLayer: ViewModifier {
                 .zoomTransitionDestination(sourceID: request.id, in: storyZoomNamespace)
                 .environmentObject(router)
                 .environmentObject(statusViewModel)
-                .environmentObject(conversationViewModel)
+                .meeshyConversationList(conversationViewModel)
                 .environment(\.isStoryViewerPresenting, true)
             }
             // La célébration d'un palier (#5809) — l'hôte est écrit une seule
@@ -306,7 +306,7 @@ struct iPadCoversAndChromeLayer: ViewModifier {
                 }
                 .environmentObject(router)
                 .environmentObject(statusViewModel)
-                .environmentObject(conversationViewModel)
+                .meeshyConversationList(conversationViewModel)
                 .environmentObject(storyViewModel)
             }
             .overlay(alignment: .top) {

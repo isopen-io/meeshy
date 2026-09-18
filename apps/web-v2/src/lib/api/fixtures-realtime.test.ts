@@ -4,6 +4,13 @@ import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names'
 
 import { VIEWER_ID } from './fixtures-base';
 import { CONVERSATIONS, conversationsWithSurged, resetSurgedConversationsForTests } from './fixtures';
+import {
+  LIVE_3_ATTACHMENT_ID,
+  LIVE_3_AUDIO_URL,
+  LIVE_3_ID,
+  LIVE_CONVERSATION_ID,
+  LIVE_MESSAGES,
+} from './fixtures-live';
 import { createFixturesSocketClient, LIVE_SCHEDULE, recordSurgedFromEntry } from './fixtures-realtime';
 
 describe('createFixturesSocketClient (#5793) — le bouchon de fixtures', () => {
@@ -175,5 +182,59 @@ describe('createFixturesSocketClient (#5793) — le bouchon de fixtures', () => 
 
     expect(conversationsWithSurged()).toHaveLength(CONVERSATIONS.length);
     resetSurgedConversationsForTests();
+  });
+
+  /**
+   * `message:attachment-updated` × 3 (#7017) — LE PIPELINE AUDIO, LU DANS LA
+   * DONNÉE. Ce que ce témoin garde n'est pas visible au gate navigateur, qui
+   * ne peut que constater l'ABSENCE de transcription : une charge qui
+   * désignerait un autre `attachment.id` que celui du corpus serait un NO-OP
+   * silencieux (`applyMessageAttachmentUpdated` n'AJOUTE jamais une pièce
+   * inconnue), donc indistinguable d'un correctif absent.
+   */
+  test('la chronologie enrichit LA pièce de `live-3`, en trois temps, aux mêmes id', () => {
+    const entries = LIVE_SCHEDULE.filter((e) => e.event === SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED);
+    expect(entries).toHaveLength(3);
+
+    for (const entry of entries) {
+      const payload = entry.payload as {
+        readonly conversationId: string;
+        readonly messageId: string;
+        readonly attachment: Record<string, unknown>;
+      };
+      expect(payload.conversationId).toBe(LIVE_CONVERSATION_ID);
+      expect(payload.messageId).toBe(LIVE_3_ID);
+      expect(payload.attachment.id).toBe(LIVE_3_ATTACHMENT_ID);
+      /* La MÊME pièce que le corpus sert : un `fileUrl` divergent ferait
+         rejouer la piste originale sous une transcription traduite. */
+      expect(payload.attachment.fileUrl).toBe(LIVE_3_AUDIO_URL);
+      /* LA CHARGE LA PLUS PAUVRE — aucun des trois drapeaux de protection,
+         donc le pire cas de la garde de masquage du puits (c'est ce que sert
+         la passerelle d'avant #7014). Enrichir cette fixture rendrait
+         indémontrable le cas où le cache est le SEUL à savoir qu'une pièce est
+         masquée, et ferait passer ici un gate que la vraie passerelle ferait
+         tomber. */
+      expect('isViewOnce' in payload.attachment).toBe(false);
+      expect('isBlurred' in payload.attachment).toBe(false);
+      expect('effectFlags' in payload.attachment).toBe(false);
+    }
+
+    /* CUMULATIVE — le serveur relit la ligne après chaque enrichissement, donc
+       l'évènement `fr` porte AUSSI `en` : « clients REPLACE the attachment's
+       translation map with what this event carries » (`emitAttachmentUpdated.ts`). */
+    const languagesOf = (index: number) =>
+      Object.keys((entries[index]?.payload as { readonly attachment: { readonly translations: object } }).attachment.translations).sort();
+    expect(languagesOf(0)).toEqual([]);
+    expect(languagesOf(1)).toEqual(['en']);
+    expect(languagesOf(2)).toEqual(['en', 'fr']);
+  });
+
+  /** La pièce du CORPUS part NUE — sans quoi l'état « aucune transcription »
+   * n'existerait jamais et le gate mesurerait un texte qui était déjà là. */
+  test('`live-3` part SANS transcription ni traduction', () => {
+    const attachment = LIVE_MESSAGES.find((m) => m.id === LIVE_3_ID)?.attachments?.[0];
+    expect(attachment?.id).toBe(LIVE_3_ATTACHMENT_ID);
+    expect(attachment?.transcription).toBeUndefined();
+    expect(attachment?.translations).toBeUndefined();
   });
 });

@@ -860,7 +860,7 @@ struct CallView: View {
             return String(localized: "call.transcription.error.permissionDenied", defaultValue: "Autorisez la reconnaissance vocale dans Réglages pour activer les sous-titres.", bundle: .main)
         case .recognizerUnavailable, .onDeviceNotSupported:
             return String(localized: "call.transcription.error.unavailable", defaultValue: "Sous-titres indisponibles pour votre langue sur cet appareil.", bundle: .main)
-        case .recognitionFailed, .audioEngineFailed:
+        case .recognitionFailed, .audioEngineFailed, .tapFormatUnavailable:
             return String(localized: "call.transcription.error.failed", defaultValue: "Impossible d'activer les sous-titres. Réessayez.", bundle: .main)
         }
     }

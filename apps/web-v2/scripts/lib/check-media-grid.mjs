@@ -29,6 +29,15 @@ import { waitForRowSettled } from './check-media.mjs';
 const QUAD_ID = 'media-13';
 const OVERFLOW_ID = 'media-14';
 const TRIPLE_VIDEO_ID = 'media-12';
+/** `media-11` — LA PAIRE, le troisième agencement, qu'aucun gate ne visitait. */
+const PAIR_ID = 'media-11';
+/** `media-15` — LA VIDÉO SEULE (#7016) : la branche SOLO de `MediaGrid`, qu'aucun gate ne visitait. */
+const SOLO_VIDEO_ID = 'media-15';
+/** `media-16` — DEUX IMAGES DE MOI (#7018) : la branche `justify-end`, qu'aucune fixture n'atteignait. */
+const MINE_GRID_ID = 'media-16';
+
+/** Le ratio de la vidéo témoin (`gridVideo`, 160 × 90) — `soloVideoSlot` s'y accroche, repli 16/9 identique. */
+const SOLO_VIDEO_RATIO = 160 / 90;
 
 async function scrollUntilMounted(page, scroller, id) {
   for (let attempt = 1; attempt <= 40; attempt += 1) {
@@ -36,6 +45,23 @@ async function scrollUntilMounted(page, scroller, id) {
     if (mounted) return;
     await scroller.evaluate((el) => {
       el.scrollTop = 0;
+    });
+    await page.waitForTimeout(150);
+  }
+}
+
+/**
+ * Le pendant VERS LE BAS de `scrollUntilMounted` — `media-16` est le
+ * DERNIER message avant `media-7` : une fois les témoins du haut visités, le
+ * virtualiseur l'a démonté, et remonter au sommet (`scrollTop = 0`) ne le
+ * remontera jamais. La direction du défilement fait partie du témoin.
+ */
+async function scrollDownUntilMounted(page, scroller, id) {
+  for (let attempt = 1; attempt <= 40; attempt += 1) {
+    const mounted = await page.evaluate((mid) => document.querySelector(`[data-message="${mid}"]`) !== null, id);
+    if (mounted) return;
+    await scroller.evaluate((el) => {
+      el.scrollTop = el.scrollHeight;
     });
     await page.waitForTimeout(150);
   }
@@ -95,9 +121,37 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
 
   const gridBox = await rowOf(QUAD_ID).locator('[data-media-grid]').first().boundingBox();
   const quadRowBox = await rowOf(QUAD_ID).boundingBox();
+  /**
+   * `MEDIA_GRID_MAX_WIDTH` EST UN PLAFOND, PAS UNE COTE (#7018).
+   *
+   * Ce témoin exigeait `width === 300` — et il était VERT parce que la boîte
+   * DÉBORDAIT : à 390 px de viewport, le porteur de la grille mesure 246 px en
+   * Focal et 223 px en Bulles, jamais 300. Le littéral encodait donc le défaut
+   * qu'il aurait dû attraper, et le seul cas où il pouvait rougir était sa
+   * CORRECTION. La règle vérifiée est désormais celle que le style POSE —
+   * `width: 300` plafonné à `100 %` — soit `min(300, porteur)`, et le débord
+   * se juge par les deux témoins en dessous.
+   */
+  /* La largeur de CONTENU du porteur, jamais sa `boundingBox` : `100 %` se
+     résout contre la boîte de CONTENU, et une bulle REÇUE porte une bordure
+     de 1 px en plus de ses 14 px de padding (mesuré : 253,4 de bord à bord,
+     223,4 de contenu) — deux pixels qui feraient rougir un témoin juste. */
+  const gridHostWidth = await rowOf(QUAD_ID)
+    .locator('[data-media-grid]')
+    .first()
+    .evaluate((el) => {
+      const host = el.parentElement;
+      const style = getComputedStyle(host);
+      return host.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+    });
+  const expectedGridWidth = Math.min(300, gridHostWidth);
   expect(
-    gridBox !== null && Math.abs(gridBox.width - 300) <= 0.5,
-    `[${skin}/${scheme}] la boîte de la grille mesure 300px de large (obtenu ${gridBox?.width})`,
+    gridBox !== null && Math.abs(gridBox.width - expectedGridWidth) <= 0.5,
+    `[${skin}/${scheme}] la boîte de la grille mesure min(300, porteur) = ${expectedGridWidth.toFixed(1)}px de large (obtenu ${gridBox?.width})`,
+  );
+  expect(
+    gridBox !== null && gridBox.width <= 300.5,
+    `[${skin}/${scheme}] la boîte ne dépasse JAMAIS MEDIA_GRID_MAX_WIDTH (obtenu ${gridBox?.width})`,
   );
   expect(
     gridBox !== null && Math.abs(gridBox.height - 240) <= 0.5,
@@ -107,6 +161,32 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
     gridBox !== null && quadRowBox !== null && gridBox.x + gridBox.width <= quadRowBox.x + quadRowBox.width + 0.5,
     `[${skin}/${scheme}] la grille ne déborde jamais de la rangée (${JSON.stringify({ gridBox, quadRowBox })})`,
   );
+  /**
+   * LE COROLLAIRE DU PLAFOND, SUR LES QUATRE AGENCEMENTS.
+   *
+   * Plafonner la boîte (#7018) crée un risque que le débord n'avait pas : une
+   * boîte qui RÉTRÉCIT et des cases qui ne rétrécissent pas seraient COUPÉES.
+   * Et ce défaut-là se CACHE — la boîte porte `overflow: hidden` (mesuré),
+   * donc rien ne dépasse, rien ne déclenche le témoin de défilement, et
+   * l'image manquante ressemble à un cadrage voulu. C'est le pire des deux.
+   *
+   * Sur les QUATRE, jamais sur le seul quadruple : les trois agencements sont
+   * gouvernés par des mécanismes DIFFÉRENTS — `flex-shrink` par défaut sur la
+   * paire et le triplet (dont les cases portent une `width` EXPLICITE, ce qui
+   * a tout l'air d'une cote qui ne cédera pas), `1fr 1fr` sur le quadruple.
+   * Un témoin posé sur un seul d'entre eux ne dit rien des deux autres.
+   */
+  const expectNoTileClipped = async (id) => {
+    const box = await rowOf(id).locator('[data-media-grid]').first().boundingBox();
+    const tilesRight = await rowOf(id)
+      .locator('[data-media-tile]')
+      .evaluateAll((els) => Math.max(...els.map((el) => el.getBoundingClientRect().right)));
+    expect(
+      box !== null && tilesRight <= box.x + box.width + 0.5,
+      `[${skin}/${scheme}] ${id} : aucune case n'est COUPÉE par la boîte (case la plus à droite ${tilesRight.toFixed(1)}, boîte ${box === null ? '?' : (box.x + box.width).toFixed(1)})`,
+    );
+  };
+  await expectNoTileClipped(QUAD_ID);
 
   await scrollUntilMounted(page, scroller, OVERFLOW_ID);
   await waitForRowSettled(page, OVERFLOW_ID);
@@ -125,6 +205,7 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
     (await maskedTile.locator('img').count()) === 0,
     `[${skin}/${scheme}] le substitut masqué ne rend AUCUN <img>`,
   );
+  await expectNoTileClipped(OVERFLOW_ID);
 
   // ===== G2 — chaque tuile est décodée, aucune image perdue =====
   //
@@ -241,8 +322,106 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
     (await tripleRow.locator('video[poster]').count()) === 1,
     `[${skin}/${scheme}] la vidéo de media-12 porte un poster, jamais un <video> vide`,
   );
+  await expectNoTileClipped(TRIPLE_VIDEO_ID);
+
+  /* `media-11` n'était visitée par AUCUN gate — la PAIRE est pourtant le
+     troisième agencement, et le seul dont les deux cases se partagent la
+     largeur à parts égales sous `flex-shrink`. */
+  await scrollUntilMounted(page, scroller, PAIR_ID);
+  await waitForRowSettled(page, PAIR_ID);
+  expect(
+    (await rowOf(PAIR_ID).locator('[data-media-tile]').count()) === 2,
+    `[${skin}/${scheme}] media-11 (2 images) rend 2 [data-media-tile]`,
+  );
+  await expectNoTileClipped(PAIR_ID);
+
+  /**
+   * ===== G6 — LA VIDÉO SEULE OCCUPE UNE HAUTEUR (#7016) =====
+   *
+   * La branche SOLO de `MediaGrid` rendait `VideoTile` SANS conteneur
+   * dimensionné, or sa racine est `size-full` avec tous ses enfants
+   * `absolute inset-0` : un `height: 100%` contre un parent en hauteur `auto`
+   * se résout en `auto` → contenu → ZÉRO. Mesuré avant ce lot, au navigateur :
+   * `{focal: {w:246, h:0}, bulles: {w:119, h:0}}` — une vidéo INVISIBLE, dans
+   * les deux peaux.
+   *
+   * La loi qui la dimensionne existait, testée et gardée par le gate de cotes
+   * (`soloVideoSlot`, `media-grid-layout.ts`), et n'était appelée par PERSONNE
+   * — le motif « une loi qui calcule une valeur que personne ne lit ». Ce
+   * témoin mesure ce que la loi PRODUIT à l'écran, jamais son retour.
+   *
+   * Pourquoi le RATIO plutôt que la cote : la boîte est plafonnée à `100 %`
+   * de son porteur (#7018 ci-dessous), donc sa largeur RENDUE dépend de la
+   * peau (246 en Focal, la bulle en Bulles). Ce qui doit tenir dans les deux,
+   * c'est la FORME que `soloVideoSlot` élit — et une hauteur non nulle.
+   */
+  await scrollUntilMounted(page, scroller, SOLO_VIDEO_ID);
+  await waitForRowSettled(page, SOLO_VIDEO_ID);
+  const soloRow = rowOf(SOLO_VIDEO_ID);
+  const soloTileBox = await soloRow.locator('[data-media-tile]').first().boundingBox();
+  const soloVideoBox = await soloRow.locator('video').first().boundingBox();
+  expect(
+    soloTileBox !== null && soloTileBox.height > 0,
+    `[${skin}/${scheme}] media-15 (vidéo SEULE) a une hauteur NON NULLE (obtenu ${JSON.stringify(soloTileBox)})`,
+  );
+  expect(
+    soloVideoBox !== null && soloVideoBox.height > 0 && soloVideoBox.width > 0,
+    `[${skin}/${scheme}] le <video> de media-15 est VISIBLE, jamais un rectangle plat (obtenu ${JSON.stringify(soloVideoBox)})`,
+  );
+  expect(
+    (await soloRow.locator('video[poster]').count()) === 1,
+    `[${skin}/${scheme}] la vidéo SEULE de media-15 porte son poster, jamais un <video> vide`,
+  );
+  const soloRatio = soloTileBox === null || soloTileBox.height === 0 ? 0 : soloTileBox.width / soloTileBox.height;
+  expect(
+    Math.abs(soloRatio - SOLO_VIDEO_RATIO) <= 0.05,
+    `[${skin}/${scheme}] media-15 garde la FORME élue par soloVideoSlot (${SOLO_VIDEO_RATIO.toFixed(3)}), obtenu ${soloRatio.toFixed(3)}`,
+  );
+  expect(
+    soloTileBox !== null && soloTileBox.width <= 300.5,
+    `[${skin}/${scheme}] media-15 ne dépasse jamais MEDIA_GRID_MAX_WIDTH (obtenu ${soloTileBox?.width})`,
+  );
+
+  /**
+   * ===== G7 — LE FIL N'EST JAMAIS DÉFILABLE HORIZONTALEMENT (#7018) =====
+   *
+   * L'INVARIANT, plus fort et plus simple que « la grille ne déborde pas de la
+   * rangée » (G1 ci-dessus) : il attrape TOUTE la famille — n'importe quelle
+   * boîte de largeur fixe dans n'importe quel porteur contraint, pas seulement
+   * la grille de `media-16`.
+   *
+   * Pourquoi G1 ne pouvait pas le voir : il assertait le débord de la RANGÉE,
+   * jamais de la BULLE, et les cinq fixtures de grille venaient TOUTES d'un
+   * autre expéditeur. Sur un message REÇU la bulle est collée à GAUCHE et les
+   * 46,6 px de débord tombent dans la gouttière de 50 px — invisibles. Sur un
+   * message DE MOI (`justify-end`) la même boîte sort de l'ÉCRAN. Le gate
+   * était juste ; il lui manquait la donnée. `media-16` est cette donnée.
+   */
+  await scrollDownUntilMounted(page, scroller, MINE_GRID_ID);
+  await waitForRowSettled(page, MINE_GRID_ID);
+  const mineRow = rowOf(MINE_GRID_ID);
+  if (skin === 'bulles') {
+    const mineJustify = await mineRow.evaluate((el) => getComputedStyle(el).justifyContent);
+    expect(
+      mineJustify === 'flex-end',
+      `[${skin}/${scheme}] media-16 est bien la branche « DE MOI » (justify-end), sans quoi ce témoin mesure l'autre cas (obtenu ${mineJustify})`,
+    );
+  }
+  const mineGridBox = await mineRow.locator('[data-media-grid]').first().boundingBox();
+  const viewportWidth = await page.evaluate(() => window.innerWidth);
+  expect(
+    mineGridBox !== null && mineGridBox.x + mineGridBox.width <= viewportWidth + 0.5,
+    `[${skin}/${scheme}] la grille de media-16 reste DANS l'écran (bord droit ${mineGridBox === null ? '?' : mineGridBox.x + mineGridBox.width}, écran ${viewportWidth})`,
+  );
+  const scrollerWidths = await scroller.evaluate((el) => ({ scrollWidth: el.scrollWidth, clientWidth: el.clientWidth }));
+  expect(
+    scrollerWidths.scrollWidth <= scrollerWidths.clientWidth,
+    `[${skin}/${scheme}] le fil n'est JAMAIS défilable horizontalement (${JSON.stringify(scrollerWidths)})`,
+  );
 
   // ===== G3 — le tap ouvre la visionneuse au bon index, le focus est piégé, le retour la ferme =====
+  // G7 a défilé VERS LE BAS : le virtualiseur a démonté `media-13`, il faut le remonter avant de le viser.
+  await scrollUntilMounted(page, scroller, QUAD_ID);
   await rowOf(QUAD_ID).evaluate((el) => el.scrollIntoView({ block: 'center' }));
   await waitForRowSettled(page, QUAD_ID);
   const historyLengthBefore = await page.evaluate(() => window.history.length);

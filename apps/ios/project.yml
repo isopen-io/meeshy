@@ -176,6 +176,15 @@ targets:
       - path: Meeshy
         excludes:
           - "**/*.md"
+      # #7003 — la LOI qui décide ce que l'extension de notification a le droit
+      # d'attacher (famille de média + plafond mémoire) vit chez son
+      # consommateur, dans `MeeshyNotificationExtension`. Mais une extension de
+      # notification n'a pas d'hôte de test : le seul endroit d'où une règle
+      # pure est éprouvable est `MeeshyTests`, qui `@testable import Meeshy`.
+      # Le fichier est donc compilé dans les DEUX cibles — même mécanique que
+      # `ForwardPickerModel.swift` pour l'extension de partage, en sens
+      # inverse. Il n'importe QUE Foundation ; garde : `NSEAttachmentPolicyTests`.
+      - path: MeeshyNotificationExtension/NSEAttachmentPolicy.swift
     settings:
       INFOPLIST_FILE: Meeshy/Info.plist
       PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app

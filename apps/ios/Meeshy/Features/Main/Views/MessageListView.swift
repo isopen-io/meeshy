@@ -655,7 +655,11 @@ struct MessageListView: UIViewControllerRepresentable {
     @EnvironmentObject private var router: Router
     @EnvironmentObject private var storyViewModel: StoryViewModel
     @EnvironmentObject private var statusViewModel: StatusViewModel
-    @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
+    /// SANS abonnement (#7006) : le fil ne LIT le modèle de liste que pour le
+    /// remettre au contrôleur, dans `makeUIViewController`. Déclaré en
+    /// `@EnvironmentObject`, il rejouait `updateUIViewController` à chaque
+    /// `typing:start` de n'importe quelle conversation.
+    @Environment(\.meeshyConversationList) private var conversationListViewModel
     @Environment(\.colorScheme) private var colorScheme
 
     class Coordinator {

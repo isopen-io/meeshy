@@ -6,10 +6,12 @@ import { apiDeps, postMediaUploadDeps } from '@/lib/api/deps';
 import type { ApiFailure, ApiResult } from '@/lib/api/http';
 import { attachmentSrc } from '@/lib/api/media-url';
 import type { PostMediaUploadDeps, PostMediaUploadResult } from '@/lib/api/post-media-upload';
+import { protectedMediaDeps, type ProtectedMediaDeps } from '@/lib/api/protected-media';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
 import { STORIES_QUERY_PREFIX } from '@/lib/api/stories';
 import { publishStory } from '@/lib/api/stories-publish';
+import { useProtectedMediaSrc } from '@/lib/api/use-protected-media';
 import { backgroundCss } from '@/lib/canvas/background';
 import { electBackgroundTrack } from '@/lib/canvas/background-sound';
 import type { SceneCarrier } from '@/lib/canvas/carrier';
@@ -100,9 +102,18 @@ export type StoryStudioDeps = {
   readonly api: ConversationsDeps;
   readonly upload: PostMediaUploadDeps;
   readonly drafts: StudioDraftStore;
+  /** LE TRANSPORT D'UNE PISTE PROTÉGÉE (#7015) — injectable pour les témoins
+   * UNIQUEMENT, comme tout le réseau de cet écran. La production prend
+   * `protectedMediaDeps`, le site UNIQUE. */
+  readonly media?: ProtectedMediaDeps;
 };
 
-const defaultStoryStudioDeps: StoryStudioDeps = { api: apiDeps, upload: postMediaUploadDeps, drafts: studioDraftStore };
+const defaultStoryStudioDeps: StoryStudioDeps = {
+  api: apiDeps,
+  upload: postMediaUploadDeps,
+  drafts: studioDraftStore,
+  media: protectedMediaDeps,
+};
 
 /** L'aperçu adresse ses médias par `mediaURL` (URL locale) : le porteur est
  * VIDE, et CONSTANT — une nouvelle identité à chaque rendu re-rendrait le
@@ -544,8 +555,27 @@ function StoryStudio({ deps, viewerId }: { readonly deps: StoryStudioDeps; reado
     () => (previewDocument === null ? null : electBackgroundTrack({ document: previewDocument, sceneIndex: 0, carrier: PREVIEW_CARRIER })),
     [previewDocument],
   );
+  /**
+   * #7015, revue-correction — **LE TROISIÈME `<audio>` DE LA MÊME SOURCE.**
+   *
+   * L'aperçu élit sa piste avec `electBackgroundTrack`, exactement comme le
+   * lecteur de story et celui des Réels, et posait sa `src` TELLE QUELLE. Une
+   * piste EMPRUNTÉE est servie par `GET /api/v1/static/…`, une route
+   * AUTHENTIFIÉE : la balise part sans en-tête et rend `401`. La
+   * bibliothèque n'est pas encore branchée à cet écran (`background-sound.ts`
+   * : « `library` reste HORS PÉRIMÈTRE »), donc rien ne l'atteint AUJOURD'HUI
+   * — c'est précisément pourquoi le site unique se branche maintenant, avant
+   * qu'un emprunt ne rouvre le défaut. Sur un `blob:` ou une pièce jointe
+   * ordinaire, le hook rend la source INCHANGÉE et SYNCHRONEMENT : rien ne
+   * change pour le chemin nominal.
+   */
+  const { src: soundSrc } = useProtectedMediaSrc(backgroundTrack?.src ?? '', deps.media ?? protectedMediaDeps);
   const [soundMuted, setSoundMuted] = useState(true);
   const soundAudioRef = useRef<HTMLAudioElement | null>(null);
+  // La dépendance est la source RÉSOLUE, jamais celle qu'on a demandée : une
+  // piste protégée n'est montée qu'APRÈS sa résolution, et un effet calé sur
+  // `track.src` ne se rejouerait pas — il aurait tourné une fois, sur un `ref`
+  // nul, et la piste ne démarrerait jamais.
   useEffect(() => {
     const el = soundAudioRef.current;
     if (el === null || backgroundTrack === null) return;
@@ -555,7 +585,7 @@ function StoryStudio({ deps, viewerId }: { readonly deps: StoryStudioDeps; reado
       // bouton — un vrai geste utilisateur — reste la seule voie, jamais un
       // second essai silencieux qui masquerait le refus.
     });
-  }, [backgroundTrack?.src]);
+  }, [soundSrc]);
 
   /** LA SAISIE ADOPTE LA BOÎTE DU TEXTE SÉLECTIONNÉ, jamais une formule
    * recopiée (défaut 1, revue-correction #6900) — `stageRef` porte l'ancêtre
@@ -699,10 +729,10 @@ function StoryStudio({ deps, viewerId }: { readonly deps: StoryStudioDeps; reado
                 />
               </Suspense>
             ) : null}
-            {backgroundTrack !== null ? (
+            {soundSrc !== null && soundSrc !== '' ? (
               <>
                 {/* eslint-disable-next-line jsx-a11y/media-has-caption -- son de fond décoratif, aucun sous-titre à porter ici (P1) */}
-                <audio ref={soundAudioRef} data-story-studio-sound src={backgroundTrack.src} loop muted={soundMuted} />
+                <audio ref={soundAudioRef} data-story-studio-sound src={soundSrc} loop muted={soundMuted} />
                 <button
                   type="button"
                   data-story-studio-sound-toggle

@@ -48,7 +48,7 @@ final class MessageListViewController: UIViewController {
     private let router: Router
     private let storyViewModel: StoryViewModel
     private let statusViewModel: StatusViewModel
-    private let conversationListViewModel: ConversationListViewModel
+    private let conversationListViewModel: ConversationListViewModel?  // #7006 — remis aux cellules, jamais lu ici ; nil hors liste montée.
     /// `internal` depuis la sortie du cluster snapshot (#4944) : en Swift,
     /// `private` porte sur le FICHIER.
     var cancellables = Set<AnyCancellable>()
@@ -526,7 +526,7 @@ final class MessageListViewController: UIViewController {
         router: Router,
         storyViewModel: StoryViewModel,
         statusViewModel: StatusViewModel,
-        conversationListViewModel: ConversationListViewModel
+        conversationListViewModel: ConversationListViewModel?
     ) {
         self.store = store
         self.currentUserId = currentUserId
@@ -1843,7 +1843,7 @@ final class MessageListViewController: UIViewController {
                 .environmentObject(host)
                 .environmentObject(stories)
                 .environmentObject(statuses)
-                .environmentObject(convList)
+                .conversationListObject(convList)
                 // Révélé des heures au défilement (successeur de la pilule
                 // « jour · heure »). Observé par `FocalRevealedTime` SEULE —
                 // une `Text` et rien d'autre — donc son basculement
@@ -1868,14 +1868,14 @@ final class MessageListViewController: UIViewController {
                                 .environmentObject(host)
                                 .environmentObject(stories)
                                 .environmentObject(statuses)
-                                .environmentObject(convList)
+                                .conversationListObject(convList)
                                 .environmentObject(self.timestampReveal)
                         } else {
                             makeThemedBubble(true)
                                 .environmentObject(host)
                                 .environmentObject(stories)
                                 .environmentObject(statuses)
-                                .environmentObject(convList)
+                                .conversationListObject(convList)
                         }
                     }
                 }

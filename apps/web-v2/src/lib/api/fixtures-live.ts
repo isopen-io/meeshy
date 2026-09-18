@@ -1,5 +1,6 @@
 import type { Conversation, Message } from './types';
-import { conversationDefaults, fatou, kwame, message, minutesAgo, viewer, VIEWER_ID } from './fixtures-base';
+import { attachmentDefaults, conversationDefaults, fatou, kwame, message, minutesAgo, viewer, VIEWER_ID } from './fixtures-base';
+import { wavDataUri } from './fixtures-media';
 
 /**
  * LE CORPUS « RECETTE TEMPS RÉEL » (#6171, § 5 étape 6 de la spécification) —
@@ -42,7 +43,61 @@ const live2: Message = liveMessage({
   createdAt: minutesAgo(30),
 });
 
-export const LIVE_MESSAGES: readonly Message[] = [LIVE_1, live2];
+/**
+ * `live-3` — LE VOCAL NU (#7017) : une pièce audio SANS transcription et SANS
+ * traductions, exactement ce qu'un `message:new` porte à l'instant où le vocal
+ * arrive — le pipeline n'a encore rien produit.
+ *
+ * La chronologie (`fixtures-realtime.ts`) l'enrichit en TROIS temps, comme le
+ * pipeline réel : Whisper (`es`), puis NLLB langue par langue (`en`, puis
+ * `fr`) — trois `message:attachment-updated`, un par enrichissement
+ * (`emitAttachmentUpdated.ts`, « une émission par enrichissement »).
+ *
+ * `originalName` est SERVI, comme sur toute pièce réelle, et il est ce qui
+ * rend le gate exigeant : `servedTranscript` (`api/prism.ts`) retombe dessus
+ * quand aucune transcription n'existe, si bien que `[data-transcript]` porte
+ * le NOM DU FICHIER au chargement. Le gate ne peut donc pas se contenter de
+ * compter un nœud — il lit le TEXTE, et c'est la seule mesure qui distingue
+ * « la transcription est arrivée » de « le widget est monté ».
+ */
+export const LIVE_3_ID = 'live-3';
+export const LIVE_3_ATTACHMENT_ID = 'live-3-a1';
+/** PARTAGÉS avec la chronologie (`fixtures-realtime.ts`) : la charge de
+ * `message:attachment-updated` doit désigner LA MÊME pièce — un `fileUrl` ou
+ * un `id` qui divergerait ferait silencieusement un no-op (la pièce serait
+ * INCONNUE du message), et le gate mesurerait l'absence de correctif sans
+ * pouvoir la distinguer d'une fixture mal appariée. */
+export const LIVE_3_AUDIO_URL = wavDataUri({ seconds: 2, tone: 392 });
+const live3CreatedAt = minutesAgo(25);
+export const LIVE_3_CREATED_AT = live3CreatedAt.toISOString();
+const live3: Message = liveMessage({
+  id: LIVE_3_ID,
+  senderId: 'u-kwame',
+  sender: kwame,
+  content: '',
+  originalLanguage: 'es',
+  messageType: 'audio',
+  translations: [],
+  createdAt: live3CreatedAt,
+  attachments: [
+    {
+      ...attachmentDefaults,
+      id: LIVE_3_ATTACHMENT_ID,
+      messageId: LIVE_3_ID,
+      fileName: 'nota.wav',
+      originalName: 'nota-de-voz.wav',
+      mimeType: 'audio/wav',
+      fileSize: 16_044,
+      fileUrl: LIVE_3_AUDIO_URL,
+      duration: 9_000,
+      uploadedBy: 'u-kwame',
+      createdAt: LIVE_3_CREATED_AT,
+      currentUserConsumption: null,
+    },
+  ],
+} as Parameters<typeof message>[0]);
+
+export const LIVE_MESSAGES: readonly Message[] = [LIVE_1, live2, live3];
 
 export const LIVE_CONVERSATION: Conversation = {
   ...conversationDefaults,

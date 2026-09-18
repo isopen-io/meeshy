@@ -107,6 +107,39 @@ final class ReelsViewModelTests: XCTestCase {
         XCTAssertTrue(sut.hasLoadedOnce)
     }
 
+    // MARK: - Une panne n'est pas un vide (#7007)
+
+    /// Le défaut corrigé : le `catch` de `fetch(reset:)` ne faisait que
+    /// journaliser, si bien qu'un démarrage à froid hors ligne sur cache vide
+    /// rendait « Aucun réel pour le moment » — indiscernable d'un fil
+    /// réellement vide, et sans chemin pour réessayer.
+    func test_coldStart_reseauEnPanne_surCacheVide_publieLeMotif() async {
+        let (sut, service, _) = makeSUT(cachedReels: [])
+        service.getFeedResult = .failure(APIError.networkError(URLError(.notConnectedToInternet)))
+
+        sut.seed(posts: [], startId: nil)
+        await sut.awaitColdStart()
+
+        XCTAssertTrue(sut.reels.isEmpty)
+        XCTAssertNotNil(sut.loadFailure, "une panne doit publier son motif, pas seulement le journaliser")
+    }
+
+    func test_retryLoad_apresUnePanne_rechargeEtEffaceLeMotif() async {
+        let (sut, service, _) = makeSUT(cachedReels: [])
+        service.getFeedResult = .failure(APIError.networkError(URLError(.notConnectedToInternet)))
+        sut.seed(posts: [], startId: nil)
+        await sut.awaitColdStart()
+        XCTAssertNotNil(sut.loadFailure)
+
+        service.getFeedResult = .success(Self.makePaginated(reelIds: ["r1", "r2"]))
+        service.getReelsResult = .success(Self.makePaginated(reelIds: ["r1", "r2"]))
+
+        await sut.retryLoad()
+
+        XCTAssertEqual(sut.reels.map(\.id), ["r1", "r2"], "« Réessayer » doit recharger, pas rester inerte")
+        XCTAssertNil(sut.loadFailure, "une passe qui aboutit efface le motif précédent")
+    }
+
     func test_coldStart_droppedCachedReel_resetsCurrentIdToFreshHead() async {
         let (sut, service, _) = makeSUT(cachedReels: [Self.makeReel(id: "cached-only")])
         service.getFeedResult = .success(Self.makePaginated(reelIds: ["fresh-1"]))

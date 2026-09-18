@@ -333,6 +333,16 @@ public final class PushNotificationManager: NSObject, ObservableObject {
 // MARK: - Notification Payload
 
 public struct NotificationPayload {
+    /// **L'identité de la ligne de cloche que ce push annonce (#6999).**
+    ///
+    /// Le gateway la pose depuis toujours (`NotificationService.createNotification`,
+    /// clé `notificationId` de `data`) et son doc-comment dit exactement
+    /// pourquoi : c'est la SEULE clé qui permette de marquer lu au tap
+    /// (`POST /notifications/:id/read`) — les types sans `conversationId` ni
+    /// `postId` (système, nouvelle connexion, mot de passe changé,
+    /// double facteur, demande d'ami) n'ont rien d'autre. Ce décodeur ne la
+    /// lisait pas : ces notifications restaient non lues À VIE après un tap.
+    public let notificationId: String?
     public let type: String?
     public let conversationId: String?
     public let messageId: String?
@@ -367,6 +377,8 @@ public struct NotificationPayload {
     public let iceServersJSON: String?
 
     public init(userInfo: [AnyHashable: Any]) {
+        let rawNotificationId = userInfo["notificationId"] as? String ?? ""
+        self.notificationId = rawNotificationId.isEmpty ? nil : rawNotificationId
         self.type = userInfo["type"] as? String
         self.conversationId = userInfo["conversationId"] as? String
         self.messageId = userInfo["messageId"] as? String

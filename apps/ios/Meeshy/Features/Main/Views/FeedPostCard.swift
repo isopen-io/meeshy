@@ -105,7 +105,6 @@ struct FeedPostCard: View {
     @StateObject private var mediaSaveCoordinator = MediaSaveCoordinator()
 
     var accentColor: String { post.authorColor }
-    private var topComments: [FeedComment] { Array(post.comments.sorted { $0.likes > $1.likes }.prefix(3)) }
 
     /// True when the signed-in user authored this post — gates the private reach
     /// stats (impressions + views) shown only to the author.
@@ -1160,7 +1159,7 @@ struct FeedPostCard: View {
                     .padding(.horizontal, 16)
 
                 VStack(alignment: .leading, spacing: 12) {
-                    let comments = topComments
+                    let comments = post.topComments
                     ForEach(Array(comments.enumerated()), id: \.element.id) { index, comment in
                         topCommentRow(comment: comment, isLast: index == comments.count - 1)
                     }

@@ -835,6 +835,17 @@ jobs:
           cd apps/web-v2
           node scripts/check-story-scene.mjs
 
+      # #7015 — LE SON DE FOND EMPRUNTÉ À LA BIBLIOTHÈQUE JOUE. Mesuré en
+      # production : `GET /api/v1/static/<uuid>.m4a` rend 401, pas 404 — la
+      # route est authentifiée et une balise `<audio src>` ne porte aucun
+      # en-tête. Ce gate mesure l'EFFET (readyState, duration), l'absence de
+      # jeton dans l'URL, et qu'un refus dégrade sans promesse rejetée.
+      - name: Gate son de fond de story (route authentifiée, URL d'objet, refus)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-story-sound.mjs
+
       # #6900 — LE STUDIO DE STORY PEINT CE QU'IL PUBLIERA. Publier inerte sur
       # un brouillon vide, un fond + un son posés font PEINDRE le moteur
       # partagé (mesure de pixels, pas la présence d'une balise), la carte

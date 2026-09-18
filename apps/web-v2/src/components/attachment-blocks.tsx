@@ -12,7 +12,6 @@ import { PLAYBACK_SPEEDS, seekFraction, speedLabel } from '@/lib/view/media-tran
 import { activeSegmentIndex, segmentSeekTarget } from '@/lib/view/transcript-karaoke';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
-import { READER_LOCALE } from '@/lib/reader';
 import { TRANSCRIPT_TEXT_OPACITY } from '@/lib/reading-mode/metrics';
 
 import { Glyph, GlyphSvg } from './glyph';
@@ -126,7 +125,28 @@ function VoiceAttachment({
 
   const isPlaying = status === 'playing';
   const isError = status === 'error';
-  const lang = transcript.language !== READER_LOCALE ? transcript.language : undefined;
+  /**
+   * LA LANGUE SERVIE EST TOUJOURS ANNONCÉE (revue-correction #7017).
+   *
+   * Cette ligne lisait `transcript.language !== READER_LOCALE ? … : undefined`,
+   * c'est-à-dire « pas d'attribut redondant sur du contenu déjà en langue de
+   * page ». La prémisse était fausse : `READER_LOCALE` n'est PAS la langue du
+   * document. `<html lang>` est posé par le script d'amorçage de la langue
+   * d'INTERFACE depuis `navigator.languages`
+   * (`inline-interface-language-bootstrap.js`, #6206) ; `READER_LOCALE` est le
+   * rang 1 du Prisme de CONTENU, et vaut toujours `'fr'` (`lib/reader.ts`).
+   * L'attribut disparaissait donc exactement dans le cas où il est
+   * indispensable — du français dans un document anglais, le cas NOMINAL d'un
+   * francophone sur un appareil anglais : le texte héritait de `lang="en"` et
+   * un lecteur d'écran le prononçait avec une voix anglaise.
+   *
+   * Aucune comparaison ne peut remplacer celle-là sans mentir : le seul terme
+   * juste serait la langue EFFECTIVE de l'hôte, que ce composant ne connaît
+   * pas et n'a pas à connaître (elle dépend de l'arbre, pas de la pièce).
+   * On annonce donc, à tous les rangs — un `lang` redondant est valide et
+   * inoffensif, un `lang` manquant ou vide ne l'est pas.
+   */
+  const lang = transcript.language !== '' ? transcript.language : undefined;
 
   return (
     <div className="flex flex-col gap-1 py-1" data-attachment={attachment.id}>

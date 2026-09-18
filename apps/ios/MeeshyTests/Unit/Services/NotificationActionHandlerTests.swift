@@ -153,6 +153,9 @@ final class NotificationActionHandlerTests: XCTestCase {
         let removedPostBanners: () -> [String]
         let preparedReplyQueue: () -> Int
         let revokedNotificationIds: () -> [[String]]
+        /// #6999 — ce que le geste a CONSOMMÉ. Injecté : le défaut atteint
+        /// `NotificationToastManager.shared`, donc le réseau.
+        let consumedRefs: () -> [NotificationRef]
     }
 
     private func makeSUT(
@@ -176,6 +179,7 @@ final class NotificationActionHandlerTests: XCTestCase {
         var removedPostBanners: [String] = []
         var preparedReplyQueueCount = 0
         var revokedIds: [[String]] = []
+        var consumedRefs: [NotificationRef] = []
 
         let sut = NotificationActionHandler(
             messageService: messageService,
@@ -192,6 +196,7 @@ final class NotificationActionHandlerTests: XCTestCase {
             isRegisteredUser: { isRegisteredUser },
             openNotification: { _ in openedCount += 1 },
             localMarkRead: { markedRead.append($0) },
+            consume: { consumedRefs.append($0) },
             removeDeliveredForConversation: { removedBanners.append($0) },
             removeDeliveredForPost: { removedPostBanners.append($0) },
             removeDeliveredForNotificationIds: { revokedIds.append($0) },
@@ -213,7 +218,8 @@ final class NotificationActionHandlerTests: XCTestCase {
             removedConversationBanners: { removedBanners },
             removedPostBanners: { removedPostBanners },
             preparedReplyQueue: { preparedReplyQueueCount },
-            revokedNotificationIds: { revokedIds }
+            revokedNotificationIds: { revokedIds },
+            consumedRefs: { consumedRefs }
         )
     }
 
