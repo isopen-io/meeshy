@@ -18,7 +18,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { segmentText } from '../utils/text-segments';
+import { hasRichText, segmentText } from '../utils/text-segments';
 
 const texts = (content: string, options?: Parameters<typeof segmentText>[1]) =>
   segmentText(content, options).map((s) => s.kind);
@@ -123,6 +123,21 @@ describe('segmentText — les liens', () => {
 
   it('une balise <script> reste du TEXTE — aucun segment ne la rend active', () => {
     expect(texts('<script>alert(1)</script>')).toEqual(['text']);
+  });
+
+  /**
+   * LE CHEVAUCHEMENT RÉEL — pas seulement « le hashtag ne matche pas dans
+   * l'ancre » (cas déjà couvert plus haut, où le second analyseur ne trouve
+   * simplement rien). Ici `@alice`, précédé d'un `/`, EST un match valide de
+   * `MENTION_REGEX` — et il vit entièrement À L'INTÉRIEUR du match de l'URL.
+   * Sans le tri par position d'ouverture PUIS le rejet `match.start < cursor`
+   * (le premier par position d'ouverture gagne), la mention couperait le lien
+   * en trois segments au lieu d'un seul.
+   */
+  it('un handle valide À L’INTÉRIEUR d’une URL ne la découpe pas — le lien gagne en entier', () => {
+    expect(segmentText('https://meeshy.me/@alice')).toEqual([
+      { kind: 'url', text: 'https://meeshy.me/@alice', href: 'https://meeshy.me/@alice' },
+    ]);
   });
 });
 
@@ -271,6 +286,24 @@ describe('segmentText — le souligné et le barré', () => {
       { kind: 'emphasis', style: 'strikethrough', children: [{ kind: 'text', text: 'd' }] },
     ]);
   });
+
+  /**
+   * DEUX matches DE NATURE DIFFÉRENTE dans le MÊME morceau non enrichi — le
+   * cas que `RUDE` ci-dessous ne couvre jamais : chacun de ses matches y vit
+   * dans son propre segment plat, séparé des autres par une emphase. Ici, le
+   * lien précède la mention dans le texte mais SUIT `MENTION_REGEX` dans
+   * l'ordre de construction du tableau (`collect` empile mentions, hashtags,
+   * puis URLs) — sans le tri par position d'ouverture, la mention sortirait
+   * avant le lien alors qu'elle lui succède dans la phrase.
+   */
+  it('un lien et une mention non chevauchants restent dans l’ordre du texte, pas celui de leur analyseur', () => {
+    expect(segmentText('vois https://meeshy.me/a puis @alice')).toEqual([
+      { kind: 'text', text: 'vois ' },
+      { kind: 'url', text: 'https://meeshy.me/a', href: 'https://meeshy.me/a' },
+      { kind: 'text', text: ' puis ' },
+      { kind: 'mention', text: '@alice', username: 'alice' },
+    ]);
+  });
 });
 
 describe('segmentText — la reconstruction', () => {
@@ -291,5 +324,26 @@ describe('segmentText — la reconstruction', () => {
 
   it('deux appels sur le même texte rendent la même chose — les regex globales sont RÉINITIALISÉES', () => {
     expect(segmentText(RUDE, { hashtags: true })).toEqual(segmentText(RUDE, { hashtags: true }));
+  });
+});
+
+describe('hasRichText — la question qu’une surface se pose avant de monter des segments', () => {
+  it('un texte nu ne porte rien à enrichir', () => {
+    expect(hasRichText('Bonjour tout le monde')).toBe(false);
+  });
+
+  it('une chaîne vide ne porte rien à enrichir', () => {
+    expect(hasRichText('')).toBe(false);
+  });
+
+  it('une mention, un lien ou une emphase font basculer la réponse à VRAI', () => {
+    expect(hasRichText('salut @alice')).toBe(true);
+    expect(hasRichText('vois https://meeshy.me/a')).toBe(true);
+    expect(hasRichText('**gras**')).toBe(true);
+  });
+
+  it('un hashtag ne compte QUE si l’option est activée — le chemin nominal reste nu sinon', () => {
+    expect(hasRichText('on avance sur #projet')).toBe(false);
+    expect(hasRichText('on avance sur #projet', { hashtags: true })).toBe(true);
   });
 });

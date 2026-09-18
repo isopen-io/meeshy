@@ -33186,7 +33186,7 @@ Trois choses à retenir :
 
 > Preuve : même défilement en vidéo, sans correctif (258 faults, vierge ~10 s) puis avec (0 fault, aucune image vierge). Le contrôle « sans » est ce qui a prouvé que le correctif était la cause — une rafale de `simctl screenshot` pendant le geste mesurait le vierge plus fort qu'il n'était, la vidéo ne l'altère pas.
 
-## Leçon 628
+## Leçon 631
 
 **Un gate en CHAÎNE (`&&`) ne prouve QUE les étapes avant celle qui rougit — une correction qui répare la première étape signalée peut en laisser une seconde, jamais jouée, derrière elle.**
 

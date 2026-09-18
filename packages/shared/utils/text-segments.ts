@@ -218,11 +218,13 @@ export function segmentText(content: string, options: SegmentOptions = {}): read
     if (start === undefined) continue;
     // La règle qui a matché est celle dont le groupe est défini — un seul
     // l'est par match, l'alternation étant exclusive et chaque motif ne
-    // portant qu'un groupe.
+    // portant qu'un groupe : un `match[0]` non vide garantit qu'exactement UN
+    // candidat a `inner` défini, jamais zéro — d'où le `!` non-null, justifié
+    // par cet invariant plutôt qu'un `if` qui ne pourrait jamais rougir.
     const hit = EMPHASIS_RULES.map((rule, index) => ({ style: rule.style, inner: match[index + 1] })).find(
-      (candidate) => candidate.inner !== undefined,
-    );
-    if (hit?.inner === undefined) continue;
+      (candidate): candidate is { readonly style: EmphasisStyle; readonly inner: string } =>
+        candidate.inner !== undefined,
+    )!;
     if (start > cursor) segments.push(...inlineSegments(content.slice(cursor, start), options));
     segments.push({ kind: 'emphasis', style: hit.style, children: inlineSegments(hit.inner, options) });
     cursor = start + match[0].length;
