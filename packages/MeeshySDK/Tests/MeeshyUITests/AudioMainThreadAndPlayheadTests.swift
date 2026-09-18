@@ -1,4 +1,5 @@
 import XCTest
+@testable import MeeshySDK
 @testable import MeeshyUI
 
 /// **L'audio cesse de tenir le fil principal, et de battre à 30 Hz** (#7010).
