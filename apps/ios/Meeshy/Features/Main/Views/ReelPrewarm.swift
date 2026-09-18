@@ -55,9 +55,18 @@ enum ReelPrewarm {
 
     /// L'URL vidéo d'un réel, ou `nil` quand il n'en porte pas (réel photo,
     /// audio, scène sans vidéo) — auquel cas il n'y a rien à préchauffer.
+    ///
+    /// **`primaryReelDisplayMedia`, et surtout pas `media.first(…)`** : c'est
+    /// la propriété que `ReelFeedVideoSurface` interroge pour décider quoi
+    /// JOUER, et le préchauffage doit remplir le cache sous la clé que la
+    /// lecture ira y chercher. Elle est de plus repost-consciente — un réel
+    /// republié ne porte aucun média sur le post extérieur, et une résolution
+    /// écrite à la main ici aurait silencieusement cessé de préchauffer toute
+    /// cette famille. Un cache alimenté sous une clé que personne ne lit ne
+    /// préchauffe rien ; il ne fait que dépenser.
     nonisolated static func videoURL(for post: FeedPost) -> URL? {
-        guard let media = post.media.first(where: { $0.type == .video }),
-              let raw = media.url else { return nil }
+        guard let media = post.primaryReelDisplayMedia, media.type == .video,
+              let raw = media.url, !raw.isEmpty else { return nil }
         return MeeshyConfig.resolveMediaURL(raw)
     }
 
