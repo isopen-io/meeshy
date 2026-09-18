@@ -1,7 +1,43 @@
-New: "Nearby"
-• Discover posts around you on a map — density, pins or a list, within the radius you choose
-• Make your own posts discoverable nearby, at the precision YOU decide: exact, neighborhood, city or region — never more precise than your choice
-• "See what's nearby" from any place shown on a post
+Our biggest update yet. Creating, watching and talking have all been rebuilt.
 
-Also
-• More stable: a crash when opening "Nearby" is fixed
+CREATE — ONE STUDIO
+• Story, Reel or Post: switch format from the inside, without losing what you already wrote or added
+• Compose with your thumb — long press opens the camera right inside the scene, tools on the left, history on the right, undo and redo whenever you need
+• Several scenes, several media, each with its own caption and language: carousel, mosaic or slides, your call
+• Crop, rotate and trim without quality loss. Start from a message you received, something shared from another app, or whatever you just pasted
+
+DECORATE — 200 STICKERS, 14 TEXT EFFECTS
+• About twenty families — joy, mood, greetings, party, nature, travel, music, sport — and many are animated
+• Lift a subject out of a photo and it joins your personal library
+• Text goes from 4 to 14 effects (glow, shadow, emboss, neon), with 18 styles and their matching fonts
+• A decoration can carry live data: place, time, weather, your own words
+
+YOUR VOICE, IN THEIR LANGUAGE
+• Your voice message is transcribed on device the moment you let go — the text is there immediately, no waiting on the server
+• Audio in a post, a reel or a comment now plays in the listener's language
+• One screen to record, trim and place a sound: scene background, soundtrack, or something to listen to under the text
+• Photo and video captions read in your language, translated live
+
+WATCH
+• Full screen opens sharp on the real image, never on a blurry thumbnail
+• Swipe through a post's media, then through its comments' media, like a film roll
+• React, reply or create a story without leaving full screen
+• Double tap either side of a video: ten seconds back or forward
+
+CONVERSATIONS
+• Multi-select up to 100 messages to forward or delete in one go
+• Double tap to react, long press for the menu — which now only offers actions that actually do something
+• Quotes show the thumbnail, duration and size of the media they point to
+• Reading modes reworked, and "River" — time as a vertical axis — opens in beta
+
+YOUR ACCOUNT
+• Sign up on a single screen: email or phone, password optional, magic link
+• Your online status is visible to accepted friends only — not through a shared conversation, a community, or a story link
+• Progress, streaks and nearly 120 achievements; the Meesh, our rare currency, now has its coin
+
+AROUND YOU
+• "Nearby" now has two levels, neighbourhood and discovery, as density, dots or a list
+• A place chip carries its time window — and discoverability stays an explicit choice, at the precision you set
+
+UNDER THE HOOD
+Cold start in a handful of requests: your conversations appear without waiting for the network. Nine crashes fixed at the root. Around twenty accessibility fixes — VoiceOver, Dynamic Type, WCAG contrast, 44 pt targets, right-to-left layout for Arabic. Seven interface languages served without approximation.
