@@ -117,7 +117,14 @@ export function StoryRailSelfTile({ entry, size, language }: SelfTileProps) {
       {/* `initialsOf`, jamais un `slice(0, 2)` maison : c'est la MÊME fonction
           que `StoryTile` sur la tuile voisine, et deux façons de réduire un
           libellé à deux lettres divergent au premier nom composé. */}
-      <Avatar initials={initialsOf(translate(language, 'stories.mine'))} color={'var(--color-ios-brand)'} size={size} />
+      <Avatar
+        initials={initialsOf(translate(language, 'stories.mine'))}
+        color={'var(--color-ios-brand)'}
+        size={size}
+        /* MA PHOTO (#6975) — résolue par `selfRailEntry`, pas ici : cette
+           tuile est un rendu, la descente est une loi. */
+        {...(entry.avatar === undefined ? {} : { src: entry.avatar })}
+      />
     </span>
   );
 

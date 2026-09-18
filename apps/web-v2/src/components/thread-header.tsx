@@ -8,7 +8,7 @@ import { UnreadBadge } from './unread-badge';
 import type { Conversation } from '@/lib/api/types';
 import type { MenuRow } from '@/lib/reading-mode/catalog';
 import { apiConfig } from '@/lib/api/config';
-import { initialsOf, peerOf, presenceOf } from '@/lib/view/conversation';
+import { avatarOf, initialsOf, peerOf, presenceOf } from '@/lib/view/conversation';
 import { Link } from '@/routes/route-table';
 
 /**
@@ -51,6 +51,12 @@ export function ThreadHeader({
   readonly onSelectReadingMode: (mode: ConversationReadingMode) => void;
   readonly onResetReadingModeToAuto: () => void;
 }) {
+  /* DÉRIVÉ ICI, comme `presenceOf(peerOf(...))` plus bas (#6975) : cette
+     coquille ne porte aucune RÈGLE, mais elle descend déjà les deux lois de
+     `view/conversation` qui dépendent du pair, et une prop de plus pour la
+     photo aurait fait un troisième chemin pour la même donnée. */
+  const photo = avatarOf(conversation, viewerId);
+
   return (
     /*
       LA BANDE FLOTTE, ELLE NE BORNE PLUS (#6213) — `absolute inset-x-0 top-0`
@@ -195,10 +201,15 @@ export function ThreadHeader({
           aria-label={expanded ? 'Replier l’en-tête' : 'Déplier l’en-tête'}
           className="shrink-0"
         >
+          {/* LA PHOTO PAR `avatarOf` (#6975) — `peerOf(conversation,
+              viewerId)` était déjà appelé À LA LIGNE SUIVANTE pour la
+              présence : la donnée arrivait jusqu'ici et l'en-tête de CHAQUE
+              conversation rendait des initiales. */}
           <Avatar
             initials={initialsOf(title)}
             color={accent}
             size={44}
+            {...(photo === undefined ? {} : { src: photo })}
             {...(group ? {} : { presence: presenceOf(peerOf(conversation, viewerId)) })}
           />
         </button>

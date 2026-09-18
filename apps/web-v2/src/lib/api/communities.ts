@@ -265,9 +265,38 @@ export async function createCommunity(deps: CommunitiesDeps, draft: CommunityDra
 
 type PageContext = { readonly pageParam: number; readonly signal?: AbortSignal };
 
+/**
+ * **CINQ MINUTES DE FRAÎCHEUR SUR LES TROIS REQUÊTES** (#6974) — un annuaire
+ * de communautés, la fiche de l'une et la liste de ses conversations ne
+ * changent pas toutes les trente secondes, et c'est le défaut qui
+ * s'appliquait (`query-client.ts:234`). La recherche est DÉBOUNCÉE et chaque
+ * terme a sa propre clé (`communitiesQueryKey`) : sans fenêtre, revenir sur un
+ * terme déjà tapé re-payait sa page.
+ *
+ * **Ce que la fenêtre coûte, dit à voix haute** : aucun événement socket ne
+ * porte `['communities']` — vérifié, `socket.ts` n'invalide que
+ * `['conversations']`, `['notifications']` et `['friends']`. Ici la donnée
+ * bouge sous les gestes de TIERS (une communauté créée par quelqu'un d'autre,
+ * un compteur de membres, une conversation ajoutée), et rien ne le dit : la
+ * fenêtre reste donc au PLANCHER du lot, cinq minutes. Ce qui vient du porteur
+ * est déjà couvert sans relecture — `community-actions.ts:64` écrit la fiche,
+ * `:66` la met en tête de la liste, `:67` périme les autres termes de
+ * recherche sans les refetcher.
+ *
+ * **La fenêtre du DÉTAIL est neutralisée chez son unique consommateur, et
+ * c'est assumé** : `routes/community.tsx:69` repose `staleTime: 0` APRÈS avoir
+ * répandu cette fabrique — cache-first par `initialData` (la ligne déjà reçue
+ * par la liste), revalidation en fond, justifié par son propre doc-comment et
+ * hors périmètre de #6974. La valeur ci-dessous ne gouverne donc, aujourd'hui,
+ * que la liste et les conversations ; elle reste posée pour tout consommateur
+ * qui LAISSERAIT la fabrique décider.
+ */
+export const COMMUNITIES_STALE_TIME = 5 * 60_000;
+
 export function communitiesQueryOptions(deps: CommunitiesDeps, search: string) {
   return {
     queryKey: communitiesQueryKey(search),
+    staleTime: COMMUNITIES_STALE_TIME,
     initialPageParam: 0,
     queryFn: async ({ pageParam, signal }: PageContext) =>
       unwrap(await loadCommunities({ ...deps, search, offset: pageParam, ...withSignal(signal) })),
@@ -278,6 +307,7 @@ export function communitiesQueryOptions(deps: CommunitiesDeps, search: string) {
 export function communityQueryOptions(deps: CommunitiesDeps, communityId: string) {
   return {
     queryKey: communityQueryKey(communityId),
+    staleTime: COMMUNITIES_STALE_TIME,
     queryFn: async ({ signal }: { readonly signal?: AbortSignal }) =>
       unwrap(await loadCommunity({ ...deps, communityId, ...withSignal(signal) })),
   };
@@ -286,6 +316,7 @@ export function communityQueryOptions(deps: CommunitiesDeps, communityId: string
 export function communityConversationsQueryOptions(deps: CommunitiesDeps, communityId: string) {
   return {
     queryKey: communityConversationsQueryKey(communityId),
+    staleTime: COMMUNITIES_STALE_TIME,
     initialPageParam: 0,
     queryFn: async ({ pageParam, signal }: PageContext) =>
       unwrap(await loadCommunityConversations({ ...deps, communityId, offset: pageParam, ...withSignal(signal) })),

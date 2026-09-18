@@ -1,14 +1,23 @@
 import { describe, expect, test } from 'bun:test';
 
-import { VIEWER_HANDLE, VIEWER_ID } from './fixtures-base';
+import { VIEWER_HANDLE, VIEWER_ID, portraitStandIn } from './fixtures-base';
 import { resolveViewer } from './viewer';
 
 /** `resolveViewer` — le site UNIQUE de « qui lit » (#5695, étape 9). */
 
 describe('resolveViewer', () => {
-  test('source fixtures ⇒ le lecteur de fixture, inscrit', () => {
+  test('source fixtures ⇒ le lecteur de fixture, inscrit, AVEC sa photo (#6975)', () => {
     const viewer = resolveViewer({ source: 'fixtures', session: { status: 'anonymous' } });
-    expect(viewer).toEqual({ id: VIEWER_ID, handle: VIEWER_HANDLE, displayName: 'Vous', isAnonymous: false });
+    expect(viewer).toEqual({
+      id: VIEWER_ID,
+      handle: VIEWER_HANDLE,
+      displayName: 'Vous',
+      isAnonymous: false,
+      /* `avatar` — le lecteur de fixture n'en portait AUCUN, donc la pastille
+         « moi » du rail n'avait aucune photo à peindre et un gate de pixels y
+         mesurait un vide LÉGITIME. */
+      avatar: portraitStandIn('#fb7185', '#7f1d1d'),
+    });
   });
 
   test('source gateway + session authenticated ⇒ l’utilisateur de session, inscrit', () => {

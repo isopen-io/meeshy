@@ -57,9 +57,57 @@
  * (`gate.meeshy.me`), et Workbox n'accepte une expression régulière sur une
  * URL d'origine étrangère que si la correspondance commence à l'indice 0.
  */
-export const API_RESPONSE_CACHE_PATTERN = /^https?:\/\/[^/]+\/api\/(?!v1\/admin(?:[/?#]|$))/;
+/**
+ * ## POURQUOI LES MÉDIAS EN SORTENT (#6973)
+ *
+ * MESURÉ en rejouant le routeur de Workbox sur `dist/sw.js` du 2026-09-18 :
+ *
+ *     SEAU api   [image] …/api/v1/attachments/file/2026%2F09%2Fu%2Favatar.png
+ *     SEAU api   [image] …/api/v1/attachments/file/2026%2F09%2Fu%2Fscene.jpg
+ *     SEAU api   [video] …/api/v1/attachments/file/2026%2F09%2Fu%2Freel.mp4
+ *     SEAU api   [audio] …/api/v1/attachments/file/2026%2F09%2Fu%2Fvoix.m4a
+ *     SEAU api   [json ] …/api/v1/conversations?limit=30
+ *
+ * TOUTE URL de média passe par `/api/v1/attachments/…` (`lib/api/media-url.ts`,
+ * site unique `streamSrc`), ce motif n'était ancré sur aucune ORIGINE, et le
+ * routeur retient la PREMIÈRE route qui matche : les médias gagnaient la route
+ * du JSON, enregistrée la première.
+ *
+ * **Le coût n'est pas « les images ne sont pas en CacheFirst ». C'est que le
+ * plafond de 200 entrées était PARTAGÉ.** Un défilement de fil évinçait du
+ * seau les réponses de conversations et de messages dont la lecture hors ligne
+ * dépend — le cache que le lecteur a payé une fois, chassé par les images
+ * qu'il vient de voir passer. Sorti de là, le plafond redevient RÉSERVÉ au
+ * JSON, et c'était le vrai enjeu.
+ *
+ * Les DEUX montages de la passerelle sont exclus : `/api/v1/attachments/` et
+ * le montage LEGACY non versionné `/api/attachments/`, qui sert encore des
+ * `fileUrl` persistées depuis des années (`download.ts`,
+ * § `registerFileStreamRoute`). Une garde posée d'un côté ne protège pas
+ * l'autre — c'est ce que ce fichier de la passerelle dit de lui-même.
+ */
+export const API_RESPONSE_CACHE_PATTERN =
+  /^https?:\/\/[^/]+\/api\/(?!v1\/admin(?:[/?#]|$))(?!(?:v1\/)?attachments\/)/;
 
-/** L'origine de MESURE du prédicat : jamais servie, seulement composée. */
+/**
+ * LA ROUTE DE FLUX DES MÉDIAS — le COMPLÉMENT du motif ci-dessus sur `/api/`.
+ *
+ * Elle n'est PAS passée à Workbox : le seau `medias` matche sur
+ * `request.destination === 'image'`, une valeur que seul le navigateur connaît
+ * et qu'aucune URL ne porte. C'est précisément ce qui rend la décision
+ * « audio et vidéo restent HORS cache » vraie par CONSTRUCTION plutôt que par
+ * énumération d'extensions — un filtre qui énumère se périme au premier ajout,
+ * en silence.
+ *
+ * Ce motif sert donc deux lecteurs, et l'origine y est OPTIONNELLE parce que
+ * les deux voient des formes différentes : le gate de l'artefact, qui vérifie
+ * que les deux seaux sont DISJOINTS, et `mediaImageCrossOrigin` ci-dessous,
+ * qui voit le `src` tel que la page le pose — absolu en production
+ * (`gate.meeshy.me`), relatif en développement (le proxy de `vite.config.ts`).
+ */
+export const MEDIA_RESPONSE_CACHE_PATTERN = /^(?:https?:\/\/[^/]+)?\/api\/(?:v1\/)?attachments\//;
+
+/** L'origine de MESURE des prédicats : jamais servie, seulement composée. */
 const ORIGINE_DE_MESURE = 'https://meeshy.invalid';
 
 /**
@@ -70,4 +118,42 @@ const ORIGINE_DE_MESURE = 'https://meeshy.invalid';
  */
 export function apiResponseMayBeCached(pathname: string): boolean {
   return API_RESPONSE_CACHE_PATTERN.test(new URL(pathname, ORIGINE_DE_MESURE).href);
+}
+
+/** `true` si cette adresse est la route de flux d'un média de la passerelle. */
+export function mediaResponseMayBeCached(src: string): boolean {
+  return MEDIA_RESPONSE_CACHE_PATTERN.test(src);
+}
+
+/**
+ * **CE QUE L'`<img>` DOIT DEMANDER AU RÉSEAU** — la SECONDE moitié de #6973,
+ * indissociable de la première.
+ *
+ * La passerelle rend déjà `Access-Control-Allow-Origin: *` et
+ * `Cross-Origin-Resource-Policy: cross-origin` sur la route de flux
+ * (`services/gateway/src/routes/attachments/download.ts`,
+ * `crossOriginMediaHeaders`). **Un en-tête CORS est INERTE tant que l'`<img>`
+ * ne demande pas le mode `cors`** : sans `crossOrigin`, la requête part en
+ * `no-cors`, la réponse est OPAQUE (status 0), et le seau la garde sans
+ * pouvoir distinguer une image d'une page d'erreur 404 — trente jours durant.
+ *
+ * MAIS LA POSER PARTOUT CASSE CE QU'ELLE PRÉTEND RÉPARER. Un hôte qui ne rend
+ * pas `Access-Control-Allow-Origin` fait ÉCHOUER l'image dès que la requête
+ * passe en mode `cors`, et `attachmentSrc` laisse passer INCHANGÉES les
+ * adresses externes (un CDN, le magasin statique `static.meeshy.me`, #4625) et
+ * les aperçus locaux (`blob:`) — par décision (`media-url.ts`, § « CE QU'IL NE
+ * TOUCHE PAS »). L'avatar serait retombé sur ses initiales, silencieusement,
+ * pour tous ces hôtes.
+ *
+ * `crossOrigin` est donc une AFFIRMATION SUR LE SERVEUR : on ne la pose que là
+ * où on connaît sa réponse. Elle vit ici, à côté de ce que le seau garde,
+ * parce que c'est la MÊME question — deux sites en auraient fait deux
+ * réponses.
+ *
+ * Sur une adresse de MÊME ORIGINE (le proxy de développement), le mode `cors`
+ * est inoffensif : la vérification CORS ne s'applique pas à une réponse
+ * same-origin, qui reste `basic` et non opaque.
+ */
+export function mediaImageCrossOrigin(src: string | undefined): 'anonymous' | undefined {
+  return src !== undefined && mediaResponseMayBeCached(src) ? 'anonymous' : undefined;
 }

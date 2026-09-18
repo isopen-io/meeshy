@@ -113,6 +113,37 @@ export const VIEWER_ID = 'u-viewer';
 /** Le `username` du lecteur de fixture — `Participant` ne le porte pas à la racine (`participant.ts:125-150`). */
 export const VIEWER_HANDLE = 'vous';
 
+/**
+ * **UNE VRAIE PHOTO DE PROFIL DANS LE CORPUS** (#6975) — même dispositif que
+ * `feedPhotoStandIn` (`fixtures-feed.ts`) et `STORY_PHOTO_STAND_IN` : un
+ * `data:` URI traverse `resolveAttachmentSrc` INCHANGÉ (`media-url.ts`
+ * § `LOCAL_OBJECT_URL_PATTERN`) et ne coûte aucune requête réseau — condition
+ * nécessaire pour qu'un gate navigateur puisse mesurer des PIXELS hors ligne.
+ *
+ * **POURQUOI IL A FALLU L'AJOUTER.** Tout le corpus servait `avatar: null` —
+ * mesuré : vingt-deux occurrences, zéro photo. Un gate qui aurait demandé
+ * « une photo est-elle peinte ? » sur ce corpus mesurait un VIDE LÉGITIME et
+ * sortait vert pour la mauvaise raison (`lessons` § « une erreur avalée en
+ * VIDE ressemble exactement à un vide légitime »).
+ *
+ * `width`/`height` sont POSÉS sur le `<svg>`, pas seulement son `viewBox` :
+ * c'est ce qui donne à l'image une taille INTRINSÈQUE, donc un
+ * `naturalWidth` déterministe — la seule mesure qui distingue une photo
+ * PEINTE d'un `src` simplement passé.
+ */
+export const portraitStandIn = (topHex: string, bottomHex: string, figure: 'buste' | 'aucune' = 'buste'): string =>
+  `data:image/svg+xml;utf8,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">` +
+      `<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">` +
+      `<stop offset="0" stop-color="${topHex}"/><stop offset="1" stop-color="${bottomHex}"/></linearGradient></defs>` +
+      `<rect width="64" height="64" fill="url(#g)"/>` +
+      (figure === 'buste'
+        ? `<circle cx="32" cy="24" r="11" fill="rgba(255,255,255,0.72)"/>` +
+          `<path d="M8 64a24 24 0 0 1 48 0Z" fill="rgba(255,255,255,0.72)"/>`
+        : '') +
+      `</svg>`,
+  )}`;
+
 /** L'identifiant de la conversation « Équipe déploiement » — le fil historique du POC. */
 export const CONVERSATION_ID = 'c-deploiement';
 
@@ -148,21 +179,39 @@ export const viewer: Participant = {
   lastActiveAt: minutesAgo(0),
 };
 
+/**
+ * LE RANG 1 DE LA PHOTO (#6975) — un avatar **LOCAL** posé sur le participant
+ * (surcharge par conversation, `Participant.avatar`). C'est le rang que même
+ * une boucle naïve servirait : il ne suffit donc pas à garder la loi, et
+ * `kwame` juste en dessous porte l'autre moitié.
+ */
 export const amina: Participant = {
   ...participantDefaults,
   id: 'p-amina',
   userId: 'u-amina',
   displayName: 'Amina Diallo',
+  avatar: portraitStandIn('#f472b6', '#7c3aed'),
   isOnline: true,
   lastActiveAt: minutesAgo(0),
 };
 
-/** Hors de la fenêtre d'une minute mais dans celle de trois : `away`, calculé. */
+/**
+ * Hors de la fenêtre d'une minute mais dans celle de trois : `away`, calculé.
+ *
+ * **ET LE RANG 2 DE LA PHOTO** (#6975) — sa photo vit sur le **COMPTE**
+ * (`Participant.user.avatar`), SANS surcharge locale. C'est le rang qu'un
+ * client lisant `participant.avatar` seul RATE, et c'est le cas NOMINAL :
+ * personne ne pose d'avatar par conversation. Écrire le témoin sur le rang 1
+ * seul ne pouvait rien attraper — au rang 1 la boucle naïve et la loi juste
+ * rendent le même verdict (leçon 261 : un témoin de RANG s'écrit sur un rang
+ * AUTRE que le premier).
+ */
 export const kwame: Participant = {
   ...participantDefaults,
   id: 'p-kwame',
   userId: 'u-kwame',
   displayName: 'Kwame Mensah',
+  user: { id: 'u-kwame', avatar: portraitStandIn('#38bdf8', '#1e3a8a') },
   isOnline: false,
   lastActiveAt: minutesAgo(2),
 };
@@ -172,12 +221,20 @@ export const kwame: Participant = {
  * le rang que ni `amina` (online) ni `kwame` (away) ne couvraient — sans
  * elle l'état `idle` de la loi 1/3/5 n'était observable nulle part dans le
  * jeu de démonstration (#5559 §5.3).
+ *
+ * **ET LE RANG 2 DE LA PHOTO DANS LA LISTE** (#6975) — comme `kwame`, sa photo
+ * vit sur le COMPTE (`Participant.user.avatar`), sans surcharge locale. Elle
+ * est portée ICI en plus de `kwame` parce que la seule conversation directe de
+ * ce dernier (`c-kwame`) est ARCHIVÉE, donc absente de la liste par défaut :
+ * le rang 2 n'y était mesurable que dans le FIL. `c-nouvelle` (pair : Fatou)
+ * le rend mesurable sur le premier écran.
  */
 export const fatou: Participant = {
   ...participantDefaults,
   id: 'p-fatou',
   userId: 'u-fatou',
   displayName: 'Fatou Bâ',
+  user: { id: 'u-fatou', avatar: portraitStandIn('#a78bfa', '#4c1d95') },
   isOnline: false,
   lastActiveAt: minutesAgo(4),
 };

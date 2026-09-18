@@ -649,6 +649,29 @@ jobs:
           cd apps/web-v2
           node scripts/check-lens.mjs
 
+      # #6975 — L'INVENTAIRE : aucune surface ne monte `Avatar` sans `src`, sauf
+      # celles dont le registre dit OÙ la chaîne s'arrête. Le gate de pixels
+      # prouve que la loi peint ; celui-ci prouve qu'aucun écran n'est oublié —
+      # y compris ceux qu'aucun navigateur de gate ne visite. Sans navigateur,
+      # donc joué même si Chromium manque.
+      - name: Gate inventaire des avatars (aucun `Avatar` muet)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-avatar-src.mjs
+
+      # #6975 — UNE PHOTO DE PROFIL EST PEINTE, pas seulement passée. Tous les
+      # autres gates d'avatar mesurent la GÉOMÉTRIE (check-curve) ou la pastille
+      # de PRÉSENCE (avatar.test.tsx) : aucun ne demandait « une photo est-elle
+      # là ? », et dix-sept surfaces montaient `Avatar` sans `src` sans faire
+      # rougir un seul verdict. `naturalWidth` après `decode()`, sur les trois
+      # RANGS de la loi partagée, plus un contre-témoin sans photo.
+      - name: Gate photo de profil peinte (trois rangs, pixels)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-avatar-pixels.mjs
+
       # #6277 / #6133 — aucun disque flottant ne recouvre, au repos, un texte de
       # carte du Flux, un libellé du plateau ni un contrôle du chrome
       # (elementFromPoint, deux schémas, 390×844 et 320×568) ; l'en-tête du Flux

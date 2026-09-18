@@ -1,4 +1,4 @@
-import { VIEWER_ID } from './fixtures-base';
+import { VIEWER_ID, portraitStandIn } from './fixtures-base';
 import { REEL_CLIP_RGB, REEL_CLIP_VOICE, STORY_CLIP_LONG } from './fixtures-reel-clips';
 import type { StatusMoodPost, StoryFeedPost, StoryTrayPost } from './stories';
 
@@ -71,7 +71,7 @@ export const STORY_TRAY: readonly StoryTrayPost[] = [
     expiresAt: hoursFromNow(18),
     viewCount: 12,
     isViewedByMe: true,
-    author: { id: 'u-camille', username: 'camille', displayName: 'Camille Roy' },
+    author: { id: 'u-camille', username: 'camille', displayName: 'Camille Roy', avatar: portraitStandIn('#34d399', '#065f46') },
     media: [{ id: 'm1', thumbnailUrl: '', mimeType: 'image/jpeg' }],
   },
   {
@@ -342,7 +342,7 @@ export const STORY_FEED: readonly StoryFeedPost[] = [
     expiresAt: hoursFromNow(18),
     viewCount: 12,
     isViewedByMe: true,
-    author: { id: 'u-camille', username: 'camille', displayName: 'Camille Roy' },
+    author: { id: 'u-camille', username: 'camille', displayName: 'Camille Roy', avatar: portraitStandIn('#34d399', '#065f46') },
     content: 'Bonjour à tous, belle journée !',
     originalLanguage: 'fr',
   },
