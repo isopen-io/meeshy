@@ -32,40 +32,21 @@
  *
  * `CAPTURE_DIR=<dossier>` écrit les captures de recette.
  */
-import { createServer } from 'node:http';
-import { mkdir, readFile, stat } from 'node:fs/promises';
-import { extname, join, normalize } from 'node:path';
+import { mkdir } from 'node:fs/promises';
+import { join } from 'node:path';
 
 import { launchChromium } from './lib/browser.mjs';
+import { startDistServer } from './lib/gate-server.mjs';
 import { contrastOf } from './lib/contrast.mjs';
 import { syncPillOverlap } from './lib/sync-pill-clearance.mjs';
 
 const DIST = new URL('../dist/', import.meta.url).pathname;
-const TYPES = {
-  '.html': 'text/html; charset=utf-8',
-  '.js': 'text/javascript',
-  '.css': 'text/css',
-  '.svg': 'image/svg+xml',
-  '.png': 'image/png',
-  '.webmanifest': 'application/manifest+json',
-};
-
-const server = createServer(async (req, res) => {
-  const p = normalize(new URL(req.url, 'http://x').pathname).replace(/^\/+/, '');
-  for (const f of [join(DIST, p), join(DIST, `${p}.html`), join(DIST, p, 'index.html'), join(DIST, 'index.html')]) {
-    try {
-      if (!(await stat(f)).isFile()) continue;
-      res.writeHead(200, { 'content-type': TYPES[extname(f)] ?? 'application/octet-stream' });
-      res.end(await readFile(f));
-      return;
-    } catch {
-      /* candidat suivant */
-    }
-  }
-  res.writeHead(404).end('404');
-});
-await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
-const BASE = `http://127.0.0.1:${server.address().port}`;
+/* Le serveur vit dans `lib/` depuis #6988 : celui qui était écrit ici
+   repliait TOUT sur `index.html`, y compris un `/assets/*.js` dont la lecture
+   échouait — le navigateur rendait alors « Failed to fetch dynamically imported
+   module » pour une panne transitoire, sans aucune trace au journal. */
+const served = await startDistServer(DIST);
+const BASE = served.base;
 
 const CAPTURE_DIR = process.env.CAPTURE_DIR ?? null;
 if (CAPTURE_DIR !== null) await mkdir(CAPTURE_DIR, { recursive: true });
@@ -312,7 +293,7 @@ try {
   }
 } finally {
   await browser.close();
-  server.close();
+  served.close();
 }
 
 if (failures.length > 0) {
