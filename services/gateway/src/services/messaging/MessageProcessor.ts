@@ -598,6 +598,13 @@ export class MessageProcessor {
       Boolean(data.forwardedFromId) ||
       Boolean(data.copyAttachmentsFromMessageId);
     if (hasAttachmentLinks) {
+      const refreshedAttachments = await performanceLogger.withTiming(
+        'messaging.refreshAttachments',
+        () => this.prisma.messageAttachment.findMany({
+          where: { messageId: message.id }
+        }),
+        corrWithMsg
+      );
       // #7028 (suite de #7014, revue PR #7028) — le cliquet de type de
       // `serializeAttachmentForSocket` (`SocketAttachmentRow`) ne peut PAS voir
       // ce producteur : `message.attachments` traverse ensuite le type PUBLIC
@@ -605,18 +612,16 @@ export class MessageProcessor {
       // avant qu'il n'atteigne le sérialiseur — cf. le doc-comment de
       // `MessageHandler._serializeAttachmentsField`. La SEULE frontière où ce
       // `findMany` peut encore être vérifié est ICI, à la source, avant cette
-      // érosion : annoter le retour du callback force `tsc` à confronter le
-      // `findMany` à `SocketAttachmentRow[]` — un `select` restrictif qui
-      // omettrait `isViewOnce`/`isBlurred`/`effectFlags` (le risque nommé par
-      // la revue : #4166 en a déjà posé un sur trois requêtes voisines pour la
-      // perf) ne compile plus ICI, avec un diagnostic qui pointe cette ligne.
-      const refreshedAttachments = await performanceLogger.withTiming(
-        'messaging.refreshAttachments',
-        (): Promise<SocketAttachmentRow[]> => this.prisma.messageAttachment.findMany({
-          where: { messageId: message.id }
-        }),
-        corrWithMsg
-      );
+      // érosion. Affectation-fantôme plutôt qu'annotation du callback
+      // ci-dessus : `refreshedAttachments` garde son type Prisma EXACT
+      // (`mimeType: string`, requis quelques lignes plus bas) pendant que
+      // cette ligne-ci confronte séparément la même valeur à
+      // `SocketAttachmentRow[]`. Un `select` restrictif qui omettrait
+      // `isViewOnce`/`isBlurred`/`effectFlags` (le risque nommé par la revue :
+      // #4166 en a déjà posé un sur trois requêtes voisines pour la perf) fait
+      // ROUGIR CETTE ligne (TS2322), avant toute érosion en aval.
+      const _refreshedAttachmentsCarryProtection: readonly SocketAttachmentRow[] = refreshedAttachments;
+      void _refreshedAttachmentsCarryProtection;
       (message as Message & { attachments: unknown[] }).attachments = refreshedAttachments;
 
       // ÉTAPE 4 ter: Dire ce QU'EST ce message, maintenant qu'on sait ce qu'il
