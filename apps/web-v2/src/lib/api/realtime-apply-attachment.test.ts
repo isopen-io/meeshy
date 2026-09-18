@@ -3,6 +3,7 @@ import { QueryClient } from '@tanstack/react-query';
 import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
+import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 import { maskedAttachment } from '@meeshy/shared/utils/attachment-protection';
 
 import { Attachments } from '@/components/attachment-blocks';
@@ -148,54 +149,100 @@ describe('applyMessageAttachmentUpdated (#7017) — la transcription arrive SANS
   });
 
   /**
-   * UNE CHARGE QUI NE DÉCLARE RIEN NE DÉMASQUE RIEN. `maskedAttachment` rend
-   * `false` sur une charge muette (« une pièce sans déclaration est une pièce
-   * ordinaire » — son fail-closed vit chez l'appelant), et le sérialiseur
-   * socket ne servait AUCUN des trois drapeaux avant #7014. Une pièce à VUE
-   * UNIQUE connue du cache par le REST doit rester masquée quand son
-   * enrichissement arrive : sinon le voile tombe au moment précis où le
-   * pipeline finit son travail — la fuite du cycle 125, rouverte par un chemin
-   * neuf et sans qu'aucun gate ne rougisse.
+   * LA PROTECTION SE RATTRAPE CANAL PAR CANAL, JAMAIS EN BLOC — revue
+   * adversariale #7017, et c'est le trou que les deux témoins voisins ne
+   * pouvaient pas voir.
    *
-   * CE TÉMOIN EST GARDÉ EN PROFONDEUR PAR DEUX MÉCANISMES INDÉPENDANTS —
-   * chacun SEUL suffit à le tenir vert pour CE payload précis (la charge
-   * omet les trois drapeaux, elle ne les dément pas) : la FUSION (le spread
-   * `{ ...cached, ...incoming }` garde `isViewOnce` quand `incoming` ne le
-   * porte pas) et la GARDE (`mergedAttachment` restaure les clés de
-   * protection depuis `cached` dès que `maskedAttachment(cached)` est vrai et
-   * que la fusion l'a perdu). Il ne tombe donc QUE si les DEUX partent
-   * ensemble — révision-correction, mesuré par mutation :
+   * `maskedAttachment` est un OU sur TROIS canaux (`isViewOnce`, `isBlurred`,
+   * les bits masquants d'`effectFlags`). Une garde qui se contente de
+   * demander « la pièce fusionnée est-elle ENCORE masquée ? » laisse donc
+   * tomber UN canal tant qu'un AUTRE tient debout : une pièce à la fois à VUE
+   * UNIQUE et FLOUTÉE dont la charge dément la vue unique repart floutée et
+   * PLUS À VUE UNIQUE — l'agrégat n'a pas bougé, la protection si. Le
+   * doc-comment de `mergedAttachment` énonce pourtant la loi juste (« la
+   * charge peut AJOUTER une protection ; elle ne peut pas en RETIRER une ») :
+   * le code disait moins que sa propre règle.
    *
-   *  - `mergedAttachment` réduit à `return incoming as Attachment` (aucun
-   *    repli sur `cached`, les DEUX mécanismes disparaissent d'un coup) ⇒ 4
-   *    échecs : CE témoin, « fusion, jamais remplacement sec », « démentit la
-   *    protection » et le témoin DOM ci-dessous — ROUGE.
-   *  - guard SEUL retiré (`return { ...cached, ...incoming } as unknown as
-   *    Attachment;`, la fusion reste) ⇒ CE témoin reste VERT (la fusion
-   *    seule suffit pour un payload qui ne fait que TAIRE la protection) ;
-   *    seul « démentit la protection » tombe — c'est pourquoi ce second
-   *    témoin existe : lui seul isole la garde, en faisant DÉCLARER par
-   *    `incoming` `isViewOnce: false` — une valeur que la fusion seule
-   *    laisserait GAGNER.
+   * Ce n'est pas une hypothèse de laboratoire : c'est le régime NOMINAL du
+   * jour où la passerelle servira les trois drapeaux (#7014). Une ligne relue
+   * après une consommation, un `select` partiel, une course entre deux
+   * enrichissements — il suffit qu'UN canal revienne à `false` pendant qu'un
+   * autre reste vrai. Et c'est le trou EXACT que les deux témoins voisins
+   * laissent ouvert : ils démentent TOUS les canaux à la fois, cas où
+   * l'agrégat tombe et où la garde en bloc suffit. **Un témoin de garde
+   * s'écrit sur la protection PARTIELLE, jamais sur la totale** — au
+   * démenti total, la garde en bloc et le cliquet par canal rendent le même
+   * verdict, donc le témoin ne peut pas tomber (leçon 261, portée d'un rang
+   * de Prisme à un canal de protection).
    *
-   * Aucun des trois témoins (celui-ci, « fusion, jamais remplacement sec »,
-   * « démentit la protection ») ne subsume les autres : chacun meurt sous une
-   * mutation que les deux autres survivent.
+   * Ce témoin REMPLACE « une pièce DÉJÀ masquée le reste quand la charge ne
+   * déclare aucun drapeau » : celui-là ne tombait que sous la mutation
+   * « remplacement sec », que « fusion, jamais remplacement sec » attrape
+   * déjà — il ne gardait donc rien que son voisin ne gardât.
    */
-  test('une pièce DÉJÀ masquée le reste protégée même si le puits abandonne TOUT repli au cache (remplacement sec)', () => {
+  test('un canal de protection DÉMENTI ne tombe pas parce qu’un AUTRE reste debout', () => {
     const client = new QueryClient();
+    const bothChannels = MESSAGE_EFFECT_FLAGS.VIEW_ONCE | MESSAGE_EFFECT_FLAGS.BLURRED;
     client.setQueryData(
       messagesQueryKey('c-a'),
-      threadPages([cachedAudioMessage(socketAttachment({ isViewOnce: true, isBlurred: false }))]),
+      threadPages([
+        cachedAudioMessage(socketAttachment({ isViewOnce: true, isBlurred: true, effectFlags: bothChannels })),
+      ]),
     );
 
     applyMessageAttachmentUpdated(client, {
       conversationId: 'c-a',
       messageId: 'm-audio',
-      attachment: socketAttachment({ transcription: { type: 'audio', text: 'Hola', language: 'es' } }),
+      attachment: socketAttachment({
+        isViewOnce: false,
+        isBlurred: true,
+        effectFlags: MESSAGE_EFFECT_FLAGS.BLURRED,
+        transcription: { type: 'audio', text: 'Hola', language: 'es' },
+      }),
     });
 
-    expect(maskedAttachment(attachmentOf(client, 'c-a', 'm-audio') as never)).toBe(true);
+    const servie = attachmentOf(client, 'c-a', 'm-audio');
+    /* L'agrégat reste vrai dans les deux mondes — c'est pour cela qu'il ne
+       peut pas servir de témoin ici. Ce qui distingue, ce sont les CANAUX. */
+    expect(maskedAttachment(servie as never)).toBe(true);
+    expect(servie.isViewOnce).toBe(true);
+    expect(servie.isBlurred).toBe(true);
+    expect(servie.effectFlags).toBe(bothChannels);
+  });
+
+  /**
+   * LA CONTRE-ÉPREUVE DU CLIQUET (leçon 261) — il garde le SECRET, pas la
+   * DÉCORATION. `effectFlags` porte, sur les mêmes 32 bits, les canaux
+   * masquants (`VIEW_ONCE`, `BLURRED`) ET les effets décoratifs (`CONFETTI`,
+   * `GLOW`, …, `lib/effects.ts`). Un cliquet qui rattraperait le champ ENTIER
+   * ferait reparaître un confetti que le serveur vient de retirer — une
+   * protection qui ressuscite un effet n'est plus une protection, c'est un
+   * cache qui refuse les mises à jour. Sans ce témoin, le masque
+   * `MASKING_EFFECT_FLAGS` pourrait devenir `~0` sans que rien ne rougisse.
+   */
+  test('le cliquet rattrape les bits MASQUANTS, jamais un effet DÉCORATIF que le serveur retire', () => {
+    const client = new QueryClient();
+    client.setQueryData(
+      messagesQueryKey('c-a'),
+      threadPages([
+        cachedAudioMessage(
+          socketAttachment({
+            isViewOnce: true,
+            effectFlags: MESSAGE_EFFECT_FLAGS.VIEW_ONCE | MESSAGE_EFFECT_FLAGS.CONFETTI,
+          }),
+        ),
+      ]),
+    );
+
+    applyMessageAttachmentUpdated(client, {
+      conversationId: 'c-a',
+      messageId: 'm-audio',
+      attachment: socketAttachment({ isViewOnce: false, isBlurred: false, effectFlags: 0 }),
+    });
+
+    const servie = attachmentOf(client, 'c-a', 'm-audio');
+    expect(servie.isViewOnce).toBe(true);
+    expect(servie.effectFlags).toBe(MESSAGE_EFFECT_FLAGS.VIEW_ONCE);
   });
 
   test('une pièce DÉJÀ masquée le reste même si la charge socket DÉMENT la protection', () => {
