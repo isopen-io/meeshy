@@ -1,4 +1,9 @@
 import Foundation
+// `MemberImportVisibility` (SE-0444) est activé sur ce module : `send(_:)` est
+// un membre de `PassthroughSubject`, donc Combine doit être importé ICI, dans
+// le fichier qui l'appelle — l'import de `NotificationToastManager.swift` ne
+// porte pas jusqu'à cette extension.
+import Combine
 import os
 
 /// La RÉFÉRENCE d'une consommation — ce qu'on déclare avoir consommé.

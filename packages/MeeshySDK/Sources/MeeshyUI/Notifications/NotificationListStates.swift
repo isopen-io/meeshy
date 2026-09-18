@@ -1,4 +1,5 @@
 import SwiftUI
+import Foundation
 
 // Les deux états que la cloche ne DESSINAIT pas (#7000).
 //
