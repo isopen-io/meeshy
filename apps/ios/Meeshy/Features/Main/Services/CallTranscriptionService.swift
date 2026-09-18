@@ -98,6 +98,12 @@ enum TranscriptionError: LocalizedError, Equatable {
     case onDeviceNotSupported(language: String)
     case recognitionFailed(underlying: Error)
     case audioEngineFailed(underlying: Error)
+    /// Le micro n'a plus de format exploitable — route d'entrée disparue,
+    /// session désactivée, matériel en cours de reconfiguration. Distincte
+    /// d'`audioEngineFailed` : rien n'a échoué, on a REFUSÉ d'appeler
+    /// AVAudioEngine, parce que l'appeler aurait levé une exception ObjC
+    /// irrattrapable (voir `AudioTapFormatReadiness`, #7002).
+    case tapFormatUnavailable(sampleRate: Double, channelCount: UInt32)
 
     var errorDescription: String? {
         switch self {
@@ -111,6 +117,8 @@ enum TranscriptionError: LocalizedError, Equatable {
             return "Recognition failed: \(error.localizedDescription)"
         case .audioEngineFailed(let error):
             return "Local audio capture failed: \(error.localizedDescription)"
+        case .tapFormatUnavailable(let sampleRate, let channelCount):
+            return "Microphone format unavailable: \(sampleRate) Hz / \(channelCount) ch"
         }
     }
 
@@ -311,7 +319,10 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         do {
             try startLocalCapture()
         } catch {
-            lastError = .audioEngineFailed(underlying: error)
+            // Un refus de tap (#7002) porte déjà son diagnostic : le
+            // ré-emballer en `audioEngineFailed` ferait dire « la capture a
+            // échoué » là où rien n'a été tenté.
+            lastError = (error as? TranscriptionError) ?? .audioEngineFailed(underlying: error)
             callsLogger.error("startTranscribing: AVAudioEngine failed: \(error.localizedDescription)")
             self.recognizer = nil
             return
@@ -425,6 +436,15 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
 
         let input = audioEngine.inputNode
         let format = input.outputFormat(forBus: 0)
+        // Poser un tap sur un format à 0 Hz / 0 canal lève une exception ObjC
+        // irrattrapable — voir `AudioTapFormatReadiness` (#7002). Ici on peut
+        // encore REFUSER de démarrer : `startTranscribing` attrape et pose
+        // `lastError` sans jamais allumer `isTranscribing`.
+        guard AudioTapFormatReadiness.mayInstall(sampleRate: format.sampleRate,
+                                                 channelCount: format.channelCount) else {
+            throw TranscriptionError.tapFormatUnavailable(sampleRate: format.sampleRate,
+                                                          channelCount: format.channelCount)
+        }
         // nonisolated(unsafe): SFSpeechAudioBufferRecognitionRequest isn't
         // audited Sendable by Apple, but `append(_:)` is Apple's documented
         // call pattern for exactly this real-time tap callback — the type
@@ -489,7 +509,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     private func handleAudioEngineConfigurationChange() {
         guard isTranscribing, let request else { return }
         let ownerCallId = callId
-        reinstallTap(for: request)
+        guard reinstallTap(for: request) else { return }
         if !audioEngine.isRunning {
             do {
                 try audioEngine.start()
@@ -544,7 +564,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         )
         guard action == .restartEngine, let request else { return }
         let ownerCallId = callId
-        reinstallTap(for: request)
+        guard reinstallTap(for: request) else { return }
         do {
             try audioEngine.start()
             callsLogger.info("Restarted transcription capture after audio interruption ended")
@@ -594,15 +614,34 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
 
     /// See `startLocalCapture`'s doc comment — same `@Sendable`-typed-local
     /// requirement applies here.
-    private func reinstallTap(for newRequest: SFSpeechAudioBufferRecognitionRequest) {
+    ///
+    /// **Rend `false` quand le micro n'a plus de format exploitable** (#7002) :
+    /// ses trois appelants sont rejoués sur les instants où c'est le plus
+    /// probable — changement de configuration, fin d'interruption, rotation de
+    /// requête. Le refus RETIRE les sous-titres au lieu de laisser
+    /// `isTranscribing` allumé au-dessus d'un moteur que plus rien n'alimente ;
+    /// les appelants n'ont donc rien à dégrader eux-mêmes, seulement à
+    /// s'arrêter. Pas de `@discardableResult` : ignorer ce verdict doit faire
+    /// rougir le compilateur, pas passer inaperçu.
+    private func reinstallTap(for newRequest: SFSpeechAudioBufferRecognitionRequest) -> Bool {
         audioEngine.inputNode.removeTap(onBus: 0)
         let format = audioEngine.inputNode.outputFormat(forBus: 0)
+        guard AudioTapFormatReadiness.mayInstall(sampleRate: format.sampleRate,
+                                                 channelCount: format.channelCount) else {
+            let ownerCallId = callId
+            callsLogger.error("Transcription tap refused: microphone format is \(format.sampleRate) Hz / \(format.channelCount) ch — captions stopped")
+            applyRecognitionError(.tapFormatUnavailable(sampleRate: format.sampleRate,
+                                                        channelCount: format.channelCount),
+                                  callId: ownerCallId)
+            return false
+        }
         // nonisolated(unsafe): see startLocalCapture's identical comment.
         nonisolated(unsafe) let capturedRequest = newRequest
         let tapBlock: @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void = { buffer, _ in
             capturedRequest.append(buffer)
         }
         audioEngine.inputNode.installTap(onBus: 0, bufferSize: 1024, format: format, block: tapBlock)
+        return true
     }
 
     // MARK: - Recognition
@@ -803,7 +842,10 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         newRequest.addsPunctuation = true
         newRequest.requiresOnDeviceRecognition = true
         request = newRequest
-        reinstallTap(for: newRequest)
+        // Une rotation qui ne peut pas reposer son tap ne doit pas ouvrir une
+        // tâche de reconnaissance que rien n'alimentera — `reinstallTap` a
+        // déjà éteint les sous-titres.
+        guard reinstallTap(for: newRequest) else { return }
 
         startRecognitionTask(language: language)
     }
