@@ -15,9 +15,19 @@
 
 /** Les seaux d'exécution déclarés par `runtimeCaching` — ceux qui portent de la donnée de lecteur. */
 export const SW_RUNTIME_CACHES = {
-  /** Les réponses `/api/**` en NetworkFirst — 200 entrées, sept jours. */
+  /**
+   * Le JSON `/api/**` en NetworkFirst — 200 entrées, sept jours. Ni
+   * l'administration (#6862) ni les MÉDIAS (#6973) : le plafond de 200 entrées
+   * est RÉSERVÉ au JSON, sans quoi un défilement de fil évince les réponses de
+   * conversations et de messages dont la lecture hors ligne dépend.
+   */
   api: 'api',
-  /** Les images en CacheFirst — 120 entrées, trente jours. */
+  /**
+   * Les IMAGES en CacheFirst — 300 entrées, trente jours, `statuses: [0, 200]`.
+   * Enregistré AVANT le seau `api` (le routeur de Workbox retient la première
+   * route qui matche) ; audio et vidéo n'y entrent pas, décision inscrite dans
+   * `vite.config.ts` et gardée par `scripts/check-sw-api-cache.mjs`.
+   */
   medias: 'medias',
 } as const;
 

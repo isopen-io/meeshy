@@ -2,6 +2,7 @@ import { PRESENCE_HEX, presenceTone } from '@meeshy/shared/utils/user-presence';
 
 import { attachmentSrc } from '@/lib/api/media-url';
 import type { UserPresenceStatus } from '@/lib/api/types';
+import { mediaImageCrossOrigin } from '@/lib/net/api-runtime-cache';
 
 /**
  * L'AVATAR, avec sa geometrie derivee — les memes formules que
@@ -114,10 +115,26 @@ export function Avatar({
         {initials}
       </span>
       {showsImage ? (
+        /* `decoding` et `crossOrigin` — LES DEUX BOUTS DE #6973.
+           `decoding="async"` : c'était la SEULE `<img>` du dépôt sans lui
+           (`media-grid.tsx`, `reel-page.tsx`, `notification-row.tsx` et
+           `communities-parts.tsx` le posent tous), et une liste qui monte des
+           dizaines de portraits décodait donc sur le fil principal, pendant le
+           geste.
+           `crossOrigin` : la passerelle rend déjà `Access-Control-Allow-Origin`
+           sur sa route de flux, mais l'en-tête est INERTE tant que la requête
+           part en `no-cors` — la réponse est alors OPAQUE, et le seau `medias`
+           la garde trente jours sans pouvoir la distinguer d'une page d'erreur.
+           `mediaImageCrossOrigin` ne la pose QUE sur la route de flux : un CDN
+           tiers ou le magasin statique (que `attachmentSrc` laisse passer
+           inchangés, par décision) ÉCHOUERAIT en mode `cors` sans en-tête, et
+           l'avatar serait retombé sur ses initiales en silence. */
         <img
           src={resolvedSrc}
           alt={name ?? ''}
           loading="lazy"
+          decoding="async"
+          crossOrigin={mediaImageCrossOrigin(resolvedSrc)}
           className="absolute inset-0 size-full rounded-chip object-cover"
           onError={(event) => {
             event.currentTarget.style.display = 'none';
