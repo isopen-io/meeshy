@@ -1,7 +1,43 @@
-Neu: „In der Nähe“
-• Entdecke Posts rund um dich auf einer Karte – als Dichte, Punkte oder Liste, im Radius deiner Wahl
-• Mach deine eigenen Posts in der Nähe auffindbar, so genau wie DU es willst: exakt, Viertel, Stadt oder Region – nie genauer als deine Wahl
-• „Was ist hier in der Nähe?“ von jedem Ort aus, der auf einem Post angezeigt wird
+Das größte Meeshy-Update bisher. Erstellen, Ansehen und Sprechen — alles neu gedacht.
 
-Außerdem
-• Mehr Stabilität: ein Absturz beim Öffnen von „In der Nähe“ ist behoben
+ERSTELLEN — EIN EINZIGES STUDIO
+• Story, Reel oder Beitrag: Wechsle das Format von innen, ohne zu verlieren, was du schon geschrieben oder hinzugefügt hast
+• Gestalte mit dem Daumen — langes Drücken öffnet die Kamera direkt in der Szene, Werkzeuge links, Verlauf rechts, Rückgängig und Wiederholen jederzeit
+• Mehrere Szenen, mehrere Medien, jedes mit eigener Bildunterschrift und Sprache: Karussell, Mosaik oder Folien, ganz wie du willst
+• Zuschneiden, drehen und kürzen ohne Qualitätsverlust. Beginne mit einer erhaltenen Nachricht, mit etwas aus einer anderen App geteiltem, oder mit dem, was du gerade eingefügt hast
+
+VERZIEREN — 200 STICKER, 14 TEXTEFFEKTE
+• Rund zwanzig Familien — Freude, Stimmung, Grüße, Feier, Natur, Reisen, Musik, Sport — viele davon animiert
+• Stelle ein Motiv aus einem Foto frei: Es wandert in deine persönliche Bibliothek
+• Text bekommt statt 4 nun 14 Effekte (Leuchten, Schatten, Relief, Neon), mit 18 Stilen und passenden Schriften
+• Eine Verzierung kann lebende Daten tragen: Ort, Uhrzeit, Wetter, deine eigenen Worte
+
+DEINE STIMME, IN IHRER SPRACHE
+• Deine Sprachnachricht wird direkt auf dem Gerät transkribiert, sobald du loslässt — der Text ist sofort da, ohne auf den Server zu warten
+• Der Ton eines Beitrags, eines Reels oder eines Kommentars läuft jetzt in der Sprache der Zuhörerin oder des Zuhörers
+• Ein einziger Bildschirm zum Aufnehmen, Kürzen und Platzieren: Szenenhintergrund, Soundtrack oder Hörinhalt unter dem Text
+• Foto- und Videountertitel liest du in deiner Sprache, live übersetzt
+
+ANSEHEN
+• Der Vollbildmodus öffnet scharf auf dem echten Bild, nie auf einer unscharfen Vorschau
+• Blättere durch die Medien eines Beitrags und dann durch die seiner Kommentare, wie durch einen Filmstreifen
+• Reagiere, antworte oder erstelle eine Story, ohne das Vollbild zu verlassen
+• Doppeltippen an der Seite eines Videos: zehn Sekunden zurück oder vor
+
+UNTERHALTUNGEN
+• Mehrfachauswahl von bis zu 100 Nachrichten, um sie auf einmal weiterzuleiten oder zu löschen
+• Doppeltippen zum Reagieren, langes Drücken für das Menü — das nur noch Aktionen anbietet, die wirklich etwas bewirken
+• Zitate zeigen Vorschaubild, Dauer und Größe des gemeinten Mediums
+• Überarbeitete Lesemodi, und „Fluss" — die Zeit als senkrechte Achse — startet als Beta
+
+DEIN KONTO
+• Registrierung auf einem einzigen Bildschirm: E-Mail oder Telefon, Passwort optional, Magic Link
+• Deinen Online-Status sehen nur bestätigte Freundinnen und Freunde — weder eine geteilte Unterhaltung noch eine Community noch ein Story-Link verraten ihn
+• Fortschritt, Serien und fast 120 Erfolge; der Meesh, unsere seltene Währung, hat jetzt seine Münze
+
+UM DICH HERUM
+• „In der Nähe" hat nun zwei Ebenen, Umgebung und Entdeckung, als Dichte, Punkte oder Liste
+• Ein Ortskürzel trägt sein Zeitfenster — und Auffindbarkeit bleibt eine ausdrückliche Entscheidung, in der Genauigkeit, die du einstellst
+
+UNTER DER HAUBE
+Kaltstart mit einer Handvoll Anfragen: Deine Unterhaltungen erscheinen, ohne auf das Netz zu warten. Neun Abstürze an der Wurzel behoben. Rund zwanzig Verbesserungen der Barrierefreiheit — VoiceOver, Dynamic Type, WCAG-Kontraste, 44-pt-Ziele, gespiegelte Oberfläche für Arabisch. Sieben Oberflächensprachen ohne Näherungen.
