@@ -13,12 +13,12 @@ describe('PAGINATION_CONVERSATIONS', () => {
     for (const id of ids) expect(existingIds.has(id)).toBe(false);
   });
 
-  /* 46 depuis #7032 : le salon « Texte enrichi » (`fixtures-rich-text.ts`)
-     rejoint les 11 existantes, et 11 + 34 + 1 = 46. Ce compte est un INVENTAIRE
-     — il bouge quand un corpus entre, et c'est précisément son rôle de le dire
-     plutôt que de laisser un ajout passer inaperçu. */
-  test('CONVERSATIONS.length === 46 — les 34 sont bien fusionnées', () => {
-    expect(CONVERSATIONS).toHaveLength(46);
+  /* 45, et ce compte est LU AILLEURS — `check-lens.mjs:939` en dérive ses 44
+     rangées rendues, `conversations.test.ts` ses 15 de page 2. Un corpus de
+     démonstration qui n'a besoin que de son ADRESSE va dans
+     `OFF_LIST_CONVERSATIONS` (`fixtures.ts`), pas ici (#7033). */
+  test('CONVERSATIONS.length === 45 — les 34 sont bien fusionnées', () => {
+    expect(CONVERSATIONS).toHaveLength(45);
   });
 
   test('toutes STRICTEMENT plus anciennes que la plus ancienne des 11 existantes', () => {

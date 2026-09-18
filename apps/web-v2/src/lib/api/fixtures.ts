@@ -640,10 +640,6 @@ export const CONVERSATIONS: readonly Conversation[] = [
   CATCHUP_CONVERSATION,
   MEDIA_CONVERSATION,
   STATES_CONVERSATION,
-  /* LE SALON « TEXTE ENRICHI » (#7032) — liens, mentions, emphase, et les
-     DEUX contre-témoins : un hashtag qui doit rester du texte, un pseudo que
-     le serveur n'a pas validé. */
-  RICH_TEXT_CONVERSATION,
   /**
    * LE CORPUS DE PAGINATION (#6195) — 34 conversations STRICTEMENT plus
    * anciennes que les 11 ci-dessus (`fixtures-pagination.ts`), pour que la
@@ -751,6 +747,38 @@ export function conversationsWithSurged(): readonly Conversation[] {
  * l'ORDRE d'exécution. */
 export function resetSurgedConversationsForTests(): void {
   surgedConversations.length = 0;
+}
+
+/**
+ * **LES CONVERSATIONS DE DÉMONSTRATION, HORS LISTE** (#7032, revue #7033) — le
+ * corollaire STATIQUE du registre ci-dessus, et pour la même raison écrite
+ * quatre paragraphes plus haut : la TAILLE de `CONVERSATIONS` est une valeur
+ * MESURÉE par des gates qui ne savent rien du corpus qu'on ajoute.
+ *
+ * Le salon « Texte enrichi » y était entré, et son `lastMessageAt` (≈ 2 min)
+ * en faisait le plus récent de tout le corpus. Trois comptes ont bougé d'un
+ * cran — 45 → 46 conversations, 15 → 16 en page 2, et 44 → 45 rangées rendues
+ * dans `scripts/check-lens.mjs:939`, celui-là seulement découvert en CI, sur
+ * un travail SANS `continue-on-error`. Un corpus de démonstration n'a aucun
+ * besoin d'être SERVI EN LISTE : son gate y navigue par l'ADRESSE
+ * (`check-rich-text.mjs` fait `goto('/c/c-texte-enrichi')`), exactement comme
+ * les DEUX autres moitiés du même corpus — publications et profil public —
+ * que `hashtag-posts.ts` et `public-profile.ts` importent à la demande.
+ *
+ * Ce registre est donc la place des corpus dont un gate a besoin par son
+ * ADRESSE et dont aucune liste n'a besoin. Y ajouter une entrée ne déplace
+ * AUCUN compte ; l'ajouter à `CONVERSATIONS` les déplace TOUS.
+ */
+const OFF_LIST_CONVERSATIONS: readonly Conversation[] = [RICH_TEXT_CONVERSATION];
+
+/**
+ * LA LECTURE PAR IDENTIFIANT — la liste servie D'ABORD (corpus figé +
+ * survenues), les hors-liste ENSUITE. Site unique de `loadConversation` en
+ * fixtures : une conversation qu'aucune page ne porte doit tout de même
+ * s'OUVRIR, sans quoi son adresse mènerait à « introuvable ».
+ */
+export function conversationById(id: string): Conversation | undefined {
+  return conversationsWithSurged().find((c) => c.id === id) ?? OFF_LIST_CONVERSATIONS.find((c) => c.id === id);
 }
 
 const withConsumption = (messages: readonly Message[]): readonly Message[] => {
