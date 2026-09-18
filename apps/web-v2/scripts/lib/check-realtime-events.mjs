@@ -52,8 +52,33 @@ const langOf = (page, id) => page.locator(`[data-message="${id}"] p`).first().ge
  * témoin qui ne peut pas tomber » appliquée à un sélecteur.
  */
 const transcriptOf = (page, id) => page.locator(`[data-message="${id}"] [data-transcript]`).first().innerText();
-const transcriptLangOf = (page, id) =>
-  page.locator(`[data-message="${id}"] [data-transcript]`).first().getAttribute('lang');
+
+/**
+ * LA LANGUE QU'UN LECTEUR D'ÉCRAN ENTEND, jamais l'attribut posé sur le nœud
+ * (revue-correction #7017).
+ *
+ * `getAttribute('lang')` ne peut pas tomber sur le défaut qui compte : un
+ * attribut ABSENT (`null`) et un attribut VIDE (`''`, la coquille que Preact
+ * laisse derrière une prop disparue — `lang` étant une propriété de
+ * `HTMLElement`, `setProperty` prend la branche `name in dom` et écrit
+ * `dom.lang = ''` au lieu d'appeler `removeAttribute`) se lisent tous deux
+ * comme « rien », alors qu'ils désignent DEUX langues effectives différentes —
+ * la langue HÉRITÉE du document pour le premier, « langue inconnue » pour le
+ * second. Aucune des deux n'est la langue SERVIE.
+ *
+ * `closest('[lang]')` mesure ce que la cascade HTML résout RÉELLEMENT, et il
+ * distingue les trois cas : `'fr'` (le nœud annonce sa langue), `''` (coquille)
+ * et `'en'` (hérité du `<html lang>` que pose le script d'amorçage de la langue
+ * d'INTERFACE). Un témoin écrit sur l'attribut aurait blanchi les deux
+ * derniers.
+ */
+const transcriptServedLangOf = (page, id) =>
+  page.evaluate((messageId) => {
+    const paragraph = document.querySelector(`[data-message="${messageId}"] [data-transcript]`);
+    return paragraph?.closest('[lang]')?.getAttribute('lang') ?? null;
+  }, id);
+
+const documentLangOf = (page) => page.evaluate(() => document.documentElement.lang);
 
 /**
  * LE LIBELLÉ, lu sur `data-typing-label` — jamais un TEXTE VISIBLE scanné
@@ -129,6 +154,23 @@ export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA
     `${label} live-3 : AUCUNE transcription au chargement — le pipeline n'a encore rien produit (obtenu « ${live3AtLoad} »)`,
   );
 
+  /**
+   * LA PRÉMISSE DES TROIS MESURES DE LANGUE CI-DESSOUS, POSÉE PLUTÔT QUE
+   * SUPPOSÉE (revue-correction #7017). Ce contexte est ouvert en `locale:
+   * 'en-US'`, donc le script d'amorçage de la langue d'INTERFACE
+   * (`inline-interface-language-bootstrap.js`) écrit `<html lang="en">`,
+   * pendant que le CONTENU descend le Prisme du LECTEUR, dont le rang 1 vaut
+   * TOUJOURS `'fr'` (`systemLanguage: 'fr'`, `src/lib/reader.ts`). Les deux
+   * résolveurs DIVERGENT, et c'est cette divergence — le cas NOMINAL d'un
+   * francophone sur un appareil anglais — qui rend les assertions suivantes
+   * falsifiables : sans elle, « annoncer la langue servie » et « ne rien
+   * annoncer » se ressembleraient.
+   */
+  expect(
+    (await documentLangOf(page)) === 'en',
+    `${label} le document est en ANGLAIS (langue d'INTERFACE, locale en-US) pendant que le Prisme sert du contenu français (obtenu ${await documentLangOf(page)})`,
+  );
+
   await page.clock.runFor(2200); // T+2,5 s
   expect(
     (await textOf(page, 'live-1')).includes('Hi, is the review still on Thursday?'),
@@ -140,8 +182,8 @@ export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA
     `${label} live-3 : la transcription Whisper (es) apparaît SANS rechargement (obtenu « ${await transcriptOf(page, 'live-3')} »)`,
   );
   expect(
-    (await transcriptLangOf(page, 'live-3')) === 'es',
-    `${label} live-3 : lang="es" — la langue RÉELLEMENT servie, pas celle du lecteur (obtenu ${await transcriptLangOf(page, 'live-3')})`,
+    (await transcriptServedLangOf(page, 'live-3')) === 'es',
+    `${label} live-3 : la transcription est ANNONCÉE en "es" — la langue RÉELLEMENT servie, pas celle du lecteur ni celle du document (obtenu ${JSON.stringify(await transcriptServedLangOf(page, 'live-3'))})`,
   );
 
   await page.clock.runFor(1500); // T+4 s
@@ -159,8 +201,8 @@ export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA
     `${label} live-3 : la traduction ANGLAISE (rang 2) est servie dès qu'elle arrive (obtenu « ${await transcriptOf(page, 'live-3')} »)`,
   );
   expect(
-    (await transcriptLangOf(page, 'live-3')) === 'en',
-    `${label} live-3 : lang="en" au rang 2 (obtenu ${await transcriptLangOf(page, 'live-3')})`,
+    (await transcriptServedLangOf(page, 'live-3')) === 'en',
+    `${label} live-3 : la transcription est ANNONCÉE en "en" au rang 2 (obtenu ${JSON.stringify(await transcriptServedLangOf(page, 'live-3'))})`,
   );
   expect(messageFetches === 0, `${label} aucune requête « /messages » n'a été déclenchée par la traduction ni par l'enrichissement de la pièce (${messageFetches})`);
 
@@ -171,42 +213,46 @@ export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA
     `${label} live-1 : le fil ne change pas quand conversation:updated arrive (le fil OUVERT n'écoute que message:translation)`,
   );
   /**
-   * LE RANG 1 REPREND LA MAIN — et l'annotation de langue doit LÂCHER avec
-   * lui. Un `lang` resté à « en » sur un texte français est le défaut que ce
-   * témoin garde : il ferait prononcer « on garde la revue jeudi ? » à une
-   * voix anglaise, c'est-à-dire un Prisme juste à l'œil et faux à l'oreille.
+   * LE RANG 1 REPREND LA MAIN — et la langue ANNONCÉE doit devenir « fr »,
+   * jamais se taire.
    *
-   * CE QUE LA MESURE A RENDU, et pourquoi ce témoin n'exige PAS `null`
-   * (mesuré au navigateur sur ce dist, `dump` des quatre instants) :
+   * CE TÉMOIN NE POUVAIT PAS TOMBER, et c'est la revue-correction #7017 qui
+   * l'a mesuré. Il exigeait `lang === null || lang === ''` : les DEUX seules
+   * valeurs que la règle de rendu d'alors pouvait produire à cet instant
+   * (`null` si le nœud naissait ici, `''` — la coquille Preact — parce qu'il
+   * avait porté « en » une seconde plus tôt). Une assertion satisfaite par
+   * l'ensemble des issues possibles ne garde rien.
    *
-   *     T+0    lang="es"   T+2,5 lang="es"   T+4 lang="en"   T+5 lang=""
+   * Pire, elle CONSACRAIT le défaut. `attachment-blocks.tsx` omettait
+   * l'attribut quand la langue servie valait `READER_LOCALE`, en le justifiant
+   * par « c'est la langue du document » — or le document est en `en` ici
+   * (assertion posée plus haut) et `READER_LOCALE` vaut TOUJOURS `'fr'`. Le
+   * cas où l'attribut disparaissait était donc exactement celui où il est
+   * INDISPENSABLE : un texte français dans un document anglais. Mesuré au
+   * navigateur sur le dist d'avant correctif — quatre instants, `closest
+   * ('[lang]')` :
    *
-   * Preact ne RETIRE pas l'attribut quand la prop disparaît : `lang` étant une
-   * propriété de `HTMLElement`, `setProperty` prend la branche `name in dom`
-   * et écrit `dom.lang = ''` au lieu d'appeler `removeAttribute`. Sur le
-   * chemin REST le nœud naît sans l'attribut (`check-media.mjs` (e ter)
-   * l'asserte `null` à juste titre) ; ici il a porté « en » une seconde plus
-   * tôt, et il en garde la COQUILLE.
+   *     T+0,3 « es »   T+2,5 « es »   T+4 « en »   T+5 « » (langue INCONNUE)
    *
-   * `lang=""` n'est pas neutre — HTML le définit comme « langue explicitement
-   * INCONNUE », donc il n'hérite PAS du français du document. C'est un défaut
-   * de RENDU (`attachment-blocks.tsx:129`, et ses jumeaux `media-grid.tsx:58,
-   * 298` / `media-viewer.tsx:190`), atteignable aussi par le geste
-   * « Traduire » du chemin REST — hors du périmètre de #7017, qui ne touche
-   * que l'ALIMENTATION. Suivi : #7024.
+   * Un lecteur d'écran lisait donc « Bonjour, on garde la revue jeudi ? » sans
+   * langue déclarée. La coquille `lang=""` sauvait la mise par accident (HTML
+   * la définit comme « langue explicitement inconnue », donc elle n'hérite pas
+   * de l'anglais) ; sur le chemin REST, où le nœud naît sans attribut, rien ne
+   * la sauvait — le français y héritait bel et bien du `<html lang="en">`.
    *
-   * Ce témoin garde donc ce qui relève de CE lot — la langue annoncée SUIT le
-   * rang servi et ne reste pas accrochée au rang précédent — et il tombe sur
-   * le défaut qui compte (`lang="en"` figé), coquille ou pas.
+   * La règle appliquée désormais n'a plus de cas particulier : on ANNONCE la
+   * langue servie, à tous les rangs. C'est ce que la spécification §4.3 d
+   * demandait (`<p lang="fr">`), et ce que `attachment-blocks.test.tsx` garde
+   * à l'unité avec la divergence interface/Prisme qui la motive.
    */
   expect(
     (await transcriptOf(page, 'live-3')).includes('on garde la revue jeudi ?'),
     `${label} live-3 : la traduction FRANÇAISE (rang 1) reprend la main à T+4,2 s (obtenu « ${await transcriptOf(page, 'live-3')} »)`,
   );
-  const rank1Lang = await transcriptLangOf(page, 'live-3');
+  const rank1Lang = await transcriptServedLangOf(page, 'live-3');
   expect(
-    rank1Lang === null || rank1Lang === '',
-    `${label} live-3 : la transcription ne réclame plus AUCUNE langue étrangère au rang 1 (obtenu ${JSON.stringify(rank1Lang)})`,
+    rank1Lang === 'fr',
+    `${label} live-3 : la transcription est ANNONCÉE en "fr" au rang 1 — jamais muette dans un document anglais (obtenu ${JSON.stringify(rank1Lang)})`,
   );
   expect(messageFetches === 0, `${label} le fil n'a jamais été rechargé pour obtenir la transcription (${messageFetches})`);
 

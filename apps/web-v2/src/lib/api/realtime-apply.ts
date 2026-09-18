@@ -609,9 +609,11 @@ function mergedAttachment(cached: Attachment, incoming: Record<string, unknown>)
  * NLLB + les pistes TTS rejoignent un message DÉJÀ reçu
  * (`emitAttachmentUpdated.ts:77`).
  *
- * Le RENDU de la transcription était déjà juste — widget, descente du Prisme
- * par la fonction partagée (`servedTranscript`, `api/prism.ts`), `lang=` porté
- * par la langue servie, piste traduite, karaoké. **C'est l'ALIMENTATION qui
+ * Le RENDU de la transcription était déjà en place — widget, descente du Prisme
+ * par la fonction partagée (`servedTranscript`, `api/prism.ts`), piste
+ * traduite, karaoké ; son `lang=`, lui, ne l'était pas et le premier jet de ce
+ * lot l'a écrit « déjà juste » à tort (revue-correction #7017, corrigé dans
+ * `attachment-blocks.tsx`). **C'est l'ALIMENTATION qui
  * manquait** : web-v2 n'écoutait pas l'évènement, si bien qu'un vocal reçu
  * restait sans transcription ET sans drapeau de langue
  * (`translatedLanguagesOf` lit `attachment.translations`, `view/message.ts`)
