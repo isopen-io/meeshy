@@ -34,6 +34,10 @@
  *    rangée dont le sommet passe SOUS l'arête basse de l'en-tête. Sans elle,
  *    le flou de la bande (`backdrop-blur-xl`) n'a rien à flouter — l'en-tête
  *    était habillé en bande flottante et posé en frère de flux.
+ *    Et le fil S'ARRÊTE sous l'encoche — mesuré UNE FOIS L'HISTORIQUE ÉPUISÉ
+ *    depuis #6972 : `scrollTop === 0` n'est plus une position de repos mais le
+ *    déclencheur d'un chargement, et ce critère restait vert par ACCIDENT.
+ *    Voir le bloc 4 plus bas.
  *
  * 5. RIEN NE SE CACHE DERRIÈRE LE COMPOSEUR. Le bouton « revenir en bas »
  *    est ENTIÈREMENT au-dessus de lui : posé à `bottom-2` d'un défileur
@@ -210,7 +214,46 @@ expect(
   `au repos, la dernière rangée respire ${LIST_BOTTOM_BREATH} px au-dessus du composeur (mesuré ${respiration.toFixed(1)})`,
 );
 
-/* 4 — LE CONTENU TRANSITE SOUS LA BANDE */
+/*
+  4 — LE CONTENU TRANSITE SOUS LA BANDE, ET LE FIL S'ARRÊTE SOUS L'ENCOCHE
+  UNE FOIS L'HISTORIQUE ÉPUISÉ.
+
+  CE QUE CE CRITÈRE MESURAIT, ET CE QU'IL MESURE DÉSORMAIS (#6972). Il
+  AFFIRMAIT qu'à `scrollTop === 0` la première rangée est posée sous l'encoche.
+  Depuis que le haut du fil PAGINE, `scrollTop === 0` n'est plus une position
+  de REPOS : c'est le déclencheur d'un chargement, après quoi l'ancrage repose
+  le défileur ailleurs.
+
+  Sur `c-rattrapage` l'assertion restait verte — mais PAR ACCIDENT : le corpus
+  de fixtures compte trente messages, la page suivante revient VIDE et le
+  quatrième refus de `nextMessagesCursor` désarme la sentinelle avant qu'aucune
+  rangée ne s'insère. Un corpus qui paginerait vraiment l'aurait fait tomber,
+  et pour la bonne raison. Un témoin vert par accident ne mesure rien.
+
+  Elle attend donc que la TÊTE du fil se TAISE (`data-thread-older` ne vaut
+  plus ni `idle` ni `loading-more`, `routes/thread-modes.tsx` § `OlderHead`)
+  avant de mesurer, puis remet le défileur au sommet : c'est le MÊME fait —
+  « le fil ne se glisse pas sous l'horloge » — énoncé sur l'état de repos réel.
+*/
+await page.evaluate(() => {
+  document.querySelector('main').scrollTop = 0;
+});
+const olderSettled = await page
+  .waitForFunction(
+    () => {
+      const head = document.querySelector('[data-thread-older]');
+      const state = head === null ? null : head.getAttribute('data-thread-older');
+      return state === null || state === 'exhausted' || state === 'error';
+    },
+    { timeout: 8000 },
+  )
+  .then(() => true)
+  .catch(() => false);
+expect(
+  olderSettled,
+  "la tête du fil se TAIT quand l'historique est épuisé — `data-thread-older` quitte `idle`/`loading-more`",
+);
+/* Remis au sommet APRÈS la pagination : reposer l'ancre a pu décaler le fil. */
 await page.evaluate(() => {
   document.querySelector('main').scrollTop = 0;
 });

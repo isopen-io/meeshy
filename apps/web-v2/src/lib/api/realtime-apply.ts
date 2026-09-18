@@ -14,7 +14,7 @@ import type { ConversationStoreState } from '@/lib/conversation-store';
 import type { OutboxState } from '@/lib/send/outbox-store';
 
 import { patchConversation } from './conversations';
-import { messagesQueryKey, type MessagesPage } from './messages';
+import { cachedThreadConversationIds, findCachedThreadMessage, patchThreadMessages, upsertThreadMessage } from './messages';
 import type { Conversation, Message, Participant } from './types';
 
 /**
@@ -149,14 +149,11 @@ export function applyMessageNew(
   const message = rawMessageFromSocket(raw);
   const cid = raw.clientMessageId;
 
-  queryClient.setQueryData<MessagesPage>(messagesQueryKey(raw.conversationId), (page) => {
-    if (page === undefined) return page;
-    const index = page.messages.findIndex(
-      (m) => m.id === message.id || (cid !== undefined && (m as { readonly clientMessageId?: string }).clientMessageId === cid),
-    );
-    if (index === -1) return { ...page, messages: [...page.messages, message] };
-    return { ...page, messages: page.messages.map((m, i) => (i === index ? message : m)) };
-  });
+  /* `upsertThreadMessage` (#6972, étape 1) — le SITE UNIQUE qui porte la loi
+     « remplace par id OU clientMessageId, sinon append » (`api/messages.ts`) :
+     elle était écrite ICI et dans `upsertConfirmed` (`send/perform-send.ts`),
+     deux copies que leurs doc-comments déclaraient déjà identiques. */
+  upsertThreadMessage(queryClient, raw.conversationId, message);
 
   /* Le cid ne voyage QUE vers la room personnelle de l'expéditeur
      (`stripClientMessageId`, `MeeshySocketIOManager.ts:3011-3039`) : sa
@@ -501,34 +498,24 @@ function mergeMessageTranslations(message: Message, incoming: TranslationEvent['
  *
  * La charge (`TranslationEvent`) ne porte PAS `conversationId` : on retrouve
  * la page qui contient ce message en balayant les fils déjà en cache
- * (`['conversations', <id>, 'messages']`) — un message dont le fil n'est
- * jamais ouvert n'a rien à peindre localement, motif `applyMessageNew` §
- * `page === undefined` (le prochain `GET …/messages` sert la traduction).
+ * (`cachedThreadConversationIds`, `api/messages.ts` — #6972 étape 1 : le
+ * prédicat de clé vit LÀ, avec la forme qu'il énumère) — un message dont le
+ * fil n'est jamais ouvert n'a rien à peindre localement, motif
+ * `applyMessageNew` § `page === undefined` (le prochain `GET …/messages` sert
+ * la traduction).
  */
 export function applyMessageTranslation(queryClient: QueryClient, data: TranslationEvent): void {
   const incoming = buildTranslationRecord(data.translations);
   if (Object.keys(incoming).length === 0) return;
 
-  const queries = queryClient.getQueryCache().findAll({
-    predicate: (query) =>
-      Array.isArray(query.queryKey) &&
-      query.queryKey.length === 3 &&
-      query.queryKey[0] === 'conversations' &&
-      query.queryKey[2] === 'messages',
-  });
+  for (const conversationId of cachedThreadConversationIds(queryClient)) {
+    const existing = findCachedThreadMessage(queryClient, conversationId, data.messageId);
+    if (existing === undefined) continue;
 
-  for (const query of queries) {
-    const conversationId = query.queryKey[1] as string;
-    const page = query.state.data as MessagesPage | undefined;
-    if (page === undefined) continue;
-    const index = page.messages.findIndex((m) => m.id === data.messageId);
-    if (index === -1) continue;
-
-    const merged = mergeMessageTranslations(page.messages[index] as Message, data.translations);
-    queryClient.setQueryData<MessagesPage>(query.queryKey as ReturnType<typeof messagesQueryKey>, {
-      ...page,
-      messages: page.messages.map((m, i) => (i === index ? merged : m)),
-    });
+    const merged = mergeMessageTranslations(existing, data.translations);
+    patchThreadMessages(queryClient, conversationId, (messages) =>
+      messages.map((m) => (m.id === data.messageId ? merged : m)),
+    );
 
     patchConversation(queryClient, conversationId, (c) => {
       if (c.lastMessage?.id !== data.messageId) return c;

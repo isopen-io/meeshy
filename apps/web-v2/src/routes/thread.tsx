@@ -23,14 +23,14 @@ import { ReactionSheet } from '@/components/reaction-sheet';
 import { SelectionToolbar } from '@/components/selection-toolbar';
 import { ThreadHeader } from '@/components/thread-header';
 import { DayPill, ScrollToBottomButton } from '@/components/thread-chrome';
+import { TypingDots } from '@/components/typing-dots';
 import { ThreadError, ThreadRefused, ThreadSkeleton } from '@/components/thread-states';
 import { apiConfig } from '@/lib/api/config';
 import { apiDeps } from '@/lib/api/deps';
 import { recordViewOnceConsumption } from '@/lib/api/fixtures';
-import { messagesQueryKey } from '@/lib/api/messages';
+import { patchThreadMessages } from '@/lib/api/messages';
 import { useConversationsSnapshot, useThreadData } from '@/lib/api/query';
 import { applyConsumption } from '@/lib/api/view-once';
-import type { Message } from '@/lib/api/types';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
 import { accentOf, withAccent } from '@/lib/accent';
@@ -66,6 +66,7 @@ import { backdropStyleVars } from '@/lib/view/thread-backdrop';
 import { BOTTOM_ANCHOR_FRAMES, pinToBottom } from '@/lib/view/pin-to-bottom';
 import { useThreadChromeSignals } from '@/lib/view/use-thread-chrome-signals';
 import { useThreadInsets } from '@/lib/view/use-thread-insets';
+import { THREAD_ROW_ESTIMATE, useOlderMessages } from '@/lib/view/use-older-messages';
 import { ThreadModes } from './thread-modes';
 
 /**
@@ -165,12 +166,11 @@ export default function ThreadScreen() {
     async (messageId: string): Promise<boolean> => {
       if (!online) return false;
       if (__FIXTURES__ && apiConfig.source === 'fixtures') recordViewOnceConsumption(messageId);
-      queryClient.setQueryData<{ readonly messages: readonly Message[]; readonly hasOlder: boolean }>(
-        messagesQueryKey(conversationId),
-        (page) =>
-          page === undefined
-            ? page
-            : { ...page, messages: applyConsumption(page.messages, { messageId, viewOnceCount: 1 }) },
+      /* `patchThreadMessages` (#6972, étape 1) — le SITE UNIQUE qui patche un
+         fil (`lib/api/messages.ts`) : cet écran ne recopie plus la forme de la
+         page, qui est devenue `InfiniteData` à l'étape 2. */
+      patchThreadMessages(queryClient, conversationId, (messages) =>
+        applyConsumption(messages, { messageId, viewOnceCount: 1 }),
       );
       return true;
     },
@@ -390,7 +390,7 @@ export default function ThreadScreen() {
   const virtualizer = useVirtualizer({
     count: placed.length,
     getScrollElement: () => scroller.current,
-    estimateSize: () => 88,
+    estimateSize: () => THREAD_ROW_ESTIMATE,
     overscan: 6,
     getItemKey: (index) => placed[index]?.message.id ?? index,
   });
@@ -553,14 +553,43 @@ export default function ThreadScreen() {
   };
 
   /**
+   * **L'HISTORIQUE, À L'APPROCHE DU HAUT** (#6972) — la sentinelle haute, son
+   * ancrage et le rejeu d'un refus vivent dans `useOlderMessages`
+   * (`lib/view/use-older-messages.ts`, doc-comment complet là-bas : un seul
+   * déclencheur, la distance au BAS du contenu comme repère, la TÊTE du fil
+   * comme clé d'effet). Cet écran ne fait que CÂBLER ce que le port lui rend
+   * — même motif que `useThreadChromeSignals` et `useThreadTyping`.
+   */
+  const older = useOlderMessages({
+    scroller,
+    state: threadData.olderState,
+    rowCount: placed.length,
+    firstMessageId: placed[0]?.message.id,
+    fetchOlder: threadData.fetchOlder,
+    noteProgrammaticScroll,
+  });
+
+  /**
    * UN FIL S'OUVRE EN BAS. Sur le dernier message, pas sur le premier — et
    * `align: 'end'` plutôt qu'un `scrollTop = scrollHeight`, qui serait faux
    * tant que les hauteurs réelles ne sont pas mesurées.
+   *
+   * **SUR L'IDENTITÉ DE LA QUEUE, PLUS SUR LE COMPTE** (#6972). Cet effet
+   * dépendait de `placed.length` — donc il se rejouait à CHAQUE page
+   * d'historique insérée, et ses vingt images de `scrollTop = scrollHeight`
+   * ramenaient le fil tout en bas juste après que l'ancrage venait de le
+   * tenir en place. Le lecteur qui remontait son historique aurait été
+   * renvoyé au présent par le geste même qui devait le servir.
+   *
+   * L'identité du DERNIER message dit ce que le compte voulait dire : elle
+   * change quand un message arrive ou disparaît en queue (re-ancrer est
+   * juste), elle NE change pas quand l'historique s'insère en tête
+   * (re-ancrer serait faux).
    */
-  const count = placed.length;
+  const lastMessageId = placed[placed.length - 1]?.message.id;
   useEffect(() => {
     const el = scroller.current;
-    if (el === null || count === 0) return;
+    if (el === null || lastMessageId === undefined) return;
 
     /**
      * UN SEUL `scrollToIndex` NE SUFFIT PAS, et c'est mesuré : il vise le bas
@@ -592,9 +621,9 @@ export default function ThreadScreen() {
         el.removeEventListener(event, release);
       }
     };
-    // Volontairement sur le seul COMPTE : se ré-ancrer à chaque rendu
+    // Volontairement sur la seule QUEUE du fil : se ré-ancrer à chaque rendu
     // empêcherait l'utilisateur de remonter son historique.
-  }, [count]);
+  }, [lastMessageId]);
 
   /**
    * LA CITATION DU COMPOSEUR PRÉ-ADRESSÉ (#5695, écart 8 ; revue-correction
@@ -843,8 +872,55 @@ export default function ThreadScreen() {
           onReact={messageMenu.onMenuReact}
           typists={typing.typists}
           accent={accent}
+          older={{ state: older.state, sentinelRef: older.sentinelRef }}
         />
       </main>
+      {/*
+        LE RETOUR VISIBLE DE LA PAGINATION VERS LE PASSÉ (#6972) — FLOTTANT,
+        frère absolu de `<main>`, exactement comme la pilule de jour au-dessus :
+        posé DANS le défileur il grandirait le contenu par le HAUT, poussant
+        tout le fil de quarante pixels à l'instant où la page part et le
+        ramenant quand elle arrive — deux sauts pour une page qui s'est
+        chargée correctement (voir le doc-comment d'`OlderHead`,
+        `thread-modes.tsx`). La PRISE reste dans le flux, à un pixel ;
+        seul le DESSIN flotte.
+
+        Sous la bande, au même repère que la pilule de jour — la pilule de jour
+        ne colle rien au sommet du fil (`stickyDayOf`,
+        `use-thread-chrome-signals.ts`), et c'est au sommet, et là seulement,
+        que l'historique se charge : les deux ne se disputent jamais la place.
+      */}
+      {older.state === 'loading-more' || older.state === 'error' ? (
+        <div className="absolute inset-x-0 z-20 flex justify-center px-4" style={{ top: 'calc(var(--safe-top, 0px) + 60px)' }}>
+          {older.state === 'loading-more' ? (
+            /* `role="status"` avec un TEXTE visuellement masqué : une région
+               live annonce son CONTENU qui change, jamais son nom calculé
+               (revue-correction #6195, motif `LensPaginationFooter`). */
+            <span
+              role="status"
+              className="glass-prominent glass-card rounded-chip inline-flex items-center px-3 py-1.5"
+              style={{ color: 'var(--color-ios-ink-2)', border: '0.5px solid var(--color-edge)' }}
+            >
+              <TypingDots color="currentColor" />
+              <span className="sr-only">Chargement des messages plus anciens</span>
+            </span>
+          ) : (
+            /* UN REFUS OFFRE SON REJEU — un échec silencieux laisserait le
+               haut du fil muet et l'historique inatteignable sans que rien ne
+               le dise (loi 4 : un contrôle existe s'il a un effet). Cible de
+               44 px, comme le « Réessayer » de la Lentille. */
+            <button
+              type="button"
+              onClick={older.retry}
+              className="glass-prominent glass-card rounded-chip inline-flex items-center gap-2 px-3 text-mini font-semibold"
+              style={{ color: 'var(--color-ios-ink)', border: '0.5px solid var(--color-edge)', minHeight: 44 }}
+            >
+              Historique indisponible <span aria-hidden>·</span> Réessayer
+            </button>
+          )}
+        </div>
+      ) : null}
+
       <ScrollToBottomButton
         visible={chrome.scrollButtonVisible}
         unreadCount={chrome.scrollButtonUnreadCount}

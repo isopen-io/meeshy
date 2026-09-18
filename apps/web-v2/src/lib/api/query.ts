@@ -15,7 +15,8 @@ import type { FeedInfiniteData } from './feed-pages';
 import { recordPostShare } from './feed-share';
 import { postQueryOptions } from './publication-detail';
 import type { PostToggleKind } from '@/lib/feed/interactions';
-import type { Conversation, Participant } from './types';
+import { paginationStateOf } from '@/lib/lens/pagination';
+import type { Conversation, Message, Participant } from './types';
 import { messagesQuery } from './messages';
 import { appQueryClient } from './query-client';
 import { performReaction, type PerformReactionResult } from './reactions';
@@ -213,9 +214,30 @@ export function useConversation(id: string) {
   return useQuery(conversationQuery(apiDeps, id, { queryClient }));
 }
 
+/**
+ * `useMessages` (#6972) — `useInfiniteQuery` : le fil charge les messages plus
+ * ANCIENS à l'approche du haut, par `before=<id de message>` (§ Critère de fin
+ * 1 de l'issue). Avant ce lot c'était un `useQuery` SIMPLE sur `?limit=50`,
+ * sans `initialPageParam`, sans `getNextPageParam`, et `nextCursor` — la
+ * moitié utile du curseur — était jeté : **une conversation de plus de 50
+ * messages était définitivement tronquée.** Le dépôt le savait
+ * (`decisions.md:2030` : « La sentinelle est GÉNÉRIQUE, et le fil la
+ * copiera ») ; la moitié liste (#6195 / D-44) avait été livrée, la moitié fil
+ * jamais.
+ *
+ * `.data` est APLATI par `select` (`flattenMessagePages`) ; `.hasNextPage` /
+ * `.isFetchingNextPage` / `.isFetchNextPageError` alimentent
+ * `paginationStateOf` — la MÊME loi à quatre cas que la Lentille
+ * (`lib/lens/pagination.ts`), lue côté écran.
+ */
 export function useMessages(id: string) {
-  return useQuery(messagesQuery(apiDeps, id));
+  return useInfiniteQuery(messagesQuery(apiDeps, id));
 }
+
+/** Référence STABLE — un `[]` écrit en ligne change d'identité à chaque
+ * rendu, ce qui défait `useMemo([threadData.messages])`, `place()` et toute
+ * la mémoïsation du fil virtualisé (`routes/thread.tsx` § `placed`). */
+const NO_MESSAGES: readonly Message[] = [];
 
 export type ThreadDataStatus = 'pending' | 'success' | 'refused' | 'error';
 
@@ -261,8 +283,29 @@ export function useThreadData(id: string) {
   return {
     conversationId,
     conversation: conversation.data,
-    messages: messages.data?.messages ?? [],
+    messages: messages.data?.messages ?? NO_MESSAGES,
+    /**
+     * `hasOlder` — « le serveur DÉCLARE-T-IL du plus ancien ? », lu sur la
+     * page qui borde la fenêtre (`threadWindowOf`, `messages-pages.ts`).
+     * JAMAIS `hasNextPage`, qui répond à l'autre question — « peut-on en
+     * demander davantage sans boucler ? » — et qui tombe à faux dès qu'un
+     * refus anti-boucle s'applique, alors que l'historique, lui, existe
+     * toujours. Son lecteur est `windowCoversUnread` (« Sur les N derniers
+     * messages » du Résumé Vivant, `routes/thread.tsx`).
+     */
     hasOlder: messages.data?.hasOlder ?? false,
+    /** L'état de pagination du HAUT du fil, quatre cas, la MÊME loi que la
+     * Lentille (`paginationStateOf`, `lib/lens/pagination.ts`) — dérivé des
+     * drapeaux de TanStack, jamais tenu à part. */
+    olderState: paginationStateOf({
+      hasNextPage: messages.hasNextPage,
+      isFetchingNextPage: messages.isFetchingNextPage,
+      isFetchNextPageError: messages.isFetchNextPageError,
+    }),
+    /** `fetchNextPage` de TanStack — référence STABLE entre deux rendus
+     * (`useInfiniteQuery` la mémoïse), ce que l'ancrage de `routes/thread.tsx`
+     * exige pour ne pas recréer sa sentinelle à chaque image. */
+    fetchOlder: messages.fetchNextPage,
     status,
     error,
     refetch: (): void => {

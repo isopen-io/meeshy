@@ -1,4 +1,4 @@
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, type Ref } from 'react';
 import type { Virtualizer } from '@tanstack/react-virtual';
 
 import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes';
@@ -7,6 +7,7 @@ import { Bubble } from '@/components/bubble';
 import { FocalRow } from '@/components/focal-row';
 import { SummarySkeleton } from '@/components/summary/summary-skeleton';
 import { TypingRosterCell } from '@/components/typing-roster-cell';
+import type { ListPaginationState } from '@/lib/lens/pagination';
 import type { Conversation, Message } from '@/lib/api/types';
 import type { TypingEntry } from '@/lib/api/typing-store';
 import type { Viewer } from '@/lib/api/viewer';
@@ -48,6 +49,62 @@ const SummaryHost = lazy(() => import('@/components/summary/summary-host'));
  * c'est précisément pour qu'elle ait un fichier sous le budget où s'ajouter
  * que ce découpage précède son lot, plutôt que de le suivre.
  */
+/**
+ * **LA TÊTE DU FIL — LA PAGINATION VERS LE PASSÉ** (#6972).
+ *
+ * Elle vit AU-DESSUS de la liste virtualisée et HORS d'elle : les `<li>` du
+ * `<ol>` sont tous en `position: absolute` et la hauteur du `<ol>` est celle
+ * que le virtualiseur calcule — y glisser une rangée de flux fausserait sa
+ * géométrie. En frère AVANT le `<ol>` (dont le `margin-block-start: auto`
+ * pousse la liste en bas quand le fil est court), elle est exactement au
+ * sommet du contenu défilable, là où la sentinelle doit être.
+ *
+ * ## ELLE FAIT UN PIXEL DANS TOUS LES ÉTATS, ET C'EST LA MOITIÉ DU TRAVAIL
+ *
+ * La première écriture de ce composant rendait les quatre cas du pied de la
+ * Lentille — trois points à `py-4` pendant le chargement, caption +
+ * « Réessayer » sur échec. Mais cette bande est AU-DESSUS de ce qu'on lit :
+ * grandir de 1 px à 40 px pousse tout le fil de 39 px vers le bas À L'INSTANT
+ * où la page part, puis le ramène quand elle arrive. Le lecteur voit son
+ * historique sauter DEUX fois pour une page qui s'est chargée correctement —
+ * et l'ancrage, qui tient la distance au BAS du contenu, ne peut rien y faire :
+ * ce n'est pas l'insertion qui bouge, c'est l'indicateur.
+ *
+ * Le RETOUR VISIBLE (points de chargement, refus + « Réessayer ») FLOTTE donc
+ * au-dessus du défileur, posé par `routes/thread.tsx` en frère absolu de
+ * `<main>` — la même doctrine que la pilule de jour et le bouton « revenir en
+ * bas » (« un enfant `position: absolute` d'un conteneur qui défile DÉFILE
+ * AVEC LUI »). Ici ne reste que la PRISE : un pixel, jamais plus, jamais
+ * moins.
+ *
+ * Le marqueur est posé dans les QUATRE états — y compris `exhausted`, qui ne
+ * montre rien. Sans lui, « la sentinelle est désarmée parce que l'historique
+ * est épuisé » et « la sentinelle n'a jamais été câblée » rendraient le même
+ * DOM, donc le même verdict : un gate vert des deux côtés de la mutation
+ * qu'il existe pour mesurer. `data-thread-older` est du même genre que
+ * `data-pagination-footer` (`components/lens-pagination-footer.tsx`).
+ *
+ * `ref` n'est attaché QU'EN `idle` : un observateur posé pendant qu'une page
+ * est en vol, ou après un échec, redemanderait la même page en boucle.
+ */
+function OlderHead({
+  state,
+  sentinelRef,
+}: {
+  readonly state: ListPaginationState;
+  readonly sentinelRef: Ref<HTMLDivElement>;
+}) {
+  return (
+    <div
+      data-thread-older={state}
+      aria-hidden
+      className="shrink-0"
+      style={{ height: 1 }}
+      {...(state === 'idle' ? { ref: sentinelRef } : {})}
+    />
+  );
+}
+
 export type ThreadSummaryCapability = {
   readonly conversation: Conversation;
   readonly messages: readonly Message[];
@@ -88,6 +145,7 @@ export function ThreadModes({
   onReact,
   typists,
   accent = 'var(--color-ios-brand)',
+  older,
 }: {
   readonly mode: ConversationReadingMode;
   readonly viewer: Viewer;
@@ -160,6 +218,18 @@ export function ThreadModes({
    * cellule de frappe la lit, et elle ne monte pas sans frappeur : une surface
    * sans temps réel (`typists: []`) n'a donc rien à en dire. */
   readonly accent?: string;
+  /**
+   * LA PAGINATION VERS LE PASSÉ (#6972) — une CAPACITÉ, comme `summary` : ses
+   * trois valeurs n'ont aucun sens séparément, et `undefined` ⇒ la surface ne
+   * pagine pas, donc AUCUNE tête n'est montée (la lecture souveraine de
+   * l'administration, `routes/admin-conversation-reading.tsx`, sert une page et
+   * une seule — lui poser une sentinelle promettrait un historique qu'elle ne
+   * sait pas charger : loi 4).
+   */
+  readonly older?: {
+    readonly state: ListPaginationState;
+    readonly sentinelRef: Ref<HTMLDivElement>;
+  };
 }) {
   const viewerId = viewer.id ?? '';
 
@@ -211,6 +281,16 @@ export function ThreadModes({
           </div>
         </div>
       ) : null}
+
+      {/* LA TÊTE DU FIL (#6972) — AVANT le `<ol>`, donc au sommet du contenu
+          défilable : voir le doc-comment d'`OlderHead`. Jamais montée sur un
+          fil VIDE : une sentinelle qui intersecte immédiatement sur un écran
+          sans rangée déclencherait une rafale de requêtes pour un écran qui
+          restera vide (revue-correction #6195, le même défaut sur la
+          Lentille). */}
+      {older === undefined || placed.length === 0 ? null : (
+        <OlderHead state={older.state} sentinelRef={older.sentinelRef} />
+      )}
 
       <ol
         style={{

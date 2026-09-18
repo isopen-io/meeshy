@@ -9,7 +9,8 @@ import { conversationStore } from '@/lib/conversation-store';
 import { mergeTimeline } from '@/lib/grouping';
 import { createOutboxStore, entriesOf, type OutboxState } from '@/lib/send/outbox-store';
 import type { StoreApi } from 'zustand/vanilla';
-import { messagesQueryKey, type MessagesPage } from './messages';
+import { messagesQueryKey } from './messages';
+import type { MessagesInfiniteData } from './messages-pages';
 import {
   applyConversationUnreadUpdated,
   applyConversationUpdated,
@@ -26,6 +27,23 @@ import type { Conversation, Message } from './types';
  * témoin qui la muterait laisserait une entrée à un autre fichier de témoins
  * (motif `createTypingStore()` dans `socket.test.ts`). */
 const freshOutbox = (): StoreApi<OutboxState> => createOutboxStore();
+
+/**
+ * LA FORME `InfiniteData` DU CACHE DU FIL (#6972) — `threadPages` la POSE,
+ * `threadOf` la RELIT APLATIE. Ce sont les deux SEULS endroits de ce fichier
+ * qui la connaissent : les témoins mesurent la RÈGLE (dédoublonnage, fusion
+ * de traductions, portée), jamais la structure du cache qui la porte.
+ */
+const threadPages = (messages: readonly Message[]): MessagesInfiniteData =>
+  ({ pages: [{ messages, hasOlder: false, nextCursor: null }], pageParams: [undefined] }) as MessagesInfiniteData;
+
+const threadOf = (
+  client: QueryClient,
+  conversationId: string,
+): { readonly messages: readonly Message[] } | undefined => {
+  const data = client.getQueryData<MessagesInfiniteData>(messagesQueryKey(conversationId));
+  return data === undefined ? undefined : { messages: data.pages.flatMap((p) => [...p.messages]) };
+};
 
 /**
  * `seedConversations`/`readConversations` (#6195) — le cache de liste change
@@ -136,14 +154,14 @@ describe('applyMessageNew (#5793) — le puits unique de message:new', () => {
   test('insère dans le fil OUVERT sans déclencher aucune requête réseau', () => {
     const client = new QueryClient();
     const calls = { count: 0 };
-    client.setQueryData<MessagesPage>(messagesQueryKey('c-a'), { messages: [], hasOlder: false });
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([]));
     // `queryFn`/`queryKey` posés APRÈS la donnée : une requête déclenchée par
     // erreur ferait échouer ce test au lieu de passer silencieusement.
     void client.getQueryCache().build(client, { queryKey: messagesQueryKey('c-a'), queryFn: countingQueryFn(calls) });
 
     applyMessageNew(client, freshOutbox(), socketMessage({}));
 
-    const page = client.getQueryData<MessagesPage>(messagesQueryKey('c-a'));
+    const page = threadOf(client, 'c-a');
     expect(page?.messages).toHaveLength(1);
     expect(page?.messages[0]?.id).toBe('m-remote-1');
     expect(page?.messages[0]?.content).toBe('salut depuis le socket');
@@ -159,11 +177,11 @@ describe('applyMessageNew (#5793) — le puits unique de message:new', () => {
   test('un `message:new` portant le `clientMessageId` d’un envoi local PROMEUT la rangée, ne la double jamais (D-11/D-28)', () => {
     const client = new QueryClient();
     const local = localMessage({ id: 'cid-abc', clientMessageId: 'cid-abc' } as Message & { clientMessageId: string });
-    client.setQueryData<MessagesPage>(messagesQueryKey('c-a'), { messages: [local], hasOlder: false });
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([local]));
 
     applyMessageNew(client, freshOutbox(), socketMessage({ id: 'm-server-9', clientMessageId: 'cid-abc' }));
 
-    const page = client.getQueryData<MessagesPage>(messagesQueryKey('c-a'));
+    const page = threadOf(client, 'c-a');
     expect(page?.messages).toHaveLength(1);
     expect(page?.messages[0]?.id).toBe('m-server-9');
   });
@@ -189,11 +207,11 @@ describe('applyMessageNew (#5793) — le puits unique de message:new', () => {
     const outbox = freshOutbox();
     const local = localMessage({ id: 'cid-abc', clientMessageId: 'cid-abc' } as Message & { clientMessageId: string });
     outbox.getState().enqueue('c-a', { message: local as never, delivery: 'pending', attempts: 1, startedAt: 0 });
-    client.setQueryData<MessagesPage>(messagesQueryKey('c-a'), { messages: [], hasOlder: false });
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([]));
 
     applyMessageNew(client, outbox, socketMessage({ id: 'm-server-9', clientMessageId: 'cid-abc' }));
 
-    const page = client.getQueryData<MessagesPage>(messagesQueryKey('c-a'));
+    const page = threadOf(client, 'c-a');
     const rendered = mergeTimeline(page?.messages ?? [], entriesOf(outbox.getState(), 'c-a').map((e) => e.message));
     expect(rendered).toHaveLength(1);
     expect(rendered[0]?.id).toBe('m-server-9');
@@ -206,7 +224,7 @@ describe('applyMessageNew (#5793) — le puits unique de message:new', () => {
     const outbox = freshOutbox();
     const local = localMessage({ id: 'cid-abc', clientMessageId: 'cid-abc' } as Message & { clientMessageId: string });
     outbox.getState().enqueue('c-a', { message: local as never, delivery: 'pending', attempts: 1, startedAt: 0 });
-    client.setQueryData<MessagesPage>(messagesQueryKey('c-a'), { messages: [], hasOlder: false });
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([]));
 
     applyMessageNew(client, outbox, socketMessage({ id: 'm-du-pair' }));
 
@@ -217,14 +235,11 @@ describe('applyMessageNew (#5793) — le puits unique de message:new', () => {
   test('un `message:new` dont l’id existe déjà (double livraison) REMPLACE, ne double jamais', () => {
     const client = new QueryClient();
     const first = socketMessage({ content: 'premier passage' });
-    client.setQueryData<MessagesPage>(messagesQueryKey('c-a'), {
-      messages: [{ ...first, translations: [] } as unknown as Message],
-      hasOlder: false,
-    });
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([{ ...first, translations: [] } as unknown as Message]));
 
     applyMessageNew(client, freshOutbox(), socketMessage({ content: 'second passage (rejeu)' }));
 
-    const page = client.getQueryData<MessagesPage>(messagesQueryKey('c-a'));
+    const page = threadOf(client, 'c-a');
     expect(page?.messages).toHaveLength(1);
     expect(page?.messages[0]?.content).toBe('second passage (rejeu)');
   });
@@ -747,14 +762,14 @@ describe('applyMessageTranslation (#5793, revue-correction défaut 2) — le pip
   test('fusionne dans le fil OUVERT — le message reçu quitte la langue de l’expéditeur', () => {
     const client = new QueryClient();
     const original = localMessage({ id: 'm-1', originalLanguage: 'es', content: 'Hola', translations: [] });
-    client.setQueryData<MessagesPage>(messagesQueryKey('c-a'), { messages: [original], hasOlder: false });
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([original]));
 
     applyMessageTranslation(client, {
       messageId: 'm-1',
       translations: [translationEntry({ targetLanguage: 'fr', translatedContent: 'Salut' })],
     });
 
-    const page = client.getQueryData<MessagesPage>(messagesQueryKey('c-a'));
+    const page = threadOf(client, 'c-a');
     const patched = page?.messages.find((m) => m.id === 'm-1');
     expect(patched?.translations.find((t) => t.targetLanguage === 'fr')?.translatedContent).toBe('Salut');
   });
@@ -767,14 +782,14 @@ describe('applyMessageTranslation (#5793, revue-correction défaut 2) — le pip
         { id: 't-fr-1', messageId: 'm-1', targetLanguage: 'fr', translatedContent: 'brouillon', translationModel: 'basic', createdAt: new Date() },
       ] as unknown as Message['translations'],
     });
-    client.setQueryData<MessagesPage>(messagesQueryKey('c-a'), { messages: [original], hasOlder: false });
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([original]));
 
     applyMessageTranslation(client, {
       messageId: 'm-1',
       translations: [translationEntry({ targetLanguage: 'fr', translatedContent: 'version finale' })],
     });
 
-    const page = client.getQueryData<MessagesPage>(messagesQueryKey('c-a'));
+    const page = threadOf(client, 'c-a');
     const patched = page?.messages.find((m) => m.id === 'm-1');
     expect(patched?.translations.filter((t) => t.targetLanguage === 'fr')).toHaveLength(1);
     expect(patched?.translations.find((t) => t.targetLanguage === 'fr')?.translatedContent).toBe('version finale');
@@ -783,7 +798,7 @@ describe('applyMessageTranslation (#5793, revue-correction défaut 2) — le pip
   test('alimente `lastMessageTranslations` quand ce message est le DERNIER de sa ligne', () => {
     const client = new QueryClient();
     const original = localMessage({ id: 'm-1', translations: [] });
-    client.setQueryData<MessagesPage>(messagesQueryKey('c-a'), { messages: [original], hasOlder: false });
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([original]));
     seedConversations(client, [conv({ id: 'c-a', lastMessage: localMessage({ id: 'm-1' }) })]);
 
     applyMessageTranslation(client, {
@@ -812,13 +827,13 @@ describe('applyMessageTranslation (#5793, revue-correction défaut 2) — le pip
   test('T1 — le RANG du lecteur : `en` sert au rang 2, `fr` reprend la main au rang 1', () => {
     const client = new QueryClient();
     const original = localMessage({ id: 'm-1', originalLanguage: 'es', content: 'Hola', translations: [] });
-    client.setQueryData<MessagesPage>(messagesQueryKey('c-a'), { messages: [original], hasOlder: false });
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([original]));
 
     const readerServed = () =>
       served({
         preferredLanguages: ['fr', 'en'],
         originalLanguage: 'es',
-        translations: (client.getQueryData<MessagesPage>(messagesQueryKey('c-a'))?.messages[0] as Message).translations,
+        translations: (threadOf(client, 'c-a')?.messages[0] as Message).translations,
         original: 'Hola',
       });
 
@@ -834,13 +849,13 @@ describe('applyMessageTranslation (#5793, revue-correction défaut 2) — le pip
   test('T1, contre-épreuve — prisme [\'en\',\'fr\'] : `fr` sert au rang 2, `en` reprend la main au rang 1', () => {
     const client = new QueryClient();
     const original = localMessage({ id: 'm-1', originalLanguage: 'es', content: 'Hola', translations: [] });
-    client.setQueryData<MessagesPage>(messagesQueryKey('c-a'), { messages: [original], hasOlder: false });
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([original]));
 
     const readerServed = () =>
       served({
         preferredLanguages: ['en', 'fr'],
         originalLanguage: 'es',
-        translations: (client.getQueryData<MessagesPage>(messagesQueryKey('c-a'))?.messages[0] as Message).translations,
+        translations: (threadOf(client, 'c-a')?.messages[0] as Message).translations,
         original: 'Hola',
       });
 

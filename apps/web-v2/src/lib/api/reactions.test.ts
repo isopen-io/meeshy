@@ -31,6 +31,26 @@ const message = (overrides: Partial<Message> = {}): Message =>
     ...overrides,
   }) as unknown as Message;
 
+/**
+ * LA FORME `InfiniteData` DU CACHE DU FIL (#6972) — `threadPages` la POSE,
+ * `threadOf` la RELIT APLATIE. Les deux SEULS endroits de ce fichier qui la
+ * connaissent : les témoins mesurent la RÈGLE, jamais la structure.
+ */
+const threadPages = (messages: readonly Message[]) => ({
+  pages: [{ messages, hasOlder: false, nextCursor: null }],
+  pageParams: [undefined],
+});
+
+const threadOf = (
+  client: QueryClient,
+  conversationId: string,
+): { readonly messages: readonly Message[] } | undefined => {
+  const data = client.getQueryData<{ readonly pages: readonly { readonly messages: readonly Message[] }[] }>(
+    messagesQueryKey(conversationId),
+  );
+  return data === undefined ? undefined : { messages: data.pages.flatMap((p) => [...p.messages]) };
+};
+
 describe('applyReactionDelta — immuable, +1 crée la clé, −1 la retire à 0', () => {
   test('+1 sur un message SANS l’emoji crée l’entrée', () => {
     const result = applyReactionDelta([message()], { messageId: 'm1', emoji: '👍', delta: 1 });
@@ -97,42 +117,42 @@ describe('performReaction — plan → optimiste → appel → issue (source fix
 
   test('réaction optimiste IMMÉDIATE, avant tout `await` — capsule +1', async () => {
     const queryClient = new QueryClient();
-    queryClient.setQueryData(messagesQueryKey('c1'), { messages: [message()], hasOlder: false });
+    queryClient.setQueryData(messagesQueryKey('c1'), threadPages([message()]));
     const promise = performReaction({ conversationId: 'c1', messageId: 'm1', emoji: '👍', deps: depsOf(queryClient) });
     // Synchronement après l'appel (avant la résolution de la promesse), le
     // cache porte déjà le +1 — c'est l'optimiste que T15/G1 vérifient.
-    const page = queryClient.getQueryData<{ messages: readonly Message[] }>(messagesQueryKey('c1'));
+    const page = threadOf(queryClient, 'c1');
     expect(page?.messages[0]?.reactionSummary).toEqual({ '👍': 1 });
     await promise;
   });
 
   test('confirmé (201) : le magasin « mien » retient l’emoji, le compte tient à 1', async () => {
     const queryClient = new QueryClient();
-    queryClient.setQueryData(messagesQueryKey('c1'), { messages: [message()], hasOlder: false });
+    queryClient.setQueryData(messagesQueryKey('c1'), threadPages([message()]));
     const result = await performReaction({ conversationId: 'c1', messageId: 'm1', emoji: '👍', deps: depsOf(queryClient) });
     expect(result.ok).toBe(true);
     expect(reactionStore.getState().mine.m1).toEqual(['👍']);
-    const page = queryClient.getQueryData<{ messages: readonly Message[] }>(messagesQueryKey('c1'));
+    const page = threadOf(queryClient, 'c1');
     expect(page?.messages[0]?.reactionSummary).toEqual({ '👍': 1 });
   });
 
   test('un second appel sur le MÊME emoji RETIRE (toggle)', async () => {
     const queryClient = new QueryClient();
-    queryClient.setQueryData(messagesQueryKey('c1'), { messages: [message()], hasOlder: false });
+    queryClient.setQueryData(messagesQueryKey('c1'), threadPages([message()]));
     await performReaction({ conversationId: 'c1', messageId: 'm1', emoji: '👍', deps: depsOf(queryClient) });
     await performReaction({ conversationId: 'c1', messageId: 'm1', emoji: '👍', deps: depsOf(queryClient) });
     expect(reactionStore.getState().mine.m1 ?? []).toEqual([]);
-    const page = queryClient.getQueryData<{ messages: readonly Message[] }>(messagesQueryKey('c1'));
+    const page = threadOf(queryClient, 'c1');
     expect(page?.messages[0]?.reactionSummary).toEqual({});
   });
 
   test('refusé au plafond : AUCUNE écriture optimiste, message du dépôt partagé', async () => {
     const queryClient = new QueryClient();
-    queryClient.setQueryData(messagesQueryKey('c1'), { messages: [message()], hasOlder: false });
+    queryClient.setQueryData(messagesQueryKey('c1'), threadPages([message()]));
     reactionStore.setState({ mine: { m1: Array.from({ length: MAX_REACTIONS_PER_OBJECT }, (_, i) => `e${i}`) } });
     const result = await performReaction({ conversationId: 'c1', messageId: 'm1', emoji: 'over', deps: depsOf(queryClient) });
     expect(result).toEqual({ ok: false, message: REACTION_LIMIT_REACHED_MESSAGE });
-    const page = queryClient.getQueryData<{ messages: readonly Message[] }>(messagesQueryKey('c1'));
+    const page = threadOf(queryClient, 'c1');
     expect(page?.messages[0]?.reactionSummary).toEqual({});
   });
 });
@@ -155,20 +175,20 @@ describe('performReaction — une réaction hors ligne est ANNONCÉE (revue #581
 
   test('panne réseau (`transport.request` qui REJETTE) ⇒ `{ ok: true, notice }`, l’optimiste RESTE posé', async () => {
     const queryClient = new QueryClient();
-    queryClient.setQueryData(messagesQueryKey('c1'), { messages: [message()], hasOlder: false });
+    queryClient.setQueryData(messagesQueryKey('c1'), threadPages([message()]));
     const transport = { request: () => Promise.reject(new Error('offline')) } as unknown as HttpTransport;
 
     const result = await performReaction({ conversationId: 'c1', messageId: 'm1', emoji: '👍', deps: gatewayDepsOf(queryClient, transport) });
 
     expect(result).toEqual({ ok: true, notice: REACTION_PENDING_MESSAGE });
     expect(reactionStore.getState().mine.m1).toEqual(['👍']);
-    const page = queryClient.getQueryData<{ messages: readonly Message[] }>(messagesQueryKey('c1'));
+    const page = threadOf(queryClient, 'c1');
     expect(page?.messages[0]?.reactionSummary).toEqual({ '👍': 1 });
   });
 
   test('5xx retryable (`kept`, sans lever) ⇒ `{ ok: true, notice }` — MÊME annonce que la panne réseau', async () => {
     const queryClient = new QueryClient();
-    queryClient.setQueryData(messagesQueryKey('c1'), { messages: [message()], hasOlder: false });
+    queryClient.setQueryData(messagesQueryKey('c1'), threadPages([message()]));
     const transport = {
       request: () => Promise.resolve<ApiResult<unknown>>({ ok: false, status: 503, error: 'indisponible' }),
     } as unknown as HttpTransport;
@@ -180,7 +200,7 @@ describe('performReaction — une réaction hors ligne est ANNONCÉE (revue #581
 
   test('confirmé (201) ⇒ AUCUN `notice` — le succès reste silencieux', async () => {
     const queryClient = new QueryClient();
-    queryClient.setQueryData(messagesQueryKey('c1'), { messages: [message()], hasOlder: false });
+    queryClient.setQueryData(messagesQueryKey('c1'), threadPages([message()]));
     const transport = {
       request: () => Promise.resolve<ApiResult<unknown>>({ ok: true, data: {}, status: 201 }),
     } as unknown as HttpTransport;
@@ -212,7 +232,7 @@ describe('performReaction — un retrait refusé en 404 RÉCONCILIE au lieu de r
     const queryClient = new QueryClient();
     // Le fantôme : le compte serveur ne porte PAS l'emoji (jamais confirmé),
     // mais `reactionStore.mine` le croit posé (persisté par le correctif 5).
-    queryClient.setQueryData(messagesQueryKey('c1'), { messages: [message({ reactionSummary: {} })], hasOlder: false });
+    queryClient.setQueryData(messagesQueryKey('c1'), threadPages([message({ reactionSummary: {} })]));
     reactionStore.setState({ mine: { m1: ['👍'] } });
     const transport = {
       request: () => Promise.resolve<ApiResult<unknown>>({ ok: false, status: 404, error: 'not found' }),
@@ -224,13 +244,13 @@ describe('performReaction — un retrait refusé en 404 RÉCONCILIE au lieu de r
     // « mien » reste RETIRÉ — pas re-posé par un rollback.
     expect(reactionStore.getState().mine.m1 ?? []).toEqual([]);
     // Le compte SERVEUR (déjà à 0 après l'optimiste) n'est pas re-gonflé.
-    const page = queryClient.getQueryData<{ messages: readonly Message[] }>(messagesQueryKey('c1'));
+    const page = threadOf(queryClient, 'c1');
     expect(page?.messages[0]?.reactionSummary).toEqual({});
   });
 
   test('un SECOND tap après la réconciliation n’ajoute plus de fantôme (le retrait n’est plus inerte)', async () => {
     const queryClient = new QueryClient();
-    queryClient.setQueryData(messagesQueryKey('c1'), { messages: [message({ reactionSummary: {} })], hasOlder: false });
+    queryClient.setQueryData(messagesQueryKey('c1'), threadPages([message({ reactionSummary: {} })]));
     reactionStore.setState({ mine: { m1: ['👍'] } });
     const transport = {
       request: () => Promise.resolve<ApiResult<unknown>>({ ok: false, status: 404, error: 'not found' }),
@@ -244,7 +264,7 @@ describe('performReaction — un retrait refusé en 404 RÉCONCILIE au lieu de r
 
   test('un retrait refusé en 409 (vrai conflit, pas 404) reste `rolledBack` — restauration inchangée', async () => {
     const queryClient = new QueryClient();
-    queryClient.setQueryData(messagesQueryKey('c1'), { messages: [message({ reactionSummary: { '👍': 1 } })], hasOlder: false });
+    queryClient.setQueryData(messagesQueryKey('c1'), threadPages([message({ reactionSummary: { '👍': 1 } })]));
     reactionStore.setState({ mine: { m1: ['👍'] } });
     const transport = {
       request: () => Promise.resolve<ApiResult<unknown>>({ ok: false, status: 409, error: 'conflit' }),
@@ -255,13 +275,13 @@ describe('performReaction — un retrait refusé en 404 RÉCONCILIE au lieu de r
     expect(result).toEqual({ ok: false, message: 'Réaction impossible' });
     // Restauration NORMALE — la garde 404 ne s'applique pas à un 409.
     expect(reactionStore.getState().mine.m1).toEqual(['👍']);
-    const page = queryClient.getQueryData<{ messages: readonly Message[] }>(messagesQueryKey('c1'));
+    const page = threadOf(queryClient, 'c1');
     expect(page?.messages[0]?.reactionSummary).toEqual({ '👍': 1 });
   });
 
   test('un AJOUT refusé en 404 (cas théorique) reste `rolledBack` — la garde ne vise que `remove`', async () => {
     const queryClient = new QueryClient();
-    queryClient.setQueryData(messagesQueryKey('c1'), { messages: [message()], hasOlder: false });
+    queryClient.setQueryData(messagesQueryKey('c1'), threadPages([message()]));
     const transport = {
       request: () => Promise.resolve<ApiResult<unknown>>({ ok: false, status: 404, error: 'not found' }),
     } as unknown as HttpTransport;
