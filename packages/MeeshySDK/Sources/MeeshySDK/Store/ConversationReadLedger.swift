@@ -83,13 +83,16 @@ public enum ConversationReadSource: Sendable, Hashable {
     case server
 }
 
-/// L'entrée UNIQUE du registre. Six formes, et pas une de plus : tout ce qui
-/// change un non-lu sur cet appareil est l'une d'elles.
+/// L'entrée UNIQUE du registre : tout ce qui change un non-lu sur cet appareil
+/// est l'une de ces formes, et aucune autre.
 ///
-/// Quatre nomment UNE conversation et passent par la précédence
-/// (`ConversationReadPrecedence.resolve`). Les deux autres sont de niveau
-/// REGISTRE : `localOpen` déplace un curseur unique, `snapshot` redéfinit
-/// l'ensemble des conversations connues.
+/// **Quatre nomment UNE conversation** et passent par la précédence
+/// (`ConversationReadPrecedence.resolve`) : `serverUnread`, `serverReceipt`,
+/// `localMarkRead`, `localMarkUnread`.
+///
+/// **Trois sont de niveau REGISTRE**, et ne touchent aucune entrée par la
+/// précédence : `localOpen` déplace un curseur unique, `snapshot` redéfinit
+/// l'ensemble des conversations connues, `forget` en retire une.
 public enum ConversationReadEvent: Sendable, Hashable {
     /// `conversation:unread-updated` — le compteur servi, par destinataire.
     case serverUnread(conversationId: String, unreadCount: Int)
@@ -285,8 +288,8 @@ public final class ConversationReadLedger: @unchecked Sendable {
     /// conversation inconnue (l'appelant y lit « rien n'a bougé », ce dont il a
     /// besoin pour ne pas réveiller un débounce pour rien).
     ///
-    /// **C'est aussi l'affordance de ROLLBACK**, et elle ne demande pas de
-    /// septième cas : un `markAsRead` refusé par le serveur (4xx) se défait en
+    /// **C'est aussi l'affordance de ROLLBACK**, et elle ne demande AUCUN cas
+    /// de plus : un `markAsRead` refusé par le serveur (4xx) se défait en
     /// réappliquant `.serverUnread` avec le compteur rendu ici. Le rollback
     /// n'est donc pas un mode du registre — c'est une écriture de plus, qui
     /// passe par la même précédence que toutes les autres.
