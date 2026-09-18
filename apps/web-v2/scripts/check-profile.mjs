@@ -41,6 +41,7 @@ import { join } from 'node:path';
 import { launchChromium } from './lib/browser.mjs';
 import { startDistServer } from './lib/gate-server.mjs';
 import { contrastOf } from './lib/contrast.mjs';
+import { reachAtRest, resumeExclusions } from './lib/reach-at-rest.mjs';
 
 const DIST = new URL('../dist/', import.meta.url).pathname;
 /* Le serveur vit dans `lib/` depuis #6988 : celui qui était écrit ici
@@ -70,34 +71,22 @@ const capture = async (page, name) => {
 
 const textOf = (page, selector) => page.$eval(selector, (el) => (el.textContent ?? '').trim()).catch(() => null);
 
-/** Au repos : chaque contrôle et chaque texte VISIBLE, à son centre. */
-const reachAtRest = (page) =>
-  page.evaluate(() => {
-    const by = (hit) => (hit === null ? 'rien' : hit.closest('.floating-menus') !== null ? 'un disque flottant' : hit.tagName);
-    const visible = (r) => {
-      const x = r.left + r.width / 2;
-      const y = r.top + r.height / 2;
-      return r.width > 0 && r.height > 0 && x > 0 && x < innerWidth && y > 0 && y < innerHeight;
-    };
-    const measure = (el) => {
-      const r = el.getBoundingClientRect();
-      if (!visible(r)) return [];
-      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-      return [
-        {
-          nom: el.getAttribute('aria-label') ?? (el.textContent ?? '').trim().slice(0, 40),
-          ok: hit !== null && (hit === el || el.contains(hit)),
-          par: by(hit),
-          hauteur: r.height,
-        },
-      ];
-    };
-    const controls = [...document.querySelectorAll('header a, header button, #contenu a, #contenu button')].flatMap(measure);
-    const texts = [...document.querySelectorAll('#contenu h2, [data-profile-hero] p, #contenu section .text-body, #contenu section .text-caption')].flatMap(
-      measure,
-    );
-    return { controls, texts };
-  });
+/**
+ * LES CIBLES DU RELEVÉ AU REPOS — la mesure elle-même vit dans
+ * `lib/reach-at-rest.mjs`, SITE UNIQUE depuis #7040.
+ *
+ * Ce fichier en portait une copie, comme six autres gates. Toutes ouvraient sur
+ * un `visible()` qui RENVOYAIT UN TABLEAU VIDE pour un élément dont le centre
+ * sortait du viewport : un contrôle hors cadre ne cassait rien, n'apparaissait
+ * nulle part, et le gate restait vert avec un contrôle de moins. Un tel élément
+ * est désormais MESURÉ et rendu `ok: false` — et ce qui est légitimement hors
+ * cadre (écrêté par un conteneur, déclaré `inert`/`aria-hidden`) s'écarte sous
+ * une raison ÉCRITE, comptée par `resumeExclusions()`.
+ */
+const REACH = {
+  controls: 'header a, header button, #contenu a, #contenu button',
+  texts: '#contenu h2, [data-profile-hero] p, #contenu section .text-body, #contenu section .text-caption',
+};
 
 /** Chaque contrôle du contenu, amené au milieu de l'écran puis mesuré. */
 const reachScrolled = async (page) => {
@@ -222,12 +211,12 @@ try {
       await capture(page, `profil-${scheme}-${width}x${height}`);
 
       // ------------------------------------------------ 2. atteignabilité
-      const rest = await reachAtRest(page);
+      const rest = await reachAtRest(page, REACH);
       const blocked = rest.controls.filter((c) => !c.ok);
       /* Au repos, hors édition, l'écran n'expose que le retour et « Modifier » :
          la bannière et l'avatar sont à LIRE, pas à toucher. Les rangs du Prisme
          et les entrées se mesurent plus bas, amenés au milieu de l'écran. */
-      check(rest.controls.length >= 2, `${label} : le retour et « Modifier » mesurés au repos (${rest.controls.length})`);
+      check(rest.controls.length >= 2, `${label} : le retour et « Modifier » mesurés au repos (${rest.controls.length}, ${resumeExclusions(rest)})`);
       check(blocked.length === 0, `${label} : aucun contrôle n'est volé à son centre au repos — ${JSON.stringify(blocked)}`);
       const stolen = rest.texts.filter((t) => !t.ok);
       check(rest.texts.length >= 4, `${label} : au moins quatre textes visibles mesurés au repos (${rest.texts.length})`);
@@ -264,7 +253,7 @@ try {
       check(halves.length === 0, `${label} : chaque champ garde son couple de focus entier — ${JSON.stringify(halves)}`);
       await page.evaluate(() => document.getElementById('contenu')?.scrollTo({ top: 0 }));
       await page.waitForTimeout(150);
-      const picks = (await reachAtRest(page)).controls.filter((c) => /photo de profil|bannière/.test(c.nom));
+      const picks = (await reachAtRest(page, REACH)).controls.filter((c) => /photo de profil|bannière/.test(c.nom));
       check(
         picks.length === 2 && picks.every((c) => c.ok && c.hauteur >= TAP_FLOOR),
         `${label} : en édition, les deux contrôles d'image s'atteignent au repos, hors des disques — ${JSON.stringify(picks)}`,

@@ -43,6 +43,7 @@ import { join } from 'node:path';
 import { launchChromium } from './lib/browser.mjs';
 import { contrastOf } from './lib/contrast.mjs';
 import { startDistServer } from './lib/gate-server.mjs';
+import { reachAtRest, resumeExclusions } from './lib/reach-at-rest.mjs';
 
 const DIST = new URL('../dist/', import.meta.url).pathname;
 
@@ -86,40 +87,21 @@ const announced = (page, text, timeout = 1500) =>
     () => false,
   );
 
-/** Au repos : chaque contrôle et chaque texte VISIBLE, à son centre. */
-const reachAtRest = (page, controlsSelector, textsSelector) =>
-  page.evaluate(
-    ([controlsSel, textsSel]) => {
-      const by = (hit) => (hit === null ? 'rien' : hit.closest('.floating-menus') !== null ? 'un disque flottant' : hit.tagName);
-      const visible = (r) => {
-        const x = r.left + r.width / 2;
-        const y = r.top + r.height / 2;
-        return r.width > 0 && r.height > 0 && x > 0 && x < innerWidth && y > 0 && y < innerHeight;
-      };
-      const measure = (el) => {
-        const r = el.getBoundingClientRect();
-        if (!visible(r)) return [];
-        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-        return [
-          {
-            nom: el.getAttribute('aria-label') ?? (el.textContent ?? '').trim().slice(0, 40),
-            ok: hit !== null && (hit === el || el.contains(hit)),
-            par: by(hit),
-            hauteur: r.height,
-          },
-        ];
-      };
-      return {
-        controls: [...document.querySelectorAll(controlsSel)].flatMap(measure),
-        texts: [...document.querySelectorAll(textsSel)].flatMap(measure),
-      };
-    },
-    [controlsSelector, textsSelector],
-  );
+/**
+ * LE RELEVÉ AU REPOS vit dans `lib/reach-at-rest.mjs`, SITE UNIQUE depuis #7040.
+ *
+ * Ce fichier en portait une copie, comme six autres gates. Toutes ouvraient sur
+ * un `visible()` qui RENVOYAIT UN TABLEAU VIDE pour un élément dont le centre
+ * sortait du viewport : un contrôle hors cadre ne cassait rien, n'apparaissait
+ * nulle part, et le gate restait vert avec un contrôle de moins. Un tel élément
+ * est désormais MESURÉ et rendu `ok: false` — et ce qui est légitimement hors
+ * cadre (écrêté par un conteneur, déclaré `inert`/`aria-hidden`) s'écarte sous
+ * une raison ÉCRITE, comptée par `resumeExclusions()`.
+ */
 
 const assertReach = (label, screen, rest, { controls, texts, tapFloor = true }) => {
   const blocked = rest.controls.filter((c) => !c.ok);
-  check(rest.controls.length >= controls && blocked.length === 0, `${label} : ${screen}, aucun contrôle volé à son centre au repos (${rest.controls.length} mesurés) — ${JSON.stringify(blocked)}`);
+  check(rest.controls.length >= controls && blocked.length === 0, `${label} : ${screen}, aucun contrôle volé à son centre au repos (${rest.controls.length} mesurés, ${resumeExclusions(rest)}) — ${JSON.stringify(blocked)}`);
   const stolen = rest.texts.filter((t) => !t.ok);
   check(rest.texts.length >= texts && stolen.length === 0, `${label} : ${screen}, aucun texte volé à son centre au repos (${rest.texts.length} mesurés) — ${JSON.stringify(stolen)}`);
   if (!tapFloor) return;
@@ -182,7 +164,7 @@ try {
       check((await page.$$('[data-links-family]')).length === 1, `${label} : le hub ne montre que la famille servie`);
       check((await page.getAttribute('[data-links-family-create]', 'href')) === '/links/share/new', `${label} : « + » mène à la création`);
       await capture(page, `hub-${slug}`);
-      assertReach(label, 'le hub', await reachAtRest(page, 'header a, [data-links-family] a', 'header h1, [data-links-banner] .text-body, [data-links-banner] .text-caption, [data-links-family-title]'), {
+      assertReach(label, 'le hub', await reachAtRest(page, { controls: 'header a, [data-links-family] a', texts: 'header h1, [data-links-banner] .text-body, [data-links-banner] .text-caption, [data-links-family-title]' }), {
         controls: 3,
         texts: 4,
       });
@@ -209,7 +191,7 @@ try {
         `${label} : une ligne annonce nom, état, rejoints et conversation`,
       );
       await capture(page, `liste-${slug}`);
-      assertReach(label, 'la liste', await reachAtRest(page, 'header a, [data-share-link] a, [data-share-link-copy]', 'header h1, [data-share-links-stat] strong, [data-share-link-name], [data-share-link-joined]'), {
+      assertReach(label, 'la liste', await reachAtRest(page, { controls: 'header a, [data-share-link] a, [data-share-link-copy]', texts: 'header h1, [data-share-links-stat] strong, [data-share-link-name], [data-share-link-joined]' }), {
         controls: 4,
         texts: 5,
       });
@@ -251,7 +233,7 @@ try {
         `${label} : identifiant et création, sans expiration inventée`,
       );
       await capture(page, `detail-${slug}`);
-      assertReach(label, 'le détail', await reachAtRest(page, 'header a, [data-share-link-action]', 'header h1, [data-share-link-title], [data-share-link-status], [data-share-link-url]'), {
+      assertReach(label, 'le détail', await reachAtRest(page, { controls: 'header a, [data-share-link-action]', texts: 'header h1, [data-share-link-title], [data-share-link-status], [data-share-link-url]' }), {
         controls: 3,
         texts: 4,
       });
@@ -320,7 +302,7 @@ try {
       check((await page.$$('main input:not([type="number"])')).length === 2, `${label} : nom et description — aucun champ de slug, que la passerelle ignorerait`);
       check((await page.getAttribute('[data-link-submit]', 'aria-disabled')) === 'true', `${label} : sans conversation, le bouton est désactivé`);
       await capture(page, `creation-${slug}`);
-      assertReach(label, 'la création', await reachAtRest(page, 'header a, [data-link-conversation], main input, main select, [data-link-rule]', 'header h1, main h2'), {
+      assertReach(label, 'la création', await reachAtRest(page, { controls: 'header a, [data-link-conversation], main input, main select, [data-link-rule]', texts: 'header h1, main h2' }), {
         controls: 4,
         texts: 3,
       });
