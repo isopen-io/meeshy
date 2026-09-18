@@ -5,7 +5,14 @@ import type { SocketClient, SocketFactory, SocketHandler } from '@/lib/net/socke
 import type { Conversation } from './types';
 import { CONVERSATION_ID, VIEWER_ID, conversationDefaults, kwame, viewer } from './fixtures-base';
 import { recordSurgedConversation } from './fixtures';
-import { LIVE_1, LIVE_CONVERSATION_ID } from './fixtures-live';
+import {
+  LIVE_1,
+  LIVE_3_ATTACHMENT_ID,
+  LIVE_3_AUDIO_URL,
+  LIVE_3_CREATED_AT,
+  LIVE_3_ID,
+  LIVE_CONVERSATION_ID,
+} from './fixtures-live';
 
 /**
  * LE BOUCHON DE FIXTURES (#5793, § 3.5 de la spécification ; étendu #6171,
@@ -58,6 +65,54 @@ const liveTranslation = (params: {
   ],
 });
 
+/**
+ * LES TROIS TEMPS DU PIPELINE AUDIO (#7017) — la charge de
+ * `message:attachment-updated` telle que la passerelle la sert : la pièce
+ * ENTIÈRE passée par `serializeAttachmentForSocket`, jamais un delta.
+ *
+ * Elle NE PORTE PAS `isViewOnce` / `isBlurred` / `effectFlags`, et c'est la
+ * charge la plus PAUVRE que le puits puisse recevoir — donc le pire cas de sa
+ * garde de masquage. C'est la forme que sert la passerelle d'avant #7014 ;
+ * enrichir cette fixture rendrait indémontrable le cas où le cache est le SEUL
+ * à savoir qu'une pièce est masquée, et ferait passer ici un gate que la vraie
+ * passerelle ferait tomber (doc-comment du module, « aux MÊMES noms et aux
+ * MÊMES formes »).
+ *
+ * `translations` est CUMULATIVE : le serveur relit la ligne après chaque
+ * enrichissement, donc l'évènement `fr` porte aussi `en`
+ * (`emitAttachmentUpdated.ts:60-64` : « clients REPLACE the attachment's
+ * translation map with what this event carries »).
+ */
+const liveTranscript = (params: {
+  readonly transcription: { readonly type: 'audio'; readonly text: string; readonly language: string };
+  readonly translations: Readonly<Record<string, { readonly type: 'audio'; readonly transcription: string }>>;
+}) => ({
+  conversationId: LIVE_CONVERSATION_ID,
+  messageId: LIVE_3_ID,
+  attachment: {
+    id: LIVE_3_ATTACHMENT_ID,
+    messageId: LIVE_3_ID,
+    fileName: 'nota.wav',
+    originalName: 'nota-de-voz.wav',
+    mimeType: 'audio/wav',
+    fileSize: 16_044,
+    fileUrl: LIVE_3_AUDIO_URL,
+    duration: 9_000,
+    capturedInApp: false,
+    createdAt: LIVE_3_CREATED_AT,
+    transcription: params.transcription,
+    translations: params.translations,
+    reactionSummary: {},
+    currentUserReactions: [],
+  },
+});
+
+const LIVE_TRANSCRIPTION_ES = {
+  type: 'audio',
+  text: 'Hola, ¿seguimos con la revisión el jueves?',
+  language: 'es',
+} as const;
+
 const liveTyping = (userId: 'u-kwame' | 'u-fatou', isTyping: boolean) => ({
   userId,
   username: userId === 'u-kwame' ? 'kwame.mensah' : 'fatou.ba',
@@ -90,6 +145,50 @@ const liveTyping = (userId: 'u-kwame' | 'u-fatou', isTyping: boolean) => ({
  * comportement s'observe au navigateur — chacun son niveau.
  */
 export const LIVE_SCHEDULE: readonly ScheduledFixtureEvent[] = [
+  /**
+   * `message:attachment-updated` × 3 (#7017) — LE PIPELINE AUDIO EN TROIS
+   * TEMPS, aux instants qui tombent JUSTE AVANT les arrêts d'horloge que
+   * `check-realtime-events.mjs` observait déjà (T+0,3 s, T+2,5 s, T+4 s,
+   * T+5 s) : le gate n'avance pas d'une milliseconde de plus pour les lire, et
+   * son compteur `messageFetches`, asserté à T+4 s, couvre ces trois
+   * évènements — c'est ce qui PROUVE le « sans rechargement ».
+   *
+   * 1 500 ms — Whisper : la transcription ESPAGNOLE seule ⇒ le fil sert
+   *            l'ORIGINAL (`lang="es"`).
+   * 3 000 ms — NLLB, première langue : `en` ⇒ **RANG 2** du prisme du lecteur
+   *            (`['fr','en']` sous `locale: 'en-US'`). Un témoin de rang ne
+   *            s'écrit pas sur le rang 1, où une descente juste et un
+   *            court-circuit rendent le même verdict (CLAUDE.md § Prisme,
+   *            leçon 261).
+   * 4 200 ms — NLLB, seconde langue : `fr` REPREND LA MAIN au rang 1.
+   */
+  {
+    kind: 'once',
+    atMs: 1500,
+    event: SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED,
+    payload: liveTranscript({ transcription: LIVE_TRANSCRIPTION_ES, translations: {} }),
+  },
+  {
+    kind: 'once',
+    atMs: 3000,
+    event: SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED,
+    payload: liveTranscript({
+      transcription: LIVE_TRANSCRIPTION_ES,
+      translations: { en: { type: 'audio', transcription: 'Hi, shall we keep the review on Thursday?' } },
+    }),
+  },
+  {
+    kind: 'once',
+    atMs: 4200,
+    event: SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED,
+    payload: liveTranscript({
+      transcription: LIVE_TRANSCRIPTION_ES,
+      translations: {
+        en: { type: 'audio', transcription: 'Hi, shall we keep the review on Thursday?' },
+        fr: { type: 'audio', transcription: 'Bonjour, on garde la revue jeudi ?' },
+      },
+    }),
+  },
   { kind: 'once', atMs: 2000, event: SERVER_EVENTS.MESSAGE_TRANSLATION, payload: liveTranslation({ atMs: 2000, targetLanguage: 'en', translatedContent: 'Hi, is the review still on Thursday?' }) },
   { kind: 'once', atMs: 3500, event: SERVER_EVENTS.MESSAGE_TRANSLATION, payload: liveTranslation({ atMs: 3500, targetLanguage: 'fr', translatedContent: 'Bonjour, la revue reste bien jeudi ?' }) },
   {

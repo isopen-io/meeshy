@@ -556,7 +556,15 @@ export function isAttachmentUpdated(payload: unknown): payload is AttachmentUpda
 /** Les trois colonnes que `maskedAttachment` (@meeshy/shared) interroge.
  * `effectFlags` n'est PAS déclaré sur `Attachment` — il voyage sur le fil sans
  * figurer au type partagé — d'où la lecture par cette clé plutôt que par une
- * propriété typée. */
+ * propriété typée.
+ *
+ * JUMELLE ASSUMÉE, ET TEMPORAIRE. #7014, livré en parallèle, pose l'inventaire
+ * de ces mêmes trois champs à sa place définitive —
+ * `ATTACHMENT_PROTECTION_FIELDS` (`@meeshy/shared/utils/attachment-protection`)
+ * — avec un cliquet de compilation qui oblige un quatrième canal à s'y
+ * déclarer. Cette constante doit DISPARAÎTRE au profit de cet import dès que
+ * les deux branches sont fusionnées : deux inventaires du même secret sont
+ * exactement ce que #7014 existe pour empêcher. Suivi : #7029. */
 const PROTECTION_KEYS = ['isViewOnce', 'isBlurred', 'effectFlags'] as const;
 
 /**

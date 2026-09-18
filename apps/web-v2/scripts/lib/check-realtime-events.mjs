@@ -39,6 +39,23 @@ const textOf = (page, id) => page.locator(`[data-message="${id}"] p`).first().in
 const langOf = (page, id) => page.locator(`[data-message="${id}"] p`).first().getAttribute('lang');
 
 /**
+ * LA TRANSCRIPTION D'UN VOCAL (#7017) — `[data-transcript]`
+ * (`attachment-blocks.tsx`), le MÊME nœud que `check-media.mjs` interroge sur
+ * le chemin REST. Ici il est mesuré sur le chemin TEMPS RÉEL, qu'aucun gate ne
+ * jouait : la transcription Whisper puis les traductions NLLB arrivent APRÈS
+ * le message, par `message:attachment-updated`, et web-v2 ne l'écoutait pas.
+ *
+ * LE TEXTE, JAMAIS LA PRÉSENCE DU NŒUD. `servedTranscript` (`api/prism.ts`)
+ * retombe sur `originalName` quand aucune transcription n'existe : le
+ * paragraphe est donc DÉJÀ LÀ au chargement, avec le nom du fichier. Compter
+ * les nœuds ferait passer un gate qui ne mesure rien — c'est la forme « un
+ * témoin qui ne peut pas tomber » appliquée à un sélecteur.
+ */
+const transcriptOf = (page, id) => page.locator(`[data-message="${id}"] [data-transcript]`).first().innerText();
+const transcriptLangOf = (page, id) =>
+  page.locator(`[data-message="${id}"] [data-transcript]`).first().getAttribute('lang');
+
+/**
  * LE LIBELLÉ, lu sur `data-typing-label` — jamais un TEXTE VISIBLE scanné
  * (revue-correction #6171, défaut 4) : la tenue PLATE (Focal/Script, le
  * mode PAR DÉFAUT D-7, donc l'état de CE gate) ne rend plus aucun texte —
@@ -93,27 +110,105 @@ export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA
   expect((await textOf(page, 'live-1')).includes('Hola'), `${label} live-1 : l'ORIGINAL espagnol au chargement`);
   expect((await langOf(page, 'live-1')) === 'es', `${label} live-1 : lang="es" au chargement`);
 
-  await page.clock.runFor(2200); // T+2,3 s
+  /**
+   * ===== 1 bis. LE VOCAL — message:attachment-updated (#7017) =====
+   *
+   * Le pipeline audio rend en TROIS temps (`fixtures-realtime.ts` § les trois
+   * entrées `MESSAGE_ATTACHMENT_UPDATED`), et chacun est lu à un arrêt
+   * d'horloge que ce gate observait DÉJÀ : la section ne coûte pas une
+   * milliseconde simulée de plus.
+   *
+   * L'ÉPREUVE DE CE TÉMOIN N'EST PAS SON VERT mais sa MUTATION : retirer
+   * `socket.on(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, …)` de
+   * `src/lib/api/socket.ts` doit le faire TOMBER dès la première assertion de
+   * T+2,5 s. Un gate qu'on n'a pas vu rougir ne garde rien.
+   */
+  const live3AtLoad = await transcriptOf(page, 'live-3');
+  expect(
+    !live3AtLoad.includes('revisión') && !live3AtLoad.includes('review') && !live3AtLoad.includes('revue'),
+    `${label} live-3 : AUCUNE transcription au chargement — le pipeline n'a encore rien produit (obtenu « ${live3AtLoad} »)`,
+  );
+
+  await page.clock.runFor(2200); // T+2,5 s
   expect(
     (await textOf(page, 'live-1')).includes('Hi, is the review still on Thursday?'),
     `${label} live-1 : la traduction ANGLAISE (rang 2 du Prisme) est servie à T+2 s`,
   );
   expect((await langOf(page, 'live-1')) === 'en', `${label} live-1 : lang="en" au rang 2`);
+  expect(
+    (await transcriptOf(page, 'live-3')).includes('¿seguimos con la revisión el jueves?'),
+    `${label} live-3 : la transcription Whisper (es) apparaît SANS rechargement (obtenu « ${await transcriptOf(page, 'live-3')} »)`,
+  );
+  expect(
+    (await transcriptLangOf(page, 'live-3')) === 'es',
+    `${label} live-3 : lang="es" — la langue RÉELLEMENT servie, pas celle du lecteur (obtenu ${await transcriptLangOf(page, 'live-3')})`,
+  );
 
-  await page.clock.runFor(1500); // T+3,8 s
+  await page.clock.runFor(1500); // T+4 s
   expect(
     (await textOf(page, 'live-1')).includes('Bonjour, la revue reste bien jeudi ?'),
     `${label} live-1 : la traduction FRANÇAISE (rang 1) reprend la main à T+3,5 s`,
   );
   expect((await langOf(page, 'live-1')) === 'fr', `${label} live-1 : lang="fr" au rang 1`);
-  expect(messageFetches === 0, `${label} aucune requête « /messages » n'a été déclenchée par la traduction (${messageFetches})`);
+  /* LE RANG 2, sur la famille AUDIO — la seule traduction disponible à cet
+     instant est `en`, le rang 2 du prisme du lecteur. Un témoin posé au rang 1
+     ne pourrait pas tomber : la descente juste et le court-circuit interdit y
+     rendent le même verdict (CLAUDE.md § Prisme, leçon 261). */
+  expect(
+    (await transcriptOf(page, 'live-3')).includes('shall we keep the review on Thursday?'),
+    `${label} live-3 : la traduction ANGLAISE (rang 2) est servie dès qu'elle arrive (obtenu « ${await transcriptOf(page, 'live-3')} »)`,
+  );
+  expect(
+    (await transcriptLangOf(page, 'live-3')) === 'en',
+    `${label} live-3 : lang="en" au rang 2 (obtenu ${await transcriptLangOf(page, 'live-3')})`,
+  );
+  expect(messageFetches === 0, `${label} aucune requête « /messages » n'a été déclenchée par la traduction ni par l'enrichissement de la pièce (${messageFetches})`);
 
   // ===== 2. conversation:updated NE PARLE QU'À LA LISTE =====
-  await page.clock.runFor(1000); // T+4,8 s
+  await page.clock.runFor(1000); // T+5 s
   expect(
     (await textOf(page, 'live-1')).includes('Bonjour, la revue reste bien jeudi ?'),
     `${label} live-1 : le fil ne change pas quand conversation:updated arrive (le fil OUVERT n'écoute que message:translation)`,
   );
+  /**
+   * LE RANG 1 REPREND LA MAIN — et l'annotation de langue doit LÂCHER avec
+   * lui. Un `lang` resté à « en » sur un texte français est le défaut que ce
+   * témoin garde : il ferait prononcer « on garde la revue jeudi ? » à une
+   * voix anglaise, c'est-à-dire un Prisme juste à l'œil et faux à l'oreille.
+   *
+   * CE QUE LA MESURE A RENDU, et pourquoi ce témoin n'exige PAS `null`
+   * (mesuré au navigateur sur ce dist, `dump` des quatre instants) :
+   *
+   *     T+0    lang="es"   T+2,5 lang="es"   T+4 lang="en"   T+5 lang=""
+   *
+   * Preact ne RETIRE pas l'attribut quand la prop disparaît : `lang` étant une
+   * propriété de `HTMLElement`, `setProperty` prend la branche `name in dom`
+   * et écrit `dom.lang = ''` au lieu d'appeler `removeAttribute`. Sur le
+   * chemin REST le nœud naît sans l'attribut (`check-media.mjs` (e ter)
+   * l'asserte `null` à juste titre) ; ici il a porté « en » une seconde plus
+   * tôt, et il en garde la COQUILLE.
+   *
+   * `lang=""` n'est pas neutre — HTML le définit comme « langue explicitement
+   * INCONNUE », donc il n'hérite PAS du français du document. C'est un défaut
+   * de RENDU (`attachment-blocks.tsx:129`, et ses jumeaux `media-grid.tsx:58,
+   * 298` / `media-viewer.tsx:190`), atteignable aussi par le geste
+   * « Traduire » du chemin REST — hors du périmètre de #7017, qui ne touche
+   * que l'ALIMENTATION. Suivi : #7024.
+   *
+   * Ce témoin garde donc ce qui relève de CE lot — la langue annoncée SUIT le
+   * rang servi et ne reste pas accrochée au rang précédent — et il tombe sur
+   * le défaut qui compte (`lang="en"` figé), coquille ou pas.
+   */
+  expect(
+    (await transcriptOf(page, 'live-3')).includes('on garde la revue jeudi ?'),
+    `${label} live-3 : la traduction FRANÇAISE (rang 1) reprend la main à T+4,2 s (obtenu « ${await transcriptOf(page, 'live-3')} »)`,
+  );
+  const rank1Lang = await transcriptLangOf(page, 'live-3');
+  expect(
+    rank1Lang === null || rank1Lang === '',
+    `${label} live-3 : la transcription ne réclame plus AUCUNE langue étrangère au rang 1 (obtenu ${JSON.stringify(rank1Lang)})`,
+  );
+  expect(messageFetches === 0, `${label} le fil n'a jamais été rechargé pour obtenir la transcription (${messageFetches})`);
 
   // ===== 3. LE ROSTER, DANS LE FIL =====
   await page.clock.runFor(1500); // T+6,3 s
