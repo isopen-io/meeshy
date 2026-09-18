@@ -36,6 +36,7 @@ import { join } from 'node:path';
 import { launchChromium } from './lib/browser.mjs';
 import { startDistServer } from './lib/gate-server.mjs';
 import { contrastOf } from './lib/contrast.mjs';
+import { reachAtRest, resumeExclusions } from './lib/reach-at-rest.mjs';
 
 const DIST = new URL('../dist/', import.meta.url).pathname;
 const VERSION = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')).version;
@@ -75,32 +76,22 @@ const capture = async (page, name) => {
 
 const textOf = (page, selector) => page.$eval(selector, (el) => (el.textContent ?? '').trim()).catch(() => null);
 
-/** Au repos : chaque contrôle et chaque texte VISIBLE, à son centre. */
-const reachAtRest = (page) =>
-  page.evaluate(() => {
-    const by = (hit) => (hit === null ? 'rien' : hit.closest('.floating-menus') !== null ? 'un disque flottant' : hit.tagName);
-    const visible = (r) => {
-      const x = r.left + r.width / 2;
-      const y = r.top + r.height / 2;
-      return r.width > 0 && r.height > 0 && x > 0 && x < innerWidth && y > 0 && y < innerHeight;
-    };
-    const measure = (el) => {
-      const r = el.getBoundingClientRect();
-      if (!visible(r)) return [];
-      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-      return [
-        {
-          nom: el.getAttribute('aria-label') ?? (el.textContent ?? '').trim().slice(0, 40),
-          ok: hit !== null && (hit === el || el.contains(hit)),
-          par: by(hit),
-          hauteur: r.height,
-        },
-      ];
-    };
-    const controls = [...document.querySelectorAll('header a, #contenu a, #contenu button, #contenu select')].flatMap(measure);
-    const texts = [...document.querySelectorAll('#contenu h2, #contenu .text-body, #contenu .text-caption')].flatMap(measure);
-    return { controls, texts };
-  });
+/**
+ * LES CIBLES DU RELEVÉ AU REPOS — la mesure elle-même vit dans
+ * `lib/reach-at-rest.mjs`, SITE UNIQUE depuis #7040.
+ *
+ * Ce fichier en portait une copie, comme six autres gates. Toutes ouvraient sur
+ * un `visible()` qui RENVOYAIT UN TABLEAU VIDE pour un élément dont le centre
+ * sortait du viewport : un contrôle hors cadre ne cassait rien, n'apparaissait
+ * nulle part, et le gate restait vert avec un contrôle de moins. Un tel élément
+ * est désormais MESURÉ et rendu `ok: false` — et ce qui est légitimement hors
+ * cadre (écrêté par un conteneur, déclaré `inert`/`aria-hidden`) s'écarte sous
+ * une raison ÉCRITE, comptée par `resumeExclusions()`.
+ */
+const REACH = {
+  controls: 'header a, #contenu a, #contenu button, #contenu select',
+  texts: '#contenu h2, #contenu .text-body, #contenu .text-caption',
+};
 
 /** Chaque contrôle du contenu, amené au milieu de l'écran puis mesuré. */
 const reachScrolled = async (page) => {
@@ -219,9 +210,9 @@ try {
         corridor.discs >= 2 && corridor.cardTop !== null && corridor.cardTop >= corridor.discBottom,
         `${label} : au repos, la carte de profil commence sous les disques flottants — ${JSON.stringify(corridor)}`,
       );
-      const rest = await reachAtRest(page);
+      const rest = await reachAtRest(page, REACH);
       const blocked = rest.controls.filter((c) => !c.ok);
-      check(rest.controls.length >= 3, `${label} : des contrôles mesurés au repos (${rest.controls.length})`);
+      check(rest.controls.length >= 3, `${label} : des contrôles mesurés au repos (${rest.controls.length}, ${resumeExclusions(rest)})`);
       check(blocked.length === 0, `${label} : aucun contrôle n'est volé à son centre au repos — ${JSON.stringify(blocked)}`);
       const stolen = rest.texts.filter((t) => !t.ok);
       check(rest.texts.length >= 4 && stolen.length === 0, `${label} : aucun texte n'est volé à son centre au repos (${rest.texts.length}) — ${JSON.stringify(stolen)}`);

@@ -629,7 +629,15 @@ export default function StoryScreen() {
       className="fixed inset-0 flex flex-col"
       style={{ background: '#000', color: '#fff', colorScheme: 'dark', zIndex: 200 }}
     >
-      <div className="pointer-events-none absolute top-3 end-3" style={{ zIndex: 2 }}>
+      {/* LA CROIX DES ÉTATS D'ATTENTE LIT L'ENCOCHE, comme celle du chemin
+          chargé (#7040). Elle était posée à `top-3` SEC, pendant que le chrome
+          de la story, douze lignes plus bas, lit bien `--safe-top` : sur une
+          coque à encoche, la seule porte de sortie d'un « Chargement… » ou d'une
+          « Story introuvable » passait SOUS la barre d'état. Une divergence
+          interne à un même fichier, et sur l'état où l'utilisateur a le plus
+          besoin de sortir. Le `12px` conserve l'espacement de `top-3` quand il
+          n'y a pas d'encoche : rien ne bouge là où rien n'était cassé. */}
+      <div className="pointer-events-none absolute end-3" style={{ top: 'calc(var(--safe-top, 0px) + 12px)', zIndex: 2 }}>
         {loading || notFound ? <CloseButton onClose={closeViewer} /> : null}
       </div>
 

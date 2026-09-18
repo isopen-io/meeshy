@@ -45,6 +45,34 @@
  */
 
 import { Prisma } from '@meeshy/shared/prisma/client';
+import {
+  ATTACHMENT_PROTECTION_FIELDS,
+  type AttachmentProtectionField,
+} from '@meeshy/shared/utils/attachment-protection';
+
+/**
+ * Les trois colonnes de protection PROPRES à `MessageAttachment`
+ * (`isViewOnce` / `isBlurred` / `effectFlags`), INDÉPENDANTES de leurs
+ * homonymes sur le `Message` porteur — DÉRIVÉES de l'inventaire partagé
+ * (`ATTACHMENT_PROTECTION_FIELDS`), jamais réécrites (#7014).
+ *
+ * Elle vivait dans `routes/admin/media-protection.ts`, qui la ré-exporte
+ * désormais depuis ici : un fragment de `select` Prisma a son domicile dans ce
+ * fichier — « Every gateway endpoint that returns or broadcasts a Message with
+ * its attachments MUST select from one of these named shapes » — et son ancien
+ * domicile, un module de ROUTE, rendait sa réutilisation par le canal SOCKET
+ * impossible sans traîner `NotificationService` dans la couche temps réel.
+ *
+ * `Prisma.validator` n'est pas décoratif ici : il refuse à la compilation un
+ * nom d'inventaire qui ne serait pas une colonne de `MessageAttachment`.
+ */
+const protectionFieldsSelect = Object.fromEntries(
+  ATTACHMENT_PROTECTION_FIELDS.map((champ) => [champ, true])
+) as { readonly [K in AttachmentProtectionField]: true };
+
+export const attachmentProtectionSelect = Prisma.validator<Prisma.MessageAttachmentSelect>()(
+  protectionFieldsSelect
+);
 
 /**
  * Render-ready attachment shape.
@@ -100,6 +128,32 @@ export const attachmentMediaSelect = Prisma.validator<Prisma.MessageAttachmentSe
   capturedInApp: true,
   // BUG2 A' — réactions par-image (agrégées au mapping en reactionSummary + currentUserReactions)
   reactions: { select: { emoji: true, participantId: true } },
+});
+
+/**
+ * LA FORME DU CANAL SOCKET (#7014) — `attachmentMediaSelect` PLUS la
+ * protection propre à la pièce jointe.
+ *
+ * Toute requête dont le résultat part chez `serializeAttachmentForSocket`
+ * sélectionne CELLE-CI, jamais `attachmentMediaSelect` nu. La raison est
+ * mesurée : `attachmentMediaSelect` est délibérément SANS drapeau de
+ * protection (son doc-comment : « No consumption-tracking, no security
+ * flags »), si bien que `message:edited` et `message:attachment-updated`
+ * remettaient au fil une pièce MUETTE sur sa propre protection — et
+ * `maskedAttachment`, qui échoue OUVERTE quand on ne la nourrit pas, laissait
+ * son `<img>` atteindre le DOM en clair.
+ *
+ * Elle porte le `select` et la projection ENSEMBLE, comme
+ * `utils/recipient-language.ts` porte le sien avec sa descente : c'est la
+ * projection trop étroite, jamais l'appel manquant, qui rend une garde
+ * impossible en aval sans qu'aucun témoin ne rougisse (leçon 276). La liste de
+ * protection n'est pas retapée — elle est SPREAD depuis
+ * `attachmentProtectionSelect`, donc un quatrième canal la rejoint sans
+ * qu'aucun site socket n'ait à s'en souvenir.
+ */
+export const attachmentSocketSelect = Prisma.validator<Prisma.MessageAttachmentSelect>()({
+  ...attachmentMediaSelect,
+  ...attachmentProtectionSelect,
 });
 
 /**
