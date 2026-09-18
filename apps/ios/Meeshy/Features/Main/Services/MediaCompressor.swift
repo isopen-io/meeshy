@@ -167,6 +167,13 @@ actor MediaCompressor {
         let asset = AVURLAsset(url: url)
         let outputURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("compressed_\(UUID().uuidString).mp4")
+        // `AVAssetWriter` ne REMPLACE pas un fichier existant : il refuse, et
+        // ce refus sort par `startWriting()` rendant `false` — dont
+        // `startSession` fait ensuite une exception ObjC irrattrapable (#7004).
+        // Le nom porte un UUID, la collision est donc improbable et non
+        // impossible (temporaire survivant d'un run précédent, restauration).
+        // Une ligne ici vaut mieux qu'un plantage qu'on ne saurait pas lire.
+        try? FileManager.default.removeItem(at: outputURL)
 
         // **Fast-path SOTA** : si la source est déjà au format cible
         // (codec HEVC/H.264 + résolution ≤ budget + bitrate ≤ budget × 2),
@@ -278,7 +285,13 @@ actor MediaCompressor {
         }
 
         reader.startReading()
-        writer.startWriting()
+        // Même règle que la jumelle `StoryExporter` : `startSession` après un
+        // `startWriting` refusé lève un `NSInternalInconsistencyException`
+        // qu'aucun `do/catch` Swift ne rattrape (#7004). L'utilisateur voit
+        // alors l'échec d'envoi et peut réessayer, au lieu de perdre l'app.
+        guard writer.startWriting() else {
+            throw writer.error ?? CompressionError.writerCannotStart
+        }
         writer.startSession(atSourceTime: .zero)
 
         let vOut = SendableTrackOutput(value: videoOutput)
@@ -559,11 +572,17 @@ actor MediaCompressor {
 enum CompressionError: LocalizedError {
     case exportSessionFailed
     case noVideoTrack
+    /// `startWriting()` a refusé de commencer — disque plein, chemin de sortie
+    /// occupé, réglages rejetés par l'encodeur — et le writer n'a pas donné
+    /// d'erreur à lire. Distincte d'`exportSessionFailed`, qui dit qu'un export
+    /// COMMENCÉ n'a pas abouti (#7004).
+    case writerCannotStart
 
     var errorDescription: String? {
         switch self {
         case .exportSessionFailed: return "Video compression failed"
         case .noVideoTrack: return "No video track found in source file"
+        case .writerCannotStart: return "Video writer could not start (disk full or output path busy)"
         }
     }
 }
