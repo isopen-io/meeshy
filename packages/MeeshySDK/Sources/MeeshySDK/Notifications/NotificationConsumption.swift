@@ -132,8 +132,18 @@ struct NotificationSelfReadLedger {
 /// des échos.
 extension NotificationToastManager {
 
-    /// Consomme ce que `ref` désigne. Rend `false` quand le serveur a refusé
-    /// (le rollback a été appliqué) ou qu'il n'y avait rien à consommer.
+    /// Consomme ce que `ref` désigne.
+    ///
+    /// Le verdict ne porte que sur ce que l'appel a pu ATTENDRE :
+    /// - `.notification` / `.types` / `.all` attendent le serveur — `false`
+    ///   signifie qu'il a refusé (et, pour `.notification`, que le rollback a
+    ///   été appliqué) ou qu'il n'y avait rien à consommer ;
+    /// - `.conversation` / `.post` rendent toujours `true` : leur marquage
+    ///   serveur est COALESCÉ (au plus un POST par fenêtre de cinq secondes,
+    ///   voir `markConversationNotificationsRead`), donc ce qui est garanti au
+    ///   retour est la consommation LOCALE — cache, vues, bannières — et le
+    ///   compteur se recale par `refreshUnreadCount()` puis par
+    ///   `notification:counts`.
     @discardableResult
     public func consume(_ ref: NotificationRef) async -> Bool {
         switch ref {
