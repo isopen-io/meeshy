@@ -125,3 +125,64 @@ describe('Avatar — `src` traverse la résolution de média (#6388)', () => {
     expect(html).toContain('src="blob:https://staging.meeshy.me/abcd"');
   });
 });
+
+/**
+ * **L'`<img>` D'AVATAR EST CELLE QUI MANQUAIT AUX DEUX BOUTS** (#6973).
+ *
+ * `decoding` : c'est la SEULE `<img>` du dépôt qui ne le portait pas —
+ * `media-grid.tsx`, `reel-page.tsx`, `notification-row.tsx` et
+ * `communities-parts.tsx` le posent tous. Sans lui, le décodage d'un portrait
+ * se fait sur le fil principal, au milieu du défilement d'une liste qui en
+ * monte des dizaines (dimension 4, « y a-t-il UNE image perdue pendant le
+ * geste ? »).
+ *
+ * `crossOrigin` : la passerelle rend déjà `Access-Control-Allow-Origin: *` sur
+ * la route de flux, mais l'en-tête est INERTE tant que la requête part en
+ * `no-cors` — la réponse est alors opaque, et le seau `medias` la garde sans
+ * pouvoir distinguer une image d'une page d'erreur. La règle vit dans
+ * `lib/net/api-runtime-cache.ts`, aux côtés de ce que le seau garde : c'est la
+ * MÊME question, et deux sites en auraient fait deux réponses.
+ */
+describe('Avatar — ce que l’`<img>` demande au réseau (#6973)', () => {
+  test('`decoding="async"` — hors du fil principal, comme les quatre autres `<img>` du dépôt', () => {
+    const html = renderToStaticMarkup(<Avatar initials="LD" color="#4F46E5" size={44} src="2026/09/6aa607/photo.png" />);
+    expect(html).toContain('decoding="async"');
+  });
+
+  test('un portrait servi par la PASSERELLE demande le mode `cors` — sans quoi la réponse est opaque', () => {
+    const cle = renderToStaticMarkup(<Avatar initials="LD" color="#4F46E5" size={44} src="2026/09/6aa607/photo.png" />);
+    expect(cle).toContain('crossorigin="anonymous"');
+
+    const heritee = renderToStaticMarkup(
+      <Avatar initials="LD" color="#4F46E5" size={44} src="https://gate.meeshy.me/2026/09/6aa607/photo.png" />,
+    );
+    expect(heritee).toContain('crossorigin="anonymous"');
+
+    const resolue = renderToStaticMarkup(
+      <Avatar initials="LD" color="#4F46E5" size={44} src="https://gate.meeshy.me/api/v1/attachments/file/2026%2F09%2Fphoto.png" />,
+    );
+    expect(resolue).toContain('crossorigin="anonymous"');
+  });
+
+  /**
+   * LA RÉGRESSION QUE `crossOrigin` POSÉ PARTOUT AURAIT CAUSÉE : un hôte sans
+   * `Access-Control-Allow-Origin` fait ÉCHOUER l'image dès que la requête
+   * passe en mode `cors` — et `attachmentSrc` laisse passer les adresses
+   * externes inchangées, par décision (`media-url.ts` § « CE QU'IL NE TOUCHE
+   * PAS »). L'avatar serait retombé sur ses initiales, silencieusement.
+   */
+  test('un portrait d’un hôte TIERS ne demande RIEN — son CORS est inconnu', () => {
+    const html = renderToStaticMarkup(<Avatar initials="LD" color="#4F46E5" size={44} src="https://cdn.example/lea.jpg" />);
+    expect(html).not.toContain('crossorigin');
+    // Le magasin STATIQUE (#4625) traverse aussi inchangé.
+    const statique = renderToStaticMarkup(
+      <Avatar initials="LD" color="#4F46E5" size={44} src="https://static.meeshy.me/u/i/2025/11/photo.png" />,
+    );
+    expect(statique).not.toContain('crossorigin');
+  });
+
+  test('un aperçu local (`blob:`) ne demande rien non plus — il n’a pas d’origine à négocier', () => {
+    const html = renderToStaticMarkup(<Avatar initials="LD" color="#4F46E5" size={44} src="blob:https://staging.meeshy.me/abcd" />);
+    expect(html).not.toContain('crossorigin');
+  });
+});

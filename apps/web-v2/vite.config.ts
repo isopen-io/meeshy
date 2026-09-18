@@ -552,10 +552,64 @@ export default defineConfig({
                */
               runtimeCaching: [
                 {
-                  /* PAS L'ADMINISTRATION (#6862) — `API_RESPONSE_CACHE_PATTERN`
-                     porte la règle et son motif : une conversation privée lue
-                     en régime souverain ne doit pas rester sept jours sur le
-                     disque du poste, dans un seau qu'`AdminAuditLog` ignore.
+                  /* LES MÉDIAS D'ABORD, ET L'ORDRE EST LA MOITIÉ DU CORRECTIF
+                     (#6973) : le routeur de Workbox retient la PREMIÈRE route
+                     qui matche. Mesuré sur `dist/sw.js` du 2026-09-18, ce seau
+                     était enregistré EN SECOND et toute URL de média passe par
+                     `/api/v1/attachments/…` — avatars, scènes de fil, vignettes
+                     partaient donc dans le seau `api`, dont ils épuisaient le
+                     plafond de 200 entrées en un défilement, évinçant les
+                     réponses de conversations et de messages dont la lecture
+                     hors ligne dépend. `API_RESPONSE_CACHE_PATTERN` exclut
+                     désormais `/attachments/` AUSSI : la ceinture, l'ordre
+                     étant les bretelles — un seul des deux suffirait, et c'est
+                     précisément pour ça qu'on pose les deux.
+
+                     `destination === 'image'` plutôt qu'un motif d'URL : c'est
+                     ce qui laisse AUDIO et VIDÉO dehors par CONSTRUCTION
+                     (décision assumée, voir plus bas) et non par une liste
+                     d'extensions, qui se périmerait au premier format ajouté.
+                     La fonction est AUTONOME — elle ne cite aucun identifiant
+                     importé : Workbox stringifie ce champ dans `dist/sw.js`, où
+                     rien ne suit un import (#6862). */
+                  urlPattern: ({ request }) => request.destination === 'image',
+                  handler: 'CacheFirst',
+                  options: {
+                    cacheName: SW_RUNTIME_CACHES.medias,
+                    /* INDISSOCIABLE DE CE QUI PRÉCÈDE (#6973) : une `<img>`
+                       sans `crossOrigin` rend une réponse OPAQUE (status 0),
+                       que `CacheFirst` rejette EN SILENCE — le seau restait
+                       vide, et sortir les médias du seau `api` n'aurait rien
+                       changé. `mediaImageCrossOrigin` (api-runtime-cache.ts)
+                       fait demander le mode `cors` là où la passerelle rend
+                       `Access-Control-Allow-Origin` ; le `0` reste ici pour
+                       tout le reste (un CDN tiers, une `<img>` sans la règle). */
+                    cacheableResponse: { statuses: [0, 200] },
+                    /* 300 entrées, contre 120 : ce seau porte désormais les
+                       médias de la passerelle EN PLUS des actifs de l'origine.
+                       Avatars et scènes de fil y cohabitent — ils ne sont PAS
+                       séparables par l'URL, les deux étant composés par le site
+                       unique `streamSrc` (`lib/api/media-url.ts`) ; leur donner
+                       deux seaux demanderait un marqueur dans l'URL, donc une
+                       seconde clé de cache pour les mêmes octets.
+                       `purgeOnQuotaError` est le filet : un seau de médias est
+                       entièrement REGÉNÉRABLE, et il vaut mieux le vider que
+                       voir le navigateur refuser toute écriture. */
+                    expiration: {
+                      maxEntries: 300,
+                      maxAgeSeconds: 60 * 60 * 24 * 30,
+                      purgeOnQuotaError: true,
+                    },
+                  },
+                },
+                {
+                  /* PAS L'ADMINISTRATION (#6862), PAS LES MÉDIAS (#6973) —
+                     `API_RESPONSE_CACHE_PATTERN` porte les deux règles et son
+                     motif : une conversation privée lue en régime souverain ne
+                     doit pas rester sept jours sur le disque du poste, dans un
+                     seau qu'`AdminAuditLog` ignore ; et les 200 entrées de ce
+                     seau sont RÉSERVÉES au JSON, sans quoi un défilement de fil
+                     chasse la lecture hors ligne.
                      Une VALEUR, jamais un prédicat importé : Workbox stringifie
                      ce champ dans `dist/sw.js`, où aucun import ne le suit —
                      `check-sw-api-cache.mjs` fait décider l'artefact construit. */
@@ -567,14 +621,28 @@ export default defineConfig({
                     expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 7 },
                   },
                 },
-                {
-                  urlPattern: ({ request }) => request.destination === 'image',
-                  handler: 'CacheFirst',
-                  options: {
-                    cacheName: SW_RUNTIME_CACHES.medias,
-                    expiration: { maxEntries: 120, maxAgeSeconds: 60 * 60 * 24 * 30 },
-                  },
-                },
+                /* AUDIO ET VIDÉO RESTENT HORS CACHE, ET C'EST UNE DÉCISION
+                   (#6973 point 5) — pas un oubli, et surtout pas une règle qui
+                   AURAIT L'AIR de les couvrir.
+                   Leur `src` traverse la même route de flux que les images ;
+                   `API_RESPONSE_CACHE_PATTERN` l'excluant et le seau des médias
+                   ne matchant que `destination === 'image'`, aucune route ne les
+                   réclame : ils partent en réseau nu, et leur lecture
+                   progressive reste intacte.
+                   Les couvrir coûterait DEUX choses qu'on refuse. D'abord un
+                   `RangeRequestsPlugin` : un élément média demande d'emblée un
+                   `Range`, la passerelle rend `206`
+                   (`download.ts`, § « Supports Range requests for audio/video
+                   seeking »), et une `206` n'est ni stockable ni resservable
+                   sans lui — or le plugin sert une tranche depuis une réponse
+                   ENTIÈRE en cache, donc il faudrait télécharger la vidéo
+                   COMPLÈTE avant la première image : une régression de fluidité
+                   déguisée en optimisation. Ensuite le quota : une vidéo de fil
+                   pèse des dizaines de mégaoctets, et trois d'entre elles
+                   videraient par éviction le seau qu'on vient de réserver aux
+                   avatars et aux scènes. Le jour où un vocal doit s'écouter
+                   hors ligne, il lui faudra son PROPRE seau, avec son propre
+                   plafond et son `rangeRequests` — pas une ligne de plus ici. */
               ],
             },
           }),
