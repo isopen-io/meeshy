@@ -162,9 +162,17 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
                avatarURLString, apiBaseURL: apiBaseURL
            ) {
             group.enter()
-            downloadData(from: avatarURL) { data in
-                avatarData = data
-                group.leave()
+            // L'avatar est le SEUL octet que l'INPerson exige en mémoire. Il
+            // descend malgré tout sur disque, et n'est lu que si sa taille
+            // mesurée tient dans le plafond : un « avatar » de 30 Mo servi par
+            // erreur ne doit pas emporter l'extension (#7003).
+            downloadFile(from: avatarURL) { fileURL in
+                defer { group.leave() }
+                guard let fileURL else { return }
+                defer { try? FileManager.default.removeItem(at: fileURL) }
+                guard let size = Self.fileSize(at: fileURL),
+                      size > 0, size <= NSEAttachmentPolicy.maxAttachmentBytes else { return }
+                avatarData = try? Data(contentsOf: fileURL)
             }
         }
 
@@ -173,15 +181,31 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
                attachmentURLString, apiBaseURL: apiBaseURL
            ) {
             let mime = userInfo["attachmentMimeType"] as? String ?? ""
-            group.enter()
-            downloadData(from: attachmentURL) { [weak self] data in
-                defer { group.leave() }
-                guard let self, let data else { return }
-                messageAttachment = self.createMessageAttachment(
-                    from: data,
-                    originalURL: attachmentURL,
-                    mimeType: mime
-                )
+            // PRÉ-VOL (#7003) : la famille et la taille DÉCLARÉE sur le fil
+            // décident AVANT la requête. Le gateway pose `firstAttachmentUrl`
+            // pour tout type dès qu'un média peut voyager — vidéos et documents
+            // compris —, et la taille qu'il pose à côté n'était pas lue.
+            let declaredSize = NSEAttachmentPolicy.declaredFileSize(userInfo["attachmentFileSize"])
+            if NSEAttachmentPolicy.mayAttach(mimeType: mime, fileSize: declaredSize) {
+                group.enter()
+                downloadFile(from: attachmentURL) { [weak self] fileURL in
+                    defer { group.leave() }
+                    guard let self, let fileURL else { return }
+                    // APRÈS-VOL : un serveur n'est pas tenu par ce qu'il
+                    // annonce. Le fichier est sur DISQUE, donc le mesurer ne
+                    // coûte rien — et le refuser non plus.
+                    guard NSEAttachmentPolicy.mayAttach(
+                        mimeType: mime, fileSize: Self.fileSize(at: fileURL)
+                    ) else {
+                        try? FileManager.default.removeItem(at: fileURL)
+                        return
+                    }
+                    messageAttachment = self.createMessageAttachment(
+                        fromFile: fileURL,
+                        originalURL: attachmentURL,
+                        mimeType: mime
+                    )
+                }
             }
         }
 
@@ -727,17 +751,28 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
 
     // MARK: - Attachments
 
-    /// Generic data download for any push payload URL (avatar or message media).
+    /// Generic file download for any push payload URL (avatar or message media).
     /// Fire-and-forget — completion is invoked exactly once, with nil on any failure.
+    /// The caller OWNS the returned file and must delete it when done.
     ///
     /// The timeout is dynamically capped to the remaining OS budget so that a slow
     /// download never holds the notification hostage past the 30 s kill deadline.
     /// If the remaining budget is below `minDownloadBudget` the download is skipped
     /// immediately (completion(nil)) — better to deliver without rich content than
     /// to let the extension be killed mid-transfer with no content at all.
-    private func downloadData(
+    ///
+    /// **`downloadTask`, jamais `dataTask` (#7003).** Un `dataTask` ramène tout
+    /// le corps de la réponse EN MÉMOIRE, sans plafond ni lecture de
+    /// `Content-Length` — et une extension de notification ne dispose que d'une
+    /// enveloppe d'environ 24 Mo, dans laquelle quatre à cinq téléchargements
+    /// s'additionnent. Un message vidéo de 40 Mo la faisait dépasser, et iOS la
+    /// tuait par jetsam : pas de rapport de crash, pas de trace, juste une
+    /// bannière sans enrichissement qu'on ne distingue pas d'un réseau lent.
+    /// Écrire sur DISQUE rend la taille du fichier inoffensive pour la mémoire
+    /// et MESURABLE avant tout usage — cf. `NSEAttachmentPolicy`.
+    private func downloadFile(
         from url: URL,
-        completion: @escaping (Data?) -> Void
+        completion: @escaping (URL?) -> Void
     ) {
         let elapsed = Date().timeIntervalSince(extensionStartTime)
         let budgetRemaining = Self.nseBudget - elapsed
@@ -749,22 +784,49 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         let timeout = min(12, budgetRemaining)
         nonisolated(unsafe) let completion = completion
         let request = URLRequest(url: url, timeoutInterval: timeout)
-        let task = URLSession.shared.dataTask(with: request) { data, _, error in
-            guard let data, error == nil else {
+        let task = URLSession.shared.downloadTask(with: request) { location, _, error in
+            // Le fichier rendu par `downloadTask` est effacé dès le retour de ce
+            // bloc : on le DÉPLACE avant de rendre la main, sans quoi l'appelant
+            // reçoit une URL qui n'existe déjà plus.
+            guard let location, error == nil else {
                 completion(nil)
                 return
             }
-            completion(data)
+            let destination = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString)
+            do {
+                try FileManager.default.moveItem(at: location, to: destination)
+                completion(destination)
+            } catch {
+                completion(nil)
+            }
         }
         task.resume()
+    }
+
+    /// Taille d'un fichier local, `nil` s'il a disparu. C'est la mesure du
+    /// SECOND étage de `NSEAttachmentPolicy` : un serveur n'est jamais tenu par
+    /// la taille qu'il annonce sur le fil.
+    private nonisolated static func fileSize(at url: URL) -> Int? {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path) else {
+            return nil
+        }
+        return (attributes[.size] as? NSNumber)?.intValue
     }
 
     /// Creates a UNNotificationAttachment from raw bytes for a message media.
     /// Picks the right file extension + UTI typeHint so iOS renders the attachment
     /// in its native style (image preview, audio waveform with play button, video
     /// thumbnail with tap-to-play).
+    ///
+    /// **Prend un FICHIER, plus des octets (#7003)** : le corps n'a jamais
+    /// transité par la mémoire, il est descendu sur disque et il n'y a qu'à le
+    /// renommer avec la bonne extension. `UNNotificationAttachment` déplace
+    /// ensuite ce fichier dans son propre magasin ; s'il refuse, on efface —
+    /// une extension qui laisse des temporaires derrière elle les paie au
+    /// push suivant.
     private func createMessageAttachment(
-        from data: Data,
+        fromFile downloadedFile: URL,
         originalURL: URL,
         mimeType: String
     ) -> UNNotificationAttachment? {
@@ -775,7 +837,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         let tempFile = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString + "." + ext)
         do {
-            try data.write(to: tempFile)
+            try FileManager.default.moveItem(at: downloadedFile, to: tempFile)
             var options: [String: Any] = [:]
             if let typeHint {
                 options[UNNotificationAttachmentOptionsTypeHintKey] = typeHint
@@ -786,6 +848,8 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
                 options: options.isEmpty ? nil : options
             )
         } catch {
+            try? FileManager.default.removeItem(at: tempFile)
+            try? FileManager.default.removeItem(at: downloadedFile)
             return nil
         }
     }

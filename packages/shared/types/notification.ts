@@ -233,6 +233,16 @@ export interface NotificationContext {
   readonly firstAttachmentUrl?: string;
   /** MIME type du 1er attachment, ex. `audio/m4a`, `image/jpeg`, `video/mp4`. */
   readonly firstAttachmentMimeType?: string;
+  /** Taille en OCTETS du fichier servi par `firstAttachmentUrl` (#7003).
+   *  Une extension de notification ne dispose que d'environ 24 Mo : sans ce
+   *  champ, la NSE ne pouvait décider d'attacher ou non qu'APRÈS avoir ramené
+   *  le corps entier en mémoire — c'est-à-dire trop tard. Elle la lit désormais
+   *  AVANT la requête (`NSEAttachmentPolicy.mayAttach`).
+   *  Absente quand la taille est inconnue, ou quand la piste servie n'est PAS
+   *  le fichier d'origine (une piste traduite a sa propre taille, que rien ne
+   *  connaît ici) : ce qui QUALIFIE un fichier voyage avec LUI, jamais avec un
+   *  autre. */
+  readonly firstAttachmentFileSize?: number;
   /** Durée en millisecondes du 1er attachment audio/video. */
   readonly firstAttachmentDurationMs?: number;
   /** Date de publication ISO de l'entité sociale liée (post/story/réel/mood).
