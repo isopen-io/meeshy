@@ -104,6 +104,16 @@ public enum ConversationReadEvent: Sendable, Hashable {
     case localMarkUnread(conversationId: String)
     /// Une liste entière de conversations, et d'où elle vient.
     case snapshot(rows: [ConversationReadRow], source: ConversationReadSource)
+    /// Cette conversation n'est plus à moi : quittée, supprimée, bannissement.
+    ///
+    /// **La septième forme, et il faut dire pourquoi les six autres ne
+    /// suffisaient pas** : ce n'est pas un événement de LECTURE. Aucun
+    /// compteur n'est servi, aucune frontière n'avance — la LIGNE disparaît, et
+    /// son non-lu avec elle. L'exprimer par un `snapshot` obligerait chaque
+    /// appelant à recomposer la liste entière pour retirer une entrée, ce qui
+    /// est à la fois coûteux et faux (il ne la connaît pas forcément entière).
+    /// Comme `snapshot`, elle est de niveau REGISTRE.
+    case forget(conversationId: String)
 }
 
 // MARK: - Précédence
@@ -171,7 +181,7 @@ public enum ConversationReadPrecedence {
             next.serverLastReadAt = nil
             next.unreadCount = max(1, current.unreadCount)
 
-        case .localOpen, .snapshot:
+        case .localOpen, .snapshot, .forget:
             return current
         }
 
@@ -233,6 +243,14 @@ public final class ConversationReadLedger: @unchecked Sendable {
         }
     }
 
+    /// Projection PAR CONVERSATION du compteur, pour les surfaces qui rendent
+    /// une LIGNE plutôt qu'un agrégat (une conversation muette garde sa
+    /// pastille : seul le total la tait). Aucune borne ici — ce n'est pas un
+    /// total, c'est l'inventaire.
+    public func counts() -> [String: Int] {
+        stateQueue.sync { entries.mapValues { max(0, $0.unreadCount) } }
+    }
+
     /// **Le total UNIQUE**, et ses deux seules bornes. Trois formules
     /// coexistaient — le moteur excluait la conversation ouverte, le
     /// coordinateur les muettes, le ViewModel n'excluait rien — si bien que
@@ -263,7 +281,9 @@ public final class ConversationReadLedger: @unchecked Sendable {
 
     /// L'entrée UNIQUE. Rend l'entrée telle qu'elle était AVANT l'événement
     /// pour la conversation qu'il nomme — `nil` pour `localOpen` / `snapshot`,
-    /// qui n'en nomment pas une.
+    /// qui n'en nomment pas une, et `nil` pour un `forget` visant une
+    /// conversation inconnue (l'appelant y lit « rien n'a bougé », ce dont il a
+    /// besoin pour ne pas réveiller un débounce pour rien).
     ///
     /// **C'est aussi l'affordance de ROLLBACK**, et elle ne demande pas de
     /// septième cas : un `markAsRead` refusé par le serveur (4xx) se défait en
@@ -287,6 +307,11 @@ public final class ConversationReadLedger: @unchecked Sendable {
             case .snapshot(let rows, let source):
                 applySnapshotLocked(rows: rows, source: source)
                 return nil
+
+            case .forget(let conversationId):
+                let before = entries.removeValue(forKey: conversationId)
+                if _openConversationId == conversationId { _openConversationId = nil }
+                return before
 
             case .serverUnread(let conversationId, _),
                  .serverReceipt(let conversationId, _, _),

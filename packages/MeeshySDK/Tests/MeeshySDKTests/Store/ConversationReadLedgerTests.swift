@@ -361,6 +361,54 @@ struct ConversationReadLedgerSnapshotTests {
         #expect(ledger.apply(.snapshot(rows: [], source: .server)) == nil)
     }
 
+    /// Quittée, supprimée, bannissement : la LIGNE s'en va, et son non-lu avec
+    /// elle — sinon il pèse à vie sur un agrégat que plus rien ne corrigera
+    /// (aucun événement n'arrive plus sur une conversation qu'on a quittée).
+    @Test("Oublier une conversation retire son non-lu de l'agrégat")
+    func forgetDropsTheEntryAndItsWeight() {
+        let ledger = ConversationReadLedger()
+        ledger.apply(.snapshot(rows: [row("a", 3), row("b", 5)], source: .server))
+
+        let removed = ledger.apply(.forget(conversationId: "a"))
+
+        #expect(removed?.unreadCount == 3, "apply rend l'entrée retirée")
+        #expect(ledger.state(for: "a") == nil)
+        #expect(ledger.total(excludingOpen: false, excludingMuted: false) == 5)
+    }
+
+    /// L'appelant a besoin de distinguer « j'ai retiré quelque chose » de
+    /// « il n'y avait rien » : c'est ce qui lui évite de réveiller un débounce
+    /// — donc une écriture de badge et de widget — pour un id inconnu.
+    @Test("Oublier une conversation inconnue ne rend rien")
+    func forgettingAnUnknownConversationReturnsNothing() {
+        let ledger = ConversationReadLedger()
+        #expect(ledger.apply(.forget(conversationId: "jamais-vue")) == nil)
+    }
+
+    /// Oublier la conversation OUVERTE relâche aussi le curseur : le garder
+    /// pointé sur une ligne disparue ferait exclure du total une conversation
+    /// qui n'existe plus, et masquerait la suivante à porter le même id.
+    @Test("Oublier la conversation ouverte relâche le curseur")
+    func forgettingTheOpenConversationReleasesTheCursor() {
+        let ledger = ConversationReadLedger()
+        ledger.apply(.snapshot(rows: [row("a", 1)], source: .server))
+        ledger.apply(.localOpen(conversationId: "a"))
+
+        ledger.apply(.forget(conversationId: "a"))
+
+        #expect(ledger.openConversationId == nil)
+    }
+
+    @Test("counts() projette chaque ligne SANS borne — une muette garde sa pastille")
+    func countsProjectsEveryRow() {
+        let ledger = ConversationReadLedger()
+        ledger.apply(.snapshot(rows: [row("a", 2), row("b", 5, muted: true)], source: .server))
+        ledger.apply(.localOpen(conversationId: "a"))
+
+        #expect(ledger.counts() == ["a": 0, "b": 5],
+                "a est ouverte donc lue (0) ; b est muette mais garde son compte de LIGNE")
+    }
+
     @Test("La purge de session vide le registre et relâche la conversation ouverte")
     func resetClearsEverything() {
         let ledger = ConversationReadLedger()
