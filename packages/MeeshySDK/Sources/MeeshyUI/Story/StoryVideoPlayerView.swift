@@ -88,6 +88,14 @@ final class VideoPlayerCoordinator: ObservableObject {
         }
     }
 
+    /// `isPlayerReady` n'est ré-assigné QUE s'il change : `@Published` publie
+    /// sur `willSet`, valeur changée ou non, et `teardown()` est atteint par
+    /// `setup(url:…)` à CHAQUE changement d'URL — c'est-à-dire depuis le corps
+    /// d'une vue SwiftUI. Un coordinateur déjà démonté publiait pour rien, et
+    /// le premier appelant venu d'un représentable rejouerait #6977 :
+    /// « Publishing changes from within view updates », SwiftUI qui abandonne
+    /// ses rendus, écran VIERGE au défilement. Même forme
+    /// qu'`AudioPlaybackManager.resetState()` (#7005).
     func teardown() {
         readyObserver?.invalidate()
         readyObserver = nil
@@ -98,7 +106,7 @@ final class VideoPlayerCoordinator: ObservableObject {
         looper?.disableLooping()
         looper = nil
         player = nil
-        isPlayerReady = false
+        if isPlayerReady { isPlayerReady = false }
         url = nil
     }
 
