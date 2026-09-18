@@ -205,7 +205,14 @@ export const MediaGrid = memo(function MediaGrid({
       data-media-grid
       data-media-frame={frame}
       className={FRAME_CLASS[frame]}
-      style={{ width: MEDIA_GRID_MAX_WIDTH, height: boxHeight }}
+      /* `maxWidth: '100%'` (#7018) — PARITÉ avec `ImageTile`, qui porte
+         `max-w-full` depuis toujours. Une largeur FIXE de 300 px dans une
+         bulle dont la largeur utile est 253,4 px (390 px de viewport,
+         `max-w-[70%]` + la gouttière de 50 px) débordait de 46,6 px : vers la
+         GOUTTIÈRE sur un message reçu — invisible —, HORS DE L'ÉCRAN sur un
+         message DE MOI (`justify-end`), rendant tout le fil défilable
+         horizontalement (`scrollWidth` 437 pour `clientWidth` 390, mesuré). */
+      style={{ width: MEDIA_GRID_MAX_WIDTH, maxWidth: '100%', height: boxHeight }}
     >
       {items.length === 2 ? (
         <div className="flex size-full" style={{ gap: MEDIA_GRID_SPACING }}>

@@ -214,7 +214,7 @@ struct ConversationView: View {
     @EnvironmentObject var storyViewModel: StoryViewModel
     @EnvironmentObject var statusViewModel: StatusViewModel
     @EnvironmentObject var router: Router
-    @EnvironmentObject var conversationListViewModel: ConversationListViewModel
+    @Environment(\.meeshyConversationList) var conversationListViewModel
     @StateObject var viewModel: ConversationViewModel
     /// WS-7 (F-086, contrat §WS-7/A6) — décision de l'orchestrateur des modes
     /// de lecture, prise UNE SEULE FOIS dans `init` (écart #4 du contrat :
@@ -689,7 +689,7 @@ struct ConversationView: View {
                     isPresented: $headerState.showStoryViewerFromHeader,
                     onReplyToStory: { replyContext in
                         headerState.showStoryViewerFromHeader = false
-                        router.navigateToStoryReply(replyContext, conversationListViewModel: conversationListViewModel)
+                        router.navigateToStoryReply(replyContext, conversationList: conversationListViewModel)
                     },
                     singleGroup: true,
                     startAtFirstUnviewed: true,
@@ -700,7 +700,7 @@ struct ConversationView: View {
                 // inherit EnvironmentObjects automatically.
                 .environmentObject(router)
                 .environmentObject(statusViewModel)
-                .environmentObject(conversationListViewModel)
+                .conversationListObject(conversationListViewModel)
                 // U1 inc.2 — zoom depuis la bulle si elle est enregistrée
                 // (tray in-chat), fallback cover standard sinon (avatar header).
                 .zoomTransitionDestination(sourceID: headerState.storyUserIdForHeader ?? "", in: zoomNamespace)
@@ -712,7 +712,7 @@ struct ConversationView: View {
                     isPresented: $overlayState.showStoryViewer,
                     onReplyToStory: { replyContext in
                         overlayState.showStoryViewer = false
-                        router.navigateToStoryReply(replyContext, conversationListViewModel: conversationListViewModel)
+                        router.navigateToStoryReply(replyContext, conversationList: conversationListViewModel)
                     },
                     singleGroup: true,
                     initialStoryIndex: overlayState.storyViewerSlideIndex,
@@ -724,7 +724,7 @@ struct ConversationView: View {
                 // inherit EnvironmentObjects automatically.
                 .environmentObject(router)
                 .environmentObject(statusViewModel)
-                .environmentObject(conversationListViewModel)
+                .conversationListObject(conversationListViewModel)
                 .zoomTransitionDestination(sourceID: overlayState.storyViewerUserId ?? "", in: zoomNamespace)
             }
             .sheet(isPresented: $composerState.showConversationInfo) {
@@ -918,7 +918,7 @@ struct ConversationView: View {
                     // présentation. L'hôte ne remet que la cible.
                     target: cible,
                     storyViewModel: storyViewModel,
-                    preview: MediaComposerPreviewHosts(router: router, conversationListViewModel: conversationListViewModel, statusViewModel: statusViewModel),
+                    preview: MediaComposerPreviewHosts(router: router, conversationList: conversationListViewModel, statusViewModel: statusViewModel),
                     onDismiss: { composerState.composeMediaTarget = nil }
                 )
             }
@@ -1212,7 +1212,7 @@ struct ConversationView: View {
                     // Pièces jointes du brouillon (copiées en durable au
                     // background) : restaure les survivantes dans le tray —
                     // un fichier purgé est sauté silencieusement, le texte
-                    // reste intact. Thumbnails régénérées pour les images.
+                    // reste intact. Vignettes régénérées HORS du MainActor (#7006).
                     if let refs = draft.attachments, !refs.isEmpty,
                        composerState.pendingAttachments.isEmpty,
                        let userId = AuthManager.shared.currentUser?.id {
@@ -1223,12 +1223,7 @@ struct ConversationView: View {
                         )
                         composerState.pendingAttachments = restored.attachments
                         composerState.pendingMediaFiles = restored.files
-                        for attachment in restored.attachments where attachment.kind == .image {
-                            if let url = restored.files[attachment.id],
-                               let thumb = UIImage(contentsOfFile: url.path) {
-                                composerState.pendingThumbnails[attachment.id] = thumb
-                            }
-                        }
+                        Task { await restoreDraftThumbnails(attachments: restored.attachments, files: restored.files) }
                     }
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { overlayState.longPressEnabled = true }

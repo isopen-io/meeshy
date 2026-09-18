@@ -51,10 +51,20 @@ public final class NotificationCoordinator: ObservableObject {
 
     /// Total of unread messages across every conversation. Drives the app icon badge
     /// and the widget's unread count.
+    ///
+    /// **Projection du registre de lecture, plus une copie** (#6998). Ce
+    /// coordinateur tenait sa propre carte `conversationId → Int` et sa propre
+    /// formule de total — la cinquième copie du non-lu, et la deuxième des
+    /// trois formules qui coexistaient (le moteur excluait la conversation
+    /// ouverte, celle-ci les muettes, le ViewModel n'excluait rien). Le nombre
+    /// vient désormais de `ConversationReadLedger.total(excludingOpen:excludingMuted:)`,
+    /// qui est le seul à le calculer ; `@Published` reste pour les abonnés.
     @Published public private(set) var conversationUnreadTotal: Int = 0
 
-    /// Per-conversation unread counts (kept in sync via socket events).
-    @Published public private(set) var conversationUnreadCounts: [String: Int] = [:]
+    /// Per-conversation unread counts — projection du registre, jamais un
+    /// magasin. Sert les surfaces qui rendent une LIGNE : une conversation
+    /// muette garde sa pastille, seul le total la tait.
+    public var conversationUnreadCounts: [String: Int] { ledger.counts() }
 
     /// Count of unread in-app notifications (friend requests, mentions, reactions, …).
     /// Drives the in-app notification bell indicator only.
@@ -98,12 +108,17 @@ public final class NotificationCoordinator: ObservableObject {
     /// fermeture).
     private let openConversationIdProvider: @MainActor () -> String?
 
-    /// Ids of conversations the user has muted. Muted conversations still show
-    /// their unread badge on their own row, but MUST NOT nag the app-icon badge
-    /// or the widget unread counter — the whole point of muting is to silence
-    /// that aggregate. Kept in sync from every `registerConversations` /
-    /// `reconcileConversationUnreads` snapshot (which carry `userState.isMuted`).
-    private var mutedConversationIds: Set<String> = []
+    /// **Le registre de lecture** — la source unique du non-lu de conversation
+    /// (#6998). Injecté : la production partage `.shared` avec les autres
+    /// surfaces (c'est tout l'intérêt), les tests en reçoivent un neuf pour ne
+    /// pas hériter de l'état d'un voisin.
+    ///
+    /// L'état MUET y vit aussi, et le `Set` que ce coordinateur tenait a
+    /// disparu avec : une conversation muette garde son compteur de LIGNE mais
+    /// ne gonfle pas l'agrégat qu'on l'a mise en sourdine pour faire taire —
+    /// c'est la borne `excludingMuted` du total, une seule fois pour toutes les
+    /// surfaces.
+    private let ledger: ConversationReadLedger
 
     private var cancellables = Set<AnyCancellable>()
     private var debounceTask: Task<Void, Never>?
@@ -125,7 +140,8 @@ public final class NotificationCoordinator: ObservableObject {
         currentUserIdProvider: @escaping @MainActor () -> String? = { AuthManager.shared.currentUser?.id },
         badgeEnabledProvider: @escaping @MainActor () -> Bool = { UserPreferencesManager.shared.notification.notificationBadgeEnabled },
         badgeEnabledChanges: AnyPublisher<Bool, Never>? = nil,
-        openConversationIdProvider: @escaping @MainActor () -> String? = { MessageSocketManager.shared.activeConversationId }
+        openConversationIdProvider: @escaping @MainActor () -> String? = { MessageSocketManager.shared.activeConversationId },
+        ledger: ConversationReadLedger = .shared
     ) {
         self.badgeWriter = badgeWriter
         self.appGroupDefaults = UserDefaults(suiteName: appGroupSuiteName)
@@ -133,6 +149,7 @@ public final class NotificationCoordinator: ObservableObject {
         self.badgeEnabledProvider = badgeEnabledProvider
         self.badgeEnabledChanges = badgeEnabledChanges
         self.openConversationIdProvider = openConversationIdProvider
+        self.ledger = ledger
     }
 
     // MARK: - Lifecycle
@@ -169,8 +186,7 @@ public final class NotificationCoordinator: ObservableObject {
         cancellables.removeAll()
         debounceTask?.cancel()
         debounceTask = nil
-        conversationUnreadCounts = [:]
-        mutedConversationIds = []
+        ledger.reset()
         conversationUnreadTotal = 0
         inAppNotificationUnread = 0
         let writer = badgeWriter
@@ -216,17 +232,15 @@ public final class NotificationCoordinator: ObservableObject {
     /// known conversations and only mutates state for newly-seen ones.
     public func registerConversations(_ conversations: [MeeshyConversation]) {
         hasAuthoritativeSnapshot = true
-        var didChange = false
-        for c in conversations where conversationUnreadCounts[c.id] == nil {
-            conversationUnreadCounts[c.id] = c.userState.unreadCount
-            didChange = true
-        }
-        // Mute state can flip on any snapshot (the user muted/unmuted a thread),
-        // so refresh it for EVERY conversation here, not just newly-seen ones.
-        if applyMuteState(from: conversations) { didChange = true }
-        if didChange {
-            recomputeTotal()
-        }
+        // `.cache` : ces lignes viennent d'une republication de liste, pas
+        // d'une lecture serveur fraîche. Elles SÈMENT les conversations
+        // inconnues, rafraîchissent l'état muet, et ne piétinent jamais un
+        // compteur que le socket possède déjà — la sémantique historique de
+        // cette méthode, désormais DÉCLARÉE au lieu d'être déduite du nom de
+        // l'appelant.
+        syncOpenConversation()
+        ledger.apply(.snapshot(rows: conversations.map(ConversationReadRow.init), source: .cache))
+        recomputeTotal()
         widgetSink?.publishConversations(conversations)
         widgetSink?.publishFavoriteContacts(conversations)
         scheduleSync()
@@ -237,12 +251,13 @@ public final class NotificationCoordinator: ObservableObject {
     /// where the caller has authoritative data.
     public func reconcileConversationUnreads(_ conversations: [MeeshyConversation]) {
         hasAuthoritativeSnapshot = true
-        var counts: [String: Int] = [:]
-        for c in conversations {
-            counts[c.id] = c.userState.unreadCount
-        }
-        conversationUnreadCounts = counts
-        mutedConversationIds = Set(conversations.filter { $0.userState.isMuted }.map(\.id))
+        // `.server` : l'appelant GARANTIT que ces lignes viennent du serveur.
+        // Elles écrasent les compteurs suivis ET retirent ce qu'elles ne
+        // nomment plus — c'est la seule forme qui peut remettre le badge à
+        // zéro après une lecture faite sur un AUTRE appareil pendant que
+        // celui-ci dormait (aucun socket ne la rapporte).
+        syncOpenConversation()
+        ledger.apply(.snapshot(rows: conversations.map(ConversationReadRow.init), source: .server))
         recomputeTotal()
         widgetSink?.publishConversations(conversations)
         widgetSink?.publishFavoriteContacts(conversations)
@@ -256,9 +271,12 @@ public final class NotificationCoordinator: ObservableObject {
     }
 
     /// Forget a conversation entirely (user was removed from a group, conv deleted).
+    ///
+    /// Le `guard` sur ce que le registre RETIRE (et non sur ce qu'il contient)
+    /// garde l'idempotence : oublier un id inconnu ne réveille aucun débounce,
+    /// donc n'écrit ni le badge ni le widget.
     public func removeConversation(_ conversationId: String) {
-        guard conversationUnreadCounts.removeValue(forKey: conversationId) != nil else { return }
-        mutedConversationIds.remove(conversationId)
+        guard ledger.apply(.forget(conversationId: conversationId)) != nil else { return }
         recomputeTotal()
         scheduleSync()
     }
@@ -269,18 +287,23 @@ public final class NotificationCoordinator: ObservableObject {
     /// the user is looking at it, it can never be "unread" on the app icon.
     public func applyConversationUnread(conversationId: String, unreadCount: Int) {
         hasAuthoritativeSnapshot = true
-        let isOpen = conversationId == openConversationIdProvider()
-        let clamped = isOpen ? 0 : max(unreadCount, 0)
-        if conversationUnreadCounts[conversationId] == clamped { return }
-        conversationUnreadCounts[conversationId] = clamped
+        // Le gate « conversation ouverte » n'est plus posé ICI : il vit dans le
+        // registre, qui l'applique en RANG 1 à tout événement. Le coordinateur
+        // ne fait que lui dire quelle conversation est visible.
+        syncOpenConversation()
+        let before = ledger.state(for: conversationId)?.unreadCount
+        ledger.apply(.serverUnread(conversationId: conversationId, unreadCount: unreadCount))
+        // Idempotence : un compteur identique ne réveille pas le débounce, donc
+        // n'écrit ni le badge ni le widget.
+        guard ledger.state(for: conversationId)?.unreadCount != before else { return }
         recomputeTotal()
         scheduleSync()
     }
 
     /// Mark a conversation as fully read locally — called when the user opens it.
     public func markConversationRead(_ conversationId: String) {
-        guard let existing = conversationUnreadCounts[conversationId], existing > 0 else { return }
-        conversationUnreadCounts[conversationId] = 0
+        guard let existing = ledger.state(for: conversationId)?.unreadCount, existing > 0 else { return }
+        ledger.apply(.localMarkRead(conversationId: conversationId))
         recomputeTotal()
         scheduleSync()
     }
@@ -352,32 +375,32 @@ public final class NotificationCoordinator: ObservableObject {
             .store(in: &cancellables)
     }
 
-    /// Refreshes `mutedConversationIds` from a snapshot. Returns `true` if the
-    /// muted set actually changed (so the caller knows to recompute the total).
-    private func applyMuteState(from conversations: [MeeshyConversation]) -> Bool {
-        var changed = false
-        for c in conversations {
-            if c.userState.isMuted {
-                changed = mutedConversationIds.insert(c.id).inserted || changed
-            } else if mutedConversationIds.remove(c.id) != nil {
-                changed = true
-            }
-        }
-        return changed
+    /// Dit au registre quelle conversation est VISIBLE, et seulement quand ça
+    /// change — une écriture par événement ferait battre le publisher du
+    /// registre pour rien.
+    ///
+    /// Le coordinateur reste, pour l'instant, le seul à alimenter ce curseur,
+    /// depuis son `openConversationIdProvider`. Unifier les TROIS producteurs
+    /// de « conversation ouverte » (`ConversationSyncEngine`,
+    /// `MessageSocketManager.activeConversationId`,
+    /// `NotificationToastManager.onConversationOpened`) reste à faire — c'est
+    /// la suite de #6998, et c'est ce qui fera du registre le seul à le SAVOIR
+    /// autant qu'il en est déjà le seul à le STOCKER.
+    private func syncOpenConversation() {
+        let visible = openConversationIdProvider()
+        guard ledger.openConversationId != visible else { return }
+        ledger.apply(.localOpen(conversationId: visible))
     }
 
+    /// Le badge d'icône et le widget comptent les AUTRES conversations, et
+    /// jamais les muettes. **Une seule formule, et elle n'est plus ici** : elle
+    /// est au registre, qui la sert à toutes les surfaces avec les bornes que
+    /// chacune DÉCLARE.
     private func recomputeTotal() {
-        let total = Self.unmutedTotal(counts: conversationUnreadCounts, mutedIds: mutedConversationIds)
+        let total = ledger.total(excludingOpen: true, excludingMuted: true)
         if total != conversationUnreadTotal {
             conversationUnreadTotal = total
         }
-    }
-
-    /// The app-icon / widget badge total: unread summed over UNMUTED
-    /// conversations only. Muted threads keep their per-row badge but never
-    /// inflate the aggregate the user muted them to silence. Pure + testable.
-    static func unmutedTotal(counts: [String: Int], mutedIds: Set<String>) -> Int {
-        counts.reduce(0) { $0 + (mutedIds.contains($1.key) ? 0 : $1.value) }
     }
 
     /// Debounce badge + widget writes so rapid socket bursts don't hammer the system.

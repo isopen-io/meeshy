@@ -91,6 +91,8 @@ const PASSERELLE = 'https://gate.meeshy.me';
 const FLUX = '/api/v1/attachments/file';
 /** Le montage LEGACY non versionné, qui sert encore des `fileUrl` en base. */
 const FLUX_LEGACY = '/api/attachments/file';
+/** LA TROISIÈME ROUTE DE MÉDIA (#7015) — les sons de fond, AUTHENTIFIÉE. */
+const SONS = '/api/v1/static';
 
 /**
  * Les URL que le seau `api` doit REFUSER, et celles qu'il doit garder.
@@ -109,7 +111,13 @@ const VERDICTS_ATTENDUS = [
   { href: `${PASSERELLE}${FLUX_LEGACY}/2026%2F09%2Fu%2Fscene.jpg`, gardable: false, media: true },
   { href: `${PASSERELLE}/api/v1/attachments/abc123/thumbnail`, gardable: false, media: true },
   { href: `${PASSERELLE}${FLUX}/2026%2F09%2Fu%2Freel.mp4`, gardable: false, media: true },
+  // #7015 — les sons de fond : 7 Mo pièce, et une route AUTHENTIFIÉE dont le
+  // refus devenait un `no-response` non rattrapé à chaque lecture de story.
+  { href: `${PASSERELLE}${SONS}/d0bf39b7-cd47-4e70-8f1c-34b2d9b5ee4b.m4a`, gardable: false },
+  { href: `${PASSERELLE}${SONS}/42af6b03-975a-4232-9123-de3301dc260c.mp3`, gardable: false },
   { href: `${ORIGINE}/api/v1/conversations`, gardable: true },
+  // CONTRASTE — la garde lit un SEGMENT, jamais un préfixe de chaîne.
+  { href: `${ORIGINE}/api/v1/statistiques`, gardable: true },
   { href: `${PASSERELLE}/api/v1/conversations/c1/messages`, gardable: true },
   { href: `${ORIGINE}/api/v1/users/administrateur`, gardable: true },
   { href: `${ORIGINE}/api/v1/attachmentsfoo`, gardable: true },
@@ -142,6 +150,15 @@ const ROUTAGE_ATTENDU = [
   { href: `${PASSERELLE}/api/v1/conversations?limit=30`, destination: '', seau: 'api' },
   { href: `${PASSERELLE}/api/v1/conversations/c1/messages`, destination: '', seau: 'api' },
   { href: `${PASSERELLE}/api/v1/admin/users`, destination: '', seau: null },
+  /* #7015 — UN SON DE FOND N'A AUCUN SEAU, et c'est une DÉCISION.
+     Il voyage en `fetch` (destination VIDE, jamais `audio` : une balise ne
+     peut pas porter l'en-tête que la route exige), donc le seau `medias` ne
+     le voit pas ; et le seau `api` l'exclut désormais. La passerelle rend
+     `Cache-Control: private, max-age=3600` — le cache HTTP du navigateur est
+     le seul qui sache reconjuguer ces octets avec l'identité qui les a
+     demandés. Un seau Workbox, lui, les resservirait à n'importe qui. */
+  { href: `${PASSERELLE}${SONS}/d0bf39b7-cd47-4e70-8f1c-34b2d9b5ee4b.m4a`, destination: '', seau: null },
+  { href: `${PASSERELLE}${SONS}/42af6b03-975a-4232-9123-de3301dc260c.mp3`, destination: 'audio', seau: null },
 ];
 
 /**

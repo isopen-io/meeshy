@@ -325,20 +325,20 @@ extension StoryBackgroundLayer {
         applyContentTransform(transform.caTransform())
     }
 
-    /// Loads a UIImage from a URL, supporting both `file://` (sync read) and
-    /// HTTP(S) (via CacheCoordinator with NSCache + disk TTL + dedup). Returns
-    /// `nil` on any error — the caller decides whether to fallback to another
-    /// URL or give up.
+    /// Loads a UIImage from a URL, supporting both `file://` and HTTP(S) (via
+    /// CacheCoordinator with NSCache + disk TTL + dedup). Returns `nil` on any
+    /// error — the caller decides whether to fallback to another URL or give up.
+    /// Lecture ET décodage vivent hors du MainActor : voir
+    /// `StoryLayerImageDecoding` (#7010).
     @MainActor
     static func loadImage(from url: URL) async -> UIImage? {
         if url.isFileURL {
-            guard let data = try? Data(contentsOf: url) else { return nil }
-            return UIImage(data: data)
+            return await StoryLayerImageDecoding.decodedImage(fileAt: url)
         }
         guard let data = try? await CacheCoordinator.shared.images.data(for: url.absoluteString) else {
             return nil
         }
-        return UIImage(data: data)
+        return await StoryLayerImageDecoding.decodedImage(from: data)
     }
 
     @MainActor

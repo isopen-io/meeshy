@@ -136,6 +136,10 @@ final class NotificationActionHandler: NotificationActionHandling {
     private let isRegisteredUser: @MainActor () -> Bool
     private let openNotification: @MainActor ([AnyHashable: Any]) -> Void
     private let localMarkRead: @MainActor (String) -> Void
+    /// L'unique consommation du SDK, injectée pour que les tests l'observent :
+    /// `NotificationToastManager` est un singleton `@MainActor` sans couture de
+    /// service, et un témoin ne peut pas mesurer un aller-retour REST réel.
+    private let consume: @MainActor (NotificationRef) async -> Void
     private let removeDeliveredForConversation: @MainActor (String) -> Void
     private let removeDeliveredForPost: @MainActor (String) -> Void
     private let removeDeliveredForNotificationIds: @MainActor ([String]) async -> Void
@@ -193,15 +197,17 @@ final class NotificationActionHandler: NotificationActionHandling {
             // ouverture d'écran passe, elle, par `onConversationOpened`.
             NotificationToastManager.shared.onConversationMarkedRead(conversationId)
         },
+        consume: @escaping @MainActor (NotificationRef) async -> Void = { ref in
+            await NotificationToastManager.shared.consume(ref)
+        },
+        // #6999 — par le FIL, pas par la seule clé de charge : le
+        // `threadIdentifier` est ce qu'iOS a REGROUPÉ, et une bannière peut y
+        // être rangée sans que sa charge porte `conversationId` / `postId`.
         removeDeliveredForConversation: @escaping @MainActor (String) -> Void = { conversationId in
-            NotificationActionHandler.removeDeliveredNotifications(
-                matching: { ($0["conversationId"] as? String) == conversationId }
-            )
+            NotificationActionHandler.removeDeliveredBanners(forThreadOf: .conversation(id: conversationId))
         },
         removeDeliveredForPost: @escaping @MainActor (String) -> Void = { postId in
-            NotificationActionHandler.removeDeliveredNotifications(
-                matching: { ($0["postId"] as? String) == postId }
-            )
+            NotificationActionHandler.removeDeliveredBanners(forThreadOf: .post(id: postId))
         },
         removeDeliveredForNotificationIds: @escaping @MainActor ([String]) async -> Void = { ids in
             let revocation = NotificationRevocationPayload(notificationIds: ids, conversationIds: [])
@@ -226,6 +232,7 @@ final class NotificationActionHandler: NotificationActionHandling {
         self.isRegisteredUser = isRegisteredUser
         self.openNotification = openNotification
         self.localMarkRead = localMarkRead
+        self.consume = consume
         self.removeDeliveredForConversation = removeDeliveredForConversation
         self.removeDeliveredForPost = removeDeliveredForPost
         self.removeDeliveredForNotificationIds = removeDeliveredForNotificationIds
@@ -292,6 +299,10 @@ final class NotificationActionHandler: NotificationActionHandling {
 
         switch actionIdentifier {
         case UNNotificationDefaultActionIdentifier:
+            // #6999 — OUVRIR, c'est CONSOMMER. Le tap ne marquait rien lu : la
+            // ligne restait non lue dans la cloche et le compteur ne bougeait
+            // pas, pour une notification que l'utilisateur venait d'ouvrir.
+            await consumeTapped(payload)
             openNotification(userInfo)
 
         case UNNotificationDismissActionIdentifier:
@@ -317,6 +328,7 @@ final class NotificationActionHandler: NotificationActionHandling {
              MeeshyNotificationAction.answerCall.rawValue:
             // All of these surface the app to the relevant screen — the
             // deep-link router decides the destination based on payload.type.
+            await consumeTapped(payload)
             openNotification(userInfo)
 
         case MeeshyNotificationAction.declineCall.rawValue:
@@ -326,8 +338,28 @@ final class NotificationActionHandler: NotificationActionHandling {
             break
 
         default:
+            await consumeTapped(payload)
             openNotification(userInfo)
         }
+    }
+
+    // MARK: - Consommation d'une bannière (#6999)
+
+    /// Marque lue la notification que le geste vient d'ouvrir ou de résoudre.
+    ///
+    /// `notificationId` est la SEULE clé qui couvre tous les types : un
+    /// `security_alert`, un `login_new_device`, un `password_changed`, un
+    /// `friend_request` n'ont ni `conversationId` ni `postId`, et n'avaient donc
+    /// aucun chemin vers « lu » — ils le restaient à vie. Le gateway la pose
+    /// depuis toujours ; c'est le décodeur client qui l'ignorait.
+    ///
+    /// La consommation par FIL (conversation, post) n'est PAS faite ici : elle
+    /// suit la navigation (`onConversationOpened` / `onPostOpened`), qui sait
+    /// ce qui s'est réellement ouvert. Faire les deux marquerait lues des
+    /// lignes que l'utilisateur n'a pas atteintes si le routage échoue.
+    private func consumeTapped(_ payload: NotificationPayload) async {
+        guard let notificationId = payload.notificationId else { return }
+        await consume(.notification(id: notificationId))
     }
 
     // MARK: - Mark read
@@ -544,6 +576,11 @@ final class NotificationActionHandler: NotificationActionHandling {
             logger.error("comment REST send failed — outbox row will retry with the same mutation id: \(error.localizedDescription, privacy: .public)")
         }
 
+        // #6999 — commenter, c'est consommer : la notification commentée passe
+        // lue, et le FIL du post quitte le centre. Ce chemin ne faisait que le
+        // second, laissant la ligne de cloche non lue — contrairement à
+        // `reply`, son jumeau côté conversation, qui marque lu depuis toujours.
+        await consumeTapped(payload)
         removeDeliveredForPost(postId)
     }
 
@@ -581,6 +618,12 @@ final class NotificationActionHandler: NotificationActionHandling {
             }
             _ = try await friendService.respond(requestId: requestId, accepted: accepted)
             logger.info("friend request \(requestId, privacy: .public) \(accepted ? "accepted" : "declined", privacy: .public) from notification")
+            // #6999 — la demande est TRANCHÉE : sa notification est consommée.
+            // Le chemin `reply` le faisait déjà (via `localMarkRead`) ; celui-ci
+            // retirait la bannière et laissait la ligne de cloche non lue, avec
+            // son compteur — une demande d'ami n'a ni `conversationId` ni
+            // `postId`, donc aucun autre chemin ne l'aurait rattrapée.
+            await consumeTapped(payload)
             if let senderId = payload.senderId {
                 Self.removeDeliveredNotifications(
                     matching: {
@@ -628,9 +671,31 @@ final class NotificationActionHandler: NotificationActionHandling {
         confirmationTimeout: Duration = defaultRemovalConfirmationTimeout,
         completion: (@Sendable () -> Void)? = nil
     ) {
+        removeDeliveredBanners(
+            matching: { predicate($0.userInfo) },
+            center: center,
+            confirmationTimeout: confirmationTimeout,
+            completion: completion
+        )
+    }
+
+    /// La même chose, mais le prédicat voit la bannière ENTIÈRE — son
+    /// `threadIdentifier` compris (#6999).
+    ///
+    /// La forme `userInfo` ci-dessus reste le point d'entrée des révocations,
+    /// qui interrogent bien une clé de charge (`notificationId`). Le retrait
+    /// par FIL, lui, ne peut pas s'exprimer sur la seule charge : ce qu'iOS a
+    /// REGROUPÉ est dans le `threadIdentifier`, et une bannière peut y être
+    /// rangée sans que sa charge porte la clé de contexte.
+    nonisolated static func removeDeliveredBanners(
+        matching predicate: @escaping @Sendable (DeliveredBanner) -> Bool,
+        center: DeliveredBannerCenter = .system(),
+        confirmationTimeout: Duration = defaultRemovalConfirmationTimeout,
+        completion: (@Sendable () -> Void)? = nil
+    ) {
         center.delivered { banners in
             let matching = banners
-                .filter { predicate($0.userInfo) }
+                .filter { predicate($0) }
                 .map(\.identifier)
             guard !matching.isEmpty else {
                 completion?()
@@ -665,6 +730,44 @@ final class NotificationActionHandler: NotificationActionHandling {
                 center: center,
                 confirmationTimeout: confirmationTimeout
             ) { continuation.resume() }
+        }
+    }
+
+    /// **Le fil consommé quitte le centre iOS (#6999).**
+    ///
+    /// Point d'entrée branché sur `NotificationToastManager.deliveredBannerPurger` :
+    /// ouvrir une conversation ou un post, le marquer lu depuis une bannière,
+    /// répondre, commenter — tout ce qui CONSOMME un fil retire ses bannières.
+    /// Une référence qui ne désigne aucun fil (`.id`, `.types`, `.all`) ne
+    /// retire RIEN : « toutes les bannières » est précisément le geste que
+    /// #7000 vient de supprimer du retour au premier plan.
+    nonisolated static func removeDeliveredBanners(
+        forThreadOf ref: NotificationRef,
+        center: DeliveredBannerCenter = .system()
+    ) {
+        guard NotificationThreadIdentifier.resolve(for: ref) != nil else { return }
+        removeDeliveredBanners(
+            matching: { NotificationActionHandler.bannerBelongs($0, to: ref) },
+            center: center
+        )
+    }
+
+    /// Le prédicat, PUR et testable : une bannière appartient au fil de `ref`
+    /// si iOS l'y a rangée (`threadIdentifier`) **ou** si sa charge porte la
+    /// clé de contexte. Les deux, jamais l'un seul — le `threadIdentifier`
+    /// manque sur une bannière composée sans passer par la NSE (push non
+    /// mutable, notification locale), et la clé de charge manque dès que le
+    /// gateway ne l'a pas remplie.
+    nonisolated static func bannerBelongs(_ banner: DeliveredBanner, to ref: NotificationRef) -> Bool {
+        guard let thread = NotificationThreadIdentifier.resolve(for: ref) else { return false }
+        if banner.threadIdentifier == thread { return true }
+        switch ref {
+        case .conversation(let id):
+            return (banner.userInfo["conversationId"] as? String) == id
+        case .post(let id):
+            return (banner.userInfo["postId"] as? String) == id
+        case .notification, .types, .all:
+            return false
         }
     }
 
@@ -710,6 +813,21 @@ final class NotificationActionHandler: NotificationActionHandling {
 nonisolated struct DeliveredBanner: @unchecked Sendable {
     let identifier: String
     let userInfo: [AnyHashable: Any]
+
+    /// Le FIL sous lequel iOS a rangé la bannière — ce que la NSE pose dans
+    /// `applyThreading(to:)` (#6999).
+    ///
+    /// Le `userInfo` ne suffit pas : c'est le `threadIdentifier` qui dit ce
+    /// qu'iOS a REGROUPÉ, et une bannière peut y être rangée sans que la
+    /// charge ait porté la clé que le prédicat interroge. Interroger les deux
+    /// est strictement plus large, jamais moins.
+    let threadIdentifier: String
+
+    init(identifier: String, userInfo: [AnyHashable: Any], threadIdentifier: String = "") {
+        self.identifier = identifier
+        self.userInfo = userInfo
+        self.threadIdentifier = threadIdentifier
+    }
 }
 
 /// #3896 — seam over `UNUserNotificationCenter`'s two delivered-banner
@@ -736,7 +854,11 @@ extension UNUserNotificationCenter: UNUserNotificationCenterProviding {
     nonisolated func getDeliveredBanners(completionHandler: @escaping @Sendable ([DeliveredBanner]) -> Void) {
         getDeliveredNotifications { notifications in
             completionHandler(notifications.map {
-                DeliveredBanner(identifier: $0.request.identifier, userInfo: $0.request.content.userInfo)
+                DeliveredBanner(
+                    identifier: $0.request.identifier,
+                    userInfo: $0.request.content.userInfo,
+                    threadIdentifier: $0.request.content.threadIdentifier
+                )
             })
         }
     }

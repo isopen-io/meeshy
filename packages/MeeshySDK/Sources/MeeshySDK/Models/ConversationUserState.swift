@@ -124,6 +124,47 @@ public struct ConversationUserState: Codable, Hashable, Sendable {
     public var hasPendingSync: Bool { pendingMutationCount > 0 }
     public var isVisible: Bool { deletedForUserAt == nil && !isArchived }
 
+    // MARK: - Version gating
+
+    /// Greffe la moitié PRÉFÉRENCES de `self` sur `incoming`, dont la moitié
+    /// LECTURE (`unreadCount`, `lastReadAt`, `lastDeliveredAt`) est conservée.
+    ///
+    /// `version` ne versionne QUE les préférences : ni `applyReadReceipt`, ni le
+    /// zéro d'ouverture, ni le compteur servi par `conversation:unread-updated`
+    /// ne le bumpent jamais (§9 du design). Préserver le `userState` local EN
+    /// BLOC parce qu'une préférence est en vol figeait donc aussi le compteur —
+    /// pastille gelée sur toute conversation épinglée, muette ou archivée, et
+    /// définitivement, puisque rien ne rebaisse une version.
+    ///
+    /// La frontière de lecture locale n'a pas besoin d'être greffée ici : elle
+    /// est monotone et `ConversationSyncEngine.reconcileUnread`, qui s'applique
+    /// juste après chez les deux appelants, en reprend le MAX. La lui recopier
+    /// ici ferait deux règles pour un seul fait.
+    public func preferencesGrafted(onto incoming: ConversationUserState) -> ConversationUserState {
+        var merged = incoming
+        merged.isPinned = isPinned
+        merged.isMuted = isMuted
+        merged.mentionsOnly = mentionsOnly
+        merged.isArchived = isArchived
+        merged.deletedForUserAt = deletedForUserAt
+        merged.clearHistoryBefore = clearHistoryBefore
+        merged.customName = customName
+        merged.reaction = reaction
+        merged.tags = tags
+        merged.sectionId = sectionId
+        merged.orderInCategory = orderInCategory
+        // Local-only, par appareil : un instantané serveur ne les porte jamais,
+        // les prendre de `incoming` les effacerait à chaque rafraîchissement.
+        merged.isLocked = isLocked
+        merged.hasDraft = hasDraft
+        merged.draftPreview = draftPreview
+        // Les métadonnées de sync suivent la moitié qu'elles décrivent.
+        merged.version = version
+        merged.lastSyncedAt = lastSyncedAt
+        merged.pendingMutationCount = pendingMutationCount
+        return merged
+    }
+
     // MARK: - Codable (lenient decoder)
 
     /// Custom decoder that falls back to the init defaults for any

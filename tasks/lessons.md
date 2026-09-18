@@ -33185,3 +33185,47 @@ Trois choses à retenir :
 - **Le premier correctif a fait tomber les faults de 258 à 99 — et le fil est resté vierge.** Le second publieur (`SharedAVPlayerManager`) n'apparaissait pas dans les piles du premier relevé parce qu'un fault n'est émis que pour un objet qu'une vue OBSERVE ; il est apparu dès que le premier s'est tu. Relire les piles APRÈS chaque correctif, pas seulement avant.
 
 > Preuve : même défilement en vidéo, sans correctif (258 faults, vierge ~10 s) puis avec (0 fault, aucune image vierge). Le contrôle « sans » est ce qui a prouvé que le correctif était la cause — une rafale de `simctl screenshot` pendant le geste mesurait le vierge plus fort qu'il n'était, la vidéo ne l'altère pas.
+
+## Leçon 628 — `.frame(maxWidth:)` ÉTEND, il ne BORNE pas : pour empêcher un enfant de dicter la taille d'un `ZStack`, le poser en `overlay` d'une couche neutre
+
+**Le fait (2026-09-18, #7037).** Ouvrir une pièce jointe d'un post ne montrait aucune croix. Mesurée dans l'arbre d'accessibilité, elle était à **x = −326,3 pt** — 286 pt à gauche d'un écran de 402. Le plein écran ne se fermait plus qu'au geste.
+
+**La cause.** `SceneFloorView` peint l'empreinte du sol en `scaledToFill()` **nue**. Ce modificateur rend une vue qui REMPLIT la proposition : au moins une dimension déborde, et **c'est cette taille débordante que la vue ANNONCE**. Le `ZStack` du plein écran, qui adopte la taille de son plus grand enfant, prenait 1082,7 pt de large (874 × 1,24) et se centrait : bord gauche à (402 − 1082,7) / 2 = −340,3. La croix, alignée sur ce bord au pas du couloir (14 pt), tombait à −326,3. **L'arithmétique du défaut est exactement celle mesurée** — c'est ce qui l'a identifiée.
+
+**Deux fausses pistes, écartées en les MESURANT.**
+- `.frame(maxWidth: .infinity, maxHeight: .infinity)` sur le carrousel : ce cadre est EXTENSIBLE, il monte jusqu'au plafond proposé et ne rétrécit jamais une vue déjà plus large. Mesure après : **mêmes −326,3**. (Même famille que [[reference_frame_maxheight_is_a_flexible_frame_that_fills]].)
+- Le carrousel posé en overlay d'une couche neutre : bon motif, **mauvaise couche** — le coupable était le sol.
+
+**Le motif qui borne vraiment :**
+
+```swift
+Color.clear
+    .overlay { /* la vue qui déborde */ }
+    .clipped()
+```
+
+Un `overlay` **ne participe jamais** au calcul de taille de son hôte. `Color.clear` prend la place proposée, l'enfant la remplit, `clipped()` retire ce qui dépasse. Rien ne change à l'écran ; seul le cadre ANNONCÉ redevient celui de l'écran.
+
+**Corollaire de témoin.** Le défaut ne change que la taille ANNONCÉE — à l'écran, l'image remplissait déjà correctement avant comme après. Un témoin de pixels serait resté vert des deux côtés ; celui qui l'attrape mesure `UIHostingController.sizeThatFits(in:)`. Contrôle joué : sans correctif 628,3 pt annoncés pour 402 proposés, trois témoins rouges ; avec, quatre verts.
+
+## Leçon 629 — pour savoir QUELLE vue est à l'écran, sonder par la POSITION, jamais par un `defaultValue`
+
+**Le fait (2026-09-18, #7037).** Pour prouver que la croix rendue venait bien de `ConversationMediaGalleryView`, j'ai changé son libellé en « Fermer-SONDE7037 » et recompilé. L'arbre d'accessibilité affichait toujours « Fermer ». **J'en ai conclu, à tort, que ce n'était pas cette vue** — et j'ai perdu un cycle à chercher ailleurs.
+
+**Pourquoi la sonde était inopérante.** `String(localized: "common.close", defaultValue: "Fermer-SONDE7037", bundle: .main)` : le `defaultValue` n'est servi **que si la clé est absente du catalogue**. `common.close` y est. La sonde ne pouvait rien changer, quelle que soit la vue rendue. C'est le même mécanisme que [[reference_a_defaultvalue_hides_a_missing_catalog_key_in_six_languages]], vu depuis l'autre bout : là il MASQUE une clé absente, ici il rend une sonde MUETTE.
+
+**La sonde qui tranche** : un `.offset(x: 700)` temporaire. Mesure : x passé de −326,3 à **373,7 = −326,3 + 700**. L'identité de la vue est prouvée par l'arithmétique, et aucun catalogue ne s'interpose.
+
+**Règle.** Pour identifier une vue rendue, sonder une propriété que **le code seul** décide — position, taille, opacité — jamais une chaîne qui traverse une table de localisation.
+
+## Leçon 630 — une garde par sous-chaîne rougit sur sa PROPRE explication ; une garde indexée par FICHIER se périme à la première extraction
+
+**Deux rouges du 2026-09-18, même famille, causes jumelles.**
+
+1. **La garde qui se mord la queue** (#7000). `MeeshyApp` ne devait plus appeler `removeAllDeliveredNotifications()`. Le code l'a bien perdu — mais le commentaire qui EXPLIQUE le retrait nomme la fonction (« ici vivait `removeAllDeliveredNotifications()` »), et la garde lisait la source **brute**. Elle rougissait sur son propre commentaire d'explication. Correctif : `AppSourceGuard.stripComments` avant toute mesure — le dépouilleur que toutes les autres gardes du dépôt emploient déjà.
+
+2. **La garde qui a perdu sa cible** (#6999). `test_bulkHandlers_triggerNoRESTRefetch` cherchait `handleNotificationReadBulk` dans `NotificationToastManager.swift`. Le lot l'avait extraite vers `NotificationConsumption.swift` — **sans changer un seul comportement**. `XCTUnwrap` rendait `nil`, la suite rougissait. Correctif : lire l'UNITÉ (les deux fichiers), pas le fichier. Même racine que [[reference_an_extraction_reds_every_guard_indexed_by_file]].
+
+**Ce que les deux enseignent ensemble.** Une garde de source mesure un TEXTE, et un texte a deux ennemis : ce qu'on écrit à côté du code (les commentaires) et l'endroit où le code vit (le fichier). Une garde robuste dépouille le premier et suit l'unité pour le second. **Avant de croire un rouge de garde de source, vérifier qu'elle mesure encore ce qu'elle croit mesurer** — ces deux-là accusaient un défaut qui n'existait pas.
+
+**Corollaire d'exception.** `FixedFontSizeGuardTests` n'a d'exception que pour la dette GELÉE : un fichier NEUF n'y entre jamais, quel que soit le commentaire qui invoque la doctrine des glyphes décoratifs. Une exception qui se réclame d'une doctrine sans être inscrite au registre de la dette n'existe pas.

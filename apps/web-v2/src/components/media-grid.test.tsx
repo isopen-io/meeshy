@@ -7,14 +7,16 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 import { messagesOf } from '@/lib/api/fixtures';
 import { MEDIA_CONVERSATION_ID } from '@/lib/api/fixtures-media';
 import {
+  MEDIA_GRID_MINE_WITNESS_ID,
   MEDIA_GRID_OVERFLOW_WITNESS_ID,
   MEDIA_GRID_PAIR_WITNESS_ID,
   MEDIA_GRID_QUAD_WITNESS_ID,
   MEDIA_GRID_TRIPLE_WITNESS_ID,
+  MEDIA_SOLO_VIDEO_WITNESS_ID,
 } from '@/lib/api/fixtures-media-grid';
 import type { Attachment } from '@/lib/api/types';
 import { sizesFor } from '@/lib/api/media-url';
-import { mediaGridSlots } from '@/lib/view/media-grid-layout';
+import { mediaGridSlots, soloVideoSlot } from '@/lib/view/media-grid-layout';
 
 import { MediaGrid } from './media-grid';
 
@@ -246,5 +248,84 @@ describe('MediaGrid — la boîte porte ses cotes dérivées (U4, #6169)', () =>
     const grid = el.querySelector('[data-media-grid]') as HTMLElement;
     expect(grid.style.width).toBe('300px');
     expect(grid.style.height).toBe('240px');
+  });
+});
+
+/**
+ * #7016 — LA VIDÉO SEULE PORTE ENFIN SES COTES.
+ *
+ * La branche SOLO rendait `VideoTile` SANS conteneur dimensionné, alors que sa
+ * racine est `size-full` avec tous ses enfants `absolute inset-0` : un
+ * `height: 100 %` contre un parent en hauteur `auto` se résout en `auto` →
+ * contenu → **ZÉRO**. Mesuré au navigateur avant ce lot, dans les deux peaux :
+ * `{focal: 246 × 0, bulles: 119 × 0}`.
+ *
+ * La loi qui dimensionne cette tuile — `soloVideoSlot` — existait, était
+ * testée (`media-grid-layout.test.ts`) et gardée par le gate de cotes
+ * (`curve-media-grid.mjs`), et n'avait AUCUN site d'appel : le motif « une loi
+ * qui calcule une valeur que personne ne lit ». Ce témoin est sa PROJECTION —
+ * il compare le style posé à ce que la loi rend, jamais à un littéral recopié
+ * (qui divergerait en silence le jour où la loi change).
+ *
+ * `aspectRatio` plutôt que `height` : la boîte est plafonnée à `100 %` de son
+ * porteur (#7018), donc sa largeur RENDUE dépend de la peau. Le couple
+ * `width` + `aspectRatio` fait descendre la hauteur AVEC la largeur ; un
+ * `height` figé, lui, déformerait la vidéo dès que le porteur est plus étroit
+ * que 300 px — ce qui est le cas NOMINAL de la bulle (253,4 px à 390 px).
+ */
+describe('MediaGrid — la vidéo SEULE porte les cotes de soloVideoSlot (#7016)', () => {
+  test('media-15 : la tuile est dimensionnée — jamais une hauteur nulle', () => {
+    const el = mount(attachmentsOf(MEDIA_SOLO_VIDEO_WITNESS_ID), () => {});
+    const tile = el.querySelector('[data-media-tile]') as HTMLElement;
+    const slot = soloVideoSlot(160 / 90);
+    expect(slot.width).toBe(300);
+    expect(slot.height).toBe(168.75);
+    expect(tile.style.width).toBe(`${slot.width}px`);
+    expect(tile.style.aspectRatio).toBe(`${slot.width} / ${slot.height}`);
+    expect(tile.style.maxWidth).toBe('100%');
+  });
+
+  test('media-15 : le <video> est monté sous cette boîte, avec son poster', () => {
+    const el = mount(attachmentsOf(MEDIA_SOLO_VIDEO_WITNESS_ID), () => {});
+    const tile = el.querySelector('[data-media-tile]') as HTMLElement;
+    const video = tile.querySelector('video');
+    expect(video !== null).toBe(true);
+    expect(video!.getAttribute('poster') !== null).toBe(true);
+  });
+
+  test('CONTRE-ÉPREUVE : en GRILLE la vidéo ne se dimensionne PAS elle-même — la case la dimensionne (media-12)', () => {
+    const el = mount(attachmentsOf(MEDIA_GRID_TRIPLE_WITNESS_ID), () => {});
+    const videoTile = el.querySelector('video')!.closest('[data-media-tile]') as HTMLElement;
+    expect(videoTile.style.width).toBe('');
+    expect(videoTile.style.aspectRatio).toBe('');
+  });
+});
+
+/**
+ * #7018 — LA BOÎTE DE GRILLE NE SORT PLUS DE SON PORTEUR.
+ *
+ * `ImageTile` porte `max-w-full` depuis toujours ; la boîte de `MediaGrid`, à
+ * largeur FIXE de 300 px, ne le portait pas. Dans une bulle dont la largeur
+ * utile est 253,4 px (390 px de viewport, `max-w-[70%]` + gouttière de 50 px),
+ * elle débordait de 46,6 px — vers la gouttière sur un message REÇU (invisible),
+ * HORS DE L'ÉCRAN sur un message DE MOI (`justify-end`), rendant tout le fil
+ * défilable horizontalement (`scrollWidth` 437 pour `clientWidth` 390, mesuré).
+ */
+describe('MediaGrid — la boîte ne déborde jamais de son porteur (#7018)', () => {
+  const grilles: readonly (readonly [string, string])[] = [
+    ['media-11 (2 pièces)', MEDIA_GRID_PAIR_WITNESS_ID],
+    ['media-12 (3 pièces)', MEDIA_GRID_TRIPLE_WITNESS_ID],
+    ['media-13 (4 pièces)', MEDIA_GRID_QUAD_WITNESS_ID],
+    ['media-14 (6 pièces)', MEDIA_GRID_OVERFLOW_WITNESS_ID],
+    ['media-16 (2 pièces, DE MOI)', MEDIA_GRID_MINE_WITNESS_ID],
+  ];
+
+  grilles.forEach(([label, id]) => {
+    test(`${label} : la boîte est plafonnée à 100 % de son porteur`, () => {
+      const el = mount(attachmentsOf(id), () => {});
+      const grid = el.querySelector('[data-media-grid]') as HTMLElement;
+      expect(grid.style.width).toBe('300px');
+      expect(grid.style.maxWidth).toBe('100%');
+    });
   });
 });

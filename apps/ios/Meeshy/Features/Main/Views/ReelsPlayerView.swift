@@ -46,7 +46,10 @@ struct ReelsPlayerView: View {
 
     @Environment(\.layoutDirection) private var layoutDirection
 
-    @StateObject private var viewModel = ReelsViewModel()
+    // `internal` (et non `private`) : `emptyState` vit dans
+    // `ReelsPlayerView+EmptyState.swift`, et une propriété stockée `private`
+    // est inaccessible depuis un fichier d'extension frère (même module).
+    @StateObject var viewModel = ReelsViewModel()
     @State private var commentsReel: FeedPost?
     /// Réel en édition via le menu « … » du rail d'actions — parité avec le
     /// menu de `FeedPostCard`/`ReelFeedCard` (même `EditPostSheet`).
@@ -312,34 +315,6 @@ struct ReelsPlayerView: View {
             onOpenStory?(reel.authorId)
         } else {
             onOpenProfile?(reel.authorId, reel.authorUsername ?? reel.author)
-        }
-    }
-
-    // MARK: Empty / loading
-
-    @ViewBuilder
-    private var emptyState: some View {
-        if viewModel.hasLoadedOnce {
-            VStack(spacing: 14) {
-                // Glyphe héros décoratif ≥40pt : figé (doctrine 74i/86i) + masqué VoiceOver (le texte porte le sens)
-                Image(systemName: "play.rectangle.on.rectangle")
-                    .font(.system(size: 44))
-                    .foregroundColor(.white.opacity(0.7))
-                    .accessibilityHidden(true)
-                Text(String(localized: "reels.empty", defaultValue: "Aucun réel pour le moment", bundle: .main))
-                    .font(.headline)
-                    .foregroundColor(.white)
-            }
-            .accessibilityElement(children: .combine)
-        } else {
-            // Instant App cold-start: a shimmering full-bleed placeholder (same
-            // treatment as `ReelPoster`'s own loading state) instead of a bare
-            // spinner — `hasLoadedOnce` only ever stays `false` for the instant
-            // between `seed()`/`coldStart()` being called and their (cache-first,
-            // synchronous) first `apply(reels:startId:)`.
-            Color.black.shimmer()
-                .ignoresSafeArea()
-                .accessibilityHidden(true)
         }
     }
 

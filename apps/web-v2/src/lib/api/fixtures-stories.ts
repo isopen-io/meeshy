@@ -318,6 +318,60 @@ export const SCENE_STORIES: readonly StoryFeedPost[] = [
     media: [scenePano('m-scene-pano-3')],
     storyEffects: { v: 3, scenes: [{ id: 's1', thumbHash: STORY_SCENE_THUMB_HASH, objects: [fitBackground('m-scene-pano-3')] }] },
   },
+  /**
+   * LE SON EMPRUNTÉ À LA BIBLIOTHÈQUE (#7015) — la forme EXACTE de la
+   * production, relevée en base le 2026-09-18 : l'objet audio de fond ne
+   * porte AUCUN `postMediaId` (le son n'appartient pas à l'auteur) mais un
+   * `mediaURL` vers `GET /api/v1/static/:filename`, la route AUTHENTIFIÉE qui
+   * sert `/app/sounds` — 20 publications de production citent cette forme, 9
+   * fichiers distincts.
+   *
+   * C'est la seule story du corpus dont le son ne peut PAS être obtenu par
+   * une balise `<audio src>` : la route exige un en-tête que le navigateur
+   * n'envoie jamais sur un chargement de média. `check-story-sound.mjs` la
+   * conduit dans un vrai navigateur.
+   *
+   * Hors de `STORY_TRAY` comme ses trois voisines — elle n'ajoute aucune
+   * tuile au rail, dont la géographie est gardée ailleurs.
+   */
+  {
+    id: 'st-scene-sound',
+    type: 'STORY',
+    createdAt: hoursAgo(14),
+    expiresAt: hoursFromNow(6),
+    viewCount: 1,
+    isViewedByMe: true,
+    author: sceneStoryAuthor,
+    originalLanguage: 'es',
+    media: [scenePano('m-scene-pano-4')],
+    storyEffects: {
+      v: 3,
+      scenes: [
+        {
+          id: 's1',
+          thumbHash: STORY_SCENE_THUMB_HASH,
+          timelineDuration: 8,
+          objects: [
+            fitBackground('m-scene-pano-4'),
+            {
+              id: 'a1',
+              kind: 'audio',
+              anchor: { t: 'free', x: 0.5, y: 0.5 },
+              plane: 'bg',
+              z: 0,
+              transform: identity,
+              payload: {
+                isBackground: true,
+                mediaURL: '/api/v1/static/d0bf39b7-cd47-4e70-8f1c-34b2d9b5ee4b.m4a',
+                volume: 0.8,
+                loop: true,
+              },
+            },
+          ],
+        },
+      ],
+    },
+  },
 ];
 
 /**

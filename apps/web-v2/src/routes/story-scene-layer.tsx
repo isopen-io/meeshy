@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 
 import { BackgroundTrackAudio } from '@/components/background-track-audio';
+import type { ProtectedMediaUnavailableReason } from '@/lib/api/protected-media';
 import { objectMediaIdentity, objectMediaSrc } from '@/lib/canvas/carrier';
 import { electBackgroundTrack, sceneHasControllableSound } from '@/lib/canvas/background-sound';
 import type { CanvasDocument } from '@/lib/canvas/document';
@@ -114,6 +115,14 @@ export function StorySceneLayer({
   const readyRef = useRef(false);
   const durationsRef = useRef<{ video: number; track: number }>({ video: 0, track: 0 });
   const [ready, setReady] = useState(false);
+  /**
+   * LE SON DE FOND PEUT ÊTRE DÉFINITIVEMENT INDISPONIBLE (revue-correction
+   * #7015, défaut 2) — un refus, une absence, une coupure réseau et un rendu
+   * sans identité rendaient tous le MÊME silence, indiscernable de « cette
+   * story n'a jamais eu de son ». `data-scene-sound-unavailable` DIT la
+   * raison sur la scène — le gate `check-story-sound.mjs` § 401 la lit.
+   */
+  const [soundUnavailable, setSoundUnavailable] = useState<ProtectedMediaUnavailableReason | null>(null);
   const scene = document.scenes[sceneIndex];
   const canvas = { width: framing.canvas.width, height: framing.canvas.height };
 
@@ -178,6 +187,7 @@ export function StorySceneLayer({
   const pureImage = pureImageSrc !== undefined;
   const soundAvailable = useMemo(() => sceneHasControllableSound({ document, sceneIndex, carrier }), [document, sceneIndex, carrier]);
   const backdropHash = scene === undefined ? undefined : readerBackdropHash(scene, story);
+  const track = electBackgroundTrack({ document, sceneIndex, carrier });
 
   useEffect(() => {
     onSoundAvailability(soundAvailable);
@@ -195,9 +205,15 @@ export function StorySceneLayer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pureImageSrc]);
 
+  // Une raison tenue par un tour de boucle PRÉCÉDENT (piste protégée refusée,
+  // puis la story avance sur une scène SANS son) ne doit pas survivre —
+  // l'attribut resterait posé sur une scène qui n'a plus rien à dégrader.
+  useEffect(() => {
+    setSoundUnavailable(null);
+  }, [storyId, track?.src]);
+
   if (scene === undefined) return null;
 
-  const track = electBackgroundTrack({ document, sceneIndex, carrier });
   const live = playing && ready;
   const radius = framing.cornerRadius;
   const imageRect = verdict?.verdict === 'imageOnly' ? verdict.rect : null;
@@ -251,7 +267,11 @@ export function StorySceneLayer({
     );
 
   return (
-    <div className="pointer-events-none absolute inset-0" data-story-scene-layer>
+    <div
+      className="pointer-events-none absolute inset-0"
+      data-story-scene-layer
+      {...(soundUnavailable !== null ? { 'data-scene-sound-unavailable': soundUnavailable } : {})}
+    >
       {placeholderSrc !== undefined ? (
         // eslint-disable-next-line jsx-a11y/alt-text
         <img
@@ -305,6 +325,7 @@ export function StorySceneLayer({
           muted={muted}
           onDurationKnown={(ms) => reportDuration('track', ms)}
           onPlaybackBlocked={onPlaybackBlocked}
+          onUnavailable={setSoundUnavailable}
         />
       ) : null}
     </div>
