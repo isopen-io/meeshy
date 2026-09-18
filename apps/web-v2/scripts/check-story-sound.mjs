@@ -35,7 +35,15 @@
  *  3. DÉGRADATION — la MÊME page quand la passerelle refuse (401) : aucune
  *     piste montée, aucune erreur de page, et **aucune promesse rejetée non
  *     rattrapée** (`unhandledrejection`, posé avant tout script d'application).
- *  4. CONTRE-ÉPREUVE — `/story/st-scene`, dont le son vient d'une pièce jointe
+ *  4. **UN `200` QUI N'EST PAS DE L'AUDIO** (revue-correction) — `apiConfig.base`
+ *     vaut `''` par défaut, une valeur qui n'est juste que DERRIÈRE UN PROXY :
+ *     hors proxy, la requête part vers l'origine WEB et reçoit `200 text/html`,
+ *     l'`index.html` du SPA. Le corps n'est pas vide, le statut est `ok` — et
+ *     sans contrôle de TYPE, `createObjectURL` rendait une URL d'objet de HTML
+ *     posée en `<audio src>` : aucune erreur, aucun son, et surtout aucun
+ *     `null`, donc la dégradation du point 3 ne se déclenchait JAMAIS. Ce bloc
+ *     est le seul à tomber si l'on retire le contrôle de type.
+ *  5. CONTRE-ÉPREUVE — `/story/st-scene`, dont le son vient d'une pièce jointe
  *     (`data:`), joue sans qu'AUCUNE requête ne parte vers la route protégée :
  *     le transport coûteux ne touche qu'elle.
  *
@@ -93,7 +101,10 @@ const AUDIO = octetsAudio();
 /**
  * Ouvre un contexte muni de la session, en interceptant la route protégée.
  * `servi` : `'ok'` sert les octets si (et seulement si) la requête porte une
- * identité ; `'refus'` répond 401 comme la production le fait aujourd'hui.
+ * identité ; `'refus'` répond 401 comme la production le fait aujourd'hui ;
+ * `'spa'` répond `200 text/html` — ce que l'origine WEB rend quand
+ * `apiConfig.base` est vide hors proxy, et que rien d'autre ne distingue d'une
+ * piste tant qu'on ne regarde que le statut et la taille.
  */
 async function ouvrir(browser, { servi }) {
   const context = await browser.newContext({
@@ -122,6 +133,9 @@ async function ouvrir(browser, { servi }) {
     });
     if (servi === 'refus') {
       return route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ success: false, error: 'Unauthorized' }) });
+    }
+    if (servi === 'spa') {
+      return route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: '<!doctype html><html><body>meeshy</body></html>' });
     }
     if (headers['authorization'] === undefined && headers['x-session-token'] === undefined) {
       // CE QUE LA PRODUCTION FAIT d'une balise `<audio src>` : la route est
@@ -214,7 +228,30 @@ try {
     await context.close();
   }
 
-  /* ── 4. CONTRE-ÉPREUVE — une pièce jointe ne passe PAS par ce transport ─ */
+  /* ── 4. UN `200` QUI N'EST PAS DE L'AUDIO — l'index du SPA ────────────── */
+  {
+    const { context, page, requetes } = await ouvrir(browser, { servi: 'spa' });
+    const erreurs = [];
+    page.on('pageerror', (error) => erreurs.push(String(error?.message ?? error)));
+    await page.goto(`${BASE}/story/st-scene-sound`, { waitUntil: 'load' });
+    await page.waitForSelector('[data-story-scene], [data-story-ready], [data-scene-player]', { timeout: 5_000 }).catch(() => undefined);
+    await page.waitForTimeout(1_200);
+
+    check(requetes.length >= 1, 'index du SPA : la route protégée n’est même pas appelée');
+    // LE SEUL INVARIANT QUI TOMBE SI L'ON RETIRE LE CONTRÔLE DE TYPE : sans
+    // lui, `createObjectURL` rend une URL d'objet DE HTML, la balise est
+    // montée, `readyState` reste 0 — et rien ne le dit.
+    check(
+      (await pisteDe(page)) === null,
+      'index du SPA : une balise `<audio>` est montée sur du HTML — `readyState` restera 0, sans son ni erreur ni dégradation',
+    );
+    check(erreurs.length === 0, `index du SPA : ${erreurs.length} erreur(s) de page — ${erreurs.join(' | ')}`);
+    const rejets = await page.evaluate(() => window.__rejets.slice());
+    check(rejets.length === 0, `index du SPA : ${rejets.length} promesse(s) rejetée(s) non rattrapée(s) — ${rejets.join(' | ')}`);
+    await context.close();
+  }
+
+  /* ── 5. CONTRE-ÉPREUVE — une pièce jointe ne passe PAS par ce transport ─ */
   {
     const { context, page, requetes } = await ouvrir(browser, { servi: 'ok' });
     await page.goto(`${BASE}/story/st-scene`, { waitUntil: 'load' });

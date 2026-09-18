@@ -70,6 +70,19 @@ import { credentialHeaders, type Credential } from './http';
  */
 export const PROTECTED_MEDIA_PATH = '/api/v1/static/';
 
+/**
+ * CE QUE LA ROUTE SERT, ET RIEN D'AUTRE (revue-correction #7015).
+ *
+ * `GET /static/:filename` refuse toute extension hors `ALLOWED_AUDIO_EXT`
+ * puis pose `Content-Type: EXT_TO_MIME[ext]`
+ * (`services/gateway/src/services/posts/soundFormats.ts`) — six entrées,
+ * toutes `audio/*`. Le repli `application/octet-stream` d'`audio.ts` est
+ * INATTEIGNABLE : les six extensions admises sont exactement les six clés de
+ * la carte. La garde est donc EXACTE, pas approximative — rien de légitime ne
+ * tombe dedans.
+ */
+const SERVED_AUDIO_TYPE = /^audio\//i;
+
 /** L'origine de MESURE des chemins relatifs : jamais appelée, seulement composée. */
 const ORIGINE_DE_MESURE = 'https://meeshy.invalid';
 
@@ -117,6 +130,28 @@ export function isProtectedMediaSrc(src: string): boolean {
 }
 
 /**
+ * **UN `200` N'EST PAS UNE PISTE.**
+ *
+ * Le statut et la taille ne disent RIEN de ce que le corps contient.
+ * `apiConfig.base` vaut `''` par défaut (`config.ts`), une valeur qui n'est
+ * juste que DERRIÈRE UN PROXY : hors proxy — les deux coques Capacitor, une
+ * PWA servie sans relais — la requête part vers l'origine WEB et reçoit
+ * `200 text/html`, l'`index.html` du SPA. Le corps n'est pas vide, le statut
+ * est `ok`, et `createObjectURL` rendait une URL d'objet **de HTML** posée en
+ * `<audio src>` : `readyState` reste 0, aucun son, aucune erreur — et surtout
+ * **pas de `null`**, donc la balise est montée et la dégradation dessinée ne
+ * se déclenche jamais. Un échec de RÉSOLUTION déguisé en piste muette,
+ * exactement ce que `media-url.ts` § « LA SECONDE FORME » décrit des images.
+ *
+ * Le blob porte le type que le serveur a ANNONCÉ, et c'est lui que l'URL
+ * d'objet servira à l'élément : le lire ici, c'est mesurer ce qui sera
+ * réellement posé, pas ce qu'on espérait recevoir.
+ */
+function isServedAudio(blob: Blob): boolean {
+  return SERVED_AUDIO_TYPE.test(blob.type);
+}
+
+/**
  * Les octets du média, derrière une URL d'objet — ou `null`.
  *
  * **NE REJETTE JAMAIS.** `null` dit « pas de son », et c'est tout ce que
@@ -149,6 +184,10 @@ export async function fetchProtectedObjectUrl(
     if (!response.ok) return null;
     const blob = await response.blob();
     if (blob.size === 0) return null;
+    // Avant `createObjectURL`, jamais après : publier l'URL d'un corps qu'on
+    // s'apprête à refuser laisserait ses octets en mémoire pour toute la vie
+    // du document — personne n'ayant reçu l'URL pour la révoquer.
+    if (!isServedAudio(blob)) return null;
     return deps.createObjectURL(blob);
   } catch {
     return null;

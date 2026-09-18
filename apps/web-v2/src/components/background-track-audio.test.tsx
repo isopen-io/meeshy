@@ -207,14 +207,27 @@ describe('BackgroundTrackAudio — le son de fond, site unique (T5, #6903)', () 
  */
 const SON_PROTEGE = 'https://gate.meeshy.me/api/v1/static/d0bf39b7-cd47-4e70-8f1c-34b2d9b5ee4b.m4a';
 
-function depsDeTest(options: { readonly resolved?: string | null; readonly revoked?: string[] } = {}): ProtectedMediaDeps {
+/**
+ * LE TYPE QUE LA ROUTE SERT (revue-correction #7015) — `audio/x-m4a` pour un
+ * `.m4a`, la carte `EXT_TO_MIME` du gateway. Le fixture le PORTE parce que
+ * `fetchProtectedObjectUrl` le VÉRIFIE désormais : un corps non vide en `200`
+ * ne suffit pas, sans quoi l'`index.html` du SPA (servi `200 text/html` dès
+ * que `apiConfig.base` est vide hors proxy) devenait une URL d'objet posée en
+ * `<audio src>` — pas de son, et pas de `null` non plus, donc aucune
+ * dégradation.
+ */
+const AUDIO_SERVI = 'audio/x-m4a';
+
+function depsDeTest(
+  options: { readonly resolved?: string | null; readonly revoked?: string[]; readonly typeServi?: string } = {},
+): ProtectedMediaDeps {
   return {
     credential: () => ({ kind: 'registered', token: 'jwt-1' }),
     fetchImpl: (() =>
       Promise.resolve(
         options.resolved === null
           ? new Response('', { status: 401 })
-          : new Response(new Blob(['octets']), { status: 200 }),
+          : new Response(new Blob(['octets'], { type: options.typeServi ?? AUDIO_SERVI }), { status: 200 }),
       )) as typeof fetch,
     createObjectURL: () => options.resolved ?? 'blob:meeshy/son',
     revokeObjectURL: (url) => {
@@ -309,5 +322,25 @@ describe('BackgroundTrackAudio — la piste PROTÉGÉE (#7015)', () => {
 
   test('(l) LA LOI EST BRANCHÉE — sans `mediaDeps`, le composant prend les dépendances de PRODUCTION', () => {
     expect(defaultMediaDeps).toBe(protectedMediaDeps);
+  });
+
+  test('(m) le SPA qui répond `200 text/html` ⇒ AUCUNE piste montée (jusqu’au PIXEL)', async () => {
+    const el = mount(
+      <BackgroundTrackAudio
+        track={trackOf({ src: SON_PROTEGE })}
+        playing
+        muted={false}
+        onDurationKnown={() => {}}
+        onPlaybackBlocked={() => {}}
+        mediaDeps={depsDeTest({ typeServi: 'text/html' })}
+      />,
+    );
+    await act(async () => {});
+    // Le défaut qu'il attrape : une URL d'objet DE HTML posée en `<audio src>`
+    // montait la balise, `readyState` restait 0, et rien — ni son, ni erreur,
+    // ni dégradation — ne le disait. Ce témoin s'arrête au PIXEL : pas de
+    // balise du tout.
+    expect(el.querySelector('[data-scene-sound-track]')).toBeNull();
+    expect(playCalls).toBe(0);
   });
 });

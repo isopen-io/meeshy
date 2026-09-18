@@ -30,6 +30,33 @@ const SON = `${GATE}${PROTECTED_MEDIA_PATH}d0bf39b7-cd47-4e70-8f1c-34b2d9b5ee4b.
 
 type Appel = { readonly url: string; readonly headers: Record<string, string> };
 
+/**
+ * CE QUE LA ROUTE SERT VRAIMENT — mesuré, jamais supposé :
+ * `GET /static/:filename` refuse toute extension hors
+ * `ALLOWED_AUDIO_EXT` (`services/gateway/src/services/posts/soundFormats.ts`)
+ * puis pose `Content-Type: EXT_TO_MIME[ext]` — six entrées, toutes `audio/*`
+ * (`.m4a` → `audio/x-m4a`). Le repli `application/octet-stream` de
+ * `audio.ts:155` est INATTEIGNABLE : les six extensions admises sont
+ * exactement les six clés de la carte. Le fixture porte donc la forme de
+ * production, pas une forme commode.
+ */
+const audioServi = (): Response =>
+  new Response(new Blob(['octets'], { type: 'audio/x-m4a' }), { status: 200, headers: { 'content-type': 'audio/x-m4a' } });
+
+/**
+ * L'INDEX DU SPA, SERVI EN `200` — la SECONDE FORME que `media-url.ts`
+ * documente pour les images, rejouée sur le son. `apiConfig.base` vaut `''`
+ * par défaut (`config.ts:24`, valide derrière un proxy SEULEMENT) : hors
+ * proxy, le `fetch` part vers l'origine WEB, qui répond `200 text/html` avec
+ * son propre `index.html`. Le corps n'est pas vide, le statut est `ok` — et
+ * rien d'autre ne distingue cette réponse d'une piste.
+ */
+const spaIndexHtml = (): Response =>
+  new Response(new Blob(['<!doctype html><html><body>meeshy</body></html>'], { type: 'text/html' }), {
+    status: 200,
+    headers: { 'content-type': 'text/html; charset=utf-8' },
+  });
+
 function deps(options: {
   readonly reponse?: () => Promise<Response>;
   readonly credential?: Credential | null;
@@ -44,7 +71,7 @@ function deps(options: {
         headers[name] = value;
       });
       options.appels?.push({ url: String(input), headers });
-      return (options.reponse ?? (() => Promise.resolve(new Response(new Blob(['xx']), { status: 200 }))))();
+      return (options.reponse ?? (() => Promise.resolve(audioServi())))();
     }) as typeof fetch,
     createObjectURL: options.objectUrl ?? (() => 'blob:meeshy/1'),
     revokeObjectURL: () => undefined,
@@ -142,5 +169,88 @@ describe('une indisponibilité DÉGRADE — jamais une promesse rejetée', () =>
     const url = await fetchProtectedObjectUrl('https://cdn.test/track.mp3', deps({ appels }));
     expect(url).toBeNull();
     expect(appels).toHaveLength(0);
+  });
+});
+
+/**
+ * UN `200` N'EST PAS UNE PISTE — le type SERVI décide (revue-correction #7015).
+ *
+ * `response.ok` + `blob.size !== 0` laissaient passer N'IMPORTE QUEL corps non
+ * vide. Le cas n'est pas théorique : `apiConfig.base` vaut `''` par défaut
+ * (`config.ts:24`), une valeur qui n'est juste que DERRIÈRE UN PROXY. Hors
+ * proxy — les deux coques Capacitor, une PWA servie sans relais — la requête
+ * part vers l'origine WEB et reçoit `200 text/html`, l'`index.html` du SPA.
+ * `createObjectURL` rendait alors une URL d'objet **de HTML**, posée en
+ * `<audio src>` : `readyState` reste 0, aucun son, aucune erreur, et surtout
+ * **pas de `null`** — donc la balise est montée et la dégradation dessinée ne
+ * se déclenche JAMAIS. Un échec de RÉSOLUTION déguisé en piste muette, exactement
+ * ce que `media-url.ts` § « LA SECONDE FORME » décrit pour les images.
+ *
+ * La garde est FERMÉE : ce qui n'est pas `audio/*` n'est pas servi. Le seul
+ * producteur de cette route pose un `Content-Type` de `EXT_TO_MIME`, tous
+ * `audio/*` — rien de légitime ne tombe ici.
+ */
+describe('le TYPE servi décide — un `200` qui n’est pas de l’audio n’est pas une piste', () => {
+  test('le SPA qui répond `200 text/html` (son propre index) ne devient JAMAIS une piste', async () => {
+    let objectUrls = 0;
+    const url = await fetchProtectedObjectUrl(
+      SON,
+      deps({
+        reponse: () => Promise.resolve(spaIndexHtml()),
+        objectUrl: () => {
+          objectUrls += 1;
+          return 'blob:meeshy/html';
+        },
+      }),
+    );
+    expect(url).toBeNull();
+    // Pas d'URL d'objet du tout : des octets de HTML ne doivent ni être
+    // publiés ni rester en mémoire en attendant une révocation que personne
+    // ne fera.
+    expect(objectUrls).toBe(0);
+  });
+
+  test('une erreur JSON servie en `200` (un relais qui enveloppe) ne devient pas une piste', async () => {
+    const url = await fetchProtectedObjectUrl(
+      SON,
+      deps({
+        reponse: () =>
+          Promise.resolve(
+            new Response(new Blob(['{"success":false,"error":"Unauthorized"}'], { type: 'application/json' }), {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            }),
+          ),
+      }),
+    );
+    expect(url).toBeNull();
+  });
+
+  test('un corps SANS type annoncé ne passe pas non plus — la garde est FERMÉE', async () => {
+    const url = await fetchProtectedObjectUrl(SON, deps({ reponse: () => Promise.resolve(new Response(new Blob(['octets']), { status: 200 })) }));
+    expect(url).toBeNull();
+  });
+
+  test('CONTRASTE — le type que la route SERT vraiment passe, et rend l’URL d’objet', async () => {
+    expect(await fetchProtectedObjectUrl(SON, deps({ reponse: () => Promise.resolve(audioServi()) }))).toBe('blob:meeshy/1');
+    // Les six MIME de `EXT_TO_MIME`, un par extension servable.
+    for (const mime of ['audio/mpeg', 'audio/mp4', 'audio/wav', 'audio/x-m4a', 'audio/aac', 'audio/ogg']) {
+      const url = await fetchProtectedObjectUrl(
+        SON,
+        deps({ reponse: () => Promise.resolve(new Response(new Blob(['octets'], { type: mime }), { status: 200 })) }),
+      );
+      expect(url).toBe('blob:meeshy/1');
+    }
+  });
+
+  test('le PARAMÈTRE du type ne change rien — `audio/ogg; codecs=opus` reste de l’audio', async () => {
+    const url = await fetchProtectedObjectUrl(
+      SON,
+      deps({
+        reponse: () =>
+          Promise.resolve(new Response(new Blob(['octets'], { type: 'audio/ogg; codecs=opus' }), { status: 200 })),
+      }),
+    );
+    expect(url).toBe('blob:meeshy/1');
   });
 });
