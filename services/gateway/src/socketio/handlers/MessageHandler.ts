@@ -1006,7 +1006,17 @@ export class MessageHandler {
         conversationId: message.conversationId,
         translations: [],
         ...(editedMentions.reconciled ? { validatedMentions: [...editedMentions.validatedUsernames] } : {}),
-        attachments: this._serializeAttachmentsField(message as unknown as Message),
+        // #7028 — sérialisé depuis `message.attachments` DIRECTEMENT (la forme
+        // réelle du `select` ci-dessus, `attachmentSocketSelect`), jamais via
+        // `_serializeAttachmentsField(message as unknown as Message)` : ce
+        // détour érodait le type deux fois (le cast vers le type PUBLIC
+        // `Message`, puis `Array.isArray` qui réduit tout élément à `any`
+        // dans le corps de la méthode) et rendait le paramètre de
+        // `serializeAttachmentForSocket` incapable de voir un `select`
+        // dépouillé de ses drapeaux de protection. Ici, `message.attachments`
+        // porte encore son type Prisma exact : un `attachmentMediaSelect` nu
+        // au lieu de `attachmentSocketSelect` ne compile plus (TS2345).
+        attachments: message.attachments.map((att) => serializeAttachmentForSocket(att)),
       };
 
       const room = ROOMS.conversation(message.conversationId);
@@ -2134,7 +2144,19 @@ export class MessageHandler {
   private _serializeAttachmentsField(message: Message): unknown[] {
     const raw = message.attachments;
     if (!Array.isArray(raw)) return [];
-    return raw.map((att) => serializeAttachmentForSocket(att as Record<string, unknown>));
+    // #7028 — le cast `as Record<string, unknown>` retiré ici ne rendait la
+    // ligne conforme QUE de nom : `Array.isArray` réduit `raw` à `any[]`
+    // (comportement documenté de `lib.es5.d.ts`, `arg is any[]`), donc `att`
+    // est déjà `any` avant ce cast — celui-ci ne faisait qu'ÉTROITER le type
+    // vers `Record<string, unknown>`, un type qui ne satisfait plus le
+    // paramètre `SocketAttachmentRow` de `serializeAttachmentForSocket` et
+    // faisait rougir la compilation SANS rapport avec la protection réelle
+    // de la ligne. Ce chemin (`message: Message`, le type PUBLIC partagé)
+    // reste un cliquet hors de portée : `Attachment` ne déclare pas
+    // `effectFlags`, et la garantie réelle de ce producteur — `message:new`
+    // via `MessageProcessor.saveMessage`, `findMany` SANS `select` — est documentée
+    // comme un risque résiduel, pas un site que ce lot corrige (#7028, revue).
+    return raw.map((att) => serializeAttachmentForSocket(att));
   }
 
   /**

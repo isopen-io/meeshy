@@ -94,12 +94,18 @@ describe(`les appelants de ${APPELANT}`, () => {
       // chargent rien (`emitAttachmentUpdated.ts` en est un : c'est
       // `MeeshySocketIOManager` qui charge pour lui). La responsabilité d'un
       // relais est chez son appelant, lequel est dans ce même inventaire.
-      expect(
-        !selectionne(FORME_SANS_PROTECTION),
-        `${relatif} passe une ligne au sérialiseur socket en la chargeant avec ` +
-          `${FORME_SANS_PROTECTION} (sans drapeau de protection). Le sérialiseur étant ` +
-          `fail-closed, toute pièce servie par ce site ressort MASQUÉE. Charger ${FORME_DU_CANAL}.`,
-      ).toBe(true);
+      // Le diagnostic voyage dans la VALEUR comparée, jamais en second
+      // argument d'`expect` : cette forme-là est une API de `bun:test` et de
+      // Vitest, que le gateway — qui tourne sous JEST — refuse au typage
+      // (`TS2554: Expected 1 arguments, but got 2`). Le témoin passait en local
+      // sous `bun test` et faisait échouer la suite ENTIÈRE en CI.
+      const diagnostic = selectionne(FORME_SANS_PROTECTION)
+        ? `${relatif} charge ${FORME_SANS_PROTECTION} (sans drapeau de protection) et passe la ligne ` +
+          `au sérialiseur socket, qui est FAIL-CLOSED : toute pièce servie par ce site ressort ` +
+          `MASQUÉE. Charger ${FORME_DU_CANAL}.`
+        : 'conforme';
+
+      expect(diagnostic).toBe('conforme');
     },
   );
 });

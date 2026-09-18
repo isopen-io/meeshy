@@ -272,10 +272,7 @@ function serializeSyncMessage(
       ? {}
       : {
           attachments: brut.attachments.map((attachment) =>
-            serializeAttachmentForSocket(
-              attachment as unknown as Record<string, unknown>,
-              readerParticipantId,
-            ),
+            serializeAttachmentForSocket(attachment, readerParticipantId),
           ),
         }),
   };

@@ -1,7 +1,24 @@
 import {
   attachmentProtectionOf,
+  type AttachmentProtectionField,
   type AttachmentProtectionFlags,
 } from '@meeshy/shared/utils/attachment-protection';
+
+/**
+ * La forme que TOUT appelant de `serializeAttachmentForSocket` doit remettre
+ * (#7028) — `Record<string, unknown>` PLUS les trois colonnes de protection,
+ * requises et non nullables.
+ *
+ * Le grep de source qui gardait cet inventaire (`serialize-attachment-callers-
+ * select.test.ts`) ne voyait que les fichiers qui IMPORTENT le sérialiseur —
+ * `MessageProcessor.saveMessage` l'alimente sans l'importer (`message.attachments`
+ * traverse `MessageHandler._serializeAttachmentsField`), donc hors de sa portée.
+ * Un CLIQUET DE TYPE, lui, couvre tout appelant, importateur ou non : le
+ * paramètre exige les trois colonnes, et un `select` qui les omet ne compile
+ * plus.
+ */
+export type SocketAttachmentRow = Record<string, unknown> &
+  Required<Pick<AttachmentProtectionFlags, AttachmentProtectionField>>;
 
 /**
  * Canonical serializer for a `MessageAttachment` over Socket.IO.
@@ -115,7 +132,7 @@ export function aggregateAttachmentReactions(
 }
 
 export function serializeAttachmentForSocket(
-  raw: Record<string, unknown>,
+  raw: SocketAttachmentRow,
   currentParticipantId?: string
 ): SocketAttachment {
   const { reactionSummary, currentUserReactions } = aggregateAttachmentReactions(

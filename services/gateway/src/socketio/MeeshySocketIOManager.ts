@@ -2474,7 +2474,11 @@ export class MeeshySocketIOManager {
         connectedUsers: this.connectedUsers,
         conversationId: normalizedConversationId,
         messageId,
-        attachment: fresh as Record<string, unknown>,
+        // #7028 — `fresh` porte déjà la forme exacte de `attachmentSocketSelect`
+        // (protection comprise) : le caster vers `Record<string, unknown>`
+        // l'appauvrissait au point de ne plus satisfaire `SocketAttachmentRow`,
+        // le paramètre de `emitAttachmentUpdated` depuis ce lot.
+        attachment: fresh,
       });
     } catch (err) {
       logger.error(`❌ [SocketIOManager] Failed to broadcast attachment-updated for ${attachmentId}:`, err);
