@@ -70,13 +70,25 @@ const liveTranslation = (params: {
  * `message:attachment-updated` telle que la passerelle la sert : la pièce
  * ENTIÈRE passée par `serializeAttachmentForSocket`, jamais un delta.
  *
- * Elle NE PORTE PAS `isViewOnce` / `isBlurred` / `effectFlags`, et c'est la
- * charge la plus PAUVRE que le puits puisse recevoir — donc le pire cas de sa
- * garde de masquage. C'est la forme que sert la passerelle d'avant #7014 ;
- * enrichir cette fixture rendrait indémontrable le cas où le cache est le SEUL
- * à savoir qu'une pièce est masquée, et ferait passer ici un gate que la vraie
- * passerelle ferait tomber (doc-comment du module, « aux MÊMES noms et aux
- * MÊMES formes »).
+ * Elle NE PORTE PAS `isViewOnce` / `isBlurred` / `effectFlags`, et ce n'est
+ * pas une commodité de fixture : c'est la forme MESURÉE de la passerelle.
+ * `serializeAttachmentForSocket` (`services/gateway/src/socketio/`) construit
+ * un objet littéral EXPLICITE dont `SocketAttachment` ne déclare aucun des
+ * trois champs, et `attachmentMediaSelect` — le seul `select` du chemin
+ * socket — ne les charge pas davantage (ils vivent dans
+ * `attachmentFullSelect`, que ce chemin n'emprunte pas). Relevé sur `dev` au
+ * 2026-09-18 : ni `attachmentSocketSelect` ni `ATTACHMENT_PROTECTION_FIELDS`
+ * n'existent dans le dépôt — #7014 N'A PAS atterri, et une fixture écrite
+ * d'après cette branche rejouerait une charge que la vraie passerelle
+ * n'émet PAS (doc-comment du module, « aux MÊMES noms et aux MÊMES formes ») :
+ * un gate qui rejoue une charge impossible ne mesure pas le produit.
+ *
+ * C'est aussi la charge la plus PAUVRE que le puits puisse recevoir, donc le
+ * pire cas de sa garde de masquage (`mergedAttachment`, `realtime-apply.ts`) —
+ * celui où le CACHE est le seul à savoir qu'une pièce est masquée. Le jour où
+ * #7014 atterrit VRAIMENT, c'est `serializeAttachmentForSocket` qui change en
+ * premier ; cette fixture le suit ALORS, et le témoin d'à côté est ce qui
+ * oblige à y revenir.
  *
  * `translations` est CUMULATIVE : le serveur relit la ligne après chaque
  * enrichissement, donc l'évènement `fr` porte aussi `en`
