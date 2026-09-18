@@ -352,6 +352,11 @@ final class LocalizationConsistencyTests: XCTestCase {
         // #6693 — le rail d'actions a quitté l'hôte avec ses quatorze clés. Le cliquet
         // suit le CODE, pas le chemin : sa destination s'inscrit dans le même commit.
         "apps/ios/Meeshy/Features/Main/Views/ReelsPlayerView+ActionRail.swift",  // 14
+        // #7007 — même mouvement, même raison : l'état vide du pager a quitté
+        // l'hôte (hors budget, et il devait gagner un TROISIÈME état) en emportant
+        // `reels.empty`. Il arrive avec une clé de plus, `common.retry`, parce
+        // qu'une panne qui ne propose pas d'en sortir n'est pas un état.
+        "apps/ios/Meeshy/Features/Main/Views/ReelsPlayerView+EmptyState.swift",  // 2
         "apps/ios/Meeshy/Features/Main/Components/EditPostSheet.swift",  // 23
         "apps/ios/Meeshy/Features/Main/Components/ReportMessageSheet.swift",  // 21
         "apps/ios/Meeshy/Features/Main/Views/FeedView.swift",  // 21

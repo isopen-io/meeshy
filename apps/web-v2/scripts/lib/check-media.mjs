@@ -485,16 +485,26 @@ export async function checkThreadMedia({ browser, BASE, expect, setScheme, AA_TH
     `[${skin}/${scheme}] et le navigateur DÉCODE ce src — durée ${enDuration}s, jamais une URL qui échoue en silence`,
   );
 
-  // (e ter) `lang` EST POSÉ SUR LA TRANSCRIPTION SERVIE DANS UNE LANGUE ≠
-  //         DOCUMENT (`READER_LOCALE` = 'fr' sous ce prisme navigateur),
-  //         ABSENT quand elle est SERVIE dans la langue du document — jamais
-  //         un attribut redondant sur du contenu déjà en langue de page.
-  //         Mesuré au MÊME instant que (e) : media-2 sert "fr" (= document,
-  //         `lang` absent), media-3 sert "en" (≠ document, `lang="en"`).
+  // (e ter) `lang` PORTE LA LANGUE SERVIE, À TOUS LES RANGS — media-2 sert
+  //         "fr" (rang 1 du Prisme), media-3 sert "en" (rang 2).
+  //
+  //         CE TÉMOIN EXIGEAIT L'ABSENCE DE L'ATTRIBUT sur media-2, au motif
+  //         que `READER_LOCALE` ('fr') serait « la langue du document » et
+  //         qu'un `lang="fr"` y serait redondant (revue-correction #7017). Les
+  //         deux sont des résolveurs DISJOINTS : `<html lang>` est posé par le
+  //         script d'amorçage de la langue d'INTERFACE depuis
+  //         `navigator.languages` (`inline-interface-language-bootstrap.js`),
+  //         `READER_LOCALE` est le rang 1 du Prisme de CONTENU et vaut
+  //         toujours 'fr'. Ce contexte n'impose aucune `locale`, donc le
+  //         document suit la locale du runner — « en » sur les postes et la
+  //         CI mesurés. La transcription française de media-2 y HÉRITAIT donc
+  //         l'anglais : un lecteur d'écran prononçait « Bonjour l'équipe, le
+  //         déploiement s'est terminé à trois heures » avec une voix anglaise,
+  //         et ce témoin le certifiait conforme.
   const enTranscriptLang = await transcriptLangOf('media-2');
   expect(
-    enTranscriptLang === null,
-    `[${skin}/${scheme}] la transcription de media-2, servie en "fr" (langue du document), ne porte AUCUN lang (obtenu : ${enTranscriptLang})`,
+    enTranscriptLang === 'fr',
+    `[${skin}/${scheme}] la transcription de media-2, servie en "fr" (rang 1), l'ANNONCE — jamais muette dans un document dont la langue d'interface peut différer (obtenu : ${JSON.stringify(enTranscriptLang)})`,
   );
   const deTranscriptLang = await transcriptLangOf('media-3');
   expect(

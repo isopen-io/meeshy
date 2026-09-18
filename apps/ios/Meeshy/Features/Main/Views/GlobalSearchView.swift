@@ -234,13 +234,12 @@ struct GlobalSearchView: View {
     private var resultsList: some View {
         ScrollView(showsIndicators: false) {
             LazyVStack(spacing: 8) {
-                if viewModel.isSearching {
-                    searchingIndicator
-                } else if viewModel.searchText.trimmingCharacters(in: .whitespacesAndNewlines).count < 2 {
+                if viewModel.searchText.trimmingCharacters(in: .whitespacesAndNewlines).count < 2 {
                     recentSearchesSection
-                } else if viewModel.hasSearched && tabCount(for: viewModel.selectedTab) == 0 {
-                    emptyResultsView
+                } else if tabCount(for: viewModel.selectedTab) == 0 {
+                    emptyTabStateView
                 } else {
+                    degradedBanner
                     switch viewModel.selectedTab {
                     case .messages:
                         messagesResultsList
@@ -256,9 +255,108 @@ struct GlobalSearchView: View {
             .padding(.bottom, 120)
         }
         .scrollDismissesKeyboard(.interactively)
+        // L'indicateur de recherche est en SURIMPRESSION, jamais dans le flux :
+        // c'est ce qui lui permet de dire « je cherche » sans pousser ni
+        // remplacer une seule ligne de la liste servie.
+        .overlay(alignment: .top) { revalidationPill }
+    }
+
+    // MARK: - Ce qui BLOQUE l'onglet courant
+
+    /// Le motif d'un écran vide QUAND le vide vient d'une panne et non de la
+    /// requête. `nil` ⇒ le vide est légitime (« Aucun résultat »). Le MÊME
+    /// motif sert deux rendus : plein écran quand il n'y a rien à montrer,
+    /// bandeau discret quand des résultats locaux restent servis.
+    private var blockingFailure: (icon: String, title: String)? {
+        if viewModel.loadState == .offline {
+            return ("wifi.slash", String(localized: "connection.offline"))
+        }
+        if case .error(let message) = viewModel.loadState {
+            return ("exclamationmark.arrow.triangle.2.circlepath", message)
+        }
+        return nil
+    }
+
+    @ViewBuilder
+    private var emptyTabStateView: some View {
+        if viewModel.isSearching {
+            searchingIndicator
+        } else if let failure = blockingFailure {
+            retryStateView(icon: failure.icon, title: failure.title)
+        } else if viewModel.hasSearched {
+            emptyResultsView
+        }
+    }
+
+    private func retryStateView(icon: String, title: String) -> some View {
+        EmptyStateView(
+            icon: icon,
+            title: title,
+            subtitle: "",
+            actionLabel: String(localized: "common.retry"),
+            onAction: { Task { await viewModel.retryLastSearch() } }
+        )
+        .padding(.top, 40)
+        .accessibilityElement(children: .contain)
+    }
+
+    /// Bandeau posé AU-DESSUS des résultats gardés quand le réseau a échoué
+    /// mais que le local a servi : la liste reste lisible, et la panne se dit
+    /// quand même. Sans lui, une recherche hors ligne ressemblait trait pour
+    /// trait à une recherche complète.
+    @ViewBuilder
+    private var degradedBanner: some View {
+        if let failure = blockingFailure {
+            HStack(spacing: 10) {
+                Image(systemName: failure.icon)
+                    .font(MeeshyFont.relative(13, weight: .semibold))
+                    .foregroundColor(MeeshyColors.warning)
+                Text(failure.title)
+                    .font(MeeshyFont.relative(12, weight: .medium))
+                    .foregroundColor(theme.textMuted)
+                    .lineLimit(2)
+                Spacer(minLength: 8)
+                Button(String(localized: "common.retry")) {
+                    HapticFeedback.light()
+                    Task { await viewModel.retryLastSearch() }
+                }
+                .font(MeeshyFont.relative(12, weight: .semibold))
+                .foregroundColor(MeeshyColors.indigo400)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .adaptiveGlass(in: RoundedRectangle(cornerRadius: 14))
+            .accessibilityElement(children: .contain)
+        }
     }
 
     // MARK: - Searching Indicator
+
+    /// Indicateur DISCRET de revalidation : une pastille posée au-dessus de la
+    /// liste, qui ne prend aucune place dans le flux. Il ne se montre que
+    /// lorsqu'une recherche tourne PAR-DESSUS des résultats déjà affichés —
+    /// l'état `.loading` (démarrage à froid) garde son indicateur plein écran.
+    @ViewBuilder
+    private var revalidationPill: some View {
+        if viewModel.isRevalidating {
+            HStack(spacing: 6) {
+                ProgressView()
+                    .controlSize(.mini)
+                    .tint(MeeshyColors.indigo400)
+                Text(String(localized: "search.in_progress", defaultValue: "Recherche en cours..."))
+                    .font(MeeshyFont.relative(11, weight: .medium))
+                    .foregroundColor(theme.textMuted)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .adaptiveGlass(in: Capsule())
+            .padding(.top, 6)
+            .transition(.opacity)
+            .allowsHitTesting(false)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(String(localized: "accessibility.searching", defaultValue: "Recherche en cours"))
+        }
+    }
 
     private var searchingIndicator: some View {
         VStack(spacing: 16) {

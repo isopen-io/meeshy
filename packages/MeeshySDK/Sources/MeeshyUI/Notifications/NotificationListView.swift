@@ -251,7 +251,13 @@ public struct NotificationListView: View {
     private var notificationList: some View {
         Group {
             if viewModel.isLoading && viewModel.notifications.isEmpty {
-                loadingState
+                NotificationListSkeleton()
+            } else if viewModel.loadDidFail && viewModel.notifications.isEmpty {
+                // La panne AVANT le vide : sans cet ordre, une erreur réseau
+                // se lit « Aucune notification ».
+                NotificationListErrorState(brandColor: brandColor) {
+                    Task { await viewModel.loadInitial() }
+                }
             } else if filteredNotifications.isEmpty {
                 emptyState
             } else {
@@ -303,18 +309,10 @@ public struct NotificationListView: View {
     }
 
     // MARK: - States
-
-    private var loadingState: some View {
-        VStack(spacing: 12) {
-            Spacer()
-            ProgressView()
-                .tint(brandColor)
-            Text(String(localized: "notifications.loading", defaultValue: "Chargement...", bundle: .module))
-                .font(.system(size: 14))
-                .foregroundColor(theme.textMuted)
-            Spacer()
-        }
-    }
+    //
+    // Le squelette et l'état d'erreur vivent dans `NotificationListStates.swift`
+    // — voir son en-tête pour ce qu'ils remplacent (un spinner sur cache vide,
+    // et une panne qui se lisait « Aucune notification »).
 
     private var emptyState: some View {
         let category = viewModel.selectedCategory
@@ -363,6 +361,13 @@ final class NotificationListViewModel: ObservableObject {
     @Published var hasMore = false
     @Published var unreadOnly = false
     @Published var selectedCategory: NotificationCategory = .all
+
+    /// Le dernier chargement RÉSEAU a échoué (#7000). L'erreur était avalée
+    /// dans un `Logger.error` : la vue retombait sur son état VIDE, et une
+    /// panne s'affichait « Aucune notification ». Un booléen suffit — le
+    /// message rendu ne cite pas l'erreur technique, qui n'apprendrait rien à
+    /// l'utilisateur et fuiterait des détails d'implémentation.
+    @Published var loadDidFail = false
 
     var unreadCount: Int { NotificationToastManager.shared.unreadCount }
 
@@ -447,6 +452,29 @@ final class NotificationListViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
+        // #7000 — le canal qui manquait. `republishRead(.all)` faisait `break`
+        // faute d'abonné : une cloche déjà montée gardait ses lignes non lues
+        // pendant qu'un autre appareil venait de tout marquer.
+        manager.allNotificationsRead
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in
+                guard let self else { return }
+                self.notifications = NotificationCachePatch.markingRead(
+                    self.notifications, scope: .all
+                )
+            }
+            .store(in: &cancellables)
+
+        // #7000 — le serveur a refusé un marquage optimiste : la ligne
+        // redevient non lue à l'écran, et l'utilisateur l'apprend. Sans ce
+        // retour, l'optimisme deviendrait un MENSONGE durable.
+        manager.notificationReadRolledBack
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] notificationId in
+                self?.handleReadRollback(notificationId)
+            }
+            .store(in: &cancellables)
+
         manager.notificationWasDeleted
             .receive(on: DispatchQueue.main)
             .sink { [weak self] notificationId in
@@ -471,6 +499,30 @@ final class NotificationListViewModel: ObservableObject {
         notifications[idx] = notifications[idx].withReadState(true)
     }
 
+    /// Le rollback d'un marquage optimiste — la transformation PURE inverse,
+    /// plus le signal à l'utilisateur.
+    private func handleReadRollback(_ notificationId: String) {
+        notifications = NotificationCachePatch.markingUnread(notifications, id: notificationId)
+        Self.announceFailure(
+            String(
+                localized: "notifications.markRead.failed",
+                defaultValue: "Impossible de marquer cette notification lue",
+                bundle: .module
+            )
+        )
+    }
+
+    /// Le pont de toast que le SDK et l'app partagent déjà
+    /// (`FeedbackToastManager.observeSDKToasts`). MeeshyUI ne peut pas
+    /// atteindre `FeedbackToastManager`, qui vit dans la cible app.
+    static func announceFailure(_ message: String) {
+        NotificationCenter.default.post(
+            name: Notification.Name("meeshy.showToast"),
+            object: nil,
+            userInfo: ["message": message, "isSuccess": false]
+        )
+    }
+
     /// Marque localement toutes les lignes liées à une conversation comme lues
     /// (ouverture de la conversation → contenu consommé). Mise à jour optimiste :
     /// le compteur autoritatif est ensuite recalé par `notification:counts`.
@@ -493,6 +545,10 @@ final class NotificationListViewModel: ObservableObject {
 
     func loadInitial() async {
         offset = 0
+
+        // Un réessai après panne repart d'une ardoise propre : sinon l'état
+        // d'erreur resterait affiché le temps du chargement, sous le squelette.
+        loadDidFail = false
 
         let cached = await CacheCoordinator.shared.notifications.load(for: "all")
         switch cached {
@@ -520,10 +576,14 @@ final class NotificationListViewModel: ObservableObject {
             hasMore = response.pagination?.hasMore ?? false
             nextCursor = response.pagination?.nextCursor
             offset = response.data.count
+            loadDidFail = false
             try await CacheCoordinator.shared.notifications.save(response.data, for: "all")
             await NotificationToastManager.shared.refreshUnreadCount()
         } catch {
             Logger.notifications.error("Failed to refresh notifications: \(error.localizedDescription)")
+            // L'échec doit ATTEINDRE l'écran (#7000) : journalisé et oublié,
+            // il laissait la vue rendre son état vide.
+            loadDidFail = true
         }
         isLoading = false
     }
@@ -561,8 +621,26 @@ final class NotificationListViewModel: ObservableObject {
         await NotificationToastManager.shared.markRead(notificationId: notification.id)
     }
 
+    /// « Tout lire » ne patche QU'EN SUCCÈS (#7000).
+    ///
+    /// Le patch était inconditionnel derrière l'`await` : un refus serveur
+    /// affichait quand même toutes les lignes lues, au-dessus d'un compteur
+    /// que le manager avait — lui — correctement laissé en place. Deux
+    /// vérités à l'écran, dont la fausse était la plus visible. La
+    /// republication `.all` du manager suffirait, mais on garde le patch
+    /// local : un geste de l'utilisateur ne se paie pas un aller-retour de
+    /// publisher pour se voir.
     func markAllRead() async {
-        await NotificationToastManager.shared.markAllAsRead()
+        guard await NotificationToastManager.shared.markAllAsRead() else {
+            Self.announceFailure(
+                String(
+                    localized: "notifications.markAllRead.failed",
+                    defaultValue: "Impossible de tout marquer comme lu",
+                    bundle: .module
+                )
+            )
+            return
+        }
         notifications = NotificationCachePatch.markingRead(notifications, scope: .all)
     }
 

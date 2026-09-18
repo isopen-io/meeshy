@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
 import { createHttpTransport } from '@/lib/api/http';
+import type { ProtectedMediaDeps } from '@/lib/api/protected-media';
 import { sessionStore } from '@/lib/api/session';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { createStudioDraftStore, type StudioDraftStore } from '@/lib/stories/studio-draft-store';
@@ -293,6 +294,69 @@ describe('StoryComposeScreen — le son de fond s’ÉCOUTE, avec un vrai bouton
     act(() => toggle.click());
     expect(toggle.getAttribute('aria-pressed')).toBe('false');
     expect(el.querySelector<HTMLAudioElement>('[data-story-studio-sound]')?.muted).toBe(true);
+  });
+});
+
+/**
+ * #7015, revue-correction — **LE TROISIÈME `<audio>` DE LA MÊME SOURCE ÉLUE.**
+ *
+ * L'aperçu du studio élit sa piste avec `electBackgroundTrack`, la MÊME
+ * fonction que le lecteur de story et celui des Réels — et posait sa `src`
+ * TELLE QUELLE. Sur un fichier local (`blob:`) c'est juste ; sur une piste
+ * servie par `GET /api/v1/static/…` — la route AUTHENTIFIÉE — la balise part
+ * sans en-tête et rend `401`.
+ *
+ * **CE QUE LA MESURE DIT, ET CE QU'ELLE NE DIT PAS.** La bibliothèque de sons
+ * n'est PAS encore branchée au studio web (`background-sound.ts` : « `library`
+ * reste HORS PÉRIMÈTRE ») : aujourd'hui, `draft.sound.previewUrl` est un
+ * `blob:` (fichier choisi) ou un `/api/v1/attachments/file/…` (brouillon
+ * restauré, route SANS authentification). Cette surface n'est donc pas
+ * atteignable en production À CETTE DATE — elle le devient au premier
+ * emprunt, et le brouillon RESTAURÉ est le chemin exact par lequel une piste
+ * empruntée y entrerait. Le témoin passe par lui : le studio partage désormais
+ * le SITE UNIQUE du transport protégé, au lieu d'attendre que la bibliothèque
+ * rouvre le défaut que ce lot vient de fermer deux fois.
+ */
+const SON_EMPRUNTE = '/api/v1/static/d0bf39b7-cd47-4e70-8f1c-34b2d9b5ee4b.m4a';
+
+function draftsAvecSonEmprunte(): StudioDraftStore {
+  const drafts = createStudioDraftStore(null);
+  drafts.set(VIEWER_ID, {
+    texts: [{ id: 't1', text: 'Sur une piste empruntée' }],
+    sound: { postMediaId: 'pm-lib', fileUrl: SON_EMPRUNTE },
+  });
+  return drafts;
+}
+
+/** Le type que la route SERT (`EXT_TO_MIME`, `soundFormats.ts`) — un `200` non
+ * typé n'est plus une piste depuis la revue-correction. */
+function mediaDepsDeTest(options: { readonly typeServi?: string } = {}): ProtectedMediaDeps {
+  return {
+    credential: () => ({ kind: 'registered', token: 'jeton-du-temoin' }),
+    fetchImpl: (() =>
+      Promise.resolve(new Response(new Blob(['octets'], { type: options.typeServi ?? 'audio/x-m4a' }), { status: 200 }))) as typeof fetch,
+    createObjectURL: () => 'blob:meeshy/studio',
+    revokeObjectURL: () => undefined,
+  };
+}
+
+describe('StoryComposeScreen — la piste PROTÉGÉE de l’aperçu (#7015)', () => {
+  test('l’URL protégée n’est JAMAIS posée en `src` — l’aperçu reçoit une URL d’objet', async () => {
+    const el = mount({ ...harness({ drafts: draftsAvecSonEmprunte() }).deps, media: mediaDepsDeTest() });
+    await flush(() => el.querySelector('[data-scene-player]') !== null && el.querySelector('[data-story-studio-sound]') !== null);
+
+    const soundAudio = el.querySelector<HTMLAudioElement>('[data-story-studio-sound]');
+    expect(soundAudio?.getAttribute('src')).toBe('blob:meeshy/studio');
+    expect(soundAudio?.getAttribute('src')).not.toContain('/api/v1/static/');
+  });
+
+  test('une piste indisponible ⇒ ni lecteur ni bouton — jamais un contrôle INERTE (loi 4)', async () => {
+    const el = mount({ ...harness({ drafts: draftsAvecSonEmprunte() }).deps, media: mediaDepsDeTest({ typeServi: 'text/html' }) });
+    await flush(() => el.querySelector('[data-scene-player]') !== null);
+    expect(el.querySelector('[data-story-studio-sound]')).toBeNull();
+    // Le bouton COUPER/RÉTABLIR d'une piste qui ne jouera jamais n'aurait
+    // aucun effet : il ne se dessine pas.
+    expect(el.querySelector('[data-story-studio-sound-toggle]')).toBeNull();
   });
 });
 

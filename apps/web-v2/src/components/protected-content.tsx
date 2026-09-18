@@ -15,6 +15,8 @@ import {
   type ProtectionKind,
   type RevealPhase,
 } from '@/lib/reading-mode/protection';
+import type { Attachment } from '@/lib/api/types';
+import { attachmentSegments } from '@/lib/view/message-a11y-label';
 
 import { Glyph } from './glyph';
 
@@ -40,7 +42,7 @@ export function ProtectedContent({
   kind,
   isViewOnce,
   contentLength,
-  attachmentCount,
+  attachments,
   surface,
   isMine = false,
   revealable = true,
@@ -52,7 +54,16 @@ export function ProtectedContent({
   readonly kind: ProtectionKind;
   readonly isViewOnce: boolean;
   readonly contentLength: number;
-  readonly attachmentCount: number;
+  /**
+   * LES PIÈCES DU MESSAGE — l'OBJET, plus seulement leur nombre (#7020).
+   *
+   * Le voile n'avait besoin que d'un compte (« y a-t-il quelque chose de
+   * masqué ? »). Le CONSTAT d'un contenu RETENU a besoin de leur NATURE, et le
+   * dire depuis un nombre obligerait à un second vocabulaire — exactement ce
+   * que `PROTECTED_LABEL` interdit. Le nombre se dérive de la liste ; l'inverse,
+   * non.
+   */
+  readonly attachments: readonly Attachment[] | undefined;
   readonly surface: 'row' | 'bubble';
   readonly isMine?: boolean;
   /**
@@ -84,6 +95,7 @@ export function ProtectedContent({
   // tombstone couperait la fenêtre de révélation qu'on vient de payer
   // (D-23 §1.4 point 4, le comportement retenu est celui de la BULLE iOS).
   const [phase, setPhase] = useState<RevealPhase>(() => (kind === 'burned' ? { phase: 'consumed' } : { phase: 'hidden' }));
+  const attachmentCount = attachments?.length ?? 0;
   const [pending, setPending] = useState(false);
   const [revealError, setRevealError] = useState(false);
   const errorTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -153,7 +165,18 @@ export function ProtectedContent({
    * Placé avant `standard`, ce garde couvre les QUATRE causes d'un seul coup,
    * parce qu'il lit le verdict SERVI et ne le recalcule pas.
    */
-  if (!revealable) return <ProtectionNotice kind="withheld" surface={surface} isMine={isMine} />;
+  /* `exactOptionalPropertyTypes` : une clé ABSENTE doit le RESTER, jamais
+     devenir une clé posée à `undefined` — la discipline du chantier. */
+  if (!revealable) {
+    return (
+      <ProtectionNotice
+        kind="withheld"
+        surface={surface}
+        isMine={isMine}
+        {...(attachments === undefined ? {} : { attachments })}
+      />
+    );
+  }
 
   if (kind === 'standard') return <>{children}</>;
 
@@ -265,6 +288,7 @@ export function ProtectionNotice({
   kind,
   surface,
   isMine = false,
+  attachments,
 }: {
   /**
    * `withheld` (#6862) — le contenu n'est pas masqué À L'AFFICHAGE : il n'est
@@ -276,6 +300,23 @@ export function ProtectionNotice({
   readonly kind: 'deleted' | 'burned' | 'withheld';
   readonly surface: 'row' | 'bubble';
   readonly isMine?: boolean;
+  /**
+   * LE CONSTAT D'UN CONTENU RETENU (#7020) — les pièces que la passerelle LISTE
+   * sans les servir, et qu'il faut pouvoir constater.
+   *
+   * Lu pour le SEUL `withheld`, et c'est une frontière, pas une commodité :
+   * `deleted` et `burned` racontent une histoire où la pièce n'existe PLUS (un
+   * message retiré, une vue unique consommée) — y compter des images
+   * inventerait un fait. `withheld` dit l'inverse : le message est INTACT,
+   * c'est la passerelle qui refuse de le servir, et `servedAttachment` liste
+   * exprès ses pièces pour que l'administration puisse le CONSTATER.
+   *
+   * Ce qui sort reste le TYPE et le NOMBRE — jamais le nom, le poids, la durée
+   * ni l'URL, que `MaskedAttachment` retient déjà pour la même raison
+   * (leçon 275 : « une protection de CONTENU se mesure sur tout ce que la
+   * charge TRANSPORTE »).
+   */
+  readonly attachments?: readonly Attachment[];
 }) {
   const LABELS = {
     deleted: { label: 'Message supprimé', aria: 'Message supprimé' },
@@ -283,6 +324,16 @@ export function ProtectionNotice({
     withheld: { label: 'Contenu retenu', aria: 'Contenu retenu : ce message existe et ne se montre pas' },
   } as const;
   const { label, aria: ariaLabel } = LABELS[kind];
+  /* Le MÊME vocabulaire que l'oreille — `attachmentSegments` est le site
+     unique, importé et jamais recopié (§ `PROTECTED_LABEL`). */
+  const constat = kind === 'withheld' ? attachmentSegments(attachments).join(', ') : '';
+  const media =
+    constat === '' ? null : (
+      <span data-withheld-media className="not-italic opacity-80">
+        {' · '}
+        {constat}
+      </span>
+    );
 
   if (surface === 'row') {
     return (
@@ -296,9 +347,10 @@ export function ProtectionNotice({
            commence à 41 (mesuré en revue : texte à x=112 contre x=71). */
         className="italic text-bubble"
         style={{ color: 'var(--color-ios-ink-2)' }}
-        aria-label={ariaLabel}
+        aria-label={constat === '' ? ariaLabel : `${ariaLabel}, ${constat}`}
       >
         {label}
+        {media}
       </p>
     );
   }
@@ -308,7 +360,7 @@ export function ProtectionNotice({
       <span
         data-protected="consumed"
         className={`protected-notice protected-notice--${kind} inline-flex items-center gap-1.5 rounded-chip`}
-        aria-label={ariaLabel}
+        aria-label={constat === '' ? ariaLabel : `${ariaLabel}, ${constat}`}
       >
         <Glyph
           name={kind === 'burned' ? 'flameFill' : 'prohibit'}
@@ -317,6 +369,7 @@ export function ProtectionNotice({
         />
         <span className="text-title italic" style={{ color: 'var(--color-ios-ink-2)' }}>
           {label}
+          {media}
         </span>
       </span>
     </div>

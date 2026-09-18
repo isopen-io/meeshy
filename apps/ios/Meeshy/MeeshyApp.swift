@@ -234,6 +234,13 @@ struct MeeshyApp: App {
                     NotificationToastManager.shared.hapticPlayer = {
                         HapticFeedback.light()
                     }
+                    // #6999 — un fil consommé quitte le centre iOS. Le SDK sait
+                    // CE QUI est consommé ; la couture `UNUserNotificationCenter`
+                    // et le budget d'arrière-plan qui l'entoure vivent
+                    // app-side, dans `NotificationActionHandler`.
+                    NotificationToastManager.shared.deliveredBannerPurger = { ref in
+                        NotificationActionHandler.removeDeliveredBanners(forThreadOf: ref)
+                    }
                     // Révocation par socket (`notification:deleted`) : la
                     // bannière déjà livrée suit la suppression — même atome de
                     // retrait que le push de contrôle `notification_revoked`.
@@ -573,7 +580,16 @@ struct MeeshyApp: App {
                 .adaptiveOnChange(of: scenePhase) { _, newPhase in
                     switch newPhase {
                     case .active:
-                        UNUserNotificationCenter.current().removeAllDeliveredNotifications()
+                        // #7000 — ici vivait `removeAllDeliveredNotifications()` :
+                        // TOUTES les bannières livrées effacées à chaque retour au
+                        // premier plan, celles d'autres conversations comprises,
+                        // même sans session, et sans rien rafraîchir derrière. On
+                        // vidait le seul endroit où l'utilisateur pouvait lire ce
+                        // qu'il avait manqué, en laissant cloche et badge périmés.
+                        // Le geste juste est l'inverse : relire (liste + compteur).
+                        // Les bannières ne partent plus qu'à la consommation de ce
+                        // qu'elles annoncent.
+                        NotificationGapResyncCoordinator.shared.refreshOnForeground()
                         // CALL-FIX 2026-06-06 — tell the gateway we're foreground so
                         // incoming calls use the in-app banner (socket) instead of a
                         // VoIP push / CallKit.

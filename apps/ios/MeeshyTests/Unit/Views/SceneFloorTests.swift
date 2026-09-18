@@ -233,6 +233,97 @@ final class SceneFloorTests: XCTestCase {
                        "un réel composé n'est plus posé sur du noir pur (\(pixels.hex(x: x, y: y)))")
     }
 
+    // MARK: - Le sol ne DICTE pas la taille de son hôte
+
+    /// **#7037 — un sol PREND la place qu'on lui propose, il ne la DICTE
+    /// jamais.**
+    ///
+    /// Les trois hôtes du sol le montent en FRÈRE de leur chrome, dans un
+    /// `ZStack` — et un `ZStack` adopte la taille de son plus grand enfant. Le
+    /// sol peignait son empreinte en `scaledToFill()` sans cadre ni rognage :
+    /// une image remplie REND ses cotes agrandies, et l'hôte les adoptait. Tout
+    /// ce qui s'y alignait sur un BORD partait avec.
+    ///
+    /// Mesuré au simulateur avant le correctif, dans une fenêtre de 402 pt :
+    ///
+    /// ```
+    /// empreinte portrait (36 × 64) → hôte large de   437,3 → sonde gauche à x =   −3,7
+    /// empreinte carrée   (64 × 64) → hôte large de   778,0 → sonde gauche à x = −174,0
+    /// empreinte paysage  (64 × 36) → hôte large de 1 383,3 → sonde gauche à x = −476,7
+    /// ```
+    ///
+    /// À l'écran, dans la galerie de post : la croix « Fermer » à x = −326,3,
+    /// entièrement hors du viewport, et le menu ⋯ — donc « Enregistrer » et
+    /// « Partager hors de Meeshy » — sorti par l'autre bord.
+    ///
+    /// **Le témoin porte sur les DEUX formes**, et c'est ce qui le rend utile :
+    /// une empreinte portrait ne perd que 3,7 pt, assez pour passer une recette
+    /// et pas assez pour se voir. Une mesure faite sur elle seule aurait conclu
+    /// au vert.
+    ///
+    /// Il vit ICI, sur l'atome, plutôt que chez un hôte : les trois surfaces
+    /// plein écran (lecteur de stories, galerie de post, réel) montent le même
+    /// sol, et une règle vérifiée chez un seul est une règle qu'un autre finira
+    /// par ne pas avoir.
+    func test_leSol_neDicteJamaisLaTailleDeSonHote() throws {
+        for (forme, empreinte) in [("paysage", Self.empreintePaysage),
+                                   ("portrait", Self.empreintePortrait),
+                                   ("carrée", Self.empreinteIndigo)] {
+            let ecran = RenderedScreen(SolChezUnHote(empreinte: empreinte), size: Self.fenetre)
+            defer { ecran.dismount() }
+
+            let gauche = try XCTUnwrap(ecran.frame(labeledPrefix: SolChezUnHote.gauche),
+                                       "empreinte \(forme) : la sonde de gauche n'est pas rendue")
+            let droite = try XCTUnwrap(ecran.frame(labeledPrefix: SolChezUnHote.droite),
+                                       "empreinte \(forme) : la sonde de droite n'est pas rendue")
+
+            XCTAssertEqual(
+                gauche.minX, SolChezUnHote.marge, accuracy: 0.5,
+                "empreinte \(forme) : le sol a élargi son hôte — la sonde de gauche est à " +
+                "x = \(gauche.minX) au lieu de \(SolChezUnHote.marge)")
+            XCTAssertEqual(
+                droite.maxX, Self.fenetre.width - SolChezUnHote.marge, accuracy: 0.5,
+                "empreinte \(forme) : le sol a élargi son hôte — la sonde de droite finit à " +
+                "x = \(droite.maxX) au lieu de \(Self.fenetre.width - SolChezUnHote.marge)")
+        }
+    }
+
+    private static let fenetre = CGSize(width: 402, height: 874)
+
+    /// Le montage des trois hôtes, réduit à ce qui décide : un sol et un chrome
+    /// alignés sur les bords, frères dans un `ZStack`. Les sondes remplacent la
+    /// croix et le menu — ce qu'on mesure est la PLACE que l'hôte leur laisse,
+    /// pas ce qu'elles sont.
+    private struct SolChezUnHote: View {
+        static let gauche = "SondeDeBordGauche"
+        static let droite = "SondeDeBordDroit"
+        /// Le pas du couloir de la galerie : `MediaGalleryStage.gutter + 2`.
+        static let marge: CGFloat = 14
+
+        let empreinte: String
+
+        var body: some View {
+            ZStack {
+                Color.black.ignoresSafeArea()
+                SceneFloorView(thumbHash: empreinte, veil: SceneFloorView.cardedVeil)
+                    .ignoresSafeArea()
+                VStack(spacing: 0) {
+                    HStack {
+                        Color.blue.frame(width: 40, height: 40)
+                            .accessibilityLabel(Self.gauche)
+                        Spacer(minLength: 0)
+                        Color.red.frame(width: 40, height: 40)
+                            .accessibilityLabel(Self.droite)
+                    }
+                    .padding(.horizontal, Self.marge)
+                    .frame(height: 56)
+                    Spacer(minLength: 0)
+                }
+                .ignoresSafeArea()
+            }
+        }
+    }
+
     // MARK: - Le montage des pixels
 
     /// Ce qu'on lit là où le sol ne peint rien. Distincte du noir, qui est
@@ -248,8 +339,14 @@ final class SceneFloorTests: XCTestCase {
     /// L'empreinte d'un APLAT indigo, encodée par le SDK plutôt qu'écrite à la
     /// main : la teinte attendue est alors prévisible, et les assertions peuvent
     /// dire QUELLE couleur elles ont lue.
-    private static let empreinteIndigo: String = {
-        let taille = CGSize(width: 64, height: 64)
+    private static let empreinteIndigo = empreinte(CGSize(width: 64, height: 64))
+
+    /// Les deux FORMES que #7037 sépare : c'est le rapport de l'empreinte, et lui
+    /// seul, qui décidait de combien le sol élargissait son hôte.
+    private static let empreintePaysage = empreinte(CGSize(width: 64, height: 36))
+    private static let empreintePortrait = empreinte(CGSize(width: 36, height: 64))
+
+    private static func empreinte(_ taille: CGSize) -> String {
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = 1
         format.opaque = true
@@ -258,7 +355,7 @@ final class SceneFloorTests: XCTestCase {
             ctx.cgContext.fill(CGRect(origin: .zero, size: taille))
         }
         return aplat.toThumbHash() ?? ""
-    }()
+    }
 
     private static func pageScene(empreinte: String?) -> GallerySceneItem {
         let document = CanvasV3(scenes: [SceneV3(id: "s1", objects: [])])

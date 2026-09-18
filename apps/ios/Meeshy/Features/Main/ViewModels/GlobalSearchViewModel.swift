@@ -67,6 +67,33 @@ struct GlobalSearchUserResult: Identifiable, Sendable {
     let isOnline: Bool
 }
 
+// MARK: - Ce qu'un volet de recherche rend
+
+/// Résultat d'un volet de recherche (conversations, utilisateurs, messages) :
+/// ses éléments ET la raison d'un échec réseau s'il y en a eu un.
+///
+/// Un `catch { return [] }` rend une panne INDISCERNABLE d'un vide légitime :
+/// l'écran affiche « Aucun résultat » pendant que le réseau est tombé, et le
+/// lecteur accuse sa requête. Le volet dit donc les deux — ce qu'il a pu
+/// servir, et pourquoi il n'a pas pu servir plus.
+///
+/// `nonisolated` : le volet des messages traverse un `withTaskGroup`, dont les
+/// tâches ne portent pas l'isolation de l'appelant. Sous
+/// `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, un type déclaré sans ce
+/// qualificatif serait isolé au MainActor jusqu'à son initialiseur mémoire.
+nonisolated struct GlobalSearchLeg<Item: Sendable>: Sendable {
+    let items: [Item]
+    let failure: String?
+
+    static func served(_ items: [Item]) -> GlobalSearchLeg<Item> {
+        GlobalSearchLeg(items: items, failure: nil)
+    }
+
+    static func failed(_ reason: String) -> GlobalSearchLeg<Item> {
+        GlobalSearchLeg(items: [], failure: reason)
+    }
+}
+
 // MARK: - ViewModel
 
 @MainActor
@@ -91,12 +118,43 @@ final class GlobalSearchViewModel: ObservableObject {
     /// SwiftUI skips re-laying it out while the user types.
     @Published private(set) var resultsQuery = ""
 
+    /// Motif de la dernière panne du volet RÉSEAU, `nil` quand le dernier
+    /// aller-retour a abouti. Publié EN PLUS de `loadState` parce que les deux
+    /// répondent à deux questions distinctes : `loadState` dit ce que l'écran
+    /// doit rendre À LA PLACE de la liste, `remoteFailure` dit qu'une panne a
+    /// eu lieu alors même que des résultats LOCAUX (FTS5, cache) restent
+    /// affichables. Sans lui, une panne servie sur des résultats locaux se
+    /// confondait avec un succès ; sans `loadState`, elle remplaçait une liste
+    /// pleine par un écran d'erreur.
+    @Published private(set) var remoteFailure: String?
+
+    /// Dernière requête effectivement lancée — ce que « Réessayer » rejoue.
+    /// `resultsQuery` ne convient pas : il n'est posé qu'en SORTIE de
+    /// `performSearch`, donc il reste vide précisément quand la recherche a
+    /// échoué avant de rien produire, et le bouton aurait été inerte.
+    private var lastQuery = ""
+
     /// Backwards-compatibility shim — earlier consumers (and `GlobalSearchView`)
     /// read `isSearching` directly. Derived from `loadState` so existing call
     /// sites keep working without churn. Excludes `.cachedStale` so the spinner
     /// does NOT hide stale LRU results during background revalidation, per the
     /// non-negotiable "no spinner when cache has data" rule (CLAUDE.md).
     var isSearching: Bool { loadState == .loading }
+
+    /// Une recherche tourne PAR-DESSUS des résultats déjà à l'écran. La vue
+    /// rend alors un indicateur DISCRET en surimpression — jamais un spinner
+    /// qui remplace la liste.
+    var isRevalidating: Bool { loadState == .cachedStale }
+
+    /// Y a-t-il quelque chose à l'écran, toutes familles confondues ? C'est
+    /// cette question — et non « le cache LRU a-t-il répondu ? » — qui décide
+    /// entre `.loading` (démarrage à froid, squelette légitime) et
+    /// `.cachedStale` (revalidation discrète). Le cache LRU ne couvre que les
+    /// messages : sur l'onglet Utilisateurs, chaque lettre repassait donc par
+    /// `.loading` alors que la liste était pleine.
+    private var hasDisplayedResults: Bool {
+        !messageResults.isEmpty || !conversationResults.isEmpty || !userResults.isEmpty
+    }
 
     // MARK: - Dependencies
 
@@ -232,23 +290,31 @@ final class GlobalSearchViewModel: ObservableObject {
             .store(in: &cancellables)
     }
 
+    /// Le texte montré à l'utilisateur pour une panne de volet. On ne sert
+    /// JAMAIS `error.localizedDescription` : un message d'URLSession en anglais
+    /// dans une bannière française est pire qu'une phrase générique, et il
+    /// nomme des détails de transport dont le lecteur n'a que faire.
+    private static var remoteFailureMessage: String {
+        String(localized: "common.error.generic")
+    }
+
     // MARK: - Search
 
     func performSearch(query: String) async {
         hasSearched = true
+        lastQuery = query
 
-        // If we have a cached LRU hit for the message tab we are still going
-        // to revalidate downstream (FTS5 + cached merge are served first,
-        // network for conversations/users still runs), so we surface
-        // `.cachedStale` per the architecture-bible rule "no spinner when
-        // cache has data". Otherwise this is a cold load and we honour
-        // `.loading`.
+        // Un spinner ne remplace JAMAIS ce qui est déjà à l'écran. La frappe
+        // relance une recherche toutes les 300 ms (debounce) : poser `.loading`
+        // à chaque fois faisait clignoter la liste lettre après lettre.
+        // `.loading` est donc réservé au démarrage à froid — ni cache LRU, ni
+        // résultat affiché.
         let key = query.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
         let hasCachedHit = messageQueryCache.contains { entry in
             entry.query == key &&
             Date().timeIntervalSince(entry.cachedAt) < Self.messageQueryCacheStaleTTL
         }
-        loadState = hasCachedHit ? .cachedStale : .loading
+        loadState = (hasCachedHit || hasDisplayedResults) ? .cachedStale : .loading
 
         async let conversationsTask = searchConversations(query: query)
         async let usersTask = searchUsers(query: query)
@@ -262,16 +328,34 @@ final class GlobalSearchViewModel: ObservableObject {
         // `.loading` / `.cachedStale`.
         guard !Task.isCancelled else { return }
 
-        conversationResults = convs
-        userResults = users
-        messageResults = msgs
+        conversationResults = convs.items
+        userResults = users.items
+        messageResults = msgs.items
         resultsQuery = query
+
+        let failure = convs.failure ?? users.failure ?? msgs.failure
+        remoteFailure = failure
 
         if NetworkMonitor.shared.isOffline {
             loadState = .offline
+        } else if let failure, !hasDisplayedResults {
+            // Rien à montrer ET le réseau est tombé : l'écran dit la panne et
+            // propose de réessayer, au lieu d'un « Aucun résultat » qui accuse
+            // la requête. Avec des résultats servis, on reste `.loaded` — la
+            // panne se dit en bannière discrète, sans effacer la liste.
+            loadState = .error(failure)
         } else {
             loadState = .loaded
         }
+    }
+
+    /// Rejoue la dernière requête lancée. C'est ce que fait le bouton
+    /// « Réessayer » des états hors-ligne et d'erreur — un contrôle qui
+    /// n'aurait pas d'effet ne serait pas un contrôle.
+    func retryLastSearch() async {
+        let trimmed = lastQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count >= 2 else { return }
+        await performSearch(query: lastQuery)
     }
 
     // MARK: - Search Conversations (FTS5-first, network fallback)
@@ -280,10 +364,13 @@ final class GlobalSearchViewModel: ObservableObject {
     /// `@Published` state. The caller (`performSearch`) gates the write on a
     /// `Task.isCancelled` check so a debounce-cancelled run can't overwrite
     /// the next query's results.
-    private func searchConversations(query: String) async -> [GlobalSearchConversationResult] {
+    private func searchConversations(query: String) async -> GlobalSearchLeg<GlobalSearchConversationResult> {
         let localResults = await searchLocalConversations(query: query)
-        let remoteResults = await fetchRemoteConversationResults(query: query)
-        return mergeUniqueConversationResults(local: localResults, remote: remoteResults)
+        let remote = await fetchRemoteConversationResults(query: query)
+        return GlobalSearchLeg(
+            items: mergeUniqueConversationResults(local: localResults, remote: remote.items),
+            failure: remote.failure
+        )
     }
 
     /// Prisme Linguistique du lecteur, dans l'ordre — systemLanguage,
@@ -334,7 +421,7 @@ final class GlobalSearchViewModel: ObservableObject {
         }
     }
 
-    private func fetchRemoteConversationResults(query: String) async -> [GlobalSearchConversationResult] {
+    private func fetchRemoteConversationResults(query: String) async -> GlobalSearchLeg<GlobalSearchConversationResult> {
         do {
             let response: APIResponse<[APIConversation]> = try await api.request(
                 ConversationsEndpoint.search,
@@ -342,7 +429,7 @@ final class GlobalSearchViewModel: ObservableObject {
             )
             let userId = authManager.currentUser?.id ?? ""
             let preferred = preferredContentLanguages
-            return response.data.map { apiConv in
+            return .served(response.data.map { apiConv in
                 let conv = apiConv.toConversation(currentUserId: userId)
                 return GlobalSearchConversationResult(
                     id: conv.id,
@@ -360,9 +447,9 @@ final class GlobalSearchViewModel: ObservableObject {
                     unreadCount: conv.userState.unreadCount,
                     conversation: conv
                 )
-            }
+            })
         } catch {
-            return []
+            return .failed(Self.remoteFailureMessage)
         }
     }
 
@@ -387,10 +474,13 @@ final class GlobalSearchViewModel: ObservableObject {
 
     /// Returns the merged FTS5 + remote results. Pure — does NOT mutate
     /// `@Published` state. See note on `searchConversations`.
-    private func searchUsers(query: String) async -> [GlobalSearchUserResult] {
+    private func searchUsers(query: String) async -> GlobalSearchLeg<GlobalSearchUserResult> {
         let localResults = await searchLocalUsers(query: query)
-        let remoteResults = await fetchRemoteUserResults(query: query)
-        return mergeUniqueUserResults(local: localResults, remote: remoteResults)
+        let remote = await fetchRemoteUserResults(query: query)
+        return GlobalSearchLeg(
+            items: mergeUniqueUserResults(local: localResults, remote: remote.items),
+            failure: remote.failure
+        )
     }
 
     private func searchLocalUsers(query: String) async -> [GlobalSearchUserResult] {
@@ -425,10 +515,10 @@ final class GlobalSearchViewModel: ObservableObject {
         }
     }
 
-    private func fetchRemoteUserResults(query: String) async -> [GlobalSearchUserResult] {
+    private func fetchRemoteUserResults(query: String) async -> GlobalSearchLeg<GlobalSearchUserResult> {
         do {
             let results = try await userService.searchUsers(query: query, limit: 20, offset: 0)
-            return results.map { user in
+            return .served(results.map { user in
                 GlobalSearchUserResult(
                     id: user.id,
                     username: user.username,
@@ -436,9 +526,9 @@ final class GlobalSearchViewModel: ObservableObject {
                     avatar: user.avatar,
                     isOnline: user.isOnline ?? false
                 )
-            }
+            })
         } catch {
-            return []
+            return .failed(Self.remoteFailureMessage)
         }
     }
 
@@ -461,7 +551,7 @@ final class GlobalSearchViewModel: ObservableObject {
 
     /// Returns the merged FTS5 + remote results. Pure — does NOT mutate
     /// `@Published` state. See note on `searchConversations`.
-    private func searchMessages(query: String) async -> [GlobalSearchMessageResult] {
+    private func searchMessages(query: String) async -> GlobalSearchLeg<GlobalSearchMessageResult> {
         // FTS5 local results — instant, available offline
         let localResults = await searchLocalMessages(query: query)
 
@@ -470,13 +560,21 @@ final class GlobalSearchViewModel: ObservableObject {
         // and skip the round-trip. The FTS5 results are recomputed each
         // call (cheap, local) so they never go stale.
         if let cached = cachedRemoteResults(for: query) {
-            return mergeUniqueMessageResults(local: localResults, remote: cached)
+            return .served(mergeUniqueMessageResults(local: localResults, remote: cached))
         }
 
         // Network — merge fresh server-side hits
-        let remoteResults = await fetchRemoteMessageResults(query: query)
-        cacheRemoteResults(remoteResults, for: query)
-        return mergeUniqueMessageResults(local: localResults, remote: remoteResults)
+        let remote = await fetchRemoteMessageResults(query: query)
+        // On ne met en cache QUE ce qui a abouti : mémoriser le vide d'une
+        // panne sous la clé de la requête la ferait resservir pendant deux
+        // minutes, réseau revenu ou non.
+        if remote.failure == nil {
+            cacheRemoteResults(remote.items, for: query)
+        }
+        return GlobalSearchLeg(
+            items: mergeUniqueMessageResults(local: localResults, remote: remote.items),
+            failure: remote.failure
+        )
     }
 
     // MARK: - Message Query Cache (in-memory LRU, 5 entries)
@@ -534,7 +632,7 @@ final class GlobalSearchViewModel: ObservableObject {
         }
     }
 
-    private func fetchRemoteMessageResults(query: String) async -> [GlobalSearchMessageResult] {
+    private func fetchRemoteMessageResults(query: String) async -> GlobalSearchLeg<GlobalSearchMessageResult> {
         do {
             let response: APIResponse<[APIConversation]> = try await api.request(
                 ConversationsEndpoint.search,
@@ -549,10 +647,11 @@ final class GlobalSearchViewModel: ObservableObject {
             let searchConvs = Array(response.data.prefix(10)).map { $0.toConversation(currentUserId: userId) }
 
             var allResults: [GlobalSearchMessageResult] = []
-            await withTaskGroup(of: [GlobalSearchMessageResult].self) { group in
+            var perConversationFailure: String?
+            await withTaskGroup(of: GlobalSearchLeg<GlobalSearchMessageResult>.self) { group in
                 for conv in searchConvs {
                     group.addTask { [weak self] in
-                        guard let self else { return [] }
+                        guard let self else { return .served([]) }
                         return await self.searchMessagesInConversation(
                             conversationId: conv.id,
                             conversationName: conv.name,
@@ -561,13 +660,20 @@ final class GlobalSearchViewModel: ObservableObject {
                         )
                     }
                 }
-                for await results in group {
-                    allResults.append(contentsOf: results)
+                for await leg in group {
+                    allResults.append(contentsOf: leg.items)
+                    if perConversationFailure == nil { perConversationFailure = leg.failure }
                 }
             }
-            return allResults.sorted { $0.createdAt > $1.createdAt }
+            // Une conversation sur dix qui échoue n'est pas une panne : les neuf
+            // autres ont servi. On ne remonte l'échec que si RIEN n'est revenu —
+            // sinon la bannière contredirait la liste qu'elle surplombe.
+            return GlobalSearchLeg(
+                items: allResults.sorted { $0.createdAt > $1.createdAt },
+                failure: allResults.isEmpty ? perConversationFailure : nil
+            )
         } catch {
-            return []
+            return .failed(Self.remoteFailureMessage)
         }
     }
 
@@ -592,7 +698,7 @@ final class GlobalSearchViewModel: ObservableObject {
         conversationName: String,
         conversationAvatar: String?,
         query: String
-    ) async -> [GlobalSearchMessageResult] {
+    ) async -> GlobalSearchLeg<GlobalSearchMessageResult> {
         do {
             let response: MessagesAPIResponse = try await api.request(
                 ConversationsEndpoint.byIdMessagesSearch(id: conversationId),
@@ -601,7 +707,7 @@ final class GlobalSearchViewModel: ObservableObject {
                     URLQueryItem(name: "limit", value: "5"),
                 ]
             )
-            return response.data.map { apiMsg in
+            return .served(response.data.map { apiMsg in
                 let senderName = apiMsg.sender?.displayName ?? apiMsg.sender?.username ?? "?"
                 return GlobalSearchMessageResult(
                     id: apiMsg.id,
@@ -613,9 +719,9 @@ final class GlobalSearchViewModel: ObservableObject {
                     senderAvatar: apiMsg.sender?.avatar,
                     createdAt: apiMsg.createdAt
                 )
-            }
+            })
         } catch {
-            return []
+            return .failed(Self.remoteFailureMessage)
         }
     }
 
@@ -626,6 +732,8 @@ final class GlobalSearchViewModel: ObservableObject {
         conversationResults = []
         userResults = []
         resultsQuery = ""
+        lastQuery = ""
+        remoteFailure = nil
         hasSearched = false
         loadState = .idle
     }

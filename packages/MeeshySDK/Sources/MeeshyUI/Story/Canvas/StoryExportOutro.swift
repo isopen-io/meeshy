@@ -222,7 +222,10 @@ public enum StoryExportOutro {
         )
         guard writer.canAdd(input) else { throw OutroError.writerRejectedInput }
         writer.add(input)
-        writer.startWriting()
+        // Même règle que la jumelle `StoryExporter` : `startSession` après un
+        // `startWriting` refusé lève un `NSInternalInconsistencyException`
+        // qu'aucun `do/catch` Swift ne rattrape (#7004).
+        guard writer.startWriting() else { throw OutroError.writerCannotStart(writer.error) }
         writer.startSession(atSourceTime: .zero)
 
         let frameCount = max(1, Int(clipDuration * fps))
@@ -387,6 +390,10 @@ public enum StoryExportOutro {
 
     public enum OutroError: Error {
         case writerRejectedInput
+        /// `startWriting()` a refusé de commencer — disque plein, chemin de
+        /// sortie occupé. Distincte d'`encodingFailed`, qui dit qu'un encodage
+        /// COMMENCÉ n'a pas abouti (#7004).
+        case writerCannotStart(Error?)
         case pixelBufferCreationFailed
         case encodingFailed(Error?)
     }

@@ -256,7 +256,14 @@ final class SocketLifecycleBindingGuardTests: XCTestCase {
     /// compteur autoritatif arrive par `notification:counts`, et un GET par
     /// événement de masse changerait le coût réseau du produit.
     func test_bulkHandlers_triggerNoRESTRefetch() throws {
+        // **L'unité, pas le fichier** (#6999). `handleNotificationReadBulk` a
+        // déménagé dans `NotificationConsumption.swift` quand la consommation
+        // des notifications a pris son site unique ; sa jumelle est restée chez
+        // le manager. Une garde indexée par FICHIER rougit sur une extraction
+        // qui ne change aucun comportement — elle doit lire l'unité entière.
         let source = try sdkSource("Sources/MeeshySDK/Notifications/NotificationToastManager.swift")
+            + "\n"
+            + ((try? sdkSource("Sources/MeeshySDK/Notifications/NotificationConsumption.swift")) ?? "")
         let readBulk = try XCTUnwrap(declarationBlock(after: "func handleNotificationReadBulk", in: source))
         let deletedBulk = try XCTUnwrap(declarationBlock(after: "func handleNotificationDeletedBulk", in: source))
 

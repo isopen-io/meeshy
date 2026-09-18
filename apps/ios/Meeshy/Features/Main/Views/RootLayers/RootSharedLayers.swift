@@ -55,6 +55,15 @@ struct RootNotificationToastOverlay: View {
                 NotificationToastView(event: toast) {
                     if suppressToastTap { return }
                     notificationManager.dismissToast()
+                    // #6999 — taper un toast OUVRE le contenu : la notification
+                    // est consommée, exactement comme une ligne de cloche tapée.
+                    // Le geste ne marquait rien lu, et le contenu ouvert
+                    // n'aidait pas toujours : une mention, un palier ou une
+                    // alerte système n'a pas de conversation à rattraper.
+                    let consumedId = toast.id
+                    Task { @MainActor in
+                        await NotificationToastManager.shared.consume(.notification(id: consumedId))
+                    }
                     onTap(toast)
                 }
                 .simultaneousGesture(

@@ -6,6 +6,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { attachmentDefaults } from '@/lib/api/fixtures-base';
 import { messagesOf } from '@/lib/api/fixtures';
+import { resolveInterfaceLanguageCode } from '@/lib/inline-interface-language-bootstrap.js';
+import { READER_LOCALE } from '@/lib/reader';
 import {
   MEDIA_BROKEN_IMAGE_WITNESS_ID,
   MEDIA_CONVERSATION_ID,
@@ -111,23 +113,46 @@ describe('Attachments — le vocal, la piste suit le TEXTE servi (#5805, cycle 1
   });
 
   /**
-   * ÉCART AVEC LA SPÉCIFICATION (§4.3 d), suivi ici plutôt que reproduit en
-   * silence : l'énumération demandait `<p lang="fr">` sous ce prisme, mais sa
-   * PROPRE garde générale, une phrase plus bas, dit « lang est ABSENT ssi la
-   * langue servie est celle du document (READER_LOCALE) » — et `READER_LOCALE`
-   * vaut TOUJOURS `'fr'` dans cette application (`systemLanguage: 'fr'`,
-   * rang 1, gagne quel que soit `deviceLocale`, `src/lib/reader.ts`, mesuré).
-   * Les deux ne peuvent pas être vraies à la fois : la garde générale, plus
-   * robuste (elle couvre TOUS les rangs, pas un cas particulier), est celle
-   * que ce lot applique — un `lang="fr"` sur un document dont le `<html
-   * lang="fr">` est déjà posé serait l'attribut redondant que la garde
-   * interdit précisément d'écrire.
+   * `READER_LOCALE` N'EST PAS LA LANGUE DU DOCUMENT — et c'est la spécification
+   * (§4.3 d, `<p lang="fr">` sous ce prisme) qui avait raison contre la « garde
+   * générale » que ce fichier appliquait jusqu'ici (« lang est ABSENT ssi la
+   * langue servie est celle du document (READER_LOCALE) »).
+   *
+   * Les deux résolveurs sont DISJOINTS, et le dépôt le dit ailleurs sans que ce
+   * témoin l'ait lu : `<html lang>` est posé par le script d'amorçage de la
+   * langue d'INTERFACE (`inline-interface-language-bootstrap.js`, #6206) depuis
+   * `navigator.languages`, pendant que le CONTENU descend le Prisme du LECTEUR
+   * (`READER_LOCALE`, toujours `'fr'` — `systemLanguage: 'fr'` gagne au rang 1
+   * quel que soit `deviceLocale`, `src/lib/reader.ts`). Le témoin ci-dessous
+   * mesure l'écart plutôt que de le supposer : sur un navigateur anglais, le
+   * document est en `en` et la transcription servie est en `fr`.
+   *
+   * Omettre `lang` dans ce cas — LE CAS NOMINAL d'un lecteur francophone sur un
+   * appareil anglais — fait HÉRITER l'anglais du document à du texte français :
+   * un lecteur d'écran prononce « Bonjour, on garde la revue jeudi ? » avec une
+   * voix anglaise. L'attribut n'est redondant que si les deux langues
+   * coïncident, ce qu'aucun site du rendu ne peut savoir — et savoir le ferait
+   * dépendre d'un état global. On ANNONCE donc toujours la langue servie.
    */
-  test('prisme [\'fr\',\'en\'] ⇒ piste fr ; AUCUN lang (fr est la langue du document — garde générale, écart suivi ci-dessus)', () => {
+  test('prisme [\'fr\',\'en\'] ⇒ piste fr ET <p lang="fr"> : la langue SERVIE est annoncée même au rang 1', () => {
     const html = renderOne(voiceEn, { languages: ['fr', 'en'] });
     expect(html).toContain('data-track-language="fr"');
     expect(html).toContain(`src="${voiceEn.translations!.fr!.url}"`);
-    expect(html).not.toMatch(/<p[^>]*\slang=/);
+    expect(html).toMatch(/<p [^>]*data-transcript[^>]*\slang="fr"/);
+  });
+
+  /**
+   * LA RAISON, MESURÉE (leçon 261 : un témoin de rang s'écrit là où les deux
+   * règles DIVERGENT). Sans ce témoin, la ligne ci-dessus n'est qu'une attente
+   * retournée ; avec lui, elle repose sur un fait du dépôt — la langue
+   * d'INTERFACE d'un navigateur anglais vaut `en` quand `READER_LOCALE` vaut
+   * `fr`. Le jour où les deux se confondraient (une application servie dans la
+   * seule langue du lecteur), ce témoin tomberait AVANT celui du rendu et
+   * dirait pourquoi.
+   */
+  test('la langue d’INTERFACE et le rang 1 du Prisme DIVERGENT sur un navigateur anglais', () => {
+    expect(resolveInterfaceLanguageCode(null, ['en-US', 'en'])).toBe('en');
+    expect(READER_LOCALE).toBe('fr');
   });
 
   test('prisme [\'en\',\'fr\'] : la langue servie EST l’originale (en) ⇒ src=fileUrl, data-track-language="en", lang="en" (≠ document fr)', () => {

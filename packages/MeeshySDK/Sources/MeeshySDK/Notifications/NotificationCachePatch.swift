@@ -43,6 +43,20 @@ public enum NotificationCachePatch {
         }
     }
 
+    /// Le geste INVERSE de `markingRead`, borné à UNE ligne : le ROLLBACK d'un
+    /// marquage optimiste que le serveur a refusé (#7000).
+    ///
+    /// Borné à un id, et jamais à une portée : un rollback ne rend que ce que
+    /// CE geste a pris. Rejouer `.conversation(id:)` à l'envers marquerait non
+    /// lues des lignes que d'autres gestes — ou un autre appareil — avaient
+    /// légitimement lues.
+    public static func markingUnread(_ items: [APINotification], id: String) -> [APINotification] {
+        items.map { item in
+            guard item.id == id, item.isRead else { return item }
+            return item.withReadState(false)
+        }
+    }
+
     /// Retire une ligne (suppression utilisateur ou événement `notification:deleted`).
     public static func removing(_ items: [APINotification], id: String) -> [APINotification] {
         items.filter { $0.id != id }
