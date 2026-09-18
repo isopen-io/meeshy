@@ -227,21 +227,35 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         let completion = onCompletion
         let contentReady = onContentReady
 
-        // Preloaded composer assets. `preloadedImages` are in-memory bitmaps
-        // (non-`Sendable`), so we persist them to temp `file://` URLs ONCE here
-        // — URLs are `Sendable`, which lets both the resolver closure and the
-        // `ImageCacheReader` capture them without crossing Swift 6 strict
-        // concurrency. `makeUIView` runs once per representable instance, so
-        // the writes happen exactly once.
+        // **Les bitmaps préchargés restent EN MÉMOIRE** (#7008).
+        //
+        // Ce site encodait chaque image en PNG et l'écrivait dans
+        // `temporaryDirectory`, SYNCHRONEMENT et sur le thread principal :
+        // 100-300 ms par image 1080×1920, soit un gel de 0,5 à 2 s à
+        // l'ouverture de l'aperçu du composer. L'argument était la
+        // `Sendable`-ité (« `UIImage` ne l'est pas, une `URL` oui ») — il est
+        // faux depuis que le SDK marque `UIImage` `Sendable` : son voisin
+        // `ComposerImageCacheReader` sert des `UIImage` depuis la mémoire
+        // derrière le MÊME protocole, dans le même répertoire, depuis
+        // toujours.
+        //
+        // Et l'entrée `imageURLs` du résolveur ci-dessous était redondante :
+        // le lecteur d'images était construit À PARTIR de la même carte, donc
+        // toute clé que le résolveur aurait servie, le cache la servait déjà
+        // — et il est consulté AVANT lui (`StoryBackgroundLayer.configure`
+        // essaie `cachedImage(for:)` puis seulement l'URL).
         let videoURLs = preloadedVideoURLs
         let audioURLs = preloadedAudioURLs
-        let imageURLs = Self.persistPreloadedImages(preloadedImages)
+        let images = preloadedImages
+        // Les PNG déjà posés par les versions antérieures n'ont aucun autre
+        // propriétaire : ce site est le seul du dépôt à connaître leur préfixe.
+        _ = StoryPreviewTempSweeper.sweepOnce
 
         // Resolver: preloaded local assets take priority (composer preview),
         // then fall through to the published `StoryItem.media` remote URLs so
         // the live viewer behaves identically when the preloaded dicts are empty.
         let resolver: @Sendable (String) -> URL? = { postId in
-            if let local = videoURLs[postId] ?? audioURLs[postId] ?? imageURLs[postId] {
+            if let local = videoURLs[postId] ?? audioURLs[postId] {
                 return local
             }
             // Normalize through the SSRF-guarded resolver (relative → absolute,
@@ -261,12 +275,12 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
 
         // The background-image branch of `StoryBackgroundLayer.configure`
         // only consults the resolver when `imageCache` is non-nil. Supply a
-        // file-backed cache reader so preloaded images reach the resolver path;
-        // it falls back to the host's own reader (`nil` on every live surface)
+        // memory-backed cache reader so preloaded images reach the layers; it
+        // falls back to the host's own reader (`nil` on every live surface)
         // when no images were preloaded so the live viewer is unaffected.
-        let imageCache: ImageCacheReader? = imageURLs.isEmpty
+        let imageCache: ImageCacheReader? = images.isEmpty
             ? self.imageCache
-            : PreloadedImageCacheReader(fileURLs: imageURLs)
+            : PreloadedImageCacheReader(images: images)
 
         view.onContentReady = { contentReady?() }
         let progress = onContentProgress
@@ -312,22 +326,6 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         return view
     }
 
-    /// Writes each preloaded `UIImage` to a unique temp `file://` URL and
-    /// returns a `[mediaId: URL]` map. PNG keeps the bitmap lossless (composer
-    /// previews may include transparency). Images that fail to encode are
-    /// silently dropped — the resolver then falls back to the remote lookup.
-    private static func persistPreloadedImages(_ images: [String: UIImage]) -> [String: URL] {
-        guard !images.isEmpty else { return [:] }
-        let dir = FileManager.default.temporaryDirectory
-        var result: [String: URL] = [:]
-        for (mediaId, image) in images {
-            guard let data = image.pngData() else { continue }
-            let url = dir.appendingPathComponent("story-preview-\(UUID().uuidString).png")
-            guard (try? data.write(to: url, options: .atomic)) != nil else { continue }
-            result[mediaId] = url
-        }
-        return result
-    }
 
     public func updateUIView(_ view: StoryCanvasUIView, context: Context) {
         // Le changement de langue ne touche NI l'id NI le `content` du slide
@@ -461,19 +459,68 @@ extension StoryReaderRepresentable {
 
 // MARK: - Preloaded image cache
 
-/// `ImageCacheReader` backed by composer-preloaded images that were persisted
-/// to temp `file://` URLs by `StoryReaderRepresentable.persistPreloadedImages`.
+/// `ImageCacheReader` servant les bitmaps préchargés du composer **depuis la
+/// mémoire**.
 ///
-/// Only a `[String: URL]` is captured — `URL` is `Sendable`, so the struct is
-/// trivially `Sendable` and sidesteps the fact that `UIImage` is not. The
-/// background image layer calls `cachedImage(for:)` with the media id; we
-/// decode the matching temp file lazily on first lookup.
+/// Il a longtemps servi des fichiers : `makeUIView` encodait chaque image en
+/// PNG dans `temporaryDirectory`, et ce lecteur relisait puis redécodait le
+/// fichier **à chaque appel**, sans aucun cache (#7008). Le détour coûtait
+/// deux fois — à l'écriture (synchrone, sur le thread principal, 100-300 ms
+/// par image 1080×1920) et à chaque lecture.
+///
+/// Le motif en mémoire existait pourtant déjà dans le même répertoire, sous le
+/// même protocole : `ComposerImageCacheReader` (`StoryCanvasRepresentable`)
+/// rend `images[key]` et rien de plus. La contrainte qui avait justifié le
+/// disque — « `UIImage` n'est pas `Sendable` » — ne tient plus : ce voisin
+/// prouve le contraire depuis toujours.
 struct PreloadedImageCacheReader: ImageCacheReader {
-    let fileURLs: [String: URL]
+    let images: [String: UIImage]
 
     func cachedImage(for key: String) async -> UIImage? {
-        guard let url = fileURLs[key],
-              let data = try? Data(contentsOf: url) else { return nil }
-        return UIImage(data: data)
+        images[key]
+    }
+}
+
+// MARK: - Balayage des PNG d'aperçu laissés par les versions antérieures
+
+/// **Le dossier temporaire ne grossit plus, et ce qu'il contient déjà s'en
+/// va** (#7008).
+///
+/// Jusqu'au 2026-09-18, chaque ouverture de l'aperçu du composer écrivait un
+/// `story-preview-<UUID>.png` par image préchargée, et **aucun site du dépôt
+/// ne les effaçait** — le préfixe n'apparaissait qu'à l'écriture. Plus aucun
+/// n'est écrit ; ceux déjà posés sur les appareils mis à jour, eux, restent, et
+/// personne d'autre ne sait les nommer.
+///
+/// Une seule passe par lancement, en tâche détachée de fond : le balayage ne
+/// doit rien coûter au montage de l'aperçu, qui est précisément ce que ce lot
+/// vient d'alléger.
+nonisolated enum StoryPreviewTempSweeper {
+
+    /// Le préfixe que `makeUIView` posait. Il est déclaré ICI et nulle part
+    /// ailleurs : un balayage qui ne partagerait pas le littéral de
+    /// l'écriture est la façon dont une purge cesse de purger sans rougir.
+    static let filePrefix = "story-preview-"
+
+    /// `static let` ⇒ `swift_once` : le balayage part au PREMIER accès, une
+    /// seule fois par processus, sans verrou à tenir ni drapeau à écrire.
+    static let sweepOnce: Void = {
+        Task.detached(priority: .background) { _ = sweep() }
+    }()
+
+    /// Supprime les fichiers d'aperçu d'un répertoire. Paramétrable pour que
+    /// le témoin n'ait pas à écrire dans le vrai dossier temporaire.
+    @discardableResult
+    static func sweep(in directory: URL = FileManager.default.temporaryDirectory) -> Int {
+        let manager = FileManager.default
+        guard let entries = try? manager.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: nil
+        ) else { return 0 }
+        var removed = 0
+        for url in entries where url.lastPathComponent.hasPrefix(filePrefix) {
+            if (try? manager.removeItem(at: url)) != nil { removed += 1 }
+        }
+        return removed
     }
 }
