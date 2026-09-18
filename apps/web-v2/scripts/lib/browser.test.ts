@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, test } from 'bun:test';
 
 import { pageDiagnostics, watchPage } from './browser.mjs';
 
@@ -39,18 +39,18 @@ const fakePage = (url: string) => {
 };
 
 describe("le diagnostic d'un gate de peau", () => {
-  it('ne dit rien quand aucune page ne fut ouverte', () => {
+  test('ne dit rien quand aucune page ne fut ouverte', () => {
     expect(pageDiagnostics([])).toBe('');
   });
 
-  it("nomme l'URL de la page ouverte, même sans erreur — c'est elle qui situe le timeout", () => {
+  test("nomme l'URL de la page ouverte, même sans erreur — c'est elle qui situe le timeout", () => {
     const page = fakePage('http://127.0.0.1:4173/links/share/new');
     const watched = watchPage(page as never);
 
     expect(pageDiagnostics([watched])).toContain('/links/share/new');
   });
 
-  it("rend les erreurs de page collectées, dans l'ordre d'arrivée", () => {
+  test("rend les erreurs de page collectées, dans l'ordre d'arrivée", () => {
     const page = fakePage('http://127.0.0.1:4173/links/share/new');
     const watched = watchPage(page as never);
 
@@ -63,14 +63,14 @@ describe("le diagnostic d'un gate de peau", () => {
     expect(report.indexOf('Failed to fetch')).toBeLessThan(report.indexOf('Missing initialPageParam'));
   });
 
-  it("dit explicitement qu'aucune erreur de page n'est arrivée — l'absence est une INFORMATION, pas un silence", () => {
+  test("dit explicitement qu'aucune erreur de page n'est arrivée — l'absence est une INFORMATION, pas un silence", () => {
     const page = fakePage('http://127.0.0.1:4173/links/share');
     const watched = watchPage(page as never);
 
     expect(pageDiagnostics([watched])).toMatch(/aucune erreur de page/i);
   });
 
-  it('rend les messages de console de niveau erreur, qu\'un `pageerror` ne porte pas', () => {
+  test('rend les messages de console de niveau erreur, qu\'un `pageerror` ne porte pas', () => {
     const page = fakePage('http://127.0.0.1:4173/links/share/new');
     const watched = watchPage(page as never);
 
@@ -82,7 +82,7 @@ describe("le diagnostic d'un gate de peau", () => {
     expect(report).not.toContain('un journal ordinaire');
   });
 
-  it('sépare les pages, pour que deux gabarits ne mélangent pas leurs causes', () => {
+  test('sépare les pages, pour que deux gabarits ne mélangent pas leurs causes', () => {
     const grand = fakePage('http://127.0.0.1:4173/links/share/new');
     const petit = fakePage('http://127.0.0.1:4173/links');
     const a = watchPage(grand as never);
