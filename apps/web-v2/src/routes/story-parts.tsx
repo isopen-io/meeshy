@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import { useEffect, useRef, type CSSProperties } from 'react';
 
 import { GlyphSvg } from '@/components/glyph';
 import { MEDIA_TRANSPORT_GLYPHS } from '@/components/glyphs-media-transport';
@@ -142,7 +142,38 @@ export function StoryMediaLayer({
     onFailed();
   };
 
-  if (showsMedia && !isMediaAbsent(mediaSrc)) {
+  const connueAbsente = showsMedia && isMediaAbsent(mediaSrc);
+
+  /**
+   * UNE SOURCE DÉJÀ CONNUE ABSENTE PRÉVIENT L'HÔTE (#7022 suivi — revue
+   * adversariale 2026-09-19).
+   *
+   * Ne monter aucune `<img>` épargne la requête ; mais `onReady`/`onFailed`
+   * sont les DEUX seuls signaux par lesquels `story.tsx` apprend que la
+   * diapositive est jouable (`contentReady`, dont l'effet de progression
+   * dépend). Ne rien monter, c'était ne plus rien dire : au DEUXIÈME passage
+   * sur une story morte — exactement le moment où le registre sert à quelque
+   * chose — la barre restait à 0 et le carrousel ne tournait plus. Le
+   * doc-comment d'`échec()` nommait déjà ce risque pour le chemin `onError` ;
+   * le chemin « déjà connue » l'avait rouvert.
+   *
+   * DANS UN EFFET, jamais pendant le rendu : prévenir l'hôte lui fait poser un
+   * état, et le dépôt vient de payer une publication en cours de rendu
+   * (`031964fe09`, le fil qui se vidait au défilement).
+   *
+   * L'APPEL EST DANS UNE RÉF parce que l'hôte le recompose à chaque rendu
+   * (fermeture en ligne dans `story.tsx`) : le mettre en dépendance relancerait
+   * l'effet sans fin. Les dépendances sont donc ce qui IDENTIFIE la
+   * diapositive — la story et sa source.
+   */
+  const prévenir = useRef(onFailed);
+  prévenir.current = onFailed;
+  useEffect(() => {
+    if (!connueAbsente) return;
+    prévenir.current();
+  }, [storyId, mediaSrc, connueAbsente]);
+
+  if (showsMedia && !connueAbsente) {
     /* `feedMediaKindOf` — LA LOI DÉJÀ PARTAGÉE par le fil
        (`lib/feed/layout.ts:43`), jamais un second test de préfixe MIME : deux
        lois qui classent des médias divergent au premier format ajouté. Elle

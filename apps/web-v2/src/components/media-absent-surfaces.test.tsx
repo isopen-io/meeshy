@@ -239,6 +239,78 @@ describe('la surface média d’une STORY — #7022', () => {
     expect(container.querySelector('[data-media-unavailable]')).not.toBeNull();
   });
 
+  /**
+   * LE CARROUSEL NE DOIT PAS SE FIGER SUR UNE SOURCE DÉJÀ CONNUE ABSENTE
+   * (#7022 suivi — revue adversariale 2026-09-19).
+   *
+   * Ne monter aucune `<img>` épargne la requête ; mais `onReady`/`onFailed`
+   * sont les DEUX seuls signaux par lesquels l'hôte apprend que la diapositive
+   * est jouable (`story.tsx` : `contentReady = readyStoryId === story.id || …`,
+   * et l'effet de progression s'arrête net sur `!contentReady`). En ne montant
+   * rien, la couche ne prévenait plus personne : la barre restait à 0 et la
+   * story ne tournait JAMAIS — au deuxième passage sur la même story, c'est-à-
+   * dire exactement quand le registre sert à quelque chose.
+   *
+   * Le témoin mesure l'APPEL, parce que c'est lui que l'hôte écoute ; le
+   * doc-comment de `échec()` nommait déjà ce risque (« Enregistrer sans
+   * prévenir l'hôte figerait le carrousel sur une story morte ») pour le
+   * chemin `onError`, et le chemin « déjà connue » l'avait rouvert.
+   */
+  test('une source DÉJÀ connue absente PRÉVIENT l’hôte — sans quoi la progression reste à zéro', async () => {
+    noteMediaAbsent(ABSENT);
+    let échecs = 0;
+
+    await act(async () => {
+      root.render(
+        <StoryMediaLayer
+          storyId="st-figee"
+          mediaSrc={ABSENT}
+          mimeType="image/jpeg"
+          showsMedia
+          hasMedia
+          background={{}}
+          caption={null}
+          onReady={() => undefined}
+          onFailed={() => {
+            échecs += 1;
+          }}
+        />,
+      );
+    });
+
+    expect(échecs).toBe(1);
+  });
+
+  /**
+   * CONTRE-ÉPREUVE — une story VIVANTE ne doit pas se déclarer en échec.
+   * Sans elle, un `onFailed()` appelé inconditionnellement au montage
+   * passerait le témoin ci-dessus au vert en cassant toutes les stories.
+   */
+  test('une story vivante ne prévient d’aucun échec au montage', async () => {
+    const vivante = 'https://gate.meeshy.me/api/v1/attachments/file/2026%2F09%2Fvivante-2.jpg';
+    let échecs = 0;
+
+    await act(async () => {
+      root.render(
+        <StoryMediaLayer
+          storyId="st-vivante"
+          mediaSrc={vivante}
+          mimeType="image/jpeg"
+          showsMedia
+          hasMedia
+          background={{}}
+          caption={null}
+          onReady={() => undefined}
+          onFailed={() => {
+            échecs += 1;
+          }}
+        />,
+      );
+    });
+
+    expect(échecs).toBe(0);
+  });
+
   test('l’échec s’enregistre au module — la réouverture de la story n’y revient pas', () => {
     act(() => {
       root.render(couche());
