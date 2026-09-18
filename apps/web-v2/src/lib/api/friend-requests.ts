@@ -149,9 +149,44 @@ export async function loadFriendRequests(
 
 type PageContext = { readonly pageParam: string | null; readonly signal?: AbortSignal };
 
+/**
+ * **CINQ MINUTES DE FRAÎCHEUR POUR TOUTE LA FAMILLE `['friends']`** (#6974) —
+ * la fenêtre la mieux ADOSSÉE du lot, et la seule dont le raisonnement tient
+ * sur le temps réel plutôt que sur l'inventaire des auteurs :
+ *
+ * - `socket.ts:385` invalide `FRIENDS_QUERY_PREFIX` sur les QUATRE événements
+ *   d'amitié (`friend-request:new`, `:cancelled`, `:accepted`, `:rejected`) —
+ *   donc une demande reçue, annulée, acceptée ou refusée ARRIVE, quelle que
+ *   soit la fenêtre ;
+ * - `socket.ts:469` rejoue cette invalidation à chaque RE-authentification,
+ *   ce qui couvre le trou d'une coupure de socket ;
+ * - `friend-actions.ts:66`/`:85`/`:107` écrit le cache sur les gestes locaux.
+ *
+ * Une fenêtre longue n'est donc pas un pari sur l'immobilité de la donnée :
+ * c'est la conséquence du fait qu'un canal temps réel porte déjà ses
+ * changements. La fenêtre ne retient que ce qu'AUCUN de ces trois chemins ne
+ * dit — et il n'en reste rien de visible.
+ *
+ * **Ce que la fenêtre ÉVITE** est mesuré et documenté à part
+ * (`decisions.md:2036`) : un rafraîchissement d'une requête infinie refait
+ * AUTANT d'appels que de pages chargées, séquentiellement. `useExhaustPages`
+ * (`routes/discover.tsx:128`, `:129`, `routes/conversation-new.tsx:105`) tire
+ * TOUTES les pages du panier `accepted` à cent lignes la page : un compte à
+ * 350 contacts payait quatre allers-retours à chaque focus passé 30 s.
+ *
+ * **Attention — un appelant peut la neutraliser** : `use-pending-friend-
+ * requests.ts:31` repose `staleTime: 30_000` APRÈS avoir répandu cette
+ * fabrique, et son observateur est monté sur neuf routes (`floating-gate.ts`).
+ * Tant que ce site n'a pas suivi, le panier `received` garde une fenêtre de
+ * 30 s quand la pastille du barreau est à l'écran (le rang stale se décide PAR
+ * OBSERVATEUR). Voir le rapport de #6974.
+ */
+export const FRIENDS_STALE_TIME = 5 * 60_000;
+
 export function friendRequestsQueryOptions(deps: FriendRequestsDeps, bucket: FriendRequestBucket) {
   return {
     queryKey: friendRequestsQueryKey(bucket),
+    staleTime: FRIENDS_STALE_TIME,
     initialPageParam: null as string | null,
     queryFn: async ({ pageParam, signal }: PageContext) =>
       unwrap(await loadFriendRequests({ ...deps, bucket, cursor: pageParam, ...(signal === undefined ? {} : { signal }) })),

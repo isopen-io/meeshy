@@ -42,9 +42,36 @@ export async function loadPost(
   });
 }
 
+/**
+ * **CINQ MINUTES DE FRAÎCHEUR** (#6974) — une publication est un objet PUBLIÉ :
+ * son texte, ses médias et son auteur ne changent plus. Ce qui bouge — les
+ * compteurs et l'état du lecteur — est déjà tenu SANS relecture :
+ * `feed-gestures.ts:127` et `:142` écrivent cette clé-là (jamais seulement
+ * celle du fil) pour aimer, enregistrer et le compte servi, `:152` l'invalide
+ * quand la passerelle refuse. Le défaut de l'application (30 s,
+ * `query-client.ts:234`) relisait donc la publication entière à chaque retour
+ * de focus.
+ *
+ * **Ce que la fenêtre coûte, dit à voix haute** : le socket porte bien
+ * `post:liked`, `:unliked` et `:bookmarked`, mais ses trois gestionnaires
+ * n'écrivent QUE `FEED_QUERY_KEY` (`socket.ts:303`, via `updateFeed`) — jamais
+ * `['posts', id]`. Les compteurs d'une publication ouverte hors du fil peuvent
+ * donc afficher jusqu'à cinq minutes de retard ; brancher ces trois
+ * gestionnaires sur la clé du détail est un lot à part.
+ *
+ * **La fenêtre est neutralisée dans `usePost`, et c'est assumé** :
+ * `query.ts:206` repose `staleTime: 0` APRÈS avoir répandu cette fabrique —
+ * cache-first par `initialData` (la carte déjà reçue par le fil, datée du
+ * fil), revalidation en fond, justifié par son propre doc-comment et hors
+ * périmètre de #6974. La valeur ci-dessous gouverne donc la GRAINE des Réels
+ * (`routes/reels.tsx:167`, qui ne repose rien), et tout consommateur à venir.
+ */
+export const PUBLICATION_STALE_TIME = 5 * 60_000;
+
 export function postQueryOptions(deps: PublicationDeps & { readonly postId: string }) {
   return {
     queryKey: postQueryKey(deps.postId),
+    staleTime: PUBLICATION_STALE_TIME,
     queryFn: ({ signal }: { readonly signal: AbortSignal }) => loadPost({ ...deps, signal }).then(unwrap),
   };
 }

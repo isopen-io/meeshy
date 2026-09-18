@@ -185,9 +185,30 @@ export async function loadMyShareLinks(
   };
 }
 
+/**
+ * **CINQ MINUTES DE FRAÎCHEUR** (#6974) — mes liens de partage n'ont qu'un
+ * auteur, et `link-actions.ts` écrit le cache à chacun de ses gestes : `:70`
+ * la bascule active/inactive (avec son retour arrière `:74`), `:119` un lien
+ * neuf en tête de liste. Deux écrans OBSERVENT la même entrée
+ * (`routes/share-links.tsx:51` et `routes/share-link.tsx:57`, la fiche lisant
+ * la liste plutôt qu'une seconde requête) : sans fenêtre, passer de la liste à
+ * une fiche et revenir payait un aller-retour par transition passé les 30 s du
+ * défaut (`query-client.ts:234`).
+ *
+ * **Ce que la fenêtre coûte, dit à voix haute** : aucun événement socket ne
+ * porte `['share-links']` (vérifié sur `socket.ts`), et la seule valeur qu'un
+ * TIERS fait bouger est le compteur d'usages — un invité qui consomme le lien
+ * l'incrémente côté passerelle, sans rien émettre. `usageCount` et le
+ * `summary` de la première page peuvent donc afficher jusqu'à cinq minutes de
+ * retard. C'est un compteur d'observation, jamais une garde : la limite
+ * d'usages est appliquée par la passerelle, pas par ce qui est peint ici.
+ */
+export const SHARE_LINKS_STALE_TIME = 5 * 60_000;
+
 export function shareLinksQueryOptions(deps: LinksDeps) {
   return {
     queryKey: SHARE_LINKS_QUERY_KEY,
+    staleTime: SHARE_LINKS_STALE_TIME,
     initialPageParam: 0,
     queryFn: async ({ pageParam, signal }: { readonly pageParam: number; readonly signal?: AbortSignal }) =>
       unwrap(await loadMyShareLinks({ ...deps, offset: pageParam, ...withSignal(signal) })),
