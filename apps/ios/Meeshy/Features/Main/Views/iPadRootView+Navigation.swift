@@ -243,7 +243,7 @@ extension iPadRootView {
         // Delegate to the centralized helper. iPad's openConversation is wired
         // through router.onRouteRequested, so navigateToConversation dispatches
         // into the two-column flow automatically.
-        router.navigateToStoryReply(context, conversationListViewModel: conversationViewModel)
+        router.navigateToStoryReply(context, conversationList: conversationViewModel)
     }
 
     // MARK: - Handle Notification Tap

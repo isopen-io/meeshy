@@ -167,7 +167,7 @@ extension ConversationView {
 
     func navigateToDM(with userId: String, name: String) async {
         // Check if a DM already exists in the loaded conversation list
-        if let existing = conversationListViewModel.conversations.first(where: {
+        if let existing = conversationListViewModel?.conversations.first(where: {
             $0.type == .direct && $0.participantUserId == userId
         }) {
             router.navigateToConversation(existing)
@@ -186,7 +186,7 @@ extension ConversationView {
                 with: userId,
                 currentUserId: currentUserId
             )
-            await conversationListViewModel.refresh()
+            await conversationListViewModel?.refresh()
             router.navigateToConversation(newConv)
         } catch {
             Logger.network.error("createDirectConversation failed: \(error.localizedDescription)")

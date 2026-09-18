@@ -214,7 +214,7 @@ struct ConversationView: View {
     @EnvironmentObject var storyViewModel: StoryViewModel
     @EnvironmentObject var statusViewModel: StatusViewModel
     @EnvironmentObject var router: Router
-    @EnvironmentObject var conversationListViewModel: ConversationListViewModel
+    @Environment(\.meeshyConversationList) var conversationListViewModel
     @StateObject var viewModel: ConversationViewModel
     /// WS-7 (F-086, contrat §WS-7/A6) — décision de l'orchestrateur des modes
     /// de lecture, prise UNE SEULE FOIS dans `init` (écart #4 du contrat :
@@ -689,7 +689,7 @@ struct ConversationView: View {
                     isPresented: $headerState.showStoryViewerFromHeader,
                     onReplyToStory: { replyContext in
                         headerState.showStoryViewerFromHeader = false
-                        router.navigateToStoryReply(replyContext, conversationListViewModel: conversationListViewModel)
+                        router.navigateToStoryReply(replyContext, conversationList: conversationListViewModel)
                     },
                     singleGroup: true,
                     startAtFirstUnviewed: true,
@@ -700,7 +700,7 @@ struct ConversationView: View {
                 // inherit EnvironmentObjects automatically.
                 .environmentObject(router)
                 .environmentObject(statusViewModel)
-                .environmentObject(conversationListViewModel)
+                .conversationListObject(conversationListViewModel)
                 // U1 inc.2 — zoom depuis la bulle si elle est enregistrée
                 // (tray in-chat), fallback cover standard sinon (avatar header).
                 .zoomTransitionDestination(sourceID: headerState.storyUserIdForHeader ?? "", in: zoomNamespace)
@@ -712,7 +712,7 @@ struct ConversationView: View {
                     isPresented: $overlayState.showStoryViewer,
                     onReplyToStory: { replyContext in
                         overlayState.showStoryViewer = false
-                        router.navigateToStoryReply(replyContext, conversationListViewModel: conversationListViewModel)
+                        router.navigateToStoryReply(replyContext, conversationList: conversationListViewModel)
                     },
                     singleGroup: true,
                     initialStoryIndex: overlayState.storyViewerSlideIndex,
@@ -724,7 +724,7 @@ struct ConversationView: View {
                 // inherit EnvironmentObjects automatically.
                 .environmentObject(router)
                 .environmentObject(statusViewModel)
-                .environmentObject(conversationListViewModel)
+                .conversationListObject(conversationListViewModel)
                 .zoomTransitionDestination(sourceID: overlayState.storyViewerUserId ?? "", in: zoomNamespace)
             }
             .sheet(isPresented: $composerState.showConversationInfo) {
@@ -918,7 +918,7 @@ struct ConversationView: View {
                     // présentation. L'hôte ne remet que la cible.
                     target: cible,
                     storyViewModel: storyViewModel,
-                    preview: MediaComposerPreviewHosts(router: router, conversationListViewModel: conversationListViewModel, statusViewModel: statusViewModel),
+                    preview: MediaComposerPreviewHosts(router: router, conversationList: conversationListViewModel, statusViewModel: statusViewModel),
                     onDismiss: { composerState.composeMediaTarget = nil }
                 )
             }
