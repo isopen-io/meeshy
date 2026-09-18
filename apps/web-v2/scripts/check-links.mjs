@@ -50,7 +50,7 @@ const DIST = new URL('../dist/', import.meta.url).pathname;
    TOUT sur `index.html`, y compris un `/assets/*.js` dont la lecture échouait,
    et le navigateur rendait alors « Failed to fetch dynamically imported
    module » pour une panne transitoire. Ce gate en a rougi trois fois. */
-const served = await startDistServer(DIST);
+const served = await startDistServer(DIST, { serviceWorker: false });
 const BASE = served.base;
 
 const CAPTURE_DIR = process.env.CAPTURE_DIR ?? null;

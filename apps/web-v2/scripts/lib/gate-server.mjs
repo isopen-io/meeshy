@@ -86,9 +86,28 @@ export const distCandidates = (pathname) => {
  * `readFile`/`stat` sont injectables pour qu'un témoin puisse exercer la
  * branche 500 — une saturation ne se provoque pas à la demande.
  */
-export const startDistServer = async (dist, { readFile = readFileDefault, stat = statDefault } = {}) => {
+/** `/sw.js` et les runtimes Workbox qui l'accompagnent. */
+const EST_SERVICE_WORKER = /^\/(sw\.js|workbox-[^/]+\.js|sw-[^/]+\.js)$/;
+
+export const startDistServer = async (dist, { readFile = readFileDefault, stat = statDefault, serviceWorker = true } = {}) => {
   const server = createServer(async (req, res) => {
     const pathname = normalize(new URL(req.url, 'http://x').pathname);
+    /* LE PRÉCACHE N'EST PAS GRATUIT (#6988). Le manifeste porte ~240 entrées,
+       et un gate ouvre un contexte PAR schéma et PAR gabarit — quatre profils
+       isolés, donc quatre installations, donc près d'un millier de requêtes de
+       précache qui frappent ce serveur mono-thread EN PLUS des navigations que
+       le gate mesure. Sur un runner partagé, c'est la saturation, et elle se
+       lit comme un chunk qui n'arrive pas.
+
+       Un gate qui MESURE le service worker le sert (c'est le défaut) ; un gate
+       qui mesure des LIENS, une liste ou un fil ne doit pas payer son
+       installation. On retire le précache, jamais l'application : la coquille
+       et les assets restent servis. */
+    if (!serviceWorker && EST_SERVICE_WORKER.test(pathname)) {
+      res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
+      res.end(`404 ${pathname} — service worker volontairement non servi (gate sans précache)`);
+      return;
+    }
     for (const candidate of distCandidates(pathname)) {
       const file = join(dist, candidate);
       try {

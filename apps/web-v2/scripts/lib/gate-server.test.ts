@@ -77,6 +77,26 @@ describe('le serveur des gates', () => {
     expect(await response.text()).toContain('coquille');
   });
 
+  test("le service worker est servi par défaut — les gates qui le MESURENT en dépendent", async () => {
+    await writeFile(join(root, 'sw.js'), 'self.addEventListener("install", () => {});');
+    const response = await fetch(`${served.base}/sw.js`);
+
+    expect(response.status).toBe(200);
+  });
+
+  test("`serviceWorker: false` le refuse — 240 entrées de précache × 4 contextes saturent le serveur d'un gate qui ne le mesure pas", async () => {
+    const sans = await startDistServer(root, { serviceWorker: false });
+    try {
+      expect((await fetch(`${sans.base}/sw.js`)).status).toBe(404);
+      expect((await fetch(`${sans.base}/workbox-c7abac1c.js`)).status).toBe(404);
+      // La coquille et les assets restent servis : on retire le précache, pas l'application.
+      expect((await fetch(`${sans.base}/assets/present.js`)).status).toBe(200);
+      expect((await fetch(`${sans.base}/links/share`)).status).toBe(200);
+    } finally {
+      sans.close();
+    }
+  });
+
   test("une erreur de lecture AUTRE qu'absente rend 500 et NOMME son code — une saturation doit se voir", async () => {
     const saturé = await startDistServer(root, {
       readFile: () => Promise.reject(Object.assign(new Error('too many open files'), { code: 'EMFILE' })),

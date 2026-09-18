@@ -20,5 +20,12 @@ export declare function startDistServer(
   io?: {
     readonly readFile?: (path: string) => Promise<Buffer | string>;
     readonly stat?: (path: string) => Promise<{ isFile(): boolean }>;
+    /**
+     * Servir `/sw.js` et ses runtimes. Défaut `true`. Le poser à `false` évite
+     * **246 requêtes de précache PAR CONTEXTE** (mesuré : 302 requêtes servies
+     * contre 56) — un gate qui ouvre quatre profils en épargne près de mille.
+     * À ne PAS poser sur un gate qui MESURE le service worker.
+     */
+    readonly serviceWorker?: boolean;
   },
 ): Promise<DistServer>;
