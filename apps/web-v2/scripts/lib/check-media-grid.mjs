@@ -29,8 +29,13 @@ import { waitForRowSettled } from './check-media.mjs';
 const QUAD_ID = 'media-13';
 const OVERFLOW_ID = 'media-14';
 const TRIPLE_VIDEO_ID = 'media-12';
+/** `media-15` — LA VIDÉO SEULE (#7016) : la branche SOLO de `MediaGrid`, qu'aucun gate ne visitait. */
+const SOLO_VIDEO_ID = 'media-15';
 /** `media-16` — DEUX IMAGES DE MOI (#7018) : la branche `justify-end`, qu'aucune fixture n'atteignait. */
 const MINE_GRID_ID = 'media-16';
+
+/** Le ratio de la vidéo témoin (`gridVideo`, 160 × 90) — `soloVideoSlot` s'y accroche, repli 16/9 identique. */
+const SOLO_VIDEO_RATIO = 160 / 90;
 
 async function scrollUntilMounted(page, scroller, id) {
   for (let attempt = 1; attempt <= 40; attempt += 1) {
@@ -302,6 +307,53 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
   expect(
     (await tripleRow.locator('video[poster]').count()) === 1,
     `[${skin}/${scheme}] la vidéo de media-12 porte un poster, jamais un <video> vide`,
+  );
+
+  /**
+   * ===== G6 — LA VIDÉO SEULE OCCUPE UNE HAUTEUR (#7016) =====
+   *
+   * La branche SOLO de `MediaGrid` rendait `VideoTile` SANS conteneur
+   * dimensionné, or sa racine est `size-full` avec tous ses enfants
+   * `absolute inset-0` : un `height: 100%` contre un parent en hauteur `auto`
+   * se résout en `auto` → contenu → ZÉRO. Mesuré avant ce lot, au navigateur :
+   * `{focal: {w:246, h:0}, bulles: {w:119, h:0}}` — une vidéo INVISIBLE, dans
+   * les deux peaux.
+   *
+   * La loi qui la dimensionne existait, testée et gardée par le gate de cotes
+   * (`soloVideoSlot`, `media-grid-layout.ts`), et n'était appelée par PERSONNE
+   * — le motif « une loi qui calcule une valeur que personne ne lit ». Ce
+   * témoin mesure ce que la loi PRODUIT à l'écran, jamais son retour.
+   *
+   * Pourquoi le RATIO plutôt que la cote : la boîte est plafonnée à `100 %`
+   * de son porteur (#7018 ci-dessous), donc sa largeur RENDUE dépend de la
+   * peau (246 en Focal, la bulle en Bulles). Ce qui doit tenir dans les deux,
+   * c'est la FORME que `soloVideoSlot` élit — et une hauteur non nulle.
+   */
+  await scrollUntilMounted(page, scroller, SOLO_VIDEO_ID);
+  await waitForRowSettled(page, SOLO_VIDEO_ID);
+  const soloRow = rowOf(SOLO_VIDEO_ID);
+  const soloTileBox = await soloRow.locator('[data-media-tile]').first().boundingBox();
+  const soloVideoBox = await soloRow.locator('video').first().boundingBox();
+  expect(
+    soloTileBox !== null && soloTileBox.height > 0,
+    `[${skin}/${scheme}] media-15 (vidéo SEULE) a une hauteur NON NULLE (obtenu ${JSON.stringify(soloTileBox)})`,
+  );
+  expect(
+    soloVideoBox !== null && soloVideoBox.height > 0 && soloVideoBox.width > 0,
+    `[${skin}/${scheme}] le <video> de media-15 est VISIBLE, jamais un rectangle plat (obtenu ${JSON.stringify(soloVideoBox)})`,
+  );
+  expect(
+    (await soloRow.locator('video[poster]').count()) === 1,
+    `[${skin}/${scheme}] la vidéo SEULE de media-15 porte son poster, jamais un <video> vide`,
+  );
+  const soloRatio = soloTileBox === null || soloTileBox.height === 0 ? 0 : soloTileBox.width / soloTileBox.height;
+  expect(
+    Math.abs(soloRatio - SOLO_VIDEO_RATIO) <= 0.05,
+    `[${skin}/${scheme}] media-15 garde la FORME élue par soloVideoSlot (${SOLO_VIDEO_RATIO.toFixed(3)}), obtenu ${soloRatio.toFixed(3)}`,
+  );
+  expect(
+    soloTileBox !== null && soloTileBox.width <= 300.5,
+    `[${skin}/${scheme}] media-15 ne dépasse jamais MEDIA_GRID_MAX_WIDTH (obtenu ${soloTileBox?.width})`,
   );
 
   /**
