@@ -125,7 +125,7 @@ final class NotificationGapResyncCoordinator {
         } catch {
             Logger.notifResync.error("Notification cache not replaced after resync: \(error.localizedDescription, privacy: .public)")
         }
-        await refreshUnreadCount()
+        await NotificationGapResyncCoordinator.refreshUnreadCount()
     }
 
     /// Le saut d'acteur, nommé : `defaultResync` est une closure `@Sendable`
