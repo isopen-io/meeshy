@@ -6,15 +6,28 @@ import { hostMute, playerConfig, type ScenePlayerMode } from './config';
 // son, la boucle et le chrome — jamais startsPaused, toujours vrai.
 describe('playerConfig — le mode gouverne le son, la boucle et le chrome (T-C)', () => {
   test('card ⇒ muet verrouillé, boucle, sans chrome', () => {
-    expect(playerConfig('card')).toEqual({ startsPaused: true, isMuted: true, locksMute: true, loops: true, showsChrome: false });
+    expect(playerConfig('card')).toEqual({ startsPaused: true, isMuted: true, locksMute: true, loops: true, showsChrome: false, showsMuteBadge: true });
   });
 
   test('reader ⇒ sonore, sans boucle, avec chrome', () => {
-    expect(playerConfig('reader')).toEqual({ startsPaused: true, isMuted: false, locksMute: false, loops: false, showsChrome: true });
+    expect(playerConfig('reader')).toEqual({ startsPaused: true, isMuted: false, locksMute: false, loops: false, showsChrome: true, showsMuteBadge: true });
   });
 
   test('reel ⇒ sonore, boucle, avec chrome', () => {
-    expect(playerConfig('reel')).toEqual({ startsPaused: true, isMuted: false, locksMute: false, loops: true, showsChrome: true });
+    expect(playerConfig('reel')).toEqual({ startsPaused: true, isMuted: false, locksMute: false, loops: true, showsChrome: true, showsMuteBadge: false });
+  });
+
+  /**
+   * Revue-correction #6903 — LA PASTILLE DE MUET SE DIT UNE FOIS PAR ÉCRAN :
+   * `reel` est le SEUL mode dont l'hôte porte déjà l'état du son sur un
+   * contrôle à lui (le bouton son du rail des Réels). Un témoin de rang AUTRE
+   * que le premier : les quatre modes qui la gardent sont éprouvés en face du
+   * seul qui la perd — sans quoi « tout à `true` » passerait aussi.
+   */
+  test('showsMuteBadge ⇒ vrai partout SAUF `reel`, où le rail dit déjà le son', () => {
+    const modes: readonly ScenePlayerMode[] = ['card', 'reader', 'story', 'preview'];
+    for (const mode of modes) expect(playerConfig(mode).showsMuteBadge).toBe(true);
+    expect(playerConfig('reel').showsMuteBadge).toBe(false);
   });
 
   test('story et preview ⇒ sans chrome, sans boucle', () => {

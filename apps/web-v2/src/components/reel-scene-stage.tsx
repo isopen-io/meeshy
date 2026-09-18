@@ -42,6 +42,15 @@ const ScenePlayer = lazy(() => import('./scene-player'));
  * observé par la SEULE barre. Sans durée connue (`duration === null`),
  * AUCUNE barre : un contrôle qui ne bougerait jamais est un contrôle qui
  * ment (loi 4).
+ *
+ * **DEUX cadres, et il faut les distinguer** (revue-correction #6903) : la
+ * BOÎTE (`[data-reel-scene-stage]`) est la scène ajustée 9:16, qui laisse des
+ * bandes noires sur un écran plus long ; le CADRE (`[data-reel-scene]`) est
+ * la page. Le moteur et la piste vivent dans la BOÎTE ; le tap de pause et la
+ * barre de progression vivent sur le CADRE — comme le réel VIDÉO du même
+ * écran (`ReelPlayable`, `reel-page.tsx`) et comme iOS
+ * (`ReelsPlayerView.swift:656-664, 891-894`). Les y remettre rendrait une
+ * bande noire inerte et pousserait la barre contre la rangée auteur.
  */
 export type ReelSceneStageProps = {
   readonly scene: FeedCardScene;
@@ -139,37 +148,53 @@ export default function ReelSceneStage({ scene, mode, soundOn, accent, language,
             onPlaybackBlocked={onSoundBlocked}
           />
         ) : null}
-        <button
-          type="button"
-          data-reel-surface
-          aria-label={translate(language, playing ? 'reels.pause' : 'reels.play')}
-          onClick={() => setPaused((p) => !p)}
-          className="absolute inset-0 grid place-items-center focus-visible:outline-2 focus-visible:-outline-offset-4"
-          style={{ outlineColor: 'white', WebkitTapHighlightColor: 'transparent' }}
-        >
-          {!playing ? (
-            <span aria-hidden="true" className="grid size-18 place-items-center rounded-full" style={{ backgroundColor: RAIL_DISC }}>
-              <Glyph name="fillPlay" size={34} className="text-white" />
-            </span>
-          ) : null}
-        </button>
-        {duration !== null ? (
-          <>
-            <span
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 bottom-0 block h-[3px]"
-              style={{ backgroundColor: 'rgba(255,255,255,0.3)' }}
-            />
-            <span
-              aria-hidden="true"
-              data-reel-progress
-              ref={barRef}
-              className="pointer-events-none absolute inset-x-0 bottom-0 block h-[3px] origin-left"
-              style={{ backgroundColor: accent, transform: 'scaleX(0)' }}
-            />
-          </>
-        ) : null}
       </div>
+      {/* LE TAP COUVRE LA PAGE, jamais la seule boîte 9:16
+          (revue-correction #6903) : une scène 9:16 ajustée dans un écran plus
+          long laisse des BANDES (mesuré : 75 px en haut et en bas d'un
+          390×844), et un tap y restait sans effet — alors que le réel VIDÉO
+          du même écran prend la page entière (`ReelPlayable`,
+          `reel-page.tsx`, `inset-0` de l'`<article>`) et qu'iOS met en pause
+          au tap de CONTENU (`ReelsPlayerView.swift:891-894`). Même geste,
+          même effet, partout sur l'écran. */}
+      <button
+        type="button"
+        data-reel-surface
+        aria-label={translate(language, playing ? 'reels.pause' : 'reels.play')}
+        onClick={() => setPaused((p) => !p)}
+        className="absolute inset-0 grid place-items-center focus-visible:outline-2 focus-visible:-outline-offset-4"
+        style={{ outlineColor: 'white', WebkitTapHighlightColor: 'transparent' }}
+      >
+        {!playing ? (
+          <span aria-hidden="true" className="grid size-18 place-items-center rounded-full" style={{ backgroundColor: RAIL_DISC }}>
+            <Glyph name="fillPlay" size={34} className="text-white" />
+          </span>
+        ) : null}
+      </button>
+      {/* LA BARRE VIT EN BAS DE PAGE, pas en bas de la boîte de scène
+          (revue-correction #6903) : iOS la pose à la place de `ReelScrubBar`,
+          sous la rangée auteur et le rail (`ReelsPlayerView.swift:656-664`),
+          et le réel VIDÉO du web l'y pose déjà (`ReelPlayable`). Dans la
+          boîte, elle atterrissait à 76 px du bas, contre la rangée auteur —
+          deux réels du même écran, deux places. `z-10` la fait passer
+          au-dessus du VOILE BAS, qui l'effaçait (mesuré : `rgb(15,15,36)`
+          contre `rgb(12,12,12)`) — même remède que `ReelPlayable`. */}
+      {duration !== null ? (
+        <>
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-0 bottom-0 z-10 block h-[3px]"
+            style={{ backgroundColor: 'rgba(255,255,255,0.3)' }}
+          />
+          <span
+            aria-hidden="true"
+            data-reel-progress
+            ref={barRef}
+            className="pointer-events-none absolute inset-x-0 bottom-0 z-10 block h-[3px] origin-left"
+            style={{ backgroundColor: accent, transform: 'scaleX(0)' }}
+          />
+        </>
+      ) : null}
     </div>
   );
 }

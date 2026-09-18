@@ -270,8 +270,10 @@ export default function ScenePlayer({
       {/* `isMuted` — le muet RÉSOLU (`hostMute`), pas celui que le mode
           PROPOSE : un lecteur de story qui tient son muet viewant
           (`muted: true` sur un mode sonore) coupait bien le son et
-          n'affichait AUCUNE pastille pour le dire (revue-correction #6901). */}
-      {audible && isMuted ? (
+          n'affichait AUCUNE pastille pour le dire (revue-correction #6901).
+          `config.showsMuteBadge` (revue-correction #6903) retire la pastille
+          là où l'hôte dit DÉJÀ le muet — le rail des Réels. */}
+      {audible && isMuted && config.showsMuteBadge ? (
         <span
           data-scene-sound="muted"
           className="pointer-events-none absolute end-2.5 bottom-2.5 grid place-items-center rounded-full"

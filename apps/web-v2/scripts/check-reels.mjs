@@ -33,8 +33,10 @@
  * 13. aucune erreur de page, aucun défilement horizontal.
  * 14. un réel COMPOSÉ (#6903) se rejoue comme sa scène : `[data-scene-player]`
  *     centré, jamais un `<video data-reel-media>` brut, muet à l'ouverture
- *     (aucune activation) mais une lecture MUETTE qui AVANCE, et aucun
- *     lecteur ni piste de son de fond ne survit au retour.
+ *     (aucune activation) mais une lecture MUETTE qui AVANCE, le muet dit UNE
+ *     fois (sur le rail, jamais une pastille de moteur en plus), le tap et la
+ *     barre sur la PAGE et non dans la boîte 9:16, et aucun lecteur ni piste
+ *     de son de fond ne survit au retour.
  *
  * `CAPTURE_DIR=<dossier>` écrit les captures de recette.
  */
@@ -557,6 +559,23 @@ try {
 
       // ------------------------------------------------ 14. un réel COMPOSÉ (#6903)
       const sceneCtx = await browser.newContext({ viewport: { width, height }, colorScheme: scheme, locale: 'fr-FR' });
+      /**
+       * L'ARRIVÉE PAR LIEN PROFOND, RENDUE DÉTERMINISTE (revue-correction
+       * #6903) : `hasUserActivation()` (`routes/reels.tsx:63-70`) lit
+       * `navigator.userActivation.hasBeenActive` AU PREMIER RENDU, et
+       * Chromium piloté l'arme quelque part autour de la première peinture —
+       * mesuré `hasBeenActive: true` sur 10 contextes NEUFS interrogés juste
+       * après le montage, alors que le rendu avait déjà lu `false`. Ce
+       * témoin rougissait donc une fois sur dix, au hasard de la course. On
+       * pose ici la CONDITION qu'il prétend éprouver — « la page n'a reçu
+       * aucun geste » — au lieu de parier dessus.
+       */
+      await sceneCtx.addInitScript(() => {
+        Object.defineProperty(navigator, 'userActivation', {
+          configurable: true,
+          get: () => ({ hasBeenActive: false, isActive: false }),
+        });
+      });
       const scenePage = await sceneCtx.newPage();
       scenePage.setDefaultTimeout(10_000);
       const sceneErrors = [];
@@ -581,6 +600,99 @@ try {
 
       const soundLabel = await scenePage.getAttribute('[data-reel-index="0"] [data-reel-gesture="sound"]', 'aria-label');
       check(soundLabel === 'Activer le son', `${label} : sans activation, le son du réel composé démarre coupé`);
+
+      // Revue-correction #6903 — LE MUET SE DIT UNE FOIS : la pastille du
+      // moteur doublait le bouton son du rail et se posait MESURÉ sur le
+      // compteur de partages.
+      const badges = await scenePage.$$eval('[data-reel-index="0"] [data-scene-sound="muted"]', (els) => els.length);
+      check(badges === 0, `${label} : le muet d'un réel composé se dit UNE fois, sur le rail — aucune pastille de moteur (${badges})`);
+
+      // Revue-correction #6903 — LE TAP ET LA BARRE SONT SUR LA PAGE, pas
+      // dans la boîte 9:16 : une scène ajustée laisse des bandes où le tap
+      // restait sans effet, et la barre atterrissait contre la rangée auteur.
+      const frames = await scenePage.evaluate(() => {
+        const page = document.querySelector('[data-reel-index="0"]');
+        // `offsetWidth` — la largeur de MISE EN PAGE : la barre porte un
+        // `scaleX(progression)` que `getBoundingClientRect` inclurait, et on
+        // mesure ici sa PLACE, jamais son avancement.
+        const r = (el) => {
+          if (el === null) return null;
+          const b = el.getBoundingClientRect();
+          return { x: Math.round(b.x), y: Math.round(b.y), w: el.offsetWidth, bottom: Math.round(b.bottom) };
+        };
+        return {
+          page: r(page),
+          surface: r(page?.querySelector('[data-reel-surface]') ?? null),
+          bar: r(page?.querySelector('[data-reel-progress]') ?? null),
+        };
+      });
+      check(
+        frames.surface !== null &&
+          frames.page !== null &&
+          frames.surface.x === frames.page.x &&
+          frames.surface.y === frames.page.y &&
+          frames.surface.w === frames.page.w &&
+          frames.surface.bottom === frames.page.bottom,
+        `${label} : le tap d'un réel composé couvre la PAGE, jamais la seule boîte 9:16 (${JSON.stringify(frames)})`,
+      );
+      const tapped = await scenePage.evaluate(() => {
+        const el = document.elementFromPoint(window.innerWidth / 2, 12);
+        return el === null ? null : el.closest('[data-reel-surface]') !== null;
+      });
+      check(tapped === true, `${label} : la bande noire au-dessus de la scène reçoit bien le tap de pause`);
+      check(
+        frames.bar !== null && frames.page !== null && frames.bar.bottom === frames.page.bottom && frames.bar.w === frames.page.w,
+        `${label} : la barre du réel composé est collée au bas de la PAGE, comme celle d'un réel vidéo (${JSON.stringify(frames.bar)})`,
+      );
+      /**
+       * LA BARRE SE VOIT (revue-correction #6903) — le VOILE BAS est peint
+       * APRÈS elle et l'effaçait : mesuré au pixel, `rgb(15,15,36)` de
+       * rempli contre `rgb(12,12,12)` de piste, deux teintes qu'aucun œil ne
+       * sépare. On mesure donc ce qui est PEINT, jamais une règle CSS : une
+       * capture de la bande basse, décodée dans un canvas, et l'écart entre
+       * la part remplie et la piste.
+       */
+      // On attend que la lecture ait REMPLI un bout de barre plutôt que de
+      // forcer un `scaleX` — l'horloge le réécrirait à la trame suivante.
+      await scenePage
+        .waitForFunction(
+          () => {
+            const el = document.querySelector('[data-reel-index="0"] [data-reel-progress]');
+            return el !== null && el.getBoundingClientRect().width >= 20;
+          },
+          undefined,
+          { timeout: 5000 },
+        )
+        .catch(() => undefined);
+      const barPixels = await scenePage.evaluate(() => {
+        const bar = document.querySelector('[data-reel-index="0"] [data-reel-progress]');
+        if (bar === null) return null;
+        return { y: Math.round(bar.getBoundingClientRect().top) + 1, w: bar.offsetWidth };
+      });
+      const strip = barPixels === null ? null : await scenePage.screenshot({ clip: { x: 0, y: barPixels.y, width: barPixels.w, height: 1 } });
+      const pixels =
+        strip === null
+          ? null
+          : await scenePage.evaluate(async (data) => {
+              const img = new Image();
+              img.src = `data:image/png;base64,${data}`;
+              await img.decode();
+              const canvas = document.createElement('canvas');
+              canvas.width = img.naturalWidth;
+              canvas.height = img.naturalHeight;
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0);
+              const at = (x) => [...ctx.getImageData(x, 0, 1, 1).data].slice(0, 3);
+              return { fill: at(2), track: at(img.naturalWidth - 3) };
+            }, strip.toString('base64'));
+      // La PISTE (`rgba(255,255,255,0.3)`, sans transformation) sur le noir du
+      // lecteur vaut ~77 quand rien ne la couvre, ~12 sous le voile : c'est
+      // la mesure qui prouve que la barre n'est plus effacée.
+      const trackLuma = pixels === null ? -1 : Math.max(...pixels.track);
+      const gap = pixels === null ? -1 : Math.max(...pixels.fill.map((v, i) => Math.abs(v - pixels.track[i])));
+      check(trackLuma >= 50, `${label} : la piste de la barre n'est pas effacée par le voile bas — ${trackLuma} sur 255 (${JSON.stringify(pixels)})`);
+      check(gap >= 40, `${label} : le rempli de la barre se distingue de sa piste — écart ${gap} sur 255 (${JSON.stringify(pixels)})`);
+
       const sceneTime = (sel) => scenePage.evaluate((s) => document.querySelector(s)?.currentTime ?? -1, sel);
       const t0Video = await sceneTime('[data-reel-index="0"] [data-scene-player] video');
       const t0Track = await sceneTime('[data-reel-index="0"] [data-scene-sound-track]');
@@ -592,6 +704,29 @@ try {
         `${label} : une lecture MUETTE de la scène et de son son de fond avance (vidéo ${t0Video} → ${t1Video}, piste ${t0Track} → ${t1Track})`,
       );
       await capture(scenePage, `reels-scene-${slug}`);
+
+      /**
+       * LOI 4 — LE BOUTON SON D'UN RÉEL COMPOSÉ A UN EFFET (revue-correction
+       * #6903) : il commande la piste de fond, le seul son que cette scène
+       * porte. Le fond VIDÉO, lui, reste muet même là : l'AUTEUR l'a déclaré
+       * (`payload.muted`), et la loi qui décide d'afficher ce bouton le lit
+       * déjà (`sceneHasControllableSound`) — le rendu le lit désormais aussi.
+       */
+      await scenePage.click('[data-reel-index="0"] [data-reel-gesture="sound"]');
+      const unmuted = await scenePage
+        .waitForFunction(
+          () => document.querySelector('[data-reel-index="0"] [data-scene-sound-track]')?.muted === false,
+          undefined,
+          { timeout: 3000 },
+        )
+        .then(() => true)
+        .catch(() => false);
+      const afterSound = await scenePage.evaluate(() => ({
+        label: document.querySelector('[data-reel-index="0"] [data-reel-gesture="sound"]')?.getAttribute('aria-label') ?? null,
+        fond: document.querySelector('[data-reel-index="0"] [data-scene-player] video')?.muted ?? null,
+      }));
+      check(unmuted && afterSound.label === 'Couper le son', `${label} : le bouton son d'un réel composé OUVRE sa piste de fond (${JSON.stringify(afterSound)})`);
+      check(afterSound.fond === true, `${label} : le fond vidéo que l'AUTEUR a coupé reste muet, son ouvert (${afterSound.fond})`);
 
       await scenePage.click('[data-reels-back]');
       await scenePage.waitForURL('**/feed');

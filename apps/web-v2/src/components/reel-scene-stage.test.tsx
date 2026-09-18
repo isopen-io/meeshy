@@ -223,16 +223,53 @@ describe('ReelSceneStage — un réel composé se rejoue comme sa scène (T6, #6
     expect(el.querySelector('[data-reel-poster]')).not.toBeNull();
   });
 
-  test('(e) soundOn faux ⇒ le moteur ET la piste sont muets', async () => {
+  test('(e) soundOn faux ⇒ le moteur ET la piste sont muets, et AUCUNE pastille ne double le rail', async () => {
     const el = await mount(<ReelSceneStage {...propsOf({ soundOn: false })} />);
-    expect(el.querySelector('[data-scene-sound="muted"]')).not.toBeNull();
+    expect((el.querySelector('[data-scene-player] video') as HTMLVideoElement | null)?.muted).toBe(true);
     expect((el.querySelector('[data-scene-sound-track]') as HTMLAudioElement | null)?.muted).toBe(true);
+    // Le muet d'un réel se dit UNE fois, sur le bouton son du rail
+    // (`reel-page.tsx#ReelRail`) — la pastille du moteur le doublait et se
+    // posait sur le compteur de partages (revue-correction #6903).
+    expect(el.querySelector('[data-scene-sound="muted"]')).toBeNull();
   });
 
   test('(e bis) soundOn vrai ⇒ ni pastille muette, ni piste muette', async () => {
     const el = await mount(<ReelSceneStage {...propsOf({ soundOn: true })} />);
     expect(el.querySelector('[data-scene-sound="muted"]')).toBeNull();
     expect((el.querySelector('[data-scene-sound-track]') as HTMLAudioElement | null)?.muted).toBe(false);
+  });
+
+  /**
+   * Revue-correction #6903 — LE TAP ET LA BARRE VIVENT SUR LA PAGE, pas dans
+   * la boîte 9:16 : la scène ajustée laisse des bandes (75 px en haut et en
+   * bas d'un 390×844) où un tap restait sans effet, et la barre atterrissait
+   * à 76 px du bas, contre la rangée auteur. Le réel VIDÉO du même écran
+   * (`ReelPlayable`) les pose déjà sur la page.
+   */
+  test('(l) la surface de tap et la barre sont SŒURS de la boîte, dans le cadre PLEINE page', async () => {
+    const el = await mount(<ReelSceneStage {...propsOf()} />);
+    const frame = el.querySelector('[data-reel-scene]') as HTMLElement;
+    const stage = el.querySelector('[data-reel-scene-stage]') as HTMLElement;
+    const surface = el.querySelector('[data-reel-surface]') as HTMLElement;
+    expect(surface.parentElement).toBe(frame);
+    expect(stage.contains(surface)).toBe(false);
+    expect(frame.className).toContain('inset-0');
+    expect(surface.className).toContain('inset-0');
+  });
+
+  test('(m) la barre de progression est une SŒUR de la boîte, collée au bas de la page', async () => {
+    const el = await mount(<ReelSceneStage {...propsOf()} />);
+    const frame = el.querySelector('[data-reel-scene]') as HTMLElement;
+    const stage = el.querySelector('[data-reel-scene-stage]') as HTMLElement;
+    const video = el.querySelector('[data-scene-player] video') as HTMLVideoElement;
+    Object.defineProperty(video, 'duration', { value: 3, configurable: true });
+    await act(async () => {
+      video.dispatchEvent(new window.Event('loadedmetadata'));
+    });
+    const bar = el.querySelector('[data-reel-progress]') as HTMLElement;
+    expect(bar.parentElement).toBe(frame);
+    expect(stage.contains(bar)).toBe(false);
+    expect(bar.className).toContain('bottom-0');
   });
 
   test('(f) refus de lecture sonore ⇒ onSoundBlocked appelé (moteur et/ou piste, le refus atteint l’écran)', async () => {

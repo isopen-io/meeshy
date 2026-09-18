@@ -115,11 +115,20 @@ function ReelPlayable({
         ) : null}
       </button>
       {/* La progression est ÉCRITE, jamais animée : une transition sur la
-          transformation amortirait le suivi de la lecture. */}
+          transformation amortirait le suivi de la lecture.
+
+          `z-10` (revue-correction #6903) — LE VOILE BAS EST PEINT APRÈS CETTE
+          BARRE, et il l'effaçait : mesuré au pixel sur la capture,
+          `rgb(15,15,36)` de rempli contre `rgb(12,12,12)` de piste, soit
+          ~15 % de la couleur voulue (le voile vaut 0,85 d'opacité à 2 px du
+          bas). Une barre de progression qu'on ne distingue pas ne dit rien
+          de la lecture — iOS la peint franchement
+          (`ReelsPlayerView.swift:656-664`). Le voile reste sur le MÉDIA,
+          où il sert la lisibilité du blanc ; la barre passe au-dessus. */}
       <span
         aria-hidden="true"
         data-reel-progress
-        className="pointer-events-none absolute inset-x-0 bottom-0 block h-[3px] origin-left"
+        className="pointer-events-none absolute inset-x-0 bottom-0 z-10 block h-[3px] origin-left"
         style={{ backgroundColor: 'rgba(255,255,255,0.85)', transform: `scaleX(${progress})` }}
       />
       {status === 'error' ? (

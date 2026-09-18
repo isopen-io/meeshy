@@ -147,6 +147,46 @@ describe('ScenePlayer — `muted`, la demande de l’hôte gouverne le muet du m
     expect(el.querySelector('video')?.muted).toBe(false);
   });
 
+  /**
+   * Revue-correction #6903 — LE MUET DE L'AUTEUR EST DÉFINITIF : `payload.muted`
+   * est déjà la déclaration que lisent `sceneHasControllableSound` (« un fond
+   * VIDÉO NON DÉCLARÉ muet ») et `isDocumentAudible`. Le rendu ne lisait que
+   * le muet de l'HÔTE : une scène dont l'auteur a coupé le fond et qui ne
+   * porte aucune piste de fond sonnait dès l'ouverture d'un réel
+   * (`soundOn = hasUserActivation()`) sans qu'AUCUN bouton ne puisse la
+   * couper — la loi venait de dire au rail qu'il n'y avait rien à couper.
+   * Témoin de rang AUTRE que le premier : l'hôte demande EXPRESSÉMENT le son.
+   */
+  test('`payload.muted: true` ⇒ le fond reste muet même quand l’hôte OUVRE le son', () => {
+    const el = mount(
+      <ScenePlayer
+        document={documentOf([fond({ postMediaId: 'vid', mediaType: 'video/mp4', muted: true })])}
+        sceneIndex={0}
+        mode="reel"
+        playing
+        muted={false}
+        carrier={carrier}
+        preferredLanguages={['fr']}
+      />,
+    );
+    expect(el.querySelector('video')?.muted).toBe(true);
+  });
+
+  test('sans `payload.muted`, le même fond suit bien la demande de l’hôte (le témoin ci-dessus mesure la DÉCLARATION)', () => {
+    const el = mount(
+      <ScenePlayer
+        document={documentOf([fond({ postMediaId: 'vid', mediaType: 'video/mp4' })])}
+        sceneIndex={0}
+        mode="reel"
+        playing
+        muted={false}
+        carrier={carrier}
+        preferredLanguages={['fr']}
+      />,
+    );
+    expect(el.querySelector('video')?.muted).toBe(false);
+  });
+
   // T-E7 (#6901, D5) — le verrou du muet : `card` VERROUILLE le son quel que
   // soit ce que l'hôte demande (miroir `MeeshyScenePlayer.hostMute`).
   test('mode="card" + muted={false} ⇒ la vidéo de fond reste muette (le verrou de la carte)', () => {
@@ -162,6 +202,39 @@ describe('ScenePlayer — `muted`, la demande de l’hôte gouverne le muet du m
       />,
     );
     expect(el.querySelector('video')?.muted).toBe(true);
+  });
+
+  /**
+   * LA PASTILLE DE MUET SE DIT UNE FOIS PAR ÉCRAN (revue-correction #6903) —
+   * `config.showsMuteBadge` : le moteur la peint là où il est SEUL à pouvoir
+   * dire le muet (carte du fil, lecteur de story, aperçu du studio), et se
+   * tait en mode `reel`, où le rail des Réels porte déjà l'état sur son
+   * bouton son (`reel-page.tsx#ReelRail`). Un témoin de rang AUTRE que le
+   * premier : les quatre modes qui la gardent sont éprouvés en face du seul
+   * qui la perd.
+   */
+  test('un fond vidéo SONORE et muet : pastille en card/reader/story/preview, JAMAIS en reel', () => {
+    const audible = documentOf([fond({ postMediaId: 'vid', mediaType: 'video/mp4' })]);
+    const badgeFor = (mode: ScenePlayerMode): boolean => {
+      const box = window.document.createElement('div');
+      window.document.body.appendChild(box);
+      const own = createRoot(box);
+      act(() => {
+        own.render(<ScenePlayer document={audible} sceneIndex={0} mode={mode} playing muted carrier={carrier} preferredLanguages={['fr']} />);
+      });
+      const present = box.querySelector('[data-scene-sound="muted"]') !== null;
+      act(() => {
+        own.unmount();
+      });
+      box.remove();
+      return present;
+    };
+    expect(badgeFor('card')).toBe(true);
+    expect(badgeFor('reader')).toBe(true);
+    expect(badgeFor('story')).toBe(true);
+    expect(badgeFor('preview')).toBe(true);
+    expect(badgeFor('reel')).toBe(false);
+    mount(<ScenePlayer document={audible} sceneIndex={0} mode="card" playing={false} carrier={carrier} preferredLanguages={['fr']} />);
   });
 
   test('une entrée de porteur SANS adresse ne masque pas le `mediaURL` de l’objet', () => {

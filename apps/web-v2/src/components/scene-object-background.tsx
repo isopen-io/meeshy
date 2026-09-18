@@ -62,6 +62,20 @@ export function BackgroundLayer({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const isVideo = src !== undefined && mediaType?.startsWith('video') === true;
+  /**
+   * LE MUET DE L'AUTEUR EST DÉFINITIF (revue-correction #6903) — `payload.muted`
+   * dit « cette vidéo n'a pas de son POUR LE LECTEUR » : c'est déjà ce que la
+   * loi en tire (`sceneHasControllableSound`, `lib/canvas/background-sound.ts`
+   * : « un fond VIDÉO NON DÉCLARÉ muet » ; `isDocumentAudible`,
+   * `lib/feed/scene-motion.ts`). Le rendu, lui, ne lisait que le muet de
+   * l'HÔTE — donc un réel composé dont l'auteur a coupé le fond et qui ne
+   * porte AUCUNE piste de fond sonnait à l'ouverture (`soundOn =
+   * hasUserActivation()`) SANS bouton pour le couper, puisque la loi venait
+   * de dire au rail qu'il n'y avait rien à couper. Un son sans commande est
+   * l'inverse exact d'un contrôle inerte, et se corrige du même côté : la
+   * loi et le rendu lisent la MÊME déclaration.
+   */
+  const authorMuted = payload.muted === true;
   const awaitsContent = callbacks.current.onContentReady !== undefined;
   // `aspectFill` par défaut, `aspect` sur « fit » déclaré (`background.ts`).
   const fit = framing === 'fit' ? 'object-contain' : 'object-cover';
@@ -127,7 +141,7 @@ export function BackgroundLayer({
           ref={videoRef}
           key={src}
           src={src}
-          muted={muted}
+          muted={muted || authorMuted}
           loop
           playsInline
           preload={awaitsContent ? 'auto' : 'none'}
