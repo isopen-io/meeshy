@@ -33230,7 +33230,7 @@ Un `overlay` **ne participe jamais** au calcul de taille de son hôte. `Color.cl
 
 **Corollaire d'exception.** `FixedFontSizeGuardTests` n'a d'exception que pour la dette GELÉE : un fichier NEUF n'y entre jamais, quel que soit le commentaire qui invoque la doctrine des glyphes décoratifs. Une exception qui se réclame d'une doctrine sans être inscrite au registre de la dette n'existe pas.
 
-## Leçon 631 — rendre un prédicat fail-closed ne sauve que ses usages POSITIFS : sa négation reste menteuse, et troque un gate qui explose contre un gate qui ment
+## Leçon 632 — rendre un prédicat fail-closed ne sauve que ses usages POSITIFS : sa négation reste menteuse, et troque un gate qui explose contre un gate qui ment
 
 **Le rouge.** `dev` bloqué une nuit sur « Gate états du fil » (#7048, PR #7050) : `paintedAt` passait les coordonnées d'une `boundingBox` à `page.screenshot({ clip })` sans vérifier qu'elles tombaient dans le viewport. Le virtualiseur sortait la rangée de l'écran entre deux mesures (mesurée à **y = −297**), Playwright levait « Clipped area is either empty or outside the resulting image », et l'exception remontait en `uncaughtException`.
 
