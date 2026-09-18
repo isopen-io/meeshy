@@ -12,7 +12,7 @@ import { applyMessageTranslation } from './realtime-apply';
 import { refreshListAction, useThreadData } from './query';
 import { appQueryClient } from './query-client';
 import { STATUS_MOODS_QUERY_KEY, STORY_TRAY_QUERY_KEY } from './stories';
-import type { Conversation } from './types';
+import type { Conversation, Message } from './types';
 
 /**
  * `useThreadData` — testé par `renderToStaticMarkup` (motif
@@ -39,6 +39,17 @@ function renderProbe(id: string): string {
   );
 }
 
+/**
+ * LA FORME `InfiniteData` DU CACHE DU FIL (#6972) — `threadPages` la POSE,
+ * `threadOf` la RELIT APLATIE. Les deux SEULS endroits de ce fichier qui la
+ * connaissent : les témoins mesurent la RÈGLE, jamais la structure.
+ */
+const threadPages = (messages: readonly Message[]) => ({
+  pages: [{ messages, hasOlder: false, nextCursor: null }],
+  pageParams: [undefined],
+});
+
+
 describe('useThreadData — F8 (#5650), jamais de repli sur une autre conversation', () => {
   test('id inconnu : le rendu ne montre jamais le titre d’une autre conversation', () => {
     const html = renderProbe('c-inexistant-xyz');
@@ -48,6 +59,116 @@ describe('useThreadData — F8 (#5650), jamais de repli sur une autre conversati
 
   test('id connu (fixtures) : le rendu ne rejette pas au premier passage', () => {
     expect(() => renderProbe('c-deploiement')).not.toThrow();
+  });
+});
+
+/**
+ * **LE FIL PAGINÉ, VU DEPUIS L'ÉCRAN** (#6972) — `useThreadData` est le SEUL
+ * chemin par lequel `routes/thread.tsx` connaît le fil : ce que
+ * `flattenMessagePages` recolle et ce que `paginationStateOf` dérive doivent
+ * y ARRIVER. Un correctif dont la valeur n'atteint pas son lecteur n'a
+ * corrigé personne (CLAUDE.md § Prisme, cycle 122).
+ */
+describe('useThreadData — la pagination du HAUT atteint bien l’écran (#6972)', () => {
+  const thread = (partial: Partial<Conversation> = {}): Conversation =>
+    ({
+      id: 'c-pagine',
+      type: 'group',
+      status: 'active',
+      visibility: 'public',
+      isActive: true,
+      memberCount: 3,
+      participants: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      ...partial,
+    }) as Conversation;
+
+  const row = (id: string): Message => ({ id, content: `contenu ${id}` }) as Message;
+
+  const probe = (queryClient: QueryClient): string => {
+    function Probe() {
+      const data = useThreadData('c-pagine');
+      return (
+        <span
+          data-ids={data.messages.map((m) => m.id).join(',')}
+          data-has-older={String(data.hasOlder)}
+          data-older-state={data.olderState}
+        />
+      );
+    }
+    return renderToStaticMarkup(
+      <QueryClientProvider client={queryClient}>
+        <Probe />
+      </QueryClientProvider>,
+    );
+  };
+
+  test('DEUX pages en cache ⇒ `messages` est globalement ASCENDANT (le piège de la couture)', () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData(conversationQueryKey('c-pagine'), thread());
+    queryClient.setQueryData(messagesQueryKey('c-pagine'), {
+      pages: [
+        { messages: [row('m3'), row('m4')], hasOlder: true, nextCursor: 'm3' },
+        { messages: [row('m1'), row('m2')], hasOlder: false, nextCursor: null },
+      ],
+      pageParams: [undefined, 'm3'],
+    });
+
+    expect(probe(queryClient)).toContain('data-ids="m1,m2,m3,m4"');
+  });
+
+  test('une page qui déclare un historique ⇒ `hasOlder` vrai, `olderState` idle', () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData(conversationQueryKey('c-pagine'), thread());
+    queryClient.setQueryData(messagesQueryKey('c-pagine'), {
+      pages: [{ messages: [row('m1')], hasOlder: true, nextCursor: 'm1' }],
+      pageParams: [undefined],
+    });
+
+    const html = probe(queryClient);
+    expect(html).toContain('data-has-older="true"');
+    expect(html).toContain('data-older-state="idle"');
+  });
+
+  /**
+   * LE FIL ÉPUISÉ — `hasOlder` faux ET `olderState` `exhausted` : c'est ce
+   * qui DÉSARME la sentinelle haute (`enabled`), et donc ce qui empêche le
+   * haut du fil de redemander une page à chaque image de défilement.
+   */
+  test('une page sans historique ⇒ `hasOlder` faux, `olderState` exhausted', () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData(conversationQueryKey('c-pagine'), thread());
+    queryClient.setQueryData(messagesQueryKey('c-pagine'), {
+      pages: [{ messages: [row('m1')], hasOlder: false, nextCursor: null }],
+      pageParams: [undefined],
+    });
+
+    const html = probe(queryClient);
+    expect(html).toContain('data-has-older="false"');
+    expect(html).toContain('data-older-state="exhausted"');
+  });
+
+  /**
+   * LE 5e REFUS ATTEINT L'ÉCRAN — une page qui annonce `hasOlder` mais dont
+   * AUCUN message n'est neuf (la passerelle a resservi une page déjà vue,
+   * `messages-list.ts:386-397`) désarme la sentinelle : sans cela, le haut du
+   * fil rechargerait son propre début sans fin.
+   */
+  test('page RESSERVIE (hasOlder vrai, aucun id neuf) ⇒ `olderState` exhausted', () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData(conversationQueryKey('c-pagine'), thread());
+    queryClient.setQueryData(messagesQueryKey('c-pagine'), {
+      pages: [
+        { messages: [row('m1'), row('m2')], hasOlder: true, nextCursor: 'm1' },
+        { messages: [row('m1'), row('m2')], hasOlder: true, nextCursor: 'm1' },
+      ],
+      pageParams: [undefined, 'm1'],
+    });
+
+    const html = probe(queryClient);
+    expect(html).toContain('data-ids="m1,m2"');
+    expect(html).toContain('data-older-state="exhausted"');
   });
 });
 
@@ -79,7 +200,7 @@ describe('useThreadData — `conversationId` (#5793, revue-correction défaut 3)
   test('un id de ROUTE non canonique (identifiant) résout `conversationId` sur `conversation.id`', () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     queryClient.setQueryData(conversationQueryKey('salon-riviere'), canonical({}));
-    queryClient.setQueryData(messagesQueryKey('canonical-abc'), { messages: [], hasOlder: false });
+    queryClient.setQueryData(messagesQueryKey('canonical-abc'), threadPages([]));
 
     function Probe() {
       const data = useThreadData('salon-riviere');
@@ -98,7 +219,7 @@ describe('useThreadData — `conversationId` (#5793, revue-correction défaut 3)
   test('un id de ROUTE DÉJÀ canonique ne change pas de clé — `conversationId` reste l’id de route', () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     queryClient.setQueryData(conversationQueryKey('canonical-abc'), canonical({}));
-    queryClient.setQueryData(messagesQueryKey('canonical-abc'), { messages: [], hasOlder: false });
+    queryClient.setQueryData(messagesQueryKey('canonical-abc'), threadPages([]));
 
     function Probe() {
       const data = useThreadData('canonical-abc');

@@ -5,12 +5,14 @@ import {
   cachedThreadConversationIds,
   findCachedThreadMessage,
   loadMessages,
+  messagesInfiniteOptions,
   messagesQuery,
   messagesQueryKey,
   patchThreadMessages,
   sendMessage,
   upsertThreadMessage,
 } from './messages';
+import { flattenMessagePages, nextMessagesCursor, type MessagesInfiniteData } from './messages-pages';
 import { CONVERSATIONS_QUERY_KEY, conversationQueryKey } from './conversations';
 import { createHttpTransport } from './http';
 import { hasOlderMessagesOf, messagesOf, resetSentMessagesForTests } from './fixtures';
@@ -39,11 +41,45 @@ describe('loadMessages — fixtures', () => {
     }
   });
 
+  /**
+   * LA FICTION DE `hasOlderMessagesOf` SURVIT À LA PAGINATION (#6972) — le
+   * corpus de `c-rattrapage` compte TRENTE messages, sous la limite de 50 :
+   * la loi de fenêtrage seule (`pageOfMessages`) rendrait donc `hasOlder`
+   * faux, et le Résumé Vivant perdrait « Sur les N derniers messages », le
+   * seul état que cette conversation existe pour rendre atteignable.
+   * La fiction est DÉCLARÉE par les fixtures et respectée ici ; elle doit
+   * venir avec un curseur, sinon le 2e refus de `nextMessagesCursor` la
+   * neutraliserait à la lecture.
+   */
+  test('c-rattrapage ⇒ hasOlder DÉCLARÉ, avec un curseur (sans quoi la fiction serait muette)', async () => {
+    const transport = createHttpTransport({ base: '' });
+    const result = await loadMessages({ source: 'fixtures', transport, conversationId: 'c-rattrapage' });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.hasOlder).toBe(true);
+      expect(result.data.nextCursor).toBe(messagesOf('c-rattrapage')[0]?.id);
+    }
+  });
+
   test('c-deploiement ⇒ hasOlder false', async () => {
     const transport = createHttpTransport({ base: '' });
     const result = await loadMessages({ source: 'fixtures', transport, conversationId: 'c-deploiement' });
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.data.hasOlder).toBe(hasOlderMessagesOf('c-deploiement'));
+    if (result.ok) {
+      expect(result.data.hasOlder).toBe(hasOlderMessagesOf('c-deploiement'));
+      expect(result.data.nextCursor).toBe(null);
+    }
+  });
+
+  test('`before` = le curseur de c-rattrapage ⇒ page VIDE (le corpus est épuisé)', async () => {
+    const transport = createHttpTransport({ base: '' });
+    const oldest = messagesOf('c-rattrapage')[0]!.id;
+    const result = await loadMessages({ source: 'fixtures', transport, conversationId: 'c-rattrapage', before: oldest });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.messages).toEqual([]);
+      expect(result.data.hasOlder).toBe(false);
+    }
   });
 
   test('id inconnu ⇒ messages: []', async () => {
@@ -55,7 +91,7 @@ describe('loadMessages — fixtures', () => {
 });
 
 describe('loadMessages — gateway', () => {
-  test('data en DESC ⇒ messages ASCENDANT ; hasOlder = cursorPagination.hasMore ; URL ?limit=50', async () => {
+  test('data en DESC ⇒ messages ASCENDANT ; hasOlder ET nextCursor lus ; URL ?limit=50', async () => {
     const { impl, calls } = fakeFetch({
       status: 200,
       body: {
@@ -71,8 +107,32 @@ describe('loadMessages — gateway', () => {
     if (result.ok) {
       expect(result.data.messages.map((m: { readonly id: string }) => m.id)).toEqual(['m1', 'm2', 'm3']);
       expect(result.data.hasOlder).toBe(true);
+      /* LA MOITIÉ JETÉE (#6972) — `nextCursor` était LU dans la charge et
+         jamais porté : la moitié utile du curseur mourait ici. */
+      expect(result.data.nextCursor).toBe('m1');
     }
     expect(calls[0]?.url).toBe('/api/v1/conversations/c-a/messages?limit=50');
+  });
+
+  test('`before` est CONCATÉNÉ à l’URL (miroir `conversations.ts`)', async () => {
+    const { impl, calls } = fakeFetch({
+      status: 200,
+      body: { success: true, data: [], cursorPagination: { limit: 50, hasMore: false, nextCursor: null } },
+    });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+    await loadMessages({ source: 'gateway', transport, conversationId: 'c-a', before: 'm1' });
+    expect(calls[0]?.url).toBe('/api/v1/conversations/c-a/messages?limit=50&before=m1');
+  });
+
+  test('`cursorPagination` absent ⇒ hasOlder faux, aucun curseur (fail-closed)', async () => {
+    const { impl } = fakeFetch({ status: 200, body: { success: true, data: [{ id: 'm1' }] } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+    const result = await loadMessages({ source: 'gateway', transport, conversationId: 'c-a' });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.hasOlder).toBe(false);
+      expect(result.data.nextCursor).toBe(null);
+    }
   });
 
   test('401 (sans-session) propagé', async () => {
@@ -99,16 +159,86 @@ describe('loadMessages — gateway', () => {
 });
 
 describe('messagesQuery — la fabrique', () => {
-  test('décode messages[].createdAt via select', () => {
+  test('aplatit ET décode messages[].createdAt via select', () => {
     const { queryKey, select } = messagesQuery({ source: 'fixtures', transport: createHttpTransport({ base: '' }) }, 'c-a');
     expect(queryKey).toEqual(['conversations', 'c-a', 'messages']);
-    const page = {
-      messages: [{ ...messagesOf('c-deploiement')[0]!, createdAt: '2026-09-08T09:00:00.000Z' }],
-      hasOlder: false,
-    } as unknown as Parameters<typeof select>[0];
-    const decoded = select(page);
-    expect(decoded.messages[0]?.createdAt).toBeInstanceOf(Date);
-    expect(decoded.hasOlder).toBe(false);
+    const decoded = select({
+      pages: [{ messages: [{ ...messagesOf('c-deploiement')[0]!, createdAt: '2026-09-08T09:00:00.000Z' }], hasOlder: false, nextCursor: null }],
+      pageParams: [undefined],
+    } as unknown as Parameters<typeof select>[0]);
+    expect(decoded[0]?.createdAt).toBeInstanceOf(Date);
+  });
+
+  test('`select` est la MÊME référence entre deux fabriques (fonction de MODULE)', () => {
+    const deps = { source: 'fixtures' as const, transport: createHttpTransport({ base: '' }) };
+    expect(messagesQuery(deps, 'c-a').select).toBe(messagesQuery(deps, 'c-b').select);
+  });
+
+  test('`initialPageParam` est undefined — la page 1 ne porte AUCUN `before`', () => {
+    const options = messagesInfiniteOptions({ source: 'fixtures', transport: createHttpTransport({ base: '' }) }, 'c-a');
+    expect(options.initialPageParam).toBeUndefined();
+    expect(options.getNextPageParam).toBe(nextMessagesCursor);
+  });
+});
+
+/**
+ * LE DÉFILEMENT INFINI DU FIL, DE BOUT EN BOUT (#6972) — `fetchInfiniteQuery`
+ * joue la MÊME mécanique que la sentinelle : `pages: 2` ⇒ deux requêtes, la
+ * seconde portant le `before` rendu par `getNextPageParam`. Motif
+ * `conversations.test.ts` § `conversationsInfiniteOptions`.
+ */
+describe('messagesInfiniteOptions par QueryClient.fetchInfiniteQuery', () => {
+  const pagedFetch = (byBefore: Readonly<Record<string, readonly string[]>>, hasMoreOf: Readonly<Record<string, string | null>>) => {
+    const calls: string[] = [];
+    const impl = (async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://x');
+      const before = url.searchParams.get('before') ?? '';
+      calls.push(before);
+      const ids = byBefore[before] ?? [];
+      const nextCursor = hasMoreOf[before] ?? null;
+      return new Response(
+        JSON.stringify({
+          success: true,
+          /* la passerelle sert DESC */
+          data: [...ids].reverse().map((id) => ({ id })),
+          cursorPagination: { limit: 50, hasMore: nextCursor !== null, nextCursor },
+        }),
+        { status: 200 },
+      );
+    }) as typeof fetch;
+    return { impl, calls };
+  };
+
+  test('deux pages ⇒ deux requêtes, la seconde avec `before`, et un fil ASCENDANT', async () => {
+    const { impl, calls } = pagedFetch(
+      { '': ['m3', 'm4', 'm5'], m3: ['m1', 'm2'] },
+      { '': 'm3', m3: null },
+    );
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+    const options = messagesInfiniteOptions({ source: 'gateway', transport }, 'c-a');
+    const client = new QueryClient();
+
+    const twoPages = await client.fetchInfiniteQuery({ ...options, pages: 2 });
+    expect(calls).toEqual(['', 'm3']);
+    expect(twoPages.pageParams).toEqual([undefined, 'm3']);
+    expect(flattenMessagePages(twoPages).map((m) => m.id)).toEqual(['m1', 'm2', 'm3', 'm4', 'm5']);
+    expect(options.getNextPageParam(twoPages.pages[1]!, twoPages.pages, twoPages.pageParams[1])).toBeUndefined();
+  });
+
+  test('`before` INCONNU resservi par la passerelle ⇒ le 5e refus ARRÊTE la boucle', async () => {
+    /* La passerelle ne valide pas `before` : elle ressert la page récente,
+       `hasMore: true` et le même curseur. Sans le refus « aucun message
+       neuf », `fetchInfiniteQuery({ pages: 3 })` rejouerait le début du fil
+       indéfiniment. */
+    const { impl, calls } = pagedFetch({ '': ['m2', 'm3'], m2: ['m2', 'm3'] }, { '': 'm2', m2: 'm2' });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+    const options = messagesInfiniteOptions({ source: 'gateway', transport }, 'c-a');
+    const client = new QueryClient();
+
+    const pages = await client.fetchInfiniteQuery({ ...options, pages: 5 });
+    expect(calls).toEqual(['', 'm2']);
+    expect(pages.pages).toHaveLength(2);
+    expect(flattenMessagePages(pages).map((m) => m.id)).toEqual(['m2', 'm3']);
   });
 });
 
@@ -146,22 +276,22 @@ describe('messagesQuery — identité du résultat entre deux rendus (source gat
     updatedAt: new Date(1_757_000_000_000 - i * 60_000).toISOString(),
   }));
 
-  test('deux rendus successifs rendent la MÊME référence de page', async () => {
-    const { QueryClient, QueryObserver } = await import('@tanstack/react-query');
+  test('deux rendus successifs rendent la MÊME référence de fil', async () => {
+    const { InfiniteQueryObserver } = await import('@tanstack/react-query');
     const { impl } = fakeFetch({
       status: 200,
-      body: { success: true, data: WIRE, cursorPagination: { limit: 50, hasMore: false } },
+      body: { success: true, data: WIRE, cursorPagination: { limit: 50, hasMore: false, nextCursor: null } },
     });
     const deps = { source: 'gateway' as const, transport: createHttpTransport({ base: '', fetchImpl: impl }) };
     const client = new QueryClient();
     const render = () => client.defaultQueryOptions(messagesQuery(deps, 'c-a') as never);
 
-    const observer = new QueryObserver(client, render());
+    const observer = new InfiniteQueryObserver(client, render() as never);
     const unsubscribe = observer.subscribe(() => {});
     await observer.refetch();
 
-    const first = observer.getOptimisticResult(render()).data;
-    const second = observer.getOptimisticResult(render()).data;
+    const first = observer.getOptimisticResult(render() as never).data;
+    const second = observer.getOptimisticResult(render() as never).data;
     unsubscribe();
 
     expect(first).toBeDefined();
@@ -183,11 +313,19 @@ describe('messagesQuery — identité du résultat entre deux rendus (source gat
  * donc au changement de forme qu'ils existent pour protéger.
  */
 const seedThread = (client: QueryClient, conversationId: string, messages: readonly Message[], hasOlder = false): void => {
-  client.setQueryData(messagesQueryKey(conversationId), { messages, hasOlder });
+  client.setQueryData<MessagesInfiniteData>(messagesQueryKey(conversationId), {
+    pages: [{ messages, hasOlder, nextCursor: null }],
+    pageParams: [undefined],
+  });
 };
 
-const readThread = (client: QueryClient, conversationId: string): readonly Message[] | undefined =>
-  client.getQueryData<{ readonly messages: readonly Message[] }>(messagesQueryKey(conversationId))?.messages;
+/** Lit le fil du cache SANS passer par `flattenMessagePages` (qui décode et
+ * dédoublonne) : les témoins ci-dessous mesurent ce qui est ÉCRIT, pas ce qui
+ * est servi. */
+const readThread = (client: QueryClient, conversationId: string): readonly Message[] | undefined => {
+  const cached = client.getQueryData<MessagesInfiniteData>(messagesQueryKey(conversationId));
+  return cached === undefined ? undefined : cached.pages.flatMap((p) => [...p.messages]);
+};
 
 const msg = (id: string, extra: Partial<Message> = {}): Message =>
   message({

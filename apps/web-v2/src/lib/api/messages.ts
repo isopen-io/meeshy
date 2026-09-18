@@ -2,46 +2,75 @@ import type { QueryClient } from '@tanstack/react-query';
 
 import { unwrap } from './client';
 import type { ConversationsDeps } from './conversations';
-import { decodeMessages } from './decode';
 import { hasOlderMessagesOf, messagesOf, recordSentMessage } from './fixtures';
 import type { ApiResult, HttpTransport } from './http';
+import { flattenMessagePages, nextMessagesCursor, pageOfMessages } from './messages-pages';
+import type { MessagesInfiniteData, MessagesPage, MessagesPageParam } from './messages-pages';
 import type { Message } from './types';
 
 /**
- * LE PORT DU FIL (#5650, F2) — `GET /api/v1/conversations/:id/messages`
+ * LE PORT DU FIL (#5650, F2 ; PAGINÉ #6972) —
+ * `GET /api/v1/conversations/:id/messages?limit=50[&before=<id>]`
  * (`services/gateway/src/routes/conversations/messages-list.ts:91-201`,
- * `optionalAuth`), `?limit=50` (le Salon Rivière porte 40 messages,
- * `targets/seed.md`) — la clé de requête ne porte PAS `limit` (une seule
- * page, Q4).
+ * `optionalAuth`).
+ *
+ * **`before` EST UN ID DE MESSAGE**, jamais un horodatage : la description du
+ * schéma de la passerelle dit « get messages before this timestamp » (`:119`)
+ * et elle est FAUSSE — le handler résout l'id en `createdAt` sur la
+ * conversation puis filtre `{ lt: … }` (`:386-397`). Le curseur à lui renvoyer
+ * est donc `cursorPagination.nextCursor`, l'id du DERNIER message servi (le
+ * plus ANCIEN, tri DESC).
+ *
+ * `limit=50` est le PLAFOND de cette route (`validatePagination(…,
+ * { maxLimit: 50 })`, `:232`) — demander davantage rend 50, jamais une erreur.
  *
  * ORDRE : la passerelle sert `createdAt DESC` (vue par défaut CHRONOLOGIE,
- * `messages-list-views.ts:101-107`) ; ce port RENVERSE en ASCENDANT — l'ordre
- * des fixtures (`fixtures.ts:80-96`) et de `place()` (`grouping.ts`).
- *
- * `hasOlder` = `cursorPagination.hasMore` (« une page plus ancienne existe » ;
- * `messages-list.ts:699-710`).
+ * `messages-list-views.ts:101-107`) ; ce port RENVERSE en ASCENDANT **par
+ * page** — l'ordre des fixtures (`fixtures.ts:80-96`) et de `place()`
+ * (`grouping.ts`). C'est `flattenMessagePages` (`messages-pages.ts`) qui
+ * recolle les pages dans le bon sens ; voir son doc-comment, le piège y est.
  */
-export type MessagesPage = {
-  readonly messages: readonly Message[];
-  readonly hasOlder: boolean;
-};
-
 export const messagesQueryKey = (id: string) => ['conversations', id, 'messages'] as const;
 
 const MESSAGES_LIMIT = 50;
 
 export async function loadMessages(
-  params: ConversationsDeps & { readonly conversationId: string; readonly signal?: AbortSignal },
+  params: ConversationsDeps & {
+    readonly conversationId: string;
+    readonly before?: MessagesPageParam;
+    readonly signal?: AbortSignal;
+  },
 ): Promise<ApiResult<MessagesPage>> {
   if (__FIXTURES__ && params.source === 'fixtures') {
-    return {
-      ok: true,
-      data: { messages: messagesOf(params.conversationId), hasOlder: hasOlderMessagesOf(params.conversationId) },
-    };
+    const page = pageOfMessages(messagesOf(params.conversationId), {
+      ...(params.before !== undefined ? { before: params.before } : {}),
+      limit: MESSAGES_LIMIT,
+    });
+    /**
+     * LA FICTION DE `hasOlderMessagesOf` SURVIT À LA PAGINATION (#6972) — le
+     * corpus de `c-rattrapage` compte TRENTE messages, sous la limite : la loi
+     * de fenêtrage seule rendrait `hasOlder` faux, et le Résumé Vivant
+     * perdrait « Sur les N derniers messages », le seul état que cette
+     * conversation existe pour rendre atteignable (`fixtures.ts:919`).
+     *
+     * La fiction vient avec un CURSEUR — sans lui, le 2e refus de
+     * `nextMessagesCursor` la rendrait muette. La page suivante sera VIDE
+     * (le corpus est épuisé) : c'est le 4e refus qui arrête la descente, et
+     * c'est exactement ce qu'il existe pour faire.
+     */
+    if (params.before === undefined && !page.hasOlder && hasOlderMessagesOf(params.conversationId)) {
+      const oldest = page.messages[0];
+      return { ok: true, data: { ...page, hasOlder: true, nextCursor: oldest === undefined ? null : oldest.id } };
+    }
+    return { ok: true, data: page };
   }
+  const query = new URLSearchParams({
+    limit: String(MESSAGES_LIMIT),
+    ...(params.before !== undefined ? { before: params.before } : {}),
+  });
   const result = await params.transport.request<readonly Message[]>({
     method: 'GET',
-    path: `/api/v1/conversations/${params.conversationId}/messages?limit=${MESSAGES_LIMIT}`,
+    path: `/api/v1/conversations/${params.conversationId}/messages?${query.toString()}`,
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });
   if (!result.ok) return result;
@@ -50,36 +79,46 @@ export async function loadMessages(
     data: {
       messages: [...result.data].reverse(),
       hasOlder: result.cursorPagination?.hasMore === true,
+      /* LA MOITIÉ JETÉE (#6972) — `cursorPagination` était lu pour son SEUL
+         `hasMore`, et `nextCursor` — la valeur à renvoyer en `before` —
+         mourait ici. Le fil savait donc qu'un historique existait, sans
+         jamais pouvoir le demander. */
+      nextCursor: result.cursorPagination?.nextCursor ?? null,
     },
   };
 }
 
 /**
- * `decodeMessagesPage` — FONCTION DE MODULE, jamais une lambda écrite en
- * ligne dans la fabrique (#5650, F1/F3, revue-correction). `useBaseQuery`
- * rappelle `observer.getOptimisticResult(options)` à CHAQUE rendu, et
- * `QueryObserver#createResult` ne réutilise le résultat mémorisé que si
- * `options.select === this.#selectFn` : une lambda neuve à chaque rendu
- * re-décode toute la page, et le partage structurel ne rattrape rien —
- * `replaceEqualDeep` compare les `Date` par IDENTITÉ, et décoder une chaîne
- * ISO en fabrique une nouvelle à chaque passage. `threadData.messages`
- * changeait alors d'identité à chaque rendu, ce qui défaisait `useMemo`,
- * `place()` et toute la mémoïsation du fil virtualisé — à 60 images par
- * seconde de défilement. Témoin : `messages.test.ts` § « identité du
- * résultat entre deux rendus (source gateway) ».
+ * `messagesInfiniteOptions` — spreadable dans `useInfiniteQuery` OU
+ * `QueryClient.fetchInfiniteQuery`, SANS `select` (motif
+ * `conversationsInfiniteOptions`, `api/conversations.ts`) : un appelant qui
+ * n'a besoin que des PAGES brutes n'en paie pas le coût.
+ *
+ * `initialPageParam: undefined` ⇒ la première page ne porte AUCUN `before` —
+ * la MÊME absence que `nextCursor` d'un fil épuisé.
  */
-function decodeMessagesPage(page: MessagesPage): MessagesPage {
-  return { ...page, messages: decodeMessages(page.messages) };
-}
-
-/** FABRIQUE (F3) — la même forme que `conversationQuery`. */
-export function messagesQuery(deps: ConversationsDeps, conversationId: string) {
+export function messagesInfiniteOptions(deps: ConversationsDeps, conversationId: string) {
   return {
     queryKey: messagesQueryKey(conversationId),
-    queryFn: async ({ signal }: { readonly signal?: AbortSignal }) =>
-      unwrap(await loadMessages({ ...deps, conversationId, ...(signal !== undefined ? { signal } : {}) })),
-    select: decodeMessagesPage,
+    queryFn: async ({ pageParam, signal }: { readonly pageParam?: MessagesPageParam; readonly signal?: AbortSignal }) =>
+      unwrap(
+        await loadMessages({
+          ...deps,
+          conversationId,
+          ...(pageParam !== undefined ? { before: pageParam } : {}),
+          ...(signal !== undefined ? { signal } : {}),
+        }),
+      ),
+    initialPageParam: undefined as MessagesPageParam,
+    getNextPageParam: nextMessagesCursor,
   };
+}
+
+/** FABRIQUE (F3) — la même forme que `conversationsQuery`. `select` reste une
+ * fonction de MODULE (`flattenMessagePages`), jamais une lambda écrite en
+ * ligne : le doc-comment de `flattenMessagePages` porte la mesure. */
+export function messagesQuery(deps: ConversationsDeps, conversationId: string) {
+  return { ...messagesInfiniteOptions(deps, conversationId), select: flattenMessagePages };
 }
 
 export type { HttpTransport };
@@ -105,9 +144,18 @@ export type { HttpTransport };
  * (la prochaine ouverture le chargera par `GET …/messages`).
  */
 
-/** Le réducteur d'un fil — `readonly Message[]` → `readonly Message[]`. La
- * MÊME signature que `applyReactionDelta`/`applyConsumption`/`upsertConfirmed`
- * portaient déjà : ce module ne fait que leur donner UN hôte. */
+/**
+ * Le réducteur d'un fil — `readonly Message[]` → `readonly Message[]`. La
+ * MÊME signature que `applyReactionDelta`/`applyConsumption` portaient déjà :
+ * ce module ne fait que leur donner UN hôte.
+ *
+ * **IL EST APPLIQUÉ PAGE PAR PAGE**, donc ce doit être une TRANSFORMATION de
+ * rangées (un `map`) — jamais une insertion : appender ici ajouterait la
+ * rangée à CHAQUE page chargée. L'insertion a son propre site,
+ * `upsertThreadMessage` ci-dessous, qui sait sur quelle page poser un message
+ * neuf. Pour un `map`, l'application par page est exactement équivalente à
+ * l'application sur le fil aplati.
+ */
 export type ThreadMessagesUpdater = (messages: readonly Message[]) => readonly Message[];
 
 export function patchThreadMessages(
@@ -115,9 +163,10 @@ export function patchThreadMessages(
   conversationId: string,
   updater: ThreadMessagesUpdater,
 ): void {
-  queryClient.setQueryData<MessagesPage>(messagesQueryKey(conversationId), (page) =>
-    page === undefined ? page : { ...page, messages: updater(page.messages) },
-  );
+  queryClient.setQueryData<MessagesInfiniteData>(messagesQueryKey(conversationId), (data) => {
+    if (data === undefined || !Array.isArray(data.pages)) return data;
+    return { ...data, pages: data.pages.map((page) => ({ ...page, messages: updater(page.messages) })) };
+  });
 }
 
 /**
@@ -140,14 +189,34 @@ export function upsertThreadMessage(
   message: Message & { readonly clientMessageId?: string },
 ): void {
   const cid = message.clientMessageId;
-  patchThreadMessages(queryClient, conversationId, (messages) => {
-    const index = messages.findIndex(
-      (m) =>
-        m.id === message.id ||
-        (cid !== undefined && (m as { readonly clientMessageId?: string }).clientMessageId === cid),
-    );
-    if (index === -1) return [...messages, message];
-    return messages.map((m, i) => (i === index ? message : m));
+  const matches = (m: Message): boolean =>
+    m.id === message.id || (cid !== undefined && (m as { readonly clientMessageId?: string }).clientMessageId === cid);
+
+  queryClient.setQueryData<MessagesInfiniteData>(messagesQueryKey(conversationId), (data) => {
+    if (data === undefined || !Array.isArray(data.pages)) return data;
+
+    const host = data.pages.findIndex((page) => page.messages.some(matches));
+    if (host !== -1) {
+      return {
+        ...data,
+        pages: data.pages.map((page, i) =>
+          i === host ? { ...page, messages: page.messages.map((m) => (matches(m) ? message : m)) } : page,
+        ),
+      };
+    }
+
+    /* APPEND SUR `pages[0]` — LA PAGE LA PLUS RÉCENTE. On pagine vers le
+       PASSÉ : la page 1 (celle sans `before`) porte les messages les plus
+       récents, et un message NEUF est plus récent que tout le chargé. Le
+       mettre sur la dernière page l'enverrait au FOND de l'historique.
+       `pages` VIDE (un `fetchInfiniteQuery` qui vient d'être remis à zéro) ⇒
+       rien à peindre, même doctrine que « le fil n'est pas ouvert ». */
+    const newest = data.pages[0];
+    if (newest === undefined) return data;
+    return {
+      ...data,
+      pages: [{ ...newest, messages: [...newest.messages, message] }, ...data.pages.slice(1)],
+    };
   });
 }
 
@@ -183,9 +252,13 @@ export function findCachedThreadMessage(
   conversationId: string,
   messageId: string,
 ): Message | undefined {
-  const page = queryClient.getQueryData<MessagesPage>(messagesQueryKey(conversationId));
-  if (page === undefined || !Array.isArray(page.messages)) return undefined;
-  return page.messages.find((m) => m.id === messageId);
+  const data = queryClient.getQueryData<MessagesInfiniteData>(messagesQueryKey(conversationId));
+  if (data === undefined || !Array.isArray(data.pages)) return undefined;
+  for (const page of data.pages) {
+    const found = page.messages.find((m) => m.id === messageId);
+    if (found !== undefined) return found;
+  }
+  return undefined;
 }
 
 /**

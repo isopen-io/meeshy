@@ -359,16 +359,26 @@ export function createAppQueryClient(options: CreateAppQueryClientOptions): AppQ
  * appelée avant ce module dans `main.tsx`).
  */
 /**
- * `CACHE_SCHEMA` (#6195) — bumpé quand la FORME PERSISTÉE d'une requête
- * change, ici `['conversations']` : `readonly Conversation[]` → `InfiniteData`.
- * Un cache écrit AVANT ce lot et restauré APRÈS ferait lever `select`
- * (`flattenConversationPages`) sur `.pages` d'un tableau qui n'en porte pas —
- * le buster par IDENTITÉ (`currentBuster`) ne protège pas de ÇA, il protège
- * du compte SUIVANT sur le même navigateur (D-6). Les deux causes de purge
- * sont INDÉPENDANTES : celle-ci n'a pas besoin d'un changement d'identité
- * pour se déclencher, une seule fois, au premier chargement qui suit ce lot.
+ * `CACHE_SCHEMA` — bumpé quand la FORME PERSISTÉE d'une requête change.
+ *
+ *  - **2** (#6195) — `['conversations']` : `readonly Conversation[]` →
+ *    `InfiniteData`.
+ *  - **3** (#6972) — `['conversations', <id>, 'messages']` :
+ *    `{ messages, hasOlder }` → `InfiniteData<MessagesPage>`.
+ *
+ * Un cache écrit AVANT un de ces lots et restauré APRÈS ferait lever `select`
+ * (`flattenConversationPages`, `flattenMessagePages`) sur un `.pages` que la
+ * donnée ne porte pas — le buster par IDENTITÉ (`currentBuster`) ne protège
+ * pas de ÇA, il protège du compte SUIVANT sur le même navigateur (D-6). Les
+ * deux causes de purge sont INDÉPENDANTES : celle-ci n'a pas besoin d'un
+ * changement d'identité pour se déclencher, une seule fois, au premier
+ * chargement qui suit le lot.
+ *
+ * **C'est un défaut qui ne se voit pas en développement** : un cache vide n'a
+ * pas d'ancienne forme à restaurer. Il ne serait apparu que chez les
+ * utilisateurs EXISTANTS, au premier chargement, sur l'écran le plus visité.
  */
-export const CACHE_SCHEMA = 2;
+export const CACHE_SCHEMA = 3;
 
 function currentBuster(): string {
   const session = sessionStore.getState().session;
