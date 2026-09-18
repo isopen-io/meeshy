@@ -112,6 +112,35 @@ export async function paintedAt(page, x, y, quoi = 'une sonde') {
   }, shot.toString('base64'));
 }
 
+/**
+ * AMÈNE LA RANGÉE DANS LE VIEWPORT, ET L'Y ATTEND STABLE (#7048).
+ *
+ * `waitForRowSettled` seule ne suffit pas, et c'est mesuré : elle attend que
+ * `top` cesse de CHANGER entre deux lectures, jamais que la rangée soit À
+ * L'ÉCRAN. Une rangée garée à `y = −297` et immobile lui paraît « stable » —
+ * c'est exactement l'état que le journal CI a mesuré sur `media-13`.
+ *
+ * Défiler une fois avant d'attendre RÉTRÉCIT la fenêtre de course sans la
+ * fermer : le virtualiseur peut réajuster APRÈS la stabilisation (les médias
+ * protégés se résolvent en asynchrone depuis #7023, et une hauteur qui arrive
+ * tard redistribue le fil). La boucle ci-dessous ferme la question en la
+ * POSANT : elle ne rend la main que lorsque la case réellement SONDÉE tient
+ * entière dans le viewport.
+ *
+ * Elle ne LÈVE pas si elle échoue — `paintedAt` refusera la coordonnée et fera
+ * rougir le témoin en le nommant. Deux gardes valent mieux qu'une exception.
+ */
+async function settleTileInView(page, row, id, essais = 6) {
+  for (let essai = 1; essai <= essais; essai += 1) {
+    await row.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+    await waitForRowSettled(page, id);
+    const vue = page.viewportSize();
+    const boite = await row.locator('[data-media-tile]').nth(0).boundingBox();
+    if (!vue || !boite) return;
+    if (boite.y >= 0 && boite.y + boite.height <= vue.height) return;
+  }
+}
+
 const INDIGO = [99, 102, 241];
 const BLACK = [0, 0, 0];
 /**
@@ -341,8 +370,7 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
    * décodage de quatre images et une mutation du DOM : la rangée a le temps de
    * sortir du viewport, et `paintedAt` découpe alors une capture hors image.
    */
-  await rowOf(QUAD_ID).evaluate((el) => el.scrollIntoView({ block: 'center' }));
-  await waitForRowSettled(page, QUAD_ID);
+  await settleTileInView(page, rowOf(QUAD_ID), QUAD_ID);
   const leadingBox = await rowOf(QUAD_ID).locator('[data-media-tile]').nth(0).boundingBox();
   const trailingBox = await rowOf(QUAD_ID).locator('[data-media-tile]').nth(1).boundingBox();
   const shapeGrid = await rowOf(QUAD_ID).locator('[data-media-grid]').first().boundingBox();
