@@ -246,8 +246,21 @@ final class AvatarContextTests: XCTestCase {
         XCTAssertEqual(AvatarContext.messageBubble.shadowRadius, 4)
     }
 
-    func test_shadowRadius_eightForConversationList() {
-        XCTAssertEqual(AvatarContext.conversationList.shadowRadius, 8)
+    /// **Aucune ombre sur l'avatar d'une rangée de liste** (#7010).
+    ///
+    /// Une ombre portée sur un cercle force une passe hors écran PAR RANGÉE :
+    /// sur un fil de conversations qui défile, c'est une composition de plus
+    /// par avatar visible, à chaque image. `.conversationList` tombait dans
+    /// `default` et payait 8 — le plus gros rayon de la table — sans qu'aucune
+    /// décision de design ne l'ait posé.
+    func test_shadowRadius_zeroForConversationList() {
+        XCTAssertEqual(AvatarContext.conversationList.shadowRadius, 0)
+    }
+
+    /// Un décalage sans rayon ne dessine rien : les deux tables doivent tomber
+    /// ensemble, sinon le cas garde un `y` pour une ombre qui n'existe plus.
+    func test_shadowY_zeroForConversationList() {
+        XCTAssertEqual(AvatarContext.conversationList.shadowY, 0)
     }
 
     func test_shadowRadius_twelveForProfileBanner() {

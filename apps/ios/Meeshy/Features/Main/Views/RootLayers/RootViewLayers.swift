@@ -27,7 +27,7 @@ struct RootEnvironmentLayer: ViewModifier {
             .environmentObject(router)
             .environmentObject(storyViewModel)
             .environmentObject(statusViewModel)
-            .environmentObject(conversationViewModel)
+            .meeshyConversationList(conversationViewModel)
             .environmentObject(storyViewerCoordinator)
             // Humeur / anneau de story par EnvironmentValues : les feuilles (dont la
             // feuille de commentaires) en héritent, contrairement aux
@@ -52,7 +52,7 @@ struct RootEnvironmentLayer: ViewModifier {
                     .environmentObject(router)
                     .environmentObject(storyViewModel)
                     .environmentObject(statusViewModel)
-                    .environmentObject(conversationViewModel)
+                    .meeshyConversationList(conversationViewModel)
                     .environmentObject(storyViewerCoordinator)
                     .presentationDetents([.large, .medium])
                     .presentationDragIndicator(.visible)
@@ -139,7 +139,7 @@ struct RootStoryDoorsLayer: ViewModifier {
                     ),
                     onReplyToStory: { replyContext in
                         storyViewerCoordinator.dismiss()
-                        router.navigateToStoryReply(replyContext, conversationListViewModel: conversationViewModel)
+                        router.navigateToStoryReply(replyContext, conversationList: conversationViewModel)
                     },
                     singleGroup: request.singleGroup,
                     postId: request.postId,
@@ -155,7 +155,7 @@ struct RootStoryDoorsLayer: ViewModifier {
                 // EnvironmentObjects automatically.
                 .environmentObject(router)
                 .environmentObject(statusViewModel)
-                .environmentObject(conversationViewModel)
+                .meeshyConversationList(conversationViewModel)
                 // Re-inject le flag isStoryViewerPresenting — fullScreenCover
                 // n'hérite pas non plus des `Environment` values du parent,
                 // donc le `StoryViewerContainer.ConnectionBanner` interne au
@@ -337,7 +337,7 @@ struct RootSheetsLayer: ViewModifier {
                             router.pendingShareContent = nil
                         }
                     )
-                    .environmentObject(conversationViewModel)
+                    .meeshyConversationList(conversationViewModel)
                     .environmentObject(router)
                     .environmentObject(statusViewModel)
                     .presentationDetents([.medium, .large])

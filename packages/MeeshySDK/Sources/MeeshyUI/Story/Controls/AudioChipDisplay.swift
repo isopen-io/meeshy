@@ -369,8 +369,8 @@ public struct AudioChipMarquee: View {
     }
 }
 
-/// Compteur « M:SS » du temps restant du secteur — atome AUTONOME : il
-/// observe le playhead ICI même (jamais dans le header — doctrine
+/// Compteur « M:SS » du temps restant du secteur — atome AUTONOME : il LIT le
+/// playhead ICI même (jamais dans le header — doctrine
 /// StoryViewerView+Sidebar « le header est reconstruit à chaque tick ») et un
 /// `TimelineView(.periodic)` cadence la relecture à la seconde. `elapsed`
 /// vient du clock canvas (`StoryReaderPlayheadState`, throttle 30 Hz) : quand
@@ -386,7 +386,14 @@ struct AudioChipRemainingTimeText: View {
     /// invisible.
     let tint: Color
 
-    @ObservedObject private var playhead = StoryReaderPlayheadState.shared
+    /// LU, jamais OBSERVÉ (#7010). Le playhead publie ≈ 30 fois par seconde ;
+    /// ce compteur change une fois par SECONDE, et c'est le
+    /// `TimelineView(.periodic(by: 1))` ci-dessous qui porte sa cadence.
+    /// L'abonnement ré-évaluait donc le corps — et reconstruisait la
+    /// `TimelineView` — vingt-neuf fois pour rien. Lire la valeur DANS la
+    /// fermeture du `TimelineView` la prend fraîche à chaque tic, sans rien
+    /// souscrire : la cadence vient de l'horloge, la valeur de la source.
+    private var playhead: StoryReaderPlayheadState { .shared }
 
     init(window: AudioChipPlaybackWindow,
          minuteDigits: Int,
