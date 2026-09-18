@@ -290,7 +290,8 @@ actor MediaCompressor {
         // qu'aucun `do/catch` Swift ne rattrape (#7004). L'utilisateur voit
         // alors l'échec d'envoi et peut réessayer, au lieu de perdre l'app.
         guard writer.startWriting() else {
-            throw writer.error ?? CompressionError.writerCannotStart
+            if let cause = writer.error { throw cause }
+            throw CompressionError.writerCannotStart
         }
         writer.startSession(atSourceTime: .zero)
 

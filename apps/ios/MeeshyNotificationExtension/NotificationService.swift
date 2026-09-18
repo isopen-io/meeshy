@@ -170,7 +170,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
                 defer { group.leave() }
                 guard let fileURL else { return }
                 defer { try? FileManager.default.removeItem(at: fileURL) }
-                guard let size = Self.fileSize(at: fileURL),
+                guard let size = NotificationService.fileSize(at: fileURL),
                       size > 0, size <= NSEAttachmentPolicy.maxAttachmentBytes else { return }
                 avatarData = try? Data(contentsOf: fileURL)
             }
@@ -195,7 +195,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
                     // annonce. Le fichier est sur DISQUE, donc le mesurer ne
                     // coûte rien — et le refuser non plus.
                     guard NSEAttachmentPolicy.mayAttach(
-                        mimeType: mime, fileSize: Self.fileSize(at: fileURL)
+                        mimeType: mime, fileSize: NotificationService.fileSize(at: fileURL)
                     ) else {
                         try? FileManager.default.removeItem(at: fileURL)
                         return

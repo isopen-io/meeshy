@@ -7,6 +7,7 @@
  */
 
 import type { PostType } from './post.js';
+import type { NotificationAttachmentWire } from './notification-attachment-wire.js';
 
 // =====================================================
 // NOTIFICATION TYPES & ENUMS
@@ -203,8 +204,12 @@ export interface NotificationActor {
 /**
  * CONTEXT - Où c'est arrivé
  * Contexte de navigation pour la notification
+ *
+ * Le média INLINE de la bannière (URL, mime, taille, durée du 1er attachment)
+ * est HÉRITÉ de `NotificationAttachmentWire` : ces quatre champs décrivent un
+ * FICHIER, pas un endroit, et ils voyagent ensemble (#7003).
  */
-export interface NotificationContext {
+export interface NotificationContext extends NotificationAttachmentWire {
   readonly conversationId?: string;
   readonly conversationTitle?: string;
   /** Avatar (image URL) de la conversation/groupe. Sert de repli à la toast
@@ -226,25 +231,6 @@ export interface NotificationContext {
   readonly parentCommentId?: string;
   readonly encryptedContent?: string;
   readonly notificationLocKey?: string;
-  /** Phase A iOS Communication Notifications — URL accessible publiquement du
-   *  1er attachment du message (image/audio/video). Téléchargé par
-   *  MeeshyNotificationExtension et attaché comme UNNotificationAttachment
-   *  natif avec UTI typeHint (audio waveform, image preview, video thumbnail). */
-  readonly firstAttachmentUrl?: string;
-  /** MIME type du 1er attachment, ex. `audio/m4a`, `image/jpeg`, `video/mp4`. */
-  readonly firstAttachmentMimeType?: string;
-  /** Taille en OCTETS du fichier servi par `firstAttachmentUrl` (#7003).
-   *  Une extension de notification ne dispose que d'environ 24 Mo : sans ce
-   *  champ, la NSE ne pouvait décider d'attacher ou non qu'APRÈS avoir ramené
-   *  le corps entier en mémoire — c'est-à-dire trop tard. Elle la lit désormais
-   *  AVANT la requête (`NSEAttachmentPolicy.mayAttach`).
-   *  Absente quand la taille est inconnue, ou quand la piste servie n'est PAS
-   *  le fichier d'origine (une piste traduite a sa propre taille, que rien ne
-   *  connaît ici) : ce qui QUALIFIE un fichier voyage avec LUI, jamais avec un
-   *  autre. */
-  readonly firstAttachmentFileSize?: number;
-  /** Durée en millisecondes du 1er attachment audio/video. */
-  readonly firstAttachmentDurationMs?: number;
   /** Date de publication ISO de l'entité sociale liée (post/story/réel/mood).
    *  Permet au client d'afficher « publié il y a 2 j » même quand le contenu
    *  n'est plus accessible (story expirée). @see schema.prisma Post.createdAt */

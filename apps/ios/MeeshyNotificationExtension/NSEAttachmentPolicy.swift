@@ -78,12 +78,9 @@ nonisolated enum NSEAttachmentPolicy {
     /// (`audio/mp4; codecs=mp4a.40.2`) et une casse quelconque : ce qui arrive
     /// ici vient d'une charge réseau, pas d'une constante du dépôt.
     static func isRenderableFamily(_ mimeType: String) -> Bool {
-        let base = mimeType
-            .split(separator: ";", maxSplits: 1, omittingEmptySubsequences: false)
-            .first
-            .map(String.init)?
-            .trimmingCharacters(in: .whitespaces)
-            .lowercased() ?? ""
+        let tete = mimeType.split(separator: ";", maxSplits: 1,
+                                  omittingEmptySubsequences: false).first ?? ""
+        let base = String(tete).trimmingCharacters(in: .whitespaces).lowercased()
         return base.hasPrefix("image/") || base.hasPrefix("audio/")
     }
 
