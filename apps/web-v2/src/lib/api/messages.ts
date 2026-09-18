@@ -1,3 +1,5 @@
+import type { QueryClient } from '@tanstack/react-query';
+
 import { unwrap } from './client';
 import type { ConversationsDeps } from './conversations';
 import { decodeMessages } from './decode';
@@ -81,6 +83,110 @@ export function messagesQuery(deps: ConversationsDeps, conversationId: string) {
 }
 
 export type { HttpTransport };
+
+/* ───────────────────────── LE CACHE DU FIL ─────────────────────────────── */
+
+/**
+ * **LES QUATRE ACCÈS AU CACHE DU FIL** (#6972, étape 1) — deux pour LIRE, deux
+ * pour ÉCRIRE, et rien d'autre ne connaît la forme de la page.
+ *
+ * Avant ce lot, SIX sites l'écrivaient en direct : `realtime-apply.ts`
+ * (`applyMessageNew`, `applyMessageTranslation`), `reactions.ts`
+ * (`applyDelta`), `send/perform-send.ts` (l'accusé), `routes/thread.tsx`
+ * (la consommation d'une vue unique). Chacun recopiait `{ ...page, messages:
+ * … }` et le prédicat de dédoublonnage — donc chacun devenait un défaut le
+ * jour où la forme changerait. C'est exactement ce que D-44 a soldé pour la
+ * Lentille avant de la paginer (`findCachedConversation` / `patchConversation`,
+ * `api/conversations.ts`) : **un site lit, un site patche**.
+ *
+ * `page === undefined` ⇒ **NO-OP**, sur les deux écritures : un fil qui n'est
+ * pas OUVERT n'a rien à peindre localement, et fabriquer une page ici
+ * inventerait un historique dont on ne connaît ni le curseur ni les bornes
+ * (la prochaine ouverture le chargera par `GET …/messages`).
+ */
+
+/** Le réducteur d'un fil — `readonly Message[]` → `readonly Message[]`. La
+ * MÊME signature que `applyReactionDelta`/`applyConsumption`/`upsertConfirmed`
+ * portaient déjà : ce module ne fait que leur donner UN hôte. */
+export type ThreadMessagesUpdater = (messages: readonly Message[]) => readonly Message[];
+
+export function patchThreadMessages(
+  queryClient: QueryClient,
+  conversationId: string,
+  updater: ThreadMessagesUpdater,
+): void {
+  queryClient.setQueryData<MessagesPage>(messagesQueryKey(conversationId), (page) =>
+    page === undefined ? page : { ...page, messages: updater(page.messages) },
+  );
+}
+
+/**
+ * `upsertThreadMessage` — REMPLACE par `id` **OU** `clientMessageId` si la
+ * rangée existe, sinon APPEND en queue (l'ordre ASCENDANT que ce port
+ * établit).
+ *
+ * La loi était écrite DEUX fois — `applyMessageNew` (`realtime-apply.ts`) et
+ * `upsertConfirmed` (`send/perform-send.ts`) — et leurs doc-comments
+ * affirmaient déjà être « la MÊME règle » (D-11/D-28). Elles divergeaient
+ * pourtant sur un point : `upsertConfirmed` comparait `m.clientMessageId ===
+ * confirmed.clientMessageId` SANS garde, ce qui fait matcher `undefined ===
+ * undefined` — inoffensif parce qu'un `LocalMessage` en porte toujours un,
+ * mais faux comme loi. La garde est ici : le `clientMessageId` de la charge
+ * ENTRANTE doit être défini pour servir de clé.
+ */
+export function upsertThreadMessage(
+  queryClient: QueryClient,
+  conversationId: string,
+  message: Message & { readonly clientMessageId?: string },
+): void {
+  const cid = message.clientMessageId;
+  patchThreadMessages(queryClient, conversationId, (messages) => {
+    const index = messages.findIndex(
+      (m) =>
+        m.id === message.id ||
+        (cid !== undefined && (m as { readonly clientMessageId?: string }).clientMessageId === cid),
+    );
+    if (index === -1) return [...messages, message];
+    return messages.map((m, i) => (i === index ? message : m));
+  });
+}
+
+/**
+ * `cachedThreadConversationIds` — les conversations dont le fil EST en cache.
+ * Le prédicat vient de `applyMessageTranslation` (`realtime-apply.ts`), dont
+ * la charge (`TranslationEvent`) ne porte PAS `conversationId` : il faut
+ * balayer. Trois segments EXACTEMENT, `['conversations', <id>, 'messages']` —
+ * ni la liste (`['conversations']`), ni la case d'une conversation
+ * (`['conversations', <id>]`), ni la lecture souveraine de l'administration
+ * (`ADMIN_SOUVERAIN_PREFIXE`, une clé délibérément AUTRE,
+ * `routes/admin-conversation-reading.tsx`).
+ */
+export function cachedThreadConversationIds(queryClient: QueryClient): readonly string[] {
+  return queryClient
+    .getQueryCache()
+    .findAll({
+      predicate: (query) =>
+        Array.isArray(query.queryKey) &&
+        query.queryKey.length === 3 &&
+        query.queryKey[0] === 'conversations' &&
+        query.queryKey[2] === 'messages',
+    })
+    .map((query) => query.queryKey[1] as string);
+}
+
+/** `findCachedThreadMessage` — motif `findCachedConversation` : `undefined`
+ * si le message n'y est pas, si le fil n'est pas ouvert, OU si le cache porte
+ * encore une forme antérieure (jamais une exception — `CACHE_SCHEMA` purge,
+ * mais un appelant qui lirait entre-temps ne doit rien casser). */
+export function findCachedThreadMessage(
+  queryClient: QueryClient,
+  conversationId: string,
+  messageId: string,
+): Message | undefined {
+  const page = queryClient.getQueryData<MessagesPage>(messagesQueryKey(conversationId));
+  if (page === undefined || !Array.isArray(page.messages)) return undefined;
+  return page.messages.find((m) => m.id === messageId);
+}
 
 /**
  * L'ENVOI D'UN MESSAGE (#5813, étape 2 ; étendu #5668 aux pièces jointes) —

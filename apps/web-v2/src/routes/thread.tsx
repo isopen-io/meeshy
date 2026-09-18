@@ -27,10 +27,9 @@ import { ThreadError, ThreadRefused, ThreadSkeleton } from '@/components/thread-
 import { apiConfig } from '@/lib/api/config';
 import { apiDeps } from '@/lib/api/deps';
 import { recordViewOnceConsumption } from '@/lib/api/fixtures';
-import { messagesQueryKey } from '@/lib/api/messages';
+import { patchThreadMessages } from '@/lib/api/messages';
 import { useConversationsSnapshot, useThreadData } from '@/lib/api/query';
 import { applyConsumption } from '@/lib/api/view-once';
-import type { Message } from '@/lib/api/types';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
 import { accentOf, withAccent } from '@/lib/accent';
@@ -165,12 +164,11 @@ export default function ThreadScreen() {
     async (messageId: string): Promise<boolean> => {
       if (!online) return false;
       if (__FIXTURES__ && apiConfig.source === 'fixtures') recordViewOnceConsumption(messageId);
-      queryClient.setQueryData<{ readonly messages: readonly Message[]; readonly hasOlder: boolean }>(
-        messagesQueryKey(conversationId),
-        (page) =>
-          page === undefined
-            ? page
-            : { ...page, messages: applyConsumption(page.messages, { messageId, viewOnceCount: 1 }) },
+      /* `patchThreadMessages` (#6972, étape 1) — le SITE UNIQUE qui patche un
+         fil (`lib/api/messages.ts`) : cet écran ne recopie plus la forme de la
+         page, qui est devenue `InfiniteData` à l'étape 2. */
+      patchThreadMessages(queryClient, conversationId, (messages) =>
+        applyConsumption(messages, { messageId, viewOnceCount: 1 }),
       );
       return true;
     },

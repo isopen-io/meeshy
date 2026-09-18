@@ -1,9 +1,21 @@
+import { QueryClient } from '@tanstack/react-query';
 import { afterEach, describe, expect, test } from 'bun:test';
 
-import { loadMessages, messagesQuery, sendMessage } from './messages';
+import {
+  cachedThreadConversationIds,
+  findCachedThreadMessage,
+  loadMessages,
+  messagesQuery,
+  messagesQueryKey,
+  patchThreadMessages,
+  sendMessage,
+  upsertThreadMessage,
+} from './messages';
+import { CONVERSATIONS_QUERY_KEY, conversationQueryKey } from './conversations';
 import { createHttpTransport } from './http';
 import { hasOlderMessagesOf, messagesOf, resetSentMessagesForTests } from './fixtures';
-import { VIEWER_ID } from './fixtures-base';
+import { VIEWER_ID, message } from './fixtures-base';
+import type { Message } from './types';
 
 function fakeFetch(response: { readonly status: number; readonly body?: unknown }) {
   const calls: { readonly url: string; readonly init: RequestInit }[] = [];
@@ -154,6 +166,127 @@ describe('messagesQuery — identité du résultat entre deux rendus (source gat
 
     expect(first).toBeDefined();
     expect(second).toBe(first);
+  });
+});
+
+/**
+ * LES QUATRE ACCÈS AU CACHE DU FIL (#6972, étape 1) — le coût caché que la
+ * pagination devait solder AVANT de toucher au hook : la forme de la page
+ * était écrite EN DIRECT par six sites (`realtime-apply.ts` ×2,
+ * `reactions.ts`, `perform-send.ts`, `routes/thread.tsx`), donc le passage en
+ * `InfiniteData` les cassait tous. Motif D-44 (`findCachedConversation` /
+ * `patchConversation`) : **un site lit, un site patche**.
+ *
+ * `seedThread`/`readThread` sont les DEUX seuls endroits de ce fichier qui
+ * connaissent la forme — c'est délibéré : les témoins ci-dessous mesurent la
+ * RÈGLE (upsert, dédoublonnage, portée), jamais la structure, et survivent
+ * donc au changement de forme qu'ils existent pour protéger.
+ */
+const seedThread = (client: QueryClient, conversationId: string, messages: readonly Message[], hasOlder = false): void => {
+  client.setQueryData(messagesQueryKey(conversationId), { messages, hasOlder });
+};
+
+const readThread = (client: QueryClient, conversationId: string): readonly Message[] | undefined =>
+  client.getQueryData<{ readonly messages: readonly Message[] }>(messagesQueryKey(conversationId))?.messages;
+
+const msg = (id: string, extra: Partial<Message> = {}): Message =>
+  message({
+    id,
+    conversationId: 'c-a',
+    senderId: 'u1',
+    content: `contenu ${id}`,
+    originalLanguage: 'fr',
+    translations: [],
+    createdAt: new Date(1_757_000_000_000),
+    ...extra,
+  });
+
+describe('patchThreadMessages — le SITE UNIQUE qui patche un fil', () => {
+  test('applique le réducteur au fil visé ; les autres messages restent toBe-identiques', () => {
+    const client = new QueryClient();
+    const [m1, m2] = [msg('m1'), msg('m2')];
+    seedThread(client, 'c-a', [m1, m2]);
+
+    patchThreadMessages(client, 'c-a', (messages) =>
+      messages.map((m) => (m.id === 'm2' ? { ...m, content: 'patché' } : m)),
+    );
+
+    const after = readThread(client, 'c-a');
+    expect(after?.[0]).toBe(m1);
+    expect(after?.[1]?.content).toBe('patché');
+  });
+
+  test('fil ABSENT du cache ⇒ RIEN n’est créé (le fil n’est pas ouvert)', () => {
+    const client = new QueryClient();
+    patchThreadMessages(client, 'c-fermee', (messages) => [...messages, msg('m9')]);
+    expect(client.getQueryData(messagesQueryKey('c-fermee'))).toBeUndefined();
+  });
+
+  test('ne touche jamais un AUTRE fil', () => {
+    const client = new QueryClient();
+    seedThread(client, 'c-a', [msg('m1')]);
+    seedThread(client, 'c-b', [msg('m2')]);
+    patchThreadMessages(client, 'c-a', (messages) => messages.map((m) => ({ ...m, content: 'x' })));
+    expect(readThread(client, 'c-b')?.[0]?.content).toBe('contenu m2');
+  });
+});
+
+describe('upsertThreadMessage — id OU clientMessageId, une seule loi', () => {
+  test('id inconnu ⇒ APPEND en queue (l’ordre ASCENDANT du fil)', () => {
+    const client = new QueryClient();
+    seedThread(client, 'c-a', [msg('m1')]);
+    upsertThreadMessage(client, 'c-a', msg('m2'));
+    expect(readThread(client, 'c-a')?.map((m) => m.id)).toEqual(['m1', 'm2']);
+  });
+
+  test('même id ⇒ REMPLACE EN PLACE, sans doubler la rangée', () => {
+    const client = new QueryClient();
+    seedThread(client, 'c-a', [msg('m1'), msg('m2')]);
+    upsertThreadMessage(client, 'c-a', msg('m1', { content: 'écho' }));
+    const after = readThread(client, 'c-a');
+    expect(after?.map((m) => m.id)).toEqual(['m1', 'm2']);
+    expect(after?.[0]?.content).toBe('écho');
+  });
+
+  test('même clientMessageId ⇒ PROMEUT la rangée optimiste en place (D-11/D-28)', () => {
+    const client = new QueryClient();
+    const local = { ...msg('local-1'), clientMessageId: 'cid_abc' } as Message;
+    seedThread(client, 'c-a', [local]);
+    upsertThreadMessage(client, 'c-a', { ...msg('m-serveur'), clientMessageId: 'cid_abc' } as Message);
+    const after = readThread(client, 'c-a');
+    expect(after?.map((m) => m.id)).toEqual(['m-serveur']);
+  });
+
+  test('charge SANS clientMessageId ⇒ ne matche pas une rangée qui n’en porte pas (piège undefined === undefined)', () => {
+    const client = new QueryClient();
+    seedThread(client, 'c-a', [msg('m1')]);
+    upsertThreadMessage(client, 'c-a', msg('m2'));
+    expect(readThread(client, 'c-a')?.map((m) => m.id)).toEqual(['m1', 'm2']);
+  });
+
+  test('fil ABSENT du cache ⇒ RIEN n’est créé', () => {
+    const client = new QueryClient();
+    upsertThreadMessage(client, 'c-fermee', msg('m1'));
+    expect(client.getQueryData(messagesQueryKey('c-fermee'))).toBeUndefined();
+  });
+});
+
+describe('cachedThreadConversationIds / findCachedThreadMessage — le SITE UNIQUE qui lit', () => {
+  test('n’énumère QUE les fils, jamais la liste ni la case d’une conversation', () => {
+    const client = new QueryClient();
+    client.setQueryData(CONVERSATIONS_QUERY_KEY, { pages: [], pageParams: [] });
+    client.setQueryData(conversationQueryKey('c-a'), { id: 'c-a' });
+    seedThread(client, 'c-a', [msg('m1')]);
+    seedThread(client, 'c-b', [msg('m2')]);
+    expect([...cachedThreadConversationIds(client)].sort()).toEqual(['c-a', 'c-b']);
+  });
+
+  test('rend le message du fil, `undefined` s’il n’y est pas, `undefined` si le fil n’est pas ouvert', () => {
+    const client = new QueryClient();
+    seedThread(client, 'c-a', [msg('m1')]);
+    expect(findCachedThreadMessage(client, 'c-a', 'm1')?.id).toBe('m1');
+    expect(findCachedThreadMessage(client, 'c-a', 'm404')).toBeUndefined();
+    expect(findCachedThreadMessage(client, 'c-fermee', 'm1')).toBeUndefined();
   });
 });
 
