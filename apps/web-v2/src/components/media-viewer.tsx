@@ -530,10 +530,20 @@ export default function MediaViewer({
       onKeyDown={onKeyDown}
       tabIndex={-1}
     >
-      {/* Couloir haut — AU-DESSUS d'une page scène en plein viewport (`zIndex`, #6902). */}
+      {/* Couloir haut — AU-DESSUS d'une page scène en plein viewport (`zIndex`, #6902).
+          `pointerEvents` SUIT `opacity` (#7040) : `opacity: 0` cache aux YEUX,
+          jamais au DOIGT. Sans lui, un appui en haut à gauche en plein cadre
+          FERMAIT la visionneuse — un contrôle invisible et vivant, pire qu'un
+          contrôle mort, puisqu'on ne peut ni le voir ni prévoir son effet. */}
       <div
         className="media-viewer-chrome relative flex items-center justify-between px-3"
-        style={{ height: topCorridorHeight, paddingTop: insets.top, opacity: isFull ? 0 : 1, zIndex: 10 }}
+        style={{
+          height: topCorridorHeight,
+          paddingTop: insets.top,
+          opacity: isFull ? 0 : 1,
+          pointerEvents: isFull ? 'none' : 'auto',
+          zIndex: 10,
+        }}
       >
         <button
           ref={closeButtonRef}
@@ -634,6 +644,13 @@ export default function MediaViewer({
         className="media-viewer-chrome relative flex flex-col"
         style={{
           opacity: isFull ? 0 : 1,
+          /* Le JUMEAU du couloir haut (#7040) : même littéral, même défaut. Il
+             ne figurait dans aucun signalement — il a été trouvé en posant au
+             correctif la question que le dépôt pose aux siens, « qu'est-ce qui
+             part À CÔTÉ de ce que je viens de garder ? ». Ce couloir porte la
+             PELLICULE : sans cette ligne, ses vignettes se choisissaient à
+             l'aveugle sous un doigt qui ne voit rien. */
+          pointerEvents: isFull ? 'none' : 'auto',
           paddingBottom: insets.bottom,
           zIndex: 10,
           /* LE VOILE BAS (revue-correction #6902) — une page SCÈNE prend le

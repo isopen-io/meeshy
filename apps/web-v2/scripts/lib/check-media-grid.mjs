@@ -25,6 +25,7 @@
  * ULTÉRIEUR ne consomme plus qu'UNE seule couche (jamais deux, jamais zéro).
  */
 import { waitForRowSettled } from './check-media.mjs';
+import { confinementDe } from './chrome-confinement.mjs';
 
 const QUAD_ID = 'media-13';
 const OVERFLOW_ID = 'media-14';
@@ -261,6 +262,17 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
   expect(rootInert, `[${skin}/${scheme}] #root porte inert le temps de l'ouverture`);
   const focusedIsClose = await page.evaluate(() => document.activeElement?.getAttribute('aria-label') === 'Fermer');
   expect(focusedIsClose, `[${skin}/${scheme}] le focus initial est sur le bouton « Fermer »`);
+
+  /**
+   * #7040 — ET LA PORTE DE SORTIE TIENT DANS LE CADRE. Le focus l'atteint (le
+   * témoin ci-dessus) ; encore faut-il que le DOIGT le puisse. #7037 (iOS) a
+   * rendu cette même croix à `x = −326,3` pour un viewport de 402 pt, sur le
+   * plein écran d'une pièce jointe à PLUSIEURS pages : le plateau adoptait la
+   * largeur du carrousel. La grille QUAD ouverte ici est exactement ce cas —
+   * quatre pages, le carrousel le plus large du fil de conversation.
+   */
+  const porte = await confinementDe(page, '[data-media-viewer] .media-viewer-close', { nom: 'la croix de la visionneuse' });
+  expect(porte.ok, `[${skin}/${scheme}] #7040 : ${porte.message}`);
 
   const filmstripItems = dialog.locator('[data-filmstrip-item]');
   expect((await filmstripItems.count()) === 4, `[${skin}/${scheme}] la pellicule compte 4 vignettes (media-13)`);

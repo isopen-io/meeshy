@@ -13,6 +13,7 @@ import { join } from 'node:path';
 
 import { launchChromium } from './lib/browser.mjs';
 import { startDistServer } from './lib/gate-server.mjs';
+import { confinementDe } from './lib/chrome-confinement.mjs';
 
 const DIST = new URL('../dist/', import.meta.url).pathname;
 /* Le serveur vit dans `lib/` depuis #6988 : celui qui était écrit ici
@@ -598,6 +599,25 @@ async function fullscreenInvariants(viewport) {
   });
 
   check(fullscreen.index === '1', `[${viewport.width}×${viewport.height}] #6902 : index courant attendu "1" (la scène TOUCHÉE) — reçu "${fullscreen.index}"`);
+
+  /**
+   * #7040 — LA PORTE DE SORTIE TIENT DANS LE CADRE.
+   *
+   * #7037 (iOS) a rendu une croix à `x = −326,3` pour un viewport de 402 pt :
+   * entièrement hors de l'écran, sur le plein écran d'une pièce jointe. Le
+   * plateau y adoptait la largeur du CARROUSEL et toutes ses couches
+   * s'alignaient sur ce cadre-là plutôt que sur l'écran — un motif qui ne
+   * demande qu'un `ZStack` de trop pour se rejouer ici, où le même plein écran
+   * monte AUSSI les pages voisines (`rendersFullPixels`).
+   *
+   * Aucun gate du dépôt ne savait dire ça : `reachAtRest` EXCLUAIT du relevé ce
+   * dont le centre sortait du cadre (le lot qui porte cette ligne), et le seul
+   * invariant de confinement existant (`check-thread-chrome.mjs:554-571`, la
+   * capsule de synchronisation) ne couvrait pas les plein écran. Il y est
+   * porté, aux DEUX gabarits que cette fonction joue déjà.
+   */
+  const porte = await confinementDe(page, '[data-scene-fullscreen] .media-viewer-close', { nom: 'la croix du plein écran de scène' });
+  check(porte.ok, `[${viewport.width}×${viewport.height}] #7040 : ${porte.message}`);
 
   const ratioCard = sceneBoxBefore.width / sceneBoxBefore.height;
   const ratioFullscreen = fullscreen.width / fullscreen.height;
