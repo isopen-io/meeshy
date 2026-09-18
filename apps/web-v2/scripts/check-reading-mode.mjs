@@ -99,7 +99,7 @@ const CAPTURES = join(APP, '..', '..', '.cache', 'web-v2-workflow', 'rendus');
    repliait TOUT sur `index.html`, y compris un `/assets/*.js` dont la lecture
    échouait — le navigateur rendait alors « Failed to fetch dynamically imported
    module » pour une panne transitoire, sans aucune trace au journal. */
-const served = await startDistServer(DIST);
+const served = await startDistServer(DIST, { serviceWorker: false });
 const BASE = served.base;
 
 await mkdir(CAPTURES, { recursive: true });
