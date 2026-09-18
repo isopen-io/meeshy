@@ -233,7 +233,11 @@ final class NumericAccessibilityValueGuardTests: XCTestCase {
         let hosts = [
             "Features/Main/Components/CameraView.swift",
             "Features/Main/Components/MediaKindLabel.swift",
-            "Features/Main/Components/MessageOverlayMenu.swift",
+            // #7005 — la minuterie de l'aperçu d'appui long a DÉMÉNAGÉ, elle
+            // n'a pas disparu : `OverlayAudioPlayer` a quitté
+            // `MessageOverlayMenu.swift` (hôte hors budget) pour son propre
+            // fichier. La liste SUIT l'hôte, comme au 248i.
+            "Features/Main/Components/OverlayAudioPlayer.swift",
             "Features/Main/Components/RecentMediaStrip.swift",
             "Features/Main/Components/UniversalComposerBar+Recording.swift",
             "Features/Main/Components/MessageDetail/MessageTranscriptionDetailView.swift",

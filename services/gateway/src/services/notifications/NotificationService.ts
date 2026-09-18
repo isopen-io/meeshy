@@ -1219,25 +1219,30 @@ export class NotificationService {
     readonly originalUrl?: string;
     readonly originalMimeType?: string;
     readonly originalDurationMs?: number | null;
+    readonly originalFileSize?: number | null;
   }): {
     readonly url?: string;
     readonly mimeType?: string;
     readonly durationMs?: number;
+    readonly fileSize?: number;
   } {
     const original = {
       url: params.originalUrl,
       mimeType: params.originalMimeType,
       durationMs: params.originalDurationMs ?? undefined,
+      fileSize: params.originalFileSize ?? undefined,
     };
     if (!params.served) return original;
 
     const track = params.tracks?.[params.served.language];
     if (!track) return original;
 
-    // La piste remplace le fichier ; son étiquette et sa durée ne retombent PAS
-    // sur celles de l'original — elles décriraient un autre fichier. Absentes,
-    // elles restent absentes : la NSE déduit l'UTI de l'extension, et le corps
-    // se compose sans durée plutôt qu'avec une fausse.
+    // La piste remplace le fichier ; son étiquette, sa durée et sa TAILLE ne
+    // retombent PAS sur celles de l'original — elles décriraient un autre
+    // fichier. Absentes, elles restent absentes : la NSE déduit l'UTI de
+    // l'extension, le corps se compose sans durée plutôt qu'avec une fausse, et
+    // le plafond mémoire (#7003) retombe sur sa mesure APRÈS téléchargement
+    // plutôt que sur un chiffre emprunté.
     return { url: track.url, mimeType: track.mimeType, durationMs: track.durationMs };
   }
 
@@ -1776,11 +1781,21 @@ export class NotificationService {
                     attachmentUrl: '',
                     attachmentMimeType: '',
                     attachmentDurationMs: '',
+                    attachmentFileSize: '',
                   } : {
                     attachmentUrl: params.context.firstAttachmentUrl || '',
                     attachmentMimeType: params.context.firstAttachmentMimeType || '',
                     attachmentDurationMs: params.context.firstAttachmentDurationMs != null
                       ? String(params.context.firstAttachmentDurationMs)
+                      : '',
+                    // #7003 — la NSE la lit AVANT de lancer la requête : une
+                    // pièce jointe trop lourde pour son enveloppe de 24 Mo ne
+                    // se refuse utilement qu'avant d'être descendue. Elle
+                    // voyage sous le même verrou que l'URL qu'elle décrit :
+                    // un média protégé n'annonce pas plus sa taille que son
+                    // adresse.
+                    attachmentFileSize: params.context.firstAttachmentFileSize != null
+                      ? String(params.context.firstAttachmentFileSize)
                       : '',
                   }),
                   encryptedContent: params.context.encryptedContent || '',
@@ -2168,6 +2183,7 @@ export class NotificationService {
       originalUrl: params.firstAttachmentUrl,
       originalMimeType: params.firstAttachmentMimeType,
       originalDurationMs: params.firstAttachmentDuration,
+      originalFileSize: params.firstAttachmentFileSize,
     });
 
     // Cycle 122 — le corps AFFICHÉ descend le Prisme, pas seulement les champs
@@ -2213,6 +2229,11 @@ export class NotificationService {
         // paramètres bruts : la piste servie, son étiquette et sa durée.
         firstAttachmentUrl: servedMedia.url,
         firstAttachmentMimeType: servedMedia.mimeType,
+        // #7003 — la taille voyage avec le fichier qu'elle décrit, et c'est la
+        // NSE qui la LIT : sans elle, l'extension ne pouvait décider d'attacher
+        // ou non qu'après avoir ramené le corps entier dans une enveloppe de
+        // 24 Mo, c'est-à-dire trop tard.
+        firstAttachmentFileSize: servedMedia.fileSize,
         // `MessageAttachment.duration` est DÉJÀ en millisecondes (`schema.prisma`,
         // et le doc-comment de `formatSingleAttachmentLabelI18n` le redit). Ce
         // site la multipliait par 1000 comme si elle était en secondes : un

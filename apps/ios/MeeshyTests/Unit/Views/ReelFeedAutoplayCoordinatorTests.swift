@@ -213,6 +213,103 @@ final class ReelFeedAutoplayCoordinatorTests: XCTestCase {
         XCTAssertNil(sut.activeReelId,
                      "Un appel actif vide l'élection sans débounce — une scène n'y échappe pas.")
     }
+
+    // MARK: - #7009 — le voisin est DÉSIGNÉ pendant que N joue
+
+    func test_update_designeLeVoisinSuivantDuReelActif() async {
+        let sut = makeSUT()
+        sut.update(
+            frames: [frame("a", midY: 100), frame("b", midY: 400), frame("c", midY: 800)],
+            viewportMinY: 0, viewportMaxY: 800
+        )
+        await waitForActiveReel(sut, toEqual: "b")
+
+        XCTAssertEqual(sut.activeReelId, "b")
+        XCTAssertEqual(sut.prewarmReelId, "c", "N+1 doit être désigné dès que N est élu")
+    }
+
+    /// Le DERNIER réel de la fenêtre n'a pas de suivant : désigner quoi que ce
+    /// soit y réserverait une place du pool (borné à trois) pour rien.
+    func test_update_surLeDernierReel_neDesigneAucunVoisin() async {
+        let sut = makeSUT()
+        sut.update(
+            frames: [frame("a", midY: 100), frame("b", midY: 600)],
+            viewportMinY: 0, viewportMaxY: 800
+        )
+        await waitForActiveReel(sut, toEqual: "b")
+
+        XCTAssertEqual(sut.activeReelId, "b")
+        XCTAssertNil(sut.prewarmReelId)
+    }
+
+    func test_clear_libereAussiLeVoisinDesigne() async {
+        let sut = makeSUT()
+        sut.update(
+            frames: [frame("a", midY: 100), frame("b", midY: 400), frame("c", midY: 800)],
+            viewportMinY: 0, viewportMaxY: 800
+        )
+        await waitForActiveReel(sut, toEqual: "b")
+        XCTAssertEqual(sut.prewarmReelId, "c")
+
+        sut.clear()
+
+        XCTAssertNil(sut.activeReelId)
+        XCTAssertNil(sut.prewarmReelId, "quitter le fil doit relâcher le voisin, pas le garder préparé")
+    }
+
+    // MARK: - #7009 — la règle de fenêtre, pure
+
+    func test_prewarmWindow_prendLeMidYImmediatementSuperieur() {
+        let frames = [frame("a", midY: 100), frame("b", midY: 400), frame("c", midY: 800)]
+        XCTAssertEqual(ReelPrewarmWindow.next(after: "a", in: frames), "b")
+        XCTAssertEqual(ReelPrewarmWindow.next(after: "b", in: frames), "c")
+        XCTAssertNil(ReelPrewarmWindow.next(after: "c", in: frames))
+    }
+
+    /// L'ordre du TABLEAU n'est pas l'ordre du FIL : `onPreferenceChange`
+    /// agrège les frames dans l'ordre où les cartes se sont annoncées. La
+    /// règle doit donc trancher sur la géométrie, jamais sur l'index.
+    func test_prewarmWindow_ignoreLOrdreDuTableau() {
+        let frames = [frame("c", midY: 800), frame("a", midY: 100), frame("b", midY: 400)]
+        XCTAssertEqual(ReelPrewarmWindow.next(after: "a", in: frames), "b")
+    }
+
+    func test_prewarmWindow_sansActif_neDesigneRien() {
+        XCTAssertNil(ReelPrewarmWindow.next(after: nil, in: [frame("a", midY: 100)]))
+        XCTAssertNil(ReelPrewarmWindow.next(after: "absent", in: [frame("a", midY: 100)]))
+    }
+
+    // MARK: - #7010 — `FeedView` n'OBSERVE pas le coordinateur
+
+    /// `@StateObject` / `@ObservedObject` abonnent la vue à `objectWillChange`
+    /// **que son body lise l'objet ou non**. `FeedView` ne lit aucun champ du
+    /// coordinateur — il le PASSE à ses conteneurs — mais l'abonnement suffisait
+    /// à re-differ 1 450 lignes de vue à chaque élection, c'est-à-dire en
+    /// continu pendant le scroll. `@State` possède sans observer.
+    ///
+    /// Garde de SOURCE parce que la régression est invisible à tout témoin de
+    /// comportement : les deux formes rendent exactement le même écran, l'une
+    /// simplement en perdant des images.
+    func test_feedViewPossedeLeCoordinateurSansLObserver() throws {
+        let source = try AppSourceGuard.unit("Meeshy/Features/Main/Views/FeedView.swift")
+        let code = AppSourceGuard.stripComments(source)
+
+        XCTAssertTrue(
+            code.contains("@State private var reelAutoplay"),
+            "FeedView doit POSSÉDER le coordinateur en `@State`"
+        )
+        for abonnement in ["@StateObject private var reelAutoplay", "@ObservedObject var reelAutoplay"] {
+            XCTAssertFalse(
+                code.contains(abonnement),
+                """
+                `FeedView` s'abonne de nouveau au coordinateur (`\(abonnement)`) : \
+                chaque élection de réel re-diffe la vue entière pendant le scroll. \
+                Les conteneurs (`ReelFeedCardContainer`, `PostSceneCardContainer`) \
+                sont les seuls à devoir l'observer.
+                """
+            )
+        }
+    }
 }
 
 /// WS3.1 — the single open-autostart gate shared by a reel's audio and video
@@ -271,4 +368,5 @@ final class ReelMediaAutostartGateTests: XCTestCase {
             ReelMediaAutostart.shouldLoadAudio(currentUrl: nil, url: "https://cdn/a.mp3"),
             "A fresh engine (no url) must load on open")
     }
+
 }

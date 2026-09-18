@@ -22,6 +22,8 @@ import Combine
 /// - `user:updated`                → `ConversationStore.applyUserUpdated`
 ///   (profil public d'un contact : nom, avatar, bannière)
 /// - `read-status:updated`         → `ConversationStore.applyReadReceipt`
+/// - `conversation:unread-updated` → `ConversationStore.applyServerUnread`
+///   (le SEUL fil qui porte le compteur de non-lus — #6997)
 /// - `user:updated`                → `ConversationStore.applyUserUpdated`
 ///   (profil public d'un CONTACT : nom, avatar, bannière — seule la ligne
 ///   d'une conversation directe avec lui bouge)
@@ -74,6 +76,19 @@ public final class ConversationStoreSocketBridge {
     /// pas de ligne.
     private let fetchConversation: @Sendable (_ conversationId: String, _ currentUserId: String) async -> MeeshyConversation?
 
+    /// La conversation actuellement VISIBLE, lue au moment où un compteur
+    /// arrive (#6997).
+    ///
+    /// C'est le gate de `handleUnreadUpdated` côté cache disque, et c'est
+    /// volontairement LA MÊME valeur : le gateway diffuse le même `unreadCount`
+    /// à tous les destinataires sans savoir qui regarde, et un compteur non nul
+    /// sur la conversation qu'on lit est un mensonge visuel. Deux lectures de
+    /// la même source ne peuvent pas diverger — deux gates dérivés séparément,
+    /// si (c'est le défaut nommé par #6998).
+    ///
+    /// Injecté pour que le pont se teste sans le singleton du moteur.
+    private let openConversationId: @Sendable () -> String?
+
     public init(
         store: ConversationStore = .shared,
         categoryStore: UserCategoryStore = .shared,
@@ -81,12 +96,14 @@ public final class ConversationStoreSocketBridge {
         fetchConversation: @escaping @Sendable (_ conversationId: String, _ currentUserId: String) async -> MeeshyConversation? = { conversationId, me in
             guard let api = try? await ConversationService.shared.getById(conversationId) else { return nil }
             return api.toConversation(currentUserId: me)
-        }
+        },
+        openConversationId: @escaping @Sendable () -> String? = { ConversationSyncEngine.shared.currentlyOpenConversationId }
     ) {
         self.store = store
         self.categoryStore = categoryStore
         self.currentUserId = currentUserId
         self.fetchConversation = fetchConversation
+        self.openConversationId = openConversationId
     }
 
     /// Wire the shared socket manager's broadcasts to the stores.
@@ -114,6 +131,7 @@ public final class ConversationStoreSocketBridge {
             userPreferencesReordered: socket.userPreferencesReordered.eraseToAnyPublisher(),
             userUpdated: socket.userUpdated.eraseToAnyPublisher(),
             readStatusUpdated: socket.readStatusUpdated.eraseToAnyPublisher(),
+            unreadUpdated: socket.unreadUpdated.eraseToAnyPublisher(),
             categoryCreated: socket.categoryCreated.eraseToAnyPublisher(),
             categoryUpdated: socket.categoryUpdated.eraseToAnyPublisher(),
             categoryDeleted: socket.categoryDeleted.eraseToAnyPublisher(),
@@ -135,6 +153,7 @@ public final class ConversationStoreSocketBridge {
         userPreferencesReordered: AnyPublisher<UserPreferencesReorderedSocketEvent, Never>,
         userUpdated: AnyPublisher<UserUpdatedEvent, Never> = Empty().eraseToAnyPublisher(),
         readStatusUpdated: AnyPublisher<ReadStatusUpdateEvent, Never>,
+        unreadUpdated: AnyPublisher<UnreadUpdateEvent, Never> = Empty().eraseToAnyPublisher(),
         categoryCreated: AnyPublisher<CategorySocketEvent, Never>,
         categoryUpdated: AnyPublisher<CategorySocketEvent, Never>,
         categoryDeleted: AnyPublisher<CategoryDeletedSocketEvent, Never>,
@@ -254,6 +273,29 @@ public final class ConversationStoreSocketBridge {
                     conversationId: event.conversationId,
                     unreadCount: unreadCount,
                     lastReadAt: lastReadAt
+                ))
+            }
+        }.store(in: &cancellables)
+
+        // Le SEUL fil qui porte le compteur de non-lus d'une conversation
+        // (#6997). Il n'a PAS de gate d'identité, et il n'en a pas besoin : le
+        // gateway adresse déjà `conversation:unread-updated` à chaque
+        // destinataire séparément, avec SON compte
+        // (`emitUnreadCountsToRecipients`) — contrairement à
+        // `read-status:updated`, dont la copie de l'éventail atteint aussi les
+        // pairs pour leurs coches.
+        //
+        // Le gate qui compte ici est l'autre : la conversation OUVERTE reste à
+        // zéro. Il est lu à l'arrivée de l'événement, jamais capturé à
+        // l'abonnement — le pont vit toute la session, l'écran visible change
+        // à chaque navigation.
+        let openConversationId = self.openConversationId
+        unreadUpdated.sink { event in
+            let served = event.conversationId == openConversationId() ? 0 : event.unreadCount
+            Task {
+                await store.applyServerUnread(ConversationUnreadEvent(
+                    conversationId: event.conversationId,
+                    unreadCount: served
                 ))
             }
         }.store(in: &cancellables)

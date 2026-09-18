@@ -93,8 +93,9 @@ final class NotificationBulkRepublicationTests: XCTestCase {
 
         XCTAssertTrue(
             conversations.isEmpty && posts.isEmpty && types.isEmpty,
-            "« Tout lire » n'a pas de canal partiel : le geste LOCAL équivalent (`markAllAsRead()`) n'en émet " +
-            "aucun non plus, la liste se recalant sur le cache patché"
+            "« Tout lire » n'emprunte AUCUN canal partiel — emprunter `.types([...])` marquerait lues des " +
+            "lignes hors portée. Il a depuis #7000 son propre canal, `allNotificationsRead` " +
+            "(voir `NotificationReadConsumptionTests`)"
         )
         cancellables.removeAll()
     }

@@ -58,6 +58,13 @@ final class ReelsViewModel: ObservableObject {
     @Published private(set) var isLoadingMore = false
     @Published private(set) var hasLoadedOnce = false
 
+    /// Motif du dernier échec de chargement, `nil` quand le dernier
+    /// aller-retour a abouti. Sans lui, une panne réseau au démarrage à froid
+    /// se rendait « Aucun réel pour le moment » : le lecteur croyait qu'il
+    /// n'existait rien, et n'avait aucun moyen de réessayer. Le journal seul
+    /// ne corrige personne — il ne quitte pas la machine du développeur.
+    @Published private(set) var loadFailure: String?
+
     @Published private(set) var likedIds: Set<String> = []
     @Published private(set) var bookmarkedIds: Set<String> = []
     /// Réels repartagés durant CETTE session de visionnage — append-only
@@ -243,6 +250,12 @@ final class ReelsViewModel: ObservableObject {
         }
     }
 
+    /// Rejoue le chargement après une panne. C'est ce que fait le bouton
+    /// « Réessayer » de l'écran vide — un contrôle sans effet n'en serait pas un.
+    func retryLoad() async {
+        await fetch(reset: reels.isEmpty)
+    }
+
     private func fetch(reset: Bool) async {
         guard !isFetching, reset || hasMore else { return }
         isFetching = true
@@ -275,7 +288,11 @@ final class ReelsViewModel: ObservableObject {
             if currentId == nil || !reels.contains(where: { $0.id == currentId }) {
                 currentId = reels.first?.id
             }
+            if loadFailure != nil { loadFailure = nil }
         } catch {
+            // Le motif est PUBLIÉ, pas seulement journalisé : l'écran vide doit
+            // pouvoir dire « panne » plutôt que « rien », et offrir un réessai.
+            loadFailure = String(localized: "common.error.generic")
             // Transient network failures (offline blip, timeout) must NOT
             // permanently kill pagination: `hasMore` is left untouched (still
             // `true`) and `nextCursor` is preserved, so the next

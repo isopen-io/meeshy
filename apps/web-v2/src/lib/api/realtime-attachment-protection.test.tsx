@@ -7,7 +7,12 @@ import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags'
 import { Attachments } from '@/components/attachment-blocks';
 import type { Attachment } from '@/lib/api/types';
 
-import { serializeAttachmentForSocket } from '../../../../../services/gateway/src/socketio/serializeAttachmentForSocket';
+import type { AttachmentProtectionField } from '@meeshy/shared/utils/attachment-protection';
+
+import {
+  serializeAttachmentForSocket,
+  type SocketAttachmentRow,
+} from '../../../../../services/gateway/src/socketio/serializeAttachmentForSocket';
 import { decodeMessage } from './decode';
 import { rawMessageFromSocket } from './realtime-apply';
 
@@ -50,8 +55,24 @@ import { rawMessageFromSocket } from './realtime-apply';
  * `imageVariants: null` (`media-url.ts`, le défaut que `sansNull` ferme).
  */
 
+/**
+ * CE QUE LE TÉMOIN DÉCLARE, ET POURQUOI IL NE LE CASTE PAS (#7028) — la
+ * déclaration de protection est typée sur les trois colonnes de la loi, jamais
+ * sur un `Record<string, unknown>` fourre-tout.
+ *
+ * Le cliquet de type que ce lot pose — `SocketAttachmentRow`, qui EXIGE les
+ * trois colonnes de tout appelant du sérialiseur — ne vaut que s'il est
+ * EXERCÉ. Un `as Record<string, unknown>` au site d'appel le satisferait en le
+ * désarmant : le témoin passerait quelle que soit la forme, et un `select` qui
+ * cesserait de charger les trois colonnes ne le ferait pas tomber. Le type du
+ * paramètre est donc la déclaration elle-même, et `lignePrisma` annonce
+ * `SocketAttachmentRow` — c'est le compilateur qui vérifie que la ligne
+ * fabriquée ici a bien la forme que la passerelle remet.
+ */
+type DeclarationDeProtection = Readonly<Partial<Pick<SocketAttachmentRow, AttachmentProtectionField>>>;
+
 /** La ligne telle que `MessageProcessor` la relit après `handleAttachments` — colonnes NON NULLABLES. */
-const lignePrisma = (protection: Record<string, unknown>) => ({
+const lignePrisma = (protection: DeclarationDeProtection): SocketAttachmentRow => ({
   id: 'att-secret',
   messageId: 'msg-secret',
   fileName: 'secret.jpg',
@@ -73,7 +94,7 @@ const lignePrisma = (protection: Record<string, unknown>) => ({
 });
 
 /** `message:new` tel que la passerelle l'émet, pièces jointes SÉRIALISÉES par elle. */
-const messageDuFil = (protection: Record<string, unknown>): SocketIOMessage =>
+const messageDuFil = (protection: DeclarationDeProtection): SocketIOMessage =>
   ({
     id: 'msg-secret',
     conversationId: 'c-secret',
@@ -83,10 +104,10 @@ const messageDuFil = (protection: Record<string, unknown>): SocketIOMessage =>
     messageType: 'image',
     createdAt: '2026-09-18T10:00:00.000Z',
     translations: [],
-    attachments: [serializeAttachmentForSocket(lignePrisma(protection) as Record<string, unknown>)],
+    attachments: [serializeAttachmentForSocket(lignePrisma(protection))],
   }) as unknown as SocketIOMessage;
 
-const rendu = (protection: Record<string, unknown>): string => {
+const rendu = (protection: DeclarationDeProtection): string => {
   const message = decodeMessage(rawMessageFromSocket(messageDuFil(protection)));
   const attachments = (message.attachments ?? []) as readonly Attachment[];
 

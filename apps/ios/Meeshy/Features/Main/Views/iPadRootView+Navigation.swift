@@ -243,7 +243,7 @@ extension iPadRootView {
         // Delegate to the centralized helper. iPad's openConversation is wired
         // through router.onRouteRequested, so navigateToConversation dispatches
         // into the two-column flow automatically.
-        router.navigateToStoryReply(context, conversationListViewModel: conversationViewModel)
+        router.navigateToStoryReply(context, conversationList: conversationViewModel)
     }
 
     // MARK: - Handle Notification Tap
@@ -260,8 +260,7 @@ extension iPadRootView {
             // Parité iPhone/push : scroll + flash sur le message exact.
             navigateToConversationById(
                 conversationId,
-                highlightMessageId: notification.context?.messageId,
-                ensureUnread: true
+                highlightMessageId: notification.context?.messageId
             )
 
         // Une mention vit SOIT dans une conversation SOIT dans un post/commentaire
@@ -273,8 +272,7 @@ extension iPadRootView {
             if let conversationId = data?.conversationId, !conversationId.isEmpty {
                 navigateToConversationById(
                     conversationId,
-                    highlightMessageId: notification.context?.messageId,
-                    ensureUnread: true
+                    highlightMessageId: notification.context?.messageId
                 )
             } else if let postId = notification.context?.postId ?? data?.postId ?? notification.metadata?.postId {
                 routeSocialNotification(
@@ -359,8 +357,7 @@ extension iPadRootView {
                 // Parité iPhone/push : scroll + flash sur le message exact.
                 navigateToConversationById(
                     conversationId,
-                    highlightMessageId: event.messageId,
-                    ensureUnread: true
+                    highlightMessageId: event.messageId
                 )
             }
 
@@ -436,7 +433,7 @@ extension iPadRootView {
              .translationCompleted, .translationReady, .legacyTranslationReady, .transcriptionCompleted,
              .messageEdited, .messageDeleted, .messagePinned, .messageForwarded:
             guard let conversationId = payload.conversationId, !conversationId.isEmpty else { return }
-            navigateToConversationById(conversationId, highlightMessageId: payload.messageId, ensureUnread: true)
+            navigateToConversationById(conversationId, highlightMessageId: payload.messageId)
 
         // Une mention vit SOIT dans une conversation SOIT dans un post/commentaire
         // — même repli que `RootView.navigateFromNotification` (iPhone). C'est le
@@ -444,7 +441,7 @@ extension iPadRootView {
         // référence dans un post/story/réel/statut était un tap MUET sur iPad.
         case .userMentioned, .mention, .legacyMention:
             if let conversationId = payload.conversationId, !conversationId.isEmpty {
-                navigateToConversationById(conversationId, highlightMessageId: payload.messageId, ensureUnread: true)
+                navigateToConversationById(conversationId, highlightMessageId: payload.messageId)
             } else if let postId = payload.postId, !postId.isEmpty {
                 routeSocialNotification(
                     postId: postId,
@@ -542,17 +539,18 @@ extension iPadRootView {
 
     // MARK: - Navigate to Conversation by ID
 
-    func navigateToConversationById(_ conversationId: String, highlightMessageId: String? = nil, ensureUnread: Bool = false) {
+    /// #6998 — jumelle de `RootView.navigateToConversationById`, et le
+    /// paramètre `ensureUnread` y disparaît pour la même raison : il forçait
+    /// `unreadCount = 1` hors de tout store, sur la seule ouverture par
+    /// notification, ouvrant la conversation sur un non-lu FICTIF. Le compteur
+    /// appartient au registre de lecture ; aucune vue ne le fabrique.
+    func navigateToConversationById(_ conversationId: String, highlightMessageId: String? = nil) {
         if let existing = conversationViewModel.conversations.first(where: { $0.id == conversationId }) {
-            var conv = existing
-            if ensureUnread && conv.userState.unreadCount == 0 {
-                conv.userState.unreadCount = 1
-            }
             if let messageId = highlightMessageId {
                 router.pendingHighlightMessageId = messageId
                 router.pendingHighlightConversationId = conversationId
             }
-            openConversation(conv)
+            openConversation(existing)
             return
         }
         Task {
@@ -564,10 +562,7 @@ extension iPadRootView {
             for attempt in 0..<2 {
                 do {
                     let apiConv = try await ConversationService.shared.getById(conversationId)
-                    var conv = apiConv.toConversation(currentUserId: currentUserId)
-                    if ensureUnread && conv.userState.unreadCount == 0 {
-                        conv.userState.unreadCount = 1
-                    }
+                    let conv = apiConv.toConversation(currentUserId: currentUserId)
                     if let messageId = highlightMessageId {
                         router.pendingHighlightMessageId = messageId
                         router.pendingHighlightConversationId = conversationId

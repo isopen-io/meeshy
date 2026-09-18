@@ -35,6 +35,7 @@ import { LIVE_MESSAGE_MARK } from './liveMessage';
 import { unsetOrNull } from '../../utils/prisma-unset';
 import { mapWithConcurrency } from '@meeshy/shared/utils/concurrency';
 import { findExistingMessage, findContentWindowDuplicate } from './messageDedupProjection';
+import type { SocketAttachmentRow } from '../../socketio/serializeAttachmentForSocket';
 
 // Logger dédié pour MessageProcessor
 const logger = enhancedLogger.child({ module: 'MessageProcessor' });
@@ -597,9 +598,21 @@ export class MessageProcessor {
       Boolean(data.forwardedFromId) ||
       Boolean(data.copyAttachmentsFromMessageId);
     if (hasAttachmentLinks) {
+      // #7028 (suite de #7014, revue PR #7028) — le cliquet de type de
+      // `serializeAttachmentForSocket` (`SocketAttachmentRow`) ne peut PAS voir
+      // ce producteur : `message.attachments` traverse ensuite le type PUBLIC
+      // `Message` (partagé), où `Array.isArray` réduit tout élément à `any`
+      // avant qu'il n'atteigne le sérialiseur — cf. le doc-comment de
+      // `MessageHandler._serializeAttachmentsField`. La SEULE frontière où ce
+      // `findMany` peut encore être vérifié est ICI, à la source, avant cette
+      // érosion : annoter le retour du callback force `tsc` à confronter le
+      // `findMany` à `SocketAttachmentRow[]` — un `select` restrictif qui
+      // omettrait `isViewOnce`/`isBlurred`/`effectFlags` (le risque nommé par
+      // la revue : #4166 en a déjà posé un sur trois requêtes voisines pour la
+      // perf) ne compile plus ICI, avec un diagnostic qui pointe cette ligne.
       const refreshedAttachments = await performanceLogger.withTiming(
         'messaging.refreshAttachments',
-        () => this.prisma.messageAttachment.findMany({
+        (): Promise<SocketAttachmentRow[]> => this.prisma.messageAttachment.findMany({
           where: { messageId: message.id }
         }),
         corrWithMsg

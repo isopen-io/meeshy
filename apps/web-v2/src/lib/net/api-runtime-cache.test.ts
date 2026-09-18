@@ -112,6 +112,28 @@ describe('un média ne va JAMAIS dans le seau du JSON (#6973)', () => {
     expect(apiResponseMayBeCached('/api/v1/attachments/file/2026%2F09%2Fu%2Freel.mp4')).toBe(false);
   });
 
+  /**
+   * #7015 — LA TROISIÈME ROUTE DE MÉDIA, ET ELLE MANQUAIT À L'ÉNUMÉRATION.
+   *
+   * `GET /api/v1/static/:filename` sert les SONS DE FOND (`/app/sounds`, 18
+   * fichiers en production, jusqu'à 7 Mo pièce). Elle n'est ni `admin` ni
+   * `attachments` : le seau `api` la prenait, avec les deux conséquences que
+   * #6973 venait de fermer sur les pièces jointes — quelques pistes suffisent
+   * à épuiser les 200 entrées RÉSERVÉES au JSON — plus une troisième, propre
+   * à celle-ci : la route étant authentifiée, un chargement sans en-tête
+   * échoue, et `NetworkFirst` sans cache transforme l'échec en `no-response`
+   * NON RATTRAPÉ (« The FetchEvent … resulted in a network error response »),
+   * une erreur de console PAR LECTURE.
+   */
+  test('la route des SONS DE FOND sort du seau `api` (#7015)', () => {
+    expect(apiResponseMayBeCached('/api/v1/static/d0bf39b7-cd47-4e70-8f1c-34b2d9b5ee4b.m4a')).toBe(false);
+    expect(apiResponseMayBeCached('/api/v1/static/42af6b03-975a-4232-9123-de3301dc260c.mp3')).toBe(false);
+    // La garde lit un SEGMENT : un chemin qui commence par « static » sans en
+    // être reste gardé.
+    expect(apiResponseMayBeCached('/api/v1/statics')).toBe(true);
+    expect(apiResponseMayBeCached('/api/v1/statistiques')).toBe(true);
+  });
+
   test("CONTRASTE — le JSON garde le seau `api` ENTIER, c'est le vrai enjeu", () => {
     expect(apiResponseMayBeCached('/api/v1/conversations?limit=30')).toBe(true);
     expect(apiResponseMayBeCached('/api/v1/conversations/c1/messages')).toBe(true);

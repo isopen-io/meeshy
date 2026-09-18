@@ -191,6 +191,9 @@ export {
   getDefaultNotificationPreferences,
 } from './notification.js';
 
+// Le média inline d'une bannière — hérité par `NotificationContext` (#7003).
+export type { NotificationAttachmentWire } from './notification-attachment-wire.js';
+
 // Legacy aliases for backwards compatibility
 export type { Notification as PrismaNotification } from './notification.js';
 export type { NotificationType as PrismaNotificationType } from './notification.js';

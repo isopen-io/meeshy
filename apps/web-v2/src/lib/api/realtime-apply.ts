@@ -1,6 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 import type { StoreApi } from 'zustand/vanilla';
 
+import type { AttachmentUpdatedEventData } from '@meeshy/shared/types/socketio-events/attachment';
 import type {
   ConversationUnreadUpdatedEventData,
   ConversationUpdatedEventData,
@@ -8,6 +9,7 @@ import type {
 } from '@meeshy/shared/types/socketio-events/conversation';
 import type { SocketIOMessage } from '@meeshy/shared/types/socketio-events/message';
 import type { TranslationEvent } from '@meeshy/shared/types/socketio-events/translation';
+import { maskedAttachment } from '@meeshy/shared/utils/attachment-protection';
 import { buildTranslationRecord } from '@meeshy/shared/utils/conversation-helpers';
 
 import type { ConversationStoreState } from '@/lib/conversation-store';
@@ -15,7 +17,7 @@ import type { OutboxState } from '@/lib/send/outbox-store';
 
 import { patchConversation } from './conversations';
 import { cachedThreadConversationIds, findCachedThreadMessage, patchThreadMessages, upsertThreadMessage } from './messages';
-import type { Conversation, Message, Participant } from './types';
+import type { Attachment, Conversation, Message, Participant } from './types';
 
 /**
  * L'APPLICATION DU TEMPS RÉEL AU CACHE (#5793) — des fonctions PURES,
@@ -523,4 +525,132 @@ export function applyMessageTranslation(queryClient: QueryClient, data: Translat
       return { ...rest, lastMessageTranslations: { ..._existing, ...incoming } };
     });
   }
+}
+
+/**
+ * `attachmentIdOf` — LE SEUL SITE QUI SAIT ADRESSER UNE PIÈCE dans la charge
+ * de `message:attachment-updated` : la garde de forme et le puits l'appellent
+ * tous les deux, jamais chacun sa relecture. Sans `id`, la pièce n'est PAS
+ * adressable et l'évènement est REJETÉ — remplacer « la première pièce audio »
+ * écraserait une AUTRE pièce du même message, un message pouvant en porter
+ * plusieurs, chacune enrichie par son propre passage Whisper (c'est la raison
+ * pour laquelle l'éventail serveur déduplique sa file hors-ligne sur
+ * `attachmentId`, `emitAttachmentUpdated.ts:100-104`).
+ */
+const attachmentIdOf = (attachment: unknown): string | undefined => {
+  if (typeof attachment !== 'object' || attachment === null) return undefined;
+  const id = (attachment as Record<string, unknown>).id;
+  return typeof id === 'string' ? id : undefined;
+};
+
+/** Garde de FORME pour `message:attachment-updated`, FAIL-CLOSED — motif
+ * `isSocketMessage` : une charge qui ne nomme pas SA conversation, SON message
+ * et SA pièce est rejetée plutôt que devinée. */
+export function isAttachmentUpdated(payload: unknown): payload is AttachmentUpdatedEventData {
+  if (typeof payload !== 'object' || payload === null) return false;
+  const p = payload as Record<string, unknown>;
+  if (typeof p.conversationId !== 'string' || typeof p.messageId !== 'string') return false;
+  return attachmentIdOf(p.attachment) !== undefined;
+}
+
+/** Les trois colonnes que `maskedAttachment` (@meeshy/shared) interroge.
+ * `effectFlags` n'est PAS déclaré sur `Attachment` — il voyage sur le fil sans
+ * figurer au type partagé — d'où la lecture par cette clé plutôt que par une
+ * propriété typée.
+ *
+ * JUMELLE ASSUMÉE, ET TEMPORAIRE. #7014, livré en parallèle, pose l'inventaire
+ * de ces mêmes trois champs à sa place définitive —
+ * `ATTACHMENT_PROTECTION_FIELDS` (`@meeshy/shared/utils/attachment-protection`)
+ * — avec un cliquet de compilation qui oblige un quatrième canal à s'y
+ * déclarer. Cette constante doit DISPARAÎTRE au profit de cet import dès que
+ * les deux branches sont fusionnées : deux inventaires du même secret sont
+ * exactement ce que #7014 existe pour empêcher. Suivi : #7029. */
+const PROTECTION_KEYS = ['isViewOnce', 'isBlurred', 'effectFlags'] as const;
+
+/**
+ * LA FUSION D'UNE PIÈCE ENRICHIE — et sa garde de masquage (#7017, dépendance
+ * croisée #7014).
+ *
+ * FUSION, jamais remplacement sec : `SocketAttachment`
+ * (`services/gateway/src/socketio/serializeAttachmentForSocket.ts`) est une
+ * PROJECTION du rang, pas le rang entier — `currentUserConsumption`, servi par
+ * le REST, n'en fait pas partie. Un `attachments[i] = charge` ferait disparaître
+ * la barre de consommation d'un vocal déjà écouté à l'instant exact où sa
+ * transcription arrive.
+ *
+ * ET LA PROTECTION NE PEUT QUE MONTER. `maskedAttachment` rend `false` sur une
+ * charge qui ne DÉCLARE rien (« une pièce sans déclaration est une pièce
+ * ordinaire » — son fail-closed vit chez l'appelant), et le sérialiseur socket
+ * ne sert PAS les trois drapeaux tant que #7014 n'a pas atterri. Une pièce à
+ * VUE UNIQUE connue du cache par le REST verrait donc son voile tomber au
+ * moment PRÉCIS où le pipeline finit son travail — la fuite du cycle 125,
+ * rouverte par un chemin neuf et sans qu'aucun gate ne rougisse. La charge
+ * peut AJOUTER une protection (elle en sait alors plus que le cache) ; elle ne
+ * peut pas en retirer une.
+ */
+function mergedAttachment(cached: Attachment, incoming: Record<string, unknown>): Attachment {
+  /* Le cast est le motif documenté de `rawMessageFromSocket` ci-dessus : la
+     charge socket est un `Record<string, unknown>` dont le type ne dit rien,
+     et le cache tient la FORME DU FIL (D-26) — c'est `decodeMessagesPage`,
+     posé en `select`, qui dénullifie chaque pièce à la lecture
+     (`decode.ts` § `decodeAttachment`), jamais ce puits. */
+  const merged = { ...cached, ...incoming } as unknown as Attachment;
+  if (!maskedAttachment(cached) || maskedAttachment(merged)) return merged;
+
+  const kept = Object.fromEntries(
+    PROTECTION_KEYS.filter((key) => key in cached).map((key) => [key, (cached as unknown as Record<string, unknown>)[key]]),
+  );
+  return { ...merged, ...kept };
+}
+
+/**
+ * `applyMessageAttachmentUpdated` — LE PUITS DE `message:attachment-updated`
+ * (#7017), l'évènement par lequel la transcription Whisper puis les traductions
+ * NLLB + les pistes TTS rejoignent un message DÉJÀ reçu
+ * (`emitAttachmentUpdated.ts:77`).
+ *
+ * Le RENDU de la transcription était déjà en place — widget, descente du Prisme
+ * par la fonction partagée (`servedTranscript`, `api/prism.ts`), piste
+ * traduite, karaoké ; son `lang=`, lui, ne l'était pas et le premier jet de ce
+ * lot l'a écrit « déjà juste » à tort (revue-correction #7017, corrigé dans
+ * `attachment-blocks.tsx`). **C'est l'ALIMENTATION qui
+ * manquait** : web-v2 n'écoutait pas l'évènement, si bien qu'un vocal reçu
+ * restait sans transcription ET sans drapeau de langue
+ * (`translatedLanguagesOf` lit `attachment.translations`, `view/message.ts`)
+ * jusqu'à ce qu'on quitte et rouvre le fil. C'est la jumelle de la question
+ * « qui AFFICHE ce que tu résous ? » (CLAUDE.md § Prisme, cycle 122) — ici :
+ * **qui l'ALIMENTE, et quand ?**
+ *
+ * TROIS REFUS, tous fail-closed, et chacun pour sa raison :
+ *  - le fil n'est pas OUVERT ⇒ rien à peindre localement, motif
+ *    `applyMessageNew` § `page === undefined` (le prochain `GET …/messages`
+ *    sert la pièce enrichie) ;
+ *  - le message est inconnu de la fenêtre chargée ⇒ idem ;
+ *  - **la pièce est inconnue du message ⇒ JAMAIS UN AJOUT.** L'évènement dit
+ *    « cette pièce a été ENRICHIE », jamais « voici une pièce de plus » :
+ *    ajouter une pièce inconnue ferait entrer dans le fil un média dont le
+ *    cache n'a rien pour juger la protection.
+ *
+ * UN SITE LIT, UN SITE PATCHE (#6972) : `findCachedThreadMessage` et
+ * `patchThreadMessages` (`api/messages.ts`) — ce puits ne connaît pas la forme
+ * de la page.
+ */
+export function applyMessageAttachmentUpdated(queryClient: QueryClient, data: AttachmentUpdatedEventData): void {
+  const attachmentId = attachmentIdOf(data.attachment);
+  if (attachmentId === undefined) return;
+
+  const existing = findCachedThreadMessage(queryClient, data.conversationId, data.messageId);
+  if (existing === undefined) return;
+  const attachments = existing.attachments;
+  if (attachments === undefined || !attachments.some((a) => a.id === attachmentId)) return;
+
+  const incoming = data.attachment as Record<string, unknown>;
+  const next: Message = {
+    ...existing,
+    attachments: attachments.map((a) => (a.id === attachmentId ? mergedAttachment(a, incoming) : a)),
+  };
+
+  patchThreadMessages(queryClient, data.conversationId, (messages) =>
+    messages.map((m) => (m.id === data.messageId ? next : m)),
+  );
 }

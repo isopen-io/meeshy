@@ -207,8 +207,8 @@ struct ProfileUserPostsList: View {
         LazyVStack(spacing: 12) {
             if viewModel.posts.isEmpty {
                 if viewModel.isLoading {
-                    ProgressView()
-                        .padding(.top, 40)
+                    // Cache VIDE ⇒ squelette (bible § I4), jamais un spinner.
+                    SkeletonFeedList(count: 3).padding(.top, 8)
                 } else {
                     emptyState
                 }

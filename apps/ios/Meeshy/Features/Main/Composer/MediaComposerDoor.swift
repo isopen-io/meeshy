@@ -213,7 +213,11 @@ struct ComposerSeedTarget: Identifiable {
 /// les deux portes de story).
 struct MediaComposerPreviewHosts {
     let router: Router
-    let conversationListViewModel: ConversationListViewModel
+    /// OPTIONNEL depuis #7006 : l'hôte le tient désormais par
+    /// `@Environment(\.meeshyConversationList)`, qui vaut `nil` là où aucune
+    /// liste n'est montée. L'aperçu reste CÂBLÉ — seul le partage vers une
+    /// conversation, qui n'existe pas sans liste, s'en trouve retiré.
+    let conversationList: ConversationListViewModel?
     let statusViewModel: StatusViewModel
 }
 
@@ -452,7 +456,7 @@ struct MediaComposerDoor: View {
                 preloadedAudioURLs: assets.audioURLs
             )
             .environmentObject(preview.router)
-            .environmentObject(preview.conversationListViewModel)
+            .conversationListObject(preview.conversationList)
             .environmentObject(preview.statusViewModel)
         }
     }

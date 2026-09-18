@@ -55,9 +55,9 @@ struct FeedView: View {
     // et que `ThemedFeedOverlay` côté iPhone). Injecté par `iPadRootView`.
     @EnvironmentObject private var storyViewerCoordinator: StoryViewerCoordinator
     @StateObject var viewModel = FeedViewModel()
-    /// Élit le réel le plus centré dans le viewport et pilote sa lecture muette
-    /// (source UNIQUE de "quel réel joue"). Call-aware via son init par défaut.
-    @StateObject private var reelAutoplay = ReelFeedAutoplayCoordinator()
+    /// Source UNIQUE de « quel réel joue ». `@State` et NON `@StateObject` (#7010) :
+    /// ce body n'en lit rien, et l'abonnement re-diffait tout `FeedView` au scroll.
+    @State private var reelAutoplay = ReelFeedAutoplayCoordinator()
     /// When true, use the UIKit-backed FeedListView for high-performance scrolling.
     /// Set to false to keep the existing SwiftUI ScrollView path.
     @State private var useUIKitList = false
