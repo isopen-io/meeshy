@@ -107,4 +107,44 @@ describe('registre des médias absents — #7022', () => {
     expect(isMediaAbsent('blob:https://staging.meeshy.me/2f0a-…')).toBe(false);
     expect(isMediaAbsent('data:image/png;base64,iVBORw0KGgo=')).toBe(false);
   });
+
+  /**
+   * HORS LIGNE, UN ÉCHEC NE PROUVE RIEN SUR LE FICHIER (#7022 suivi — revue
+   * adversariale 2026-09-18). `<img onError>` tire aussi bien sur un 404 que
+   * sur une antenne coupée : défiler un fil hors-ligne échouait chaque image,
+   * les gravait toutes absentes, et au retour du réseau elles restaient
+   * « indisponibles » jusqu'à un rechargement complet — alors que leurs
+   * octets n'ont jamais bougé. `navigator.onLine === false` est le seul
+   * signal FIABLE (`lib/net/online.ts`) : il ne prouve jamais qu'une requête
+   * PASSERAIT, mais son absence prouve qu'aucune n'a de sens à retenir.
+   */
+  test('hors ligne, un échec de chargement ne s’enregistre PAS — l’absence n’est pas mesurée', () => {
+    const src = 'https://gate.meeshy.me/api/v1/attachments/file/2025%2F10%2Fcoupure.jpg';
+    const navigatorMutable = navigator as Navigator & { onLine?: boolean };
+    const descripteur = Object.getOwnPropertyDescriptor(navigatorMutable, 'onLine');
+    Object.defineProperty(navigatorMutable, 'onLine', { value: false, configurable: true });
+
+    try {
+      noteMediaAbsent(src);
+      expect(isMediaAbsent(src)).toBe(false);
+    } finally {
+      if (descripteur) Object.defineProperty(navigatorMutable, 'onLine', descripteur);
+      else Reflect.deleteProperty(navigatorMutable, 'onLine');
+    }
+  });
+
+  test('EN LIGNE, un échec s’enregistre normalement — la garde ne masque QUE l’absence de réseau', () => {
+    const src = 'https://gate.meeshy.me/api/v1/attachments/file/2025%2F10%2Fvivant-en-ligne.jpg';
+    const navigatorMutable = navigator as Navigator & { onLine?: boolean };
+    const descripteur = Object.getOwnPropertyDescriptor(navigatorMutable, 'onLine');
+    Object.defineProperty(navigatorMutable, 'onLine', { value: true, configurable: true });
+
+    try {
+      noteMediaAbsent(src);
+      expect(isMediaAbsent(src)).toBe(true);
+    } finally {
+      if (descripteur) Object.defineProperty(navigatorMutable, 'onLine', descripteur);
+      else Reflect.deleteProperty(navigatorMutable, 'onLine');
+    }
+  });
 });
