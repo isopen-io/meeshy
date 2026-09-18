@@ -208,19 +208,23 @@ describe('createFixturesSocketClient (#5793) — le bouchon de fixtures', () => 
       /* La MÊME pièce que le corpus sert : un `fileUrl` divergent ferait
          rejouer la piste originale sous une transcription traduite. */
       expect(payload.attachment.fileUrl).toBe(LIVE_3_AUDIO_URL);
-      /* LA FORME QUE #7014 SERT DÉSORMAIS — `attachmentSocketSelect` charge
-         TOUJOURS les trois colonnes de protection et `serializeAttachmentForSocket`
-         les sert FAIL-CLOSED, présentes même sur une pièce ordinaire (`false` /
-         `false` / `0`, jamais omises). Une fixture qui omettrait ces trois clés
-         rejouerait une charge que la vraie passerelle n'émet plus : le gate
-         navigateur qui la consomme (`check-realtime-events.mjs` via
-         `check-thread-states.mjs`) mesurerait alors un produit qui n'existe plus. */
-      expect('isViewOnce' in payload.attachment).toBe(true);
-      expect(payload.attachment.isViewOnce).toBe(false);
-      expect('isBlurred' in payload.attachment).toBe(true);
-      expect(payload.attachment.isBlurred).toBe(false);
-      expect('effectFlags' in payload.attachment).toBe(true);
-      expect(payload.attachment.effectFlags).toBe(0);
+      /* LA FORME MESURÉE DE LA PASSERELLE, pas celle d'une branche annoncée.
+         `serializeAttachmentForSocket` construit un objet littéral EXPLICITE
+         dont `SocketAttachment` ne déclare AUCUN des trois drapeaux de
+         protection, et `attachmentMediaSelect` — le seul `select` du chemin
+         socket — ne les charge pas (ils vivent dans `attachmentFullSelect`,
+         que `emitAttachmentUpdated` n'emprunte pas). Relevé sur `dev` au
+         2026-09-18 : ni `attachmentSocketSelect` ni
+         `ATTACHMENT_PROTECTION_FIELDS` n'existent — #7014 n'a PAS atterri.
+
+         Ce témoin est donc le CLIQUET qui empêche la fixture de dériver vers
+         une charge que la passerelle n'émet pas : un gate navigateur qui
+         rejoue une charge impossible ne mesure pas le produit. Le jour où
+         #7014 atterrit, c'est `serializeAttachmentForSocket` qui change en
+         premier — et ce témoin est ce qui oblige à revenir ici. */
+      expect('isViewOnce' in payload.attachment).toBe(false);
+      expect('isBlurred' in payload.attachment).toBe(false);
+      expect('effectFlags' in payload.attachment).toBe(false);
     }
 
     /* CUMULATIVE — le serveur relit la ligne après chaque enrichissement, donc
