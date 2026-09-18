@@ -1006,16 +1006,9 @@ export class MessageHandler {
         conversationId: message.conversationId,
         translations: [],
         ...(editedMentions.reconciled ? { validatedMentions: [...editedMentions.validatedUsernames] } : {}),
-        // #7028 — sérialisé depuis `message.attachments` DIRECTEMENT (la forme
-        // réelle du `select` ci-dessus, `attachmentSocketSelect`), jamais via
-        // `_serializeAttachmentsField(message as unknown as Message)` : ce
-        // détour érodait le type deux fois (le cast vers le type PUBLIC
-        // `Message`, puis `Array.isArray` qui réduit tout élément à `any`
-        // dans le corps de la méthode) et rendait le paramètre de
-        // `serializeAttachmentForSocket` incapable de voir un `select`
-        // dépouillé de ses drapeaux de protection. Ici, `message.attachments`
-        // porte encore son type Prisma exact : un `attachmentMediaSelect` nu
-        // au lieu de `attachmentSocketSelect` ne compile plus (TS2345).
+        // #7028 — sérialisé DIRECTEMENT (type Prisma exact du `select`
+        // ci-dessus), jamais via `_serializeAttachmentsField`, qui érode vers
+        // `any` et rendrait un `attachmentMediaSelect` nu invisible (TS2345).
         attachments: message.attachments.map((att) => serializeAttachmentForSocket(att)),
       };
 
@@ -2132,30 +2125,14 @@ export class MessageHandler {
   }
 
   /**
-   * Normalize the attachments field on a broadcast message via the
-   * centralized `serializeAttachmentForSocket` helper. Tolerates the
-   * legacy `as any` access pattern and guarantees `transcription` +
-   * `translations` always travel through the socket payload (parity with
-   * the REST `attachmentMediaSelect` shape). Replaces the previous
-   * `(message as never)['attachments'] || []` cast that silently dropped
-   * both Prisme Linguistique JSON fields when the upstream query did not
-   * explicitly select them.
+   * Normalise `attachments` via `serializeAttachmentForSocket`. `Array.isArray`
+   * érode `raw` à `any[]` (le cast retiré ici était donc déjà sans effet) — le
+   * cliquet de type sur ce chemin (type PUBLIC `Message`) vit à la SOURCE,
+   * `MessageProcessor.saveMessage` (#7028, #7014), pas ici.
    */
   private _serializeAttachmentsField(message: Message): unknown[] {
     const raw = message.attachments;
     if (!Array.isArray(raw)) return [];
-    // #7028 — le cast `as Record<string, unknown>` retiré ici ne rendait la
-    // ligne conforme QUE de nom : `Array.isArray` réduit `raw` à `any[]`
-    // (comportement documenté de `lib.es5.d.ts`, `arg is any[]`), donc `att`
-    // est déjà `any` avant ce cast — celui-ci ne faisait qu'ÉTROITER le type
-    // vers `Record<string, unknown>`, un type qui ne satisfait plus le
-    // paramètre `SocketAttachmentRow` de `serializeAttachmentForSocket` et
-    // faisait rougir la compilation SANS rapport avec la protection réelle
-    // de la ligne. Ce chemin (`message: Message`, le type PUBLIC partagé)
-    // reste un cliquet hors de portée : `Attachment` ne déclare pas
-    // `effectFlags`, et la garantie réelle de ce producteur — `message:new`
-    // via `MessageProcessor.saveMessage`, `findMany` SANS `select` — est documentée
-    // comme un risque résiduel, pas un site que ce lot corrige (#7028, revue).
     return raw.map((att) => serializeAttachmentForSocket(att));
   }
 
