@@ -569,7 +569,7 @@ function StoryStudio({ deps, viewerId }: { readonly deps: StoryStudioDeps; reado
    * ordinaire, le hook rend la source INCHANGÉE et SYNCHRONEMENT : rien ne
    * change pour le chemin nominal.
    */
-  const soundSrc = useProtectedMediaSrc(backgroundTrack?.src ?? '', deps.media ?? protectedMediaDeps);
+  const { src: soundSrc } = useProtectedMediaSrc(backgroundTrack?.src ?? '', deps.media ?? protectedMediaDeps);
   const [soundMuted, setSoundMuted] = useState(true);
   const soundAudioRef = useRef<HTMLAudioElement | null>(null);
   // La dépendance est la source RÉSOLUE, jamais celle qu'on a demandée : une

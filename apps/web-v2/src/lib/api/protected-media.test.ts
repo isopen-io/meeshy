@@ -23,6 +23,13 @@ import {
  * Ces témoins gardent le SITE UNIQUE qui répare ça : les octets sont demandés
  * par `fetch` — le seul transport du navigateur qui porte un en-tête — et
  * l'élément média reçoit une URL d'OBJET. Aucun jeton ne transite par une URL.
+ *
+ * **REVUE-CORRECTION (défaut 2)** — `fetchProtectedObjectUrl` rendait un
+ * `null` unique pour toute indisponibilité : refus, absence, coupure
+ * modération, réseau tombé et rendu sans identité étaient INDISCERNABLES pour
+ * l'appelant. Il rend désormais un résultat DISCRIMINÉ —
+ * `{ kind: 'ready', url }` ou `{ kind: 'unavailable', reason }`, JAMAIS un
+ * rejet.
  */
 const CREDENTIAL: Credential = { kind: 'registered', token: 'jwt-1' };
 const GATE = 'https://gate.meeshy.me';
@@ -102,10 +109,10 @@ describe('isProtectedMediaSrc — la SEULE route média de la passerelle qui exi
 });
 
 describe('fetchProtectedObjectUrl — l’identité voyage en EN-TÊTE, jamais en paramètre', () => {
-  test('la requête porte `Authorization`, et rend une URL d’objet', async () => {
+  test('la requête porte `Authorization`, et rend `{ kind: \'ready\', url }`', async () => {
     const appels: Appel[] = [];
-    const url = await fetchProtectedObjectUrl(SON, deps({ appels }));
-    expect(url).toBe('blob:meeshy/1');
+    const result = await fetchProtectedObjectUrl(SON, deps({ appels }));
+    expect(result).toEqual({ kind: 'ready', url: 'blob:meeshy/1' });
     expect(appels).toHaveLength(1);
     expect(appels[0]?.url).toBe(SON);
     expect(appels[0]?.headers['authorization']).toBe('Bearer jwt-1');
@@ -121,53 +128,63 @@ describe('fetchProtectedObjectUrl — l’identité voyage en EN-TÊTE, jamais e
     expect(appels[0]?.headers['authorization']).toBeUndefined();
   });
 
-  test('SANS crédential, AUCUNE requête n’est tentée — la route la refuserait', async () => {
+  test('SANS crédential, AUCUNE requête n’est tentée — `{ kind: \'unavailable\', reason: \'no-identity\' }`', async () => {
     const appels: Appel[] = [];
-    const url = await fetchProtectedObjectUrl(SON, deps({ appels, credential: null }));
-    expect(url).toBeNull();
+    const result = await fetchProtectedObjectUrl(SON, deps({ appels, credential: null }));
+    expect(result).toEqual({ kind: 'unavailable', reason: 'no-identity' });
     expect(appels).toHaveLength(0);
   });
 });
 
-describe('une indisponibilité DÉGRADE — jamais une promesse rejetée', () => {
-  test('un refus (401) rend `null`, sans rejeter', async () => {
-    const url = await fetchProtectedObjectUrl(SON, deps({ reponse: () => Promise.resolve(new Response('', { status: 401 })) }));
-    expect(url).toBeNull();
+/**
+ * UNE INDISPONIBILITÉ DÉGRADE — jamais une promesse rejetée, et désormais
+ * jamais un `null` muet : chaque branche rend SA raison, et l'appelant peut
+ * enfin la dire (revue-correction #7015, défaut 2).
+ */
+describe('une indisponibilité DÉGRADE — jamais une promesse rejetée, et la RAISON voyage', () => {
+  test('un refus (401) rend `{ kind: \'unavailable\', reason: \'refused\' }`, sans rejeter', async () => {
+    const result = await fetchProtectedObjectUrl(SON, deps({ reponse: () => Promise.resolve(new Response('', { status: 401 })) }));
+    expect(result).toEqual({ kind: 'unavailable', reason: 'refused' });
   });
 
-  test('un fichier absent (404) rend `null`', async () => {
-    const url = await fetchProtectedObjectUrl(SON, deps({ reponse: () => Promise.resolve(new Response('', { status: 404 })) }));
-    expect(url).toBeNull();
+  test('un refus (403) rend aussi `\'refused\'` — même famille que 401', async () => {
+    const result = await fetchProtectedObjectUrl(SON, deps({ reponse: () => Promise.resolve(new Response('', { status: 403 })) }));
+    expect(result).toEqual({ kind: 'unavailable', reason: 'refused' });
   });
 
-  test('un son COUPÉ (410, `mutedAt`) rend `null`', async () => {
-    const url = await fetchProtectedObjectUrl(SON, deps({ reponse: () => Promise.resolve(new Response('', { status: 410 })) }));
-    expect(url).toBeNull();
+  test('un fichier absent (404) rend `{ kind: \'unavailable\', reason: \'missing\' }`', async () => {
+    const result = await fetchProtectedObjectUrl(SON, deps({ reponse: () => Promise.resolve(new Response('', { status: 404 })) }));
+    expect(result).toEqual({ kind: 'unavailable', reason: 'missing' });
   });
 
-  test('le RÉSEAU qui tombe rend `null` — le rejet est rattrapé ICI', async () => {
-    const url = await fetchProtectedObjectUrl(SON, deps({ reponse: () => Promise.reject(new TypeError('Failed to fetch')) }));
-    expect(url).toBeNull();
+  test('un son COUPÉ (410, `mutedAt`) rend `{ kind: \'unavailable\', reason: \'muted\' }`', async () => {
+    const result = await fetchProtectedObjectUrl(SON, deps({ reponse: () => Promise.resolve(new Response('', { status: 410 })) }));
+    expect(result).toEqual({ kind: 'unavailable', reason: 'muted' });
   });
 
-  test('un corps VIDE ne fabrique pas une piste muette', async () => {
-    const url = await fetchProtectedObjectUrl(SON, deps({ reponse: () => Promise.resolve(new Response(new Blob([]), { status: 200 })) }));
-    expect(url).toBeNull();
+  test('le RÉSEAU qui tombe rend `{ kind: \'unavailable\', reason: \'offline\' }` — le rejet est rattrapé ICI', async () => {
+    const result = await fetchProtectedObjectUrl(SON, deps({ reponse: () => Promise.reject(new TypeError('Failed to fetch')) }));
+    expect(result).toEqual({ kind: 'unavailable', reason: 'offline' });
   });
 
-  test('`createObjectURL` indisponible (rendu hors navigateur) rend `null`', async () => {
-    const url = await fetchProtectedObjectUrl(SON, deps({
+  test('un corps VIDE ne fabrique pas une piste muette — `\'missing\'`', async () => {
+    const result = await fetchProtectedObjectUrl(SON, deps({ reponse: () => Promise.resolve(new Response(new Blob([]), { status: 200 })) }));
+    expect(result).toEqual({ kind: 'unavailable', reason: 'missing' });
+  });
+
+  test('`createObjectURL` indisponible (rendu hors navigateur) rend `\'missing\'`', async () => {
+    const result = await fetchProtectedObjectUrl(SON, deps({
       objectUrl: () => {
         throw new TypeError('createObjectURL is not a function');
       },
     }));
-    expect(url).toBeNull();
+    expect(result).toEqual({ kind: 'unavailable', reason: 'missing' });
   });
 
   test('une source NON protégée ne part jamais sur ce transport', async () => {
     const appels: Appel[] = [];
-    const url = await fetchProtectedObjectUrl('https://cdn.test/track.mp3', deps({ appels }));
-    expect(url).toBeNull();
+    const result = await fetchProtectedObjectUrl('https://cdn.test/track.mp3', deps({ appels }));
+    expect(result.kind).toBe('unavailable');
     expect(appels).toHaveLength(0);
   });
 });
@@ -193,7 +210,7 @@ describe('une indisponibilité DÉGRADE — jamais une promesse rejetée', () =>
 describe('le TYPE servi décide — un `200` qui n’est pas de l’audio n’est pas une piste', () => {
   test('le SPA qui répond `200 text/html` (son propre index) ne devient JAMAIS une piste', async () => {
     let objectUrls = 0;
-    const url = await fetchProtectedObjectUrl(
+    const result = await fetchProtectedObjectUrl(
       SON,
       deps({
         reponse: () => Promise.resolve(spaIndexHtml()),
@@ -203,7 +220,7 @@ describe('le TYPE servi décide — un `200` qui n’est pas de l’audio n’es
         },
       }),
     );
-    expect(url).toBeNull();
+    expect(result).toEqual({ kind: 'unavailable', reason: 'missing' });
     // Pas d'URL d'objet du tout : des octets de HTML ne doivent ni être
     // publiés ni rester en mémoire en attendant une révocation que personne
     // ne fera.
@@ -211,7 +228,7 @@ describe('le TYPE servi décide — un `200` qui n’est pas de l’audio n’es
   });
 
   test('une erreur JSON servie en `200` (un relais qui enveloppe) ne devient pas une piste', async () => {
-    const url = await fetchProtectedObjectUrl(
+    const result = await fetchProtectedObjectUrl(
       SON,
       deps({
         reponse: () =>
@@ -223,34 +240,37 @@ describe('le TYPE servi décide — un `200` qui n’est pas de l’audio n’es
           ),
       }),
     );
-    expect(url).toBeNull();
+    expect(result).toEqual({ kind: 'unavailable', reason: 'missing' });
   });
 
   test('un corps SANS type annoncé ne passe pas non plus — la garde est FERMÉE', async () => {
-    const url = await fetchProtectedObjectUrl(SON, deps({ reponse: () => Promise.resolve(new Response(new Blob(['octets']), { status: 200 })) }));
-    expect(url).toBeNull();
+    const result = await fetchProtectedObjectUrl(SON, deps({ reponse: () => Promise.resolve(new Response(new Blob(['octets']), { status: 200 })) }));
+    expect(result).toEqual({ kind: 'unavailable', reason: 'missing' });
   });
 
-  test('CONTRASTE — le type que la route SERT vraiment passe, et rend l’URL d’objet', async () => {
-    expect(await fetchProtectedObjectUrl(SON, deps({ reponse: () => Promise.resolve(audioServi()) }))).toBe('blob:meeshy/1');
+  test('CONTRASTE — le type que la route SERT vraiment passe, et rend `{ kind: \'ready\', url }`', async () => {
+    expect(await fetchProtectedObjectUrl(SON, deps({ reponse: () => Promise.resolve(audioServi()) }))).toEqual({
+      kind: 'ready',
+      url: 'blob:meeshy/1',
+    });
     // Les six MIME de `EXT_TO_MIME`, un par extension servable.
     for (const mime of ['audio/mpeg', 'audio/mp4', 'audio/wav', 'audio/x-m4a', 'audio/aac', 'audio/ogg']) {
-      const url = await fetchProtectedObjectUrl(
+      const result = await fetchProtectedObjectUrl(
         SON,
         deps({ reponse: () => Promise.resolve(new Response(new Blob(['octets'], { type: mime }), { status: 200 })) }),
       );
-      expect(url).toBe('blob:meeshy/1');
+      expect(result).toEqual({ kind: 'ready', url: 'blob:meeshy/1' });
     }
   });
 
   test('le PARAMÈTRE du type ne change rien — `audio/ogg; codecs=opus` reste de l’audio', async () => {
-    const url = await fetchProtectedObjectUrl(
+    const result = await fetchProtectedObjectUrl(
       SON,
       deps({
         reponse: () =>
           Promise.resolve(new Response(new Blob(['octets'], { type: 'audio/ogg; codecs=opus' }), { status: 200 })),
       }),
     );
-    expect(url).toBe('blob:meeshy/1');
+    expect(result).toEqual({ kind: 'ready', url: 'blob:meeshy/1' });
   });
 });

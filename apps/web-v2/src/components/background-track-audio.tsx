@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-import { protectedMediaDeps, type ProtectedMediaDeps } from '@/lib/api/protected-media';
+import { protectedMediaDeps, type ProtectedMediaDeps, type ProtectedMediaUnavailableReason } from '@/lib/api/protected-media';
 import { useProtectedMediaSrc } from '@/lib/api/use-protected-media';
 import type { BackgroundTrack } from '@/lib/canvas/background-sound';
 
@@ -25,6 +25,15 @@ export type BackgroundTrackAudioProps = {
   readonly muted: boolean;
   readonly onDurationKnown: (durationMs: number) => void;
   readonly onPlaybackBlocked: () => void;
+  /**
+   * LA PISTE PROTÉGÉE EST DÉFINITIVEMENT INDISPONIBLE (revue-correction
+   * #7015, défaut 2) — appelé UNE fois, avec la RAISON (`refused`, `missing`,
+   * `muted`, `offline`, `no-identity`), quand `fetchProtectedObjectUrl` rend
+   * `unavailable`. Optionnel : un hôte qui ne dessine aucun état dégradé
+   * (aucun aujourd'hui hors story/réel) n'a rien à faire de plus qu'avant —
+   * `src === null` continue de ne monter aucune balise.
+   */
+  readonly onUnavailable?: (reason: ProtectedMediaUnavailableReason) => void;
   /** Injectable pour les témoins UNIQUEMENT — la production prend
    * `defaultMediaDeps`, dont l'identité est gardée par un témoin. */
   readonly mediaDeps?: ProtectedMediaDeps;
@@ -58,8 +67,17 @@ export const defaultMediaDeps = protectedMediaDeps;
  * aurait tourné une première fois sur un `ref` nul, sans jamais rejouer quand
  * la résolution arrive.
  */
-export function BackgroundTrackAudio({ mediaDeps = defaultMediaDeps, ...props }: BackgroundTrackAudioProps) {
-  const src = useProtectedMediaSrc(props.track.src, mediaDeps);
+export function BackgroundTrackAudio({ mediaDeps = defaultMediaDeps, onUnavailable, ...props }: BackgroundTrackAudioProps) {
+  const { src, reason } = useProtectedMediaSrc(props.track.src, mediaDeps);
+  // `onUnavailable` derrière une ref : un rappel recomposé à chaque rendu de
+  // l'hôte (une closure en ligne, motif courant ici) ne doit PAS relancer cet
+  // effet — seule la RAISON, qui ne change qu'une fois par résolution,
+  // décide de l'appel (même motif que `callbacks` dans l'élément ci-dessous).
+  const onUnavailableRef = useRef(onUnavailable);
+  onUnavailableRef.current = onUnavailable;
+  useEffect(() => {
+    if (reason !== null) onUnavailableRef.current?.(reason);
+  }, [reason]);
   if (src === null) return null;
   return <BackgroundTrackElement {...props} src={src} />;
 }
@@ -71,7 +89,7 @@ function BackgroundTrackElement({
   onDurationKnown,
   onPlaybackBlocked,
   src,
-}: Omit<BackgroundTrackAudioProps, 'mediaDeps'> & { readonly src: string }) {
+}: Omit<BackgroundTrackAudioProps, 'mediaDeps' | 'onUnavailable'> & { readonly src: string }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const playedMsRef = useRef(0);
   const callbacks = useRef({ onDurationKnown, onPlaybackBlocked });

@@ -324,6 +324,60 @@ describe('BackgroundTrackAudio — la piste PROTÉGÉE (#7015)', () => {
     expect(defaultMediaDeps).toBe(protectedMediaDeps);
   });
 
+  test('(n) refus (401) ⇒ onUnavailable(\'refused\') appelé UNE fois, aucune balise (revue-correction #7015, défaut 2)', async () => {
+    const raisons: unknown[] = [];
+    const el = mount(
+      <BackgroundTrackAudio
+        track={trackOf({ src: SON_PROTEGE })}
+        playing
+        muted={false}
+        onDurationKnown={() => {}}
+        onPlaybackBlocked={() => {}}
+        onUnavailable={(reason) => raisons.push(reason)}
+        mediaDeps={depsDeTest({ resolved: null })}
+      />,
+    );
+    await act(async () => {});
+    expect(el.querySelector('[data-scene-sound-track]')).toBeNull();
+    expect(raisons).toEqual(['refused']);
+  });
+
+  test('(o) une piste RÉSOLUE (`ready`) ⇒ onUnavailable JAMAIS appelé', async () => {
+    const raisons: unknown[] = [];
+    const el = mount(
+      <BackgroundTrackAudio
+        track={trackOf({ src: SON_PROTEGE })}
+        playing
+        muted={false}
+        onDurationKnown={() => {}}
+        onPlaybackBlocked={() => {}}
+        onUnavailable={(reason) => raisons.push(reason)}
+        mediaDeps={depsDeTest()}
+      />,
+    );
+    await act(async () => {});
+    expect(el.querySelector('[data-scene-sound-track]')).not.toBeNull();
+    expect(raisons).toEqual([]);
+  });
+
+  test('(p) un `200` qui n’est pas de l’audio ⇒ onUnavailable(\'missing\') — le PIXEL ET la raison', async () => {
+    const raisons: unknown[] = [];
+    const el = mount(
+      <BackgroundTrackAudio
+        track={trackOf({ src: SON_PROTEGE })}
+        playing
+        muted={false}
+        onDurationKnown={() => {}}
+        onPlaybackBlocked={() => {}}
+        onUnavailable={(reason) => raisons.push(reason)}
+        mediaDeps={depsDeTest({ typeServi: 'text/html' })}
+      />,
+    );
+    await act(async () => {});
+    expect(el.querySelector('[data-scene-sound-track]')).toBeNull();
+    expect(raisons).toEqual(['missing']);
+  });
+
   test('(m) le SPA qui répond `200 text/html` ⇒ AUCUNE piste montée (jusqu’au PIXEL)', async () => {
     const el = mount(
       <BackgroundTrackAudio

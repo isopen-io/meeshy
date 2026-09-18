@@ -5,7 +5,27 @@ import {
   isProtectedMediaSrc,
   protectedMediaDeps,
   type ProtectedMediaDeps,
+  type ProtectedMediaUnavailableReason,
 } from './protected-media';
+
+/**
+ * CE QUE `useProtectedMediaSrc` REND — revue-correction #7015 (défaut 2).
+ *
+ * `src` est la source POSABLE en `<audio src>` (ou tout élément média) : la
+ * source reçue telle quelle si elle n'exige aucune identité, une URL d'objet
+ * une fois résolue, ou `null` tant qu'elle n'est pas prête / si elle ne l'est
+ * jamais. `reason` n'est non-`null` QUE dans ce dernier cas — un refus, une
+ * absence, une coupure réseau ou un rendu sans identité rendaient auparavant
+ * le MÊME `null` muet ; un appelant qui doit DIRE pourquoi (dessiner un état,
+ * remonter à la télémétrie) lit `reason` plutôt que de retraiter `null` comme
+ * une absence de piste.
+ */
+export type UseProtectedMediaSrcResult = {
+  readonly src: string | null;
+  readonly reason: ProtectedMediaUnavailableReason | null;
+};
+
+const PENDING: UseProtectedMediaSrcResult = { src: null, reason: null };
 
 /**
  * `useProtectedMediaSrc` (#7015) — LA SOURCE QU'UN ÉLÉMENT MÉDIA PEUT POSER.
@@ -14,12 +34,13 @@ import {
  * l'écrasante majorité des médias (pièces jointes, `blob:`, `data:`), et cela
  * SYNCHRONEMENT : aucun rendu supplémentaire, aucune fenêtre sans son.
  *
- * Pour la seule route protégée (`/api/v1/static/`), rend `null` d'abord, puis
- * l'URL d'OBJET une fois les octets obtenus — et `null` POUR TOUJOURS si la
+ * Pour la seule route protégée (`/api/v1/static/`), rend `{ src: null, reason:
+ * null }` d'abord (en attente), puis `{ src: url, reason: null }` une fois les
+ * octets obtenus, ou `{ src: null, reason }` — POUR TOUJOURS — si la
  * passerelle refuse, si le fichier a disparu ou si le réseau tombe. Un
- * appelant lit donc `null` comme « pas de son », jamais comme « attends
- * encore » : c'est la dégradation propre exigée par #7015, et elle n'a qu'une
- * forme.
+ * appelant qui n'a besoin que de la source continue de lire `src` comme avant
+ * (`null` ⇒ « pas de son ») ; un appelant qui doit DÉGRADER visiblement lit
+ * `reason` en plus.
  *
  * L'URL d'objet est RÉVOQUÉE au démontage et à chaque changement de source —
  * sans quoi les octets d'une piste restent en mémoire pour toute la vie du
@@ -27,9 +48,9 @@ import {
  * la piste à chaque tour de boucle (`key` de l'appelant) : la fuite serait
  * proportionnelle au temps passé sur l'écran.
  */
-export function useProtectedMediaSrc(src: string, deps: ProtectedMediaDeps = protectedMediaDeps): string | null {
+export function useProtectedMediaSrc(src: string, deps: ProtectedMediaDeps = protectedMediaDeps): UseProtectedMediaSrcResult {
   const protege = isProtectedMediaSrc(src);
-  const [resolved, setResolved] = useState<string | null>(null);
+  const [resolved, setResolved] = useState<UseProtectedMediaSrcResult>(PENDING);
 
   useEffect(() => {
     if (!protege) return;
@@ -40,21 +61,25 @@ export function useProtectedMediaSrc(src: string, deps: ProtectedMediaDeps = pro
     // s'exécute HORS du `try` de React, et un rejet sans écouteur est
     // exactement ce que #7015 vient supprimer de la console.
     void fetchProtectedObjectUrl(src, deps)
-      .then((url) => {
+      .then((result) => {
         if (abandonne) {
-          if (url !== null) deps.revokeObjectURL(url);
+          if (result.kind === 'ready') deps.revokeObjectURL(result.url);
           return;
         }
-        objectUrl = url;
-        setResolved(url);
+        if (result.kind === 'ready') {
+          objectUrl = result.url;
+          setResolved({ src: result.url, reason: null });
+        } else {
+          setResolved({ src: null, reason: result.reason });
+        }
       })
       .catch(() => undefined);
     return () => {
       abandonne = true;
-      setResolved(null);
+      setResolved(PENDING);
       if (objectUrl !== null) deps.revokeObjectURL(objectUrl);
     };
   }, [src, protege, deps]);
 
-  return protege ? resolved : src;
+  return protege ? resolved : { src, reason: null };
 }

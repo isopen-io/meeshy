@@ -130,6 +130,49 @@ export function isProtectedMediaSrc(src: string): boolean {
 }
 
 /**
+ * POURQUOI un son de fond MANQUE — revue-correction #7015 (défaut 2).
+ *
+ * `refused` — la passerelle a refusé l'identité présentée (401/403) ; c'est
+ *   EXACTEMENT le 401 de production quand aucune identité ne part.
+ * `missing` — le fichier n'existe plus (404), le corps servi n'est pas de
+ *   l'audio (un `200` de SPA ou de proxy, § `isServedAudio`), ou l'objet n'a
+ *   pas pu être matérialisé (`createObjectURL` indisponible hors navigateur).
+ * `muted` — la modération a coupé la diffusion (410, `mutedAt`).
+ * `offline` — le réseau est tombé avant toute réponse.
+ * `no-identity` — aucune identité à présenter (visiteur déconnecté) : la
+ *   route la refuserait de toute façon, la requête ne part même pas.
+ */
+export type ProtectedMediaUnavailableReason = 'refused' | 'missing' | 'muted' | 'offline' | 'no-identity';
+
+/**
+ * CE QUE `fetchProtectedObjectUrl` REND — un résultat DISCRIMINÉ, jamais un
+ * `null` muet (revue-correction #7015, défaut 2).
+ *
+ * Un refus, une absence, une coupure réseau et un rendu sans identité
+ * rendaient tous le MÊME `null` : l'appelant ne pouvait distinguer « pas de
+ * son » de « son refusé », ni le dire à l'utilisateur, à un gate ou à la
+ * télémétrie — c'est l'erreur avalée en vide légitime. `unavailable` porte
+ * désormais la RAISON ; `ready` porte l'URL d'objet, la seule forme posable
+ * en `<audio src>`.
+ */
+export type ProtectedMediaResult =
+  | { readonly kind: 'ready'; readonly url: string }
+  | { readonly kind: 'unavailable'; readonly reason: ProtectedMediaUnavailableReason };
+
+const UNAVAILABLE = (reason: ProtectedMediaUnavailableReason): ProtectedMediaResult => ({ kind: 'unavailable', reason });
+
+/** La RAISON d'un statut HTTP refusé — la route ne rend que ces trois formes
+ * de refus (`services/gateway/src/routes/posts/audio.ts`) : 401 (identité
+ * refusée), 404 (fichier absent), 410 (coupé par la modération). Tout autre
+ * statut (503 de la garde `mutedAt`, par exemple) dégrade en `missing` — ni
+ * une identité en cause, ni une coupure réseau, ni une modération connue. */
+function reasonForStatus(status: number): ProtectedMediaUnavailableReason {
+  if (status === 401 || status === 403) return 'refused';
+  if (status === 410) return 'muted';
+  return 'missing';
+}
+
+/**
  * **UN `200` N'EST PAS UNE PISTE.**
  *
  * Le statut et la taille ne disent RIEN de ce que le corps contient.
@@ -152,14 +195,16 @@ function isServedAudio(blob: Blob): boolean {
 }
 
 /**
- * Les octets du média, derrière une URL d'objet — ou `null`.
+ * Les octets du média, derrière une URL d'objet — ou la RAISON pour laquelle
+ * il n'y en a pas (`ProtectedMediaResult`, revue-correction #7015 défaut 2).
  *
- * **NE REJETTE JAMAIS.** `null` dit « pas de son », et c'est tout ce que
- * l'appelant a besoin de savoir : un refus (401), un fichier absent (404), un
- * son coupé par la modération (410, `mutedAt`), un réseau tombé et un rendu
- * hors navigateur rendent la MÊME valeur. C'est la seconde moitié de #7015 —
- * une indisponibilité doit dégrader proprement, sans une seule promesse
- * rejetée non rattrapée dans la console.
+ * **NE REJETTE JAMAIS.** Avant la revue-correction, un refus (401), un
+ * fichier absent (404), un son coupé par la modération (410, `mutedAt`), un
+ * réseau tombé et un rendu hors navigateur rendaient tous le MÊME `null` —
+ * l'appelant ne pouvait pas distinguer « pas de son » de « son refusé », ni
+ * le dire à l'utilisateur, à un gate ou à la télémétrie. Chaque branche rend
+ * désormais sa propre raison ; aucune promesse rejetée non rattrapée dans la
+ * console reste le premier invariant.
  *
  * `mode: 'cors'` est EXPLICITE : c'est ce qui distingue cette requête du
  * chargement `no-cors` d'une balise, que `Cross-Origin-Resource-Policy:
@@ -169,27 +214,31 @@ export async function fetchProtectedObjectUrl(
   src: string,
   deps: ProtectedMediaDeps = protectedMediaDeps,
   signal?: AbortSignal,
-): Promise<string | null> {
-  if (!isProtectedMediaSrc(src)) return null;
+): Promise<ProtectedMediaResult> {
+  if (!isProtectedMediaSrc(src)) return UNAVAILABLE('missing');
   const credential = deps.credential();
   // La route refuse un appelant sans identité : la requête serait un 401 de
-  // plus au journal, jamais un son. On se tait.
-  if (credential === null) return null;
+  // plus au journal, jamais un son. On se tait, et on le DIT à l'appelant.
+  if (credential === null) return UNAVAILABLE('no-identity');
   try {
     const response = await deps.fetchImpl(src, {
       mode: 'cors',
       headers: credentialHeaders(credential),
       ...(signal !== undefined ? { signal } : {}),
     });
-    if (!response.ok) return null;
+    if (!response.ok) return UNAVAILABLE(reasonForStatus(response.status));
     const blob = await response.blob();
-    if (blob.size === 0) return null;
+    if (blob.size === 0) return UNAVAILABLE('missing');
     // Avant `createObjectURL`, jamais après : publier l'URL d'un corps qu'on
     // s'apprête à refuser laisserait ses octets en mémoire pour toute la vie
     // du document — personne n'ayant reçu l'URL pour la révoquer.
-    if (!isServedAudio(blob)) return null;
-    return deps.createObjectURL(blob);
+    if (!isServedAudio(blob)) return UNAVAILABLE('missing');
+    try {
+      return { kind: 'ready', url: deps.createObjectURL(blob) };
+    } catch {
+      return UNAVAILABLE('missing');
+    }
   } catch {
-    return null;
+    return UNAVAILABLE('offline');
   }
 }

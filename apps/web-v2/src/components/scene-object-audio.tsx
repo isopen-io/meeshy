@@ -61,7 +61,7 @@ export function SceneObjectAudio({
    * balise, la même dégradation dessinée que le fond.
    */
   const posee = objectMediaSrc(object, carrier);
-  const src = useProtectedMediaSrc(posee ?? '', mediaDeps);
+  const { src } = useProtectedMediaSrc(posee ?? '', mediaDeps);
   const ref = useRef<HTMLAudioElement | null>(null);
   const loop = object.payload.loop === true;
 

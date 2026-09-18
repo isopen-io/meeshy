@@ -33,8 +33,12 @@
  *  2. AUCUN SECRET DANS UNE URL — ni le jeton, ni `token=`, dans aucune des
  *     requêtes émises vers la route protégée (`CLAUDE.md` § 4).
  *  3. DÉGRADATION — la MÊME page quand la passerelle refuse (401) : aucune
- *     piste montée, aucune erreur de page, et **aucune promesse rejetée non
- *     rattrapée** (`unhandledrejection`, posé avant tout script d'application).
+ *     piste montée, aucune erreur de page, **aucune promesse rejetée non
+ *     rattrapée** (`unhandledrejection`, posé avant tout script d'application)
+ *     et — revue-correction #7015 défaut 2 — la scène PORTE la raison
+ *     (`data-scene-sound-unavailable="refused"`) : un refus, une absence et
+ *     une coupure réseau rendaient auparavant le MÊME silence, indiscernable
+ *     d'une story qui n'a jamais eu de son.
  *  4. **UN `200` QUI N'EST PAS DE L'AUDIO** (revue-correction) — `apiConfig.base`
  *     vaut `''` par défaut, une valeur qui n'est juste que DERRIÈRE UN PROXY :
  *     hors proxy, la requête part vers l'origine WEB et reçoit `200 text/html`,
@@ -46,6 +50,13 @@
  *  5. CONTRE-ÉPREUVE — `/story/st-scene`, dont le son vient d'une pièce jointe
  *     (`data:`), joue sans qu'AUCUNE requête ne parte vers la route protégée :
  *     le transport coûteux ne touche qu'elle.
+ *  6. **LE STUDIO** (revue-correction, défaut 1) — `/stories/new`, un
+ *     brouillon RESTAURÉ dont le son est EMPRUNTÉ à la bibliothèque : le même
+ *     défaut (`el.play()` sur l'URL protégée nue) y rendait le silence sur le
+ *     bouton son, sans que ce gate — ni aucun autre — ne le voie (mesuré :
+ *     `grep studio|story-compose|scene-object|objectMediaSrc` rendait zéro
+ *     ligne). Le geste réel de l'auteur (le bouton 44 px) est exercé, et
+ *     l'invariant porte sur `readyState`, comme le point 1.
  *
  * Le service worker n'est pas servi (`serviceWorker: false`) : ce gate ne
  * mesure pas le précache, et son seau est gardé par `check-sw-api-cache.mjs`,
@@ -105,8 +116,14 @@ const AUDIO = octetsAudio();
  * `'spa'` répond `200 text/html` — ce que l'origine WEB rend quand
  * `apiConfig.base` est vide hors proxy, et que rien d'autre ne distingue d'une
  * piste tant qu'on ne regarde que le statut et la taille.
+ *
+ * `storageEntries` — paires clé/valeur DÉPOSÉES dans `localStorage` avant tout
+ * script d'application, en plus de la session (revue-correction #7015,
+ * défaut 1 § studio) : le brouillon du studio (`meeshy.draft.story.<id>`) y
+ * porte un son EMPRUNTÉ, exactement comme un brouillon restauré le ferait en
+ * production.
  */
-async function ouvrir(browser, { servi }) {
+async function ouvrir(browser, { servi, storageEntries = [] }) {
   const context = await browser.newContext({
     viewport: { width: 390, height: 844 },
     serviceWorkers: 'block',
@@ -123,6 +140,11 @@ async function ouvrir(browser, { servi }) {
     },
     SESSION,
   );
+  if (storageEntries.length > 0) {
+    await context.addInitScript((entries) => {
+      for (const [key, valeur] of entries) window.localStorage.setItem(key, valeur);
+    }, storageEntries);
+  }
   await context.route(`**${CHEMIN_PROTEGE}*`, async (route) => {
     const request = route.request();
     const headers = request.headers();
@@ -225,6 +247,15 @@ try {
     check(erreurs.length === 0, `refus : ${erreurs.length} erreur(s) de page — ${erreurs.join(' | ')}`);
     const rejets = await page.evaluate(() => window.__rejets.slice());
     check(rejets.length === 0, `refus : ${rejets.length} promesse(s) rejetée(s) non rattrapée(s) — ${rejets.join(' | ')}`);
+    // REVUE-CORRECTION #7015, DÉFAUT 2 — « aucune piste, aucune erreur » ne
+    // suffit plus : un refus, une absence et une coupure réseau rendaient
+    // auparavant le MÊME silence, indiscernable d'une story qui n'a jamais eu
+    // de son. La scène doit maintenant PORTER la raison.
+    const raison = await page.evaluate(() => document.querySelector('[data-story-scene-layer]')?.getAttribute('data-scene-sound-unavailable') ?? null);
+    check(
+      raison === 'refused',
+      `refus : la scène ne porte pas \`data-scene-sound-unavailable="refused"\` (lu : ${raison ?? '—'}) — un son refusé ressemble à une story qui n'en a jamais eu`,
+    );
     await context.close();
   }
 
@@ -262,6 +293,62 @@ try {
       `st-scene : la source a changé de forme (« ${(piste?.src ?? '—').slice(0, 24)}… ») — une pièce jointe reste posée telle quelle`,
     );
     check(requetes.length === 0, `st-scene : ${requetes.length} requête(s) vers la route protégée pour un média qui n’en relève pas`);
+    await context.close();
+  }
+
+  /* ── 6. LE STUDIO — l'auteur EMPRUNTE un son (revue-correction #7015,
+        défaut 1) ──────────────────────────────────────────────────────── */
+  {
+    // La bibliothèque de sons n'est pas branchée au studio web
+    // (`background-sound.ts` : « `library` reste HORS PÉRIMÈTRE ») : le
+    // chemin de production PAR LEQUEL une piste empruntée y entre AUJOURD'HUI
+    // est le brouillon RESTAURÉ (`meeshy.draft.story.<id>`), exactement comme
+    // `story-compose.test.tsx` le mesure au niveau unitaire. Ce gate rejoue
+    // la même entrée, mais dans un VRAI navigateur — sur l'EFFET
+    // (`readyState`), jamais la seule présence d'une balise.
+    const draft = JSON.stringify({
+      texts: [],
+      sound: { postMediaId: 'pm-lib', fileUrl: `${CHEMIN_PROTEGE}d0bf39b7-cd47-4e70-8f1c-34b2d9b5ee4b.m4a` },
+    });
+    const { context, page, requetes } = await ouvrir(browser, {
+      servi: 'ok',
+      storageEntries: [[`meeshy.draft.story.${SESSION.user.id}`, draft]],
+    });
+    await page.goto(`${BASE}/stories/new`, { waitUntil: 'load' });
+    await page.waitForSelector('[data-story-studio-sound-toggle]', { timeout: 5_000 }).catch(() => undefined);
+    // LE GESTE SON — le bouton 44 px que `story-compose.test.tsx` exerce déjà
+    // au niveau unitaire : l'auteur qui emprunte un son l'écoute avant de
+    // publier, exactement le geste que le défaut rendait muet.
+    await page.click('[data-story-studio-sound-toggle]').catch(() => undefined);
+
+    let piste = null;
+    for (let essai = 0; essai < 60; essai += 1) {
+      piste = await page.evaluate(() => {
+        const el = document.querySelector('[data-story-studio-sound]');
+        if (el === null) return null;
+        const audio = /** @type {HTMLAudioElement} */ (el);
+        return { src: audio.getAttribute('src') ?? '', readyState: audio.readyState, duration: audio.duration };
+      });
+      if (piste !== null && piste.readyState >= 1 && Number.isFinite(piste.duration) && piste.duration > 0) break;
+      await page.waitForTimeout(100);
+    }
+
+    check(piste !== null, 'studio : aucun `<audio>` monté sur un son EMPRUNTÉ — l’auteur publie sans avoir pu vérifier sa piste');
+    check(
+      piste !== null && piste.src.startsWith('blob:'),
+      `studio : la balise porte « ${piste?.src ?? '—'} » — attendu une URL d’objet (une balise ne peut pas porter d’en-tête)`,
+    );
+    check(
+      piste !== null && !piste.src.includes(CHEMIN_PROTEGE),
+      'studio : l’URL protégée est posée en `src` — la requête partirait anonyme, donc 401, et l’auteur entend le silence',
+    );
+    check(
+      piste !== null && piste.readyState >= 1 && piste.duration > 0,
+      `studio : la piste ne DÉCODE pas (readyState=${piste?.readyState ?? '—'}, duration=${piste?.duration ?? '—'})`,
+    );
+    check(requetes.length >= 1, 'studio : aucune requête vers la route protégée — les octets ne sont pas demandés');
+    const studioPortentUneIdentite = requetes.every((r) => r.authorization !== null || r.sessionToken !== null);
+    check(studioPortentUneIdentite, 'studio : une requête part SANS identité — c’est exactement le 401 de production');
     await context.close();
   }
 } finally {
