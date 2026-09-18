@@ -105,7 +105,26 @@ struct GalleryScenePage: View, Equatable {
         // la loi, peint le fond DANS la carte et rogne aux coins de la loi.
         // Cette page n'en refait aucune des trois : elle donne le VIEWPORT que
         // le plateau laisse (`GallerySceneStage`), et ses gestes.
-        SceneCard(layout: stage.layout, thumbHash: item.thumbHash) {
+        SceneCard(layout: stage.layout,
+                  thumbHash: item.thumbHash,
+                  // **En plein écran, le SOL est la scène** (#7039, directive
+                  // porteur du 2026-09-18 : « prendre le fond sol comme scène
+                  // directement et dessiner tous les éléments de la scène
+                  // dessus », « le thumbhash habituel est laissé au profit du
+                  // sol »). Le fond ne change pas de NATURE — c'est la même
+                  // empreinte — il change de PORTEUR : `GallerySceneFloor` la
+                  // peint déjà sur l'écran entier, et sans voile dès que la
+                  // porte du plein cadre est franchie (`fullVeil == 0`).
+                  //
+                  // Les proportions, elles, ne bougent pas : le contenu reste
+                  // cadré à `layout.sceneFrame`, aucune coordonnée n'est
+                  // redistribuée sur le viewport. C'est la précision du porteur
+                  // — « les éléments respectent toujours les proportions de la
+                  // scène ».
+                  //
+                  // CARDÉ, rien ne change : la carte doit se détacher de son
+                  // sol, et c'est son fond qui l'en détache.
+                  paintsBackdrop: !presentation.isFull) {
             if rendersPlayer {
                 player
             } else {
@@ -113,6 +132,14 @@ struct GalleryScenePage: View, Equatable {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // **Le tap FOND la carte dans le sol** (#7039). Le porteur décrit un
+        // fondu, pas un ressort : « le fondu est la scène avant le tap, qui
+        // fait disparaître les éléments de contrôle et d'information, et fait
+        // disparaître la scène pour préserver le sol déjà peint ». Les
+        // contrôles s'effacent déjà en opacité (`overlayLayer`) ; le fond de la
+        // carte les rejoint, sur la même durée, pour que les deux sorties se
+        // lisent comme un seul geste de mise au point.
+        .animation(.easeInOut(duration: 0.2), value: presentation.isFull)
         .contentShape(Rectangle())
         // **Le tap franchit la porte du plein cadre, et en revient** (#6142,
         // #6694). En lecture, le canvas ne RECONNAÎT aucun geste de manipulation
