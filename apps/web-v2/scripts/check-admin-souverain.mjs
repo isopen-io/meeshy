@@ -37,6 +37,7 @@ import { mkdir, readFile, rm, stat } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 
 import { launchChromium } from './lib/browser.mjs';
+import { constateLesMedias } from './lib/check-admin-medias.mjs';
 
 const ROOT = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 const OUT_DIR = 'dist-admin-souverain';
@@ -173,14 +174,31 @@ const MEDIAS_DU_MEMBRE = [
   { id: 'md-3', originalName: 'contrat.pdf', mimeType: 'application/pdf', source: 'post', isProtected: true },
 ];
 
-/** Une vignette RÉELLE — un PNG data-URI ne dépend d'aucune passerelle. */
-const IMAGE = `data:image/svg+xml;base64,${Buffer.from(
-  '<svg xmlns="http://www.w3.org/2000/svg" width="480" height="270" viewBox="0 0 480 270">' +
-    '<rect width="480" height="270" fill="#1f6feb"/>' +
-    '<circle cx="150" cy="135" r="70" fill="#f0c674"/>' +
-    '<text x="240" y="240" font-family="sans-serif" font-size="28" fill="#ffffff">plan-de-salle.png</text>' +
-    '</svg>',
-).toString('base64')}`;
+/**
+ * Une vignette RÉELLE — un data-URI ne dépend d'aucune passerelle.
+ *
+ * **PNG et non SVG depuis #7023.** L'ancienne fixture était un SVG servi sous
+ * `mimeType: 'image/svg+xml'` pendant que son `originalName` disait `.png` —
+ * une incohérence sans conséquence tant que le constat se contentait de
+ * COMPTER les balises. Il mesure désormais des PIXELS (`lib/check-admin-medias.mjs`) :
+ * l'image est redessinée dans un canvas pour prouver que c'est bien ELLE qui
+ * est peinte, et un canvas alimenté par un SVG peut être TEINTÉ selon le
+ * moteur — un verdict qui dépendrait du navigateur n'en est pas un. C'est le
+ * pixel indigo de `MEDIA_IMAGE_DATA_URI` (`src/lib/api/fixtures-media.ts`),
+ * celui que `lib/check-media.mjs` mesure déjà en CI, étiré par `object-cover`
+ * sur toute la tuile.
+ */
+const IMAGE =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR42mNITvsIAALqAbsneUV/AAAAAElFTkSuQmCC';
+
+/**
+ * CE QUI NE DOIT JAMAIS ATTEINDRE LE DOM (leçon 275) — le nom de fichier d'une
+ * pièce protégée et l'aiguille de l'URL que la passerelle a retirée. La
+ * seconde est posée DANS la charge du corpus, plus bavarde que ce que
+ * `servedAttachment` sert : un témoin fail-closed se mesure sur une charge qui
+ * porterait encore le secret.
+ */
+const SECRETS_DES_PIECES = ['vue-unique-secret.png', 'dossier-chiffre.png', 'FUITE-SOUVERAINE'];
 
 const TEXTES = {
   original: 'Hello team',
@@ -238,11 +256,75 @@ const MESSAGES_SERVIS = [
     encryptionMode: 'e2ee',
     isProtected: true,
     translations: [],
-    attachmentCount: 0,
-    attachments: [],
+    /* LA PIÈCE D'UN MESSAGE RETENU RESTE LISTÉE — c'est la politique de
+       `servedAttachment` (« un administrateur doit pouvoir CONSTATER qu'un
+       média existe »), et `fileUrl` y est DÉLIBÉRÉMENT bavard : le témoin
+       fail-closed se mesure sur une charge plus généreuse que le serveur. */
+    attachmentCount: 1,
+    attachments: [
+      {
+        id: 'a-chiffre',
+        messageId: 'm-protege',
+        originalName: 'dossier-chiffre.png',
+        mimeType: 'image/png',
+        fileSize: 4096,
+        fileUrl: 'data:image/png;base64,FUITE-SOUVERAINE',
+        thumbnailUrl: null,
+        transcription: null,
+        translations: null,
+        imageVariants: null,
+        isProtected: true,
+        isViewOnce: false,
+        viewOnceCount: 0,
+        isBlurred: false,
+      },
+    ],
     replyTo: null,
     createdAt: '2026-06-02T11:00:00.000Z',
     sender: expediteur('u-bob', 'Bob'),
+  },
+  {
+    /* LA PIÈCE SEULE EST PROTÉGÉE, LE MESSAGE NE L'EST PAS — le cas où les
+       deux politiques divergent le plus : le texte reste lisible, la pièce
+       arrive SANS URL, et seuls ses drapeaux bruts disent au client qu'il
+       tient un secret plutôt qu'un fichier cassé. */
+    id: 'm-piece-protegee',
+    conversationId: CONVERSATION_ID,
+    senderId: 'u-alice',
+    content: 'Regarde la photo',
+    originalLanguage: 'fr',
+    messageType: 'text',
+    messageSource: 'user',
+    isEdited: false,
+    isViewOnce: false,
+    viewOnceCount: 0,
+    isBlurred: false,
+    reactionCount: 0,
+    isEncrypted: false,
+    isProtected: false,
+    translations: [],
+    attachmentCount: 1,
+    attachments: [
+      {
+        id: 'a-vue-unique',
+        messageId: 'm-piece-protegee',
+        originalName: 'vue-unique-secret.png',
+        mimeType: 'image/png',
+        fileSize: 8192,
+        fileUrl: null,
+        thumbnailUrl: null,
+        transcription: null,
+        translations: null,
+        imageVariants: null,
+        isProtected: true,
+        isViewOnce: true,
+        viewOnceCount: 0,
+        isBlurred: false,
+      },
+    ],
+    replyTo: null,
+    createdAt: '2026-06-02T10:30:00.000Z',
+    sender: expediteur('u-alice', 'Alice'),
   },
   {
     id: 'm-traduit',
@@ -281,7 +363,7 @@ const MESSAGES_SERVIS = [
         id: 'a-image',
         messageId: 'm-traduit',
         originalName: 'plan-de-salle.png',
-        mimeType: 'image/svg+xml',
+        mimeType: 'image/png',
         fileSize: 4096,
         fileUrl: IMAGE,
         thumbnailUrl: null,
@@ -424,8 +506,8 @@ function repondre(pathname, search, avecAgent) {
  */
 const LANGUE_KEY = 'meeshy.interface-language';
 
-async function openContext(browser, { base, avecAgent, langue = 'fr' }) {
-  const context = await browser.newContext({ viewport: VIEWPORT, colorScheme: 'light', serviceWorkers: 'block' });
+async function openContext(browser, { base, avecAgent, langue = 'fr', schema = 'light' }) {
+  const context = await browser.newContext({ viewport: VIEWPORT, colorScheme: schema, serviceWorkers: 'block' });
   await context.addInitScript(
     ({ session, langue: code, clef }) => {
       window.localStorage.setItem('meeshy.session', JSON.stringify(session));
@@ -833,6 +915,47 @@ async function main() {
         `le bandeau n’annonce AUCUN prisme de membre là où il n’y en a pas${banniere === '' ? '' : ` — « ${banniere.trim()} »`}`,
       );
       await cliche(page, 'ecran-souverain-prisme-administrateur');
+      await ctx.close();
+    }
+
+    // ------------------- 8 : LES MÉDIAS, PEINTS ET PROTÉGÉS, DANS LES DEUX SCHÉMAS
+    /**
+     * #7023 — le constat qui manquait, et qu'aucun témoin `bun test` ne peut
+     * rendre : happy-dom ne peint pas. Les sections 5 à 7 comptaient les
+     * balises `<img>`/`<audio>` ; une balise n'est pas un pixel.
+     *
+     * Les DEUX schémas, parce que le voile d'une pièce protégée et le constat
+     * d'un contenu retenu sont peints par des tokens (`--accent`,
+     * `--color-ios-ink-2`) que le schéma sombre redéfinit — et qu'une
+     * protection qu'on ne VOIT pas sur fond sombre est une protection annoncée
+     * et non montrée (CLAUDE.md, cycle 124).
+     */
+    console.log('\n8. LES MÉDIAS DE LA LECTURE SOUVERAINE — PEINTS, ET PROTÉGÉS');
+    for (const schema of ['light', 'dark']) {
+      const ctx = await openContext(browser, { base, avecAgent: true, schema });
+      const { page } = ctx;
+      await page.goto(`${base}/adm/conversations/${CONVERSATION_ID}`, { waitUntil: 'load' });
+      await attendre(() => present(page, '[data-admin-reading-gate]'));
+      await page.fill('[data-admin-reason]', 'Signalement #9142 — contrôle des pièces');
+      await page.waitForTimeout(120);
+      await page.click('[data-admin-reason-submit]');
+      check(await attendreLeFil(page), `[${schema}] la lecture souveraine rend le fil`);
+      await page.waitForTimeout(900);
+
+      await constateLesMedias(page, {
+        check,
+        schema,
+        libre: 'a-image',
+        protegee: 'm-piece-protegee',
+        retenue: 'm-protege',
+        /* Le prisme de CET écran est celui de l'administrateur (`fr`) : la
+           piste attendue est donc la française, et le témoin distingue ainsi
+           « la bonne piste » de « l'original servi par défaut ». */
+        pisteAttendue: 'AAAAHGZ0eXBNNEEi',
+        secrets: SECRETS_DES_PIECES,
+      });
+
+      await cliche(page, `medias-souverains-${schema}`, { fullPage: true });
       await ctx.close();
     }
   } finally {
