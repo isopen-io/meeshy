@@ -1,0 +1,295 @@
+/**
+ * LE DÉCOUPAGE D'UN TEXTE ÉCRIT PAR QUELQU'UN (#7032).
+ *
+ * Ce que ces témoins gardent, et qui n'est PAS « il y a un segment de type
+ * lien » :
+ *
+ *  - la CLASSE DE CARACTÈRES d'une mention est DÉRIVÉE de `mention-parser.ts`,
+ *    jamais recopiée — un `@marie-claire` est un seul handle, un
+ *    `contact@marie.com` n'en est pas un ;
+ *  - une URL est ANCRÉE sur `https?://`, donc aucun autre schéma ne peut
+ *    produire un `href` — c'est la garde qui rend `javascript:` inatteignable
+ *    par construction plutôt que par filtrage ;
+ *  - le hashtag est une OPTION, `false` par défaut : les hashtags n'existent
+ *    que pour les publications (aucune jointure message ↔ hashtag dans le
+ *    schéma), et un lien de hashtag en conversation serait un contrôle inerte ;
+ *  - une mention se compare en INSENSIBLE À LA CASSE au jeu validé par le
+ *    serveur (`Message.validatedMentions` est stocké en minuscules).
+ */
+import { describe, expect, it } from 'vitest';
+
+import { segmentText } from '../utils/text-segments';
+
+const texts = (content: string, options?: Parameters<typeof segmentText>[1]) =>
+  segmentText(content, options).map((s) => s.kind);
+
+describe('segmentText — le texte nu', () => {
+  it('rend UN seul segment de texte quand rien n’est à enrichir', () => {
+    expect(segmentText('Bonjour tout le monde')).toEqual([{ kind: 'text', text: 'Bonjour tout le monde' }]);
+  });
+
+  it('rend une liste VIDE sur une chaîne vide, jamais un segment vide', () => {
+    expect(segmentText('')).toEqual([]);
+  });
+});
+
+describe('segmentText — les mentions', () => {
+  it('découpe @pseudo et garde le texte autour', () => {
+    expect(segmentText('salut @alice ça va')).toEqual([
+      { kind: 'text', text: 'salut ' },
+      { kind: 'mention', text: '@alice', username: 'alice' },
+      { kind: 'text', text: ' ça va' },
+    ]);
+  });
+
+  it('le tiret appartient au handle — @marie-claire est UN handle, pas @marie', () => {
+    const [mention] = segmentText('@marie-claire');
+    expect(mention).toEqual({ kind: 'mention', text: '@marie-claire', username: 'marie-claire' });
+  });
+
+  it('une adresse e-mail n’est pas une mention — frontière gauche de mention-parser', () => {
+    expect(texts('écris à contact@marie.com')).toEqual(['text']);
+  });
+
+  it('un @ précédé d’une lettre ACCENTUÉE n’est pas une mention non plus', () => {
+    expect(texts('éric@marie.com')).toEqual(['text']);
+  });
+
+  it('le username SERVI est en minuscules, le texte AFFICHÉ garde sa casse', () => {
+    expect(segmentText('@Alice')).toEqual([{ kind: 'mention', text: '@Alice', username: 'alice' }]);
+  });
+
+  it('avec un jeu validé, seuls les pseudos du jeu deviennent des mentions', () => {
+    expect(texts('@alice et @inconnue', { mentions: ['alice'] })).toEqual(['mention', 'text']);
+  });
+
+  it('la comparaison au jeu validé est INSENSIBLE à la casse — sinon @Alice n’est jamais un lien', () => {
+    expect(texts('@Alice', { mentions: ['alice'] })).toEqual(['mention']);
+  });
+
+  it('un jeu validé VIDE ne linkifie rien — le serveur s’est prononcé', () => {
+    expect(texts('@alice', { mentions: [] })).toEqual(['text']);
+  });
+
+  it('sans jeu validé, tout handle est une mention — ne rien linkifier serait une régression', () => {
+    expect(texts('@alice')).toEqual(['mention']);
+  });
+});
+
+describe('segmentText — les hashtags', () => {
+  it('N’EST PAS activé par défaut : en conversation, #projet reste du texte', () => {
+    expect(texts('on avance sur #projet')).toEqual(['text']);
+  });
+
+  it('activé, découpe #projet et minuscule le tag servi', () => {
+    expect(segmentText('sur #Projet', { hashtags: true })).toEqual([
+      { kind: 'text', text: 'sur ' },
+      { kind: 'hashtag', text: '#Projet', tag: 'projet' },
+    ]);
+  });
+
+  it('une ancre d’URL (#section) n’est pas un hashtag — le / la précède', () => {
+    const segments = segmentText('https://exemple.fr/page#section', { hashtags: true });
+    expect(segments.map((s) => s.kind)).toEqual(['url']);
+  });
+});
+
+describe('segmentText — les liens', () => {
+  it('découpe une URL et porte son href', () => {
+    expect(segmentText('vois https://meeshy.me/a')).toEqual([
+      { kind: 'text', text: 'vois ' },
+      { kind: 'url', text: 'https://meeshy.me/a', href: 'https://meeshy.me/a' },
+    ]);
+  });
+
+  it('AUCUN schéma autre que http(s) ne produit un lien — la regex est ANCRÉE', () => {
+    for (const hostile of [
+      'javascript:alert(1)',
+      'JavaScript:alert(1)',
+      'data:text/html,<script>alert(1)</script>',
+      'vbscript:msgbox(1)',
+      'file:///etc/passwd',
+      "[clique](javascript:alert('xss'))",
+    ]) {
+      expect(segmentText(hostile).every((s) => s.kind !== 'url')).toBe(true);
+    }
+  });
+
+  it('AUCUN segment produit ne porte un href hors http(s), quel que soit l’entrant', () => {
+    const hrefs = segmentText('a javascript:x https://ok.fr data:x', { hashtags: true })
+      .flatMap((s) => (s.kind === 'url' ? [s.href] : []));
+    expect(hrefs).toEqual(['https://ok.fr']);
+  });
+
+  it('une balise <script> reste du TEXTE — aucun segment ne la rend active', () => {
+    expect(texts('<script>alert(1)</script>')).toEqual(['text']);
+  });
+});
+
+describe('segmentText — le gras et l’italique', () => {
+  it('**gras** devient un segment d’emphase qui ne garde PAS ses étoiles', () => {
+    expect(segmentText('un **mot** fort')).toEqual([
+      { kind: 'text', text: 'un ' },
+      { kind: 'emphasis', style: 'bold', children: [{ kind: 'text', text: 'mot' }] },
+      { kind: 'text', text: ' fort' },
+    ]);
+  });
+
+  it('*italique* aussi', () => {
+    expect(segmentText('*doucement*')).toEqual([
+      { kind: 'emphasis', style: 'italic', children: [{ kind: 'text', text: 'doucement' }] },
+    ]);
+  });
+
+  it('une étoile ISOLÉE reste du texte — 3 * 4 n’ouvre aucune emphase', () => {
+    expect(texts('3 * 4 = 12')).toEqual(['text']);
+  });
+
+  it('une emphase NON FERMÉE reste du texte', () => {
+    expect(texts('**pas fermé')).toEqual(['text']);
+  });
+
+  it('une emphase VIDE (****) reste du texte', () => {
+    expect(texts('****')).toEqual(['text']);
+  });
+
+  it('un lien DANS une emphase reste un lien — l’emphase porte ses propres segments', () => {
+    const [segment] = segmentText('**vois https://meeshy.me/a**');
+    expect(segment).toEqual({
+      kind: 'emphasis',
+      style: 'bold',
+      children: [
+        { kind: 'text', text: 'vois ' },
+        { kind: 'url', text: 'https://meeshy.me/a', href: 'https://meeshy.me/a' },
+      ],
+    });
+  });
+
+  it('une mention DANS une emphase reste une mention, et le jeu validé s’y applique', () => {
+    expect(segmentText('**@alice et @inconnue**', { mentions: ['alice'] })).toEqual([
+      {
+        kind: 'emphasis',
+        style: 'bold',
+        children: [
+          { kind: 'mention', text: '@alice', username: 'alice' },
+          { kind: 'text', text: ' et @inconnue' },
+        ],
+      },
+    ]);
+  });
+
+  it('une emphase ne s’imbrique pas dans une emphase — un seul niveau, pas de récursion sans fin', () => {
+    const [segment] = segmentText('**a *b* c**');
+    expect(segment).toEqual({
+      kind: 'emphasis',
+      style: 'bold',
+      children: [{ kind: 'text', text: 'a *b* c' }],
+    });
+  });
+});
+
+/**
+ * LES QUATRE EMPHASES (directive porteur) — gras, italique, souligné, barré.
+ * Les deux dernières arrivent après les deux premières, et le piège n'est pas
+ * le même : `*` n'apparaît jamais DANS un mot, `_` si. C'est pourquoi le
+ * souligné porte une frontière de mot que le gras n'a pas besoin d'avoir.
+ */
+describe('segmentText — le souligné et le barré', () => {
+  it('__souligné__ devient une emphase `underline` sans garder ses tirets bas', () => {
+    expect(segmentText('un __mot__ souligné')).toEqual([
+      { kind: 'text', text: 'un ' },
+      { kind: 'emphasis', style: 'underline', children: [{ kind: 'text', text: 'mot' }] },
+      { kind: 'text', text: ' souligné' },
+    ]);
+  });
+
+  it('~~barré~~ devient une emphase `strikethrough`', () => {
+    expect(segmentText('~~annulé~~')).toEqual([
+      { kind: 'emphasis', style: 'strikethrough', children: [{ kind: 'text', text: 'annulé' }] },
+    ]);
+  });
+
+  /**
+   * LE PIÈGE NOMMÉ PAR LE PORTEUR, et il ne se limite pas à `snake_case` (qui
+   * n'a qu'UN tiret bas, donc hors de portée d'un marqueur double). Le cas qui
+   * mord vraiment est le tiret bas DOUBLE à l'intérieur d'un mot : sans
+   * frontière, `chemin__long__ici` souligne « long » au milieu d'un
+   * identifiant. La frontière de mot est donc la garde, pas le doublement.
+   */
+  it('un tiret bas DANS un mot ne souligne rien — ni snake_case, ni un identifiant à double tiret', () => {
+    expect(texts('la variable snake_case reste nue')).toEqual(['text']);
+    expect(texts('chemin__long__ici')).toEqual(['text']);
+  });
+
+  it('un tiret bas ISOLÉ et un tilde ISOLÉ restent du texte', () => {
+    expect(texts('a _ b ~ c')).toEqual(['text']);
+  });
+
+  it('un souligné ou un barré NON FERMÉ reste du texte', () => {
+    expect(texts('__pas fermé')).toEqual(['text']);
+    expect(texts('~~pas fermé')).toEqual(['text']);
+  });
+
+  it('un souligné VIDE et un barré VIDE restent du texte', () => {
+    expect(texts('____')).toEqual(['text']);
+    expect(texts('~~~~')).toEqual(['text']);
+  });
+
+  it('un lien DANS un souligné reste un lien, et une mention DANS un barré reste une mention', () => {
+    expect(segmentText('__vois https://meeshy.me/a__')).toEqual([
+      {
+        kind: 'emphasis',
+        style: 'underline',
+        children: [
+          { kind: 'text', text: 'vois ' },
+          { kind: 'url', text: 'https://meeshy.me/a', href: 'https://meeshy.me/a' },
+        ],
+      },
+    ]);
+    expect(segmentText('~~@alice~~', { mentions: ['alice'] })).toEqual([
+      { kind: 'emphasis', style: 'strikethrough', children: [{ kind: 'mention', text: '@alice', username: 'alice' }] },
+    ]);
+  });
+
+  /**
+   * L'EMPHASE À L'INTÉRIEUR D'UNE URL NE DOIT PAS LA COUPER — le cas que
+   * l'énoncé du lot nomme, et le seul où les deux analyseurs se marcheraient
+   * dessus. Une adresse porte couramment des tirets bas ; `segmentText`
+   * découpe l'emphase AVANT les liens, donc c'est ici que la garde se mesure.
+   */
+  it('une adresse qui porte des tirets bas doublés reste UN lien entier', () => {
+    expect(segmentText('https://meeshy.me/a__b__c')).toEqual([
+      { kind: 'url', text: 'https://meeshy.me/a__b__c', href: 'https://meeshy.me/a__b__c' },
+    ]);
+  });
+
+  it('les quatre emphases cohabitent dans une même phrase', () => {
+    expect(segmentText('**a** *b* __c__ ~~d~~').filter((s) => s.kind === 'emphasis')).toEqual([
+      { kind: 'emphasis', style: 'bold', children: [{ kind: 'text', text: 'a' }] },
+      { kind: 'emphasis', style: 'italic', children: [{ kind: 'text', text: 'b' }] },
+      { kind: 'emphasis', style: 'underline', children: [{ kind: 'text', text: 'c' }] },
+      { kind: 'emphasis', style: 'strikethrough', children: [{ kind: 'text', text: 'd' }] },
+    ]);
+  });
+});
+
+describe('segmentText — la reconstruction', () => {
+  /** Les QUATRE marqueurs dans la même phrase : un trou ou un doublon
+   * introduit par l'un d'eux tombe ici, et nulle part ailleurs. */
+  const RUDE =
+    'Salut @Alice, vois **https://meeshy.me/a** et #Projet — __noté__, ~~annulé~~, pas contact@x.fr ni 3 * 4 ni snake_case';
+
+  const MARKER: Record<string, string> = { bold: '**', italic: '*', underline: '__', strikethrough: '~~' };
+
+  it('les segments couvrent le texte d’origine sans trou ni doublon (les marqueurs d’emphase exceptés)', () => {
+    const flatten = (segments: ReturnType<typeof segmentText>): string =>
+      segments
+        .map((s) => (s.kind === 'emphasis' ? `${MARKER[s.style]}${flatten(s.children)}${MARKER[s.style]}` : s.text))
+        .join('');
+    expect(flatten(segmentText(RUDE, { hashtags: true }))).toBe(RUDE);
+  });
+
+  it('deux appels sur le même texte rendent la même chose — les regex globales sont RÉINITIALISÉES', () => {
+    expect(segmentText(RUDE, { hashtags: true })).toEqual(segmentText(RUDE, { hashtags: true }));
+  });
+});

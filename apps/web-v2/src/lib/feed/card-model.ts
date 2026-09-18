@@ -128,6 +128,12 @@ export type FeedCardModel = {
   readonly createdAt: string;
   readonly repostOfHandle?: string;
   readonly text?: FeedCardText;
+  /**
+   * LES PSEUDOS QUE LE SERVEUR A VALIDÉS (#7032) — le jeu qui décide quels
+   * `@handle` du texte deviennent des liens. ABSENT (relation non chargée) ⇒
+   * tout handle est cliquable ; `[]` ⇒ aucun. Voir `FeedPost.mentions`.
+   */
+  readonly validatedMentions?: readonly string[];
   readonly media: readonly FeedCardMedia[];
   readonly scene?: FeedCardScene;
   /** L'agencement CHOISI par l'auteur (#6514, `resolveMosaicLayout`) —
@@ -349,6 +355,13 @@ export function resolveFeedCardModel(
     createdAt: new Date(post.createdAt).toISOString(),
     ...(repostOfHandle !== undefined ? { repostOfHandle } : {}),
     ...(text !== undefined ? { text } : {}),
+    // `null` et `undefined` RETOMBENT tous deux sur « le serveur ne s'est pas
+    // prononcé » : la passerelle sert `null` pour un champ optionnel absent
+    // (doc-comment de `FeedAuthor`), et un `[]` fabriqué ici tuerait tous les
+    // liens de mention d'une republication.
+    ...(post.mentions === undefined || post.mentions === null
+      ? {}
+      : { validatedMentions: post.mentions.map((reference) => reference.username) }),
     media,
     ...(scene !== undefined ? { scene } : {}),
     layout: resolveMosaicLayout(post.storyEffects),

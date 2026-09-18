@@ -13,8 +13,12 @@ describe('PAGINATION_CONVERSATIONS', () => {
     for (const id of ids) expect(existingIds.has(id)).toBe(false);
   });
 
-  test('CONVERSATIONS.length === 45 — les 34 sont bien fusionnées', () => {
-    expect(CONVERSATIONS).toHaveLength(45);
+  /* 46 depuis #7032 : le salon « Texte enrichi » (`fixtures-rich-text.ts`)
+     rejoint les 11 existantes, et 11 + 34 + 1 = 46. Ce compte est un INVENTAIRE
+     — il bouge quand un corpus entre, et c'est précisément son rôle de le dire
+     plutôt que de laisser un ajout passer inaperçu. */
+  test('CONVERSATIONS.length === 46 — les 34 sont bien fusionnées', () => {
+    expect(CONVERSATIONS).toHaveLength(46);
   });
 
   test('toutes STRICTEMENT plus anciennes que la plus ancienne des 11 existantes', () => {

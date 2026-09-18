@@ -27,6 +27,7 @@ import { LIVE_CONVERSATION, LIVE_CONVERSATION_ID, LIVE_MESSAGES } from './fixtur
 import { PAGINATION_CONVERSATIONS } from './fixtures-pagination';
 import { MEDIA_CONVERSATION, MEDIA_CONVERSATION_ID, MEDIA_MESSAGES } from './fixtures-media';
 import { STATES_CONVERSATION, STATES_CONVERSATION_ID, STATES_MESSAGES } from './fixtures-states';
+import { RICH_TEXT_CONVERSATION, RICH_TEXT_CONVERSATION_ID, RICH_TEXT_MESSAGES } from './fixtures-rich-text';
 import {
   RIVER_CONTINUATION_WITNESS_ID,
   RIVER_CONVERSATION,
@@ -639,6 +640,10 @@ export const CONVERSATIONS: readonly Conversation[] = [
   CATCHUP_CONVERSATION,
   MEDIA_CONVERSATION,
   STATES_CONVERSATION,
+  /* LE SALON « TEXTE ENRICHI » (#7032) — liens, mentions, emphase, et les
+     DEUX contre-témoins : un hashtag qui doit rester du texte, un pseudo que
+     le serveur n'a pas validé. */
+  RICH_TEXT_CONVERSATION,
   /**
    * LE CORPUS DE PAGINATION (#6195) — 34 conversations STRICTEMENT plus
    * anciennes que les 11 ci-dessus (`fixtures-pagination.ts`), pour que la
@@ -910,6 +915,7 @@ export const messagesOf = (conversationId: string): readonly Message[] => {
   if (conversationId === CATCHUP_CONVERSATION_ID) return withSent(conversationId, withConsumption(CATCHUP_MESSAGES));
   if (conversationId === MEDIA_CONVERSATION_ID) return withSent(conversationId, withConsumption(MEDIA_MESSAGES));
   if (conversationId === STATES_CONVERSATION_ID) return withSent(conversationId, withConsumption(STATES_MESSAGES));
+  if (conversationId === RICH_TEXT_CONVERSATION_ID) return withSent(conversationId, withConsumption(RICH_TEXT_MESSAGES));
   if (conversationId === LIVE_CONVERSATION_ID) return withSent(conversationId, withConsumption(LIVE_MESSAGES));
   const last = CONVERSATIONS.find((c) => c.id === conversationId)?.lastMessage;
   return withSent(conversationId, last === undefined ? [] : withConsumption([last]));

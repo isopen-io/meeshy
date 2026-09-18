@@ -85,7 +85,9 @@ describe('loadConversationsPage — source fixtures', () => {
     const cursor = page1.ok ? page1.data.cursorPagination.nextCursor! : '';
     const page2 = await loadConversationsPage({ source: 'fixtures', transport, before: cursor });
     expect(page2.ok).toBe(true);
-    if (page2.ok) expect(page2.data.conversations).toHaveLength(15);
+    /* 16 depuis #7032 : le corpus passe à 46 conversations (le salon « Texte
+       enrichi »), donc la seconde page en porte 46 − 30. */
+    if (page2.ok) expect(page2.data.conversations).toHaveLength(16);
   });
 
   /**
