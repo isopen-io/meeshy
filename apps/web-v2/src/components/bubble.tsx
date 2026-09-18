@@ -334,7 +334,7 @@ export function Bubble({
       kind={kind}
       isViewOnce={message.isViewOnce}
       contentLength={message.content.length}
-      attachmentCount={message.attachments?.length ?? 0}
+      attachments={message.attachments}
       surface="bubble"
       isMine={isMine}
       revealable={revealable}
