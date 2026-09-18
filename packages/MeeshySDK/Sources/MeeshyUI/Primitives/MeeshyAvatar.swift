@@ -144,7 +144,14 @@ public enum AvatarContext: Sendable {
 
     public var shadowRadius: CGFloat {
         switch self {
-        case .postReaction, .typingIndicator, .recentParticipant: return 0
+        // `.conversationList` est PORTÉ PAR UNE LISTE, et une ombre portée
+        // sur un cercle force une passe hors écran PAR RANGÉE : sur un fil de
+        // conversations qui défile, c'est une composition supplémentaire par
+        // avatar visible, à chaque image. Les autres contextes de liste
+        // (`.postReaction`, `.typingIndicator`, `.recentParticipant`) étaient
+        // déjà à zéro ; celui-ci tombait dans `default` et payait le plus gros
+        // rayon de la table (8) — pas par décision de design, par omission.
+        case .postReaction, .typingIndicator, .recentParticipant, .conversationList: return 0
         case .postComment: return 2
         case .messageBubble, .storyViewer, .storyViewerRow, .feedComposer, .userListItem, .notification,
              .conversationHeaderStacked: return 4
@@ -155,7 +162,10 @@ public enum AvatarContext: Sendable {
 
     public var shadowY: CGFloat {
         switch self {
-        case .postReaction, .typingIndicator, .recentParticipant: return 0
+        // Un décalage sans rayon ne dessine rien : les deux tables se tiennent
+        // par les mêmes cas, sans quoi `.conversationList` garderait un `y`
+        // pour une ombre qui n'existe plus.
+        case .postReaction, .typingIndicator, .recentParticipant, .conversationList: return 0
         case .postComment: return 1
         case .messageBubble, .conversationHeaderStacked: return 2
         default: return 4
