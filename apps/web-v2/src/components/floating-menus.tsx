@@ -11,7 +11,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useNotificationCounts } from '@/lib/view/use-notification-counts';
 import { usePendingFriendRequestCount } from '@/lib/view/use-pending-friend-requests';
-import { initialsOf } from '@/lib/view/conversation';
+import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { PROFILE_DESTINATION, feedDiscDestination, menuLadderFor, type FloatingDestination } from '@/lib/view/floating-menu';
 import { isContextMenuKey } from '@/lib/view/long-press';
 import {
@@ -181,6 +181,15 @@ export function FloatingMenus({ routeKey }: { readonly routeKey: string }) {
     session.status === 'authenticated'
       ? (session.user.displayName ?? session.user.username)
       : null;
+  /**
+   * MA PHOTO SUR LE DISQUE (#6975) — `session.user` était déjà lu juste
+   * au-dessus, pour le NOM SEULEMENT : `avatar` arrivait dans le même objet
+   * (`SessionUser`, `api/session.ts:53`) et le disque, présent sur CHAQUE
+   * écran de l'application, rendait deux initiales. `participantAvatarOf`
+   * plutôt qu'un test direct : un `avatar: ''` en base ne devient pas ici un
+   * `<img src="">` (qui recharge la page courante).
+   */
+  const maPhoto = session.status === 'authenticated' ? participantAvatarOf(session.user) : undefined;
 
   /**
    * **Le second tap ouvre le profil** — la règle d'iOS
@@ -380,7 +389,12 @@ export function FloatingMenus({ routeKey }: { readonly routeKey: string }) {
           {nom === null ? (
             <MenuGlyph glyph={PROFILE_DESTINATION.glyph} size={22} />
           ) : (
-            <Avatar initials={initialsOf(nom)} color="var(--color-ios-brand)" size={38} />
+            <Avatar
+              initials={initialsOf(nom)}
+              color="var(--color-ios-brand)"
+              size={38}
+              {...(maPhoto === undefined ? {} : { src: maPhoto })}
+            />
           )}
         </button>
         {/* MENU OUVERT, LE COMPTE CHANGE DE PORTEUR — `RootView.swift:1666`

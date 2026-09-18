@@ -1,4 +1,5 @@
 import type { StatusMoodPost } from '@/lib/api/stories';
+import { participantAvatarOf } from '@/lib/view/conversation';
 import type { StoryTrayGroup } from '@/lib/view/story-tray';
 
 /**
@@ -30,6 +31,18 @@ export type StoryRailSelfEntry = {
   readonly entryStoryId: string | undefined;
   /** Mon humeur COURANTE — `undefined` ⇒ la pastille rend 💭. */
   readonly moodEmoji: string | undefined;
+  /**
+   * **MA PHOTO** (#6975) — `undefined` ⇒ la pastille rend mes initiales.
+   *
+   * Ce type la JETAIT : il n'en portait aucun champ, donc la tuile ne pouvait
+   * rendre qu'un dégradé d'initiales — alors que `Viewer.avatar`
+   * (`lib/api/viewer.ts`) avait été ajouté POUR elle, son doc-comment le dit
+   * (« la pastille "moi" du rail de stories est la PREMIÈRE surface à en avoir
+   * besoin »), et que personne ne le lisait. Une loi qui calcule une valeur
+   * que personne ne lit, dans l'autre sens : une valeur servie qu'aucun type
+   * ne laisse passer.
+   */
+  readonly avatar: string | undefined;
 };
 
 /**
@@ -54,6 +67,14 @@ function currentMoodOf(moods: readonly StatusMoodPost[], viewerId: string): stri
 
 export function selfRailEntry(options: {
   readonly viewerId: string | undefined;
+  /**
+   * MA PHOTO, TELLE QUE LA SESSION LA SERT (`Viewer.avatar`, #6975) — passée
+   * plutôt que devinée : cette loi est PURE, elle ne lit aucun magasin.
+   * Facultative, et la descente retombe alors sur l'auteur de MES stories,
+   * parce que la raison d'être de cette cellule est précisément d'exister
+   * quand je n'ai RIEN publié — auquel cas il n'y a aucun groupe à interroger.
+   */
+  readonly avatar?: string | undefined;
   readonly groups: readonly StoryTrayGroup[];
   readonly moods: readonly StatusMoodPost[];
 }): StoryRailSelfEntry | undefined {
@@ -66,6 +87,10 @@ export function selfRailEntry(options: {
     hasActiveStory: mien !== undefined,
     entryStoryId: mien?.entryStoryId,
     moodEmoji: currentMoodOf(options.moods, viewerId),
+    /* LA MÊME loi partagée que partout ailleurs (`participantAvatarOf` →
+       `resolveParticipantAvatar`) : les deux rangs sont donnés dans l'ordre,
+       et une chaîne BLANCHE ne masque pas le rang suivant. */
+    avatar: participantAvatarOf({ avatar: options.avatar }) ?? participantAvatarOf(mien?.author),
   };
 }
 

@@ -1,7 +1,7 @@
 import { checkStatusOf, isMineOf, servedRowLanguage, translatedLanguagesOf } from '@/lib/view/message';
 import { badgesOf, editedOf, ephemeralBadgeOf, systemRowOf } from '@/lib/view/message-badges';
 import { bodyKindOf, placeOf, storyCitationOf } from '@/lib/view/message-body';
-import { initialsOf, presenceOf } from '@/lib/view/conversation';
+import { initialsOf, participantAvatarOf, presenceOf } from '@/lib/view/conversation';
 import type { LocalDelivery } from '@/lib/view/message';
 import { prismFor, served } from '@/lib/api/prism';
 import { mediaCarrierOf } from '@/lib/view/media';
@@ -230,6 +230,7 @@ export function Bubble({
    * d'iOS a chaque suite de deux messages.
    */
   const showsIdentity = isGrouped && !isMine && tail;
+  const senderPhoto = participantAvatarOf(message.sender);
 
   // `kind === 'veiled' | 'burned'` toutes deux passent par `ProtectedContent`.
   const isProtected = kind !== 'standard' || !revealable;
@@ -520,6 +521,10 @@ export function Bubble({
                   color="var(--accent)"
                   size={32}
                   name={message.sender?.displayName ?? ''}
+                  /* LA PHOTO DE L'EXPÉDITEUR (#6975), par la MÊME loi que la
+                     rangée plate — les deux tenues du même message ne peuvent
+                     pas servir deux visages différents. */
+                  {...(senderPhoto === undefined ? {} : { src: senderPhoto })}
                   /* `nowMs`, jamais `Date.now()` — l'horloge de cette bulle est
                      INJECTABLE (prop `now`, ci-dessus) et `presenceOf` prend la
                      sienne en paramètre précisément pour que la loi 1/3/5 se
