@@ -86,12 +86,32 @@ public struct SceneFloorView: View {
     public var body: some View {
         ZStack {
             if let image = decoded {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-                    .blur(radius: Self.blurRadius)
-                    .scaleEffect(Self.scale)
-                    .opacity(Self.opacity)
+                // **Le sol PREND la place qu'on lui propose, il ne la DICTE
+                // jamais** (#7037).
+                //
+                // `scaledToFill()` seul REND les cotes agrandies de l'image, et
+                // les trois hôtes montent ce sol en FRÈRE de leur chrome dans un
+                // `ZStack` — qui adopte la taille de son plus grand enfant. Tout
+                // ce qui s'alignait sur un BORD partait donc avec le sol.
+                // Mesuré au simulateur dans une fenêtre de 402 pt : un hôte élargi
+                // à 1 383 pt sur une empreinte paysage, la croix « Fermer » de la
+                // galerie de post rejetée à x = −326,3, entièrement hors écran.
+                //
+                // `Color.clear` REND la proposition — c'est elle qui parle à
+                // l'hôte —, l'image remplit par-dessus, et `clipped()` retire ce
+                // qui dépasse. Rien ne change à l'écran : ce qui est retiré
+                // débordait déjà hors de la fenêtre. Ce qui change est ce que le
+                // sol RÉPOND quand on lui demande sa taille.
+                Color.clear
+                    .overlay {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                            .blur(radius: Self.blurRadius)
+                            .scaleEffect(Self.scale)
+                            .opacity(Self.opacity)
+                    }
+                    .clipped()
             }
             Color.black.opacity(veil)
         }
