@@ -50,10 +50,19 @@ export function FocusIdentity({
   initials,
   name,
   accent,
+  src,
 }: {
   readonly initials: string;
   readonly name: string;
   readonly accent: string;
+  /**
+   * LA PHOTO DE L'EXPÉDITEUR (#6975) — RÉSOLUE PAR L'HÔTE, jamais ici : la
+   * chip d'identité en focus est la superposition de la rangée qu'elle élit,
+   * et `focal-row.tsx` a déjà descendu `participantAvatarOf(message.sender)`
+   * pour son propre avatar. Deux descentes pour un même expéditeur, c'est la
+   * paire qui finit par servir deux visages (`CLAUDE.md` § Prisme).
+   */
+  readonly src?: string;
 }) {
   return (
     <div
@@ -61,7 +70,7 @@ export function FocusIdentity({
       style={{ minHeight: IDENTITY_CHIP_HEIGHT }}
       aria-hidden
     >
-      <Avatar initials={initials} color={accent} size={IDENTITY_AVATAR_SIZE} />
+      <Avatar initials={initials} color={accent} size={IDENTITY_AVATAR_SIZE} {...(src === undefined ? {} : { src })} />
       {/* `IDENTITY_NAME_SIZE` (13,5) est une cote GÉOMÉTRIQUE dérivée de
           `FocalMetrics.FocusStrip.identityNameSize` — un nombre, pas une
           couleur (D-4 vaut pour la palette) : elle voyage en style inline,

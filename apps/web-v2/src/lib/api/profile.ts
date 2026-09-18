@@ -263,9 +263,44 @@ export async function patchMyImage(deps: ProfileDeps, kind: ProfileImageKind, ur
   );
 }
 
+/**
+ * **TRENTE MINUTES DE FRAÎCHEUR** (#6974) — mesuré : sans `staleTime`, le
+ * défaut de l'application s'applique (30 s, `query-client.ts:234`), et
+ * `routes/profile.tsx:134` relisait donc les 27 champs du profil à chaque
+ * retour de focus passé la demi-minute.
+ *
+ * Ce qui autorise la fenêtre n'est PAS un pari sur l'immobilité de la donnée,
+ * c'est l'inventaire de ce qui l'écrit : le porteur est le SEUL auteur de son
+ * profil, et chacun de ses gestes écrit le cache dans le même mouvement
+ * (`profile-actions.ts:129` l'avance optimiste, `:141`/`:214` la valeur
+ * SERVIE). Un patch ne passe donc jamais par une relecture.
+ *
+ * **Ce que la fenêtre coûte, dit à voix haute** : aucun événement socket ne
+ * porte `['me', 'profile']` (vérifié — `socket.ts` n'invalide que
+ * `['conversations']`, `['notifications']` et `['friends']`). Un profil
+ * modifié depuis un AUTRE appareil met donc jusqu'à 30 min à apparaître ici,
+ * ou jusqu'au prochain démarrage à froid. C'est le bon arbitrage sur une
+ * donnée que le lecteur vient de changer lui-même ailleurs, et un mauvais
+ * arbitrage sur tout ce qu'un TIERS fait bouger — d'où la fenêtre plus courte
+ * des statistiques ci-dessous.
+ */
+export const MY_PROFILE_STALE_TIME = 30 * 60_000;
+
+/**
+ * **CINQ MINUTES, PAS TRENTE** (#6974) — les statistiques sont la moitié de
+ * cet écran que le porteur n'écrit PAS : abonnés, publications, messages
+ * bougent sous les gestes des AUTRES. Aucun socket ne les porte et aucune
+ * mutation locale ne les écrit (mesuré : `MY_STATS_QUERY_KEY` n'apparaît dans
+ * aucun `setQueryData` du dépôt) — la seule chose qui les rafraîchit est cette
+ * fenêtre. Elle reste donc au PLANCHER du lot : un compteur en retard de cinq
+ * minutes est acceptable, en retard d'une demi-heure ne l'est pas.
+ */
+export const MY_STATS_STALE_TIME = 5 * 60_000;
+
 export function myProfileQueryOptions(deps: ProfileDeps) {
   return {
     queryKey: MY_PROFILE_QUERY_KEY,
+    staleTime: MY_PROFILE_STALE_TIME,
     queryFn: async ({ signal }: { readonly signal?: AbortSignal }) => unwrap(await loadMyProfile({ ...deps, ...withSignal(signal) })),
   };
 }
@@ -273,6 +308,7 @@ export function myProfileQueryOptions(deps: ProfileDeps) {
 export function myStatsQueryOptions(deps: ProfileDeps) {
   return {
     queryKey: MY_STATS_QUERY_KEY,
+    staleTime: MY_STATS_STALE_TIME,
     queryFn: async ({ signal }: { readonly signal?: AbortSignal }) => unwrap(await loadMyStats({ ...deps, ...withSignal(signal) })),
   };
 }

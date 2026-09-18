@@ -1,3 +1,4 @@
+import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
 import { getUserPresenceStatus } from '@meeshy/shared/utils/user-presence';
 
 import { customNameOf } from '@/lib/api/preferences';
@@ -69,6 +70,71 @@ export const peerOf = (conversation: Conversation, viewerId: string): Participan
   conversation.type === 'direct'
     ? conversation.participants.find((p) => p.userId !== viewerId)
     : undefined;
+
+/**
+ * LA FORME MINIMALE D'UN PORTEUR DE PHOTO, DITE DANS LES TERMES DE CE CLIENT.
+ *
+ * `AvatarBearingParticipant` (shared) déclare `avatar?: string | null` — juste
+ * là où elle est écrite, refusée ici : web-v2 compile en
+ * `exactOptionalPropertyTypes`, et ses propres types (dérivés de Zod) portent
+ * `string | undefined`. Les deux formes décrivent le MÊME champ ; seule la
+ * variance des optionnels diffère. Ce type l'admet explicitement plutôt que de
+ * la masquer par une assertion.
+ */
+type AvatarBearer = {
+  readonly avatar?: string | null | undefined;
+  readonly user?: { readonly avatar?: string | null | undefined } | null | undefined;
+};
+
+/**
+ * **LA PHOTO, PAR LA LOI PARTAGÉE — SITE UNIQUE DU CLIENT** (#6975).
+ *
+ * `resolveParticipantAvatar` (`packages/shared/utils/participant-helpers.ts`)
+ * est la loi du dépôt : avatar **LOCAL** du participant (surcharge par
+ * conversation), puis avatar du **COMPTE** lié, puis rien — une chaîne blanche
+ * comptant pour absente, sans quoi un `avatar: ''` fuirait en `<img src="">`
+ * (soit un rechargement de la page courante).
+ *
+ * **Elle n'était appliquée par AUCUN client web avant ce lot.** La passerelle
+ * sérialise ses participants par `{...m}`
+ * (`services/gateway/src/routes/conversations/core-list.ts:699`) SANS la
+ * descendre : les deux champs arrivent, et c'est au client de choisir. Un
+ * client qui lirait `participant.avatar` seul raterait donc la photo de compte
+ * de tout participant sans surcharge locale — le cas NOMINAL, puisque
+ * personne ne pose d'avatar par conversation.
+ *
+ * **POURQUOI UN SEUL SITE, ET PAS UNE LIGNE PAR SURFACE.** Dix-sept surfaces
+ * de cette application montaient `Avatar` sans `src`. Les recâbler chacune
+ * avec sa propre `participant.avatar ?? participant.user?.avatar` est
+ * exactement le motif qui a produit TROIS familles divergentes de résolution
+ * du Prisme en trois cycles (`CLAUDE.md` § Prisme Linguistique) : la
+ * quatrième surface écrite oublie le second rang, et rien ne rougit — une
+ * photo absente ressemble à un compte sans photo.
+ */
+export const participantAvatarOf = (bearer?: AvatarBearer | null): string | undefined =>
+  /* LES DEUX RANGS SONT REMIS À LA LOI, PAS ÉVALUÉS ICI — l'ORDRE et la règle
+     « une chaîne blanche n'est pas une URL » restent le seul fait de
+     `resolveParticipantAvatar`. Ce qui se fait ici est une NORMALISATION de
+     variance (`undefined` → `null`), jamais une seconde descente. */
+  resolveParticipantAvatar({ avatar: bearer?.avatar ?? null, user: { avatar: bearer?.user?.avatar ?? null } }) ??
+  undefined;
+
+/**
+ * LA PHOTO D'UNE LIGNE DE CONVERSATION — le pair d'abord, la conversation
+ * ensuite.
+ *
+ * Miroir exact de `titleOf` juste au-dessus, et pour la même raison : **un
+ * DIRECT porte le visage de l'autre**, un GROUPE porte le sien. `peerOf` rend
+ * `undefined` hors d'un direct, donc la descente retombe naturellement sur
+ * `conversation.avatar` sans qu'aucun test de type n'ait à être écrit ici.
+ *
+ * Le repli passe par la MÊME loi que le pair (`participantAvatarOf({ avatar:
+ * … })`) plutôt que par un `??` : c'est ce qui fait qu'un `avatar: ''` posé
+ * sur une conversation compte pour absent là aussi, sans normalisation
+ * recopiée.
+ */
+export const avatarOf = (conversation: Conversation, viewerId: string): string | undefined =>
+  participantAvatarOf(peerOf(conversation, viewerId)) ?? participantAvatarOf({ avatar: conversation.avatar });
 
 /**
  * Deux lettres, jamais plus : « Amina Diallo » → « AD », « Équipe » → « ÉQ ».

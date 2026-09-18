@@ -17,6 +17,7 @@ import type { FeedInfiniteData, FeedPost } from './feed-pages';
 import { STORY_TRAY_QUERY_KEY } from './stories';
 import { BLOCKED_USERS_QUERY_KEY } from './blocks';
 import { friendRequestsQueryKey } from './friend-requests';
+import { NOTIFICATIONS_QUERY_KEY, NOTIFICATION_COUNTS_QUERY_KEY, notificationListKey } from './notifications';
 import { createTypingStore, typistsOf } from './typing-store';
 import type { Message } from './types';
 
@@ -416,6 +417,41 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
 
     socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
     expect(queryClient.getQueryState(friendRequestsQueryKey('received'))?.isInvalidated).toBe(true);
+  });
+
+  /**
+   * **LE REJEU DE LA CLOCHE, PAR FAMILLE NOMMÉE** (#6974) — le rejeu de
+   * reconnexion balayait la RACINE `['notifications']`, seule invalidation du
+   * dépôt à opérer sur un préfixe de domaine plutôt que sur les familles
+   * qu'elle vise (`notifications-realtime.ts:92` nomme déjà
+   * `NOTIFICATION_LISTS_KEY`).
+   *
+   * Les DEUX familles doivent rester couvertes, et ce témoin le fixe : les
+   * LISTES parce qu'une notification émise pendant la coupure n'a atteint
+   * aucun gestionnaire, les COMPTES parce que `notification:counts` ne se
+   * rejoue pas et que RIEN d'autre ne les rafraîchit à cet instant (mesuré :
+   * leur seul lecteur, `use-notification-counts.ts:34`, ne relit que sur focus
+   * de fenêtre, et une coupure du seul socket n'en produit aucun).
+   *
+   * La TROISIÈME clé est une SENTINELLE : elle n'existe pas dans
+   * l'application, elle tient la place de la prochaine requête qu'on rangera
+   * sous `['notifications']`. Une racine balayée l'emporterait sans que
+   * personne ne l'ait décidé.
+   */
+  test('une RE-authentification périme les LISTES et les COMPTES de la cloche, jamais la racine `[notifications]`', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    const sentinelle = [...NOTIFICATIONS_QUERY_KEY, 'sentinelle-hors-familles'] as const;
+    queryClient.setQueryData(notificationListKey('all'), { pages: [], pageParams: [] });
+    queryClient.setQueryData(NOTIFICATION_COUNTS_QUERY_KEY, { total: 0, unread: 0, byType: {} });
+    queryClient.setQueryData(sentinelle, { quoi: 'une requête future' });
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
+    socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
+
+    expect(queryClient.getQueryState(notificationListKey('all'))?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(NOTIFICATION_COUNTS_QUERY_KEY)?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(sentinelle)?.isInvalidated).toBe(false);
   });
 
   /**

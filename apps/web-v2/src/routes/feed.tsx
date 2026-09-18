@@ -235,7 +235,7 @@ export default function FeedScreen() {
 
   const session = useStore(sessionStore, (s) => s.session);
   const viewer = useMemo(() => resolveViewer({ source: apiDeps.source, session }), [session]);
-  const railProps = useStoryRailProps(viewer.id ?? undefined);
+  const railProps = useStoryRailProps(viewer.id ?? undefined, viewer.avatar);
   /** La bande de l'en-tête prend la place du titre quand le grand plateau est
    * SORTI du scrollport — mêmes seuils que la liste (`lib/lens/pinned-rail.ts`). */
   const { pinned, observe: observeGrandRail } = useOutOfView({

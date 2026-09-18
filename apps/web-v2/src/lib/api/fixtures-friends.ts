@@ -1,4 +1,4 @@
-import { minutesAgo, VIEWER_ID } from './fixtures-base';
+import { minutesAgo, portraitStandIn, VIEWER_ID } from './fixtures-base';
 import type { FriendRequestAction, FriendRequestBucket, FriendRequestRecord, PersonSummary } from './friend-requests';
 import type { ApiResult } from './http';
 
@@ -18,7 +18,19 @@ import type { ApiResult } from './http';
  * témoin dépende d'un autre.
  */
 
-const person = (id: string, username: string, displayName: string): PersonSummary => ({ id, username, displayName, avatar: null });
+/**
+ * `avatar` (#6975) — le corpus servait `avatar: null` pour TOUT LE MONDE, donc
+ * aucun témoin ne pouvait distinguer « la surface ne sert pas la photo » de
+ * « ce compte n'en a pas ». Les personnes du corpus en portent donc une, sauf
+ * celles qui reçoivent explicitement `null` — le contre-témoin, indispensable :
+ * sans lui, un `<img src="">` posé inconditionnellement passerait pour juste.
+ */
+const person = (id: string, username: string, displayName: string, avatar: string | null = portraitStandIn('#60a5fa', '#1e40af')): PersonSummary => ({
+  id,
+  username,
+  displayName,
+  avatar,
+});
 
 export const FIXTURE_PEOPLE = {
   amina: person('u-amina', 'amina.diallo', 'Amina Diallo'),
@@ -28,7 +40,8 @@ export const FIXTURE_PEOPLE = {
   bruno: person('u-bruno', 'bruno.laurent', 'Bruno Laurent'),
   yann: person('u-yann', 'yann.legoff', 'Yann Le Goff'),
   lea: person('u-lea', 'lea.martin', 'Léa Martin'),
-  idris: person('u-idris', 'idris.sow', 'Idris Sow'),
+  /** LE CONTRE-TÉMOIN : un compte SANS photo — la surface doit y rendre ses initiales. */
+  idris: person('u-idris', 'idris.sow', 'Idris Sow', null),
 } as const;
 
 const VIEWER_PARTY = person(VIEWER_ID, 'vous', 'Vous');

@@ -154,6 +154,54 @@ describe('LivingSummary — la rampe et les épisodes', () => {
     expect(html).not.toContain(String(entries[0]?.needScore));
   });
 
+  /**
+   * **`avatarUrl` PEINT** (#6975) — il traversait TROIS transformations
+   * (`summary/assembly.ts:134` → `summary/face-ramp.ts:115` → `:65`) et
+   * n'atteignait AUCUN pixel : la rampe rendait des initiales sur des comptes
+   * porteurs de photo. Une loi qui calcule une valeur que personne ne lit.
+   *
+   * Le témoin porte sur l'`<img>` RENDUE, pas sur la présence du champ dans le
+   * modèle : c'est le pas qui manquait.
+   */
+  test('une entrée porteuse d’`avatarUrl` rend une <img> — jamais des initiales seules (#6975)', () => {
+    const html = renderToStaticMarkup(
+      <LivingSummary
+        model={{
+          digest: digest({ messageCount: 1, episodes: [] }),
+          faceRamp: [{ ...rampEntry('u-karim', ['q1']), avatarUrl: 'https://cdn.example.com/karim.png' }],
+        }}
+        agentSummary={null}
+        showsSkeleton={false}
+        isComplete={true}
+        onReplyToPerson={noop}
+        onOpenEpisode={noop}
+        onResumeThread={noop}
+      />,
+    );
+    expect(html).toContain('https://cdn.example.com/karim.png');
+  });
+
+  /**
+   * LE CONTRE-TÉMOIN — `avatarUrl: null` ne fabrique AUCUNE `<img>`. Sans lui,
+   * le témoin ci-dessus verdirait aussi sur un `<img src="">` posé
+   * inconditionnellement, qui recharge la page courante.
+   */
+  test('`avatarUrl: null` ⇒ aucune <img> dans la rampe (#6975)', () => {
+    const html = renderToStaticMarkup(
+      <LivingSummary
+        model={{ digest: digest({ messageCount: 1, episodes: [] }), faceRamp: [rampEntry('u-adam', ['m1'])] }}
+        agentSummary={null}
+        showsSkeleton={false}
+        isComplete={true}
+        onReplyToPerson={noop}
+        onOpenEpisode={noop}
+        onResumeThread={noop}
+      />,
+    );
+    const ramp = html.slice(html.indexOf('data-face-ramp'));
+    expect(ramp).not.toContain('<img');
+  });
+
   test('renders episodes as buttons labelled by displayTitle with hint', () => {
     const html = renderToStaticMarkup(
       <LivingSummary

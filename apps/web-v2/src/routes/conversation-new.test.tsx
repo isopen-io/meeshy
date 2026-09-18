@@ -242,3 +242,36 @@ describe('un refus se pose sous son champ, et RIEN ne part', () => {
     expect(submit(el)?.disabled).toBe(false);
   });
 });
+
+/**
+ * **LA PHOTO SUR LES DEUX SURFACES DE CET ÉCRAN** (#6975) — la liste des
+ * personnes ET les chips du groupe. `PersonSummary.avatar` est servi, et la
+ * surface VOISINE la passait déjà (`discover-parts.tsx:222`) : deux listes de
+ * personnes, la même donnée, un visage d'un côté et deux initiales de l'autre.
+ *
+ * Le témoin porte sur l'`<img>` RENDUE, jamais sur la présence du champ dans
+ * le modèle : c'est le pas qui manquait. Son CONTRE-TÉMOIN (« aucune photo ⇒
+ * aucune `<img>` ») vit là où le corpus le rend observable : la rangée
+ * `c-annonces` du gate de pixels (`scripts/check-avatar-pixels.mjs`) et
+ * l'entrée `avatarUrl: null` de la rampe (`living-summary.test.tsx`) — cet
+ * écran-ci ne sert qu'UN contact, et il porte une photo.
+ */
+describe('la photo des personnes (#6975)', () => {
+  test('une personne porteuse de photo rend une <img> dans sa ligne', async () => {
+    const el = await mount();
+    const rows = people(el);
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.some((row) => row.querySelector('.avatar-root img') !== null)).toBe(true);
+  });
+
+  test('la chip d’un membre choisi porte la même photo que sa ligne', async () => {
+    const el = await mount();
+    await click(modeButton(el, 'group'));
+    const porteurDePhoto = people(el).find((row) => row.querySelector('.avatar-root img') !== null);
+    expect(porteurDePhoto).toBeDefined();
+    await click(porteurDePhoto);
+    const chip = chosen(el);
+    expect(chip).not.toBeNull();
+    expect(chip?.querySelector('.avatar-root img')).not.toBeNull();
+  });
+});
