@@ -843,6 +843,6 @@ console.log(
     ` et à canvas-v3.ts (${MOSAIC_LAYOUT_COTES} cotes ; les valeurs sont gardées par mosaic-layout.test.ts).` +
     `\n  Le cadrage d'une scène de fil est conforme à SceneFraming.swift` +
     ` (${SCENE_FRAMING_COTES} cotes ; les valeurs sont gardées par scene-framing.test.ts).` +
-    `\n  Le plateau et l'image seule du lecteur de story sont conformes à StoryViewerView+Canvas.swift,` +
-    ` StoryLetterboxFill.swift et StoryImageOnlyPresentation.swift (${STORY_READER_COTES} cotes).`,
+    `\n  Le plateau du lecteur de story est conforme à StoryViewerView+Canvas.swift, SceneShape.swift,` +
+    ` SceneFloorView.swift et StoryLetterboxFill.swift (${STORY_READER_COTES} cotes).`,
 );

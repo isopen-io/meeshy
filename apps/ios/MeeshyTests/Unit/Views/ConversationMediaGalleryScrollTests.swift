@@ -220,6 +220,11 @@ final class ConversationMediaGalleryScrollTests: XCTestCase {
     /// `Equatable` et être montée en `.equatable()` — et les montages
     /// `.equatable()` sont ceux des pages nommées, pas un de plus.
     private static let pageKinds = ["GalleryImagePage", "GalleryVideoPage", "GalleryScenePage"]
+    /// Les COUCHES de la galerie qui ne sont pas des pages mais partagent leur
+    /// raison d'être `Equatable` : le SOL d'une scène (#6904, tour 4) est monté
+    /// par la racine derrière le pager, et une réévaluation de la racine ne
+    /// doit pas re-rendre un flou de 60 pt pour un `thumbHash` inchangé.
+    private static let equatableLayers = ["GallerySceneFloor"]
 
     func test_everyPageKind_isEquatable_andMountedAsSuch() throws {
         let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(Self.gallery))
@@ -232,9 +237,15 @@ final class ConversationMediaGalleryScrollTests: XCTestCase {
             XCTAssertTrue(Self.isMountedEquatable(kind, in: code),
                           "\(kind) doit être montée en .equatable() : la comparaison seule n'économise rien")
         }
+        for layer in Self.equatableLayers {
+            XCTAssertTrue(code.contains("struct \(layer): View, Equatable"),
+                          "\(layer) doit être Equatable : la racine la monte, et la re-rendrait à chaque réévaluation")
+            XCTAssertTrue(Self.isMountedEquatable(layer, in: code),
+                          "\(layer) doit être montée en .equatable() : la comparaison seule n'économise rien")
+        }
         XCTAssertEqual(
-            code.components(separatedBy: ".equatable()").count - 1, Self.pageKinds.count,
-            "les pages nommées — image, vidéo, scène — sont montées en .equatable(), et elles seules."
+            code.components(separatedBy: ".equatable()").count - 1, Self.pageKinds.count + Self.equatableLayers.count,
+            "les pages nommées — image, vidéo, scène — et les couches nommées — le sol — sont montées en .equatable(), et elles seules."
         )
     }
 

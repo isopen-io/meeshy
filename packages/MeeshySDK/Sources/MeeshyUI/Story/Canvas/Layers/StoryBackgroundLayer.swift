@@ -183,6 +183,23 @@ public final class StoryBackgroundLayer: CALayer {
     /// in-place bitmap edit under the same id is reflected on the canvas.
     @MainActor private var lastContentVersion: UInt64 = 0
 
+    /// **La taille à laquelle cette couche a été CONFIGURÉE pour la dernière
+    /// fois** — et non celle de son cadre, que l'hôte réécrit avant d'appeler
+    /// `configure` (#6904).
+    ///
+    /// `StoryCanvasUIView.rebuildLayers` pose `backgroundLayer.frame` à la
+    /// nouvelle taille douze lignes avant son `configure`. Un diff qui lisait
+    /// `self.frame.size` comparait donc la géométrie à ce que son APPELANT
+    /// venait d'y écrire : toujours égale, y compris sur la passe où le canvas
+    /// venait de changer de cotes. Le fond restait alors peint aux cotes
+    /// précédentes, ancré en haut à gauche — mesuré au simulateur sur le plein
+    /// écran immersif de la galerie (canvas 378 × 672 conservé dans des bornes
+    /// de 402 × 714,67).
+    ///
+    /// `nil` tant qu'aucune configuration n'a abouti : une couche neuve ne
+    /// prétend pas avoir déjà projeté quoi que ce soit.
+    @MainActor private var configuredRenderSize: CGSize?
+
     /// Applies the active filter (if any) to `image`, stamps it into `img.contents`
     /// with the resolved gravity, and marks final content. The single choke point
     /// for every FINAL image stamp (warm hit / composer cache / URL load) so the
@@ -389,7 +406,7 @@ extension StoryBackgroundLayer {
             && (self.lastContentVersion == contentVersion)
         let nothingChanged = (previousContentIdentity == nextContentIdentity)
             && (self.transform3D == transform)
-            && (self.frame.size == geometry.renderSize)
+            && (self.configuredRenderSize == geometry.renderSize)
             && hasVisibleContent
             && filterUnchanged
         if nothingChanged { return }
@@ -468,6 +485,7 @@ extension StoryBackgroundLayer {
         self.activeFilterIntensity = filterIntensity
         self.lastContentVersion = contentVersion
         self.frame = CGRect(origin: .zero, size: geometry.renderSize)
+        self.configuredRenderSize = geometry.renderSize
 
         if canReuseContent {
             // Même contenu visuel : on garde le sublayer en place pour éviter

@@ -204,13 +204,20 @@ final class ScenePresentationTests: XCTestCase {
 
     // MARK: - Le cadre du canvas, quand la scène en porte un
 
-    /// Une scène qui a logé son porteur (`carrierAspect`) a déjà sa forme : la
-    /// règle de l'image ne la réinterprète pas, et le rapport servi est celui du
-    /// canvas que l'appelant tient de la loi du porteur.
-    func test_uneSceneQuiPorteSonCadre_gardeLeRapportDeSonCanvas() {
+    /// **`carrierAspect` ne décide plus d'aucune forme** (décision porteur du
+    /// 2026-09-17 sur #6896, lot #6904).
+    ///
+    /// Le témoin disait l'inverse jusqu'ici — « une scène qui a logé son
+    /// porteur a déjà sa forme » — et c'était la règle de juillet que la
+    /// directive du 31 août avait déjà retirée du composer : la scène est
+    /// figée en 9:16, `carrierAspect` redevient une mémoire d'ÉDITION pour la
+    /// migration v1 (contrat S8). Une scène qui en porte un se présente donc
+    /// comme toute autre : sa forme vient de ce qu'elle MONTRE.
+    func test_uneSceneQuiPorteSonCadre_sePresenteCommeLesAutres() throws {
         let s = scene([fond(aspect: 4.0 / 3.0)], carrierAspect: 16.0 / 9.0)
-        XCTAssertNil(SceneFraming.imageAspect(scene: s))
+        XCTAssertEqual(try XCTUnwrap(SceneFraming.imageAspect(scene: s)),
+                       4.0 / 3.0, accuracy: 0.0001)
         XCTAssertEqual(SceneFraming.presentationAspect(scene: s, canvasAspect: paysage),
-                       paysage, accuracy: 0.0001)
+                       4.0 / 3.0, accuracy: 0.0001)
     }
 }

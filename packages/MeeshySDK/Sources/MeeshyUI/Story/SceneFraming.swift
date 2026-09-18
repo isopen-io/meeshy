@@ -46,12 +46,17 @@ import MeeshySDK
 /// absurde sur un dixième de scène.
 public nonisolated enum SceneFraming {
 
-    /// Le rapport largeur / hauteur d'une scène — le 9:16 de la composition.
-    public static let sceneAspect: CGFloat = 9.0 / 16.0
+    /// Le rapport largeur / hauteur d'une scène — PROJECTION de la loi de
+    /// forme (`SceneShape.aspect`, #6904). Le littéral vivait ici ; il vit
+    /// désormais à un seul endroit du dépôt, et ce nom reste pour les appelants
+    /// de la carte de fil.
+    public static let sceneAspect: CGFloat = SceneShape.aspect
 
     /// La marge ajoutée autour d'une ancre d'objet, faute de connaître sa
-    /// taille rendue. Voir « L'approximation » ci-dessus.
-    public static let objectPadding: CGFloat = 0.16
+    /// taille rendue. Voir « L'approximation » ci-dessus. PROJECTION de
+    /// `SceneShape.objectPadding` (revue #6904, tour 2) : la valeur vivait ici
+    /// ET dans la loi, deux copies qu'aucune garde ne comparait.
+    public static let objectPadding: CGFloat = SceneShape.objectPadding
 
     /// Le cadre ne descend jamais sous cette fraction, en largeur comme en
     /// hauteur : sous ce seuil on ne cadre plus, on zoome.
@@ -59,9 +64,11 @@ public nonisolated enum SceneFraming {
 
     /// Position conventionnelle d'un objet ancré à une BANDE. Le fil n'a pas
     /// le moteur de rendu sous la main ; ces deux valeurs disent « en haut » et
-    /// « en bas » avec la marge que le reader applique.
-    public static let bandTopY: CGFloat = 0.12
-    public static let bandBottomY: CGFloat = 0.88
+    /// « en bas » avec la marge que le reader applique. PROJECTIONS de
+    /// `SceneShape.bandTopY` / `.bandBottomY` (revue #6904, tour 2) — même
+    /// raison que `objectPadding` ci-dessus.
+    public static let bandTopY: CGFloat = SceneShape.bandTopY
+    public static let bandBottomY: CGFloat = SceneShape.bandBottomY
 
     /// **La hauteur maximale d'une carte de fil, en fraction de sa largeur**
     /// (#6767, décision « plafond 1,4 ajusté ») — même plafond que les cartes
@@ -133,11 +140,12 @@ public nonisolated enum SceneFraming {
     /// > Une règle qui interroge le contrat sans regarder les données passe à
     /// > côté de ce que les données disent. Le contrat autorisait les deux
     /// > écritures ; une seule est employée.
+    ///
+    /// PROJECTION de `SceneShape.isBackground` (revue #6904, tour 2) : le
+    /// corps vivait ici ET dans la loi, mot pour mot, sans qu'aucune garde ne
+    /// les compare.
     public static func isBackground(_ object: ObjectV3) -> Bool {
-        guard object.kind == .media else { return false }
-        if object.plane == .bg { return true }
-        if case .bool(true)? = object.payload["isBackground"] { return true }
-        return false
+        SceneShape.isBackground(object)
     }
 
     /// **Le fond est l'objet qui porte l'IMAGE** (#6708, recette staging du
@@ -153,9 +161,10 @@ public nonisolated enum SceneFraming {
     /// haut et le bas.
     ///
     /// Sans image, le porteur reste le fond : c'est lui qui porte la couleur.
+    ///
+    /// PROJECTION de `SceneShape.backgroundMedia(in:)` (revue #6904, tour 2).
     public static func backgroundMedia(in scene: SceneV3) -> ObjectV3? {
-        scene.objects.first { isBackground($0) && carriesPicture($0) }
-            ?? scene.objects.first(where: isBackground)
+        SceneShape.backgroundMedia(in: scene)
     }
 
     /// **Cette scène montre-t-elle quelque chose ?**
@@ -187,10 +196,10 @@ public nonisolated enum SceneFraming {
     /// `payload.mediaId` sans porteur `content` associé) — `ObjectV3.mediaReference`
     /// en est le site unique, lu par tout ce qui doit savoir si un objet
     /// désigne un enregistrement du post.
+    ///
+    /// PROJECTION de `SceneShape.carriesPicture` (revue #6904, tour 2).
     static func carriesPicture(_ object: ObjectV3) -> Bool {
-        if case .string(let url)? = object.payload["mediaURL"], !url.isEmpty { return true }
-        if object.mediaReference != nil { return true }
-        return declaredAspect(of: object) != nil
+        SceneShape.carriesPicture(object)
     }
 
     /// **Le rapport DÉCLARÉ par l'objet lui-même.**
@@ -202,14 +211,16 @@ public nonisolated enum SceneFraming {
     /// C'est ce qui la garde PURE et immédiate : une carte peut cadrer avant
     /// que la moindre image ne soit téléchargée, donc sans saut de mise en
     /// page à l'arrivée du média.
+    ///
+    /// PROJECTION de `SceneShape.declaredAspect(of:)` (revue #6904, tour 2).
     public static func declaredAspect(of object: ObjectV3) -> CGFloat? {
-        if case .number(let v)? = object.payload["aspectRatio"], v > 0 { return CGFloat(v) }
-        return nil
+        SceneShape.declaredAspect(of: object)
     }
 
-    /// Le rapport du fond de cette scène, tel qu'elle le déclare.
+    /// Le rapport du fond de cette scène, tel qu'elle le déclare. PROJECTION
+    /// de `SceneShape.backgroundAspect(in:)` (revue #6904, tour 2).
     public static func backgroundAspect(in scene: SceneV3) -> CGFloat? {
-        backgroundMedia(in: scene).flatMap(declaredAspect)
+        SceneShape.backgroundAspect(in: scene)
     }
 
     // MARK: - Le cadre
@@ -344,13 +355,20 @@ public nonisolated enum SceneFraming {
     ///
     /// **Elle échoue FERMÉE.** Un objet visible posé sur l'image, un fond que
     /// l'auteur a zoomé, tourné, déplacé, recadré ou animé, une forme non
-    /// déclarée, une image pas plus large que la scène, ou une scène qui porte
-    /// déjà son cadre (`carrierAspect`) : `nil`, et la scène se présente comme
-    /// avant. Montrer la scène à tort coûte un rognage qui existait déjà ;
-    /// montrer l'image à tort déferait un cadrage que l'auteur a posé.
+    /// déclarée, ou une image pas plus large que la scène : `nil`, et la scène
+    /// se présente comme avant. Montrer la scène à tort coûte un rognage qui
+    /// existait déjà ; montrer l'image à tort déferait un cadrage que l'auteur
+    /// a posé.
+    ///
+    /// **`carrierAspect` n'est plus lu ici** (décision #6896, lot #6904) : il
+    /// redevient ce que le contrat S8 en dit, une mémoire d'ÉDITION pour la
+    /// migration v1. Une scène qui en porte un se présente comme les autres —
+    /// sa forme vient de ce qu'elle MONTRE, jamais du porteur dont elle est
+    /// née. C'est ce qui rend cette règle équivalente à
+    /// `SceneShape.frame(scene:) == .mediaBand(…)` pour un média plus large que
+    /// la scène.
     public static func imageAspect(scene: SceneV3) -> CGFloat? {
-        guard scene.carrierAspect == nil,
-              let fond = backgroundMedia(in: scene), carriesPicture(fond),
+        guard let fond = backgroundMedia(in: scene), carriesPicture(fond),
               let rapport = declaredAspect(of: fond), rapport > sceneAspect,
               isUntouched(fond),
               scene.objects.allSatisfy({ $0.id == fond.id || !showsPixels($0) })
@@ -456,28 +474,18 @@ public nonisolated enum SceneFraming {
     /// Un média plus ÉTROIT remplit la scène : il n'y a pas de bande, donc
     /// rien à resserrer. C'est le cas du portrait, que le porteur décrit comme
     /// prenant « toute la scène ».
+    /// PROJECTION de `SceneShape.mediaBand(backgroundAspect:)` (#6904) : la
+    /// zone qu'occupe le média posé sans rognage. La loi décrit AUSSI la
+    /// colonne d'un média plus vertical que la scène ; le cadrage de carte n'en
+    /// retient que la hauteur (`fullWidth`), ce qui rend le même verdict.
     public static func backgroundBand(aspect: CGFloat) -> CGRect {
-        guard aspect > sceneAspect else { return CGRect(x: 0, y: 0, width: 1, height: 1) }
-        let hauteur = sceneAspect / aspect
-        return CGRect(x: 0, y: (1 - hauteur) / 2, width: 1, height: hauteur)
+        SceneShape.mediaBand(backgroundAspect: aspect)
     }
 
     /// La boîte d'un objet, autour de son ancre et à la marge près.
+    /// PROJECTION de `SceneShape.anchorBox(of:)` (revue #6904, tour 2).
     static func anchorBox(of object: ObjectV3) -> CGRect {
-        let centre: CGPoint
-        switch object.anchor {
-        case .free(let x, let y):
-            centre = CGPoint(x: CGFloat(x), y: CGFloat(y))
-        case .band(let edge):
-            centre = CGPoint(x: 0.5, y: edge == .top ? bandTopY : bandBottomY)
-        }
-        // L'échelle de l'objet module la marge : un sticker agrandi occupe
-        // davantage, et la boîte doit suivre. Bornée pour qu'un facteur
-        // extrême ne fasse pas couvrir toute la scène à un seul objet.
-        let facteur = min(max(CGFloat(object.transform.scale), 0.5), 3)
-        let marge = objectPadding * facteur
-        return CGRect(x: centre.x - marge, y: centre.y - marge,
-                      width: marge * 2, height: marge * 2)
+        SceneShape.anchorBox(of: object)
     }
 
     /// Le plancher : sous `minimumSide`, on ne cadre plus, on zoome.

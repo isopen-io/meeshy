@@ -196,15 +196,50 @@ final class MediaGalleryGestureArbitrationTests: XCTestCase {
     /// lui-même — « le canvas garde ses gestes de navigation sous la légende » —
     /// et l'hôte le réintroduisait une couche plus haut, hors de portée de la
     /// garde du composant.
+    ///
+    /// **LE VOILE A CHANGÉ DE COUCHE (#6904 tour 5, directive porteur du
+    /// 2026-09-18), et ce témoin le SUIT.** La directive — « l'ombre dégradé […]
+    /// doit être mis sur tous l'écran à partir du bas de l'écran » — retire le
+    /// dégradé du bloc du cadre : le voile est désormais celui de la story
+    /// (`StoryReaderScrims`, monté par `stageScrimsLayer`), une couche de
+    /// l'écran. Exiger encore un `LinearGradient` DANS `cadreOverlay`
+    /// interdirait précisément ce que la directive demande — un témoin qui
+    /// verrouille un comportement retiré par directive se réécrit, il ne se
+    /// « répare » pas.
+    ///
+    /// **Ce que le témoin garde est la RÈGLE, pas son ancien site** : le voile
+    /// ne prend aucune touche. Elle est même mieux tenue qu'avant —
+    /// `.allowsHitTesting(false)` et `.accessibilityHidden(true)` vivent DANS le
+    /// composant, hors de portée d'un hôte qui les oublierait, là où l'ancien
+    /// dégradé les redemandait à son site de montage. Le témoin vérifie donc les
+    /// deux moitiés : le bloc du cadre ne porte PLUS de dégradé, et le composant
+    /// qui le remplace est bien sourd au doigt.
     func test_theVeilOfTheFrame_takesNoTouch() throws {
         let code = try source()
-        guard let voile = declarationBody(startingAt: "var cadreOverlay: some View", in: code) else {
+        guard let bloc = declarationBody(startingAt: "var cadreOverlay: some View", in: code) else {
             XCTFail("`cadreOverlay` introuvable"); return
         }
 
-        XCTAssertTrue(compact(voile).contains("LinearGradient("),
-                      "le voile reste un dégradé — c'est son opacité au DOIGT qui change, pas son dessin")
-        XCTAssertTrue(compact(voile).contains(".allowsHitTesting(false)"),
+        XCTAssertFalse(compact(bloc).contains("LinearGradient("),
+                       "le voile a quitté le bloc du cadre pour l'ÉCRAN : deux voiles superposés " +
+                       "noirciraient deux fois le bas, et la story n'en a qu'un")
+
+        let voile = AppSourceGuard.stripComments(
+            try String(contentsOf: Self.voileSource, encoding: .utf8))
+        XCTAssertTrue(voile.contains("LinearGradient("),
+                      "le voile reste un dégradé — c'est sa COUCHE qui change, pas son dessin")
+        XCTAssertTrue(voile.contains(".allowsHitTesting(false)"),
                       "le voile ne vole ni le tap de #6142 ni le feuilletage du pager")
+    }
+
+    /// Le composant de voile partagé — celui du lecteur de stories, que la
+    /// galerie et le réel montent depuis #6904 tour 5.
+    private static var voileSource: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Views
+            .deletingLastPathComponent()   // Unit
+            .deletingLastPathComponent()   // MeeshyTests
+            .deletingLastPathComponent()   // ios
+            .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+CanvasScrims.swift")
     }
 }
