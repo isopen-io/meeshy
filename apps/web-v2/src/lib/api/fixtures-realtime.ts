@@ -6,6 +6,7 @@ import type { Conversation } from './types';
 import { CONVERSATION_ID, VIEWER_ID, conversationDefaults, kwame, viewer } from './fixtures-base';
 import { recordSurgedConversation } from './fixtures';
 import { LIVE_1, LIVE_CONVERSATION_ID } from './fixtures-live';
+import { MEDIA_IMAGE_DATA_URI } from './fixtures-media';
 
 /**
  * LE BOUCHON DE FIXTURES (#5793, § 3.5 de la spécification ; étendu #6171,
@@ -65,6 +66,66 @@ const liveTyping = (userId: 'u-kwame' | 'u-fatou', isTyping: boolean) => ({
   conversationId: LIVE_CONVERSATION_ID,
   isTyping,
 });
+
+/**
+ * UNE ARRIVÉE DE MÉDIA SUR `c-live` (#7014) — la forme que
+ * `serializeAttachmentForSocket` SERT, drapeaux de protection compris.
+ *
+ * Rend un TABLEAU d'une entrée pour se répandre dans la table : la chronologie
+ * est de la DONNÉE (doc-comment du module), et un helper qui ajouterait ses
+ * entrées par effet de bord la rendrait illisible à qui la LIT — ce que
+ * `LIVE_SCHEDULE` est exportée pour permettre (#6807).
+ *
+ * `messageType: 'image'`, `content: ''` : le média est TOUT le message, motif
+ * `media-10`. Le `<img>` ne peut donc pas être caché par un texte qui
+ * l'accompagnerait — ce qui rendrait le témoin ambigu.
+ */
+const liveMediaArrival = (params: {
+  readonly id: string;
+  readonly atMs: number;
+  readonly isViewOnce: boolean;
+}): readonly ScheduledFixtureEvent[] => [
+  {
+    kind: 'once',
+    atMs: params.atMs,
+    event: SERVER_EVENTS.MESSAGE_NEW,
+    payload: {
+      id: params.id,
+      conversationId: LIVE_CONVERSATION_ID,
+      senderId: 'u-kwame',
+      sender: { id: 'u-kwame', username: 'kwame.mensah', displayName: 'Kwame Mensah' },
+      content: '',
+      originalLanguage: 'fr',
+      messageType: 'image',
+      createdAt: new Date(LIVE_1.createdAt.getTime() + params.atMs).toISOString(),
+      translations: [],
+      attachments: [
+        {
+          id: `${params.id}-a1`,
+          messageId: params.id,
+          fileName: 'capture.png',
+          originalName: 'capture-privee.png',
+          mimeType: 'image/png',
+          fileSize: 96,
+          fileUrl: MEDIA_IMAGE_DATA_URI,
+          width: 1200,
+          height: 800,
+          createdAt: new Date(LIVE_1.createdAt.getTime() + params.atMs).toISOString(),
+          transcription: null,
+          translations: null,
+          capturedInApp: false,
+          /* LES TROIS DRAPEAUX, TOUJOURS SERVIS — c'est ce que le lot a
+             corrigé côté passerelle. Les servir ICI aussi est le POINT : une
+             charge qui les tairait est la forme EXACTE du défaut, et la
+             mutation qui doit faire rougir le gate. */
+          isViewOnce: params.isViewOnce,
+          isBlurred: false,
+          effectFlags: 0,
+        },
+      ],
+    },
+  },
+];
 
 /**
  * LA CHRONOLOGIE DE `c-live` (#6171) — mesurée depuis `connect()`, jamais
@@ -159,6 +220,41 @@ export const LIVE_SCHEDULE: readonly ScheduledFixtureEvent[] = [
       createdAt: new Date(LIVE_1.createdAt.getTime() + 14000).toISOString(),
     },
   },
+
+  /**
+   * `live-ordinaire` / `live-protege` (#7014) — LA PIÈCE PROTÉGÉE REÇUE EN
+   * TEMPS RÉEL, que rien ne jouait.
+   *
+   * `media-10` (`fixtures-media.ts`) porte déjà la MÊME forme — la PIÈCE
+   * déclarée `isViewOnce` sur un message ORDINAIRE — mais sur le chemin REST,
+   * où le `select` du serveur sert bien ses drapeaux. Ce gate-là était VERT
+   * pendant toute la vie du défaut : `serializeAttachmentForSocket` énumérait
+   * trente champs à la main, sans les trois de la protection, et
+   * `maskedAttachment` échoue OUVERTE quand on ne la nourrit pas. Une photo à
+   * VUE UNIQUE arrivée par `message:new` rendait donc son `<img>` EN CLAIR
+   * jusqu'au prochain `GET /messages`.
+   *
+   * LES DEUX MESSAGES NE DIFFÈRENT QUE PAR LA DÉCLARATION — même média, même
+   * expéditeur, même arrivée. Sans le second, un fil qui cesserait de monter
+   * les messages reçus par socket ferait passer le premier pour une garde qui
+   * tient (leçon 261) ; et c'est le message ORDINAIRE qui donne au gate l'URL
+   * à traquer dans la bulle protégée, plutôt qu'un littéral recopié là-bas.
+   *
+   * APRÈS `conversation:new` (14 000 ms) : ces deux messages PATCHENT la ligne
+   * 2 de `c-live`, que les assertions de la liste mesurent jusqu'à T+6,5 s, et
+   * les placer plus tôt les ferait lire un aperçu que ce lot aurait déplacé.
+   *
+   * La charge suit ce que `serializeAttachmentForSocket` SERT — drapeaux de
+   * protection compris, ce qui est précisément l'objet du lot. C'est une
+   * FIXTURE : elle prouve la moitié CLIENT du fail-closed (le fil rend-il la
+   * pièce déclarée ?), jamais que la passerelle sert bien ces champs — cette
+   * moitié-là est tenue par la garde d'inventaire
+   * (`serializeAttachmentForSocket.test.ts`) et par le témoin bout-à-bout
+   * (`realtime-attachment-protection.test.tsx`), qui importe le VRAI
+   * sérialiseur.
+   */
+  ...liveMediaArrival({ id: 'live-ordinaire', atMs: 30000, isViewOnce: false }),
+  ...liveMediaArrival({ id: 'live-protege', atMs: 31000, isViewOnce: true }),
 ];
 
 const SCHEDULE: readonly ScheduledFixtureEvent[] = [
