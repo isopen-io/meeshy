@@ -14,7 +14,7 @@ import {
 } from '@/components/rail-tile';
 import { StoryRailSelfTile } from '@/components/story-rail-self-tile';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import { initialsOf } from '@/lib/view/conversation';
+import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { railGroupsWithoutSelf, type StoryRailSelfEntry } from '@/lib/view/story-rail-self';
 import { storyAuthorLabel, type StoryTrayGroup } from '@/lib/view/story-tray';
 import { Link } from '@/routes/route-table';
@@ -128,6 +128,7 @@ function StoryTile({
   readonly language: InterfaceLanguage;
 }) {
   const label = storyAuthorLabel(group, language);
+  const photo = participantAvatarOf(group.author);
   const combien = group.stories.length;
   const anneau = railRingBox(size);
   const cellule = railCellWidth(size, showsLabel);
@@ -200,7 +201,18 @@ function StoryTile({
             }`,
           }}
         >
-          <Avatar initials={initialsOf(label)} color={'var(--color-ios-brand)'} size={size} />
+          {/* LA PHOTO DE L'AUTEUR (#6975) — `storyAuthorSelect` la SERT
+              (`StoryTrayAuthor.avatar`) et le rail rendait des initiales sous
+              un anneau qui promet un visage. `participantAvatarOf` plutôt
+              qu'un `group.author?.avatar` direct : la loi partagée reste le
+              seul site, et un `avatar: ''` servi n'y devient pas un
+              `<img src="">`. */}
+          <Avatar
+            initials={initialsOf(label)}
+            color={'var(--color-ios-brand)'}
+            size={size}
+            {...(photo === undefined ? {} : { src: photo })}
+          />
           {/* LE BADGE D'HUMEUR (#5652) — miroir `LentilleRailEntry.moodEmoji`
               (`StoriesVivantsRail.swift`) : une pastille SECONDAIRE posée sur
               l'anneau, jamais un second anneau — l'humeur et la story sont

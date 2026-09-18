@@ -4,7 +4,7 @@ import { Glyph } from '@/components/glyph';
 import type { PersonSummary } from '@/lib/api/friend-requests';
 import { GROUP_DESCRIPTION_MAX, GROUP_TITLE_MAX, type GroupDraft, type GroupField } from '@/lib/conversation-new/group';
 import { colorForName } from '@meeshy/shared/utils/conversation-colors';
-import { initialsOf } from '@/lib/view/conversation';
+import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 
 /**
  * **LE COMPOSEUR D'UN GROUPE** (#6706) — le nom, la description, qui en est, et
@@ -178,6 +178,9 @@ function ChosenPeople({
         <ul data-group-chosen className="flex flex-wrap gap-2">
           {chosen.map((person) => {
             const name = person.displayName ?? person.username;
+            /* LA PHOTO (#6975) — même donnée, même loi que la liste d'où
+               cette chip vient d'être choisie. */
+            const photo = participantAvatarOf(person);
             return (
               <li key={person.id}>
                 <button
@@ -188,7 +191,12 @@ function ChosenPeople({
                   className="flex items-center gap-2 rounded-chip py-1 ps-1 pe-2.5"
                   style={{ minHeight: 44, backgroundColor: 'var(--color-ios-card)', color: 'var(--color-ios-ink)' }}
                 >
-                  <Avatar initials={initialsOf(name)} color={colorForName(name)} size={28} />
+                  <Avatar
+                    initials={initialsOf(name)}
+                    color={colorForName(name)}
+                    size={28}
+                    {...(photo === undefined ? {} : { src: photo })}
+                  />
                   <span className="max-w-[9rem] truncate text-caption font-medium">{name}</span>
                   <span aria-hidden="true" style={{ color: 'var(--color-ios-ink-3)' }}>
                     <Glyph name="x" size={12} />

@@ -17,6 +17,7 @@ import {
   kwame,
   message,
   minutesAgo,
+  portraitStandIn,
   threadMoment,
   translation,
   viewer,
@@ -474,6 +475,13 @@ export const CONVERSATIONS: readonly Conversation[] = [
        (`PARTICIPANTS`, `fixtures-catchup.test.ts` compris). */
     memberCount: 3,
     participants: [...PARTICIPANTS, bruno, anonymousGuest],
+    /**
+     * LE TROISIÈME RANG DE LA PHOTO (#6975) — un GROUPE n'a pas de pair, il
+     * porte la SIENNE (`Conversation.avatar`). Sans cette ligne, le repli de
+     * `avatarOf` n'était observable par aucun gate navigateur : les deux
+     * autres rangs vivent sur des participants de conversations DIRECTES.
+     */
+    avatar: portraitStandIn('#fbbf24', '#b45309', 'aucune'),
     unreadCount: 2,
     lastMessage,
     lastMessageAt: lastMessage.createdAt,

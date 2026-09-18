@@ -70,6 +70,7 @@ const self = (over: Partial<StoryRailSelfEntry> = {}): StoryRailSelfEntry => ({
   hasActiveStory: false,
   entryStoryId: undefined,
   moodEmoji: undefined,
+  avatar: undefined,
   ...over,
 });
 

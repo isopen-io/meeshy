@@ -756,15 +756,33 @@ export async function checkThreadMedia({ browser, BASE, expect, setScheme, AA_TH
       `(${presentes}/${idsAttendus.length}) — sans elles, un « aucune <img> » ne mesurerait qu'une virtualisation`,
   );
 
+  //     L'AVATAR DE L'EXPÉDITEUR EST UNE `<img>`, ET CE N'EST PAS LA PIÈCE
+  //     JOINTE (#6975). Ce comptage disait `img` en visant `la pièce jointe` :
+  //     deux surfaces, un seul nombre. Dès que la rangée a servi la photo de
+  //     son expéditeur (`focal-row.tsx` / `bubble.tsx`), le gate a rendu
+  //     « la pièce jointe n'atteint PAS le DOM (img=1) » — un ROUGE qui
+  //     nommait la protection en mesurant l'identité. Pire, sa CONTRE-ÉPREUVE
+  //     (`imagesDuNonProtege > 0`) devenait vraie par l'avatar seul : le gate
+  //     serait resté vert sur un fil qui ne rend plus AUCUN média, soit
+  //     exactement le piège de la leçon 261 que son propre commentaire cite.
+  //     `.avatar-root` (`components/avatar.tsx`) est donc exclu des quatre
+  //     comptages de médias de ce fichier — un gate ne mesure que ce qu'il
+  //     nomme.
+  const COMPTE_MEDIAS = (el) => {
+    const horsAvatar = (selector) =>
+      [...el.querySelectorAll(selector)].filter((n) => n.closest('.avatar-root') === null).length;
+    return {
+      img: horsAvatar('img'),
+      audio: horsAvatar('audio'),
+      source: horsAvatar('source'),
+      video: horsAvatar('video'),
+    };
+  };
+
   for (const [id, forme] of protegesAttendus) {
     const rangee = rowOf(id);
     await rangee.waitFor({ state: 'attached' });
-    const medias = await rangee.evaluate((el) => ({
-      img: el.querySelectorAll('img').length,
-      audio: el.querySelectorAll('audio').length,
-      source: el.querySelectorAll('source').length,
-      video: el.querySelectorAll('video').length,
-    }));
+    const medias = await rangee.evaluate(COMPTE_MEDIAS);
     const total = medias.img + medias.audio + medias.source + medias.video;
     expect(
       total === 0,
@@ -778,7 +796,7 @@ export async function checkThreadMedia({ browser, BASE, expect, setScheme, AA_TH
   //     fil qui ne rendrait plus AUCUNE image ferait passer les deux assertions
   //     ci-dessus (leçon 261 — un témoin ne s'écrit pas sur le rang qui rendrait
   //     le même verdict par accident).
-  const imagesDuNonProtege = await rowOf('media-1').evaluate((el) => el.querySelectorAll('img').length);
+  const imagesDuNonProtege = await rowOf('media-1').evaluate(COMPTE_MEDIAS).then((m) => m.img);
   expect(
     imagesDuNonProtege > 0,
     `[${skin}/${scheme}] CONTRÔLE : le MÊME média sur un message NON protégé rend bien son <img> ` +
@@ -800,8 +818,8 @@ export async function checkThreadMedia({ browser, BASE, expect, setScheme, AA_TH
   //         protection sur le message dans la fixture laisserait le gate vert
   //         en ne mesurant plus que l'autre loi.
   const pieceMasquee = await rowOf('media-10').evaluate((el) => ({
-    img: el.querySelectorAll('img').length,
-    audio: el.querySelectorAll('audio').length,
+    img: [...el.querySelectorAll('img')].filter((n) => n.closest('.avatar-root') === null).length,
+    audio: [...el.querySelectorAll('audio')].filter((n) => n.closest('.avatar-root') === null).length,
     substitut: el.querySelector('[data-protected-attachment="hidden"]') !== null,
     // La rangée n'est PAS voilée au niveau message : la marque de #6184 doit
     // être absente, sinon le témoin mesurerait la mauvaise loi.

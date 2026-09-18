@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
+import { Avatar } from '@/components/avatar';
 import { adminIdentityQueryOptions } from '@/lib/api/admin';
 import { adminUserDetailQueryKey, adminUserDetailQueryOptions, type AdminUserDetail } from '@/lib/api/admin-user-detail';
 import { apiDeps } from '@/lib/api/deps';
@@ -9,6 +10,7 @@ import { visibleAdminSections } from '@/lib/admin/sections';
 import { translateAdmin } from '@/lib/i18n-admin-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useParams, useRoute } from '@/lib/router';
+import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { ActionButton } from '@/routes/link-page-parts';
 
@@ -195,6 +197,15 @@ export default function AdminUserScreen() {
  */
 function Entete({ membre, language }: { readonly membre: AdminUserDetail; readonly language: InterfaceLanguage }) {
   const etat = membre.deletedAt !== null ? 'admin.user.deleted' : membre.isActive ? null : 'admin.users.inactive';
+  /**
+   * LA PHOTO DU MEMBRE (#6975) — `AdminUserDetail.avatar` est SERVI
+   * (`api/admin-user-detail.ts:56`) et cette fiche ne montait aucun avatar du
+   * tout : un nom, une bio, une pastille d'activité. C'est le seul écran de
+   * l'application où identifier une personne A une conséquence (désactiver,
+   * bannir, réinitialiser un mot de passe), et c'était le seul à ne pas
+   * montrer son visage.
+   */
+  const photo = participantAvatarOf(membre);
 
   return (
     <div className="flex items-center gap-3">
@@ -202,6 +213,13 @@ function Entete({ membre, language }: { readonly membre: AdminUserDetail; readon
         aria-hidden="true"
         className="grid size-2 shrink-0 place-items-center rounded-full"
         style={{ backgroundColor: membre.isOnline ? 'var(--color-success, #34D399)' : 'transparent' }}
+      />
+      <Avatar
+        initials={initialsOf(membre.displayName)}
+        color="var(--color-ios-brand)"
+        size={44}
+        name={membre.displayName}
+        {...(photo === undefined ? {} : { src: photo })}
       />
       <div className="min-w-0 flex-1">
         <p className="truncate text-title font-semibold" style={{ color: INK }}>

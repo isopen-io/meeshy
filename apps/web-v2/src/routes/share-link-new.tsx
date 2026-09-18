@@ -13,7 +13,7 @@ import { resolveViewer } from '@/lib/api/viewer';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
-import { titleOf } from '@/lib/view/conversation';
+import { avatarOf, titleOf } from '@/lib/view/conversation';
 import { eligibleForShareLink } from '@/lib/view/share-link-eligibility';
 import { LinksGlyph, LinksHeader, LinksOfflineNotice } from '@/routes/links-parts';
 import { href, navigate } from '@/routes/route-table';
@@ -60,7 +60,15 @@ export default function ShareLinkNewScreen() {
     appQueryClient,
   );
   const pickable: readonly PickableConversation[] = useMemo(
-    () => eligibleForShareLink(conversations.data ?? []).map((conversation) => ({ id: conversation.id, title: titleOf(conversation, viewerId) })),
+    () =>
+      eligibleForShareLink(conversations.data ?? []).map((conversation) => {
+        /* `avatar` (#6975) — la MÊME loi que la ligne de liste (`avatarOf` :
+           le pair d'un direct, la conversation pour un groupe), pour que la
+           conversation choisie porte ici le visage qu'elle a partout
+           ailleurs. */
+        const photo = avatarOf(conversation, viewerId);
+        return { id: conversation.id, title: titleOf(conversation, viewerId), ...(photo === undefined ? {} : { avatar: photo }) };
+      }),
     [conversations.data, viewerId],
   );
 

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { presenceOf, previewKindOf, titleOf } from './conversation';
+import { avatarOf, participantAvatarOf, presenceOf, previewKindOf, titleOf } from './conversation';
 import type { Conversation, Message, Participant } from '@/lib/api/types';
 
 const NOW = Date.parse('2026-09-07T12:00:00.000Z');
@@ -209,5 +209,76 @@ describe('previewKindOf — la forme de l’aperçu de liste (D-23, #5676)', () 
   test('rien de protégé ⇒ standard', () => {
     const c = conversation({ lastMessage: lastMessage({}) });
     expect(previewKindOf(c, NOW)).toBe('standard');
+  });
+});
+
+/**
+ * **LA PHOTO A DEUX RANGS, ET LE SECOND EST CELUI QU'ON RATE** (#6975).
+ *
+ * `resolveParticipantAvatar` (`packages/shared/utils/participant-helpers.ts`)
+ * est la loi PARTAGÉE : avatar LOCAL du participant, puis avatar du COMPTE
+ * lié. Un client qui n'écrirait que `participant.avatar` raterait la photo de
+ * compte de tout participant sans surcharge locale — et la passerelle sert
+ * bien les DEUX champs (`core-list.ts:699` sérialise par `{...m}` sans
+ * appliquer la loi).
+ *
+ * LES TÉMOINS PORTENT DONC SUR LE RANG 2 ET SUR LE REPLI, jamais seulement
+ * sur le rang 1 : au rang 1, la boucle naïve et la loi juste rendent le MÊME
+ * verdict, donc un témoin écrit là ne peut pas tomber (leçon 261).
+ */
+describe('avatarOf — la loi PARTAGÉE de l’avatar, jamais une boucle locale (#6975)', () => {
+  const direct = (peer: Partial<Participant>, rest: Partial<Conversation> = {}): Conversation =>
+    conversation({
+      type: 'direct',
+      participants: [participant({ id: 'p-viewer', userId: 'u-viewer', displayName: 'Vous' }), participant({ id: 'p-peer', userId: 'u1', ...peer })],
+      ...rest,
+    });
+
+  test('rang 1 — l’avatar LOCAL du pair', () => {
+    expect(avatarOf(direct({ avatar: 'local.png' }), 'u-viewer')).toBe('local.png');
+  });
+
+  test('rang 2 — l’avatar du COMPTE quand le pair n’a pas de surcharge locale', () => {
+    expect(avatarOf(direct({ user: { id: 'u1', avatar: 'compte.png' } }), 'u-viewer')).toBe('compte.png');
+  });
+
+  test('rang 1 PRIME sur rang 2', () => {
+    expect(avatarOf(direct({ avatar: 'local.png', user: { id: 'u1', avatar: 'compte.png' } }), 'u-viewer')).toBe('local.png');
+  });
+
+  test('un avatar local BLANC retombe sur le compte — jamais un `src=""` parasite', () => {
+    expect(avatarOf(direct({ avatar: '   ', user: { id: 'u1', avatar: 'compte.png' } }), 'u-viewer')).toBe('compte.png');
+  });
+
+  test('aucun avatar de pair ⇒ repli sur `conversation.avatar`', () => {
+    expect(avatarOf(direct({}, { avatar: 'salon.png' }), 'u-viewer')).toBe('salon.png');
+  });
+
+  test('un GROUPE n’a pas de pair : il porte sa propre photo', () => {
+    const groupe = conversation({ type: 'group', avatar: 'equipe.png', participants: [participant({ userId: 'u-viewer' })] });
+    expect(avatarOf(groupe, 'u-viewer')).toBe('equipe.png');
+  });
+
+  test('aucune photo NULLE PART ⇒ `undefined`, jamais une chaîne vide', () => {
+    expect(avatarOf(direct({}), 'u-viewer')).toBeUndefined();
+    expect(avatarOf(conversation({ type: 'group', avatar: '' }), 'u-viewer')).toBeUndefined();
+  });
+});
+
+/**
+ * `participantAvatarOf` — la MÊME loi, appliquée à un participant SEUL : le
+ * `sender` d'un message (rangée Focal, bulle), le frappeur d'un roster, un
+ * membre d'un rail. Elle existe pour que ces surfaces n'aient pas à
+ * reconstruire `[avatar, user.avatar]` chacune de leur côté, ce qui est
+ * exactement le motif qui a produit trois familles divergentes de Prisme en
+ * trois cycles (`CLAUDE.md` § Prisme Linguistique).
+ */
+describe('participantAvatarOf — la loi partagée sur un participant seul (#6975)', () => {
+  test('rang 2 servi quand le rang 1 manque', () => {
+    expect(participantAvatarOf(participant({ user: { id: 'u1', avatar: 'compte.png' } }))).toBe('compte.png');
+  });
+
+  test('participant ABSENT ⇒ `undefined`', () => {
+    expect(participantAvatarOf(undefined)).toBeUndefined();
   });
 });

@@ -9,7 +9,7 @@ import { storyViewedStore } from '@/lib/api/story-viewed-store';
 import { resolveViewer } from '@/lib/api/viewer';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
-import { initialsOf } from '@/lib/view/conversation';
+import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { groupStoriesByAuthor, storyAuthorLabel, type StoryTrayGroup } from '@/lib/view/story-tray';
 import { useSearch } from '@/lib/router';
 import { Link } from '@/routes/route-table';
@@ -101,6 +101,7 @@ const storiesCountLabel = (language: InterfaceLanguage, count: number): string =
 
 export function StoryRow({ language, group }: { readonly language: InterfaceLanguage; readonly group: StoryTrayGroup }) {
   const label = storyAuthorLabel(group, language);
+  const photo = participantAvatarOf(group.author);
   return (
     <Link
       to="story"
@@ -117,7 +118,12 @@ export function StoryRow({ language, group }: { readonly language: InterfaceLang
             : 'color-mix(in srgb, var(--color-ios-ink-3) 40%, transparent)',
         }}
       >
-        <Avatar initials={initialsOf(label)} color={'var(--color-ios-brand)'} size={44} />
+        <Avatar
+          initials={initialsOf(label)}
+          color={'var(--color-ios-brand)'}
+          size={44}
+          {...(photo === undefined ? {} : { src: photo })}
+        />
       </span>
       <span className="flex min-w-0 flex-col">
         <span className="truncate text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
