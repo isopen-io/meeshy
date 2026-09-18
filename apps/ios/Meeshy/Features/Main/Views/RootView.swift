@@ -1095,7 +1095,7 @@ struct RootView: View {
                 }
                 return
             }
-            navigateToConversationById(conversationId, highlightMessageId: ctx.messageId, ensureUnread: true)
+            navigateToConversationById(conversationId, highlightMessageId: ctx.messageId)
 
         case .friendRequest, .contactRequest, .legacyFriendRequest,
              .friendAccepted, .contactAccepted, .legacyFriendAccepted,
@@ -1250,14 +1250,19 @@ struct RootView: View {
         }
     }
 
-    private func navigateToConversationById(_ conversationId: String, highlightMessageId: String? = nil, ensureUnread: Bool = false) {
+    /// #6998 — `ensureUnread` a DISPARU, et ce n'est pas un allègement : ce
+    /// paramètre forçait `unreadCount = 1` hors de tout store, sur une copie
+    /// locale de la ligne, à la seule ouverture par notification. La
+    /// conversation s'ouvrait donc sur un non-lu FICTIF — séparateur
+    /// « nouveaux messages » sur un message déjà lu, pastille inventée dans
+    /// l'agrégat — et le deep link `/c/:id` du même écran ne le faisait pas,
+    /// si bien que deux chemins vers la MÊME conversation ne montraient pas la
+    /// même chose. Le compteur appartient au registre de lecture
+    /// (`ConversationReadLedger`) ; aucune vue ne le fabrique.
+    private func navigateToConversationById(_ conversationId: String, highlightMessageId: String? = nil) {
         // 1. Fast path: in-memory list (post-load happy path)
         if let existing = conversationViewModel.conversations.first(where: { $0.id == conversationId }) {
-            var conv = existing
-            if ensureUnread && conv.userState.unreadCount == 0 {
-                conv.userState.unreadCount = 1
-            }
-            router.navigateToConversation(conv, highlightMessageId: highlightMessageId)
+            router.navigateToConversation(existing, highlightMessageId: highlightMessageId)
             return
         }
 
@@ -1274,9 +1279,7 @@ struct RootView: View {
                 }
             }()
             if let cached = cachedConversations?.first(where: { $0.id == conversationId }) {
-                var c = cached
-                if ensureUnread && c.userState.unreadCount == 0 { c.userState.unreadCount = 1 }
-                router.navigateToConversation(c, highlightMessageId: highlightMessageId)
+                router.navigateToConversation(cached, highlightMessageId: highlightMessageId)
                 // Background refresh — keeps the displayed conversation in sync
                 // without blocking navigation. Failures are silent: the user
                 // already sees the cached version.
@@ -1311,10 +1314,7 @@ struct RootView: View {
             for attempt in 0..<2 {
                 do {
                     let apiConv = try await ConversationService.shared.getById(conversationId)
-                    var conv = apiConv.toConversation(currentUserId: currentUserId)
-                    if ensureUnread && conv.userState.unreadCount == 0 {
-                        conv.userState.unreadCount = 1
-                    }
+                    let conv = apiConv.toConversation(currentUserId: currentUserId)
                     router.navigateToConversation(conv, highlightMessageId: highlightMessageId)
                     return
                 } catch {
