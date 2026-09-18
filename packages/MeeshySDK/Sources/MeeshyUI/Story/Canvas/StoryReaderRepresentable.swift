@@ -505,7 +505,7 @@ nonisolated enum StoryPreviewTempSweeper {
     /// `static let` ⇒ `swift_once` : le balayage part au PREMIER accès, une
     /// seule fois par processus, sans verrou à tenir ni drapeau à écrire.
     static let sweepOnce: Void = {
-        Task.detached(priority: .background) { _ = sweep() }
+        Task.detached(priority: .background) { _ = StoryPreviewTempSweeper.sweep() }
     }()
 
     /// Supprime les fichiers d'aperçu d'un répertoire. Paramétrable pour que
