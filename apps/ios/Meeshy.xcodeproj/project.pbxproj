@@ -1951,6 +1951,7 @@
 		FD182119EC3BFA56CAC2E259 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDD8A1DD471BCBD134A984F7 /* NotificationService.swift */; };
 		FD4AF315D7D8B1B9F3EF2994 /* QuotedReplyPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 815541CE0C23AA04E94FD6BE /* QuotedReplyPresentation.swift */; };
 		FD5330940132CA241827A1F0 /* P2PWebRTCClientBuildVideoTrackFailureRevertSourceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F04B51D93CB9EFFD152B260 /* P2PWebRTCClientBuildVideoTrackFailureRevertSourceTests.swift */; };
+		FD7187A6C464C9E1F0658723 /* SceneFloorIsTheSceneGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27D6EA8593DC79F061952167 /* SceneFloorIsTheSceneGuardTests.swift */; };
 		FD8990F04A83BDAD542DFFC1 /* SendEligibilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10755ECE55C27CD492BC3C04 /* SendEligibilityTests.swift */; };
 		FDC7CFA9D55A5124C3C05D93 /* PostDetailViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B61BFFCD7F8A5BD665B47FA /* PostDetailViewModelTests.swift */; };
 		FDC8C24F6C6EE9FEEF55F946 /* StoryRepublishWiringGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EEEB36F89B143888BFA22AF /* StoryRepublishWiringGuardTests.swift */; };
@@ -2343,6 +2344,7 @@
 		27796318FA52DC96BDFC6B77 /* ForwardPickerModelPortabilityGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForwardPickerModelPortabilityGuardTests.swift; sourceTree = "<group>"; };
 		27AFCFA265A0E0DFA547D04B /* ShareComposeDoor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareComposeDoor.swift; sourceTree = "<group>"; };
 		27C17BCE0600D4221BD09F0A /* CallManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallManager.swift; sourceTree = "<group>"; };
+		27D6EA8593DC79F061952167 /* SceneFloorIsTheSceneGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneFloorIsTheSceneGuardTests.swift; sourceTree = "<group>"; };
 		2823C2A199AAC91936A4B771 /* CometPillReduceMotionGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CometPillReduceMotionGuardTests.swift; sourceTree = "<group>"; };
 		282D05E72454D2F9AF6CD5AD /* ContactSyncServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactSyncServiceTests.swift; sourceTree = "<group>"; };
 		28816254597DA49937313B56 /* LocationSharingSettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationSharingSettingsSection.swift; sourceTree = "<group>"; };
@@ -5582,6 +5584,7 @@
 				B176702401936F84123D5CC1 /* OptionalViewReturnGuardTests.swift */,
 				8C53F5538E90BB0F0B92E719 /* PerpetualMotionGuardTests.swift */,
 				AC04B8137BFE23D653DB2C5D /* ReadingDirectionGuardTests.swift */,
+				27D6EA8593DC79F061952167 /* SceneFloorIsTheSceneGuardTests.swift */,
 				49E2C1EAF126C1930923572A /* SkeletonColdStartGuardTests.swift */,
 				40743F60A001DEADAB035464 /* SkeletonLoadMoreGuardTests.swift */,
 				C502C6825CBC2A134554BF5C /* TickedRepeatForeverAnimationSourceGuardTests.swift */,
@@ -8691,6 +8694,7 @@
 				577CA1C97812C67C8998A6B0 /* SceneCaptionTests.swift in Sources */,
 				A4C7639C95971BEEFAD2E87B /* SceneCardMountingTests.swift in Sources */,
 				83006513C3DB2481AE65DF09 /* SceneCardUnicityTests.swift in Sources */,
+				FD7187A6C464C9E1F0658723 /* SceneFloorIsTheSceneGuardTests.swift in Sources */,
 				82E4C1F2DF222C8AC3B3764F /* SceneFloorTests.swift in Sources */,
 				E90F39A4C1302CE6A5B4D174 /* SceneFullscreenCaptionTranslationGuardTests.swift in Sources */,
 				D7C1FACA15C1B3CEB6B81426 /* ScrollActivityVectorTests.swift in Sources */,
@@ -9011,7 +9015,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1822;
+				CURRENT_PROJECT_VERSION = 1824;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = D72UK7R5RE;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -9193,7 +9197,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1822;
+				CURRENT_PROJECT_VERSION = 1824;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = D72UK7R5RE;
 				ENABLE_NS_ASSERTIONS = NO;
