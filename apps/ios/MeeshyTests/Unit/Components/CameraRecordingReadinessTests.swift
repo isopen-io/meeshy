@@ -119,4 +119,41 @@ final class CameraRecordingReadinessTests: XCTestCase {
         XCTAssertTrue(source.contains("endRecordingWithoutOutput"),
                       "Le refus d'un segment doit avoir une sortie NOMMÉE, pas un return muet.")
     }
+
+    // MARK: - Le DÉCLENCHEUR PHOTO, second appel à AVFoundation du même modèle (#6984)
+
+    /// **Prendre une photo tuait le processus de la même façon** (rapports du
+    /// simulateur du 2026-09-12, `CameraView.swift:493`) :
+    /// `-[AVCapturePhotoOutput capturePhotoWithSettings:delegate:]` lève la
+    /// même exception ObjC quand aucune connexion vidéo active n'existe. La
+    /// garde de l'enregistrement n'avait pas été posée devant CE second appel
+    /// — et le témoin ci-dessus ne comptait que `startRecording(to:`, il ne
+    /// pouvait pas le voir. Même règle, second site.
+    func test_laPhoto_obeitALaMemeRegle() {
+        XCTAssertTrue(CameraRecordingReadiness.mayCapturePhoto(
+            sessionIsRunning: true, hasVideoConnection: true,
+            connectionIsActive: true, connectionIsEnabled: true))
+        XCTAssertFalse(CameraRecordingReadiness.mayCapturePhoto(
+            sessionIsRunning: true, hasVideoConnection: false,
+            connectionIsActive: false, connectionIsEnabled: false))
+        XCTAssertFalse(CameraRecordingReadiness.mayCapturePhoto(
+            sessionIsRunning: false, hasVideoConnection: true,
+            connectionIsActive: true, connectionIsEnabled: true))
+    }
+
+    /// **Le seul appel à `capturePhoto(with:` est gardé DANS `takePhoto`.**
+    func test_leSeulAppelACapturePhoto_estGardeParLaRegle() throws {
+        let source = try cameraViewSource()
+        let appels = source.components(separatedBy: "photoOutput.capturePhoto(with:").count - 1
+        XCTAssertEqual(appels, 1,
+                       "Un second site d'appel devrait porter sa propre garde — la garde suit l'appel, pas la fonction.")
+        guard let debut = source.range(of: "func takePhoto(flash:"),
+              let fin = source.range(of: "photoOutput.capturePhoto(with:",
+                                     range: debut.upperBound..<source.endIndex) else {
+            return XCTFail("takePhoto(flash:) ne contient plus l'appel gardé.")
+        }
+        let corps = String(source[debut.upperBound..<fin.lowerBound])
+        XCTAssertTrue(corps.contains("mayCapturePhoto"),
+                      "La garde doit précéder l'appel DANS takePhoto(flash:), pas seulement exister dans le fichier.")
+    }
 }

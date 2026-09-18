@@ -485,6 +485,15 @@ final class CameraModel: NSObject, ObservableObject {
     }
 
     func takePhoto(flash: AVCaptureDevice.FlashMode) {
+        // Même exception ObjC que l'enregistrement sans connexion active, donc
+        // même prévention devant l'appel — un `do/catch` ne la rattraperait pas.
+        let connection = photoOutput.connection(with: .video)
+        guard CameraRecordingReadiness.mayCapturePhoto(
+            sessionIsRunning: session.isRunning,
+            hasVideoConnection: connection != nil,
+            connectionIsActive: connection?.isActive ?? false,
+            connectionIsEnabled: connection?.isEnabled ?? false
+        ) else { return }
         let settings = AVCapturePhotoSettings()
         if photoOutput.supportedFlashModes.contains(flash) {
             settings.flashMode = flash

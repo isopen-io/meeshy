@@ -11,6 +11,20 @@ function render(props: Parameters<typeof LensPaginationFooter>[0]): string {
 }
 
 describe('LensPaginationFooter', () => {
+  test('loading-more ⇒ un contenu de chargement FOURNI remplace les points (#6987)', () => {
+    const html = render({
+      state: 'loading-more',
+      showsAllLoadedHint: false,
+      onRetry: () => {},
+      sentinelRef: null,
+      loadingMoreContent: <div data-fantome="carte" />,
+    });
+    expect(html).toContain('data-pagination-footer="loading-more"');
+    expect(html).toContain('data-fantome="carte"');
+    expect(html).toContain('role="status"');
+    expect(html).toContain('Chargement de la suite');
+  });
+
   test('loading-more ⇒ role=status, un TEXTE annonçable, les points', () => {
     const html = render({ state: 'loading-more', showsAllLoadedHint: false, onRetry: () => {}, sentinelRef: null });
     expect(html).toContain('data-pagination-footer="loading-more"');
