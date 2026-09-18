@@ -208,15 +208,19 @@ describe('createFixturesSocketClient (#5793) — le bouchon de fixtures', () => 
       /* La MÊME pièce que le corpus sert : un `fileUrl` divergent ferait
          rejouer la piste originale sous une transcription traduite. */
       expect(payload.attachment.fileUrl).toBe(LIVE_3_AUDIO_URL);
-      /* LA CHARGE LA PLUS PAUVRE — aucun des trois drapeaux de protection,
-         donc le pire cas de la garde de masquage du puits (c'est ce que sert
-         la passerelle d'avant #7014). Enrichir cette fixture rendrait
-         indémontrable le cas où le cache est le SEUL à savoir qu'une pièce est
-         masquée, et ferait passer ici un gate que la vraie passerelle ferait
-         tomber. */
-      expect('isViewOnce' in payload.attachment).toBe(false);
-      expect('isBlurred' in payload.attachment).toBe(false);
-      expect('effectFlags' in payload.attachment).toBe(false);
+      /* LA FORME QUE #7014 SERT DÉSORMAIS — `attachmentSocketSelect` charge
+         TOUJOURS les trois colonnes de protection et `serializeAttachmentForSocket`
+         les sert FAIL-CLOSED, présentes même sur une pièce ordinaire (`false` /
+         `false` / `0`, jamais omises). Une fixture qui omettrait ces trois clés
+         rejouerait une charge que la vraie passerelle n'émet plus : le gate
+         navigateur qui la consomme (`check-realtime-events.mjs` via
+         `check-thread-states.mjs`) mesurerait alors un produit qui n'existe plus. */
+      expect('isViewOnce' in payload.attachment).toBe(true);
+      expect(payload.attachment.isViewOnce).toBe(false);
+      expect('isBlurred' in payload.attachment).toBe(true);
+      expect(payload.attachment.isBlurred).toBe(false);
+      expect('effectFlags' in payload.attachment).toBe(true);
+      expect(payload.attachment.effectFlags).toBe(0);
     }
 
     /* CUMULATIVE — le serveur relit la ligne après chaque enrichissement, donc

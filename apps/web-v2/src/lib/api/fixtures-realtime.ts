@@ -70,13 +70,14 @@ const liveTranslation = (params: {
  * `message:attachment-updated` telle que la passerelle la sert : la pièce
  * ENTIÈRE passée par `serializeAttachmentForSocket`, jamais un delta.
  *
- * Elle NE PORTE PAS `isViewOnce` / `isBlurred` / `effectFlags`, et c'est la
- * charge la plus PAUVRE que le puits puisse recevoir — donc le pire cas de sa
- * garde de masquage. C'est la forme que sert la passerelle d'avant #7014 ;
- * enrichir cette fixture rendrait indémontrable le cas où le cache est le SEUL
- * à savoir qu'une pièce est masquée, et ferait passer ici un gate que la vraie
- * passerelle ferait tomber (doc-comment du module, « aux MÊMES noms et aux
- * MÊMES formes »).
+ * Elle PORTE `isViewOnce: false` / `isBlurred: false` / `effectFlags: 0` —
+ * la forme FAIL-CLOSED que `attachmentSocketSelect` charge et que
+ * `serializeAttachmentForSocket` sert désormais TOUJOURS (#7014) : une pièce
+ * ordinaire déclare explicitement l'absence de protection, elle ne se tait
+ * plus dessus. Une fixture muette sur ces trois clés rejouerait une charge
+ * que la vraie passerelle n'émet plus (doc-comment du module, « aux MÊMES
+ * noms et aux MÊMES formes ») — un gate qui rejoue une charge impossible ne
+ * mesure pas le produit.
  *
  * `translations` est CUMULATIVE : le serveur relit la ligne après chaque
  * enrichissement, donc l'évènement `fr` porte aussi `en`
@@ -99,6 +100,9 @@ const liveTranscript = (params: {
     fileUrl: LIVE_3_AUDIO_URL,
     duration: 9_000,
     capturedInApp: false,
+    isViewOnce: false,
+    isBlurred: false,
+    effectFlags: 0,
     createdAt: LIVE_3_CREATED_AT,
     transcription: params.transcription,
     translations: params.translations,
