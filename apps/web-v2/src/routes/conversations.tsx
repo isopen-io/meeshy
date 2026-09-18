@@ -359,7 +359,7 @@ export default function ConversationsScreen() {
    * donc plus lieu d'être — une story n'est pas une conversation — et le plafond
    * de six entrées vit dans le rail, avec sa porte « tout voir ».
    */
-  const railProps = useStoryRailProps(viewer.id ?? undefined);
+  const railProps = useStoryRailProps(viewer.id ?? undefined, viewer.avatar);
 
   /**
    * LES SECTIONS (#5694, écart 6) — `resolveLensSections` re-partitionne le

@@ -4,7 +4,7 @@ import { checkStatusOf, isMineOf, servedRowLanguage, translatedLanguagesOf } fro
 import type { LocalDelivery } from '@/lib/view/message';
 import { badgesOf, editedOf, ephemeralBadgeOf, systemRowOf } from '@/lib/view/message-badges';
 import { bodyKindOf, placeOf, storyCitationOf } from '@/lib/view/message-body';
-import { initialsOf, presenceOf } from '@/lib/view/conversation';
+import { initialsOf, participantAvatarOf, presenceOf } from '@/lib/view/conversation';
 import { prismFor, served } from '@/lib/api/prism';
 import { mediaCarrierOf } from '@/lib/view/media';
 import type { PlacedMessage } from '@/lib/grouping';
@@ -365,6 +365,12 @@ export const FocalRow = memo(function FocalRow({
    * sur ses propres messages (fixture, charge socket allégée) : le repli
    * comble l'identité, jamais un nom vide en tête de groupe. */
   const senderAvatarName = message.sender?.displayName ?? (isMine ? 'Vous' : '');
+  /* LA PHOTO DE L'EXPÉDITEUR (#6975) — `message.sender` est un `Participant`
+     complet (c'est déjà lui que `presenceOf` reçoit deux lignes plus bas),
+     donc les DEUX rangs de la loi partagée sont là : avatar local, puis
+     avatar du compte. La rangée de message est le mode de lecture PAR DÉFAUT
+     (D-7) : elle est vue à chaque message de chaque conversation. */
+  const senderPhoto = participantAvatarOf(message.sender);
   const senderName = isMine ? 'Vous' : senderAvatarName;
   /* LA COULEUR DU NOM DE SOI — un jeton GÉNÉRÉ, pas l'encre primaire
    * (revue #5935, défaut majeur 2, SOLDÉ). `FocalIdentityHeader.swift:90-92`
@@ -584,6 +590,7 @@ export const FocalRow = memo(function FocalRow({
             initials={initialsOf(senderAvatarName)}
             color="var(--accent)"
             size={AVATAR_SIZE}
+            {...(senderPhoto === undefined ? {} : { src: senderPhoto })}
             presence={presenceOf(message.sender, nowMs)}
           />
         ) : null}
@@ -602,7 +609,12 @@ export const FocalRow = memo(function FocalRow({
       <div className="min-w-0 relative">
         {elected ? <FocusCard /> : null}
         {elected ? (
-          <FocusIdentity initials={initialsOf(senderAvatarName)} name={senderName} accent="var(--accent)" />
+          <FocusIdentity
+            initials={initialsOf(senderAvatarName)}
+            name={senderName}
+            accent="var(--accent)"
+            {...(senderPhoto === undefined ? {} : { src: senderPhoto })}
+          />
         ) : null}
 
         {/* LES BADGES DE TÊTE — épinglé, transféré (#5936) — AU-DESSUS de

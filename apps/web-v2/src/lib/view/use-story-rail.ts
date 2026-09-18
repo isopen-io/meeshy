@@ -35,7 +35,7 @@ const EMPTY_STATUS_MOODS: readonly StatusMoodPost[] = [];
  * bande épinglée) : c'est ce qui garantit que la tuile jumelle vers laquelle la
  * bande rend le focus existe (`RailTitleSlot`).
  */
-export function useStoryRailProps(viewerId: string | undefined): StoryRailProps {
+export function useStoryRailProps(viewerId: string | undefined, viewerAvatar?: string): StoryRailProps {
   const tray = useStoryTray();
   const seenNow = useStore(storyViewedStore, (s) => s.ids);
   const moods = useStatusMoods();
@@ -62,8 +62,17 @@ export function useStoryRailProps(viewerId: string | undefined): StoryRailProps 
    * le cas où ses deux portes comptent le plus.
    */
   const self = useMemo(
-    () => selfRailEntry({ viewerId, groups, moods: moods.data ?? EMPTY_STATUS_MOODS }),
-    [viewerId, groups, moods.data],
+    /* `avatar` (#6975) — `Viewer.avatar` avait été ajouté POUR cette pastille
+       et n'atteignait AUCUN rendu : le paramètre le fait descendre jusqu'à la
+       loi, qui décide (photo de session, puis auteur de mes stories). */
+    () =>
+      selfRailEntry({
+        viewerId,
+        ...(viewerAvatar === undefined ? {} : { avatar: viewerAvatar }),
+        groups,
+        moods: moods.data ?? EMPTY_STATUS_MOODS,
+      }),
+    [viewerId, viewerAvatar, groups, moods.data],
   );
 
   return useMemo(

@@ -24,7 +24,7 @@ import {
 } from '@/lib/conversation-new/group';
 import { useOnline } from '@/lib/net/online';
 import { coldStateOf, type ColdState } from '@/lib/view/cold-state';
-import { initialsOf } from '@/lib/view/conversation';
+import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { useExhaustPages } from '@/lib/view/use-exhaust-pages';
 import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 import { GroupComposer } from '@/routes/conversation-new-group';
@@ -501,6 +501,11 @@ function PersonRow(props: {
   readonly onPick: (participantId: string) => void;
 }) {
   const name = props.person.displayName ?? props.person.username;
+  /* LA PHOTO (#6975) — `PersonSummary.avatar` est servi, et la surface
+     VOISINE la passait déjà (`discover-parts.tsx:222`) : deux listes de
+     personnes, la même donnée, un visage d'un côté et des initiales de
+     l'autre. */
+  const photo = participantAvatarOf(props.person);
   const choosing = props.selected !== undefined;
   return (
     <li>
@@ -513,7 +518,12 @@ function PersonRow(props: {
         className="flex w-full items-center gap-3 px-4 py-3 text-left disabled:opacity-50"
         style={{ minHeight: 44 }}
       >
-        <Avatar initials={initialsOf(name)} color={colorForName(name)} size={40} />
+        <Avatar
+          initials={initialsOf(name)}
+          color={colorForName(name)}
+          size={40}
+          {...(photo === undefined ? {} : { src: photo })}
+        />
         <span className="flex-1 truncate text-body font-medium" style={{ color: 'var(--color-ios-ink)' }}>
           {name}
         </span>
