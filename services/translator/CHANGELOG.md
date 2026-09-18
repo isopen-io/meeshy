@@ -1,5 +1,27 @@
 # @meeshy/translator
 
+## 1.60.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - vingt-deux gates cessent de payer un précache qu'ils ne mesurent pas (Refs #6988)
+  - un gate qui ne mesure pas le service worker cesse d'en payer le précache (Refs #6988)
+  - les vingt-sept gates restants servent leur dist par le site unique (Closes #6988)
+  - le serveur des gates ne déguise plus une panne en page (Refs #6988)
+  - l'historique se charge à l'approche du haut, sans que le fil bouge sous les yeux (Closes #6972)
+  - le fil pose deux cartes fantômes sous le dernier post pendant que la page suivante arrive (Refs #6987)
+  - prendre une photo sans connexion vidéo active ne fait plus planter l'app (Refs #6984)
+  - la photo de profil est PEINTE sur les seize surfaces qui n'en servaient aucune — une loi, un site (Closes #6975)
+  - le fil ne se vide plus au défilement — arrêter un lecteur déjà arrêté ne publie plus pendant le rendu (Refs #6977)
+  - le fil charge enfin les messages plus anciens — `before=<id>` et curseur (Refs #6972)
+  - dix requêtes quasi-immuables ne se relisent plus toutes les 30 s
+  - les médias sortent du seau du JSON — le plafond de 200 entrées redevient RÉSERVÉ aux conversations (Closes #6973)
+  - le témoin du diagnostic passe sous tsc — `bun test` ne typait rien (Refs #6971)
+  - la forme du cache du fil n'est plus écrite par six sites, mais par deux (Refs #6972)
+  - un gate de peau qui expire DIT pourquoi — le diagnostic vivait en mémoire et se jetait (Closes #6971)
+
 ## 1.59.0
 
 ### Minor Changes
