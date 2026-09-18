@@ -2,7 +2,7 @@ import type { InfiniteData } from '@tanstack/react-query';
 import * as z from 'zod/mini';
 
 import { unwrap } from './client';
-import { decodePerson, type FriendRequestsDeps, type PersonSummary } from './friend-requests';
+import { FRIENDS_STALE_TIME, decodePerson, type FriendRequestsDeps, type PersonSummary } from './friend-requests';
 import type { ApiResult } from './http';
 
 /**
@@ -59,9 +59,22 @@ export async function loadBlockedUsers(
 
 type PageContext = { readonly pageParam: string | null; readonly signal?: AbortSignal };
 
+/**
+ * **LA FENÊTRE DE LA FAMILLE, jamais une seconde valeur** (#6974) — la clé
+ * vit sous `['friends']` (§ doc-comment du fichier), donc `socket.ts:385` et
+ * `:469` l'invalident avec le reste de la famille : le raisonnement qui
+ * autorise les cinq minutes est celui de `FRIENDS_STALE_TIME`, écrit UNE fois
+ * chez `friend-requests.ts`. Deux littéraux auraient divergé au premier
+ * réglage de l'un des deux.
+ *
+ * Ce que la fenêtre coûte ici est encore plus mince qu'ailleurs : bloquer et
+ * débloquer sont des gestes du PORTEUR, et `friend-actions.ts:182` écrit le
+ * cache au tap. Personne d'autre ne modifie cette liste.
+ */
 export function blockedUsersQueryOptions(deps: FriendRequestsDeps) {
   return {
     queryKey: BLOCKED_USERS_QUERY_KEY,
+    staleTime: FRIENDS_STALE_TIME,
     initialPageParam: null as string | null,
     queryFn: async ({ pageParam, signal }: PageContext) =>
       unwrap(await loadBlockedUsers({ ...deps, cursor: pageParam, ...(signal === undefined ? {} : { signal }) })),

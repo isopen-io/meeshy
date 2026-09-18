@@ -138,9 +138,29 @@ export async function patchAppPreferences(deps: AppPreferencesDeps, patch: Prefe
   return served === null ? { ok: false, status: 0, error: 'Réglages illisibles' } : { ok: true, data: served };
 }
 
+/**
+ * **TRENTE MINUTES DE FRAÎCHEUR** (#6974) — le cas le PLUS net du lot : des
+ * réglages n'ont qu'un auteur, et il est assis devant l'écran. `routes/
+ * settings.tsx:154` les relisait pourtant à chaque retour de focus passé les
+ * 30 s du défaut (`query-client.ts:234`).
+ *
+ * Ce qui autorise la fenêtre : `app-preferences-actions.ts` écrit le cache aux
+ * TROIS temps d'un basculement (`:62` l'avance optimiste, `:69` le retour
+ * arrière sur échec, `:74` la valeur SERVIE) — un réglage changé ici n'attend
+ * jamais une relecture pour s'afficher.
+ *
+ * Ce que la fenêtre coûte : aucun événement socket ne porte
+ * `['me', 'app-preferences']` (vérifié sur `socket.ts`). Un réglage changé
+ * depuis un AUTRE appareil met jusqu'à 30 min à arriver dans cet onglet — ce
+ * qui est exactement la situation où le lecteur vient de le changer lui-même
+ * ailleurs, et a déjà vu le résultat là-bas.
+ */
+export const APP_PREFERENCES_STALE_TIME = 30 * 60_000;
+
 export function appPreferencesQueryOptions(deps: AppPreferencesDeps) {
   return {
     queryKey: APP_PREFERENCES_QUERY_KEY,
+    staleTime: APP_PREFERENCES_STALE_TIME,
     queryFn: async ({ signal }: { readonly signal?: AbortSignal }) =>
       unwrap(await loadAppPreferences({ ...deps, ...withSignal(signal) })),
   };
