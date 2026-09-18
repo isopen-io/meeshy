@@ -65,6 +65,56 @@ const ATTACHMENT_STREAM_PATH = '/api/v1/attachments/file';
  */
 const STORAGE_KEY_PATH_PATTERN = /^\/\d{4}\/\d{2}\//;
 
+/** LA MÊME FORME, SANS SA BARRE INITIALE — telle qu'elle sort d'une route de flux. */
+const STORAGE_KEY_PATTERN = /^\d{4}\/\d{2}\//;
+
+/**
+ * LES DEUX MONTAGES DE LA ROUTE DE FLUX, du plus spécifique au plus court —
+ * l'ordre PORTE la correction : `/api/attachments/file/` est un préfixe de
+ * rien, mais tester le court d'abord ne reconnaîtrait jamais le versionné.
+ * Les deux existent réellement (`registerFileStreamRoute` est monté DEUX fois,
+ * `routes/attachments/index.ts`) et les deux sont en base : 1600 lignes en v1,
+ * 574 sous le montage legacy non versionné (mesuré le 2026-09-18).
+ */
+const STREAM_ROUTE_PREFIXES = ['/api/v1/attachments/file/', '/api/attachments/file/'] as const;
+
+/** Décode UNE fois, sans jamais lever : une clé mal encodée reste servie telle quelle. */
+function decodeOnce(encoded: string): string {
+  try {
+    return decodeURIComponent(encoded);
+  } catch {
+    return encoded;
+  }
+}
+
+/**
+ * LA SEPTIÈME FORME (#7022) — LA ROUTE DE FLUX QUI PORTE SA CLÉ, avec ou sans
+ * hôte. C'est la forme MAJORITAIRE de la base : 1600 références sur 2912
+ * (55 %) sont des `https://gate.meeshy.me/api/v1/attachments/file/<clé>`.
+ *
+ * Elle traversait INCHANGÉE — un test de FORME (« ça commence par https, c'est
+ * donc déjà résolu ») là où il fallait un test de PROVENANCE (« cet hôte est-il
+ * celui que ce déploiement doit interroger ? »). En production l'hôte gravé est
+ * le bon, et le défaut y est donc invisible ; ailleurs — staging, local, les
+ * deux coques Capacitor — la page allait chercher ses médias sur la passerelle
+ * de PRODUCTION, quelle que soit sa base configurée.
+ *
+ * Rendre la CLÉ (et non l'adresse) est ce qui rend la réparation idempotente :
+ * l'appelant la repose par `streamSrc`, donc une adresse déjà juste se
+ * recompose à l'identique, et jamais une SECONDE route ne s'empile.
+ *
+ * Rend `null` quand ce que porte la route n'a pas la forme d'une clé de
+ * stockage — au premier chef les pistes TRADUITES
+ * (`/api/v1/attachments/file/translated/<nom>`, `MessageTranslationService`),
+ * qui vivent hors de l'arborescence datée et qu'une re-base abîmerait.
+ */
+function storageKeyOfStreamRoute(pathname: string): string | null {
+  const prefix = STREAM_ROUTE_PREFIXES.find((candidate) => pathname.startsWith(candidate));
+  if (prefix === undefined) return null;
+  const key = decodeOnce(pathname.slice(prefix.length));
+  return STORAGE_KEY_PATTERN.test(key) ? key : null;
+}
+
 /**
  * LA SIXIÈME FORME (#6388) — UNE ADRESSE QUI PORTE UNE CLÉ, SANS SA ROUTE.
  *
@@ -98,19 +148,23 @@ function storageKeyOfLegacyUrl(fileUrl: string): string | null {
  * console de staging montrait. Le legacy la répare au même titre
  * (`apps/web/utils/attachment-url.ts`, § « chemin de date »).
  *
- * Rend `null` pour tout ce qui n'a pas la forme d'une clé — au premier chef
- * `/api/v1/attachments/file/…`, la route de flux elle-même, qui ne se
- * réécrit pas (c'est en lui posant une SECONDE route qu'on fabrique
- * `…/attachments/file/api/v1/attachments/file/…`, `media-ref.ts`).
+ * UN CHEMIN QUI PORTE DÉJÀ LA ROUTE DE FLUX rend sa CLÉ, pas `null` (#7022) —
+ * c'est `storageKeyOfStreamRoute` qui la lui prend. Le risque que l'ancienne
+ * rédaction voulait écarter (`…/attachments/file/api/v1/attachments/file/…`,
+ * `media-ref.ts`) ne vient PAS de reconnaître la route : il vient de la
+ * CONCATÉNER. En rendant la clé NUE — la route retirée — on la repose une
+ * seule fois par `streamSrc`, donc empiler devient impossible plutôt que
+ * simplement évité, et l'adresse se recompose à l'identique quand elle était
+ * déjà juste.
+ *
+ * Rend `null` pour tout ce qui n'a la forme ni d'une clé ni d'une route qui en
+ * porte une.
  */
 function storageKeyOfPath(pathname: string): string | null {
+  const routed = storageKeyOfStreamRoute(pathname);
+  if (routed !== null) return routed;
   if (!STORAGE_KEY_PATH_PATTERN.test(pathname)) return null;
-  const encoded = pathname.slice(1);
-  try {
-    return decodeURIComponent(encoded);
-  } catch {
-    return encoded;
-  }
+  return decodeOnce(pathname.slice(1));
 }
 
 /** PURE — prend la base en paramètre (même motif que `resolveApiConfig`,
