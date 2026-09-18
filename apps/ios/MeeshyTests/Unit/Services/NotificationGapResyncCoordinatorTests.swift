@@ -160,7 +160,12 @@ final class NotificationGapResyncCoordinatorTests: XCTestCase {
     /// (`NotificationActionHandler.removeDeliveredNotifications(matching:)`),
     /// jamais global.
     func test_meeshyApp_neverClearsEveryDeliveredBanner() throws {
-        let source = try String(contentsOf: meeshyAppSourceURL(), encoding: .utf8)
+        // Les COMMENTAIRES sont dépouillés avant la mesure : celui qui explique
+        // le retrait NOMME la fonction retirée, et une garde par sous-chaîne
+        // lue sur la source brute rougit sur sa propre explication.
+        let source = AppSourceGuard.stripComments(
+            try String(contentsOf: meeshyAppSourceURL(), encoding: .utf8)
+        )
 
         XCTAssertFalse(
             source.contains("removeAllDeliveredNotifications"),
