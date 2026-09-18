@@ -201,10 +201,16 @@ final class FeedPostCardScenePlayerGuardTests: XCTestCase {
             "est inférieure au plafond."
         )
         XCTAssertTrue(
-            block.contains("9.0 / 16.0"),
+            block.contains("?? SceneShape.aspect"),
             "Le 9:16 doit rester le REPLI du rapport NATUREL : sans cadrage à appliquer, la " +
             "carte part du gabarit de composition de la scène avant que SceneCardHeightCap ne " +
-            "le plafonne."
+            "le plafonne — et ce gabarit est la LOI `SceneShape.aspect` (#6904), lue, jamais " +
+            "réécrite."
+        )
+        XCTAssertFalse(
+            block.contains("9.0 / 16.0"),
+            "…et jamais un littéral 9.0 / 16.0 : la carte du fil garde son cadrage d'APERÇU " +
+            "(hors loi par décision du 2026-09-17), mais la valeur du gabarit n'a qu'une source."
         )
     }
 
