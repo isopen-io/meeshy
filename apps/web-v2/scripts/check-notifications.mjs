@@ -47,6 +47,7 @@ import { launchChromium } from './lib/browser.mjs';
 import { startDistServer } from './lib/gate-server.mjs';
 import { contrastOf } from './lib/contrast.mjs';
 import { syncPillOverlap } from './lib/sync-pill-clearance.mjs';
+import { reachAtRest, resumeExclusions } from './lib/reach-at-rest.mjs';
 
 const DIST = new URL('../dist/', import.meta.url).pathname;
 /* Le serveur vit dans `lib/` depuis #6988 : celui qui était écrit ici
@@ -132,35 +133,36 @@ const capture = async (page, name) => {
   if (CAPTURE_DIR !== null) await page.screenshot({ path: join(CAPTURE_DIR, `${name}.png`) });
 };
 
-/** Chaque texte de rangée et chaque contrôle du chrome, à son centre. */
-const reachAtRest = (page) =>
-  page.evaluate(() => {
-    const port = document.getElementById('contenu')?.getBoundingClientRect() ?? null;
-    if (port === null) return { texts: [], controls: [] };
-    const by = (hit) => (hit === null ? 'rien' : hit.closest('.floating-menus') !== null ? 'un disque flottant' : hit.tagName);
-    const texts = [
-      ...document.querySelectorAll(
-        '[data-notification] [data-notification-title], [data-notification] [data-notification-body], [data-notification] [data-notification-time]',
-      ),
-    ].flatMap((el) => {
-      const r = el.getBoundingClientRect();
-      const x = r.left + r.width / 2;
-      const y = r.top + r.height / 2;
-      if (!(y > Math.max(port.top, 0) && y < Math.min(port.bottom, innerHeight) && x > 0 && x < innerWidth)) return [];
-      const hit = document.elementFromPoint(x, y);
-      const row = el.closest('[data-notification]');
-      return [{ text: (el.textContent ?? '').trim().slice(0, 40), ok: hit !== null && row !== null && row.contains(hit), par: by(hit) }];
-    });
-    const controls = [...document.querySelectorAll('main > header a, main > header button, [data-category]')].flatMap((el) => {
-      const r = el.getBoundingClientRect();
-      const x = r.left + r.width / 2;
-      const y = r.top + r.height / 2;
-      if (!(x > 0 && x < innerWidth && y > 0 && y < innerHeight)) return [];
-      const hit = document.elementFromPoint(x, y);
-      return [{ nom: el.getAttribute('aria-label') ?? (el.textContent ?? '').trim(), ok: hit !== null && (hit === el || el.contains(hit)), par: by(hit), hauteur: r.height }];
-    });
-    return { texts, controls };
-  });
+/**
+ * LES CIBLES DU RELEVÉ AU REPOS — la mesure vit dans `lib/reach-at-rest.mjs`,
+ * SITE UNIQUE depuis #7040.
+ *
+ * CE FICHIER ÉTAIT LA SEPTIÈME COPIE, ET LA SEULE À DIVERGER. Il ne portait
+ * pas le `visible()` des six autres mais DEUX prédicats en ligne : les textes
+ * bornés au port de `#contenu`, les contrôles bornés au seul viewport, aucun
+ * des deux ne gardant la taille de la boîte. Trois écarts, tous absorbés par le
+ * site unique sans rien perdre :
+ *
+ *  · le PORT de `#contenu` n'a plus à être écrit : `#contenu` écrête (il
+ *    défile), et la remontée des ancêtres qui écrêtent le trouve d'elle-même —
+ *    une rangée sous la ligne de flottaison s'écarte donc sous le nom
+ *    `écrêté par MAIN#contenu` au lieu de disparaître ;
+ *  · la PORTÉE du toucher — un texte de rangée est atteint dès que le point
+ *    retombe sur SA RANGÉE, pas sur le `<span>` exact — est une QUESTION
+ *    différente de celle des six autres gates, donc un paramètre (`porteeTextes`) et
+ *    non une copie ;
+ *  · la garde de taille, qu'il n'avait pas, lui est rendue.
+ *
+ * Et comme les six autres : un contrôle du chrome dont le centre sort du
+ * viewport est désormais MESURÉ `ok: false`, au lieu d'être silencieusement
+ * retiré du relevé.
+ */
+const REACH = {
+  texts:
+    '[data-notification] [data-notification-title], [data-notification] [data-notification-body], [data-notification] [data-notification-time]',
+  controls: 'main > header a, main > header button, [data-category]',
+  porteeTextes: '[data-notification]',
+};
 
 const browser = await launchChromium();
 try {
@@ -276,12 +278,12 @@ try {
       check((await countText(page)) === '3 non lues', `${label} : l'en-tête dit « 3 non lues » (« ${await countText(page)} »)`);
 
       // ------------------------------------------------ 3. atteignabilité au repos
-      const reach = await reachAtRest(page);
+      const reach = await reachAtRest(page, REACH);
       const stolen = reach.texts.filter((t) => !t.ok);
       check(reach.texts.length >= 6, `${label} : au moins six textes de rangée mesurés au repos (${reach.texts.length})`);
       check(stolen.length === 0, `${label} : aucun texte de rangée n'est volé à son centre — ${JSON.stringify(stolen)}`);
       const blocked = reach.controls.filter((c) => !c.ok);
-      check(reach.controls.length >= 4, `${label} : au moins quatre contrôles du chrome mesurés (${reach.controls.length})`);
+      check(reach.controls.length >= 4, `${label} : au moins quatre contrôles du chrome mesurés (${reach.controls.length}, ${resumeExclusions(reach)})`);
       check(blocked.length === 0, `${label} : chaque contrôle du chrome retombe sur lui-même — ${JSON.stringify(blocked)}`);
       const small = reach.controls.filter((c) => c.hauteur < TAP_FLOOR);
       check(small.length === 0, `${label} : chaque contrôle du chrome fait au moins ${TAP_FLOOR} de haut — ${JSON.stringify(small)}`);
