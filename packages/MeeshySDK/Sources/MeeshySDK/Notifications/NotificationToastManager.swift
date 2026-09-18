@@ -95,6 +95,19 @@ public final class NotificationToastManager: ObservableObject {
     /// toggle côté in-app.
     public var hapticPlayer: (@MainActor () -> Void)?
 
+    /// Retrait des bannières DÉJÀ LIVRÉES du fil qu'on vient de consommer
+    /// (#6999), injecté par la cible app — même motif que `hapticPlayer` : la
+    /// couture `DeliveredBannerCenter` et le budget d'arrière-plan qui
+    /// l'entoure vivent dans `NotificationActionHandler`, pas ici.
+    ///
+    /// Sans ce relais, ouvrir une conversation depuis la liste in-app laissait
+    /// ses bannières dans le centre de notifications : l'app savait le contenu
+    /// consommé partout SAUF là où l'utilisateur allait le relire.
+    ///
+    /// `nil` en test et dans toute cible qui ne l'a pas câblé — la
+    /// consommation reste correcte, seule la pièce système manque.
+    public var deliveredBannerPurger: (@MainActor (NotificationRef) -> Void)?
+
     /// Présentation Local-First (nom renommé + emoji favori) d'une conversation
     /// pour les toasts in-app. Le SDK ne peut pas lire le snapshot local des
     /// conversations de l'app, donc la cible app injecte une closure de pull —
@@ -248,14 +261,7 @@ public final class NotificationToastManager: ObservableObject {
             dismissToast()
         }
 
-        // Le contenu de la conversation est consommé : ses notifications ne
-        // doivent plus apparaître comme non lues. On informe d'abord la liste
-        // in-app (mise à jour optimiste instantanée), puis on marque côté serveur
-        // (qui ré-émet `notification:counts` → la cloche/badge se recalent), et
-        // enfin on rafraîchit le compteur pour récupérer la valeur autoritative.
-        conversationNotificationsRead.send(conversationId)
-        applyReadToCache(.conversation(id: conversationId))
-        markConversationNotificationsRead(conversationId)
+        consumeConversationLocally(conversationId)
     }
 
     /// Variante de `onConversationOpened` pour un marquage SANS ouverture : la
@@ -269,9 +275,27 @@ public final class NotificationToastManager: ObservableObject {
             dismissToast()
         }
 
+        consumeConversationLocally(conversationId)
+    }
+
+    /// Ce qu'une conversation consommée déclenche, en UN site (#6999).
+    ///
+    /// On informe d'abord la liste in-app (mise à jour optimiste instantanée),
+    /// puis on marque côté serveur (qui ré-émet `notification:counts` → la
+    /// cloche et le badge se recalent, le compteur étant ensuite rafraîchi),
+    /// et enfin — c'est le geste qui MANQUAIT — on retire du centre iOS les
+    /// bannières du fil : le contenu était réputé consommé partout sauf là où
+    /// l'utilisateur allait le relire.
+    ///
+    /// Site unique parce que ses deux appelants (`onConversationOpened` et
+    /// `onConversationMarkedRead`) avaient déjà divergé une fois : le second
+    /// est né en copiant le premier, et tout ce qu'on ajoute à l'un doit être
+    /// ajouté à l'autre pour rester vrai.
+    private func consumeConversationLocally(_ conversationId: String) {
         conversationNotificationsRead.send(conversationId)
         applyReadToCache(.conversation(id: conversationId))
         markConversationNotificationsRead(conversationId)
+        deliveredBannerPurger?(.conversation(id: conversationId))
     }
 
     /// Pendant de `onConversationOpened` pour un contenu social : story, statut
@@ -293,9 +317,7 @@ public final class NotificationToastManager: ObservableObject {
             dismissToast()
         }
 
-        postNotificationsRead.send(postId)
-        applyReadToCache(.post(id: postId))
-        markPostNotificationsRead(postId)
+        consumePostLocally(postId)
     }
 
     /// Jumelle de `onConversationMarkedRead` pour un POST : consomme ses
@@ -311,9 +333,16 @@ public final class NotificationToastManager: ObservableObject {
             dismissToast()
         }
 
+        consumePostLocally(postId)
+    }
+
+    /// Le pendant de `consumeConversationLocally` pour un post — même raison
+    /// d'être un site unique, mêmes deux appelants jumeaux.
+    private func consumePostLocally(_ postId: String) {
         postNotificationsRead.send(postId)
         applyReadToCache(.post(id: postId))
         markPostNotificationsRead(postId)
+        deliveredBannerPurger?(.post(id: postId))
     }
 
     /// Relâche la déclaration de contenu actif — appelé à la fermeture du

@@ -234,6 +234,13 @@ struct MeeshyApp: App {
                     NotificationToastManager.shared.hapticPlayer = {
                         HapticFeedback.light()
                     }
+                    // #6999 — un fil consommé quitte le centre iOS. Le SDK sait
+                    // CE QUI est consommé ; la couture `UNUserNotificationCenter`
+                    // et le budget d'arrière-plan qui l'entoure vivent
+                    // app-side, dans `NotificationActionHandler`.
+                    NotificationToastManager.shared.deliveredBannerPurger = { ref in
+                        NotificationActionHandler.removeDeliveredBanners(forThreadOf: ref)
+                    }
                     // Révocation par socket (`notification:deleted`) : la
                     // bannière déjà livrée suit la suppression — même atome de
                     // retrait que le push de contrôle `notification_revoked`.

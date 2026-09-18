@@ -12,6 +12,40 @@ import os
 /// des deux gagne un cas.
 public typealias NotificationRef = NotificationReadScope
 
+/// Le `threadIdentifier` sous lequel iOS REGROUPE les bannières — celui que
+/// l'extension de service pose sur chaque push (`MeeshyNotificationExtension`,
+/// `applyThreading(to:)`).
+///
+/// C'est la seule clé qui permette de retirer du centre de notifications
+/// TOUTES les bannières d'un fil qu'on vient de consommer. Les quick-actions
+/// retiraient par `userInfo["conversationId"]`, ce qui rate toute bannière dont
+/// la charge n'a pas porté la clé alors qu'iOS l'a bien rangée dans le fil, et
+/// l'ouverture d'une conversation ne retirait RIEN.
+///
+/// **Sa jumelle vit dans la NSE, et ne peut pas appeler celle-ci** : une
+/// extension de service ne lie pas MeeshySDK. La garde
+/// `NotificationConsumptionWiringTests` relit donc la source de la NSE pour que
+/// les deux formes ne divergent jamais en silence.
+public enum NotificationThreadIdentifier {
+    public static func conversation(_ id: String) -> String { "conversation:\(id)" }
+    public static func post(_ id: String) -> String { "post:\(id)" }
+
+    /// Le fil d'une référence de consommation — `nil` quand la référence n'en
+    /// désigne aucun : une notification isolée (`.id`), une catégorie, la
+    /// boîte entière. Ne JAMAIS y répondre par un repli : retirer « toutes les
+    /// bannières » est exactement le geste que #7000 vient de supprimer.
+    public static func resolve(for ref: NotificationRef) -> String? {
+        switch ref {
+        case .conversation(let id):
+            return id.isEmpty ? nil : conversation(id)
+        case .post(let id):
+            return id.isEmpty ? nil : post(id)
+        case .notification, .types, .all:
+            return nil
+        }
+    }
+}
+
 /// Les marquages « lu » dont CET appareil est l'auteur, et pour lesquels le
 /// compteur a DÉJÀ été décrémenté localement.
 ///

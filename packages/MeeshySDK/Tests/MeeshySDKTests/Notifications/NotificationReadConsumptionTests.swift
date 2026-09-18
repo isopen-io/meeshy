@@ -24,8 +24,44 @@ final class NotificationReadConsumptionTests: XCTestCase {
 
     override func tearDown() {
         NotificationToastManager.shared.selfReadLedger.removeAll()
+        NotificationToastManager.shared.deliveredBannerPurger = nil
         NotificationCoordinator.shared.setInAppNotificationUnread(0)
         super.tearDown()
+    }
+
+    // MARK: - Le fil consommé quitte le centre iOS (#6999)
+
+    func test_consumingAConversation_purgesItsDeliveredBanners() {
+        var purged: [NotificationRef] = []
+        NotificationToastManager.shared.deliveredBannerPurger = { purged.append($0) }
+
+        NotificationToastManager.shared.onConversationMarkedRead("c-1")
+
+        XCTAssertEqual(purged, [.conversation(id: "c-1")])
+    }
+
+    func test_openingAConversation_purgesItsDeliveredBanners() {
+        var purged: [NotificationRef] = []
+        NotificationToastManager.shared.deliveredBannerPurger = { purged.append($0) }
+        NotificationToastManager.shared.onConversationClosed("c-2")
+
+        NotificationToastManager.shared.onConversationOpened("c-2")
+
+        XCTAssertEqual(
+            purged, [.conversation(id: "c-2")],
+            "ouvrir une conversation depuis la liste in-app laissait ses bannières dans le centre iOS : " +
+            "le contenu était réputé consommé partout SAUF là où l'utilisateur allait le relire"
+        )
+        NotificationToastManager.shared.onConversationClosed("c-2")
+    }
+
+    func test_consumingAPost_purgesItsDeliveredBanners() {
+        var purged: [NotificationRef] = []
+        NotificationToastManager.shared.deliveredBannerPurger = { purged.append($0) }
+
+        NotificationToastManager.shared.onPostConsumed("p-3")
+
+        XCTAssertEqual(purged, [.post(id: "p-3")])
     }
 
     // MARK: - L'écho de notre propre marquage
