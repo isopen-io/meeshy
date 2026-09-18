@@ -1,7 +1,9 @@
 import type { CSSProperties } from 'react';
 
-import { Glyph, GlyphSvg } from '@/components/glyph';
+import { GlyphSvg } from '@/components/glyph';
 import { MEDIA_TRANSPORT_GLYPHS } from '@/components/glyphs-media-transport';
+import { MediaUnavailable } from '@/components/media-unavailable';
+import { isMediaAbsent, noteMediaAbsent } from '@/lib/api/media-absent';
 import { feedMediaKindOf } from '@/lib/feed/layout';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -20,21 +22,17 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
  * dimension 1) qui n'a pas à voyager.
  */
 
-/** Le média d'une story dont la source est INEXPLOITABLE (absente, ou dont le
- * téléchargement a échoué) — un état DESSINÉ, jamais un `<img src="">` : le
- * navigateur y peint son icône de lien brisé sur fond noir et redemande le
- * document courant au passage. Mesuré sur `story-image-light.png` du premier
- * jet (§ A de la revue). */
-export function MediaUnavailable() {
-  return (
-    <div className="grid gap-2 justify-items-center px-8 text-center">
-      <Glyph name="image" size={38} style={{ color: 'rgba(255,255,255,0.7)' }} />
-      <p className="text-body" style={{ color: 'rgba(255,255,255,0.75)' }}>
-        Média indisponible
-      </p>
-    </div>
-  );
-}
+/**
+ * L'ÉTAT DESSINÉ A DÉMÉNAGÉ (#7022) — `components/media-unavailable.tsx`.
+ *
+ * Il vivait ici, et la story était la SEULE des trois surfaces à en avoir un :
+ * le post et le message n'avaient rien. Le porteur a tranché que les trois
+ * doivent dégrader proprement ; un état dessiné par surface aurait fait trois
+ * jumelles, dont deux à écrire — et son libellé était ici en dur, donc français
+ * pour les sept langues. Le ré-export garde l'ancien nom joignable, sans
+ * seconde définition.
+ */
+export { MediaUnavailable } from '@/components/media-unavailable';
 
 export type StoryCaption = {
   readonly text: string;
@@ -89,7 +87,32 @@ export function StoryMediaLayer({
   onFailed,
   onDurationKnown,
 }: StoryMediaLayerProps) {
-  if (showsMedia) {
+  /**
+   * LA MÉMOIRE DE L'ÉCHEC, ET NON SEULEMENT SON ÉTAT (#7022). `showsMedia`
+   * arrive de `story.tsx`, où il dérive de `mediaFailed` — un état qui se
+   * remet à `false` à chaque changement de story (`story.tsx:426`). Rouvrir la
+   * même story, ou y revenir d'un retour en arrière dans le carrousel, rejoue
+   * donc la requête morte et son 404. Le registre, lui, est à l'échelle de la
+   * session : une source qu'on SAIT absente ne se redemande jamais.
+   *
+   * Le `&&` est dans ce sens-là parce que les deux savoirs sont DISJOINTS :
+   * l'hôte sait ce que cette story-ci vient de faire, le registre sait ce que
+   * TOUTES les surfaces ont appris. Aucun ne subsume l'autre.
+   */
+
+  /**
+   * L'ÉCHEC S'ÉCRIT AUX DEUX ENDROITS. Le registre porte la mémoire longue ;
+   * `onFailed` reste appelé parce qu'il fait DEUX choses de plus chez l'hôte —
+   * marquer la diapositive prête (sans quoi la progression resterait bloquée à
+   * zéro et la story ne tournerait jamais) et basculer sa propre vue.
+   * Enregistrer sans prévenir l'hôte figerait le carrousel sur une story morte.
+   */
+  const échec = (): void => {
+    noteMediaAbsent(mediaSrc);
+    onFailed();
+  };
+
+  if (showsMedia && !isMediaAbsent(mediaSrc)) {
     /* `feedMediaKindOf` — LA LOI DÉJÀ PARTAGÉE par le fil
        (`lib/feed/layout.ts:43`), jamais un second test de préfixe MIME : deux
        lois qui classent des médias divergent au premier format ajouté. Elle
@@ -154,7 +177,7 @@ export function StoryMediaLayer({
             const seconds = el.duration;
             if (Number.isFinite(seconds) && seconds > 0) onDurationKnown(seconds * 1000);
           }}
-          onError={onFailed}
+          onError={échec}
         />
       );
     }
@@ -166,7 +189,7 @@ export function StoryMediaLayer({
         alt=""
         className="absolute inset-0 size-full object-cover"
         onLoad={onReady}
-        onError={onFailed}
+        onError={échec}
       />
     );
   }
@@ -174,7 +197,10 @@ export function StoryMediaLayer({
   return (
     <div className="absolute inset-0 grid place-items-center px-8" style={background}>
       {hasMedia ? (
-        <MediaUnavailable />
+        /* `over-media` — la scène d'une story est sombre par construction
+           (fond calculé, image plein cadre) : les jetons du thème y
+           disparaîtraient en clair comme en sombre. */
+        <MediaUnavailable language={currentInterfaceLanguage()} />
       ) : caption !== null ? (
         <p
           className="text-center text-title font-semibold"
