@@ -895,3 +895,164 @@ describe('ScenePlayer — l’audio non-fond suit lecture et muet (T-E11)', () =
     }
   });
 });
+
+// T3 (#6903) — le mode `reel` accepte une durée de REPLI de l'hôte et
+// signale chaque tour de boucle (`onLoop`), pour une scène SANS objet
+// temporisé (un réel composé par le studio : fond vidéo + texte, sans
+// `timing` ni `timelineDuration`).
+describe('ScenePlayer — mode reel, l’horloge d’une scène SANS objet temporisé (T3, #6903)', () => {
+  function withMediaStubs<T>(run: () => T): T {
+    const originalPlay = window.HTMLMediaElement.prototype.play;
+    const originalPause = window.HTMLMediaElement.prototype.pause;
+    window.HTMLMediaElement.prototype.play = function play(this: HTMLMediaElement) {
+      return Promise.resolve();
+    };
+    window.HTMLMediaElement.prototype.pause = function pause(this: HTMLMediaElement) {
+      /* no-op */
+    };
+    try {
+      return run();
+    } finally {
+      window.HTMLMediaElement.prototype.play = originalPlay;
+      window.HTMLMediaElement.prototype.pause = originalPause;
+    }
+  }
+
+  const videoOnlyDoc = (overrides?: Record<string, unknown>) => sceneDocumentOf([fond({ postMediaId: 'vid', mediaType: 'video/webm' })], overrides);
+
+  test('(a) fallbackDurationSeconds ⇒ onTime avance, ≈1,5 après 1,5 s de trames', () => {
+    withMediaStubs(() =>
+      withRafQueue((flushTo) => {
+        const times: number[] = [];
+        mount(
+          <ScenePlayer
+            document={videoOnlyDoc()}
+            sceneIndex={0}
+            mode="reel"
+            playing
+            carrier={carrier}
+            preferredLanguages={['fr']}
+            fallbackDurationSeconds={3}
+            onTime={(t) => times.push(t)}
+          />,
+        );
+        flushTo(0);
+        flushTo(1500);
+        expect(times.length).toBeGreaterThan(0);
+        expect(times[times.length - 1]).toBeCloseTo(1.5, 1);
+      }),
+    );
+  });
+
+  test('(b) le wrap déclenche onLoop UNE fois ; onEnded jamais — le mode boucle', () => {
+    withMediaStubs(() =>
+      withRafQueue((flushTo) => {
+        let loops = 0;
+        let ended = 0;
+        const times: number[] = [];
+        mount(
+          <ScenePlayer
+            document={videoOnlyDoc()}
+            sceneIndex={0}
+            mode="reel"
+            playing
+            carrier={carrier}
+            preferredLanguages={['fr']}
+            fallbackDurationSeconds={3}
+            onTime={(t) => times.push(t)}
+            onLoop={() => (loops += 1)}
+            onEnded={() => (ended += 1)}
+          />,
+        );
+        flushTo(0);
+        flushTo(3100);
+        expect(loops).toBe(1);
+        expect(ended).toBe(0);
+        expect(times[times.length - 1]).toBeLessThan(1);
+      }),
+    );
+  });
+
+  test('(c) mode="card" ⇒ requestAnimationFrame jamais appelé, même avec un repli (T-E5 CONSERVÉ)', () => {
+    let called = 0;
+    const originalRaf = window.requestAnimationFrame;
+    window.requestAnimationFrame = ((_cb: FrameRequestCallback) => {
+      called += 1;
+      return 0;
+    }) as typeof window.requestAnimationFrame;
+    try {
+      withMediaStubs(() =>
+        mount(
+          <ScenePlayer document={videoOnlyDoc()} sceneIndex={0} mode="card" playing carrier={carrier} preferredLanguages={['fr']} fallbackDurationSeconds={3} />,
+        ),
+      );
+      expect(called).toBe(0);
+    } finally {
+      window.requestAnimationFrame = originalRaf;
+    }
+  });
+
+  test('(d) mode="reel" SANS repli ni objet temporisé ⇒ requestAnimationFrame jamais appelé', () => {
+    let called = 0;
+    const originalRaf = window.requestAnimationFrame;
+    window.requestAnimationFrame = ((_cb: FrameRequestCallback) => {
+      called += 1;
+      return 0;
+    }) as typeof window.requestAnimationFrame;
+    try {
+      withMediaStubs(() => mount(<ScenePlayer document={videoOnlyDoc()} sceneIndex={0} mode="reel" playing carrier={carrier} preferredLanguages={['fr']} />));
+      expect(called).toBe(0);
+    } finally {
+      window.requestAnimationFrame = originalRaf;
+    }
+  });
+
+  test('(e) timelineDuration DÉCLARÉE prime le repli de l’hôte', () => {
+    withMediaStubs(() =>
+      withRafQueue((flushTo) => {
+        let loops = 0;
+        mount(
+          <ScenePlayer
+            document={videoOnlyDoc({ timelineDuration: 2 })}
+            sceneIndex={0}
+            mode="reel"
+            playing
+            carrier={carrier}
+            preferredLanguages={['fr']}
+            fallbackDurationSeconds={9}
+            onLoop={() => (loops += 1)}
+          />,
+        );
+        flushTo(0);
+        flushTo(2100);
+        expect(loops).toBe(1);
+      }),
+    );
+  });
+
+  test('(f) mode="story" (le plein écran #6902) avec timelineDuration ⇒ onEnded UNE fois, onLoop jamais — inchangé', () => {
+    withRafQueue((flushTo) => {
+      let ended = 0;
+      let loops = 0;
+      mount(
+        <ScenePlayer
+          document={sceneDocumentOf(
+            [textObject({ timing: { start: 0, keyframes: [{ time: 0, x: 0.1, y: 0.1 }, { time: 1, x: 0.9, y: 0.9 }] } })],
+            { timelineDuration: 2 },
+          )}
+          sceneIndex={0}
+          mode="story"
+          playing
+          carrier={carrier}
+          preferredLanguages={['fr']}
+          onEnded={() => (ended += 1)}
+          onLoop={() => (loops += 1)}
+        />,
+      );
+      flushTo(0);
+      flushTo(2100);
+      expect(ended).toBe(1);
+      expect(loops).toBe(0);
+    });
+  });
+});
