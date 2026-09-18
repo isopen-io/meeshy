@@ -344,7 +344,10 @@ public enum StoryExportIntro {
         )
         guard writer.canAdd(input) else { throw IntroError.writerRejectedInput }
         writer.add(input)
-        writer.startWriting()
+        // Même règle que la jumelle `StoryExporter` : `startSession` après un
+        // `startWriting` refusé lève un `NSInternalInconsistencyException`
+        // qu'aucun `do/catch` Swift ne rattrape (#7004).
+        guard writer.startWriting() else { throw IntroError.writerCannotStart(writer.error) }
         writer.startSession(atSourceTime: .zero)
 
         guard let buffer = pixelBuffer(from: image, size: size) else {
@@ -512,6 +515,10 @@ public enum StoryExportIntro {
 
     public enum IntroError: Error {
         case writerRejectedInput
+        /// `startWriting()` a refusé de commencer — disque plein, chemin de
+        /// sortie occupé. Distincte d'`encodingFailed`, qui dit qu'un encodage
+        /// COMMENCÉ n'a pas abouti (#7004).
+        case writerCannotStart(Error?)
         case pixelBufferCreationFailed
         case encodingFailed(Error?)
     }
