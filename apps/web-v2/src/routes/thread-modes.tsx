@@ -144,6 +144,7 @@ export function ThreadModes({
   onPickLanguage,
   onReact,
   typists,
+  typistAvatarOf,
   accent = 'var(--color-ios-brand)',
   older,
 }: {
@@ -214,6 +215,15 @@ export function ThreadModes({
    * ICI, pour que la loi reste PARTAGÉE avec les autres surfaces (bouton
    * « revenir en bas », Rivière). */
   readonly typists: readonly TypingEntry[];
+  /**
+   * LA PHOTO DU FRAPPEUR, résolue par l'hôte (#6985). `TypingEntry` n'en porte
+   * aucune, et `typing:start` non plus — élargir le fil dupliquerait
+   * l'information à chaque frappe de chaque personne, alors que l'hôte a déjà
+   * ses participants en cache. `undefined` ⇒ la cellule rend ses initiales,
+   * comme avant : une surface sans roster (la lecture souveraine de
+   * l'administration, `typists: []`) n'a rien à fournir.
+   */
+  readonly typistAvatarOf?: (userId: string) => string | undefined;
   /** La teinte de la conversation — `--color-ios-brand` à défaut. SEULE la
    * cellule de frappe la lit, et elle ne monte pas sans frappeur : une surface
    * sans temps réel (`typists: []`) n'a donc rien à en dire. */
@@ -528,7 +538,12 @@ export function ThreadModes({
           Focal/Script (le mode PAR DÉFAUT, D-7) rendent la pastille + les
           trois points SANS capsule ni libellé visible, miroir
           `TypingIndicatorBubble(isFlat: readingMode != .bubbles)`. */}
-      <TypingRosterCell typists={typists} accent={accent} flat={usesFlatRow(mode)} />
+      <TypingRosterCell
+        typists={typists}
+        accent={accent}
+        flat={usesFlatRow(mode)}
+        {...(typistAvatarOf === undefined ? {} : { avatarOf: typistAvatarOf })}
+      />
     </>
   );
 }
