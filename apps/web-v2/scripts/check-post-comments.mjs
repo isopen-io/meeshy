@@ -478,6 +478,17 @@ async function runScheme({ browser, base, scheme, check }) {
     say(`et retire les gestes de la rangée en cours d'édition — on ne supprime pas ce qu'on corrige (${enEdition.gestes})`),
   );
   check(enEdition.save && enEdition.cancel, say('le champ offre « Enregistrer » et « Annuler »'));
+  /* LE FOCUS SUIT LE GESTE — happy-dom a un modèle de focus approximatif ;
+     seul un moteur réel dit où le curseur a ATTERRI après que « Modifier » a
+     démonté le bouton qu'on venait d'actionner. */
+  const focus = await page.evaluate(() => ({
+    champ: document.activeElement?.getAttribute('data-comment-edit-field') ?? null,
+    curseur: document.activeElement?.selectionStart ?? null,
+  }));
+  check(
+    focus.champ === MINE && focus.curseur === COMMENTS[0].content.length,
+    say(`« Modifier » DONNE le focus au champ, curseur à la fin — ${JSON.stringify(focus)}`),
+  );
   await capture(page, `feed.post-comment-edit.${scheme}`);
 
   await page.click(`[data-comment-row="${MINE}"] [data-comment-edit-cancel]`);

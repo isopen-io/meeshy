@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Avatar } from '@/components/avatar';
 import { GlyphSvg } from '@/components/glyph';
@@ -208,10 +208,32 @@ function EditForm({
   const [draft, setDraft] = useState(comment.content);
   const trimmed = draft.trim();
   const submittable = trimmed !== '' && trimmed.length <= COMMENT_MAX_LENGTH;
+  const fieldRef = useRef<HTMLTextAreaElement>(null);
+
+  /**
+   * LE FOCUS SUIT LE GESTE — « Modifier » démonte la barre entière, donc le
+   * bouton qu'on vient d'actionner : sans cette reprise, le focus retombe sur
+   * `<body>` et qui navigue au clavier ou au lecteur d'écran perd sa place,
+   * devant retraverser la page pour atteindre le champ qu'il vient d'ouvrir.
+   * Même discipline que le composeur quand un refus lui rend son texte
+   * (`comment-composer.tsx:59`).
+   *
+   * LE CURSEUR VA À LA FIN, jamais sur une sélection totale : on ouvre ce
+   * champ pour corriger une lettre, et la première frappe effacerait tout le
+   * commentaire. `setSelectionRange` est gardé — un environnement de test
+   * peut ne pas l'offrir, et le focus vaut mieux que rien.
+   */
+  useEffect(() => {
+    const field = fieldRef.current;
+    if (field === null) return;
+    field.focus();
+    field.setSelectionRange?.(field.value.length, field.value.length);
+  }, []);
 
   return (
     <div className="flex flex-col gap-2 pt-1">
       <textarea
+        ref={fieldRef}
         data-comment-edit-field={comment.id}
         aria-label={translate(language, 'comments.edit.label')}
         value={draft}

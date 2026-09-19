@@ -247,6 +247,30 @@ describe('les gestes d’une rangée — offerts là où ils aboutissent, jamais
     expect(encreDe('edit')).not.toBe('var(--color-error)');
   });
 
+  /**
+   * **LE BOUTON QUI S'EFFACE EMPORTE LE FOCUS AVEC LUI.** « Modifier » démonte
+   * la barre de gestes ENTIÈRE, celui qu'on vient d'actionner compris : sans
+   * reprise, le focus retombe sur `<body>` et le lecteur au clavier ou au
+   * lecteur d'écran perd sa place — il doit retraverser la page pour trouver
+   * le champ qu'il vient d'ouvrir (WCAG 2.4.3). Le composeur tient déjà cette
+   * discipline sur le même écran (`comment-composer.tsx:59`,
+   * `fieldRef.current?.focus()` quand le texte revient au lecteur).
+   *
+   * Et le CURSEUR va à la FIN : une sélection totale ferait effacer tout le
+   * commentaire à la première frappe de qui voulait corriger une lettre.
+   */
+  test('« Modifier » DONNE le focus au champ, curseur à la fin — le geste ne perd pas sa place', async () => {
+    const host = await monter(liste({ comments: [comment({ content: 'Bonjour', author: MIEN })], gestures: gestesDe() }));
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-comment-gesture="edit"]')?.click());
+    const champ = host.querySelector<HTMLTextAreaElement>('[data-comment-edit-field]');
+    expect(champ).not.toBeNull();
+    /* L'ATTRIBUT plutôt que l'élément : une comparaison d'objets ferait
+       déverser le `window` entier de happy-dom dans le rapport d'échec, et le
+       témoin ne dirait plus ce qu'il mesure. */
+    expect(document.activeElement?.getAttribute('data-comment-edit-field')).toBe('c1');
+    expect(champ?.selectionStart).toBe('Bonjour'.length);
+  });
+
   test('SANS rappels — visiteur anonyme — aucune rangée n’offre de bouton (loi 4)', async () => {
     const host = await monter(liste({ comments: [comment({ author: MIEN })] }));
     expect(host.querySelector('[data-comment-gesture]')).toBeNull();
