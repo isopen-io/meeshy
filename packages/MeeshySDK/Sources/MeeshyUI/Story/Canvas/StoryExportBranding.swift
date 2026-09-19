@@ -247,6 +247,7 @@ public enum StoryExportBranding {
         if let sv = try await storyAsset.loadTracks(withMediaType: .video).first {
             try storyVideo.insertTimeRange(storyRange, of: sv, at: storyStart)
         }
+        let storyPorteDuSon = try await storyAsset.loadTracks(withMediaType: .audio).first != nil
         if let sa = try await storyAsset.loadTracks(withMediaType: .audio).first {
             try storyAudioTrack.insertTimeRange(storyRange, of: sa, at: storyStart)
         } else {
@@ -331,9 +332,22 @@ public enum StoryExportBranding {
         // les oublier livrerait une vidéo muette. Ce fil-là court sous les
         // deux branches.
         guard appendsBrandOutro else {
-            storyAudioParams.setVolumeRamp(fromStartVolume: 1, toEndVolume: 1,
-                                           timeRange: CMTimeRange(start: .zero, duration: baseEnd))
-            audioParameters.append(storyAudioParams)
+            // UNE PISTE AUDIO PUREMENT VIDE FAIT ÉCHOUER L'EXPORT — mesuré :
+            // `AVFoundationErrorDomain -11838 « Operation Stopped »` sur une
+            // scène muette, attrapé par `test_wrap_sansMarque_rendLaStorySeule`.
+            //
+            // Le silence explicite posé plus haut existe pour que la piste ne
+            // s'arrête pas AVANT le jingle de fermeture (`:253-256`). Sans
+            // carte de fin, il n'y a plus de jingle — donc plus rien à
+            // compenser, et la piste ne contient QUE du vide. On la retire.
+            //
+            // Le chemin marqué, lui, n'est pas concerné : le jingle y apporte
+            // toujours de l'audio réel.
+            if storyPorteDuSon {
+                audioParameters.append(storyAudioParams)
+            } else {
+                composition.removeTrack(storyAudioTrack)
+            }
             return try await assemble(composition: composition,
                                       layers: [storyLayer, introLayer].compactMap { $0 },
                                       totalDuration: baseEnd,
