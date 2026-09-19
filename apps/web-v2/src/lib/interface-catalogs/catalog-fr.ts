@@ -538,6 +538,13 @@ const fr = {
   'userProfile.offline.body': 'Le profil s’affichera à la reconnexion.',
   'userProfile.posts.empty': 'Aucune publication',
   'userProfile.posts.emptyBody': 'Rien de public à lire pour l’instant.',
+  /* LE VIDE D'UN FILTRE N'EST PAS LE VIDE D'UN COMPTE (miroir de
+     `filteredEmptyState`, `ProfileUserPostsList.swift:498-510`) : dire
+     « Aucune publication » à qui vient de toucher « Réels » est FAUX — le
+     compte publie, c'est le filtre qui ne trouve rien ICI. */
+  'userProfile.posts.emptyPosts': 'Aucun poste',
+  'userProfile.posts.emptyReels': 'Aucun réel',
+  'userProfile.posts.emptyFilter': 'Touchez à nouveau la tuile pour tout revoir.',
   'userProfile.posts.error': 'Impossible de charger les publications',
   'userProfile.posts.loadMore': 'Charger plus',
   'userProfile.posts.loading': 'Chargement…',

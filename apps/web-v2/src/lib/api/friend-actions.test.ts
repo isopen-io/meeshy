@@ -304,6 +304,21 @@ describe('bloquer', () => {
     expect(h.queryClient.getQueryData<BlockedData>(BLOCKED_USERS_QUERY_KEY)?.pages[0]?.users.map((u) => u.id)).toEqual(['u-grace']);
   });
 
+  /* LE PANIER N'A JAMAIS ÉTÉ LU — et c'est le cas que les trois témoins
+     voisins ne pouvaient pas voir : ils SÈMENT tous le cache avant le geste.
+     Sans amorce, `setQueryData` recevait `undefined` et n'écrivait rien :
+     « Bloquer » partait sur le réseau sans que l'écran bouge. */
+  test('un panier JAMAIS LU s’amorce au geste, et un refus le rend à son néant', async () => {
+    const h = harness(refused);
+    expect(h.queryClient.getQueryData(BLOCKED_USERS_QUERY_KEY)).toBeUndefined();
+
+    const outcome = performBlock({ person: ada, deps: h.deps });
+    expect(h.queryClient.getQueryData<BlockedData>(BLOCKED_USERS_QUERY_KEY)?.pages[0]?.users.map((u) => u.id)).toEqual(['u-ada']);
+    h.release();
+    expect(await outcome).toBe('failed');
+    expect(h.queryClient.getQueryData(BLOCKED_USERS_QUERY_KEY)).toBeUndefined();
+  });
+
   test('un second geste PENDANT le vol ne produit PAS une seconde requête', async () => {
     const h = harness(ok(null));
     h.queryClient.setQueryData<BlockedData>(BLOCKED_USERS_QUERY_KEY, { pages: [{ users: [], nextCursor: null }], pageParams: [null] });

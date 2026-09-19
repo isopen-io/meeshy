@@ -90,8 +90,20 @@ const snapshotOf = (queryClient: QueryClient, keys: readonly QueryKey[]): Snapsh
 const relationalSnapshot = (queryClient: QueryClient, userId: string, buckets: readonly QueryKey[]): Snapshot =>
   snapshotOf(queryClient, [...buckets, ...profileKeysFor(queryClient, userId)]);
 
+/**
+ * **RENDRE UNE ENTRÉE À SON NÉANT DEMANDE `removeQueries`, PAS `setQueryData`**
+ * (revue #7083) — `setQueryData(key, undefined)` N'EFFACE RIEN : `undefined`
+ * signifie « ne pas mettre à jour ». Un geste qui AMORCE un panier jamais lu
+ * (`withRequestFirst`, `withBlockedFirst`) laissait donc son amorce derrière
+ * lui quand la passerelle refusait — une liste d'UNE ligne, fabriquée par un
+ * geste qui a échoué, et présentée comme la liste entière. L'invalidation qui
+ * suit la rattrapait seulement si un observateur était monté.
+ */
 const restore = (queryClient: QueryClient, snapshot: Snapshot): void => {
-  snapshot.forEach(([key, data]) => queryClient.setQueryData(key, data));
+  snapshot.forEach(([key, data]) => {
+    if (data === undefined) queryClient.removeQueries({ queryKey: key, exact: true });
+    else queryClient.setQueryData(key, data);
+  });
   void queryClient.invalidateQueries({ queryKey: FRIENDS_QUERY_PREFIX });
 };
 
@@ -212,11 +224,26 @@ export function performSendRequest({ person, deps }: { readonly person: PersonSu
 const withoutBlocked = (data: BlockedData | undefined, userId: string): BlockedData | undefined =>
   data === undefined ? data : { ...data, pages: data.pages.map((page) => ({ ...page, users: page.users.filter((row) => row.id !== userId) })) };
 
-const withBlockedFirst = (data: BlockedData | undefined, person: PersonSummary): BlockedData | undefined => {
-  if (data === undefined) return data;
+/**
+ * **UN PANIER JAMAIS LU S'AMORCE, il ne s'ignore pas** (revue #7083) — la
+ * JUMELLE `withRequestFirst` amorce déjà le sien (`seed`, ci-dessus), et c'est
+ * l'asymétrie entre les deux qui faisait le défaut : `if (data === undefined)
+ * return data` rendait `undefined` à `setQueryData`, qui n'écrit alors RIEN.
+ * Le geste partait sur le réseau et l'écran ne bougeait pas — « Bloquer »
+ * devenait un contrôle sans effet visible (loi 4) exactement quand le panier
+ * n'était pas encore lu ou que sa lecture avait échoué. Les témoins d'alors
+ * SEMAIENT tous le cache avant le geste : aucun ne pouvait le voir.
+ *
+ * Ce que l'amorce affirme est BORNÉ et vrai : la personne est bloquée. La
+ * revalidation de la famille remplace la page par la liste entière, et un
+ * refus restaure l'instantané — c'est-à-dire `undefined`.
+ */
+const withBlockedFirst = (data: BlockedData | undefined, person: PersonSummary): BlockedData => {
+  const seed: BlockedData = { pages: [{ users: [], nextCursor: null }], pageParams: [null] };
+  const base = data ?? seed;
   return {
-    ...data,
-    pages: data.pages.map((page, index) => {
+    ...base,
+    pages: base.pages.map((page, index) => {
       const kept = page.users.filter((row) => row.id !== person.id);
       return index === 0 ? { ...page, users: [person, ...kept] } : { ...page, users: kept };
     }),

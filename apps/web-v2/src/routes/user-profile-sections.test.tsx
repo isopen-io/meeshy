@@ -7,7 +7,7 @@ import type { ProfileRelation } from '@/lib/profile/relation';
 import { actionsFor } from '@/lib/profile/relation';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { ProfileRelationSection, ProfileStatsBand, ProfileStatsSection } from './user-profile-sections';
+import { ProfilePostsEmpty, ProfileRelationSection, ProfileStatsBand, ProfileStatsSection } from './user-profile-sections';
 
 /**
  * **LES PIÈCES DU PROFIL PUBLIC, DESSINÉES** (#7083) — ce qu'aucune capture ne
@@ -125,6 +125,29 @@ describe('ProfileStatsSection — le défaut d’iOS qu’on ne copie pas', () =
 
   test('« Membre depuis » porte une date, formatée dans la langue du lecteur', () => {
     expect(statsSection(THIRD_PARTY).querySelector('[data-profile-member-since]')?.textContent).toContain('2024');
+  });
+});
+
+describe('ProfilePostsEmpty — le vide d’un FILTRE n’est pas le vide d’un COMPTE', () => {
+  const empty = (filter: 'all' | 'posts' | 'reels') =>
+    parse(renderToStaticMarkup(<ProfilePostsEmpty language="fr" filter={filter} />));
+
+  test('sans filtre, c’est le compte qui ne publie rien', () => {
+    const el = empty('all');
+    expect(el.querySelector('[data-profile-posts-empty]')?.getAttribute('data-profile-posts-empty')).toBe('all');
+    expect(el.textContent).toContain('Aucune publication');
+    expect(el.textContent).toContain('Rien de public à lire');
+  });
+
+  /* Le bandeau annonce « 2 Réels » au-dessus : lui répondre « Aucune
+     publication » serait faux au même instant, et priverait le lecteur du
+     SEUL geste qui le sort de là — re-toucher la tuile. */
+  test('sous un filtre, le texte nomme ce qui manque ET rend son geste', () => {
+    const reels = empty('reels');
+    expect(reels.textContent).toContain('Aucun réel');
+    expect(reels.textContent).not.toContain('Aucune publication');
+    expect(reels.textContent).toContain('Touchez à nouveau la tuile');
+    expect(empty('posts').textContent).toContain('Aucun poste');
   });
 });
 

@@ -94,6 +94,34 @@ describe('les trois blocs arrivent ensemble', () => {
   });
 });
 
+/**
+ * **LE FILTRE NE DOIT PAS MURER LA SUITE** (revue #7083) — le filtre est
+ * CLIENT, sur les pages déjà lues, et la tuile annonce un compte SERVEUR
+ * (`expand=stats`). Le premier jet retirait « Charger plus » dès qu'un filtre
+ * était actif : le bandeau disait « 2 Réels » au-dessus d'une liste d'UN, et
+ * plus aucun geste n'atteignait le second. iOS n'arrête pas non plus sa
+ * sentinelle sous un filtre (`ProfileUserPostsList.swift:246-252`).
+ */
+describe('le filtre et la pagination', () => {
+  const cards = (el: HTMLElement) => el.querySelectorAll('[data-feed-card-id]').length;
+
+  test('sous un filtre, « Charger plus » reste offert — et il ramène ce que la tuile annonce', async () => {
+    const el = await mount('kwame-mensah');
+    const all = cards(el);
+    act(() => (el.querySelector('[data-profile-filter="reels"]') as HTMLButtonElement).click());
+    const filtered = cards(el);
+    expect(filtered).toBeLessThan(all);
+    expect(el.querySelector('[data-profile-posts-more]')).not.toBeNull();
+
+    act(() => (el.querySelector('[data-profile-posts-more]') as HTMLButtonElement).click());
+    await settle();
+    await settle();
+    /* La tuile est la PROMESSE ; la liste filtrée doit pouvoir la tenir. */
+    const promised = Number((el.querySelector('[data-profile-tile="reelsCount"] strong')?.textContent ?? '0').trim());
+    expect(cards(el)).toBe(promised);
+  });
+});
+
 describe('sa PROPRE fiche', () => {
   test('n’offre AUCUNE action relationnelle — on ne se demande pas en ami', async () => {
     const el = await mount('vous');

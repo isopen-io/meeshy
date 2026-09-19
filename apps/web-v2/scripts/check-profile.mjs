@@ -36,7 +36,10 @@
  * SECONDE PASSE (#7083) — `/u/<pseudo>`, LE PROFIL PUBLIC DE QUELQU'UN, dans
  * les MÊMES quatre combinaisons : les trois blocs, le bandeau tapable dont
  * « Messages » et « Traductions » sont ABSENTS (le défaut d'iOS qu'on ne copie
- * pas), le filtre et la pagination MESURÉS À L'EFFET (le nombre de cartes),
+ * pas), le filtre et la pagination MESURÉS À L'EFFET (le nombre de cartes) —
+ * et mesurés ENSEMBLE, parce que c'est leur COMBINAISON qui casse : un filtre
+ * qui retirerait « Charger plus » laisserait la tuile promettre « 2 Réels »
+ * au-dessus d'une liste d'UN, sans aucun geste pour atteindre le second,
  * l'action relationnelle optimiste dans la MÊME image, « Écrire » qui mène à
  * un fil, le refus qui ne répète pas le pseudo demandé, l'atteignabilité et le
  * contraste AA.
@@ -411,10 +414,24 @@ try {
       await page.waitForFunction((n) => document.querySelectorAll('[data-profile-posts] [data-feed-card-id]').length === n, allCards, { timeout: 1000 });
       check((await cardCount()) === allCards, `${label} : re-toucher la MÊME tuile rétablit tout`);
 
-      // ------------------------------------------------ 12. la pagination a un EFFET
+      // ------------------------------------------------ 12. la pagination a un EFFET, et le FILTRE ne la MURE pas
+      /* Le filtre est CLIENT (sur les pages déjà lues) et la tuile annonce un
+         compte SERVEUR (`expand=stats`) : tant que « Charger plus » manque sous
+         un filtre, le bandeau promet « 2 Réels » au-dessus d'une liste d'UN et
+         plus aucun geste n'atteint le second. La pagination se mesure donc
+         SOUS le filtre — c'est la combinaison qui casse, pas chaque moitié. */
       check((await page.$('[data-profile-posts-more]')) !== null, `${label} : une seconde page est annoncée`);
+      await page.click('[data-profile-filter="reels"]');
+      await page.waitForFunction((n) => document.querySelectorAll('[data-profile-posts] [data-feed-card-id]').length < n, allCards, { timeout: 1000 });
+      check((await page.$('[data-profile-posts-more]')) !== null, `${label} : sous un filtre, « Charger plus » reste OFFERT`);
+      const promised = Number((await textOf(page, '[data-profile-tile="reelsCount"] strong')) ?? '0');
       await page.click('[data-profile-posts-more]');
-      await page.waitForFunction((n) => document.querySelectorAll('[data-profile-posts] [data-feed-card-id]').length > n, allCards, { timeout: 3000 });
+      const held = await page
+        .waitForFunction((n) => document.querySelectorAll('[data-profile-posts] [data-feed-card-id]').length === n, promised, { timeout: 3000 })
+        .then(() => true, () => false);
+      check(held, `${label} : la tuile est TENUE — ${promised} réels annoncés, ${await cardCount()} servis`);
+      await page.click('[data-profile-filter="reels"]');
+      await page.waitForFunction((n) => document.querySelectorAll('[data-profile-posts] [data-feed-card-id]').length > n, allCards, { timeout: 1000 });
       const grown = await cardCount();
       check(grown > allCards, `${label} : « Charger plus » ajoute des cartes (${allCards} → ${grown})`);
       check((await page.$('[data-profile-posts-more]')) === null, `${label} : le bouton disparaît sur la dernière page`);

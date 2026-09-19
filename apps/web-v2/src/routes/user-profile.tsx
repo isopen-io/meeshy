@@ -329,13 +329,21 @@ export function UserProfileView({ username }: { readonly username: string }) {
                     ) : posts.isPending ? (
                       <span aria-busy="true" aria-label={translate(language, 'userProfile.posts.loading')} className="block rounded-card" style={{ height: 140, backgroundColor: 'var(--color-ios-card)' }} />
                     ) : models.length === 0 ? (
-                      <ProfilePostsEmpty language={language} />
+                      <ProfilePostsEmpty language={language} filter={filter} />
                     ) : (
                       models.map((model) => (
                         <FeedPostCard key={model.id} model={model} onGesture={onGesture} onShare={onShare} preferredLanguages={readerLanguages} />
                       ))
                     )}
-                    {posts.hasNextPage && filter === 'all' ? (
+                    {/* LA SUITE SE CHARGE SOUS UN FILTRE AUSSI (revue #7083) — le
+                        filtre est CLIENT, sur les pages déjà lues, et la tuile
+                        annonce un compte SERVEUR : la retirer ici faisait dire
+                        « 2 Réels » à un bandeau au-dessus d'une liste d'UN, sans
+                        aucun geste pour atteindre le second. iOS ne s'arrête pas
+                        non plus — sa sentinelle de bas de liste est armée par
+                        `hasMore`, jamais par le filtre
+                        (`ProfileUserPostsList.swift:246-252`). */}
+                    {posts.hasNextPage ? (
                       <button
                         type="button"
                         data-profile-posts-more

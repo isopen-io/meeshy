@@ -2,7 +2,7 @@ import { memo, type ReactNode } from 'react';
 
 import { Avatar } from '@/components/avatar';
 import { Glyph, GlyphSvg } from '@/components/glyph';
-import { GroupedSection, SECTION_CARD_STYLE } from '@/components/grouped-section';
+import { GroupedSection, SECTION_BRAND_INK, SECTION_CARD_STYLE, SECTION_INK, SECTION_INK_2 } from '@/components/grouped-section';
 import { DISCOVER_GLYPHS } from '@/components/glyphs-discover';
 import { FEED_GLYPHS } from '@/components/glyphs-feed';
 import { PROFILE_GLYPHS } from '@/components/glyphs-profile';
@@ -42,8 +42,11 @@ import { initialsOf } from '@/lib/view/conversation';
  * catalogue — pas le pixel.
  */
 
-const INK = 'var(--color-ios-ink)';
-const INK_2 = 'var(--color-ios-ink-2)';
+/* LES TROIS ENCRES VIENNENT DE `grouped-section`, jamais d'un second littéral :
+   c'est déjà ce que fait `/me` (`profile-sections.tsx:14-17`), et une chaîne de
+   jeton écrite deux fois diverge au premier réglage de l'une des deux. */
+const INK = SECTION_INK;
+const INK_2 = SECTION_INK_2;
 const BRAND = 'var(--color-ios-brand)';
 /**
  * LE REMPLISSAGE DE MARQUE EST `--ios-indigo-600`, pas `--color-ios-brand`
@@ -56,8 +59,9 @@ const BRAND = 'var(--color-ios-brand)';
 const BRAND_FILL = 'var(--ios-indigo-600)';
 const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2';
 /** MÊME encre de marque que « Découvrir » et les titres de section : elle
- * bascule avec le schéma, et c'est elle qui tient AA dans les deux. */
-const BRAND_INK = 'text-[color:var(--ios-indigo-400)] light:text-[color:var(--ios-indigo-600)]';
+ * bascule avec le schéma, et c'est elle qui tient AA dans les deux. Elle est
+ * IMPORTÉE (`SECTION_BRAND_INK`), pas recopiée — même raison que les encres. */
+const BRAND_INK = SECTION_BRAND_INK;
 
 // ------------------------------------------------------------------ l'identité
 
@@ -129,24 +133,39 @@ export const ProfileHero = memo(function ProfileHero({
 type ActionTone = 'brand' | 'success' | 'muted' | 'danger' | 'warning';
 
 const ACTIONS = {
-  add: { label: 'discover.connection.add', aria: 'discover.connection.addLabel', tone: 'brand' },
-  accept: { label: 'discover.connection.contact', aria: 'discover.connection.acceptLabel', tone: 'success' },
-  reject: { label: 'discover.connection.blocked', aria: 'discover.connection.rejectLabel', tone: 'muted' },
-  cancel: { label: 'discover.connection.pending', aria: 'discover.connection.cancelLabel', tone: 'muted' },
-  write: { label: 'userProfile.action.write', aria: 'userProfile.action.writeLabel', tone: 'brand' },
-  block: { label: 'userProfile.action.block', aria: 'userProfile.action.blockLabel', tone: 'danger' },
-  unblock: { label: 'discover.blocked.unblock', aria: 'discover.blocked.unblockLabel', tone: 'warning' },
-} as const satisfies Readonly<Record<ProfileActionKind, { readonly label: InterfaceCatalogKey; readonly aria: InterfaceCatalogKey; readonly tone: ActionTone }>>;
+  add: { aria: 'discover.connection.addLabel', tone: 'brand' },
+  accept: { aria: 'discover.connection.acceptLabel', tone: 'success' },
+  reject: { aria: 'discover.connection.rejectLabel', tone: 'muted' },
+  cancel: { aria: 'discover.connection.cancelLabel', tone: 'muted' },
+  write: { aria: 'userProfile.action.writeLabel', tone: 'brand' },
+  block: { aria: 'userProfile.action.blockLabel', tone: 'danger' },
+  unblock: { aria: 'discover.blocked.unblockLabel', tone: 'warning' },
+} as const satisfies Readonly<Record<ProfileActionKind, { readonly aria: InterfaceCatalogKey; readonly tone: ActionTone }>>;
 
-/* Accepter et refuser portent leur PROPRE libellé — « Contact » et « Bloqué »
-   sont les états, pas les gestes. iOS les nomme « Accepter la connexion » /
-   « Refuser la connexion » ; la v3.1 réutilise les libellés d'aria de
-   « Découvrir », déjà traduits, et peint le VERBE court sur le bouton. */
-const ACTION_LABELS = {
+/**
+ * LE TEXTE DU BOUTON, EN DEUX TABLES parce qu'il y a DEUX FORMES de clé — l'une
+ * prend le nom de la personne, l'autre non, et `translate` le VÉRIFIE au type.
+ *
+ * Aucune des deux ne porte de clé qu'on n'affiche pas : la table d'avant en
+ * gardait trois (« Contact », « Bloqué », « En attente » pour accepter, refuser
+ * et annuler) que le rendu écrasait. Ces mots nomment des ÉTATS, pas des
+ * gestes — les laisser dans une table de libellés de BOUTON était un piège pour
+ * la prochaine main, qui les aurait crus servis.
+ */
+const PLAIN_LABEL = {
+  add: 'discover.connection.add',
+  write: 'userProfile.action.write',
+  block: 'userProfile.action.block',
+  unblock: 'discover.blocked.unblock',
+} as const satisfies Readonly<Record<'add' | 'write' | 'block' | 'unblock', InterfaceCatalogKey>>;
+
+/* Accepter, refuser et annuler nomment la personne : iOS écrit « Accepter la
+   connexion » ; la v3.1 réutilise les libellés déjà traduits de « Découvrir ». */
+const NAMED_LABEL = {
   accept: 'discover.connection.acceptLabel',
   reject: 'discover.connection.rejectLabel',
   cancel: 'discover.connection.cancelLabel',
-} as const satisfies Partial<Readonly<Record<ProfileActionKind, InterfaceCatalogKey>>>;
+} as const satisfies Readonly<Record<'accept' | 'reject' | 'cancel', InterfaceCatalogKey>>;
 
 const TONE_COLOR: Readonly<Record<ActionTone, string>> = {
   brand: BRAND,
@@ -172,8 +191,8 @@ const ACTION_GLYPH: Readonly<Record<ProfileActionKind, ReactNode>> = {
  * icône, même couleur de contexte sur les deux surfaces (dimension 6).
  */
 const actionText = (language: InterfaceLanguage, kind: ProfileActionKind, name: string): string => {
-  if (kind === 'accept' || kind === 'reject' || kind === 'cancel') return translate(language, ACTION_LABELS[kind], { name });
-  return translate(language, ACTIONS[kind].label);
+  if (kind === 'accept' || kind === 'reject' || kind === 'cancel') return translate(language, NAMED_LABEL[kind], { name });
+  return translate(language, PLAIN_LABEL[kind]);
 };
 
 function ActionButton({
@@ -603,17 +622,35 @@ export function ProfileSkeleton({ language }: { readonly language: InterfaceLang
   );
 }
 
-export function ProfilePostsEmpty({ language }: { readonly language: InterfaceLanguage }) {
+/**
+ * **LE VIDE D'UN FILTRE N'EST PAS LE VIDE D'UN COMPTE** — miroir de
+ * `filteredEmptyState` (`ProfileUserPostsList.swift:498-510`), et c'est la
+ * moitié que le premier jet n'avait pas : « Aucune publication · Rien de public
+ * à lire » servi à qui vient de toucher « Réels » est FAUX — la tuile voisine
+ * annonce le contraire au même instant. Le texte dit donc ce qui manque
+ * VRAIMENT, et il rend son geste : re-toucher la tuile.
+ */
+const FILTERED_EMPTY = {
+  posts: 'userProfile.posts.emptyPosts',
+  reels: 'userProfile.posts.emptyReels',
+} as const satisfies Readonly<Record<ProfilePostsFilterTap, InterfaceCatalogKey>>;
+
+export function ProfilePostsEmpty({ language, filter }: { readonly language: InterfaceLanguage; readonly filter: ProfilePostsFilter }) {
+  const filtered = filter !== 'all';
   return (
-    <div data-profile-posts-empty className="grid justify-items-center gap-2 rounded-card px-6 py-8 text-center" style={SECTION_CARD_STYLE}>
+    <div
+      data-profile-posts-empty={filter}
+      className="grid justify-items-center gap-2 rounded-card px-6 py-8 text-center"
+      style={SECTION_CARD_STYLE}
+    >
       <span aria-hidden="true" style={{ color: INK_2 }}>
-        <GlyphSvg glyph={PROFILE_GLYPHS.quotes} size={22} />
+        <GlyphSvg glyph={filter === 'reels' ? FEED_GLYPHS.monitorPlay : PROFILE_GLYPHS.quotes} size={22} />
       </span>
       <p className="text-body font-semibold" style={{ color: INK }}>
-        {translate(language, 'userProfile.posts.empty')}
+        {translate(language, filter === 'all' ? 'userProfile.posts.empty' : FILTERED_EMPTY[filter])}
       </p>
       <p className="text-caption" style={{ color: INK_2 }}>
-        {translate(language, 'userProfile.posts.emptyBody')}
+        {translate(language, filtered ? 'userProfile.posts.emptyFilter' : 'userProfile.posts.emptyBody')}
       </p>
     </div>
   );
