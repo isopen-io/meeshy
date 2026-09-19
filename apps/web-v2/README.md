@@ -426,6 +426,29 @@ node scripts/check-app-update.mjs
 La coque Capacitor n'a pas ce chemin : aucun service worker, actifs embarqués,
 version neuve par le magasin (décision D-82).
 
+### Le poids actuel, relevé au 2026-09-19 (`node scripts/measure-weight.mjs`)
+
+Les chiffres **24,53 / 24,36 Ko** cités plus haut (§ « Le runtime », § « Les
+deux variantes ») datent des tout premiers lots du chantier et ne sont plus
+la première peinture SERVIE aujourd'hui — chaque écran porté depuis (fil,
+composeur de scène, catalogues d'interface par langue, temps réel, Réels…)
+a payé son propre budget, gardé lot par lot dans `budgets.json`, jamais
+recopié ici. Relevé au 2026-09-19 sur ce dépôt :
+
+```
+bun run build && node scripts/measure-weight.mjs
+```
+
+**48,72 Ko gzip avant le premier pixel, 10 requêtes, 2,11 s de téléchargement
+Fast 3G** ; **545,42 Ko** à la demande, répartis en ~40 chunks nommés (les
+plus lourds : `thread-modes` 74,27 Ko/gzip 23,55, `thread` 65,24 Ko/gzip
+21,54, `core` 61,64 Ko/gzip 19,94). Le script ne rougit contre AUCUN plafond
+de `budgets.json` : cette valeur est la courbe COURANTE, portée lot par lot
+et déjà acceptée, pas une régression à corriger. Elle rend caduc tout calcul
+qui repartirait des chiffres `24,53`/`24,36` ci-dessus — gardés ici comme
+mesure D'ORIGINE du runtime et du routeur, pas comme reflet de l'écran
+d'aujourd'hui.
+
 ## L'interface
 
 Reprise de l'app iOS, relevée dans `apps/ios` et `packages/MeeshySDK` — pas des
