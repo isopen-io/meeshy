@@ -60,7 +60,7 @@ import {
   type StoryPlaybackStory,
 } from '@/lib/stories/playback';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
-import { shortcutYieldsToTarget } from '@/lib/view/shortcut-scope';
+import { screenGestureYields, shortcutYieldsToTarget } from '@/lib/view/shortcut-scope';
 import { useElementSize } from '@/lib/view/use-element-size';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { useReaderLanguages } from '@/lib/view/use-reader';
@@ -449,7 +449,23 @@ export default function StoryScreen() {
   });
   const lastCenterTapRef = useRef(-Infinity);
 
+  /**
+   * **LA FEUILLE RÉCLAME LE GESTE COMME ELLE RÉCLAME LA TOUCHE** (#7112,
+   * revue). La pause posée à l'ouverture ne suffisait pas : elle est un
+   * `useState` semé UNE fois, que `resume()` défait sans que rien ne la
+   * ré-affirme. La feuille n'occupe que le bas de l'écran ; un tap sur la
+   * scène NUE au-dessus valait « reprendre » (`decideTouchDown`), la story
+   * avançait six secondes plus tard, `setCommentsOpen(false)` fermait le fil
+   * — et le commentaire à moitié écrit partait avec. C'est le symptôme 2 de
+   * D-91 par l'autre entrée : la cession avait été écrite pour les touches,
+   * jamais pour le doigt. La loi vit à UN seul endroit, avec sa jumelle du
+   * clavier (`lib/view/shortcut-scope.ts`).
+   */
+  const gestureYields = (e: ReactPointerEvent<HTMLDivElement>): boolean =>
+    screenGestureYields({ target: e.target, layerOpen: commentsOpen });
+
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (gestureYields(e)) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const zone = classifyTapZone((e.clientX - rect.left) / rect.width);
     const g = gestureRef.current;
@@ -477,6 +493,7 @@ export default function StoryScreen() {
   const onPointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
     const g = gestureRef.current;
     clearHoldTimer();
+    if (gestureYields(e)) return;
     if (g.holdFired || g.resumedThisGesture) return;
 
     const rect = e.currentTarget.getBoundingClientRect();

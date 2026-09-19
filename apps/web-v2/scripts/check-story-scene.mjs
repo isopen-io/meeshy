@@ -37,6 +37,10 @@
  *     cession FINE : une flèche alors qu'un BOUTON a le focus avance quand
  *     même. Trois symptômes, une cause, et aucun visible à un témoin de DOM :
  *     il faut un vrai clavier et un vrai focus.
+ *     7 bis — ET LE MÊME DÉFAUT PAR LE DOIGT : deux taps sur la scène NUE
+ *     au-dessus de la feuille ne doivent ni reprendre la lecture ni naviguer
+ *     ni emporter le brouillon. « Une couche de saisie réclame le geste comme
+ *     elle réclame la touche » (`screenGestureYields`, même module).
  *  8. Aucune erreur de page ; clair et sombre rendent les MÊMES mesures (le
  *     lecteur force son canevas sombre, `story.tsx`).
  *
@@ -471,6 +475,51 @@ async function runScheme(colorScheme) {
       afterArrow.sheet === true && afterArrow.text === typed,
       `${tag} st-amie-2 : une flèche PENDANT la frappe ne doit ni avancer la story ni emporter le brouillon — ${JSON.stringify(afterArrow)}`,
     );
+
+    /* ── 7 bis. LE MÊME DÉFAUT PAR L'AUTRE ENTRÉE : LE DOIGT (#7112, revue)
+           ─────────────────────────────────────────────────────────────────
+       La cession ci-dessus a été écrite pour les TOUCHES. La feuille
+       n'occupe que le bas de l'écran ; les ~550 px de scène NUE au-dessus
+       gardaient leurs trois bandes de geste vivantes. Un tap sur un bord y
+       vaut « reprendre » (`decideTouchDown`, `lib/stories/gesture.ts`), la
+       lecture repartait SOUS la feuille, la diapositive suivante arrivait,
+       `setCommentsOpen(false)` fermait le fil — et le brouillon partait avec.
+
+       LE TÉMOIN MESURE LA CAUSE, PAS SON DÉLAI. Attendre les six secondes de
+       la diapositive rendrait un gate lent ET fragile ; ce qui se mesure ici
+       est que la lecture N'A PAS REPRIS (`data-story-paused` tient) et que
+       DEUX taps au bord — reprendre, puis naviguer — ne déplacent rien.
+       C'est le scénario exact de la recette manuelle, en un dixième du temps. */
+    const bordDroit = await page.$eval('[data-story-scene]', (el) => {
+      const r = el.getBoundingClientRect();
+      return { x: Math.round(r.left + r.width * 0.9), y: Math.round(r.top + r.height * 0.25) };
+    });
+    const avantTap = await page.evaluate(() => document.querySelector('[data-story-scene]')?.getAttribute('data-story-scene') ?? null);
+    await page.mouse.click(bordDroit.x, bordDroit.y);
+    await page.waitForTimeout(150);
+    await page.mouse.click(bordDroit.x, bordDroit.y);
+    await page.waitForTimeout(350);
+    const apresTap = await page.evaluate(() => ({
+      story: document.querySelector('[data-story-scene]')?.getAttribute('data-story-scene') ?? null,
+      pause: document.querySelector('[data-story-scene]')?.getAttribute('data-story-paused') ?? null,
+      sheet: document.querySelector('[data-story-comments-sheet]') !== null,
+      text: document.querySelector('[data-comment-field]')?.value ?? null,
+    }));
+    check(
+      apresTap.story === avantTap && apresTap.pause === 'true' && apresTap.sheet === true && apresTap.text === typed,
+      `${tag} st-amie-2 : DEUX taps sur la scène nue, feuille ouverte, ne doivent ni reprendre la lecture ni naviguer ni emporter le brouillon — ${avantTap} → ${JSON.stringify(apresTap)}`,
+    );
+    /* MÊME DISCIPLINE QU'AU SYMPTÔME a : si celui-ci tombe, la feuille a été
+       emportée et les témoins SUIVANTS mourraient d'un `page.click` en
+       timeout — un ROUGE qui accuse la mauvaise chose (30 s d'attente sur la
+       croix, et le message de CE témoin jamais imprimé). On rouvre donc,
+       après avoir rendu le verdict. */
+    if (!apresTap.sheet) {
+      await page.goto(`${BASE}/story/st-amie-2`, { waitUntil: 'load' });
+      await page.waitForSelector('[data-story-action="comments"]', { timeout: 8000 });
+      await page.click('[data-story-action="comments"]');
+      await page.waitForSelector('[data-story-comments-close]', { timeout: 8000 });
+    }
     /* LA CONTRE-ÉPREUVE DE LA CESSION — elle est FINE, et sans ce témoin rien
        n'empêcherait de la rendre GROSSIÈRE. Cliquer un bouton le FOCALISE
        (comportement natif) : si l'écran cédait TOUTE touche à un contrôle

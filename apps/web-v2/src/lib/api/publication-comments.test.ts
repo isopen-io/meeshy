@@ -2,6 +2,7 @@ import { QueryClient } from '@tanstack/react-query';
 import { describe, expect, test } from 'bun:test';
 
 import { postQueryKey } from './publication-detail';
+import { STORY_FEED_QUERY_KEY, type StoryFeedPost } from './stories';
 import {
   COMMENTS_PAGE_SIZE,
   COMMENT_FAILED_MESSAGE,
@@ -107,6 +108,18 @@ const withCaches = (postId: string) => {
 const countOf = (queryClient: QueryClient, postId: string): number | undefined =>
   (queryClient.getQueryData(postQueryKey(postId)) as { readonly commentCount?: number } | undefined)?.commentCount;
 
+/** Ce que le RAIL du lecteur de stories lit — `currentStory.commentCount`,
+ * servi par `STORY_FEED_QUERY_KEY`, jamais par `postQueryKey`. */
+const railCountOf = (queryClient: QueryClient, storyId: string): number | null | undefined =>
+  queryClient.getQueryData<readonly StoryFeedPost[]>(STORY_FEED_QUERY_KEY)?.find((s) => s.id === storyId)?.commentCount;
+
+const story = (id: string, commentCount: number | null): StoryFeedPost => ({
+  id,
+  type: 'STORY',
+  createdAt: '2026-09-19T09:00:00.000Z',
+  commentCount,
+});
+
 describe('performComment — optimiste, puis l’issue (`POST /posts/:postId/comments`, :179)', () => {
   test('le commentaire APPARAÎT avant le réseau et le compteur monte dans le même geste', async () => {
     const queryClient = withCaches('p1');
@@ -194,5 +207,76 @@ describe('performComment — optimiste, puis l’issue (`POST /posts/:postId/com
     });
 
     expect(countOf(queryClient, 'p2')).toBe(5);
+  });
+});
+
+describe('le compteur bouge LÀ OÙ LE RAIL LE LIT — `STORY_FEED_QUERY_KEY` (#7112, revue)', () => {
+  /* Le témoin voisin (« la liste JAMAIS OUVERTE… ») mesure `postQueryKey` :
+     il verdissait pendant que la pastille du rail restait au chiffre d'avant,
+     parce que le rail lit un AUTRE corpus. Ces vecteurs mesurent celui-là. */
+
+  test('commenter une story monte le compteur du CORPUS DES STORIES, celui que le rail lit', async () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(STORY_FEED_QUERY_KEY, [story('st-1', 3), story('st-2', 9)]);
+    const { transport } = transportOf({ ok: true, data: comment('c-served') });
+
+    await performComment({
+      postId: 'st-1',
+      content: 'joli',
+      author,
+      deps: { source: 'gateway', transport: transport as never, queryClient },
+    });
+
+    expect(railCountOf(queryClient, 'st-1')).toBe(4);
+    /* La story VOISINE garde son identité : aucune rangée du plateau ne se
+       re-rend pour un commentaire qui ne la concerne pas. */
+    expect(railCountOf(queryClient, 'st-2')).toBe(9);
+  });
+
+  test('un REFUS PERMANENT redescend le compteur du rail — jamais une pastille menteuse derrière un fil vide', async () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(STORY_FEED_QUERY_KEY, [story('st-1', 3)]);
+    const { transport } = transportOf({ ok: false, status: 403 });
+
+    const result = await performComment({
+      postId: 'st-1',
+      content: 'joli',
+      author,
+      deps: { source: 'gateway', transport: transport as never, queryClient },
+    });
+
+    expect(result).toEqual({ ok: false, message: COMMENT_FAILED_MESSAGE });
+    expect(railCountOf(queryClient, 'st-1')).toBe(3);
+  });
+
+  test('`commentCount` ABSENT du corpus part de zéro — la passerelle le sert `null` quand personne n’a commenté', async () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(STORY_FEED_QUERY_KEY, [story('st-1', null)]);
+    const { transport } = transportOf({ ok: true, data: comment('c-served') });
+
+    await performComment({
+      postId: 'st-1',
+      content: 'le premier',
+      author,
+      deps: { source: 'gateway', transport: transport as never, queryClient },
+    });
+
+    expect(railCountOf(queryClient, 'st-1')).toBe(1);
+  });
+
+  test('une publication ÉTRANGÈRE au corpus des stories le laisse INTACT — pas de ligne fabriquée', async () => {
+    const queryClient = new QueryClient();
+    const corpus = [story('st-1', 3)];
+    queryClient.setQueryData(STORY_FEED_QUERY_KEY, corpus);
+    const { transport } = transportOf({ ok: true, data: comment('c-served') });
+
+    await performComment({
+      postId: 'p-du-flux',
+      content: 'ailleurs',
+      author,
+      deps: { source: 'gateway', transport: transport as never, queryClient },
+    });
+
+    expect(queryClient.getQueryData(STORY_FEED_QUERY_KEY)).toBe(corpus);
   });
 });

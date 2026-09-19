@@ -4,6 +4,7 @@ import { CommentThread } from '@/components/comment-thread';
 import { Glyph } from '@/components/glyph';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { CLAIMS_GESTURE_ATTRIBUTE } from '@/lib/view/shortcut-scope';
 
 /**
  * **LE FIL DE COMMENTAIRES D'UNE STORY**, posé en feuille au-dessus de la
@@ -92,9 +93,13 @@ export function StoryCommentsSheet({ postId, onClose }: StoryCommentsSheetProps)
       aria-label={translate(language, 'comments.title')}
       ref={panneau}
       tabIndex={-1}
-      /* Le plateau navigue au `pointerdown`/`pointerup` : la feuille doit
-         retenir les siens, sinon un tap dans la liste ferait avancer la
-         story derrière (même remède que chaque bouton du rail). */
+      /* Le plateau navigue au `pointerdown`/`pointerup` : la feuille RÉCLAME
+         le geste, sinon un tap dans la liste ferait avancer la story
+         derrière. L'attribut le DÉCLARE à l'hôte — qui est le seul à savoir
+         ce que son geste fait — et `stopPropagation` reste la seconde
+         barrière ; la déclaration seule survit à une couche voisine posée un
+         jour sans le gestionnaire (`lib/view/shortcut-scope.ts`, #7112). */
+      {...{ [CLAIMS_GESTURE_ATTRIBUTE]: '' }}
       onPointerDown={(e) => e.stopPropagation()}
       onPointerUp={(e) => e.stopPropagation()}
       className="absolute inset-x-0 bottom-0 flex flex-col overflow-hidden"

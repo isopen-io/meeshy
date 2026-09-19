@@ -6,6 +6,7 @@ import type { FeedAuthor, FeedMedia, FeedPost } from './feed-pages';
 import type { ApiResult, HttpTransport } from './http';
 import { outcomeOf } from './outcome';
 import { postQueryKey } from './publication-detail';
+import { STORY_FEED_QUERY_KEY, type StoryFeedPost } from './stories';
 
 /**
  * **LE PORT DES COMMENTAIRES D'UNE PUBLICATION** — le fil de commentaires que
@@ -180,17 +181,44 @@ export function dropComment(data: CommentInfiniteData | undefined, tempId: strin
   });
 }
 
+/** `commentCount` est servi par la MÊME colonne (`postInclude.commentCount`,
+ * `postIncludes.ts:354`) aux deux corpus — mais il y arrive `number | null |
+ * undefined`. Une seule lecture, pour les deux caisses. */
+const countOf = (value: number | null | undefined): number =>
+  typeof value === 'number' && Number.isFinite(value) ? value : 0;
+
 /**
  * Le compteur de la PUBLICATION — le rail d'une story et la rangée d'une
  * carte le lisent sans jamais ouvrir la liste. Il bouge donc AVEC le
  * commentaire, et revient avec lui : sans cela, un refus laisserait un
  * compteur menteur derrière un fil vide.
+ *
+ * **IL Y A DEUX CAISSES, ET LE DOC-COMMENT N'EN CONNAISSAIT QU'UNE** (#7112,
+ * revue). La rangée d'une carte lit `postQueryKey(postId)` ; le rail du
+ * lecteur de stories, lui, lit `currentStory.commentCount` — servi par
+ * `STORY_FEED_QUERY_KEY` (`routes/story.tsx`, `useStoryFeed`), un corpus que
+ * cette fonction n'ouvrait pas. On commentait donc une story, la ligne
+ * apparaissait en tête du fil, et la pastille du rail restait au chiffre
+ * d'avant. C'est la « loi qui calcule une valeur que personne ne lit », avec
+ * l'aggravation qu'une PHRASE affirmait le contraire : tant qu'un
+ * doc-comment nomme le rail, il fabrique la certitude que la chose est faite.
+ * La RÉFÉRENCE tranche dans le même sens (D-1) — iOS incrémente son compteur
+ * sur son PROPRE envoi optimiste (`StoryViewerView+Content.swift:930,934`),
+ * et son rail le lit (`+Sidebar.swift:619`).
+ *
+ * Le patron est celui de `story-reactions.ts` : le cœur d'une story bascule
+ * déjà `STORY_FEED_QUERY_KEY` et son compte suit le doigt. Les deux caisses
+ * bougent ENSEMBLE et reviennent ENSEMBLE — un post absent d'un corpus y est
+ * simplement laissé tel quel.
  */
 function shiftCommentCount(queryClient: QueryClient, postId: string, delta: 1 | -1): void {
-  queryClient.setQueryData<FeedPost>(postQueryKey(postId), (post) => {
-    if (post === undefined) return post;
-    const current = typeof post.commentCount === 'number' && Number.isFinite(post.commentCount) ? post.commentCount : 0;
-    return { ...post, commentCount: Math.max(0, current + delta) };
+  queryClient.setQueryData<FeedPost>(postQueryKey(postId), (post) =>
+    post === undefined ? post : { ...post, commentCount: Math.max(0, countOf(post.commentCount) + delta) },
+  );
+  queryClient.setQueryData<readonly StoryFeedPost[]>(STORY_FEED_QUERY_KEY, (stories) => {
+    if (stories === undefined) return stories;
+    if (!stories.some((s) => s.id === postId)) return stories;
+    return stories.map((s) => (s.id === postId ? { ...s, commentCount: Math.max(0, countOf(s.commentCount) + delta) } : s));
   });
 }
 

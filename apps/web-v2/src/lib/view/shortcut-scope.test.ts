@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { shortcutYieldsToTarget } from './shortcut-scope';
+import { CLAIMS_GESTURE_ATTRIBUTE, screenGestureYields, shortcutYieldsToTarget } from './shortcut-scope';
 
 /**
  * **UNE FRAPPE ADRESSÉE À UN CONTRÔLE N'EST PAS UN RACCOURCI D'ÉCRAN.**
@@ -79,5 +79,44 @@ describe('shortcutYieldsToTarget — le cas NOMINAL est la surface nue', () => {
   test('une cible ABSENTE ou non-élément ne réclame rien — `window` reçoit ses propres touches', () => {
     expect(shortcutYieldsToTarget({ target: null, key: ' ' })).toBe(false);
     expect(shortcutYieldsToTarget({ target: window, key: ' ' })).toBe(false);
+  });
+});
+
+describe('screenGestureYields — une couche de saisie réclame le GESTE comme elle réclame la touche (#7112)', () => {
+  const gestureYieldsFor = (html: string, selector: string, layerOpen: boolean): boolean => {
+    const host = document.createElement('div');
+    host.innerHTML = html;
+    document.body.append(host);
+    const target = host.querySelector(selector);
+    const verdict = screenGestureYields({ target, layerOpen });
+    host.remove();
+    return verdict;
+  };
+
+  test('LA COUCHE OUVERTE FAIT TAIRE LE GESTE PARTOUT, pas seulement sous elle', () => {
+    /* Le défaut mesuré : la feuille de commentaires n'occupe que le bas de
+       l'écran, et un tap sur la scène NUE au-dessus reprenait la lecture —
+       la story avançait, la feuille se fermait, le brouillon partait. */
+    expect(gestureYieldsFor('<div data-scene></div>', '[data-scene]', true)).toBe(true);
+    expect(screenGestureYields({ target: document.body, layerOpen: true })).toBe(true);
+    expect(screenGestureYields({ target: null, layerOpen: true })).toBe(true);
+  });
+
+  test('COUCHE FERMÉE, la scène nue garde son geste — c’est le cas NOMINAL du lecteur', () => {
+    expect(gestureYieldsFor('<div data-scene></div>', '[data-scene]', false)).toBe(false);
+    expect(screenGestureYields({ target: document.body, layerOpen: false })).toBe(false);
+  });
+
+  test('une couche qui RÉCLAME le geste le prend pour elle et pour ses descendants', () => {
+    const feuille = `<section ${CLAIMS_GESTURE_ATTRIBUTE}><textarea data-champ></textarea></section>`;
+    expect(gestureYieldsFor(feuille, 'section', false)).toBe(true);
+    /* Par `closest()`, jamais par la balise : un tap atteint le champ, pas la
+       section — c'est le même piège que le glyphe d'un bouton au clavier. */
+    expect(gestureYieldsFor(feuille, '[data-champ]', false)).toBe(true);
+  });
+
+  test('une cible non-élément ne réclame rien quand aucune couche n’est ouverte', () => {
+    expect(screenGestureYields({ target: null, layerOpen: false })).toBe(false);
+    expect(screenGestureYields({ target: window, layerOpen: false })).toBe(false);
   });
 });
