@@ -278,8 +278,16 @@ const runProtectionSuite = async ({ browser, BASE, expect, skin }) => {
     expect(!rowStillHasContent, `[${skin}] la rangée éphémère échue ne rend plus ni contenu ni badge`);
   }
 
-  // 7 — supprimé : jamais le contenu.
-  expect((await mainInnerText()).includes('Message supprimé'), `[${skin}] « Message supprimé » est affiché`);
+  /* 7 — supprimé : jamais le contenu. Le libellé se lit SUR LA RANGÉE
+     `prot-6`, jamais sur `main` entier (revue-correction #7054) —
+     `DELETED_WITNESS_ID` était déclaré et n'était lu par personne, pendant
+     qu'un « Message supprimé » rendu par N'IMPORTE QUELLE autre rangée
+     satisfaisait ce témoin. Une constante morte à côté d'une assertion trop
+     large, c'est la seconde qui devait apprendre le nom de la première. */
+  expect(
+    (await rowOf(DELETED_WITNESS_ID).innerText()).includes('Message supprimé'),
+    `[${skin}] « Message supprimé » est affiché SUR la rangée supprimée`,
+  );
   expect(!(await mainInnerText()).includes(DELETED_CONTENT), `[${skin}] le contenu supprimé ne fuit jamais`);
   expect(
     !(await mainInnerHtml()).includes(DELETED_CONTENT),

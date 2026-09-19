@@ -42,7 +42,7 @@
  *
  * ## 3. La sémantique d'ORDRE
  *
- * `factBefore(beforeMs, fait)` se lit « après l'évènement qui précède, l'état
+ * `factBefore(beforeMs, fact)` se lit « après l'évènement qui précède, l'état
  * est X, AVANT que l'évènement suivant (à `beforeMs`) ne tire ». C'est le
  * témoin de TEMPS devenu témoin d'ORDRE (#7054, critère de fin 4) : au lieu
  * d'avancer l'horloge d'une durée fixe puis de lire immédiatement, on avance
@@ -96,7 +96,7 @@ export const CHRONOLOGY_STEP_MS = 50;
  *   `check-thread-states.mjs`) avance d'un délai RELATIF à l'action qui
  *   précède — son échéance est datée par le clic, pas par le corpus.
  *   `advanceBy` est une projection d'`advanceTo`, jamais un second compteur ;
- * - `factBefore(beforeMs, fait)` : avance par pas de `stepMs` jusqu'à ce que
+ * - `factBefore(beforeMs, fact)` : avance par pas de `stepMs` jusqu'à ce que
  *   `fait()` rende vrai, sans jamais atteindre `beforeMs`. Rend `true`/`false`,
  *   ne lève JAMAIS (même discipline que `await-fact.mjs`).
  */
@@ -123,9 +123,9 @@ export async function pausedChronology(page, { time, stepMs = CHRONOLOGY_STEP_MS
     await advanceTo(elapsed + durationMs);
   };
 
-  const factBefore = async (beforeMs, fait) => {
+  const factBefore = async (beforeMs, fact) => {
     for (;;) {
-      if (await fait()) return true;
+      if (await fact()) return true;
       if (elapsed + stepMs >= beforeMs) return false;
       await page.clock.runFor(stepMs);
       elapsed += stepMs;
