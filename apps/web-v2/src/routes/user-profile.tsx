@@ -99,6 +99,11 @@ const FAILURE_NOTICE = {
  * L'ISSUE D'UN GESTE, DITE À VOIX HAUTE — les clés de « Découvrir » sont
  * réutilisées telles quelles (même geste, même mot), `userProfile.announce.*`
  * ne portant que ce qui est propre à cet écran.
+ *
+ * **« Écrire » n'a PAS de `done`, et c'est délibéré** : un geste qui réussit
+ * NAVIGUE, et l'écran d'après EST le retour. Lui coller « Demande envoyée »
+ * par commodité de table aurait annoncé une autre action que celle posée — un
+ * lecteur d'écran aurait entendu le mauvais mot avant de changer d'écran.
  */
 const ANNOUNCE = {
   add: { done: 'discover.announce.sent', failed: 'discover.announce.sendFailed' },
@@ -107,8 +112,8 @@ const ANNOUNCE = {
   cancel: { done: 'discover.announce.cancelled', failed: 'discover.announce.cancelFailed' },
   block: { done: 'userProfile.announce.blocked', failed: 'userProfile.announce.blockFailed' },
   unblock: { done: 'discover.announce.unblocked', failed: 'discover.announce.unblockFailed' },
-  write: { done: 'discover.announce.sent', failed: 'userProfile.announce.writeFailed' },
-} as const satisfies Readonly<Record<ProfileActionKind, { readonly done: InterfaceCatalogKey; readonly failed: InterfaceCatalogKey }>>;
+  write: { done: null, failed: 'userProfile.announce.writeFailed' },
+} as const satisfies Readonly<Record<ProfileActionKind, { readonly done: InterfaceCatalogKey | null; readonly failed: InterfaceCatalogKey }>>;
 
 function ProfileHeaderBar({ title }: { readonly title: string }) {
   return (
@@ -232,8 +237,12 @@ export function UserProfileView({ username }: { readonly username: string }) {
   );
 
   const report = useCallback(
-    (kind: ProfileActionKind, outcome: FriendActionOutcome) =>
-      announce(translate(language, outcome === 'done' ? ANNOUNCE[kind].done : outcome === 'offline' ? 'discover.announce.offline' : ANNOUNCE[kind].failed)),
+    (kind: ProfileActionKind, outcome: FriendActionOutcome) => {
+      if (outcome === 'offline') return announce(translate(language, 'discover.announce.offline'));
+      if (outcome === 'failed') return announce(translate(language, ANNOUNCE[kind].failed));
+      const done = ANNOUNCE[kind].done;
+      if (done !== null) announce(translate(language, done));
+    },
     [announce, language],
   );
 

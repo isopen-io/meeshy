@@ -485,20 +485,21 @@ export const ProfileStatsBand = memo(function ProfileStatsBand({
             </span>
           </>
         );
-        const active = tile.tap !== null && filter === tile.tap;
+        const { tap } = tile;
+        const active = tap !== null && filter === tap;
         return (
           <li key={tile.key} data-profile-tile={tile.key}>
-            {tile.tap === null ? (
+            {tap === null ? (
               <span className={`${TILE_CLASS} block`} style={{ ...SECTION_CARD_STYLE, minHeight: 64 }} aria-label={`${value} ${label}`} role="img">
                 {body}
               </span>
             ) : (
               <button
                 type="button"
-                data-profile-filter={tile.tap}
+                data-profile-filter={tap}
                 aria-pressed={active}
                 aria-label={translate(language, active ? 'userProfile.stat.filterClear' : 'userProfile.stat.filterLabel', { name: label })}
-                onClick={() => onFilter(tile.tap === null ? 'posts' : tile.tap)}
+                onClick={() => onFilter(tap)}
                 className={`${TILE_CLASS} w-full ${FOCUS}`}
                 style={{
                   ...SECTION_CARD_STYLE,
