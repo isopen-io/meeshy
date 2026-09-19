@@ -9,6 +9,7 @@ import { FeedSceneMosaic } from './feed-scene-mosaic';
 import { FeedSceneSurface } from './feed-scene-surface';
 import { GlyphSvg } from './glyph';
 import { FEED_GLYPHS } from './glyphs-feed';
+import { RichText } from './rich-text';
 import type { FeedCardMedia, FeedCardModel, FeedCardStats, FeedCardText, FeedCardViewer } from '@/lib/feed/card-model';
 import type { PostToggleKind } from '@/lib/feed/interactions';
 import { isPagedLayout, type TiledLayoutMode } from '@/lib/feed/mosaic-layout';
@@ -228,8 +229,27 @@ function FeedPostHeader({ model }: { readonly model: FeedCardModel }) {
 }
 
 /** Le texte d'un POST — tronqué à 20 mots avec « voir plus »/« voir moins »
- * (`truncateWords`, `lib/feed/text.ts`) ; `lang` porte la langue SERVIE. */
-function FeedPostText({ text }: { readonly text: FeedCardText }) {
+ * (`truncateWords`, `lib/feed/text.ts`) ; `lang` porte la langue SERVIE.
+ *
+ * **ET C'EST LA SEULE SURFACE OÙ LE HASHTAG EST CLIQUABLE** (#7032) : les
+ * hashtags n'existent que pour les PUBLICATIONS (`PostHashtag` relie un
+ * hashtag à un post, jamais à un message) — d'où `hashtags` posé ICI et nulle
+ * part ailleurs. L'enrichissement porte sur le texte AFFICHÉ, donc déjà
+ * traduit par le Prisme ET déjà tronqué : c'est ce que le lecteur voit qu'il
+ * peut cliquer, jamais un original qu'il ne lit pas. */
+function FeedPostText({
+  text,
+  mentions,
+}: {
+  readonly text: FeedCardText;
+  /* `| undefined` EXPLICITE, et non un `?` seul : sous `exactOptionalPropertyTypes`
+     les deux ne disent pas la même chose, et c'est l'ABSENCE de distinction qui
+     compte ici. `undefined` est une valeur PORTEUSE de sens pour le Prisme des
+     mentions — « le serveur ne s'est pas prononcé, souligne tout handle » — à
+     distinguer de `[]`, « il s'est prononcé, n'en souligne aucun ». La passer
+     doit donc rester possible, exactement comme `RichText` la déclare. */
+  readonly mentions?: readonly string[] | undefined;
+}) {
   const [expanded, setExpanded] = useState(false);
   const truncated = truncateWords(text.full, FEED_TEXT_TRUNCATION_LIMIT);
   const shown = !truncated.truncated || expanded ? text.full : truncated.text;
@@ -237,13 +257,14 @@ function FeedPostText({ text }: { readonly text: FeedCardText }) {
 
   return (
     <div className="px-3">
-      <p
+      <RichText
+        text={shown}
         className="whitespace-pre-wrap text-bubble"
         {...(text.language !== '' ? { lang: text.language } : {})}
         style={{ color: 'var(--color-ios-ink)' }}
-      >
-        {shown}
-      </p>
+        hashtags
+        mentions={mentions}
+      />
       {truncated.truncated ? (
         <button
           type="button"
@@ -491,7 +512,7 @@ export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerS
       data-feed-card-id={model.id}
     >
       <FeedPostHeader model={model} />
-      {bodyText !== undefined ? <FeedPostText text={bodyText} /> : null}
+      {bodyText !== undefined ? <FeedPostText text={bodyText} mentions={model.validatedMentions} /> : null}
       {/* Un post à SCÈNES SANS média (cas réel, § 3 de la spécification) ne
           doit plus rester nu sous son texte (D-78) : la condition porte donc
           sur `model.scene` autant que sur `model.media.length`. */}

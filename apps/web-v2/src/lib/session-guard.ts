@@ -43,6 +43,18 @@ export type RouteKey =
   | 'storyCompose'
   | 'story'
   | 'feed'
+  /**
+   * LE PROFIL PUBLIC ET LE MOT-CLÉ (#7032) — PRIVÉES, comme `feed`. Les deux
+   * ports qu'elles lisent exigent une session : `GET /directory/people/:handle`
+   * porte `fastify.authenticate` (`routes/directory/people.ts`), et
+   * `GET /social/posts?scope=hashtag` rend 401 sans elle
+   * (`routes/posts/feed.ts`). Non déclarées ici, elles seraient PUBLIQUES par
+   * défaut (voir `routeKey` plus bas) : un visiteur sans compte y verrait un
+   * écran qui se peint puis reçoit un 401 en silence — la classe de défaut que
+   * `stories`, `feed` et `settings` décrivent juste au-dessus.
+   */
+  | 'userProfile'
+  | 'hashtag'
   | 'notifications'
   | 'profile'
   | 'settings'
@@ -194,6 +206,10 @@ const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
   'storyCompose',
   'story',
   'feed',
+  /* LES DEUX ADRESSES DU TEXTE ENRICHI (#7032) — privées, leurs ports étant
+     authentifiés ; voir la raison écrite sur `RouteKey` plus haut. */
+  'userProfile',
+  'hashtag',
   'notifications',
   'profile',
   'settings',
