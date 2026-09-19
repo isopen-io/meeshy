@@ -518,15 +518,17 @@ export default function StoryScreen() {
         closeViewer();
         return;
       }
-      /* LE RESTE APPARTIENT AU NŒUD QUI A LE FOCUS, S'IL EN REVENDIQUE
-         (`lib/view/shortcut-scope.ts`). Sans cette cession, mesuré au
+      /* LE RESTE APPARTIENT AU NŒUD QUI A LE FOCUS, TOUCHE PAR TOUCHE
+         (`lib/view/shortcut-scope.ts`, D-91). Sans cette cession, mesuré au
          navigateur : « a b » tapé dans le composeur de commentaire rendait
          « ab » (le raccourci de pause avalait l'espace), une flèche pendant
          la frappe faisait avancer la story — ce qui ferme la feuille et
          emporte le brouillon — et Espace n'activait AUCUN bouton du lecteur,
          le `click` d'un `<button>` naissant d'un `keyup` que le
-         `preventDefault` ci-dessous supprimait. */
-      if (shortcutYieldsToTarget(e.target)) return;
+         `preventDefault` ci-dessous supprimait. La cession est FINE : un
+         bouton ne réclame qu'Espace et Entrée, sinon cliquer « muet » (ce
+         qui le focalise) figerait les flèches jusqu'au clic suivant. */
+      if (shortcutYieldsToTarget({ target: e.target, key: e.key })) return;
       if (e.key === 'ArrowLeft') advance('previous');
       else if (e.key === 'ArrowRight') advance('next');
       else if (e.key === ' ') {

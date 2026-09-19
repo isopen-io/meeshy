@@ -30,12 +30,13 @@
  *  5. `/story/st-scene-image` (une image SEULE) — l'image à son rectangle 16:9
  *     centré, AUCUN `[data-scene-player]`, aucune bande, aucun bouton son.
  *  6. CONTRE-ÉPREUVE v1 — `/story/st-amie-2` ne monte aucune carte de scène.
- *  7. LES RACCOURCIS NE VOLENT PAS LA FRAPPE D'UN CONTRÔLE (#7112, revue) —
- *     Espace ACTIVE le bouton du rail qui a le focus, « a b c » tapé dans le
- *     composeur de commentaire reste « a b c », et une flèche pendant la
- *     frappe n'avance pas la story. Trois symptômes, une seule cause, et
- *     aucun visible à un témoin de DOM : il faut un vrai clavier et un vrai
- *     focus.
+ *  7. LES RACCOURCIS NE VOLENT PAS LA FRAPPE D'UN CONTRÔLE (#7112, revue,
+ *     D-91) — Espace ACTIVE le bouton du rail qui a le focus, « a b c » tapé
+ *     dans le composeur de commentaire reste « a b c », une flèche pendant la
+ *     frappe n'avance pas la story ; et sa CONTRE-ÉPREUVE, qui garde la
+ *     cession FINE : une flèche alors qu'un BOUTON a le focus avance quand
+ *     même. Trois symptômes, une cause, et aucun visible à un témoin de DOM :
+ *     il faut un vrai clavier et un vrai focus.
  *  8. Aucune erreur de page ; clair et sombre rendent les MÊMES mesures (le
  *     lecteur force son canevas sombre, `story.tsx`).
  *
@@ -442,9 +443,9 @@ async function runScheme(colorScheme) {
     await page.focus('[data-story-action="comments"]');
     await page.keyboard.press(' ');
     await page.waitForTimeout(350);
-    const ouverteParEspace = (await page.$('[data-story-comments-sheet]')) !== null;
+    const openedBySpace = (await page.$('[data-story-comments-sheet]')) !== null;
     check(
-      ouverteParEspace,
+      openedBySpace,
       `${tag} st-amie-2 : ESPACE sur un bouton du rail qui a le focus doit l'ACTIVER — le raccourci de pause ne prend pas la touche d'un contrôle`,
     );
     /* LES TROIS SYMPTÔMES SE MESURENT SÉPARÉMENT — si le premier tombe, on
@@ -452,23 +453,41 @@ async function runScheme(colorScheme) {
        leur verdict. Un `if` autour d'eux les aurait fait DISPARAÎTRE du
        décompte au lieu de rougir : une absence de témoin n'est pas un
        témoin vert, et c'est le compte d'invariants qui l'aurait dit tout bas. */
-    if (!ouverteParEspace) {
+    if (!openedBySpace) {
       await page.click('[data-story-action="comments"]');
       await page.waitForTimeout(350);
     }
     await page.click('[data-comment-field]');
     await page.keyboard.type('a b c');
-    const frappe = await page.$eval('[data-comment-field]', (el) => el.value);
-    check(frappe === 'a b c', `${tag} st-amie-2 : « a b c » tapé dans le composeur doit rester « a b c » — obtenu ${JSON.stringify(frappe)}`);
+    const typed = await page.$eval('[data-comment-field]', (el) => el.value);
+    check(typed === 'a b c', `${tag} st-amie-2 : « a b c » tapé dans le composeur doit rester « a b c » — obtenu ${JSON.stringify(typed)}`);
     await page.keyboard.press('ArrowRight');
     await page.waitForTimeout(350);
-    const apresFleche = await page.evaluate(() => ({
-      feuille: document.querySelector('[data-story-comments-sheet]') !== null,
-      texte: document.querySelector('[data-comment-field]')?.value ?? null,
+    const afterArrow = await page.evaluate(() => ({
+      sheet: document.querySelector('[data-story-comments-sheet]') !== null,
+      text: document.querySelector('[data-comment-field]')?.value ?? null,
     }));
     check(
-      apresFleche.feuille === true && apresFleche.texte === frappe,
-      `${tag} st-amie-2 : une flèche PENDANT la frappe ne doit ni avancer la story ni emporter le brouillon — ${JSON.stringify(apresFleche)}`,
+      afterArrow.sheet === true && afterArrow.text === typed,
+      `${tag} st-amie-2 : une flèche PENDANT la frappe ne doit ni avancer la story ni emporter le brouillon — ${JSON.stringify(afterArrow)}`,
+    );
+    /* LA CONTRE-ÉPREUVE DE LA CESSION — elle est FINE, et sans ce témoin rien
+       n'empêcherait de la rendre GROSSIÈRE. Cliquer un bouton le FOCALISE
+       (comportement natif) : si l'écran cédait TOUTE touche à un contrôle
+       focalisé, les flèches cesseraient d'avancer la story dès le premier
+       clic sur « muet » — un raccourci mort, pour corriger un vol de frappe.
+       Un bouton ne réclame qu'Espace et Entrée ; les flèches restent à
+       l'écran. */
+    await page.click('[data-story-comments-close]');
+    await page.waitForTimeout(250);
+    await page.focus('[data-story-action="react"]');
+    const sceneBeforeArrow = await page.evaluate(() => document.querySelector('[data-story-scene]')?.getAttribute('data-story-scene') ?? null);
+    await page.keyboard.press('ArrowRight');
+    await page.waitForTimeout(400);
+    const afterArrowBouton = await page.evaluate(() => document.querySelector('[data-story-scene]')?.getAttribute('data-story-scene') ?? null);
+    check(
+      sceneBeforeArrow !== null && sceneAfterArrow !== sceneBeforeArrow,
+      `${tag} st-amie-2 : une flèche alors qu'un BOUTON a le focus doit rester un raccourci d'écran — story ${sceneBeforeArrow} → ${sceneAfterArrow}`,
     );
 
     check(pageErrors.length === 0, `${tag} erreurs de page : ${pageErrors.join(' | ')}`);
