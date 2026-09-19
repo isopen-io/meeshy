@@ -241,11 +241,11 @@ export function StoryActionRail({ plan, language, handlers, counts, pressed, hid
    * là où `story-rail.tsx` a dû le poser aussi sur son enveloppe (le doublon
    * s'était reconstitué un cran au-dessus de l'attribut).
    */
-  const masque = hidden === true;
+  const masked = hidden === true;
 
   const style: CSSProperties = {
     paddingBottom: 'calc(var(--safe-bottom, 0px) + 12px)',
-    opacity: masque ? 0 : 1,
+    opacity: masked ? 0 : 1,
     transition: 'opacity 180ms ease',
   };
 
@@ -253,11 +253,11 @@ export function StoryActionRail({ plan, language, handlers, counts, pressed, hid
     <div
       data-story-action-rail
       role="toolbar"
-      aria-label={masque ? undefined : translate(language, 'story.action.rail')}
+      aria-label={masked ? undefined : translate(language, 'story.action.rail')}
       aria-orientation="vertical"
       className="pointer-events-none absolute end-2 bottom-0 flex flex-col items-center gap-3"
       style={style}
-      inert={masque}
+      inert={masked}
     >
       {boutons.map((action) => {
         /* Non-null : `boutons` ne garde que les actions dont le tracé existe. */

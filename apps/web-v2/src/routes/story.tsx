@@ -39,10 +39,11 @@ import {
 import { STORY_DEFAULT_REACTION, hasReactedToStory } from '@/lib/stories/reaction';
 import { resolveStoryCaption } from '@/lib/stories/caption';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { translate } from '@/lib/i18n-catalog';
 import { resolveStoryMediaCaption } from '@/lib/stories/media-caption';
 import { readerCardFraming } from '@/lib/stories/framing';
 
-import { StoryMediaLayer } from './story-parts';
+import { CloseButton, ProgressBars, StoryMediaLayer } from './story-parts';
 import {
   currentStoryAt,
   groupForPlayback,
@@ -59,7 +60,9 @@ import {
   type StoryPlaybackStory,
 } from '@/lib/stories/playback';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
+import { shortcutYieldsToTarget } from '@/lib/view/shortcut-scope';
 import { useElementSize } from '@/lib/view/use-element-size';
+import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { useParams } from '@/lib/router';
 import { Link, href, navigate } from '@/routes/route-table';
@@ -154,92 +157,6 @@ function authorLabel(group: StoryPlaybackGroup): string {
   if (group.isMine) return 'Votre story';
   const fullName = [a.firstName, a.lastName].filter((part) => part !== undefined && part !== '').join(' ');
   return a.displayName ?? (fullName !== '' ? fullName : (a.username ?? ''));
-}
-
-function CloseButton({ onClose }: { readonly onClose: () => void }) {
-  return (
-    <button
-      type="button"
-      onPointerDown={(e) => e.stopPropagation()}
-      onClick={onClose}
-      aria-label="Fermer"
-      className="pointer-events-auto grid shrink-0 place-items-center rounded-full"
-      style={{ width: 44, height: 44, background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.12)' }}
-    >
-      <Glyph name="x" size={16} style={{ color: '#fff' }} />
-    </button>
-  );
-}
-
-/**
- * `StoryProgressBarsView` (`StoryViewerView+Content.swift:3128-3177`) —
- * capsules de hauteur 3, `gap: 3`, piste blanc 20 % ; segments PASSÉS blanc
- * PLEIN, segment COURANT le dégradé `indigo500 → error → indigo400`. Le
- * premier jet peignait TOUS les segments en indigo de marque : sur le fond
- * par défaut d'une story texte — le gradient de marque, précisément — la
- * progression devenait invisible, et le passé ne se distinguait plus du
- * présent (mesuré sur `story-light.png`, deux barres grises identiques).
- *
- * **LA FRACTION NE PASSE PAS PAR L'ÉTAT** — `fillRef` reçoit un
- * `transform: scaleX()` écrit à même le DOM à chaque image. Poser la
- * progression en `useState` re-rendait l'écran ENTIER soixante fois par
- * seconde (l'image, l'en-tête, la légende, la scène), pour animer trois
- * pixels de haut ; iOS évite exactement cela (« évite de committer le
- * `@State` `progress` », granularité 1/300). `scaleX` plutôt que `width` :
- * la propriété n'apparaît dans AUCUN objet `style` rendu, donc aucun rendu
- * ne peut l'écraser, et l'animation reste sur le compositeur.
- */
-function ProgressBars({
-  group,
-  index,
-  slideKey,
-  barRef,
-  fillRef,
-}: {
-  readonly group: StoryPlaybackGroup;
-  readonly index: number;
-  readonly slideKey: string;
-  readonly barRef: { current: HTMLDivElement | null };
-  readonly fillRef: { current: HTMLSpanElement | null };
-}) {
-  return (
-    <div
-      ref={barRef}
-      role="progressbar"
-      aria-label={`Story ${index + 1} sur ${group.stories.length}`}
-      aria-valuemin={0}
-      aria-valuemax={100}
-      aria-valuenow={0}
-      className="flex"
-      style={{ gap: 3, height: 3 }}
-    >
-      {group.stories.map((story, i) => (
-        <span
-          key={story.id}
-          aria-hidden="true"
-          className="flex-1 overflow-hidden rounded-full"
-          style={{ background: 'rgba(255,255,255,0.2)' }}
-        >
-          {i === index ? (
-            <span
-              key={slideKey}
-              ref={fillRef}
-              className="block size-full rounded-full"
-              style={{
-                transform: 'scaleX(0)',
-                transformOrigin: 'left center',
-                willChange: 'transform',
-                background:
-                  'linear-gradient(90deg, var(--color-ios-brand), var(--ios-error), var(--color-i400))',
-              }}
-            />
-          ) : (
-            <span className="block size-full rounded-full" style={{ background: i < index ? '#fff' : 'transparent' }} />
-          )}
-        </span>
-      ))}
-    </div>
-  );
 }
 
 export default function StoryScreen() {
@@ -594,14 +511,31 @@ export default function StoryScreen() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      /* ÉCHAP D'ABORD, ET SANS CONDITION : fermer depuis un champ reste juste,
+         et la feuille de commentaires, qui veut le garder pour elle,
+         l'intercepte en phase de CAPTURE (`story-comments-sheet.tsx`). */
+      if (e.key === 'Escape') {
+        closeViewer();
+        return;
+      }
+      /* LE RESTE APPARTIENT AU NŒUD QUI A LE FOCUS, S'IL EN REVENDIQUE
+         (`lib/view/shortcut-scope.ts`). Sans cette cession, mesuré au
+         navigateur : « a b » tapé dans le composeur de commentaire rendait
+         « ab » (le raccourci de pause avalait l'espace), une flèche pendant
+         la frappe faisait avancer la story — ce qui ferme la feuille et
+         emporte le brouillon — et Espace n'activait AUCUN bouton du lecteur,
+         le `click` d'un `<button>` naissant d'un `keyup` que le
+         `preventDefault` ci-dessous supprimait. */
+      if (shortcutYieldsToTarget(e.target)) return;
       if (e.key === 'ArrowLeft') advance('previous');
       else if (e.key === 'ArrowRight') advance('next');
       else if (e.key === ' ') {
         e.preventDefault();
         if (paused) resume();
         else pause();
-      } else if (e.key === 'Escape') closeViewer();
-      else if ((e.key === 'm' || e.key === 'M') && showsSound) setStorySoundMuted((m) => !m);
+      } else if (e.key === 'm' || e.key === 'M') {
+        if (showsSound) setStorySoundMuted((m) => !m);
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -654,19 +588,39 @@ export default function StoryScreen() {
     setCommentsOpen(false);
   }, [currentStory?.id]);
 
+  /**
+   * **CE QUE LE GESTE DE RÉACTION APPREND DOIT S'ENTENDRE** (#7112, revue).
+   * `performStoryReaction` distingue trois issues — parti, POSÉ MAIS NON
+   * CONFIRMÉ (réseau, 5xx, 429), REFUSÉ et défait — et rendait ses deux clés
+   * (`STORY_REACTION_PENDING`, `STORY_REACTION_FAILED`) à un appelant qui les
+   * JETAIT (`void storyReactionAction(...)`). Mesuré : aucun site du dépôt ne
+   * lisait ces clés. Un refus permanent retirait donc le cœur SANS un mot —
+   * indiscernable d'un second tap — et un geste hors ligne ressemblait à un
+   * geste confirmé. C'est la « loi qui calcule une valeur que personne ne
+   * lit », et le remède est celui que les Réels emploient déjà sur la MÊME
+   * grammaire d'issues (`usePostGesture` → `reels.tsx`) : une région
+   * `role="status"` unique, la dernière annonce gagnant (`useLiveAnnouncer`).
+   */
+  const { text: announcement, announce } = useLiveAnnouncer();
+
   const railHandlers = useMemo<StoryActionRailHandlers>(() => {
     if (currentStory === undefined) return {};
     const storyId = currentStory.id;
     return {
       ...(showsSound ? { sound: () => setStorySoundMuted((m) => !m) } : {}),
-      react: () => void storyReactionAction(storyId),
+      react: () => {
+        void storyReactionAction(storyId).then((result) => {
+          if (!result.ok) announce(translate(interfaceLanguage, result.message));
+          else if (result.notice !== undefined) announce(translate(interfaceLanguage, result.notice));
+        });
+      },
       /* « Répondre » et « Commentaires » ouvrent la MÊME feuille : une seule
          zone de saisie, et le bouton de réponse n'est donc jamais un second
          composeur (spécification porteur 2026-05-28). */
       reply: () => setCommentsOpen(true),
       comments: () => setCommentsOpen(true),
     };
-  }, [currentStory, showsSound]);
+  }, [currentStory, showsSound, announce, interfaceLanguage]);
 
   /* LE RAIL EST-IL PEINT ? Une seule réponse, lue par le rail ET par la
      légende qui doit lui laisser la place. */
@@ -735,6 +689,15 @@ export default function StoryScreen() {
       <div className="pointer-events-none absolute end-3" style={{ top: 'calc(var(--safe-top, 0px) + 12px)', zIndex: 2 }}>
         {loading || notFound ? <CloseButton onClose={closeViewer} /> : null}
       </div>
+
+      {/* L'UNIQUE RÉGION VIVANTE DU LECTEUR — l'issue d'un geste s'y dit, et
+          nulle part ailleurs (D-11 : jamais deux notifications pour un même
+          événement). Elle vit à la RACINE, hors du bloc conditionnel de la
+          scène : une région live démontée entre l'annonce et sa lecture n'est
+          jamais annoncée, et le corpus change sous elle à chaque avance. */}
+      <p role="status" aria-live="polite" className="sr-only">
+        {announcement}
+      </p>
 
       {loading ? (
         <div className="grid flex-1 place-items-center" role="status">
@@ -966,10 +929,20 @@ export default function StoryScreen() {
               /* LE RAIL SE RETIRE DEVANT LA FEUILLE — mesuré à la capture :
                  les trois boutons se peignaient PAR-DESSUS la liste de
                  commentaires, et « Commentaires » recouvrait le bouton
-                 d'envoi du composeur. Le rail est le chrome de la SCÈNE ; la
-                 feuille est un écran à elle, et iOS lui cède de même la place
-                 (`showCommentsOverlay`). Masqué, jamais démonté : il
-                 refarait sa mise en page à la fermeture. */
+                 d'envoi du composeur. Masqué, jamais démonté : il refarait sa
+                 mise en page à la fermeture.
+
+                 **ÉCART ASSUMÉ AVEC iOS, et il faut le dire dans ce sens** :
+                 iOS ne cède PAS la place. Il rend son overlay de commentaires
+                 SOUS les contrôles, exprès — « Rendered BEFORE the sidebar …
+                 so SwiftUI ZStack z-orders it BENEATH the story controls —
+                 user can still tap React / Reply / mute while comments are
+                 visible » (`StoryViewerView+Canvas.swift:1640-1645`). Sa
+                 surface est une liste FLOTTANTE transparente ; la nôtre est
+                 une feuille OPAQUE de 68 % qui occupe la place du rail. Deux
+                 contrôles superposés ne sont qu'un seul contrôle pour le
+                 doigt : c'est la géométrie du web qui impose le retrait, pas
+                 un choix d'iOS qu'on recopierait. */
               hidden={chromeHidden || commentsOpen}
             />
           ) : null}

@@ -57,7 +57,25 @@ export function StoryCommentsSheet({ postId, onClose }: StoryCommentsSheetProps)
     <div
       data-story-comments-sheet={postId}
       role="dialog"
-      aria-modal="true"
+      /**
+       * **PAS D'`aria-modal` : CETTE FEUILLE N'EST PAS UNE MODALE, ET ELLE NE
+       * DOIT PAS EN ÊTRE UNE** (revue #7112).
+       *
+       * `aria-modal="true"` ANNONCE une modale ; il n'en fait pas une — c'est
+       * mot pour mot la raison écrite dans `components/sheet.tsx:11-19`, et le
+       * dépôt a déjà payé ce défaut (la tabulation continuait DERRIÈRE la
+       * feuille, `auth-screens.test.tsx:142`). Le posé ici était donc une
+       * DÉCLARATION que rien n'appliquait : la croix du lecteur restait
+       * atteignable au clavier (mesuré au navigateur — `focus()` puis
+       * `activeElement`) pendant que l'attribut ordonnait au lecteur d'écran
+       * de faire comme si elle n'existait pas.
+       *
+       * Et la modalité serait le MAUVAIS produit : iOS garde délibérément
+       * l'arrière-plan interactif sous son overlay de commentaires — « user
+       * can still tap React / Reply / mute while comments are visible »,
+       * `StoryViewerView+Canvas.swift:1640-1645`. La feuille est donc un
+       * dialogue NON MODAL, ce que `role="dialog"` seul dit exactement.
+       */
       aria-label={translate(language, 'comments.title')}
       ref={panneau}
       tabIndex={-1}

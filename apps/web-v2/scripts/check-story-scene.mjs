@@ -30,7 +30,13 @@
  *  5. `/story/st-scene-image` (une image SEULE) — l'image à son rectangle 16:9
  *     centré, AUCUN `[data-scene-player]`, aucune bande, aucun bouton son.
  *  6. CONTRE-ÉPREUVE v1 — `/story/st-amie-2` ne monte aucune carte de scène.
- *  7. Aucune erreur de page ; clair et sombre rendent les MÊMES mesures (le
+ *  7. LES RACCOURCIS NE VOLENT PAS LA FRAPPE D'UN CONTRÔLE (#7112, revue) —
+ *     Espace ACTIVE le bouton du rail qui a le focus, « a b c » tapé dans le
+ *     composeur de commentaire reste « a b c », et une flèche pendant la
+ *     frappe n'avance pas la story. Trois symptômes, une seule cause, et
+ *     aucun visible à un témoin de DOM : il faut un vrai clavier et un vrai
+ *     focus.
+ *  8. Aucune erreur de page ; clair et sombre rendent les MÊMES mesures (le
  *     lecteur force son canevas sombre, `story.tsx`).
  *
  * Les valeurs attendues (textes, couleurs) sont RECOPIÉES ici à dessein : un
@@ -284,28 +290,32 @@ async function runScheme(colorScheme) {
      * dépôt où l'effet de `inert` se mesure pour de bon (happy-dom l'imite,
      * un navigateur l'APPLIQUE).
      *
-     * Les deux moitiés du contrat, et il faut les DEUX : le bouton reste
-     * MONTÉ (le démonter referait la mise en page au relâchement) et il
-     * n'est plus ATTEIGNABLE. Un témoin qui ne mesurerait que la seconde
-     * verdirait sur un démontage, c'est-à-dire sur la régression que
-     * l'opacité existe pour éviter.
+     * TROIS moitiés, et il les faut toutes les trois : sous le voile le
+     * bouton reste MONTÉ (le démonter referait la mise en page au
+     * relâchement) et n'est plus ATTEIGNABLE ; le voile levé, il REDEVIENT
+     * atteignable. Un témoin qui ne mesurerait que « monté » verdirait sur un
+     * démontage — la régression que l'opacité existe pour éviter ; un témoin
+     * qui ne mesurerait que « inatteignable » verdirait sur un `inert`
+     * PERMANENT, c'est-à-dire sur un lecteur entièrement inerte.
      *
      * Le témoin interroge l'EFFET (`focus()` puis `activeElement`), jamais
      * l'attribut : un `inert` posé sur le mauvais nœud — le défaut RÉEL de
      * `story-rail.tsx`, dont le doublon s'était reconstitué sur l'enveloppe —
      * laisserait une assertion d'attribut verte.
      */
-    const chromeMasque = await page.evaluate(() => {
-      const croix = document.querySelector('button[aria-label="Fermer"]');
-      if (croix === null) return { monte: false, atteignable: null };
-      document.body.focus();
-      croix.focus();
-      return { monte: true, atteignable: document.activeElement === croix };
-    });
+    const reachableCloseButton = () =>
+      page.evaluate(() => {
+        const closeButton = document.querySelector('button[aria-label="Fermer"]');
+        if (closeButton === null) return { mounted: false, reachable: null };
+        document.body.focus();
+        closeButton.focus();
+        return { mounted: true, reachable: document.activeElement === closeButton };
+      });
+    const maskedChrome = await reachableCloseButton();
     await page.mouse.up();
     check(
-      chromeMasque.monte === true && chromeMasque.atteignable === false,
-      `${tag} st-scene : chrome masqué, la croix doit rester MONTÉE mais devenir INATTEIGNABLE (D-90) — ${JSON.stringify(chromeMasque)}`,
+      maskedChrome.mounted === true && maskedChrome.reachable === false,
+      `${tag} st-scene : chrome masqué, la croix doit rester MONTÉE mais devenir INATTEIGNABLE (D-90) — ${JSON.stringify(maskedChrome)}`,
     );
     check(
       pendantAppui.paused === true && pendantAppui.barre === barrePlusTard,
@@ -326,6 +336,25 @@ async function runScheme(colorScheme) {
     check(
       reprise.scene === 'st-scene' && reprise.paused === false && t1 !== null && reprise.t !== null && reprise.t !== t1,
       `${tag} st-scene : le tap latéral doit reprendre sans naviguer, la piste avançant de nouveau — t1=${t1}, ${JSON.stringify(reprise)}`,
+    );
+    /**
+     * LA MOITIÉ QUE LE PREMIER JET DE D-90 N'AVAIT PAS (revue #7112) — il ne
+     * mesurait que « inatteignable sous le voile ». Un `inert` POSÉ EN
+     * PERMANENCE (l'accident classique d'un runtime qui rendrait
+     * `inert={false}` par une chaîne vraie) satisfait cette moitié-là et tue
+     * toute la commande du lecteur : le témoin serait resté VERT sur la pire
+     * régression qu'il puisse y avoir.
+     *
+     * Elle se mesure ICI, pas au relâchement : une pause d'appui long
+     * SURVIT au `mouse.up` par dessein (`onPointerUp` sort tout de suite si
+     * `holdFired`), et c'est le tap latéral ci-dessus qui rend le chrome.
+     * Mesuré : placé au relâchement, ce témoin rougissait aux quatre
+     * configurations en accusant le code juste.
+     */
+    const shownChrome = await reachableCloseButton();
+    check(
+      shownChrome.mounted === true && shownChrome.reachable === true,
+      `${tag} st-scene : chrome RENDU, la croix doit redevenir ATTEIGNABLE — un \`inert\` permanent passerait la moitié précédente (D-90) — ${JSON.stringify(shownChrome)}`,
     );
 
     /* ── 4. l'image seule AVEC un texte dedans : le texte se lit ────────── */
@@ -393,6 +422,54 @@ async function runScheme(colorScheme) {
       images: document.querySelectorAll('[data-story-scene] img').length,
     }));
     check(v1.carte === 0 && v1.images >= 1, `${tag} st-amie-2 (v1) : le chemin v1 doit rester une image, sans carte de scène — ${JSON.stringify(v1)}`);
+
+    /* ── 7. LES RACCOURCIS DU LECTEUR NE VOLENT PAS LA FRAPPE D'UN CONTRÔLE
+           (revue #7112, `lib/view/shortcut-scope.ts`) ───────────────────────
+       Le lecteur écoute le clavier sur `window` ; sa feuille de commentaires
+       (D-89) y a posé une zone de saisie. TROIS symptômes mesurés ici, une
+       seule cause — un `preventDefault` d'écran sur une touche adressée au
+       nœud qui a le focus :
+
+         a. Espace sur un BOUTON du rail ne l'activait pas : le `click` d'un
+            `<button>` naît du `keyup` d'Espace, que ce `preventDefault`
+            supprime. Chaque bouton du lecteur n'était activable qu'à Entrée.
+         b. « a b » tapé dans le composeur rendait « ab ».
+         c. une flèche pendant la frappe faisait avancer la story, ce qui
+            ferme la feuille et emporte le brouillon.
+
+       Aucun des trois n'est visible à un témoin de DOM : il faut un vrai
+       clavier, sur un vrai navigateur, avec un vrai focus. */
+    await page.focus('[data-story-action="comments"]');
+    await page.keyboard.press(' ');
+    await page.waitForTimeout(350);
+    const ouverteParEspace = (await page.$('[data-story-comments-sheet]')) !== null;
+    check(
+      ouverteParEspace,
+      `${tag} st-amie-2 : ESPACE sur un bouton du rail qui a le focus doit l'ACTIVER — le raccourci de pause ne prend pas la touche d'un contrôle`,
+    );
+    /* LES TROIS SYMPTÔMES SE MESURENT SÉPARÉMENT — si le premier tombe, on
+       ouvre la feuille au CLIC pour que les deux suivants rendent quand même
+       leur verdict. Un `if` autour d'eux les aurait fait DISPARAÎTRE du
+       décompte au lieu de rougir : une absence de témoin n'est pas un
+       témoin vert, et c'est le compte d'invariants qui l'aurait dit tout bas. */
+    if (!ouverteParEspace) {
+      await page.click('[data-story-action="comments"]');
+      await page.waitForTimeout(350);
+    }
+    await page.click('[data-comment-field]');
+    await page.keyboard.type('a b c');
+    const frappe = await page.$eval('[data-comment-field]', (el) => el.value);
+    check(frappe === 'a b c', `${tag} st-amie-2 : « a b c » tapé dans le composeur doit rester « a b c » — obtenu ${JSON.stringify(frappe)}`);
+    await page.keyboard.press('ArrowRight');
+    await page.waitForTimeout(350);
+    const apresFleche = await page.evaluate(() => ({
+      feuille: document.querySelector('[data-story-comments-sheet]') !== null,
+      texte: document.querySelector('[data-comment-field]')?.value ?? null,
+    }));
+    check(
+      apresFleche.feuille === true && apresFleche.texte === frappe,
+      `${tag} st-amie-2 : une flèche PENDANT la frappe ne doit ni avancer la story ni emporter le brouillon — ${JSON.stringify(apresFleche)}`,
+    );
 
     check(pageErrors.length === 0, `${tag} erreurs de page : ${pageErrors.join(' | ')}`);
     await context.close();
