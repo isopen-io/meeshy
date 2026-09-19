@@ -83,6 +83,38 @@ describe('buildMessageListSelect — la requête demande les drapeaux de protect
       effectFlags: true,
     });
   });
+
+  /**
+   * #7070 — la SECONDE garde que l'union locale désarmait, et qu'aucun témoin
+   * ne regardait.
+   *
+   * `redactForwardedAttachmentUrlsIn` (`services/preferences/forwarded-attachment-urls.ts`)
+   * est appelée en `messages-list-query.ts:902`, sur les attachements RACINE
+   * d'un message transféré dont la SOURCE doit être tue
+   * (`forwardSourceGate` faux). Elle décide par
+   * `isForwarded || forwardedFromAttachmentId`. L'union
+   * `attachmentMediaSelect + attachmentProtectionSelect` ne chargeait NI l'un
+   * NI l'autre : le prédicat lisait deux `undefined`, rendait `false`, et la
+   * réécriture ne faisait RIEN sur la population même qu'elle protège. Or le
+   * chemin de stockage réutilisé par une copie de transfert est
+   * `AAAA/MM/<User.id>/<nom>` — la liste livrait donc en clair, dans `fileUrl`,
+   * l'identifiant de l'auteur d'origine que la réponse refusait de NOMMER
+   * trois lignes plus haut. Une garde désarmée par la seule forme de son
+   * `select`, exactement la leçon 276 : c'est la projection trop étroite, pas
+   * l'appel manquant, qui rend une garde impossible en aval sans qu'aucun
+   * témoin ne rougisse.
+   *
+   * `attachmentSocketSelect` charge les deux colonnes. Ce témoin interdit
+   * qu'un rétrécissement futur du `select` les reprenne sans un mot.
+   */
+  it('attachments.select porte isForwarded et forwardedFromAttachmentId — sans eux la réécriture des URL de transfert ne fait RIEN', () => {
+    const select = buildMessageListSelect({ includeTranslations: false, includeReplies: false });
+
+    expect(select.attachments.select).toMatchObject({
+      isForwarded: true,
+      forwardedFromAttachmentId: true,
+    });
+  });
 });
 
 const CONV_ID = '507f1f77bcf86cd799439011';
@@ -139,6 +171,8 @@ async function buildApp(): Promise<FastifyInstance> {
     isViewOnce: true,
     isBlurred: true,
     effectFlags: 2,
+    isForwarded: false,
+    forwardedFromAttachmentId: null,
   };
 
   const carrier = {

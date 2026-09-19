@@ -45,7 +45,7 @@ import { StatusService } from '../../services/StatusService';
 import { NotificationService } from '../../services/notifications/NotificationService';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
 import { attachmentForwardPreviewSelect, attachmentSocketSelect } from '../../services/attachments/attachmentIncludes';
-import { serializeAttachmentForSocket } from '../serializeAttachmentForSocket';
+import { serializeAttachmentForSocket, serializeMessageAttachmentsForSocket } from '../serializeAttachmentForSocket';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';
 import { emitConversationPreviewUpdate } from '../emitConversationPreviewUpdate';
 import { enqueueForOfflineParticipants } from '../offlineParticipantQueue';
@@ -1007,8 +1007,11 @@ export class MessageHandler {
         translations: [],
         ...(editedMentions.reconciled ? { validatedMentions: [...editedMentions.validatedUsernames] } : {}),
         // #7028 — sérialisé DIRECTEMENT (type Prisma exact du `select`
-        // ci-dessus), jamais via `_serializeAttachmentsField`, qui érode vers
-        // `any` et rendrait un `attachmentMediaSelect` nu invisible (TS2345).
+        // ci-dessus), jamais via `serializeMessageAttachmentsForSocket`, dont
+        // le paramètre `unknown` érode vers `any` et rendrait un
+        // `attachmentMediaSelect` nu invisible (TS2345). Le cliquet de type
+        // est ici la seule garde — ce chemin ne passe par aucune source qui le
+        // pose en amont, contrairement à `_buildMessagePayload` (#7070).
         attachments: message.attachments.map((att) => serializeAttachmentForSocket(att)),
       };
 
@@ -2113,7 +2116,13 @@ export class MessageHandler {
     return buildMessageNewPayload(message, {
       conversationId,
       translations,
-      attachments: this._serializeAttachmentsField(message),
+      // #7070 — le site UNIQUE des DEUX producteurs de `message:new`. Ce
+      // handler portait ici sa propre boucle privée (`_serializeAttachmentsField`),
+      // jumelle exacte du helper partagé : c'est cette duplication qui a laissé
+      // le producteur REST/ZMQ servir la ligne BRUTE pendant que celui-ci
+      // servait la forme curatée. Un champ ajouté au helper atteint désormais
+      // les deux transports sans qu'aucun site n'ait à s'en souvenir.
+      attachments: serializeMessageAttachmentsForSocket(message.attachments),
       // Lot 2 : `MessageProcessor.saveMessage` récupère déjà `metadata` du
       // message CITÉ (include, pas select restrictif), donc la donnée brute
       // voyageait déjà — mais sans ce hoist elle restait invisible sous
@@ -2122,18 +2131,6 @@ export class MessageHandler {
         ? hoistLocationOnto(message.replyTo as unknown as Record<string, unknown>)
         : message.replyTo,
     });
-  }
-
-  /**
-   * Normalise `attachments` via `serializeAttachmentForSocket`. `Array.isArray`
-   * érode `raw` à `any[]` (le cast retiré ici était donc déjà sans effet) — le
-   * cliquet de type sur ce chemin (type PUBLIC `Message`) vit à la SOURCE,
-   * `MessageProcessor.saveMessage` (#7028, #7014), pas ici.
-   */
-  private _serializeAttachmentsField(message: Message): unknown[] {
-    const raw = message.attachments;
-    if (!Array.isArray(raw)) return [];
-    return raw.map((att) => serializeAttachmentForSocket(att));
   }
 
   /**

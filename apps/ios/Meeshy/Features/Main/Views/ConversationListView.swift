@@ -274,7 +274,7 @@ struct ConversationListView: View {
     /// Purge différée annulable de l'overlay (voir `dismissContextMenu`). Conservée
     /// pour l'annuler si une nouvelle ouverture survient avant la fin du zoom-out,
     /// sinon la purge en vol effacerait le menu qui vient de se rouvrir.
-    @State var contextMenuDismissWork: DispatchWorkItem? = nil
+    @State var contextMenuDismissSettle = Debouncer()
     /// Scale de la carte d'aperçu de l'overlay (1.0 = dépliée, 0 = repliée via
     /// le drag vers le haut sur la carte — `previewCollapseGesture`, +Overlays).
     /// Muté uniquement quand l'overlay est ouvert ; les lignes ne le reçoivent
@@ -847,8 +847,7 @@ struct ConversationListView: View {
                 // la ligne pressée (toujours invisible) et anime l'émergence.
                 // Annule une purge de fermeture encore en vol, sinon elle
                 // effacerait ce menu fraîchement ouvert (~0.26 s plus tard).
-                contextMenuDismissWork?.cancel()
-                contextMenuDismissWork = nil
+                contextMenuDismissSettle.cancel()
                 let wasMounted = sheetTargets.contextMenu != nil
                 contextMenuAppeared = false
                 contextMenuSourceFrame = sourceFrame.height > 0 ? sourceFrame : nil

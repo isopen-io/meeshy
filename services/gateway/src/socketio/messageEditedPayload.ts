@@ -46,8 +46,17 @@ import type { SocketIOMessage } from '@meeshy/shared/types/socketio-events';
  * - `sender` : passthrough BRUT côté socket (le `select` du handler porte
  *   `role`, pas `user`), reconstruit et aplati côté manager ;
  * - `translations` : chaque chemin les obtient par sa propre voie ;
- * - `attachments`, `metadata`, `messageSource` : servis par les seuls chemins
- *   qui les chargent.
+ * - `metadata`, `messageSource` : servis par les seuls chemins qui les chargent.
+ *
+ * `attachments` a QUITTÉ cette liste (#7070), et la nuance compte : ce champ
+ * reste servi « par les seuls chemins qui le chargent » — le transport REST
+ * (`broadcastMessageMutation`, alimenté par un `findUniqueOrThrow` sans
+ * `attachments`) n'en porte aucun, et son ABSENCE ne perd rien puisque les
+ * clients fusionnent `{ ...cached, ...editedPayload }`. Mais sa FORME n'est
+ * plus « propre à chaque transport » : les deux chemins qui le chargent
+ * (`MessageHandler.handleMessageEdit`, `MeeshySocketIOManager.broadcastMessageEdited`)
+ * servent la MÊME, `SocketAttachment`. Un troisième qui chargerait des pièces
+ * jointes n'a donc plus de forme à choisir — il a une forme à REJOINDRE.
  *
  * Toute famille de champs REQUISE PAR LE CONTRAT appartient à cette unité,
  * jamais au site d'appel : c'est la seule disposition où « ce transport sert le

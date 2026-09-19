@@ -6,7 +6,6 @@ import {
   errorResponseSchema
 } from '@meeshy/shared/types';
 import { AuthSchemas, validateSchema } from '@meeshy/shared/utils/validation';
-import jwt from 'jsonwebtoken';
 import { getRequestContext } from '../../services/GeoIPService';
 import { logWarn } from '../../utils/logger';
 import { getJwtSecret } from '../../utils/secrets';
@@ -34,6 +33,7 @@ import {
 import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes.js';
 import { disconnectSession } from '../../socketio/disconnectSession';
 import { hashSessionToken } from '../../utils/session-token';
+import { notifyIfLoginFromNewDevice } from './notify-new-device';
 import {
   rememberPendingDeviceTrust,
   consumePendingDeviceTrust
@@ -160,25 +160,28 @@ export function registerLoginRoutes(context: AuthRouteContext) {
 
       logger.info('Connexion réussie', { username: user.username });
 
-      // Notification login nouvel appareil (session non trustée = nouvel appareil)
-      if (!session.isTrusted) {
-        const notificationService = fastify.notificationService;
-        if (notificationService) {
-          const jwtSecret = getJwtSecret();
-          const revokeToken = jwt.sign(
-            { userId: user.id, action: 'revoke-all' },
-            jwtSecret,
-            { expiresIn: '24h' }
-          );
-          notificationService.createLoginNewDeviceNotification({
-            recipientUserId: user.id,
-            deviceInfo: requestContext.deviceInfo,
-            ipAddress: requestContext.ip,
-            geoData: requestContext.geoData,
-            revokeToken,
-          }).catch((err: unknown) => logger.error('Notification error login_new_device', err as Error));
+      // #7035 — L'ALERTE SE JUGE SUR L'APPAREIL, jamais sur la session qui
+      // vient de naître. `!session.isTrusted` était vrai à CHAQUE connexion
+      // (`markSessionTrusted` ne s'exécute qu'après, en arrière-plan) : 60
+      // notifications sur 100 du compte de recette, toutes depuis le même
+      // appareil. Une alerte qui crie tout le temps ne protège plus.
+      //
+      // Détachée à dessein — une connexion valide n'échoue pas parce qu'on n'a
+      // pas su décider d'une notification. `.catch` OBLIGATOIRE sur une promesse
+      // détachée (loi du dépôt, leçon 230).
+      void notifyIfLoginFromNewDevice(
+        fastify.prisma?.userSession,
+        fastify.notificationService,
+        getJwtSecret(),
+        {
+          userId: user.id,
+          currentSessionId: session.id,
+          deviceInfo: requestContext.deviceInfo,
+          userAgent: requestContext.userAgent,
+          ipAddress: requestContext.ip,
+          geoData: requestContext.geoData,
         }
-      }
+      ).catch((err: unknown) => logger.error('Notification error login_new_device', err as Error));
 
       // Le jeton NOMME la session qui vient de naître (#4264) : sans ce lien,
       // révoquer cet appareil-ci depuis un autre laissait son JWT passer
@@ -300,25 +303,28 @@ export function registerLoginRoutes(context: AuthRouteContext) {
 
       logger.info('Connexion 2FA réussie', { username: user.username });
 
-      // Notification login nouvel appareil (session non trustée = nouvel appareil)
-      if (!session.isTrusted) {
-        const notificationService = fastify.notificationService;
-        if (notificationService) {
-          const jwtSecret = getJwtSecret();
-          const revokeToken = jwt.sign(
-            { userId: user.id, action: 'revoke-all' },
-            jwtSecret,
-            { expiresIn: '24h' }
-          );
-          notificationService.createLoginNewDeviceNotification({
-            recipientUserId: user.id,
-            deviceInfo: requestContext.deviceInfo,
-            ipAddress: requestContext.ip,
-            geoData: requestContext.geoData,
-            revokeToken,
-          }).catch((err: unknown) => logger.error('Notification error login_new_device 2FA', err as Error));
+      // #7035 — L'ALERTE SE JUGE SUR L'APPAREIL, jamais sur la session qui
+      // vient de naître. `!session.isTrusted` était vrai à CHAQUE connexion
+      // (`markSessionTrusted` ne s'exécute qu'après, en arrière-plan) : 60
+      // notifications sur 100 du compte de recette, toutes depuis le même
+      // appareil. Une alerte qui crie tout le temps ne protège plus.
+      //
+      // Détachée à dessein — une connexion valide n'échoue pas parce qu'on n'a
+      // pas su décider d'une notification. `.catch` OBLIGATOIRE sur une promesse
+      // détachée (loi du dépôt, leçon 230).
+      void notifyIfLoginFromNewDevice(
+        fastify.prisma?.userSession,
+        fastify.notificationService,
+        getJwtSecret(),
+        {
+          userId: user.id,
+          currentSessionId: session.id,
+          deviceInfo: requestContext.deviceInfo,
+          userAgent: requestContext.userAgent,
+          ipAddress: requestContext.ip,
+          geoData: requestContext.geoData,
         }
-      }
+      ).catch((err: unknown) => logger.error('Notification error login_new_device 2FA', err as Error));
 
       // Même lien qu'au mot de passe : la seconde porte d'un compte protégé
       // n'a aucune raison d'émettre un jeton plus pauvre (#4264).

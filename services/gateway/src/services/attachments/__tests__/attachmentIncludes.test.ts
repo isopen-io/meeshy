@@ -291,6 +291,41 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
       expect(attachmentSocketSelect).not.toHaveProperty('encryptionAuthTag');
       expect(attachmentSocketSelect).not.toHaveProperty('filePath');
     });
+
+    /**
+     * LE CLIQUET DE DÉRIVE, et la raison pour laquelle il n'est pas remplacé
+     * par une dérivation.
+     *
+     * Mesuré après #7070 : `attachmentSocketSelect` est EXACTEMENT
+     * `attachmentFullSelect` moins l'enveloppe de chiffrement — deux listes
+     * de colonnes tenues À LA MAIN, dans le MÊME fichier, à trente lignes
+     * l'une de l'autre. Les deux témoins ci-dessus n'énumèrent que les cinq
+     * familles de ce lot : une SIXIÈME ajoutée demain à `attachmentFullSelect`
+     * (une ligne, un endpoint de détail) n'atteindrait pas le fil, et aucun
+     * témoin ne rougirait — « un relais qui RECOPIE champ par champ est un
+     * inventaire à tenir à jour, et il ne l'est jamais » (doc-comment du
+     * sérialiseur).
+     *
+     * Écrire `socket = full − enveloppe` en CODE aurait fermé la dérive dans
+     * le mauvais sens : un secret de serveur ajouté un jour à
+     * `attachmentFullSelect` aurait alors atteint la room toute entière sans
+     * un mot. Le cliquet, lui, est FAIL-CLOSED : il ne laisse rien fuir, il
+     * exige seulement qu'un humain tranche à quel canal appartient la
+     * nouvelle colonne — et nomme la colonne en défaut dans son échec.
+     */
+    it('ne DÉRIVE pas de attachmentFullSelect en silence — tout écart est NOMMÉ (#7070)', () => {
+      const ENVELOPPE_SERVEUR = ['encryptionIv', 'encryptionAuthTag'];
+      const clesSocket = new Set(Object.keys(attachmentSocketSelect));
+      const clesCompletes = new Set(Object.keys(attachmentFullSelect));
+
+      expect({
+        absentesDuFil: [...clesCompletes].filter((k) => !clesSocket.has(k)).sort(),
+        absentesDuDetail: [...clesSocket].filter((k) => !clesCompletes.has(k)).sort(),
+      }).toEqual({
+        absentesDuFil: [...ENVELOPPE_SERVEUR].sort(),
+        absentesDuDetail: [],
+      });
+    });
   });
 
   describe('attachmentForwardPreviewSelect', () => {

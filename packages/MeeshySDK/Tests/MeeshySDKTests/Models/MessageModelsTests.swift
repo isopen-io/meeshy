@@ -300,6 +300,44 @@ final class MessageModelsTests: XCTestCase {
         XCTAssertEqual(try attachment(#"{"id":"a1","isBlurred":true}"#).declaredProtection, true)
     }
 
+    /// #7070/#7098 — décoder (`APIMessageAttachment`) n'est pas lire : la
+    /// struct acceptait déjà ces huit champs (`APIAttachmentDecodingTests`),
+    /// mais `toMessage(currentUserId:)` — le chemin réseau `message:new` /
+    /// `message:edited` — ne les portait pas au DOMAINE
+    /// (`MeeshyMessageAttachment`), le seul type que les lecteurs produit
+    /// consultent (`FocalAttachmentBlock`, `MessageActionResolver`,
+    /// `UpsertEquality`). Témoin sur le domaine, jamais sur l'API struct.
+    func test_toMessage_portsAttachmentProtectionAndEncryption_toTheDomain() throws {
+        let json = """
+        {
+          "id":"srv1","conversationId":"c1","senderId":"u1",
+          "content":null,"createdAt":"2026-09-19T10:00:00Z",
+          "attachments":[{
+            "id":"att-secret","mimeType":"image/jpeg","fileUrl":"https://cdn.example/secret.jpg",
+            "isViewOnce":true,"maxViewOnceCount":1,"viewOnceCount":0,"isBlurred":true,
+            "effectFlags":4,"isForwarded":true,"forwardedFromAttachmentId":"att-original",
+            "isEncrypted":true,"encryptionMode":"e2ee"
+          }]
+        }
+        """
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let api = try decoder.decode(APIMessage.self, from: Data(json.utf8))
+
+        let message = api.toMessage(currentUserId: "u2")
+
+        let att = try XCTUnwrap(message.attachments.first)
+        XCTAssertTrue(att.isViewOnce, "une pièce à vue unique reçue en direct doit rester protégée")
+        XCTAssertEqual(att.maxViewOnceCount, 1)
+        XCTAssertEqual(att.viewOnceCount, 0)
+        XCTAssertTrue(att.isBlurred)
+        XCTAssertEqual(att.effectFlags, 4)
+        XCTAssertTrue(att.isForwarded)
+        XCTAssertEqual(att.forwardedFromAttachmentId, "att-original")
+        XCTAssertTrue(att.isEncrypted, "une pièce chiffrée doit activer la restriction d'actions")
+        XCTAssertEqual(att.encryptionMode, "e2ee")
+    }
+
     // MARK: - ReplyReference : l'avatar de l'auteur cite
 
     /// Le champ avatar est OPTIONNEL, et il doit le rester : un blob

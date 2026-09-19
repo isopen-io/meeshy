@@ -217,6 +217,8 @@ post-*
 !apps/web/__tests__/components/post-detail-background-sound.test.tsx
 !apps/web-v2/src/lib/api/post-media-upload.ts
 !apps/web-v2/src/lib/api/post-media-upload.test.ts
+!services/gateway/src/services/notifications/post-media-thumbnail.ts
+!services/gateway/src/services/notifications/fanout/post-mention.ts
 
 # Development runtime (dev.sh)
 .pids/

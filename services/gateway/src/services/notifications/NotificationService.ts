@@ -32,14 +32,12 @@ import {
   type NotificationPreference as NotifPrefs,
 } from '@meeshy/shared/types/preferences';
 import { isWithinDnd } from '@meeshy/shared/utils/notification-dnd';
-import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 import {
   resolveUserLanguage,
   resolveUserLanguagesOrdered,
   resolvePrismTranslation,
 } from '@meeshy/shared/utils/conversation-helpers';
-import { formatClock } from '@meeshy/shared/utils/duration-format';
-import { notificationString, buildNotificationDisplay, formatFileSizeI18n, type NotificationStringKey } from '@meeshy/shared/utils/notification-strings';
+import { notificationString, buildNotificationDisplay } from '@meeshy/shared/utils/notification-strings';
 import { publicMediaUrlFromEnv } from '../attachments/publicMediaUrl';
 import { recipientDateLocale, recipientLanguage } from '../../utils/recipient-language';
 import { notificationLogger, securityLogger } from '../../utils/logger-enhanced';
@@ -52,149 +50,48 @@ import { visibleNotificationsWhere } from './visibleNotificationsWhere';
 import type { ServerEmitIOWithRooms } from '../../socketio/serverEmit';
 import { PushNotificationService } from '../PushNotificationService';
 import { EmailService } from '../EmailService';
-import { getCommunityCoMemberIds } from '../posts/communityVisibility';
-import { filterPostConsumers } from '../posts/postAudience';
 import { loadPostAcl, canUserConsumePost } from '../posts/postVisibility';
-
-function formatDuration(ms: number): string {
-  return formatClock(Math.round(ms / 1000));
-}
-
-/**
- * La SOURCE du Prisme d'un message : ses traductions SERVABLES sur le canal
- * push, plus sa langue d'origine — qui concourt à son propre rang (règle #3) et
- * n'est donc jamais un court-circuit.
- *
- * Elle ne dépend PAS du destinataire : un même message se relit une fois pour
- * tout un éventail, et c'est la DESCENTE qui est par lecteur.
- */
-export type MessagePrismSource = {
-  readonly translations: Readonly<Record<string, string>>;
-  readonly originalLanguage: string | null;
-};
-
-/**
- * Ce qu'UNE relecture de message rend aux éventails qui n'ont pas de gate
- * d'éligibilité — la source du Prisme, et l'horloge de la bulle.
- *
- * Les deux ne se mélangent pas : la première dit ce qui TRADUIT l'aperçu, la
- * seconde ce qui l'ORDONNE dans la conversation. Elles voyagent ensemble parce
- * qu'elles viennent de la même lecture, pas parce qu'elles répondent à la même
- * question — d'où deux types et non un.
- *
- * Cycle 126 : la NSE pré-enregistre une bulle pour TOUT éventail qui pousse un
- * `messageId`. `createMessageNotification` datait la sienne depuis sa relecture
- * VIVANTE (qui lui sert aussi de gate d'éligibilité) ; la réponse et la mention
- * n'avaient que celle-ci, qui ne demandait pas ces deux colonnes — leur bulle
- * était donc datée par l'horloge du DEVICE, et mal ordonnée dans le fil.
- */
-export type MessageBannerSource = MessagePrismSource & {
-  readonly createdAt: Date | null;
-  readonly messageType: string | null;
-  readonly liveness: MessageLiveness;
-};
-
-/**
- * Ce qu'une relecture a APPRIS de la vie du message — trois états, et le
- * troisième n'est pas un détail de forme.
- *
- * `createMessageNotification` porte cette garde depuis toujours, et son
- * commentaire dit pourquoi : entre le commit du message et l'éventail il peut
- * s'écouler des centaines de millisecondes, et un message rappelé dans cette
- * fenêtre ne doit pas pousser son texte ORIGINAL sur un écran verrouillé. La
- * règle vaut mot pour mot pour la réponse et la mention, qui relisent la MÊME
- * ligne dans la MÊME fenêtre (cycle 127).
- *
- *  - `live` — la ligne a été lue : ni rappelée, ni expirée. Annoncer.
- *  - `gone` — la ligne a été lue et PROUVE le rappel ou l'expiration. Se taire.
- *  - `unknown` — la lecture n'a rien PROUVÉ : elle a levé, ou n'a rendu aucune
- *    ligne. Annoncer.
- *
- * La distinction `gone` / `unknown` est la leçon du cycle 112 : « la dépendance
- * n'a pas répondu » et « la réponse dit non » sont deux verdicts, et un `catch`
- * qui les confond transforme un hoquet Mongo en silence pour tout un fil. La
- * relecture reste donc fail-OPEN sur l'ERREUR — une bannière appauvrie se
- * rattrape, une annonce perdue non — et fail-CLOSED sur la PREUVE, où c'est un
- * secret qui est en jeu.
- *
- * **Une ligne ABSENTE est `unknown`, jamais `gone`**, et le dépôt le tenait déjà
- * pour dit : le balayage de rétraction de l'éventail refuse d'agir dessus dans
- * les mêmes termes — « `deletedAt` non nul est la SEULE preuve d'un rappel. Une
- * ligne absente ne prouve rien, et aucun chemin de la gateway ne supprime un
- * message physiquement ». Le mécanisme qui la produit est réel : le message vient
- * d'être committé, et une lecture servie par un secondaire en retard sur le jeu
- * de réplicas rend `null` pour un message parfaitement vivant. En faire une
- * preuve ferait perdre des annonces qu'aucun réessai ne rattrape.
- */
-export type MessageLiveness = 'live' | 'gone' | 'unknown';
-
-/** Rien à traduire — la réponse de `previewPrismSource` sur un aperçu sans source. */
-const EMPTY_PRISM_SOURCE: MessagePrismSource = {
-  translations: {},
-  originalLanguage: null,
-};
-
-/**
- * Ce qu'une relecture EN ÉCHEC rend : aucune traduction, aucune horloge, et un
- * verdict de vie qui n'accuse RIEN. Distinct d'`EMPTY_PRISM_SOURCE`, dont il
- * partage la forme mais pas la question : l'un dit « rien ne traduit cet
- * aperçu », l'autre « je n'ai pas pu lire ».
- */
-const UNKNOWN_BANNER_SOURCE: MessageBannerSource = {
-  ...EMPTY_PRISM_SOURCE,
-  createdAt: null,
-  messageType: null,
-  liveness: 'unknown',
-};
-
-/**
- * Ce que l'aperçu composé par un éventail EST — donc ce qui le traduit.
- *
- * `Message.translations` ne traduit que `Message.content` : la question « peut-on
- * substituer une traduction dans ce texte ? » n'a de réponse qu'au site qui a
- * COMPOSÉ l'aperçu, jamais chez le résolveur, qui verrait trois textes de même
- * type. Le cycle 122 la posait par un booléen (`previewIsMessageContent`) ; le
- * cycle 123 en fait un type SOMME, pour une raison mesurée : la transcription
- * d'un vocal n'est pas « non substituable », elle est substituable par une AUTRE
- * carte (`MessageAttachment.translations`). Un booléen et une source séparés
- * pourraient se contredire ; ces trois formes s'excluent par construction.
- *
- *  - `message-content` — cas nominal : l'aperçu EST le contenu du message ;
- *  - `protected-placeholder` — éphémère / vue unique / flouté / chiffré :
- *    l'aperçu est un placeholder. Rien ne le traduit, et rien de la traduction
- *    du texte masqué ne doit partir sur le fil (cycle 123) ;
- *  - `transcript` — la transcription d'un vocal, avec SA carte.
- */
-export type PreviewPrismBasis =
-  | { readonly kind: 'message-content' }
-  | { readonly kind: 'protected-placeholder' }
-  | { readonly kind: 'transcript'; readonly source: MessagePrismSource };
-
-const MESSAGE_CONTENT_BASIS: PreviewPrismBasis = { kind: 'message-content' };
-
-/**
- * Ce qu'il faut d'un média pour COMPOSER le corps d'une bannière — cycle 125 bis.
- *
- * `buildMessageNotificationBodyI18n` remplace un texte ABSENT par le libellé
- * détaillé de la première pièce jointe (« 🎵 Audio · 0:07 », « 📷 Photo ·
- * 1024×768 ») et suffixe les badges des suivantes. Les TROIS éventails de
- * `messageNotificationFanOut` en ont besoin : sans ces champs, la bannière
- * d'une RÉPONSE ou d'une MENTION portant un vocal ou une photo sans légende a
- * un corps VIDE, pendant que celle d'un message simple porte le libellé.
- *
- * Distinct des champs de RICH-PUSH (`firstAttachmentUrl`, `firstAttachmentMimeType`)
- * et de l'inventaire persisté (`hasAttachments`, `firstAttachmentFilename`),
- * que seule la bannière d'un message simple porte : ceux-ci composent un TEXTE,
- * ceux-là transportent un fichier. La séparation est celle du cycle 125 — une
- * charge ne se garde pas comme une chaîne.
- */
-export type NotificationBannerMedia = {
-  readonly attachments?: ReadonlyArray<NotificationAttachmentSummary>;
-  readonly firstAttachmentFileSize?: number | null;
-  readonly firstAttachmentDuration?: number | null;
-  readonly firstAttachmentWidth?: number | null;
-  readonly firstAttachmentHeight?: number | null;
-};
+import { pushCategoryForNotificationType, buildPushHeader, dedupePushSubtitle } from './push-header';
+import {
+  type MessagePrismSource,
+  type MessageBannerSource,
+  type MessageLiveness,
+  type PreviewPrismBasis,
+  type NotificationBannerMedia,
+  type NotificationActorProfile,
+  EMPTY_PRISM_SOURCE,
+  UNKNOWN_BANNER_SOURCE,
+  MESSAGE_CONTENT_BASIS,
+  protectedPreview,
+  buildMessageNotificationBodyI18n,
+  truncateMessage,
+  buildOwnerSubtitleWithDetail,
+  targetPreviewBody,
+} from './notification-preview';
+import { resolvePostMedia } from './post-media-thumbnail';
+import type { FanoutDependencies } from './fanout/dependencies';
+import {
+  getStoryNotificationRecipients,
+  createStoryCommentNotificationsBatch,
+  type StoryNotificationRecipients,
+  type StoryCommentFanoutParams,
+} from './fanout/story-comment';
+import {
+  createCommentMentionNotificationsBatch,
+  type CommentMentionFanoutParams,
+} from './fanout/comment-mention';
+import {
+  createPostMentionNotificationsBatch,
+  type PostMentionFanoutParams,
+} from './fanout/post-mention';
+import {
+  createFriendContentNotificationsBatch,
+  type FriendContentFanoutParams,
+} from './fanout/friend-content';
+import {
+  createMemberJoinedNotification,
+  createMemberJoinedNotificationsBatch,
+} from './fanout/member-joined';
 
 /** Budget APNs — au-delà, la charge est dégradée par étages (cf. `createNotification`). */
 const PUSHED_TRANSLATION_MAX_CHARS = 200;
@@ -212,22 +109,6 @@ function pickMetadataString(metadata: unknown, key: string): string {
 }
 
 /**
- * Resolve the best available name for a notification actor:
- * displayName first, then username, then a neutral fallback.
- */
-function resolveActorName(actor: NotificationActor | undefined): string {
-  return actor?.displayName?.trim() || actor?.username?.trim() || 'Meeshy';
-}
-
-/**
- * GW4 — native iOS category set by the PRODUCER (the NSE `applyCategory`
- * stays as fallback for legacy payloads). Mirrors the NSE type mapping with
- * one deliberate divergence: the CALL family is split into
- * `MEESHY_CALL_INCOMING` (answer/decline) vs `MEESHY_CALL_MISSED`
- * (callback/view) so a finished call never shows an "Answer" action.
- * Unknown types return undefined — no category means no misleading actions.
- */
-/**
  * Ce qu'il faut pour remplacer une bannière réécrite : la ligne RELUE (seule
  * source du texte d'après) et le cadrage déjà composé pour le socket, pour que
  * la bannière et le toast in-app disent exactement la même chose.
@@ -237,473 +118,6 @@ type ReproducedNotificationPush = {
   readonly title: string;
   readonly subtitle?: string;
 };
-
-export function pushCategoryForNotificationType(type: NotificationType): string | undefined {
-  switch (type) {
-    case 'new_message':
-    case 'message_reply':
-    case 'reply':
-    case 'message_forwarded':
-    case 'message_reaction':
-    case 'reaction':
-    case 'new_conversation':
-    case 'new_conversation_direct':
-    case 'new_conversation_group':
-    case 'added_to_conversation':
-      return 'MEESHY_MESSAGE';
-    case 'mention':
-    case 'user_mentioned':
-      return 'MEESHY_MENTION';
-    case 'friend_request':
-    case 'contact_request':
-      return 'MEESHY_FRIEND_REQUEST';
-    case 'post_like':
-    case 'post_comment':
-    case 'post_repost':
-    case 'story_reaction':
-    case 'status_reaction':
-    case 'comment_like':
-    case 'comment_reply':
-    case 'comment_reaction':
-    case 'story_new_comment':
-    case 'story_thread_reply':
-    case 'friend_story_comment':
-    case 'friend_new_story':
-    case 'friend_new_post':
-    case 'friend_new_mood':
-      return 'MEESHY_SOCIAL';
-    case 'incoming_call':
-      return 'MEESHY_CALL_INCOMING';
-    case 'missed_call':
-    case 'call_ended':
-    case 'call_declined':
-    case 'call_recording_ready':
-      return 'MEESHY_CALL_MISSED';
-    default:
-      return undefined;
-  }
-}
-
-/**
- * Build the APN/FCM push header (title + optional subtitle) for a notification.
- *
- * Keeps the title focused on the sender so iOS Communication Notifications
- * (`INSendMessageIntent.donate`) can rewrite the banner around the sender's
- * INPerson without losing the conversation name. The conversation name is
- * carried in a separate `subtitle` field — APN-native, displayed by iOS
- * between title and body and untouched by Communication Intent donation.
- *
- * Conversation-scoped notifications (messages, mentions, reactions) get the
- * conversation name as subtitle when the conversation is a group/global chat
- * — the recipient must know WHICH group the activity happened in. System
- * events keep the title-only layout where the actor name is the natural focus.
- *
- * Exported for unit testing — the helper is pure and side-effect free.
- */
-const CONVERSATION_SUBTITLE_TYPES = new Set([
-  'new_message',
-  'user_mentioned',
-  'message_reaction',
-]);
-
-/** Longueur au-delà de laquelle une bannière iOS 3 lignes coupe de toute façon. */
-const PUSH_SUBTITLE_MAX_LENGTH = 120;
-
-export function buildPushHeader(input: {
-  type: string;
-  customTitle?: string;
-  actor?: NotificationActor;
-  context: {
-    conversationType?: string | null;
-    conversationTitle?: string | null;
-  };
-  /**
-   * Fragment d'action localisé, SANS l'acteur (« a commenté un réel ») —
-   * `NotificationDisplay.action`. Présent pour les notifications sociales,
-   * `null` pour les messages / appels / système.
-   *
-   * Il existe parce qu'iOS réécrit le titre d'une Communication Notification
-   * avec le `displayName` de l'`INPerson` expéditeur : le titre riche persisté
-   * n'atteindrait jamais l'écran. L'action passe donc par le subtitle.
-   */
-  action?: string | null;
-  /** Sous-titre d'entité persisté (cible du geste), quand la ligne en porte un. */
-  entitySubtitle?: string | null;
-}): { title: string; subtitle: string | undefined } {
-  const isMessage = CONVERSATION_SUBTITLE_TYPES.has(input.type);
-  const conversationType = input.context.conversationType?.trim() || '';
-  const conversationTitle = input.context.conversationTitle?.trim() || '';
-  const isGroupMessage = isMessage
-    && conversationType !== ''
-    && conversationType !== 'direct';
-
-  const actorName = resolveActorName(input.actor);
-  const title = input.customTitle?.trim() || actorName;
-  // Le subtitle ne porte que le NOM CANONIQUE du groupe — l'icône de type et le
-  // renommage local (customName) sont résolus CÔTÉ CLIENT (NSE + toast), en
-  // Local-First, depuis les préférences locales (cf. ConversationSnapshot App
-  // Group). Le gateway ne recompose pas la présentation systématiquement.
-  const conversationSubtitle = isGroupMessage && conversationTitle !== ''
-    ? conversationTitle
-    : undefined;
-
-  // Ordre : action sociale → cible explicite → nom de conversation.
-  //
-  // L'action se suffit à elle-même : l'auteur du contenu y est déjà fusionné
-  // (« a commenté un réel DE WINDIE NH ») et l'aperçu du contenu visé occupe
-  // le CORPS. Y adjoindre la cible reproduirait, sur trois lignes, la même
-  // information écrite deux fois — le défaut signalé sur les réactions.
-  const action = input.action?.trim() || '';
-  const entity = input.entitySubtitle?.trim() || '';
-  const subtitle = (action || entity || conversationSubtitle || '').slice(0, PUSH_SUBTITLE_MAX_LENGTH)
-    || undefined;
-
-  return { title, subtitle };
-}
-
-/**
- * La bannière ne dit jamais deux fois la même phrase.
- *
- * `buildPushHeader` promeut l'ACTION en subtitle ; le corps du push est le
- * `content` PERSISTÉ. Les deux sont légitimes et, la plupart du temps,
- * différents — l'action au-dessus, l'aperçu du contenu en dessous. Mais pour
- * une story / un post / un réel SANS excerpt, `content` retombe justement sur
- * la phrase d'action (« a publié une nouvelle story »), parce que la ligne de
- * la LISTE in-app n'a pas de sous-titre pour la porter et ne doit jamais être
- * vide — invariant explicite, tenu par
- * `NotificationService.friendcontent.test.ts`. La bannière affichait alors la
- * même phrase deux fois (signalé par le porteur produit le 2026-08-22).
- *
- * Le dédoublonnage se fait ICI, au seul point où les deux lignes se
- * rencontrent : ni le contenu persisté (la liste en a besoin) ni
- * `buildPushHeader` (le toast Socket.IO consomme son subtitle) ne bougent.
- *
- * **C'est le SUBTITLE qui tombe, jamais le corps** : le corps part aussi vers
- * FCM (bloc `notification`) et WebPush, où le subtitle n'existe pas — le vider
- * exposerait trois plateformes à une alerte sans texte pour ne corriger qu'iOS.
- *
- * Seul le doublon EXACT (aux espaces de bord près) est supprimé : le corps est
- * tronqué à 200 et le subtitle à 120, donc un subtitle qui n'est qu'un préfixe
- * du corps porte peut-être une information de plus — le faire disparaître
- * cacherait du texte au lieu d'en dédoublonner.
- *
- * Exporté pour test unitaire — la fonction est pure.
- */
-export function dedupePushSubtitle(input: {
-  subtitle?: string;
-  body: string;
-}): string | undefined {
-  const subtitle = input.subtitle?.trim();
-  if (!subtitle) return undefined;
-  return subtitle === input.body.trim() ? undefined : input.subtitle;
-}
-
-// ──────────────────────────────────────────────────────────────────────────
-// Protected-message preview (view-once / blurred / ephemeral / encrypted)
-// ──────────────────────────────────────────────────────────────────────────
-//
-// Replaces the previous plain-English placeholders ("View-once message",
-// "Hidden message", "Encrypted message") with a compact icon-only body that
-// conveys the protection type + content type without leaking content :
-//   * Ephemeral (TTL):   🔥 + content-type icon + duration   (e.g. "🔥 🎵 5min")
-//   * View-once:         👁️ + content-type icon              (e.g. "👁️ 🖼️")
-//   * Blurred:           🌫️ + content-type icon              (e.g. "🌫️ 💬")
-//   * Encrypted:         🔒 + content-type icon              (e.g. "🔒 🎬")
-//
-// Emojis are platform-universal so no client-side localisation is needed for
-// the body itself. The `locKey` is still emitted for compatibility with the
-// iOS NSE locKey path (used only as a fallback when E2EE decryption fails).
-
-const PROTECTION_ICON = Object.freeze({
-  ephemeral: '🔥',
-  viewOnce:  '👁️',
-  blurred:   '🌫️',
-  encrypted: '🔒',
-} as const);
-
-const CONTENT_TYPE_ICON = Object.freeze({
-  text:     '💬',
-  audio:    '🎵',
-  image:    '🖼️',
-  video:    '🎬',
-  file:     '📎',
-  location: '📍',
-  system:   '⚙️',
-} as const);
-
-type ProtectedMessageType = keyof typeof CONTENT_TYPE_ICON;
-
-/**
- * Maps a Prisma `Message.messageType` to its visual icon. Falls back to the
- * speech-balloon (text) when the value is unknown so the body always renders.
- */
-export function contentTypeIcon(messageType: string | null | undefined): string {
-  if (!messageType) return CONTENT_TYPE_ICON.text;
-  const key = messageType.toLowerCase() as ProtectedMessageType;
-  return CONTENT_TYPE_ICON[key] ?? CONTENT_TYPE_ICON.text;
-}
-
-/**
- * Compact human-readable duration for an ephemeral message TTL. Returns
- * undefined when the duration is non-positive or unknown so the caller can
- * omit the suffix entirely.
- *
- * Outputs (rounded, FR-style abbreviations to stay locale-neutral) :
- *   < 60s   → "Ns"      ("30s")
- *   < 60min → "Nmin"    ("5min")
- *   < 24h   → "Nh"      ("2h")
- *   else    → "Nj"      ("3j" — for "jours/days")
- */
-export function formatEphemeralDuration(
-  expiresAt: Date | null | undefined,
-  createdAt: Date | null | undefined,
-): string | undefined {
-  if (!expiresAt || !createdAt) return undefined;
-  const ms = expiresAt.getTime() - createdAt.getTime();
-  if (!Number.isFinite(ms) || ms <= 0) return undefined;
-  const sec = Math.round(ms / 1000);
-  if (sec < 60)     return `${sec}s`;
-  const min = Math.round(sec / 60);
-  if (min < 60)     return `${min}min`;
-  const h = Math.round(min / 60);
-  if (h < 24)       return `${h}h`;
-  const d = Math.round(h / 24);
-  return `${d}j`;
-}
-
-/**
- * L'identité d'acteur qu'une notification affiche, résolue par l'APPELANT.
- *
- * Les trois créateurs ci-dessous rechargeaient l'expéditeur par
- * `user.findUnique({ id: senderId })` et abandonnaient sur `null`. Deux
- * conséquences, corrigées par ce paramètre :
- *
- *  - un participant ANONYME n'a pas de ligne `User` (`Participant.userId` est
- *    nullable), donc la lecture rendait toujours `null` : un anonyme ne
- *    notifiait personne, ni par lien de partage ni par le chemin socket. Son
- *    `displayName`/`avatar` de participant est la seule identité qui existe —
- *    et elle suffit à nommer une notification ;
- *  - la lecture était refaite PAR DESTINATAIRE alors que l'appelant venait de
- *    la faire une fois pour tout l'éventail.
- *
- * Optionnel : sans lui, le comportement historique (lecture + abandon sur
- * absence) est conservé à l'identique pour tous les appelants existants.
- */
-export type NotificationActorProfile = {
-  username: string;
-  displayName: string | null;
-  avatar: string | null;
-};
-
-/**
- * Builds the sanitised body for a protected message. Returns `null` when the
- * message is NOT protected (caller should keep the original text).
- *
- * Precedence : ephemeral > view-once > blurred > encrypted. Only one
- * protection icon is shown to keep the body compact, but the most restrictive
- * protection always wins.
- *
- * The `locKey` is returned alongside for the iOS NSE locKey path. It is
- * preserved as a semantic key (not a localised string) so client apps can
- * resolve it through their own `Localizable.xcstrings` when needed (mostly
- * for E2EE-undecryptable messages where the gateway body cannot be trusted).
- */
-export function protectedPreview(input: {
-  messageType: string | null | undefined;
-  isEncrypted?: boolean | null;
-  isViewOnce?: boolean | null;
-  isBlurred?: boolean | null;
-  effectFlags?: number | null;
-  expiresAt?: Date | null;
-  createdAt?: Date | null;
-}): { preview: string; locKey: string } | null {
-  const flags = input.effectFlags ?? 0;
-  const isEphemeral = (input.expiresAt instanceof Date) || (flags & MESSAGE_EFFECT_FLAGS.EPHEMERAL) !== 0;
-  const isViewOnce  = (input.isViewOnce === true) || (flags & MESSAGE_EFFECT_FLAGS.VIEW_ONCE) !== 0;
-  const isBlurred   = (input.isBlurred  === true) || (flags & MESSAGE_EFFECT_FLAGS.BLURRED)   !== 0;
-  const isEncrypted = input.isEncrypted === true;
-  if (!isEphemeral && !isViewOnce && !isBlurred && !isEncrypted) return null;
-
-  const icon = contentTypeIcon(input.messageType);
-
-  if (isEphemeral) {
-    const duration = formatEphemeralDuration(input.expiresAt ?? null, input.createdAt ?? null);
-    const preview = duration
-      ? `${PROTECTION_ICON.ephemeral} ${icon} ${duration}`
-      : `${PROTECTION_ICON.ephemeral} ${icon}`;
-    return { preview, locKey: 'notification.ephemeral_message' };
-  }
-  if (isViewOnce) {
-    return { preview: `${PROTECTION_ICON.viewOnce} ${icon}`, locKey: 'notification.view_once_message' };
-  }
-  if (isBlurred) {
-    return { preview: `${PROTECTION_ICON.blurred} ${icon}`, locKey: 'notification.hidden_message' };
-  }
-  // isEncrypted (last branch — least restrictive flag)
-  return { preview: `${PROTECTION_ICON.encrypted} ${icon}`, locKey: 'notification.encrypted_message' };
-}
-
-/**
- * LE DOMICILE DE CETTE LOI EST `@meeshy/shared/utils/attachment-protection`
- * depuis #6189 — elle gouverne TROIS clients, donc elle ne pouvait pas rester
- * dans un service du gateway : `apps/web-v2` ne pouvait pas l'importer, et ne
- * la lisait donc nulle part (une pièce `isViewOnce` sur un message non protégé
- * rendait son `<img>` et l'URL en clair).
- *
- * Réexportée ici, et SEULEMENT réexportée : un second corps serait deux lois
- * pour une règle, ce que `tasks/lessons.md` § 586 fait payer. Les appelants du
- * gateway peuvent continuer à l'importer d'ici ; les nouveaux la prennent à son
- * domicile.
- */
-export { maskedAttachment } from '@meeshy/shared/utils/attachment-protection';
-
-function extractExtension(filename: string | null | undefined): string | null {
-  if (!filename) return null;
-  const dot = filename.lastIndexOf('.');
-  if (dot < 0 || dot === filename.length - 1) return null;
-  return filename.slice(dot + 1).toLowerCase();
-}
-
-const DOC_LABELS: Record<string, string> = {
-  pdf: '📄 PDF',
-  doc: '📝 Word',
-  docx: '📝 Word',
-  xls: '📊 Excel',
-  xlsx: '📊 Excel',
-  csv: '📊 CSV',
-  ppt: '📊 PowerPoint',
-  pptx: '📊 PowerPoint',
-  txt: '📝 Texte',
-  rtf: '📝 RTF',
-  md: '📝 Markdown',
-  json: '📋 JSON',
-  xml: '📋 XML',
-  html: '📋 HTML',
-  zip: '📦 ZIP',
-  rar: '📦 RAR',
-  '7z': '📦 7z',
-  tar: '📦 TAR',
-  gz: '📦 GZ',
-};
-
-function formatDocumentLabel(ext: string): string {
-  return DOC_LABELS[ext] ?? `📎 Fichier .${ext}`;
-}
-
-type NotificationAttachmentType = 'image' | 'video' | 'audio' | 'document';
-
-type NotificationAttachmentSummary = {
-  type: NotificationAttachmentType;
-  filename?: string | null;
-};
-
-/**
- * Detailed label for a single attachment — used as the notification body base
- * when the message carries no text. Includes dimensions/duration/size.
- */
-export function formatSingleAttachmentLabelI18n(lang: string, params: {
-  type: NotificationAttachmentType;
-  filename?: string | null;
-  fileSize?: number | null;
-  /** Durée en MILLISECONDES (champ `duration` de MessageAttachment, cf. schema.prisma). */
-  duration?: number | null;
-  width?: number | null;
-  height?: number | null;
-}): string {
-  const details: string[] = [];
-
-  if (params.type === 'audio') {
-    if (params.duration) details.push(formatDuration(params.duration));
-    if (params.fileSize) details.push(formatFileSizeI18n(lang, params.fileSize));
-    const word = notificationString(lang, 'attachment.audio');
-    return details.length > 0 ? `${word} · ${details.join(' · ')}` : word;
-  }
-
-  if (params.type === 'video') {
-    if (params.duration) details.push(formatDuration(params.duration));
-    if (params.fileSize) details.push(formatFileSizeI18n(lang, params.fileSize));
-    const word = notificationString(lang, 'attachment.video');
-    return details.length > 0 ? `${word} · ${details.join(' · ')}` : word;
-  }
-
-  if (params.type === 'image') {
-    if (params.width && params.height) details.push(`${params.width}×${params.height}`);
-    if (params.fileSize) details.push(formatFileSizeI18n(lang, params.fileSize));
-    const word = notificationString(lang, 'attachment.photo');
-    return details.length > 0 ? `${word} · ${details.join(' · ')}` : word;
-  }
-
-  const ext = extractExtension(params.filename);
-  const docLabel = ext ? formatDocumentLabel(ext) : notificationString(lang, 'attachment.document');
-  return params.fileSize ? `${docLabel} · ${formatFileSizeI18n(lang, params.fileSize)}` : docLabel;
-}
-
-/**
- * Badge for a group of extra document attachments. Keeps the per-extension
- * label (📄 PDF, 📝 Word…) when the group is homogeneous, falls back to a
- * generic paperclip count otherwise.
- */
-function formatDocumentBadge(lang: string, docs: ReadonlyArray<NotificationAttachmentSummary>): string {
-  const labels = docs.map(doc => {
-    const ext = extractExtension(doc.filename);
-    return ext ? formatDocumentLabel(ext) : notificationString(lang, 'attachment.document');
-  });
-  const homogeneous = labels.every(label => label === labels[0]);
-  if (homogeneous) {
-    return docs.length > 1 ? `${labels[0]} · ${docs.length}` : labels[0];
-  }
-  return notificationString(lang, 'attachment.files', { count: docs.length });
-}
-
-/**
- * Per-type `+N` badges for the attachments beyond the first one (the first is
- * surfaced as inline rich media). Order: images, audios, videos, documents.
- */
-function buildAttachmentBadges(lang: string, rest: ReadonlyArray<NotificationAttachmentSummary>): string {
-  const images = rest.filter(att => att.type === 'image');
-  const audios = rest.filter(att => att.type === 'audio');
-  const videos = rest.filter(att => att.type === 'video');
-  const documents = rest.filter(att => att.type === 'document');
-
-  const segments: string[] = [];
-  if (images.length > 0) segments.push(`+${images.length}📷`);
-  if (audios.length > 0) segments.push(`+${audios.length}🎵`);
-  if (videos.length > 0) segments.push(`+${videos.length}🎬`);
-  if (documents.length > 0) segments.push(formatDocumentBadge(lang, documents));
-  return segments.join(' ');
-}
-
-/**
- * Compose the message notification body: message text (or, when absent, a
- * detailed label for the first attachment) followed by per-type `+N` badges
- * for the remaining attachments. Localized to the recipient's language.
- */
-export function buildMessageNotificationBodyI18n(lang: string, params: {
-  messagePreview?: string;
-  attachments?: ReadonlyArray<NotificationAttachmentSummary>;
-  firstAttachmentFileSize?: number | null;
-  firstAttachmentDuration?: number | null;
-  firstAttachmentWidth?: number | null;
-  firstAttachmentHeight?: number | null;
-}): string {
-  const text = params.messagePreview?.trim() || '';
-  const attachments = params.attachments ?? [];
-
-  if (attachments.length === 0) return text;
-
-  const [first, ...rest] = attachments;
-  const badges = buildAttachmentBadges(lang, rest);
-  const base = text || formatSingleAttachmentLabelI18n(lang, {
-    type: first.type,
-    filename: first.filename,
-    fileSize: params.firstAttachmentFileSize,
-    duration: params.firstAttachmentDuration,
-    width: params.firstAttachmentWidth,
-    height: params.firstAttachmentHeight,
-  });
-
-  return [base, badges].filter(Boolean).join(' ');
-}
 
 /**
  * Notification types whose offline email is a genuine account-security alert
@@ -723,60 +137,6 @@ const SECURITY_EMAIL_NOTIFICATION_TYPES = new Set<string>([
 ]);
 
 const isSecurityEmailType = (type: string): boolean => SECURITY_EMAIL_NOTIFICATION_TYPES.has(type);
-
-/**
- * Borne appliquée à chaque lecture de graphe qui alimente un fan-out de
- * notification. Elle tient le coût sur un post viral ou un auteur à très grand
- * carnet — et elle est nommée pour que le seuil de saturation soit LE MÊME que
- * celui écrit dans le `take` : une constante partagée ne peut pas dériver du
- * test qui la surveille.
- *
- * Les requêtes prennent `FANOUT_ROW_CAP + 1`. La ligne excédentaire est un
- * TÉMOIN, jamais un destinataire : elle est lue, comptée, puis jetée par un
- * `slice`, de sorte que la borne de DIFFUSION reste à sa valeur pendant que sa
- * saturation devient dicible. Sans elle, il faudrait déduire la troncature de
- * « la requête a rendu autant de lignes que la borne » — ce qui déclare tronqué
- * un seau de très exactement `FANOUT_ROW_CAP` engagés, alors qu'il est complet,
- * et fait crier au loup à chaque publication d'un auteur à exactement 500 amis.
- *
- * Portée du témoin : sur une requête sans `distinct` (les amitiés) il est EXACT —
- * une 501e ligne existe si et seulement si la base en avait plus de 500. Sur une
- * requête `distinct` (commentaires, réactions) il reste un signal SUFFISANT : il
- * ne se déclenche jamais à tort, mais il peut se taire sur une troncature que la
- * déduplication a repliée en deçà de la borne. Le seau où la troncature est de
- * loin la plus probable — un auteur à plus de 500 amis est banal, un post à plus
- * de 500 commentateurs distincts ne l'est pas — est celui où le compte est exact.
- */
-const FANOUT_ROW_CAP = 500;
-
-/** Les trois lectures bornées qui composent les seaux d'un fan-out de fil. */
-type FanoutBucket = 'previousComments' | 'friendRequests' | 'reactors';
-
-/**
- * Les trois seaux d'un fan-out de commentaire, et ce qu'on n'a PAS pu lire.
- *
- * `truncatedBuckets` distingue « ce seau est complet » de « ce seau s'arrête à
- * la borne » — deux listes identiques en apparence, dont une seule dit la
- * vérité sur l'audience réelle. Sans ce champ, un fan-out silencieusement
- * tronqué se lit exactement comme un fan-out exhaustif.
- */
-type StoryNotificationRecipients = {
-  authorId: string;
-  friendIds: string[];
-  previousCommenterIds: string[];
-  truncatedBuckets: FanoutBucket[];
-};
-
-/**
- * La part d'une notification `member_joined` qui ne dépend PAS du destinataire.
- * Lue une fois, servie à toute l'audience — c'est ce qui distingue une arrivée
- * (un événement, N destinataires) d'une boucle de N notifications distinctes.
- */
-type MemberJoinedSnapshot = {
-  readonly newMember: { username: string; displayName: string | null; avatar: string | null };
-  readonly conversation: { title: string | null; type: string } | null;
-  readonly memberCount: number;
-};
 
 /**
  * Le lot d'un retrait par chemin JSON. Très au-dessus du réel — une demande
@@ -1335,6 +695,17 @@ export class NotificationService {
 
     notificationLogger.info('Notification suppressed (conversation muted)', { userId, conversationId, type });
     return true;
+  }
+
+  /** Ce qu'un éventail batch emprunte à l'instance — fermé sur `this` à CHAQUE appel (jamais mis en cache : `fanout-delegation.test.ts`, #7093). */
+  private fanoutDependencies(): FanoutDependencies {
+    return {
+      prisma: this.prisma,
+      createNotification: (params) => this.createNotification(params),
+      resolveRecipientLangs: (ids) => this.resolveRecipientLangs(ids),
+      shouldCreateMentionNotification: (s, r) => this.shouldCreateMentionNotification(s, r),
+      isConversationMutedFor: (u, c, t) => this.isConversationMutedFor(u, c, t),
+    };
   }
 
   private async shouldCreateNotification(
@@ -2800,825 +2171,41 @@ export class NotificationService {
   // STORY COMMENT FAN-OUT (Phase 1D)
   // ==============================================
 
-  /**
-   * Resolves the three recipient buckets for story comment notifications.
-   *
-   * Priority order (a user appears in EXACTLY ONE bucket):
-   *   1. storyAuthorId  → STORY_NEW_COMMENT
-   *   2. previousCommenterIds (prior commenters on this post, excl. commenter & author)
-   *                     → STORY_THREAD_REPLY
-   *   3. friendIds (friends of the author, excl. commenter, author, and prior commenters)
-   *                     → FRIEND_STORY_COMMENT
-   */
+  /** Fonction de module (`fanout/story-comment.ts`, ne lit que `prisma`) — le délégué reste pour les 30 témoins qui l'appellent sur l'instance (25 `storycomments` + 5 `fanouttruncation`) ; AUCUN appelant de production hors de cette classe, mesuré le 2026-09-19. */
   async getStoryNotificationRecipients(
     postId: string,
     authorId: string,
     commenterId: string
   ): Promise<StoryNotificationRecipients> {
-    // Cap at FANOUT_ROW_CAP rows to bound fan-out cost on viral posts.
-    // Future: large posts should use a background queue for fan-out.
-    //
-    // Les IDs qui ne seront JAMAIS notifiés sortent PAR LA REQUÊTE, pas par un
-    // filtre en aval : sous la borne, une ligne écartée après coup a quand même
-    // consommé sa place. Et l'auteur qui répond à chacun de ses commentateurs est
-    // l'engagé le plus prolifique de son propre fil — ses réponses évinçaient donc
-    // des destinataires réels du seau, en silence.
-    const excludedEngagerIds = Array.from(new Set([commenterId, authorId]));
-
-    const [previousComments, friendRequests, reactors] = await Promise.all([
-      this.prisma.postComment.findMany({
-        where: {
-          postId,
-          deletedAt: null,
-          authorId: { notIn: excludedEngagerIds },
-        },
-        distinct: ['authorId'],
-        select: { authorId: true },
-        take: FANOUT_ROW_CAP + 1,
-        orderBy: { createdAt: 'desc' },
-      }),
-      this.prisma.friendRequest.findMany({
-        where: {
-          status: 'accepted',
-          OR: [{ senderId: authorId }, { receiverId: authorId }],
-        },
-        select: { senderId: true, receiverId: true },
-        take: FANOUT_ROW_CAP + 1,
-        orderBy: { updatedAt: 'desc' },
-      }),
-      // Include post reactors as thread-engaged participants (same bucket as prior commenters)
-      this.prisma.postReaction.findMany({
-        where: {
-          postId,
-          userId: { notIn: excludedEngagerIds },
-        },
-        distinct: ['userId'],
-        select: { userId: true },
-        take: FANOUT_ROW_CAP + 1,
-        orderBy: { createdAt: 'desc' },
-      }),
-    ]);
-
-    // Une liste rendue à la borne exacte est INDISCERNABLE d'une liste
-    // complète : le seau paraît entier, et le destinataire au-delà de la borne
-    // n'apprend jamais rien. La saturation est donc nommée dans le retour — pour
-    // que l'appelant puisse en tenir compte — et consignée ici, pour qu'elle
-    // soit observable ailleurs que dans le silence d'un utilisateur.
-    //
-    // Le verdict se lit sur la LIGNE TÉMOIN (`take` = borne + 1), pas sur
-    // « autant de lignes que la borne » : un seau qui compte exactement
-    // `FANOUT_ROW_CAP` engagés est COMPLET, et le déclarer tronqué ferait crier
-    // au loup à chaque publication d'un auteur à exactement 500 amis. C'est ce
-    // que la note ci-dessus demande — distinguer « complet » de « s'arrête à la
-    // borne » — et `>=` échouait précisément au point où les deux se touchent.
-    const truncatedBuckets = [
-      previousComments.length > FANOUT_ROW_CAP ? 'previousComments' as const : null,
-      friendRequests.length > FANOUT_ROW_CAP ? 'friendRequests' as const : null,
-      reactors.length > FANOUT_ROW_CAP ? 'reactors' as const : null,
-    ].filter((bucket): bucket is FanoutBucket => bucket !== null);
-
-    if (truncatedBuckets.length > 0) {
-      notificationLogger.warn('Fan-out de commentaire tronqué à la borne', {
-        postId,
-        authorId,
-        buckets: truncatedBuckets,
-        cap: FANOUT_ROW_CAP,
-      });
-    }
-
-    // Le `notIn` plus haut est ce qui protège le BUDGET ; les `filter` ci-dessous
-    // restent la POSTCONDITION de la méthode. Deux rôles distincts, pas une garde
-    // en double : la requête décide qui coûte une ligne, la méthode répond de ce
-    // qu'elle rend — « ni l'auteur ni le commentateur ne sortent d'ici » tient
-    // quelle que soit la clause `where` du jour.
-    const isNotifiableEngager = (id: string): boolean =>
-      id !== authorId && id !== commenterId;
-
-    const rawPreviousCommenterIds = previousComments
-      .slice(0, FANOUT_ROW_CAP)
-      .map((c: { authorId: string }) => c.authorId)
-      .filter(isNotifiableEngager);
-
-    // Merge reactor user IDs into the "thread engagement" bucket.
-    // Reactors who also commented are deduplicated via Set — they still appear only once.
-    const reactorIds = reactors
-      .slice(0, FANOUT_ROW_CAP)
-      .map((r: { userId: string }) => r.userId)
-      .filter(isNotifiableEngager);
-
-    const previousCommenterIds = Array.from(
-      new Set([...rawPreviousCommenterIds, ...reactorIds])
-    );
-
-    const previousCommenterSet = new Set(previousCommenterIds);
-
-    // L'auteur ancre CHAQUE ligne d'amitié — l'écarter par la requête est
-    // impossible ici : sa présence est structurelle, pas budgétaire.
-    const allFriendIds = friendRequests
-      .slice(0, FANOUT_ROW_CAP)
-      .flatMap((fr: { senderId: string; receiverId: string }) => [fr.senderId, fr.receiverId])
-      .filter(isNotifiableEngager);
-
-    const friendIds = Array.from(new Set(allFriendIds)).filter(
-      (id: string) => !previousCommenterSet.has(id)
-    );
-
-    return { authorId, friendIds, previousCommenterIds, truncatedBuckets };
+    return getStoryNotificationRecipients(this.prisma, postId, authorId, commenterId);
   }
 
-  /**
-   * Fan-out notifications when a new top-level comment is added to a story.
-   *
-   *  - Story author        → STORY_NEW_COMMENT  (priority: normal)
-   *  - Previous commenters → STORY_THREAD_REPLY (priority: low)
-   *  - Friends of author   → FRIEND_STORY_COMMENT (priority: low)
-   *
-   * Commenter never receives a notification.
-   */
-  async createStoryCommentNotificationsBatch(params: {
-    postId: string;
-    commentId: string;
-    storyAuthorId: string;
-    commenterId: string;
-    commentExcerpt?: string;
-    /**
-     * Type du post commenté. Pilote le wording (« story » vs « publication »
-     * vs « humeur ») et le bucket auteur : pour un post non-story, l'auteur
-     * est déjà notifié via `createPostCommentNotification` (route), donc le
-     * bucket 1 est sauté pour éviter la double notification.
-     * Défaut STORY (compat avec les appels existants).
-     */
-    postType?: 'STORY' | 'POST' | 'MOOD' | 'STATUS' | 'REEL';
-    /** Date de publication ISO du contenu commenté (contexte expiry côté client). */
-    postCreatedAt?: string | Date;
-    /** Date d'expiration ISO du contenu commenté (story/status éphémère). */
-    postExpiresAt?: string | Date;
-    /**
-     * User IDs to exclude from fan-out buckets (story_thread_reply, friend_story_comment).
-     * Use to pass mentionedUserIds so users who received user_mentioned don't also get
-     * a lower-priority story thread/friend notification.
-     * The story author always gets STORY_NEW_COMMENT regardless of this list.
-     */
-    excludeUserIds?: string[];
-    /**
-     * Visibilité du post commenté. Filtre les buckets fan-out (thread + amis)
-     * exactement comme `SocialEventsHandler.getVisibilityFilteredRecipients` et
-     * `createFriendContentNotificationsBatch` : un post ONLY/EXCEPT/PRIVATE/
-     * COMMUNITY ne doit JAMAIS notifier (extrait de commentaire inclus) un
-     * utilisateur qui n'a pas le droit de le voir.
-     *
-     * REQUIS — annoncé par les cycles 28, 29 et 30, qui l'avaient laissé
-     * `visibility?` à défaut `PUBLIC`. Une garde qu'on désarme en omettant un
-     * paramètre optionnel n'est pas une garde : rien ne signalait l'oubli, ni
-     * au build ni à l'exécution. Le prix se paie une fois, à la déclaration.
-     */
-    visibility: string | null | undefined;
-    /** Liste d'IDs pour les modes ONLY (autorisés) / EXCEPT (exclus). */
-    visibilityUserIds?: string[];
-  }): Promise<void> {
-    const [actor, postAuthor] = await Promise.all([
-      this.prisma.user.findUnique({
-        where: { id: params.commenterId },
-        select: { username: true, displayName: true, avatar: true },
-      }),
-      this.prisma.user.findUnique({
-        where: { id: params.storyAuthorId },
-        select: { username: true, displayName: true },
-      }),
-    ]);
-
-    if (!actor) return;
-
-    // La saturation des seaux est consignée par `getStoryNotificationRecipients`
-    // lui-même — là où elle est constatée, donc pour TOUS ses appelants et pas
-    // seulement pour celui-ci.
-    const { authorId, friendIds, previousCommenterIds } =
-      await this.getStoryNotificationRecipients(
-        params.postId,
-        params.storyAuthorId,
-        params.commenterId
-      );
-
-    // Filtre de visibilité — miroir de SocialEventsHandler.getVisibilityFilteredRecipients
-    // et de createFriendContentNotificationsBatch : un post restreint ne doit jamais
-    // fanout un commentaire (extrait inclus) vers un utilisateur qui ne peut pas le voir.
-    // L'auteur (bucket STORY_NEW_COMMENT) est exempt — il possède le post.
-    const visibility = params.visibility;
-    const visibilityUserIdSet = new Set(params.visibilityUserIds ?? []);
-    const coMemberIds = visibility === 'COMMUNITY'
-      ? new Set(await getCommunityCoMemberIds(this.prisma, params.storyAuthorId))
-      : null;
-    // Ne s'applique QU'À `friendIds`, une sortie d'ÉNUMÉRATEUR : ces gens SONT
-    // les amis actuels de l'auteur, dépliés de son graphe quelques lignes plus
-    // haut. Leur amitié n'est donc pas à re-vérifier, et seules les listes
-    // nominatives peuvent encore les écarter. Un post COMMUNITY ne passe jamais
-    // ici : il a sa propre branche, adossée au graphe communauté.
-    const canSeeAsFriend = (userId: string): boolean => {
-      switch (visibility) {
-        case 'PRIVATE': return false;
-        case 'ONLY': return visibilityUserIdSet.has(userId);
-        case 'EXCEPT': return !visibilityUserIdSet.has(userId);
-        default: return true; // PUBLIC / FRIENDS — amis par construction
-      }
-    };
-    // Un post COMMUNITY fanout aux co-membres (pas aux amis de l'auteur) — le graphe
-    // amis et le graphe communauté diffèrent ; on cible exactement le même set que le
-    // broadcast temps réel, buckets thread/auteur/commenter restant disjoints.
-    const friendAudience = (
-      visibility === 'COMMUNITY'
-        ? [...coMemberIds!].filter(id =>
-            id !== params.storyAuthorId &&
-            id !== params.commenterId &&
-            !previousCommenterIds.includes(id))
-        : friendIds.filter(canSeeAsFriend)
-    );
-    // `previousCommenterIds` (commentateurs antérieurs ∪ réacteurs) n'est PAS une
-    // sortie d'énumérateur : c'est un ensemble arbitraire au regard de l'audience
-    // du moment. Ils y étaient admis quand ils ont engagé le post ; une
-    // dés-amitié ou une édition de visibilité les en sort sans toucher à leur
-    // commentaire. Il leur faut donc un test d'ADMISSION, pas la table locale
-    // ci-dessus qui rendait `true` sur FRIENDS/EXCEPT sans lire aucun graphe.
-    // Même audience que `canNotifyAboutPost`, qui garde la notification unitaire
-    // de cette même population depuis le cycle 30.
-    //
-    // Sur un post COMMUNITY, les co-membres sont donc résolus une seconde fois
-    // (deux requêtes bornées de plus, sur un chemin déjà détaché de la réponse
-    // HTTP). C'est le prix assumé pour ne PAS refiltrer à la main avec le set
-    // ci-dessus : une copie locale de la règle d'admission est exactement ce qui
-    // avait laissé ce seau sans garde.
-    const engagedAudience = await filterPostConsumers({
-      prisma: this.prisma,
-      authorId: params.storyAuthorId,
-      visibility,
-      visibilityUserIds: params.visibilityUserIds,
-      candidateUserIds: previousCommenterIds,
-    });
-
-    const excerpt = params.commentExcerpt
-      ? this.truncateMessage(params.commentExcerpt)
-      : '';
-
-    // Wording typé : le destinataire doit savoir SUR QUOI porte le commentaire
-    // (story / publication / humeur / statut) et, pour les buckets fan-out, la
-    // story/publication DE QUI. Le contexte voyage en `subtitle` (APN-natif,
-    // restauré côté NSE après la donation d'intent), le body reste le contenu
-    // du commentaire.
-    const postType = params.postType ?? 'STORY';
-    // REEL est une variante de post : le catalogue i18n serveur le rend comme
-    // « publication », mais on conserve REEL dans la metadata pour que le client
-    // affiche le libellé/icône « Réel » distinct.
-    const i18nPostType = postType === 'REEL' ? 'POST' : postType;
-    const authorName = postAuthor?.displayName?.trim()
-      || postAuthor?.username?.trim()
-      || '';
-    const langs = await this.resolveRecipientLangs([authorId, ...engagedAudience, ...friendAudience]);
-    const contextSubtitleFor = (lang: string): string => authorName
-      ? notificationString(lang, 'comment.subtitleFrom', { postType: i18nPostType, author: authorName })
-      : notificationString(lang, 'comment.subtitleBare', { postType: i18nPostType });
-
-    const commonContext = {
-      postId: params.postId,
-      commentId: params.commentId,
-      ...(params.postCreatedAt ? { postCreatedAt: new Date(params.postCreatedAt).toISOString() } : {}),
-      ...(params.postExpiresAt ? { postExpiresAt: new Date(params.postExpiresAt).toISOString() } : {}),
-    };
-    const commonMetadata = {
-      action: 'view_post' as const,
-      postId: params.postId,
-      commentId: params.commentId,
-      commentPreview: excerpt,
-      postType,
-      ...(authorName ? { contentAuthorName: authorName } : {}),
-    };
-    const actorInfo = {
-      id: params.commenterId,
-      username: actor.username,
-      displayName: actor.displayName,
-      avatar: actor.avatar,
-    };
-
-    const excludeSet = new Set(params.excludeUserIds ?? []);
-    const tasks: Array<Promise<unknown>> = [];
-
-    // 1. Story author notification — always sent regardless of excludeUserIds
-    //    (STORY_NEW_COMMENT has priority over all fan-out notifications).
-    //    Pour un post non-story, l'auteur est déjà notifié via post_comment
-    //    (route) — bucket sauté pour ne pas le notifier deux fois.
-    if (authorId !== params.commenterId && postType === 'STORY') {
-      const aLang = langs.get(authorId) ?? 'fr';
-      tasks.push(
-        this.createNotification({
-          userId: authorId,
-          type: 'story_new_comment',
-          priority: 'normal',
-          content: excerpt || notificationString(aLang, 'comment.your', { postType: i18nPostType }),
-          subtitle: notificationString(aLang, 'comment.subtitleOwner', { postType: i18nPostType }),
-          actor: actorInfo,
-          context: commonContext,
-          metadata: commonMetadata,
-          lang: aLang,
-        })
-      );
-    }
-
-    // 2. Previous commenters (thread participants) — skip mentioned users
-    for (const recipientId of engagedAudience) {
-      if (excludeSet.has(recipientId)) continue;
-      const rLang = langs.get(recipientId) ?? 'fr';
-      tasks.push(
-        this.createNotification({
-          userId: recipientId,
-          type: 'story_thread_reply',
-          priority: 'low',
-          content: excerpt || notificationString(rLang, 'comment.repliedIn', { postType: i18nPostType }),
-          // Pas de `subtitle` explicite : l'auteur du contenu est désormais
-          // DANS l'action (« a répondu dans une story de Alice »), et le
-          // répéter en sous-titre écrirait deux fois la même chose.
-          ...(authorName ? {} : { subtitle: contextSubtitleFor(rLang) }),
-          actor: actorInfo,
-          context: commonContext,
-          metadata: commonMetadata,
-          lang: rLang,
-        })
-      );
-    }
-
-    // 3. Friends of the story author (or community co-members) — skip mentioned users
-    for (const recipientId of friendAudience) {
-      if (excludeSet.has(recipientId)) continue;
-      const rLang = langs.get(recipientId) ?? 'fr';
-      tasks.push(
-        this.createNotification({
-          userId: recipientId,
-          type: 'friend_story_comment',
-          priority: 'low',
-          content: excerpt || notificationString(rLang, 'comment.generic', { postType: i18nPostType }),
-          ...(authorName ? {} : { subtitle: contextSubtitleFor(rLang) }),
-          actor: actorInfo,
-          context: commonContext,
-          metadata: commonMetadata,
-          lang: rLang,
-        })
-      );
-    }
-
-    // createNotification ne rejette jamais (catch interne + log du userId
-    // exact) : attendre les tasks suffit, pas de gestion rejected ici.
-    await Promise.allSettled(tasks);
+  async createStoryCommentNotificationsBatch(params: StoryCommentFanoutParams): Promise<void> {
+    return createStoryCommentNotificationsBatch(this.fanoutDependencies(), params);
   }
 
   // ==============================================
   // COMMENT MENTION NOTIFICATIONS (Phase 2B)
   // ==============================================
 
-  /**
-   * Envoie des notifications user_mentioned en batch pour les mentions dans un commentaire.
-   *
-   * Priority dedup: user_mentioned > story_new_comment > story_thread_reply > friend_story_comment
-   * Les mentionedUserIds doivent être passés en excludeUserIds dans createStoryCommentNotificationsBatch
-   * pour éviter la double notification.
-   *
-   * Skip: self-mention, rate-limit anti-spam (MAX_MENTIONS_PER_MINUTE par paire sender:recipient).
-   */
-  async createCommentMentionNotificationsBatch(params: {
-    commentId: string;
-    postId: string;
-    commenterId: string;
-    mentionedUserIds: string[];
-    commentExcerpt?: string;
-    /**
-     * Type de l'entité portant le commentaire — discriminant qui décide de la
-     * surface ouverte au tap côté client. Sans lui, une mention dans le
-     * commentaire d'un réel ouvre le détail de post plat. Défaut POST.
-     */
-    postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
-    /**
-     * Auteur du POST commenté — le sommet du graphe qui définit l'audience.
-     * C'est bien lui et non le commentateur : l'auteur seul a choisi qui peut
-     * voir. Requis, pour qu'aucun appelant ne puisse rouvrir la fuite par
-     * omission.
-     */
-    postAuthorId: string;
-    /**
-     * Visibilité du POST commenté. Un commentaire n'a pas d'audience propre :
-     * il hérite de celle du post. Requis — cf. `postAuthorId`.
-     */
-    visibility: string | null | undefined;
-    /** `Post.visibilityUserIds` — liste blanche en ONLY, liste noire en EXCEPT. */
-    visibilityUserIds?: readonly string[];
-  }): Promise<void> {
-    if (params.mentionedUserIds.length === 0) return;
-
-    const commenter = await this.prisma.user.findUnique({
-      where: { id: params.commenterId },
-      select: { username: true, displayName: true, avatar: true },
-    });
-
-    if (!commenter) return;
-
-    // Nommer quelqu'un ne lui donne pas le droit de voir : un mentionné hors
-    // audience ne reçoit rien. Sans ce filtre, l'extrait du commentaire — donc
-    // du contenu d'un post restreint — atterrissait sur son écran verrouillé,
-    // avec un lien de tap vers un post qui le refuserait.
-    //
-    // Audience de CONSOMMATION (amis ∪ contacts DM) — la même que
-    // `canNotifyAboutPost` pour les notifications unitaires du fil, et que le
-    // feed. Un contact DM non-ami à qui le feed montre ce post doit être averti
-    // qu'on l'y a nommé.
-    const audience = await filterPostConsumers({
-      prisma: this.prisma,
-      authorId: params.postAuthorId,
-      visibility: params.visibility,
-      visibilityUserIds: params.visibilityUserIds,
-      candidateUserIds: params.mentionedUserIds,
-    });
-    if (audience.length === 0) return;
-
-    const content = params.commentExcerpt
-      ? this.truncateMessage(params.commentExcerpt)
-      : '';
-    const langs = await this.resolveRecipientLangs(audience);
-
-    const actorInfo = {
-      id: params.commenterId,
-      username: commenter.username,
-      displayName: commenter.displayName,
-      avatar: commenter.avatar,
-    };
-
-    const tasks: Array<Promise<unknown>> = [];
-
-    for (const userId of audience) {
-      if (userId === params.commenterId) continue;
-
-      if (!this.shouldCreateMentionNotification(params.commenterId, userId)) {
-        notificationLogger.info('Comment mention notification blocked (rate limit)', {
-          commenterId: params.commenterId,
-          recipientId: userId,
-        });
-        continue;
-      }
-
-      tasks.push(
-        this.createNotification({
-          userId,
-          type: 'user_mentioned',
-          priority: 'high',
-          content,
-          actor: actorInfo,
-          lang: langs.get(userId) ?? 'fr',
-          context: {
-            postId: params.postId,
-            commentId: params.commentId,
-          },
-          metadata: {
-            action: 'view_post',
-            entityType: 'comment',
-            postId: params.postId,
-            commentId: params.commentId,
-            commentPreview: content,
-            postType: params.postType ?? 'POST',
-          } as any,
-        })
-      );
-    }
-
-    // createNotification ne rejette jamais (catch interne + log du userId
-    // exact) : attendre les tasks suffit, pas de gestion rejected ici.
-    await Promise.allSettled(tasks);
+  async createCommentMentionNotificationsBatch(params: CommentMentionFanoutParams): Promise<void> {
+    return createCommentMentionNotificationsBatch(this.fanoutDependencies(), params);
   }
 
   // ==============================================
   // POST MENTION NOTIFICATIONS (Fix 2)
   // ==============================================
 
-  /**
-   * Envoie des notifications user_mentioned en batch pour les mentions dans un post.
-   *
-   * Mirrors createCommentMentionNotificationsBatch.
-   * Skip: self-mention, rate-limit anti-spam (MAX_MENTIONS_PER_MINUTE per pair sender:recipient).
-   */
-  async createPostMentionNotificationsBatch(params: {
-    postId: string;
-    posterId: string;
-    mentionedUserIds: string[];
-    postExcerpt?: string;
-    /**
-     * Type du contenu mentionnant — discriminant qui décide de la surface
-     * ouverte au tap côté client (lecteur de réel / viewer éphémère / détail de
-     * post). Défaut POST.
-     */
-    postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
-    /**
-     * `Post.visibility`. Requis — la garde d'audience ne doit pas pouvoir être
-     * désarmée par simple omission d'un paramètre optionnel.
-     */
-    visibility: string | null | undefined;
-    /** `Post.visibilityUserIds` — liste blanche en ONLY, liste noire en EXCEPT. */
-    visibilityUserIds?: readonly string[];
-  }): Promise<void> {
-    if (params.mentionedUserIds.length === 0) return;
-
-    const poster = await this.prisma.user.findUnique({
-      where: { id: params.posterId },
-      select: { username: true, displayName: true, avatar: true },
-    });
-
-    if (!poster) return;
-
-    // La garde d'audience est RETIRÉE du chemin de référence — décision produit
-    // 2026-08-19. Elle empêchait l'extrait d'un post FRIENDS de partir vers un
-    // non-ami ; mais nommer quelqu'un lui OUVRE désormais le contenu, donc la
-    // garde n'a plus d'objet : elle taisait précisément les gens que l'auteur
-    // venait de désigner.
-    //
-    // CE QUI PROTÈGE RÉELLEMENT — à ne pas se tromper de gardien.
-    //
-    // La rédaction d'origine désignait l'avertissement du composer comme « la
-    // SEULE protection restante ». C'est FAUX, et dangereusement : un
-    // avertissement d'interface ne protège rien côté serveur, et cette phrase
-    // invite à croire que l'ACL de lecture serait retirable. Une revue de
-    // sécurité automatique s'y est d'ailleurs laissé prendre le 2026-08-19 et a
-    // classé ce bloc en IDOR à haute gravité.
-    //
-    // Le vrai gardien est un GRANT PERSISTÉ, vérifié à la lecture :
-    //   PostMention                              (table, `post_user_mention_unique`)
-    //     → isReferenceStillOpen                 (postVisibility.ts)
-    //       → canUserViewPost(..., includeReferenced: true)
-    //         → canUserConsumePost               (verdict de LECTURE)
-    //
-    // Le grant n'est pas perpétuel : sur un contenu EXPIRÉ il ne vaut qu'une
-    // fenêtre de 24 h (`verdictFor`, referenceAccess.ts), et c'est
-    // `isReferenceStillOpen` — et non la seule existence de la ligne — qui la
-    // fait respecter par TOUT ce que `canUserConsumePost` garde : ce lot de
-    // notifications, le fil de commentaires, la room socket.
-    //
-    // L'extrait ne part donc qu'à des utilisateurs qui sont EFFECTIVEMENT
-    // autorisés à ouvrir le post : la notification ne leur apprend rien qu'ils
-    // ne puissent déjà lire. L'ordre le garantit — `createPostMentions` est
-    // `await`é AVANT `createPostMentionNotificationsBatch` (postMentions.ts),
-    // donc pas de fenêtre où la notification précéderait le grant.
-    //
-    // L'avertissement du composer reste utile, mais il est de l'UX : il évite à
-    // l'auteur d'ouvrir son contenu sans le vouloir. Il n'est pas la garde.
-    // Retirer le grant persisté ou `includeReferenced`, EN REVANCHE, rouvrirait
-    // une vraie fuite.
-    const audience = params.mentionedUserIds;
-    if (audience.length === 0) return;
-
-    const excerpt = params.postExcerpt
-      ? this.truncateMessage(params.postExcerpt)
-      : '';
-    const langs = await this.resolveRecipientLangs(audience);
-
-    const actorInfo = {
-      id: params.posterId,
-      username: poster.username,
-      displayName: poster.displayName,
-      avatar: poster.avatar,
-    };
-
-    const tasks: Array<Promise<unknown>> = [];
-
-    for (const userId of audience) {
-      if (userId === params.posterId) continue;
-
-      if (!this.shouldCreateMentionNotification(params.posterId, userId)) {
-        notificationLogger.info('Post mention notification blocked (rate limit)', {
-          posterId: params.posterId,
-          recipientId: userId,
-        });
-        continue;
-      }
-
-      tasks.push(
-        this.createNotification({
-          userId,
-          type: 'user_mentioned',
-          priority: 'high',
-          content: excerpt || notificationString(langs.get(userId) ?? 'fr', 'mention'),
-          actor: actorInfo,
-          lang: langs.get(userId) ?? 'fr',
-          context: {
-            postId: params.postId,
-          },
-          metadata: {
-            action: 'view_post',
-            entityType: 'post',
-            postId: params.postId,
-            postPreview: excerpt,
-            postType: params.postType ?? 'POST',
-          } as any,
-        })
-      );
-    }
-
-    // createNotification ne rejette jamais (catch interne + log du userId
-    // exact) : attendre les tasks suffit, pas de gestion rejected ici.
-    await Promise.allSettled(tasks);
+  async createPostMentionNotificationsBatch(params: PostMentionFanoutParams): Promise<void> {
+    return createPostMentionNotificationsBatch(this.fanoutDependencies(), params);
   }
 
   // ==============================================
   // FRIEND CONTENT NOTIFICATIONS (Phase 4F)
   // ==============================================
 
-  /**
-   * Fan-out notifications to all friends of `authorId` when they publish new content.
-   *
-   * contentType mapping:
-   *   STORY  → friend_new_story
-   *   POST   → friend_new_post
-   *   MOOD   → friend_new_mood
-   *   STATUS → friend_new_mood  (lightweight/ephemeral; grouped with MOOD to avoid type proliferation)
-   *
-   * Rate-limit: none in v1. These are once-per-publish events so burst risk is low.
-   * Aggregation: none in v1. Duplicate suppression (author vs friend) is enforced via excludeUserIds.
-   *
-   * Dedup with mentions: pass mentionedUserIds as `excludeUserIds`.
-   * user_mentioned takes priority over friend_new_post for the same recipient.
-   *
-   * Cap: 500 friend rows max (mirrors createStoryCommentNotificationsBatch pattern).
-   */
-  async createFriendContentNotificationsBatch(params: {
-    postId: string;
-    authorId: string;
-    contentType: 'STORY' | 'POST' | 'MOOD' | 'STATUS' | 'REEL';
-    excerpt?: string;
-    /** Date de publication ISO du contenu (contexte « publié il y a … » côté client). */
-    postCreatedAt?: string | Date;
-    /** Date d'expiration ISO (story/status éphémère) → le client affiche « expirée ». */
-    postExpiresAt?: string | Date;
-    /** Nature du média principal — affiché quand le contenu n'a pas de texte. */
-    mediaType?: 'image' | 'video' | 'audio' | 'text';
-    /**
-     * User IDs to exclude from fan-out.
-     * Pass mentionedUserIds so a friend who is also @mentioned only gets user_mentioned.
-     */
-    excludeUserIds?: string[];
-    /**
-     * Post visibility — used to filter recipients (same rules as Socket.IO broadcast).
-     *
-     * **Requis**, comme sur les trois lots voisins depuis les cycles 28 et 31.
-     * L'omission n'était pas anodine ici : le défaut `PUBLIC` fait retomber un
-     * post `PRIVATE` — ou un `EXCEPT` et sa liste noire — sur l'énumération
-     * complète des amis, avec extrait et vignette. La faute appartient au build.
-     */
-    visibility: string | null | undefined;
-    /** User IDs list for ONLY/EXCEPT visibility modes. */
-    visibilityUserIds?: string[];
-  }): Promise<void> {
-    // REEL est une variante de post : même type de notification (friend_new_post),
-    // mais le contentType REEL est conservé dans la metadata pour l'affichage client.
-    const typeMap: Record<'STORY' | 'POST' | 'MOOD' | 'STATUS' | 'REEL', 'friend_new_story' | 'friend_new_post' | 'friend_new_mood'> = {
-      STORY: 'friend_new_story',
-      POST: 'friend_new_post',
-      MOOD: 'friend_new_mood',
-      STATUS: 'friend_new_mood',
-      REEL: 'friend_new_post',
-    };
-    const notificationType = typeMap[params.contentType];
-
-    const author = await this.prisma.user.findUnique({
-      where: { id: params.authorId },
-      select: { username: true, displayName: true, avatar: true },
-    });
-
-    if (!author) return;
-
-    const friendRequestRows = await this.prisma.friendRequest.findMany({
-      where: {
-        status: 'accepted',
-        OR: [{ senderId: params.authorId }, { receiverId: params.authorId }],
-      },
-      select: { senderId: true, receiverId: true },
-      take: FANOUT_ROW_CAP + 1,
-      orderBy: { updatedAt: 'desc' },
-    });
-
-    // Le tri est `updatedAt desc` et la borne est fixe : chez un auteur qui la
-    // dépasse durablement, ce sont TOUJOURS les mêmes contacts — les plus
-    // anciens — qui n'apprennent aucune de ses publications. Le silence est ici
-    // structurel, pas ponctuel, d'où la trace.
-    //
-    // Requête sans `distinct` : la ligne témoin y est un compte EXACT — elle
-    // existe si et seulement si l'auteur a PLUS de `FANOUT_ROW_CAP` amitiés
-    // acceptées. Elle est comptée, puis jetée par le `slice` : la borne de
-    // diffusion reste à sa valeur, seule sa saturation devient dicible.
-    if (friendRequestRows.length > FANOUT_ROW_CAP) {
-      notificationLogger.warn('Fan-out de publication tronqué à la borne', {
-        postId: params.postId,
-        authorId: params.authorId,
-        cap: FANOUT_ROW_CAP,
-      });
-    }
-    const friendRequests = friendRequestRows.slice(0, FANOUT_ROW_CAP);
-
-    const excludeSet = new Set(params.excludeUserIds ?? []);
-    const excerpt = params.excerpt ? this.truncateMessage(params.excerpt) : '';
-    // Vignette du contenu publié → rendue in-app + attachée au push iOS. Le
-    // mediaType explicite de l'appelant prime ; sinon on le dérive du média.
-    const media = await this.resolvePostMedia(params.postId);
-    const mediaType = params.mediaType ?? media?.mediaType;
-
-    // Aucun `?? 'PUBLIC'` : une visibilité absente retombe sur la branche par
-    // défaut ci-dessous (l'énumération des amis), jamais sur une ouverture.
-    const visibility = params.visibility;
-    const visibilityUserIds = params.visibilityUserIds ?? [];
-    const visibilityUserIdSet = new Set(visibilityUserIds);
-
-    if (visibility === 'PRIVATE') return;
-
-    // Content : le wording « a publié une nouvelle … » est localisé par
-    // destinataire ; le subtitle typé (« Nouvelle story » …) voyage en
-    // APN-natif (restauré par le NSE) — les deux dans la langue du destinataire.
-    const contentKeyByType: Record<'friend_new_story' | 'friend_new_post' | 'friend_new_mood', NotificationStringKey> = {
-      friend_new_story: 'friend.story',
-      friend_new_post: 'friend.post',
-      friend_new_mood: 'friend.mood',
-    };
-    // Un réel emprunte le type friend_new_post mais garde son wording propre :
-    // « a publié un nouveau réel », pas « … un nouveau post ». Le discriminant
-    // REEL est conservé dans la metadata pour l'affichage client, donc le titre,
-    // le corps et le sous-titre doivent tous rester conscients de l'entité —
-    // sinon un réel s'annonçait comme un post (titre + corps) tout en affichant
-    // « Nouveau réel » en sous-titre du builder : une contradiction.
-    const contentKey: NotificationStringKey =
-      params.contentType === 'REEL' ? 'friend.reel' : contentKeyByType[notificationType];
-
-    const baseFriendIds = friendRequests
-      .map(fr => (fr.senderId === params.authorId ? fr.receiverId : fr.senderId))
-      .filter(id => id !== params.authorId && !excludeSet.has(id));
-
-    let recipientIds: string[];
-    if (visibility === 'COMMUNITY') {
-      // Une action dans une communauté est OBLIGATOIREMENT notifiée à TOUS les
-      // membres de la communauté (pas seulement aux contacts de l'auteur) —
-      // miroir de SocialEventsHandler.getVisibilityFilteredRecipients pour que
-      // notification et broadcast temps réel ciblent exactement le même set.
-      const coMemberIds = await getCommunityCoMemberIds(this.prisma, params.authorId);
-      recipientIds = coMemberIds.filter(id => id !== params.authorId && !excludeSet.has(id));
-    } else if (visibility === 'ONLY') {
-      recipientIds = visibilityUserIds.filter(id => id !== params.authorId && !excludeSet.has(id));
-    } else if (visibility === 'EXCEPT') {
-      recipientIds = baseFriendIds.filter(id => !visibilityUserIdSet.has(id));
-    } else {
-      recipientIds = baseFriendIds;
-    }
-
-    const uniqueRecipientIds = [...new Set(recipientIds)];
-    const langs = await this.resolveRecipientLangs(uniqueRecipientIds);
-
-    const actorInfo = {
-      id: params.authorId,
-      username: author.username,
-      displayName: author.displayName,
-      avatar: author.avatar,
-    };
-
-    const tasks: Array<Promise<unknown>> = [];
-
-    for (const recipientId of uniqueRecipientIds) {
-      const fLang = langs.get(recipientId) ?? 'fr';
-      tasks.push(
-        this.createNotification({
-          userId: recipientId,
-          type: notificationType,
-          priority: 'normal',
-          content: excerpt || notificationString(fLang, contentKey),
-          subtitle: notificationString(fLang, 'friend.subtitleNew', {
-            postType: params.contentType,
-          }),
-          actor: actorInfo,
-          lang: fLang,
-          context: {
-            postId: params.postId,
-            ...(params.postCreatedAt ? { postCreatedAt: new Date(params.postCreatedAt).toISOString() } : {}),
-            ...(params.postExpiresAt ? { postExpiresAt: new Date(params.postExpiresAt).toISOString() } : {}),
-            ...(media?.thumbnailUrl
-              ? { firstAttachmentUrl: media.thumbnailUrl, firstAttachmentMimeType: media.thumbnailMimeType }
-              : {}),
-          },
-          metadata: {
-            action: 'view_post',
-            postId: params.postId,
-            contentType: params.contentType,
-            // Le discriminant d'entité voyage AUSSI sous `postType` : c'est la
-            // clé que lisent le payload push (`data.postType`) et le routage
-            // client. Sans ce miroir, le nouveau réel d'un ami arrivait sans
-            // discriminant et ouvrait le détail de post plat au lieu du lecteur
-            // immersif. `contentType` est conservé pour la rétro-compat web.
-            postType: params.contentType,
-            excerpt,
-            ...(mediaType ? { mediaType } : {}),
-            ...(media?.thumbnailUrl ? { postThumbnailUrl: media.thumbnailUrl } : {}),
-          } as any,
-        })
-      );
-    }
-
-    // createNotification ne rejette jamais (catch interne + log du userId
-    // exact) : attendre les tasks suffit, pas de gestion rejected ici.
-    await Promise.allSettled(tasks);
+  async createFriendContentNotificationsBatch(params: FriendContentFanoutParams): Promise<void> {
+    return createFriendContentNotificationsBatch(this.fanoutDependencies(), params);
   }
 
   // ==============================================
@@ -3862,33 +2449,9 @@ export class NotificationService {
     conversationId: string;
     joinMethod?: 'via_link' | 'invited';
   }): Promise<Notification | null> {
-    // Une arrivée est de l'activité AMBIANTE : elle se tait dans une
-    // conversation en sourdine (cf. `mutedRecipients.ts`). Avant les lectures :
-    // sur un groupe où tout le monde a coupé le son, un ajout de membre payait
-    // trois requêtes par destinataire pour ne rien émettre.
-    if (await this.isConversationMutedFor(params.recipientUserId, params.conversationId, 'member_joined')) {
-      return null;
-    }
-
-    const snapshot = await this.loadMemberJoinedSnapshot(params.newMemberUserId, params.conversationId);
-    if (!snapshot) return null;
-
-    return this.createMemberJoinedFor(params.recipientUserId, params, snapshot);
+    return createMemberJoinedNotification(this.fanoutDependencies(), params);
   }
 
-  /**
-   * Prévient une audience entière de la même arrivée.
-   *
-   * Les trois lectures dont `member_joined` a besoin — profil du nouveau
-   * membre, conversation, effectif — ne dépendent pas du destinataire : elles
-   * sont faites UNE fois pour toute l'audience, et le mute est demandé en une
-   * requête plutôt qu'une par personne. La boucle d'appels unitaires qui
-   * précédait payait 4 requêtes par destinataire pour quatre résultats
-   * identiques, et le surcoût grandissait avec le groupe.
-   *
-   * Rend le nombre de notifications réellement créées : une préférence de type
-   * ou un DND côté destinataire peut en écarter sans que ce soit une erreur.
-   */
   async createMemberJoinedNotificationsBatch(
     recipientUserIds: readonly string[],
     common: {
@@ -3897,87 +2460,7 @@ export class NotificationService {
       joinMethod?: 'via_link' | 'invited';
     }
   ): Promise<number> {
-    const audience = [...new Set(recipientUserIds)];
-    if (audience.length === 0) return 0;
-
-    const listening = await filterMutedRecipients(this.prisma, common.conversationId, audience);
-    if (listening.length === 0) {
-      notificationLogger.info('Member-joined fan-out silenced (whole audience muted)', {
-        conversationId: common.conversationId,
-        audienceSize: audience.length,
-      });
-      return 0;
-    }
-
-    const snapshot = await this.loadMemberJoinedSnapshot(common.newMemberUserId, common.conversationId);
-    if (!snapshot) return 0;
-
-    // `createNotification` ne rejette jamais (catch interne) — un destinataire
-    // en échec rend `null` et n'emporte pas les autres.
-    const results = await Promise.all(
-      listening.map((recipientUserId) => this.createMemberJoinedFor(recipientUserId, common, snapshot))
-    );
-    return results.filter(Boolean).length;
-  }
-
-  /**
-   * La part de `member_joined` qui ne dépend PAS du destinataire. `null` quand
-   * le nouveau membre est introuvable : sans acteur, la notification n'a pas de
-   * sujet, et aucun destinataire ne doit en recevoir.
-   */
-  private async loadMemberJoinedSnapshot(
-    newMemberUserId: string,
-    conversationId: string
-  ): Promise<MemberJoinedSnapshot | null> {
-    const [newMember, conversation, memberCount] = await Promise.all([
-      this.prisma.user.findUnique({
-        where: { id: newMemberUserId },
-        select: { username: true, displayName: true, avatar: true },
-      }),
-      this.prisma.conversation.findUnique({
-        where: { id: conversationId },
-        select: { title: true, type: true },
-      }),
-      this.prisma.participant.count({
-        where: { conversationId },
-      }),
-    ]);
-
-    if (!newMember) return null;
-    return { newMember, conversation, memberCount };
-  }
-
-  private createMemberJoinedFor(
-    recipientUserId: string,
-    common: { newMemberUserId: string; conversationId: string; joinMethod?: 'via_link' | 'invited' },
-    snapshot: MemberJoinedSnapshot
-  ): Promise<Notification | null> {
-    return this.createNotification({
-      userId: recipientUserId,
-      type: 'member_joined',
-      priority: 'low',
-      content: 'Nouveau membre',
-
-      actor: {
-        id: common.newMemberUserId,
-        username: snapshot.newMember.username,
-        displayName: snapshot.newMember.displayName,
-        avatar: snapshot.newMember.avatar,
-      },
-
-      context: {
-        conversationId: common.conversationId,
-        conversationTitle: snapshot.conversation?.title,
-        conversationType: snapshot.conversation?.type as any,
-      },
-
-      metadata: {
-        action: 'view_conversation',
-        memberCount: snapshot.memberCount,
-        isMember: true,
-        joinMethod: common.joinMethod,
-      },
-    });
+    return createMemberJoinedNotificationsBatch(this.fanoutDependencies(), recipientUserIds, common);
   }
 
   // ==============================================
@@ -4209,7 +2692,7 @@ export class NotificationService {
     // média (« Votre story · 📷 Photo ») — le destinataire identifie QUEL
     // contenu sans ouvrir l'app, et le push iOS attache la miniature.
     const trimmedPreview = params.postPreview?.trim() ?? '';
-    const media = await this.resolvePostMedia(params.postId);
+    const media = await resolvePostMedia(this.prisma, params.postId);
     // Le sous-titre nomme la cible, le corps la MONTRE : le détail (texte /
     // média) descend dans le corps, que la phrase d'action n'occupe plus.
     const subtitle = notificationString(lang, 'comment.subtitleOwner', { postType: subtitlePostType });
@@ -4218,7 +2701,7 @@ export class NotificationService {
       userId: params.postAuthorId,
       type,
       priority: 'normal',
-      content: this.targetPreviewBody(lang, subtitlePostType, {
+      content: targetPreviewBody(lang, subtitlePostType, {
         textPreview: trimmedPreview,
         mediaType: media?.mediaType,
       }),
@@ -4289,8 +2772,8 @@ export class NotificationService {
     const trimmedPostPreview = params.postPreview?.trim() ?? '';
     // Cible du commentaire : extrait texte du post si présent, sinon résumé
     // média (« Votre publication · 📷 Photo ») + vignette poussée au push iOS.
-    const media = await this.resolvePostMedia(params.postId);
-    const subtitle = this.buildOwnerSubtitleWithDetail(lang, params.postType ?? 'POST', {
+    const media = await resolvePostMedia(this.prisma, params.postId);
+    const subtitle = buildOwnerSubtitleWithDetail(lang, params.postType ?? 'POST', {
       textPreview: trimmedPostPreview,
       mediaType: media?.mediaType,
     });
@@ -4362,7 +2845,7 @@ export class NotificationService {
 
     const lang = await this.resolveRecipientLang(params.postAuthorId);
     const trimmedPostPreview = params.postPreview?.trim() ?? '';
-    const media = await this.resolvePostMedia(params.originalPostId);
+    const media = await resolvePostMedia(this.prisma, params.originalPostId);
     // Cf. `targetPreviewBody` : un partage n'apporte aucun contenu neuf, le
     // détail du contenu partagé descend donc dans le corps.
     const subtitle = notificationString(lang, 'comment.subtitleOwner', {
@@ -4373,7 +2856,7 @@ export class NotificationService {
       userId: params.postAuthorId,
       type: 'post_repost',
       priority: 'normal',
-      content: this.targetPreviewBody(lang, params.postType ?? 'POST', {
+      content: targetPreviewBody(lang, params.postType ?? 'POST', {
         textPreview: trimmedPostPreview,
         mediaType: media?.mediaType,
       }),
@@ -4451,7 +2934,7 @@ export class NotificationService {
     // POST_NOUN_CAP gère REEL distinctement (« Réel ») → pas de mapping vers POST.
     const subtitle = notificationString(lang, 'comment.subtitleBare', { postType: params.postType ?? 'POST' });
     // Vignette du contenu portant le commentaire → attachée au push iOS.
-    const media = await this.resolvePostMedia(params.postId);
+    const media = await resolvePostMedia(this.prisma, params.postId);
 
     return this.createNotification({
       userId: params.commentAuthorId,
@@ -4527,7 +3010,7 @@ export class NotificationService {
     const lang = await this.resolveRecipientLang(params.commentAuthorId);
     const trimmedPreview = params.commentPreview?.trim() ?? '';
     // Vignette du post portant le commentaire → attachée au push iOS.
-    const media = await this.resolvePostMedia(params.postId);
+    const media = await resolvePostMedia(this.prisma, params.postId);
     // La cible est LE COMMENTAIRE : son extrait est ce que le corps doit
     // montrer, la phrase d'action étant déjà portée par le titre et la
     // bannière. Sans extrait, le corps nomme l'entité.
@@ -5164,110 +3647,7 @@ export class NotificationService {
    * Plus naturel pour les aperçus de messages multilingues.
    */
   private truncateMessage(message: string, maxWords: number = 25): string {
-    if (!message) return '';
-
-    const words = message.trim().split(/\s+/);
-    if (words.length <= maxWords) {
-      return message;
-    }
-    return words.slice(0, maxWords).join(' ') + '...';
-  }
-
-  /**
-   * Résout le 1er média d'un post → nature + miniature pour enrichir la
-   * notification : la ligne in-app rend la vignette, le push iOS l'attache
-   * (UNNotificationAttachment). Pour image on attache le fichier lui-même ;
-   * pour vidéo/audio on attache la miniature générée (toujours une image).
-   *
-   * Défensif : retourne `null` (au lieu de jeter) si le modèle `postMedia`
-   * est absent (tests) ou si le post n'a pas de média visuel — l'appelant
-   * retombe alors sur le rendu texte seul.
-   */
-  private async resolvePostMedia(postId: string): Promise<{
-    mediaType: 'image' | 'video' | 'audio';
-    thumbnailUrl?: string;
-    thumbnailMimeType?: string;
-  } | null> {
-    try {
-      const media = await this.prisma.postMedia.findFirst({
-        where: { postId },
-        orderBy: { order: 'asc' },
-        select: { mimeType: true, fileUrl: true, thumbnailUrl: true },
-      });
-      if (!media) return null;
-
-      const mime = (media.mimeType ?? '').toLowerCase();
-      const mediaType = mime.startsWith('image/') ? 'image'
-        : mime.startsWith('video/') ? 'video'
-          : mime.startsWith('audio/') ? 'audio'
-            : null;
-      if (!mediaType) return null;
-
-      // Vignette poussée au client/iOS : toujours une image téléchargeable.
-      // Image → le fichier ; vidéo/audio → la miniature générée (si présente).
-      const rawThumb = mediaType === 'image'
-        ? (media.fileUrl || media.thumbnailUrl || undefined)
-        : (media.thumbnailUrl || undefined);
-      const thumbnailUrl = rawThumb ? publicMediaUrlFromEnv(rawThumb) : undefined;
-      const thumbnailMimeType = thumbnailUrl
-        ? (mediaType === 'image' ? (media.mimeType ?? 'image/jpeg') : 'image/jpeg')
-        : undefined;
-
-      return { mediaType, thumbnailUrl, thumbnailMimeType };
-    } catch {
-      return null;
-    }
-  }
-
-  /**
-   * Sous-titre « Votre {entité} » enrichi du détail du contenu visé : l'extrait
-   * texte (« Votre story : « … » ») ou, à défaut, un résumé média localisé
-   * (« Votre story · 📷 Photo »). Source unique pour réactions / partages —
-   * aligné sur le wording des commentaires. SANS date (le client l'append).
-   */
-  private buildOwnerSubtitleWithDetail(
-    lang: string,
-    postType: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL',
-    detail: { textPreview?: string; mediaType?: 'image' | 'video' | 'audio' },
-  ): string {
-    const label = notificationString(lang, 'comment.subtitleOwner', { postType });
-    const text = detail.textPreview?.trim();
-    if (text) return `${label} : « ${this.truncateMessage(text)} »`;
-    const mediaSummary = this.mediaSummaryString(lang, detail.mediaType);
-    return mediaSummary ? `${label} · ${mediaSummary}` : label;
-  }
-
-  /**
-   * Corps d'une notification qui n'apporte AUCUN contenu neuf — une réaction,
-   * un partage. Le geste lui-même est déjà énoncé par le titre et par le
-   * sous-titre de bannière (« a réagi ❤️ à votre publication ») : répéter cette
-   * phrase dans le corps écrivait la même information deux fois sur trois
-   * lignes. Le corps sert donc à identifier CE QUI a été visé — le début du
-   * texte, ou le résumé média, ou les deux.
-   *
-   * Le repli sur le libellé de l'entité (« Votre publication ») ne sert qu'aux
-   * contenus sans texte NI média : un corps vide ferait disparaître la ligne.
-   */
-  private targetPreviewBody(
-    lang: string,
-    postType: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL',
-    detail: { textPreview?: string; mediaType?: 'image' | 'video' | 'audio' },
-  ): string {
-    const text = detail.textPreview?.trim();
-    const mediaSummary = this.mediaSummaryString(lang, detail.mediaType);
-    if (text && mediaSummary) return `${mediaSummary} · ${this.truncateMessage(text)}`;
-    if (text) return this.truncateMessage(text);
-    if (mediaSummary) return mediaSummary;
-    return notificationString(lang, 'comment.subtitleOwner', { postType });
-  }
-
-  /** Résumé média localisé (« 📷 Photo » / « 🎬 Vidéo » / « 🎵 Audio ») ou ''. */
-  private mediaSummaryString(lang: string, mediaType?: 'image' | 'video' | 'audio'): string {
-    const key: NotificationStringKey | null = mediaType === 'image' ? 'attachment.photo'
-      : mediaType === 'video' ? 'attachment.video'
-        : mediaType === 'audio' ? 'attachment.audio'
-          : null;
-    return key ? notificationString(lang, key) : '';
+    return truncateMessage(message, maxWords);
   }
 
   // ==============================================

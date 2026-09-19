@@ -5,8 +5,11 @@
  *
  * ## Ce qu'il ne réinvente pas
  *
- * Il COMPOSE `maskedAttachment` (`services/notifications/NotificationService.ts`)
- * — la MÊME garde que l'éventail de notifications applique déjà (cycle 125,
+ * Il COMPOSE `maskedAttachment` — dont le DOMICILE est
+ * `@meeshy/shared/utils/attachment-protection` (#6189), ré-exporté par
+ * `services/notifications/notification-preview.ts` (#7093, qui l'a sorti de
+ * `NotificationService.ts` avec les autres lois pures d'aperçu) —
+ * la MÊME garde que l'éventail de notifications applique déjà (cycle 125,
  * voir `services/gateway/CLAUDE.md` § « La jumelle d'une garde peut être un
  * MÉDIUM »). Une seconde écriture de « ce média est-il masqué ? » ne peut que
  * diverger : c'est exactement la classe de défaut que ce fichier ferme en
@@ -46,16 +49,17 @@
  * ne s'est simplement pas encore dupliqué. Il est déplacé ici, à côté de son
  * jumeau média, pour la même raison que celui-ci y vit déjà.
  */
-import { maskedAttachment } from '../../services/notifications/NotificationService';
+import { maskedAttachment } from '../../services/notifications/notification-preview';
 
 /**
  * Fragment de `select` Prisma pour les colonnes de protection PROPRES à
  * `MessageAttachment` — RÉ-EXPORTÉ depuis son domicile, jamais recopié (#7014).
  *
  * Il était DÉFINI ici, dans un module de ROUTE, ce qui le rendait inatteignable
- * au canal SOCKET : l'importer depuis `socketio/` aurait traîné
- * `NotificationService` (que ce fichier importe pour `maskedAttachment`) dans
- * la couche temps réel. Un prédicat partagé défini dans une route est le même
+ * au canal SOCKET : l'importer depuis `socketio/` aurait traîné le module de
+ * notifications (que ce fichier importe pour `maskedAttachment` —
+ * `notification-preview.ts` depuis #7093, `NotificationService.ts` avant lui)
+ * dans la couche temps réel. Un prédicat partagé défini dans une route est le même
  * défaut qu'un prédicat recopié — c'est le raisonnement de #4388, appliqué
  * cette fois au `select` plutôt qu'au prédicat. Ses quatre appelants
  * d'administration continuent de l'importer d'ici ; l'OBJET, lui, est le même

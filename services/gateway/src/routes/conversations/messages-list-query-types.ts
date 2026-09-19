@@ -75,8 +75,11 @@ export type CurrentUserConsumption = {
 
 /**
  * Pièce jointe brute, telle que chargée par `buildMessageListSelect`
- * (`attachmentMediaSelect` + `attachmentProtectionSelect` à la racine,
- * `attachmentFullSelect` sous `replyTo`). Les champs nommés sont ceux que ce
+ * (`attachmentSocketSelect` à la racine depuis #7070 — il remplace l'union
+ * locale `attachmentMediaSelect` + `attachmentProtectionSelect`, et c'est lui
+ * qui rend `isForwarded` / `forwardedFromAttachmentId` NOMMÉS ci-dessous
+ * réellement chargés ; `attachmentFullSelect` sous `replyTo`). Les champs
+ * nommés sont ceux que ce
  * module lit ou remet à un helper typé (`redactForwardedAttachmentUrlsIn`
  * exige `fileUrl`/`thumbnailUrl`/`isForwarded`/`forwardedFromAttachmentId`
  * NOMMÉS, pas seulement couverts par l'index) ; le reste voyage par l'index

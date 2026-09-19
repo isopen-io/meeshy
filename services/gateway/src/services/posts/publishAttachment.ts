@@ -81,7 +81,8 @@ export const planAttachmentPublication = (input: {
    * rangée par `MessageProcessor.saveMessage`) ET la PIÈCE JOINTE (ses propres
    * `isViewOnce` / `isBlurred` / `effectFlags`). Le plan reçoit donc le VERDICT,
    * pas les colonnes : les prédicats partagés `protectedPreview` +
-   * `maskedAttachment` (NotificationService) le composent, et ne peuvent pas
+   * `maskedAttachment` (`services/notifications/notification-preview.ts`
+   * depuis #7093) le composent, et ne peuvent pas
    * diverger de la bannière de notification qui les emploie déjà.
    */
   readonly mediaIsProtected: boolean;

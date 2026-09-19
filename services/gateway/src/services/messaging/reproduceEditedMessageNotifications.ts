@@ -1,6 +1,6 @@
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { truncateByCodePoints } from '../../utils/truncate-text';
-import { protectedPreview } from '../notifications/NotificationService';
+import { protectedPreview } from '../notifications/notification-preview';
 import type {
   ReproducedNotification,
   ReproducedNotificationAnnouncer,

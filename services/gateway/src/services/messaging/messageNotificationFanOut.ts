@@ -4,7 +4,7 @@ import {
   protectedPreview,
   type NotificationActorProfile,
   type PreviewPrismBasis,
-} from '../notifications/NotificationService';
+} from '../notifications/notification-preview';
 import {
   transcriptTranslationTexts,
   transcriptTranslationTracks,

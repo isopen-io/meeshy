@@ -12,7 +12,7 @@ import {
  * Le grep de source qui gardait cet inventaire (`serialize-attachment-callers-
  * select.test.ts`) ne voyait que les fichiers qui IMPORTENT le sérialiseur —
  * `MessageProcessor.saveMessage` l'alimente sans l'importer (`message.attachments`
- * traverse `MessageHandler._serializeAttachmentsField`), donc hors de sa portée.
+ * traverse `serializeMessageAttachmentsForSocket`), donc hors de sa portée.
  * Un CLIQUET DE TYPE, lui, couvre tout appelant, importateur ou non : le
  * paramètre exige les trois colonnes, et un `select` qui les omet ne compile
  * plus.
@@ -243,11 +243,22 @@ export function serializeAttachmentForSocket(
  *
  * Avant ce lot, le producteur REST/ZMQ (`MeeshySocketIOManager`) posait
  * `attachments: message.attachments ?? []` — la ligne Prisma BRUTE — pendant
- * que le producteur socket (`MessageHandler._serializeAttachmentsField`)
- * appelait déjà `serializeAttachmentForSocket` pièce par pièce. Cette fonction
- * est le site UNIQUE des deux appelants : un producteur qui la contourne pour
- * revenir à un passthrough brut est exactement la régression que
- * `message-new-producer-parity.test.ts` détecte.
+ * que le producteur socket (`MessageHandler`) tenait sa PROPRE boucle privée
+ * (`_serializeAttachmentsField`), jumelle exacte de celle-ci. Les deux sites
+ * appellent désormais cette fonction ; la boucle privée a été supprimée, sans
+ * quoi « site unique » aurait été une phrase et non un fait — et c'est
+ * précisément une boucle recopiée qui a laissé les deux transports diverger.
+ *
+ * Le paramètre est `unknown` parce que `Message.attachments` l'est sur le type
+ * PUBLIC partagé : ce cast ÉRODE le cliquet de type de `SocketAttachmentRow`
+ * (#7028), qui vit donc en AMONT, à la source du chargement
+ * (`MessageProcessor.saveMessage`, affectation-fantôme). Un chemin qui ne
+ * traverse pas cette source sérialise pièce par pièce sur le type Prisma exact
+ * de son `select` — cf. `MessageHandler.handleMessageEdit` — plutôt que
+ * d'appeler cette fonction.
+ *
+ * Un producteur qui la contourne pour revenir à un passthrough brut est
+ * exactement la régression que `message-new-producer-parity.test.ts` détecte.
  */
 export function serializeMessageAttachmentsForSocket(
   attachments: unknown,

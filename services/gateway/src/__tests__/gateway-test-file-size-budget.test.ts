@@ -201,7 +201,12 @@ const DETTE_HERITEE: Readonly<Record<string, number>> = {
   '__tests__/unit/services/MagicLinkService.test.ts': 1136,
   '__tests__/unit/SocialEventsHandler.test.ts': 1134,
   'services/zmq-translation/__tests__/ZmqMessageHandler.test.ts': 1121,
-  '__tests__/unit/services/NotificationService.pushMessage.test.ts': 1090,
+  // 1090 → 1061 (#7093, 2026-09-19) : `pushCategoryForNotificationType` a
+  // quitté la classe pour `push-header.ts`, et ses deux témoins l'ont suivie
+  // vers `notifications/pushCategoryForNotificationType.test.ts`. Un cliquet
+  // se resserre quand un fichier maigrit — sinon la marge rendue reste
+  // disponible pour la prochaine addition.
+  '__tests__/unit/services/NotificationService.pushMessage.test.ts': 1061,
   '__tests__/unit/routes/admin/admin-content-routes.test.ts': 1087,
   '__tests__/unit/services/EncryptionService.test.ts': 1044,
   '__tests__/unit/services/MetadataManager.test.ts': 1044,

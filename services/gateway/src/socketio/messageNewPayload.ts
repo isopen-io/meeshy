@@ -49,10 +49,11 @@ import { attachmentReplyToFromMetadata } from '../services/messaging/attachmentR
  *
  * `attachments` a QUITTÉ cette liste (#7070) : les deux appelants le
  * construisent désormais par la MÊME fonction (`serializeMessageAttachmentsForSocket`,
- * `serializeAttachmentForSocket.ts`) — il reste un paramètre plutôt qu'un champ
- * de cette unité seulement parce que le chemin REST le résout à partir de
- * `message.attachments`, quand le chemin socket l'obtient d'une fonction
- * privée du handler ; la FORME qu'ils produisent ne diverge plus.
+ * `serializeAttachmentForSocket.ts`), sur le MÊME argument (`message.attachments`)
+ * — le chemin socket tenait jusque-là une boucle privée jumelle, supprimée par
+ * ce lot. Il reste un PARAMÈTRE plutôt qu'un champ de cette unité, et c'est
+ * une dette assumée : l'absorber ici retirerait à `MessageHandler.handleMessageEdit`
+ * la seule voie qui lui conserve le type Prisma exact de son `select` (#7028).
  *
  * Toute famille de champs DÉRIVÉE DE LA LIGNE MESSAGE appartient à cette unité,
  * jamais au site d'appel : c'est la seule disposition où « ajouter un champ »
