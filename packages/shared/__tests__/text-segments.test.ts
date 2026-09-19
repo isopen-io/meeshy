@@ -139,6 +139,61 @@ describe('segmentText — les liens', () => {
       { kind: 'url', text: 'https://meeshy.me/@alice', href: 'https://meeshy.me/@alice' },
     ]);
   });
+
+  /**
+   * **LA PONCTUATION QUI FERME LA PHRASE N'APPARTIENT PAS AU LIEN** — et c'est
+   * le cas NOMINAL, pas un cas tordu : « regarde https://meeshy.me/notes. »
+   * est la façon dont on écrit un lien dans une phrase. Les caractères de
+   * ponctuation étant tous des caractères d'URL valides, la classe gourmande
+   * les avalait : le lien affiché disait `…/notes.` et MENAIT à `…/notes.`,
+   * une adresse qui n'existe pas. Un lien qui ne va pas où il dit est un
+   * contrôle qui ment (loi 4), et rien ne le signale à l'écran.
+   *
+   * La parenthèse est traitée par ÉQUILIBRE, jamais par liste : un `)` final
+   * ne se retire que si la chaîne en compte plus que de `(` — sans quoi
+   * `…/Sémantique_(logique)`, où la parenthèse fait partie de l'adresse,
+   * serait cassée par le correctif censé réparer `(https://…)`.
+   */
+  it('la ponctuation FINALE reste dans la phrase — le lien s’arrête où l’adresse s’arrête', () => {
+    const hrefs = (content: string) => segmentText(content).flatMap((s) => (s.kind === 'url' ? [s.href] : []));
+    expect(hrefs('regarde https://meeshy.me/notes.')).toEqual(['https://meeshy.me/notes']);
+    expect(hrefs('lire https://meeshy.me/a, puis https://meeshy.me/b;')).toEqual([
+      'https://meeshy.me/a',
+      'https://meeshy.me/b',
+    ]);
+    expect(hrefs('vraiment https://meeshy.me/a ?! et https://meeshy.me/b!')).toEqual([
+      'https://meeshy.me/a',
+      'https://meeshy.me/b',
+    ]);
+    expect(hrefs('voir (https://meeshy.me/a) merci')).toEqual(['https://meeshy.me/a']);
+  });
+
+  it('le crochet suit la MÊME règle d’équilibre que la parenthèse', () => {
+    const hrefs = (content: string) => segmentText(content).flatMap((s) => (s.kind === 'url' ? [s.href] : []));
+    expect(hrefs('voir [https://meeshy.me/a] merci')).toEqual(['https://meeshy.me/a']);
+    expect(hrefs('voir https://meeshy.me/a[0] merci')).toEqual(['https://meeshy.me/a[0]']);
+  });
+
+  it('une parenthèse ÉQUILIBRÉE appartient à l’adresse et y reste', () => {
+    expect(segmentText('voir https://fr.wikipedia.org/wiki/Prisme_(optique) ok')).toEqual([
+      { kind: 'text', text: 'voir ' },
+      {
+        kind: 'url',
+        text: 'https://fr.wikipedia.org/wiki/Prisme_(optique)',
+        href: 'https://fr.wikipedia.org/wiki/Prisme_(optique)',
+      },
+      { kind: 'text', text: ' ok' },
+    ]);
+  });
+
+  it('la ponctuation retirée du lien RESTE LISIBLE — le découpage couvre toujours le texte d’origine', () => {
+    const content = 'regarde https://meeshy.me/notes.';
+    expect(segmentText(content).map((s) => (s.kind === 'emphasis' ? '' : s.text)).join('')).toBe(content);
+  });
+
+  it('une adresse qui se réduirait à son seul schéma n’est pas un lien', () => {
+    expect(segmentText('bizarre https://. suite').every((s) => s.kind !== 'url')).toBe(true);
+  });
 });
 
 describe('segmentText — le gras et l’italique', () => {

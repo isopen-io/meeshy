@@ -1,5 +1,7 @@
-import { describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
+
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { Bubble } from './bubble';
 import { FeedPostCard } from './feed-post-card';
@@ -26,6 +28,50 @@ import type { PlacedMessage } from '@/lib/grouping';
  */
 
 const hrefsOf = (html: string): readonly string[] => [...html.matchAll(/href="([^"]*)"/g)].map((m) => m[1] ?? '');
+
+/**
+ * **LA QUESTION SE POSE SUR L'ANCÊTRE, JAMAIS SUR LA BALISE** — et c'est une
+ * mesure, pas une précaution. La forme précédente de ce témoin cherchait
+ * `/<a[^>]*aria-hidden/` : en remettant `aria-hidden` sur le `<p>` ENTIER —
+ * exactement la régression que `plainTextHidden` existe pour empêcher — les
+ * seize témoins de ce fichier restaient VERTS, `check-reading-mode.mjs`
+ * compris. Un élément focusable est masqué par n'importe lequel de ses
+ * ancêtres ; une chaîne ne sait pas lire une ascendance, un DOM si.
+ */
+const focusablesMasques = (html: string): readonly string[] => {
+  const hote = document.createElement('div');
+  hote.innerHTML = html;
+  return [...hote.querySelectorAll('a[href], button, [tabindex]')]
+    .filter((element) => element.closest('[aria-hidden="true"]') !== null)
+    .map((element) => element.outerHTML);
+};
+
+/** La PROSE qu'aucun `aria-hidden` ne couvre — la moitié inverse du témoin
+ * ci-dessus : sans elle, retirer tout masque rendrait la chaîne verte en
+ * rétablissant le doublon de lecture de #5935. */
+const proseNue = (html: string): readonly string[] => {
+  const hote = document.createElement('div');
+  hote.innerHTML = html;
+  const paragraphe = hote.querySelector('[data-rich-text]');
+  if (paragraphe === null) return ['aucun [data-rich-text] rendu'];
+  const walker = document.createTreeWalker(paragraphe, NodeFilter.SHOW_TEXT);
+  const nue: string[] = [];
+  for (let noeud = walker.nextNode(); noeud !== null; noeud = walker.nextNode()) {
+    const texte = (noeud.textContent ?? '').trim();
+    const parent = noeud.parentElement;
+    if (texte === '' || parent === null || parent.closest('a') !== null) continue;
+    if (parent.closest('[aria-hidden="true"]') === null) nue.push(texte);
+  }
+  return nue;
+};
+
+beforeAll(() => {
+  ensureHappyDomRegistered();
+});
+
+afterAll(async () => {
+  await releaseHappyDomIfRegistered();
+});
 
 const placeOf = (msg: Message): PlacedMessage => ({ message: msg, head: true, tail: true, opensDay: null });
 
@@ -135,13 +181,14 @@ describe('la RANGÉE PLATE enrichit le texte sans violer l’arbre d’accessibi
     expect(hrefsOf(html)).toContain('/u/kwame-mensah');
   });
 
-  test('AUCUN <a> ne porte `aria-hidden` — un élément focusable masqué est une violation ARIA', () => {
+  test('AUCUN élément focusable ne vit sous un `aria-hidden`, fût-ce par son ancêtre — c’est la violation aria-hidden-focus', () => {
     const html = renderFocal(threadMessage({ id: 'f2', content: 'merci @kwame-mensah, vois https://meeshy.me/a', validatedMentions: ['kwame-mensah'] }));
-    expect(html).not.toMatch(/<a[^>]*aria-hidden/);
+    expect(focusablesMasques(html)).toEqual([]);
   });
 
-  test('la PROSE reste masquée — le libellé de la rangée la porte déjà', () => {
-    const html = renderFocal(threadMessage({ id: 'f3', content: 'merci @kwame-mensah', validatedMentions: ['kwame-mensah'] }));
+  test('la PROSE reste masquée, feuille par feuille — le libellé de la rangée la porte déjà', () => {
+    const html = renderFocal(threadMessage({ id: 'f3', content: 'merci @kwame-mensah, et voilà', validatedMentions: ['kwame-mensah'] }));
+    expect(proseNue(html)).toEqual([]);
     expect(html).toContain('aria-hidden="true"');
   });
 

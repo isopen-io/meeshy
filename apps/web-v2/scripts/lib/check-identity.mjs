@@ -168,10 +168,17 @@ export async function checkRowIdentityAndLabel({ browser, BASE, CAPTURES, setSch
          * qu'un texte nu). Seuls les segments NON interactifs sont donc
          * masqués, feuille par feuille — voir `focal-row.tsx`. L'invariant
          * de #5935 (« la phrase n'est jamais lue deux fois ») ne se lit donc
-         * plus sur le CONTENEUR : il se lit sur chaque NŒUD DE TEXTE — soit
-         * il est sous un `aria-hidden="true"`, soit il vit dans un `<a>`
-         * (auquel cas il DOIT rester exposé et atteignable, c'est le point
-         * même du changement).
+         * plus sur le CONTENEUR : il se lit sur chaque NŒUD DE TEXTE, et il a
+         * DEUX faces, jamais une — la prose DOIT être masquée (sinon la
+         * phrase est lue deux fois), le texte d'un `<a>` NE DOIT PAS l'être
+         * (sinon le lien est focusable et invisible : `aria-hidden-focus`).
+         *
+         * **Mesuré : n'en garder qu'UNE ne garde rien.** Écrite « masqué OU
+         * dans un `<a>` », cette boucle restait VERTE quand on remettait
+         * `aria-hidden` sur le `<p>` ENTIER — la régression même que le
+         * changement de niveau existe pour empêcher, puisqu'un lien masqué
+         * satisfait la branche « masqué ». D'où l'égalité stricte ci-dessous :
+         * `interactif === masqué` est TOUJOURS un défaut, dans les deux sens.
          */
         const paragraphTextIsMasked = paragraph
           ? (() => {
@@ -180,9 +187,14 @@ export async function checkRowIdentityAndLabel({ browser, BASE, CAPTURES, setSch
               while (node) {
                 const text = (node.textContent ?? '').trim();
                 const parent = node.parentElement;
-                const interactive = text.length > 0 && parent && parent.closest('a') !== null;
-                const hidden = text.length > 0 && parent && parent.closest('[aria-hidden="true"]') !== null;
-                if (text.length > 0 && !interactive && !hidden) return false;
+                // Fail-closed : un nœud de texte porteur SANS élément parent
+                // n'est pas un cas « sans avis », c'est un cas non mesurable.
+                if (text.length > 0 && !parent) return false;
+                if (text.length > 0 && parent) {
+                  const interactive = parent.closest('a') !== null;
+                  const hidden = parent.closest('[aria-hidden="true"]') !== null;
+                  if (interactive === hidden) return false;
+                }
                 node = walker.nextNode();
               }
               return true;

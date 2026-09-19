@@ -114,6 +114,51 @@ const HASHTAG_REGEX = /(?<![\p{L}\p{N}_/])#([\p{L}\p{N}_]{1,50})/gu;
 const URL_REGEX = /(?<![@\w])https?:\/\/[\w\-._~:/?#[\]@!$&'()*+,;=%]+/g;
 
 /**
+ * **CE QUI FERME LA PHRASE N'APPARTIENT PAS À L'ADRESSE.** Tous ces caractères
+ * sont des caractères d'URL VALIDES — la classe ci-dessus les accepte donc, et
+ * les avalait : « regarde https://meeshy.me/notes. » produisait un lien vers
+ * `…/notes.`, une adresse qui n'existe pas. Le lien AFFICHÉ et le lien SUIVI
+ * cessaient d'être le même, sans que rien ne le dise à l'écran (loi 4).
+ *
+ * La liste est celle qui termine une phrase, jamais une adresse : une URL
+ * réelle ne finit ni par un point, ni par une virgule, ni par un
+ * point-virgule, ni par un deux-points, ni par un point d'exclamation ou
+ * d'interrogation, ni par un guillemet.
+ */
+const URL_TAIL_PUNCTUATION = '.,;:!?\'"';
+
+/**
+ * LES FERMANTES SE TRAITENT PAR ÉQUILIBRE, JAMAIS PAR LISTE — c'est la
+ * différence entre `(https://meeshy.me/a)`, où la parenthèse encadre le lien,
+ * et `https://fr.wikipedia.org/wiki/Prisme_(optique)`, où elle EN FAIT PARTIE.
+ * Compter les deux moitiés distingue les deux ; retirer tout `)` final
+ * casserait la seconde au nom de la première.
+ *
+ * DEUX PAIRES, et deux seulement : ce sont les seules fermantes que
+ * `URL_REGEX` peut capturer. L'accolade n'appartient pas à sa classe de
+ * caractères — une entrée `'}'` ici serait une branche qu'aucun entrant ne
+ * peut atteindre, c'est-à-dire un témoin qui ne peut pas tomber déguisé en
+ * exhaustivité.
+ */
+const URL_CLOSERS: Readonly<Record<string, string>> = { ')': '(', ']': '[' };
+
+const occurrences = (text: string, char: string): number => [...text].filter((c) => c === char).length;
+
+const trimUrlTail = (url: string): string => {
+  const last = url.at(-1);
+  if (last === undefined) return url;
+  if (URL_TAIL_PUNCTUATION.includes(last)) return trimUrlTail(url.slice(0, -1));
+  const opener = URL_CLOSERS[last];
+  if (opener !== undefined && occurrences(url, last) > occurrences(url, opener)) return trimUrlTail(url.slice(0, -1));
+  return url;
+};
+
+/** Ce que l'ancrage de `URL_REGEX` garantit AVANT la taille, et qu'il faut
+ * re-garantir APRÈS : rognée, une adresse peut se réduire à son seul schéma
+ * (`https://.`), et `https://` seul n'est l'adresse de rien. */
+const URL_HAS_AUTHORITY = /^https?:\/\/[^\s]/;
+
+/**
  * **LES QUATRE MARQUEURS, DANS L'ORDRE OÙ ILS SONT ESSAYÉS.** L'alternation
  * est ordonnée, et le gras DOIT précéder l'italique : à une position portant
  * `**`, c'est la paire qui doit gagner sur l'étoile seule.
@@ -161,7 +206,13 @@ const collect = (
     const segment = build(match);
     const start = match.index;
     if (segment === null || start === undefined) return [];
-    return [{ start, end: start + match[0].length, segment }];
+    /* LA FIN EST CELLE DU SEGMENT, PAS CELLE DU MATCH. Les trois analyseurs
+       posent dans `text` la tranche qu'ils CONSOMMENT (les frontières sont des
+       lookarounds, de largeur nulle) — la longueur du match leur était donc
+       égale jusqu'ici. Elle cesse de l'être dès qu'un analyseur rend MOINS que
+       ce qu'il a matché : l'URL rognée de sa ponctuation finale doit laisser
+       le point au texte qui suit, pas le faire disparaître. */
+    return [{ start, end: start + segment.text.length, segment }];
   });
 
 function inlineSegments(content: string, options: SegmentOptions): readonly InlineSegment[] {
@@ -186,7 +237,10 @@ function inlineSegments(content: string, options: SegmentOptions): readonly Inli
           return tag === undefined ? null : { kind: 'hashtag', text: match[0], tag: tag.toLowerCase() };
         })
       : []),
-    ...collect(content, URL_REGEX, (match) => ({ kind: 'url', text: match[0], href: match[0] })),
+    ...collect(content, URL_REGEX, (match) => {
+      const url = trimUrlTail(match[0]);
+      return URL_HAS_AUTHORITY.test(url) ? { kind: 'url', text: url, href: url } : null;
+    }),
   ].sort((a, b) => a.start - b.start);
 
   const segments: InlineSegment[] = [];

@@ -90,12 +90,18 @@ const rtMention = richMessage({
   createdAt: threadMoment(25),
 });
 
-/** LIEN — une URL, et un `javascript:` qui doit rester du texte mort. */
+/**
+ * LIEN — une URL, un `javascript:` qui doit rester du texte mort, et une
+ * TROISIÈME forme que le premier jet n'avait pas : un lien qui TERMINE LA
+ * PHRASE. C'est la façon nominale d'écrire une adresse, et la ponctuation
+ * finale étant un caractère d'URL valide, elle était avalée dans le `href` —
+ * le lien affiché et le lien suivi cessaient d'être le même (revue #7033).
+ */
 const rtLien = richMessage({
   id: 'rt-3',
   senderId: 'u-kwame',
   sender: kwame,
-  content: 'La note est là : https://meeshy.me/notes/7021 — pas javascript:alert(1).',
+  content: 'La note est là : https://meeshy.me/notes/7021 — pas javascript:alert(1). Détail sur https://meeshy.me/notes/7022.',
   originalLanguage: 'fr',
   translations: [],
   createdAt: threadMoment(20),
