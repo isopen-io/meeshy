@@ -27,7 +27,14 @@ import { LIVE_CONVERSATION, LIVE_CONVERSATION_ID, LIVE_MESSAGES } from './fixtur
 import { PAGINATION_CONVERSATIONS } from './fixtures-pagination';
 import { MEDIA_CONVERSATION, MEDIA_CONVERSATION_ID, MEDIA_MESSAGES } from './fixtures-media';
 import { STATES_CONVERSATION, STATES_CONVERSATION_ID, STATES_MESSAGES } from './fixtures-states';
-import { RICH_TEXT_CONVERSATION, RICH_TEXT_CONVERSATION_ID, RICH_TEXT_MESSAGES } from './fixtures-rich-text';
+import {
+  RICH_TEXT_CONVERSATION,
+  RICH_TEXT_CONVERSATION_ID,
+  RICH_TEXT_DIRECT,
+  RICH_TEXT_DIRECT_ID,
+  RICH_TEXT_DIRECT_MESSAGES,
+  RICH_TEXT_MESSAGES,
+} from './fixtures-rich-text';
 import {
   RIVER_CONTINUATION_WITNESS_ID,
   RIVER_CONVERSATION,
@@ -769,7 +776,7 @@ export function resetSurgedConversationsForTests(): void {
  * ADRESSE et dont aucune liste n'a besoin. Y ajouter une entrée ne déplace
  * AUCUN compte ; l'ajouter à `CONVERSATIONS` les déplace TOUS.
  */
-const OFF_LIST_CONVERSATIONS: readonly Conversation[] = [RICH_TEXT_CONVERSATION];
+const OFF_LIST_CONVERSATIONS: readonly Conversation[] = [RICH_TEXT_CONVERSATION, RICH_TEXT_DIRECT];
 
 /**
  * LA LECTURE PAR IDENTIFIANT — la liste servie D'ABORD (corpus figé +
@@ -779,6 +786,18 @@ const OFF_LIST_CONVERSATIONS: readonly Conversation[] = [RICH_TEXT_CONVERSATION]
  */
 export function conversationById(id: string): Conversation | undefined {
   return conversationsWithSurged().find((c) => c.id === id) ?? OFF_LIST_CONVERSATIONS.find((c) => c.id === id);
+}
+
+/**
+ * LE DIRECT DÉJÀ OUVERT AVEC QUELQU'UN (#7083) — ce que la passerelle REND
+ * plutôt que de recréer (`core-lifecycle.ts`, création idempotente d'un
+ * direct). La recherche porte sur les MÊMES deux registres que
+ * `conversationById` : un direct existe indépendamment de ce qu'une page de
+ * liste montre — l'archiver ne le supprime pas, et le serveur le retrouverait.
+ */
+export function directConversationWith(participantId: string): Conversation | undefined {
+  const matches = (c: Conversation) => c.type === 'direct' && c.participants.some((p) => p.userId === participantId);
+  return conversationsWithSurged().find(matches) ?? OFF_LIST_CONVERSATIONS.find(matches);
 }
 
 const withConsumption = (messages: readonly Message[]): readonly Message[] => {
@@ -944,6 +963,7 @@ export const messagesOf = (conversationId: string): readonly Message[] => {
   if (conversationId === MEDIA_CONVERSATION_ID) return withSent(conversationId, withConsumption(MEDIA_MESSAGES));
   if (conversationId === STATES_CONVERSATION_ID) return withSent(conversationId, withConsumption(STATES_MESSAGES));
   if (conversationId === RICH_TEXT_CONVERSATION_ID) return withSent(conversationId, withConsumption(RICH_TEXT_MESSAGES));
+  if (conversationId === RICH_TEXT_DIRECT_ID) return withSent(conversationId, withConsumption(RICH_TEXT_DIRECT_MESSAGES));
   if (conversationId === LIVE_CONVERSATION_ID) return withSent(conversationId, withConsumption(LIVE_MESSAGES));
   const last = CONVERSATIONS.find((c) => c.id === conversationId)?.lastMessage;
   return withSent(conversationId, last === undefined ? [] : withConsumption([last]));

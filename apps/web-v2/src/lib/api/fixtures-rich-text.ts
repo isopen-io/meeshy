@@ -6,7 +6,7 @@ import { amina, conversationDefaults, kwame, message, portraitStandIn, threadMom
 import { FIXTURE_PEOPLE, fixtureBlockedUsers, fixtureFriendRequests } from './fixtures-friends';
 import type { HashtagPage } from './hashtag-posts';
 import type { PublicProfile, PublicProfileStats, PublicProfileView, ServedRelation } from './public-profile';
-import type { Conversation, Message } from './types';
+import type { Conversation, Message, Participant } from './types';
 
 /**
  * **LE CORPUS DU TEXTE ENRICHI** (#7032) — le seul jeu qui fasse tomber un
@@ -66,7 +66,10 @@ const RICH_PERSON: PublicProfile = {
   username: KWAME_HANDLE,
   displayName: 'Kwame Mensah',
   avatar: portraitStandIn('#60a5fa', '#1e40af'),
-  banner: portraitStandIn('#a78bfa', '#4338ca'),
+  /* `figure: 'aucune'` — une BANNIÈRE, pas un portrait : le buste blanc du
+     stand-in par défaut se lisait comme un second avatar, écrasé derrière le
+     vrai. */
+  banner: portraitStandIn('#a78bfa', '#4338ca', 'aucune'),
   bio: 'Compte de démonstration du texte enrichi.',
   createdAt: '2024-03-08T09:00:00.000Z',
 };
@@ -174,6 +177,51 @@ export const RICH_TEXT_MESSAGES: readonly Message[] = [
   rtLast,
 ];
 
+/**
+ * LE DIRECT AVEC LE SUJET DE RECETTE (#7083) — HORS LISTE
+ * (`fixtures.ts` § `OFF_LIST_CONVERSATIONS`) : « Écrire » depuis son profil
+ * doit MENER quelque part, et la passerelle rend un direct existant plutôt
+ * que d'en créer un second (création idempotente, `core-lifecycle.ts`).
+ *
+ * Hors liste, donc : ce corpus sert une ADRESSE, pas une page. L'y ajouter
+ * déplacerait tous les comptes de la lentille pour un fil qu'aucun gate de
+ * liste ne regarde — c'est exactement la raison écrite au registre.
+ */
+export const RICH_TEXT_DIRECT_ID = 'c-direct-kwame';
+
+const richDirectPeer: Participant = {
+  ...kwame,
+  id: 'p-rich-kwame',
+  userId: RICH_PERSON.id,
+  displayName: RICH_PERSON.displayName ?? RICH_PERSON.username,
+  ...(RICH_PERSON.avatar === null ? {} : { avatar: RICH_PERSON.avatar }),
+};
+
+const rdLast = message({
+  id: 'rd-1',
+  conversationId: RICH_TEXT_DIRECT_ID,
+  senderId: RICH_PERSON.id,
+  sender: richDirectPeer,
+  content: 'Merci pour la relecture !',
+  originalLanguage: 'fr',
+  translations: [],
+  createdAt: threadMoment(240),
+});
+
+export const RICH_TEXT_DIRECT_MESSAGES: readonly Message[] = [rdLast];
+
+export const RICH_TEXT_DIRECT: Conversation = {
+  ...conversationDefaults,
+  id: RICH_TEXT_DIRECT_ID,
+  type: 'direct',
+  memberCount: 2,
+  participants: [viewer, richDirectPeer],
+  unreadCount: 0,
+  lastMessage: rdLast,
+  lastMessageAt: rdLast.createdAt,
+  lastMessageOriginalLanguage: 'fr',
+};
+
 export const RICH_TEXT_CONVERSATION: Conversation = {
   ...conversationDefaults,
   id: RICH_TEXT_CONVERSATION_ID,
@@ -264,11 +312,21 @@ const authorPost = (
 });
 
 const AUTHOR_POSTS: readonly FeedPost[] = [
-  /* LE TÉMOIN DE RANG, hérité du corpus du texte enrichi : original ESPAGNOL,
-     traduction ANGLAISE, aucune française. Le prisme du gate (`['fr','en']`)
-     sert donc le RANG 2 — un bloc qui ne descendrait que le rang 1 montrerait
-     l'espagnol. Le bloc publications du profil hérite de ce témoin sans en
-     réécrire un (leçon 261 : un témoin de rang s'écrit hors du rang 1). */
+  /**
+   * LE TÉMOIN DE PRISME DU BLOC PUBLICATIONS — original ESPAGNOL, traduction
+   * ANGLAISE, aucune française. Il porte les DEUX moitiés de la loi, et
+   * lesquelles se voient dépend de la LOCALE du lecteur (rang 4 du Prisme,
+   * `lib/reader.ts` § `READER_LANGUAGES`) :
+   *
+   *  · prisme `['fr']` (contexte `fr-FR`) — aucune traduction ne matche, donc
+   *    l'ORIGINAL espagnol est servi. C'est la règle 1 du Prisme, et un rendu
+   *    qui tomberait sur `translations.first` montrerait l'anglais ;
+   *  · prisme `['fr','en']` (contexte `en-US`) — c'est le RANG 2 qui sert, et
+   *    un rendu qui ne descendrait que le rang 1 montrerait encore l'espagnol.
+   *
+   * Les deux sont mesurées par `check-profile.mjs`, dans deux contextes de
+   * locale — un témoin de RANG ne peut pas s'écrire sur le rang 1 (leçon 261).
+   */
   authorPost('ap-1', 'POST', 'Hola, el informe está listo.', 12, {
     originalLanguage: 'es',
     translations: { en: { text: 'Hi, the report is ready.' } },

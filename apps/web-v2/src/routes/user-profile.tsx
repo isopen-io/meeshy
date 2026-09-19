@@ -10,7 +10,6 @@ import { GroupedSection } from '@/components/grouped-section';
 import { PROFILE_GLYPHS } from '@/components/glyphs-profile';
 import { authorPostsInfiniteOptions, flattenAuthorPosts } from '@/lib/api/author-posts';
 import { blockedUsersQueryOptions, flattenBlockedUsers } from '@/lib/api/blocks';
-import { ApiError } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
 import { createDirectConversation } from '@/lib/api/conversations';
 import {
@@ -27,8 +26,9 @@ import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
 import { resolveFeedCardModel } from '@/lib/feed/card-model';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
-import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
+import { failureMayRetry, profileFailureOf, type ProfileFailure } from '@/lib/profile/failure';
 import { filterPosts, toggledFilter, type ProfilePostsFilter, type ProfilePostsFilterTap } from '@/lib/profile/posts-filter';
 import { actionsFor, bucketNeededFor, relationFromServed, type ProfileActionKind } from '@/lib/profile/relation';
 import { useParams } from '@/lib/router';
@@ -83,8 +83,17 @@ import {
  * absence.
  */
 
-const isRefusal = (error: unknown): boolean => error instanceof ApiError && (error.status === 403 || error.status === 404);
-const isThrottled = (error: unknown): boolean => error instanceof ApiError && error.status === 429;
+/** Le rendu d'un échec, par sa NATURE — la loi vit dans `lib/profile/failure.ts`,
+ * pure, parce que « 403 et 404 rendent le même texte » ne se mesure qu'en
+ * comparant deux chaînes. */
+const FAILURE_NOTICE = {
+  refused: { glyph: 'lock', tone: 'var(--color-ios-ink-3)', alert: false, title: 'userProfile.refused.title', body: 'userProfile.refused.body' },
+  throttled: { glyph: 'warningCircle', tone: 'var(--color-warning)', alert: true, title: 'userProfile.throttled.title', body: 'userProfile.throttled.body' },
+  offline: { glyph: 'warningCircle', tone: 'var(--color-warning)', alert: false, title: 'profile.offline.title', body: 'userProfile.offline.body' },
+  error: { glyph: 'warningCircle', tone: 'var(--color-error)', alert: true, title: 'userProfile.error.title', body: 'userProfile.error.body' },
+} as const satisfies Readonly<
+  Record<ProfileFailure, { readonly glyph: 'lock' | 'warningCircle'; readonly tone: string; readonly alert: boolean; readonly title: InterfaceCatalogKey; readonly body: InterfaceCatalogKey }>
+>;
 
 /**
  * L'ISSUE D'UN GESTE, DITE À VOIX HAUTE — les clés de « Découvrir » sont
@@ -119,8 +128,40 @@ function ProfileHeaderBar({ title }: { readonly title: string }) {
   );
 }
 
+function ProfileFailureNotice({
+  language,
+  failure,
+  onRetry,
+}: {
+  readonly language: InterfaceLanguage;
+  readonly failure: ProfileFailure;
+  readonly onRetry: () => void;
+}) {
+  const notice = FAILURE_NOTICE[failure];
+  return (
+    <ProfileNotice
+      glyph={notice.glyph}
+      tone={notice.tone}
+      alert={notice.alert}
+      title={translate(language, notice.title)}
+      detail={translate(language, notice.body)}
+      {...(failureMayRetry(failure) ? { action: { label: translate(language, 'profile.retry'), onAction: onRetry } } : {})}
+    />
+  );
+}
+
+/**
+ * LA ROUTE LIT L'ADRESSE, LA VUE PREND SON SUJET EN PARAMÈTRE — deux
+ * responsabilités, et la seconde est celle qui se mesure : `useParams()` exige
+ * le contexte du routeur, et un témoin qui monterait le routeur entier
+ * mesurerait surtout le chargement d'un chunk.
+ */
 export default function UserProfileScreen() {
   const { username } = useParams<'/u/$username'>();
+  return <UserProfileView username={username} />;
+}
+
+export function UserProfileView({ username }: { readonly username: string }) {
   const language = currentInterfaceLanguage();
   const online = useOnline();
   const minute = useMinute();
@@ -233,7 +274,12 @@ export default function UserProfileScreen() {
   const awaitingRequest = bucket !== null && pendingRequest === null;
 
   return (
-    <div data-user-profile={username} className="flex h-dvh flex-col overflow-hidden pt-safe">
+    /* L'ATTRIBUT NE PORTE QUE CE QUI EST SERVI (#7083, D-6) — il portait le
+       handle DEMANDÉ, donc un profil refusé le répétait dans le document :
+       « ce compte n'existe pas » et son pseudo à côté, c'est exactement ce que
+       le refus indistinct doit taire. Vide sur un refus ; `check-rich-text.mjs`
+       y trouve toujours son point d'accroche. */
+    <div data-user-profile={person?.username ?? ''} className="flex h-dvh flex-col overflow-hidden pt-safe">
       <ProfileHeaderBar title={person === undefined ? translate(language, 'userProfile.title') : name} />
       <p role="status" aria-live="polite" data-profile-announce className="sr-only">
         {actionAnnouncement === '' ? gestureAnnouncement : actionAnnouncement}
@@ -303,32 +349,8 @@ export default function UserProfileScreen() {
               </>
             )}
           </div>
-        ) : isRefusal(view.error) ? (
-          <ProfileNotice
-            glyph="lock"
-            tone="var(--color-ios-ink-3)"
-            alert={false}
-            title={translate(language, 'userProfile.refused.title')}
-            detail={translate(language, 'userProfile.refused.body')}
-          />
-        ) : isThrottled(view.error) ? (
-          <ProfileNotice
-            glyph="warningCircle"
-            tone="var(--color-warning)"
-            alert
-            title={translate(language, 'userProfile.throttled.title')}
-            detail={translate(language, 'userProfile.throttled.body')}
-            action={{ label: translate(language, 'profile.retry'), onAction: () => void view.refetch() }}
-          />
         ) : view.isError ? (
-          <ProfileNotice
-            glyph="warningCircle"
-            tone={online ? 'var(--color-error)' : 'var(--color-warning)'}
-            alert={online}
-            title={translate(language, online ? 'userProfile.error.title' : 'profile.offline.title')}
-            detail={translate(language, online ? 'userProfile.error.body' : 'userProfile.offline.body')}
-            {...(online ? { action: { label: translate(language, 'profile.retry'), onAction: () => void view.refetch() } } : {})}
-          />
+          <ProfileFailureNotice language={language} failure={profileFailureOf(view.error, online)} onRetry={() => void view.refetch()} />
         ) : (
           <div className="mx-auto w-full max-w-xl pt-2">
             <ProfileSkeleton language={language} />

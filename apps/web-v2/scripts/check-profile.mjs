@@ -33,6 +33,22 @@
  *     désactivés ;
  *  8. aucune erreur de page.
  *
+ * SECONDE PASSE (#7083) — `/u/<pseudo>`, LE PROFIL PUBLIC DE QUELQU'UN, dans
+ * les MÊMES quatre combinaisons : les trois blocs, le bandeau tapable dont
+ * « Messages » et « Traductions » sont ABSENTS (le défaut d'iOS qu'on ne copie
+ * pas), le filtre et la pagination MESURÉS À L'EFFET (le nombre de cartes),
+ * l'action relationnelle optimiste dans la MÊME image, « Écrire » qui mène à
+ * un fil, le refus qui ne répète pas le pseudo demandé, l'atteignabilité et le
+ * contraste AA.
+ *
+ * CE QUE CE GATE NE PEUT PAS PROUVER, et qui doit être dit : le chemin SERVICE
+ * WORKER (rechargement à FROID hors ligne). `startDistServer(DIST, {
+ * serviceWorker: false })` sert le `dist` SANS coquille. Cette moitié est
+ * prouvée par `lib/net/network-only-navigations.test.ts` (la navigation `/u/`
+ * revient à la coquille depuis #7083) et par la recette manuelle. Ce qui est
+ * mesuré ici est l'autre moitié : hors ligne, la fiche DÉJÀ visitée se repeint
+ * depuis le cache persisté et ses gestes d'écriture sont désactivés.
+ *
  * `CAPTURE_DIR=<dossier>` écrit les captures de recette.
  */
 import { mkdir, stat } from 'node:fs/promises';
@@ -88,7 +104,17 @@ const REACH = {
   texts: '#contenu h2, [data-profile-hero] p, #contenu section .text-body, #contenu section .text-caption',
 };
 
-/** Chaque contrôle du contenu, amené au milieu de l'écran puis mesuré. */
+/**
+ * Chaque contrôle du contenu, amené au milieu de l'écran puis mesuré.
+ *
+ * `enProse` distingue un lien EN LIGNE dans une phrase (`#livraison`,
+ * `@kwame-mensah` dans le texte d'une publication) d'une cible autonome. Le
+ * plancher de {@link TAP_FLOOR} ne s'applique pas au premier : une ligne de
+ * texte fait 18 px, et l'agrandir DÉFORMERAIT la phrase — c'est l'exception
+ * « inline » de WCAG 2.5.8, pas une tolérance. L'atteignabilité (`ok`), elle,
+ * est mesurée pour TOUS : un lien de prose volé par un disque flottant reste
+ * un défaut.
+ */
 const reachScrolled = async (page) => {
   const count = await page.$$eval('#contenu a, #contenu button', (els) => els.length);
   const out = [];
@@ -104,6 +130,7 @@ const reachScrolled = async (page) => {
           nom: el.getAttribute('aria-label') ?? (el.textContent ?? '').trim().slice(0, 40),
           ok: hit !== null && (hit === el || el.contains(hit)),
           hauteur: r.height,
+          enProse: el.closest('[data-rich-text]') !== null,
         };
       }, i),
     );
@@ -322,10 +349,184 @@ try {
       await capture(page, `profil-hors-ligne-${scheme}-${width}x${height}`);
       await context.setOffline(false);
 
+      // ================================================ LE PROFIL PUBLIC DE QUELQU'UN (#7083)
+      await context.setOffline(false);
+      await page.goto(`${BASE}/u/kwame-mensah`, { waitUntil: 'load' });
+      await page.waitForSelector('[data-user-hero]');
+      await page.waitForSelector('[data-profile-posts] [data-feed-card-id]');
+
+      // ------------------------------------------------ 9. l'identité et les trois blocs
+      check((await textOf(page, '[data-user-hero] p')) === 'Kwame Mensah', `${label} : /u/ porte le nom (« ${await textOf(page, '[data-user-hero] p')} »)`);
+      check((await textOf(page, '[data-user-hero] p:nth-of-type(2)')) === '@kwame-mensah', `${label} : /u/ porte l'@identifiant`);
+      check((await page.$('[data-user-banner]')) !== null, `${label} : /u/ porte sa bannière`);
+      const publicSections = await page.$$eval('#contenu section h2', (els) => els.map((el) => (el.textContent ?? '').trim()));
+      check(
+        JSON.stringify(publicSections) === JSON.stringify(['CONNEXION', 'PUBLICATIONS', 'STATISTIQUES']),
+        `${label} : les trois blocs, dans l'ordre (${JSON.stringify(publicSections)})`,
+      );
+      await capture(page, `profil-public-${scheme}-${width}x${height}`);
+
+      // ------------------------------------------------ 10. le bandeau, et ce qu'il NE dit pas
+      const band = await page.$$eval('[data-profile-tile]', (els) =>
+        els.map((el) => ({ cle: el.getAttribute('data-profile-tile'), texte: (el.textContent ?? '').trim(), bouton: el.querySelector('button') !== null })),
+      );
+      check(band.length === 3, `${label} : trois tuiles — ${JSON.stringify(band.map((t) => t.cle))}`);
+      check(
+        band.every((t) => /\d/.test(t.texte)),
+        `${label} : chaque tuile porte son compte SERVI — ${JSON.stringify(band.map((t) => t.texte))}`,
+      );
+      /* iOS ouvre les stories parce qu'il a l'écran ; la v3.1 ne l'a pas —
+         une tuile muette informe, un bouton sans effet mentirait (loi 4). */
+      check(
+        band.find((t) => t.cle === 'storiesCount')?.bouton === false && band.filter((t) => t.bouton).length === 2,
+        `${label} : « Stories » n'est PAS un bouton, « Postes » et « Réels » le sont`,
+      );
+      /* LE DÉFAUT D'iOS QU'ON NE COPIE PAS : `servedUserStats` retire quatre
+         compteurs à un tiers ; iOS les décode en 0 et annonce « 0 Messages ». */
+      const statsText = (await textOf(page, '[data-profile-stats]')) ?? '';
+      check(
+        !statsText.includes('Messages') && !statsText.includes('Traductions'),
+        `${label} : un compteur ABSENT ne peint AUCUNE tuile — « ${statsText.slice(0, 90)} »`,
+      );
+
+      /* LA RÈGLE 1 DU PRISME, sur le prisme à UN échelon de ce contexte
+         (`fr-FR` ⇒ `['fr']`) : la publication espagnole n'a QUE des
+         traductions anglaises, donc l'ORIGINAL est servi. Un rendu qui
+         tomberait sur « la première traduction » montrerait l'anglais.
+         L'autre moitié — le rang 2 — se mesure en `en-US`, après la boucle. */
+      const serviFr = (await textOf(page, '[data-feed-card-id="ap-1"]')) ?? '';
+      check(
+        serviFr.includes('el informe') && !serviFr.includes('the report'),
+        `${label} : prisme ['fr'] — aucune traduction ne matche ⇒ l'ORIGINAL, jamais « la première »`,
+      );
+
+      // ------------------------------------------------ 11. le filtre a un EFFET, et il se DÉFAIT
+      const cardCount = () => page.$$eval('[data-profile-posts] [data-feed-card-id]', (els) => els.length);
+      const allCards = await cardCount();
+      await page.click('[data-profile-filter="reels"]');
+      await page.waitForFunction((n) => document.querySelectorAll('[data-profile-posts] [data-feed-card-id]').length < n, allCards, { timeout: 1000 });
+      const reelCards = await cardCount();
+      check(reelCards > 0 && reelCards < allCards, `${label} : toucher « Réels » filtre le listing (${allCards} → ${reelCards})`);
+      await page.click('[data-profile-filter="reels"]');
+      await page.waitForFunction((n) => document.querySelectorAll('[data-profile-posts] [data-feed-card-id]').length === n, allCards, { timeout: 1000 });
+      check((await cardCount()) === allCards, `${label} : re-toucher la MÊME tuile rétablit tout`);
+
+      // ------------------------------------------------ 12. la pagination a un EFFET
+      check((await page.$('[data-profile-posts-more]')) !== null, `${label} : une seconde page est annoncée`);
+      await page.click('[data-profile-posts-more]');
+      await page.waitForFunction((n) => document.querySelectorAll('[data-profile-posts] [data-feed-card-id]').length > n, allCards, { timeout: 3000 });
+      const grown = await cardCount();
+      check(grown > allCards, `${label} : « Charger plus » ajoute des cartes (${allCards} → ${grown})`);
+      check((await page.$('[data-profile-posts-more]')) === null, `${label} : le bouton disparaît sur la dernière page`);
+
+      // ------------------------------------------------ 13. atteignabilité et contraste AA
+      const publicRest = await reachAtRest(page, REACH);
+      const publicBlocked = publicRest.controls.filter((c) => !c.ok);
+      check(publicBlocked.length === 0, `${label} : /u/ — aucun contrôle volé à son centre au repos — ${JSON.stringify(publicBlocked)}`);
+      const publicScrolled = await reachScrolled(page);
+      const publicUnreachable = publicScrolled.filter((c) => !c.ok || (!c.enProse && c.hauteur < TAP_FLOOR));
+      check(
+        publicScrolled.length >= 6 && publicUnreachable.length === 0,
+        `${label} : /u/ — chaque contrôle s'atteint et fait ${TAP_FLOOR} de haut (${publicScrolled.length}) — ${JSON.stringify(publicUnreachable)}`,
+      );
+      const publicInks = {
+        nom: await contrastOf(page, '[data-user-hero] p'),
+        identifiant: await contrastOf(page, '[data-user-hero] p:nth-of-type(2)'),
+        titreSection: await contrastOf(page, '#user-profile-posts'),
+        valeurTuile: await contrastOf(page, '[data-profile-tile="postsCount"] strong'),
+        libelleTuile: await contrastOf(page, '[data-profile-tile="postsCount"] .text-chip'),
+        valeurStat: await contrastOf(page, '[data-profile-stat="languagesUsed"] strong'),
+        ajouter: await contrastOf(page, '[data-profile-action="add"]'),
+        bloquer: await contrastOf(page, '[data-profile-action="block"]'),
+        membreDepuis: await contrastOf(page, '[data-profile-member-since]'),
+      };
+      const publicFaibles = Object.entries(publicInks).filter(([, ratio]) => ratio === null || ratio < WCAG_AA);
+      check(publicFaibles.length === 0, `${label} : /u/ — chaque texte tient AA — ${JSON.stringify(publicInks)}`);
+
+      // ------------------------------------------------ 14. l'action relationnelle est OPTIMISTE, dans les DEUX sens
+      /* « Aussitôt » = au rendu qui suit le geste, borné à une seconde — même
+         mesure que l'enregistrement optimiste de `/me` ci-dessus. Le geste
+         INVERSE est joué dans la foulée : il prouve l'autre moitié de la loi,
+         ET il rend la fixture à son état initial, sans quoi les trois
+         combinaisons suivantes ouvriraient la fiche déjà « en attente ». */
+      const relationTurned = async (selector) =>
+        page.waitForFunction((s) => document.querySelector(s) !== null, selector, { timeout: 1000 }).then(() => true, () => false);
+      await page.click('[data-profile-action="add"]');
+      check(await relationTurned('[data-profile-action="cancel"]'), `${label} : « Ajouter » passe la fiche « en attente » dans la même image`);
+      check(
+        (await textOf(page, '[data-profile-context]'))?.includes('Kwame Mensah') === true,
+        `${label} : la bannière de contexte dit de QUI il s'agit`,
+      );
+      /* « Annuler » attend sa LIGNE : la passerelle ne sert pas l'identifiant
+         de la demande (`relationAvec` jette `id`), l'écran charge donc le
+         panier des envoyées et le bouton reste désactivé tant qu'il ne l'a
+         pas — un geste qui n'aurait rien à envoyer mentirait. Ce qui se mesure
+         ici est que l'attente est BORNÉE, pas qu'elle n'existe pas. */
+      const cancelArmed = await page
+        .waitForSelector('[data-profile-action="cancel"]:not([disabled])', { timeout: 3000 })
+        .then(() => true, () => false);
+      check(cancelArmed, `${label} : « Annuler » s'arme dès que sa ligne arrive`);
+      if (cancelArmed) {
+        await page.click('[data-profile-action="cancel"]');
+        check(await relationTurned('[data-profile-action="add"]'), `${label} : « Annuler » rend la fiche à « Ajouter », aussi vite`);
+      }
+
+      // ------------------------------------------------ 15. hors ligne, la fiche reste lisible
+      await context.setOffline(true);
+      await page.waitForSelector('[data-profile-offline]');
+      check((await textOf(page, '[data-user-hero] p')) === 'Kwame Mensah', `${label} : hors ligne, la fiche reste lisible`);
+      check(
+        (await page.$$eval('[data-profile-action]', (els) => els.filter((el) => !el.disabled).length)) === 0,
+        `${label} : hors ligne, aucun geste d'écriture ne part`,
+      );
+      await capture(page, `profil-public-hors-ligne-${scheme}-${width}x${height}`);
+      await context.setOffline(false);
+
+      // ------------------------------------------------ 16. « Écrire » mène à un fil
+      await page.goto(`${BASE}/u/kwame-mensah`, { waitUntil: 'load' });
+      await page.waitForSelector('[data-profile-action="write"]');
+      await page.click('[data-profile-action="write"]');
+      await page.waitForFunction(() => window.location.pathname.startsWith('/c/'), undefined, { timeout: 3000 });
+      check(page.url().includes('/c/'), `${label} : « Écrire » mène au fil (${page.url().replace(BASE, '')})`);
+      check((await page.waitForSelector('main', { timeout: 5000 }).then(() => true, () => false)), `${label} : et le fil s'ouvre`);
+
+      // ------------------------------------------------ 17. le refus ne répète RIEN
+      await page.goto(`${BASE}/u/personne-qui-nexiste-pas`, { waitUntil: 'load' });
+      await page.waitForSelector('#contenu p');
+      await page.waitForTimeout(200);
+      const refusal = (await textOf(page, '#contenu')) ?? '';
+      check(refusal.includes('Ce profil n’est pas accessible'), `${label} : un profil refusé le dit — « ${refusal.slice(0, 60)} »`);
+      check(
+        !refusal.toLowerCase().includes('introuvable') && !(await page.content()).includes('personne-qui-nexiste-pas'),
+        `${label} : le refus ne laisse RIEN déduire — ni « introuvable », ni le pseudo demandé`,
+      );
+      check((await page.$('[data-profile-retry]')) === null, `${label} : un refus n'offre pas « Réessayer »`);
+
       check(errors.length === 0, `${label} : aucune erreur de page — ${JSON.stringify(errors)}`);
       await context.close();
     }
   }
+  /**
+   * LE PRISME DU BLOC PUBLICATIONS, SUR UN RANG AUTRE QUE LE PREMIER (#7083).
+   *
+   * Les quatre combinaisons ci-dessus tournent en `fr-FR`, donc sur un prisme
+   * à UN seul échelon (`['fr']`) : la publication espagnole y est servie en
+   * ESPAGNOL, ce qui est la règle 1 du Prisme (aucune traduction ne matche ⇒
+   * l'original) mais ne prouve RIEN sur la descente. Un contexte `en-US`
+   * donne le prisme `['fr','en']` : la MÊME publication doit alors se lire en
+   * ANGLAIS — c'est le rang 2, et un bloc qui ne descendrait que le rang 1
+   * montrerait encore l'espagnol. Même dispositif que `check-rich-text.mjs`,
+   * qui ouvre lui aussi un second contexte pour cette seule mesure.
+   */
+  const rangContext = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'light', locale: 'en-US' });
+  const rangPage = await rangContext.newPage();
+  rangPage.setDefaultTimeout(10_000);
+  await rangPage.goto(`${BASE}/u/kwame-mensah`, { waitUntil: 'load' });
+  await rangPage.waitForSelector('[data-profile-posts] [data-feed-card-id]');
+  const servi = (await textOf(rangPage, '[data-feed-card-id="ap-1"]')) ?? '';
+  check(servi.includes('the report is ready'), `prisme ['fr','en'] : la publication espagnole se lit au RANG 2 — « ${servi.slice(0, 70)} »`);
+  check(!servi.includes('el informe'), `prisme ['fr','en'] : et l'original n'est plus le texte servi`);
+  await rangContext.close();
 } finally {
   await browser.close();
   served.close();
@@ -336,4 +537,4 @@ if (failures.length > 0) {
   for (const f of failures) console.error(`    · ${f}`);
   process.exit(1);
 }
-console.log('\n  Le profil se lit, se modifie, s’atteint et tient AA — et la photo part recompressée.\n');
+console.log('\n  Les deux profils se lisent, s’atteignent et tiennent AA — /me se modifie, /u/ publie, filtre, pagine et connecte.\n');

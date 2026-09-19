@@ -45,7 +45,19 @@ import { initialsOf } from '@/lib/view/conversation';
 const INK = 'var(--color-ios-ink)';
 const INK_2 = 'var(--color-ios-ink-2)';
 const BRAND = 'var(--color-ios-brand)';
+/**
+ * LE REMPLISSAGE DE MARQUE EST `--ios-indigo-600`, pas `--color-ios-brand`
+ * (#7083) — et c'est une MESURE : l'indigo de marque bascule avec le schéma et
+ * rend 4,47 contre le blanc (sous AA, dans les deux schémas), là où l'indigo
+ * 600 rend au-delà de 4,5. Même jeton que la pastille de « Découvrir »
+ * (`discover-parts.tsx` § `BRAND_FILL`) : un bouton PLEIN se peint avec lui,
+ * un bouton de CONTOUR garde l'encre de marque.
+ */
+const BRAND_FILL = 'var(--ios-indigo-600)';
 const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2';
+/** MÊME encre de marque que « Découvrir » et les titres de section : elle
+ * bascule avec le schéma, et c'est elle qui tient AA dans les deux. */
+const BRAND_INK = 'text-[color:var(--ios-indigo-400)] light:text-[color:var(--ios-indigo-600)]';
 
 // ------------------------------------------------------------------ l'identité
 
@@ -94,7 +106,14 @@ export const ProfileHero = memo(function ProfileHero({
         <p className="max-w-full break-words text-screen font-bold" style={{ color: INK }}>
           {name}
         </p>
-        <p className="text-body font-medium" style={{ color: accent }}>{`@${profile.username}`}</p>
+        {/* LE PSEUDO EST TEINTÉ PAR LA MARQUE, PAS PAR L'ACCENT — et c'est un
+            écart ASSUMÉ avec iOS (`+Header.swift:134-137`). L'accent est
+            DÉRIVÉ de l'identifiant (`authorAccentColor`) : il prend n'importe
+            quelle teinte, et il en existe qui tombent sous AA sur fond de
+            carte (mesuré : 4,22 en sombre). Un texte que le lecteur ne lit pas
+            n'est pas une identité, c'est un défaut. L'accent reste peint là où
+            il ne porte aucun texte — le dégradé de bannière et l'avatar. */}
+        <p className={`text-body font-medium ${BRAND_INK}`}>{`@${profile.username}`}</p>
         {profile.bio === null ? null : (
           <p className="max-w-prose whitespace-pre-wrap pt-1.5 text-body" style={{ color: INK }}>
             {profile.bio}
@@ -183,8 +202,12 @@ function ActionButton({
       style={{
         minHeight: 48,
         outlineColor: tone,
-        color: filled ? 'var(--color-ios-surface)' : tone,
-        backgroundColor: filled ? tone : `color-mix(in srgb, ${tone} 12%, transparent)`,
+        /* BLANC, jamais la surface : un bouton PLEIN se lit sur sa teinte,
+           et `--color-ios-surface` suit le schéma — en sombre il tombait à
+           4,45 contre l'indigo de marque (mesuré). Même choix que la pastille
+           de « Découvrir » (`discover-parts.tsx`, `text-white`). */
+        color: filled ? '#fff' : tone,
+        backgroundColor: filled ? (ACTIONS[kind].tone === 'brand' ? BRAND_FILL : tone) : `color-mix(in srgb, ${tone} 12%, transparent)`,
       }}
     >
       <span aria-hidden="true" className="grid place-items-center">
@@ -286,7 +309,7 @@ export const ProfileRelationSection = memo(function ProfileRelationSection({
               data-profile-signin-cta
               onClick={onSignIn}
               className={`mt-1 grid w-full place-items-center rounded-card px-4 text-body font-semibold ${FOCUS}`}
-              style={{ minHeight: 48, color: 'var(--color-ios-surface)', backgroundColor: BRAND, outlineColor: BRAND }}
+              style={{ minHeight: 48, color: '#fff', backgroundColor: BRAND_FILL, outlineColor: BRAND }}
             >
               {translate(language, 'userProfile.signin.cta')}
             </button>
@@ -528,7 +551,7 @@ export function ProfileNotice({
           data-profile-retry
           onClick={action.onAction}
           className={`grid place-items-center rounded-chip px-5 text-body font-semibold ${FOCUS}`}
-          style={{ minHeight: 44, color: 'var(--color-ios-surface)', backgroundColor: BRAND, outlineColor: BRAND }}
+          style={{ minHeight: 44, color: '#fff', backgroundColor: BRAND_FILL, outlineColor: BRAND }}
         >
           {action.label}
         </button>
