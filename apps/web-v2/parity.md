@@ -77,6 +77,33 @@
 > fichier par un script plutôt que de le régénérer à la main, non fait ici
 > faute de mandat sur ce tour.
 
+> **Correction du 2026-09-19.** Ce tableau était resté à « 57 » depuis le
+> 2026-09-17 : `/admin` et `/admin/agent` sont apparues côté v3.1 (l'écran
+> d'administration existant a rejoint la table des routes) et trois adresses
+> neuves sans équivalent legacy ont été ajoutées — `/adm/agent`,
+> `/hashtag/:tag`, `/u/:username`. Mesure du jour, `node
+> scripts/route-inventory.mjs` : **62** routes v3.1 (57 écrans + 5 documents
+> pré-rendus) / **117** adresses distinctes en union avec le legacy (toujours
+> **80**, inchangé ; `apps/web-old-version3` toujours **0**).
+>
+> La liste des **26 adresses** du 2026-09-17 était déjà incomplète (`/status/new`
+> en manquait alors qu'elle existait depuis le 2026-09-09) — la dérive porte
+> donc à la fois sur les adresses AJOUTÉES et sur l'exactitude du delta
+> lui-même. Plutôt que de rejouer un delta sur un delta déjà faux, la liste
+> complète des **37** adresses `legacy=false` mesurées aujourd'hui : `/adm`,
+> `/adm/agent`, `/adm/conversations(+:conversation)`, `/adm/users(+:user)`,
+> `/admin/conversations(+:conversation)`, `/admin/users/:user`, `/c/:conversation`,
+> `/calls`, `/chat/:link`, `/communities/:community`, `/communities/new`,
+> `/discover`, `/feeds/post/:post`, `/hashtag/:tag`, `/l/:token`,
+> `/l/:token/expired`, `/links/share(+:link,+new)`, `/me/progression` + ses
+> trois sous-vues, `/post/:post`, `/reels`, `/settings/data-export`,
+> `/settings/notifications`, `/signup/affiliate/:token`, `/status/new`,
+> `/stories`, `/stories/new`, `/story/:post`, `/u/:username`, `/welcome`.
+> Aucun gate ne tient toujours ce delta à jour (même réserve que le
+> 2026-09-17) : le correctif structurel — dériver ce document du script au
+> lieu de le régénérer à la main — reste non fait, faute de mandat sur ce
+> tour également.
+
 > **Correction du 2026-09-08 (#5669).** Ce tableau a porté « `apps/web-v2` — 0 —
 > nulle part encore » pendant tout le cadrage de #5492, et c'était FAUX : la
 > v3.1 servait déjà quatre écrans et cinq documents. Le script n'énumérait que
