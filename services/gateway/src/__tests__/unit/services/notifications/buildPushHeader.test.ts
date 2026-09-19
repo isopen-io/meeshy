@@ -15,7 +15,7 @@
  * @jest-environment node
  */
 
-import { buildPushHeader } from '../../../../services/notifications/NotificationService';
+import { buildPushHeader } from '../../../../services/notifications/push-header';
 
 describe('buildPushHeader', () => {
   it('builds {title=sender, subtitle=conv} for a global conversation message', () => {

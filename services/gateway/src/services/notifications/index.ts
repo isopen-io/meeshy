@@ -5,6 +5,7 @@
 
 export { NotificationService } from './NotificationService';
 export { NotificationFormatter } from './NotificationFormatter';
+export { pushCategoryForNotificationType, buildPushHeader, dedupePushSubtitle } from './push-header';
 
 export type {
   CreateNotificationData,
