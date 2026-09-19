@@ -1,7 +1,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { MentionParticipant } from '@meeshy/shared/utils/mention-parser';
 import { MAX_MENTIONS_PER_MESSAGE } from '../../validation/mention-list.js';
-import { protectedPreview } from '../notifications/NotificationService';
+import { protectedPreview } from '../notifications/notification-preview';
 
 /**
  * Le masque servi quand la relecture des drapeaux ne conclut pas — message

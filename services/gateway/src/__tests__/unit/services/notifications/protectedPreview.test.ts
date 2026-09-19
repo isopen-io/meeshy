@@ -19,7 +19,7 @@ import {
   protectedPreview,
   contentTypeIcon,
   formatEphemeralDuration,
-} from '../../../../services/notifications/NotificationService';
+} from '../../../../services/notifications/notification-preview';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 
 describe('contentTypeIcon', () => {

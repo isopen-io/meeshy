@@ -47,7 +47,7 @@ import { sendSuccess, sendForbidden, sendInternalError } from '../../utils/respo
 import { buildCursorPaginationMeta } from '../../utils/pagination';
 import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloorsOrFail, historyFloorClause } from '../../services/historyFloor';
 import { loadPersonalHistoryHidingByConversation } from '../../services/personalHistoryFilter';
-import { protectedPreview, maskedAttachment } from '../../services/notifications/NotificationService';
+import { protectedPreview, maskedAttachment } from '../../services/notifications/notification-preview';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import type { AttachmentSearchQuery } from './types';
 

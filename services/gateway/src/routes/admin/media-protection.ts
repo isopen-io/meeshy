@@ -46,7 +46,7 @@
  * ne s'est simplement pas encore dupliqué. Il est déplacé ici, à côté de son
  * jumeau média, pour la même raison que celui-ci y vit déjà.
  */
-import { maskedAttachment } from '../../services/notifications/NotificationService';
+import { maskedAttachment } from '../../services/notifications/notification-preview';
 
 /**
  * Fragment de `select` Prisma pour les colonnes de protection PROPRES à

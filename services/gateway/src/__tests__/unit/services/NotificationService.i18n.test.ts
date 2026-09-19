@@ -1,8 +1,8 @@
+import { NotificationService } from '../../../services/notifications/NotificationService';
 import {
-  NotificationService,
   formatSingleAttachmentLabelI18n,
   buildMessageNotificationBodyI18n,
-} from '../../../services/notifications/NotificationService';
+} from '../../../services/notifications/notification-preview';
 
 function makeService(users: Record<string, any>) {
   const prisma: any = {

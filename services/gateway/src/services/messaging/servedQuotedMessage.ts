@@ -1,4 +1,4 @@
-import { maskedAttachment, protectedPreview } from '../notifications/NotificationService';
+import { maskedAttachment, protectedPreview } from '../notifications/notification-preview';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 import {
   transformTranslationsToArray,

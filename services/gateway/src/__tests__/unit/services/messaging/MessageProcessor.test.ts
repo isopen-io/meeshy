@@ -75,6 +75,15 @@ jest.mock('../../../../services/notifications/NotificationService', () => ({
     createReplyNotification: (...a: any[]) => mockCreateReplyNotification(...a),
     createMentionNotificationsBatch: (...a: any[]) => mockCreateMentionNotificationsBatch(...a),
   })),
+}));
+
+// #7093 — `messageNotificationFanOut.ts` importe désormais `protectedPreview`
+// et `maskedAttachment` depuis `notification-preview.ts` (plus depuis
+// `NotificationService`). Le bouchon suit le déménagement : sans lui, les
+// VRAIES fonctions s'exécuteraient dans cette suite et l'isolation voulue par
+// le cycle 125 se perdrait en silence.
+jest.mock('../../../../services/notifications/notification-preview', () => ({
+  ...(jest.requireActual('../../../../services/notifications/notification-preview') as object),
   protectedPreview: jest.fn().mockReturnValue(null),
   // Cycle 125 — la JUMELLE de `protectedPreview`, pour le MÉDIA : l'éventail
   // l'appelle pour décider si le FICHIER d'une pièce jointe a le droit de

@@ -26,7 +26,7 @@ import {
 // chiffré) et la pièce jointe (`maskedAttachment`). Les réutiliser, plutôt que
 // de réécrire la règle, garantit qu'un post publié ne fuit pas ce qu'un push
 // masque.
-import { protectedPreview, maskedAttachment } from '../../services/notifications/NotificationService';
+import { protectedPreview, maskedAttachment } from '../../services/notifications/notification-preview';
 import { canAccessConversation } from '../conversations/utils/access-control';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendError, sendUpgradeRequired, sendGone } from '../../utils/response';
 import { getAppVersionFloor, getAppStoreUrl, isBelowFloor } from '../../utils/appVersion';
