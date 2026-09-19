@@ -68,10 +68,28 @@ describe('les gates du fil n’attendent aucun délai sur une lecture d’état'
    * prouve qu'il installe PUIS met en pause, dans cet ordre. Une suite qui
    * reprendrait la pose en direct redeviendrait libre de sauter la pause —
    * c'est ce qui était arrivé au § 5.
+   *
+   * LA LISTE EST DÉRIVÉE, PAS ÉCRITE (revue-correction #7054, défaut majeur
+   * 1) — ce test n'itérait que QUATRE chemins CONSTANTS pendant que l'hôte
+   * en importait NEUF : `check-message-states.mjs`, un cinquième module non
+   * gardé, posait `page.clock.install` SANS `pauseAt` — la cause racine
+   * EXACTE de #7054, invisible à cette garde. Lire les `import … from
+   * './lib/…mjs'` de l'hôte plutôt que les recopier fait qu'un module
+   * ajouté au gate entre sous garde SANS qu'on y pense — la RÉSERVE CONNUE
+   * ci-dessus (« le compte se DÉPLACE dans le même commit que
+   * l'extraction ») ne vaut donc plus que pour les tests de comptage
+   * ci-dessous, qui ciblent des invariants NOMMÉS (0 délai sur CE fichier
+   * précis), jamais pour celui-ci.
    */
   test('aucun gate du fil ne pose l’horloge truquée en direct — le site unique est pausedChronology', async () => {
+    const hostSource = await readFile(hostPath, 'utf8');
+    const importedLibModules = [...hostSource.matchAll(/from '\.\/lib\/([\w-]+\.mjs)'/g)].map((match) =>
+      fileURLToPath(new URL(`./${match[1]}`, import.meta.url)),
+    );
+    expect(importedLibModules.length).toBeGreaterThan(0);
+
     const posed = [];
-    for (const path of [hostPath, realtimePath, offlinePath, protectionPath]) {
+    for (const path of [hostPath, ...importedLibModules]) {
       const source = await readFile(path, 'utf8');
       if (source.includes('.clock.')) posed.push(path.split('/').slice(-1)[0]);
     }

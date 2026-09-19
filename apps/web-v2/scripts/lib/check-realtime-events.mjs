@@ -132,6 +132,30 @@ const rowLine2Text = (page, conversationId) => page.locator(`[data-row="${conver
  */
 const MONOTONE_FACT_BUDGET_MS = 5_000;
 
+/**
+ * LE BUDGET D'UNE BASCULE DE MODE, en millisecondes SIMULÉES (revue-
+ * correction #7054, défaut majeur 3) — RELATIF à `chrono.now()`, jamais
+ * l'instant ABSOLU du prochain évènement réel. Les quatre bascules
+ * Focal/Script/Bulles/Focal du § 3 partageaient toutes `origin + 10500`
+ * comme borne : `factBefore` ne réinitialise jamais son compteur `elapsed`,
+ * donc le budget de 1 200 ms (10 500 − 9 300) était CUMULÉ entre les quatre
+ * appels — dès que les deux premiers en consommaient la moitié sous
+ * contention, le troisième sondait une fois, ne consommait aucun pas et
+ * rendait `false` : un `if`, pas une attente, rapporté comme un échec du
+ * PRODUIT. Un budget RELATIF, comme `MONOTONE_FACT_BUDGET_MS` au § 6, rend
+ * à chaque bascule son propre plafond anti-blocage.
+ *
+ * LA VALEUR N'EST PAS ARBITRAIRE : `LIVE_SCHEDULE` porte un `typing:start`
+ * RÉEL de Fatou à `atMs: 10500` (`fixtures-realtime.ts:303`) — le prochain
+ * évènement après le keepalive de Kwame à 9 000 ms. Les quatre bascules
+ * partent de `chrono.now() === origin + 9300` ; à 250 ms chacune, leur somme
+ * dans le pire cas (1 000 ms) reste sous les 1 200 ms de marge avant ce
+ * fait réel, de sorte qu'une bascule qui consommerait tout son budget ne
+ * ferait jamais lire à la suivante un roster déjà changé par l'évènement
+ * suivant de la chronologie.
+ */
+const MODE_SWITCH_FACT_BUDGET_MS = 250;
+
 export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA_THRESHOLD, scheme }) {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'en-US' });
   await setScheme(context, scheme);
@@ -347,9 +371,12 @@ export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA
    * fausserait la suite (la cellule y garde sa capsule à tout instant).
    *
    * Aucun de ces quatre bascules n'attend un ÉVÈNEMENT de la chronologie —
-   * la borne `origin + 10500` de `factBefore` n'est qu'un PLAFOND anti-
-   * blocage (le prochain fait réel n'arrive qu'à T+13,3 s) : le rendu d'un
-   * clic de menu est une micro-tâche, `factBefore` y consomme donc 0 pas en
+   * la borne `chrono.now() + MODE_SWITCH_FACT_BUDGET_MS` de `factBefore`
+   * n'est qu'un PLAFOND anti-blocage RELATIF (revue-correction #7054,
+   * défaut majeur 3 — voir le doc-comment de la constante : une borne
+   * ABSOLUE partagée entre les quatre appels laissait le budget de la
+   * dernière être ce que les premières avaient laissé) : le rendu d'un clic
+   * de menu est une micro-tâche, `factBefore` y consomme donc 0 pas en
    * pratique.
    */
   const modeChip = page.getByRole('button', { name: /Mode de lecture/ });
@@ -366,22 +393,22 @@ export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA
 
   await modeChip.click();
   await menuItem(/^Focal/).click();
-  const focalFlat = await chrono.factBefore(origin + 10500, async () => (await hasCapsule()) === false);
+  const focalFlat = await chrono.factBefore(chrono.now() + MODE_SWITCH_FACT_BUDGET_MS, async () => (await hasCapsule()) === false);
   expect(focalFlat, `${label} mode Focal (défaut D-7) : la cellule n'a AUCUNE capsule (pastille + points seuls)`);
 
   await modeChip.click();
   await menuItem(/^Script/).click();
-  const scriptFlat = await chrono.factBefore(origin + 10500, async () => (await hasCapsule()) === false);
+  const scriptFlat = await chrono.factBefore(chrono.now() + MODE_SWITCH_FACT_BUDGET_MS, async () => (await hasCapsule()) === false);
   expect(scriptFlat, `${label} mode Script : la cellule n'a AUCUNE capsule, même tenue que Focal`);
 
   await modeChip.click();
   await menuItem(/^Bulles/).click();
-  const bubblesCapsule = await chrono.factBefore(origin + 10500, async () => (await hasCapsule()) === true);
+  const bubblesCapsule = await chrono.factBefore(chrono.now() + MODE_SWITCH_FACT_BUDGET_MS, async () => (await hasCapsule()) === true);
   expect(bubblesCapsule, `${label} mode Bulles : la capsule à libellé reste la tenue du mode bulles`);
 
   await modeChip.click();
   await menuItem(/^Focal/).click();
-  await chrono.factBefore(origin + 10500, async () => (await hasCapsule()) === false);
+  await chrono.factBefore(chrono.now() + MODE_SWITCH_FACT_BUDGET_MS, async () => (await hasCapsule()) === false);
 
   await chrono.advanceTo(origin + 13300); // T+13,3 s — Fatou s'arrête à 13 000 ms.
   await chrono.factBefore(origin + 14000, async () => (await typingCellText(page)) === 'Kwame Mensah is typing');

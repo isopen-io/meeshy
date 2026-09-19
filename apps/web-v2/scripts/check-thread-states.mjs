@@ -272,11 +272,18 @@ await checkProtectionStates({ browser, BASE, expect });
   await menuPage.keyboard.press('ArrowRight');
   // `waitForValueSettled` (`settle-value.mjs`) : DEUX lectures consécutives
   // identiques, jamais une seule — la garde ci-dessus n'exclut pas un second
-  // rebond du même effet différé.
-  const focusedAfter = await waitForValueSettled(
+  // rebond du même effet différé. LE RETOUR EST JETÉ, JAMAIS ASSERTÉ
+  // (revue-correction #7054, défaut majeur 2) : `waitForValueSettled` rend
+  // `undefined` quand son budget s'épuise, et `undefined !== null &&
+  // undefined !== focusedBefore` sont VRAIES toutes les deux — l'expiration
+  // de l'attente se rapportait alors comme un SUCCÈS. Même discipline que le
+  // 6.4 ter juste en dessous : on attend la stabilisation, puis on RELIT
+  // l'état réel de la page pour l'assertion.
+  await waitForValueSettled(
     menuPage,
     () => document.activeElement?.getAttribute('aria-label') ?? null,
   );
+  const focusedAfter = await menuPage.evaluate(() => document.activeElement?.getAttribute('aria-label') ?? null);
   expect(
     focusedAfter !== null && focusedAfter !== focusedBefore,
     `ArrowRight déplace le focus sur le rail (${focusedBefore} → ${focusedAfter})`,

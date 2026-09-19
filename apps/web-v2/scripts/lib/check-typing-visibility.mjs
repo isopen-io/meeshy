@@ -1,3 +1,5 @@
+import { awaitFact } from './await-fact.mjs';
+
 /**
  * 10 — L'INDICATEUR DE FRAPPE SE VOIT (revue-correction #5793). C'est un état
  * du fil comme les autres, et il naît APRÈS le dernier message : la cellule
@@ -18,6 +20,16 @@
  * `check-message-states.mjs` : l'hôte (`check-thread-states.mjs`) est déjà
  * au-delà du seuil de découpage de 1000 lignes (CLAUDE.md § Code Style).
  * `expect` est REMIS par l'hôte, jamais redéfini.
+ *
+ * LA CELLULE S'ATTEND COMME UN FAIT, JAMAIS UN DÉLAI MURAL (revue-correction
+ * #7054, défaut majeur 1) — `page.waitForTimeout(KEEPALIVE_GRACE_MS)` suivi
+ * d'un `page.evaluate(measure)` mesurait l'état APRÈS 6 s de mur : sous une
+ * contention qui retarde le démarrage au-delà de ce délai, `measure` rend
+ * `null` et « l'indicateur de frappe apparaît dans le fil » rougit sur un
+ * défaut inexistant — la forme même que ce lot retire ailleurs. `awaitFact`
+ * (`await-fact.mjs`) sonde `[data-typing-cell]` jusqu'à son attachement,
+ * `KEEPALIVE_GRACE_MS` devenant le PLAFOND anti-blocage, jamais l'attente
+ * elle-même.
  */
 const KEEPALIVE_GRACE_MS = 6000;
 const AFTER_SCROLL_MS = 4000;
@@ -48,10 +60,10 @@ export async function checkTypingVisibility({ browser, BASE, expect }) {
   const page = await context.newPage();
   await page.goto(`${BASE}/c/c-deploiement`, { waitUntil: 'load' });
   await page.waitForSelector('[data-row]');
-  await page.waitForTimeout(KEEPALIVE_GRACE_MS);
+  const appeared = await awaitFact(page.locator('main [data-typing-cell]'), { timeoutMs: KEEPALIVE_GRACE_MS });
+  expect(appeared, "l'indicateur de frappe apparaît dans le fil (bouchon de fixtures, 3 s)");
 
   const seen = await page.evaluate(measure);
-  expect(seen !== null, "l'indicateur de frappe apparaît dans le fil (bouchon de fixtures, 3 s)");
   expect(
     seen !== null && seen.bottom <= seen.port + 1,
     `l'indicateur de frappe est ENTIER dans la fenêtre quand le lecteur est en bas (obtenu : ${JSON.stringify(seen)})`,
