@@ -41,6 +41,7 @@ import { coldStateOf } from '@/lib/view/cold-state';
 import { PULL_THRESHOLD, pullTransform } from '@/lib/view/pull-to-refresh';
 import { useTapGate } from '@/lib/view/tap-gate';
 import { useExhaustPages } from '@/lib/view/use-exhaust-pages';
+import { announcementToneOf } from '@/lib/view/announcement-tone';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { useLoadMoreSentinel } from '@/lib/view/use-load-more-sentinel';
 import { useMinute } from '@/lib/view/use-minute';
@@ -149,9 +150,10 @@ export default function DiscoverScreen() {
      état — voir `use-live-announcer.ts`. */
   const report = useCallback(
     (outcome: FriendActionOutcome, done: AnnounceKey, failed: AnnounceKey) =>
-      outcome === 'done'
-        ? announce(translate(language, done))
-        : announce(translate(language, outcome === 'offline' ? 'discover.announce.offline' : failed), 'error'),
+      announce(
+        translate(language, outcome === 'done' ? done : outcome === 'offline' ? 'discover.announce.offline' : failed),
+        announcementToneOf(outcome),
+      ),
     [announce, language],
   );
 

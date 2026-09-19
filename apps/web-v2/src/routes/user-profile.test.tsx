@@ -352,3 +352,4 @@ describe('« Charger plus »', () => {
     expect(el.querySelector('[data-profile-offline]')).not.toBeNull();
   });
 });
+

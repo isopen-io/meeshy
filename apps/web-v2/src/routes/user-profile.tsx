@@ -33,6 +33,7 @@ import { failureMayRetry, profileFailureOf, type ProfileFailure } from '@/lib/pr
 import { filterPosts, showsEmptyState, toggledFilter, type ProfilePostsFilter, type ProfilePostsFilterTap } from '@/lib/profile/posts-filter';
 import { actionsFor, bucketNeededFor, relationFromServed, type ProfileActionKind } from '@/lib/profile/relation';
 import { useParams } from '@/lib/router';
+import { announcementToneOf } from '@/lib/view/announcement-tone';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { useMinute } from '@/lib/view/use-minute';
 import { usePostGesture } from '@/lib/view/use-post-gesture';
@@ -282,10 +283,11 @@ export function UserProfileView({ username }: { readonly username: string }) {
      même geste serait le doublon que D-11 interdit. */
   const report = useCallback(
     (kind: ProfileActionKind, outcome: FriendActionOutcome) => {
-      if (outcome === 'offline') return announce(translate(language, 'discover.announce.offline'), 'error');
-      if (outcome === 'failed') return announce(translate(language, ANNOUNCE[kind].failed), 'error');
+      const tone = announcementToneOf(outcome);
+      if (outcome === 'offline') return announce(translate(language, 'discover.announce.offline'), tone);
+      if (outcome === 'failed') return announce(translate(language, ANNOUNCE[kind].failed), tone);
       const done = ANNOUNCE[kind].done;
-      if (done !== null) announce(translate(language, done));
+      if (done !== null) announce(translate(language, done), tone);
     },
     [announce, language],
   );
