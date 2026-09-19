@@ -565,7 +565,7 @@ describe('MediaViewer — la pièce MASQUÉE reste masquée dans la visionneuse 
  */
 describe('MediaViewer — le pied porte le carrier, absent sans lui (#6169)', () => {
   const carrier: MediaCarrier = {
-    sender: { displayName: 'Kwame Mensah' },
+    sender: { displayName: 'Kwame Mensah', avatarUrl: null },
     sentAt: '2026-09-13T10:13:00.000Z',
     caption: { text: 'Aufnahme vom Yachthafen', language: 'de', translated: true },
   };
@@ -622,7 +622,7 @@ describe('MediaViewer — la nature « scène » (#6902)', () => {
           onClose={params.onClose ?? (() => {})}
           languages={['fr']}
           fallbackLanguage="fr"
-          carrier={{ sender: { displayName: 'Omar' }, sentAt: model.createdAt, caption: null }}
+          carrier={{ sender: { displayName: 'Omar', avatarUrl: null }, sentAt: model.createdAt, caption: null }}
         />,
       );
     });
@@ -716,7 +716,7 @@ describe('MediaViewer — la page scène : cadrage, nom, son et pause (revue-cor
           onClose={() => {}}
           languages={['fr']}
           fallbackLanguage="fr"
-          carrier={{ sender: { displayName: 'Omar' }, sentAt: model.createdAt, caption: null }}
+          carrier={{ sender: { displayName: 'Omar', avatarUrl: null }, sentAt: model.createdAt, caption: null }}
         />,
       );
     });

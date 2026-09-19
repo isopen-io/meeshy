@@ -303,7 +303,7 @@ export function Bubble({
           attachments={message.attachments}
           languages={languages}
           fallbackLanguage={message.originalLanguage}
-          carrier={mediaCarrierOf({ message, caption: rendered })}
+          carrier={mediaCarrierOf({ message, caption: rendered, senderAvatarUrl: senderPhoto })}
           mediaFrame="box"
           {...(displayLanguage !== undefined ? { displayLanguage } : {})}
         />

@@ -4,10 +4,13 @@ import { createPortal } from 'react-dom';
 
 import { maskedAttachment } from '@meeshy/shared/utils/attachment-protection';
 
+import { Avatar } from '@/components/avatar';
+
 import type { Attachment } from '@/lib/api/types';
 import { attachmentSrc } from '@/lib/api/media-url';
 import type { SceneGalleryEntry } from '@/lib/feed/gallery-lot';
 import { thumbHashPlaceholder } from '@/lib/media/thumbhash';
+import { initialsOf } from '@/lib/view/conversation';
 import { nextFocusIndex } from '@/lib/view/focus-trap';
 import { useLongPress } from '@/lib/view/long-press';
 import { electDescription, type MediaCarrier } from '@/lib/view/media';
@@ -152,6 +155,17 @@ function CarrierFooter({
     <div data-viewer-footer className="media-viewer-chrome flex flex-col gap-1 px-4 pb-2 text-white">
       {carrier.sender !== null ? (
         <div className="flex items-center gap-2 text-mini">
+          {/* LA PHOTO DE L'AUTEUR (#6985). Elle VOYAGE dans le carrier, résolue
+              par l'hôte — ce module n'en descend aucune, comme il ne descend
+              pas la légende. `initialsOf` reste le repli quand `avatarUrl` est
+              nul : un visage s'affiche toujours, jamais un trou. */}
+          <Avatar
+            initials={initialsOf(carrier.sender.displayName)}
+            color="var(--accent)"
+            size={24}
+            name={carrier.sender.displayName}
+            {...(carrier.sender.avatarUrl === null ? {} : { src: carrier.sender.avatarUrl })}
+          />
           <span className="font-medium">{carrier.sender.displayName}</span>
           <time dateTime={carrier.sentAt} className="opacity-70">
             {new Date(carrier.sentAt).toLocaleString(READER_LOCALE, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
