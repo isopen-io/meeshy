@@ -375,6 +375,16 @@ export function ThreadModes({
              elle, `aria-label` annonçait EN CLAIR le texte que la rangée
              floute ou remplace par un tombstone. */
           const rowProtection = expiredIds.has(p.message.id) ? 'expired' : protectionOf(p.message, Date.now());
+          /* `phase` EST OMISE ICI, ET C'EST UNE DETTE SUIVIE, PAS UN OUBLI
+             (#7142) — `composeMessageLabel` l'accepte (défaut FERMÉ
+             `{ phase: 'hidden' }`) et sa contre-épreuve est verte, mais la
+             phase de révélation vit SOUS ce nœud : `ProtectedContent` la tient
+             en `useState`, tandis que `aria-label` se pose au-dessus, sur
+             `[data-row]`. Conséquence mesurée : une rangée voilée RÉVÉLÉE
+             peint son contenu pendant que son nom accessible dit encore
+             « Contenu masqué ». C'est ICI que le correctif de #7142 atterrira ;
+             le doc-comment de `MessageLabelInput.phase` ne suffisait pas à le
+             dire, puisqu'on ne l'ouvre pas en lisant cet appel. */
           const rowLabel = composeMessageLabel({
             message: p.message,
             isMine: isMineOf(p.message, viewerId),
