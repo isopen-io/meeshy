@@ -803,6 +803,17 @@ jobs:
           cd apps/web-v2
           node scripts/check-feed-media.mjs
 
+      # #7022 — UN MÉDIA ABSENT DÉGRADE PROPREMENT. 8 fichiers sur 2912 sont
+      # réellement absents du volume de production (le cadrage du lot en
+      # annonçait 582 : faux, cf. l'issue). Une référence morte doit rendre un
+      # état DESSINÉ, ANNONCÉ, lisible et SANS bouton — il n'y a rien à
+      # retenter — sans emporter la story autour d'elle.
+      - name: Gate médias absents (état dessiné, annoncé, non destructeur)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-medias-absents.mjs
+
       # #6898 — UNE PUBLICATION V:3 SE LIT DANS LE FIL AVEC TOUS SES OBJETS.
       # Texte seul, image, cadrage plafonné à 1,4, une seule scène cinématique
       # joue à la fois (`prefers-reduced-motion` en tient une hors du jeu), et
@@ -985,6 +996,19 @@ jobs:
         run: |
           cd apps/web-v2
           node scripts/check-app-update.mjs
+
+      # #7032 — le TEXTE ENRICHI : une mention validée est un lien qui, CLIQUÉ,
+      # peint vraiment le profil ; un pseudo non validé et un hashtag de
+      # CONVERSATION restent du texte (aucune jointure message ↔ hashtag
+      # n'existe) ; les quatre emphases rendent <strong>/<em>/<u>/<s> pendant
+      # que `snake_case` traverse intact ; l'enrichissement porte sur le texte
+      # TRADUIT, mesuré sous un prisme à DEUX échelons (`fr`,`en`) avec son
+      # contre-témoin à un seul ; aucun href hostile, aucun <script>.
+      - name: Gate texte enrichi (liens, mentions, quatre emphases, texte traduit)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-rich-text.mjs
 
       # #6458 — le barreau « Administration » du menu flottant, sur un dist
       # gateway (l'administration n'a pas de fixtures) : sept barreaux dans

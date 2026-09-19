@@ -1,6 +1,7 @@
 import { authorAccentColor } from '@meeshy/shared/utils/conversation-colors';
 import { getAttachmentType } from '@meeshy/shared/types/attachment';
 import { parseMentions, type MentionParticipant } from '@meeshy/shared/utils/mention-parser';
+import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
 
 import type { Message, Participant } from '@/lib/api/types';
 import { presenceOf } from '@/lib/view/conversation';
@@ -131,7 +132,13 @@ function deriveParticipants(
     result.push({
       id: message.senderId,
       displayName,
-      avatarUrl: known?.avatar ?? null,
+      // #6985 — la LOI PARTAGÉE, jamais son premier rang. `known?.avatar` ne
+      // lisait que la surcharge LOCALE du participant ; le rang 2 — la photo
+      // portée par le COMPTE — est pourtant le cas nominal, un participant
+      // n'ayant le plus souvent aucune surcharge. La loi normalise en prime
+      // les chaînes blanches, qu'un `??` laissait fuir : le client rendait
+      // alors `<img src="">`, qui RECHARGE la page courante.
+      avatarUrl: resolveParticipantAvatar(known),
       colorHex: authorAccentColor(message.senderId, displayName),
       presence: presenceOf(known, now),
     });

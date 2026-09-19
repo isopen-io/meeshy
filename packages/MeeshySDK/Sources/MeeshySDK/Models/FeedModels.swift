@@ -579,6 +579,23 @@ public struct FeedPost: Identifiable, Sendable {
     /// has `repostOfId == this.id`). Drives the filled green repost icon.
     public var isRepostedByMe: Bool = false
     public var comments: [FeedComment] = []
+    /// **Les commentaires mis en avant sous un post** — trois au plus, les plus
+    /// aimés d'abord. Le classement vit ICI, pas dans la carte (#7010).
+    ///
+    /// La règle était écrite dans `FeedPostCard`, donc redérivée à chaque
+    /// évaluation de son `body` et introuvable depuis toute autre surface qui
+    /// voudrait le même aperçu. `comments` ne porte que la TRANCHE servie par
+    /// la passerelle (`APIPost.comments`) plus d'éventuelles insertions
+    /// optimistes — quelques éléments, jamais le fil entier.
+    ///
+    /// **Non STOCKÉ à dessein.** `comments` est `var` et reçoit ces insertions
+    /// (`FeedViewModel`), qui laisseraient un champ dérivé PÉRIMÉ sans qu'aucun
+    /// écran ne le dise — et un `didSet` ne se déclenche pas depuis l'init
+    /// memberwise, donc un post construit avec ses commentaires n'en aurait
+    /// AUCUN à montrer. Une donnée dérivée d'une source mutable se calcule.
+    public var topComments: [FeedComment] {
+        Array(comments.sorted { $0.likes > $1.likes }.prefix(3))
+    }
     public var commentCount: Int = 0
     /// Server-issued repost count — total reposts of this post. Distinct from
     /// `isReposted` which (when present, currently absent server-side) would

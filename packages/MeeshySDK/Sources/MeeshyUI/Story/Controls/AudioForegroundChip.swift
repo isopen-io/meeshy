@@ -584,7 +584,16 @@ public struct AudioForegroundReaderOverlay: View {
     /// — `StoryCanvasUIView` souscrit à la registry et applique au mixer.
     public let onTap: ((StoryAudioPlayerObject) -> Void)?
 
-    @ObservedObject private var playhead = StoryReaderPlayheadState.shared
+    /// **Les identifiants VISIBLES, pas le temps** (#7010).
+    ///
+    /// Le playhead publie ≈ 30 fois par seconde ; cet overlay, lui, ne change
+    /// qu'aux FRONTIÈRES de fenêtre — quelques fois par slide. Observé, il
+    /// reconstruisait son `GeometryReader`, son `ForEach` et chacun de ses
+    /// chips (onde animée comprise) trente fois par seconde pour un rendu
+    /// identique. L'abonnement vit désormais dans un `onReceive` qui FILTRE :
+    /// il n'écrit cet état que si l'appartenance a bougé, donc le corps ne se
+    /// ré-évalue qu'à l'ouverture ou à la fermeture d'une fenêtre.
+    @State private var visibleAudioIds: [String] = []
     @ObservedObject private var muteRegistry = StoryReaderAudioMuteRegistry.shared
 
     public init(foregroundAudios: [StoryAudioPlayerObject],
@@ -617,6 +626,17 @@ public struct AudioForegroundReaderOverlay: View {
                 )
             }
         }
+        // `@Published` livre sa valeur COURANTE à la souscription : la
+        // première appartenance est donc calculée au montage, sans attendre le
+        // premier tic — un chip dont la fenêtre couvre 0 s'affiche tout de
+        // suite, exactement comme avant.
+        .onReceive(StoryReaderPlayheadState.shared.$elapsedSeconds) { seconds in
+            let ids = Self.visibleAudios(in: foregroundAudios,
+                                         elapsed: seconds ?? fallbackElapsedTime ?? 0,
+                                         slideDuration: slideDuration).map(\.id)
+            guard ids != visibleAudioIds else { return }
+            visibleAudioIds = ids
+        }
         // Quand l'overlay disparaît (viewer fermé), reset les états partagés
         // pour ne pas fuiter vers le prochain cycle (re-entry rapide sur la
         // même story sinon le mute persiste).
@@ -626,16 +646,11 @@ public struct AudioForegroundReaderOverlay: View {
         }
     }
 
-    /// Playhead effectif : le clock canvas dès qu'un tick a été publié,
-    /// sinon le fallback fourni par le caller, sinon `0`.
-    private var elapsedTime: TimeInterval {
-        playhead.elapsedSeconds ?? fallbackElapsedTime ?? 0
-    }
-
+    /// L'ORDRE vient des audios de la slide, jamais de la liste d'identifiants
+    /// — celle-ci ne dit QUE l'appartenance.
     private var visibleAudios: [StoryAudioPlayerObject] {
-        Self.visibleAudios(in: foregroundAudios,
-                           elapsed: elapsedTime,
-                           slideDuration: slideDuration)
+        let visibles = Set(visibleAudioIds)
+        return foregroundAudios.filter { visibles.contains($0.id) }
     }
 
     /// État muet AFFICHÉ par le chip reader — pur, extrait pour tests.

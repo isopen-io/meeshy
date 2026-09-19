@@ -74,9 +74,12 @@ public final class AudioTrimPreviewPlayer: ObservableObject {
         arreterHorloge()
     }
 
+    /// `isPlaying` n'est ré-assigné QUE s'il change : `@Published` publie sur
+    /// `willSet`, valeur changée ou non, et un aperçu déjà arrêté publiait pour
+    /// rien à chaque `onDisappear` (#7005, même forme que #6977).
     public func stop() {
         player?.stop()
-        isPlaying = false
+        if isPlaying { isPlaying = false }
         arreterHorloge()
     }
 

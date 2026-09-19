@@ -15,6 +15,7 @@ import { Avatar } from './avatar';
 import { Attachments } from './attachment-blocks';
 import { EmojiOnly, LocationCard, StickerArtwork, StoryCitationCard } from './message-body-blocks';
 import { EphemeralBadge, ProtectedContent, ProtectionNotice } from './protected-content';
+import { RichText } from './rich-text';
 import { SystemNotice } from './system-notice';
 import {
   Badges,
@@ -303,7 +304,7 @@ export function Bubble({
           attachments={message.attachments}
           languages={languages}
           fallbackLanguage={message.originalLanguage}
-          carrier={mediaCarrierOf({ message, caption: rendered })}
+          carrier={mediaCarrierOf({ message, caption: rendered, senderAvatarUrl: senderPhoto })}
           mediaFrame="box"
           {...(displayLanguage !== undefined ? { displayLanguage } : {})}
         />
@@ -320,10 +321,26 @@ export function Bubble({
            exactement comme du contenu natif — ni encadre, ni italique, ni
            annonce. C'est le Prisme : la traduction ne se signale que par
            la pastille du pied. `lang` porte la langue REELLEMENT servie,
-           pour que la synthese vocale la prononce juste. */
-        <p className="text-bubble leading-[1.35] whitespace-pre-wrap" lang={rendered.language}>
-          {rendered.text}
-        </p>
+           pour que la synthese vocale la prononce juste.
+
+           ET C'EST CE TEXTE-LÀ QUI S'ENRICHIT (#7032) — le SERVI, jamais
+           l'original : le lecteur clique ce qu'il lit. `validatedMentions`
+           est le jeu que la passerelle a résolu (`messages-reads.ts`,
+           `messageNewPayload.ts`), en minuscules ; `undefined` ⇒ le serveur ne
+           s'est pas prononcé et tout handle est un lien.
+
+           `hashtags` reste à son défaut FAUX : les hashtags n'existent que
+           pour les publications (aucune jointure message ↔ hashtag dans le
+           schéma), et un `#mot` cliquable ici ouvrirait un écran que rien ne
+           peut remplir. `linkColor` suit la bulle — la teinte de marque ne se
+           lit pas sur l'indigo d'un message envoyé. */
+        <RichText
+          text={rendered.text}
+          lang={rendered.language}
+          className="text-bubble leading-[1.35] whitespace-pre-wrap"
+          mentions={message.validatedMentions}
+          linkColor={isMine ? 'white' : 'var(--color-ios-brand)'}
+        />
       ) : null}
     </>
   );
@@ -334,7 +351,7 @@ export function Bubble({
       kind={kind}
       isViewOnce={message.isViewOnce}
       contentLength={message.content.length}
-      attachmentCount={message.attachments?.length ?? 0}
+      attachments={message.attachments}
       surface="bubble"
       isMine={isMine}
       revealable={revealable}

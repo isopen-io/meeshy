@@ -223,13 +223,13 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
         loadTask = Task {
             await acquireSession()
             guard !Task.isCancelled else { return }
-            do {
-                let data = try Data(contentsOf: url)
-                playData(data)
-            } catch {
-                Self.log.error("playLocal echec (\(url.lastPathComponent, privacy: .public)): \(error.localizedDescription, privacy: .public)")
+            // #7010 — `Task { }` HÉRITE du MainActor ; `AudioBytesLoader` part vraiment.
+            guard let data = await AudioBytesLoader.bytes(at: url) else {
+                Self.log.error("playLocal echec (\(url.lastPathComponent, privacy: .public)): octets illisibles")
                 isLoading = false
+                return
             }
+            playData(data)
         }
     }
 

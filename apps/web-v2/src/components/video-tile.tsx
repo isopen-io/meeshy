@@ -1,6 +1,11 @@
 import { attachmentSrc } from '@/lib/api/media-url';
 import type { Attachment } from '@/lib/api/types';
-import { DURATION_BADGE_OPACITY, PLAY_DIAMETER_MULTI, PLAY_DIAMETER_SOLO } from '@/lib/view/media-grid-layout';
+import {
+  DURATION_BADGE_OPACITY,
+  PLAY_DIAMETER_MULTI,
+  PLAY_DIAMETER_SOLO,
+  soloVideoSlot,
+} from '@/lib/view/media-grid-layout';
 import { useMediaPlayback } from '@/lib/view/use-media-playback';
 
 import { Glyph, GlyphSvg } from './glyph';
@@ -36,6 +41,12 @@ export function VideoFallback({ attachment }: { readonly attachment: Attachment 
   );
 }
 
+/** Le ratio INTRINSÈQUE d'une pièce, ou `undefined` — `soloVideoSlot` sait déjà replier sur 16/9. */
+const intrinsicRatio = (attachment: Attachment): number | undefined =>
+  attachment.width !== undefined && attachment.height !== undefined && attachment.height > 0
+    ? attachment.width / attachment.height
+    : undefined;
+
 /**
  * `VideoTile` (#6221) — LA LECTURE VIDÉO INLINE, miroir de `BubbleGridVideo
  * ThumbnailView`/`videoBody` (`+Media.swift:477-749`) : poster servi, bouton
@@ -45,6 +56,29 @@ export function VideoFallback({ attachment }: { readonly attachment: Attachment 
  * `onExpand` — tap HORS du bouton central ⇒ la visionneuse (§1.5 tableau
  * d'écarts) ; le bouton, lui, ne fait QUE piloter la lecture INLINE
  * (`useMediaPlayback`, coordinateur PARTAGÉ avec les vocaux — #6221).
+ *
+ * `solo` NE CHOISIT PLUS SEULEMENT UN DIAMÈTRE : IL DÉCIDE QUI DIMENSIONNE
+ * (#7016). En GRILLE, la case est déjà dimensionnée par `mediaGridSlots` et la
+ * tuile la remplit (`size-full`) ; SEULE, aucun porteur ne lui donnait de
+ * hauteur — `size-full` contre un parent en hauteur `auto` se résout en `auto`
+ * → contenu → **ZÉRO**, et tous les enfants étant `absolute inset-0`, la vidéo
+ * disparaissait purement et simplement (mesuré : 246 × 0 en Focal, 119 × 0 en
+ * Bulles). La loi qui la dimensionne — `soloVideoSlot`, miroir de
+ * `FocalMediaGridLayout.soloVideoSlot` — existait, testée et gardée par le
+ * gate de cotes, sans AUCUN site d'appel.
+ *
+ * C'est ICI qu'elle s'applique, et pas chez l'hôte : `VideoTile` est le seul à
+ * savoir qu'un `fileUrl` vide le fait retomber sur `VideoFallback` — une
+ * RANGÉE de texte, que boucler dans une boîte 300 × 168,75 déformerait. Une
+ * boîte posée par `MediaGrid` ne pourrait pas le savoir sans recopier ce
+ * prédicat.
+ *
+ * `width` + `aspectRatio` + `maxWidth: 100 %` — exactement la recette
+ * d'`ImageTile` : la hauteur DESCEND avec la largeur quand le porteur est plus
+ * étroit que 300 px (le cas nominal de la bulle, 253,4 px à 390 px), là où un
+ * `height` figé écraserait l'image. Le PLAFOND de hauteur que `soloVideoSlot`
+ * applique (1,6 × la largeur, pour qu'un portrait 9:16 ne mange pas l'écran)
+ * voyage dans le ratio : il est déjà mordu au moment où la loi rend son couple.
  */
 export function VideoTile({
   attachment,
@@ -60,6 +94,7 @@ export function VideoTile({
   if (attachment.fileUrl === '') return <VideoFallback attachment={attachment} />;
 
   const diameter = solo ? PLAY_DIAMETER_SOLO : PLAY_DIAMETER_MULTI;
+  const slot = solo ? soloVideoSlot(intrinsicRatio(attachment)) : undefined;
   const durationLabel = durationLabelOf(attachment.duration);
   const isPlaying = status === 'playing';
   const isError = status === 'error';
@@ -77,7 +112,14 @@ export function VideoTile({
          visionneuse » que `ImageTile`/`GridCellImage` remplissent en bouton
          — mais elle occupe une CASE de la grille au même titre qu'elles. */
       data-media-tile
-      className="relative size-full overflow-hidden bg-black"
+      className={
+        slot === undefined
+          ? 'relative size-full overflow-hidden bg-black'
+          : 'relative overflow-hidden rounded-media bg-black'
+      }
+      {...(slot !== undefined
+        ? { style: { width: slot.width, maxWidth: '100%', aspectRatio: `${slot.width} / ${slot.height}` } }
+        : {})}
       onClick={onExpand}
       role="presentation"
     >

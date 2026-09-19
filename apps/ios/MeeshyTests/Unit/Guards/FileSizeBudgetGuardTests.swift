@@ -442,7 +442,16 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // Cumul MESURÉ après cette fusion : **53 905** — soit les 54 034 de #6708 moins
     // les 129 de ce lot, et le même mou de 369 lignes (#6016), qui n'est pas repris
     // ici.
-    private static let legacyLineCeiling = 54_274
+    //
+    // **54 249 depuis #7007.** `emptyState` a quitté `ReelsPlayerView.swift`
+    // (1 282 → 1 257) pour `ReelsPlayerView+EmptyState.swift` : le pager devait
+    // gagner un TROISIÈME état — panne, distinct de « aucun réel » et du
+    // démarrage à froid — et la directive interdit d'ajouter à un fichier hors
+    // budget. Le lot reprend LES 25 LIGNES QU'IL A LIBÉRÉES, et elles seules :
+    // le mou antérieur (327 lignes au moment de la mesure) appartient aux lots
+    // qui l'ont créé, et le reprendre d'ici casserait leur séquencement — c'est
+    // exactement l'asymétrie que la règle 3 protège.
+    private static let legacyLineCeiling = 54_249
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

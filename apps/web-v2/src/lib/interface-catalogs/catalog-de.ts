@@ -72,6 +72,7 @@ const de = {
   'feed.post.media.previous': 'Vorheriges Medium',
   'feed.post.media.next': 'Nächstes Medium',
   'feed.post.media.mosaic': 'Mosaik aus {count} Medien',
+  'media.unavailable': 'Medium nicht verfügbar',
   'feed.post.see_more': 'mehr anzeigen',
   'feed.post.see_less': 'weniger anzeigen',
   'feed.post.reel.chip': 'Reel',

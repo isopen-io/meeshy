@@ -95,7 +95,7 @@ settings:
   # Cloud — les lanes fastlane prennent `max(dépôt, dernier TestFlight) + 1`,
   # donc une valeur juste rend le prochain build prévisible. Maintenue par
   # `./meeshy.sh build-number`.
-  CURRENT_PROJECT_VERSION: "1822"
+  CURRENT_PROJECT_VERSION: "1825"
   # Alignée sur la version App Store Connect. Passée à 1.0.1 le 2026-07-31 :
   # la 1.0.0 avait été rejetée (déclaration Age Rating `ageAssurance` à true
   # sans mécanisme de vérification d'âge dans l'app), et l'enregistrement ASC a
@@ -176,6 +176,15 @@ targets:
       - path: Meeshy
         excludes:
           - "**/*.md"
+      # #7003 — la LOI qui décide ce que l'extension de notification a le droit
+      # d'attacher (famille de média + plafond mémoire) vit chez son
+      # consommateur, dans `MeeshyNotificationExtension`. Mais une extension de
+      # notification n'a pas d'hôte de test : le seul endroit d'où une règle
+      # pure est éprouvable est `MeeshyTests`, qui `@testable import Meeshy`.
+      # Le fichier est donc compilé dans les DEUX cibles — même mécanique que
+      # `ForwardPickerModel.swift` pour l'extension de partage, en sens
+      # inverse. Il n'importe QUE Foundation ; garde : `NSEAttachmentPolicyTests`.
+      - path: MeeshyNotificationExtension/NSEAttachmentPolicy.swift
     settings:
       INFOPLIST_FILE: Meeshy/Info.plist
       PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app

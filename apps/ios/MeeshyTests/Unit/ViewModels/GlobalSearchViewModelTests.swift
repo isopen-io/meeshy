@@ -606,7 +606,7 @@ final class GlobalSearchViewModelTests: XCTestCase {
 
 // MARK: - UserSearchResult Test Helper
 
-private extension UserSearchResult {
+extension UserSearchResult {
     static func stub(
         id: String = "user-stub",
         username: String = "stubuser",

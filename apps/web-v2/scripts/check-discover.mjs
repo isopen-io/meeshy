@@ -49,6 +49,7 @@ import { launchChromium } from './lib/browser.mjs';
 import { startDistServer } from './lib/gate-server.mjs';
 import { contrastOf } from './lib/contrast.mjs';
 import { syncPillOverlap } from './lib/sync-pill-clearance.mjs';
+import { reachAtRest, resumeExclusions } from './lib/reach-at-rest.mjs';
 
 const DIST = new URL('../dist/', import.meta.url).pathname;
 /* Le serveur vit dans `lib/` depuis #6988 : celui qui était écrit ici
@@ -80,35 +81,23 @@ const attrOf = (page, selector, name) => page.getAttribute(selector, name).catch
 const ids = (page, selector, attribute) => page.$$eval(selector, (els, a) => els.map((el) => el.getAttribute(a)), attribute);
 const presenceDots = (page) => page.$$eval('[data-presence]', (els) => els.length);
 
-/** Au repos : chaque contrôle et chaque texte VISIBLE, à son centre. */
-const reachAtRest = (page, controlSelector, textSelector) =>
-  page.evaluate(
-    ([controlsSel, textsSel]) => {
-      const by = (hit) => (hit === null ? 'rien' : hit.closest('.floating-menus') !== null ? 'un disque flottant' : hit.tagName);
-      const visible = (r) => {
-        const x = r.left + r.width / 2;
-        const y = r.top + r.height / 2;
-        return r.width > 0 && r.height > 0 && x > 0 && x < innerWidth && y > 0 && y < innerHeight;
-      };
-      const measure = (el) => {
-        const r = el.getBoundingClientRect();
-        if (!visible(r)) return [];
-        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-        return [{ nom: el.getAttribute('aria-label') ?? (el.textContent ?? '').trim().slice(0, 40), ok: hit !== null && (hit === el || el.contains(hit)), par: by(hit), hauteur: r.height }];
-      };
-      return {
-        controls: [...document.querySelectorAll(controlsSel)].flatMap(measure),
-        texts: [...document.querySelectorAll(textsSel)].flatMap(measure),
-      };
-    },
-    [controlSelector, textSelector],
-  );
+/**
+ * LE RELEVÉ AU REPOS vit dans `lib/reach-at-rest.mjs`, SITE UNIQUE depuis #7040.
+ *
+ * Ce fichier en portait une copie, comme six autres gates. Toutes ouvraient sur
+ * un `visible()` qui RENVOYAIT UN TABLEAU VIDE pour un élément dont le centre
+ * sortait du viewport : un contrôle hors cadre ne cassait rien, n'apparaissait
+ * nulle part, et le gate restait vert avec un contrôle de moins. Un tel élément
+ * est désormais MESURÉ et rendu `ok: false` — et ce qui est légitimement hors
+ * cadre (écrêté par un conteneur, déclaré `inert`/`aria-hidden`) s'écarte sous
+ * une raison ÉCRITE, comptée par `resumeExclusions()`.
+ */
 
 const expectReach = (label, where, rest, minimum) => {
   const blocked = rest.controls.filter((c) => !c.ok);
   const stolen = rest.texts.filter((t) => !t.ok);
   const small = rest.controls.filter((c) => c.hauteur < TAP_FLOOR);
-  check(rest.controls.length >= minimum, `${label} : ${where} — au moins ${minimum} contrôles mesurés au repos (${rest.controls.length})`);
+  check(rest.controls.length >= minimum, `${label} : ${where} — au moins ${minimum} contrôles mesurés au repos (${rest.controls.length}, ${resumeExclusions(rest)})`);
   check(blocked.length === 0, `${label} : ${where} — aucun contrôle volé à son centre — ${JSON.stringify(blocked)}`);
   check(rest.texts.length >= 1 && stolen.length === 0, `${label} : ${where} — aucun texte volé à son centre (${rest.texts.length}) — ${JSON.stringify(stolen)}`);
   check(small.length === 0, `${label} : ${where} — chaque contrôle fait au moins ${TAP_FLOOR} de haut — ${JSON.stringify(small)}`);
@@ -213,7 +202,10 @@ try {
       expectReach(
         label,
         'Découvrir',
-        await reachAtRest(page, 'header a, [data-discover-tab], [data-discover-invite-email], [data-discover-invite-send], [data-discover-search]', 'header h1, [data-discover-tab-title], [data-discover-invite] label'),
+        await reachAtRest(page, {
+          controls: 'header a, [data-discover-tab], [data-discover-invite-email], [data-discover-invite-send], [data-discover-search]',
+          texts: 'header h1, [data-discover-tab-title], [data-discover-invite] label',
+        }),
         6,
       );
 
@@ -282,7 +274,10 @@ try {
       expectReach(
         label,
         'Demandes',
-        await reachAtRest(page, 'header a, [data-discover-tab], [data-request-filter], #contenu [data-request] button', 'header h1, [data-request] [data-person-name], [data-request] [data-request-message]'),
+        await reachAtRest(page, {
+          controls: 'header a, [data-discover-tab], [data-request-filter], #contenu [data-request] button',
+          texts: 'header h1, [data-request] [data-person-name], [data-request] [data-request-message]',
+        }),
         8,
       );
       const inks = {

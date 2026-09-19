@@ -32,6 +32,7 @@ import { GlyphSvg } from './glyph';
 import { THREAD_IDENTITY_GLYPHS } from './glyphs-thread-identity';
 import { EmojiOnly, LocationCard, StickerArtwork, StoryCitationCard } from './message-body-blocks';
 import { EphemeralBadge, ProtectedContent, ProtectionNotice } from './protected-content';
+import { RichText } from './rich-text';
 import { SystemNotice } from './system-notice';
 import {
   Badges,
@@ -483,7 +484,7 @@ export const FocalRow = memo(function FocalRow({
           attachments={message.attachments}
           languages={languages}
           fallbackLanguage={message.originalLanguage}
-          carrier={mediaCarrierOf({ message, caption: rendered })}
+          carrier={mediaCarrierOf({ message, caption: rendered, senderAvatarUrl: senderPhoto })}
           mediaFrame="tiles"
           {...(displayLanguage !== undefined ? { displayLanguage } : {})}
         />
@@ -495,22 +496,26 @@ export const FocalRow = memo(function FocalRow({
       ) : body.kind === 'emoji-only' ? (
         <EmojiOnly text={body.text} fontSize={body.fontSize} />
       ) : rendered.text ? (
-        <p
-          className="text-bubble leading-[1.35] whitespace-pre-wrap"
+        /* `plainTextHidden` (#7032) DÉPLACE le masque, il ne le retire pas.
+           Le texte servi est DÉJÀ dans `aria-label={rowLabel}`
+           (`composeMessageLabel`, `thread-modes.tsx`) : sans masque, l'arbre
+           AX réel le portait DEUX fois, en frère non `ignored` du libellé de
+           l'`article` (revue #5935, défauts majeurs 1/4). Mais `aria-hidden`
+           sur le PARAGRAPHE ENTIER rendrait chaque lien de mention focusable
+           ET invisible aux technologies d'assistance — la violation ARIA
+           `aria-hidden-focus`, c'est-à-dire pire qu'un texte nu. Seuls les
+           segments NON interactifs sont donc masqués : la phrase n'est
+           toujours lue qu'une fois, et les liens restent atteignables, nommés,
+           et au clavier. `lang` reste porté ICI pour l'affichage visuel ET sur
+           `[data-row]` (`rowServed.language`) pour le libellé. */
+        <RichText
+          text={rendered.text}
           lang={rendered.language}
+          className="text-bubble leading-[1.35] whitespace-pre-wrap"
           style={{ color: 'var(--color-ios-ink)' }}
-          /* `aria-hidden` (revue #5935, défauts majeurs 1/4) — ce texte est
-             DÉJÀ le `servedText` que `composeMessageLabel` a posé dans
-             `aria-label={rowLabel}` (`thread-modes.tsx`) : sans ce masque,
-             l'arbre AX réel le portait DEUX fois, en frère non `ignored`
-             du libellé de l'`article`. `lang` reste porté ICI pour l'affichage
-             visuel ET sur `[data-row]` (`rowServed.language`) pour le
-             libellé — un lecteur d'écran qui commute de langue au fil du
-             DOM n'a donc plus rien à lire sous ce nœud. */
-          aria-hidden
-        >
-          {rendered.text}
-        </p>
+          mentions={message.validatedMentions}
+          plainTextHidden
+        />
       ) : null}
     </>
   );
@@ -709,7 +714,7 @@ export const FocalRow = memo(function FocalRow({
                 kind={kind}
                 isViewOnce={message.isViewOnce}
                 contentLength={message.content.length}
-                attachmentCount={message.attachments?.length ?? 0}
+                attachments={message.attachments}
                 surface="row"
                 revealable={revealable}
                 onConsumeViewOnce={onConsumeViewOnce}

@@ -1,5 +1,116 @@
 import { describe, it, expect } from '@jest/globals';
 import { serializeAttachmentForSocket, aggregateAttachmentReactions } from '../serializeAttachmentForSocket';
+import {
+  attachmentProtectionSelect,
+  attachmentSocketSelect,
+} from '../../services/attachments/attachmentIncludes';
+import { attachmentProtectionSelect as attachmentProtectionSelectDepuisAdmin } from '../../routes/admin/media-protection';
+import { maskedAttachment } from '@meeshy/shared/utils/attachment-protection';
+import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
+
+/**
+ * LA PROTECTION SUR LE CANAL SOCKET (#7014).
+ *
+ * `maskedAttachment` échoue OUVERTE quand on ne la nourrit pas — c'est écrit
+ * dans son doc-comment, et c'est le bon défaut CHEZ ELLE. Le fail-closed vit
+ * chez le relais, et ce relais-ci ne servait RIEN : `SocketAttachment`
+ * énumérait trente champs à la main, sans `isViewOnce` / `isBlurred` /
+ * `effectFlags`. Mesuré avant ce lot, sur une ligne `isViewOnce: true` :
+ * `maskedAttachment(ligne) === true`, `maskedAttachment(servi) === false` —
+ * une photo à VUE UNIQUE reçue par `message:send-with-attachments` rendait son
+ * `<img>` EN CLAIR dans web-v2 jusqu'au prochain `GET /messages`.
+ *
+ * Les témoins ci-dessous gardent les DEUX moitiés, parce qu'un témoin par NOM
+ * laisserait passer le quatrième champ :
+ *
+ *  - INVENTAIRE : tout champ de `attachmentProtectionSelect` est SERVI par le
+ *    sérialiseur, et CHARGÉ par le `select` qui l'alimente ;
+ *  - FAIL-CLOSED : une pièce protégée reste masquée de l'autre côté du fil,
+ *    quel que soit le canal (drapeau, drapeau, bitmask).
+ */
+const ligneDeBase = {
+  id: 'att-prot',
+  messageId: 'msg-prot',
+  mimeType: 'image/jpeg',
+  fileSize: 42_000,
+  fileUrl: 'https://cdn.meeshy.me/uploads/secret.jpg',
+  transcription: null,
+  translations: null,
+  createdAt: new Date('2026-09-18T10:00:00Z'),
+} as const;
+
+const servi = (protection: Record<string, unknown>) =>
+  serializeAttachmentForSocket({ ...ligneDeBase, ...protection } as Record<string, unknown>);
+
+describe('serializeAttachmentForSocket — la garde d’INVENTAIRE (#7014)', () => {
+  /**
+   * La garde qui RESTE VRAIE au quatrième champ : elle ne nomme aucun champ,
+   * elle lit la SÉLECTION. Un champ ajouté à `attachmentProtectionSelect` et
+   * oublié du sérialiseur la fait tomber en le NOMMANT.
+   */
+  it('sert TOUT champ de attachmentProtectionSelect', () => {
+    const attendus = Object.keys(attachmentProtectionSelect);
+    const charge = servi({ isViewOnce: false, isBlurred: false, effectFlags: 0 }) as unknown as Record<string, unknown>;
+
+    expect(attendus.length).toBeGreaterThan(0);
+    expect(attendus.filter((champ) => !(champ in charge))).toEqual([]);
+  });
+
+  /**
+   * L'autre moitié de l'inventaire : le `select` du canal socket CHARGE ce que
+   * le sérialiseur doit servir. Sans ce témoin, la projection fail-closed
+   * masquerait TOUT média en production sans qu'un seul test ne rougisse —
+   * c'est la projection trop étroite, jamais l'appel manquant, qui rend une
+   * garde impossible en aval (leçon 276).
+   */
+  it('attachmentSocketSelect CHARGE tout champ de attachmentProtectionSelect', () => {
+    const manquants = Object.keys(attachmentProtectionSelect).filter(
+      (champ) => (attachmentSocketSelect as Record<string, unknown>)[champ] !== true
+    );
+
+    expect(manquants).toEqual([]);
+  });
+
+  /**
+   * Le REST et le socket lisent la MÊME sélection, pas deux copies. Une seconde
+   * écriture de « quels champs font la protection » ne peut que diverger : c'est
+   * la classe de défaut que ce lot ferme.
+   */
+  it('la sélection du gateway est UNE — REST et socket partagent l’objet', () => {
+    expect(attachmentProtectionSelectDepuisAdmin).toBe(attachmentProtectionSelect);
+  });
+});
+
+describe('serializeAttachmentForSocket — FAIL-CLOSED sur la protection (#7014)', () => {
+  it('une pièce à VUE UNIQUE reste masquée de l’autre côté du fil', () => {
+    expect(maskedAttachment(servi({ isViewOnce: true, isBlurred: false, effectFlags: 0 }))).toBe(true);
+  });
+
+  it('une pièce FLOUTÉE reste masquée', () => {
+    expect(maskedAttachment(servi({ isViewOnce: false, isBlurred: true, effectFlags: 0 }))).toBe(true);
+  });
+
+  it('le BITMASK seul suffit — le canal qu’un témoin « à vue » ne couvrirait pas', () => {
+    expect(
+      maskedAttachment(
+        servi({ isViewOnce: false, isBlurred: false, effectFlags: MESSAGE_EFFECT_FLAGS.VIEW_ONCE })
+      )
+    ).toBe(true);
+  });
+
+  it('une pièce ORDINAIRE traverse sans masque — la garde ne ferme pas ce qui est ouvert', () => {
+    expect(maskedAttachment(servi({ isViewOnce: false, isBlurred: false, effectFlags: 0 }))).toBe(false);
+  });
+
+  /**
+   * Les trois colonnes sont NON NULLABLES et à défaut (`schema.prisma`) : une
+   * colonne sélectionnée n'est jamais `undefined`. Son absence PROUVE que la
+   * requête ne l'a pas chargée — jamais que la pièce est ordinaire.
+   */
+  it('une ligne dont la requête a OMIS la protection sort masquée', () => {
+    expect(maskedAttachment(servi({}))).toBe(true);
+  });
+});
 
 describe('serializeAttachmentForSocket', () => {
   it('preserves transcription and translations on audio attachment', () => {

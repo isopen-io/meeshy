@@ -284,7 +284,7 @@ struct iPadRootView: View {
                 .status(statusId: entry.id, authorId: entry.userId,
                         authorName: entry.username, emoji: entry.moodEmoji,
                         content: entry.content, publishedAt: entry.createdAt),
-                conversationListViewModel: conversationViewModel
+                conversationList: conversationViewModel
             )
         }
 

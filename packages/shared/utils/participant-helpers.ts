@@ -1,11 +1,26 @@
 /**
+ * **LES DEUX FORMES DE L'ABSENCE SONT ACCEPTÉES** (#6985). Sous
+ * `exactOptionalPropertyTypes` — actif dans `apps/web-v2` —, `avatar?: string |
+ * null` décrit une propriété ABSENTE ou valant `string | null`, mais REFUSE une
+ * propriété PRÉSENTE valant `undefined`. Or c'est exactement la forme du
+ * `Participant` du web (`avatar: string | undefined`), et la rampe des visages
+ * ne pouvait donc pas appeler la loi partagée sans un cast.
+ *
+ * Élargir un paramètre d'ENTRÉE ne casse aucun appelant : ces deux types ne
+ * décrivent que ce que les fonctions ci-dessous acceptent de LIRE, et
+ * `isNonBlank` traite déjà `undefined` et `null` à l'identique. Les deux types
+ * bougent ensemble — leur doc-comment les dit « miroir strict », et un miroir
+ * qui ne suit qu'à moitié est le début d'une divergence.
+ */
+
+/**
  * Forme minimale d'un participant porteur d'un avatar : avatar local optionnel
  * (`Participant.avatar`) + avatar du compte utilisateur lié optionnel (`User.avatar`).
  * Couvre les participants enregistrés, anonymes et les `sender` de message.
  */
 export type AvatarBearingParticipant = {
-  readonly avatar?: string | null;
-  readonly user?: { readonly avatar?: string | null } | null;
+  readonly avatar?: string | null | undefined;
+  readonly user?: { readonly avatar?: string | null | undefined } | null | undefined;
 };
 
 /**
@@ -14,8 +29,8 @@ export type AvatarBearingParticipant = {
  * lié optionnel (`User.displayName`).
  */
 export type DisplayNameBearingParticipant = {
-  readonly displayName?: string | null;
-  readonly user?: { readonly displayName?: string | null } | null;
+  readonly displayName?: string | null | undefined;
+  readonly user?: { readonly displayName?: string | null | undefined } | null | undefined;
 };
 
 const isNonBlank = (value?: string | null): value is string =>

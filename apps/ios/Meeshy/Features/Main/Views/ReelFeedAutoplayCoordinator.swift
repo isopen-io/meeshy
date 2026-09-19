@@ -21,6 +21,19 @@ final class ReelFeedAutoplayCoordinator: ObservableObject {
     nonisolated deinit {}
     @Published private(set) var activeReelId: String?
 
+    /// **Le réel à PRÉCHAUFFER — celui qui suit l'actif** (#7009).
+    ///
+    /// Le coordinateur n'élisait que l'actif : le voisin n'était touché qu'au
+    /// moment où il le devenait à son tour, et le swipe montrait un trou noir
+    /// le temps du premier frame. Il est élu ici parce que c'est ici que vit
+    /// l'ORDRE du fil (`frames`) ; il est CONSOMMÉ par `ReelFeedCardContainer`,
+    /// qui est le seul à tenir le `FeedPost` — donc son URL.
+    ///
+    /// Comme `activeReelId`, il n'est lu QUE par des conteneurs, jamais par le
+    /// `body` de `FeedView` : sans cela, chaque changement d'élection
+    /// ré-évaluerait le `ForEach` entier (invariant I1).
+    @Published private(set) var prewarmReelId: String?
+
     private let isCallActive: () -> Bool
     /// Debounce des recalculs d'élection : annulé+reprogrammé à chaque `update()`
     /// pour coalescer le churn de frames au scroll (I2).
@@ -71,6 +84,12 @@ final class ReelFeedAutoplayCoordinator: ObservableObject {
             guard !self.isCallActive() else { self.clear(); return }
             let next = mostCenteredReel(frames: frames, viewportMinY: viewportMinY, viewportMaxY: viewportMaxY)
             if next != self.activeReelId { self.activeReelId = next }
+            // Réassignation CONDITIONNELLE, comme au-dessus : `@Published`
+            // publie sur `willSet`, valeur changée ou non, et ce bloc court
+            // pendant le défilement. Republier à l'identique fait « Publishing
+            // changes from within view updates » et vide le fil (#6977).
+            let neighbour = ReelPrewarmWindow.next(after: next, in: frames)
+            if neighbour != self.prewarmReelId { self.prewarmReelId = neighbour }
         }
     }
 
@@ -78,6 +97,7 @@ final class ReelFeedAutoplayCoordinator: ObservableObject {
         debounceTask?.cancel()
         debounceTask = nil
         if activeReelId != nil { activeReelId = nil }
+        if prewarmReelId != nil { prewarmReelId = nil }
     }
 
     /// Suspension immédiate déclenchée par un passage en appel hors scroll (C1) :

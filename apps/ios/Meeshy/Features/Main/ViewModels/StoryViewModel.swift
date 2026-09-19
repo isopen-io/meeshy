@@ -37,6 +37,14 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
 
     @Published var storyGroups: [StoryGroup] = []
     @Published var isLoading = false
+
+    /// Motif du dernier échec de chargement du tray, `nil` quand la dernière
+    /// passe a abouti. Le `catch` de `fetchStoriesFromNetwork` ne faisait que
+    /// journaliser : un rail de stories VIDE par panne était strictement
+    /// indiscernable d'un rail vide parce que personne n'a publié. Le journal
+    /// ne quitte pas la machine du développeur — seul un état publié atteint
+    /// un lecteur.
+    @Published private(set) var loadFailure: String?
     @Published var showStoryComposer = false
     /// Brouillon à reprendre, consommé par le cover racine du composer
     /// (`StoryComposerCover`). Posé AVANT `showStoryComposer = true` pour que
@@ -376,7 +384,11 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             try? await CacheCoordinator.shared.stories.save(storyGroups, for: Self.storiesCacheKey)
             prefetchAllStoryMedia(storyGroups)
             renderMissingReceiverCovers()
+            if loadFailure != nil { loadFailure = nil }
         } catch {
+            // Le motif est PUBLIÉ, pas seulement journalisé (#7007) : le rail
+            // doit pouvoir dire « panne » au lieu de se taire.
+            loadFailure = String(localized: "common.error.generic")
             Logger.messages.error("[StoryVM] Failed to load stories: \(error.localizedDescription)")
         }
     }

@@ -5,7 +5,7 @@ import type { ConversationsInfiniteData, ConversationsPage, ConversationsPagePar
 import { flattenConversationPages, nextConversationsCursor } from './conversations-pages';
 import type { DataSource } from './config';
 import { decodeConversation } from './decode';
-import { conversationsWithSurged } from './fixtures';
+import { conversationById, conversationsWithSurged } from './fixtures';
 import { pageOfConversations } from './fixtures-pagination';
 import type { ApiResult, ApiSuccess, HttpTransport } from './http';
 import type { Conversation } from './types';
@@ -96,9 +96,12 @@ export async function loadConversation(
   params: ConversationsDeps & { readonly id: string; readonly signal?: AbortSignal },
 ): Promise<ApiResult<Conversation>> {
   if (__FIXTURES__ && params.source === 'fixtures') {
-    /* Les survenues AUSSI : une conversation qui vient d'apparaître dans la
-       liste doit pouvoir s'OUVRIR, sans quoi la ligne mènerait à « introuvable ». */
-    const found = conversationsWithSurged().find((c) => c.id === params.id);
+    /* `conversationById`, jamais la seule liste servie : les survenues AUSSI
+       (une conversation qui vient d'apparaître dans la liste doit pouvoir
+       s'OUVRIR, sans quoi la ligne mènerait à « introuvable »), et les corpus
+       de démonstration HORS liste (#7033), qu'un gate atteint par leur
+       adresse et qu'aucune page ne porte. */
+    const found = conversationById(params.id);
     return found === undefined
       ? { ok: false, status: 404, error: 'Conversation not found' }
       : { ok: true, data: found };

@@ -196,13 +196,19 @@ struct ReelImageBackdrop: View, Equatable {
         ZStack {
             Color(hex: media.thumbnailColor)
             if let img = backdropImage {
+                // **Aucun `.blur` ici, et c'est délibéré** (#7009). La source
+                // est un ThumbHash de 16×16 étiré plein écran : l'interpolation
+                // bilinéaire le rend DÉJÀ flou, et le `.blur(radius: 60)` qui
+                // vivait là ajoutait une passe GPU plein cadre à chaque frame du
+                // swipe pour flouter ce qui l'était déjà. Si un rendu plus doux
+                // redevenait nécessaire, la bonne réponse est `.drawingGroup()`
+                // (une seule rasterisation), pas un flou par frame.
                 Image(uiImage: img)
                     .resizable()
                     .interpolation(.low)
                     .aspectRatio(contentMode: .fill)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .scaleEffect(1.18)
-                    .blur(radius: 60)
                     .opacity(0.85)
             }
         }

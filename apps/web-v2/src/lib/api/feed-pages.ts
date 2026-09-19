@@ -121,6 +121,22 @@ export type FeedPost = {
    */
   readonly storyEffects?: unknown;
   readonly repostOf?: FeedRepostOf | null;
+  /**
+   * LES PERSONNES QUE LE SERVEUR A RÉSOLUES (#7032) — `PostReference[]` aplati
+   * par `withMentions` (`services/gateway/src/services/posts/postReferences.ts`),
+   * servi sous `mentions` par TOUS les chemins de liste (feed, hashtag, réels,
+   * statuts, profil). Seul `username` est déclaré ici : c'est le seul champ que
+   * le texte enrichi consomme, et un type plus large ferait entrer dans le cache
+   * persisté des profils qu'aucune surface ne peint.
+   *
+   * **ABSENT ≠ VIDE.** `undefined` (une relation que le `select` n'a pas
+   * chargée — c'est le cas du post ORIGINAL d'une republication) veut dire « le
+   * serveur ne s'est pas prononcé » et laisse tout handle cliquable ; `[]` est
+   * un VERDICT et n'en laisse aucun. Le doc-comment de `withNestedRepostMentions`
+   * insiste sur cette distinction côté serveur ; la perdre ici la rendrait
+   * inutile.
+   */
+  readonly mentions?: readonly { readonly username: string }[] | null;
   readonly likeCount?: number | null;
   readonly commentCount?: number | null;
   readonly repostCount?: number | null;

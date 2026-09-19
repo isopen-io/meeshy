@@ -63,6 +63,18 @@ struct ReelFeedCardContainer: View {
             onPin: onPin
         )
         .equatable()
+        // **Le préchauffage du voisin vit ICI** (#7009), et pas dans le
+        // coordinateur : lui ne connaît que des ids, le conteneur tient le
+        // `FeedPost` — donc l'URL. Le travail est fait par la carte QUI SERA
+        // jouée ensuite, à l'instant où le coordinateur la désigne.
+        //
+        // `.task(id:)` annule et relance à chaque changement du prédicat : un
+        // défilement rapide ne laisse donc pas derrière lui une file de
+        // préchargements pour des réels déjà dépassés.
+        .task(id: coordinator.prewarmReelId == post.id) {
+            guard coordinator.prewarmReelId == post.id else { return }
+            await ReelPrewarm.prepare(post)
+        }
     }
 }
 

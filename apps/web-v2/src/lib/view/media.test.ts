@@ -282,13 +282,56 @@ describe('electDescription / servedTranscript — la forme RÉELLE du wire (`typ
  * `mediaCarrierOf` ne RÉSOUT rien : il VOYAGE ce qu'on lui donne.
  */
 describe('mediaCarrierOf — VOYAGE ce que l’hôte a déjà résolu, ne résout rien (#6169)', () => {
+  /**
+   * L'AVATAR VOYAGE AVEC LE NOM (#6985). `MediaCarrier.sender` ne portait que
+   * `displayName`, et la visionneuse ne pouvait donc monter AUCUN `Avatar` —
+   * non par oubli de rendu, mais parce que **la donnée s'arrêtait au type**.
+   *
+   * Le carrier reste ce que son doc-comment promet : il ne RÉSOUT rien. C'est
+   * l'hôte qui descend `participantAvatarOf` (il le fait déjà pour sa propre
+   * pastille, `bubble.tsx:233`) et remet le résultat, exactement comme il
+   * remet `caption`. Une seconde descente ICI referait l'erreur que le cycle
+   * 128 a fermée sur trois clients.
+   */
+  test('l’avatar RÉSOLU par l’hôte voyage avec le nom', () => {
+    const carrier = mediaCarrierOf({
+      message: { sender: { displayName: 'Kwame Mensah' }, createdAt: new Date('2026-09-13T10:13:00.000Z') },
+      caption: { text: '', language: 'fr', translated: false },
+      senderAvatarUrl: 'https://static.meeshy.me/u/i/kwame.jpg',
+    });
+    expect(carrier.sender).toEqual({ displayName: 'Kwame Mensah', avatarUrl: 'https://static.meeshy.me/u/i/kwame.jpg' });
+  });
+
+  test('un auteur SANS avatar porte `null` — jamais une chaîne vide, qui rendrait `<img src="">`', () => {
+    const carrier = mediaCarrierOf({
+      message: { sender: { displayName: 'Kwame Mensah' }, createdAt: new Date('2026-09-13T10:13:00.000Z') },
+      caption: { text: '', language: 'fr', translated: false },
+    });
+    expect(carrier.sender).toEqual({ displayName: 'Kwame Mensah', avatarUrl: null });
+  });
+
+  test('le carrier ne RÉSOUT pas : un avatar présent sur le message mais NON remis par l’hôte ne voyage pas', () => {
+    // Le jour où quelqu'un ajoutera une descente ici « pour rendre service »,
+    // ce témoin tombera — et c'est le but. Deux descentes pour une valeur sont
+    // exactement ce que le cycle 128 a payé.
+    const carrier = mediaCarrierOf({
+      message: {
+        sender: { displayName: 'Kwame Mensah', avatar: 'ignoré.png' } as { readonly displayName?: string },
+        createdAt: new Date('2026-09-13T10:13:00.000Z'),
+      },
+      caption: { text: '', language: 'fr', translated: false },
+    });
+    expect(carrier.sender?.avatarUrl).toBeNull();
+  });
+
   test('sender = { displayName } depuis message.sender, sentAt = message.createdAt (ISO)', () => {
     const createdAt = new Date('2026-09-13T10:13:00.000Z');
     const carrier = mediaCarrierOf({
       message: { sender: { displayName: 'Kwame Mensah' }, createdAt },
       caption: { text: '', language: 'fr', translated: false },
     });
-    expect(carrier.sender).toEqual({ displayName: 'Kwame Mensah' });
+    // `avatarUrl: null` fait partie du contrat depuis #6985 : l'hôte n'en a remis aucun ici.
+    expect(carrier.sender).toEqual({ displayName: 'Kwame Mensah', avatarUrl: null });
     expect(carrier.sentAt).toBe('2026-09-13T10:13:00.000Z');
   });
 

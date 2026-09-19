@@ -65,17 +65,29 @@ public struct SceneCard<Content: View>: View {
     private let thumbHash: String?
     private let cornerRadiusOverride: CGFloat?
     private let hostScale: CGFloat
+    private let paintsBackdrop: Bool
     private let content: Content
 
+    /// - Parameter paintsBackdrop: **qui peint le fond de la scène** (#7039).
+    ///   `true` (le défaut) : la carte le peint, comme partout où elle se
+    ///   détache de ce qui l'entoure — la carte du fil, l'état cardé de la
+    ///   galerie, les quatre montages du lecteur de stories. `false` : l'HÔTE
+    ///   le porte, et la carte n'en peint aucun. Le second cas sert le plein
+    ///   écran d'une scène de post, où le sol occupe déjà l'écran entier sans
+    ///   voile : deux surfaces y peignaient le MÊME hachage dans deux cadres
+    ///   différents, ce qui est le défaut #6797, et ce qui a projeté la croix
+    ///   hors de l'écran (#7037). Un seul peintre, une seule géométrie.
     public init(layout: SceneShape.Layout,
                 thumbHash: String?,
                 cornerRadius: CGFloat? = nil,
                 hostScale: CGFloat = 1,
+                paintsBackdrop: Bool = true,
                 @ViewBuilder content: () -> Content) {
         self.layout = layout
         self.thumbHash = thumbHash
         self.cornerRadiusOverride = cornerRadius
         self.hostScale = hostScale
+        self.paintsBackdrop = paintsBackdrop
         self.content = content()
     }
 
@@ -102,7 +114,13 @@ public struct SceneCard<Content: View>: View {
             // même fond que pour la story ! ») : l'immersif d'un post n'est pas
             // une scène rognée sans hors-champ, c'est cette même carte dans le
             // viewport entier.
+            // **Le fond s'efface en FONDU, il ne disparaît pas d'un coup**
+            // (#7039). L'opacité, plutôt qu'un `if`, parce que le porteur
+            // demande que le tap FONDE la carte dans le sol : une vue retirée
+            // de la hiérarchie saute, une opacité animée se fond. Le coût est
+            // celui d'une couleur plate ou d'une image de 32 px de côté.
             SceneBackdropView(backdrop: layout.backdrop, thumbHash: thumbHash)
+                .opacity(paintsBackdrop ? 1 : 0)
             // Le cadre est posé sur le CONTENU aussi, et pas seulement sur la
             // pile : un `UIViewRepresentable` proposé sans contrainte explicite
             // débordait en largeur sur iPhone 16 Pro (`StoryViewerView+Canvas`,
