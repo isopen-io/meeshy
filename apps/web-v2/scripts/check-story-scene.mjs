@@ -40,6 +40,7 @@ import { join } from 'node:path';
 
 import { launchChromium } from './lib/browser.mjs';
 import { startDistServer } from './lib/gate-server.mjs';
+import { confinementDe } from './lib/chrome-confinement.mjs';
 
 const DIST = new URL('../dist/', import.meta.url).pathname;
 /* Le serveur vit dans `lib/` depuis #6988 : celui qui était écrit ici
@@ -368,6 +369,35 @@ async function runScheme(colorScheme) {
     await context.close();
   }
   return measures;
+}
+
+/**
+ * #7040 — LA SEULE PORTE DE SORTIE DES ÉTATS D'ATTENTE LIT L'ENCOCHE.
+ *
+ * `story.tsx` posait la croix des états « Chargement… » et « Story introuvable »
+ * à `top-3` SEC, pendant que le chrome du chemin CHARGÉ, douze lignes plus bas,
+ * lit `calc(var(--safe-top, 0px) + 8px)`. Une divergence interne à un même
+ * fichier, et sur l'état où l'utilisateur a le plus besoin de sortir : sur une
+ * coque à encoche, sa seule issue passait SOUS la barre d'état.
+ *
+ * LE GATE SIMULE L'ENCOCHE, sinon il ne peut pas tomber. `--safe-top` vaut
+ * `env(safe-area-inset-top, 0px)`, donc ZÉRO dans un Chromium de bureau : un
+ * témoin qui ne la pose pas mesurerait un défaut de coque sur un appareil qui
+ * n'en a pas, et resterait vert pour toujours. Les cotes recopiées sont celles
+ * d'un iPhone à encoche (47 / 34 pt).
+ *
+ * Les deux états partagent le MÊME nœud : une mesure les couvre tous les deux.
+ */
+{
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'fr-FR' });
+  const page = await context.newPage();
+  await page.goto(`${BASE}/story/st-inconnue-du-corpus`, { waitUntil: 'load' });
+  await page.addStyleTag({ content: ':root{--safe-top:47px;--safe-bottom:34px}' });
+  await page.waitForSelector('[role="alert"]', { timeout: 8000 });
+
+  const porte = await confinementDe(page, 'button[aria-label="Fermer"]', { nom: "la croix de l'état « Story introuvable »" });
+  check(porte.ok, `#7040 : sous une encoche de 47, ${porte.message}`);
+  await context.close();
 }
 
 const clair = await runScheme('light');

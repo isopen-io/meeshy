@@ -44,7 +44,7 @@ import { sharedPlaceFromMetadata, hoistLocationOnto } from '../../services/locat
 import { StatusService } from '../../services/StatusService';
 import { NotificationService } from '../../services/notifications/NotificationService';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
-import { attachmentForwardPreviewSelect, attachmentMediaSelect } from '../../services/attachments/attachmentIncludes';
+import { attachmentForwardPreviewSelect, attachmentSocketSelect } from '../../services/attachments/attachmentIncludes';
 import { serializeAttachmentForSocket } from '../serializeAttachmentForSocket';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';
 import { emitConversationPreviewUpdate } from '../emitConversationPreviewUpdate';
@@ -792,7 +792,13 @@ export class MessageHandler {
               // `location`.
               metadata: true,
               sender: { select: { id: true, userId: true, displayName: true, avatar: true, role: true } },
-              attachments: { select: attachmentMediaSelect },
+              // #7014 — `attachmentSocketSelect`, jamais `attachmentMediaSelect`
+              // nu : ce que cette requête charge repart par
+              // `serializeAttachmentForSocket` sur `message:edited`, et
+              // `attachmentMediaSelect` est délibérément SANS drapeau de
+              // protection. Sans les trois colonnes, l'édition d'un message
+              // rediffusait une pièce MUETTE sur sa propre protection.
+              attachments: { select: attachmentSocketSelect },
             },
           })
       );
@@ -1000,7 +1006,10 @@ export class MessageHandler {
         conversationId: message.conversationId,
         translations: [],
         ...(editedMentions.reconciled ? { validatedMentions: [...editedMentions.validatedUsernames] } : {}),
-        attachments: this._serializeAttachmentsField(message as unknown as Message),
+        // #7028 — sérialisé DIRECTEMENT (type Prisma exact du `select`
+        // ci-dessus), jamais via `_serializeAttachmentsField`, qui érode vers
+        // `any` et rendrait un `attachmentMediaSelect` nu invisible (TS2345).
+        attachments: message.attachments.map((att) => serializeAttachmentForSocket(att)),
       };
 
       const room = ROOMS.conversation(message.conversationId);
@@ -2116,19 +2125,15 @@ export class MessageHandler {
   }
 
   /**
-   * Normalize the attachments field on a broadcast message via the
-   * centralized `serializeAttachmentForSocket` helper. Tolerates the
-   * legacy `as any` access pattern and guarantees `transcription` +
-   * `translations` always travel through the socket payload (parity with
-   * the REST `attachmentMediaSelect` shape). Replaces the previous
-   * `(message as never)['attachments'] || []` cast that silently dropped
-   * both Prisme Linguistique JSON fields when the upstream query did not
-   * explicitly select them.
+   * Normalise `attachments` via `serializeAttachmentForSocket`. `Array.isArray`
+   * érode `raw` à `any[]` (le cast retiré ici était donc déjà sans effet) — le
+   * cliquet de type sur ce chemin (type PUBLIC `Message`) vit à la SOURCE,
+   * `MessageProcessor.saveMessage` (#7028, #7014), pas ici.
    */
   private _serializeAttachmentsField(message: Message): unknown[] {
     const raw = message.attachments;
     if (!Array.isArray(raw)) return [];
-    return raw.map((att) => serializeAttachmentForSocket(att as Record<string, unknown>));
+    return raw.map((att) => serializeAttachmentForSocket(att));
   }
 
   /**
