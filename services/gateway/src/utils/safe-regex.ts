@@ -410,6 +410,22 @@ type OffLoopBudgets = {
   readonly budgetMs: number;
   /** délai accordé au fil pour ANNONCER son premier motif */
   readonly startupBudgetMs: number;
+  /**
+   * Le programme du fil, INJECTABLE POUR LES TÉMOINS (#7068).
+   *
+   * La branche « le fil n'a pas démarré à temps » ne pouvait se tester qu'en
+   * pariant sur une COURSE : poser `startupBudgetMs: 0` et espérer que le
+   * minuteur gagne contre la naissance de l'isolate V8. Il gagne presque
+   * toujours — et « presque » a fait rougir `main` une fois, puis verdir à la
+   * relance sur le MÊME arbre.
+   *
+   * Un fil qui, par construction, ne parle jamais rend le dépassement CERTAIN :
+   * le témoin mesure alors la RÈGLE (« ne pas pouvoir mesurer refuse en
+   * UNSUPPORTED_RUNTIME, jamais en accusant le motif ») au lieu d'arbitrer
+   * l'ordonnanceur. Même patron que la migration injectable de
+   * `AppDatabase.inMemoryWriter`, « pour forcer la branche d'échec ».
+   */
+  readonly workerSource?: string;
 };
 
 /**
@@ -459,7 +475,7 @@ async function runOffLoop(job: OffLoopJob, budgets: OffLoopBudgets): Promise<Off
 
   let worker: Worker;
   try {
-    worker = new Worker(WORKER_SOURCE, { eval: true, workerData: job });
+    worker = new Worker(budgets.workerSource ?? WORKER_SOURCE, { eval: true, workerData: job });
   } catch {
     return { counts, invalid, hungIndex: null, unsupported: true };
   }
@@ -580,7 +596,7 @@ function adversarialCorpus(source: string): string[] {
  */
 export async function certifyPatterns(
   patterns: readonly string[],
-  options: { budgetMs?: number; startupBudgetMs?: number } = {}
+  options: { budgetMs?: number; startupBudgetMs?: number; workerSource?: string } = {}
 ): Promise<PatternRefusal[]> {
   if (patterns.length === 0) return [];
 
@@ -598,6 +614,7 @@ export async function certifyPatterns(
     {
       budgetMs: options.budgetMs ?? DEFAULT_PROBE_BUDGET_MS,
       startupBudgetMs: options.startupBudgetMs ?? DEFAULT_STARTUP_BUDGET_MS,
+      workerSource: options.workerSource,
     }
   );
 

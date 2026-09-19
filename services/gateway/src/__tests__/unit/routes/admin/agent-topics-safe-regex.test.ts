@@ -128,8 +128,31 @@ describe('certifyPatterns — la sonde hors boucle d\'événements', () => {
     // dit à l'administrateur que la machine n'a pas répondu ;
     // `BACKTRACKING_BUDGET` lui disait que son mot-clé explosait, et l'envoyait
     // réécrire un motif qui n'avait rien.
-    const refusals = await certifyPatterns(['\\bfilm\\b'], { startupBudgetMs: 0 });
+    //
+    // #7068 — CE TÉMOIN N'ARBITRE PLUS UNE COURSE. Il posait
+    // `startupBudgetMs: 0` et pariait que le minuteur gagnerait contre la
+    // naissance de l'isolate V8. Le pari tient presque toujours : il a tenu
+    // des mois, puis a fait rougir `main` une fois — et la relance a verdi sur
+    // le MÊME arbre. Le doc-comment ci-dessus annonçait pourtant le danger
+    // (« le témoin de cette propriété ne peut pas être une DURÉE »), avant d'en
+    // poser une.
+    //
+    // Un fil qui ne poste JAMAIS rien rend le dépassement certain : la règle
+    // est mesurée, l'ordonnanceur ne l'est plus. Le budget reste généreux
+    // (50 ms) précisément parce qu'il n'est plus ce qui décide.
+    const filMuet = 'setTimeout(() => {}, 60000);';
+    const refusals = await certifyPatterns(['\\bfilm\\b'], {
+      startupBudgetMs: 50,
+      workerSource: filMuet,
+    });
     expect(refusals.map((r) => r.code)).toEqual(['UNSUPPORTED_RUNTIME']);
+  }, 15000);
+
+  it('CONTRE-ÉPREUVE — le MÊME motif, avec le vrai fil, est CERTIFIÉ', async () => {
+    // Sans elle, le témoin ci-dessus serait vert sur une sonde qui refuserait
+    // tout : il faut prouver que `\bfilm\b` passe quand la mesure a lieu.
+    const refusals = await certifyPatterns(['\\bfilm\\b']);
+    expect(refusals).toEqual([]);
   }, 15000);
 });
 
