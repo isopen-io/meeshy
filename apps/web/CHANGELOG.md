@@ -1,5 +1,71 @@
 # @meeshy/web
 
+## 1.62.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - le repli d'hôte quitte le service de notifications, qui repasse sous sa dette (Refs #7022)
+  - les deux fichiers du cliquet #7014 repassent sous leur dette héritée (Refs #7028)
+  - une clé de stockage reste téléchargeable sur l'écran verrouillé (Refs #7022)
+  - une story dont le média est déjà connu absent ne fige plus le carrousel (Refs #7022)
+  - le gate G5 défile vers sa rangée, et une sonde perdue rougit au lieu de tuer le gate (Closes #7048)
+  - un canal de protection dementi par la charge socket ne tombe plus parce qu'un AUTRE tient debout
+  - la fixture live-3 rejoue la charge que la passerelle EMET vraiment, pas celle d'une branche annoncee
+  - le producteur `message:new` de MessageProcessor rejoint le cliquet de type de #7014 (Refs #7028)
+  - la remontée des écrêteurs s'arrête à un élément `fixed` — son bloc conteneur EST le viewport (Refs #7040)
+  - le témoin d'inventaire passe sous JEST — `expect(valeur, message)` est une API de bun (Refs #7014)
+  - une erreur de décodage vidéo ne grave plus une story absente (Refs #7022)
+  - un média hors ligne ou d'un compte précédent ne se grave plus absent (Refs #7022)
+  - la porte de sortie d'un plein écran tient dans le cadre, et un chrome invisible n'est plus cliquable (Refs #7040)
+  - l'état vide des réels n'introduit plus de taille de police figée (run test) (Refs #7007)
+  - les deux derniers <audio> du son de fond passent au transport protégé, et un refus se DIT (Refs #7015)
+  - le sol d'une scene n'elargit plus son hote — la croix du plein ecran revient dans l'ecran (Closes #7037)
+  - un contrôle hors du viewport ne disparaît plus du relevé — sept gates le NOMMENT au lieu de l'écarter (Refs #7040)
+  - le son de fond avait TROIS balises `<audio>` et le lot n'en avait corrigé qu'UNE (Refs #7015)
+  - un `200` n'était pas une piste — n'importe quel corps non vide devenait une URL d'objet posée en `<audio src>` (Refs #7015)
+  - en plein écran, le sol EST la scène — l'empreinte quitte la carte et le tap l'y fond (run test) (Refs #7039)
+  - la transcription servie ANNONCE sa langue — le témoin de rang 1 ne pouvait pas tomber (Refs #7017)
+  - la croix du plein écran revient dans l'écran — le sol d'une scène ne dicte plus la taille du plateau (run test) (Refs #7037)
+  - le delta-sync cessait de servir TOUTE pièce jointe — le cinquième appelant n'avait pas suivi (Refs #7014)
+  - un média absent rend un état dessiné et ne se redemande plus à chaque remontage (Refs #7022)
+  - une vidéo SEULE avait une hauteur de ZÉRO pixel — la loi qui la dimensionne existait sans aucun site d'appel (Closes #7016)
+  - une adresse de média ne grave plus un hôte de déploiement dans la donnée (Refs #7022)
+  - une grille de médias DE MOI ne sort plus de l'écran — la boîte de 300 px est plafonnée à son porteur (Closes #7018)
+  - la jumelle recopiée du motif de cache faisait rougir le témoin du gate sur un artefact SYNTHÉTIQUE (Refs #7015)
+  - le son de fond d'une story joue enfin — une balise audio ne porte aucun en-tête, la route qui le sert en exige un (Refs #7015)
+  - l'await sort de XCTUnwrap — le témoin du décodage de fond compilait faux (run test) (Refs #7010)
+  - le média inline d'une bannière vit chez lui — packages/shared reste sous budget (Refs #7003) (run test)
+  - la lecture souveraine dit QUELLES pièces la passerelle retient (Refs #7023)
+  - le préchauffage d'un réel remplit le cache sous la clé que la LECTURE ira y chercher (run test) (Refs #7009)
+  - le badge d'icône et le widget lisent le registre au lieu d'en tenir une copie (run test) (Refs #6998)
+  - une pièce jointe protégée reçue en temps réel n'atteint plus le DOM en clair (Refs #7014)
+  - la transcription d'un vocal arrive SANS rechargement — web-v2 écoute message:attachment-updated (Refs #7017)
+  - ouvrir une conversation depuis une notification n'invente plus un non-lu (run test) (Refs #6998)
+  - un initialiseur explicite là où une propriété stockée privée le rendrait inatteignable (run test)
+  - l'audio quitte le fil principal, et le playhead cesse de faire battre ce qui ne bat pas avec lui (Refs #7010)
+  - importer Combine et Foundation là où leurs membres sont appelés (run test)
+  - le fond d'une story ne se décode plus sur le fil principal à chaque transition de slide (Refs #7010)
+  - le réel suivant est préparé pendant que le courant joue, et le fond ne se refloute plus à chaque image (run test) (Refs #7009, Refs #7010)
+  - l'extension de notification n'attache plus un média qu'elle ne peut pas tenir (Refs #7003) (run test)
+  - la précédence du non-lu s'écrit une fois — ConversationReadLedger (Refs #6998)
+  - ouvrir une notification la marque lue partout — une seule consommation, et le fil consommé quitte le centre iOS (run test)
+  - l'avatar d'une rangée de conversation ne porte plus d'ombre (Refs #7010)
+  - l'aperçu des commentaires d'un post ne se reclasse plus à chaque évaluation de la carte (Refs #7010)
+  - l'aperçu du composer n'encode plus ses images en PNG sur le thread principal (run test) (Refs #7008)
+  - la racine ne se re-diffuse plus à chaque toast — elle n'observe que le compteur qu'elle dessine (Refs #7010)
+  - réels, stories et profil disent leur panne au lieu de se taire (run test) (Refs #7007)
+  - le store de conversations apprend le compteur de non-lus que le serveur lui envoie (run test) (Refs #6997)
+  - fermer le menu audio d'appui long et quitter une story ne republient plus un état inchangé (Refs #7005) (run test)
+  - la cloche ne descend plus de deux, marquer lu est instantané, et revenir au premier plan relit au lieu d'effacer
+  - les vignettes d'un brouillon repris ne décodent plus l'image entière sur la première frame (Refs #7006)
+  - la conversation ouverte ne se ré-évalue plus quand un contact tape ailleurs (Refs #7006)
+  - la recherche garde ses résultats pendant qu'elle cherche et dit sa panne au lieu d'un vide (run test) (Refs #7007)
+  - un export vidéo qui ne peut pas commencer le dit au lieu de planter (Refs #7004) (run test)
+  - retirer ses AirPods pendant un appel sous-titré ne fait plus tomber l'app (Refs #7002) (run test)
+  - un registre des lectures locales pour que l'écho socket ne décrémente pas une seconde fois
+
 ## 1.61.0
 
 ### Minor Changes
