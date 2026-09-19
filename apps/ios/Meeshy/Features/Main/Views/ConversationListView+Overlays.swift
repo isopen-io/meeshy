@@ -374,7 +374,7 @@ extension ConversationListView {
         // si l'utilisateur rouvre un menu avant la fin du zoom-out, `onLongPress`
         // annule ce work item, sinon il effacerait le menu fraîchement rouvert.
         chipAutoScrollDriver.stop()
-        contextMenuDismissWork?.cancel()
+        contextMenuDismissSettle.cancel()
         // min() : ne jamais RE-déplier une carte repliée par le drag vers le
         // haut (0.0 → 0.7 ferait flasher l'aperçu pendant le fondu de sortie).
         // Le shrink est ANIMÉ dans la même transaction que le fondu : la carte
@@ -392,7 +392,7 @@ extension ConversationListView {
             }
             contextMenuAppeared = false
         }
-        let work = DispatchWorkItem {
+        contextMenuDismissSettle.arm(after: 0.26) {
             sheetTargets.contextMenu = nil
             previewScale = 1.0
             previewEmergeOffset = 0
@@ -401,8 +401,6 @@ extension ConversationListView {
             chipModeLatched = false
             contextMenuSourceFrame = nil
         }
-        contextMenuDismissWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.26, execute: work)
     }
 
     /// Progression du morph drag-n-drop pendant le drag vers le bas sur la

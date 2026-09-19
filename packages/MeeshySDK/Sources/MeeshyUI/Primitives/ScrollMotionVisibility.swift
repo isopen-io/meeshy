@@ -80,29 +80,29 @@ private struct ScrollMotionFromOffset: ViewModifier {
     let settleDelay: Duration
 
     @State private var isMoving = false
-    /// L'apaisement en attente — ré-armé à chaque tick d'offset, annulé au
-    /// démontage. Un `DispatchWorkItem` par frame reste une allocation, mais
-    /// sans continuation ni annulation coopérative : le patron du dépôt
-    /// (`focalFlattenWork`, `LentilleSceneActivity`).
-    @State private var settleWork: DispatchWorkItem?
+    /// L'apaisement en attente, ré-armé à chaque tick d'offset et annulé au
+    /// démontage — tenu par une CLASSE, jamais par l'état de ce modifieur.
+    ///
+    /// #7034 — c'était un `@State private var settleWork: DispatchWorkItem?`, et
+    /// c'est la forme qui fabrique la chaîne : une fermeture écrite dans un
+    /// `ViewModifier` capture la STRUCT entière, donc le work item rangé en
+    /// ligne dans son `@State`. Chaque réarmement ajoutait un maillon, et la
+    /// libération de la chaîne est récursive — douze débordements de pile
+    /// mesurés sur l'appareil du porteur, toujours à ~18 300 frames.
+    ///
+    /// Ce site est le plus exposé du dépôt : il arme **une fois par image de
+    /// défilement**, sur quatre écrans. Le doc-comment ci-dessus citait déjà le
+    /// bon patron — une classe, comme `LentilleSceneActivity` — sans le suivre.
+    @State private var settle = Debouncer()
 
     func body(content: Content) -> some View {
         content
             .environment(\.isScrollMotionActive, isMoving)
             .adaptiveOnChange(of: offset) { _, _ in
                 if !isMoving { isMoving = true }
-                settleWork?.cancel()
-                let work = DispatchWorkItem { isMoving = false }
-                settleWork = work
-                DispatchQueue.main.asyncAfter(
-                    deadline: .now() + Self.seconds(settleDelay),
-                    execute: work
-                )
+                settle.arm(after: Self.seconds(settleDelay)) { isMoving = false }
             }
-            .onDisappear {
-                settleWork?.cancel()
-                settleWork = nil
-            }
+            .onDisappear { settle.cancel() }
     }
 
     private static func seconds(_ duration: Duration) -> TimeInterval {

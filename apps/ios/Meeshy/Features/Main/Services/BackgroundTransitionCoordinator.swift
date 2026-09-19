@@ -40,6 +40,14 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
         defer { isTransitioning = false }
 
         let taskId = UIApplication.shared.beginBackgroundTask(withName: "meeshy.background.transition") { [weak self] in
+            // #7059 — L'OS ANNONCE LA SUSPENSION : c'est exactement l'instant du
+            // 0xDEAD10CC. La base se ferme aux verrous ICI, de façon SYNCHRONE
+            // et depuis le fil qui nous appelle — un `Task { }` ne garantit pas
+            // de s'exécuter avant que le processus ne soit gelé, et ce qui roule
+            // encore sur `DatabasePool.writer` tiendrait son verrou pendant le
+            // gel. `suspend()` ne fait que poster une notification : aucun
+            // besoin du main actor, aucune attente.
+            DatabaseSuspension.suspend()
             // OS is telling us time is up. End the task from the main actor so
             // we don't leave it dangling and trigger the 0x8BADF00D watchdog.
             Task { @MainActor [weak self] in
@@ -111,6 +119,14 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
             }
         }
 
+        // #7059 — DERNIER GESTE AVANT DE RENDRE LA GARDE, et l'ordre n'est pas
+        // négociable : suspendre plus tôt ferait échouer les steps ci-dessus en
+        // SQLITE_INTERRUPT, à commencer par `db.maintenance`. À partir d'ici,
+        // plus personne ne prend de verrou sur le fichier — c'est ce qui manquait
+        // aux cinq suppressions 0xDEAD10CC mesurées sur l'appareil du porteur,
+        // toutes venues d'écrivains que la garde de maintenance ne couvrait pas.
+        DatabaseSuspension.suspend()
+
         endBackgroundTask()
     }
 
@@ -118,6 +134,11 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
 
     func resumeFromBackground() async {
         logger.info("Foreground resume starting")
+        // #7059 — PREMIER GESTE, avant tout ce qui écrit. Les consommateurs
+        // ci-dessous gravent en base dès la première ligne ; les laisser tourner
+        // sur une base encore suspendue échangerait le plantage contre une
+        // application muette au réveil, ce qui se diagnostique bien plus mal.
+        DatabaseSuspension.resume()
         await withBudget("nse.consumePending") {
             await NSEPendingMessageConsumer.shared.consumeAll()
         }

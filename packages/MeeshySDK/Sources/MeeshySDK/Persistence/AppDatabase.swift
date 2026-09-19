@@ -92,6 +92,13 @@ public final class AppDatabase: @unchecked Sendable {
             let pool = try openPool(at: databaseURL)
             try runMigrations(on: pool)
             return (pool, false)
+        } catch where estUneInterruptionDeSuspension(error) {
+            // #7059 — l'application est SUSPENDUE, pas cassée. Le store reste
+            // INTACT sur le disque et la session se replie en mémoire : elle
+            // perd son cache, jamais ses données. Le prochain lancement, hors
+            // suspension, migrera normalement.
+            logger.notice("DB open interrupted by suspension; store left INTACT, falling back to in-memory for this session")
+            return inMemoryWriter()
         } catch {
             logger.error("On-disk DB unusable (\(error.localizedDescription, privacy: .public)); deleting and recreating")
             removeDatabaseFiles(at: databaseURL)
@@ -140,6 +147,26 @@ public final class AppDatabase: @unchecked Sendable {
 
     private static func openPool(at databaseURL: URL) throws -> DatabasePool {
         var configuration = Configuration()
+        // #7059 — LA BASE APPREND QUE L'APPLICATION SE SUSPEND.
+        //
+        // Sans ce drapeau, un travail en cours sur `DatabasePool.writer` au
+        // moment où iOS suspend le processus retient un verrou sur le fichier
+        // SQLite, et RunningBoard supprime l'application (`0xDEAD10CC`).
+        // Mesuré CINQ fois sur l'appareil du porteur, sur TROIS sites d'appel
+        // différents — autorisation de requête, construction de curseur, union
+        // de régions observées : ce n'est pas une requête lente qu'on pourrait
+        // accélérer, c'est le verrou lui-même.
+        //
+        // La garde `beginBackgroundTask` de `BackgroundTransitionCoordinator`
+        // ne couvrait qu'UN écrivain, la maintenance ; les cinq suppressions
+        // viennent des autres. Ici, GRDB refuse toute PRISE de verrou dès que
+        // `Database.suspendNotification` est postée, quel que soit l'écrivain.
+        //
+        // Contrepartie assumée, et c'est ce que les témoins mesurent : pendant
+        // la fenêtre de suspension les écritures lèvent `SQLITE_INTERRUPT` ou
+        // `SQLITE_ABORT`. Les lectures en WAL passent — l'écran continue de
+        // servir ce qui est en base.
+        configuration.observesSuspensionNotifications = true
         configuration.prepareDatabase { db in
             // WAL mode is GRDB default, but set it explicitly for clarity.
             // busy_timeout prevents immediate SQLITE_BUSY errors under concurrent
@@ -148,6 +175,23 @@ public final class AppDatabase: @unchecked Sendable {
             try db.execute(sql: "PRAGMA busy_timeout = 5000")
         }
         return try DatabasePool(path: databaseURL.path, configuration: configuration)
+    }
+
+    /// **Une interruption n'est pas une corruption** (#7059).
+    ///
+    /// `openOrRecover` EFFACE le store quand la migration échoue — c'est sa
+    /// raison d'être, un fichier corrompu doit être recréé. Armer la suspension
+    /// fait apparaître une erreur qui n'existait pas avant : une ouverture
+    /// pendant la fenêtre de suspension (réveil d'arrière-plan, tâche BG) voit
+    /// sa migration interrompue. La lire comme une corruption ferait **perdre
+    /// la base locale de l'utilisateur** — on aurait troqué une suppression par
+    /// le système contre une perte de données, strictement pire.
+    ///
+    /// `SQLITE_INTERRUPT` / `SQLITE_ABORT` disent « pas maintenant », jamais
+    /// « ce fichier est illisible ».
+    static func estUneInterruptionDeSuspension(_ error: Error) -> Bool {
+        guard let erreur = error as? DatabaseError else { return false }
+        return erreur.resultCode == .SQLITE_INTERRUPT || erreur.resultCode == .SQLITE_ABORT
     }
 
     /// Delete the SQLite file and its WAL/SHM sidecars so a recreate starts clean.
