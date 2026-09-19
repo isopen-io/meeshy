@@ -1342,6 +1342,51 @@ final class MessagePersistenceActorTests: XCTestCase {
             "ThumbHash must survive ingestion so the bubble shows an instant blur placeholder")
     }
 
+    /// #7070/#7098 — le décodage (`APIMessageAttachment`) portait déjà la
+    /// protection et le fait du chiffrement d'une pièce ; c'est la PROJECTION
+    /// au domaine gravée en cache (`MeeshyMessageAttachment`, celle que
+    /// `FocalAttachmentBlock` et `MessageActionResolver` lisent) qui les
+    /// laissait tomber au défaut `false`/`0`. Témoin sur le DOMAINE, jamais
+    /// sur `APIMessageAttachment` — décoder n'est pas lire.
+    func test_upsertFromAPIMessages_persistsAttachmentProtectionAndEncryption() async throws {
+        let apiMsg = makeAPIMessage(
+            id: "srv_protected_1",
+            conversationId: "conv_protected",
+            content: nil,
+            attachments: [[
+                "id": "att_protected",
+                "mimeType": "image/jpeg",
+                "fileUrl": "https://cdn.example/secret.jpg",
+                "isViewOnce": true,
+                "maxViewOnceCount": 1,
+                "viewOnceCount": 0,
+                "isBlurred": true,
+                "effectFlags": 4,
+                "isForwarded": true,
+                "forwardedFromAttachmentId": "att_original",
+                "isEncrypted": true,
+                "encryptionMode": "e2ee"
+            ]]
+        )
+
+        try await actor.upsertFromAPIMessages([apiMsg])
+
+        let rows = try actor.messages(for: "conv_protected", limit: 10)
+        let json = try XCTUnwrap(rows[0].attachmentsJson)
+        let attachments = try JSONDecoder().decode([MeeshyMessageAttachment].self, from: json)
+        XCTAssertEqual(attachments.count, 1)
+        let att = attachments[0]
+        XCTAssertTrue(att.isViewOnce, "une pièce à vue unique arrivée par le fil doit rester protégée en cache")
+        XCTAssertEqual(att.maxViewOnceCount, 1)
+        XCTAssertEqual(att.viewOnceCount, 0)
+        XCTAssertTrue(att.isBlurred)
+        XCTAssertEqual(att.effectFlags, 4)
+        XCTAssertTrue(att.isForwarded)
+        XCTAssertEqual(att.forwardedFromAttachmentId, "att_original")
+        XCTAssertTrue(att.isEncrypted, "une pièce chiffrée doit rester marquée pour restreindre ses actions")
+        XCTAssertEqual(att.encryptionMode, "e2ee")
+    }
+
     /// RC2.2 — an encrypted DM keeps its ciphertext + flag; cleartext never
     /// touches disk (the display pipeline decrypts in memory).
     func test_upsertFromAPIMessages_encryptedMessage_persistsCiphertextAndFlag() async throws {

@@ -1618,13 +1618,27 @@ public actor MessagePersistenceActor {
                             mimeType: apiAtt.mimeType ?? "application/octet-stream",
                             fileSize: apiAtt.fileSize ?? 0,
                             fileUrl: apiAtt.fileUrl ?? "",
+                            forwardedFromAttachmentId: apiAtt.forwardedFromAttachmentId,
+                            isForwarded: apiAtt.isForwarded == true,
                             capturedInApp: apiAtt.capturedInApp == true,
+                            // #7070 — même défaut que le chemin réseau
+                            // (`APIMessage.toMessage`) : le décodage
+                            // (`APIMessageAttachment`) portait déjà ces cinq
+                            // familles, la PROJECTION au domaine gravée en
+                            // cache ne les reprenait pas.
+                            isViewOnce: apiAtt.isViewOnce == true,
+                            maxViewOnceCount: apiAtt.maxViewOnceCount,
+                            viewOnceCount: apiAtt.viewOnceCount ?? 0,
+                            isBlurred: apiAtt.isBlurred == true,
+                            effectFlags: apiAtt.effectFlags,
                             width: apiAtt.width,
                             height: apiAtt.height,
                             thumbnailUrl: apiAtt.thumbnailUrl,
                             thumbHash: apiAtt.thumbHash,
                             duration: apiAtt.duration,
                             uploadedBy: api.senderId,
+                            isEncrypted: apiAtt.isEncrypted == true,
+                            encryptionMode: apiAtt.encryptionMode,
                             latitude: apiAtt.latitude,
                             longitude: apiAtt.longitude,
                             thumbnailColor: thumbColor,

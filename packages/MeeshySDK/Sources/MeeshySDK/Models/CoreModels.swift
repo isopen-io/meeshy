@@ -1148,6 +1148,11 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
     public var maxViewOnceCount: Int?
     public var viewOnceCount: Int = 0
     public var isBlurred: Bool = false
+    /// Effets appliqués à la pièce (confettis, flou animé…), miroir
+    /// `attachment`-level de `MeeshyMessage.effectFlags`. Absent avant
+    /// #7070 — un blob `attachmentsJson` écrit plus tôt décode en `nil`,
+    /// ce qui est juste : « pas d'effet connu », jamais « pas d'effet ».
+    public var effectFlags: UInt32?
     public var width: Int?
     public var height: Int?
     /// D4 — responsive downscaled WebP variants for picking a lighter image.
@@ -1257,6 +1262,7 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
                 forwardedFromAttachmentId: String? = nil, isForwarded: Bool = false,
                 capturedInApp: Bool = false,
                 isViewOnce: Bool = false, maxViewOnceCount: Int? = nil, viewOnceCount: Int = 0, isBlurred: Bool = false,
+                effectFlags: UInt32? = nil,
                 width: Int? = nil, height: Int? = nil, thumbnailPath: String? = nil, thumbnailUrl: String? = nil, thumbHash: String? = nil,
                 duration: Int? = nil, bitrate: Int? = nil, sampleRate: Int? = nil, codec: String? = nil, channels: Int? = nil,
                 fps: Float? = nil, videoCodec: String? = nil, pageCount: Int? = nil, lineCount: Int? = nil,
@@ -1280,6 +1286,7 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
         self.capturedInApp = capturedInApp
         self.isViewOnce = isViewOnce; self.maxViewOnceCount = maxViewOnceCount
         self.viewOnceCount = viewOnceCount; self.isBlurred = isBlurred
+        self.effectFlags = effectFlags
         self.width = width; self.height = height; self.thumbnailPath = thumbnailPath; self.thumbnailUrl = thumbnailUrl; self.thumbHash = thumbHash
         self.duration = duration; self.bitrate = bitrate; self.sampleRate = sampleRate; self.codec = codec; self.channels = channels
         self.fps = fps; self.videoCodec = videoCodec; self.pageCount = pageCount; self.lineCount = lineCount

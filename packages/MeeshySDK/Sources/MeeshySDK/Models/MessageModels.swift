@@ -812,9 +812,19 @@ extension APIMessage {
             return MeeshyMessageAttachment(
                 id: apiAtt.id, fileName: apiAtt.fileName ?? "", originalName: apiAtt.originalName ?? "",
                 mimeType: apiAtt.mimeType ?? "application/octet-stream", fileSize: apiAtt.fileSize ?? 0,
-                fileUrl: apiAtt.fileUrl ?? "", capturedInApp: apiAtt.capturedInApp == true,
+                fileUrl: apiAtt.fileUrl ?? "",
+                forwardedFromAttachmentId: apiAtt.forwardedFromAttachmentId, isForwarded: apiAtt.isForwarded == true,
+                capturedInApp: apiAtt.capturedInApp == true,
+                // #7070 — la charge socket et REST porte désormais ces cinq
+                // familles (protection + chiffrement) ; les PORTER ici est ce
+                // qui manquait — le décodage seul (`APIMessageAttachment`) ne
+                // suffit pas, voir #7098.
+                isViewOnce: apiAtt.isViewOnce == true, maxViewOnceCount: apiAtt.maxViewOnceCount,
+                viewOnceCount: apiAtt.viewOnceCount ?? 0, isBlurred: apiAtt.isBlurred == true,
+                effectFlags: apiAtt.effectFlags,
                 width: apiAtt.width, height: apiAtt.height,
                 thumbnailUrl: apiAtt.thumbnailUrl, thumbHash: apiAtt.thumbHash, duration: apiAtt.duration, uploadedBy: senderId,
+                isEncrypted: apiAtt.isEncrypted == true, encryptionMode: apiAtt.encryptionMode,
                 latitude: apiAtt.latitude, longitude: apiAtt.longitude,
                 thumbnailColor: thumbnailColor,
                 transcription: embeddedTranscription,
