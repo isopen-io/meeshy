@@ -33241,3 +33241,38 @@ Le défaut n'en était pas un — c'était le GATE qui datait. `focal-row.tsx` (
 > **Un `&&` dans un script `gate` composite cache tout ce qui suit la première rougeur — corriger le défaut RAPPORTÉ ne prouve rien sur les étapes qu'il empêchait d'atteindre.** Jouer le gate ENTIER, jusqu'au bout, après CHAQUE correction — jamais seulement l'étape nommée par le CI. Et quand un gate écrit avant une refonte accuse le code QUE la refonte vient sciemment de changer (ici documenté dans le commit ET le doc-comment du composant), lire d'abord si c'est le CODE qui régresse ou le GATE qui a un cran de retard : ici la nouvelle stratégie ARIA était strictement MEILLEURE (liens atteignables) que celle que le gate réclamait — la corriger revenait à réintroduire le défaut que la PR venait de corriger.
 
 Discrimination : `git stash` sur `check-identity.mjs` seul → 14/14 défauts réapparaissent à l'identique (message, lignes) ; `git stash pop` → 0 défaut. Détail : `apps/web-v2/scripts/lib/check-identity.mjs`, `apps/web-v2/src/components/rich-text.tsx`, `apps/web-v2/src/components/focal-row.tsx`.
+## Leçon 631 — un COMMENTAIRE compte dans le budget de taille, et un lot qui explique bien peut faire rougir un fichier hors budget
+
+2026-09-19, #7022 (PR #7047). Le lot faisait passer `NotificationService.ts` de
+6119 à **6126** lignes, et `gateway-file-size-budget` l'a refusé : le fichier est
+hors budget de longue date, et CLAUDE.md interdit tout AJOUT à un tel fichier —
+« une dette héritée ne se solde pas en montant le plafond ».
+
+Ce qui surprend, et qui est la leçon : **le lot n'ajoutait presque que du
+commentaire.** Sur ses 16 lignes nettes, deux étaient du code (un `import`, une
+délégation) ; les quatorze autres expliquaient pourquoi la composition d'adresse
+devait vivre ailleurs. Un excellent commentaire reste des lignes, et un gardien
+de taille ne distingue pas les deux. Le réflexe « j'ajoute juste une explication,
+ça ne compte pas » est faux sur tout fichier proche de sa borne.
+
+**Ce qu'il faut regarder pour choisir ce qui SORT.** La tentation est de couper
+l'explication qu'on vient d'écrire — c'est le pire choix, on retire le savoir et
+on garde la dette. Ici, la bonne pièce se reconnaissait à un aveu :
+`toPublicMediaUrl` n'était plus qu'une **délégation d'une ligne**, et la seule
+chose qu'elle ajoutait à la règle qu'elle appelait était un repli
+`https://gate.meeshy.me` — un nom d'hôte de DÉPLOIEMENT écrit dans un service de
+domaine, c'est-à-dire exactement ce que le lot retirait de la donnée. Le
+correctif de budget et le correctif de conception étaient le même geste :
+`publicMediaUrlFromEnv` vit désormais à côté de sa règle, aucun appelant ne nomme
+plus d'hôte, et le fichier retombe à 6114.
+
+> **Quand un garde de taille rougit, chercher la pièce qui CONTREDIT le lot,
+> pas la plus courte à supprimer.** Un fichier hors budget contient presque
+> toujours quelque chose qui n'aurait jamais dû y être ; le garde est l'occasion
+> de le trouver, pas une taxe à payer.
+
+Et un corollaire de séquence : **ce rouge était CACHÉ par un autre.** `Test
+gateway` ne pouvait pas être lu tant que « Peaux web-v2 » mourait sur une
+exception ; le budget n'est apparu qu'une fois le premier gate réparé. Un dépôt
+qui traîne un rouge ne traîne jamais UN rouge — voir
+`reference_a_quiet_branch_is_not_a_green_branch`.
