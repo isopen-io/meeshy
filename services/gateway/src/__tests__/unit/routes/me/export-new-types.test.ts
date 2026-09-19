@@ -132,10 +132,22 @@ describe('GET /export — reactions', () => {
 });
 
 describe('GET /export — media', () => {
-  it('returns attachments and postMedia as two sub-sections', async () => {
+  /**
+   * La fixture porte `fileUrl`, parce que la LIGNE le porte : `schema.prisma`
+   * déclare la colonne `String` NON nullable sur `MessageAttachment` comme sur
+   * `PostMedia`, et le `select` de la section la demande. Une fixture sans elle
+   * décrivait une ligne que la base ne peut pas rendre — un double qui ment par
+   * ce qu'il ACCEPTE — et elle gelait du même coup l'adresse SERVIE, le seul
+   * champ de cette section dont le destinataire de l'archive ait besoin (#7022).
+   */
+  it('returns attachments and postMedia as two sub-sections, each with a servable address', async () => {
+    const baseInitiale = process.env.API_PUBLIC_URL;
+    process.env.API_PUBLIC_URL = 'https://gate.exemple.test';
     const prisma = basePrisma({
       messageAttachment: {
-        findMany: jest.fn<any>().mockResolvedValue([{ id: 'a1', mimeType: 'image/jpeg' }]),
+        findMany: jest.fn<any>().mockResolvedValue([
+          { id: 'a1', mimeType: 'image/jpeg', fileUrl: '2026/09/507f1f77bcf86cd799439011/photo.jpeg' },
+        ]),
         count: jest.fn<any>().mockResolvedValue(1),
       },
     });
@@ -143,10 +155,19 @@ describe('GET /export — media', () => {
     const res = await app.inject({ method: 'GET', url: '/export?types=media' });
     expect(res.statusCode).toBe(200);
     const body = res.json().data;
-    expect(body.media.attachments).toEqual([{ id: 'a1', mimeType: 'image/jpeg' }]);
+    expect(body.media.attachments).toEqual([
+      {
+        id: 'a1',
+        mimeType: 'image/jpeg',
+        fileUrl:
+          'https://gate.exemple.test/api/v1/attachments/file/2026%2F09%2F507f1f77bcf86cd799439011%2Fphoto.jpeg',
+      },
+    ]);
     expect(body.media.postMedia).toEqual([]);
     expect(body.mediaCount).toEqual({ attachments: 1, postMedia: 0 });
     await app.close();
+    if (baseInitiale === undefined) delete process.env.API_PUBLIC_URL;
+    else process.env.API_PUBLIC_URL = baseInitiale;
   });
 });
 
