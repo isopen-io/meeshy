@@ -565,7 +565,7 @@ describe('MediaViewer — la pièce MASQUÉE reste masquée dans la visionneuse 
  */
 describe('MediaViewer — le pied porte le carrier, absent sans lui (#6169)', () => {
   const carrier: MediaCarrier = {
-    sender: { displayName: 'Kwame Mensah' },
+    sender: { displayName: 'Kwame Mensah', avatarUrl: null },
     sentAt: '2026-09-13T10:13:00.000Z',
     caption: { text: 'Aufnahme vom Yachthafen', language: 'de', translated: true },
   };
@@ -622,7 +622,7 @@ describe('MediaViewer — la nature « scène » (#6902)', () => {
           onClose={params.onClose ?? (() => {})}
           languages={['fr']}
           fallbackLanguage="fr"
-          carrier={{ sender: { displayName: 'Omar' }, sentAt: model.createdAt, caption: null }}
+          carrier={{ sender: { displayName: 'Omar', avatarUrl: null }, sentAt: model.createdAt, caption: null }}
         />,
       );
     });
@@ -716,7 +716,7 @@ describe('MediaViewer — la page scène : cadrage, nom, son et pause (revue-cor
           onClose={() => {}}
           languages={['fr']}
           fallbackLanguage="fr"
-          carrier={{ sender: { displayName: 'Omar' }, sentAt: model.createdAt, caption: null }}
+          carrier={{ sender: { displayName: 'Omar', avatarUrl: null }, sentAt: model.createdAt, caption: null }}
         />,
       );
     });
@@ -791,5 +791,82 @@ describe('MediaViewer — la page scène : cadrage, nom, son et pause (revue-cor
       dialog.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: ' ' }));
     });
     expect(button()!.getAttribute('data-scene-viewer-playpause')).toBe('paused');
+  });
+});
+
+/**
+ * EN PLEIN CADRE, UN CHROME INVISIBLE RESTAIT CLIQUABLE (#7040).
+ *
+ * Les deux couloirs de la visionneuse s'effacent en plein cadre — `opacity:
+ * isFull ? 0 : 1` — et portent `zIndex: 10`, donc ils restent AU-DESSUS de la
+ * page. Aucun des deux ne coupait ses événements de pointeur : un appui en haut
+ * à gauche FERMAIT la visionneuse au lieu de repasser en mode carte, et la
+ * pellicule du couloir bas restait, elle aussi, sensible sous un doigt qui ne
+ * voit rien.
+ *
+ * `opacity: 0` cache aux YEUX, jamais au DOIGT. C'est la forme la plus banale
+ * d'un contrôle inerte à l'envers : le contrôle n'est pas mort, il est
+ * INVISIBLE ET VIVANT — ce qui est pire, puisque l'utilisateur ne peut ni le
+ * voir ni prévoir son effet.
+ *
+ * Le couloir BAS n'était pas dans le signalement : il a été trouvé en posant au
+ * correctif la question que le dépôt pose aux siens — « qu'est-ce qui part À
+ * CÔTÉ de ce que je viens de garder ? ». Même fichier, même littéral, même
+ * défaut, et une pellicule de vignettes cliquables en prime.
+ */
+describe('les deux couloirs de la visionneuse : invisibles ⇒ intouchables', () => {
+  const chromes = (body: HTMLElement): readonly HTMLElement[] =>
+    Array.from(body.querySelectorAll<HTMLElement>('[data-media-viewer] .media-viewer-chrome'));
+
+  const enterFull = (body: HTMLElement): void => {
+    act(() => {
+      body.querySelector('.media-viewer-track-frame')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+  };
+
+  test('en mode CARTE, les deux couloirs sont visibles et touchables', () => {
+    const body = mount({ items: attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID), startIndex: 0, onClose: () => {} });
+
+    expect(chromes(body).length).toBe(2);
+    expect(chromes(body).map((c) => c.style.opacity)).toEqual(['1', '1']);
+    expect(chromes(body).every((c) => c.style.pointerEvents !== 'none')).toBe(true);
+  });
+
+  test('un tap entre en plein cadre : les DEUX couloirs deviennent invisibles ET intouchables, jamais l’un sans l’autre', () => {
+    const body = mount({ items: attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID), startIndex: 0, onClose: () => {} });
+
+    enterFull(body);
+
+    expect(chromes(body).map((c) => c.style.opacity)).toEqual(['0', '0']);
+    expect(chromes(body).map((c) => c.style.pointerEvents)).toEqual(['none', 'none']);
+  });
+
+  test('le couloir qui porte « Fermer » est bien celui qui devient intouchable — sinon un tap en haut à gauche fermerait', () => {
+    const body = mount({ items: attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID), startIndex: 0, onClose: () => {} });
+
+    enterFull(body);
+
+    const close = body.querySelector<HTMLElement>('[data-media-viewer] .media-viewer-close')!;
+    const couloir = close.closest<HTMLElement>('.media-viewer-chrome')!;
+    expect(couloir.style.pointerEvents).toBe('none');
+  });
+
+  test('le couloir BAS aussi — sa pellicule de vignettes ne se choisit pas à l’aveugle', () => {
+    const body = mount({ items: attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID), startIndex: 0, onClose: () => {} });
+
+    enterFull(body);
+
+    const vignette = body.querySelector<HTMLElement>('[data-filmstrip-item]')!;
+    expect(vignette.closest<HTMLElement>('.media-viewer-chrome')!.style.pointerEvents).toBe('none');
+  });
+
+  test('repasser en mode carte les REND touchables — l’effacement n’est pas une porte à sens unique', () => {
+    const body = mount({ items: attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID), startIndex: 0, onClose: () => {} });
+
+    enterFull(body);
+    enterFull(body);
+
+    expect(chromes(body).map((c) => c.style.opacity)).toEqual(['1', '1']);
+    expect(chromes(body).every((c) => c.style.pointerEvents !== 'none')).toBe(true);
   });
 });

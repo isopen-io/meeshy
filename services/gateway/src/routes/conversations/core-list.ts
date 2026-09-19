@@ -5,7 +5,7 @@
  * d'entrée `registerCoreRoutes` qui appelle ce registrar.
  */
 import { FastifyInstance, FastifyRequest } from 'fastify';
-import { conversationListQuerystringSchema } from './list-querystring';
+import { CONVERSATION_LIST_PAGINATION, conversationListQuerystringSchema } from './list-querystring';
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { resolveParticipantAvatar, resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
@@ -25,7 +25,8 @@ import {
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import { loadConversationTombstones } from './utils/delta-tombstones';
-import { sendUnauthorized, sendInternalError } from '../../utils/response';
+import { sendUnauthorized, sendInternalError, sendBadRequest } from '../../utils/response';
+import { resolveListCursor } from './list-cursor';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { presenceFor, viewerFromRequest } from '../users/presence-gate';
 import { validatePagination, buildCursorPaginationMeta } from '../../utils/pagination';
@@ -144,7 +145,7 @@ export function registerConversationListRoute(
       // `take: NaN`/negative and throw a `PrismaClientValidationError` → HTTP 500
       // on caller-controlled input. The schema declares `limit`/`offset` as plain
       // strings (no AJV coercion), so the guard has to live here.
-      const { limit, offset } = validatePagination(request.query.offset, request.query.limit, { defaultLimit: 30, maxLimit: 100 });
+      const { limit, offset } = validatePagination(request.query.offset, request.query.limit, CONVERSATION_LIST_PAGINATION);
       const includeCount = request.query.includeCount === 'true';
 
       // OPTIMIZED: Filtres optionnels pour éviter de charger toutes les conversations
@@ -230,17 +231,31 @@ export function registerConversationListRoute(
         { participants: { none: { role: 'creator' } } } // aucun créateur identifiable ⇒ comportement actuel
       ];
 
-      // Cursor-based pagination: filter by lastMessageAt of the cursor conversation
+      // Pagination par curseur — résolue DANS LE SCOPE DU LECTEUR (#6991).
+      //
+      // La résolution vivait ici, sans scope, et la garde `?.lastMessageAt`
+      // faisait repartir la PAGE 1 en silence quand elle échouait : un appelant
+      // distinguait ainsi une conversation tierce existante et active d'une qui
+      // ne l'est pas. `messages-list.ts` scope son propre curseur depuis #4177
+      // et son commentaire l'exige — « les deux curseurs de la même route
+      // doivent se comporter pareil ici » ; c'est cette phrase qu'on honore.
+      //
+      // Un curseur irrecevable se REFUSE, il ne se ressert pas : c'est la page 1
+      // muette qui transformait une garde manquante en canal d'observation.
+      const curseur = await resolveListCursor({ prisma, beforeCursor, userId });
+      if (curseur.genre === 'refus') {
+        return sendBadRequest(reply, 'Unknown pagination cursor', { code: 'INVALID_CURSOR' });
+      }
       let cursorLastMessageAt: Date | null = null;
-      if (beforeCursor) {
-        const cursorConversation = await prisma.conversation.findFirst({
-          where: { id: beforeCursor },
-          select: { lastMessageAt: true }
-        });
-        if (cursorConversation?.lastMessageAt) {
-          cursorLastMessageAt = cursorConversation.lastMessageAt;
-          whereClause.lastMessageAt = { lt: cursorLastMessageAt };
-        }
+      if (curseur.genre === 'borne') {
+        cursorLastMessageAt = curseur.lastMessageAt;
+        whereClause.lastMessageAt = { lt: cursorLastMessageAt };
+      } else if (curseur.genre === 'queue') {
+        // Les `lastMessageAt` nuls sortent en QUEUE d'un tri `desc` : une
+        // conversation sans message est une borne légitime, et rien ne la suit.
+        // Sans cette branche, le lecteur reprendrait la page 1 — la seconde
+        // moitié du défaut, celle que l'optionnel confondait avec la première.
+        whereClause.lastMessageAt = { lt: new Date(0) };
       }
 
       // Filtre delta-sync. DEUX consommateurs, qui doivent rester d'accord sur

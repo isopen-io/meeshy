@@ -45,7 +45,14 @@ export function SceneFullscreenGallery({ request, models, preferredLanguages, on
     if (found === undefined) return undefined;
     const lot = composeSceneGalleryLot(found);
     if (lot === undefined || lot.items.length === 0) return undefined;
-    const carrier: MediaCarrier = { sender: { displayName: found.author.name }, sentAt: found.createdAt, caption: null };
+    // #6985 — l'avatar était DÉJÀ résolu sur `FeedCardAuthor.avatarSrc` ; seul
+    // le type du carrier le jetait. La scène plein écran d'un post montre donc
+    // le même visage que sa carte dans le fil.
+    const carrier: MediaCarrier = {
+      sender: { displayName: found.author.name, avatarUrl: found.author.avatarSrc ?? null },
+      sentAt: found.createdAt,
+      caption: null,
+    };
     return { lot, carrier };
   }, [models, postId]);
 

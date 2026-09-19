@@ -1,13 +1,18 @@
+import { useState } from 'react';
+
 import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
 
 import type { Attachment } from '@/lib/api/types';
 import { attachmentSrc } from '@/lib/api/media-url';
+import { isMediaAbsent, noteMediaAbsent } from '@/lib/api/media-absent';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { EMOJI_ONLY_FONT_SIZES, mapsUrlOf, type SharedPlace, type StoryCitation } from '@/lib/view/message-body';
 import { shortRelativeTime } from '@/lib/relative-time';
 import { META_TEXT_OPACITY, STICKER_EMOJI_BOX } from '@/lib/reading-mode/metrics';
 
 import { GlyphSvg } from './glyph';
 import { THREAD_STATES_GLYPHS } from './glyphs-thread-states';
+import { MediaUnavailable } from './media-unavailable';
 
 /**
  * LE CORPS D'UN MESSAGE — sticker, emoji seul, lieu, story citée (#5936).
@@ -184,6 +189,17 @@ export function StoryCitationCard({
   readonly now: Date;
   readonly onOpen?: (messageId: string) => void;
 }) {
+  /**
+   * Le compteur d'échecs REDEMANDE un rendu ; le verdict, lui, se lit au
+   * registre à chaque passage (#7022). Un `errored: boolean` semé au montage
+   * porterait le verdict de la citation PRÉCÉDENTE dès que le fil recycle la
+   * carte.
+   */
+  const [, setÉchecs] = useState(0);
+  const vignetteSrc = citation.thumbnailUrl === null ? '' : attachmentSrc(citation.thumbnailUrl);
+  const vignetteAbsente = vignetteSrc !== '' && isMediaAbsent(vignetteSrc);
+  const montreVignette = vignetteSrc !== '' && !vignetteAbsente;
+
   const relativeDate = citation.createdAt === '' ? '' : shortRelativeTime(new Date(citation.createdAt), now);
   const label = storyCitationLabel(citation);
   const card = (
@@ -198,14 +214,32 @@ export function StoryCitationCard({
         style={{
           width: STORY_CARD_WIDTH,
           aspectRatio: `${STORY_CARD_WIDTH} / ${Math.round(STORY_CARD_WIDTH / STORY_SCENE_ASPECT_RATIO)}`,
+          /* Le fond TEINTÉ est celui d'une carte SANS scène — une vignette
+             morte en est une, au même titre qu'une citation qui n'en a jamais
+             porté (#7022). */
           backgroundColor:
-            citation.thumbnailUrl === null
+            montreVignette === false
               ? `color-mix(in srgb, ${accent} var(--story-scene-fallback-opacity), var(--ios-surface))`
               : undefined,
         }}
       >
-        {citation.thumbnailUrl !== null ? (
-          <img alt="" src={attachmentSrc(citation.thumbnailUrl)} className="size-full object-cover" />
+        {montreVignette ? (
+          /* `onError` (#7022) — LA VIGNETTE MORTE. Cette `<img>` n'avait aucun
+             repli : une référence dont les octets ont disparu (8 sur 2912,
+             mesurées le 2026-09-18 sur le volume de production) laissait
+             l'icône de lien brisé du navigateur au milieu d'une carte de
+             citation par ailleurs intacte — l'apparence d'un message corrompu,
+             pour un fichier manquant. Le registre est au niveau MODULE : une
+             rangée que le virtualiseur remonte ne redemande plus rien. */
+          <img
+            alt=""
+            src={vignetteSrc}
+            className="size-full object-cover"
+            onError={() => {
+              noteMediaAbsent(vignetteSrc);
+              setÉchecs((compte) => compte + 1);
+            }}
+          />
         ) : citation.previewText !== '' ? (
           <span
             className="line-clamp-4 flex size-full items-center justify-center p-2.5 text-center text-title font-semibold text-white"
@@ -213,6 +247,15 @@ export function StoryCitationCard({
           >
             {citation.previewText}
           </span>
+        ) : vignetteAbsente ? (
+          /* NI VIGNETTE NI APERÇU — l'état dessiné, en `compact` : la carte
+             fait 120 px de large, le libellé y déborderait. L'ANNONCE reste,
+             portée par la boîte (dimension 5).
+             Il n'arrive QU'ICI, en dernier : une vignette morte dont la
+             citation porte un texte d'aperçu rend le TEXTE. C'est du contenu
+             réel, qui existe encore, et il vaut mieux que l'aveu qu'il manque
+             une image. */
+          <MediaUnavailable language={currentInterfaceLanguage()} tone="on-card" compact />
         ) : null}
       </span>
       <span

@@ -40,6 +40,7 @@ import {
 } from '@meeshy/shared/utils/conversation-helpers';
 import { formatClock } from '@meeshy/shared/utils/duration-format';
 import { notificationString, buildNotificationDisplay, formatFileSizeI18n, type NotificationStringKey } from '@meeshy/shared/utils/notification-strings';
+import { publicMediaUrlFromEnv } from '../attachments/publicMediaUrl';
 import { recipientDateLocale, recipientLanguage } from '../../utils/recipient-language';
 import { notificationLogger, securityLogger } from '../../utils/logger-enhanced';
 import { SecuritySanitizer } from '../../utils/sanitize';
@@ -1783,7 +1784,11 @@ export class NotificationService {
                     attachmentDurationMs: '',
                     attachmentFileSize: '',
                   } : {
-                    attachmentUrl: params.context.firstAttachmentUrl || '',
+                    // #7022 — L'ADRESSE SE COMPOSE ICI : la NSE descend cette
+                    // chaîne SANS base configurée, donc une clé de stockage (la
+                    // forme que `normalize-media-urls.ts` laisse en base) n'y est
+                    // pas une adresse. Règle et mesures : `publicMediaUrl.ts`.
+                    attachmentUrl: publicMediaUrlFromEnv(params.context.firstAttachmentUrl || ''),
                     attachmentMimeType: params.context.firstAttachmentMimeType || '',
                     attachmentDurationMs: params.context.firstAttachmentDurationMs != null
                       ? String(params.context.firstAttachmentDurationMs)
@@ -2227,6 +2232,13 @@ export class NotificationService {
         // Phase A — propagation au payload APN pour rendu media inline iOS.
         // Cycle 128 — les TROIS champs sortent de l'élection du Prisme, pas des
         // paramètres bruts : la piste servie, son étiquette et sa durée.
+        // #7022 — la RÉFÉRENCE reste telle que la base la porte (une clé de
+        // stockage en sortie de `normalize-media-urls.ts`) : ce contexte est
+        // PERSISTÉ et servi aux clients, qui ont tous une base configurée et
+        // composent l'adresse eux-mêmes. Y absolutiser regraverait l'hôte de
+        // déploiement dans la donnée — exactement ce que ce lot retire.
+        // C'est la CHARGE PUSH qui compose l'adresse, parce que son lecteur
+        // (la NSE iOS) n'a aucune base — voir `attachmentUrl` plus haut.
         firstAttachmentUrl: servedMedia.url,
         firstAttachmentMimeType: servedMedia.mimeType,
         // #7003 — la taille voyage avec le fichier qu'elle décrit, et c'est la
@@ -5196,7 +5208,7 @@ export class NotificationService {
       const rawThumb = mediaType === 'image'
         ? (media.fileUrl || media.thumbnailUrl || undefined)
         : (media.thumbnailUrl || undefined);
-      const thumbnailUrl = rawThumb ? this.toPublicMediaUrl(rawThumb) : undefined;
+      const thumbnailUrl = rawThumb ? publicMediaUrlFromEnv(rawThumb) : undefined;
       const thumbnailMimeType = thumbnailUrl
         ? (mediaType === 'image' ? (media.mimeType ?? 'image/jpeg') : 'image/jpeg')
         : undefined;
@@ -5205,14 +5217,6 @@ export class NotificationService {
     } catch {
       return null;
     }
-  }
-
-  /** Absolutise une URL média relative pour qu'elle soit téléchargeable par
-   *  l'extension de notification iOS (qui n'a pas de base configurée). */
-  private toPublicMediaUrl(url: string): string {
-    if (/^https?:\/\//i.test(url)) return url;
-    const base = (process.env.API_PUBLIC_URL || 'https://gate.meeshy.me').replace(/\/$/, '');
-    return `${url.startsWith('/') ? base : `${base}/`}${url}`;
   }
 
   /**

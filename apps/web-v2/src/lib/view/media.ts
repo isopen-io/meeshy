@@ -12,7 +12,15 @@ import type { Attachment } from '@/lib/api/types';
  */
 export type MediaCarrier = {
   readonly caption: Served | null;
-  readonly sender: { readonly displayName: string } | null;
+  /**
+   * L'AVATAR VOYAGE AVEC LE NOM (#6985). Ce champ ne portait que
+   * `displayName`, et la visionneuse ne pouvait donc monter aucun `Avatar` —
+   * non par oubli de rendu, mais parce que **la donnée s'arrêtait au type**.
+   *
+   * `avatarUrl` est `null` quand l'auteur n'en a pas : jamais une chaîne
+   * vide, qui ferait rendre `<img src="">` — lequel RECHARGE la page courante.
+   */
+  readonly sender: { readonly displayName: string; readonly avatarUrl: string | null } | null;
   readonly sentAt: string;
 };
 
@@ -50,11 +58,24 @@ export type CarrierMessageSource = {
   readonly createdAt: Date;
 };
 
-export function mediaCarrierOf(params: { readonly message: CarrierMessageSource; readonly caption: Served }): MediaCarrier {
-  const { message, caption } = params;
+export function mediaCarrierOf(params: {
+  readonly message: CarrierMessageSource;
+  readonly caption: Served;
+  /**
+   * L'avatar DÉJÀ RÉSOLU par l'hôte (`participantAvatarOf`), remis comme
+   * `caption` l'est. Ce module n'en descend AUCUN lui-même : une seconde
+   * descente referait ici l'erreur que le cycle 128 a fermée sur trois
+   * clients — deux résolutions pour une valeur finissent par diverger.
+   */
+  readonly senderAvatarUrl?: string | null | undefined;
+}): MediaCarrier {
+  const { message, caption, senderAvatarUrl } = params;
   const displayName = message.sender?.displayName;
   return {
-    sender: displayName !== undefined && displayName !== '' ? { displayName } : null,
+    sender:
+      displayName !== undefined && displayName !== ''
+        ? { displayName, avatarUrl: senderAvatarUrl !== undefined && senderAvatarUrl !== '' ? senderAvatarUrl : null }
+        : null,
     sentAt: message.createdAt.toISOString(),
     caption,
   };

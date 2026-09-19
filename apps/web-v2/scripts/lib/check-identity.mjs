@@ -30,11 +30,20 @@ import { pageÀInstantFigé } from './instant.mjs';
  *      lecteur d'écran annonçait le libellé composé PUIS relisait le nom, le
  *      texte et l'heure (arbre AX réel, CDP `Accessibility.getFullAXTree` :
  *      `[article]` PUIS `[StaticText]`/`[paragraph]`/`[time]`, aucun
- *      `ignored`). `[data-identity]`, le `<p>` du texte servi et `.focal-meta`
- *      (heure + accusé) portent désormais `aria-hidden` (`focal-row.tsx`) —
- *      ce module vérifie qu'ils y sont TOUJOURS, aux DEUX schémas, sur une
- *      rangée ordinaire : la garde `role !== 'presentation'` d'un lecteur
- *      d'écran suit `aria-hidden`, jamais `role="article"` seul.
+ *      `ignored`). `[data-identity]` et `.focal-meta` (heure + accusé)
+ *      portent désormais `aria-hidden` (`focal-row.tsx`) — ce module vérifie
+ *      qu'ils y sont TOUJOURS, aux DEUX schémas, sur une rangée ordinaire :
+ *      la garde `role !== 'presentation'` d'un lecteur d'écran suit
+ *      `aria-hidden`, jamais `role="article"` seul.
+ *
+ *      **LE MASQUE DU TEXTE SERVI A CHANGÉ DE NIVEAU (#7032).** Le `<p>` du
+ *      texte servi ne porte plus `aria-hidden` LUI-MÊME : `RichText`
+ *      (`plainTextHidden`) le pose feuille par feuille, sur chaque segment
+ *      NON interactif, pour qu'un lien de mention sous ce paragraphe reste
+ *      focusable ET nommé (masquer le conteneur entier créerait la violation
+ *      ARIA inverse, `aria-hidden-focus`). Ce module vérifie donc que CHAQUE
+ *      nœud de texte du paragraphe est soit masqué, soit à l'intérieur d'un
+ *      `<a>` — jamais que le `<p>` porte l'attribut.
  *
  *   b. Un témoin de RANG ≠ 1 (CLAUDE.md racine, leçon 261) : cliquer la
  *      pastille du Prisme sur `m1` (original anglais, traduction française)
@@ -151,6 +160,46 @@ export async function checkRowIdentityAndLabel({ browser, BASE, CAPTURES, setSch
         const paragraph = [...row.querySelectorAll('p:not([data-transcript])')].find(
           (el) => (el.textContent ?? '').trim().length > 0,
         );
+        /**
+         * LE MASQUE A CHANGÉ DE NIVEAU (#7032) — `RichText` (`plainTextHidden`)
+         * ne pose plus `aria-hidden` sur le `<p>` ENTIER : un lien de mention
+         * SOUS un ancêtre masqué serait focusable et invisible aux
+         * technologies d'assistance (violation `aria-hidden-focus`, pire
+         * qu'un texte nu). Seuls les segments NON interactifs sont donc
+         * masqués, feuille par feuille — voir `focal-row.tsx`. L'invariant
+         * de #5935 (« la phrase n'est jamais lue deux fois ») ne se lit donc
+         * plus sur le CONTENEUR : il se lit sur chaque NŒUD DE TEXTE, et il a
+         * DEUX faces, jamais une — la prose DOIT être masquée (sinon la
+         * phrase est lue deux fois), le texte d'un `<a>` NE DOIT PAS l'être
+         * (sinon le lien est focusable et invisible : `aria-hidden-focus`).
+         *
+         * **Mesuré : n'en garder qu'UNE ne garde rien.** Écrite « masqué OU
+         * dans un `<a>` », cette boucle restait VERTE quand on remettait
+         * `aria-hidden` sur le `<p>` ENTIER — la régression même que le
+         * changement de niveau existe pour empêcher, puisqu'un lien masqué
+         * satisfait la branche « masqué ». D'où l'égalité stricte ci-dessous :
+         * `interactif === masqué` est TOUJOURS un défaut, dans les deux sens.
+         */
+        const paragraphTextIsMasked = paragraph
+          ? (() => {
+              const walker = document.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT);
+              let node = walker.nextNode();
+              while (node) {
+                const text = (node.textContent ?? '').trim();
+                const parent = node.parentElement;
+                // Fail-closed : un nœud de texte porteur SANS élément parent
+                // n'est pas un cas « sans avis », c'est un cas non mesurable.
+                if (text.length > 0 && !parent) return false;
+                if (text.length > 0 && parent) {
+                  const interactive = parent.closest('a') !== null;
+                  const hidden = parent.closest('[aria-hidden="true"]') !== null;
+                  if (interactive === hidden) return false;
+                }
+                node = walker.nextNode();
+              }
+              return true;
+            })()
+          : null;
         const meta = row.querySelector('.focal-meta');
         return {
           id: row.getAttribute('data-row'),
@@ -158,7 +207,7 @@ export async function checkRowIdentityAndLabel({ browser, BASE, CAPTURES, setSch
           ariaLabel: (row.getAttribute('aria-label') ?? '').trim(),
           identityText,
           identityAriaHidden: identityEl ? identityEl.getAttribute('aria-hidden') : null,
-          paragraphAriaHidden: paragraph ? paragraph.getAttribute('aria-hidden') : null,
+          paragraphTextIsMasked,
           metaAriaHidden: meta ? meta.getAttribute('aria-hidden') : null,
           servedText: paragraph ? (paragraph.textContent ?? '').trim() : null,
         };
@@ -184,7 +233,10 @@ export async function checkRowIdentityAndLabel({ browser, BASE, CAPTURES, setSch
         expect(row.identityAriaHidden === 'true', `[data-identity] de ${row.id} est aria-hidden (${scheme})`);
       }
       if (row.servedText !== null) {
-        expect(row.paragraphAriaHidden === 'true', `le <p> de texte servi de ${row.id} est aria-hidden (${scheme})`);
+        expect(
+          row.paragraphTextIsMasked === true,
+          `le texte servi de ${row.id} n'est pas doublé pour un lecteur d'écran — masqué feuille par feuille, liens exceptés (${scheme})`,
+        );
       }
       if (row.metaAriaHidden !== null) {
         expect(row.metaAriaHidden === 'true', `.focal-meta de ${row.id} est aria-hidden (${scheme})`);

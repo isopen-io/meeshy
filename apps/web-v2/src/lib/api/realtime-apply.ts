@@ -9,6 +9,7 @@ import type {
 } from '@meeshy/shared/types/socketio-events/conversation';
 import type { SocketIOMessage } from '@meeshy/shared/types/socketio-events/message';
 import type { TranslationEvent } from '@meeshy/shared/types/socketio-events/translation';
+import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 import { maskedAttachment } from '@meeshy/shared/utils/attachment-protection';
 import { buildTranslationRecord } from '@meeshy/shared/utils/conversation-helpers';
 
@@ -553,19 +554,50 @@ export function isAttachmentUpdated(payload: unknown): payload is AttachmentUpda
   return attachmentIdOf(p.attachment) !== undefined;
 }
 
-/** Les trois colonnes que `maskedAttachment` (@meeshy/shared) interroge.
- * `effectFlags` n'est PAS déclaré sur `Attachment` — il voyage sur le fil sans
- * figurer au type partagé — d'où la lecture par cette clé plutôt que par une
- * propriété typée.
+/** Les bits d'`effectFlags` que `maskedAttachment` (@meeshy/shared) compte
+ * comme MASQUANTS. Les autres bits sont DÉCORATIFS (`activeDecorativeEffects`,
+ * `lib/effects.ts`) : un cliquet qui les rattraperait aussi ferait reparaître
+ * un effet que le serveur vient de retirer — ce cliquet ne garde QUE le
+ * secret. */
+const MASKING_EFFECT_FLAGS = MESSAGE_EFFECT_FLAGS.VIEW_ONCE | MESSAGE_EFFECT_FLAGS.BLURRED;
+
+const maskingFlagsOf = (value: unknown): number =>
+  (typeof value === 'number' ? value : 0) & MASKING_EFFECT_FLAGS;
+
+/**
+ * LE PLANCHER DE PROTECTION — les valeurs que la pièce fusionnée ne peut PAS
+ * descendre en dessous, CANAL PAR CANAL.
  *
- * JUMELLE ASSUMÉE, ET TEMPORAIRE. #7014, livré en parallèle, pose l'inventaire
- * de ces mêmes trois champs à sa place définitive —
- * `ATTACHMENT_PROTECTION_FIELDS` (`@meeshy/shared/utils/attachment-protection`)
- * — avec un cliquet de compilation qui oblige un quatrième canal à s'y
- * déclarer. Cette constante doit DISPARAÎTRE au profit de cet import dès que
- * les deux branches sont fusionnées : deux inventaires du même secret sont
- * exactement ce que #7014 existe pour empêcher. Suivi : #7029. */
-const PROTECTION_KEYS = ['isViewOnce', 'isBlurred', 'effectFlags'] as const;
+ * `maskedAttachment` est un OU sur trois canaux, donc un cliquet posé sur SON
+ * verdict laisse tomber un canal tant qu'un autre tient debout : une pièce à la
+ * fois à VUE UNIQUE et FLOUTÉE dont la charge dément la seule vue unique
+ * repartait floutée et plus à vue unique, l'agrégat n'ayant pas bougé (revue
+ * adversariale #7017). Chaque canal se rattrape donc SÉPARÉMENT — c'est la loi
+ * que le doc-comment de `mergedAttachment` énonçait déjà et que son code
+ * n'appliquait qu'en bloc.
+ *
+ * `effectFlags` n'est PAS déclaré sur `Attachment` — il voyage sur le fil sans
+ * figurer au type partagé — d'où la lecture par clé plutôt que par propriété
+ * typée.
+ *
+ * JUMELLE ASSUMÉE, ET TEMPORAIRE. #7014 pose l'inventaire de ces mêmes trois
+ * canaux à sa place définitive — `ATTACHMENT_PROTECTION_FIELDS`
+ * (`@meeshy/shared/utils/attachment-protection`) — avec un cliquet de
+ * compilation qui oblige un quatrième canal à s'y déclarer. Ce site doit s'y
+ * rebrancher dès que la branche atterrit (mesuré le 2026-09-18 : elle n'est
+ * PAS dans `dev`, ni le symbole ni `attachmentSocketSelect` n'existent). Suivi
+ * : #7029.
+ */
+function protectionFloorOf(cached: Record<string, unknown>, merged: Record<string, unknown>): Record<string, unknown> {
+  const keptFlags = maskingFlagsOf(cached.effectFlags);
+  return {
+    ...(cached.isViewOnce === true ? { isViewOnce: true } : {}),
+    ...(cached.isBlurred === true ? { isBlurred: true } : {}),
+    ...(keptFlags === 0
+      ? {}
+      : { effectFlags: (typeof merged.effectFlags === 'number' ? merged.effectFlags : 0) | keptFlags }),
+  };
+}
 
 /**
  * LA FUSION D'UNE PIÈCE ENRICHIE — et sa garde de masquage (#7017, dépendance
@@ -578,15 +610,20 @@ const PROTECTION_KEYS = ['isViewOnce', 'isBlurred', 'effectFlags'] as const;
  * la barre de consommation d'un vocal déjà écouté à l'instant exact où sa
  * transcription arrive.
  *
- * ET LA PROTECTION NE PEUT QUE MONTER. `maskedAttachment` rend `false` sur une
- * charge qui ne DÉCLARE rien (« une pièce sans déclaration est une pièce
- * ordinaire » — son fail-closed vit chez l'appelant), et le sérialiseur socket
- * ne sert PAS les trois drapeaux tant que #7014 n'a pas atterri. Une pièce à
- * VUE UNIQUE connue du cache par le REST verrait donc son voile tomber au
- * moment PRÉCIS où le pipeline finit son travail — la fuite du cycle 125,
- * rouverte par un chemin neuf et sans qu'aucun gate ne rougisse. La charge
- * peut AJOUTER une protection (elle en sait alors plus que le cache) ; elle ne
- * peut pas en retirer une.
+ * ET LA PROTECTION NE PEUT QUE MONTER, CANAL PAR CANAL. `maskedAttachment`
+ * rend `false` sur une charge qui ne DÉCLARE rien (« une pièce sans
+ * déclaration est une pièce ordinaire » — son fail-closed vit chez
+ * l'appelant), et le sérialiseur socket ne sert AUCUN des trois drapeaux tant
+ * que #7014 n'a pas atterri (mesuré le 2026-09-18 : `SocketAttachment` ne les
+ * déclare pas, `attachmentMediaSelect` ne les charge pas). Une pièce à VUE
+ * UNIQUE connue du cache par le REST verrait donc son voile tomber au moment
+ * PRÉCIS où le pipeline finit son travail — la fuite du cycle 125, rouverte
+ * par un chemin neuf et sans qu'aucun gate ne rougisse. La charge peut AJOUTER
+ * une protection (elle en sait alors plus que le cache) ; elle ne peut en
+ * RETIRER aucune — et « aucune » se vérifie sur CHAQUE canal, pas sur leur
+ * OU : demander seulement « la pièce fusionnée est-elle encore masquée ? »
+ * laissait tomber un canal tant qu'un autre tenait debout (revue adversariale
+ * #7017, `protectionFloorOf` ci-dessus).
  */
 function mergedAttachment(cached: Attachment, incoming: Record<string, unknown>): Attachment {
   /* Le cast est le motif documenté de `rawMessageFromSocket` ci-dessus : la
@@ -595,12 +632,12 @@ function mergedAttachment(cached: Attachment, incoming: Record<string, unknown>)
      posé en `select`, qui dénullifie chaque pièce à la lecture
      (`decode.ts` § `decodeAttachment`), jamais ce puits. */
   const merged = { ...cached, ...incoming } as unknown as Attachment;
-  if (!maskedAttachment(cached) || maskedAttachment(merged)) return merged;
+  if (!maskedAttachment(cached)) return merged;
 
-  const kept = Object.fromEntries(
-    PROTECTION_KEYS.filter((key) => key in cached).map((key) => [key, (cached as unknown as Record<string, unknown>)[key]]),
-  );
-  return { ...merged, ...kept };
+  return {
+    ...merged,
+    ...protectionFloorOf(cached as unknown as Record<string, unknown>, merged as unknown as Record<string, unknown>),
+  };
 }
 
 /**

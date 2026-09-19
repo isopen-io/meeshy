@@ -4,10 +4,13 @@ import { createPortal } from 'react-dom';
 
 import { maskedAttachment } from '@meeshy/shared/utils/attachment-protection';
 
+import { Avatar } from '@/components/avatar';
+
 import type { Attachment } from '@/lib/api/types';
 import { attachmentSrc } from '@/lib/api/media-url';
 import type { SceneGalleryEntry } from '@/lib/feed/gallery-lot';
 import { thumbHashPlaceholder } from '@/lib/media/thumbhash';
+import { initialsOf } from '@/lib/view/conversation';
 import { nextFocusIndex } from '@/lib/view/focus-trap';
 import { useLongPress } from '@/lib/view/long-press';
 import { electDescription, type MediaCarrier } from '@/lib/view/media';
@@ -152,6 +155,17 @@ function CarrierFooter({
     <div data-viewer-footer className="media-viewer-chrome flex flex-col gap-1 px-4 pb-2 text-white">
       {carrier.sender !== null ? (
         <div className="flex items-center gap-2 text-mini">
+          {/* LA PHOTO DE L'AUTEUR (#6985). Elle VOYAGE dans le carrier, résolue
+              par l'hôte — ce module n'en descend aucune, comme il ne descend
+              pas la légende. `initialsOf` reste le repli quand `avatarUrl` est
+              nul : un visage s'affiche toujours, jamais un trou. */}
+          <Avatar
+            initials={initialsOf(carrier.sender.displayName)}
+            color="var(--accent)"
+            size={24}
+            name={carrier.sender.displayName}
+            {...(carrier.sender.avatarUrl === null ? {} : { src: carrier.sender.avatarUrl })}
+          />
           <span className="font-medium">{carrier.sender.displayName}</span>
           <time dateTime={carrier.sentAt} className="opacity-70">
             {new Date(carrier.sentAt).toLocaleString(READER_LOCALE, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
@@ -530,10 +544,20 @@ export default function MediaViewer({
       onKeyDown={onKeyDown}
       tabIndex={-1}
     >
-      {/* Couloir haut — AU-DESSUS d'une page scène en plein viewport (`zIndex`, #6902). */}
+      {/* Couloir haut — AU-DESSUS d'une page scène en plein viewport (`zIndex`, #6902).
+          `pointerEvents` SUIT `opacity` (#7040) : `opacity: 0` cache aux YEUX,
+          jamais au DOIGT. Sans lui, un appui en haut à gauche en plein cadre
+          FERMAIT la visionneuse — un contrôle invisible et vivant, pire qu'un
+          contrôle mort, puisqu'on ne peut ni le voir ni prévoir son effet. */}
       <div
         className="media-viewer-chrome relative flex items-center justify-between px-3"
-        style={{ height: topCorridorHeight, paddingTop: insets.top, opacity: isFull ? 0 : 1, zIndex: 10 }}
+        style={{
+          height: topCorridorHeight,
+          paddingTop: insets.top,
+          opacity: isFull ? 0 : 1,
+          pointerEvents: isFull ? 'none' : 'auto',
+          zIndex: 10,
+        }}
       >
         <button
           ref={closeButtonRef}
@@ -634,6 +658,13 @@ export default function MediaViewer({
         className="media-viewer-chrome relative flex flex-col"
         style={{
           opacity: isFull ? 0 : 1,
+          /* Le JUMEAU du couloir haut (#7040) : même littéral, même défaut. Il
+             ne figurait dans aucun signalement — il a été trouvé en posant au
+             correctif la question que le dépôt pose aux siens, « qu'est-ce qui
+             part À CÔTÉ de ce que je viens de garder ? ». Ce couloir porte la
+             PELLICULE : sans cette ligne, ses vignettes se choisissaient à
+             l'aveugle sous un doigt qui ne voit rien. */
+          pointerEvents: isFull ? 'none' : 'auto',
           paddingBottom: insets.bottom,
           zIndex: 10,
           /* LE VOILE BAS (revue-correction #6902) — une page SCÈNE prend le

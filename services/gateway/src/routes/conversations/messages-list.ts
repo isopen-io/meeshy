@@ -56,10 +56,10 @@ import {
   type MessageRattrapable,
 } from '../../services/messaging/citedAttachmentBackfill';
 import {
-  MESSAGES_VIEW_QUERY_PROPERTIES,
   resolveCollectionView,
   resolveSearchMessageIds
 } from './messages-list-views';
+import { MESSAGES_LIST_PAGINATION, messagesListQuerystringSchema } from './messages-querystring';
 import {
   buildAfterWatermarkClause,
   buildMessageListSelect,
@@ -111,23 +111,7 @@ export function registerMessagesListRoute(
           id: { type: 'string', description: 'Conversation ID or identifier' }
         }
       },
-      querystring: {
-        type: 'object',
-        properties: {
-          limit: { type: 'string', description: 'Maximum number of messages to return (default 20)' },
-          offset: { type: 'string', description: 'Number of messages to skip (default 0)' },
-          before: { type: 'string', description: 'Cursor for pagination: get messages before this timestamp' },
-          after: { type: 'string', description: 'Forward watermark (ISO8601): get messages created strictly after this instant, ascending. For local-first incremental gap backfill.' },
-          around: { type: 'string', description: 'Load messages around this messageId (for search jump)' },
-          replyToId: { type: 'string', description: "#4177 — filtre la collection aux réponses de CE message (fil de réponses), côté serveur. Absent jusqu'ici : AJV retirait silencieusement le paramètre, et ThreadRepliesLoader (iOS) recevait le fil ENTIER de la conversation." },
-          include_reactions: { type: 'string', enum: ['true', 'false'], description: "#4177 — Accepté pour compatibilité, SANS EFFET : le détail brut des réactions n'a jamais atteint aucun client (messageSchema ne le déclare pas, fast-json-stringify le retirait). reactionSummary et reactionCount, seuls champs réellement servis, sont toujours inclus." },
-          include_translations: { type: 'string', enum: ['true', 'false'], description: 'Include translations (default true)' },
-          include_status: { type: 'string', enum: ['true', 'false'], description: 'Accepté pour compatibilité, sans effet. Les accusés NOMINATIFS par participant ne sont pas servis par cette liste — `messageSchema` ne les déclare pas, donc fast-json-stringify les a toujours retirés, et les charger revenait à payer une relation par page pour un tableau jeté. Les coches se peignent avec les compteurs agrégés déjà présents sur chaque message (deliveredCount / readCount / recipientCount), qui appliquent le gate showReadReceipts. Pour le détail nominatif, utiliser GET /conversations/:id/statuses, qui applique ce même gate.' },
-          include_replies: { type: 'string', enum: ['true', 'false'], description: 'Include replyTo message details (default true)' },
-          languages: { type: 'string', description: 'Comma-separated Prisme languages (e.g. "fr,en"). When set, only these languages are serialized in BOTH text and audio translations; absent = all languages. Bandwidth opt-in.' },
-          ...MESSAGES_VIEW_QUERY_PROPERTIES
-        }
-      },
+      querystring: messagesListQuerystringSchema,
       response: {
         200: {
           type: 'object',
@@ -194,7 +178,7 @@ export function registerMessagesListRoute(
     try {
       const { id } = request.params;
       const {
-        limit: limitStr = '20',
+        limit: limitStr = String(MESSAGES_LIST_PAGINATION.defaultLimit),
         offset: offsetStr = '0',
         before,
         after,
@@ -229,7 +213,7 @@ export function registerMessagesListRoute(
       const afterMode = afterClause !== null;
 
       // Valider et parser les paramètres de pagination
-      const { offset, limit } = validatePagination(offsetStr, limitStr, { maxLimit: 50 });
+      const { offset, limit } = validatePagination(offsetStr, limitStr, MESSAGES_LIST_PAGINATION);
 
       // Résoudre l'ID de conversation réel
       let t0 = performance.now();
@@ -743,8 +727,35 @@ export function registerMessagesListRoute(
         // trimming `messages` shipped limit+1 rows to the client.
         messages.splice(limit);
         mappedMessages.splice(limit);
+      } else if (isProbedRead) {
+        cursorHasMore = false;
+      } else if (isAroundMode) {
+        // `around` construit sa fenêtre par `id: { in: … }` et saute le COUNT :
+        // ni la sonde ni le total ne sont disponibles ici. Comportement
+        // INCHANGÉ — hors périmètre de #6993, qui vise la première page.
+        cursorHasMore = messages.length === limit;
       } else {
-        cursorHasMore = isProbedRead ? false : messages.length === limit;
+        // PREMIÈRE PAGE — la vérité était DÉJÀ dans la réponse (#6993).
+        //
+        // Ce chemin est le SEUL qui paie un `count()` (`:496-497` le saute pour
+        // before/around/after/search), et `pagination.hasMore` en dérive
+        // correctement douze lignes plus bas — `buildPaginationMeta` calcule
+        // `offset + resultCount < total`. `cursorPagination.hasMore`, lui,
+        // DEVINAIT : « la page est pleine, donc il en reste ». Une seule charge
+        // portait donc deux `hasMore` contradictoires, et le client lit celui-ci
+        // (`apps/web-v2/src/lib/api/messages.ts:50` → `hasOlder`, qui libelle
+        // « Sur les N derniers messages » du Résumé Vivant).
+        //
+        // Les deux règles ne divergent qu'à un seul rang : une pile de
+        // `limit` messages exactement, où la page est PLEINE et le fil ÉPUISÉ.
+        // À `limit − 1` comme à `limit + 1`, elles rendent le même verdict —
+        // c'est pourquoi le témoin de #6993 est écrit sur la pile 50.
+        //
+        // Le mode `after` a été corrigé de la même devinette vers une MESURE,
+        // par la sonde `limit + 1`. Ici la mesure est déjà payée : la lire
+        // coûte moins qu'une sonde, et supprime le désaccord plutôt que de le
+        // déplacer.
+        cursorHasMore = offset + messages.length < totalCount;
       }
       // `nextCursor` is a message id the client passes back as `before` — a
       // BACKWARD cursor. A forward-watermark page is ASCENDING, so its last row

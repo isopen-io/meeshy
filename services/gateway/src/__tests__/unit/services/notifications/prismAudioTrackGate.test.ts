@@ -53,6 +53,16 @@ const ORIGINAL_DURATION_MS = 12000;
 
 /** La piste TTS que le pipeline a produite pour le lecteur francophone. */
 const FR_TRACK_URL = '/api/v1/attachments/file/translated/att_fr.mp3';
+
+/**
+ * CE QUE LA CHARGE PUSH PORTE DEPUIS #7022 — l'adresse ABSOLUE, composée par
+ * la passerelle (`publicMediaUrl`). La NSE iOS n'a aucune base configurée : un
+ * chemin relatif n'y est pas téléchargeable, et une clé de stockage — la forme
+ * que `normalize-media-urls.ts` laisse en base — encore moins. La RÉFÉRENCE,
+ * elle, reste nue dans le contexte persisté ; seul le fil la compose.
+ */
+const SUR_LE_FIL = (chemin: string): string => `https://gate.meeshy.me${chemin}`;
+
 const FR_TRACK_DURATION_MS = 9400;
 
 /** Ce que la transcription dit, et ce que sa traduction en dit. */
@@ -155,7 +165,7 @@ describe('bannière d\'un vocal — la piste attachée suit la langue SERVIE', (
 
     await runVoiceNote(service);
 
-    expect(pushedData(sendToUser).attachmentUrl).toBe(FR_TRACK_URL);
+    expect(pushedData(sendToUser).attachmentUrl).toBe(SUR_LE_FIL(FR_TRACK_URL));
   });
 
   /**
@@ -202,7 +212,7 @@ describe('bannière d\'un vocal — la piste attachée suit la langue SERVIE', (
       },
     });
 
-    expect(pushedData(sendToUser).attachmentUrl).toBe(FR_TRACK_URL);
+    expect(pushedData(sendToUser).attachmentUrl).toBe(SUR_LE_FIL(FR_TRACK_URL));
   });
 });
 
@@ -214,7 +224,7 @@ describe('les trois cas où l\'ORIGINAL reste le bon fichier', () => {
     await runVoiceNote(service);
 
     const data = pushedData(sendToUser);
-    expect(data.attachmentUrl).toBe(ORIGINAL_URL);
+    expect(data.attachmentUrl).toBe(SUR_LE_FIL(ORIGINAL_URL));
     expect(data.attachmentMimeType).toBe(ORIGINAL_MIME);
     expect(data.attachmentDurationMs).toBe(String(ORIGINAL_DURATION_MS));
   });
@@ -227,7 +237,7 @@ describe('les trois cas où l\'ORIGINAL reste le bon fichier', () => {
     await runVoiceNote(service, { attachmentTracks: {} });
 
     const data = pushedData(sendToUser);
-    expect(data.attachmentUrl).toBe(ORIGINAL_URL);
+    expect(data.attachmentUrl).toBe(SUR_LE_FIL(ORIGINAL_URL));
     expect(data.attachmentMimeType).toBe(ORIGINAL_MIME);
     expect(pushedPayload(sendToUser).body ?? '').toContain(TRANSCRIPT_FR);
   });
@@ -237,7 +247,7 @@ describe('les trois cas où l\'ORIGINAL reste le bon fichier', () => {
 
     await runVoiceNote(service, { attachmentTracks: undefined });
 
-    expect(pushedData(sendToUser).attachmentUrl).toBe(ORIGINAL_URL);
+    expect(pushedData(sendToUser).attachmentUrl).toBe(SUR_LE_FIL(ORIGINAL_URL));
   });
 });
 

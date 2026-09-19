@@ -439,9 +439,19 @@ describe('FeedPostCard — le texte du post reste AU-DESSUS de la scène', () =>
     },
   });
 
+  /* L'assertion porte sur la POSITION du texte, jamais sur l'ordre des
+     attributs de son `<p>` : la forme précédente épinglait
+     `<p class="…"` en TÊTE de balise, et le `data-rich-text` posé par
+     `RichText` (#7032) la faisait rougir alors que le texte était toujours
+     au-dessus de la scène. Un témoin de disposition ne doit pas tomber sur un
+     attribut de plus. */
   test('un post à scène et à média SEUL sans légende rend son texte au-dessus', () => {
     const html = renderToStaticMarkup(<FeedPostCard model={modelOf(scenePostWithSoleMedia)} />);
-    expect(html).toMatch(/<p class="whitespace-pre-wrap text-bubble"[^>]*>Le texte du post<\/p>/);
+    const texte = html.indexOf('Le texte du post');
+    const scene = html.indexOf('data-feed-scene-box');
+    expect(html).toMatch(/<p[^>]*class="whitespace-pre-wrap text-bubble"[^>]*>Le texte du post<\/p>/);
+    expect(texte).toBeGreaterThan(-1);
+    expect(scene).toBeGreaterThan(texte);
   });
 
   test('… et jamais en bandeau de légende dans la scène', () => {
