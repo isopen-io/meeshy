@@ -145,9 +145,11 @@ export type StoryActionRailProps = {
    * lecteur sait qu'il a déjà réagi. */
   readonly pressed?: Partial<Record<StoryActionRailButton, boolean>>;
   /** Masqué avec le reste du chrome pendant une pause par appui long
-   * (`chromeHidden`) — la même opacité et le même `aria-hidden` que l'en-tête,
-   * jamais un démontage : le rail reparaîtrait alors au relâchement en
-   * refaisant sa mise en page. */
+   * (`chromeHidden`), ou recouvert par la feuille de commentaires — la même
+   * opacité que l'en-tête, jamais un démontage : le rail reparaîtrait alors au
+   * relâchement en refaisant sa mise en page. Il devient alors INERTE (voir le
+   * rendu), parce qu'un rail qu'on ne voit plus ne doit pas rester une
+   * commande. */
   readonly hidden?: boolean;
 };
 
@@ -214,9 +216,36 @@ export function StoryActionRail({ plan, language, handlers, counts, pressed, hid
   );
   if (boutons.length === 0) return null;
 
+  /**
+   * **UN RAIL QU'ON NE VOIT PLUS NE DOIT PAS RESTER UNE COMMANDE.** L'opacité
+   * ne retire que ce que l'ŒIL voit : le conteneur porte bien
+   * `pointer-events-none`, mais CHAQUE bouton le ré-active
+   * (`pointer-events-auto`, § `RailButton`) — c'est nécessaire au rail VISIBLE,
+   * pour que le geste de plateau passe ENTRE les boutons. Masqué, le rail
+   * restait donc cliquable ET tabulable : `routes/story.tsx` le masque quand la
+   * feuille de commentaires s'ouvre, et ses boutons invisibles commandaient
+   * par-dessus elle — « Commentaires » recouvrant le bouton d'envoi du
+   * composeur.
+   *
+   * `inert` retire le sous-arbre des DEUX arbres en un geste — jamais un couple
+   * `aria-hidden` + `tabindex="-1"` à tenir par bouton, qui se désynchroniserait
+   * au premier bouton ajouté (même remède et même raison que
+   * `story-rail.tsx:405-422`). `aria-hidden` DISPARAÎT avec lui : il ne parlait
+   * qu'à l'arbre d'accessibilité, et posé sur un sous-arbre focusable il est
+   * la violation que les vérificateurs nomment `aria-hidden-focus`.
+   *
+   * Et une région INERTE n'a rien à annoncer : **son libellé tombe avec elle**,
+   * sinon c'est lui qui reste dans l'arbre pendant que son contenu en sort.
+   *
+   * Le rail est ici le nœud le PLUS HAUT qu'il rende : un seul `inert` suffit,
+   * là où `story-rail.tsx` a dû le poser aussi sur son enveloppe (le doublon
+   * s'était reconstitué un cran au-dessus de l'attribut).
+   */
+  const masque = hidden === true;
+
   const style: CSSProperties = {
     paddingBottom: 'calc(var(--safe-bottom, 0px) + 12px)',
-    opacity: hidden === true ? 0 : 1,
+    opacity: masque ? 0 : 1,
     transition: 'opacity 180ms ease',
   };
 
@@ -224,11 +253,11 @@ export function StoryActionRail({ plan, language, handlers, counts, pressed, hid
     <div
       data-story-action-rail
       role="toolbar"
-      aria-label={translate(language, 'story.action.rail')}
+      aria-label={masque ? undefined : translate(language, 'story.action.rail')}
       aria-orientation="vertical"
       className="pointer-events-none absolute end-2 bottom-0 flex flex-col items-center gap-3"
       style={style}
-      {...(hidden === true ? { 'aria-hidden': true } : {})}
+      inert={masque}
     >
       {boutons.map((action) => {
         /* Non-null : `boutons` ne garde que les actions dont le tracé existe. */

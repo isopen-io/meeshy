@@ -188,7 +188,47 @@ describe('ce que chaque bouton ANNONCE et FAIT', () => {
     const host = await monter({ plan: resolveStoryActionRailPlan(inputs()), language: 'fr', handlers: TOUS, hidden: true });
     const rail = host.querySelector('[data-story-action-rail]');
     expect(rail).not.toBeNull();
-    expect(rail?.getAttribute('aria-hidden')).toBe('true');
+    /* L'attribut qui le retire des DEUX arbres — pas `aria-hidden`, qui ne
+       parle qu'à l'un d'eux et laisserait le sous-arbre tabulable (c'est la
+       violation `aria-hidden-focus` : un `Tab` amène le focus dans une région
+       que le lecteur d'écran a reçu l'ordre de taire). */
+    expect(rail?.hasAttribute('inert')).toBe(true);
+    expect(rail?.hasAttribute('aria-hidden')).toBe(false);
+  });
+
+  test('le rail VISIBLE ne porte pas l’attribut — jamais un `inert="false"` qui figerait tout', async () => {
+    const host = await monter({ plan: resolveStoryActionRailPlan(inputs()), language: 'fr', handlers: TOUS });
+    expect(host.querySelector('[data-story-action-rail]')?.hasAttribute('inert')).toBe(false);
+  });
+
+  test('le rail masqué ne prend NI le doigt NI la tabulation — sinon il commande par-dessus la feuille', async () => {
+    /* LE DÉFAUT QUE CE TÉMOIN FERME. `routes/story.tsx` masque le rail quand
+       la feuille de commentaires s'ouvre (`hidden={chromeHidden ||
+       commentsOpen}`). L'opacité seule ne retirait que ce que l'ŒIL voit :
+       le conteneur portait `pointer-events-none`, mais CHAQUE bouton le
+       ré-active (`pointer-events-auto`, pour laisser passer le geste de
+       plateau ENTRE les boutons quand le rail est visible). Quatre boutons
+       invisibles restaient donc cliquables et tabulables PAR-DESSUS la
+       feuille — dont « Commentaires », qui recouvrait le bouton d'envoi du
+       composeur.
+
+       Le témoin mesure l'EFFET, pas l'attribut : un bouton d'un sous-arbre
+       inerte ne peut pas devenir actif, même par `.focus()` programmatique
+       (happy-dom l'applique — même mesure que `story-rail.test.tsx:213`). */
+    const host = await monter({ plan: resolveStoryActionRailPlan(inputs()), language: 'fr', handlers: TOUS, hidden: true });
+    const bouton = host.querySelector<HTMLButtonElement>('[data-story-action="comments"]');
+    expect(bouton).not.toBeNull();
+    document.body.focus();
+    await act(async () => bouton?.focus());
+    expect(document.activeElement).not.toBe(bouton);
+  });
+
+  test('un rail masqué n’annonce plus rien — son libellé tombe avec lui', async () => {
+    /* Miroir exact du précédent maison (`story-rail.tsx:420-421`) : « une
+       région INERTE n'a rien à annoncer : son libellé tombe avec elle, sinon
+       c'est lui qui porte le doublon ». */
+    const host = await monter({ plan: resolveStoryActionRailPlan(inputs()), language: 'fr', handlers: TOUS, hidden: true });
+    expect(host.querySelector('[data-story-action-rail]')?.getAttribute('aria-label')).toBeNull();
   });
 
   test('le rail est une barre d’outils VERTICALE nommée — un lecteur d’écran sait où il est', async () => {
