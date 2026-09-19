@@ -15,10 +15,27 @@ import {
 import { createSoundRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { logError } from '../../utils/logger.js';
 
-// Volume DÉDIÉ, servi uniquement par la route JWT `/static/:filename`.
+// Volume DÉDIÉ, servi uniquement par la route authentifiée `/static/:filename`.
+//
 // Surtout PAS sous UPLOAD_PATH : tout ce qui s'y trouve est exposé par
-// `GET /attachments/file/*` (sans authentification, download.ts:256) et par le
+// `GET /attachments/file/*` (sans authentification, download.ts) et par le
 // montage nginx en lecture seule sur `static.<domaine>`, en cache immutable un an.
+//
+// CE COMMENTAIRE NE NOMME PAS UNE SORTIE À EMPRUNTER — #7015 l'a lu ainsi, et
+// c'est l'inverse. Il énonce une décision de CONFIDENTIALITÉ : ce volume reste
+// hors du magasin public. Mesuré le 2026-09-18 en production :
+// `https://static.meeshy.me/<uuid>.m4a` rend 404 (le volume `gateway_sounds`
+// n'est monté sur aucun nginx statique) ; et sur les 20 publications qui citent
+// ces fichiers, UNE est `PRIVATE`. Les 18 fichiers présents viennent de
+// l'ancienne route d'envoi manuel (`POST /stories/audio`, retirée par #4190),
+// qui ne gatait sur aucune visibilité — leur seule protection actuelle est
+// cette authentification. Le rendre public le serait pour un an de cache.
+// Garde : `__tests__/unit/config/sounds-volume-never-public.test.ts`.
+//
+// Un client qui doit jouer ces octets présente donc une identité. iOS le fait
+// par `APIClient` ; le web le fait par `fetch` + URL d'objet
+// (`apps/web-v2/src/lib/api/protected-media.ts`) — une balise `<audio src>` ne
+// porte aucun en-tête, ce qui rendait 401 sur TOUTE lecture web avant #7015.
 const UPLOAD_DIR = process.env.UPLOAD_DIR ?? '/app/sounds';
 
 const ListQuerySchema = z.object({

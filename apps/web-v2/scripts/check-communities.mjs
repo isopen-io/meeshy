@@ -44,6 +44,7 @@ import { launchChromium } from './lib/browser.mjs';
 import { startDistServer } from './lib/gate-server.mjs';
 import { contrastOf } from './lib/contrast.mjs';
 import { syncPillOverlap } from './lib/sync-pill-clearance.mjs';
+import { reachAtRest, resumeExclusions } from './lib/reach-at-rest.mjs';
 
 const DIST = new URL('../dist/', import.meta.url).pathname;
 /* Le serveur vit dans `lib/` depuis #6988 : celui qui était écrit ici
@@ -73,34 +74,22 @@ const textOf = (page, selector) => page.$eval(selector, (el) => (el.textContent 
 
 const settle = (page) => page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 
-/** Au repos : chaque contrôle et chaque texte VISIBLE, à son centre. */
-const reachAtRest = (page) =>
-  page.evaluate(() => {
-    const by = (hit) => (hit === null ? 'rien' : hit.closest('.floating-menus') !== null ? 'un disque flottant' : hit.tagName);
-    const visible = (r) => {
-      const x = r.left + r.width / 2;
-      const y = r.top + r.height / 2;
-      return r.width > 0 && r.height > 0 && x > 0 && x < innerWidth && y > 0 && y < innerHeight;
-    };
-    const measure = (el) => {
-      const r = el.getBoundingClientRect();
-      if (!visible(r)) return [];
-      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-      return [
-        {
-          nom: el.getAttribute('aria-label') ?? (el.textContent ?? '').trim().slice(0, 40),
-          ok: hit !== null && (hit === el || el.contains(hit)),
-          par: by(hit),
-          hauteur: r.height,
-        },
-      ];
-    };
-    const controls = [...document.querySelectorAll('header a, header button, [data-community-back], [data-community-search], #contenu a, #contenu button')].flatMap(
-      measure,
-    );
-    const texts = [...document.querySelectorAll('#contenu h1, [data-community-name], [data-community-counts], #contenu p, #contenu h2')].flatMap(measure);
-    return { controls, texts };
-  });
+/**
+ * LES CIBLES DU RELEVÉ AU REPOS — la mesure elle-même vit dans
+ * `lib/reach-at-rest.mjs`, SITE UNIQUE depuis #7040.
+ *
+ * Ce fichier en portait une copie, comme six autres gates. Toutes ouvraient sur
+ * un `visible()` qui RENVOYAIT UN TABLEAU VIDE pour un élément dont le centre
+ * sortait du viewport : un contrôle hors cadre ne cassait rien, n'apparaissait
+ * nulle part, et le gate restait vert avec un contrôle de moins. Un tel élément
+ * est désormais MESURÉ et rendu `ok: false` — et ce qui est légitimement hors
+ * cadre (écrêté par un conteneur, déclaré `inert`/`aria-hidden`) s'écarte sous
+ * une raison ÉCRITE, comptée par `resumeExclusions()`.
+ */
+const REACH = {
+  controls: 'header a, header button, [data-community-back], [data-community-search], #contenu a, #contenu button',
+  texts: '#contenu h1, [data-community-name], [data-community-counts], #contenu p, #contenu h2',
+};
 
 /** Chaque carte, amenée au milieu de l'écran puis mesurée. */
 const reachCards = async (page) => {
@@ -269,9 +258,9 @@ try {
       await capture(page, `communautes-${slug}`);
 
       // ------------------------------------------------ 2. atteignabilité
-      const rest = await reachAtRest(page);
+      const rest = await reachAtRest(page, REACH);
       const blocked = rest.controls.filter((c) => !c.ok);
-      check(rest.controls.length >= 4, `${label} : au repos, retour, « + », recherche et au moins une carte mesurés (${rest.controls.length})`);
+      check(rest.controls.length >= 4, `${label} : au repos, retour, « + », recherche et au moins une carte mesurés (${rest.controls.length}, ${resumeExclusions(rest)})`);
       check(blocked.length === 0, `${label} : aucun contrôle n'est volé à son centre au repos — ${JSON.stringify(blocked)}`);
       const stolen = rest.texts.filter((t) => !t.ok);
       check(rest.texts.length >= 3, `${label} : au moins trois textes visibles mesurés au repos (${rest.texts.length})`);
@@ -336,7 +325,7 @@ try {
       const rows = await page.$$eval('[data-community-conversation]', (els) => els.map((el) => el.getAttribute('href')));
       check(JSON.stringify(rows) === JSON.stringify(['/c/c-deploiement', '/c/c-annonces']), `${label} : ses conversations mènent à leurs fils (${JSON.stringify(rows)})`);
       check((await page.$('.floating-menus')) === null, `${label} : le détail, route profonde, ne porte pas les disques (miroir isDeepRoute)`);
-      const detailRest = await reachAtRest(page);
+      const detailRest = await reachAtRest(page, REACH);
       const detailBlocked = detailRest.controls.filter((c) => !c.ok || c.hauteur < TAP_FLOOR);
       check(detailRest.controls.length >= 2 && detailBlocked.length === 0, `${label} : le retour et les conversations visibles s'atteignent — ${JSON.stringify(detailBlocked)}`);
       const detailInks = {

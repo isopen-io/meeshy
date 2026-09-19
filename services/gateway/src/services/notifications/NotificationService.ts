@@ -40,6 +40,7 @@ import {
 } from '@meeshy/shared/utils/conversation-helpers';
 import { formatClock } from '@meeshy/shared/utils/duration-format';
 import { notificationString, buildNotificationDisplay, formatFileSizeI18n, type NotificationStringKey } from '@meeshy/shared/utils/notification-strings';
+import { publicMediaUrlFromEnv } from '../attachments/publicMediaUrl';
 import { recipientDateLocale, recipientLanguage } from '../../utils/recipient-language';
 import { notificationLogger, securityLogger } from '../../utils/logger-enhanced';
 import { SecuritySanitizer } from '../../utils/sanitize';
@@ -1219,25 +1220,30 @@ export class NotificationService {
     readonly originalUrl?: string;
     readonly originalMimeType?: string;
     readonly originalDurationMs?: number | null;
+    readonly originalFileSize?: number | null;
   }): {
     readonly url?: string;
     readonly mimeType?: string;
     readonly durationMs?: number;
+    readonly fileSize?: number;
   } {
     const original = {
       url: params.originalUrl,
       mimeType: params.originalMimeType,
       durationMs: params.originalDurationMs ?? undefined,
+      fileSize: params.originalFileSize ?? undefined,
     };
     if (!params.served) return original;
 
     const track = params.tracks?.[params.served.language];
     if (!track) return original;
 
-    // La piste remplace le fichier ; son étiquette et sa durée ne retombent PAS
-    // sur celles de l'original — elles décriraient un autre fichier. Absentes,
-    // elles restent absentes : la NSE déduit l'UTI de l'extension, et le corps
-    // se compose sans durée plutôt qu'avec une fausse.
+    // La piste remplace le fichier ; son étiquette, sa durée et sa TAILLE ne
+    // retombent PAS sur celles de l'original — elles décriraient un autre
+    // fichier. Absentes, elles restent absentes : la NSE déduit l'UTI de
+    // l'extension, le corps se compose sans durée plutôt qu'avec une fausse, et
+    // le plafond mémoire (#7003) retombe sur sa mesure APRÈS téléchargement
+    // plutôt que sur un chiffre emprunté.
     return { url: track.url, mimeType: track.mimeType, durationMs: track.durationMs };
   }
 
@@ -1776,11 +1782,25 @@ export class NotificationService {
                     attachmentUrl: '',
                     attachmentMimeType: '',
                     attachmentDurationMs: '',
+                    attachmentFileSize: '',
                   } : {
-                    attachmentUrl: params.context.firstAttachmentUrl || '',
+                    // #7022 — L'ADRESSE SE COMPOSE ICI : la NSE descend cette
+                    // chaîne SANS base configurée, donc une clé de stockage (la
+                    // forme que `normalize-media-urls.ts` laisse en base) n'y est
+                    // pas une adresse. Règle et mesures : `publicMediaUrl.ts`.
+                    attachmentUrl: publicMediaUrlFromEnv(params.context.firstAttachmentUrl || ''),
                     attachmentMimeType: params.context.firstAttachmentMimeType || '',
                     attachmentDurationMs: params.context.firstAttachmentDurationMs != null
                       ? String(params.context.firstAttachmentDurationMs)
+                      : '',
+                    // #7003 — la NSE la lit AVANT de lancer la requête : une
+                    // pièce jointe trop lourde pour son enveloppe de 24 Mo ne
+                    // se refuse utilement qu'avant d'être descendue. Elle
+                    // voyage sous le même verrou que l'URL qu'elle décrit :
+                    // un média protégé n'annonce pas plus sa taille que son
+                    // adresse.
+                    attachmentFileSize: params.context.firstAttachmentFileSize != null
+                      ? String(params.context.firstAttachmentFileSize)
                       : '',
                   }),
                   encryptedContent: params.context.encryptedContent || '',
@@ -2168,6 +2188,7 @@ export class NotificationService {
       originalUrl: params.firstAttachmentUrl,
       originalMimeType: params.firstAttachmentMimeType,
       originalDurationMs: params.firstAttachmentDuration,
+      originalFileSize: params.firstAttachmentFileSize,
     });
 
     // Cycle 122 — le corps AFFICHÉ descend le Prisme, pas seulement les champs
@@ -2211,8 +2232,20 @@ export class NotificationService {
         // Phase A — propagation au payload APN pour rendu media inline iOS.
         // Cycle 128 — les TROIS champs sortent de l'élection du Prisme, pas des
         // paramètres bruts : la piste servie, son étiquette et sa durée.
+        // #7022 — la RÉFÉRENCE reste telle que la base la porte (une clé de
+        // stockage en sortie de `normalize-media-urls.ts`) : ce contexte est
+        // PERSISTÉ et servi aux clients, qui ont tous une base configurée et
+        // composent l'adresse eux-mêmes. Y absolutiser regraverait l'hôte de
+        // déploiement dans la donnée — exactement ce que ce lot retire.
+        // C'est la CHARGE PUSH qui compose l'adresse, parce que son lecteur
+        // (la NSE iOS) n'a aucune base — voir `attachmentUrl` plus haut.
         firstAttachmentUrl: servedMedia.url,
         firstAttachmentMimeType: servedMedia.mimeType,
+        // #7003 — la taille voyage avec le fichier qu'elle décrit, et c'est la
+        // NSE qui la LIT : sans elle, l'extension ne pouvait décider d'attacher
+        // ou non qu'après avoir ramené le corps entier dans une enveloppe de
+        // 24 Mo, c'est-à-dire trop tard.
+        firstAttachmentFileSize: servedMedia.fileSize,
         // `MessageAttachment.duration` est DÉJÀ en millisecondes (`schema.prisma`,
         // et le doc-comment de `formatSingleAttachmentLabelI18n` le redit). Ce
         // site la multipliait par 1000 comme si elle était en secondes : un
@@ -5175,7 +5208,7 @@ export class NotificationService {
       const rawThumb = mediaType === 'image'
         ? (media.fileUrl || media.thumbnailUrl || undefined)
         : (media.thumbnailUrl || undefined);
-      const thumbnailUrl = rawThumb ? this.toPublicMediaUrl(rawThumb) : undefined;
+      const thumbnailUrl = rawThumb ? publicMediaUrlFromEnv(rawThumb) : undefined;
       const thumbnailMimeType = thumbnailUrl
         ? (mediaType === 'image' ? (media.mimeType ?? 'image/jpeg') : 'image/jpeg')
         : undefined;
@@ -5184,14 +5217,6 @@ export class NotificationService {
     } catch {
       return null;
     }
-  }
-
-  /** Absolutise une URL média relative pour qu'elle soit téléchargeable par
-   *  l'extension de notification iOS (qui n'a pas de base configurée). */
-  private toPublicMediaUrl(url: string): string {
-    if (/^https?:\/\//i.test(url)) return url;
-    const base = (process.env.API_PUBLIC_URL || 'https://gate.meeshy.me').replace(/\/$/, '');
-    return `${url.startsWith('/') ? base : `${base}/`}${url}`;
   }
 
   /**

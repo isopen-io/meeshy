@@ -4,6 +4,7 @@ import { BackgroundTrackAudio } from './background-track-audio';
 import { Glyph } from './glyph';
 import { RAIL_DISC, ReelPoster } from './reel-poster';
 import { electBackgroundTrack } from '@/lib/canvas/background-sound';
+import type { ProtectedMediaUnavailableReason } from '@/lib/api/protected-media';
 import { fitScene, SCENE_RATIO } from '@/lib/canvas/fit';
 import { sceneDurationSeconds } from '@/lib/canvas/timeline';
 import type { FeedCardScene } from '@/lib/feed/card-model';
@@ -78,7 +79,12 @@ export default function ReelSceneStage({ scene, mode, soundOn, accent, language,
   const [hidden, setHidden] = useState(documentHiddenNow);
   const [knownMaxMs, setKnownMaxMs] = useState<number | null>(null);
   const [pass, setPass] = useState(0);
+  /** LE SON DE FOND PEUT ÊTRE DÉFINITIVEMENT INDISPONIBLE (revue-correction
+   * #7015, défaut 2) — même dégradation dessinée que `story-scene-layer.tsx`,
+   * pour la MÊME piste résolue par le MÊME `BackgroundTrackAudio`. */
+  const [soundUnavailable, setSoundUnavailable] = useState<ProtectedMediaUnavailableReason | null>(null);
   const barRef = useRef<HTMLSpanElement | null>(null);
+  const track = electBackgroundTrack({ document: scene.document, sceneIndex: 0, carrier: scene.carrier });
 
   // Quitter la page OUBLIE la pause (miroir `ReelsPlayerView+Scene.swift:111-115`) :
   // un retour ultérieur en `active` rejoue SANS tap.
@@ -92,6 +98,10 @@ export default function ReelSceneStage({ scene, mode, soundOn, accent, language,
     return () => document.removeEventListener('visibilitychange', onVisibility);
   }, []);
 
+  useEffect(() => {
+    setSoundUnavailable(null);
+  }, [track?.src]);
+
   const noteDuration = useCallback((ms: number) => {
     setKnownMaxMs((current) => (current === null || ms > current ? ms : current));
   }, []);
@@ -102,7 +112,6 @@ export default function ReelSceneStage({ scene, mode, soundOn, accent, language,
   const declared = scene0 !== undefined ? sceneDurationSeconds(scene0) : null;
   const duration = reelSceneDuration({ declared, knownMs: knownMaxMs === null ? [] : [knownMaxMs] });
   const playing = reelScenePlays({ active: mode === 'active', paused, documentHidden: hidden });
-  const track = electBackgroundTrack({ document: scene.document, sceneIndex: 0, carrier: scene.carrier });
   const muted = !soundOn;
 
   const box = fitScene({ viewport: outer, ratio: SCENE_RATIO });
@@ -115,7 +124,13 @@ export default function ReelSceneStage({ scene, mode, soundOn, accent, language,
   };
 
   return (
-    <div ref={observeOuter} data-reel-scene data-reel-scene-playing={playing ? 'true' : 'false'} className="absolute inset-0">
+    <div
+      ref={observeOuter}
+      data-reel-scene
+      data-reel-scene-playing={playing ? 'true' : 'false'}
+      className="absolute inset-0"
+      {...(soundUnavailable !== null ? { 'data-scene-sound-unavailable': soundUnavailable } : {})}
+    >
       <div
         data-reel-scene-stage
         className="absolute overflow-hidden bg-black"
@@ -146,6 +161,7 @@ export default function ReelSceneStage({ scene, mode, soundOn, accent, language,
             muted={muted}
             onDurationKnown={noteDuration}
             onPlaybackBlocked={onSoundBlocked}
+            onUnavailable={setSoundUnavailable}
           />
         ) : null}
       </div>

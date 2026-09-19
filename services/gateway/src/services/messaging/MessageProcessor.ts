@@ -35,6 +35,7 @@ import { LIVE_MESSAGE_MARK } from './liveMessage';
 import { unsetOrNull } from '../../utils/prisma-unset';
 import { mapWithConcurrency } from '@meeshy/shared/utils/concurrency';
 import { findExistingMessage, findContentWindowDuplicate } from './messageDedupProjection';
+import type { SocketAttachmentRow } from '../../socketio/serializeAttachmentForSocket';
 
 // Logger dédié pour MessageProcessor
 const logger = enhancedLogger.child({ module: 'MessageProcessor' });
@@ -604,6 +605,13 @@ export class MessageProcessor {
         }),
         corrWithMsg
       );
+      // #7028 (#7014) — cliquet de type À LA SOURCE : en aval, `Array.isArray`
+      // érode `message.attachments` vers `any[]`, invisible au cliquet de
+      // `serializeAttachmentForSocket`. Affectation-fantôme (pas d'annotation
+      // du callback, qui érode `att.mimeType` requis plus bas) : un `select`
+      // sans protection rougit ICI (TS2322).
+      const _refreshedAttachmentsCarryProtection: readonly SocketAttachmentRow[] = refreshedAttachments;
+      void _refreshedAttachmentsCarryProtection;
       (message as Message & { attachments: unknown[] }).attachments = refreshedAttachments;
 
       // ÉTAPE 4 ter: Dire ce QU'EST ce message, maintenant qu'on sait ce qu'il

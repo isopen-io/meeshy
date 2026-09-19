@@ -1,7 +1,9 @@
-import type { CSSProperties } from 'react';
+import { useEffect, useRef, type CSSProperties } from 'react';
 
-import { Glyph, GlyphSvg } from '@/components/glyph';
+import { GlyphSvg } from '@/components/glyph';
 import { MEDIA_TRANSPORT_GLYPHS } from '@/components/glyphs-media-transport';
+import { MediaUnavailable } from '@/components/media-unavailable';
+import { isMediaAbsent, noteMediaAbsent } from '@/lib/api/media-absent';
 import { feedMediaKindOf } from '@/lib/feed/layout';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -20,21 +22,25 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
  * dimension 1) qui n'a pas à voyager.
  */
 
-/** Le média d'une story dont la source est INEXPLOITABLE (absente, ou dont le
- * téléchargement a échoué) — un état DESSINÉ, jamais un `<img src="">` : le
- * navigateur y peint son icône de lien brisé sur fond noir et redemande le
- * document courant au passage. Mesuré sur `story-image-light.png` du premier
- * jet (§ A de la revue). */
-export function MediaUnavailable() {
-  return (
-    <div className="grid gap-2 justify-items-center px-8 text-center">
-      <Glyph name="image" size={38} style={{ color: 'rgba(255,255,255,0.7)' }} />
-      <p className="text-body" style={{ color: 'rgba(255,255,255,0.75)' }}>
-        Média indisponible
-      </p>
-    </div>
-  );
-}
+/**
+ * L'ÉTAT DESSINÉ A DÉMÉNAGÉ (#7022) — `components/media-unavailable.tsx`.
+ *
+ * Il vivait ici, et la story était la SEULE des trois surfaces à en avoir un :
+ * le post et le message n'avaient rien. Le porteur a tranché que les trois
+ * doivent dégrader proprement ; un état dessiné par surface aurait fait trois
+ * jumelles, dont deux à écrire — et son libellé était ici en dur, donc français
+ * pour les sept langues. Le ré-export garde l'ancien nom joignable, sans
+ * seconde définition.
+ */
+export { MediaUnavailable } from '@/components/media-unavailable';
+
+/**
+ * `MediaError.NETWORK` (2) et `MediaError.SRC_NOT_SUPPORTED` (4) — les seuls
+ * codes qui disent que le FICHIER, pas le décodeur, est en cause (#7022
+ * suivi). `ABORTED` (1) et `DECODE` (3) ne prouvent rien sur son existence —
+ * voir `échecVidéo` ci-dessous.
+ */
+const NETWORK_OR_SOURCE_ERROR: ReadonlySet<number> = new Set([2, 4]);
 
 export type StoryCaption = {
   readonly text: string;
@@ -89,7 +95,85 @@ export function StoryMediaLayer({
   onFailed,
   onDurationKnown,
 }: StoryMediaLayerProps) {
-  if (showsMedia) {
+  /**
+   * LA MÉMOIRE DE L'ÉCHEC, ET NON SEULEMENT SON ÉTAT (#7022). `showsMedia`
+   * arrive de `story.tsx`, où il dérive de `mediaFailed` — un état qui se
+   * remet à `false` à chaque changement de story (`story.tsx:426`). Rouvrir la
+   * même story, ou y revenir d'un retour en arrière dans le carrousel, rejoue
+   * donc la requête morte et son 404. Le registre, lui, est à l'échelle de la
+   * session : une source qu'on SAIT absente ne se redemande jamais.
+   *
+   * Le `&&` est dans ce sens-là parce que les deux savoirs sont DISJOINTS :
+   * l'hôte sait ce que cette story-ci vient de faire, le registre sait ce que
+   * TOUTES les surfaces ont appris. Aucun ne subsume l'autre.
+   */
+
+  /**
+   * L'ÉCHEC S'ÉCRIT AUX DEUX ENDROITS. Le registre porte la mémoire longue ;
+   * `onFailed` reste appelé parce qu'il fait DEUX choses de plus chez l'hôte —
+   * marquer la diapositive prête (sans quoi la progression resterait bloquée à
+   * zéro et la story ne tournerait jamais) et basculer sa propre vue.
+   * Enregistrer sans prévenir l'hôte figerait le carrousel sur une story morte.
+   */
+  const échec = (): void => {
+    noteMediaAbsent(mediaSrc);
+    onFailed();
+  };
+
+  /**
+   * L'ÉCHEC D'UNE VIDÉO N'EST PAS TOUJOURS UNE ABSENCE (#7022 suivi — revue
+   * adversariale 2026-09-18, défaut FRAGILE §2). `<img onError>` n'a qu'une
+   * seule cause côté DOM ; `<video onError>` en a QUATRE, portées par
+   * `MediaError.code`, et deux d'entre elles ne disent RIEN sur l'existence
+   * du fichier :
+   * - `NETWORK` (2) et `SRC_NOT_SUPPORTED` (4) — le FICHIER est en cause :
+   *   le transfert a échoué, ou la source n'a jamais pu être identifiée ;
+   * - `ABORTED` (1) et `DECODE` (3) — le DÉCODEUR est en cause : la lecture a
+   *   été interrompue, ou ce navigateur ne sait pas lire ce codec (HEVC sous
+   *   Chrome, par exemple). Les octets existent, et un autre navigateur ou un
+   *   autre appareil les lit sans problème.
+   * Graver l'absence sur 1/3 masquerait une story vivante pour toute la
+   * session ; `onFailed()` reste appelé dans tous les cas — l'hôte avance sur
+   * son carrousel, que le média revienne un jour ou non.
+   */
+  const échecVidéo = (event: { currentTarget: HTMLVideoElement }): void => {
+    const code = event.currentTarget.error?.code;
+    if (code !== undefined && NETWORK_OR_SOURCE_ERROR.has(code)) noteMediaAbsent(mediaSrc);
+    onFailed();
+  };
+
+  const connueAbsente = showsMedia && isMediaAbsent(mediaSrc);
+
+  /**
+   * UNE SOURCE DÉJÀ CONNUE ABSENTE PRÉVIENT L'HÔTE (#7022 suivi — revue
+   * adversariale 2026-09-19).
+   *
+   * Ne monter aucune `<img>` épargne la requête ; mais `onReady`/`onFailed`
+   * sont les DEUX seuls signaux par lesquels `story.tsx` apprend que la
+   * diapositive est jouable (`contentReady`, dont l'effet de progression
+   * dépend). Ne rien monter, c'était ne plus rien dire : au DEUXIÈME passage
+   * sur une story morte — exactement le moment où le registre sert à quelque
+   * chose — la barre restait à 0 et le carrousel ne tournait plus. Le
+   * doc-comment d'`échec()` nommait déjà ce risque pour le chemin `onError` ;
+   * le chemin « déjà connue » l'avait rouvert.
+   *
+   * DANS UN EFFET, jamais pendant le rendu : prévenir l'hôte lui fait poser un
+   * état, et le dépôt vient de payer une publication en cours de rendu
+   * (`031964fe09`, le fil qui se vidait au défilement).
+   *
+   * L'APPEL EST DANS UNE RÉF parce que l'hôte le recompose à chaque rendu
+   * (fermeture en ligne dans `story.tsx`) : le mettre en dépendance relancerait
+   * l'effet sans fin. Les dépendances sont donc ce qui IDENTIFIE la
+   * diapositive — la story et sa source.
+   */
+  const prévenir = useRef(onFailed);
+  prévenir.current = onFailed;
+  useEffect(() => {
+    if (!connueAbsente) return;
+    prévenir.current();
+  }, [storyId, mediaSrc, connueAbsente]);
+
+  if (showsMedia && !connueAbsente) {
     /* `feedMediaKindOf` — LA LOI DÉJÀ PARTAGÉE par le fil
        (`lib/feed/layout.ts:43`), jamais un second test de préfixe MIME : deux
        lois qui classent des médias divergent au premier format ajouté. Elle
@@ -154,7 +238,7 @@ export function StoryMediaLayer({
             const seconds = el.duration;
             if (Number.isFinite(seconds) && seconds > 0) onDurationKnown(seconds * 1000);
           }}
-          onError={onFailed}
+          onError={échecVidéo}
         />
       );
     }
@@ -166,7 +250,7 @@ export function StoryMediaLayer({
         alt=""
         className="absolute inset-0 size-full object-cover"
         onLoad={onReady}
-        onError={onFailed}
+        onError={échec}
       />
     );
   }
@@ -174,7 +258,10 @@ export function StoryMediaLayer({
   return (
     <div className="absolute inset-0 grid place-items-center px-8" style={background}>
       {hasMedia ? (
-        <MediaUnavailable />
+        /* `over-media` — la scène d'une story est sombre par construction
+           (fond calculé, image plein cadre) : les jetons du thème y
+           disparaîtraient en clair comme en sombre. */
+        <MediaUnavailable language={currentInterfaceLanguage()} />
       ) : caption !== null ? (
         <p
           className="text-center text-title font-semibold"

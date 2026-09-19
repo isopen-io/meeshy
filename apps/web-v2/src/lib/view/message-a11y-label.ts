@@ -71,8 +71,18 @@ const pluralize = (count: number, singular: string, plural: string): string =>
 const lowerFirst = (text: string): string =>
   text.length === 0 ? text : text.charAt(0).toLocaleLowerCase('fr-FR') + text.slice(1);
 
-/** Compte les pièces jointes PAR CATÉGORIE, dans l'ordre iOS : images, vidéos, audios, fichiers. */
-function attachmentSegments(attachments: readonly Attachment[] | undefined): readonly string[] {
+/**
+ * Compte les pièces jointes PAR CATÉGORIE, dans l'ordre iOS : images, vidéos,
+ * audios, fichiers.
+ *
+ * EXPORTÉ (#7020) pour que le CONSTAT peint par `ProtectionNotice` sur un
+ * message dont la passerelle a RETENU le contenu emploie exactement le même
+ * vocabulaire que l'oreille : « un second vocabulaire ferait dire deux choses
+ * différentes à l'œil et à l'oreille pour un même état » (doc-comment de
+ * `PROTECTED_LABEL`, quelques lignes plus haut). Il n'y a rien à dupliquer —
+ * `kindOf` et `pluralize` vivent déjà ici.
+ */
+export function attachmentSegments(attachments: readonly Attachment[] | undefined): readonly string[] {
   if (attachments === undefined || attachments.length === 0) return [];
   const counts = { image: 0, video: 0, audio: 0, file: 0 };
   for (const attachment of attachments) counts[kindOf(attachment)] += 1;
@@ -202,9 +212,20 @@ export function composeMessageLabel({
   /**
    * LE VOILE remplace le TEXTE **et** l'inventaire des pièces jointes : « 1
    * image » sur un message à vue unique dit déjà ce que le flou cache.
+   *
+   * **`withheld` EST L'EXCEPTION, et c'est une décision du SERVEUR, pas d'ici**
+   * (#7020). Ce cas ne se produit que dans la lecture souveraine de
+   * l'administration (`contentWithheld` n'a pas d'autre appelant du chantier),
+   * et `servedAttachment` (`sovereign-message-projection.ts`) y LISTE
+   * délibérément les pièces d'un message retenu — type, poids, durée — en
+   * disant pourquoi : « un administrateur doit pouvoir CONSTATER qu'un média
+   * existe ». Taire l'inventaire ici retirait à un lecteur SOUS MOTIF ÉCRIT et
+   * SOUS TRACE D'AUDIT ce que le voile donne déjà à un membre ordinaire
+   * (`data-masked-media`) : « deux photos ont été retenues » et « un texte a
+   * été retenu » s'annonçaient d'une seule phrase.
    */
   if (contentWithheld) {
-    segments.push(PROTECTED_LABEL.withheld);
+    segments.push(PROTECTED_LABEL.withheld, ...attachmentSegments(message.attachments));
   } else if (protection === 'veiled') {
     segments.push(PROTECTED_LABEL.veiled);
   } else {

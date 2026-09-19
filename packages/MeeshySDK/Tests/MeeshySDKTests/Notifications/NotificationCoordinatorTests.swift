@@ -56,13 +56,31 @@ final class NotificationCoordinatorTests: XCTestCase {
 
     // MARK: - Factory
 
+    /// Un registre NEUF par SUT (#6998). La production partage
+    /// `ConversationReadLedger.shared` entre le badge, la pastille « retour »,
+    /// le widget et le menu — c'est tout l'intérêt d'une source unique — mais
+    /// deux tests qui se le partageraient hériteraient l'un de l'état de
+    /// l'autre, et l'ordre d'exécution déciderait du verdict.
+    private func makeLedger() -> ConversationReadLedger { ConversationReadLedger() }
+
     private func makeSUT() -> (NotificationCoordinator, MockBadgeWriter, MockWidgetSink, String) {
         let suite = "group.test.meeshy.coordinator.\(UUID().uuidString)"
         createdSuiteNames.append(suite)
         let defaults = UserDefaults(suiteName: suite)
         defaults?.removePersistentDomain(forName: suite)
         let writer = MockBadgeWriter()
-        let sut = NotificationCoordinator(badgeWriter: writer, appGroupSuiteName: suite)
+        // `openConversationIdProvider: { nil }` — EXPLICITE, pas un détail de
+        // confort. Le défaut lit `MessageSocketManager.shared.activeConversationId`,
+        // un singleton qu'une AUTRE suite du même process laisse posé
+        // (`MessageSocketReconnectLifecycleTests` y écrit « A » et ne l'efface
+        // jamais). Tant qu'un seul chemin le consultait, la collision restait
+        // improbable ; depuis que les instantanés le consultent aussi, l'ordre
+        // d'exécution déciderait du verdict. Les trois tests qui MESURENT le
+        // gate injectent leur propre valeur (`makeSUTWithOpenConversation`).
+        let sut = NotificationCoordinator(
+            badgeWriter: writer, appGroupSuiteName: suite,
+            openConversationIdProvider: { nil }, ledger: makeLedger()
+        )
         let sink = MockWidgetSink()
         sut.widgetSink = sink
         return (sut, writer, sink, suite)
@@ -84,7 +102,8 @@ final class NotificationCoordinatorTests: XCTestCase {
         createdSuiteNames.append(suite)
         UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
         return NotificationCoordinator(badgeWriter: MockBadgeWriter(), appGroupSuiteName: suite,
-                                       currentUserIdProvider: { userId })
+                                       currentUserIdProvider: { userId },
+                                       openConversationIdProvider: { nil }, ledger: makeLedger())
     }
 
     private func makeSUTWithOpenConversation(_ openId: String?) -> NotificationCoordinator {
@@ -92,7 +111,7 @@ final class NotificationCoordinatorTests: XCTestCase {
         createdSuiteNames.append(suite)
         UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
         return NotificationCoordinator(badgeWriter: MockBadgeWriter(), appGroupSuiteName: suite,
-                                       openConversationIdProvider: { openId })
+                                       openConversationIdProvider: { openId }, ledger: makeLedger())
     }
 
     // MARK: - Réveil background — syncNow ne doit RIEN écraser sans snapshot autoritaire
@@ -158,6 +177,59 @@ final class NotificationCoordinatorTests: XCTestCase {
         sut.applyConversationUnread(conversationId: "c1", unreadCount: 3)
 
         XCTAssertEqual(sut.conversationUnreadTotal, 3)
+    }
+
+    // MARK: - #6998 — le badge est une PROJECTION du registre de lecture
+
+    /// Le coordinateur ne tient plus de carte `conversationId → Int` : il LIT
+    /// celle du registre. Le témoin le prouve par l'extérieur — un compteur
+    /// posé DIRECTEMENT dans le registre, sans passer par aucune méthode du
+    /// coordinateur, apparaît dans sa projection.
+    func test_conversationUnreadCounts_isAProjectionOfTheLedger() {
+        let ledger = ConversationReadLedger()
+        let suite = "group.test.meeshy.coordinator.\(UUID().uuidString)"
+        createdSuiteNames.append(suite)
+        let sut = NotificationCoordinator(
+            badgeWriter: MockBadgeWriter(), appGroupSuiteName: suite,
+            openConversationIdProvider: { nil }, ledger: ledger
+        )
+
+        ledger.apply(.serverUnread(conversationId: "c1", unreadCount: 6))
+
+        XCTAssertEqual(
+            sut.conversationUnreadCounts["c1"], 6,
+            "le coordinateur n'a plus de copie : la carte qu'il expose est celle du registre"
+        )
+    }
+
+    /// Le gate « conversation ouverte » ne s'appliquait qu'au chemin SOCKET.
+    /// Un instantané — republication de liste, resync après reconnexion —
+    /// rallumait donc le badge pour la conversation que l'utilisateur est en
+    /// train de LIRE, jusqu'au prochain événement socket. Le registre applique
+    /// la règle en rang 1, quel que soit l'événement.
+    func test_reconcileConversationUnreads_openConversation_staysZero() {
+        let sut = makeSUTWithOpenConversation("c1")
+
+        sut.reconcileConversationUnreads([
+            makeConversation(id: "c1", unread: 5),
+            makeConversation(id: "c2", unread: 2)
+        ])
+
+        XCTAssertEqual(sut.conversationUnreadCounts["c1"], 0,
+                       "la conversation OUVERTE est lue — un instantané ne la rallume pas")
+        XCTAssertEqual(sut.conversationUnreadTotal, 2)
+    }
+
+    func test_registerConversations_openConversation_staysZero() {
+        let sut = makeSUTWithOpenConversation("c1")
+
+        sut.registerConversations([
+            makeConversation(id: "c1", unread: 5),
+            makeConversation(id: "c2", unread: 2)
+        ])
+
+        XCTAssertEqual(sut.conversationUnreadCounts["c1"], 0)
+        XCTAssertEqual(sut.conversationUnreadTotal, 2)
     }
 
     // MARK: - appgroup-01 — reset() wipes the App Group widget store
@@ -303,12 +375,13 @@ final class NotificationCoordinatorTests: XCTestCase {
                        "un-muting restores it to the badge")
     }
 
-    func test_unmutedTotal_sumsOnlyUnmuted() {
-        let counts = ["a": 2, "b": 5, "c": 1]
-        XCTAssertEqual(NotificationCoordinator.unmutedTotal(counts: counts, mutedIds: []), 8)
-        XCTAssertEqual(NotificationCoordinator.unmutedTotal(counts: counts, mutedIds: ["b"]), 3)
-        XCTAssertEqual(NotificationCoordinator.unmutedTotal(counts: counts, mutedIds: ["a", "b", "c"]), 0)
-    }
+    /// `NotificationCoordinator.unmutedTotal` a DISPARU (#6998) : le
+    /// coordinateur ne calcule plus de total, il en LIT un. La règle qu'il
+    /// portait — « la somme ignore les muettes » — est mesurée là où elle vit
+    /// désormais, `ConversationReadLedgerTotalTests.totalExcludesMuted`, avec
+    /// sa jumelle qui vérifie que la LIGNE muette garde bien sa pastille.
+    /// Ce qui reste ici mesure la même règle à travers le coordinateur :
+    /// `test_registerConversations_mutedUnread_excludedFromBadgeTotal`.
 
     func test_registerConversations_pushesToWidgetSink() async {
         let (sut, _, sink, _) = makeSUT()
@@ -571,7 +644,9 @@ final class NotificationCoordinatorTests: XCTestCase {
         let sink = MockWidgetSink()
         let sut = NotificationCoordinator(
             badgeWriter: writer, appGroupSuiteName: suite,
-            badgeEnabledProvider: { false }
+            badgeEnabledProvider: { false },
+            openConversationIdProvider: { nil },
+            ledger: makeLedger()
         )
         sut.widgetSink = sink
         sut.registerConversations([makeConversation(id: "a", unread: 3)])
@@ -656,7 +731,9 @@ final class NotificationCoordinatorTests: XCTestCase {
             badgeWriter: writer,
             appGroupSuiteName: suite,
             badgeEnabledProvider: { badgeEnabled },
-            badgeEnabledChanges: changes.eraseToAnyPublisher()
+            badgeEnabledChanges: changes.eraseToAnyPublisher(),
+            openConversationIdProvider: { nil },
+            ledger: makeLedger()
         )
         sut.start()
         sut.applyConversationUnread(conversationId: "c1", unreadCount: 7)

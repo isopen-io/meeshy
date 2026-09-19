@@ -78,7 +78,7 @@ struct RootView: View {
     // (callDuration 1 Hz + stats qualité) hors de `RootView.body`. Cf. watchdog
     // 0x8BADF00D. RootView ne se ré-évalue donc plus à chaque tick d'appel.
     @StateObject private var connectionStatus = ConnectionStatusViewModel()
-    @ObservedObject private var notificationManager = NotificationToastManager.shared
+    @StateObject private var notifications = RootNotificationSource()  // #7010 — le compteur SEUL est observé ; cf. RootNotificationSource.
     @EnvironmentObject private var deepLinkRouter: DeepLinkRouter
     @Environment(\.colorScheme) private var systemColorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotionEnabled
@@ -196,7 +196,7 @@ struct RootView: View {
                     RootRouteDestination(
                         route: route,
                         router: router,
-                        notificationManager: notificationManager,
+                        notificationManager: notifications.manager,
                         onNotificationTap: handleNotificationTap
                     )
                 }
@@ -314,7 +314,7 @@ struct RootView: View {
 
             // 9. Notification toast overlay (socket real-time)
             RootNotificationToastOverlay(
-                notificationManager: notificationManager,
+                notificationManager: notifications.manager,
                 suppressToastTap: suppressToastTap,
                 onTap: handleSocketNotificationTap,
                 onPreview: openNotificationPreview(for:)
@@ -455,7 +455,7 @@ struct RootView: View {
                 .status(statusId: entry.id, authorId: entry.userId,
                         authorName: entry.username, emoji: entry.moodEmoji,
                         content: entry.content, publishedAt: entry.createdAt),
-                conversationListViewModel: conversationViewModel
+                conversationList: conversationViewModel
             )
         }
 
@@ -486,7 +486,7 @@ struct RootView: View {
         async let storiesLoad: Void = storyViewModel.loadStories()
         async let statusesLoad: Void = statusViewModel.loadStatuses()
         async let conversationsLoad: Void = conversationViewModel.loadConversations()
-        async let unreadRefresh: Void = notificationManager.refreshUnreadCount()
+        async let unreadRefresh: Void = notifications.manager.refreshUnreadCount()
         _ = await (storiesLoad, statusesLoad, conversationsLoad, unreadRefresh, versionFloor)
     }
 
@@ -973,7 +973,7 @@ struct RootView: View {
         suppressToastTap = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { suppressToastTap = false }
         HapticFeedback.medium()
-        notificationManager.dismissToast()
+        notifications.manager.dismissToast()
 
         // Fast path: in-memory conversation list.
         if let existing = conversationViewModel.conversations.first(where: { $0.id == conversationId }) {
@@ -1095,7 +1095,7 @@ struct RootView: View {
                 }
                 return
             }
-            navigateToConversationById(conversationId, highlightMessageId: ctx.messageId, ensureUnread: true)
+            navigateToConversationById(conversationId, highlightMessageId: ctx.messageId)
 
         case .friendRequest, .contactRequest, .legacyFriendRequest,
              .friendAccepted, .contactAccepted, .legacyFriendAccepted,
@@ -1250,14 +1250,19 @@ struct RootView: View {
         }
     }
 
-    private func navigateToConversationById(_ conversationId: String, highlightMessageId: String? = nil, ensureUnread: Bool = false) {
+    /// #6998 — `ensureUnread` a DISPARU, et ce n'est pas un allègement : ce
+    /// paramètre forçait `unreadCount = 1` hors de tout store, sur une copie
+    /// locale de la ligne, à la seule ouverture par notification. La
+    /// conversation s'ouvrait donc sur un non-lu FICTIF — séparateur
+    /// « nouveaux messages » sur un message déjà lu, pastille inventée dans
+    /// l'agrégat — et le deep link `/c/:id` du même écran ne le faisait pas,
+    /// si bien que deux chemins vers la MÊME conversation ne montraient pas la
+    /// même chose. Le compteur appartient au registre de lecture
+    /// (`ConversationReadLedger`) ; aucune vue ne le fabrique.
+    private func navigateToConversationById(_ conversationId: String, highlightMessageId: String? = nil) {
         // 1. Fast path: in-memory list (post-load happy path)
         if let existing = conversationViewModel.conversations.first(where: { $0.id == conversationId }) {
-            var conv = existing
-            if ensureUnread && conv.userState.unreadCount == 0 {
-                conv.userState.unreadCount = 1
-            }
-            router.navigateToConversation(conv, highlightMessageId: highlightMessageId)
+            router.navigateToConversation(existing, highlightMessageId: highlightMessageId)
             return
         }
 
@@ -1274,9 +1279,7 @@ struct RootView: View {
                 }
             }()
             if let cached = cachedConversations?.first(where: { $0.id == conversationId }) {
-                var c = cached
-                if ensureUnread && c.userState.unreadCount == 0 { c.userState.unreadCount = 1 }
-                router.navigateToConversation(c, highlightMessageId: highlightMessageId)
+                router.navigateToConversation(cached, highlightMessageId: highlightMessageId)
                 // Background refresh — keeps the displayed conversation in sync
                 // without blocking navigation. Failures are silent: the user
                 // already sees the cached version.
@@ -1311,10 +1314,7 @@ struct RootView: View {
             for attempt in 0..<2 {
                 do {
                     let apiConv = try await ConversationService.shared.getById(conversationId)
-                    var conv = apiConv.toConversation(currentUserId: currentUserId)
-                    if ensureUnread && conv.userState.unreadCount == 0 {
-                        conv.userState.unreadCount = 1
-                    }
+                    let conv = apiConv.toConversation(currentUserId: currentUserId)
                     router.navigateToConversation(conv, highlightMessageId: highlightMessageId)
                     return
                 } catch {
@@ -1476,8 +1476,8 @@ struct RootView: View {
             // ne peut pas le découvrir par tâtonnement.
             leftA11yHint: String(localized: "a11y.floating.feed.hint", defaultValue: "Ouvre le flux d'actualité", bundle: .main),
             rightA11yHint: String(localized: "a11y.floating.menu.hint", defaultValue: "Ouvre le menu de navigation", bundle: .main),
-            rightA11yValue: notificationManager.unreadCount > 0
-                ? String(format: String(localized: "a11y.floating.menu.notifications-value", defaultValue: "%d notifications en attente", bundle: .main), notificationManager.unreadCount)
+            rightA11yValue: notifications.unreadCount > 0
+                ? String(format: String(localized: "a11y.floating.menu.notifications-value", defaultValue: "%d notifications en attente", bundle: .main), notifications.unreadCount)
                 : nil,
             rightA11yActionName: String(localized: "a11y.floating.menu.profile-action", defaultValue: "Modifier le profil", bundle: .main),
             leftContent: {
@@ -1526,9 +1526,9 @@ struct RootView: View {
                     .allowsHitTesting(false)
 
                     // Badge
-                    if !showMenu && notificationManager.unreadCount > 0 {
-                        NotificationBadge(count: notificationManager.unreadCount)
-                            .accessibilityLabel(UnreadCountLabel.notifications(notificationManager.unreadCount))
+                    if !showMenu && notifications.unreadCount > 0 {
+                        NotificationBadge(count: notifications.unreadCount)
+                            .accessibilityLabel(UnreadCountLabel.notifications(notifications.unreadCount))
                     }
                 }
             }
@@ -1602,7 +1602,7 @@ struct RootView: View {
 
     private func menuBadgeCount(_ badge: RootMenuBadge?) -> Int {
         switch badge {
-        case .unreadNotifications: return notificationManager.unreadCount
+        case .unreadNotifications: return notifications.unreadCount
         case .pendingFriendRequests: return FriendshipCache.shared.pendingReceivedCount
         case nil: return 0
         }

@@ -803,6 +803,17 @@ jobs:
           cd apps/web-v2
           node scripts/check-feed-media.mjs
 
+      # #7022 — UN MÉDIA ABSENT DÉGRADE PROPREMENT. 8 fichiers sur 2912 sont
+      # réellement absents du volume de production (le cadrage du lot en
+      # annonçait 582 : faux, cf. l'issue). Une référence morte doit rendre un
+      # état DESSINÉ, ANNONCÉ, lisible et SANS bouton — il n'y a rien à
+      # retenter — sans emporter la story autour d'elle.
+      - name: Gate médias absents (état dessiné, annoncé, non destructeur)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-medias-absents.mjs
+
       # #6898 — UNE PUBLICATION V:3 SE LIT DANS LE FIL AVEC TOUS SES OBJETS.
       # Texte seul, image, cadrage plafonné à 1,4, une seule scène cinématique
       # joue à la fois (`prefers-reduced-motion` en tient une hors du jeu), et
@@ -823,6 +834,17 @@ jobs:
         run: |
           cd apps/web-v2
           node scripts/check-story-scene.mjs
+
+      # #7015 — LE SON DE FOND EMPRUNTÉ À LA BIBLIOTHÈQUE JOUE. Mesuré en
+      # production : `GET /api/v1/static/<uuid>.m4a` rend 401, pas 404 — la
+      # route est authentifiée et une balise `<audio src>` ne porte aucun
+      # en-tête. Ce gate mesure l'EFFET (readyState, duration), l'absence de
+      # jeton dans l'URL, et qu'un refus dégrade sans promesse rejetée.
+      - name: Gate son de fond de story (route authentifiée, URL d'objet, refus)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-story-sound.mjs
 
       # #6900 — LE STUDIO DE STORY PEINT CE QU'IL PUBLIERA. Publier inerte sur
       # un brouillon vide, un fond + un son posés font PEINDRE le moteur

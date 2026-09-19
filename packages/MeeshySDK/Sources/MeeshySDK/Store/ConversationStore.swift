@@ -230,15 +230,19 @@ public actor ConversationStore {
     /// prochaine republication : le va-et-vient 0 ↔ 99 vu à l'ouverture.
     /// La parade n'est pas une règle de plus, c'est LA règle — celle du
     /// moteur de sync, appliquée ici au même titre (`reconcileUnread`).
+    ///
+    /// …et « échappe » se lit à la LETTRE depuis #6997 : quand la garde de
+    /// version FRAPPE, seule la moitié PRÉFÉRENCES du `userState` local est
+    /// greffée (`preferencesGrafted(onto:)`), jamais le bloc entier. Écrasé en
+    /// bloc, le compteur SERVI restait invisible dès qu'une préférence avait
+    /// bumpé `version` — c'est-à-dire sur toute conversation épinglée, muette
+    /// ou archivée, et définitivement puisque rien ne rebaisse une version.
     public func hydrateMetadata(_ convs: [MeeshyConversation]) {
         for incoming in convs {
             let existing = conversations[incoming.id]
-            var merged: MeeshyConversation
+            var merged = incoming
             if let existing, existing.userState.version > incoming.userState.version {
-                merged = incoming
-                merged.userState = existing.userState
-            } else {
-                merged = incoming
+                merged.userState = existing.userState.preferencesGrafted(onto: incoming.userState)
             }
             // `openConversationId: nil` — le gate « conversation ouverte » n'a
             // pas à être re-consulté ici : l'ouverture pose déjà une frontière
@@ -420,6 +424,36 @@ public actor ConversationStore {
         guard isNewer else { return }
         conv.userState.lastReadAt = event.lastReadAt
         conv.userState.unreadCount = event.unreadCount
+        commit(conv)
+    }
+
+    /// Applique le compteur de non-lus SERVI par `conversation:unread-updated`.
+    ///
+    /// C'est le SEUL fil qui porte ce compteur (le gateway l'émet par
+    /// destinataire), et le store ne l'écoutait pas : il regreffait son
+    /// `userState` périmé sur la ligne à sa prochaine republication —
+    /// déclenchée par n'importe quelle mutation sur n'importe quelle AUTRE
+    /// conversation. C'est la pastille qui disparaît puis revient (#6997).
+    ///
+    /// Ce chemin ne bumpe JAMAIS `userState.version` : le versionnement est
+    /// réservé aux préférences (§9 du design), au même titre que
+    /// `applyReadReceipt` juste au-dessus. Il ne touche pas non plus à la
+    /// frontière de lecture — un compteur n'est pas un accusé de lecture, et
+    /// les confondre a déjà produit les deux défauts symétriques.
+    ///
+    /// Le gate « conversation ouverte » n'est PAS ici : il vit chez l'appelant
+    /// (`ConversationStoreSocketBridge`), qui lit la MÊME valeur que le cache
+    /// disque (`ConversationSyncEngine.currentlyOpenConversationId`). Le store
+    /// reste ainsi un building block, et les deux porteurs ne peuvent pas
+    /// diverger sur ce qu'« ouverte » veut dire.
+    ///
+    /// Clamp ≥ 0 : un compteur serveur aberrant ne descend jamais sous zéro,
+    /// même règle que l'agrégat du moteur (`publishTotalUnread`).
+    public func applyServerUnread(_ event: ConversationUnreadEvent) {
+        guard var conv = conversations[event.conversationId] else { return }
+        let served = max(0, event.unreadCount)
+        guard conv.userState.unreadCount != served else { return }
+        conv.userState.unreadCount = served
         commit(conv)
     }
 
@@ -996,6 +1030,20 @@ public struct ReadStatusEvent: Sendable, Hashable {
     }
 }
 
+/// Store-owned input for `applyServerUnread`. Découplé de
+/// `UnreadUpdateEvent` (couche socket, qui porte AUSSI le pont ✦ et sa
+/// tri-valeur d'annonce) : le store ne connaît que le compteur, et la couche
+/// de câblage fait la projection socket → store.
+public struct ConversationUnreadEvent: Sendable, Hashable {
+    public let conversationId: String
+    public let unreadCount: Int
+
+    public init(conversationId: String, unreadCount: Int) {
+        self.conversationId = conversationId
+        self.unreadCount = unreadCount
+    }
+}
+
 /// Store-owned input for `applyConversationDeleted`.
 public struct ConversationDeletedEvent: Sendable, Hashable {
     public let conversationId: String
@@ -1105,67 +1153,5 @@ public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
         self.defaultWriteRole = defaultWriteRole
         self.slowModeSeconds = slowModeSeconds
         self.autoTranslateEnabled = autoTranslateEnabled
-    }
-}
-
-// MARK: - Default service adapters
-//
-// Bridge the lean `ConversationPreferenceWriting` /
-// `ConversationLifecycleWriting` protocols onto the existing
-// PreferenceService / ConversationService shared singletons.
-// Tests inject their own mocks via the init that takes both protocols.
-
-struct DefaultPreferenceWritingAdapter: ConversationPreferenceWriting {
-    func updateConversationPreferences(
-        conversationId: String,
-        request: UpdateConversationPreferencesRequest
-    ) async throws -> APIConversationPreferences {
-        // The legacy PreferenceService.updateConversationPreferences
-        // returns Void; Phase 4 needs the new prefs (with `version`) to
-        // close the loop. Re-fetch the prefs after the write until the
-        // service interface gets the unified update-and-return shape in
-        // a follow-up.
-        try await PreferenceService.shared.updateConversationPreferences(
-            conversationId: conversationId,
-            request: request
-        )
-        return try await PreferenceService.shared.getConversationPreferences(
-            conversationId: conversationId
-        )
-    }
-
-    func reorderConversations(_ updates: [(convId: String, orderInCategory: Int)]) async throws {
-        try await PreferenceService.shared.reorderConversations(
-            updates.map { (conversationId: $0.convId, orderInCategory: $0.orderInCategory) }
-        )
-    }
-}
-
-public struct DefaultCacheReadingAdapter: ConversationCacheReading {
-    public init() {}
-    public func loadConversationList() async -> CacheResult<[MeeshyConversation]> {
-        await CacheCoordinator.shared.conversations.load(for: "list")
-    }
-}
-
-struct DefaultConversationLifecycleAdapter: ConversationLifecycleWriting {
-    func markRead(conversationId: String) async throws {
-        try await ConversationService.shared.markRead(conversationId: conversationId)
-    }
-    func markUnread(conversationId: String) async throws {
-        try await ConversationService.shared.markUnread(conversationId: conversationId)
-    }
-    func deleteForMe(conversationId: String) async throws {
-        try await ConversationService.shared.deleteForMe(conversationId: conversationId)
-    }
-    func leave(conversationId: String) async throws {
-        try await ConversationService.shared.leave(conversationId: conversationId)
-    }
-}
-
-public struct DefaultCategoryCreatingAdapter: ConversationCategoryCreating {
-    public init() {}
-    public func create(name: String, color: String?, icon: String?) async throws -> ConversationCategory {
-        try await UserCategoryStore.shared.create(name: name, color: color, icon: icon)
     }
 }

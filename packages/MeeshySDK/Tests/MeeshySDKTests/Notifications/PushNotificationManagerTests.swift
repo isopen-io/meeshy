@@ -223,6 +223,42 @@ final class PushNotificationManagerTests: XCTestCase {
         XCTAssertEqual(sut.pendingNotificationPayload?.parentCommentId, "parent-3")
     }
 
+    /// #6999 — **l'identité de la ligne de cloche que le push annonce.**
+    ///
+    /// Le gateway pose `notificationId` depuis toujours ; le décodeur ne la
+    /// lisait pas. C'est la SEULE clé qui couvre les types sans
+    /// `conversationId` ni `postId` — alerte de sécurité, nouvelle connexion,
+    /// mot de passe changé, double facteur, demande d'ami : sans elle, ils
+    /// restaient non lus À VIE après un tap.
+    @MainActor
+    func test_handleNotification_carriesTheNotificationIdentity() {
+        let (sut, defaults, _, suite) = makePushManagerSUT()
+        defer { tearDownDefaults(defaults, suiteName: suite) }
+
+        sut.handleNotification(userInfo: [
+            "type": "security_alert",
+            "notificationId": "notif-42"
+        ])
+
+        XCTAssertEqual(sut.pendingNotificationPayload?.notificationId, "notif-42")
+    }
+
+    @MainActor
+    func test_handleNotification_emptyNotificationId_resolvesToNil() {
+        let (sut, defaults, _, suite) = makePushManagerSUT()
+        defer { tearDownDefaults(defaults, suiteName: suite) }
+
+        sut.handleNotification(userInfo: [
+            "type": "security_alert",
+            "notificationId": ""
+        ])
+
+        XCTAssertNil(
+            sut.pendingNotificationPayload?.notificationId,
+            "une chaîne vide partirait en `POST /notifications//read` — mieux vaut ne rien consommer"
+        )
+    }
+
     /// Empty/absent comment ids resolve to nil (not the empty string) so the
     /// navigation falls back to "open post, no scroll" cleanly.
     @MainActor

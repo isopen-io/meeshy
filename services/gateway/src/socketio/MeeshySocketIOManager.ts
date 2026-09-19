@@ -38,7 +38,7 @@ import { AdminAgentHandler } from './handlers/AdminAgentHandler';
 import { AgentAdminRelay } from './AgentAdminRelay';
 import { CallService } from '../services/CallService';
 import { AttachmentService } from '../services/attachments';
-import { attachmentMediaSelect } from '../services/attachments/attachmentIncludes';
+import { attachmentSocketSelect } from '../services/attachments/attachmentIncludes';
 import { emitAttachmentUpdated } from './emitAttachmentUpdated';
 import { buildTranslationEvent } from './buildTranslationEvent';
 import { validateSocketEvent, isValidationFailure } from '../middleware/validation.js';
@@ -2455,7 +2455,13 @@ export class MeeshySocketIOManager {
     try {
       const fresh = await this.prisma.messageAttachment.findUnique({
         where: { id: attachmentId },
-        select: attachmentMediaSelect,
+        // #7014 — la forme du canal socket, protection comprise : cette ligne
+        // repart telle quelle par `serializeAttachmentForSocket` sur
+        // `message:attachment-updated`, l'événement qui REMPLACE la pièce dans
+        // le cache des clients. Chargée par `attachmentMediaSelect` nu, elle
+        // effaçait la protection d'une pièce déjà correctement masquée dès que
+        // Whisper ou le TTS finissait de l'enrichir.
+        select: attachmentSocketSelect,
       });
       if (!fresh) {
         logger.warn(`⚠️ [SocketIOManager] Cannot broadcast attachment-updated: attachment ${attachmentId} not found`);
@@ -2468,7 +2474,11 @@ export class MeeshySocketIOManager {
         connectedUsers: this.connectedUsers,
         conversationId: normalizedConversationId,
         messageId,
-        attachment: fresh as Record<string, unknown>,
+        // #7028 — `fresh` porte déjà la forme exacte de `attachmentSocketSelect`
+        // (protection comprise) : le caster vers `Record<string, unknown>`
+        // l'appauvrissait au point de ne plus satisfaire `SocketAttachmentRow`,
+        // le paramètre de `emitAttachmentUpdated` depuis ce lot.
+        attachment: fresh,
       });
     } catch (err) {
       logger.error(`❌ [SocketIOManager] Failed to broadcast attachment-updated for ${attachmentId}:`, err);

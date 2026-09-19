@@ -3,6 +3,7 @@ import { QueryClient, dehydrate, hydrate, type DehydratedState } from '@tanstack
 import { SW_RUNTIME_CACHE_NAMES } from '@/lib/sw-caches';
 
 import { ApiError } from './client';
+import { resetAbsentMedia } from './media-absent';
 import { reactionStore } from './reaction-store';
 /* `souverain.ts` n'a AUCUNE dépendance — c'est ce qui le rend importable
    depuis le socle sans y tirer les décodeurs d'administration (#6862). */
@@ -338,6 +339,14 @@ export function createAppQueryClient(options: CreateAppQueryClientOptions): AppQ
       // emojis « miens » du compte PRÉCÉDENT tant qu'aucune réaction
       // nouvelle n'écrasait la carte.
       reactionStore.setState({ mine: {} });
+      // LE REGISTRE DES MÉDIAS ABSENTS DE L'IDENTITÉ PRÉCÉDENTE (#7022 suivi,
+      // revue adversariale 2026-09-18) — même défaut que `reactionStore`
+      // ci-dessus, une ligne plus haut : un média REFUSÉ (403) à A restait
+      // gravé absent pour B, connecté ENSUITE dans le même onglet, alors que
+      // B a parfaitement le droit de le voir. `resetAbsentMedia` est un
+      // module-level singleton (`lib/api/media-absent.ts`), comme
+      // `reactionStore` — sans cette ligne, il survit à la purge du cache.
+      resetAbsentMedia();
       try {
         storage.removeItem(CACHE_KEY);
       } catch {

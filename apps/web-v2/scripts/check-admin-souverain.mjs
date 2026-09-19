@@ -12,20 +12,16 @@
  * sont interceptées et répondues ; TOUTE autre requête sortante est
  * abandonnée — aucun octet ne part vers une passerelle réelle.
  *
- * AUCUNE ROUTE HTTP N'EST INVENTÉE : les huit adresses servies ci-dessous
+ * AUCUNE ROUTE HTTP N'EST INVENTÉE : les huit adresses servies plus bas
  * existent toutes dans `services/gateway/src/routes/{me,admin}` et sont déjà
  * les seules que `lib/api/admin*.ts` appelle.
  *
- * LE CORPUS EST BÂTI POUR QUE LE TÉMOIN DE PRISME NE PUISSE PAS VERDIR PAR
- * COÏNCIDENCE (leçon 261) : le membre administré lit `de › es`, son rang 1
- * (`de`) n'a AUCUNE traduction, l'administrateur lit `fr`, et l'original est
- * anglais. Les trois textes sont DIFFÉRENTS :
- *
- * | prisme | rang servi | texte attendu |
- * |---|---|---|
- * | membre `['de','es']` | 2 (`es`) | **Hola equipo** |
- * | administrateur `['fr', …]` | 1 (`fr`) | Bonjour l'équipe |
- * | descente arrêtée au rang 1 | aucun | Hello team (l'original) |
+ * CE FICHIER ORCHESTRE, IL NE PORTE PLUS NI LA CHARGE NI LES CONSTATS (#7023).
+ * La charge servie vit dans `lib/admin-souverain-corpus.mjs` — dont l'en-tête
+ * porte la table du Prisme et la raison de chaque ligne — et les constats de
+ * médias dans `lib/check-admin-medias.mjs`. Un découpage PAR RESPONSABILITÉ,
+ * arrivé par le budget : la rangée des trois médiums ajoutée au corpus faisait
+ * passer cet hôte au-delà des 1 000 lignes (`CLAUDE.md` § Code Style).
  *
  * Construit dans `dist-admin-souverain` (motif `dist-*` du `.gitignore`).
  * `CAPTURE_DIR=<dossier>` écrit les captures de chaque état ; par défaut
@@ -37,6 +33,22 @@ import { mkdir, readFile, rm, stat } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 
 import { launchChromium } from './lib/browser.mjs';
+import { constateLesMedias } from './lib/check-admin-medias.mjs';
+import {
+  AGENT_CONFIGS,
+  AGENT_LOGS,
+  AGENT_STATS,
+  CONVERSATIONS_DU_MEMBRE,
+  CONVERSATION_ID,
+  MEDIAS_DU_MEMBRE,
+  MEMBRE,
+  MEMBRE_ID,
+  MESSAGES_SERVIS,
+  SECRETS_DES_PIECES,
+  SESSION,
+  TEXTES,
+  identiteServie,
+} from './lib/admin-souverain-corpus.mjs';
 
 const ROOT = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 const OUT_DIR = 'dist-admin-souverain';
@@ -53,299 +65,6 @@ const TYPES = {
 };
 
 const VIEWPORT = { width: 430, height: 932 };
-
-// ---------------------------------------------------------------------------
-// LE CORPUS SERVI
-// ---------------------------------------------------------------------------
-
-const MEMBRE_ID = '64b000000000000000000042';
-const CONVERSATION_ID = '64c000000000000000000007';
-const AUTRE_CONVERSATION_ID = '64c000000000000000000008';
-
-/** L'ADMINISTRATEUR — sa langue d'application est le FRANÇAIS. */
-const SESSION = {
-  token: 'jeton-de-recette',
-  sessionToken: 'session-de-recette',
-  user: {
-    id: '64b000000000000000000001',
-    username: 'recette-admin',
-    displayName: 'Recette Admin',
-    systemLanguage: 'fr',
-    regionalLanguage: 'fr',
-    customDestinationLanguage: null,
-  },
-  expiresAt: Date.now() + 60 * 60 * 1000,
-};
-
-const PERMISSIONS_NUES = {
-  canAccessAdmin: true,
-  canManageUsers: true,
-  canManageGroups: false,
-  canManageConversations: true,
-  canViewAnalytics: false,
-  canModerateContent: false,
-  canViewAuditLogs: false,
-  canManageNotifications: false,
-  canManageTranslations: false,
-  canManageAgent: false,
-};
-
-const identiteServie = (avecAgent) => ({
-  role: 'ADMIN',
-  permissions: { ...PERMISSIONS_NUES, canManageAgent: avecAgent },
-});
-
-/** LE MEMBRE ADMINISTRÉ — allemand d'abord, espagnol ensuite. */
-const MEMBRE = {
-  id: MEMBRE_ID,
-  username: 'kaethe',
-  displayName: 'Käthe Vogel',
-  firstName: 'Käthe',
-  lastName: 'Vogel',
-  bio: '',
-  avatar: '',
-  email: 'kaethe@example.test',
-  phoneNumber: '',
-  role: 'USER',
-  timezone: 'Europe/Berlin',
-  systemLanguage: 'de',
-  regionalLanguage: 'es',
-  customDestinationLanguage: '',
-  isActive: true,
-  isOnline: false,
-  deactivatedAt: null,
-  deletedAt: null,
-  deletedBy: null,
-  lockedUntil: null,
-  lockedReason: null,
-  failedLoginAttempts: 0,
-  lastPasswordChange: null,
-  twoFactorEnabledAt: null,
-  emailVerifiedAt: '2026-04-02T09:00:00.000Z',
-  phoneVerifiedAt: null,
-  lastActiveAt: '2026-09-16T18:20:00.000Z',
-  createdAt: '2026-01-12T08:30:00.000Z',
-  updatedAt: '2026-09-16T18:20:00.000Z',
-};
-
-const participant = (userId, displayName, role) => ({
-  userId,
-  displayName,
-  avatar: null,
-  role,
-  joinedAt: '2026-02-01T10:00:00.000Z',
-  isActive: true,
-});
-
-const CONVERSATIONS_DU_MEMBRE = [
-  {
-    id: CONVERSATION_ID,
-    identifier: 'projet-rosetta',
-    title: 'Projet Rosetta',
-    type: 'group',
-    isActive: true,
-    memberCount: 4,
-    createdAt: '2026-02-01T10:00:00.000Z',
-    lastMessageAt: '2026-06-02T11:00:00.000Z',
-    participants: [
-      participant(MEMBRE_ID, 'Käthe Vogel', 'MEMBER'),
-      participant('u-alice', 'Alice', 'ADMIN'),
-    ],
-    membership: participant(MEMBRE_ID, 'Käthe Vogel', 'MEMBER'),
-  },
-  {
-    id: AUTRE_CONVERSATION_ID,
-    identifier: 'support-2026',
-    title: 'Support 2026',
-    type: 'group',
-    isActive: true,
-    memberCount: 9,
-    createdAt: '2026-03-04T10:00:00.000Z',
-    lastMessageAt: '2026-05-30T09:10:00.000Z',
-    participants: [participant(MEMBRE_ID, 'Käthe Vogel', 'MEMBER')],
-    membership: participant(MEMBRE_ID, 'Käthe Vogel', 'MEMBER'),
-  },
-];
-
-const MEDIAS_DU_MEMBRE = [
-  { id: 'md-1', originalName: 'plan-de-salle.png', mimeType: 'image/png', source: 'message', isProtected: false },
-  { id: 'md-2', originalName: 'note-vocale.m4a', mimeType: 'audio/mp4', source: 'message', isProtected: false },
-  { id: 'md-3', originalName: 'contrat.pdf', mimeType: 'application/pdf', source: 'post', isProtected: true },
-];
-
-/** Une vignette RÉELLE — un PNG data-URI ne dépend d'aucune passerelle. */
-const IMAGE = `data:image/svg+xml;base64,${Buffer.from(
-  '<svg xmlns="http://www.w3.org/2000/svg" width="480" height="270" viewBox="0 0 480 270">' +
-    '<rect width="480" height="270" fill="#1f6feb"/>' +
-    '<circle cx="150" cy="135" r="70" fill="#f0c674"/>' +
-    '<text x="240" y="240" font-family="sans-serif" font-size="28" fill="#ffffff">plan-de-salle.png</text>' +
-    '</svg>',
-).toString('base64')}`;
-
-const TEXTES = {
-  original: 'Hello team',
-  espagnol: 'Hola equipo',
-  francais: "Bonjour l'équipe",
-  allemand: 'ABSENT — le rang 1 du membre n’a aucune traduction',
-};
-
-const expediteur = (id, nom) => ({
-  id: `p-${id}`,
-  userId: id,
-  displayName: nom,
-  avatar: null,
-  user: { id, username: nom.toLowerCase() },
-});
-
-/** Le fil SERVI : `createdAt DESC`, la forme de `sovereign-message-projection.ts`. */
-const MESSAGES_SERVIS = [
-  {
-    id: 'm-reponse',
-    conversationId: CONVERSATION_ID,
-    senderId: MEMBRE_ID,
-    content: 'Alles klar.',
-    originalLanguage: 'de',
-    messageType: 'text',
-    messageSource: 'user',
-    isEdited: false,
-    isViewOnce: false,
-    viewOnceCount: 0,
-    isBlurred: false,
-    reactionCount: 0,
-    isEncrypted: false,
-    isProtected: false,
-    translations: [],
-    attachmentCount: 0,
-    attachments: [],
-    replyTo: null,
-    createdAt: '2026-06-02T11:05:00.000Z',
-    sender: expediteur(MEMBRE_ID, 'Käthe'),
-  },
-  {
-    id: 'm-protege',
-    conversationId: CONVERSATION_ID,
-    senderId: 'u-bob',
-    content: null,
-    originalLanguage: 'en',
-    messageType: 'text',
-    messageSource: 'user',
-    isEdited: false,
-    isViewOnce: false,
-    viewOnceCount: 0,
-    isBlurred: false,
-    reactionCount: 0,
-    isEncrypted: true,
-    encryptionMode: 'e2ee',
-    isProtected: true,
-    translations: [],
-    attachmentCount: 0,
-    attachments: [],
-    replyTo: null,
-    createdAt: '2026-06-02T11:00:00.000Z',
-    sender: expediteur('u-bob', 'Bob'),
-  },
-  {
-    id: 'm-traduit',
-    conversationId: CONVERSATION_ID,
-    senderId: 'u-alice',
-    content: TEXTES.original,
-    originalLanguage: 'en',
-    messageType: 'text',
-    messageSource: 'user',
-    isEdited: false,
-    isViewOnce: false,
-    viewOnceCount: 0,
-    isBlurred: false,
-    reactionCount: 0,
-    isEncrypted: false,
-    isProtected: false,
-    translations: [
-      {
-        id: 't-es',
-        messageId: 'm-traduit',
-        targetLanguage: 'es',
-        translatedContent: TEXTES.espagnol,
-        createdAt: '2026-06-02T10:00:05.000Z',
-      },
-      {
-        id: 't-fr',
-        messageId: 'm-traduit',
-        targetLanguage: 'fr',
-        translatedContent: TEXTES.francais,
-        createdAt: '2026-06-02T10:00:05.000Z',
-      },
-    ],
-    attachmentCount: 2,
-    attachments: [
-      {
-        id: 'a-image',
-        messageId: 'm-traduit',
-        originalName: 'plan-de-salle.png',
-        mimeType: 'image/svg+xml',
-        fileSize: 4096,
-        fileUrl: IMAGE,
-        thumbnailUrl: null,
-        transcription: null,
-        translations: null,
-        imageVariants: null,
-        isProtected: false,
-        isViewOnce: false,
-        viewOnceCount: 0,
-        isBlurred: false,
-      },
-      {
-        id: 'a-vocal',
-        messageId: 'm-traduit',
-        originalName: 'note-vocale.m4a',
-        mimeType: 'audio/mp4',
-        fileSize: 20480,
-        fileUrl: 'data:audio/mp4;base64,AAAAHGZ0eXBNNEEg',
-        thumbnailUrl: null,
-        transcription: { language: 'en', text: TEXTES.original },
-        translations: {
-          es: { type: 'audio', transcription: TEXTES.espagnol, url: 'data:audio/mp4;base64,AAAAHGZ0eXBNNEEh' },
-          fr: { type: 'audio', transcription: TEXTES.francais, url: 'data:audio/mp4;base64,AAAAHGZ0eXBNNEEi' },
-        },
-        imageVariants: null,
-        isProtected: false,
-        isViewOnce: false,
-        viewOnceCount: 0,
-        isBlurred: false,
-      },
-    ],
-    replyTo: null,
-    createdAt: '2026-06-02T10:00:00.000Z',
-    sender: expediteur('u-alice', 'Alice'),
-  },
-];
-
-const AGENT_STATS = { totalConfigs: 4, activeConfigs: 3, totalControlledUsers: 12, totalMessagesSent: 486 };
-
-const AGENT_CONFIGS = [
-  {
-    conversationId: CONVERSATION_ID,
-    conversation: { id: CONVERSATION_ID, title: 'Projet Rosetta' },
-    enabled: true,
-    isScanning: false,
-    currentNode: null,
-    controlledUserIds: ['u-alice', 'u-bob'],
-    analytics: { messagesSent: 34, lastResponseAt: '2026-09-16T09:15:00.000Z' },
-  },
-];
-
-const AGENT_LOGS = [
-  {
-    id: 'log-1',
-    conversationId: CONVERSATION_ID,
-    conversation: { id: CONVERSATION_ID, title: 'Projet Rosetta' },
-    trigger: 'manual',
-    startedAt: '2026-09-16T09:14:30.000Z',
-    durationMs: 4200,
-    outcome: 'completed',
-    messagesSent: 1,
-    userIdsUsed: ['u-alice'],
-  },
-];
 
 // ---------------------------------------------------------------------------
 // LE SERVEUR STATIQUE ET L'INTERCEPTION
@@ -424,8 +143,8 @@ function repondre(pathname, search, avecAgent) {
  */
 const LANGUE_KEY = 'meeshy.interface-language';
 
-async function openContext(browser, { base, avecAgent, langue = 'fr' }) {
-  const context = await browser.newContext({ viewport: VIEWPORT, colorScheme: 'light', serviceWorkers: 'block' });
+async function openContext(browser, { base, avecAgent, langue = 'fr', schema = 'light' }) {
+  const context = await browser.newContext({ viewport: VIEWPORT, colorScheme: schema, serviceWorkers: 'block' });
   await context.addInitScript(
     ({ session, langue: code, clef }) => {
       window.localStorage.setItem('meeshy.session', JSON.stringify(session));
@@ -833,6 +552,49 @@ async function main() {
         `le bandeau n’annonce AUCUN prisme de membre là où il n’y en a pas${banniere === '' ? '' : ` — « ${banniere.trim()} »`}`,
       );
       await cliche(page, 'ecran-souverain-prisme-administrateur');
+      await ctx.close();
+    }
+
+    // ------------------- 8 : LES MÉDIAS, PEINTS ET PROTÉGÉS, DANS LES DEUX SCHÉMAS
+    /**
+     * #7023 — le constat qui manquait, et qu'aucun témoin `bun test` ne peut
+     * rendre : happy-dom ne peint pas. Les sections 5 à 7 comptaient les
+     * balises `<img>`/`<audio>` ; une balise n'est pas un pixel.
+     *
+     * Les DEUX schémas, parce que le voile d'une pièce protégée et le constat
+     * d'un contenu retenu sont peints par des tokens (`--accent`,
+     * `--color-ios-ink-2`) que le schéma sombre redéfinit — et qu'une
+     * protection qu'on ne VOIT pas sur fond sombre est une protection annoncée
+     * et non montrée (CLAUDE.md, cycle 124).
+     */
+    console.log('\n8. LES MÉDIAS DE LA LECTURE SOUVERAINE — PEINTS, ET PROTÉGÉS');
+    for (const schema of ['light', 'dark']) {
+      const ctx = await openContext(browser, { base, avecAgent: true, schema });
+      const { page } = ctx;
+      await page.goto(`${base}/adm/conversations/${CONVERSATION_ID}`, { waitUntil: 'load' });
+      await attendre(() => present(page, '[data-admin-reading-gate]'));
+      await page.fill('[data-admin-reason]', 'Signalement #9142 — contrôle des pièces');
+      await page.waitForTimeout(120);
+      await page.click('[data-admin-reason-submit]');
+      check(await attendreLeFil(page), `[${schema}] la lecture souveraine rend le fil`);
+      await page.waitForTimeout(900);
+
+      await constateLesMedias(page, {
+        check,
+        schema,
+        libre: 'a-image',
+        vocal: 'm-traduit',
+        protegee: 'm-piece-protegee',
+        pieces: 'm-pieces',
+        retenue: 'm-protege',
+        /* Le prisme de CET écran est celui de l'administrateur (`fr`) : la
+           piste attendue est donc la française, et le témoin distingue ainsi
+           « la bonne piste » de « l'original servi par défaut ». */
+        pisteAttendue: 'AAAAHGZ0eXBNNEEi',
+        secrets: SECRETS_DES_PIECES,
+      });
+
+      await cliche(page, `medias-souverains-${schema}`, { fullPage: true });
       await ctx.close();
     }
   } finally {
