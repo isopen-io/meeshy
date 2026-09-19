@@ -40,7 +40,7 @@ import {
 } from '@meeshy/shared/utils/conversation-helpers';
 import { formatClock } from '@meeshy/shared/utils/duration-format';
 import { notificationString, buildNotificationDisplay, formatFileSizeI18n, type NotificationStringKey } from '@meeshy/shared/utils/notification-strings';
-import { publicMediaUrl } from '../attachments/publicMediaUrl';
+import { publicMediaUrlFromEnv } from '../attachments/publicMediaUrl';
 import { recipientDateLocale, recipientLanguage } from '../../utils/recipient-language';
 import { notificationLogger, securityLogger } from '../../utils/logger-enhanced';
 import { SecuritySanitizer } from '../../utils/sanitize';
@@ -1788,7 +1788,7 @@ export class NotificationService {
                     // chaîne SANS base configurée, donc une clé de stockage (la
                     // forme que `normalize-media-urls.ts` laisse en base) n'y est
                     // pas une adresse. Règle et mesures : `publicMediaUrl.ts`.
-                    attachmentUrl: this.toPublicMediaUrl(params.context.firstAttachmentUrl || ''),
+                    attachmentUrl: publicMediaUrlFromEnv(params.context.firstAttachmentUrl || ''),
                     attachmentMimeType: params.context.firstAttachmentMimeType || '',
                     attachmentDurationMs: params.context.firstAttachmentDurationMs != null
                       ? String(params.context.firstAttachmentDurationMs)
@@ -5208,7 +5208,7 @@ export class NotificationService {
       const rawThumb = mediaType === 'image'
         ? (media.fileUrl || media.thumbnailUrl || undefined)
         : (media.thumbnailUrl || undefined);
-      const thumbnailUrl = rawThumb ? this.toPublicMediaUrl(rawThumb) : undefined;
+      const thumbnailUrl = rawThumb ? publicMediaUrlFromEnv(rawThumb) : undefined;
       const thumbnailMimeType = thumbnailUrl
         ? (mediaType === 'image' ? (media.mimeType ?? 'image/jpeg') : 'image/jpeg')
         : undefined;
@@ -5217,18 +5217,6 @@ export class NotificationService {
     } catch {
       return null;
     }
-  }
-
-  /** Absolutise une URL média relative pour qu'elle soit téléchargeable par
-   *  l'extension de notification iOS (qui n'a pas de base configurée).
-   *
-   *  #7022 — la composition vit dans `publicMediaUrl`
-   *  (`services/attachments/publicMediaUrl.ts`), site UNIQUE partagé avec le
-   *  média du rich-push : une CLÉ DE STOCKAGE y reçoit la ROUTE DE FLUX, et
-   *  non la seule base — collée derrière la base, elle désignait la racine de
-   *  la passerelle, qui ne sert aucun fichier. */
-  private toPublicMediaUrl(url: string): string {
-    return publicMediaUrl(url, process.env.API_PUBLIC_URL || 'https://gate.meeshy.me');
   }
 
   /**
