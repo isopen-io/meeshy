@@ -438,3 +438,89 @@ describe('un appelant qui repose staleTime écrase la fenêtre de la fabrique', 
     expect(appels).toBe(2);
   });
 });
+
+/**
+ * **LE PLUS IMPATIENT GAGNE** (#6981) — et c'est pour ça qu'un seul site
+ * suffisait à annuler la fenêtre de #6974.
+ *
+ * `usePendingFriendRequestCount` reposait `staleTime: 30_000` APRÈS avoir
+ * répandu `friendRequestsQueryOptions`, et son observateur est monté sur
+ * **neuf routes** (`lib/view/floating-gate.ts`). Or `query-core` ne fait
+ * voter personne : `Query.onFocus()` refetche dès qu'UN SEUL observateur juge
+ * la donnée périmée (`query.js:127-131` → `shouldFetchOn`).
+ *
+ * L'entrée étant INFINIE, ce refetch rejoue **toutes les pages chargées**, à
+ * cent lignes la page. Un compte à 350 contacts en charge quatre, puis en
+ * rejoue quatre à chaque focus de fenêtre, sur n'importe laquelle des neuf
+ * routes.
+ *
+ * Le témoin monte donc DEUX observateurs sur la même clé — un « patient » aux
+ * seules options de fabrique, un « pressé » qui rejoue exactement ce que le
+ * site fautif faisait — et mesure l'effet à 31 s, la fenêtre où les deux
+ * règles divergent. À 1 s comme à 6 min, elles rendent le même verdict.
+ */
+describe('deux observateurs sur une clé : le plus impatient décide (#6981)', () => {
+  const observateurInfini = (client: QueryClient, surcharge: { readonly staleTime?: number } = {}) => {
+    const options = friendRequestsQueryOptions(deps, 'received');
+    return {
+      options,
+      creer: (compter: () => void) =>
+        new InfiniteQueryObserver(client, {
+          ...options,
+          queryFn: (contexte: { readonly pageParam: string | null; readonly signal?: AbortSignal }) => {
+            compter();
+            return options.queryFn(contexte);
+          },
+          ...surcharge,
+        }),
+    };
+  };
+
+  test('un observateur PRESSÉ (staleTime 30 s) refetche pour tous — le défaut de #6981', async () => {
+    const client = banc('impatient-avant');
+    let appels = 0;
+    const patient = observateurInfini(client);
+    const presse = observateurInfini(client, { staleTime: 30_000 });
+
+    await monteur(() => patient.creer(() => { appels += 1; }))();
+    expect(appels).toBe(1);
+
+    // 31 s : au-delà des 30 s du pressé, TRÈS en deçà des 5 min de la fabrique.
+    vieillir(client, patient.options.queryKey, AU_DELA_DU_DEFAUT);
+    await monteur(() => presse.creer(() => { appels += 1; }))();
+
+    expect(appels).toBe(2);
+  });
+
+  test('sans la surcharge, les DEUX respectent la fenêtre de la fabrique — aucun appel', async () => {
+    const client = banc('impatient-apres');
+    let appels = 0;
+    const premier = observateurInfini(client);
+    const second = observateurInfini(client);
+
+    await monteur(() => premier.creer(() => { appels += 1; }))();
+    expect(appels).toBe(1);
+
+    vieillir(client, premier.options.queryKey, AU_DELA_DU_DEFAUT);
+    await monteur(() => second.creer(() => { appels += 1; }))();
+
+    // C'est l'assertion que le site fautif faisait tomber, et la seule qui
+    // sépare « la fabrique déclare 5 min » de « quelqu'un a reposé 30 s ».
+    expect(appels).toBe(1);
+  });
+
+  test('la fenêtre reste BORNÉE par le haut — au-delà de 5 min, un appel de plus', async () => {
+    // Sans ce troisième temps, retirer toute fraîcheur (`staleTime: Infinity`)
+    // verdirait les deux précédents.
+    const client = banc('impatient-borne');
+    let appels = 0;
+    const premier = observateurInfini(client);
+    const second = observateurInfini(client);
+
+    await monteur(() => premier.creer(() => { appels += 1; }))();
+    vieillir(client, premier.options.queryKey, CINQ_MINUTES + 1_000);
+    await monteur(() => second.creer(() => { appels += 1; }))();
+
+    expect(appels).toBe(2);
+  });
+});
