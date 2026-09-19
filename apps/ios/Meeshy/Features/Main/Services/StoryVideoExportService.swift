@@ -92,12 +92,21 @@ protocol StoryVideoExportServiceProviding {
     ///     pas la liste des médias : seul le propriétaire de la `StoryItem` peut
     ///     les apparier (`StoryExporter.stickerImageSources(for:media:)`), et le
     ///     bake les rapatrie comme les médias de premier plan. Vide = 🖼️.
+    /// - Parameter appendsBrandOutro: la carte de fin est-elle due ? `true`
+    ///   partout sauf pour l'export d'une SCÈNE DE POST (#7052), que le
+    ///   porteur a voulue SANS habillage — ni interlude, ni carte, ni jingle.
+    ///
+    ///   Porté par l'EXIGENCE et non par un relais à défaut : le doc-comment
+    ///   du relais ci-dessous dit pourquoi — « pour qu'aucun double de test ne
+    ///   puisse laisser tomber l'index en silence ». Un drapeau qu'un double
+    ///   ignorerait ferait sortir une scène marquée sans que rien ne rougisse.
     func prepareExport(
         slide: StorySlide,
         languages: [String],
         watermark: StoryExportWatermark?,
         intro: StoryExportIntroContent?,
         stickerImageSources: [String: String],
+        appendsBrandOutro: Bool,
         onProgress: ((Double) -> Void)?,
         onPhaseChange: ((StoryExportPhase) -> Void)?
     ) async -> URL?
@@ -126,7 +135,7 @@ extension StoryVideoExportServiceProviding {
         onPhaseChange: ((StoryExportPhase) -> Void)?
     ) async -> URL? {
         await prepareExport(slide: slide, languages: languages, watermark: watermark,
-                            intro: intro, stickerImageSources: [:],
+                            intro: intro, stickerImageSources: [:], appendsBrandOutro: true,
                             onProgress: onProgress, onPhaseChange: onPhaseChange)
     }
 }
@@ -172,6 +181,7 @@ final class StoryVideoExportService: StoryVideoExportServiceProviding {
         watermark: StoryExportWatermark? = nil,
         intro: StoryExportIntroContent? = nil,
         stickerImageSources: [String: String] = [:],
+        appendsBrandOutro: Bool = true,
         onProgress: ((Double) -> Void)? = nil,
         onPhaseChange: ((StoryExportPhase) -> Void)? = nil
     ) async -> URL? {
@@ -272,7 +282,8 @@ final class StoryVideoExportService: StoryVideoExportServiceProviding {
                     storyURL: outputURL,
                     intro: intro,
                     outro: intro,
-                    renderSize: renderSize
+                    renderSize: renderSize,
+                    appendsBrandOutro: appendsBrandOutro
                 )
                 let wrap = Date().timeIntervalSince(wrapStart)
                 logger.info("export-cost : emballage \(String(format: "%.1f", wrap), privacy: .public) s — TOTAL \(String(format: "%.1f", Date().timeIntervalSince(startedAt)), privacy: .public) s (slide \(slide.id, privacy: .public))")

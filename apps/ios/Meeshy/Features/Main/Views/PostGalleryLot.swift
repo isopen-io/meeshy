@@ -124,6 +124,35 @@ nonisolated struct GallerySceneItem: Equatable {
         SceneSurface(aspect: SceneShape.aspect, paintsLetterbox: false)
     }
 
+    /// **LA SLIDE DE CETTE SCÈNE-CI, prête pour l'exporteur** (#7052).
+    ///
+    /// `carrier.toRenderableSlide()` ne peut pas servir seul : le carrier est
+    /// bâti UNE FOIS PAR POST (`PostGalleryLot.compose`) et remis identiquement
+    /// à chaque page, et le décodage de `StoryEffects` fige `sceneIndex: 0`
+    /// (`StoryModels.swift:1244`). Sur un post à plusieurs scènes, l'exporteur
+    /// aurait donc baké N fois la PREMIÈRE, quelle que soit la page ouverte —
+    /// un défaut invisible à la scène 0, où le bon et le mauvais chemin
+    /// rendent le même fichier.
+    ///
+    /// Le document complet survit pourtant sur cette valeur, et le projecteur
+    /// v3 → runtime est public : `StoryEffects(rendering:sceneIndex:)`
+    /// (`CanvasV3Migration.swift:792`), borné sur les index du document.
+    ///
+    /// On REBÂTIT donc le porteur avec les effets de la bonne scène, puis on
+    /// laisse `toRenderableSlide` faire son travail — plutôt que de remplacer
+    /// `slide.effects` APRÈS coup, ce qui jetterait l'hydratation des durées de
+    /// média que cette méthode applique (`StoryModels.swift:2256-2262`) et
+    /// livrerait une scène vidéo à la mauvaise durée.
+    func renderableSlide(preferredLanguages: [String]) -> StorySlide {
+        StoryItem(
+            id: carrier.id,
+            content: carrier.content,
+            media: carrier.media,
+            storyEffects: StoryEffects(rendering: document, sceneIndex: sceneIndex),
+            createdAt: carrier.createdAt
+        ).toRenderableSlide(preferredLanguages: preferredLanguages)
+    }
+
     static func == (gauche: GallerySceneItem, droite: GallerySceneItem) -> Bool {
         gauche.id == droite.id
             && gauche.postId == droite.postId
