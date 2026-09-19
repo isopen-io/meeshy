@@ -3,7 +3,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Avatar } from '@/components/avatar';
 import { GlyphSvg } from '@/components/glyph';
 import { FEED_GLYPHS } from '@/components/glyphs-feed';
-import type { CommentGestureMessageKey } from '@/lib/api/comment-gestures';
+import type {
+  CommentGestureIssue,
+  CommentGestureMessageKey,
+  CommentGestureReasonKey,
+} from '@/lib/api/comment-gestures';
 import { COMMENT_MAX_LENGTH, type PostComment } from '@/lib/api/publication-comments';
 import { resolveFeedText } from '@/lib/feed/text';
 import { translate } from '@/lib/i18n-catalog';
@@ -43,13 +47,27 @@ import { initialsOf } from '@/lib/view/conversation';
 export type CommentGestureHandlers = {
   /** L'identité qui décide de « Modifier » et « Supprimer » — jamais recalculée ici. */
   readonly viewerId: string;
-  readonly onLike: (commentId: string) => void;
+  /** `on` est la direction VOULUE, élue ici parce que c'est ici qu'on voit
+   * l'état du cœur — et elle voyage ensuite avec la requête (défaut majeur 2). */
+  readonly onLike: (commentId: string, on: boolean) => void;
   readonly onEdit: (commentId: string, content: string) => void;
   readonly onDelete: (commentId: string) => void;
-  /** La clé de catalogue du dernier geste EN ÉCHEC sur cette rangée, s'il y en a un. */
-  readonly failureOf: (commentId: string) => CommentGestureMessageKey | undefined;
+  /** Le dernier geste EN ÉCHEC sur cette rangée, avec SA classe d'issue. */
+  readonly failureOf: (commentId: string) => CommentGestureRowFailure | undefined;
   /** Rejoue ce geste-là — l'hôte se souvient duquel il s'agit. */
   readonly onRetryGesture: (commentId: string) => void;
+  /** VRAI tant qu'un geste de cette rangée est EN VOL — l'indisponibilité
+   * s'ANNONCE (`CommentRowView.swift:284`, `.disabled(isInFlight)`), elle ne
+   * se contente pas d'avaler le second tap (défaut majeur 7). */
+  readonly busyOf: (commentId: string) => boolean;
+};
+
+/** Ce que la rangée a besoin de savoir d'un échec : quoi dire, et si un rejeu
+ * peut aboutir. La RAISON remplace « Réessayer » quand il ne le peut pas. */
+export type CommentGestureRowFailure = {
+  readonly message: CommentGestureMessageKey;
+  readonly issue: CommentGestureIssue;
+  readonly reason?: CommentGestureReasonKey | undefined;
 };
 
 export type CommentRowProps = {
@@ -78,20 +96,50 @@ const countOf = (value: number | null | undefined): number =>
 const GESTURE_BUTTON =
   'inline-flex items-center justify-center gap-1 rounded-chip px-2 focus-visible:outline-2 focus-visible:outline-offset-2';
 
+/**
+ * LE DÉLAI DE RÉTRACTATION DU VERBE DESTRUCTEUR — assez long pour viser
+ * « Confirmer » sans se presser, assez court pour qu'un tap oublié ne laisse
+ * pas une rangée armée quand on y revient. La valeur est ici, à son SITE
+ * UNIQUE, pour que le témoin la lise plutôt que de la redire.
+ */
+export const COMMENT_DELETE_CONFIRM_MS = 4000;
+
 function GestureBar({
   comment,
   language,
   gestures,
+  editRef,
   onStartEdit,
+  onDelete,
 }: {
   readonly comment: PostComment;
   readonly language: InterfaceLanguage;
   readonly gestures: CommentGestureHandlers;
+  readonly editRef: { current: HTMLButtonElement | null };
   readonly onStartEdit: () => void;
+  readonly onDelete: () => void;
 }) {
   const isLiked = comment.isLikedByMe === true;
   const likes = countOf(comment.likeCount);
   const isMine = comment.author.id === gestures.viewerId;
+  const busy = gestures.busyOf(comment.id);
+
+  /**
+   * **SUPPRIMER DEMANDE DEUX GESTES, COMME SUR iOS** (revue-correction #7135,
+   * défaut majeur 5). `CommentRowView.swift:364` enferme
+   * `Button(role: .destructive)` dans un menu « … » : ouvrir, puis choisir.
+   * Le web posait le verbe irréversible À DÉCOUVERT, immédiatement à droite du
+   * verbe réversible — un pouce qui vise « Modifier » atteignait « Supprimer »,
+   * et le commentaire partait sans qu'aucun dialogue ne s'interpose. La
+   * confirmation SUR PLACE coûte le même second geste qu'iOS sans imposer une
+   * feuille modale, et elle se rétracte seule.
+   */
+  const [confirming, setConfirming] = useState(false);
+  useEffect(() => {
+    if (!confirming) return undefined;
+    const timer = setTimeout(() => setConfirming(false), COMMENT_DELETE_CONFIRM_MS);
+    return () => clearTimeout(timer);
+  }, [confirming]);
 
   return (
     /* Le retrait compense le `px-2` des boutons : la rangée de gestes
@@ -101,11 +149,22 @@ function GestureBar({
         type="button"
         data-comment-gesture="like"
         aria-pressed={isLiked}
-        onClick={() => gestures.onLike(comment.id)}
+        /* `aria-disabled` ET `aria-busy`, JAMAIS `disabled` — un `disabled`
+           posé sur le bouton qu'on vient d'actionner lui retire le focus, qui
+           retombe sur `<body>` : on corrigerait le défaut majeur 7 en
+           rejouant le défaut majeur 6 sur le geste le plus fréquent. Le clic
+           est retenu ici, à la source, et l'indisponibilité est ANNONCÉE. */
+        aria-disabled={busy}
+        aria-busy={busy}
+        onClick={() => {
+          if (busy) return;
+          gestures.onLike(comment.id, !isLiked);
+        }}
         className={GESTURE_BUTTON}
         style={{
           minHeight: 44,
           color: isLiked ? 'var(--color-error)' : 'var(--color-ios-ink-3)',
+          opacity: busy ? 0.5 : 1,
           outlineColor: 'var(--color-ios-brand)',
         }}
       >
@@ -131,6 +190,7 @@ function GestureBar({
         <>
           <button
             type="button"
+            ref={editRef}
             data-comment-gesture="edit"
             onClick={onStartEdit}
             className={`${GESTURE_BUTTON} text-check`}
@@ -149,11 +209,28 @@ function GestureBar({
           <button
             type="button"
             data-comment-gesture="delete"
-            onClick={() => gestures.onDelete(comment.id)}
+            data-comment-delete-armed={confirming ? '' : undefined}
+            onClick={() => {
+              if (!confirming) {
+                setConfirming(true);
+                return;
+              }
+              setConfirming(false);
+              onDelete();
+            }}
             className={`${GESTURE_BUTTON} text-check`}
-            style={{ minHeight: 44, color: 'var(--color-error)', outlineColor: 'var(--color-ios-brand)' }}
+            style={{
+              minHeight: 44,
+              /* L'ÉCART MESURÉ AU RECTANGLE, pas au texte — 4 px séparaient
+                 deux cibles dont l'une est irréversible, moitié moins que le
+                 minimum entre cibles adjacentes. `gap-1` (4) + 12 = 16 px. */
+              marginInlineStart: 12,
+              color: 'var(--color-error)',
+              fontWeight: confirming ? 600 : undefined,
+              outlineColor: 'var(--color-ios-brand)',
+            }}
           >
-            {translate(language, 'comments.action.delete')}
+            {translate(language, confirming ? 'comments.action.delete.confirm' : 'comments.action.delete')}
           </button>
         </>
       ) : null}
@@ -161,32 +238,56 @@ function GestureBar({
   );
 }
 
-/** L'ÉCHEC D'UN GESTE EST VISIBLE ET SE REJOUE — jamais un silence : la rangée
+/**
+ * L'ÉCHEC D'UN GESTE EST VISIBLE SUR SA RANGÉE — jamais un silence : la rangée
  * est revenue à son état d'avant, et sans ce constat le lecteur croirait que
- * son tap n'a pas été pris. */
+ * son tap n'a pas été pris.
+ *
+ * **ET IL PORTE SA CLASSE D'ISSUE** (revue-correction #7135, défaut majeur 1).
+ * « Réessayer » n'était offert QUE sur les refus que `outcome.ts` déclare
+ * NON-REJOUABLES : un 403 retapé rendait la même alerte indéfiniment, pendant
+ * que le seul cas où le rejeu sert — la panne passagère — n'avait qu'une ligne
+ * grise au bas du fil. Les deux sont inversés ici :
+ *
+ *  - `refused` : encre d'erreur, `role="alert"`, la RAISON à la place du
+ *    rejeu (`comment.refused.*`) — dire pourquoi vaut mieux qu'offrir un
+ *    bouton dont on sait qu'il ne peut pas aboutir ;
+ *  - `unconfirmed` : encre neutre, `role="status"` (rien n'est perdu, rien
+ *    n'est acquis), et « Réessayer » qui rejoue la requête EXACTE.
+ */
 function GestureFailure({
   language,
-  message,
+  failure,
   onRetry,
 }: {
   readonly language: InterfaceLanguage;
-  readonly message: CommentGestureMessageKey;
+  readonly failure: CommentGestureRowFailure;
   readonly onRetry: () => void;
 }) {
+  const refused = failure.issue === 'refused';
   return (
-    <p role="alert" data-comment-gesture-error={message} className="flex flex-wrap items-center gap-2 pt-0.5">
-      <span className="text-caption" style={{ color: 'var(--color-error)' }}>
-        {translate(language, message)}
+    <p
+      role={refused ? 'alert' : 'status'}
+      {...(refused ? {} : { 'aria-live': 'polite' as const })}
+      data-comment-gesture-error={failure.message}
+      data-comment-gesture-issue={failure.issue}
+      className="flex flex-wrap items-center gap-2 pt-0.5"
+    >
+      <span className="text-caption" style={{ color: refused ? 'var(--color-error)' : 'var(--color-ios-ink-2)' }}>
+        {translate(language, failure.message)}
+        {failure.reason === undefined ? null : ` ${translate(language, failure.reason)}`}
       </span>
-      <button
-        type="button"
-        data-comment-gesture-retry
-        onClick={onRetry}
-        className="rounded-chip px-2 text-check font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
-        style={{ minHeight: 44, color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
-      >
-        {translate(language, 'comments.retry')}
-      </button>
+      {refused ? null : (
+        <button
+          type="button"
+          data-comment-gesture-retry
+          onClick={onRetry}
+          className="rounded-chip px-2 text-check font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
+          style={{ minHeight: 44, color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
+        >
+          {translate(language, 'comments.retry')}
+        </button>
+      )}
     </p>
   );
 }
@@ -301,6 +402,23 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
   const actionable = comment.pending !== true ? gestures : undefined;
   const failure = actionable?.failureOf(comment.id);
 
+  /**
+   * **LE FOCUS REVIENT D'OÙ IL EST PARTI** (revue-correction #7135, défaut
+   * majeur 6) — la moitié manquante de « le focus suit le geste ». L'aller
+   * était posé (`EditForm` prend le focus à l'ouverture) ; au RETOUR,
+   * « Annuler » et « Enregistrer » démontaient le champ ET leurs deux boutons
+   * sans rendre le focus à rien, et le lecteur d'écran repartait du haut du
+   * document. Le bouton « Modifier » est remonté par le même rendu : on le
+   * refocalise, ce qui est exactement la place d'où le geste est parti.
+   */
+  const editRef = useRef<HTMLButtonElement>(null);
+  const rowRef = useRef<HTMLLIElement>(null);
+  const wasEditing = useRef(false);
+  useEffect(() => {
+    if (wasEditing.current && !editing) editRef.current?.focus();
+    wasEditing.current = editing;
+  }, [editing]);
+
   const save = useCallback(
     (content: string) => {
       setEditing(false);
@@ -309,8 +427,27 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
     [actionable, comment.id],
   );
 
+  /**
+   * **SUPPRIMER EMPORTE LA RANGÉE ENTIÈRE, DONC LE FOCUS AVEC ELLE.** La
+   * destination se lit AVANT l'appel, tant que la rangée est encore montée :
+   * le cœur de la rangée SUIVANTE, ou à défaut le fil lui-même, qui porte son
+   * nom accessible (« Commentaires »). Après coup il n'y aurait plus de nœud
+   * d'où regarder le voisinage.
+   */
+  const requestDelete = useCallback(() => {
+    const row = rowRef.current;
+    const next = row?.nextElementSibling ?? row?.previousElementSibling ?? null;
+    const target =
+      next?.querySelector<HTMLElement>('[data-comment-gesture="like"]') ??
+      row?.closest<HTMLElement>('[data-comment-thread]') ??
+      null;
+    actionable?.onDelete(comment.id);
+    target?.focus();
+  }, [actionable, comment.id]);
+
   return (
     <li
+      ref={rowRef}
       data-comment-row={comment.id}
       {...(comment.pending === true ? { 'data-comment-pending': '' } : {})}
       className="flex gap-3 py-2"
@@ -343,10 +480,17 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
           </p>
         )}
         {actionable !== undefined && !editing ? (
-          <GestureBar comment={comment} language={language} gestures={actionable} onStartEdit={() => setEditing(true)} />
+          <GestureBar
+            comment={comment}
+            language={language}
+            gestures={actionable}
+            editRef={editRef}
+            onStartEdit={() => setEditing(true)}
+            onDelete={requestDelete}
+          />
         ) : null}
         {actionable !== undefined && failure !== undefined ? (
-          <GestureFailure language={language} message={failure} onRetry={() => actionable.onRetryGesture(comment.id)} />
+          <GestureFailure language={language} failure={failure} onRetry={() => actionable.onRetryGesture(comment.id)} />
         ) : null}
       </div>
     </li>

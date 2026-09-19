@@ -17,6 +17,7 @@ import {
   COMMENT_DELETE_FAILED_MESSAGE,
   COMMENT_EDIT_FAILED_MESSAGE,
   COMMENT_GESTURE_PENDING_MESSAGE,
+  COMMENT_GESTURE_UNCONFIRMED_MESSAGE,
   COMMENT_LIKE_FAILED_MESSAGE,
   performCommentDelete,
   performCommentEdit,
@@ -82,13 +83,30 @@ const gatewayDeps = (queryClient: QueryClient, transport: HttpTransport): Commen
 
 const MUTATION_ID = /^cmid_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
+/**
+ * LE LECTEUR EST HORS LIGNE PENDANT CET APPEL — et il le redevient en ligne
+ * après. `comment.gesture.pending` NOMME le réseau : le servir sur un 5xx
+ * envoie l'utilisateur vérifier son wifi alors que sa connexion est bonne
+ * (défaut majeur 4). Le témoin doit donc pouvoir poser les DEUX rangs.
+ */
+const horsLigne = async <T>(run: () => Promise<T>): Promise<T> => {
+  const descriptor = Object.getOwnPropertyDescriptor(navigator, 'onLine');
+  Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+  try {
+    return await run();
+  } finally {
+    if (descriptor === undefined) delete (navigator as { onLine?: boolean }).onLine;
+    else Object.defineProperty(navigator, 'onLine', descriptor);
+  }
+};
+
 describe('performCommentLike — le compteur bouge AVANT la réponse, et REVIENT au refus', () => {
   test('le cœur et le compte basculent avant toute réponse réseau', async () => {
     const queryClient = seeded([[comment({ likeCount: 3 })]]);
     let release: (r: ApiResult<unknown>) => void = () => undefined;
     const { transport } = scripted(() => new Promise((resolve) => (release = resolve)));
 
-    const pending = performCommentLike({ postId: 'p1', commentId: 'cm1', deps: gatewayDeps(queryClient, transport) });
+    const pending = performCommentLike({ postId: 'p1', commentId: 'cm1', on: true, deps: gatewayDeps(queryClient, transport) });
     expect(cached(queryClient)?.isLikedByMe).toBe(true);
     expect(cached(queryClient)?.likeCount).toBe(4);
 
@@ -100,7 +118,7 @@ describe('performCommentLike — le compteur bouge AVANT la réponse, et REVIENT
     const queryClient = seeded([[comment()]]);
     const { requests, transport } = scripted(async () => ({ ok: true, data: { liked: true, likeCount: 1 } }));
 
-    await performCommentLike({ postId: 'p1', commentId: 'cm1', deps: gatewayDeps(queryClient, transport) });
+    await performCommentLike({ postId: 'p1', commentId: 'cm1', on: true, deps: gatewayDeps(queryClient, transport) });
 
     expect(requests).toHaveLength(1);
     expect(requests[0]?.method).toBe('POST');
@@ -111,18 +129,41 @@ describe('performCommentLike — le compteur bouge AVANT la réponse, et REVIENT
     const queryClient = seeded([[comment({ isLikedByMe: true, likeCount: 5 })]]);
     const { requests, transport } = scripted(async () => ({ ok: true, data: { liked: false, likeCount: 4 } }));
 
-    await performCommentLike({ postId: 'p1', commentId: 'cm1', deps: gatewayDeps(queryClient, transport) });
+    await performCommentLike({ postId: 'p1', commentId: 'cm1', on: false, deps: gatewayDeps(queryClient, transport) });
 
     expect(requests[0]?.method).toBe('DELETE');
     expect(cached(queryClient)?.isLikedByMe).toBe(false);
     expect(cached(queryClient)?.likeCount).toBe(4);
   });
 
+  /**
+   * **LE VERBE SUIT LA DIRECTION DEMANDÉE, PAS L'ÉTAT DU CACHE** (défaut
+   * majeur 2 de la revue-correction). `performCommentLike` relisait
+   * `site.comment.isLikedByMe` AU MOMENT DE L'APPEL. Tant que le rejeu ne
+   * survenait qu'après un rollback, les deux lectures coïncidaient — et c'est
+   * exactement pourquoi aucun témoin ne pouvait le voir. Dès que le rejeu
+   * porte sur un optimiste RESTÉ POSÉ (ce que l'issue passagère fait
+   * maintenant, ce que l'écho socket de #7118 et la file #5868 feront
+   * encore), le cache dit « déjà aimé » et l'ancienne règle envoyait un
+   * `DELETE` là où le lecteur demandait un `POST`.
+   *
+   * LE TÉMOIN SE POSE DONC SUR UN CACHE DÉJÀ BASCULÉ — sur un cache au repos,
+   * la règle juste et la règle fausse rendent le même verbe.
+   */
+  test('une requête REJOUÉE sur un optimiste NON défait renvoie le MÊME verbe', async () => {
+    const queryClient = seeded([[comment({ isLikedByMe: true, likeCount: 4 })]]);
+    const { requests, transport } = scripted(async () => ({ ok: true, data: { liked: true, likeCount: 4 } }));
+
+    await performCommentLike({ postId: 'p1', commentId: 'cm1', on: true, deps: gatewayDeps(queryClient, transport) });
+
+    expect(requests[0]?.method).toBe('POST');
+  });
+
   test('le `likeCount` SERVI fait foi — il remplace l’estimation optimiste', async () => {
     const queryClient = seeded([[comment({ likeCount: 3 })]]);
     const { transport } = scripted(async () => ({ ok: true, data: { liked: true, likeCount: 11 } }));
 
-    await performCommentLike({ postId: 'p1', commentId: 'cm1', deps: gatewayDeps(queryClient, transport) });
+    await performCommentLike({ postId: 'p1', commentId: 'cm1', on: true, deps: gatewayDeps(queryClient, transport) });
 
     expect(cached(queryClient)?.likeCount).toBe(11);
   });
@@ -134,21 +175,80 @@ describe('performCommentLike — le compteur bouge AVANT la réponse, et REVIENT
     const queryClient = seeded([[comment({ isLikedByMe: false, likeCount: 3 })]]);
     const { transport } = scripted(async () => ({ ok: false, status: 404, error: 'Comment not found' }));
 
-    const result = await performCommentLike({ postId: 'p1', commentId: 'cm1', deps: gatewayDeps(queryClient, transport) });
+    const result = await performCommentLike({ postId: 'p1', commentId: 'cm1', on: true, deps: gatewayDeps(queryClient, transport) });
 
-    expect(result).toEqual({ ok: false, message: COMMENT_LIKE_FAILED_MESSAGE });
+    /* UN REFUS PERMANENT PORTE SA RAISON ET N'OFFRE PAS DE REJEU — `issue`
+       est ce que la rangée lit pour choisir entre « Réessayer » et la cause
+       (défaut majeur 1). Un 404 hors audience et un 403 hors auteur disent la
+       même chose au lecteur : ce geste ne lui est pas ouvert. */
+    expect(result).toEqual({
+      ok: false,
+      message: COMMENT_LIKE_FAILED_MESSAGE,
+      issue: 'refused',
+      reason: 'comment.refused.right',
+    });
     expect(cached(queryClient)?.likeCount).toBe(3);
     expect(cached(queryClient)?.isLikedByMe).toBe(false);
   });
 
-  test('panne réseau ⇒ l’optimiste RESTE, et le geste non confirmé est ANNONCÉ', async () => {
+  /**
+   * **LE PLAFOND DES CINQ RÉACTIONS SE NOMME** — un 409 `ConflictError` est un
+   * refus permanent comme un autre pour le transport, mais c'est le SEUL que
+   * le lecteur ne puisse pas deviner : rien à l'écran ne dit qu'il vient
+   * d'atteindre une limite. « Réessayer » y rendait la même alerte
+   * indéfiniment.
+   */
+  test('409 ⇒ le refus NOMME le plafond des cinq réactions, et n’offre aucun rejeu', async () => {
+    const queryClient = seeded([[comment({ likeCount: 2 })]]);
+    const { transport } = scripted(async () => ({ ok: false, status: 409, error: 'Reaction limit reached' }));
+
+    const result = await performCommentLike({ postId: 'p1', commentId: 'cm1', on: true, deps: gatewayDeps(queryClient, transport) });
+
+    expect(result).toEqual({
+      ok: false,
+      message: COMMENT_LIKE_FAILED_MESSAGE,
+      issue: 'refused',
+      reason: 'comment.like.limit',
+    });
+  });
+
+  test('401 ⇒ le refus dit la SESSION, pas un échec indistinct', async () => {
+    const queryClient = seeded([[comment()]]);
+    const { transport } = scripted(async () => ({ ok: false, status: 401, error: 'Unauthorized' }));
+
+    expect(
+      await performCommentLike({ postId: 'p1', commentId: 'cm1', on: true, deps: gatewayDeps(queryClient, transport) }),
+    ).toEqual({ ok: false, message: COMMENT_LIKE_FAILED_MESSAGE, issue: 'refused', reason: 'comment.refused.session' });
+  });
+
+  test('panne réseau HORS LIGNE ⇒ l’optimiste RESTE, et le geste non confirmé OFFRE le rejeu', async () => {
     const queryClient = seeded([[comment({ likeCount: 1 })]]);
     const { transport } = scripted(() => Promise.reject(new TypeError('Failed to fetch')));
 
-    const result = await performCommentLike({ postId: 'p1', commentId: 'cm1', deps: gatewayDeps(queryClient, transport) });
+    const result = await horsLigne(() =>
+      performCommentLike({ postId: 'p1', commentId: 'cm1', on: true, deps: gatewayDeps(queryClient, transport) }),
+    );
 
-    expect(result).toEqual({ ok: true, notice: COMMENT_GESTURE_PENDING_MESSAGE });
+    /* `issue: 'unconfirmed'` ⇒ la rangée pose « Réessayer ». C'est l'inverse
+       exact de l'état d'avant, où le rejeu n'existait QUE sur les refus qui ne
+       peuvent pas aboutir. */
+    expect(result).toEqual({ ok: false, message: COMMENT_GESTURE_PENDING_MESSAGE, issue: 'unconfirmed' });
     expect(cached(queryClient)?.likeCount).toBe(2);
+  });
+
+  /**
+   * **UNE PANNE DE PASSERELLE N'EST PAS UNE COUPURE RÉSEAU.** Le 500 EN LIGNE
+   * est un rang AUTRE que le hors-ligne, seul cas couvert jusqu'ici : les deux
+   * servaient le même « Geste non confirmé — hors ligne », et l'utilisateur
+   * partait vérifier son wifi pendant que sa connexion était bonne.
+   */
+  test('500 EN LIGNE ⇒ le message ne nomme PAS le réseau', async () => {
+    const queryClient = seeded([[comment({ likeCount: 1 })]]);
+    const { transport } = scripted(async () => ({ ok: false, status: 500, error: 'Internal' }));
+
+    expect(
+      await performCommentLike({ postId: 'p1', commentId: 'cm1', on: true, deps: gatewayDeps(queryClient, transport) }),
+    ).toEqual({ ok: false, message: COMMENT_GESTURE_UNCONFIRMED_MESSAGE, issue: 'unconfirmed' });
   });
 
   /** Miroir `commentHeartInFlightIds` (`PostDetailViewModel.swift:494`). */
@@ -158,8 +258,8 @@ describe('performCommentLike — le compteur bouge AVANT la réponse, et REVIENT
     const { requests, transport } = scripted(() => new Promise((resolve) => (release = resolve)));
     const deps = gatewayDeps(queryClient, transport);
 
-    const first = performCommentLike({ postId: 'p1', commentId: 'cm1', deps });
-    expect(await performCommentLike({ postId: 'p1', commentId: 'cm1', deps })).toEqual({ ok: true });
+    const first = performCommentLike({ postId: 'p1', commentId: 'cm1', on: true, deps });
+    expect(await performCommentLike({ postId: 'p1', commentId: 'cm1', on: true, deps })).toEqual({ ok: true });
 
     expect(requests).toHaveLength(1);
     expect(cached(queryClient)?.likeCount).toBe(1);
@@ -171,7 +271,7 @@ describe('performCommentLike — le compteur bouge AVANT la réponse, et REVIENT
     const queryClient = seeded([[comment()], [comment({ id: 'cm9', likeCount: 2 })]]);
     const { transport } = scripted(async () => ({ ok: true, data: { liked: true, likeCount: 3 } }));
 
-    await performCommentLike({ postId: 'p1', commentId: 'cm9', deps: gatewayDeps(queryClient, transport) });
+    await performCommentLike({ postId: 'p1', commentId: 'cm9', on: true, deps: gatewayDeps(queryClient, transport) });
 
     expect(cached(queryClient, 'cm9')?.likeCount).toBe(3);
     expect(cached(queryClient, 'cm1')?.likeCount).toBe(0);
@@ -226,7 +326,12 @@ describe('performCommentEdit — le texte change AVANT la réponse, et REVIENT a
       deps: gatewayDeps(queryClient, transport),
     });
 
-    expect(result).toEqual({ ok: false, message: COMMENT_EDIT_FAILED_MESSAGE });
+    expect(result).toEqual({
+      ok: false,
+      message: COMMENT_EDIT_FAILED_MESSAGE,
+      issue: 'refused',
+      reason: 'comment.refused.right',
+    });
     expect(cached(queryClient)?.content).toBe('Superbe photo');
   });
 
@@ -241,7 +346,7 @@ describe('performCommentEdit — le texte change AVANT la réponse, et REVIENT a
       deps: gatewayDeps(queryClient, transport),
     });
 
-    expect(result).toEqual({ ok: false, message: COMMENT_EDIT_FAILED_MESSAGE });
+    expect(result).toEqual({ ok: false, message: COMMENT_EDIT_FAILED_MESSAGE, issue: 'refused' });
     expect(requests).toHaveLength(0);
     expect(cached(queryClient)?.content).toBe('Superbe photo');
   });
@@ -328,7 +433,14 @@ describe('performCommentEdit — le texte change AVANT la réponse, et REVIENT a
     expect(requests).toHaveLength(0);
   });
 
-  test('panne réseau ⇒ le texte modifié RESTE, non confirmé et ANNONCÉ', async () => {
+  /**
+   * **UN GESTE DESTRUCTEUR NON CONFIRMÉ SE DÉFAIT** (défaut majeur 4). Le
+   * texte modifié RESTAIT à l'écran sur une panne : la rangée affirmait une
+   * correction que la passerelle n'avait jamais acceptée, le texte d'avant
+   * revenait au prochain chargement, et aucune file ne rejouait rien. Le rejeu
+   * est offert à la place — c'est LUI qui porte la reprise.
+   */
+  test('panne réseau ⇒ le texte d’ORIGINE revient, et le rejeu est OFFERT', async () => {
     const queryClient = seeded([[comment({ content: 'Superbe photo' })]]);
     const { transport } = scripted(() => Promise.reject(new TypeError('Failed to fetch')));
 
@@ -339,8 +451,23 @@ describe('performCommentEdit — le texte change AVANT la réponse, et REVIENT a
         content: 'Superbe photo !',
         deps: gatewayDeps(queryClient, transport),
       }),
-    ).toEqual({ ok: true, notice: COMMENT_GESTURE_PENDING_MESSAGE });
-    expect(cached(queryClient)?.content).toBe('Superbe photo !');
+    ).toEqual({ ok: false, message: COMMENT_GESTURE_UNCONFIRMED_MESSAGE, issue: 'unconfirmed' });
+    expect(cached(queryClient)?.content).toBe('Superbe photo');
+  });
+
+  test('500 EN LIGNE ⇒ même chose, et le message ne nomme PAS le réseau', async () => {
+    const queryClient = seeded([[comment({ content: 'Superbe photo' })]]);
+    const { transport } = scripted(async () => ({ ok: false, status: 500, error: 'Internal' }));
+
+    expect(
+      await performCommentEdit({
+        postId: 'p1',
+        commentId: 'cm1',
+        content: 'Superbe photo !',
+        deps: gatewayDeps(queryClient, transport),
+      }),
+    ).toEqual({ ok: false, message: COMMENT_GESTURE_UNCONFIRMED_MESSAGE, issue: 'unconfirmed' });
+    expect(cached(queryClient)?.content).toBe('Superbe photo');
   });
 });
 
@@ -381,9 +508,49 @@ describe('performCommentDelete — la rangée part AVANT la réponse, et REVIENT
 
     const result = await performCommentDelete({ postId: 'p1', commentId: 'b', deps: gatewayDeps(queryClient, transport) });
 
-    expect(result).toEqual({ ok: false, message: COMMENT_DELETE_FAILED_MESSAGE });
+    expect(result).toEqual({
+      ok: false,
+      message: COMMENT_DELETE_FAILED_MESSAGE,
+      issue: 'refused',
+      reason: 'comment.refused.right',
+    });
     expect(rows(queryClient).map((c) => c.id)).toEqual(['a', 'b', 'c']);
     expect(queryClient.getQueryData<FeedPost>(postQueryKey('p1'))?.commentCount).toBe(3);
+  });
+
+  /**
+   * **LE DÉFAUT MAJEUR 4, À SA FORME LA PLUS COÛTEUSE.** Un 500 laissait la
+   * rangée PARTIE, le compteur de la publication DÉCRÉMENTÉ, aucune alerte
+   * (la rangée n'existait plus pour la porter), aucun rejeu, aucune file — et
+   * pour seule phrase « Geste non confirmé — hors ligne » pendant que
+   * `navigator.onLine` valait `true`. L'utilisateur croyait son commentaire
+   * supprimé ; il revenait au chargement suivant.
+   *
+   * LE TÉMOIN SE POSE SUR UN 500 EN LIGNE — un rang AUTRE que le hors-ligne,
+   * seul cas que le corpus couvrait.
+   */
+  test('500 EN LIGNE ⇒ la rangée REVIENT, le compteur remonte, et le rejeu est OFFERT', async () => {
+    const queryClient = seeded([trois()]);
+    queryClient.setQueryData<FeedPost>(postQueryKey('p1'), { id: 'p1', type: 'POST', createdAt: '', commentCount: 3 });
+    const { transport } = scripted(async () => ({ ok: false, status: 500, error: 'Internal' }));
+
+    const result = await performCommentDelete({ postId: 'p1', commentId: 'b', deps: gatewayDeps(queryClient, transport) });
+
+    expect(result).toEqual({ ok: false, message: COMMENT_GESTURE_UNCONFIRMED_MESSAGE, issue: 'unconfirmed' });
+    expect(rows(queryClient).map((c) => c.id)).toEqual(['a', 'b', 'c']);
+    expect(queryClient.getQueryData<FeedPost>(postQueryKey('p1'))?.commentCount).toBe(3);
+  });
+
+  test('panne réseau HORS LIGNE ⇒ la rangée REVIENT aussi, et le message NOMME le réseau', async () => {
+    const queryClient = seeded([trois()]);
+    const { transport } = scripted(() => Promise.reject(new TypeError('Failed to fetch')));
+
+    const result = await horsLigne(() =>
+      performCommentDelete({ postId: 'p1', commentId: 'b', deps: gatewayDeps(queryClient, transport) }),
+    );
+
+    expect(result).toEqual({ ok: false, message: COMMENT_GESTURE_PENDING_MESSAGE, issue: 'unconfirmed' });
+    expect(rows(queryClient).map((c) => c.id)).toEqual(['a', 'b', 'c']);
   });
 
   test('une rangée de la SECONDE page revient DANS SA PAGE, pas en tête du fil', async () => {
@@ -422,7 +589,7 @@ describe('source `fixtures` — les trois gestes basculent sans jamais toucher a
   test('aimer, modifier et supprimer aboutissent hors réseau', async () => {
     const queryClient = seeded([[comment({ likeCount: 1 })]]);
 
-    expect(await performCommentLike({ postId: 'p1', commentId: 'cm1', deps: fixtureDeps(queryClient) })).toEqual({ ok: true });
+    expect(await performCommentLike({ postId: 'p1', commentId: 'cm1', on: true, deps: fixtureDeps(queryClient) })).toEqual({ ok: true });
     expect(cached(queryClient)?.likeCount).toBe(2);
 
     expect(
@@ -593,7 +760,7 @@ describe('la borne de longueur est UNE — le champ et le port comptent la même
       deps: gatewayDeps(queryClient, transport),
     });
 
-    expect(result).toEqual({ ok: false, message: COMMENT_EDIT_FAILED_MESSAGE });
+    expect(result).toEqual({ ok: false, message: COMMENT_EDIT_FAILED_MESSAGE, issue: 'refused' });
     expect(requests).toEqual([]);
     expect(cached(queryClient)?.content).toBe('Superbe photo');
   });

@@ -4,7 +4,7 @@ import { useStore } from 'zustand/react';
 import { CommentComposer, type CommentComposerResult } from '@/components/comment-composer';
 import { CommentList } from '@/components/comment-list';
 import type { CommentGestureHandlers } from '@/components/comment-row';
-import type { CommentGestureMessageKey, CommentGestureRequest } from '@/lib/api/comment-gestures';
+import type { CommentGestureFailure, CommentGestureRequest } from '@/lib/api/comment-gestures';
 import { apiDeps } from '@/lib/api/deps';
 import { commentAction, commentGestureAction, useComments } from '@/lib/api/query';
 import { flattenCommentPages, type CommentInfiniteData } from '@/lib/api/publication-comments';
@@ -86,11 +86,26 @@ export function CommentThread({ postId, enabled = true, tone = 'onLight' }: Comm
    * contrat) et la rangée ne connaît pas le réseau. On garde la REQUÊTE, pas
    * seulement son message : « Réessayer » rejoue EXACTEMENT le geste refusé,
    * sans que la rangée ait à se souvenir duquel il s'agissait.
+   *
+   * ET IL N'Y A PLUS DE LIGNE GRISE GLOBALE (revue-correction #7135, défaut
+   * majeur 1) : une issue passagère s'annonçait au BAS DU FIL, loin de la
+   * rangée concernée et sans aucune prise, pendant que le rejeu s'offrait sur
+   * la rangée pour les seuls refus qui ne peuvent pas aboutir. Tout ce qui
+   * arrive à une rangée s'affiche désormais SUR elle.
    */
-  const [failures, setFailures] = useState<ReadonlyMap<string, { message: CommentGestureMessageKey; request: CommentGestureRequest }>>(
+  const [failures, setFailures] = useState<ReadonlyMap<string, { failure: CommentGestureFailure; request: CommentGestureRequest }>>(
     () => new Map(),
   );
-  const [notice, setNotice] = useState('');
+
+  /**
+   * LES GESTES EN VOL, PAR RANGÉE — l'état que `comment-gestures.ts` tenait
+   * pour lui seul (`inFlight`, la garde de correction) et que personne ne
+   * RENDAIT : un second tap sur le cœur pendant l'appel était avalé en
+   * silence par un bouton qui avait l'air disponible (défaut majeur 7). iOS
+   * publie le sien (`commentHeartInFlightIds`, `PostDetailViewModel.swift:43`)
+   * et la cible s'y désactive (`CommentRowView.swift:284`).
+   */
+  const [busy, setBusy] = useState<ReadonlySet<string>>(() => new Set());
 
   const runGesture = useCallback(
     async (request: CommentGestureRequest) => {
@@ -100,17 +115,21 @@ export function CommentThread({ postId, enabled = true, tone = 'onLight' }: Comm
         next.delete(request.commentId);
         return next;
       });
-      setNotice('');
-      const result = await commentGestureAction(request);
-      if (result.ok) {
-        /* PARTI MAIS NON CONFIRMÉ : l'optimiste tient, et le silence serait
-           indiscernable d'une confirmation (même règle que le composeur). */
-        if (result.notice !== undefined) setNotice(translate(language, result.notice));
-        return;
+      setBusy((current) => new Set(current).add(request.commentId));
+      try {
+        const result = await commentGestureAction(request);
+        if (result.ok) return;
+        setFailures((current) => new Map(current).set(request.commentId, { failure: result, request }));
+      } finally {
+        setBusy((current) => {
+          if (!current.has(request.commentId)) return current;
+          const next = new Set(current);
+          next.delete(request.commentId);
+          return next;
+        });
       }
-      setFailures((current) => new Map(current).set(request.commentId, { message: result.message, request }));
     },
-    [language],
+    [],
   );
 
   /* UN VISITEUR ANONYME N'A AUCUN GESTE — les trois routes exigent un
@@ -123,25 +142,32 @@ export function CommentThread({ postId, enabled = true, tone = 'onLight' }: Comm
       canWrite
         ? {
             viewerId,
-            onLike: (commentId) => void runGesture({ kind: 'like', postId, commentId }),
+            onLike: (commentId, on) => void runGesture({ kind: 'like', postId, commentId, on }),
             onDelete: (commentId) => void runGesture({ kind: 'delete', postId, commentId }),
             onEdit: (commentId, content) =>
               void runGesture({ kind: 'edit', postId, commentId, content, originalLanguage: language }),
-            failureOf: (commentId) => failures.get(commentId)?.message,
+            failureOf: (commentId) => failures.get(commentId)?.failure,
             onRetryGesture: (commentId) => {
               const failed = failures.get(commentId);
               if (failed !== undefined) void runGesture(failed.request);
             },
+            busyOf: (commentId) => busy.has(commentId),
           }
         : undefined,
-    [canWrite, viewerId, postId, language, runGesture, failures],
+    [canWrite, viewerId, postId, language, runGesture, failures, busy],
   );
 
   return (
     <section
       data-comment-thread={postId}
       aria-label={translate(language, 'comments.title')}
-      className="flex min-h-0 flex-1 flex-col"
+      /* LA DESTINATION DE REPLI DU FOCUS quand la rangée qui le portait vient
+         d'être supprimée (défaut majeur 6) : `-1` la rend focalisable au
+         PROGRAMME sans l'ajouter à l'ordre de tabulation, et son nom
+         accessible annonce « Commentaires » plutôt qu'un retour muet au haut
+         du document. */
+      tabIndex={-1}
+      className="flex min-h-0 flex-1 flex-col focus-visible:outline-none"
       style={tone === 'onDark' ? { colorScheme: 'dark' } : undefined}
     >
       <div className="min-h-0 flex-1 overflow-y-auto px-3">
@@ -163,11 +189,6 @@ export function CommentThread({ postId, enabled = true, tone = 'onLight' }: Comm
           {...(gestures === undefined ? {} : { gestures })}
         />
       </div>
-      {notice !== '' ? (
-        <p role="status" aria-live="polite" data-comment-gesture-notice className="text-caption px-3 pb-1" style={{ color: 'var(--color-ios-ink-2)' }}>
-          {notice}
-        </p>
-      ) : null}
       {/* UN VISITEUR ANONYME NE COMMENTE PAS — la passerelle exige un
           `registeredUser` (`comments.ts:184-186`). Offrir le champ puis
           refuser en 401 serait un contrôle qui ment (loi 4). */}

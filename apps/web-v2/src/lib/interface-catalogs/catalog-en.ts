@@ -777,6 +777,7 @@ const en = {
   'comments.action.unlike': 'Unlike',
   'comments.action.edit': 'Edit',
   'comments.action.delete': 'Delete',
+  'comments.action.delete.confirm': 'Confirm',
   'comments.edit.label': 'Edit comment',
   'comments.edit.save': 'Save',
   'comments.edit.cancel': 'Cancel',
@@ -784,6 +785,10 @@ const en = {
   'comment.edit.error': 'Your edit wasn’t saved.',
   'comment.delete.error': 'The comment couldn’t be deleted.',
   'comment.gesture.pending': 'Action not confirmed — offline',
+  'comment.gesture.unconfirmed': 'Action not confirmed — the gateway didn’t answer.',
+  'comment.refused.session': 'Session expired — sign in again.',
+  'comment.refused.right': 'This action isn’t open to you.',
+  'comment.like.limit': 'Five reactions per person at most.',
   'feed.action.comment': 'Comment',
 
   'admin.title': 'Administration',

@@ -774,6 +774,7 @@ const ar = {
   'comments.action.unlike': 'لم يعد يعجبني',
   'comments.action.edit': 'تعديل',
   'comments.action.delete': 'حذف',
+  'comments.action.delete.confirm': 'تأكيد',
   'comments.edit.label': 'تعديل التعليق',
   'comments.edit.save': 'حفظ',
   'comments.edit.cancel': 'إلغاء',
@@ -781,6 +782,10 @@ const ar = {
   'comment.edit.error': 'لم يُحفظ التعديل.',
   'comment.delete.error': 'تعذّر حذف التعليق.',
   'comment.gesture.pending': 'إجراء غير مؤكَّد — دون اتصال',
+  'comment.gesture.unconfirmed': 'إجراء غير مؤكَّد — لم تستجب البوابة.',
+  'comment.refused.session': 'انتهت الجلسة — سجّل الدخول من جديد.',
+  'comment.refused.right': 'هذا الإجراء غير متاح لك.',
+  'comment.like.limit': 'خمسة تفاعلات كحد أقصى لكل شخص.',
   'feed.action.comment': 'تعليق',
 
   'admin.title': 'الإدارة',

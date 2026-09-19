@@ -777,6 +777,7 @@ const es = {
   'comments.action.unlike': 'Ya no me gusta',
   'comments.action.edit': 'Editar',
   'comments.action.delete': 'Eliminar',
+  'comments.action.delete.confirm': 'Confirmar',
   'comments.edit.label': 'Editar comentario',
   'comments.edit.save': 'Guardar',
   'comments.edit.cancel': 'Cancelar',
@@ -784,6 +785,10 @@ const es = {
   'comment.edit.error': 'No se ha guardado la modificación.',
   'comment.delete.error': 'No se ha podido eliminar el comentario.',
   'comment.gesture.pending': 'Acción sin confirmar — sin conexión',
+  'comment.gesture.unconfirmed': 'Acción sin confirmar: la pasarela no respondió.',
+  'comment.refused.session': 'Sesión caducada: vuelve a iniciar sesión.',
+  'comment.refused.right': 'Esta acción no está disponible para ti.',
+  'comment.like.limit': 'Cinco reacciones como máximo por persona.',
   'feed.action.comment': 'Comentar',
 
   'admin.title': 'Administración',

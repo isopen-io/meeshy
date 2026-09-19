@@ -27,6 +27,10 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 
 export type CommentComposerResult = { readonly ok: boolean; readonly message?: InterfaceCatalogKey | undefined };
 
+/** CE QUE LE COMPOSEUR A À DIRE, et de quelle encre — `refused` a perdu le
+ * texte (il est rendu au champ) ; `unconfirmed` l'a posé sans confirmation. */
+type ComposerNotice = { readonly text: string; readonly issue: 'refused' | 'unconfirmed' };
+
 export type CommentComposerProps = {
   readonly language: InterfaceLanguage;
   readonly onSend: (content: string) => Promise<CommentComposerResult>;
@@ -39,7 +43,7 @@ export type CommentComposerProps = {
 export function CommentComposer({ language, onSend, canWrite }: CommentComposerProps) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
-  const [notice, setNotice] = useState<string>('');
+  const [notice, setNotice] = useState<ComposerNotice | null>(null);
   const fieldRef = useRef<HTMLTextAreaElement | null>(null);
   const fieldId = useId();
 
@@ -47,12 +51,17 @@ export function CommentComposer({ language, onSend, canWrite }: CommentComposerP
     const content = text.trim();
     if (content === '' || sending) return;
     setSending(true);
-    setNotice('');
+    setNotice(null);
     /* Vidé AVANT l'appel — l'optimiste est déjà dans la liste. */
     setText('');
     const result = await onSend(content);
     setSending(false);
-    if (result.message !== undefined) setNotice(translate(language, result.message as 'comment.send.error'));
+    if (result.message !== undefined) {
+      setNotice({
+        text: translate(language, result.message as 'comment.send.error'),
+        issue: result.ok ? 'unconfirmed' : 'refused',
+      });
+    }
     /* RENDU au lecteur sur un refus : son texte lui appartient. */
     if (!result.ok) {
       setText(content);
@@ -73,12 +82,13 @@ export function CommentComposer({ language, onSend, canWrite }: CommentComposerP
   return (
     <form
       data-comment-composer
-      className="flex items-end gap-2 px-3 py-2"
+      className="flex flex-col gap-1 px-3 py-2"
       onSubmit={(e) => {
         e.preventDefault();
         void submit();
       }}
     >
+      <div className="flex items-end gap-2">
       <label className="sr-only" htmlFor={fieldId}>
         {translate(language, 'comments.placeholder')}
       </label>
@@ -127,12 +137,42 @@ export function CommentComposer({ language, onSend, canWrite }: CommentComposerP
       >
         <Glyph name="arrowUp" size={18} />
       </button>
-      {/* L'ANNONCE — `performComment` distingue « parti » de « posé mais non
-          confirmé » ; sans ce texte, le second serait indiscernable du
-          premier (le défaut qu'a payé `REACTION_PENDING_MESSAGE`). */}
-      <p role="status" aria-live="polite" className="sr-only" data-comment-notice>
-        {notice}
-      </p>
+      </div>
+      {/**
+       * L'ANNONCE — `performComment` distingue « parti » de « posé mais non
+       * confirmé » ; sans ce texte, le second serait indiscernable du
+       * premier (le défaut qu'a payé `REACTION_PENDING_MESSAGE`).
+       *
+       * **ET ELLE SE VOIT** (revue-correction #7135, défaut majeur 8). Elle
+       * vivait en `sr-only`, mesurée à 1 × 1 px : quand la passerelle refusait
+       * une publication, le seul signal offert à qui VOIT était un champ qui
+       * se vide et une rangée fantôme qui reste. La même surface affiche
+       * pourtant l'échec d'un GESTE de rangée en clair — l'écran parlait deux
+       * langues. `role="status"` et `aria-live` restent : la voix n'y perd
+       * rien, c'est l'œil qui y gagne. L'encre suit l'issue, comme sur la
+       * rangée : refus en `--color-error`, non-confirmé en encre neutre.
+       *
+       * PAS DE « RÉESSAYER » ICI, ET C'EST MESURÉ : sur un refus PERMANENT,
+       * `performComment` a déjà défait l'optimiste et RENDU le texte au champ
+       * — le bouton d'envoi EST le rejeu, et un second bouton à côté ferait
+       * deux portes pour un geste. Sur une issue passagère, la rangée
+       * optimiste TIENT : rejouer enverrait un `X-Client-Mutation-Id` NEUF
+       * (`replayCost: 'diverges'` côté passerelle), donc un SECOND
+       * commentaire, pas une reprise du premier. La reprise de cette
+       * famille-là est la file #5868.
+       */}
+      {notice === null ? null : (
+        <p
+          role="status"
+          aria-live="polite"
+          data-comment-notice
+          data-comment-notice-issue={notice.issue}
+          className="text-caption"
+          style={{ color: notice.issue === 'refused' ? 'var(--color-error)' : 'var(--color-ios-ink-2)' }}
+        >
+          {notice.text}
+        </p>
+      )}
     </form>
   );
 }

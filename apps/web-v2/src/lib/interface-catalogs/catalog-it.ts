@@ -777,6 +777,7 @@ const it = {
   'comments.action.unlike': 'Non mi piace più',
   'comments.action.edit': 'Modifica',
   'comments.action.delete': 'Elimina',
+  'comments.action.delete.confirm': 'Conferma',
   'comments.edit.label': 'Modifica commento',
   'comments.edit.save': 'Salva',
   'comments.edit.cancel': 'Annulla',
@@ -784,6 +785,10 @@ const it = {
   'comment.edit.error': 'La modifica non è stata salvata.',
   'comment.delete.error': 'Non è stato possibile eliminare il commento.',
   'comment.gesture.pending': 'Azione non confermata — offline',
+  'comment.gesture.unconfirmed': 'Azione non confermata — il gateway non ha risposto.',
+  'comment.refused.session': 'Sessione scaduta — accedi di nuovo.',
+  'comment.refused.right': 'Questa azione non ti è consentita.',
+  'comment.like.limit': 'Al massimo cinque reazioni a persona.',
   'feed.action.comment': 'Commenta',
 
   'admin.title': 'Amministrazione',

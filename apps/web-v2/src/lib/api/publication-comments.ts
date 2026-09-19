@@ -239,11 +239,18 @@ export function shiftCommentCount(queryClient: QueryClient, postId: string, delt
 
 /** Une CLÉ de catalogue, jamais un texte déjà traduit — seule la surface qui
  * annonce connaît la langue d'interface (même patron que `feed-gestures.ts`). */
-type CommentMessageKey = 'comment.send.error' | 'comment.send.pending' | 'comment.send.empty';
+type CommentMessageKey = 'comment.send.error' | 'comment.send.pending' | 'comment.send.empty' | 'comment.gesture.unconfirmed';
 
 export const COMMENT_FAILED_MESSAGE: CommentMessageKey = 'comment.send.error';
 export const COMMENT_PENDING_MESSAGE: CommentMessageKey = 'comment.send.pending';
 export const COMMENT_EMPTY_MESSAGE: CommentMessageKey = 'comment.send.empty';
+/** UNE PANNE DE PASSERELLE N'EST PAS UNE COUPURE RÉSEAU (revue-correction
+ * #7135, défaut majeur 4) — `comment.send.pending` NOMME le réseau, donc ne
+ * se sert que sur une absence de réponse alors que le lecteur est hors ligne.
+ * Un 5xx annoncé « hors ligne » envoie l'utilisateur vérifier son wifi. */
+export const COMMENT_UNCONFIRMED_MESSAGE: CommentMessageKey = 'comment.gesture.unconfirmed';
+
+const readerIsOffline = (): boolean => typeof navigator !== 'undefined' && navigator.onLine === false;
 
 export type CommentResult =
   | { readonly ok: true; readonly notice?: CommentMessageKey }
@@ -313,7 +320,9 @@ export async function performComment(params: {
 
   const result = await sendComment(deps, { postId, body }).catch(() => null);
 
-  if (result === null) return { ok: true, notice: COMMENT_PENDING_MESSAGE };
+  if (result === null) {
+    return { ok: true, notice: readerIsOffline() ? COMMENT_PENDING_MESSAGE : COMMENT_UNCONFIRMED_MESSAGE };
+  }
 
   if (result.ok) {
     const served = result.data;
@@ -326,7 +335,8 @@ export async function performComment(params: {
     return { ok: true };
   }
 
-  if (outcomeOf(result) !== 'permanent') return { ok: true, notice: COMMENT_PENDING_MESSAGE };
+  /* Un STATUT servi est un fait de PASSERELLE, jamais de réseau. */
+  if (outcomeOf(result) !== 'permanent') return { ok: true, notice: COMMENT_UNCONFIRMED_MESSAGE };
 
   deps.queryClient.setQueryData<CommentInfiniteData>(key, (data) => dropComment(data, tempId));
   shiftCommentCount(deps.queryClient, postId, -1);

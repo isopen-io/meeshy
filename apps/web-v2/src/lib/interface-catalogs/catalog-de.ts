@@ -777,6 +777,7 @@ const de = {
   'comments.action.unlike': 'Gefällt mir nicht mehr',
   'comments.action.edit': 'Bearbeiten',
   'comments.action.delete': 'Löschen',
+  'comments.action.delete.confirm': 'Bestätigen',
   'comments.edit.label': 'Kommentar bearbeiten',
   'comments.edit.save': 'Speichern',
   'comments.edit.cancel': 'Abbrechen',
@@ -784,6 +785,10 @@ const de = {
   'comment.edit.error': 'Die Änderung wurde nicht gespeichert.',
   'comment.delete.error': 'Der Kommentar konnte nicht gelöscht werden.',
   'comment.gesture.pending': 'Aktion nicht bestätigt — offline',
+  'comment.gesture.unconfirmed': 'Aktion nicht bestätigt — das Gateway hat nicht geantwortet.',
+  'comment.refused.session': 'Sitzung abgelaufen — bitte neu anmelden.',
+  'comment.refused.right': 'Diese Aktion steht dir nicht offen.',
+  'comment.like.limit': 'Höchstens fünf Reaktionen pro Person.',
   'feed.action.comment': 'Kommentieren',
 
   'admin.title': 'Verwaltung',

@@ -851,6 +851,7 @@ const fr = {
   'comments.action.unlike': 'Je n’aime plus',
   'comments.action.edit': 'Modifier',
   'comments.action.delete': 'Supprimer',
+  'comments.action.delete.confirm': 'Confirmer',
   'comments.edit.label': 'Modifier le commentaire',
   'comments.edit.save': 'Enregistrer',
   'comments.edit.cancel': 'Annuler',
@@ -858,6 +859,10 @@ const fr = {
   'comment.edit.error': 'La modification n’a pas été enregistrée.',
   'comment.delete.error': 'Le commentaire n’a pas pu être supprimé.',
   'comment.gesture.pending': 'Geste non confirmé — hors ligne',
+  'comment.gesture.unconfirmed': 'Geste non confirmé — la passerelle n’a pas répondu.',
+  'comment.refused.session': 'Session expirée — reconnectez-vous.',
+  'comment.refused.right': 'Ce geste ne vous est pas ouvert.',
+  'comment.like.limit': 'Cinq réactions au maximum par personne.',
   'feed.action.comment': 'Commenter',
 
   'admin.title': 'Administration',

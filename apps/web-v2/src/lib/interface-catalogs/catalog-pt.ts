@@ -781,6 +781,7 @@ const pt = {
   'comments.action.unlike': 'Já não gosto',
   'comments.action.edit': 'Editar',
   'comments.action.delete': 'Eliminar',
+  'comments.action.delete.confirm': 'Confirmar',
   'comments.edit.label': 'Editar comentário',
   'comments.edit.save': 'Guardar',
   'comments.edit.cancel': 'Cancelar',
@@ -788,6 +789,10 @@ const pt = {
   'comment.edit.error': 'A alteração não foi guardada.',
   'comment.delete.error': 'Não foi possível eliminar o comentário.',
   'comment.gesture.pending': 'Ação não confirmada — sem ligação',
+  'comment.gesture.unconfirmed': 'Ação não confirmada — o gateway não respondeu.',
+  'comment.refused.session': 'Sessão expirada — inicie sessão novamente.',
+  'comment.refused.right': 'Esta ação não lhe está aberta.',
+  'comment.like.limit': 'No máximo cinco reações por pessoa.',
   'feed.action.comment': 'Comentar',
 
   'admin.title': 'Administração',
