@@ -8,6 +8,16 @@
 > plus. Traiter les sections « Firebase » / « composition » comme du contexte historique, pas comme
 > l'état courant du code.
 
+**Carte des modules (2026-09-19, #7093).** Les lois pures et les éventails
+batch ont quitté `NotificationService.ts` (6119 → 4494 lignes) :
+`notification-preview.ts` (aperçus/bannières), `push-header.ts` (titre/
+sous-titre APN), `post-media-thumbnail.ts` (vignette d'un post),
+`fanout/story-comment.ts`, `fanout/comment-mention.ts`,
+`fanout/post-mention.ts`, `fanout/friend-content.ts`, `fanout/member-joined.ts`
+(cinq éventails, `fanout/dependencies.ts` pour leur type de dépendances). La
+classe garde l'API publique (`createNotification`, le Prisme des bannières,
+les gardes anti-spam) et délègue. `index.ts` ré-exporte chaque loi pure.
+
 ## Overview
 
 Système de notifications modulaire et scalable avec support multi-canal (WebSocket + Firebase Push).
