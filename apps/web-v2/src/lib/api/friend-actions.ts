@@ -82,6 +82,24 @@ const patchProfileRelations = (queryClient: QueryClient, userId: string, relatio
   });
 };
 
+/**
+ * **LE BLOCAGE SE PATCHE SUR LA FICHE, PAS SEULEMENT DANS LE PANIER** (#7125) —
+ * `/u/:handle` DÉDUISAIT l'état du panier ; il le lit maintenant sur le FIL
+ * (`blockedByViewer`, servi avec `expand=relation`). Écrire le seul panier
+ * laisserait donc « Bloquer » sans AUCUN effet sur l'écran d'où on vient de le
+ * toucher — le contrôle mort que la loi 4 interdit, et la forme exacte du
+ * défaut que `withBlockedFirst` a déjà corrigé une fois, un cache plus loin.
+ *
+ * **`relation` ne bouge PAS** : bloquer n'efface pas la ligne d'amitié, et
+ * débloquer doit rendre la relation qu'on avait. Les deux dimensions sont
+ * orthogonales jusque dans l'écriture optimiste.
+ */
+const patchProfileBlocked = (queryClient: QueryClient, userId: string, blockedByViewer: boolean): void => {
+  profileKeysFor(queryClient, userId).forEach((key) => {
+    queryClient.setQueryData<PublicProfileView>(key, (view) => (view === undefined ? view : { ...view, blockedByViewer }));
+  });
+};
+
 const snapshotOf = (queryClient: QueryClient, keys: readonly QueryKey[]): Snapshot =>
   keys.map((key) => [key, queryClient.getQueryData(key)] as const);
 
@@ -262,12 +280,17 @@ const withBlockedFirst = (data: BlockedData | undefined, person: PersonSummary):
  * effacerait — un geste qui « marche » puis se défait tout seul. Le panier,
  * lui, est la source que « Découvrir » lit déjà : UNE source, et les deux
  * surfaces bougent ensemble.
+ *
+ * **La FICHE, elle, porte le champ `blockedByViewer`** (#7125) et se patche
+ * donc AUSSI — § `patchProfileBlocked` : deux surfaces, deux formes du même
+ * état, un seul geste qui les écrit et un seul instantané qui les rend.
  */
 export function performBlock({ person, deps }: { readonly person: PersonSummary; readonly deps: FriendActionDeps }): Promise<FriendActionOutcome> {
   return once(`block:${person.id}`, async () => {
     if (!deps.isOnline()) return 'offline';
-    const snapshot = snapshotOf(deps.queryClient, [BLOCKED_USERS_QUERY_KEY]);
+    const snapshot = relationalSnapshot(deps.queryClient, person.id, [BLOCKED_USERS_QUERY_KEY]);
     deps.queryClient.setQueryData<BlockedData>(BLOCKED_USERS_QUERY_KEY, (data) => withBlockedFirst(data, person));
+    patchProfileBlocked(deps.queryClient, person.id, true);
 
     const result = await blockUser(deps, person.id);
     if (!result.ok) {
@@ -281,8 +304,9 @@ export function performBlock({ person, deps }: { readonly person: PersonSummary;
 export function performUnblock({ person, deps }: { readonly person: PersonSummary; readonly deps: FriendActionDeps }): Promise<FriendActionOutcome> {
   return once(`unblock:${person.id}`, async () => {
     if (!deps.isOnline()) return 'offline';
-    const snapshot = snapshotOf(deps.queryClient, [BLOCKED_USERS_QUERY_KEY]);
+    const snapshot = relationalSnapshot(deps.queryClient, person.id, [BLOCKED_USERS_QUERY_KEY]);
     deps.queryClient.setQueryData<BlockedData>(BLOCKED_USERS_QUERY_KEY, (data) => withoutBlocked(data, person.id));
+    patchProfileBlocked(deps.queryClient, person.id, false);
 
     const result = await unblockUser(deps, person.id);
     if (!result.ok) {

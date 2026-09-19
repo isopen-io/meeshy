@@ -421,15 +421,18 @@ const servedRelation = (userId: string): ServedRelation => {
 
 const viewOf = (profile: PublicProfile): PublicProfileView => {
   const isSelf = profile.id === VIEWER_ID;
-  /* Un compte BLOQUÉ par le lecteur : la passerelle n'a pas de valeur
-     `blocked` dans `relationAvec` — la fiche le sait par le panier des
-     bloqués, comme « Découvrir ». `relation` reste donc `none` sur le fil ;
-     c'est `relationFromServed` qui compose l'état affiché. */
+  /* Un compte BLOQUÉ par le lecteur voyage sur son PROPRE champ (#7125) :
+     `relation` garde la ligne d'amitié — ce que la passerelle fait aussi,
+     `hasBlocked` étant interrogée À CÔTÉ de `friendRequest`. L'ensemble des
+     bloqués reste la source des DEUX, comme `relationAvec` et `hasBlocked`
+     lisent la même base : deux sources ici auraient fait dire deux choses au
+     même geste. */
   return {
     profile,
     stats: isSelf ? SELF_STATS : THIRD_PARTY_STATS,
     relation: servedRelation(profile.id),
     isSelf,
+    blockedByViewer: !isSelf && fixtureBlockedUsers().some((person) => person.id === profile.id),
   };
 };
 

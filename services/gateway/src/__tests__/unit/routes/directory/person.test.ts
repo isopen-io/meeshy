@@ -65,33 +65,44 @@ const PRIVES_DE_STATS = [
   'friendRequestsReceived',
 ] as const;
 
-function prismaDouble() {
+/**
+ * @param bloquesParLeLecteur les ids que le LECTEUR a bloqués — le double
+ * reconnaît la requête de blocage à son `where.blockedUserIds`, la seule des
+ * deux interrogations de `user.findFirst` qui le porte. Un double qui rendrait
+ * la ligne de profil à cette requête-là dirait « bloqué » sur toute fiche.
+ */
+function prismaDouble(bloquesParLeLecteur: readonly string[] = []) {
   return {
     user: {
       // La ligne rend PLUS que la projection publique — c'est le point : si le
       // `select` venait à recharger les six champs, ils seraient là, et seule
       // la déclaration du schéma déciderait. Le témoin mesure donc la sortie.
-      findFirst: jest.fn<any>(async () => ({
-        id: CIBLE,
-        username: 'cible',
-        firstName: 'Ada',
-        lastName: 'Lovelace',
-        displayName: 'Ada',
-        avatar: null,
-        banner: null,
-        bio: null,
-        role: 'USER',
-        isOnline: true,
-        lastActiveAt: new Date('2026-08-01T10:00:00Z'),
-        deactivatedAt: null,
-        createdAt: new Date('2025-01-01T00:00:00Z'),
-        updatedAt: new Date('2026-08-28T00:00:00Z'),
-        isActive: true,
-        systemLanguage: 'fr',
-        regionalLanguage: 'en',
-        customDestinationLanguage: 'es',
-        voiceModel: null,
-      })),
+      findFirst: jest.fn<any>(async (args?: any) => {
+        if (args?.where?.blockedUserIds) {
+          return bloquesParLeLecteur.includes(args.where.blockedUserIds.has) ? { id: 'peu-importe' } : null;
+        }
+        return {
+          id: CIBLE,
+          username: 'cible',
+          firstName: 'Ada',
+          lastName: 'Lovelace',
+          displayName: 'Ada',
+          avatar: null,
+          banner: null,
+          bio: null,
+          role: 'USER',
+          isOnline: true,
+          lastActiveAt: new Date('2026-08-01T10:00:00Z'),
+          deactivatedAt: null,
+          createdAt: new Date('2025-01-01T00:00:00Z'),
+          updatedAt: new Date('2026-08-28T00:00:00Z'),
+          isActive: true,
+          systemLanguage: 'fr',
+          regionalLanguage: 'en',
+          customDestinationLanguage: 'es',
+          voiceModel: null,
+        };
+      }),
       findUnique: jest.fn<any>(async () => ({ createdAt: new Date('2025-01-01T00:00:00Z') })),
     },
     message: { count: jest.fn<any>(async () => 69), groupBy: jest.fn<any>(async () => []) },
@@ -104,9 +115,13 @@ function prismaDouble() {
   };
 }
 
-async function monter(viewerId: string | null, role = 'USER'): Promise<FastifyInstance> {
+async function monter(
+  viewerId: string | null,
+  role = 'USER',
+  bloquesParLeLecteur: readonly string[] = []
+): Promise<FastifyInstance> {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
-  app.decorate('prisma', prismaDouble() as never);
+  app.decorate('prisma', prismaDouble(bloquesParLeLecteur) as never);
   (app as unknown as { redis?: unknown }).redis = undefined;
   // `getOptionalAuth` construit son middleware depuis `fastify.prisma` ; on lui
   // substitue une identité posée directement, comme le font les autres témoins
@@ -274,6 +289,110 @@ describe('`fields` ne peut que RESTREINDRE', () => {
     expect(data.username).toBe('cible');
     // `id` survit toujours : sans lui la réponse ne dit plus de qui elle parle.
     expect(data.id).toBe(CIBLE);
+    await app.close();
+  });
+});
+
+/**
+ * **LE BLOCAGE SE LIT PAR SUJET, PAS DANS UNE PAGE** (#7125).
+ *
+ * `/u/:handle` déduisait « ai-je bloqué cette personne ? » du panier
+ * `GET /blocks`, paginé à CENT lignes et jamais tourné : au-delà de la
+ * centième personne bloquée, sa fiche s'ouvrait ENTIÈRE — publications,
+ * compteurs — avec « Bloquer » offert au lieu de la carte de blocage. Du
+ * contenu masqué redevenait visible par le seul effet du rang.
+ *
+ * C'est le raisonnement que `apps/web-v2/src/lib/profile/relation.ts:13-18`
+ * écrit DÉJÀ contre l'usage du panier `accepted` pour l'amitié, et que
+ * personne n'avait appliqué au panier des bloqués faute d'alternative servie.
+ *
+ * **Pourquoi un champ À CÔTÉ de `relation`, et pas une sixième valeur.**
+ * Bloquer quelqu'un n'efface pas la ligne d'amitié : le serveur continue de
+ * servir `friend` ou `pending_sent`, et c'est juste — débloquer doit rendre
+ * la relation qu'on avait. Une valeur `blocked` sur le même fil écraserait
+ * cette information, et l'écran ne saurait plus quoi afficher APRÈS le
+ * déblocage.
+ *
+ * **Le champ est DIRIGÉ.** « Ai-je bloqué cette personne » — jamais
+ * `isBlockedBetween` (`utils/blocking.ts:21`), qui est bidirectionnelle parce
+ * qu'elle sert l'interdiction de messagerie. « Débloquer » n'a de sens que
+ * dans un sens : on ne débloque pas pour le compte d'autrui.
+ */
+describe('`blockedByViewer` — le blocage répond par SUJET (#7125)', () => {
+  it('un lecteur qui a bloqué la cible le lit sur `?expand=relation`', async () => {
+    const app = await monter(TIERS, 'USER', [CIBLE]);
+
+    const data = (await lire(app, '?expand=relation')).json().data as Record<string, unknown>;
+
+    expect(data.blockedByViewer).toBe(true);
+    await app.close();
+  });
+
+  it("un lecteur qui n'a pas bloqué reçoit `false` — jamais l'absence du champ", async () => {
+    const app = await monter(TIERS, 'USER', []);
+
+    const data = (await lire(app, '?expand=relation')).json().data as Record<string, unknown>;
+
+    // `false` et « champ absent » se lisent pareil en JavaScript, et c'est
+    // précisément l'ambiguïté qui ferait retomber l'écran sur le panier.
+    expect('blockedByViewer' in data).toBe(true);
+    expect(data.blockedByViewer).toBe(false);
+    await app.close();
+  });
+
+  it('LA question nomme le SUJET — aucune page, aucun rang', async () => {
+    const app = await monter(TIERS, 'USER', [CIBLE]);
+
+    await lire(app, '?expand=relation');
+
+    // Le témoin qui porte l'issue : si la passerelle répondait depuis une
+    // LISTE, cet appel ne pourrait pas nommer la cible. Un `where` qui la
+    // nomme ne peut pas dépendre du rang.
+    const appels = (app as unknown as { prisma: { user: { findFirst: { mock: { calls: unknown[][] } } } } }).prisma
+      .user.findFirst.mock.calls;
+    const question = appels
+      .map(([args]) => args as { where?: { blockedUserIds?: { has?: string }; id?: string } } | undefined)
+      .find((args) => args?.where?.blockedUserIds !== undefined);
+
+    expect(question).toBeDefined();
+    expect(question?.where?.blockedUserIds?.has).toBe(CIBLE);
+    expect(question?.where?.id).toBe(TIERS);
+    await app.close();
+  });
+
+  it('sans `expand=relation`, le champ ne part pas — et la question n’est pas posée', async () => {
+    const app = await monter(TIERS, 'USER', [CIBLE]);
+
+    const data = (await lire(app)).json().data as Record<string, unknown>;
+
+    expect('blockedByViewer' in data).toBe(false);
+    const appels = (app as unknown as { prisma: { user: { findFirst: { mock: { calls: unknown[][] } } } } }).prisma
+      .user.findFirst.mock.calls;
+    // `relation` DÉCLENCHE des requêtes (`person.ts:56-59`) : ne pas la
+    // demander doit rester gratuit.
+    expect(appels.some(([a]) => (a as { where?: { blockedUserIds?: unknown } })?.where?.blockedUserIds)).toBe(false);
+    await app.close();
+  });
+
+  it("un lecteur ANONYME n'a pas de blocage, et ne paie aucune requête pour l'apprendre", async () => {
+    const app = await monter(null);
+
+    const data = (await lire(app, '?expand=relation')).json().data as Record<string, unknown>;
+
+    expect(data.blockedByViewer).toBe(false);
+    const appels = (app as unknown as { prisma: { user: { findFirst: { mock: { calls: unknown[][] } } } } }).prisma
+      .user.findFirst.mock.calls;
+    expect(appels.some(([a]) => (a as { where?: { blockedUserIds?: unknown } })?.where?.blockedUserIds)).toBe(false);
+    await app.close();
+  });
+
+  it('on ne se bloque pas soi-même, et la question ne part pas non plus', async () => {
+    const app = await monter(CIBLE);
+
+    const data = (await lire(app, '?expand=relation')).json().data as Record<string, unknown>;
+
+    expect(data.blockedByViewer).toBe(false);
+    expect(data.isSelf).toBe(true);
     await app.close();
   });
 });

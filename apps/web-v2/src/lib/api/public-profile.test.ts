@@ -137,6 +137,27 @@ describe('decodePublicProfileView', () => {
   test('un profil illisible rend `null` — la vue entière tombe avec lui', () => {
     expect(decodePublicProfileView({ username: 'sans-id' })).toBeNull();
   });
+
+  /**
+   * **`blockedByViewer` VOYAGE À CÔTÉ DE LA RELATION, JAMAIS DEDANS** (#7125) —
+   * bloquer quelqu'un n'efface pas la ligne d'amitié, et la passerelle continue
+   * de servir `friend` : c'est ce qui permet à « Débloquer » de rendre la
+   * relation qu'on avait. Une sixième valeur de `relation` l'aurait écrasée.
+   */
+  test('« ai-je bloqué cette personne » est un champ à part, et la ligne d’amitié lui SURVIT', () => {
+    const view = decodePublicProfileView({ ...WIRE_THIRD_PARTY, relation: 'friend', blockedByViewer: true });
+    expect(view?.blockedByViewer).toBe(true);
+    expect(view?.relation).toBe('friend');
+  });
+
+  /* Un champ absent — une passerelle plus ancienne — ou d'un autre type ne
+     fabrique pas un blocage : seul un `true` SERVI en est un, exactement comme
+     `isSelf` juste à côté. */
+  test('rien d’autre qu’un `true` servi ne vaut un blocage', () => {
+    expect(decodePublicProfileView(WIRE_THIRD_PARTY)?.blockedByViewer).toBe(false);
+    expect(decodePublicProfileView({ ...WIRE_THIRD_PARTY, blockedByViewer: 'oui' })?.blockedByViewer).toBe(false);
+    expect(decodePublicProfileView({ ...WIRE_THIRD_PARTY, blockedByViewer: false })?.blockedByViewer).toBe(false);
+  });
 });
 
 const recordingTransport = (): { readonly transport: HttpTransport; readonly paths: string[] } => {
