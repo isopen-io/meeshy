@@ -61,6 +61,7 @@ import { fileURLToPath } from 'node:url';
 
 import { launchChromium } from './lib/browser.mjs';
 import { startDistServer } from './lib/gate-server.mjs';
+import { driftLine, insertionDrift } from './lib/insertion-drift.mjs';
 
 const APP = fileURLToPath(new URL('..', import.meta.url));
 const BENCH = 500;
@@ -203,17 +204,18 @@ const pullOlderPage = () =>
       }),
   );
 
-let insertionJump = 0;
+/** Les tirages BRUTS — agrégés par `insertionDrift`, jamais à la main : un
+ * accumulateur initialisé à `0` imprimait « 0 px » sur une mesure qui n'avait
+ * pas eu lieu (#7110). */
+const pulls = [];
 let olderPages = 0;
-let lostAnchor = 0;
 for (let turn = 0; turn < 20; turn += 1) {
   if ((await olderState()) !== 'idle') break;
   const pull = await pullOlderPage();
   if (pull.loaded !== true) break;
   olderPages += 1;
   await page.waitForTimeout(150);
-  if (pull.drift === null) lostAnchor += 1;
-  else insertionJump = Math.max(insertionJump, pull.drift);
+  pulls.push({ drift: pull.drift });
   const r = await snapshot(`page ancienne ${olderPages}`);
   expect(
     r.cellCount < MAX_CELLS,
@@ -221,13 +223,23 @@ for (let turn = 0; turn < 20; turn += 1) {
   );
 }
 
+const drift = insertionDrift(pulls);
+const lostAnchor = drift.genre === 'non-mesurable' ? drift.perdues : 0;
+
 expect(olderPages >= 2, `au moins DEUX pages anciennes se chargent à l'approche du haut (mesuré ${olderPages})`);
 expect(lostAnchor === 0, `la rangée repérée reste MONTÉE après l'insertion (perdue ${lostAnchor} fois)`);
 /** Deux pixels : la marge d'arrondi du navigateur. Au-delà, l'historique
- * inséré a fait glisser le fil sous les yeux du lecteur. */
+ * inséré a fait glisser le fil sous les yeux du lecteur.
+ *
+ * L'assertion exige une mesure RÉELLE (#7110) : sur `non-mesurable`, l'ancien
+ * accumulateur valait `0`, donc `0 <= 2` — le gate concluait au vert par
+ * ABSENCE DE SUJET, et seule l'assertion voisine `lostAnchor === 0` le
+ * rattrapait. Deux gardes qui tombent ensemble valent mieux qu'une qui ment. */
 expect(
-  insertionJump <= 2,
-  `une cellule visible a bougé de ${Math.round(insertionJump)} px à l'insertion d'une page ancienne — l'historique pousse le fil sous les yeux`,
+  drift.genre === 'mesurée' && drift.max <= 2,
+  drift.genre === 'mesurée'
+    ? `une cellule visible a bougé de ${Math.round(drift.max)} px à l'insertion d'une page ancienne — l'historique pousse le fil sous les yeux`
+    : `la dérive d'insertion n'a PAS pu être mesurée (${driftLine(drift)}) — aucun verdict de dérive n'est prononçable`,
 );
 expect(
   (await olderState()) === 'exhausted',
@@ -304,7 +316,7 @@ for (const r of readings) {
   );
 }
 console.log(`  pages anciennes chargées ${olderPages}`);
-console.log(`  saut à l'insertion      ${Math.round(insertionJump)} px`);
+console.log(`  saut à l'insertion      ${driftLine(drift)}`);
 console.log(`  saut du contenu visible ${Math.round(visualJump)} px\n`);
 
 if (failures.length > 0) {
