@@ -174,12 +174,18 @@ type PageContext = { readonly pageParam: string | null; readonly signal?: AbortS
  * TOUTES les pages du panier `accepted` à cent lignes la page : un compte à
  * 350 contacts payait quatre allers-retours à chaque focus passé 30 s.
  *
- * **Attention — un appelant peut la neutraliser** : `use-pending-friend-
- * requests.ts:31` repose `staleTime: 30_000` APRÈS avoir répandu cette
- * fabrique, et son observateur est monté sur neuf routes (`floating-gate.ts`).
- * Tant que ce site n'a pas suivi, le panier `received` garde une fenêtre de
- * 30 s quand la pastille du barreau est à l'écran (le rang stale se décide PAR
- * OBSERVATEUR). Voir le rapport de #6974.
+ * **Un appelant peut la neutraliser, et l'un l'a fait** (#6981, corrigé) :
+ * `use-pending-friend-requests.ts` reposait `staleTime: 30_000` APRÈS avoir
+ * répandu cette fabrique, et son observateur est monté sur neuf routes
+ * (`floating-gate.ts`). `query-core` ne fait voter personne — `Query.onFocus()`
+ * refetche dès qu'UN SEUL observateur juge la donnée périmée — donc cette
+ * seule surcharge ramenait le panier `received` à une fenêtre de 30 s POUR
+ * TOUT LE MONDE, et l'entrée étant infinie, chaque focus rejouait toutes les
+ * pages chargées.
+ *
+ * La surcharge est retirée, et `use-pending-friend-requests.test.tsx` garde
+ * désormais l'EFFET sur le vrai hook : un montage à 31 s ne déclenche aucun
+ * vol. Un témoin de source aurait laissé revenir la surcharge.
  */
 export const FRIENDS_STALE_TIME = 5 * 60_000;
 

@@ -184,3 +184,71 @@ describe('TypingRosterCell — tenue PLATE (Focal/Script) vs tenue BULLES (#6171
     expect(root).toContain('aria-label="Kwame Mensah écrit"');
   });
 });
+
+/**
+ * LE VISAGE DU MENEUR PORTE SA PHOTO (#6985, point 2).
+ *
+ * `TypingEntry` ne porte aucun avatar — **et la charge serveur non plus** :
+ * `typing:start` sert `userId` / `username` / `displayName`. Élargir
+ * l'événement aurait dupliqué l'information à chaque frappe de chaque
+ * personne, alors qu'elle est DÉJÀ en cache côté client.
+ *
+ * L'hôte résout donc, et remet un résolveur. Pourquoi une FONCTION et pas la
+ * liste des participants : le meneur est élu DANS la cellule (`typingLead`,
+ * le premier apparu) — l'hôte ne sait pas de qui il s'agit, et le lui faire
+ * calculer dupliquerait l'élection. Mesuré avant de trancher : la cellule
+ * n'est pas `memo`-isée, donc l'identité instable d'une fonction en prop ne
+ * coûte rien ici.
+ */
+describe('TypingRosterCell — le visage du meneur porte sa photo (#6985)', () => {
+  const avatarDe = (userId: string) => (userId === 'u-kwame' ? 'https://static.meeshy.me/u/i/kwame.jpg' : undefined);
+
+  test('tenue plate : la pastille du meneur rend son <img>, jamais ses seules initiales', () => {
+    const html = renderToStaticMarkup(
+      <TypingRosterCell typists={[entry('u-kwame', 'Kwame Mensah')]} accent="#5B4CFF" flat avatarOf={avatarDe} />,
+    );
+
+    expect(html).toContain('kwame.jpg');
+  });
+
+  test('tenue bulles : la même photo, la cellule ne sert pas deux visages du même frappeur', () => {
+    const html = renderToStaticMarkup(
+      <TypingRosterCell typists={[entry('u-kwame', 'Kwame Mensah')]} accent="#5B4CFF" flat={false} avatarOf={avatarDe} />,
+    );
+
+    expect(html).toContain('kwame.jpg');
+  });
+
+  test('le MENEUR seul, jamais le second : deux frappeurs, une seule photo — celle du premier apparu', () => {
+    // `typingLead` élit le premier apparu, et la cellule ne multiplie pas ses
+    // avatars. Sans ce témoin, un résolveur appelé sur le mauvais frappeur
+    // resterait invisible.
+    const html = renderToStaticMarkup(
+      <TypingRosterCell
+        typists={[entry('u-amina', 'Amina Diallo'), entry('u-kwame', 'Kwame Mensah')]}
+        accent="#5B4CFF"
+        flat
+        avatarOf={(userId) => (userId === 'u-amina' ? 'amina.jpg' : 'kwame.jpg')}
+      />,
+    );
+
+    expect(html).toContain('amina.jpg');
+    expect(html).not.toContain('kwame.jpg');
+  });
+
+  test('sans résolveur, la cellule rend ses initiales — aucun <img> fabriqué', () => {
+    const html = renderToStaticMarkup(
+      <TypingRosterCell typists={[entry('u-kwame', 'Kwame Mensah')]} accent="#5B4CFF" flat />,
+    );
+
+    expect(html).not.toContain('<img');
+  });
+
+  test('un frappeur SANS photo ne rend aucun <img> — jamais un src vide, qui recharge la page', () => {
+    const html = renderToStaticMarkup(
+      <TypingRosterCell typists={[entry('u-ghost', 'Inconnu')]} accent="#5B4CFF" flat avatarOf={avatarDe} />,
+    );
+
+    expect(html).not.toContain('<img');
+  });
+});

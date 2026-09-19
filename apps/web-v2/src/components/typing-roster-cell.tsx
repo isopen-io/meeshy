@@ -64,13 +64,32 @@ export function TypingRosterCell({
   typists,
   accent,
   flat,
+  avatarOf,
 }: {
   readonly typists: readonly TypingEntry[];
   readonly accent: string;
   readonly flat: boolean;
+  /**
+   * LA PHOTO DU MENEUR, résolue par l'HÔTE (#6985). `TypingEntry` n'en porte
+   * aucune, et la charge serveur non plus : `typing:start` sert `userId` /
+   * `username` / `displayName`. Élargir l'événement dupliquerait
+   * l'information à CHAQUE frappe de CHAQUE personne, alors qu'elle est déjà
+   * en cache côté client — d'où un résolveur remis, jamais un champ de plus
+   * sur le fil.
+   *
+   * Une FONCTION plutôt que la liste des participants : le meneur est élu
+   * ICI (`typingLead`, le premier apparu), l'hôte ne sait pas de qui il
+   * s'agit, et le lui faire calculer dupliquerait l'élection. Mesuré avant de
+   * trancher : cette cellule n'est pas `memo`-isée, donc l'identité instable
+   * d'une fonction en prop ne coûte rien.
+   */
+  readonly avatarOf?: (userId: string) => string | undefined;
 }) {
   const lead = typingLead(typists);
   if (lead === undefined) return null;
+  /* `undefined` quand il n'y a pas de photo — jamais `''` : `Avatar` rendrait
+     un `<img src="">`, qui RECHARGE la page courante. */
+  const leadPhoto = avatarOf?.(lead.userId) || undefined;
   const label = typingAnnouncement(
     typists.map((t) => t.displayName),
     interfaceTypingFormatter(currentInterfaceLanguage()),
@@ -86,7 +105,12 @@ export function TypingRosterCell({
         data-typing-cell
         data-typing-label={label}
       >
-        <Avatar initials={initialsOf(lead.displayName)} color={accent} size={AVATAR_SIZE} />
+        <Avatar
+          initials={initialsOf(lead.displayName)}
+          color={accent}
+          size={AVATAR_SIZE}
+          {...(leadPhoto === undefined ? {} : { src: leadPhoto })}
+        />
         <TypingDots color={accent} />
       </div>
     );
@@ -100,7 +124,12 @@ export function TypingRosterCell({
       data-typing-cell
       data-typing-label={label}
     >
-      <Avatar initials={initialsOf(lead.displayName)} color={accent} size={18} />
+      <Avatar
+        initials={initialsOf(lead.displayName)}
+        color={accent}
+        size={18}
+        {...(leadPhoto === undefined ? {} : { src: leadPhoto })}
+      />
       <span
         className="flex items-center gap-1.5 rounded-chip px-3 py-2"
         style={{ backgroundColor: 'var(--color-ios-card)' }}

@@ -28,7 +28,14 @@ export function usePendingFriendRequestCount(): number {
     {
       ...friendRequestsQueryOptions(apiDeps, 'received'),
       enabled: apiDeps.source === 'fixtures' || authenticated,
-      staleTime: 30_000,
+      // AUCUN `staleTime` ici (#6981) — celui de `friendRequestsQueryOptions`
+      // vaut cinq minutes (#6974), et le reposer à 30 s par-dessus le rendait
+      // MORT-NÉ. `query-core` ne fait voter personne : `Query.onFocus()`
+      // refetche dès qu'UN SEUL observateur juge la donnée périmée. Cet
+      // observateur-ci étant monté sur NEUF routes (`floating-gate.ts`), sa
+      // surcharge suffisait à annuler la fenêtre pour tout le monde — et
+      // l'entrée étant INFINIE, chaque focus rejouait TOUTES les pages
+      // chargées, à cent lignes la page.
     },
     appQueryClient,
   );
