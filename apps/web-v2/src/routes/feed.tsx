@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { useStore } from 'zustand/react';
 
 import { FeedPostCard } from '@/components/feed-post-card';
@@ -33,7 +33,7 @@ import { usePullToRefresh } from '@/lib/view/use-pull-to-refresh';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { useScrollportMemory } from '@/lib/view/use-scrollport-memory';
 import { useStoryRailProps } from '@/lib/view/use-story-rail';
-import { Link } from '@/routes/route-table';
+import { Link, href, navigate } from '@/routes/route-table';
 
 /**
  * LE FIL DES PUBLICATIONS (#5893, #6104, #6277) — destination du bouton
@@ -268,6 +268,14 @@ export default function FeedScreen() {
    * seulement s'il y a déjà des cartes : une liste vide ne doit rien charger
    * en boucle (même garde que `conversations.tsx`). */
   const { announcement, onGesture, onShare } = usePostGesture();
+  /* COMMENTER DEPUIS LE FIL — le compteur conduit au DÉTAIL de la
+     publication, à son ancre de commentaires (`routes/post.tsx`
+     § `#commentaires`). iOS ouvre une couche (`FeedCommentsSheet`) ; le web
+     a déjà une route pour cette publication, et y mener garde UNE adresse
+     partageable pour un fil — jamais un état modal sans URL. */
+  const openComments = useCallback((postId: string) => {
+    navigate(`${href('post', { post: postId })}#commentaires`);
+  }, []);
 
   // L'ÉLECTION DE LA SCÈNE QUI JOUE (#6898 § 5.3) — UN SEUL
   // `IntersectionObserver`, posé ici, pour toutes les cartes du fil.
@@ -319,6 +327,7 @@ export default function FeedScreen() {
                   model={model}
                   onGesture={onGesture}
                   onShare={onShare}
+                  onComment={openComments}
                   preferredLanguages={readerLanguages}
                   onOpenScene={sceneGallery.onOpenScene}
                   registerScene={registerScene}

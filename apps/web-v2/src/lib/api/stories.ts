@@ -212,6 +212,22 @@ export type StoryFeedPost = {
    * sert (`schema.prisma:911`) — dépouillée par `lib/api/prism.ts`, JAMAIS
    * relue ici telle quelle (D-14, cycle 122 du CLAUDE.md racine). */
   readonly translations?: unknown;
+  /**
+   * **LES EMOJIS QUE CE LECTEUR A POSÉS** (`PostFeedService.ts:511`,
+   * `userReactionsMap`) — et NON un booléen `isLikedByMe` : le corpus des
+   * stories ne sert pas la forme du Flux. Le champ arrivait bien sur le fil
+   * et ce type le JETAIT, donc le rail du lecteur ne pouvait pas savoir si
+   * la story était déjà aimée — chaque tap aurait posé une réaction sans
+   * jamais pouvoir la retirer (loi 4 : un bouton de retrait inerte).
+   */
+  readonly currentUserReactions?: readonly string[] | null;
+  /** `postInclude.reactionCount` (`postIncludes.ts:351`) — le compte GLOBAL
+   * que le rail affiche sous le cœur. */
+  readonly reactionCount?: number | null;
+  /** `postInclude.commentCount` (`postIncludes.ts:354`) — ce que le rail lit
+   * pour savoir si le bouton « Commentaires » existe (`showsComments`,
+   * `lib/stories/action-rail.ts`), SANS aucune requête. */
+  readonly commentCount?: number | null;
   /** `unknown` (#6899, T8/T9) — un fond v1 (`{ background }`) OU un document
    * canvas v3 (`{ v: 3, scenes: […] }`) selon la négociation O17
    * (`storyEffectsV3.ts`, § 3 de la spécification `stories-lecteur`) : lu par

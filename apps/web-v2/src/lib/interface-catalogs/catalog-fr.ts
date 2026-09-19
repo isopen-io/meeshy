@@ -760,6 +760,39 @@ const fr = {
      `admin.denied.*`, `admin.role`) ont déménagé dans
      `catalog-admin-fr.ts` (#6871, #6834) : elles ne pesaient que pour un
      lecteur qui n'ouvre jamais l'administration. */
+  /* LE RAIL D'ACTIONS DU LECTEUR DE STORIES et LE FIL DE COMMENTAIRES
+     d'une publication — les libellés reprennent ceux d'iOS
+     (`story.viewer.action.*`, `Localizable.xcstrings`) ; `comments.*`
+     est propre au web, qui rend la liste là où iOS pose une couche. */
+  'story.action.rail': 'Actions de la story',
+  'story.action.react': 'Réagir',
+  'story.action.reply': 'Répondre',
+  'story.action.forward': 'Envoyer',
+  'story.action.repost': 'Republier',
+  'story.action.views': 'Vues',
+  'story.action.share': 'Partager',
+  'story.action.save': 'Enregistrer',
+  'story.action.comments': 'Commentaires',
+  'story.action.translations': 'Traductions',
+  'comments.title': 'Commentaires',
+  'comments.close': 'Fermer les commentaires',
+  'comments.loading': 'Chargement des commentaires',
+  'comments.empty': 'Aucun commentaire',
+  'comments.empty.hint': 'Soyez la première personne à en écrire un.',
+  'comments.error': 'Impossible de charger les commentaires',
+  'comments.error.hint': 'Réessayez dans un instant.',
+  'comments.retry': 'Réessayer',
+  'comments.more': 'Voir plus de commentaires',
+  'comments.offline': 'Hors ligne — seuls les commentaires déjà lus s’affichent.',
+  'comments.placeholder': 'Écrire un commentaire…',
+  'comments.send': 'Envoyer le commentaire',
+  'comments.row.pending': 'Envoi en cours',
+  'comments.signin': 'Connectez-vous pour commenter.',
+  'comment.send.error': 'Le commentaire n’a pas pu être publié.',
+  'comment.send.pending': 'Commentaire non confirmé — hors ligne',
+  'comment.send.empty': 'Écrivez quelque chose avant d’envoyer.',
+  'feed.action.comment': 'Commenter',
+
   'admin.title': 'Administration',
 
 } as const;

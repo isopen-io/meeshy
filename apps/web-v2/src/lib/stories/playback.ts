@@ -163,6 +163,13 @@ export type StoryPlaybackStory = {
   readonly createdAt: string | Date;
   readonly expiresAt?: string | Date | null;
   readonly isViewedByMe?: boolean;
+  /** LE RAIL D'ACTIONS lit ces trois-là, et RIEN d'autre du réseau : la loi
+   * (`lib/stories/action-rail.ts`) décide du jeu de boutons depuis le corpus
+   * DÉJÀ EN MAIN — « aucune résolution réseau n'est nécessaire pour décider
+   * du set » (`StoryViewerView+Sidebar.swift:24-26`). */
+  readonly commentCount?: number | null;
+  readonly reactionCount?: number | null;
+  readonly currentUserReactions?: readonly string[] | null;
 };
 
 export type StoryPlaybackGroup = {

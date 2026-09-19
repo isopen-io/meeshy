@@ -13,8 +13,9 @@ import { useStore } from 'zustand/react';
 
 import { Avatar } from '@/components/avatar';
 import { Glyph } from '@/components/glyph';
+import { STORY_ACTION_RAIL_CORRIDOR, StoryActionRail, type StoryActionRailHandlers } from '@/components/story-action-rail';
 import { apiDeps } from '@/lib/api/deps';
-import { markStoryViewedAction, useStoryFeed, useStoryPost } from '@/lib/api/query';
+import { markStoryViewedAction, storyReactionAction, useStoryFeed, useStoryPost } from '@/lib/api/query';
 import { attachmentSrc } from '@/lib/api/media-url';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
@@ -30,11 +31,18 @@ import {
   isDoubleTap,
   isDrag,
 } from '@/lib/stories/gesture';
+import {
+  freezeStoryActionRail,
+  reconcileStoryActionRailComments,
+  type FrozenStoryActionRail,
+} from '@/lib/stories/action-rail';
+import { STORY_DEFAULT_REACTION, hasReactedToStory } from '@/lib/stories/reaction';
 import { resolveStoryCaption } from '@/lib/stories/caption';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { resolveStoryMediaCaption } from '@/lib/stories/media-caption';
 import { readerCardFraming } from '@/lib/stories/framing';
 
-import { SoundToggle, StoryMediaLayer } from './story-parts';
+import { StoryMediaLayer } from './story-parts';
 import {
   currentStoryAt,
   groupForPlayback,
@@ -59,6 +67,13 @@ import { Link, href, navigate } from '@/routes/route-table';
 /** L'hôte des scènes v3 (#6899) — chargé À LA DEMANDE, motif D-54 : une story
  * v1 ne paie ni ses lois (image seule, bandes, son de fond), ni le moteur. */
 const StorySceneLayer = lazy(() => import('./story-scene-layer'));
+
+/** Le fil de commentaires — chargé À LA DEMANDE (motif D-54) : un lecteur qui
+ * regarde des stories sans les commenter ne paie ni la liste, ni le
+ * composeur, ni leur requête. */
+const StoryCommentsSheet = lazy(() =>
+  import('@/components/story-comments-sheet').then((m) => ({ default: m.StoryCommentsSheet })),
+);
 
 /**
  * **LE LECTEUR PLEIN ÉCRAN DE STORIES** (#5817, D-1) — la référence est le
@@ -244,6 +259,7 @@ export default function StoryScreen() {
   const viewer = useMemo(() => resolveViewer({ source: apiDeps.source, session }), [session]);
   const reader = useReaderLanguages();
   const online = useOnline();
+  const interfaceLanguage = currentInterfaceLanguage();
   const feed = useStoryFeed();
 
   /* L'ORDRE DES AUTEURS EST FIGÉ À L'OUVERTURE (`stableGroupOrder`,
@@ -373,6 +389,19 @@ export default function StoryScreen() {
      laisse l'en-tête lisible. */
   const [chromeHidden, setChromeHidden] = useState(false);
   const [mediaFailed, setMediaFailed] = useState(false);
+  /**
+   * **LE PLAN DU RAIL, FIGÉ À L'ENTRÉE DE LA DIAPOSITIVE** (directive porteur
+   * 2026-07-10, `StoryActionRailPlan`) — la loi vit dans
+   * `lib/stories/action-rail.ts` ; ici on ne fait que l'appeler au bon
+   * moment. Le gel porte l'identité de la story, comme `mediaDuration` et
+   * `soundAvailability` : une remise à zéro « à chaque story » serait la
+   * même course entre les effets du parent et ceux de l'enfant.
+   */
+  const [frozenRail, setFrozenRail] = useState<FrozenStoryActionRail | null>(null);
+  /** Le fil de commentaires, ouvert par « Commentaires » ou par « Répondre »
+   * — une seule zone de saisie pour les deux (spécification porteur du
+   * 2026-05-28, citée par `StoryComposerBarView`). */
+  const [commentsOpen, setCommentsOpen] = useState(false);
   const showsImage = mediaSrc !== '' && !mediaFailed;
   /**
    * « PRÊT » ET LA DURÉE APPARTIENNENT À UNE STORY, et portent son identité
@@ -577,6 +606,72 @@ export default function StoryScreen() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [advance, paused, pause, resume, closeViewer, showsSound]);
+
+  /* LE GEL — re-résolu au CHANGEMENT de story, et la seule remontée que le
+     lecteur apprend ensuite est le SON (le sondage de piste audio conclut
+     souvent après l'entrée). Le compteur de commentaires, lui, est déjà dans
+     le corpus : sa RÉCONCILIATION est un second chemin, appliqué ci-dessous
+     quand le corpus se rafraîchit sous le lecteur. */
+  useEffect(() => {
+    if (currentStory === undefined) return;
+    setFrozenRail((current) =>
+      freezeStoryActionRail(current, {
+        storyId: currentStory.id,
+        isOwnStory: group?.isMine === true,
+        /* `canReply` — la capacité que l'hôte OFFRE, miroir de
+           `onReplyToStory != nil` : le web répond par le fil de commentaires
+           de la publication, donc il peut toujours. */
+        canReply: true,
+        hasAudibleSound: showsSound,
+        commentCount: currentStory.commentCount ?? 0,
+        /* Le Prisme a-t-il quelque chose à explorer ? Le lecteur web ne sert
+           pas encore de sélecteur de langue : `false` retire le bouton, et
+           `storyActionRailButtons` le fait sans branche à oublier (loi 4). */
+        hasTranslatableContent: false,
+      }),
+    );
+  }, [currentStory, group?.isMine, showsSound]);
+
+  useEffect(() => {
+    if (currentStory === undefined) return;
+    const count = currentStory.commentCount ?? 0;
+    if (count <= 0) return;
+    setFrozenRail((current) =>
+      current === null ? current : reconcileStoryActionRailComments(current, { storyId: currentStory.id, commentCount: count }),
+    );
+  }, [currentStory]);
+
+  /* LA FEUILLE MET LA LECTURE EN PAUSE — sans cela, la story avancerait sous
+     le fil qu'on lit, et le composeur changerait de publication à mi-phrase. */
+  useEffect(() => {
+    if (!commentsOpen) return;
+    pause();
+    return () => resume();
+  }, [commentsOpen, pause, resume]);
+
+  /* Une nouvelle story ferme le fil : il appartenait à la précédente. */
+  useEffect(() => {
+    setCommentsOpen(false);
+  }, [currentStory?.id]);
+
+  const railHandlers = useMemo<StoryActionRailHandlers>(() => {
+    if (currentStory === undefined) return {};
+    const storyId = currentStory.id;
+    return {
+      ...(showsSound ? { sound: () => setStorySoundMuted((m) => !m) } : {}),
+      react: () => void storyReactionAction(storyId),
+      /* « Répondre » et « Commentaires » ouvrent la MÊME feuille : une seule
+         zone de saisie, et le bouton de réponse n'est donc jamais un second
+         composeur (spécification porteur 2026-05-28). */
+      reply: () => setCommentsOpen(true),
+      comments: () => setCommentsOpen(true),
+    };
+  }, [currentStory, showsSound]);
+
+  /* LE RAIL EST-IL PEINT ? Une seule réponse, lue par le rail ET par la
+     légende qui doit lui laisser la place. */
+  const railShown =
+    currentStory !== undefined && frozenRail !== null && frozenRail.storyId === currentStory.id && Object.keys(railHandlers).length > 0;
 
   const resolvedContent = useMemo(() => {
     if (currentStory === undefined) return null;
@@ -788,9 +883,14 @@ export default function StoryScreen() {
                   {shortRelativeTime(new Date(currentStory.createdAt), new Date(), reader.locale)}
                 </span>
               </div>
-              {showsSound ? (
-                <SoundToggle muted={storySoundMuted} onToggle={() => setStorySoundMuted((m) => !m)} />
-              ) : null}
+              {/* LE SON A QUITTÉ CETTE LIGNE POUR LA TÊTE DU RAIL (#4508,
+                  arbitrage écrit avant d'être codé, cité par
+                  `StoryViewerView+Sidebar.swift:479-491`) : « le son est le
+                  SEUL élément du rail qui décrit ce qui est en train de SE
+                  PASSER ; tous les autres décrivent ce qu'on peut FAIRE. Un
+                  état se lit en premier, une action s'atteint au pouce. »
+                  Le bouton est le MÊME (`data-story-sound-toggle`, libellé
+                  constant + `aria-pressed`) — seule sa place change. */}
               <CloseButton onClose={closeViewer} />
             </div>
           </div>
@@ -801,11 +901,20 @@ export default function StoryScreen() {
               style={{
                 paddingTop: 40,
                 paddingBottom: 'calc(var(--safe-bottom, 0px) + 16px)',
+                /* LA LÉGENDE S'ARRÊTE AVANT LE RAIL — sans ce couloir, une
+                   phrase longue passe SOUS les boutons (mesuré : le bloc
+                   courait jusqu'à x 374, le bouton « Commentaires » occupait
+                   x 338→382). La valeur vient du rail lui-même, jamais d'un
+                   nombre recopié ici. */
+                paddingInlineEnd: railShown ? STORY_ACTION_RAIL_CORRIDOR : undefined,
                 background: CHROME_SCRIM_BOTTOM,
-                opacity: chromeHidden ? 0 : 1,
+                /* MÊME CESSION QUE LE RAIL (mesuré à la capture) : « Le lac,
+                   ce matin. » se lisait PAR-DESSUS « Écrire un commentaire… ».
+                   Deux textes superposés ne sont pas un état — c'en est zéro. */
+                opacity: chromeHidden || commentsOpen ? 0 : 1,
                 transition: 'opacity 180ms ease',
               }}
-              aria-hidden={chromeHidden ? true : undefined}
+              aria-hidden={chromeHidden || commentsOpen ? true : undefined}
             >
               {resolvedContent !== null ? (
                 <p className="text-body" style={CLAMPED_CAPTION} lang={resolvedContent.language || undefined}>
@@ -827,6 +936,36 @@ export default function StoryScreen() {
                 </p>
               ) : null}
             </div>
+          ) : null}
+
+          {/* LE RAIL D'ACTIONS — il ne DÉCIDE rien : `frozenRail.plan` est la
+              loi figée à l'entrée, `railHandlers` dit ce que le web sait
+              FAIRE, et le rail ne peint que l'intersection (loi 4). */}
+          {railShown ? (
+            <StoryActionRail
+              plan={frozenRail.plan}
+              language={interfaceLanguage}
+              handlers={railHandlers}
+              counts={{ react: currentStory.reactionCount, comments: currentStory.commentCount }}
+              pressed={{
+                sound: storySoundMuted,
+                react: hasReactedToStory(currentStory, STORY_DEFAULT_REACTION),
+              }}
+              /* LE RAIL SE RETIRE DEVANT LA FEUILLE — mesuré à la capture :
+                 les trois boutons se peignaient PAR-DESSUS la liste de
+                 commentaires, et « Commentaires » recouvrait le bouton
+                 d'envoi du composeur. Le rail est le chrome de la SCÈNE ; la
+                 feuille est un écran à elle, et iOS lui cède de même la place
+                 (`showCommentsOverlay`). Masqué, jamais démonté : il
+                 refarait sa mise en page à la fermeture. */
+              hidden={chromeHidden || commentsOpen}
+            />
+          ) : null}
+
+          {commentsOpen ? (
+            <Suspense fallback={null}>
+              <StoryCommentsSheet postId={currentStory.id} onClose={() => setCommentsOpen(false)} />
+            </Suspense>
           ) : null}
         </div>
       ) : null}

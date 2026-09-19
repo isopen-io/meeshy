@@ -1,11 +1,8 @@
 import { useEffect, useRef, type CSSProperties } from 'react';
 
-import { GlyphSvg } from '@/components/glyph';
-import { MEDIA_TRANSPORT_GLYPHS } from '@/components/glyphs-media-transport';
 import { MediaUnavailable } from '@/components/media-unavailable';
 import { isMediaAbsent, noteMediaAbsent } from '@/lib/api/media-absent';
 import { feedMediaKindOf } from '@/lib/feed/layout';
-import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 /**
@@ -272,45 +269,5 @@ export function StoryMediaLayer({
         </p>
       ) : null}
     </div>
-  );
-}
-
-export type SoundToggleProps = {
-  readonly muted: boolean;
-  readonly onToggle: () => void;
-};
-
-/**
- * `SoundToggle` (T10, #6899) — LE BOUTON MUET du son d'une scène v3, miroir de
- * `StoryViewerView+Sidebar.swift:486-509` (icône
- * `speaker.slash.fill`/`speaker.wave.2.fill`). Le rail droit iOS est HORS
- * TRANCHE (#5817) : ce bouton vit dans la LIGNE AUTEUR du lecteur, et son hôte
- * ne le monte QUE quand il a un son à couper (`sceneHasControllableSound`,
- * `lib/canvas/background-sound.ts`) — jamais un décor sans effet (loi 4).
- *
- * C'est un bouton BASCULE : un libellé CONSTANT (« Muet ») et `aria-pressed`
- * portent l'état. Un libellé qui change avec l'état (« Son » / « Muet ») lu à
- * côté de `aria-pressed="false"` s'annonce « Son, non enfoncé » — l'inverse de
- * ce qui se passe.
- */
-export function SoundToggle({ muted, onToggle }: SoundToggleProps) {
-  const language = currentInterfaceLanguage();
-  return (
-    <button
-      type="button"
-      data-story-sound-toggle
-      onPointerDown={(e) => e.stopPropagation()}
-      onClick={onToggle}
-      aria-pressed={muted}
-      aria-label={translate(language, 'story.sound.off')}
-      className="pointer-events-auto grid shrink-0 place-items-center rounded-full"
-      style={{ width: 44, height: 44, background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.12)' }}
-    >
-      <GlyphSvg
-        glyph={muted ? MEDIA_TRANSPORT_GLYPHS.speakerSlash : MEDIA_TRANSPORT_GLYPHS.speakerHigh}
-        size={16}
-        style={{ color: '#fff' }}
-      />
-    </button>
   );
 }

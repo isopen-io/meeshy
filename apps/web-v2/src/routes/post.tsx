@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useRef } from 'react';
 
+import { CommentThread } from '@/components/comment-thread';
 import { FeedPostCard } from '@/components/feed-post-card';
 import { Glyph } from '@/components/glyph';
 import { SceneFullscreenGallery } from '@/components/scene-fullscreen-gallery';
 import { ApiError } from '@/lib/api/client';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { usePost } from '@/lib/api/query';
 import { resolveFeedCardModel } from '@/lib/feed/card-model';
 import { useFeedAutoplayRoot } from '@/lib/feed/use-feed-autoplay';
@@ -25,9 +28,15 @@ import { FeedSkeleton } from './feed';
  * hôte des gestes (`usePostGesture`), même cache que le fil pour l'état du
  * lecteur (`performPostGesture` bascule les deux).
  *
- * CE QUI N'EST PAS REPRIS CE LOT, ASSUMÉ : les commentaires, la
- * republication, le partage et le menu « Plus d'options » — chacun à sa
- * propre marche de #6278.
+ * **LES COMMENTAIRES VIVENT ICI** — `CommentThread` (liste + composeur,
+ * `components/comment-thread.tsx`), la surface que le lecteur de stories
+ * partage. C'est là que mène le compteur de commentaires de TOUTE carte du
+ * fil : il était un `<span>` inerte, il conduit désormais à ce fil.
+ *
+ * CE QUI N'EST PAS REPRIS, ASSUMÉ : la republication, le menu « Plus
+ * d'options », et dans le fil de commentaires lui-même aimer / répondre /
+ * éditer / supprimer un commentaire et ses médias — chacun à sa propre
+ * marche.
  */
 
 export function PostDetailHeader() {
@@ -112,6 +121,7 @@ export default function PostDetailScreen() {
   // LE PLEIN ÉCRAN D'UNE SCÈNE (#6902) — MÊME hôte que le fil (`routes/feed.tsx`).
   const sceneGallery = useSceneGallery();
   const [search] = useSearch();
+  const commentsTitle = translate(currentInterfaceLanguage(), 'comments.title');
 
   const model = useMemo(
     () => (post.data === undefined ? undefined : resolveFeedCardModel(post.data, { preferredLanguages: readerLanguages, now: new Date() })),
@@ -162,6 +172,17 @@ export default function PostDetailScreen() {
             <FeedSkeleton />
           </div>
         )}
+        {/* LE FIL — seulement sur une publication SERVIE : l'ouvrir sur un
+            refus (D-6) dirait que la publication existe. Le même argument que
+            la carte elle-même, appliqué à ce qui la suit. */}
+        {model !== undefined ? (
+          <div id="commentaires" className="flex flex-col pt-2">
+            <h2 className="text-body font-semibold px-1 pb-1" style={{ color: 'var(--color-ios-ink)' }}>
+              {commentsTitle}
+            </h2>
+            <CommentThread postId={postId} />
+          </div>
+        ) : null}
       </main>
       {model !== undefined ? (
         <SceneFullscreenGallery
