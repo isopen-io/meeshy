@@ -9,7 +9,8 @@
 > l'état courant du code.
 
 **Carte des modules (2026-09-19, #7093).** Les lois pures et les éventails
-batch ont quitté `NotificationService.ts` (6119 → 4494 lignes) :
+batch ont quitté `NotificationService.ts` (6114 → 4494 lignes MESURÉES ; le
+cliquet de `gateway-file-size-budget.test.ts`, lui, descend de 6119 à 4494) :
 `notification-preview.ts` (aperçus/bannières), `push-header.ts` (titre/
 sous-titre APN), `post-media-thumbnail.ts` (vignette d'un post),
 `fanout/story-comment.ts`, `fanout/comment-mention.ts`,

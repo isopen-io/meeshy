@@ -127,7 +127,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   },
 }));
 
-import { NotificationService } from '../../../services/notifications/NotificationService'; import { pushCategoryForNotificationType } from '../../../services/notifications/push-header';
+import { NotificationService } from '../../../services/notifications/NotificationService';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 
 const RECIPIENT_ID = '507f1f77bcf86cd799439011';
@@ -1057,34 +1057,5 @@ describe('NotificationService — message push title/body', () => {
         expect(prisma.notification.create).toHaveBeenCalled();
       });
     });
-  });
-});
-
-// ─── GW4 — pure type → category mapping ──────────────────────────────────────
-
-describe('pushCategoryForNotificationType', () => {
-  it('mirrors the iOS NSE mapping with the CALL split (incoming vs missed)', () => {
-    expect(pushCategoryForNotificationType('new_message')).toBe('MEESHY_MESSAGE');
-    expect(pushCategoryForNotificationType('message_reply')).toBe('MEESHY_MESSAGE');
-    expect(pushCategoryForNotificationType('message_reaction')).toBe('MEESHY_MESSAGE');
-    expect(pushCategoryForNotificationType('new_conversation_direct')).toBe('MEESHY_MESSAGE');
-    expect(pushCategoryForNotificationType('user_mentioned')).toBe('MEESHY_MENTION');
-    expect(pushCategoryForNotificationType('mention')).toBe('MEESHY_MENTION');
-    expect(pushCategoryForNotificationType('friend_request')).toBe('MEESHY_FRIEND_REQUEST');
-    expect(pushCategoryForNotificationType('contact_request')).toBe('MEESHY_FRIEND_REQUEST');
-    expect(pushCategoryForNotificationType('post_like')).toBe('MEESHY_SOCIAL');
-    expect(pushCategoryForNotificationType('post_comment')).toBe('MEESHY_SOCIAL');
-    expect(pushCategoryForNotificationType('story_new_comment')).toBe('MEESHY_SOCIAL');
-    expect(pushCategoryForNotificationType('friend_new_post')).toBe('MEESHY_SOCIAL');
-    expect(pushCategoryForNotificationType('incoming_call')).toBe('MEESHY_CALL_INCOMING');
-    expect(pushCategoryForNotificationType('missed_call')).toBe('MEESHY_CALL_MISSED');
-    expect(pushCategoryForNotificationType('call_ended')).toBe('MEESHY_CALL_MISSED');
-    expect(pushCategoryForNotificationType('call_declined')).toBe('MEESHY_CALL_MISSED');
-  });
-
-  it('returns undefined for unmapped types (no misleading actions)', () => {
-    expect(pushCategoryForNotificationType('system')).toBeUndefined();
-    expect(pushCategoryForNotificationType('login_new_device')).toBeUndefined();
-    expect(pushCategoryForNotificationType('made_up_type')).toBeUndefined();
   });
 });

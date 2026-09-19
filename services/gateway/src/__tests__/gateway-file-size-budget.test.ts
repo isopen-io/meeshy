@@ -96,8 +96,10 @@ const MAX_LINES = 1000;
  * marge de croissance qu'il n'a plus — un cliquet se pose sur ce qu'on MESURE,
  * jamais sur ce qu'un document affirme.
  *
- * `services/notifications/NotificationService.ts` : 6119 → 4494 (découpage
- * #7093, 2026-09-19). Les lois pures et les quatre éventails batch (plus
+ * `services/notifications/NotificationService.ts` : entrée 6119 → 4494
+ * (découpage #7093, 2026-09-19 ; le fichier MESURAIT 6114 avant le lot — le
+ * gel d'origine portait une marge de 5 lignes, rendue au dépôt par ce
+ * rabaissement). Les lois pures et les quatre éventails batch (plus
  * `member_joined`, cinquième éventail de même forme) sont partis vers
  * `notification-preview.ts`, `push-header.ts`, `post-media-thumbnail.ts` et
  * `fanout/*.ts`, dans le même dossier — la mesure descend, jamais un fichier

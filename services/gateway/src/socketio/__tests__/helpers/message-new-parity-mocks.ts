@@ -133,12 +133,18 @@ jest.mock('../../../services/PrivacyPreferencesService', () => ({
 }));
 
 let mockNotificationServiceInstance: any;
-// Double PROLONGÉ, jamais remplacé : ce module exporte aussi les fonctions PURES
-// du masquage de protection (`protectedPreview`, `maskedAttachment`), que la
-// composition de `message:new` appelle pour la citation. Un double partiel les
-// rendait `undefined` — le broadcast levait, et les DEUX producteurs n'émettaient
-// plus rien (cf. § « Un double PARTIEL d'un module perd en silence tout ce que le
-// module GAGNE » du CLAUDE.md de la passerelle).
+// Double PROLONGÉ, jamais remplacé (cf. § « Un double PARTIEL d'un module perd
+// en silence tout ce que le module GAGNE » du CLAUDE.md de la passerelle).
+//
+// Depuis #7093 ce module n'exporte plus QUE la classe : les fonctions PURES du
+// masquage de protection (`protectedPreview`, `maskedAttachment`), que la
+// composition de `message:new` appelle pour la citation, vivent dans
+// `services/notifications/notification-preview.ts` — que cette aide ne double
+// PAS, donc les vraies tournent. Le `requireActual` reste la discipline : il
+// couvre d'avance tout ce que ce module réexporterait demain, et c'est
+// exactement l'oubli qui, avant le découpage, rendait ces deux fonctions
+// `undefined` — le broadcast levait, et les DEUX producteurs n'émettaient plus
+// rien.
 jest.mock('../../../services/notifications/NotificationService', () => ({
   ...(jest.requireActual('../../../services/notifications/NotificationService') as Record<string, unknown>),
   NotificationService: jest.fn().mockImplementation(() => {

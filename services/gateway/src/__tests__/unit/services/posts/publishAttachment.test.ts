@@ -122,8 +122,10 @@ describe('planAttachmentPublication — la porte', () => {
 describe('planAttachmentPublication — un média protégé ne se publie jamais', () => {
   // La NATURE de la protection (vue unique / flou / éphémère / chiffré, au
   // niveau MESSAGE comme au niveau PIÈCE JOINTE) est tranchée par l'appelant
-  // via `protectedPreview` + `maskedAttachment` (testés dans NotificationService
-  // et dans le test de route). Le plan ne reçoit que le VERDICT booléen.
+  // via `protectedPreview` + `maskedAttachment` (`notifications/
+  // notification-preview.ts` depuis #7093 ; témoins dans
+  // `notifications/protectedPreview.test.ts` et dans le test de route).
+  // Le plan ne reçoit que le VERDICT booléen.
   it("refuse dès que l'appelant signale un média protégé", () => {
     const result = planAttachmentPublication({
       attachment: makeAttachment(),

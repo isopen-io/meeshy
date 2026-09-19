@@ -21,7 +21,9 @@
  * Et EN ÉCRIT une quatrième, qui n'existait pas sous forme réutilisable :
  *   4. Exclusion du contenu PROTÉGÉ (éphémère / vue unique / flouté / chiffré,
  *      niveau MESSAGE **et** niveau PIÈCE JOINTE). `protectedPreview()` /
- *      `maskedAttachment()` (`services/notifications/NotificationService.ts`)
+ *      `maskedAttachment()` (`services/notifications/notification-preview.ts`
+ *      depuis #7093 ; `maskedAttachment` y est ré-exportée de son domicile
+ *      `@meeshy/shared/utils/attachment-protection`)
  *      composent un texte de placeholder, jamais une clause Prisma — mais leur
  *      PRÉDICAT (le booléen qu'ils calculent avant de composer un texte) est
  *      la même question qu'ici : « ce contenu a-t-il le droit d'être vu ? ».

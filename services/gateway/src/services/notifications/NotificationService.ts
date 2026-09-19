@@ -2171,7 +2171,7 @@ export class NotificationService {
   // STORY COMMENT FAN-OUT (Phase 1D)
   // ==============================================
 
-  /** Fonction de module (`fanout/story-comment.ts`, ne lit que `prisma`) — méthode déléguante gardée pour `postAudience.ts` et 40+ témoins. */
+  /** Fonction de module (`fanout/story-comment.ts`, ne lit que `prisma`) — le délégué reste pour les 30 témoins qui l'appellent sur l'instance (25 `storycomments` + 5 `fanouttruncation`) ; AUCUN appelant de production hors de cette classe, mesuré le 2026-09-19. */
   async getStoryNotificationRecipients(
     postId: string,
     authorId: string,

@@ -79,7 +79,7 @@ jest.mock('../../../../services/notifications/NotificationService', () => ({
 jest.mock('../../../../services/notifications/notification-preview', () => ({
   ...(jest.requireActual('../../../../services/notifications/notification-preview') as object),
   protectedPreview: jest.fn().mockReturnValue(null),
-  // Cycle 125 (#7093) — jumelle média ; absente ici, l'éventail meurt dans son catch.
+  // Cycle 125 — la JUMELLE média de `protectedPreview` : elle décide si le FICHIER d'une pièce jointe a le droit de voyager sur le push. Doublée ICI (et non laissée au `requireActual` ci-dessus) pour que l'éventail reste isolé du verdict réel, comme avant #7093.
   maskedAttachment: jest.fn().mockReturnValue(false),
 }));
 
