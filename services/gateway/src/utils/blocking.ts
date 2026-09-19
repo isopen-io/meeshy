@@ -41,6 +41,35 @@ export async function isBlockedBetween(
 }
 
 /**
+ * Returns true when `viewerId` has blocked `targetId` — DIRECTIONAL.
+ *
+ * Deliberately not {@link isBlockedBetween}, which is bidirectional because it
+ * serves messaging enforcement. A profile screen asks a different question:
+ * "Unblock" is only offered to the side that blocked, and nobody unblocks on
+ * someone else's behalf. Answering it with the bidirectional law would offer
+ * "Unblock" to a user who was blocked — a button that cannot work.
+ *
+ * Answers BY SUBJECT, in one indexed lookup (`@@index([blockedUserIds])`), so
+ * the verdict never depends on a page or a rank (#7125).
+ */
+export async function hasBlocked(
+  prisma: PrismaClient,
+  viewerId: string,
+  targetId: string
+): Promise<boolean> {
+  if (viewerId === targetId) {
+    return false;
+  }
+
+  const match = await prisma.user.findFirst({
+    where: { id: viewerId, blockedUserIds: { has: targetId } },
+    select: { id: true },
+  });
+
+  return match !== null;
+}
+
+/**
  * Batched version of {@link isBlockedBetween} for filtering many candidates
  * against one user in a single round-trip (2 queries instead of N).
  *
