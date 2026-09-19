@@ -441,6 +441,40 @@ try {
         (await page.$('[data-profile-posts-empty]')) === null || (await page.$('[data-profile-posts-more]')) === null,
         `${label} : jamais « aucun résultat » ET « Charger plus » dans la même image`,
       );
+      /* « CHARGER PLUS » EST UN GESTE COMME LES AUTRES (revue #7083, défaut
+         majeur 4) : il restait ACTIF hors ligne et le tap ne changeait ni la
+         liste, ni le libellé, ni l'état — TanStack met la page en PAUSE, donc
+         l'écran ne passe jamais par `isError`, le seul chemin qui aurait peint
+         « Réessayer ». L'utilisateur touchait un contrôle et l'application se
+         taisait. On mesure l'EFFET du tap, pas seulement l'attribut.
+
+         LA SONDE EST ICI, et pas dans la section HORS LIGNE plus bas : le
+         cache des publications est PERSISTÉ (`query-client.ts`), donc une
+         fiche rouverte après la section 12 revient DÉJÀ paginée jusqu'au bout
+         et n'a plus de bouton du tout. Mesurer un contrôle absent rendrait un
+         gate vert sur un geste jamais regardé. */
+      await context.setOffline(true);
+      const avantTapHorsLigne = await cardCount();
+      /* L'ATTENTE FAIT PARTIE DE LA MESURE : `setOffline` coupe le RÉSEAU, la
+         bascule de `navigator.onLine` arrive par un événement, et React
+         redessine au tour suivant. Lire l'attribut dans la foulée mesurerait
+         l'image d'AVANT la coupure — un gate vert sur un bouton jamais
+         regardé hors ligne. */
+      const desarme = await page
+        .waitForSelector('[data-profile-posts-more][disabled]', { timeout: 3000 })
+        .then(() => true, () => false);
+      check(desarme, `${label} : hors ligne, « Charger plus » se désarme avec ses voisins`);
+      await page.click('[data-profile-posts-more]', { force: true }).catch(() => null);
+      await page.waitForTimeout(400);
+      check(
+        (await cardCount()) === avantTapHorsLigne,
+        `${label} : hors ligne, le tap sur « Charger plus » ne change RIEN (${avantTapHorsLigne})`,
+      );
+      await context.setOffline(false);
+      const rearme = await page
+        .waitForSelector('[data-profile-posts-more]:not([disabled])', { timeout: 5000 })
+        .then(() => true, () => false);
+      check(rearme, `${label} : et il se RÉARME au retour du réseau — jamais un geste perdu pour la session`);
       /* SON ENCRE SE MESURE ICI, tant qu'il existe — la dernière page le
          retire, et une mesure faite plus bas rendrait `null` pour un contrôle
          simplement absent, c'est-à-dire un gate vert sur une couleur jamais
@@ -519,13 +553,6 @@ try {
       }
 
       // ------------------------------------------------ 15. hors ligne, la fiche reste lisible
-      /* LA FICHE EST RECHARGÉE pour retrouver sa PREMIÈRE page : la section 12
-         l'a paginée jusqu'au bout, et « Charger plus » — dont l'inertie hors
-         ligne se mesure ici (revue #7083, défaut majeur 4) — n'existe plus sur
-         la dernière page. Mesurer un contrôle absent rendrait un gate vert sur
-         un geste jamais regardé. */
-      await page.goto(`${BASE}/u/kwame-mensah`, { waitUntil: 'load' });
-      await page.waitForSelector('[data-profile-posts-more]');
       await context.setOffline(true);
       await page.waitForSelector('[data-profile-offline]');
       check((await textOf(page, '[data-user-hero] p')) === 'Kwame Mensah', `${label} : hors ligne, la fiche reste lisible`);
@@ -533,20 +560,6 @@ try {
         (await page.$$eval('[data-profile-action]', (els) => els.filter((el) => !el.disabled).length)) === 0,
         `${label} : hors ligne, aucun geste d'écriture ne part`,
       );
-      /* « CHARGER PLUS » EST UN GESTE COMME LES AUTRES (revue #7083, défaut
-         majeur 4) : il restait ACTIF hors ligne et le tap ne changeait ni la
-         liste, ni le libellé, ni l'état — TanStack met la page en PAUSE, donc
-         l'écran ne passe jamais par `isError`, le seul chemin qui aurait peint
-         « Réessayer ». L'utilisateur touchait un contrôle et l'application se
-         taisait. On mesure l'EFFET du tap, pas seulement l'attribut. */
-      const avantTap = await cardCount();
-      check(
-        (await page.$eval('[data-profile-posts-more]', (el) => el.disabled)) === true,
-        `${label} : hors ligne, « Charger plus » se désarme avec ses voisins`,
-      );
-      await page.click('[data-profile-posts-more]', { force: true }).catch(() => null);
-      await page.waitForTimeout(400);
-      check((await cardCount()) === avantTap, `${label} : hors ligne, le tap sur « Charger plus » ne change RIEN (${avantTap})`);
       /* UNE SEULE VOIX POUR L'ÉTAT RÉSEAU (revue #7083, défaut majeur 5, D-11)
          — la pastille globale peignait « Hors ligne » PAR-DESSUS le titre
          « Hors ligne » de la carte de l'écran : le même mot deux fois, dont
