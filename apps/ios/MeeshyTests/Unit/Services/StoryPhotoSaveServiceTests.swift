@@ -63,6 +63,10 @@ final class ScriptedStoryExporter: StoryVideoExportServiceProviding {
     private(set) var lastIntro: StoryExportIntroContent?
     /// Index `postMediaId → adresse` des stickers image reçu par le bake (#4852).
     private(set) var lastStickerImageSources: [String: String] = [:]
+    /// Le drapeau de marque REÇU (#7052) — retenu, jamais ignoré : un double
+    /// qui laisse tomber un paramètre laisse passer l'appelant qui cesse de le
+    /// poser, et une scène ressortirait marquée sans qu'aucun témoin ne tombe.
+    private(set) var lastAppendsBrandOutro: Bool?
 
     func prepareExport(
         slide: StorySlide,
@@ -70,10 +74,12 @@ final class ScriptedStoryExporter: StoryVideoExportServiceProviding {
         watermark: StoryExportWatermark?,
         intro: StoryExportIntroContent?,
         stickerImageSources: [String: String],
+        appendsBrandOutro: Bool,
         onProgress: ((Double) -> Void)?,
         onPhaseChange: ((StoryExportPhase) -> Void)?
     ) async -> URL? {
         prepareCallCount += 1
+        lastAppendsBrandOutro = appendsBrandOutro
         lastLanguages = languages
         lastIntro = intro
         lastStickerImageSources = stickerImageSources
@@ -135,6 +141,10 @@ final class ManualStoryExporter: StoryVideoExportServiceProviding {
     private(set) var lastBakedURL: URL?
     /// Index `postMediaId → adresse` des stickers image reçu par le bake (#4852).
     private(set) var lastStickerImageSources: [String: String] = [:]
+    /// Le drapeau de marque REÇU (#7052) — retenu, jamais ignoré : un double
+    /// qui laisse tomber un paramètre laisse passer l'appelant qui cesse de le
+    /// poser, et une scène ressortirait marquée sans qu'aucun témoin ne tombe.
+    private(set) var lastAppendsBrandOutro: Bool?
 
     var pendingCount: Int { pendingCalls.count }
 
@@ -144,10 +154,12 @@ final class ManualStoryExporter: StoryVideoExportServiceProviding {
         watermark: StoryExportWatermark?,
         intro: StoryExportIntroContent?,
         stickerImageSources: [String: String],
+        appendsBrandOutro: Bool,
         onProgress: ((Double) -> Void)?,
         onPhaseChange: ((StoryExportPhase) -> Void)?
     ) async -> URL? {
         lastStickerImageSources = stickerImageSources
+        lastAppendsBrandOutro = appendsBrandOutro
         return await withCheckedContinuation { continuation in
             pendingCalls.append(PendingCall(onProgress: onProgress, continuation: continuation))
         }

@@ -209,11 +209,21 @@ public enum StoryExportBranding {
     ///     et l'enregistrement Photos peignent l'auteur en fermeture, l'export
     ///     depuis le composer timeline ferme sur le logo seul.
     ///   - renderSize: gabarit du MP4 final — celui de la story.
+    ///   - appendsBrandOutro: la carte de fin est-elle DUE ? `true` par défaut,
+    ///     et c'est l'invariant du 2026-07-26 : `outro: nil` change le CONTENU
+    ///     de la carte, jamais sa présence, et un témoin le garde
+    ///     (`test_wrap_withoutIntro_stillAppendsBrandOutro`).
+    ///
+    ///     `false` est réservé à l'export d'une SCÈNE DE POST (#7052) : le
+    ///     porteur a tranché que ce fichier-là rend l'œuvre SEULE — ni
+    ///     interlude, ni carte, ni jingle. Un seul appelant le passe ; tous
+    ///     les autres chemins gardent leur marque sans rien changer.
     /// - Returns: l'URL du MP4 assemblé. L'appelant en est propriétaire.
     public static func wrap(storyURL: URL,
                             intro: StoryExportIntroContent?,
                             outro: StoryExportIntroContent?,
-                            renderSize: CGSize) async throws -> URL {
+                            renderSize: CGSize,
+                            appendsBrandOutro: Bool = true) async throws -> URL {
         let storyAsset = AVURLAsset(url: storyURL)
         let storyDuration = try await storyAsset.load(.duration)
 
@@ -304,6 +314,33 @@ public enum StoryExportBranding {
         }
 
         // MARK: Carte de fin
+        //
+        // TOUTE CETTE SECTION EST CONDITIONNELLE DEPUIS #7052, et elle ne
+        // l'était pas : `outro: nil` changeait le CONTENU de la carte (logo
+        // seul au lieu de l'identité), jamais sa PRÉSENCE — invariant du
+        // 2026-07-26, gardé par `test_wrap_withoutIntro_stillAppendsBrandOutro`.
+        //
+        // `appendsBrandOutro` vaut `true` par défaut : aucun appelant existant
+        // ne change de comportement, et le témoin de l'invariant reste vert.
+        // Seul l'export d'une SCÈNE DE POST passe `false`, le porteur ayant
+        // tranché que ce fichier-là rend l'œuvre SEULE.
+        //
+        // Sans carte, la story n'a plus de fondu de sortie — rien ne la
+        // recouvre — mais ses paramètres audio restent DUS : c'est
+        // `audioParameters` qui porte la piste de la story jusqu'au mixage, et
+        // les oublier livrerait une vidéo muette. Ce fil-là court sous les
+        // deux branches.
+        guard appendsBrandOutro else {
+            storyAudioParams.setVolumeRamp(fromStartVolume: 1, toEndVolume: 1,
+                                           timeRange: CMTimeRange(start: .zero, duration: baseEnd))
+            audioParameters.append(storyAudioParams)
+            return try await assemble(composition: composition,
+                                      layers: [storyLayer, introLayer].compactMap { $0 },
+                                      totalDuration: baseEnd,
+                                      renderSize: renderSize,
+                                      audioParameters: audioParameters)
+        }
+
         let overlap = CMTime(seconds: outroOverlap, preferredTimescale: 600)
         let rawOutroStart = CMTimeSubtract(baseEnd, overlap)
         // Deux bornes : jamais avant le début du temps, et jamais à l'intérieur
@@ -356,11 +393,30 @@ public enum StoryExportBranding {
 
         let totalDuration = CMTimeAdd(outroStart, outroDuration)
 
-        let instruction = AVMutableVideoCompositionInstruction()
-        instruction.timeRange = CMTimeRange(start: .zero, duration: totalDuration)
         // Premier élément = couche de devant. La carte de fin couvre la story,
         // qui couvre l'interlude.
-        instruction.layerInstructions = [outroLayer, storyLayer, introLayer].compactMap { $0 }
+        return try await assemble(composition: composition,
+                                  layers: [outroLayer, storyLayer, introLayer].compactMap { $0 },
+                                  totalDuration: totalDuration,
+                                  renderSize: renderSize,
+                                  audioParameters: audioParameters)
+    }
+
+    /// LE MIXAGE ET L'ENCODAGE, partagés par les deux sorties de `wrap`
+    /// (#7052) — avec carte de fin, et sans.
+    ///
+    /// Extrait plutôt que recopié : la branche sans marque a besoin du MÊME
+    /// mixage audio, du MÊME gabarit et du MÊME piège d'encodage. Deux copies
+    /// auraient divergé au premier correctif porté d'un seul côté, et c'est
+    /// précisément ce que ce fichier a déjà payé sur sa chaîne en deux passes.
+    private static func assemble(composition: AVMutableComposition,
+                                 layers: [AVMutableVideoCompositionLayerInstruction],
+                                 totalDuration: CMTime,
+                                 renderSize: CGSize,
+                                 audioParameters: [AVMutableAudioMixInputParameters]) async throws -> URL {
+        let instruction = AVMutableVideoCompositionInstruction()
+        instruction.timeRange = CMTimeRange(start: .zero, duration: totalDuration)
+        instruction.layerInstructions = layers
 
         let videoComposition = AVMutableVideoComposition()
         videoComposition.instructions = [instruction]
