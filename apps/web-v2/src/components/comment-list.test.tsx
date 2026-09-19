@@ -226,6 +226,27 @@ describe('les gestes d’une rangée — offerts là où ils aboutissent, jamais
     expect(ligne('autrui')?.querySelector('[data-comment-gesture="like"]')).not.toBeNull();
   });
 
+  /**
+   * **SUPPRIMER EST DESTRUCTEUR, ET SE VOIT** — `CommentRowView.swift:364`
+   * pose `Button(role: .destructive)`, que SwiftUI peint en rouge. La v3.1
+   * rendait « Supprimer » dans l'encre EXACTE de « Modifier » : deux libellés
+   * voisins, même couleur, même poids, l'un réversible et l'autre non — et là
+   * où iOS coûte DEUX gestes (ouvrir le menu « … », choisir), le web détruit
+   * au PREMIER tap. Le seul signal qui reste est donc la couleur, et elle
+   * manquait.
+   *
+   * Le témoin lit le JETON, jamais une valeur : `--color-error` est le même
+   * que celui de l'alerte d'échec (`GestureFailure`), donc une seule encre de
+   * refus pour toute la rangée.
+   */
+  test('SUPPRIMER porte l’encre destructrice, MODIFIER non — le tap irréversible se distingue du tap réversible', async () => {
+    const host = await monter(liste({ comments: [comment({ author: MIEN })], gestures: gestesDe() }));
+    const encreDe = (geste: string) =>
+      host.querySelector<HTMLElement>(`[data-comment-gesture="${geste}"]`)?.style.color ?? '';
+    expect(encreDe('delete')).toBe('var(--color-error)');
+    expect(encreDe('edit')).not.toBe('var(--color-error)');
+  });
+
   test('SANS rappels — visiteur anonyme — aucune rangée n’offre de bouton (loi 4)', async () => {
     const host = await monter(liste({ comments: [comment({ author: MIEN })] }));
     expect(host.querySelector('[data-comment-gesture]')).toBeNull();

@@ -246,6 +246,73 @@ describe('performCommentEdit — le texte change AVANT la réponse, et REVIENT a
     expect(cached(queryClient)?.content).toBe('Superbe photo');
   });
 
+  /**
+   * **CORRIGER UNE FAUTE NE CHANGE PAS LA LANGUE DU TEXTE** — le défaut que
+   * #6600 a déjà coûté à iOS, mot pour mot : « ouverte sur le défaut "fr",
+   * [la pastille] réécrirait la langue d'un commentaire espagnol à la première
+   * faute corrigée » (`ComposerModels.swift:100-107`). La passerelle ÉCRIT ce
+   * qu'on lui déclare — `updateData.originalLanguage = data.originalLanguage
+   * ?? null` dès que le texte change (`PostCommentService.ts:314-316`) — et
+   * purge les traductions dans le même mouvement : le pipeline retraduit alors
+   * un texte espagnol en le croyant français, pour TOUS les lecteurs.
+   *
+   * LE TÉMOIN S'ÉCRIT SUR UN RANG AUTRE QUE LE PREMIER (leçon 261) : langue
+   * d'interface `fr`, commentaire `es`. Les deux valeurs coïncident sur tout
+   * commentaire français — c'est très exactement pourquoi ni les 46 témoins du
+   * lot ni le corpus de fixtures (`cm-r2-0`, `originalLanguage: 'fr'`) ne
+   * pouvaient le voir.
+   */
+  test('la langue DÉCLARÉE est celle du commentaire CORRIGÉ, jamais celle de l’interface', async () => {
+    const queryClient = seeded([[comment({ content: 'Muy buena foto', originalLanguage: 'es' })]]);
+    const { requests, transport } = scripted(async () => ({ ok: true, data: comment({ content: 'Muy buena foto!' }) }));
+
+    await performCommentEdit({
+      postId: 'p1',
+      commentId: 'cm1',
+      content: 'Muy buena foto!',
+      originalLanguage: 'fr',
+      deps: gatewayDeps(queryClient, transport),
+    });
+
+    expect(requests[0]?.body).toEqual({ content: 'Muy buena foto!', originalLanguage: 'es' });
+  });
+
+  /** Sans langue connue, la déclaration de l’appelant reste le meilleur
+   * repli — c'est le `?? current` du miroir iOS, pas un silence. */
+  test('un commentaire SANS langue connue retombe sur celle que l’appelant déclare', async () => {
+    const queryClient = seeded([[comment({ content: 'Superbe photo', originalLanguage: null })]]);
+    const { requests, transport } = scripted(async () => ({ ok: true, data: comment({ content: 'Superbe photo !' }) }));
+
+    await performCommentEdit({
+      postId: 'p1',
+      commentId: 'cm1',
+      content: 'Superbe photo !',
+      originalLanguage: 'fr',
+      deps: gatewayDeps(queryClient, transport),
+    });
+
+    expect(requests[0]?.body).toEqual({ content: 'Superbe photo !', originalLanguage: 'fr' });
+  });
+
+  /** Fail-closed, comme tout ce que `compose-language.ts` rend : un code que
+   * Meeshy ne SUPPORTE pas n'est pas transmis — la passerelle le refuserait en
+   * 400 (`CommonSchemas.language`), et un refus sur une faute d'orthographe
+   * corrigée serait incompréhensible. */
+  test('une langue stockée que Meeshy ne supporte pas n’est pas retransmise', async () => {
+    const queryClient = seeded([[comment({ content: 'Superbe photo', originalLanguage: 'zz' })]]);
+    const { requests, transport } = scripted(async () => ({ ok: true, data: comment({ content: 'Superbe photo !' }) }));
+
+    await performCommentEdit({
+      postId: 'p1',
+      commentId: 'cm1',
+      content: 'Superbe photo !',
+      originalLanguage: 'fr',
+      deps: gatewayDeps(queryClient, transport),
+    });
+
+    expect(requests[0]?.body).toEqual({ content: 'Superbe photo !', originalLanguage: 'fr' });
+  });
+
   test('un texte INCHANGÉ n’est pas un appel non plus', async () => {
     const queryClient = seeded([[comment({ content: 'Superbe photo' })]]);
     const { requests, transport } = scripted(async () => ({ ok: true, data: comment() }));

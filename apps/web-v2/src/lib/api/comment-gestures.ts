@@ -1,5 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 
+import { editedLanguage } from '@/lib/send/compose-language';
+
 import { newClientMessageId } from './client-message-id';
 import type { DataSource } from './config';
 import type { ApiResult, HttpTransport } from './http';
@@ -263,6 +265,12 @@ export async function performCommentEdit(
 
   const site = readSite(deps, postId, commentId);
   if (site === undefined) return { ok: false, message: COMMENT_EDIT_FAILED_MESSAGE };
+  /* LA LANGUE SE LIT SUR LE COMMENTAIRE, PAS SUR L'APPELANT — c'est ICI que
+     la loi s'applique, parce que c'est le seul site qui tient ENSEMBLE le
+     texte corrigé et la langue qu'il portait déjà. La faire appliquer par
+     l'hôte demanderait à chaque surface de la connaître, et la surface qui
+     l'oublierait relabelliserait le commentaire en silence (#6600). */
+  const declared = editedLanguage(site.comment.originalLanguage, params.originalLanguage);
   /* `UpdateCommentSchema` refuse un corps qui ne change RIEN (« Nothing to
      update ») — et un aller-retour qui ne change rien n'a de toute façon
      aucune raison de partir. */
@@ -276,7 +284,7 @@ export async function performCommentEdit(
       method: 'PATCH',
       path: `/api/v1/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}`,
       idempotent: true,
-      body: { content, ...(params.originalLanguage === undefined ? {} : { originalLanguage: params.originalLanguage }) },
+      body: { content, ...(declared === undefined ? {} : { originalLanguage: declared }) },
       fixture: { ...site.comment, content },
     }).catch(() => null);
 

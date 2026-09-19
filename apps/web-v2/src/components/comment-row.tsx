@@ -138,12 +138,20 @@ function GestureBar({
           >
             {translate(language, 'comments.action.edit')}
           </button>
+          {/* **L'ENCRE DESTRUCTRICE** — `Button(role: .destructive)`
+              (`CommentRowView.swift:364`), que SwiftUI peint en rouge. Ici le
+              signal compte DOUBLE : iOS enferme « Supprimer » dans un menu
+              « … » (deux gestes, et le rouge au bout), le web le pose à
+              découvert et détruit au PREMIER tap. Sans cette encre, le geste
+              irréversible avait l'apparence exacte du geste réversible posé
+              juste à sa gauche. Le MÊME jeton que l'alerte d'échec — une
+              seule encre de refus pour toute la rangée. */}
           <button
             type="button"
             data-comment-gesture="delete"
             onClick={() => gestures.onDelete(comment.id)}
             className={`${GESTURE_BUTTON} text-check`}
-            style={{ minHeight: 44, color: 'var(--color-ios-ink-3)', outlineColor: 'var(--color-ios-brand)' }}
+            style={{ minHeight: 44, color: 'var(--color-error)', outlineColor: 'var(--color-ios-brand)' }}
           >
             {translate(language, 'comments.action.delete')}
           </button>
