@@ -1108,7 +1108,14 @@ struct StoryViewerView: View {
             (windowItems + extraWarmItems)
                 .flatMap { $0.media }
                 .compactMap { m -> (String, URL)? in
-                    guard let raw = m.url, let url = URL(string: raw) else { return nil }
+                    // #7056 — `MeeshyConfig.resolveMediaURL`, jamais `URL(string:)`
+                    // nu : une CLÉ DE STOCKAGE (`2026/02/<id>/photo.jpg`, la
+                    // forme que la base porte désormais) ne rend PAS `nil` ici —
+                    // elle rend une URL RELATIVE, sans schéma ni hôte. Le
+                    // `guard` passait, le chargement échouait, et aucune
+                    // branche de repli n'était empruntée : l'image disparaissait
+                    // en silence. Un `nil` aurait au moins été visible.
+                    guard let raw = m.url, let url = MeeshyConfig.resolveMediaURL(raw) else { return nil }
                     return (m.id, url)
                 },
             uniquingKeysWith: { first, _ in first }
@@ -1885,11 +1892,15 @@ struct StoryViewerView: View {
         if !media.postMediaId.isEmpty {
             if let preloaded = preloadedVideoURLs[media.postMediaId] { return preloaded }
             if let feed = story.media.first(where: { $0.id == media.postMediaId }),
-               let urlString = feed.url, let url = URL(string: urlString) {
+               let urlString = feed.url, let url = MeeshyConfig.resolveMediaURL(urlString) {
                 return url
             }
         }
-        if let urlString = media.mediaURL, let url = URL(string: urlString) {
+        // #7056 — les deux lectures de ce résolveur passent par
+        // `MeeshyConfig.resolveMediaURL`, qui porte la branche « clé de
+        // stockage » (`MeeshyConfig.swift:166-172`) et traite `file://` en
+        // premier : le cas local reste intact.
+        if let urlString = media.mediaURL, let url = MeeshyConfig.resolveMediaURL(urlString) {
             return url
         }
         return nil

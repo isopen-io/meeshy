@@ -493,7 +493,12 @@ public final class StoryMediaLayer: CALayer {
         if !media.postMediaId.isEmpty, let resolved = resolver?(media.postMediaId) {
             return resolved
         }
-        guard let urlString = media.mediaURL, let url = URL(string: urlString) else {
+        // #7056 — `resolveMediaURL` porte la branche « clé de stockage » et
+        // traite `file://` AVANT tout (`MeeshyConfig.swift:139-143`), donc le
+        // garde d'existence ci-dessous reste exact. `URL(string:)` nu rendait
+        // une URL relative sur une clé nue : le média ne se chargeait jamais,
+        // sans qu'aucun `nil` ne le signale.
+        guard let urlString = media.mediaURL, let url = MeeshyConfig.resolveMediaURL(urlString) else {
             return nil
         }
         // The file-existence guard applies ONLY in the READER (a resolver is
