@@ -37,7 +37,7 @@ import {
   resolveUserLanguagesOrdered,
   resolvePrismTranslation,
 } from '@meeshy/shared/utils/conversation-helpers';
-import { notificationString, buildNotificationDisplay, type NotificationStringKey } from '@meeshy/shared/utils/notification-strings';
+import { notificationString, buildNotificationDisplay } from '@meeshy/shared/utils/notification-strings';
 import { publicMediaUrlFromEnv } from '../attachments/publicMediaUrl';
 import { recipientDateLocale, recipientLanguage } from '../../utils/recipient-language';
 import { notificationLogger, securityLogger } from '../../utils/logger-enhanced';
@@ -50,8 +50,6 @@ import { visibleNotificationsWhere } from './visibleNotificationsWhere';
 import type { ServerEmitIOWithRooms } from '../../socketio/serverEmit';
 import { PushNotificationService } from '../PushNotificationService';
 import { EmailService } from '../EmailService';
-import { getCommunityCoMemberIds } from '../posts/communityVisibility';
-import { filterPostConsumers } from '../posts/postAudience';
 import { loadPostAcl, canUserConsumePost } from '../posts/postVisibility';
 import { pushCategoryForNotificationType, buildPushHeader, dedupePushSubtitle } from './push-header';
 import {
@@ -71,6 +69,29 @@ import {
   targetPreviewBody,
 } from './notification-preview';
 import { resolvePostMedia } from './post-media-thumbnail';
+import type { FanoutDependencies } from './fanout/dependencies';
+import {
+  getStoryNotificationRecipients,
+  createStoryCommentNotificationsBatch,
+  type StoryNotificationRecipients,
+  type StoryCommentFanoutParams,
+} from './fanout/story-comment';
+import {
+  createCommentMentionNotificationsBatch,
+  type CommentMentionFanoutParams,
+} from './fanout/comment-mention';
+import {
+  createPostMentionNotificationsBatch,
+  type PostMentionFanoutParams,
+} from './fanout/post-mention';
+import {
+  createFriendContentNotificationsBatch,
+  type FriendContentFanoutParams,
+} from './fanout/friend-content';
+import {
+  createMemberJoinedNotification,
+  createMemberJoinedNotificationsBatch,
+} from './fanout/member-joined';
 
 /** Budget APNs — au-delà, la charge est dégradée par étages (cf. `createNotification`). */
 const PUSHED_TRANSLATION_MAX_CHARS = 200;
@@ -98,7 +119,6 @@ type ReproducedNotificationPush = {
   readonly subtitle?: string;
 };
 
-
 /**
  * Notification types whose offline email is a genuine account-security alert
  * (login, password, 2FA, lockout…). Used to (a) keep these in a separate
@@ -117,60 +137,6 @@ const SECURITY_EMAIL_NOTIFICATION_TYPES = new Set<string>([
 ]);
 
 const isSecurityEmailType = (type: string): boolean => SECURITY_EMAIL_NOTIFICATION_TYPES.has(type);
-
-/**
- * Borne appliquée à chaque lecture de graphe qui alimente un fan-out de
- * notification. Elle tient le coût sur un post viral ou un auteur à très grand
- * carnet — et elle est nommée pour que le seuil de saturation soit LE MÊME que
- * celui écrit dans le `take` : une constante partagée ne peut pas dériver du
- * test qui la surveille.
- *
- * Les requêtes prennent `FANOUT_ROW_CAP + 1`. La ligne excédentaire est un
- * TÉMOIN, jamais un destinataire : elle est lue, comptée, puis jetée par un
- * `slice`, de sorte que la borne de DIFFUSION reste à sa valeur pendant que sa
- * saturation devient dicible. Sans elle, il faudrait déduire la troncature de
- * « la requête a rendu autant de lignes que la borne » — ce qui déclare tronqué
- * un seau de très exactement `FANOUT_ROW_CAP` engagés, alors qu'il est complet,
- * et fait crier au loup à chaque publication d'un auteur à exactement 500 amis.
- *
- * Portée du témoin : sur une requête sans `distinct` (les amitiés) il est EXACT —
- * une 501e ligne existe si et seulement si la base en avait plus de 500. Sur une
- * requête `distinct` (commentaires, réactions) il reste un signal SUFFISANT : il
- * ne se déclenche jamais à tort, mais il peut se taire sur une troncature que la
- * déduplication a repliée en deçà de la borne. Le seau où la troncature est de
- * loin la plus probable — un auteur à plus de 500 amis est banal, un post à plus
- * de 500 commentateurs distincts ne l'est pas — est celui où le compte est exact.
- */
-const FANOUT_ROW_CAP = 500;
-
-/** Les trois lectures bornées qui composent les seaux d'un fan-out de fil. */
-type FanoutBucket = 'previousComments' | 'friendRequests' | 'reactors';
-
-/**
- * Les trois seaux d'un fan-out de commentaire, et ce qu'on n'a PAS pu lire.
- *
- * `truncatedBuckets` distingue « ce seau est complet » de « ce seau s'arrête à
- * la borne » — deux listes identiques en apparence, dont une seule dit la
- * vérité sur l'audience réelle. Sans ce champ, un fan-out silencieusement
- * tronqué se lit exactement comme un fan-out exhaustif.
- */
-type StoryNotificationRecipients = {
-  authorId: string;
-  friendIds: string[];
-  previousCommenterIds: string[];
-  truncatedBuckets: FanoutBucket[];
-};
-
-/**
- * La part d'une notification `member_joined` qui ne dépend PAS du destinataire.
- * Lue une fois, servie à toute l'audience — c'est ce qui distingue une arrivée
- * (un événement, N destinataires) d'une boucle de N notifications distinctes.
- */
-type MemberJoinedSnapshot = {
-  readonly newMember: { username: string; displayName: string | null; avatar: string | null };
-  readonly conversation: { title: string | null; type: string } | null;
-  readonly memberCount: number;
-};
 
 /**
  * Le lot d'un retrait par chemin JSON. Très au-dessus du réel — une demande
@@ -729,6 +695,17 @@ export class NotificationService {
 
     notificationLogger.info('Notification suppressed (conversation muted)', { userId, conversationId, type });
     return true;
+  }
+
+  /** Ce qu'un éventail batch emprunte à l'instance — fermé sur `this` à CHAQUE appel (jamais mis en cache : `fanout-delegation.test.ts`, #7093). */
+  private fanoutDependencies(): FanoutDependencies {
+    return {
+      prisma: this.prisma,
+      createNotification: (params) => this.createNotification(params),
+      resolveRecipientLangs: (ids) => this.resolveRecipientLangs(ids),
+      shouldCreateMentionNotification: (s, r) => this.shouldCreateMentionNotification(s, r),
+      isConversationMutedFor: (u, c, t) => this.isConversationMutedFor(u, c, t),
+    };
   }
 
   private async shouldCreateNotification(
@@ -2194,825 +2171,41 @@ export class NotificationService {
   // STORY COMMENT FAN-OUT (Phase 1D)
   // ==============================================
 
-  /**
-   * Resolves the three recipient buckets for story comment notifications.
-   *
-   * Priority order (a user appears in EXACTLY ONE bucket):
-   *   1. storyAuthorId  → STORY_NEW_COMMENT
-   *   2. previousCommenterIds (prior commenters on this post, excl. commenter & author)
-   *                     → STORY_THREAD_REPLY
-   *   3. friendIds (friends of the author, excl. commenter, author, and prior commenters)
-   *                     → FRIEND_STORY_COMMENT
-   */
+  /** Fonction de module (`fanout/story-comment.ts`, ne lit que `prisma`) — méthode déléguante gardée pour `postAudience.ts` et 40+ témoins. */
   async getStoryNotificationRecipients(
     postId: string,
     authorId: string,
     commenterId: string
   ): Promise<StoryNotificationRecipients> {
-    // Cap at FANOUT_ROW_CAP rows to bound fan-out cost on viral posts.
-    // Future: large posts should use a background queue for fan-out.
-    //
-    // Les IDs qui ne seront JAMAIS notifiés sortent PAR LA REQUÊTE, pas par un
-    // filtre en aval : sous la borne, une ligne écartée après coup a quand même
-    // consommé sa place. Et l'auteur qui répond à chacun de ses commentateurs est
-    // l'engagé le plus prolifique de son propre fil — ses réponses évinçaient donc
-    // des destinataires réels du seau, en silence.
-    const excludedEngagerIds = Array.from(new Set([commenterId, authorId]));
-
-    const [previousComments, friendRequests, reactors] = await Promise.all([
-      this.prisma.postComment.findMany({
-        where: {
-          postId,
-          deletedAt: null,
-          authorId: { notIn: excludedEngagerIds },
-        },
-        distinct: ['authorId'],
-        select: { authorId: true },
-        take: FANOUT_ROW_CAP + 1,
-        orderBy: { createdAt: 'desc' },
-      }),
-      this.prisma.friendRequest.findMany({
-        where: {
-          status: 'accepted',
-          OR: [{ senderId: authorId }, { receiverId: authorId }],
-        },
-        select: { senderId: true, receiverId: true },
-        take: FANOUT_ROW_CAP + 1,
-        orderBy: { updatedAt: 'desc' },
-      }),
-      // Include post reactors as thread-engaged participants (same bucket as prior commenters)
-      this.prisma.postReaction.findMany({
-        where: {
-          postId,
-          userId: { notIn: excludedEngagerIds },
-        },
-        distinct: ['userId'],
-        select: { userId: true },
-        take: FANOUT_ROW_CAP + 1,
-        orderBy: { createdAt: 'desc' },
-      }),
-    ]);
-
-    // Une liste rendue à la borne exacte est INDISCERNABLE d'une liste
-    // complète : le seau paraît entier, et le destinataire au-delà de la borne
-    // n'apprend jamais rien. La saturation est donc nommée dans le retour — pour
-    // que l'appelant puisse en tenir compte — et consignée ici, pour qu'elle
-    // soit observable ailleurs que dans le silence d'un utilisateur.
-    //
-    // Le verdict se lit sur la LIGNE TÉMOIN (`take` = borne + 1), pas sur
-    // « autant de lignes que la borne » : un seau qui compte exactement
-    // `FANOUT_ROW_CAP` engagés est COMPLET, et le déclarer tronqué ferait crier
-    // au loup à chaque publication d'un auteur à exactement 500 amis. C'est ce
-    // que la note ci-dessus demande — distinguer « complet » de « s'arrête à la
-    // borne » — et `>=` échouait précisément au point où les deux se touchent.
-    const truncatedBuckets = [
-      previousComments.length > FANOUT_ROW_CAP ? 'previousComments' as const : null,
-      friendRequests.length > FANOUT_ROW_CAP ? 'friendRequests' as const : null,
-      reactors.length > FANOUT_ROW_CAP ? 'reactors' as const : null,
-    ].filter((bucket): bucket is FanoutBucket => bucket !== null);
-
-    if (truncatedBuckets.length > 0) {
-      notificationLogger.warn('Fan-out de commentaire tronqué à la borne', {
-        postId,
-        authorId,
-        buckets: truncatedBuckets,
-        cap: FANOUT_ROW_CAP,
-      });
-    }
-
-    // Le `notIn` plus haut est ce qui protège le BUDGET ; les `filter` ci-dessous
-    // restent la POSTCONDITION de la méthode. Deux rôles distincts, pas une garde
-    // en double : la requête décide qui coûte une ligne, la méthode répond de ce
-    // qu'elle rend — « ni l'auteur ni le commentateur ne sortent d'ici » tient
-    // quelle que soit la clause `where` du jour.
-    const isNotifiableEngager = (id: string): boolean =>
-      id !== authorId && id !== commenterId;
-
-    const rawPreviousCommenterIds = previousComments
-      .slice(0, FANOUT_ROW_CAP)
-      .map((c: { authorId: string }) => c.authorId)
-      .filter(isNotifiableEngager);
-
-    // Merge reactor user IDs into the "thread engagement" bucket.
-    // Reactors who also commented are deduplicated via Set — they still appear only once.
-    const reactorIds = reactors
-      .slice(0, FANOUT_ROW_CAP)
-      .map((r: { userId: string }) => r.userId)
-      .filter(isNotifiableEngager);
-
-    const previousCommenterIds = Array.from(
-      new Set([...rawPreviousCommenterIds, ...reactorIds])
-    );
-
-    const previousCommenterSet = new Set(previousCommenterIds);
-
-    // L'auteur ancre CHAQUE ligne d'amitié — l'écarter par la requête est
-    // impossible ici : sa présence est structurelle, pas budgétaire.
-    const allFriendIds = friendRequests
-      .slice(0, FANOUT_ROW_CAP)
-      .flatMap((fr: { senderId: string; receiverId: string }) => [fr.senderId, fr.receiverId])
-      .filter(isNotifiableEngager);
-
-    const friendIds = Array.from(new Set(allFriendIds)).filter(
-      (id: string) => !previousCommenterSet.has(id)
-    );
-
-    return { authorId, friendIds, previousCommenterIds, truncatedBuckets };
+    return getStoryNotificationRecipients(this.prisma, postId, authorId, commenterId);
   }
 
-  /**
-   * Fan-out notifications when a new top-level comment is added to a story.
-   *
-   *  - Story author        → STORY_NEW_COMMENT  (priority: normal)
-   *  - Previous commenters → STORY_THREAD_REPLY (priority: low)
-   *  - Friends of author   → FRIEND_STORY_COMMENT (priority: low)
-   *
-   * Commenter never receives a notification.
-   */
-  async createStoryCommentNotificationsBatch(params: {
-    postId: string;
-    commentId: string;
-    storyAuthorId: string;
-    commenterId: string;
-    commentExcerpt?: string;
-    /**
-     * Type du post commenté. Pilote le wording (« story » vs « publication »
-     * vs « humeur ») et le bucket auteur : pour un post non-story, l'auteur
-     * est déjà notifié via `createPostCommentNotification` (route), donc le
-     * bucket 1 est sauté pour éviter la double notification.
-     * Défaut STORY (compat avec les appels existants).
-     */
-    postType?: 'STORY' | 'POST' | 'MOOD' | 'STATUS' | 'REEL';
-    /** Date de publication ISO du contenu commenté (contexte expiry côté client). */
-    postCreatedAt?: string | Date;
-    /** Date d'expiration ISO du contenu commenté (story/status éphémère). */
-    postExpiresAt?: string | Date;
-    /**
-     * User IDs to exclude from fan-out buckets (story_thread_reply, friend_story_comment).
-     * Use to pass mentionedUserIds so users who received user_mentioned don't also get
-     * a lower-priority story thread/friend notification.
-     * The story author always gets STORY_NEW_COMMENT regardless of this list.
-     */
-    excludeUserIds?: string[];
-    /**
-     * Visibilité du post commenté. Filtre les buckets fan-out (thread + amis)
-     * exactement comme `SocialEventsHandler.getVisibilityFilteredRecipients` et
-     * `createFriendContentNotificationsBatch` : un post ONLY/EXCEPT/PRIVATE/
-     * COMMUNITY ne doit JAMAIS notifier (extrait de commentaire inclus) un
-     * utilisateur qui n'a pas le droit de le voir.
-     *
-     * REQUIS — annoncé par les cycles 28, 29 et 30, qui l'avaient laissé
-     * `visibility?` à défaut `PUBLIC`. Une garde qu'on désarme en omettant un
-     * paramètre optionnel n'est pas une garde : rien ne signalait l'oubli, ni
-     * au build ni à l'exécution. Le prix se paie une fois, à la déclaration.
-     */
-    visibility: string | null | undefined;
-    /** Liste d'IDs pour les modes ONLY (autorisés) / EXCEPT (exclus). */
-    visibilityUserIds?: string[];
-  }): Promise<void> {
-    const [actor, postAuthor] = await Promise.all([
-      this.prisma.user.findUnique({
-        where: { id: params.commenterId },
-        select: { username: true, displayName: true, avatar: true },
-      }),
-      this.prisma.user.findUnique({
-        where: { id: params.storyAuthorId },
-        select: { username: true, displayName: true },
-      }),
-    ]);
-
-    if (!actor) return;
-
-    // La saturation des seaux est consignée par `getStoryNotificationRecipients`
-    // lui-même — là où elle est constatée, donc pour TOUS ses appelants et pas
-    // seulement pour celui-ci.
-    const { authorId, friendIds, previousCommenterIds } =
-      await this.getStoryNotificationRecipients(
-        params.postId,
-        params.storyAuthorId,
-        params.commenterId
-      );
-
-    // Filtre de visibilité — miroir de SocialEventsHandler.getVisibilityFilteredRecipients
-    // et de createFriendContentNotificationsBatch : un post restreint ne doit jamais
-    // fanout un commentaire (extrait inclus) vers un utilisateur qui ne peut pas le voir.
-    // L'auteur (bucket STORY_NEW_COMMENT) est exempt — il possède le post.
-    const visibility = params.visibility;
-    const visibilityUserIdSet = new Set(params.visibilityUserIds ?? []);
-    const coMemberIds = visibility === 'COMMUNITY'
-      ? new Set(await getCommunityCoMemberIds(this.prisma, params.storyAuthorId))
-      : null;
-    // Ne s'applique QU'À `friendIds`, une sortie d'ÉNUMÉRATEUR : ces gens SONT
-    // les amis actuels de l'auteur, dépliés de son graphe quelques lignes plus
-    // haut. Leur amitié n'est donc pas à re-vérifier, et seules les listes
-    // nominatives peuvent encore les écarter. Un post COMMUNITY ne passe jamais
-    // ici : il a sa propre branche, adossée au graphe communauté.
-    const canSeeAsFriend = (userId: string): boolean => {
-      switch (visibility) {
-        case 'PRIVATE': return false;
-        case 'ONLY': return visibilityUserIdSet.has(userId);
-        case 'EXCEPT': return !visibilityUserIdSet.has(userId);
-        default: return true; // PUBLIC / FRIENDS — amis par construction
-      }
-    };
-    // Un post COMMUNITY fanout aux co-membres (pas aux amis de l'auteur) — le graphe
-    // amis et le graphe communauté diffèrent ; on cible exactement le même set que le
-    // broadcast temps réel, buckets thread/auteur/commenter restant disjoints.
-    const friendAudience = (
-      visibility === 'COMMUNITY'
-        ? [...coMemberIds!].filter(id =>
-            id !== params.storyAuthorId &&
-            id !== params.commenterId &&
-            !previousCommenterIds.includes(id))
-        : friendIds.filter(canSeeAsFriend)
-    );
-    // `previousCommenterIds` (commentateurs antérieurs ∪ réacteurs) n'est PAS une
-    // sortie d'énumérateur : c'est un ensemble arbitraire au regard de l'audience
-    // du moment. Ils y étaient admis quand ils ont engagé le post ; une
-    // dés-amitié ou une édition de visibilité les en sort sans toucher à leur
-    // commentaire. Il leur faut donc un test d'ADMISSION, pas la table locale
-    // ci-dessus qui rendait `true` sur FRIENDS/EXCEPT sans lire aucun graphe.
-    // Même audience que `canNotifyAboutPost`, qui garde la notification unitaire
-    // de cette même population depuis le cycle 30.
-    //
-    // Sur un post COMMUNITY, les co-membres sont donc résolus une seconde fois
-    // (deux requêtes bornées de plus, sur un chemin déjà détaché de la réponse
-    // HTTP). C'est le prix assumé pour ne PAS refiltrer à la main avec le set
-    // ci-dessus : une copie locale de la règle d'admission est exactement ce qui
-    // avait laissé ce seau sans garde.
-    const engagedAudience = await filterPostConsumers({
-      prisma: this.prisma,
-      authorId: params.storyAuthorId,
-      visibility,
-      visibilityUserIds: params.visibilityUserIds,
-      candidateUserIds: previousCommenterIds,
-    });
-
-    const excerpt = params.commentExcerpt
-      ? this.truncateMessage(params.commentExcerpt)
-      : '';
-
-    // Wording typé : le destinataire doit savoir SUR QUOI porte le commentaire
-    // (story / publication / humeur / statut) et, pour les buckets fan-out, la
-    // story/publication DE QUI. Le contexte voyage en `subtitle` (APN-natif,
-    // restauré côté NSE après la donation d'intent), le body reste le contenu
-    // du commentaire.
-    const postType = params.postType ?? 'STORY';
-    // REEL est une variante de post : le catalogue i18n serveur le rend comme
-    // « publication », mais on conserve REEL dans la metadata pour que le client
-    // affiche le libellé/icône « Réel » distinct.
-    const i18nPostType = postType === 'REEL' ? 'POST' : postType;
-    const authorName = postAuthor?.displayName?.trim()
-      || postAuthor?.username?.trim()
-      || '';
-    const langs = await this.resolveRecipientLangs([authorId, ...engagedAudience, ...friendAudience]);
-    const contextSubtitleFor = (lang: string): string => authorName
-      ? notificationString(lang, 'comment.subtitleFrom', { postType: i18nPostType, author: authorName })
-      : notificationString(lang, 'comment.subtitleBare', { postType: i18nPostType });
-
-    const commonContext = {
-      postId: params.postId,
-      commentId: params.commentId,
-      ...(params.postCreatedAt ? { postCreatedAt: new Date(params.postCreatedAt).toISOString() } : {}),
-      ...(params.postExpiresAt ? { postExpiresAt: new Date(params.postExpiresAt).toISOString() } : {}),
-    };
-    const commonMetadata = {
-      action: 'view_post' as const,
-      postId: params.postId,
-      commentId: params.commentId,
-      commentPreview: excerpt,
-      postType,
-      ...(authorName ? { contentAuthorName: authorName } : {}),
-    };
-    const actorInfo = {
-      id: params.commenterId,
-      username: actor.username,
-      displayName: actor.displayName,
-      avatar: actor.avatar,
-    };
-
-    const excludeSet = new Set(params.excludeUserIds ?? []);
-    const tasks: Array<Promise<unknown>> = [];
-
-    // 1. Story author notification — always sent regardless of excludeUserIds
-    //    (STORY_NEW_COMMENT has priority over all fan-out notifications).
-    //    Pour un post non-story, l'auteur est déjà notifié via post_comment
-    //    (route) — bucket sauté pour ne pas le notifier deux fois.
-    if (authorId !== params.commenterId && postType === 'STORY') {
-      const aLang = langs.get(authorId) ?? 'fr';
-      tasks.push(
-        this.createNotification({
-          userId: authorId,
-          type: 'story_new_comment',
-          priority: 'normal',
-          content: excerpt || notificationString(aLang, 'comment.your', { postType: i18nPostType }),
-          subtitle: notificationString(aLang, 'comment.subtitleOwner', { postType: i18nPostType }),
-          actor: actorInfo,
-          context: commonContext,
-          metadata: commonMetadata,
-          lang: aLang,
-        })
-      );
-    }
-
-    // 2. Previous commenters (thread participants) — skip mentioned users
-    for (const recipientId of engagedAudience) {
-      if (excludeSet.has(recipientId)) continue;
-      const rLang = langs.get(recipientId) ?? 'fr';
-      tasks.push(
-        this.createNotification({
-          userId: recipientId,
-          type: 'story_thread_reply',
-          priority: 'low',
-          content: excerpt || notificationString(rLang, 'comment.repliedIn', { postType: i18nPostType }),
-          // Pas de `subtitle` explicite : l'auteur du contenu est désormais
-          // DANS l'action (« a répondu dans une story de Alice »), et le
-          // répéter en sous-titre écrirait deux fois la même chose.
-          ...(authorName ? {} : { subtitle: contextSubtitleFor(rLang) }),
-          actor: actorInfo,
-          context: commonContext,
-          metadata: commonMetadata,
-          lang: rLang,
-        })
-      );
-    }
-
-    // 3. Friends of the story author (or community co-members) — skip mentioned users
-    for (const recipientId of friendAudience) {
-      if (excludeSet.has(recipientId)) continue;
-      const rLang = langs.get(recipientId) ?? 'fr';
-      tasks.push(
-        this.createNotification({
-          userId: recipientId,
-          type: 'friend_story_comment',
-          priority: 'low',
-          content: excerpt || notificationString(rLang, 'comment.generic', { postType: i18nPostType }),
-          ...(authorName ? {} : { subtitle: contextSubtitleFor(rLang) }),
-          actor: actorInfo,
-          context: commonContext,
-          metadata: commonMetadata,
-          lang: rLang,
-        })
-      );
-    }
-
-    // createNotification ne rejette jamais (catch interne + log du userId
-    // exact) : attendre les tasks suffit, pas de gestion rejected ici.
-    await Promise.allSettled(tasks);
+  async createStoryCommentNotificationsBatch(params: StoryCommentFanoutParams): Promise<void> {
+    return createStoryCommentNotificationsBatch(this.fanoutDependencies(), params);
   }
 
   // ==============================================
   // COMMENT MENTION NOTIFICATIONS (Phase 2B)
   // ==============================================
 
-  /**
-   * Envoie des notifications user_mentioned en batch pour les mentions dans un commentaire.
-   *
-   * Priority dedup: user_mentioned > story_new_comment > story_thread_reply > friend_story_comment
-   * Les mentionedUserIds doivent être passés en excludeUserIds dans createStoryCommentNotificationsBatch
-   * pour éviter la double notification.
-   *
-   * Skip: self-mention, rate-limit anti-spam (MAX_MENTIONS_PER_MINUTE par paire sender:recipient).
-   */
-  async createCommentMentionNotificationsBatch(params: {
-    commentId: string;
-    postId: string;
-    commenterId: string;
-    mentionedUserIds: string[];
-    commentExcerpt?: string;
-    /**
-     * Type de l'entité portant le commentaire — discriminant qui décide de la
-     * surface ouverte au tap côté client. Sans lui, une mention dans le
-     * commentaire d'un réel ouvre le détail de post plat. Défaut POST.
-     */
-    postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
-    /**
-     * Auteur du POST commenté — le sommet du graphe qui définit l'audience.
-     * C'est bien lui et non le commentateur : l'auteur seul a choisi qui peut
-     * voir. Requis, pour qu'aucun appelant ne puisse rouvrir la fuite par
-     * omission.
-     */
-    postAuthorId: string;
-    /**
-     * Visibilité du POST commenté. Un commentaire n'a pas d'audience propre :
-     * il hérite de celle du post. Requis — cf. `postAuthorId`.
-     */
-    visibility: string | null | undefined;
-    /** `Post.visibilityUserIds` — liste blanche en ONLY, liste noire en EXCEPT. */
-    visibilityUserIds?: readonly string[];
-  }): Promise<void> {
-    if (params.mentionedUserIds.length === 0) return;
-
-    const commenter = await this.prisma.user.findUnique({
-      where: { id: params.commenterId },
-      select: { username: true, displayName: true, avatar: true },
-    });
-
-    if (!commenter) return;
-
-    // Nommer quelqu'un ne lui donne pas le droit de voir : un mentionné hors
-    // audience ne reçoit rien. Sans ce filtre, l'extrait du commentaire — donc
-    // du contenu d'un post restreint — atterrissait sur son écran verrouillé,
-    // avec un lien de tap vers un post qui le refuserait.
-    //
-    // Audience de CONSOMMATION (amis ∪ contacts DM) — la même que
-    // `canNotifyAboutPost` pour les notifications unitaires du fil, et que le
-    // feed. Un contact DM non-ami à qui le feed montre ce post doit être averti
-    // qu'on l'y a nommé.
-    const audience = await filterPostConsumers({
-      prisma: this.prisma,
-      authorId: params.postAuthorId,
-      visibility: params.visibility,
-      visibilityUserIds: params.visibilityUserIds,
-      candidateUserIds: params.mentionedUserIds,
-    });
-    if (audience.length === 0) return;
-
-    const content = params.commentExcerpt
-      ? this.truncateMessage(params.commentExcerpt)
-      : '';
-    const langs = await this.resolveRecipientLangs(audience);
-
-    const actorInfo = {
-      id: params.commenterId,
-      username: commenter.username,
-      displayName: commenter.displayName,
-      avatar: commenter.avatar,
-    };
-
-    const tasks: Array<Promise<unknown>> = [];
-
-    for (const userId of audience) {
-      if (userId === params.commenterId) continue;
-
-      if (!this.shouldCreateMentionNotification(params.commenterId, userId)) {
-        notificationLogger.info('Comment mention notification blocked (rate limit)', {
-          commenterId: params.commenterId,
-          recipientId: userId,
-        });
-        continue;
-      }
-
-      tasks.push(
-        this.createNotification({
-          userId,
-          type: 'user_mentioned',
-          priority: 'high',
-          content,
-          actor: actorInfo,
-          lang: langs.get(userId) ?? 'fr',
-          context: {
-            postId: params.postId,
-            commentId: params.commentId,
-          },
-          metadata: {
-            action: 'view_post',
-            entityType: 'comment',
-            postId: params.postId,
-            commentId: params.commentId,
-            commentPreview: content,
-            postType: params.postType ?? 'POST',
-          } as any,
-        })
-      );
-    }
-
-    // createNotification ne rejette jamais (catch interne + log du userId
-    // exact) : attendre les tasks suffit, pas de gestion rejected ici.
-    await Promise.allSettled(tasks);
+  async createCommentMentionNotificationsBatch(params: CommentMentionFanoutParams): Promise<void> {
+    return createCommentMentionNotificationsBatch(this.fanoutDependencies(), params);
   }
 
   // ==============================================
   // POST MENTION NOTIFICATIONS (Fix 2)
   // ==============================================
 
-  /**
-   * Envoie des notifications user_mentioned en batch pour les mentions dans un post.
-   *
-   * Mirrors createCommentMentionNotificationsBatch.
-   * Skip: self-mention, rate-limit anti-spam (MAX_MENTIONS_PER_MINUTE per pair sender:recipient).
-   */
-  async createPostMentionNotificationsBatch(params: {
-    postId: string;
-    posterId: string;
-    mentionedUserIds: string[];
-    postExcerpt?: string;
-    /**
-     * Type du contenu mentionnant — discriminant qui décide de la surface
-     * ouverte au tap côté client (lecteur de réel / viewer éphémère / détail de
-     * post). Défaut POST.
-     */
-    postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
-    /**
-     * `Post.visibility`. Requis — la garde d'audience ne doit pas pouvoir être
-     * désarmée par simple omission d'un paramètre optionnel.
-     */
-    visibility: string | null | undefined;
-    /** `Post.visibilityUserIds` — liste blanche en ONLY, liste noire en EXCEPT. */
-    visibilityUserIds?: readonly string[];
-  }): Promise<void> {
-    if (params.mentionedUserIds.length === 0) return;
-
-    const poster = await this.prisma.user.findUnique({
-      where: { id: params.posterId },
-      select: { username: true, displayName: true, avatar: true },
-    });
-
-    if (!poster) return;
-
-    // La garde d'audience est RETIRÉE du chemin de référence — décision produit
-    // 2026-08-19. Elle empêchait l'extrait d'un post FRIENDS de partir vers un
-    // non-ami ; mais nommer quelqu'un lui OUVRE désormais le contenu, donc la
-    // garde n'a plus d'objet : elle taisait précisément les gens que l'auteur
-    // venait de désigner.
-    //
-    // CE QUI PROTÈGE RÉELLEMENT — à ne pas se tromper de gardien.
-    //
-    // La rédaction d'origine désignait l'avertissement du composer comme « la
-    // SEULE protection restante ». C'est FAUX, et dangereusement : un
-    // avertissement d'interface ne protège rien côté serveur, et cette phrase
-    // invite à croire que l'ACL de lecture serait retirable. Une revue de
-    // sécurité automatique s'y est d'ailleurs laissé prendre le 2026-08-19 et a
-    // classé ce bloc en IDOR à haute gravité.
-    //
-    // Le vrai gardien est un GRANT PERSISTÉ, vérifié à la lecture :
-    //   PostMention                              (table, `post_user_mention_unique`)
-    //     → isReferenceStillOpen                 (postVisibility.ts)
-    //       → canUserViewPost(..., includeReferenced: true)
-    //         → canUserConsumePost               (verdict de LECTURE)
-    //
-    // Le grant n'est pas perpétuel : sur un contenu EXPIRÉ il ne vaut qu'une
-    // fenêtre de 24 h (`verdictFor`, referenceAccess.ts), et c'est
-    // `isReferenceStillOpen` — et non la seule existence de la ligne — qui la
-    // fait respecter par TOUT ce que `canUserConsumePost` garde : ce lot de
-    // notifications, le fil de commentaires, la room socket.
-    //
-    // L'extrait ne part donc qu'à des utilisateurs qui sont EFFECTIVEMENT
-    // autorisés à ouvrir le post : la notification ne leur apprend rien qu'ils
-    // ne puissent déjà lire. L'ordre le garantit — `createPostMentions` est
-    // `await`é AVANT `createPostMentionNotificationsBatch` (postMentions.ts),
-    // donc pas de fenêtre où la notification précéderait le grant.
-    //
-    // L'avertissement du composer reste utile, mais il est de l'UX : il évite à
-    // l'auteur d'ouvrir son contenu sans le vouloir. Il n'est pas la garde.
-    // Retirer le grant persisté ou `includeReferenced`, EN REVANCHE, rouvrirait
-    // une vraie fuite.
-    const audience = params.mentionedUserIds;
-    if (audience.length === 0) return;
-
-    const excerpt = params.postExcerpt
-      ? this.truncateMessage(params.postExcerpt)
-      : '';
-    const langs = await this.resolveRecipientLangs(audience);
-
-    const actorInfo = {
-      id: params.posterId,
-      username: poster.username,
-      displayName: poster.displayName,
-      avatar: poster.avatar,
-    };
-
-    const tasks: Array<Promise<unknown>> = [];
-
-    for (const userId of audience) {
-      if (userId === params.posterId) continue;
-
-      if (!this.shouldCreateMentionNotification(params.posterId, userId)) {
-        notificationLogger.info('Post mention notification blocked (rate limit)', {
-          posterId: params.posterId,
-          recipientId: userId,
-        });
-        continue;
-      }
-
-      tasks.push(
-        this.createNotification({
-          userId,
-          type: 'user_mentioned',
-          priority: 'high',
-          content: excerpt || notificationString(langs.get(userId) ?? 'fr', 'mention'),
-          actor: actorInfo,
-          lang: langs.get(userId) ?? 'fr',
-          context: {
-            postId: params.postId,
-          },
-          metadata: {
-            action: 'view_post',
-            entityType: 'post',
-            postId: params.postId,
-            postPreview: excerpt,
-            postType: params.postType ?? 'POST',
-          } as any,
-        })
-      );
-    }
-
-    // createNotification ne rejette jamais (catch interne + log du userId
-    // exact) : attendre les tasks suffit, pas de gestion rejected ici.
-    await Promise.allSettled(tasks);
+  async createPostMentionNotificationsBatch(params: PostMentionFanoutParams): Promise<void> {
+    return createPostMentionNotificationsBatch(this.fanoutDependencies(), params);
   }
 
   // ==============================================
   // FRIEND CONTENT NOTIFICATIONS (Phase 4F)
   // ==============================================
 
-  /**
-   * Fan-out notifications to all friends of `authorId` when they publish new content.
-   *
-   * contentType mapping:
-   *   STORY  → friend_new_story
-   *   POST   → friend_new_post
-   *   MOOD   → friend_new_mood
-   *   STATUS → friend_new_mood  (lightweight/ephemeral; grouped with MOOD to avoid type proliferation)
-   *
-   * Rate-limit: none in v1. These are once-per-publish events so burst risk is low.
-   * Aggregation: none in v1. Duplicate suppression (author vs friend) is enforced via excludeUserIds.
-   *
-   * Dedup with mentions: pass mentionedUserIds as `excludeUserIds`.
-   * user_mentioned takes priority over friend_new_post for the same recipient.
-   *
-   * Cap: 500 friend rows max (mirrors createStoryCommentNotificationsBatch pattern).
-   */
-  async createFriendContentNotificationsBatch(params: {
-    postId: string;
-    authorId: string;
-    contentType: 'STORY' | 'POST' | 'MOOD' | 'STATUS' | 'REEL';
-    excerpt?: string;
-    /** Date de publication ISO du contenu (contexte « publié il y a … » côté client). */
-    postCreatedAt?: string | Date;
-    /** Date d'expiration ISO (story/status éphémère) → le client affiche « expirée ». */
-    postExpiresAt?: string | Date;
-    /** Nature du média principal — affiché quand le contenu n'a pas de texte. */
-    mediaType?: 'image' | 'video' | 'audio' | 'text';
-    /**
-     * User IDs to exclude from fan-out.
-     * Pass mentionedUserIds so a friend who is also @mentioned only gets user_mentioned.
-     */
-    excludeUserIds?: string[];
-    /**
-     * Post visibility — used to filter recipients (same rules as Socket.IO broadcast).
-     *
-     * **Requis**, comme sur les trois lots voisins depuis les cycles 28 et 31.
-     * L'omission n'était pas anodine ici : le défaut `PUBLIC` fait retomber un
-     * post `PRIVATE` — ou un `EXCEPT` et sa liste noire — sur l'énumération
-     * complète des amis, avec extrait et vignette. La faute appartient au build.
-     */
-    visibility: string | null | undefined;
-    /** User IDs list for ONLY/EXCEPT visibility modes. */
-    visibilityUserIds?: string[];
-  }): Promise<void> {
-    // REEL est une variante de post : même type de notification (friend_new_post),
-    // mais le contentType REEL est conservé dans la metadata pour l'affichage client.
-    const typeMap: Record<'STORY' | 'POST' | 'MOOD' | 'STATUS' | 'REEL', 'friend_new_story' | 'friend_new_post' | 'friend_new_mood'> = {
-      STORY: 'friend_new_story',
-      POST: 'friend_new_post',
-      MOOD: 'friend_new_mood',
-      STATUS: 'friend_new_mood',
-      REEL: 'friend_new_post',
-    };
-    const notificationType = typeMap[params.contentType];
-
-    const author = await this.prisma.user.findUnique({
-      where: { id: params.authorId },
-      select: { username: true, displayName: true, avatar: true },
-    });
-
-    if (!author) return;
-
-    const friendRequestRows = await this.prisma.friendRequest.findMany({
-      where: {
-        status: 'accepted',
-        OR: [{ senderId: params.authorId }, { receiverId: params.authorId }],
-      },
-      select: { senderId: true, receiverId: true },
-      take: FANOUT_ROW_CAP + 1,
-      orderBy: { updatedAt: 'desc' },
-    });
-
-    // Le tri est `updatedAt desc` et la borne est fixe : chez un auteur qui la
-    // dépasse durablement, ce sont TOUJOURS les mêmes contacts — les plus
-    // anciens — qui n'apprennent aucune de ses publications. Le silence est ici
-    // structurel, pas ponctuel, d'où la trace.
-    //
-    // Requête sans `distinct` : la ligne témoin y est un compte EXACT — elle
-    // existe si et seulement si l'auteur a PLUS de `FANOUT_ROW_CAP` amitiés
-    // acceptées. Elle est comptée, puis jetée par le `slice` : la borne de
-    // diffusion reste à sa valeur, seule sa saturation devient dicible.
-    if (friendRequestRows.length > FANOUT_ROW_CAP) {
-      notificationLogger.warn('Fan-out de publication tronqué à la borne', {
-        postId: params.postId,
-        authorId: params.authorId,
-        cap: FANOUT_ROW_CAP,
-      });
-    }
-    const friendRequests = friendRequestRows.slice(0, FANOUT_ROW_CAP);
-
-    const excludeSet = new Set(params.excludeUserIds ?? []);
-    const excerpt = params.excerpt ? this.truncateMessage(params.excerpt) : '';
-    // Vignette du contenu publié → rendue in-app + attachée au push iOS. Le
-    // mediaType explicite de l'appelant prime ; sinon on le dérive du média.
-    const media = await resolvePostMedia(this.prisma, params.postId);
-    const mediaType = params.mediaType ?? media?.mediaType;
-
-    // Aucun `?? 'PUBLIC'` : une visibilité absente retombe sur la branche par
-    // défaut ci-dessous (l'énumération des amis), jamais sur une ouverture.
-    const visibility = params.visibility;
-    const visibilityUserIds = params.visibilityUserIds ?? [];
-    const visibilityUserIdSet = new Set(visibilityUserIds);
-
-    if (visibility === 'PRIVATE') return;
-
-    // Content : le wording « a publié une nouvelle … » est localisé par
-    // destinataire ; le subtitle typé (« Nouvelle story » …) voyage en
-    // APN-natif (restauré par le NSE) — les deux dans la langue du destinataire.
-    const contentKeyByType: Record<'friend_new_story' | 'friend_new_post' | 'friend_new_mood', NotificationStringKey> = {
-      friend_new_story: 'friend.story',
-      friend_new_post: 'friend.post',
-      friend_new_mood: 'friend.mood',
-    };
-    // Un réel emprunte le type friend_new_post mais garde son wording propre :
-    // « a publié un nouveau réel », pas « … un nouveau post ». Le discriminant
-    // REEL est conservé dans la metadata pour l'affichage client, donc le titre,
-    // le corps et le sous-titre doivent tous rester conscients de l'entité —
-    // sinon un réel s'annonçait comme un post (titre + corps) tout en affichant
-    // « Nouveau réel » en sous-titre du builder : une contradiction.
-    const contentKey: NotificationStringKey =
-      params.contentType === 'REEL' ? 'friend.reel' : contentKeyByType[notificationType];
-
-    const baseFriendIds = friendRequests
-      .map(fr => (fr.senderId === params.authorId ? fr.receiverId : fr.senderId))
-      .filter(id => id !== params.authorId && !excludeSet.has(id));
-
-    let recipientIds: string[];
-    if (visibility === 'COMMUNITY') {
-      // Une action dans une communauté est OBLIGATOIREMENT notifiée à TOUS les
-      // membres de la communauté (pas seulement aux contacts de l'auteur) —
-      // miroir de SocialEventsHandler.getVisibilityFilteredRecipients pour que
-      // notification et broadcast temps réel ciblent exactement le même set.
-      const coMemberIds = await getCommunityCoMemberIds(this.prisma, params.authorId);
-      recipientIds = coMemberIds.filter(id => id !== params.authorId && !excludeSet.has(id));
-    } else if (visibility === 'ONLY') {
-      recipientIds = visibilityUserIds.filter(id => id !== params.authorId && !excludeSet.has(id));
-    } else if (visibility === 'EXCEPT') {
-      recipientIds = baseFriendIds.filter(id => !visibilityUserIdSet.has(id));
-    } else {
-      recipientIds = baseFriendIds;
-    }
-
-    const uniqueRecipientIds = [...new Set(recipientIds)];
-    const langs = await this.resolveRecipientLangs(uniqueRecipientIds);
-
-    const actorInfo = {
-      id: params.authorId,
-      username: author.username,
-      displayName: author.displayName,
-      avatar: author.avatar,
-    };
-
-    const tasks: Array<Promise<unknown>> = [];
-
-    for (const recipientId of uniqueRecipientIds) {
-      const fLang = langs.get(recipientId) ?? 'fr';
-      tasks.push(
-        this.createNotification({
-          userId: recipientId,
-          type: notificationType,
-          priority: 'normal',
-          content: excerpt || notificationString(fLang, contentKey),
-          subtitle: notificationString(fLang, 'friend.subtitleNew', {
-            postType: params.contentType,
-          }),
-          actor: actorInfo,
-          lang: fLang,
-          context: {
-            postId: params.postId,
-            ...(params.postCreatedAt ? { postCreatedAt: new Date(params.postCreatedAt).toISOString() } : {}),
-            ...(params.postExpiresAt ? { postExpiresAt: new Date(params.postExpiresAt).toISOString() } : {}),
-            ...(media?.thumbnailUrl
-              ? { firstAttachmentUrl: media.thumbnailUrl, firstAttachmentMimeType: media.thumbnailMimeType }
-              : {}),
-          },
-          metadata: {
-            action: 'view_post',
-            postId: params.postId,
-            contentType: params.contentType,
-            // Le discriminant d'entité voyage AUSSI sous `postType` : c'est la
-            // clé que lisent le payload push (`data.postType`) et le routage
-            // client. Sans ce miroir, le nouveau réel d'un ami arrivait sans
-            // discriminant et ouvrait le détail de post plat au lieu du lecteur
-            // immersif. `contentType` est conservé pour la rétro-compat web.
-            postType: params.contentType,
-            excerpt,
-            ...(mediaType ? { mediaType } : {}),
-            ...(media?.thumbnailUrl ? { postThumbnailUrl: media.thumbnailUrl } : {}),
-          } as any,
-        })
-      );
-    }
-
-    // createNotification ne rejette jamais (catch interne + log du userId
-    // exact) : attendre les tasks suffit, pas de gestion rejected ici.
-    await Promise.allSettled(tasks);
+  async createFriendContentNotificationsBatch(params: FriendContentFanoutParams): Promise<void> {
+    return createFriendContentNotificationsBatch(this.fanoutDependencies(), params);
   }
 
   // ==============================================
@@ -3256,33 +2449,9 @@ export class NotificationService {
     conversationId: string;
     joinMethod?: 'via_link' | 'invited';
   }): Promise<Notification | null> {
-    // Une arrivée est de l'activité AMBIANTE : elle se tait dans une
-    // conversation en sourdine (cf. `mutedRecipients.ts`). Avant les lectures :
-    // sur un groupe où tout le monde a coupé le son, un ajout de membre payait
-    // trois requêtes par destinataire pour ne rien émettre.
-    if (await this.isConversationMutedFor(params.recipientUserId, params.conversationId, 'member_joined')) {
-      return null;
-    }
-
-    const snapshot = await this.loadMemberJoinedSnapshot(params.newMemberUserId, params.conversationId);
-    if (!snapshot) return null;
-
-    return this.createMemberJoinedFor(params.recipientUserId, params, snapshot);
+    return createMemberJoinedNotification(this.fanoutDependencies(), params);
   }
 
-  /**
-   * Prévient une audience entière de la même arrivée.
-   *
-   * Les trois lectures dont `member_joined` a besoin — profil du nouveau
-   * membre, conversation, effectif — ne dépendent pas du destinataire : elles
-   * sont faites UNE fois pour toute l'audience, et le mute est demandé en une
-   * requête plutôt qu'une par personne. La boucle d'appels unitaires qui
-   * précédait payait 4 requêtes par destinataire pour quatre résultats
-   * identiques, et le surcoût grandissait avec le groupe.
-   *
-   * Rend le nombre de notifications réellement créées : une préférence de type
-   * ou un DND côté destinataire peut en écarter sans que ce soit une erreur.
-   */
   async createMemberJoinedNotificationsBatch(
     recipientUserIds: readonly string[],
     common: {
@@ -3291,87 +2460,7 @@ export class NotificationService {
       joinMethod?: 'via_link' | 'invited';
     }
   ): Promise<number> {
-    const audience = [...new Set(recipientUserIds)];
-    if (audience.length === 0) return 0;
-
-    const listening = await filterMutedRecipients(this.prisma, common.conversationId, audience);
-    if (listening.length === 0) {
-      notificationLogger.info('Member-joined fan-out silenced (whole audience muted)', {
-        conversationId: common.conversationId,
-        audienceSize: audience.length,
-      });
-      return 0;
-    }
-
-    const snapshot = await this.loadMemberJoinedSnapshot(common.newMemberUserId, common.conversationId);
-    if (!snapshot) return 0;
-
-    // `createNotification` ne rejette jamais (catch interne) — un destinataire
-    // en échec rend `null` et n'emporte pas les autres.
-    const results = await Promise.all(
-      listening.map((recipientUserId) => this.createMemberJoinedFor(recipientUserId, common, snapshot))
-    );
-    return results.filter(Boolean).length;
-  }
-
-  /**
-   * La part de `member_joined` qui ne dépend PAS du destinataire. `null` quand
-   * le nouveau membre est introuvable : sans acteur, la notification n'a pas de
-   * sujet, et aucun destinataire ne doit en recevoir.
-   */
-  private async loadMemberJoinedSnapshot(
-    newMemberUserId: string,
-    conversationId: string
-  ): Promise<MemberJoinedSnapshot | null> {
-    const [newMember, conversation, memberCount] = await Promise.all([
-      this.prisma.user.findUnique({
-        where: { id: newMemberUserId },
-        select: { username: true, displayName: true, avatar: true },
-      }),
-      this.prisma.conversation.findUnique({
-        where: { id: conversationId },
-        select: { title: true, type: true },
-      }),
-      this.prisma.participant.count({
-        where: { conversationId },
-      }),
-    ]);
-
-    if (!newMember) return null;
-    return { newMember, conversation, memberCount };
-  }
-
-  private createMemberJoinedFor(
-    recipientUserId: string,
-    common: { newMemberUserId: string; conversationId: string; joinMethod?: 'via_link' | 'invited' },
-    snapshot: MemberJoinedSnapshot
-  ): Promise<Notification | null> {
-    return this.createNotification({
-      userId: recipientUserId,
-      type: 'member_joined',
-      priority: 'low',
-      content: 'Nouveau membre',
-
-      actor: {
-        id: common.newMemberUserId,
-        username: snapshot.newMember.username,
-        displayName: snapshot.newMember.displayName,
-        avatar: snapshot.newMember.avatar,
-      },
-
-      context: {
-        conversationId: common.conversationId,
-        conversationTitle: snapshot.conversation?.title,
-        conversationType: snapshot.conversation?.type as any,
-      },
-
-      metadata: {
-        action: 'view_conversation',
-        memberCount: snapshot.memberCount,
-        isMember: true,
-        joinMethod: common.joinMethod,
-      },
-    });
+    return createMemberJoinedNotificationsBatch(this.fanoutDependencies(), recipientUserIds, common);
   }
 
   // ==============================================

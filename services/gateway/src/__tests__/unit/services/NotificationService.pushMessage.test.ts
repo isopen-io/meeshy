@@ -127,8 +127,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   },
 }));
 
-import { NotificationService } from '../../../services/notifications/NotificationService';
-import { pushCategoryForNotificationType } from '../../../services/notifications/push-header';
+import { NotificationService } from '../../../services/notifications/NotificationService'; import { pushCategoryForNotificationType } from '../../../services/notifications/push-header';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 
 const RECIPIENT_ID = '507f1f77bcf86cd799439011';

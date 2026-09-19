@@ -95,9 +95,16 @@ const MAX_LINES = 1000;
  * chiffres de l'issue plutôt que la mesure du jour aurait rendu au dépôt une
  * marge de croissance qu'il n'a plus — un cliquet se pose sur ce qu'on MESURE,
  * jamais sur ce qu'un document affirme.
+ *
+ * `services/notifications/NotificationService.ts` : 6119 → 4494 (découpage
+ * #7093, 2026-09-19). Les lois pures et les quatre éventails batch (plus
+ * `member_joined`, cinquième éventail de même forme) sont partis vers
+ * `notification-preview.ts`, `push-header.ts`, `post-media-thumbnail.ts` et
+ * `fanout/*.ts`, dans le même dossier — la mesure descend, jamais un fichier
+ * ne quitte la classe elle-même.
  */
 const DETTE_HERITEE: Readonly<Record<string, number>> = {
-  'services/notifications/NotificationService.ts': 6119,
+  'services/notifications/NotificationService.ts': 4494,
   'socketio/CallEventsHandler.ts': 5181,
   'socketio/MeeshySocketIOManager.ts': 3816,
   'services/message-translation/MessageTranslationService.ts': 3303,
