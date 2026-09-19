@@ -424,6 +424,11 @@ try {
       await page.click('[data-profile-filter="reels"]');
       await page.waitForFunction((n) => document.querySelectorAll('[data-profile-posts] [data-feed-card-id]').length < n, allCards, { timeout: 1000 });
       check((await page.$('[data-profile-posts-more]')) !== null, `${label} : sous un filtre, « Charger plus » reste OFFERT`);
+      /* SON ENCRE SE MESURE ICI, tant qu'il existe — la dernière page le
+         retire, et une mesure faite plus bas rendrait `null` pour un contrôle
+         simplement absent, c'est-à-dire un gate vert sur une couleur jamais
+         regardée. */
+      const chargerPlusInk = await contrastOf(page, '[data-profile-posts-more]');
       const promised = Number((await textOf(page, '[data-profile-tile="reelsCount"] strong')) ?? '0');
       await page.click('[data-profile-posts-more]');
       const held = await page
@@ -454,6 +459,14 @@ try {
         libelleTuile: await contrastOf(page, '[data-profile-tile="postsCount"] .text-chip'),
         valeurStat: await contrastOf(page, '[data-profile-stat="languagesUsed"] strong'),
         ajouter: await contrastOf(page, '[data-profile-action="add"]'),
+        /* « ÉCRIRE » ET « CHARGER PLUS » entrent à la revue de #7083 : la
+           liste mesurait deux boutons sur quatre, et les DEUX qu'elle sautait
+           étaient précisément ceux à l'encre `--color-ios-brand` — 3,84 en
+           clair pour « Écrire », le geste que l'audience de cet écran vient
+           chercher. Une liste d'encres nommée À LA MAIN ne mesure que ce que
+           son auteur soupçonne : elle se relit quand un bouton s'ajoute. */
+        ecrire: await contrastOf(page, '[data-profile-action="write"]'),
+        chargerPlus: chargerPlusInk,
         bloquer: await contrastOf(page, '[data-profile-action="block"]'),
         membreDepuis: await contrastOf(page, '[data-profile-member-since]'),
       };

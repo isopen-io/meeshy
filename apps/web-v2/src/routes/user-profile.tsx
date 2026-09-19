@@ -44,6 +44,7 @@ import {
   ProfileOfflineBanner,
   ProfilePostsEmpty,
   ProfilePostsError,
+  ProfilePostsMore,
   ProfileRelationSection,
   ProfileSkeleton,
   ProfileStatsBand,
@@ -344,16 +345,7 @@ export function UserProfileView({ username }: { readonly username: string }) {
                         `hasMore`, jamais par le filtre
                         (`ProfileUserPostsList.swift:246-252`). */}
                     {posts.hasNextPage ? (
-                      <button
-                        type="button"
-                        data-profile-posts-more
-                        onClick={() => void posts.fetchNextPage()}
-                        disabled={posts.isFetchingNextPage}
-                        className="mx-auto grid place-items-center rounded-chip px-5 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
-                        style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)', minHeight: 44 }}
-                      >
-                        {translate(language, posts.isFetchingNextPage ? 'userProfile.posts.loading' : 'userProfile.posts.loadMore')}
-                      </button>
+                      <ProfilePostsMore language={language} loading={posts.isFetchingNextPage} onMore={() => void posts.fetchNextPage()} />
                     ) : null}
                   </div>
                 </GroupedSection>

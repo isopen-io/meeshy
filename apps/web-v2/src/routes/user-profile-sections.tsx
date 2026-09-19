@@ -195,6 +195,22 @@ const actionText = (language: InterfaceLanguage, kind: ProfileActionKind, name: 
   return translate(language, PLAIN_LABEL[kind]);
 };
 
+/**
+ * **L'ENCRE DE MARQUE NE SE PEINT PAS AVEC `--color-ios-brand`** (revue #7083),
+ * et le lot le savait pour les boutons PLEINS sans l'appliquer aux AUTRES :
+ * `--color-ios-brand` vaut `--ios-indigo-500`, et sur la teinte à 12 % d'un
+ * bouton de CONTOUR il rendait **3,84 en clair / 4,06 en sombre** pour
+ * « Écrire » — le geste que l'audience de cet écran vient chercher — et 4,47 /
+ * 4,45 pour « Charger plus ». Tous sous AA, dans les DEUX schémas.
+ *
+ * `BRAND_INK` est la seule encre de marque MESURÉE lisible (le `@pseudo` la
+ * porte déjà, 6,67) : une classe, parce qu'elle BASCULE avec le schéma — et
+ * une classe ne gagne contre un `style` inline que si celui-ci ne pose pas
+ * `color`. D'où le choix : la teinte de marque passe par la CLASSE, les autres
+ * tons (succès, danger, avertissement) restent inline.
+ */
+const brandInkOf = (kind: ProfileActionKind, filled: boolean): boolean => !filled && ACTIONS[kind].tone === 'brand';
+
 function ActionButton({
   language,
   kind,
@@ -210,6 +226,7 @@ function ActionButton({
 }) {
   const tone = TONE_COLOR[ACTIONS[kind].tone];
   const filled = kind === 'add' || kind === 'accept';
+  const brandInk = brandInkOf(kind, filled);
   return (
     <button
       type="button"
@@ -217,7 +234,7 @@ function ActionButton({
       disabled={disabled}
       aria-label={translate(language, ACTIONS[kind].aria, { name })}
       onClick={() => onAction(kind)}
-      className={`flex w-full items-center justify-center gap-2 rounded-card px-4 text-body font-semibold disabled:opacity-45 ${FOCUS}`}
+      className={`flex w-full items-center justify-center gap-2 rounded-card px-4 text-body font-semibold disabled:opacity-45 ${FOCUS} ${brandInk ? BRAND_INK : ''}`}
       style={{
         minHeight: 48,
         outlineColor: tone,
@@ -225,7 +242,7 @@ function ActionButton({
            et `--color-ios-surface` suit le schéma — en sombre il tombait à
            4,45 contre l'indigo de marque (mesuré). Même choix que la pastille
            de « Découvrir » (`discover-parts.tsx`, `text-white`). */
-        color: filled ? '#fff' : tone,
+        ...(filled ? { color: '#fff' } : brandInk ? {} : { color: tone }),
         backgroundColor: filled ? (ACTIONS[kind].tone === 'brand' ? BRAND_FILL : tone) : `color-mix(in srgb, ${tone} 12%, transparent)`,
       }}
     >
@@ -671,11 +688,44 @@ export function ProfilePostsError({ language, onRetry }: { readonly language: In
         type="button"
         data-profile-posts-retry
         onClick={onRetry}
-        className={`grid place-items-center rounded-chip px-5 text-body font-semibold ${FOCUS}`}
-        style={{ minHeight: 44, color: BRAND, outlineColor: BRAND }}
+        className={`grid place-items-center rounded-chip px-5 text-body font-semibold ${FOCUS} ${BRAND_INK}`}
+        style={{ minHeight: 44, outlineColor: BRAND }}
       >
         {translate(language, 'profile.retry')}
       </button>
     </div>
+  );
+}
+
+/**
+ * **« CHARGER PLUS » VIT ICI, avec l'encre qui le rend lisible** — il portait
+ * `--color-ios-brand` (4,47 clair / 4,45 sombre, sous AA dans les deux) dans
+ * l'écran, hors de portée de la loi d'encre écrite dans ce fichier. Une
+ * teinte de marque qui se peint à DEUX endroits finit toujours par diverger de
+ * sa mesure : il n'en reste qu'un.
+ *
+ * Il s'affiche sous TOUS les filtres (`hasNext` seul) : le filtre est client,
+ * la tuile annonce un compte serveur, et le retirer murait la suite.
+ */
+export function ProfilePostsMore({
+  language,
+  loading,
+  onMore,
+}: {
+  readonly language: InterfaceLanguage;
+  readonly loading: boolean;
+  readonly onMore: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      data-profile-posts-more
+      onClick={onMore}
+      disabled={loading}
+      className={`mx-auto grid place-items-center rounded-chip px-5 text-body font-semibold disabled:opacity-45 ${FOCUS} ${BRAND_INK}`}
+      style={{ minHeight: 44, outlineColor: BRAND }}
+    >
+      {translate(language, loading ? 'userProfile.posts.loading' : 'userProfile.posts.loadMore')}
+    </button>
   );
 }
