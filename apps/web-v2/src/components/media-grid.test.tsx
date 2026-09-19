@@ -16,7 +16,7 @@ import {
 } from '@/lib/api/fixtures-media-grid';
 import type { Attachment } from '@/lib/api/types';
 import { sizesFor } from '@/lib/api/media-url';
-import { mediaGridSlots, soloVideoSlot } from '@/lib/view/media-grid-layout';
+import { mediaGridCellSizes, mediaGridSlots, soloVideoSlot } from '@/lib/view/media-grid-layout';
 
 import { MediaGrid } from './media-grid';
 
@@ -222,32 +222,104 @@ describe('MediaGrid — l’image en ÉCHEC de décodage dans une case de grille
  * dérivait).
  */
 describe('MediaGrid — la boîte porte ses cotes dérivées (U4, #6169)', () => {
-  test('media-11 (2 pièces) : 300 × 180', () => {
+  /**
+   * #7030 (relecture adversariale, PAS jouée avant fusion) — `height` FIXE
+   * était le défaut : la boîte est plafonnée à `100 %` de son porteur
+   * (#7018), donc sa largeur RENDUE rétrécit dès que le porteur est plus
+   * étroit que 300 px (223,4 px en Bulles, mesuré) — une `height` littérale
+   * ne suit pas, chaque case shrinkée par flex-shrink se retrouve sous une
+   * hauteur inchangée : `110,7 × 180` au lieu de `110,7 × 134,0`. Même motif
+   * que la vidéo SEULE (#7016, ci-dessus) : `width` + `aspectRatio`, JAMAIS
+   * `height`, pour que la hauteur DESCENDE avec la largeur plafonnée.
+   */
+  test('media-11 (2 pièces) : largeur 300, forme 300 / 180 — jamais une hauteur figée', () => {
     const el = mount(attachmentsOf(MEDIA_GRID_PAIR_WITNESS_ID), () => {});
     const grid = el.querySelector('[data-media-grid]') as HTMLElement;
     expect(grid.style.width).toBe('300px');
-    expect(grid.style.height).toBe('180px');
+    expect(grid.style.height).toBe('');
+    expect(grid.style.aspectRatio).toBe('300 / 180');
   });
 
-  test('media-12 (3 pièces) : 300 × 240', () => {
+  test('media-12 (3 pièces) : largeur 300, forme 300 / 240 — jamais une hauteur figée', () => {
     const el = mount(attachmentsOf(MEDIA_GRID_TRIPLE_WITNESS_ID), () => {});
     const grid = el.querySelector('[data-media-grid]') as HTMLElement;
     expect(grid.style.width).toBe('300px');
-    expect(grid.style.height).toBe('240px');
+    expect(grid.style.height).toBe('');
+    expect(grid.style.aspectRatio).toBe('300 / 240');
   });
 
-  test('media-13 (4 pièces) : 300 × 240', () => {
+  test('media-13 (4 pièces) : largeur 300, forme 300 / 240 — jamais une hauteur figée', () => {
     const el = mount(attachmentsOf(MEDIA_GRID_QUAD_WITNESS_ID), () => {});
     const grid = el.querySelector('[data-media-grid]') as HTMLElement;
     expect(grid.style.width).toBe('300px');
-    expect(grid.style.height).toBe('240px');
+    expect(grid.style.height).toBe('');
+    expect(grid.style.aspectRatio).toBe('300 / 240');
   });
 
-  test('media-14 (6 pièces, 4 rendues) : 300 × 240', () => {
+  test('media-14 (6 pièces, 4 rendues) : largeur 300, forme 300 / 240 — jamais une hauteur figée', () => {
     const el = mount(attachmentsOf(MEDIA_GRID_OVERFLOW_WITNESS_ID), () => {});
     const grid = el.querySelector('[data-media-grid]') as HTMLElement;
     expect(grid.style.width).toBe('300px');
-    expect(grid.style.height).toBe('240px');
+    expect(grid.style.height).toBe('');
+    expect(grid.style.aspectRatio).toBe('300 / 240');
+  });
+
+  /**
+   * LA CASE, PAS SEULEMENT LA BOÎTE — SUR LES TROIS AGENCEMENTS (#7030,
+   * seconde relecture).
+   *
+   * La boîte peut suivre sa forme sans que les cases suivent la LEUR. La
+   * première écriture de ce témoin n'instrumentait que la paire et la case
+   * GAUCHE du triplet, faute d'une hauteur de case dans `mediaGridSlots` (qui
+   * porte, par contrat, la hauteur de la BOÎTE sur chaque case). Elle laissait
+   * donc SANS témoin de forme le QUADRUPLE — deux rangées `1fr 1fr`, un
+   * mécanisme qu'aucune des deux cases couvertes n'exerce, et le seul dont la
+   * hauteur de rangée dépend désormais de la largeur servie — alors que
+   * `expectNoTileClipped`, dans le gate navigateur, énonce trois lignes plus
+   * haut la règle inverse : « sur les QUATRE, jamais sur le seul quadruple ».
+   *
+   * `mediaGridCellSizes` (la dérivation manquante) rend cette hauteur ; chaque
+   * case la porte, et le gate navigateur compare le ratio RENDU à celui-là.
+   */
+  const expectEveryCellCarriesItsDesignSize = (witnessId: string, count: number) => {
+    const el = mount(attachmentsOf(witnessId), () => {});
+    const cells = mediaGridCellSizes(count);
+    const carriers = Array.from(el.querySelectorAll('[data-slot-width]')) as HTMLElement[];
+    expect(carriers.length).toBe(cells.length);
+    carriers.forEach((carrier, i) => {
+      expect(carrier.getAttribute('data-slot-width')).toBe(String(cells[i]!.width));
+      expect(carrier.getAttribute('data-slot-height')).toBe(String(cells[i]!.height));
+    });
+  };
+
+  test('media-11 (paire) : les DEUX cases portent leur forme rendue', () => {
+    expectEveryCellCarriesItsDesignSize(MEDIA_GRID_PAIR_WITNESS_ID, 2);
+  });
+
+  test('media-12 (triplet) : les TROIS cases portent leur forme rendue, les empilées comprises', () => {
+    expectEveryCellCarriesItsDesignSize(MEDIA_GRID_TRIPLE_WITNESS_ID, 3);
+  });
+
+  test('media-13 (quadruple, `1fr 1fr`) : les QUATRE cases portent leur forme rendue', () => {
+    expectEveryCellCarriesItsDesignSize(MEDIA_GRID_QUAD_WITNESS_ID, 4);
+  });
+
+  /**
+   * `media-14` — SIX pièces dont une MASQUÉE. La case masquée rend son
+   * substitut (`MaskedAttachment`), jamais la case de grille : elle ne porte
+   * donc aucune cote, et ce témoin le DIT plutôt que de le subir — c'est ce
+   * qui interdit au gate navigateur d'indexer les cases par position.
+   */
+  test('media-14 (6 pièces, 4 rendues, 1 masquée) : seules les cases NON masquées portent leur forme', () => {
+    const el = mount(attachmentsOf(MEDIA_GRID_OVERFLOW_WITNESS_ID), () => {});
+    const cells = mediaGridCellSizes(6);
+    const carriers = Array.from(el.querySelectorAll('[data-slot-width]')) as HTMLElement[];
+    expect(el.querySelectorAll('[data-protected-attachment]').length).toBe(1);
+    expect(carriers.length).toBe(cells.length - 1);
+    for (const carrier of carriers) {
+      expect(carrier.getAttribute('data-slot-width')).toBe(String(cells[0]!.width));
+      expect(carrier.getAttribute('data-slot-height')).toBe(String(cells[0]!.height));
+    }
   });
 });
 

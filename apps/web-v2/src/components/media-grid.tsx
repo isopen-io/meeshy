@@ -12,6 +12,7 @@ import {
   MEDIA_GRID_VISIBLE_MAX,
   OVERFLOW_LABEL_SIZE,
   OVERFLOW_VEIL_OPACITY,
+  mediaGridCellSizes,
   mediaGridSlots,
   type MediaGridFrame,
 } from '@/lib/view/media-grid-layout';
@@ -171,22 +172,37 @@ export const MediaGrid = memo(function MediaGrid({
   }
 
   const slots = mediaGridSlots(items.length);
+  const cellSizes = mediaGridCellSizes(items.length);
   const boxHeight = slots[0]!.height;
   const visible = items.slice(0, MEDIA_GRID_VISIBLE_MAX);
+
+  /* LA FORME QUE CETTE CASE DOIT GARDER, posée sur la case ELLE-MÊME (#7030,
+     seconde relecture). Les cotes restent en px et la boîte rétrécit avec son
+     porteur : c'est le RATIO qui est l'invariant, et le gate navigateur le
+     compare à ces deux nombres — la sortie RÉELLE de `mediaGridCellSizes` à
+     ce montage, jamais un littéral recopié dans le gate. Posée par `cell()`,
+     donc sur les TROIS agencements : la première écriture n'instrumentait que
+     la paire et la case gauche du triplet, et laissait le quadruple — deux
+     rangées `1fr 1fr`, le seul mécanisme dont la hauteur de rangée dépend
+     désormais de la largeur servie — sans aucun témoin de forme. */
+  const cellShape = (index: number) => ({
+    'data-slot-width': cellSizes[index]!.width,
+    'data-slot-height': cellSizes[index]!.height,
+  });
 
   const cell = (attachment: Attachment, index: number, widthPx: number) => {
     const overflowCount = slots[index]!.overflowCount;
     if (maskedAttachment(attachment)) return <MaskedAttachment key={attachment.id} attachment={attachment} fill />;
     if (kindOf(attachment) === 'video') {
       return (
-        <div key={attachment.id} className={CELL_CLASS[frame]}>
+        <div key={attachment.id} className={CELL_CLASS[frame]} {...cellShape(index)}>
           <VideoTile attachment={attachment} solo={false} onExpand={() => onOpen(index)} />
           {overflowCount > 0 ? <OverflowVeil count={overflowCount} total={items.length} index={index} onOpen={onOpen} /> : null}
         </div>
       );
     }
     return (
-      <div key={attachment.id} className={CELL_CLASS[frame]}>
+      <div key={attachment.id} className={CELL_CLASS[frame]} {...cellShape(index)}>
         <GridCellImage
           attachment={attachment}
           languages={languages}
@@ -211,8 +227,25 @@ export const MediaGrid = memo(function MediaGrid({
          `max-w-[70%]` + la gouttière de 50 px) débordait de 46,6 px : vers la
          GOUTTIÈRE sur un message reçu — invisible —, HORS DE L'ÉCRAN sur un
          message DE MOI (`justify-end`), rendant tout le fil défilable
-         horizontalement (`scrollWidth` 437 pour `clientWidth` 390, mesuré). */
-      style={{ width: MEDIA_GRID_MAX_WIDTH, maxWidth: '100%', height: boxHeight }}
+         horizontalement (`scrollWidth` 437 pour `clientWidth` 390, mesuré).
+
+         `aspectRatio`, JAMAIS `height` (#7030, relecture adversariale — la
+         régression que #7018 a introduite en se corrigeant à moitié) : le
+         plafond `100 %` fait RÉTRÉCIR la largeur RENDUE dès que le porteur
+         est plus étroit que 300 px (223,4 px en Bulles, mesuré), et une
+         `height` littérale ne suit pas — chaque case, shrinkée par
+         `flex-shrink` par défaut, se retrouvait sous une hauteur inchangée
+         (paire : 110,7 × 180 au lieu de 110,7 × 134,0). Même motif que la
+         vidéo SEULE (#7016, `soloVideoSlot`, ci-dessus dans ce fichier) :
+         `width` + `aspectRatio` fait DESCENDRE la hauteur avec la largeur
+         plafonnée, dans les trois agencements (paire, triplet, quadruple —
+         `1fr 1fr` y est déjà proportionnel en largeur, il ne l'était pas en
+         hauteur) sans toucher aux cotes des CASES, qui restent en px : le
+         partage `flex-shrink` par défaut (poids égaux à valeurs de départ
+         égales) les rétrécit déjà PROPORTIONNELLEMENT à la largeur de la
+         boîte — mesuré après correctif : écart ≤ 0,3 % avec le ratio de
+         `mediaGridSlots`, bien sous la tolérance de 2 % du gate. */
+      style={{ width: MEDIA_GRID_MAX_WIDTH, maxWidth: '100%', aspectRatio: `${MEDIA_GRID_MAX_WIDTH} / ${boxHeight}` }}
     >
       {items.length === 2 ? (
         <div className="flex size-full" style={{ gap: MEDIA_GRID_SPACING }}>
