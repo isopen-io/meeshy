@@ -17,6 +17,7 @@ export type Chronology = {
   readonly now: () => number;
   readonly mark: () => number;
   readonly advanceTo: (targetMs: number) => Promise<void>;
+  readonly advanceBy: (durationMs: number) => Promise<void>;
   readonly factBefore: (beforeMs: number, fait: () => boolean | Promise<boolean>) => Promise<boolean>;
 };
 

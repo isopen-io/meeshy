@@ -123,6 +123,15 @@ const typingCellAvatarInitials = (page) =>
 
 const rowLine2Text = (page, conversationId) => page.locator(`[data-row="${conversationId}"] [data-line2]`).innerText();
 
+/**
+ * LE BUDGET D'UN FAIT MONOTONE DÉJÀ TIRÉ, en millisecondes SIMULÉES — pour
+ * les faits que plus aucune entrée de `LIVE_SCHEDULE` ne suit, donc dont la
+ * borne ne protège plus aucun évènement ultérieur. Généreux et anti-blocage,
+ * jamais un délai : `factBefore` s'arrête au fait et ne consomme ce budget
+ * que si le fait n'arrive pas.
+ */
+const MONOTONE_FACT_BUDGET_MS = 5_000;
+
 export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA_THRESHOLD, scheme }) {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'en-US' });
   await setScheme(context, scheme);
@@ -545,11 +554,21 @@ export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA
    * avec la section LISTE ci-dessus (§ doc-comment de tête — une horloge par
    * CONTEXTE) : au moment où l'exécution atteint cette ligne, l'horloge
    * partagée a déjà dépassé 42 s (`listOrigin` + les avancées de la §4). Les
-   * deux faits sont donc MONOTONES et déjà arrivés — `factBefore` les
-   * constate sans consommer un seul pas, et la borne qu'il reçoit ne sert
-   * plus qu'à documenter l'évènement qu'elle nommait à l'origine.
+   * deux faits sont donc MONOTONES et déjà tirés.
+   *
+   * LA BORNE EST DONC RELATIVE, JAMAIS L'INSTANT DE L'ÉVÈNEMENT (revue-
+   * correction #7054). Écrite `origin + 31000`, elle est DÉJÀ DÉPASSÉE quand
+   * l'exécution arrive ici : `factBefore` sonde alors UNE fois, ne consomme
+   * aucun pas et rend `false` — c'est un `if`, pas une attente. Le jour où le
+   * rendu du message a un tour de retard (contention, une micro-tâche de
+   * plus), le gate n'a aucun moyen de le rattraper et rougit sur quatre
+   * témoins d'un coup. Une attente qui ne PEUT pas attendre est la jumelle
+   * exacte du délai fixe que ce lot retire : `chrono.now() +
+   * MONOTONE_FACT_BUDGET_MS` lui rend un budget, et comme plus aucune entrée
+   * de `LIVE_SCHEDULE` ne suit 31 000 ms, l'avancer ne peut rien faire tirer
+   * d'autre.
    */
-  await chrono.factBefore(origin + 31000, attachedOn(page, '[data-message="live-ordinaire"]'));
+  await chrono.factBefore(chrono.now() + MONOTONE_FACT_BUDGET_MS, attachedOn(page, '[data-message="live-ordinaire"]'));
   const vuOrdinaire = await bulleVue('live-ordinaire', null);
   expect(
     vuOrdinaire?.img === true,
@@ -566,8 +585,9 @@ export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA
     `${label} CONTRÔLE : l'URL du média est LUE sur la bulle ordinaire, jamais recopiée dans ce gate (obtenue ${urlServie})`,
   );
 
-  /** LE MÊME MÉDIA, LA MÊME ARRIVÉE — la seule déclaration en plus. */
-  await chrono.factBefore(origin + 31000 + 5000, attachedOn(page, '[data-message="live-protege"]'));
+  /** LE MÊME MÉDIA, LA MÊME ARRIVÉE — la seule déclaration en plus. Borne
+   *  RELATIVE pour la même raison qu'au-dessus. */
+  await chrono.factBefore(chrono.now() + MONOTONE_FACT_BUDGET_MS, attachedOn(page, '[data-message="live-protege"]'));
   const vuProtege = await bulleVue('live-protege', urlServie);
   expect(
     vuProtege !== null,

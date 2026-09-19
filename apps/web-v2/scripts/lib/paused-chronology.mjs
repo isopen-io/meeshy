@@ -88,6 +88,14 @@ export const CHRONOLOGY_STEP_MS = 50;
  * - `mark()` : alias de `now()`, pour nommer un point de départ ;
  * - `advanceTo(targetMs)` : avance l'horloge jusqu'à `targetMs`, en une
  *   seule fois — jamais deux fois le même intervalle ;
+ * - `advanceBy(durationMs)` : la même avancée, exprimée en DURÉE. Les deux
+ *   existent parce que les gates posent DEUX questions différentes, et
+ *   qu'écrire l'une avec l'autre ment sur celle qu'on pose : une chronologie
+ *   d'ÉVÈNEMENTS (`c-live`) vise des instants ABSOLUS lus dans
+ *   `LIVE_SCHEDULE`, tandis qu'une suite de GESTES (le § 5 de
+ *   `check-thread-states.mjs`) avance d'un délai RELATIF à l'action qui
+ *   précède — son échéance est datée par le clic, pas par le corpus.
+ *   `advanceBy` est une projection d'`advanceTo`, jamais un second compteur ;
  * - `factBefore(beforeMs, fait)` : avance par pas de `stepMs` jusqu'à ce que
  *   `fait()` rende vrai, sans jamais atteindre `beforeMs`. Rend `true`/`false`,
  *   ne lève JAMAIS (même discipline que `await-fact.mjs`).
@@ -108,6 +116,13 @@ export async function pausedChronology(page, { time, stepMs = CHRONOLOGY_STEP_MS
     elapsed = targetMs;
   };
 
+  const advanceBy = async (durationMs) => {
+    if (durationMs < 0) {
+      throw new RangeError(`advanceBy(${durationMs}) : une chronologie n'avance jamais d'une durée négative`);
+    }
+    await advanceTo(elapsed + durationMs);
+  };
+
   const factBefore = async (beforeMs, fait) => {
     for (;;) {
       if (await fait()) return true;
@@ -117,5 +132,5 @@ export async function pausedChronology(page, { time, stepMs = CHRONOLOGY_STEP_MS
     }
   };
 
-  return { now, mark: now, advanceTo, factBefore };
+  return { now, mark: now, advanceTo, advanceBy, factBefore };
 }

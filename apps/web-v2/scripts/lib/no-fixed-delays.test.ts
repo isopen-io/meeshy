@@ -27,6 +27,7 @@ import { fileURLToPath } from 'node:url';
 const hostPath = fileURLToPath(new URL('../check-thread-states.mjs', import.meta.url));
 const realtimePath = fileURLToPath(new URL('./check-realtime-events.mjs', import.meta.url));
 const offlinePath = fileURLToPath(new URL('./check-offline-states.mjs', import.meta.url));
+const protectionPath = fileURLToPath(new URL('./check-protection-states.mjs', import.meta.url));
 
 const countWaitForTimeout = (source: string) => source.split('waitForTimeout').length - 1;
 
@@ -39,6 +40,42 @@ describe('les gates du fil n’attendent aucun délai sur une lecture d’état'
   test('check-offline-states.mjs : 0 occurrence — aucune horloge truquée, awaitFact sonde les minuteurs réels', async () => {
     const source = await readFile(offlinePath, 'utf8');
     expect(countWaitForTimeout(source)).toBe(0);
+  });
+
+  /**
+   * LA SURFACE GARDÉE SUIT LE GATE, PAS LA LISTE D'ORIGINE (revue-correction
+   * #7054). Le § 5 a quitté l'hôte pour `check-protection-states.mjs` : une
+   * garde restée sur trois chemins aurait cessé de couvrir la section la plus
+   * serrée du gate (400 ms de marge sur la révélation d'un flouté) sans
+   * qu'aucun témoin ne rougisse — la forme exacte de la réserve écrite
+   * ci-dessus.
+   */
+  test('check-protection-states.mjs : 0 occurrence — la suite tient son horloge en PAUSE', async () => {
+    const source = await readFile(protectionPath, 'utf8');
+    expect(countWaitForTimeout(source)).toBe(0);
+  });
+
+  /**
+   * ET L'HORLOGE, PAS SEULEMENT LE DÉLAI NOMMÉ. Une horloge truquée posée
+   * SANS mise en pause avance avec le temps MURAL (mesuré sur le dist :
+   * +3 004 ms d'horloge page pour 3 005 ms de mur, Playwright 1.62.1) — un
+   * délai fixe qui ne dit pas son nom, et le mécanisme EXACT des deux rouges
+   * de #7054. Le `grep` du critère de fin ne l'attrape pas : il cherche la
+   * PRÉSENCE d'une méthode, quand le défaut est l'ABSENCE d'une autre.
+   *
+   * La règle gardée est donc « aucun gate du fil ne pose l'horloge lui-même » :
+   * le site UNIQUE est `pausedChronology`, dont `paused-chronology.test.ts`
+   * prouve qu'il installe PUIS met en pause, dans cet ordre. Une suite qui
+   * reprendrait la pose en direct redeviendrait libre de sauter la pause —
+   * c'est ce qui était arrivé au § 5.
+   */
+  test('aucun gate du fil ne pose l’horloge truquée en direct — le site unique est pausedChronology', async () => {
+    const posed = [];
+    for (const path of [hostPath, realtimePath, offlinePath, protectionPath]) {
+      const source = await readFile(path, 'utf8');
+      if (source.includes('.clock.')) posed.push(path.split('/').slice(-1)[0]);
+    }
+    expect(posed).toEqual([]);
   });
 
   test('check-thread-states.mjs : EXACTEMENT 1 waitForTimeout, et c’est le GESTE de l’appui long', async () => {
