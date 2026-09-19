@@ -368,13 +368,24 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
    * hauteur, ce témoin suit sans qu'on le retouche.
    *
    * Le ratio de CHAQUE CASE se lit sur `data-slot-width`/`data-slot-height`,
-   * posés par `media-grid.tsx` depuis `slots[i]` — la sortie RÉELLE de
-   * `mediaGridSlots()` à ce montage. Seules la paire (les deux cases) et la
-   * case GAUCHE du triplet portent ces attributs : `mediaGridSlots` documente
-   * que `slots[i].height`, pour les DEUX cases empilées à droite du triplet,
-   * porte la hauteur de la BOÎTE ENTIÈRE, pas leur hauteur rendue — un
-   * littéral juste pour la boîte y serait faux pour la case, un témoin qui ne
-   * peut QUE tomber ou QUE passer n'apporte rien.
+   * posés par `media-grid.tsx` depuis `mediaGridCellSizes()` — la sortie
+   * RÉELLE de la loi à ce montage, jamais un littéral recopié ici.
+   *
+   * SUR LES TROIS AGENCEMENTS, jamais sur deux cases choisies (seconde
+   * relecture #7030). La première écriture n'instrumentait que la paire et la
+   * case GAUCHE du triplet — faute d'une hauteur de case, `mediaGridSlots`
+   * portant par contrat la hauteur de la BOÎTE sur chacune. Elle laissait donc
+   * SANS témoin le QUADRUPLE (`1fr 1fr`), le seul mécanisme dont la hauteur de
+   * rangée dépend désormais de la largeur servie, et contredisait la règle que
+   * `expectNoTileClipped` énonce plus haut dans ce fichier : « sur les QUATRE,
+   * jamais sur le seul quadruple ». `mediaGridCellSizes` rend cette hauteur ;
+   * chaque case la porte.
+   *
+   * Le parcours prend TOUTES les cases instrumentées de la rangée plutôt
+   * qu'un index : une case MASQUÉE rend son substitut et n'en porte aucune
+   * (`media-14`), et indexer par position y viserait la mauvaise case. Il
+   * exige d'en trouver au moins `minimum` — sans quoi le témoin ne mesure
+   * RIEN et doit rougir, jamais passer par absence de matière.
    */
   const checkBoxAspectRatio = async (id) => {
     const gridEl = rowOf(id).locator('[data-media-grid]').first();
@@ -394,23 +405,58 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
       `[${skin}/${scheme}] ${id} : la boîte garde le ratio ${expectedRatio.toFixed(3)} posé par \`aspectRatio\` (obtenu ${actualRatio.toFixed(3)}, boîte ${JSON.stringify(box)})`,
     );
   };
-  const checkSlotRatio = async (id, tileIndex) => {
-    const wrapper = rowOf(id).locator('[data-slot-width]').nth(tileIndex);
-    const slotWidth = Number(await wrapper.getAttribute('data-slot-width'));
-    const slotHeight = Number(await wrapper.getAttribute('data-slot-height'));
-    const expectedRatio = slotWidth / slotHeight;
-    const tileBox = await wrapper.locator('[data-media-tile]').first().boundingBox();
-    const actualRatio = tileBox === null || tileBox.height === 0 ? 0 : tileBox.width / tileBox.height;
+  const checkSlotRatios = async (id, minimum) => {
+    /* `evaluateAll` en UNE passe, jamais `getAttribute` sur un `nth()` : une
+       case absente y ferait EXPIRER le localisateur (30 s) et remonterait en
+       exception NON RATTRAPÉE — le gate rougirait bien, mais il s'ARRÊTERAIT
+       là, emportant dans son silence tout ce qui suit dans le fichier ET la
+       seconde peau. Une garde doit rougir SUR CE QU'ELLE MESURE, pas éteindre
+       le reste du relevé (mesuré : 210 constats au lieu de ~600). */
+    const measured = await rowOf(id)
+      .locator('[data-slot-width]')
+      .evaluateAll((els) =>
+        els.map((el) => {
+          const rect = el.getBoundingClientRect();
+          return {
+            designWidth: Number(el.getAttribute('data-slot-width')),
+            designHeight: Number(el.getAttribute('data-slot-height')),
+            width: rect.width,
+            height: rect.height,
+          };
+        }),
+      );
     expect(
-      tileBox !== null && Math.abs(actualRatio - expectedRatio) / expectedRatio <= 0.02,
-      `[${skin}/${scheme}] ${id} case ${tileIndex} : ratio ${expectedRatio.toFixed(3)} (mediaGridSlots ${slotWidth}×${slotHeight}), obtenu ${actualRatio.toFixed(3)} (case ${JSON.stringify(tileBox)})`,
+      measured.length >= minimum,
+      `[${skin}/${scheme}] ${id} : au moins ${minimum} cases portent leur forme (mediaGridCellSizes), obtenu ${measured.length}`,
     );
+    measured.forEach((cell, index) => {
+      const expectedRatio = cell.designWidth / cell.designHeight;
+      const actualRatio = cell.height === 0 ? 0 : cell.width / cell.height;
+      expect(
+        Number.isFinite(expectedRatio) &&
+          expectedRatio > 0 &&
+          Math.abs(actualRatio - expectedRatio) / expectedRatio <= 0.02,
+        `[${skin}/${scheme}] ${id} case ${index} : ratio ${expectedRatio.toFixed(3)} (mediaGridCellSizes ${cell.designWidth}×${cell.designHeight}), obtenu ${actualRatio.toFixed(3)} (rendue ${cell.width.toFixed(1)}×${cell.height.toFixed(1)})`,
+      );
+    });
   };
-  await checkBoxAspectRatio(PAIR_ID);
-  await checkSlotRatio(PAIR_ID, 0);
-  await checkSlotRatio(PAIR_ID, 1);
-  await checkBoxAspectRatio(TRIPLE_VIDEO_ID);
-  await checkSlotRatio(TRIPLE_VIDEO_ID, 0);
+  /* Le virtualiseur a démonté les rangées du haut en descendant : chaque
+     agencement se REMONTE avant d'être mesuré (`scrollUntilMounted` rend la
+     main tout de suite quand la rangée est déjà là). */
+  const checkGridShape = async (id, minimum) => {
+    await scrollUntilMounted(page, scroller, id);
+    await waitForRowSettled(page, id);
+    await checkBoxAspectRatio(id);
+    await checkSlotRatios(id, minimum);
+  };
+  await checkGridShape(PAIR_ID, 2);
+  await checkGridShape(TRIPLE_VIDEO_ID, 3);
+  await checkGridShape(QUAD_ID, 4);
+  /* `media-14` : SIX pièces, dont une MASQUÉE — trois cases instrumentées,
+     jamais quatre. Le substitut masqué ne porte aucune cote (il n'a pas de
+     forme de grille à garder), et c'est bien la raison pour laquelle ce
+     témoin parcourt les cases plutôt que de les indexer. */
+  await checkGridShape(OVERFLOW_ID, 3);
 
   /**
    * ===== G6 — LA VIDÉO SEULE OCCUPE UNE HAUTEUR (#7016) =====
@@ -495,6 +541,14 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
     scrollerWidths.scrollWidth <= scrollerWidths.clientWidth,
     `[${skin}/${scheme}] le fil n'est JAMAIS défilable horizontalement (${JSON.stringify(scrollerWidths)})`,
   );
+  /* G8 SUR `media-16`, ICI et pas dans son bloc : c'est le porteur le plus
+     ÉTROIT du corpus (la bulle « DE MOI », collée à droite), donc celui où le
+     rétrécissement de la boîte est le plus fort — la forme des cases y est le
+     plus exposée. Elle est déjà montée par le témoin ci-dessus ; la remonter
+     depuis le HAUT ne marcherait pas (`media-16` est le dernier avant
+     `media-7`, voir `scrollDownUntilMounted`). */
+  await checkBoxAspectRatio(MINE_GRID_ID);
+  await checkSlotRatios(MINE_GRID_ID, 2);
 
   // ===== G3 — le tap ouvre la visionneuse au bon index, le focus est piégé, le retour la ferme =====
   // G7 a défilé VERS LE BAS : le virtualiseur a démonté `media-13`, il faut le remonter avant de le viser.

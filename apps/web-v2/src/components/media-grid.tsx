@@ -12,6 +12,7 @@ import {
   MEDIA_GRID_VISIBLE_MAX,
   OVERFLOW_LABEL_SIZE,
   OVERFLOW_VEIL_OPACITY,
+  mediaGridCellSizes,
   mediaGridSlots,
   type MediaGridFrame,
 } from '@/lib/view/media-grid-layout';
@@ -171,22 +172,37 @@ export const MediaGrid = memo(function MediaGrid({
   }
 
   const slots = mediaGridSlots(items.length);
+  const cellSizes = mediaGridCellSizes(items.length);
   const boxHeight = slots[0]!.height;
   const visible = items.slice(0, MEDIA_GRID_VISIBLE_MAX);
+
+  /* LA FORME QUE CETTE CASE DOIT GARDER, posée sur la case ELLE-MÊME (#7030,
+     seconde relecture). Les cotes restent en px et la boîte rétrécit avec son
+     porteur : c'est le RATIO qui est l'invariant, et le gate navigateur le
+     compare à ces deux nombres — la sortie RÉELLE de `mediaGridCellSizes` à
+     ce montage, jamais un littéral recopié dans le gate. Posée par `cell()`,
+     donc sur les TROIS agencements : la première écriture n'instrumentait que
+     la paire et la case gauche du triplet, et laissait le quadruple — deux
+     rangées `1fr 1fr`, le seul mécanisme dont la hauteur de rangée dépend
+     désormais de la largeur servie — sans aucun témoin de forme. */
+  const cellShape = (index: number) => ({
+    'data-slot-width': cellSizes[index]!.width,
+    'data-slot-height': cellSizes[index]!.height,
+  });
 
   const cell = (attachment: Attachment, index: number, widthPx: number) => {
     const overflowCount = slots[index]!.overflowCount;
     if (maskedAttachment(attachment)) return <MaskedAttachment key={attachment.id} attachment={attachment} fill />;
     if (kindOf(attachment) === 'video') {
       return (
-        <div key={attachment.id} className={CELL_CLASS[frame]}>
+        <div key={attachment.id} className={CELL_CLASS[frame]} {...cellShape(index)}>
           <VideoTile attachment={attachment} solo={false} onExpand={() => onOpen(index)} />
           {overflowCount > 0 ? <OverflowVeil count={overflowCount} total={items.length} index={index} onOpen={onOpen} /> : null}
         </div>
       );
     }
     return (
-      <div key={attachment.id} className={CELL_CLASS[frame]}>
+      <div key={attachment.id} className={CELL_CLASS[frame]} {...cellShape(index)}>
         <GridCellImage
           attachment={attachment}
           languages={languages}
@@ -234,31 +250,14 @@ export const MediaGrid = memo(function MediaGrid({
       {items.length === 2 ? (
         <div className="flex size-full" style={{ gap: MEDIA_GRID_SPACING }}>
           {visible.map((a, i) => (
-            <div
-              key={a.id}
-              data-slot-width={slots[i]!.width}
-              data-slot-height={slots[i]!.height}
-              style={{ width: slots[i]!.width }}
-            >
+            <div key={a.id} style={{ width: slots[i]!.width }}>
               {cell(a, i, slots[i]!.width)}
             </div>
           ))}
         </div>
       ) : items.length === 3 ? (
         <div className="flex size-full" style={{ gap: MEDIA_GRID_SPACING }}>
-          {/* Seule case GAUCHE à porter l'attribut de RATIO (gate #7030) :
-             `slots[1]`/`slots[2]` (colonne de droite) valent la hauteur de la
-             BOÎTE entière (doc de `mediaGridSlots`), pas la hauteur rendue de
-             CHAQUE case empilée — comparer leur `boundingBox` à ce littéral
-             comparerait deux choses différentes, un faux témoin plus nocif
-             qu'une absence de témoin. */}
-          <div
-            data-slot-width={slots[0]!.width}
-            data-slot-height={slots[0]!.height}
-            style={{ width: slots[0]!.width }}
-          >
-            {cell(visible[0]!, 0, slots[0]!.width)}
-          </div>
+          <div style={{ width: slots[0]!.width }}>{cell(visible[0]!, 0, slots[0]!.width)}</div>
           <div className="flex flex-col" style={{ width: slots[1]!.width, gap: MEDIA_GRID_SPACING }}>
             <div style={{ flex: 1 }}>{cell(visible[1]!, 1, slots[1]!.width)}</div>
             <div style={{ flex: 1 }}>{cell(visible[2]!, 2, slots[2]!.width)}</div>

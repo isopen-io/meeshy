@@ -16,7 +16,7 @@ import {
 } from '@/lib/api/fixtures-media-grid';
 import type { Attachment } from '@/lib/api/types';
 import { sizesFor } from '@/lib/api/media-url';
-import { mediaGridSlots, soloVideoSlot } from '@/lib/view/media-grid-layout';
+import { mediaGridCellSizes, mediaGridSlots, soloVideoSlot } from '@/lib/view/media-grid-layout';
 
 import { MediaGrid } from './media-grid';
 
@@ -265,32 +265,61 @@ describe('MediaGrid — la boîte porte ses cotes dérivées (U4, #6169)', () =>
   });
 
   /**
-   * LA CASE, PAS SEULEMENT LA BOÎTE. La boîte peut suivre sa forme sans que
-   * les cases suivent la LEUR : ce témoin compare le RATIO largeur/hauteur
-   * posé par chaque case (paire, et la case GAUCHE du triplet — les deux
-   * seules où `slots[i].height` EST la hauteur rendue, `mediaGridSlots`
-   * documentant que les cases EMPILÉES du triplet portent la hauteur de la
-   * BOÎTE entière, pas la leur) à celui de `mediaGridSlots`, jamais à un
-   * littéral recopié.
+   * LA CASE, PAS SEULEMENT LA BOÎTE — SUR LES TROIS AGENCEMENTS (#7030,
+   * seconde relecture).
+   *
+   * La boîte peut suivre sa forme sans que les cases suivent la LEUR. La
+   * première écriture de ce témoin n'instrumentait que la paire et la case
+   * GAUCHE du triplet, faute d'une hauteur de case dans `mediaGridSlots` (qui
+   * porte, par contrat, la hauteur de la BOÎTE sur chaque case). Elle laissait
+   * donc SANS témoin de forme le QUADRUPLE — deux rangées `1fr 1fr`, un
+   * mécanisme qu'aucune des deux cases couvertes n'exerce, et le seul dont la
+   * hauteur de rangée dépend désormais de la largeur servie — alors que
+   * `expectNoTileClipped`, dans le gate navigateur, énonce trois lignes plus
+   * haut la règle inverse : « sur les QUATRE, jamais sur le seul quadruple ».
+   *
+   * `mediaGridCellSizes` (la dérivation manquante) rend cette hauteur ; chaque
+   * case la porte, et le gate navigateur compare le ratio RENDU à celui-là.
    */
-  test('media-11 (paire) : chaque case porte le ratio largeur/hauteur de mediaGridSlots', () => {
-    const el = mount(attachmentsOf(MEDIA_GRID_PAIR_WITNESS_ID), () => {});
-    const slots = mediaGridSlots(2);
-    const wrappers = Array.from(el.querySelectorAll('[data-slot-width]')) as HTMLElement[];
-    expect(wrappers.length).toBe(2);
-    wrappers.forEach((wrapper, i) => {
-      expect(wrapper.getAttribute('data-slot-width')).toBe(String(slots[i]!.width));
-      expect(wrapper.getAttribute('data-slot-height')).toBe(String(slots[i]!.height));
+  const expectEveryCellCarriesItsDesignSize = (witnessId: string, count: number) => {
+    const el = mount(attachmentsOf(witnessId), () => {});
+    const cells = mediaGridCellSizes(count);
+    const carriers = Array.from(el.querySelectorAll('[data-slot-width]')) as HTMLElement[];
+    expect(carriers.length).toBe(cells.length);
+    carriers.forEach((carrier, i) => {
+      expect(carrier.getAttribute('data-slot-width')).toBe(String(cells[i]!.width));
+      expect(carrier.getAttribute('data-slot-height')).toBe(String(cells[i]!.height));
     });
+  };
+
+  test('media-11 (paire) : les DEUX cases portent leur forme rendue', () => {
+    expectEveryCellCarriesItsDesignSize(MEDIA_GRID_PAIR_WITNESS_ID, 2);
   });
 
-  test('media-12 (triplet) : la case GAUCHE porte le ratio de mediaGridSlots[0]', () => {
-    const el = mount(attachmentsOf(MEDIA_GRID_TRIPLE_WITNESS_ID), () => {});
-    const slots = mediaGridSlots(3);
-    const wrappers = Array.from(el.querySelectorAll('[data-slot-width]')) as HTMLElement[];
-    expect(wrappers.length).toBe(1);
-    expect(wrappers[0]!.getAttribute('data-slot-width')).toBe(String(slots[0]!.width));
-    expect(wrappers[0]!.getAttribute('data-slot-height')).toBe(String(slots[0]!.height));
+  test('media-12 (triplet) : les TROIS cases portent leur forme rendue, les empilées comprises', () => {
+    expectEveryCellCarriesItsDesignSize(MEDIA_GRID_TRIPLE_WITNESS_ID, 3);
+  });
+
+  test('media-13 (quadruple, `1fr 1fr`) : les QUATRE cases portent leur forme rendue', () => {
+    expectEveryCellCarriesItsDesignSize(MEDIA_GRID_QUAD_WITNESS_ID, 4);
+  });
+
+  /**
+   * `media-14` — SIX pièces dont une MASQUÉE. La case masquée rend son
+   * substitut (`MaskedAttachment`), jamais la case de grille : elle ne porte
+   * donc aucune cote, et ce témoin le DIT plutôt que de le subir — c'est ce
+   * qui interdit au gate navigateur d'indexer les cases par position.
+   */
+  test('media-14 (6 pièces, 4 rendues, 1 masquée) : seules les cases NON masquées portent leur forme', () => {
+    const el = mount(attachmentsOf(MEDIA_GRID_OVERFLOW_WITNESS_ID), () => {});
+    const cells = mediaGridCellSizes(6);
+    const carriers = Array.from(el.querySelectorAll('[data-slot-width]')) as HTMLElement[];
+    expect(el.querySelectorAll('[data-protected-attachment]').length).toBe(1);
+    expect(carriers.length).toBe(cells.length - 1);
+    for (const carrier of carriers) {
+      expect(carrier.getAttribute('data-slot-width')).toBe(String(cells[0]!.width));
+      expect(carrier.getAttribute('data-slot-height')).toBe(String(cells[0]!.height));
+    }
   });
 });
 
