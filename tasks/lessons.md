@@ -33186,17 +33186,6 @@ Trois choses à retenir :
 
 > Preuve : même défilement en vidéo, sans correctif (258 faults, vierge ~10 s) puis avec (0 fault, aucune image vierge). Le contrôle « sans » est ce qui a prouvé que le correctif était la cause — une rafale de `simctl screenshot` pendant le geste mesurait le vierge plus fort qu'il n'était, la vidéo ne l'altère pas.
 
-## Leçon 631
-
-**Un gate en CHAÎNE (`&&`) ne prouve QUE les étapes avant celle qui rougit — une correction qui répare la première étape signalée peut en laisser une seconde, jamais jouée, derrière elle.**
-
-PR #7033 (texte enrichi, liens/mentions cliquables) : `Quality (bun)` rapportait UNE seule défaillance, `check-utilities.mjs` (une classe `x` de témoin sans règle CSS). Corrigée, `bun run gate` complet — jamais joué localement sur cette PR avant ce tour — a rougi une SECONDE fois, sur `check-reading-mode.mjs`, une étape que le premier échec avait empêché d'atteindre en CI (`&&` s'arrête au premier `exit 1`). 14 défauts : « le `<p>` de texte servi n'est pas `aria-hidden` ».
-
-Le défaut n'en était pas un — c'était le GATE qui datait. `focal-row.tsx` (même PR) était passé d'un masque de CONTENEUR (`aria-hidden` sur le `<p>` entier) à un masque FEUILLE PAR FEUILLE (`RichText`/`plainTextHidden`, un `<span aria-hidden>` par segment non interactif), précisément pour qu'un lien de mention sous ce paragraphe reste focusable et nommé — masquer le conteneur entier aurait recréé la violation ARIA inverse (`aria-hidden-focus`). Le gate `check-identity.mjs` (#5935), écrit pour l'ANCIEN masque, cherchait l'attribut au mauvais niveau : la garde mesurait une IMPLÉMENTATION, pas l'invariant qu'elle prétendait garder (« la phrase n'est jamais lue deux fois »).
-
-> **Un `&&` dans un script `gate` composite cache tout ce qui suit la première rougeur — corriger le défaut RAPPORTÉ ne prouve rien sur les étapes qu'il empêchait d'atteindre.** Jouer le gate ENTIER, jusqu'au bout, après CHAQUE correction — jamais seulement l'étape nommée par le CI. Et quand un gate écrit avant une refonte accuse le code QUE la refonte vient sciemment de changer (ici documenté dans le commit ET le doc-comment du composant), lire d'abord si c'est le CODE qui régresse ou le GATE qui a un cran de retard : ici la nouvelle stratégie ARIA était strictement MEILLEURE (liens atteignables) que celle que le gate réclamait — la corriger revenait à réintroduire le défaut que la PR venait de corriger.
-
-Discrimination : `git stash` sur `check-identity.mjs` seul → 14/14 défauts réapparaissent à l'identique (message, lignes) ; `git stash pop` → 0 défaut. Détail : `apps/web-v2/scripts/lib/check-identity.mjs`, `apps/web-v2/src/components/rich-text.tsx`, `apps/web-v2/src/components/focal-row.tsx`.
 ## Leçon 628 — `.frame(maxWidth:)` ÉTEND, il ne BORNE pas : pour empêcher un enfant de dicter la taille d'un `ZStack`, le poser en `overlay` d'une couche neutre
 
 **Le fait (2026-09-18, #7037).** Ouvrir une pièce jointe d'un post ne montrait aucune croix. Mesurée dans l'arbre d'accessibilité, elle était à **x = −326,3 pt** — 286 pt à gauche d'un écran de 402. Le plein écran ne se fermait plus qu'au geste.
@@ -33240,3 +33229,15 @@ Un `overlay` **ne participe jamais** au calcul de taille de son hôte. `Color.cl
 **Ce que les deux enseignent ensemble.** Une garde de source mesure un TEXTE, et un texte a deux ennemis : ce qu'on écrit à côté du code (les commentaires) et l'endroit où le code vit (le fichier). Une garde robuste dépouille le premier et suit l'unité pour le second. **Avant de croire un rouge de garde de source, vérifier qu'elle mesure encore ce qu'elle croit mesurer** — ces deux-là accusaient un défaut qui n'existait pas.
 
 **Corollaire d'exception.** `FixedFontSizeGuardTests` n'a d'exception que pour la dette GELÉE : un fichier NEUF n'y entre jamais, quel que soit le commentaire qui invoque la doctrine des glyphes décoratifs. Une exception qui se réclame d'une doctrine sans être inscrite au registre de la dette n'existe pas.
+
+## Leçon 632 — un gate en CHAÎNE (`&&`) ne prouve que les étapes AVANT celle qui rougit
+
+**Un gate en CHAÎNE (`&&`) ne prouve QUE les étapes avant celle qui rougit — une correction qui répare la première étape signalée peut en laisser une seconde, jamais jouée, derrière elle.**
+
+PR #7033 (texte enrichi, liens/mentions cliquables) : `Quality (bun)` rapportait UNE seule défaillance, `check-utilities.mjs` (une classe `x` de témoin sans règle CSS). Corrigée, `bun run gate` complet — jamais joué localement sur cette PR avant ce tour — a rougi une SECONDE fois, sur `check-reading-mode.mjs`, une étape que le premier échec avait empêché d'atteindre en CI (`&&` s'arrête au premier `exit 1`). 14 défauts : « le `<p>` de texte servi n'est pas `aria-hidden` ».
+
+Le défaut n'en était pas un — c'était le GATE qui datait. `focal-row.tsx` (même PR) était passé d'un masque de CONTENEUR (`aria-hidden` sur le `<p>` entier) à un masque FEUILLE PAR FEUILLE (`RichText`/`plainTextHidden`, un `<span aria-hidden>` par segment non interactif), précisément pour qu'un lien de mention sous ce paragraphe reste focusable et nommé — masquer le conteneur entier aurait recréé la violation ARIA inverse (`aria-hidden-focus`). Le gate `check-identity.mjs` (#5935), écrit pour l'ANCIEN masque, cherchait l'attribut au mauvais niveau : la garde mesurait une IMPLÉMENTATION, pas l'invariant qu'elle prétendait garder (« la phrase n'est jamais lue deux fois »).
+
+> **Un `&&` dans un script `gate` composite cache tout ce qui suit la première rougeur — corriger le défaut RAPPORTÉ ne prouve rien sur les étapes qu'il empêchait d'atteindre.** Jouer le gate ENTIER, jusqu'au bout, après CHAQUE correction — jamais seulement l'étape nommée par le CI. Et quand un gate écrit avant une refonte accuse le code QUE la refonte vient sciemment de changer (ici documenté dans le commit ET le doc-comment du composant), lire d'abord si c'est le CODE qui régresse ou le GATE qui a un cran de retard : ici la nouvelle stratégie ARIA était strictement MEILLEURE (liens atteignables) que celle que le gate réclamait — la corriger revenait à réintroduire le défaut que la PR venait de corriger.
+
+Discrimination : `git stash` sur `check-identity.mjs` seul → 14/14 défauts réapparaissent à l'identique (message, lignes) ; `git stash pop` → 0 défaut. Détail : `apps/web-v2/scripts/lib/check-identity.mjs`, `apps/web-v2/src/components/rich-text.tsx`, `apps/web-v2/src/components/focal-row.tsx`.
