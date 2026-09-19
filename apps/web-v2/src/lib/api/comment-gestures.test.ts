@@ -1,10 +1,18 @@
 import { QueryClient } from '@tanstack/react-query';
 import { describe, expect, test } from 'bun:test';
 
-import type { FeedPost } from './feed-pages';
+import { FEED_QUERY_KEY } from './feed';
+import type { FeedInfiniteData, FeedPost } from './feed-pages';
 import type { ApiResult, HttpRequest, HttpTransport } from './http';
-import { commentsQueryKey, type CommentInfiniteData, type PostComment } from './publication-comments';
+import {
+  COMMENT_MAX_LENGTH,
+  commentsQueryKey,
+  performComment,
+  type CommentInfiniteData,
+  type PostComment,
+} from './publication-comments';
 import { postQueryKey } from './publication-detail';
+import { reelsQueryKey } from './reels';
 import {
   COMMENT_DELETE_FAILED_MESSAGE,
   COMMENT_EDIT_FAILED_MESSAGE,
@@ -357,5 +365,169 @@ describe('source `fixtures` — les trois gestes basculent sans jamais toucher a
 
     expect(await performCommentDelete({ postId: 'p1', commentId: 'cm1', deps: fixtureDeps(queryClient) })).toEqual({ ok: true });
     expect(cached(queryClient)).toBeUndefined();
+  });
+});
+
+/**
+ * LE COMPTEUR D'UNE PUBLICATION NE PEUT PAS DIFFÉRER SELON L'ÉCRAN QUI LA
+ * MONTRE (#7135, R1) — la carte du FIL lit `commentCount` depuis
+ * `FEED_QUERY_KEY` (`feed-post-card.tsx:75`), le lecteur des Réels depuis ses
+ * propres pages, la fiche depuis `postQueryKey`. `shiftCommentCount`
+ * n'écrivait que dans la fiche et le rail de stories : on ouvrait le fil, on
+ * tapait le compteur d'une carte, on supprimait son commentaire, on revenait —
+ * et la carte affichait toujours l'ancien compte.
+ *
+ * C'est le défaut que `PostLikeMutation.swift` documente au-dessus de sa loi :
+ * « un compteur serveur à 0 réaffiché après un retrait tardif passait à −1 sur
+ * le second chemin et restait à 0 sur le premier ». Une règle recopiée diverge.
+ */
+describe('le compteur de commentaires bascule dans TOUS les caches qui le montrent', () => {
+  const feedPost = (partial: Partial<FeedPost> = {}): FeedPost => ({
+    id: 'p1',
+    type: 'POST',
+    createdAt: '2026-09-19T10:00:00.000Z',
+    commentCount: 7,
+    ...partial,
+  });
+
+  const feedPages = (posts: readonly FeedPost[]): FeedInfiniteData => ({
+    pages: [{ posts, pagination: { limit: 20, hasMore: false, nextCursor: null } }],
+    pageParams: [undefined],
+  });
+
+  const seedAllRoots = (queryClient: QueryClient, count: number): void => {
+    queryClient.setQueryData(FEED_QUERY_KEY, feedPages([feedPost({ commentCount: count }), feedPost({ id: 'p2', commentCount: 99 })]));
+    queryClient.setQueryData(reelsQueryKey('affinity'), feedPages([feedPost({ commentCount: count })]));
+    queryClient.setQueryData<FeedPost>(postQueryKey('p1'), feedPost({ commentCount: count }));
+  };
+
+  const countIn = (queryClient: QueryClient, key: readonly unknown[], id = 'p1'): number | null | undefined =>
+    queryClient.getQueryData<FeedInfiniteData>(key)?.pages.flatMap((p) => p.posts).find((p) => p.id === id)?.commentCount;
+
+  const threeCounts = (queryClient: QueryClient) => ({
+    feed: countIn(queryClient, FEED_QUERY_KEY),
+    reels: countIn(queryClient, reelsQueryKey('affinity')),
+    detail: queryClient.getQueryData<FeedPost>(postQueryKey('p1'))?.commentCount,
+  });
+
+  test('supprimer décrémente le compteur de la carte DANS LE FIL, pas seulement dans le détail', async () => {
+    const queryClient = seeded([[comment({ id: 'b' })]]);
+    seedAllRoots(queryClient, 7);
+    const { transport } = scripted(async () => ({ ok: true, data: { deleted: true } }));
+
+    await performCommentDelete({ postId: 'p1', commentId: 'b', deps: gatewayDeps(queryClient, transport) });
+
+    expect(countIn(queryClient, FEED_QUERY_KEY)).toBe(6);
+  });
+
+  test('… et dans les pages de RÉELS', async () => {
+    const queryClient = seeded([[comment({ id: 'b' })]]);
+    seedAllRoots(queryClient, 7);
+    const { transport } = scripted(async () => ({ ok: true, data: { deleted: true } }));
+
+    await performCommentDelete({ postId: 'p1', commentId: 'b', deps: gatewayDeps(queryClient, transport) });
+
+    expect(countIn(queryClient, reelsQueryKey('affinity'))).toBe(6);
+  });
+
+  test('le refus REMET le compteur à sa valeur exacte dans les TROIS caches', async () => {
+    const queryClient = seeded([[comment({ id: 'b' })]]);
+    seedAllRoots(queryClient, 7);
+    const { transport } = scripted(async () => ({ ok: false, status: 403, error: 'Not authorized' }));
+
+    await performCommentDelete({ postId: 'p1', commentId: 'b', deps: gatewayDeps(queryClient, transport) });
+
+    expect(threeCounts(queryClient)).toEqual({ feed: 7, reels: 7, detail: 7 });
+  });
+
+  test('envoyer incrémente les TROIS', async () => {
+    const queryClient = new QueryClient();
+    seedAllRoots(queryClient, 7);
+    const { transport } = scripted(async () => ({
+      ok: true,
+      data: { id: 'cm-servi', content: 'Bravo', createdAt: '2026-09-19T12:00:00.000Z', author: { id: 'u-moi', displayName: 'Vous' } },
+    }));
+
+    await performComment({
+      postId: 'p1',
+      content: 'Bravo',
+      author: { id: 'u-moi', displayName: 'Vous' },
+      deps: { source: 'gateway', transport, queryClient },
+    });
+
+    expect(threeCounts(queryClient)).toEqual({ feed: 8, reels: 8, detail: 8 });
+  });
+
+  /** LA LIGNE QU'ON OUBLIE — `applyPostToggle` opère sur des pages EXISTANTES ;
+   * « incrémenter partout » sans cette garde ferait apparaître une ligne
+   * fantôme dans un cache qui n'a jamais servi ce post. */
+  test('une publication ABSENTE d’une racine n’y crée rien', async () => {
+    const queryClient = seeded([[comment({ id: 'b' })]]);
+    queryClient.setQueryData(FEED_QUERY_KEY, feedPages([feedPost({ id: 'p2', commentCount: 99 })]));
+    const { transport } = scripted(async () => ({ ok: true, data: { deleted: true } }));
+
+    await performCommentDelete({ postId: 'p1', commentId: 'b', deps: gatewayDeps(queryClient, transport) });
+
+    const posts = queryClient.getQueryData<FeedInfiniteData>(FEED_QUERY_KEY)?.pages.flatMap((p) => p.posts) ?? [];
+    expect(posts.map((p) => p.id)).toEqual(['p2']);
+    expect(posts[0]?.commentCount).toBe(99);
+  });
+
+  /** La borne basse de `PostLikeMutation.swift` — un compteur servi à 0
+   * réaffiché après un retrait tardif ne passe JAMAIS à −1. */
+  test('un compteur déjà à zéro ne descend pas sous zéro', async () => {
+    const queryClient = seeded([[comment({ id: 'b' })]]);
+    seedAllRoots(queryClient, 0);
+    const { transport } = scripted(async () => ({ ok: true, data: { deleted: true } }));
+
+    await performCommentDelete({ postId: 'p1', commentId: 'b', deps: gatewayDeps(queryClient, transport) });
+
+    expect(threeCounts(queryClient)).toEqual({ feed: 0, reels: 0, detail: 0 });
+  });
+});
+
+/**
+ * LA BORNE DE LONGUEUR EST UNE (#7135, R2) — elle était déclarée DEUX fois,
+ * `publication-comments.ts:246` et `comment-gestures.ts:90`, toutes deux
+ * exportées et toutes deux consommées. Les deux valaient 2000, donc rien ne se
+ * voyait ; le jour où l'une bouge, le champ laisse taper ce que le port
+ * refuse — et le lecteur reçoit un refus qu'il ne peut pas comprendre, parce
+ * que « Enregistrer » était actif. Le compilateur ne dit rien : deux modules
+ * ont le droit d'exporter le même nom.
+ *
+ * Un test d'identité de référence serait FAIBLE (il verdirait sur deux
+ * constantes égales par hasard) : ces témoins mesurent l'EFFET du seuil, de
+ * part et d'autre.
+ */
+describe('la borne de longueur est UNE — le champ et le port comptent la même chose', () => {
+  test('un texte d’exactement COMMENT_MAX_LENGTH caractères est ACCEPTÉ par le port', async () => {
+    const queryClient = seeded([[comment()]]);
+    const { requests, transport } = scripted(async () => ({ ok: true, data: { id: 'cm1', content: 'x' } }));
+
+    const result = await performCommentEdit({
+      postId: 'p1',
+      commentId: 'cm1',
+      content: 'a'.repeat(COMMENT_MAX_LENGTH),
+      deps: gatewayDeps(queryClient, transport),
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(requests).toHaveLength(1);
+  });
+
+  test('un texte de COMMENT_MAX_LENGTH + 1 est REFUSÉ, et le port ne part pas', async () => {
+    const queryClient = seeded([[comment()]]);
+    const { requests, transport } = scripted(async () => ({ ok: true, data: {} }));
+
+    const result = await performCommentEdit({
+      postId: 'p1',
+      commentId: 'cm1',
+      content: 'a'.repeat(COMMENT_MAX_LENGTH + 1),
+      deps: gatewayDeps(queryClient, transport),
+    });
+
+    expect(result).toEqual({ ok: false, message: COMMENT_EDIT_FAILED_MESSAGE });
+    expect(requests).toEqual([]);
+    expect(cached(queryClient)?.content).toBe('Superbe photo');
   });
 });

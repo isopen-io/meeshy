@@ -33,10 +33,14 @@ import { FeedSkeleton } from './feed';
  * partage. C'est là que mène le compteur de commentaires de TOUTE carte du
  * fil : il était un `<span>` inerte, il conduit désormais à ce fil.
  *
+ * **AIMER, MODIFIER ET SUPPRIMER UN COMMENTAIRE** sont livrés (#7135,
+ * `lib/api/comment-gestures.ts`) : chaque geste a un effet immédiat, et le
+ * refus du réseau le reprend sur SA rangée.
+ *
  * CE QUI N'EST PAS REPRIS, ASSUMÉ : la republication, le menu « Plus
- * d'options », et dans le fil de commentaires lui-même aimer / répondre /
- * éditer / supprimer un commentaire et ses médias — chacun à sa propre
- * marche.
+ * d'options », et dans le fil de commentaires lui-même RÉPONDRE (les réponses
+ * imbriquées, le compteur `↰ N`), les médias d'un commentaire et les échos
+ * socket — chacun à sa propre marche, toutes tenues par #7118.
  */
 
 export function PostDetailHeader() {

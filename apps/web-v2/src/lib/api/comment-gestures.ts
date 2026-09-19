@@ -4,7 +4,13 @@ import { newClientMessageId } from './client-message-id';
 import type { DataSource } from './config';
 import type { ApiResult, HttpTransport } from './http';
 import { outcomeOf } from './outcome';
-import { commentsQueryKey, shiftCommentCount, type CommentInfiniteData, type PostComment } from './publication-comments';
+import {
+  COMMENT_MAX_LENGTH,
+  commentsQueryKey,
+  shiftCommentCount,
+  type CommentInfiniteData,
+  type PostComment,
+} from './publication-comments';
 
 /**
  * LES GESTES D'UNE RANGÉE DE COMMENTAIRE (#7133, première tranche de #7118) —
@@ -85,9 +91,6 @@ export const COMMENT_GESTURE_PENDING_MESSAGE: CommentGestureMessageKey = 'commen
 export type CommentGestureResult =
   | { readonly ok: true; readonly notice?: CommentGestureMessageKey }
   | { readonly ok: false; readonly message: CommentGestureMessageKey };
-
-/** `UpdateCommentSchema.content` : `max(2000)`, comme la création. */
-export const COMMENT_MAX_LENGTH = 2000;
 
 const inFlight = new Set<string>();
 

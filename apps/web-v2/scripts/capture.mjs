@@ -50,6 +50,13 @@ const SCREENS = [
       dans la série STANDING pour qu'aucun changement de la carte ne passe
       désormais sans image, dans les DEUX schémas. */
   { name: 'feed', path: '/feed' },
+  /** LE FIL DE COMMENTAIRES (#7135) — `post-text-rank2` est le SEUL corpus qui
+      porte à la fois une rangée À SOI (`cm-r2-0`, donc « Modifier » et
+      « Supprimer » visibles) et un post de RANG 2 du Prisme : l'original est
+      espagnol, le lecteur voit le français. Sans cette entrée, l'écran que
+      `check-post-comments.mjs` garde n'avait aucune capture reproductible —
+      les siennes avaient été prises par un script ad hoc jamais versé. */
+  { name: 'post-comments', path: '/post/post-text-rank2' },
   { name: 'story-text', path: '/story/st-amie-1' },
   { name: 'story-image', path: '/story/st-amie-2' },
   /** LE RAIL D'ACTIONS ET SON PLAN RÉDUIT (#7112, D-88) — `st-amie-2`
