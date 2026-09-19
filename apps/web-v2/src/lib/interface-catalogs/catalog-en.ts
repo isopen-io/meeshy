@@ -72,6 +72,7 @@ const en = {
   'feed.post.media.previous': 'Previous media',
   'feed.post.media.next': 'Next media',
   'feed.post.media.mosaic': 'Mosaic of {count} media',
+  'media.unavailable': 'Media unavailable',
   'feed.post.see_more': 'see more',
   'feed.post.see_less': 'show less',
   'feed.post.reel.chip': 'Reel',

@@ -945,6 +945,61 @@ describe('Bubble — contenu retenu au serveur (#6862)', () => {
     expect(html).toContain('data-protected="hidden"');
     expect(html).not.toContain('Contenu retenu');
   });
+
+  /**
+   * **ET L'HÔTE PASSE LES PIÈCES** (#7023, relecture adversaire).
+   *
+   * `protection-notice.test.tsx` monte `ProtectionNotice` DIRECTEMENT : il
+   * prouve que le composant SAIT dire le constat sur ses deux surfaces, jamais
+   * que la bulle le lui DONNE. Et le chemin produit du constat — la lecture
+   * souveraine — est câblé en `focal` (`MODE_DE_LECTURE`,
+   * `routes/admin-conversation-reading.tsx`), donc aucun témoin d'écran ne
+   * traverse la peau BULLE : retirer `attachments={message.attachments}` de
+   * `bubble.tsx` ne faisait rougir personne (mesuré).
+   *
+   * C'est « un import dit ce qui est DISPONIBLE, jamais ce qui est APPELÉ »
+   * appliqué à une prop, et la même forme que le défaut que ce lot ferme :
+   * la surface bulle du COMPOSANT était couverte, le câblage de son HÔTE
+   * ne l'était pas. Piège armé plutôt que fuite — la bulle ne rend aucun
+   * `withheld` aujourd'hui — mais c'est exactement le régime que la règle du
+   * cycle 84 refuse de laisser en place : le jour où l'administration offre
+   * un sélecteur de mode, le constat disparaîtrait sans qu'un témoin tombe.
+   */
+  const pieceRetenue = (id: string, mimeType: string) => ({
+    ...attachmentDefaults,
+    id,
+    messageId: BASE_MESSAGE.id,
+    fileName: id,
+    originalName: id,
+    mimeType,
+    fileSize: 2048,
+    fileUrl: '',
+    uploadedBy: 'u-amina',
+    createdAt: '2026-09-08T09:00:00.000Z',
+  });
+
+  test('… et il DIT les pièces retenues — c’est l’HÔTE qui passe `attachments`, pas le composant qui les devine', () => {
+    const html = renderRetenu({
+      ...BASE_MESSAGE,
+      content: '',
+      translations: [],
+      isEncrypted: true,
+      attachments: [
+        pieceRetenue('a-1', 'image/png'),
+        pieceRetenue('a-2', 'image/png'),
+        pieceRetenue('a-3', 'video/mp4'),
+      ],
+    });
+    expect(html).toContain('Contenu retenu');
+    expect(html).toContain('data-withheld-media');
+    expect(html).toContain('2 images, 1 vidéo');
+  });
+
+  test('CONTRASTE — retenu SANS pièce ne porte aucun constat (sans quoi le témoin ci-dessus ne mesure rien)', () => {
+    const html = renderRetenu({ ...BASE_MESSAGE, content: '', translations: [], isEncrypted: true });
+    expect(html).toContain('Contenu retenu');
+    expect(html).not.toContain('data-withheld-media');
+  });
 });
 
 /**

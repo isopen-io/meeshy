@@ -1,3 +1,25 @@
+import {
+  attachmentProtectionOf,
+  type AttachmentProtectionField,
+  type AttachmentProtectionFlags,
+} from '@meeshy/shared/utils/attachment-protection';
+
+/**
+ * La forme que TOUT appelant de `serializeAttachmentForSocket` doit remettre
+ * (#7028) — `Record<string, unknown>` PLUS les trois colonnes de protection,
+ * requises et non nullables.
+ *
+ * Le grep de source qui gardait cet inventaire (`serialize-attachment-callers-
+ * select.test.ts`) ne voyait que les fichiers qui IMPORTENT le sérialiseur —
+ * `MessageProcessor.saveMessage` l'alimente sans l'importer (`message.attachments`
+ * traverse `MessageHandler._serializeAttachmentsField`), donc hors de sa portée.
+ * Un CLIQUET DE TYPE, lui, couvre tout appelant, importateur ou non : le
+ * paramètre exige les trois colonnes, et un `select` qui les omet ne compile
+ * plus.
+ */
+export type SocketAttachmentRow = Record<string, unknown> &
+  Required<Pick<AttachmentProtectionFlags, AttachmentProtectionField>>;
+
 /**
  * Canonical serializer for a `MessageAttachment` over Socket.IO.
  *
@@ -18,8 +40,31 @@
  * Replaces scattered `(message as any).attachments` casts that silently
  * dropped `transcription` and `translations` depending on the query
  * path. See `docs/superpowers/specs/2026-05-25-audio-instant-render-and-attachment-size-design.md`.
+ *
+ * ## La PROTECTION voyage avec la pièce (#7014)
+ *
+ * Cette énumération manuelle a retenu, en silence, les trois champs dont
+ * dépend `maskedAttachment` — la loi partagée qui décide si une pièce jointe
+ * a le droit d'atteindre un DOM. Mesuré avant le lot, sur une ligne
+ * `isViewOnce: true` : `maskedAttachment(ligne) === true`,
+ * `maskedAttachment(servi) === false`. Une photo à VUE UNIQUE envoyée par
+ * `message:send-with-attachments` rendait donc son `<img>` EN CLAIR chez ses
+ * destinataires jusqu'au prochain `GET /messages` — la fuite que #6189 avait
+ * fermée côté REST, rouverte par le canal socket.
+ *
+ * La correction n'est pas d'ajouter trois lignes à l'énumération, c'est de
+ * cesser d'énumérer : `attachmentProtectionOf` PROJETTE la ligne sur
+ * l'inventaire partagé (`ATTACHMENT_PROTECTION_FIELDS`) dont
+ * `attachmentProtectionSelect` dérive aussi. Un quatrième canal de protection
+ * s'ajoute à l'inventaire, et il traverse ce sérialiseur sans qu'une seule
+ * ligne d'ici ne change. Un relais qui RECOPIE champ par champ est un
+ * inventaire à tenir à jour, et il ne l'est jamais.
+ *
+ * Le `select` qui alimente ce sérialiseur est `attachmentSocketSelect`
+ * (`services/attachments/attachmentIncludes.ts`) — jamais `attachmentMediaSelect`
+ * nu, qui est délibérément SANS drapeau de protection.
  */
-export interface SocketAttachment {
+export interface SocketAttachment extends AttachmentProtectionFlags {
   readonly id: string;
   readonly messageId: string;
   readonly fileName?: string | null;
@@ -87,7 +132,7 @@ export function aggregateAttachmentReactions(
 }
 
 export function serializeAttachmentForSocket(
-  raw: Record<string, unknown>,
+  raw: SocketAttachmentRow,
   currentParticipantId?: string
 ): SocketAttachment {
   const { reactionSummary, currentUserReactions } = aggregateAttachmentReactions(
@@ -129,5 +174,10 @@ export function serializeAttachmentForSocket(
     translations: raw.translations ?? null,
     reactionSummary,
     currentUserReactions,
+    // Protection — PROJETÉE depuis l'inventaire partagé, jamais recopiée
+    // (voir l'en-tête du module). Répandue en DERNIER pour qu'aucune clé
+    // ci-dessus ne puisse l'éclipser, et fail-CLOSED : une ligne dont la
+    // requête n'a pas chargé ces colonnes sort MASQUÉE plutôt qu'ordinaire.
+    ...attachmentProtectionOf(raw),
   };
 }

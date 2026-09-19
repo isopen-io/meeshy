@@ -167,10 +167,99 @@ describe('resolveAttachmentSrc — l’adresse héritée sans route (#6388)', ()
     );
   });
 
-  test('une adresse qui porte DÉJÀ la route de flux traverse INCHANGÉE — jamais une seconde route', () => {
+  test('une adresse qui porte DÉJÀ la route de flux ne reçoit jamais une SECONDE route', () => {
+    expect(resolveAttachmentSrc('https://gate.meeshy.me/api/v1/attachments/file/2026%2F09%2Fphoto.png', 'https://gate.meeshy.me')).toBe(
+      'https://gate.meeshy.me/api/v1/attachments/file/2026%2F09%2Fphoto.png',
+    );
+  });
+});
+
+/**
+ * LA SEPTIÈME FORME — L'ADRESSE ABSOLUE QUI PORTE SA ROUTE, ET AVEC ELLE UN
+ * HÔTE DE DÉPLOIEMENT (#7022). C'est la forme MAJORITAIRE en production :
+ * 1600 références sur 2912 (55 %), mesurées le 2026-09-18 sur
+ * `meeshy-database` — 964 `MessageAttachment` + 636 `PostMedia`, toutes en
+ * `https://gate.meeshy.me/api/v1/attachments/file/<clé>`.
+ *
+ * ELLE NE TOMBE PAS EN PRODUCTION, et c'est ce qui l'a tenue invisible : là,
+ * l'hôte gravé est le bon. Elle tombe partout ailleurs — staging, local, et
+ * les DEUX coques Capacitor : une base configurée sur
+ * `gate.staging.meeshy.me` n'est jamais consultée, et la page va chercher ses
+ * médias sur la passerelle de PRODUCTION. Un lecteur de staging lit donc les
+ * octets de production, et un compte qui n'existe que sur staging ne voit
+ * rien du tout.
+ *
+ * Le doc-comment de `resolveAttachmentSrc` énonçait DÉJÀ la règle — « l'hôte
+ * que porte une adresse héritée ne sert à RIEN : la clé identifie le fichier,
+ * l'hôte est une décision de déploiement (#4324) ; la réparation vise donc
+ * `base` » — mais ne l'appliquait qu'à la forme SANS route (la sixième,
+ * #6388). La règle était écrite et à moitié appliquée : le cas majoritaire
+ * échappait à la moitié manquante.
+ *
+ * La réparation reste une RE-BASE, jamais un ajout : la clé est extraite de la
+ * route portée par l'adresse, puis reposée UNE fois derrière la base — ce que
+ * garde le premier témoin de la section précédente.
+ */
+describe("resolveAttachmentSrc — l'adresse absolue qui grave un hôte (#7022)", () => {
+  test('la forme MAJORITAIRE de production est re-basée sur la base CONFIGURÉE', () => {
     expect(
       resolveAttachmentSrc('https://gate.meeshy.me/api/v1/attachments/file/2026%2F09%2Fphoto.png', 'https://gate.staging.meeshy.me'),
-    ).toBe('https://gate.meeshy.me/api/v1/attachments/file/2026%2F09%2Fphoto.png');
+    ).toBe('https://gate.staging.meeshy.me/api/v1/attachments/file/2026%2F09%2Fphoto.png');
+  });
+
+  test('la même adresse avec une clé à BARRES (la forme réellement en base) est re-basée aussi', () => {
+    expect(
+      resolveAttachmentSrc(
+        'https://gate.meeshy.me/api/v1/attachments/file/2026/02/68f33afa8ae497b2054c84d7/community_upload_2e813ffd.jpg',
+        'https://gate.staging.meeshy.me',
+      ),
+    ).toBe(
+      'https://gate.staging.meeshy.me/api/v1/attachments/file/2026%2F02%2F68f33afa8ae497b2054c84d7%2Fcommunity_upload_2e813ffd.jpg',
+    );
+  });
+
+  test("la route LEGACY non versionnée (`/api/attachments/file/…`, 574 lignes) rejoint la route v1", () => {
+    expect(
+      resolveAttachmentSrc(
+        'https://gate.meeshy.me/api/attachments/file/2025%2F12%2F6908537c%2Fdossier_181fb11b.pdf',
+        'https://gate.staging.meeshy.me',
+      ),
+    ).toBe('https://gate.staging.meeshy.me/api/v1/attachments/file/2025%2F12%2F6908537c%2Fdossier_181fb11b.pdf');
+  });
+
+  test('la MÊME route en RELATIF rejoint la route v1 sans que la base ne change', () => {
+    expect(resolveAttachmentSrc('/api/attachments/file/2025%2F12%2F6908537c%2Fdossier.pdf', 'https://gate.meeshy.me')).toBe(
+      'https://gate.meeshy.me/api/v1/attachments/file/2025%2F12%2F6908537c%2Fdossier.pdf',
+    );
+  });
+
+  test('en DEV (base vide, proxé par Vite) la re-base ne fabrique aucun hôte', () => {
+    expect(resolveAttachmentSrc('/api/v1/attachments/file/2026%2F09%2Fphoto.png', '')).toBe(
+      '/api/v1/attachments/file/2026%2F09%2Fphoto.png',
+    );
+  });
+
+  test("une route de flux qui ne porte PAS une clé de stockage n'est pas re-basée — la piste TRADUITE vit ailleurs", () => {
+    expect(resolveAttachmentSrc('/api/v1/attachments/file/translated/voice_fr_42.mp3', 'https://gate.meeshy.me')).toBe(
+      'https://gate.meeshy.me/api/v1/attachments/file/translated/voice_fr_42.mp3',
+    );
+  });
+
+  test('le magasin STATIQUE garde son hôte — ses octets ne sont pas sur la passerelle (#4625)', () => {
+    expect(resolveAttachmentSrc('https://static.meeshy.me/u/i/2025/11/avatar_1763143871947_o0.jpg', 'https://gate.staging.meeshy.me')).toBe(
+      'https://static.meeshy.me/u/i/2025/11/avatar_1763143871947_o0.jpg',
+    );
+  });
+
+  test('un CDN tiers garde son hôte', () => {
+    expect(resolveAttachmentSrc('https://cdn.example.com/api/v1/photo.png', 'https://gate.staging.meeshy.me')).toBe(
+      'https://cdn.example.com/api/v1/photo.png',
+    );
+  });
+
+  test('IDEMPOTENTE — re-baser deux fois rend la même adresse', () => {
+    const once = resolveAttachmentSrc('https://gate.meeshy.me/api/v1/attachments/file/2026/09/a/b.png', 'https://gate.staging.meeshy.me');
+    expect(resolveAttachmentSrc(once, 'https://gate.staging.meeshy.me')).toBe(once);
   });
 
   /**

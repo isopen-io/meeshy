@@ -72,6 +72,7 @@ const ar = {
   'feed.post.media.previous': 'الوسائط السابقة',
   'feed.post.media.next': 'الوسائط التالية',
   'feed.post.media.mosaic': 'فسيفساء من {count} وسائط',
+  'media.unavailable': 'الوسائط غير متوفرة',
   'feed.post.see_more': 'عرض المزيد',
   'feed.post.see_less': 'عرض أقل',
   'feed.post.reel.chip': 'ريل',

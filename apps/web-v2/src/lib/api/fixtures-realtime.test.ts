@@ -208,12 +208,20 @@ describe('createFixturesSocketClient (#5793) — le bouchon de fixtures', () => 
       /* La MÊME pièce que le corpus sert : un `fileUrl` divergent ferait
          rejouer la piste originale sous une transcription traduite. */
       expect(payload.attachment.fileUrl).toBe(LIVE_3_AUDIO_URL);
-      /* LA CHARGE LA PLUS PAUVRE — aucun des trois drapeaux de protection,
-         donc le pire cas de la garde de masquage du puits (c'est ce que sert
-         la passerelle d'avant #7014). Enrichir cette fixture rendrait
-         indémontrable le cas où le cache est le SEUL à savoir qu'une pièce est
-         masquée, et ferait passer ici un gate que la vraie passerelle ferait
-         tomber. */
+      /* LA FORME MESURÉE DE LA PASSERELLE, pas celle d'une branche annoncée.
+         `serializeAttachmentForSocket` construit un objet littéral EXPLICITE
+         dont `SocketAttachment` ne déclare AUCUN des trois drapeaux de
+         protection, et `attachmentMediaSelect` — le seul `select` du chemin
+         socket — ne les charge pas (ils vivent dans `attachmentFullSelect`,
+         que `emitAttachmentUpdated` n'emprunte pas). Relevé sur `dev` au
+         2026-09-18 : ni `attachmentSocketSelect` ni
+         `ATTACHMENT_PROTECTION_FIELDS` n'existent — #7014 n'a PAS atterri.
+
+         Ce témoin est donc le CLIQUET qui empêche la fixture de dériver vers
+         une charge que la passerelle n'émet pas : un gate navigateur qui
+         rejoue une charge impossible ne mesure pas le produit. Le jour où
+         #7014 atterrit, c'est `serializeAttachmentForSocket` qui change en
+         premier — et ce témoin est ce qui oblige à revenir ici. */
       expect('isViewOnce' in payload.attachment).toBe(false);
       expect('isBlurred' in payload.attachment).toBe(false);
       expect('effectFlags' in payload.attachment).toBe(false);

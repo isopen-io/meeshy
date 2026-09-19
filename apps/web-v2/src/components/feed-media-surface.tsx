@@ -2,7 +2,9 @@ import { useState } from 'react';
 
 import { Glyph, GlyphSvg } from './glyph';
 import { FEED_GLYPHS } from './glyphs-feed';
+import { MediaUnavailable } from './media-unavailable';
 import type { FeedCardMedia } from '@/lib/feed/card-model';
+import { isMediaAbsent, noteMediaAbsent } from '@/lib/api/media-absent';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
@@ -29,6 +31,21 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
  */
 export function FeedMediaSurface({ media, playable = false }: { readonly media: FeedCardMedia; readonly playable?: boolean }) {
   const [loaded, setLoaded] = useState(false);
+  /**
+   * LE COMPTEUR D'ÉCHECS, ET NON UN `errored: boolean` (#7022). Le verdict se
+   * LIT au registre de module à chaque rendu (`isMediaAbsent(media.src)`) ;
+   * cet état ne sert qu'à REDEMANDER un rendu quand le registre vient
+   * d'apprendre quelque chose.
+   *
+   * La distinction n'est pas théorique : un fil virtualisé RECYCLE ses
+   * composants, donc la même instance sert successivement plusieurs sources.
+   * Un booléen posé au montage porterait le verdict de la rangée PRÉCÉDENTE et
+   * masquerait une image parfaitement vivante — le défaut qu'on ferme, retourné
+   * (c'est la forme web de « un état semé par un seul `onChange` hérite de la
+   * ligne précédente »). Dérivé de `media.src`, il ne peut pas se tromper de
+   * rangée.
+   */
+  const [, setÉchecs] = useState(0);
 
   if (playable && media.kind === 'video') {
     const language = currentInterfaceLanguage();
@@ -113,6 +130,22 @@ export function FeedMediaSurface({ media, playable = false }: { readonly media: 
     );
   }
 
+  /**
+   * LE MÉDIA RÉELLEMENT ABSENT (#7022) — état DESSINÉ, et AUCUNE `<img>`
+   * montée : c'est le non-montage qui épargne la requête, pas un masquage.
+   *
+   * Le ThumbHash lui-même se retire avec elle. Il est l'APERÇU d'octets qui
+   * arrivent ; au-dessus d'une absence définitive il ment — une image floue et
+   * plausible fait attendre un chargement qui ne viendra jamais.
+   */
+  if (isMediaAbsent(media.src)) {
+    return (
+      <div className="absolute inset-0">
+        <MediaUnavailable language={currentInterfaceLanguage()} tone="on-card" />
+      </div>
+    );
+  }
+
   return (
     <>
       {media.placeholder !== undefined ? (
@@ -120,6 +153,10 @@ export function FeedMediaSurface({ media, playable = false }: { readonly media: 
       ) : null}
       <img
         src={media.src}
+        onError={() => {
+          noteMediaAbsent(media.src);
+          setÉchecs((compte) => compte + 1);
+        }}
         /* `PostMedia.alt` SERVI, jamais la légende (déjà rendue en texte
            visible sous le média) : la répéter la ferait lire deux fois.
            Sans texte d'accessibilité, l'image est DÉCORATIVE (`alt=""`) —
