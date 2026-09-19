@@ -24,28 +24,28 @@
  */
 
 /** En deçà de deux insertions, il n'y a pas de quoi conclure à une dérive. */
-const INSERTIONS_MINIMALES = 2;
+const MIN_INSERTIONS = 2;
 
 /**
  * Agrège les tirages de pages en un verdict de dérive.
  *
  * @param {ReadonlyArray<{ drift: number | null }>} pulls
- * @returns {{ genre: 'mesurée', max: number, pages: number }
- *          | { genre: 'non-mesurable', perdues: number, pages: number }
- *          | { genre: 'aucune-page', pages: number }}
+ * @returns {{ kind: 'measured', max: number, pages: number }
+ *          | { kind: 'unmeasurable', lost: number, pages: number }
+ *          | { kind: 'no-pages', pages: number }}
  */
 export function insertionDrift(pulls) {
   const pages = pulls.length;
-  if (pages < INSERTIONS_MINIMALES) return { genre: 'aucune-page', pages };
+  if (pages < MIN_INSERTIONS) return { kind: 'no-pages', pages };
 
-  const perdues = pulls.filter((p) => p.drift === null).length;
+  const lost = pulls.filter((p) => p.drift === null).length;
   /* UNE seule ancre perdue suffit. Le maximum des tirages RESTANTS répondrait à
      une autre question — « parmi ce qu'on a pu voir, quel est le pire ? » — et
      c'est précisément la question qui rassure à tort. */
-  if (perdues > 0) return { genre: 'non-mesurable', perdues, pages };
+  if (lost > 0) return { kind: 'unmeasurable', lost, pages };
 
-  const max = pulls.reduce((haut, p) => Math.max(haut, p.drift ?? 0), 0);
-  return { genre: 'mesurée', max, pages };
+  const max = pulls.reduce((highest, p) => Math.max(highest, p.drift ?? 0), 0);
+  return { kind: 'measured', max, pages };
 }
 
 /**
@@ -55,9 +55,9 @@ export function insertionDrift(pulls) {
  * @returns {string}
  */
 export function driftLine(verdict) {
-  if (verdict.genre === 'mesurée') return `${Math.round(verdict.max)} px`;
-  if (verdict.genre === 'non-mesurable') {
-    return `non mesurable — ancre perdue ${verdict.perdues} fois sur ${verdict.pages} insertions`;
+  if (verdict.kind === 'measured') return `${Math.round(verdict.max)} px`;
+  if (verdict.kind === 'unmeasurable') {
+    return `non mesurable — ancre perdue ${verdict.lost} fois sur ${verdict.pages} insertions`;
   }
-  return `non mesurable — ${verdict.pages} insertion(s), il en faut ${INSERTIONS_MINIMALES}`;
+  return `non mesurable — ${verdict.pages} insertion(s), il en faut ${MIN_INSERTIONS}`;
 }

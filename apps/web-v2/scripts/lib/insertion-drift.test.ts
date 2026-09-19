@@ -37,7 +37,7 @@ import { driftLine, insertionDrift } from './insertion-drift.mjs';
 describe('insertionDrift — ce qui distingue « zéro dérive » de « aucune mesure » (#7110)', () => {
   test('des tirages tous mesurés rendent la dérive MAXIMALE', () => {
     expect(insertionDrift([{ drift: 0 }, { drift: 38 }, { drift: 2 }])).toEqual({
-      genre: 'mesurée',
+      kind: 'measured',
       max: 38,
       pages: 3,
     });
@@ -47,37 +47,37 @@ describe('insertionDrift — ce qui distingue « zéro dérive » de « aucune m
     // C'est LE cas du défaut : sans lui, le verdict serait `{ max: 0 }`, et la
     // ligne imprimée dirait « 0 px » sur une mesure qui n'a pas eu lieu.
     expect(insertionDrift([{ drift: 0 }, { drift: null }, { drift: 0 }])).toEqual({
-      genre: 'non-mesurable',
-      perdues: 1,
+      kind: 'unmeasurable',
+      lost: 1,
       pages: 3,
     });
   });
 
   test('aucune page insérée ⇒ il n’y a rien à mesurer, et ce n’est pas la même chose qu’une ancre perdue', () => {
-    expect(insertionDrift([])).toEqual({ genre: 'aucune-page', pages: 0 });
+    expect(insertionDrift([])).toEqual({ kind: 'no-pages', pages: 0 });
   });
 
   test('une seule page ne suffit pas : le gate exige DEUX insertions pour conclure', () => {
-    expect(insertionDrift([{ drift: 0 }])).toEqual({ genre: 'aucune-page', pages: 1 });
+    expect(insertionDrift([{ drift: 0 }])).toEqual({ kind: 'no-pages', pages: 1 });
   });
 });
 
 describe('driftLine — la ligne imprimée ne dit un chiffre que sur une mesure (#7110)', () => {
   test('une dérive mesurée s’imprime en pixels, arrondie', () => {
-    expect(driftLine({ genre: 'mesurée', max: 37.6, pages: 10 })).toBe('38 px');
+    expect(driftLine({ kind: 'measured', max: 37.6, pages: 10 })).toBe('38 px');
   });
 
   test('une ancre perdue n’imprime AUCUN chiffre — elle dit que la mesure n’a pas eu lieu', () => {
-    const ligne = driftLine({ genre: 'non-mesurable', perdues: 2, pages: 10 });
-    expect(ligne).toContain('non mesurable');
-    expect(ligne).toContain('2');
+    const line = driftLine({ kind: 'unmeasurable', lost: 2, pages: 10 });
+    expect(line).toContain('non mesurable');
+    expect(line).toContain('2');
     // L'assertion qui garde le défaut : plus jamais « 0 px » sur une non-mesure.
-    expect(ligne).not.toContain('px');
+    expect(line).not.toContain('px');
   });
 
   test('aucune page insérée le dit aussi, et sans chiffre de dérive', () => {
-    const ligne = driftLine({ genre: 'aucune-page', pages: 1 });
-    expect(ligne).toContain('non mesurable');
-    expect(ligne).not.toContain('px');
+    const line = driftLine({ kind: 'no-pages', pages: 1 });
+    expect(line).toContain('non mesurable');
+    expect(line).not.toContain('px');
   });
 });

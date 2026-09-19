@@ -224,7 +224,7 @@ for (let turn = 0; turn < 20; turn += 1) {
 }
 
 const drift = insertionDrift(pulls);
-const lostAnchor = drift.genre === 'non-mesurable' ? drift.perdues : 0;
+const lostAnchor = drift.kind === 'unmeasurable' ? drift.lost : 0;
 
 expect(olderPages >= 2, `au moins DEUX pages anciennes se chargent à l'approche du haut (mesuré ${olderPages})`);
 expect(lostAnchor === 0, `la rangée repérée reste MONTÉE après l'insertion (perdue ${lostAnchor} fois)`);
@@ -236,8 +236,8 @@ expect(lostAnchor === 0, `la rangée repérée reste MONTÉE après l'insertion 
  * ABSENCE DE SUJET, et seule l'assertion voisine `lostAnchor === 0` le
  * rattrapait. Deux gardes qui tombent ensemble valent mieux qu'une qui ment. */
 expect(
-  drift.genre === 'mesurée' && drift.max <= 2,
-  drift.genre === 'mesurée'
+  drift.kind === 'measured' && drift.max <= 2,
+  drift.kind === 'measured'
     ? `une cellule visible a bougé de ${Math.round(drift.max)} px à l'insertion d'une page ancienne — l'historique pousse le fil sous les yeux`
     : `la dérive d'insertion n'a PAS pu être mesurée (${driftLine(drift)}) — aucun verdict de dérive n'est prononçable`,
 );

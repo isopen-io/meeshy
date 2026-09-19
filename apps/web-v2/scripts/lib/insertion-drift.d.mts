@@ -15,10 +15,10 @@
  * l'appelant à traiter la branche « la mesure n'a pas eu lieu », qui est tout
  * l'objet de l'issue.
  */
-export type DériveDInsertion =
-  | { readonly genre: 'mesurée'; readonly max: number; readonly pages: number }
-  | { readonly genre: 'non-mesurable'; readonly perdues: number; readonly pages: number }
-  | { readonly genre: 'aucune-page'; readonly pages: number };
+export type InsertionDriftVerdict =
+  | { readonly kind: 'measured'; readonly max: number; readonly pages: number }
+  | { readonly kind: 'unmeasurable'; readonly lost: number; readonly pages: number }
+  | { readonly kind: 'no-pages'; readonly pages: number };
 
 /**
  * Agrège les tirages de pages en un verdict.
@@ -29,7 +29,7 @@ export type DériveDInsertion =
  */
 export declare function insertionDrift(
   pulls: ReadonlyArray<{ readonly drift: number | null }>,
-): DériveDInsertion;
+): InsertionDriftVerdict;
 
 /** La ligne imprimée pour ce verdict — un chiffre en pixels SEULEMENT sur une mesure. */
-export declare function driftLine(verdict: DériveDInsertion): string;
+export declare function driftLine(verdict: InsertionDriftVerdict): string;
