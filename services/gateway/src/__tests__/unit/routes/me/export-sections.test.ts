@@ -9,7 +9,7 @@
  * @jest-environment node
  */
 
-import { describe, it, expect, jest } from '@jest/globals';
+import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 import {
   resolveExportPage,
   exportPosts,
@@ -170,6 +170,154 @@ describe('exportVoiceProfile', () => {
   it('returns null when the user has no voice profile', async () => {
     const prisma = fakePrisma();
     await expect(exportVoiceProfile(prisma, USER_ID)).resolves.toBeNull();
+  });
+});
+
+/**
+ * Les adresses de média SERVIES par l'archive (#7022, étape 3).
+ *
+ * `MessageAttachment.fileUrl` / `PostMedia.fileUrl` portent TROIS formes en
+ * production (mesuré le 2026-09-18) : une adresse absolue (1600 lignes), une
+ * route RELATIVE sans hôte (574), et une CLÉ NUE de l'arborescence datée (738).
+ * Les deux dernières n'ouvrent rien chez le destinataire de l'archive — un
+ * humain, un outil — qui n'a aucun résolveur : ce n'est pas un défaut à venir,
+ * c'en est un ACTIF, pour un quart des lignes.
+ *
+ * La composition ne se réécrit pas ici : le site unique est
+ * `publicMediaUrlFromEnv` (`services/attachments/publicMediaUrl.ts`), qui
+ * connaît déjà les trois formes et qui est IDEMPOTENT — une adresse déjà
+ * absolue le traverse inchangée. Les témoins ci-dessous exercent donc la
+ * composition RÉELLE, jamais une seconde rédigée dans le test, et le socle est
+ * posé par l'environnement pour que l'assertion prouve la base CONFIGURÉE et
+ * non un hôte codé en dur.
+ */
+describe("adresses de média servies par l'export", () => {
+  const BASE = 'https://gate.exemple.test';
+  const CLE_NUE = '2026/09/507f1f77bcf86cd799439011/photo.jpeg';
+  const ROUTE_RELATIVE = '/api/attachments/file/2026%2F09%2F507f1f77bcf86cd799439011%2Fvoix.m4a';
+  const DEJA_ABSOLUE = 'https://gate.meeshy.me/api/v1/attachments/file/2026%2F09%2Fu%2Fdeja.jpeg';
+
+  let baseInitiale: string | undefined;
+
+  beforeEach(() => {
+    baseInitiale = process.env.API_PUBLIC_URL;
+    process.env.API_PUBLIC_URL = BASE;
+  });
+
+  afterEach(() => {
+    if (baseInitiale === undefined) delete process.env.API_PUBLIC_URL;
+    else process.env.API_PUBLIC_URL = baseInitiale;
+  });
+
+  it('sert une CLÉ NUE de pièce jointe en adresse de flux absolue', async () => {
+    const prisma = fakePrisma({
+      messageAttachment: {
+        findMany: jest.fn<any>().mockResolvedValue([{ id: 'a1', fileUrl: CLE_NUE }]),
+        count: jest.fn<any>().mockResolvedValue(1),
+      },
+    });
+    const sections = await exportMedia(prisma, USER_ID, { limit: 500, offset: 0 });
+    expect(sections.attachments.items[0]).toMatchObject({
+      fileUrl: `${BASE}/api/v1/attachments/file/2026%2F09%2F507f1f77bcf86cd799439011%2Fphoto.jpeg`,
+    });
+  });
+
+  it('sert une CLÉ NUE de média de publication en adresse de flux absolue', async () => {
+    const prisma = fakePrisma({
+      postMedia: {
+        findMany: jest.fn<any>().mockResolvedValue([{ id: 'm1', fileUrl: CLE_NUE }]),
+        count: jest.fn<any>().mockResolvedValue(1),
+      },
+    });
+    const sections = await exportMedia(prisma, USER_ID, { limit: 500, offset: 0 });
+    expect(sections.postMedia.items[0]).toMatchObject({
+      fileUrl: `${BASE}/api/v1/attachments/file/2026%2F09%2F507f1f77bcf86cd799439011%2Fphoto.jpeg`,
+    });
+  });
+
+  it("pose l'hôte configuré sur une route RELATIVE, qui ne mène nulle part sans lui", async () => {
+    const prisma = fakePrisma({
+      messageAttachment: {
+        findMany: jest.fn<any>().mockResolvedValue([{ id: 'a2', fileUrl: ROUTE_RELATIVE }]),
+        count: jest.fn<any>().mockResolvedValue(1),
+      },
+    });
+    const sections = await exportMedia(prisma, USER_ID, { limit: 500, offset: 0 });
+    expect(sections.attachments.items[0]).toMatchObject({ fileUrl: `${BASE}${ROUTE_RELATIVE}` });
+  });
+
+  it('laisse une adresse DÉJÀ ABSOLUE traverser inchangée (idempotence)', async () => {
+    const prisma = fakePrisma({
+      messageAttachment: {
+        findMany: jest.fn<any>().mockResolvedValue([{ id: 'a3', fileUrl: DEJA_ABSOLUE }]),
+        count: jest.fn<any>().mockResolvedValue(1),
+      },
+      postMedia: {
+        findMany: jest.fn<any>().mockResolvedValue([{ id: 'm3', fileUrl: DEJA_ABSOLUE }]),
+        count: jest.fn<any>().mockResolvedValue(1),
+      },
+    });
+    const sections = await exportMedia(prisma, USER_ID, { limit: 500, offset: 0 });
+    expect(sections.attachments.items[0]).toMatchObject({ fileUrl: DEJA_ABSOLUE });
+    expect(sections.postMedia.items[0]).toMatchObject({ fileUrl: DEJA_ABSOLUE });
+  });
+
+  it("ne perd aucune autre colonne de la ligne en composant l'adresse", async () => {
+    const ligne = {
+      id: 'a4',
+      messageId: 'msg-1',
+      originalName: 'photo.jpeg',
+      mimeType: 'image/jpeg',
+      fileSize: 1234,
+      fileUrl: CLE_NUE,
+      duration: null,
+      width: 800,
+      height: 600,
+      createdAt: new Date('2026-09-18T10:00:00.000Z'),
+    };
+    const prisma = fakePrisma({
+      messageAttachment: {
+        findMany: jest.fn<any>().mockResolvedValue([ligne]),
+        count: jest.fn<any>().mockResolvedValue(1),
+      },
+    });
+    const sections = await exportMedia(prisma, USER_ID, { limit: 500, offset: 0 });
+    expect(sections.attachments.items[0]).toEqual({
+      ...ligne,
+      fileUrl: `${BASE}/api/v1/attachments/file/2026%2F09%2F507f1f77bcf86cd799439011%2Fphoto.jpeg`,
+    });
+  });
+
+  it("n'altère ni le total ni hasMore de la section", async () => {
+    const prisma = fakePrisma({
+      messageAttachment: {
+        findMany: jest.fn<any>().mockResolvedValue([{ id: 'a5', fileUrl: CLE_NUE }]),
+        count: jest.fn<any>().mockResolvedValue(9),
+      },
+    });
+    const sections = await exportMedia(prisma, USER_ID, { limit: 1, offset: 0 });
+    expect(sections.attachments.total).toBe(9);
+    expect(sections.attachments.hasMore).toBe(true);
+  });
+
+  it('sert `referenceAudioUrl` du profil vocal sous la même règle', async () => {
+    const prisma = fakePrisma({
+      userVoiceModel: {
+        findFirst: jest.fn<any>().mockResolvedValue({ profileId: 'vfp_1', referenceAudioUrl: ROUTE_RELATIVE }),
+      },
+    });
+    const profile = await exportVoiceProfile(prisma, USER_ID);
+    expect(profile).toEqual({ profileId: 'vfp_1', referenceAudioUrl: `${BASE}${ROUTE_RELATIVE}` });
+  });
+
+  it('laisse `referenceAudioUrl` à null quand le profil vocal n’en porte pas', async () => {
+    const prisma = fakePrisma({
+      userVoiceModel: {
+        findFirst: jest.fn<any>().mockResolvedValue({ profileId: 'vfp_2', referenceAudioUrl: null }),
+      },
+    });
+    const profile = await exportVoiceProfile(prisma, USER_ID);
+    expect(profile).toEqual({ profileId: 'vfp_2', referenceAudioUrl: null });
   });
 });
 
