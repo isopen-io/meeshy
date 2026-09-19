@@ -7,7 +7,8 @@ import { FEED_GLYPHS } from './glyphs-feed';
 import { MEDIA_TRANSPORT_GLYPHS } from './glyphs-media-transport';
 import { RAIL_DISC, ReelPoster } from './reel-poster';
 import { carrierMediaIdentity } from '@/lib/canvas/carrier';
-import { sceneHasControllableSound } from '@/lib/canvas/background-sound';
+import { sceneHasAudibleBackgroundVideo, sceneHasControllableSound } from '@/lib/canvas/background-sound';
+import type { ProtectedMediaDeps, ProtectedMediaUnavailableReason } from '@/lib/api/protected-media';
 import type { FeedCardMedia, FeedCardModel, FeedCardScene } from '@/lib/feed/card-model';
 import type { PostToggleKind } from '@/lib/feed/interactions';
 import { translate } from '@/lib/i18n-catalog';
@@ -53,6 +54,10 @@ export type ReelPageProps = {
    * automatique (#6903) — même politique que le réel vidéo (`soundOn =
    * false`), câblée par l'écran (`routes/reels.tsx`). */
   readonly onSoundBlocked: () => void;
+  /** Injectable pour les témoins UNIQUEMENT — la production prend les
+   * dépendances de `BackgroundTrackAudio` ; sans elle, « la piste protégée
+   * est refusée » ne s'éprouve qu'en laissant partir un vrai `fetch`. */
+  readonly mediaDeps?: ProtectedMediaDeps;
 };
 
 const TEXT_SHADOW = '0 1px 2px rgba(0,0,0,0.7)';
@@ -198,7 +203,11 @@ function ReelStage({
   language,
   preferredLanguages,
   onSoundBlocked,
-}: Pick<ReelPageProps, 'model' | 'mode' | 'soundOn' | 'language' | 'preferredLanguages' | 'onSoundBlocked'>) {
+  onSoundUnavailable,
+  mediaDeps,
+}: Pick<ReelPageProps, 'model' | 'mode' | 'soundOn' | 'language' | 'preferredLanguages' | 'onSoundBlocked' | 'mediaDeps'> & {
+  readonly onSoundUnavailable: (reason: ProtectedMediaUnavailableReason) => void;
+}) {
   const stage = reelStageOf(model);
   const accent = model.author.accentColor;
   // LA SCÈNE DÉCIDE AVANT LE MÉDIA (#6903, miroir `ReelsPlayerView.swift:900-904`) :
@@ -219,6 +228,8 @@ function ReelStage({
           preferredLanguages={preferredLanguages}
           {...(poster !== undefined ? { poster } : {})}
           onSoundBlocked={onSoundBlocked}
+          onSoundUnavailable={onSoundUnavailable}
+          {...(mediaDeps !== undefined ? { mediaDeps } : {})}
         />
       </Suspense>
     );
@@ -334,10 +345,24 @@ export function ReelPage(props: ReelPageProps) {
   // Une scène JOUE toujours (elle est le fond) ; le bouton son n'existe que
   // si elle a un son À COUPER (`sceneHasControllableSound`, miroir
   // `BackgroundSoundBadge.showsMuteButton` — loi 4, #6903).
-  const playable =
-    stage.kind === 'video' ||
-    stage.kind === 'audio' ||
-    (stage.kind === 'scene' && sceneHasControllableSound({ document: stage.scene.document, sceneIndex: 0, carrier: stage.scene.carrier }));
+  /**
+   * ET LE TRANSPORT A SON MOT À DIRE (#7015, seconde revue).
+   * `sceneHasControllableSound` est STRUCTUREL : il répond d'après ce que le
+   * DOCUMENT déclare. Une piste empruntée servie par la route authentifiée
+   * peut être définitivement refusée (401) — `ReelSceneStage` l'apprend et le
+   * remonte ici. Il ne reste alors à couper que la vidéo de fond NON muette ;
+   * s'il n'y en a pas, le rail son serait resté au-dessus d'une scène sans
+   * `<audio>` — exactement le contrôle INERTE que `playable` écarte déjà pour
+   * une scène muette. Le repli est la MOITIÉ vidéo de la même loi, jamais une
+   * seconde règle (`sceneHasAudibleBackgroundVideo`).
+   */
+  const [soundUnavailable, setSoundUnavailable] = useState<ProtectedMediaUnavailableReason | null>(null);
+  const sceneSound =
+    stage.kind === 'scene' &&
+    (soundUnavailable === null
+      ? sceneHasControllableSound({ document: stage.scene.document, sceneIndex: 0, carrier: stage.scene.carrier })
+      : sceneHasAudibleBackgroundVideo({ document: stage.scene.document, sceneIndex: 0 }));
+  const playable = stage.kind === 'video' || stage.kind === 'audio' || sceneSound;
 
   return (
     <article
@@ -356,6 +381,8 @@ export function ReelPage(props: ReelPageProps) {
         language={language}
         preferredLanguages={props.preferredLanguages}
         onSoundBlocked={props.onSoundBlocked}
+        onSoundUnavailable={setSoundUnavailable}
+        {...(props.mediaDeps !== undefined ? { mediaDeps: props.mediaDeps } : {})}
       />
       {/* LE VOILE BAS tient le blanc de l'auteur, de la légende et des compteurs
           au-dessus de AA sur la PIRE image (une mire blanche) : mesuré au pixel
