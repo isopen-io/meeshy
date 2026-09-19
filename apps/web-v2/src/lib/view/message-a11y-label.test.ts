@@ -207,7 +207,7 @@ describe('composeMessageLabel — la protection', () => {
 });
 
 /**
- * **UNE RANGÉE QUI NE PEINT PAS SA CITATION NE LA PRONONCE PAS** (#7132) —
+ * **UNE RANGÉE QUI NE PEINT PAS SA CITATION NE LA PRONONCE PAS** (#7092) —
  * le SECOND VOCABULAIRE que le doc-comment de `PROTECTED_LABEL` dit vouloir
  * éviter, pris en défaut sur le segment de citation : la rangée retenue rend
  * `ProtectionNotice` et la rangée voilée AU REPOS rend son substitut — ni
@@ -220,7 +220,7 @@ describe('composeMessageLabel — la protection', () => {
  * et simple du segment. Le cas RÉVÉLÉ — la phase où `rendersContent` monte les
  * enfants — doit continuer de le porter.
  */
-describe('composeMessageLabel — la citation suit ce que la rangée PEINT (#7132)', () => {
+describe('composeMessageLabel — la citation suit ce que la rangée PEINT (#7092)', () => {
   const quoted = () => message({ id: 'q1', sender: senderOf('Amina Diallo'), content: 'Le RDV est à 18h' });
 
   test('RETENU : la rangée rend un constat, pas un `Quote` — le libellé ne prononce aucune citation', () => {

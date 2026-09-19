@@ -143,7 +143,7 @@ export type MessageLabelInput = {
    */
   readonly contentWithheld?: boolean;
   /**
-   * LA PHASE DE RÉVÉLATION (#7132) — l'autre moitié de la matrice que
+   * LA PHASE DE RÉVÉLATION (#7092) — l'autre moitié de la matrice que
    * `rendersContent` consulte : « la rangée monte-t-elle ses enfants ? ».
    * Sans elle, le libellé rejouerait la protection par un `if` recopié, la
    * jumelle exacte que le doc-comment de `lib/reading-mode/protection.ts`
@@ -235,7 +235,7 @@ export function composeMessageLabel({
   } else {
     /**
      * LA CITATION EST UN ENFANT DE LA RANGÉE, DONC ELLE SUIT SA MATRICE
-     * (#7132) — elle se prononce ICI, dans la branche qui dit que les enfants
+     * (#7092) — elle se prononce ICI, dans la branche qui dit que les enfants
      * sont MONTÉS, jamais avant le dispatch. Composée plus haut, elle
      * annonçait « réponse à Amina Diallo » au-dessus d'un constat de contenu
      * retenu et d'un substitut voilé : le second vocabulaire que le
