@@ -17,6 +17,17 @@ import { STORAGE_KEY_SHAPE } from './mediaUrlNormalization';
  * toutes des clés (mesuré le 2026-09-18). La vignette de l'écran verrouillé
  * passerait de « la moitié » à « jamais ».
  *
+ * OÙ ELLE S'APPLIQUE, ET OÙ ELLE NE S'APPLIQUE PAS. Sur la CHARGE PUSH
+ * (`createNotification` → `data.attachmentUrl`), dont le lecteur n'a pas de
+ * base ; et sur la vignette d'un post (`resolvePostMedia`), qui alimente la
+ * même charge. JAMAIS sur le `context` PERSISTÉ de la notification : celui-ci
+ * est servi à des clients qui composent l'adresse eux-mêmes
+ * (`resolveAttachmentSrc` web-v2, `buildAttachmentUrl` legacy,
+ * `MeeshyConfig.resolveMediaURL` iOS), et y absolutiser regraverait l'hôte de
+ * déploiement dans la donnée — exactement ce que #7022 retire. Deux
+ * applications successives sont sans effet : le résultat est absolu, donc
+ * inchangé par la seconde.
+ *
  * FAIL-CLOSED PAR LA FORME. Seule une clé de l'arborescence DATÉE
  * (`STORAGE_KEY_SHAPE` — le MÊME prédicat que la migration, jamais un second)
  * reçoit la route de flux. Tout le reste garde exactement le comportement qu'il

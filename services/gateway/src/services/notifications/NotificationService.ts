@@ -1784,10 +1784,7 @@ export class NotificationService {
                     attachmentDurationMs: '',
                     attachmentFileSize: '',
                   } : {
-                    // #7022 — L'ADRESSE SE COMPOSE ICI : la NSE descend cette
-                    // chaîne SANS base configurée, donc une clé de stockage (la
-                    // forme que `normalize-media-urls.ts` laisse en base) n'y est
-                    // pas une adresse. Règle et mesures : `publicMediaUrl.ts`.
+                    // #7022 — L'ADRESSE SE COMPOSE ICI, pour le seul lecteur sans base (`publicMediaUrl.ts`).
                     attachmentUrl: this.toPublicMediaUrl(params.context.firstAttachmentUrl || ''),
                     attachmentMimeType: params.context.firstAttachmentMimeType || '',
                     attachmentDurationMs: params.context.firstAttachmentDurationMs != null
@@ -2232,13 +2229,8 @@ export class NotificationService {
         // Phase A — propagation au payload APN pour rendu media inline iOS.
         // Cycle 128 — les TROIS champs sortent de l'élection du Prisme, pas des
         // paramètres bruts : la piste servie, son étiquette et sa durée.
-        // #7022 — la RÉFÉRENCE reste telle que la base la porte (une clé de
-        // stockage en sortie de `normalize-media-urls.ts`) : ce contexte est
-        // PERSISTÉ et servi aux clients, qui ont tous une base configurée et
-        // composent l'adresse eux-mêmes. Y absolutiser regraverait l'hôte de
-        // déploiement dans la donnée — exactement ce que ce lot retire.
-        // C'est la CHARGE PUSH qui compose l'adresse, parce que son lecteur
-        // (la NSE iOS) n'a aucune base — voir `attachmentUrl` plus haut.
+        // #7022 — la RÉFÉRENCE reste NUE ici : ce contexte est PERSISTÉ et servi
+        // à des clients qui ont une base. Seule la charge push compose (`publicMediaUrl.ts`).
         firstAttachmentUrl: servedMedia.url,
         firstAttachmentMimeType: servedMedia.mimeType,
         // #7003 — la taille voyage avec le fichier qu'elle décrit, et c'est la
@@ -5221,12 +5213,7 @@ export class NotificationService {
 
   /** Absolutise une URL média relative pour qu'elle soit téléchargeable par
    *  l'extension de notification iOS (qui n'a pas de base configurée).
-   *
-   *  #7022 — la composition vit dans `publicMediaUrl`
-   *  (`services/attachments/publicMediaUrl.ts`), site UNIQUE partagé avec le
-   *  média du rich-push : une CLÉ DE STOCKAGE y reçoit la ROUTE DE FLUX, et
-   *  non la seule base — collée derrière la base, elle désignait la racine de
-   *  la passerelle, qui ne sert aucun fichier. */
+   *  #7022 — la règle vit dans `attachments/publicMediaUrl.ts` (site UNIQUE). */
   private toPublicMediaUrl(url: string): string {
     return publicMediaUrl(url, process.env.API_PUBLIC_URL || 'https://gate.meeshy.me');
   }
