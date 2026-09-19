@@ -100,7 +100,13 @@ const COMMENTS = [
     author: author('u-ines', 'Inès Lefèvre', 'ines'),
     originalLanguage: 'fr',
     isLikedByMe: false,
-    likeCount: 0,
+    /* NON NUL, DÉLIBÉRÉMENT — la rangée ne peint son compte que s'il est
+       supérieur à zéro (`comment-row.tsx:128`). À zéro, « le refus remet le
+       compte à sa valeur exacte » comparerait deux chaînes VIDES : vert sur un
+       rollback juste, et vert aussi sur un rollback qui remettrait la rangée à
+       un état qu'aucun chiffre ne montre. Un témoin se mesure sur une valeur
+       qui S'AFFICHE. */
+    likeCount: 7,
   },
   {
     id: THIRD,
@@ -211,6 +217,17 @@ async function runScheme({ browser, base, scheme, check }) {
      surcharge : abandonné, pour ne jamais laisser partir un octet réel. */
   await page.route('**/socket.io/**', (route) => route.abort());
 
+  /* LE FILET, POSÉ EN PREMIER — Playwright apparie les routes en ordre INVERSE
+     d'enregistrement : la DERNIÈRE posée gagne. Un filet posé en dernier
+     intercepterait donc la publication et son fil, qui rendraient une charge
+     vide, et la carte se peindrait sur un `createdAt` absent (mesuré : la page
+     lève « Invalid time value » et aucune rangée n'apparaît). Il vient donc
+     AVANT les routes précises, pour ne recevoir que ce qu'elles n'ont pas pris.
+     Sa raison d'être : aucune requête ne doit partir vers un hôte réel, et une
+     requête non prévue qui resterait EN VOL ferait expirer le gate sur un
+     `waitForSelector` qui ne dirait pas pourquoi. */
+  await page.route('**/api/v1/**', (route) => json(route, envelope([])));
+
   /** Le scénario du `like`, réécrit d'un bloc à l'autre. */
   let likePlan = { kind: 'ok' };
 
@@ -221,7 +238,12 @@ async function runScheme({ browser, base, scheme, check }) {
       sent.push({ method: request.method(), path: new URL(request.url()).pathname });
       if (likePlan.kind === 'delay') {
         await new Promise((resolve) => setTimeout(resolve, likePlan.ms));
-        return json(route, envelope({ liked: true, likeCount: 1 }));
+        /* LE COMPTE SERVI EST COHÉRENT AVEC L'OPTIMISTE — la passerelle rend
+           un `likeCount` ABSOLU, que `servedLikeCount` substitue à
+           l'estimation. Un stub qui rendrait n'importe quel chiffre ferait
+           reculer le compteur sous les yeux du lecteur, et les captures de
+           recette montreraient ce recul comme s'il venait du produit. */
+        return json(route, envelope({ liked: true, likeCount: likePlan.served }));
       }
       if (likePlan.kind === 'refuse') {
         /* 404 `COMMENT_NOT_FOUND` est ce que la passerelle rend hors audience
@@ -255,11 +277,6 @@ async function runScheme({ browser, base, scheme, check }) {
   });
 
   await page.route(isPostDetail, (route) => json(route, envelope(POST)));
-
-  /* LE FILET — toute autre route d'API rend une charge VIDE plutôt que de
-     partir vers un hôte réel. Sans lui, une requête non prévue reste en vol et
-     le gate expire sur un `waitForSelector` qui ne dit pas pourquoi. */
-  await page.route('**/api/v1/**', (route) => json(route, envelope([])));
 
   await page.goto(`${base}/post/${POST_ID}`, { waitUntil: 'load' });
   await page.waitForSelector(`[data-comment-row="${OTHER}"]`);
@@ -307,7 +324,11 @@ async function runScheme({ browser, base, scheme, check }) {
     page.$eval(`[data-comment-row="${id}"] [data-comment-gesture="like"]`, (b) => b.getAttribute('aria-pressed'));
 
   const avant = await compteDe(THIRD);
-  likePlan = { kind: 'delay', ms: 1200 };
+  /* `served: 6` et non 5 — une autre personne a aimé pendant que la requête
+     volait. Le compte SERVI est absolu et doit remplacer l'estimation locale
+     (`servedLikeCount`) ; servir exactement l'optimiste rendrait ce témoin
+     incapable de distinguer « le servi a gagné » de « rien ne s'est passé ». */
+  likePlan = { kind: 'delay', ms: 1200, served: 6 };
   await page.click(`[data-comment-row="${THIRD}"] [data-comment-gesture="like"]`);
   await page.waitForTimeout(250);
   const pendant = await compteDe(THIRD);
@@ -318,16 +339,30 @@ async function runScheme({ browser, base, scheme, check }) {
   );
   check(presséPendant === 'true', say(`et le cœur est annoncé PRESSÉ dans le même temps — aria-pressed=${presséPendant}`));
   await page.waitForTimeout(1300);
+  const apresServi = await compteDe(THIRD);
+  check(
+    apresServi === '6',
+    say(`le compte SERVI par la passerelle remplace l'estimation locale — « ${pendant} » optimiste puis « ${apresServi} » servi`),
+  );
 
   // ------------------------------------------------ 4. le refus reprend TOUT
   likePlan = { kind: 'refuse' };
   const avantRefus = await compteDe(OTHER);
+  const appelsAvant = sent.filter((r) => r.path === likePathOf(OTHER)).length;
   await page.click(`[data-comment-row="${OTHER}"] [data-comment-gesture="like"]`);
   await page.waitForSelector(`[data-comment-row="${OTHER}"] [data-comment-gesture-error]`);
   const apresRefus = await compteDe(OTHER);
   const presséApres = await presseDe(OTHER);
+  /* LE GESTE A BIEN EU LIEU — sans ce constat, « le compte est revenu à sa
+     valeur » serait vert sur un bouton qui n'a RIEN fait : les deux lectures
+     sont alors égales pour la pire des raisons. La moitié qui mord est
+     celle-ci ; celle qui rassure est la suivante. */
   check(
-    apresRefus === avantRefus,
+    sent.filter((r) => r.path === likePathOf(OTHER)).length === appelsAvant + 1,
+    say(`le tap a bien ENVOYÉ son geste avant d'être refusé — ${appelsAvant} puis ${sent.filter((r) => r.path === likePathOf(OTHER)).length}`),
+  );
+  check(
+    apresRefus === avantRefus && avantRefus !== '',
     say(`le refus REMET le compte à sa valeur EXACTE — « ${avantRefus} » puis « ${apresRefus} »`),
   );
   check(presséApres === 'false', say(`et le cœur redevient vide — aria-pressed=${presséApres}`));
