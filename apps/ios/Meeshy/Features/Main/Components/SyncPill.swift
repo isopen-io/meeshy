@@ -238,7 +238,7 @@ struct SyncPill: View {
     @State private var isVisible: Bool = false
     /// Effacement différé (one-shot, annulable) — réarmé à chaque nouvelle
     /// entrée. Borné, jamais `repeatForever` (cf. audit chauffe #3940).
-    @State private var hideWorkItem: DispatchWorkItem?
+    @State private var hideSettle = Debouncer()
 
     /// **La pastille est-elle en train d'enfler ?** (#6188)
     ///
@@ -252,7 +252,7 @@ struct SyncPill: View {
     /// Retour au repos différé (one-shot, annulable). Annulable parce qu'une
     /// SECONDE conversation qui se met à écrire pendant l'accent doit relancer
     /// la fenêtre entière, pas la laisser expirer sur l'ancien minuteur.
-    @State private var emphasisWorkItem: DispatchWorkItem?
+    @State private var emphasisSettle = Debouncer()
 
     /// Délai sans NOUVELLE entrée après lequel la pastille s'efface — évite
     /// l'affichage permanent au repos (#4017). Réarmé à chaque arrivée.
@@ -329,7 +329,7 @@ struct SyncPill: View {
         seenEntryIDs = currentIDs
 
         if entries.isEmpty {
-            hideWorkItem?.cancel(); hideWorkItem = nil
+            hideSettle.cancel()
             isVisible = false
             return
         }
@@ -355,40 +355,34 @@ struct SyncPill: View {
         guard !reduceMotion else { return }
         guard TypingAnnouncementLaw.announcement(among: newEntries) != nil else { return }
 
-        emphasisWorkItem?.cancel()
+        emphasisSettle.cancel()
         withAnimation(.spring(response: TypingAnnouncementLaw.emphasisRiseDuration,
                               dampingFraction: 0.6)) {
             isEmphasizing = true
         }
 
-        let settle = DispatchWorkItem {
+        emphasisSettle.arm(
+            after: TypingAnnouncementLaw.emphasisRiseDuration
+                + TypingAnnouncementLaw.emphasisHoldDuration
+        ) {
             withAnimation(.spring(response: TypingAnnouncementLaw.emphasisFallDuration,
                                   dampingFraction: 0.8)) {
                 isEmphasizing = false
             }
         }
-        emphasisWorkItem = settle
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + TypingAnnouncementLaw.emphasisRiseDuration
-                + TypingAnnouncementLaw.emphasisHoldDuration,
-            execute: settle
-        )
     }
 
     /// Programme l'effacement au repos (#4017). Un état persistant l'annule et
     /// garde la pastille affichée. One-shot borné (jamais `repeatForever`).
     private func scheduleAutoHide() {
-        hideWorkItem?.cancel()
+        hideSettle.cancel()
         if entriesHavePersistentState {
             isVisible = true
-            hideWorkItem = nil
             return
         }
-        let work = DispatchWorkItem {
+        hideSettle.arm(after: Self.idleHideDelay) {
             withAnimation(.easeOut(duration: 0.3)) { isVisible = false }
         }
-        hideWorkItem = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.idleHideDelay, execute: work)
     }
 
     @ViewBuilder
