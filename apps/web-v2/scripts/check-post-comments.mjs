@@ -27,9 +27,15 @@
  *  3. **LE REFUS DÉFAIT L'OPTIMISTE À LA VALEUR EXACTE**, et l'annonce sur SA
  *     rangée — la rangée voisine reste muette. C'est la capture
  *     `feed.post-comment-failure`, prouvée plutôt que décrite ;
- *  4. **« Réessayer » REPART** : une seconde requête est observée. Un état
- *     d'erreur dont le bouton ne rejoue rien serait le contrôle inerte que la
- *     loi 4 interdit — et aucun témoin de rendu ne l'aurait distingué ;
+ *  4. **LES DEUX CLASSES D'ISSUE, ET CE QUE CHACUNE OFFRE** (revue-correction
+ *     #7135). Ce bloc mesurait l'ACTE — « Réessayer repart » — jamais
+ *     l'ISSUE, et il était donc vert sur la seule classe où le rejeu ne peut
+ *     PAS aboutir : un 403 retapé rend la même alerte indéfiniment
+ *     (`outcome.ts:40-55`, la règle depuis #5813). Désormais un refus
+ *     PERMANENT dit sa RAISON et n'offre aucun bouton, tandis qu'un 500 EN
+ *     LIGNE — la classe que le gate ne jouait pas du tout — offre le rejeu,
+ *     sans accuser le réseau, et le rejeu repart AVEC LE MÊME VERBE sur un
+ *     optimiste resté posé ;
  *  5. **« Modifier » ouvre le champ SUR PLACE**, sur l'ORIGINAL et non sur la
  *     traduction affichée, et « Annuler » le referme SANS aucune requête ;
  *  6. **« ENREGISTRER » DÉCLARE LA LANGUE DU TEXTE CORRIGÉ**, jamais celle de
@@ -40,14 +46,23 @@
  *     par rien. La rangée à soi est donc de RANG 2 (espagnol lu en français),
  *     parce qu'en français la règle juste et le relabel rendent le même
  *     verdict (leçon 261) ;
- *  7. **« SUPPRIMER » RETIRE LA RANGÉE ET DÉCRÉMENTE LE COMPTEUR DE LA
- *     PUBLICATION** — le travail principal du lot (#7135 : le compte ne
- *     bougeait que dans deux caches sur quatre) n'avait aucun témoin de
- *     navigateur, alors que son symptôme se lit sur des PIXELS : la rangée de
- *     statistiques peinte au-dessus du fil ;
- *  8. **LES CIBLES FONT AU MOINS 44 px** — mesurées au rectangle, jamais lues
- *     dans une feuille de style (dimension 5) ;
- *  9. **LES DEUX SCHÉMAS** se peignent sans erreur de page.
+ *  7. **« SUPPRIMER » S'ARME PUIS CONFIRME**, retire la rangée et décrémente
+ *     le compteur de la PUBLICATION — le travail principal du lot (#7135 : le
+ *     compte ne bougeait que dans deux caches sur quatre) n'avait aucun témoin
+ *     de navigateur, alors que son symptôme se lit sur des PIXELS. Le gate
+ *     tapait UNE fois et le commentaire partait ; iOS demande deux gestes
+ *     (menu « … » puis `Button(role: .destructive)`), et la v3.1 fait de même
+ *     sur place. **Et son refus PASSAGER (500) REMET tout** : rangée,
+ *     compteur, alerte et rejeu — sans quoi l'écran affirmait une suppression
+ *     que la passerelle venait de refuser ;
+ *  8. **LES CIBLES FONT AU MOINS 44 px ET S'ÉCARTENT D'AU MOINS 8** — mesurées
+ *     au rectangle, jamais lues dans une feuille de style (dimension 5). Le
+ *     bloc ne mesurait que la HAUTEUR : « Supprimer » vivait à 4 px du verbe
+ *     RÉVERSIBLE voisin ;
+ *  9. **LE FOCUS NE TOMBE JAMAIS SUR `<body>`** — ni après « Annuler », ni
+ *     après « Enregistrer », ni après une suppression : qui navigue au clavier
+ *     garde sa place (WCAG 2.4.3) ;
+ * 10. **LES DEUX SCHÉMAS** se peignent sans erreur de page.
  *
  * Et il PRODUIT les captures de recette (`CAPTURE_DIR`) : sans elles, les
  * images de l'écran étaient prises par un script ad hoc jamais versé — la
@@ -261,6 +276,9 @@ async function runScheme({ browser, base, scheme, check }) {
 
   /** Le scénario du `like`, réécrit d'un bloc à l'autre. */
   let likePlan = { kind: 'ok' };
+  /** Celui du `DELETE` — la suppression est le geste DESTRUCTEUR, et c'est
+   * son refus PASSAGER que la revue a trouvé silencieux (défaut majeur 4). */
+  let deletePlan = { kind: 'ok' };
 
   await page.route(
     (url) => url.pathname.startsWith(`/api/v1/posts/${POST_ID}/comments/`) && url.pathname.endsWith('/like'),
@@ -283,6 +301,14 @@ async function runScheme({ browser, base, scheme, check }) {
            des refus PERMANENTS : c'est cette classe-là qu'on mesure. */
         return refusal(route, 403, 'FORBIDDEN', 'Not authorized');
       }
+      if (likePlan.kind === 'flaky') {
+        /* UNE PANNE DE PASSERELLE, EN LIGNE — la classe PASSAGÈRE, celle où
+           un rejeu à l'identique peut aboutir. Elle n'était mesurée nulle
+           part : le gate ne connaissait que le refus permanent, et c'est
+           précisément la classe où « Réessayer » était offert à tort
+           (revue-correction #7135, défaut majeur 1). */
+        return refusal(route, 500, 'INTERNAL', 'Gateway failure');
+      }
       return json(route, envelope({ liked: true, likeCount: 1 }));
     },
   );
@@ -293,6 +319,7 @@ async function runScheme({ browser, base, scheme, check }) {
       const request = route.request();
       if (request.method() === 'DELETE') {
         sent.push({ method: 'DELETE', path: new URL(request.url()).pathname });
+        if (deletePlan.kind === 'refuse5xx') return refusal(route, 500, 'INTERNAL', 'Gateway failure');
         return json(route, envelope({ deleted: true }));
       }
       const body = JSON.parse(request.postData() ?? '{}');
@@ -362,6 +389,26 @@ async function runScheme({ browser, base, scheme, check }) {
     say(`chaque cible de geste fait au moins 44 px — ${JSON.stringify(hauteurs)}`),
   );
 
+  /* **ET ELLES SE MESURENT AUSSI EN ÉCARTEMENT** (revue-correction #7135,
+     défaut majeur 5). Ce bloc ne mesurait que la HAUTEUR : « Supprimer »
+     vivait à 4 px de « Modifier » — moitié moins que le minimum entre cibles
+     adjacentes, et la cible voisine est IRRÉVERSIBLE. Un pouce qui vise le
+     verbe réversible atteignait le destructeur. La géométrie se lit au
+     RECTANGLE, jamais au texte : `px-2` donne l'illusion d'un écart que le
+     doigt ne rencontre pas. */
+  const ecart = await page.evaluate((id) => {
+    const rect = (geste) =>
+      document.querySelector(`[data-comment-row="${id}"] [data-comment-gesture="${geste}"]`)?.getBoundingClientRect() ?? null;
+    const edit = rect('edit');
+    const supprimer = rect('delete');
+    if (edit === null || supprimer === null) return null;
+    return { editRight: Math.round(edit.right), deleteLeft: Math.round(supprimer.left), ecart: Math.round(supprimer.left - edit.right) };
+  }, MINE);
+  check(
+    ecart !== null && ecart.ecart >= 8,
+    say(`« Supprimer » est ÉCARTÉ de « Modifier » d'au moins 8 px — ${JSON.stringify(ecart)}`),
+  );
+
   // ------------------------------------------------ 3. l'optimiste SE PEINT
   const compteDe = (id) => page.$eval(`[data-comment-row="${id}"] [data-comment-gesture="like"]`, (b) => (b.textContent ?? '').trim());
   const presseDe = (id) =>
@@ -419,8 +466,24 @@ async function runScheme({ browser, base, scheme, check }) {
   }));
   check(alerte.role === 'alert', say(`l'échec est ANNONCÉ en alerte — role=${alerte.role}`));
   check(alerte.texte !== '', say(`et il porte un texte lisible — « ${alerte.texte} »`));
-  check(alerte.retry, say('et il offre « Réessayer »'));
-  check(alerte.hauteurRetry >= 44, say(`dont la cible fait au moins 44 px — ${alerte.hauteurRetry}`));
+  check(alerte.hauteurRetry === 0 || alerte.hauteurRetry >= 44, say(`toute cible offerte fait au moins 44 px — ${alerte.hauteurRetry}`));
+
+  /* **UN REFUS PERMANENT N'OFFRE PAS DE REJEU, IL DIT SA RAISON**
+     (revue-correction #7135, défaut majeur 1). Le gate mesurait l'ACTE — « le
+     rejeu repart » — jamais l'ISSUE, donc il était vert sur la classe où le
+     rejeu ne peut PAS aboutir : un 403 retapé rend la même alerte
+     indéfiniment (`outcome.ts:40-55`, qui déclare cette règle depuis #5813).
+     Le verdict s'inverse ici : pas de bouton, et une cause. */
+  const issueRefus = await page.$eval(
+    `[data-comment-row="${OTHER}"] [data-comment-gesture-error]`,
+    (el) => el.getAttribute('data-comment-gesture-issue'),
+  );
+  check(issueRefus === 'refused', say(`… et il porte sa CLASSE d'issue — ${issueRefus}`));
+  check(!alerte.retry, say(`un refus PERMANENT n'offre AUCUN rejeu — retry=${alerte.retry}`));
+  check(
+    alerte.texte.includes('ouvert') || alerte.texte.includes('Session'),
+    say(`… il dit la RAISON à la place — « ${alerte.texte} »`),
+  );
 
   const voisines = await page.evaluate(
     (ids) => ids.filter((id) => document.querySelector(`[data-comment-row="${id}"] [data-comment-gesture-error]`) !== null),
@@ -429,15 +492,45 @@ async function runScheme({ browser, base, scheme, check }) {
   check(voisines.length === 0, say(`les rangées VOISINES restent muettes — ${JSON.stringify(voisines)}`));
   await capture(page, `feed.post-comment-failure.${scheme}`);
 
-  // ------------------------------------------------ 5. « Réessayer » REPART
-  const avantRejeu = sent.filter((r) => r.path === likePathOf(OTHER)).length;
-  await page.click(`[data-comment-row="${OTHER}"] [data-comment-gesture-retry]`);
-  await page.waitForTimeout(600);
-  const apresRejeu = sent.filter((r) => r.path === likePathOf(OTHER)).length;
+  // ------------------------------------------------ 5. LA PANNE PASSAGÈRE, elle, se REJOUE
+  /* LA CLASSE QUE LE GATE NE CONNAISSAIT PAS — un 500 EN LIGNE. C'est ICI que
+     « Réessayer » sert, et c'est ici seulement qu'il est offert désormais. Le
+     message, lui, ne doit PAS nommer le réseau : `navigator.onLine` vaut
+     `true`, et « hors ligne » enverrait l'utilisateur vérifier son wifi. */
+  likePlan = { kind: 'flaky' };
+  await page.click(`[data-comment-row="${THIRD}"] [data-comment-gesture="like"]`);
+  await page.waitForSelector(`[data-comment-row="${THIRD}"] [data-comment-gesture-error]`);
+  const passagere = await page.$eval(`[data-comment-row="${THIRD}"] [data-comment-gesture-error]`, (el) => ({
+    issue: el.getAttribute('data-comment-gesture-issue'),
+    texte: (el.textContent ?? '').trim(),
+    retry: el.querySelector('[data-comment-gesture-retry]') !== null,
+    hauteurRetry: Math.round(el.querySelector('[data-comment-gesture-retry]')?.getBoundingClientRect().height ?? 0),
+  }));
+  check(passagere.issue === 'unconfirmed', say(`un 500 EN LIGNE est une issue PASSAGÈRE — ${passagere.issue}`));
+  check(passagere.retry && passagere.hauteurRetry >= 44, say(`… et c'est LÀ que « Réessayer » se pose — ${JSON.stringify(passagere)}`));
   check(
-    apresRejeu === avantRejeu + 1,
-    say(`« Réessayer » REJOUE la requête exacte — ${avantRejeu} puis ${apresRejeu} appels sur ${likePathOf(OTHER)}`),
+    !passagere.texte.toLowerCase().includes('hors ligne'),
+    say(`… sans accuser le réseau alors que la connexion est bonne — « ${passagere.texte} »`),
   );
+
+  const avantRejeu = sent.filter((r) => r.path === likePathOf(THIRD)).length;
+  const verbeAvant = sent.filter((r) => r.path === likePathOf(THIRD)).at(-1)?.method;
+  await page.click(`[data-comment-row="${THIRD}"] [data-comment-gesture-retry]`);
+  await page.waitForTimeout(600);
+  const rejoues = sent.filter((r) => r.path === likePathOf(THIRD));
+  check(
+    rejoues.length === avantRejeu + 1,
+    say(`« Réessayer » REJOUE la requête exacte — ${avantRejeu} puis ${rejoues.length} appels sur ${likePathOf(THIRD)}`),
+  );
+  /* **ET AVEC LE MÊME VERBE** (défaut majeur 2). L'optimiste est RESTÉ posé
+     — le cœur est plein — donc un module qui relit sa direction dans le cache
+     enverrait un `DELETE` là où le lecteur demandait un `POST`. Ce témoin
+     était IMPOSSIBLE à écrire avant, le rejeu ne survenant qu'après rollback. */
+  check(
+    rejoues.at(-1)?.method === verbeAvant && verbeAvant !== undefined,
+    say(`… et avec le MÊME verbe, sur un optimiste NON défait — ${verbeAvant} puis ${rejoues.at(-1)?.method}`),
+  );
+  likePlan = { kind: 'ok' };
 
   // ------------------------------------------------ 6. modifier SUR PLACE
   /* LE CORPS SE LIT AVANT L'ÉDITION — le champ REMPLACE le paragraphe. */
@@ -481,9 +574,11 @@ async function runScheme({ browser, base, scheme, check }) {
   /* LE FOCUS SUIT LE GESTE — happy-dom a un modèle de focus approximatif ;
      seul un moteur réel dit où le curseur a ATTERRI après que « Modifier » a
      démonté le bouton qu'on venait d'actionner. */
+  await settleFocus(page, () => document.activeElement?.hasAttribute?.('data-comment-edit-field') === true);
   const focus = await page.evaluate(() => ({
     champ: document.activeElement?.getAttribute('data-comment-edit-field') ?? null,
     curseur: document.activeElement?.selectionStart ?? null,
+    actif: document.activeElement?.tagName + ' ' + (document.activeElement?.getAttribute('data-comment-gesture') ?? document.activeElement?.className ?? ''),
   }));
   check(
     focus.champ === MINE && focus.curseur === COMMENTS[0].content.length,
@@ -494,6 +589,22 @@ async function runScheme({ browser, base, scheme, check }) {
   await page.click(`[data-comment-row="${MINE}"] [data-comment-edit-cancel]`);
   await page.waitForSelector(`[data-comment-edit-field="${MINE}"]`, { state: 'detached' });
   check(sent.length === avantEdition, say(`« Annuler » referme le champ SANS aucune requête — ${sent.length - avantEdition}`));
+
+  /* **LE RETOUR VAUT L'ALLER** (revue-correction #7135, défaut majeur 6). Ce
+     bloc mesurait le focus à l'OUVERTURE et jamais à la FERMETURE : « Annuler »
+     et « Enregistrer » démontaient le champ ET leurs deux boutons sans rendre
+     le focus à rien, et qui navigue au clavier repartait du haut du document.
+     La moitié manquante du correctif `473a1289a5`, dont le doc-comment
+     nommait pourtant le risque. */
+  await settleFocus(page, () => document.activeElement?.getAttribute?.('data-comment-gesture') === 'edit');
+  const focusApresAnnuler = await page.evaluate(() => ({
+    geste: document.activeElement?.getAttribute('data-comment-gesture') ?? null,
+    rangee: document.activeElement?.closest('[data-comment-row]')?.getAttribute('data-comment-row') ?? null,
+  }));
+  check(
+    focusApresAnnuler.geste === 'edit' && focusApresAnnuler.rangee === MINE,
+    say(`« Annuler » REND le focus au bouton « Modifier » — ${JSON.stringify(focusApresAnnuler)}`),
+  );
 
   // ------------------------------------------------ 7. ENREGISTRER, et la langue qui part avec
   /* CE BLOC MANQUAIT (revue #7135) : le gate ouvrait le champ, l'annulait, et
@@ -529,6 +640,9 @@ async function runScheme({ browser, base, scheme, check }) {
     apresEnregistrement === CORRIGE,
     say(`et la rangée peint le texte servi, traductions purgées — « ${apresEnregistrement} »`),
   );
+  await settleFocus(page, () => document.activeElement?.getAttribute?.('data-comment-gesture') === 'edit');
+  const focusApresSauver = await page.evaluate(() => document.activeElement?.getAttribute('data-comment-gesture') ?? null);
+  check(focusApresSauver === 'edit', say(`« Enregistrer » aussi rend le focus au geste qui l'a ouvert — ${focusApresSauver}`));
 
   // ------------------------------------------------ 8. SUPPRIMER, et les compteurs qui suivent
   /* LE TRAVAIL PRINCIPAL DU LOT N'AVAIT AUCUN TÉMOIN DE NAVIGATEUR : le
@@ -540,22 +654,105 @@ async function runScheme({ browser, base, scheme, check }) {
   const compteurCartes = () =>
     page.$eval('[data-feed-actions]', (row) => ((row.children[1]?.textContent ?? '').trim()));
   const avantSuppression = await compteurCartes();
+
+  /* **SUPPRIMER REFUSÉ PAR UN 500 : L'ÉCRAN NE DOIT PAS AFFIRMER LA
+     SUPPRESSION** (revue-correction #7135, défaut majeur 4). La rangée
+     partait, le compteur décrémentait, aucune alerte ne se posait (la rangée
+     n'existait plus pour la porter), aucune file ne rejouait rien — et la
+     seule phrase de l'écran disait « hors ligne » pendant que la connexion
+     était bonne. Le témoin se pose sur un 500 EN LIGNE, rang AUTRE que le
+     hors-ligne. */
+  deletePlan = { kind: 'refuse5xx' };
+  await page.click(`[data-comment-row="${MINE}"] [data-comment-gesture="delete"]`);
+  await page.click(`[data-comment-row="${MINE}"] [data-comment-gesture="delete"]`);
+  await page.waitForSelector(`[data-comment-row="${MINE}"] [data-comment-gesture-error]`);
+  const refusSuppression = await page.evaluate(
+    (id) => {
+      const row = document.querySelector(`[data-comment-row="${id}"]`);
+      const alerte = row?.querySelector('[data-comment-gesture-error]');
+      return {
+        rangee: row !== null,
+        issue: alerte?.getAttribute('data-comment-gesture-issue') ?? null,
+        retry: alerte?.querySelector('[data-comment-gesture-retry]') !== null && alerte !== null,
+        texte: (alerte?.textContent ?? '').trim(),
+      };
+    },
+    MINE,
+  );
+  check(refusSuppression.rangee, say(`un 500 sur SUPPRIMER REMET la rangée — elle n'a jamais été supprimée`));
+  check(
+    (await compteurCartes()) === avantSuppression,
+    say(`… et le compteur de la publication REVIENT — « ${avantSuppression} » puis « ${await compteurCartes()} »`),
+  );
+  check(refusSuppression.issue === 'unconfirmed' && refusSuppression.retry, say(`… l'échec est ANNONCÉ sur SA rangée avec « Réessayer » — ${JSON.stringify(refusSuppression)}`));
+  check(
+    !refusSuppression.texte.toLowerCase().includes('hors ligne'),
+    say(`… sans accuser le réseau — « ${refusSuppression.texte} »`),
+  );
+  await capture(page, `feed.post-comment-delete-refused.${scheme}`);
+
+  /* **ET LE PREMIER TAP NE DÉTRUIT PAS** (défaut majeur 5) — il ARME. iOS
+     enferme le verbe dans un menu « … » : deux gestes. Le gate tapait UNE
+     fois et le commentaire partait. */
+  deletePlan = { kind: 'ok' };
+  const departsAvant = sent.filter((r) => r.method === 'DELETE' && r.path.endsWith(MINE)).length;
+  await page.click(`[data-comment-row="${MINE}"] [data-comment-gesture="delete"]`);
+  await page.waitForTimeout(150);
+  const arme = await page.$eval(`[data-comment-row="${MINE}"] [data-comment-gesture="delete"]`, (b) => ({
+    arme: b.hasAttribute('data-comment-delete-armed'),
+    libelle: (b.textContent ?? '').trim(),
+  }));
+  check(
+    arme.arme && sent.filter((r) => r.method === 'DELETE' && r.path.endsWith(MINE)).length === departsAvant,
+    say(`le PREMIER tap sur « Supprimer » n'envoie RIEN — il arme, et se renomme « ${arme.libelle} »`),
+  );
+  check(
+    (await page.$(`[data-comment-row="${MINE}"]`)) !== null,
+    say('… et la rangée est toujours là : rien d’irréversible au premier tap'),
+  );
+
   await page.click(`[data-comment-row="${MINE}"] [data-comment-gesture="delete"]`);
   await page.waitForSelector(`[data-comment-row="${MINE}"]`, { state: 'detached' });
+  await page.waitForTimeout(200);
   const apresSuppression = await compteurCartes();
   check(
     avantSuppression === String(COMMENTS.length) && apresSuppression === String(COMMENTS.length - 1),
-    say(`SUPPRIMER retire la rangée ET décrémente le compteur de la publication — « ${avantSuppression} » puis « ${apresSuppression} »`),
+    say(`le SECOND tap retire la rangée ET décrémente le compteur — « ${avantSuppression} » puis « ${apresSuppression} »`),
   );
   check(
     sent.some((r) => r.method === 'DELETE' && r.path.endsWith(MINE)),
     say(`et la suppression est bien PARTIE — ${JSON.stringify(sent.filter((r) => r.method === 'DELETE'))}`),
+  );
+  /* LA PLACE DU LECTEUR NE DISPARAÎT PAS AVEC LA RANGÉE (défaut majeur 6). */
+  await settleFocus(page, () => document.activeElement?.getAttribute?.('data-comment-gesture') === 'like');
+  const focusApresSuppression = await page.evaluate(() => ({
+    geste: document.activeElement?.getAttribute('data-comment-gesture') ?? null,
+    rangee: document.activeElement?.closest('[data-comment-row]')?.getAttribute('data-comment-row') ?? null,
+    fil: document.activeElement?.hasAttribute('data-comment-thread') ?? false,
+  }));
+  check(
+    focusApresSuppression.geste === 'like' || focusApresSuppression.fil,
+    say(`SUPPRIMER passe le focus à la rangée suivante, ou au fil à défaut — ${JSON.stringify(focusApresSuppression)}`),
   );
 
   // ------------------------------------------------ 9. aucune erreur de page
   check(errors.length === 0, say(`aucune erreur de page — ${JSON.stringify(errors)}`));
   await context.close();
 }
+
+/**
+ * ATTENDRE QUE LE FOCUS SE POSE, SANS EN FAIRE LE VERDICT. Un
+ * `waitForSelector` rend la main dès que le nœud est DANS le document — les
+ * effets de React, eux, courent après la peinture, et c'est un effet qui pose
+ * le focus. Lire `document.activeElement` à cet instant mesurait donc la
+ * course, pas la règle (observé : vert en sombre, rouge en clair, sur le même
+ * code). Le dépassement de délai est AVALÉ volontairement : c'est le `check`
+ * qui suit qui juge, et qui dit alors OÙ le focus a atterri — un `timeout` de
+ * Playwright ne l'aurait pas dit.
+ */
+const settleFocus = async (page, predicat) => {
+  await page.waitForFunction(predicat, null, { timeout: 2000 }).catch(() => undefined);
+};
 
 const capture = async (page, name) => {
   if (CAPTURE_DIR !== null) await page.screenshot({ path: join(CAPTURE_DIR, `${name}.png`) });
