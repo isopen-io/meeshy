@@ -106,7 +106,7 @@ export function CommentComposer({ language, onSend, canWrite }: CommentComposerP
         }}
         className="max-h-32 min-h-11 flex-1 resize-none rounded-chip px-3 py-2.5 text-body focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{
-          background: 'var(--color-ios-fill-2)',
+          background: 'var(--color-ios-card)',
           color: 'var(--color-ios-ink)',
           outlineColor: 'var(--color-ios-brand)',
         }}
@@ -120,7 +120,7 @@ export function CommentComposer({ language, onSend, canWrite }: CommentComposerP
         style={{
           width: 44,
           height: 44,
-          background: vide || sending ? 'var(--color-ios-fill-2)' : 'var(--color-ios-brand)',
+          background: vide || sending ? 'var(--color-ios-card)' : 'var(--color-ios-brand)',
           color: vide || sending ? 'var(--color-ios-ink-3)' : '#fff',
           outlineColor: 'var(--color-ios-brand)',
         }}

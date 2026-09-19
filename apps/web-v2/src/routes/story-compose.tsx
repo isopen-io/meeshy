@@ -828,7 +828,7 @@ function StoryStudio({ deps, viewerId }: { readonly deps: StoryStudioDeps; reado
         <div
           data-story-editor-panel
           className="shrink-0 overflow-y-auto border-t px-4 py-2"
-          style={{ maxHeight: 200, borderColor: 'var(--color-ios-separator)' }}
+          style={{ maxHeight: 200, borderColor: 'var(--color-edge)' }}
         >
           <StudioObjectEditor
             lang={lang}

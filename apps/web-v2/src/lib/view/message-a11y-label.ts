@@ -4,7 +4,7 @@ import { forwardAttributionOf, forwardLabelOf, systemRowOf, systemRowText } from
 import { bodyKindOf, placeOf, storyCitationOf } from './message-body';
 import { time } from '@/lib/grouping';
 import { activeDecorativeEffects } from '@/lib/effects';
-import type { ProtectionKind } from '@/lib/reading-mode/protection';
+import { rendersContent, type ProtectionKind, type RevealPhase } from '@/lib/reading-mode/protection';
 import type { Attachment, Message } from '@/lib/api/types';
 
 /**
@@ -142,6 +142,22 @@ export type MessageLabelInput = {
    * « Contenu retenu ».
    */
   readonly contentWithheld?: boolean;
+  /**
+   * LA PHASE DE RÉVÉLATION (#7132) — l'autre moitié de la matrice que
+   * `rendersContent` consulte : « la rangée monte-t-elle ses enfants ? ».
+   * Sans elle, le libellé rejouerait la protection par un `if` recopié, la
+   * jumelle exacte que le doc-comment de `lib/reading-mode/protection.ts`
+   * interdit — et que `protected-content.tsx:183-190` refuse déjà pour le
+   * rendu.
+   *
+   * DÉFAUT `hidden`, ET C'EST LA VÉRITÉ DE L'APPELANT D'AUJOURD'HUI :
+   * `thread-modes.tsx:378` pose `aria-label` sur le nœud PARENT de
+   * `ProtectedContent`, qui tient la phase en état LOCAL — une rangée voilée
+   * y est donc au repos au moment où le libellé se compose. Le jour où cette
+   * phase remontera, ce paramètre dit déjà quoi en faire ; d'ici là il tient
+   * la branche fermée, jamais ouverte par défaut (fail-closed).
+   */
+  readonly phase?: RevealPhase;
 };
 
 /**
@@ -155,6 +171,7 @@ export function composeMessageLabel({
   delivery,
   protection,
   contentWithheld = false,
+  phase = { phase: 'hidden' },
 }: MessageLabelInput): string {
   /**
    * UN MESSAGE SYSTÈME EST SYSTÈME AVANT D'ÊTRE SUPPRIMÉ (#5936, même loi que
@@ -197,19 +214,6 @@ export function composeMessageLabel({
   if (!isMine && author !== undefined && author !== '') segments.push(author);
 
   /**
-   * UNE STORY CITÉE REMPLACE LA CITATION ORDINAIRE (#5936) — « réponse à sa
-   * story », jamais « réponse à {auteur} » : c'est une SCÈNE, pas la parole
-   * de quelqu'un (`storyCitationOf`, miroir `BubbleStoryCitationCard`).
-   */
-  const storyCitation = storyCitationOf(message);
-  if (storyCitation !== null) {
-    segments.push('réponse à sa story');
-  } else if (message.replyTo) {
-    const quotedAuthor = message.replyTo.sender?.displayName ?? 'expéditeur inconnu';
-    segments.push(`réponse à ${quotedAuthor}`);
-  }
-
-  /**
    * LE VOILE remplace le TEXTE **et** l'inventaire des pièces jointes : « 1
    * image » sur un message à vue unique dit déjà ce que le flou cache.
    *
@@ -226,9 +230,30 @@ export function composeMessageLabel({
    */
   if (contentWithheld) {
     segments.push(PROTECTED_LABEL.withheld, ...attachmentSegments(message.attachments));
-  } else if (protection === 'veiled') {
+  } else if (!rendersContent(protection, phase)) {
     segments.push(PROTECTED_LABEL.veiled);
   } else {
+    /**
+     * LA CITATION EST UN ENFANT DE LA RANGÉE, DONC ELLE SUIT SA MATRICE
+     * (#7132) — elle se prononce ICI, dans la branche qui dit que les enfants
+     * sont MONTÉS, jamais avant le dispatch. Composée plus haut, elle
+     * annonçait « réponse à Amina Diallo » au-dessus d'un constat de contenu
+     * retenu et d'un substitut voilé : le second vocabulaire que le
+     * doc-comment de `PROTECTED_LABEL` existe pour interdire, pris en défaut
+     * sur un autre segment que le texte.
+     *
+     * UNE STORY CITÉE REMPLACE LA CITATION ORDINAIRE (#5936) — « réponse à sa
+     * story », jamais « réponse à {auteur} » : c'est une SCÈNE, pas la parole
+     * de quelqu'un (`storyCitationOf`, miroir `BubbleStoryCitationCard`).
+     */
+    const storyCitation = storyCitationOf(message);
+    if (storyCitation !== null) {
+      segments.push('réponse à sa story');
+    } else if (message.replyTo) {
+      const quotedAuthor = message.replyTo.sender?.displayName ?? 'expéditeur inconnu';
+      segments.push(`réponse à ${quotedAuthor}`);
+    }
+
     /**
      * STICKER / EMOJI SEUL (#5936) — `bodyKindOf` est la MÊME loi que la
      * rangée consomme pour peindre : un sticker prend un segment dédié

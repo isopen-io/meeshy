@@ -8,6 +8,7 @@ import type { PostComment } from '@/lib/api/publication-comments';
 
 import { CommentComposer } from './comment-composer';
 import { CommentList, type CommentListState } from './comment-list';
+import type { CommentGestureHandlers } from './comment-row';
 
 /**
  * `CommentList` — LES QUATRE ÉTATS DESSINÉS et le PRISME appliqué à une
@@ -66,7 +67,13 @@ async function monter(node: React.ReactElement): Promise<HTMLDivElement> {
   return container;
 }
 
-const liste = (props: { comments?: readonly PostComment[]; state?: CommentListState; onRetry?: () => void; onMore?: () => void }) => (
+const liste = (props: {
+  comments?: readonly PostComment[];
+  state?: CommentListState;
+  onRetry?: () => void;
+  onMore?: () => void;
+  gestures?: CommentGestureHandlers;
+}) => (
   <CommentList
     comments={props.comments ?? []}
     state={props.state ?? etat()}
@@ -76,8 +83,31 @@ const liste = (props: { comments?: readonly PostComment[]; state?: CommentListSt
     now={NOW}
     onRetry={props.onRetry ?? (() => {})}
     onMore={props.onMore ?? (() => {})}
+    {...(props.gestures === undefined ? {} : { gestures: props.gestures })}
   />
 );
+
+/** Les rappels de geste, avec leur journal — la liste ne connaît PAS le
+ * réseau : ce que ces témoins mesurent, c'est qu'un bouton EXISTE là où il
+ * doit et qu'il APPELLE (loi 4). L'optimiste et son rollback se mesurent une
+ * couche plus bas, dans `lib/api/comment-gestures.test.ts`. */
+const gestesDe = (
+  patch: Partial<CommentGestureHandlers> = {},
+): CommentGestureHandlers & { readonly journal: string[] } => {
+  const journal: string[] = [];
+  return {
+    journal,
+    viewerId: 'u-moi',
+    onLike: (id) => journal.push(`like:${id}`),
+    onEdit: (id, content) => journal.push(`edit:${id}:${content}`),
+    onDelete: (id) => journal.push(`delete:${id}`),
+    failureOf: () => undefined,
+    onRetryGesture: (id) => journal.push(`retry:${id}`),
+    ...patch,
+  };
+};
+
+const MIEN = { id: 'u-moi', displayName: 'Vous', username: 'moi' };
 
 describe('les quatre états — un écran blanc n’en est pas un', () => {
   test('CHARGEMENT sur un cache VIDE : un squelette, jamais un vide muet', async () => {
@@ -162,6 +192,126 @@ describe('la pagination et le Prisme', () => {
     const host = await monter(liste({ comments: [comment({ pending: true })] }));
     expect(host.querySelector('[data-comment-pending]')).not.toBeNull();
     expect(host.querySelector('[data-comment-row]')?.textContent).toContain('Envoi en cours');
+  });
+});
+
+/**
+ * LES TROIS GESTES D'UNE RANGÉE (#7133) — `CommentRowView.swift` : le cœur
+ * pour tout le monde, le menu « … » réduit aux actions qui EXISTENT
+ * (`:107-111`), c'est-à-dire aux siennes. La passerelle tranche dans le même
+ * sens : `PATCH`/`DELETE …/comments/:commentId` gardent l'AUTEUR, pas
+ * l'audience (`comments.ts:500-523`).
+ */
+describe('les gestes d’une rangée — offerts là où ils aboutissent, jamais ailleurs', () => {
+  test('AIMER est offert sur TOUTE rangée, et appelle l’hôte', async () => {
+    const gestes = gestesDe();
+    const host = await monter(liste({ comments: [comment()], gestures: gestes }));
+    const bouton = host.querySelector<HTMLButtonElement>('[data-comment-row] [data-comment-gesture="like"]');
+    expect(bouton).not.toBeNull();
+    await act(async () => bouton?.click());
+    expect(gestes.journal).toEqual(['like:c1']);
+  });
+
+  test('MODIFIER et SUPPRIMER n’existent QUE sur son propre commentaire', async () => {
+    const gestes = gestesDe();
+    const host = await monter(
+      liste({ comments: [comment({ id: 'mien', author: MIEN }), comment({ id: 'autrui' })], gestures: gestes }),
+    );
+    const ligne = (id: string) => host.querySelector(`[data-comment-row="${id}"]`);
+    expect(ligne('mien')?.querySelector('[data-comment-gesture="edit"]')).not.toBeNull();
+    expect(ligne('mien')?.querySelector('[data-comment-gesture="delete"]')).not.toBeNull();
+    expect(ligne('autrui')?.querySelector('[data-comment-gesture="edit"]')).toBeNull();
+    expect(ligne('autrui')?.querySelector('[data-comment-gesture="delete"]')).toBeNull();
+    /* AIMER, lui, reste offert des deux côtés. */
+    expect(ligne('autrui')?.querySelector('[data-comment-gesture="like"]')).not.toBeNull();
+  });
+
+  test('SANS rappels — visiteur anonyme — aucune rangée n’offre de bouton (loi 4)', async () => {
+    const host = await monter(liste({ comments: [comment({ author: MIEN })] }));
+    expect(host.querySelector('[data-comment-gesture]')).toBeNull();
+  });
+
+  test('une rangée EN VOL n’offre aucun geste — son id n’existe pas chez la passerelle', async () => {
+    const host = await monter(liste({ comments: [comment({ author: MIEN, pending: true })], gestures: gestesDe() }));
+    expect(host.querySelector('[data-comment-gesture]')).toBeNull();
+  });
+
+  /** LE NOM ACCESSIBLE VIT SUR LE GLYPHE (`feed-post-card.tsx:85-92`) : un
+   * `aria-label` posé sur le BOUTON remplacerait son contenu, et le compte
+   * serait INAUDIBLE — le défaut que la rangée de statistiques du fil a déjà
+   * payé. C'est donc ce témoin-là, et pas l'attribut de l'enveloppe. */
+  test('le cœur ANNONCE son état ET son compte : « Je n’aime plus » sur le glyphe, « 4 » en texte lu', async () => {
+    const host = await monter(liste({ comments: [comment({ isLikedByMe: true, likeCount: 4 })], gestures: gestesDe() }));
+    const bouton = host.querySelector<HTMLButtonElement>('[data-comment-gesture="like"]');
+    expect(bouton?.getAttribute('aria-pressed')).toBe('true');
+    expect(bouton?.hasAttribute('aria-label')).toBe(false);
+    expect(bouton?.querySelector('svg')?.getAttribute('aria-label')).toBe('Je n’aime plus');
+    expect(bouton?.querySelector('svg')?.getAttribute('aria-hidden')).toBeNull();
+    expect(bouton?.textContent).toContain('4');
+  });
+
+  test('cœur VIDE : le glyphe dit « J’aime » — le nom suit l’état, pas l’inverse', async () => {
+    const host = await monter(liste({ comments: [comment({ isLikedByMe: false })], gestures: gestesDe() }));
+    const bouton = host.querySelector<HTMLButtonElement>('[data-comment-gesture="like"]');
+    expect(bouton?.getAttribute('aria-pressed')).toBe('false');
+    expect(bouton?.querySelector('svg')?.getAttribute('aria-label')).toBe('J’aime');
+  });
+
+  test('MODIFIER ouvre le champ SUR PLACE, et « Enregistrer » remonte le texte nettoyé', async () => {
+    const gestes = gestesDe();
+    const host = await monter(liste({ comments: [comment({ id: 'mien', author: MIEN })], gestures: gestes }));
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-comment-gesture="edit"]')?.click());
+
+    const champ = host.querySelector<HTMLTextAreaElement>('[data-comment-edit-field="mien"]');
+    expect(champ?.value).toBe('Bonjour');
+    await act(async () => {
+      if (champ === null) throw new Error('champ absent');
+      champ.value = '  Bonjour à tous  ';
+      champ.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-comment-edit-save]')?.click());
+
+    expect(gestes.journal).toEqual(['edit:mien:Bonjour à tous']);
+    expect(host.querySelector('[data-comment-edit-field="mien"]')).toBeNull();
+  });
+
+  test('« Enregistrer » est DÉSACTIVÉ sur un texte vide — annoncé, jamais un bouton actif qui ne fait rien', async () => {
+    const host = await monter(liste({ comments: [comment({ id: 'mien', author: MIEN, content: '' })], gestures: gestesDe() }));
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-comment-gesture="edit"]')?.click());
+    expect(host.querySelector<HTMLButtonElement>('[data-comment-edit-save]')?.disabled).toBe(true);
+  });
+
+  test('« Annuler » referme sans rien remonter — le texte lu revient', async () => {
+    const gestes = gestesDe();
+    const host = await monter(liste({ comments: [comment({ id: 'mien', author: MIEN })], gestures: gestes }));
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-comment-gesture="edit"]')?.click());
+    expect(host.querySelector('[data-comment-edit-field="mien"]')).not.toBeNull();
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-comment-edit-cancel]')?.click());
+    expect(host.querySelector('[data-comment-edit-field="mien"]')).toBeNull();
+    expect(host.querySelector('[data-comment-row] p')?.textContent).toBe('Bonjour');
+    expect(gestes.journal).toEqual([]);
+  });
+
+  test('SUPPRIMER appelle l’hôte', async () => {
+    const gestes = gestesDe();
+    const host = await monter(liste({ comments: [comment({ id: 'mien', author: MIEN })], gestures: gestes }));
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-comment-gesture="delete"]')?.click());
+    expect(gestes.journal).toEqual(['delete:mien']);
+  });
+
+  /** L'ÉTAT D'ERREUR EST VISIBLE ET SE REJOUE — sans ce constat, la rangée
+   * revenue à son état d'avant serait indiscernable d'un tap non pris. */
+  test('un geste en ÉCHEC est ANNONCÉ en alerte sur SA rangée, et offre de réessayer', async () => {
+    const gestes = gestesDe({ failureOf: (id) => (id === 'c1' ? 'comment.like.error' : undefined) });
+    const host = await monter(liste({ comments: [comment(), comment({ id: 'c2' })], gestures: gestes }));
+
+    const alerte = host.querySelector('[data-comment-row="c1"] [data-comment-gesture-error]');
+    expect(alerte?.getAttribute('role')).toBe('alert');
+    expect(alerte?.textContent).toContain('n’a pas été enregistré');
+    expect(host.querySelector('[data-comment-row="c2"] [data-comment-gesture-error]')).toBeNull();
+
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-comment-gesture-retry]')?.click());
+    expect(gestes.journal).toEqual(['retry:c1']);
   });
 });
 

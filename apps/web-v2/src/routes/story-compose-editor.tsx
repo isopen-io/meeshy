@@ -165,7 +165,7 @@ export function StudioObjectEditor({ lang, layer, onChange, onPose, onRemove }: 
             pressed={layer.color === hex}
             onPress={() => onChange((current) => ({ ...current, color: hex }))}
             probe={`color:${hex}`}
-            style={{ backgroundColor: hexColorCss(hex), color: 'transparent', minWidth: 44, border: '1px solid var(--color-ios-separator)' }}
+            style={{ backgroundColor: hexColorCss(hex), color: 'transparent', minWidth: 44, border: '1px solid var(--color-edge)' }}
           >
             <span aria-hidden="true">·</span>
           </StudioChip>
@@ -186,7 +186,7 @@ export function StudioObjectEditor({ lang, layer, onChange, onPose, onRemove }: 
             pressed={layer.background === hex}
             onPress={() => onChange((current) => ({ ...current, background: hex }))}
             probe={`textbg:${hex}`}
-            style={{ backgroundColor: hexColorCss(hex), color: 'transparent', minWidth: 44, border: '1px solid var(--color-ios-separator)' }}
+            style={{ backgroundColor: hexColorCss(hex), color: 'transparent', minWidth: 44, border: '1px solid var(--color-edge)' }}
           >
             <span aria-hidden="true">·</span>
           </StudioChip>

@@ -1,18 +1,16 @@
-import { Avatar } from '@/components/avatar';
+import { CommentRow, type CommentGestureHandlers } from '@/components/comment-row';
 import { Glyph } from '@/components/glyph';
-import { resolveFeedText } from '@/lib/feed/text';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import { shortRelativeTime } from '@/lib/relative-time';
 import type { PostComment } from '@/lib/api/publication-comments';
-import { initialsOf } from '@/lib/view/conversation';
 
 /**
  * **LA LISTE DES COMMENTAIRES D'UNE PUBLICATION** — miroir de
- * `CommentListView.swift` + `CommentRowView.swift` réduit à ce que la v3.1
- * sait faire : le texte, l'auteur, l'heure, et les QUATRE états dessinés.
- * Aimer un commentaire, répondre à un commentaire (`parentId`), l'éditer, le
- * supprimer et ses médias sont des marches à part — leurs boutons n'existent
+ * `CommentListView.swift` réduit à ce que la v3.1 sait faire : les QUATRE
+ * états dessinés, la pagination, et une rangée par commentaire
+ * (`comment-row.tsx`, qui porte le texte, l'auteur, l'heure et les trois
+ * gestes). Répondre à un commentaire (`parentId`), les réponses imbriquées et
+ * leurs médias restent des marches à part (#7118) — leurs boutons n'existent
  * donc pas ici (loi 4), et aucune n'est annoncée.
  *
  * **LE PRISME PASSE PAR LE SITE PARTAGÉ** — `resolveFeedText` (`lib/feed/text.ts`
@@ -24,10 +22,10 @@ import { initialsOf } from '@/lib/view/conversation';
  * prononce un texte français avec une voix anglaise est le défaut du cycle
  * 122 rendu audible.
  *
- * **CE COMPOSANT NE CHARGE RIEN.** Il reçoit la liste et son état ; l'hôte
- * (`routes/post.tsx`, le panneau du lecteur de story) tient la requête. C'est
- * ce qui le rend éprouvable sans réseau, et ce qui permet aux DEUX surfaces
- * de partager exactement la même liste.
+ * **CE COMPOSANT NE CHARGE RIEN.** Il reçoit la liste, son état et les
+ * RAPPELS de geste ; l'hôte (`comment-thread.tsx`) tient la requête, le réseau
+ * et l'état d'échec. C'est ce qui le rend éprouvable sans réseau, et ce qui
+ * permet aux DEUX surfaces de partager exactement la même liste.
  */
 
 export type CommentListState = {
@@ -47,69 +45,15 @@ export type CommentListProps = {
   readonly now: Date;
   readonly onRetry: () => void;
   readonly onMore: () => void;
+  /**
+   * ABSENT ⇒ AUCUN bouton de geste sur aucune rangée. Un visiteur anonyme ne
+   * peut ni aimer ni modifier (`requiredAuth` + `registeredUser` sur les trois
+   * routes) : l'hôte ne câble alors rien, plutôt que d'offrir des contrôles
+   * qui refuseraient au premier tap (loi 4, même argument que `canWrite` sur
+   * le composeur).
+   */
+  readonly gestures?: CommentGestureHandlers | undefined;
 };
-
-const displayName = (author: PostComment['author']): string => {
-  const display = typeof author.displayName === 'string' && author.displayName !== '' ? author.displayName : null;
-  const username = typeof author.username === 'string' && author.username !== '' ? author.username : null;
-  return display ?? username ?? '';
-};
-
-function CommentRow({
-  comment,
-  language,
-  preferredLanguages,
-  locale,
-  now,
-}: {
-  readonly comment: PostComment;
-  readonly language: InterfaceLanguage;
-  readonly preferredLanguages: readonly string[];
-  readonly locale: string;
-  readonly now: Date;
-}) {
-  const name = displayName(comment.author);
-  const servi = resolveFeedText({
-    preferredLanguages,
-    originalLanguage: comment.originalLanguage,
-    translations: comment.translations,
-    content: comment.content,
-  });
-  const photo = typeof comment.author.avatar === 'string' && comment.author.avatar !== '' ? comment.author.avatar : undefined;
-
-  return (
-    <li
-      data-comment-row={comment.id}
-      {...(comment.pending === true ? { 'data-comment-pending': '' } : {})}
-      className="flex gap-3 py-2"
-      style={{ opacity: comment.pending === true ? 0.6 : 1 }}
-    >
-      <Avatar initials={initialsOf(name)} color="var(--color-ios-brand)" size={32} {...(photo === undefined ? {} : { src: photo })} />
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <div className="flex min-w-0 items-baseline gap-2">
-          <span className="truncate text-check font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-            {name}
-          </span>
-          <span className="shrink-0 text-check" style={{ color: 'var(--color-ios-ink-3)' }}>
-            {comment.pending === true
-              ? translate(language, 'comments.row.pending')
-              : shortRelativeTime(new Date(comment.createdAt), now, locale)}
-          </span>
-        </div>
-        {/* `lang` UNIQUEMENT quand le texte servi n'est PAS la langue du
-            document : poser `lang` partout ferait mentir la voix sur les
-            rangées non traduites. */}
-        <p
-          className="text-body break-words whitespace-pre-wrap"
-          style={{ color: 'var(--color-ios-ink)' }}
-          {...(servi.translated && servi.language !== '' ? { lang: servi.language } : {})}
-        >
-          {servi.text}
-        </p>
-      </div>
-    </li>
-  );
-}
 
 function CommentState({
   glyph,
@@ -152,7 +96,17 @@ function CommentState({
   );
 }
 
-export function CommentList({ comments, state, language, preferredLanguages, locale, now, onRetry, onMore }: CommentListProps) {
+export function CommentList({
+  comments,
+  state,
+  language,
+  preferredLanguages,
+  locale,
+  now,
+  onRetry,
+  onMore,
+  gestures,
+}: CommentListProps) {
   /* CACHE D'ABORD — le squelette n'apparaît que sur une liste VIDE. Une
      relecture en fond sur une liste déjà peinte ne détruit rien : c'est la
      règle « jamais de spinner sur un cache non vide » des Instant App
@@ -163,8 +117,8 @@ export function CommentList({ comments, state, language, preferredLanguages, loc
       <div data-comment-state="loading" aria-busy="true" aria-label={translate(language, 'comments.loading')} className="grid gap-3 py-4">
         {[0, 1, 2].map((i) => (
           <div key={i} className="flex gap-3">
-            <span className="animate-pulse rounded-full" style={{ width: 32, height: 32, background: 'var(--color-ios-fill-2)' }} />
-            <span className="h-8 flex-1 animate-pulse rounded-chip" style={{ background: 'var(--color-ios-fill-2)' }} />
+            <span className="animate-pulse rounded-full" style={{ width: 32, height: 32, background: 'var(--color-ios-card)' }} />
+            <span className="h-8 flex-1 animate-pulse rounded-chip" style={{ background: 'var(--color-ios-card)' }} />
           </div>
         ))}
       </div>
@@ -207,6 +161,7 @@ export function CommentList({ comments, state, language, preferredLanguages, loc
             preferredLanguages={preferredLanguages}
             locale={locale}
             now={now}
+            {...(gestures === undefined ? {} : { gestures })}
           />
         ))}
       </ul>

@@ -1,10 +1,12 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useStore } from 'zustand/react';
 
 import { CommentComposer, type CommentComposerResult } from '@/components/comment-composer';
 import { CommentList } from '@/components/comment-list';
+import type { CommentGestureHandlers } from '@/components/comment-row';
+import type { CommentGestureMessageKey, CommentGestureRequest } from '@/lib/api/comment-gestures';
 import { apiDeps } from '@/lib/api/deps';
-import { commentAction, useComments } from '@/lib/api/query';
+import { commentAction, commentGestureAction, useComments } from '@/lib/api/query';
 import { flattenCommentPages, type CommentInfiniteData } from '@/lib/api/publication-comments';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
@@ -79,6 +81,62 @@ export function CommentThread({ postId, enabled = true, tone = 'onLight' }: Comm
     [postId, viewer.id, viewer.displayName, viewer.handle, viewer.avatar, language],
   );
 
+  /**
+   * L'ÉCHEC D'UN GESTE VIT ICI, PAR RANGÉE — la liste ne charge rien (son
+   * contrat) et la rangée ne connaît pas le réseau. On garde la REQUÊTE, pas
+   * seulement son message : « Réessayer » rejoue EXACTEMENT le geste refusé,
+   * sans que la rangée ait à se souvenir duquel il s'agissait.
+   */
+  const [failures, setFailures] = useState<ReadonlyMap<string, { message: CommentGestureMessageKey; request: CommentGestureRequest }>>(
+    () => new Map(),
+  );
+  const [notice, setNotice] = useState('');
+
+  const runGesture = useCallback(
+    async (request: CommentGestureRequest) => {
+      setFailures((current) => {
+        if (!current.has(request.commentId)) return current;
+        const next = new Map(current);
+        next.delete(request.commentId);
+        return next;
+      });
+      setNotice('');
+      const result = await commentGestureAction(request);
+      if (result.ok) {
+        /* PARTI MAIS NON CONFIRMÉ : l'optimiste tient, et le silence serait
+           indiscernable d'une confirmation (même règle que le composeur). */
+        if (result.notice !== undefined) setNotice(translate(language, result.notice));
+        return;
+      }
+      setFailures((current) => new Map(current).set(request.commentId, { message: result.message, request }));
+    },
+    [language],
+  );
+
+  /* UN VISITEUR ANONYME N'A AUCUN GESTE — les trois routes exigent un
+     `registeredUser` (`comments.ts`), exactement comme le composeur. */
+  const canWrite = viewer.id !== null && !viewer.isAnonymous;
+  const viewerId = viewer.id ?? '';
+
+  const gestures = useMemo<CommentGestureHandlers | undefined>(
+    () =>
+      canWrite
+        ? {
+            viewerId,
+            onLike: (commentId) => void runGesture({ kind: 'like', postId, commentId }),
+            onDelete: (commentId) => void runGesture({ kind: 'delete', postId, commentId }),
+            onEdit: (commentId, content) =>
+              void runGesture({ kind: 'edit', postId, commentId, content, originalLanguage: language }),
+            failureOf: (commentId) => failures.get(commentId)?.message,
+            onRetryGesture: (commentId) => {
+              const failed = failures.get(commentId);
+              if (failed !== undefined) void runGesture(failed.request);
+            },
+          }
+        : undefined,
+    [canWrite, viewerId, postId, language, runGesture, failures],
+  );
+
   return (
     <section
       data-comment-thread={postId}
@@ -102,12 +160,18 @@ export function CommentThread({ postId, enabled = true, tone = 'onLight' }: Comm
           now={now}
           onRetry={() => void query.refetch()}
           onMore={() => void query.fetchNextPage()}
+          {...(gestures === undefined ? {} : { gestures })}
         />
       </div>
+      {notice !== '' ? (
+        <p role="status" aria-live="polite" data-comment-gesture-notice className="text-caption px-3 pb-1" style={{ color: 'var(--color-ios-ink-2)' }}>
+          {notice}
+        </p>
+      ) : null}
       {/* UN VISITEUR ANONYME NE COMMENTE PAS — la passerelle exige un
           `registeredUser` (`comments.ts:184-186`). Offrir le champ puis
           refuser en 401 serait un contrôle qui ment (loi 4). */}
-      <CommentComposer language={language} onSend={onSend} canWrite={viewer.id !== null && !viewer.isAnonymous} />
+      <CommentComposer language={language} onSend={onSend} canWrite={canWrite} />
     </section>
   );
 }

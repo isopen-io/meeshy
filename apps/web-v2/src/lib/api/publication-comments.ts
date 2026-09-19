@@ -57,6 +57,13 @@ export type PostComment = {
    * la forme d'un POST, jamais celle (tableau) d'un message. */
   readonly translations?: unknown;
   readonly likeCount?: number | null;
+  /**
+   * SERVI EXPLICITEMENT PAR LA PASSERELLE, `false` compris — dérivé des
+   * `CommentReaction` du lecteur (`PostCommentService.ts:471-483`, qui dit
+   * pourquoi : « c'est l'ABSENCE du champ qui faisait mentir le client »).
+   * Un champ absent vaut donc « pas aimé », jamais « on ne sait pas ».
+   */
+  readonly isLikedByMe?: boolean;
   readonly replyCount?: number | null;
   readonly effectFlags?: number | null;
   readonly currentUserReactions?: readonly string[] | null;
@@ -211,7 +218,7 @@ const countOf = (value: number | null | undefined): number =>
  * bougent ENSEMBLE et reviennent ENSEMBLE — un post absent d'un corpus y est
  * simplement laissé tel quel.
  */
-function shiftCommentCount(queryClient: QueryClient, postId: string, delta: 1 | -1): void {
+export function shiftCommentCount(queryClient: QueryClient, postId: string, delta: 1 | -1): void {
   queryClient.setQueryData<FeedPost>(postQueryKey(postId), (post) =>
     post === undefined ? post : { ...post, commentCount: Math.max(0, countOf(post.commentCount) + delta) },
   );
