@@ -11,7 +11,12 @@ import { STORAGE_KEY_SHAPE } from './mediaUrlNormalization';
  *
  * **L'EXTENSION DE NOTIFICATION iOS N'EN A AUCUNE.** Elle reçoit
  * `data.attachmentUrl` et le descend tel quel : une clé de stockage nue n'y est
- * pas une adresse, et le média ne s'attache plus. C'est ce que le script de
+ * pas une adresse, et le média ne s'attache plus. Précision mesurée sur le
+ * lecteur réel (`NotificationPayloadHelpers.resolveRemoteMediaURL`) : un chemin
+ * en BARRE INITIALE, lui, est résolu par la NSE elle-même contre son origine de
+ * confiance — c'est la clé NUE, et elle seule, qu'elle ne sait pas adresser
+ * (elle en ferait `<base>/2026/09/…`, la racine de la passerelle, qui ne sert
+ * aucun fichier). C'est ce que le script de
  * normalisation ferait partir À CÔTÉ de la colonne qu'il répare — 964 lignes
  * d'attachement sont absolues aujourd'hui et fonctionnent, elles deviendraient
  * toutes des clés (mesuré le 2026-09-18). La vignette de l'écran verrouillé
