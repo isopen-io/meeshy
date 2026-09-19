@@ -18,6 +18,7 @@ export {
   mediaSummaryString,
   maskedAttachment,
 } from './notification-preview';
+export { resolvePostMedia } from './post-media-thumbnail';
 
 export type {
   CreateNotificationData,

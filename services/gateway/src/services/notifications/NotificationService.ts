@@ -70,6 +70,7 @@ import {
   buildOwnerSubtitleWithDetail,
   targetPreviewBody,
 } from './notification-preview';
+import { resolvePostMedia } from './post-media-thumbnail';
 
 /** Budget APNs — au-delà, la charge est dégradée par étages (cf. `createNotification`). */
 const PUSHED_TRANSLATION_MAX_CHARS = 200;
@@ -2910,7 +2911,7 @@ export class NotificationService {
     const excerpt = params.excerpt ? this.truncateMessage(params.excerpt) : '';
     // Vignette du contenu publié → rendue in-app + attachée au push iOS. Le
     // mediaType explicite de l'appelant prime ; sinon on le dérive du média.
-    const media = await this.resolvePostMedia(params.postId);
+    const media = await resolvePostMedia(this.prisma, params.postId);
     const mediaType = params.mediaType ?? media?.mediaType;
 
     // Aucun `?? 'PUBLIC'` : une visibilité absente retombe sur la branche par
@@ -3602,7 +3603,7 @@ export class NotificationService {
     // média (« Votre story · 📷 Photo ») — le destinataire identifie QUEL
     // contenu sans ouvrir l'app, et le push iOS attache la miniature.
     const trimmedPreview = params.postPreview?.trim() ?? '';
-    const media = await this.resolvePostMedia(params.postId);
+    const media = await resolvePostMedia(this.prisma, params.postId);
     // Le sous-titre nomme la cible, le corps la MONTRE : le détail (texte /
     // média) descend dans le corps, que la phrase d'action n'occupe plus.
     const subtitle = notificationString(lang, 'comment.subtitleOwner', { postType: subtitlePostType });
@@ -3682,7 +3683,7 @@ export class NotificationService {
     const trimmedPostPreview = params.postPreview?.trim() ?? '';
     // Cible du commentaire : extrait texte du post si présent, sinon résumé
     // média (« Votre publication · 📷 Photo ») + vignette poussée au push iOS.
-    const media = await this.resolvePostMedia(params.postId);
+    const media = await resolvePostMedia(this.prisma, params.postId);
     const subtitle = buildOwnerSubtitleWithDetail(lang, params.postType ?? 'POST', {
       textPreview: trimmedPostPreview,
       mediaType: media?.mediaType,
@@ -3755,7 +3756,7 @@ export class NotificationService {
 
     const lang = await this.resolveRecipientLang(params.postAuthorId);
     const trimmedPostPreview = params.postPreview?.trim() ?? '';
-    const media = await this.resolvePostMedia(params.originalPostId);
+    const media = await resolvePostMedia(this.prisma, params.originalPostId);
     // Cf. `targetPreviewBody` : un partage n'apporte aucun contenu neuf, le
     // détail du contenu partagé descend donc dans le corps.
     const subtitle = notificationString(lang, 'comment.subtitleOwner', {
@@ -3844,7 +3845,7 @@ export class NotificationService {
     // POST_NOUN_CAP gère REEL distinctement (« Réel ») → pas de mapping vers POST.
     const subtitle = notificationString(lang, 'comment.subtitleBare', { postType: params.postType ?? 'POST' });
     // Vignette du contenu portant le commentaire → attachée au push iOS.
-    const media = await this.resolvePostMedia(params.postId);
+    const media = await resolvePostMedia(this.prisma, params.postId);
 
     return this.createNotification({
       userId: params.commentAuthorId,
@@ -3920,7 +3921,7 @@ export class NotificationService {
     const lang = await this.resolveRecipientLang(params.commentAuthorId);
     const trimmedPreview = params.commentPreview?.trim() ?? '';
     // Vignette du post portant le commentaire → attachée au push iOS.
-    const media = await this.resolvePostMedia(params.postId);
+    const media = await resolvePostMedia(this.prisma, params.postId);
     // La cible est LE COMMENTAIRE : son extrait est ce que le corps doit
     // montrer, la phrase d'action étant déjà portée par le titre et la
     // bannière. Sans extrait, le corps nomme l'entité.
@@ -4559,54 +4560,6 @@ export class NotificationService {
   private truncateMessage(message: string, maxWords: number = 25): string {
     return truncateMessage(message, maxWords);
   }
-
-  /**
-   * Résout le 1er média d'un post → nature + miniature pour enrichir la
-   * notification : la ligne in-app rend la vignette, le push iOS l'attache
-   * (UNNotificationAttachment). Pour image on attache le fichier lui-même ;
-   * pour vidéo/audio on attache la miniature générée (toujours une image).
-   *
-   * Défensif : retourne `null` (au lieu de jeter) si le modèle `postMedia`
-   * est absent (tests) ou si le post n'a pas de média visuel — l'appelant
-   * retombe alors sur le rendu texte seul.
-   */
-  private async resolvePostMedia(postId: string): Promise<{
-    mediaType: 'image' | 'video' | 'audio';
-    thumbnailUrl?: string;
-    thumbnailMimeType?: string;
-  } | null> {
-    try {
-      const media = await this.prisma.postMedia.findFirst({
-        where: { postId },
-        orderBy: { order: 'asc' },
-        select: { mimeType: true, fileUrl: true, thumbnailUrl: true },
-      });
-      if (!media) return null;
-
-      const mime = (media.mimeType ?? '').toLowerCase();
-      const mediaType = mime.startsWith('image/') ? 'image'
-        : mime.startsWith('video/') ? 'video'
-          : mime.startsWith('audio/') ? 'audio'
-            : null;
-      if (!mediaType) return null;
-
-      // Vignette poussée au client/iOS : toujours une image téléchargeable.
-      // Image → le fichier ; vidéo/audio → la miniature générée (si présente).
-      const rawThumb = mediaType === 'image'
-        ? (media.fileUrl || media.thumbnailUrl || undefined)
-        : (media.thumbnailUrl || undefined);
-      const thumbnailUrl = rawThumb ? publicMediaUrlFromEnv(rawThumb) : undefined;
-      const thumbnailMimeType = thumbnailUrl
-        ? (mediaType === 'image' ? (media.mimeType ?? 'image/jpeg') : 'image/jpeg')
-        : undefined;
-
-      return { mediaType, thumbnailUrl, thumbnailMimeType };
-    } catch {
-      return null;
-    }
-  }
-
-
 
   // ==============================================
   // QUERIES
