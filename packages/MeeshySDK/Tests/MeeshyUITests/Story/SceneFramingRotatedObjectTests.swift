@@ -176,6 +176,35 @@ final class SceneFramingRotatedObjectTests: XCTestCase {
                        "et la boîte reste centrée sur l'ancre — la rotation ne déplace rien")
     }
 
+    /// **La CONSÉQUENCE assumée du plafond de largeur, et elle mérite d'être
+    /// nommée** : un fond plus ÉTROIT que la scène occupe une colonne, et un
+    /// texte wrappé est plus large qu'elle. S'y resserrer couperait les mots
+    /// sur les côtés — la loi montre donc le 9:16 entier.
+    ///
+    /// Ce cas ne figure pas dans la planche, qui ne porte que des fonds plus
+    /// LARGES que la scène (les seuls à laisser une bande horizontale) : sans
+    /// ce témoin, le plafond changerait ce verdict en silence.
+    func test_unTexteSurUneColonne_faitMontrerLaScèneEntière() throws {
+        let colonne = 0.35 // un fond bien plus étroit que le 9:16 de la scène
+        let doc = document(fondAspect: colonne,
+                           textes: [texte("Bonjour le monde", x: 0.5, y: 0.5, scale: 1, rotation: 0)])
+        let scene = try XCTUnwrap(doc.scenes.first)
+        XCTAssertEqual(SceneShape.frame(scene: scene), .wholeScene,
+                       "un texte déborde d'une colonne : on montre tout plutôt que de couper")
+    }
+
+    /// **Contre-épreuve : la MÊME colonne, sans texte, reste resserrée.** Sans
+    /// elle, le témoin ci-dessus passerait aussi si la loi avait cessé de
+    /// resserrer tout court.
+    func test_laMêmeColonne_sansTexte_resteResserrée() throws {
+        let colonne = 0.35
+        let doc = document(fondAspect: colonne, textes: [])
+        let scene = try XCTUnwrap(doc.scenes.first)
+        XCTAssertEqual(SceneShape.frame(scene: scene),
+                       .mediaBand(SceneShape.mediaBand(backgroundAspect: CGFloat(colonne))),
+                       "sans rien par-dessus, la colonne du média reste ce qu'on montre")
+    }
+
     /// **Contre-épreuve : à 0°, la loi n'a pas changé de verdict en hauteur.**
     /// Élargir la boîte de tout objet aurait fait payer à chaque carte du fil
     /// une hauteur qu'aucun contenu ne réclame ; la largeur d'un objet ne
