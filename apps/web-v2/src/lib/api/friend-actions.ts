@@ -1,6 +1,7 @@
 import type { QueryClient, QueryKey } from '@tanstack/react-query';
 
-import { BLOCKED_USERS_QUERY_KEY, unblockUser, type BlockedData } from './blocks';
+import { BLOCKED_USERS_QUERY_KEY, blockUser, unblockUser, type BlockedData } from './blocks';
+import { PUBLIC_PROFILE_QUERY_PREFIX, type PublicProfileView, type ServedRelation } from './public-profile';
 import {
   friendRequestsQueryKey,
   respondToFriendRequest,
@@ -58,11 +59,51 @@ function once(key: string, run: () => Promise<FriendActionOutcome>): Promise<Fri
 
 type Snapshot = readonly (readonly [QueryKey, unknown])[];
 
+/**
+ * **TOUTE ENTRÉE DE PROFIL QUI PORTE CET IDENTIFIANT** (#7083) — la fiche
+ * `/u/:handle` est mise en cache par HANDLE (`publicProfileQueryKey`), et une
+ * même personne y entre sous plusieurs clés : son pseudo depuis une mention,
+ * son identifiant depuis une notification. Patcher la seule clé visitée
+ * laisserait la jumelle afficher l'état d'AVANT le geste dès la navigation
+ * suivante — l'exact défaut que ce lot évite ailleurs en gardant UNE source.
+ *
+ * Le PRÉFIXE est importé de `public-profile.ts`, jamais recopié : une chaîne
+ * écrite deux fois diverge au premier renommage, et rien ne rougirait.
+ */
+const profileKeysFor = (queryClient: QueryClient, userId: string): readonly QueryKey[] =>
+  queryClient
+    .getQueriesData<PublicProfileView>({ queryKey: PUBLIC_PROFILE_QUERY_PREFIX })
+    .filter(([, data]) => data?.profile.id === userId)
+    .map(([key]) => key);
+
+const patchProfileRelations = (queryClient: QueryClient, userId: string, relation: ServedRelation): void => {
+  profileKeysFor(queryClient, userId).forEach((key) => {
+    queryClient.setQueryData<PublicProfileView>(key, (view) => (view === undefined ? view : { ...view, relation }));
+  });
+};
+
 const snapshotOf = (queryClient: QueryClient, keys: readonly QueryKey[]): Snapshot =>
   keys.map((key) => [key, queryClient.getQueryData(key)] as const);
 
+/** L'instantané d'un geste RELATIONNEL : ses paniers ET chaque fiche de la
+ * personne touchée — sans quoi `restore` défairait la moitié du geste. */
+const relationalSnapshot = (queryClient: QueryClient, userId: string, buckets: readonly QueryKey[]): Snapshot =>
+  snapshotOf(queryClient, [...buckets, ...profileKeysFor(queryClient, userId)]);
+
+/**
+ * **RENDRE UNE ENTRÉE À SON NÉANT DEMANDE `removeQueries`, PAS `setQueryData`**
+ * (revue #7083) — `setQueryData(key, undefined)` N'EFFACE RIEN : `undefined`
+ * signifie « ne pas mettre à jour ». Un geste qui AMORCE un panier jamais lu
+ * (`withRequestFirst`, `withBlockedFirst`) laissait donc son amorce derrière
+ * lui quand la passerelle refusait — une liste d'UNE ligne, fabriquée par un
+ * geste qui a échoué, et présentée comme la liste entière. L'invalidation qui
+ * suit la rattrapait seulement si un observateur était monté.
+ */
 const restore = (queryClient: QueryClient, snapshot: Snapshot): void => {
-  snapshot.forEach(([key, data]) => queryClient.setQueryData(key, data));
+  snapshot.forEach(([key, data]) => {
+    if (data === undefined) queryClient.removeQueries({ queryKey: key, exact: true });
+    else queryClient.setQueryData(key, data);
+  });
   void queryClient.invalidateQueries({ queryKey: FRIENDS_QUERY_PREFIX });
 };
 
@@ -128,8 +169,12 @@ export function performRespondToRequest({
   return once(`request:${request.id}`, async () => {
     if (!deps.isOnline()) return 'offline';
     const from: FriendRequestBucket = action === 'cancel' ? 'sent' : 'received';
-    const snapshot = snapshotOf(deps.queryClient, [friendRequestsQueryKey(from), friendRequestsQueryKey('accepted')]);
+    /* L'AUTRE partie : l'expéditeur d'une reçue, le destinataire d'une envoyée
+       — la personne dont la FICHE porte cette relation. */
+    const otherId = action === 'cancel' ? request.receiverId : request.senderId;
+    const snapshot = relationalSnapshot(deps.queryClient, otherId, [friendRequestsQueryKey(from), friendRequestsQueryKey('accepted')]);
     update(deps.queryClient, from, (data) => withoutRequest(data, request.id));
+    patchProfileRelations(deps.queryClient, otherId, action === 'accept' ? 'friend' : 'none');
     if (action === 'accept') {
       update(deps.queryClient, 'accepted', (data) => withRequestFirst(data, { ...request, status: 'accepted' }, request.id));
     }
@@ -151,7 +196,8 @@ const optimisticRequestId = (userId: string): string => `optimiste:${userId}`;
 export function performSendRequest({ person, deps }: { readonly person: PersonSummary; readonly deps: FriendActionDeps }): Promise<FriendActionOutcome> {
   return once(`send:${person.id}`, async () => {
     if (!deps.isOnline()) return 'offline';
-    const snapshot = snapshotOf(deps.queryClient, [friendRequestsQueryKey('sent')]);
+    const snapshot = relationalSnapshot(deps.queryClient, person.id, [friendRequestsQueryKey('sent')]);
+    patchProfileRelations(deps.queryClient, person.id, 'pending_sent');
     const placeholderId = optimisticRequestId(person.id);
     const placeholder: FriendRequestRecord = {
       id: placeholderId,
@@ -175,13 +221,68 @@ export function performSendRequest({ person, deps }: { readonly person: PersonSu
   });
 }
 
+const withoutBlocked = (data: BlockedData | undefined, userId: string): BlockedData | undefined =>
+  data === undefined ? data : { ...data, pages: data.pages.map((page) => ({ ...page, users: page.users.filter((row) => row.id !== userId) })) };
+
+/**
+ * **UN PANIER JAMAIS LU S'AMORCE, il ne s'ignore pas** (revue #7083) — la
+ * JUMELLE `withRequestFirst` amorce déjà le sien (`seed`, ci-dessus), et c'est
+ * l'asymétrie entre les deux qui faisait le défaut : `if (data === undefined)
+ * return data` rendait `undefined` à `setQueryData`, qui n'écrit alors RIEN.
+ * Le geste partait sur le réseau et l'écran ne bougeait pas — « Bloquer »
+ * devenait un contrôle sans effet visible (loi 4) exactement quand le panier
+ * n'était pas encore lu ou que sa lecture avait échoué. Les témoins d'alors
+ * SEMAIENT tous le cache avant le geste : aucun ne pouvait le voir.
+ *
+ * Ce que l'amorce affirme est BORNÉ et vrai : la personne est bloquée. La
+ * revalidation de la famille remplace la page par la liste entière, et un
+ * refus restaure l'instantané — c'est-à-dire `undefined`.
+ */
+const withBlockedFirst = (data: BlockedData | undefined, person: PersonSummary): BlockedData => {
+  const seed: BlockedData = { pages: [{ users: [], nextCursor: null }], pageParams: [null] };
+  const base = data ?? seed;
+  return {
+    ...base,
+    pages: base.pages.map((page, index) => {
+      const kept = page.users.filter((row) => row.id !== person.id);
+      return index === 0 ? { ...page, users: [person, ...kept] } : { ...page, users: kept };
+    }),
+  };
+};
+
+/**
+ * **BLOQUER** (#7083) — la JUMELLE de `performUnblock`, au même `once` et au
+ * même instantané.
+ *
+ * **Le blocage s'écrit dans le PANIER DES BLOQUÉS, pas dans la relation du
+ * fil.** `relationAvec` (`routes/directory/person.ts:72-93`) n'a pas de valeur
+ * `blocked` : bloquer quelqu'un n'efface pas la ligne d'amitié, et le serveur
+ * continue de servir `friend` ou `none`. Écrire `'blocked'` dans `relation`
+ * inventerait une sixième valeur de fil que la revalidation suivante
+ * effacerait — un geste qui « marche » puis se défait tout seul. Le panier,
+ * lui, est la source que « Découvrir » lit déjà : UNE source, et les deux
+ * surfaces bougent ensemble.
+ */
+export function performBlock({ person, deps }: { readonly person: PersonSummary; readonly deps: FriendActionDeps }): Promise<FriendActionOutcome> {
+  return once(`block:${person.id}`, async () => {
+    if (!deps.isOnline()) return 'offline';
+    const snapshot = snapshotOf(deps.queryClient, [BLOCKED_USERS_QUERY_KEY]);
+    deps.queryClient.setQueryData<BlockedData>(BLOCKED_USERS_QUERY_KEY, (data) => withBlockedFirst(data, person));
+
+    const result = await blockUser(deps, person.id);
+    if (!result.ok) {
+      restore(deps.queryClient, snapshot);
+      return 'failed';
+    }
+    return 'done';
+  });
+}
+
 export function performUnblock({ person, deps }: { readonly person: PersonSummary; readonly deps: FriendActionDeps }): Promise<FriendActionOutcome> {
   return once(`unblock:${person.id}`, async () => {
     if (!deps.isOnline()) return 'offline';
     const snapshot = snapshotOf(deps.queryClient, [BLOCKED_USERS_QUERY_KEY]);
-    deps.queryClient.setQueryData<BlockedData>(BLOCKED_USERS_QUERY_KEY, (data) =>
-      data === undefined ? data : { ...data, pages: data.pages.map((page) => ({ ...page, users: page.users.filter((row) => row.id !== person.id) })) },
-    );
+    deps.queryClient.setQueryData<BlockedData>(BLOCKED_USERS_QUERY_KEY, (data) => withoutBlocked(data, person.id));
 
     const result = await unblockUser(deps, person.id);
     if (!result.ok) {

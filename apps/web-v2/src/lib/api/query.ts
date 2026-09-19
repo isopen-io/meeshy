@@ -11,8 +11,9 @@ import { conversationQuery, conversationsQuery, refreshConversations } from './c
 import { apiDeps } from './deps';
 import { FEED_QUERY_KEY, feedQuery, refreshFeed } from './feed';
 import { performPostGesture, type PostGestureResult } from './feed-gestures';
-import type { FeedInfiniteData } from './feed-pages';
+import type { FeedAuthor, FeedInfiniteData } from './feed-pages';
 import { recordPostShare } from './feed-share';
+import { commentsInfiniteOptions, performComment, type CommentResult } from './publication-comments';
 import { postQueryOptions } from './publication-detail';
 import type { PostToggleKind } from '@/lib/feed/interactions';
 import { paginationStateOf } from '@/lib/lens/pagination';
@@ -29,6 +30,7 @@ import {
   storyPostQueryOptions,
   storyTrayQueryOptions,
 } from './stories';
+import { performStoryReaction, viewerReactedToStory, type StoryReactionResult } from './story-reactions';
 import { storyViewedStore } from './story-viewed-store';
 
 /**
@@ -383,4 +385,63 @@ export function retrySendAction(params: {
  */
 export function reactAction(conversationId: string, messageId: string, emoji: string): Promise<PerformReactionResult> {
   return performReaction({ conversationId, messageId, emoji, deps: { ...apiDeps, queryClient: appQueryClient } });
+}
+
+/**
+ * `useComments` (#6278 suite) — le fil de commentaires d'UNE publication,
+ * `useInfiniteQuery` comme le Flux. `.data` reste PAGINÉ (pas de `select`) :
+ * l'insertion optimiste de `performComment` écrit dans les pages, et un
+ * `select` qui aplatit ne changerait rien pour elle mais obligerait chaque
+ * hôte à reconnaître deux formes. L'aplatissement se fait au rendu, par
+ * `flattenCommentPages` — le site unique.
+ *
+ * `enabled` : une story qui n'a pas encore ouvert son panneau ne charge pas
+ * son fil. Le compteur du rail vient du corpus, jamais d'une requête.
+ */
+export function useComments(postId: string, options?: { readonly enabled?: boolean }) {
+  return useInfiniteQuery({
+    ...commentsInfiniteOptions({ ...apiDeps, postId }),
+    ...(options?.enabled === undefined ? {} : { enabled: options.enabled }),
+  });
+}
+
+/**
+ * `commentAction` — RÉFÉRENCE DE MODULE STABLE (motif `reactAction`) : le
+ * SITE UNIQUE d'envoi d'un commentaire, lié à l'instance PARTAGÉE
+ * `appQueryClient`. La liste de `/post/$post` et le panneau du lecteur de
+ * story écrivent donc dans le MÊME cache — le commentaire posé depuis une
+ * story apparaît dans le détail de la publication sans relecture.
+ */
+export function commentAction(params: {
+  readonly postId: string;
+  readonly content: string;
+  readonly author: FeedAuthor;
+  readonly originalLanguage?: string | undefined;
+}): Promise<CommentResult> {
+  return performComment({
+    postId: params.postId,
+    content: params.content,
+    author: params.author,
+    ...(params.originalLanguage === undefined ? {} : { originalLanguage: params.originalLanguage }),
+    deps: { ...apiDeps, queryClient: appQueryClient },
+  });
+}
+
+/**
+ * `storyReactionAction` — RÉFÉRENCE DE MODULE STABLE (motif `reactAction`) :
+ * réagir à la story lue, sur l'instance PARTAGÉE `appQueryClient` — le corpus
+ * que `useStoryFeed` observe est celui que le geste bascule, donc le cœur du
+ * rail se remplit sans qu'aucun état local n'ait à s'en souvenir.
+ */
+export function storyReactionAction(storyId: string, emoji?: string): Promise<StoryReactionResult> {
+  return performStoryReaction({
+    storyId,
+    ...(emoji === undefined ? {} : { emoji }),
+    deps: { ...apiDeps, queryClient: appQueryClient },
+  });
+}
+
+/** Ai-je réagi à cette story ? Lu du MÊME cache que le geste bascule. */
+export function viewerReactedToStoryNow(storyId: string, emoji?: string): boolean {
+  return viewerReactedToStory(appQueryClient, storyId, emoji);
 }

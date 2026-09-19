@@ -423,6 +423,13 @@ export const STORY_FEED: readonly StoryFeedPost[] = [
     content: 'Le lac, ce matin.',
     originalLanguage: 'fr',
     media: [{ id: 'm3', url: STORY_PHOTO_STAND_IN, thumbnailUrl: STORY_PHOTO_STAND_IN, mimeType: 'image/svg+xml' }],
+    /* LE RAIL D'ACTIONS lit ces trois-là depuis le corpus, sans aucune
+       requête (`lib/stories/action-rail.ts`) : sans eux, le bouton
+       « Commentaires » n'existerait sur AUCUNE story de fixtures et sa porte
+       (`commentCount > 0`) serait VERTE PAR OMISSION. */
+    commentCount: 3,
+    reactionCount: 12,
+    currentUserReactions: [],
   },
   {
     id: 'st-mienne',
@@ -434,6 +441,11 @@ export const STORY_FEED: readonly StoryFeedPost[] = [
     author: { id: VIEWER_ID, username: 'vous', displayName: 'Moi' },
     content: 'Ma story à moi.',
     originalLanguage: 'fr',
+    /* MA story porte le plan RÉDUIT : ni réagir, ni répondre, ni republier —
+       mais bien ses commentaires, pour que la capture montre une RÉDUCTION et
+       non un rail vide (`resolveStoryActionRailPlan`). */
+    commentCount: 2,
+    reactionCount: 4,
   },
   /** LA STORY VIDÉO (#6807) — `url` porte un clip VP8 réellement décodable
    * (`REEL_CLIP_RGB`), jamais une image servie sous un `mimeType` vidéo : le

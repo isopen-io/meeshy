@@ -29,7 +29,19 @@ export const NETWORK_ONLY_NAVIGATIONS: readonly RegExp[] = [
   /^\/conversation\//,
   /^\/p\//,
   /^\/s\//,
-  /^\/u\//,
+  /* `/u/` SE PARTAGE, ET LA COUPE EST MESURABLE (#7083) — nginx y sert les
+     médias hérités (`root /srv/legacy-uploads`) ET, par `try_files`, la fiche
+     de profil de la v2. Le préfixe entier laissait donc `/u/<pseudo>` au
+     réseau : la fiche n'existait pas hors ligne et payait un aller-retour à
+     froid. Un PSEUDO ne peut porter ni point ni barre (`usernamePatternSource`,
+     `^[a-zA-Z0-9_-]+$`), un ObjectId non plus ; un téléversement porte toujours
+     une extension, et peut être imbriqué. Ces deux motifs ne tranchent pas à la
+     place de nginx — ils disent seulement QUI doit lui poser la question. Se
+     tromper de sens casse chaque avatar hérité, en silence, pour les seuls
+     lecteurs qui reviennent : `network-only-navigations.test.ts` énumère les
+     deux familles. */
+  /^\/u\/[^?#]*\./,
+  /^\/u\/[^/?#]+\/[^/?#]/,
   /^\/users\//,
   /^\/\.well-known\//,
   /^\/(?:robots\.txt|sitemap\.xml|manifest\.json|firebase-messaging-sw\.js|android-chrome-512x512\.png)(?:\?|$)/,

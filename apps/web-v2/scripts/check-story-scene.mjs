@@ -30,7 +30,18 @@
  *  5. `/story/st-scene-image` (une image SEULE) — l'image à son rectangle 16:9
  *     centré, AUCUN `[data-scene-player]`, aucune bande, aucun bouton son.
  *  6. CONTRE-ÉPREUVE v1 — `/story/st-amie-2` ne monte aucune carte de scène.
- *  7. Aucune erreur de page ; clair et sombre rendent les MÊMES mesures (le
+ *  7. LES RACCOURCIS NE VOLENT PAS LA FRAPPE D'UN CONTRÔLE (#7112, revue,
+ *     D-91) — Espace ACTIVE le bouton du rail qui a le focus, « a b c » tapé
+ *     dans le composeur de commentaire reste « a b c », une flèche pendant la
+ *     frappe n'avance pas la story ; et sa CONTRE-ÉPREUVE, qui garde la
+ *     cession FINE : une flèche alors qu'un BOUTON a le focus avance quand
+ *     même. Trois symptômes, une cause, et aucun visible à un témoin de DOM :
+ *     il faut un vrai clavier et un vrai focus.
+ *     7 bis — ET LE MÊME DÉFAUT PAR LE DOIGT : deux taps sur la scène NUE
+ *     au-dessus de la feuille ne doivent ni reprendre la lecture ni naviguer
+ *     ni emporter le brouillon. « Une couche de saisie réclame le geste comme
+ *     elle réclame la touche » (`screenGestureYields`, même module).
+ *  8. Aucune erreur de page ; clair et sombre rendent les MÊMES mesures (le
  *     lecteur force son canevas sombre, `story.tsx`).
  *
  * Les valeurs attendues (textes, couleurs) sont RECOPIÉES ici à dessein : un
@@ -277,7 +288,40 @@ async function runScheme(colorScheme) {
     await page.waitForTimeout(400);
     const barrePlusTard = await page.evaluate(() => document.querySelector('[aria-valuenow]')?.getAttribute('aria-valuenow') ?? null);
     const pleinBord = await readBox(page, '[data-story-scene-box]');
+    /**
+     * LE CHROME MASQUÉ NE DOIT PLUS ÊTRE UNE COMMANDE (D-90) — mesuré ICI
+     * parce que la souris est DÉJÀ enfoncée : c'est le seul instant où
+     * `chromeHidden` est vrai dans un VRAI navigateur, et le seul endroit du
+     * dépôt où l'effet de `inert` se mesure pour de bon (happy-dom l'imite,
+     * un navigateur l'APPLIQUE).
+     *
+     * TROIS moitiés, et il les faut toutes les trois : sous le voile le
+     * bouton reste MONTÉ (le démonter referait la mise en page au
+     * relâchement) et n'est plus ATTEIGNABLE ; le voile levé, il REDEVIENT
+     * atteignable. Un témoin qui ne mesurerait que « monté » verdirait sur un
+     * démontage — la régression que l'opacité existe pour éviter ; un témoin
+     * qui ne mesurerait que « inatteignable » verdirait sur un `inert`
+     * PERMANENT, c'est-à-dire sur un lecteur entièrement inerte.
+     *
+     * Le témoin interroge l'EFFET (`focus()` puis `activeElement`), jamais
+     * l'attribut : un `inert` posé sur le mauvais nœud — le défaut RÉEL de
+     * `story-rail.tsx`, dont le doublon s'était reconstitué sur l'enveloppe —
+     * laisserait une assertion d'attribut verte.
+     */
+    const reachableCloseButton = () =>
+      page.evaluate(() => {
+        const closeButton = document.querySelector('button[aria-label="Fermer"]');
+        if (closeButton === null) return { mounted: false, reachable: null };
+        document.body.focus();
+        closeButton.focus();
+        return { mounted: true, reachable: document.activeElement === closeButton };
+      });
+    const maskedChrome = await reachableCloseButton();
     await page.mouse.up();
+    check(
+      maskedChrome.mounted === true && maskedChrome.reachable === false,
+      `${tag} st-scene : chrome masqué, la croix doit rester MONTÉE mais devenir INATTEIGNABLE (D-90) — ${JSON.stringify(maskedChrome)}`,
+    );
     check(
       pendantAppui.paused === true && pendantAppui.barre === barrePlusTard,
       `${tag} st-scene : l'appui long doit geler la piste ET la barre — ${JSON.stringify(pendantAppui)}, barre 400 ms plus tard ${barrePlusTard}`,
@@ -297,6 +341,25 @@ async function runScheme(colorScheme) {
     check(
       reprise.scene === 'st-scene' && reprise.paused === false && t1 !== null && reprise.t !== null && reprise.t !== t1,
       `${tag} st-scene : le tap latéral doit reprendre sans naviguer, la piste avançant de nouveau — t1=${t1}, ${JSON.stringify(reprise)}`,
+    );
+    /**
+     * LA MOITIÉ QUE LE PREMIER JET DE D-90 N'AVAIT PAS (revue #7112) — il ne
+     * mesurait que « inatteignable sous le voile ». Un `inert` POSÉ EN
+     * PERMANENCE (l'accident classique d'un runtime qui rendrait
+     * `inert={false}` par une chaîne vraie) satisfait cette moitié-là et tue
+     * toute la commande du lecteur : le témoin serait resté VERT sur la pire
+     * régression qu'il puisse y avoir.
+     *
+     * Elle se mesure ICI, pas au relâchement : une pause d'appui long
+     * SURVIT au `mouse.up` par dessein (`onPointerUp` sort tout de suite si
+     * `holdFired`), et c'est le tap latéral ci-dessus qui rend le chrome.
+     * Mesuré : placé au relâchement, ce témoin rougissait aux quatre
+     * configurations en accusant le code juste.
+     */
+    const shownChrome = await reachableCloseButton();
+    check(
+      shownChrome.mounted === true && shownChrome.reachable === true,
+      `${tag} st-scene : chrome RENDU, la croix doit redevenir ATTEIGNABLE — un \`inert\` permanent passerait la moitié précédente (D-90) — ${JSON.stringify(shownChrome)}`,
     );
 
     /* ── 4. l'image seule AVEC un texte dedans : le texte se lit ────────── */
@@ -364,6 +427,126 @@ async function runScheme(colorScheme) {
       images: document.querySelectorAll('[data-story-scene] img').length,
     }));
     check(v1.carte === 0 && v1.images >= 1, `${tag} st-amie-2 (v1) : le chemin v1 doit rester une image, sans carte de scène — ${JSON.stringify(v1)}`);
+
+    /* ── 7. LES RACCOURCIS DU LECTEUR NE VOLENT PAS LA FRAPPE D'UN CONTRÔLE
+           (revue #7112, `lib/view/shortcut-scope.ts`) ───────────────────────
+       Le lecteur écoute le clavier sur `window` ; sa feuille de commentaires
+       (D-89) y a posé une zone de saisie. TROIS symptômes mesurés ici, une
+       seule cause — un `preventDefault` d'écran sur une touche adressée au
+       nœud qui a le focus :
+
+         a. Espace sur un BOUTON du rail ne l'activait pas : le `click` d'un
+            `<button>` naît du `keyup` d'Espace, que ce `preventDefault`
+            supprime. Chaque bouton du lecteur n'était activable qu'à Entrée.
+         b. « a b » tapé dans le composeur rendait « ab ».
+         c. une flèche pendant la frappe faisait avancer la story, ce qui
+            ferme la feuille et emporte le brouillon.
+
+       Aucun des trois n'est visible à un témoin de DOM : il faut un vrai
+       clavier, sur un vrai navigateur, avec un vrai focus. */
+    await page.focus('[data-story-action="comments"]');
+    await page.keyboard.press(' ');
+    await page.waitForTimeout(350);
+    const openedBySpace = (await page.$('[data-story-comments-sheet]')) !== null;
+    check(
+      openedBySpace,
+      `${tag} st-amie-2 : ESPACE sur un bouton du rail qui a le focus doit l'ACTIVER — le raccourci de pause ne prend pas la touche d'un contrôle`,
+    );
+    /* LES TROIS SYMPTÔMES SE MESURENT SÉPARÉMENT — si le premier tombe, on
+       ouvre la feuille au CLIC pour que les deux suivants rendent quand même
+       leur verdict. Un `if` autour d'eux les aurait fait DISPARAÎTRE du
+       décompte au lieu de rougir : une absence de témoin n'est pas un
+       témoin vert, et c'est le compte d'invariants qui l'aurait dit tout bas. */
+    if (!openedBySpace) {
+      await page.click('[data-story-action="comments"]');
+      await page.waitForTimeout(350);
+    }
+    await page.click('[data-comment-field]');
+    await page.keyboard.type('a b c');
+    const typed = await page.$eval('[data-comment-field]', (el) => el.value);
+    check(typed === 'a b c', `${tag} st-amie-2 : « a b c » tapé dans le composeur doit rester « a b c » — obtenu ${JSON.stringify(typed)}`);
+    await page.keyboard.press('ArrowRight');
+    await page.waitForTimeout(350);
+    const afterArrow = await page.evaluate(() => ({
+      sheet: document.querySelector('[data-story-comments-sheet]') !== null,
+      text: document.querySelector('[data-comment-field]')?.value ?? null,
+    }));
+    check(
+      afterArrow.sheet === true && afterArrow.text === typed,
+      `${tag} st-amie-2 : une flèche PENDANT la frappe ne doit ni avancer la story ni emporter le brouillon — ${JSON.stringify(afterArrow)}`,
+    );
+
+    /* ── 7 bis. LE MÊME DÉFAUT PAR L'AUTRE ENTRÉE : LE DOIGT (#7112, revue)
+           ─────────────────────────────────────────────────────────────────
+       La cession ci-dessus a été écrite pour les TOUCHES. La feuille
+       n'occupe que le bas de l'écran ; les ~550 px de scène NUE au-dessus
+       gardaient leurs trois bandes de geste vivantes. Un tap sur un bord y
+       vaut « reprendre » (`decideTouchDown`, `lib/stories/gesture.ts`), la
+       lecture repartait SOUS la feuille, la diapositive suivante arrivait,
+       `setCommentsOpen(false)` fermait le fil — et le brouillon partait avec.
+
+       LE TÉMOIN MESURE LA CAUSE, PAS SON DÉLAI. Attendre les six secondes de
+       la diapositive rendrait un gate lent ET fragile ; ce qui se mesure ici
+       est que la lecture N'A PAS REPRIS (`data-story-paused` tient) et que
+       DEUX taps au bord — reprendre, puis naviguer — ne déplacent rien.
+       C'est le scénario exact de la recette manuelle, en un dixième du temps. */
+    const bordDroit = await page.$eval('[data-story-scene]', (el) => {
+      const r = el.getBoundingClientRect();
+      return { x: Math.round(r.left + r.width * 0.9), y: Math.round(r.top + r.height * 0.25) };
+    });
+    const avantTap = await page.evaluate(() => document.querySelector('[data-story-scene]')?.getAttribute('data-story-scene') ?? null);
+    await page.mouse.click(bordDroit.x, bordDroit.y);
+    await page.waitForTimeout(150);
+    await page.mouse.click(bordDroit.x, bordDroit.y);
+    await page.waitForTimeout(350);
+    const apresTap = await page.evaluate(() => ({
+      story: document.querySelector('[data-story-scene]')?.getAttribute('data-story-scene') ?? null,
+      pause: document.querySelector('[data-story-scene]')?.getAttribute('data-story-paused') ?? null,
+      sheet: document.querySelector('[data-story-comments-sheet]') !== null,
+      text: document.querySelector('[data-comment-field]')?.value ?? null,
+    }));
+    check(
+      apresTap.story === avantTap && apresTap.pause === 'true' && apresTap.sheet === true && apresTap.text === typed,
+      `${tag} st-amie-2 : DEUX taps sur la scène nue, feuille ouverte, ne doivent ni reprendre la lecture ni naviguer ni emporter le brouillon — ${avantTap} → ${JSON.stringify(apresTap)}`,
+    );
+    /* MÊME DISCIPLINE QU'AU SYMPTÔME a : si celui-ci tombe, la feuille a été
+       emportée et les témoins SUIVANTS mourraient d'un `page.click` en
+       timeout — un ROUGE qui accuse la mauvaise chose (30 s d'attente sur la
+       croix, et le message de CE témoin jamais imprimé). On rouvre donc,
+       après avoir rendu le verdict. */
+    if (!apresTap.sheet) {
+      await page.goto(`${BASE}/story/st-amie-2`, { waitUntil: 'load' });
+      await page.waitForSelector('[data-story-action="comments"]', { timeout: 8000 });
+      await page.click('[data-story-action="comments"]');
+      await page.waitForSelector('[data-story-comments-close]', { timeout: 8000 });
+    }
+    /* LA CONTRE-ÉPREUVE DE LA CESSION — elle est FINE, et sans ce témoin rien
+       n'empêcherait de la rendre GROSSIÈRE. Cliquer un bouton le FOCALISE
+       (comportement natif) : si l'écran cédait TOUTE touche à un contrôle
+       focalisé, les flèches cesseraient d'avancer la story dès le premier
+       clic sur « muet » — un raccourci mort, pour corriger un vol de frappe.
+       Un bouton ne réclame qu'Espace et Entrée ; les flèches restent à
+       l'écran. */
+    await page.click('[data-story-comments-close]');
+    await page.waitForTimeout(250);
+    /* LA FEUILLE REND LE FOCUS PAR OÙ IL EST ENTRÉ — elle le PREND au montage
+       (sinon la touche suivante irait au plateau, qui navigue) ; ne pas le
+       rendre le laisse tomber sur `<body>`, et au clavier on repart du haut
+       du document pour retrouver le bouton qu'on venait d'actionner. */
+    const focusRendu = await page.evaluate(() => document.activeElement?.getAttribute('data-story-action') ?? document.activeElement?.tagName ?? null);
+    check(
+      focusRendu === 'comments',
+      `${tag} st-amie-2 : en se fermant, la feuille doit RENDRE le focus au bouton qui l'a ouverte — reçu ${JSON.stringify(focusRendu)}`,
+    );
+    await page.focus('[data-story-action="react"]');
+    const sceneBeforeArrow = await page.evaluate(() => document.querySelector('[data-story-scene]')?.getAttribute('data-story-scene') ?? null);
+    await page.keyboard.press('ArrowRight');
+    await page.waitForTimeout(400);
+    const sceneAfterArrow = await page.evaluate(() => document.querySelector('[data-story-scene]')?.getAttribute('data-story-scene') ?? null);
+    check(
+      sceneBeforeArrow !== null && sceneAfterArrow !== sceneBeforeArrow,
+      `${tag} st-amie-2 : une flèche alors qu'un BOUTON a le focus doit rester un raccourci d'écran — story ${sceneBeforeArrow} → ${sceneAfterArrow}`,
+    );
 
     check(pageErrors.length === 0, `${tag} erreurs de page : ${pageErrors.join(' | ')}`);
     await context.close();

@@ -165,7 +165,10 @@ export type FeedInfiniteData = InfiniteData<FeedPage, FeedPageParam>;
  * gagne. FONCTION DE MODULE — `select` doit rester la MÊME référence entre
  * deux fabriques pour que `QueryObserver` la mémorise.
  */
-export function flattenFeedPages(data: FeedInfiniteData): readonly FeedPost[] {
+/* Le paramètre ne demande que les PAGES (#7083) : le type du CURSEUR ne
+   participe pas à l'aplatissement, et l'exiger obligeait tout appelant dont
+   l'observateur rend `pageParam: unknown` à poser une assertion pour rien. */
+export function flattenFeedPages(data: { readonly pages: readonly FeedPage[] }): readonly FeedPost[] {
   const seen = new Set<string>();
   const result: FeedPost[] = [];
   for (const page of data.pages) {

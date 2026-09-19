@@ -123,13 +123,55 @@ export function fixtureRespondFriendRequest(id: string, action: FriendRequestAct
   return { ok: true, data: accepted };
 }
 
+/**
+ * **UNE DEMANDE PART VERS N'IMPORTE QUEL COMPTE, pas seulement vers ceux que
+ * CE corpus connaît** (#7083). La route ne vérifie que l'existence du
+ * destinataire ; un auteur de publication, un profil ouvert depuis une
+ * mention, sont des comptes parfaitement valides que `FIXTURE_PEOPLE`
+ * n'énumère pas — rendre 404 y faisait échouer un geste que la production
+ * accepte, et l'écran le défaisait proprement pour la mauvaise raison.
+ *
+ * Le destinataire INCONNU de ce corpus part donc avec `receiver: null` — une
+ * relation que le `select` n'a pas chargée, forme que le wire produit
+ * réellement — et l'appelant garde la personne qu'il connaît
+ * (`friend-actions.ts` § `performSendRequest`). Jamais un nom FABRIQUÉ depuis
+ * un identifiant : ce serait une valeur fausse peinte comme mesurée.
+ */
 export function fixtureSendFriendRequest(receiverId: string): ApiResult<FriendRequestRecord> {
   const other = Object.values(FIXTURE_PEOPLE).find((candidate) => candidate.id === receiverId);
-  if (other === undefined) return { ok: false, status: 404, error: 'Utilisateur introuvable' };
+  if (other === undefined) {
+    if (state.sent.some((row) => row.receiverId === receiverId)) return { ok: false, status: 409, error: 'Demande déjà envoyée' };
+    const created: FriendRequestRecord = {
+      id: `fx-fr-sent-${receiverId}`,
+      senderId: VIEWER_ID,
+      receiverId,
+      status: 'pending',
+      message: null,
+      createdAt: minutesAgo(0).toISOString(),
+      sender: VIEWER_PARTY,
+      receiver: null,
+    };
+    state = { ...state, sent: [created, ...state.sent] };
+    return { ok: true, data: created };
+  }
   if (state.sent.some((row) => row.receiverId === receiverId)) return { ok: false, status: 409, error: 'Demande déjà envoyée' };
   const created = record({ id: `fx-fr-sent-${receiverId}`, other, incoming: false, status: 'pending', message: null, minutes: 0 });
   state = { ...state, sent: [created, ...state.sent] };
   return { ok: true, status: 201, data: created };
+}
+
+/**
+ * BLOQUER — IDEMPOTENTE comme la route (`blocks.ts:307`, « a second call
+ * returns the same state and the same status »). La personne bloquée peut ne
+ * pas appartenir au corpus des connus (un auteur de publication, par exemple) :
+ * le blocage n'est pas une relation à établir, c'est une appartenance à un
+ * ensemble — et le serveur ne refuse pas davantage.
+ */
+export function fixtureBlockUser(userId: string): ApiResult<null> {
+  if (state.blocked.some((candidate) => candidate.id === userId)) return { ok: true, data: null };
+  const known = Object.values(FIXTURE_PEOPLE).find((candidate) => candidate.id === userId);
+  state = { ...state, blocked: [known ?? person(userId, userId, userId, null), ...state.blocked] };
+  return { ok: true, data: null };
 }
 
 export function fixtureUnblockUser(userId: string): ApiResult<null> {
