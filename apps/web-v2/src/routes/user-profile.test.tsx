@@ -1,6 +1,6 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider, onlineManager } from '@tanstack/react-query';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import { authorPostsQueryKey } from '@/lib/api/author-posts';
@@ -191,18 +191,32 @@ describe('le refus ne laisse RIEN transparaître', () => {
 const AUTHOR_ID = 'u-rich-kwame';
 
 /**
- * **COUPER LE RÉSEAU SE DÉFAIT, ÉVÉNEMENT COMPRIS** — `navigator.onLine` seul
- * ne suffit dans AUCUN des deux sens : `useOnline` s'abonne aux événements
- * `online` / `offline` (`lib/net/online.ts`), et l'`onlineManager` de TanStack
- * Query s'y abonne aussi. Rendre `onLine` à `true` sans REJOUER l'événement
- * laisse le gestionnaire de requêtes en PAUSE — pour tout le reste du
- * processus de test, donc pour les autres fichiers : mesuré ici, 53 témoins
- * rouges dans des écrans qui n'ont rien à voir, et une suite 13 fois plus
- * lente. La coupure se défait exactement comme elle se pose.
+ * **COUPER LE RÉSEAU DANS UN PROCESSUS PARTAGÉ SE DÉFAIT EXPLICITEMENT.**
+ *
+ * `bun test` exécute TOUS les fichiers dans UN process : `navigator`, le
+ * `window` de happy-dom et l'`onlineManager` de TanStack Query y sont des
+ * singletons. Une coupure mal rendue ne salit donc pas ce témoin — elle
+ * salit la SUITE. Mesuré ici, et c'est la raison de ce commentaire : 52
+ * témoins rouges dans des écrans qui n'ont AUCUN rapport (fiches
+ * d'administration, création de conversation) et un run 10 fois plus long
+ * (34 s → 354 s), les échecs crachant des dumps de DOM par millions de
+ * lignes jusqu'à faire EXPIRER une fixture datée.
+ *
+ * **Et rejouer l'événement `online` ne suffit pas** — c'est le piège exact :
+ * l'`onlineManager` n'ÉCOUTE le `window` que tant qu'il a un abonné. L'ordre
+ * de l'`afterEach` (démonter, puis rétablir) laissait donc zéro abonné au
+ * moment du `dispatchEvent`, l'événement tombait dans le vide, et le
+ * gestionnaire restait HORS LIGNE pour tout le reste du processus : chaque
+ * requête des fichiers suivants partait en PAUSE, sans jamais répondre.
+ *
+ * Les trois voies sont donc rendues explicitement : la propriété que lit
+ * `useOnline` (`lib/net/online.ts`), l'événement pour ses abonnés vivants, et
+ * l'`onlineManager` en direct — qui, lui, ne dépend d'aucun abonnement.
  */
 const setOnline = (value: boolean) => {
   Object.defineProperty(navigator, 'onLine', { value, configurable: true });
   window.dispatchEvent(new Event(value ? 'online' : 'offline'));
+  onlineManager.setOnline(value);
 };
 
 /**
