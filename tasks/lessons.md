@@ -33295,7 +33295,7 @@ Discrimination : `git stash` sur `check-identity.mjs` seul → 14/14 défauts r�
 
 **Corollaire de portée.** Le défaut vivait dans la SEULE des quatre sondes de pixels du fichier qui n'appariait pas `scrollIntoView({ block: 'center' })` à son `waitForRowSettled` — les trois autres le faisaient. `waitForRowSettled` attend qu'une rangée cesse de BOUGER, jamais qu'elle soit À L'ÉCRAN : les deux attentes ne sont pas substituables, et un inventaire des sites voisins l'aurait dit avant la CI.
 
-## Leçon 633 — remplacer un délai par une attente de fait peut RÉVÉLER une course que le délai masquait ; il en faut alors DEUX : le fait qu'on cherche, et sa STABILITÉ
+## Leçon 634 — remplacer un délai par une attente de fait peut RÉVÉLER une course que le délai masquait ; il en faut alors DEUX : le fait qu'on cherche, et sa STABILITÉ
 
 2026-09-19, #7054 (chronologie du fil : `install` + `pauseAt` remplace `install` seul, tous les délais fixes des états HORS chronologie deviennent des attentes de fait). Le lot converti et vert sur ses propres témoins a fait rougir, de façon INTERMITTENTE, deux assertions du menu du message que personne n'avait touchées : « le clic droit … ouvre UN role=menu » (0/1 après ouverture) puis, une fois corrigée, « ArrowRight déplace le focus » et « Tab garde le focus DANS le menu » (retombant sur l'item de départ, ou sortant du cluster).
 
