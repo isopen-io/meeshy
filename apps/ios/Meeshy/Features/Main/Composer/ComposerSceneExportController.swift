@@ -126,6 +126,20 @@ final class ComposerSceneExportController: ObservableObject {
                 // fabriquer un depuis une source absente ferait croire à un
                 // relais.
                 stickerImageSources: [:],
+                // **La carte de fin est DUE ici** (#7052). L'exception que ce
+                // paramètre porte vise l'export d'une SCÈNE DE POST, voulue
+                // sans habillage — ni interlude, ni carte, ni jingle. Ce
+                // contrôleur est l'autre cas : le partage hors-Meeshy de la
+                // composition de l'auteur, qui peint déjà son interlude
+                // d'identité douze lignes plus haut. Retirer la carte ici
+                // livrerait une story amputée de sa signature.
+                //
+                // Le paramètre n'a DÉLIBÉRÉMENT pas de valeur par défaut —
+                // « porté par l'EXIGENCE et non par un relais à défaut »
+                // (`StoryVideoExportService:95`) : c'est ce qui a fait rougir
+                // la compilation plutôt que de laisser une scène sortir
+                // marquée en silence.
+                appendsBrandOutro: true,
                 onProgress: { [weak self] fraction in self?.progress = fraction },
                 onPhaseChange: nil
             )
