@@ -24,7 +24,7 @@
  * `online`/`offline` et la coupure elle-même n'existent que là. Aucun test
  * unitaire ne peut couper un réseau.
  *
- * POURQUOI `await-fact.mjs`, JAMAIS `waitForTimeout` (#7054). Aucune horloge
+ * POURQUOI `await-fact.mjs`, JAMAIS un délai fixe posé en dur (#7054). Aucune horloge
  * truquée n'est en jeu ici (ni `install` ni `setFixedTime`) : les minuteurs de
  * ce contexte sont les VRAIS minuteurs du navigateur, donc `awaitFact` sonde
  * directement, sans passer par `paused-chronology.mjs`. Chaque lecture d'état

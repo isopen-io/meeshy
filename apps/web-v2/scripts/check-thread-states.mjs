@@ -14,8 +14,10 @@ import { fileURLToPath } from 'node:url';
 
 import { launchChromium } from './lib/browser.mjs';
 import { startDistServer } from './lib/gate-server.mjs';
+import { awaitCondition, awaitFact } from './lib/await-fact.mjs';
 import { checkOfflineStates } from './lib/check-offline-states.mjs';
-import { checkThreadMedia } from './lib/check-media.mjs';
+import { checkThreadMedia, waitForRowSettled } from './lib/check-media.mjs';
+import { waitForValueSettled } from './lib/settle-value.mjs';
 import { checkThreadMediaGrid } from './lib/check-media-grid.mjs';
 import { checkViewerVideoTransport } from './lib/check-media-transport.mjs';
 import { checkMessageStates } from './lib/check-message-states.mjs';
@@ -394,11 +396,22 @@ await runProtectionSuite('bulles');
   const menuPage = await menuContext.newPage();
   await menuPage.goto(`${BASE}/c/c-deploiement`, { waitUntil: 'load' });
   await menuPage.waitForSelector('[data-message]');
-  await menuPage.waitForTimeout(300);
 
   const rows = menuPage.locator('[data-row]');
   const cluster = menuPage.locator('[role="menu"]');
   const listItems = menuPage.locator('.message-menu-list [role="menuitem"]');
+
+  /**
+   * L'ANCRAGE D'OUVERTURE DU FIL EST ENCORE EN VOL (#7054, découvert en
+   * vérifiant ce lot) — `pinToBottom` répète `scrollTop = scrollHeight` sur
+   * 20 VRAIES images pendant que les hauteurs convergent, et chaque image où
+   * la hauteur a changé émet un `scroll` NATIF que `useRovingMenu` (#5814)
+   * traite comme une fermeture (`onScroll: onClose`, capturé sur `document`,
+   * `roving-menu.ts:160`) : un menu ouvert PENDANT cette fenêtre se referme
+   * aussitôt, sans rapport avec le clic. `waitForRowSettled`
+   * (`lib/check-media.mjs`) attend le FAIT — réutilisé, jamais dupliqué.
+   */
+  await waitForRowSettled(menuPage, await rows.nth(2).locator('[data-message]').getAttribute('data-message'));
 
   /**
    * Le fil est ANCRÉ EN BAS et VIRTUALISÉ : une rangée peut être montée sans
@@ -409,15 +422,21 @@ await runProtectionSuite('bulles');
   const openMenuOnRow = async (index) => {
     await rows.nth(index).scrollIntoViewIfNeeded();
     await rows.nth(index).click({ button: 'right' });
-    await menuPage.waitForTimeout(250);
+    await awaitFact(cluster);
   };
-  /** Rend `false` PLUTÔT QUE DE LEVER quand l'entrée manque — un témoin doit
-   *  nommer le défaut trouvé, jamais mourir dessus (§ `clickIfPresent`). */
+  /**
+   * Rend `false` PLUTÔT QUE DE LEVER quand l'entrée manque — un témoin doit
+   * nommer le défaut trouvé, jamais mourir dessus (§ `clickIfPresent`).
+   *
+   * AUCUNE attente après le clic (#7054) : l'EFFET d'une entrée de menu
+   * diffère de l'une à l'autre (le presse-papiers, un attribut `lang`, une
+   * capsule, une barre de sélection…) — chaque APPELANT attend SON fait,
+   * juste après.
+   */
   const clickMenuItem = async (label) => {
     const item = listItems.filter({ hasText: label }).first();
     if ((await item.count()) === 0) return expect(false, `l'entrée « ${label} » manque au menu`);
     await item.click();
-    await menuPage.waitForTimeout(250);
     return true;
   };
 
@@ -495,7 +514,7 @@ await runProtectionSuite('bulles');
 
   // 6.3 — ÉCHAP ferme et rend le focus À LA RANGÉE.
   await menuPage.keyboard.press('Escape');
-  await menuPage.waitForTimeout(200);
+  await awaitFact(cluster, { state: 'detached' });
   expect((await cluster.count()) === 0, 'Échap ferme le menu');
   expect(
     await menuPage.evaluate(() => document.activeElement?.hasAttribute('data-row') === true),
@@ -504,8 +523,20 @@ await runProtectionSuite('bulles');
 
   // 6.4 — LA TOUCHE MENU (Shift+F10) ouvre le MÊME menu depuis le clavier.
   await menuPage.keyboard.press('Shift+F10');
-  await menuPage.waitForTimeout(250);
+  await awaitFact(cluster);
   expect((await cluster.count()) === 1, 'Shift+F10 sur la rangée focalisée ouvre le menu');
+  /**
+   * LE FOCUS INITIAL DU CLUSTER EST POSÉ PAR UN `requestAnimationFrame`
+   * DIFFÉRÉ (#7054) — `useRovingMenu` (`roving-menu.ts:176`) focalise le
+   * premier item une image APRÈS le montage, donc APRÈS `awaitFact(cluster)`.
+   * Un `.focus()` programmatique + `ArrowRight` avant cette image se fait
+   * ÉCRASER par cet effet (« 😂 → 😂 », mesuré). On attend la STABILISATION
+   * du focus dans le cluster avant de le déplacer nous-mêmes.
+   */
+  await waitForValueSettled(
+    menuPage,
+    () => document.querySelector('[role="menu"]')?.contains(document.activeElement) === true,
+  );
 
   // 6.4 bis — LE PARCOURS CLAVIER DU RAIL. `ArrowRight` y déplaçait le focus
   // par un événement RECOPIÉ (`{ ...event, key }`), qui perd `preventDefault`
@@ -514,32 +545,46 @@ await runProtectionSuite('bulles');
   await railFirst.focus();
   const focusedBefore = await menuPage.evaluate(() => document.activeElement?.getAttribute('aria-label'));
   await menuPage.keyboard.press('ArrowRight');
-  await menuPage.waitForTimeout(120);
-  const focusedAfter = await menuPage.evaluate(() => document.activeElement?.getAttribute('aria-label'));
+  // `waitForValueSettled` (`settle-value.mjs`) : DEUX lectures consécutives
+  // identiques, jamais une seule — la garde ci-dessus n'exclut pas un second
+  // rebond du même effet différé.
+  const focusedAfter = await waitForValueSettled(
+    menuPage,
+    () => document.activeElement?.getAttribute('aria-label') ?? null,
+  );
   expect(
     focusedAfter !== null && focusedAfter !== focusedBefore,
     `ArrowRight déplace le focus sur le rail (${focusedBefore} → ${focusedAfter})`,
   );
   // 6.4 ter — TAB NE SORT PAS DU CLUSTER : derrière le voile, les rangées sont
-  // focalisables et pourtant inatteignables.
+  // focalisables et pourtant inatteignables. Même garde qu'au-dessus : DEUX
+  // lectures consécutives identiques, pas une lecture après un seul fait.
   await menuPage.keyboard.press('Tab');
-  await menuPage.waitForTimeout(120);
+  await waitForValueSettled(
+    menuPage,
+    () => document.querySelector('[role="menu"]')?.contains(document.activeElement) === true,
+  );
   expect(
     await menuPage.evaluate(() => document.querySelector('[role="menu"]')?.contains(document.activeElement) === true),
     'Tab garde le focus DANS le menu',
   );
   await menuPage.keyboard.press('Escape');
-  await menuPage.waitForTimeout(150);
+  await awaitFact(cluster, { state: 'detached' });
 
   // 6.5 — L'APPUI LONG (500 ms, souris tenue) ouvre le même menu, et le geste
   // ne laisse AUCUNE sélection de texte native derrière lui.
   await rows.nth(0).scrollIntoViewIfNeeded();
   await rows.nth(0).hover();
+  // DÉLAI DE GESTE, pas d'état (#7054) : le temps tenu EST l'entrée — le
+  // seuil d'appui long (500 ms) se mesure en le TENANT, aucun fait ne le
+  // remplace. La seule occurrence autorisée par `no-fixed-delays.test.ts`.
   await menuPage.mouse.down();
   await menuPage.waitForTimeout(700);
   await menuPage.mouse.up();
-  await menuPage.waitForTimeout(250);
-  const longPressOpened = expect((await cluster.count()) === 1, 'un appui tenu 500 ms ouvre le menu');
+  const longPressOpened = expect(
+    (await awaitFact(cluster)) && (await cluster.count()) === 1,
+    'un appui tenu 500 ms ouvre le menu',
+  );
   expect(
     await menuPage.evaluate(() => (window.getSelection()?.toString() ?? '') === ''),
     "l'appui long ne sélectionne pas le texte de la rangée",
@@ -549,6 +594,7 @@ await runProtectionSuite('bulles');
   // 6.6 — COPIER écrit le texte SERVI dans le presse-papiers.
   const servedText = await rows.nth(0).innerText();
   if (await clickMenuItem('Copier')) {
+    await awaitCondition(menuPage, () => window.__copied.length > 0);
     const copied = await menuPage.evaluate(() => window.__copied);
     expect(copied.length === 1, 'Copier écrit une fois dans le presse-papiers');
     expect(
@@ -568,8 +614,13 @@ await runProtectionSuite('bulles');
     const unchecked = choices.and(menuPage.locator('[aria-checked="false"]'));
     const target = (await unchecked.count()) > 0 ? unchecked.first() : choices.nth(1);
     await target.click();
-    await menuPage.waitForTimeout(350);
-    const langAfter = await rows.nth(0).locator('[lang]').first().getAttribute('lang');
+    // DEUX lectures consécutives identiques (`settle-value.mjs`), pas une
+    // lecture après un seul fait — même garde que 6.4bis/6.4ter.
+    const settled = await waitForValueSettled(menuPage, () => ({
+      lang: document.querySelector('[data-row]')?.querySelector('[lang]')?.getAttribute('lang') ?? null,
+      text: document.querySelector('[data-row]')?.textContent ?? null,
+    }));
+    const langAfter = settled?.lang ?? (await rows.nth(0).locator('[lang]').first().getAttribute('lang'));
     const textAfter = await rows.nth(0).innerText();
     expect(langAfter !== langBefore, `Traduire change lang (${langBefore} → ${langAfter})`);
     expect(textAfter !== textBefore, 'Traduire change le TEXTE servi, pas seulement son étiquette');
@@ -579,7 +630,10 @@ await runProtectionSuite('bulles');
   const chipsBefore = await rows.nth(0).locator('.rounded-chip').count();
   await openMenuOnRow(0);
   await menuPage.locator('[role="group"][aria-label="Réagir"] [role="menuitem"]').first().click();
-  await menuPage.waitForTimeout(300);
+  await waitForValueSettled(
+    menuPage,
+    () => document.querySelector('[data-row]')?.querySelectorAll('.rounded-chip').length ?? 0,
+  );
   expect(
     (await rows.nth(0).locator('.rounded-chip').count()) > chipsBefore,
     'une réaction du rail ajoute une capsule tout de suite (optimiste)',
@@ -588,6 +642,9 @@ await runProtectionSuite('bulles');
   // 6.9 — COMPOSER pré-adresse le composeur (la citation apparaît).
   await openMenuOnRow(0);
   if (await clickMenuItem('Composer')) {
+    await awaitFact(
+      menuPage.getByRole('button', { name: /Annuler la réponse/ }).or(menuPage.locator('[data-reply-target]')).first(),
+    );
     expect(
       (await menuPage.getByRole('button', { name: /Annuler la réponse/ }).count()) > 0 ||
         (await menuPage.locator('[data-reply-target]').count()) > 0,
@@ -599,6 +656,7 @@ await runProtectionSuite('bulles');
   // coche de la rangée est un contrôle RÉEL (role=checkbox), pas un décor.
   await openMenuOnRow(0);
   if (await clickMenuItem('Sélectionner')) {
+    await awaitFact(menuPage.getByRole('toolbar', { name: 'Sélection de messages' }));
     expect(
       (await menuPage.getByRole('toolbar', { name: 'Sélection de messages' }).count()) === 1,
       'Sélectionner remplace le composeur par la barre de sélection',
@@ -614,9 +672,12 @@ await runProtectionSuite('bulles');
       const second = checkboxes.nth(1);
       const before = await second.getAttribute('aria-checked');
       await second.click();
-      await menuPage.waitForTimeout(250);
+      const after = await waitForValueSettled(
+        menuPage,
+        () => document.querySelectorAll('[role="checkbox"]')[1]?.getAttribute('aria-checked') ?? null,
+      );
       expect(
-        (await second.getAttribute('aria-checked')) !== before,
+        after !== before,
         "la coche d'une AUTRE rangée bascule au clic (contrôle réel, pas un décor)",
       );
     }
@@ -648,32 +709,37 @@ await runProtectionSuite('bulles');
     const leakPage = await leakContext.newPage();
     await leakPage.goto(`${BASE}/c/c-protection`, { waitUntil: 'load' });
     await leakPage.waitForSelector('[data-message]');
-    await leakPage.waitForTimeout(300);
 
     const rowFor = (id) => leakPage.locator(`[data-row]:has([data-message="${id}"])`);
+    const leakMenuList = leakPage.locator('.message-menu-list');
+
+    // L'ancrage d'ouverture peut encore être en vol (§ doc-comment du premier
+    // `waitForRowSettled` de ce fichier) — le clic droit qui suit ouvrirait
+    // un menu que le premier `scroll` de convergence referme aussitôt.
+    await waitForRowSettled(leakPage, BLURRED_WITNESS_ID);
 
     // (a) le menu d'un message PROTÉGÉ n'offre pas « Copier ».
     await rowFor(BLURRED_WITNESS_ID).click({ button: 'right' });
-    await leakPage.waitForTimeout(250);
+    await awaitFact(leakMenuList);
     const protectedLabels = await leakPage.locator('.message-menu-list [role="menuitem"]').allInnerTexts();
     expect(!protectedLabels.includes('Copier'), 'un message flouté n’offre pas « Copier »');
     expect(!protectedLabels.includes('Traduire'), 'un message flouté n’offre pas « Traduire »');
     await leakPage.keyboard.press('Escape');
-    await leakPage.waitForTimeout(200);
+    await awaitFact(leakPage.locator('[role="menu"]'), { state: 'detached' });
 
     // (b) le SÉLECTIONNER + « Copier » de la barre ne fait pas sortir le secret.
     await rowFor(TRANSLATED_UNVEILED_WITNESS_ID).click({ button: 'right' });
-    await leakPage.waitForTimeout(250);
+    await awaitFact(leakMenuList);
     await leakPage.locator('.message-menu-list [role="menuitem"]').filter({ hasText: 'Sélectionner' }).first().click();
-    await leakPage.waitForTimeout(250);
+    await awaitFact(leakPage.getByRole('toolbar', { name: 'Sélection de messages' }));
     const blurredCheckbox = rowFor(BLURRED_WITNESS_ID).getByRole('checkbox');
     if ((await blurredCheckbox.count()) === 0) {
       expect(false, 'la rangée floutée porte une coche de sélection');
     } else {
       await blurredCheckbox.first().click();
-      await leakPage.waitForTimeout(250);
+      await awaitFact(rowFor(BLURRED_WITNESS_ID).locator('[role="checkbox"][aria-checked="true"]'));
       await leakPage.getByRole('button', { name: 'Copier' }).click();
-      await leakPage.waitForTimeout(250);
+      await awaitCondition(leakPage, () => window.__copied.length > 0);
       const leaked = await leakPage.evaluate(() => window.__copied.join('\n'));
       expect(!leaked.includes(BLURRED_CONTENT), 'le contenu flouté ne part JAMAIS dans le presse-papiers');
       expect(leaked.length > 0, 'la copie d’une sélection mixte rend quand même le message non protégé');
@@ -701,7 +767,6 @@ await runProtectionSuite('bulles');
   const touchPage = await touchContext.newPage();
   await touchPage.goto(`${BASE}/c/c-deploiement`, { waitUntil: 'load' });
   await touchPage.waitForSelector('[data-row]');
-  await touchPage.waitForTimeout(300);
   const touchGuard = await touchPage.evaluate(() => {
     const row = document.querySelector('[data-row]');
     if (row === null) return null;
@@ -747,6 +812,9 @@ await runProtectionSuite('bulles');
    * list` dans le contexte tactile, `-webkit-touch-callout` lu dans le DIST
    * construit (WebKit-only, jeté par Chromium à l'analyse).
    */
+  // L'ancrage d'ouverture peut encore être en vol (§ doc-comment du premier
+  // `waitForRowSettled` de ce fichier).
+  await waitForRowSettled(touchPage, await touchPage.locator('[data-row] [data-message]').first().getAttribute('data-message'));
   await touchPage.dispatchEvent('[data-row]', 'contextmenu');
   await touchPage.waitForSelector('.message-menu-list');
   const clusterTouchGuard = await touchPage.evaluate(() => {
@@ -797,7 +865,6 @@ await runProtectionSuite('bulles');
   const composerPage = await composerContext.newPage();
   await composerPage.goto(`${BASE}/c/c-deploiement`, { waitUntil: 'load' });
   await composerPage.waitForSelector('[data-message]');
-  await composerPage.waitForTimeout(300);
 
   const inertInComposer = () =>
     composerPage.evaluate(() => {
@@ -826,7 +893,10 @@ await runProtectionSuite('bulles');
   expect((await plus.count()) === 1, 'le composeur offre la porte des pièces jointes');
   const tilesBefore = await composerPage.locator('[role="group"][aria-label="Types de pièces jointes"]').count();
   await plus.click();
-  await composerPage.waitForTimeout(350);
+  // C'EST L'`import()` DIFFÉRÉ DE LA LEÇON 590 (#7054) : le tiroir est chargé
+  // en chunk `lazy(…)` (`ComposerTray`), donc son montage n'est pas une
+  // micro-tâche — on attend le FAIT (le panneau attaché), jamais un délai.
+  await awaitFact(composerPage.locator('[role="group"][aria-label="Types de pièces jointes"]'));
   const tilesAfter = await composerPage.locator('[role="group"][aria-label="Types de pièces jointes"]').count();
   expect(tilesBefore === 0 && tilesAfter === 1, 'le « + » OUVRE le tiroir (le geste a un effet, loi 4)');
 
