@@ -424,6 +424,23 @@ try {
       await page.click('[data-profile-filter="reels"]');
       await page.waitForFunction((n) => document.querySelectorAll('[data-profile-posts] [data-feed-card-id]').length < n, allCards, { timeout: 1000 });
       check((await page.$('[data-profile-posts-more]')) !== null, `${label} : sous un filtre, « Charger plus » reste OFFERT`);
+      /* ET LA TROISIÈME COMBINAISON DU MÊME COUPLE (revue #7083, défaut
+         majeur 2) : le correctif qui a rendu « Charger plus » visible sous un
+         filtre a OUVERT l'image inverse — « Aucun réel · Touchez à nouveau la
+         tuile pour tout revoir » peint SOUS une tuile disant « 2 Réels », avec
+         « Charger plus » juste en dessous. Les deux branches du rendu sont
+         DISJOINTES (`models.length === 0` d'un côté, `hasNextPage` de
+         l'autre) : chaque moitié se mesurait verte séparément, jamais leur
+         coexistence. Ici on garde l'INVARIANT — jamais les deux ensemble.
+         L'ÉTAT lui-même (page sans aucun réel ET suite annoncée) n'est pas
+         atteignable depuis le corpus de fixtures, dont la première page porte
+         un réel : il est mesuré par montage réel dans
+         `routes/user-profile.test.tsx` § « le vide filtré et la page qui reste
+         à lire », qui sème le cache. */
+      check(
+        (await page.$('[data-profile-posts-empty]')) === null || (await page.$('[data-profile-posts-more]')) === null,
+        `${label} : jamais « aucun résultat » ET « Charger plus » dans la même image`,
+      );
       /* SON ENCRE SE MESURE ICI, tant qu'il existe — la dernière page le
          retire, et une mesure faite plus bas rendrait `null` pour un contrôle
          simplement absent, c'est-à-dire un gate vert sur une couleur jamais
@@ -502,6 +519,13 @@ try {
       }
 
       // ------------------------------------------------ 15. hors ligne, la fiche reste lisible
+      /* LA FICHE EST RECHARGÉE pour retrouver sa PREMIÈRE page : la section 12
+         l'a paginée jusqu'au bout, et « Charger plus » — dont l'inertie hors
+         ligne se mesure ici (revue #7083, défaut majeur 4) — n'existe plus sur
+         la dernière page. Mesurer un contrôle absent rendrait un gate vert sur
+         un geste jamais regardé. */
+      await page.goto(`${BASE}/u/kwame-mensah`, { waitUntil: 'load' });
+      await page.waitForSelector('[data-profile-posts-more]');
       await context.setOffline(true);
       await page.waitForSelector('[data-profile-offline]');
       check((await textOf(page, '[data-user-hero] p')) === 'Kwame Mensah', `${label} : hors ligne, la fiche reste lisible`);
@@ -509,6 +533,34 @@ try {
         (await page.$$eval('[data-profile-action]', (els) => els.filter((el) => !el.disabled).length)) === 0,
         `${label} : hors ligne, aucun geste d'écriture ne part`,
       );
+      /* « CHARGER PLUS » EST UN GESTE COMME LES AUTRES (revue #7083, défaut
+         majeur 4) : il restait ACTIF hors ligne et le tap ne changeait ni la
+         liste, ni le libellé, ni l'état — TanStack met la page en PAUSE, donc
+         l'écran ne passe jamais par `isError`, le seul chemin qui aurait peint
+         « Réessayer ». L'utilisateur touchait un contrôle et l'application se
+         taisait. On mesure l'EFFET du tap, pas seulement l'attribut. */
+      const avantTap = await cardCount();
+      check(
+        (await page.$eval('[data-profile-posts-more]', (el) => el.disabled)) === true,
+        `${label} : hors ligne, « Charger plus » se désarme avec ses voisins`,
+      );
+      await page.click('[data-profile-posts-more]', { force: true }).catch(() => null);
+      await page.waitForTimeout(400);
+      check((await cardCount()) === avantTap, `${label} : hors ligne, le tap sur « Charger plus » ne change RIEN (${avantTap})`);
+      /* UNE SEULE VOIX POUR L'ÉTAT RÉSEAU (revue #7083, défaut majeur 5, D-11)
+         — la pastille globale peignait « Hors ligne » PAR-DESSUS le titre
+         « Hors ligne » de la carte de l'écran : le même mot deux fois, dont
+         une moitié masquée par l'autre. La loi vit dans
+         `lib/view/sync-pill-voice.ts`. */
+      const chevauche = await page.evaluate(() => {
+        const pastille = document.querySelector('[data-sync-pill]');
+        const carte = document.querySelector('[data-profile-offline]');
+        if (pastille === null || carte === null) return false;
+        const a = pastille.getBoundingClientRect();
+        const b = carte.getBoundingClientRect();
+        return a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+      });
+      check(!chevauche, `${label} : une seule voix hors ligne — la pastille globale ne recouvre pas la carte de l'écran`);
       await capture(page, `profil-public-hors-ligne-${scheme}-${width}x${height}`);
       await context.setOffline(false);
 

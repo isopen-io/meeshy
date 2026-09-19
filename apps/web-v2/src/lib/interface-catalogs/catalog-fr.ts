@@ -547,6 +547,12 @@ const fr = {
   'userProfile.posts.emptyFilter': 'Touchez à nouveau la tuile pour tout revoir.',
   'userProfile.posts.error': 'Impossible de charger les publications',
   'userProfile.posts.loadMore': 'Charger plus',
+  /* CE QUI EST ARRIVÉ SE DIT (revue #7083) : « Charger plus » était le seul
+     geste de l'écran à changer la LONGUEUR de la liste, et le seul à ne rien
+     annoncer. La forme « Publications ajoutées : {count} » évite l'accord de
+     pluriel dans les sept langues — un seul libellé pour 1 comme pour 12. */
+  'userProfile.posts.loaded': 'Publications ajoutées : {count}',
+  'userProfile.posts.loadedNone': 'Aucune publication de plus à afficher',
   'userProfile.posts.loading': 'Chargement…',
   'userProfile.stat.posts': 'Postes',
   'userProfile.stat.reels': 'Réels',

@@ -36,3 +36,30 @@ export const filterPosts = (posts: readonly FeedPost[], filter: ProfilePostsFilt
   if (filter === 'all') return posts;
   return posts.filter((post) => (filter === 'reels' ? isReel(post) : !isReel(post)));
 };
+
+/**
+ * **UNE ABSENCE NE S'AFFIRME QUE QUAND PLUS RIEN N'EST À LIRE** (revue #7083) —
+ * miroir EXACT de `filteredEmptyState` (`ProfileUserPostsList.swift:497-510`) :
+ * `if !viewModel.hasMore { … }`, et le doc-comment iOS en donne la raison.
+ *
+ * Le filtre est CLIENT, sur les pages DÉJÀ lues ; la tuile qui l'arme annonce
+ * un compte SERVEUR. Tant qu'une page reste à lire, « Aucun réel » est une
+ * affirmation que la tuile voisine — « 2 Réels » — et le bouton d'en dessous
+ * — « Charger plus » — démentent dans la MÊME image. Le geste qui trouverait
+ * les réels était alors présenté comme l'alternative à une phrase jurant qu'il
+ * n'y en a pas.
+ *
+ * **Le vide du COMPTE, lui, se dit tout de suite** : `filter === 'all'` et zéro
+ * ligne servie, c'est la réponse de la passerelle, pas un artefact de filtre —
+ * et le premier jet la peignait déjà ainsi.
+ *
+ * Deux booléens et une longueur : la loi vit ici, pure, parce que c'est la
+ * COEXISTENCE de deux branches disjointes du rendu (`models.length === 0` d'un
+ * côté, `hasNextPage` de l'autre) qui produisait le défaut — un gate qui
+ * mesure chaque branche séparément ne la voit jamais.
+ */
+export const showsEmptyState = (params: {
+  readonly visible: number;
+  readonly filter: ProfilePostsFilter;
+  readonly hasNextPage: boolean;
+}): boolean => params.visible === 0 && (params.filter === 'all' || !params.hasNextPage);

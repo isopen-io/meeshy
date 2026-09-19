@@ -504,6 +504,8 @@ const pt = {
   'userProfile.posts.emptyFilter': 'Toque novamente no bloco para ver tudo.',
   'userProfile.posts.error': 'Não foi possível carregar as publicações',
   'userProfile.posts.loadMore': 'Carregar mais',
+  'userProfile.posts.loaded': 'Publicações adicionadas: {count}',
+  'userProfile.posts.loadedNone': 'Não há mais publicações a mostrar',
   'userProfile.posts.loading': 'A carregar…',
   'userProfile.stat.posts': 'Publicações',
   'userProfile.stat.reels': 'Reels',

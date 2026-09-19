@@ -500,6 +500,8 @@ const en = {
   'userProfile.posts.emptyFilter': 'Tap the tile again to see everything.',
   'userProfile.posts.error': 'Could not load the posts',
   'userProfile.posts.loadMore': 'Load more',
+  'userProfile.posts.loaded': 'Posts added: {count}',
+  'userProfile.posts.loadedNone': 'No further posts to show',
   'userProfile.posts.loading': 'Loading…',
   'userProfile.stat.posts': 'Posts',
   'userProfile.stat.reels': 'Reels',

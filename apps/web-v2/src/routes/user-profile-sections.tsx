@@ -706,14 +706,31 @@ export function ProfilePostsError({ language, onRetry }: { readonly language: In
  *
  * Il s'affiche sous TOUS les filtres (`hasNext` seul) : le filtre est client,
  * la tuile annonce un compte serveur, et le retirer murait la suite.
+ *
+ * **HORS LIGNE IL SE DÉSARME, comme les trois gestes relationnels au-dessus**
+ * (revue #7083, défaut majeur 4). Mesuré au navigateur : coupure réseau, les
+ * trois gestes `[data-profile-action]` désactivés, le bandeau hors ligne
+ * peint — et ce bouton-ci resté `ACTIF`. Le tap ne changeait alors ni la
+ * liste, ni le libellé, ni l'état : TanStack met la page en PAUSE
+ * (`networkMode` par défaut), donc l'écran ne passe JAMAIS par `isError`, le
+ * seul chemin qui aurait peint « Réessayer ». L'utilisateur touchait un
+ * contrôle et l'application se taisait — la loi 4 prise à revers.
+ *
+ * Le bandeau hors ligne de l'écran dit déjà POURQUOI ; un bouton qui se
+ * désarme avec ses voisins, sur la même cause, est la lecture la plus simple
+ * (dimension 6 : même écran, même loi pour chaque geste). Le libellé reste
+ * « Charger plus » : son inertie est portée par `disabled`, pas par un mot de
+ * plus à traduire en sept langues.
  */
 export function ProfilePostsMore({
   language,
   loading,
+  online,
   onMore,
 }: {
   readonly language: InterfaceLanguage;
   readonly loading: boolean;
+  readonly online: boolean;
   readonly onMore: () => void;
 }) {
   return (
@@ -721,7 +738,7 @@ export function ProfilePostsMore({
       type="button"
       data-profile-posts-more
       onClick={onMore}
-      disabled={loading}
+      disabled={loading || !online}
       className={`mx-auto grid place-items-center rounded-chip px-5 text-body font-semibold disabled:opacity-45 ${FOCUS} ${BRAND_INK}`}
       style={{ minHeight: 44, outlineColor: BRAND }}
     >

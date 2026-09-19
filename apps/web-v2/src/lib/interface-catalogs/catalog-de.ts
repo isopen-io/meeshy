@@ -500,6 +500,8 @@ const de = {
   'userProfile.posts.emptyFilter': 'Tippe erneut auf die Kachel, um alles zu sehen.',
   'userProfile.posts.error': 'Die Beiträge konnten nicht geladen werden',
   'userProfile.posts.loadMore': 'Mehr laden',
+  'userProfile.posts.loaded': 'Hinzugefügte Beiträge: {count}',
+  'userProfile.posts.loadedNone': 'Keine weiteren Beiträge vorhanden',
   'userProfile.posts.loading': 'Wird geladen…',
   'userProfile.stat.posts': 'Beiträge',
   'userProfile.stat.reels': 'Reels',

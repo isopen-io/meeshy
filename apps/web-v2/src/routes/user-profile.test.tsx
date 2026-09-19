@@ -3,6 +3,9 @@ import { createRoot, type Root } from 'react-dom/client';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
+import { authorPostsQueryKey } from '@/lib/api/author-posts';
+import { BLOCKED_USERS_QUERY_KEY } from '@/lib/api/blocks';
+import { fixtureAuthorPosts } from '@/lib/api/fixtures-rich-text';
 import { appQueryClient } from '@/lib/api/query-client';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -39,6 +42,11 @@ afterEach(() => {
   mounted?.container.remove();
   mounted = null;
   appQueryClient.clear();
+  /* LE RÉSEAU SE REMET ICI, jamais en fin de corps de témoin : une assertion
+     qui casse avant la ligne de restauration laisserait l'`onlineManager` de
+     TanStack en pause pour tout le reste du PROCESSUS — donc pour les autres
+     fichiers de la suite. Voir `setOnline` ci-dessous. */
+  setOnline(true);
 });
 
 const settle = () =>
@@ -174,5 +182,159 @@ describe('le refus ne laisse RIEN transparaître', () => {
     expect(el.querySelector('[data-profile-retry]')).toBeNull();
     /* Et aucun bloc de contenu n'a été monté. */
     expect(el.querySelector('[data-profile-posts]')).toBeNull();
+  });
+});
+
+/** L'identifiant de l'auteur des fixtures (`RICH_PERSON.id`) : la liste des
+ * publications est indexée par `User.id`, jamais par pseudo
+ * (`PostFeedService.ts:869`). */
+const AUTHOR_ID = 'u-rich-kwame';
+
+/**
+ * **COUPER LE RÉSEAU SE DÉFAIT, ÉVÉNEMENT COMPRIS** — `navigator.onLine` seul
+ * ne suffit dans AUCUN des deux sens : `useOnline` s'abonne aux événements
+ * `online` / `offline` (`lib/net/online.ts`), et l'`onlineManager` de TanStack
+ * Query s'y abonne aussi. Rendre `onLine` à `true` sans REJOUER l'événement
+ * laisse le gestionnaire de requêtes en PAUSE — pour tout le reste du
+ * processus de test, donc pour les autres fichiers : mesuré ici, 53 témoins
+ * rouges dans des écrans qui n'ont rien à voir, et une suite 13 fois plus
+ * lente. La coupure se défait exactement comme elle se pose.
+ */
+const setOnline = (value: boolean) => {
+  Object.defineProperty(navigator, 'onLine', { value, configurable: true });
+  window.dispatchEvent(new Event(value ? 'online' : 'offline'));
+};
+
+/**
+ * **SOUS UN FILTRE, L'ÉCRAN NE DÉCLARE PAS UNE ABSENCE QUE SES VOISINS
+ * DÉMENTENT** (revue #7083, défaut majeur 2).
+ *
+ * Le défaut mesuré : première page sans aucun réel, `hasMore: true` — l'écran
+ * peignait « Aucun réel · Touchez à nouveau la tuile pour tout revoir » SOUS
+ * une tuile disant « 2 Réels », avec « Charger plus » juste en dessous. Le
+ * geste qui trouverait les réels était présenté comme l'alternative à une
+ * phrase jurant qu'il n'y en a pas. iOS interdit cette image :
+ * `filteredEmptyState` est MUET tant que `hasMore`
+ * (`ProfileUserPostsList.swift:497-510`).
+ *
+ * Les deux branches du rendu étant DISJOINTES, c'est leur COEXISTENCE qu'il
+ * faut mesurer — chaque moitié était déjà verte séparément.
+ */
+describe('le vide filtré et la page qui reste à lire', () => {
+  /** Une première page de POSTES seuls, avec une suite annoncée — exactement
+   * la forme que la passerelle sert quand les réels sont plus loin. */
+  const seedPostsOnly = (hasMore: boolean) => {
+    const page = fixtureAuthorPosts(AUTHOR_ID, null);
+    appQueryClient.setQueryData(authorPostsQueryKey(AUTHOR_ID), {
+      pages: [
+        {
+          posts: page.posts.filter((post) => post.type !== 'REEL'),
+          pagination: { ...page.pagination, hasMore, nextCursor: hasMore ? 'author:3' : null },
+        },
+      ],
+      pageParams: [undefined],
+    });
+  };
+
+  test('tant qu’une page reste à lire, l’écran SE TAIT et ne montre que le geste qui trouve', async () => {
+    seedPostsOnly(true);
+    const el = await mount('kwame-mensah');
+    act(() => (el.querySelector('[data-profile-filter="reels"]') as HTMLButtonElement).click());
+    expect(el.querySelectorAll('[data-feed-card-id]').length).toBe(0);
+    /* La tuile PROMET toujours, et c'est elle qui a raison. */
+    expect(text(el.querySelector('[data-profile-tile="reelsCount"] strong'))).toBe('2');
+    expect(el.querySelector('[data-profile-posts-empty]')).toBeNull();
+    expect(el.querySelector('[data-profile-posts-more]')).not.toBeNull();
+  });
+
+  test('la dernière page lue, le vide filtré se DIT — sinon la tuile surmonterait du vide', async () => {
+    seedPostsOnly(false);
+    const el = await mount('kwame-mensah');
+    act(() => (el.querySelector('[data-profile-filter="reels"]') as HTMLButtonElement).click());
+    expect(el.querySelector('[data-profile-posts-more]')).toBeNull();
+    expect(text(el.querySelector('[data-profile-posts-empty]'))).toContain('Aucun réel');
+  });
+});
+
+/**
+ * **LE PANIER DES BLOQUÉS SE LIT EN ENTIER** (revue #7083, défaut majeur 1).
+ *
+ * `BLOCKED_PAGE_SIZE` vaut 100 et rien n'appelait `fetchNextPage` : au-delà de
+ * la centième ligne, la fiche d'une personne BLOQUÉE s'ouvrait entière, avec
+ * « Bloquer » offert à la place de la carte de blocage. La passerelle n'expose
+ * AUCUNE source par sujet (`routes/directory/blocks.ts` : `PUT`, `DELETE`,
+ * `GET /blocks`, rien d'autre ; `relationAvec` n'a pas de valeur `blocked`) —
+ * l'issue compagnon #7125 la demande ; d'ici là, on lit le panier jusqu'au
+ * bout plutôt que de conclure sur sa première page.
+ */
+describe('un blocage au-delà de la première page du panier', () => {
+  test('la fiche rend la carte de blocage, jamais « Bloquer »', async () => {
+    /* Le sujet est ABSENT de la page semée, et une suite est annoncée : c'est
+       la forme exacte d'un lecteur qui a bloqué plus de cent personnes. */
+    appQueryClient.setQueryData(BLOCKED_USERS_QUERY_KEY, {
+      pages: [{ users: [], nextCursor: 'blocked:1' }],
+      pageParams: [null],
+    });
+    const el = await mount('yann.legoff');
+    await settle();
+    await settle();
+    expect(el.querySelector('[data-profile-blocked]')).not.toBeNull();
+    expect(el.querySelector('[data-profile-action="unblock"]')).not.toBeNull();
+    expect(el.querySelector('[data-profile-action="block"]')).toBeNull();
+    expect(el.querySelector('[data-profile-posts]')).toBeNull();
+  });
+});
+
+/**
+ * **L'ISSUE D'UN GESTE SE VOIT** (revue #7083, défaut majeur 3) — la région
+ * `role="status"` de `/u/` était `sr-only` INCONDITIONNELLE, là où « Découvrir »
+ * peignait une pastille sur les MÊMES clés et le MÊME hook. Un refus de la
+ * passerelle défaisait l'état optimiste sans un mot pour un utilisateur voyant.
+ */
+describe('l’annonce d’un geste relationnel', () => {
+  test('elle QUITTE `sr-only` — même loi que « Découvrir » (dimension 6)', async () => {
+    const el = await mount('kwame-mensah');
+    act(() => (el.querySelector('[data-profile-action="add"]') as HTMLButtonElement).click());
+    await settle();
+    const region = el.querySelector('[data-profile-announce]');
+    expect(text(region)).toBe('Demande envoyée');
+    expect(region?.getAttribute('class')).not.toBe('sr-only');
+  });
+});
+
+/**
+ * **« CHARGER PLUS » — SON EFFET, SON ANNONCE, SON FOCUS** (revue #7083,
+ * défauts majeurs 4 et 6).
+ */
+describe('« Charger plus »', () => {
+  test('il annonce ce qui est arrivé et rend le focus à la première carte NEUVE', async () => {
+    const el = await mount('kwame-mensah');
+    const more = el.querySelector('[data-profile-posts-more]') as HTMLButtonElement;
+    more.focus();
+    const before = el.querySelectorAll('[data-feed-card-id]').length;
+    act(() => more.click());
+    await settle();
+    await settle();
+    const cards = [...el.querySelectorAll('[data-feed-card-id]')];
+    expect(cards.length).toBeGreaterThan(before);
+    expect(text(el.querySelector('[data-profile-announce]'))).toBe(`Publications ajoutées : ${cards.length - before}`);
+    /* Le bouton DISPARAÎT sur la dernière page : sans reprise, le focus
+       retombait sur `document.body` et il fallait re-tabuler depuis le haut. */
+    expect(document.activeElement).toBe(cards[before] ?? null);
+  });
+
+  test('hors ligne, le tap n’a AUCUN effet — et le geste est désarmé comme ses trois voisins', async () => {
+    const el = await mount('kwame-mensah');
+    const before = el.querySelectorAll('[data-feed-card-id]').length;
+    await act(async () => setOnline(false));
+    const more = el.querySelector('[data-profile-posts-more]') as HTMLButtonElement;
+    expect(more.disabled).toBe(true);
+    act(() => more.click());
+    await settle();
+    await settle();
+    /* L'EFFET, pas l'attribut : la liste n'a pas bougé, et le bandeau dit
+       pourquoi — jamais un contrôle qu'on touche sans rien obtenir. */
+    expect(el.querySelectorAll('[data-feed-card-id]').length).toBe(before);
+    expect(el.querySelector('[data-profile-offline]')).not.toBeNull();
   });
 });

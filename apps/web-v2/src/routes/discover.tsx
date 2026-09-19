@@ -3,6 +3,7 @@ import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useStore } from 'zustand/react';
 
 import { LensPaginationFooter } from '@/components/lens-pagination-footer';
+import { LiveAnnouncement } from '@/components/live-announcement';
 import { PullIndicator } from '@/components/pull-indicator';
 import { blockedUsersQueryOptions, flattenBlockedUsers } from '@/lib/api/blocks';
 import { unwrap } from '@/lib/api/client';
@@ -143,9 +144,14 @@ export default function DiscoverScreen() {
     () => ({ ...apiDeps, queryClient: appQueryClient, isOnline: () => navigator.onLine, viewerId: () => viewerId }),
     [viewerId],
   );
+  /* L'ENCRE DIT LA NATURE (revue #7083) : un refus et un hors-ligne ne se
+     lisent pas comme une réussite. Le ton voyage avec le texte, dans le même
+     état — voir `use-live-announcer.ts`. */
   const report = useCallback(
     (outcome: FriendActionOutcome, done: AnnounceKey, failed: AnnounceKey) =>
-      announce(translate(language, outcome === 'done' ? done : outcome === 'offline' ? 'discover.announce.offline' : failed)),
+      outcome === 'done'
+        ? announce(translate(language, done))
+        : announce(translate(language, outcome === 'offline' ? 'discover.announce.offline' : failed), 'error'),
     [announce, language],
   );
 
@@ -382,22 +388,12 @@ export default function DiscoverScreen() {
         <div aria-hidden="true" className="shrink-0" style={{ height: DISCOVER_TOP_RESERVE }} />
         {panels[tab]()}
       </div>
-      <p
-        role="status"
-        data-discover-announce
-        className={
-          announcer.text === ''
-            ? 'sr-only'
-            : 'pointer-events-none absolute inset-x-0 mx-auto w-fit max-w-[calc(100%-2rem)] rounded-chip px-4 py-2.5 text-center text-caption font-semibold'
-        }
-        style={
-          announcer.text === ''
-            ? undefined
-            : { bottom: 'calc(env(safe-area-inset-bottom, 0px) + 20px)', color: 'var(--color-ios-card)', backgroundColor: 'var(--color-ios-ink)' }
-        }
-      >
-        {announcer.text}
-      </p>
+      {/* LA PASTILLE D'ANNONCE VIT DANS `components/live-announcement.tsx`
+          depuis la revue #7083 : elle était écrite ici et, en `sr-only`
+          inconditionnel, une seconde fois sur `/u/` — mêmes clés, même hook,
+          deux produits. Le motif que les 40 surfaces restantes vont copier n'a
+          plus qu'un site. */}
+      <LiveAnnouncement text={announcer.text} tone={announcer.tone} marker="discover" />
       {unblockTarget === null ? null : (
         <UnblockConfirm
           language={language}

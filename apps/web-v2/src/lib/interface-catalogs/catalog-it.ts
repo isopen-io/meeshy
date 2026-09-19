@@ -500,6 +500,8 @@ const it = {
   'userProfile.posts.emptyFilter': 'Tocca di nuovo il riquadro per rivedere tutto.',
   'userProfile.posts.error': 'Impossibile caricare le pubblicazioni',
   'userProfile.posts.loadMore': 'Carica altro',
+  'userProfile.posts.loaded': 'Pubblicazioni aggiunte: {count}',
+  'userProfile.posts.loadedNone': 'Nessuna altra pubblicazione da mostrare',
   'userProfile.posts.loading': 'Caricamento…',
   'userProfile.stat.posts': 'Post',
   'userProfile.stat.reels': 'Reel',

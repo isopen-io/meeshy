@@ -498,6 +498,8 @@ const ar = {
   'userProfile.posts.emptyFilter': 'انقر على البطاقة مرة أخرى لعرض كل شيء.',
   'userProfile.posts.error': 'تعذّر تحميل المنشورات',
   'userProfile.posts.loadMore': 'تحميل المزيد',
+  'userProfile.posts.loaded': 'المنشورات المضافة: {count}',
+  'userProfile.posts.loadedNone': 'لا مزيد من المنشورات للعرض',
   'userProfile.posts.loading': 'جارٍ التحميل…',
   'userProfile.stat.posts': 'منشورات',
   'userProfile.stat.reels': 'ريلز',

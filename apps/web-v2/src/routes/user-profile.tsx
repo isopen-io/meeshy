@@ -1,10 +1,11 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useStore } from 'zustand/react';
 
 import { authorAccentColor } from '@meeshy/shared/utils/conversation-colors';
 
 import { FeedPostCard } from '@/components/feed-post-card';
+import { LiveAnnouncement } from '@/components/live-announcement';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { GroupedSection } from '@/components/grouped-section';
 import { PROFILE_GLYPHS } from '@/components/glyphs-profile';
@@ -29,7 +30,7 @@ import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { failureMayRetry, profileFailureOf, type ProfileFailure } from '@/lib/profile/failure';
-import { filterPosts, toggledFilter, type ProfilePostsFilter, type ProfilePostsFilterTap } from '@/lib/profile/posts-filter';
+import { filterPosts, showsEmptyState, toggledFilter, type ProfilePostsFilter, type ProfilePostsFilterTap } from '@/lib/profile/posts-filter';
 import { actionsFor, bucketNeededFor, relationFromServed, type ProfileActionKind } from '@/lib/profile/relation';
 import { useParams } from '@/lib/router';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
@@ -173,7 +174,7 @@ export function UserProfileView({ username }: { readonly username: string }) {
   const minute = useMinute();
   const { languages: readerLanguages } = useReaderLanguages();
   const { announcement: gestureAnnouncement, onGesture, onShare } = usePostGesture();
-  const { text: actionAnnouncement, announce } = useLiveAnnouncer();
+  const { text: actionAnnouncement, tone: actionTone, announce } = useLiveAnnouncer();
   const [filter, setFilter] = useState<ProfilePostsFilter>('all');
   const [busy, setBusy] = useState(false);
 
@@ -195,6 +196,42 @@ export function UserProfileView({ username }: { readonly username: string }) {
     () => (person === undefined ? false : flattenBlockedUsers(blockedList.data).some((row) => row.id === person.id)),
     [blockedList.data, person],
   );
+
+  /**
+   * **LE PANIER SE LIT EN ENTIER, PAS SUR SES CENT PREMIÈRES LIGNES**
+   * (revue #7083, défaut majeur 1). `BLOCKED_PAGE_SIZE` vaut 100
+   * (`api/blocks.ts:19`) et rien n'appelait `fetchNextPage` : au-delà de la
+   * centième ligne, la fiche d'une personne BLOQUÉE s'ouvrait entière, avec
+   * « Bloquer » offert à la place de la carte de blocage — l'inverse exact de
+   * ce que le lecteur a demandé.
+   *
+   * **La passerelle n'a AUCUNE source par SUJET** — mesuré :
+   * `PUT /blocks/:userId` (`routes/directory/blocks.ts:301`),
+   * `DELETE /blocks/:userId` (`:340`), `GET /blocks` (`:376`), rien d'autre ;
+   * et `relationAvec` (`routes/directory/person.ts:72-93`) n'a pas de valeur
+   * `blocked`. Tant que l'issue gateway compagnon #7125 (`blockedByViewer` sur
+   * `expand=relation`) n'est pas livrée, la seule réponse HONNÊTE est de lire
+   * le panier jusqu'au bout plutôt que de conclure sur sa première page. La
+   * v3.1 ne PATCHE pas la passerelle pour une capacité nouvelle.
+   *
+   * **CE QUE ÇA COÛTE, et pourquoi c'est peu** : la boucle s'arrête dès que le
+   * sujet est trouvé, et `getNextPageParam` rend `undefined` sur la dernière
+   * page. Pour l'immense majorité des lecteurs — moins de 100 blocages — c'est
+   * ZÉRO requête de plus. Le panier reste par ailleurs la source des écritures
+   * optimistes (`performBlock` / `performUnblock`), et il est mis en cache pour
+   * la famille entière (`FRIENDS_STALE_TIME`).
+   */
+  const { hasNextPage: moreBlocked, isFetchingNextPage: drainingBlocked, fetchNextPage: drainBlocked } = blockedList;
+  const subjectId = person?.id ?? null;
+  /* LES DÉPENDANCES SONT DES PRIMITIVES, jamais l'objet de requête : son
+     identité change à CHAQUE rendu, et l'effet relancerait `fetchNextPage`
+     avant que `isFetchingNextPage` n'ait basculé — deux requêtes pour une
+     page. Même leçon que `preferredLanguages` sur `TranslationToggle`. */
+  useEffect(() => {
+    if (subjectId === null || blocked) return;
+    if (moreBlocked !== true || drainingBlocked) return;
+    void drainBlocked();
+  }, [blocked, drainBlocked, drainingBlocked, moreBlocked, subjectId]);
 
   const bucket = bucketNeededFor(served);
   const requests = useInfiniteQuery(
@@ -237,10 +274,16 @@ export function UserProfileView({ username }: { readonly username: string }) {
     [viewerId],
   );
 
+  /* UN ÉCHEC NE SE LIT PAS COMME UNE RÉUSSITE (revue #7083) : le refus et le
+     hors-ligne portent l'encre d'erreur, et la région est VISIBLE — c'était
+     la moitié manquante. Aucun bouton « Réessayer » ne s'ajoute pour autant :
+     l'état optimiste a été défait, le bouton d'action est revenu à son libellé
+     d'avant, et c'est LUI le geste rejouable — un second contrôle pour le
+     même geste serait le doublon que D-11 interdit. */
   const report = useCallback(
     (kind: ProfileActionKind, outcome: FriendActionOutcome) => {
-      if (outcome === 'offline') return announce(translate(language, 'discover.announce.offline'));
-      if (outcome === 'failed') return announce(translate(language, ANNOUNCE[kind].failed));
+      if (outcome === 'offline') return announce(translate(language, 'discover.announce.offline'), 'error');
+      if (outcome === 'failed') return announce(translate(language, ANNOUNCE[kind].failed), 'error');
       const done = ANNOUNCE[kind].done;
       if (done !== null) announce(translate(language, done));
     },
@@ -281,6 +324,64 @@ export function UserProfileView({ username }: { readonly username: string }) {
   const onFilter = useCallback((tap: ProfilePostsFilterTap) => setFilter((current) => toggledFilter(current, tap)), []);
   const onSignIn = useCallback(() => navigate(href('login')), []);
 
+  /**
+   * **« CHARGER PLUS » RENDAIT LE FOCUS AU NÉANT ET N'ANNONÇAIT RIEN**
+   * (revue #7083, défaut majeur 6) — mesuré : `Enter` sur le bouton, puis
+   * `focus = BODY (perdu)`, `annonce = ''`, deux cartes arrivées. Le bouton
+   * DISPARAÎT quand la dernière page entre, et l'utilisateur au clavier devait
+   * re-tabuler depuis le début de la page pour revenir où il en était
+   * (dimension 5). La région `aria-live` existait pourtant et servait déjà les
+   * gestes relationnels : elle n'était branchée qu'au seul geste qui ne change
+   * PAS la longueur de la liste.
+   *
+   * **LE COMPTE SE PREND SUR LE DOM, pas sur `models`** : ce qui a « bougé »
+   * pour le lecteur est ce qui est RENDU, et le filtre client peut très bien
+   * ne laisser passer aucune des lignes de la page neuve — auquel cas rien
+   * n'est arrivé À L'ÉCRAN, et c'est cela qu'il faut dire.
+   *
+   * **L'ATTERRISSAGE EST LA PREMIÈRE CARTE NEUVE**, rendue focalisable par
+   * `tabIndex = -1` : le lecteur reprend là où le contenu commence, et la
+   * tabulation suivante le ramène naturellement vers le bouton s'il survit.
+   * À défaut de carte neuve, le focus retombe sur le bloc des publications —
+   * jamais sur `document.body`.
+   */
+  const postsRef = useRef<HTMLDivElement | null>(null);
+  const pendingMore = useRef<number | null>(null);
+
+  const cardsNow = useCallback(
+    (): readonly HTMLElement[] => [...(postsRef.current?.querySelectorAll<HTMLElement>('[data-feed-card-id]') ?? [])],
+    [],
+  );
+
+  /* `posts.fetchNextPage` est STABLE ; `posts` ne l'est pas — refermer le
+     rappel sur l'objet de requête en fabriquerait un neuf à chaque rendu, et
+     le bouton se redessinerait pour rien (Zero Unnecessary Re-render). */
+  const { fetchNextPage: fetchMorePosts } = posts;
+  const onMore = useCallback(() => {
+    pendingMore.current = cardsNow().length;
+    void fetchMorePosts();
+  }, [cardsNow, fetchMorePosts]);
+
+  useEffect(() => {
+    const before = pendingMore.current;
+    if (before === null || posts.isFetchingNextPage) return;
+    pendingMore.current = null;
+    const cards = cardsNow();
+    const added = cards.length - before;
+    announce(
+      added > 0
+        ? translate(language, 'userProfile.posts.loaded', { count: String(added) })
+        : translate(language, 'userProfile.posts.loadedNone'),
+    );
+    const landing = cards[before] ?? postsRef.current;
+    if (landing === null || landing === undefined) return;
+    landing.tabIndex = -1;
+    landing.focus();
+    /* `models` referme l'effet sur le rendu qui a POSÉ les cartes neuves :
+       `fetchNextPage().then()` résout une image trop tôt, le DOM n'en porte
+       alors aucune. */
+  }, [announce, cardsNow, language, models, posts.isFetchingNextPage]);
+
   const awaitingRequest = bucket !== null && pendingRequest === null;
 
   return (
@@ -289,11 +390,10 @@ export function UserProfileView({ username }: { readonly username: string }) {
        « ce compte n'existe pas » et son pseudo à côté, c'est exactement ce que
        le refus indistinct doit taire. Vide sur un refus ; `check-rich-text.mjs`
        y trouve toujours son point d'accroche. */
-    <div data-user-profile={person?.username ?? ''} className="flex h-dvh flex-col overflow-hidden pt-safe">
+    /* `relative` PORTE la pastille d'annonce : elle est posée `absolute` au
+       bas de son hôte, exactement comme sur « Découvrir ». */
+    <div data-user-profile={person?.username ?? ''} className="relative flex h-dvh flex-col overflow-hidden pt-safe">
       <ProfileHeaderBar title={person === undefined ? translate(language, 'userProfile.title') : name} />
-      <p role="status" aria-live="polite" data-profile-announce className="sr-only">
-        {actionAnnouncement === '' ? gestureAnnouncement : actionAnnouncement}
-      </p>
       <main id="contenu" className="scrollbar-none flex flex-1 flex-col overflow-y-auto px-4 pb-safe">
         {person !== undefined ? (
           <div className="mx-auto grid w-full max-w-xl gap-6 pb-12 pt-2">
@@ -323,15 +423,24 @@ export function UserProfileView({ username }: { readonly username: string }) {
                   icon={<GlyphSvg glyph={PROFILE_GLYPHS.quotes} size={12} />}
                   card={false}
                 >
-                  <div data-profile-posts className="grid gap-3">
+                  <div data-profile-posts ref={postsRef} className="grid gap-3">
                     <ProfileStatsBand language={language} stats={view.data?.stats ?? null} filter={filter} onFilter={onFilter} />
                     {posts.isError ? (
                       <ProfilePostsError language={language} onRetry={() => void posts.refetch()} />
                     ) : posts.isPending ? (
                       <span aria-busy="true" aria-label={translate(language, 'userProfile.posts.loading')} className="block rounded-card" style={{ height: 140, backgroundColor: 'var(--color-ios-card)' }} />
-                    ) : models.length === 0 ? (
+                    ) : /* UNE ABSENCE NE S'AFFIRME QUE QUAND PLUS RIEN N'EST À
+                          LIRE (revue #7083) — sous un filtre, tant qu'une page
+                          reste à lire, « Aucun réel » est démenti au même
+                          instant par la tuile « 2 Réels » au-dessus et par
+                          « Charger plus » en dessous. La loi est pure
+                          (`showsEmptyState`) parce que c'est la COEXISTENCE de
+                          ces deux branches disjointes qui casse, et qu'un gate
+                          mesurant chacune séparément ne la voit jamais.
+                          Miroir de `ProfileUserPostsList.swift:497-510`. */
+                    showsEmptyState({ visible: models.length, filter, hasNextPage: posts.hasNextPage }) ? (
                       <ProfilePostsEmpty language={language} filter={filter} />
-                    ) : (
+                    ) : models.length === 0 ? null : (
                       models.map((model) => (
                         <FeedPostCard key={model.id} model={model} onGesture={onGesture} onShare={onShare} preferredLanguages={readerLanguages} />
                       ))
@@ -345,7 +454,7 @@ export function UserProfileView({ username }: { readonly username: string }) {
                         `hasMore`, jamais par le filtre
                         (`ProfileUserPostsList.swift:246-252`). */}
                     {posts.hasNextPage ? (
-                      <ProfilePostsMore language={language} loading={posts.isFetchingNextPage} onMore={() => void posts.fetchNextPage()} />
+                      <ProfilePostsMore language={language} loading={posts.isFetchingNextPage} online={online} onMore={onMore} />
                     ) : null}
                   </div>
                 </GroupedSection>
@@ -366,6 +475,15 @@ export function UserProfileView({ username }: { readonly username: string }) {
           </div>
         )}
       </main>
+      {/* L'ISSUE D'UN GESTE SE VOIT (revue #7083) — la région était `sr-only`
+          INCONDITIONNELLE : un refus de la passerelle défaisait l'état
+          optimiste et ne laissait aucune trace pour un utilisateur voyant.
+          Même composant, même loi que « Découvrir » (dimension 6). */}
+      <LiveAnnouncement
+        text={actionAnnouncement === '' ? gestureAnnouncement : actionAnnouncement}
+        tone={actionAnnouncement === '' ? 'neutral' : actionTone}
+        marker="profile"
+      />
     </div>
   );
 }

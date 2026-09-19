@@ -500,6 +500,8 @@ const es = {
   'userProfile.posts.emptyFilter': 'Toca de nuevo la casilla para volver a verlo todo.',
   'userProfile.posts.error': 'No se pudieron cargar las publicaciones',
   'userProfile.posts.loadMore': 'Cargar más',
+  'userProfile.posts.loaded': 'Publicaciones añadidas: {count}',
+  'userProfile.posts.loadedNone': 'No hay más publicaciones que mostrar',
   'userProfile.posts.loading': 'Cargando…',
   'userProfile.stat.posts': 'Publicaciones',
   'userProfile.stat.reels': 'Reels',
