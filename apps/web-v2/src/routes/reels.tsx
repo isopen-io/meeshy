@@ -16,6 +16,7 @@ import { useOnline } from '@/lib/net/online';
 import { currentHistory, reelsExitOf } from '@/lib/reels/exit';
 import { activeIndexOf, composeReelThread, entryReelIds, neighborIndex, pageModeOf, shouldLoadMoreReels } from '@/lib/reels/thread';
 import { useSearch } from '@/lib/router';
+import { shortcutYieldsToTarget } from '@/lib/view/shortcut-scope';
 import { useMinute } from '@/lib/view/use-minute';
 import { usePostGesture } from '@/lib/view/use-post-gesture';
 import { useReaderLanguages } from '@/lib/view/use-reader';
@@ -214,6 +215,15 @@ export default function ReelsScreen() {
         close();
         return;
       }
+      /* LA JUMELLE DE `routes/story.tsx`, FERMÉE AVANT SON SYMPTÔME (D-91).
+         Cet écran écoute lui aussi le clavier sur `window` et appelle
+         `preventDefault()` ; il n'a aujourd'hui aucune zone de saisie, donc
+         aucun des trois symptômes mesurés chez le lecteur de stories — mais
+         c'est EXACTEMENT ce qui était vrai du lecteur avant que D-89 lui
+         donne son composeur de commentaire. La cession est fine : les
+         flèches ne sont jamais rendues à un bouton, le réel gardant sa
+         navigation quel que soit le contrôle qui a le focus. */
+      if (shortcutYieldsToTarget({ target: event.target, key: event.key })) return;
       const direction = KEY_DIRECTION[event.key];
       const el = scroller.current;
       if (direction === undefined || el === null) return;

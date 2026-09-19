@@ -47,8 +47,21 @@ export function StoryCommentsSheet({ postId, onClose }: StoryCommentsSheetProps)
     return () => document.removeEventListener('keydown', onKey, true);
   }, [onClose]);
 
-  /* LE FOCUS ENTRE DANS LA FEUILLE — sans cela, la touche suivante irait au
-     plateau, qui navigue d'une story à l'autre. */
+  /**
+   * **LE FOCUS ENTRE DANS LA FEUILLE** — sans cela, la touche suivante irait
+   * au plateau, qui navigue d'une story à l'autre.
+   *
+   * **LE RENDRE N'EST PAS DE SON RESSORT, ET C'EST MESURÉ** (revue #7112).
+   * Une couche qui prend le focus le rend d'ordinaire en se démontant, en
+   * mémorisant `document.activeElement` à son montage — écrit ainsi ici, le
+   * témoin navigateur a rendu `BODY`. La raison est en AMONT : l'hôte rend le
+   * rail `inert` quand la feuille s'ouvre (D-90), et un sous-arbre inerte
+   * ÉJECTE le focus qu'il contient. Le bouton était donc déjà flouté avant
+   * que cet effet ne tourne : la feuille ne peut pas savoir d'où l'on vient.
+   *
+   * C'est l'HÔTE qui mémorise, parce que c'est lui qui détruit
+   * (`routes/story.tsx`, `returnFocusRef`).
+   */
   useEffect(() => {
     panneau.current?.focus();
   }, []);

@@ -480,11 +480,20 @@ async function runScheme(colorScheme) {
        l'écran. */
     await page.click('[data-story-comments-close]');
     await page.waitForTimeout(250);
+    /* LA FEUILLE REND LE FOCUS PAR OÙ IL EST ENTRÉ — elle le PREND au montage
+       (sinon la touche suivante irait au plateau, qui navigue) ; ne pas le
+       rendre le laisse tomber sur `<body>`, et au clavier on repart du haut
+       du document pour retrouver le bouton qu'on venait d'actionner. */
+    const focusRendu = await page.evaluate(() => document.activeElement?.getAttribute('data-story-action') ?? document.activeElement?.tagName ?? null);
+    check(
+      focusRendu === 'comments',
+      `${tag} st-amie-2 : en se fermant, la feuille doit RENDRE le focus au bouton qui l'a ouverte — reçu ${JSON.stringify(focusRendu)}`,
+    );
     await page.focus('[data-story-action="react"]');
     const sceneBeforeArrow = await page.evaluate(() => document.querySelector('[data-story-scene]')?.getAttribute('data-story-scene') ?? null);
     await page.keyboard.press('ArrowRight');
     await page.waitForTimeout(400);
-    const afterArrowBouton = await page.evaluate(() => document.querySelector('[data-story-scene]')?.getAttribute('data-story-scene') ?? null);
+    const sceneAfterArrow = await page.evaluate(() => document.querySelector('[data-story-scene]')?.getAttribute('data-story-scene') ?? null);
     check(
       sceneBeforeArrow !== null && sceneAfterArrow !== sceneBeforeArrow,
       `${tag} st-amie-2 : une flèche alors qu'un BOUTON a le focus doit rester un raccourci d'écran — story ${sceneBeforeArrow} → ${sceneAfterArrow}`,

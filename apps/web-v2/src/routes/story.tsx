@@ -319,6 +319,21 @@ export default function StoryScreen() {
    * — une seule zone de saisie pour les deux (spécification porteur du
    * 2026-05-28, citée par `StoryComposerBarView`). */
   const [commentsOpen, setCommentsOpen] = useState(false);
+  /**
+   * **CE QUI AVAIT LE FOCUS QUAND LA FEUILLE S'EST OUVERTE**, mémorisé par
+   * l'HÔTE et non par la feuille (revue #7112) — parce que c'est l'hôte qui
+   * le détruit : il rend le rail `inert` à l'ouverture (D-90), et un
+   * sous-arbre inerte ÉJECTE le focus qu'il contient. Une feuille qui lirait
+   * `document.activeElement` à son montage trouverait déjà `<body>` — mesuré
+   * au navigateur, c'est exactement ce que le témoin a rendu avant ce
+   * correctif. On retient donc AVANT d'ouvrir, et on rend APRÈS avoir
+   * refermé, quand l'inertie est levée.
+   */
+  const returnFocusRef = useRef<HTMLElement | null>(null);
+  const openComments = useCallback(() => {
+    returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setCommentsOpen(true);
+  }, []);
   const showsImage = mediaSrc !== '' && !mediaFailed;
   /**
    * « PRÊT » ET LA DURÉE APPARTIENNENT À UNE STORY, et portent son identité
@@ -585,6 +600,17 @@ export default function StoryScreen() {
     return () => resume();
   }, [commentsOpen, pause, resume]);
 
+  /* ET LE FOCUS REVIENT D'OÙ IL EST PARTI. L'effet tourne APRÈS le commit qui
+     retire `inert` du rail : rendre le focus plus tôt le verrait rejeté par
+     l'inertie encore posée. `isConnected` parce que la feuille se ferme AUSSI
+     quand la story change — le bouton d'origine peut alors n'être plus là. */
+  useEffect(() => {
+    if (commentsOpen) return;
+    const target = returnFocusRef.current;
+    returnFocusRef.current = null;
+    if (target !== null && target.isConnected) target.focus();
+  }, [commentsOpen]);
+
   /* Une nouvelle story ferme le fil : il appartenait à la précédente. */
   useEffect(() => {
     setCommentsOpen(false);
@@ -619,10 +645,10 @@ export default function StoryScreen() {
       /* « Répondre » et « Commentaires » ouvrent la MÊME feuille : une seule
          zone de saisie, et le bouton de réponse n'est donc jamais un second
          composeur (spécification porteur 2026-05-28). */
-      reply: () => setCommentsOpen(true),
-      comments: () => setCommentsOpen(true),
+      reply: openComments,
+      comments: openComments,
     };
-  }, [currentStory, showsSound, announce, interfaceLanguage]);
+  }, [currentStory, showsSound, announce, interfaceLanguage, openComments]);
 
   /* LE RAIL EST-IL PEINT ? Une seule réponse, lue par le rail ET par la
      légende qui doit lui laisser la place. */
