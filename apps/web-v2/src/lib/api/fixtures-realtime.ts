@@ -71,25 +71,28 @@ const liveTranslation = (params: {
  * `message:attachment-updated` telle que la passerelle la sert : la pièce
  * ENTIÈRE passée par `serializeAttachmentForSocket`, jamais un delta.
  *
- * Elle NE PORTE PAS `isViewOnce` / `isBlurred` / `effectFlags`, et ce n'est
- * pas une commodité de fixture : c'est la forme MESURÉE de la passerelle.
- * `serializeAttachmentForSocket` (`services/gateway/src/socketio/`) construit
- * un objet littéral EXPLICITE dont `SocketAttachment` ne déclare aucun des
- * trois champs, et `attachmentMediaSelect` — le seul `select` du chemin
- * socket — ne les charge pas davantage (ils vivent dans
- * `attachmentFullSelect`, que ce chemin n'emprunte pas). Relevé sur `dev` au
- * 2026-09-18 : ni `attachmentSocketSelect` ni `ATTACHMENT_PROTECTION_FIELDS`
- * n'existent dans le dépôt — #7014 N'A PAS atterri, et une fixture écrite
- * d'après cette branche rejouerait une charge que la vraie passerelle
- * n'émet PAS (doc-comment du module, « aux MÊMES noms et aux MÊMES formes ») :
- * un gate qui rejoue une charge impossible ne mesure pas le produit.
+ * Elle PORTE les trois canaux de protection à leur valeur ORDINAIRE, et ce
+ * n'est pas une commodité de fixture : c'est la forme MESURÉE de la
+ * passerelle depuis que #7014 a atterri (merge `4511c5e780` sur `dev`).
+ * `serializeAttachmentForSocket` (`services/gateway/src/socketio/`) RÉPAND
+ * `attachmentProtectionOf(raw)` en DERNIER — fail-closed, donc toujours
+ * présent — et `emitAttachmentUpdated` est nourri par `attachmentSocketSelect`
+ * (`attachmentMediaSelect` PLUS la protection), jamais par le select nu.
  *
- * C'est aussi la charge la plus PAUVRE que le puits puisse recevoir, donc le
- * pire cas de sa garde de masquage (`mergedAttachment`, `realtime-apply.ts`) —
- * celui où le CACHE est le seul à savoir qu'une pièce est masquée. Le jour où
- * #7014 atterrit VRAIMENT, c'est `serializeAttachmentForSocket` qui change en
- * premier ; cette fixture le suit ALORS, et le témoin d'à côté est ce qui
- * oblige à y revenir.
+ * Le doc-comment précédent affirmait l'inverse, en le datant : « relevé sur
+ * `dev` au 2026-09-18 : ni `attachmentSocketSelect` ni
+ * `ATTACHMENT_PROTECTION_FIELDS` n'existent — #7014 n'a PAS atterri ». C'était
+ * vrai ce jour-là et faux le lendemain. Le témoin d'à côté
+ * (`fixtures-realtime.test.ts`) était posé EXPRÈS comme le cliquet qui oblige
+ * à revenir ici ; il a rougi, et la fixture a suivi — « un gate qui rejoue une
+ * charge impossible ne mesure pas le produit » vaut dans les DEUX sens.
+ *
+ * La charge la plus PAUVRE — celle où le cache est le seul à savoir qu'une
+ * pièce est masquée — reste exercée, mais par l'unitaire qui en a la charge
+ * (`realtime-apply-attachment.test.ts`) et par la loi partagée
+ * (`raisedAttachmentProtection`, `packages/shared/utils/attachment-protection.ts`) :
+ * une FIXTURE doit rejouer ce que la passerelle ÉMET, jamais un pire cas
+ * qu'elle n'émet plus.
  *
  * `translations` est CUMULATIVE : le serveur relit la ligne après chaque
  * enrichissement, donc l'évènement `fr` porte aussi `en`
@@ -117,6 +120,13 @@ const liveTranscript = (params: {
     translations: params.translations,
     reactionSummary: {},
     currentUserReactions: [],
+    /* LES TROIS CANAUX, TOUJOURS SERVIS — `attachmentProtectionOf` est
+       fail-closed, donc la passerelle ne peut PAS les omettre. `live-3` est
+       une pièce ordinaire : leurs valeurs sont celles des colonnes à défaut
+       (`schema.prisma` — `Boolean @default(false)`, `Int @default(0)`). */
+    isViewOnce: false,
+    isBlurred: false,
+    effectFlags: 0,
   },
 });
 

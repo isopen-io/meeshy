@@ -84,7 +84,7 @@ export type AttachmentProtectionInventoryCoversTheLaw = Assert<
  * dérive pas. C'est un inventaire que le compilateur tient, pas un inventaire
  * qu'on oublie.
  */
-const MASQUE_SI_ABSENT: {
+export const ATTACHMENT_PROTECTION_MASK: {
   readonly [K in AttachmentProtectionField]-?: NonNullable<AttachmentProtectionFlags[K]>;
 } = {
   isViewOnce: true,
@@ -96,7 +96,82 @@ function chargeConforme<K extends AttachmentProtectionField>(
   champ: K,
   brute: unknown
 ): brute is NonNullable<AttachmentProtectionFlags[K]> {
-  return typeof brute === typeof MASQUE_SI_ABSENT[champ];
+  return typeof brute === typeof ATTACHMENT_PROTECTION_MASK[champ];
+}
+
+type CanalReleve = readonly [AttachmentProtectionField, boolean | number];
+
+/**
+ * Ce que le plancher REND — les canaux à relever, jamais `null` ni `undefined`.
+ *
+ * `Partial<AttachmentProtectionFlags>` serait FAUX ici : ses canaux admettent
+ * `null` (une ligne Prisma peut en porter), et répandre ce type sur une pièce
+ * dont le canal est un `boolean` non nullable est refusé sous
+ * `exactOptionalPropertyTypes` (TS2375, mesuré sur `realtime-apply.ts`). Le
+ * plancher ne produit QUE des valeurs masquantes : son type le dit.
+ */
+export type AttachmentProtectionFloor = {
+  readonly [K in AttachmentProtectionField]?: NonNullable<AttachmentProtectionFlags[K]>;
+};
+
+/**
+ * LE PLANCHER DE PROTECTION — ce qu'une charge NEUVE ne peut PAS faire
+ * descendre, CANAL PAR CANAL (#7029, contrat de #7014).
+ *
+ * Un `message:attachment-updated` REMPLACE la pièce dans le cache d'un client :
+ * la transcription Whisper, puis les traductions NLLB et les pistes TTS,
+ * arrivent par lui. La charge qu'il porte en sait donc plus que le cache sur le
+ * CONTENU — et parfois moins sur la PROTECTION, selon le `select` qui l'a
+ * chargée. Une pièce à VUE UNIQUE connue du cache par le REST verrait son voile
+ * tomber à l'instant PRÉCIS où le pipeline finit son travail : la fuite du
+ * cycle 125, rouverte par un chemin neuf, et qu'aucun gate ne verrait.
+ *
+ * **CANAL PAR CANAL, jamais sur l'agrégat.** `maskedAttachment` est un OU : un
+ * cliquet posé sur SON verdict laisse tomber un canal tant qu'un AUTRE tient
+ * debout — une pièce à la fois à vue unique ET floutée dont la charge dément la
+ * seule vue unique repartait floutée et plus à vue unique, l'agrégat n'ayant
+ * pas bougé (revue adversariale #7017).
+ *
+ * **DÉRIVÉE DE L'INVENTAIRE, jamais réécrite.** Un quatrième canal ajouté à
+ * `ATTACHMENT_PROTECTION_FIELDS` est retenu par cette fonction sans qu'une
+ * ligne d'ici ne change : son masque dit à la fois ce qui le fait basculer
+ * (`ATTACHMENT_PROTECTION_MASK`) et, par son `typeof`, comment le retenir —
+ * `true` pour un drapeau, un OU de bits pour un bitfield. C'est la raison
+ * d'être de ce module : une copie locale de cet inventaire, si juste soit-elle
+ * le jour où on l'écrit, ne reçoit pas le quatrième canal.
+ *
+ * Ne retient QUE les bits MASQUANTS d'un bitfield : les autres sont décoratifs
+ * (`activeDecorativeEffects`), et un plancher qui les rattraperait ferait
+ * reparaître un effet que le serveur vient de retirer. Ce plancher ne garde que
+ * le secret.
+ *
+ * Rend les seuls canaux à RELEVER — à RÉPANDRE sur la pièce fusionnée
+ * (`{ ...fusionnee, ...raisedAttachmentProtection(cache, fusionnee) }`), jamais
+ * une pièce entière : ce module ne connaît pas la forme d'une pièce jointe.
+ */
+export function raisedAttachmentProtection(
+  cached: Readonly<Record<string, unknown>> | null | undefined,
+  merged: Readonly<Record<string, unknown>> | null | undefined
+): AttachmentProtectionFloor {
+  return Object.fromEntries(
+    /* Le type de retour est ANNOTÉ : sans lui, `flatMap` infère l'élément
+       depuis la PREMIÈRE branche (le canal booléen) et rejette le canal
+       bitfield (TS2345, `number` non assignable à `boolean`). */
+    ATTACHMENT_PROTECTION_FIELDS.flatMap((champ): readonly CanalReleve[] => {
+      const masque: boolean | number = ATTACHMENT_PROTECTION_MASK[champ];
+      const auCache = cached?.[champ];
+
+      if (typeof masque === 'boolean') {
+        return auCache === masque ? [[champ, masque]] : [];
+      }
+
+      const retenus = (typeof auCache === 'number' ? auCache : 0) & masque;
+      if (retenus === 0) return [];
+
+      const recu = merged?.[champ];
+      return [[champ, (typeof recu === 'number' ? recu : 0) | retenus]];
+    })
+  ) as AttachmentProtectionFloor;
 }
 
 /**
@@ -128,7 +203,7 @@ export function attachmentProtectionOf(
   return Object.fromEntries(
     ATTACHMENT_PROTECTION_FIELDS.map((champ) => {
       const brute = row?.[champ];
-      return [champ, chargeConforme(champ, brute) ? brute : MASQUE_SI_ABSENT[champ]];
+      return [champ, chargeConforme(champ, brute) ? brute : ATTACHMENT_PROTECTION_MASK[champ]];
     })
   ) as AttachmentProtectionFlags;
 }
