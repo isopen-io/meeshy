@@ -3337,9 +3337,9 @@ Captures : `.cache/web-v2-workflow/recette/stories/coque-{ios,android}-0{1,2,3}-
 
 **Ce que coûte la règle** : un paramètre de plus sur une fonction très appelée, et un témoin de contre-épreuve OBLIGATOIRE. Un témoin écrit sur le seul cas au repos verdirait sur la suppression pure et simple du segment ; celui qui tient la règle est **`veiled` dans la phase qui MONTE ses enfants**, où la rangée peint la citation et le libellé doit la reprendre. Rouge mesuré avant le correctif : 3 échecs sur `message-a11y-label.test.ts`, la contre-épreuve verte des deux côtés.
 
-*Note de traçabilité (2026-09-20)* — cette décision a d'abord été gravée sous `#7132` par le commit `b5815693ea` ; `#7132` est un incident CORS de téléversement, sans rapport. La décision et son lot appartiennent à **#7092**.
+*Note de traçabilité (2026-09-20)* — cette décision a d'abord été gravée sous `#7132` par le commit `b5815693ea` ; `#7132` est un incident CORS de téléversement, sans rapport. La décision et son lot appartiennent à **#7092**. Le même commit a gravé une SECONDE citation fausse (`#7133` pour D-95 et D-96, corrigée en `#7135` le même jour) : **un point d'étape qui cite plusieurs issues les mêle toutes ensemble ou aucune** — corriger celle qu'on a vue ne dit rien de l'autre, et la recherche qui l'attrape part du COMMIT, jamais du numéro déjà repéré.
 
-## D-95 — Les gestes d'une rangée de commentaire : un port, des rappels, et un refus qui s'annonce SUR SA RANGÉE (2026-09-19, #7133)
+## D-95 — Les gestes d'une rangée de commentaire : un port, des rappels, et un refus qui s'annonce SUR SA RANGÉE (2026-09-19, #7135)
 
 **Décision** — aimer, modifier et supprimer un commentaire vivent dans **`lib/api/comment-gestures.ts`**, un port calqué sur `feed-gestures.ts` (plan → optimiste → appel → issue). `comment-list.tsx` et `comment-row.tsx` n'en reçoivent que des **rappels** ; l'hôte (`comment-thread.tsx`) tient le réseau, et garde la **REQUÊTE** de chaque geste refusé — pas seulement son message — pour que « Réessayer » rejoue exactement le geste qui a échoué.
 
@@ -3355,7 +3355,9 @@ Captures : `.cache/web-v2-workflow/recette/stories/coque-{ios,android}-0{1,2,3}-
 
 **Ce que ça coûte** : un module de plus plutôt qu'une addition à `publication-comments.ts` (déjà à son budget) et à `comment-list.tsx` (qui ne charge rien, par contrat — c'est ce qui la rend partageable entre `/post/$post` et le lecteur de stories). Répondre, les réponses imbriquées, les médias, l'écho socket `comment:added` et la file hors-ligne restent à #7118, que ce lot N'ÉPUISE PAS.
 
-## D-96 — Un jeton de couleur référencé par du code doit être DÉCLARÉ par une feuille (2026-09-19, #7133)
+*Note de traçabilité (2026-09-20)* — gravée d'abord sous `#7133` par le commit `b5815693ea` ; `#7133` est « Une scène composée se partage hors de Meeshy », sans rapport. Le lot est **#7135**, fermé le 2026-09-19 — et `comment-row.tsx`, `comment-gestures.ts` et `comment-list.test.tsx` portaient DÉJÀ `#7135` dans leurs revues-corrections : le même fichier renvoyait à deux issues pour un seul travail.
+
+## D-96 — Un jeton de couleur référencé par du code doit être DÉCLARÉ par une feuille (2026-09-19, #7135)
 
 **Décision** — tout `var(--color-…)` écrit **sans repli** dans un `.ts`/`.tsx` du chantier nomme un jeton qu'une feuille déclare (`src/styles/*.css`, `packages/design-tokens/*.css`). La garde est `src/styles/declared-tokens.test.ts`.
 
@@ -3366,3 +3368,5 @@ Captures : `.cache/web-v2-workflow/recette/stories/coque-{ios,android}-0{1,2,3}-
 **Ce que la garde NE juge pas, et pourquoi c'est écrit** : `var(--x, #fff)` PEINT quoi qu'il arrive. Nommer là un jeton inexistant est une dette de vocabulaire, pas la panne silencieuse que la garde existe pour attraper ; deux sites sont dans ce cas (`--color-ios-on-brand`, `--color-ios-danger`) et ont leur propre suivi. Les y faire entrer ferait de la garde un registre d'exemptions — exactement ce qui empêche une garde d'être crue.
 
 **Contre-épreuve incluse** : la garde vérifie qu'elle LIT bien quelque chose (plus de 20 jetons déclarés, plus de 20 référencés). Sans elle, une liste vide pourrait tout aussi bien signifier « la lecture n'a rien lu ». Rouge mesuré en réintroduisant `--color-ios-fill-2` ; vert après restauration.
+
+*Note de traçabilité (2026-09-20)* — gravée d'abord sous `#7133` (sans rapport, voir D-95). Cette garde a été trouvée au critère (6) de **#7135** — « captures clair ET sombre, REGARDÉES » —, ce qui est la démonstration de ce que vaut ce critère : aucun gate du dépôt ne voyait la panne, et l'œil l'a vue du premier coup.

@@ -16,7 +16,7 @@ import { shortRelativeTime } from '@/lib/relative-time';
 import { initialsOf } from '@/lib/view/conversation';
 
 /**
- * **UNE RANGÉE DE COMMENTAIRE ET SES TROIS GESTES** (#7133) — miroir de
+ * **UNE RANGÉE DE COMMENTAIRE ET SES TROIS GESTES** (#7135) — miroir de
  * `CommentRowView.swift` : le cœur et son compte à gauche, le menu « … » à
  * droite, et ce menu « n'est affiché que s'il contient au moins une action »
  * (`:107-111`).

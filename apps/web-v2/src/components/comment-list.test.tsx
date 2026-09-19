@@ -203,7 +203,7 @@ describe('la pagination et le Prisme', () => {
 });
 
 /**
- * LES TROIS GESTES D'UNE RANGÉE (#7133) — `CommentRowView.swift` : le cœur
+ * LES TROIS GESTES D'UNE RANGÉE (#7135) — `CommentRowView.swift` : le cœur
  * pour tout le monde, le menu « … » réduit aux actions qui EXISTENT
  * (`:107-111`), c'est-à-dire aux siennes. La passerelle tranche dans le même
  * sens : `PATCH`/`DELETE …/comments/:commentId` gardent l'AUTEUR, pas

@@ -4,7 +4,8 @@ import { describe, expect, test } from 'bun:test';
 
 /**
  * **UN JETON QU'AUCUNE FEUILLE NE DÉCLARE NE PEINT RIEN — ET NE ROUGIT NULLE
- * PART** (#7133, trouvé à la capture).
+ * PART** (#7135, trouvé à la capture — critère (6), « captures clair ET
+ * sombre, REGARDÉES »).
  *
  * `style={{ background: 'var(--color-ios-fill-2)' }}` compile, passe `tsc`,
  * passe `check:utilities` (qui juge les CLASSES, pas les styles en ligne),
