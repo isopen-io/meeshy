@@ -238,6 +238,11 @@ function EditForm({
         aria-label={translate(language, 'comments.edit.label')}
         value={draft}
         rows={2}
+        /* LA MÊME BORNE QUE LE COMPOSEUR (`comment-composer.tsx:91`) — sans
+           elle, on tapait au-delà de 2000 et « Enregistrer » s'éteignait en
+           silence : un bouton devenu inerte sans qu'un mot dise pourquoi. La
+           borne est celle de la passerelle, lue au site UNIQUE. */
+        maxLength={COMMENT_MAX_LENGTH}
         /* `onInput`, JAMAIS `onChange` — la MÊME raison que le composeur
            (`comment-composer.tsx:93-98`) : sous le runtime Preact (D-2),
            `onChange` est l'événement NATIF `change`, qui ne part qu'à la perte

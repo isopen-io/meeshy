@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
-import type { PostComment } from '@/lib/api/publication-comments';
+import { COMMENT_MAX_LENGTH, type PostComment } from '@/lib/api/publication-comments';
 
 import { CommentComposer } from './comment-composer';
 import { CommentList, type CommentListState } from './comment-list';
@@ -269,6 +269,31 @@ describe('les gestes d’une rangée — offerts là où ils aboutissent, jamais
        témoin ne dirait plus ce qu'il mesure. */
     expect(document.activeElement?.getAttribute('data-comment-edit-field')).toBe('c1');
     expect(champ?.selectionStart).toBe('Bonjour'.length);
+  });
+
+  /**
+   * **LES DEUX CHAMPS DU MÊME MÉTIER PORTENT LA MÊME BORNE.** Le composeur
+   * pose `maxLength={COMMENT_MAX_LENGTH}` : on ne PEUT pas taper au-delà. Le
+   * champ d'édition, lui, laissait taper sans limite et « Enregistrer »
+   * s'éteignait ensuite en silence — un bouton devenu inerte sans qu'aucun
+   * mot ne dise pourquoi, sur une surface qui revendique pourtant « la MÊME
+   * peau que le composeur, c'est le même métier ». Une borne qui n'existe que
+   * dans l'un des deux champs se découvre à l'usage, pas à la lecture.
+   */
+  test('le champ d’édition porte la MÊME borne que le composeur — on ne tape pas au-delà', async () => {
+    /* LES DEUX DANS UN SEUL MONTAGE — `monter` ne retient qu'une racine, et
+       deux appels en laisseraient une démontée par personne. */
+    const host = await monter(
+      <>
+        {liste({ comments: [comment({ author: MIEN })], gestures: gestesDe() })}
+        <CommentComposer language="fr" canWrite onSend={async () => ({ ok: true })} />
+      </>,
+    );
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-comment-gesture="edit"]')?.click());
+
+    const borneDe = (selecteur: string) => host.querySelector(selecteur)?.getAttribute('maxlength') ?? null;
+    expect(borneDe('[data-comment-edit-field]')).toBe(borneDe('[data-comment-field]'));
+    expect(borneDe('[data-comment-edit-field]')).toBe(String(COMMENT_MAX_LENGTH));
   });
 
   test('SANS rappels — visiteur anonyme — aucune rangée n’offre de bouton (loi 4)', async () => {
