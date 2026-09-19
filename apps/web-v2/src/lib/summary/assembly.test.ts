@@ -224,3 +224,70 @@ describe('buildLivingSummary — les trois cas de conversion', () => {
     expect(amina?.presence).toBe('online');
   });
 });
+
+/**
+ * LA RAMPE DES VISAGES DESCEND LA LOI PARTAGÉE, PAS SON PREMIER RANG (#6985).
+ *
+ * `deriveParticipants` lisait `known?.avatar` — le rang 1 seulement. La loi du
+ * dépôt est `resolveParticipantAvatar = [participant.avatar,
+ * participant.user?.avatar].find(isNonBlank)` (`packages/shared/utils/participant-helpers.ts`),
+ * et le rang 2 est le cas NOMINAL : un participant sans surcharge locale porte
+ * sa photo sur son compte.
+ *
+ * **Ces témoins sont écrits sur un rang AUTRE que le premier**, et c'est la
+ * seule façon qu'ils aient de tomber : au rang 1, la lecture naïve et la loi
+ * juste rendent le même verdict.
+ */
+describe('la rampe des visages résout l’avatar par la loi partagée (#6985)', () => {
+  const avecAvatar = (partial: Partial<Participant>) => participant({ userId: 'u-amina', ...partial });
+
+  test('RANG 2 — un participant sans surcharge locale porte la photo de son COMPTE', () => {
+    const model = buildLivingSummary(
+      baseInput({
+        participants: [avecAvatar({ user: { id: 'u-amina', avatar: 'compte.png' } } as Partial<Participant>)],
+        messages: [message({ id: 'm1', senderId: 'u-amina', createdAt: NOW, content: '@vous, ça va ?' })],
+      }),
+    );
+
+    expect(model.faceRamp[0]?.avatarUrl).toBe('compte.png');
+  });
+
+  test('RANG 1 — une surcharge locale PRIME sur le compte, et l’ordre ne s’inverse pas', () => {
+    const model = buildLivingSummary(
+      baseInput({
+        participants: [
+          avecAvatar({ avatar: 'local.png', user: { id: 'u-amina', avatar: 'compte.png' } } as Partial<Participant>),
+        ],
+        messages: [message({ id: 'm1', senderId: 'u-amina', createdAt: NOW, content: '@vous, ça va ?' })],
+      }),
+    );
+
+    expect(model.faceRamp[0]?.avatarUrl).toBe('local.png');
+  });
+
+  test('une surcharge locale BLANCHE retombe sur le compte — `??` laissait fuir la chaîne vide', () => {
+    // Sans la normalisation de la loi partagée, le client rendait `<img src="">`,
+    // qui RECHARGE la page courante. C'est la raison d'être de `isNonBlank`.
+    const model = buildLivingSummary(
+      baseInput({
+        participants: [
+          avecAvatar({ avatar: '   ', user: { id: 'u-amina', avatar: 'compte.png' } } as Partial<Participant>),
+        ],
+        messages: [message({ id: 'm1', senderId: 'u-amina', createdAt: NOW, content: '@vous, ça va ?' })],
+      }),
+    );
+
+    expect(model.faceRamp[0]?.avatarUrl).toBe('compte.png');
+  });
+
+  test('deux rangs vides rendent `null`, jamais une chaîne blanche', () => {
+    const model = buildLivingSummary(
+      baseInput({
+        participants: [avecAvatar({ avatar: '', user: { id: 'u-amina', avatar: '  ' } } as Partial<Participant>)],
+        messages: [message({ id: 'm1', senderId: 'u-amina', createdAt: NOW, content: '@vous, ça va ?' })],
+      }),
+    );
+
+    expect(model.faceRamp[0]?.avatarUrl).toBeNull();
+  });
+});
