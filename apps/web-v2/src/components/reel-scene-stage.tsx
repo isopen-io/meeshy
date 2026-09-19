@@ -4,7 +4,7 @@ import { BackgroundTrackAudio } from './background-track-audio';
 import { Glyph } from './glyph';
 import { RAIL_DISC, ReelPoster } from './reel-poster';
 import { electBackgroundTrack } from '@/lib/canvas/background-sound';
-import type { ProtectedMediaUnavailableReason } from '@/lib/api/protected-media';
+import type { ProtectedMediaDeps, ProtectedMediaUnavailableReason } from '@/lib/api/protected-media';
 import { fitScene, SCENE_RATIO } from '@/lib/canvas/fit';
 import { sceneDurationSeconds } from '@/lib/canvas/timeline';
 import type { FeedCardScene } from '@/lib/feed/card-model';
@@ -64,13 +64,32 @@ export type ReelSceneStageProps = {
   /** Un `play()` sonore refusé par la politique de lecture automatique — le
    * moteur ET la piste de fond y remontent, l'écran repasse `soundOn=false`. */
   readonly onSoundBlocked: () => void;
+  /** LA PISTE ÉLUE NE SERA JAMAIS SERVIE (#7015, seconde revue) — remonté à
+   * `ReelPage`, qui décide s'il RESTE un son à couper. Sans ce relais, le
+   * rail son reste monté au-dessus d'une scène sans `<audio>` : un contrôle
+   * INERTE (loi 4), le défaut même que `playable` prétend écarter. */
+  readonly onSoundUnavailable?: (reason: ProtectedMediaUnavailableReason) => void;
+  /** Injectable pour les témoins UNIQUEMENT — la production prend les
+   * dépendances de `BackgroundTrackAudio`. */
+  readonly mediaDeps?: ProtectedMediaDeps;
 };
 
 function documentHiddenNow(): boolean {
   return typeof document !== 'undefined' && document.hidden;
 }
 
-export default function ReelSceneStage({ scene, mode, soundOn, accent, language, preferredLanguages, poster, onSoundBlocked }: ReelSceneStageProps) {
+export default function ReelSceneStage({
+  scene,
+  mode,
+  soundOn,
+  accent,
+  language,
+  preferredLanguages,
+  poster,
+  onSoundBlocked,
+  onSoundUnavailable,
+  mediaDeps,
+}: ReelSceneStageProps) {
   // `far` ne charge ni le moteur ni la piste — même discipline que
   // `reel-page.tsx` avant de monter ce chunk, et défense en profondeur pour
   // un hôte qui ferait transiter cette instance jusqu'à `far` sans démonter.
@@ -161,7 +180,11 @@ export default function ReelSceneStage({ scene, mode, soundOn, accent, language,
             muted={muted}
             onDurationKnown={noteDuration}
             onPlaybackBlocked={onSoundBlocked}
-            onUnavailable={setSoundUnavailable}
+            onUnavailable={(reason) => {
+              setSoundUnavailable(reason);
+              onSoundUnavailable?.(reason);
+            }}
+            {...(mediaDeps !== undefined ? { mediaDeps } : {})}
           />
         ) : null}
       </div>

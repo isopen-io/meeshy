@@ -1,9 +1,9 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 
 import { BackgroundTrackAudio } from '@/components/background-track-audio';
-import type { ProtectedMediaUnavailableReason } from '@/lib/api/protected-media';
+import type { ProtectedMediaDeps, ProtectedMediaUnavailableReason } from '@/lib/api/protected-media';
 import { objectMediaIdentity, objectMediaSrc } from '@/lib/canvas/carrier';
-import { electBackgroundTrack, sceneHasControllableSound } from '@/lib/canvas/background-sound';
+import { electBackgroundTrack, sceneHasAudibleBackgroundVideo, sceneHasControllableSound } from '@/lib/canvas/background-sound';
 import type { CanvasDocument } from '@/lib/canvas/document';
 import { backgroundMedia, declaredAspect } from '@/lib/feed/scene-framing';
 import { isVideoObject } from '@/lib/feed/scene-motion';
@@ -80,6 +80,11 @@ export type StorySceneLayerProps = {
   /** Le mesureur de PRODUCTION est `sceneFootprint` ; les témoins en injectent
    * un autre pour éprouver la présentation sans vraie mise en page. */
   readonly measure?: (params: SceneFootprintParams) => Footprint | null;
+  /** Injectable pour les témoins UNIQUEMENT — la production prend
+   * `defaultMediaDeps`, comme `BackgroundTrackAudio` à qui elle est remise
+   * telle quelle. Sans elle, « la piste protégée est refusée » ne s'éprouve
+   * qu'en laissant partir un vrai `fetch`. */
+  readonly mediaDeps?: ProtectedMediaDeps;
 };
 
 const isPlainRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
@@ -107,6 +112,7 @@ export function StorySceneLayer({
   onPlaybackBlocked,
   onSoundAvailability,
   measure = sceneFootprint,
+  mediaDeps,
 }: StorySceneLayerProps) {
   const storyId = story.id;
   const carrier = useMemo(() => storyCarrier(story), [story]);
@@ -185,7 +191,17 @@ export function StorySceneLayer({
       ? objectMediaSrc(fond, carrier)
       : undefined;
   const pureImage = pureImageSrc !== undefined;
-  const soundAvailable = useMemo(() => sceneHasControllableSound({ document, sceneIndex, carrier }), [document, sceneIndex, carrier]);
+  const declaredSound = useMemo(() => sceneHasControllableSound({ document, sceneIndex, carrier }), [document, sceneIndex, carrier]);
+  /**
+   * CE QU'IL RESTE À COUPER, une fois le transport CONSULTÉ (#7015, seconde
+   * revue). `sceneHasControllableSound` répond d'après le DOCUMENT ; quand la
+   * piste élue est définitivement indisponible (`soundUnavailable`), le seul
+   * son qui joue encore est la vidéo de fond non coupée. Sans ce repli, le
+   * chrome montait son `SoundToggle` (`story.tsx` § `showsSound`) au-dessus
+   * d'une scène sans `<audio>` : on tape, et il ne se passe JAMAIS rien.
+   */
+  const audibleVideo = useMemo(() => sceneHasAudibleBackgroundVideo({ document, sceneIndex }), [document, sceneIndex]);
+  const soundAvailable = soundUnavailable === null ? declaredSound : audibleVideo;
   const backdropHash = scene === undefined ? undefined : readerBackdropHash(scene, story);
   const track = electBackgroundTrack({ document, sceneIndex, carrier });
 
@@ -326,6 +342,7 @@ export function StorySceneLayer({
           onDurationKnown={(ms) => reportDuration('track', ms)}
           onPlaybackBlocked={onPlaybackBlocked}
           onUnavailable={setSoundUnavailable}
+          {...(mediaDeps !== undefined ? { mediaDeps } : {})}
         />
       ) : null}
     </div>

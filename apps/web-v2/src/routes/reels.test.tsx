@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { ReelPage } from '@/components/reel-page';
 import { REEL_MARKET_IMAGES, REEL_RANK2_ES, REEL_SCENE_LOOP, REEL_STUDIO, REEL_SUNSET_EN, REEL_VOICE } from '@/lib/api/fixtures-reels';
 import type { FeedPost } from '@/lib/api/feed-pages';
+import type { ProtectedMediaDeps } from '@/lib/api/protected-media';
 import { resolveFeedCardModel } from '@/lib/feed/card-model';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { showsFloatingMenus } from '@/lib/view/floating-gate';
@@ -307,5 +308,84 @@ describe('ReelPage — un réel COMPOSÉ, la scène apparaît une fois son chunk
       root.unmount();
     });
     container.remove();
+  });
+
+  /**
+   * # LE RAIL SON D'UNE PISTE QUE PERSONNE N'ENTENDRA (#7015, seconde revue)
+   *
+   * `playable` écarte déjà le bouton son d'une scène MUETTE — « loi 4 », dit
+   * son commentaire. Mais il l'écarte d'après `sceneHasControllableSound`,
+   * qui est STRUCTUREL : il répond d'après ce que le DOCUMENT déclare et ne
+   * sait rien du transport. `REEL_SCENE_LOOP` a un fond vidéo `muted: true`
+   * et une piste ÉLUE : dès que cette piste est servie par la route
+   * AUTHENTIFIÉE et refusée (401 — le défaut d'origine de #7015),
+   * `BackgroundTrackAudio` ne monte AUCUN `<audio>` et le rail son restait
+   * là. On tape, et il ne se passe JAMAIS rien — le contrôle inerte que
+   * `playable` prétend justement écarter.
+   *
+   * Le second témoin est le garde-fou : rendre le fond vidéo AUDIBLE remet un
+   * son à couper, donc le rail. Fermer sur le seul « la piste est refusée »
+   * retirerait un contrôle qui a, lui, un effet.
+   */
+  const SON_PROTEGE = '/api/v1/static/d0bf39b7-cd47-4e70-8f1c-34b2d9b5ee4b.m4a';
+  const depsRefus = (): ProtectedMediaDeps => ({
+    credential: () => ({ kind: 'registered', token: 'jeton-de-test' }),
+    fetchImpl: async () => new Response('', { status: 401 }),
+    createObjectURL: () => 'blob:meeshy/jamais',
+    revokeObjectURL: () => {},
+  });
+  /** LE MÊME réel, dont la seule piste passe par la route authentifiée. */
+  const reelPisteProtegee = (audibleVideo: boolean): FeedPost => ({
+    ...REEL_SCENE_LOOP,
+    id: `reel-scene-protege-${audibleVideo ? 'video' : 'muet'}`,
+    media: (REEL_SCENE_LOOP.media ?? []).map((m) => (m.mimeType?.startsWith('audio/') === true ? { ...m, fileUrl: SON_PROTEGE } : m)),
+    ...(audibleVideo
+      ? {
+          storyEffects: JSON.parse(
+            JSON.stringify(REEL_SCENE_LOOP.storyEffects).replaceAll('"muted":true', '"muted":false'),
+          ) as FeedPost['storyEffects'],
+        }
+      : {}),
+  });
+
+  async function railSonApresRefus(audibleVideo: boolean): Promise<Element | null> {
+    const container = window.document.createElement('div');
+    window.document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <ReelPage
+          model={modelOf(reelPisteProtegee(audibleVideo))}
+          index={0}
+          count={1}
+          mode="active"
+          soundOn={false}
+          language="fr"
+          preferredLanguages={['fr']}
+          onToggleSound={() => undefined}
+          onGesture={() => undefined}
+          onShare={() => undefined}
+          onSoundBlocked={() => undefined}
+          mediaDeps={depsRefus()}
+        />,
+      );
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    const rail = container.querySelector('[data-reel-gesture="sound"]');
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+    return rail;
+  }
+
+  test('une piste PROTÉGÉE refusée, fond vidéo MUET ⇒ aucun rail son (jamais un contrôle inerte, loi 4)', async () => {
+    expect(await railSonApresRefus(false)).toBeNull();
+  });
+
+  test('CONTRASTE — piste refusée MAIS fond vidéo AUDIBLE ⇒ le rail son RESTE : ce son-là joue', async () => {
+    expect(await railSonApresRefus(true)).not.toBeNull();
   });
 });
