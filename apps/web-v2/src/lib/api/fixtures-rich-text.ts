@@ -1,10 +1,11 @@
 import { usernamePatternSource } from '@meeshy/shared/types/api-schemas';
 
-import type { FeedAuthor, FeedPost } from './feed-pages';
+import { AUTHOR_POSTS_PAGE_SIZE } from './author-posts';
+import type { FeedAuthor, FeedPage, FeedPost } from './feed-pages';
 import { amina, conversationDefaults, kwame, message, portraitStandIn, threadMoment, translation, VIEWER_ID, viewer } from './fixtures-base';
-import { FIXTURE_PEOPLE } from './fixtures-friends';
+import { FIXTURE_PEOPLE, fixtureBlockedUsers, fixtureFriendRequests } from './fixtures-friends';
 import type { HashtagPage } from './hashtag-posts';
-import type { PublicProfile } from './public-profile';
+import type { PublicProfile, PublicProfileStats, PublicProfileView, ServedRelation } from './public-profile';
 import type { Conversation, Message } from './types';
 
 /**
@@ -65,7 +66,9 @@ const RICH_PERSON: PublicProfile = {
   username: KWAME_HANDLE,
   displayName: 'Kwame Mensah',
   avatar: portraitStandIn('#60a5fa', '#1e40af'),
+  banner: portraitStandIn('#a78bfa', '#4338ca'),
   bio: 'Compte de démonstration du texte enrichi.',
+  createdAt: '2024-03-08T09:00:00.000Z',
 };
 
 const rtIntro = richMessage({
@@ -231,26 +234,185 @@ export function fixtureHashtagPosts(tag: string, cursor: number, limit: number):
   return { posts: slice, nextCursor: next < posts.length ? next : null };
 }
 
+// ------------------------------------------------- les publications d'un auteur
+
+/**
+ * LES PUBLICATIONS DU SUJET DE RECETTE (#7083) — cinq, dont DEUX réels : c'est
+ * le corpus minimal qui rend le filtre du bandeau MESURABLE (toucher « Réels »
+ * doit faire baisser le nombre de cartes, re-toucher doit le rétablir).
+ */
+const authorPost = (
+  id: string,
+  type: 'POST' | 'REEL',
+  content: string,
+  minutes: number,
+  extra: Partial<FeedPost> = {},
+): FeedPost => ({
+  id,
+  type,
+  createdAt: threadMoment(minutes).toISOString(),
+  content,
+  originalLanguage: 'fr',
+  author: { id: RICH_PERSON.id, username: RICH_PERSON.username, displayName: RICH_PERSON.displayName, avatar: RICH_PERSON.avatar },
+  mentions: [],
+  likeCount: 0,
+  commentCount: 0,
+  repostCount: 0,
+  bookmarkCount: 0,
+  shareCount: 0,
+  ...extra,
+});
+
+const AUTHOR_POSTS: readonly FeedPost[] = [
+  /* LE TÉMOIN DE RANG, hérité du corpus du texte enrichi : original ESPAGNOL,
+     traduction ANGLAISE, aucune française. Le prisme du gate (`['fr','en']`)
+     sert donc le RANG 2 — un bloc qui ne descendrait que le rang 1 montrerait
+     l'espagnol. Le bloc publications du profil hérite de ce témoin sans en
+     réécrire un (leçon 261 : un témoin de rang s'écrit hors du rang 1). */
+  authorPost('ap-1', 'POST', 'Hola, el informe está listo.', 12, {
+    originalLanguage: 'es',
+    translations: { en: { text: 'Hi, the report is ready.' } },
+  }),
+  authorPost('ap-2', 'REEL', 'Trois minutes sur le terrain.', 90),
+  authorPost('ap-3', 'POST', `Compte rendu sous #livraison — merci @${KWAME_HANDLE}.`, 60 * 5, {
+    mentions: [{ username: KWAME_HANDLE }],
+    likeCount: 4,
+    commentCount: 2,
+  }),
+  authorPost('ap-4', 'REEL', 'Le montage de la semaine.', 60 * 26),
+  authorPost('ap-5', 'POST', 'Première note publiée sur ce compte.', 60 * 24 * 9),
+];
+
+/**
+ * LA PAGE DE FIXTURES EN PORTE TROIS, pas vingt — et c'est délibéré.
+ *
+ * La route sert au plus `limit` lignes, mais rien dans son contrat ne promet
+ * qu'une page PLEINE : `hasMore` + `nextCursor` sont la seule vérité, et
+ * `nextFeedCursor` ne compare jamais la longueur d'une page à la limite
+ * demandée. Un corpus de quarante publications n'achèterait donc aucun témoin
+ * de plus qu'un corpus de cinq servi par pages de trois — il pèserait juste.
+ *
+ * LE CURSEUR EST UNE CHAÎNE OPAQUE, comme celui de la passerelle : un entier
+ * rendrait vert un port qui `Number(...)`-ait le curseur, c'est-à-dire
+ * exactement le défaut que le doc-comment d'`author-posts.ts` décrit.
+ */
+const FIXTURE_AUTHOR_PAGE = 3;
+const CURSOR_PREFIX = 'author:';
+
+export function fixtureAuthorPosts(authorId: string, cursor: string | null): FeedPage {
+  const all = authorId === RICH_PERSON.id ? AUTHOR_POSTS : [];
+  const from = cursor === null ? 0 : Number.parseInt(cursor.slice(CURSOR_PREFIX.length), 10);
+  const start = Number.isFinite(from) && from > 0 ? from : 0;
+  const posts = all.slice(start, start + FIXTURE_AUTHOR_PAGE);
+  const next = start + posts.length;
+  const hasMore = next < all.length;
+  return {
+    posts,
+    pagination: {
+      limit: AUTHOR_POSTS_PAGE_SIZE,
+      hasMore,
+      nextCursor: hasMore ? `${CURSOR_PREFIX}${next}` : null,
+    },
+  };
+}
+
+// ------------------------------------------------------------- le profil public
+
+/** Les compteurs SERVIS à un tiers — les quatre intimes sont ABSENTS, comme
+ * `servedUserStats` les retire (`routes/user-stats.ts:245-251`). */
+const THIRD_PARTY_STATS: PublicProfileStats = {
+  languagesUsed: 4,
+  memberDays: 561,
+  postsCount: 3,
+  reelsCount: 2,
+  storiesCount: 7,
+  totalMessages: null,
+  totalConversations: null,
+  totalTranslations: null,
+  friendRequestsReceived: null,
+};
+
+/** Les onze compteurs — ce que le serveur sert à SOI et à l'administration. */
+const SELF_STATS: PublicProfileStats = {
+  ...THIRD_PARTY_STATS,
+  postsCount: 0,
+  reelsCount: 0,
+  storiesCount: 0,
+  totalMessages: 1204,
+  totalConversations: 18,
+  totalTranslations: 340,
+  friendRequestsReceived: 3,
+};
+
+/**
+ * LA RELATION SE DÉRIVE DU MÊME ÉTAT QUE LES PANIERS, jamais d'une table à
+ * part : côté serveur, `relationAvec` lit la table `friendRequest`
+ * (`routes/directory/person.ts:72-93`) — c'est-à-dire exactement ce que
+ * `GET /directory/friend-requests` sert. Deux sources ici auraient fait dire
+ * deux choses au même geste, le défaut que `relationshipIndexOf` évite déjà
+ * sur « Découvrir ».
+ */
+const servedRelation = (userId: string): ServedRelation => {
+  if (userId === VIEWER_ID) return 'self';
+  if (fixtureBlockedUsers().some((person) => person.id === userId)) return 'none';
+  if (fixtureFriendRequests('accepted').some((row) => row.senderId === userId || row.receiverId === userId)) return 'friend';
+  if (fixtureFriendRequests('received').some((row) => row.senderId === userId)) return 'pending_received';
+  if (fixtureFriendRequests('sent').some((row) => row.receiverId === userId)) return 'pending_sent';
+  return 'none';
+};
+
+const viewOf = (profile: PublicProfile): PublicProfileView => {
+  const isSelf = profile.id === VIEWER_ID;
+  /* Un compte BLOQUÉ par le lecteur : la passerelle n'a pas de valeur
+     `blocked` dans `relationAvec` — la fiche le sait par le panier des
+     bloqués, comme « Découvrir ». `relation` reste donc `none` sur le fil ;
+     c'est `relationFromServed` qui compose l'état affiché. */
+  return {
+    profile,
+    stats: isSelf ? SELF_STATS : THIRD_PARTY_STATS,
+    relation: servedRelation(profile.id),
+    isSelf,
+  };
+};
+
+const VIEWER_PROFILE: PublicProfile = {
+  id: VIEWER_ID,
+  username: 'vous',
+  displayName: 'Awa Diallo',
+  avatar: portraitStandIn('#34d399', '#065f46'),
+  banner: null,
+  bio: 'Traductrice, Dakar.',
+  createdAt: '2023-10-02T08:30:00.000Z',
+};
+
 /**
  * LE PROFIL PUBLIC EN FIXTURES — résolu par pseudo, INSENSIBLE À LA CASSE,
  * comme `servirProfilPublic` (`{ username: { equals: handle, mode:
  * 'insensitive' } }`). Sans cette insensibilité, un `@Kwame.Mensah` écrit dans
  * un message ouvrirait « profil introuvable » alors que le serveur, lui, le
  * trouve — le gate mesurerait un défaut que la production n'a pas.
+ *
+ * Il rend désormais la VUE ENTIÈRE (#7083) — identité, compteurs, relation —
+ * parce que la route la sert en UN aller-retour (`?expand=stats,relation`) :
+ * une fixture qui n'en rendrait qu'une part laisserait l'écran câbler des
+ * requêtes que la production ne fait pas.
  */
-export function fixturePublicProfile(handle: string): PublicProfile | null {
+export function fixturePublicProfile(handle: string): PublicProfileView | null {
   const needle = handle.trim().toLowerCase();
-  if (RICH_PERSON.username.toLowerCase() === needle || RICH_PERSON.id.toLowerCase() === needle) return RICH_PERSON;
+  if (RICH_PERSON.username.toLowerCase() === needle || RICH_PERSON.id.toLowerCase() === needle) return viewOf(RICH_PERSON);
+  if (VIEWER_PROFILE.username === needle || VIEWER_PROFILE.id.toLowerCase() === needle) return viewOf(VIEWER_PROFILE);
   const found = Object.values(FIXTURE_PEOPLE).find(
     (person) => person.username.toLowerCase() === needle || person.id.toLowerCase() === needle,
   );
   return found === undefined
     ? null
-    : {
+    : viewOf({
         id: found.id,
         username: found.username,
         displayName: found.displayName,
         avatar: found.avatar,
+        banner: null,
         bio: `Compte de démonstration — ${found.displayName ?? found.username}.`,
-      };
+        createdAt: '2025-01-14T12:00:00.000Z',
+      });
 }

@@ -85,6 +85,29 @@ export function blockedUsersQueryOptions(deps: FriendRequestsDeps) {
 export const flattenBlockedUsers = (data: BlockedData | undefined): readonly PersonSummary[] =>
   data?.pages.flatMap((page) => page.users) ?? [];
 
+/**
+ * **BLOQUER** (#7083) — `PUT /api/v1/directory/blocks/:userId`
+ * (`services/gateway/src/routes/directory/blocks.ts:302`), la JUMELLE exacte
+ * de `unblockUser` ci-dessous : même préfixe, même famille de clés, même
+ * fichier. Un module à part aurait fabriqué deux vocabulaires pour les deux
+ * sens d'un même geste.
+ *
+ * **IDEMPOTENTE** — le doc de la route le dit : « a second call returns the
+ * same state and the same status ». Les alias `POST /users/:userId/block`
+ * portent `depreciee(...)` : un client neuf ne s'y inscrit pas.
+ */
+export async function blockUser(deps: FriendRequestsDeps, userId: string): Promise<ApiResult<null>> {
+  if (__FIXTURES__ && deps.source === 'fixtures') {
+    const { fixtureBlockUser } = await import('./fixtures-friends');
+    return fixtureBlockUser(userId);
+  }
+  const result = await deps.transport.request<unknown>({
+    method: 'PUT',
+    path: `/api/v1/directory/blocks/${encodeURIComponent(userId)}`,
+  });
+  return result.ok ? { ...result, data: null } : result;
+}
+
 export async function unblockUser(deps: FriendRequestsDeps, userId: string): Promise<ApiResult<null>> {
   if (__FIXTURES__ && deps.source === 'fixtures') {
     const { fixtureUnblockUser } = await import('./fixtures-friends');

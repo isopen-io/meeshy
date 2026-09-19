@@ -132,6 +132,20 @@ export function fixtureSendFriendRequest(receiverId: string): ApiResult<FriendRe
   return { ok: true, status: 201, data: created };
 }
 
+/**
+ * BLOQUER — IDEMPOTENTE comme la route (`blocks.ts:307`, « a second call
+ * returns the same state and the same status »). La personne bloquée peut ne
+ * pas appartenir au corpus des connus (un auteur de publication, par exemple) :
+ * le blocage n'est pas une relation à établir, c'est une appartenance à un
+ * ensemble — et le serveur ne refuse pas davantage.
+ */
+export function fixtureBlockUser(userId: string): ApiResult<null> {
+  if (state.blocked.some((candidate) => candidate.id === userId)) return { ok: true, data: null };
+  const known = Object.values(FIXTURE_PEOPLE).find((candidate) => candidate.id === userId);
+  state = { ...state, blocked: [known ?? person(userId, userId, userId, null), ...state.blocked] };
+  return { ok: true, data: null };
+}
+
 export function fixtureUnblockUser(userId: string): ApiResult<null> {
   state = { ...state, blocked: state.blocked.filter((candidate) => candidate.id !== userId) };
   return { ok: true, data: null };
