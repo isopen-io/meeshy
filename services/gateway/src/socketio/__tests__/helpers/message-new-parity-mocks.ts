@@ -74,9 +74,18 @@ jest.mock('../../../services/attachments', () => ({
   }),
 }));
 
-jest.mock('../../../services/attachments/attachmentIncludes', () => ({
-  attachmentMediaSelect: {},
-}));
+// #7070 — le RÉEL, pas un moignon : les témoins de parité lisent désormais
+// `attachmentSocketSelect` pour dériver la liste des clés attendues sur le
+// fil (`Object.keys(attachmentSocketSelect)` moins `reactions`). Un stub
+// `{ attachmentMediaSelect: {} }` rendait `attachmentSocketSelect` (déjà
+// consommé par `MeeshySocketIOManager._broadcastAttachmentUpdated`, hors de
+// la portée de ce fichier) `undefined` en silence — inoffensif tant que rien
+// ne le lisait, ce qui a cessé d'être vrai ici. Pure donnée (des `{ champ:
+// true }` Prisma), sans effet de bord : la déléguer au module réel ne change
+// rien à l'isolation que ce fichier construit.
+jest.mock('../../../services/attachments/attachmentIncludes', () =>
+  jest.requireActual('../../../services/attachments/attachmentIncludes')
+);
 
 jest.mock('../../../services/EmailService', () => ({
   EmailService: jest.fn().mockImplementation(() => ({

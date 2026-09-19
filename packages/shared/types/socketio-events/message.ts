@@ -354,11 +354,17 @@ export interface SocketIOMessageSender {
  * transcriptions client divergentes sans jamais être déclaré (cycle 99).
  *
  * Ce qui est déclaré `unknown` l'est PAR DÉCISION, pas par paresse : `replyTo`,
- * `attachments`, `translations` et `metadata` ont une forme DÉLIBÉRÉMENT
- * différente d'un transport à l'autre (cf. l'en-tête de
+ * `translations` et `metadata` ont une forme DÉLIBÉRÉMENT différente d'un
+ * transport à l'autre (cf. l'en-tête de
  * `services/gateway/src/socketio/messageNewPayload.ts`, qui énumère les écarts
  * et leur raison). Entre deux producteurs qui se contredisent, ne rien affirmer
  * est plus honnête que d'en couronner un.
+ *
+ * `attachments` reste `unknown` pour une raison DIFFÉRENTE depuis #7070 : les
+ * deux producteurs servent désormais la MÊME forme (`SocketAttachment`,
+ * `services/gateway/src/socketio/serializeAttachmentForSocket.ts`), mais ce
+ * type est gateway-side et le paquet partagé ne l'importe pas — le déclarer
+ * ici demanderait de le faire migrer, ce que ce lot ne fait pas.
  *
  * Portée de la garde, pour ne pas la surestimer : la passerelle compile en
  * `strict: false` / `strictNullChecks: false`. Déclarer un champ ici fait donc

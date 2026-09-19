@@ -44,11 +44,15 @@ import { attachmentReplyToFromMetadata } from '../services/messaging/attachmentR
  * - `replyTo` : passthrough BRUT côté socket, sender RECONSTRUIT et APLATI côté
  *   REST. Les fusionner changerait la forme consommée par un client sans
  *   certitude sur lequel des deux en dépend.
- * - `attachments` : normalisés par `serializeAttachmentForSocket` côté socket,
- *   servis bruts côté REST (le `select` du chemin REST les livre déjà à la
- *   forme rendue).
  * - `translations` : chaque chemin les obtient par sa propre voie (relecture
  *   Mongo côté socket, transformation directe côté REST).
+ *
+ * `attachments` a QUITTÉ cette liste (#7070) : les deux appelants le
+ * construisent désormais par la MÊME fonction (`serializeMessageAttachmentsForSocket`,
+ * `serializeAttachmentForSocket.ts`) — il reste un paramètre plutôt qu'un champ
+ * de cette unité seulement parce que le chemin REST le résout à partir de
+ * `message.attachments`, quand le chemin socket l'obtient d'une fonction
+ * privée du handler ; la FORME qu'ils produisent ne diverge plus.
  *
  * Toute famille de champs DÉRIVÉE DE LA LIGNE MESSAGE appartient à cette unité,
  * jamais au site d'appel : c'est la seule disposition où « ajouter un champ »

@@ -22,8 +22,8 @@
  *
  * POURQUOI `polling: 25`, JAMAIS `raf` (le défaut de `waitForFunction`).
  * Mesuré le 2026-09-19 (§1.2 point 3 de la spécification #7054) : sous
- * horloge truquée (`page.clock.install` + `pauseAt`), le sondage PROPRE de
- * Playwright n'est PAS truqué — `UtilityScript` lit
+ * horloge truquée (`install` + `pauseAt`, `paused-chronology.mjs`), le
+ * sondage PROPRE de Playwright n'est PAS truqué — `UtilityScript` lit
  * `global.__pwClock.builtins`, les minuteurs ORIGINAUX capturés par
  * l'horloge — mais le polling par défaut de `waitForFunction` utilise
  * `requestAnimationFrame`, et RIEN ne garantit que ce `rAF`-là reste sur les

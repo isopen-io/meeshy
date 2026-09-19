@@ -33230,17 +33230,6 @@ Un `overlay` **ne participe jamais** au calcul de taille de son hôte. `Color.cl
 
 **Corollaire d'exception.** `FixedFontSizeGuardTests` n'a d'exception que pour la dette GELÉE : un fichier NEUF n'y entre jamais, quel que soit le commentaire qui invoque la doctrine des glyphes décoratifs. Une exception qui se réclame d'une doctrine sans être inscrite au registre de la dette n'existe pas.
 
-## Leçon 632 — un gate en CHAÎNE (`&&`) ne prouve que les étapes AVANT celle qui rougit
-
-**Un gate en CHAÎNE (`&&`) ne prouve QUE les étapes avant celle qui rougit — une correction qui répare la première étape signalée peut en laisser une seconde, jamais jouée, derrière elle.**
-
-PR #7033 (texte enrichi, liens/mentions cliquables) : `Quality (bun)` rapportait UNE seule défaillance, `check-utilities.mjs` (une classe `x` de témoin sans règle CSS). Corrigée, `bun run gate` complet — jamais joué localement sur cette PR avant ce tour — a rougi une SECONDE fois, sur `check-reading-mode.mjs`, une étape que le premier échec avait empêché d'atteindre en CI (`&&` s'arrête au premier `exit 1`). 14 défauts : « le `<p>` de texte servi n'est pas `aria-hidden` ».
-
-Le défaut n'en était pas un — c'était le GATE qui datait. `focal-row.tsx` (même PR) était passé d'un masque de CONTENEUR (`aria-hidden` sur le `<p>` entier) à un masque FEUILLE PAR FEUILLE (`RichText`/`plainTextHidden`, un `<span aria-hidden>` par segment non interactif), précisément pour qu'un lien de mention sous ce paragraphe reste focusable et nommé — masquer le conteneur entier aurait recréé la violation ARIA inverse (`aria-hidden-focus`). Le gate `check-identity.mjs` (#5935), écrit pour l'ANCIEN masque, cherchait l'attribut au mauvais niveau : la garde mesurait une IMPLÉMENTATION, pas l'invariant qu'elle prétendait garder (« la phrase n'est jamais lue deux fois »).
-
-> **Un `&&` dans un script `gate` composite cache tout ce qui suit la première rougeur — corriger le défaut RAPPORTÉ ne prouve rien sur les étapes qu'il empêchait d'atteindre.** Jouer le gate ENTIER, jusqu'au bout, après CHAQUE correction — jamais seulement l'étape nommée par le CI. Et quand un gate écrit avant une refonte accuse le code QUE la refonte vient sciemment de changer (ici documenté dans le commit ET le doc-comment du composant), lire d'abord si c'est le CODE qui régresse ou le GATE qui a un cran de retard : ici la nouvelle stratégie ARIA était strictement MEILLEURE (liens atteignables) que celle que le gate réclamait — la corriger revenait à réintroduire le défaut que la PR venait de corriger.
-
-Discrimination : `git stash` sur `check-identity.mjs` seul → 14/14 défauts réapparaissent à l'identique (message, lignes) ; `git stash pop` → 0 défaut. Détail : `apps/web-v2/scripts/lib/check-identity.mjs`, `apps/web-v2/src/components/rich-text.tsx`, `apps/web-v2/src/components/focal-row.tsx`.
 ## Leçon 631 — un COMMENTAIRE compte dans le budget de taille, et un lot qui explique bien peut faire rougir un fichier hors budget
 
 2026-09-19, #7022 (PR #7047). Le lot faisait passer `NotificationService.ts` de
@@ -33277,7 +33266,18 @@ exception ; le budget n'est apparu qu'une fois le premier gate réparé. Un dép
 qui traîne un rouge ne traîne jamais UN rouge — voir
 `reference_a_quiet_branch_is_not_a_green_branch`.
 
-## Leçon 632 — rendre un prédicat fail-closed ne sauve que ses usages POSITIFS : sa négation reste menteuse, et troque un gate qui explose contre un gate qui ment
+## Leçon 632 — un gate en CHAÎNE (`&&`) ne prouve que les étapes AVANT celle qui rougit
+
+**Un gate en CHAÎNE (`&&`) ne prouve QUE les étapes avant celle qui rougit — une correction qui répare la première étape signalée peut en laisser une seconde, jamais jouée, derrière elle.**
+
+PR #7033 (texte enrichi, liens/mentions cliquables) : `Quality (bun)` rapportait UNE seule défaillance, `check-utilities.mjs` (une classe `x` de témoin sans règle CSS). Corrigée, `bun run gate` complet — jamais joué localement sur cette PR avant ce tour — a rougi une SECONDE fois, sur `check-reading-mode.mjs`, une étape que le premier échec avait empêché d'atteindre en CI (`&&` s'arrête au premier `exit 1`). 14 défauts : « le `<p>` de texte servi n'est pas `aria-hidden` ».
+
+Le défaut n'en était pas un — c'était le GATE qui datait. `focal-row.tsx` (même PR) était passé d'un masque de CONTENEUR (`aria-hidden` sur le `<p>` entier) à un masque FEUILLE PAR FEUILLE (`RichText`/`plainTextHidden`, un `<span aria-hidden>` par segment non interactif), précisément pour qu'un lien de mention sous ce paragraphe reste focusable et nommé — masquer le conteneur entier aurait recréé la violation ARIA inverse (`aria-hidden-focus`). Le gate `check-identity.mjs` (#5935), écrit pour l'ANCIEN masque, cherchait l'attribut au mauvais niveau : la garde mesurait une IMPLÉMENTATION, pas l'invariant qu'elle prétendait garder (« la phrase n'est jamais lue deux fois »).
+
+> **Un `&&` dans un script `gate` composite cache tout ce qui suit la première rougeur — corriger le défaut RAPPORTÉ ne prouve rien sur les étapes qu'il empêchait d'atteindre.** Jouer le gate ENTIER, jusqu'au bout, après CHAQUE correction — jamais seulement l'étape nommée par le CI. Et quand un gate écrit avant une refonte accuse le code QUE la refonte vient sciemment de changer (ici documenté dans le commit ET le doc-comment du composant), lire d'abord si c'est le CODE qui régresse ou le GATE qui a un cran de retard : ici la nouvelle stratégie ARIA était strictement MEILLEURE (liens atteignables) que celle que le gate réclamait — la corriger revenait à réintroduire le défaut que la PR venait de corriger.
+
+Discrimination : `git stash` sur `check-identity.mjs` seul → 14/14 défauts réapparaissent à l'identique (message, lignes) ; `git stash pop` → 0 défaut. Détail : `apps/web-v2/scripts/lib/check-identity.mjs`, `apps/web-v2/src/components/rich-text.tsx`, `apps/web-v2/src/components/focal-row.tsx`.
+## Leçon 633 — rendre un prédicat fail-closed ne sauve que ses usages POSITIFS : sa négation reste menteuse, et troque un gate qui explose contre un gate qui ment
 
 **Le rouge.** `dev` bloqué une nuit sur « Gate états du fil » (#7048, PR #7050) : `paintedAt` passait les coordonnées d'une `boundingBox` à `page.screenshot({ clip })` sans vérifier qu'elles tombaient dans le viewport. Le virtualiseur sortait la rangée de l'écran entre deux mesures (mesurée à **y = −297**), Playwright levait « Clipped area is either empty or outside the resulting image », et l'exception remontait en `uncaughtException`.
 
@@ -33294,3 +33294,20 @@ qui traîne un rouge ne traîne jamais UN rouge — voir
 **Règle.** Quand on rend un prédicat fail-closed, **énumérer ses usages NÉGATIFS avant de conclure** — `grep '!predicat('`. Chacun a besoin de sa jumelle, qui n'est pas la négation : `loin(v, c) = estUneMesure(v) && !near(v, c)`. Les deux sens doivent exiger que la mesure ait EU LIEU. C'est la forme, sur un prédicat, de la règle déjà payée sur les gardes : [[reference_guard_direction_decides_failure_direction]].
 
 **Corollaire de portée.** Le défaut vivait dans la SEULE des quatre sondes de pixels du fichier qui n'appariait pas `scrollIntoView({ block: 'center' })` à son `waitForRowSettled` — les trois autres le faisaient. `waitForRowSettled` attend qu'une rangée cesse de BOUGER, jamais qu'elle soit À L'ÉCRAN : les deux attentes ne sont pas substituables, et un inventaire des sites voisins l'aurait dit avant la CI.
+
+## Leçon 633 — remplacer un délai par une attente de fait peut RÉVÉLER une course que le délai masquait ; il en faut alors DEUX : le fait qu'on cherche, et sa STABILITÉ
+
+2026-09-19, #7054 (chronologie du fil : `install` + `pauseAt` remplace `install` seul, tous les délais fixes des états HORS chronologie deviennent des attentes de fait). Le lot converti et vert sur ses propres témoins a fait rougir, de façon INTERMITTENTE, deux assertions du menu du message que personne n'avait touchées : « le clic droit … ouvre UN role=menu » (0/1 après ouverture) puis, une fois corrigée, « ArrowRight déplace le focus » et « Tab garde le focus DANS le menu » (retombant sur l'item de départ, ou sortant du cluster).
+
+**Le délai fixe ne synchronisait pas seulement AVEC le produit — il ABSORBAIT une course qu'il ne nommait pas.** Deux causes distinctes, superposées :
+
+1. `pinToBottom` (`lib/view/pin-to-bottom.ts`) répète `scrollTop = scrollHeight` sur 20 VRAIES images pendant que les hauteurs mesurées convergent ; chaque image où la hauteur a changé émet un `scroll` NATIF, et `useRovingMenu` (#5814) ferme TOUT menu ouvert au moindre `scroll`, capturé sur `document`. Ouvrir le menu PENDANT cette fenêtre le referme aussitôt — SANS RAPPORT avec le clic qui l'a ouvert.
+2. Le focus initial du cluster est posé par un `requestAnimationFrame` DIFFÉRÉ (`roving-menu.ts:176`, `itemRefs.current[start]?.focus()`) — une image APRÈS que le cluster est monté, donc APRÈS qu'un `awaitFact`/`awaitCondition` a déjà vu l'ouverture ou le déplacement. Un geste de test qui enchaîne (`.focus()` programmatique, `ArrowRight`) avant cette image se fait ÉCRASER par l'effet.
+
+**Pourquoi le délai fixe ne rougissait JAMAIS.** 250-300 ms couvrait, sans le nommer, le temps que `pinToBottom` mette ses 20 images derrière lui ET que le `requestAnimationFrame` différé ait tourné — un délai qui « marche » peut être en train de PAYER une course, pas seulement d'attendre un rendu. Le retirer ne casse rien : il révèle ce qu'il cachait.
+
+**Le premier correctif était juste mais insuffisant.** `waitForRowSettled` (le fait « la rangée cesse de bouger ») répare la fermeture-par-scroll — mais `awaitCondition` (un prédicat qui devient vrai UNE fois) reste aveugle à un effet qui REVIENT une image plus tard : il s'arrête sur la valeur TRANSITOIRE, avant que le `requestAnimationFrame` ne l'annule. Mesuré : sous CONTENTION (le même gate rejoué en boucle concurrente — la charge que #7054 corrige par ailleurs), ce rebond différé peut prendre plus de 800 ms.
+
+**La règle.** Un fait qui peut être ANNULÉ par un effet différé (un `requestAnimationFrame`, un `setTimeout` chaîné) n'est prouvé qu'une fois STABLE — DEUX lectures consécutives identiques, jamais une seule. `scripts/lib/settle-value.mjs` (`waitForValueSettled`) généralise `waitForRowSettled` (une VALEUR quelconque plutôt qu'une position) et borne le budget au MÊME ordre de grandeur que le plafond des faits (`FACT_CEILING_MS`), pour rester robuste à la même contention qui a produit le rouge initial.
+
+> **Convertir un délai en attente de fait est une chirurgie, pas un renommage : chercher ce que l'ANCIEN délai payait en silence, pas seulement ce qu'il synchronisait.** La question à poser n'est pas « que attend-on ? » mais « qu'est-ce qui, dans cette fenêtre, pourrait se reproduire une fois de plus ? ». Et le témoin qui l'attrape est celui qui ne bougeait pas : deux assertions à 900 lignes du code touché, jamais éditées, ont rougi seules — l'aire d'effet d'un délai retiré dépasse toujours la ligne qui le portait.

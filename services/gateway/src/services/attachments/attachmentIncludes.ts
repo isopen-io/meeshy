@@ -131,8 +131,11 @@ export const attachmentMediaSelect = Prisma.validator<Prisma.MessageAttachmentSe
 });
 
 /**
- * LA FORME DU CANAL SOCKET (#7014) — `attachmentMediaSelect` PLUS la
- * protection propre à la pièce jointe.
+ * LA FORME DU CANAL SOCKET (#7014, étendue #7070) — `attachmentMediaSelect`
+ * PLUS la protection propre à la pièce jointe PLUS les familles que les
+ * clients réels (iOS, web-v2, web legacy) lisent sur `message:new` /
+ * `message:edited` et que #7070 a trouvées ABSENTES : forwarding, effets de
+ * vue-unique, compteurs de consommation, fait ET mode du chiffrement.
  *
  * Toute requête dont le résultat part chez `serializeAttachmentForSocket`
  * sélectionne CELLE-CI, jamais `attachmentMediaSelect` nu. La raison est
@@ -150,10 +153,51 @@ export const attachmentMediaSelect = Prisma.validator<Prisma.MessageAttachmentSe
  * protection n'est pas retapée — elle est SPREAD depuis
  * `attachmentProtectionSelect`, donc un quatrième canal la rejoint sans
  * qu'aucun site socket n'ait à s'en souvenir.
+ *
+ * ## Ce que #7070 AJOUTE, et ce qu'il refuse délibérément
+ *
+ * `MessageProcessor.saveMessage` relisait ses pièces par un `findMany` SANS
+ * `select` : la ligne Prisma BRUTE (65 colonnes) atteignait `message:new` /
+ * `message:edited` sur le chemin REST/ZMQ — le transport DOMINANT (toute pièce
+ * jointe, tout DM chiffré, toute vue-unique partent par lui côté iOS). Cinq
+ * familles manquaient ici pour que le chemin socket (déjà curaté) et le chemin
+ * REST (désormais curaté par la MÊME forme) ne divergent plus :
+ *
+ *   - forwarding            : forwardedFromAttachmentId, isForwarded
+ *   - effets vue-unique     : maxViewOnceCount, viewOnceCount (isViewOnce /
+ *                             isBlurred / effectFlags viennent déjà de
+ *                             attachmentProtectionSelect)
+ *   - consommation          : deliveredToAllAt, viewedByAllAt,
+ *                             downloadedByAllAt, listenedByAllAt,
+ *                             watchedByAllAt, viewedCount, downloadedCount,
+ *                             consumedCount
+ *   - fait du chiffrement   : isEncrypted, encryptionMode
+ *
+ * `filePath` (chemin serveur), `encryptionIv` et `encryptionAuthTag` restent
+ * HORS de cette forme, à dessein : ce sont des secrets de SERVEUR (le gateway
+ * déchiffre lui-même la pièce, `AttachmentService.decryptAttachment`), et
+ * aucun des quatre décodeurs clients ne les lit pour déchiffrer quoi que ce
+ * soit côté device (mesuré, #7070 § 1.2/1.4). Les pousser à toute une room est
+ * exactement la sur-divulgation que #7070 ferme, jamais une famille à
+ * rattraper.
  */
 export const attachmentSocketSelect = Prisma.validator<Prisma.MessageAttachmentSelect>()({
   ...attachmentMediaSelect,
   ...attachmentProtectionSelect,
+  forwardedFromAttachmentId: true,
+  isForwarded: true,
+  maxViewOnceCount: true,
+  viewOnceCount: true,
+  deliveredToAllAt: true,
+  viewedByAllAt: true,
+  downloadedByAllAt: true,
+  listenedByAllAt: true,
+  watchedByAllAt: true,
+  viewedCount: true,
+  downloadedCount: true,
+  consumedCount: true,
+  isEncrypted: true,
+  encryptionMode: true,
 });
 
 /**

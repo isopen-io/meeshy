@@ -48,6 +48,88 @@ export function makePrisma(): any {
 export const CONVERSATION_ID = 'conv-123456789012';
 
 /**
+ * Une ligne `MessageAttachment` COMPLÈTE — les 65 colonnes que
+ * `MessageProcessor.saveMessage` relisait SANS `select` (#7070), secrets de
+ * serveur compris (`filePath`, `encryptionIv`, `encryptionAuthTag`). Sert à
+ * prouver que le producteur REST/ZMQ ne les repart plus telles quelles : sans
+ * cette fabrique, `attachments: []` (le défaut de `makeContractMessage`) ne
+ * peut faire tomber aucun des deux témoins.
+ */
+export function makeAttachmentRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'att-123456789012',
+    messageId: 'msg-123456789012',
+    fileName: 'photo-generee.jpg',
+    originalName: 'photo.jpg',
+    mimeType: 'image/jpeg',
+    fileSize: 204_800,
+    // Secrets de SERVEUR — jamais lus par un client, jamais servis (#7070).
+    filePath: 'attachments/2026/09/sender-userId/photo-generee.jpg',
+    fileUrl: 'https://cdn.meeshy.me/uploads/photo-generee.jpg',
+    thumbnailPath: 'attachments/2026/09/sender-userId/photo-generee-thumb.jpg',
+    thumbnailUrl: 'https://cdn.meeshy.me/uploads/photo-generee-thumb.jpg',
+    thumbHash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4',
+    width: 1200,
+    height: 800,
+    imageVariants: null,
+    duration: null,
+    bitrate: null,
+    sampleRate: null,
+    codec: null,
+    channels: null,
+    fps: null,
+    videoCodec: null,
+    pageCount: null,
+    lineCount: null,
+    metadata: null,
+    uploadedBy: 'sender-userId',
+    isAnonymous: false,
+    capturedInApp: false,
+    createdAt: new Date('2026-09-19T08:00:00.000Z'),
+    transcription: null,
+    translations: null,
+    // Forwarding.
+    forwardedFromAttachmentId: null,
+    isForwarded: false,
+    // Vue-unique / flou / effets — les trois colonnes de PROTECTION (#7014).
+    isViewOnce: false,
+    maxViewOnceCount: null,
+    viewOnceCount: 0,
+    isBlurred: false,
+    effectFlags: 0,
+    // Consommation dénormalisée.
+    deliveredToAllAt: null,
+    viewedByAllAt: null,
+    downloadedByAllAt: null,
+    listenedByAllAt: null,
+    watchedByAllAt: null,
+    viewedCount: 0,
+    downloadedCount: 0,
+    consumedCount: 0,
+    // Chiffrement — le FAIT et le MODE voyagent, l'enveloppe (IV/tag) jamais.
+    isEncrypted: false,
+    encryptionMode: null,
+    encryptionIv: 'yWlAsecretIv1234',
+    encryptionAuthTag: 'yWlAsecretAuthTag5678',
+    // Colonnes NON déclarées par `attachmentSocketSelect` — un témoin de
+    // parité qui laisserait passer ne serait-ce que l'une d'elles n'aurait
+    // rien prouvé.
+    serverKeyId: 'key-secret-000000000',
+    encryptionHmac: 'hmac-secret-000000000',
+    scanStatus: 'clean',
+    scanCompletedAt: new Date('2026-09-19T08:00:01.000Z'),
+    moderationStatus: 'approved',
+    moderationReason: null,
+    title: null,
+    alt: null,
+    caption: null,
+    captionLanguage: null,
+    captionTranslations: null,
+    ...overrides,
+  };
+}
+
+/**
  * Message de référence : il porte UNE valeur de chaque famille du contrat de
  * fil, pour qu'aucun producteur ne puisse rester vert en omettant une famille
  * entière. `content` est VIDE parce que c'est ce que `MessageProcessor` écrit

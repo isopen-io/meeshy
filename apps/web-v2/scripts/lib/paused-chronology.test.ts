@@ -86,6 +86,41 @@ describe('pausedChronology', () => {
     expect(runsAfter).toBe(runsBefore);
   });
 
+  test('advanceBy avance de la DURÉE demandée, jamais vers un instant absolu', async () => {
+    const { page, calls } = fakePage();
+    const chrono = await pausedChronology(page as never, { time: 0 });
+
+    await chrono.advanceBy(300);
+    await chrono.advanceBy(250);
+
+    const runs = calls.filter((c): c is { op: 'runFor'; ticks: number } => c.op === 'runFor');
+    expect(runs).toEqual([{ op: 'runFor', ticks: 300 }, { op: 'runFor', ticks: 250 }]);
+    expect(chrono.now()).toBe(550);
+  });
+
+  test('advanceBy(0) est un no-op — aucun runFor', async () => {
+    const { page, calls } = fakePage();
+    const chrono = await pausedChronology(page as never, { time: 0 });
+
+    await chrono.advanceBy(0);
+
+    expect(calls.some((c) => c.op === 'runFor')).toBe(false);
+  });
+
+  test('advanceBy refuse une durée négative — jamais un runFor négatif', async () => {
+    const { page } = fakePage();
+    const chrono = await pausedChronology(page as never, { time: 0 });
+
+    let caught: unknown = null;
+    try {
+      await chrono.advanceBy(-1);
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(RangeError);
+  });
+
   test('factBefore rend true sans avancer quand le fait est déjà là', async () => {
     const { page, calls } = fakePage();
     const chrono = await pausedChronology(page as never, { time: 0 });

@@ -46,11 +46,13 @@ import {
   makeTranslationService,
   makePrisma,
   makeContractMessage,
+  makeAttachmentRow,
   seedParticipantsAlways,
   seedParticipantsBySelect,
   CONVERSATION_ID,
 } from './helpers/message-new-parity-fixtures';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { attachmentSocketSelect } from '../../services/attachments/attachmentIncludes';
 import {
   declaredConversationUpdatedFields,
   contractKeepsIndexSignature,
@@ -200,6 +202,81 @@ describe('message:new — les DEUX producteurs disent la même chose du même me
 
     expect(socketPayload.sticker).toEqual(sticker);
     expect(restPayload.sticker).toEqual(sticker);
+  });
+
+  /**
+   * #7070 — les pièces jointes voyagent désormais par la MÊME forme, quel que
+   * soit le transport. Avant ce lot, le producteur REST/ZMQ posait
+   * `attachments: message.attachments ?? []` : la ligne Prisma BRUTE (65
+   * colonnes, secrets de serveur compris) — pendant que le producteur socket
+   * servait déjà `serializeAttachmentForSocket`.
+   */
+  const SOCKET_ATTACHMENT_WIRE_KEYS = [
+    ...Object.keys(attachmentSocketSelect).filter((k) => k !== 'reactions'),
+    'reactionSummary',
+    'currentUserReactions',
+  ].sort();
+
+  it('les pièces jointes voyagent à l’IDENTIQUE par les DEUX transports', async () => {
+    const message = makeContractMessage({ attachments: [makeAttachmentRow()] });
+
+    const socketPayload = await payloadFromSocketPath(message);
+    const restPayload = await payloadFromRestPath(message);
+
+    expect(restPayload.attachments).toEqual(socketPayload.attachments);
+  });
+
+  it("aucun transport n'émet une clé hors de l'inventaire du canal socket", async () => {
+    const message = makeContractMessage({ attachments: [makeAttachmentRow()] });
+
+    for (const [transport, payload] of [
+      ['socket', await payloadFromSocketPath(message)],
+      ['REST/ZMQ', await payloadFromRestPath(message)],
+    ] as const) {
+      const attachments = payload.attachments as ReadonlyArray<Record<string, unknown>>;
+      expect(attachments).toHaveLength(1);
+      const servedKeys = Object.keys(attachments[0]).sort();
+
+      // Egalité d'ENSEMBLE — le message d'échec nomme la clé en trop plutôt
+      // que de laisser un `toEqual` partiel la laisser passer en silence.
+      expect({ transport, servedKeys }).toEqual({ transport, servedKeys: SOCKET_ATTACHMENT_WIRE_KEYS });
+
+      // Nommées explicitement : ce sont les secrets de serveur que #7070 ferme.
+      expect(attachments[0]).toEqual(
+        expect.not.objectContaining({
+          filePath: expect.anything(),
+          encryptionIv: expect.anything(),
+          encryptionAuthTag: expect.anything(),
+          serverKeyId: expect.anything(),
+          encryptionHmac: expect.anything(),
+          thumbnailPath: expect.anything(),
+        })
+      );
+    }
+  });
+
+  it("message:edited (résumé d'appel, REST/ZMQ) ne porte ni filePath ni IV sur sa pièce", async () => {
+    ioState.toEmit.mockClear();
+    await manager.broadcastMessageEdited(
+      makeContractMessage({ attachments: [makeAttachmentRow()] }) as any,
+      CONVERSATION_ID
+    );
+    const call = (ioState.toEmit.mock.calls as any[]).find(
+      (c) => c[0] === SERVER_EVENTS.MESSAGE_EDITED
+    );
+    expect(call).toBeDefined();
+    const payload = call?.[1] as Record<string, unknown>;
+    const attachments = payload.attachments as ReadonlyArray<Record<string, unknown>>;
+
+    expect(attachments).toHaveLength(1);
+    expect(Object.keys(attachments[0]).sort()).toEqual(SOCKET_ATTACHMENT_WIRE_KEYS);
+    expect(attachments[0]).toEqual(
+      expect.not.objectContaining({
+        filePath: expect.anything(),
+        encryptionIv: expect.anything(),
+        encryptionAuthTag: expect.anything(),
+      })
+    );
   });
 
   it('les DEUX producteurs déclarent le MÊME jeu de clés de contrat', async () => {

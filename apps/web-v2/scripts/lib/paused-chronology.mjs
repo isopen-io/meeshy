@@ -42,7 +42,7 @@
  *
  * ## 3. La sémantique d'ORDRE
  *
- * `factBefore(beforeMs, fait)` se lit « après l'évènement qui précède, l'état
+ * `factBefore(beforeMs, fact)` se lit « après l'évènement qui précède, l'état
  * est X, AVANT que l'évènement suivant (à `beforeMs`) ne tire ». C'est le
  * témoin de TEMPS devenu témoin d'ORDRE (#7054, critère de fin 4) : au lieu
  * d'avancer l'horloge d'une durée fixe puis de lire immédiatement, on avance
@@ -88,7 +88,15 @@ export const CHRONOLOGY_STEP_MS = 50;
  * - `mark()` : alias de `now()`, pour nommer un point de départ ;
  * - `advanceTo(targetMs)` : avance l'horloge jusqu'à `targetMs`, en une
  *   seule fois — jamais deux fois le même intervalle ;
- * - `factBefore(beforeMs, fait)` : avance par pas de `stepMs` jusqu'à ce que
+ * - `advanceBy(durationMs)` : la même avancée, exprimée en DURÉE. Les deux
+ *   existent parce que les gates posent DEUX questions différentes, et
+ *   qu'écrire l'une avec l'autre ment sur celle qu'on pose : une chronologie
+ *   d'ÉVÈNEMENTS (`c-live`) vise des instants ABSOLUS lus dans
+ *   `LIVE_SCHEDULE`, tandis qu'une suite de GESTES (le § 5 de
+ *   `check-thread-states.mjs`) avance d'un délai RELATIF à l'action qui
+ *   précède — son échéance est datée par le clic, pas par le corpus.
+ *   `advanceBy` est une projection d'`advanceTo`, jamais un second compteur ;
+ * - `factBefore(beforeMs, fact)` : avance par pas de `stepMs` jusqu'à ce que
  *   `fait()` rende vrai, sans jamais atteindre `beforeMs`. Rend `true`/`false`,
  *   ne lève JAMAIS (même discipline que `await-fact.mjs`).
  */
@@ -108,14 +116,21 @@ export async function pausedChronology(page, { time, stepMs = CHRONOLOGY_STEP_MS
     elapsed = targetMs;
   };
 
-  const factBefore = async (beforeMs, fait) => {
+  const advanceBy = async (durationMs) => {
+    if (durationMs < 0) {
+      throw new RangeError(`advanceBy(${durationMs}) : une chronologie n'avance jamais d'une durée négative`);
+    }
+    await advanceTo(elapsed + durationMs);
+  };
+
+  const factBefore = async (beforeMs, fact) => {
     for (;;) {
-      if (await fait()) return true;
+      if (await fact()) return true;
       if (elapsed + stepMs >= beforeMs) return false;
       await page.clock.runFor(stepMs);
       elapsed += stepMs;
     }
   };
 
-  return { now, mark: now, advanceTo, factBefore };
+  return { now, mark: now, advanceTo, advanceBy, factBefore };
 }

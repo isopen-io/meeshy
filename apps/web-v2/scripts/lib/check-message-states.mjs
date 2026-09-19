@@ -1,4 +1,5 @@
 import { contrastOf, luminanceOf } from './contrast.mjs';
+import { pausedChronology } from './paused-chronology.mjs';
 
 /**
  * 9 — LES ÉTATS DU MESSAGE (#5936) — un message épinglé, transféré, modifié,
@@ -25,9 +26,24 @@ import { contrastOf, luminanceOf } from './contrast.mjs';
  * système), puis le BAS (déjà visible par défaut — emoji, sticker, lieu,
  * story). `scrollTop =` déclenche un `scroll` NATIF, que `useVirtualizer`
  * écoute déjà (`getScrollElement`) — aucune seconde loi de défilement.
+ *
+ * L'HORLOGE EST EN PAUSE, JAMAIS `install` SEUL (revue-correction #7054,
+ * défaut majeur 1) — ce module posait l'horloge truquée (`install({ time:
+ * INSTANT })`) SANS la mettre en pause (`pauseAt`), la cause racine EXACTE
+ * des deux rouges de #7054 : sous Playwright 1.62.1, une horloge truquée
+ * installée sans pause DÉRIVE 1:1 avec le temps mural. `no-fixed-
+ * delays.test.ts` ne le voyait pas — sa garde n'itérait que quatre chemins,
+ * et ce cinquième module n'y figurait pas. `pausedChronology` (`paused-
+ * chronology.mjs`) est désormais le site UNIQUE qui pose l'horloge du gate.
  */
 
 const INSTANT = new Date('2026-09-10T12:00:00.000Z').getTime();
+
+/** Le budget de DÉMARRAGE, en millisecondes SIMULÉES — généreux et
+ *  anti-blocage, jamais un délai : `factBefore` s'arrête au fait, et ne
+ *  consomme ce budget que si le fil ne monte pas du tout (même discipline
+ *  que `check-protection-states.mjs`). */
+const MESSAGE_STATES_BOOT_BUDGET_MS = 15_000;
 
 /** La couleur RÉELLEMENT peinte sur un nœud — `null` s'il est absent, comme
  * `contrastOf`. Sert les témoins de PARITÉ (deux nœuds, une seule teinte). */
@@ -82,15 +98,18 @@ export async function checkMessageStates({ browser, BASE, expect, setScheme, AA_
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   await setScheme(context, scheme);
   const page = await context.newPage();
-  await page.clock.install({ time: INSTANT });
+  const chrono = await pausedChronology(page, { time: INSTANT });
   await page.goto(`${BASE}/c/c-states`, { waitUntil: 'load' });
-  await page.waitForSelector('[data-message]');
-  await page.clock.runFor(300);
+  const booted = await chrono.factBefore(chrono.now() + MESSAGE_STATES_BOOT_BUDGET_MS, () =>
+    page.evaluate(() => document.querySelector('[data-message]') !== null),
+  );
+  expect(booted, `[${skin}/${scheme}] le fil des états est monté sous horloge en pause (${chrono.now()} ms simulées)`);
+  await chrono.advanceBy(300);
 
   if (skin === 'bulles') {
     await page.getByRole('button', { name: /Mode de lecture/ }).click();
     await page.getByRole('menuitemradio', { name: /Bulles/ }).click();
-    await page.clock.runFor(300);
+    await chrono.advanceBy(300);
   }
 
   const label = `[${skin}/${scheme}]`;

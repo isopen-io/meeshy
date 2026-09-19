@@ -2,6 +2,7 @@ import {
   attachmentMediaSelect,
   attachmentFullSelect,
   attachmentForwardPreviewSelect,
+  attachmentSocketSelect,
 } from '../attachmentIncludes';
 import { messageAttachmentSchema } from '@meeshy/shared/types/api-schemas';
 
@@ -47,6 +48,19 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
       const missing = Object.keys(attachmentForwardPreviewSelect).filter(
         (k) => !schemaKeys.has(k),
       );
+      expect(missing).toEqual([]);
+    });
+
+    /**
+     * #7070 — jumeau de la garde ci-dessus, pour la forme du CANAL SOCKET.
+     * Sinon `GET /messages` et `GET /sync` (qui appliquent `messageAttachmentSchema`
+     * en réponse) SERVIRAIENT moins que `message:new`/`message:edited` sur le
+     * MÊME `select` — la divergence inverse de celle que #7070 ferme.
+     */
+    it('attachmentSocketSelect ⊆ messageAttachmentSchema.properties', () => {
+      const missing = Object.keys(attachmentSocketSelect)
+        .filter((k) => !INTERNAL_AGGREGATION_FIELDS.has(k))
+        .filter((k) => !schemaKeys.has(k));
       expect(missing).toEqual([]);
     });
 
@@ -230,6 +244,52 @@ describe('attachments/attachmentIncludes — canonical shared selects', () => {
       // drop transcription/translations during a future refactor.
       expect(attachmentFullSelect.transcription).toBe(true);
       expect(attachmentFullSelect.translations).toBe(true);
+    });
+  });
+
+  describe('attachmentSocketSelect — la forme du canal socket, étendue (#7070)', () => {
+    it('est un superset de attachmentMediaSelect et attachmentProtectionSelect', () => {
+      for (const key of Object.keys(attachmentMediaSelect)) {
+        expect(attachmentSocketSelect).toHaveProperty(
+          key,
+          (attachmentMediaSelect as Record<string, unknown>)[key],
+        );
+      }
+    });
+
+    it('porte les CINQ familles que #7070 a trouvées absentes du chemin REST/ZMQ', () => {
+      expect(attachmentSocketSelect).toEqual(
+        expect.objectContaining({
+          // protection (#7014, déjà là)
+          isViewOnce: true,
+          isBlurred: true,
+          effectFlags: true,
+          // forwarding
+          forwardedFromAttachmentId: true,
+          isForwarded: true,
+          // effets de vue-unique
+          maxViewOnceCount: true,
+          viewOnceCount: true,
+          // consommation
+          deliveredToAllAt: true,
+          viewedByAllAt: true,
+          downloadedByAllAt: true,
+          listenedByAllAt: true,
+          watchedByAllAt: true,
+          viewedCount: true,
+          downloadedCount: true,
+          consumedCount: true,
+          // fait + mode du chiffrement (jamais l'enveloppe)
+          isEncrypted: true,
+          encryptionMode: true,
+        }),
+      );
+    });
+
+    it("N'AJOUTE PAS l'enveloppe de chiffrement — secret de serveur, pas de fil (#7070)", () => {
+      expect(attachmentSocketSelect).not.toHaveProperty('encryptionIv');
+      expect(attachmentSocketSelect).not.toHaveProperty('encryptionAuthTag');
+      expect(attachmentSocketSelect).not.toHaveProperty('filePath');
     });
   });
 

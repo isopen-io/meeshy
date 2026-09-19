@@ -1134,7 +1134,7 @@ d'offset non provoqué par l'utilisateur
 | état | iOS | web-v2 |
 |---|---|---|
 | **chargement à froid** | squelette de 6 bulles, `VStack(spacing: 12)`, `padding(.top, 96)` (`ConversationView.swift:1369-1382`), gated `isBlockingSpinnerNeeded && messages.isEmpty` (`:1395-1406`) | **absent** — les fixtures sont synchrones |
-| **vide** | pas d'état vide dédié (fin d'historique ⇒ bloc de notice E2E, `ConversationView.swift:631-654`) | **présent et meilleur** : « Aucun message pour l'instant » + sous-titre (`thread.tsx:473-490`), gaté par `check-thread-states.mjs:95-102`, motivé en D-16 (`decisions.md:368-374`) |
+| **vide** | pas d'état vide dédié (fin d'historique ⇒ bloc de notice E2E, `ConversationView.swift:631-654`) | **présent et meilleur** : « Aucun message pour l'instant » + sous-titre (`thread.tsx:473-490`), gaté par `scripts/lib/check-offline-states.mjs:59-67` (extrait de `check-thread-states.mjs` au #7054), motivé en D-16 (`decisions.md:368-374`) |
 | **erreur** | phases de `ConversationLoadingPhase` | absent |
 | **hors ligne** | l'état en vol devient un `hourglass` `warning` sur la coche (`BubbleDeliveryCheck.swift:32-36`) ; le bouton flottant prend la forme capsule `wifi.slash` (`ConversationScrollControlsView.swift:192-199`) | bandeau `role="status"` non bloquant sous l'en-tête (`thread.tsx:432-444`), `useSyncExternalStore` sur `navigator.onLine` ; **pas de sablier sur la coche** |
 | **envoi optimiste** | `deliveryStatus == .sending`, horloge débouncée 0,2 s (`BubbleDeliveryCheck.swift:139`) | `localDelivery = 'pending'` posé **hors du domaine**, dans une `Map` à côté de la liste (`thread.tsx:69, 286`), rendu `clock` ; jamais confirmé faute de transport (`decisions.md:392-395`) |

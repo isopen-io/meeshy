@@ -39,6 +39,7 @@ import { AgentAdminRelay } from './AgentAdminRelay';
 import { CallService } from '../services/CallService';
 import { AttachmentService } from '../services/attachments';
 import { attachmentSocketSelect } from '../services/attachments/attachmentIncludes';
+import { serializeMessageAttachmentsForSocket } from './serializeAttachmentForSocket';
 import { emitAttachmentUpdated } from './emitAttachmentUpdated';
 import { buildTranslationEvent } from './buildTranslationEvent';
 import { validateSocketEvent, isValidationFailure } from '../middleware/validation.js';
@@ -2967,9 +2968,14 @@ export class MeeshySocketIOManager {
         ...buildMessageNewPayload(message, {
           conversationId: normalizedId,
           translations: messageTranslations,
-          // Le `select` du chemin REST livre déjà les pièces jointes à la forme
-          // rendue ; le chemin socket, lui, les normalise (cf. la note jumelle).
-          attachments: message.attachments ?? [],
+          // #7070 — les DEUX chemins normalisent désormais par la MÊME
+          // fonction. Ce chemin-ci diffusait tel quel le tableau brut du
+          // message : la ligne Prisma COMPLÈTE que `MessageProcessor.saveMessage`
+          // relit SANS `select` — filePath, IV et tag d'authentification
+          // compris — pendant que le chemin socket (`MessageHandler._buildMessagePayload`)
+          // servait déjà la forme curatée. `serializeMessageAttachmentsForSocket`
+          // est le site unique des deux transports.
+          attachments: serializeMessageAttachmentsForSocket(message.attachments),
           // DUPLICATION ASSUMÉE avec MessageHandler._buildMessagePayload : ce
           // bloc RECONSTRUIT et APLATIT le sender (username/firstName/lastName
           // remontés depuis `sender.user`), alors que le chemin socket fait un
@@ -3270,7 +3276,9 @@ export class MeeshySocketIOManager {
           firstName: senderParticipant.user?.firstName || '',
           lastName: senderParticipant.user?.lastName || '',
         } : undefined,
-        attachments: message.attachments ?? [],
+        // #7070 — même unification que `_broadcastNewMessage` : la ligne
+        // brute ne repart plus telle quelle sur `message:edited`.
+        attachments: serializeMessageAttachmentsForSocket(message.attachments),
       };
 
       this.io.to(ROOMS.conversation(normalizedId)).emit(SERVER_EVENTS.MESSAGE_EDITED, editedPayload);

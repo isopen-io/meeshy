@@ -107,6 +107,40 @@ export interface SocketAttachment extends AttachmentProtectionFlags {
   readonly reactionSummary: Readonly<Record<string, number>>;
   /** BUG2 A' — emojis posés par le destinataire (vide si destinataire inconnu, ex broadcast). */
   readonly currentUserReactions: readonly string[];
+
+  // ===========================================================================
+  // #7070 — les familles qu'`attachmentSocketSelect` charge en plus de la
+  // protection depuis ce lot : `message:new` / `message:edited` servaient
+  // jusqu'ici la ligne BRUTE sur le chemin REST/ZMQ (65 colonnes, filePath et
+  // enveloppe de chiffrement comprises) et cette forme curatée sur le chemin
+  // socket — deux formes pour le MÊME événement. Voir le doc-comment
+  // d'`attachmentSocketSelect` (`attachmentIncludes.ts`) pour la raison de
+  // chaque famille, et pour celle qui reste HORS de cette forme (filePath,
+  // encryptionIv, encryptionAuthTag — des secrets de SERVEUR qu'aucun client
+  // ne lit pour déchiffrer).
+  // ===========================================================================
+
+  /** Provenance d'un transfert — DISTINCTE de `forwardedFromId` (au niveau MESSAGE). */
+  readonly forwardedFromAttachmentId?: string | null;
+  readonly isForwarded: boolean;
+  /** Plafond de vue-unique PROPRE à la pièce (indépendant de celui du message). */
+  readonly maxViewOnceCount?: number | null;
+  readonly viewOnceCount: number;
+  /** Horodatages et compteurs de consommation dénormalisés (bande de lecture). */
+  readonly deliveredToAllAt?: Date | string | null;
+  readonly viewedByAllAt?: Date | string | null;
+  readonly downloadedByAllAt?: Date | string | null;
+  readonly listenedByAllAt?: Date | string | null;
+  readonly watchedByAllAt?: Date | string | null;
+  readonly viewedCount: number;
+  readonly downloadedCount: number;
+  readonly consumedCount: number;
+  /**
+   * Le FAIT du chiffrement et son MODE — jamais l'enveloppe (`encryptionIv` /
+   * `encryptionAuthTag` restent hors de cette forme, § doc-comment ci-dessus).
+   */
+  readonly isEncrypted: boolean;
+  readonly encryptionMode?: string | null;
 }
 
 /**
@@ -174,10 +208,53 @@ export function serializeAttachmentForSocket(
     translations: raw.translations ?? null,
     reactionSummary,
     currentUserReactions,
+    // #7070 — les défauts reflètent les colonnes `@default(...)` du schéma
+    // (`false` / `0`), jamais `undefined` : un appelant qui a chargé
+    // `attachmentSocketSelect` reçoit toujours une valeur exploitable, un
+    // appelant qui aurait chargé une forme plus étroite reçoit le même défaut
+    // que la colonne elle-même.
+    forwardedFromAttachmentId: (raw.forwardedFromAttachmentId as string | null | undefined) ?? null,
+    isForwarded: (raw.isForwarded as boolean | null | undefined) ?? false,
+    maxViewOnceCount: (raw.maxViewOnceCount as number | null | undefined) ?? null,
+    viewOnceCount: (raw.viewOnceCount as number | null | undefined) ?? 0,
+    deliveredToAllAt: (raw.deliveredToAllAt as Date | string | null | undefined) ?? null,
+    viewedByAllAt: (raw.viewedByAllAt as Date | string | null | undefined) ?? null,
+    downloadedByAllAt: (raw.downloadedByAllAt as Date | string | null | undefined) ?? null,
+    listenedByAllAt: (raw.listenedByAllAt as Date | string | null | undefined) ?? null,
+    watchedByAllAt: (raw.watchedByAllAt as Date | string | null | undefined) ?? null,
+    viewedCount: (raw.viewedCount as number | null | undefined) ?? 0,
+    downloadedCount: (raw.downloadedCount as number | null | undefined) ?? 0,
+    consumedCount: (raw.consumedCount as number | null | undefined) ?? 0,
+    isEncrypted: (raw.isEncrypted as boolean | null | undefined) ?? false,
+    encryptionMode: (raw.encryptionMode as string | null | undefined) ?? null,
     // Protection — PROJETÉE depuis l'inventaire partagé, jamais recopiée
     // (voir l'en-tête du module). Répandue en DERNIER pour qu'aucune clé
     // ci-dessus ne puisse l'éclipser, et fail-CLOSED : une ligne dont la
     // requête n'a pas chargé ces colonnes sort MASQUÉE plutôt qu'ordinaire.
     ...attachmentProtectionOf(raw),
   };
+}
+
+/**
+ * Normalise `message.attachments` — LA forme brute d'un `Message` (shared
+ * `types/conversation.ts`), quel que soit le chemin qui l'a chargée — vers
+ * `SocketAttachment[]`, l'UNIQUE forme émise sur `message:new` /
+ * `message:edited` quel que soit le TRANSPORT (#7070).
+ *
+ * Avant ce lot, le producteur REST/ZMQ (`MeeshySocketIOManager`) posait
+ * `attachments: message.attachments ?? []` — la ligne Prisma BRUTE — pendant
+ * que le producteur socket (`MessageHandler._serializeAttachmentsField`)
+ * appelait déjà `serializeAttachmentForSocket` pièce par pièce. Cette fonction
+ * est le site UNIQUE des deux appelants : un producteur qui la contourne pour
+ * revenir à un passthrough brut est exactement la régression que
+ * `message-new-producer-parity.test.ts` détecte.
+ */
+export function serializeMessageAttachmentsForSocket(
+  attachments: unknown,
+  currentParticipantId?: string
+): SocketAttachment[] {
+  if (!Array.isArray(attachments)) return [];
+  return attachments.map((att) =>
+    serializeAttachmentForSocket(att as SocketAttachmentRow, currentParticipantId)
+  );
 }
