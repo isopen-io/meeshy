@@ -277,7 +277,36 @@ async function runScheme(colorScheme) {
     await page.waitForTimeout(400);
     const barrePlusTard = await page.evaluate(() => document.querySelector('[aria-valuenow]')?.getAttribute('aria-valuenow') ?? null);
     const pleinBord = await readBox(page, '[data-story-scene-box]');
+    /**
+     * LE CHROME MASQUÉ NE DOIT PLUS ÊTRE UNE COMMANDE (D-90) — mesuré ICI
+     * parce que la souris est DÉJÀ enfoncée : c'est le seul instant où
+     * `chromeHidden` est vrai dans un VRAI navigateur, et le seul endroit du
+     * dépôt où l'effet de `inert` se mesure pour de bon (happy-dom l'imite,
+     * un navigateur l'APPLIQUE).
+     *
+     * Les deux moitiés du contrat, et il faut les DEUX : le bouton reste
+     * MONTÉ (le démonter referait la mise en page au relâchement) et il
+     * n'est plus ATTEIGNABLE. Un témoin qui ne mesurerait que la seconde
+     * verdirait sur un démontage, c'est-à-dire sur la régression que
+     * l'opacité existe pour éviter.
+     *
+     * Le témoin interroge l'EFFET (`focus()` puis `activeElement`), jamais
+     * l'attribut : un `inert` posé sur le mauvais nœud — le défaut RÉEL de
+     * `story-rail.tsx`, dont le doublon s'était reconstitué sur l'enveloppe —
+     * laisserait une assertion d'attribut verte.
+     */
+    const chromeMasque = await page.evaluate(() => {
+      const croix = document.querySelector('button[aria-label="Fermer"]');
+      if (croix === null) return { monte: false, atteignable: null };
+      document.body.focus();
+      croix.focus();
+      return { monte: true, atteignable: document.activeElement === croix };
+    });
     await page.mouse.up();
+    check(
+      chromeMasque.monte === true && chromeMasque.atteignable === false,
+      `${tag} st-scene : chrome masqué, la croix doit rester MONTÉE mais devenir INATTEIGNABLE (D-90) — ${JSON.stringify(chromeMasque)}`,
+    );
     check(
       pendantAppui.paused === true && pendantAppui.barre === barrePlusTard,
       `${tag} st-scene : l'appui long doit geler la piste ET la barre — ${JSON.stringify(pendantAppui)}, barre 400 ms plus tard ${barrePlusTard}`,

@@ -3190,7 +3190,9 @@ Un bouton n'est peint que si les trois répondent oui, et il est alors **absent 
 
 **Pourquoi la loi entière alors que le rendu en sert quatre** — parce que la loi est ce qui se PÉRIME quand iOS bouge, et qu'une loi partielle ne se compare à rien. Les quatre actions câblées aujourd'hui sont celles qui ont un EFFET mesurable côté web : **le son** (déménagé de la ligne auteur vers la TÊTE du rail, arbitrage #4508 — « le son est le SEUL élément du rail qui décrit ce qui est en train de SE PASSER »), **réagir** (`POST|DELETE /api/v1/posts/:postId/like`), **répondre** et **commentaires** (la même feuille, une seule zone de saisie — spécification porteur du 2026-05-28). Les cinq autres — republier, vues, partager, enregistrer, traductions — demandent chacune une surface que le web n'a pas encore ; elles restent dans la loi et hors du rendu, et chacune est une issue de suivi.
 
-**Ce que ça coûte** — `story_reader` passe de 6,29 à 9,32 Ko gzip (plafond porté à 11, mesuré, source dans `budgets.json`). Le FIL de commentaires n'y entre pas : il est chargé à la demande (D-54).
+**Ce que ça coûte** — `story_reader` passe de 6,29 à **9,36** Ko gzip (plafond porté à 11, mesuré, source dans `budgets.json`). Le FIL de commentaires n'y entre pas : il est chargé à la demande (D-54). *(Chiffre CORRIGÉ le 2026-09-19 : cette ligne annonçait 9,32, que la remesure ne rend pas. Sans conséquence sur le verdict, et c'est justement pourquoi il fallait le corriger — un chiffre servi qui n'est pas le chiffre mesuré ne rougit nulle part, et la remesure suivante se comparerait à une référence inventée.)*
+
+**Le plafond de 11 n'est PAS arbitré** — `budgets.json` le dit dans son `status` (« CIBLE — REMESURÉE PAR LE RAIL D'ACTIONS DU LECTEUR, NON ARBITRÉE »), comme `interface_catalogs` porté de 65 à 67. Relever un plafond de poids pour y faire entrer son propre lot est le geste symétrique de « baisser un seuil pour passer » : il n'est pas interdit, mais il n'est pas au pouvoir de la session qui en a besoin. Le re-baisser rendrait le gate rouge sans rien corriger ; le porteur tranche, la question est posée dans #7112.
 
 **Contradiction tranchée** — la consigne du tour disait de réutiliser `lib/api/reactions.ts`. Ce port sert `POST /api/v1/reactions` avec un `messageId` : c'est le port des réactions d'un **message de conversation**. Une story est une **publication** ; sa réaction passe par `POST|DELETE /posts/:id/like`, la route que le Flux emploie déjà. La réutilisation juste est donc celle de la ROUTE et de la grammaire d'issues de `feed-gestures.ts`, pas celle du module nommé. Et une seconde différence interdit la fusion pure et simple : `scope=stories` sert `currentUserReactions: string[]` là où le Flux sert `isLikedByMe: boolean` (`PostFeedService.ts:511` contre `postIncludes.ts`). Lire le booléen sur une story le trouverait toujours absent — chaque tap aurait posé une réaction sans jamais pouvoir la retirer, le bouton de retrait devenant inerte. C'est cette LECTURE, et elle seule, qu'écrit `lib/stories/reaction.ts`.
 
@@ -3209,3 +3211,25 @@ Le fondement est que la passerelle ne fait pas la différence : une story est un
 **Une faute trouvée en chemin, et consignée** : `--color-ios-bg` **n'existe dans aucune feuille** du chantier (`src/styles/ios.css` déclare `--color-ios-surface`). Une variable CSS inexistante ne rougit nulle part : la feuille de commentaires s'est peinte TRANSPARENTE et son texte est tombé sur la photo de la story — illisible, vu à la capture, invisible à tout témoin de DOM. Deux autres sites du dépôt portent la même faute (`components/derived-identity.tsx:125` et `:187`) : issue de suivi, hors tranche.
 
 **Et un défaut de RUNTIME que son témoin a attrapé** : le composeur lisait `onChange`. Sous le runtime Preact (D-2), `onChange` d'un champ est l'événement NATIF `change`, qui ne part qu'à la PERTE DU FOCUS — le bouton d'envoi serait resté désactivé pendant toute la frappe. `onInput` partout, et c'est la convention déjà écrite du dépôt (`legende-plan.test.tsx`).
+
+## D-90 — Ce qu'on MASQUE devient INERTE : l'opacité retire ce que l'œil voit, jamais ce que le doigt touche (2026-09-19, #7112)
+
+**Décision** — toute surface que la v3.1 masque **sans la démonter** porte `inert`, et **perd son `aria-label` avec lui**. Jamais `aria-hidden` seul, jamais un couple `aria-hidden` + `tabindex="-1"` tenu enfant par enfant.
+
+**Le fait qui fonde la règle : c'est la TROISIÈME fois que le dépôt paie exactement ce défaut.**
+
+| site | ce qui restait atteignable | où |
+|---|---|---|
+| le grand rail de stories derrière la bande épinglée | ses liens, dans la tabulation ET dans l'arbre d'accessibilité, sous le MÊME `aria-label` que la bande | #6103, puis son enveloppe un cran plus haut (revue du 2026-09-12) |
+| l'aperçu CLONÉ du cluster d'actions d'un message | les `<button>` des drapeaux du pied, focalisables malgré `aria-hidden` | D-29 |
+| le rail d'actions du lecteur de stories masqué par la feuille de commentaires | quatre boutons cliquables et tabulables PAR-DESSUS la feuille, dont « Commentaires » recouvrant le bouton d'envoi du composeur | ce lot |
+
+**Le motif est toujours le même, et c'est pour ça qu'il se répète** : l'auteur masque ce qu'il VOIT (`opacity: 0`) et pose `aria-hidden` pour l'annonce — deux gestes qui adressent l'œil et l'oreille, aucun qui adresse le **doigt** ni le **clavier**. Un `pointer-events-none` sur le conteneur n'y suffit pas dès qu'un enfant le ré-active, et c'est le cas nominal : le rail des stories doit laisser passer le geste de plateau ENTRE ses boutons, donc chaque bouton porte `pointer-events-auto`. La protection posée sur le PARENT était défaite par l'ENFANT, exactement comme l'`inert` du `<ul>` de `story-rail` était défait par son enveloppe — la même leçon, dans les deux directions.
+
+**Pourquoi `inert` et rien d'autre.** Il retire le sous-arbre des **DEUX** arbres — tabulation et accessibilité — en un geste, sur un seul nœud, et l'inertie s'hérite : rien à tenir d'accord au premier enfant ajouté. `aria-hidden` ne parle qu'à l'un des deux, et **posé sur un sous-arbre focusable il est une faute nommée** (`aria-hidden-focus`) : un `Tab` amène le focus dans une région que le lecteur d'écran a reçu l'ordre de taire. Il DISPARAÎT donc partout où `inert` arrive, plutôt que de le doubler.
+
+**Et le libellé tombe avec la région.** Une région inerte n'a rien à annoncer ; garder son nom, c'est laisser l'étiquette dans l'arbre pendant que son contenu en sort — soit précisément le doublon que la garde existe pour empêcher.
+
+**Où le poser** : sur le nœud le **plus haut** que le composant rende. `StoryActionRail` n'en rend qu'un, un seul `inert` suffit ; `StoryRail` a dû le poser sur le `<ul>` **et** sur son enveloppe, parce que deux boutons vivaient chez le parent, hors de portée de l'attribut. **La question à poser n'est pas « l'attribut est-il posé ? » mais « qu'est-ce qui reste atteignable à côté de ce qu'il couvre ? »**
+
+**Le témoin se pose sur l'EFFET, pas sur l'attribut** — `.focus()` sur un enfant d'un sous-arbre inerte ne doit pas le rendre actif (happy-dom l'applique : mesuré sur `story-rail.test.tsx:213` et `story-action-rail.test.tsx`). Un témoin qui n'assertait que la présence de l'attribut verdirait sur un `inert` posé au mauvais nœud — c'est-à-dire sur les deux défauts du tableau ci-dessus.

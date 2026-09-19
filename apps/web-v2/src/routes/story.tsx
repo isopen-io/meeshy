@@ -846,7 +846,19 @@ export default function StoryScreen() {
               opacity: chromeHidden ? 0 : 1,
               transition: 'opacity 180ms ease',
             }}
-            aria-hidden={chromeHidden ? true : undefined}
+            /* MASQUÉ ⇒ INERTE, jamais `aria-hidden` seul (D-90). Cette
+               en-tête porte un CONTRÔLE — la croix de fermeture — et
+               `CloseButton` ré-active `pointer-events-auto` sur lui-même :
+               le `pointer-events-none` du conteneur ne le retenait pas.
+               Pendant une pause par appui long, une croix invisible restait
+               donc cliquable et tabulable, et `aria-hidden` par-dessus un
+               bouton focusable est en outre la faute `aria-hidden-focus`.
+               Mesuré au navigateur, aux quatre configurations
+               (`check-story-scene.mjs`, « la croix doit rester MONTÉE mais
+               devenir INATTEIGNABLE »). La LÉGENDE, douze lignes plus bas,
+               garde `aria-hidden` : elle ne contient que des `<p>` — rien
+               d'atteignable, donc rien à rendre inerte. */
+            inert={chromeHidden}
           >
             <ProgressBars
               group={group}
