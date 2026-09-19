@@ -1043,7 +1043,7 @@ final class StoryPhotoSaveServiceTests: XCTestCase {
         sut.save(scene: scene)
         await waitUntilIdle(sut, storyId: scene.id)
 
-        XCTAssertEqual(exporter.lastSlide?.effects.textObjects?.map(\.text), ["la seconde"],
+        XCTAssertEqual(exporter.lastSlide?.effects.textObjects.map(\.text), ["la seconde"],
                        "la page ouverte est la scène 1 — c'est elle qui doit être bakée")
     }
 
