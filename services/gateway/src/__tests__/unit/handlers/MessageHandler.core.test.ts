@@ -85,9 +85,8 @@ jest.mock('../../../services/CacheStore', () => ({
 }));
 
 const mockSerializeAttachment: any = jest.fn((att: any) => att);
-jest.mock('../../../socketio/serializeAttachmentForSocket', () => ({
-  serializeAttachmentForSocket: (...a: any[]) => mockSerializeAttachment(...a),
-}));
+// #7070 — la LISTE (site UNIQUE, partagé avec le producteur REST/ZMQ) autant que la pièce. Elle DÉLÈGUE à l'espion : « chaque pièce passe par le sérialiseur » et « un `attachments` non-tableau donne `[]` » restent tous deux mesurés ici. Écrit sur UNE ligne : ce fichier est hors budget (`gateway-test-file-size-budget`), il ne peut que rétrécir.
+jest.mock('../../../socketio/serializeAttachmentForSocket', () => ({ serializeAttachmentForSocket: (...a: any[]) => mockSerializeAttachment(...a), serializeMessageAttachmentsForSocket: (l: unknown) => (Array.isArray(l) ? l.map((a: unknown) => mockSerializeAttachment(a)) : []) }));
 
 const mockBuildPostReplyTo: any = jest.fn((post: any) => ({ snapshot: post }));
 const mockPostReplyToFromMetadata: any = jest.fn(() => null);

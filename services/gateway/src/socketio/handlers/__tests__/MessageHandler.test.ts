@@ -97,9 +97,8 @@ jest.mock('../../../services/messaging/postReplySnapshot', () => ({
 }));
 
 const mockSerializeAttachmentForSocket = jest.fn() as jest.Mock<any>;
-jest.mock('../../serializeAttachmentForSocket', () => ({
-  serializeAttachmentForSocket: (...a: any[]) => mockSerializeAttachmentForSocket(...a),
-}));
+// #7070 — la LISTE (site UNIQUE, partagé avec le producteur REST/ZMQ) autant que la pièce : sans elle le handler n'émet plus rien, et l'échec nomme l'émission, jamais le double. Elle DÉLÈGUE à l'espion, pour que « chaque pièce passe par le sérialiseur » reste mesuré ici. Écrit sur UNE ligne : ce fichier est hors budget (`gateway-test-file-size-budget`), il ne peut que rétrécir.
+jest.mock('../../serializeAttachmentForSocket', () => ({ serializeAttachmentForSocket: (...a: any[]) => mockSerializeAttachmentForSocket(...a), serializeMessageAttachmentsForSocket: (l: unknown) => (Array.isArray(l) ? l.map((a: unknown) => mockSerializeAttachmentForSocket(a)) : []) }));
 
 const mockConversationStatsUpdate = jest.fn() as jest.Mock<any>;
 jest.mock('../../../services/ConversationStatsService', () => ({

@@ -68,8 +68,15 @@ jest.mock('../../../services/messaging/postReplySnapshot', () => ({
   postReplyToFromMetadata: jest.fn(() => null),
   POST_REPLY_SNAPSHOT_SELECT: { id: true },
 }));
+// #7070 — la LISTE autant que la pièce : le handler appelle le site unique
+// `serializeMessageAttachmentsForSocket`. Double transparent, comme son voisin :
+// ce fichier mesure la réciprocité des SOURCES de transfert, pas la forme servie
+// des pièces jointes.
 jest.mock('../../serializeAttachmentForSocket', () => ({
   serializeAttachmentForSocket: jest.fn((a: unknown) => a),
+  serializeMessageAttachmentsForSocket: jest.fn((attachments: unknown) =>
+    Array.isArray(attachments) ? attachments : []
+  ),
 }));
 jest.mock('../../../services/ConversationStatsService', () => ({
   conversationStatsService: { updateOnNewMessage: jest.fn<any>().mockResolvedValue(undefined) },
