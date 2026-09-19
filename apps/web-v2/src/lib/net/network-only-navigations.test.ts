@@ -26,13 +26,56 @@ const SAMPLE_QUERIES = ['', '?q=1', '?ref=abc'] as const;
 const addressesOf = (pattern: string): readonly string[] =>
   SAMPLE_PARAMS.flatMap((value) => SAMPLE_QUERIES.map((query) => `${pattern.replace(/\$[A-Za-z0-9_]+/g, value)}${query}`));
 
+/**
+ * **LA SEULE ROUTE DE LA V2 DONT NGINX PARTAGE LE PRÉFIXE** (#7032).
+ *
+ * `location /u/` n'est PAS une page : c'est `root /srv/legacy-uploads` +
+ * `try_files $uri /index.html` (`apps/web-v2/nginx.conf`). Le volume
+ * `frontend_uploads` y sert les avatars et bannières TÉLÉVERSÉS PAR LE LEGACY,
+ * dont l'adresse `https://meeshy.me/u/…` est GRAVÉE EN BASE. Le `try_files`
+ * est ce qui fait que `/u/<pseudo>`, qui n'est pas un fichier, retombe sur
+ * `/index.html` et atteint la v2 — c'est d'ailleurs déjà ce que suppose la
+ * redirection `^/users/(.+)$ → /u/$1`.
+ *
+ * Retirer `/^\/u\//` de la liste rendrait donc la coquille à `/u/photo.jpg`
+ * pour tout visiteur qui porte déjà le service worker : **chaque avatar hérité
+ * casserait**, silencieusement, et pour les seuls lecteurs qui REVIENNENT —
+ * exactement la panne que le doc-comment de la liste décrit.
+ *
+ * Le coût de l'exception est connu et petit : un chargement À FROID de
+ * `/u/<pseudo>` fait un aller-retour réseau au lieu d'être servi par la
+ * coquille, et l'adresse n'est pas disponible hors ligne. Une navigation
+ * INTERNE (le clic sur une mention) ne passe par aucun service worker — c'est
+ * `history.pushState` — donc le chemin nominal du texte enrichi ne paie rien.
+ *
+ * L'exemption est NOMMÉE route par route pour qu'elle ne puisse pas s'élargir
+ * en silence : toute autre route de la v2 laissée au réseau fait rougir le
+ * témoin ci-dessous.
+ */
+const NGINX_SHARED_PREFIX_ROUTES: ReadonlySet<string> = new Set(['userProfile']);
+
 describe('NETWORK_ONLY_NAVIGATIONS — confrontée à la table des routes', () => {
   test('aucune route de la v2 n’est laissée au réseau, avec ou sans requête', () => {
     for (const [key, { pattern }] of Object.entries(ROUTES)) {
+      if (NGINX_SHARED_PREFIX_ROUTES.has(key)) continue;
       for (const address of addressesOf(pattern)) {
         expect({ key, address, refused: refused(address) }).toEqual({ key, address, refused: false });
       }
     }
+  });
+
+  test('l’exemption reste MINIMALE — une seule route, et c’est celle dont nginx sert les médias hérités', () => {
+    expect([...NGINX_SHARED_PREFIX_ROUTES]).toEqual(['userProfile']);
+    expect(ROUTES.userProfile.pattern).toBe('/u/$username');
+    /* Le média hérité ET la page de profil partagent le préfixe : les deux
+       doivent atteindre nginx, qui tranche par l'existence du fichier. */
+    expect(refused('/u/avatar-legacy.png')).toBe(true);
+    expect(refused('/u/kwame-mensah')).toBe(true);
+  });
+
+  test('`/hashtag/` — l’autre adresse ouverte par #7032 — reste à la v2', () => {
+    expect(refused('/hashtag/livraison')).toBe(false);
+    expect(refused('/hashtag/livraison?from=feed')).toBe(false);
   });
 
   test('`/conversations/new` reste à la v2 ; une conversation NOMMÉE va au réseau', () => {

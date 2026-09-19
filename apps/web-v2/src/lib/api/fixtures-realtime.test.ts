@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
+import {
+  ATTACHMENT_PROTECTION_FIELDS,
+  maskedAttachment,
+} from '@meeshy/shared/utils/attachment-protection';
 
 import { VIEWER_ID } from './fixtures-base';
 import { CONVERSATIONS, conversationsWithSurged, resetSurgedConversationsForTests } from './fixtures';
@@ -208,23 +212,31 @@ describe('createFixturesSocketClient (#5793) — le bouchon de fixtures', () => 
       /* La MÊME pièce que le corpus sert : un `fileUrl` divergent ferait
          rejouer la piste originale sous une transcription traduite. */
       expect(payload.attachment.fileUrl).toBe(LIVE_3_AUDIO_URL);
-      /* LA FORME MESURÉE DE LA PASSERELLE, pas celle d'une branche annoncée.
-         `serializeAttachmentForSocket` construit un objet littéral EXPLICITE
-         dont `SocketAttachment` ne déclare AUCUN des trois drapeaux de
-         protection, et `attachmentMediaSelect` — le seul `select` du chemin
-         socket — ne les charge pas (ils vivent dans `attachmentFullSelect`,
-         que `emitAttachmentUpdated` n'emprunte pas). Relevé sur `dev` au
-         2026-09-18 : ni `attachmentSocketSelect` ni
-         `ATTACHMENT_PROTECTION_FIELDS` n'existent — #7014 n'a PAS atterri.
+      /* LA FORME MESURÉE DE LA PASSERELLE — ET #7014 A ATTERRI (merge
+         `4511c5e780` sur `dev`). Ce témoin affirmait l'INVERSE, et le disait
+         comme un relevé : « ni `attachmentSocketSelect` ni
+         `ATTACHMENT_PROTECTION_FIELDS` n'existent — #7014 n'a PAS atterri ».
+         Les deux existent désormais ; `serializeAttachmentForSocket` RÉPAND
+         `attachmentProtectionOf(raw)` en DERNIER, et `emitAttachmentUpdated`
+         est nourri par `attachmentSocketSelect`. La charge du canal socket
+         porte donc TOUJOURS les canaux de protection — un relevé vrai le
+         2026-09-18 et faux le lendemain, exactement le risque que ce cliquet
+         existait pour attraper. Il attrape, et on revient ici : c'est le
+         mouvement prévu, pas une dérive.
 
-         Ce témoin est donc le CLIQUET qui empêche la fixture de dériver vers
-         une charge que la passerelle n'émet pas : un gate navigateur qui
-         rejoue une charge impossible ne mesure pas le produit. Le jour où
-         #7014 atterrit, c'est `serializeAttachmentForSocket` qui change en
-         premier — et ce témoin est ce qui oblige à revenir ici. */
-      expect('isViewOnce' in payload.attachment).toBe(false);
-      expect('isBlurred' in payload.attachment).toBe(false);
-      expect('effectFlags' in payload.attachment).toBe(false);
+         DÉRIVÉ DE L'INVENTAIRE, jamais des trois noms : un quatrième canal
+         rejoint `ATTACHMENT_PROTECTION_FIELDS` (cliquet de compilation de
+         #7014), traverse le sérialiseur sans qu'une ligne du gateway ne
+         change — et fait rougir ICI tant que la fixture ne le rejoue pas.
+         Trois `in` écrits à la main ne l'auraient pas vu passer. */
+      for (const champ of ATTACHMENT_PROTECTION_FIELDS) {
+        expect(champ in payload.attachment).toBe(true);
+      }
+      /* ORDINAIRE — `live-3` n'est pas une pièce protégée. Le dire ICI garde
+         la prémisse du gate navigateur : si la fixture servait une pièce
+         masquée, le widget de transcription ne serait JAMAIS monté et les
+         assertions de langue du gate mesureraient une absence. */
+      expect(maskedAttachment(payload.attachment)).toBe(false);
     }
 
     /* CUMULATIVE — le serveur relit la ligne après chaque enrichissement, donc

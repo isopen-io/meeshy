@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import type { ProtectedMediaDeps } from '@/lib/api/protected-media';
 import { parseCanvasDocument, type CanvasDocument } from '@/lib/canvas/document';
 import type { SceneFootprintParams } from '@/lib/stories/footprint';
 import type { ReaderCardFraming } from '@/lib/stories/framing';
@@ -278,5 +279,68 @@ describe('StorySceneLayer — le son de fond', () => {
   test('sans piste de fond, aucun `<audio>` ne se monte', async () => {
     const el = await mount(layer({ document: documentOf([fitBackground, text(0.92)]) }));
     expect(el.querySelector('audio')).toBeNull();
+  });
+
+  /**
+   * # LE BOUTON MUET D'UNE PISTE QUE PERSONNE N'ENTENDRA (#7015, seconde revue)
+   *
+   * `sceneHasControllableSound` est STRUCTUREL : il dit ce que le DOCUMENT
+   * déclare, jamais ce que le transport a rendu. Une piste empruntée servie
+   * par la route authentifiée peut être définitivement refusée (401) — le lot
+   * le SAIT (`soundUnavailable`, peint en `data-scene-sound-unavailable`) —
+   * mais l'availability remontée au chrome restait `true`. Le lecteur montait
+   * donc son `SoundToggle` (`story.tsx` § `showsSound`) au-dessus d'une scène
+   * SANS `<audio>` : on tape, `aria-pressed` bascule, et il ne se passe
+   * JAMAIS rien. **Un contrôle existe s'il a un EFFET** (loi 4) — et le
+   * studio, lui, applique déjà la règle (« ni lecteur ni bouton »,
+   * `story-compose.test.tsx`). La règle était appliquée à UNE des deux
+   * surfaces qui élisent la même piste.
+   *
+   * Le second témoin est le garde-fou de ce correctif : la vidéo de fond NON
+   * COUPÉE sonne toute seule. Retirer le bouton parce que la PISTE est
+   * refusée retirerait un contrôle qui a, lui, un effet — une garde
+   * fail-closed sur le mauvais axe est un défaut de plus, pas un de moins.
+   */
+  const SON_PROTEGE = '/api/v1/static/d0bf39b7-cd47-4e70-8f1c-34b2d9b5ee4b.m4a';
+  /** LA MÊME story, dont la seule piste est servie par la route AUTHENTIFIÉE. */
+  const STORY_PROTEGEE: StorySceneLayerProps['story'] = {
+    ...STORY,
+    media: (STORY.media ?? []).map((m) => (m.id === 'track' ? { ...m, fileUrl: SON_PROTEGE } : m)),
+  };
+  /** La passerelle REFUSE — le 401 mesuré en production sur une balise nue. */
+  const depsRefus = (): ProtectedMediaDeps => ({
+    credential: () => ({ kind: 'registered', token: 'jeton-de-test' }),
+    fetchImpl: async () => new Response('', { status: 401 }),
+    createObjectURL: () => 'blob:meeshy/jamais',
+    revokeObjectURL: () => {},
+  });
+
+  test('une piste PROTÉGÉE refusée ⇒ le chrome apprend qu’il n’a AUCUN son à couper (jamais un bouton inerte)', async () => {
+    const heard: boolean[] = [];
+    const el = await mount(
+      layer({
+        story: STORY_PROTEGEE,
+        document: withTrack(),
+        mediaDeps: depsRefus(),
+        onSoundAvailability: (available) => heard.push(available),
+      }),
+    );
+    await waitForElement(el, '[data-scene-sound-unavailable]');
+    expect(el.querySelector('[data-scene-sound-track]')).toBeNull();
+    expect(heard.at(-1)).toBe(false);
+  });
+
+  test('CONTRASTE — piste refusée MAIS fond vidéo non coupé ⇒ le bouton RESTE : ce son-là joue', async () => {
+    const heard: boolean[] = [];
+    const el = await mount(
+      layer({
+        story: STORY_PROTEGEE,
+        document: withTrack(videoBackground),
+        mediaDeps: depsRefus(),
+        onSoundAvailability: (available) => heard.push(available),
+      }),
+    );
+    await waitForElement(el, '[data-scene-sound-unavailable]');
+    expect(heard.at(-1)).toBe(true);
   });
 });

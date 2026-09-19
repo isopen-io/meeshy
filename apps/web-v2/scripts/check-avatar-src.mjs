@@ -32,19 +32,24 @@ const SRC = new URL('../src/', import.meta.url).pathname;
  * LES SURFACES AUTORISÉES À NE PAS SERVIR DE PHOTO — parce que la donnée
  * n'atteint pas le composant, avec l'endroit EXACT où la chaîne s'arrête.
  */
-const EXEMPTIONS = [
-  {
-    fichier: 'components/typing-roster-cell.tsx',
-    combien: 2,
-    pourquoi:
-      "`TypingEntry` (`lib/api/typing-store.ts:22-28`) ne porte AUCUN avatar, et " +
-      "le fil ne lui en donne pas : la charge `typing:start` du serveur " +
-      '(`packages/shared/types/socketio-events/presence.ts`) sert `userId`, ' +
-      '`username` et `displayName`, rien de plus. La photo du frappeur ' +
-      "exigerait soit de l'élargir, soit que l'hôte (`routes/thread-modes.tsx`) " +
-      'résolve le frappeur contre `conversation.participants`.',
-  },
-];
+/**
+ * LE REGISTRE EST VIDE (#6985) — et c'est un état, pas un oubli.
+ *
+ * Il portait `components/typing-roster-cell.tsx` (2 avatars), au motif que
+ * `TypingEntry` ne porte aucune photo et que la charge `typing:start` n'en
+ * sert pas. L'exemption nommait elle-même les deux issues possibles : élargir
+ * le fil, « soit que l'hôte (`routes/thread-modes.tsx`) résolve le frappeur
+ * contre `conversation.participants` ».
+ *
+ * C'est la seconde qui a été retenue : élargir `typing:start` aurait dupliqué
+ * l'avatar à chaque frappe de chaque personne, alors que l'hôte a déjà ses
+ * participants en cache. La chaîne est donc fermée, et l'exemption tombe —
+ * comme ce fichier l'exige de toute exemption dont le motif a disparu.
+ *
+ * Une surface ne peut revenir ici que si la donnée n'existe PAS, jamais parce
+ * qu'on ne l'a pas branchée, et avec l'endroit EXACT où la chaîne s'arrête.
+ */
+const EXEMPTIONS = [];
 
 const fichiers = [];
 const parcours = (dir) => {

@@ -103,6 +103,26 @@ export function sceneHasControllableSound(params: {
   readonly carrier: SceneCarrier;
 }): boolean {
   if (electBackgroundTrack(params) !== null) return true;
+  return sceneHasAudibleBackgroundVideo(params);
+}
+
+/**
+ * LE SON QUI RESTE QUAND LA PISTE ÉLUE NE SERA JAMAIS SERVIE (#7015, seconde
+ * revue) — la MOITIÉ vidéo de `sceneHasControllableSound`, extraite pour être
+ * appelable SEULE, jamais recopiée.
+ *
+ * `sceneHasControllableSound` est STRUCTUREL : il répond d'après ce que le
+ * DOCUMENT déclare. Une piste empruntée servie par la route authentifiée peut
+ * être définitivement refusée (401) — l'hôte l'apprend par `onUnavailable` —
+ * et le chrome montait alors son bouton muet au-dessus d'une scène SANS
+ * `<audio>` : un contrôle INERTE (loi 4). L'hôte retombe donc sur cette
+ * moitié-ci, qui dit s'il reste quelque chose à COUPER. La retirer aussi
+ * serait le défaut symétrique : une vidéo de fond non coupée sonne, elle.
+ */
+export function sceneHasAudibleBackgroundVideo(params: {
+  readonly document: CanvasDocument;
+  readonly sceneIndex: number;
+}): boolean {
   const scene = params.document.scenes[params.sceneIndex];
   const fond = scene === undefined ? undefined : backgroundMedia(scene);
   return fond !== undefined && isVideoObject(fond) && fond.payload.muted !== true;

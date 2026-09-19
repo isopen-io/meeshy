@@ -33230,6 +33230,17 @@ Un `overlay` **ne participe jamais** au calcul de taille de son hôte. `Color.cl
 
 **Corollaire d'exception.** `FixedFontSizeGuardTests` n'a d'exception que pour la dette GELÉE : un fichier NEUF n'y entre jamais, quel que soit le commentaire qui invoque la doctrine des glyphes décoratifs. Une exception qui se réclame d'une doctrine sans être inscrite au registre de la dette n'existe pas.
 
+## Leçon 632 — un gate en CHAÎNE (`&&`) ne prouve que les étapes AVANT celle qui rougit
+
+**Un gate en CHAÎNE (`&&`) ne prouve QUE les étapes avant celle qui rougit — une correction qui répare la première étape signalée peut en laisser une seconde, jamais jouée, derrière elle.**
+
+PR #7033 (texte enrichi, liens/mentions cliquables) : `Quality (bun)` rapportait UNE seule défaillance, `check-utilities.mjs` (une classe `x` de témoin sans règle CSS). Corrigée, `bun run gate` complet — jamais joué localement sur cette PR avant ce tour — a rougi une SECONDE fois, sur `check-reading-mode.mjs`, une étape que le premier échec avait empêché d'atteindre en CI (`&&` s'arrête au premier `exit 1`). 14 défauts : « le `<p>` de texte servi n'est pas `aria-hidden` ».
+
+Le défaut n'en était pas un — c'était le GATE qui datait. `focal-row.tsx` (même PR) était passé d'un masque de CONTENEUR (`aria-hidden` sur le `<p>` entier) à un masque FEUILLE PAR FEUILLE (`RichText`/`plainTextHidden`, un `<span aria-hidden>` par segment non interactif), précisément pour qu'un lien de mention sous ce paragraphe reste focusable et nommé — masquer le conteneur entier aurait recréé la violation ARIA inverse (`aria-hidden-focus`). Le gate `check-identity.mjs` (#5935), écrit pour l'ANCIEN masque, cherchait l'attribut au mauvais niveau : la garde mesurait une IMPLÉMENTATION, pas l'invariant qu'elle prétendait garder (« la phrase n'est jamais lue deux fois »).
+
+> **Un `&&` dans un script `gate` composite cache tout ce qui suit la première rougeur — corriger le défaut RAPPORTÉ ne prouve rien sur les étapes qu'il empêchait d'atteindre.** Jouer le gate ENTIER, jusqu'au bout, après CHAQUE correction — jamais seulement l'étape nommée par le CI. Et quand un gate écrit avant une refonte accuse le code QUE la refonte vient sciemment de changer (ici documenté dans le commit ET le doc-comment du composant), lire d'abord si c'est le CODE qui régresse ou le GATE qui a un cran de retard : ici la nouvelle stratégie ARIA était strictement MEILLEURE (liens atteignables) que celle que le gate réclamait — la corriger revenait à réintroduire le défaut que la PR venait de corriger.
+
+Discrimination : `git stash` sur `check-identity.mjs` seul → 14/14 défauts réapparaissent à l'identique (message, lignes) ; `git stash pop` → 0 défaut. Détail : `apps/web-v2/scripts/lib/check-identity.mjs`, `apps/web-v2/src/components/rich-text.tsx`, `apps/web-v2/src/components/focal-row.tsx`.
 ## Leçon 631 — un COMMENTAIRE compte dans le budget de taille, et un lot qui explique bien peut faire rougir un fichier hors budget
 
 2026-09-19, #7022 (PR #7047). Le lot faisait passer `NotificationService.ts` de
@@ -33265,3 +33276,21 @@ gateway` ne pouvait pas être lu tant que « Peaux web-v2 » mourait sur une
 exception ; le budget n'est apparu qu'une fois le premier gate réparé. Un dépôt
 qui traîne un rouge ne traîne jamais UN rouge — voir
 `reference_a_quiet_branch_is_not_a_green_branch`.
+
+## Leçon 632 — rendre un prédicat fail-closed ne sauve que ses usages POSITIFS : sa négation reste menteuse, et troque un gate qui explose contre un gate qui ment
+
+**Le rouge.** `dev` bloqué une nuit sur « Gate états du fil » (#7048, PR #7050) : `paintedAt` passait les coordonnées d'une `boundingBox` à `page.screenshot({ clip })` sans vérifier qu'elles tombaient dans le viewport. Le virtualiseur sortait la rangée de l'écran entre deux mesures (mesurée à **y = −297**), Playwright levait « Clipped area is either empty or outside the resulting image », et l'exception remontait en `uncaughtException`.
+
+**Ce que le journal désignait.** Des dizaines de lignes « A bad HTTP response code (404) … fetching the script ». **Bruit délibéré** : le gate démarre son serveur en `{ serviceWorker: false }`, et les exécutions VERTES portent le même bruit. Il n'était imprimé que parce que `pageDiagnostics()` s'exécute depuis le handler `uncaughtException`. Le premier diagnostic y a perdu son temps.
+
+> **Un diagnostic déclenché par une panne n'est pas la panne.** Avant de suivre ce qu'il montre, demander : **cette ligne est-elle aussi présente quand tout va bien ?** Si oui, elle ne juge rien.
+
+**Le correctif évident, et son piège.** Faire rendre à `paintedAt` le MOTIF de son refus (une chaîne) au lieu de lever, puis rendre `near()` fail-closed — `Array.isArray(rgb) && …`. Correct pour toute règle POSITIVE : une sonde perdue la fait tomber.
+
+**Ce que ça casse en silence.** Le même fichier portait une règle NÉGATIVE — « la rangée plate arrondit CHAQUE case : le coin intérieur est HORS média » — écrite `!near(coin, INDIGO)`. Sur une sonde perdue, `near` rend `false`, donc `!near` rend **VRAI** : le témoin aurait été déclaré SATISFAIT **au moment précis où la mesure venait d'échouer**. Verdir par ABSENCE DE SUJET.
+
+**Le troc.** Un gate qui EXPLOSE se voit dans le journal ; un gate qui MENT ne se voit nulle part. S'arrêter à `near` aurait donc **aggravé** le défaut tout en fermant l'issue.
+
+**Règle.** Quand on rend un prédicat fail-closed, **énumérer ses usages NÉGATIFS avant de conclure** — `grep '!predicat('`. Chacun a besoin de sa jumelle, qui n'est pas la négation : `loin(v, c) = estUneMesure(v) && !near(v, c)`. Les deux sens doivent exiger que la mesure ait EU LIEU. C'est la forme, sur un prédicat, de la règle déjà payée sur les gardes : [[reference_guard_direction_decides_failure_direction]].
+
+**Corollaire de portée.** Le défaut vivait dans la SEULE des quatre sondes de pixels du fichier qui n'appariait pas `scrollIntoView({ block: 'center' })` à son `waitForRowSettled` — les trois autres le faisaient. `waitForRowSettled` attend qu'une rangée cesse de BOUGER, jamais qu'elle soit À L'ÉCRAN : les deux attentes ne sont pas substituables, et un inventaire des sites voisins l'aurait dit avant la CI.

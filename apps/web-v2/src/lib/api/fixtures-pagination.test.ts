@@ -13,6 +13,10 @@ describe('PAGINATION_CONVERSATIONS', () => {
     for (const id of ids) expect(existingIds.has(id)).toBe(false);
   });
 
+  /* 45, et ce compte est LU AILLEURS — `check-lens.mjs:939` en dérive ses 44
+     rangées rendues, `conversations.test.ts` ses 15 de page 2. Un corpus de
+     démonstration qui n'a besoin que de son ADRESSE va dans
+     `OFF_LIST_CONVERSATIONS` (`fixtures.ts`), pas ici (#7033). */
   test('CONVERSATIONS.length === 45 — les 34 sont bien fusionnées', () => {
     expect(CONVERSATIONS).toHaveLength(45);
   });
