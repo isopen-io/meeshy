@@ -82,11 +82,25 @@ export type PublicProfileStats = {
 export const SERVED_RELATIONS = ['self', 'friend', 'pending_sent', 'pending_received', 'none'] as const;
 export type ServedRelation = (typeof SERVED_RELATIONS)[number];
 
+/**
+ * **`blockedByViewer` EST UN CHAMP À CÔTÉ DE `relation`, JAMAIS UNE SIXIÈME
+ * VALEUR DEDANS** (#7125) — bloquer quelqu'un n'efface pas la ligne d'amitié,
+ * et la passerelle continue de servir `friend` ou `pending_sent` : c'est ce qui
+ * permet à « Débloquer » de rendre la relation qu'on avait. Les deux dimensions
+ * sont orthogonales, la charge les sépare, le décodeur aussi.
+ *
+ * La loi est DIRIGÉE — « ai-je bloqué cette personne », jamais
+ * « sommes-nous bloqués » : `hasBlocked` côté passerelle
+ * (`services/gateway/src/utils/blocking.ts`), et non `isBlockedBetween`, qui
+ * sert l'interdiction de messagerie. Offrir « Débloquer » à quelqu'un qui s'est
+ * fait bloquer serait un contrôle mort.
+ */
 export type PublicProfileView = {
   readonly profile: PublicProfile;
   readonly stats: PublicProfileStats | null;
   readonly relation: ServedRelation;
   readonly isSelf: boolean;
+  readonly blockedByViewer: boolean;
 };
 
 /** Le PRÉFIXE de la famille — `friend-actions.ts` l'importe pour patcher
@@ -163,6 +177,10 @@ export function decodePublicProfileView(raw: unknown): PublicProfileView | null 
     stats: decodePublicStats(wire.stats),
     relation: decodeServedRelation(wire.relation),
     isSelf: wire.isSelf === true,
+    /* Seul un `true` SERVI vaut un blocage — même idiome qu'`isSelf` juste
+       au-dessus : un champ absent (passerelle plus ancienne) ou d'un autre
+       type ne fabrique pas un état que personne n'a mesuré. */
+    blockedByViewer: wire.blockedByViewer === true,
   };
 }
 
