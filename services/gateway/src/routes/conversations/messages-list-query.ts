@@ -21,8 +21,7 @@ import { stickerFromMetadata, hoistStickerOnto } from '../../services/stickers/m
 import { resolveForwardSourceGateForReader } from '../../services/preferences/forward-source-visibility.js';
 import { redactForwardedAttachmentUrlsIn } from '../../services/preferences/forwarded-attachment-urls.js';
 import { loadPersonalHistoryHidingByConversation, NO_PERSONAL_HIDING } from '../../services/personalHistoryFilter';
-import { attachmentMediaSelect, attachmentFullSelect, attachmentForwardPreviewSelect } from '../../services/attachments/attachmentIncludes';
-import { attachmentProtectionSelect } from '../admin/media-protection';
+import { attachmentFullSelect, attachmentForwardPreviewSelect, attachmentSocketSelect } from '../../services/attachments/attachmentIncludes';
 import {
   resolveParticipantAvatar,
   resolveParticipantDisplayName,
@@ -324,15 +323,11 @@ export function buildMessageListSelect(options: {
             }
           }
         },
-        // #5125 — `attachmentMediaSelect` est délibérément SANS drapeau de
-        // protection (voir son doc-comment dans `attachmentIncludes.ts`) ; les
-        // trois colonnes PROPRES à la pièce jointe (indépendantes de celles du
-        // message porteur, cf. `admin/media-protection.ts`) sont ajoutées ici
-        // pour que la liste de conversation les serve au même titre que les
-        // drapeaux de MESSAGE (déjà sélectionnés plus haut) — sans eux, une
-        // pièce floutée/à vue unique de façon INDÉPENDANTE de son message
-        // portait un attachement muet sur sa propre protection.
-        attachments: { select: { ...attachmentMediaSelect, ...attachmentProtectionSelect } },
+        // #5125, unifié #7070 — `attachmentSocketSelect` (jamais `attachmentMediaSelect`
+        // nu, délibérément SANS drapeau de protection, ni une union locale des
+        // deux) : c'est littéralement la forme du canal socket que #7014 a
+        // nommée, et que cette route écrivait à la main jusqu'ici.
+        attachments: { select: attachmentSocketSelect },
         _count: {
           select: {
             reactions: true,

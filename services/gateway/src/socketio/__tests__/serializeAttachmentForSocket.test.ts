@@ -79,6 +79,77 @@ describe('serializeAttachmentForSocket — la garde d’INVENTAIRE (#7014)', () 
   it('la sélection du gateway est UNE — REST et socket partagent l’objet', () => {
     expect(attachmentProtectionSelectDepuisAdmin).toBe(attachmentProtectionSelect);
   });
+
+  /**
+   * #7070 — GÉNÉRALISATION de la garde ci-dessus, de la protection à TOUT le
+   * canal socket. `attachmentSocketSelect` a gagné cinq familles (forwarding,
+   * vue-unique, consommation, fait+mode du chiffrement) que le producteur
+   * REST/ZMQ servait jusqu'ici en ligne BRUTE et que le sérialiseur, lui,
+   * ignorait : la charge socket restait pauvre même une fois la source curatée.
+   */
+  it('sert TOUT champ de attachmentSocketSelect (hors `reactions`, agrégé séparément)', () => {
+    const ligneComplete = {
+      ...ligneDeBase,
+      forwardedFromAttachmentId: 'att-source',
+      isForwarded: true,
+      maxViewOnceCount: 3,
+      viewOnceCount: 1,
+      isViewOnce: false,
+      isBlurred: false,
+      effectFlags: 0,
+      deliveredToAllAt: new Date('2026-09-19T09:00:00Z'),
+      viewedByAllAt: null,
+      downloadedByAllAt: null,
+      listenedByAllAt: null,
+      watchedByAllAt: null,
+      viewedCount: 2,
+      downloadedCount: 1,
+      consumedCount: 1,
+      isEncrypted: true,
+      encryptionMode: 'e2ee',
+    };
+    const charge = serializeAttachmentForSocket(ligneComplete) as unknown as Record<string, unknown>;
+
+    const attendus = Object.keys(attachmentSocketSelect).filter((champ) => champ !== 'reactions');
+    expect(attendus.length).toBeGreaterThan(0);
+    expect(attendus.filter((champ) => !(champ in charge))).toEqual([]);
+  });
+
+  /**
+   * Le CLIQUET qui interdit le retour de `filePath` / `encryptionIv` /
+   * `encryptionAuthTag` par le sérialiseur — le seul site d'émission de
+   * `attachments` après #7070 (les deux producteurs REST/ZMQ et socket
+   * passent désormais tous deux par lui).
+   */
+  it("n'émet AUCUNE clé hors attachmentSocketSelect ∪ {reactionSummary, currentUserReactions}", () => {
+    const ligneAvecSecrets = {
+      ...ligneDeBase,
+      filePath: 'attachments/2026/09/uid/secret.jpg',
+      encryptionIv: 'iv-secrete',
+      encryptionAuthTag: 'tag-secret',
+      serverKeyId: 'key-secrete',
+      encryptionHmac: 'hmac-secret',
+      thumbnailPath: 'attachments/2026/09/uid/secret-thumb.jpg',
+      scanStatus: 'clean',
+      moderationReason: null,
+      title: 'Titre',
+      alt: 'Texte alternatif',
+      caption: 'Légende',
+    };
+    const charge = serializeAttachmentForSocket(ligneAvecSecrets) as unknown as Record<string, unknown>;
+
+    const inventaire = new Set([
+      ...Object.keys(attachmentSocketSelect).filter((champ) => champ !== 'reactions'),
+      'reactionSummary',
+      'currentUserReactions',
+    ]);
+    const horsInventaire = Object.keys(charge).filter((champ) => !inventaire.has(champ));
+
+    expect(horsInventaire).toEqual([]);
+    expect(charge).not.toHaveProperty('filePath');
+    expect(charge).not.toHaveProperty('encryptionIv');
+    expect(charge).not.toHaveProperty('encryptionAuthTag');
+  });
 });
 
 describe('serializeAttachmentForSocket — FAIL-CLOSED sur la protection (#7014)', () => {

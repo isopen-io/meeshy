@@ -9,21 +9,19 @@ import {
   type TranslationListQuery
 } from './types';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
-import { attachmentMediaSelect } from '../../services/attachments/attachmentIncludes';
+import { attachmentSocketSelect } from '../../services/attachments/attachmentIncludes';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validatePagination } from '../../utils/pagination';
 import { requirePermission } from '../../middleware/authorize';
 import { registerContentShareLinkRoutes } from './content-share-links';
-// #4333 bonus, #4384 — `attachmentMediaSelect` est délibérément SANS drapeau
-// de sécurité (voir son doc-comment : « No consumption-tracking, no security
-// flags »), et cette route est une liste PLATEFORME-ENTIÈRE, pas un contexte
-// qui gate déjà la protection en amont. Même classe de défaut que #4157 c.4 :
-// les prédicats PARTAGÉS, jamais une copie. MÉDIA et TEXTE vivent côte à côte
-// dans `routes/admin/media-protection.ts` depuis #4388, qui y a déplacé le
-// second — il vivait jusque-là dans un fichier de route
-// (`conversation-messages-sovereign.ts`), son seul autre appelant.
+// #4333 bonus, #4384, unifié #7070 — cette route est une liste
+// PLATEFORME-ENTIÈRE, pas un contexte qui gate déjà la protection en amont :
+// elle sélectionne `attachmentSocketSelect` (#7014), littéralement la forme du
+// canal socket, plutôt qu'une union locale de `attachmentMediaSelect` (SANS
+// drapeau de sécurité, son doc-comment le dit) et `attachmentProtectionSelect`.
+// TEXTE (`messageProtectionSelect` et consorts) vit à côté, dans
+// `routes/admin/media-protection.ts` depuis #4388.
 import {
-  attachmentProtectionSelect,
   messageProtectionSelect,
   messageContentProtectionSelect,
   mediaAttachmentIsProtected,
@@ -385,7 +383,7 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
                 type: true
               }
             },
-            attachments: { select: { ...attachmentMediaSelect, ...attachmentProtectionSelect } },
+            attachments: { select: attachmentSocketSelect },
             _count: {
               select: {
                 replies: true

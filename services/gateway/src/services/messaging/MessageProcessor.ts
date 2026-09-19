@@ -21,7 +21,7 @@ import { MessageTranslationService } from '../message-translation/MessageTransla
 import { AttachmentService } from '../attachments';
 import { copyAttachmentsFromMessage } from './copyAttachments';
 import { deriveMessageTypeForAttachments } from './attachmentMessageType';
-import { attachmentFullSelect } from '../attachments/attachmentIncludes';
+import { attachmentFullSelect, attachmentSocketSelect } from '../attachments/attachmentIncludes';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import { shouldProcessAudioAttachment } from '../../utils/transcription';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
@@ -601,7 +601,7 @@ export class MessageProcessor {
       const refreshedAttachments = await performanceLogger.withTiming(
         'messaging.refreshAttachments',
         () => this.prisma.messageAttachment.findMany({
-          where: { messageId: message.id }
+          where: { messageId: message.id }, select: attachmentSocketSelect // #7070 — repart TELLE QUELLE sur message:new/edited REST/ZMQ
         }),
         corrWithMsg
       );

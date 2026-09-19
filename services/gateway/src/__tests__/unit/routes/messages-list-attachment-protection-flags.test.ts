@@ -8,9 +8,10 @@
  * porter une pièce jointe floutée seule, et `attachmentMediaSelect` — la forme
  * PARTAGÉE par les notifications, les listes admin et cette liste — exclut
  * délibérément les drapeaux de sécurité (voir son doc-comment dans
- * `attachmentIncludes.ts`). Cette liste doit donc composer
- * `{ ...attachmentMediaSelect, ...attachmentProtectionSelect }`, exactement
- * comme `routes/admin/content.ts` le fait déjà pour la même raison (#4333).
+ * `attachmentIncludes.ts`). Cette liste sélectionne donc `attachmentSocketSelect`
+ * (#7014, étendu #7070) — littéralement la forme du canal socket, jamais une
+ * union locale des deux — exactement comme `routes/admin/content.ts` (#4333)
+ * et le producteur `message:new`/`message:edited` (#7070) le font désormais.
  *
  * Deux témoins, deux couches :
  *   1. la REQUÊTE — `buildMessageListSelect` demande bien les trois colonnes
