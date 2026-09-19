@@ -25,6 +25,7 @@
  * ULTÉRIEUR ne consomme plus qu'UNE seule couche (jamais deux, jamais zéro).
  */
 import { waitForRowSettled } from './check-media.mjs';
+import { confinementDe } from './chrome-confinement.mjs';
 
 const QUAD_ID = 'media-13';
 const OVERFLOW_ID = 'media-14';
@@ -73,8 +74,29 @@ async function scrollDownUntilMounted(page, scroller, id) {
  * `check-media.mjs`) : la forme d'une grille (un écart qui laisse voir le fond,
  * un coin arrondi) ne se lit dans aucun style calculé, seulement à l'écran.
  */
-async function paintedAt(page, x, y) {
-  const shot = await page.screenshot({ clip: { x: Math.floor(x), y: Math.floor(y), width: 1, height: 1 } });
+export async function paintedAt(page, x, y, quoi = 'une sonde') {
+  // UNE SONDE HORS ÉCRAN FAIT ROUGIR SON TÉMOIN, elle ne tue pas le gate
+  // (#7048). Sans ce contrôle, `page.screenshot` lève « Clipped area is either
+  // empty or outside the resulting image » — un message qui ne nomme ni la
+  // coordonnée, ni la rangée, ni le bloc. Il remonte en `uncaughtException`,
+  // jette les 588 témoins DÉJÀ VERTS, et déclenche `pageDiagnostics()`, dont
+  // les dizaines de lignes « console (erreur) · A bad HTTP response code
+  // (404) » — le service worker que ce gate refuse de servir À DESSEIN,
+  // présent dans les exécutions VERTES — désignent alors la mauvaise chose.
+  // Le premier diagnostic de ce défaut y a perdu son temps.
+  //
+  // Le motif voyage donc dans la VALEUR RENDUE, en CHAÎNE là où un triplet est
+  // attendu : les `expect` qui la consomment l'interpolent déjà dans leur
+  // message, et nomment ainsi le point exact sans qu'aucun d'eux soit réécrit.
+  const vue = page.viewportSize();
+  const [cx, cy] = [Math.floor(x), Math.floor(y)];
+  if (vue && (cx < 0 || cy < 0 || cx >= vue.width || cy >= vue.height)) {
+    return (
+      `${quoi} tombe HORS du viewport : (${cx}, ${cy}) pour ${vue.width}×${vue.height} — ` +
+      `la rangée visée a quitté l'écran avant la mesure, il faut défiler vers elle AVANT de la sonder`
+    );
+  }
+  const shot = await page.screenshot({ clip: { x: cx, y: cy, width: 1, height: 1 } });
   return page.evaluate(async (data) => {
     const bitmap = new Image();
     await new Promise((ok, ko) => {
@@ -93,7 +115,33 @@ async function paintedAt(page, x, y) {
 
 const INDIGO = [99, 102, 241];
 const BLACK = [0, 0, 0];
-const near = (rgb, target) => rgb.every((c, i) => Math.abs(c - target[i]) <= 6);
+/**
+ * `rgb` peut ne PAS être un triplet : `paintedAt` rend le MOTIF de son refus
+ * (une chaîne) quand la sonde tombe hors du viewport (#7048). Sans le
+ * `Array.isArray`, `.every` lève un `TypeError` — et le gate meurt exactement
+ * comme il mourait avant, à un message près. Rendre `false` ici fait tomber le
+ * témoin qui l'appelle, AVEC son message : l'`expect` interpole déjà la valeur,
+ * donc le motif s'imprime là où l'on attendait un triplet, les 588 témoins
+ * déjà verts sont conservés, et les suivants sont joués.
+ */
+export const near = (rgb, target) => Array.isArray(rgb) && rgb.every((c, i) => Math.abs(c - target[i]) <= 6);
+
+/**
+ * LA NÉGATION DE `near`, ET ELLE N'EST PAS `!near` (#7048).
+ *
+ * `near` rendu fail-closed suffit à une règle POSITIVE (« ce pixel EST
+ * l'indigo ») : une sonde perdue la fait tomber. Elle ne suffit pas à une règle
+ * NÉGATIVE (« ce pixel n'est PAS l'indigo »), parce que `!near(perdue, X)` rend
+ * **vrai** — la règle serait déclarée satisfaite alors qu'aucun pixel n'a été
+ * lu. G5 porte exactement cette forme (« la rangée plate arrondit CHAQUE case :
+ * coin intérieur hors média »), et elle aurait donc VERDI PAR ABSENCE DE SUJET
+ * au moment précis où la mesure venait d'échouer.
+ *
+ * Un correctif qui s'arrête à `near` troque un gate qui EXPLOSE contre un gate
+ * qui MENT — l'explosion, au moins, se voit. `loin` exige donc une VRAIE
+ * mesure avant de conclure à l'écart.
+ */
+export const loin = (rgb, target) => Array.isArray(rgb) && !near(rgb, target);
 
 export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, skin, scheme }) {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
@@ -285,27 +333,51 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
    * Ref-Native `targets/thread.media-grid.light.png` montre les écarts au
    * fond du fil. Se lit au PIXEL : l'écart entre les deux premières cases, et
    * le coin intérieur bas-droit de la première.
+   *
+   * LE DÉFILEMENT EST APPARIÉ À L'ATTENTE (#7048) — `waitForRowSettled` attend
+   * qu'une rangée cesse de BOUGER, jamais qu'elle soit À L'ÉCRAN. G5 était la
+   * seule sonde de pixels de ce fichier à ne pas rapprocher les deux ; les
+   * trois autres le font (`:227-228`, plus bas `:425-426` et `:563-564`).
+   * Entre le `scrollIntoView` du témoin précédent et ce point-ci il y a le
+   * décodage de quatre images et une mutation du DOM : la rangée a le temps de
+   * sortir du viewport, et `paintedAt` découpe alors une capture hors image.
    */
+  await rowOf(QUAD_ID).evaluate((el) => el.scrollIntoView({ block: 'center' }));
   await waitForRowSettled(page, QUAD_ID);
   const leadingBox = await rowOf(QUAD_ID).locator('[data-media-tile]').nth(0).boundingBox();
   const trailingBox = await rowOf(QUAD_ID).locator('[data-media-tile]').nth(1).boundingBox();
   const shapeGrid = await rowOf(QUAD_ID).locator('[data-media-grid]').first().boundingBox();
   const middleY = leadingBox.y + leadingBox.height / 2;
-  const gapColour = await paintedAt(page, (leadingBox.x + leadingBox.width + trailingBox.x) / 2, middleY);
-  const innerCornerColour = await paintedAt(page, leadingBox.x + leadingBox.width - 1, leadingBox.y + leadingBox.height - 1);
+  const gapColour = await paintedAt(
+    page,
+    (leadingBox.x + leadingBox.width + trailingBox.x) / 2,
+    middleY,
+    `[${skin}/${scheme}] G5 — l'écart entre les deux premières cases`,
+  );
+  const innerCornerColour = await paintedAt(
+    page,
+    leadingBox.x + leadingBox.width - 1,
+    leadingBox.y + leadingBox.height - 1,
+    `[${skin}/${scheme}] G5 — le coin intérieur de la 1ʳᵉ case`,
+  );
   if (skin === 'bulles') {
     expect(
       near(gapColour, BLACK) && near(innerCornerColour, INDIGO),
       `[${skin}/${scheme}] la bulle pose UNE boîte noire : écart noir, coin intérieur plein (écart ${gapColour}, coin ${innerCornerColour})`,
     );
   } else {
-    const backgroundColour = await paintedAt(page, shapeGrid.x - 8, middleY);
+    const backgroundColour = await paintedAt(
+      page,
+      shapeGrid.x - 8,
+      middleY,
+      `[${skin}/${scheme}] G5 — le fond du fil à gauche de la grille`,
+    );
     expect(
-      !near(gapColour, BLACK) && near(gapColour, backgroundColour),
+      loin(gapColour, BLACK) && near(gapColour, backgroundColour),
       `[${skin}/${scheme}] la rangée plate laisse l'écart au FOND du fil, jamais noir (écart ${gapColour}, fond ${backgroundColour})`,
     );
     expect(
-      !near(innerCornerColour, INDIGO),
+      loin(innerCornerColour, INDIGO),
       `[${skin}/${scheme}] la rangée plate arrondit CHAQUE case : coin intérieur de la 1ʳᵉ hors média (coin ${innerCornerColour})`,
     );
   }
@@ -440,6 +512,17 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
   expect(rootInert, `[${skin}/${scheme}] #root porte inert le temps de l'ouverture`);
   const focusedIsClose = await page.evaluate(() => document.activeElement?.getAttribute('aria-label') === 'Fermer');
   expect(focusedIsClose, `[${skin}/${scheme}] le focus initial est sur le bouton « Fermer »`);
+
+  /**
+   * #7040 — ET LA PORTE DE SORTIE TIENT DANS LE CADRE. Le focus l'atteint (le
+   * témoin ci-dessus) ; encore faut-il que le DOIGT le puisse. #7037 (iOS) a
+   * rendu cette même croix à `x = −326,3` pour un viewport de 402 pt, sur le
+   * plein écran d'une pièce jointe à PLUSIEURS pages : le plateau adoptait la
+   * largeur du carrousel. La grille QUAD ouverte ici est exactement ce cas —
+   * quatre pages, le carrousel le plus large du fil de conversation.
+   */
+  const porte = await confinementDe(page, '[data-media-viewer] .media-viewer-close', { nom: 'la croix de la visionneuse' });
+  expect(porte.ok, `[${skin}/${scheme}] #7040 : ${porte.message}`);
 
   const filmstripItems = dialog.locator('[data-filmstrip-item]');
   expect((await filmstripItems.count()) === 4, `[${skin}/${scheme}] la pellicule compte 4 vignettes (media-13)`);

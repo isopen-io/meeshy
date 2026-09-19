@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 
 import { ApiError } from './client';
+import { isMediaAbsent, noteMediaAbsent, resetAbsentMedia } from './media-absent';
 import { CACHE_SCHEMA, createAppQueryClient, purgeReaderCaches, shouldRetry, type StorageLike } from './query-client';
 import { reactionStore } from './reaction-store';
 import { createSessionStore } from './session';
@@ -404,5 +405,42 @@ describe('« mes réactions » (reactionStore) survit au rechargement, SUR LA M�
     session.getState().clearSession();
 
     expect(reactionStore.getState().mine.m1).toBeUndefined();
+  });
+});
+
+/**
+ * LE REGISTRE DES MÉDIAS ABSENTS (#7022) SURVIT AU CHANGEMENT DE COMPTE — LA
+ * COUPURE D'ACCÈS (revue adversariale 2026-09-18, défaut REVUE_NON_JOUÉE §1).
+ *
+ * Scénario mesuré : A ouvre une publication dont un média lui est REFUSÉ
+ * (403) → `noteMediaAbsent` grave la source absente, au niveau MODULE. A se
+ * déconnecte, B se connecte dans le MÊME onglet (SPA, pas de rechargement) —
+ * B, qui a le DROIT de voir ce média, hérite du verdict de A et voit « Média
+ * indisponible » pour toute sa session. Le registre ne connaît que des
+ * ÉCHECS DE CHARGEMENT, jamais une identité ; une source qui a échoué pour A
+ * n'a RIEN prouvé sur ce que B peut voir.
+ *
+ * Le site est le MÊME que celui qui vide `reactionStore` ci-dessus : le
+ * changement d'identité, dans `createAppQueryClient`. Deux registres de
+ * MODULE, deux fuites SYMÉTRIQUES entre deux comptes du même navigateur.
+ */
+describe('changement d’identité ⇒ le registre des médias absents ne fuit PAS vers le compte suivant (#7022)', () => {
+  afterEach(() => {
+    resetAbsentMedia();
+  });
+
+  test('un média gravé absent pour un compte redevient demandable pour le compte SUIVANT', () => {
+    const storage = fakeStorage();
+    const session = createSessionStore({ storage: fakeStorage() });
+    session.getState().establish({ user: { id: 'u-1', username: 'ada' }, token: 'jwt', sessionToken: 'sess', expiresIn: 86_400 });
+    createAppQueryClient({ storage, buster: '0.0.0-test:u-1', session });
+
+    const src = 'https://gate.meeshy.me/api/v1/attachments/file/2026%2F09%2Frestreint-a-ada.jpg';
+    noteMediaAbsent(src);
+    expect(isMediaAbsent(src)).toBe(true);
+
+    session.getState().establish({ user: { id: 'u-2', username: 'bob' }, token: 'jwt2', sessionToken: 'sess2', expiresIn: 86_400 });
+
+    expect(isMediaAbsent(src)).toBe(false);
   });
 });

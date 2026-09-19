@@ -7,6 +7,7 @@ import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags'
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { FocalRow } from './focal-row';
+import { attachmentDefaults } from '@/lib/api/fixtures-base';
 import { messagesOf } from '@/lib/api/fixtures';
 import { MEDIA_CONVERSATION_ID } from '@/lib/api/fixtures-media';
 import { MEDIA_GRID_QUAD_WITNESS_ID } from '@/lib/api/fixtures-media-grid';
@@ -1017,6 +1018,47 @@ describe('FocalRow — contenu retenu au serveur (#6862)', () => {
     const html = render({ ...BASE_MESSAGE, isBlurred: true, content: 'SECRET-4817', translations: [] });
     expect(html).toContain('data-protected="hidden"');
     expect(html).not.toContain('Contenu retenu');
+  });
+
+  /**
+   * **ET L'HÔTE PASSE LES PIÈCES** (#7023, relecture adversaire) — jumelle du
+   * témoin de `bubble.test.tsx`, dont le doc-comment porte le raisonnement.
+   * Ici la peau est CELLE du produit (la lecture souveraine est câblée en
+   * `focal`), donc ce témoin-ci double une couverture qui existe déjà par
+   * `admin-conversation-reading-medias.test.tsx` — il la rend LOCALE, au même
+   * endroit que sa jumelle, pour qu'un lot qui touche `focal-row.tsx` voie
+   * tomber le témoin de SON fichier plutôt que celui d'une route.
+   */
+  const pieceRetenue = (id: string, mimeType: string) => ({
+    ...attachmentDefaults,
+    id,
+    messageId: BASE_MESSAGE.id,
+    fileName: id,
+    originalName: id,
+    mimeType,
+    fileSize: 2048,
+    fileUrl: '',
+    uploadedBy: 'u-amina',
+    createdAt: '2026-09-08T09:00:00.000Z',
+  });
+
+  test('… et il DIT les pièces retenues — c’est l’HÔTE qui passe `attachments`', () => {
+    const html = renderRetenu({
+      ...BASE_MESSAGE,
+      content: '',
+      translations: [],
+      isEncrypted: true,
+      attachments: [pieceRetenue('a-1', 'image/png'), pieceRetenue('a-2', 'audio/mpeg')],
+    });
+    expect(html).toContain('Contenu retenu');
+    expect(html).toContain('data-withheld-media');
+    expect(html).toContain('1 image, 1 audio');
+  });
+
+  test('CONTRASTE — retenu SANS pièce ne porte aucun constat', () => {
+    const html = renderRetenu({ ...BASE_MESSAGE, content: '', translations: [], isEncrypted: true });
+    expect(html).toContain('Contenu retenu');
+    expect(html).not.toContain('data-withheld-media');
   });
 });
 

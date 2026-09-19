@@ -6,7 +6,7 @@ import {
   type ParticipantRoomTarget,
 } from './emitToConversationParticipants';
 import { enqueueForOfflineParticipants, type OfflineParticipantQueueDeps } from './offlineParticipantQueue';
-import { serializeAttachmentForSocket } from './serializeAttachmentForSocket';
+import { serializeAttachmentForSocket, type SocketAttachmentRow } from './serializeAttachmentForSocket';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 
 const logger = enhancedLogger.child({ module: 'emitAttachmentUpdated' });
@@ -18,8 +18,12 @@ export interface AttachmentUpdatedParams {
   connectedUsers: { has(key: string): boolean };
   conversationId: string;
   messageId: string;
-  /** The freshly-read attachment row (or a record of the same shape). */
-  attachment: Record<string, unknown>;
+  /**
+   * The freshly-read attachment row (or a record of the same shape) —
+   * `attachmentSocketSelect`-shaped, protection columns included (#7028):
+   * `serializeAttachmentForSocket` is fail-closed on their absence.
+   */
+  attachment: SocketAttachmentRow;
 }
 
 /**

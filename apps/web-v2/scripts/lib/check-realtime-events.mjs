@@ -423,5 +423,107 @@ export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA
   );
 
   await listPage.close();
+
+  // ===== 6. LA PIÈCE PROTÉGÉE ARRIVÉE PAR SOCKET N'ATTEINT PAS LE DOM (#7014) =====
+  /**
+   * LE CHEMIN TEMPS RÉEL, QU'AUCUN GATE NE JOUAIT — et c'est la moitié qui a
+   * fui. `check-media.mjs` exerce `media-10` (la PIÈCE déclarée protégée sur un
+   * message ordinaire, #6189) sur le chemin REST : il était VERT pendant toute
+   * la vie du défaut, parce que le corpus arrive par `GET /messages`, où le
+   * `select` sert bien `isViewOnce`. Le canal SOCKET, lui, ne servait RIEN —
+   * `serializeAttachmentForSocket` énumérait trente champs à la main, sans les
+   * trois de la protection — et `maskedAttachment` échoue OUVERTE quand on ne
+   * la nourrit pas. Une photo à VUE UNIQUE reçue en direct rendait donc son
+   * `<img>` EN CLAIR jusqu'au prochain `GET /messages`.
+   *
+   * CE QUE CE GATE MESURE, exactement : la moitié CLIENT du fail-closed —
+   * `message:new` → `applyMessageNew` → cache TanStack → `decodeMessage` →
+   * bulle → `<Attachments>` → DOM, dans un VRAI navigateur. C'est le segment
+   * qu'aucun autre témoin ne traverse : le témoin bout-à-bout
+   * (`realtime-attachment-protection.test.tsx`) branche le VRAI sérialiseur de
+   * la passerelle mais rend `<Attachments>` à la main, sans cache ni bulle ;
+   * `check-media.mjs` monte la vraie bulle mais n'arrive que par REST.
+   *
+   * La moitié SERVEUR — que la passerelle ÉMET bien ces champs — est tenue
+   * ailleurs, et doit l'être : la charge ci-dessous est une FIXTURE, donc ce
+   * gate ne peut pas prouver ce que le sérialiseur sert. C'est la garde
+   * d'INVENTAIRE (`serializeAttachmentForSocket.test.ts`) qui le prouve, et le
+   * témoin bout-à-bout qui relie les deux.
+   *
+   * L'ÉPREUVE DE CE TÉMOIN N'EST PAS SON VERT mais sa MUTATION : retirer
+   * `isViewOnce` de la pièce de `live-protege` (`fixtures-realtime.ts`) — la
+   * forme EXACTE du défaut, une charge socket muette sur sa protection — doit
+   * le faire tomber. Mesuré en l'écrivant.
+   */
+  const bulleVue = (id, urlServie) =>
+    page.evaluate(
+      ([messageId, url]) => {
+        const bulle = document.querySelector(`[data-message="${messageId}"]`);
+        if (bulle === null) return null;
+        const img = bulle.querySelector('img');
+        return {
+          img: img !== null,
+          src: img?.getAttribute('src') ?? null,
+          substitut: bulle.querySelector('[data-protected-attachment="hidden"]') !== null,
+          /* L'URL est cherchée dans le HTML ENTIER de la bulle, jamais sur le
+             seul `src` d'un `<img>` : un `background-image`, un `<source>`,
+             un `data-` quelconque la ferait fuir tout autant. Les octets dans
+             la page SONT la fuite — un `filter: blur()` n'est pas une
+             rétention (motif `check-media.mjs` § (n)). */
+          urlEnClair: url !== null && bulle.outerHTML.includes(url),
+        };
+      },
+      [id, urlServie ?? null],
+    );
+
+  /**
+   * LE CONTRÔLE EST OBSERVÉ EN PREMIER, et il n'est pas seulement la
+   * contre-épreuve (leçon 261) : c'est LUI qui donne au gate l'URL à chercher
+   * dans la bulle protégée. Recopier ce littéral ici en ferait une SECONDE
+   * définition — celle qui dérive en silence le jour où la fixture change son
+   * média, laissant le témoin chercher une chaîne que plus personne ne sert et
+   * verdir sur une fuite réelle. Le média est servi par la fixture, une fois.
+   */
+  await page.clock.runFor(3000); // T+30,3 s — `live-ordinaire` est arrivé à 30 000 ms.
+  const ordinaire = page.locator('[data-message="live-ordinaire"]');
+  await ordinaire.waitFor({ state: 'attached', timeout: 5000 }).catch(() => undefined);
+  const vuOrdinaire = await bulleVue('live-ordinaire', null);
+  expect(
+    vuOrdinaire?.img === true,
+    `${label} CONTRÔLE, T+30,3 s : le média SANS déclaration, arrivé PAR SOCKET, rend bien son <img> — sans quoi les témoins suivants ne pourraient pas tomber (obtenu ${JSON.stringify(vuOrdinaire)})`,
+  );
+  expect(
+    vuOrdinaire?.substitut === false,
+    `${label} CONTRÔLE, T+30,3 s : la pièce ordinaire ne porte AUCUN substitut (obtenu ${JSON.stringify(vuOrdinaire)})`,
+  );
+
+  const urlServie = vuOrdinaire?.src ?? null;
+  expect(
+    typeof urlServie === 'string' && urlServie.length > 0,
+    `${label} CONTRÔLE : l'URL du média est LUE sur la bulle ordinaire, jamais recopiée dans ce gate (obtenue ${urlServie})`,
+  );
+
+  /** LE MÊME MÉDIA, LA MÊME ARRIVÉE — la seule déclaration en plus. */
+  await page.clock.runFor(1000); // T+31,3 s — `live-protege` est arrivé à 31 000 ms.
+  const protegee = page.locator('[data-message="live-protege"]');
+  await protegee.waitFor({ state: 'attached', timeout: 5000 }).catch(() => undefined);
+  const vuProtege = await bulleVue('live-protege', urlServie);
+  expect(
+    vuProtege !== null,
+    `${label} T+31,3 s : le message protégé reçu par socket porte bien sa bulle (sinon ce témoin ne mesure RIEN)`,
+  );
+  expect(
+    vuProtege?.img === false,
+    `${label} T+31,3 s : la pièce déclarée \`isViewOnce\` arrivée PAR SOCKET ne rend AUCUN <img> (obtenu ${JSON.stringify(vuProtege)})`,
+  );
+  expect(
+    vuProtege?.urlEnClair === false,
+    `${label} T+31,3 s : l'URL du média protégé n'est NULLE PART dans la bulle (obtenu ${JSON.stringify(vuProtege)})`,
+  );
+  expect(
+    vuProtege?.substitut === true,
+    `${label} T+31,3 s : la pièce protégée porte son substitut \`data-protected-attachment="hidden"\` (obtenu ${JSON.stringify(vuProtege)})`,
+  );
+
   await context.close();
 }

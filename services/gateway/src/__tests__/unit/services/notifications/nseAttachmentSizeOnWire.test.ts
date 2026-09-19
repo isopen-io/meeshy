@@ -44,6 +44,16 @@ const PHOTO_BYTES = 240_000;
 const ORIGINAL_VOICE_URL = '/api/v1/attachments/file/voice_note.m4a';
 const FR_TRACK_URL = '/api/v1/attachments/file/translated/att_fr.mp3';
 
+/**
+ * CE QUE LA CHARGE PUSH PORTE DEPUIS #7022 — l'adresse ABSOLUE, composée par
+ * la passerelle (`publicMediaUrl`). La NSE iOS n'a aucune base configurée : un
+ * chemin relatif n'y est pas téléchargeable, et une clé de stockage — la forme
+ * que `normalize-media-urls.ts` laisse en base — encore moins. La RÉFÉRENCE,
+ * elle, reste nue dans le contexte persisté ; seul le fil la compose.
+ */
+const SUR_LE_FIL = (chemin: string): string => `https://gate.meeshy.me${chemin}`;
+
+
 function makeService(recipientLanguage = 'fr') {
   const prisma = {
     message: {
@@ -118,7 +128,7 @@ describe('charge APNs — la taille du média atteint la NSE', () => {
     await runPhoto(service);
 
     const data = pushedData(sendToUser);
-    expect(data.attachmentUrl).toBe(PHOTO_URL);
+    expect(data.attachmentUrl).toBe(SUR_LE_FIL(PHOTO_URL));
     expect(data.attachmentFileSize).toBe(String(PHOTO_BYTES));
   });
 
@@ -183,7 +193,7 @@ describe('charge APNs — la taille du média atteint la NSE', () => {
     } as any);
 
     const data = pushedData(sendToUser);
-    expect(data.attachmentUrl).toBe(FR_TRACK_URL);
+    expect(data.attachmentUrl).toBe(SUR_LE_FIL(FR_TRACK_URL));
     expect(data.attachmentFileSize).toBe('');
   });
 });
