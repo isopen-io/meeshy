@@ -17,6 +17,7 @@
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { validatePagination } from '../../utils/pagination';
+import { publicMediaUrlFromEnv } from '../../services/attachments/publicMediaUrl';
 
 const DEFAULT_LIMIT = 500;
 const MAX_LIMIT = 2000;
@@ -41,6 +42,26 @@ export type ExportSection<T> = { readonly items: readonly T[]; readonly total: n
 
 function toSection<T>(items: readonly T[], total: number, page: ExportPage): ExportSection<T> {
   return { items, total, hasMore: page.offset + items.length < total };
+}
+
+/**
+ * L'ADRESSE D'UN MÉDIA SERVIE PAR L'ARCHIVE (#7022).
+ *
+ * Le destinataire d'un export RGPD — un humain, un outil — n'a AUCUN
+ * résolveur : ni base configurée, ni préfixe d'API, ni convention de clé.
+ * Servir la colonne brute lui remet donc, pour une ligne sur quatre, une clé
+ * de stockage nue (`2026/09/<uid>/<nom>.jpeg`) qui n'ouvre rien ; et pour une
+ * ligne sur cinq, une route relative sans hôte, qui ne mène nulle part hors
+ * d'un navigateur déjà posé sur le bon domaine.
+ *
+ * La composition n'est pas réécrite ici : `publicMediaUrlFromEnv` en est le
+ * site UNIQUE, il connaît les trois formes de la colonne et il est IDEMPOTENT
+ * — une adresse déjà absolue le traverse inchangée, donc la portabilité de
+ * l'archive ne se paie d'aucune régression sur les 1600 lignes qui
+ * fonctionnaient.
+ */
+function withServedMediaUrl<T extends { readonly fileUrl: string }>(row: T): T {
+  return { ...row, fileUrl: publicMediaUrlFromEnv(row.fileUrl) };
 }
 
 export async function exportPosts(prisma: PrismaClient, userId: string, page: ExportPage) {
@@ -174,8 +195,8 @@ export async function exportMedia(prisma: PrismaClient, userId: string, page: Ex
   ]);
 
   return {
-    attachments: toSection(attachments, attachmentsTotal, page),
-    postMedia: toSection(postMedia, postMediaTotal, page),
+    attachments: toSection(attachments.map(withServedMediaUrl), attachmentsTotal, page),
+    postMedia: toSection(postMedia.map(withServedMediaUrl), postMediaTotal, page),
   };
 }
 
@@ -187,7 +208,7 @@ export async function exportMedia(prisma: PrismaClient, userId: string, page: Ex
  * JSON portable.
  */
 export async function exportVoiceProfile(prisma: PrismaClient, userId: string) {
-  return prisma.userVoiceModel.findFirst({
+  const profile = await prisma.userVoiceModel.findFirst({
     where: { userId },
     select: {
       profileId: true, embeddingModel: true, embeddingDimension: true, audioCount: true,
@@ -196,6 +217,17 @@ export async function exportVoiceProfile(prisma: PrismaClient, userId: string) {
       voicePublicAt: true, createdAt: true, updatedAt: true,
     },
   });
+
+  // `referenceAudioUrl` est la MÊME classe de valeur que les deux `fileUrl`
+  // ci-dessus — `schema.prisma` la déclare « URL to the reference audio », et
+  // les formes du dépôt vont de `/api/v1/attachments/file/…` à une adresse
+  // absolue. Un `null` reste `null` : l'absence de référence n'est pas une
+  // adresse vide, et `publicMediaUrl` ne fabrique jamais ce que la base ne
+  // porte pas.
+  if (profile === null) return profile;
+  return profile.referenceAudioUrl
+    ? { ...profile, referenceAudioUrl: publicMediaUrlFromEnv(profile.referenceAudioUrl) }
+    : profile;
 }
 
 /**
