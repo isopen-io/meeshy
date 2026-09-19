@@ -30,11 +30,24 @@
  *  4. **« Réessayer » REPART** : une seconde requête est observée. Un état
  *     d'erreur dont le bouton ne rejoue rien serait le contrôle inerte que la
  *     loi 4 interdit — et aucun témoin de rendu ne l'aurait distingué ;
- *  5. **« Modifier » ouvre le champ SUR PLACE**, « Annuler » le referme SANS
- *     aucune requête (le transport reste muet) ;
- *  6. **LES CIBLES FONT AU MOINS 44 px** — mesurées au rectangle, jamais lues
+ *  5. **« Modifier » ouvre le champ SUR PLACE**, sur l'ORIGINAL et non sur la
+ *     traduction affichée, et « Annuler » le referme SANS aucune requête ;
+ *  6. **« ENREGISTRER » DÉCLARE LA LANGUE DU TEXTE CORRIGÉ**, jamais celle de
+ *     l'interface. Ce bloc MANQUAIT : le gate ouvrait le champ et l'annulait
+ *     sans jamais appuyer sur « Enregistrer », si bien que la seule chose qui
+ *     se décide à l'enregistrement — ce que la passerelle ÉCRIT dans
+ *     `originalLanguage` avant de purger les traductions — n'était mesurée
+ *     par rien. La rangée à soi est donc de RANG 2 (espagnol lu en français),
+ *     parce qu'en français la règle juste et le relabel rendent le même
+ *     verdict (leçon 261) ;
+ *  7. **« SUPPRIMER » RETIRE LA RANGÉE ET DÉCRÉMENTE LE COMPTEUR DE LA
+ *     PUBLICATION** — le travail principal du lot (#7135 : le compte ne
+ *     bougeait que dans deux caches sur quatre) n'avait aucun témoin de
+ *     navigateur, alors que son symptôme se lit sur des PIXELS : la rangée de
+ *     statistiques peinte au-dessus du fil ;
+ *  8. **LES CIBLES FONT AU MOINS 44 px** — mesurées au rectangle, jamais lues
  *     dans une feuille de style (dimension 5) ;
- *  7. **LES DEUX SCHÉMAS** se peignent sans erreur de page.
+ *  9. **LES DEUX SCHÉMAS** se peignent sans erreur de page.
  *
  * Et il PRODUIT les captures de recette (`CAPTURE_DIR`) : sans elles, les
  * images de l'écran étaient prises par un script ad hoc jamais versé — la
@@ -83,13 +96,31 @@ const THIRD = 'cm-gate-third';
 
 const author = (id, displayName, username) => ({ id, displayName, username });
 
+/**
+ * LA RANGÉE À SOI EST DE RANG 2, DÉLIBÉRÉMENT (revue #7135) — écrite en
+ * ESPAGNOL, lue en FRANÇAIS. C'est la seule forme qui rend mesurables trois
+ * affirmations que la même rangée en français rendait indistinguables :
+ *
+ *  · le corps affiché est la TRADUCTION (le Prisme descend jusqu'au pixel) ;
+ *  · « Modifier » ouvre sur l'ORIGINAL — ouvrir sur la traduction ferait
+ *    RÉÉCRIRE le commentaire dans la langue du lecteur au premier
+ *    enregistrement, en croyant corriger une faute ;
+ *  · le `PATCH` déclare `es`, jamais la langue d'interface `fr`. La
+ *    passerelle ÉCRIT cette déclaration et purge les traductions
+ *    (`PostCommentService.ts:313-316`) : une déclaration fausse fait
+ *    retraduire l'espagnol comme du français pour TOUS ses lecteurs (#6600).
+ *
+ * Un témoin de rang s'écrit sur un rang AUTRE que le premier (leçon 261) : en
+ * `fr`, la règle juste et le relabel rendent le même verdict.
+ */
 const COMMENTS = [
   {
     id: MINE,
-    content: 'Je l’ai testé ce matin, ça tient.',
+    content: 'Lo probé esta mañana, aguanta bien.',
     createdAt: '2026-09-19T09:40:00.000Z',
     author: author(VIEWER_ID, 'Vous', 'gate-viewer'),
-    originalLanguage: 'fr',
+    originalLanguage: 'es',
+    translations: { fr: { text: 'Je l’ai testé ce matin, ça tient.', translationModel: 'nllb-200' } },
     isLikedByMe: true,
     likeCount: 2,
   },
@@ -260,11 +291,24 @@ async function runScheme({ browser, base, scheme, check }) {
     (url) => /^\/api\/v1\/posts\/[^/]+\/comments\/[^/]+$/.test(url.pathname),
     async (route) => {
       const request = route.request();
-      sent.push({ method: request.method(), path: new URL(request.url()).pathname });
-      if (request.method() === 'DELETE') return json(route, envelope({ deleted: true }));
+      if (request.method() === 'DELETE') {
+        sent.push({ method: 'DELETE', path: new URL(request.url()).pathname });
+        return json(route, envelope({ deleted: true }));
+      }
       const body = JSON.parse(request.postData() ?? '{}');
+      /* LE CORPS EST RETENU — sans lui, « le PATCH déclare la bonne langue »
+         n'est pas mesurable, et c'est très exactement le défaut qui a traversé
+         le lot : la langue d'INTERFACE partait sur chaque correction. */
+      sent.push({ method: request.method(), path: new URL(request.url()).pathname, body });
       const target = COMMENTS.find((c) => request.url().endsWith(c.id));
-      return json(route, envelope({ ...target, content: body.content ?? target?.content }));
+      /* LA PASSERELLE PURGE LES TRADUCTIONS DÈS QUE LE TEXTE CHANGE
+         (`PostCommentService.ts:313`) — les servir encore ferait peindre la
+         traduction de l'ANCIEN texte au-dessus du nouveau, et le gate
+         montrerait un écran que la passerelle ne sert jamais. */
+      return json(
+        route,
+        envelope({ ...target, content: body.content ?? target?.content, translations: {}, isEdited: true }),
+      );
     },
   );
 
@@ -396,6 +440,11 @@ async function runScheme({ browser, base, scheme, check }) {
   );
 
   // ------------------------------------------------ 6. modifier SUR PLACE
+  /* LE CORPS SE LIT AVANT L'ÉDITION — le champ REMPLACE le paragraphe. */
+  const corpsAffiche = await page.$eval(`[data-comment-row="${MINE}"] p.text-body`, (p) => ({
+    texte: (p.textContent ?? '').trim(),
+    lang: p.getAttribute('lang'),
+  }));
   const avantEdition = sent.length;
   await page.click(`[data-comment-row="${MINE}"] [data-comment-gesture="edit"]`);
   await page.waitForSelector(`[data-comment-edit-field="${MINE}"]`);
@@ -411,9 +460,18 @@ async function runScheme({ browser, base, scheme, check }) {
     },
     MINE,
   );
+  /* **SUR L'ORIGINAL, JAMAIS SUR LA TRADUCTION.** La rangée AFFICHE le
+     français (rang 2 du Prisme) ; le champ doit s'ouvrir sur l'ESPAGNOL.
+     Ouvrir sur ce qui est peint ferait réécrire le commentaire dans la langue
+     du lecteur au premier « Enregistrer », en croyant corriger une faute —
+     et le texte d'origine serait perdu pour tout le monde. */
   check(
     enEdition.valeur === COMMENTS[0].content,
-    say(`« Modifier » ouvre le champ SUR PLACE, garni du texte existant — « ${enEdition.valeur} »`),
+    say(`« Modifier » ouvre le champ sur l'ORIGINAL, pas sur la traduction affichée — « ${enEdition.valeur} »`),
+  );
+  check(
+    corpsAffiche.texte === COMMENTS[0].translations.fr.text,
+    say(`… alors que le corps AFFICHÉ est bien la traduction servie — « ${corpsAffiche.texte} »`),
   );
   check(
     enEdition.gestes === 0,
@@ -426,7 +484,64 @@ async function runScheme({ browser, base, scheme, check }) {
   await page.waitForSelector(`[data-comment-edit-field="${MINE}"]`, { state: 'detached' });
   check(sent.length === avantEdition, say(`« Annuler » referme le champ SANS aucune requête — ${sent.length - avantEdition}`));
 
-  // ------------------------------------------------ 7. aucune erreur de page
+  // ------------------------------------------------ 7. ENREGISTRER, et la langue qui part avec
+  /* CE BLOC MANQUAIT (revue #7135) : le gate ouvrait le champ, l'annulait, et
+     n'appuyait JAMAIS sur « Enregistrer ». Tout ce qui se joue à
+     l'enregistrement — le texte qui se repeint, et surtout la LANGUE déclarée
+     à la passerelle — n'était donc mesuré par rien, ni ici ni en `bun test` :
+     c'est là que le relabel de la langue est passé. */
+  const CORRIGE = 'Lo probé esta mañana, aguanta perfectamente.';
+  await page.click(`[data-comment-row="${MINE}"] [data-comment-gesture="edit"]`);
+  await page.waitForSelector(`[data-comment-edit-field="${MINE}"]`);
+  await page.fill(`[data-comment-edit-field="${MINE}"]`, CORRIGE);
+  await page.click(`[data-comment-row="${MINE}"] [data-comment-edit-save]`);
+  await page.waitForSelector(`[data-comment-edit-field="${MINE}"]`, { state: 'detached' });
+  await page.waitForTimeout(400);
+
+  const patch = sent.filter((r) => r.method === 'PATCH' && r.path.endsWith(MINE)).at(-1);
+  check(patch !== undefined, say(`« Enregistrer » ENVOIE son PATCH — ${JSON.stringify(patch ?? null)}`));
+  check(
+    patch?.body?.content === CORRIGE,
+    say(`… avec le texte corrigé — « ${patch?.body?.content ?? ''} »`),
+  );
+  /* L'INVARIANT DE #6600 : corriger une faute ne change pas la langue d'un
+     texte. La langue d'interface est `fr` (le contexte est ouvert en fr-FR) ;
+     déclarer `fr` ici ferait retraduire l'espagnol comme du français pour
+     TOUS les lecteurs, la passerelle écrivant la déclaration et purgeant les
+     traductions dans le même mouvement. */
+  check(
+    patch?.body?.originalLanguage === 'es',
+    say(`… et DÉCLARE la langue du commentaire corrigé, jamais celle de l'interface — « ${patch?.body?.originalLanguage ?? '(absente)'} »`),
+  );
+  const apresEnregistrement = await page.$eval(`[data-comment-row="${MINE}"] p.text-body`, (p) => (p.textContent ?? '').trim());
+  check(
+    apresEnregistrement === CORRIGE,
+    say(`et la rangée peint le texte servi, traductions purgées — « ${apresEnregistrement} »`),
+  );
+
+  // ------------------------------------------------ 8. SUPPRIMER, et les compteurs qui suivent
+  /* LE TRAVAIL PRINCIPAL DU LOT N'AVAIT AUCUN TÉMOIN DE NAVIGATEUR : le
+     compteur de commentaires de la publication ne bougeait que dans DEUX
+     caches sur quatre, et le symptôme — « on supprime son commentaire, la
+     carte garde l'ancien chiffre » — se lit ICI, sur la rangée de
+     statistiques que la fiche peint au-dessus du fil. Un témoin de cache dit
+     que la valeur a changé ; celui-ci dit qu'un pixel l'a montrée. */
+  const compteurCartes = () =>
+    page.$eval('[data-feed-actions]', (row) => ((row.children[1]?.textContent ?? '').trim()));
+  const avantSuppression = await compteurCartes();
+  await page.click(`[data-comment-row="${MINE}"] [data-comment-gesture="delete"]`);
+  await page.waitForSelector(`[data-comment-row="${MINE}"]`, { state: 'detached' });
+  const apresSuppression = await compteurCartes();
+  check(
+    avantSuppression === String(COMMENTS.length) && apresSuppression === String(COMMENTS.length - 1),
+    say(`SUPPRIMER retire la rangée ET décrémente le compteur de la publication — « ${avantSuppression} » puis « ${apresSuppression} »`),
+  );
+  check(
+    sent.some((r) => r.method === 'DELETE' && r.path.endsWith(MINE)),
+    say(`et la suppression est bien PARTIE — ${JSON.stringify(sent.filter((r) => r.method === 'DELETE'))}`),
+  );
+
+  // ------------------------------------------------ 9. aucune erreur de page
   check(errors.length === 0, say(`aucune erreur de page — ${JSON.stringify(errors)}`));
   await context.close();
 }
