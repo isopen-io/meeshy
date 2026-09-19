@@ -18,6 +18,7 @@ import { apiDeps } from '@/lib/api/deps';
 import { markStoryViewedAction, storyReactionAction, useStoryFeed, useStoryPost } from '@/lib/api/query';
 import { attachmentSrc } from '@/lib/api/media-url';
 import { sessionStore } from '@/lib/api/session';
+import { storyReactionAnnouncement } from '@/lib/api/story-reactions';
 import { resolveViewer } from '@/lib/api/viewer';
 import { backgroundCss } from '@/lib/canvas/background';
 import { parseCanvasDocument } from '@/lib/canvas/document';
@@ -655,8 +656,8 @@ export default function StoryScreen() {
       ...(showsSound ? { sound: () => setStorySoundMuted((m) => !m) } : {}),
       react: () => {
         void storyReactionAction(storyId).then((result) => {
-          if (!result.ok) announce(translate(interfaceLanguage, result.message));
-          else if (result.notice !== undefined) announce(translate(interfaceLanguage, result.notice));
+          const key = storyReactionAnnouncement(result);
+          if (key !== null) announce(translate(interfaceLanguage, key));
         });
       },
       /* « Répondre » et « Commentaires » ouvrent la MÊME feuille : une seule

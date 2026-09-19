@@ -46,7 +46,7 @@ export type StoryReactionDeps = {
 
 /** Une CLÉ de catalogue, jamais un texte traduit — seule la surface qui
  * annonce connaît la langue d'interface. */
-type StoryReactionMessageKey = 'feed.like.error' | 'feed.gesture.pending';
+export type StoryReactionMessageKey = 'feed.like.error' | 'feed.gesture.pending';
 
 export const STORY_REACTION_FAILED: StoryReactionMessageKey = 'feed.like.error';
 export const STORY_REACTION_PENDING: StoryReactionMessageKey = 'feed.gesture.pending';
@@ -127,4 +127,23 @@ export function viewerReactedToStory(
 ): boolean {
   const corpus = queryClient.getQueryData<readonly StoryFeedPost[]>(STORY_FEED_QUERY_KEY);
   return hasReactedToStory(corpus?.find((s) => s.id === storyId), emoji);
+}
+
+/**
+ * **CE QU'IL FAUT DIRE, ET QUAND SE TAIRE** (#7112, revue) — l'adaptateur
+ * `issue → annonce`, extrait de l'hôte (`routes/story.tsx`) pour la raison
+ * qui l'a rendu nécessaire : aucun fichier de test du dépôt n'importe cet
+ * hôte, et sous fixtures `sendStoryReaction` rend `{ok:true}` de façon
+ * SYNCHRONE — ni `!result.ok` ni `result.notice` n'y sont joignables. La
+ * règle vivait donc à l'unique endroit où ni un témoin unitaire ni un gate
+ * de navigateur ne pouvait l'atteindre : effaçable demain sans qu'un seul
+ * gate ne rougisse.
+ *
+ * Trois issues, DEUX annonces — le succès NET se tait. Un geste confirmé a
+ * déjà son retour : le cœur a basculé sous le doigt, et son compte avec.
+ * Une annonce de plus serait du bruit sur chaque tap.
+ */
+export function storyReactionAnnouncement(result: StoryReactionResult): StoryReactionMessageKey | null {
+  if (!result.ok) return result.message;
+  return result.notice ?? null;
 }
