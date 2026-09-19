@@ -33229,3 +33229,50 @@ Un `overlay` **ne participe jamais** au calcul de taille de son hôte. `Color.cl
 **Ce que les deux enseignent ensemble.** Une garde de source mesure un TEXTE, et un texte a deux ennemis : ce qu'on écrit à côté du code (les commentaires) et l'endroit où le code vit (le fichier). Une garde robuste dépouille le premier et suit l'unité pour le second. **Avant de croire un rouge de garde de source, vérifier qu'elle mesure encore ce qu'elle croit mesurer** — ces deux-là accusaient un défaut qui n'existait pas.
 
 **Corollaire d'exception.** `FixedFontSizeGuardTests` n'a d'exception que pour la dette GELÉE : un fichier NEUF n'y entre jamais, quel que soit le commentaire qui invoque la doctrine des glyphes décoratifs. Une exception qui se réclame d'une doctrine sans être inscrite au registre de la dette n'existe pas.
+
+## Leçon 632 — un gate en CHAÎNE (`&&`) ne prouve que les étapes AVANT celle qui rougit
+
+**Un gate en CHAÎNE (`&&`) ne prouve QUE les étapes avant celle qui rougit — une correction qui répare la première étape signalée peut en laisser une seconde, jamais jouée, derrière elle.**
+
+PR #7033 (texte enrichi, liens/mentions cliquables) : `Quality (bun)` rapportait UNE seule défaillance, `check-utilities.mjs` (une classe `x` de témoin sans règle CSS). Corrigée, `bun run gate` complet — jamais joué localement sur cette PR avant ce tour — a rougi une SECONDE fois, sur `check-reading-mode.mjs`, une étape que le premier échec avait empêché d'atteindre en CI (`&&` s'arrête au premier `exit 1`). 14 défauts : « le `<p>` de texte servi n'est pas `aria-hidden` ».
+
+Le défaut n'en était pas un — c'était le GATE qui datait. `focal-row.tsx` (même PR) était passé d'un masque de CONTENEUR (`aria-hidden` sur le `<p>` entier) à un masque FEUILLE PAR FEUILLE (`RichText`/`plainTextHidden`, un `<span aria-hidden>` par segment non interactif), précisément pour qu'un lien de mention sous ce paragraphe reste focusable et nommé — masquer le conteneur entier aurait recréé la violation ARIA inverse (`aria-hidden-focus`). Le gate `check-identity.mjs` (#5935), écrit pour l'ANCIEN masque, cherchait l'attribut au mauvais niveau : la garde mesurait une IMPLÉMENTATION, pas l'invariant qu'elle prétendait garder (« la phrase n'est jamais lue deux fois »).
+
+> **Un `&&` dans un script `gate` composite cache tout ce qui suit la première rougeur — corriger le défaut RAPPORTÉ ne prouve rien sur les étapes qu'il empêchait d'atteindre.** Jouer le gate ENTIER, jusqu'au bout, après CHAQUE correction — jamais seulement l'étape nommée par le CI. Et quand un gate écrit avant une refonte accuse le code QUE la refonte vient sciemment de changer (ici documenté dans le commit ET le doc-comment du composant), lire d'abord si c'est le CODE qui régresse ou le GATE qui a un cran de retard : ici la nouvelle stratégie ARIA était strictement MEILLEURE (liens atteignables) que celle que le gate réclamait — la corriger revenait à réintroduire le défaut que la PR venait de corriger.
+
+Discrimination : `git stash` sur `check-identity.mjs` seul → 14/14 défauts réapparaissent à l'identique (message, lignes) ; `git stash pop` → 0 défaut. Détail : `apps/web-v2/scripts/lib/check-identity.mjs`, `apps/web-v2/src/components/rich-text.tsx`, `apps/web-v2/src/components/focal-row.tsx`.
+## Leçon 631 — un COMMENTAIRE compte dans le budget de taille, et un lot qui explique bien peut faire rougir un fichier hors budget
+
+2026-09-19, #7022 (PR #7047). Le lot faisait passer `NotificationService.ts` de
+6119 à **6126** lignes, et `gateway-file-size-budget` l'a refusé : le fichier est
+hors budget de longue date, et CLAUDE.md interdit tout AJOUT à un tel fichier —
+« une dette héritée ne se solde pas en montant le plafond ».
+
+Ce qui surprend, et qui est la leçon : **le lot n'ajoutait presque que du
+commentaire.** Sur ses 16 lignes nettes, deux étaient du code (un `import`, une
+délégation) ; les quatorze autres expliquaient pourquoi la composition d'adresse
+devait vivre ailleurs. Un excellent commentaire reste des lignes, et un gardien
+de taille ne distingue pas les deux. Le réflexe « j'ajoute juste une explication,
+ça ne compte pas » est faux sur tout fichier proche de sa borne.
+
+**Ce qu'il faut regarder pour choisir ce qui SORT.** La tentation est de couper
+l'explication qu'on vient d'écrire — c'est le pire choix, on retire le savoir et
+on garde la dette. Ici, la bonne pièce se reconnaissait à un aveu :
+`toPublicMediaUrl` n'était plus qu'une **délégation d'une ligne**, et la seule
+chose qu'elle ajoutait à la règle qu'elle appelait était un repli
+`https://gate.meeshy.me` — un nom d'hôte de DÉPLOIEMENT écrit dans un service de
+domaine, c'est-à-dire exactement ce que le lot retirait de la donnée. Le
+correctif de budget et le correctif de conception étaient le même geste :
+`publicMediaUrlFromEnv` vit désormais à côté de sa règle, aucun appelant ne nomme
+plus d'hôte, et le fichier retombe à 6114.
+
+> **Quand un garde de taille rougit, chercher la pièce qui CONTREDIT le lot,
+> pas la plus courte à supprimer.** Un fichier hors budget contient presque
+> toujours quelque chose qui n'aurait jamais dû y être ; le garde est l'occasion
+> de le trouver, pas une taxe à payer.
+
+Et un corollaire de séquence : **ce rouge était CACHÉ par un autre.** `Test
+gateway` ne pouvait pas être lu tant que « Peaux web-v2 » mourait sur une
+exception ; le budget n'est apparu qu'une fois le premier gate réparé. Un dépôt
+qui traîne un rouge ne traîne jamais UN rouge — voir
+`reference_a_quiet_branch_is_not_a_green_branch`.

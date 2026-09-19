@@ -36,10 +36,25 @@
 /** Un identifiant MongoDB servi par la passerelle : 24 caractères hexadécimaux. */
 export const OBJECT_ID_PATTERN = '^[0-9a-fA-F]{24}$';
 
+/**
+ * Les bornes de pagination de CETTE route — la seule source, lue par le schéma
+ * (pour sa description) et par le handler (`validatePagination`, `core-list.ts`).
+ *
+ * La description annonçait « max 50, default 15 » pour un handler qui
+ * appliquait `{ defaultLimit: 30, maxLimit: 100 }` : les quatre nombres étaient
+ * faux (#6994). L'écart ne vient pas d'une étourderie mais de ce qu'une borne
+ * était écrite DEUX FOIS, à deux endroits qu'aucun lien ne rapprochait. Depuis
+ * qu'elle est interpolée, changer l'une sans l'autre n'est plus possible.
+ */
+export const CONVERSATION_LIST_PAGINATION = { defaultLimit: 30, maxLimit: 100 } as const;
+
 export const conversationListQuerystringSchema = {
   type: 'object',
   properties: {
-    limit: { type: 'string', description: 'Maximum number of conversations to return (max 50, default 15)' },
+    limit: {
+      type: 'string',
+      description: `Maximum number of conversations to return (max ${CONVERSATION_LIST_PAGINATION.maxLimit}, default ${CONVERSATION_LIST_PAGINATION.defaultLimit})`,
+    },
     offset: { type: 'string', description: 'Number of conversations to skip for pagination (default 0)' },
     before: {
       type: 'string',

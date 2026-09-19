@@ -181,6 +181,19 @@ export const ROUTES = {
      plutôt que de planter sur un lien périmé. */
   post: { pattern: '/post/$post', screen: publicationScreen },
   postDeepLink: { pattern: '/feeds/post/$post', screen: publicationScreen },
+  /* LE PROFIL PUBLIC DE QUELQU'UN et LES PUBLICATIONS D'UN MOT-CLÉ (#7032) —
+     les DEUX adresses que le texte enrichi vise, et elles arrivent AVANT les
+     liens qui les visent : une mention qui tomberait sur « adresse inconnue »
+     serait un contrôle qui ment (loi 4), le défaut que le rail des stories a
+     déjà payé plus haut. Nomenclature LEGACY reprise (D-5) : `apps/web/app/u/`
+     et `apps/web/app/hashtag/[tag]` servent déjà ces chemins, et un lien déjà
+     partagé doit continuer de s'ouvrir après la bascule.
+
+     Le PSEUDO, jamais l'identifiant : c'est ce qu'un `@handle` porte dans le
+     texte, et la passerelle résout les deux à la même adresse
+     (`servirProfilPublic`, insensible à la casse sur le pseudo). */
+  userProfile: { pattern: '/u/$username', screen: () => import('@/routes/user-profile') },
+  hashtag: { pattern: '/hashtag/$tag', screen: () => import('@/routes/hashtag') },
   links: { pattern: '/links', screen: () => import('@/routes/links') },
   /* LES LIENS DE PARTAGE (#6361, D-63) — miroir `Route.shareLinks`, puis
      `CreateShareLinkView` et `ShareLinkDetailView` (`Router.swift`,
