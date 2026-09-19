@@ -7,6 +7,7 @@ import { useOnline } from '@/lib/net/online';
 import { useRoute } from '@/lib/router';
 import { nextSyncPillExpiry, resolveSyncPill, syncPillLabel } from '@/lib/view/sync-pill';
 import { syncPillTop } from '@/lib/view/sync-pill-offset';
+import { pillAnnouncesOffline } from '@/lib/view/sync-pill-voice';
 
 /**
  * **LA PASTILLE DE SYNCHRONISATION** (#6080) — miroir `SyncPill` /
@@ -62,7 +63,8 @@ export function SyncPill() {
   const online = useOnline();
   const entries = useStore(outboxStore, (s) => s.entries);
   const [now, setNow] = useState(() => Date.now());
-  const top = syncPillTop(useRoute().key);
+  const routeKey = useRoute().key;
+  const top = syncPillTop(routeKey);
 
   /**
    * TOUTES LES CONVERSATIONS, jamais celle qui est ouverte : une pastille
@@ -87,6 +89,12 @@ export function SyncPill() {
   }, [echeance]);
 
   if (state.kind === 'hidden') return null;
+  /* UNE SEULE VOIX POUR L'ÉTAT RÉSEAU (revue #7083, D-11) — sur les routes qui
+     peignent leur PROPRE carte hors ligne, la pastille disait le même mot au
+     même pixel, à demi recouvert. La loi et ses raisons vivent dans
+     `sync-pill-voice.ts` ; `failed` et `syncing` ne se taisent jamais, ils
+     parlent de l'outbox et aucun écran ne les double. */
+  if (state.kind === 'offline' && !pillAnnouncesOffline(routeKey)) return null;
 
   const teinte = TEINTE[state.kind];
 

@@ -13,10 +13,12 @@ import { useStore } from 'zustand/react';
 
 import { Avatar } from '@/components/avatar';
 import { Glyph } from '@/components/glyph';
+import { STORY_ACTION_RAIL_CORRIDOR, StoryActionRail, type StoryActionRailHandlers } from '@/components/story-action-rail';
 import { apiDeps } from '@/lib/api/deps';
-import { markStoryViewedAction, useStoryFeed, useStoryPost } from '@/lib/api/query';
+import { markStoryViewedAction, storyReactionAction, useStoryFeed, useStoryPost } from '@/lib/api/query';
 import { attachmentSrc } from '@/lib/api/media-url';
 import { sessionStore } from '@/lib/api/session';
+import { storyReactionAnnouncement } from '@/lib/api/story-reactions';
 import { resolveViewer } from '@/lib/api/viewer';
 import { backgroundCss } from '@/lib/canvas/background';
 import { parseCanvasDocument } from '@/lib/canvas/document';
@@ -30,11 +32,19 @@ import {
   isDoubleTap,
   isDrag,
 } from '@/lib/stories/gesture';
+import {
+  freezeStoryActionRail,
+  reconcileStoryActionRailComments,
+  type FrozenStoryActionRail,
+} from '@/lib/stories/action-rail';
+import { STORY_DEFAULT_REACTION, hasReactedToStory } from '@/lib/stories/reaction';
 import { resolveStoryCaption } from '@/lib/stories/caption';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { translate } from '@/lib/i18n-catalog';
 import { resolveStoryMediaCaption } from '@/lib/stories/media-caption';
 import { readerCardFraming } from '@/lib/stories/framing';
 
-import { SoundToggle, StoryMediaLayer } from './story-parts';
+import { CloseButton, ProgressBars, StoryMediaLayer } from './story-parts';
 import {
   currentStoryAt,
   groupForPlayback,
@@ -51,7 +61,9 @@ import {
   type StoryPlaybackStory,
 } from '@/lib/stories/playback';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
+import { screenGestureYields, shortcutYieldsToTarget } from '@/lib/view/shortcut-scope';
 import { useElementSize } from '@/lib/view/use-element-size';
+import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { useParams } from '@/lib/router';
 import { Link, href, navigate } from '@/routes/route-table';
@@ -59,6 +71,13 @@ import { Link, href, navigate } from '@/routes/route-table';
 /** L'hôte des scènes v3 (#6899) — chargé À LA DEMANDE, motif D-54 : une story
  * v1 ne paie ni ses lois (image seule, bandes, son de fond), ni le moteur. */
 const StorySceneLayer = lazy(() => import('./story-scene-layer'));
+
+/** Le fil de commentaires — chargé À LA DEMANDE (motif D-54) : un lecteur qui
+ * regarde des stories sans les commenter ne paie ni la liste, ni le
+ * composeur, ni leur requête. */
+const StoryCommentsSheet = lazy(() =>
+  import('@/components/story-comments-sheet').then((m) => ({ default: m.StoryCommentsSheet })),
+);
 
 /**
  * **LE LECTEUR PLEIN ÉCRAN DE STORIES** (#5817, D-1) — la référence est le
@@ -141,92 +160,6 @@ function authorLabel(group: StoryPlaybackGroup): string {
   return a.displayName ?? (fullName !== '' ? fullName : (a.username ?? ''));
 }
 
-function CloseButton({ onClose }: { readonly onClose: () => void }) {
-  return (
-    <button
-      type="button"
-      onPointerDown={(e) => e.stopPropagation()}
-      onClick={onClose}
-      aria-label="Fermer"
-      className="pointer-events-auto grid shrink-0 place-items-center rounded-full"
-      style={{ width: 44, height: 44, background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.12)' }}
-    >
-      <Glyph name="x" size={16} style={{ color: '#fff' }} />
-    </button>
-  );
-}
-
-/**
- * `StoryProgressBarsView` (`StoryViewerView+Content.swift:3128-3177`) —
- * capsules de hauteur 3, `gap: 3`, piste blanc 20 % ; segments PASSÉS blanc
- * PLEIN, segment COURANT le dégradé `indigo500 → error → indigo400`. Le
- * premier jet peignait TOUS les segments en indigo de marque : sur le fond
- * par défaut d'une story texte — le gradient de marque, précisément — la
- * progression devenait invisible, et le passé ne se distinguait plus du
- * présent (mesuré sur `story-light.png`, deux barres grises identiques).
- *
- * **LA FRACTION NE PASSE PAS PAR L'ÉTAT** — `fillRef` reçoit un
- * `transform: scaleX()` écrit à même le DOM à chaque image. Poser la
- * progression en `useState` re-rendait l'écran ENTIER soixante fois par
- * seconde (l'image, l'en-tête, la légende, la scène), pour animer trois
- * pixels de haut ; iOS évite exactement cela (« évite de committer le
- * `@State` `progress` », granularité 1/300). `scaleX` plutôt que `width` :
- * la propriété n'apparaît dans AUCUN objet `style` rendu, donc aucun rendu
- * ne peut l'écraser, et l'animation reste sur le compositeur.
- */
-function ProgressBars({
-  group,
-  index,
-  slideKey,
-  barRef,
-  fillRef,
-}: {
-  readonly group: StoryPlaybackGroup;
-  readonly index: number;
-  readonly slideKey: string;
-  readonly barRef: { current: HTMLDivElement | null };
-  readonly fillRef: { current: HTMLSpanElement | null };
-}) {
-  return (
-    <div
-      ref={barRef}
-      role="progressbar"
-      aria-label={`Story ${index + 1} sur ${group.stories.length}`}
-      aria-valuemin={0}
-      aria-valuemax={100}
-      aria-valuenow={0}
-      className="flex"
-      style={{ gap: 3, height: 3 }}
-    >
-      {group.stories.map((story, i) => (
-        <span
-          key={story.id}
-          aria-hidden="true"
-          className="flex-1 overflow-hidden rounded-full"
-          style={{ background: 'rgba(255,255,255,0.2)' }}
-        >
-          {i === index ? (
-            <span
-              key={slideKey}
-              ref={fillRef}
-              className="block size-full rounded-full"
-              style={{
-                transform: 'scaleX(0)',
-                transformOrigin: 'left center',
-                willChange: 'transform',
-                background:
-                  'linear-gradient(90deg, var(--color-ios-brand), var(--ios-error), var(--color-i400))',
-              }}
-            />
-          ) : (
-            <span className="block size-full rounded-full" style={{ background: i < index ? '#fff' : 'transparent' }} />
-          )}
-        </span>
-      ))}
-    </div>
-  );
-}
-
 export default function StoryScreen() {
   const { post } = useParams<'/story/$post'>();
   const [currentId, setCurrentId] = useState(post);
@@ -244,6 +177,7 @@ export default function StoryScreen() {
   const viewer = useMemo(() => resolveViewer({ source: apiDeps.source, session }), [session]);
   const reader = useReaderLanguages();
   const online = useOnline();
+  const interfaceLanguage = currentInterfaceLanguage();
   const feed = useStoryFeed();
 
   /* L'ORDRE DES AUTEURS EST FIGÉ À L'OUVERTURE (`stableGroupOrder`,
@@ -373,6 +307,34 @@ export default function StoryScreen() {
      laisse l'en-tête lisible. */
   const [chromeHidden, setChromeHidden] = useState(false);
   const [mediaFailed, setMediaFailed] = useState(false);
+  /**
+   * **LE PLAN DU RAIL, FIGÉ À L'ENTRÉE DE LA DIAPOSITIVE** (directive porteur
+   * 2026-07-10, `StoryActionRailPlan`) — la loi vit dans
+   * `lib/stories/action-rail.ts` ; ici on ne fait que l'appeler au bon
+   * moment. Le gel porte l'identité de la story, comme `mediaDuration` et
+   * `soundAvailability` : une remise à zéro « à chaque story » serait la
+   * même course entre les effets du parent et ceux de l'enfant.
+   */
+  const [frozenRail, setFrozenRail] = useState<FrozenStoryActionRail | null>(null);
+  /** Le fil de commentaires, ouvert par « Commentaires » ou par « Répondre »
+   * — une seule zone de saisie pour les deux (spécification porteur du
+   * 2026-05-28, citée par `StoryComposerBarView`). */
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  /**
+   * **CE QUI AVAIT LE FOCUS QUAND LA FEUILLE S'EST OUVERTE**, mémorisé par
+   * l'HÔTE et non par la feuille (revue #7112) — parce que c'est l'hôte qui
+   * le détruit : il rend le rail `inert` à l'ouverture (D-90), et un
+   * sous-arbre inerte ÉJECTE le focus qu'il contient. Une feuille qui lirait
+   * `document.activeElement` à son montage trouverait déjà `<body>` — mesuré
+   * au navigateur, c'est exactement ce que le témoin a rendu avant ce
+   * correctif. On retient donc AVANT d'ouvrir, et on rend APRÈS avoir
+   * refermé, quand l'inertie est levée.
+   */
+  const returnFocusRef = useRef<HTMLElement | null>(null);
+  const openComments = useCallback(() => {
+    returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setCommentsOpen(true);
+  }, []);
   const showsImage = mediaSrc !== '' && !mediaFailed;
   /**
    * « PRÊT » ET LA DURÉE APPARTIENNENT À UNE STORY, et portent son identité
@@ -488,7 +450,23 @@ export default function StoryScreen() {
   });
   const lastCenterTapRef = useRef(-Infinity);
 
+  /**
+   * **LA FEUILLE RÉCLAME LE GESTE COMME ELLE RÉCLAME LA TOUCHE** (#7112,
+   * revue). La pause posée à l'ouverture ne suffisait pas : elle est un
+   * `useState` semé UNE fois, que `resume()` défait sans que rien ne la
+   * ré-affirme. La feuille n'occupe que le bas de l'écran ; un tap sur la
+   * scène NUE au-dessus valait « reprendre » (`decideTouchDown`), la story
+   * avançait six secondes plus tard, `setCommentsOpen(false)` fermait le fil
+   * — et le commentaire à moitié écrit partait avec. C'est le symptôme 2 de
+   * D-91 par l'autre entrée : la cession avait été écrite pour les touches,
+   * jamais pour le doigt. La loi vit à UN seul endroit, avec sa jumelle du
+   * clavier (`lib/view/shortcut-scope.ts`).
+   */
+  const gestureYields = (e: ReactPointerEvent<HTMLDivElement>): boolean =>
+    screenGestureYields({ target: e.target, layerOpen: commentsOpen });
+
   const onPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (gestureYields(e)) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const zone = classifyTapZone((e.clientX - rect.left) / rect.width);
     const g = gestureRef.current;
@@ -516,6 +494,7 @@ export default function StoryScreen() {
   const onPointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
     const g = gestureRef.current;
     clearHoldTimer();
+    if (gestureYields(e)) return;
     if (g.holdFired || g.resumedThisGesture) return;
 
     const rect = e.currentTarget.getBoundingClientRect();
@@ -565,18 +544,134 @@ export default function StoryScreen() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      /* ÉCHAP D'ABORD, ET SANS CONDITION : fermer depuis un champ reste juste,
+         et la feuille de commentaires, qui veut le garder pour elle,
+         l'intercepte en phase de CAPTURE (`story-comments-sheet.tsx`). */
+      if (e.key === 'Escape') {
+        closeViewer();
+        return;
+      }
+      /* LE RESTE APPARTIENT AU NŒUD QUI A LE FOCUS, TOUCHE PAR TOUCHE
+         (`lib/view/shortcut-scope.ts`, D-91). Sans cette cession, mesuré au
+         navigateur : « a b » tapé dans le composeur de commentaire rendait
+         « ab » (le raccourci de pause avalait l'espace), une flèche pendant
+         la frappe faisait avancer la story — ce qui ferme la feuille et
+         emporte le brouillon — et Espace n'activait AUCUN bouton du lecteur,
+         le `click` d'un `<button>` naissant d'un `keyup` que le
+         `preventDefault` ci-dessous supprimait. La cession est FINE : un
+         bouton ne réclame qu'Espace et Entrée, sinon cliquer « muet » (ce
+         qui le focalise) figerait les flèches jusqu'au clic suivant. */
+      if (shortcutYieldsToTarget({ target: e.target, key: e.key })) return;
       if (e.key === 'ArrowLeft') advance('previous');
       else if (e.key === 'ArrowRight') advance('next');
       else if (e.key === ' ') {
         e.preventDefault();
         if (paused) resume();
         else pause();
-      } else if (e.key === 'Escape') closeViewer();
-      else if ((e.key === 'm' || e.key === 'M') && showsSound) setStorySoundMuted((m) => !m);
+      } else if (e.key === 'm' || e.key === 'M') {
+        if (showsSound) setStorySoundMuted((m) => !m);
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [advance, paused, pause, resume, closeViewer, showsSound]);
+
+  /* LE GEL — re-résolu au CHANGEMENT de story, et la seule remontée que le
+     lecteur apprend ensuite est le SON (le sondage de piste audio conclut
+     souvent après l'entrée). Le compteur de commentaires, lui, est déjà dans
+     le corpus : sa RÉCONCILIATION est un second chemin, appliqué ci-dessous
+     quand le corpus se rafraîchit sous le lecteur. */
+  useEffect(() => {
+    if (currentStory === undefined) return;
+    setFrozenRail((current) =>
+      freezeStoryActionRail(current, {
+        storyId: currentStory.id,
+        isOwnStory: group?.isMine === true,
+        /* `canReply` — la capacité que l'hôte OFFRE, miroir de
+           `onReplyToStory != nil` : le web répond par le fil de commentaires
+           de la publication, donc il peut toujours. */
+        canReply: true,
+        hasAudibleSound: showsSound,
+        commentCount: currentStory.commentCount ?? 0,
+        /* Le Prisme a-t-il quelque chose à explorer ? Le lecteur web ne sert
+           pas encore de sélecteur de langue : `false` retire le bouton, et
+           `storyActionRailButtons` le fait sans branche à oublier (loi 4). */
+        hasTranslatableContent: false,
+      }),
+    );
+  }, [currentStory, group?.isMine, showsSound]);
+
+  useEffect(() => {
+    if (currentStory === undefined) return;
+    const count = currentStory.commentCount ?? 0;
+    if (count <= 0) return;
+    setFrozenRail((current) =>
+      current === null ? current : reconcileStoryActionRailComments(current, { storyId: currentStory.id, commentCount: count }),
+    );
+  }, [currentStory]);
+
+  /* LA FEUILLE MET LA LECTURE EN PAUSE — sans cela, la story avancerait sous
+     le fil qu'on lit, et le composeur changerait de publication à mi-phrase. */
+  useEffect(() => {
+    if (!commentsOpen) return;
+    pause();
+    return () => resume();
+  }, [commentsOpen, pause, resume]);
+
+  /* ET LE FOCUS REVIENT D'OÙ IL EST PARTI. L'effet tourne APRÈS le commit qui
+     retire `inert` du rail : rendre le focus plus tôt le verrait rejeté par
+     l'inertie encore posée. `isConnected` parce que la feuille se ferme AUSSI
+     quand la story change — le bouton d'origine peut alors n'être plus là. */
+  useEffect(() => {
+    if (commentsOpen) return;
+    const target = returnFocusRef.current;
+    returnFocusRef.current = null;
+    if (target !== null && target.isConnected) target.focus();
+  }, [commentsOpen]);
+
+  /* Une nouvelle story ferme le fil : il appartenait à la précédente. */
+  useEffect(() => {
+    setCommentsOpen(false);
+  }, [currentStory?.id]);
+
+  /**
+   * **CE QUE LE GESTE DE RÉACTION APPREND DOIT S'ENTENDRE** (#7112, revue).
+   * `performStoryReaction` distingue trois issues — parti, POSÉ MAIS NON
+   * CONFIRMÉ (réseau, 5xx, 429), REFUSÉ et défait — et rendait ses deux clés
+   * (`STORY_REACTION_PENDING`, `STORY_REACTION_FAILED`) à un appelant qui les
+   * JETAIT (`void storyReactionAction(...)`). Mesuré : aucun site du dépôt ne
+   * lisait ces clés. Un refus permanent retirait donc le cœur SANS un mot —
+   * indiscernable d'un second tap — et un geste hors ligne ressemblait à un
+   * geste confirmé. C'est la « loi qui calcule une valeur que personne ne
+   * lit », et le remède est celui que les Réels emploient déjà sur la MÊME
+   * grammaire d'issues (`usePostGesture` → `reels.tsx`) : une région
+   * `role="status"` unique, la dernière annonce gagnant (`useLiveAnnouncer`).
+   */
+  const { text: announcement, announce } = useLiveAnnouncer();
+
+  const railHandlers = useMemo<StoryActionRailHandlers>(() => {
+    if (currentStory === undefined) return {};
+    const storyId = currentStory.id;
+    return {
+      ...(showsSound ? { sound: () => setStorySoundMuted((m) => !m) } : {}),
+      react: () => {
+        void storyReactionAction(storyId).then((result) => {
+          const key = storyReactionAnnouncement(result);
+          if (key !== null) announce(translate(interfaceLanguage, key));
+        });
+      },
+      /* « Répondre » et « Commentaires » ouvrent la MÊME feuille : une seule
+         zone de saisie, et le bouton de réponse n'est donc jamais un second
+         composeur (spécification porteur 2026-05-28). */
+      reply: openComments,
+      comments: openComments,
+    };
+  }, [currentStory, showsSound, announce, interfaceLanguage, openComments]);
+
+  /* LE RAIL EST-IL PEINT ? Une seule réponse, lue par le rail ET par la
+     légende qui doit lui laisser la place. */
+  const railShown =
+    currentStory !== undefined && frozenRail !== null && frozenRail.storyId === currentStory.id && Object.keys(railHandlers).length > 0;
 
   const resolvedContent = useMemo(() => {
     if (currentStory === undefined) return null;
@@ -640,6 +735,15 @@ export default function StoryScreen() {
       <div className="pointer-events-none absolute end-3" style={{ top: 'calc(var(--safe-top, 0px) + 12px)', zIndex: 2 }}>
         {loading || notFound ? <CloseButton onClose={closeViewer} /> : null}
       </div>
+
+      {/* L'UNIQUE RÉGION VIVANTE DU LECTEUR — l'issue d'un geste s'y dit, et
+          nulle part ailleurs (D-11 : jamais deux notifications pour un même
+          événement). Elle vit à la RACINE, hors du bloc conditionnel de la
+          scène : une région live démontée entre l'annonce et sa lecture n'est
+          jamais annoncée, et le corpus change sous elle à chaque avance. */}
+      <p role="status" aria-live="polite" className="sr-only">
+        {announcement}
+      </p>
 
       {loading ? (
         <div className="grid flex-1 place-items-center" role="status">
@@ -751,7 +855,19 @@ export default function StoryScreen() {
               opacity: chromeHidden ? 0 : 1,
               transition: 'opacity 180ms ease',
             }}
-            aria-hidden={chromeHidden ? true : undefined}
+            /* MASQUÉ ⇒ INERTE, jamais `aria-hidden` seul (D-90). Cette
+               en-tête porte un CONTRÔLE — la croix de fermeture — et
+               `CloseButton` ré-active `pointer-events-auto` sur lui-même :
+               le `pointer-events-none` du conteneur ne le retenait pas.
+               Pendant une pause par appui long, une croix invisible restait
+               donc cliquable et tabulable, et `aria-hidden` par-dessus un
+               bouton focusable est en outre la faute `aria-hidden-focus`.
+               Mesuré au navigateur, aux quatre configurations
+               (`check-story-scene.mjs`, « la croix doit rester MONTÉE mais
+               devenir INATTEIGNABLE »). La LÉGENDE, douze lignes plus bas,
+               garde `aria-hidden` : elle ne contient que des `<p>` — rien
+               d'atteignable, donc rien à rendre inerte. */
+            inert={chromeHidden}
           >
             <ProgressBars
               group={group}
@@ -788,9 +904,14 @@ export default function StoryScreen() {
                   {shortRelativeTime(new Date(currentStory.createdAt), new Date(), reader.locale)}
                 </span>
               </div>
-              {showsSound ? (
-                <SoundToggle muted={storySoundMuted} onToggle={() => setStorySoundMuted((m) => !m)} />
-              ) : null}
+              {/* LE SON A QUITTÉ CETTE LIGNE POUR LA TÊTE DU RAIL (#4508,
+                  arbitrage écrit avant d'être codé, cité par
+                  `StoryViewerView+Sidebar.swift:479-491`) : « le son est le
+                  SEUL élément du rail qui décrit ce qui est en train de SE
+                  PASSER ; tous les autres décrivent ce qu'on peut FAIRE. Un
+                  état se lit en premier, une action s'atteint au pouce. »
+                  Le bouton est le MÊME (`data-story-sound-toggle`, libellé
+                  constant + `aria-pressed`) — seule sa place change. */}
               <CloseButton onClose={closeViewer} />
             </div>
           </div>
@@ -801,11 +922,20 @@ export default function StoryScreen() {
               style={{
                 paddingTop: 40,
                 paddingBottom: 'calc(var(--safe-bottom, 0px) + 16px)',
+                /* LA LÉGENDE S'ARRÊTE AVANT LE RAIL — sans ce couloir, une
+                   phrase longue passe SOUS les boutons (mesuré : le bloc
+                   courait jusqu'à x 374, le bouton « Commentaires » occupait
+                   x 338→382). La valeur vient du rail lui-même, jamais d'un
+                   nombre recopié ici. */
+                paddingInlineEnd: railShown ? STORY_ACTION_RAIL_CORRIDOR : undefined,
                 background: CHROME_SCRIM_BOTTOM,
-                opacity: chromeHidden ? 0 : 1,
+                /* MÊME CESSION QUE LE RAIL (mesuré à la capture) : « Le lac,
+                   ce matin. » se lisait PAR-DESSUS « Écrire un commentaire… ».
+                   Deux textes superposés ne sont pas un état — c'en est zéro. */
+                opacity: chromeHidden || commentsOpen ? 0 : 1,
                 transition: 'opacity 180ms ease',
               }}
-              aria-hidden={chromeHidden ? true : undefined}
+              aria-hidden={chromeHidden || commentsOpen ? true : undefined}
             >
               {resolvedContent !== null ? (
                 <p className="text-body" style={CLAMPED_CAPTION} lang={resolvedContent.language || undefined}>
@@ -827,6 +957,46 @@ export default function StoryScreen() {
                 </p>
               ) : null}
             </div>
+          ) : null}
+
+          {/* LE RAIL D'ACTIONS — il ne DÉCIDE rien : `frozenRail.plan` est la
+              loi figée à l'entrée, `railHandlers` dit ce que le web sait
+              FAIRE, et le rail ne peint que l'intersection (loi 4). */}
+          {railShown ? (
+            <StoryActionRail
+              plan={frozenRail.plan}
+              language={interfaceLanguage}
+              handlers={railHandlers}
+              counts={{ react: currentStory.reactionCount, comments: currentStory.commentCount }}
+              pressed={{
+                sound: storySoundMuted,
+                react: hasReactedToStory(currentStory, STORY_DEFAULT_REACTION),
+              }}
+              /* LE RAIL SE RETIRE DEVANT LA FEUILLE — mesuré à la capture :
+                 les trois boutons se peignaient PAR-DESSUS la liste de
+                 commentaires, et « Commentaires » recouvrait le bouton
+                 d'envoi du composeur. Masqué, jamais démonté : il refarait sa
+                 mise en page à la fermeture.
+
+                 **ÉCART ASSUMÉ AVEC iOS, et il faut le dire dans ce sens** :
+                 iOS ne cède PAS la place. Il rend son overlay de commentaires
+                 SOUS les contrôles, exprès — « Rendered BEFORE the sidebar …
+                 so SwiftUI ZStack z-orders it BENEATH the story controls —
+                 user can still tap React / Reply / mute while comments are
+                 visible » (`StoryViewerView+Canvas.swift:1640-1645`). Sa
+                 surface est une liste FLOTTANTE transparente ; la nôtre est
+                 une feuille OPAQUE de 68 % qui occupe la place du rail. Deux
+                 contrôles superposés ne sont qu'un seul contrôle pour le
+                 doigt : c'est la géométrie du web qui impose le retrait, pas
+                 un choix d'iOS qu'on recopierait. */
+              hidden={chromeHidden || commentsOpen}
+            />
+          ) : null}
+
+          {commentsOpen ? (
+            <Suspense fallback={null}>
+              <StoryCommentsSheet postId={currentStory.id} onClose={() => setCommentsOpen(false)} />
+            </Suspense>
           ) : null}
         </div>
       ) : null}

@@ -31,14 +31,29 @@ import { Link } from '@/routes/route-table';
  * LES GESTES QUI ÉCRIVENT (#6278) : « Aimer » et « Enregistrer » sont des
  * boutons à bascule DÈS QU'UN HÔTE porte `onGesture` — la carte ne tient
  * aucun état de geste, elle peint `model.viewer` (le cache du fil) et remet
- * l'intention. Sans hôte, ou pour commenter/repartager/partager qui n'ont
- * pas encore d'effet, la statistique reste un `<span>` : un bouton sans effet
- * mentirait (loi 4).
+ * l'intention. Sans hôte, ou pour une statistique qui n'a pas encore d'effet,
+ * elle reste un `<span>` : un bouton sans effet mentirait (loi 4).
+ *
+ * **COMMENTER MÈNE AU FIL** — `onComment` rend le compteur de commentaires
+ * ATTEIGNABLE (`FeedPostCard.swift`, où le même compteur ouvre
+ * `FeedCommentsSheet`). Le web n'a pas de couche modale de fil : l'hôte
+ * conduit au détail de la publication, où la liste et le composeur vivent.
+ * Le compteur était un `<span>` INERTE, et c'est le défaut nommé par la loi
+ * 4 — « cliquer une traduction change-t-il le texte lu ? » posé à un chiffre.
+ *
+ * **`repostCount` RESTE INERTE, ET C'EST ÉCRIT.** La republication ouvre un
+ * composeur prérempli côté iOS (`StoryViewerView+Sidebar.swift:686-706`,
+ * `republishStorySource`) ; le web n'a pas ce composeur. Tant qu'il n'existe
+ * pas, ce chiffre est une STATISTIQUE, pas un contrôle — son témoin
+ * (`feed-post-card-gestures.test.tsx`) mesure l'ABSENCE de rôle bouton,
+ * pour qu'un futur lot ne le rende pas cliquable sans lui donner d'effet.
  */
 
 type GestureHandler = (postId: string, kind: PostToggleKind) => void;
 
 type ShareHandler = (postId: string) => void;
+
+type CommentHandler = (postId: string) => void;
 
 const GESTURE_OF_STAT: Partial<Record<keyof FeedCardStats, PostToggleKind>> = {
   likeCount: 'like',
@@ -83,6 +98,7 @@ function FeedActionsRow({
   tone,
   onGesture,
   onShare,
+  onComment,
 }: {
   readonly postId: string;
   readonly stats: FeedCardStats;
@@ -90,6 +106,7 @@ function FeedActionsRow({
   readonly tone: 'onLight' | 'onDark';
   readonly onGesture?: GestureHandler;
   readonly onShare?: ShareHandler;
+  readonly onComment?: CommentHandler;
 }) {
   const ink = tone === 'onDark' ? 'rgba(255,255,255,0.92)' : 'var(--color-ios-ink-2)';
   const language = currentInterfaceLanguage();
@@ -106,6 +123,24 @@ function FeedActionsRow({
               type="button"
               data-feed-gesture="share"
               onClick={() => onShare(postId)}
+              className="flex items-center gap-1.5 rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
+              style={{ color: ink, minHeight: 44, minWidth: 44, outlineColor: 'var(--color-ios-brand)' }}
+            >
+              <GlyphSvg glyph={FEED_GLYPHS[item.glyph]} size={19} title={label} />
+              <span className="text-check font-medium">{stats[item.key]}</span>
+            </button>
+          );
+        }
+        /* COMMENTER — un geste PONCTUEL comme « Partager » : il CONDUIT au
+           fil, il ne bascule rien. Pas d'`aria-pressed` : un état enfoncé
+           annoncerait une opinion que commenter n'exprime pas. */
+        if (item.key === 'commentCount' && onComment !== undefined) {
+          return (
+            <button
+              key={item.key}
+              type="button"
+              data-feed-gesture="comment"
+              onClick={() => onComment(postId)}
               className="flex items-center gap-1.5 rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
               style={{ color: ink, minHeight: 44, minWidth: 44, outlineColor: 'var(--color-ios-brand)' }}
             >
@@ -287,13 +322,14 @@ function FeedPostText({
 /** Le RÉEL — plein cadre, identité et actions SUR le média, scrim bas (miroir
  * `ReelFeedCard.swift`). Rendu en AFFICHE IMMOBILE : la lecture reste hors
  * tranche (D-42), le média est son propre repli (poster/placeholder). */
-type CardHosts = { readonly onGesture?: GestureHandler; readonly onShare?: ShareHandler };
+type CardHosts = { readonly onGesture?: GestureHandler; readonly onShare?: ShareHandler; readonly onComment?: CommentHandler };
 
 /** Les hôtes optionnels passent tels quels — `exactOptionalPropertyTypes`
  * refuse de poser une clé optionnelle à `undefined`. */
-const hostsOf = ({ onGesture, onShare }: CardHosts): CardHosts => ({
+const hostsOf = ({ onGesture, onShare, onComment }: CardHosts): CardHosts => ({
   ...(onGesture !== undefined ? { onGesture } : {}),
   ...(onShare !== undefined ? { onShare } : {}),
+  ...(onComment !== undefined ? { onComment } : {}),
 });
 
 function FeedReelCard({ model, ...hosts }: { readonly model: FeedCardModel } & CardHosts) {

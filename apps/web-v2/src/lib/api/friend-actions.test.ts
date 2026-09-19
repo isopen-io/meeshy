@@ -2,9 +2,10 @@ import { QueryClient } from '@tanstack/react-query';
 import { describe, expect, test } from 'bun:test';
 
 import { BLOCKED_USERS_QUERY_KEY, type BlockedData } from './blocks';
-import { performRespondToRequest, performSendRequest, performUnblock, type FriendActionDeps } from './friend-actions';
+import { performBlock, performRespondToRequest, performSendRequest, performUnblock, type FriendActionDeps } from './friend-actions';
 import { friendRequestsQueryKey, pendingRequestsOf, type FriendRequestRecord, type FriendRequestsData, type PersonSummary } from './friend-requests';
 import { createHttpTransport } from './http';
+import { publicProfileQueryKey, type PublicProfileView, type ServedRelation } from './public-profile';
 import { performEmailInvitation } from './invitations';
 
 /**
@@ -196,5 +197,142 @@ describe('inviter par e-mail', () => {
     const sent = harness({ status: 201, body: { success: true, data: { email: 'grace@example.org' } } });
     sent.release();
     expect(await performEmailInvitation({ email: 'grace@example.org', deps: sent.deps })).toBe('sent');
+  });
+});
+
+/**
+ * **LES GESTES ATTEIGNENT LA FICHE DE PROFIL** (#7083) — `/u/:handle` met la
+ * personne en cache PAR HANDLE, et la même personne y entre sous plusieurs
+ * clés : son pseudo depuis une mention, son identifiant depuis une
+ * notification. Un geste qui ne patcherait que la clé visitée laisserait la
+ * jumelle afficher l'état d'AVANT dès la navigation suivante.
+ */
+
+const profileView = (person: PersonSummary, relation: ServedRelation): PublicProfileView => ({
+  profile: { id: person.id, username: person.username, displayName: person.displayName, avatar: null, banner: null, bio: null, createdAt: null },
+  stats: null,
+  relation,
+  isSelf: false,
+});
+
+const relationIn = (queryClient: QueryClient, handle: string): ServedRelation | undefined =>
+  queryClient.getQueryData<PublicProfileView>(publicProfileQueryKey(handle))?.relation;
+
+describe('les gestes relationnels patchent la fiche de profil, optimistes et réversibles', () => {
+  test('« Ajouter » passe la fiche à « en attente » AVANT la réponse, et un refus l’y ramène', async () => {
+    const h = harness(refused);
+    h.queryClient.setQueryData(publicProfileQueryKey('ada'), profileView(ada, 'none'));
+
+    const outcome = performSendRequest({ person: ada, deps: h.deps });
+    expect(relationIn(h.queryClient, 'ada')).toBe('pending_sent');
+    h.release();
+    expect(await outcome).toBe('failed');
+    expect(relationIn(h.queryClient, 'ada')).toBe('none');
+  });
+
+  test('« Accepter » fait un contact de la fiche ; un refus la ramène « en attente reçue »', async () => {
+    const h = harness(refused);
+    h.queryClient.setQueryData(friendRequestsQueryKey('received'), pages(request('f-ada', ada)));
+    h.queryClient.setQueryData(friendRequestsQueryKey('accepted'), pages());
+    h.queryClient.setQueryData(publicProfileQueryKey('ada'), profileView(ada, 'pending_received'));
+
+    const outcome = performRespondToRequest({ request: request('f-ada', ada), action: 'accept', deps: h.deps });
+    expect(relationIn(h.queryClient, 'ada')).toBe('friend');
+    expect(h.ids('received')).toEqual([]);
+    h.release();
+    expect(await outcome).toBe('failed');
+    expect(relationIn(h.queryClient, 'ada')).toBe('pending_received');
+    expect(h.ids('received')).toEqual(['f-ada']);
+  });
+
+  test('« Annuler » vise le DESTINATAIRE d’une envoyée, pas son expéditeur', async () => {
+    const h = harness(refused);
+    h.queryClient.setQueryData(friendRequestsQueryKey('sent'), pages(request('f-grace', grace, false)));
+    h.queryClient.setQueryData(friendRequestsQueryKey('accepted'), pages());
+    h.queryClient.setQueryData(publicProfileQueryKey('grace'), profileView(grace, 'pending_sent'));
+
+    const outcome = performRespondToRequest({ request: request('f-grace', grace, false), action: 'cancel', deps: h.deps });
+    expect(relationIn(h.queryClient, 'grace')).toBe('none');
+    h.release();
+    expect(await outcome).toBe('failed');
+    expect(relationIn(h.queryClient, 'grace')).toBe('pending_sent');
+  });
+
+  test('TOUTE entrée qui porte l’identifiant bouge, et TOUTE entrée revient', async () => {
+    const h = harness(refused);
+    /* La même personne, deux clés : le pseudo et l'identifiant. */
+    h.queryClient.setQueryData(publicProfileQueryKey('ada'), profileView(ada, 'none'));
+    h.queryClient.setQueryData(publicProfileQueryKey('u-ada'), profileView(ada, 'none'));
+    /* Et une autre personne, qui ne doit PAS bouger. */
+    h.queryClient.setQueryData(publicProfileQueryKey('grace'), profileView(grace, 'none'));
+
+    const outcome = performSendRequest({ person: ada, deps: h.deps });
+    expect([relationIn(h.queryClient, 'ada'), relationIn(h.queryClient, 'u-ada'), relationIn(h.queryClient, 'grace')]).toEqual([
+      'pending_sent',
+      'pending_sent',
+      'none',
+    ]);
+    h.release();
+    expect(await outcome).toBe('failed');
+    expect([relationIn(h.queryClient, 'ada'), relationIn(h.queryClient, 'u-ada'), relationIn(h.queryClient, 'grace')]).toEqual([
+      'none',
+      'none',
+      'none',
+    ]);
+  });
+
+  test('hors ligne, rien ne part et la fiche ne bouge pas', async () => {
+    const h = harness(ok(null), { online: false });
+    h.queryClient.setQueryData(publicProfileQueryKey('ada'), profileView(ada, 'none'));
+    h.release();
+    expect(await performSendRequest({ person: ada, deps: h.deps })).toBe('offline');
+    expect(h.calls).toHaveLength(0);
+    expect(relationIn(h.queryClient, 'ada')).toBe('none');
+  });
+});
+
+describe('bloquer', () => {
+  test('la personne entre dans le panier AU GESTE ; un refus l’en retire', async () => {
+    const h = harness(refused);
+    h.queryClient.setQueryData<BlockedData>(BLOCKED_USERS_QUERY_KEY, { pages: [{ users: [grace], nextCursor: null }], pageParams: [null] });
+
+    const outcome = performBlock({ person: ada, deps: h.deps });
+    expect(h.queryClient.getQueryData<BlockedData>(BLOCKED_USERS_QUERY_KEY)?.pages[0]?.users.map((u) => u.id)).toEqual(['u-ada', 'u-grace']);
+    h.release();
+    expect(await outcome).toBe('failed');
+    expect(h.calls).toEqual([{ method: 'PUT', url: 'https://gate.test/api/v1/directory/blocks/u-ada' }]);
+    expect(h.queryClient.getQueryData<BlockedData>(BLOCKED_USERS_QUERY_KEY)?.pages[0]?.users.map((u) => u.id)).toEqual(['u-grace']);
+  });
+
+  /* LE PANIER N'A JAMAIS ÉTÉ LU — et c'est le cas que les trois témoins
+     voisins ne pouvaient pas voir : ils SÈMENT tous le cache avant le geste.
+     Sans amorce, `setQueryData` recevait `undefined` et n'écrivait rien :
+     « Bloquer » partait sur le réseau sans que l'écran bouge. */
+  test('un panier JAMAIS LU s’amorce au geste, et un refus le rend à son néant', async () => {
+    const h = harness(refused);
+    expect(h.queryClient.getQueryData(BLOCKED_USERS_QUERY_KEY)).toBeUndefined();
+
+    const outcome = performBlock({ person: ada, deps: h.deps });
+    expect(h.queryClient.getQueryData<BlockedData>(BLOCKED_USERS_QUERY_KEY)?.pages[0]?.users.map((u) => u.id)).toEqual(['u-ada']);
+    h.release();
+    expect(await outcome).toBe('failed');
+    expect(h.queryClient.getQueryData(BLOCKED_USERS_QUERY_KEY)).toBeUndefined();
+  });
+
+  test('un second geste PENDANT le vol ne produit PAS une seconde requête', async () => {
+    const h = harness(ok(null));
+    h.queryClient.setQueryData<BlockedData>(BLOCKED_USERS_QUERY_KEY, { pages: [{ users: [], nextCursor: null }], pageParams: [null] });
+    const first = performBlock({ person: ada, deps: h.deps });
+    const second = performBlock({ person: ada, deps: h.deps });
+    h.release();
+    expect(await Promise.all([first, second])).toEqual(['done', 'done']);
+    expect(h.calls).toHaveLength(1);
+  });
+
+  test('hors ligne, rien ne part', async () => {
+    const h = harness(ok(null), { online: false });
+    h.release();
+    expect(await performBlock({ person: ada, deps: h.deps })).toBe('offline');
+    expect(h.calls).toHaveLength(0);
   });
 });

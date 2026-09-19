@@ -5,7 +5,7 @@ import type { ConversationsInfiniteData, ConversationsPage, ConversationsPagePar
 import { flattenConversationPages, nextConversationsCursor } from './conversations-pages';
 import type { DataSource } from './config';
 import { decodeConversation } from './decode';
-import { conversationById, conversationsWithSurged } from './fixtures';
+import { conversationById, conversationsWithSurged, directConversationWith } from './fixtures';
 import { pageOfConversations } from './fixtures-pagination';
 import type { ApiResult, ApiSuccess, HttpTransport } from './http';
 import type { Conversation } from './types';
@@ -224,11 +224,11 @@ export function refreshConversations(queryClient: QueryClient, deps: Conversatio
  */
 export function createDirectConversation(deps: ConversationsDeps, participantId: string): Promise<ApiResult<Conversation>> {
   if (__FIXTURES__ && deps.source === 'fixtures') {
-    /* Les survenues AUSSI : un direct qui vient d'apparaître est un direct
-       EXISTANT, et le serveur est idempotent — le rendre plutôt que refuser. */
-    const found = conversationsWithSurged().find(
-      (c) => c.type === 'direct' && c.participants.some((p) => p.userId === participantId),
-    );
+    /* Les survenues AUSSI, et les HORS-LISTE : un direct qui vient
+       d'apparaître, ou qu'aucune page de liste ne porte, est un direct
+       EXISTANT — et le serveur est idempotent, il le rend plutôt que refuser
+       (`fixtures.ts` § `directConversationWith`). */
+    const found = directConversationWith(participantId);
     if (found !== undefined) return Promise.resolve({ ok: true, data: found });
     return Promise.resolve({ ok: false, status: 501, error: 'Création de direct indisponible en fixtures' });
   }

@@ -49,7 +49,7 @@ describe('FeedPostCard — aimer et enregistrer remettent l’intention à l’h
     render(post, onGesture);
   };
 
-  const gesture = (kind: PostToggleKind | 'share') =>
+  const gesture = (kind: PostToggleKind | 'share' | 'comment' | 'repost') =>
     container.querySelector(`button[data-feed-gesture="${kind}"]`) as HTMLButtonElement | null;
 
   const post = (partial: Partial<FeedPost>): FeedPost => ({
@@ -127,5 +127,56 @@ describe('FeedPostCard — aimer et enregistrer remettent l’intention à l’h
     expect(share?.textContent).toContain('4');
     act(() => share?.click());
     expect(shared).toEqual(['p1']);
+  });
+
+  /** COMMENTER — le compteur était un `<span>` INERTE : cliquer dessus ne
+   * faisait rien, sur un écran qui en montre cinq côte à côte. Il devient un
+   * bouton dès qu'un hôte sait où mène le fil, et jamais avant (loi 4). */
+  test('« Commenter » est un CHIFFRE INERTE sans hôte, un BOUTON avec — et il ne bascule rien', () => {
+    const ouverts: string[] = [];
+    mount(post({ commentCount: 7 }), () => undefined);
+    expect(gesture('comment')).toBeNull();
+
+    act(() => {
+      root.render(
+        <FeedPostCard
+          model={resolveFeedCardModel(post({ commentCount: 7 }), { preferredLanguages: ['fr'], now: NOW })}
+          onGesture={() => undefined}
+          onComment={(postId) => ouverts.push(postId)}
+        />,
+      );
+    });
+
+    const comment = gesture('comment');
+    expect(comment).not.toBeNull();
+    expect(comment?.hasAttribute('aria-pressed')).toBe(false);
+    expect(comment?.textContent).toContain('7');
+    act(() => comment?.click());
+    expect(ouverts).toEqual(['p1']);
+  });
+
+  /** `repostCount` RESTE une statistique — la republication ouvre un composeur
+   * que le web n'a pas encore. Ce témoin garde l'ABSENCE : sans lui, un lot à
+   * venir rendrait le chiffre cliquable sans lui donner d'effet, et l'écran
+   * porterait de nouveau un contrôle qui ment. */
+  test('CONTRE-ÉPREUVE — « Republier » n’est PAS un bouton, même avec tous les hôtes branchés', () => {
+    mount(post({ repostCount: 5 }), () => undefined);
+    act(() => {
+      root.render(
+        <FeedPostCard
+          model={resolveFeedCardModel(post({ repostCount: 5 }), { preferredLanguages: ['fr'], now: NOW })}
+          onGesture={() => undefined}
+          onShare={() => undefined}
+          onComment={() => undefined}
+        />,
+      );
+    });
+
+    expect(gesture('repost')).toBeNull();
+    const rangee = container.querySelector('[data-feed-actions]');
+    const libelles = [...(rangee?.querySelectorAll('button') ?? [])].map((b) => b.getAttribute('data-feed-gesture'));
+    expect(libelles).not.toContain('repost');
+    /* Le chiffre reste LU — inerte n'est pas invisible. */
+    expect(rangee?.textContent).toContain('5');
   });
 });

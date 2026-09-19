@@ -9,13 +9,42 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  * `setText` d'expiration retombait hors de tout `act()` — voir #5888. */
 export const ANNOUNCEMENT_DURATION_MS = 1500;
 
+/**
+ * LE SILENCE EST UNE VALEUR, pas deux états à tenir d'accord : texte vide et
+ * ton neutre voyagent ensemble, sinon une encre d'erreur survivrait au texte
+ * qu'elle qualifiait.
+ *
+ * **La MÊME référence à chaque expiration** : React ABANDONNE le rendu quand
+ * l'état ne change pas, donc une pastille déjà éteinte ne réveille personne
+ * (Zero Unnecessary Re-render). Le chemin d'ANNONCE, lui, compose un objet
+ * neuf — et c'est voulu : deux échecs identiques à la suite doivent se
+ * ré-ÉNONCER, là où l'état `string` d'avant les confondait en silence.
+ */
+const SILENT = { text: '', tone: 'neutral' } as const;
+
+/**
+ * **CE QUE L'ANNONCE VAUT, pas seulement ce qu'elle dit** (revue #7083, défaut
+ * majeur 3) — un geste REFUSÉ par la passerelle défaisait son état optimiste
+ * et ne laissait AUCUNE trace : le bouton revenait à « Ajouter », sans un mot.
+ * Le texte de l'échec existait pourtant déjà (`ANNOUNCE[kind].failed`) ; il
+ * n'avait ni voix visible, ni encre qui le distingue d'un succès.
+ *
+ * Le ton voyage AVEC le texte parce qu'il en est une propriété : deux états
+ * séparés se désynchroniseraient à la première annonce qui en chasse une
+ * autre, et c'est exactement ce que ce hook a été écrit pour empêcher.
+ */
+export type AnnouncementTone = 'neutral' | 'error';
+
 export type Announcer = {
   /** Le texte À LIRE en ce moment — `''` hors annonce, jamais `undefined` :
    * l'hôte le pose tel quel dans son UNIQUE région `role="status"`. */
   readonly text: string;
+  /** L'encre de l'annonce COURANTE — `'neutral'` hors annonce. */
+  readonly tone: AnnouncementTone;
   /** Pose une annonce et réarme son propre effacement — voir le doc-comment
-   * ci-dessous : n'importe quelle source peut appeler, la DERNIÈRE gagne. */
-  readonly announce: (message: string) => void;
+   * ci-dessous : n'importe quelle source peut appeler, la DERNIÈRE gagne.
+   * Le ton est optionnel : une annonce qui ne dit pas le sien est neutre. */
+  readonly announce: (message: string, tone?: AnnouncementTone) => void;
 };
 
 /**
@@ -49,14 +78,14 @@ export type Announcer = {
  * exception du scheduler React APRÈS le démontage de happy-dom (#5888).
  */
 export function useLiveAnnouncer(durationMs: number = ANNOUNCEMENT_DURATION_MS): Announcer {
-  const [text, setText] = useState('');
+  const [current, setCurrent] = useState<{ readonly text: string; readonly tone: AnnouncementTone }>(SILENT);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const announce = useCallback(
-    (message: string) => {
+    (message: string, tone: AnnouncementTone = 'neutral') => {
       if (timerRef.current !== null) clearTimeout(timerRef.current);
-      setText(message);
-      timerRef.current = setTimeout(() => setText(''), durationMs);
+      setCurrent({ text: message, tone });
+      timerRef.current = setTimeout(() => setCurrent(SILENT), durationMs);
     },
     [durationMs],
   );
@@ -70,5 +99,5 @@ export function useLiveAnnouncer(durationMs: number = ANNOUNCEMENT_DURATION_MS):
     if (timerRef.current !== null) clearTimeout(timerRef.current);
   }, []);
 
-  return { text, announce };
+  return { text: current.text, tone: current.tone, announce };
 }

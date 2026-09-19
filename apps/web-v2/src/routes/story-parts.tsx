@@ -1,12 +1,11 @@
 import { useEffect, useRef, type CSSProperties } from 'react';
 
-import { GlyphSvg } from '@/components/glyph';
-import { MEDIA_TRANSPORT_GLYPHS } from '@/components/glyphs-media-transport';
+import { Glyph } from '@/components/glyph';
 import { MediaUnavailable } from '@/components/media-unavailable';
 import { isMediaAbsent, noteMediaAbsent } from '@/lib/api/media-absent';
 import { feedMediaKindOf } from '@/lib/feed/layout';
-import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import type { StoryPlaybackGroup } from '@/lib/stories/playback';
 
 /**
  * LES PIÈCES PURES DU LECTEUR DE STORY (#6801) — extraites de `story.tsx`,
@@ -275,42 +274,103 @@ export function StoryMediaLayer({
   );
 }
 
-export type SoundToggleProps = {
-  readonly muted: boolean;
-  readonly onToggle: () => void;
-};
-
 /**
- * `SoundToggle` (T10, #6899) — LE BOUTON MUET du son d'une scène v3, miroir de
- * `StoryViewerView+Sidebar.swift:486-509` (icône
- * `speaker.slash.fill`/`speaker.wave.2.fill`). Le rail droit iOS est HORS
- * TRANCHE (#5817) : ce bouton vit dans la LIGNE AUTEUR du lecteur, et son hôte
- * ne le monte QUE quand il a un son à couper (`sceneHasControllableSound`,
- * `lib/canvas/background-sound.ts`) — jamais un décor sans effet (loi 4).
+ * **LA CROIX DU LECTEUR** — extraite de `story.tsx` (#7112, revue) parce que
+ * le fichier hôte franchissait 1 000 lignes : « on extrait d'abord, on ajoute
+ * ensuite » (CLAUDE.md § budget), jamais un plafond relevé.
  *
- * C'est un bouton BASCULE : un libellé CONSTANT (« Muet ») et `aria-pressed`
- * portent l'état. Un libellé qui change avec l'état (« Son » / « Muet ») lu à
- * côté de `aria-pressed="false"` s'annonce « Son, non enfoncé » — l'inverse de
- * ce qui se passe.
+ * Elle porte `pointer-events-auto` : son conteneur est un chrome en
+ * `pointer-events-none`, et sans cela la croix ne se toucherait pas. C'est
+ * cette ré-activation qui rendait la croix CLIQUABLE sous un chrome masqué,
+ * jusqu'à ce que l'hôte pose `inert` sur la région (D-90) — la protection se
+ * pose donc sur le PARENT, et ce bouton ne la connaît pas : il se tient seul,
+ * comme `StoryViewerView+ActionButton.swift:11`.
+ *
+ * `onPointerDown` stoppé : le plateau navigue au `pointerdown`/`pointerup`,
+ * et sans cette coupure fermer le lecteur ferait AUSSI avancer d'une story.
  */
-export function SoundToggle({ muted, onToggle }: SoundToggleProps) {
-  const language = currentInterfaceLanguage();
+export function CloseButton({ onClose }: { readonly onClose: () => void }) {
   return (
     <button
       type="button"
-      data-story-sound-toggle
       onPointerDown={(e) => e.stopPropagation()}
-      onClick={onToggle}
-      aria-pressed={muted}
-      aria-label={translate(language, 'story.sound.off')}
+      onClick={onClose}
+      aria-label="Fermer"
       className="pointer-events-auto grid shrink-0 place-items-center rounded-full"
       style={{ width: 44, height: 44, background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.12)' }}
     >
-      <GlyphSvg
-        glyph={muted ? MEDIA_TRANSPORT_GLYPHS.speakerSlash : MEDIA_TRANSPORT_GLYPHS.speakerHigh}
-        size={16}
-        style={{ color: '#fff' }}
-      />
+      <Glyph name="x" size={16} style={{ color: '#fff' }} />
     </button>
+  );
+}
+
+/**
+ * `StoryProgressBarsView` (`StoryViewerView+Content.swift:3128-3177`) —
+ * capsules de hauteur 3, `gap: 3`, piste blanc 20 % ; segments PASSÉS blanc
+ * PLEIN, segment COURANT le dégradé `indigo500 → error → indigo400`. Le
+ * premier jet peignait TOUS les segments en indigo de marque : sur le fond
+ * par défaut d'une story texte — le gradient de marque, précisément — la
+ * progression devenait invisible, et le passé ne se distinguait plus du
+ * présent (mesuré sur `story-light.png`, deux barres grises identiques).
+ *
+ * **LA FRACTION NE PASSE PAS PAR L'ÉTAT** — `fillRef` reçoit un
+ * `transform: scaleX()` écrit à même le DOM à chaque image. Poser la
+ * progression en `useState` re-rendait l'écran ENTIER soixante fois par
+ * seconde (l'image, l'en-tête, la légende, la scène), pour animer trois
+ * pixels de haut ; iOS évite exactement cela (« évite de committer le
+ * `@State` `progress` », granularité 1/300). `scaleX` plutôt que `width` :
+ * la propriété n'apparaît dans AUCUN objet `style` rendu, donc aucun rendu
+ * ne peut l'écraser, et l'animation reste sur le compositeur.
+ */
+export function ProgressBars({
+  group,
+  index,
+  slideKey,
+  barRef,
+  fillRef,
+}: {
+  readonly group: StoryPlaybackGroup;
+  readonly index: number;
+  readonly slideKey: string;
+  readonly barRef: { current: HTMLDivElement | null };
+  readonly fillRef: { current: HTMLSpanElement | null };
+}) {
+  return (
+    <div
+      ref={barRef}
+      role="progressbar"
+      aria-label={`Story ${index + 1} sur ${group.stories.length}`}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={0}
+      className="flex"
+      style={{ gap: 3, height: 3 }}
+    >
+      {group.stories.map((story, i) => (
+        <span
+          key={story.id}
+          aria-hidden="true"
+          className="flex-1 overflow-hidden rounded-full"
+          style={{ background: 'rgba(255,255,255,0.2)' }}
+        >
+          {i === index ? (
+            <span
+              key={slideKey}
+              ref={fillRef}
+              className="block size-full rounded-full"
+              style={{
+                transform: 'scaleX(0)',
+                transformOrigin: 'left center',
+                willChange: 'transform',
+                background:
+                  'linear-gradient(90deg, var(--color-ios-brand), var(--ios-error), var(--color-i400))',
+              }}
+            />
+          ) : (
+            <span className="block size-full rounded-full" style={{ background: i < index ? '#fff' : 'transparent' }} />
+          )}
+        </span>
+      ))}
+    </div>
   );
 }

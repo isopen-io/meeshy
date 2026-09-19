@@ -1,0 +1,234 @@
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import type { PostComment } from '@/lib/api/publication-comments';
+
+import { CommentComposer } from './comment-composer';
+import { CommentList, type CommentListState } from './comment-list';
+
+/**
+ * `CommentList` — LES QUATRE ÉTATS DESSINÉS et le PRISME appliqué à une
+ * rangée. Un écran blanc n'est pas un état ; et un texte servi dans une autre
+ * langue que le document doit le DIRE (`lang=`), sans quoi un lecteur d'écran
+ * prononce le français avec une voix anglaise (cycle 122 rendu audible).
+ */
+const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+
+beforeAll(async () => {
+  ensureHappyDomRegistered();
+  globals.IS_REACT_ACT_ENVIRONMENT = true;
+  await loadInterfaceCatalog('fr');
+});
+
+afterAll(async () => {
+  await act(async () => {});
+  delete globals.IS_REACT_ACT_ENVIRONMENT;
+  await releaseHappyDomIfRegistered();
+});
+
+let container: HTMLDivElement | undefined;
+let root: Root | undefined;
+
+afterEach(async () => {
+  if (root !== undefined) await act(async () => root?.unmount());
+  container?.remove();
+  root = undefined;
+  container = undefined;
+});
+
+const NOW = new Date('2026-09-19T12:00:00.000Z');
+
+const etat = (patch: Partial<CommentListState> = {}): CommentListState => ({
+  loading: false,
+  error: false,
+  online: true,
+  hasMore: false,
+  loadingMore: false,
+  ...patch,
+});
+
+const comment = (patch: Partial<PostComment> = {}): PostComment => ({
+  id: 'c1',
+  content: 'Bonjour',
+  createdAt: '2026-09-19T11:58:00.000Z',
+  author: { id: 'u1', displayName: 'Noa Berger', username: 'noa' },
+  ...patch,
+});
+
+async function monter(node: React.ReactElement): Promise<HTMLDivElement> {
+  container = document.createElement('div');
+  document.body.append(container);
+  root = createRoot(container);
+  await act(async () => root?.render(node));
+  return container;
+}
+
+const liste = (props: { comments?: readonly PostComment[]; state?: CommentListState; onRetry?: () => void; onMore?: () => void }) => (
+  <CommentList
+    comments={props.comments ?? []}
+    state={props.state ?? etat()}
+    language="fr"
+    preferredLanguages={['fr', 'en']}
+    locale="fr-FR"
+    now={NOW}
+    onRetry={props.onRetry ?? (() => {})}
+    onMore={props.onMore ?? (() => {})}
+  />
+);
+
+describe('les quatre états — un écran blanc n’en est pas un', () => {
+  test('CHARGEMENT sur un cache VIDE : un squelette, jamais un vide muet', async () => {
+    const host = await monter(liste({ state: etat({ loading: true }) }));
+    expect(host.querySelector('[data-comment-state="loading"]')?.getAttribute('aria-busy')).toBe('true');
+  });
+
+  test('CACHE-FIRST — une relecture EN FOND sur une liste peuplée ne détruit rien', async () => {
+    const host = await monter(liste({ comments: [comment()], state: etat({ loading: true }) }));
+    expect(host.querySelector('[data-comment-state="loading"]')).toBeNull();
+    expect(host.querySelectorAll('[data-comment-row]')).toHaveLength(1);
+  });
+
+  test('VIDE : un titre et une invitation, pas un blanc', async () => {
+    const host = await monter(liste({}));
+    expect(host.querySelector('[data-comment-state="empty"]')?.textContent).toContain('Aucun commentaire');
+  });
+
+  test('ERREUR : annoncée en alerte, avec un « Réessayer » qui appelle l’hôte', async () => {
+    let retries = 0;
+    const host = await monter(liste({ state: etat({ error: true }), onRetry: () => (retries += 1) }));
+    const bloc = host.querySelector('[data-comment-state="error"]');
+    expect(bloc?.getAttribute('role')).toBe('alert');
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-comment-retry]')?.click());
+    expect(retries).toBe(1);
+  });
+
+  test('HORS LIGNE et vide : pas de « Réessayer » — rien ne peut aboutir sans réseau', async () => {
+    const host = await monter(liste({ state: etat({ error: true, online: false }) }));
+    expect(host.querySelector('[data-comment-retry]')).toBeNull();
+    expect(host.querySelector('[data-comment-state="error"]')?.textContent).toContain('Hors ligne');
+  });
+
+  test('HORS LIGNE sur une liste PEUPLÉE : on DIT l’état, on n’efface pas ce qui est lu', async () => {
+    const host = await monter(liste({ comments: [comment()], state: etat({ online: false }) }));
+    expect(host.querySelectorAll('[data-comment-row]')).toHaveLength(1);
+    expect(host.querySelector('[data-comment-state="offline"]')?.getAttribute('role')).toBe('status');
+  });
+});
+
+describe('la pagination et le Prisme', () => {
+  test('« Voir plus » n’existe que s’il reste une page, et appelle l’hôte', async () => {
+    let more = 0;
+    const sans = await monter(liste({ comments: [comment()] }));
+    expect(sans.querySelector('[data-comment-more]')).toBeNull();
+    if (root !== undefined) {
+      await act(async () =>
+        root?.render(liste({ comments: [comment()], state: etat({ hasMore: true }), onMore: () => (more += 1) })),
+      );
+    }
+    await act(async () => sans.querySelector<HTMLButtonElement>('[data-comment-more]')?.click());
+    expect(more).toBe(1);
+  });
+
+  test('UN TÉMOIN DE RANG — un commentaire anglais traduit en français est SERVI en français, et le DIT', async () => {
+    /* Le rang 1 du lecteur est `fr` ; l'original est `en`. La règle juste et
+       un court-circuit « la langue d'origine est dans le prisme ⇒ l'original »
+       rendraient des verdicts DIFFÉRENTS ici — c'est pour cela que le témoin
+       se pose ici, et pas sur un commentaire déjà français. */
+    const host = await monter(
+      liste({
+        comments: [
+          comment({
+            content: 'Which lake is this?',
+            originalLanguage: 'en',
+            translations: { fr: { text: 'C’est quel lac ?', translationModel: 'nllb-200' } },
+          }),
+        ],
+      }),
+    );
+    const p = host.querySelector('[data-comment-row] p');
+    expect(p?.textContent).toBe('C’est quel lac ?');
+    expect(p?.getAttribute('lang')).toBe('fr');
+  });
+
+  test('un commentaire DÉJÀ dans la langue du lecteur ne porte PAS de `lang` — la voix ne change pas pour rien', async () => {
+    const host = await monter(liste({ comments: [comment({ originalLanguage: 'fr' })] }));
+    expect(host.querySelector('[data-comment-row] p')?.hasAttribute('lang')).toBe(false);
+  });
+
+  test('une rangée EN VOL se marque, et dit « Envoi en cours » plutôt qu’une heure qu’elle n’a pas', async () => {
+    const host = await monter(liste({ comments: [comment({ pending: true })] }));
+    expect(host.querySelector('[data-comment-pending]')).not.toBeNull();
+    expect(host.querySelector('[data-comment-row]')?.textContent).toContain('Envoi en cours');
+  });
+});
+
+describe('CommentComposer — le champ se vide avant le réseau, et revient sur un refus', () => {
+  const taper = async (host: HTMLElement, texte: string) => {
+    const champ = host.querySelector<HTMLTextAreaElement>('[data-comment-field]');
+    if (champ === null) throw new Error('champ absent');
+    await act(async () => {
+      champ.value = texte;
+      /* Sous happy-dom, `onChange` d'un champ ne reçoit JAMAIS un `input`
+         dispatché — seul `onInput` se déclenche (convention du dépôt,
+         `legende-plan.test.tsx`). C'est ce témoin qui a montré que le
+         composeur lisait `onChange`, donc n'apprenait la frappe qu'au blur. */
+      champ.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  };
+
+  test('un visiteur anonyme n’a PAS de champ — la passerelle exige un compte (loi 4)', async () => {
+    const host = await monter(<CommentComposer language="fr" canWrite={false} onSend={async () => ({ ok: true })} />);
+    expect(host.querySelector('[data-comment-field]')).toBeNull();
+    expect(host.querySelector('[data-comment-composer="signed-out"]')?.textContent).toContain('Connectez-vous');
+  });
+
+  test('le bouton d’envoi est DÉSACTIVÉ à vide — annoncé, jamais un bouton actif qui ne fait rien', async () => {
+    const host = await monter(<CommentComposer language="fr" canWrite onSend={async () => ({ ok: true })} />);
+    expect(host.querySelector<HTMLButtonElement>('[data-comment-send]')?.disabled).toBe(true);
+    await taper(host, 'salut');
+    expect(host.querySelector<HTMLButtonElement>('[data-comment-send]')?.disabled).toBe(false);
+  });
+
+  test('envoi réussi : le champ est VIDE — l’optimiste vit dans la liste, pas deux fois', async () => {
+    const envoyes: string[] = [];
+    const host = await monter(
+      <CommentComposer
+        language="fr"
+        canWrite
+        onSend={async (c) => {
+          envoyes.push(c);
+          return { ok: true };
+        }}
+      />,
+    );
+    await taper(host, 'salut');
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-comment-send]')?.click());
+    expect(envoyes).toEqual(['salut']);
+    expect(host.querySelector<HTMLTextAreaElement>('[data-comment-field]')?.value).toBe('');
+  });
+
+  test('REFUS : le texte REVIENT au lecteur, et la cause est annoncée', async () => {
+    const host = await monter(
+      <CommentComposer language="fr" canWrite onSend={async () => ({ ok: false, message: 'comment.send.error' })} />,
+    );
+    await taper(host, 'salut');
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-comment-send]')?.click());
+    expect(host.querySelector<HTMLTextAreaElement>('[data-comment-field]')?.value).toBe('salut');
+    expect(host.querySelector('[data-comment-notice]')?.textContent).toContain('n’a pas pu être publié');
+  });
+
+  test('PARTI MAIS NON CONFIRMÉ : le champ se vide QUAND MÊME, et l’état est DIT', async () => {
+    /* `ok: true` avec un message — l'optimiste reste posé dans la liste, et
+       le silence serait indiscernable d'une confirmation. */
+    const host = await monter(
+      <CommentComposer language="fr" canWrite onSend={async () => ({ ok: true, message: 'comment.send.pending' })} />,
+    );
+    await taper(host, 'salut');
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-comment-send]')?.click());
+    expect(host.querySelector<HTMLTextAreaElement>('[data-comment-field]')?.value).toBe('');
+    expect(host.querySelector('[data-comment-notice]')?.textContent).toContain('non confirmé');
+  });
+});

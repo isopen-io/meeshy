@@ -18,6 +18,7 @@ import { CONVERSATIONS_QUERY_KEY } from './conversations';
 import { FEED_QUERY_KEY } from './feed';
 import type { FeedInfiniteData } from './feed-pages';
 import { FRIENDS_QUERY_PREFIX } from './friends-keys';
+import { PUBLIC_PROFILE_QUERY_PREFIX } from './public-profile';
 import { NOTIFICATION_COUNTS_QUERY_KEY, NOTIFICATION_LISTS_KEY } from './notifications';
 import {
   applyNotificationCounts,
@@ -405,6 +406,13 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
    */
   const onFriendshipChanged = (): void => {
     void deps.queryClient.invalidateQueries({ queryKey: FRIENDS_QUERY_PREFIX });
+    /* ET LA FICHE DE PROFIL (#7083) — `/u/:handle` porte `relation`, servie
+       AVEC le profil (`expand=relation`). Elle change quand quelqu'un d'AUTRE
+       pose un geste : sans cette ligne, la fiche resterait sur « Ajouter » pour
+       une demande qui vient d'arriver, jusqu'à expiration de sa fenêtre de
+       fraîcheur. Miroir d'`onReceive(FriendshipCache.objectWillChange)`
+       (`UserProfileSheet.swift:156-158`). */
+    void deps.queryClient.invalidateQueries({ queryKey: PUBLIC_PROFILE_QUERY_PREFIX });
   };
 
   /**

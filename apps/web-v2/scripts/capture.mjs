@@ -52,6 +52,15 @@ const SCREENS = [
   { name: 'feed', path: '/feed' },
   { name: 'story-text', path: '/story/st-amie-1' },
   { name: 'story-image', path: '/story/st-amie-2' },
+  /** LE RAIL D'ACTIONS ET SON PLAN RÉDUIT (#7112, D-88) — `st-amie-2`
+      ci-dessus porte le rail COMPLET d'une story d'AUTRUI (son, cœur avec ses
+      12, réponse, commentaires avec ses 3) ; `st-mienne` porte le plan que la
+      loi laisse à l'AUTEUR, et c'est lui qu'il faut voir : ni cœur, ni
+      réponse, ni republication. Sans cette seconde entrée, la RÉDUCTION —
+      la moitié de la loi que la contre-épreuve mesure hors DOM — n'aurait
+      aucune image, et la porte `isOwnStory` serait tenue pour acquise sur la
+      seule foi d'un témoin. */
+  { name: 'story-mienne', path: '/story/st-mienne' },
   /** LE LECTEUR DE SCÈNE (#6899) — un document canvas v:3 rendu par le MÊME
       moteur que le fil (`ScenePlayer`, D-79), carte 9:16 sur le plateau :
       verdict `canvas` (texte sur la bande, bandes au ThumbHash), image seule

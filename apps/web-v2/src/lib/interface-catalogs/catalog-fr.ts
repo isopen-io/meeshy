@@ -519,6 +519,62 @@ const fr = {
   'discover.announce.unblockFailed': 'Impossible de débloquer',
   'discover.announce.offline': 'Hors ligne : rien n’a été envoyé.',
 
+  /* LE PROFIL PUBLIC DE QUELQU'UN (#7083) — préfixe `userProfile.*` : le
+     préfixe `profile.*` appartient à /me, et deux écrans qui partageraient un
+     préfixe partageraient ses retouches. Ce qui EXISTE déjà est réutilisé, pas
+     redit : `discover.connection.*` et `discover.announce.*` (les mêmes
+     gestes), `profile.stats.*`, `profile.section.stats`,
+     `profile.section.member_since`, `profile.retry`, `profile.offline.title`. */
+  'userProfile.title': 'Profil',
+  'userProfile.loading': 'Chargement du profil',
+  'userProfile.section.publications': 'PUBLICATIONS',
+  'userProfile.section.relation': 'CONNEXION',
+  'userProfile.refused.title': 'Ce profil n’est pas accessible',
+  'userProfile.refused.body': 'Il n’existe pas, ou vous n’y avez pas accès.',
+  'userProfile.throttled.title': 'Trop de demandes',
+  'userProfile.throttled.body': 'Réessayez dans un instant.',
+  'userProfile.error.title': 'Impossible de charger ce profil',
+  'userProfile.error.body': 'Réessayez dans un instant.',
+  'userProfile.offline.body': 'Le profil s’affichera à la reconnexion.',
+  'userProfile.posts.empty': 'Aucune publication',
+  'userProfile.posts.emptyBody': 'Rien de public à lire pour l’instant.',
+  /* LE VIDE D'UN FILTRE N'EST PAS LE VIDE D'UN COMPTE (miroir de
+     `filteredEmptyState`, `ProfileUserPostsList.swift:498-510`) : dire
+     « Aucune publication » à qui vient de toucher « Réels » est FAUX — le
+     compte publie, c'est le filtre qui ne trouve rien ICI. */
+  'userProfile.posts.emptyPosts': 'Aucun poste',
+  'userProfile.posts.emptyReels': 'Aucun réel',
+  'userProfile.posts.emptyFilter': 'Touchez à nouveau la tuile pour tout revoir.',
+  'userProfile.posts.error': 'Impossible de charger les publications',
+  'userProfile.posts.loadMore': 'Charger plus',
+  /* CE QUI EST ARRIVÉ SE DIT (revue #7083) : « Charger plus » était le seul
+     geste de l'écran à changer la LONGUEUR de la liste, et le seul à ne rien
+     annoncer. La forme « Publications ajoutées : {count} » évite l'accord de
+     pluriel dans les sept langues — un seul libellé pour 1 comme pour 12. */
+  'userProfile.posts.loaded': 'Publications ajoutées : {count}',
+  'userProfile.posts.loadedNone': 'Aucune publication de plus à afficher',
+  'userProfile.posts.loading': 'Chargement…',
+  'userProfile.stat.posts': 'Postes',
+  'userProfile.stat.reels': 'Réels',
+  'userProfile.stat.stories': 'Stories',
+  'userProfile.stat.filterLabel': 'Filtrer sur {name}',
+  'userProfile.stat.filterClear': 'Tout afficher',
+  'userProfile.context.received': '{name} souhaite entrer en contact avec vous. Acceptez pour échanger des messages.',
+  'userProfile.context.sent': 'Vous avez envoyé une demande de connexion à {name}. En attente de sa réponse.',
+  'userProfile.context.pending': 'La demande est en attente. Elle se charge…',
+  'userProfile.action.write': 'Écrire',
+  'userProfile.action.writeLabel': 'Écrire à {name}',
+  'userProfile.action.block': 'Bloquer',
+  'userProfile.action.blockLabel': 'Bloquer {name}',
+  'userProfile.blocked.title': 'Vous avez bloqué cette personne',
+  'userProfile.blocked.body': 'Ses publications et ses statistiques restent masquées tant que le blocage dure.',
+  'userProfile.signin.title': 'Connectez-vous pour entrer en contact',
+  'userProfile.signin.body': 'Les demandes de connexion et les messages demandent un compte.',
+  'userProfile.signin.cta': 'Se connecter',
+  'userProfile.announce.blocked': 'Personne bloquée',
+  'userProfile.announce.blockFailed': 'Impossible de bloquer',
+  'userProfile.announce.writeFailed': 'Impossible d’ouvrir la conversation',
+
   'a11y.floating.rung.discover.requests.one': 'Découvrir, {count} demande reçue',
   'a11y.floating.rung.discover.requests.other': 'Découvrir, {count} demandes reçues',
 
@@ -760,6 +816,39 @@ const fr = {
      `admin.denied.*`, `admin.role`) ont déménagé dans
      `catalog-admin-fr.ts` (#6871, #6834) : elles ne pesaient que pour un
      lecteur qui n'ouvre jamais l'administration. */
+  /* LE RAIL D'ACTIONS DU LECTEUR DE STORIES et LE FIL DE COMMENTAIRES
+     d'une publication — les libellés reprennent ceux d'iOS
+     (`story.viewer.action.*`, `Localizable.xcstrings`) ; `comments.*`
+     est propre au web, qui rend la liste là où iOS pose une couche. */
+  'story.action.rail': 'Actions de la story',
+  'story.action.react': 'Réagir',
+  'story.action.reply': 'Répondre',
+  'story.action.forward': 'Envoyer',
+  'story.action.repost': 'Republier',
+  'story.action.views': 'Vues',
+  'story.action.share': 'Partager',
+  'story.action.save': 'Enregistrer',
+  'story.action.comments': 'Commentaires',
+  'story.action.translations': 'Traductions',
+  'comments.title': 'Commentaires',
+  'comments.close': 'Fermer les commentaires',
+  'comments.loading': 'Chargement des commentaires',
+  'comments.empty': 'Aucun commentaire',
+  'comments.empty.hint': 'Soyez la première personne à en écrire un.',
+  'comments.error': 'Impossible de charger les commentaires',
+  'comments.error.hint': 'Réessayez dans un instant.',
+  'comments.retry': 'Réessayer',
+  'comments.more': 'Voir plus de commentaires',
+  'comments.offline': 'Hors ligne — seuls les commentaires déjà lus s’affichent.',
+  'comments.placeholder': 'Écrire un commentaire…',
+  'comments.send': 'Envoyer le commentaire',
+  'comments.row.pending': 'Envoi en cours',
+  'comments.signin': 'Connectez-vous pour commenter.',
+  'comment.send.error': 'Le commentaire n’a pas pu être publié.',
+  'comment.send.pending': 'Commentaire non confirmé — hors ligne',
+  'comment.send.empty': 'Écrivez quelque chose avant d’envoyer.',
+  'feed.action.comment': 'Commenter',
+
   'admin.title': 'Administration',
 
 } as const;
