@@ -3,7 +3,14 @@ import { describe, expect, test } from 'bun:test';
 import { attachmentDefaults } from '@/lib/api/fixtures-base';
 import type { Attachment } from '@/lib/api/types';
 
-import { mediaGridSlots, partitionAttachments, soloVideoSlot, visibleCount } from './media-grid-layout';
+import {
+  MEDIA_GRID_SPACING,
+  mediaGridCellSizes,
+  mediaGridSlots,
+  partitionAttachments,
+  soloVideoSlot,
+  visibleCount,
+} from './media-grid-layout';
 
 /**
  * T1 (#6221) — `mediaGridSlots`, miroir de `FocalMediaGridLayout.slots(for:)`.
@@ -59,6 +66,85 @@ describe('mediaGridSlots — miroir de FocalMediaGridLayout.slots', () => {
 
   test('7 pièces : +3 sur la 4ᵉ', () => {
     expect(mediaGridSlots(7)[3]!.overflowCount).toBe(3);
+  });
+
+  /**
+   * `mediaGridCellSizes` — LA FORME RENDUE D'UNE CASE, distincte de
+   * `mediaGridSlots` (#7030, relecture adversariale).
+   *
+   * `mediaGridSlots` porte, sur CHAQUE case, la hauteur de la BOÎTE entière —
+   * c'est sa documentation, et c'est le miroir exact de
+   * `FocalMediaGridLayout.slots(for:)`. Ce n'est donc PAS la forme que la case
+   * occupe à l'écran dès qu'elle est EMPILÉE : au triplet, les deux cases de
+   * droite se partagent la hauteur de la boîte ; au quadruple, les quatre s'en
+   * partagent deux rangées. Comparer une `boundingBox` rendue à `slot.height`
+   * y comparerait deux choses différentes — c'est pour CETTE raison que la
+   * première écriture du gate n'instrumentait que la paire et la case gauche
+   * du triplet, laissant le QUADRUPLE — gouverné par `1fr 1fr`, un mécanisme
+   * qu'aucune des deux cases couvertes n'exerce — sans aucun témoin de forme.
+   *
+   * La dérivation manquante vit ici, une fois, et non dans le composant ni
+   * dans le gate : `media-grid.tsx` la POSE sur chaque case
+   * (`data-slot-width`/`data-slot-height`) et le gate navigateur compare le
+   * ratio RENDU à celui-là.
+   */
+  describe('mediaGridCellSizes — la forme RENDUE de chaque case', () => {
+    test('0 pièce : aucune case', () => {
+      expect(mediaGridCellSizes(0)).toEqual([]);
+    });
+
+    test('2 pièces : les deux cases occupent la hauteur PLEINE de la boîte', () => {
+      const cells = mediaGridCellSizes(2);
+      expect(cells).toHaveLength(2);
+      for (const cell of cells) {
+        expect(cell.width).toBeCloseTo(149, 5);
+        expect(cell.height).toBe(180);
+      }
+    });
+
+    test('3 pièces : la gauche prend 240, les deux EMPILÉES se partagent 240 moins l’écart', () => {
+      const [left, right1, right2] = mediaGridCellSizes(3);
+      expect(left!.width).toBeCloseTo(178.8, 5);
+      expect(left!.height).toBe(240);
+      expect(right1!.width).toBeCloseTo(119.2, 5);
+      expect(right1!.height).toBeCloseTo((240 - MEDIA_GRID_SPACING) / 2, 5);
+      expect(right2).toEqual(right1!);
+    });
+
+    test('4 pièces : deux rangées de `1fr`, chaque case (240 − écart) / 2 de haut', () => {
+      const cells = mediaGridCellSizes(4);
+      expect(cells).toHaveLength(4);
+      for (const cell of cells) {
+        expect(cell.width).toBeCloseTo(149, 5);
+        expect(cell.height).toBeCloseTo(119, 5);
+      }
+    });
+
+    test('6 pièces : 4 cases rendues, mêmes cotes que le quadruple', () => {
+      expect(mediaGridCellSizes(6)).toEqual(mediaGridCellSizes(4));
+    });
+
+    /**
+     * LE LIEN AVEC LA LOI, JAMAIS UN LITTÉRAL PARALLÈLE : la LARGEUR d'une
+     * case est celle de `mediaGridSlots`, et la somme des hauteurs d'une
+     * COLONNE (écarts compris) est la hauteur de la BOÎTE. Si la loi change,
+     * la dérivée suit — ou ce témoin rougit.
+     */
+    test('les largeurs viennent de mediaGridSlots, et les hauteurs remplissent la boîte', () => {
+      for (const count of [2, 3, 4, 6]) {
+        const slots = mediaGridSlots(count);
+        const cells = mediaGridCellSizes(count);
+        expect(cells).toHaveLength(slots.length);
+        cells.forEach((cell, index) => {
+          expect(cell.width).toBe(slots[index]!.width);
+        });
+      }
+      const boxHeight = mediaGridSlots(4)[0]!.height;
+      const quad = mediaGridCellSizes(4);
+      expect(quad[0]!.height * 2 + MEDIA_GRID_SPACING).toBeCloseTo(boxHeight, 5);
+      const triple = mediaGridCellSizes(3);
+      expect(triple[1]!.height * 2 + MEDIA_GRID_SPACING).toBeCloseTo(triple[0]!.height, 5);
+    });
   });
 
   test('visibleCount(n) = min(n, 4)', () => {

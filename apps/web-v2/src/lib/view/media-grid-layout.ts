@@ -100,6 +100,42 @@ export function mediaGridSlots(count: number): readonly MediaSlot[] {
 /** Le nombre de cases RENDUES pour `count` pièces — le reste devient le badge `+N` sur la dernière. */
 export const visibleCount = (count: number): number => Math.min(count, MEDIA_GRID_VISIBLE_MAX);
 
+/** La forme qu'une case OCCUPE à l'écran — distincte de `MediaSlot`, dont la hauteur est celle de la BOÎTE. */
+export type MediaCellSize = { readonly width: number; readonly height: number };
+
+/**
+ * `mediaGridCellSizes` — LA FORME RENDUE de chaque case, dérivée de
+ * `mediaGridSlots` et de `MEDIA_GRID_SPACING` (#7030).
+ *
+ * `MediaSlot.height` porte la hauteur de la BOÎTE sur CHAQUE case (miroir
+ * exact de `FocalMediaGridLayout.slots(for:)`, dont les tests Swift
+ * l'observent ainsi) : ce n'est donc pas la hauteur qu'une case EMPILÉE
+ * occupe. Le composant empile — deux cases dans la colonne droite du
+ * triplet, deux rangées `1fr 1fr` au quadruple — et cette dérivation dit ce
+ * que cet empilement produit, UNE fois, pour que ni le composant ni le gate
+ * ne la réécrivent.
+ *
+ * C'est ce que la boîte plafonnée doit préserver : sa LARGEUR rendue rétrécit
+ * avec son porteur (`maxWidth: 100 %`, #7018) et sa hauteur suit par
+ * `aspectRatio` (#7030) — chaque case garde alors ce RATIO, quelle que soit
+ * la largeur servie.
+ */
+export function mediaGridCellSizes(count: number): readonly MediaCellSize[] {
+  const slots = mediaGridSlots(count);
+  if (slots.length === 0) return [];
+  const stackedHeight = (boxHeight: number): number => (boxHeight - MEDIA_GRID_SPACING) / 2;
+  if (slots.length <= 2) return slots.map(({ width, height }) => ({ width, height }));
+  if (slots.length === 3) {
+    const [left, right] = slots;
+    return [
+      { width: left!.width, height: left!.height },
+      { width: right!.width, height: stackedHeight(right!.height) },
+      { width: right!.width, height: stackedHeight(right!.height) },
+    ];
+  }
+  return slots.map(({ width, height }) => ({ width, height: stackedHeight(height) }));
+}
+
 export type VideoSlotSize = { readonly width: number; readonly height: number };
 
 /**
