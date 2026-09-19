@@ -271,31 +271,67 @@ describe('le vide filtré et la page qui reste à lire', () => {
 });
 
 /**
- * **LE PANIER DES BLOQUÉS SE LIT EN ENTIER** (revue #7083, défaut majeur 1).
+ * **LE BLOCAGE SE LIT PAR SUJET, SUR LE FIL DU PROFIL** (#7125).
  *
- * `BLOCKED_PAGE_SIZE` vaut 100 et rien n'appelait `fetchNextPage` : au-delà de
- * la centième ligne, la fiche d'une personne BLOQUÉE s'ouvrait entière, avec
- * « Bloquer » offert à la place de la carte de blocage. La passerelle n'expose
- * AUCUNE source par sujet (`routes/directory/blocks.ts` : `PUT`, `DELETE`,
- * `GET /blocks`, rien d'autre ; `relationAvec` n'a pas de valeur `blocked`) —
- * l'issue compagnon #7125 la demande ; d'ici là, on lit le panier jusqu'au
- * bout plutôt que de conclure sur sa première page.
+ * Il se DÉDUISAIT du panier `GET /blocks`, plafonné à cent lignes
+ * (`BLOCKED_PAGE_SIZE`), qu'un effet DRAINAIT page par page jusqu'à y trouver
+ * le sujet. Ce drainage fermait le trou de sécurité d'origine — au-delà de la
+ * centième ligne, la fiche d'une personne bloquée s'ouvrait entière — mais il
+ * laissait intact le défaut qui compte : **pendant le drainage, `blocked` vaut
+ * `false`**, donc l'écran rend le contenu de cette personne ET lance sa requête
+ * de publications, une page de panier après l'autre, jusqu'à la trouver.
+ * Exposition transitoire, et N requêtes pour une question à une ligne.
+ *
+ * La passerelle sert désormais `blockedByViewer` avec `expand=relation`
+ * (`routes/directory/person.ts`, `hasBlocked`) : la réponse arrive AVEC
+ * l'identité, il n'y a plus de fenêtre à traverser, et l'écran ne s'abonne plus
+ * du tout au panier.
  */
-describe('un blocage au-delà de la première page du panier', () => {
-  test('la fiche rend la carte de blocage, jamais « Bloquer »', async () => {
-    /* Le sujet est ABSENT de la page semée, et une suite est annoncée : c'est
-       la forme exacte d'un lecteur qui a bloqué plus de cent personnes. */
+describe('le blocage, lu par SUJET', () => {
+  /** `yann` est bloqué dans le corpus (`fixtures-friends.ts`). */
+  const BLOCKED_ID = 'u-yann';
+
+  test('un panier VIDE ne dément pas le fil : la carte de blocage est peinte, jamais « Bloquer »', async () => {
+    /* La forme exacte d'un lecteur qui a bloqué plus de cent personnes : le
+       sujet est ABSENT de ce que le panier a servi. */
+    appQueryClient.setQueryData(BLOCKED_USERS_QUERY_KEY, {
+      pages: [{ users: [], nextCursor: null }],
+      pageParams: [null],
+    });
+    const el = await mount('yann.legoff');
+    expect(el.querySelector('[data-profile-blocked]')).not.toBeNull();
+    expect(el.querySelector('[data-profile-action="unblock"]')).not.toBeNull();
+    expect(el.querySelector('[data-profile-action="block"]')).toBeNull();
+    expect(el.querySelector('[data-profile-posts]')).toBeNull();
+  });
+
+  test('la carte est peinte sans qu’AUCUNE page de panier n’ait été servie', async () => {
+    const el = await mount('yann.legoff');
+    expect(el.querySelector('[data-profile-blocked]')).not.toBeNull();
+    /* L'écran ne s'abonne plus au panier : sans observateur, TanStack ne crée
+       même pas l'entrée — l'ABSENCE d'état est la preuve, là où un compteur de
+       pages aurait mesuré le drainage plutôt que sa disparition. */
+    expect(appQueryClient.getQueryState(BLOCKED_USERS_QUERY_KEY)).toBeUndefined();
+  });
+
+  /**
+   * **LE DÉFAUT QUE LE DRAINAGE NE FERMAIT PAS** — mesuré sur la forme d'un
+   * lecteur qui a bloqué plus de cent personnes : première page sans le sujet,
+   * une suite annoncée. Le drainage finissait par trouver la personne et la
+   * carte arrivait ; mais `dataUpdateCount` du listing de publications valait
+   * **1** — le contenu d'une personne bloquée était parti sur le réseau
+   * pendant la fenêtre, et le panier avait été tourné pour rien.
+   */
+  test('la requête de publications ne part JAMAIS — même là où le panier aurait été DRAINÉ', async () => {
     appQueryClient.setQueryData(BLOCKED_USERS_QUERY_KEY, {
       pages: [{ users: [], nextCursor: 'blocked:1' }],
       pageParams: [null],
     });
     const el = await mount('yann.legoff');
-    await settle();
-    await settle();
     expect(el.querySelector('[data-profile-blocked]')).not.toBeNull();
-    expect(el.querySelector('[data-profile-action="unblock"]')).not.toBeNull();
-    expect(el.querySelector('[data-profile-action="block"]')).toBeNull();
-    expect(el.querySelector('[data-profile-posts]')).toBeNull();
+    expect(appQueryClient.getQueryState(authorPostsQueryKey(BLOCKED_ID))?.dataUpdateCount ?? 0).toBe(0);
+    /* Et le panier n'a pas été TOURNÉ : la page semée est la seule. */
+    expect(appQueryClient.getQueryData<{ readonly pages: readonly unknown[] }>(BLOCKED_USERS_QUERY_KEY)?.pages.length).toBe(1);
   });
 });
 

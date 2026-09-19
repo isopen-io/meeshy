@@ -213,10 +213,14 @@ const profileView = (person: PersonSummary, relation: ServedRelation): PublicPro
   stats: null,
   relation,
   isSelf: false,
+  blockedByViewer: false,
 });
 
 const relationIn = (queryClient: QueryClient, handle: string): ServedRelation | undefined =>
   queryClient.getQueryData<PublicProfileView>(publicProfileQueryKey(handle))?.relation;
+
+const blockedIn = (queryClient: QueryClient, handle: string): boolean | undefined =>
+  queryClient.getQueryData<PublicProfileView>(publicProfileQueryKey(handle))?.blockedByViewer;
 
 describe('les gestes relationnels patchent la fiche de profil, optimistes et réversibles', () => {
   test('« Ajouter » passe la fiche à « en attente » AVANT la réponse, et un refus l’y ramène', async () => {
@@ -334,5 +338,51 @@ describe('bloquer', () => {
     h.release();
     expect(await performBlock({ person: ada, deps: h.deps })).toBe('offline');
     expect(h.calls).toHaveLength(0);
+  });
+});
+
+/**
+ * **BLOQUER ATTEINT LA FICHE, comme les quatre gestes relationnels** (#7125).
+ *
+ * La fiche `/u/:handle` DÉDUISAIT « ai-je bloqué cette personne » du panier ;
+ * elle le lit maintenant sur le FIL (`blockedByViewer`, servi avec
+ * `expand=relation`). Un geste qui ne patcherait que le panier laisserait donc
+ * « Bloquer » SANS AUCUN EFFET sur l'écran d'où on vient de le toucher — le
+ * contrôle mort que la loi 4 interdit, et le défaut exact que `withBlockedFirst`
+ * a déjà corrigé une fois, un cache plus loin.
+ *
+ * **`relation` ne bouge PAS** : bloquer n'efface pas la ligne d'amitié, et
+ * débloquer doit rendre la relation qu'on avait.
+ */
+describe('bloquer et débloquer atteignent la fiche de profil', () => {
+  test('« Bloquer » marque TOUTE entrée au geste sans toucher la relation ; un refus la démarque', async () => {
+    const h = harness(refused);
+    h.queryClient.setQueryData(publicProfileQueryKey('ada'), profileView(ada, 'friend'));
+    h.queryClient.setQueryData(publicProfileQueryKey('u-ada'), profileView(ada, 'friend'));
+    h.queryClient.setQueryData(publicProfileQueryKey('grace'), profileView(grace, 'none'));
+
+    const outcome = performBlock({ person: ada, deps: h.deps });
+    expect([blockedIn(h.queryClient, 'ada'), blockedIn(h.queryClient, 'u-ada'), blockedIn(h.queryClient, 'grace')]).toEqual([
+      true,
+      true,
+      false,
+    ]);
+    expect(relationIn(h.queryClient, 'ada')).toBe('friend');
+
+    h.release();
+    expect(await outcome).toBe('failed');
+    expect([blockedIn(h.queryClient, 'ada'), blockedIn(h.queryClient, 'u-ada')]).toEqual([false, false]);
+    expect(relationIn(h.queryClient, 'ada')).toBe('friend');
+  });
+
+  test('« Débloquer » démarque la fiche au geste, et un refus la remarque', async () => {
+    const h = harness(refused);
+    h.queryClient.setQueryData(publicProfileQueryKey('ada'), { ...profileView(ada, 'friend'), blockedByViewer: true });
+
+    const outcome = performUnblock({ person: ada, deps: h.deps });
+    expect(blockedIn(h.queryClient, 'ada')).toBe(false);
+    h.release();
+    expect(await outcome).toBe('failed');
+    expect(blockedIn(h.queryClient, 'ada')).toBe(true);
   });
 });
