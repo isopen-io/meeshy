@@ -46,3 +46,15 @@ export function publicMediaUrl(value: string, base: string): string {
   if (STORAGE_KEY_SHAPE.test(value)) return `${racine}${ATTACHMENT_STREAM_PATH}/${encodeURIComponent(value)}`;
   return `${racine}/${value}`;
 }
+
+/**
+ * LA MÊME COMPOSITION, LA BASE PRISE DE L'ENVIRONNEMENT (#7022).
+ *
+ * Le repli `https://gate.meeshy.me` vivait dans `NotificationService`, c'est-à-dire
+ * qu'un nom d'hôte de DÉPLOIEMENT était écrit dans un service de domaine — très
+ * exactement ce que ce lot retire de la donnée. Il vit désormais à côté de la règle
+ * qu'il sert, en un seul endroit : un appelant ne nomme plus jamais d'hôte.
+ */
+export function publicMediaUrlFromEnv(value: string): string {
+  return publicMediaUrl(value, process.env.API_PUBLIC_URL || 'https://gate.meeshy.me');
+}
