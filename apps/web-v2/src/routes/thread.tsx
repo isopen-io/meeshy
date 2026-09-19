@@ -34,7 +34,7 @@ import { applyConsumption } from '@/lib/api/view-once';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
 import { accentOf, withAccent } from '@/lib/accent';
-import { isGroup, titleOf, unreadOf } from '@/lib/view/conversation';
+import { isGroup, titleOf, unreadOf, participantAvatarOf } from '@/lib/view/conversation';
 import { useParams } from '@/lib/router';
 import { mergeTimeline, place } from '@/lib/grouping';
 import { useReaderLanguages } from '@/lib/view/use-reader';
@@ -97,6 +97,26 @@ export default function ThreadScreen() {
    */
   const threadData = useThreadData(id);
   const conversation = threadData.conversation;
+
+  /**
+   * LA PHOTO D'UN FRAPPEUR (#6985) — résolue ICI, depuis les participants que
+   * cet hôte a DÉJÀ en cache, et remise à la cellule de frappe. Le fil
+   * `typing:start` ne porte pas d'avatar, et l'y ajouter dupliquerait
+   * l'information à chaque frappe de chaque personne.
+   *
+   * `participantAvatarOf` est la LOI PARTAGÉE (rang local puis rang compte,
+   * chaînes blanches normalisées), jamais une boucle écrite ici.
+   *
+   * Mémoïsé sur les participants : la cellule n'est pas `memo`-isée, donc
+   * l'identité ne change rien à son rendu — mais la CARTE, elle, se
+   * reconstruirait à chaque frappe reçue si on ne la retenait pas.
+   */
+  const typistAvatarOf = useMemo(() => {
+    const parParticipant = new Map(
+      (conversation?.participants ?? []).map((p) => [p.userId ?? p.id, participantAvatarOf(p)] as const),
+    );
+    return (userId: string) => parParticipant.get(userId) ?? undefined;
+  }, [conversation?.participants]);
   /**
    * `conversationId` (revue-correction #5793, défaut MAJEUR 3) — LA clé de
    * cache et de socket, jamais le paramètre de route brut : voir le
@@ -871,6 +891,7 @@ export default function ThreadScreen() {
           onPickLanguage={messageMenu.onPickLanguage}
           onReact={messageMenu.onMenuReact}
           typists={typing.typists}
+          typistAvatarOf={typistAvatarOf}
           accent={accent}
           older={{ state: older.state, sentinelRef: older.sentinelRef }}
         />
