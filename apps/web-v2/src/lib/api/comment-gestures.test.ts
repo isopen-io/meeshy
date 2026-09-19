@@ -159,6 +159,66 @@ describe('performCommentLike — le compteur bouge AVANT la réponse, et REVIENT
     expect(requests[0]?.method).toBe('POST');
   });
 
+  /**
+   * **L'ÉCRITURE OPTIMISTE EST IDEMPOTENTE, PAS DIFFÉRENTIELLE** (défaut
+   * majeur 1 de la seconde revue-correction). Le témoin du VERBE ci-dessus
+   * frôle ce défaut sans le voir : il mesure ce que le rejeu ENVOIE, jamais ce
+   * que le rejeu ÉCRIT. `liked()` / `unliked()` comptent en DELTA
+   * (`countOf(comment.likeCount) ± 1`) sur la rangée TELLE QU'ELLE EST dans le
+   * cache ; tant que le rejeu ne survenait qu'après un rollback, la rangée
+   * était revenue à son état d'avant et le delta tombait juste. Depuis que
+   * l'optimiste du cœur RESTE POSÉ sur une issue passagère (doctrine du geste
+   * réversible), le second tap part d'un compte DÉJÀ incrémenté : trois rejeux
+   * sur une passerelle qui bat de l'aile affichaient « 6 » là où la passerelle
+   * en avait « 3 ».
+   *
+   * L'auto-guérison par `servedLikeCount` ne rattrape rien ici : elle suppose
+   * une réponse SERVIE, et il n'y en a pas — c'est précisément le cas du rejeu.
+   *
+   * LE TÉMOIN SE POSE DONC SUR LE CACHE, seule surface qui le dise, et sur un
+   * rejeu qui ÉCHOUE encore : c'est le rang où la règle juste et la règle
+   * fausse divergent.
+   */
+  test('deux rejeux d’un cœur NON confirmé laissent le compteur à +1, jamais +2', async () => {
+    const queryClient = seeded([[comment({ isLikedByMe: false, likeCount: 3 })]]);
+    const { requests, transport } = scripted(async () => ({ ok: false, status: 503, error: 'Service Unavailable' }));
+    const request = { postId: 'p1', commentId: 'cm1', on: true, deps: gatewayDeps(queryClient, transport) } as const;
+
+    expect(await performCommentLike(request)).toEqual({
+      ok: false,
+      message: COMMENT_GESTURE_UNCONFIRMED_MESSAGE,
+      issue: 'unconfirmed',
+    });
+    expect(cached(queryClient)?.likeCount).toBe(4);
+
+    await performCommentLike(request);
+
+    expect(cached(queryClient)?.likeCount).toBe(4);
+    expect(cached(queryClient)?.isLikedByMe).toBe(true);
+    /* LE REJEU PART BIEN — l'idempotence porte sur l'ÉCRITURE, pas sur
+       l'appel : renoncer à appeler ferait d'un « Réessayer » un bouton inerte
+       (loi 4). */
+    expect(requests).toHaveLength(2);
+  });
+
+  /* LE SENS INVERSE, et il fausse le compteur dans l'AUTRE direction : le
+     `Math.max(0, …)` d'`unliked` fige à 0 au lieu de dériver, si bien qu'un
+     compte servi à 1 tombait à 0 puis y restait — la même règle différentielle,
+     le même défaut, invisible au témoin jumeau. */
+  test('deux rejeux d’un retrait NON confirmé laissent le compteur à −1, jamais −2', async () => {
+    const queryClient = seeded([[comment({ isLikedByMe: true, likeCount: 3 })]]);
+    const { transport } = scripted(async () => ({ ok: false, status: 503, error: 'Service Unavailable' }));
+    const request = { postId: 'p1', commentId: 'cm1', on: false, deps: gatewayDeps(queryClient, transport) } as const;
+
+    await performCommentLike(request);
+    expect(cached(queryClient)?.likeCount).toBe(2);
+
+    await performCommentLike(request);
+
+    expect(cached(queryClient)?.likeCount).toBe(2);
+    expect(cached(queryClient)?.isLikedByMe).toBe(false);
+  });
+
   test('le `likeCount` SERVI fait foi — il remplace l’estimation optimiste', async () => {
     const queryClient = seeded([[comment({ likeCount: 3 })]]);
     const { transport } = scripted(async () => ({ ok: true, data: { liked: true, likeCount: 11 } }));

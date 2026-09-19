@@ -291,6 +291,30 @@ const unliked = (comment: PostComment): PostComment => ({
 });
 
 /**
+ * LA RANGÉE QUE LE TAP VEUT VOIR — IDEMPOTENTE, jamais différentielle
+ * (seconde revue-correction #7135, défaut majeur 1). `liked` / `unliked`
+ * comptent en DELTA sur la rangée telle qu'elle est DANS LE CACHE : juste tant
+ * que le rejeu ne survenait qu'après un rollback (la rangée était alors revenue
+ * à son état d'avant), faux depuis que l'optimiste du cœur RESTE POSÉ sur une
+ * issue passagère. Le second tap partait d'un compte déjà incrémenté, et trois
+ * rejeux affichaient « 6 » pour « 3 » — dans l'autre sens, le `Math.max(0, …)`
+ * figeait le compte à 0 plutôt que de le faire dériver, ce qui le fausse
+ * pareillement.
+ *
+ * `on` porte la direction VOULUE (défaut majeur 2) ; il manquait de savoir si
+ * elle est DÉJÀ appliquée. Si elle l'est, l'optimiste du premier tap tient
+ * toujours : ne rien réécrire. Le rollback permanent, lui, restaure
+ * `site.comment` — l'état d'avant le PREMIER tap — et reste juste dans les deux
+ * cas.
+ *
+ * `isLikedByMe` est FACULTATIF : `=== true` le normalise, sans quoi une rangée
+ * qui n'a jamais été aimée (`undefined`) se verrait retirer un like qu'elle n'a
+ * pas sur un `on: false`.
+ */
+const likeTarget = (comment: PostComment, on: boolean): PostComment =>
+  (comment.isLikedByMe === true) === on ? comment : on ? liked(comment) : unliked(comment);
+
+/**
  * LA DIRECTION VOYAGE AVEC LA REQUÊTE, elle ne se relit pas dans le cache
  * (revue-correction #7135, défaut majeur 2). Ce module la déduisait de
  * `site.comment.isLikedByMe` AU MOMENT DE L'APPEL : inoffensif tant que le
@@ -310,7 +334,8 @@ export async function performCommentLike(params: GestureParams & { readonly on: 
   const site = readSite(deps, postId, commentId);
   if (site === undefined) return refused(COMMENT_LIKE_FAILED_MESSAGE);
 
-  writeComments(deps, postId, (data) => replaceCommentAt(data, site, on ? liked(site.comment) : unliked(site.comment)));
+  const target = likeTarget(site.comment, on);
+  writeComments(deps, postId, (data) => replaceCommentAt(data, site, target));
 
   inFlight.add(flightKey);
   try {
@@ -318,7 +343,7 @@ export async function performCommentLike(params: GestureParams & { readonly on: 
       method: on ? 'POST' : 'DELETE',
       path: `/api/v1/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}/like`,
       idempotent: false,
-      fixture: { liked: on, likeCount: countOf(on ? liked(site.comment).likeCount : unliked(site.comment).likeCount) },
+      fixture: { liked: on, likeCount: countOf(target.likeCount) },
     }).catch(() => null);
 
     /* LE CŒUR EST RÉVERSIBLE : son optimiste RESTE sur une issue passagère, et
