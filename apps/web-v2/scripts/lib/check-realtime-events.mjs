@@ -13,13 +13,23 @@
  * (`lib/reader.ts:44-52`), donc `['fr','en']` en `en-US` : c'est ce qui rend
  * le RANG 2 (`en`) OBSERVABLE avant que `fr` ne reprenne la main au rang 1.
  *
- * Horloge : `page.clock.install({ time: INSTANT })` puis `runFor` — la scène
- * n'est PAS mesurée ici (aucune élection Focal, la réserve de
- * `instant.mjs:24-31` qui interdit `install` pour cette raison ne s'applique
- * donc pas). `install` est ce que CE gate EXIGE : la chronologie du bouchon est
- * une suite de `setTimeout` (`fixtures-realtime.ts` § `SCHEDULE`), et seul
- * `runFor` la fait avancer PAS À PAS — sous `setFixedTime` elle partirait en
- * temps réel, donc sans point d'observation entre deux événements.
+ * Horloge : `pausedChronology` (`./paused-chronology.mjs`) — `install` PUIS
+ * `pauseAt`, JAMAIS `install` seul. Sous `install` seul, l'horloge truquée de
+ * Playwright 1.62.1 dérive avec le temps MURAL entre deux appels du gate
+ * (mesuré, doc-comment de `paused-chronology.mjs` § 1) : sous contention, la
+ * chronologie peut DÉPASSER l'instant qu'une assertion veut lire — c'est
+ * exactement le rouge de #7054 (« obtenu le FRANÇAIS » à T+4 s, « obtenu
+ * Kwame Mensah écrit » à T+5 s). La scène n'est PAS mesurée ici (aucune
+ * élection Focal, la réserve de `instant.mjs:24-31` qui interdit `install`
+ * pour cette raison ne s'applique donc pas ici).
+ *
+ * La chronologie est ORDONNÉE, jamais calée sur un délai : chaque point
+ * d'arrêt attend SON fait, via `chrono.factBefore(prochainÉvènementMs,
+ * fait)`, AVANT que l'évènement suivant ne tire — en avançant l'horloge par
+ * pas de `CHRONOLOGY_STEP_MS`, jamais par une lecture immédiate après un
+ * `runFor` de durée fixe (§1.2 de la spécification #7054 : le sondage propre
+ * de Playwright, `await-fact.mjs`, n'est PAS truqué, mais ce qui fait
+ * avancer le PRODUIT sous horloge en pause reste `runFor`).
  *
  * `INSTANT` est IMPORTÉ de `instant.mjs`, jamais redéclaré (revue-correction
  * #6171) : la valeur y était recopiée à l'identique, ce qui aurait fait une
@@ -34,9 +44,20 @@
  */
 import { contrastOf } from './contrast.mjs';
 import { INSTANT } from './instant.mjs';
+import { pausedChronology } from './paused-chronology.mjs';
 
 const textOf = (page, id) => page.locator(`[data-message="${id}"] p`).first().innerText();
 const langOf = (page, id) => page.locator(`[data-message="${id}"] p`).first().getAttribute('lang');
+
+/**
+ * `attachedOn(targetPage, sélecteur)` — un FAIT pour `chrono.factBefore` :
+ * rend `true` dès que le nœud existe dans le DOM de `targetPage`. Générique
+ * sur la page, jamais fermé sur `page` seule (revue de ce lot) : le fil et la
+ * liste ci-dessous vivent sur deux `Page` distinctes du MÊME contexte, et un
+ * fait fermé sur la mauvaise page sonderait un DOM qui ne bougera jamais.
+ */
+const attachedOn = (targetPage, selector) => () =>
+  targetPage.evaluate((sel) => document.querySelector(sel) !== null, selector);
 
 /**
  * LA TRANSCRIPTION D'UN VOCAL (#7017) — `[data-transcript]`
@@ -106,7 +127,7 @@ export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'en-US' });
   await setScheme(context, scheme);
   const page = await context.newPage();
-  await page.clock.install({ time: INSTANT });
+  const chrono = await pausedChronology(page, { time: INSTANT });
 
   let messageFetches = 0;
   /**
@@ -129,8 +150,10 @@ export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA
 
   // ===== 1. LE FIL — message:translation, le RANG du lecteur =====
   await page.goto(`${BASE}/c/c-live`, { waitUntil: 'load' });
-  await page.waitForSelector('[data-message="live-1"]');
-  await page.clock.runFor(300);
+  const booted = await chrono.factBefore(1500, attachedOn(page, '[data-message="live-1"]'));
+  expect(booted, `${label} le fil c-live est monté avant le premier fait de la chronologie`);
+  const origin = chrono.mark();
+  await chrono.advanceTo(origin + 300);
 
   expect((await textOf(page, 'live-1')).includes('Hola'), `${label} live-1 : l'ORIGINAL espagnol au chargement`);
   expect((await langOf(page, 'live-1')) === 'es', `${label} live-1 : lang="es" au chargement`);
@@ -171,7 +194,11 @@ export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA
     `${label} le document est en ANGLAIS (langue d'INTERFACE, locale en-US) pendant que le Prisme sert du contenu français (obtenu ${await documentLangOf(page)})`,
   );
 
-  await page.clock.runFor(2200); // T+2,5 s
+  await chrono.advanceTo(origin + 2500); // T+2,5 s
+  await chrono.factBefore(
+    origin + 3000,
+    async () => (await langOf(page, 'live-1')) === 'en' && (await transcriptServedLangOf(page, 'live-3')) === 'es',
+  );
   expect(
     (await textOf(page, 'live-1')).includes('Hi, is the review still on Thursday?'),
     `${label} live-1 : la traduction ANGLAISE (rang 2 du Prisme) est servie à T+2 s`,
@@ -186,7 +213,11 @@ export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA
     `${label} live-3 : la transcription est ANNONCÉE en "es" — la langue RÉELLEMENT servie, pas celle du lecteur ni celle du document (obtenu ${JSON.stringify(await transcriptServedLangOf(page, 'live-3'))})`,
   );
 
-  await page.clock.runFor(1500); // T+4 s
+  await chrono.advanceTo(origin + 4000); // T+4 s
+  await chrono.factBefore(
+    origin + 4200,
+    async () => (await langOf(page, 'live-1')) === 'fr' && (await transcriptServedLangOf(page, 'live-3')) === 'en',
+  );
   expect(
     (await textOf(page, 'live-1')).includes('Bonjour, la revue reste bien jeudi ?'),
     `${label} live-1 : la traduction FRANÇAISE (rang 1) reprend la main à T+3,5 s`,
@@ -207,7 +238,8 @@ export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA
   expect(messageFetches === 0, `${label} aucune requête « /messages » n'a été déclenchée par la traduction ni par l'enrichissement de la pièce (${messageFetches})`);
 
   // ===== 2. conversation:updated NE PARLE QU'À LA LISTE =====
-  await page.clock.runFor(1000); // T+5 s
+  await chrono.advanceTo(origin + 5000); // T+5 s
+  await chrono.factBefore(origin + 6000, async () => (await transcriptServedLangOf(page, 'live-3')) === 'fr');
   expect(
     (await textOf(page, 'live-1')).includes('Bonjour, la revue reste bien jeudi ?'),
     `${label} live-1 : le fil ne change pas quand conversation:updated arrive (le fil OUVERT n'écoute que message:translation)`,
@@ -257,13 +289,15 @@ export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA
   expect(messageFetches === 0, `${label} le fil n'a jamais été rechargé pour obtenir la transcription (${messageFetches})`);
 
   // ===== 3. LE ROSTER, DANS LE FIL =====
-  await page.clock.runFor(1500); // T+6,3 s
+  await chrono.advanceTo(origin + 6300); // T+6,3 s
+  await chrono.factBefore(origin + 7500, async () => /^Kwame Mensah is typing$/.test((await typingCellText(page)) ?? ''));
   expect(
     /^Kwame Mensah is typing$/.test((await typingCellText(page)) ?? ''),
     `${label} T+6,3 s : la cellule dit « Kwame Mensah is typing » (obtenu ${await typingCellText(page)})`,
   );
 
-  await page.clock.runFor(1500); // T+7,8 s
+  await chrono.advanceTo(origin + 7800); // T+7,8 s
+  await chrono.factBefore(origin + 9000, async () => (await typingCellText(page)) === 'Kwame Mensah and Fatou Bâ are typing');
   expect(
     (await typingCellText(page)) === 'Kwame Mensah and Fatou Bâ are typing',
     `${label} T+7,8 s : « Kwame Mensah and Fatou Bâ are typing » (obtenu ${await typingCellText(page)})`,
@@ -281,7 +315,11 @@ export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA
    * l'avatar (FB) — exactement le défaut mesuré en revue avant correctif
    * (`typing-store.ts` § `start`, falsifié par `typing-store.test.ts`).
    */
-  await page.clock.runFor(1500); // T+9,3 s — keepalive de Kwame à 9 000 ms.
+  await chrono.advanceTo(origin + 9300); // T+9,3 s — keepalive de Kwame à 9 000 ms.
+  await chrono.factBefore(
+    origin + 10500,
+    async () => (await typingCellText(page)) === 'Kwame Mensah and Fatou Bâ are typing',
+  );
   expect(
     (await typingCellText(page)) === 'Kwame Mensah and Fatou Bâ are typing',
     `${label} T+9,3 s : le keepalive de Kwame ne change PAS l'ordre du roster (obtenu ${await typingCellText(page)})`,
@@ -298,6 +336,12 @@ export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA
    * deux frappeurs déjà en roster, puis REPOSÉ sur Focal (le mode PAR DÉFAUT,
    * D-7) avant de reprendre le scénario — un mode qui resterait Bulles
    * fausserait la suite (la cellule y garde sa capsule à tout instant).
+   *
+   * Aucun de ces quatre bascules n'attend un ÉVÈNEMENT de la chronologie —
+   * la borne `origin + 10500` de `factBefore` n'est qu'un PLAFOND anti-
+   * blocage (le prochain fait réel n'arrive qu'à T+13,3 s) : le rendu d'un
+   * clic de menu est une micro-tâche, `factBefore` y consomme donc 0 pas en
+   * pratique.
    */
   const modeChip = page.getByRole('button', { name: /Mode de lecture/ });
   const menuItem = (name) => page.getByRole('menuitemradio', { name });
@@ -313,33 +357,32 @@ export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA
 
   await modeChip.click();
   await menuItem(/^Focal/).click();
-  await page.waitForTimeout(50);
-  expect(
-    (await hasCapsule()) === false,
-    `${label} mode Focal (défaut D-7) : la cellule n'a AUCUNE capsule (pastille + points seuls)`,
-  );
+  const focalFlat = await chrono.factBefore(origin + 10500, async () => (await hasCapsule()) === false);
+  expect(focalFlat, `${label} mode Focal (défaut D-7) : la cellule n'a AUCUNE capsule (pastille + points seuls)`);
 
   await modeChip.click();
   await menuItem(/^Script/).click();
-  await page.waitForTimeout(50);
-  expect((await hasCapsule()) === false, `${label} mode Script : la cellule n'a AUCUNE capsule, même tenue que Focal`);
+  const scriptFlat = await chrono.factBefore(origin + 10500, async () => (await hasCapsule()) === false);
+  expect(scriptFlat, `${label} mode Script : la cellule n'a AUCUNE capsule, même tenue que Focal`);
 
   await modeChip.click();
   await menuItem(/^Bulles/).click();
-  await page.waitForTimeout(50);
-  expect((await hasCapsule()) === true, `${label} mode Bulles : la capsule à libellé reste la tenue du mode bulles`);
+  const bubblesCapsule = await chrono.factBefore(origin + 10500, async () => (await hasCapsule()) === true);
+  expect(bubblesCapsule, `${label} mode Bulles : la capsule à libellé reste la tenue du mode bulles`);
 
   await modeChip.click();
   await menuItem(/^Focal/).click();
-  await page.waitForTimeout(50);
+  await chrono.factBefore(origin + 10500, async () => (await hasCapsule()) === false);
 
-  await page.clock.runFor(4000); // T+13,3 s — Fatou s'arrête à 13 000 ms.
+  await chrono.advanceTo(origin + 13300); // T+13,3 s — Fatou s'arrête à 13 000 ms.
+  await chrono.factBefore(origin + 14000, async () => (await typingCellText(page)) === 'Kwame Mensah is typing');
   expect(
     (await typingCellText(page)) === 'Kwame Mensah is typing',
     `${label} T+13,3 s : Fatou s'est arrêtée, Kwame reste seul (obtenu ${await typingCellText(page)})`,
   );
 
-  await page.clock.runFor(14000); // T+27,3 s — dernier `start` de Kwame à 12 000 ms + 15 000 ms de sécurité.
+  await chrono.advanceTo(origin + 27300); // T+27,3 s — dernier `start` de Kwame à 12 000 ms + 15 000 ms de sécurité.
+  await chrono.factBefore(origin + 30000, async () => (await typingCellText(page)) === null);
   expect(
     (await typingCellText(page)) === null,
     `${label} T+27,3 s : plus aucun frappeur, la cellule a disparu (obtenu ${await typingCellText(page)})`,
@@ -347,16 +390,26 @@ export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA
 
   // ===== 4. LA LISTE — conversation:updated résolu au Prisme, puis la frappe PRIME =====
   const listPage = await context.newPage();
-  await listPage.clock.install({ time: INSTANT });
+  /* PAS de second `install` : l'horloge est PAR CONTEXTE (Playwright 1.62.1,
+     `_browserContext._channel.clockInstall`) — `listPage` partage celle de
+     `chrono`, déjà en pause. La réinstaller ici écraserait son journal en
+     silence (§1.1 de `paused-chronology.mjs`) sans qu'aucun `expect` n'en
+     dépende : c'était un doublon d'infrastructure, pas un témoin. */
   await listPage.goto(`${BASE}/`, { waitUntil: 'load' });
-  await listPage.waitForSelector('[data-row="c-live"]');
-  await listPage.clock.runFor(300);
+  const listBooted = await chrono.factBefore(chrono.now() + 1500, attachedOn(listPage, '[data-row="c-live"]'));
+  expect(listBooted, `${label} la liste est montée avant le premier fait de sa chronologie`);
+  const listOrigin = chrono.mark();
+  await chrono.advanceTo(listOrigin + 300);
   expect(
     (await rowLine2Text(listPage, 'c-live')).includes('Oui, jeudi 14h.'),
     `${label} liste, T+0,3 s : la ligne 2 décrit le dernier message CONNU avant l'événement`,
   );
 
-  await listPage.clock.runFor(4700); // T+5 s — conversation:updated a adopté live-1.
+  await chrono.advanceTo(listOrigin + 5000); // T+5 s — conversation:updated a adopté live-1.
+  await chrono.factBefore(
+    listOrigin + 6000,
+    async () => (await rowLine2Text(listPage, 'c-live')).includes('Bonjour, la revue reste bien jeudi ?'),
+  );
   const line2AfterAdoption = await rowLine2Text(listPage, 'c-live');
   expect(
     line2AfterAdoption.includes('Bonjour, la revue reste bien jeudi ?'),
@@ -373,16 +426,17 @@ export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA
      réservé aux trois crans iOS qui ne PEUVENT pas tenir l'AA ; la ligne 2 de la
      Lentille n'en est pas un, et `check-list-actions.mjs` l'exige déjà ailleurs.
 
-     MESURÉ ICI, AVANT que la frappe ne prenne la ligne 2 : après `runFor(1500)`
-     ce nœud ne porte plus l'aperçu mais « Kwame Mensah écrit », et le témoin
-     mesurerait un AUTRE texte que celui qu'il nomme. */
+     MESURÉ ICI, AVANT que la frappe ne prenne la ligne 2 : après l'avancée
+     suivante ce nœud ne porte plus l'aperçu mais « Kwame Mensah écrit », et le
+     témoin mesurerait un AUTRE texte que celui qu'il nomme. */
   const contrast = await contrastOf(listPage, `[data-row="c-live"] [data-line2]`);
   expect(
     contrast !== null && contrast >= AA_THRESHOLD,
     `${label} liste, T+5 s : l'aperçu SERVI de la ligne 2 tient l'AA (${contrast}:1 >= ${AA_THRESHOLD})`,
   );
 
-  await listPage.clock.runFor(1500); // T+6,5 s — la frappe de Kwame PRIME sur l'aperçu.
+  await chrono.advanceTo(listOrigin + 6500); // T+6,5 s — la frappe de Kwame PRIME sur l'aperçu.
+  await chrono.factBefore(listOrigin + 7500, async () => (await rowLine2Text(listPage, 'c-live')).includes('écrit'));
   expect(
     (await rowLine2Text(listPage, 'c-live')).includes('écrit'),
     `${label} liste, T+6,5 s : la frappe PRIME sur l'aperçu (Line2Kind)`,
@@ -413,9 +467,11 @@ export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA
    * rougir ne garde rien.
    */
   const rowsBefore = await listPage.locator('[data-row]').count();
-  await listPage.clock.runFor(8000); // T+14,5 s — l'entrée `conversation:new` a tiré.
+  await chrono.advanceTo(listOrigin + 14500); // T+14,5 s — l'entrée `conversation:new` a tiré.
   const surgedRow = listPage.locator('[data-row="c-surgie"]');
-  await surgedRow.waitFor({ state: 'attached', timeout: 5000 }).catch(() => undefined);
+  // `factBefore` ne LÈVE jamais (§ `await-fact.mjs`) : un `.catch(() =>
+  // undefined)` de rattrapage n'a donc plus lieu d'être ici.
+  await chrono.factBefore(listOrigin + 30000, attachedOn(listPage, '[data-row="c-surgie"]'));
   const rowsAfter = await listPage.locator('[data-row]').count();
   expect(
     (await surgedRow.count()) === 1,
@@ -483,10 +539,17 @@ export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA
    * définition — celle qui dérive en silence le jour où la fixture change son
    * média, laissant le témoin chercher une chaîne que plus personne ne sert et
    * verdir sur une fuite réelle. Le média est servi par la fixture, une fois.
+   *
+   * `live-ordinaire` (30 000 ms) et `live-protege` (31 000 ms) sont datés
+   * depuis la connexion du FIL (`origin`), mais la chronologie est PARTAGÉE
+   * avec la section LISTE ci-dessus (§ doc-comment de tête — une horloge par
+   * CONTEXTE) : au moment où l'exécution atteint cette ligne, l'horloge
+   * partagée a déjà dépassé 42 s (`listOrigin` + les avancées de la §4). Les
+   * deux faits sont donc MONOTONES et déjà arrivés — `factBefore` les
+   * constate sans consommer un seul pas, et la borne qu'il reçoit ne sert
+   * plus qu'à documenter l'évènement qu'elle nommait à l'origine.
    */
-  await page.clock.runFor(3000); // T+30,3 s — `live-ordinaire` est arrivé à 30 000 ms.
-  const ordinaire = page.locator('[data-message="live-ordinaire"]');
-  await ordinaire.waitFor({ state: 'attached', timeout: 5000 }).catch(() => undefined);
+  await chrono.factBefore(origin + 31000, attachedOn(page, '[data-message="live-ordinaire"]'));
   const vuOrdinaire = await bulleVue('live-ordinaire', null);
   expect(
     vuOrdinaire?.img === true,
@@ -504,9 +567,7 @@ export async function checkRealtimeEvents({ browser, BASE, expect, setScheme, AA
   );
 
   /** LE MÊME MÉDIA, LA MÊME ARRIVÉE — la seule déclaration en plus. */
-  await page.clock.runFor(1000); // T+31,3 s — `live-protege` est arrivé à 31 000 ms.
-  const protegee = page.locator('[data-message="live-protege"]');
-  await protegee.waitFor({ state: 'attached', timeout: 5000 }).catch(() => undefined);
+  await chrono.factBefore(origin + 31000 + 5000, attachedOn(page, '[data-message="live-protege"]'));
   const vuProtege = await bulleVue('live-protege', urlServie);
   expect(
     vuProtege !== null,
