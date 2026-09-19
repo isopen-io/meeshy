@@ -5,7 +5,7 @@
  * d'entrée `registerCoreRoutes` qui appelle ce registrar.
  */
 import { FastifyInstance, FastifyRequest } from 'fastify';
-import { conversationListQuerystringSchema } from './list-querystring';
+import { CONVERSATION_LIST_PAGINATION, conversationListQuerystringSchema } from './list-querystring';
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { resolveParticipantAvatar, resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
@@ -144,7 +144,7 @@ export function registerConversationListRoute(
       // `take: NaN`/negative and throw a `PrismaClientValidationError` → HTTP 500
       // on caller-controlled input. The schema declares `limit`/`offset` as plain
       // strings (no AJV coercion), so the guard has to live here.
-      const { limit, offset } = validatePagination(request.query.offset, request.query.limit, { defaultLimit: 30, maxLimit: 100 });
+      const { limit, offset } = validatePagination(request.query.offset, request.query.limit, CONVERSATION_LIST_PAGINATION);
       const includeCount = request.query.includeCount === 'true';
 
       // OPTIMIZED: Filtres optionnels pour éviter de charger toutes les conversations
