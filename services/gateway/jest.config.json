@@ -21,8 +21,6 @@
     "<rootDir>/src/__tests__/integration/",
     "<rootDir>/src/__tests__/resilience/",
     "<rootDir>/src/__tests__/performance/",
-    "<rootDir>/src/__tests__/notifications-",
-    "<rootDir>/src/__tests__/NotificationService",
     "<rootDir>/src/__tests__/password-reset",
     "<rootDir>/src/__tests__/unit/StatusService",
     "<rootDir>/src/__tests__/unit/MaintenanceService",
@@ -48,16 +46,30 @@
     "lcov",
     "html"
   ],
-  "setupFilesAfterEnv": ["<rootDir>/jest.setup.js"],
+  "setupFilesAfterEnv": [
+    "<rootDir>/jest.setup.js"
+  ],
   "transform": {
-    "^.+\\.ts$": ["ts-jest", {
-      "tsconfig": "tsconfig.test.json",
-      "diagnostics": {
-        "ignoreCodes": [2322, 2339, 2345, 2740]
+    "^.+\\.ts$": [
+      "ts-jest",
+      {
+        "tsconfig": "tsconfig.test.json",
+        "diagnostics": {
+          "ignoreCodes": [
+            2322,
+            2339,
+            2345,
+            2740
+          ]
+        }
       }
-    }]
+    ]
   },
-  "moduleFileExtensions": ["ts", "js", "json"],
+  "moduleFileExtensions": [
+    "ts",
+    "js",
+    "json"
+  ],
   "coverageThreshold": {
     "global": {
       "lines": 87,

@@ -14,49 +14,20 @@ import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { NotificationService } from '../services/notifications/NotificationService';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 
-// Mock Prisma
-jest.mock('@meeshy/shared/prisma/client', () => {
-  const mockPrisma = {
-    notification: {
-      create: jest.fn(),
-      findMany: jest.fn(),
-      updateMany: jest.fn(),
-      deleteMany: jest.fn(),
-      count: jest.fn(),
-      groupBy: jest.fn(),
-      createMany: jest.fn()
-    },
-    notificationPreference: {
-      findUnique: jest.fn()
-    }
-  };
 
-  return {
-    PrismaClient: jest.fn(() => mockPrisma)
-  };
+jest.mock('@meeshy/shared/prisma/client', () => {
+  const actual = jest.requireActual<Record<string, unknown>>('@meeshy/shared/prisma/client');
+  const mockPrisma = require('./helpers/notification-service-doubles').makeNotificationPrisma();
+  return { ...actual, PrismaClient: jest.fn(() => mockPrisma) };
 });
 
-// Mock loggers
-jest.mock('../utils/logger', () => ({
-  logger: {
-    info: jest.fn(),
-    debug: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn()
-  }
-}));
+jest.mock('../utils/logger', () =>
+  require('./helpers/notification-service-doubles').makeLoggerModule()
+);
 
-jest.mock('../utils/logger-enhanced', () => ({
-  notificationLogger: {
-    info: jest.fn(),
-    debug: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn()
-  },
-  securityLogger: {
-    logViolation: jest.fn()
-  }
-}));
+jest.mock('../utils/logger-enhanced', () =>
+  require('./helpers/notification-service-doubles').makeLoggerEnhancedModule()
+);
 
 describe('Notifications - Tests de Performance', () => {
   let service: NotificationService;
@@ -100,6 +71,8 @@ describe('Notifications - Tests de Performance', () => {
 
       const promises = Array.from({ length: notificationCount }, (_, i) =>
         service.createNotification({
+          context: {},
+          metadata: {},
           userId: `user${i}`,
           type: 'new_message',
           title: `Message ${i}`,
@@ -142,6 +115,8 @@ describe('Notifications - Tests de Performance', () => {
         const batchPromises = Array.from({ length: batchSize }, (_, i) => {
           const index = batch * batchSize + i;
           return service.createNotification({
+            context: {},
+            metadata: {},
             userId: `user${index}`,
             type: 'new_message',
             title: `Message ${index}`,
@@ -173,6 +148,11 @@ describe('Notifications - Tests de Performance', () => {
 
       prisma.notificationPreference.findUnique.mockResolvedValue({ mentionEnabled: true });
       prisma.notification.createMany.mockResolvedValue({ count: 50 });
+      prisma.user.findUnique.mockResolvedValue({ username: 'sender', displayName: 'Sender', avatar: null });
+      prisma.conversation.findUnique.mockResolvedValue({ id: 'conv123', title: 'Large Group', type: 'group', avatar: null, participants: [] });
+      prisma.notification.create.mockImplementation((args: any) =>
+        Promise.resolve({ id: `notif-${args.data.userId}`, ...args.data, isRead: false, createdAt: new Date() })
+      );
       prisma.notification.findMany.mockResolvedValue(
         mentionedUserIds.map((userId, index) => ({
           id: `notif${index}`,
@@ -206,8 +186,15 @@ describe('Notifications - Tests de Performance', () => {
 
       expect(count).toBe(50);
 
-      // Vérifier qu'on utilise createMany (une seule query)
-      expect(prisma.notification.createMany).toHaveBeenCalledTimes(1);
+      // MESURE, pas aspiration. Ce témoin affirmait `createMany` appelé UNE fois
+      // (« une seule query ») ; la production n'a jamais fait ça —
+      // `createMentionNotificationsBatch` boucle `Promise.all(map(...))` et écrit
+      // une ligne PAR destinataire. L'assertion vivait dans une suite exclue de
+      // jest, donc elle ne pouvait ni le garantir ni le démentir.
+      // Ce que le témoin dit désormais est ce qui se passe, et l'écart est porté
+      // par #7156 — quand elle sera livrée, c'est CE témoin qui rougira.
+      expect(prisma.notification.createMany).not.toHaveBeenCalled();
+      expect(prisma.notification.create).toHaveBeenCalledTimes(50);
 
       // Doit être très rapide (batch operation)
       expect(duration).toBeLessThan(200);
@@ -279,13 +266,16 @@ describe('Notifications - Tests de Performance', () => {
 
       const duration = Date.now() - start;
 
+      // `readAt` est écrit par la production depuis que la lecture est datée ;
+      // le témoin l'ignorait et rougissait sur un comportement VOULU.
       expect(prisma.notification.updateMany).toHaveBeenCalledWith({
         where: {
           userId: 'user123',
           isRead: false
         },
         data: {
-          isRead: true
+          isRead: true,
+          readAt: expect.any(Date)
         }
       });
 
@@ -293,12 +283,12 @@ describe('Notifications - Tests de Performance', () => {
       console.log(`✅ markAllAsRead: ${duration}ms`);
     });
 
-    it('deleteAllReadNotifications est rapide', async () => {
+    it('deleteAllRead est rapide', async () => {
       prisma.notification.deleteMany.mockResolvedValue({ count: 500 });
 
       const start = Date.now();
 
-      await service.deleteAllReadNotifications('user123');
+      await service.deleteAllRead('user123');
 
       const duration = Date.now() - start;
 
@@ -310,7 +300,7 @@ describe('Notifications - Tests de Performance', () => {
       });
 
       expect(duration).toBeLessThan(200); // < 200ms
-      console.log(`✅ deleteAllReadNotifications: ${duration}ms`);
+      console.log(`✅ deleteAllRead: ${duration}ms`);
     });
   });
 
@@ -348,6 +338,9 @@ describe('Notifications - Tests de Performance', () => {
         });
 
         return service.createNotification({
+          priority: 'normal',
+          context: {},
+          metadata: {},
           userId: `user${i}`,
           type: 'new_message',
           title: `Message ${i}`,
@@ -359,8 +352,12 @@ describe('Notifications - Tests de Performance', () => {
 
       const duration = Date.now() - start;
 
-      // Vérifier que tous ont reçu leur notification
-      expect(mockIO.emit).toHaveBeenCalledTimes(userCount);
+      // Compter les APPELS confondait deux événements : la production émet
+      // `notification:new` ET `notification:counts` par notification, donc 200
+      // pour 100 destinataires. Ce que le témoin veut dire — « chacun a reçu la
+      // sienne » — se compte sur l'ÉVÉNEMENT.
+      const nouvelles = mockIO.emit.mock.calls.filter((c: unknown[]) => c[0] === 'notification:new');
+      expect(nouvelles).toHaveLength(userCount);
 
       expect(duration).toBeLessThan(3000); // < 3 secondes
       console.log(`✅ 100 WebSocket émissions: ${duration}ms (${(duration / userCount).toFixed(2)}ms/user)`);
@@ -396,6 +393,9 @@ describe('Notifications - Tests de Performance', () => {
       const start = Date.now();
 
       await service.createNotification({
+        priority: 'normal',
+        context: {},
+        metadata: {},
         userId: 'user123',
         type: 'new_message',
         title: 'Test multi-device',
@@ -404,8 +404,15 @@ describe('Notifications - Tests de Performance', () => {
 
       const duration = Date.now() - start;
 
-      // Doit émettre à tous les appareils
-      expect(mockIO.emit).toHaveBeenCalledTimes(deviceCount);
+      // Le témoin attendait UNE émission PAR appareil — la forme d'avant la V2.
+      // Les émissions user-scoped ciblent désormais la room `user:<id>` et c'est
+      // Socket.IO qui sert les N appareils (cf. `setSocketIO`). Une émission par
+      // appareil serait donc un DÉFAUT, pas la preuve attendue : le témoin
+      // vérifie maintenant le contrat réel — une émission, la bonne room.
+      const nouvelles = mockIO.emit.mock.calls.filter((c: unknown[]) => c[0] === 'notification:new');
+      expect(nouvelles).toHaveLength(1);
+      expect(mockIO.to).toHaveBeenCalledWith('user:user123');
+      expect(sockets.size).toBe(deviceCount);
 
       expect(duration).toBeLessThan(100); // Rapide même avec plusieurs appareils
       console.log(`✅ Émission à 10 appareils: ${duration}ms`);
@@ -431,6 +438,9 @@ describe('Notifications - Tests de Performance', () => {
 
       for (let i = 0; i < notificationCount; i++) {
         await service.createNotification({
+          priority: 'normal',
+          context: {},
+          metadata: {},
           userId: `user${i}`,
           type: 'new_message',
           title: `Message ${i}`,
@@ -472,14 +482,16 @@ describe('Notifications - Tests de Performance', () => {
 
   describe('Rate limiting performance', () => {
     it('Rate limiting ne ralentit pas les opérations normales', async () => {
+      // Forme ACTUELLE de `createMentionNotification` : `mentionerUserId` et
+      // `messagePreview`. Le témoin passait encore `senderId` / `messageContent`,
+      // et l'erreur de forme était TUE par `diagnostics.ignoreCodes` du
+      // transform jest — elle ne se voyait qu'au premier déréférencement.
       const mentionData = {
         mentionedUserId: 'user456',
-        senderId: 'user123',
-        senderUsername: 'testuser',
-        messageContent: 'Test',
+        mentionerUserId: 'user123',
+        messagePreview: 'Test',
         conversationId: 'conv123',
-        messageId: 'msg123',
-        isMemberOfConversation: true
+        messageId: 'msg123'
       };
 
       prisma.notificationPreference.findUnique.mockResolvedValue({ mentionEnabled: true });

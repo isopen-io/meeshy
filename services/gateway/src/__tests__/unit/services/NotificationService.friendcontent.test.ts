@@ -24,27 +24,13 @@ jest.mock('isomorphic-dompurify', () => ({
   },
 }));
 
-jest.mock('../../../utils/sanitize', () => ({
-  SecuritySanitizer: {
-    sanitizeText: jest.fn((input: string) => input?.replace(/<[^>]*>/g, '') || ''),
-    sanitizeUsername: jest.fn((input: string) =>
-      input?.replace(/[^a-zA-Z0-9_.-]/g, '').substring(0, 50) || ''
-    ),
-    sanitizeURL: jest.fn((input: string) => {
-      if (!input) return null;
-      try {
-        const url = new URL(input);
-        if (['http:', 'https:'].includes(url.protocol)) return input;
-        return null;
-      } catch {
-        return null;
-      }
-    }),
-    sanitizeJSON: jest.fn((input: unknown) => input),
-    isValidNotificationType: jest.fn(() => true),
-    isValidPriority: jest.fn(() => true),
-  },
-}));
+// Double PARTAGÉ — cf. `helpers/notification-service-doubles.ts`. Un
+// double écrit à la main ici dérive dès que `SecuritySanitizer` gagne
+// une méthode, et le symptôme est un APPEL qui échoue, pas une
+// assertion qui rougit.
+jest.mock('../../../utils/sanitize', () =>
+  require('../../helpers/notification-service-doubles').makeSanitizeModule()
+);
 
 jest.mock('@meeshy/shared/prisma/client', () => {
   const mockPrisma = {
