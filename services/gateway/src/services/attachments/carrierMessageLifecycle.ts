@@ -40,10 +40,10 @@
  *
  * ─── CE QUE CE PRÉDICAT NE FERME PAS ────────────────────────────────────────
  *
- * L'URL publique qu'un client reçoit (`MessageAttachment.url`) ne pointe PAS
- * ici : `UploadProcessor.getAttachmentUrl` émet
- * `/api/v1/attachments/file/<chemin>`, servie SANS authentification et par
- * chemin — donc sans identifiant de pièce jointe à partir duquel remonter au
+ * L'URL publique qu'un client atteint ne pointe PAS ici : ce qui se persiste
+ * est la CLÉ DE STOCKAGE (#7022), que le client repose contre sa propre base
+ * pour former `/attachments/file/<clé>` — servie SANS authentification et par
+ * chemin, donc sans identifiant de pièce jointe à partir duquel remonter au
  * message. C'est une URL-capacité (nom de fichier en UUIDv4, 122 bits), pas une
  * énumération ; son défaut est l'absence de révocation, et il se referme
  * aujourd'hui par l'`unlink` du balayage, pas par une garde. Y ajouter une
