@@ -15,6 +15,7 @@ import {
   type ProtectionKind,
   type RevealPhase,
 } from '@/lib/reading-mode/protection';
+import { useRevealPhasePublisher } from '@/lib/reading-mode/reveal-phase-channel';
 import type { Attachment } from '@/lib/api/types';
 import { attachmentSegments } from '@/lib/view/message-a11y-label';
 
@@ -95,6 +96,26 @@ export function ProtectedContent({
   // tombstone couperait la fenêtre de révélation qu'on vient de payer
   // (D-23 §1.4 point 4, le comportement retenu est celui de la BULLE iOS).
   const [phase, setPhase] = useState<RevealPhase>(() => (kind === 'burned' ? { phase: 'consumed' } : { phase: 'hidden' }));
+
+  /**
+   * LA PHASE REMONTE (#7142) — ce composant la TIENT, et le nom accessible de
+   * la rangée se compose AU-DESSUS de lui (`thread-modes.tsx`, `aria-label` sur
+   * `[data-row]`). Sans cette émission, une rangée révélée peint son contenu
+   * sous un nom qui dit encore « Contenu masqué », et un lecteur d'écran n'a
+   * AUCUN chemin vers ce qu'il vient de dévoiler — le texte peint étant par
+   * ailleurs `aria-hidden` (`plainTextHidden`, #7032, qui reste juste : le
+   * texte vit dans le libellé, jamais deux fois).
+   *
+   * L'état publié est l'état LOCAL, celui-là même qui pilote l'affichage : la
+   * rangée dit donc toujours ce qu'elle montre. Publier depuis un effet plutôt
+   * que depuis `setPhase` couvre aussi le MONTAGE — un message arrivé déjà
+   * `burned` annonce `consumed` sans qu'aucun geste n'ait eu lieu.
+   */
+  const publishPhase = useRevealPhasePublisher();
+  useEffect(() => {
+    publishPhase(messageId, phase);
+  }, [publishPhase, messageId, phase]);
+
   const attachmentCount = attachments?.length ?? 0;
   const [pending, setPending] = useState(false);
   const [revealError, setRevealError] = useState(false);
