@@ -1,7 +1,8 @@
 import type { QueryClient } from '@tanstack/react-query';
 
 import { FEED_QUERY_KEY } from './feed';
-import type { FeedInfiniteData, FeedPage, FeedPost } from './feed-pages';
+import { bumpNewPostCount } from './feed-new-count';
+import type { FeedInfiniteData, FeedPost } from './feed-pages';
 import { postQueryKey } from './publication-detail';
 
 /**
@@ -12,27 +13,16 @@ import { postQueryKey } from './publication-detail';
  * cousins (`post:liked`, `post:bookmarked`, les quatre `story:*`,
  * `comment:added`).
  *
- * Un module d'APPLICATEURS, sur le modèle de `notifications-realtime.ts` : il
- * ne tient aucune requête, seulement les clés et les lois de mise à jour — ce
- * qui le laisse entrer dans le chunk `realtime` sans y tirer un cache de route
- * (D-98).
+ * Un module d'APPLICATEURS : il ne tient aucune requête, seulement les lois de
+ * mise à jour. `socket.ts` l'atteint par `import()` — MESURÉ, un import
+ * statique portait le chunk `realtime` à 5,01 Ko pour un plafond de 5. La CLÉ
+ * du compteur vit à part (`feed-new-count.ts`) pour la raison symétrique :
+ * l'écran qui l'affiche n'a pas à payer les lois qui l'alimentent.
  *
  * La doctrine est celle d'iOS (`FeedViewModel.swift:1464-1500`), pas une
  * invention locale ; chaque loi ci-dessous cite la ligne qui la porte.
  */
 
-/**
- * LE COMPTE DE CE QU'ON N'A PAS ENCORE VU — miroir de `newPostsCount`
- * (`FeedViewModel.swift:63`), qui alimente la bannière « N nouveaux posts »
- * (`FeedView.swift:1200-1235`).
- *
- * Il vit dans le cache de requêtes plutôt que dans un store à lui : le
- * `QueryClient` est le canal que la socket et les écrans partagent DÉJÀ, et un
- * second canal pour un seul entier coûterait plus que le compte qu'il porte.
- * Aucune `queryFn` ne le sert — c'est un compte de SESSION, sans source
- * serveur : il naît à la première publication reçue et meurt avec l'onglet.
- */
-export const FEED_NEW_COUNT_KEY = ['feed', 'new-count'] as const;
 
 const objectOf = (value: unknown): Record<string, unknown> | null =>
   typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : null;
@@ -54,19 +44,15 @@ const mutationIdOf = (payload: unknown): string | null => {
   return typeof cmid === 'string' && cmid.length > 0 ? cmid : null;
 };
 
-export const isPostCreated = (payload: unknown): boolean => postOf(payload) !== null;
-
-export const isPostUpdated = (payload: unknown): boolean => postOf(payload) !== null;
-
-export const isPostDeleted = (payload: unknown): boolean => typeof objectOf(payload)?.postId === 'string';
-
-const mapPages = (
-  data: FeedInfiniteData | undefined,
-  map: (page: FeedPage) => FeedPage,
-): FeedInfiniteData | undefined => (data === undefined ? undefined : { ...data, pages: data.pages.map(map) });
-
-const holds = (data: FeedInfiniteData | undefined, postId: string): boolean =>
-  data?.pages.some((page) => page.posts.some((held) => held.id === postId)) === true;
+/**
+ * PAS DE GARDE `is…` EXPORTÉE, contrairement aux six couples de
+ * `realtime-apply.ts` — et c'est mesuré, pas une préférence : aucun appelant de
+ * production ne s'en servirait (chaque `apply…` garde déjà sa propre charge),
+ * et trois exports morts pesaient assez pour porter le chunk `realtime` à 5,01
+ * Ko contre un plafond de 5. Les témoins interrogent donc le COMPORTEMENT —
+ * une charge malformée ne change rien et ne lève pas — ce qui est de toute
+ * façon la règle du dépôt.
+ */
 
 /**
  * CE QUI APPARTIENT AU LECTEUR NE VIENT PAS DU SERVEUR. `isLikedByMe` et
@@ -76,22 +62,31 @@ const holds = (data: FeedInfiniteData | undefined, postId: string): boolean =>
  * avaient aimé — miroir explicite d'iOS, « Preserve local-only state (isLiked)
  * across the update » (`FeedViewModel.swift:1495`).
  *
- * Les COMPTEURS, eux, ne sont pas préservés : `likeCount` est un agrégat que le
- * serveur tient, et le sien est plus juste que le nôtre.
+ * Un spread CONDITIONNEL, et non `a ?? b` : sous `exactOptionalPropertyTypes`,
+ * poser explicitement `undefined` sur une propriété optionnelle est un défaut
+ * de type — une propriété ABSENTE et une propriété qui VAUT `undefined` ne sont
+ * pas la même chose. La comparaison est `== null` pour couvrir les deux formes
+ * d'absence ; un `false` TENU est une réponse du lecteur (« je n'aime pas »),
+ * pas une absence, et il survit. Les COMPTEURS ne sont pas préservés —
+ * `likeCount` est un agrégat que le serveur tient mieux que nous.
  */
-const withViewerState = (incoming: FeedPost, held: FeedPost): FeedPost => ({
+const merged = (incoming: FeedPost, held: FeedPost): FeedPost => ({
   ...incoming,
-  ...(held.isLikedByMe === undefined || held.isLikedByMe === null ? {} : { isLikedByMe: held.isLikedByMe }),
-  ...(held.isBookmarkedByMe === undefined || held.isBookmarkedByMe === null
-    ? {}
-    : { isBookmarkedByMe: held.isBookmarkedByMe }),
+  ...(held.isLikedByMe == null ? {} : { isLikedByMe: held.isLikedByMe }),
+  ...(held.isBookmarkedByMe == null ? {} : { isBookmarkedByMe: held.isBookmarkedByMe }),
 });
 
-const replaceInPages = (data: FeedInfiniteData | undefined, incoming: FeedPost): FeedInfiniteData | undefined =>
-  mapPages(data, (page) => ({
-    ...page,
-    posts: page.posts.map((held) => (held.id === incoming.id ? withViewerState(incoming, held) : held)),
-  }));
+/** UN SEUL parcours de pages pour les trois lois — insérer, remplacer, retirer
+ *  ne diffèrent que par ce qu'elles font d'une liste de cartes. */
+const mapPosts = (
+  data: FeedInfiniteData | undefined,
+  update: (posts: readonly FeedPost[], pageIndex: number) => readonly FeedPost[],
+): FeedInfiniteData | undefined =>
+  data === undefined
+    ? undefined
+    : { ...data, pages: data.pages.map((page, index) => ({ ...page, posts: update(page.posts, index) })) };
+
+const idsOf = (data: FeedInfiniteData): readonly string[] => data.pages.flatMap((page) => page.posts.map((p) => p.id));
 
 /**
  * `post:created` — TROIS TEMPS, dans cet ordre (`FeedViewModel.swift:1470`).
@@ -116,25 +111,23 @@ export function applyPostCreated(queryClient: QueryClient, payload: unknown): vo
   const data = queryClient.getQueryData<FeedInfiniteData>(FEED_QUERY_KEY);
   if (data === undefined) return;
 
+  const ids = idsOf(data);
+  if (ids.includes(incoming.id)) return;
+
   const cmid = mutationIdOf(payload);
-  if (cmid !== null && holds(data, cmid)) {
+  if (cmid !== null && ids.includes(cmid)) {
     queryClient.setQueryData<FeedInfiniteData>(
       FEED_QUERY_KEY,
-      mapPages(data, (page) => ({
-        ...page,
-        posts: page.posts.map((held) => (held.id === cmid ? withViewerState(incoming, held) : held)),
-      })),
+      mapPosts(data, (posts) => posts.map((held) => (held.id === cmid ? merged(incoming, held) : held))),
     );
     return;
   }
 
-  if (holds(data, incoming.id)) return;
-
-  queryClient.setQueryData<FeedInfiniteData>(FEED_QUERY_KEY, {
-    ...data,
-    pages: data.pages.map((page, index) => (index === 0 ? { ...page, posts: [incoming, ...page.posts] } : page)),
-  });
-  queryClient.setQueryData<number>(FEED_NEW_COUNT_KEY, (held) => (held ?? 0) + 1);
+  queryClient.setQueryData<FeedInfiniteData>(
+    FEED_QUERY_KEY,
+    mapPosts(data, (posts, index) => (index === 0 ? [incoming, ...posts] : posts)),
+  );
+  bumpNewPostCount(queryClient);
 }
 
 /**
@@ -147,9 +140,11 @@ export function applyPostUpdated(queryClient: QueryClient, payload: unknown): vo
   const incoming = postOf(payload);
   if (incoming === null) return;
 
-  queryClient.setQueryData<FeedInfiniteData>(FEED_QUERY_KEY, (data) => replaceInPages(data, incoming));
+  queryClient.setQueryData<FeedInfiniteData>(FEED_QUERY_KEY, (data) =>
+    mapPosts(data, (posts) => posts.map((held) => (held.id === incoming.id ? merged(incoming, held) : held))),
+  );
   queryClient.setQueryData<FeedPost>(postQueryKey(incoming.id), (held) =>
-    held === undefined ? held : withViewerState(incoming, held),
+    held === undefined ? held : merged(incoming, held),
   );
 }
 
@@ -159,12 +154,7 @@ export function applyPostDeleted(queryClient: QueryClient, payload: unknown): vo
   if (typeof postId !== 'string') return;
 
   queryClient.setQueryData<FeedInfiniteData>(FEED_QUERY_KEY, (data) =>
-    mapPages(data, (page) => ({ ...page, posts: page.posts.filter((held) => held.id !== postId) })),
+    mapPosts(data, (posts) => posts.filter((held) => held.id !== postId)),
   );
   queryClient.removeQueries({ queryKey: postQueryKey(postId) });
-}
-
-/** La bannière tapée : on repart de zéro (`FeedViewModel.swift:389`). */
-export function clearNewPostCount(queryClient: QueryClient): void {
-  queryClient.setQueryData<number>(FEED_NEW_COUNT_KEY, 0);
 }

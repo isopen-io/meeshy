@@ -16,6 +16,7 @@ import { decodeNotification } from '@/lib/notifications/record';
 
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
 import { FEED_QUERY_KEY } from './feed';
+import { applyPostCreated, applyPostDeleted, applyPostUpdated } from './feed-realtime';
 import type { FeedInfiniteData } from './feed-pages';
 import { FRIENDS_QUERY_PREFIX } from './friends-keys';
 import { PUBLIC_PROFILE_QUERY_PREFIX } from './public-profile';
@@ -28,7 +29,6 @@ import {
   applyNotificationRead,
   applyNotificationReadBulk,
 } from './notifications-realtime';
-import { applyPostCreated, applyPostDeleted, applyPostUpdated } from './feed-realtime';
 import {
   applyConversationUnreadUpdated,
   applyConversationUpdated,
@@ -379,8 +379,11 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
    * jamais le fil sans rechargement.
    *
    * Les lois vivent dans `feed-realtime.ts` — réconciliation par cmid,
-   * idempotence, insertion en tête, préservation de l'état du lecteur — parce
-   * qu'un écouteur ne doit tenir QUE le branchement (D-98).
+   * idempotence, insertion en tête, préservation de l'état du lecteur — et
+   * un écouteur ne tient QUE le branchement (D-98). L'import est STATIQUE et
+   * c'est MESURÉ : `feed-realtime.ts` ne tient aucune requête, et le rendre
+   * différé coûtait PLUS que le module lui-même (5,10 Ko contre 5,01 pour le
+   * chunk `realtime` — trois `import()` et leur table de dépendances).
    */
   const onPostCreated = (payload: unknown): void => {
     applyPostCreated(deps.queryClient, payload);

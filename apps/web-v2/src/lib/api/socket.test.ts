@@ -1030,12 +1030,13 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
    * L'ÉPREUVE N'EST PAS LEUR VERT mais leur MUTATION : retirer
    * `socket.on(SERVER_EVENTS.POST_CREATED, …)` doit les faire TOMBER.
    *
-   * Aucune attente de micro-tâche ici, contrairement à `comment:added` :
-   * `feed-realtime.ts` ne tient aucune requête, seulement des lois, donc il
-   * entre par un import STATIQUE sans violer D-98 — et s'applique dans le tour
-   * du `fire`.
+   * L'attente d'une micro-tâche est GARDÉE bien que l'import soit statique :
+   * elle ne coûte rien, et elle tient si le module repasse un jour en
+   * `import()` — ce qui a été mesuré puis écarté (le différé faisait tomber
+   * `feed-realtime` dans le chunk `feed` et produisait DEUX dépassements au
+   * lieu d'un).
    */
-  test('`post:created` est ÉCOUTÉ : la publication d’un ami entre EN TÊTE du fil', () => {
+  test('`post:created` est ÉCOUTÉ : la publication d’un ami entre EN TÊTE du fil', async () => {
     const { deps, socket, queryClient } = buildDeps();
     queryClient.setQueryData(FEED_QUERY_KEY, feedWith({ content: 'déjà là' }));
     createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
@@ -1044,11 +1045,13 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
       post: { id: 'p-neuf', type: 'POST', createdAt: '2026-09-20T10:00:00.000Z', content: 'venue d’ailleurs' },
     });
 
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
     const posts = queryClient.getQueryData<FeedInfiniteData>(FEED_QUERY_KEY)?.pages[0]?.posts;
     expect(posts?.map((post) => post.id)).toEqual(['p-neuf', 'p-1']);
   });
 
-  test('`post:updated` est ÉCOUTÉ : le texte change, le cœur DU LECTEUR reste', () => {
+  test('`post:updated` est ÉCOUTÉ : le texte change, le cœur DU LECTEUR reste', async () => {
     const { deps, socket, queryClient } = buildDeps();
     queryClient.setQueryData(FEED_QUERY_KEY, feedWith({ content: 'avant', isLikedByMe: true }));
     createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
@@ -1057,21 +1060,25 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
       post: { id: 'p-1', type: 'POST', createdAt: '2026-09-13T10:00:00.000Z', content: 'après' },
     });
 
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
     expect(feedPost(queryClient)?.content).toBe('après');
     expect(feedPost(queryClient)?.isLikedByMe).toBe(true);
   });
 
-  test('`post:deleted` est ÉCOUTÉ : la publication quitte le fil', () => {
+  test('`post:deleted` est ÉCOUTÉ : la publication quitte le fil', async () => {
     const { deps, socket, queryClient } = buildDeps();
     queryClient.setQueryData(FEED_QUERY_KEY, feedWith({ content: 'à retirer' }));
     createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
 
     socket.fire(SERVER_EVENTS.POST_DELETED, { postId: 'p-1' });
 
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
     expect(queryClient.getQueryData<FeedInfiniteData>(FEED_QUERY_KEY)?.pages[0]?.posts).toEqual([]);
   });
 
-  test('`destroy` démonte AUSSI les trois écoutes de publication', () => {
+  test('`destroy` démonte AUSSI les trois écoutes de publication', async () => {
     const { deps, socket, queryClient } = buildDeps();
     queryClient.setQueryData(FEED_QUERY_KEY, feedWith({ content: 'déjà là' }));
 
@@ -1082,6 +1089,8 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
       post: { id: 'p-neuf', type: 'POST', createdAt: '2026-09-20T10:00:00.000Z' },
     });
     socket.fire(SERVER_EVENTS.POST_DELETED, { postId: 'p-1' });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(queryClient.getQueryData<FeedInfiniteData>(FEED_QUERY_KEY)?.pages[0]?.posts.map((post) => post.id)).toEqual([
       'p-1',

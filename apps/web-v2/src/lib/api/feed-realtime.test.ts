@@ -3,15 +3,8 @@ import { describe, expect, test } from 'bun:test';
 
 import { FEED_QUERY_KEY } from './feed';
 import type { FeedInfiniteData, FeedPost } from './feed-pages';
-import {
-  FEED_NEW_COUNT_KEY,
-  applyPostCreated,
-  applyPostDeleted,
-  applyPostUpdated,
-  isPostCreated,
-  isPostDeleted,
-  isPostUpdated,
-} from './feed-realtime';
+import { FEED_NEW_COUNT_KEY } from './feed-new-count';
+import { applyPostCreated, applyPostDeleted, applyPostUpdated } from './feed-realtime';
 import { postQueryKey } from './publication-detail';
 
 /**
@@ -84,32 +77,36 @@ const cartes = (queryClient: QueryClient): readonly FeedPost[] =>
 
 const compte = (queryClient: QueryClient): number => queryClient.getQueryData<number>(FEED_NEW_COUNT_KEY) ?? 0;
 
-describe('les gardes de FORME', () => {
-  test('`isPostCreated` accepte la charge que la passerelle émet', () => {
-    expect(isPostCreated({ post: post() })).toBe(true);
-    expect(isPostCreated({ post: post(), clientMutationId: 'cmid_x' })).toBe(true);
-  });
-
+describe('une charge MALFORMÉE ne change rien, et ne lève pas', () => {
   /**
-   * LE CONTRE-TÉMOIN — sans lui, une garde qui rendrait `true` sur tout
-   * laisserait `apply…` insérer des cartes sans id, que plus rien ne pourrait
-   * dédoublonner NI retirer. Chaque cas retire UNE chose, pour que le verdict
-   * désigne ce qui manque.
+   * LA GARDE SE MESURE PAR SON EFFET, pas par une fonction exportée : un
+   * événement inattendu ne doit ni casser l'écran ni entrer dans le cache.
+   * Chaque cas retire UNE chose, pour que le verdict désigne ce qui manque —
+   * un id absent ou vide rendrait la carte indédoublonnable ET irretirable.
    */
-  test('`isPostCreated` refuse ce qui n’est pas cette charge', () => {
-    expect(isPostCreated(null)).toBe(false);
-    expect(isPostCreated({})).toBe(false);
-    expect(isPostCreated({ post: null })).toBe(false);
-    expect(isPostCreated({ post: { id: 42 } })).toBe(false);
-    expect(isPostCreated({ post: { id: '' } })).toBe(false);
+  test('`post:created` ignore ce qui n’est pas sa charge', () => {
+    const queryClient = clientAvec([post({ id: 'p1' })]);
+
+    for (const charge of [null, {}, { post: null }, { post: { id: 42 } }, { post: { id: '' } }]) {
+      expect(() => applyPostCreated(queryClient, charge)).not.toThrow();
+    }
+
+    expect(cartes(queryClient).map((p) => p.id)).toEqual(['p1']);
+    expect(compte(queryClient)).toBe(0);
   });
 
-  test('`isPostUpdated` et `isPostDeleted` gardent leurs charges', () => {
-    expect(isPostUpdated({ post: post() })).toBe(true);
-    expect(isPostUpdated({ postId: 'p1' })).toBe(false);
-    expect(isPostDeleted({ postId: 'p1' })).toBe(true);
-    expect(isPostDeleted({ post: post() })).toBe(false);
-    expect(isPostDeleted({ postId: 7 })).toBe(false);
+  test('`post:updated` et `post:deleted` ignorent les leurs', () => {
+    const queryClient = clientAvec([post({ id: 'p1', content: 'intact' })]);
+
+    for (const charge of [null, {}, { postId: 'p1' }, { post: { id: 7 } }]) {
+      expect(() => applyPostUpdated(queryClient, charge)).not.toThrow();
+    }
+    for (const charge of [null, {}, { postId: 7 }, { post: post() }]) {
+      expect(() => applyPostDeleted(queryClient, charge)).not.toThrow();
+    }
+
+    expect(cartes(queryClient).map((p) => p.id)).toEqual(['p1']);
+    expect(cartes(queryClient)[0]?.content).toBe('intact');
   });
 });
 

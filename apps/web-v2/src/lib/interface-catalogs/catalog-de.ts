@@ -86,6 +86,8 @@ const de = {
   'feed.empty.subtitle': 'Beiträge deiner Kontakte erscheinen hier.',
   'feed.loading': 'Feed wird geladen',
   'feed.allLoaded': 'Alle Beiträge sind geladen',
+  'feed.newPosts.one': '{count} neuer Beitrag',
+  'feed.newPosts.other': '{count} neue Beiträge',
   'feed.like.error': 'Fehler beim Liken des Beitrags',
   'post.bookmark.error': 'Speichern fehlgeschlagen',
   'feed.gesture.pending': 'Aktion nicht bestätigt — offline',

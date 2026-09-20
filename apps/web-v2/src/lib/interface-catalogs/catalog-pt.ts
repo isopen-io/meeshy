@@ -90,6 +90,8 @@ const pt = {
   'feed.empty.subtitle': 'As publicações dos seus contatos vão aparecer aqui.',
   'feed.loading': 'Carregando o feed',
   'feed.allLoaded': 'Todas as publicações foram carregadas',
+  'feed.newPosts.one': '{count} nova publicação',
+  'feed.newPosts.other': '{count} novas publicações',
   'feed.like.error': 'Erro ao curtir a publicação',
   'post.bookmark.error': 'Não foi possível salvar',
   'feed.gesture.pending': 'Ação não confirmada — offline',

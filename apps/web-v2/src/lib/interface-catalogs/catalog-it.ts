@@ -86,6 +86,8 @@ const it = {
   'feed.empty.subtitle': 'Le pubblicazioni dei tuoi contatti appariranno qui.',
   'feed.loading': 'Caricamento del feed',
   'feed.allLoaded': 'Tutte le pubblicazioni sono state caricate',
+  'feed.newPosts.one': '{count} nuova pubblicazione',
+  'feed.newPosts.other': '{count} nuove pubblicazioni',
   'feed.like.error': 'Errore nel mettere Mi piace',
   'post.bookmark.error': 'Salvataggio non riuscito',
   'feed.gesture.pending': 'Azione non confermata — offline',
