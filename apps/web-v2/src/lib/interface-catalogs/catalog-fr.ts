@@ -117,6 +117,7 @@ const fr = {
   'feed.allLoaded': 'Toutes les publications sont chargées',
   'feed.newPosts.one': '{count} nouvelle publication',
   'feed.newPosts.other': '{count} nouvelles publications',
+  'a11y.avatar.profile': 'Voir le profil de {name}',
   'feed.like.error': 'Impossible d’aimer la publication',
   'post.bookmark.error': 'Erreur lors de l’enregistrement',
   'feed.gesture.pending': 'Geste non confirmé — hors ligne',

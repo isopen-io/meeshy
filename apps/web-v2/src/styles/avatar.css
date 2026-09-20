@@ -1,0 +1,39 @@
+/**
+ * LA CIBLE TACTILE D'UN AVATAR-LIEN (#6396).
+ *
+ * Les avatars de liste descendent à 24–32 px. Les rendre cliquables tels quels
+ * poserait des cibles sous le plancher de 44 px que ce dépôt tient partout
+ * (dimension 5).
+ *
+ * ## POURQUOI UN PSEUDO-ÉLÉMENT NE SUFFISAIT PAS
+ *
+ * La première forme étendait la zone par un `::before` absolu centré. Elle
+ * capte bien le pointeur — mais elle n'agrandit pas la BOÎTE du lien, et
+ * `check-profile.mjs` a mesuré ce qu'il fallait mesurer : `hauteur: 40` sur
+ * les quatre schémas × gabarits. **Une cible tactile se mesure sur le rect du
+ * contrôle, pas sur ce qu'on peint par-dessus** — un lecteur d'écran, un
+ * pilote au clavier et un outil d'audit voient la boîte.
+ *
+ * ## LA FORME RETENUE : la boîte grandit, la mise en page ne bouge pas
+ *
+ * Le lien porte une taille minimale de 44 px et compense par une marge
+ * NÉGATIVE de la moitié de ce qu'il a gagné. L'avatar reste exactement où il
+ * était dans le flux ; seule la boîte du lien déborde, symétriquement.
+ *
+ * `max(0px, …)` : au-dessus de 44 px — le héros d'un profil en fait 96 — la
+ * marge vaut zéro. Sans cette borne, un grand avatar recevrait une marge
+ * POSITIVE et s'écarterait de ses voisins.
+ *
+ * `--avatar-size` est posé par le composant, qui est le seul à connaître la
+ * taille demandée ; le CSS ne peut pas la déduire (`padding: 100%` réfère à la
+ * LARGEUR du parent, jamais à la hauteur — le piège classique de cette
+ * technique).
+ */
+.avatar-profile-link {
+  display: grid;
+  place-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  margin: calc(-1 * max(0px, (44px - var(--avatar-size, 44px)) / 2));
+  border-radius: inherit;
+}

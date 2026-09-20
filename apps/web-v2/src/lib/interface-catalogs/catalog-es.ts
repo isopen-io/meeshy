@@ -88,6 +88,7 @@ const es = {
   'feed.allLoaded': 'Todas las publicaciones están cargadas',
   'feed.newPosts.one': '{count} publicación nueva',
   'feed.newPosts.other': '{count} publicaciones nuevas',
+  'a11y.avatar.profile': 'Ver el perfil de {name}',
   'feed.like.error': 'Error al dar me gusta',
   'post.bookmark.error': 'No se pudo guardar',
   'feed.gesture.pending': 'Acción no confirmada — sin conexión',
