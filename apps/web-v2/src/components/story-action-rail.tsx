@@ -78,6 +78,21 @@ type RailGlyphs = { readonly idle: GlyphShape; readonly active?: GlyphShape };
  * (mesuré : +0,9 Ko gzip sur `story_reader`). Le jour où « Vues » aura son
  * effet, il aura son tracé — pas avant.
  */
+/**
+ * MESURE DU 2026-09-20 (#7121) — RETIRER LES CINQ GLYPHES QUE LE WEB NE SERT
+ * PAS (`forward`, `repost`, `share`, `save`, `translations`) NE REND QUE
+ * 0,05 Ko : `story_reader` passe de 9,74 à 9,69.
+ *
+ * La raison est STRUCTURELLE, et elle vaut pour tout candidat de cette forme :
+ * ces tracés viennent de TABLES — `FEED_GLYPHS`, `GLYPHS` — importées ENTIÈRES
+ * pour d'autres entrées de cette même carte (`heart`, `heartFill`,
+ * `chatCircle`). Retirer une entrée ne retire pas son tracé du chunk ; seul
+ * l'abandon complet d'une table y change quelque chose, et aucune n'est
+ * abandonnable ici.
+ *
+ * Mesuré parce que la revue de #7112 les désignait comme LE poids à rendre.
+ * Ils ne le sont pas. Ne pas rejouer ce nettoyage en espérant un gain.
+ */
 const GLYPH_OF: Partial<Readonly<Record<StoryActionRailButton, RailGlyphs>>> = {
   sound: { idle: MEDIA_TRANSPORT_GLYPHS.speakerSlash, active: MEDIA_TRANSPORT_GLYPHS.speakerHigh },
   react: { idle: FEED_GLYPHS.heart, active: FEED_GLYPHS.heartFill },
