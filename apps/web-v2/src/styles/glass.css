@@ -58,8 +58,20 @@
   --glass-density: 80%;
 }
 
+/* 94 % ET NON 92 (#7178) — arbitré sur mesure, comme D-51 l'exige.
+   À 92 %, le PLACEHOLDER de la bande du composeur (`--ios-ink-3`, du TEXTE)
+   mesurait 4,40:1 en schéma clair, sous le seuil AA de 4,5. Le remède ne
+   pouvait pas être l'encre : `--ios-ink-3` vaut `indigo700.opacity(0.8)`,
+   déjà le CRAN MINIMAL qu'iOS a arbitré (D-18 bis — « 0.79 échoue sur
+   backgroundTertiary à 4,496:1 »), et D-4 interdit d'en inventer une.
+   Mesuré au pire cas (canvas noir, flou désactivé) : 92 % → 4,40 ·
+   **94 % → 4,55** · 96 % → 4,69 · 100 % → 4,98. 94 est le plus bas palier
+   qui tient, la même méthode que les six mesures de D-51.
+   Le TON n'était pas la réponse : `glass-card` DÉGRADE à 4,21:1 — mesuré
+   avant d'être écarté. Et monter la densité ne peut dégrader AUCUN autre
+   couple : plus opaque, c'est plus de contraste pour toutes les encres. */
 .glass-prominent {
-  --glass-density: 92%;
+  --glass-density: 94%;
 }
 
 .glass-card {
