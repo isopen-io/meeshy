@@ -26,6 +26,7 @@ import { useOnline } from '@/lib/net/online';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { FeedNewPostsBanner } from '@/components/feed-new-posts-banner';
+import { authorStoryRing } from '@/lib/view/author-story-ring';
 import { FEED_NEW_COUNT_KEY, clearNewPostCount } from '@/lib/api/feed-new-count';
 import { FLOATING_CORRIDOR_BOTTOM } from '@/lib/view/floating-corridor';
 import { usePostGesture } from '@/lib/view/use-post-gesture';
@@ -348,6 +349,15 @@ export default function FeedScreen() {
               <li key={model.id}>
                 <FeedPostCard
                   model={model}
+                  /* L'ANNEAU DE STORY VIENT DU CORPUS QUE CET ÉCRAN TIENT DÉJÀ
+                     (#7185) : `railProps.groups` est chargé pour le plateau, et
+                     l'anneau d'une carte s'y LIT — zéro requête ajoutée, là où
+                     demander « cet auteur a-t-il une story ? » par carte en
+                     aurait coûté une par avatar. */
+                  {...(() => {
+                    const anneau = authorStoryRing(railProps.groups, model.author.id);
+                    return anneau === null ? {} : { storyRing: anneau };
+                  })()}
                   onGesture={onGesture}
                   onShare={onShare}
                   onComment={openComments}
