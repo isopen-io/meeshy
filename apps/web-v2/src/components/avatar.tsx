@@ -1,3 +1,5 @@
+import type { CSSProperties } from 'react';
+
 import '@/styles/avatar.css';
 
 import { PRESENCE_HEX, presenceTone } from '@meeshy/shared/utils/user-presence';
@@ -198,6 +200,9 @@ export function Avatar({
       to="userProfile"
       params={{ username: profileUsername }}
       className="avatar-profile-link"
+      /* La taille voyage jusqu'au CSS : lui seul ne peut pas la déduire, et
+         c'est elle qui décide de la marge compensatoire. */
+      style={{ '--avatar-size': `${size}px` } as CSSProperties}
       aria-label={translate(currentInterfaceLanguage(), 'a11y.avatar.profile', { name: name ?? profileUsername })}
     >
       {corps}
