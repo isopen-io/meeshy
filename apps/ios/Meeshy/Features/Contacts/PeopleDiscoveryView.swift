@@ -25,7 +25,13 @@ struct PeopleDiscoveryView: View {
     @StateObject private var blockedVM = BlockedViewModel()
     @ObservedObject private var friendship = FriendshipCache.shared
 
-    @State private var scrollOffset: CGFloat = 0
+    /// Offset de défilement relayé au header SANS invalider ce body :
+    /// `@State` retient la référence sans s'y abonner, et seul le
+    /// `ScrollOffsetReader` monté autour du header se re-rend à chaque tick.
+    /// Même montage que sa jumelle `ContactsHubView`, dans le même dossier.
+    /// L'ancien `CGFloat` d'état ré-exécutait ce body ENTIER — header, barre
+    /// de sous-onglets et onglet affiché — à la cadence de l'affichage (#6226).
+    @State private var scrollRelay = ScrollOffsetRelay()
     @State private var subTab: DiscoveryTab
 
     init(initialTab: DiscoveryTab = .discover) {
@@ -34,18 +40,22 @@ struct PeopleDiscoveryView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            CollapsibleHeader(
-                title: String(localized: "discovery.title", defaultValue: "Découvrir", bundle: .main),
-                scrollOffset: scrollOffset,
-                onBack: { router.pop() },
-                titleColor: theme.textPrimary,
-                backArrowColor: MeeshyColors.indigo500,
-                backgroundColor: theme.backgroundPrimary,
-                // The sub-tab bar lives *inside* the header surface (accessory
-                // slot) so it rides up with the collapsing header and the
-                // content scrolls under it — same pattern as the Feed.
-                accessory: { AnyView(subTabBar) }
-            )
+            // Seul ce reader se re-rend au fil du défilement — cette racine
+            // écrit `scrollRelay.offset` sans s'y abonner.
+            ScrollOffsetReader(relay: scrollRelay) { offset in
+                CollapsibleHeader(
+                    title: String(localized: "discovery.title", defaultValue: "Découvrir", bundle: .main),
+                    scrollOffset: offset,
+                    onBack: { router.pop() },
+                    titleColor: theme.textPrimary,
+                    backArrowColor: MeeshyColors.indigo500,
+                    backgroundColor: theme.backgroundPrimary,
+                    // The sub-tab bar lives *inside* the header surface (accessory
+                    // slot) so it rides up with the collapsing header and the
+                    // content scrolls under it — same pattern as the Feed.
+                    accessory: { AnyView(subTabBar) }
+                )
+            }
 
             subContent
         }
@@ -54,7 +64,7 @@ struct PeopleDiscoveryView: View {
         .adaptiveOnChange(of: subTab) { _, _ in
             // Re-expand the header when switching sub-tabs (the freshly shown
             // sub-tab only re-reports its offset once scrolled).
-            scrollOffset = 0
+            scrollRelay.offset = 0
             HapticFeedback.light()
         }
     }
@@ -143,19 +153,19 @@ struct PeopleDiscoveryView: View {
             RequestsTab(
                 viewModel: requestsVM,
                 isActive: true,
-                onScrollOffsetChange: { scrollOffset = $0 }
+                onScrollOffsetChange: { scrollRelay.offset = $0 }
             )
         case .discover:
             DiscoverTab(
                 viewModel: discoverVM,
                 isActive: true,
-                onScrollOffsetChange: { scrollOffset = $0 }
+                onScrollOffsetChange: { scrollRelay.offset = $0 }
             )
         case .blocked:
             BlockedTab(
                 viewModel: blockedVM,
                 isActive: true,
-                onScrollOffsetChange: { scrollOffset = $0 }
+                onScrollOffsetChange: { scrollRelay.offset = $0 }
             )
         }
     }

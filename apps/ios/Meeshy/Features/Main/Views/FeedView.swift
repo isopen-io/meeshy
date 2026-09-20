@@ -100,7 +100,14 @@ struct FeedView: View {
     /// hides and `defaultType` ignores this flag.
     @State var composerForcePlainPost = false
     @State private var showAudioComposer = false
-    @State private var headerScrollOffset: CGFloat = 0
+    /// Offset de défilement relayé au header SANS invalider ce body :
+    /// `@State` retient la référence sans s'y abonner, et seul le
+    /// `ScrollOffsetReader` monté autour du header se re-rend à chaque tick.
+    /// Même montage que `ConversationListView` et `ContactsHubView`.
+    /// L'ancien `CGFloat` d'état ré-exécutait ce body ENTIER — 1 449 lignes,
+    /// toutes les cartes du fil et leurs closures — à la cadence de
+    /// l'affichage (#6226).
+    @State private var scrollRelay = ScrollOffsetRelay()
     /// Holds the freshly-minted `meeshy.me/l/<token>` URL when the user taps
     /// the share button on a post — the `.sheet` further down presents the
     /// system share UI as soon as this is non-nil and clears it on dismiss.
@@ -600,32 +607,36 @@ struct FeedView: View {
                 // Compact story trail that TAKES THE TITLE'S PLACE in the bar —
                 // reveals as the full-size trail scrolls up under it, so a
                 // scrolled feed shows the trail instead of « Meeshy Feed ».
-                CollapsibleHeader(
-                    title: "Meeshy Feed",
-                    scrollOffset: headerScrollOffset,
-                    showBackButton: false,
-                    titleColor: theme.textPrimary,
-                    backArrowColor: MeeshyColors.indigo500,
-                    backgroundColor: theme.backgroundPrimary,
-                    // Deux lectures du même feed dans le slot trailing : les
-                    // Réels et « À proximité ». La carte des posts d'hier vit
-                    // désormais dans cette dernière (mode Discover, staff).
-                    trailing: { feedHeaderActions },
-                    titleAccessory: {
-                        AnyView(
-                            // Lancement unifié via StoryViewerCoordinator (cf.
-                            // PinnedStoryTrailBand.presentStory) — même chemin que la trail des chats.
-                            PinnedStoryTrailBand(
-                                viewModel: storyViewModel,
-                                scrollOffset: headerScrollOffset
+                // Seul ce reader se re-rend au fil du défilement — cette
+                // racine écrit `scrollRelay.offset` sans s'y abonner.
+                ScrollOffsetReader(relay: scrollRelay) { offset in
+                    CollapsibleHeader(
+                        title: "Meeshy Feed",
+                        scrollOffset: offset,
+                        showBackButton: false,
+                        titleColor: theme.textPrimary,
+                        backArrowColor: MeeshyColors.indigo500,
+                        backgroundColor: theme.backgroundPrimary,
+                        // Deux lectures du même feed dans le slot trailing : les
+                        // Réels et « À proximité ». La carte des posts d'hier vit
+                        // désormais dans cette dernière (mode Discover, staff).
+                        trailing: { feedHeaderActions },
+                        titleAccessory: {
+                            AnyView(
+                                // Lancement unifié via StoryViewerCoordinator (cf.
+                                // PinnedStoryTrailBand.presentStory) — même chemin que la trail des chats.
+                                PinnedStoryTrailBand(
+                                    viewModel: storyViewModel,
+                                    scrollOffset: offset
+                                )
                             )
-                        )
-                    }
-                )
-                // L'offset du feed change à chaque frame défilée puis se tait :
-                // c'est le seul signal de mouvement dont dispose un
-                // `ScrollView` SwiftUI avant iOS 17.
-                .scrollMotionActive(offset: headerScrollOffset)
+                        }
+                    )
+                    // L'offset du feed change à chaque frame défilée puis se tait :
+                    // c'est le seul signal de mouvement dont dispose un
+                    // `ScrollView` SwiftUI avant iOS 17.
+                    .scrollMotionActive(offset: offset)
+                }
                 Spacer()
             }
 
@@ -1090,7 +1101,7 @@ struct FeedView: View {
                 },
                 coordinateSpaceName: "feedScroll",
                 onScrollOffsetChange: { offset in
-                    headerScrollOffset = offset
+                    scrollRelay.offset = offset
                 },
                 topPadding: CollapsibleHeaderMetrics.expandedHeight
             ) {
