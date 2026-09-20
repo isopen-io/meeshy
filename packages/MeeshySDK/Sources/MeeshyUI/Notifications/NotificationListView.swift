@@ -221,9 +221,13 @@ public struct NotificationListView: View {
 
         return Button {
             HapticFeedback.light()
+            // #7169 — AUCUN aller-retour réseau. `filteredNotifications` filtre
+            // ce qui est DÉJÀ chargé, sur `selectedCategory` seul : recharger
+            // faisait attendre le réseau pour un geste de LECTURE, et hors
+            // ligne la liste ne se filtrait pas alors que les données étaient
+            // là. `selectedCategory` est `@Published` : la poser suffit à
+            // redessiner.
             viewModel.selectedCategory = category
-            viewModel.unreadOnly = category == .unread
-            Task { await viewModel.loadInitial() }
         } label: {
             HStack(spacing: 5) {
                 Image(systemName: category.icon)
@@ -359,7 +363,10 @@ final class NotificationListViewModel: ObservableObject {
     @Published var notifications: [APINotification] = []
     @Published var isLoading = false
     @Published var hasMore = false
-    @Published var unreadOnly = false
+    // `unreadOnly` a été RETIRÉ (#7169) : il était écrit par la puce de filtre
+    // et lu par personne — les deux appels de liste passent `unreadOnly: false`
+    // EN DUR. Un `@Published` sans lecteur fait republier l'objet, donc
+    // re-rendre ses abonnés, sans porter aucune information.
     @Published var selectedCategory: NotificationCategory = .all
 
     /// Le dernier chargement RÉSEAU a échoué (#7000). L'erreur était avalée
@@ -407,7 +414,17 @@ final class NotificationListViewModel: ObservableObject {
     private func subscribeToRealTimeEvents() {
         let manager = NotificationToastManager.shared
 
-        manager.objectWillChange
+        // #7169 — LE COMPTEUR SEUL, pas tout ce que le gestionnaire publie.
+        //
+        // Relayer `objectWillChange` re-rendait la cloche ENTIÈRE à chaque
+        // apparition ET disparition de bannière — un contenu qu'elle ne
+        // dessine pas. Le seul état du gestionnaire qu'elle LIT est
+        // `unreadCount` (cf. la propriété calculée plus haut) ; les huit
+        // autres signaux ont déjà leur abonnement nommé juste en dessous.
+        // `removeDuplicates` parce que `refreshUnreadCount` rend très souvent
+        // la même valeur, et que `@Published` republie sans comparer.
+        manager.$unreadCount
+            .removeDuplicates()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.objectWillChange.send()
