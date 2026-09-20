@@ -119,6 +119,7 @@ const fr = {
   'feed.newPosts.other': '{count} nouvelles publications',
   'a11y.avatar.profile': 'Voir le profil de {name}',
   'a11y.avatar.story': 'Voir la story de {name}',
+  'userProfile.self.edit': 'Modifier mon profil',
   'feed.like.error': 'Impossible d’aimer la publication',
   'post.bookmark.error': 'Erreur lors de l’enregistrement',
   'feed.gesture.pending': 'Geste non confirmé — hors ligne',
