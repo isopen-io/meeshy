@@ -134,10 +134,11 @@ export type { HttpTransport };
 /* ───────────────────────── LE CACHE DU FIL ─────────────────────────────── */
 
 /**
- * **LES QUATRE ACCÈS AU CACHE DU FIL** (#6972, étape 1) — deux pour LIRE, deux
- * pour ÉCRIRE, et rien d'autre ne connaît la forme de la page.
+ * **LES ACCÈS AU CACHE DU FIL** (#6972, étape 1 ; CINQUIÈME accès #7223) —
+ * deux pour ÉCRIRE, trois pour LIRE, et rien d'autre ne connaît la forme de
+ * la page.
  *
- * Avant ce lot, SIX sites l'écrivaient en direct : `realtime-apply.ts`
+ * Avant #6972, SIX sites l'écrivaient en direct : `realtime-apply.ts`
  * (`applyMessageNew`, `applyMessageTranslation`), `reactions.ts`
  * (`applyDelta`), `send/perform-send.ts` (l'accusé), `routes/thread.tsx`
  * (la consommation d'une vue unique). Chacun recopiait `{ ...page, messages:
@@ -150,6 +151,14 @@ export type { HttpTransport };
  * pas OUVERT n'a rien à peindre localement, et fabriquer une page ici
  * inventerait un historique dont on ne connaît ni le curseur ni les bornes
  * (la prochaine ouverture le chargera par `GET …/messages`).
+ *
+ * `latestCachedThreadMessage` (#7223) rejoint les lectures pour la MÊME
+ * raison que les quatre premiers accès : `applyReadStatusUpdated`
+ * (`realtime-apply.ts`) a besoin du message le plus RÉCENT d'un fil — `
+ * read-status:updated` ne nomme aucun message, il décrit le dernier de la
+ * conversation (`MessageReadStatusService.getLatestMessageSummary`) — et ne
+ * doit pas réapprendre que `pages[0]` est la page la plus récente,
+ * ASCENDANTE en interne.
  */
 
 /**
@@ -267,6 +276,25 @@ export function findCachedThreadMessage(
     if (found !== undefined) return found;
   }
   return undefined;
+}
+
+/**
+ * `latestCachedThreadMessage` (#7223) — le message le plus RÉCENT d'un fil
+ * en cache, ou `undefined` si le fil n'est pas ouvert ou n'a aucun message.
+ *
+ * `pages[0]` est la page la plus RÉCENTE (doc-comment `MessagesPage`,
+ * `messages-pages.ts`) et chaque page est ASCENDANTE en interne
+ * (§ `upsertThreadMessage` ci-dessus, « APPEND SUR `pages[0]` ») — le DERNIER
+ * élément de `pages[0].messages` est donc le message le plus récent de tout
+ * le fil, sans balayer les autres pages. Un `pages[0]` VIDE (page en cours de
+ * remplacement) retombe correctement sur `undefined`.
+ */
+export function latestCachedThreadMessage(queryClient: QueryClient, conversationId: string): Message | undefined {
+  const data = queryClient.getQueryData<MessagesInfiniteData>(messagesQueryKey(conversationId));
+  if (data === undefined || !Array.isArray(data.pages)) return undefined;
+  const newest = data.pages[0];
+  if (newest === undefined) return undefined;
+  return newest.messages[newest.messages.length - 1];
 }
 
 /**
