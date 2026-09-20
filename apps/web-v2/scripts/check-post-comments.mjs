@@ -704,10 +704,102 @@ async function runScheme({ browser, base, scheme, check }) {
   const CORRIGE = 'Lo probé esta mañana, aguanta perfectamente.';
   await page.click(`[data-comment-row="${MINE}"] [data-comment-gesture="edit"]`);
   await page.waitForSelector(`[data-comment-edit-field="${MINE}"]`);
+  /**
+   * **LE CHAMP PORTE SON TEXTE AVANT QU'ON LE REMPLACE** (#7176).
+   *
+   * `waitForSelector` rend la main dès que le nœud est DANS le document ;
+   * `EditForm` pose sa valeur au rendu et son curseur dans un EFFET, qui court
+   * après. Remplir à cet instant fabriquait, sous charge, un champ qui portait
+   * l'ANCIEN texte SUIVI du nouveau — et c'est ce que la passerelle recevait :
+   *
+   *     « Lo probé esta mañana, aguanta bien.Lo probé esta mañana, aguanta perfectamente. »
+   *
+   * Le gate rendait alors « … avec le texte corrigé » en échec, sur un produit
+   * qui n'avait rien de faux. Attendre le FAIT — le champ porte exactement
+   * l'original — retire la course sans rien retirer à la mesure : ce qu'on
+   * vérifie ensuite reste le PATCH, que ce gate est seul à voir.
+   */
+  const attendreFait = async (predicat, limiteMs = 8000) => {
+    const fin = Date.now() + limiteMs;
+    while (Date.now() < fin) {
+      if (await predicat()) return true;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    return false;
+  };
+  /**
+   * **LE FAIT ATTENDU EST LE CURSEUR POSÉ, PAS LA VALEUR PRÉSENTE** (#7176).
+   *
+   * `EditForm` prend le focus et place le curseur à la FIN dans un EFFET, qui
+   * court après la peinture. `page.fill` sélectionne tout PUIS tape : si
+   * l'effet s'intercale entre les deux, il défait la sélection et la frappe
+   * s'AJOUTE au texte au lieu de le remplacer. Mesuré en intégration continue,
+   * sur le corps du PATCH :
+   *
+   *     « Lo probé esta mañana, aguanta bien.Lo probé esta mañana, aguanta perfectamente. »
+   *
+   * Attendre que le champ porte une valeur ne suffisait pas — il la porte dès
+   * le premier rendu, alors que l'effet n'a pas encore couru. Le fait qui
+   * ferme la course est le curseur DÉJÀ posé à la fin : après lui, plus rien
+   * ne vient défaire la sélection de `fill`.
+   *
+   * AVALÉE, comme `settleFocus` : un gate ne meurt pas sur une attente, il REND
+   * un verdict. Si le curseur ne se posait jamais, c'est le `check` du PATCH
+   * qui le dirait — en citant ce qui est parti.
+   */
+  await attendreFait(async () =>
+    page
+      .$eval(
+        `[data-comment-edit-field="${MINE}"]`,
+        (n) => n.value !== '' && n.selectionStart === n.value.length && document.activeElement === n,
+      )
+      .catch(() => false),
+  );
+  /* ET LA FRAPPE DEVIENT INSENSIBLE À LA COURSE. Vider d'abord : sur un champ
+     VIDE, un effet qui replacerait le curseur « à la fin » le pose en 0, et il
+     n'y a plus rien à quoi la frappe puisse s'ajouter. L'attente ci-dessus
+     ferme la fenêtre ; ce vidage fait qu'un reste de fenêtre ne coûte rien.
+     Deux mesures pour une course, parce qu'elle ne se reproduit PAS en local :
+     un correctif qu'on ne peut pas voir échouer se double. */
+  await page.fill(`[data-comment-edit-field="${MINE}"]`, '');
   await page.fill(`[data-comment-edit-field="${MINE}"]`, CORRIGE);
+  /* … et il porte le NOUVEAU avant qu'on enregistre : `fill` écrit par
+     événements, React repeint au tour suivant. Sans cette seconde attente,
+     « Enregistrer » pouvait partir sur une valeur que le champ n'avait pas
+     encore. */
+  await attendreFait(
+    async () => (await page.$eval(`[data-comment-edit-field="${MINE}"]`, (n) => n.value).catch(() => '')) === CORRIGE,
+  );
   await page.click(`[data-comment-row="${MINE}"] [data-comment-edit-save]`);
   await page.waitForSelector(`[data-comment-edit-field="${MINE}"]`, { state: 'detached' });
-  await page.waitForTimeout(400);
+  /**
+   * **PUIS LE FAIT QUI PRÉCÈDE LA LECTURE** (leçon 634). Le délai de 400 ms qui
+   * tenait cette place était un PARI sur la vitesse de la machine.
+   *
+   * Le fait attendu est **le PATCH parti**, observé côté Node sur `sent` :
+   * c'est lui qui déclenche le repeint de la rangée, donc l'attendre place la
+   * lecture APRÈS la cause, au lieu de parier sur sa durée.
+   *
+   * ATTENDRE LA SEULE STABILITÉ NE SUFFIT PAS, et c'est le piège qu'on évite
+   * ici : deux lectures identiques peuvent tomber toutes les deux AVANT le
+   * repeint — « stable » sur l'ANCIEN état. Le dépassement est AVALÉ
+   * volontairement (même discipline que `settleFocus` plus bas) : c'est le
+   * `check` qui suit qui juge, et qui dit alors ce qu'il a lu — un `timeout`
+   * ne l'aurait pas dit.
+   */
+  await attendreFait(async () => sent.some((r) => r.method === 'PATCH' && r.path.endsWith(MINE)));
+  /* … puis la rangée repeinte : non vide ET identique à la lecture précédente.
+     Le PATCH étant parti, la stabilité ne peut plus se confirmer sur l'ancien
+     état. */
+  let precedent = null;
+  await attendreFait(async () => {
+    const lu = await page
+      .$eval(`[data-comment-row="${MINE}"] p.text-body`, (n) => (n.textContent ?? '').trim())
+      .catch(() => '');
+    const stable = lu !== '' && lu === precedent;
+    precedent = lu;
+    return stable;
+  });
 
   const patch = sent.filter((r) => r.method === 'PATCH' && r.path.endsWith(MINE)).at(-1);
   check(patch !== undefined, say(`« Enregistrer » ENVOIE son PATCH — ${JSON.stringify(patch ?? null)}`));
