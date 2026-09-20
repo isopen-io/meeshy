@@ -704,10 +704,56 @@ async function runScheme({ browser, base, scheme, check }) {
   const CORRIGE = 'Lo probé esta mañana, aguanta perfectamente.';
   await page.click(`[data-comment-row="${MINE}"] [data-comment-gesture="edit"]`);
   await page.waitForSelector(`[data-comment-edit-field="${MINE}"]`);
+  /**
+   * **LE CHAMP PORTE SON TEXTE AVANT QU'ON LE REMPLACE** (#7176).
+   *
+   * `waitForSelector` rend la main dès que le nœud est DANS le document ;
+   * `EditForm` pose sa valeur au rendu et son curseur dans un EFFET, qui court
+   * après. Remplir à cet instant fabriquait, sous charge, un champ qui portait
+   * l'ANCIEN texte SUIVI du nouveau — et c'est ce que la passerelle recevait :
+   *
+   *     « Lo probé esta mañana, aguanta bien.Lo probé esta mañana, aguanta perfectamente. »
+   *
+   * Le gate rendait alors « … avec le texte corrigé » en échec, sur un produit
+   * qui n'avait rien de faux. Attendre le FAIT — le champ porte exactement
+   * l'original — retire la course sans rien retirer à la mesure : ce qu'on
+   * vérifie ensuite reste le PATCH, que ce gate est seul à voir.
+   */
+  await page.waitForFunction(
+    (sel) => (document.querySelector(sel)?.value ?? '') !== '',
+    `[data-comment-edit-field="${MINE}"]`,
+  );
   await page.fill(`[data-comment-edit-field="${MINE}"]`, CORRIGE);
+  /* … et il porte le NOUVEAU avant qu'on enregistre : `fill` écrit par
+     événements, React repeint au tour suivant. Sans cette seconde attente,
+     « Enregistrer » pouvait partir sur une valeur que le champ n'avait pas
+     encore. */
+  await page.waitForFunction(
+    ([sel, attendu]) => document.querySelector(sel)?.value === attendu,
+    [`[data-comment-edit-field="${MINE}"]`, CORRIGE],
+  );
   await page.click(`[data-comment-row="${MINE}"] [data-comment-edit-save]`);
   await page.waitForSelector(`[data-comment-edit-field="${MINE}"]`, { state: 'detached' });
-  await page.waitForTimeout(400);
+  /**
+   * **PUIS LE FAIT, ET SA STABILITÉ** (leçon 634). Le délai de 400 ms qui
+   * tenait cette place était un PARI sur la vitesse de la machine.
+   *
+   * Ce qu'on attend ici n'est PAS « la rangée porte le texte corrigé » — ce
+   * serait rendre tautologique le témoin qui le vérifie trois lignes plus bas.
+   * On attend que la rangée ne CHANGE PLUS : deux lectures identiques à un
+   * tour d'intervalle. Le gate lit alors un état arrêté, et reste libre de le
+   * trouver faux.
+   */
+  await page.waitForFunction(
+    (sel) => {
+      const lu = (document.querySelector(sel)?.textContent ?? '').trim();
+      const precedent = globalThis.__meeshyDernierTexte;
+      globalThis.__meeshyDernierTexte = lu;
+      return lu !== '' && lu === precedent;
+    },
+    `[data-comment-row="${MINE}"] p.text-body`,
+    { polling: 100 },
+  );
 
   const patch = sent.filter((r) => r.method === 'PATCH' && r.path.endsWith(MINE)).at(-1);
   check(patch !== undefined, say(`« Enregistrer » ENVOIE son PATCH — ${JSON.stringify(patch ?? null)}`));
