@@ -30,6 +30,27 @@ import type { PlacedMessage } from '@/lib/grouping';
 const hrefsOf = (html: string): readonly string[] => [...html.matchAll(/href="([^"]*)"/g)].map((m) => m[1] ?? '');
 
 /**
+ * LES LIENS DU TEXTE, ET D'AUCUNE AUTRE PARTIE DE LA CARTE (#6396).
+ *
+ * Les témoins de la CARTE relevaient jusqu'ici TOUS les `href` du balisage
+ * rendu, alors qu'ils mesurent l'enrichissement du TEXTE. C'était viser la
+ * cible par un moyen qui n'est pas elle : le jour où la carte a gagné un lien
+ * ailleurs — l'avatar qui ouvre le profil de son auteur — les quatre sont
+ * devenus rouges sans que rien de ce qu'ils gardent n'ait bougé.
+ *
+ * Ils interrogent donc le nœud du texte enrichi. Un lien ajouté à l'en-tête, au
+ * média ou à la rangée d'actions ne les concerne pas ; un lien qui
+ * DISPARAÎTRAIT du texte les fait toujours tomber.
+ */
+const hrefsOfRichText = (html: string): readonly string[] => {
+  const hote = document.createElement('div');
+  hote.innerHTML = html;
+  const texte = hote.querySelector('[data-rich-text]');
+  if (texte === null) return ['aucun [data-rich-text] rendu'];
+  return [...texte.querySelectorAll('a[href]')].map((lien) => lien.getAttribute('href') ?? '');
+};
+
+/**
  * **LA QUESTION SE POSE SUR L'ANCÊTRE, JAMAIS SUR LA BALISE** — et c'est une
  * mesure, pas une précaution. La forme précédente de ce témoin cherchait
  * `/<a[^>]*aria-hidden/` : en remettant `aria-hidden` sur le `<p>` ENTIER —
@@ -228,21 +249,21 @@ describe('la RANGÉE PLATE enrichit le texte sans violer l’arbre d’accessibi
 describe('la CARTE DE PUBLICATION enrichit le texte — hashtags COMPRIS', () => {
   test('un #hashtag y devient un lien, contrairement à la conversation', () => {
     const html = renderCard({ content: 'compte rendu sous #Livraison' });
-    expect(hrefsOf(html)).toEqual(['/hashtag/livraison']);
+    expect(hrefsOfRichText(html)).toEqual(['/hashtag/livraison']);
   });
 
   test('une mention validée par le serveur devient un lien', () => {
     const html = renderCard({ content: 'merci @kwame-mensah', mentions: [{ username: 'kwame-mensah' }] });
-    expect(hrefsOf(html)).toContain('/u/kwame-mensah');
+    expect(hrefsOfRichText(html)).toContain('/u/kwame-mensah');
   });
 
   test('un pseudo hors du jeu servi reste du texte', () => {
     const html = renderCard({ content: 'merci @fantome', mentions: [] });
-    expect(hrefsOf(html)).toEqual([]);
+    expect(hrefsOfRichText(html)).toEqual([]);
   });
 
   test('une URL devient un lien externe', () => {
-    expect(hrefsOf(renderCard({ content: 'voir https://meeshy.me/a' }))).toEqual(['https://meeshy.me/a']);
+    expect(hrefsOfRichText(renderCard({ content: 'voir https://meeshy.me/a' }))).toEqual(['https://meeshy.me/a']);
   });
 
   test('l’enrichissement porte sur le texte TRADUIT (rang ≠ 1)', () => {
@@ -252,6 +273,6 @@ describe('la CARTE DE PUBLICATION enrichit le texte — hashtags COMPRIS', () =>
       translations: { en: { text: 'Look at #Delivery and https://meeshy.me/en' } },
     });
     expect(html).toContain('lang="en"');
-    expect(hrefsOf(html)).toEqual(['/hashtag/delivery', 'https://meeshy.me/en']);
+    expect(hrefsOfRichText(html)).toEqual(['/hashtag/delivery', 'https://meeshy.me/en']);
   });
 });
