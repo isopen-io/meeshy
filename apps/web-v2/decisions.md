@@ -3432,3 +3432,68 @@ Captures : `.cache/web-v2-workflow/recette/stories/coque-{ios,android}-0{1,2,3}-
 **La confidentialité ne change pas, et c'est ce qu'il faut FIGER.** La ligne lue est déjà bornée aux demandes dont le lecteur est PARTIE (`OR: [{senderId: viewerId, receiverId: cibleId}, {senderId: cibleId, receiverId: viewerId}]`) : aucune requête entre tiers n'est atteignable par cette route. Servir l'`id` n'ouvre donc rien — mais **la garde qui le rend vrai n'a pas de témoin aujourd'hui**, et un `select` qui gagne un champ est exactement le moment où une garde tacite se perd. Le témoin s'écrit sur le cas TIERS, pas sur le cas nominal (leçon 261 : un témoin de rang s'écrit sur un rang autre que le premier).
 
 **Ce que ça coûte.** Un champ de plus sur une charge déjà servie, et `bucketNeededFor` disparaît avec son panier — du code client RETIRÉ, pas ajouté (dimensions 2 et 11). Le prix est ailleurs : ce lot touche la passerelle, donc il suit les cinq conditions du chantier (témoin qui échoue d'abord, correctif minimal, suite rejouée sur le périmètre, son issue, sa preuve).
+
+## D-102 — La phase de révélation REMONTE par un canal, jamais par les peaux (2026-09-20, #7142)
+
+`ProtectedContent` tient la phase (`useState`) ; `aria-label` se pose deux
+niveaux plus haut, sur `[data-row]` (`thread-modes.tsx`). Entre les deux vivent
+`FocalRow` et `Bubble`, toutes deux `memo`.
+
+**Un rappel passé en prop aurait dû être relayé par CHAQUE peau** — deux relais
+à tenir en accord, donc deux chemins qui divergent, c'est-à-dire exactement ce
+que le critère « la phase remonte par UN SEUL mécanisme, partagé par les deux
+peaux » interdit. `RevealPhaseChannel`
+(`lib/reading-mode/reveal-phase-channel.tsx`) laisse les deux peaux
+**inchangées** : elles ne savent rien de la remontée, donc elles ne peuvent pas
+en diverger.
+
+Le canal ne porte QUE l'émission — sa valeur est une fonction stable, donc
+publier ne re-rend aucun consommateur. Le REGISTRE vit chez l'hôte, seul à se
+re-rendre, et il ne garde **que ce qui s'écarte du défaut** : `hidden` n'y entre
+jamais (sinon chaque rangée voilée visible coûterait un re-rendu au montage pour
+n'apprendre que ce qu'on supposait), et `until` n'entre pas dans la comparaison
+(le libellé ne lit la phase qu'à travers `rendersContent`, qui ne regarde que son
+NOM).
+
+**Coût mesuré AVANT d'être payé**, parce que l'issue le posait en préalable :
+trois changements d'état par révélation — et non « un par tic de brouillard »,
+`FOG_DURATION_MS` étant une durée consommée par un `setTimeout`, jamais un
+`setInterval`. À 18,9 µs par `composeMessageLabel` et 20 rangées visibles, une
+révélation coûte ≈ 1,1 ms, soit moins de 7 % du budget d'UNE image, réparti sur
+trois instants séparés de secondes.
+
+Un canal absent est un **silence, pas une panne** (`publish` par défaut est un
+no-op) : `ProtectedContent` est monté par des hôtes qui n'ont aucun nom
+accessible à tenir, et ce mécanisme n'a donc pas à être câblé partout.
+
+## D-103 — Le texte d'un message est prononcé par le libellé de la rangée, sur les DEUX peaux (2026-09-20, #7142)
+
+`plainTextHidden` (#7032, réponse au défaut majeur 1/4 de la revue #5935) masque
+la prose non interactive parce que le texte servi est DÉJÀ dans
+`aria-label={rowLabel}`. Il n'avait jamais été porté sur `bubble.tsx` — mesuré
+sur un message SANS aucune protection :
+
+```
+focal   : libellé porte le texte = true | DOM expose le texte = false
+bubbles : libellé porte le texte = true | DOM expose le texte = TRUE
+```
+
+L'arbre d'accessibilité de la peau Bulles portait donc le texte **deux fois**,
+pour tout message, depuis toujours — invisible parce qu'aucun témoin ne jouait la
+règle sur les deux peaux.
+
+**Il fallait le corriger dans le lot de #7142, et pas après** : alimenter la
+phase rend le libellé porteur du texte sur une rangée révélée, donc le critère
+« le libellé OU le DOM, jamais les deux, jamais aucun » serait devenu VRAI sur
+Focal et FAUX sur Bulles. Un lot qui livre son critère sur une peau et le brise
+sur l'autre n'a pas livré, et la divergence entre peaux est elle-même le défaut
+(dimension 6 : même geste, même effet).
+
+Conséquence de forme, assumée : la bulle rend désormais
+`<strong><span aria-hidden="true">…</span></strong>` — la MÊME forme que la
+rangée plate depuis #7032. La balise qui porte le SENS reste `<strong>`/`<em>`,
+jamais un `<span>` stylé.
+
+**La règle générale** : une règle d'accessibilité qui ne s'applique qu'à une peau
+n'est pas une règle, c'est un accident. Un témoin qui ne joue qu'une peau ne peut
+pas le voir — c'est en jouant les DEUX que celui-ci est tombé.
