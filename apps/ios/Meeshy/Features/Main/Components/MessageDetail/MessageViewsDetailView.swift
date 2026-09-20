@@ -6,7 +6,7 @@ import os
 // MARK: - Views Sub-Filter
 
 private enum ViewsFilter: String, CaseIterable, Identifiable {
-    case sent, delivered, read, notSeen, listened, watched
+    case sent, delivered, read, notSeen, listened, watched, viewed
 
     var id: String { rawValue }
 
@@ -18,6 +18,7 @@ private enum ViewsFilter: String, CaseIterable, Identifiable {
         case .notSeen: return String(localized: "message-detail.views.not-seen", defaultValue: "Non vu", bundle: .main)
         case .listened: return String(localized: "message-detail.views.listened", defaultValue: "Écouté", bundle: .main)
         case .watched: return String(localized: "message-detail.views.watched", defaultValue: "Vu", bundle: .main)
+        case .viewed: return String(localized: "message-detail.views.viewed", defaultValue: "Consulté", bundle: .main)
         }
     }
 
@@ -29,6 +30,7 @@ private enum ViewsFilter: String, CaseIterable, Identifiable {
         case .notSeen: return "eye.slash.fill"
         case .listened: return "headphones"
         case .watched: return "play.rectangle.fill"
+        case .viewed: return "document.viewfinder"
         }
     }
 }
@@ -67,8 +69,11 @@ struct MessageViewsDetailView: View {
         var filters: [ViewsFilter] = [.sent, .delivered, .read, .notSeen]
         let hasAudio = message.attachments.contains { AttachmentKind(mimeType: $0.mimeType) == .audio }
         let hasVideo = message.attachments.contains { AttachmentKind(mimeType: $0.mimeType) == .video }
+        let hasImage = message.attachments.contains { AttachmentKind(mimeType: $0.mimeType) == .image }
+        let hasDocument = message.attachments.contains { AttachmentKind(mimeType: $0.mimeType) == .document }
         if hasAudio { filters.append(.listened) }
         if hasVideo { filters.append(.watched) }
+        if hasImage || hasDocument { filters.append(.viewed) }
         return filters
     }
 
@@ -114,6 +119,8 @@ struct MessageViewsDetailView: View {
                     viewsListenedContent(accent: accent)
                 case .watched:
                     viewsWatchedContent(accent: accent)
+                case .viewed:
+                    viewsViewedContent(accent: accent)
                 }
             }
             .id(viewsFilter)
@@ -140,6 +147,12 @@ struct MessageViewsDetailView: View {
         case .watched:
             let videoIds = message.attachments.filter { AttachmentKind(mimeType: $0.mimeType) == .video }.map(\.id)
             count = videoIds.reduce(0) { $0 + (attachmentStatuses[$1]?.count ?? 0) }
+        case .viewed:
+            let viewedIds = message.attachments.filter { attachment in
+                let kind = AttachmentKind(mimeType: attachment.mimeType)
+                return kind == .image || kind == .document
+            }.map(\.id)
+            count = viewedIds.reduce(0) { $0 + (attachmentStatuses[$1]?.count ?? 0) }
         default: break
         }
 
@@ -645,6 +658,33 @@ struct MessageViewsDetailView: View {
         }
     }
 
+    // MARK: - Consulté (Viewed) — Per-Image/Document Attachment
+
+    private func viewsViewedContent(accent: Color) -> some View {
+        let viewedAttachments = message.attachments.filter { attachment in
+            let kind = AttachmentKind(mimeType: attachment.mimeType)
+            return kind == .image || kind == .document
+        }
+
+        return VStack(alignment: .leading, spacing: 14) {
+            if isLoadingAttachmentStatuses {
+                loadingIndicator(accent: accent)
+            } else {
+                ForEach(viewedAttachments) { attachment in
+                    mediaConsumptionCard(
+                        attachment: attachment,
+                        isAudio: false,
+                        accent: accent
+                    )
+                }
+
+                if viewedAttachments.isEmpty {
+                    emptyStateView(icon: "document.viewfinder", text: String(localized: "message-detail.views.viewed.empty", defaultValue: "Aucune image ou document", bundle: .main), accent: accent)
+                }
+            }
+        }
+    }
+
     // MARK: - Shared Views Components
 
     private func timelineBanner(icon: String, text: String, detail: String, count: String? = nil, accent: Color) -> some View {
@@ -834,8 +874,9 @@ struct MessageViewsDetailView: View {
                         // Live playback progress — real-time position pushed via
                         // `attachment-status:updated` (percentage/playPositionMs)
                         // lands here through `attachmentStatuses` reload, same as
-                        // the mm:ss chip above.
-                        if !isComplete, fraction > 0 {
+                        // the mm:ss chip above. Only shown for time-based media (audio/video).
+                        let isTimeBased = AttachmentKind(mimeType: attachment.mimeType).hasTimebasedTrack
+                        if !isComplete, isTimeBased, fraction > 0 {
                             HStack(spacing: 6) {
                                 ProgressView(value: fraction)
                                     .progressViewStyle(.linear)
@@ -961,14 +1002,11 @@ struct MessageViewsDetailView: View {
     }
 
     private func loadAttachmentStatuses() async {
-        let mediaAttachments = message.attachments.filter {
-            AttachmentKind(mimeType: $0.mimeType).hasTimebasedTrack
-        }
-        guard !mediaAttachments.isEmpty, !isLoadingAttachmentStatuses else { return }
+        guard !message.attachments.isEmpty, !isLoadingAttachmentStatuses else { return }
         isLoadingAttachmentStatuses = true
         defer { isLoadingAttachmentStatuses = false }
 
-        for attachment in mediaAttachments {
+        for attachment in message.attachments {
             do {
                 let statuses = try await AttachmentService.shared.getStatusDetails(attachmentId: attachment.id)
                 attachmentStatuses[attachment.id] = statuses
