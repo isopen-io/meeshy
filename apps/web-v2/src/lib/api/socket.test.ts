@@ -20,6 +20,7 @@ import { friendRequestsQueryKey } from './friend-requests';
 import { NOTIFICATIONS_QUERY_KEY, NOTIFICATION_COUNTS_QUERY_KEY, notificationListKey } from './notifications';
 import { createTypingStore, typistsOf } from './typing-store';
 import type { Message } from './types';
+import { commentsQueryKey } from './publication-comments';
 
 /**
  * LA FORME `InfiniteData` DU CACHE DU FIL (#6972) — `threadPages` la POSE,
@@ -930,6 +931,71 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
       | undefined;
     expect(served?.transcription?.text).toBe('Hola');
     expect(fetchCount).toBe(0);
+  });
+
+  /**
+   * **`comment:added` EST ÉCOUTÉ** (#7151) — et ce témoin est la moitié qui
+   * manquait au lot.
+   *
+   * `realtime-apply-comment.test.ts` prouve que la RÈGLE est juste ; il ne
+   * prouve pas qu'elle est BRANCHÉE. C'est exactement la distance que #7142
+   * vient de coûter au dépôt : un mécanisme écrit, testé, et jamais activé.
+   *
+   * L'ÉPREUVE DE CE TÉMOIN N'EST PAS SON VERT mais sa MUTATION : retirer
+   * `socket.on(SERVER_EVENTS.COMMENT_ADDED, …)` doit le faire TOMBER.
+   */
+  test('`comment:added` est ÉCOUTÉ : la rangée entre dans la liste sans rechargement', async () => {
+    const { deps, socket, queryClient } = buildDeps();
+    const key = commentsQueryKey('p-1');
+    queryClient.setQueryData(key, { pages: [{ comments: [], nextCursor: null }], pageParams: [undefined] });
+
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+    socket.fire(SERVER_EVENTS.COMMENT_ADDED, {
+      postId: 'p-1',
+      commentCount: 1,
+      comment: {
+        id: 'c-neuf',
+        content: 'Un commentaire venu d’ailleurs',
+        createdAt: '2026-09-20T10:00:00.000Z',
+        author: { id: 'u-autre', displayName: 'Noa Berger', username: 'noa' },
+      },
+    });
+
+    /* L'APPLICATION ARRIVE PAR `import()` (D-98) : elle se résout en
+       micro-tâches, jamais dans le tour du `fire`. Lire tout de suite
+       mesurerait la course, pas la règle. */
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const data = queryClient.getQueryData(key) as
+      | { readonly pages: readonly { readonly comments: readonly { readonly id: string }[] }[] }
+      | undefined;
+    expect(data?.pages.flatMap((page) => page.comments).map((c) => c.id)).toEqual(['c-neuf']);
+  });
+
+  test('`destroy` démonte AUSSI `comment:added`', async () => {
+    const { deps, socket, queryClient } = buildDeps();
+    const key = commentsQueryKey('p-1');
+    queryClient.setQueryData(key, { pages: [{ comments: [], nextCursor: null }], pageParams: [undefined] });
+
+    const connection = createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+    connection.destroy();
+    socket.fire(SERVER_EVENTS.COMMENT_ADDED, {
+      postId: 'p-1',
+      commentCount: 1,
+      comment: {
+        id: 'c-neuf',
+        content: 'Un commentaire venu d’ailleurs',
+        createdAt: '2026-09-20T10:00:00.000Z',
+        author: { id: 'u-autre', displayName: 'Noa Berger', username: 'noa' },
+      },
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const data = queryClient.getQueryData(key) as
+      | { readonly pages: readonly { readonly comments: readonly unknown[] }[] }
+      | undefined;
+    expect(data?.pages.flatMap((page) => page.comments)).toEqual([]);
   });
 
   test('`destroy` démonte AUSSI `message:attachment-updated`', () => {

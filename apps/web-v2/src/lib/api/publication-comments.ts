@@ -1,5 +1,7 @@
 import type { InfiniteData, QueryClient } from '@tanstack/react-query';
 
+import type { CommentAddedEventData } from '@meeshy/shared/types/post';
+
 import { applyCommentCount, shiftedCount, withCommentCount } from '@/lib/feed/interactions';
 
 import { newClientMessageId } from './client-message-id';
@@ -273,7 +275,22 @@ export type CommentResult =
  */
 export const COMMENT_MAX_LENGTH = 2000;
 
-const newClientMutationId = (): string => newClientMessageId().replace(/^cid_/, 'cmid_');
+/**
+ * **LE CMID DÉRIVE DU `tempId`, IL NE S'EN INVENTE PAS UN SECOND** (#7151).
+ *
+ * La forme précédente appelait `newClientMessageId()` une SECONDE fois : le
+ * cmid envoyé à la passerelle n'avait alors AUCUN lien avec l'id de la rangée
+ * provisoire. L'écho `comment:added` revenait avec ce cmid, et le client ne
+ * pouvait retrouver aucune rangée à réconcilier — la ligne s'insérait une
+ * seconde fois, sous l'id serveur.
+ *
+ * `CommentAddedEventData.clientMutationId` était pourtant écrit POUR cet usage
+ * (« insérée sous cet id local »). Ce qui manquait n'était pas le champ : c'est
+ * que les deux identifiants ne se correspondaient pas. Un seul identifiant,
+ * deux préfixes — et `optimisticIdOf` (`realtime-apply.ts`) refait le chemin
+ * inverse.
+ */
+const mutationIdOf = (tempId: string): string => tempId.replace(/^cid_/, 'cmid_');
 
 /**
  * L'ENVOI — optimiste, puis l'issue, exactement la forme de
@@ -318,7 +335,7 @@ export async function performComment(params: {
     ...(params.originalLanguage === undefined ? {} : { originalLanguage: params.originalLanguage }),
   };
 
-  const result = await sendComment(deps, { postId, body }).catch(() => null);
+  const result = await sendComment(deps, { postId, body, clientMutationId: mutationIdOf(tempId) }).catch(() => null);
 
   if (result === null) {
     return { ok: true, notice: readerIsOffline() ? COMMENT_PENDING_MESSAGE : COMMENT_UNCONFIRMED_MESSAGE };
@@ -345,7 +362,12 @@ export async function performComment(params: {
 
 function sendComment(
   deps: CommentDeps,
-  params: { readonly postId: string; readonly body: Readonly<Record<string, unknown>> },
+  params: {
+    readonly postId: string;
+    readonly body: Readonly<Record<string, unknown>>;
+    /** DÉRIVÉ du `tempId` de la rangée provisoire — voir `mutationIdOf`. */
+    readonly clientMutationId: string;
+  },
 ): Promise<ApiResult<PostComment>> {
   if (__FIXTURES__ && deps.source === 'fixtures') {
     return import('./fixtures-comments').then(({ fixtureAddComment }) => fixtureAddComment(params.postId, params.body));
@@ -354,7 +376,7 @@ function sendComment(
     method: 'POST',
     path: `/api/v1/posts/${encodeURIComponent(params.postId)}/comments`,
     body: params.body,
-    headers: { 'X-Client-Mutation-Id': newClientMutationId() },
+    headers: { 'X-Client-Mutation-Id': params.clientMutationId },
   });
 }
 
@@ -379,4 +401,105 @@ export function commentsInfiniteOptions(deps: CommentDeps & { readonly postId: s
     initialPageParam: undefined as CommentPageParam,
     getNextPageParam: nextCommentCursor,
   };
+}
+
+
+/**
+ * **LA GARDE DE FORME VIT AVEC CE QU'ELLE GARDE** (#7151) — `comment:added`, l'événement que la
+ * passerelle émet depuis toujours (`event-names.ts:423`) et que personne
+ * n'écoutait : mesuré avant ce lot, `grep -rn "comment:added"` sur `src/`
+ * rendait VIDE. Il fallait recharger pour voir le commentaire d'un tiers.
+ */
+export function isCommentAdded(payload: unknown): payload is CommentAddedEventData {
+  if (typeof payload !== 'object' || payload === null) return false;
+  const p = payload as Record<string, unknown>;
+  if (typeof p.postId !== 'string' || typeof p.commentCount !== 'number') return false;
+  if (p.clientMutationId !== undefined && typeof p.clientMutationId !== 'string') return false;
+  const comment = p.comment;
+  if (typeof comment !== 'object' || comment === null) return false;
+  const c = comment as Record<string, unknown>;
+  return typeof c.id === 'string' && typeof c.content === 'string' && typeof c.createdAt === 'string';
+}
+
+/* ------------------------------------------------------------------ #7151 --
+ * **L'APPLICATION DE `comment:added` VIT ICI, PAS DANS `realtime-apply.ts`.**
+ *
+ * D-98 l'exige : « un écouteur temps réel n'IMPORTE pas le cache qu'il met à
+ * jour — le chunk `realtime` ne doit tirer aucun cache de route ». Mesuré : y
+ * importer ce module faisait passer `realtime` de 4,8 à **5,05 Ko**, au-dessus
+ * de son plafond de 5. Ce n'était pas `shiftCommentCount` (0,01 Ko) mais le
+ * module ENTIER — transport, fixtures, messages de catalogue.
+ *
+ * La garde de FORME (`isCommentAdded`) reste dans le site unique : elle est
+ * pure et n'importe rien. Seule l'APPLICATION descend ici, et `socket.ts` la
+ * rejoint par un `import()` — le motif que ce fichier emploie déjà pour
+ * `fixtures-comments`.
+ * -------------------------------------------------------------------------- */
+/**
+ * LA RANGÉE PROVISOIRE QUE CET ÉCHO RÉCONCILIE.
+ *
+ * `CommentAddedEventData.clientMutationId` existe pour ça — son doc-comment le
+ * dit : « ré-émis dans l'écho pour que l'ÉMETTEUR réconcilie sa ligne optimiste
+ * (insérée sous cet id local) ». Encore faut-il que les deux identifiants se
+ * correspondent : le cmid DÉRIVE désormais du `tempId` de la rangée
+ * (`publication-comments.ts`), un seul identifiant sous deux préfixes.
+ */
+/**
+ * **LA CHARGE SOCKET SE PROJETTE DANS LA FORME QUE LE CACHE TIENT** (D-26,
+ * « cache = forme du fil ») — le même geste que `rawMessageFromSocket` vingt
+ * lignes plus haut, pour la même raison.
+ *
+ * `PostComment` du fil déclare `createdAt: string | Date` ; le cache de
+ * web-v2 ne tient que des CHAÎNES, et `decodeCommentsPage` est seul à les
+ * revivre. La garde a déjà vérifié le type à l'exécution ; cette projection le
+ * dit au typage, sans second décodage.
+ */
+const commentFromSocket = (comment: CommentAddedEventData['comment']): PostComment =>
+  ({
+    ...comment,
+    createdAt: typeof comment.createdAt === 'string' ? comment.createdAt : comment.createdAt.toISOString(),
+  }) as PostComment;
+
+const optimisticIdOf = (clientMutationId: string | undefined): string | undefined =>
+  clientMutationId === undefined || !clientMutationId.startsWith('cmid_')
+    ? undefined
+    : `cid_${clientMutationId.slice('cmid_'.length)}`;
+
+/**
+ * **TROIS CHEMINS, ET UN SEUL BOUGE LE COMPTEUR.**
+ *
+ * 1. l'id est DÉJÀ dans la liste ⇒ rien. Un rejeu (reconnexion, double
+ *    abonnement) ne dédouble ni la rangée ni le compte — `insertComment` pose
+ *    en tête SANS regarder l'id, la garde est donc ici.
+ * 2. l'écho porte le cmid d'une rangée PROVISOIRE locale ⇒ elle prend sa place.
+ *    Le compteur a déjà été bougé quand on l'a posée : le toucher une seconde
+ *    fois le ferait dériver.
+ * 3. sinon ⇒ insertion, et le compteur suit (`shiftCommentCount`, le site
+ *    unique qui tient les QUATRE caisses).
+ *
+ * Un post dont aucune liste n'est ouverte n'a rien à mettre à jour — ce n'est
+ * pas une erreur, et lever y casserait l'écran d'à côté.
+ */
+export function applyCommentAdded(queryClient: QueryClient, payload: unknown): void {
+  /* LA GARDE EST ICI, plus chez l'appelant : `socket.ts` route, il ne juge
+     pas. Une charge inattendue sort SANS lever — un événement d'une version
+     voisine ne casse pas l'écran. */
+  if (!isCommentAdded(payload)) return;
+  const data = payload;
+  const key = commentsQueryKey(data.postId);
+  const cached = queryClient.getQueryData<CommentInfiniteData>(key);
+  if (cached === undefined) return;
+
+  const present = flattenCommentPages(cached);
+  const servi = commentFromSocket(data.comment);
+  if (present.some((c) => c.id === servi.id)) return;
+
+  const tempId = optimisticIdOf(data.clientMutationId);
+  if (tempId !== undefined && present.some((c) => c.id === tempId)) {
+    queryClient.setQueryData<CommentInfiniteData>(key, (d) => replaceComment(d, tempId, servi));
+    return;
+  }
+
+  queryClient.setQueryData<CommentInfiniteData>(key, (d) => insertComment(d, servi));
+  shiftCommentCount(queryClient, data.postId, 1);
 }
