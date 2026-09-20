@@ -42,6 +42,9 @@ const SAUTER = new Set(Array.isArray(A.sauter) ? A.sauter : [])
 const SIM_NATIVE = typeof A.sim_native === 'string' && A.sim_native ? A.sim_native : '171765AF-36FD-45B1-9B9D-570E24C72E11'
 const SIM_COQUE = typeof A.sim_coque === 'string' && A.sim_coque ? A.sim_coque : '138B8B8D-0B3B-44E5-98B0-B62723B884BC'
 const SCRATCH = `${REPO_WEB}/.cache/lecture-workflow` // .cache est gitignore
+// La spec et ce script vivent sur feat/lecture-et-accuses, dans un worktree qui NE CHANGE JAMAIS de branche.
+const REPO_SPEC = typeof A.repo_spec === 'string' && A.repo_spec ? A.repo_spec : '/Users/smpceo/Documents/v2_meeshy-lecture-spec'
+const SPEC = `${REPO_SPEC}/docs/superpowers/specs/2026-09-21-lecture-et-accuses-design.md`
 
 // LE BON MODELE AU BON MOMENT (directive porteur 2026-09-21 : fable orchestre seulement ;
 // sonnet/haiku developpent ; opus relit, corrige, valide et livre en fin).
@@ -159,11 +162,16 @@ Bash : PRÉFIXE CHAQUE commande, SANS EXCEPTION, par \`cd ${REPO_PAR_CHAINE[chai
 un AUTRE clone du même dépôt, occupé par d'autres sessions : ce que tu y lirais est faux, ce que tu y
 écrirais détruirait le travail d'un autre. Première commande de ta mission, littéralement :
 \`cd ${REPO_PAR_CHAINE[chaine]} && git branch --show-current && git rev-parse --short HEAD\`.
-NE CRÉE PAS de worktree, NE POUSSE JAMAIS sur \`${BASE}\` directement (une session voisine veille le
-verdict CI de \`${BASE}\` : tout part par une PR, avec auto-merge).
+NE CRÉE PAS de worktree, NE POUSSE JAMAIS sur \`${BASE}\` directement, et NE FUSIONNE JAMAIS une PR :
+\`gh pr merge\` est INTERDIT sous TOUTES ses formes (\`--auto\`, \`--squash\`, \`--merge\`, \`--rebase\`,
+\`--admin\`) pour tout agent de ce chantier${AUTO_MERGE ? ", sauf l'agent de LIVRAISON qui arme `gh pr merge --auto --merge` et rien d'autre" : ' — sans exception ce tour : une session voisine tient le verdict CI de `' + BASE + '` et demande que sa tête ne bouge pas'}.
+Sur ce dépôt \`--auto\` fusionne IMMÉDIATEMENT quand aucun check n'est requis : un agent l'a fait sur #7213 et
+a cassé la parole donnée à cette session. Toute occurrence de \`gh pr merge\` dans ta transcription est une
+FAUTE. Seul l'agent de livraison ouvre la PR (\`gh pr create\`) ; les autres poussent leur branche, c'est tout.
 
-LA SPÉCIFICATION DU CHANTIER : ${REPO_PAR_CHAINE[chaine]}/docs/superpowers/specs/2026-09-21-lecture-et-accuses-design.md
-— lis-la en entier avant d'écrire : le relevé du 2026-09-21 (§ 2), les décisions D-L1 (badge = conversations
+LA SPÉCIFICATION DU CHANTIER : ${SPEC} (chemin ABSOLU, dans un worktree qui ne change jamais de branche —
+les worktrees de chaîne, eux, basculent sur des branches issues de ${BASE} où ce fichier n'existe pas) — lis-la
+en entier avant d'écrire : le relevé du 2026-09-21 (§ 2), les décisions D-L1 (badge = conversations
 non lues), D-L2 (ouverture SUR le séparateur, toujours), D-L3 (séparateur en couleur PRIMAIRE), les lots (§ 4).
 
 SOURCES DE VÉRITÉ, dans cet ordre :
@@ -534,7 +542,8 @@ ${RELEVE}
 7. Rends : branche, commits, fichiers, témoins (rouge PUIS vert, prouvé), endpoints cités, gates rapides
    (sorties tronquées), dimensions mûres/restantes, blocage s'il y en a un.
 
-INTERDITS : toucher services/gateway depuis la chaîne web ou ios (une capacité manquante ⇒ blocage, pas un
+INTERDITS : ouvrir une PR (c'est l'agent de livraison qui le fait) ; \`gh pr merge\` sous toute forme ;
+toucher services/gateway depuis la chaîne web ou ios (une capacité manquante ⇒ blocage, pas un
 contournement ; un BOGUE PROUVÉ du gateway ⇒ témoin rouge d'abord, correctif minimal, son propre commit) ;
 inventer un champ ou un événement ; désactiver un témoin ; contourner un gate ; pousser sur ${BASE}.`,
       { label: `developper:${l.cle}`, phase: 'Developper', schema: FAIT, model: taille === 'petit' ? MODELE.petit : MODELE.developper, effort: taille === 'petit' ? 'medium' : 'high' })
@@ -601,7 +610,7 @@ ${restants.length ? `RESTANTS (ils voyagent avec le lot et se DISENT dans la PR)
    gates et leurs chiffres, le rouge préexistant s'il y en a, \`Closes #${num || 'n'}\`, dimensions mûres et
    restantes ; ligne vide puis
    🤖 Generated with [Claude Code](https://claude.com/claude-code)
-   ${AUTO_MERGE ? `Puis \`gh pr merge --auto --merge\`.` : `N'ARME PAS l'auto-merge (\`gh pr merge --auto\` INTERDIT ce tour : une session voisine tient le verdict de ${BASE} et demande que sa tête ne bouge pas) — la PR reste ouverte, rends auto_merge=false, et dis-le dans le corps de la PR (« auto-merge à armer après le feu vert de la veille de dev »).`} Si GitHub dit CONFLICTING sur une fusion propre, \`git merge-tree\`
+   ${AUTO_MERGE ? `Puis \`gh pr merge --auto --merge\`.` : `NE FUSIONNE PAS ET N'ARME RIEN — \`gh pr merge\` interdit sous toutes ses formes ce tour (voir le socle) ; la PR reste OUVERTE, rends auto_merge=false, et écris dans son corps « auto-merge à armer après le feu vert de la veille de dev ».`} Si GitHub dit CONFLICTING sur une fusion propre, \`git merge-tree\`
    arbitre ; fusionne origin/${BASE} dans la branche et repousse.
 6. Commentaire sur l'issue #${num || 'n'} : la PR, les preuves (gates, témoins, captures décrites), dimensions
    MÛRES / RESTANTES, et une issue par dimension non mûre (même milestone) si elle n'existe pas. Termine par
