@@ -605,6 +605,8 @@ export interface ConversationReadCursor {
 
   readonly lastReadMessageId?: string;
   readonly lastReadAt?: Date;
+  /** createdAt of `lastReadMessageId` — see schema.prisma for why this, not `lastReadAt`, is the chronological key. */
+  readonly lastReadMessageCreatedAt?: Date;
   readonly unreadCount: number;
 
   readonly createdAt: Date;

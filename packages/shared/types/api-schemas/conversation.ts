@@ -257,6 +257,13 @@ export const conversationSchema = {
     messageCount: { type: 'number', nullable: true, description: 'Total message count' },
     unreadCount: { type: 'number', nullable: true, description: 'Unread message count for current user' },
 
+    // La frontière de lecture du lecteur (#7198), jumelle de celle de
+    // `conversationMinimalSchema` — même curseur (`ConversationReadCursor`),
+    // même règle d'absence (REV-4 : jamais fabriquée).
+    lastReadMessageId: { type: 'string', nullable: true, description: 'Dernier message lu par le lecteur dans cette conversation (ABSENT si inconnu)' },
+    lastReadAt: { type: 'string', format: 'date-time', nullable: true, description: 'Dernière lecture connue du lecteur pour cette conversation (ABSENT si inconnue)' },
+    lastReadMessageCreatedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Horloge (createdAt) de `lastReadMessageId` — position chronologique du curseur (ABSENT si inconnue)' },
+
     // Encryption
     encryptionMode: {
       type: 'string',
@@ -507,9 +514,13 @@ export const conversationMinimalSchema = {
         originalLanguage: { type: 'string', description: 'Langue d’origine du texte agent' }
       }
     },
-    // Horloge du curseur de lecture — voyage À CÔTÉ du pont (le contrat gelé
-    // §3.2 ne le porte pas). ABSENT sans curseur, jamais fabriqué (REV-4).
+    // La frontière de lecture du lecteur (#7198) — servie INCONDITIONNELLEMENT
+    // (pas seulement quand le pont ✦ s'affiche), depuis `ConversationReadCursor`.
+    // ABSENTE sans curseur, jamais fabriquée (REV-4) : `lastReadAt` voyage À
+    // CÔTÉ du pont, le contrat gelé §3.2 ne le porte pas.
+    lastReadMessageId: { type: 'string', description: 'Dernier message lu par le lecteur dans cette conversation (ABSENT si inconnu)' },
     lastReadAt: { type: 'string', format: 'date-time', description: 'Dernière lecture connue du lecteur pour cette conversation (ABSENT si inconnue)' },
+    lastReadMessageCreatedAt: { type: 'string', format: 'date-time', description: 'Horloge (createdAt) de `lastReadMessageId` — position chronologique du curseur (ABSENT si inconnue)' },
     members: {
       type: 'array',
       items: conversationParticipantMinimalSchema,

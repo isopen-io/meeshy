@@ -207,6 +207,13 @@ const makePrisma = (): any => ({
     update: jest.fn(),
     count: jest.fn().mockResolvedValue(0),
   },
+  // #7198 — la frontière de lecture (lastReadMessageId/lastReadAt/
+  // lastReadMessageCreatedAt) est désormais lue INCONDITIONNELLEMENT dès
+  // qu'un participant appelant est résolu, liste comme détail — vide par
+  // défaut, comme l'était le pont ✦ avant lui.
+  conversationReadCursor: {
+    findMany: jest.fn().mockResolvedValue([]),
+  },
   message: {
     findFirst: jest.fn().mockResolvedValue(null),
     findMany: jest.fn().mockResolvedValue([]),
