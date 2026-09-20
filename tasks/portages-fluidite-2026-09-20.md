@@ -46,3 +46,50 @@ Audit iOS du 2026-09-20, branche `fix/nouvelle-connexion-appareil-7035`,
 § « Cinq correctifs déjà écrits, qu'il reste à recopier ». Étape 02 du plan,
 après la fermeture des deux caches qui franchissaient la déconnexion (#7146,
 livrée par la PR #7147).
+
+---
+
+## Ce que le portage a trouvé — et que le relevé disait autrement
+
+Quatre des cinq lignes du tableau ci-dessus tenaient ; **trois constats les
+corrigent**, tous dans le même sens : le relevé lisait les DÉCLARATIONS et
+concluait sur l'usage.
+
+### 1. « Deux se corrigent en changeant un mot » — un seul le pouvait
+
+`reelAutoplay` était bien un changement de mot : `ThemedFeedOverlay` ne lit
+aucune valeur du coordinateur.
+
+`pendingAudioPlayer`, non. La racine LIT `isPlaying` — dans
+`audioTileFallback`, qui dessine « lecture » ou « pause ». Passer en `@State`
+sans extraire la tuile aurait figé son icône à sa naissance. **Un défaut de
+CORRECTION, pire que la lenteur qu'il corrige.** D'où `PendingAudioTile`.
+
+### 2. Les quatre autres porteurs du vumètre ne sont pas dans ce cas
+
+`PostDetailView`, `FeedCommentsSheet`, `StoryViewerView+CanvasComposerBar` et
+`AudioPostComposerView` lisent tous `isRecording`, `duration` et
+`audioLevels` dans une vue. Leur canton passe par le CONTRAT du composant qui
+reçoit ces trois valeurs — un lot à lui seul : #7162.
+
+### 3. Le volet « trois Equatable jamais posées » était déjà soldé
+
+Remesuré : `RiverBubbleView` porte `.equatable()` à ses DEUX sites de
+montage, `CommentRowView` à ses TROIS, et `ProfilePostRow` — comme tout
+`UserProfileSheet*` — a quitté le dépôt. Le corps de #6226 n'avait pas été
+remesuré depuis son écriture.
+
+> **Une énumération de sites porte deux affirmations : « ces sites ont le
+> défaut » et « ce sont les sites qui l'ont ».** La seconde vieillit sans
+> prévenir — le dépôt avance, l'énoncé reste. Avant de porter un correctif
+> d'après une liste, la remesurer ; c'est la leçon 261 appliquée à un relevé
+> d'audit plutôt qu'à une règle.
+
+### Ce que le relais a coûté de plus que prévu
+
+`ScrollOffsetReader`, l'hôte générique, existait déjà — le portage est resté
+mécanique. Mais le fil de l'iPhone gardait son en-tête dans une `private var`
+de la racine : elle devient une FONCTION de l'offset, que le lecteur
+alimente. Le relevé comptait « treize écrans sur quinze » ; le balayage en
+trouve **neuf détenteurs de relais et trois retardataires**, soit une
+adoption plus large et un reste plus petit que l'estimation.
