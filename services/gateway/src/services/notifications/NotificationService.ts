@@ -41,6 +41,7 @@ import { notificationString, buildNotificationDisplay } from '@meeshy/shared/uti
 import { publicMediaUrlFromEnv } from '../attachments/publicMediaUrl';
 import { recipientDateLocale, recipientLanguage } from '../../utils/recipient-language';
 import { notificationLogger, securityLogger } from '../../utils/logger-enhanced';
+import { sanitizeNotificationInputs, persistedNotificationTitle } from './sanitizeInputs';
 import { SecuritySanitizer } from '../../utils/sanitize';
 import { truncateByCodePoints } from '../../utils/truncate-text';
 import { filterMutedRecipients } from './mutedRecipients';
@@ -857,22 +858,13 @@ export class NotificationService {
         return null;
       }
 
-      // SECURITY: Sanitize user-provided content (defense-in-depth)
-      const sanitizedContent = SecuritySanitizer.sanitizeText(params.content);
-      const sanitizedActor = params.actor ? {
-        ...params.actor,
-        displayName: params.actor.displayName
-          ? SecuritySanitizer.sanitizeText(params.actor.displayName)
-          : params.actor.displayName,
-        // #7157 — le repli `?? params.actor.avatar` restituait la valeur
-        // d'origine PRÉCISÉMENT quand `sanitizeURL` l'avait rejetée. Un chemin
-        // relatif doit survivre, un protocole refusé doit tomber : deux cas
-        // distincts, une seule règle, chez le sanitiseur.
-        avatar: params.actor.avatar
-          ? SecuritySanitizer.sanitizeURLOrPath(params.actor.avatar)
-          : params.actor.avatar,
-      } : undefined;
-      const sanitizedMetadata = SecuritySanitizer.sanitizeJSON(params.metadata);
+      // SECURITY: défense en profondeur — cf. `sanitizeInputs.ts`, qui tient
+      // ENSEMBLE le texte, l'acteur, les métadonnées et le titre. Les deux
+      // défauts trouvés ici (#7157, #7159) étaient des champs VOISINS qu'aucune
+      // phrase du bloc ne nommait : les énumérer à un seul endroit est ce qui
+      // les rend visibles.
+      const { content: sanitizedContent, actor: sanitizedActor, metadata: sanitizedMetadata } =
+        sanitizeNotificationInputs(params);
 
       // Titre/sous-titre localisés, conscients de l'entité — calculés UNE fois
       // côté serveur (langue du destinataire) puis persistés. Source unique pour
@@ -913,15 +905,8 @@ export class NotificationService {
         : (display.subtitle ?? null);
       // Titre persisté : le builder localisé quand il en a un (types sociaux),
       // sinon le titre explicite de l'appelant (annonce système : son sujet).
-      // #7159 — le titre traversait le bloc « defense-in-depth » sans y entrer,
-      // alors que le `content` du même appel y passe. Il est le POINT DE
-      // PASSAGE de tout ce qui finit en titre, quelle qu'en soit la source
-      // (libellé localisé, sujet d'une diffusion, nom d'acteur) : le sanitiser
-      // ici couvre toutes les branches d'un coup. Sanitisation AVANT la
-      // troncature, sans quoi on couperait au milieu d'une entité.
-      const titreBrut = display.title ?? params.title ?? null;
-      const titreSain = titreBrut !== null ? SecuritySanitizer.sanitizeText(titreBrut).trim() : null;
-      const persistedTitle = (titreSain !== null && titreSain !== '') ? titreSain.slice(0, 160) : null;
+      // Sanitisation et troncature dans `sanitizeInputs.ts` (#7159).
+      const persistedTitle = persistedNotificationTitle(display.title, params.title);
 
       const notification = await this.prisma.notification.create({
         data: {
