@@ -90,7 +90,29 @@ describe('les autres familles', () => {
     expect(notificationTarget(record({ type: 'login_new_device' }))).toEqual({ route: 'settings' });
   });
 
-  test('une demande de contact ne mène NULLE PART tant que le web n’a pas d’écran de contacts', () => {
-    expect(notificationTarget(record({ type: 'friend_request', context: { friendRequestId: 'fr1' } }))).toBeNull();
+  /* Ce témoin disait « ne mène NULLE PART tant que le web n’a pas d’écran de
+     contacts » — une exemption dont la CONDITION est devenue fausse : #6363 a
+     livré `/discover` et son onglet « Demandes », qui porte les boutons
+     Accepter et Refuser. Sans cette destination, apprendre qu’on a reçu une
+     demande et pouvoir y répondre étaient deux écrans sans chemin entre eux
+     (#7173). */
+  test('une demande de contact ouvre l’onglet « Demandes » de la découverte, filtre « Reçues »', () => {
+    for (const type of ['friend_request', 'contact_request']) {
+      expect(notificationTarget(record({ type, context: { friendRequestId: 'fr1' } }))).toEqual({
+        route: 'discover',
+        search: { onglet: 'requests', demandes: 'received' },
+      });
+    }
+  });
+
+  test('une demande ACCEPTÉE ouvre le fil, pas la découverte — on peut désormais écrire', () => {
+    expect(notificationTarget(record({ type: 'friend_accepted', context: { conversationId: 'c-neuve' } }))).toEqual({
+      route: 'thread',
+      params: { conversation: 'c-neuve' },
+    });
+  });
+
+  test('un type sans destination rend toujours null — la table ne se remplit pas en silence', () => {
+    expect(notificationTarget(record({ type: 'un_type_sans_ecran' }))).toBeNull();
   });
 });
