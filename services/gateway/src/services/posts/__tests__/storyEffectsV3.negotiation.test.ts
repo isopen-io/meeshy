@@ -95,6 +95,13 @@ const loadV3Blob = (): Record<string, unknown> =>
 async function buildApp(readerLanguage: string = 'fr'): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   const prisma = {
+    /* #7184 — les deux lectures de `getBlockRelatedUserIds` : la garde de
+       blocage traverse `buildFeedVisibilityFilter`, donc tout double qui
+       compose un fil doit les servir. */
+    user: {
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      findUnique: jest.fn<any>().mockResolvedValue({ blockedUserIds: [] }),
+    },
     postMention: {
       findMany: jest.fn<any>().mockResolvedValue([]),
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
@@ -313,6 +320,11 @@ describe('garde de source — withMentions porte TOUJOURS un paramètre lecteur 
 describe('getStories — le tray négocie la forme pour le lecteur', () => {
   function storiesPrisma(storyEffects: unknown) {
     return {
+      /* #7184 — cf. le double de `buildApp` ci-dessus. */
+      user: {
+        findMany: jest.fn<any>().mockResolvedValue([]),
+        findUnique: jest.fn<any>().mockResolvedValue({ blockedUserIds: [] }),
+      },
       post: {
         findMany: jest.fn<any>().mockResolvedValue([{
           id: POST_ID,

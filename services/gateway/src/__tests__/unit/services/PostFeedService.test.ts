@@ -1321,26 +1321,10 @@ describe('PostFeedService.getReels', () => {
     expect((result.items[0] as any).currentUserReactions).toEqual(['❤️']);
   });
 
-  /**
-   * AMENDÉ PAR #7184 — « auxiliaire » et « garde » ne tombent pas du même côté.
-   *
-   * Ce témoin faisait échouer `user.findUnique` EN BLOC pour éprouver le
-   * best-effort de l'affinité. Cette lecture sert désormais DEUX choses : les
-   * langues du lecteur (auxiliaire — son absence dégrade un classement) et le
-   * blocage (une GARDE — son absence laisserait passer le contenu d'un
-   * bloquant).
-   *
-   * Le sens de la garde décide du sens de la panne : la panne d'une lecture
-   * auxiliaire se traverse, celle d'une garde FERME. La distinction se fait sur
-   * le `select`, c'est-à-dire sur ce que la requête DEMANDE — la seule chose qui
-   * sépare vraiment les deux ici.
-   */
   it('reste fonctionnel quand les requêtes d\'affinité auxiliaires échouent (best-effort)', async () => {
     const reel = makePost('r-1', { type: 'REEL' });
     mockPostFindMany.mockResolvedValue([reel]);
-    mockUserFindUnique.mockImplementation(async (args: any) =>
-      args?.select?.blockedUserIds ? { blockedUserIds: [] } : Promise.reject(new Error('db down'))
-    );
+    mockUserFindUnique.mockImplementation(async (a: any) => (a?.select?.blockedUserIds ? { blockedUserIds: [] } : Promise.reject(new Error('db down'))));
     mockPostMentionFindMany.mockRejectedValue(new Error('db down'));
     mockPostViewFindMany.mockRejectedValue(new Error('db down'));
     mockPostReactionFindMany.mockResolvedValue([]);
@@ -1350,24 +1334,6 @@ describe('PostFeedService.getReels', () => {
 
     expect(result.items).toHaveLength(1);
     expect((result.items[0] as any).id).toBe('r-1');
-  });
-
-  /**
-   * L'AUTRE MOITIÉ, et elle n'existait pas : une garde qui se traverse en
-   * silence quand sa lecture échoue est fail-OPEN — elle servirait le contenu
-   * d'un bloquant au moment précis où elle ne peut plus le reconnaître.
-   */
-  it('mais une panne de la lecture de BLOCAGE ferme le fil, elle ne se traverse pas', async () => {
-    const reel = makePost('r-1', { type: 'REEL' });
-    mockPostFindMany.mockResolvedValue([reel]);
-    mockUserFindUnique.mockImplementation(async (args: any) =>
-      args?.select?.blockedUserIds ? Promise.reject(new Error('db down')) : { systemLanguage: 'fr' }
-    );
-    mockPostReactionFindMany.mockResolvedValue([]);
-
-    const service = new PostFeedService(mockPrisma);
-
-    await expect(service.getReels('user-1')).rejects.toThrow('db down');
   });
 
   // Prisme rank 4 (deviceLocale) alimente l'affinité de langue du reel viewer.

@@ -4,8 +4,8 @@ import { decodeCursor, encodeCursor } from '../routes/posts/types';
 import { authorSelect, postInclude, postMentionInclude, storyPostInclude, trayStorySelect, NOT_DELETED } from './posts/postIncludes';
 import { withMentions, type WireReader } from './posts/postReferences';
 import { EPHEMERAL_AUTHOR_ARCHIVE_MS } from './posts/ephemeralPosts';
-import { buildPostVisibilityOrFilter, isEphemeralPostType } from './posts/postVisibility';
-import { blockedIdsAroundViewer } from './ContactDirectoryService';
+import { isEphemeralPostType } from './posts/postVisibility';
+import { buildFeedVisibilityFilter } from './posts/feedVisibility';
 import {
   reelAffinityScore,
   type ReelAffinityContext,
@@ -132,7 +132,7 @@ export class PostFeedService {
       getCommunityCoMemberIds(this.prisma, userId, this.cache),
     ]);
     const allContactIds = [...new Set([...friendIds, ...dmContactIds])];
-    const visibilityFilter = await this.buildVisibilityFilter(userId, allContactIds, communityCoMemberIds);
+    const visibilityFilter = await buildFeedVisibilityFilter(this.prisma, userId, allContactIds, communityCoMemberIds);
 
     // Phase 1 — Fetch candidates
     const where: any = {
@@ -294,7 +294,7 @@ export class PostFeedService {
       getCommunityCoMemberIds(this.prisma, userId, this.cache),
     ]);
     const allContactIds = [...new Set([...friendIds, ...dmContactIds])];
-    const visibilityFilter = await this.buildVisibilityFilter(userId, allContactIds, communityCoMemberIds);
+    const visibilityFilter = await buildFeedVisibilityFilter(this.prisma, userId, allContactIds, communityCoMemberIds);
 
     // Archive de l'AUTEUR : mes propres stories restent renvoyées après leur
     // expiration, pour que « Mes stories » puisse les lister (vignette voilée).
@@ -541,7 +541,7 @@ export class PostFeedService {
       getCommunityCoMemberIds(this.prisma, userId, this.cache),
     ]);
     const allContactIds = [...new Set([...friendIds, ...dmContactIds])];
-    const visibilityFilter = await this.buildVisibilityFilter(userId, allContactIds, communityCoMemberIds);
+    const visibilityFilter = await buildFeedVisibilityFilter(this.prisma, userId, allContactIds, communityCoMemberIds);
 
     const whereClause: any = {
       deletedAt: NOT_DELETED,
@@ -663,7 +663,7 @@ export class PostFeedService {
       getCommunityCoMemberIds(this.prisma, userId, this.cache),
     ]);
     const contactIds = new Set([...friendIds, ...dmContactIds]);
-    const visibilityFilter = await this.buildVisibilityFilter(userId, [...contactIds], communityCoMemberIds);
+    const visibilityFilter = await buildFeedVisibilityFilter(this.prisma, userId, [...contactIds], communityCoMemberIds);
 
     const andClauses: any[] = [
       visibilityFilter,
@@ -890,7 +890,7 @@ export class PostFeedService {
         getCommunityCoMemberIds(this.prisma, viewerUserId, this.cache),
       ]);
       const allContactIds = [...new Set([...friendIds, ...dmContactIds])];
-      andClauses.push(await this.buildVisibilityFilter(viewerUserId, allContactIds, communityCoMemberIds));
+      andClauses.push(await buildFeedVisibilityFilter(this.prisma, viewerUserId, allContactIds, communityCoMemberIds));
     }
 
     if (cursorData) {
@@ -1125,21 +1125,6 @@ export class PostFeedService {
       isBookmarkedByMe: flags.bookmarkedIds.has(postId),
       isRepostedByMe: flags.repostedIds.has(postId),
     };
-  }
-
-  /// G5 — délègue au filtre canonique unique (posts/postVisibility.ts).
-  /// Audience feed = friends ∪ contacts DM (divergence assumée vs PostService,
-  /// décision produit en attente — story-sota §4).
-  /**
-   * LE BLOCAGE EST RÉSOLU ICI, PAS CHEZ LES APPELANTS (#7184). Les cinq sites
-   * qui composent un fil ont chacun leur `Promise.all` d'audience ; y ajouter
-   * une sixième lecture aurait été cinq occasions d'en oublier une — et c'est
-   * précisément l'oubli que ce lot corrige. La méthode devient `async` pour
-   * que la garde voyage AVEC le filtre, jamais à côté.
-   */
-  private async buildVisibilityFilter(viewerId: string, friendIds: string[], communityCoMemberIds: string[] = []) {
-    const blockedAuthorIds = await blockedIdsAroundViewer(this.prisma, viewerId);
-    return buildPostVisibilityOrFilter(viewerId, friendIds, communityCoMemberIds, blockedAuthorIds);
   }
 
   private async getDirectConversationContactIds(userId: string): Promise<string[]> {

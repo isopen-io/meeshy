@@ -218,3 +218,25 @@ describe('PostFeedService — aucun contenu ne traverse un blocage (#7184)', () 
     expect(where.AND[0].AND).toBeUndefined();
   });
 });
+
+/**
+ * **LE SENS DE LA GARDE DÉCIDE DU SENS DE LA PANNE** (#7184).
+ *
+ * `user.findUnique` sert DEUX choses depuis ce lot : les langues du lecteur
+ * (auxiliaire — son absence dégrade un classement, et le fil s'affiche quand
+ * même) et le blocage (une GARDE). Une garde qui se traverse en silence quand
+ * sa lecture échoue est fail-OPEN : elle servirait le contenu d'un bloquant au
+ * moment précis où elle ne peut plus le reconnaître.
+ *
+ * Le témoin jumeau — celui du best-effort, dans `PostFeedService.test.ts` —
+ * mesure l'autre moitié : les auxiliaires tombent, le fil tient.
+ */
+describe('PostFeedService — la panne de la lecture de BLOCAGE ferme le fil', () => {
+  it('ne sert rien plutôt que de servir sans garde', async () => {
+    const prisma = makeMockPrisma();
+    prisma.communityMember.findMany.mockResolvedValue([]);
+    prisma.user.findUnique.mockRejectedValue(new Error('db down'));
+
+    await expect(new PostFeedService(prisma).getStories('viewer-1')).rejects.toThrow('db down');
+  });
+});
