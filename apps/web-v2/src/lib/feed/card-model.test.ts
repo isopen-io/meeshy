@@ -52,7 +52,17 @@ describe('resolveFeedCardModel — le SITE UNIQUE qui compose type, Prisme, acce
       }),
       { preferredLanguages: ['fr', 'en'], now: NOW },
     );
-    expect(model.text).toEqual({ full: 'Good morning everyone', language: 'en', translated: true });
+    /* `original` / `originalLanguage` (#7141) — le modèle porte désormais ce que
+       le GESTE ouvre, sans quoi la carte annoncerait une traduction sans offrir
+       de chemin vers l'original (loi 4). Ils sont portés MÊME quand rien n'est
+       traduit : c'est `translated` qui décide de l'annonce. */
+    expect(model.text).toEqual({
+      full: 'Good morning everyone',
+      language: 'en',
+      translated: true,
+      original: 'Buenos días a todos',
+      originalLanguage: 'es',
+    });
   });
 
   test('l’attribution de republication porte le pseudo, jamais un objet vide', () => {
