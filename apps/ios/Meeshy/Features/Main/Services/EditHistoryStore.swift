@@ -1,4 +1,6 @@
 import Foundation
+import Combine
+import MeeshySDK
 import os
 
 /// One revision in the edit history of a message. `content` is the value
@@ -38,6 +40,7 @@ final class EditHistoryStore: @unchecked Sendable {
     private let storageKey = "meeshy_edit_history"
     private let lock = NSLock()
     private var cache: [String: [EditRevision]]
+    private var cancellables = Set<AnyCancellable>()
 
     private let maxRevisionsPerMessage = 30
     /// Borne le nombre de MESSAGES suivis — la borne par message ne suffisait
@@ -64,6 +67,24 @@ final class EditHistoryStore: @unchecked Sendable {
         } else {
             self.cache = [:]
         }
+        wireAuthLogoutHook()
+    }
+
+    /// cache-09 (#7146) — pattern calqué sur `ConversationLockManager` : à la
+    /// déconnexion, l'historique d'édition du compte sortant part.
+    ///
+    /// `EditRevision.content` est le TEXTE des versions précédentes d'un
+    /// message — précisément ce qu'un auteur a choisi de retirer. La clé
+    /// `UserDefaults` est commune à tous les comptes et `clearAll()` n'avait
+    /// aucun appelant : l'historique survivait à la déconnexion.
+    private func wireAuthLogoutHook() {
+        AuthManager.shared.$isAuthenticated
+            .removeDuplicates()
+            .dropFirst()
+            .filter { !$0 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.clearAll() }
+            .store(in: &cancellables)
     }
 
     /// Append the previous content as a new revision for the given message.

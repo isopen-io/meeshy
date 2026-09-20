@@ -17,7 +17,19 @@ import type { ServedRelation } from '@/lib/api/public-profile';
  * au-delà de la centième y est ABSENT — et « absent du panier » se lirait
  * « Ajouter » sur la fiche d'un ami.
  *
- * **CE QUE LA PASSERELLE NE DIT PAS, ET CE QU'ON N'INVENTE PAS.**
+ * **LE BLOCAGE EST SERVI, ET IL EST SERVI À CÔTÉ** (#7125). `relationAvec`
+ * n'a toujours pas de valeur `blocked`, et c'est JUSTE : bloquer quelqu'un
+ * n'efface pas la ligne d'amitié, le serveur continue de servir `friend` ou
+ * `pending_sent`, et c'est ce qui permet à « Débloquer » de rendre la relation
+ * qu'on avait. La passerelle répond donc sur un CHAMP à part —
+ * `blockedByViewer`, résolu par `hasBlocked` pour ce sujet précis
+ * (`services/gateway/src/utils/blocking.ts`, `routes/directory/person.ts`) —
+ * et `blocked` ci-dessous en est la projection directe. Il se DÉDUISAIT du
+ * panier `BLOCKED_USERS_QUERY_KEY`, plafonné à cent lignes : la même raison
+ * qui interdit le panier `accepted` deux paragraphes plus haut le condamnait,
+ * et il n'a tenu que faute d'alternative servie.
+ *
+ * **CE QUE LA PASSERELLE NE DIT TOUJOURS PAS, ET CE QU'ON N'INVENTE PAS.**
  *
  *  - *L'identifiant de la demande en cours* : `relationAvec` lit
  *    `{ status, senderId }` et jette `id` (`person.ts:81-92`). Accepter,
@@ -27,12 +39,6 @@ import type { ServedRelation } from '@/lib/api/public-profile';
  *    attente (`bucketNeededFor`). Coût nominal (`none` / `friend` / `self`) :
  *    ZÉRO requête de plus. Tant que l'identifiant manque, le geste est
  *    ANNONCÉ en attente : jamais un bouton mort (loi 4).
- *  - *Le blocage* : `relationAvec` n'a PAS de valeur `blocked` — bloquer
- *    quelqu'un n'efface pas la ligne d'amitié, et le serveur continue de
- *    servir `friend` ou `none`. On n'ajoute donc pas une sixième valeur au
- *    fil : le blocage se lit dans le panier des bloqués
- *    (`BLOCKED_USERS_QUERY_KEY`), la MÊME source que « Découvrir », que
- *    `performBlock` / `performUnblock` écrivent au geste.
  *
  * L'ordre de résolution est celui d'`UserRelationshipResolver.resolve` puis de
  * `FriendshipCache.status`, repris de `relationshipOf` : soi, bloqué, contact,

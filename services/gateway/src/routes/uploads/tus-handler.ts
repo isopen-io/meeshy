@@ -25,6 +25,7 @@ import { classifyAnonymousAttachment, verifyDeclaredMimeType, RECOMMENDED_SIGNAT
 import { isExifStrippable, stripExifFromImageBuffer } from '../../services/attachments/ExifStrip';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { originIsAllowed } from '../../config/cors-origins';
+import { TUS_COLLECTION_METHODS, TUS_UPLOAD_METHODS } from './tus-methods';
 
 const logger = enhancedLogger.child({ module: 'TusHandler' });
 
@@ -683,8 +684,6 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
   // confirmation précède le retrait, couple par couple — les retirer ici serait
   // les retirer sur une SUPPOSITION, exactement le raisonnement que ce lot
   // corrige. Suivi séparé.
-  const TUS_COLLECTION_METHODS = ['HEAD', 'POST', 'OPTIONS'] as const;
-  const TUS_UPLOAD_METHODS = ['HEAD', 'POST', 'PATCH', 'DELETE', 'OPTIONS'] as const;
 
   fastify.route({
     method: [...TUS_COLLECTION_METHODS],

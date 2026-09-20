@@ -803,6 +803,18 @@ jobs:
           cd apps/web-v2
           node scripts/check-feed-media.mjs
 
+      # #7135 — LES GESTES D'UNE RANGÉE DE COMMENTAIRE ONT UN EFFET. Les
+      # témoins `bun test` tournent sous happy-dom et prouvent que les rappels
+      # partent ; seul un moteur réel peut dire que le cœur se REMPLIT avant la
+      # réponse, que la cible fait 44 px, que le refus défait l'optimiste à la
+      # valeur EXACTE et que « Réessayer » repart. Surface partagée par
+      # `/post/$post` et le panneau du lecteur de stories.
+      - name: Gate commentaires (aimer, modifier, supprimer — optimiste et refus)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web-v2
+          node scripts/check-post-comments.mjs
+
       # #7022 — UN MÉDIA ABSENT DÉGRADE PROPREMENT. 8 fichiers sur 2912 sont
       # réellement absents du volume de production (le cadrage du lot en
       # annonçait 582 : faux, cf. l'issue). Une référence morte doit rendre un

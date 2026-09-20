@@ -12,6 +12,7 @@ import { computeUserStats, servedUserStats } from '../user-stats';
 import { publicProfileSchema, servirProfilPublic } from '../users/public-profile';
 import { getOptionalAuth } from '../users/presence-gate';
 import { parseFieldList, parseTokenSet, restrictFields } from '../../utils/sparse-fieldset';
+import { hasBlocked } from '../../utils/blocking';
 
 const logger = enhancedLogger.child({ module: 'DirectoryPerson' });
 
@@ -68,29 +69,51 @@ const EXPANSIONS: readonly Expansion[] = ['stats', 'presence', 'relation'] as co
  * relation qu'on aurait mesurée, mais l'impossibilité d'en avoir une. Les deux
  * se servent pareil, et c'est voulu — dire « je ne sais pas » ici apprendrait
  * seulement au client à traiter un troisième cas qui n'existe pas.
+ *
+ * ## `blockedByViewer` est un champ À CÔTÉ du fil, jamais une valeur DEDANS (#7125)
+ *
+ * Bloquer quelqu'un n'efface pas la ligne d'amitié : `relation` continue de
+ * servir `friend` ou `pending_sent`, et c'est juste — débloquer doit rendre la
+ * relation qu'on avait. Une sixième valeur `blocked` sur le MÊME fil écraserait
+ * cette information, et l'écran ne saurait plus quoi afficher après le
+ * déblocage. Les deux dimensions sont orthogonales ; la charge les sépare.
+ *
+ * Le champ existait déjà côté client, mais DÉDUIT du panier `GET /blocks` —
+ * paginé à cent lignes. Au-delà de la centième personne bloquée, sa fiche
+ * s'ouvrait entière (#7125) : du contenu masqué redevenait visible par le seul
+ * effet du rang. La passerelle répond désormais PAR SUJET.
  */
 async function relationAvec(
   fastify: FastifyInstance,
   viewerId: string | undefined,
   cibleId: string
-): Promise<{ relation: string; isSelf: boolean }> {
-  if (!viewerId) return { relation: 'none', isSelf: false };
-  if (viewerId === cibleId) return { relation: 'self', isSelf: true };
+): Promise<{ relation: string; isSelf: boolean; blockedByViewer: boolean }> {
+  if (!viewerId) return { relation: 'none', isSelf: false, blockedByViewer: false };
+  if (viewerId === cibleId) return { relation: 'self', isSelf: true, blockedByViewer: false };
 
-  const lien = await fastify.prisma.friendRequest.findFirst({
-    where: {
-      OR: [
-        { senderId: viewerId, receiverId: cibleId },
-        { senderId: cibleId, receiverId: viewerId },
-      ],
-    },
-    select: { status: true, senderId: true },
-  });
+  /* Les deux questions sont INDÉPENDANTES — les sérialiser doublerait la
+     latence de l'expansion la plus chère de la route pour rien. */
+  const [lien, blockedByViewer] = await Promise.all([
+    fastify.prisma.friendRequest.findFirst({
+      where: {
+        OR: [
+          { senderId: viewerId, receiverId: cibleId },
+          { senderId: cibleId, receiverId: viewerId },
+        ],
+      },
+      select: { status: true, senderId: true },
+    }),
+    hasBlocked(fastify.prisma, viewerId, cibleId),
+  ]);
 
-  if (!lien) return { relation: 'none', isSelf: false };
-  if (lien.status === 'accepted') return { relation: 'friend', isSelf: false };
-  if (lien.status !== 'pending') return { relation: 'none', isSelf: false };
-  return { relation: lien.senderId === viewerId ? 'pending_sent' : 'pending_received', isSelf: false };
+  const fil = ((): string => {
+    if (!lien) return 'none';
+    if (lien.status === 'accepted') return 'friend';
+    if (lien.status !== 'pending') return 'none';
+    return lien.senderId === viewerId ? 'pending_sent' : 'pending_received';
+  })();
+
+  return { relation: fil, isSelf: false, blockedByViewer };
 }
 
 /**
@@ -242,6 +265,7 @@ export async function directoryPersonRoutes(fastify: FastifyInstance) {
                 },
                 relation: { type: 'string' },
                 isSelf: { type: 'boolean' },
+                blockedByViewer: { type: 'boolean' },
               },
             },
           },
@@ -347,6 +371,6 @@ export async function directoryPersonRoutes(fastify: FastifyInstance) {
 function epinglesServis(demande: ReadonlySet<Expansion>): readonly string[] {
   const epingles = ['id'];
   if (demande.has('stats')) epingles.push('stats');
-  if (demande.has('relation')) epingles.push('relation', 'isSelf');
+  if (demande.has('relation')) epingles.push('relation', 'isSelf', 'blockedByViewer');
   return epingles;
 }

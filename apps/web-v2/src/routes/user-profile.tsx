@@ -10,7 +10,6 @@ import { Glyph, GlyphSvg } from '@/components/glyph';
 import { GroupedSection } from '@/components/grouped-section';
 import { PROFILE_GLYPHS } from '@/components/glyphs-profile';
 import { authorPostsInfiniteOptions, flattenAuthorPosts } from '@/lib/api/author-posts';
-import { blockedUsersQueryOptions, flattenBlockedUsers } from '@/lib/api/blocks';
 import { apiDeps } from '@/lib/api/deps';
 import { createDirectConversation } from '@/lib/api/conversations';
 import {
@@ -74,7 +73,8 @@ import {
  * chargé que si la relation est EN ATTENTE (`bucketNeededFor`) — la passerelle
  * ne sert pas l'identifiant de la demande, et Accepter / Refuser / Annuler en
  * ont besoin. Issue gateway compagnon : `relationRequestId` sur
- * `expand=relation`.
+ * `expand=relation`. **Le panier des BLOQUÉS, lui, n'est plus chargé du tout**
+ * (#7125) : `blockedByViewer` arrive sur le même fil que l'identité.
  *
  * **MÊME CARTE QUE LE FIL, MÊME MODÈLE** — `resolveFeedCardModel` et
  * `FeedPostCard`, jamais une seconde peau : le Prisme, l'accent et la géométrie
@@ -188,51 +188,28 @@ export function UserProfileView({ username }: { readonly username: string }) {
   const person = view.data?.profile;
   const served = view.data?.relation ?? 'none';
 
-  /* LE BLOCAGE N'EST PAS SUR LE FIL : `relationAvec` n'a pas de valeur
-     `blocked` (`routes/directory/person.ts:72-93`). Il se lit dans le panier
-     des bloqués — la MÊME source que « Découvrir », que `performBlock` et
-     `performUnblock` écrivent au geste. */
-  const blockedList = useInfiniteQuery({ ...blockedUsersQueryOptions(apiDeps), enabled: signedIn }, appQueryClient);
-  const blocked = useMemo(
-    () => (person === undefined ? false : flattenBlockedUsers(blockedList.data).some((row) => row.id === person.id)),
-    [blockedList.data, person],
-  );
-
   /**
-   * **LE PANIER SE LIT EN ENTIER, PAS SUR SES CENT PREMIÈRES LIGNES**
-   * (revue #7083, défaut majeur 1). `BLOCKED_PAGE_SIZE` vaut 100
-   * (`api/blocks.ts:19`) et rien n'appelait `fetchNextPage` : au-delà de la
-   * centième ligne, la fiche d'une personne BLOQUÉE s'ouvrait entière, avec
-   * « Bloquer » offert à la place de la carte de blocage — l'inverse exact de
-   * ce que le lecteur a demandé.
+   * **LE BLOCAGE SE LIT PAR SUJET, SUR LE MÊME FIL QUE L'IDENTITÉ** (#7125) —
+   * `blockedByViewer`, servi avec `expand=relation` et résolu par `hasBlocked`
+   * (`services/gateway/src/utils/blocking.ts`). Il voyage À CÔTÉ de `relation`,
+   * jamais dedans : bloquer n'efface pas la ligne d'amitié, et débloquer doit
+   * rendre la relation qu'on avait (`lib/api/public-profile.ts`).
    *
-   * **La passerelle n'a AUCUNE source par SUJET** — mesuré :
-   * `PUT /blocks/:userId` (`routes/directory/blocks.ts:301`),
-   * `DELETE /blocks/:userId` (`:340`), `GET /blocks` (`:376`), rien d'autre ;
-   * et `relationAvec` (`routes/directory/person.ts:72-93`) n'a pas de valeur
-   * `blocked`. Tant que l'issue gateway compagnon #7125 (`blockedByViewer` sur
-   * `expand=relation`) n'est pas livrée, la seule réponse HONNÊTE est de lire
-   * le panier jusqu'au bout plutôt que de conclure sur sa première page. La
-   * v3.1 ne PATCHE pas la passerelle pour une capacité nouvelle.
+   * **Ce que la lecture par sujet ferme, et que le drainage laissait ouvert.**
+   * L'état se DÉDUISAIT du panier `GET /blocks`, plafonné à cent lignes, qu'un
+   * effet tournait page par page jusqu'à y trouver la personne. Cette boucle
+   * finissait par rendre le bon verdict — mais PENDANT qu'elle tournait,
+   * `blocked` valait `false` : l'écran rendait le contenu d'une personne
+   * bloquée et LANÇAIT sa requête de publications (mesuré : `dataUpdateCount`
+   * à 1). La réponse arrive maintenant AVEC l'identité ; il n'y a plus de
+   * fenêtre, plus de page à tourner, et cet écran ne s'abonne plus au panier.
    *
-   * **CE QUE ÇA COÛTE, et pourquoi c'est peu** : la boucle s'arrête dès que le
-   * sujet est trouvé, et `getNextPageParam` rend `undefined` sur la dernière
-   * page. Pour l'immense majorité des lecteurs — moins de 100 blocages — c'est
-   * ZÉRO requête de plus. Le panier reste par ailleurs la source des écritures
-   * optimistes (`performBlock` / `performUnblock`), et il est mis en cache pour
-   * la famille entière (`FRIENDS_STALE_TIME`).
+   * Le panier VIT toujours — « Découvrir » le lit, et `performBlock` /
+   * `performUnblock` l'écrivent au geste ; ces deux gestes patchent DE PLUS
+   * `blockedByViewer` sur chaque fiche en cache, sans quoi « Bloquer » n'aurait
+   * plus aucun effet visible sur l'écran d'où on le touche (loi 4).
    */
-  const { hasNextPage: moreBlocked, isFetchingNextPage: drainingBlocked, fetchNextPage: drainBlocked } = blockedList;
-  const subjectId = person?.id ?? null;
-  /* LES DÉPENDANCES SONT DES PRIMITIVES, jamais l'objet de requête : son
-     identité change à CHAQUE rendu, et l'effet relancerait `fetchNextPage`
-     avant que `isFetchingNextPage` n'ait basculé — deux requêtes pour une
-     page. Même leçon que `preferredLanguages` sur `TranslationToggle`. */
-  useEffect(() => {
-    if (subjectId === null || blocked) return;
-    if (moreBlocked !== true || drainingBlocked) return;
-    void drainBlocked();
-  }, [blocked, drainBlocked, drainingBlocked, moreBlocked, subjectId]);
+  const blocked = view.data?.blockedByViewer === true;
 
   const bucket = bucketNeededFor(served);
   const requests = useInfiniteQuery(

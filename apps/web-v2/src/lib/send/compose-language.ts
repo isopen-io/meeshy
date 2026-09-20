@@ -85,6 +85,36 @@ export function normalizedSupportedCode(code: string | null | undefined): string
   return normalized !== undefined && isSupportedLanguage(normalized) ? normalized : undefined;
 }
 
+/**
+ * LA LANGUE QU'UNE **CORRECTION** DÉCLARE (#7135) — miroir exact de
+ * `DefaultComposerLanguage.resolve(editing:current:)`
+ * (`ComposerModels.swift:105-107`), et la DEUXIÈME moitié de la loi
+ * ci-dessus : `composeLanguage` dit dans quelle langue on ÉCRIT, celle-ci
+ * dans quelle langue on a DÉJÀ écrit.
+ *
+ * Corriger une faute ne change pas la langue d'un texte. Le rang 1 du
+ * lecteur, la langue d'interface, le repli « fr » sont tous des estimations de
+ * ce qu'on s'apprête à taper — aucun ne dit ce qui est déjà là, et le
+ * commentaire, lui, le SAIT. iOS écrit la conséquence en toutes lettres :
+ * « ouverte sur le défaut "fr", [la pastille] réécrirait la langue d'un
+ * commentaire espagnol à la première faute corrigée » (#6600). La passerelle
+ * ÉCRIT ce qu'on lui déclare dès que le texte change
+ * (`PostCommentService.ts:314-316`, `updateData.originalLanguage =
+ * data.originalLanguage ?? null`) et purge les traductions dans le même
+ * mouvement : une déclaration fausse fait retraduire un texte espagnol comme
+ * s'il était français, pour TOUS ses lecteurs.
+ *
+ * `current` — ce que l'appelant aurait déclaré — n'est le repli que faute de
+ * mieux, et il passe par la MÊME garde fail-closed : un code hors du
+ * référentiel n'est jamais transmis.
+ */
+export function editedLanguage(
+  original: string | null | undefined,
+  current: string | null | undefined,
+): string | undefined {
+  return normalizedSupportedCode(original) ?? normalizedSupportedCode(current);
+}
+
 export function composeLanguage(input: {
   readonly text: string;
   readonly detected: DetectedLanguage | null;

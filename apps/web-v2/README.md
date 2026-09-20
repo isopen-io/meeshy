@@ -72,6 +72,23 @@ Mesuré au 2026-09-10 (`node scripts/check-offline.mjs` contre `vite preview`) :
 Precache PWA (variante A, `dist/`) : **50 entrées, 720,96 KiB** — mesuré par
 le même gate, jamais un chiffre du manifest Workbox lu à l'œil.
 
+Remesuré au **2026-09-20**, même commande, serveur `bunx vite preview` sur le
+port **4174** (4173 était pris par une AUTRE session du poste : un gate qui
+mesure un serveur qu'il n'a pas lancé mesure l'application de quelqu'un
+d'autre — le port se choisit, il ne se suppose pas) :
+
+| visite | réseau | cache SW |
+|---|---|---|
+| 1 (froide) | 90 req · 127,5 Ko | 0 req · 0 octet |
+| 2 (SW installé) | 0 req · 0 octet | 86 req · 72,5 Ko |
+| 3 (hors ligne) | — | fil ouvert, titre « Meeshy Chats » |
+
+Precache PWA au même relevé : **262 entrées, 1993,50 KiB**. Le nombre de
+REQUÊTES passe de 11 à 90 sans que le poids servi bouge (125,3 → 127,5 Ko) :
+ce sont les chunks nommés des écrans portés depuis le 2026-09-10, pas une
+régression de charge utile — la seule grandeur qui garde la première peinture
+reste celle de `measure-weight.mjs` ci-dessous.
+
 Les captures figent l'horloge de la page (`page.clock.setFixedTime`) : sans
 ça, deux captures du même code diffèrent par leurs horodatages et comparer un
 rendu avant/après devient impossible.
@@ -448,6 +465,34 @@ et déjà acceptée, pas une régression à corriger. Elle rend caduc tout calcu
 qui repartirait des chiffres `24,53`/`24,36` ci-dessus — gardés ici comme
 mesure D'ORIGINE du runtime et du routeur, pas comme reflet de l'écran
 d'aujourd'hui.
+
+### Relevé du 2026-09-20 (`bun run gate`, segment `measure-weight.mjs`)
+
+```
+bun run build && node scripts/measure-weight.mjs
+```
+
+**49 Ko gzip avant le premier pixel, 10 requêtes, 2,13 s de téléchargement
+seul sur Fast 3G** ; **573,91 Ko** à la demande (hors première peinture). Les
+cinq documents institutionnels : **40,22 Ko** pour les cinq, `/about` à
+**9,85 Ko gzip · 4 requêtes · 0 script**.
+
+Le segment est **vert** (RC=0 sur les 56), et il ne l'est pas par une mesure :
+`interface_catalogs` pesait **70,27 Ko** contre un plafond de **70**, et le
+plafond a **doublé sur directive porteur du 2026-09-20** (141, #7140) parce
+qu'un gate qui rougissait pour 0,27 Ko bloquait toute la chaîne. Remesuré le
+même jour sous ce plafond, **sans y toucher** : **70,79 Ko gzip -9** pour les
+sept catalogues, dont **0,52 Ko attribués aux cinq clés de ce tour**
+(`comments.action.delete.confirm`, `comment.gesture.unconfirmed`,
+`comment.refused.session`, `comment.refused.right`, `comment.like.limit`),
+par deux mesures prises sur le MÊME arbre. **Ce que le doublement coûte, dit
+franchement** : le cliquet ne mord plus avant que les sept catalogues n'aient
+doublé — toute la croissance d'ici là passera en silence, et la SEULE trace
+d'une hausse est désormais celle que son lot écrit dans `budgets.json`. Une
+valeur posée sur directive ne peut pas avoir de témoin : elle ne survit que
+par ce commentaire. La piste structurelle (un TROISIÈME catalogue à la
+demande, sur le patron de `interface_catalogs_admin`) reste ouverte à
+**#7121** — elle ne paie qu'à l'échelle d'une FAMILLE de clés, pas à cinq.
 
 ## L'interface
 

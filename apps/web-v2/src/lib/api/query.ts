@@ -6,6 +6,7 @@ import { outboxStore } from '@/lib/send/outbox-store';
 import type { RowActionId } from '@/lib/view/row-actions';
 
 import { ApiError } from './client';
+import { performCommentGesture, type CommentGestureRequest, type CommentGestureResult } from './comment-gestures';
 import { performRowAction } from './conversation-actions';
 import { conversationQuery, conversationsQuery, refreshConversations } from './conversations';
 import { apiDeps } from './deps';
@@ -425,6 +426,17 @@ export function commentAction(params: {
     ...(params.originalLanguage === undefined ? {} : { originalLanguage: params.originalLanguage }),
     deps: { ...apiDeps, queryClient: appQueryClient },
   });
+}
+
+/**
+ * `commentGestureAction` — RÉFÉRENCE DE MODULE STABLE, MÊME motif et MÊME
+ * raison que `commentAction` juste au-dessus : les gestes d'une rangée
+ * écrivent dans le cache PARTAGÉ (`appQueryClient`), donc un commentaire aimé
+ * depuis le panneau d'une story l'est aussi dans le détail de la publication,
+ * sans relecture.
+ */
+export function commentGestureAction(request: CommentGestureRequest): Promise<CommentGestureResult> {
+  return performCommentGesture(request, { ...apiDeps, queryClient: appQueryClient });
 }
 
 /**

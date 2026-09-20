@@ -17,10 +17,20 @@ export type PostToggleKind = 'like' | 'bookmark';
 
 export type PostToggle = { readonly postId: string; readonly kind: PostToggleKind; readonly on: boolean };
 
-const shifted = (count: number | null | undefined, on: boolean): number => {
+/**
+ * LA BORNE BASSE, SITE UNIQUE — un compteur servi à 0 puis réaffiché après un
+ * retrait tardif ne passe JAMAIS à −1. C'est très exactement ce que la
+ * duplication avait coûté à iOS avant l'extraction de `PostLikeMutation.swift`
+ * (« `FeedViewModel` par un `+= isLiked ? 1 : -1` sans borne basse »), et c'est
+ * pourquoi tout compteur de publication — aimes, enregistrements, commentaires
+ * — passe par cette seule ligne plutôt que par sa propre addition.
+ */
+export const shiftedCount = (count: number | null | undefined, delta: 1 | -1): number => {
   const current = typeof count === 'number' && Number.isFinite(count) ? count : 0;
-  return Math.max(0, current + (on ? 1 : -1));
+  return Math.max(0, current + delta);
 };
+
+const shifted = (count: number | null | undefined, on: boolean): number => shiftedCount(count, on ? 1 : -1);
 
 export function togglePost(post: FeedPost, change: PostToggle): FeedPost {
   if (post.id !== change.postId) return post;
@@ -60,6 +70,33 @@ export function withServedCount(post: FeedPost, served: ServedCount): FeedPost {
 
 export function applyServedCount(data: FeedInfiniteData | undefined, served: ServedCount): FeedInfiniteData | undefined {
   return mapPosts(data, (post) => withServedCount(post, served));
+}
+
+/**
+ * LE COMPTEUR DE COMMENTAIRES (#7135) — écrire ou retirer un commentaire bouge
+ * le compte de la PUBLICATION, et ce compte se lit sur plusieurs écrans : la
+ * rangée de statistiques d'une carte du Flux, la même carte servie par un fil
+ * de Réels, la fiche `/post/$post`, la pastille du rail d'une story. La règle
+ * vit donc ICI, à côté de `applyPostToggle`, et non dans le port des
+ * commentaires : une règle recopiée diverge, et celle-ci avait déjà commencé à
+ * le faire — seuls la fiche et le rail bougeaient, si bien qu'on supprimait son
+ * commentaire et que la carte du fil gardait l'ancien chiffre.
+ *
+ * `mapPosts` n'opère que sur des pages EXISTANTES : une publication qu'une
+ * racine n'a jamais servie n'y apparaît pas.
+ */
+export type CommentCountDelta = { readonly postId: string; readonly delta: 1 | -1 };
+
+export function withCommentCount(post: FeedPost, change: CommentCountDelta): FeedPost {
+  if (post.id !== change.postId) return post;
+  return { ...post, commentCount: shiftedCount(post.commentCount, change.delta) };
+}
+
+export function applyCommentCount(
+  data: FeedInfiniteData | undefined,
+  change: CommentCountDelta,
+): FeedInfiniteData | undefined {
+  return mapPosts(data, (post) => withCommentCount(post, change));
 }
 
 /**

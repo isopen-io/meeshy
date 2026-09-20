@@ -443,6 +443,25 @@ public enum SceneShape {
     /// montrer le 9:16 entier.
     public nonisolated static let objectPadding: CGFloat = 0.16
 
+    /// **La demi-largeur qu'un TEXTE peut peindre, en fractions de la largeur
+    /// de la scène** (#7127).
+    ///
+    /// Ce n'est pas une préférence : `StoryTextLayer` wrappe un texte à 88 % de
+    /// la largeur de design (`widthFraction = 0.88`) et lui ajoute une réserve
+    /// d'encre — la demi-largeur de la scène majore les deux. Les autres
+    /// familles n'ont pas de plafond DÉCLARÉ par leur renderer ; leur boîte
+    /// reste la marge, simplement tournée.
+    ///
+    /// La loi ne s'en sert que TOURNÉE, et c'est là tout l'intérêt : à 0° la
+    /// largeur d'un objet ne dit rien de sa hauteur, mais dès qu'il pivote elle
+    /// y descend — et la hauteur est le seul axe sur lequel une carte se
+    /// resserre.
+    nonisolated static let textPaintHalfWidth: CGFloat = 0.5
+
+    nonisolated static func paintHalfWidth(of object: ObjectV3) -> CGFloat {
+        object.kind == .text ? textPaintHalfWidth : 0
+    }
+
     public nonisolated static func anchorBox(of object: ObjectV3) -> CGRect {
         let centre: CGPoint
         switch object.anchor {
@@ -453,8 +472,31 @@ public enum SceneShape {
         }
         let facteur = min(max(CGFloat(object.transform.scale), 0.5), 3)
         let marge = objectPadding * facteur
-        return CGRect(x: centre.x - marge, y: centre.y - marge,
-                      width: marge * 2, height: marge * 2)
+
+        // **La rotation se calcule en POINTS, jamais en fractions** (#7127).
+        //
+        // Une fraction de largeur et une fraction de hauteur ne mesurent pas la
+        // même longueur — la scène est 9:16 — et tourner une boîte exprimée en
+        // fractions reviendrait à la tourner dans un espace étiré : l'enveloppe
+        // en sortirait fausse des deux côtés. On passe donc en unités de
+        // LARGEUR (la hauteur y vaut `1 / aspect`), on tourne, on revient.
+        //
+        // Mesuré sur le calque réel avant ce calcul : un texte long tourné de
+        // 45° occupait 0,48 de la hauteur de la scène quand la loi lui en
+        // accordait 0,32, et la fenêtre de carte le coupait des deux côtés
+        // (13 cas sur 480 de la planche #7127). La dimension existait au
+        // contrat, voyageait jusqu'à `CATransform3DMakeRotation`, et la loi ne
+        // la lisait pas.
+        let demiLargeur = max(marge, paintHalfWidth(of: object))
+        let demiHauteur = marge / aspect
+        let angle = CGFloat(object.transform.rotation) * .pi / 180
+        let cosinus = abs(cos(angle))
+        let sinus = abs(sin(angle))
+        let enveloppeX = demiLargeur * cosinus + demiHauteur * sinus
+        let enveloppeY = (demiLargeur * sinus + demiHauteur * cosinus) * aspect
+
+        return CGRect(x: centre.x - enveloppeX, y: centre.y - enveloppeY,
+                      width: enveloppeX * 2, height: enveloppeY * 2)
     }
 
     /// Position conventionnelle d'un objet ancré à une BANDE — « en haut » et
