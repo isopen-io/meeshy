@@ -164,7 +164,7 @@ un AUTRE clone du même dépôt, occupé par d'autres sessions : ce que tu y lir
 \`cd ${REPO_PAR_CHAINE[chaine]} && git branch --show-current && git rev-parse --short HEAD\`.
 NE CRÉE PAS de worktree, NE POUSSE JAMAIS sur \`${BASE}\` directement, et NE FUSIONNE JAMAIS une PR :
 \`gh pr merge\` est INTERDIT sous TOUTES ses formes (\`--auto\`, \`--squash\`, \`--merge\`, \`--rebase\`,
-\`--admin\`) pour tout agent de ce chantier${AUTO_MERGE ? ", sauf l'agent de LIVRAISON qui arme `gh pr merge --auto --merge` et rien d'autre" : ' — sans exception ce tour : une session voisine tient le verdict CI de `' + BASE + '` et demande que sa tête ne bouge pas'}.
+\`--admin\`) pour tout agent de ce chantier${AUTO_MERGE ? ", sauf l'agent de LIVRAISON du tour, qui fusionne UNE PR au VERT de ses checks par `gh pr merge <n> --merge` — jamais `--auto`, qui fusionne sur-le-champ ici, faute de protection de branche" :' — sans exception ce tour : une session voisine tient le verdict CI de `' + BASE + '` et demande que sa tête ne bouge pas'}.
 Sur ce dépôt \`--auto\` fusionne IMMÉDIATEMENT quand aucun check n'est requis : un agent l'a fait sur #7213 et
 a cassé la parole donnée à cette session. Toute occurrence de \`gh pr merge\` dans ta transcription est une
 FAUTE. Seul l'agent de livraison ouvre la PR (\`gh pr create\`) ; les autres poussent leur branche, c'est tout.
@@ -261,7 +261,8 @@ const CADRAGE = {
         type: 'object', additionalProperties: false, required: ['cle', 'verdict', 'preuve'],
         properties: {
           cle: { type: 'string' },
-          verdict: { type: 'string', enum: ['a-faire', 'deja-livre', 'tenu-ailleurs', 'a-decouper'] },
+          verdict: { type: 'string', enum: ['a-faire', 'deja-livre', 'tenu-ailleurs', 'a-decouper', 'en-pr'] },
+          pr_numero: { type: 'number', description: 'pour en-pr : le numéro de la PR OUVERTE de la branche lot/<clé>-*' },
           preuve: { type: 'string', description: 'fichier:ligne, commande et sortie' },
           existe_deja: { type: 'string', description: 'ce que l arbre VIVANT porte déjà pour ce lot (fichiers, wc -l)' },
           fichiers_cibles: { type: 'array', items: { type: 'string' }, description: 'les fichiers que le lot touchera — pour détecter deux lots sur un même fichier' },
@@ -440,7 +441,10 @@ Sois FACTUEL : etat cite les commandes et leurs sorties.`,
 TA MISSION — VÉRIFIER CHAQUE LOT CONTRE L'ARBRE VIVANT (origin/${BASE} = ${synchro.sha_dev || '?'}). Le relevé
 de la spec date du matin ; ${BASE} a pu bouger. Pour CHAQUE lot ci-dessous, dans le worktree de sa chaîne
 (gateway → ${REPO_GW}, web → ${REPO_WEB}, ios → ${REPO_IOS}) :
-1. Rejoue les greps qui fondent « existe déjà » (les fichiers, fonctions, événements cités) et lis les
+0. D'ABORD : ce lot a-t-il déjà une PR OUVERTE d'un tour précédent ? \`gh pr list --state open --search "head:lot/<clé en minuscules>-" --json number,headRefName,title\`
+   (et \`gh pr list --state merged --search "head:lot/<clé en minuscules>-"\`). PR ouverte ⇒ verdict en-pr avec
+   pr_numero (le lot ne se redéveloppe PAS : il se fusionne au vert de ses checks). PR fusionnée ⇒ deja-livre.
+1. Sinon, rejoue les greps qui fondent « existe déjà » (les fichiers, fonctions, événements cités) et lis les
    fichiers cibles : le lot est-il DÉJÀ LIVRÉ (le critère de fin est tenu — prouve-le par le code et un
    témoin existant), TENU AILLEURS (une PR/branche du relevé y écrit), À FAIRE, ou À DÉCOUPER (plus d'un
    jour de travail : dis en quoi le découper) ?
@@ -458,11 +462,41 @@ Sois FACTUEL : chaque verdict porte sa preuve (fichier:ligne, commande, sortie).
 
   const verdicts = new Map((cadrage && cadrage.lots ? cadrage.lots : []).map((v) => [v.cle, v]))
   const aFaire = candidats.filter((l) => { const v = verdicts.get(l.cle); return !v || v.verdict === 'a-faire' || v.verdict === 'a-decouper' })
+  const enPr = candidats.filter((l) => { const v = verdicts.get(l.cle); return v && v.verdict === 'en-pr' && v.pr_numero })
   const dejaLivres = candidats.filter((l) => { const v = verdicts.get(l.cle); return v && v.verdict === 'deja-livre' })
   const tenus = candidats.filter((l) => { const v = verdicts.get(l.cle); return v && v.verdict === 'tenu-ailleurs' })
-  log(`cadrage : ${aFaire.length} à faire (${aFaire.map((l) => l.cle).join(', ') || '—'}), ${dejaLivres.length} déjà livrés, ${tenus.length} tenus ailleurs`)
+  log(`cadrage : ${aFaire.length} à faire (${aFaire.map((l) => l.cle).join(', ') || '—'}), ${enPr.length} en PR (${enPr.map((l) => `${l.cle}#${verdicts.get(l.cle).pr_numero}`).join(', ') || '—'}), ${dejaLivres.length} déjà livrés, ${tenus.length} tenus ailleurs`)
   if (cadrage && cadrage.collisions && cadrage.collisions.length) log(`collisions : ${cadrage.collisions.join(' ; ')}`)
-  if (!aFaire.length) { resultats.push({ tour, cadrage, rien_a_faire: true }); lotsDuTour = []; continue }
+
+  // Les PR ouvertes d'un tour précédent se fusionnent au VERT de leurs checks — jamais par --auto, qui
+  // fusionne sur-le-champ sur ce dépôt sans protection de branche.
+  const FUSION = {
+    type: 'object', additionalProperties: false, required: ['fusionnee', 'rapport'],
+    properties: { fusionnee: { type: 'boolean' }, sha: { type: 'string' }, checks: { type: 'string', description: 'la sortie de gh pr checks, tronquée' }, rapport: { type: 'string' } },
+  }
+  const fusions = AUTO_MERGE && enPr.length ? await parallel(enPr.map((l) => async () => {
+    const num = verdicts.get(l.cle).pr_numero
+    const f = await agent(`${socle(l.chaine)}
+
+TA MISSION — FUSIONNER LA PR #${num} DU LOT ${l.cle} DANS \`${BASE}\`, AU VERT DE SES CHECKS ET SEULEMENT ALORS.
+Tu es l'agent de LIVRAISON de ce tour : tu es le seul autorisé à fusionner, et uniquement ainsi :
+1. \`cd ${REPO_PAR_CHAINE[l.chaine]} && gh pr view ${num} --json state,mergeStateStatus,headRefName,baseRefName\` — la PR doit être OPEN vers ${BASE}.
+   Si mergeStateStatus est DIRTY/BEHIND : \`git fetch origin && git checkout <headRefName> && git merge origin/${BASE}\`
+   (jamais rebase), résous en gardant les deux apports, rejoue les gates rapides de la plateforme, pousse.
+2. \`gh pr checks ${num} --watch --fail-fast\` (bloquant ; au plus ~45 min). Rends la sortie tronquée.
+3. TOUT VERT ⇒ \`gh pr merge ${num} --merge\` (JAMAIS --auto, JAMAIS --squash) puis \`gh pr view ${num} --json mergedAt,mergeCommit\`.
+   UN ROUGE ⇒ ne fusionne pas ; lis le job (\`gh run view <id> --log-failed | tail -60\`) ; si le rouge est CAUSÉ
+   par le lot, corrige-le en TDD sur la branche, pousse, et reprends à l'étape 2 (une fois) ; s'il est
+   PRÉEXISTANT (le même job est rouge sur origin/${BASE}), fusionne quand même et DIS-LE dans un commentaire de la PR.
+4. Commentaire de clôture sur l'issue du lot (\`Closes\` est dans le commit ; sinon \`gh issue close\` avec la preuve).
+Rends fusionnee, sha, checks, rapport.`,
+      { label: `fusionner:${l.cle}`, phase: 'Livrer', schema: FUSION, model: MODELE.livrer, effort: 'medium' })
+    if (f) log(`${l.cle} : PR #${num} ${f.fusionnee ? `fusionnée (${f.sha || '?'})` : 'NON fusionnée'}`)
+    return { cle: l.cle, issue: numeros[l.cle] || l.issue || 0, pr: num, fusion: f }
+  })) : []
+  if (!AUTO_MERGE && enPr.length) log(`${enPr.length} PR en attente (auto_merge désarmé) : ${enPr.map((l) => `#${verdicts.get(l.cle).pr_numero}`).join(', ')}`)
+
+  if (!aFaire.length && !enPr.length) { resultats.push({ tour, cadrage, rien_a_faire: true }); lotsDuTour = []; continue }
 
   // -------------------------------------------------------------------------
   phase('Ouvrir')
@@ -610,7 +644,7 @@ ${restants.length ? `RESTANTS (ils voyagent avec le lot et se DISENT dans la PR)
    gates et leurs chiffres, le rouge préexistant s'il y en a, \`Closes #${num || 'n'}\`, dimensions mûres et
    restantes ; ligne vide puis
    🤖 Generated with [Claude Code](https://claude.com/claude-code)
-   ${AUTO_MERGE ? `Puis \`gh pr merge --auto --merge\`.` : `NE FUSIONNE PAS ET N'ARME RIEN — \`gh pr merge\` interdit sous toutes ses formes ce tour (voir le socle) ; la PR reste OUVERTE, rends auto_merge=false, et écris dans son corps « auto-merge à armer après le feu vert de la veille de dev ».`} Si GitHub dit CONFLICTING sur une fusion propre, \`git merge-tree\`
+   ${AUTO_MERGE ? `Puis ATTENDS LE VERT et fusionne toi-même — JAMAIS \`--auto\` (sur ce dépôt sans protection de branche, \`--auto\` fusionne sur-le-champ, avant tout verdict) : \`gh pr checks <n> --watch --fail-fast\` (au plus ~45 min), puis, tout vert, \`gh pr merge <n> --merge\` ; un rouge CAUSÉ par le lot se corrige en TDD sur la branche puis on recommence (une fois) ; un rouge PRÉEXISTANT (même job rouge sur origin/${BASE}) se dit dans la PR et n'empêche pas la fusion ; si le vert n'est pas venu dans le délai, laisse la PR ouverte et dis-le (elle sera fusionnée au tour suivant).` : `NE FUSIONNE PAS ET N'ARME RIEN — \`gh pr merge\` interdit sous toutes ses formes ce tour (voir le socle) ; la PR reste OUVERTE, rends auto_merge=false, et écris dans son corps « auto-merge à armer après le feu vert de la veille de dev ».`} Si GitHub dit CONFLICTING sur une fusion propre, \`git merge-tree\`
    arbitre ; fusionne origin/${BASE} dans la branche et repousse.
 6. Commentaire sur l'issue #${num || 'n'} : la PR, les preuves (gates, témoins, captures décrites), dimensions
    MÛRES / RESTANTES, et une issue par dimension non mûre (même milestone) si elle n'existe pas. Termine par
@@ -644,8 +678,11 @@ ${restants.length ? `RESTANTS (ils voyagent avec le lot et se DISENT dans la PR)
     }
     return faits
   }))
-  const livres = parChaine.filter(Boolean).flat()
-  log(`tour ${tour} : ${livres.filter((r) => r.livraison && r.livraison.pousse).length}/${aFaire.length} lots livrés en PR`)
+  const livres = [
+    ...parChaine.filter(Boolean).flat(),
+    ...fusions.filter(Boolean).map((f) => ({ cle: f.cle, issue: f.issue, livraison: { pousse: !!(f.fusion && f.fusion.fusionnee), pr_numero: f.pr, pr_url: `https://github.com/isopen-io/meeshy/pull/${f.pr}`, rapport: f.fusion && f.fusion.rapport }, fusion: f.fusion })),
+  ]
+  log(`tour ${tour} : ${livres.filter((r) => r.livraison && r.livraison.pousse).length}/${aFaire.length + enPr.length} lots livrés (PR ouvertes ou fusionnées)`)
 
   // -------------------------------------------------------------------------
   phase('Valider')
@@ -661,12 +698,13 @@ tu ne codes pas, tu MESURES, et chaque échec devient un lot (forme des lots du 
 LES PR DU TOUR :
 ${livres.map((r) => `- ${r.cle}${r.issue ? ` (#${r.issue})` : ''} : ${r.livraison && r.livraison.pr_url ? r.livraison.pr_url : '(pas de PR)'} — ${r.livraison && r.livraison.pousse ? 'livré' : 'non livré'}`).join('\n')}
 
-A. ATTENDRE LES FUSIONS ET LE DÉPLOIEMENT (sans jamais fusionner toi-même ni pousser sur ${BASE}) :
-1. Pour chaque PR ouverte : \`gh pr checks <n> --watch --fail-fast\` (bloquant, jusqu'au verdict) puis
-   \`gh pr view <n> --json state,mergedAt,mergeStateStatus\`. Une PR ROUGE : lis le job rouge
-   (\`gh run view <id> --log-failed | tail -80\`), rends-la dans non_fusionnees avec la cause — c'est un
-   défaut du tour suivant (lot « la PR #n est rouge sur <job> : <cause> », chaîne du lot). Une PR
-   fusionnée va dans fusionnees. Attends au plus ~40 min par PR ; au-delà, dis-le.
+A. FUSIONNER AU VERT, PUIS ATTENDRE LE DÉPLOIEMENT (jamais de push sur ${BASE}, jamais \`--auto\`) :
+1. Pour chaque PR de lot encore ouverte (\`gh pr list --state open --search "head:lot/"\`) : \`gh pr checks <n> --watch --fail-fast\`
+   (bloquant, jusqu'au verdict, ~40 min au plus). TOUT VERT ⇒ \`gh pr merge <n> --merge\` puis
+   \`gh pr view <n> --json mergedAt\` → fusionnees. Une PR ROUGE : lis le job rouge
+   (\`gh run view <id> --log-failed | tail -80\`) ; rouge PRÉEXISTANT (même job rouge sur origin/${BASE}) ⇒
+   fusionne et dis-le ; rouge CAUSÉ par le lot ⇒ ne fusionne pas, rends-la dans non_fusionnees avec la
+   cause — c'est un défaut du tour suivant (lot « la PR #n est rouge sur <job> : <cause> », chaîne du lot).
 2. Staging suit ${BASE} : \`gh run list --workflow docker.yml --branch ${BASE} --limit 3 --json headSha,status,conclusion\`
    — attends le run qui porte la tête de ${BASE} après la dernière fusion (\`gh run watch <id>\`). Puis lis
    le sha que staging SERT (\`curl -s https://gate.staging.meeshy.me/api/v1/health\` ou la route de version
@@ -732,7 +770,7 @@ D. RENDS acceptable (true seulement si TOUT passe sur les deux plateformes), les
   resultats.push({ tour, synchro: { sha_dev: synchro.sha_dev, ci_dev: synchro.ci_dev, tenus: TENUS }, cadrage: { a_faire: aFaire.map((l) => l.cle), deja_livres: dejaLivres.map((l) => l.cle), tenus: tenus.map((l) => l.cle), collisions: cadrage && cadrage.collisions }, issues: { ...numeros }, lots: livres, validation })
 
   // Le tour suivant reprend les lots non livrés et les défauts de la recette.
-  const nonLivres = aFaire.filter((l) => { const r = livres.find((x) => x.cle === l.cle); return !r || !r.livraison || !r.livraison.pousse })
+  const nonLivres = [...aFaire, ...enPr].filter((l) => { const r = livres.find((x) => x.cle === l.cle); return !r || !r.livraison || !r.livraison.pousse || (AUTO_MERGE && r.fusion && !r.fusion.fusionnee) || (!AUTO_MERGE) })
   const defauts = validation && Array.isArray(validation.defauts) ? validation.defauts.map((d) => ({ ...d, taille: d.taille || 'developper', depend: d.depend || [] })) : []
   lotsDuTour = [...nonLivres, ...defauts]
   if (validation && validation.acceptable && !nonLivres.length) { log('=== ÉTAT ACCEPTABLE ATTEINT ==='); break }
