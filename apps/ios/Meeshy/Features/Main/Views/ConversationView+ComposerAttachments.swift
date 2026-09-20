@@ -76,7 +76,7 @@ extension ConversationView {
                                     .accessibilityHidden(true)
                             }
                         } else if attachment.type == .audio {
-                            audioTileFallback(attachment)
+                            PendingAudioTile(attachment: attachment, player: pendingAudioPlayer)
                         } else if attachment.type == .location {
                             locationTileFallback()
                         } else {
@@ -229,40 +229,6 @@ extension ConversationView {
 
     // MARK: - Rich Tile Fallbacks
 
-    private func audioTileFallback(_ attachment: MessageAttachment) -> some View {
-        let color = Color(hex: attachment.thumbnailColor)
-        let isPlaying = pendingAudioPlayer.isPlaying
-        return ZStack {
-            RoundedRectangle(cornerRadius: 10)
-                .fill(
-                    LinearGradient(
-                        colors: [color, color.opacity(0.7)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .frame(width: 56, height: 56)
-
-            VStack(spacing: 3) {
-                HStack(spacing: 1.5) {
-                    ForEach(0..<7, id: \.self) { i in
-                        let h: CGFloat = [0.3, 0.8, 0.5, 1.0, 0.4, 0.9, 0.6][i]
-                        RoundedRectangle(cornerRadius: 1)
-                            .fill(Color.white.opacity(isPlaying ? 0.9 : 0.6))
-                            .frame(width: 2, height: 4 + 14 * h)
-                    }
-                }
-                .frame(height: 20)
-
-                Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                    // Doctrine 86i : glyphe décoratif borné par la tuile fixe 56×56 → figé + masqué.
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(.white.opacity(0.8))
-                    .accessibilityHidden(true)
-            }
-        }
-    }
-
     private func locationTileFallback() -> some View {
         ZStack {
             RoundedRectangle(cornerRadius: 10)
@@ -348,4 +314,54 @@ extension ConversationView {
     }
 
     // See ConversationView+AttachmentHandlers.swift for: startRecording, stopAndPreviewRecording, stopAndSendRecording, sendMessageWithAttachments, handlePhotoSelection, generateVideoThumbnail, handleFileImport, mimeTypeForURL, getFileSize, handleCameraCapture, sendMessage
+}
+
+// MARK: - Tuile d'un audio en attente
+
+/// Seul abonné du lecteur du composeur : cette tuile DESSINE « lecture »
+/// ou « pause », elle a donc besoin de se re-rendre à chaque bascule. La
+/// racine, elle, POSSÈDE le lecteur sans l'observer — il publie sa
+/// progression toutes les 100 ms, et 2 911 lignes n'ont pas à se
+/// réévaluer pour une icône (#6226).
+///
+/// Même dispositif que `ComposerAudioHost` pour le vumètre, et que
+/// `ComposerTextHost` pour le texte (#4105) : la racine possède, l'hôte
+/// observe.
+struct PendingAudioTile: View {
+    let attachment: MessageAttachment
+    @ObservedObject var player: AudioPlaybackManager
+
+    var body: some View {
+        let color = Color(hex: attachment.thumbnailColor)
+        let isPlaying = player.isPlaying
+        return ZStack {
+            RoundedRectangle(cornerRadius: 10)
+                .fill(
+                    LinearGradient(
+                        colors: [color, color.opacity(0.7)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 56, height: 56)
+
+            VStack(spacing: 3) {
+                HStack(spacing: 1.5) {
+                    ForEach(0..<7, id: \.self) { i in
+                        let h: CGFloat = [0.3, 0.8, 0.5, 1.0, 0.4, 0.9, 0.6][i]
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(Color.white.opacity(isPlaying ? 0.9 : 0.6))
+                            .frame(width: 2, height: 4 + 14 * h)
+                    }
+                }
+                .frame(height: 20)
+
+                Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                    // Doctrine 86i : glyphe décoratif borné par la tuile fixe 56×56 → figé + masqué.
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.white.opacity(0.8))
+                    .accessibilityHidden(true)
+            }
+        }
+    }
 }

@@ -138,4 +138,45 @@ final class StoryExportBrandingTests: XCTestCase {
                              "la carte de fin allonge toujours la story")
         XCTAssertEqual(got.size, ref.size)
     }
+
+    /// **L'ŒUVRE SEULE** (#7052) — le seul chemin qui retire la carte de fin.
+    ///
+    /// L'export d'une SCÈNE DE POST rend le document composé sans aucun
+    /// habillage : ni interlude d'entrée, ni carte de fin, ni jingle. C'est la
+    /// décision du porteur (#7043, tranchée sur #7052), et elle ne vaut QUE
+    /// pour ce chemin : `appendsBrandOutro` vaut `true` par défaut, donc
+    /// `test_wrap_withoutIntro_stillAppendsBrandOutro` juste au-dessus reste
+    /// vert — c'est lui qui prouve qu'on n'a pas rejoué, en croyant servir ce
+    /// lot, la régression que la revue du 2026-07-26 avait corrigée.
+    ///
+    /// Les deux témoins sont donc CONTRAIRES et doivent être verts ENSEMBLE :
+    /// l'un exige la carte de fin quand personne ne l'a retirée, l'autre son
+    /// absence quand on la retire explicitement.
+    @MainActor
+    func test_wrap_sansMarque_rendLaStorySeule() async throws {
+        try XCTSkipIf(
+            ProcessInfo.processInfo.environment["MEESHY_SKIP_EXPORT_TESTS"] != nil,
+            "Export tests skipped via MEESHY_SKIP_EXPORT_TESTS env var"
+        )
+
+        let slide = makeSlide()
+        let renderSize = StoryExportIntroSizing.renderSize(for: slide)
+
+        let story = try await bakeStory(slide)
+        let nu = try await StoryExportBranding.wrap(storyURL: story, intro: nil, outro: nil,
+                                                    renderSize: renderSize,
+                                                    appendsBrandOutro: false)
+        defer {
+            [story, nu].forEach { try? FileManager.default.removeItem(at: $0) }
+        }
+
+        let got = try await inspect(nu)
+
+        // La durée EXACTE de la story : c'est la mesure que le témoin jumeau
+        // interdit, et la seule qui distingue « la carte est retirée » de
+        // « elle est raccourcie ».
+        XCTAssertEqual(got.duration, Self.storyDuration, accuracy: 0.1,
+                       "sans marque, la sortie dure exactement la scène — aucune carte de fin ajoutée")
+        XCTAssertEqual(got.size, renderSize, "le gabarit ne dépend pas de l'habillage")
+    }
 }

@@ -1,4 +1,4 @@
-import { Suspense, lazy, type Ref } from 'react';
+import { Suspense, lazy, useCallback, useState, type Ref } from 'react';
 import type { Virtualizer } from '@tanstack/react-virtual';
 
 import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes';
@@ -7,6 +7,8 @@ import { Bubble } from '@/components/bubble';
 import { FocalRow } from '@/components/focal-row';
 import { SummarySkeleton } from '@/components/summary/summary-skeleton';
 import { TypingRosterCell } from '@/components/typing-roster-cell';
+import type { RevealPhase } from '@/lib/reading-mode/protection';
+import { RevealPhaseChannel } from '@/lib/reading-mode/reveal-phase-channel';
 import type { ListPaginationState } from '@/lib/lens/pagination';
 import type { Conversation, Message } from '@/lib/api/types';
 import type { TypingEntry } from '@/lib/api/typing-store';
@@ -243,6 +245,45 @@ export function ThreadModes({
 }) {
   const viewerId = viewer.id ?? '';
 
+  /**
+   * LE REGISTRE DES PHASES DE RÉVÉLATION (#7142) — déclaré ICI, avant le
+   * retour anticipé du mode `summary` : un hook posé plus bas ne serait pas
+   * appelé à tous les rendus.
+   *
+   * `ProtectedContent` tient l'état ; il le PUBLIE par le canal, et ce
+   * registre est ce que l'hôte en retient pour composer le nom accessible de
+   * la rangée. Sans lui, une rangée révélée peint son contenu sous un
+   * `aria-label` qui dit encore « Contenu masqué ».
+   *
+   * ## CE QU'IL NE GARDE PAS, ET POURQUOI
+   *
+   * 1. **`hidden` n'est jamais stocké** — c'est le défaut de
+   *    `composeMessageLabel`. Au montage, chaque rangée voilée visible publie
+   *    `hidden` : sans cette clause, l'écran paierait un re-rendu par rangée
+   *    pour n'apprendre que ce qu'il supposait déjà.
+   * 2. **`until` n'entre pas dans la comparaison.** Le libellé ne lit la phase
+   *    qu'à travers `rendersContent`, qui ne regarde que son NOM
+   *    (`protection.ts:153-157`). Deux phases de même nom rendent le même
+   *    libellé : re-rendre sur un horodatage serait un rendu sans effet.
+   *
+   * Reste donc trois changements par révélation (`revealed` → `fogging` →
+   * l'effacement ou `consumed`), mesurés à ≈ 1,1 ms pour 20 rangées visibles.
+   */
+  const [revealPhases, setRevealPhases] = useState<ReadonlyMap<string, RevealPhase>>(() => new Map());
+  const publishRevealPhase = useCallback((messageId: string, phase: RevealPhase) => {
+    setRevealPhases((current) => {
+      const held = current.get(messageId);
+      if (phase.phase === 'hidden') {
+        if (held === undefined) return current;
+        const next = new Map(current);
+        next.delete(messageId);
+        return next;
+      }
+      if (held !== undefined && held.phase === phase.phase) return current;
+      return new Map(current).set(messageId, phase);
+    });
+  }, []);
+
   if (mode === 'summary' && summary !== undefined) {
     return (
       /*
@@ -272,7 +313,7 @@ export function ThreadModes({
   }
 
   return (
-    <>
+    <RevealPhaseChannel publish={publishRevealPhase}>
       {placed.length === 0 ? (
         /*
           L'ÉTAT VIDE EST UN ÉTAT, pas une absence d'écran. Un fil sans
@@ -375,16 +416,20 @@ export function ThreadModes({
              elle, `aria-label` annonçait EN CLAIR le texte que la rangée
              floute ou remplace par un tombstone. */
           const rowProtection = expiredIds.has(p.message.id) ? 'expired' : protectionOf(p.message, Date.now());
-          /* `phase` EST OMISE ICI, ET C'EST UNE DETTE SUIVIE, PAS UN OUBLI
-             (#7142) — `composeMessageLabel` l'accepte (défaut FERMÉ
-             `{ phase: 'hidden' }`) et sa contre-épreuve est verte, mais la
-             phase de révélation vit SOUS ce nœud : `ProtectedContent` la tient
-             en `useState`, tandis que `aria-label` se pose au-dessus, sur
-             `[data-row]`. Conséquence mesurée : une rangée voilée RÉVÉLÉE
-             peint son contenu pendant que son nom accessible dit encore
-             « Contenu masqué ». C'est ICI que le correctif de #7142 atterrira ;
-             le doc-comment de `MessageLabelInput.phase` ne suffisait pas à le
-             dire, puisqu'on ne l'ouvre pas en lisant cet appel. */
+          /* LA PHASE DE RÉVÉLATION EST ALIMENTÉE (#7142) — elle vit SOUS ce
+             nœud (`ProtectedContent`, `useState`) alors qu'`aria-label` se
+             pose AU-DESSUS, sur `[data-row]` ; elle remonte par le canal
+             (`RevealPhaseChannel`, autour de ce rendu) et s'arrête dans
+             `revealPhases`. Tant qu'elle était omise, le défaut FERMÉ de
+             `composeMessageLabel` s'appliquait : une rangée voilée RÉVÉLÉE
+             peignait son contenu pendant que son nom accessible disait encore
+             « Contenu masqué » — et le texte peint étant `aria-hidden`
+             (`plainTextHidden`, #7032), un lecteur d'écran n'avait AUCUN
+             chemin vers ce qu'il venait de dévoiler.
+
+             ABSENT ⇒ `hidden` : le registre ne garde que ce qui s'écarte du
+             défaut (voir son doc-comment), si bien qu'une rangée au repos n'y
+             occupe aucune entrée. */
           const rowLabel = composeMessageLabel({
             message: p.message,
             isMine: isMineOf(p.message, viewerId),
@@ -392,6 +437,7 @@ export function ThreadModes({
             delivery: checkStatusOf(p.message, rowDelivery),
             protection: rowProtection,
             contentWithheld: rowWithheld,
+            phase: revealPhases.get(p.message.id) ?? { phase: 'hidden' },
           });
           return (
             <li
@@ -554,6 +600,6 @@ export function ThreadModes({
         flat={usesFlatRow(mode)}
         {...(typistAvatarOf === undefined ? {} : { avatarOf: typistAvatarOf })}
       />
-    </>
+    </RevealPhaseChannel>
   );
 }

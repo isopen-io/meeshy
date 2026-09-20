@@ -25,7 +25,7 @@ extension iPadRootView {
             .zIndex(200)
 
             RootNotificationToastOverlay(
-                notificationManager: notificationManager,
+                notificationManager: notifications.manager,
                 suppressToastTap: suppressToastTap,
                 onTap: handleSocketNotificationTap,
                 onPreview: openNotificationPreview(for:)

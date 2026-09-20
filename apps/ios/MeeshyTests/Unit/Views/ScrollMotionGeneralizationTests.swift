@@ -91,11 +91,43 @@ final class ScrollMotionGeneralizationTests: XCTestCase {
         )
     }
 
-    /// Feed : même famille que la liste, offset porté par un `@State`.
+    /// Feed : même famille que la liste, et depuis #6226 même MONTAGE — le
+    /// `@State CGFloat` a cédé au relais, l'offset arrive par le paramètre du
+    /// `ScrollOffsetReader`.
+    ///
+    /// > Cette garde EXEMPTAIT le défaut qu'elle a servi à trouver : elle
+    /// > attendait l'ancienne expression, donc elle rougissait au portage. Le
+    /// > registre se lit AVANT d'écrire, et se met à jour dans le commit qui
+    /// > change ce qu'il juge — jamais après.
+    ///
+    /// C'est la CHAÎNE qui est gardée, pas l'orthographe d'un maillon : le
+    /// reader remet l'offset, le header le publie. `offset: offset` seul ne
+    /// dirait pas d'où vient la valeur.
     func test_feedHeader_wiresBothHalvesOfTheLaw() throws {
         try assertWiresBothHalves(
             "FeedView.swift",
-            sourceExpression: ".scrollMotionActive(offset: headerScrollOffset)"
+            sourceExpression: ".scrollMotionActive(offset: offset)"
+        )
+        let feed = try viewSource("FeedView.swift")
+        XCTAssertTrue(
+            feed.contains("ScrollOffsetReader(relay: scrollRelay)"),
+            "L'offset publié par le header du fil doit venir du RELAIS, pas d'un `@State` de la racine (#6226)."
+        )
+    }
+
+    /// Le fil de l'iPhone (`ThemedFeedOverlay`) porte la même paire que son
+    /// jumeau iPad — et, depuis #6226, le même relais. Il manquait à cette
+    /// garde : une loi vérifiée sur trois écrans en laissait un quatrième,
+    /// le plus scrollé de l'app, hors de portée.
+    func test_iPhoneFeedHeader_wiresBothHalvesOfTheLaw() throws {
+        try assertWiresBothHalves(
+            "RootViewComponents.swift",
+            sourceExpression: ".scrollMotionActive(offset: scrollOffset)"
+        )
+        let overlay = try viewSource("RootViewComponents.swift")
+        XCTAssertTrue(
+            overlay.contains("ScrollOffsetReader(relay: scrollRelay)"),
+            "L'offset publié par le header du fil iPhone doit venir du RELAIS (#6226)."
         )
     }
 }

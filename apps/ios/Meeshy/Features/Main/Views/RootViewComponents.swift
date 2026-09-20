@@ -115,8 +115,14 @@ struct ThemedFeedOverlay: View {
     @StateObject private var viewModel = FeedViewModel()
     /// Élit le réel le plus centré dans le viewport et pilote sa lecture muette
     /// (source UNIQUE de "quel réel joue"). Call-aware via son init par défaut.
-    /// Identique au chemin iPad (`FeedView.feedScrollView`).
-    @StateObject private var reelAutoplay = ReelFeedAutoplayCoordinator()
+    ///
+    /// `@State` et NON `@StateObject` (#7010) : ce body n'en lit rien — il
+    /// remet la référence et l'appelle — et l'abonnement re-diffusait tout le
+    /// fil à chaque changement de réel actif, donc à chaque tick de
+    /// défilement. Seule `ReelFeedCard` l'observe, et c'est la seule qui en a
+    /// besoin. Le chemin iPad (`FeedView`) portait déjà ce montage : c'est le
+    /// même correctif, qui n'avait jamais traversé.
+    @State private var reelAutoplay = ReelFeedAutoplayCoordinator()
     @EnvironmentObject var router: Router
     @EnvironmentObject var storyViewModel: StoryViewModel
     @EnvironmentObject var statusViewModel: StatusViewModel
@@ -134,10 +140,15 @@ struct ThemedFeedOverlay: View {
         showFullComposer = true
     }
     @State private var quoteOriginalPost: FeedPost?
-    /// Negative scroll offset of the feed (0 at rest, more negative scrolling
-    /// up) — drives the collapsing header and the hand-over of the title slot to
-    /// the compact story trail. Mirrors `FeedView`.
-    @State private var headerScrollOffset: CGFloat = 0
+    /// Offset de défilement relayé au header SANS invalider ce body :
+    /// `@State` retient la référence sans s'y abonner, et seul le
+    /// `ScrollOffsetReader` monté autour du header se re-rend à chaque tick.
+    /// Même montage que `FeedView`, `ConversationListView` et
+    /// `ContactsHubView`. L'ancien `CGFloat` d'état ré-exécutait ce body
+    /// ENTIER — tableau des publications réalloué, vingt-cinq closures par
+    /// carte reconstruites, anneaux de story rejoués — à la cadence de
+    /// l'affichage (#6226).
+    @State private var scrollRelay = ScrollOffsetRelay()
 
     // Post reaction state — socket-driven, mirrors FeedView pattern.
     @State private var postLikedIds: Set<String> = []
@@ -388,10 +399,10 @@ struct ThemedFeedOverlay: View {
     /// Header épinglé en haut du feed, même traitement visuel que le header
     /// « Meeshy Chats » (`ConversationListHeaderOverlay`) : titre dégradé indigo +
     /// actions glass à droite (Réels, puis carte).
-    private var feedHeader: some View {
+    private func feedHeader(scrollOffset: CGFloat) -> some View {
         CollapsibleHeader(
             title: "Meeshy Feed",
-            scrollOffset: headerScrollOffset,
+            scrollOffset: scrollOffset,
             showBackButton: false,
             titleColor: theme.textPrimary,
             backArrowColor: MeeshyColors.indigo500,
@@ -418,14 +429,14 @@ struct ThemedFeedOverlay: View {
                     // Lancement unifié via StoryViewerCoordinator (chemin unique trail).
                     PinnedStoryTrailBand(
                         viewModel: storyViewModel,
-                        scrollOffset: headerScrollOffset
+                        scrollOffset: scrollOffset
                     )
                 )
             }
         )
         // L'offset du feed change à chaque frame défilée puis se tait : seul
         // signal de mouvement d'un `ScrollView` SwiftUI avant iOS 17.
-        .scrollMotionActive(offset: headerScrollOffset)
+        .scrollMotionActive(offset: scrollOffset)
     }
 
     /// Actions du header, dans l'ordre de lecture : les Réels, puis « À
@@ -676,7 +687,7 @@ struct ThemedFeedOverlay: View {
                     },
                     coordinateSpaceName: "feedScroll",
                     onScrollOffsetChange: { offset in
-                        headerScrollOffset = offset
+                        scrollRelay.offset = offset
                     },
                     topPadding: CollapsibleHeaderMetrics.expandedHeight
                 ) {
@@ -765,7 +776,11 @@ struct ThemedFeedOverlay: View {
             // réserve `CollapsibleHeaderMetrics.expandedHeight` en tête (topPadding)
             // pour que le contenu glisse dessous au scroll et que la trail compacte
             // se révèle dans le slot accessory.
-            feedHeader
+            // Seul ce reader se re-rend au fil du défilement — cette racine
+            // écrit `scrollRelay.offset` sans s'y abonner.
+            ScrollOffsetReader(relay: scrollRelay) { offset in
+                feedHeader(scrollOffset: offset)
+            }
         }
         // Drapeau `Router.pendingOpenFeedComposer` (accès rapide « Publier un
         // post », 2026-08-21) : consommé à l'apparition ET quand il se lève

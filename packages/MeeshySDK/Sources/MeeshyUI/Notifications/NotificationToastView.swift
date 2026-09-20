@@ -46,8 +46,16 @@ public struct NotificationToastView: View {
         accent.opacity(isDark ? 0.45 : 0.30)
     }
 
-    public init(event: SocketNotificationEvent, onTap: (() -> Void)? = nil) {
+    /// - Parameter presentation: ce que la bannière affiche, déjà résolu par
+    ///   `NotificationToastManager` au moment de la pose (#7167). Absent, il
+    ///   est résolu ici — une fois, à la construction, jamais à chaque corps.
+    public init(
+        event: SocketNotificationEvent,
+        presentation: NotificationBannerPresentation? = nil,
+        onTap: (() -> Void)? = nil
+    ) {
         self.event = event
+        self.presentation = presentation ?? NotificationToastManager.shared.resolvedBannerPresentation(for: event)
         self.onTap = onTap
     }
 
@@ -59,9 +67,10 @@ public struct NotificationToastView: View {
     // groupe (renommage + emoji favori) que seul l'appareil connaît. La vue ne
     // décide de rien — elle place.
 
-    private var presentation: NotificationBannerPresentation {
-        NotificationToastManager.shared.resolvedBannerPresentation(for: event)
-    }
+    /// STOCKÉE, jamais calculée (#7167) : la résoudre dans le corps faisait une
+    /// lecture App Group et un décodage JSON complet à chaque rendu — pendant
+    /// l'animation de la bannière, sur le fil principal.
+    private let presentation: NotificationBannerPresentation
 
     private var avatarColorHex: String {
         // Deterministic from the sender id (stable across re-renders + matches

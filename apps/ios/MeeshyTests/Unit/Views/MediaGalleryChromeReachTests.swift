@@ -18,10 +18,15 @@ import XCTest
 ///
 /// **Le ⋯ n'était PAS de la partie, mesure à l'appui.** L'issue avait élargi le
 /// périmètre en supposant qu'il sortait par l'autre bord du même `HStack`. Il
-/// n'existe simplement pas sur une page SCÈNE (#6709), et les pages qui le
-/// portent — pièces jointes de conversation, médias de post — n'ont pas de sol,
-/// donc pas d'élargissement. Son absence sur un post est une décision de
+/// n'existait alors simplement pas sur une page SCÈNE (#6709), et les pages qui
+/// le portent — pièces jointes de conversation, médias de post — n'ont pas de
+/// sol, donc pas d'élargissement. Son absence sur un post était une décision de
 /// produit, pas cette régression.
+///
+/// **Depuis #7052, une page scène le porte** — le menu y enregistre l'ŒUVRE
+/// bakée, jamais la vignette que #6709 avait retirée. Le ⋯ entre donc dans la
+/// mesure, sur la SEULE surface dont le sol dictait sa taille : c'est
+/// exactement le rang que la phrase ci-dessus disait ne pas pouvoir mesurer.
 ///
 /// ## La cause, MESURÉE — et ce n'est pas le carrousel
 ///
@@ -145,11 +150,15 @@ final class MediaGalleryChromeReachTests: XCTestCase {
     /// seulement que la croix est partie.
     private struct Corridor {
         let close: CGRect
-        /// **`nil` est une réponse légitime** : une page SCÈNE n'offre pas le ⋯
-        /// (#6709 — une œuvre composée n'est pas le fichier de sa vignette, donc
-        /// pas de requête, donc pas de menu : loi 4). Le témoin le NOMME au lieu
-        /// de le traiter en absence de rendu, sans quoi il accuserait la
-        /// géométrie d'une décision de produit.
+        /// **`nil` reste une réponse REPRÉSENTABLE**, et c'est ce qui permet au
+        /// témoin de NOMMER une absence au lieu de la confondre avec une absence
+        /// de rendu — sans quoi il accuserait la géométrie d'une décision de
+        /// produit. Une page qui n'a rien à enregistrer n'offre pas le menu
+        /// (loi 4) : c'était le cas d'une page SCÈNE jusqu'à #7052, ce l'est
+        /// encore d'une pièce sans URL.
+        ///
+        /// C'est donc au TÉMOIN de dire, surface par surface, si l'absence est
+        /// légitime — `test_uneSceneDePost_…` exige désormais la présence.
         let menu: CGRect?
         let diagnostic: String
     }
@@ -225,14 +234,27 @@ final class MediaGalleryChromeReachTests: XCTestCase {
     /// la forme de l'empreinte qui décide, jamais le nombre de pièces. Les trois
     /// sont mesurés : leçon 261 appliquée à la géométrie.
     ///
-    /// **Le ⋯ n'est pas mesuré ici, et ce n'est pas un oubli.** Une page scène
-    /// n'en offre aucun (#6709 : sa seule URL est la vignette de son média, et
-    /// l'enregistrer sortirait un fond sans le texte ni les stickers de
-    /// l'auteur). Le témoin l'AFFIRME, pour qu'une future apparition du menu sur
-    /// cette surface soit une décision et non un accident — et parce que c'est ce
-    /// que la mesure a répondu à la question « le ⋯ sort-il par l'autre bord ? » :
-    /// sur les pages qui ont un sol il n'existe pas, sur celles qui l'ont il n'y
-    /// a pas de sol.
+    /// **Le ⋯ EST mesuré ici depuis #7052, et le renversement est la décision
+    /// que ce témoin attendait.** Il affirmait son absence — « une page scène
+    /// n'offre pas le ⋯ » (#6709 : sa seule URL est la vignette de son média,
+    /// et l'enregistrer sortirait un fond sans le texte ni les stickers de
+    /// l'auteur) — en disant exactement pourquoi : *pour qu'une future
+    /// apparition du menu sur cette surface soit une décision et non un
+    /// accident*. #7052 est cette décision.
+    ///
+    /// **Ce que la règle a changé n'est pas la mesure de #6709, c'est ce qu'on
+    /// enregistre.** La pièce synthétique reste inenregistrable, et le menu ne
+    /// l'enregistre pas : il bake l'ŒUVRE (`StoryPhotoSaveService.save(scene:)`,
+    /// sans prélude ni outro) et n'offre plus « Partager hors de Meeshy », qui
+    /// aurait, lui, sorti le fichier que #6709 a retiré.
+    ///
+    /// Ce témoin ne juge toujours que la GÉOMÉTRIE — la croix, et désormais le
+    /// ⋯, restent dans la fenêtre quelle que soit la forme de l'empreinte.
+    /// L'existence du menu est mesurée ici comme un PRÉALABLE : sans elle, les
+    /// deux assertions qui suivent (`assertInsideWindow`, puis l'invariant
+    /// d'abscisse) passeraient en silence sur une surface où le menu aurait
+    /// disparu — c'est ce que leurs `guard let menu … else { return/continue }`
+    /// font, légitimement, partout ailleurs.
     func test_uneSceneDePost_laisseLaCroixDansLaFenetre() {
         let cas: [(String, Int, String)] = [
             ("scène paysage ×3", 3, Self.landscapeHash),
@@ -244,9 +266,9 @@ final class MediaGalleryChromeReachTests: XCTestCase {
             guard let corridor = corridor(nom, attachments: lot.attachments, sceneContext: lot.context)
             else { continue }
             assertInsideWindow(corridor)
-            XCTAssertNil(corridor.menu,
-                         "\(nom) : une page scène n'offre pas le ⋯ (#6709) — si elle en montre un, " +
-                         "c'est que la règle a changé, et ce témoin doit le dire")
+            XCTAssertNotNil(corridor.menu,
+                            "\(nom) : une page scène offre le ⋯ depuis #7052 — il y enregistre " +
+                            "l'ŒUVRE bakée, jamais la vignette que #6709 avait retirée")
         }
     }
 
@@ -296,8 +318,11 @@ final class MediaGalleryChromeReachTests: XCTestCase {
                 \(mesure.close.minX) sur « \(nom) » · \(mesure.diagnostic)
                 """
             )
-            // Le ⋯ ne se compare que là où il existe : une page scène n'en offre
-            // pas (#6709), et une absence VOULUE n'est pas un déplacement.
+            // Le ⋯ ne se compare que là où il existe : une absence VOULUE (loi 4,
+            // une page sans rien à enregistrer) n'est pas un déplacement. Les
+            // pages scène, elles, en portent un depuis #7052 — l'alignement de
+            // leur `maxX` sur la référence est donc mesuré ici pour la première
+            // fois, sur la seule surface qui montait un sol.
             guard let menu = mesure.menu, let attendu = reference.menu else { continue }
             XCTAssertEqual(
                 menu.maxX, attendu.maxX, accuracy: 0.5,

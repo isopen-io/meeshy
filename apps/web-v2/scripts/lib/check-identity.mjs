@@ -248,7 +248,13 @@ export async function checkRowIdentityAndLabel({ browser, BASE, CAPTURES, setSch
     // n'est dans le DOM que si la fenêtre virtualisée l'y tient — d'où le
     // défilement RÉEL, la même primitive que `electRow` (`lib/scroll-row.mjs`).
     await scrollRowIntoView(page, 'm1');
-    const pastille = page.locator('main li [data-row="m1"] button[aria-label*="langue d’origine"]').first();
+    /* VISÉE PAR SON MARQUEUR (#7141) — la pastille lit désormais le catalogue
+       d'interface, donc son `aria-label` suit la langue du LECTEUR. Épingler le
+       texte français le faisait disparaître sous toute autre locale : en
+       intégration continue, ce gate rendait « m1 porte la pastille du Prisme »
+       en échec alors que la pastille était là, correcte, en anglais.
+       `data-prism-toggle` ne change avec aucune langue. */
+    const pastille = page.locator('main li [data-row="m1"] button[data-prism-toggle]').first();
     expect((await pastille.count()) > 0, `m1 porte la pastille du Prisme (${scheme})`);
     const snapshotM1 = () =>
       page.evaluate(() => {

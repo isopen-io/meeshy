@@ -72,7 +72,26 @@ internal struct _InlineRenderer: View {
 
     @State private var showControls: Bool = true
     @State private var controlsTimer: Timer?
-    @ObservedObject private var manager = SharedAVPlayerManager.shared
+    /// Référence NUE (PAS `@ObservedObject`) : ce renderer existe par vidéo
+    /// montée — bulles, cartes du fil, commentaires, rangées Focal, détail de
+    /// post — et le moteur republie `currentTime` toutes les 200 ms (battement
+    /// thermique). `@ObservedObject` s'abonne à l'OBJET, pas aux champs lus :
+    /// dès qu'UNE vidéo jouait, toutes ces vues se réévaluaient cinq fois par
+    /// seconde, y compris celles qui n'affichent qu'une vignette. Le
+    /// `.equatable()` du parent n'y pouvait rien — l'invalidation naissait ICI.
+    ///
+    /// Les quatre champs réellement lus sont MIROITÉS ci-dessous, chacun par
+    /// son `.onReceive`. Même discipline que `ReelFeedVideoSurface`, écrite
+    /// pour la même raison (#6226).
+    ///
+    /// Les APPELS (`load`, `play`, `release`, `stop`) passent toujours par
+    /// `manager` : une méthode n'exige aucun abonnement, et un miroir n'est
+    /// pas encore à jour à l'instruction qui suit l'appel.
+    private let manager = SharedAVPlayerManager.shared
+    @State private var activeURL: String = SharedAVPlayerManager.shared.activeURL
+    @State private var enginePlayer: AVPlayer? = SharedAVPlayerManager.shared.player
+    @State private var engineDuration: Double = SharedAVPlayerManager.shared.duration
+    @State private var engineIsMuted: Bool = SharedAVPlayerManager.shared.isMuted
 
     /// Aspect ratio DISPLAY (post-rotation) résolu async depuis le
     /// `preferredTransform` de l'AVAsset (priorité 1 une fois en cache).
@@ -84,7 +103,7 @@ internal struct _InlineRenderer: View {
     @State private var thumbnailAspectRatio: CGFloat?
 
     private var isThisActive: Bool {
-        manager.activeURL == player.attachment.fileUrl && manager.player != nil
+        activeURL == player.attachment.fileUrl && enginePlayer != nil
     }
 
     /// Ratio source-de-vérité unique pour cette bulle. Ordre de priorité :
@@ -104,10 +123,10 @@ internal struct _InlineRenderer: View {
 
     /// True quand le surface est mountée mais l'AVPlayerItem n'a pas encore
     /// chargé la durée — proxy pour "buffering / asset loading". Une fois
-    /// `manager.duration > 0`, AVPlayer connait la duration de l'asset et
+    /// `engineDuration > 0`, AVPlayer connait la duration de l'asset et
     /// rend ses premières frames.
     private var isLoadingAsset: Bool {
-        isThisActive && manager.duration <= 0
+        isThisActive && engineDuration <= 0
     }
 
     var body: some View {
@@ -124,11 +143,11 @@ internal struct _InlineRenderer: View {
         ZStack {
             Color.black
 
-            if isThisActive, let p = manager.player {
+            if isThisActive, let p = enginePlayer {
                 MeeshyVideoSurface(
                     player: p,
                     gravity: .resizeAspect,
-                    isMuted: manager.isMuted,
+                    isMuted: engineIsMuted,
                     enablesPip: Self.surfaceEnablesPip(controls: player.controls)
                 )
                     .onTapGesture { toggleControls() }
@@ -155,6 +174,10 @@ internal struct _InlineRenderer: View {
             }
         }
         .aspectRatio(bubbleAspectRatio, contentMode: .fit)
+        .onReceive(manager.$activeURL) { activeURL = $0 }
+        .onReceive(manager.$player) { enginePlayer = $0 }
+        .onReceive(manager.$duration) { engineDuration = $0 }
+        .onReceive(manager.$isMuted) { engineIsMuted = $0 }
         .applyVideoFrame(player.frame)
         .task(id: player.attachment.fileUrl) {
             // Lance les deux résolutions en parallèle. La plus rapide (le

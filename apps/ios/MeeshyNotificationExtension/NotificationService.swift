@@ -460,11 +460,25 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         // Ce refus, comme le gate de type et la lecture des champs GW5, vit
         // désormais dans `prePersistedMessagePlan` — pur, donc gardé par des
         // témoins.
-        guard let pool = Self.sharedPool,
-              let plan = NotificationPayloadHelpers.prePersistedMessagePlan(
+        // #7168 — LE FILTRE DE TYPE D'ABORD. Une clause de `guard` s'évalue
+        // dans l'ordre, et `Self.sharedPool` est une `static let` paresseuse
+        // qui ouvre `DatabasePool` PUIS rejoue toutes les migrations, avec un
+        // `busyMode` qui bloque jusqu'à cinq secondes sur collision avec l'app
+        // principale. L'évaluer en premier faisait payer cette ouverture à
+        // TOUT push qui n'annonce pas l'arrivée d'un message — like, réaction,
+        // commentaire, demande d'ami, arrivée d'un membre — pour repartir les
+        // mains vides, sur le budget qui sert à télécharger l'avatar et la
+        // pièce jointe avant d'afficher la bannière.
+        //
+        // Le filtre est PUR et gardé en propre (`NSEMessageArrivalGateTests`) ;
+        // l'ordre, lui, n'est pas observable d'ici — ce fichier n'est compilé
+        // que dans la cible d'extension.
+        guard NotificationPayloadHelpers.announcesMessageArrival(userInfo["type"] as? String) else { return }
+        guard let plan = NotificationPayloadHelpers.prePersistedMessagePlan(
                   userInfo: userInfo,
                   now: Date()
-              )
+              ),
+              let pool = Self.sharedPool
         else { return }
 
         do {

@@ -129,17 +129,61 @@ final class StoryPhotoSaveService: ObservableObject {
     /// qu'un job tourne pour la même story est ignoré (le menu reste
     /// atteignable via le long-press pendant l'export).
     func save(story: StoryItem) {
-        guard jobs[story.id] == nil else { return }
-
         let available = StoryExportLanguageResolver.availableLanguages(story: story)
         let language = StoryExportLanguageResolver.defaultLanguage(
             available: available,
             preferred: preferredLanguages()
         )
         let languages: [String] = language.map { [$0] } ?? []
-        let slide = story.toRenderableSlide(preferredLanguages: languages)
+        bakeThenSave(jobKey: story.id,
+                     slide: story.toRenderableSlide(preferredLanguages: languages),
+                     languages: languages,
+                     stickerMedia: story.media,
+                     resolvesIdentity: true,
+                     appendsBrandOutro: true)
+    }
+
+    /// **UNE SCÈNE DE POST S'ENREGISTRE COMME UNE STORY** (#7052) — même bake,
+    /// même anneau, même annulation, même nettoyage.
+    ///
+    /// Trois différences, toutes décidées par le porteur (#7043) :
+    ///
+    /// - la slide est celle de la scène OUVERTE (`renderableSlide`), et non la
+    ///   scène 0 que le porteur du post rendrait ;
+    /// - `resolvesIdentity: false` — pas d'interlude, donc rien à résoudre, et
+    ///   surtout pas les 4 s de `BoundedAsyncResolution` avant un bake qu'on
+    ///   sait déjà sans prélude ;
+    /// - `appendsBrandOutro: false` — l'œuvre SEULE, sans carte de fin.
+    ///
+    /// Un second chemin qui réimplémenterait le jeton de génération, la
+    /// coupure d'avant-bake, `uncancellableJobs` ou le nettoyage du MP4
+    /// périmé serait faux — et faux d'une façon qui ne se voit qu'en
+    /// production. D'où le passage par le MÊME corps.
+    func save(scene: GallerySceneItem) {
+        let languages = preferredLanguages()
+        bakeThenSave(jobKey: scene.id,
+                     slide: scene.renderableSlide(preferredLanguages: languages),
+                     languages: languages,
+                     // Les images des stickers vivent sur le média du POST,
+                     // que le porteur transporte (#4852) : sans cet index,
+                     // Photos recevrait 🖼️ à leur place.
+                     stickerMedia: scene.carrier.media,
+                     resolvesIdentity: false,
+                     appendsBrandOutro: false)
+    }
+
+    /// Le corps PARTAGÉ des deux entrées ci-dessus : bake, écriture Photos,
+    /// anneau, annulation, nettoyage. Ce qui varie est passé en paramètre ;
+    /// tout le reste — et c'est l'essentiel — ne se duplique pas.
+    private func bakeThenSave(jobKey storyId: String,
+                              slide: StorySlide,
+                              languages: [String],
+                              stickerMedia: [FeedMedia],
+                              resolvesIdentity: Bool,
+                              appendsBrandOutro: Bool) {
+        guard jobs[storyId] == nil else { return }
+
         let watermark = MeeshyExportWatermark.make(username: AuthManager.shared.currentUser?.username)
-        let storyId = story.id
         // Nouvelle tentative pour cette story : voir la doc de `generations`.
         let generation = (generations[storyId] ?? 0) + 1
         generations[storyId] = generation
@@ -153,7 +197,13 @@ final class StoryPhotoSaveService: ObservableObject {
             // absent — voir `BoundedAsyncResolution.resolve`. `intro` est la
             // closure injectée à l'init, pas le singleton — l'injection en
             // test reste honorée.
-            let introContent = await BoundedAsyncResolution.resolve(self.intro, timeout: self.introTimeout)
+            // `resolvesIdentity: false` (scène de post, #7052) : aucun
+            // interlude n'est dû, donc rien à résoudre — et surtout pas les
+            // 4 s de `BoundedAsyncResolution` avant un bake qu'on sait déjà
+            // sans prélude. L'anneau resterait à 0 % pour rien.
+            let introContent = resolvesIdentity
+                ? await BoundedAsyncResolution.resolve(self.intro, timeout: self.introTimeout)
+                : nil
             // Tentative déjà périmée AVANT même que le bake ne démarre.
             // Sur une installation fraîche, la résolution d'identité court
             // jusqu'à `introTimeout` (4 s) : l'anneau affiche 0 %, et
@@ -181,11 +231,14 @@ final class StoryPhotoSaveService: ObservableObject {
                 languages: languages,
                 watermark: watermark,
                 intro: introContent,
-                // Images des stickers (#4852) : un `StorySticker` ne porte que le
-                // `postMediaId` de son média, et seul ce site tient la slide ET
-                // `story.media` — sans l'index, Photos recevait 🖼️.
+                // Images des stickers (#4852) : un `StorySticker` ne porte que
+                // le `postMediaId` de son média, et seul ce site tient la
+                // slide ET le média de son porteur — sans l'index, Photos
+                // recevait 🖼️. Le porteur diffère selon l'entrée (`story.media`
+                // ou `scene.carrier.media`, #7052), d'où le paramètre.
                 stickerImageSources: StoryExporter.stickerImageSources(
-                    for: slide.effects.stickerObjects, media: story.media),
+                    for: slide.effects.stickerObjects, media: stickerMedia),
+                appendsBrandOutro: appendsBrandOutro,
                 onProgress: { [weak self] fraction in
                     guard let self, self.isCurrent(generation, for: storyId) else { return }
                     self.jobs[storyId] = StorySaveProgressMapper.bake(fraction)

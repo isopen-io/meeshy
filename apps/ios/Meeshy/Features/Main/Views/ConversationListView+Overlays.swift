@@ -1163,6 +1163,11 @@ struct ConversationListBottomBar: View {
     @EnvironmentObject var router: Router
 
     @State private var searchBounce = false
+    /// La VACUITÉ du texte de recherche, remontée par l'hôte du champ — la
+    /// seule chose que cette barre ait à savoir de la frappe. Un `@Binding`
+    /// sur le texte lui-même la ferait se re-rendre à chaque caractère, ce
+    /// que l'isolement du modèle vient précisément d'éviter (#7158).
+    @State private var searchTextIsEmpty = true
 
     private var theme: ThemeManager { ThemeManager.shared }
     private var isActive: Bool { isSearching.wrappedValue || showSearchOverlay }
@@ -1320,23 +1325,13 @@ struct ConversationListBottomBar: View {
             // `scaleEffect` — rien pour VoiceOver (253i, #4266).
             .toggleStateAccessibility(isToggle: true, isActive: isActive)
 
-            TextField(String(localized: "search.placeholder", defaultValue: "Rechercher..."), text: $conversationViewModel.searchText)
-                .focused(isSearching)
-                .foregroundColor(theme.textPrimary)
-                .font(MeeshyFont.relative(15))
-                .accessibilityLabel(String(localized: "conversation.list.search_conversations", defaultValue: "Rechercher des conversations", bundle: .main))
-
-            if !conversationViewModel.searchText.isEmpty {
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { conversationViewModel.searchText = "" }
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(MeeshyColors.error)
-                        .scaleEffect(1.0)
-                }
-                .accessibilityLabel(String(localized: "accessibility.clear_search", defaultValue: "Effacer la recherche"))
-                .transition(.scale.combined(with: .opacity))
-            }
+            // Seul cet hôte se re-rend à la frappe — cette barre, et la liste
+            // au-dessus d'elle, n'apprennent du texte que sa VACUITÉ (#7158).
+            ConversationSearchFieldHost(
+                searchTextModel: conversationViewModel.searchTextModel,
+                isSearching: isSearching,
+                isEmpty: $searchTextIsEmpty
+            )
 
             // Dashboard / widget button
             Button {
@@ -1391,7 +1386,7 @@ struct ConversationListBottomBar: View {
                 .shadow(color: isActive ? MeeshyColors.indigo300.opacity(0.25) : .clear, radius: 12, y: 5)
         )
         .scaleEffect(searchBounce ? 1.02 : 1.0)
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: conversationViewModel.searchText.isEmpty)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: searchTextIsEmpty)
         .adaptiveOnChange(of: isSearching.wrappedValue) { _, newValue in
             withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {
                 searchBounce = newValue
@@ -1404,5 +1399,50 @@ struct ConversationListBottomBar: View {
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 16)
+    }
+}
+
+
+// MARK: - Hôte du champ de recherche (#7158)
+
+/// Seul abonné du texte de recherche : ce champ DESSINE la frappe, il doit
+/// donc se re-rendre à chaque caractère. La barre qui l'héberge — et la liste
+/// de conversations au-dessus d'elle — n'en apprend que la VACUITÉ, un
+/// changement rare.
+///
+/// Même dispositif que `ComposerTextHost` pour le texte du composeur (#4105) :
+/// le modèle vit hors de l'arbre de dépendances de la racine, un hôte dédié
+/// l'observe.
+struct ConversationSearchFieldHost: View {
+    @ObservedObject var searchTextModel: ConversationSearchTextModel
+    var isSearching: FocusState<Bool>.Binding
+    @Binding var isEmpty: Bool
+
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    var body: some View {
+        TextField(
+            String(localized: "search.placeholder", defaultValue: "Rechercher..."),
+            text: $searchTextModel.text
+        )
+            .focused(isSearching)
+            .foregroundColor(theme.textPrimary)
+            .font(MeeshyFont.relative(15))
+            .accessibilityLabel(String(localized: "conversation.list.search_conversations", defaultValue: "Rechercher des conversations", bundle: .main))
+            .adaptiveOnChange(of: searchTextModel.text.isEmpty, initial: true) { _, nowEmpty in
+                isEmpty = nowEmpty
+            }
+
+        if !searchTextModel.text.isEmpty {
+            Button {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { searchTextModel.text = "" }
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundColor(MeeshyColors.error)
+                    .scaleEffect(1.0)
+            }
+            .accessibilityLabel(String(localized: "accessibility.clear_search", defaultValue: "Effacer la recherche"))
+            .transition(.scale.combined(with: .opacity))
+        }
     }
 }

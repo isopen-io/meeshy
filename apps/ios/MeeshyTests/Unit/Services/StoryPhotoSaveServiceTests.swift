@@ -63,6 +63,16 @@ final class ScriptedStoryExporter: StoryVideoExportServiceProviding {
     private(set) var lastIntro: StoryExportIntroContent?
     /// Index `postMediaId → adresse` des stickers image reçu par le bake (#4852).
     private(set) var lastStickerImageSources: [String: String] = [:]
+    /// Le drapeau de marque REÇU (#7052) — retenu, jamais ignoré : un double
+    /// qui laisse tomber un paramètre laisse passer l'appelant qui cesse de le
+    /// poser, et une scène ressortirait marquée sans qu'aucun témoin ne tombe.
+    private(set) var lastAppendsBrandOutro: Bool?
+    /// **La SLIDE réellement bakée** (#7052) — le seul champ qui dise QUELLE
+    /// scène est partie. Sans lui, `save(scene:)` pouvait baker la scène 0 d'un
+    /// post à plusieurs scènes quelle que soit la page ouverte sans qu'aucune
+    /// assertion ne puisse le voir : tous les autres champs de ce double sont
+    /// identiques d'une scène à l'autre.
+    private(set) var lastSlide: StorySlide?
 
     func prepareExport(
         slide: StorySlide,
@@ -70,10 +80,13 @@ final class ScriptedStoryExporter: StoryVideoExportServiceProviding {
         watermark: StoryExportWatermark?,
         intro: StoryExportIntroContent?,
         stickerImageSources: [String: String],
+        appendsBrandOutro: Bool,
         onProgress: ((Double) -> Void)?,
         onPhaseChange: ((StoryExportPhase) -> Void)?
     ) async -> URL? {
         prepareCallCount += 1
+        lastAppendsBrandOutro = appendsBrandOutro
+        lastSlide = slide
         lastLanguages = languages
         lastIntro = intro
         lastStickerImageSources = stickerImageSources
@@ -135,6 +148,10 @@ final class ManualStoryExporter: StoryVideoExportServiceProviding {
     private(set) var lastBakedURL: URL?
     /// Index `postMediaId → adresse` des stickers image reçu par le bake (#4852).
     private(set) var lastStickerImageSources: [String: String] = [:]
+    /// Le drapeau de marque REÇU (#7052) — retenu, jamais ignoré : un double
+    /// qui laisse tomber un paramètre laisse passer l'appelant qui cesse de le
+    /// poser, et une scène ressortirait marquée sans qu'aucun témoin ne tombe.
+    private(set) var lastAppendsBrandOutro: Bool?
 
     var pendingCount: Int { pendingCalls.count }
 
@@ -144,10 +161,12 @@ final class ManualStoryExporter: StoryVideoExportServiceProviding {
         watermark: StoryExportWatermark?,
         intro: StoryExportIntroContent?,
         stickerImageSources: [String: String],
+        appendsBrandOutro: Bool,
         onProgress: ((Double) -> Void)?,
         onPhaseChange: ((StoryExportPhase) -> Void)?
     ) async -> URL? {
         lastStickerImageSources = stickerImageSources
+        lastAppendsBrandOutro = appendsBrandOutro
         return await withCheckedContinuation { continuation in
             pendingCalls.append(PendingCall(onProgress: onProgress, continuation: continuation))
         }
@@ -867,5 +886,224 @@ final class StoryPhotoSaveServiceTests: XCTestCase {
         manual.resolve(attempt: 0)
         await waitUntil { manual.cleanupCallCount >= 1 }
         XCTAssertEqual(toasts.successMessages.count, 1, "le bake abandonné ne poste aucun toast supplémentaire")
+    }
+
+    // MARK: - #7052 — une SCÈNE de post s'enregistre comme une story
+
+    // Quatre choses séparent `save(scene:)` de `save(story:)`, et elles
+    // n'avaient AUCUN témoin : la surcharge a été livrée (d29d770dd1) sans que
+    // le mot « scene » apparaisse une seule fois dans ce fichier. Les quatre se
+    // mesurent ci-dessous, chacune sur le rang où la règle juste et la règle
+    // absente rendent des verdicts DIFFÉRENTS (leçon 261) :
+    //
+    //   • la carte de fin — sur le rang `false`, donc jamais sur une story ;
+    //   • l'interlude d'identité — sur une résolution qui ne revient JAMAIS,
+    //     donc pas sur celle qui arrive à temps ;
+    //   • les images des stickers — sur le média du PORTEUR, qu'aucune autre
+    //     valeur de la scène ne porte ;
+    //   • la scène bakée — sur l'index 1 d'un document à deux scènes, le seul
+    //     rang où le bon chemin et `carrier.toRenderableSlide()` divergent.
+
+    /// Le document v3 d'un post, dont CHAQUE scène porte un texte distinct.
+    /// C'est la seule façon de dire, en lisant la slide bakée, LAQUELLE est
+    /// partie : tout le reste (langues, marque, porteur) est identique d'une
+    /// page à l'autre.
+    private func makeDocument(texts: [String], stickerMediaId: String? = nil) -> CanvasV3 {
+        CanvasV3(scenes: texts.enumerated().map { index, texte in
+            var objets: [ObjectV3] = [
+                ObjectV3(id: "t\(index)", kind: .text,
+                         anchor: .free(x: 0.5, y: 0.5), plane: .fg, z: 1,
+                         transform: TransformV3(),
+                         payload: ["text": .string(texte)])
+            ]
+            if let stickerMediaId {
+                objets.append(ObjectV3(id: "st\(index)", kind: .sticker,
+                                       anchor: .free(x: 0.3, y: 0.3), plane: .fg, z: 2,
+                                       transform: TransformV3(),
+                                       payload: ["postMediaId": .string(stickerMediaId)]))
+            }
+            return SceneV3(id: "sc\(index)", objects: objets)
+        })
+    }
+
+    /// Une page scène telle que `PostGalleryLot.compose` la fabrique — porteur
+    /// bâti UNE FOIS pour le post, donc figé sur la scène 0
+    /// (`StoryEffects(rendering:sceneIndex:)` du décodage, `StoryModels:1244`).
+    /// Reproduire ce figement est ce qui rend le témoin d'index discriminant :
+    /// un `save(scene:)` qui bakerait `carrier.toRenderableSlide()` sortirait
+    /// la scène 0 quelle que soit la page ouverte.
+    private func makeScene(_ document: CanvasV3,
+                           sceneIndex: Int = 0,
+                           carrierMedia: [FeedMedia] = []) -> GallerySceneItem {
+        GallerySceneItem(
+            id: "scene:post-7052#\(sceneIndex)",
+            postId: "post-7052",
+            document: document,
+            sceneIndex: sceneIndex,
+            carrier: StoryItem(id: "post-7052",
+                               content: "le texte du post",
+                               media: carrierMedia,
+                               storyEffects: StoryEffects(rendering: document, sceneIndex: 0),
+                               createdAt: Date(timeIntervalSince1970: 0)),
+            mediaId: nil,
+            aspect: SceneShape.aspect,
+            canvasAspect: SceneShape.aspect,
+            moves: false,
+            thumbHash: nil,
+            thumbnailURL: nil
+        )
+    }
+
+    /// **L'ŒUVRE SEULE, sans carte de fin** (#7052, directive porteur #7043).
+    /// Une scène de post n'est pas une story : elle sort nue de l'outro.
+    func test_saveScene_bakesWithoutTheBrandOutro() async {
+        let (sut, exporter, photos, toasts) = makeSUT()
+        let scene = makeScene(makeDocument(texts: ["une scène"]))
+
+        sut.save(scene: scene)
+        await waitUntilIdle(sut, storyId: scene.id)
+
+        XCTAssertEqual(exporter.prepareCallCount, 1)
+        XCTAssertEqual(exporter.lastAppendsBrandOutro, false,
+                       "une scène de post sort sans carte de fin — l'œuvre seule")
+        XCTAssertEqual(photos.savedVideoURLs.count, 1, "le reste du chemin est celui d'une story")
+        XCTAssertEqual(toasts.successMessages.count, 1)
+        XCTAssertEqual(exporter.cleanupCallCount, 1, "le MP4 temporaire est nettoyé, comme pour une story")
+    }
+
+    /// **Le rang qui fait parler le précédent.** Sur une STORY, le même
+    /// paramètre vaut `true` : sans ce contre-témoin, un `appendsBrandOutro`
+    /// câblé en dur à `false` par les DEUX entrées rendrait le test ci-dessus
+    /// vert tout en supprimant la carte de fin des stories.
+    func test_saveStory_stillAppendsTheBrandOutro() async {
+        let (sut, exporter, _, _) = makeSUT()
+        let story = makeStory()
+
+        sut.save(story: story)
+        await waitUntilIdle(sut, storyId: story.id)
+
+        XCTAssertEqual(exporter.lastAppendsBrandOutro, true,
+                       "une story garde sa carte de fin — seule la scène la perd")
+    }
+
+    /// **Aucun prélude, donc rien à résoudre — et surtout pas les 4 s de
+    /// `BoundedAsyncResolution` avant un bake qu'on sait déjà sans interlude.**
+    ///
+    /// La résolution d'identité de ce SUT ne revient JAMAIS (le test ne
+    /// `release()` pas). Sur le chemin d'une story, `test_save_…_thenReleased_…`
+    /// montre que le bake N'EST PAS ENCORE PARTI à ce stade ; ici la sauvegarde
+    /// va jusqu'à la photothèque sans qu'elle soit relâchée. `isSuspended`
+    /// ajoute l'assertion forte : la résolution n'a pas seulement été bornée,
+    /// elle n'a jamais été APPELÉE.
+    func test_saveScene_neverResolvesTheIdentityInterlude() async {
+        let (sut, exporter, photos, _, resolver) = makeManualIntroSUT()
+        let scene = makeScene(makeDocument(texts: ["une scène"]))
+
+        sut.save(scene: scene)
+        await waitUntilIdle(sut, storyId: scene.id)
+
+        XCTAssertFalse(resolver.isSuspended,
+                       "la résolution d'identité ne doit même pas être entrée pour une scène")
+        XCTAssertEqual(exporter.prepareCallCount, 1, "le bake part sans attendre l'identité")
+        XCTAssertNil(exporter.lastIntro, "aucun interlude ne précède une scène de post")
+        XCTAssertEqual(photos.savedVideoURLs.count, 1)
+    }
+
+    /// **Les images des stickers vivent sur le média du POST** (#4852 porté au
+    /// #7052) : un `StorySticker` ne porte que le `postMediaId` de son image, et
+    /// seul le PORTEUR de la scène tient l'index. Sans lui, Photos recevrait 🖼️
+    /// à la place de l'image.
+    func test_saveScene_pairsStickerImagesWithTheCarrierMedia() async {
+        let (sut, exporter, _, _) = makeSUT()
+        let document = makeDocument(texts: ["une scène"], stickerMediaId: "pm-sticker")
+        let scene = makeScene(document,
+                              carrierMedia: [FeedMedia(id: "pm-sticker", type: .image,
+                                                       url: "https://cdn.meeshy.test/sticker.png")])
+
+        sut.save(scene: scene)
+        await waitUntilIdle(sut, storyId: scene.id)
+
+        XCTAssertEqual(exporter.lastStickerImageSources,
+                       ["pm-sticker": "https://cdn.meeshy.test/sticker.png"],
+                       "l'index vient de `scene.carrier.media` — la scène seule ne le porte pas")
+    }
+
+    /// **La scène OUVERTE, jamais la première.**
+    ///
+    /// Le porteur est bâti une fois par post et remis identiquement à chaque
+    /// page ; le décodage de ses effets fige `sceneIndex: 0`. Un `save(scene:)`
+    /// qui passerait par `carrier.toRenderableSlide()` bakerait donc N fois la
+    /// PREMIÈRE scène — un défaut INVISIBLE à l'index 0, où le bon et le mauvais
+    /// chemin rendent le même fichier. Le témoin se pose donc à l'index 1.
+    func test_saveScene_bakesTheOpenScene_notTheFirstOne() async {
+        let (sut, exporter, _, _) = makeSUT()
+        let document = makeDocument(texts: ["la première", "la seconde"])
+        let scene = makeScene(document, sceneIndex: 1)
+
+        sut.save(scene: scene)
+        await waitUntilIdle(sut, storyId: scene.id)
+
+        XCTAssertEqual(exporter.lastSlide?.effects.textObjects.map(\.text), ["la seconde"],
+                       "la page ouverte est la scène 1 — c'est elle qui doit être bakée")
+    }
+
+    /// **La clé du job est l'identité de la PAGE**, pas celle du post : deux
+    /// scènes d'un même document s'exportent côte à côte, et l'anneau de l'une
+    /// ne parle jamais pour l'autre.
+    func test_saveScene_keysTheJobOnTheSceneIdentity() async {
+        let manuel = ManualStoryExporter()
+        let sut = StoryPhotoSaveService(
+            exporter: manuel,
+            photoSaver: StubPhotoSaver(),
+            toasts: MockFeedbackToast(),
+            preferredLanguages: { [] },
+            intro: { nil }
+        )
+        let document = makeDocument(texts: ["la première", "la seconde"])
+        let premiere = makeScene(document, sceneIndex: 0)
+        let seconde = makeScene(document, sceneIndex: 1)
+
+        sut.save(scene: premiere)
+        await waitUntil { manuel.pendingCount >= 1 }
+
+        XCTAssertNotNil(sut.progress(for: premiere.id))
+        XCTAssertNil(sut.progress(for: seconde.id),
+                     "la scène voisine n'a aucun export en vol — la clé est la PAGE, pas le post")
+
+        sut.save(scene: seconde)
+        await waitUntil { manuel.pendingCount >= 2 }
+        XCTAssertNotNil(sut.progress(for: seconde.id), "deux scènes d'un même post s'exportent côte à côte")
+
+        // Draine les deux bakes suspendus : une `CheckedContinuation` laissée
+        // pendante en fin de test fuiterait.
+        sut.cancel(storyId: premiere.id)
+        sut.cancel(storyId: seconde.id)
+        manuel.resolve(attempt: 0)
+        manuel.resolve(attempt: 1)
+        await waitUntil { manuel.cleanupCallCount >= 2 }
+    }
+
+    /// **Le Prisme du LECTEUR descend ENTIER vers le renderer** (#7052), là où
+    /// une story n'emmène qu'une seule langue — celle que ses `translations`
+    /// proposent (`StoryExportLanguageResolver`). Les textes d'une scène portent
+    /// leurs propres traductions dans le document : c'est au renderer de
+    /// descendre la chaîne, et la borner au rang 1 lui ferait rater un rang
+    /// inférieur disponible.
+    func test_saveScene_threadsTheWholeReaderPrism() async {
+        let exporter = ScriptedStoryExporter()
+        let sut = StoryPhotoSaveService(
+            exporter: exporter,
+            photoSaver: StubPhotoSaver(),
+            toasts: MockFeedbackToast(),
+            preferredLanguages: { ["fr", "en"] },
+            intro: { nil }
+        )
+        let scene = makeScene(makeDocument(texts: ["une scène"]))
+
+        sut.save(scene: scene)
+        await waitUntilIdle(sut, storyId: scene.id)
+
+        XCTAssertEqual(exporter.lastLanguages, ["fr", "en"],
+                       "la chaîne du lecteur passe entière — elle n'est pas réduite à son rang 1")
     }
 }

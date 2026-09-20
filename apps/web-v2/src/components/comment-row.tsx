@@ -14,6 +14,7 @@ import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { shortRelativeTime } from '@/lib/relative-time';
 import { initialsOf } from '@/lib/view/conversation';
+import { PrismPastille } from './message-blocks';
 
 /**
  * **UNE RANGÉE DE COMMENTAIRE ET SES TROIS GESTES** (#7135) — miroir de
@@ -397,6 +398,31 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
     translations: comment.translations,
     content: comment.content,
   });
+  /**
+   * **CE QUI EST RÉELLEMENT RENDU** (#7141) — le Prisme sert la traduction par
+   * défaut (§ Automatisme) ; ce drapeau ne dit que le GESTE du lecteur, qui a
+   * demandé à voir l'original.
+   *
+   * L'état vit ICI, sur la rangée, et non chez l'hôte : ouvrir un commentaire
+   * dans sa langue d'origine ne dit rien des autres, et un registre partagé
+   * ferait re-rendre tout le fil à chaque geste sur une seule rangée.
+   *
+   * Et il gouverne le TEXTE **et** `lang` ensemble : les séparer prononcerait
+   * l'espagnol avec une voix anglaise — le défaut exact que `lang` existe pour
+   * empêcher, déplacé d'un cran. C'est la dette du motif `showContent={false}`
+   * que le `CLAUDE.md` racine décrit (cycle 123) : une surface qui ANNONCE une
+   * langue sans la SERVIR est pire qu'une surface non câblée.
+   */
+  const [showingOriginal, setShowingOriginal] = useState(false);
+  const originalLanguage = comment.originalLanguage ?? '';
+  /* `marque` garde la règle d'ORIGINE — `lang` se pose parce que le texte est
+     TRADUIT, jamais parce qu'il diffère de la langue d'interface (une rangée
+     non traduite ne doit rien porter, sans quoi la voix ment). Montrer
+     l'original ne se produit QUE sur une rangée traduite : la marque y vaut
+     donc aussi, avec la langue de l'original. */
+  const lu = showingOriginal
+    ? { text: comment.content, language: originalLanguage, marque: originalLanguage !== '' }
+    : { text: servi.text, language: servi.language, marque: servi.translated && servi.language !== '' };
   const photo = typeof comment.author.avatar === 'string' && comment.author.avatar !== '' ? comment.author.avatar : undefined;
   /* Une rangée EN VOL n'a pas d'adresse chez la passerelle — aucun geste. */
   const actionable = comment.pending !== true ? gestures : undefined;
@@ -464,6 +490,17 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
               ? translate(language, 'comments.row.pending')
               : shortRelativeTime(new Date(comment.createdAt), now, locale)}
           </span>
+          {/* LA PASTILLE SE GARDE ELLE-MÊME : `servedLanguage === originalLanguage`
+              ⇒ elle rend `null`. Une rangée non traduite n'annonce donc rien, et
+              aucune condition n'est à tenir ici en double. */}
+          <PrismPastille
+            servedLanguage={servi.language}
+            originalLanguage={originalLanguage}
+            active={showingOriginal ? originalLanguage : null}
+            language={language}
+            subject="comment"
+            onToggle={() => setShowingOriginal((open) => !open)}
+          />
         </div>
         {editing && actionable !== undefined ? (
           <EditForm comment={comment} language={language} onSave={save} onCancel={() => setEditing(false)} />
@@ -474,9 +511,9 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
           <p
             className="text-body break-words whitespace-pre-wrap"
             style={{ color: 'var(--color-ios-ink)' }}
-            {...(servi.translated && servi.language !== '' ? { lang: servi.language } : {})}
+            {...(lu.marque ? { lang: lu.language } : {})}
           >
-            {servi.text}
+            {lu.text}
           </p>
         )}
         {actionable !== undefined && !editing ? (

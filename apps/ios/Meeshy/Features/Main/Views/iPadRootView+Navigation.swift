@@ -598,7 +598,7 @@ extension iPadRootView {
         suppressToastTap = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { suppressToastTap = false }
         HapticFeedback.medium()
-        notificationManager.dismissToast()
+        notifications.manager.dismissToast()
 
         if let existing = conversationViewModel.conversations.first(where: { $0.id == conversationId }) {
             notificationPreviewConversation = existing

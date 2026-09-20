@@ -830,6 +830,20 @@ const fr = {
   'story.action.save': 'Enregistrer',
   'story.action.comments': 'Commentaires',
   'story.action.translations': 'Traductions',
+  /* LA PASTILLE DU PRISME (#7141) — trois SUJETS, parce que « Afficher le
+     message… » sur un commentaire serait traduit et faux. Neuf clés plates
+     plutôt que trois à paramètre : l'accord (« traduit » / « traduite ») ne
+     se paramètre pas d'une langue à l'autre. */
+  'prism.translated.message': 'Message traduit',
+  'prism.translated.comment': 'Commentaire traduit',
+  'prism.translated.post': 'Publication traduite',
+  'prism.original.show.message': 'Afficher le message dans sa langue d’origine',
+  'prism.original.show.comment': 'Afficher le commentaire dans sa langue d’origine',
+  'prism.original.show.post': 'Afficher la publication dans sa langue d’origine',
+  'prism.original.hide.message': 'Masquer le message dans sa langue d’origine',
+  'prism.original.hide.comment': 'Masquer le commentaire dans sa langue d’origine',
+  'prism.original.hide.post': 'Masquer la publication dans sa langue d’origine',
+
   'comments.title': 'Commentaires',
   'comments.close': 'Fermer les commentaires',
   'comments.loading': 'Chargement des commentaires',

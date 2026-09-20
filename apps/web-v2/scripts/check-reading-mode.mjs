@@ -364,7 +364,16 @@ const noRowCarriesContinuousPerspective = (page) =>
    * (`closest('[data-reading-mode]')`, jamais un compte document-large qui
    * confondrait les rangées), pas un compte d'éléments.
    */
-  const pastille = page.locator('main li [data-reading-mode] button[aria-label*="langue d’origine"]').first();
+  /* VISÉE PAR SON MARQUEUR, PLUS PAR SON LIBELLÉ (#7141). La forme précédente
+     cherchait le texte FRANÇAIS du libellé. Depuis que la pastille lit le
+     catalogue d'interface, ce libellé suit la langue du LECTEUR : en
+     intégration continue, où la locale du navigateur n'est pas le français, le
+     sélecteur ne trouvait plus RIEN et le gate rendait « un message traduit
+     porte la pastille du Prisme » en échec — alors que la pastille était là,
+     correcte, dans une autre langue. Un gate n'épingle pas une chaîne
+     TRADUISIBLE : `data-prism-toggle` est posé pour être trouvé, et il ne
+     change avec aucune langue. */
+  const pastille = page.locator('main li [data-reading-mode] button[data-prism-toggle]').first();
   expect((await pastille.count()) > 0, 'un message traduit porte la pastille du Prisme');
   const langOf = async () =>
     pastille.evaluate((btn) => btn.closest('[data-reading-mode]')?.querySelector('p[lang]')?.getAttribute('lang') ?? null);
@@ -1186,7 +1195,7 @@ const noRowCarriesContinuousPerspective = (page) =>
     if (main) main.scrollTop = 0;
   });
   await page.waitForTimeout(200);
-  const pastille = page.locator('main li [data-reading-mode] button[aria-label*="langue d’origine"]').first();
+  const pastille = page.locator('main li [data-reading-mode] button[data-prism-toggle]').first();
   expect((await pastille.count()) > 0, 'un message traduit porte la pastille du Prisme (mouvement réduit)');
   const tapTarget = await pastille.evaluate((el) => {
     const r = el.getBoundingClientRect();

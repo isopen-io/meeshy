@@ -67,7 +67,19 @@ class ConversationListViewModel: ObservableObject {
     private var nextCursor: String?
 
     // MARK: - Reactive Filters & Prepared Data
-    @Published var searchText: String = ""
+    /// Le texte de recherche vit dans SON modèle, pas sur celui-ci (#7158).
+    ///
+    /// Ce modèle est déclaré en `@EnvironmentObject` par la racine de la
+    /// liste ; un `@Published` ici ré-exécute ~99 rangées à CHAQUE caractère,
+    /// l'anti-rebond du pipeline ne protégeant que le calcul. La valeur reste
+    /// lisible et écrivable sous le même nom — propriété CALCULÉE, donc aucune
+    /// publication — et le pipeline s'abonne directement à sa source.
+    let searchTextModel = ConversationSearchTextModel()
+
+    var searchText: String {
+        get { searchTextModel.text }
+        set { searchTextModel.text = newValue }
+    }
     /// **Les filtres RETENUS** — un ensemble, plus une valeur (#4069).
     ///
     /// Le filtrage utile est le CROISÉ (« non lus, parmi les directs ») et il
@@ -555,7 +567,7 @@ class ConversationListViewModel: ObservableObject {
         // Single unified pipeline: conversations, search, filter, or categories change
         // → filter + group in one pass → single @Published update (groupedConversations).
         // Eliminates the old 3-broadcast chain ($conversations → $filteredConversations → $groupedConversations).
-        Publishers.CombineLatest4($conversations, $searchText, Publishers.CombineLatest($selectedFilters, $activeTagFilter), $userCategories)
+        Publishers.CombineLatest4($conversations, searchTextModel.$text, Publishers.CombineLatest($selectedFilters, $activeTagFilter), $userCategories)
             .debounce(for: .milliseconds(16), scheduler: DispatchQueue.main)
             .sink { [weak self] (convs, text, filters, categories) in
                 guard let self else { return }
