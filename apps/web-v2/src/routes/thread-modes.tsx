@@ -149,6 +149,7 @@ export function ThreadModes({
   typistAvatarOf,
   accent = 'var(--color-ios-brand)',
   older,
+  readTrackingSentinelRef,
 }: {
   readonly mode: ConversationReadingMode;
   readonly viewer: Viewer;
@@ -242,6 +243,15 @@ export function ThreadModes({
     readonly state: ListPaginationState;
     readonly sentinelRef: Ref<HTMLDivElement>;
   };
+  /**
+   * LE MARQUAGE-LU (#7201, W1) — la sentinelle de PIED, symétrique
+   * d'`OlderHead` : une prise d'un pixel après la dernière rangée, dont
+   * l'intersection dit « le bas du fil est dans le cadre » à
+   * `useReadTracking` (`lib/view/use-read-tracking.ts`). `undefined` ⇒
+   * aucune sentinelle montée — la lecture souveraine de l'administration ne
+   * doit accuser la lecture de PERSONNE.
+   */
+  readonly readTrackingSentinelRef?: (node: Element | null) => void;
 }) {
   const viewerId = viewer.id ?? '';
 
@@ -584,6 +594,15 @@ export function ThreadModes({
           );
         })}
       </ol>
+
+      {/* LA SENTINELLE DE PIED (#7201, W1) — symétrique d'`OlderHead` : un
+          pixel APRÈS la dernière rangée, jamais dans le flux typographique
+          (`aria-hidden`, comme `OlderHead`). Montée dès qu'il y a au moins
+          une rangée — même garde que la tête : une sentinelle qui intersecte
+          IMMÉDIATEMENT sur un fil vide n'aurait rien à accuser. */}
+      {readTrackingSentinelRef === undefined || placed.length === 0 ? null : (
+        <div aria-hidden className="shrink-0" style={{ height: 1 }} ref={readTrackingSentinelRef} />
+      )}
 
       {/* L'indicateur de frappe est une VRAIE cellule du flux, en queue —
           pas un overlay : il pousse le fil comme le ferait un message, donc
