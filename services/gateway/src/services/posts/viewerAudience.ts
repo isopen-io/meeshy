@@ -15,19 +15,24 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { PostVisibility } from '@meeshy/shared/prisma/client';
 import { buildPostVisibilityOrFilter } from './postVisibility';
 import { getCommunityCoMemberIds } from './communityVisibility';
+import { blockedIdsAroundViewer } from '../ContactDirectoryService';
 
 /** Le fragment Prisma `where` qui impose la visibilité d'un post à un viewer. */
 export async function buildViewerVisibilityFilter(prisma: PrismaClient, viewerUserId?: string) {
   if (!viewerUserId) {
     return { visibility: PostVisibility.PUBLIC };
   }
-  const [friendIds, dmContactIds, communityCoMemberIds] = await Promise.all([
+  const [friendIds, dmContactIds, communityCoMemberIds, blockedAuthorIds] = await Promise.all([
     friendIdsForViewer(prisma, viewerUserId),
     directConversationContactIds(prisma, viewerUserId),
     getCommunityCoMemberIds(prisma, viewerUserId),
+    /* #7184 — le blocage ferme le CONTENU dans les deux sens. Lu ici, avec
+       l'audience, parce que c'est ici que le filtre se compose : une garde
+       résolue chez l'appelant est une garde qu'un appelant peut oublier. */
+    blockedIdsAroundViewer(prisma, viewerUserId),
   ]);
   const audienceIds = [...new Set([...friendIds, ...dmContactIds])];
-  return buildPostVisibilityOrFilter(viewerUserId, audienceIds, communityCoMemberIds);
+  return buildPostVisibilityOrFilter(viewerUserId, audienceIds, communityCoMemberIds, blockedAuthorIds);
 }
 
 /**
