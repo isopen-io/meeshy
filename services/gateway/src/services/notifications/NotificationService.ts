@@ -41,6 +41,7 @@ import { notificationString, buildNotificationDisplay } from '@meeshy/shared/uti
 import { publicMediaUrlFromEnv } from '../attachments/publicMediaUrl';
 import { recipientDateLocale, recipientLanguage } from '../../utils/recipient-language';
 import { notificationLogger, securityLogger } from '../../utils/logger-enhanced';
+import { sanitizeNotificationInputs, persistedNotificationTitle } from './sanitizeInputs';
 import { SecuritySanitizer } from '../../utils/sanitize';
 import { truncateByCodePoints } from '../../utils/truncate-text';
 import { filterMutedRecipients } from './mutedRecipients';
@@ -857,24 +858,22 @@ export class NotificationService {
         return null;
       }
 
-      // SECURITY: Sanitize user-provided content (defense-in-depth)
-      const sanitizedContent = SecuritySanitizer.sanitizeText(params.content);
-      const sanitizedActor = params.actor ? {
-        ...params.actor,
-        displayName: params.actor.displayName
-          ? SecuritySanitizer.sanitizeText(params.actor.displayName)
-          : params.actor.displayName,
-        avatar: params.actor.avatar
-          ? SecuritySanitizer.sanitizeURL(params.actor.avatar) ?? params.actor.avatar
-          : params.actor.avatar,
-      } : undefined;
-      const sanitizedMetadata = SecuritySanitizer.sanitizeJSON(params.metadata);
+      // SECURITY: défense en profondeur — cf. `sanitizeInputs.ts`, qui tient
+      // ENSEMBLE le texte, l'acteur, les métadonnées et le titre. Les deux
+      // défauts trouvés ici (#7157, #7159) étaient des champs VOISINS qu'aucune
+      // phrase du bloc ne nommait : les énumérer à un seul endroit est ce qui
+      // les rend visibles.
+      const { content: sanitizedContent, actor: sanitizedActor, metadata: sanitizedMetadata } =
+        sanitizeNotificationInputs(params);
 
       // Titre/sous-titre localisés, conscients de l'entité — calculés UNE fois
       // côté serveur (langue du destinataire) puis persistés. Source unique pour
       // la liste in-app (iOS/iPadOS/macOS) et le web ; corrige les libellés
       // imprécis/non localisés historiquement reconstruits côté client.
-      const meta = (params.metadata ?? {}) as Record<string, unknown>;
+      // #7159 — les champs de métadonnées qui ENTRENT DANS LA PHRASE
+      // (`parentCommentPreview`, `contentAuthorName`) se lisent sur la charge
+      // SANITISÉE, pas sur la brute.
+      const meta = (sanitizedMetadata ?? {}) as Record<string, unknown>;
       const displayInput = {
         type: params.type,
         actorName: sanitizedActor?.displayName ?? params.actor?.username ?? null,
@@ -906,8 +905,8 @@ export class NotificationService {
         : (display.subtitle ?? null);
       // Titre persisté : le builder localisé quand il en a un (types sociaux),
       // sinon le titre explicite de l'appelant (annonce système : son sujet).
-      const persistedTitle = display.title
-        ?? ((params.title && params.title.trim() !== '') ? params.title.trim().slice(0, 160) : null);
+      // Sanitisation et troncature dans `sanitizeInputs.ts` (#7159).
+      const persistedTitle = persistedNotificationTitle(display.title, params.title);
 
       const notification = await this.prisma.notification.create({
         data: {

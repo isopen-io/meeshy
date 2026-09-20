@@ -11,8 +11,34 @@
  * `scripts/check-git-tracking.mjs` garde désormais la classe entière.
  */
 declare module 'bun:test' {
-  export function test(name: string, body: () => void | Promise<void>): void;
-  export function describe(name: string, body: () => void): void;
+  /**
+   * `timeoutMs` (#7142) — le délai par défaut de `bun test` est de 5 s, et
+   * deux témoins de la fermeture d'une fenêtre de révélation attendent plus
+   * longtemps qu'elle ne dure (`REVEAL_DURATION_SECONDS` + `FOG_DURATION_MS`
+   * = 5,4 s). `ThreadModes` ne transmet aucune horloge injectable aux peaux :
+   * il n'y a pas d'autre chemin que le temps qui passe, donc pas d'autre
+   * moyen que de déclarer le délai.
+   *
+   * Ajouté ICI plutôt que contourné dans le témoin : ce fichier est réduit à
+   * ce que les témoins emploient, et c'est exactement ce que l'un d'eux
+   * emploie désormais. Le taire aurait laissé `bun test` vert sur un appel que
+   * `tsc` refuse — l'écart que ce fichier existe pour fermer.
+   */
+  export function test(name: string, body: () => void | Promise<void>, timeoutMs?: number): void;
+  /**
+   * `describe.each` (#7142) — le même corps de témoins rejoué sur une TABLE de
+   * cas, le nom recevant les valeurs par `%s`.
+   *
+   * Employé pour les DEUX peaux du fil (Focal, Bulles) : c'est en les jouant
+   * toutes les deux qu'on a vu qu'un masque d'accessibilité n'avait jamais été
+   * porté sur l'une d'elles. Une boucle `for` ferait la même chose sans type à
+   * déclarer — mais elle place le corps des témoins deux niveaux plus à droite,
+   * et ce fichier préfère la forme que le témoin lit le mieux.
+   */
+  export const describe: {
+    (name: string, body: () => void): void;
+    each<Cas extends readonly unknown[]>(table: readonly Cas[]): (name: string, body: (...cas: [...Cas]) => void) => void;
+  };
   export function afterEach(body: () => void | Promise<void>): void;
   /**
    * `beforeEach` (#5814) — remet un état de MODULE (magasin, bouchon) à son

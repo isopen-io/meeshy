@@ -41,7 +41,7 @@
  * | famille | ce qui tombe d'abord |
  * |---|---|
  * | `integration/`, `e2ee/` | `Cannot find module '../../../shared/types/encryption'` — douze occurrences. Des imports RELATIFS vers une arborescence que le dépôt a quittée en passant à `@meeshy/shared`. |
- * | `notifications-*`, `NotificationService` | échecs de COMPORTEMENT sur les doubles Firebase/APNs — les suites ont vieilli contre un service qui a évolué. |
+ * | ~~`notifications-*`, `NotificationService`~~ | **RENDUES au gate le 2026-09-20 (#7153).** Le diagnostic d'alors — « échecs de COMPORTEMENT sur les doubles Firebase/APNs » — s'est révélé faux pour quatre suites sur cinq : elles ne COMPILAIENT plus, chacune sur une dérive d'API, trois d'entre elles sur UNE seule erreur. Et ce que l'extinction masquait n'était pas du bruit : deux défauts de sécurité réels (#7157, #7159), qu'elles ont dénoncés dès leur premier tour. |
  * | `resilience/`, `performance/` | mêmes imports périmés, plus un dépassement de délai. |
  *
  * Autrement dit : **elles n'ont pas été éteintes parce qu'elles coûtaient cher
@@ -88,16 +88,6 @@ const ETEINTS: readonly CheminEteint[] = [
     motif: '<rootDir>/src/__tests__/performance/',
     fichiers: 1,
     pourquoi: 'imports périmés ; mesure de charge, à faire tourner hors du chemin de poussée',
-  },
-  {
-    motif: '<rootDir>/src/__tests__/notifications-',
-    fichiers: 4,
-    pourquoi: 'échecs de comportement sur les doubles Firebase et APNs — suites vieillies contre un service qui a évolué',
-  },
-  {
-    motif: '<rootDir>/src/__tests__/NotificationService',
-    fichiers: 1,
-    pourquoi: 'idem — et c\'est la surface la plus dense du dépôt en règles de confidentialité',
   },
   {
     motif: '<rootDir>/src/__tests__/password-reset',

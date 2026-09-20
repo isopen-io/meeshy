@@ -14,6 +14,13 @@ import XCTest
 /// L'invariant se tient par la SOURCE : un abonnement inutile ne change aucun
 /// pixel, il coûte des images (même méthode de preuve que #6226,
 /// `e06dee46d6`).
+///
+/// **La garde portait sur UNE racine, et le dépôt en a DEUX** (#7166). Elle
+/// n'a jamais rougi pour `iPadRootView`, qui a gardé son
+/// `@ObservedObject var notificationManager` pendant tout ce temps — alors que
+/// son corps porte, lui aussi, tout l'écran. Une garde nommée d'après le
+/// fichier qu'elle a servi à corriger ne couvre pas la famille à laquelle il
+/// appartient : elle se relit en demandant « qui d'AUTRE est dans ce cas ? ».
 final class RootRerenderSourceGuardTests: XCTestCase {
 
     private func viewsRoot() -> URL {
@@ -41,6 +48,50 @@ final class RootRerenderSourceGuardTests: XCTestCase {
             code.contains("RootNotificationSource()"),
             "`RootView` doit passer par `RootNotificationSource`, qui republie le COMPTEUR seul et porte le gestionnaire en `let` non observé (#7010)."
         )
+    }
+
+    /// #7166 — MÊME INVARIANT, AUTRE RACINE. `iPadRootView` déclare le
+    /// gestionnaire sans `private` (`@ObservedObject var notificationManager`),
+    /// ce que le motif de `RootView` ne pouvait pas attraper : la garde
+    /// cherchait une chaîne EXACTE, `private` compris. Le test porte donc sur
+    /// l'abonnement, pas sur l'orthographe d'une déclaration.
+    func test_iPadRootView_doesNotObserveTheNotificationToastManager() throws {
+        let code = try strippedSource("iPadRootView.swift")
+        XCTAssertFalse(
+            code.contains("@ObservedObject var notificationManager"),
+            "`iPadRootView` ne doit pas s'abonner à `NotificationToastManager` : elle ne lit que `unreadCount`, et la bannière a sa propre feuille (#7166, portage de #7010)."
+        )
+        XCTAssertFalse(
+            code.contains("@ObservedObject private var notificationManager"),
+            "Ajouter `private` ne rend pas l'abonnement acceptable (#7166)."
+        )
+        XCTAssertTrue(
+            code.contains("RootNotificationSource()"),
+            "`iPadRootView` doit passer par `RootNotificationSource`, comme `RootView` (#7166)."
+        )
+    }
+
+    /// **Les DEUX racines, et rien d'autre.** Ce témoin est celui qui empêche
+    /// la prochaine divergence : il n'énumère pas des fichiers connus, il
+    /// BALAIE le répertoire des racines. Une troisième racine — un jour, une
+    /// coque Mac, une racine de test — naîtrait gardée.
+    func test_aucuneRacineNObserveLeGestionnaireEnBloc() throws {
+        let racines = try FileManager.default
+            .contentsOfDirectory(at: viewsRoot(), includingPropertiesForKeys: nil)
+            .filter { $0.lastPathComponent.hasSuffix("RootView.swift") }
+
+        XCTAssertGreaterThanOrEqual(
+            racines.count, 2,
+            "Le balayage doit voir AU MOINS les deux racines connues — une liste vide se lit comme « rien à signaler »."
+        )
+
+        for racine in racines {
+            let code = AppSourceGuard.stripComments(try String(contentsOf: racine, encoding: .utf8))
+            XCTAssertFalse(
+                code.contains("@ObservedObject") && code.contains("NotificationToastManager.shared"),
+                "\(racine.lastPathComponent) observe `NotificationToastManager.shared` en bloc — le compteur seul suffit (#7010, #7166)."
+            )
+        }
     }
 
     /// Le toast garde SON observateur — là, il est justifié : cette feuille

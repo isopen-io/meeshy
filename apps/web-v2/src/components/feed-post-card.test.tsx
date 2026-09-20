@@ -449,7 +449,13 @@ describe('FeedPostCard — le texte du post reste AU-DESSUS de la scène', () =>
     const html = renderToStaticMarkup(<FeedPostCard model={modelOf(scenePostWithSoleMedia)} />);
     const texte = html.indexOf('Le texte du post');
     const scene = html.indexOf('data-feed-scene-box');
-    expect(html).toMatch(/<p[^>]*class="whitespace-pre-wrap text-bubble"[^>]*>Le texte du post<\/p>/);
+    /* … ET PAS DAVANTAGE SUR UNE CLASSE DE PLUS (#7141). La forme précédente
+       épinglait la chaîne de classes ENTIÈRE (`class="whitespace-pre-wrap
+       text-bubble"`) : poser `min-w-0 flex-1` pour que la pastille du Prisme
+       tienne à droite du texte l'a fait rougir, alors que le texte était
+       toujours au-dessus de la scène. C'est exactement le défaut que le
+       paragraphe ci-dessus décrit, rejoué sur l'attribut voisin. */
+    expect(html).toMatch(/<p[^>]*whitespace-pre-wrap text-bubble[^>]*>Le texte du post<\/p>/);
     expect(texte).toBeGreaterThan(-1);
     expect(scene).toBeGreaterThan(texte);
   });

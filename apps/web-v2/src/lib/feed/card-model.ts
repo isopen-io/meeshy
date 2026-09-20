@@ -92,7 +92,24 @@ export type FeedCardAuthor = {
   readonly avatarSrc?: string;
 };
 
-export type FeedCardText = { readonly full: string; readonly language: string; readonly translated: boolean };
+export type FeedCardText = {
+  readonly full: string;
+  readonly language: string;
+  readonly translated: boolean;
+  /**
+   * CE QUE LE GESTE OUVRE (#7141) — le texte tel que son autrice l'a écrit, et
+   * sa langue. Le Prisme sert la traduction par DÉFAUT (§ Automatisme) ; sans
+   * ces deux champs la carte pourrait ANNONCER une traduction sans offrir de
+   * chemin vers l'original, c'est-à-dire un contrôle sans effet (loi 4) — le
+   * défaut qui a déjà coûté `PostCard` au dépôt.
+   *
+   * Portés même quand rien n'est traduit : c'est `translated` qui décide de
+   * l'annonce, et un champ conditionnel obligerait chaque lecteur à refaire ce
+   * test.
+   */
+  readonly original: string;
+  readonly originalLanguage: string;
+};
 
 export type FeedCardStats = {
   readonly likeCount: number;
@@ -298,7 +315,13 @@ export function resolveFeedCardModel(
             translations: post.translations,
             content,
           });
-          return { full: resolved.text, language: resolved.language, translated: resolved.translated };
+          return {
+            full: resolved.text,
+            language: resolved.language,
+            translated: resolved.translated,
+            original: content,
+            originalLanguage: post.originalLanguage ?? '',
+          };
         })();
 
   const avatarSrc = resolveAuthorSrc(post.author?.avatar);

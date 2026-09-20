@@ -910,3 +910,59 @@ final class NSEPrePersistedMessagePlanTests: XCTestCase {
         XCTAssertEqual(plan(makePush())?.content, "")
     }
 }
+
+/// #7168 — **le filtre de TYPE est la première chose qui doit s'exécuter.**
+///
+/// `prePersistMessage` ouvrait `Self.sharedPool` AVANT de regarder le type :
+/// une clause de `guard` s'évalue dans l'ordre, et le premier terme était
+/// l'ouverture de la base — `DatabasePool` plus les migrations, avec un
+/// `busyMode` qui bloque jusqu'à cinq secondes sur collision. Tout push qui
+/// n'annonce PAS l'arrivée d'un message — like, réaction, commentaire,
+/// réponse à une story, demande d'ami, acceptation, mention de publication,
+/// arrivée d'un membre — payait cette ouverture pour repartir les mains vides,
+/// sur le budget de la NSE, celui-là même qui sert à télécharger l'avatar et
+/// la pièce jointe avant d'afficher la bannière.
+///
+/// **L'ordre lui-même n'est pas observable depuis ce bundle** :
+/// `NotificationService.swift` importe `UserNotifications` et GRDB, et n'est
+/// compilé que dans la cible d'extension (cf. `project.yml` § `MeeshyTests`,
+/// qui n'y prend que les helpers PURS). Ce qui est observable, et ce que ces
+/// témoins gardent, est la DÉCISION que le garde consulte désormais en
+/// premier — jusqu'ici exercée seulement à travers `prePersistedMessagePlan`,
+/// jamais en propre.
+final class NSEMessageArrivalGateTests: XCTestCase {
+
+    func test_lesCinqTypesQuiAnnoncentUneArrivee() {
+        for type in ["new_message", "message_reply", "reply", "message_forwarded", "user_mentioned"] {
+            XCTAssertTrue(
+                NotificationPayloadHelpers.announcesMessageArrival(type),
+                "\(type) annonce l'arrivée d'un message"
+            )
+        }
+    }
+
+    func test_toutLeReste_neDeclenchePasLOuvertureDeLaBase() {
+        // Les familles mesurées côté passerelle qui portent un `messageId` ou
+        // arrivent en volume — aucune n'écrit de bulle.
+        for type in [
+            "message_reaction", "post_like", "post_comment", "comment_reply",
+            "story_reaction", "story_new_comment", "friend_request", "contact_request",
+            "friend_accepted", "member_joined", "missed_call", "system",
+        ] {
+            XCTAssertFalse(
+                NotificationPayloadHelpers.announcesMessageArrival(type),
+                "\(type) n'annonce aucune arrivée de message"
+            )
+        }
+    }
+
+    func test_typeAbsentOuVide_neDeclencheRien() {
+        XCTAssertFalse(NotificationPayloadHelpers.announcesMessageArrival(nil))
+        XCTAssertFalse(NotificationPayloadHelpers.announcesMessageArrival(""))
+        XCTAssertFalse(NotificationPayloadHelpers.announcesMessageArrival("   "))
+    }
+
+    func test_leTypeEstLuApresElagage_commeLePlan() {
+        XCTAssertTrue(NotificationPayloadHelpers.announcesMessageArrival("  new_message  "))
+    }
+}

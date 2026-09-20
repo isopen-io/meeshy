@@ -4,6 +4,8 @@ import type { Message } from '@/lib/api/types';
 import type { Delivery } from '@/lib/view/message';
 import { forwardLabelOf, type MessageBadge } from '@/lib/view/message-badges';
 import { languageColor, flag, languageName } from '@/lib/languages';
+import { translate } from '@/lib/i18n-catalog';
+import type { InterfaceLanguage } from '@/lib/interface-language';
 import { META_TEXT_OPACITY } from '@/lib/reading-mode/metrics';
 import { shouldRevealSendingClock } from '@/lib/send/send-clock';
 
@@ -72,15 +74,50 @@ export const STATUS_LABEL: Record<Delivery, string> = {
  * information vraie. Seul le GESTE disparaît : une `<span>`, donc ni halte de
  * tabulation, ni `aria-pressed`, ni verbe à l'infinitif.
  */
+/**
+ * CE QUE LA PASTILLE QUALIFIE (#7141). « Afficher le message dans sa langue
+ * d'origine » sur un commentaire serait traduit et FAUX : le vocabulaire fait
+ * partie de la justesse, pas de la décoration. Trois sujets, neuf clés plates —
+ * l'accord (« traduit » / « traduite ») ne se paramètre pas d'une langue à
+ * l'autre.
+ */
+export type PrismSubject = 'message' | 'comment' | 'post';
+
+/* Des tables FERMÉES (`Record<PrismSubject, …>`) plutôt qu'une clé composée :
+   un sujet de plus fait rougir `tsc` ICI, au lieu de rendre une clé absente que
+   le catalogue servirait telle quelle. */
+const TRANSLATED_KEY = {
+  message: 'prism.translated.message',
+  comment: 'prism.translated.comment',
+  post: 'prism.translated.post',
+} as const satisfies Record<PrismSubject, string>;
+
+const SHOW_KEY = {
+  message: 'prism.original.show.message',
+  comment: 'prism.original.show.comment',
+  post: 'prism.original.show.post',
+} as const satisfies Record<PrismSubject, string>;
+
+const HIDE_KEY = {
+  message: 'prism.original.hide.message',
+  comment: 'prism.original.hide.comment',
+  post: 'prism.original.hide.post',
+} as const satisfies Record<PrismSubject, string>;
+
 export function PrismPastille({
   servedLanguage,
   originalLanguage,
   active,
+  language,
+  subject,
   onToggle,
 }: {
   servedLanguage: string;
   originalLanguage: string;
   active: string | null;
+  /** La langue de l'INTERFACE — jamais celle du contenu, que le Prisme résout. */
+  language: InterfaceLanguage;
+  subject: PrismSubject;
   /** ABSENTE ⇒ l'hôte ne sait pas explorer une autre langue : aucun bouton. */
   onToggle?: () => void;
 }) {
@@ -95,7 +132,7 @@ export function PrismPastille({
         style={{ color: 'var(--color-i400)' }}
       >
         <Glyph name="translate" size={12} />
-        <span className="offscreen">Message traduit</span>
+        <span className="offscreen">{translate(language, TRANSLATED_KEY[subject])}</span>
       </span>
     );
   }
@@ -106,11 +143,7 @@ export function PrismPastille({
       data-prism-toggle
       onClick={onToggle}
       aria-pressed={isOpen}
-      aria-label={
-        isOpen
-          ? 'Masquer le message dans sa langue d’origine'
-          : 'Afficher le message dans sa langue d’origine'
-      }
+      aria-label={translate(language, (isOpen ? HIDE_KEY : SHOW_KEY)[subject])}
       /* `tap-target-22` étend la zone TACTILE par un `::after` en débord
          (`app.css`) sans grandir le DESSIN — élargir visuellement ce bouton
          grandirait chaque message traduit. Défaut #5566 (revue, défaut 11

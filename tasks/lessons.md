@@ -33399,6 +33399,82 @@ Quand la rangée repérée disparaît du document, `drift` vaut `null`, `inserti
 
 > **Quand une règle s'applique à N choses, demander qui tient la liste des N.** Si c'est une main, la liste a déjà divergé ou le fera ; le témoin ne doit pas la recopier mais la DÉRIVER de la déclaration. Corollaire de vérification : un témoin d'inventaire écrit après le correctif est vert des deux côtés et ne prouve rien — ici, le rouge a été rejoué en retirant les trois stores de la liste, et il nomme exactement `affiliates, engagementProgress, phonebook` (4 témoins sur 5 rouges, dont un qui retourne le contact de test `fresh` après `reset()`, numéro et e-mail compris).
 
+## Leçon 641 — une règle d'accessibilité qui ne s'applique qu'à UNE peau n'est pas une règle, c'est un accident ; et un témoin qui ne joue qu'une peau ne peut pas le voir
+
+2026-09-20, #7142 (`thread-modes-reveal-label.test.tsx`, web-v2). Le lot devait alimenter une phase de révélation jusqu'au nom accessible d'une rangée. Son témoin a été écrit sur les DEUX peaux du fil — Focal et Bulles — parce que le mécanisme de remontée est unique et que les deux hôtes devaient le prouver. **Il est tombé sur la peau Bulles pour une raison qui n'était pas dans l'issue** : le texte peint y restait dans l'arbre d'accessibilité, alors qu'il en est retiré sur la rangée plate.
+
+**Le défaut n'était pas celui du lot, et il était plus large.** `plainTextHidden` (#7032, réponse au défaut majeur 1/4 de la revue #5935) masque la prose non interactive parce que le texte servi est DÉJÀ dans `aria-label={rowLabel}`. Il n'avait jamais été porté sur `bubble.tsx`. Mesuré sur un message **sans aucune protection** :
+
+```
+focal   : libellé porte le texte = true | DOM expose le texte = false
+bubbles : libellé porte le texte = true | DOM expose le texte = TRUE
+```
+
+La peau Bulles prononçait donc son texte **deux fois**, pour TOUT message, depuis toujours. Aucun gate ne le voyait : `rich-text-surfaces.test.tsx` testait bien les deux surfaces, mais il attendait de la bulle la forme SANS masque — c'est-à-dire qu'il **gardait le défaut** au lieu de l'attraper. Un témoin qui encode l'état des lieux d'une surface ne peut pas dire que cette surface diverge d'une autre : il faut que la même assertion soit posée sur les deux.
+
+**Pourquoi le corriger DANS ce lot et non après.** Alimenter la phase rend le libellé porteur du texte sur une rangée révélée. Le critère de l'issue — « le libellé OU le DOM, jamais les deux, jamais aucun » — serait donc devenu VRAI sur Focal et FAUX sur Bulles, au moment même où le lot prétendait le livrer. Reporter aurait signifié livrer un critère à moitié, sur la moitié qu'on ne regardait pas.
+
+**Le préalable de l'issue, lui, s'est révélé plus petit que son cadrage.** Elle demandait de mesurer avant de lever l'état : « un re-rendu par tic de brouillard ». Le brouillard ne tic pas — `FOG_DURATION_MS` est une DURÉE consommée par un `setTimeout`, jamais un `setInterval`, et le seul tic d'une seconde du chemin appartient à un composant `memo` qui ne remonte pas. Trois changements d'état par révélation, ≈ 1,1 ms pour vingt rangées visibles, moins de 7 % du budget d'une image. **Une objection de performance formulée en prose se vérifie avant d'être contournée** : ici, la contourner aurait coûté un registre hors rendu pour économiser 1,1 ms.
+
+> **Quand une loi vaut pour N surfaces, l'assertion doit être posée N fois, par la MÊME table.** Une table de cas (`describe.each(PEAUX)`) fait tomber la divergence au premier passage ; N témoins écrits séparément encodent chacun l'état de SA surface, et la divergence devient invisible — pire, elle devient *gardée*. Corollaire : un témoin qui ne joue qu'une peau ne prouve rien sur la cohérence entre peaux, et c'est précisément la dimension 6 qu'on croit couvrir en l'écrivant.
+
+## Leçon 642 — un témoin qui vise sa cible par un MOYEN qui n'est pas elle rougit au premier changement de forme ; quatre fois dans un seul lot
+
+2026-09-20, #7141 (web-v2). Le lot a monté `PrismPastille` sur deux surfaces de plus. Il n'a introduit **aucun défaut de produit** — et il a fait rougir **quatre** témoins, tous pour la même raison : chacun mesurait la bonne chose par un moyen qui n'était pas elle.
+
+| témoin | ce qu'il MESURE | ce qu'il ÉPINGLAIT | ce qui l'a cassé |
+|---|---|---|---|
+| `feed-post-card.test.tsx` | le texte est au-dessus de la scène | `class="whitespace-pre-wrap text-bubble"`, la chaîne ENTIÈRE | une classe de plus (`min-w-0 flex-1`) |
+| `card-model.test.ts` | la descente sert le rang 2 | l'objet `model.text` entier, par `toEqual` | deux champs ajoutés, voulus |
+| `check-feed-scenes.mjs` | le texte est au-dessus de la scène | `:scope > div > p[lang]`, un CHEMIN | un niveau de plus dans l'arbre |
+| `check-reading-mode.mjs` ×2, `lib/check-identity.mjs` | la pastille existe et a un effet | `aria-label*="langue d’origine"`, une chaîne TRADUISIBLE | la pastille lit le catalogue |
+
+Le quatrième est le plus instructif : **il ne pouvait pas rougir localement.** La locale du poste est française, donc le libellé l'était aussi et le gate passait (exit 0) ; seule l'intégration continue, sous une autre locale, l'a rendu. Un témoin qui dépend d'une chaîne traduisible mesure la LANGUE du lecteur autant que le produit.
+
+**Le remède est le même partout, et il existait déjà** : `data-feed-text`, `data-prism-toggle` sont posés pour être trouvés. Un marqueur ne change ni avec une classe, ni avec un niveau d'arbre, ni avec une langue. Quand un témoin doit désigner un nœud, lui donner un nom plutôt qu'un chemin.
+
+**Deux corollaires de méthode, payés dans le même lot :**
+
+1. **La CI d'une PR juge le commit de FUSION, pas la tête de branche.** « Vert sur la branche » ne dit RIEN du verdict après fusion — j'en ai conclu à un flake, à tort, et il a fallu une relance pour le voir. Pour affirmer qu'un rouge de `dev` n'est pas causé par un lot, comparer le code du commit de fusion, jamais le verdict de la branche.
+2. **Un balayage BORNÉ n'établit aucune absence.** Après avoir corrigé deux sites, `grep scripts/*.mjs` m'a rendu « aucun autre » — le troisième vivait sous `scripts/lib/`, que ce glob ne descend pas. Le rouge suivant l'a nommé. Quand on conclut « il n'y en a pas d'autre », dire d'abord OÙ on a cherché.
+
+> **Avant d'écrire une assertion, se demander ce qu'elle DEVRAIT laisser passer.** Un témoin de disposition doit survivre à une classe ; un témoin de modèle à un champ ; un témoin de structure à un niveau ; un témoin d'interface à une langue. Celui qui ne survit à rien ne garde rien — il ne fait que signaler que quelqu'un a touché au fichier.
+
+## Leçon 643 — une attente qui LÈVE est une assertion déguisée : elle tue le gate et emporte le verdict qu'on avait écrit
+
+2026-09-20, #7176 (`check-post-comments.mjs`). Quatre passages ont été nécessaires pour un seul défaut, et les trois premiers ont échoué pour la même raison de fond : **le gate mourait au lieu de parler**.
+
+### Le rouge muet
+
+`waitForSelector`, `waitForFunction`, `locator.click` **lèvent** au dépassement. Poser une attente, c'est donc poser un verdict — un verdict MUET, qui court-circuite celui qu'on a écrit trois lignes plus bas :
+
+```
+uncaughtException : page.waitForFunction: Timeout 15000ms exceeded.
+```
+
+Ce rouge n'apprend rien : ni quelle attente, ni ce que la page montrait. Et il emporte les **106 assertions suivantes**, qui n'ont jamais été jouées.
+
+Le même fichier portait déjà la bonne forme, vingt lignes plus bas, avec son doc-comment : *« Le dépassement de délai est AVALÉ volontairement : c'est le `check` qui suit qui juge, et qui dit alors OÙ le focus a atterri — un `timeout` de Playwright ne l'aurait pas dit. »* Dès que les trois attentes ont rendu la main, le gate a nommé la cause au passage suivant.
+
+### Ce que la cause était vraiment
+
+`EditForm` prend le focus et place le curseur **à la fin** dans un EFFET, qui court après la peinture. `page.fill` sélectionne tout PUIS tape : quand l'effet s'intercale entre les deux, il défait la sélection et la frappe **s'ajoute**. Le corps du PATCH partait doublé — et seul le schéma SOMBRE tombait, parce qu'il passe en second, sur une machine déjà chargée.
+
+### Les trois faux faits, et pourquoi chacun semblait juste
+
+| ce que j'attendais | pourquoi ça ne fermait pas la course |
+|---|---|
+| `waitForTimeout(400)` | un délai n'est pas un fait — il parie sur la vitesse de la machine |
+| deux lectures identiques du texte | « stable » peut se confirmer sur l'ANCIEN état : rien ne prouve que le repeint a eu lieu |
+| « le champ porte une valeur » | il la porte dès le PREMIER rendu, avant que l'effet n'ait couru |
+
+Le fait juste était le **curseur déjà posé** — après lui, plus rien ne défait la sélection.
+
+> **Avant de choisir un fait à attendre, demander ce qui le PRODUIT.** Un état présent au premier rendu ne dit rien des effets qui suivent ; une valeur stable ne dit rien du changement qui n'a pas encore eu lieu. Le fait utile est celui qui vient APRÈS la cause qu'on veut laisser passer.
+
+**Corollaire, quand la course ne se reproduit pas en local** : un test y est vert des deux côtés du diff, donc il ne prouve rien. On double alors la protection — ici l'attente ferme la fenêtre, et vider le champ avant de le remplir fait qu'un reste de fenêtre ne coûte rien (sur un champ VIDE, il n'y a plus rien à quoi la frappe puisse s'ajouter).
+
+**Corollaire d'outillage** : `gh run view --job … --log` ne rend RIEN tant que le run entier est `in_progress` (« logs will be available when it is complete »). Deux de mes quatre passages ont été poussés sans log, à l'aveugle. Attendre la fin du run coûte quelques minutes ; raisonner sans le log en a coûté deux.
 ## Leçon 641 — un relevé d'audit lit des DÉCLARATIONS et conclut sur l'USAGE, et les deux divergent précisément là où le correctif devient dangereux
 
 2026-09-20, #6226 / #7158 (PR #7163, portage des cinq correctifs de fluidité iOS). Le relevé annonçait cinq défauts « déjà corrigés ailleurs, il ne reste qu'à recopier », dont deux « en changeant un mot » : `@StateObject` → `@State` sur un gestionnaire à haute cadence que la racine n'observerait pour rien. Il les avait trouvés en cherchant les DÉCLARATIONS `@StateObject`.

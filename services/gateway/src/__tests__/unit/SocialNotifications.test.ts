@@ -20,6 +20,9 @@ jest.mock('../../utils/sanitize', () => ({
   SecuritySanitizer: {
     sanitizeText: jest.fn((s: string) => s),
     sanitizeURL: jest.fn((s: string) => s),
+    // #7157 — un double PARTIEL de `SecuritySanitizer` rend `undefined` et fait
+    // échouer l'APPEL, pas l'assertion : le service avale l'erreur et rend null.
+    sanitizeURLOrPath: jest.fn((s: string) => s),
     sanitizeJSON: jest.fn((obj: any) => obj),
     isValidNotificationType: jest.fn(() => true),
     isValidPriority: jest.fn(() => true),

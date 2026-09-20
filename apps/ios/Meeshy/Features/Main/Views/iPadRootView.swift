@@ -49,7 +49,26 @@ struct iPadRootView: View {
     // CallManager n'est PLUS observé ici : la présentation d'appel passe par
     // `.modifier(CallPresentationLayer())` (partagé avec RootView) qui isole le
     // churn d'appel hors de `iPadRootView.body`. Cf. watchdog 0x8BADF00D.
-    @ObservedObject var notificationManager = NotificationToastManager.shared
+    /// #7166, portage de #7010 — LE COMPTEUR SEUL EST OBSERVÉ.
+    ///
+    /// `NotificationToastManager` publie `unreadCount` ET `currentToast` :
+    /// l'observer en bloc faisait ré-évaluer la racine iPad ENTIÈRE — la
+    /// colonne des conversations, le fil ouvert, le composer — à chaque
+    /// apparition ET chaque disparition de bannière, pour un contenu qu'elle
+    /// ne dessine pas (`RootNotificationToastOverlay` l'observe pour son
+    /// compte). `RootView` a reçu ce correctif ; la racine iPad ne l'avait
+    /// jamais reçu, alors que son corps porte tout l'écran.
+    ///
+    /// Le gestionnaire reste atteignable par `notifications.manager` : un
+    /// `let` sur un `ObservableObject` n'abonne à rien, et appeler une méthode
+    /// ou la passer à une couche n'exige aucun abonnement.
+    ///
+    /// **Pas `private`, contrairement à `RootView`** : en Swift, `private`
+    /// porte jusqu'aux extensions du MÊME FICHIER, et cette racine est éclatée
+    /// sur quatre (`+Navigation`, `+Overlays`, `+Panels`). `RootView` tient en
+    /// un seul, d'où sa déclaration plus fermée — recopier son modificateur
+    /// ici ne compile pas.
+    @StateObject var notifications = RootNotificationSource()
     /// Ne publie que `launch` — une ouverture/fermeture de lecteur de réels,
     /// pas un flux. L'observer ne rejoue donc pas le churn que `CallManager`
     /// imposait ici (cf. watchdog 0x8BADF00D juste au-dessus).
@@ -317,7 +336,7 @@ struct iPadRootView: View {
         async let storiesLoad: Void = storyViewModel.loadStories()
         async let statusesLoad: Void = statusViewModel.loadStatuses()
         async let conversationsLoad: Void = conversationViewModel.loadConversations()
-        async let unreadRefresh: Void = notificationManager.refreshUnreadCount()
+        async let unreadRefresh: Void = notifications.manager.refreshUnreadCount()
         _ = await (storiesLoad, statusesLoad, conversationsLoad, unreadRefresh, versionFloor)
     }
 
@@ -358,7 +377,7 @@ struct iPadRootView: View {
             iPadRightPanel(
                 route: route,
                 rightPanelRoute: $rightPanelRoute,
-                notificationManager: notificationManager,
+                notificationManager: notifications.manager,
                 onOpenConversation: openConversation,
                 onNotificationTap: handleNotificationTap
             )
@@ -387,7 +406,7 @@ struct iPadRootView: View {
                 )
             },
             onNewConversation: { showNewConversation = true },
-            iPadNotificationCount: notificationManager.unreadCount,
+            iPadNotificationCount: notifications.unreadCount,
             onNotificationsTap: { rightPanelRoute = .notifications },
             onSettingsTap: { rightPanelRoute = .settings },
             iPadFeedAction: feedAction,
