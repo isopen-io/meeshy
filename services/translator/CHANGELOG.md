@@ -1,5 +1,54 @@
 # @meeshy/translator
 
+## 1.63.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - la liste des commentaires se met à jour toute seule (Closes #7151)
+  - la bande du composeur reçoit son matériau — le fil ne se lit plus sous le rail (Closes #7143)
+  - la course était le CURSEUR posé dans un effet, pas la valeur du champ (Refs #7176)
+  - aucune attente ne peut plus TUER le gate — elles rendent la main, et les checks jugent (Refs #7176)
+  - l'attente se pose sur le PATCH parti — la seule STABILITÉ pouvait se confirmer sur l'ancien état (Refs #7176)
+  - le gate des commentaires attend un FAIT, et un cliquet empêche la classe entière de grossir (Closes #7176)
+  - la source de notifications de la racine iPad est atteignable depuis ses extensions — run test (Refs #7166)
+  - le TROISIÈME site qui épinglait le libellé de la pastille — il vivait sous `scripts/lib/` (Refs #7141)
+  - le gate du mode de lecture vise la pastille par son MARQUEUR, plus par son libellé traduisible (Refs #7141)
+  - le gate des scènes vise le texte du post par son MARQUEUR, plus par sa profondeur (Refs #7141)
+  - la pastille du Prisme prend son propre module — trois surfaces, plus aucune ne l'héberge (Refs #7141)
+  - filtrer la cloche ne déclenche plus d'aller-retour réseau, et son drapeau sans lecteur disparaît — run test (Closes #7169)
+  - la bannière ne relit plus un fichier et ne décode plus tout le dictionnaire des conversations à chaque rendu (Closes #7167)
+  - la racine iPad ne se ré-évalue plus à chaque bannière — #7010 l'avait laissée derrière (Closes #7166)
+  - l'extension de notification ne paie plus l'ouverture de la base pour un push qui n'écrira rien (Closes #7168)
+  - une demande de connexion s'ouvre depuis sa notification, là où l'on y répond (Closes #7173)
+  - le corps d'une publication annonce le Prisme, et son original s'ouvre au geste (Refs #7141)
+  - sur un commentaire, le Prisme s'annonce et l'original s'ouvre au geste (Refs #7141)
+  - la pastille du Prisme parle la langue de l'interface, et nomme ce qu'elle qualifie (Refs #7141)
+  - une rangée voilée révélée atteint enfin un lecteur d'écran — et la bulle cesse de prononcer son texte deux fois (Closes #7142)
+  - le texte de recherche quitte le modèle partagé par dix-huit vues (Closes #7158)
+  - le rendu vidéo en ligne cantonne ce qu'il lit du moteur partagé (Refs #6226)
+  - le fil de l'iPhone et la racine de conversation POSSÈDENT leurs gestionnaires au lieu de les observer (Refs #6226, #7010)
+  - les trois écrans restés au `@State` d'offset passent au relais de défilement (Refs #6226)
+  - aucun cache ne franchit plus la déconnexion — les purges dérivent l'inventaire au lieu de le recopier — run test (Closes #7146)
+  - la SECONDE citation fausse du même point d'étape — D-95, D-96 et six doc-comments retrouvent #7135 (Refs #7092)
+  - la décision du libellé protégé retrouve son issue — #7092, jamais l'incident CORS (Closes #7092)
+  - aimer, modifier et supprimer un commentaire depuis le web — chaque geste a un effet, et le refus le reprend
+  - le SECOND appelant du protocole reçoit sa carte de fin — run test (Refs #7052)
+  - la fusion a fait entrer un appelant qui ignorait la carte de fin — run test (Refs #7052)
+  - une scène de post s'enregistre depuis le ⋯, et c'est l'ŒUVRE qui part (Refs #7052)
+  - une scène MUETTE sans marque ne garde pas sa piste audio vide (Refs #7052)
+  - une scène de post s'enregistre par le MÊME bake qu'une story (Refs #7052)
+  - l'export apprend à rendre l'œuvre seule, et une scène de galerie sait composer SA slide (Refs #7052) (run test)
+  - le groupe build-tools ne bump plus eslint sur le legacy gelé (#6490)
+  - le lock que la CI installe suit enfin les bumps du groupe build-tools (#6490)
+  - la défense en profondeur d'une notification tient dans son propre fichier — et NotificationService rétrécit (Refs #7153, Refs #7157, Refs #7159)
+  - un chemin « relatif » est celui qui RESTE sur son origine, pas celui qui commence par une barre (Refs #7157)
+  - la sanitisation des notifications garde enfin ce qu'elle annonce — avatar et titre (Closes #7157, Closes #7159)
+  - un téléversement ne grave plus une route dans la donnée, mais sa clé (Refs #7022)
+  - le nouveau module ne NOMME plus l'en-tête d'origine — le cliquet des portes le relevait (Refs #7132)
+  - la route tus ne peut plus exposer GET, et une garde le dit (Refs #7132)
+
 ## 1.62.0
 
 ### Minor Changes
