@@ -507,7 +507,20 @@ export const FocalRow = memo(function FocalRow({
            segments NON interactifs sont donc masqués : la phrase n'est
            toujours lue qu'une fois, et les liens restent atteignables, nommés,
            et au clavier. `lang` reste porté ICI pour l'affichage visuel ET sur
-           `[data-row]` (`rowServed.language`) pour le libellé. */
+           `[data-row]` (`rowServed.language`) pour le libellé.
+
+           CE MASQUE EST LE SECOND DES DEUX DE #7142, ET SA MOITIÉ VISIBLE.
+           Son contrat — « le texte servi est DÉJÀ dans `aria-label` » — est
+           VRAI partout SAUF sur une rangée VOILÉE qu'on vient de révéler :
+           là, `thread-modes.tsx` compose sans `phase`, le libellé retombe sur
+           « Contenu masqué » (`message-a11y-label.ts:233`), et ce même
+           libellé est la seule raison pour laquelle on masque le texte ici.
+           Mesuré : les deux masques se composent, et le contenu révélé
+           n'atteint AUCUNE technologie d'assistance — sur une vue unique il
+           est brûlé sans avoir jamais été lisible. Le correctif se décide des
+           DEUX côtés à la fois : soit le libellé porte le texte (et ce masque
+           reste juste), soit le DOM le rend pour cet état — jamais les deux,
+           jamais aucun. */
         <RichText
           text={rendered.text}
           lang={rendered.language}
