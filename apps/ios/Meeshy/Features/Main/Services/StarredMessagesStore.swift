@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import MeeshySDK
 import os
 
 /// Snapshot of a starred message so we can surface it in the dedicated
@@ -48,9 +49,39 @@ final class StarredMessagesStore: ObservableObject {
         return d
     }()
 
+    private var cancellables = Set<AnyCancellable>()
+
     init(userDefaults: UserDefaults = .standard) {
         self.defaults = userDefaults
         self.snapshots = Self.load(from: userDefaults, decoder: decoder)
+        wireAuthLogoutHook()
+    }
+
+    /// cache-09 (#7146) — pattern calqué sur `ConversationLockManager` : à la
+    /// déconnexion, les favoris du compte sortant partent.
+    ///
+    /// Ce magasin garde `contentPreview` — le TEXTE du message — avec le nom de
+    /// la conversation et celui de l'expéditeur, sous une clé `UserDefaults`
+    /// commune à tous les comptes. Sans ce câblage, l'écran « Favoris » du
+    /// compte B rendait les messages du compte A. `clearAll()` existait bien,
+    /// mais son seul appelant est le bouton « tout effacer » de l'écran : une
+    /// action volontaire de l'utilisateur, jamais une purge de session.
+    private func wireAuthLogoutHook() {
+        AuthManager.shared.$isAuthenticated
+            .removeDuplicates()
+            .dropFirst()
+            .filter { !$0 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.resetForLogout() }
+            .store(in: &cancellables)
+    }
+
+    /// Purge inconditionnelle — contrairement à `clearAll()`, ne s'abstient pas
+    /// quand la liste en mémoire est vide : le disque peut porter des entrées
+    /// qu'aucun chargement n'a encore reprises.
+    private func resetForLogout() {
+        snapshots.removeAll()
+        defaults.removeObject(forKey: storageKey)
     }
 
     // MARK: - Public API
