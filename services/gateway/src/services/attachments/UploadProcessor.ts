@@ -430,10 +430,30 @@ export class UploadProcessor {
   }
 
   /**
-   * Génère le chemin API relatif (sans domaine)
+   * CE QUI SE PERSISTE — la CLÉ DE STOCKAGE, jamais une adresse (#4324, #7022).
+   *
+   * Elle valait `apiPath('/attachments/file/<clé percent-encodée>')` : une
+   * ROUTE, et donc une décision de déploiement (le préfixe, la version) gravée
+   * dans la donnée. 539 `MessageAttachment` et 35 `PostMedia` la portent en
+   * production, la dernière écrite le 2026-09-16 — ce producteur était VIVANT,
+   * et normaliser la base avant de le tarir aurait payé une migration pour un
+   * sursis : chaque téléversement suivant regravait la route.
+   *
+   * La clé est la forme que `tus-handler` écrit déjà (`const fileUrl = relPath`)
+   * et que les quatre surfaces vivantes savent lire — `resolveAttachmentSrc`
+   * (web-v2) en fait son cas NOMINAL, `MeeshyConfig.resolveMediaURL` (iOS) a sa
+   * branche explicite, et la passerelle recompose partout où ça compte
+   * (`publicMediaUrlFromEnv` pour le fil push, `relativePathFromUrl` pour les
+   * octets). Rendre la clé ne leur AJOUTE aucune forme à supporter : elle en
+   * RETIRE une.
+   *
+   * La fonction est l'identité sur `filePath`, et c'est le fait à retenir : la
+   * colonne d'adresse (`fileUrl`) et la colonne de disque (`filePath`) portent
+   * désormais la MÊME valeur. Ce site reste nommé parce qu'il porte la
+   * DÉCISION — ce que la base reçoit se change ici, pas aux cinq appels.
    */
   getAttachmentPath(filePath: string): string {
-    return apiPath(`/attachments/file/${encodeURIComponent(filePath)}`);
+    return filePath;
   }
 
   /**

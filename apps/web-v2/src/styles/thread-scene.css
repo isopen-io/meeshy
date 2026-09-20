@@ -190,6 +190,27 @@ main[data-scene='idle'] .focus-stamp {
   opacity: 0;
   pointer-events: none;
 }
+/*
+ * CETTE BANDE N'A AUCUN MATÉRIAU, ET C'EST UNE DETTE SUIVIE (#7143) — pas
+ * une sobriété voulue. #6213 a fait FLOTTER les deux bords du fil
+ * (`thread.tsx`, `absolute inset-x-0 bottom-0`) pour que le contenu sorte
+ * par l'arête ; en haut, la bande était DÉJÀ habillée du verre du site unique
+ * (`thread-header.tsx`, `glass` — D-51) et son flou a enfin eu quelque chose
+ * à flouter. En bas, rien ne l'habillait, et rien ne l'habille : mesuré au
+ * navigateur, `.thread-composer-chrome` rend `background: rgba(0,0,0,0)` et
+ * `backdrop-filter: none`, sur ses trois couches jusqu'au `[data-composer]`.
+ *
+ * Conséquence AU REPOS (le chrome revenu, 2,5 s après le geste, et après un
+ * saut à la citation qui ne l'escamote même pas) : le rail, la pilule
+ * « Message… » et le ＋ se peignent par-dessus des bulles qui restent
+ * lisibles dessous — deux textes entrelacés, ce que D-50 interdit déjà pour
+ * tout le chrome flottant de la v2.0 (« aucun flottant ne recouvre un texte
+ * au repos »), et que `check-day-pill-rest.mjs` ne garde que pour la pilule.
+ *
+ * Le remède est le VERRE du site (`styles/glass.css`), jamais un dégradé de
+ * masquage : le porteur a fait retirer ces voiles le 2026-09-14 (#6537,
+ * « supprimer ces voiles, non pas simplement les rendre invisible »).
+ */
 .thread-composer-chrome {
   transition:
     transform var(--chrome-ease-out-ms, 250ms) ease-out,

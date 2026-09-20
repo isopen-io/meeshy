@@ -62,7 +62,7 @@ const FILS: Readonly<Record<string, readonly PostComment[]>> = {
     comment('cm-en-2', TARIQ, 'La lumière est incroyable sur cette prise.', 24, { likeCount: 1, originalLanguage: 'fr' }),
   ],
   'post-text-rank2': [
-    /* UNE RANGÉE À SOI DANS LE CORPUS (#7133) — sans elle, « Modifier » et
+    /* UNE RANGÉE À SOI DANS LE CORPUS (#7135) — sans elle, « Modifier » et
        « Supprimer » ne sont atteignables sur AUCUN écran de fixture : la
        passerelle garde ces deux gestes sur l'AUTEUR (`comments.ts:500-523`),
        donc la rangée ne les offre qu'à lui, et une recette manuelle n'aurait

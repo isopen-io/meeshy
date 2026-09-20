@@ -1,4 +1,6 @@
 import Foundation
+import Combine
+import MeeshySDK
 
 /// Persistent set of message ids the user explicitly hid via "Delete for me"
 /// (WhatsApp-style local deletion that does NOT reach the server). Backed by
@@ -20,11 +22,30 @@ final class LocallyHiddenMessagesStore: @unchecked Sendable {
     private let storageKey = "meeshy_locally_hidden_messages"
     private let lock = NSLock()
     private var cache: Set<String>
+    private var cancellables = Set<AnyCancellable>()
 
     init(userDefaults: UserDefaults = .standard) {
         self.defaults = userDefaults
         let raw = userDefaults.stringArray(forKey: storageKey) ?? []
         self.cache = Set(raw)
+        wireAuthLogoutHook()
+    }
+
+    /// cache-09 (#7146) — pattern calqué sur `ConversationLockManager` : à la
+    /// déconnexion, les masquages locaux du compte sortant partent.
+    ///
+    /// Ce sont des identifiants de messages que le compte A a choisi de ne plus
+    /// voir. Conservés sous une clé commune, ils filtraient les conversations du
+    /// compte B — un message parfaitement visible y disparaissait sans que rien
+    /// ne l'explique.
+    private func wireAuthLogoutHook() {
+        AuthManager.shared.$isAuthenticated
+            .removeDuplicates()
+            .dropFirst()
+            .filter { !$0 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.clearAll() }
+            .store(in: &cancellables)
     }
 
     /// Returns `true` when the message should be filtered out of the

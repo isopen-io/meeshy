@@ -26,7 +26,7 @@ import {
 } from './comment-gestures';
 
 /**
- * LES GESTES D'UNE RANGÉE DE COMMENTAIRE (#7133, première tranche de #7118) —
+ * LES GESTES D'UNE RANGÉE DE COMMENTAIRE (#7135, première tranche de #7118) —
  * même forme que `feed-gestures.test.ts` : le cache bouge AVANT la réponse, et
  * un refus PERMANENT le remet EXACTEMENT où il était.
  *

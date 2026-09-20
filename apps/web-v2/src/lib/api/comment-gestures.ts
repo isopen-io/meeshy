@@ -15,7 +15,7 @@ import {
 } from './publication-comments';
 
 /**
- * LES GESTES D'UNE RANGÉE DE COMMENTAIRE (#7133, première tranche de #7118) —
+ * LES GESTES D'UNE RANGÉE DE COMMENTAIRE (#7135, première tranche de #7118) —
  * aimer, modifier, supprimer : plan → optimiste → appel → issue, la forme
  * EXACTE de `feed-gestures.ts` (`performPostGesture`), sur un autre objet.
  *
