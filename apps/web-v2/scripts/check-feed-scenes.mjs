@@ -289,7 +289,17 @@ async function runScheme(colorScheme) {
       // Le texte du post reste AU-DESSUS de la scène, jamais en bandeau
       // (`FeedPostCard.swift:378-382`) — la carte clip-a porte un média SEUL
       // sans légende, le cas exact où `resolveMedia` prête le contenu du post.
-      texteDuPost: carteA.querySelector(':scope > div > p[lang]')?.textContent ?? null,
+      //
+      // VISÉ PAR SON MARQUEUR, PLUS PAR SA PROFONDEUR (#7141). La forme
+      // précédente — `:scope > div > p[lang]` — épinglait un CHEMIN : poser la
+      // pastille du Prisme à côté du texte a ajouté un niveau, et ce gate est
+      // tombé en rendant « null » alors que le texte était toujours au-dessus
+      // de la scène. Ce qu'il mesure est une POSITION (au-dessus, jamais en
+      // bandeau), pas une profondeur d'arbre ; `data-feed-text` la nomme sans
+      // la deviner. C'est la même correction que `feed-post-card.test.tsx` a
+      // dû recevoir sur sa liste de classes — deux formes du même défaut de
+      // témoin.
+      texteDuPost: carteA.querySelector('[data-feed-text]')?.textContent ?? null,
       legendesA: carteA.querySelectorAll('[data-feed-scene-caption]').length,
     };
   });

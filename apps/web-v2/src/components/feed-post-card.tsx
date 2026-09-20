@@ -10,6 +10,7 @@ import { FeedSceneSurface } from './feed-scene-surface';
 import { GlyphSvg } from './glyph';
 import { FEED_GLYPHS } from './glyphs-feed';
 import { RichText } from './rich-text';
+import { PrismPastille } from './message-blocks';
 import type { FeedCardMedia, FeedCardModel, FeedCardStats, FeedCardText, FeedCardViewer } from '@/lib/feed/card-model';
 import type { PostToggleKind } from '@/lib/feed/interactions';
 import { isPagedLayout, type TiledLayoutMode } from '@/lib/feed/mosaic-layout';
@@ -286,20 +287,47 @@ function FeedPostText({
   readonly mentions?: readonly string[] | undefined;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const truncated = truncateWords(text.full, FEED_TEXT_TRUNCATION_LIMIT);
-  const shown = !truncated.truncated || expanded ? text.full : truncated.text;
   const language = currentInterfaceLanguage();
+
+  /**
+   * **CE QUI EST RÉELLEMENT RENDU** (#7141) — le Prisme sert la traduction par
+   * défaut ; ce drapeau ne dit que le GESTE du lecteur, qui a demandé l'original.
+   *
+   * Il gouverne le TEXTE **et** `lang` ensemble : les séparer ferait prononcer
+   * l'espagnol avec une voix anglaise — le défaut que `lang` existe pour
+   * empêcher, déplacé d'un cran (motif `showContent={false}`, cycle 123 du
+   * `CLAUDE.md` racine). Et il passe AVANT la troncature : c'est le texte LU
+   * qu'on coupe, jamais la traduction pendant qu'on lit l'original.
+   */
+  const [showingOriginal, setShowingOriginal] = useState(false);
+  const lu = showingOriginal ? { full: text.original, language: text.originalLanguage } : { full: text.full, language: text.language };
+  const truncated = truncateWords(lu.full, FEED_TEXT_TRUNCATION_LIMIT);
+  const shown = !truncated.truncated || expanded ? lu.full : truncated.text;
 
   return (
     <div className="px-3">
-      <RichText
-        text={shown}
-        className="whitespace-pre-wrap text-bubble"
-        {...(text.language !== '' ? { lang: text.language } : {})}
-        style={{ color: 'var(--color-ios-ink)' }}
-        hashtags
-        mentions={mentions}
-      />
+      <div className="flex items-start gap-1">
+        <RichText
+          data-feed-text
+          text={shown}
+          className="min-w-0 flex-1 whitespace-pre-wrap text-bubble"
+          {...(lu.language !== '' ? { lang: lu.language } : {})}
+          style={{ color: 'var(--color-ios-ink)' }}
+          hashtags
+          mentions={mentions}
+        />
+        {/* LA PASTILLE SE GARDE ELLE-MÊME (`servedLanguage === originalLanguage`
+            ⇒ `null`) : une publication non traduite n'annonce rien, et aucune
+            condition n'est tenue en double ici. */}
+        <PrismPastille
+          servedLanguage={text.language}
+          originalLanguage={text.originalLanguage}
+          active={showingOriginal ? text.originalLanguage : null}
+          language={language}
+          subject="post"
+          onToggle={() => setShowingOriginal((open) => !open)}
+        />
+      </div>
       {truncated.truncated ? (
         <button
           type="button"

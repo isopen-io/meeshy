@@ -24,6 +24,7 @@ import {
   TEXT_INDENT,
 } from '@/lib/reading-mode/metrics';
 import { useFocalLoupe } from '@/lib/view/use-focal-loupe';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 import { Avatar } from './avatar';
 import { Attachments } from './attachment-blocks';
@@ -772,6 +773,8 @@ export const FocalRow = memo(function FocalRow({
                 {/* SANS CAPACITÉ DE LANGUE, AUCUN CONTRÔLE DE LANGUE (#6862) —
                     voir la jumelle de `bubble.tsx`. */}
                 <PrismPastille
+                  language={currentInterfaceLanguage()}
+                  subject="message"
                   servedLanguage={naturalServedLanguage}
                   originalLanguage={message.originalLanguage}
                   active={activeLanguage}

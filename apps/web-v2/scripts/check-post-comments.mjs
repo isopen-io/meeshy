@@ -170,8 +170,15 @@ const POST = {
   type: 'POST',
   createdAt: '2026-09-19T08:30:00.000Z',
   author: author('u-sofia', 'Sofia Marín', 'sofia'),
-  content: 'La réunion est déplacée à quinze heures.',
-  originalLanguage: 'fr',
+  /* TRADUIT, DÉLIBÉRÉMENT (#7141) — une publication déjà dans la langue du
+     lecteur n'a AUCUNE pastille à porter (règle 1 du Prisme), et l'invariant
+     « cliquer change le texte lu » n'aurait rien à mesurer. L'original est
+     espagnol, la traduction française : les deux chaînes DIFFÈRENT, donc le
+     verdict peut tomber. Le contenu du post n'est asserté nulle part ailleurs
+     dans ce gate. */
+  content: 'La reunión se traslada a las tres.',
+  originalLanguage: 'es',
+  translations: { fr: { text: 'La réunion est déplacée à quinze heures.', translationModel: 'nllb-200' } },
   likeCount: 3,
   commentCount: COMMENTS.length,
 };
@@ -375,6 +382,88 @@ async function runScheme({ browser, base, scheme, check }) {
   check(
     others.every((row) => !row.gestes.includes('edit') && !row.gestes.includes('delete')),
     say(`… et sur AUCUNE autre : la passerelle les garde sur l'AUTEUR — ${JSON.stringify(others)}`),
+  );
+
+  /* ---------------------------------- 1 bis. LE PRISME S'ANNONCE, ET S'OUVRE
+     (#7141) — **la loi 4 appliquée au Prisme.**
+
+     Le défaut que ce bloc existe pour empêcher n'est pas « la pastille est
+     absente » : c'est une pastille qui ANNONCE une langue sans la SERVIR.
+     `PostCard` l'a déjà coûté au dépôt (cycle 123 du `CLAUDE.md` racine) — une
+     zone « traductions disponibles » cliquable dont le clic ne changeait RIEN.
+     Un témoin de composant ne l'attrape pas : il peut monter la pastille, lire
+     son `aria-label` et verdir sans jamais regarder le TEXTE.
+
+     L'assertion n'interroge donc ni le rang ni le prisme, mais l'EFFET :
+     **cliquer change-t-il le texte lu ?** Les deux surfaces sont mesurées — le
+     CORPS de la publication et la RANGÉE de commentaire — parce qu'elles
+     portent deux composants différents et que l'une pourrait être câblée sans
+     l'autre. */
+  const prismeCorps = await page.evaluate(async () => {
+    const noeud = () => document.querySelector('[data-feed-text]');
+    const bouton = noeud()?.closest('div')?.querySelector('[data-prism-toggle]') ?? null;
+    const avant = noeud()?.textContent?.trim() ?? '';
+    const langueAvant = noeud()?.getAttribute('lang') ?? null;
+    bouton?.click();
+    await new Promise((r) => setTimeout(r, 60));
+    const apres = noeud()?.textContent?.trim() ?? '';
+    const langueApres = noeud()?.getAttribute('lang') ?? null;
+    /* ON REFERME. Un invariant qui AGIT doit rendre l'écran à son état : les
+       blocs suivants lisent le corps servi, et le laisser ouvert sur
+       l'original les ferait rougir sur une mesure qu'ils n'ont pas prise.
+       Mesuré : sans ce second clic, « le corps AFFICHÉ est bien la traduction
+       servie » tombait dans les DEUX schémas. */
+    bouton?.click();
+    await new Promise((r) => setTimeout(r, 60));
+    return {
+      pastille: bouton !== null,
+      avant,
+      apres,
+      langueAvant,
+      langueApres,
+      rendu: noeud()?.textContent?.trim() ?? '',
+    };
+  });
+  check(prismeCorps.pastille, say(`le CORPS de la publication porte la pastille du Prisme — ${JSON.stringify(prismeCorps)}`));
+  check(
+    prismeCorps.avant !== '' && prismeCorps.apres !== '' && prismeCorps.avant !== prismeCorps.apres,
+    say(`… et cliquer CHANGE le texte lu — ${JSON.stringify(prismeCorps)}`),
+  );
+  check(
+    prismeCorps.langueAvant !== prismeCorps.langueApres,
+    say(`… la voix suit le texte : \`lang\` change avec lui — ${JSON.stringify(prismeCorps)}`),
+  );
+
+  const prismeRangee = await page.evaluate(async (id) => {
+    const rangee = () => document.querySelector(`[data-comment-row="${id}"]`);
+    const texte = () => rangee()?.querySelector('p')?.textContent?.trim() ?? '';
+    const bouton = rangee()?.querySelector('[data-prism-toggle]') ?? null;
+    const avant = texte();
+    bouton?.click();
+    await new Promise((r) => setTimeout(r, 60));
+    const apres = texte();
+    /* ON REFERME — même raison que ci-dessus. */
+    bouton?.click();
+    await new Promise((r) => setTimeout(r, 60));
+    return { pastille: bouton !== null, avant, apres, rendu: texte() };
+  }, MINE);
+  check(prismeRangee.pastille, say(`la RANGÉE traduite porte la pastille du Prisme — ${JSON.stringify(prismeRangee)}`));
+  check(
+    prismeRangee.avant !== '' && prismeRangee.apres !== '' && prismeRangee.avant !== prismeRangee.apres,
+    say(`… et cliquer CHANGE le texte lu — ${JSON.stringify(prismeRangee)}`),
+  );
+
+  /* LE CONTRE-TÉMOIN — une rangée DÉJÀ dans la langue du lecteur ne porte
+     aucune pastille. Sans lui, les deux verdicts ci-dessus resteraient verts
+     sur une pastille posée INCONDITIONNELLEMENT, qui mentirait partout. */
+  const sansPrisme = await page.evaluate(
+    (id) => document.querySelector(`[data-comment-row="${id}"]`)?.querySelector('[data-prism-toggle]') !== null,
+    OTHER,
+  );
+  check(!sansPrisme, say(`… et une rangée NON traduite n'annonce rien — pastille présente : ${sansPrisme}`));
+  check(
+    prismeCorps.rendu === prismeCorps.avant && prismeRangee.rendu === prismeRangee.avant,
+    say(`… et le geste REFERMÉ rend l'écran à son état — ${JSON.stringify({ corps: prismeCorps.rendu, rangee: prismeRangee.rendu })}`),
   );
 
   // ------------------------------------------------ 2. les cibles se mesurent
