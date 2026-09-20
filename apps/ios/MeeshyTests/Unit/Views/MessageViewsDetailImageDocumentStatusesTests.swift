@@ -2,148 +2,105 @@ import XCTest
 @testable import Meeshy
 import MeeshySDK
 
-/// Verify that image and document attachments are included in consumption statuses,
-/// displayed in "Vu par" just like audio and video. Regression: prior to this,
-/// only hasTimebasedTrack (audio/video) were loaded.
-@MainActor
+/// **Un PDF est un document, et l'onglet « Consulté » doit le contenir.**
+///
+/// `loadAttachmentStatuses` ne filtre plus sur `hasTimebasedTrack` : la
+/// consommation d'une image ou d'un document est chargée comme celle d'un
+/// vocal. Reste à savoir QUI l'affiche — la famille de l'onglet était
+/// reconnue par `AttachmentKind == .image || == .document`, une paire qui
+/// laisse dehors `.pdf`, `.spreadsheet`, `.presentation`, `.archive`,
+/// `.text`, `.code` et `.other` : leur statut était chargé puis jeté, sans
+/// onglet pour le montrer.
 final class MessageViewsDetailImageDocumentStatusesTests: XCTestCase {
 
-    func test_loadAttachmentStatuses_includesImageAttachments() async {
-        // Arrange: a message with an image attachment
-        let imageAttachment = MessageAttachment(
-            id: "img-001",
-            fileUrl: "https://example.com/image.jpg",
-            mimeType: "image/jpeg",
-            fileName: "photo.jpg",
-            originalName: "My Photo",
-            size: 500_000,
-            duration: nil,
-            thumbHash: "data:image/png;base64,iVBORw0KGgo=",
-            translations: []
-        )
-        let message = Message(
-            id: "msg-001",
-            content: "Check this out",
-            attachments: [imageAttachment],
-            // ... other required fields, using defaults as appropriate
-            senderId: "user-123",
-            conversationId: "conv-001",
-            createdAt: Date(),
-            updatedAt: Date(),
-            deliveryStatus: .read,
-            isEphemeral: false,
-            expiresAt: nil,
-            replyToId: nil,
-            replyTo: nil,
-            translations: [],
-            reactions: []
-        )
-
-        let view = MessageViewsDetailView(
-            message: message,
-            contactColor: "#FF5733",
-            conversationId: "conv-001"
-        )
-
-        // Act: trigger load (simulated via reflection of private methods or via integration)
-        // This is a structural test: verify the filter does NOT exclude images
-        let attachmentKind = AttachmentKind(mimeType: imageAttachment.mimeType)
-
-        // Assert: image is NOT filtered out by hasTimebasedTrack
-        XCTAssertFalse(
-            attachmentKind.hasTimebasedTrack,
-            "Image should not have timebasedTrack"
-        )
-        // The NEW logic should include it anyway (no filter)
-        // This test documents the requirement: even though hasTimebasedTrack is false,
-        // the image should be loaded into attachmentStatuses.
+    private func attachment(_ id: String, _ mimeType: String) -> MessageAttachment {
+        MessageAttachment(id: id, mimeType: mimeType)
     }
 
-    func test_loadAttachmentStatuses_includesDocumentAttachments() async {
-        // Arrange: a message with a document attachment
-        let documentAttachment = MessageAttachment(
-            id: "doc-001",
-            fileUrl: "https://example.com/document.pdf",
-            mimeType: "application/pdf",
-            fileName: "contract.pdf",
-            originalName: "Service Agreement",
-            size: 1_000_000,
-            duration: nil,
-            thumbHash: nil,
-            translations: []
-        )
-        let message = Message(
-            id: "msg-001",
-            content: "Review this document",
-            attachments: [documentAttachment],
-            senderId: "user-123",
-            conversationId: "conv-001",
-            createdAt: Date(),
-            updatedAt: Date(),
-            deliveryStatus: .read,
-            isEphemeral: false,
-            expiresAt: nil,
-            replyToId: nil,
-            replyTo: nil,
-            translations: [],
-            reactions: []
-        )
+    // MARK: - La famille de l'onglet « Consulté »
 
-        // Act
-        let attachmentKind = AttachmentKind(mimeType: documentAttachment.mimeType)
-
-        // Assert: document is NOT filtered out by hasTimebasedTrack
-        XCTAssertFalse(
-            attachmentKind.hasTimebasedTrack,
-            "Document should not have timebasedTrack"
-        )
-        // The NEW logic should include it anyway (no filter)
-    }
-
-    func test_mediaConsumptionCard_progressBarOnlyShowsForAudio() {
-        // Test that the progress bar condition is guarded by isTimeBased
-        // For images/documents, the bar should NOT render even if fraction > 0
-        // This is a behavioral spec test, not a view test (those run in UI tests)
-
-        let isAudio = false  // Image
-        let isComplete = false
-        let fraction = 0.5
-
-        // The progress bar should only show if ALL three are true:
-        // 1. !isComplete
-        // 2. isTimeBased (i.e., isAudio || isVideo — here, isAudio)
-        // 3. fraction > 0
-
-        let shouldShowProgressBar = !isComplete && isAudio && fraction > 0
-        XCTAssertFalse(
-            shouldShowProgressBar,
-            "Progress bar should not show for image even with fraction > 0"
+    func test_viewedFamily_includesImage() {
+        let image = attachment("img", "image/jpeg")
+        XCTAssertEqual(
+            MessageViewsDetailView.viewedFamilyAttachments(in: [image]).map(\.id),
+            ["img"]
         )
     }
 
-    func test_mediaConsumptionCard_progressBarShowsForAudio() {
-        // Verify that audio DOES show the progress bar when conditions are met
-        let isAudio = true
-        let isComplete = false
-        let fraction = 0.5
+    /// Le cas qui manquait : `application/pdf` résout en `AttachmentKind.pdf`,
+    /// jamais en `.document`.
+    func test_viewedFamily_includesPdf() {
+        let pdf = attachment("pdf", "application/pdf")
+        XCTAssertEqual(
+            MessageViewsDetailView.viewedFamilyAttachments(in: [pdf]).map(\.id),
+            ["pdf"],
+            "un PDF est LE document courant — l'onglet « Consulté » doit le porter"
+        )
+    }
 
-        let shouldShowProgressBar = !isComplete && isAudio && fraction > 0
+    func test_viewedFamily_includesEveryNonTimebasedFamily() {
+        let mimes = [
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/vnd.ms-powerpoint",
+            "application/zip",
+            "text/plain",
+            "application/json",
+            "application/octet-stream"
+        ]
+        let attachments = mimes.enumerated().map { attachment("a\($0.offset)", $0.element) }
+        XCTAssertEqual(
+            MessageViewsDetailView.viewedFamilyAttachments(in: attachments).count,
+            mimes.count,
+            "tout ce qui n'a pas de piste temporelle se consulte"
+        )
+    }
+
+    func test_viewedFamily_excludesAudioAndVideo() {
+        let media = [attachment("aud", "audio/mp4"), attachment("vid", "video/quicktime")]
         XCTAssertTrue(
-            shouldShowProgressBar,
-            "Progress bar should show for audio when not complete and position > 0"
+            MessageViewsDetailView.viewedFamilyAttachments(in: media).isEmpty,
+            "un vocal et une vidéo gardent leurs onglets « Écouté » et « Vu »"
         )
     }
 
-    func test_mediaConsumptionCard_progressBarHiddenWhenComplete() {
-        // Verify that even for audio, complete media hides the progress bar
-        let isAudio = true
-        let isComplete = true
-        let fraction = 1.0
-
-        let shouldShowProgressBar = !isComplete && isAudio && fraction > 0
-        XCTAssertFalse(
-            shouldShowProgressBar,
-            "Progress bar should be hidden when media is complete"
+    func test_viewedFamily_keepsOnlyTheNonTimebasedOnesOfAMixedMessage() {
+        let mixed = [
+            attachment("aud", "audio/mpeg"),
+            attachment("img", "image/png"),
+            attachment("vid", "video/mp4"),
+            attachment("pdf", "application/pdf")
+        ]
+        XCTAssertEqual(
+            MessageViewsDetailView.viewedFamilyAttachments(in: mixed).map(\.id),
+            ["img", "pdf"]
         )
+    }
+
+    // MARK: - Le libellé d'une carte sans consommateur
+
+    func test_emptyConsumptionLabel_distinguishesTheThreeFamilies() {
+        let listened = MessageViewsDetailView.emptyConsumptionLabel(for: .listened)
+        let watched = MessageViewsDetailView.emptyConsumptionLabel(for: .watched)
+        let viewed = MessageViewsDetailView.emptyConsumptionLabel(for: .viewed)
+        let downloaded = MessageViewsDetailView.emptyConsumptionLabel(for: .downloaded)
+
+        XCTAssertNotEqual(listened, watched)
+        XCTAssertNotEqual(watched, viewed, "une image n'est pas « visionnée »")
+        XCTAssertEqual(viewed, downloaded, "image et document partagent « consulté »")
+    }
+
+    /// Le libellé sort du catalogue, jamais d'une chaîne écrite en dur : les
+    /// deux anciennes (« Pas encore ecoute », « Pas encore visionne ») étaient
+    /// du français sans accent servi aux sept langues.
+    func test_emptyConsumptionLabel_isAccented() {
+        for action in [AttachmentConsumptionResolver.Action.listened, .watched, .viewed] {
+            let label = MessageViewsDetailView.emptyConsumptionLabel(for: action)
+            XCTAssertFalse(label.isEmpty)
+            XCTAssertFalse(
+                label.contains("ecoute") || label.contains("visionne "),
+                "libellé non localisé : \(label)"
+            )
+        }
     }
 }

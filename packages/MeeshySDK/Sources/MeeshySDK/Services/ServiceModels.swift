@@ -563,6 +563,12 @@ public struct AttachmentStatusUser: Decodable, Identifiable {
     public let watchedComplete: Bool?
     public let lastPlayPositionMs: Int?
     public let lastWatchPositionMs: Int?
+    /// Nombre d'ouvertures d'une image ou d'un document — le « Nx » de la
+    /// famille SANS piste temporelle, servi par `getAttachmentStatusDetails`
+    /// (`viewCount`) et incrémenté par `markImageAsViewed`. Absent de ce modèle,
+    /// la colonne partait à la poubelle au décodage et la ligne d'une image
+    /// n'avait aucun compteur à montrer.
+    public let viewCount: Int?
 
     public var id: String { participantId }
 }

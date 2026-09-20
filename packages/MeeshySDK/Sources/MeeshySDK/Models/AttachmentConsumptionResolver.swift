@@ -95,4 +95,101 @@ public enum AttachmentConsumptionResolver {
                           recipientCount: recipientCount, byAllAt: watchedByAllAt)
         }
     }
+
+    // MARK: - Ligne d'un participant
+
+    /// Ce qu'une LIGNE de participant montre pour un attachment, famille par
+    /// famille.
+    ///
+    /// Les quatre actions n'écrivent pas les mêmes colonnes : `markImageAsViewed`
+    /// pose `viewedAt` / `viewCount`, `markAttachmentAsDownloaded` pose
+    /// `downloadedAt`, et seules `markAudioAsListened` / `markVideoAsWatched`
+    /// posent une position et un « terminé ». Lire `watchedAt`, `watchCount` et
+    /// `lastWatchPositionMs` pour une image rend donc une ligne muette — ni
+    /// date, ni compteur — alors que le serveur sert bien sa consommation.
+    public struct UserConsumption: Sendable, Equatable {
+        /// L'action qui compte pour cette famille de média.
+        public let action: Action
+        /// L'horloge à afficher, `nil` quand ce participant n'a aucun signal.
+        public let date: Date?
+        /// Écoutes / visionnages / ouvertures — le « Nx » de la ligne.
+        public let count: Int?
+        /// Média à piste parcouru de bout en bout ; toujours `false` hors piste.
+        public let isComplete: Bool
+        /// Dernière position de lecture, `nil` hors média à piste.
+        public let positionMs: Int?
+        /// Le fichier a été enregistré sur l'appareil du participant.
+        public let wasDownloaded: Bool
+
+        public init(
+            action: Action,
+            date: Date?,
+            count: Int?,
+            isComplete: Bool,
+            positionMs: Int?,
+            wasDownloaded: Bool
+        ) {
+            self.action = action
+            self.date = date
+            self.count = count
+            self.isComplete = isComplete
+            self.positionMs = positionMs
+            self.wasDownloaded = wasDownloaded
+        }
+
+        /// Une barre de progression n'a de sens que sur une PISTE : une image
+        /// ouverte n'est jamais « lue à 43 % ».
+        public var showsPlaybackProgress: Bool {
+            action == .listened || action == .watched
+        }
+    }
+
+    /// Résout la ligne d'un participant pour un attachment donné.
+    public static func userConsumption(
+        mimeType: String,
+        status: AttachmentStatusUser
+    ) -> UserConsumption {
+        let wasDownloaded = status.downloadedAt != nil
+        switch primaryAction(forMimeType: mimeType) {
+        case .listened:
+            return UserConsumption(
+                action: .listened,
+                date: status.listenedAt,
+                count: status.listenCount,
+                isComplete: status.listenedComplete ?? false,
+                positionMs: status.lastPlayPositionMs,
+                wasDownloaded: wasDownloaded
+            )
+        case .watched:
+            return UserConsumption(
+                action: .watched,
+                date: status.watchedAt,
+                count: status.watchCount,
+                isComplete: status.watchedComplete ?? false,
+                positionMs: status.lastWatchPositionMs,
+                wasDownloaded: wasDownloaded
+            )
+        case .viewed:
+            return UserConsumption(
+                action: .viewed,
+                date: status.viewedAt ?? status.downloadedAt,
+                count: status.viewCount,
+                isComplete: false,
+                positionMs: nil,
+                wasDownloaded: wasDownloaded
+            )
+        case .downloaded:
+            // Un document n'est jamais « vu » par le lecteur PDF (seul
+            // `DocumentViewerView` rapporte, et il rapporte `downloaded`) ;
+            // l'ouverture reste servie si une autre surface l'a posée.
+            return UserConsumption(
+                action: .downloaded,
+                date: status.downloadedAt ?? status.viewedAt,
+                count: status.viewCount,
+                isComplete: false,
+                positionMs: nil,
+                wasDownloaded: wasDownloaded
+            )
+        }
+    }
 }

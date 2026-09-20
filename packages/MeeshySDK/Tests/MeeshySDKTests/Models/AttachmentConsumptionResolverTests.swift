@@ -92,4 +92,131 @@ final class AttachmentConsumptionResolverTests: XCTestCase {
             listenedByAllAt: nil, watchedByAllAt: nil)
         XCTAssertTrue(s.isCompleteByAll, "the server's downloadedByAllAt marker is authoritative")
     }
+    // MARK: - userConsumption : la LIGNE d'un participant
+
+    private func status(
+        viewedAt: Date? = nil,
+        downloadedAt: Date? = nil,
+        listenedAt: Date? = nil,
+        watchedAt: Date? = nil,
+        listenCount: Int? = nil,
+        watchCount: Int? = nil,
+        listenedComplete: Bool? = nil,
+        watchedComplete: Bool? = nil,
+        lastPlayPositionMs: Int? = nil,
+        lastWatchPositionMs: Int? = nil,
+        viewCount: Int? = nil
+    ) -> AttachmentStatusUser {
+        AttachmentStatusUser(
+            participantId: "p1",
+            username: "Alice",
+            avatar: nil,
+            viewedAt: viewedAt,
+            downloadedAt: downloadedAt,
+            listenedAt: listenedAt,
+            watchedAt: watchedAt,
+            listenCount: listenCount,
+            watchCount: watchCount,
+            listenedComplete: listenedComplete,
+            watchedComplete: watchedComplete,
+            lastPlayPositionMs: lastPlayPositionMs,
+            lastWatchPositionMs: lastWatchPositionMs,
+            viewCount: viewCount
+        )
+    }
+
+    /// Le défaut corrigé : une image lue par les colonnes de la VIDÉO rend une
+    /// ligne muette — le serveur ne pose `watchedAt` / `watchCount` que depuis
+    /// `markVideoAsWatched`.
+    func test_userConsumption_image_readsViewedClockAndOpeningCount() {
+        let at = Date(timeIntervalSince1970: 1_700_000_000)
+        let row = AttachmentConsumptionResolver.userConsumption(
+            mimeType: "image/jpeg",
+            status: status(viewedAt: at, watchCount: 7, viewCount: 3)
+        )
+        XCTAssertEqual(row.action, .viewed)
+        XCTAssertEqual(row.date, at)
+        XCTAssertEqual(row.count, 3, "le « Nx » d'une image est viewCount, jamais watchCount")
+    }
+
+    func test_userConsumption_image_fallsBackOnDownloadClock() {
+        let at = Date(timeIntervalSince1970: 1_700_000_500)
+        let row = AttachmentConsumptionResolver.userConsumption(
+            mimeType: "image/png",
+            status: status(downloadedAt: at)
+        )
+        XCTAssertEqual(row.date, at, "enregistrer sans ouvrir reste une consommation datée")
+        XCTAssertTrue(row.wasDownloaded)
+    }
+
+    /// Un PDF est un DOCUMENT : `DocumentViewerView` ne rapporte que
+    /// `downloaded`, et c'est cette horloge qui doit s'afficher.
+    func test_userConsumption_pdf_readsDownloadClock() {
+        let at = Date(timeIntervalSince1970: 1_700_001_000)
+        let row = AttachmentConsumptionResolver.userConsumption(
+            mimeType: "application/pdf",
+            status: status(downloadedAt: at, watchCount: 4)
+        )
+        XCTAssertEqual(row.action, .downloaded)
+        XCTAssertEqual(row.date, at)
+        XCTAssertNil(row.count, "aucune ouverture rapportée : pas de « Nx » inventé")
+    }
+
+    func test_userConsumption_imageAndDocument_neverShowPlaybackProgress() {
+        for mime in ["image/jpeg", "application/pdf", "application/zip", "text/plain"] {
+            let row = AttachmentConsumptionResolver.userConsumption(
+                mimeType: mime,
+                status: status(watchedComplete: true, lastWatchPositionMs: 4_200)
+            )
+            XCTAssertFalse(row.showsPlaybackProgress, "\(mime) n'a pas de piste à parcourir")
+            XCTAssertNil(row.positionMs, "\(mime) n'a pas de position de lecture")
+            XCTAssertFalse(row.isComplete, "« terminé » n'a pas de sens hors piste : \(mime)")
+        }
+    }
+
+    func test_userConsumption_audio_keepsListeningTrack() {
+        let at = Date(timeIntervalSince1970: 1_700_002_000)
+        let row = AttachmentConsumptionResolver.userConsumption(
+            mimeType: "audio/mp4",
+            status: status(
+                listenedAt: at,
+                listenCount: 2,
+                listenedComplete: false,
+                lastPlayPositionMs: 3_500,
+                viewCount: 9
+            )
+        )
+        XCTAssertEqual(row.action, .listened)
+        XCTAssertEqual(row.date, at)
+        XCTAssertEqual(row.count, 2)
+        XCTAssertEqual(row.positionMs, 3_500)
+        XCTAssertTrue(row.showsPlaybackProgress)
+    }
+
+    func test_userConsumption_video_keepsWatchingTrack() {
+        let at = Date(timeIntervalSince1970: 1_700_003_000)
+        let row = AttachmentConsumptionResolver.userConsumption(
+            mimeType: "video/mp4",
+            status: status(
+                watchedAt: at,
+                watchCount: 5,
+                watchedComplete: true,
+                lastWatchPositionMs: 9_000
+            )
+        )
+        XCTAssertEqual(row.action, .watched)
+        XCTAssertEqual(row.date, at)
+        XCTAssertEqual(row.count, 5)
+        XCTAssertTrue(row.isComplete)
+        XCTAssertTrue(row.showsPlaybackProgress)
+    }
+
+    /// `viewCount` est servi par `getAttachmentStatusDetails` ; absent du
+    /// modèle, il tombait au décodage et le « Nx » d'une image était
+    /// inatteignable.
+    func test_attachmentStatusUser_decodesViewCountFromTheWire() throws {
+        let json = "{\"participantId\":\"p1\",\"username\":\"Alice\",\"viewCount\":4}"
+        let decoded = try JSONDecoder().decode(AttachmentStatusUser.self, from: Data(json.utf8))
+        XCTAssertEqual(decoded.viewCount, 4)
+    }
 }
