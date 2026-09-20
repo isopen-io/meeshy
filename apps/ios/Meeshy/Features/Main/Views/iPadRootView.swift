@@ -62,7 +62,13 @@ struct iPadRootView: View {
     /// Le gestionnaire reste atteignable par `notifications.manager` : un
     /// `let` sur un `ObservableObject` n'abonne à rien, et appeler une méthode
     /// ou la passer à une couche n'exige aucun abonnement.
-    @StateObject private var notifications = RootNotificationSource()
+    ///
+    /// **Pas `private`, contrairement à `RootView`** : en Swift, `private`
+    /// porte jusqu'aux extensions du MÊME FICHIER, et cette racine est éclatée
+    /// sur quatre (`+Navigation`, `+Overlays`, `+Panels`). `RootView` tient en
+    /// un seul, d'où sa déclaration plus fermée — recopier son modificateur
+    /// ici ne compile pas.
+    @StateObject var notifications = RootNotificationSource()
     /// Ne publie que `launch` — une ouverture/fermeture de lecteur de réels,
     /// pas un flux. L'observer ne rejoue donc pas le churn que `CallManager`
     /// imposait ici (cf. watchdog 0x8BADF00D juste au-dessus).
