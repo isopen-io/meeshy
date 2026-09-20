@@ -279,22 +279,42 @@ export function findCachedThreadMessage(
 }
 
 /**
- * `latestCachedThreadMessage` (#7223) — le message le plus RÉCENT d'un fil
- * en cache, ou `undefined` si le fil n'est pas ouvert ou n'a aucun message.
+ * Une rangée que le SERVEUR n'a jamais vue — la bulle optimiste, tant que
+ * l'accusé n'a pas remplacé son identifiant local par l'identifiant serveur
+ * (`localMessageOf` pose `id === clientMessageId`, `send/local-message.ts`).
+ * Un message du serveur ne porte pas de `clientMessageId`, et `undefined` ne
+ * peut égaler aucun `id` : la comparaison est donc juste dans les deux sens.
+ */
+const isUnconfirmedLocalMessage = (message: Message): boolean =>
+  (message as { readonly clientMessageId?: string }).clientMessageId === message.id;
+
+/**
+ * `latestCachedThreadMessage` (#7223) — le message le plus récent d'un fil en
+ * cache que le SERVEUR connaît, ou `undefined` si le fil n'est pas ouvert, n'a
+ * aucun message, ou n'en porte que des optimistes.
  *
  * `pages[0]` est la page la plus RÉCENTE (doc-comment `MessagesPage`,
  * `messages-pages.ts`) et chaque page est ASCENDANTE en interne
- * (§ `upsertThreadMessage` ci-dessus, « APPEND SUR `pages[0]` ») — le DERNIER
- * élément de `pages[0].messages` est donc le message le plus récent de tout
- * le fil, sans balayer les autres pages. Un `pages[0]` VIDE (page en cours de
- * remplacement) retombe correctement sur `undefined`.
+ * (§ `upsertThreadMessage` ci-dessus, « APPEND SUR `pages[0]` ») — le dernier
+ * élément de `pages[0].messages` est donc le plus récent de tout le fil, sans
+ * balayer les autres pages. Un `pages[0]` VIDE (page en cours de remplacement)
+ * retombe correctement sur `undefined`.
+ *
+ * **LES BULLES OPTIMISTES SONT SAUTÉES (revue-correction W2).** L'unique
+ * appelant applique un résumé qui décrit le dernier message NON SUPPRIMÉ EN
+ * BASE (`MessageReadStatusService.getLatestMessageSummary`) : une rangée que
+ * le serveur n'a pas encore reçue ne peut pas être celle-là, et l'estamper
+ * posait des compteurs d'un AUTRE message sur un envoi en vol — que
+ * `confirmedMessageOf` conserve quand l'accusé ne porte pas `readCount`.
+ * On descend donc jusqu'à la rangée CONFIRMÉE la plus récente, qui est bien
+ * celle que le résumé décrit.
  */
 export function latestCachedThreadMessage(queryClient: QueryClient, conversationId: string): Message | undefined {
   const data = queryClient.getQueryData<MessagesInfiniteData>(messagesQueryKey(conversationId));
   if (data === undefined || !Array.isArray(data.pages)) return undefined;
   const newest = data.pages[0];
   if (newest === undefined) return undefined;
-  return newest.messages[newest.messages.length - 1];
+  return [...newest.messages].reverse().find((m) => !isUnconfirmedLocalMessage(m));
 }
 
 /**

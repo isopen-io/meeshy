@@ -951,3 +951,102 @@ describe('applyReadStatusUpdated (#7223) — le puits de read-status:updated', (
   });
 });
 
+/**
+ * #7223, revue-correction W2 — LES DEUX CHARGES QUE `applyReadStatusUpdated`
+ * NE DOIT PAS PEINDRE, et le palier qui doit atteindre le PIXEL.
+ */
+describe('applyReadStatusUpdated (#7223, revue W2) — ce qui atteint le pixel, et ce qui ne doit rien toucher', () => {
+  /**
+   * LE CRITÈRE DU LOT, jusqu'au pixel : un message DÉJÀ distribué à tous —
+   * l'état de tout message servi par `GET /conversations/:id/messages` après
+   * sa distribution — doit passer à « lu » quand le destinataire lit. La
+   * règle vit dans `deliveryOf` (`lib/view/message.ts`), ce témoin prouve
+   * que le puits l'y conduit.
+   */
+  test('un message DÉJÀ « distribué à tous » passe à LU quand le résumé dit lu', () => {
+    const client = new QueryClient();
+    const newest = localMessage({
+      id: 'm-2',
+      deliveredCount: 1,
+      readCount: 0,
+      recipientCount: 1,
+      deliveredToAllAt: new Date('2026-09-21T09:00:00.000Z'),
+    });
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([newest]));
+
+    applyReadStatusUpdated(client, {
+      conversationId: 'c-a',
+      participantId: 'p-1',
+      userId: 'u-1',
+      type: 'read',
+      updatedAt: new Date('2026-09-21T09:06:00.000Z'),
+      summary: { totalMembers: 1, deliveredCount: 1, readCount: 1 },
+    });
+
+    const patched = threadOf(client, 'c-a')?.messages.find((m) => m.id === 'm-2');
+    expect(deliveryOf(patched as Message)).toBe('read');
+  });
+
+  /**
+   * LA BULLE OPTIMISTE N'EST PAS LE MESSAGE QUE LE SERVEUR DÉCRIT. `summary`
+   * porte le dernier message NON SUPPRIMÉ EN BASE
+   * (`MessageReadStatusService.getLatestMessageSummary`) — une rangée que le
+   * serveur n'a pas encore reçue (`id === clientMessageId`,
+   * `send/local-message.ts:73-74`) ne peut pas être celle-là. L'estamper
+   * posait `readCount >= recipientCount` sur un envoi qui n'est pas parti,
+   * et `confirmedMessageOf` (`send/local-message.ts:120-128`) garde
+   * `local.readCount` quand l'accusé ne porte pas ce champ : la coche ✓✓
+   * « lu » pouvait survivre à la confirmation d'un message que PERSONNE
+   * n'avait lu.
+   */
+  test('la bulle OPTIMISTE non confirmée n’est jamais estampillée — le message SERVEUR juste avant l’est', () => {
+    const client = new QueryClient();
+    const server = localMessage({ id: 'm-serveur', createdAt: new Date('2026-09-21T09:00:00.000Z') });
+    const pending = localMessage({
+      id: 'tmp-1',
+      clientMessageId: 'tmp-1',
+      createdAt: new Date('2026-09-21T09:05:00.000Z'),
+    });
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([server, pending]));
+
+    applyReadStatusUpdated(client, {
+      conversationId: 'c-a',
+      participantId: 'p-1',
+      userId: 'u-1',
+      type: 'read',
+      updatedAt: new Date('2026-09-21T09:06:00.000Z'),
+      summary: { totalMembers: 2, deliveredCount: 2, readCount: 2 },
+    });
+
+    const messages = threadOf(client, 'c-a')?.messages;
+    expect(messages?.find((m) => m.id === 'tmp-1')?.readCount).toBe(0);
+    expect(messages?.find((m) => m.id === 'm-serveur')?.readCount).toBe(2);
+  });
+
+  /**
+   * `getLatestMessageSummary` rend `{0, 0, 0}` sur SON chemin d'erreur
+   * (`MessageReadStatusService.ts:2623-2625`, `catch` ⇒ zéros) comme sur une
+   * conversation sans message. Appliquer ces zéros ÉCRASE des compteurs
+   * servis par `GET …/messages` et fait RÉGRESSER la coche — un résumé qui
+   * n'affirme aucun destinataire n'affirme rien du tout.
+   */
+  test('un résumé sans destinataire (totalMembers 0) ne fait RIEN régresser', () => {
+    const client = new QueryClient();
+    const newest = localMessage({ id: 'm-2', deliveredCount: 2, readCount: 0, recipientCount: 3 });
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([newest]));
+
+    applyReadStatusUpdated(client, {
+      conversationId: 'c-a',
+      participantId: 'p-1',
+      userId: 'u-1',
+      type: 'read',
+      updatedAt: new Date('2026-09-21T09:06:00.000Z'),
+      summary: { totalMembers: 0, deliveredCount: 0, readCount: 0 },
+    });
+
+    const patched = threadOf(client, 'c-a')?.messages.find((m) => m.id === 'm-2');
+    expect(patched?.deliveredCount).toBe(2);
+    expect(patched?.recipientCount).toBe(3);
+    expect(deliveryOf(patched as Message)).toBe('delivered');
+  });
+});

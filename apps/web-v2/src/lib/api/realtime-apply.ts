@@ -704,18 +704,29 @@ export function isReadStatusUpdated(payload: unknown): payload is ReadStatusUpda
  * `GET …/messages` sert le résumé exact »).
  *
  * `deliveredToAllAt`/`readByAllAt` — les deux horodatages FIGÉS que
- * `deliveryOf` (`lib/view/message.ts`) lit EN PREMIER — ne sont PAS posés
- * ici : la charge ne les porte pas, et les inventer depuis un événement qui
- * ne les affirme pas serait une horloge fabriquée. `deliveryOf` retombe déjà
- * sur les trois compteurs quand ces deux champs sont absents — TOUS-OU-RIEN
- * EN GROUPE conservé, la règle vit dans `view/message.ts`, ce puits ne la
- * réécrit pas.
+ * `deliveryOf` (`lib/view/message.ts`) consulte à chaque palier — ne sont PAS
+ * posés ici : la charge ne les porte pas, et les inventer depuis un événement
+ * qui ne les affirme pas serait une horloge fabriquée. Ce sont les COMPTEURS
+ * que ce puits rafraîchit, et `deliveryOf` les tranche palier par palier
+ * (#7223, revue-correction W2 : l'horloge « distribué à tous » ne court-
+ * circuite plus le palier LU). TOUS-OU-RIEN EN GROUPE conservé — la règle vit
+ * dans `view/message.ts`, ce puits ne la réécrit pas.
  */
 export function applyReadStatusUpdated(queryClient: QueryClient, data: ReadStatusUpdatedEventData): void {
+  const { summary } = data;
+  /* UN RÉSUMÉ SANS DESTINATAIRE N'AFFIRME RIEN (revue-correction W2).
+     `getLatestMessageSummary` rend `{0, 0, 0}` sur son chemin d'ERREUR comme
+     sur une conversation vide (`MessageReadStatusService.ts`, `catch`) —
+     appliquer ces zéros écraserait les compteurs servis par
+     `GET …/messages` et ferait RÉGRESSER la coche d'un cran. Le cas
+     LÉGITIME du dénominateur nul (tous les destinataires ont tu leurs
+     accusés) porte de toute façon les mêmes zéros que la liste : ne rien
+     peindre ne perd aucune information. */
+  if (summary.totalMembers <= 0) return;
+
   const target = latestCachedThreadMessage(queryClient, data.conversationId);
   if (target === undefined) return;
 
-  const { summary } = data;
   const next: Message = {
     ...target,
     deliveredCount: summary.deliveredCount,
