@@ -33475,7 +33475,7 @@ Le fait juste était le **curseur déjà posé** — après lui, plus rien ne d�
 **Corollaire, quand la course ne se reproduit pas en local** : un test y est vert des deux côtés du diff, donc il ne prouve rien. On double alors la protection — ici l'attente ferme la fenêtre, et vider le champ avant de le remplir fait qu'un reste de fenêtre ne coûte rien (sur un champ VIDE, il n'y a plus rien à quoi la frappe puisse s'ajouter).
 
 **Corollaire d'outillage** : `gh run view --job … --log` ne rend RIEN tant que le run entier est `in_progress` (« logs will be available when it is complete »). Deux de mes quatre passages ont été poussés sans log, à l'aveugle. Attendre la fin du run coûte quelques minutes ; raisonner sans le log en a coûté deux.
-## Leçon 641 — un relevé d'audit lit des DÉCLARATIONS et conclut sur l'USAGE, et les deux divergent précisément là où le correctif devient dangereux
+## Leçon 644 — un relevé d'audit lit des DÉCLARATIONS et conclut sur l'USAGE, et les deux divergent précisément là où le correctif devient dangereux
 
 2026-09-20, #6226 / #7158 (PR #7163, portage des cinq correctifs de fluidité iOS). Le relevé annonçait cinq défauts « déjà corrigés ailleurs, il ne reste qu'à recopier », dont deux « en changeant un mot » : `@StateObject` → `@State` sur un gestionnaire à haute cadence que la racine n'observerait pour rien. Il les avait trouvés en cherchant les DÉCLARATIONS `@StateObject`.
 
