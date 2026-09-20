@@ -719,18 +719,28 @@ async function runScheme({ browser, base, scheme, check }) {
    * l'original — retire la course sans rien retirer à la mesure : ce qu'on
    * vérifie ensuite reste le PATCH, que ce gate est seul à voir.
    */
-  await page.waitForFunction(
-    (sel) => (document.querySelector(sel)?.value ?? '') !== '',
-    `[data-comment-edit-field="${MINE}"]`,
+  const attendreFait = async (predicat, limiteMs = 8000) => {
+    const fin = Date.now() + limiteMs;
+    while (Date.now() < fin) {
+      if (await predicat()) return true;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    return false;
+  };
+  /* AVALÉE, comme `settleFocus` : un gate ne meurt pas sur une attente, il REND
+     un verdict. Si le champ ne se remplissait jamais, c'est le `check` du PATCH
+     qui le dirait — en citant ce qui est parti. Une exception de Playwright, à
+     cet endroit, ne dit RIEN et emporte les 106 assertions qui suivent. */
+  await attendreFait(async () =>
+    (await page.$eval(`[data-comment-edit-field="${MINE}"]`, (n) => n.value).catch(() => '')) !== '',
   );
   await page.fill(`[data-comment-edit-field="${MINE}"]`, CORRIGE);
   /* … et il porte le NOUVEAU avant qu'on enregistre : `fill` écrit par
      événements, React repeint au tour suivant. Sans cette seconde attente,
      « Enregistrer » pouvait partir sur une valeur que le champ n'avait pas
      encore. */
-  await page.waitForFunction(
-    ([sel, attendu]) => document.querySelector(sel)?.value === attendu,
-    [`[data-comment-edit-field="${MINE}"]`, CORRIGE],
+  await attendreFait(
+    async () => (await page.$eval(`[data-comment-edit-field="${MINE}"]`, (n) => n.value).catch(() => '')) === CORRIGE,
   );
   await page.click(`[data-comment-row="${MINE}"] [data-comment-edit-save]`);
   await page.waitForSelector(`[data-comment-edit-field="${MINE}"]`, { state: 'detached' });
@@ -749,14 +759,6 @@ async function runScheme({ browser, base, scheme, check }) {
    * `check` qui suit qui juge, et qui dit alors ce qu'il a lu — un `timeout`
    * ne l'aurait pas dit.
    */
-  const attendreFait = async (predicat, limiteMs = 8000) => {
-    const fin = Date.now() + limiteMs;
-    while (Date.now() < fin) {
-      if (await predicat()) return true;
-      await new Promise((resolve) => setTimeout(resolve, 50));
-    }
-    return false;
-  };
   await attendreFait(async () => sent.some((r) => r.method === 'PATCH' && r.path.endsWith(MINE)));
   /* … puis la rangée repeinte : non vide ET identique à la lecture précédente.
      Le PATCH étant parti, la stabilité ne peut plus se confirmer sur l'ancien
