@@ -22,11 +22,21 @@ public enum GRDBCacheError: Error, Sendable {
 /// flushAll/evictUnderMemoryPressure/dirtyCountForTest itèrent une LISTE
 /// unique au lieu d'énumérations divergentes (l'oubli du store notifications
 /// perdait l'état « lu » au kill).
+/// Les opérations que le coordinateur applique à TOUS ses stores GRDB d'un
+/// bloc — flush différé, éviction sous pression mémoire, purge de session.
+///
+/// cache-09 (#7146) — `invalidateAll()` a rejoint le protocole pour que
+/// `CacheCoordinator.reset()` et `invalidateAll()` puissent parcourir
+/// `allGRDBStores` au lieu de renommer chaque store à la main. Trois
+/// énumérations manuelles avaient divergé des propriétés déclarées, et un
+/// store non nommé survivait à la déconnexion depuis que `deleteAllL2()` ne
+/// purge plus que son propre namespace.
 protocol GRDBDirtyFlushing: Sendable {
     func flushDirtyKeys(deadline: Date?) async
     func flushDirtyKeys() async
     func evictL1() async
     func dirtyKeyCount() async -> Int
+    func invalidateAll() async
 }
 
 public actor GRDBCacheStore<Key, Value>: MutableCacheStore, GRDBDirtyFlushing

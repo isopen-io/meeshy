@@ -413,40 +413,26 @@ public actor CacheCoordinator {
         // 1. Purge everything on disk first so a concurrent reader on the
         //    other side of the actor hop sees an empty cache (no stale
         //    entries from the previous user).
-        await conversations.invalidateAll()
-        await messages.invalidateAll()
-        await participants.invalidateAll()
-        await profiles.invalidateAll()
-        await feed.invalidateAll()
-        await comments.invalidateAll()
-        await stories.invalidateAll()
-        await stats.invalidateAll()
-        await engagementProgress.invalidateAll()
-        await notifications.invalidateAll()
-        await affiliateTokens.invalidateAll()
-        await shareLinks.invalidateAll()
-        await trackingLinks.invalidateAll()
-        await communityLinks.invalidateAll()
-        await communities.invalidateAll()
-        await drafts.invalidateAll()
-        await callTranscripts.invalidateAll()
-        await statuses.invalidateAll()
-        await friends.invalidateAll()
-        await friendRequests.invalidateAll()
-        await blockedUsers.invalidateAll()
-        await userSearch.invalidateAll()
-        await callHistory.invalidateAll()
-        await timeline.invalidateAll()
-        // Preference stores are NOT userId-namespaced and the coordinator is a
-        // process-lifetime singleton, so their in-memory L1 would otherwise
-        // survive logout and expose user A's categories / tags / translation +
-        // theme prefs / per-conversation pin-mute-archive to user B on the next
-        // login. invalidateAll() also cancels their pending debounce task so a
-        // dirty pref can't be re-flushed to L2 after this reset.
-        await categories.invalidateAll()
-        await userTags.invalidateAll()
-        await userPreferences.invalidateAll()
-        await conversationPreferences.invalidateAll()
+        // cache-09 (#7146) — TOUS les stores GRDB, sans exception nommable.
+        // Cette boucle a remplacé vingt-huit appels recopiés à la main, dont
+        // l'inventaire avait divergé des propriétés déclarées : `phonebook`
+        // (le carnet d'adresses complet de l'appareil) et `affiliates` n'y
+        // figuraient pas, et survivaient donc à la déconnexion depuis que
+        // `deleteAllL2()` ne purge plus que son propre namespace. Aucun store
+        // ne s'ajoute plus ici — il s'ajoute à `allGRDBStores`, que
+        // `CacheCoordinatorPurgeInventoryTests` confronte aux déclarations.
+        //
+        // Les stores de préférences en font partie et ce n'est pas un détail :
+        // ils ne sont pas cantonnés par identifiant de compte et le
+        // coordinateur vit le temps du processus, donc leur L1 exposerait les
+        // catégories, étiquettes, préférences de traduction et de thème, et les
+        // réglages épinglé/muet/archivé du compte A au compte B. Leur
+        // `invalidateAll()` annule aussi le report d'écriture en attente, sans
+        // quoi une préférence modifiée pourrait être réécrite en L2 APRÈS ce
+        // reset.
+        for store in allGRDBStores {
+            await store.invalidateAll()
+        }
         await images.invalidateAll()
         await audio.invalidateAll()
         await video.invalidateAll()
@@ -715,8 +701,9 @@ public actor CacheCoordinator {
     var allGRDBStores: [any GRDBDirtyFlushing] {
         [
             conversations, messages, notifications, feed, stories, participants, profiles,
-            comments, statuses, communities, stats, drafts, callTranscripts, friends,
-            friendRequests, blockedUsers, userSearch, callHistory, timeline,
+            comments, statuses, communities, stats, engagementProgress, drafts,
+            callTranscripts, friends, friendRequests, blockedUsers, userSearch,
+            phonebook, affiliates, callHistory, timeline,
             affiliateTokens, shareLinks, trackingLinks, communityLinks,
             categories, userTags, userPreferences, conversationPreferences
         ]
@@ -850,41 +837,20 @@ public actor CacheCoordinator {
     }
 
     public func invalidateAll() async {
-        await conversations.invalidateAll()
-        await messages.invalidateAll()
-        await participants.invalidateAll()
-        await profiles.invalidateAll()
-        await feed.invalidateAll()
-        await stories.invalidateAll()
-        await friendRequests.invalidateAll()
-        await blockedUsers.invalidateAll()
-        await userSearch.invalidateAll()
-        await communities.invalidateAll()
-        await drafts.invalidateAll()
-        await categories.invalidateAll()
-        await userTags.invalidateAll()
-        await userPreferences.invalidateAll()
-        await conversationPreferences.invalidateAll()
-        // Ces douze stores n'étaient PAS énumérés ici. Ils disparaissaient
-        // quand même, par effet de bord : `GRDBCacheStore.deleteAllL2()` vidait
-        // les tables `cache_entries` / `cache_metadata` en entier, donc le
-        // premier `invalidateAll()` de la liste emportait déjà tout le reste.
-        // Ce comportement global ayant été corrigé (chaque store ne purge plus
-        // que son propre namespace), il faut désormais les nommer pour que
-        // `invalidateAll()` continue de tout vider comme avant.
-        await comments.invalidateAll()
-        await stats.invalidateAll()
-        await engagementProgress.invalidateAll()
-        await notifications.invalidateAll()
-        await affiliateTokens.invalidateAll()
-        await shareLinks.invalidateAll()
-        await trackingLinks.invalidateAll()
-        await communityLinks.invalidateAll()
-        await callTranscripts.invalidateAll()
-        await statuses.invalidateAll()
-        await friends.invalidateAll()
-        await callHistory.invalidateAll()
-        await timeline.invalidateAll()
+        // cache-09 (#7146) — même inventaire que `reset()`, même raison.
+        //
+        // L'histoire de cette liste dit pourquoi elle ne peut plus être tenue à
+        // la main : `GRDBCacheStore.deleteAllL2()` vidait autrefois les tables
+        // `cache_entries` / `cache_metadata` EN ENTIER, si bien que le premier
+        // `invalidateAll()` énuméré emportait déjà tous les autres — un store
+        // absent de la liste disparaissait quand même. Ce comportement global
+        // a été cantonné au namespace du store, et il a fallu nommer douze
+        // stores de plus pour que la purge reste complète. Deux ont été
+        // manqués à ce moment-là. Une boucle sur `allGRDBStores` supprime la
+        // possibilité même de l'oubli.
+        for store in allGRDBStores {
+            await store.invalidateAll()
+        }
         await images.invalidateAll()
         await audio.invalidateAll()
         await video.invalidateAll()
