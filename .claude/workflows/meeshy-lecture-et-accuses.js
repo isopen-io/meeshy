@@ -559,8 +559,11 @@ ${v.note ? `NOTE DU CADRAGE : ${v.note}` : ''}
 ${dependances.length ? `DÉPEND DE : ${dependances.join(', ')} — si le lot amont n'est pas encore dans origin/${BASE} (\`git log origin/${BASE} --oneline --grep "Closes #<n>"\` vide), \`git fetch origin\` puis \`git merge origin/<branche amont>\` (\`git branch -r | grep lot/<clé amont en minuscules>\` la nomme — elle peut vivre dans une AUTRE chaîne) dans ta branche (jamais rebase) ; la PR portera les deux et GitHub résoudra à la fusion de l'amont. Si la branche amont n'existe pas encore, code contre le CONTRAT (types partagés) et dis-le en blocage.` : ''}
 ${RELEVE}
 ÉTAPES :
-1. \`cd ${repo} && git fetch origin ${BASE} && git checkout -B ${branche} origin/${BASE}\` — la branche du lot
-   part de ${BASE} VIVANT. \`git status --short\` doit être vide. Si shared a bougé : rebâtis dist.
+1. \`cd ${repo} && git fetch origin\` puis : si \`origin/${branche}\` EXISTE déjà (un tour interrompu l'a poussée :
+   \`git branch -r | grep ${branche}\`), REPRENDS-LA — \`git checkout -B ${branche} origin/${branche} && git merge origin/${BASE}\`
+   (jamais rebase) et lis ce qu'elle porte déjà (\`git log --oneline origin/${BASE}..HEAD\`, \`git diff --stat origin/${BASE}...HEAD\`)
+   avant d'écrire ; sinon \`git checkout -B ${branche} origin/${BASE}\` — la branche du lot part de ${BASE} VIVANT.
+   \`git status --short\` doit être vide. Si shared a bougé : rebâtis dist.
 2. SPÉCIFIE d'abord, dans ${SCRATCH}/${l.cle}.md (hors dépôt) : la route/l'événement réel cité
    fichier:ligne, la référence iOS lue (pour web), les témoins à écrire (un par ligne du critère), le
    découpage. Une question produit se tranche par la spec (D-L1..3) ou par le défaut le plus simple — et
