@@ -93,3 +93,17 @@ de la racine : elle devient une FONCTION de l'offset, que le lecteur
 alimente. Le relevé comptait « treize écrans sur quinze » ; le balayage en
 trouve **neuf détenteurs de relais et trois retardataires**, soit une
 adoption plus large et un reste plus petit que l'estimation.
+
+### 4. Et la vérification a trouvé ce que le portage n'avait pas vu
+
+`pendingAudioPlayer` n'est mis en lecture par **rien** : ses quatre usages dans
+`apps/ios/` sont une déclaration, deux `stop()` et la lecture de `isPlaying`
+par la tuile. Aucun `play()`. L'icône de la tuile est donc **décorative**
+(#7171), et le canton écrit ici — correct, sans risque, et prêt pour le jour
+où la lecture sera câblée — a un gain de performance **nul** : un lecteur qui
+ne joue jamais ne publie jamais.
+
+> La question « la valeur est-elle LUE ? » m'a évité un défaut de correction.
+> Il en fallait une seconde : **« cette valeur CHANGE-t-elle jamais ? »** Une
+> propriété lue mais constante ne coûte rien à observer — et le correctif qui
+> retire cette observation ne gagne rien non plus.
