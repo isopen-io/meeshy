@@ -143,10 +143,20 @@ describe('une rangée', () => {
     expect(row(record({}))).toContain('5 min');
   });
 
+  /* La RÈGLE ne change pas — une ligne sans destination reste un bouton. Ce
+     qui change est son EXEMPLE : `friend_request` servait de cas « sans
+     destination » depuis que le web n'avait pas d'écran de contacts. Il en a
+     un depuis #6363, et la ligne y mène depuis #7173. Garder l'ancien exemple
+     aurait verrouillé le cul-de-sac au lieu de garder la règle. */
   test('une ligne SANS destination est un bouton, jamais un lien qui mentirait', () => {
-    const html = row(record({ type: 'friend_request', context: { friendRequestId: 'fr1' } }));
+    const html = row(record({ type: 'un_type_sans_ecran', context: {} }));
     expect(html).not.toContain('href=');
     expect(html).toContain('<button');
+  });
+
+  test('une demande de connexion mène à l’onglet où l’on y répond', () => {
+    const html = row(record({ type: 'friend_request', context: { friendRequestId: 'fr1' } }));
+    expect(html).toContain('href="/discover?onglet=requests&amp;demandes=received"');
   });
 
   test('une publication commentée montre sa vignette, décorative', () => {
