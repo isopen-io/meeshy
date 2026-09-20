@@ -33639,3 +33639,75 @@ l'appeler, et une seconde interdit d'écrire le drapeau à la main hors du site
 unique. Un relevé, pas une assertion sur deux fichiers connus : le troisième
 pool rougira le jour où il est écrit, pas le jour où il tue l'application.
 Cf. [[reference_inventory_guards_are_the_ones_parallel_lots_never_play]].
+
+## Leçon 648 — un double PARTIEL ne fait pas rougir une ASSERTION : il fait échouer l'APPEL, et le symptôme ne nomme jamais sa cause
+
+2026-09-20, #7153 (`services/gateway/src/__tests__/helpers/notification-service-doubles.ts`, cinq suites de `services/gateway/src/__tests__/`). Cinq suites de notification — 3 366 lignes, 90 témoins dont 25 de sécurité — étaient retirées de jest. En les réveillant, la moitié des rouges ne venait pas d'un désaccord sur le comportement, mais d'un faux `prisma` resté à une forme ancienne : deux modèles déclarés quand le domaine en touche QUATORZE.
+
+**Ce que ça produit n'est pas un échec d'assertion.** `this.prisma.user` vaut `undefined`, le déréférencement lève, et `createNotification` — qui enveloppe tout dans un `try/catch` — rend `null` en journalisant dans un logger lui aussi doublé, donc muet. Le témoin échoue alors des dizaines de lignes plus loin, sur `result?.userId` indéfini ou sur `calls[0]` vide. **Le symptôme n'a aucun rapport visible avec la cause**, et il ressemble trait pour trait à un refus légitime du service — au point que deux témoins en ont conclu que « Ne Pas Déranger » et les préférences par type n'étaient plus respectés. Ils le sont.
+
+**La carte d'un double se MESURE, et la mesure doit inclure la fermeture.** Un `grep -rhoE "prisma\.[a-zA-Z]+\.[a-zA-Z]+"` sur le répertoire du domaine rendait treize modèles — et ratait `userEventSeq`, parce que `NotificationService` construit lui-même un `SequenceService` (`:182`) qui est seul à le toucher. Le symptôme de CE manque était le pire de tous : `emitBestEffort` avale l'échec de `emitWithSeq`, donc la notification s'écrivait **sans jamais partir sur le socket**, en silence, sans un seul rouge.
+
+**Et le piège se rejoue à l'envers quand on ENRICHIT l'utilitaire doublé.** Ajouter `sanitizeURLOrPath` à `SecuritySanitizer` a fait tomber 36 témoins vivants dans trois suites : 65 suites du gateway doublent cette classe à la main, et un double partiel rend `undefined` sur la méthode neuve. Même forme, même silence, sens opposé.
+
+> **Devant un témoin qui échoue sur une valeur absente plutôt que sur une valeur fausse, soupçonner le DOUBLE avant le code.** Un double se construit depuis une carte mesurée sur la production — fermeture transitive comprise, car un service qui en CONSTRUIT un autre hérite de ses tables — et cette carte se remesure quand le domaine gagne une table **ou un collaborateur**. Un service qui avale ses erreurs transforme toute lacune de montage en refus plausible.
+
+Cf. [[reference_a_defect_between_two_injected_collaborators_is_invisible_to_unit_tests]], [[reference_a_fake_prisma_accepts_any_shape_only_tsc_validates_a_query]], [[reference_a_swallowed_error_looks_exactly_like_a_legitimate_empty]].
+
+## Leçon 649 — les témoins peuvent être DISPENSÉS de la règle qu'ils sont là pour garder, et rien ne le dit
+
+2026-09-20, #7153 / #7165 (`services/gateway/jest.config.json`). Le transform ts-jest du gateway porte `diagnostics: { ignoreCodes: [2322, 2339, 2345, 2740] }`, pour **1 348 suites**. Ce sont, très exactement, les quatre codes qui attrapent une dérive d'API : type inassignable, propriété inexistante, **argument de forme divergente**, propriétés obligatoires manquantes.
+
+**Conséquence mesurée.** Dans les cinq suites réveillées, `createNotification` était appelée sans `context`, sans `metadata`, sans `priority` — trois paramètres OBLIGATOIRES. Aucune erreur de compilation. Le défaut n'apparaissait qu'à l'exécution, au premier déréférencement, sous la forme d'un plantage avalé (cf. leçon 648). Deux méthodes avaient de plus gagné un second argument — `markAsRead(id, userId)`, `deleteNotification(id, userId)` — qui est une **garde de propriété** : les témoins appelaient encore la version à un argument, et la dispense les empêchait de le dire.
+
+**Le contre-témoin est la clé, et il est gratuit.** En annotant les mêmes littéraux avec `Parameters<NotificationService['createNotification']>[0]`, la dérive est remontée SUR-LE-CHAMP en `TS2739` — un code qui n'est pas dans la liste. Les deux formes décrivent le même défaut ; seule la seconde est visible. **Se lier à la signature plutôt qu'à un type jumeau transforme une panne d'exécution en erreur de compilation**, sans rien changer d'autre.
+
+**Et le type jumeau existait.** `CreateNotificationData` décrivait une forme PLATE que le service n'accepte plus, avec zéro consommateur de production : il n'était plus un contrat, seulement un objet qui en avait l'air.
+
+> **Avant de croire un témoin vert, demander de quelles règles il est DISPENSÉ.** Une liste d'exemptions posée pour débloquer une migration survit à la migration, vaut pour tout le dépôt, et ne se signale nulle part. Et quand un type décrit une API, préférer la SIGNATURE au type jumeau : le premier ne peut pas dériver de ce qu'il décrit.
+
+Cf. [[reference_the_gateway_jest_config_removes_suites_and_exempts_type_errors]], [[reference_a_typecheck_and_a_test_run_cover_disjoint_file_sets]], [[reference_bun_test_runs_without_typing_so_green_witnesses_prove_nothing]].
+
+## Leçon 650 — une comparaison de PRÉFIXE ne décide pas d'une URL : seul son analyseur sait où elle mène
+
+2026-09-20, #7157 (`services/gateway/src/utils/sanitize.ts`). En fermant une sanitisation inversée — `sanitizeURL(avatar) ?? avatar`, dont le repli restituait la valeur d'origine PRÉCISÉMENT quand la garde l'avait rejetée — il fallait distinguer deux raisons opposées de rendre `null` : entrée dangereuse, ou entrée qui n'est pas une URL absolue (un chemin d'API relatif, légitime). J'ai d'abord écrit la distinction en préfixe : `startsWith('/') && !startsWith('//')`.
+
+**Trois entrées la traversent et sortent ailleurs.** Résolues contre une origine quelconque :
+
+```
+//evil.example/x    → https://evil.example/x   (protocol-relative — attrapé)
+/\evil.example/x    → https://evil.example/x   (l'antislash vaut une barre)
+/<TAB>/evil.example → https://evil.example/    (les blancs sont supprimés)
+```
+
+Les deux dernières commencent par **un seul** `/`. Le test de préfixe les déclare relatives. Le correctif de sécurité en contenait donc un autre, du même genre que celui qu'il fermait.
+
+**La règle juste ne devance pas l'analyseur, elle le consulte** : résoudre le candidat contre une origine sentinelle (`.invalid`, réservé RFC 2606) et ne garder que si l'origine résolue est inchangée. Trois témoins `it.each` fixent la table, car un retour au préfixe a l'air correct — et l'est, pour le cas qu'on a en tête en l'écrivant.
+
+> **Une chaîne qui sera interprétée par un analyseur ne se juge pas par sa FORME, mais par ce qu'elle DEVIENT une fois analysée.** La question n'est pas « à quoi ressemble cette entrée ? » mais « où mène-t-elle ? » — et la réponse s'obtient en faisant tourner l'analyseur, jamais en l'imitant. Vaut pour les URL, les chemins de fichiers, les sélecteurs, et tout ce qu'un autre programme relira.
+
+## Leçon 651 — une vérification qui répond « rien trouvé » pour une raison SANS RAPPORT avec ce qu'elle cherche est pire que pas de vérification : elle autorise
+
+2026-09-20, `tasks/lessons.md`. Deux branches vivantes ont écrit `## Leçon 646` le même soir. **Git fusionne ce doublon sans le moindre conflit** — les deux blocs sont des ajouts en FIN de fichier, à des offsets différents, donc la fusion les empile l'un après l'autre. Aucun gate du dépôt ne compte les numéros. Le défaut est muet des deux côtés, git et CI, et ne se voit qu'à la lecture, des semaines plus tard, quand deux leçons portent le même identifiant et qu'aucun lien `[[…]]` ne sait plus laquelle il désigne.
+
+**Ce n'est pourtant pas la collision qui vaut leçon — c'est la vérification qui l'a manquée.** La session voisine avait bien cherché avant de pousser : une boucle sur les branches distantes, un `git show <ref>:tasks/lessons.md` par branche, un `grep` du numéro. Elle a rendu « aucune collision » — y compris sur sa PROPRE branche, où le numéro était pourtant écrit. Cause : **`git show` consomme le stdin de la boucle `while read`**, la boucle meurt après le premier tour, et le code de sortie global reste 0. Le relevé ne disait pas « pas de collision » ; il disait « je me suis arrêté tout de suite », et les deux phrases ont la même sortie.
+
+La collision n'a été attrapée qu'à la main, par relecture, juste avant la fusion.
+
+**Et ce n'est pas la première fois — c'est la seizième.** Relevé sur ce fichier
+au moment d'écrire ces lignes : **669 titres pour 647 numéros distincts**, dont
+**quinze numéros portent chacun DEUX leçons entièrement différentes** — 215,
+221, 243, 244, 249, 250, 251, 253, 287, 288, 289, 292, 293, 295, 349. La 293 est
+à la fois « Un identifiant de lot n'est pas un nom » et « "one-for-one mirror"
+écrit dans un en-tête de test n'est pas un témoin de parité » ; la 349, « Un
+champ qu'un émetteur SERT depuis toujours » et « un invariant écrit sur les
+ÉLÉMENTS d'une collection ». Les suffixes `bis` et `ter`, eux, sont délibérés et
+ne comptent pas. **Quinze collisions silencieuses se sont accumulées sans qu'une
+seule soit remarquée**, ce qui mesure exactement la valeur des vérifications
+faites jusqu'ici : elles ont toutes répondu « rien trouvé ».
+
+**La forme est générale, et elle s'est rejouée deux fois dans la même heure.** Mon propre veilleur de CI classait `failure` et `timed_out` comme rouges et tout le reste comme vert : un run **annulé** par un push concurrent — l'incident précis contre lequel il veillait — serait tombé dans « tout le reste » et se serait présenté comme un VERT. Et la garde d'inventaire de #7160 porte un troisième témoin (`test_leReleve_lit_desSourcesNonVides`) dont le seul rôle est d'interdire ce vert-là : sans lui, un balayage dont les racines ont bougé rend zéro fichier, donc zéro violation, donc deux témoins verts **par omission**.
+
+> **Un contrôle doit pouvoir échouer AUTREMENT que par ce qu'il cherche, et cet échec-là doit être bruyant.** Trois questions à poser à toute vérification avant de croire son verdict : *si la chose cherchée existait, ce relevé la verrait-il ?* — *si l'outil tombait en panne, ce relevé rendrait-il la même chose que « rien » ?* — *ai-je un contre-témoin qui prouve que le relevé a LU quelque chose ?* La troisième est la seule qui distingue « rien trouvé » de « rien lu », et elle coûte une ligne.
+
+Un espace de noms partagé sans allocateur (numéros de leçon, cliquets mesurés, registres générés) rend cette discipline obligatoire plutôt que prudente : la collision y est silencieuse par construction. Cf. [[reference_merging_an_old_branch_can_collide_lesson_numbers_without_conflict]], [[reference_inventory_guards_are_the_ones_parallel_lots_never_play]], [[reference_a_watcher_that_polls_the_current_head_can_never_conclude]], [[reference_an_exit_code_read_without_its_log_is_unread]].
