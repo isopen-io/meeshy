@@ -864,8 +864,12 @@ export class NotificationService {
         displayName: params.actor.displayName
           ? SecuritySanitizer.sanitizeText(params.actor.displayName)
           : params.actor.displayName,
+        // #7157 — le repli `?? params.actor.avatar` restituait la valeur
+        // d'origine PRÉCISÉMENT quand `sanitizeURL` l'avait rejetée. Un chemin
+        // relatif doit survivre, un protocole refusé doit tomber : deux cas
+        // distincts, une seule règle, chez le sanitiseur.
         avatar: params.actor.avatar
-          ? SecuritySanitizer.sanitizeURL(params.actor.avatar) ?? params.actor.avatar
+          ? SecuritySanitizer.sanitizeURLOrPath(params.actor.avatar)
           : params.actor.avatar,
       } : undefined;
       const sanitizedMetadata = SecuritySanitizer.sanitizeJSON(params.metadata);
@@ -874,7 +878,10 @@ export class NotificationService {
       // côté serveur (langue du destinataire) puis persistés. Source unique pour
       // la liste in-app (iOS/iPadOS/macOS) et le web ; corrige les libellés
       // imprécis/non localisés historiquement reconstruits côté client.
-      const meta = (params.metadata ?? {}) as Record<string, unknown>;
+      // #7159 — les champs de métadonnées qui ENTRENT DANS LA PHRASE
+      // (`parentCommentPreview`, `contentAuthorName`) se lisent sur la charge
+      // SANITISÉE, pas sur la brute.
+      const meta = (sanitizedMetadata ?? {}) as Record<string, unknown>;
       const displayInput = {
         type: params.type,
         actorName: sanitizedActor?.displayName ?? params.actor?.username ?? null,
@@ -906,8 +913,15 @@ export class NotificationService {
         : (display.subtitle ?? null);
       // Titre persisté : le builder localisé quand il en a un (types sociaux),
       // sinon le titre explicite de l'appelant (annonce système : son sujet).
-      const persistedTitle = display.title
-        ?? ((params.title && params.title.trim() !== '') ? params.title.trim().slice(0, 160) : null);
+      // #7159 — le titre traversait le bloc « defense-in-depth » sans y entrer,
+      // alors que le `content` du même appel y passe. Il est le POINT DE
+      // PASSAGE de tout ce qui finit en titre, quelle qu'en soit la source
+      // (libellé localisé, sujet d'une diffusion, nom d'acteur) : le sanitiser
+      // ici couvre toutes les branches d'un coup. Sanitisation AVANT la
+      // troncature, sans quoi on couperait au milieu d'une entité.
+      const titreBrut = display.title ?? params.title ?? null;
+      const titreSain = titreBrut !== null ? SecuritySanitizer.sanitizeText(titreBrut).trim() : null;
+      const persistedTitle = (titreSain !== null && titreSain !== '') ? titreSain.slice(0, 160) : null;
 
       const notification = await this.prisma.notification.create({
         data: {

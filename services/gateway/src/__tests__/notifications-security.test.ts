@@ -218,6 +218,35 @@ describe('Notifications - Tests de Sécurité', () => {
       expect(createCall.data.actor.avatar ?? null).toBeNull();
     });
 
+    // JUMEAU OBLIGATOIRE du témoin ci-dessus. `sanitizeURL` rend `null` pour
+    // DEUX raisons opposées — entrée dangereuse, ou entrée qui n'est pas une
+    // URL absolue. Un correctif qui abandonne les deux casse les avatars
+    // servis en chemin d'API, et ce témoin-là seul ne le verrait pas.
+    it('Conserve un avatar servi en chemin relatif', async () => {
+      const donnees: CreateNotificationParams = {
+        userId: 'user123',
+        type: 'new_message',
+        title: 'Message',
+        content: 'Content',
+        priority: 'normal',
+        context: {},
+        metadata: {},
+        actor: { id: 'sender1', username: 'sender', avatar: '/uploads/avatars/sender1.png' }
+      };
+
+      prisma.notificationPreference.findUnique.mockResolvedValue(null);
+      prisma.notification.create.mockResolvedValue({
+        id: 'notif123', userId: 'user123', type: 'new_message',
+        title: 'Message', content: 'Content', priority: 'normal',
+        isRead: false, createdAt: new Date()
+      });
+
+      await service.createNotification(donnees);
+
+      const createCall = prisma.notification.create.mock.calls[0][0];
+      expect(createCall.data.actor.avatar).toBe('/uploads/avatars/sender1.png');
+    });
+
     it('Sanitize JSON data object', async () => {
       const maliciousData: CreateNotificationParams = {
         userId: 'user123',
