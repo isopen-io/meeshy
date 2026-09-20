@@ -62,6 +62,17 @@ const FILS: Readonly<Record<string, readonly PostComment[]>> = {
     comment('cm-en-2', TARIQ, 'La lumière est incroyable sur cette prise.', 24, { likeCount: 1, originalLanguage: 'fr' }),
   ],
   'post-text-rank2': [
+    /* UNE RANGÉE À SOI DANS LE CORPUS (#7135) — sans elle, « Modifier » et
+       « Supprimer » ne sont atteignables sur AUCUN écran de fixture : la
+       passerelle garde ces deux gestes sur l'AUTEUR (`comments.ts:500-523`),
+       donc la rangée ne les offre qu'à lui, et une recette manuelle n'aurait
+       eu aucun moyen de les voir. Elle porte aussi un cœur DÉJÀ posé, l'autre
+       moitié du geste d'aimer. */
+    comment('cm-r2-0', FIXTURE_VIEWER_AUTHOR, 'Je l’ai testé ce matin, ça tient.', 4, {
+      originalLanguage: 'fr',
+      isLikedByMe: true,
+      likeCount: 2,
+    }),
     comment('cm-r2-1', INES, 'Merci pour le partage, c’est très clair.', 12, { originalLanguage: 'fr' }),
     comment('cm-r2-2', NOA, 'Je garde ça sous le coude.', 40, { originalLanguage: 'fr' }),
     comment('cm-r2-3', TARIQ, 'Une source à recommander ?', 95, { originalLanguage: 'fr', replyCount: 2 }),

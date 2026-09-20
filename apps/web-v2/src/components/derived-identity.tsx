@@ -122,7 +122,7 @@ export function DerivedIdentity({
                     type="button"
                     onClick={() => onUsernameChange(candidat)}
                     className="rounded-chip px-3 text-caption font-semibold"
-                    style={{ minHeight: 44, color: tint, backgroundColor: 'var(--color-ios-bg)' }}
+                    style={{ minHeight: 44, color: tint, backgroundColor: 'var(--color-ios-card)' }}
                   >
                     @{candidat}
                   </button>
@@ -184,7 +184,7 @@ function IdentityInput({
         className="flex items-center gap-1 rounded-[14px] px-4"
         style={{
           minHeight: 48,
-          backgroundColor: 'var(--color-ios-bg)',
+          backgroundColor: 'var(--color-ios-card)',
           border: `${focused ? '2px' : '1px'} solid ${
             focused ? `color-mix(in srgb, ${tint} 60%, transparent)` : 'color-mix(in srgb, var(--color-ios-ink-3) 30%, transparent)'
           }`,

@@ -1,11 +1,15 @@
 import type { InfiniteData, QueryClient } from '@tanstack/react-query';
 
+import { applyCommentCount, shiftedCount, withCommentCount } from '@/lib/feed/interactions';
+
 import { newClientMessageId } from './client-message-id';
 import type { DataSource } from './config';
-import type { FeedAuthor, FeedMedia, FeedPost } from './feed-pages';
+import { FEED_QUERY_KEY } from './feed';
+import type { FeedAuthor, FeedInfiniteData, FeedMedia, FeedPost } from './feed-pages';
 import type { ApiResult, HttpTransport } from './http';
 import { outcomeOf } from './outcome';
 import { postQueryKey } from './publication-detail';
+import { REELS_QUERY_ROOT } from './reels';
 import { STORY_FEED_QUERY_KEY, type StoryFeedPost } from './stories';
 
 /**
@@ -57,6 +61,13 @@ export type PostComment = {
    * la forme d'un POST, jamais celle (tableau) d'un message. */
   readonly translations?: unknown;
   readonly likeCount?: number | null;
+  /**
+   * SERVI EXPLICITEMENT PAR LA PASSERELLE, `false` compris — dérivé des
+   * `CommentReaction` du lecteur (`PostCommentService.ts:471-483`, qui dit
+   * pourquoi : « c'est l'ABSENCE du champ qui faisait mentir le client »).
+   * Un champ absent vaut donc « pas aimé », jamais « on ne sait pas ».
+   */
+  readonly isLikedByMe?: boolean;
   readonly replyCount?: number | null;
   readonly effectFlags?: number | null;
   readonly currentUserReactions?: readonly string[] | null;
@@ -181,61 +192,85 @@ export function dropComment(data: CommentInfiniteData | undefined, tempId: strin
   });
 }
 
-/** `commentCount` est servi par la MÊME colonne (`postInclude.commentCount`,
- * `postIncludes.ts:354`) aux deux corpus — mais il y arrive `number | null |
- * undefined`. Une seule lecture, pour les deux caisses. */
-const countOf = (value: number | null | undefined): number =>
-  typeof value === 'number' && Number.isFinite(value) ? value : 0;
-
 /**
  * Le compteur de la PUBLICATION — le rail d'une story et la rangée d'une
  * carte le lisent sans jamais ouvrir la liste. Il bouge donc AVEC le
  * commentaire, et revient avec lui : sans cela, un refus laisserait un
  * compteur menteur derrière un fil vide.
  *
- * **IL Y A DEUX CAISSES, ET LE DOC-COMMENT N'EN CONNAISSAIT QU'UNE** (#7112,
- * revue). La rangée d'une carte lit `postQueryKey(postId)` ; le rail du
- * lecteur de stories, lui, lit `currentStory.commentCount` — servi par
- * `STORY_FEED_QUERY_KEY` (`routes/story.tsx`, `useStoryFeed`), un corpus que
- * cette fonction n'ouvrait pas. On commentait donc une story, la ligne
- * apparaissait en tête du fil, et la pastille du rail restait au chiffre
- * d'avant. C'est la « loi qui calcule une valeur que personne ne lit », avec
- * l'aggravation qu'une PHRASE affirmait le contraire : tant qu'un
- * doc-comment nomme le rail, il fabrique la certitude que la chose est faite.
- * La RÉFÉRENCE tranche dans le même sens (D-1) — iOS incrémente son compteur
- * sur son PROPRE envoi optimiste (`StoryViewerView+Content.swift:930,934`),
- * et son rail le lit (`+Sidebar.swift:619`).
+ * **IL Y A QUATRE CAISSES, ET LE DOC-COMMENT N'EN A CONNU QU'UNE, PUIS DEUX.**
+ * Chacune a été trouvée en demandant, non pas « qui calcule ce compte ? », mais
+ * **« qui l'AFFICHE ? »** — et la réponse a changé trois fois :
  *
- * Le patron est celui de `story-reactions.ts` : le cœur d'une story bascule
- * déjà `STORY_FEED_QUERY_KEY` et son compte suit le doigt. Les deux caisses
- * bougent ENSEMBLE et reviennent ENSEMBLE — un post absent d'un corpus y est
- * simplement laissé tel quel.
+ *  1. `postQueryKey(postId)` — la fiche `/post/$post` ;
+ *  2. `STORY_FEED_QUERY_KEY` — la pastille du rail du lecteur de stories
+ *     (#7112 : on commentait une story, la ligne apparaissait, la pastille
+ *     restait au chiffre d'avant) ;
+ *  3. `FEED_QUERY_KEY` — la rangée de statistiques d'une carte du Flux
+ *     (`feed-post-card.tsx:75`) ;
+ *  4. `REELS_QUERY_ROOT` — la MÊME carte servie par un fil de Réels, qui peint
+ *     depuis ses propres pages (#6457).
+ *
+ * Les deux dernières manquaient (#7135) : on supprimait son commentaire depuis
+ * la fiche, on revenait au fil, et la carte affichait toujours l'ancien compte.
+ * `feed-gestures.ts` avait déjà tranché pour le cœur — « la même publication ne
+ * peut pas porter deux cœurs selon l'écran qui la montre » — et le compteur de
+ * commentaires n'avait pas suivi.
+ *
+ * **La règle elle-même vit dans `lib/feed/interactions.ts`**, à côté de
+ * `applyPostToggle` : c'est le site unique de « comment une page de fil
+ * bascule », et la borne basse (`shiftedCount`) y est écrite une seule fois —
+ * la leçon que `PostLikeMutation.swift` a coûtée à iOS. Ici, seule
+ * l'énumération des caisses. Un post absent d'une racine y est laissé tel quel.
  */
-function shiftCommentCount(queryClient: QueryClient, postId: string, delta: 1 | -1): void {
+export function shiftCommentCount(queryClient: QueryClient, postId: string, delta: 1 | -1): void {
+  const change = { postId, delta };
+  queryClient.setQueryData<FeedInfiniteData>(FEED_QUERY_KEY, (data) => applyCommentCount(data, change));
+  queryClient.setQueriesData<FeedInfiniteData>({ queryKey: REELS_QUERY_ROOT }, (data) => applyCommentCount(data, change));
   queryClient.setQueryData<FeedPost>(postQueryKey(postId), (post) =>
-    post === undefined ? post : { ...post, commentCount: Math.max(0, countOf(post.commentCount) + delta) },
+    post === undefined ? post : withCommentCount(post, change),
   );
   queryClient.setQueryData<readonly StoryFeedPost[]>(STORY_FEED_QUERY_KEY, (stories) => {
     if (stories === undefined) return stories;
     if (!stories.some((s) => s.id === postId)) return stories;
-    return stories.map((s) => (s.id === postId ? { ...s, commentCount: Math.max(0, countOf(s.commentCount) + delta) } : s));
+    return stories.map((s) => (s.id === postId ? { ...s, commentCount: shiftedCount(s.commentCount, delta) } : s));
   });
 }
 
 /** Une CLÉ de catalogue, jamais un texte déjà traduit — seule la surface qui
  * annonce connaît la langue d'interface (même patron que `feed-gestures.ts`). */
-type CommentMessageKey = 'comment.send.error' | 'comment.send.pending' | 'comment.send.empty';
+type CommentMessageKey = 'comment.send.error' | 'comment.send.pending' | 'comment.send.empty' | 'comment.gesture.unconfirmed';
 
 export const COMMENT_FAILED_MESSAGE: CommentMessageKey = 'comment.send.error';
 export const COMMENT_PENDING_MESSAGE: CommentMessageKey = 'comment.send.pending';
 export const COMMENT_EMPTY_MESSAGE: CommentMessageKey = 'comment.send.empty';
+/** UNE PANNE DE PASSERELLE N'EST PAS UNE COUPURE RÉSEAU (revue-correction
+ * #7135, défaut majeur 4) — `comment.send.pending` NOMME le réseau, donc ne
+ * se sert que sur une absence de réponse alors que le lecteur est hors ligne.
+ * Un 5xx annoncé « hors ligne » envoie l'utilisateur vérifier son wifi. */
+export const COMMENT_UNCONFIRMED_MESSAGE: CommentMessageKey = 'comment.gesture.unconfirmed';
+
+const readerIsOffline = (): boolean => typeof navigator !== 'undefined' && navigator.onLine === false;
 
 export type CommentResult =
   | { readonly ok: true; readonly notice?: CommentMessageKey }
   | { readonly ok: false; readonly message: CommentMessageKey };
 
-/** `CreateCommentSchema.content` : `max(2000)`. Refuser ICI, avant l'appel,
- * plutôt que d'encaisser un 400 qui ne dirait rien de précis au lecteur. */
+/**
+ * LA BORNE D'UN CONTENU DE COMMENTAIRE, SITE UNIQUE — `2000`, parce que la
+ * passerelle n'en a qu'une : `CreateCommentSchema.content.max(2000)` ET
+ * `UpdateCommentSchema.content.max(2000)` (`routes/posts/types.ts:428,466`).
+ * Refuser ICI, avant l'appel, plutôt que d'encaisser un 400 qui ne dirait rien
+ * de précis au lecteur.
+ *
+ * **Elle a été déclarée DEUX fois** (#7135) — ici et dans `comment-gestures.ts`
+ * —, chacune exportée, chacune consommée : le composeur et le champ d'édition
+ * lisaient l'une, le port des gestes l'autre. Les deux valaient 2000, donc rien
+ * ne se voyait. Le jour où l'une aurait bougé, « Enregistrer » serait resté
+ * ACTIF sur un texte que le port refuse — un refus que le lecteur ne peut pas
+ * comprendre. Le compilateur n'aurait rien dit : deux modules ont le droit
+ * d'exporter le même nom.
+ */
 export const COMMENT_MAX_LENGTH = 2000;
 
 const newClientMutationId = (): string => newClientMessageId().replace(/^cid_/, 'cmid_');
@@ -285,7 +320,9 @@ export async function performComment(params: {
 
   const result = await sendComment(deps, { postId, body }).catch(() => null);
 
-  if (result === null) return { ok: true, notice: COMMENT_PENDING_MESSAGE };
+  if (result === null) {
+    return { ok: true, notice: readerIsOffline() ? COMMENT_PENDING_MESSAGE : COMMENT_UNCONFIRMED_MESSAGE };
+  }
 
   if (result.ok) {
     const served = result.data;
@@ -298,7 +335,8 @@ export async function performComment(params: {
     return { ok: true };
   }
 
-  if (outcomeOf(result) !== 'permanent') return { ok: true, notice: COMMENT_PENDING_MESSAGE };
+  /* Un STATUT servi est un fait de PASSERELLE, jamais de réseau. */
+  if (outcomeOf(result) !== 'permanent') return { ok: true, notice: COMMENT_UNCONFIRMED_MESSAGE };
 
   deps.queryClient.setQueryData<CommentInfiniteData>(key, (data) => dropComment(data, tempId));
   shiftCommentCount(deps.queryClient, postId, -1);

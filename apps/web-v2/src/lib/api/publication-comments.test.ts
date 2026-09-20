@@ -7,6 +7,7 @@ import {
   COMMENTS_PAGE_SIZE,
   COMMENT_FAILED_MESSAGE,
   COMMENT_PENDING_MESSAGE,
+  COMMENT_UNCONFIRMED_MESSAGE,
   commentsQueryKey,
   dropComment,
   flattenCommentPages,
@@ -157,7 +158,12 @@ describe('performComment — optimiste, puis l’issue (`POST /posts/:postId/com
     expect(countOf(queryClient, 'p1')).toBe(1);
   });
 
-  test('une panne PASSAGÈRE garde l’optimiste et l’ANNONCE — jamais un silence pris pour un succès', async () => {
+  /** UN 503 EST UNE PANNE DE PASSERELLE, PAS UNE COUPURE RÉSEAU
+   * (revue-correction #7135, défaut majeur 4) — `comment.send.pending` NOMME
+   * le réseau, et l'annoncer ici envoyait l'utilisateur vérifier son wifi
+   * alors que sa connexion était bonne. La distinction se mesure sur un rang
+   * AUTRE que le hors-ligne, seul cas couvert jusqu'ici. */
+  test('une panne PASSAGÈRE garde l’optimiste et l’ANNONCE — sans accuser le réseau', async () => {
     const queryClient = withCaches('p1');
     const { transport } = transportOf({ ok: false, status: 503 });
 
@@ -168,7 +174,8 @@ describe('performComment — optimiste, puis l’issue (`POST /posts/:postId/com
       deps: { source: 'gateway', transport: transport as never, queryClient },
     });
 
-    expect(result).toEqual({ ok: true, notice: COMMENT_PENDING_MESSAGE });
+    expect(result).toEqual({ ok: true, notice: COMMENT_UNCONFIRMED_MESSAGE });
+    expect(COMMENT_PENDING_MESSAGE).not.toBe(COMMENT_UNCONFIRMED_MESSAGE);
     const servis = flattenCommentPages(queryClient.getQueryData<CommentInfiniteData>(commentsQueryKey('p1')));
     expect(servis).toHaveLength(2);
     expect(servis[0]?.pending).toBe(true);

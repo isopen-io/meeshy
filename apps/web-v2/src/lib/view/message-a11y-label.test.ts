@@ -207,6 +207,91 @@ describe('composeMessageLabel — la protection', () => {
 });
 
 /**
+ * **UNE RANGÉE QUI NE PEINT PAS SA CITATION NE LA PRONONCE PAS** (#7092) —
+ * le SECOND VOCABULAIRE que le doc-comment de `PROTECTED_LABEL` dit vouloir
+ * éviter, pris en défaut sur le segment de citation : la rangée retenue rend
+ * `ProtectionNotice` et la rangée voilée AU REPOS rend son substitut — ni
+ * l'une ni l'autre ne monte le `Quote` (`protected-content.tsx`, la matrice
+ * `rendersContent`) — pendant que le libellé annonçait « réponse à Amina
+ * Diallo ». L'œil et l'oreille ne disaient pas la même chose.
+ *
+ * LA CONTRE-ÉPREUVE EST INDISPENSABLE, et c'est le dernier témoin de ce bloc :
+ * un témoin écrit sur le SEUL cas au repos verdirait sur une suppression pure
+ * et simple du segment. Le cas RÉVÉLÉ — la phase où `rendersContent` monte les
+ * enfants — doit continuer de le porter.
+ */
+describe('composeMessageLabel — la citation suit ce que la rangée PEINT (#7092)', () => {
+  const quoted = () => message({ id: 'q1', sender: senderOf('Amina Diallo'), content: 'Le RDV est à 18h' });
+
+  test('RETENU : la rangée rend un constat, pas un `Quote` — le libellé ne prononce aucune citation', () => {
+    const label = composeMessageLabel({
+      message: message({ replyTo: quoted() }),
+      isMine: false,
+      servedText: '',
+      delivery: null,
+      protection: 'standard',
+      contentWithheld: true,
+    });
+    expect(label).not.toContain('réponse à');
+    expect(label).not.toContain('Amina Diallo');
+    expect(label).toBe('Bruno Bêta, Contenu retenu, 09:02');
+  });
+
+  test('RETENU sur une réponse à une STORY : « réponse à sa story » ne se prononce pas non plus', () => {
+    const label = composeMessageLabel({
+      message: message({
+        storyReplyToId: 's1',
+        metadata: { postReplyTo: { id: 's1', previewText: 'Le lac', createdAt: '2026-09-10T08:00:00.000Z' } },
+      } as Partial<Message>),
+      isMine: false,
+      servedText: '',
+      delivery: null,
+      protection: 'standard',
+      contentWithheld: true,
+    });
+    expect(label).not.toContain('réponse à');
+  });
+
+  test('VOILÉ AU REPOS : le substitut est seul — la citation n’est ni peinte ni prononcée', () => {
+    const label = composeMessageLabel({
+      message: message({ isBlurred: true, replyTo: quoted() }),
+      isMine: false,
+      servedText: 'Bonjour',
+      delivery: null,
+      protection: 'veiled',
+      phase: { phase: 'hidden' },
+    });
+    expect(label).not.toContain('réponse à');
+    expect(label).not.toContain('Amina Diallo');
+    expect(label).toBe('Bruno Bêta, Contenu masqué, 09:02');
+  });
+
+  /** LA CONTRE-ÉPREUVE — verte AVANT comme APRÈS le correctif. */
+  test('VOILÉ RÉVÉLÉ : la rangée monte ses enfants, donc le libellé REPREND la citation', () => {
+    const label = composeMessageLabel({
+      message: message({ isBlurred: true, replyTo: quoted() }),
+      isMine: false,
+      servedText: 'Bonjour',
+      delivery: null,
+      protection: 'veiled',
+      phase: { phase: 'revealed', until: Date.now() + 5000 },
+    });
+    expect(label).toContain('réponse à Amina Diallo');
+  });
+
+  test('STANDARD : rien ne change — la citation reste prononcée', () => {
+    const label = composeMessageLabel({
+      message: message({ replyTo: quoted() }),
+      isMine: false,
+      servedText: 'Bonjour',
+      delivery: null,
+      protection: 'standard',
+    });
+    expect(label).toBe('Bruno Bêta, réponse à Amina Diallo, Bonjour, 09:02');
+  });
+});
+
+/**
  * « SANS COMPTE » DANS LE LIBELLÉ (revue #5935, défauts majeurs 1/4) — le
  * masque `aria-hidden` posé sur `[data-identity]` (`focal-row.tsx`) retire
  * du sous-arbre le glyphe qui portait seul cette information
