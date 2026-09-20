@@ -173,14 +173,22 @@ final class BackgroundTaskManager {
             return
         }
         let syncTask = Task<Bool, Never> {
-            // Pull : récupère les nouveautés depuis le dernier checkpoint.
-            let synced = await ConversationSyncEngine.shared.syncSinceLastCheckpoint()
-            // Push : draine l'outbox. Le BGAppRefreshTask est le seul moment où
-            // les messages/réactions mis en file hors-ligne peuvent partir sans
-            // que l'utilisateur ait à rouvrir l'app — sans ça, un envoi fait
-            // hors-ligne attend le prochain passage au premier plan.
-            await OutboxFlushTrigger.flushNow()
-            return synced
+            // #7160 — LE RÉVEIL LÈVE LA SUSPENSION DE LA BASE, le temps du
+            // travail. `DatabaseSuspension.suspend()` est posé à la fin de
+            // l'entrée en arrière-plan ; ce réveil se produit APRÈS, alors que
+            // tout ce qui suit écrit. Sans la parenthèse, la synchronisation et
+            // le drainage de l'outbox lèvent `SQLITE_INTERRUPT` et le journal
+            // annonce quand même un succès — rien ne plante, rien n'arrive.
+            await DatabaseSuspension.duringBackgroundWake {
+                // Pull : récupère les nouveautés depuis le dernier checkpoint.
+                let synced = await ConversationSyncEngine.shared.syncSinceLastCheckpoint()
+                // Push : draine l'outbox. Le BGAppRefreshTask est le seul moment où
+                // les messages/réactions mis en file hors-ligne peuvent partir sans
+                // que l'utilisateur ait à rouvrir l'app — sans ça, un envoi fait
+                // hors-ligne attend le prochain passage au premier plan.
+                await OutboxFlushTrigger.flushNow()
+                return synced
+            }
         }
         activeSyncTask = Task { _ = await syncTask.value }
 
@@ -221,17 +229,22 @@ final class BackgroundTaskManager {
         }
 
         let prefetchTask = Task {
-            // Background prefetch: read whatever the cache currently has
-            // (snapshot semantics). We are running in a `BGProcessingTask`
-            // with a budget deadline, so we cannot meaningfully act on a
-            // staleness signal here.
-            let conversations = await CacheCoordinator.shared.conversations.load(for: "list")
-            guard let items = conversations.snapshot() else { return }
+            // #7160 — même parenthèse que la synchronisation : `ensureMessages`
+            // GRAVE les messages qu'il rapporte. Préfetcher dans une base
+            // suspendue coûte le réseau et ne laisse rien derrière.
+            await DatabaseSuspension.duringBackgroundWake {
+                // Background prefetch: read whatever the cache currently has
+                // (snapshot semantics). We are running in a `BGProcessingTask`
+                // with a budget deadline, so we cannot meaningfully act on a
+                // staleness signal here.
+                let conversations = await CacheCoordinator.shared.conversations.load(for: "list")
+                guard let items = conversations.snapshot() else { return }
 
-            let unreadConversations = items.filter { $0.userState.unreadCount > 0 }
-            for conversation in unreadConversations.prefix(10) {
-                guard !Task.isCancelled else { break }
-                await ConversationSyncEngine.shared.ensureMessages(for: conversation.id)
+                let unreadConversations = items.filter { $0.userState.unreadCount > 0 }
+                for conversation in unreadConversations.prefix(10) {
+                    guard !Task.isCancelled else { break }
+                    await ConversationSyncEngine.shared.ensureMessages(for: conversation.id)
+                }
             }
         }
         activePrefetchTask = prefetchTask

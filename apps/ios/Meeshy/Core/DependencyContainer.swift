@@ -410,9 +410,15 @@ final class DependencyContainer {
     }
 
     /// Quarantine-then-reopen, reserved for corruption-shaped failures.
-    /// Returns `nil` when the error is access-shaped or when the fresh
-    /// open still fails — the caller moves on to the next fallback tier.
-    private static func reopenReplacingCorruptFile(
+    /// Returns `nil` when the error is access-shaped, suspension-shaped, or
+    /// when the fresh open still fails — the caller moves on to the next
+    /// fallback tier.
+    ///
+    /// Interne (et non `private`) pour que ``DependencyContainerSuspensionTests``
+    /// puisse présenter une erreur EXACTE à la garde : une interruption ne se
+    /// fabrique pas en ouvrant un vrai fichier, et un témoin qui n'y arrive pas
+    /// serait vert par omission — la branche ne serait jamais jouée.
+    static func reopenReplacingCorruptFile(
         at path: String,
         after error: Error,
         config: Configuration,
@@ -422,6 +428,21 @@ final class DependencyContainer {
     ) -> DatabasePool? {
         guard !isAccessDenied(error) else {
             containerLogger.fault("Access denied at \(path, privacy: .public) — leaving the file untouched (unreadable ≠ corrupt)")
+            return nil
+        }
+        // #7160 — UNE INTERRUPTION N'EST PAS UNE CORRUPTION, et ici elle coûte
+        // LE STORE DE MESSAGES DE L'UTILISATEUR.
+        //
+        // Armer la suspension juste au-dessus fait apparaître une erreur que ce
+        // chemin n'avait jamais vue : une ouverture pendant la fenêtre de
+        // suspension (réveil d'arrière-plan, extension, tâche BG) rend
+        // `SQLITE_INTERRUPT`. `isAccessDenied` ne couvre que AUTH / PERM /
+        // CANTOPEN / READONLY : sans cette garde, l'interruption tombait dans
+        // la branche « corrompu », le fichier partait en quarantaine et une
+        // base VIDE le remplaçait. On aurait troqué une suppression par le
+        // système contre une perte de données — strictement pire.
+        guard !DatabaseSuspension.isSuspensionInterruption(error) else {
+            containerLogger.fault("Database open interrupted by suspension at \(path, privacy: .public) — leaving the file untouched (interrupted ≠ corrupt)")
             return nil
         }
         diagnostics.recoveryAttempted = true
@@ -571,6 +592,20 @@ final class DependencyContainer {
         // collision into SQLITE_BUSY; a 5 s timeout absorbs the contention
         // (the NSE's writes are sub-millisecond, the app's are batched).
         config.busyMode = .timeout(5)
+        // #7160 — LE SECOND POOL APPREND, LUI AUSSI, QUE L'APPLICATION SE SUSPEND.
+        //
+        // `observesSuspensionNotifications` se pose PAR POOL. #7059 l'a armé sur
+        // `AppDatabase` (`meeshy.sqlite`) et le `0xDEAD10CC` est revenu à
+        // l'identique en build 1827 : le rapport du 20/09 15:15 montre DEUX fils
+        // `GRDB.DatabasePool.writer` vivants au moment de la suppression — l'un
+        // en `sqlite3_wal_checkpoint_v2` jusqu'à `guarded_pwrite_np`, l'autre
+        // dans un `write` synchrone. Celui-ci est le pool de
+        // `meeshy_messages.sqlite`, et il n'écoutait rien.
+        //
+        // C'est le pool le plus exposé des deux : `MessagePersistenceActor`
+        // écrit dessus à chaque message reçu, y compris pendant la transition
+        // vers l'arrière-plan.
+        DatabaseSuspension.arm(&config)
         config.prepareDatabase { db in
             try db.execute(sql: "PRAGMA synchronous = NORMAL")
             try db.execute(sql: "PRAGMA journal_size_limit = 16777216")
