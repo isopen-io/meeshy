@@ -144,10 +144,26 @@ describe('la BULLE enrichit le texte', () => {
     expect(html).toContain('rel="noopener noreferrer"');
   });
 
-  test('**gras** et *italique* sont rendus, sans leurs étoiles', () => {
+  /**
+   * L'EMPHASE EST PORTÉE PAR SA BALISE, ET SA PROSE EST MASQUÉE — la forme
+   * attendue a changé avec #7142, et c'est le CORRECTIF, pas une régression.
+   *
+   * Ce témoin attendait `<strong>important</strong>` : la forme d'une bulle qui
+   * ne portait PAS `plainTextHidden`. La rangée plate, elle, rend
+   * `<strong><span aria-hidden="true">important</span></strong>` depuis #7032 —
+   * mesuré. Les deux peaux rendaient donc deux arbres d'accessibilité
+   * différents pour le même message, et c'est la bulle qui prononçait son texte
+   * DEUX fois (le libellé de `[data-row]` le porte déjà).
+   *
+   * Ce que le témoin mesure reste le même : la balise qui porte le SENS
+   * (`<strong>`, `<em>` — jamais un `<span>` stylé) et la disparition des
+   * étoiles. Ce qui change est l'enveloppe, et elle est désormais la même des
+   * deux côtés.
+   */
+  test('**gras** et *italique* sont rendus, sans leurs étoiles, et leur prose est masquée', () => {
     const html = renderBubble(threadMessage({ id: 'm4', content: 'c’est **important** et *urgent*' }));
-    expect(html).toContain('<strong>important</strong>');
-    expect(html).toContain('<em>urgent</em>');
+    expect(html).toContain('<strong><span aria-hidden="true">important</span></strong>');
+    expect(html).toContain('<em><span aria-hidden="true">urgent</span></em>');
     expect(html).not.toContain('**');
   });
 

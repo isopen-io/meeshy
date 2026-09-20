@@ -334,12 +334,38 @@ export function Bubble({
            schéma), et un `#mot` cliquable ici ouvrirait un écran que rien ne
            peut remplir. `linkColor` suit la bulle — la teinte de marque ne se
            lit pas sur l'indigo d'un message envoyé. */
+        /* `plainTextHidden` — LE MASQUE DE #7032, QUI N'AVAIT JAMAIS ÉTÉ
+            PORTÉ SUR CETTE PEAU (trouvé en jouant #7142 sur les DEUX peaux).
+
+            Le texte servi est DÉJÀ dans `aria-label={rowLabel}`
+            (`composeMessageLabel`, `thread-modes.tsx`) — pour TOUT message, pas
+            seulement un protégé. Sans ce masque, l'arbre d'accessibilité le
+            porte DEUX fois : c'est le défaut majeur 1/4 de la revue #5935,
+            corrigé en #7032 sur `focal-row.tsx` et resté entier ici.
+
+            Mesuré avant d'être posé, sur un message ORDINAIRE :
+
+              focal   : libellé = texte | DOM expose le texte = false
+              bubbles : libellé = texte | DOM expose le texte = TRUE
+
+            Ce lot devait le corriger : #7142 exige que le texte d'une rangée
+            révélée soit prononcé par le libellé OU par le DOM, « jamais les
+            deux, jamais aucun ». Alimenter la phase sans poser ce masque
+            aurait rendu ce critère VRAI sur Focal et FAUX sur Bulles — et la
+            divergence entre les deux peaux est elle-même un défaut (dimension
+            6 : même geste, même effet).
+
+            Seuls les segments NON interactifs sont masqués : `aria-hidden` sur
+            le paragraphe entier rendrait chaque mention focusable ET invisible
+            (violation `aria-hidden-focus`, pire qu'un texte nu). Les liens
+            restent atteignables, nommés et au clavier. */
         <RichText
           text={rendered.text}
           lang={rendered.language}
           className="text-bubble leading-[1.35] whitespace-pre-wrap"
           mentions={message.validatedMentions}
           linkColor={isMine ? 'white' : 'var(--color-ios-brand)'}
+          plainTextHidden
         />
       ) : null}
     </>
