@@ -702,9 +702,17 @@ public actor CacheCoordinator {
 
     /// cache-01 — LA liste des stores GRDB, en criticité décroissante (les
     /// premiers flushés si la deadline coupe). Toute divergence avec les
-    /// propriétés déclarées en tête de classe est un bug : les énumérations
-    /// explicites de reset()/invalidateAll() restent séparées à dessein.
-    private var allGRDBStores: [any GRDBDirtyFlushing] {
+    /// propriétés déclarées en tête de classe est un bug.
+    ///
+    /// cache-09 (#7146) — elle n'ordonne plus seulement le flush : `reset()` et
+    /// `invalidateAll()` la PARCOURENT au lieu de renommer chaque store. Les
+    /// énumérations séparées ont laissé passer `phonebook` et `affiliates`
+    /// quand `deleteAllL2()` a cessé de purger toutes les tables d'un coup, et
+    /// le compte suivant héritait du carnet d'adresses du précédent. Un seul
+    /// endroit à tenir, et `CacheCoordinatorPurgeInventoryTests` le confronte
+    /// aux propriétés déclarées — un store oublié ici rougit sans qu'on ait
+    /// pensé à lui. Visibilité interne pour ce témoin.
+    var allGRDBStores: [any GRDBDirtyFlushing] {
         [
             conversations, messages, notifications, feed, stories, participants, profiles,
             comments, statuses, communities, stats, drafts, callTranscripts, friends,
