@@ -1,5 +1,63 @@
 # @meeshy/web
 
+## 1.63.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - le champ d'édition porte la MÊME borne que le composeur (Refs #7135)
+  - « Modifier » ne fait plus perdre sa place au lecteur — le focus suit le geste (Refs #7135)
+  - corriger une faute ne change pas la langue du commentaire, et supprimer se voit (Refs #7135)
+  - la fiche d'une personne bloquée le sait au PREMIER rendu, sans drainer de panier (Refs #7125)
+  - ce que vaut l'issue d'un geste est UNE loi, lue par les DEUX surfaces (Refs #7083)
+  - le profil public tient ses six défauts de revue — blocage lu en entier, vide filtré muet, annonce visible, « Charger plus » qui ne ment plus (Refs #7083)
+  - un texte TOURNÉ n'est plus coupé par la carte qui le cadre — run test (Closes #7127)
+  - l'encre de marque des boutons de CONTOUR tenait 3,84 — « Écrire » était sous AA dans les deux schémas (Refs #7083)
+  - un filtre CLIENT ne mure pas une pagination SERVEUR, et un panier jamais lu s'amorce (Refs #7083)
+  - le profil public livre ses trois blocs — publications paginées, gestes relationnels optimistes, compteurs SERVIS (Closes #7083)
+  - le lecteur de stories porte le rail d'actions d'iOS — réagir et répondre ÉCRIVENT, et rien n'apparaît en cours de lecture
+  - les identifiants du verdict de dérive passent à l'anglais (D-13, Refs #7110)
+  - le gate de virtualisation n'imprime un chiffre de dérive que s'il a MESURÉ (Closes #7110)
+  - aucun DispatchWorkItem ne vit plus dans l'état d'une vue — la chaîne qui débordait la pile disparaît (Closes #7034) (run test)
+  - iOS porte enfin la protection et le chiffrement d'une pièce jointe du fil au domaine (Refs #7070, Closes #7098)
+  - l'app n'est plus tuée en arrière-plan pour un verrou SQLite retenu (Closes #7059)
+  - le gate des états du fil attend un fait, jamais un délai — dix runs verts avec deux gates concurrents
+  - la pastille des demandes d'amitié cesse d'annuler la fenêtre de fraîcheur pour tout le monde (Closes #6981)
+  - le visage du frappeur porte sa photo — résolue par l'hôte, jamais ajoutée au fil (Closes #6985)
+  - l'avatar de l'auteur voyage jusqu'à la visionneuse — le type le jetait (Refs #6985)
+  - un lien de mention ne peut plus redevenir invisible au lecteur d'écran, et un lien qui finit la phrase ne s'annexe plus son point (Refs #7033)
+  - la rampe des visages descend la LOI de l'avatar, pas son premier rang (Refs #6985)
+  - un média rendu depuis une CLÉ DE STOCKAGE passe par le résolveur, jamais par URL(string:) nu (Closes #7056)
+  - la garde de forme de la grille couvre les CINQ agencements et ne s'arrête plus à la première case absente (Refs #7030)
+  - G5 ne mesure qu'une case RÉELLEMENT à l'écran — défiler une fois ne ferme pas la course (Refs #7048)
+  - la grille de médias plafonnée garde la forme des cases — aspectRatio, jamais height (Refs #7030)
+  - le rail son d'un réel ne survit plus à une piste de fond refusée (Refs #7015)
+  - une piste de fond refusée ne laisse plus un bouton muet INERTE sur le lecteur de story (Refs #7015)
+  - le témoin nominal de RichText porte une classe RÉELLE — `check-utilities` redevient vert (Refs #7033)
+  - le corpus de démonstration du texte enrichi ne grossit plus la liste — `check-lens` redevient vert
+  - les liens, les mentions et les quatre emphases sont cliquables — y compris sur le texte traduit
+  - l'archive /me/export sert des adresses OUVRABLES, plus des clés de stockage (Refs #7022)
+  - le blocage se lit par SUJET, plus dans les cent premières lignes d'un panier (Refs #7125)
+  - « nouvelle connexion » se juge sur l'APPAREIL, plus sur la session qui vient de naître (Closes #7035)
+  - le service de notifications se découpe par responsabilité — lois pures et éventails batch hors de NotificationService.ts, le cliquet descend
+  - les quatre éventails batch + member_joined quittent NotificationService.ts vers fanout/ (Refs #7093)
+  - extraire post-media-thumbnail.ts de NotificationService.ts (Refs #7093)
+  - extraire notification-preview.ts de NotificationService.ts (Refs #7093)
+  - extraire push-header.ts de NotificationService.ts (Refs #7093)
+  - le site unique de `attachments` en est vraiment un — la boucle jumelle du handler socket est résorbée (Refs #7070)
+  - message:new/message:edited servent la MÊME charge par socket et REST/ZMQ (Refs #7070)
+  - la première page MESURE son hasMore, et les bornes annoncées sont celles qui s'appliquent (Closes #6993, Closes #6994)
+  - le correctif d'adresse ne fait plus grossir un fichier hors budget (Refs #7022)
+  - le curseur de la liste des conversations se résout dans le scope du lecteur (Closes #6991)
+  - le plancher de protection d'une pièce jointe est DÉRIVÉ de l'inventaire, jamais recopié (Refs #7029, #7014)
+  - couverture de text-segments.ts au seuil global — Test shared redevient vert (Refs #7033)
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.21.4
+
 ## 1.62.0
 
 ### Minor Changes
