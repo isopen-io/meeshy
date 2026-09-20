@@ -216,11 +216,24 @@ describe('derivedGlassInkPairs / glassContrastCoverage — la garde, falsifiée'
     expect(derivedGlassInkPairs([source('src/components/x.tsx', tsx)])).toEqual([]);
   });
 
+  /**
+   * LE COUPLE FACTICE DOIT RESTER ABSENT DE L'INVENTAIRE, et ce n'est pas un
+   * détail d'écriture : ces deux témoins utilisaient
+   * `glass-prominent` × `--ios-ink-3`, que #7178 vient d'y INSCRIRE (le
+   * placeholder de la bande du composeur). Ils sont alors tombés — non pas
+   * parce que la garde s'est cassée, mais parce que leur sujet avait cessé
+   * d'être neuf.
+   *
+   * Un témoin de falsification tient un couple en otage : il rougit le jour où
+   * ce couple devient légitime. Celui retenu ici, `glass` × `--ios-ink-3`, est
+   * absent de l'inventaire ET de l'application — s'il y entrait un jour, ces
+   * deux témoins le diraient de la même façon.
+   */
   test('un couple neuf, absent de l’inventaire, FAIT ROUGIR la garde — le défaut que #6367 corrige', () => {
-    const tsx = `<div className="glass-prominent"><span style={{ color: 'var(--color-ios-ink-3)' }}>x</span></div>`;
+    const tsx = `<div className="glass"><span style={{ color: 'var(--color-ios-ink-3)' }}>x</span></div>`;
     const violations = glassContrastCoverage([source('src/components/fabrique.tsx', tsx)]);
     expect(violations).toEqual([
-      { tone: '--ios-surface', ink: '--ios-ink-3', density: 'glass-prominent', sites: ['src/components/fabrique.tsx'] },
+      { tone: '--ios-surface', ink: '--ios-ink-3', density: 'glass', sites: ['src/components/fabrique.tsx'] },
     ]);
   });
 
@@ -230,9 +243,9 @@ describe('derivedGlassInkPairs / glassContrastCoverage — la garde, falsifiée'
   });
 
   test('le même couple, deux fichiers, ne rougit qu’une fois et cite les DEUX sites', () => {
-    const tsx = `<div className="glass-prominent"><span style={{ color: 'var(--color-ios-ink-3)' }}>x</span></div>`;
+    const tsx = `<div className="glass"><span style={{ color: 'var(--color-ios-ink-3)' }}>x</span></div>`;
     const violations = glassContrastCoverage([source('src/a.tsx', tsx), source('src/b.tsx', tsx)]);
-    expect(violations).toEqual([{ tone: '--ios-surface', ink: '--ios-ink-3', density: 'glass-prominent', sites: ['src/a.tsx', 'src/b.tsx'] }]);
+    expect(violations).toEqual([{ tone: '--ios-surface', ink: '--ios-ink-3', density: 'glass', sites: ['src/a.tsx', 'src/b.tsx'] }]);
   });
 });
 

@@ -16,6 +16,7 @@ import { decodeNotification } from '@/lib/notifications/record';
 
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
 import { FEED_QUERY_KEY } from './feed';
+import { applyPostCreated, applyPostDeleted, applyPostUpdated } from './feed-realtime';
 import type { FeedInfiniteData } from './feed-pages';
 import { FRIENDS_QUERY_PREFIX } from './friends-keys';
 import { PUBLIC_PROFILE_QUERY_PREFIX } from './public-profile';
@@ -370,6 +371,32 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   const onPostLiked = onPostLikeChanged(true);
   const onPostUnliked = onPostLikeChanged(false);
 
+  /**
+   * `post:created` / `post:updated` / `post:deleted` (#7182) — LE FLUX APPREND
+   * CE QUI ARRIVE. Ces trois événements étaient MUETS ici pendant que leurs
+   * sept cousins (`post:liked`, `post:bookmarked`, les quatre `story:*`,
+   * `comment:added`) étaient écoutés : une publication d'un ami n'atteignait
+   * jamais le fil sans rechargement.
+   *
+   * Les lois vivent dans `feed-realtime.ts` — réconciliation par cmid,
+   * idempotence, insertion en tête, préservation de l'état du lecteur — et
+   * un écouteur ne tient QUE le branchement (D-98). L'import est STATIQUE et
+   * c'est MESURÉ : `feed-realtime.ts` ne tient aucune requête, et le rendre
+   * différé coûtait PLUS que le module lui-même (5,10 Ko contre 5,01 pour le
+   * chunk `realtime` — trois `import()` et leur table de dépendances).
+   */
+  const onPostCreated = (payload: unknown): void => {
+    applyPostCreated(deps.queryClient, payload);
+  };
+
+  const onPostUpdated = (payload: unknown): void => {
+    applyPostUpdated(deps.queryClient, payload);
+  };
+
+  const onPostDeleted = (payload: unknown): void => {
+    applyPostDeleted(deps.queryClient, payload);
+  };
+
   const onPostBookmarked = (payload: unknown): void => {
     if (!isPostBookmarkEvent(payload)) return;
     const { postId, bookmarked, bookmarkCount } = payload;
@@ -540,6 +567,9 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.STORY_UPDATED, onStoryChanged);
   socket.on<unknown>(SERVER_EVENTS.STORY_DELETED, onStoryChanged);
   socket.on<unknown>(SERVER_EVENTS.STORY_VIEWED, onStoryChanged);
+  socket.on<unknown>(SERVER_EVENTS.POST_CREATED, onPostCreated);
+  socket.on<unknown>(SERVER_EVENTS.POST_UPDATED, onPostUpdated);
+  socket.on<unknown>(SERVER_EVENTS.POST_DELETED, onPostDeleted);
   socket.on<unknown>(SERVER_EVENTS.POST_LIKED, onPostLiked);
   socket.on<unknown>(SERVER_EVENTS.POST_UNLIKED, onPostUnliked);
   socket.on<unknown>(SERVER_EVENTS.POST_BOOKMARKED, onPostBookmarked);
@@ -588,6 +618,9 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_TRANSLATION, onMessageTranslation);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
       socket.off<unknown>(SERVER_EVENTS.COMMENT_ADDED, onCommentAdded);
+      socket.off<unknown>(SERVER_EVENTS.POST_CREATED, onPostCreated);
+      socket.off<unknown>(SERVER_EVENTS.POST_UPDATED, onPostUpdated);
+      socket.off<unknown>(SERVER_EVENTS.POST_DELETED, onPostDeleted);
       socket.off<unknown>(SERVER_EVENTS.STORY_CREATED, onStoryChanged);
       socket.off<unknown>(SERVER_EVENTS.STORY_UPDATED, onStoryChanged);
       socket.off<unknown>(SERVER_EVENTS.STORY_DELETED, onStoryChanged);

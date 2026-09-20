@@ -38,19 +38,16 @@ import { useMinute } from '@/lib/view/use-minute';
 import { usePostGesture } from '@/lib/view/use-post-gesture';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { Link, href, navigate } from '@/routes/route-table';
+import { ProfileHero } from '@/routes/user-profile-header';
+import { ProfileBlockedCard, ProfileRelationSection, ProfileStatsBand, ProfileStatsSection } from '@/routes/user-profile-sections';
 import {
-  ProfileBlockedCard,
-  ProfileHero,
   ProfileNotice,
   ProfileOfflineBanner,
   ProfilePostsEmpty,
   ProfilePostsError,
   ProfilePostsMore,
-  ProfileRelationSection,
   ProfileSkeleton,
-  ProfileStatsBand,
-  ProfileStatsSection,
-} from '@/routes/user-profile-sections';
+} from '@/routes/user-profile-states';
 
 /**
  * **LE PROFIL PUBLIC DE QUELQU'UN** (#7032, complété par #7083) — `/u/$username`,

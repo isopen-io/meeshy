@@ -219,7 +219,20 @@ export function DiscoverTabBar({
 
 function PersonAvatar({ person, name }: { readonly person: PersonSummary | null; readonly name: string }) {
   const avatar = person?.avatar ?? null;
-  return <Avatar initials={initialsOf(name)} color={colorForName(name)} size={44} {...(avatar === null ? {} : { src: avatar })} />;
+  /* L'AVATAR OUVRE LE PROFIL (#6396) — le critère de fin nommait précisément
+     ces lignes : « les lignes de la découverte, des demandes et des bloqués
+     l'ouvrent ». Les quatre listes de cet écran passent par ici. */
+  const handle = person?.username !== undefined && person.username !== '' ? person.username : undefined;
+  return (
+    <Avatar
+      initials={initialsOf(name)}
+      color={colorForName(name)}
+      size={44}
+      name={name}
+      {...(avatar === null ? {} : { src: avatar })}
+      {...(handle === undefined ? {} : { profileUsername: handle })}
+    />
+  );
 }
 
 function PersonText({ person, name, children }: { readonly person: PersonSummary | null; readonly name: string; readonly children?: ReactNode }) {

@@ -44,6 +44,14 @@ const POST_MENTIONS = [
 
 function makePrisma(post: unknown) {
   return {
+    /* #7184 — les deux lectures de `getBlockRelatedUserIds` : « qui m'a bloqué »
+       et « qui j'ai bloqué ». La garde de blocage traverse désormais
+       `buildVisibilityFilter`, donc tout double qui compose un `where` de post
+       doit les servir — un double muet ferait rougir la garde, pas le code. */
+    user: {
+      findMany: jest.fn().mockResolvedValue([]),
+      findUnique: jest.fn().mockResolvedValue({ blockedUserIds: [] }),
+    } as any,
     post: {
       findFirst: jest.fn<any>().mockResolvedValue(post),
       count: jest.fn<any>().mockResolvedValue(0),

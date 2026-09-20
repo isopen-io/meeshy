@@ -80,6 +80,11 @@ export type CommentRowProps = {
   readonly gestures?: CommentGestureHandlers | undefined;
 };
 
+/** LE PSEUDO, pour que l'avatar d'un commentaire ouvre le profil de son
+ *  auteur (#6396). Absent ⇒ aucun lien : `/u/` n'est pas une adresse. */
+const handleOf = (author: PostComment['author']): string | undefined =>
+  typeof author.username === 'string' && author.username !== '' ? author.username : undefined;
+
 const displayName = (author: PostComment['author']): string => {
   const display = typeof author.displayName === 'string' && author.displayName !== '' ? author.displayName : null;
   const username = typeof author.username === 'string' && author.username !== '' ? author.username : null;
@@ -479,7 +484,14 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
       className="flex gap-3 py-2"
       style={{ opacity: comment.pending === true ? 0.6 : 1 }}
     >
-      <Avatar initials={initialsOf(name)} color="var(--color-ios-brand)" size={32} {...(photo === undefined ? {} : { src: photo })} />
+      <Avatar
+        initials={initialsOf(name)}
+        color="var(--color-ios-brand)"
+        size={32}
+        name={name}
+        {...(photo === undefined ? {} : { src: photo })}
+        {...(handleOf(comment.author) === undefined ? {} : { profileUsername: handleOf(comment.author) as string })}
+      />
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <div className="flex min-w-0 items-baseline gap-2">
           <span className="truncate text-check font-semibold" style={{ color: 'var(--color-ios-ink)' }}>

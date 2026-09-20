@@ -23,6 +23,10 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { loadMoreRootMargin, paginationStateOf, showsAllLoadedHint } from '@/lib/lens/pagination';
 import { PINNED_RAIL_RELEASE_RATIO, PINNED_RAIL_REVEAL_RATIO } from '@/lib/lens/pinned-rail';
 import { useOnline } from '@/lib/net/online';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+
+import { FeedNewPostsBanner } from '@/components/feed-new-posts-banner';
+import { FEED_NEW_COUNT_KEY, clearNewPostCount } from '@/lib/api/feed-new-count';
 import { FLOATING_CORRIDOR_BOTTOM } from '@/lib/view/floating-corridor';
 import { usePostGesture } from '@/lib/view/use-post-gesture';
 import { useLoadMoreSentinel } from '@/lib/view/use-load-more-sentinel';
@@ -253,6 +257,21 @@ export default function FeedScreen() {
   const paginationState = paginationStateOf(feed);
   const pull = usePullToRefresh({ root: frame, onRefresh: refreshFeedAction, threshold: PULL_THRESHOLD });
   const posts = feed.data ?? EMPTY_POSTS;
+  /**
+   * CE QUI EST ARRIVÉ PENDANT QU'ON LISAIT (#7182) — le compte que
+   * `applyPostCreated` tient sur l'écoute de `post:created`. Il vit dans le
+   * cache de requêtes parce que c'est le canal que la socket et cet écran
+   * partagent déjà ; `enabled` reste vrai mais `staleTime: Infinity` garantit
+   * que la `queryFn` ne sert QUE de valeur initiale — ce compte n'a aucune
+   * source serveur, il naît et meurt avec l'onglet.
+   */
+  const queryClient = useQueryClient();
+  const newPosts = useQuery({ queryKey: FEED_NEW_COUNT_KEY, queryFn: () => 0, staleTime: Infinity, gcTime: Infinity });
+  const onSeeNewPosts = useCallback(() => {
+    frame.current?.scrollTo({ top: 0, behavior: 'smooth' });
+    clearNewPostCount(queryClient);
+  }, [queryClient]);
+
 
   const models = useMemo(
     () => posts.map((post) => resolveFeedCardModel(post, { preferredLanguages: readerLanguages, now: new Date() })),
@@ -299,6 +318,10 @@ export default function FeedScreen() {
   return (
     <div className="relative flex h-dvh flex-col overflow-hidden pt-safe">
       <FeedHeader pinned={pinned} railProps={railProps} />
+      {/* ELLE FLOTTE — exception à D-50 arbitrée par le porteur le 2026-09-20 :
+          dans le flux, elle n'aurait été visible qu'en haut du fil, là où son
+          information est déjà sous les yeux et son geste sans objet. */}
+      <FeedNewPostsBanner count={newPosts.data ?? 0} topPx={FEED_HEADER_HEIGHT + 8} onTap={onSeeNewPosts} />
       <p role="status" aria-live="polite" className="sr-only">
         {announcement}
       </p>

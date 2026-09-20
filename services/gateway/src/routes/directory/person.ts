@@ -10,6 +10,7 @@ import type { UnifiedAuthRequest } from '../../middleware/auth';
 import type { UserRoleEnum } from '@meeshy/shared/types';
 import { computeUserStats, servedUserStats } from '../user-stats';
 import { publicProfileSchema, servirProfilPublic } from '../users/public-profile';
+import { profileViewerId } from '../users/profile-block-gate';
 import { getOptionalAuth } from '../users/presence-gate';
 import { parseFieldList, parseTokenSet, restrictFields } from '../../utils/sparse-fieldset';
 import { hasBlocked } from '../../utils/blocking';
@@ -45,10 +46,10 @@ const CHAMPS_PRESENCE = ['isOnline', 'lastActiveAt'] as const;
  * construction — et un invité de lien, qui n'a pas de compte, ne peut être ni
  * ami ni propriétaire : il lit ce que lit un anonyme, ce qui est juste.
  */
-function lecteurInscrit(request: FastifyRequest): string | undefined {
-  const acteur = (request as unknown as UnifiedAuthRequest).authContext;
-  return acteur?.isAuthenticated ? acteur.registeredUser?.id : undefined;
-}
+/* La lecture vit dans `routes/users/profile-block-gate.ts` depuis #7184 : la
+   garde de blocage et cette route doivent désigner LE MÊME lecteur, sans quoi
+   l'une garderait un viewer que l'autre ignore. */
+const lecteurInscrit = profileViewerId;
 
 /**
  * Ce qu'un `expand` peut demander. Tout autre jeton est ignoré, jamais refusé.

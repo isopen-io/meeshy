@@ -194,6 +194,33 @@ export const GLASS_CONTRAST_INVENTORY = [
     kind: 'non-text',
   },
   {
+    /**
+     * #7178 — LE PLACEHOLDER de la même bande, et il n'est PAS un glyphe :
+     * « Message… » est du TEXTE, lu par les voyants comme par les lecteurs
+     * d'écran. Le classer `non-text` aurait fait passer le gate en changeant
+     * la question, pas la réponse — c'est un assouplissement de seuil déguisé,
+     * et D-51 l'interdit.
+     *
+     * L'entrée a manqué à #7143 pour la raison que son voisin explique : la
+     * couverture dérive les couples FICHIER PAR FICHIER, et ici le verre est
+     * posé dans `routes/thread.tsx` quand l'encre vit dans
+     * `components/composer.tsx`. **Un verre dont le contenu est un composant
+     * enfant échappe à la détection** — les deux entrées de cette bande ont dû
+     * être écrites à la main.
+     *
+     * Ce qui l'a fait passer n'est ni l'encre (`--ios-ink-3` est au cran
+     * minimal d'iOS, D-18 bis) ni le ton (`glass-card` DÉGRADE à 4,21:1,
+     * mesuré) mais la DENSITÉ, relevée de 92 à 94 % sur mesure.
+     *
+     * Mesure à 94 % : 4,55:1 en clair, 4,52:1 en sombre (minimum texte 4,5:1).
+     */
+    site: 'src/components/composer.tsx — le placeholder de la bande (#7178)',
+    tone: '--ios-surface',
+    ink: '--ios-ink-3',
+    density: 'glass-prominent',
+    kind: 'text',
+  },
+  {
     site: 'src/components/thread-chrome.tsx — DayPill, la pilule de jour collante',
     tone: '--ios-surface-card',
     ink: '--ios-day-ink',

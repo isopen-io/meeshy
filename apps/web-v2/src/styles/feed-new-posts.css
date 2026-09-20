@@ -1,0 +1,46 @@
+/**
+ * LA PILULE « N NOUVELLES PUBLICATIONS » (#7182).
+ *
+ * Elle FLOTTE au-dessus du fil — exception à D-50 arbitrée par le porteur le
+ * 2026-09-20 (le motif vit dans le doc-comment du composant). Elle est donc
+ * OPAQUE : une pilule translucide au-dessus d'un texte rendrait les deux
+ * illisibles, ce qui transformerait un recouvrement assumé en défaut de
+ * lisibilité (dimension 5).
+ *
+ * L'ombre n'est pas une décoration : c'est elle qui dit que la pilule est
+ * AU-DESSUS du fil et non dedans, la seule affordance dont dispose un élément
+ * qui ne réserve aucune place.
+ */
+.feed-new-posts {
+  color: white;
+  background-color: var(--color-ios-brand);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 22%);
+  animation: feed-new-posts-in 360ms cubic-bezier(0.2, 0.9, 0.3, 1.2) backwards;
+}
+
+/**
+ * Elle DESCEND de sous l'en-tête, d'où le fil l'a reçue. Une animation, pas une
+ * transition : la pilule est montée au moment où le compte passe de zéro à un,
+ * et une transition n'a rien à interpoler depuis un élément qui vient de naître
+ * (même défaut que `floating-rung-in`, `floating-menus.css`).
+ */
+@keyframes feed-new-posts-in {
+  from {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/**
+ * L'animation EXPLIQUE d'où sort la pilule ; elle n'est pas l'information.
+ * Coupée, la pilule est là, à sa place, immédiatement.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .feed-new-posts {
+    animation: none;
+  }
+}

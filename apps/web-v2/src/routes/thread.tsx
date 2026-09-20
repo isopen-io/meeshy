@@ -30,10 +30,12 @@ import { apiDeps } from '@/lib/api/deps';
 import { recordViewOnceConsumption } from '@/lib/api/fixtures';
 import { patchThreadMessages } from '@/lib/api/messages';
 import { useConversationsSnapshot, useThreadData } from '@/lib/api/query';
+import { markCaughtUp } from '@/lib/api/receipts';
 import { applyConsumption } from '@/lib/api/view-once';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
 import { accentOf, withAccent } from '@/lib/accent';
+import { conversationStore } from '@/lib/conversation-store';
 import { isGroup, titleOf, unreadOf, participantAvatarOf } from '@/lib/view/conversation';
 import { useParams } from '@/lib/router';
 import { mergeTimeline, place } from '@/lib/grouping';
@@ -67,6 +69,7 @@ import { BOTTOM_ANCHOR_FRAMES, pinToBottom } from '@/lib/view/pin-to-bottom';
 import { useThreadChromeSignals } from '@/lib/view/use-thread-chrome-signals';
 import { useThreadInsets } from '@/lib/view/use-thread-insets';
 import { THREAD_ROW_ESTIMATE, useOlderMessages } from '@/lib/view/use-older-messages';
+import { useReadTracking } from '@/lib/view/use-read-tracking';
 import { ThreadModes } from './thread-modes';
 
 /**
@@ -590,6 +593,36 @@ export default function ThreadScreen() {
   });
 
   /**
+   * LE MARQUAGE-LU SANS GESTE (#7201, W1) — ouvrir ce fil, le faire défiler
+   * jusqu'au bout et revenir au premier plan avancent la frontière de
+   * lecture. `useReadTracking` (`lib/view/use-read-tracking.ts`) pose
+   * l'IntersectionObserver et les écouteurs `visibilitychange`/`focus` ; cet
+   * écran ne fait que CÂBLER `onMark` vers `markCaughtUp`
+   * (`lib/api/receipts.ts`), qui porte la discipline optimiste (override
+   * avant réseau, rollback sur refus) — même séparation que `fetchOlder`
+   * ci-dessus.
+   *
+   * La frontière est le dernier message CONFIRMÉ (`threadData.messages`,
+   * JAMAIS `messages`/`placed`, qui portent aussi les envois optimistes
+   * encore locaux — un id que le serveur ne connaît pas).
+   */
+  const lastConfirmedMessageId = threadData.messages[threadData.messages.length - 1]?.id;
+  const onMarkCaughtUp = useCallback((markedConversationId: string, caughtUpToMessageId: string) => {
+    void markCaughtUp({
+      conversationId: markedConversationId,
+      caughtUpToMessageId,
+      deps: { ...apiDeps, store: conversationStore, queryClient },
+    });
+  }, [queryClient]);
+  const readTracking = useReadTracking({
+    scroller,
+    conversationId,
+    lastMessageId: lastConfirmedMessageId,
+    enabled: placed.length > 0,
+    onMark: onMarkCaughtUp,
+  });
+
+  /**
    * UN FIL S'OUVRE EN BAS. Sur le dernier message, pas sur le premier — et
    * `align: 'end'` plutôt qu'un `scrollTop = scrollHeight`, qui serait faux
    * tant que les hauteurs réelles ne sont pas mesurées.
@@ -894,6 +927,7 @@ export default function ThreadScreen() {
           typistAvatarOf={typistAvatarOf}
           accent={accent}
           older={{ state: older.state, sentinelRef: older.sentinelRef }}
+          readTrackingSentinelRef={readTracking.sentinelRef}
         />
       </main>
       {/*

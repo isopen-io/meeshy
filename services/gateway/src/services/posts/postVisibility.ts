@@ -81,12 +81,40 @@ export type PostAclPrisma = Pick<
  * l'accord des deux formes unitaire/lot est verrouillé cas par cas dans
  * `__tests__/unit/services/posts/postAudienceConsumption.test.ts`.
  */
+/**
+ * `blockedAuthorIds` — LE BLOCAGE, DANS LES DEUX SENS (#7184).
+ *
+ * La branche `{ visibility: PUBLIC }` ci-dessous n'a AUCUNE contrainte
+ * d'auteur, et `PUBLIC` est le défaut Prisma (`schema.prisma:3307`) : c'est par
+ * elle, et elle seule, que le contenu d'une personne qui avait bloqué le
+ * lecteur continuait de passer — publications, réels et stories. Mesuré avant
+ * ce lot : le mot `block` n'apparaissait pas une fois dans ce fichier.
+ *
+ * L'exclusion se pose donc AU-DESSUS du `OR`, jamais dans une de ses branches :
+ * la poser sur `FRIENDS` aurait laissé `PUBLIC` grand ouvert, et le défaut
+ * aurait survécu à son propre correctif.
+ *
+ * **La SYMÉTRIE est juste ici, et elle ne l'est pas sur le profil.** La garde
+ * jumelle (`routes/users/profile-block-gate.ts`) sert encore la fiche d'une
+ * personne que J'AI bloquée, parce que c'est de là qu'on débloque. Le contenu
+ * veut l'inverse : bloquer, c'est d'abord ne plus voir ce que l'autre publie.
+ * Les appelants résolvent donc `blockedIdsAroundViewer`
+ * (`services/ContactDirectoryService.ts:194`), qui confond les deux directions
+ * à dessein.
+ *
+ * La forme ne change QUE lorsqu'il y a quelque chose à écarter : un
+ * `notIn: []` ne garde rien et coûterait un niveau d'imbrication à chaque plan
+ * de requête, pour l'écrasante majorité des lecteurs qui n'ont bloqué
+ * personne. Tous les appelants posent déjà ce fragment dans un `AND` parent,
+ * où un `AND` imbriqué est légal.
+ */
 export function buildPostVisibilityOrFilter(
   viewerId: string,
   audienceIds: string[],
-  communityCoMemberIds: string[] = []
+  communityCoMemberIds: string[] = [],
+  blockedAuthorIds: readonly string[] = []
 ) {
-  return {
+  const audience = {
     OR: [
       { authorId: viewerId },
       { visibility: PostVisibility.PUBLIC },
@@ -96,6 +124,8 @@ export function buildPostVisibilityOrFilter(
       { visibility: PostVisibility.ONLY, visibilityUserIds: { has: viewerId } },
     ],
   };
+  if (blockedAuthorIds.length === 0) return audience;
+  return { AND: [audience, { authorId: { notIn: [...blockedAuthorIds] } }] };
 }
 
 /**
