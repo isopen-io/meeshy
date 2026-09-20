@@ -115,8 +115,14 @@ struct ThemedFeedOverlay: View {
     @StateObject private var viewModel = FeedViewModel()
     /// Élit le réel le plus centré dans le viewport et pilote sa lecture muette
     /// (source UNIQUE de "quel réel joue"). Call-aware via son init par défaut.
-    /// Identique au chemin iPad (`FeedView.feedScrollView`).
-    @StateObject private var reelAutoplay = ReelFeedAutoplayCoordinator()
+    ///
+    /// `@State` et NON `@StateObject` (#7010) : ce body n'en lit rien — il
+    /// remet la référence et l'appelle — et l'abonnement re-diffusait tout le
+    /// fil à chaque changement de réel actif, donc à chaque tick de
+    /// défilement. Seule `ReelFeedCard` l'observe, et c'est la seule qui en a
+    /// besoin. Le chemin iPad (`FeedView`) portait déjà ce montage : c'est le
+    /// même correctif, qui n'avait jamais traversé.
+    @State private var reelAutoplay = ReelFeedAutoplayCoordinator()
     @EnvironmentObject var router: Router
     @EnvironmentObject var storyViewModel: StoryViewModel
     @EnvironmentObject var statusViewModel: StatusViewModel

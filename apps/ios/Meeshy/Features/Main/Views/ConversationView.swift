@@ -265,14 +265,15 @@ struct ConversationView: View {
     /// Lecture/écriture depuis les handlers (send, mention, edit) via
     /// `composerText.text` — hors body, donc sans créer de dépendance.
     @State var composerText = ConversationComposerTextModel()
-    /// POSSÉDÉ, PAS OBSERVÉ (#6226) — `@State` et non `@StateObject` : le
-    /// vumètre publie vingt fois par seconde et la racine n'en lit aucune
-    /// valeur dans son `body`. Elle appelle des MÉTHODES, ce qui n'exige aucun
-    /// abonnement ; `ComposerAudioHost` est l'unique observateur. Même
-    /// dispositif que `composerText` deux lignes plus haut (#4105).
+    /// POSSÉDÉS, PAS OBSERVÉS (#6226) — `@State` et non `@StateObject` : le
+    /// vumètre publie vingt fois par seconde, le lecteur sa progression dix
+    /// fois, et la racine n'en lit aucune valeur dans son `body`. Elle appelle
+    /// des MÉTHODES, ce qui n'exige aucun abonnement ; `ComposerAudioHost` et
+    /// `PendingAudioTile` en sont les uniques observateurs. Même dispositif
+    /// que `composerText` deux lignes plus haut (#4105).
     @State var audioRecorder = AudioRecorderManager()
     @State var scrollButtonAudioIsPlaying = false
-    @StateObject var pendingAudioPlayer = AudioPlaybackManager()
+    @State var pendingAudioPlayer = AudioPlaybackManager()
     /// Composant unifié « Enregistrer » au niveau écran — sert l'action
     /// `.saveMedia` du menu appui-long (l'overlay n'est pas un cover, la
     /// sheet de destinations se présente sans conflit).

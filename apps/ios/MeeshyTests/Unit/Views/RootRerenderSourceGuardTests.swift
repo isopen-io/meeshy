@@ -55,6 +55,43 @@ final class RootRerenderSourceGuardTests: XCTestCase {
         )
     }
 
+    /// **Le fil de l'iPhone ne s'abonne pas au coordinateur de lecture
+    /// automatique des réels** (#7010).
+    ///
+    /// `ReelFeedAutoplayCoordinator` publie `activeReelId` PENDANT le
+    /// défilement — c'est son rôle : élire le réel le plus centré. Le body de
+    /// `ThemedFeedOverlay` n'en lit aucune valeur ; il ne fait que remettre la
+    /// référence (`coordinator:`, `reelAutoplay:`) et l'appeler (`update`,
+    /// `clear`). Tant qu'il la déclare en `@StateObject`, chaque changement de
+    /// réel actif re-diffuse tout le fil.
+    ///
+    /// Le chemin iPad a reçu ce correctif avec la raison écrite à côté
+    /// (`FeedView.swift`) ; il n'avait jamais traversé vers l'iPhone.
+    func test_theIPhoneFeedDoesNotObserveTheReelAutoplayCoordinator() throws {
+        let code = try strippedSource("RootViewComponents.swift")
+        XCTAssertFalse(
+            code.contains("@StateObject private var reelAutoplay"),
+            "`ThemedFeedOverlay` ne doit pas OBSERVER le coordinateur de lecture automatique : son body n'en lit rien, et l'abonnement re-diffuse tout le fil à chaque changement de réel actif (#7010)."
+        )
+        XCTAssertTrue(
+            code.contains("@State private var reelAutoplay"),
+            "`ThemedFeedOverlay` doit POSSÉDER le coordinateur en `@State` — même montage que son jumeau iPad `FeedView` (#7010)."
+        )
+    }
+
+    /// **Le pendant : la carte, elle, l'observe toujours.**
+    ///
+    /// La racine cesse de s'abonner ; sans un abonné plus bas, aucun réel ne
+    /// se mettrait à jouer quand l'élection change. C'est `ReelFeedCard` qui
+    /// porte l'abonnement, et c'est le seul qui en a besoin.
+    func test_theReelCardStillObservesTheCoordinatorItDrawsFrom() throws {
+        let code = try strippedSource("ReelFeedCard.swift")
+        XCTAssertTrue(
+            code.contains("@ObservedObject") && code.contains("ReelFeedAutoplayCoordinator"),
+            "`ReelFeedCard` DOIT observer le coordinateur : c'est elle qui décide de jouer (#7010)."
+        )
+    }
+
     /// **Le compteur est dédoublonné.** `refreshUnreadCount` est rappelée au
     /// démarrage, à chaque retour en avant-plan et après chaque marquage-lu, et
     /// rend très souvent la même valeur ; `@Published` republie sans comparer.
