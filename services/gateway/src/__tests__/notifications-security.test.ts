@@ -13,55 +13,28 @@
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { NotificationService } from '../services/notifications/NotificationService';
-// `CreateNotificationData` vit dans `notifications/types.ts` et n'a jamais été
-// réexporté par `NotificationService.ts` — le seul TS2305 qui empêchait cette
-// suite de se charger (#6160).
-import type { CreateNotificationData } from '../services/notifications/types';
+// `CreateNotificationData` (`notifications/types.ts`) décrit une forme PLATE
+// — `senderId`, `senderAvatar`, `messagePreview` au premier niveau — que
+// `createNotification` n'accepte plus : il prend `actor`, `context` et
+// `metadata`. Ce type n'a AUCUN consommateur de production (mesuré) ; s'y
+// annoter faisait croire à un contrat. Les témoins se lient désormais à la
+// SIGNATURE, donc toute dérive future devient une erreur de compilation ici.
+type CreateNotificationParams = Parameters<NotificationService['createNotification']>[0];
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 
-// Mock Prisma
 jest.mock('@meeshy/shared/prisma/client', () => {
-  const mockPrisma = {
-    notification: {
-      create: jest.fn(),
-      findMany: jest.fn(),
-      updateMany: jest.fn(),
-      deleteMany: jest.fn(),
-      count: jest.fn(),
-      createMany: jest.fn()
-    },
-    notificationPreference: {
-      findUnique: jest.fn()
-    },
-    $runCommandRaw: jest.fn()
-  };
-
-  return {
-    PrismaClient: jest.fn(() => mockPrisma)
-  };
+  const actual = jest.requireActual<Record<string, unknown>>('@meeshy/shared/prisma/client');
+  const mockPrisma = require('./helpers/notification-service-doubles').makeNotificationPrisma();
+  return { ...actual, PrismaClient: jest.fn(() => ({ ...mockPrisma, $runCommandRaw: jest.fn() })) };
 });
 
-// Mock loggers
-jest.mock('../utils/logger', () => ({
-  logger: {
-    info: jest.fn(),
-    debug: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn()
-  }
-}));
+jest.mock('../utils/logger', () =>
+  require('./helpers/notification-service-doubles').makeLoggerModule()
+);
 
-jest.mock('../utils/logger-enhanced', () => ({
-  notificationLogger: {
-    info: jest.fn(),
-    debug: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn()
-  },
-  securityLogger: {
-    logViolation: jest.fn()
-  }
-}));
+jest.mock('../utils/logger-enhanced', () =>
+  require('./helpers/notification-service-doubles').makeLoggerEnhancedModule()
+);
 
 describe('Notifications - Tests de Sécurité', () => {
   let service: NotificationService;
@@ -86,12 +59,14 @@ describe('Notifications - Tests de Sécurité', () => {
 
   describe('Protection XSS', () => {
     it('Bloque <script> dans le titre', async () => {
-      const maliciousData: CreateNotificationData = {
+      const maliciousData: CreateNotificationParams = {
         userId: 'user123',
         type: 'new_message',
         title: '<script>alert("XSS")</script>Hacked Title',
         content: 'Normal content',
-        priority: 'normal'
+        priority: 'normal',
+        context: {},
+        metadata: {}
       };
 
       prisma.notificationPreference.findUnique.mockResolvedValue(null);
@@ -123,12 +98,14 @@ describe('Notifications - Tests de Sécurité', () => {
     });
 
     it('Bloque <img> avec onerror dans le contenu', async () => {
-      const maliciousData: CreateNotificationData = {
+      const maliciousData: CreateNotificationParams = {
         userId: 'user123',
         type: 'new_message',
         title: 'Normal title',
         content: '<img src=x onerror=alert(1)>Malicious content',
-        priority: 'normal'
+        priority: 'normal',
+        context: {},
+        metadata: {}
       };
 
       prisma.notificationPreference.findUnique.mockResolvedValue(null);
@@ -160,13 +137,15 @@ describe('Notifications - Tests de Sécurité', () => {
     });
 
     it('Sanitize username avec HTML malveillant', async () => {
-      const maliciousData: CreateNotificationData = {
+      const maliciousData: CreateNotificationParams = {
         userId: 'user123',
         type: 'new_message',
         title: 'Message',
         content: 'Content',
-        senderUsername: '<b>Bold</b><script>evil()</script>user',
-        priority: 'normal'
+        priority: 'normal',
+        context: {},
+        metadata: {},
+        actor: { id: 'sender1', username: 'user', displayName: '<b>Bold</b><script>evil()</script>user' }
       };
 
       prisma.notificationPreference.findUnique.mockResolvedValue(null);
@@ -193,18 +172,21 @@ describe('Notifications - Tests de Sécurité', () => {
 
       const createCall = prisma.notification.create.mock.calls[0][0];
 
-      expect(createCall.data.senderUsername).not.toContain('<script>');
-      expect(createCall.data.senderUsername).not.toContain('<b>');
+      // L'identité de l'acteur ne voyage plus à plat : elle est dans `actor`.
+      expect(createCall.data.actor.displayName).not.toContain('<script>');
+      expect(createCall.data.actor.displayName).not.toContain('<b>');
     });
 
     it('Bloque javascript: dans avatar URL', async () => {
-      const maliciousData: CreateNotificationData = {
+      const maliciousData: CreateNotificationParams = {
         userId: 'user123',
         type: 'new_message',
         title: 'Message',
         content: 'Content',
-        senderAvatar: 'javascript:alert(1)',
-        priority: 'normal'
+        priority: 'normal',
+        context: {},
+        metadata: {},
+        actor: { id: 'sender1', username: 'sender', avatar: 'javascript:alert(1)' }
       };
 
       prisma.notificationPreference.findUnique.mockResolvedValue(null);
@@ -231,16 +213,23 @@ describe('Notifications - Tests de Sécurité', () => {
 
       const createCall = prisma.notification.create.mock.calls[0][0];
 
-      expect(createCall.data.senderAvatar).toBeNull();
+      // #7157 — un protocole refusé ne doit PAS ressortir : `sanitizeURL` rend
+      // `null` précisément pour lui, et le repli `??` le restituait tel quel.
+      expect(createCall.data.actor.avatar ?? null).toBeNull();
     });
 
     it('Sanitize JSON data object', async () => {
-      const maliciousData: CreateNotificationData = {
+      const maliciousData: CreateNotificationParams = {
         userId: 'user123',
         type: 'new_message',
         title: 'Message',
         content: 'Content',
-        data: {
+        priority: 'normal',
+        context: {},
+        // Charge HOSTILE et volontairement malformée : l'assertion porte sur ce
+        // que la sanitisation en fait, donc elle ne peut pas respecter l'union
+        // `NotificationMetadata`. C'est la seule raison de l'assertion de type.
+        metadata: {
           normalField: 'safe',
           $malicious: 'mongodb operator',
           __proto__: 'prototype pollution',
@@ -248,8 +237,7 @@ describe('Notifications - Tests de Sécurité', () => {
             xss: '<script>alert(1)</script>',
             normal: 'safe value'
           }
-        },
-        priority: 'normal'
+        } as unknown as CreateNotificationParams['metadata']
       };
 
       prisma.notificationPreference.findUnique.mockResolvedValue(null);
@@ -287,48 +275,62 @@ describe('Notifications - Tests de Sécurité', () => {
       await service.createNotification(maliciousData);
 
       const createCall = prisma.notification.create.mock.calls[0][0];
-      const savedData = JSON.parse(createCall.data.data || '{}');
+      // La charge est persistée en OBJET (`metadata`), plus en chaîne JSON.
+      const savedData = createCall.data.metadata ?? {};
 
       expect(savedData.$malicious).toBeUndefined();
-      expect(savedData.__proto__).toBeUndefined();
+      // `savedData.__proto__` rend `Object.prototype` sur tout objet ordinaire :
+      // l'attendre `undefined` ne pouvait pas passer, et ne mesurait rien. Ce
+      // qui compte est qu'aucune clé `__proto__` PROPRE ne subsiste, et que
+      // rien n'a pollué le prototype global.
+      expect(Object.prototype.hasOwnProperty.call(savedData, '__proto__')).toBe(false);
+      expect(({} as Record<string, unknown>).polluted).toBeUndefined();
       expect(savedData.nested?.xss).not.toContain('<script>');
     });
   });
 
   describe('Prévention IDOR', () => {
+    // La garde n'a pas changé d'INTENTION, elle a changé de PRIMITIVE : le
+    // marquage passe par `update({ where: { id, userId } })` et la suppression
+    // par un `findUnique` PORTÉ PAR `userId` qui commande le `delete`. Les
+    // témoins attendaient `updateMany`/`deleteMany` — la forme d'avant. Ce qui
+    // compte reste le même, et se vérifie mieux : le `where` porte l'appelant,
+    // et rien ne s'écrit quand la ligne n'est pas à lui.
     it('Empêche user2 de marquer comme lue la notification de user1', async () => {
-      prisma.notification.updateMany.mockResolvedValue({ count: 0 }); // Pas de match
+      prisma.notification.update.mockRejectedValue(new Error('Record to update not found'));
 
       const result = await service.markAsRead('notif-of-user1', 'user2');
 
-      expect(prisma.notification.updateMany).toHaveBeenCalledWith({
+      expect(prisma.notification.update).toHaveBeenCalledWith({
         where: {
           id: 'notif-of-user1',
-          userId: 'user2' // Vérifie que userId correspond
+          userId: 'user2' // la ligne DOIT appartenir à l'appelant
         },
         data: {
-          isRead: true
+          isRead: true,
+          readAt: expect.any(Date)
         }
       });
 
-      // Le result devrait indiquer succès même si count=0
-      // (pour ne pas révéler l'existence de la notification)
-      expect(result).toBe(true);
+      // Rien n'est marqué, et l'appelant n'apprend rien de l'existence de la
+      // ligne : il reçoit la même valeur que pour un identifiant inconnu.
+      expect(result).toBeNull();
     });
 
     it('Empêche user2 de supprimer la notification de user1', async () => {
-      prisma.notification.deleteMany.mockResolvedValue({ count: 0 });
+      prisma.notification.findUnique.mockResolvedValue(null); // pas à user2
 
       const result = await service.deleteNotification('notif-of-user1', 'user2');
 
-      expect(prisma.notification.deleteMany).toHaveBeenCalledWith({
-        where: {
-          id: 'notif-of-user1',
-          userId: 'user2' // Vérifie userId
-        }
-      });
-
-      expect(result).toBe(true); // Ne révèle pas l'échec
+      // La relecture est portée par `userId` — c'est ELLE qui garde.
+      expect(prisma.notification.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'notif-of-user1', userId: 'user2' }
+        })
+      );
+      // Et surtout : la suppression ne part pas « au cas où ».
+      expect(prisma.notification.delete).not.toHaveBeenCalled();
+      expect(result).toBe(false);
     });
 
     it('Vérifie userId dans markConversationNotificationsAsRead (un seul update Mongo, filtre serveur)', async () => {
@@ -432,15 +434,15 @@ describe('Notifications - Tests de Sécurité', () => {
     it('Limite les mentions à 5 par minute (même paire sender-recipient)', async () => {
       const mentionData = {
         mentionedUserId: 'user456',
-        senderId: 'user123',
-        senderUsername: 'spammer',
-        messageContent: 'Spam mention',
+        mentionerUserId: 'user123',
+        messagePreview: 'Spam mention',
         conversationId: 'conv123',
-        messageId: 'msg123',
-        isMemberOfConversation: true
+        messageId: 'msg123'
       };
 
       prisma.notificationPreference.findUnique.mockResolvedValue({ mentionEnabled: true });
+      prisma.user.findUnique.mockResolvedValue({ username: 'sender', displayName: 'Sender', avatar: null });
+      prisma.conversation.findUnique.mockResolvedValue({ id: 'conv123', title: 'Groupe', type: 'group', avatar: null, participants: [] });
       prisma.notification.create.mockResolvedValue({
         id: 'notif123',
         userId: 'user456',
@@ -482,6 +484,11 @@ describe('Notifications - Tests de Sécurité', () => {
       // Tous doivent passer (rate limit par paire)
 
       prisma.notificationPreference.findUnique.mockResolvedValue({ mentionEnabled: true });
+      // `createMentionNotification` résout l'acteur quand `senderProfile` est
+      // absent : sans ce double, elle échoue et rend `null` pour TOUS, ce qui
+      // ressemble à un rate limit alors que c'est une lacune de montage.
+      prisma.user.findUnique.mockResolvedValue({ username: 'sender', displayName: 'Sender', avatar: null });
+      prisma.conversation.findUnique.mockResolvedValue({ id: 'conv123', title: 'Groupe', type: 'group', avatar: null, participants: [] });
       prisma.notification.create.mockResolvedValue({
         id: 'notif123',
         type: 'user_mentioned',
@@ -521,15 +528,15 @@ describe('Notifications - Tests de Sécurité', () => {
     it('Rate limiting se réinitialise après 1 minute', async () => {
       const mentionData = {
         mentionedUserId: 'user456',
-        senderId: 'user123',
-        senderUsername: 'sender',
-        messageContent: 'Mention',
+        mentionerUserId: 'user123',
+        messagePreview: 'Mention',
         conversationId: 'conv123',
-        messageId: 'msg123',
-        isMemberOfConversation: true
+        messageId: 'msg123'
       };
 
       prisma.notificationPreference.findUnique.mockResolvedValue({ mentionEnabled: true });
+      prisma.user.findUnique.mockResolvedValue({ username: 'sender', displayName: 'Sender', avatar: null });
+      prisma.conversation.findUnique.mockResolvedValue({ id: 'conv123', title: 'Groupe', type: 'group', avatar: null, participants: [] });
       prisma.notification.create.mockResolvedValue({
         id: 'notif123',
         userId: 'user456',
@@ -580,7 +587,11 @@ describe('Notifications - Tests de Sécurité', () => {
         priority: 'normal' as const
       };
 
-      await expect(service.createNotification(invalidData)).rejects.toThrow();
+      // La production refuse FAIL-CLOSED en rendant `null` et en journalisant
+      // une violation — elle ne lève pas. Ce que le témoin doit garantir est
+      // qu'aucune ligne n'est écrite, pas la forme du refus.
+      await expect(service.createNotification(invalidData)).resolves.toBeNull();
+      expect(prisma.notification.create).not.toHaveBeenCalled();
     });
 
     it('Rejette une priorité invalide', async () => {
@@ -592,7 +603,8 @@ describe('Notifications - Tests de Sécurité', () => {
         priority: 'super_mega_urgent' as any
       };
 
-      await expect(service.createNotification(invalidData)).rejects.toThrow();
+      await expect(service.createNotification(invalidData)).resolves.toBeNull();
+      expect(prisma.notification.create).not.toHaveBeenCalled();
     });
 
     it('Accepte tous les types valides', async () => {
@@ -689,28 +701,50 @@ describe('Notifications - Tests de Sécurité', () => {
   });
 
   describe('Protection injection MongoDB', () => {
-    it('Échappe les opérateurs MongoDB dans userId', async () => {
-      const maliciousUserId = { $ne: null }; // Tentative d'injection
+    it("N'interpole jamais userId dans une requête — un opérateur reste une valeur", async () => {
+      // Le témoin attendait une levée. Il ne pouvait pas l'obtenir : c'est
+      // PRISMA qui refuse un non-string là où le schéma déclare un String, et
+      // il est doublé ici. Attendre un `throw` mesurait donc le double, pas le
+      // système.
+      //
+      // Ce qu'un double PERMET de prouver est la vraie propriété anti-injection
+      // de ce code : il ne CONSTRUIT aucune requête à partir de la valeur — elle
+      // est remise telle quelle au client, jamais concaténée dans un filtre.
+      const maliciousUserId = { $ne: null };
+      prisma.notification.create.mockResolvedValue({
+        id: 'notif-x', userId: maliciousUserId, type: 'new_message',
+        title: 'Test', content: 'Test', priority: 'normal',
+        isRead: false, createdAt: new Date()
+      });
 
-      // TypeScript devrait empêcher ceci, mais test quand même
-      await expect(
-        service.createNotification({
-          priority: 'normal',
-          context: {},
-          metadata: {},
-          userId: maliciousUserId as any,
-          type: 'new_message',
-          title: 'Test',
-          content: 'Test'
-        })
-      ).rejects.toThrow();
+      await service.createNotification({
+        priority: 'normal',
+        context: {},
+        metadata: {},
+        userId: maliciousUserId as unknown as string,
+        type: 'new_message',
+        title: 'Test',
+        content: 'Test'
+      });
+
+      const createCall = prisma.notification.create.mock.calls[0][0];
+      expect(createCall.data.userId).toBe(maliciousUserId);
+      expect(prisma.$runCommandRaw).not.toHaveBeenCalled();
     });
 
     it('Sanitize les champs dans les queries', async () => {
       // markAsRead avec tentative d'injection
+      prisma.notification.update.mockResolvedValue({
+        id: 'notif123', userId: 'user123', type: 'new_message',
+        title: 'T', content: 'C', priority: 'normal',
+        isRead: true, readAt: new Date(), createdAt: new Date()
+      });
+
       await service.markAsRead('notif123', 'user123');
 
-      const updateCall = prisma.notification.updateMany.mock.calls[0][0];
+      // `update`, pas `updateMany` : la garde de propriété est dans le `where`
+      // d'un update unitaire depuis que la ligne est adressée par son id.
+      const updateCall = prisma.notification.update.mock.calls[0][0];
 
       // Vérifier que les valeurs sont des strings simples
       expect(typeof updateCall.where.id).toBe('string');

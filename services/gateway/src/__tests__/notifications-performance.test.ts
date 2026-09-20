@@ -192,7 +192,7 @@ describe('Notifications - Tests de Performance', () => {
       // une ligne PAR destinataire. L'assertion vivait dans une suite exclue de
       // jest, donc elle ne pouvait ni le garantir ni le démentir.
       // Ce que le témoin dit désormais est ce qui se passe, et l'écart est porté
-      // par son issue — quand elle sera livrée, c'est CE témoin qui rougira.
+      // par #7156 — quand elle sera livrée, c'est CE témoin qui rougira.
       expect(prisma.notification.createMany).not.toHaveBeenCalled();
       expect(prisma.notification.create).toHaveBeenCalledTimes(50);
 
