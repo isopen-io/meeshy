@@ -115,6 +115,8 @@ const fr = {
   'feed.empty.subtitle': 'Les publications de vos contacts apparaîtront ici.',
   'feed.loading': 'Chargement du fil',
   'feed.allLoaded': 'Toutes les publications sont chargées',
+  'feed.newPosts.one': '{count} nouvelle publication',
+  'feed.newPosts.other': '{count} nouvelles publications',
   'feed.like.error': 'Impossible d’aimer la publication',
   'post.bookmark.error': 'Erreur lors de l’enregistrement',
   'feed.gesture.pending': 'Geste non confirmé — hors ligne',

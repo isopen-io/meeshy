@@ -86,6 +86,8 @@ const es = {
   'feed.empty.subtitle': 'Las publicaciones de tus contactos aparecerán aquí.',
   'feed.loading': 'Cargando el feed',
   'feed.allLoaded': 'Todas las publicaciones están cargadas',
+  'feed.newPosts.one': '{count} publicación nueva',
+  'feed.newPosts.other': '{count} publicaciones nuevas',
   'feed.like.error': 'Error al dar me gusta',
   'post.bookmark.error': 'No se pudo guardar',
   'feed.gesture.pending': 'Acción no confirmada — sin conexión',
