@@ -79,7 +79,7 @@ public final class CacheBackgroundFlushTask: Sendable {
             logger.warning("Background flush task expired before completion")
         }
         Task {
-            await coordinator.flushAll(deadline: deadline)
+            await CacheBackgroundFlushTask.flush(coordinator, deadline: deadline)
             processingTask.setTaskCompleted(success: true)
         }
     }
@@ -89,6 +89,26 @@ public final class CacheBackgroundFlushTask: Sendable {
     /// the test harness. Drives the coordinator's deadline-aware flush
     /// across every GRDB-backed store.
     public func run(deadline: Date) async {
-        await coordinator.flushAll(deadline: deadline)
+        await Self.flush(coordinator, deadline: deadline)
+    }
+
+    /// **Le filet de flush est un RÉVEIL, pas un sursis** (#7160).
+    ///
+    /// Cette tâche ne s'exécute que lorsque le processus a déjà basculé en
+    /// arrière-plan — donc après `DatabaseSuspension.suspend()`. Sans la
+    /// parenthèse, `flushAll` levait `SQLITE_INTERRUPT` sur chaque store et le
+    /// filet censé sauver les écritures que le flush de premier plan n'a pas eu
+    /// le temps de faire ne sauvait rien du tout, en silence.
+    ///
+    /// Site UNIQUE des deux chemins — `handle` (BGProcessingTask) et `run`
+    /// (harnais de test) — pour que la parenthèse ne puisse pas manquer à l'un
+    /// des deux.
+    nonisolated private static func flush(
+        _ coordinator: CacheCoordinator,
+        deadline: Date
+    ) async {
+        await DatabaseSuspension.duringBackgroundWake {
+            await coordinator.flushAll(deadline: deadline)
+        }
     }
 }

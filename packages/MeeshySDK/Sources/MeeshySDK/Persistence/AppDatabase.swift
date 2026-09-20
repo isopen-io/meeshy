@@ -166,7 +166,7 @@ public final class AppDatabase: @unchecked Sendable {
         // la fenêtre de suspension les écritures lèvent `SQLITE_INTERRUPT` ou
         // `SQLITE_ABORT`. Les lectures en WAL passent — l'écran continue de
         // servir ce qui est en base.
-        configuration.observesSuspensionNotifications = true
+        DatabaseSuspension.arm(&configuration)
         configuration.prepareDatabase { db in
             // WAL mode is GRDB default, but set it explicitly for clarity.
             // busy_timeout prevents immediate SQLITE_BUSY errors under concurrent
@@ -190,8 +190,7 @@ public final class AppDatabase: @unchecked Sendable {
     /// `SQLITE_INTERRUPT` / `SQLITE_ABORT` disent « pas maintenant », jamais
     /// « ce fichier est illisible ».
     static func estUneInterruptionDeSuspension(_ error: Error) -> Bool {
-        guard let erreur = error as? DatabaseError else { return false }
-        return erreur.resultCode == .SQLITE_INTERRUPT || erreur.resultCode == .SQLITE_ABORT
+        DatabaseSuspension.isSuspensionInterruption(error)
     }
 
     /// Delete the SQLite file and its WAL/SHM sidecars so a recreate starts clean.
