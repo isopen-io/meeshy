@@ -15,24 +15,30 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { PostVisibility } from '@meeshy/shared/prisma/client';
 import { buildPostVisibilityOrFilter } from './postVisibility';
 import { getCommunityCoMemberIds } from './communityVisibility';
-import { blockedIdsAroundViewer } from '../ContactDirectoryService';
 
 /** Le fragment Prisma `where` qui impose la visibilité d'un post à un viewer. */
 export async function buildViewerVisibilityFilter(prisma: PrismaClient, viewerUserId?: string) {
   if (!viewerUserId) {
     return { visibility: PostVisibility.PUBLIC };
   }
-  const [friendIds, dmContactIds, communityCoMemberIds, blockedAuthorIds] = await Promise.all([
+  const [friendIds, dmContactIds, communityCoMemberIds] = await Promise.all([
     friendIdsForViewer(prisma, viewerUserId),
     directConversationContactIds(prisma, viewerUserId),
     getCommunityCoMemberIds(prisma, viewerUserId),
-    /* #7184 — le blocage ferme le CONTENU dans les deux sens. Lu ici, avec
-       l'audience, parce que c'est ici que le filtre se compose : une garde
-       résolue chez l'appelant est une garde qu'un appelant peut oublier. */
-    blockedIdsAroundViewer(prisma, viewerUserId),
   ]);
   const audienceIds = [...new Set([...friendIds, ...dmContactIds])];
-  return buildPostVisibilityOrFilter(viewerUserId, audienceIds, communityCoMemberIds, blockedAuthorIds);
+  /* LE BLOCAGE N'EST PAS POSÉ ICI, ET C'EST UNE DÉCISION (#7184).
+     Ce filtre sert les accès UNITAIRES — `PostService.getPostById`,
+     `recordView`, `deletePost` — pour lesquels le dépôt a déjà une garde
+     dédiée, `canUserConsumePost` (`postConsumptionGate.ts:26` l'écrit :
+     « `canUserConsumePost` plutôt que le filtre `buildPostVisibilityOrFilter`
+     posé »). Y greffer le blocage mettrait une règle d'audience de LISTE sur
+     le chemin d'un post nommé, et ferait payer deux lectures à chaque
+     suppression.
+     Le blocage des accès unitaires appartient donc à `canUserConsumePost`,
+     et c'est un lot à part — nommé dans le commentaire de clôture de #7184
+     plutôt que laissé à découvrir. */
+  return buildPostVisibilityOrFilter(viewerUserId, audienceIds, communityCoMemberIds);
 }
 
 /**
