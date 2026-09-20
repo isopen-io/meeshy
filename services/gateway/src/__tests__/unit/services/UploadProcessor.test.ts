@@ -372,21 +372,11 @@ describe('UploadProcessor', () => {
       expect(mockPrismaClient.messageAttachment.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
+            // L'attente est LITTÉRALE : la calculer par `getAttachmentPath`
+            // faisait passer ce témoin quelle que soit la forme rendue (#7022).
             imageVariants: [
-              {
-                width: 640,
-                height: 360,
-                url: processor.getAttachmentPath('2024/01/test/test_image_uuid_640w.webp'),
-                size: 4096,
-                format: 'webp',
-              },
-              {
-                width: 1080,
-                height: 608,
-                url: processor.getAttachmentPath('2024/01/test/test_image_uuid_1080w.webp'),
-                size: 9216,
-                format: 'webp',
-              },
+              { width: 640, height: 360, url: '2024/01/test/test_image_uuid_640w.webp', size: 4096, format: 'webp' },
+              { width: 1080, height: 608, url: '2024/01/test/test_image_uuid_1080w.webp', size: 9216, format: 'webp' },
             ],
           }),
         })
@@ -968,29 +958,32 @@ describe('UploadProcessor', () => {
     });
   });
 
+  // #7022 — ce site rend la CLÉ DE STOCKAGE, jamais une route : ni hôte, ni
+  // préfixe d'API, ni percent-encodage (#4324). Ce que la base en reçoit est
+  // gardé par `uploadProcessorPersistsStorageKey.test.ts`, sur les données
+  // remises à `prisma.messageAttachment.create` plutôt que sur cette fonction.
   describe('getAttachmentPath', () => {
-    it('should generate relative API path without domain', () => {
+    it('should return the bare storage key', () => {
       const filePath = '2024/01/user/file.jpg';
 
       const path = processor.getAttachmentPath(filePath);
 
-      expect(path).toBe(`/api/v1/attachments/file/${encodeURIComponent(filePath)}`);
+      expect(path).toBe('2024/01/user/file.jpg');
       expect(path).not.toContain('http');
-      expect(path).not.toContain('meeshy.me');
+      expect(path).not.toContain('/api/');
     });
 
-    it('should encode file path in relative path', () => {
-      const filePath = '2024/01/user/file with spaces.jpg';
+    it('should leave a space-bearing key unencoded', () => {
+      const path = processor.getAttachmentPath('2024/01/user/file with spaces.jpg');
 
-      const path = processor.getAttachmentPath(filePath);
-
-      expect(path).toContain(encodeURIComponent(filePath));
+      expect(path).toBe('2024/01/user/file with spaces.jpg');
+      expect(path).not.toContain('%2F');
     });
 
     it('should handle empty file path', () => {
       const path = processor.getAttachmentPath('');
 
-      expect(path).toBe('/api/v1/attachments/file/');
+      expect(path).toBe('');
     });
   });
 
