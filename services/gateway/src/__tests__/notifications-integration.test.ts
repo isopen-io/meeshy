@@ -377,6 +377,9 @@ describe('Notifications Integration - Sans Firebase', () => {
         });
 
         return service.createNotification({
+          priority: 'normal',
+          context: {},
+          metadata: {},
           userId,
           type: 'new_message',
           title: `Message ${index}`,
@@ -412,6 +415,9 @@ describe('Notifications Integration - Sans Firebase', () => {
       prisma.notificationPreference.findUnique.mockResolvedValue(preferences);
 
       const result = await service.createNotification({
+        priority: 'normal',
+        context: {},
+        metadata: {},
         userId: 'user123',
         type: 'new_message',
         title: 'Test DND',
@@ -441,6 +447,9 @@ describe('Notifications Integration - Sans Firebase', () => {
       prisma.notificationPreference.findUnique.mockResolvedValue(preferences);
 
       const result = await service.createNotification({
+        priority: 'normal',
+        context: {},
+        metadata: {},
         userId: 'user123',
         type: 'new_message',
         title: 'Test',
@@ -458,6 +467,9 @@ describe('Notifications Integration - Sans Firebase', () => {
       prisma.notification.create.mockRejectedValue(new Error('Database connection error'));
 
       const result = await service.createNotification({
+        priority: 'normal',
+        context: {},
+        metadata: {},
         userId: 'user123',
         type: 'new_message',
         title: 'Test',
@@ -563,6 +575,9 @@ describe('Notifications Integration - Sans Firebase', () => {
         });
 
         return service.createNotification({
+          priority: 'normal',
+          context: {},
+          metadata: {},
           userId: `user${i}`,
           type: 'new_message',
           title: `Message ${i}`,

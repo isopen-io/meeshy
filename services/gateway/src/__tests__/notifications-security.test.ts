@@ -505,12 +505,10 @@ describe('Notifications - Tests de Sécurité', () => {
       for (let i = 0; i < 5; i++) {
         const result = await service.createMentionNotification({
           mentionedUserId: `user${i}`, // Différents recipients
-          senderId: 'user123',
-          senderUsername: 'sender',
-          messageContent: 'Mention',
+          mentionerUserId: 'user123',
+          messagePreview: 'Mention',
           conversationId: 'conv123',
-          messageId: `msg${i}`,
-          isMemberOfConversation: true
+          messageId: `msg${i}`
         });
         results.push(result);
       }
@@ -638,6 +636,9 @@ describe('Notifications - Tests de Sécurité', () => {
 
         await expect(
           service.createNotification({
+            priority: 'normal',
+            context: {},
+            metadata: {},
             userId: 'user123',
             type: type as any,
             title: 'Test',
@@ -674,6 +675,8 @@ describe('Notifications - Tests de Sécurité', () => {
 
         await expect(
           service.createNotification({
+            context: {},
+            metadata: {},
             userId: 'user123',
             type: 'new_message',
             title: 'Test',
@@ -692,6 +695,9 @@ describe('Notifications - Tests de Sécurité', () => {
       // TypeScript devrait empêcher ceci, mais test quand même
       await expect(
         service.createNotification({
+          priority: 'normal',
+          context: {},
+          metadata: {},
           userId: maliciousUserId as any,
           type: 'new_message',
           title: 'Test',
@@ -718,6 +724,9 @@ describe('Notifications - Tests de Sécurité', () => {
 
       try {
         await service.createNotification({
+          priority: 'normal',
+          context: {},
+          metadata: {},
           userId: 'user123',
           type: 'hacked_type' as any,
           title: 'Test',
@@ -741,6 +750,8 @@ describe('Notifications - Tests de Sécurité', () => {
 
       try {
         await service.createNotification({
+          context: {},
+          metadata: {},
           userId: 'user123',
           type: 'new_message',
           title: 'Test',
