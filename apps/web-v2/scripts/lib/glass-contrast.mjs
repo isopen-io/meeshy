@@ -173,6 +173,27 @@ export function glassWorstCaseContrast({ tone, ink, densityPercent, scheme }) {
  */
 export const GLASS_CONTRAST_INVENTORY = [
   {
+    /**
+     * #7143 — la bande du composeur reçoit `glass-prominent` (D-51 : la densité
+     * de « ce qui se pose SUR un contenu qu'on lit »). Ses trois encres sont
+     * des GLYPHES (annuler la réponse, micro) : seuil non-texte.
+     *
+     * **CETTE ENTRÉE A DÛ ÊTRE ÉCRITE À LA MAIN, et c'est un fait à connaître**
+     * — `glassContrastCoverage` ne l'a PAS réclamée. Elle dérive les couples
+     * fichier par fichier ; ici le VERRE est posé dans `routes/thread.tsx` et
+     * les ENCRES vivent dans `components/composer.tsx`. Un verre dont le
+     * contenu est un composant enfant échappe donc entièrement à la
+     * couverture. Mesuré : 0 couple neuf détecté, avec ou sans la classe.
+     *
+     * Mesure : 4,40:1 en clair, 8,47:1 en sombre (minimum non-texte 3:1).
+     */
+    site: 'src/routes/thread.tsx — la bande du composeur, glyphes (#7143)',
+    tone: '--ios-surface',
+    ink: '--ios-ink-2',
+    density: 'glass-prominent',
+    kind: 'non-text',
+  },
+  {
     site: 'src/components/thread-chrome.tsx — DayPill, la pilule de jour collante',
     tone: '--ios-surface-card',
     ink: '--ios-day-ink',
