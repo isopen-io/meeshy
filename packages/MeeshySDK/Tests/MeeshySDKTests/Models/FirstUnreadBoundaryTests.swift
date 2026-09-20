@@ -2,9 +2,15 @@ import Foundation
 import Testing
 @testable import MeeshySDK
 
-/// Miroir de `packages/shared/utils/first-unread.test.ts` — mêmes 8 cas, plus
-/// un 9e propre à Swift (le résultat est bien `Sendable`, pour un appel
+/// Miroir de `packages/shared/utils/first-unread.test.ts` — mêmes 13 cas, plus
+/// un 14e propre à Swift (le résultat est bien `Sendable`, pour un appel
 /// hors `@MainActor`).
+///
+/// Cinq de ces témoins existent parce que la relecture a MESURÉ, par mutation
+/// du TS, que la règle qu'ils nomment n'avait aucun témoin : retirer le filtre
+/// `id != lastReadMessageId`, relâcher la frontière en `>=`, ou supprimer le
+/// rang `joinedAt` laissait les huit premiers VERTS. Deux règles qui se
+/// MASQUENT l'une l'autre sur les cas nominaux n'ont chacune aucun témoin.
 @Suite("FirstUnreadBoundary")
 struct FirstUnreadBoundaryTests {
 
@@ -19,9 +25,9 @@ struct FirstUnreadBoundaryTests {
     @Test("élit le premier message d'autrui quand le curseur est absent (participant neuf)")
     func noCursor_electsFirstOtherMessage() {
         let messages = [
-            message("m1", "other-2", "2026-09-21T10:00:00Z"),
-            message("m2", "viewer-1", "2026-09-21T10:01:00Z"),
-            message("m3", "other-2", "2026-09-21T10:02:00Z"),
+            message("m1", other, "2026-09-21T10:00:00Z"),
+            message("m2", viewer, "2026-09-21T10:01:00Z"),
+            message("m3", other, "2026-09-21T10:02:00Z"),
         ]
 
         let result = FirstUnreadBoundary.resolve(
@@ -117,6 +123,85 @@ struct FirstUnreadBoundaryTests {
             lastReadMessageCreatedAt: nil, viewerId: viewer)
 
         #expect(result == FirstUnreadBoundary.Result(firstUnreadId: "m2", unreadCount: 1))
+    }
+
+    @Test("exclut le message AU curseur même quand son createdAt suit la frontière (décalage d'horloge)")
+    func cursorMessageExcludedDespiteClockSkew() {
+        let messages = [
+            message("m2", other, "2026-09-21T10:01:00Z"), // le message lu, gravé APRÈS la frontière enregistrée
+            message("m4", other, "2026-09-21T10:03:00Z"),
+        ]
+
+        let result = FirstUnreadBoundary.resolve(
+            messages: messages, lastReadMessageId: "m2", lastReadAt: nil,
+            lastReadMessageCreatedAt: ISO8601DateFormatter().date(from: "2026-09-21T10:00:59Z"),
+            viewerId: viewer)
+
+        #expect(result == FirstUnreadBoundary.Result(firstUnreadId: "m4", unreadCount: 1))
+    }
+
+    @Test("exclut un message d'autrui posé EXACTEMENT sur la frontière (comparaison stricte)")
+    func messageExactlyOnBoundaryExcluded() {
+        let messages = [
+            message("m1", other, "2026-09-21T10:02:00Z"), // à la frontière, mais PAS le message au curseur
+            message("m2", other, "2026-09-21T10:05:00Z"),
+        ]
+
+        let result = FirstUnreadBoundary.resolve(
+            messages: messages, lastReadMessageId: nil,
+            lastReadAt: ISO8601DateFormatter().date(from: "2026-09-21T10:02:00Z"),
+            lastReadMessageCreatedAt: nil, viewerId: viewer)
+
+        #expect(result == FirstUnreadBoundary.Result(firstUnreadId: "m2", unreadCount: 1))
+    }
+
+    @Test("replie sur joinedAt quand aucune lecture n'a jamais eu lieu (membre neuf d'un groupe ancien)")
+    func fallsBackToJoinedAt() {
+        let messages = [
+            message("m1", other, "2019-04-02T09:00:00Z"),
+            message("m2", other, "2019-04-03T09:00:00Z"),
+            message("m3", other, "2026-09-21T10:04:00Z"),
+        ]
+
+        let result = FirstUnreadBoundary.resolve(
+            messages: messages, lastReadMessageId: nil, lastReadAt: nil,
+            lastReadMessageCreatedAt: nil,
+            joinedAt: ISO8601DateFormatter().date(from: "2026-09-21T10:00:00Z"),
+            viewerId: viewer)
+
+        #expect(result == FirstUnreadBoundary.Result(firstUnreadId: "m3", unreadCount: 1))
+    }
+
+    @Test("classe joinedAt APRÈS lastReadAt — un membre qui repart et revient garde sa lecture")
+    func joinedAtRanksAfterLastReadAt() {
+        let messages = [
+            message("m1", other, "2026-09-21T10:01:00Z"),
+            message("m2", other, "2026-09-21T10:06:00Z"),
+        ]
+
+        let result = FirstUnreadBoundary.resolve(
+            messages: messages, lastReadMessageId: nil,
+            lastReadAt: ISO8601DateFormatter().date(from: "2026-09-21T10:00:00Z"),
+            lastReadMessageCreatedAt: nil,
+            joinedAt: ISO8601DateFormatter().date(from: "2026-09-21T10:05:00Z"),
+            viewerId: viewer)
+
+        #expect(result == FirstUnreadBoundary.Result(firstUnreadId: "m1", unreadCount: 2))
+    }
+
+    @Test("départage par id deux messages gravés au MÊME instant, quel que soit l'ordre d'entrée")
+    func sameInstantTieBrokenById() {
+        let instant = "2026-09-21T10:07:00Z"
+        let ordered = [message("mA", other, instant), message("mB", other, instant)]
+        let reversed = [message("mB", other, instant), message("mA", other, instant)]
+
+        let expected = FirstUnreadBoundary.Result(firstUnreadId: "mA", unreadCount: 2)
+        #expect(FirstUnreadBoundary.resolve(
+            messages: ordered, lastReadMessageId: nil, lastReadAt: nil,
+            lastReadMessageCreatedAt: nil, viewerId: viewer) == expected)
+        #expect(FirstUnreadBoundary.resolve(
+            messages: reversed, lastReadMessageId: nil, lastReadAt: nil,
+            lastReadMessageCreatedAt: nil, viewerId: viewer) == expected)
     }
 
     @Test("reste correct quand les messages ne sont pas triés en entrée")
