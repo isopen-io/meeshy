@@ -1,3 +1,4 @@
+import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
 import { useCallback, useState } from 'react';
 
 import { Avatar } from './avatar';
@@ -239,7 +240,7 @@ function FeedMediaCarousel({ media, accent }: { readonly media: readonly FeedCar
   );
 }
 
-function FeedPostHeader({ model }: { readonly model: FeedCardModel }) {
+function FeedPostHeader({ model, storyRing }: { readonly model: FeedCardModel; readonly storyRing?: AuthorStoryRing }) {
   return (
     <div className="flex items-center gap-2.5 px-3 pt-3">
       {/* L'AVATAR OUVRE LE PROFIL (#6396). Posé ICI et pas sur la variante
@@ -252,6 +253,7 @@ function FeedPostHeader({ model }: { readonly model: FeedCardModel }) {
         name={model.author.name}
         {...(model.author.avatarSrc !== undefined ? { src: model.author.avatarSrc } : {})}
         {...(model.author.username !== undefined ? { profileUsername: model.author.username } : {})}
+        {...(storyRing === undefined ? {} : { storyRing })}
       />
       <div className="flex min-w-0 flex-col">
         {/* L'HEURE QUALIFIE L'AUTEUR — même ligne, miroir
@@ -557,7 +559,7 @@ function FeedPostVisual({
   );
 }
 
-export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerScene, ...hosts }: { readonly model: FeedCardModel } & CardHosts & SceneHosts) {
+export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerScene, storyRing, ...hosts }: { readonly model: FeedCardModel; readonly storyRing?: AuthorStoryRing } & CardHosts & SceneHosts) {
   // La lecture est une VALEUR REÇUE du magasin d'élection (#6898 § 5.3) —
   // JAMAIS un état local : seules les deux cartes dont le booléen bascule se
   // re-rendent (Zero Unnecessary Re-render).
@@ -585,7 +587,7 @@ export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerS
          incapable de dire de quelle publication il parle. */
       data-feed-card-id={model.id}
     >
-      <FeedPostHeader model={model} />
+      <FeedPostHeader model={model} {...(storyRing === undefined ? {} : { storyRing })} />
       {bodyText !== undefined ? <FeedPostText text={bodyText} mentions={model.validatedMentions} /> : null}
       {/* Un post à SCÈNES SANS média (cas réel, § 3 de la spécification) ne
           doit plus rester nu sous son texte (D-78) : la condition porte donc

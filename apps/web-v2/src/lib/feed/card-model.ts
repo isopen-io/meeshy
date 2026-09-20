@@ -99,6 +99,13 @@ export type FeedCardAuthor = {
    * un vers `/u/` — une adresse qui n'existe pas.
    */
   readonly username?: string;
+  /**
+   * L'IDENTIFIANT, parce que l'anneau de story se cherche par lui (#7185) —
+   * le corpus du rail indexe ses groupes par `authorId`, jamais par pseudo.
+   * Absent quand la passerelle ne sert pas d'auteur : aucun anneau alors, ce
+   * qui est la dégradation juste.
+   */
+  readonly id?: string;
 };
 
 export type FeedCardText = {
@@ -385,6 +392,7 @@ export function resolveFeedCardModel(
       ...(textOrUndefined(post.author?.username) !== undefined
         ? { username: textOrUndefined(post.author?.username) as string }
         : {}),
+      ...(textOrUndefined(post.author?.id) !== undefined ? { id: textOrUndefined(post.author?.id) as string } : {}),
     },
     relativeTime: shortRelativeTime(new Date(post.createdAt), params.now),
     createdAt: new Date(post.createdAt).toISOString(),

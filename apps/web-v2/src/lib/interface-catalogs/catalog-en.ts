@@ -89,6 +89,7 @@ const en = {
   'feed.newPosts.one': '{count} new post',
   'feed.newPosts.other': '{count} new posts',
   'a11y.avatar.profile': 'View {name}’s profile',
+  'a11y.avatar.story': 'View {name}’s story',
   'feed.like.error': 'Error liking post',
   'post.bookmark.error': 'Couldn’t save',
   'feed.gesture.pending': 'Action not confirmed — offline',
