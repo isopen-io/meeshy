@@ -242,7 +242,17 @@ function FeedMediaCarousel({ media, accent }: { readonly media: readonly FeedCar
 function FeedPostHeader({ model }: { readonly model: FeedCardModel }) {
   return (
     <div className="flex items-center gap-2.5 px-3 pt-3">
-      <Avatar initials={model.author.initials} color={model.author.accentColor} size={40} name={model.author.name} {...(model.author.avatarSrc !== undefined ? { src: model.author.avatarSrc } : {})} />
+      {/* L'AVATAR OUVRE LE PROFIL (#6396). Posé ICI et pas sur la variante
+          RÉEL : là-bas, la carte entière est déjà un `<Link to="reels">`, et un
+          lien imbriqué dans un lien est invalide. */}
+      <Avatar
+        initials={model.author.initials}
+        color={model.author.accentColor}
+        size={40}
+        name={model.author.name}
+        {...(model.author.avatarSrc !== undefined ? { src: model.author.avatarSrc } : {})}
+        {...(model.author.username !== undefined ? { profileUsername: model.author.username } : {})}
+      />
       <div className="flex min-w-0 flex-col">
         {/* L'HEURE QUALIFIE L'AUTEUR — même ligne, miroir
             `FeedPostCard+Header.swift:51-60`. */}

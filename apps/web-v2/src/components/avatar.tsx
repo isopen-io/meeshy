@@ -1,8 +1,13 @@
+import '@/styles/avatar.css';
+
 import { PRESENCE_HEX, presenceTone } from '@meeshy/shared/utils/user-presence';
 
 import { attachmentSrc } from '@/lib/api/media-url';
 import type { UserPresenceStatus } from '@/lib/api/types';
 import { mediaImageCrossOrigin } from '@/lib/net/api-runtime-cache';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { Link } from '@/routes/route-table';
 
 /**
  * L'AVATAR, avec sa geometrie derivee — les memes formules que
@@ -33,6 +38,7 @@ export function Avatar({
   name,
   opacity,
   src,
+  profileUsername,
 }: {
   initials: string;
   /** L'accent de la conversation — jamais une couleur codée en dur ici. */
@@ -48,6 +54,21 @@ export function Avatar({
    * dans les deux schémas (mesuré 3,74:1 / 2,80:1). Défaut `1`.
    */
   opacity?: number;
+  /**
+   * **LE PSEUDO DE LA PERSONNE, QUAND SON AVATAR DOIT OUVRIR SON PROFIL**
+   * (#6396, directive porteur 2026-09-20).
+   *
+   * La CAPACITÉ vit ici, la DÉCISION reste à l'hôte — même contrat que
+   * `onGesture` sur la carte du fil. Deux raisons mesurées : certains hôtes
+   * sont DÉJÀ des `<Link>` ou des `<button>` (`lens-row.tsx:271`,
+   * `communities-parts.tsx:428`), et un lien imbriqué dans un lien est
+   * invalide ; et l'avatar d'une COMMUNAUTÉ (`communities-parts.tsx:187`)
+   * n'est pas un utilisateur.
+   *
+   * Une chaîne VIDE ne fabrique aucun lien : elle produirait `/u/`, une
+   * adresse qui n'existe pas — donc un lien qui ment (loi 4).
+   */
+  profileUsername?: string;
   /**
    * UN VRAI PORTRAIT (#5893) — `PostMedia.author.avatar`/`Viewer.avatar` :
    * une RÉFÉRENCE DE MÉDIA telle que la passerelle la sert, jamais posée pour
@@ -89,7 +110,7 @@ export function Avatar({
   const offset = size * 0.8536 - dot / 2;
   const showsDot = presence !== undefined && presence !== 'offline';
 
-  return (
+  const corps = (
     /* `block` — et ce n'est pas décoratif : un `<span>` reste INLINE, et un
        élément inline non remplacé IGNORE `width`/`height`. Dans un parent
        flex l'avatar était blockifié par le flex lui-même, donc juste ; dans
@@ -165,5 +186,21 @@ export function Avatar({
         />
       ) : null}
     </span>
+  );
+
+  if (profileUsername === undefined || profileUsername.length === 0) return corps;
+
+  /* LE LIEN SE NOMME : un lien dont le seul contenu est une image décorative
+     est annoncé « lien » et rien d'autre — l'utilisateur entend une
+     destination sans savoir laquelle. */
+  return (
+    <Link
+      to="userProfile"
+      params={{ username: profileUsername }}
+      className="avatar-profile-link"
+      aria-label={translate(currentInterfaceLanguage(), 'a11y.avatar.profile', { name: name ?? profileUsername })}
+    >
+      {corps}
+    </Link>
   );
 }

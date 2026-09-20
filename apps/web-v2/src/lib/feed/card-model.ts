@@ -90,6 +90,15 @@ export type FeedCardAuthor = {
   readonly initials: string;
   readonly accentColor: string;
   readonly avatarSrc?: string;
+  /**
+   * LE PSEUDO, PARCE QUE L'AVATAR OUVRE LE PROFIL (#6396) — l'adresse d'un
+   * profil est `/u/$username`, jamais l'identifiant (`route-table.tsx:191`).
+   *
+   * Il est ABSENT quand la passerelle n'en sert pas : un auteur anonyme n'a pas
+   * de pseudo, et `Avatar` ne fabrique alors aucun lien plutôt que d'en poser
+   * un vers `/u/` — une adresse qui n'existe pas.
+   */
+  readonly username?: string;
 };
 
 export type FeedCardText = {
@@ -373,6 +382,9 @@ export function resolveFeedCardModel(
       initials: initialsOf(authorName),
       accentColor: authorAccentColor(post.author?.id, authorName),
       ...(avatarSrc !== undefined ? { avatarSrc } : {}),
+      ...(textOrUndefined(post.author?.username) !== undefined
+        ? { username: textOrUndefined(post.author?.username) as string }
+        : {}),
     },
     relativeTime: shortRelativeTime(new Date(post.createdAt), params.now),
     createdAt: new Date(post.createdAt).toISOString(),

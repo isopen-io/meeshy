@@ -88,6 +88,7 @@ const ar = {
   'feed.allLoaded': 'تم تحميل جميع المنشورات',
   'feed.newPosts.one': 'منشور جديد {count}',
   'feed.newPosts.other': 'منشورات جديدة {count}',
+  'a11y.avatar.profile': 'عرض الملف الشخصي لـ {name}',
   'feed.like.error': 'تعذّر الإعجاب بالمنشور',
   'post.bookmark.error': 'تعذّر الحفظ',
   'feed.gesture.pending': 'لم يتم تأكيد الإجراء — غير متصل',

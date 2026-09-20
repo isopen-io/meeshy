@@ -88,6 +88,7 @@ const it = {
   'feed.allLoaded': 'Tutte le pubblicazioni sono state caricate',
   'feed.newPosts.one': '{count} nuova pubblicazione',
   'feed.newPosts.other': '{count} nuove pubblicazioni',
+  'a11y.avatar.profile': 'Vedi il profilo di {name}',
   'feed.like.error': 'Errore nel mettere Mi piace',
   'post.bookmark.error': 'Salvataggio non riuscito',
   'feed.gesture.pending': 'Azione non confermata — offline',

@@ -1,0 +1,28 @@
+/**
+ * LA CIBLE TACTILE D'UN AVATAR-LIEN (#6396).
+ *
+ * Les avatars de liste descendent à 24–32 px. Les rendre cliquables tels quels
+ * poserait des cibles sous le plancher de 44 px que ce dépôt tient partout
+ * (dimension 5). La cible est donc ÉTENDUE par un pseudo-élément centré, qui
+ * ne prend AUCUNE place dans le flux : la mise en page des 28 hôtes du
+ * composant ne bouge pas d'un pixel.
+ *
+ * `max(100%, 44px)` et non `44px` : sur un avatar de 96 px (le héros d'un
+ * profil), une cible figée à 44 serait PLUS PETITE que ce qu'on voit — un clic
+ * au bord de l'image ne ferait rien, le défaut inverse et tout aussi visible.
+ */
+.avatar-profile-link {
+  position: relative;
+  display: block;
+  border-radius: inherit;
+}
+
+.avatar-profile-link::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: max(100%, 44px);
+  height: max(100%, 44px);
+  transform: translate(-50%, -50%);
+}
