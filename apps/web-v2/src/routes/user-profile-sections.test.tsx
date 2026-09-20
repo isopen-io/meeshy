@@ -7,7 +7,8 @@ import type { ProfileRelation } from '@/lib/profile/relation';
 import { actionsFor } from '@/lib/profile/relation';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { ProfilePostsEmpty, ProfileRelationSection, ProfileStatsBand, ProfileStatsSection } from './user-profile-sections';
+import { ProfileRelationSection, ProfileStatsBand, ProfileStatsSection } from './user-profile-sections';
+import { ProfilePostsEmpty } from './user-profile-states';
 
 /**
  * **LES PIÈCES DU PROFIL PUBLIC, DESSINÉES** (#7083) — ce qu'aucune capture ne
