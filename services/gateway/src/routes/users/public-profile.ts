@@ -3,6 +3,7 @@ import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 import { sendNotFound } from '../../utils/response';
 import { selectForFields, type ColumnPlan, type FieldSet } from '../../utils/sparse-fieldset';
 import { gateProfilePresence } from './presence-gate';
+import { targetHasBlockedViewer } from './profile-block-gate';
 
 /**
  * LA forme publique d'un profil — projection, schéma, composition, lecture.
@@ -260,6 +261,17 @@ export async function servirProfilPublic(
   });
 
   if (!user) {
+    sendNotFound(reply, 'User not found');
+    return null;
+  }
+
+  /* LE BLOCAGE FERME LA PORTE AVANT TOUTE COMPOSITION (#7184). Posée ICI, la
+     garde couvre les TROIS routes qui partagent ce service et ne dépend
+     d'aucun `expand` — la ranger dans `relationAvec` l'aurait rendue levable
+     par l'appelant. Le refus est celui d'un profil INTROUVABLE, le même que
+     `getUserByEmail`/`getUserByPhone` rendent déjà pour un bloquant : la
+     cohérence entre les portes EST la correction. */
+  if (await targetHasBlockedViewer(fastify.prisma, request, String(user.id))) {
     sendNotFound(reply, 'User not found');
     return null;
   }

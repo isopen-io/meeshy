@@ -3,6 +3,14 @@ import { PostService } from '../../services/PostService';
 
 function makeMockPrisma() {
   return {
+    /* #7184 — les deux lectures de `getBlockRelatedUserIds` : « qui m'a bloqué »
+       et « qui j'ai bloqué ». La garde de blocage traverse désormais
+       `buildVisibilityFilter`, donc tout double qui compose un `where` de post
+       doit les servir — un double muet ferait rougir la garde, pas le code. */
+    user: {
+      findMany: jest.fn().mockResolvedValue([]),
+      findUnique: jest.fn().mockResolvedValue({ blockedUserIds: [] }),
+    } as any,
     post: {
       findFirst: jest.fn().mockResolvedValue(null),
       count: jest.fn().mockResolvedValue(0),

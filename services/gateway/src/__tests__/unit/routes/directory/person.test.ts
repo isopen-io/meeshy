@@ -350,9 +350,15 @@ describe('`blockedByViewer` — le blocage répond par SUJET (#7125)', () => {
     // nomme ne peut pas dépendre du rang.
     const appels = (app as unknown as { prisma: { user: { findFirst: { mock: { calls: unknown[][] } } } } }).prisma
       .user.findFirst.mock.calls;
+    /* DEUX questions de blocage partent désormais sur cette route, et elles
+       ne se confondent que si on les cherche mal (#7184) : la GARDE demande
+       « la cible a-t-elle bloqué le lecteur ? » (`where.id` = la CIBLE) avant
+       toute composition, et celle-ci demande l'inverse. On désigne donc la
+       nôtre par son porteur — la chercher par « la première qui porte
+       `blockedUserIds` » rendrait maintenant celle de la garde. */
     const question = appels
       .map(([args]) => args as { where?: { blockedUserIds?: { has?: string }; id?: string } } | undefined)
-      .find((args) => args?.where?.blockedUserIds !== undefined);
+      .find((args) => args?.where?.blockedUserIds !== undefined && args?.where?.id === TIERS);
 
     expect(question).toBeDefined();
     expect(question?.where?.blockedUserIds?.has).toBe(CIBLE);
@@ -360,7 +366,22 @@ describe('`blockedByViewer` — le blocage répond par SUJET (#7125)', () => {
     await app.close();
   });
 
-  it('sans `expand=relation`, le champ ne part pas — et la question n’est pas posée', async () => {
+  /**
+   * AMENDÉ PAR #7184 — la propriété gardée ici a changé, et il faut dire
+   * laquelle.
+   *
+   * Ce témoin mesurait « ne pas demander `relation` reste GRATUIT » : aucune
+   * requête de blocage sans `expand`. Depuis #7184, une requête de blocage part
+   * INCONDITIONNELLEMENT, parce qu'elle sert une GARDE — « la cible a-t-elle
+   * bloqué le lecteur ? » — et qu'une garde qu'un paramètre d'URL peut lever
+   * n'est pas une garde.
+   *
+   * Ce qui reste vrai, et que ce témoin continue de mesurer : la question de
+   * `blockedByViewer` (`where.id` = le LECTEUR) n'est toujours posée que sur
+   * `expand=relation`, et le champ ne part pas sans lui. L'économie survit là
+   * où elle ne coûte pas une protection.
+   */
+  it('sans `expand=relation`, le champ ne part pas — et SA question n’est pas posée', async () => {
     const app = await monter(TIERS, 'USER', [CIBLE]);
 
     const data = (await lire(app)).json().data as Record<string, unknown>;
@@ -368,9 +389,12 @@ describe('`blockedByViewer` — le blocage répond par SUJET (#7125)', () => {
     expect('blockedByViewer' in data).toBe(false);
     const appels = (app as unknown as { prisma: { user: { findFirst: { mock: { calls: unknown[][] } } } } }).prisma
       .user.findFirst.mock.calls;
-    // `relation` DÉCLENCHE des requêtes (`person.ts:56-59`) : ne pas la
-    // demander doit rester gratuit.
-    expect(appels.some(([a]) => (a as { where?: { blockedUserIds?: unknown } })?.where?.blockedUserIds)).toBe(false);
+    const questionDuLecteur = appels.some(
+      ([a]) =>
+        (a as { where?: { blockedUserIds?: unknown; id?: string } })?.where?.blockedUserIds !== undefined &&
+        (a as { where?: { id?: string } })?.where?.id === TIERS
+    );
+    expect(questionDuLecteur).toBe(false);
     await app.close();
   });
 

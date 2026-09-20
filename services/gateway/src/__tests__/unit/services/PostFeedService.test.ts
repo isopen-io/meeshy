@@ -1324,7 +1324,7 @@ describe('PostFeedService.getReels', () => {
   it('reste fonctionnel quand les requêtes d\'affinité auxiliaires échouent (best-effort)', async () => {
     const reel = makePost('r-1', { type: 'REEL' });
     mockPostFindMany.mockResolvedValue([reel]);
-    mockUserFindUnique.mockRejectedValue(new Error('db down'));
+    mockUserFindUnique.mockImplementation(async (a: any) => (a?.select?.blockedUserIds ? { blockedUserIds: [] } : Promise.reject(new Error('db down'))));
     mockPostMentionFindMany.mockRejectedValue(new Error('db down'));
     mockPostViewFindMany.mockRejectedValue(new Error('db down'));
     mockPostReactionFindMany.mockResolvedValue([]);

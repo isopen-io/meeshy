@@ -27,6 +27,17 @@ export async function buildViewerVisibilityFilter(prisma: PrismaClient, viewerUs
     getCommunityCoMemberIds(prisma, viewerUserId),
   ]);
   const audienceIds = [...new Set([...friendIds, ...dmContactIds])];
+  /* LE BLOCAGE N'EST PAS POSÉ ICI, ET C'EST UNE DÉCISION (#7184).
+     Ce filtre sert les accès UNITAIRES — `PostService.getPostById`,
+     `recordView`, `deletePost` — pour lesquels le dépôt a déjà une garde
+     dédiée, `canUserConsumePost` (`postConsumptionGate.ts:26` l'écrit :
+     « `canUserConsumePost` plutôt que le filtre `buildPostVisibilityOrFilter`
+     posé »). Y greffer le blocage mettrait une règle d'audience de LISTE sur
+     le chemin d'un post nommé, et ferait payer deux lectures à chaque
+     suppression.
+     Le blocage des accès unitaires appartient donc à `canUserConsumePost`,
+     et c'est un lot à part — nommé dans le commentaire de clôture de #7184
+     plutôt que laissé à découvrir. */
   return buildPostVisibilityOrFilter(viewerUserId, audienceIds, communityCoMemberIds);
 }
 
