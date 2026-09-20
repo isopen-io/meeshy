@@ -28,6 +28,7 @@ import {
   applyNotificationRead,
   applyNotificationReadBulk,
 } from './notifications-realtime';
+import { applyPostCreated, applyPostDeleted, applyPostUpdated } from './feed-realtime';
 import {
   applyConversationUnreadUpdated,
   applyConversationUpdated,
@@ -370,6 +371,29 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   const onPostLiked = onPostLikeChanged(true);
   const onPostUnliked = onPostLikeChanged(false);
 
+  /**
+   * `post:created` / `post:updated` / `post:deleted` (#7182) — LE FLUX APPREND
+   * CE QUI ARRIVE. Ces trois événements étaient MUETS ici pendant que leurs
+   * sept cousins (`post:liked`, `post:bookmarked`, les quatre `story:*`,
+   * `comment:added`) étaient écoutés : une publication d'un ami n'atteignait
+   * jamais le fil sans rechargement.
+   *
+   * Les lois vivent dans `feed-realtime.ts` — réconciliation par cmid,
+   * idempotence, insertion en tête, préservation de l'état du lecteur — parce
+   * qu'un écouteur ne doit tenir QUE le branchement (D-98).
+   */
+  const onPostCreated = (payload: unknown): void => {
+    applyPostCreated(deps.queryClient, payload);
+  };
+
+  const onPostUpdated = (payload: unknown): void => {
+    applyPostUpdated(deps.queryClient, payload);
+  };
+
+  const onPostDeleted = (payload: unknown): void => {
+    applyPostDeleted(deps.queryClient, payload);
+  };
+
   const onPostBookmarked = (payload: unknown): void => {
     if (!isPostBookmarkEvent(payload)) return;
     const { postId, bookmarked, bookmarkCount } = payload;
@@ -540,6 +564,9 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.STORY_UPDATED, onStoryChanged);
   socket.on<unknown>(SERVER_EVENTS.STORY_DELETED, onStoryChanged);
   socket.on<unknown>(SERVER_EVENTS.STORY_VIEWED, onStoryChanged);
+  socket.on<unknown>(SERVER_EVENTS.POST_CREATED, onPostCreated);
+  socket.on<unknown>(SERVER_EVENTS.POST_UPDATED, onPostUpdated);
+  socket.on<unknown>(SERVER_EVENTS.POST_DELETED, onPostDeleted);
   socket.on<unknown>(SERVER_EVENTS.POST_LIKED, onPostLiked);
   socket.on<unknown>(SERVER_EVENTS.POST_UNLIKED, onPostUnliked);
   socket.on<unknown>(SERVER_EVENTS.POST_BOOKMARKED, onPostBookmarked);
@@ -588,6 +615,9 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_TRANSLATION, onMessageTranslation);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
       socket.off<unknown>(SERVER_EVENTS.COMMENT_ADDED, onCommentAdded);
+      socket.off<unknown>(SERVER_EVENTS.POST_CREATED, onPostCreated);
+      socket.off<unknown>(SERVER_EVENTS.POST_UPDATED, onPostUpdated);
+      socket.off<unknown>(SERVER_EVENTS.POST_DELETED, onPostDeleted);
       socket.off<unknown>(SERVER_EVENTS.STORY_CREATED, onStoryChanged);
       socket.off<unknown>(SERVER_EVENTS.STORY_UPDATED, onStoryChanged);
       socket.off<unknown>(SERVER_EVENTS.STORY_DELETED, onStoryChanged);
