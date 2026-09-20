@@ -154,6 +154,17 @@ final class StoryExportShareViewModel: ObservableObject {
                 watermark: watermark,
                 intro: intro,
                 stickerImageSources: stickerImageSources,
+                // **La carte de fin est DUE** (#7052). L'exception que porte ce
+                // paramètre vise le seul export d'une SCÈNE DE POST, voulue sans
+                // habillage. Ici on partage une STORY publiée, qui peint déjà
+                // son interlude de marque quatre lignes plus haut : lui retirer
+                // sa carte livrerait une story amputée de sa signature.
+                //
+                // Le site appelle par le PROTOCOLE, où les valeurs par défaut de
+                // l'implémentation concrète ne s'appliquent pas — c'est ce qui
+                // l'a fait rougir là où les témoins, qui tiennent le type
+                // concret, compilaient sans rien dire.
+                appendsBrandOutro: true,
                 onProgress: { [weak self] fraction in
                     self?.progress = fraction
                 },
