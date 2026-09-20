@@ -8,6 +8,7 @@ import {
 } from '@/lib/reading-mode/metrics';
 import { focusStampLabel } from '@/lib/reading-mode/stamp';
 import type { Delivery } from '@/lib/view/message';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 /**
  * LES SUPERPOSITIONS DE LA RANGÉE ÉLUE (#5648) — extraites de `focal-row.tsx`
@@ -121,6 +122,8 @@ export function FocusStrip({
       {showsPastille ? (
         <span className="focus-chip">
           <PrismPastille
+                  language={currentInterfaceLanguage()}
+                  subject="message"
             servedLanguage={servedLanguage}
             originalLanguage={originalLanguage}
             active={active}

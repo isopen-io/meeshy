@@ -10,6 +10,7 @@ import { time } from '@/lib/grouping';
 import { languageBand, mountsBottomLine } from '@/lib/reading-mode/meta';
 import { ephemeralOf, protectionOf } from '@/lib/reading-mode/protection';
 import { BUBBLE_STICKER_SIDE } from '@/lib/reading-mode/metrics';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 import { Avatar } from './avatar';
 import { Attachments } from './attachment-blocks';
@@ -569,6 +570,8 @@ export function Bubble({
                           texte lu. La pastille RESTE, en indicateur muet ; les
                           drapeaux, eux, ne sont qu'un contrôle. */}
                       <PrismPastille
+                  language={currentInterfaceLanguage()}
+                  subject="message"
                         servedLanguage={naturalServedLanguage}
                         originalLanguage={message.originalLanguage}
                         active={activeLanguage}
