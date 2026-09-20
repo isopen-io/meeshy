@@ -26,7 +26,7 @@ import { useOnline } from '@/lib/net/online';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { FeedNewPostsBanner } from '@/components/feed-new-posts-banner';
-import { authorStoryRing } from '@/lib/view/author-story-ring';
+import { authorMoodEmoji, authorStoryRing } from '@/lib/view/author-story-ring';
 import { FEED_NEW_COUNT_KEY, clearNewPostCount } from '@/lib/api/feed-new-count';
 import { FLOATING_CORRIDOR_BOTTOM } from '@/lib/view/floating-corridor';
 import { usePostGesture } from '@/lib/view/use-post-gesture';
@@ -356,7 +356,11 @@ export default function FeedScreen() {
                      aurait coûté une par avatar. */
                   {...(() => {
                     const anneau = authorStoryRing(railProps.groups, model.author.id);
-                    return anneau === null ? {} : { storyRing: anneau };
+                    const humeur = authorMoodEmoji(railProps.groups, model.author.id);
+                    return {
+                      ...(anneau === null ? {} : { storyRing: anneau }),
+                      ...(humeur === null ? {} : { mood: humeur }),
+                    };
                   })()}
                   onGesture={onGesture}
                   onShare={onShare}
