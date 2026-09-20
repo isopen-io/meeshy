@@ -2146,7 +2146,20 @@ Deux garde-fous tiennent l'exception à sa place, tous deux sous témoin : la pi
 
 **Les densités sont ARBITRÉES sur une mesure, pas moyennées.** Le fond de repli porte le contraste quand `backdrop-filter` ne s'applique pas ; son pire cas est le fond composé sur du noir OU du blanc pur passant dessous. Relevé au navigateur, flou désactivé, schéma clair / sombre : pilule de jour (day-ink sur card) **3,54** / 4,68 à 70 %, **4,40** / 6,29 à 78 %, 4,64 / 6,78 à 80 %, 6,21 / 10,24 à 92 % ; en-tête ≥ 9,9 dès 80 %. **La pilule de jour, à 70 %, tombait sous AA en clair dès que le flou manquait** — la divergence de matière cachait un défaut de contraste.
 - **80 %, `glass`** — le plus bas palier qui tient AA pour toutes les encres du fil dans les deux schémas : bandes d'en-tête (fil, états du fil, progression), repères de jour (pilule ET séparateur en flux, jumeaux d'iOS `MessageDaySeparator` en `.ultraThinMaterial`), contrôle teinté « revenir en bas » (iOS : `adaptiveGlass(tint:)`, le régulier teinté), `GlassBack`, `GlassSurface` non proéminent (78 → 80).
-- **92 %, `glass-prominent`** — ce qui se pose SUR un contenu qu'on lit : `GlassSurface` proéminent, l'annonce au-dessus du composeur, la barre de recherche flottante de la liste (85 → 92), les disques flottants (88 → 92, sous leur dégradé).
+- **94 %, `glass-prominent`** (92 jusqu'au 2026-09-20, #7178) — ce qui se pose SUR un contenu qu'on lit : `GlassSurface` proéminent, l'annonce au-dessus du composeur, la barre de recherche flottante de la liste (85 → 92), les disques flottants (88 → 92, sous leur dégradé).
+
+**AMENDEMENT DU 2026-09-20 (#7178) — 92 % NE TENAIT PAS POUR DU TEXTE.** #7143 a donné son matériau à la bande du composeur, et c'est ce qui a rendu son contraste MESURABLE : le **placeholder** (`--ios-ink-3`, du TEXTE) y tombait à **4,40:1** en clair, sous AA.
+
+Trois remèdes possibles, deux écartés SUR MESURE plutôt que par principe :
+- **l'encre** — impossible : `--ios-ink-3` vaut `indigo700.opacity(0.8)`, déjà le cran minimal qu'iOS a arbitré (D-18 bis, #5625 : « 0.79 échoue sur `backgroundTertiary` à 4,496:1 »), et D-4 interdit d'inventer un jeton qui ne descend pas de Swift ;
+- **le ton** — `glass-card` DÉGRADE à **4,21:1** (mesuré avant d'être écarté : l'intuition disait l'inverse, puisque c'est le fond sur lequel iOS valide ses 4,76:1 — mais iOS le mesure OPAQUE, pas sous 92 % de verre) ;
+- **la densité** — retenue. 92 % → 4,40 · **94 % → 4,55** · 96 % → 4,69 · 100 % → 4,98. **94 est le plus bas palier qui tient**, exactement la méthode des six mesures ci-dessus.
+
+Ce n'est PAS une troisième densité : le site unique en garde deux. Et monter une densité ne peut dégrader aucun autre couple — plus opaque, c'est plus de contraste pour toutes les encres, dans les deux schémas.
+
+**Le placeholder n'a pas été classé `non-text`**, bien que ce fût la sortie la plus facile : « Message… » est du texte, lu par les voyants comme par les lecteurs d'écran. Le reclasser aurait fait passer le gate en changeant la QUESTION, pas la réponse — un assouplissement de seuil déguisé, que cet article interdit.
+
+**Son couple est désormais à `GLASS_CONTRAST_INVENTORY`**, écrit à la main comme son voisin, et pour la même raison : le verre est posé dans `routes/thread.tsx` quand l'encre vit dans `components/composer.tsx`. **Un verre dont le contenu est un composant enfant échappe entièrement à la détection automatique** — c'est le trou par lequel ce défaut est entré.
 - **Un flou, 24 px** — celui du site unique ; les puces passent de 12 à 24.
 
 **Ce qui n'est PAS du verre, dit sur place.** La pastille de synchronisation portait un flou sous des fonds PLEINS (erreur, avertissement, carte) : retiré, pas migré. L'inventaire nommé de `scripts/lib/glass-site.mjs` admet trois écarts, chacun avec sa raison : le VOILE du menu de message (un scrim, pas une surface), le fond du bouton d'actions de rangée (dans la gouttière réservée, jamais sur un contenu), la tuile du média masqué (en flux dans la bulle).
