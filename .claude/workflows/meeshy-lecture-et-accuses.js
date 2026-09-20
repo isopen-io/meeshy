@@ -31,6 +31,10 @@ const ATTRIBUTION = typeof A.attribution === 'string' && A.attribution ? A.attri
 const TOURS = Number.isInteger(A.tours) && A.tours > 0 ? A.tours : 2
 const VALIDER = A.valider !== false
 const LIVRER_MAIN = A.livrer_main === true
+// `auto_merge: false` : les PR s'ouvrent mais n'arment PAS l'auto-merge — une session voisine tient le
+// verdict de dev et demande que sa tête ne bouge pas avant son dev→main (2026-09-21). Sans auto-merge, la
+// recette staging n'a rien à mesurer : la phase Valider est sautée et se rejoue au tour suivant.
+const AUTO_MERGE = A.auto_merge !== false
 const SAUTER = new Set(Array.isArray(A.sauter) ? A.sauter : [])
 // Simulateurs : le NATIF de reference (l'app apps/ios) et la COQUE Capacitor de web-v2 — deux
 // appareils, jamais un seul (meme bundle id me.meeshy.app, installer l'un remplace l'autre).
@@ -597,7 +601,7 @@ ${restants.length ? `RESTANTS (ils voyagent avec le lot et se DISENT dans la PR)
    gates et leurs chiffres, le rouge préexistant s'il y en a, \`Closes #${num || 'n'}\`, dimensions mûres et
    restantes ; ligne vide puis
    🤖 Generated with [Claude Code](https://claude.com/claude-code)
-   Puis \`gh pr merge --auto --merge\`. Si GitHub dit CONFLICTING sur une fusion propre, \`git merge-tree\`
+   ${AUTO_MERGE ? `Puis \`gh pr merge --auto --merge\`.` : `N'ARME PAS l'auto-merge (\`gh pr merge --auto\` INTERDIT ce tour : une session voisine tient le verdict de ${BASE} et demande que sa tête ne bouge pas) — la PR reste ouverte, rends auto_merge=false, et dis-le dans le corps de la PR (« auto-merge à armer après le feu vert de la veille de dev »).`} Si GitHub dit CONFLICTING sur une fusion propre, \`git merge-tree\`
    arbitre ; fusionne origin/${BASE} dans la branche et repousse.
 6. Commentaire sur l'issue #${num || 'n'} : la PR, les preuves (gates, témoins, captures décrites), dimensions
    MÛRES / RESTANTES, et une issue par dimension non mûre (même milestone) si elle n'existe pas. Termine par
@@ -638,7 +642,8 @@ ${restants.length ? `RESTANTS (ils voyagent avec le lot et se DISENT dans la PR)
   phase('Valider')
   // -------------------------------------------------------------------------
   let validation = null
-  if (VALIDER) {
+  if (VALIDER && !AUTO_MERGE) log('Valider : SAUTÉE ce tour — auto-merge désarmé, les PR attendent le feu vert de la veille de dev ; relancer avec auto_merge: true')
+  if (VALIDER && AUTO_MERGE) {
     validation = await agent(`${socle('web')}
 
 TA MISSION — VALIDER LE CHANTIER SUR STAGING, SUR LES DEUX PLATEFORMES, À DEUX COMPTES. Tu es la recette :
