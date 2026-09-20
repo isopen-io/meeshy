@@ -1028,7 +1028,24 @@ export default function ThreadScreen() {
           l'enveloppe (bascule micro → champ, ouverture du tiroir de pièces
           jointes) ne désengage rien.
         */
-        <div className="thread-composer-chrome" onFocus={chrome.onComposerFocus} onBlur={chrome.onComposerBlur}>
+        /* `glass-prominent` — LE MATÉRIAU DU SITE UNIQUE (#7143, D-51). Cette
+            bande flotte depuis #6213 et n'a JAMAIS rien porté : le fil
+            transitait dessous et ses bulles restaient lisibles sous le rail et
+            la pilule « Message… ». D-50 l'interdit déjà pour tout le chrome
+            flottant (« aucun flottant ne recouvre un texte au repos »), et
+            `glass-prominent` est la densité que D-51 réserve à « ce qui se pose
+            SUR un contenu qu'on lit » — l'en-tête, lui, porte `glass`.
+
+            La classe, jamais une couleur : aucune densité écrite ici, aucune
+            seconde source à côté de `styles/glass.css` (D-4). Et jamais un
+            dégradé de masquage — le porteur a fait retirer ces voiles
+            (#6537, « supprimer ces voiles, non pas simplement les rendre
+            invisible, mais permettre qu'on manipule les éléments entre »). */
+        <div
+          className="thread-composer-chrome glass-prominent"
+          onFocus={chrome.onComposerFocus}
+          onBlur={chrome.onComposerBlur}
+        >
           <Composer
             preferred={readerLanguages}
             onSend={handleComposerSend}
