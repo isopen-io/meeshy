@@ -7,6 +7,8 @@ import { PRESENCE_HEX, presenceTone } from '@meeshy/shared/utils/user-presence';
 import { attachmentSrc } from '@/lib/api/media-url';
 import type { UserPresenceStatus } from '@/lib/api/types';
 import { mediaImageCrossOrigin } from '@/lib/net/api-runtime-cache';
+import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
+import { railRingBox, railStroke } from '@/components/rail-tile';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { Link } from '@/routes/route-table';
@@ -41,6 +43,7 @@ export function Avatar({
   opacity,
   src,
   profileUsername,
+  storyRing,
 }: {
   initials: string;
   /** L'accent de la conversation — jamais une couleur codée en dur ici. */
@@ -71,6 +74,30 @@ export function Avatar({
    * adresse qui n'existe pas — donc un lien qui ment (loi 4).
    */
   profileUsername?: string;
+  /**
+   * **L'ANNEAU DE STORY, QUAND SON AUTEUR EN A UNE** (#7185, directive porteur
+   * du 2026-09-20).
+   *
+   * Il est peint dans la couleur de l'UTILISATEUR (`color`, déjà l'accent que
+   * `authorAccentColor` dérive de son identifiant), jamais dans celle de la
+   * marque — c'est ce qui distingue cet anneau des trois du rail, qui posent
+   * `--color-ios-brand` en dur. **D-93 l'autorise ici et l'interdirait sur un
+   * texte** : cet accent descend sous AA (4,22:1 mesuré en sombre), et
+   * l'article réserve justement l'accent à « là où il ne porte aucun texte — le
+   * dégradé de bannière et l'avatar ».
+   *
+   * La géométrie n'est pas réinventée : `railRingBox` et `railStroke`
+   * (`components/rail-tile.tsx`) sont le site unique, miroir de
+   * `MeeshyAvatar.swift:165-175` — trait doublé pour une story non vue,
+   * plancher d'un pixel.
+   *
+   * **UN ANNEAU IMPLIQUE UNE DESTINATION.** Quand il est là, l'avatar ouvre la
+   * STORY ; sinon il ouvre le profil (`profileUsername`). Un avatar ne peut pas
+   * mener à deux endroits, et c'est l'ordre d'iOS comme des applications que
+   * nos lecteurs connaissent : l'anneau prime, parce qu'il est VISIBLE et qu'il
+   * annonce ce qu'il ouvre.
+   */
+  storyRing?: AuthorStoryRing;
   /**
    * UN VRAI PORTRAIT (#5893) — `PostMedia.author.avatar`/`Viewer.avatar` :
    * une RÉFÉRENCE DE MÉDIA telle que la passerelle la sert, jamais posée pour
@@ -187,23 +214,65 @@ export function Avatar({
           aria-hidden
         />
       ) : null}
+      {storyRing === undefined ? null : (
+        /* `data-story-ring` porte l'ÉTAT servi (`unseen`/`seen`), comme
+           `data-presence` porte le sien : un gate qui compterait les enfants de
+           `.avatar-root` mentirait sur la cause (revue #5935). */
+        <span
+          data-story-ring={storyRing.unseen ? 'unseen' : 'seen'}
+          className="pointer-events-none absolute rounded-chip"
+          style={{
+            inset: -(railRingBox(size) - size) / 2,
+            boxShadow: `inset 0 0 0 ${railStroke(size, storyRing.unseen)}px ${
+              storyRing.unseen ? color : `color-mix(in srgb, ${color} 40%, transparent)`
+            }`,
+          }}
+          aria-hidden
+        />
+      )}
     </span>
   );
 
+  /* L'ANNEAU PRIME SUR LE PROFIL (#7185) — un avatar ne peut pas mener à deux
+     endroits, et l'anneau est ce que le lecteur VOIT : il annonce ce qu'il
+     ouvre. Même ordre que sur iOS et que les applications que nos lecteurs
+     connaissent.
+
+     DEUX `<Link>` PLUTÔT QU'UN PARAMÉTRÉ, et c'est le typage du routeur qui
+     l'impose : `to` et `params` y sont CORRÉLÉS, si bien qu'une union
+     `{ post } | { username }` ne satisfait aucune des deux routes. Le forcer
+     par un cast aurait rendu une adresse fausse indétectable. */
+  const sizeVar = { '--avatar-size': `${size}px` } as CSSProperties;
+  const nomme = (cle: 'a11y.avatar.story' | 'a11y.avatar.profile'): string =>
+    translate(currentInterfaceLanguage(), cle, { name: name ?? profileUsername ?? '' });
+
+  if (storyRing !== undefined) {
+    return (
+      <Link
+        to="story"
+        params={{ post: storyRing.entryStoryId }}
+        className="avatar-profile-link"
+        style={sizeVar}
+        aria-label={nomme('a11y.avatar.story')}
+      >
+        {corps}
+      </Link>
+    );
+  }
+
   if (profileUsername === undefined || profileUsername.length === 0) return corps;
 
-  /* LE LIEN SE NOMME : un lien dont le seul contenu est une image décorative
-     est annoncé « lien » et rien d'autre — l'utilisateur entend une
-     destination sans savoir laquelle. */
+  /* LE LIEN SE NOMME, ET IL NOMME CE QU'IL OUVRE : un lien dont le seul contenu
+     est une image décorative est annoncé « lien » et rien d'autre —
+     l'utilisateur entend une destination sans savoir laquelle. Et « voir le
+     profil » sur un avatar qui ouvre une story serait pire que muet : faux. */
   return (
     <Link
       to="userProfile"
       params={{ username: profileUsername }}
       className="avatar-profile-link"
-      /* La taille voyage jusqu'au CSS : lui seul ne peut pas la déduire, et
-         c'est elle qui décide de la marge compensatoire. */
-      style={{ '--avatar-size': `${size}px` } as CSSProperties}
-      aria-label={translate(currentInterfaceLanguage(), 'a11y.avatar.profile', { name: name ?? profileUsername })}
+      style={sizeVar}
+      aria-label={nomme('a11y.avatar.profile')}
     >
       {corps}
     </Link>
