@@ -301,6 +301,33 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   };
 
   /**
+   * `comment:added` (#7151) — LA LISTE DES COMMENTAIRES SUIT LE FIL EN DIRECT.
+   *
+   * L'événement existait depuis toujours côté passerelle ; mesuré avant ce lot,
+   * `grep -rn "comment:added"` sur `src/` rendait VIDE. La règle vit dans
+   * `realtime-apply.ts` (idempotence, réconciliation de l'optimiste, garde de
+   * forme) : **cette ligne la BRANCHE**.
+   *
+   * Sans elle, le couple serait « écrit, testé, et jamais activé » — la forme
+   * exacte que #7142 vient de coûter au dépôt sur une autre surface. Un
+   * mécanisme dont la valeur n'atteint aucun lecteur n'a corrigé personne.
+   */
+  /**
+   * `comment:added` (#7151) — LA LISTE DES COMMENTAIRES SUIT LE FIL EN DIRECT.
+   *
+   * `import()`, JAMAIS statique — D-98 : « un écouteur temps réel n'IMPORTE pas
+   * le cache qu'il met à jour ». Mesuré : l'import statique portait le chunk
+   * `realtime` à 5,05 Ko pour un plafond de 5 ; garder la seule GARDE ici le
+   * laissait encore à 5,01. La règle ENTIÈRE — forme et application — vit donc
+   * avec le cache, et cette ligne ne fait que router.
+   */
+  const onCommentAdded = (payload: unknown): void => {
+    void import('./publication-comments').then(({ applyCommentAdded }) => {
+      applyCommentAdded(deps.queryClient, payload);
+    });
+  };
+
+  /**
    * `story:*` (#5652, bloc E ; #6080) — LE RAIL SUIT LE FIL EN DIRECT :
    * `story:created`/`story:updated`/`story:deleted`/`story:viewed` invalident
    * `STORY_TRAY_QUERY_KEY`. Miroir du motif `onAuthenticated` ci-dessous : UNE
@@ -508,6 +535,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_NEW, onConversationNew);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_TRANSLATION, onMessageTranslation);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
+  socket.on<unknown>(SERVER_EVENTS.COMMENT_ADDED, onCommentAdded);
   socket.on<unknown>(SERVER_EVENTS.STORY_CREATED, onStoryChanged);
   socket.on<unknown>(SERVER_EVENTS.STORY_UPDATED, onStoryChanged);
   socket.on<unknown>(SERVER_EVENTS.STORY_DELETED, onStoryChanged);
@@ -559,6 +587,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_UPDATED, onConversationUpdated);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_TRANSLATION, onMessageTranslation);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
+      socket.off<unknown>(SERVER_EVENTS.COMMENT_ADDED, onCommentAdded);
       socket.off<unknown>(SERVER_EVENTS.STORY_CREATED, onStoryChanged);
       socket.off<unknown>(SERVER_EVENTS.STORY_UPDATED, onStoryChanged);
       socket.off<unknown>(SERVER_EVENTS.STORY_DELETED, onStoryChanged);
