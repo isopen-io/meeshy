@@ -32,6 +32,24 @@ public final class NotificationToastManager: ObservableObject {
 
     @Published public private(set) var currentToast: SocketNotificationEvent?
 
+    /// **Ce que la bannière courante AFFICHE, résolu UNE fois à la pose**
+    /// (#7167).
+    ///
+    /// `resolvedBannerPresentation` descend jusqu'au fournisseur de
+    /// présentation de conversation, qui lit le groupe App Group et décode
+    /// le dictionnaire ENTIER des instantanés pour en tirer une entrée — une
+    /// I/O et un décodage JSON synchrones, sur le fil principal. La vue les
+    /// payait à CHAQUE évaluation de son corps, donc pendant son animation
+    /// d'entrée et de sortie, et le coût croît avec le nombre de
+    /// conversations : le défaut s'aggrave avec l'usage, donc il ne se voit
+    /// pas sur un compte de test.
+    ///
+    /// **Volontairement PAS `@Published`** : elle est écrite AVANT
+    /// `currentToast`, dont la publication suffit à la faire relire. Deux
+    /// `@Published` écrits ensemble produiraient deux tours de rendu pour un
+    /// seul événement — ce que ce lot cherche précisément à supprimer.
+    public private(set) var currentToastPresentation: NotificationBannerPresentation?
+
     /// Délibérément PAS `@Published` — aucune vue ne les observe.
     ///
     /// Ce sont des gardes de suppression, lues SYNCHRONIQUEMENT au moment de
@@ -598,6 +616,7 @@ public final class NotificationToastManager: ObservableObject {
     public func dismissToast() {
         toastDismissTask?.cancel()
         toastDismissTask = nil
+        currentToastPresentation = nil
         currentToast = nil
     }
 
@@ -834,11 +853,15 @@ public final class NotificationToastManager: ObservableObject {
             hapticPlayer?()
         }
         toastDismissTask?.cancel()
+        // Résolue AVANT la publication de `currentToast` : l'observateur qui
+        // se réveille lit les deux dans le même tour.
+        currentToastPresentation = resolvedBannerPresentation(for: event)
         currentToast = event
 
         toastDismissTask = Task {
             try? await Task.sleep(for: .nanoseconds(Self.toastDuration))
             guard !Task.isCancelled else { return }
+            currentToastPresentation = nil
             currentToast = nil
         }
     }

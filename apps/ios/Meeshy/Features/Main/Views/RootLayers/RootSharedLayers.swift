@@ -52,7 +52,12 @@ struct RootNotificationToastOverlay: View {
     var body: some View {
         VStack {
             if let toast = notificationManager.currentToast {
-                NotificationToastView(event: toast) {
+                NotificationToastView(
+                    event: toast,
+                    // #7167 — la présentation est résolue à la POSE du toast ;
+                    // la vue la place, elle ne la recalcule pas à chaque corps.
+                    presentation: notificationManager.currentToastPresentation
+                ) {
                     if suppressToastTap { return }
                     notificationManager.dismissToast()
                     // #6999 — taper un toast OUVRE le contenu : la notification
