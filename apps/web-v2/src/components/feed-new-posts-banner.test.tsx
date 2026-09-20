@@ -11,18 +11,18 @@ import { FeedNewPostsBanner } from './feed-new-posts-banner';
  * **« N NOUVELLES PUBLICATIONS »** (#7182) — ce que le lecteur n'a pas encore
  * vu, dit dans sa langue, et qui SERT à quelque chose.
  *
- * ## POURQUOI ELLE N'EST PAS FLOTTANTE, CONTRAIREMENT À iOS
+ * ## POURQUOI ELLE FLOTTE, PAR EXCEPTION À D-50
  *
- * iOS la pose par-dessus le fil (`FeedView.swift:1200-1235`). **D-50 l'interdit
- * ici** : « aucun flottant ne recouvre un texte au repos », et l'article écarte
- * nommément l'argument qui aurait sauvé le flottant — « "iOS fait pareil" dit
- * que la cible porte le même défaut, pas qu'il est souhaitable ». La bannière
- * prend donc sa place DANS le flux, en tête de liste : elle ne recouvre rien,
- * ni pendant le défilement ni au repos.
+ * D-50 pose que « aucun flottant ne recouvre un texte au repos ». La première
+ * forme de ce composant s'y pliait ; le porteur a tranché l'inverse le
+ * 2026-09-20 — elle flotte, comme iOS (`FeedView.swift:1200-1235`).
  *
- * Ce que cette conformité coûte — la bannière n'est plus visible quand le
- * lecteur est descendu — est un arbitrage de produit, ouvert au porteur ; il
- * n'appartient pas à ce composant.
+ * Le motif est dans la NATURE de l'objet : les flottants que D-50 vise sont
+ * permanents et passifs, et recouvrir devient leur état normal. Celle-ci
+ * n'existe que lorsqu'il y a quelque chose à annoncer, et ne dure que jusqu'au
+ * geste qui la congédie. D'où le témoin de COUCHE ci-dessous : une bande pleine
+ * largeur qui capterait le pointeur mangerait les gestes du fil, et ferait du
+ * recouvrement assumé un blocage qui ne l'est pas.
  *
  * ## LE TÉMOIN QUI COMPTE EST CELUI DE L'EFFET
  *
@@ -61,7 +61,7 @@ const monter = async (props: { readonly count: number; readonly onTap?: () => vo
   container = document.createElement('div');
   document.body.append(container);
   root = createRoot(container);
-  await act(async () => root?.render(<FeedNewPostsBanner count={props.count} onTap={props.onTap ?? (() => {})} />));
+  await act(async () => root?.render(<FeedNewPostsBanner count={props.count} topPx={72} onTap={props.onTap ?? (() => {})} />));
   return container;
 };
 
@@ -128,5 +128,19 @@ describe('et elle a un EFFET (loi 4)', () => {
     expect(cible?.tagName).toBe('BUTTON');
     expect(cible?.getAttribute('type')).toBe('button');
     expect(Number(cible?.style.minHeight.replace('px', ''))).toBeGreaterThanOrEqual(44);
+  });
+
+  /**
+   * LA COUCHE NE MANGE PAS LES GESTES DU FIL. Un flottant centré se pose
+   * presque toujours dans une bande pleine largeur ; si cette bande capte le
+   * pointeur, elle vole les gestes de tout ce qui passe dessous — un défaut
+   * bien pire que le recouvrement que l'exception à D-50 assume.
+   */
+  test('seule la pilule capte le pointeur, jamais la bande qui la porte', async () => {
+    const host = await monter({ count: 2 });
+    const couche = host.firstElementChild;
+
+    expect(couche?.className).toContain('pointer-events-none');
+    expect(bouton(host)?.className).toContain('pointer-events-auto');
   });
 });

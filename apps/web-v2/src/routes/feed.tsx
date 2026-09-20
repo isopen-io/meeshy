@@ -318,6 +318,10 @@ export default function FeedScreen() {
   return (
     <div className="relative flex h-dvh flex-col overflow-hidden pt-safe">
       <FeedHeader pinned={pinned} railProps={railProps} />
+      {/* ELLE FLOTTE — exception à D-50 arbitrée par le porteur le 2026-09-20 :
+          dans le flux, elle n'aurait été visible qu'en haut du fil, là où son
+          information est déjà sous les yeux et son geste sans objet. */}
+      <FeedNewPostsBanner count={newPosts.data ?? 0} topPx={FEED_HEADER_HEIGHT + 8} onTap={onSeeNewPosts} />
       <p role="status" aria-live="polite" className="sr-only">
         {announcement}
       </p>
@@ -340,16 +344,6 @@ export default function FeedScreen() {
           <FeedEmpty />
         ) : (
           <>
-            {/* Dans le FLUX, jamais par-dessus : D-50 interdit qu'un
-                flottant recouvre un texte au repos. Le `<li>` lui-même est
-                conditionnel — un `<li>` vide laisserait l'interstice de la
-                liste (`gap-3`) au-dessus de la première carte, un blanc que
-                rien n'explique. */}
-            {(newPosts.data ?? 0) > 0 ? (
-              <li>
-                <FeedNewPostsBanner count={newPosts.data ?? 0} onTap={onSeeNewPosts} />
-              </li>
-            ) : null}
             {models.map((model) => (
               <li key={model.id}>
                 <FeedPostCard
