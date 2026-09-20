@@ -735,25 +735,41 @@ async function runScheme({ browser, base, scheme, check }) {
   await page.click(`[data-comment-row="${MINE}"] [data-comment-edit-save]`);
   await page.waitForSelector(`[data-comment-edit-field="${MINE}"]`, { state: 'detached' });
   /**
-   * **PUIS LE FAIT, ET SA STABILITÉ** (leçon 634). Le délai de 400 ms qui
+   * **PUIS LE FAIT QUI PRÉCÈDE LA LECTURE** (leçon 634). Le délai de 400 ms qui
    * tenait cette place était un PARI sur la vitesse de la machine.
    *
-   * Ce qu'on attend ici n'est PAS « la rangée porte le texte corrigé » — ce
-   * serait rendre tautologique le témoin qui le vérifie trois lignes plus bas.
-   * On attend que la rangée ne CHANGE PLUS : deux lectures identiques à un
-   * tour d'intervalle. Le gate lit alors un état arrêté, et reste libre de le
-   * trouver faux.
+   * Le fait attendu est **le PATCH parti**, observé côté Node sur `sent` :
+   * c'est lui qui déclenche le repeint de la rangée, donc l'attendre place la
+   * lecture APRÈS la cause, au lieu de parier sur sa durée.
+   *
+   * ATTENDRE LA SEULE STABILITÉ NE SUFFIT PAS, et c'est le piège qu'on évite
+   * ici : deux lectures identiques peuvent tomber toutes les deux AVANT le
+   * repeint — « stable » sur l'ANCIEN état. Le dépassement est AVALÉ
+   * volontairement (même discipline que `settleFocus` plus bas) : c'est le
+   * `check` qui suit qui juge, et qui dit alors ce qu'il a lu — un `timeout`
+   * ne l'aurait pas dit.
    */
-  await page.waitForFunction(
-    (sel) => {
-      const lu = (document.querySelector(sel)?.textContent ?? '').trim();
-      const precedent = globalThis.__meeshyDernierTexte;
-      globalThis.__meeshyDernierTexte = lu;
-      return lu !== '' && lu === precedent;
-    },
-    `[data-comment-row="${MINE}"] p.text-body`,
-    { polling: 100 },
-  );
+  const attendreFait = async (predicat, limiteMs = 8000) => {
+    const fin = Date.now() + limiteMs;
+    while (Date.now() < fin) {
+      if (await predicat()) return true;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    return false;
+  };
+  await attendreFait(async () => sent.some((r) => r.method === 'PATCH' && r.path.endsWith(MINE)));
+  /* … puis la rangée repeinte : non vide ET identique à la lecture précédente.
+     Le PATCH étant parti, la stabilité ne peut plus se confirmer sur l'ancien
+     état. */
+  let precedent = null;
+  await attendreFait(async () => {
+    const lu = await page
+      .$eval(`[data-comment-row="${MINE}"] p.text-body`, (n) => (n.textContent ?? '').trim())
+      .catch(() => '');
+    const stable = lu !== '' && lu === precedent;
+    precedent = lu;
+    return stable;
+  });
 
   const patch = sent.filter((r) => r.method === 'PATCH' && r.path.endsWith(MINE)).at(-1);
   check(patch !== undefined, say(`« Enregistrer » ENVOIE son PATCH — ${JSON.stringify(patch ?? null)}`));
