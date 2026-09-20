@@ -109,3 +109,50 @@ export const makeLoggerEnhancedModule = () => ({
 
 /** Module `utils/logger` en double. */
 export const makeLoggerModule = () => ({ logger: makeLevelLogger() });
+
+/**
+ * Module `utils/sanitize` en double.
+ *
+ * Il MIROITE la production, il ne la simplifie pas : `sanitizeURLOrPath`
+ * résout contre une origine sentinelle au lieu de comparer un préfixe — un
+ * double plus permissif que le code laisserait passer un faux vert sur
+ * exactement les entrées que #7157 existe pour bloquer (`/\\hôte`,
+ * `/<blanc>/hôte`, `//hôte`).
+ *
+ * `sanitizeText` retire les balises : c'est le comportement que les témoins
+ * de XSS interrogent.
+ */
+const ORIGINE_SENTINELLE = 'https://chemin-relatif.invalid';
+
+const urlSure = (input: string): string | null => {
+  if (!input) return null;
+  try {
+    const url = new URL(input);
+    return ['http:', 'https:'].includes(url.protocol) ? input : null;
+  } catch {
+    return null;
+  }
+};
+
+export const makeSanitizeModule = () => ({
+  SecuritySanitizer: {
+    sanitizeText: jest.fn((input: string) => input?.replace(/<[^>]*>/g, '') || ''),
+    sanitizeUsername: jest.fn(
+      (input: string) => input?.replace(/[^a-zA-Z0-9_.-]/g, '').substring(0, 50) || ''
+    ),
+    sanitizeURL: jest.fn(urlSure),
+    sanitizeURLOrPath: jest.fn((input: string) => {
+      const absolue = urlSure(input);
+      if (absolue !== null) return absolue;
+      if (!input) return null;
+      try {
+        return new URL(input, ORIGINE_SENTINELLE).origin === ORIGINE_SENTINELLE ? input : null;
+      } catch {
+        return null;
+      }
+    }),
+    sanitizeJSON: jest.fn((input: unknown) => input),
+    isValidNotificationType: jest.fn(() => true),
+    isValidPriority: jest.fn(() => true),
+  },
+});
