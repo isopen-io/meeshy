@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 
 import type { SocketIOMessage } from '@meeshy/shared/types/socketio-events/message';
 import { served } from './prism';
+import { deliveryOf } from '@/lib/view/message';
 
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
 import { conversationStore } from '@/lib/conversation-store';
@@ -20,8 +21,10 @@ import {
   applyConversationUpdated,
   applyMessageNew,
   applyMessageTranslation,
+  applyReadStatusUpdated,
   isConversationUpdated,
   isMessageTranslationEvent,
+  isReadStatusUpdated,
   isSocketMessage,
   neutralLastMessageFromPreview,
 } from './realtime-apply';
@@ -818,6 +821,133 @@ describe('applyMessageTranslation (#5793, revue-correction défaut 2) — le pip
 
     applyMessageTranslation(client, { messageId: 'm-1', translations: [translationEntry({ targetLanguage: 'en', translatedContent: 'Hi' })] });
     expect(readerServed()).toEqual({ text: 'Hi', language: 'en', translated: true });
+  });
+});
+
+/**
+ * `isReadStatusUpdated` (#7223) — garde de FORME pour `read-status:updated`,
+ * motif `isConversationUnreadUpdated` : ne valide QUE les champs que
+ * `applyReadStatusUpdated` lit (`conversationId`, `summary.{totalMembers,
+ * deliveredCount, readCount}`), jamais `participantId`/`userId`/`type` que ce
+ * puits ignore (§ 2 de `W2.md` — les deux audiences de `broadcastReadStatus`
+ * partagent ces quatre champs).
+ *
+ * Le second témoin fixe le vrai nom des trois compteurs
+ * (`ReadStatusSummary`, `packages/shared/types/socketio-events/message.ts:31-37`)
+ * contre le libellé — inexact — du critère de fin du lot
+ * (`receivedCount`/`deliveredToAllAt`/`readByAllAt`) : une charge qui ne
+ * porte QUE ces trois noms-là est REJETÉE.
+ */
+describe('isReadStatusUpdated (#7223) — décodage FAIL-CLOSED', () => {
+  test('la forme RÉELLE de ReadStatusSummary est reconnue', () => {
+    expect(
+      isReadStatusUpdated({
+        conversationId: 'c-a',
+        participantId: 'p-1',
+        userId: 'u-1',
+        type: 'read',
+        updatedAt: '2026-09-21T10:00:00.000Z',
+        summary: { totalMembers: 3, deliveredCount: 2, readCount: 1 },
+      }),
+    ).toBe(true);
+  });
+
+  test('une charge qui ne porte que le libellé du critère de fin (FAUX) est rejetée', () => {
+    expect(
+      isReadStatusUpdated({
+        conversationId: 'c-a',
+        summary: { receivedCount: 2, deliveredToAllAt: null, readByAllAt: null },
+      }),
+    ).toBe(false);
+  });
+
+  test('conversationId absent ⇒ rejetée', () => {
+    expect(isReadStatusUpdated({ summary: { totalMembers: 1, deliveredCount: 0, readCount: 0 } })).toBe(false);
+  });
+});
+
+/**
+ * `applyReadStatusUpdated` (#7223) — LA FONCTION PURE qui applique
+ * `read-status:updated` au cache TanStack du fil.
+ *
+ * La charge ne nomme AUCUN message (§ 2 de `W2.md` : `summary` décrit le
+ * DERNIER message non supprimé de la conversation,
+ * `MessageReadStatusService.getLatestMessageSummary`) — cette fonction cible
+ * donc le message le plus RÉCENT du fil en cache, jamais « le premier »,
+ * jamais un id lu sur la charge (elle n'en porte pas).
+ */
+describe('applyReadStatusUpdated (#7223) — le puits de read-status:updated', () => {
+  test('patch le DERNIER message du fil avec les trois compteurs de summary', () => {
+    const client = new QueryClient();
+    const older = localMessage({ id: 'm-1', createdAt: new Date('2026-09-21T09:00:00.000Z') });
+    const newest = localMessage({ id: 'm-2', createdAt: new Date('2026-09-21T09:05:00.000Z') });
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([older, newest]));
+
+    applyReadStatusUpdated(client, {
+      conversationId: 'c-a',
+      participantId: 'p-1',
+      userId: 'u-1',
+      type: 'read',
+      updatedAt: new Date('2026-09-21T09:06:00.000Z'),
+      summary: { totalMembers: 2, deliveredCount: 2, readCount: 2 },
+    });
+
+    const messages = threadOf(client, 'c-a')?.messages;
+    const patched = messages?.find((m) => m.id === 'm-2');
+    expect(patched?.deliveredCount).toBe(2);
+    expect(patched?.readCount).toBe(2);
+    expect(patched?.recipientCount).toBe(2);
+    /* LE MESSAGE PLUS ANCIEN N'EST PAS TOUCHÉ — `summary` ne décrit QUE le
+       dernier message de la conversation, jamais tout le fil. */
+    const untouched = messages?.find((m) => m.id === 'm-1');
+    expect(untouched?.deliveredCount).toBe(0);
+    expect(untouched?.readCount).toBe(0);
+  });
+
+  test('TOUS-OU-RIEN EN GROUPE CONSERVÉ — une lecture partielle rend `delivered`, jamais `read`', () => {
+    const client = new QueryClient();
+    const newest = localMessage({ id: 'm-2' });
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([newest]));
+
+    applyReadStatusUpdated(client, {
+      conversationId: 'c-a',
+      participantId: 'p-1',
+      userId: 'u-1',
+      type: 'read',
+      updatedAt: new Date('2026-09-21T09:06:00.000Z'),
+      summary: { totalMembers: 3, deliveredCount: 3, readCount: 1 },
+    });
+
+    const patched = threadOf(client, 'c-a')?.messages.find((m) => m.id === 'm-2');
+    expect(patched).toBeDefined();
+    expect(deliveryOf(patched as Message)).toBe('delivered');
+  });
+
+  test('le fil n’est pas OUVERT (aucune page en cache) ⇒ NO-OP', () => {
+    const client = new QueryClient();
+    applyReadStatusUpdated(client, {
+      conversationId: 'c-inconnue',
+      participantId: 'p-1',
+      userId: 'u-1',
+      type: 'read',
+      updatedAt: new Date('2026-09-21T09:06:00.000Z'),
+      summary: { totalMembers: 1, deliveredCount: 1, readCount: 1 },
+    });
+    expect(threadOf(client, 'c-inconnue')).toBeUndefined();
+  });
+
+  test('le fil est ouvert mais VIDE ⇒ NO-OP (aucun message à cibler)', () => {
+    const client = new QueryClient();
+    client.setQueryData(messagesQueryKey('c-vide'), threadPages([]));
+    applyReadStatusUpdated(client, {
+      conversationId: 'c-vide',
+      participantId: 'p-1',
+      userId: 'u-1',
+      type: 'read',
+      updatedAt: new Date('2026-09-21T09:06:00.000Z'),
+      summary: { totalMembers: 1, deliveredCount: 1, readCount: 1 },
+    });
+    expect(threadOf(client, 'c-vide')?.messages).toEqual([]);
   });
 });
 
