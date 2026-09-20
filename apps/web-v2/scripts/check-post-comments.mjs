@@ -727,13 +727,41 @@ async function runScheme({ browser, base, scheme, check }) {
     }
     return false;
   };
-  /* AVALÉE, comme `settleFocus` : un gate ne meurt pas sur une attente, il REND
-     un verdict. Si le champ ne se remplissait jamais, c'est le `check` du PATCH
-     qui le dirait — en citant ce qui est parti. Une exception de Playwright, à
-     cet endroit, ne dit RIEN et emporte les 106 assertions qui suivent. */
+  /**
+   * **LE FAIT ATTENDU EST LE CURSEUR POSÉ, PAS LA VALEUR PRÉSENTE** (#7176).
+   *
+   * `EditForm` prend le focus et place le curseur à la FIN dans un EFFET, qui
+   * court après la peinture. `page.fill` sélectionne tout PUIS tape : si
+   * l'effet s'intercale entre les deux, il défait la sélection et la frappe
+   * s'AJOUTE au texte au lieu de le remplacer. Mesuré en intégration continue,
+   * sur le corps du PATCH :
+   *
+   *     « Lo probé esta mañana, aguanta bien.Lo probé esta mañana, aguanta perfectamente. »
+   *
+   * Attendre que le champ porte une valeur ne suffisait pas — il la porte dès
+   * le premier rendu, alors que l'effet n'a pas encore couru. Le fait qui
+   * ferme la course est le curseur DÉJÀ posé à la fin : après lui, plus rien
+   * ne vient défaire la sélection de `fill`.
+   *
+   * AVALÉE, comme `settleFocus` : un gate ne meurt pas sur une attente, il REND
+   * un verdict. Si le curseur ne se posait jamais, c'est le `check` du PATCH
+   * qui le dirait — en citant ce qui est parti.
+   */
   await attendreFait(async () =>
-    (await page.$eval(`[data-comment-edit-field="${MINE}"]`, (n) => n.value).catch(() => '')) !== '',
+    page
+      .$eval(
+        `[data-comment-edit-field="${MINE}"]`,
+        (n) => n.value !== '' && n.selectionStart === n.value.length && document.activeElement === n,
+      )
+      .catch(() => false),
   );
+  /* ET LA FRAPPE DEVIENT INSENSIBLE À LA COURSE. Vider d'abord : sur un champ
+     VIDE, un effet qui replacerait le curseur « à la fin » le pose en 0, et il
+     n'y a plus rien à quoi la frappe puisse s'ajouter. L'attente ci-dessus
+     ferme la fenêtre ; ce vidage fait qu'un reste de fenêtre ne coûte rien.
+     Deux mesures pour une course, parce qu'elle ne se reproduit PAS en local :
+     un correctif qu'on ne peut pas voir échouer se double. */
+  await page.fill(`[data-comment-edit-field="${MINE}"]`, '');
   await page.fill(`[data-comment-edit-field="${MINE}"]`, CORRIGE);
   /* … et il porte le NOUVEAU avant qu'on enregistre : `fill` écrit par
      événements, React repeint au tour suivant. Sans cette seconde attente,
