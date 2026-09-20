@@ -196,10 +196,28 @@ export class SecuritySanitizer {
     const absolue = SecuritySanitizer.sanitizeURL(input);
     if (absolue !== null) return absolue;
 
-    // `//hôte/x` est une URL protocol-relative, pas un chemin : elle relève de
-    // `sanitizeURL`, qui vient de la refuser.
-    return input.startsWith('/') && !input.startsWith('//') ? input : null;
+    // Un chemin est « relatif » s'il RESTE sur son origine une fois résolu —
+    // pas s'il commence par `/`. Tester le préfixe laisse passer ce que
+    // l'analyseur d'URL normalise ensuite vers un AUTRE hôte :
+    //   `//evil.com/x`   → https://evil.com/x   (protocol-relative)
+    //   `/\\evil.com/x`   → https://evil.com/x   (l'antislash vaut une barre)
+    //   `/\t/evil.com`    → https://evil.com/    (les blancs sont supprimés)
+    // Les deux derniers commencent bien par un seul `/`. C'est donc
+    // l'analyseur qui doit trancher, jamais une comparaison de préfixe.
+    try {
+      const resolue = new URL(input, SecuritySanitizer.ORIGINE_SENTINELLE);
+      return resolue.origin === SecuritySanitizer.ORIGINE_SENTINELLE ? input : null;
+    } catch {
+      return null;
+    }
   }
+
+  /**
+   * Origine jetable contre laquelle un chemin d'API est résolu pour vérifier
+   * qu'il ne s'échappe pas. `.invalid` est réservé par la RFC 2606 : ce nom ne
+   * peut désigner aucun hôte réel.
+   */
+  private static readonly ORIGINE_SENTINELLE = 'https://chemin-relatif.invalid';
 
   /**
    * Sanitize username/identifier - only alphanumeric, underscore, hyphen

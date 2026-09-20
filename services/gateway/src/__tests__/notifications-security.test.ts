@@ -247,6 +247,40 @@ describe('Notifications - Tests de Sécurité', () => {
       expect(createCall.data.actor.avatar).toBe('/uploads/avatars/sender1.png');
     });
 
+    // Un chemin est « relatif » s'il RESTE sur son origine une fois RÉSOLU, pas
+    // s'il commence par `/`. Ces trois-là commencent par un seul `/` (ou deux)
+    // et pointent pourtant ailleurs une fois normalisés — l'antislash vaut une
+    // barre, et les blancs sont supprimés. Sans ces témoins, un retour au test
+    // de préfixe passerait inaperçu.
+    it.each([
+      ['protocol-relative', '//evil.example/x.png'],
+      ['antislash normalisé en barre', '/\\evil.example/x.png'],
+      ['blanc supprimé par l analyseur', '/\t/evil.example/x.png'],
+    ])('Abandonne un avatar qui s échappe de son origine (%s)', async (_cas, avatar) => {
+      const donnees: CreateNotificationParams = {
+        userId: 'user123',
+        type: 'new_message',
+        title: 'Message',
+        content: 'Content',
+        priority: 'normal',
+        context: {},
+        metadata: {},
+        actor: { id: 'sender1', username: 'sender', avatar }
+      };
+
+      prisma.notificationPreference.findUnique.mockResolvedValue(null);
+      prisma.notification.create.mockResolvedValue({
+        id: 'notif123', userId: 'user123', type: 'new_message',
+        title: 'Message', content: 'Content', priority: 'normal',
+        isRead: false, createdAt: new Date()
+      });
+
+      await service.createNotification(donnees);
+
+      const createCall = prisma.notification.create.mock.calls[0][0];
+      expect(createCall.data.actor.avatar ?? null).toBeNull();
+    });
+
     it('Sanitize JSON data object', async () => {
       const maliciousData: CreateNotificationParams = {
         userId: 'user123',
