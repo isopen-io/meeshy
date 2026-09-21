@@ -110,6 +110,22 @@ const fr = {
      « Ouvrir » seul laisserait le lecteur d'écran deviner de quelle carte
      il s'agit dans un fil qui en aligne vingt. */
   'feed.post.open': 'Ouvrir la publication de {author}',
+  /* LES PUBLICATIONS ENREGISTRÉES (#7286) — l'écran `/me/bookmarks` et sa rangée de Réglages › Outils. */
+  'bookmarks.title': 'Publications enregistrées',
+  'bookmarks.back': 'Retour aux réglages',
+  'bookmarks.loading': 'Chargement des publications enregistrées',
+  'bookmarks.empty.title': 'Aucune publication enregistrée',
+  'bookmarks.empty.subtitle': 'Touchez le signet sous une publication pour la garder ici et la relire quand vous voulez.',
+  'bookmarks.empty.cta': 'Ouvrir le Flux',
+  'bookmarks.error.title': 'Impossible de charger vos enregistrements',
+  'bookmarks.error.body': 'Réessayez dans un instant.',
+  'bookmarks.offline.body': 'Vos enregistrements s’afficheront à la reconnexion.',
+  'bookmarks.allLoaded': 'Toutes vos publications enregistrées sont chargées',
+  'bookmarks.filter.all': 'Tout',
+  'bookmarks.filter.posts': 'Postes',
+  'bookmarks.filter.reels': 'Réels',
+  'bookmarks.filter.a11y': 'Filtrer les enregistrements',
+  'settings.tools.bookmarks': 'Publications enregistrées',
   'feed.error.title': 'Impossible de charger le fil',
   'feed.error.body': 'Réessayez dans un instant.',
   'feed.offline.title': 'Hors ligne',

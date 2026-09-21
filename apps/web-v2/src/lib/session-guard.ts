@@ -39,6 +39,15 @@ export type RouteKey =
   | 'thread'
   | 'conversationsNew'
   | 'progression'
+  /**
+   * LES PUBLICATIONS ENREGISTRÉES (#7286) — PRIVÉE, comme `feed` et pour la
+   * même raison : `GET /social/posts?scope=bookmarks` lit la table des favoris
+   * DU LECTEUR et rend 401 sans session, bien que `optionalAuth` garde la
+   * porte. Non déclarée ici, elle serait PUBLIQUE par défaut : un visiteur
+   * sans compte y verrait un écran qui se peint puis reçoit un 401 en silence
+   * — la classe de défaut que les trois entrées voisines décrivent.
+   */
+  | 'bookmarks'
   | 'stories'
   | 'storyCompose'
   | 'story'
@@ -202,6 +211,9 @@ const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
   'thread',
   'conversationsNew',
   'progression',
+  /* LES PUBLICATIONS ENREGISTRÉES (#7286) — voir la raison écrite sur
+     `RouteKey` plus haut. */
+  'bookmarks',
   'stories',
   'storyCompose',
   'story',

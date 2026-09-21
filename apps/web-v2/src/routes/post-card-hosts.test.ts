@@ -70,7 +70,8 @@ describe('le compteur de commentaires est offert partout où la carte est monté
       .map((path) => path.slice(SRC.length + 1))
       .sort();
 
-    expect(hotes.length).toBeGreaterThanOrEqual(4);
+    expect(hotes.length).toBeGreaterThanOrEqual(5);
+    expect(hotes).toContain('routes/bookmarks.tsx');
     expect(hotes).toContain('routes/feed.tsx');
     expect(hotes).toContain('routes/hashtag.tsx');
     expect(hotes).toContain('routes/post.tsx');
