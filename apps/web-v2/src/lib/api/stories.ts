@@ -304,9 +304,16 @@ export async function loadStoryPost(
   });
 }
 
+/** **LA CLÉ DE LA TROISIÈME MARCHE**, exportée plutôt que composée en ligne :
+ * le cache qu'elle nomme n'est pas lu que par sa requête — le port des
+ * réactions y bascule l'optimiste d'une story atteinte par LIEN, absente du
+ * corpus du plateau (`story-reactions.ts`). Une clé recomposée à deux
+ * endroits est un cache que l'un des deux manque en silence. */
+export const storyPostQueryKey = (postId: string) => [...STORIES_QUERY_PREFIX, 'post', postId] as const;
+
 export function storyPostQueryOptions(deps: StoriesDeps & { readonly postId: string }) {
   return {
-    queryKey: [...STORIES_QUERY_PREFIX, 'post', deps.postId] as const,
+    queryKey: storyPostQueryKey(deps.postId),
     queryFn: ({ signal }: { signal: AbortSignal }) =>
       loadStoryPost({ ...deps, signal }).then(unwrap),
   };
