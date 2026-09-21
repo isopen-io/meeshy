@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import type { FeedInfiniteData, FeedPost } from '@/lib/api/feed-pages';
 
 import { resolveFeedCardModel } from './card-model';
-import { applyMediaCaptionTranslation, mapCardPosts, togglePost, withServedCount, type PostToggle, type ServedCount } from './interactions';
+import { mapCardPosts, togglePost, withServedCount, type PostToggle, type ServedCount } from './interactions';
 
 const NOW = new Date('2026-09-13T12:00:00.000Z');
 
@@ -125,61 +125,5 @@ describe('withServedCount × mapCardPosts — un compte SERVI remplace l’estim
   test('un compte déjà juste ne change pas la référence du cache', () => {
     const data = pagesOf([post({ shareCount: 7 })]);
     expect(applyServedCount(data, { postId: 'p1', kind: 'share', count: 7 })).toBe(data);
-  });
-});
-
-const translation = (text: string) => ({ text, translationModel: 'nllb-200', createdAt: '2026-09-14T00:00:00.000Z' });
-
-describe('applyMediaCaptionTranslation — la légende d’un média suit le pipeline ZMQ EN DIRECT (#6280)', () => {
-  test('une traduction reçue entre dans `captionTranslations`, à sa langue', () => {
-    const data = pagesOf([
-      post({ media: [{ id: 'm1', mimeType: 'image/jpeg', fileUrl: 'a.jpg', caption: 'The market', captionLanguage: 'en' }] }),
-    ]);
-    const next = applyMediaCaptionTranslation(data, { mediaId: 'm1', language: 'fr', translation: translation('Le marché') });
-    expect(next?.pages[0]?.posts[0]?.media?.[0]?.captionTranslations).toEqual({ fr: translation('Le marché') });
-  });
-
-  test('une SECONDE traduction pour la MÊME langue remplace la première, jamais un doublon', () => {
-    const withFr = pagesOf([
-      post({
-        media: [
-          {
-            id: 'm1',
-            mimeType: 'image/jpeg',
-            fileUrl: 'a.jpg',
-            caption: 'The market',
-            captionTranslations: { fr: translation('Le marché') },
-          },
-        ],
-      }),
-    ]);
-    const next = applyMediaCaptionTranslation(withFr, { mediaId: 'm1', language: 'fr', translation: translation('Le grand marché') });
-    expect(next?.pages[0]?.posts[0]?.media?.[0]?.captionTranslations).toEqual({ fr: translation('Le grand marché') });
-  });
-
-  test('une traduction dans une AUTRE langue s’ajoute, sans écraser la précédente', () => {
-    const withFr = pagesOf([
-      post({
-        media: [{ id: 'm1', mimeType: 'image/jpeg', fileUrl: 'a.jpg', captionTranslations: { fr: translation('Le marché') } }],
-      }),
-    ]);
-    const next = applyMediaCaptionTranslation(withFr, { mediaId: 'm1', language: 'de', translation: translation('Der Markt') });
-    expect(next?.pages[0]?.posts[0]?.media?.[0]?.captionTranslations).toEqual({
-      fr: translation('Le marché'),
-      de: translation('Der Markt'),
-    });
-  });
-
-  test('un média ABSENT du cache (commentaire, post non chargé) laisse le cache TEL QUEL, sans lever', () => {
-    const data = pagesOf([post({ media: [{ id: 'autre', mimeType: 'image/jpeg', fileUrl: 'a.jpg' }] })]);
-    expect(applyMediaCaptionTranslation(data, { mediaId: 'm1', language: 'fr', translation: translation('Le marché') })).toBe(data);
-    expect(applyMediaCaptionTranslation(undefined, { mediaId: 'm1', language: 'fr', translation: translation('x') })).toBeUndefined();
-  });
-
-  test('seul le post porteur du média change de référence ; ses voisins restent `toBe`-identiques', () => {
-    const neighbour = post({ id: 'p2', media: [{ id: 'm2', mimeType: 'image/jpeg', fileUrl: 'b.jpg' }] });
-    const data = pagesOf([post({ media: [{ id: 'm1', mimeType: 'image/jpeg', fileUrl: 'a.jpg' }] }), neighbour]);
-    const next = applyMediaCaptionTranslation(data, { mediaId: 'm1', language: 'fr', translation: translation('Le marché') });
-    expect(next?.pages[0]?.posts[1]).toBe(neighbour);
   });
 });

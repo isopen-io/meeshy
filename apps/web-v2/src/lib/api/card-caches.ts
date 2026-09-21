@@ -17,8 +17,8 @@ import { REELS_QUERY_ROOT } from './reels-query-key';
  * Six écrans montent la MÊME carte (`FeedPostCard`), et chacun la peint depuis
  * SA caisse : le Flux, les Réels, les enregistrées, la page d'un hashtag, les
  * publications d'un profil, et la fiche `/post/$post`. Tout ce qui change une
- * carte — un cœur, un signet, un compteur, une modification, une suppression —
- * doit atteindre CHACUNE de ces caisses, sans quoi l'écran qui lit la caisse
+ * carte — un cœur, un signet, un compteur, une modification, une suppression,
+ * une traduction livrée en direct — doit atteindre CHACUNE de ces caisses, sans quoi l'écran qui lit la caisse
  * oubliée montre un contrôle inerte : la requête part, la carte ne bouge pas.
  *
  * La liste vivait RECOPIÉE à trois sites (`feed-gestures.ts#setOn`,
@@ -53,6 +53,12 @@ type CardList = {
    * câble (`ReelsViewModel.swift:95-183` : `postLiked`, `postUnliked`,
    * `postBookmarked`, `postDeleted`) —, jamais une relecture ni un contenu
    * neuf (`postUpdated` n'y est pas câblé).
+   *
+   * Une TRADUCTION livrée en direct (#7383, #7382) n'est pas un contenu
+   * neuf : elle sert au lecteur le MÊME texte dans sa langue, et ne touche
+   * pas l'ordre du fil. Elle passe donc par `updateCardPost` (iOS la pose
+   * dans toutes ses caisses, pager des Réels compris —
+   * `FeedViewModel.swift`, `feedCache.patchEverywhere`).
    */
   readonly frozen: boolean;
 };

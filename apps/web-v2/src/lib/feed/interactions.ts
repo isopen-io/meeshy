@@ -1,4 +1,4 @@
-import type { FeedInfiniteData, FeedPost } from '@/lib/api/feed-pages';
+import type { FeedPost } from '@/lib/api/feed-pages';
 
 /**
  * LES GESTES DU FIL, CÔTÉ CACHE (#6278) — PURS : `togglePost` rend UNE carte
@@ -114,53 +114,4 @@ export type CommentCountDelta = { readonly postId: string; readonly delta: 1 | -
 export function withCommentCount(post: FeedPost, change: CommentCountDelta): FeedPost {
   if (post.id !== change.postId) return post;
   return { ...post, commentCount: shiftedCount(post.commentCount, change.delta) };
-}
-
-/**
- * `media:caption-translation-updated` CÔTÉ CACHE (#6280) — LE FIL SUIT LE
- * PIPELINE ZMQ EN DIRECT, même motif que `withServedCount` ci-dessus : une
- * fonction PURE, appliquée à `FEED_QUERY_KEY`. La charge porte UNE traduction
- * (`{ language, translation }`), jamais la carte entière — on la FUSIONNE
- * dans `captionTranslations` par langue, remplace l'existante, ajoute la
- * nouvelle, jamais un doublon après un second passage du pipeline (miroir
- * `mergeMessageTranslations`, `api/realtime-apply.ts`).
- *
- * `mediaId` est l'identité de fusion, pas `postId` : un média de COMMENTAIRE
- * (`commentId` présent sur l'événement) vit dans le même `PostMedia`, jamais
- * dans le cache du fil — cette fonction balaie `post.media` par id sans
- * jamais lire `commentId`, donc un événement dont le média n'est pas au fil
- * (commentaire, post non chargé) ne modifie rien, sans lever.
- */
-export type MediaCaptionTranslationUpdate = {
-  readonly mediaId: string;
-  readonly language: string;
-  readonly translation: {
-    readonly text: string;
-    readonly translationModel: string;
-    readonly confidenceScore?: number;
-    readonly createdAt: string;
-  };
-};
-
-function withMediaCaptionTranslation(post: FeedPost, update: MediaCaptionTranslationUpdate): FeedPost {
-  const media = post.media;
-  if (media === null || media === undefined) return post;
-  const index = media.findIndex((m) => m.id === update.mediaId);
-  if (index === -1) return post;
-
-  const existing = media[index]?.captionTranslations;
-  const record =
-    existing !== null && typeof existing === 'object' && !Array.isArray(existing)
-      ? (existing as Record<string, unknown>)
-      : {};
-  const nextTranslations = { ...record, [update.language]: update.translation };
-  const nextMedia = media.map((m, i) => (i === index ? { ...m, captionTranslations: nextTranslations } : m));
-  return { ...post, media: nextMedia };
-}
-
-export function applyMediaCaptionTranslation(
-  data: FeedInfiniteData | undefined,
-  update: MediaCaptionTranslationUpdate,
-): FeedInfiniteData | undefined {
-  return mapCardPosts(data, (post) => withMediaCaptionTranslation(post, update));
 }
