@@ -63,8 +63,11 @@ export type RovingMenuOptions = {
   readonly isDisabledAt?: (index: number) => boolean;
   /** L'index de départ à l'ouverture — défaut : la première ligne ATTEIGNABLE. */
   readonly computeInitialIndex?: () => number;
-  /** `RowActions` referme ; `ReadingModeChip` remesure. Ni l'un ni l'autre par défaut. */
-  readonly onScroll?: () => void;
+  /** `RowActions` referme ; `ReadingModeChip` remesure. Ni l'un ni l'autre par défaut.
+   * Reçoit l'ÉVÉNEMENT : le menu du message a besoin de sa CIBLE pour
+   * distinguer le défilement du lecteur de celui que l'application vient
+   * d'écrire (`programmatic-scroll.ts`). */
+  readonly onScroll?: (event: Event) => void;
   readonly onResize?: () => void;
   /**
    * OÙ REND LE FOCUS À LA FERMETURE (#5814) — `RowActions`/`ReadingModeChip`

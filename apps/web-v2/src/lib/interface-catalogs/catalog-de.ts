@@ -822,6 +822,26 @@ const de = {
 
   'admin.title': 'Verwaltung',
 
+  'message-detail.info.title': 'Nachrichteninfo',
+  'message-detail.received-by': 'Erhalten von',
+  'message-detail.read-by': 'Gelesen von',
+  'message-detail.not-yet': 'Noch nicht',
+  'message-detail.received-by.empty': 'Noch keine Zustellbestätigung',
+  'message-detail.read-by.empty': 'Diese Nachricht wurde noch von niemandem gelesen',
+  'message-detail.not-yet.empty': 'Alle haben die Nachricht erhalten',
+  'message-detail.attachment.opens.one': '{count} Öffnung',
+  'message-detail.attachment.opens.other': '{count} Öffnungen',
+  'message-detail.attachment.downloads.one': '{count} Download',
+  'message-detail.attachment.downloads.other': '{count} Downloads',
+  'message-detail.attachment.listened-until': 'Angehört bis {time}',
+  'message-detail.attachment.watched-until': 'Angesehen bis {time}',
+  'message-detail.attachment.complete': 'Vollständig',
+  'message-detail.attachment.listen.empty': 'Noch nicht angehört',
+  'message-detail.attachment.watch.empty': 'Noch nicht angesehen',
+  'message-detail.loading': 'Wird geladen…',
+  'message-detail.load-error': 'Diese Informationen konnten nicht geladen werden',
+  'message-detail.retry': 'Erneut versuchen',
+
 } satisfies InterfaceCatalog;
 
 export default de;

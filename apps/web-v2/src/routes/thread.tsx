@@ -1136,6 +1136,9 @@ export default function ThreadScreen() {
             sentAt={new Date(detailMessage.createdAt)}
             delivery={isMineOf(detailMessage, viewer.id ?? '') ? deliveryStatusOf(detailMessage) : null}
             locale={readerLocale}
+            conversationId={conversationId}
+            messageId={detailMessage.id}
+            attachments={detailMessage.attachments ?? []}
             onPickLanguage={(code) => {
               messageMenu.onPickLanguage(detailFor, code);
               messageMenu.setDetailFor(null);

@@ -5,6 +5,8 @@ import type { ConversationStoreState } from '@/lib/conversation-store';
 import type { Transport } from '../net/transport';
 import type { ConversationsDeps } from './conversations';
 import { patchConversation } from './conversations';
+import { conversationById } from './fixtures';
+import type { ApiResult } from './http';
 import { outcomeOf } from './outcome';
 
 /**
@@ -79,4 +81,101 @@ export async function markCaughtUp(params: {
   }
   patchConversation(queryClient, conversationId, (c) => ({ ...c, unreadCount: 0 }));
   store.getState().clearOverride(conversationId, ['unreadCount']);
+}
+
+/**
+ * LA LISTE NOMINATIVE D'UN MESSAGE (#7226, W7) — `detail=people`, MÊME route
+ * que `pushReadReceipt`, jamais dupliquée. Miroir de `ReceiptPersonRow`
+ * (`services/gateway/src/routes/conversations/receipts.ts:471-479`) et de
+ * l'enveloppe `ReceiptsPayload` (`:480-492`) : `pagination` vit DANS `data`,
+ * pas à la racine de l'enveloppe HTTP (contrairement à
+ * `fetchAttachmentStatusDetails`, § `attachments.ts` — deux routes, deux
+ * conventions de pagination, chacune fidèle à SA passerelle).
+ *
+ * `filterReadReceiptVisible` (`receipts.ts:637-653`) a DÉJÀ retiré les
+ * opt-out `showReadReceipts` côté serveur — ce port ne réécrit AUCUNE garde,
+ * il rend `people` tel que la passerelle le sert.
+ */
+export type ReceiptPersonRow = {
+  readonly participantId: string;
+  readonly displayName: string;
+  readonly avatar: string | null;
+  readonly deliveredAt: string | null;
+  readonly receivedAt: string | null;
+  readonly readAt: string | null;
+  readonly readDevice: string | null;
+};
+
+export type ReceiptsPeoplePayload = {
+  readonly detail: 'people';
+  readonly messageIds: readonly string[];
+  readonly people: readonly ReceiptPersonRow[];
+  readonly pagination: {
+    readonly total: number;
+    readonly limit: number;
+    readonly offset: number;
+    readonly hasMore: boolean;
+    readonly nextCursor: string | null;
+  };
+};
+
+export const messageReceiptsPeopleQueryKey = (conversationId: string, messageId: string) =>
+  ['message-receipts', conversationId, messageId] as const;
+
+/**
+ * DÉTERMINISTE, DÉRIVÉE DE `CONVERSATIONS` (#7226) — sous fixtures, il
+ * n'existe aucun corpus « qui a lu/reçu ce message » : ce générateur assigne
+ * un statut par PARITTÉ d'index sur `conversation.participants` (0 mod 3 ⇒
+ * lu, 1 mod 3 ⇒ reçu seulement, 2 mod 3 ⇒ pas encore) — stable d'un rendu à
+ * l'autre, pour que les captures de recette (`scripts/capture.mjs`) et les
+ * témoins d'IU restent reproductibles.
+ */
+function peopleFixtureOf(conversationId: string): readonly ReceiptPersonRow[] {
+  const participants = conversationById(conversationId)?.participants ?? [];
+  const base = Date.UTC(2026, 8, 21, 10, 0, 0);
+  return participants.map((p, index) => {
+    const bucket = index % 3;
+    const deliveredAt = new Date(base + index * 60_000).toISOString();
+    return {
+      participantId: p.id,
+      displayName: p.displayName,
+      avatar: p.avatar ?? null,
+      deliveredAt,
+      receivedAt: bucket === 2 ? null : new Date(base + index * 60_000 + 5_000).toISOString(),
+      readAt: bucket === 0 ? new Date(base + index * 60_000 + 30_000).toISOString() : null,
+      readDevice: null,
+    };
+  });
+}
+
+export async function fetchMessageReceiptsPeople(
+  params: ConversationsDeps & {
+    readonly conversationId: string;
+    readonly messageId: string;
+    readonly signal?: AbortSignal;
+  },
+): Promise<ApiResult<ReceiptsPeoplePayload>> {
+  if (__FIXTURES__ && params.source === 'fixtures') {
+    const people = peopleFixtureOf(params.conversationId);
+    return {
+      ok: true,
+      data: {
+        detail: 'people',
+        messageIds: [params.messageId],
+        people,
+        pagination: { total: people.length, limit: people.length, offset: 0, hasMore: false, nextCursor: null },
+      },
+    };
+  }
+  // `limit` EXPLICITE au maximum de la route (`RECEIPTS_PEOPLE_MAX_LIMIT`,
+  // `routes/conversations/receipts-contracts.ts:42`) : le défaut de la
+  // passerelle est 20, et la feuille AGRÈGE ce qu'elle reçoit (trois
+  // sections nominatives) sans lire `hasMore` — une conversation de plus de
+  // vingt membres aurait donc affiché une liste tronquée SANS le dire.
+  const query = new URLSearchParams({ detail: 'people', messageIds: params.messageId, limit: '100' });
+  return params.transport.request<ReceiptsPeoplePayload>({
+    method: 'GET',
+    path: `/api/v1/conversations/${params.conversationId}/receipts?${query.toString()}`,
+    ...(params.signal !== undefined ? { signal: params.signal } : {}),
+  });
 }
