@@ -182,3 +182,11 @@ export function storyReactionAnnouncement(result: StoryReactionResult): StoryRea
   if (!result.ok) return result.message;
   return result.notice ?? null;
 }
+
+/*
+ * `story:reacted` / `story:unreacted`, CÔTÉ TEMPS RÉEL, vivent dans
+ * `lib/api/reaction-realtime.ts` — CE fichier est importé
+ * STATIQUEMENT par `routes/story.tsx` (chunk `story_reader`, budgets.json) ;
+ * la loi d'application d'un événement socket ne sert QUE l'écouteur, chargé
+ * en `import()`. Voir le doc-comment jumeau dans `lib/stories/reaction.ts`.
+ */
