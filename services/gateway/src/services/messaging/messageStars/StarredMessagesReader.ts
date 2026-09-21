@@ -152,9 +152,8 @@ export class StarredMessagesReader {
       select: STARRED_DIRECT_PEER_SELECT,
       take: directConversationIds.length * DIRECT_PEERS_PER_CONVERSATION,
     });
-    return rows.reduce(
-      (peers, row) => (peers.has(row.conversationId) ? peers : new Map(peers).set(row.conversationId, row)),
-      new Map<string, StarredDirectPeerRow>(),
-    );
+    // Le PREMIER pair lu par conversation : `new Map` garde la dernière entrée
+    // d'une clé, d'où la lecture à rebours.
+    return new Map([...rows].reverse().map((row) => [row.conversationId, row] as const));
   }
 }
