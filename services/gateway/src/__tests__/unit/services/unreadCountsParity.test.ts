@@ -43,7 +43,12 @@ describe('unread counts — parité getUnreadCountsForParticipants / getUnreadCo
   let service: MessageReadStatusService;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    // `resetAllMocks` (pas `clearAllMocks`) : chaque test pose son propre jeu
+    // de `mockResolvedValueOnce`, et un chemin qui n'appelle PAS un mock donné
+    // laisserait sinon une valeur en file, consommée par erreur au test
+    // suivant — `clearAllMocks` n'efface que l'historique d'appels, jamais la
+    // file d'implémentations « once ».
+    jest.resetAllMocks();
     mockPrisma.userConversationPreferences.findMany.mockResolvedValue([]);
     mockPrisma.userMessageDeletion.findMany.mockResolvedValue([]);
     service = new MessageReadStatusService(mockPrisma);
@@ -92,14 +97,20 @@ describe('unread counts — parité getUnreadCountsForParticipants / getUnreadCo
 
   it('renvoie le MÊME compte quand le masquage personnel pose un cutoff (clearHistoryBefore)', async () => {
     // Cutoff à 11:30 : le message de 11:00 est masqué, celui de 12:00 compte.
-    const hidingRow = { userId: USER_ID, clearHistoryBefore: new Date('2024-01-01T11:30:00Z') };
+    // `loadPersonalHistoryHidingByUser` (clé participant, DANS une conversation) et
+    // `loadPersonalHistoryHidingByConversation` (clé conversation, POUR un user) lisent
+    // la même table par une projection DIFFÉRENTE (`userId` vs `conversationId`) — même
+    // ligne base, deux formes de retour, donc deux mocks distincts ici.
+    const cutoff = new Date('2024-01-01T11:30:00Z');
     const rows = candidateRows([
       { at: '2024-01-01T11:00:00Z', from: 'other' },
       { at: '2024-01-01T12:00:00Z', from: 'other' },
     ]);
 
     mockPrisma.conversationReadCursor.findMany.mockResolvedValueOnce([]);
-    mockPrisma.userConversationPreferences.findMany.mockResolvedValueOnce([hidingRow]);
+    mockPrisma.userConversationPreferences.findMany.mockResolvedValueOnce([
+      { userId: USER_ID, clearHistoryBefore: cutoff },
+    ]);
     mockPrisma.message.findMany.mockResolvedValueOnce(rows);
     const viaParticipants = await service.getUnreadCountsForParticipants(
       [{ id: PARTICIPANT_ID, userId: USER_ID, joinedAt: new Date('2024-01-01T00:00:00Z') }],
@@ -108,7 +119,9 @@ describe('unread counts — parité getUnreadCountsForParticipants / getUnreadCo
 
     mockPrisma.participant.findMany.mockResolvedValueOnce([participantRow()]);
     mockPrisma.conversationReadCursor.findMany.mockResolvedValueOnce([]);
-    mockPrisma.userConversationPreferences.findMany.mockResolvedValueOnce([hidingRow]);
+    mockPrisma.userConversationPreferences.findMany.mockResolvedValueOnce([
+      { conversationId: CONVERSATION_ID, clearHistoryBefore: cutoff },
+    ]);
     mockPrisma.message.findMany.mockResolvedValueOnce(rows);
     const viaUser = await service.getUnreadCountsForUser(USER_ID, [CONVERSATION_ID]);
 
@@ -183,7 +196,7 @@ describe('unread counts — parité getUnreadCountsForParticipants / getUnreadCo
 
 describe('unreadCountsCore — le calcul partagé, en isolation', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
   });
 
   it('unreadFloorFor combine le plancher de lecture et le cutoff de masquage via Math.max', () => {

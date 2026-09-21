@@ -384,7 +384,9 @@ describe('MessageReadStatusService', () => {
     it('should compute fresh counts per conversation using batch queries (iter-4)', async () => {
       const lastReadAt = new Date('2026-05-21T10:00:00Z');
       const joinedAt = new Date('2026-04-01');
-      // iter-4 batch path: participant.findMany (1 query) + cursor.findMany (1 query) + message.count × N
+      // iter-4 batch path: participant.findMany (1 query) + cursor.findMany (1 query) +
+      // message.findMany × N conversations, en parallèle — le calcul partagé
+      // `computeUnreadCounts` (#7199) compte en mémoire plutôt que par `message.count`.
       mockPrisma.participant.findMany.mockResolvedValueOnce([
         { id: testParticipantId, conversationId: conversationIds[0], joinedAt },
         { id: testParticipantId, conversationId: conversationIds[1], joinedAt },
@@ -393,15 +395,21 @@ describe('MessageReadStatusService', () => {
       mockPrisma.conversationReadCursor.findMany.mockResolvedValueOnce([
         { participantId: testParticipantId, lastReadAt },
       ]);
-      mockPrisma.message.count
-        .mockResolvedValueOnce(5)
-        .mockResolvedValueOnce(3);
+      mockPrisma.message.findMany.mockImplementation(async ({ where }: any) => {
+        const unreadCount =
+          where.conversationId === conversationIds[0] ? 5 : where.conversationId === conversationIds[1] ? 3 : 0;
+        return Array.from({ length: unreadCount }, (_, i) => ({
+          createdAt: new Date(lastReadAt.getTime() + (i + 1) * 1000),
+          senderId: 'other',
+        }));
+      });
 
       const result = await service.getUnreadCountsForConversations([testParticipantId], conversationIds);
 
       expect(result.get(conversationIds[0])).toBe(5);
       expect(result.get(conversationIds[1])).toBe(3);
       expect(result.get(conversationIds[2])).toBe(0);
+      expect(mockPrisma.message.count).not.toHaveBeenCalled();
     });
 
     // Même régression que getUnreadCount, sur le chemin batch de la liste de
@@ -418,18 +426,27 @@ describe('MessageReadStatusService', () => {
       mockPrisma.conversationReadCursor.findMany.mockResolvedValueOnce([
         { participantId: testParticipantId, lastReadAt, lastReadMessageCreatedAt },
       ]);
-      mockPrisma.message.count.mockResolvedValueOnce(4);
+      mockPrisma.message.findMany.mockResolvedValueOnce(
+        Array.from({ length: 4 }, (_, i) => ({
+          createdAt: new Date(lastReadMessageCreatedAt.getTime() + (i + 1) * 1000),
+          senderId: 'other',
+        }))
+      );
 
       const result = await service.getUnreadCountsForConversations([testParticipantId], conversationIds);
 
       expect(result.get(conversationIds[0])).toBe(4);
-      expect(mockPrisma.message.count).toHaveBeenCalledWith({
+      // Le calcul partagé (#7199) ne filtre plus `senderId` côté base — l'exclusion
+      // du message propre se fait en mémoire (`computeUnreadCounts`) — mais le
+      // plancher reste la position CHRONOLOGIQUE du curseur, pas `lastReadAt`.
+      expect(mockPrisma.message.findMany).toHaveBeenCalledWith({
         where: {
           conversationId: conversationIds[0],
           deletedAt: null,
-          senderId: { not: testParticipantId },
           createdAt: { gt: lastReadMessageCreatedAt },
         },
+        select: { createdAt: true, senderId: true },
+        orderBy: { createdAt: 'asc' },
       });
     });
 
@@ -3277,9 +3294,15 @@ describe('MessageReadStatusService', () => {
         participantId: testParticipantId, lastReadAt
       }));
       mockPrisma.conversationReadCursor.findMany.mockResolvedValueOnce(cursorRows);
-      // message.count called once per participant (20 parallel calls)
-      conversationIds.forEach((_, i) => {
-        mockPrisma.message.count.mockResolvedValueOnce(i < 10 ? (i + 1) : 0);
+      // message.findMany appelé une fois par conversation (20 appels parallèles) — le
+      // calcul partagé (#7199) compte en mémoire ; la conversation pilote directement le
+      // nombre de lignes rendues, comme l'ancien mock pilotait directement `message.count`.
+      mockPrisma.message.findMany.mockImplementation(async ({ where }: any) => {
+        const unreadCount = expected[where.conversationId] ?? 0;
+        return Array.from({ length: unreadCount }, (_, i) => ({
+          createdAt: new Date(lastReadAt.getTime() + (i + 1) * 1000),
+          senderId: 'other',
+        }));
       });
 
       const result = await service.getUnreadCountsForConversations([testParticipantId], conversationIds);
@@ -3288,6 +3311,7 @@ describe('MessageReadStatusService', () => {
       for (const id of conversationIds) {
         expect(result.get(id)).toBe(expected[id]);
       }
+      expect(mockPrisma.message.count).not.toHaveBeenCalled();
     });
   });
 

@@ -27,11 +27,14 @@ import { loadPrivacyPreferencesCached } from './preferences/privacy-cache';
 import {
   NO_PERSONAL_HIDING,
   applyPersonalHistoryHiding,
-  exclusiveFloorMsFor,
   loadPersonalHistoryHiding,
   loadPersonalHistoryHidingByConversation,
   loadPersonalHistoryHidingByUser,
 } from './personalHistoryFilter';
+// Le calcul de non-lu, UNE fois (#7199) : `getUnreadCountsForParticipants` et
+// `getUnreadCountsForUser` en sont deux orchestrateurs autour du MÊME cœur —
+// voir le doc-comment du module.
+import { computeUnreadCounts, unreadFloorFor } from './unreadCountsCore';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import {
   parsePlaybackTrace,
@@ -285,43 +288,21 @@ export class MessageReadStatusService {
    * Batched variant for multiple participants in the same conversation.
    *
    * Fires on the hottest path — `_updateUnreadCounts` calls this on EVERY `message:new`
-   * for every recipient. Each participant's unread count shares the SAME shape — messages
-   * after their read floor that they did NOT send themselves — so the only per-participant
-   * variance is the `createdAt` floor and the "exclude my own messages" cut. Collapsed into
-   * **1 cursor batch + 1 `message.findMany`** (index-backed by
-   * `[conversationId, deletedAt, createdAt]`) + in-memory upper-bound binary searches.
-   *
-   * Semantics match the canonical single-participant `getUnreadCount` and
-   * `getUnreadCountsForUser`: exclude **the participant's own** messages (`senderId ≠ p.id`),
-   * NOT the new message's sender. (The previous `senderId ≠ <message sender>` predicate
-   * under-reported — in a 1:1 it pushed 0 unread on every incoming message — and diverged
-   * from the authoritative `getUnreadCountsForUser`. See iter 46 / F23b.)
-   *
-   * Counting floor per participant: `cursor.lastReadMessageCreatedAt (position)
-   * → cursor.lastReadAt (legacy) → joinedAt → null` (no floor). The chronological
-   * position — not the wall-clock `lastReadAt` — keeps messages skipped by an
-   * exact partial-prefix read counted (design lecture-exacte §3).
-   * The `findMany` lower bound is the OLDEST floor across participants, so only the
-   * messages any participant could count are fetched once; a `null` floor (never read,
-   * no `joinedAt`) drops the bound entirely.
+   * for every recipient. Thin orchestrator around the ONE shared calculation
+   * (`computeUnreadCounts`, `./unreadCountsCore` — #7199): this method's only job is to
+   * batch-load what is specific to ITS axis — cursors + personal hiding keyed by
+   * PARTICIPANT, since every participant here shares the same conversation — into
+   * `UnreadFloor[]` (via `unreadFloorFor`), then hand them to the same counting core
+   * `getUnreadCountsForUser` also calls. Before #7199 the two methods computed this
+   * independently (a `findMany` + binary search here, N `message.count()` there);
+   * see the module doc-comment of `unreadCountsCore.ts` for why that mattered — this
+   * method feeds `conversation:unread-updated`, the live push, while
+   * `getUnreadCountsForUser` feeds the list, and a badge that changes value depending
+   * on which path last spoke is worse than either alone.
    *
    * Personal hiding is loaded IN PARALLEL with the cursors (2 extra indexed queries,
    * zero extra latency, and none at all for a conversation whose participants are all
-   * anonymous — the normal shape behind a share link). It then splits in two, because
-   * the two halves of the hiding cost very differently:
-   *
-   *   - a **history cut-off** is just a stricter floor. It folds into the participant's
-   *     own `floorMs` via `exclusiveFloorMsFor`, so those participants stay on the shared
-   *     binary search AND raise the query's lower bound — strictly less work than before;
-   *   - **individually hidden messages** cannot be expressed as a bound, so those
-   *     participants — and only those — take a linear pass over the rows, and only they
-   *     make the query select message ids.
-   *
-   * Applying the hiding HERE and not only on the list path is what keeps the two badges
-   * from contradicting each other: this method feeds `conversation:unread-updated`, the
-   * live push, while `getUnreadCountsForUser` feeds the list. Fixing one alone would
-   * replace a wrong-but-stable badge with a badge that changes value depending on which
-   * path last spoke.
+   * anonymous — the normal shape behind a share link).
    *
    * Returns a Map<participantId, unreadCount>. Accepts pre-resolved participant rows
    * (id + userId + joinedAt) to avoid redundant participant lookups.
@@ -355,117 +336,15 @@ export class MessageReadStatusService {
         cursors.map((c) => [c.participantId, c.lastReadMessageCreatedAt ?? c.lastReadAt])
       );
 
-      // Per-participant counting floor (ms). `cursor position → joinedAt → null`
-      // — identical reduction to the single-participant
-      // `(lastReadMessageCreatedAt ?? lastReadAt) ?? p.joinedAt ?? null` — then
-      // raised by the reader's own history cut-off, which is nothing but a
-      // stricter floor once restated as an exclusive bound.
-      const floors = participants.map((p) => {
-        const hiding = (p.userId ? hidingByUser.get(p.userId) : undefined) ?? NO_PERSONAL_HIDING;
-        const readFloorMs = ((cursorMap.get(p.id) ?? p.joinedAt)?.getTime() ?? null) as number | null;
-        const cutoffMs = exclusiveFloorMsFor(hiding);
-        const floorMs =
-          cutoffMs === null ? readFloorMs : readFloorMs === null ? cutoffMs : Math.max(readFloorMs, cutoffMs);
-        return {
-          id: p.id,
-          floorMs,
-          hiddenMessageIds: hiding.hiddenMessageIds.length > 0 ? new Set(hiding.hiddenMessageIds) : null,
-        };
-      });
-
-      // Only a reader who hid INDIVIDUAL messages needs the rows to carry their ids.
-      // Everyone else — the overwhelming majority — keeps the exact projection this
-      // method has always fetched.
-      const needsMessageIds = floors.some((f) => f.hiddenMessageIds !== null);
-
-      // A null floor counts every candidate message (no lower bound). If ANY participant
-      // is unbounded we must fetch the full history; otherwise the oldest floor is enough.
-      // Reduce (not `Math.min(...spread)`): this fires on the hottest path
-      // (`_updateUnreadCounts` on EVERY `message:new`) and `floors` has one entry per
-      // participant. A public/global conversation at the platform's 100k+ scale can exceed
-      // V8's argument-spread ceiling (~131k), where `Math.min(...arr)` throws
-      // `RangeError: Maximum call stack size exceeded` — swallowed by the catch below,
-      // silently zeroing unread counts for the whole conversation. `reduce` is O(n) with no
-      // per-argument stack cost, so it holds for any group size.
-      const hasUnboundedFloor = floors.some((f) => f.floorMs === null);
-      const minFloorMs = hasUnboundedFloor
-        ? null
-        : floors.reduce(
-            (min, f) => ((f.floorMs as number) < min ? (f.floorMs as number) : min),
-            Infinity
-          );
-
-      // ONE query for all participants. No `senderId` filter here — the "exclude my own
-      // messages" cut is per-participant, applied in memory below. `orderBy createdAt asc`
-      // walks the index in order, so per-sender buckets stay ascending.
-      const rows = (await this.prisma.message.findMany({
-        where: {
-          conversationId,
-          deletedAt: null,
-          ...(minFloorMs !== null ? { createdAt: { gt: new Date(minFloorMs) } } : {}),
-        },
-        select: needsMessageIds
-          ? { id: true, createdAt: true, senderId: true }
-          : { createdAt: true, senderId: true },
-        orderBy: { createdAt: "asc" },
-      })) as Array<{ id?: string; createdAt: Date; senderId: string }>;
-
-      // All candidate timestamps (ascending) + per-sender buckets, so each participant's
-      // own messages can be subtracted. `countAbove` is a binary search that assumes
-      // ascending order and runs on BOTH `allTimestamps` AND every `bySender` bucket, so
-      // BOTH must be sorted. The DB already returns index order (`orderBy createdAt asc`),
-      // but sorting both is a defensive net that keeps the result correct regardless of
-      // source ordering — sorting only the total while leaving the per-sender subtrahend
-      // in raw row order would miscount the own-message cut (yielding a bogus, even
-      // negative, unread count) the moment rows ever arrived unordered.
-      const allTimestamps = rows.map((r) => r.createdAt.getTime()).sort((a, b) => a - b);
-      const bySender = new Map<string, number[]>();
-      for (const r of rows) {
-        const bucket = bySender.get(r.senderId);
-        if (bucket) bucket.push(r.createdAt.getTime());
-        else bySender.set(r.senderId, [r.createdAt.getTime()]);
-      }
-      for (const bucket of bySender.values()) bucket.sort((a, b) => a - b);
-
-      // countAbove(ts, F) = number of timestamps strictly > F. Upper-bound binary search on
-      // an ascending array: first index where ts > F → `length - lo`. Strict `>` mirrors
-      // `createdAt: { gt: floor }` (a message at exactly the floor is not counted). `null`
-      // floor counts the whole array.
-      const countAbove = (sorted: number[], floorMs: number | null): number => {
-        if (floorMs === null) return sorted.length;
-        let lo = 0;
-        let hi = sorted.length;
-        while (lo < hi) {
-          const mid = (lo + hi) >>> 1;
-          if (sorted[mid] > floorMs) hi = mid;
-          else lo = mid + 1;
-        }
-        return sorted.length - lo;
-      };
-
-      // unread(p) = (all messages after p's floor) − (p's OWN messages after p's floor).
-      // Both `allTimestamps` and each bucket are sorted ascending above, so the same
-      // binary search is valid on either.
-      //
-      // A reader who hid individual messages cannot be counted by a bound — set
-      // membership is not an interval — so they fall to a linear pass over the same
-      // rows. `hiddenMessageIds !== null` implies `needsMessageIds`, so `r.id` is
-      // present exactly where it is read.
-      const countExcludingHidden = (f: (typeof floors)[number], hidden: Set<string>): number =>
-        rows.filter(
-          (r) =>
-            r.senderId !== f.id &&
-            (f.floorMs === null || r.createdAt.getTime() > f.floorMs) &&
-            !hidden.has(r.id as string)
-        ).length;
-
-      return new Map(
-        floors.map((f) => {
-          if (f.hiddenMessageIds !== null) return [f.id, countExcludingHidden(f, f.hiddenMessageIds)];
-          const own = bySender.get(f.id) ?? [];
-          return [f.id, countAbove(allTimestamps, f.floorMs) - countAbove(own, f.floorMs)];
-        })
+      const floors = participants.map((p) =>
+        unreadFloorFor(
+          p,
+          cursorMap.get(p.id) ?? null,
+          (p.userId ? hidingByUser.get(p.userId) : undefined) ?? NO_PERSONAL_HIDING
+        )
       );
+
+      return await computeUnreadCounts(this.prisma, conversationId, floors);
     } catch (error) {
       logger.error("[MessageReadStatus] Error batch-computing unread counts", error);
       return new Map(participants.map((p) => [p.id, 0]));
@@ -474,16 +353,23 @@ export class MessageReadStatusService {
 
   /**
    * Calcule le unreadCount pour plusieurs conversations d'un utilisateur.
-   * Version optimisée iter-4 : 2 + N requêtes au lieu de 4 × N.
-   *   1. participant.findMany  — résout les Participants du user (1 query)
-   *   2. cursor.findMany       — batch tous les cursors (1 query)
-   *   3. message.count × N    — comptage en parallèle (N queries)
-   * Returns 0 for any conversation in which the participant cannot be resolved.
    *
-   * Le masquage personnel est chargé PAR CONVERSATION (2 requêtes batchées) :
-   * une coupure d'historique appartient à un couple (utilisateur, conversation),
-   * jamais à l'utilisateur seul. Appliquer la coupure d'une conversation aux
-   * autres viderait des badges qui n'ont rien à se reprocher.
+   * Orchestrateur symétrique de `getUnreadCountsForParticipants` autour du MÊME calcul
+   * partagé (`computeUnreadCounts` — #7199) : ici l'axe batché est la CONVERSATION (un
+   * utilisateur, N conversations) plutôt que le PARTICIPANT (une conversation, N
+   * participants). Curseurs et masquage personnel restent chargés PAR CONVERSATION —
+   * ce que `loadPersonalHistoryHidingByConversation` sait déjà faire en 2 requêtes
+   * batchées, contrat inchangé — puis chaque conversation appelle le calcul séparément
+   * (en parallèle, `Promise.all`) : `computeUnreadCounts` porte sur UNE conversation à
+   * la fois, sa borne `message.findMany` ne se partage pas entre conversations
+   * différentes.
+   *
+   * Le masquage personnel est chargé PAR CONVERSATION : une coupure d'historique
+   * appartient à un couple (utilisateur, conversation), jamais à l'utilisateur seul.
+   * Appliquer la coupure d'une conversation aux autres viderait des badges qui n'ont
+   * rien à se reprocher.
+   *
+   * Returns 0 for any conversation in which the participant cannot be resolved.
    */
   async getUnreadCountsForUser(
     userId: string,
@@ -533,23 +419,31 @@ export class MessageReadStatusService {
         cursors.map((c) => [c.participantId, c.lastReadMessageCreatedAt ?? c.lastReadAt])
       );
 
-      // 3. Parallel message counts — one per participant (= one per conversation)
+      // 3. Un participant par conversation dans ce chemin (résolution ci-dessus,
+      // OR id/userId) — grouper reste correct si jamais deux lignes visaient la
+      // même conversation (la dernière conversation calculée gagne, comme l'ancien
+      // `unreadCounts.set` appelé en boucle).
+      const byConversation = new Map<string, typeof participants>();
+      for (const p of participants) {
+        const bucket = byConversation.get(p.conversationId);
+        if (bucket) bucket.push(p);
+        else byConversation.set(p.conversationId, [p]);
+      }
+
+      // 4. Une conversation = un appel au calcul partagé, tous en parallèle.
       await Promise.all(
-        participants.map(async (p) => {
-          const cursorFloor = cursorMap.get(p.id) ?? null;
-          const floor: Date | null = cursorFloor ?? p.joinedAt ?? null;
-          const count = await this.prisma.message.count({
-            where: applyPersonalHistoryHiding(
-              {
-                conversationId: p.conversationId,
-                deletedAt: null,
-                senderId: { not: p.id },
-                ...(floor ? { createdAt: { gt: floor } } : {}),
-              },
+        Array.from(byConversation.entries()).map(async ([conversationId, group]) => {
+          const floors = group.map((p) =>
+            unreadFloorFor(
+              p,
+              cursorMap.get(p.id) ?? null,
               hidingByConversation.get(p.conversationId) ?? NO_PERSONAL_HIDING
-            ),
-          });
-          unreadCounts.set(p.conversationId, count);
+            )
+          );
+          const counts = await computeUnreadCounts(this.prisma, conversationId, floors);
+          for (const p of group) {
+            unreadCounts.set(conversationId, counts.get(p.id) ?? 0);
+          }
         })
       );
 
