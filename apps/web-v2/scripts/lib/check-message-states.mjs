@@ -125,13 +125,34 @@ export async function checkMessageStates({ browser, BASE, expect, setScheme, AA_
   expect((await badgesRow.locator('[data-badge="edited"]').count()) > 0, `${label} st-badges porte « modifié »`);
 
   const hasForwarded = (await badgesRow.locator('[data-badge="forwarded"]').count()) > 0;
-  if (hasForwarded) {
-    const forwardedText = await badgesRow.locator('[data-badge="forwarded"]').innerText();
-    expect(
-      forwardedText.trim() === 'Transféré depuis Salon',
-      `${label} texte exact « Transféré depuis Salon » (obtenu : « ${forwardedText.trim()} »)`,
-    );
-  }
+  /**
+   * L'ATTENDU EST LA COMPOSITION, PAS LA LANGUE (#7337) — même patron que
+   * `st-place` ci-dessous (#7328).
+   *
+   * Cette ligne attendait la CHAÎNE FRANÇAISE « Transféré depuis Salon ». Le
+   * Chromium de ce gate est `en-US` (aucune `locale` posée) : elle était verte
+   * parce que `forwardLabelOf` écrivait son libellé EN DUR, en français — elle
+   * mesurait que le badge n'était pas traduit. Le badge vient désormais du
+   * catalogue ; ce qu'il garde vraiment tient en quatre faits, dont aucun ne
+   * parle français :
+   *   1. le badge a un texte NON VIDE ;
+   *   2. il est COMPOSÉ À PARTIR DE LA DONNÉE — le nom de la conversation
+   *      d'origine du fixture, « Salon », un nom propre identique dans les
+   *      sept catalogues ;
+   *   3. il ne se RÉDUIT pas à ce nom — le qualifiant « transféré » est là ;
+   *   4. il n'est pas un IDENTIFIANT de catalogue (`message.forwarded…`), ce
+   *      qu'une clé absente d'une langue rendrait telle quelle.
+   */
+  const FORWARD_SOURCE = 'Salon';
+  const forwardedText = hasForwarded ? (await badgesRow.locator('[data-badge="forwarded"]').innerText()).trim() : null;
+  expect(
+    forwardedText !== null &&
+      forwardedText !== '' &&
+      forwardedText.includes(FORWARD_SOURCE) &&
+      forwardedText !== FORWARD_SOURCE &&
+      !forwardedText.includes('message.forwarded'),
+    `${label} st-badges : badge transféré composé à partir de « ${FORWARD_SOURCE} » (obtenu ${JSON.stringify(forwardedText)})`,
+  );
 
   const badgesHtml = await badgesRow.innerHTML();
   const pinnedIndex = badgesHtml.indexOf('data-badge="pinned"');
@@ -205,9 +226,24 @@ export async function checkMessageStates({ browser, BASE, expect, setScheme, AA_
     );
   }
 
-  // st-fwd-group — un groupe SOUS le seuil : « Transféré » sans nom.
+  /* st-fwd-group — un groupe SOUS le seuil : le badge SANS nom (#7337).
+     L'ancienne ligne cherchait « Transféré< » dans le HTML : le mot français
+     suivi d'une balise. Le fait qu'elle gardait — le badge est là et ne nomme
+     PERSONNE — se dit sans langue : le badge existe, son texte n'est ni vide ni
+     une clé de catalogue, il ne porte pas le nom retenu (« Privé », la donnée
+     du fixture) et il n'est pas le libellé NOMMÉ de `st-badges` — un badge qui
+     rendrait « … depuis Privé » ou recopierait l'autre rangée tomberait. */
+  const fwdGroupBadge = rowOf('st-fwd-group').locator('[data-badge="forwarded"]');
+  const fwdGroupText = (await fwdGroupBadge.count()) > 0 ? (await fwdGroupBadge.innerText()).trim() : null;
+  expect(
+    fwdGroupText !== null &&
+      fwdGroupText !== '' &&
+      !fwdGroupText.includes('message.forwarded') &&
+      !fwdGroupText.includes('Privé') &&
+      fwdGroupText !== forwardedText,
+    `${label} st-fwd-group : badge transféré SANS nom (obtenu ${JSON.stringify(fwdGroupText)}, nommé ${JSON.stringify(forwardedText)})`,
+  );
   const fwdGroupHtml = await rowOf('st-fwd-group').innerHTML();
-  expect(fwdGroupHtml.includes('Transféré<'), `${label} st-fwd-group : « Transféré » sans nom`);
   expect(!fwdGroupHtml.includes('Privé'), `${label} st-fwd-group : « Privé » absent du HTML (attributs compris)`);
 
   // st-call, st-join, st-notice — rangée système : plate en Focal, capsule en Bulles.

@@ -67,6 +67,8 @@ import { pausedChronology } from './paused-chronology.mjs';
 export const BLURRED_WITNESS_ID = 'prot-2';
 export const BLURRED_CONTENT = 'Le code du coffre est 4817-2290.';
 const VIEW_ONCE_WITNESS_ID = 'prot-3';
+/** Le secret de `prot-3`, commun à son original anglais et à sa traduction. */
+const VIEW_ONCE_SECRET = '5531';
 const VIEW_ONCE_OFFLINE_WITNESS_ID = 'prot-4';
 const EPHEMERAL_WITNESS_ID = 'prot-5';
 const DELETED_WITNESS_ID = 'prot-6';
@@ -108,6 +110,22 @@ const runProtectionSuite = async ({ browser, BASE, expect, skin }) => {
    */
   const mainInnerHtml = () => protectionPage.locator('main').innerHTML();
   const rowOf = (id) => protectionPage.locator(`[data-message="${id}"]`);
+  /**
+   * LE TOMBSTONE D'UNE RANGÉE, PAR SA POIGNÉE (#7337) — `data-protection-notice`
+   * (`ProtectionNotice`, `protected-content.tsx`) : son texte et son nom
+   * accessible, lus d'un seul aller-retour. `null` si la rangée n'en porte
+   * pas — l'assertion le dit, elle ne bute pas.
+   */
+  const noticeOf = (id, kind) =>
+    rowOf(id).evaluate((row, wanted) => {
+      const notice = row.querySelector(`[data-protection-notice="${wanted}"]`);
+      return notice === null
+        ? null
+        : { text: (notice.textContent ?? '').trim(), aria: notice.getAttribute('aria-label') ?? '' };
+    }, kind);
+  /** Un libellé DIT quelque chose : non vide, et pas un identifiant de catalogue. */
+  const isSpokenLabel = (text, namespace) => typeof text === 'string' && text.trim() !== '' && !text.includes(namespace);
+  let burnedNotice = null;
 
   /**
    * 0 — LA BANDE DE DRAPEAUX, AVANT toute révélation et sur les DEUX peaux.
@@ -220,7 +238,20 @@ const runProtectionSuite = async ({ browser, BASE, expect, skin }) => {
       (await rowOf(VIEW_ONCE_WITNESS_ID).locator('[data-protected="consumed"]').count()) > 0,
       `[${skin}] la vue unique consommée porte data-protected="consumed"`,
     );
-    expect((await mainInnerText()).includes('Vu et supprimé'), `[${skin}] « Vu et supprimé » est affiché`);
+    /* LE TOMBSTONE PAR SA POIGNÉE, PAS PAR SON MOT (#7337) — l'assertion
+       cherchait « Vu et supprimé » dans tout `main` : le Chromium de ce gate
+       est `en-US`, elle était verte parce que le libellé était EN DUR. Ce
+       qu'elle garde se dit sans langue : SUR la rangée consommée, le
+       tombstone `burned` est rendu, son texte et son nom accessible ne sont
+       ni vides ni une clé de catalogue, et le contenu n'y est pas. */
+    burnedNotice = await noticeOf(VIEW_ONCE_WITNESS_ID, 'burned');
+    expect(
+      burnedNotice !== null &&
+        isSpokenLabel(burnedNotice.text, 'message.') &&
+        isSpokenLabel(burnedNotice.aria, 'message.') &&
+        !burnedNotice.text.includes(VIEW_ONCE_SECRET),
+      `[${skin}] le tombstone « vu et supprimé » est affiché SUR la rangée consommée (${JSON.stringify(burnedNotice)})`,
+    );
     // Second clic sur la rangée — plus rien à cliquer, l'état reste consumed.
     await rowOf(VIEW_ONCE_WITNESS_ID).click({ force: true });
     await chrono.advanceBy(250);
@@ -284,9 +315,17 @@ const runProtectionSuite = async ({ browser, BASE, expect, skin }) => {
      qu'un « Message supprimé » rendu par N'IMPORTE QUELLE autre rangée
      satisfaisait ce témoin. Une constante morte à côté d'une assertion trop
      large, c'est la seconde qui devait apprendre le nom de la première. */
+  /* Même réécriture (#7337) : « Message supprimé » cherché à la lettre
+     devient le tombstone `deleted` SUR la rangée `prot-6`, non vide, pas une
+     clé — et DISTINCT du tombstone `burned` relevé plus haut : deux états
+     différents qui se diraient pareil seraient un défaut, dans toute langue. */
+  const deletedNotice = await noticeOf(DELETED_WITNESS_ID, 'deleted');
   expect(
-    (await rowOf(DELETED_WITNESS_ID).innerText()).includes('Message supprimé'),
-    `[${skin}] « Message supprimé » est affiché SUR la rangée supprimée`,
+    deletedNotice !== null &&
+      isSpokenLabel(deletedNotice.text, 'message.') &&
+      isSpokenLabel(deletedNotice.aria, 'message.') &&
+      (burnedNotice === null || deletedNotice.text !== burnedNotice.text),
+    `[${skin}] le tombstone « supprimé » est affiché SUR la rangée supprimée (${JSON.stringify(deletedNotice)}, vu-et-supprimé ${JSON.stringify(burnedNotice?.text ?? null)})`,
   );
   expect(!(await mainInnerText()).includes(DELETED_CONTENT), `[${skin}] le contenu supprimé ne fuit jamais`);
   expect(

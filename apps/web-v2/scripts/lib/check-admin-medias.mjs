@@ -301,9 +301,18 @@ export async function constateLesMedias(
   // 3. LA PIÈCE PROTÉGÉE SUIT LA POLITIQUE DU PRÉDICAT SERVEUR.
   const masquee = await anatomieDeLaRangee(page, protegee);
   check(masquee !== null, `${prefixe} la rangée de la pièce protégée est rendue (${protegee})`);
+  /* LE VOILE DIT SA NATURE — ÉNONCÉ SANS LANGUE (#7337). Les deux lignes qui
+     suivent attendaient « Photo protégée », puis « Vocal protégé + Pièce
+     protégée », à la lettre. Le Chromium de ce gate est `en-US` (aucune
+     `locale` posée) : elles étaient vertes parce que les voiles étaient EN
+     DUR, en français. « Dire sa nature », sans langue, c'est : chaque voile
+     a un nom NON VIDE qui n'est pas une clé de catalogue, et trois natures
+     différentes (photo, vocal, fichier) portent TROIS noms différents — un
+     voile qui dirait la même chose pour tout, ou qui rendrait sa clé, tombe. */
+  const disLibelle = (texte) => typeof texte === 'string' && texte.trim() !== '' && !texte.includes('attachment.protected');
   check(
-    masquee !== null && masquee.voile === 'Photo protégée',
-    `${prefixe} la pièce protégée peint son VOILE, et le voile DIT sa nature (${masquee?.voile})`,
+    masquee !== null && disLibelle(masquee.voile),
+    `${prefixe} la pièce protégée peint son VOILE, et le voile porte un nom (${JSON.stringify(masquee?.voile)})`,
   );
   check(
     masquee !== null && masquee.images === 0,
@@ -318,9 +327,14 @@ export async function constateLesMedias(
      puisque la ligne doit rester LISTABLE. */
   const troisMediums = await anatomieDeLaRangee(page, pieces);
   check(troisMediums !== null, `${prefixe} la rangée des trois médiums est rendue (${pieces})`);
+  const natures = [masquee?.voile ?? null, ...(troisMediums?.voiles ?? [])];
   check(
-    troisMediums !== null && troisMediums.voiles.join(' + ') === 'Vocal protégé + Pièce protégée',
-    `${prefixe} le vocal ET le fichier protégés peignent CHACUN leur voile, qui DIT sa nature (${troisMediums?.voiles.join(' + ')})`,
+    troisMediums !== null && troisMediums.voiles.length === 2 && troisMediums.voiles.every(disLibelle),
+    `${prefixe} le vocal ET le fichier protégés peignent CHACUN leur voile, qui porte un nom (${JSON.stringify(troisMediums?.voiles)})`,
+  );
+  check(
+    natures.length === 3 && natures.every(disLibelle) && new Set(natures).size === 3,
+    `${prefixe} photo, vocal et fichier protégés DISENT trois natures différentes (${JSON.stringify(natures)})`,
   );
   check(
     troisMediums !== null && troisMediums.lecteurs === 0,
