@@ -643,10 +643,10 @@ struct GalleryVideoPage: View, Equatable {
             guard isActive, isWindowed, isReadyForAutoplay,
                   videoManagerActiveURL != attachment.fileUrl else { return }
             videoManager.isForceMuted = false
-            videoManager.load(
-                urlString: attachment.fileUrl,
-                attachmentId: attachment.id.isEmpty ? nil : attachment.id,
-                servedConsumption: attachment.currentUserConsumption)
+            videoManager.load(urlString: attachment.fileUrl, attachmentId: attachment.id.isEmpty ? nil : attachment.id)
+            // Reposée APRÈS `load()` — qui appelle `cleanup()` — et clé par la
+            // pièce jointe qu'elle qualifie : ce moteur est partagé (#7212).
+            videoManager.setServedConsumption(attachment.currentUserConsumption, for: attachment.id)
             videoManager.play()
             onCacheActivation()
         }
@@ -786,10 +786,10 @@ struct GalleryVideoPage: View, Equatable {
                 // activé (elle le relâche normalement d'elle-même en perdant
                 // l'activité), on ne veut jamais en hériter silencieusement ici.
                 videoManager.isForceMuted = false
-                videoManager.load(
-                urlString: attachment.fileUrl,
-                attachmentId: attachment.id.isEmpty ? nil : attachment.id,
-                servedConsumption: attachment.currentUserConsumption)
+                videoManager.load(urlString: attachment.fileUrl, attachmentId: attachment.id.isEmpty ? nil : attachment.id)
+                // Reposée APRÈS `load()` — qui appelle `cleanup()` — et clé par
+                // la pièce jointe qu'elle qualifie : ce moteur est partagé (#7212).
+                videoManager.setServedConsumption(attachment.currentUserConsumption, for: attachment.id)
                 videoManager.play()
                 onCacheActivation()
                 HapticFeedback.light()

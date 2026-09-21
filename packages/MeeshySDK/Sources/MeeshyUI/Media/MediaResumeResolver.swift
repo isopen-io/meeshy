@@ -43,6 +43,26 @@ public enum MediaResumeResolver {
         case video
     }
 
+    /// La consommation DÉTENUE par un moteur, ou `nil` quand elle qualifie une
+    /// AUTRE pièce jointe que celle actuellement chargée.
+    ///
+    /// Les deux moteurs média sont PARTAGÉS : ils changent de piste sous la
+    /// surface qui les a nourris. Une consommation gardée SANS sa clé ferait
+    /// reprendre un média à la position d'un AUTRE — et `attachmentId` étant
+    /// publiquement posable sur les deux moteurs, aucun ordre d'appel ne peut
+    /// l'en empêcher. La clé le rend impossible par construction.
+    ///
+    /// Site UNIQUE pour l'audio ET la vidéo : c'est la même question que
+    /// `servedPositionMs` résout un cran plus bas, et la laisser aux moteurs
+    /// les ferait diverger au premier correctif qui n'en touche qu'un.
+    nonisolated public static func heldConsumption(
+        _ held: (attachmentId: String, value: MeeshyMediaConsumption?)?,
+        matching attachmentId: String
+    ) -> MeeshyMediaConsumption? {
+        guard let held, held.attachmentId == attachmentId else { return nil }
+        return held.value
+    }
+
     /// La position SERVIE (millisecondes) pour ce médium, `nil` si le serveur
     /// n'en porte aucune.
     nonisolated public static func servedPositionMs(

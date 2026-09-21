@@ -109,11 +109,29 @@ public final class SharedAVPlayerManager: ObservableObject {
     /// la surface, qui seule la connaît ; le moteur ne lit aucun singleton.
     public var consumedLanguageProvider: (() -> String?)?
 
-    /// La consommation SERVIE pour la pièce jointe CHARGÉE, remise par
-    /// `load(urlString:attachmentId:servedConsumption:)` — le moteur ne lit
-    /// aucun modèle lui-même (pureté SDK). `cleanup()` ne l'efface pas : `load`
-    /// la repose à chaque chargement, y compris à `nil`.
-    private var servedConsumption: MeeshyMediaConsumption?
+    /// La consommation SERVIE par la passerelle pour une pièce jointe donnée —
+    /// remise par la surface, qui seule tient le modèle (pureté SDK : le moteur
+    /// ne lit aucun modèle lui-même).
+    ///
+    /// Elle voyage AVEC l'identifiant qu'elle qualifie — MÊME forme que
+    /// `AudioPlaybackManager` : ce moteur est PARTAGÉ et change de piste sous
+    /// la surface qui l'a nourri. Un champ NU se serait orphelinisé au premier
+    /// `manager.attachmentId = …` posé de l'extérieur (la propriété est
+    /// publique) ; la clé, relue par `MediaResumeResolver.heldConsumption`,
+    /// rend ce cas impossible sans dépendre d'un ordre d'appel.
+    private var servedConsumption: (attachmentId: String, value: MeeshyMediaConsumption?)?
+
+    /// Déclare la consommation servie pour `attachmentId`. Une seule à la fois :
+    /// le moteur ne lit jamais que la pièce jointe qu'il a chargée.
+    ///
+    /// Posée APRÈS `load()` par les surfaces : `load()` appelle `cleanup()`, et
+    /// tout ce qu'on pose AVANT lui est à la merci de ce nettoyage — c'est
+    /// exactement le défaut que `attachmentId` a payé une fois.
+    public func setServedConsumption(
+        _ consumption: MeeshyMediaConsumption?, for attachmentId: String
+    ) {
+        servedConsumption = (attachmentId, consumption)
+    }
 
     private var positionMs: Int { currentTime.isNaN ? 0 : max(0, Int(currentTime * 1000)) }
     /// Last `currentTime` (s) at which an engagement heartbeat fired. Instance-scoped
@@ -133,20 +151,11 @@ public final class SharedAVPlayerManager: ObservableObject {
 
     // MARK: - Load
 
-    /// `servedConsumption` — la consommation que la passerelle sert pour cette
-    /// pièce jointe (#7212). Elle voyage AVEC l'identifiant qu'elle qualifie,
-    /// par le même paramètre : un champ posé séparément resterait celui de la
-    /// vidéo PRÉCÉDENTE dès que ce moteur partagé change de piste.
-    public func load(
-        urlString: String,
-        attachmentId: String? = nil,
-        servedConsumption: MeeshyMediaConsumption? = nil
-    ) {
+    public func load(urlString: String, attachmentId: String? = nil) {
         guard !urlString.isEmpty else { return }
         guard urlString != activeURL else { return }
 
         cleanup()
-        self.servedConsumption = servedConsumption
         // Posé APRÈS `cleanup()` (qui le remet à `nil`) : tous les appelants
         // posaient auparavant `manager.attachmentId` AVANT `load()`, donc
         // `cleanup()` l'effaçait silencieusement à chaque chargement et
@@ -522,7 +531,7 @@ public final class SharedAVPlayerManager: ObservableObject {
         hasAppliedResumeThisLoad = true
         guard let saved = MediaResumeResolver.resumePosition(
             localPositionSeconds: VideoPlaybackPositionStore.shared.position(for: attId),
-            servedConsumption: servedConsumption,
+            servedConsumption: MediaResumeResolver.heldConsumption(servedConsumption, matching: attId),
             medium: .video,
             totalDuration: duration,
             isEligible: Self.isResumable)

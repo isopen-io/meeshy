@@ -60,11 +60,48 @@ final class MediaResumeWiringGuardTests: XCTestCase {
             "Le relais doit être APPELÉ — à l'apparition et juste avant la lecture.")
     }
 
-    func test_leChargementVideoTransporteLaConsommationServie() throws {
+    /// Les deux renderers vidéo (inline et plein écran) remettent la
+    /// consommation servie APRÈS `load()`, jamais avant.
+    ///
+    /// L'ordre est la moitié de la règle : `load()` appelle `cleanup()`, et
+    /// c'est précisément pour avoir été posé AVANT que `attachmentId` est resté
+    /// mort depuis l'origine (`MeeshyVideoPlayerAttachmentIdWiringTests`). Une
+    /// valeur remise avant `load()` naîtrait avec le même défaut, et aucun
+    /// témoin de valeur ne la verrait mourir.
+    func test_lesRenderersVideoRemettentLaConsommationServieApresLoad() throws {
         let text = try source("Sources/MeeshyUI/Media/MeeshyVideoPlayer+Renderers.swift")
-        XCTAssertTrue(
-            text.contains("servedConsumption: player.attachment.currentUserConsumption"),
-            "La consommation servie voyage AVEC l'identifiant qu'elle qualifie, "
-            + "par le paramètre de `load(urlString:attachmentId:servedConsumption:)`.")
+        let loads = Self.offsets(
+            of: "manager.load(urlString: player.attachment.fileUrl, attachmentId: player.attachment.id)",
+            in: text)
+        let relays = Self.offsets(
+            of: "manager.setServedConsumption(player.attachment.currentUserConsumption, "
+                + "for: player.attachment.id)",
+            in: text)
+        XCTAssertEqual(loads.count, 2, "les deux renderers vidéo chargent la pièce jointe")
+        XCTAssertEqual(
+            relays.count, loads.count,
+            "Un champ DÉCLARÉ et jamais ALIMENTÉ ne corrige personne : CHAQUE "
+            + "chargement doit remettre `currentUserConsumption` au moteur, clé "
+            + "par la pièce jointe qu'elle qualifie.")
+        for (index, load) in loads.enumerated() where index < relays.count {
+            XCTAssertGreaterThan(
+                relays[index], load,
+                "le relais se pose APRÈS `load()` — `cleanup()` y efface ce qui précède")
+            let nextLoad = index + 1 < loads.count ? loads[index + 1] : text.endIndex
+            XCTAssertLessThan(
+                relays[index], nextLoad,
+                "chaque chargement porte SON relais — pas deux relais sur un seul site")
+        }
+    }
+
+    /// Les décalages de toutes les occurrences de `needle`, dans l'ordre.
+    private static func offsets(of needle: String, in text: String) -> [String.Index] {
+        var found: [String.Index] = []
+        var cursor = text.startIndex
+        while let range = text.range(of: needle, range: cursor..<text.endIndex) {
+            found.append(range.lowerBound)
+            cursor = range.upperBound
+        }
+        return found
     }
 }

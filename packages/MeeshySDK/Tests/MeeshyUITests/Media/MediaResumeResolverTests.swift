@@ -206,11 +206,14 @@ struct MediaResumeResolverTests {
     }
 
     // MARK: - La consommation servie voyage AVEC l'identifiant qu'elle qualifie
+    // Site UNIQUE, partagé par les DEUX moteurs (audio et vidéo) depuis #7212 :
+    // la vidéo gardait un champ NU, que le premier `attachmentId` posé de
+    // l'extérieur aurait orphelinisé.
 
     @Test func servedConsumption_matchingId_isReturned() {
         let consumption = MeeshyMediaConsumption(lastPlayPositionMs: 45_000, listenedComplete: false)
         let held: (attachmentId: String, value: MeeshyMediaConsumption?)? = ("att-1", consumption)
-        #expect(AudioPlaybackManager.servedConsumption(held, matching: "att-1") == consumption)
+        #expect(MediaResumeResolver.heldConsumption(held, matching: "att-1") == consumption)
     }
 
     @Test func servedConsumption_otherId_isIgnored() {
@@ -219,7 +222,7 @@ struct MediaResumeResolverTests {
         // d'un AUTRE.
         let consumption = MeeshyMediaConsumption(lastPlayPositionMs: 45_000, listenedComplete: false)
         let held: (attachmentId: String, value: MeeshyMediaConsumption?)? = ("att-1", consumption)
-        #expect(AudioPlaybackManager.servedConsumption(held, matching: "att-2") == nil)
-        #expect(AudioPlaybackManager.servedConsumption(nil, matching: "att-1") == nil)
+        #expect(MediaResumeResolver.heldConsumption(held, matching: "att-2") == nil)
+        #expect(MediaResumeResolver.heldConsumption(nil, matching: "att-1") == nil)
     }
 }

@@ -92,7 +92,9 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     ///
     /// Elle voyage AVEC l'identifiant qu'elle qualifie : un moteur PARTAGÉ
     /// change de piste sous la vue qui l'a nourri, et une consommation
-    /// orpheline ferait reprendre un vocal à la position d'un AUTRE.
+    /// orpheline ferait reprendre un vocal à la position d'un AUTRE. La
+    /// relecture passe par `MediaResumeResolver.heldConsumption`, le site
+    /// unique que le moteur VIDÉO interroge aussi.
     private var servedConsumption: (attachmentId: String, value: MeeshyMediaConsumption?)?
 
     /// Déclare la consommation servie pour `attachmentId`. Une seule à la fois :
@@ -101,16 +103,6 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
         _ consumption: MeeshyMediaConsumption?, for attachmentId: String
     ) {
         servedConsumption = (attachmentId, consumption)
-    }
-
-    /// La consommation servie pour `attachmentId`, ou `nil` quand celle qu'on
-    /// détient qualifie une AUTRE pièce jointe.
-    nonisolated public static func servedConsumption(
-        _ held: (attachmentId: String, value: MeeshyMediaConsumption?)?,
-        matching attachmentId: String
-    ) -> MeeshyMediaConsumption? {
-        guard let held, held.attachmentId == attachmentId else { return nil }
-        return held.value
     }
 
     private var positionMs: Int { Int((player?.currentTime ?? currentTime) * 1000) }
@@ -526,7 +518,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
         guard let attId = attachmentId, let player else { return }
         guard let saved = MediaResumeResolver.resumePosition(
             localPositionSeconds: AudioPlaybackPositionStore.shared.position(for: attId),
-            servedConsumption: Self.servedConsumption(servedConsumption, matching: attId),
+            servedConsumption: MediaResumeResolver.heldConsumption(servedConsumption, matching: attId),
             medium: .audio,
             totalDuration: duration,
             isEligible: Self.isResumable)
