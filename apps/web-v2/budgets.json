@@ -347,5 +347,26 @@
       "percentile": 75,
       "source": "conception v3 § 8.3 — « 3G Fast simule, p75 »"
     }
+  },
+  "story_fonts": {
+    "subject": "Les TREIZE polices d'un texte de story (#6951) — les familles de StoryTextStyle.swift qu'iOS sert par une police EMBARQUEE, et que le web sert par un substitut REDISTRIBUABLE. Mesurees en octets BRUTS : un WOFF2 porte deja sa compression (Brotli), et le regzipper l'ALOURDIT — mesure, gzip -9 rend PLUS d'octets que le fichier. Une somme en gzip dirait donc un poids que personne ne telecharge.",
+    "pattern": "^assets/[A-Za-z0-9_-]+\\.woff2$",
+    "declared_by": "apps/web-v2/src/styles/story-fonts.css (les @font-face) + src/lib/canvas/story-fonts.ts (la table, la provenance, le cliquet par fichier)",
+    "cost_model": "CONDITIONNEL PAR NATURE, et c'est ce que le gate garde plutot qu'un plafond genereux. Une @font-face ne coute que ses lignes de CSS tant qu'aucun caractere de son unicode-range n'est peint : un lecteur qui n'ouvre aucune story ne telecharge RIEN, celui qui en ouvre une en `handwriting` paie 22 332 octets, une fois. Les TROIS facons de rendre ce cout inconditionnel sont gardees par measure-weight.mjs : (1) une @font-face dans un fichier CRITIQUE, (2) un precache par le service worker -- globPatterns nommait `woff2`, et Workbox inscrivait les treize fichiers au manifeste : 247 Ko a l'installation, pour chaque visiteur, soit plus de QUATRE fois la premiere peinture entiere ; l'exclusion vit dans vite.config.ts > globIgnores --, (3) un fichier qui disparait ou qui change sans que personne ne le dise.",
+    "files": {
+      "value": 13,
+      "status": "MESURE le 2026-09-21 (#6951)",
+      "source": "Une famille manquante n'est pas un poids en moins : c'est une famille que le studio PROPOSE et que le lecteur ne PEINT pas -- « une famille a moitie servie est pire que son absence » (critere de fin de #6951)."
+    },
+    "bytes": {
+      "value": 252912,
+      "status": "MESURE le 2026-09-21 (#6951) — cliquet EXACT, volontairement sans marge",
+      "source": "MESURE le 2026-09-21 par `bun run build` puis `node scripts/measure-weight.mjs` : 252 912 octets bruts (246,98 Ko) pour les treize sous-ensembles latins, soit handwriting/Parisienne 22 332 · calligraphy/Italianno 25 292 · cartoon/Comic Neue 700 12 800 · futuristic/Saira Condensed 800 12 060 · fantasy/Metamorphous 13 876 · curve/Tangerine 16 248 · tag/Permanent Marker 29 296 · retro/Cutive 15 332 · elegant/Prata 11 916 · poster/Anton 12 004 · bubble/Fredoka 600 16 464 · note/Patrick Hand 14 224 · brush/Caveat 700 51 068. POURQUOI UN CLIQUET EXACT, et non `mesure + marge` comme les chunks voisins : un chunk grossit a chaque ligne de code ajoutee, donc sa marge absorbe le travail normal ; un BINAIRE ne derive pas. Le seul geste qui bouge ce nombre est une SUBSTITUTION de police -- deliberee, rare, et qui doit rouvrir cette entree pour dire laquelle et pourquoi. Une marge n'y absorberait rien : elle laisserait passer en silence exactement la decision qu'on veut voir. LE CHIFFRE QUI COMPTE POUR UN LECTEUR n'est pas celui-ci mais le poids d'UNE famille : median 15 332 octets, extremes 11 916 (Prata) et 51 068 (Caveat) -- une story en porte une, rarement deux. LA PREMIERE PEINTURE NE BOUGE PAS : 49,55 Ko pour un plafond de 90 (D-49), contre 49,53 avant le lot ; les 0,02 Ko sont le nom du chunk, pas une police. LES @font-face vivent dans `text-appearance-<hash>.css`, chargee avec le chunk qui NOMME les familles -- `index-<hash>.css` en porte ZERO, ce que measure-weight.mjs verifie plutot que de l'esperer. CE QUI N'EST PAS SERVI, et il faut le dire : aucun de ces treize substituts ne dessine l'ARABE (les polices d'iOS non plus) ; un texte arabe reste peint par la police systeme, et son unicode-range garantit qu'il ne telecharge meme pas le fichier."
+    },
+    "heaviest_family_bytes": {
+      "value": 51068,
+      "status": "MESURE le 2026-09-21 (#6951) — informatif, non garde",
+      "source": "`brush` / Caveat 700, le seul substitut au-dessus de 30 Ko : une ecriture cursive dessine beaucoup plus de points de contour qu'un sans-serif. Les alternatives MESUREES (Gochi Hand 19 648, Architects Daughter 13 140, Shadows Into Light 15 988, Rock Salt 52 040) sont plus legeres mais empietent sur le caractere de `cartoon`, `bubble` ou `note` -- trois familles voisines qui se confondraient. Le poids est paye par le seul lecteur qui ouvre une story en `brush`, avec le texte deja peint (font-display: swap). Meme arbitrage pour `retro` : Special Elite rendait 53 040 octets, Cutive en rend 15 332 ET ressemble davantage a American Typewriter, qui est un slab serif propre et non une machine usee."
+    }
   }
 }
