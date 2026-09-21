@@ -372,20 +372,26 @@ async function runScheme({ browser, base, scheme, check }) {
   await page.route(isPostDetail, (route) => json(route, envelope(POST)));
 
   // ------------------------------------------- 0. l'ancre dépose sur le fil
-  const focusOnThread = async () => {
+  /* `settleFocus` plutôt qu'un délai : c'est un EFFET de React qui pose le
+     focus, et il court après la peinture — `waitForSelector` rend la main
+     avant lui. Sur le cas NÉGATIF, l'attente va jusqu'à son terme sans que la
+     condition tombe, et c'est ce qui en fait la preuve la plus forte : on a
+     laissé au fil toutes ses chances de saisir le focus, il ne l'a pas pris. */
+  const focusSurLeFil = async () => {
     await page.waitForSelector(`[data-comment-row="${OTHER}"]`);
-    await page.waitForTimeout(200);
+    await settleFocus(page, () => document.activeElement?.hasAttribute?.('data-comment-thread') === true);
     return page.evaluate(() => document.activeElement?.getAttribute('data-comment-thread') ?? null);
   };
 
   await page.goto(`${base}/post/${POST_ID}#commentaires`, { waitUntil: 'load' });
-  const ancre = await focusOnThread();
+  const ancre = await focusSurLeFil();
   check(ancre === POST_ID, say(`arriver par l'ancre dépose le lecteur SUR le fil — focus sur ${JSON.stringify(ancre)}`));
 
   await page.goto(`${base}/post/${POST_ID}`, { waitUntil: 'load' });
-  const sansAncre = await focusOnThread();
+  const sansAncre = await focusSurLeFil();
   check(sansAncre === null, say(`la MÊME adresse SANS ancre ne saisit RIEN — focus sur ${JSON.stringify(sansAncre)}`));
 
+  await page.waitForTimeout(200);
   await capture(page, `feed.post-comments.${scheme}`);
 
   // ------------------------------------------------ 1. qui a le droit de quoi
