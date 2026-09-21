@@ -63,7 +63,25 @@ TARGETS = {
     # onglet 24 px) ; au-dessus, l'icone d'app (192/512) sert deja les usages
     # plus grands (apple-touch-icon, PWA).
     "favicon-48.png": 48,
+    # L'ADRESSE QUE LA PASSERELLE SERT DEJA (#7305) : la branche `webpush` de
+    # `PushNotificationService` compose `icon: '/android-chrome-192x192.png'`,
+    # une adresse qui n'existait dans aucun `public/` — l'icone d'une banniere
+    # web retombait donc sur celle, generique, du navigateur. L'ajouter ICI
+    # coute 0 sur le budget gate et ne touche ni la passerelle ni le legacy,
+    # ce qui est preferable a un changement serveur lu par les deux.
+    "android-chrome-192x192.png": 192,
 }
+
+# Le BADGE monochrome de la banniere web (#7305) — `badge: '/badge-72x72.png'`,
+# la seconde adresse que la passerelle sert et qui n'existait pas. Un badge
+# n'est pas une icone : Android n'en garde que l'ALPHA et le teinte lui-meme.
+# La source est donc le glyphe-GABARIT de la signature
+# (`AppIconFooter.imageset`, `template-rendering-intent: template`), dont seul
+# l'alpha compte deja — la meme discipline que le reste du fichier : on
+# RECUPERE la marque, on ne la redessine pas.
+BADGE_SOURCE = XCASSETS / "AppIconFooter.imageset/AppIconFooter@3x.png"
+BADGE_TARGET = PUBLIC / "badge-72x72.png"
+BADGE_SIZE = 72
 
 # --- Le logo in-app et le glyphe de signature (#5606) ------------------------
 
@@ -354,6 +372,26 @@ def generate_ios_assets(width, height, lines):
         print(f"  iOS : 1 icone, {len(IOS_SPLASH_FILES)} splashs")
 
 
+def whiten(lines):
+    """Force le RGB a blanc en preservant l'alpha — la forme qu'un badge de
+    notification doit avoir (seul l'alpha est lu, la teinte est appliquee par
+    le systeme)."""
+    out = []
+    for row in lines:
+        line = bytearray(row)
+        for i in range(0, len(line), 4):
+            line[i] = line[i + 1] = line[i + 2] = 0xFF
+        out.append(bytes(line))
+    return out
+
+
+def generate_push_badge():
+    """Le badge 72x72 de la banniere web (#7305) — reduction du glyphe-gabarit
+    de signature, RGB force a blanc, alpha preserve."""
+    width, height, lines = read_png_rgba(BADGE_SOURCE)
+    write_png(BADGE_TARGET, BADGE_SIZE, whiten(downscale(width, height, lines, BADGE_SIZE)))
+
+
 def generate_brand_assets():
     """Le logo in-app et le glyphe-gabarit de la signature (#5606) — copies
     OCTET POUR OCTET, inconditionnelles : `public/` existe toujours, a
@@ -380,6 +418,7 @@ def main():
     for name, size in TARGETS.items():
         write_png(PUBLIC / name, size, downscale(width, height, lines, size))
     generate_brand_assets()
+    generate_push_badge()
     for generate in SHELL_TARGETS.values():
         generate(width, height, lines)
 
