@@ -1,8 +1,16 @@
-import { describe, expect, test } from 'bun:test';
+import { beforeAll, describe, expect, test } from 'bun:test';
 
 import type { Message } from '@/lib/api/types';
 
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+
 import { badgesOf, forwardAttributionOf, forwardLabelOf, isSystemMessage, systemRowOf, systemRowText } from './message-badges';
+
+/* Les trois libellés de transfert viennent du catalogue (#7337) ; `translate()`
+   LÈVE sur un catalogue non chargé, par contrat (`i18n-catalog.ts`). */
+beforeAll(async () => {
+  await Promise.all([loadInterfaceCatalog('fr'), loadInterfaceCatalog('en')]);
+});
 
 const NOW = new Date('2026-09-10T10:00:00.000Z').getTime();
 
@@ -145,13 +153,28 @@ describe('forwardAttributionOf — la liste blanche iOS', () => {
 
 describe('forwardLabelOf', () => {
   test('anonymous ⇒ « Transféré »', () => {
-    expect(forwardLabelOf({ kind: 'anonymous' })).toBe('Transféré');
+    expect(forwardLabelOf({ kind: 'anonymous' }, 'fr')).toBe('Transféré');
   });
   test('group("Salon") ⇒ « Transféré depuis Salon »', () => {
-    expect(forwardLabelOf({ kind: 'group', name: 'Salon' })).toBe('Transféré depuis Salon');
+    expect(forwardLabelOf({ kind: 'group', name: 'Salon' }, 'fr')).toBe('Transféré depuis Salon');
   });
   test('person("Bruno") ⇒ « Transféré de Bruno »', () => {
-    expect(forwardLabelOf({ kind: 'person', name: 'Bruno' })).toBe('Transféré de Bruno');
+    expect(forwardLabelOf({ kind: 'person', name: 'Bruno' }, 'fr')).toBe('Transféré de Bruno');
+  });
+
+  /**
+   * LE TÉMOIN QUI NE POUVAIT PAS EXISTER AVANT (#7337) — le libellé était EN
+   * DUR : `forwardLabelOf` rendait du français quelle que soit la langue du
+   * lecteur, et aucune assertion française ne pouvait le dire. Celle-ci
+   * varie la SEULE dimension qui change, et asserte un TEXTE anglais — qu'une
+   * clé absente ne peut pas produire (elle rendrait `message.forwarded`).
+   *
+   * Le NOM du fixture reste le nom : « Salon » est une donnée, pas un
+   * libellé, donc identique dans les sept catalogues.
+   */
+  test('la LANGUE change le libellé — anglais, jamais une recopie du français', () => {
+    expect(forwardLabelOf({ kind: 'anonymous' }, 'en')).toBe('Forwarded');
+    expect(forwardLabelOf({ kind: 'group', name: 'Salon' }, 'en')).toBe('Forwarded from Salon');
   });
 });
 

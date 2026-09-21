@@ -25,7 +25,7 @@ import {
   stageAfter,
   type StagePresentation,
 } from '@/lib/view/media-stage';
-import { kindOf } from '@/lib/view/message';
+import { PROTECTED_ATTACHMENT_KEY, kindOf } from '@/lib/view/message';
 import { safeAreaInsets } from '@/lib/view/safe-area';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { lateralSeek } from '@/lib/view/media-transport';
@@ -395,7 +395,13 @@ function ViewerBackdropPage({ attachment }: { readonly attachment: Attachment })
  */
 function ViewerMaskedPage({ attachment }: { readonly attachment: Attachment }) {
   const kind = kindOf(attachment);
-  const libelle = kind === 'video' ? 'Vidéo protégée' : kind === 'audio' ? 'Vocal protégé' : 'Photo protégée';
+  /* LE LIBELLÉ VIENT DU CATALOGUE (#7337) — la MÊME table que la tuile
+     (`PROTECTED_ATTACHMENT_KEY`, `lib/view/message.ts`), jamais une seconde carte :
+     « un second vocabulaire ferait dire deux choses différentes à l'œil et à
+     l'oreille pour un même état ». `file` n'atteint pas cette page (la
+     visionneuse ne pagine que le VISUEL, D-41) — la table le porte quand
+     même, parce qu'elle est la carte du TYPE, pas celle de cette page. */
+  const libelle = translate(currentInterfaceLanguage(), PROTECTED_ATTACHMENT_KEY[kind]);
   return (
     <div
       data-protected-attachment="hidden"

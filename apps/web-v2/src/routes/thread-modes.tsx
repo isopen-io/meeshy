@@ -338,6 +338,13 @@ export function ThreadModes({
     );
   }
 
+  /* LA LANGUE D'INTERFACE, UNE FOIS PAR RENDU DE LISTE (#7337) — jamais une
+     fois par rangée : `composeMessageLabel` en a besoin pour ses tombstones et
+     son badge de transfert, et une virtualisation en rend des dizaines. C'est
+     une lecture de `document.documentElement.lang`, pas un abonnement — la
+     racine redessine déjà l'arbre quand la langue change. */
+  const interfaceLanguage = currentInterfaceLanguage();
+
   return (
     <RevealPhaseChannel publish={publishRevealPhase}>
       {placed.length === 0 ? (
@@ -462,6 +469,7 @@ export function ThreadModes({
             servedText: rowServed.text,
             delivery: checkStatusOf(p.message, rowDelivery),
             protection: rowProtection,
+            language: interfaceLanguage,
             contentWithheld: rowWithheld,
             phase: revealPhases.get(p.message.id) ?? { phase: 'hidden' },
           });

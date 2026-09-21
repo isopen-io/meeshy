@@ -895,6 +895,30 @@ const it = {
   'message.location.open': 'Apri in Mappe',
   'message.location.a11y': 'Posizione: {place}',
 
+  /* LES LIBELLÉS D'ÉTAT DU FIL (#7337) — voir `catalog-fr.ts` pour la règle. */
+  'message.forwarded': 'Inoltrato',
+  'message.forwarded.fromGroup': 'Inoltrato da {name}',
+  'message.forwarded.fromPerson': 'Inoltrato da {name}',
+  'message.send.failed': 'Non inviato',
+  'message.send.failed.reason': 'Non inviato — {reason}',
+  'message.send.retry': 'Riprova',
+  'announce.messageNotSent': 'Messaggio non inviato',
+  'announce.messageNotSent.reason': 'Messaggio non inviato — {reason}',
+  'message.deleted': 'Messaggio eliminato',
+  'message.burned': 'Visto ed eliminato',
+  'message.burned.a11y': 'Messaggio visto ed eliminato',
+  'message.expired.a11y': 'Messaggio effimero scaduto',
+  'message.withheld': 'Contenuto trattenuto',
+  'message.withheld.a11y': 'Contenuto trattenuto: questo messaggio esiste e non viene mostrato',
+  'message.veiled': 'Contenuto nascosto',
+  'message.veiled.hint': 'Tocca per rivelare il contenuto',
+  'message.veiled.viewOnce': 'Visualizza una volta',
+  'message.veiled.error': 'Impossibile rivelare per ora',
+  'attachment.protected.image': 'Foto protetta',
+  'attachment.protected.video': 'Video protetto',
+  'attachment.protected.audio': 'Audio protetto',
+  'attachment.protected.file': 'Allegato protetto',
+
 } satisfies InterfaceCatalog;
 
 export default it;

@@ -895,6 +895,30 @@ const es = {
   'message.location.open': 'Abrir en Mapas',
   'message.location.a11y': 'Ubicación: {place}',
 
+  /* LES LIBELLÉS D'ÉTAT DU FIL (#7337) — voir `catalog-fr.ts` pour la règle. */
+  'message.forwarded': 'Reenviado',
+  'message.forwarded.fromGroup': 'Reenviado desde {name}',
+  'message.forwarded.fromPerson': 'Reenviado de {name}',
+  'message.send.failed': 'No enviado',
+  'message.send.failed.reason': 'No enviado — {reason}',
+  'message.send.retry': 'Reintentar',
+  'announce.messageNotSent': 'Mensaje no enviado',
+  'announce.messageNotSent.reason': 'Mensaje no enviado — {reason}',
+  'message.deleted': 'Mensaje eliminado',
+  'message.burned': 'Visto y eliminado',
+  'message.burned.a11y': 'Mensaje visto y eliminado',
+  'message.expired.a11y': 'Mensaje efímero caducado',
+  'message.withheld': 'Contenido retenido',
+  'message.withheld.a11y': 'Contenido retenido: este mensaje existe y no se muestra',
+  'message.veiled': 'Contenido oculto',
+  'message.veiled.hint': 'Toca para revelar el contenido',
+  'message.veiled.viewOnce': 'Ver una vez',
+  'message.veiled.error': 'No se puede revelar por ahora',
+  'attachment.protected.image': 'Foto protegida',
+  'attachment.protected.video': 'Vídeo protegido',
+  'attachment.protected.audio': 'Audio protegido',
+  'attachment.protected.file': 'Archivo protegido',
+
 } satisfies InterfaceCatalog;
 
 export default es;

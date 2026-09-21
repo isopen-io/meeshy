@@ -892,6 +892,30 @@ const ar = {
   'message.location.open': 'فتح في الخرائط',
   'message.location.a11y': 'الموقع: {place}',
 
+  /* LES LIBELLÉS D'ÉTAT DU FIL (#7337) — voir `catalog-fr.ts` pour la règle. */
+  'message.forwarded': 'تمت إعادة التوجيه',
+  'message.forwarded.fromGroup': 'تمت إعادة التوجيه من {name}',
+  'message.forwarded.fromPerson': 'موجّهة من {name}',
+  'message.send.failed': 'لم يُرسَل',
+  'message.send.failed.reason': 'لم يُرسَل — {reason}',
+  'message.send.retry': 'إعادة المحاولة',
+  'announce.messageNotSent': 'لم تُرسَل الرسالة',
+  'announce.messageNotSent.reason': 'لم تُرسَل الرسالة — {reason}',
+  'message.deleted': 'تم حذف الرسالة',
+  'message.burned': 'شوهد وحُذف',
+  'message.burned.a11y': 'شوهدت الرسالة وحُذفت',
+  'message.expired.a11y': 'انتهت صلاحية الرسالة المؤقتة',
+  'message.withheld': 'محتوى محجوب',
+  'message.withheld.a11y': 'محتوى محجوب: هذه الرسالة موجودة ولا تُعرض',
+  'message.veiled': 'محتوى مخفي',
+  'message.veiled.hint': 'اضغط لإظهار المحتوى',
+  'message.veiled.viewOnce': 'عرض لمرة واحدة',
+  'message.veiled.error': 'يتعذّر الإظهار في الوقت الحالي',
+  'attachment.protected.image': 'صورة محمية',
+  'attachment.protected.video': 'فيديو محمي',
+  'attachment.protected.audio': 'رسالة صوتية محمية',
+  'attachment.protected.file': 'مرفق محمي',
+
 } satisfies InterfaceCatalog;
 
 export default ar;
