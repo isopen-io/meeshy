@@ -14,8 +14,8 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { currentHistory, reelsExitOf } from '@/lib/reels/exit';
-import { activeIndexOf, composeReelThread, entryReelIds, neighborIndex, pageModeOf, shouldLoadMoreReels } from '@/lib/reels/thread';
-import { useSearch } from '@/lib/router';
+import { activeIndexOf, composeReelThread, entryReelIds, neighborIndex, pageModeOf, reelSeedOf, shouldLoadMoreReels } from '@/lib/reels/thread';
+import { useRoute } from '@/lib/router';
 import { shortcutYieldsToTarget } from '@/lib/view/shortcut-scope';
 import { useMinute } from '@/lib/view/use-minute';
 import { usePostGesture } from '@/lib/view/use-post-gesture';
@@ -73,8 +73,6 @@ function hasUserActivation(): boolean {
 function prefersReducedMotion(): boolean {
   return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
-
-const nonEmpty = (value: string | null): string | undefined => (value !== null && value !== '' ? value : undefined);
 
 export function ReelsBackButton({ language, onBack }: { readonly language: InterfaceLanguage; readonly onBack: () => void }) {
   return (
@@ -150,8 +148,12 @@ export function ReelsFailure({ language, online, onRetry }: { readonly language:
 
 export default function ReelsScreen() {
   const language = currentInterfaceLanguage();
-  const [search] = useSearch();
-  const seed = nonEmpty(search.get('seed'));
+  /* DEUX ADRESSES, UNE GRAINE (#7298) — `/reels?seed=<id>` (le Flux) et
+     `/reel/<id>` (le lien que la passerelle grave à chaque partage) ouvrent le
+     MÊME écran ; `reelSeedOf` est le seul endroit qui décide laquelle nomme le
+     réel d'entrée. */
+  const { params, search } = useRoute();
+  const seed = reelSeedOf({ params, search });
   const online = useOnline();
   const { languages: readerLanguages } = useReaderLanguages();
   const minute = useMinute();

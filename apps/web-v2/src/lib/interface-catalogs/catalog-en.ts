@@ -848,6 +848,12 @@ const en = {
   'message-detail.load-error': 'Couldn’t load this information',
   'message-detail.retry': 'Retry',
 
+  'download.title': 'Get Meeshy',
+  'download.body': 'Write in your language, read in yours: Meeshy translates every message on the way.',
+  'download.appStore': 'Download on the App Store',
+  'download.web': 'Open Meeshy in your browser',
+  'download.otherPlatforms': 'On Android and on a computer, Meeshy runs right in your browser.',
+
 } satisfies InterfaceCatalog;
 
 export default en;

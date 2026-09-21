@@ -848,6 +848,12 @@ const it = {
   'message-detail.load-error': 'Impossibile caricare queste informazioni',
   'message-detail.retry': 'Riprova',
 
+  'download.title': 'Scarica Meeshy',
+  'download.body': 'Scrivi nella tua lingua e leggi nella tua: Meeshy traduce ogni messaggio lungo la strada.',
+  'download.appStore': 'Scarica su App Store',
+  'download.web': 'Apri Meeshy nel browser',
+  'download.otherPlatforms': 'Su Android e su computer, Meeshy funziona direttamente nel browser.',
+
 } satisfies InterfaceCatalog;
 
 export default it;

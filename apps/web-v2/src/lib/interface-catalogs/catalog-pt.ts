@@ -852,6 +852,12 @@ const pt = {
   'message-detail.load-error': 'Não foi possível carregar estas informações',
   'message-detail.retry': 'Tentar novamente',
 
+  'download.title': 'Baixe o Meeshy',
+  'download.body': 'Escreva no seu idioma e leia no seu: o Meeshy traduz cada mensagem no caminho.',
+  'download.appStore': 'Baixar na App Store',
+  'download.web': 'Abrir o Meeshy no navegador',
+  'download.otherPlatforms': 'No Android e no computador, o Meeshy funciona direto no navegador.',
+
 } satisfies InterfaceCatalog;
 
 export default pt;
