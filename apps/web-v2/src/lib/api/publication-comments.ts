@@ -18,7 +18,10 @@ import type { FeedAuthor, FeedInfiniteData, FeedMedia, FeedPost } from './feed-p
 import type { ApiResult, HttpTransport } from './http';
 import { outcomeOf } from './outcome';
 import { postQueryKey } from './publication-detail';
-import { REELS_QUERY_ROOT } from './reels';
+/* `./reels-query-key`, jamais `./reels` — ce module est atteint par
+ * `socket.ts` (le chunk `realtime`, async) ; voir le doc-comment de
+ * `reels-query-key.ts` (motif exact : `feed-realtime.ts`). */
+import { REELS_QUERY_ROOT } from './reels-query-key';
 import { STORY_FEED_QUERY_KEY, type StoryFeedPost } from './stories';
 
 /**

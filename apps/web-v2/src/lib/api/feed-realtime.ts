@@ -6,7 +6,14 @@ import { FEED_QUERY_KEY } from './feed';
 import { bumpNewPostCount } from './feed-new-count';
 import type { FeedInfiniteData, FeedPost } from './feed-pages';
 import { postQueryKey } from './publication-detail';
-import { REELS_QUERY_ROOT } from './reels';
+/* `./reels-query-key`, jamais `./reels` — ce module est atteint par `socket.ts`
+ * (le chunk `realtime`, chargé en `import()` APRÈS la première peinture) EN
+ * PLUS de la route `/reels` (chemin synchrone) ; importer le port ENTIER des
+ * réels depuis ce second chemin en fait un module partagé entre deux chunks
+ * async, que Rollup extrait sous un nom qui COLLISIONNE avec le chunk de la
+ * route (`budgets.json › on_demand_chunks.reels`, qui SOMME tout fichier du
+ * motif) — voir le doc-comment de `reels-query-key.ts`. */
+import { REELS_QUERY_ROOT } from './reels-query-key';
 
 /**
  * LE TEMPS RÉEL DU FLUX (#7182) — `post:created`, `post:updated`,
