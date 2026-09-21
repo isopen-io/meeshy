@@ -2,6 +2,9 @@ import { QueryClient } from '@tanstack/react-query';
 import { describe, expect, test } from 'bun:test';
 
 import { createHttpTransport } from '@/lib/api/http';
+import { messagesQueryKey } from '@/lib/api/messages';
+import { placeOf } from '@/lib/view/message-body';
+import { threadOf, threadPages } from '@/test-support/thread-cache';
 
 import { createOutboxStore, entriesOf } from './outbox-store';
 import { performSend, retrySend, type SendDeps } from './perform-send';
@@ -123,6 +126,72 @@ describe('le lieu attaché part avec le message (#7280)', () => {
       viewerId: 'u-viewer',
       deps,
     });
-    expect(entriesOf(deps.outbox.getState(), 'c-a')[0]?.place).toEqual(PARIS);
+    const attente = entriesOf(deps.outbox.getState(), 'c-a')[0]?.message;
+    expect(attente === undefined ? null : placeOf(attente)).toEqual({
+      latitude: PARIS.latitude,
+      longitude: PARIS.longitude,
+      name: null,
+      address: null,
+    });
+  });
+});
+
+/**
+ * **L'EXPÉDITEUR VOIT SON LIEU (#7328)** — le lot #7280 a fait PARTIR le lieu
+ * et s'est arrêté là : `Draft.place` était rangé sur l'ENTRÉE d'outbox, jamais
+ * sur le `LocalMessage` que la bulle rend. Le geste marchait, la pièce
+ * partait, et l'écran de celui qui l'envoie ne montrait RIEN — impossible de
+ * savoir si l'envoi a échoué ou si le correspondant l'a reçu.
+ *
+ * C'est la forme INVERSE du contrôle qui ment (loi 4), et la plus déroutante :
+ * un contrôle inerte ne fait rien, celui-ci fait tout SAUF le dire.
+ *
+ * Les deux témoins ci-dessous mesurent l'ALLER-RETOUR complet, parce que le
+ * défaut survivait à chacune de ses deux moitiés prise seule : la bulle
+ * OPTIMISTE (avant tout accusé) et la bulle CONFIRMÉE (`confirmedMessageOf`
+ * étale le local — ce qui n'y est pas ne peut pas en sortir).
+ *
+ * Ils interrogent `placeOf` (`lib/view/message-body.ts`), LA loi que les deux
+ * peaux appellent (`bubble.tsx:276`, `focal-row.tsx:467`) — jamais la clé
+ * brute : un témoin qui lirait `message.location` verdirait sur une forme que
+ * la carte ne sait pas lire.
+ */
+describe('l’expéditeur voit son lieu dans son propre fil (#7328)', () => {
+  test('la bulle OPTIMISTE porte le lieu, avant tout accusé', async () => {
+    const { impl } = capturingFetch();
+    const deps = depsOf(impl, false); // hors ligne : aucun accusé ne peut le réparer
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: 'je suis là, optimiste', originalLanguage: 'fr', place: PARIS },
+      viewerId: 'u-viewer',
+      deps,
+    });
+    const optimiste = entriesOf(deps.outbox.getState(), 'c-a')[0]?.message;
+    expect(optimiste === undefined ? null : placeOf(optimiste)).toEqual({
+      latitude: PARIS.latitude,
+      longitude: PARIS.longitude,
+      name: null,
+      address: null,
+    });
+  });
+
+  test('le CONFIRMÉ écrit dans le fil garde le lieu', async () => {
+    const { impl } = capturingFetch();
+    const deps = depsOf(impl);
+    deps.queryClient.setQueryData(messagesQueryKey('c-a'), threadPages([]));
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: 'je suis là, confirmé', originalLanguage: 'fr', place: PARIS },
+      viewerId: 'u-viewer',
+      deps,
+    });
+    const confirmé = threadOf(deps.queryClient, 'c-a')?.messages[0];
+    expect(confirmé?.id).toBe('m9');
+    expect(confirmé === undefined ? null : placeOf(confirmé)).toEqual({
+      latitude: PARIS.latitude,
+      longitude: PARIS.longitude,
+      name: null,
+      address: null,
+    });
   });
 });

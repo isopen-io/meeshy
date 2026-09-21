@@ -312,7 +312,7 @@ export function Bubble({
         />
       ) : null}
       {/* Le lieu est HÉBERGÉ dans la boîte (`BubbleContentBuilder.swift:134-137`). */}
-      {sharedPlace !== null ? <LocationCard place={sharedPlace} accent="var(--accent)" /> : null}
+      {sharedPlace !== null ? <LocationCard place={sharedPlace} accent="var(--accent)" language={currentInterfaceLanguage()} /> : null}
 
       {body.kind === 'sticker' ? (
         <StickerArtwork sticker={body.sticker} picture={body.picture} side={BUBBLE_STICKER_SIDE} />

@@ -887,6 +887,9 @@ const ar = {
   'composer.location.chip': 'موقع',
   'composer.location.unknown': 'مكان غير معروف',
   'composer.location.remove': 'إزالة الموقع',
+  'message.location.shared': 'موقع مشترك',
+  'message.location.open': 'فتح في الخرائط',
+  'message.location.a11y': 'الموقع: {place}',
 
 } satisfies InterfaceCatalog;
 

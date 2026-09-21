@@ -890,6 +890,9 @@ const de = {
   'composer.location.chip': 'ORT',
   'composer.location.unknown': 'Unbekannter Ort',
   'composer.location.remove': 'Standort entfernen',
+  'message.location.shared': 'Geteilter Standort',
+  'message.location.open': 'In Karten öffnen',
+  'message.location.a11y': 'Standort: {place}',
 
 } satisfies InterfaceCatalog;
 

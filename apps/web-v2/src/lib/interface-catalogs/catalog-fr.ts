@@ -979,6 +979,15 @@ const fr = {
   'composer.location.unknown': 'Lieu inconnu',
   'composer.location.remove': 'Retirer la position',
 
+  /* LA BULLE D'UN LIEU (#7328) — valeurs reprises du catalogue iOS
+     (`MeeshyUI/Resources/Localizable.xcstrings` : `location.shared`,
+     `location.fullscreen.openInMaps`, `location.a11y.label`), la référence de
+     cette bulle. `{place}` reçoit le nom du lieu, ou `message.location.shared`
+     quand il n'y en a pas — le cas NOMINAL du web, sans géocodeur inverse. */
+  'message.location.shared': 'Position partagée',
+  'message.location.open': 'Ouvrir dans Plans',
+  'message.location.a11y': 'Position : {place}',
+
 } as const;
 
 export default fr;

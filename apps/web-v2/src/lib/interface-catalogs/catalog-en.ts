@@ -890,6 +890,9 @@ const en = {
   'composer.location.chip': 'PLACE',
   'composer.location.unknown': 'Unknown place',
   'composer.location.remove': 'Remove the location',
+  'message.location.shared': 'Shared location',
+  'message.location.open': 'Open in Maps',
+  'message.location.a11y': 'Location: {place}',
 
 } satisfies InterfaceCatalog;
 
