@@ -800,6 +800,24 @@ export function directConversationWith(participantId: string): Conversation | un
   return conversationsWithSurged().find(matches) ?? OFF_LIST_CONVERSATIONS.find(matches);
 }
 
+/**
+ * LES CONVERSATIONS EN COMMUN AVEC QUELQU'UN (#7124) — ce que la passerelle
+ * rend sur `?withUserId=<id>` : les conversations dont le LECTEUR **et** le
+ * sujet sont tous deux membres actifs (`core-list.ts:193-210`), quel que soit
+ * leur TYPE — un direct, un groupe et un salon public y entrent pareil.
+ *
+ * Les deux registres sont balayés, pour la raison qui vaut déjà pour
+ * `directConversationWith` : une conversation partagée existe indépendamment
+ * de ce qu'une page de liste montre — l'archiver ne la supprime pas, et le
+ * serveur la retrouverait.
+ */
+export function sharedConversationsWith(participantId: string): readonly Conversation[] {
+  const membre = (c: Conversation, id: string) => c.participants.some((p) => p.userId === id);
+  return [...conversationsWithSurged(), ...OFF_LIST_CONVERSATIONS].filter(
+    (c) => membre(c, participantId) && membre(c, VIEWER_ID),
+  );
+}
+
 const withConsumption = (messages: readonly Message[]): readonly Message[] => {
   if (consumedViewOnceIds.size === 0) return messages;
   return messages.map((m) => {
