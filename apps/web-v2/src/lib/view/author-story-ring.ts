@@ -54,3 +54,32 @@ export function authorStoryRing(
 
   return { entryStoryId, unseen: group.hasUnseen };
 }
+
+/**
+ * L'HUMEUR COURANTE D'UN AUTEUR (#7186, directive porteur du 2026-09-20), lue
+ * du MÊME corpus que l'anneau — `withMoods` (`story-tray.ts:136`) l'a déjà
+ * greffée sur les groupes du rail. Aucune requête n'est ajoutée ici non plus.
+ *
+ * ## CE QUE CETTE LECTURE NE PEUT PAS GARANTIR, ET QUI DOIT ÊTRE DIT
+ *
+ * Un mood est un `Post` de type `STATUS`, ÉPHÉMÈRE À UNE HEURE
+ * (`schema.prisma:3435`, TTL posé par `ephemeralPosts.ts:28`). L'expiration est
+ * filtrée par la PASSERELLE (`getStatuses` exige `expiresAt > now`) ; le corpus
+ * en cache, lui, peut survivre à l'heure de ce qu'il porte.
+ *
+ * `StatusMoodPost` ne déclare pas `expiresAt` — mesuré
+ * (`lib/api/stories.ts:141-146`) — donc cette fonction ne PEUT pas vérifier la
+ * fenêtre, et elle ne fait pas semblant. C'est la limite EXACTE que le rail
+ * porte déjà : il peint les mêmes moods depuis le même corpus, sans plus de
+ * garantie. Ce lot ne l'aggrave pas et ne la corrige pas — l'élargir
+ * demanderait de faire voyager `expiresAt` sur le fil, ce qui est un lot à soi.
+ */
+export function authorMoodEmoji(
+  groups: readonly StoryTrayGroup[] | undefined,
+  authorId: string | undefined,
+): string | null {
+  if (groups === undefined || authorId === undefined || authorId === '') return null;
+
+  const mood = groups.find((candidate) => candidate.authorId === authorId)?.moodEmoji;
+  return typeof mood === 'string' && mood !== '' ? mood : null;
+}

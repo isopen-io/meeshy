@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { authorStoryRing } from './author-story-ring';
+import { authorMoodEmoji, authorStoryRing } from './author-story-ring';
 import type { StoryTrayGroup } from './story-tray';
 
 /**
@@ -79,5 +79,46 @@ describe('et sans story, rien — le cas nominal', () => {
   test('un groupe sans entrée exploitable', () => {
     expect(authorStoryRing([groupe({ entryStoryId: '' })], 'u-nour')).toBe(null);
     expect(authorStoryRing([groupe({ entryStoryId: undefined as unknown as string })], 'u-nour')).toBe(null);
+  });
+});
+
+/**
+ * **L'HUMEUR SE LIT DU MÊME CORPUS QUE L'ANNEAU** (#7186) — `withMoods` l'a
+ * greffée sur les groupes du rail, donc aucune requête n'est ajoutée.
+ *
+ * Les deux lectures sont SŒURS mais INDÉPENDANTES, et c'est ce que le dernier
+ * témoin garde : un auteur peut avoir une humeur sans story, et une story sans
+ * humeur. Les confondre ferait disparaître l'une avec l'autre.
+ */
+describe('l’humeur du moment d’un auteur', () => {
+  test('elle se lit sur son groupe', () => {
+    expect(authorMoodEmoji([groupe({ moodEmoji: '🎉' })], 'u-nour')).toBe('🎉');
+  });
+
+  test('absente, vide ou nulle : rien', () => {
+    expect(authorMoodEmoji([groupe()], 'u-nour')).toBe(null);
+    expect(authorMoodEmoji([groupe({ moodEmoji: '' })], 'u-nour')).toBe(null);
+    expect(authorMoodEmoji([groupe({ moodEmoji: null })], 'u-nour')).toBe(null);
+  });
+
+  test('sans corpus, sans auteur, ou pour un auteur inconnu : rien', () => {
+    expect(authorMoodEmoji(undefined, 'u-nour')).toBe(null);
+    expect(authorMoodEmoji([groupe({ moodEmoji: '🎉' })], undefined)).toBe(null);
+    expect(authorMoodEmoji([groupe({ moodEmoji: '🎉' })], 'u-personne')).toBe(null);
+  });
+
+  /**
+   * LES DEUX LECTURES SONT INDÉPENDANTES. Un auteur peut porter une humeur sans
+   * avoir de story — c'est même le cas le plus fréquent, les deux corpus étant
+   * DISTINCTS côté serveur (`?scope=stories` et `?scope=statuses`).
+   */
+  test('une humeur sans story, et une story sans humeur', () => {
+    const sansStory = groupe({ moodEmoji: '☕', entryStoryId: '' });
+    expect(authorMoodEmoji([sansStory], 'u-nour')).toBe('☕');
+    expect(authorStoryRing([sansStory], 'u-nour')).toBe(null);
+
+    const sansHumeur = groupe();
+    expect(authorMoodEmoji([sansHumeur], 'u-nour')).toBe(null);
+    expect(authorStoryRing([sansHumeur], 'u-nour')).not.toBe(null);
   });
 });

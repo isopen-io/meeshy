@@ -44,6 +44,7 @@ export function Avatar({
   src,
   profileUsername,
   storyRing,
+  mood,
 }: {
   initials: string;
   /** L'accent de la conversation — jamais une couleur codée en dur ici. */
@@ -74,6 +75,31 @@ export function Avatar({
    * adresse qui n'existe pas — donc un lien qui ment (loi 4).
    */
   profileUsername?: string;
+  /**
+   * **L'HUMEUR DU MOMENT DE SON UTILISATEUR** (#7186, directive porteur du
+   * 2026-09-20) — `Post.moodEmoji`, un statut ÉPHÉMÈRE à une heure.
+   *
+   * **ELLE MASQUE LA PRÉSENCE, ET NE COHABITE JAMAIS AVEC ELLE.** Miroir exact
+   * d'iOS (`MeeshyAvatar.swift:385-390`, un `else if`) : les deux signaux se
+   * disputent le MÊME coin de l'avatar, et en peindre deux l'un sur l'autre les
+   * rendrait illisibles tous les deux.
+   *
+   * **La pastille ne se DÉRIVE jamais de la présence, et ne la remplace pas
+   * quand celle-ci est masquée.** Le mood voyage par la loi des POSTS — servi
+   * aux amis ∪ contacts DM ∪ co-membres de communauté (`getStatuses:537-543`)
+   * — quand la présence n'est servie qu'à l'amitié acceptée
+   * (`resolvePresenceVisibility:54`). Son périmètre est donc strictement PLUS
+   * LARGE, et c'est légitime : un mood est un contenu PUBLIÉ volontairement,
+   * pas un signal dérivé de l'activité. Mais l'utiliser comme repli d'une
+   * présence masquée en ferait un canal de présence déguisé, et contournerait
+   * la directive du 2026-08-25 par la porte du contenu.
+   *
+   * Taille : 0,42 × l'avatar, miroir `MeeshyAvatar.swift:186-195`. Elle RESPIRE
+   * puis se pose après ~8 s (`mood-breathe`, 2 s × 4 — la borne posée par
+   * l'audit de chauffe iOS du 2026-08-26), et `prefers-reduced-motion` la coupe
+   * sans la faire disparaître.
+   */
+  mood?: string;
   /**
    * **L'ANNEAU DE STORY, QUAND SON AUTEUR EN A UNE** (#7185, directive porteur
    * du 2026-09-20).
@@ -139,6 +165,11 @@ export function Avatar({
   const offset = size * 0.8536 - dot / 2;
   const showsDot = presence !== undefined && presence !== 'offline';
 
+  /* Une humeur VIDE n'est pas une humeur : `withMoods` la filtre déjà en
+     amont, mais un appelant direct la laisserait passer et peindrait une
+     pastille MUETTE — visible, sans rien dire. */
+  const humeur = mood !== undefined && mood !== '' ? mood : undefined;
+
   const corps = (
     /* `block` — et ce n'est pas décoratif : un `<span>` reste INLINE, et un
        élément inline non remplacé IGNORE `width`/`height`. Dans un parent
@@ -191,7 +222,7 @@ export function Avatar({
           }}
         />
       ) : null}
-      {showsDot ? (
+      {showsDot && humeur === undefined ? (
         /* `data-presence` — L'ANCRE de la pastille (revue #5935). Les gates
            navigateur la comptaient par le NOMBRE d'enfants de `.avatar-root`
            (« 2 = dégradé + pastille ») : l'anneau de story et le badge
@@ -214,6 +245,27 @@ export function Avatar({
           aria-hidden
         />
       ) : null}
+      {humeur === undefined ? null : (
+        /* `data-mood` porte l'ÉTAT servi, comme `data-presence` et
+           `data-story-ring` portent les leurs — un gate qui compterait les
+           enfants de `.avatar-root` mentirait sur la cause (revue #5935). */
+        <span
+          data-mood={humeur}
+          className="pointer-events-none absolute grid place-items-center rounded-chip mood-breathe"
+          style={{
+            width: Math.round(size * 0.42),
+            height: Math.round(size * 0.42),
+            right: -Math.round(size * 0.06),
+            bottom: -Math.round(size * 0.06),
+            fontSize: Math.max(10, Math.round(size * 0.42 * 0.65)),
+            background: 'var(--color-ios-surface)',
+            boxShadow: '0 0 0 1.5px var(--color-ios-surface)',
+          }}
+          aria-hidden
+        >
+          {humeur}
+        </span>
+      )}
       {storyRing === undefined ? null : (
         /* `data-story-ring` porte l'ÉTAT servi (`unseen`/`seen`), comme
            `data-presence` porte le sien : un gate qui compterait les enfants de

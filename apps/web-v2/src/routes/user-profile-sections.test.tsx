@@ -185,7 +185,7 @@ describe('ProfileRelationSection — un contrôle existe s’il a un effet', () 
 
   test('sans relation : ajouter, écrire, bloquer', () => {
     const el = relationSection({ relation: { kind: 'none' } });
-    expect([...el.querySelectorAll('[data-profile-action]')].map((n) => n.getAttribute('data-profile-action'))).toEqual(['add', 'write', 'block']);
+    expect([...el.querySelectorAll('[data-profile-action]')].map((n) => n.getAttribute('data-profile-action'))).toEqual(['add', 'write', 'block', 'report']);
   });
 
   test('une demande REÇUE explique de quoi il s’agit, et offre accepter / refuser', () => {
@@ -203,7 +203,7 @@ describe('ProfileRelationSection — un contrôle existe s’il a un effet', () 
 
   test('un CONTACT ne se redemande pas : écrire et bloquer, rien d’autre', () => {
     const el = relationSection({ relation: { kind: 'friend' } });
-    expect([...el.querySelectorAll('[data-profile-action]')].map((n) => n.getAttribute('data-profile-action'))).toEqual(['write', 'block']);
+    expect([...el.querySelectorAll('[data-profile-action]')].map((n) => n.getAttribute('data-profile-action'))).toEqual(['write', 'block', 'report']);
     expect(el.querySelector('[data-profile-context]')).toBeNull();
   });
 });

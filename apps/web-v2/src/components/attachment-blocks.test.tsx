@@ -459,3 +459,71 @@ describe('Attachments — la pièce DÉCLARÉE protégée (#6189)', () => {
     expect(html).not.toContain('data-attachment="a-masquee"');
   });
 });
+
+/**
+ * LA CONSOMMATION REMONTE AU SERVEUR, LA BARRE AU REPOS SUIT SANS ATTENDRE
+ * LE SERVEUR (#7225, W6) — patron `createRoot`/`act` (§ « l'image en échec
+ * de décodage » ci-dessus), un événement RÉEL (`toggle()` du vocal).
+ */
+describe('Attachments — le vocal RAPPORTE sa consommation (#7225)', () => {
+  const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+
+  beforeAll(() => {
+    ensureHappyDomRegistered();
+    globals.IS_REACT_ACT_ENVIRONMENT = true;
+  });
+
+  afterAll(async () => {
+    await act(async () => {});
+    delete globals.IS_REACT_ACT_ENVIRONMENT;
+    await releaseHappyDomIfRegistered();
+  });
+
+  let container: HTMLDivElement;
+  let root: Root;
+
+  afterEach(() => {
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  test('pause après lecture : la barre au repos apparaît SANS attendre un nouvel `attachment` du serveur (optimistic update)', async () => {
+    const voice = attachmentOf(MEDIA_VOICE_EN_WITNESS_ID); // currentUserConsumption: undefined (fixture)
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(<Attachments attachments={[voice]} languages={['fr']} fallbackLanguage="fr" mediaFrame="box" />);
+    });
+
+    const audio = container.querySelector('audio')!;
+    audio.play = () => {
+      audio.dispatchEvent(new Event('play'));
+      return Promise.resolve();
+    };
+    audio.pause = () => {
+      audio.dispatchEvent(new Event('pause'));
+    };
+    Object.defineProperty(audio, 'duration', { value: 12, configurable: true });
+
+    expect(container.querySelector('[data-consumption]')).toBeNull();
+
+    const playButton = container.querySelector('button[aria-label="Lire l\'audio"]') as HTMLButtonElement;
+    await act(async () => {
+      playButton.click();
+      await Promise.resolve();
+    });
+
+    Object.defineProperty(audio, 'currentTime', { value: 6, configurable: true, writable: true });
+    const pauseButton = container.querySelector('button[aria-label="Mettre en pause"]') as HTMLButtonElement;
+    await act(async () => {
+      pauseButton.click();
+    });
+
+    const bar = container.querySelector('[data-consumption]') as HTMLElement | null;
+    expect(bar).not.toBeNull();
+    expect(bar?.style.width).toBe('50%');
+  });
+});
