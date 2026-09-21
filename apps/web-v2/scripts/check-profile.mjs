@@ -117,6 +117,20 @@ const REACH = {
  * « inline » de WCAG 2.5.8, pas une tolérance. L'atteignabilité (`ok`), elle,
  * est mesurée pour TOUS : un lien de prose volé par un disque flottant reste
  * un défaut.
+ *
+ * `href` sert la SECONDE exception de la même clause — « Equivalent » : une
+ * cible sous le plancher est admise quand la MÊME fonction est atteignable par
+ * un autre contrôle de la page qui, lui, tient les 44 px. C'est exactement la
+ * forme que #7241 a posée : le NOM d'une personne mène où mène son AVATAR, et
+ * l'avatar est un carré de 44 px collé à lui. Grandir le nom à 44 px de haut
+ * couvrirait l'horodatage au-dessus et le texte en dessous — on remplacerait
+ * une cible étroite par une cible qui VOLE ses voisines.
+ *
+ * **Et l'équivalence se MESURE, elle ne se déclare pas.** Un attribut posé sur
+ * le lien dirait qu'un jumeau existe sans l'avoir jamais vu ; le gate cherche
+ * donc, dans ce qu'il vient de relever, un contrôle de MÊME `href` qui tient le
+ * plancher. Le jour où l'avatar cesse d'être rendu à côté du nom, l'exemption
+ * disparaît d'elle-même et ce gate rougit.
  */
 const reachScrolled = async (page) => {
   const count = await page.$$eval('#contenu a, #contenu button', (els) => els.length);
@@ -133,6 +147,7 @@ const reachScrolled = async (page) => {
           nom: el.getAttribute('aria-label') ?? (el.textContent ?? '').trim().slice(0, 40),
           ok: hit !== null && (hit === el || el.contains(hit)),
           hauteur: r.height,
+          href: el.getAttribute('href'),
           enProse: el.closest('[data-rich-text]') !== null,
         };
       }, i),
@@ -497,7 +512,16 @@ try {
       const publicBlocked = publicRest.controls.filter((c) => !c.ok);
       check(publicBlocked.length === 0, `${label} : /u/ — aucun contrôle volé à son centre au repos — ${JSON.stringify(publicBlocked)}`);
       const publicScrolled = await reachScrolled(page);
-      const publicUnreachable = publicScrolled.filter((c) => !c.ok || (!c.enProse && c.hauteur < TAP_FLOOR));
+      /* LES DESTINATIONS QUI ONT DÉJÀ UNE GRANDE PORTE — mesurées sur le
+         relevé lui-même, jamais déclarées (voir `reachScrolled`). */
+      const grandesPortes = new Set(
+        publicScrolled.filter((c) => c.hauteur >= TAP_FLOOR && c.href !== null).map((c) => c.href),
+      );
+      const publicUnreachable = publicScrolled.filter(
+        (c) =>
+          !c.ok ||
+          (!c.enProse && c.hauteur < TAP_FLOOR && !(c.href !== null && grandesPortes.has(c.href))),
+      );
       check(
         publicScrolled.length >= 6 && publicUnreachable.length === 0,
         `${label} : /u/ — chaque contrôle s'atteint et fait ${TAP_FLOOR} de haut (${publicScrolled.length}) — ${JSON.stringify(publicUnreachable)}`,

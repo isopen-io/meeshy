@@ -251,7 +251,16 @@ for (const row of rows) {
  *  qui est magnifiée, et un témoin écrit sur elle serait vert même si les
  *  autres rangées restaient inatteignables (le défaut exact qu'on mesure). */
 const lastRow = rows[rows.length - 1];
-await page.evaluate((row) => document.querySelector(`[data-row="${row}"] a`)?.focus(), lastRow);
+/* LE DERNIER lien de la rangée, plus le premier (#7241) : depuis que l'AVATAR
+   porte sa propre destination (la fiche du pair), une rangée compte DEUX liens
+   — l'avatar puis le fil. Partir du premier mesurerait « Tab passe de l'avatar
+   au fil », une évidence, et laisserait le bouton d'actions hors du relevé.
+   L'invariant visé n'a pas bougé : depuis le DERNIER contrôle de la rangée,
+   Tab atteint SON bouton d'actions. */
+await page.evaluate((row) => {
+  const liens = document.querySelectorAll(`[data-row="${row}"] a`);
+  liens[liens.length - 1]?.focus();
+}, lastRow);
 await page.keyboard.press('Tab');
 const focused = await page.evaluate(() => ({
   label: document.activeElement?.getAttribute('aria-label'),
