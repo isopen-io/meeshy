@@ -2055,7 +2055,7 @@ export class MessageReadStatusService {
     try {
       const message = await this.prisma.message.findUnique({
         where: { id: messageId },
-        select: { createdAt: true, conversationId: true },
+        select: { createdAt: true, conversationId: true, senderId: true },
       });
 
       if (!message) throw new Error("Message not found");
@@ -2069,7 +2069,10 @@ export class MessageReadStatusService {
       // See `getMessageReadStatus` for the rationale: avoid `include` to
       // prevent Prisma from crashing on orphan cursors.
       const cursors = await this.prisma.conversationReadCursor.findMany({
-        where: { conversationId: message.conversationId },
+        where: {
+          conversationId: message.conversationId,
+          participantId: { not: message.senderId },
+        },
         select: {
           participantId: true,
           lastDeliveredAt: true,
@@ -2100,10 +2103,16 @@ export class MessageReadStatusService {
       // `cleanupObsoleteCursors` ne doit pas effacer un reçu de livraison/lecture
       // figé. Les rows participant sont résolues sur l'union — pas seulement sur
       // les ids de curseurs — sinon l'info d'affichage (displayName/avatar) du
-      // participant figé-seul manquerait.
+      // participant figé-seul manquerait. L'expéditeur est exclu DES DEUX
+      // sources (curseurs filtrés ci-dessus, entrées figées filtrées ici) :
+      // il ne figure ni dans ses propres « Reçu par » ni « Vu par » — même
+      // règle que `getMessageReadStatus` (§ « Denominator = active recipients
+      // EXCLUDING the sender »).
       const evaluatedParticipantIds = Array.from(new Set([
         ...cursors.map(c => c.participantId),
-        ...frozenEntries.map(e => e.participantId),
+        ...frozenEntries
+          .filter(e => e.participantId !== message.senderId)
+          .map(e => e.participantId),
       ]));
 
       const allParticipants = evaluatedParticipantIds.length
