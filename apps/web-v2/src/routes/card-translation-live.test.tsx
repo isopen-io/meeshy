@@ -58,6 +58,9 @@ afterEach(() => {
   mounted?.realtime.destroy();
   mounted = null;
   appQueryClient.clear();
+  /* L'adresse du routeur est un état de MODULE : un fichier suivant qui
+     monterait le routeur partirait de la dernière adresse visitée ici. */
+  navigate('/feed', true);
 });
 
 function fakeSocket(): SocketClient & { fire(event: string, payload: unknown): void } {
@@ -79,7 +82,12 @@ function fakeSocket(): SocketClient & { fire(event: string, payload: unknown): v
   };
 }
 
-const TIMEOUT_MS = 3000;
+/* Des BORNES d'attente, jamais des verdicts : chaque attente rend la main dès
+   que l'écran a peint ce qu'elle guette. La borne large ne coûte rien sur une
+   machine au repos et évite, sur une machine chargée, le rouge qui n'accuse
+   personne (#7310) — le premier écran monté paie la compilation des chunks. */
+const TIMEOUT_MS = 8000;
+const TEST_TIMEOUT_MS = 20_000;
 
 const settle = () =>
   act(async () => {
@@ -218,7 +226,7 @@ describe('`post:translation-updated` — le texte PEINT bascule sur chaque écra
       await settleUntil(() => read(screen.text(container, id)) === 'Bonjour à tous');
       expect(read(screen.text(container, id))).toBe('Bonjour à tous');
       expect(screen.text(container, id)?.getAttribute('lang')).toBe('fr');
-    });
+    }, TEST_TIMEOUT_MS);
   }
 });
 
@@ -243,6 +251,6 @@ describe('`media:caption-translation-updated` — la légende PEINTE bascule sur
       expect(read(caption(container, id))).toBe('Le marché');
       expect(caption(container, id)?.getAttribute('lang')).toBe('fr');
       expect(read(screen.text(container, id))).toBe('Hola a todos');
-    });
+    }, TEST_TIMEOUT_MS);
   }
 });
