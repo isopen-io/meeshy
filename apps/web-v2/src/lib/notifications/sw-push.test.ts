@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { REPRODUCED_PUSH_FIELD, REPRODUCED_PUSH_VALUE } from '@meeshy/shared/types/reproduced-notification-push';
 
 /**
  * LE SERVICE WORKER QUI REÇOIT LE PUSH (#7305).
@@ -45,6 +46,15 @@ type NotificationLike = {
 
 type ShownNotification = { readonly title: string; readonly options: Record<string, unknown> };
 
+/** Une bannière de la barre de notifications, telle que `getNotifications()` la rend. */
+type TrayBanner = {
+  readonly title: string;
+  readonly body: string;
+  readonly tag: string;
+  readonly data: Record<string, unknown>;
+  close(): void;
+};
+
 type ClientStub = {
   readonly visibilityState: string;
   readonly url: string;
@@ -57,6 +67,7 @@ type ClientStub = {
 type WorkerHarness = {
   readonly listeners: Map<string, Listener>;
   readonly shown: ShownNotification[];
+  readonly tray: TrayBanner[];
   readonly opened: string[];
   readonly badges: number[];
   readonly clients: ClientStub[];
@@ -86,7 +97,25 @@ function mount({ clients = [] as ClientStub[], already = [] as Record<string, un
   const shown: ShownNotification[] = [];
   const opened: string[] = [];
   const badges: number[] = [];
-  const existing = already.map((data) => ({ data }));
+  /* La barre de notifications du navigateur : `getNotifications()` la lit, et
+     `showNotification` y REMPLACE, à sa place, la bannière de même tag
+     (« show steps » de la Notifications API). `already` y pose des bannières
+     réduites à leur `data`. */
+  const tray: TrayBanner[] = [];
+  const onTray = (title: string, body: string, tag: string, data: Record<string, unknown>): TrayBanner => {
+    const banner: TrayBanner = {
+      title,
+      body,
+      tag,
+      data,
+      close: () => {
+        const index = tray.indexOf(banner);
+        if (index >= 0) tray.splice(index, 1);
+      },
+    };
+    return banner;
+  };
+  already.forEach((data) => tray.push(onTray('', '', '', data)));
 
   const self = {
     addEventListener: (type: string, listener: Listener) => listeners.set(type, listener),
@@ -98,7 +127,7 @@ function mount({ clients = [] as ClientStub[], already = [] as Record<string, un
       },
     },
     registration: {
-      getNotifications: async () => existing,
+      getNotifications: async () => [...tray],
       showNotification: async (title: string, options: Record<string, unknown>) => {
         /* Les deux TypeError de « create a notification » (Notifications API) :
            le bouchon refuse ce que le navigateur refuserait, et la bannière
@@ -110,6 +139,12 @@ function mount({ clients = [] as ClientStub[], already = [] as Record<string, un
           throw new TypeError('renotify exige un tag non vide');
         }
         shown.push({ title, options });
+        const tag = typeof options['tag'] === 'string' ? options['tag'] : '';
+        const data = typeof options['data'] === 'object' && options['data'] !== null ? (options['data'] as Record<string, unknown>) : {};
+        const banner = onTray(title, typeof options['body'] === 'string' ? options['body'] : '', tag, data);
+        const replaced = tag === '' ? -1 : tray.findIndex((existing) => existing.tag === tag);
+        if (replaced >= 0) tray.splice(replaced, 1, banner);
+        else tray.push(banner);
       },
     },
     navigator: {
@@ -125,6 +160,7 @@ function mount({ clients = [] as ClientStub[], already = [] as Record<string, un
   return {
     listeners,
     shown,
+    tray,
     opened,
     badges,
     clients,
@@ -238,14 +274,19 @@ describe('le son coupé et l’empilement choisis par le lecteur valent aussi su
     });
   });
 
+  /* Un identifiant PAR charge : la barre du bouchon dédoublonne comme celle du
+     navigateur (D-11 point 4), et douze charges au même identifiant n'en
+     montreraient qu'une partie — ce témoin mesure le refus du navigateur,
+     pas le dédoublonnage. */
   test('aucune combinaison de la charge ne fait refuser la bannière par le navigateur', async () => {
     const cases = [true, false].flatMap((silent) =>
       [undefined, '', 'conv-42'].flatMap((tag) =>
-        [undefined, 'n1'].map((notificationId) => ({ silent, tag, notificationId })),
+        [false, true].map((identified) => ({ silent, tag, identified })),
       ),
     );
     const worker = mount();
-    for (const { silent, tag, notificationId } of cases) {
+    for (const [index, { silent, tag, identified }] of cases.entries()) {
+      const notificationId = identified ? `n${index}` : undefined;
       await worker.dispatch(
         'push',
         push(composed({ ...(silent ? { silent } : {}), ...(tag === undefined ? {} : { tag }) }, notificationId ? { notificationId } : {})),
@@ -253,6 +294,102 @@ describe('le son coupé et l’empilement choisis par le lecteur valent aussi su
     }
     expect(worker.shown.length).toBe(cases.length);
     expect(worker.shown.filter((n) => 'vibrate' in n.options)).toEqual([]);
+  });
+});
+
+/**
+ * UNE NOTIFICATION ÉDITÉE REMPLACE LA BANNIÈRE DÉJÀ AFFICHÉE (#7342).
+ *
+ * Éditer un message, un post ou un commentaire REPRODUIT chaque notification
+ * qui en portait le texte, sous la MÊME identité. iOS et Android reçoivent
+ * d'abord un push de révocation ; le web non (#7308). Le dédoublonnage D-11
+ * point 4 écartait donc la version d'après — la bannière d'avant était encore
+ * là — et le lecteur web gardait le texte que l'auteur venait de corriger.
+ *
+ * La passerelle DÉCLARE la reproduction (`REPRODUCED_PUSH_FIELD`) : le worker
+ * ne devine pas qu'il corrige. Il ne compare le texte que pour ne pas
+ * re-sonner une bannière qui dit déjà le texte d'après.
+ */
+const firstBanner = (notification: Record<string, unknown> = {}) =>
+  composed({ tag: 'abc', ...notification }, { notificationId: 'n1', conversationId: 'abc' });
+
+const reproduction = (body: string, notification: Record<string, unknown> = {}) =>
+  composed(
+    { tag: 'abc', body, ...notification },
+    { notificationId: 'n1', conversationId: 'abc', [REPRODUCED_PUSH_FIELD]: REPRODUCED_PUSH_VALUE },
+  );
+
+const visible = (worker: WorkerHarness) => worker.tray.map((banner) => [banner.data['notificationId'], banner.body]);
+
+describe('une notification éditée remplace la bannière déjà affichée (#7342)', () => {
+  test('la bannière encore affichée porte désormais le texte d’APRÈS', async () => {
+    const worker = mount();
+    await worker.dispatch('push', push(firstBanner()));
+    await worker.dispatch('push', push(reproduction('Bonsoir')));
+    expect(worker.tray.map((banner) => ({ title: banner.title, body: banner.body, data: banner.data }))).toEqual([
+      { title: 'Awa', body: 'Bonsoir', data: { notificationId: 'n1', conversationId: 'abc' } },
+    ]);
+  });
+
+  /* Le lecteur a changé `groupNotifications` entre les deux pushes : la
+     bannière d'avant a l'identifiant pour tag, la correction arrive avec celui
+     de la conversation. Sous le tag NEUF, l'ancienne resterait à côté — deux
+     bannières pour une seule notification (D-11). */
+  test('le remplacement se fait EN PLACE, sous le tag de la bannière affichée', async () => {
+    const worker = mount();
+    await worker.dispatch('push', push(composed({}, { notificationId: 'n1', conversationId: 'abc' })));
+    await worker.dispatch('push', push(reproduction('Bonsoir')));
+    expect(visible(worker)).toEqual([['n1', 'Bonsoir']]);
+  });
+
+  /* Le cas piège : depuis #7340, un message plus récent de la même
+     conversation a REMPLACÉ la bannière (même tag). Corriger le plus ancien
+     ne doit pas le faire remonter par-dessus : la bannière visible n'est plus
+     la sienne, et le lecteur perdrait le message qu'il n'a pas encore lu. */
+  test('une bannière déjà remplacée par un message plus récent ne remonte pas', async () => {
+    const worker = mount();
+    await worker.dispatch('push', push(firstBanner()));
+    await worker.dispatch('push', push(composed({ tag: 'abc', body: 'Tu viens ?' }, { notificationId: 'n2', conversationId: 'abc' })));
+    await worker.dispatch('push', push(reproduction('Bonsoir')));
+    expect(visible(worker)).toEqual([['n2', 'Tu viens ?']]);
+  });
+
+  /* Une correction n'est pas un événement neuf : elle met à jour une bannière,
+     elle n'en lève pas. Fermée par le lecteur, ou jamais montrée parce qu'il
+     lisait l'application (D-11 point 1), la notification ne revient pas. */
+  test('une bannière que le lecteur a fermée ne revient pas pour une correction', async () => {
+    const worker = mount();
+    await worker.dispatch('push', push(firstBanner()));
+    worker.tray[0]?.close();
+    await worker.dispatch('push', push(reproduction('Bonsoir')));
+    expect(worker.tray).toEqual([]);
+  });
+
+  /* D-11 point 4, côté correction : une bannière qui dit DÉJÀ le texte
+     d'après — reproduction livrée deux fois, édition qui ne touche pas le
+     texte notifié — n'est ni re-montrée ni re-sonnée. */
+  test('une correction au texte identique ne re-montre ni ne re-sonne rien', async () => {
+    const worker = mount();
+    await worker.dispatch('push', push(firstBanner()));
+    await worker.dispatch('push', push(reproduction('Bonjour')));
+    expect(worker.shown.length).toBe(1);
+  });
+
+  /* iOS : la révocation retire la bannière d'avant, puis le push nominal —
+     du CONTENU, soumis aux préférences comme un contenu neuf — sonne, sauf si
+     le lecteur a coupé le son. Le web s'aligne : la correction s'annonce
+     (`renotify`), muette quand le son est coupé. */
+  test('la correction s’annonce comme sur iOS — dans le son choisi par le lecteur', async () => {
+    const announced = async (notification: Record<string, unknown>) => {
+      const worker = mount();
+      await worker.dispatch('push', push(firstBanner(notification)));
+      await worker.dispatch('push', push(reproduction('Bonsoir', notification)));
+      return { renotify: worker.shown[1]?.options['renotify'], silent: worker.shown[1]?.options['silent'] === true };
+    };
+    expect([await announced({}), await announced({ silent: true })]).toEqual([
+      { renotify: true, silent: false },
+      { renotify: true, silent: true },
+    ]);
   });
 });
 
