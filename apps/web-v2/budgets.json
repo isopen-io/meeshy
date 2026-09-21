@@ -13,7 +13,7 @@
     }
   },
   "institutional_page": {
-    "subject": "chaque document institutionnel PRECHAUFFE (about/contact/partners/privacy/terms), gzip -9 — le document HTML complet, feuille INLINEE comprise (scripts/prerender-institutional.tsx). Une page a la fois : ces adresses ne se composent jamais.",
+    "subject": "chaque document institutionnel PRECHAUFFE (about/contact/faq/help/partners/privacy/terms), gzip -9 — le document HTML complet, feuille INLINEE comprise (scripts/prerender-institutional.tsx). Une page a la fois : ces adresses ne se composent jamais.",
     "read_by": [
       "apps/web-v2/scripts/prerender-institutional.tsx"
     ],

@@ -117,7 +117,7 @@ const bench = Number.parseInt(process.env.MEESHY_BENCH ?? '0', 10) || 0;
 /**
  * LA VERSION DU PRODUIT — LUE, jamais recopiée (revue de #5555, défaut 8).
  *
- * `BrandSignature` rend « Meeshy {version} » sur les cinq pages
+ * `BrandSignature` rend « Meeshy {version} » sur les sept pages
  * institutionnelles ET sur l'écran de connexion. Le préchauffage lit
  * `package.json` (`scripts/prerender-institutional.tsx`) ; l'application, elle,
  * n'a pas de système de fichiers — la version y arrivait donc en LITTÉRAL
@@ -182,7 +182,7 @@ void declaredBuildFlag('VITE_READING_MODES', process.env.VITE_READING_MODES, ['o
  *
  * Il était enchaîné APRÈS `vite build` dans le script `build` du manifeste, et
  * cet ordre-là avait un coût invisible : quand `vite-plugin-pwa` parcourait
- * `dist/` pour composer son manifeste de précache, les cinq documents
+ * `dist/` pour composer son manifeste de précache, les sept documents
  * n'existaient pas encore. Le service worker ne les connaissait donc pas — et,
  * pire que de ne pas les mettre en cache, sa `NavigationRoute` servait la
  * COQUILLE de l'application à leur place dès la deuxième visite. Mesuré :
