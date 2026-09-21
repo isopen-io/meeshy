@@ -419,6 +419,18 @@ const servedRelation = (userId: string): ServedRelation => {
   return 'none';
 };
 
+/**
+ * L'IDENTIFIANT DE LA DEMANDE EN COURS (#7122) — tiré de la MÊME ligne que
+ * `servedRelation`, jamais d'une table à part : `relationAvec` rend l'`id` du
+ * `friendRequest` qu'il vient de lire, et deux sources ici feraient dire deux
+ * choses au même geste.
+ */
+const servedRelationRequestId = (userId: string, served: ServedRelation): string | null => {
+  if (served === 'pending_received') return fixtureFriendRequests('received').find((row) => row.senderId === userId)?.id ?? null;
+  if (served === 'pending_sent') return fixtureFriendRequests('sent').find((row) => row.receiverId === userId)?.id ?? null;
+  return null;
+};
+
 const viewOf = (profile: PublicProfile): PublicProfileView => {
   const isSelf = profile.id === VIEWER_ID;
   /* Un compte BLOQUÉ par le lecteur voyage sur son PROPRE champ (#7125) :
@@ -427,12 +439,14 @@ const viewOf = (profile: PublicProfile): PublicProfileView => {
      bloqués reste la source des DEUX, comme `relationAvec` et `hasBlocked`
      lisent la même base : deux sources ici auraient fait dire deux choses au
      même geste. */
+  const relation = servedRelation(profile.id);
   return {
     profile,
     stats: isSelf ? SELF_STATS : THIRD_PARTY_STATS,
-    relation: servedRelation(profile.id),
+    relation,
     isSelf,
     blockedByViewer: !isSelf && fixtureBlockedUsers().some((person) => person.id === profile.id),
+    relationRequestId: servedRelationRequestId(profile.id, relation),
   };
 };
 
