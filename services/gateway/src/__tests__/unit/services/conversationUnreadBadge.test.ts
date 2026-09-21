@@ -58,10 +58,12 @@ describe('computeConversationUnreadBadge — D-L1 : des CONVERSATIONS, pas des m
       { id: 'participant-b', conversationId: 'conv-b' },
       { id: 'participant-c', conversationId: 'conv-c' },
     ]);
+    // Le mock tient lieu de Prisma : le filtre `unreadCount: { gt: 0 } }` est
+    // appliqué CÔTÉ BASE dans la vraie requête, donc `conv-c` (0 non-lu)
+    // n'apparaît jamais dans ce que la ligne réelle renverrait.
     prisma.conversationReadCursor.findMany.mockResolvedValue([
       { conversationId: 'conv-a', unreadCount: 1 },
       { conversationId: 'conv-b', unreadCount: 40 },
-      { conversationId: 'conv-c', unreadCount: 0 },
     ]);
     prisma.userConversationPreferences.findMany.mockResolvedValue([]);
 
