@@ -221,6 +221,30 @@ async function dejaAffichee(notificationId) {
   }
 }
 
+/**
+ * LE SON ET L'EMPILEMENT SONT CEUX QUE LE LECTEUR A CHOISIS (#7308).
+ *
+ * La passerelle les calcule au chokepoint de ses préférences et les pose dans
+ * le bloc `notification` : `silent` pour `soundEnabled:false`, `tag` pour
+ * l'empilement par conversation — et AUCUN `tag` quand il a choisi
+ * `groupNotifications:false`. Le repli est donc l'identifiant de la
+ * notification, jamais `conversationId` : ce repli-là empilerait quand même.
+ *
+ * Une bannière qui REMPLACE une autre de même tag n'alerte qu'avec
+ * `renotify` ; sans lui, chaque message après le premier d'une conversation
+ * arriverait sans son ni annonce. Il accompagne aussi une bannière muette :
+ * `silent` retire le son et la vibration, pas l'annonce. `showNotification`
+ * lève un TypeError sur `renotify` sans tag et sur `silent` avec `vibrate` —
+ * `renotify` ne part qu'avec un tag, et ce worker ne pose jamais `vibrate`.
+ */
+function livraison(notification, notificationId) {
+  const tag = texte(notification.tag) || notificationId;
+  return {
+    ...(tag === '' ? {} : { tag: tag, renotify: true }),
+    ...(notification.silent === true ? { silent: true } : {}),
+  };
+}
+
 function donneesDuTap(data) {
   const retenu = {};
   TAP_FIELDS.forEach((champ) => {
@@ -254,7 +278,7 @@ async function afficher(payload) {
 
   await self.registration.showNotification(titre === '' ? corps : titre, {
     body: titre === '' ? '' : corps,
-    tag: texte(data.conversationId) || notificationId || undefined,
+    ...livraison(notification, notificationId),
     icon: BANNER_ICON,
     badge: BANNER_BADGE,
     data: donneesDuTap(data),
