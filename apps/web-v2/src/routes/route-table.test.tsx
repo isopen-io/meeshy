@@ -220,6 +220,48 @@ describe('ROUTES — l’adresse d’un réel partagé (#7298)', () => {
 });
 
 /**
+ * L'ADRESSE D'UNE HUMEUR PARTAGÉE (#7313) — `/mood/:postId`.
+ *
+ * DERNIÈRE des quatre adresses que `PostService.shareWithTrackingLink` compose
+ * (`{ POST: 'post', REEL: 'reel', STORY: 'story', STATUS: 'mood' }`) et la
+ * dernière à tomber : `/post` et `/story` étaient servies, `/reel` l'est depuis
+ * #7298. Comme pour le réel, `/l/:token` y envoie le lecteur par un
+ * `location.replace` — une navigation ENTIÈRE — et chaque partage d'humeur
+ * fabriquait un lien mort de plus.
+ *
+ * C'est un ALIAS, pas un écran : le legacy le déclare en toutes lettres
+ * (`apps/web/app/mood/[postId]/page.tsx` est un `export { default } from
+ * '@/app/feeds/post/[postId]/page'`), et le client de la v2 « ne distingue que
+ * REEL du reste » (`lib/api/feed-pages.ts`) — une humeur EST une publication.
+ * D'où la TROISIÈME porte sur `publicationScreen`, jamais une jumelle.
+ *
+ * Le témoin interroge l'ADRESSE, jamais la clé : il tombe dès que plus aucune
+ * route ne sert `/mood/<id>`.
+ */
+describe('ROUTES — l’adresse d’une humeur partagée (#7313)', () => {
+  const servedBy = (path: string) =>
+    Object.values(ROUTES).filter((route) => match(compile(route.pattern), path) !== null);
+
+  test('/mood/<id> est SERVIE, par une route et une seule', () => {
+    const served = servedBy('/mood/507f1f77bcf86cd799439011');
+    expect(served).toHaveLength(1);
+    expect(match(compile(served[0]!.pattern), '/mood/507f1f77bcf86cd799439011')).toEqual({
+      post: '507f1f77bcf86cd799439011',
+    });
+  });
+
+  test('elle ouvre le MÊME écran que /post et /feeds/post — trois portes, un écran', () => {
+    expect(servedBy('/mood/abc123')[0]!.screen).toBe(ROUTES.post.screen);
+    expect(ROUTES.postDeepLink.screen).toBe(ROUTES.post.screen);
+  });
+
+  test('/mood sans identifiant n’est pas une adresse', () => {
+    expect(servedBy('/mood')).toHaveLength(0);
+    expect(servedBy('/mood/')).toHaveLength(0);
+  });
+});
+
+/**
  * `/download` — L'ADRESSE DE L'INVITATION (#7297).
  *
  * L'app publiée l'envoie par SMS (`DiscoverViewModel.swift:285`,
@@ -244,5 +286,74 @@ describe('ROUTES — l’adresse de l’invitation (#7297)', () => {
 
   test('elle est LITTÉRALE — elle n’avale pas `/download/<quelque-chose>`', () => {
     expect(servedBy('/download/ios')).toHaveLength(0);
+  });
+});
+
+/**
+ * **LES QUATRE ADRESSES D'UN PARTAGE, TENUES ENSEMBLE** (#7319).
+ *
+ * `PostService.shareWithTrackingLink` (passerelle) compose l'adresse d'un lien
+ * de partage depuis le TYPE de la publication, et cette table-ci est la seule
+ * du dépôt qui décide si elle mène quelque part :
+ *
+ * ```
+ * const webPath = ({ POST: 'post', REEL: 'reel', STORY: 'story', STATUS: 'mood' })[post.type];
+ * const originalUrl = `${baseUrl}/${webPath}/${postId}`;
+ * ```
+ *
+ * TROIS des quatre ont été mortes, découvertes une par une : `/reel` (#7298),
+ * `/mood` (#7313), et avant elles la famille n'avait jamais été énumérée. Le
+ * coût était le même à chaque fois — `/l/:token` ouvre `originalUrl` par un
+ * `location.replace`, donc un `webPath` non servi fait tomber sur « adresse
+ * inconnue » TOUS les liens déjà émis pour ce type, ceux qui dorment dans
+ * `TrackingLink.originalUrl` compris. Rien en amont ne les répare : c'est
+ * toujours ici que ça se corrige.
+ *
+ * **CE TÉMOIN N'APPARTIENT À AUCUN DES LOTS QU'IL COUVRE, seulement à leur
+ * réunion.** #7314 (`/reel`) et #7318 (`/mood`) sont partis du MÊME `dev`, donc
+ * il aurait été rouge dans celui qui serait arrivé le premier — quel qu'il
+ * soit — et vert dans le second par accident de l'ordre de fusion. Il se pose
+ * une fois les deux fusionnés, jamais avant. C'est la forme générale des gardes
+ * d'INVENTAIRE : aucun lot parallèle ne les joue, parce qu'aucun ne les
+ * contient.
+ *
+ * Il interroge la table ENTIÈRE — « quelle route apparie ce chemin ? » — et
+ * jamais une clé : `ROUTES.mood` prouverait qu'une entrée porte ce nom, pas que
+ * l'adresse est atteignable. Et il tombe sur CHACUN de ses quatre membres, ce
+ * qui est la seule chose qui distingue un inventaire d'une liste décorative :
+ * retirer n'importe laquelle des quatre lignes de `ROUTES` le fait rougir, en
+ * NOMMANT l'adresse manquante.
+ *
+ * La famille est CLOSE : l'inventaire des adresses web composées par la
+ * passerelle (2026-09-21) ne rend aucune cinquième. Le travail de ce témoin est
+ * donc d'empêcher une régression, pas d'attendre un membre.
+ */
+describe('ROUTES — les quatre adresses de partage de la passerelle (#7319)', () => {
+  const servedBy = (path: string) =>
+    Object.values(ROUTES).filter((route) => match(compile(route.pattern), path) !== null);
+
+  /** `PostService.shareWithTrackingLink` : `Post.type` → segment de l'adresse. */
+  const WEB_PATH_PAR_TYPE = { POST: 'post', REEL: 'reel', STORY: 'story', STATUS: 'mood' } as const;
+
+  const POST_ID = '507f1f77bcf86cd799439011';
+
+  test('chacune des quatre mène à un écran, et un seul', () => {
+    const mortes = Object.entries(WEB_PATH_PAR_TYPE).flatMap(([type, webPath]) =>
+      servedBy(`/${webPath}/${POST_ID}`).length === 1 ? [] : [`${type} ⇒ /${webPath}/<id>`],
+    );
+    expect(mortes).toEqual([]);
+  });
+
+  test('chacune en extrait l’identifiant de la publication, et pas autre chose', () => {
+    for (const webPath of Object.values(WEB_PATH_PAR_TYPE)) {
+      const [route] = servedBy(`/${webPath}/${POST_ID}`);
+      expect(match(compile(route!.pattern), `/${webPath}/${POST_ID}`)).toEqual({ post: POST_ID });
+    }
+  });
+
+  test('aucune n’apparie son segment nu — `/reel` n’est pas l’adresse d’un réel', () => {
+    for (const webPath of Object.values(WEB_PATH_PAR_TYPE)) {
+      expect(servedBy(`/${webPath}/`)).toHaveLength(0);
+    }
   });
 });
