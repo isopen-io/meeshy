@@ -1,5 +1,9 @@
 import { useCallback, useRef, useState } from 'react';
 
+import { reportAttachmentStatus, type PlaybackStretch } from '@/lib/api/attachments';
+import type { ConversationsDeps } from '@/lib/api/conversations';
+import { apiDeps } from '@/lib/api/deps';
+
 import { mediaCoordinator, type MediaCoordinator } from './media-coordinator';
 
 /**
@@ -38,6 +42,14 @@ export type MediaPlayback = {
   readonly muted: boolean;
   readonly rate: number;
   readonly pictureInPicture: PictureInPictureState;
+  /** La fraction consommée la plus haute RAPPORTÉE cette session (max
+   * monotone — jamais décroissante, même règle que `MediaConsumptionStore`
+   * iOS) ; `0` sans `report`. Combinée par l'hôte à la consommation SERVIE
+   * (`attachment.currentUserConsumption`) pour que la barre au repos
+   * n'attende pas un aller-retour serveur (optimistic update). */
+  readonly reportedFraction: number;
+  /** `true` dès qu'un rapport « complet » est parti — collant, comme `reportedFraction`. */
+  readonly reportedComplete: boolean;
   readonly toggle: () => void;
   /** Déplace RÉELLEMENT la lecture, bornée à `[0, durée]`. */
   readonly seek: (seconds: number) => void;
@@ -56,6 +68,93 @@ export type MediaPlayback = {
  * fin qu'une barre (1/22 ≈ 4,5 %) sans jamais re-rendre à chaque frame.
  */
 const PROGRESS_UPDATE_STEP = 1 / 50;
+
+/**
+ * LE RAPPORT DE CONSOMMATION (#7225, W6) — OPT-IN, même patron que
+ * `tracksTime` : seul un widget qui DOIT reprendre/rapporter (vocal, vidéo)
+ * le fournit. `kind` est le verbe EXACT du body
+ * (`AttachmentStatusBodySchema.action`,
+ * `services/gateway/src/validation/messages-schemas.ts:212-251` —
+ * 'listened' pour un vocal, 'watched' pour une vidéo).
+ */
+export type MediaPlaybackReport = {
+  readonly kind: 'listened' | 'watched';
+  /** La durée CONNUE côté serveur (ms) — repli quand l'élément n'a pas
+   * encore chargé ses métadonnées (`preload="none"`) ; l'élément gagne dès
+   * qu'il la connaît. */
+  readonly durationMs?: number;
+  /** La consommation SERVIE — pour la reprise. Absent/`positionMs: null` :
+   * rien à reprendre, `complete: true` : on repart de zéro (rien à rejouer). */
+  readonly resume?: { readonly positionMs: number | null; readonly complete: boolean };
+  /** INJECTABLE pour les témoins — `apiDeps` (singleton réel) par défaut,
+   * même patron que `coordinator ?? mediaCoordinator`. */
+  readonly deps?: ConversationsDeps;
+};
+
+/** Jamais plus d'un rapport toutes les 5 s (critère de fin #7225) — sauf les
+ * DEUX signaux TERMINAUX (fin, démontage), qui doivent toujours atteindre le
+ * serveur : un vocal de 3 s ne finirait sinon jamais `complete`. */
+const REPORT_THROTTLE_MS = 5_000;
+
+/**
+ * LA TRACE DES ÉCOUTES CONTINUES (miroir `PlaybackStretchTracker.swift`,
+ * `packages/MeeshySDK/Sources/MeeshySDK/Models/PlaybackStretchTracker.swift` —
+ * mêmes cas, même sémantique). Pas d'échantillonnage périodique : le lecteur
+ * connaît les frontières EXACTES (lecture, pause, saut, fin, démontage), et
+ * chaque intervalle entre deux frontières est un segment exact.
+ */
+class PlaybackStretchTracker {
+  private openedAtMs: number | null = null;
+  private lastObservedMs = 0;
+  private readonly stretches: PlaybackStretch[] = [];
+
+  get hasOpenStretch(): boolean {
+    return this.openedAtMs !== null;
+  }
+
+  begin(positionMs: number): void {
+    if (this.openedAtMs !== null) this.close(positionMs, 'superseded');
+    this.openedAtMs = positionMs;
+    this.lastObservedMs = positionMs;
+  }
+
+  pause(positionMs?: number): void {
+    this.close(positionMs ?? this.lastObservedMs, 'pause');
+  }
+
+  completed(positionMs?: number): void {
+    this.close(positionMs ?? this.lastObservedMs, 'completed');
+  }
+
+  dismissed(positionMs?: number): void {
+    this.close(positionMs ?? this.lastObservedMs, 'dismissed');
+  }
+
+  /** Déplacer le curseur d'un média EN PAUSE n'ouvre rien : rien n'est
+   * écouté tant que la lecture n'a pas repris. */
+  seek(fromPositionMs: number, toPositionMs: number): void {
+    const wasPlaying = this.openedAtMs !== null;
+    this.close(fromPositionMs, 'seek');
+    if (wasPlaying) this.openedAtMs = toPositionMs;
+    this.lastObservedMs = toPositionMs;
+  }
+
+  /** Rend les écoutes terminées et les retire, ordre CHRONOLOGIQUE préservé. */
+  drain(): PlaybackStretch[] {
+    return this.stretches.splice(0, this.stretches.length);
+  }
+
+  private close(positionMs: number, endedBy: PlaybackStretch['endedBy']): void {
+    const openedAt = this.openedAtMs;
+    this.openedAtMs = null;
+    this.lastObservedMs = positionMs;
+    if (openedAt === null) return;
+    // Durée nulle ou négative : le lecteur se contredit — mieux vaut perdre
+    // une observation que fabriquer un segment absurde.
+    if (positionMs <= openedAt) return;
+    this.stretches.push({ startMs: openedAt, endMs: positionMs, endedBy });
+  }
+}
 
 type PictureInPictureDocument = Document & {
   readonly pictureInPictureEnabled?: boolean;
@@ -92,6 +191,7 @@ export function useMediaPlayback(params: {
    * suivrait se re-rendrait chaque seconde pour un chiffre qu'elle ne montre pas.
    */
   readonly tracksTime?: boolean;
+  readonly report?: MediaPlaybackReport;
 }): MediaPlayback {
   const { attachmentId, tracksTime = false } = params;
   const coordinator = params.coordinator ?? mediaCoordinator;
@@ -103,10 +203,70 @@ export function useMediaPlayback(params: {
   const [muted, setMutedState] = useState(false);
   const [rate, setRateState] = useState(1);
   const [pictureInPicture, setPictureInPicture] = useState<PictureInPictureState>('unsupported');
+  const [reportedFraction, setReportedFraction] = useState(0);
+  const [reportedComplete, setReportedComplete] = useState(false);
   const elementRef = useRef<HTMLMediaElement | null>(null);
   const lastEmittedProgressRef = useRef(0);
   const lastEmittedPositionRef = useRef(0);
   const listenersRef = useRef<Listeners | null>(null);
+  // Toujours la dernière valeur de `params.report`, sans entrer dans les
+  // dépendances des `useCallback` ci-dessous — le même besoin que
+  // `use-floating-drag.ts` (`onLongPressRef`) : un objet reconstruit à
+  // chaque rendu par l'appelant ne doit pas réarmer les écouteurs natifs.
+  const reportRef = useRef(params.report);
+  reportRef.current = params.report;
+  const trackerRef = useRef<PlaybackStretchTracker | null>(null);
+  if (trackerRef.current === null) trackerRef.current = new PlaybackStretchTracker();
+  const lastReportAtRef = useRef(0);
+  const appliedResumeRef = useRef(false);
+
+  const recordConsumption = useCallback((fraction: number, complete: boolean): void => {
+    const clamped = complete ? 1 : Math.max(0, Math.min(1, fraction));
+    setReportedFraction((previous) => Math.max(previous, clamped));
+    setReportedComplete((previous) => previous || complete);
+  }, []);
+
+  /**
+   * TENTE un envoi — appelée aux QUATRE frontières du critère de fin (pause,
+   * saut, fin, démontage). `force` bypass le throttle (fin/démontage —
+   * signaux TERMINAUX qui ne doivent jamais se perdre) ; sans lui, un rapport
+   * à moins de 5 s du précédent est ABANDONNÉ (les segments restent dans le
+   * tracker, ils partiront au prochain rapport qui aboutit).
+   */
+  const attemptReport = useCallback(
+    (options: { readonly element: HTMLMediaElement; readonly positionMs: number; readonly complete: boolean; readonly force: boolean }): void => {
+      const reportConfig = reportRef.current;
+      if (reportConfig === undefined) return;
+      const tracker = trackerRef.current;
+      if (tracker === null) return;
+      const now = Date.now();
+      if (!options.force && now - lastReportAtRef.current < REPORT_THROTTLE_MS) return;
+      const stretches = tracker.drain();
+      if (stretches.length === 0 && !options.complete) return;
+      lastReportAtRef.current = now;
+      const known = knownDuration(options.element);
+      const durationMs = known > 0 ? Math.round(known * 1000) : reportConfig.durationMs;
+      const fraction = durationMs !== undefined && durationMs > 0 ? options.positionMs / durationMs : 0;
+      recordConsumption(fraction, options.complete);
+      const deps = reportConfig.deps ?? apiDeps;
+      void reportAttachmentStatus({
+        ...deps,
+        attachmentId,
+        report: {
+          action: reportConfig.kind,
+          playPositionMs: options.positionMs,
+          complete: options.complete,
+          ...(durationMs !== undefined ? { durationMs } : {}),
+          ...(stretches.length > 0 ? { stretches } : {}),
+        },
+      }).catch(() => {
+        // Best effort — une trame perdue rejoint la suivante (le tracker
+        // continue d'accumuler ; seul CE segment drainé est perdu, comme un
+        // `timeupdate` manqué). Aucune file de rattrapage dans ce lot.
+      });
+    },
+    [attachmentId, recordConsumption],
+  );
 
   const detach = useCallback((element: HTMLMediaElement): void => {
     const listeners = listenersRef.current;
@@ -148,6 +308,18 @@ export function useMediaPlayback(params: {
         // prochain démontage de la rangée (mesuré au navigateur).
         coordinator.release(attachmentId);
         if (previous !== null) previous.pause();
+        // LE DÉMONTAGE EST UN SIGNAL TERMINAL (#7225) — au même titre que
+        // `ended` : l'écran quitté ne rejouera plus cet élément, donc
+        // c'est ICI ou jamais que le dernier segment ouvert (le cas
+        // échéant) part au serveur. `force: true` bypass le throttle des
+        // 5 s ; `attemptReport` n'envoie de toute façon RIEN si le tracker
+        // n'a aucun segment à dire (jamais joué).
+        if (reportRef.current !== undefined && previous !== null) {
+          const tracker = trackerRef.current;
+          const positionMs = Math.round(previous.currentTime * 1000);
+          tracker?.dismissed(positionMs);
+          attemptReport({ element: previous, positionMs, complete: false, force: true });
+        }
         lastEmittedProgressRef.current = 0;
         lastEmittedPositionRef.current = 0;
         setProgress(0);
@@ -158,7 +330,26 @@ export function useMediaPlayback(params: {
         return;
       }
 
-      const onPlay = (): void => setStatus('playing');
+      // LA REPRISE (#7225) — une seule fois par montage : `preload="none"`
+      // (VoiceAttachment) n'a encore rien chargé, mais poser `currentTime`
+      // avant tout chargement fait retenir la position au navigateur pour
+      // quand les métadonnées arrivent (mesuré Chrome/Firefox/Safari — c'est
+      // le comportement que HTML5 décrit pour un `seek` avant `HAVE_METADATA`).
+      const resume = reportRef.current?.resume;
+      if (!appliedResumeRef.current && resume?.positionMs != null && resume.positionMs > 0 && !resume.complete) {
+        appliedResumeRef.current = true;
+        try {
+          element.currentTime = resume.positionMs / 1000;
+        } catch {
+          // best effort — un navigateur qui refuse le seek pré-chargement
+          // rejouera depuis 0, dégradation gracieuse plutôt que crash.
+        }
+      }
+
+      const onPlay = (): void => {
+        setStatus('playing');
+        trackerRef.current?.begin(Math.round(element.currentTime * 1000));
+      };
       /**
        * Un `play()` qui échoue déclenche, DANS CET ORDRE, `play` (optimiste)
        * → `error` → `pause` (le navigateur revient seul à l'arrêt) — mesuré
@@ -170,12 +361,21 @@ export function useMediaPlayback(params: {
       const onPause = (): void => {
         coordinator.release(attachmentId);
         setStatus((current) => (current === 'error' ? current : 'paused'));
+        const positionMs = Math.round(element.currentTime * 1000);
+        trackerRef.current?.pause(positionMs);
+        attemptReport({ element, positionMs, complete: false, force: false });
       };
       const onEnded = (): void => {
         coordinator.release(attachmentId);
         lastEmittedProgressRef.current = 1;
         setProgress(1);
         setStatus('idle');
+        // SIGNAL TERMINAL — le média est allé jusqu'au bout SEUL, `force`
+        // bypass le throttle : un vocal de moins de 5 s ne marquerait sinon
+        // jamais `complete` si une pause vient de partir juste avant.
+        const positionMs = Math.round(knownDuration(element) * 1000);
+        trackerRef.current?.completed(positionMs);
+        attemptReport({ element, positionMs, complete: true, force: true });
       };
       const onError = (): void => {
         coordinator.release(attachmentId);
@@ -219,7 +419,7 @@ export function useMediaPlayback(params: {
       setMutedState(element.muted);
       setPictureInPicture(pictureInPictureSupport(element));
     },
-    [attachmentId, coordinator, detach, emitPosition, tracksTime],
+    [attachmentId, attemptReport, coordinator, detach, emitPosition, tracksTime],
   );
 
   const toggle = useCallback((): void => {
@@ -249,14 +449,18 @@ export function useMediaPlayback(params: {
       if (element === null || !Number.isFinite(seconds)) return;
       const total = knownDuration(element);
       const target = total > 0 ? Math.min(total, Math.max(0, seconds)) : Math.max(0, seconds);
+      const fromMs = Math.round(element.currentTime * 1000);
       element.currentTime = target;
       emitPosition(target);
       if (total > 0) {
         lastEmittedProgressRef.current = target / total;
         setProgress(target / total);
       }
+      const toMs = Math.round(target * 1000);
+      trackerRef.current?.seek(fromMs, toMs);
+      attemptReport({ element, positionMs: toMs, complete: false, force: false });
     },
-    [emitPosition],
+    [attemptReport, emitPosition],
   );
 
   const setMuted = useCallback((next: boolean): void => {
@@ -291,6 +495,8 @@ export function useMediaPlayback(params: {
     muted,
     rate,
     pictureInPicture,
+    reportedFraction,
+    reportedComplete,
     toggle,
     seek,
     setMuted,

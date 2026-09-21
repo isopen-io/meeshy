@@ -3,6 +3,8 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { createHttpTransport } from '@/lib/api/http';
+import type { ConversationsDeps } from '@/lib/api/conversations';
 import { createMediaCoordinator, type MediaCoordinator } from './media-coordinator';
 import { useMediaPlayback, type MediaPlayback } from './use-media-playback';
 
@@ -39,20 +41,29 @@ afterEach(() => {
   container.remove();
 });
 
+type HarnessReport = {
+  readonly kind: 'listened' | 'watched';
+  readonly durationMs?: number;
+  readonly resume?: { readonly positionMs: number | null; readonly complete: boolean };
+  readonly deps: ConversationsDeps;
+};
+
 function Harness({
   onReady,
   attachmentId,
   coordinator,
   tag = 'audio',
   tracksTime = false,
+  report,
 }: {
   readonly onReady: (playback: MediaPlayback) => void;
   readonly attachmentId: string;
   readonly coordinator: MediaCoordinator;
   readonly tag?: 'audio' | 'video';
   readonly tracksTime?: boolean;
+  readonly report?: HarnessReport;
 }) {
-  const playback = useMediaPlayback({ attachmentId, coordinator, tracksTime });
+  const playback = useMediaPlayback({ attachmentId, coordinator, tracksTime, ...(report !== undefined ? { report } : {}) });
   onReady(playback);
   const data = {
     'data-status': playback.status,
@@ -62,6 +73,8 @@ function Harness({
     'data-muted': String(playback.muted),
     'data-rate': playback.rate,
     'data-pip': playback.pictureInPicture,
+    'data-reported-fraction': String(playback.reportedFraction),
+    'data-reported-complete': String(playback.reportedComplete),
   };
   if (tag === 'video') {
     return <video ref={playback.bind} {...data} />;
@@ -75,6 +88,7 @@ function mount(params: {
   readonly coordinator: MediaCoordinator;
   readonly tag?: 'audio' | 'video';
   readonly tracksTime?: boolean;
+  readonly report?: HarnessReport;
 }): HTMLDivElement {
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -84,6 +98,19 @@ function mount(params: {
   });
   return container;
 }
+
+/** Bouchon de dépendances réseau — même patron que `fakeFetch` (`attachments.test.ts`). */
+function fakeReportDeps(): { readonly deps: ConversationsDeps; readonly calls: { readonly url: string; readonly init: RequestInit }[] } {
+  const calls: { readonly url: string; readonly init: RequestInit }[] = [];
+  const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    calls.push({ url: String(input), init: init ?? {} });
+    return new Response(JSON.stringify({ success: true, data: {} }), { status: 200 });
+  }) as typeof fetch;
+  const transport = createHttpTransport({ base: '', fetchImpl });
+  return { deps: { source: 'gateway', transport }, calls };
+}
+
+const bodyOf = (call: { readonly init: RequestInit }): Record<string, unknown> => JSON.parse(String(call.init.body));
 
 const mediaOf = (el: HTMLDivElement): HTMLMediaElement => el.querySelector('audio, video')!;
 const statusOf = (el: HTMLDivElement): string | null => mediaOf(el).getAttribute('data-status');
@@ -474,5 +501,242 @@ describe('useMediaPlayback — démontage (#5805)', () => {
 
     expect(coordinator.active()).toBeNull();
     expect(calls.pauseCalls).toBe(1);
+  });
+});
+
+/**
+ * LA REPRISE ET LE RAPPORT DE CONSOMMATION (#7225, W6) — `report` est
+ * OPT-IN, même patron que `tracksTime` : un widget qui n'en a pas besoin
+ * (une tuile qui ne joue rien) ne paie rien.
+ */
+describe('useMediaPlayback — reprise au montage (#7225)', () => {
+  test('resume non complet : element.currentTime est posé', async () => {
+    const coordinator = createMediaCoordinator();
+    const { deps } = fakeReportDeps();
+    const el = mount({
+      onReady: () => {},
+      attachmentId: 'a',
+      coordinator,
+      report: { kind: 'listened', resume: { positionMs: 4_000, complete: false }, deps },
+    });
+    const media = mediaOf(el);
+
+    expect(media.currentTime).toBe(4);
+  });
+
+  test('resume complet : aucun seek (le média repart de zéro)', async () => {
+    const coordinator = createMediaCoordinator();
+    const { deps } = fakeReportDeps();
+    const el = mount({
+      onReady: () => {},
+      attachmentId: 'a',
+      coordinator,
+      report: { kind: 'listened', resume: { positionMs: 9_000, complete: true }, deps },
+    });
+    const media = mediaOf(el);
+
+    expect(media.currentTime).toBe(0);
+  });
+
+  test('aucun resume connu : aucun seek', async () => {
+    const coordinator = createMediaCoordinator();
+    const { deps } = fakeReportDeps();
+    const el = mount({
+      onReady: () => {},
+      attachmentId: 'a',
+      coordinator,
+      report: { kind: 'listened', deps },
+    });
+    expect(mediaOf(el).currentTime).toBe(0);
+  });
+});
+
+describe('useMediaPlayback — rapport au serveur, throttlé (#7225)', () => {
+  test('pause après lecture : un rapport « listened », position/durée/segment cohérents', async () => {
+    const coordinator = createMediaCoordinator();
+    const { deps, calls } = fakeReportDeps();
+    let playback!: MediaPlayback;
+    const el = mount({
+      onReady: (p) => (playback = p),
+      attachmentId: 'att-9',
+      coordinator,
+      report: { kind: 'listened', durationMs: 12_000, deps },
+    });
+    const media = mediaOf(el);
+    stubMedia(media);
+    setMediaTime(media, { duration: 12 });
+
+    await act(async () => {
+      playback.toggle();
+      await Promise.resolve();
+    });
+    setMediaTime(media, { currentTime: 4 });
+
+    await act(async () => {
+      playback.toggle(); // pause
+      await Promise.resolve();
+    });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.url).toBe('/api/v1/attachments/att-9/status');
+    const body = bodyOf(calls[0]!);
+    expect(body.action).toBe('listened');
+    expect(body.complete).toBe(false);
+    expect(body.durationMs).toBe(12_000);
+    expect(body.stretches).toEqual([{ startMs: 0, endMs: 4_000, endedBy: 'pause' }]);
+  });
+
+  test('deux pause en moins de 5 s : un seul appel réseau', async () => {
+    const coordinator = createMediaCoordinator();
+    const { deps, calls } = fakeReportDeps();
+    let playback!: MediaPlayback;
+    const el = mount({ onReady: (p) => (playback = p), attachmentId: 'att-9', coordinator, report: { kind: 'listened', deps } });
+    const media = mediaOf(el);
+    stubMedia(media);
+    setMediaTime(media, { duration: 12 });
+
+    await act(async () => {
+      playback.toggle();
+      await Promise.resolve();
+    });
+    setMediaTime(media, { currentTime: 1 });
+    await act(async () => {
+      playback.toggle();
+      await Promise.resolve();
+    });
+    expect(calls).toHaveLength(1);
+
+    await act(async () => {
+      playback.toggle(); // reprend
+      await Promise.resolve();
+    });
+    setMediaTime(media, { currentTime: 2 });
+    await act(async () => {
+      playback.toggle(); // pause, < 5s après le premier rapport
+      await Promise.resolve();
+    });
+
+    expect(calls).toHaveLength(1);
+  });
+
+  test('sans configuration `report` : aucun appel, même après pause', async () => {
+    const coordinator = createMediaCoordinator();
+    let playback!: MediaPlayback;
+    const el = mount({ onReady: (p) => (playback = p), attachmentId: 'a', coordinator });
+    stubMedia(mediaOf(el));
+
+    await act(async () => {
+      playback.toggle();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      playback.toggle();
+    });
+
+    // Rien à vérifier sur le réseau (aucun `deps` fourni) — ce témoin garde
+    // seulement que le hook ne CASSE pas sans `report`.
+    expect(statusOf(el)).toBe('paused');
+  });
+
+  test('fin de lecture (ended) : rapport FORCÉ avec complete:true, même moins de 5 s après un rapport précédent', async () => {
+    const coordinator = createMediaCoordinator();
+    const { deps, calls } = fakeReportDeps();
+    let playback!: MediaPlayback;
+    const el = mount({ onReady: (p) => (playback = p), attachmentId: 'att-9', coordinator, report: { kind: 'listened', deps } });
+    const media = mediaOf(el);
+    stubMedia(media);
+    setMediaTime(media, { duration: 12 });
+
+    await act(async () => {
+      playback.toggle();
+      await Promise.resolve();
+    });
+    setMediaTime(media, { currentTime: 3 });
+    await act(async () => {
+      playback.toggle(); // pause ⇒ premier rapport
+      await Promise.resolve();
+    });
+    expect(calls).toHaveLength(1);
+
+    await act(async () => {
+      playback.toggle(); // reprend
+      await Promise.resolve();
+    });
+    setMediaTime(media, { currentTime: 12 });
+    await act(async () => {
+      media.dispatchEvent(new Event('ended'));
+    });
+
+    expect(calls).toHaveLength(2);
+    const body = bodyOf(calls[1]!);
+    expect(body.complete).toBe(true);
+  });
+
+  test('démontage après lecture : rapport FORCÉ (segment « dismissed »)', async () => {
+    const coordinator = createMediaCoordinator();
+    const { deps, calls } = fakeReportDeps();
+    let playback!: MediaPlayback;
+    const el = mount({ onReady: (p) => (playback = p), attachmentId: 'att-9', coordinator, report: { kind: 'listened', deps } });
+    const media = mediaOf(el);
+    stubMedia(media);
+    setMediaTime(media, { duration: 12 });
+
+    await act(async () => {
+      playback.toggle();
+      await Promise.resolve();
+    });
+    setMediaTime(media, { currentTime: 2 });
+
+    act(() => {
+      root.unmount();
+    });
+
+    expect(calls).toHaveLength(1);
+    const body = bodyOf(calls[0]!);
+    expect(body.stretches).toEqual([{ startMs: 0, endMs: 2_000, endedBy: 'dismissed' }]);
+    expect(body.complete).toBe(false);
+  });
+
+  test('démontage SANS avoir joué : aucun appel (rien à rapporter)', async () => {
+    const coordinator = createMediaCoordinator();
+    const { deps, calls } = fakeReportDeps();
+    const el = mount({ onReady: () => {}, attachmentId: 'att-9', coordinator, report: { kind: 'listened', deps } });
+    stubMedia(mediaOf(el));
+
+    act(() => {
+      root.unmount();
+    });
+
+    expect(calls).toHaveLength(0);
+  });
+
+  test('reportedFraction/reportedComplete progressent après un rapport (barre au repos, optimiste)', async () => {
+    const coordinator = createMediaCoordinator();
+    const { deps } = fakeReportDeps();
+    let playback!: MediaPlayback;
+    const el = mount({
+      onReady: (p) => (playback = p),
+      attachmentId: 'att-9',
+      coordinator,
+      report: { kind: 'listened', durationMs: 10_000, deps },
+    });
+    const media = mediaOf(el);
+    stubMedia(media);
+    setMediaTime(media, { duration: 10 });
+
+    expect(attr(el, 'data-reported-fraction')).toBe('0');
+
+    await act(async () => {
+      playback.toggle();
+      await Promise.resolve();
+    });
+    setMediaTime(media, { currentTime: 5 });
+    await act(async () => {
+      playback.toggle(); // pause
+      await Promise.resolve();
+    });
+
+    expect(Number(attr(el, 'data-reported-fraction'))).toBeCloseTo(0.5, 5);
+    expect(attr(el, 'data-reported-complete')).toBe('false');
   });
 });
