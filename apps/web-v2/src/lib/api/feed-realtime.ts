@@ -1,9 +1,12 @@
 import type { QueryClient } from '@tanstack/react-query';
 
+import { togglePost, withServedCount } from '@/lib/feed/interactions';
+
 import { FEED_QUERY_KEY } from './feed';
 import { bumpNewPostCount } from './feed-new-count';
 import type { FeedInfiniteData, FeedPost } from './feed-pages';
 import { postQueryKey } from './publication-detail';
+import { REELS_QUERY_ROOT } from './reels';
 
 /**
  * LE TEMPS RÉEL DU FLUX (#7182) — `post:created`, `post:updated`,
@@ -148,13 +151,81 @@ export function applyPostUpdated(queryClient: QueryClient, payload: unknown): vo
   );
 }
 
-/** `post:deleted` — elle quitte le fil ET le détail. */
+/**
+ * `post:deleted` — elle quitte le fil, le détail, ET LES RÉELS (#7227, W8).
+ *
+ * Exactement le périmètre qu'iOS observe (`ReelsViewModel.swift:169-183`,
+ * `postDeleted` SEUL parmi les événements de publication — ni `postCreated`
+ * ni `postUpdated` n'y sont câblés) : le fil des Réels est un fil
+ * D'AFFINITÉ résolu par le serveur, y insérer une carte créée côté client
+ * inventerait un tri que le serveur n'a pas décidé. La suppression, elle, ne
+ * trie rien — elle retire une carte que TOUT client doit cesser de montrer.
+ *
+ * `setQueriesData` avec la RACINE (`REELS_QUERY_ROOT`) atteint toutes les
+ * graines en cache à la fois (TanStack compare les clés par préfixe).
+ */
 export function applyPostDeleted(queryClient: QueryClient, payload: unknown): void {
   const postId = objectOf(payload)?.postId;
   if (typeof postId !== 'string') return;
 
-  queryClient.setQueryData<FeedInfiniteData>(FEED_QUERY_KEY, (data) =>
-    mapPosts(data, (posts) => posts.filter((held) => held.id !== postId)),
-  );
+  const removeFromPages = (data: FeedInfiniteData | undefined) =>
+    mapPosts(data, (posts) => posts.filter((held) => held.id !== postId));
+
+  queryClient.setQueryData<FeedInfiniteData>(FEED_QUERY_KEY, removeFromPages);
+  queryClient.setQueriesData<FeedInfiniteData>({ queryKey: REELS_QUERY_ROOT }, removeFromPages);
   queryClient.removeQueries({ queryKey: postQueryKey(postId) });
+}
+
+/**
+ * `post:reaction-added` / `post:reaction-removed` (#7227, W8) — GARDÉS au
+ * seul ❤️, miroir EXACT d'iOS (`FeedView.swift:1307-1325`). Le ❤️ posé sur un
+ * POST/REEL part en pratique par `post:liked`/`post:unliked`
+ * (`PostReactionHandler.ts:106-123`, `broadcastReactionChange`) — ce chemin
+ * est donc une PROTECTION contre un rejeu par cette voie plutôt que le
+ * chemin nominal. Les emojis NON-❤️ n'ont AUCUN champ côté `FeedPost` :
+ * `reactionSummary`/`currentUserReactions` n'existent que sur
+ * `StoryFeedPost`/`PostComment` (`stories.ts`, `publication-comments.ts`) —
+ * leur donner un effet ici inventerait un champ que rien ne sert.
+ *
+ * Même garde que `post:liked` (`socket.ts#onPostLikeChanged`) : le compte
+ * ABSOLU (`aggregation.count`) remplace l'estimation, et `isLikedByMe` ne
+ * bascule que pour le geste du LECTEUR (un autre de ses appareils).
+ */
+const HEART_EMOJI = '❤️';
+
+function isPostReactionEvent(payload: unknown): payload is {
+  readonly postId: string;
+  readonly userId: string;
+  readonly emoji: string;
+  readonly action: 'add' | 'remove';
+  readonly aggregation: { readonly count: number };
+} {
+  if (typeof payload !== 'object' || payload === null) return false;
+  const p = payload as Record<string, unknown>;
+  if (typeof p.postId !== 'string' || typeof p.userId !== 'string' || typeof p.emoji !== 'string') return false;
+  if (p.action !== 'add' && p.action !== 'remove') return false;
+  const aggregation = p.aggregation;
+  if (typeof aggregation !== 'object' || aggregation === null) return false;
+  const count = (aggregation as Record<string, unknown>).count;
+  return typeof count === 'number' && Number.isFinite(count);
+}
+
+export function applyPostReactionEvent(queryClient: QueryClient, payload: unknown, viewerId: string): void {
+  if (!isPostReactionEvent(payload)) return;
+  if (payload.emoji !== HEART_EMOJI) return;
+
+  const { postId } = payload;
+  const on = payload.action === 'add';
+  const byViewer = payload.userId === viewerId;
+  const change = { postId, kind: 'like' as const, on };
+  const served = { postId, kind: 'like' as const, count: payload.aggregation.count };
+
+  const applyToPost = (post: FeedPost): FeedPost =>
+    post.id !== postId ? post : withServedCount(byViewer ? togglePost(post, change) : post, served);
+
+  const applyToPages = (data: FeedInfiniteData | undefined) => mapPosts(data, (posts) => posts.map(applyToPost));
+
+  queryClient.setQueryData<FeedInfiniteData>(FEED_QUERY_KEY, applyToPages);
+  queryClient.setQueriesData<FeedInfiniteData>({ queryKey: REELS_QUERY_ROOT }, applyToPages);
+  queryClient.setQueryData<FeedPost>(postQueryKey(postId), (post) => (post === undefined ? post : applyToPost(post)));
 }

@@ -2,7 +2,6 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   STORY_DEFAULT_REACTION,
-  applyServedStoryReaction,
   applyStoryReaction,
   hasReactedToStory,
   storyReactionPlan,
@@ -86,47 +85,7 @@ describe('hasReactedToStory — ce que le cœur du rail peint', () => {
   });
 });
 
-/**
- * **`applyServedStoryReaction` (#7227, W8)** — la jumelle SERVIE de
- * `toggleStoryReaction` : `story:reacted`/`story:unreacted` portent un compte
- * ABSOLU (`likeCount`, miroir de `post:liked`), jamais un delta — un
- * `+1`/`−1` local dériverait sous double livraison ou un événement manqué. Et
- * `currentUserReactions` ne bascule QUE pour le geste du LECTEUR (un autre de
- * ses appareils) : le cœur d'un AUTRE ne remplit jamais le mien (même garde
- * que `post:liked`).
- */
-describe('applyServedStoryReaction — le compte ABSOLU, et la garde du lecteur', () => {
-  test('une story AUTRE que la cible ne bouge pas — MÊME référence', () => {
-    const s = story('st-2', [], 1);
-    const next = applyServedStoryReaction(s, { storyId: 'st-1', emoji: '❤️', likeCount: 9, plan: 'add', byViewer: true });
-    expect(next).toBe(s);
-  });
-
-  test('le compte se POSE, jamais ne s’ADDITIONNE', () => {
-    const s = story('st-1', [], 1);
-    const next = applyServedStoryReaction(s, { storyId: 'st-1', emoji: '❤️', likeCount: 9, plan: 'add', byViewer: false });
-    expect(next.reactionCount).toBe(9);
-  });
-
-  test('la réaction d’un AUTRE lecteur pose le compte SANS remplir mon cœur', () => {
-    const s = story('st-1', [], 1);
-    const next = applyServedStoryReaction(s, { storyId: 'st-1', emoji: '❤️', likeCount: 9, plan: 'add', byViewer: false });
-    expect(next.currentUserReactions ?? []).toEqual([]);
-  });
-
-  test('ma PROPRE réaction (autre appareil) pose le compte ET mon cœur', () => {
-    const s = story('st-1', [], 1);
-    const ajout = applyServedStoryReaction(s, { storyId: 'st-1', emoji: '❤️', likeCount: 2, plan: 'add', byViewer: true });
-    expect(ajout.currentUserReactions).toEqual(['❤️']);
-
-    const retrait = applyServedStoryReaction(ajout, { storyId: 'st-1', emoji: '❤️', likeCount: 1, plan: 'remove', byViewer: true });
-    expect(retrait.currentUserReactions).toEqual([]);
-    expect(retrait.reactionCount).toBe(1);
-  });
-
-  test('un retrait qui n’était pas mien ne le retire pas deux fois — idempotent', () => {
-    const s = story('st-1', [], 0);
-    const next = applyServedStoryReaction(s, { storyId: 'st-1', emoji: '❤️', likeCount: 0, plan: 'remove', byViewer: true });
-    expect(next.currentUserReactions).toEqual([]);
-  });
-});
+/* `applyServedStoryReaction` (#7227, W8) — la jumelle SERVIE de
+ * `toggleStoryReaction` — est testée dans `lib/api/reaction-realtime.test.ts`,
+ * PAS ici : elle vit dans un module SÉPARÉ pour ne pas peser sur le chunk
+ * `story_reader` (voir le doc-comment de tête de `reaction-realtime.ts`). */

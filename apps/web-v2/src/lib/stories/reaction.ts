@@ -87,3 +87,14 @@ export function applyStoryReaction<T extends StoryReactionSubject>(
 export function hasReactedToStory(story: StoryReactionSubject | undefined, emoji: string): boolean {
   return (story?.currentUserReactions ?? []).includes(emoji);
 }
+
+/*
+ * `applyServedStoryReaction` (la jumelle SERVIE de `toggleStoryReaction`,
+ * pour `story:reacted`/`story:unreacted`) vit dans
+ * `lib/api/reaction-realtime.ts`, PAS ici — ce fichier est importé
+ * STATIQUEMENT par `routes/story.tsx` (chunk `story_reader`, budgets.json,
+ * plafond serré), pendant que la loi temps réel ne sert que l'écouteur
+ * socket, chargé en `import()`. Les mélanger ferait payer au lecteur de
+ * stories une loi qu'il n'exerce jamais lui-même (mesuré : 9,76 → 11,02 Ko,
+ * DÉPASSEMENT du plafond 11 — cf. le commit qui a extrait ce module).
+ */

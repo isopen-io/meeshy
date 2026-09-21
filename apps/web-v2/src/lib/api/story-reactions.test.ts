@@ -6,8 +6,6 @@ import { STORY_FEED_QUERY_KEY, type StoryFeedPost } from './stories';
 import {
   STORY_REACTION_FAILED,
   STORY_REACTION_PENDING,
-  applyStoryReactionEvent,
-  isStoryReactionEvent,
   performStoryReaction,
   storyReactionAnnouncement,
   type StoryReactionDeps,
@@ -238,72 +236,5 @@ describe('storyReactionAnnouncement — ce qu’il faut dire, et quand se taire'
   test('une pose NON CONFIRMÉE et un refus s’ANNONCENT, chacun par SA clé', () => {
     expect(storyReactionAnnouncement({ ok: true, notice: STORY_REACTION_PENDING })).toBe(STORY_REACTION_PENDING);
     expect(storyReactionAnnouncement({ ok: false, message: STORY_REACTION_FAILED })).toBe(STORY_REACTION_FAILED);
-  });
-});
-
-/**
- * **`story:reacted` / `story:unreacted` — LE RAIL SUIT EN DIRECT (#7227, W8)**
- * — la garde de forme (`isStoryReactionEvent`) puis l'application PURE
- * (`applyStoryReactionEvent`), site unique que `socket.ts` BRANCHE par
- * `import()` (D-98). Miroir `applyServedStoryReaction` (`lib/stories/reaction.ts`).
- */
-describe('isStoryReactionEvent — la garde de forme', () => {
-  test('accepte une charge complète, refuse ce qui manque', () => {
-    const complete = { storyId: 's-1', userId: 'u-1', emoji: '❤️', likeCount: 3, reactionSummary: {} };
-    expect(isStoryReactionEvent(complete)).toBe(true);
-
-    for (const charge of [null, {}, { ...complete, storyId: 42 }, { ...complete, likeCount: 'trois' }]) {
-      expect(isStoryReactionEvent(charge)).toBe(false);
-    }
-  });
-});
-
-describe('applyStoryReactionEvent — application PURE sur STORY_FEED_QUERY_KEY', () => {
-  test('une charge MALFORMÉE ne change rien, et ne lève pas', () => {
-    const queryClient = seeded([story({ id: 'st-1', reactionCount: 2 })]);
-
-    for (const charge of [null, {}, { storyId: 'st-1' }]) {
-      expect(() => applyStoryReactionEvent(queryClient, charge, { viewerId: 'u-viewer', plan: 'add' })).not.toThrow();
-    }
-    expect(cached(queryClient)?.reactionCount).toBe(2);
-  });
-
-  test('un lecteur AUTRE pose le compte servi, ne remplit pas mon cœur', () => {
-    const queryClient = seeded([story({ id: 'st-1', currentUserReactions: [], reactionCount: 2 })]);
-
-    applyStoryReactionEvent(
-      queryClient,
-      { storyId: 'st-1', userId: 'u-other', emoji: '❤️', likeCount: 5, reactionSummary: {} },
-      { viewerId: 'u-viewer', plan: 'add' },
-    );
-
-    expect(cached(queryClient)?.reactionCount).toBe(5);
-    expect(cached(queryClient)?.currentUserReactions ?? []).toEqual([]);
-  });
-
-  test('le LECTEUR (autre appareil) pose le compte servi ET son cœur', () => {
-    const queryClient = seeded([story({ id: 'st-1', currentUserReactions: [], reactionCount: 2 })]);
-
-    applyStoryReactionEvent(
-      queryClient,
-      { storyId: 'st-1', userId: 'u-viewer', emoji: '❤️', likeCount: 3, reactionSummary: {} },
-      { viewerId: 'u-viewer', plan: 'add' },
-    );
-
-    expect(cached(queryClient)?.currentUserReactions).toEqual([HEART]);
-    expect(cached(queryClient)?.reactionCount).toBe(3);
-  });
-
-  test('sans corpus en cache, elle ne lève pas et n’en fabrique aucun', () => {
-    const queryClient = new QueryClient();
-
-    expect(() =>
-      applyStoryReactionEvent(
-        queryClient,
-        { storyId: 'st-1', userId: 'u-other', emoji: '❤️', likeCount: 5, reactionSummary: {} },
-        { viewerId: 'u-viewer', plan: 'add' },
-      ),
-    ).not.toThrow();
-    expect(queryClient.getQueryData(STORY_FEED_QUERY_KEY)).toBeUndefined();
   });
 });

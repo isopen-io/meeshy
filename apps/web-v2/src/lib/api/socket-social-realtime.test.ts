@@ -88,9 +88,22 @@ function buildDeps(overrides: Partial<RealtimeDeps> = {}): {
   return { deps, socket, queryClient };
 }
 
-/** L'APPLICATION DE `story:*` / `comment:*` ARRIVE PAR `import()` (D-98) :
- * elle se résout en micro-tâches, jamais dans le tour du `fire`. */
-const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+/**
+ * **L'APPLICATION DE `story:*` / `comment:*` ARRIVE PAR `import()` (D-98)** :
+ * elle se résout en micro-tâches, jamais dans le tour du `fire`. Un BUDGET de
+ * tours fixe est une constante ; la résolution d'un module est un TRAVAIL
+ * dont la durée dépend de la contention — mesuré #6187 : un témoin qui
+ * n'attend qu'un tour rougit en CI (charge) et verdit en local (repos). On
+ * BORNE en TEMPS et on relit la condition à chaque tour, jamais l'inverse.
+ */
+const FLUSH_TIMEOUT_MS = 2000;
+const flush = async (condition: () => boolean): Promise<void> => {
+  const deadline = Date.now() + FLUSH_TIMEOUT_MS;
+  for (;;) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    if (condition() || Date.now() >= deadline) return;
+  }
+};
 
 const feedWith = (partial: Partial<FeedPost>): FeedInfiniteData => ({
   pages: [
@@ -151,11 +164,11 @@ describe('`story:reacted` / `story:unreacted` sont ÉCOUTÉS (#7227)', () => {
     createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
 
     socket.fire(SERVER_EVENTS.STORY_REACTED, { storyId: 'st-1', userId: 'u-viewer', emoji: '❤️', likeCount: 3, reactionSummary: {} });
-    await flush();
+    const storyOf = () => queryClient.getQueryData<readonly StoryFeedPost[]>(STORY_FEED_QUERY_KEY)?.find((s) => s.id === 'st-1');
+    await flush(() => storyOf()?.reactionCount === 3);
 
-    const st = queryClient.getQueryData<readonly StoryFeedPost[]>(STORY_FEED_QUERY_KEY)?.find((s) => s.id === 'st-1');
-    expect(st?.reactionCount).toBe(3);
-    expect(st?.currentUserReactions).toEqual(['❤️']);
+    expect(storyOf()?.reactionCount).toBe(3);
+    expect(storyOf()?.currentUserReactions).toEqual(['❤️']);
   });
 
   test('`story:unreacted` pose le compte servi', async () => {
@@ -164,14 +177,19 @@ describe('`story:reacted` / `story:unreacted` sont ÉCOUTÉS (#7227)', () => {
     createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
 
     socket.fire(SERVER_EVENTS.STORY_UNREACTED, { storyId: 'st-1', userId: 'u-other', emoji: '❤️', likeCount: 2, reactionSummary: {} });
-    await flush();
+    const storyOf = () => queryClient.getQueryData<readonly StoryFeedPost[]>(STORY_FEED_QUERY_KEY)?.find((s) => s.id === 'st-1');
+    await flush(() => storyOf()?.reactionCount === 2);
 
-    const st = queryClient.getQueryData<readonly StoryFeedPost[]>(STORY_FEED_QUERY_KEY)?.find((s) => s.id === 'st-1');
-    expect(st?.reactionCount).toBe(2);
+    expect(storyOf()?.reactionCount).toBe(2);
     /* SA réaction à LUI n'est pas la mienne — mon cœur ne bouge pas. */
-    expect(st?.currentUserReactions).toEqual(['❤️']);
+    expect(storyOf()?.currentUserReactions).toEqual(['❤️']);
   });
 
+  /**
+   * `destroy` retire l'écouteur AVANT le `fire` : aucun `import()` n'est
+   * donc jamais déclenché — pas de course à attendre, une courte attente
+   * fixe suffit à prouver l'ABSENCE.
+   */
   test('`destroy` démonte les DEUX écoutes', async () => {
     const { deps, socket, queryClient } = buildDeps();
     queryClient.setQueryData(STORY_FEED_QUERY_KEY, [story()]);
@@ -179,7 +197,7 @@ describe('`story:reacted` / `story:unreacted` sont ÉCOUTÉS (#7227)', () => {
     connection.destroy();
 
     socket.fire(SERVER_EVENTS.STORY_REACTED, { storyId: 'st-1', userId: 'u-viewer', emoji: '❤️', likeCount: 9, reactionSummary: {} });
-    await flush();
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(queryClient.getQueryData<readonly StoryFeedPost[]>(STORY_FEED_QUERY_KEY)?.find((s) => s.id === 'st-1')?.reactionCount).toBe(2);
   });
@@ -195,10 +213,10 @@ describe('`comment:updated` / `comment:deleted` / `comment:liked` / `comment:unl
       postId: 'p-1',
       comment: { id: 'c-1', content: 'après édition', createdAt: '2026-09-21T09:00:00.000Z', author: { id: 'u-a', displayName: 'A', username: 'a' } },
     });
-    await flush();
+    const rowsOf = () => (queryClient.getQueryData(commentsQueryKey('p-1')) as { readonly pages: readonly { readonly comments: readonly { readonly id: string; readonly content: string }[] }[] }).pages.flatMap((p) => p.comments);
+    await flush(() => rowsOf().find((c) => c.id === 'c-1')?.content === 'après édition');
 
-    const rows = (queryClient.getQueryData(commentsQueryKey('p-1')) as { readonly pages: readonly { readonly comments: readonly { readonly id: string; readonly content: string }[] }[] }).pages.flatMap((p) => p.comments);
-    expect(rows.find((c) => c.id === 'c-1')?.content).toBe('après édition');
+    expect(rowsOf().find((c) => c.id === 'c-1')?.content).toBe('après édition');
   });
 
   test('`comment:deleted` retire la ligne ET pose le compte servi sur le Flux', async () => {
@@ -208,10 +226,10 @@ describe('`comment:updated` / `comment:deleted` / `comment:liked` / `comment:unl
     createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
 
     socket.fire(SERVER_EVENTS.COMMENT_DELETED, { postId: 'p-1', commentId: 'c-1', commentCount: 3 });
-    await flush();
+    const rowsOf = () => (queryClient.getQueryData(commentsQueryKey('p-1')) as { readonly pages: readonly { readonly comments: readonly unknown[] }[] }).pages.flatMap((p) => p.comments);
+    await flush(() => rowsOf().length === 0);
 
-    const rows = (queryClient.getQueryData(commentsQueryKey('p-1')) as { readonly pages: readonly { readonly comments: readonly unknown[] }[] }).pages.flatMap((p) => p.comments);
-    expect(rows).toEqual([]);
+    expect(rowsOf()).toEqual([]);
     expect(queryClient.getQueryData<FeedInfiniteData>(FEED_QUERY_KEY)?.pages[0]?.posts[0]?.commentCount).toBe(3);
   });
 
@@ -220,19 +238,23 @@ describe('`comment:updated` / `comment:deleted` / `comment:liked` / `comment:unl
     queryClient.setQueryData(commentsQueryKey('p-1'), { pages: [{ comments: [{ id: 'c-1', content: 'x', createdAt: '2026-09-21T09:00:00.000Z', author: { id: 'u-a', displayName: 'A', username: 'a' }, likeCount: 0, isLikedByMe: false }] }], pageParams: [undefined] });
     createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
 
+    type LikeRow = { readonly id: string; readonly likeCount?: number; readonly isLikedByMe?: boolean };
+    const rowsOf = () =>
+      (queryClient.getQueryData(commentsQueryKey('p-1')) as { readonly pages: readonly { readonly comments: readonly LikeRow[] }[] }).pages.flatMap((p) => p.comments);
+
     socket.fire(SERVER_EVENTS.COMMENT_LIKED, { postId: 'p-1', commentId: 'c-1', userId: 'u-viewer', emoji: '❤️', likeCount: 1 });
-    await flush();
-    let rows = (queryClient.getQueryData(commentsQueryKey('p-1')) as { readonly pages: readonly { readonly comments: readonly { readonly id: string; readonly likeCount?: number; readonly isLikedByMe?: boolean }[] }[] }).pages.flatMap((p) => p.comments);
-    expect(rows[0]?.likeCount).toBe(1);
-    expect(rows[0]?.isLikedByMe).toBe(true);
+    await flush(() => rowsOf()[0]?.likeCount === 1);
+    expect(rowsOf()[0]?.likeCount).toBe(1);
+    expect(rowsOf()[0]?.isLikedByMe).toBe(true);
 
     socket.fire(SERVER_EVENTS.COMMENT_UNLIKED, { postId: 'p-1', commentId: 'c-1', userId: 'u-viewer', emoji: '❤️', likeCount: 0 });
-    await flush();
-    rows = (queryClient.getQueryData(commentsQueryKey('p-1')) as { readonly pages: readonly { readonly comments: readonly { readonly id: string; readonly likeCount?: number; readonly isLikedByMe?: boolean }[] }[] }).pages.flatMap((p) => p.comments);
-    expect(rows[0]?.likeCount).toBe(0);
-    expect(rows[0]?.isLikedByMe).toBe(false);
+    await flush(() => rowsOf()[0]?.likeCount === 0);
+    expect(rowsOf()[0]?.likeCount).toBe(0);
+    expect(rowsOf()[0]?.isLikedByMe).toBe(false);
   });
 
+  /** `destroy` retire les écoutes AVANT le `fire` : aucun `import()` n'est
+   * jamais déclenché — une courte attente fixe suffit à prouver l'ABSENCE. */
   test('`destroy` démonte les QUATRE écoutes', async () => {
     const { deps, socket, queryClient } = buildDeps();
     queryClient.setQueryData(commentsQueryKey('p-1'), { pages: [{ comments: [{ id: 'c-1', content: 'intact', createdAt: '2026-09-21T09:00:00.000Z', author: { id: 'u-a', displayName: 'A', username: 'a' } }] }], pageParams: [undefined] });
@@ -241,7 +263,7 @@ describe('`comment:updated` / `comment:deleted` / `comment:liked` / `comment:unl
 
     socket.fire(SERVER_EVENTS.COMMENT_UPDATED, { postId: 'p-1', comment: { id: 'c-1', content: 'via un fantôme', createdAt: '2026-09-21T09:00:00.000Z', author: { id: 'u-a', displayName: 'A', username: 'a' } } });
     socket.fire(SERVER_EVENTS.COMMENT_DELETED, { postId: 'p-1', commentId: 'c-1', commentCount: 0 });
-    await flush();
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     const rows = (queryClient.getQueryData(commentsQueryKey('p-1')) as { readonly pages: readonly { readonly comments: readonly { readonly content: string }[] }[] }).pages.flatMap((p) => p.comments);
     expect(rows.map((c) => c.content)).toEqual(['intact']);
