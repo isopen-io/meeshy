@@ -7,9 +7,11 @@ import { conversationStore } from '@/lib/conversation-store';
 import type { SocketClient, SocketFactory, SocketHandler } from '@/lib/net/socket';
 import { createOutboxStore } from '@/lib/send/outbox-store';
 
+import { authorPostsQueryKey } from './author-posts';
 import { BOOKMARKS_QUERY_KEY } from './bookmarked-posts';
 import { FEED_QUERY_KEY } from './feed';
 import type { FeedInfiniteData, FeedPost } from './feed-pages';
+import { hashtagQueryKey } from './hashtag-posts';
 import { commentsQueryKey } from './publication-comments';
 import { postQueryKey } from './publication-detail';
 import { reelsQueryKey } from './reels';
@@ -484,5 +486,79 @@ describe('`post:bookmarked` écrit AUSSI les RÉELS et la FICHE (#7227)', () => 
     const reel = queryClient.getQueryData<FeedInfiniteData>(reelsQueryKey())?.pages[0]?.posts[0];
     expect(reel?.isBookmarkedByMe).toBe(true);
     expect(reel?.bookmarkCount).toBe(6);
+  });
+});
+
+/**
+ * **UN ÉCHO VENU D'AILLEURS ATTEINT LA PAGE D'UN HASHTAG ET LE PROFIL**
+ * (#7341). Ces deux écrans peignent leurs cartes depuis LEUR caisse
+ * (`hashtagQueryKey`, `authorPostsQueryKey`) ; les échos n'écrivaient que le
+ * Flux, les Réels, la fiche et les enregistrées. Un cœur posé depuis un autre
+ * appareil — ou par un autre lecteur — n'y arrivait donc jamais, et le
+ * compteur restait au chiffre de l'ouverture. Miroir de
+ * `ProfileUserPostsList.swift` (`subscribeToSocketUpdates`), qui écoute
+ * `postLiked`, `postUnliked` et `postBookmarked` sur les publications d'un
+ * profil.
+ */
+describe('`post:liked` / `post:bookmarked` atteignent un HASHTAG et un PROFIL (#7341)', () => {
+  const hashtagPage = (partial: Partial<FeedPost>) => ({
+    pages: [{ posts: [{ id: 'p-1', type: 'POST', createdAt: '2026-09-21T10:00:00.000Z', ...partial }], nextCursor: null }],
+    pageParams: [0],
+  });
+  const cardOf = (queryClient: QueryClient, key: readonly unknown[]): FeedPost | undefined =>
+    queryClient.getQueryData<{ readonly pages: readonly { readonly posts: readonly FeedPost[] }[] }>(key)?.pages[0]?.posts[0];
+
+  test('mon cœur posé sur un AUTRE appareil remplit la carte du hashtag, avec le compte servi', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    queryClient.setQueryData(hashtagQueryKey('voyage'), hashtagPage({ isLikedByMe: false, likeCount: 3 }));
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.POST_LIKED, { postId: 'p-1', userId: 'u-viewer', emoji: '❤️', likeCount: 4, reactionSummary: {} });
+
+    expect(cardOf(queryClient, hashtagQueryKey('voyage'))?.isLikedByMe).toBe(true);
+    expect(cardOf(queryClient, hashtagQueryKey('voyage'))?.likeCount).toBe(4);
+  });
+
+  test('le cœur retiré par un AUTRE lecteur pose le compte servi sur le profil, sans toucher MON cœur', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    queryClient.setQueryData(authorPostsQueryKey('u-auteur'), feedWith({ isLikedByMe: true, likeCount: 5 }));
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.POST_UNLIKED, { postId: 'p-1', userId: 'u-autre', emoji: '❤️', likeCount: 4, reactionSummary: {} });
+
+    expect(cardOf(queryClient, authorPostsQueryKey('u-auteur'))?.isLikedByMe).toBe(true);
+    expect(cardOf(queryClient, authorPostsQueryKey('u-auteur'))?.likeCount).toBe(4);
+  });
+
+  test('un enregistrement fait ailleurs pose le signet sur le hashtag ET sur le profil, avec son compte servi', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    queryClient.setQueryData(hashtagQueryKey('voyage'), hashtagPage({ isBookmarkedByMe: false, bookmarkCount: 1 }));
+    queryClient.setQueryData(authorPostsQueryKey('u-auteur'), feedWith({ isBookmarkedByMe: false, bookmarkCount: 1 }));
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.POST_BOOKMARKED, { postId: 'p-1', bookmarked: true, bookmarkCount: 2 });
+
+    for (const key of [hashtagQueryKey('voyage'), authorPostsQueryKey('u-auteur')]) {
+      expect(cardOf(queryClient, key)?.isBookmarkedByMe).toBe(true);
+      expect(cardOf(queryClient, key)?.bookmarkCount).toBe(2);
+    }
+  });
+
+  test('`post:reaction-added` ❤️ d’un autre lecteur pose le compte servi sur le profil', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    queryClient.setQueryData(authorPostsQueryKey('u-auteur'), feedWith({ isLikedByMe: false, likeCount: 1 }));
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.POST_REACTION_ADDED, {
+      postId: 'p-1',
+      userId: 'u-autre',
+      emoji: '❤️',
+      action: 'add',
+      aggregation: { emoji: '❤️', count: 2, userIds: [], hasCurrentUser: false },
+      timestamp: '2026-09-21T10:01:00.000Z',
+    });
+
+    expect(cardOf(queryClient, authorPostsQueryKey('u-auteur'))?.isLikedByMe).toBe(false);
+    expect(cardOf(queryClient, authorPostsQueryKey('u-auteur'))?.likeCount).toBe(2);
   });
 });

@@ -58,10 +58,11 @@ import { FeedSkeleton } from './feed';
  *
  * **LE RETRAIT EST LE MÊME GESTE QUE DANS LE FLUX**, et c'est tout le sujet du
  * critère de fin : `onGesture(postId, 'bookmark')` part vers
- * `performPostGesture`, qui tient QUATRE caisses — Flux, Réels, fiche, et ce
- * corpus-ci. Retirer ici retire dans le Flux ; retirer dans le Flux ôte la
- * ligne ici. Une seule source de vérité, optimiste des deux côtés, avec retour
- * en arrière à LA PLACE de la ligne (`bookmark-membership.ts`).
+ * `performPostGesture`, qui écrit CHAQUE caisse du registre des cartes
+ * (`card-caches.ts`, #7341) — ce corpus-ci compris. Retirer ici retire dans le
+ * Flux ; retirer dans le Flux ôte la ligne ici. Une seule source de vérité,
+ * optimiste des deux côtés, avec retour en arrière à LA PLACE de la ligne
+ * (`bookmark-membership.ts`).
  *
  * **CE QUI N'EST PAS REPRIS D'iOS, ASSUMÉ** : le tirer-pour-rafraîchir (le
  * corpus ne bouge que par un geste du lecteur, qui l'écrit déjà en optimiste)

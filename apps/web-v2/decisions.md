@@ -168,6 +168,19 @@ service worker (push), et une bannière déjà affichée. La règle :
 Le point 1 est propre au web : sur iOS, le système sait que l'application est au
 premier plan. Dans un navigateur, c'est au service worker de le demander.
 
+**Une correction n'est pas un second événement (2026-09-21, #7342).** Éditer un
+message, un post ou un commentaire repousse sa notification sous la MÊME
+identité, et la passerelle le déclare (`REPRODUCED_PUSH_FIELD`,
+`packages/shared/types/reproduced-notification-push.ts`). iOS et Android
+reçoivent d'abord une révocation ; le web non (#7308), si bien que le point 4
+écartait la version d'après. Le worker (`corriger()`, `public/sw-push.js`)
+remplace donc EN PLACE la bannière de cette notification quand elle est encore
+affichée, ne fait rien quand elle dit déjà le texte d'après, et **n'en lève
+aucune** quand elle ne l'est plus : un message plus récent de la conversation
+l'a remplacée (même tag, #7340), le lecteur l'a fermée, ou il lisait
+l'application. Le remplacement s'annonce, muet si le son est coupé — comme le
+push nominal qui suit la révocation sur iOS.
+
 ## D-12 · Le renommage du 2026-09-07 — `web-v4` devient `web-v3`, l'ancienne v3 devient `web-old-version3`
 
 Directive du porteur : *« Décommissionne web-v3 en web-old-version3 et nomme le web-v4

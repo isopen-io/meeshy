@@ -48,6 +48,7 @@ import { filterMutedRecipients } from './mutedRecipients';
 import { computeConversationUnreadBadge } from './conversationUnreadBadge';
 import { retractedNotificationOf, type RetractedNotification } from './retractedNotifications';
 import { sendNotificationRevocationPushes } from './notificationRevocationPush';
+import { reproducedPushData } from './reproducedNotificationPush';
 import { visibleNotificationsWhere } from './visibleNotificationsWhere';
 import type { ServerEmitIOWithRooms } from '../../socketio/serverEmit';
 import { PushNotificationService } from '../PushNotificationService';
@@ -4273,11 +4274,6 @@ export class NotificationService {
   private async pushReproducedNotification(replacement: ReproducedNotificationPush): Promise<void> {
     const { row, title, subtitle } = replacement;
     const userId = row.userId as string;
-    const context = (row.context ?? {}) as Record<string, unknown>;
-    const contextString = (key: string): string => {
-      const value = context[key];
-      return typeof value === 'string' ? value : '';
-    };
 
     // GW7 — mêmes substitutions de confidentialité que le push de création :
     // `showPreview:false` remplace le corps par un libellé générique localisé,
@@ -4290,12 +4286,6 @@ export class NotificationService {
       ? truncateByCodePoints((row.content as string | null) ?? '', 200)
       : notificationString(await this.resolveRecipientLang(userId), 'push.private');
 
-    const conversationId = contextString('conversationId');
-    const messageId = contextString('messageId');
-    const link = conversationId
-      ? (messageId ? `/conversations/${conversationId}?messageId=${messageId}` : `/conversations/${conversationId}`)
-      : undefined;
-
     // D-L1 (#7218) — même projection que le push de création (conversations
     // non lues, hors muettes) ; voir `computeConversationUnreadBadge`.
     let unreadBadge: number | undefined;
@@ -4305,6 +4295,12 @@ export class NotificationService {
     } catch {
       unreadBadge = undefined;
     }
+
+    const data = reproducedPushData(row, unreadBadge);
+    const { conversationId, messageId } = data;
+    const link = conversationId
+      ? (messageId ? `/conversations/${conversationId}?messageId=${messageId}` : `/conversations/${conversationId}`)
+      : undefined;
 
     const category = pushCategoryForNotificationType(row.type as NotificationType);
     const results = await this.pushService!.sendToUser({
@@ -4324,16 +4320,7 @@ export class NotificationService {
         ...(conversationId ? { threadId: conversationId } : {}),
         ...(category ? { category } : {}),
         ...(unreadBadge !== undefined ? { badge: unreadBadge } : {}),
-        data: {
-          notificationId: row.id as string,
-          ...(unreadBadge !== undefined ? { unreadCount: String(unreadBadge) } : {}),
-          type: String(row.type ?? ''),
-          conversationId,
-          messageId,
-          postId: contextString('postId'),
-          commentId: contextString('commentId'),
-          parentCommentId: contextString('parentCommentId'),
-        },
+        data,
       },
     });
 

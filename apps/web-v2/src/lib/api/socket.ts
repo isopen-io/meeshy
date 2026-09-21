@@ -11,15 +11,21 @@ import type { TypingActionData, TypingEvent } from '@meeshy/shared/types/socketi
 import type { ConversationStoreState } from '@/lib/conversation-store';
 import type { SocketClient, SocketFactory } from '@/lib/net/socket';
 import type { OutboxState } from '@/lib/send/outbox-store';
-import { applyMediaCaptionTranslation, type MediaCaptionTranslationUpdate } from '@/lib/feed/interactions';
 import { decodeNotification } from '@/lib/notifications/record';
 
 import { attachmentStatusDetailsQueryKey } from './attachments';
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
-import { FEED_QUERY_KEY } from './feed';
 import { messagesQueryKey } from './messages';
-import { applyPostCreated, applyPostDeleted, applyPostReactionEvent, applyPostUpdated, applyServedBookmark, applyServedLike } from './feed-realtime';
-import type { FeedInfiniteData } from './feed-pages';
+import {
+  applyMediaCaptionTranslation,
+  applyPostCreated,
+  applyPostDeleted,
+  applyPostReactionEvent,
+  applyPostTranslation,
+  applyPostUpdated,
+  applyServedBookmark,
+  applyServedLike,
+} from './feed-realtime';
 import { FRIENDS_QUERY_PREFIX } from './friends-keys';
 import { PUBLIC_PROFILE_QUERY_PREFIX } from './public-profile';
 import { NOTIFICATION_COUNTS_QUERY_KEY, NOTIFICATION_LISTS_KEY } from './notifications';
@@ -109,28 +115,6 @@ function isPostBookmarkEvent(payload: unknown): payload is PostBookmarkEvent {
     typeof p.postId === 'string' &&
     typeof p.bookmarked === 'boolean' &&
     (p.bookmarkCount === undefined || isFiniteNumber(p.bookmarkCount))
-  );
-}
-
-/** `MediaCaptionTranslationUpdatedEventData` (`@meeshy/shared/types/post`,
- * #6280), réduite aux champs que `applyMediaCaptionTranslation` consomme —
- * `postId`/`commentId` ne servent qu'au ROUTAGE serveur (ZMQ, audience) :
- * la fusion côté cache retrouve le média par `mediaId`, quel que soit le
- * document (post ou commentaire) qui le porte. `commentId` n'est donc PAS
- * relu ici : un média de commentaire n'a jamais d'entrée dans `FEED_QUERY_KEY`,
- * `applyMediaCaptionTranslation` ne trouve rien à fusionner et ne modifie
- * rien, sans lever. */
-function isMediaCaptionTranslationEvent(payload: unknown): payload is MediaCaptionTranslationUpdate {
-  if (typeof payload !== 'object' || payload === null) return false;
-  const p = payload as Record<string, unknown>;
-  if (typeof p.mediaId !== 'string' || typeof p.language !== 'string') return false;
-  if (typeof p.translation !== 'object' || p.translation === null) return false;
-  const t = p.translation as Record<string, unknown>;
-  return (
-    typeof t.text === 'string' &&
-    typeof t.translationModel === 'string' &&
-    typeof t.createdAt === 'string' &&
-    (t.confidenceScore === undefined || isFiniteNumber(t.confidenceScore))
   );
 }
 
@@ -481,15 +465,13 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
    * **ET LES RÉELS, ET LA FICHE (#7227, W8)** — la MÊME carte, servie par un
    * fil de Réels (`ReelsViewModel.swift:117-128` : SEULS les likes et la
    * suppression y sont câblés, jamais `postCreated`/`postUpdated`) ou par
-   * `/post/$post`. Les trois caisses vivent dans `feed-realtime.ts#applyServedLike`,
-   * site UNIQUE partagé avec `post:reaction-added`/`post:reaction-removed` :
-   * cet écouteur ne tient que le branchement (D-98), et deux boucles
-   * recopiées ne peuvent plus diverger d'une caisse.
+   * `/post/$post`. Les caisses vivent au registre (`card-caches.ts`, #7341 :
+   * le hashtag, le profil et les enregistrées aussi), atteint par
+   * `feed-realtime.ts#applyServedLike`, site UNIQUE partagé avec
+   * `post:reaction-added`/`post:reaction-removed` : cet écouteur ne tient que
+   * le branchement (D-98), et deux boucles recopiées ne peuvent plus diverger
+   * d'une caisse.
    */
-  const updateFeed = (update: (data: FeedInfiniteData | undefined) => FeedInfiniteData | undefined): void => {
-    deps.queryClient.setQueryData<FeedInfiniteData>(FEED_QUERY_KEY, update);
-  };
-
   const onPostLikeChanged =
     (on: boolean) =>
     (payload: unknown): void => {
@@ -532,12 +514,13 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
 
   /**
    * `post:bookmarked` — **ET LES RÉELS, ET LA FICHE (#7227, W8)**. Cet écho
-   * n'écrivait que le Flux pendant que le geste LOCAL tenait les trois
+   * n'écrivait que le Flux pendant que le geste LOCAL tenait plusieurs
    * caisses (`feed-gestures.ts#performPostGesture`) et qu'iOS réconcilie son
    * pager (`ReelsViewModel.swift:139-163`) : un favori posé depuis un AUTRE
-   * appareil n'atteignait ni le pager ni la fiche. Les trois caisses vivent
-   * dans `feed-realtime.ts#applyServedBookmark`, à côté de leurs jumelles du
-   * cœur — cet écouteur ne tient que le branchement (D-98).
+   * appareil n'atteignait ni le pager ni la fiche. Les caisses vivent au
+   * registre (`card-caches.ts`, #7341), atteint par
+   * `feed-realtime.ts#applyServedBookmark`, à côté de ses jumelles du cœur —
+   * cet écouteur ne tient que le branchement (D-98).
    */
   const onPostBookmarked = (payload: unknown): void => {
     if (!isPostBookmarkEvent(payload)) return;
@@ -563,18 +546,24 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   };
 
   /**
-   * `media:caption-translation-updated` (#6280) — LA LÉGENDE D'UN MÉDIA DU
-   * FIL SUIT LE PIPELINE ZMQ EN DIRECT, même motif que `post:liked` ci-dessus :
-   * une fonction pure (`applyMediaCaptionTranslation`, `lib/feed/interactions.ts`)
-   * appliquée à `FEED_QUERY_KEY`. `updateFeed` retrouve le média par id, quelle
-   * que soit la page qui le porte (`flattenFeedPages` garde la PREMIÈRE
-   * occurrence d'un post servi deux fois — la fusion doit donc viser TOUTES
-   * les pages, pas seulement la première, ce que `applyMediaCaptionTranslation`
-   * fait déjà via `mapPosts`).
+   * `post:translation-updated` (#7383) et `media:caption-translation-updated`
+   * (#6280, #7382) — LE PRISME SUIT LE PIPELINE EN DIRECT, sur CHAQUE écran
+   * qui montre la carte. Le texte d'une publication n'était écouté NULLE PART
+   * (iOS l'écoute sur le Flux, la fiche, le profil et les stories), et la
+   * légende d'un média n'atteignait que le Flux (`updateFeed`, disparu) : sa
+   * charge porte pourtant `postId` depuis sa naissance — c'est la garde locale
+   * qui ne le lisait pas.
+   *
+   * Les lois vivent dans `feed-realtime.ts` (validation, fusion par langue,
+   * registre des caisses) ; ces écouteurs ne tiennent que le branchement
+   * (D-98). Deux contenus, deux cartes de traduction, jamais mélangées.
    */
+  const onPostTranslationUpdated = (payload: unknown): void => {
+    applyPostTranslation(deps.queryClient, payload);
+  };
+
   const onMediaCaptionTranslationUpdated = (payload: unknown): void => {
-    if (!isMediaCaptionTranslationEvent(payload)) return;
-    updateFeed((data) => applyMediaCaptionTranslation(data, payload));
+    applyMediaCaptionTranslation(deps.queryClient, payload);
   };
 
   /**
@@ -740,6 +729,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.POST_BOOKMARKED, onPostBookmarked);
   socket.on<unknown>(SERVER_EVENTS.POST_REACTION_ADDED, onPostReactionChanged);
   socket.on<unknown>(SERVER_EVENTS.POST_REACTION_REMOVED, onPostReactionChanged);
+  socket.on<unknown>(SERVER_EVENTS.POST_TRANSLATION_UPDATED, onPostTranslationUpdated);
   socket.on<unknown>(SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, onMediaCaptionTranslationUpdated);
   socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_NEW, onNotificationNew);
   socket.on<unknown>(SERVER_EVENTS.NOTIFICATION_READ, onNotificationRead);
@@ -806,6 +796,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.POST_BOOKMARKED, onPostBookmarked);
       socket.off<unknown>(SERVER_EVENTS.POST_REACTION_ADDED, onPostReactionChanged);
       socket.off<unknown>(SERVER_EVENTS.POST_REACTION_REMOVED, onPostReactionChanged);
+      socket.off<unknown>(SERVER_EVENTS.POST_TRANSLATION_UPDATED, onPostTranslationUpdated);
       socket.off<unknown>(SERVER_EVENTS.MEDIA_CAPTION_TRANSLATION_UPDATED, onMediaCaptionTranslationUpdated);
       socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_NEW, onNotificationNew);
       socket.off<unknown>(SERVER_EVENTS.NOTIFICATION_READ, onNotificationRead);
