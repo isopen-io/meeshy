@@ -21,6 +21,7 @@ import { MessageMediaConsumptionService } from './MessageMediaConsumptionService
 // plus, jamais dupliqué.
 import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { unsetOrNull } from '../utils/prisma-unset';
 import { computeContiguousReadPrefix, computeRecipientCount, resolveReadAt, resolveReceivedAt } from '../utils/read-exactness';
 import { getExactReadTrackingCutover } from '../config/read-exactness-config';
 import { loadPrivacyPreferencesCached } from './preferences/privacy-cache';
@@ -94,6 +95,16 @@ const CREATED_AT_FIELD_FOR: Record<CursorIdField, CursorCreatedAtField> = {
  * ObjectId hex order (which is only second-accurate and diverges across gateway
  * processes; see `OBJECT_ID_RE`).
  *
+ * « Rien d'enregistré » s'écrit `unsetOrNull`, jamais `{ champ: null }`.
+ * `_advanceCursor` CRÉE la ligne de curseur avec les seules colonnes de la
+ * moitié qu'il avance : un curseur né d'un accusé de REMISE n'a aucune clé
+ * `lastReadMessageId` ni `lastReadMessageCreatedAt`, et sur MongoDB une égalité
+ * à `null` n'apparie pas une colonne ABSENTE (`utils/prisma-unset.ts`). Les
+ * trois branches manquaient alors toutes les trois — la troisième aussi, un
+ * `lt` n'appariant jamais une absence — et l'avance de lecture était rejetée
+ * comme PÉRIMÉE sur un curseur qui n'avait jamais rien lu : `lastReadMessageId`
+ * restait vide et le badge ne retombait pas (#7345, mesuré sur staging).
+ *
  * Returns `null` when no guard applies (the caller then matches on
  * participant+conversation alone):
  *   - non-ObjectId ids (tests / legacy data), preserving the historical
@@ -111,16 +122,16 @@ export function buildCursorFreshnessGuard(params: {
   if (!OBJECT_ID_RE.test(messageId)) return null;
 
   if (!messageCreatedAt) {
-    return { OR: [{ [idField]: null }, { [idField]: { lt: messageId } }] };
+    return { OR: [unsetOrNull(idField), { [idField]: { lt: messageId } }] };
   }
 
   return {
     OR: [
       // Brand-new cursor: nothing recorded yet.
-      { [createdAtField]: null, [idField]: null },
+      { AND: [unsetOrNull(createdAtField), unsetOrNull(idField)] },
       // Legacy cursor written before createdAt was tracked: fall back to the
       // ObjectId order it was recorded under, until this advance upgrades it.
-      { [createdAtField]: null, [idField]: { lt: messageId } },
+      { AND: [unsetOrNull(createdAtField), { [idField]: { lt: messageId } }] },
       // The recorded message is strictly older (correct to the millisecond). A
       // same-instant sibling from another process is left for the next later
       // receipt to carry — a transient stall, never a rollback.
@@ -1273,6 +1284,10 @@ export class MessageReadStatusService {
       let frozen = 0;
       if (toCreate.length > 0) {
         const created = await this.prisma.messageStatusEntry.createMany({
+          // Les colonnes de l'AUTRE moitié sont écrites explicitement à `null` :
+          // la discipline d'ÉCRITURE que `utils/prisma-unset.ts` nomme comme la
+          // jumelle du prédicat de lecture. Le prédicat rend exactes les lignes
+          // DÉJÀ en base ; ceci rend exactes celles à venir.
           data: toCreate.map((messageId) =>
             field === "readAt"
               ? {
@@ -1280,6 +1295,8 @@ export class MessageReadStatusService {
                   conversationId,
                   participantId,
                   readAt: at,
+                  deliveredAt: null,
+                  receivedAt: null,
                   ...(languageFor(messageId)
                     ? { viewedLanguages: [languageFor(messageId) as string] }
                     : {}),
@@ -1290,6 +1307,7 @@ export class MessageReadStatusService {
                   participantId,
                   deliveredAt: at,
                   receivedAt: at,
+                  readAt: null,
                 }
           ),
         });
@@ -1303,11 +1321,21 @@ export class MessageReadStatusService {
         .map((e) => e.messageId);
 
       if (toUpdate.length > 0) {
+        // `unsetOrNull`, et jamais `{ champ: null }` : l'entrée à compléter a été
+        // créée par l'AUTRE moitié de ce gel — la livraison écrit `deliveredAt`
+        // /`receivedAt` sans jamais nommer `readAt`, donc la colonne est ABSENTE
+        // du document, et une ÉGALITÉ à `null` ne l'apparie pas sur MongoDB
+        // (`utils/prisma-unset.ts`). Le filtre JS juste au-dessus, lui, voyait
+        // bien `null` — Prisma relit une colonne absente en `null` —, si bien
+        // que `toUpdate` portait les cinq messages et que l'écriture n'en
+        // touchait aucun : `markedCount: 0` sur un lot parfaitement légitime,
+        // et pas un `readAt` gravé. C'est le défaut mesuré sur staging (#7345),
+        // sur la séquence NOMINALE : un message est livré avant d'être lu.
         const updated = await this.prisma.messageStatusEntry.updateMany({
           where:
             field === "readAt"
-              ? { messageId: { in: toUpdate }, participantId, readAt: null }
-              : { messageId: { in: toUpdate }, participantId, deliveredAt: null },
+              ? { messageId: { in: toUpdate }, participantId, ...unsetOrNull("readAt") }
+              : { messageId: { in: toUpdate }, participantId, ...unsetOrNull("deliveredAt") },
           data: field === "readAt" ? { readAt: at } : { deliveredAt: at, receivedAt: at },
         });
         frozen += updated?.count ?? toUpdate.length;
