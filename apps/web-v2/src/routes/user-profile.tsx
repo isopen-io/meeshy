@@ -183,7 +183,11 @@ export function UserProfileView({ username }: { readonly username: string }) {
   const online = useOnline();
   const minute = useMinute();
   const { languages: readerLanguages } = useReaderLanguages();
-  const { announcement: gestureAnnouncement, onGesture, onShare } = usePostGesture();
+  /* COMMENTER UNE PUBLICATION DE LA FICHE (#7188, #7113) — le MÊME hôte que
+     le Flux, jamais une seconde mécanique : `onComment` conduit à la page de
+     la publication, à son ancre de commentaires. L'adresse vivait ici en
+     copie ; elle vit désormais avec les deux autres gestes de la rangée. */
+  const { announcement: gestureAnnouncement, onGesture, onShare, onComment } = usePostGesture();
   const { text: actionAnnouncement, tone: actionTone, announce } = useLiveAnnouncer();
   const [filter, setFilter] = useState<ProfilePostsFilter>('all');
   const [busy, setBusy] = useState(false);
@@ -278,21 +282,6 @@ export function UserProfileView({ username }: { readonly username: string }) {
     [announce, language],
   );
 
-  /**
-   * COMMENTER UNE PUBLICATION DE LA FICHE (#7188) — le MÊME chemin que depuis
-   * le Flux (`routes/feed.tsx:296`), jamais une seconde mécanique : la page de
-   * la publication, à son ancre de commentaires. Le web a déjà une adresse
-   * pour ce fil, et y mener garde UNE adresse partageable — jamais un état
-   * modal sans URL.
-   *
-   * Sans ce câblage, le compteur de commentaires retombait en `<span>` muet
-   * (`feed-post-card.tsx:154-162`) : conforme à la loi 4 — un bouton sans
-   * effet mentirait — mais la fonction MANQUAIT, et c'est elle qui ouvre aussi
-   * la publication elle-même.
-   */
-  const openComments = useCallback((postId: string) => {
-    navigate(`${href('post', { post: postId })}#commentaires`);
-  }, []);
 
   const onAction = useCallback(
     (kind: ProfileActionKind) => {
@@ -498,7 +487,7 @@ export function UserProfileView({ username }: { readonly username: string }) {
                           model={model}
                           onGesture={onGesture}
                           onShare={onShare}
-                          onComment={openComments}
+                          onComment={onComment}
                           preferredLanguages={readerLanguages}
                         />
                       ))
