@@ -745,8 +745,11 @@ B. LES DEUX COMPTES ET LES DEUX SURFACES :
   par ToolSearch « select:mcp__claude-in-chrome__tabs_context_mcp,mcp__claude-in-chrome__navigate,
   mcp__claude-in-chrome__computer,mcp__claude-in-chrome__read_page,mcp__claude-in-chrome__tabs_create_mcp,
   mcp__claude-in-chrome__read_console_messages,mcp__claude-in-chrome__find,mcp__claude-in-chrome__get_page_text »).
-  Nouvel onglet, jamais un onglet existant. Captures dans ${SCRATCH}/recette/web/. Ne déclenche aucun
-  alert/confirm.
+  Nouvel onglet, jamais un onglet existant. Si l'extension ne répond pas après 3 tentatives
+  (\`list_connected_browsers\` rend \`[]\`, \`tabs_context_mcp\` refuse — c'est arrivé le 2026-09-21), REPLIE-TOI sur
+  Chromium Playwright local (\`npx playwright\`, profil persistant sous ${SCRATCH}/recette/web/profil-*), dis-le dans le
+  rapport, et sache qu'il n'a pas de codec AAC : l'étape audio se rejoue alors par l'API. Captures dans
+  ${SCRATCH}/recette/web/. Ne déclenche aucun alert/confirm.
 - iOS (compte B) : simulateur NATIF ${SIM_NATIVE} (jamais Meeshy-iOS26). \`xcrun simctl boot ${SIM_NATIVE}\` ;
   bâtis l'app depuis ${REPO_IOS} à la tête de origin/${BASE} (\`git fetch origin ${BASE} && git checkout -B recette origin/${BASE}\`,
   \`./apps/ios/meeshy.sh build\`, un seul build à la fois, retry ×1 s'il est tué) ; installe le .app ;
