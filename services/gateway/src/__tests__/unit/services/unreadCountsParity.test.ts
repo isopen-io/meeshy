@@ -178,6 +178,38 @@ describe('unread counts — parité getUnreadCountsForParticipants / getUnreadCo
     expect(viaUser.get(CONVERSATION_ID)).toBe(2);
   });
 
+  // Déplacé de `MessageReadStatusService.test.ts` (#7199) : le plancher du chemin
+  // batch est la position CHRONOLOGIQUE du curseur, pas l'horloge murale
+  // `lastReadAt` — sinon le badge d'une conversation ouverte en préfixe partiel
+  // tombe à 0 (design lecture-exacte §3). Depuis l'unification, c'est une
+  // propriété du calcul PARTAGÉ : elle se relit donc ici, avec la requête que ce
+  // calcul produit (plus de filtre `senderId` côté base — l'exclusion du message
+  // propre se fait en mémoire).
+  it('plancher sur la position du curseur (lastReadMessageCreatedAt), jamais sur lastReadAt', async () => {
+    const lastReadMessageCreatedAt = new Date('2024-01-01T10:00:00Z');
+    const lastReadAt = new Date('2024-01-01T18:00:00Z');
+
+    mockPrisma.participant.findMany.mockResolvedValueOnce([participantRow()]);
+    mockPrisma.conversationReadCursor.findMany.mockResolvedValueOnce([
+      { participantId: PARTICIPANT_ID, lastReadAt, lastReadMessageCreatedAt },
+    ]);
+    mockPrisma.message.findMany.mockResolvedValueOnce(
+      candidateRows([
+        { at: '2024-01-01T11:00:00Z', from: 'other' },
+        { at: '2024-01-01T12:00:00Z', from: 'other' },
+      ])
+    );
+
+    const counts = await service.getUnreadCountsForUser(USER_ID, [CONVERSATION_ID]);
+
+    expect(counts.get(CONVERSATION_ID)).toBe(2);
+    expect(mockPrisma.message.findMany).toHaveBeenCalledWith({
+      where: { conversationId: CONVERSATION_ID, deletedAt: null, createdAt: { gt: lastReadMessageCreatedAt } },
+      select: { createdAt: true, senderId: true },
+      orderBy: { createdAt: 'asc' },
+    });
+  });
+
   it('les deux chemins passent par UN SEUL `message.findMany`, jamais par `message.count` (implémentation partagée)', async () => {
     mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
     mockPrisma.message.findMany.mockResolvedValue([]);

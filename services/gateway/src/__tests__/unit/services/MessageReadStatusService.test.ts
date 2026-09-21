@@ -85,6 +85,10 @@ jest.mock('@meeshy/shared/prisma/client', () => ({
   PrismaClient: jest.fn(() => mockPrisma)
 }));
 
+// `n` messages d'autrui après `floor` — la forme que le calcul partagé (#7199) lit.
+const unreadRows = (floor: Date, n: number) =>
+  Array.from({ length: n }, (_, i) => ({ createdAt: new Date(floor.getTime() + (i + 1) * 1000), senderId: 'other' }));
+
 // Mock console methods
 const originalConsoleLog = console.log;
 const originalConsoleError = console.error;
@@ -384,9 +388,8 @@ describe('MessageReadStatusService', () => {
     it('should compute fresh counts per conversation using batch queries (iter-4)', async () => {
       const lastReadAt = new Date('2026-05-21T10:00:00Z');
       const joinedAt = new Date('2026-04-01');
-      // iter-4 batch path: participant.findMany (1 query) + cursor.findMany (1 query) +
-      // message.findMany × N conversations, en parallèle — le calcul partagé
-      // `computeUnreadCounts` (#7199) compte en mémoire plutôt que par `message.count`.
+      // iter-4 batch path : participant.findMany + cursor.findMany + message.findMany × N
+      // conversations — le calcul partagé (#7199) compte en mémoire, pas par `message.count`.
       mockPrisma.participant.findMany.mockResolvedValueOnce([
         { id: testParticipantId, conversationId: conversationIds[0], joinedAt },
         { id: testParticipantId, conversationId: conversationIds[1], joinedAt },
@@ -395,14 +398,9 @@ describe('MessageReadStatusService', () => {
       mockPrisma.conversationReadCursor.findMany.mockResolvedValueOnce([
         { participantId: testParticipantId, lastReadAt },
       ]);
-      mockPrisma.message.findMany.mockImplementation(async ({ where }: any) => {
-        const unreadCount =
-          where.conversationId === conversationIds[0] ? 5 : where.conversationId === conversationIds[1] ? 3 : 0;
-        return Array.from({ length: unreadCount }, (_, i) => ({
-          createdAt: new Date(lastReadAt.getTime() + (i + 1) * 1000),
-          senderId: 'other',
-        }));
-      });
+      mockPrisma.message.findMany.mockImplementation(async ({ where }: any) =>
+        unreadRows(lastReadAt, where.conversationId === conversationIds[0] ? 5 : where.conversationId === conversationIds[1] ? 3 : 0)
+      );
 
       const result = await service.getUnreadCountsForConversations([testParticipantId], conversationIds);
 
@@ -412,43 +410,9 @@ describe('MessageReadStatusService', () => {
       expect(mockPrisma.message.count).not.toHaveBeenCalled();
     });
 
-    // Même régression que getUnreadCount, sur le chemin batch de la liste de
-    // conversations : le plancher est la position chronologique du curseur, pas
-    // l'horloge murale `lastReadAt`. Sinon le badge de chaque conversation
-    // ouverte en préfixe partiel tombe à 0.
-    it('floors the batch count on the cursor position (lastReadMessageCreatedAt), not lastReadAt', async () => {
-      const lastReadMessageCreatedAt = new Date('2026-05-21T10:00:00Z');
-      const lastReadAt = new Date('2026-05-21T18:00:00Z');
-      const joinedAt = new Date('2026-04-01');
-      mockPrisma.participant.findMany.mockResolvedValueOnce([
-        { id: testParticipantId, conversationId: conversationIds[0], joinedAt },
-      ]);
-      mockPrisma.conversationReadCursor.findMany.mockResolvedValueOnce([
-        { participantId: testParticipantId, lastReadAt, lastReadMessageCreatedAt },
-      ]);
-      mockPrisma.message.findMany.mockResolvedValueOnce(
-        Array.from({ length: 4 }, (_, i) => ({
-          createdAt: new Date(lastReadMessageCreatedAt.getTime() + (i + 1) * 1000),
-          senderId: 'other',
-        }))
-      );
-
-      const result = await service.getUnreadCountsForConversations([testParticipantId], conversationIds);
-
-      expect(result.get(conversationIds[0])).toBe(4);
-      // Le calcul partagé (#7199) ne filtre plus `senderId` côté base — l'exclusion
-      // du message propre se fait en mémoire (`computeUnreadCounts`) — mais le
-      // plancher reste la position CHRONOLOGIQUE du curseur, pas `lastReadAt`.
-      expect(mockPrisma.message.findMany).toHaveBeenCalledWith({
-        where: {
-          conversationId: conversationIds[0],
-          deletedAt: null,
-          createdAt: { gt: lastReadMessageCreatedAt },
-        },
-        select: { createdAt: true, senderId: true },
-        orderBy: { createdAt: 'asc' },
-      });
-    });
+    // Le plancher chronologique du chemin batch (`lastReadMessageCreatedAt`, jamais
+    // `lastReadAt`) est désormais une propriété du calcul PARTAGÉ : son témoin vit
+    // dans `unreadCountsParity.test.ts`, avec la requête qu'il produit (#7199).
 
     it('should return map of zeros on database error', async () => {
       // iter-4 batch path: participant.findMany throws → catch returns zeros
@@ -3294,16 +3258,11 @@ describe('MessageReadStatusService', () => {
         participantId: testParticipantId, lastReadAt
       }));
       mockPrisma.conversationReadCursor.findMany.mockResolvedValueOnce(cursorRows);
-      // message.findMany appelé une fois par conversation (20 appels parallèles) — le
-      // calcul partagé (#7199) compte en mémoire ; la conversation pilote directement le
-      // nombre de lignes rendues, comme l'ancien mock pilotait directement `message.count`.
-      mockPrisma.message.findMany.mockImplementation(async ({ where }: any) => {
-        const unreadCount = expected[where.conversationId] ?? 0;
-        return Array.from({ length: unreadCount }, (_, i) => ({
-          createdAt: new Date(lastReadAt.getTime() + (i + 1) * 1000),
-          senderId: 'other',
-        }));
-      });
+      // message.findMany appelé une fois par conversation (20 appels parallèles) — le calcul
+      // partagé (#7199) compte en mémoire ; la conversation pilote le nombre de lignes rendues.
+      mockPrisma.message.findMany.mockImplementation(async ({ where }: any) =>
+        unreadRows(lastReadAt, expected[where.conversationId] ?? 0)
+      );
 
       const result = await service.getUnreadCountsForConversations([testParticipantId], conversationIds);
 

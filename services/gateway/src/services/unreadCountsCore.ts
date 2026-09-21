@@ -18,10 +18,29 @@
  * en `cutoff.getTime() - 1` comparé par `>` strict, exactement ce que
  * `createdAt: { gte: cutoff }` exprime côté base (voir son doc-comment). Ce
  * qui manquait n'était donc pas un correctif de VALEUR, mais l'unification :
- * ce module est le SEUL endroit qui calcule un compte de non-lus depuis un
- * plancher, et les deux méthodes du service en deviennent des orchestrateurs
- * (résolution des participants/conversations, chargement des curseurs et du
- * masquage — qui restent scopés différemment par appelant) autour de lui.
+ * les deux méthodes ci-dessus deviennent des orchestrateurs (résolution des
+ * participants/conversations, chargement des curseurs et du masquage — qui
+ * restent scopés différemment par appelant) autour de ce module.
+ *
+ * **Ce module n'est PAS le seul endroit du gateway qui compte des non-lus
+ * depuis un plancher**, et l'écrire serait la leçon 261 rejouée (« une
+ * énumération porte DEUX affirmations : ces sites appliquent la règle, ET ce
+ * sont les sites où elle s'applique »). Restent dehors, sciemment, hors du
+ * périmètre de #7199 :
+ *
+ *   - `MessageReadStatusService.getUnreadCount` — le TROISIÈME chemin vers le
+ *     même badge (celui rendu au retour d'un marquage de lecture), que le
+ *     doc-comment de `MessageReadStatusService.personalHiding.test.ts` nomme
+ *     déjà comme tel. Il compte encore par `message.count` + `applyPersonal-
+ *     HistoryHiding` ; ses bornes sont ÉQUIVALENTES à celles d'ici
+ *     (`gte: cutoff` ≡ `gt: cutoff − 1 ms`, cf. `exclusiveFloorMsFor`), donc
+ *     aucune divergence de VALEUR aujourd'hui — mais une règle ajoutée ici ne
+ *     l'atteint pas ;
+ *   - `ConversationBridgeService.buildBridgeData` / `buildBridgeDataForViewers`,
+ *     qui REPRODUISENT le même filtre de lecture pour rendre une fenêtre de
+ *     messages plutôt qu'un compte.
+ *
+ * Une règle nouvelle sur le non-lu se pose ici ET se relit sur ces deux sites.
  *
  * Extrait de `MessageReadStatusService.ts` (2683 lignes, hors budget des
  * 1200 lignes — CLAUDE.md : « un fichier déjà hors budget reste interdit
