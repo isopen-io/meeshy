@@ -62,7 +62,22 @@
  *  9. **LE FOCUS NE TOMBE JAMAIS SUR `<body>`** — ni après « Annuler », ni
  *     après « Enregistrer », ni après une suppression : qui navigue au clavier
  *     garde sa place (WCAG 2.4.3) ;
- * 10. **LES DEUX SCHÉMAS** se peignent sans erreur de page.
+ * 10. **LES DEUX SCHÉMAS** se peignent sans erreur de page ;
+ * 11. **ARRIVER PAR L'ANCRE POSE LE LECTEUR SUR LE FIL** (#7113) — le compteur
+ *     d'une carte mène à `/post/$post#commentaires`, et rien n'honorait ce
+ *     fragment : le routeur ne le lit pas (`readLocation()`), et ce `<main>`-ci
+ *     défile pour son compte, hors d'atteinte du `window.scrollTo` de la
+ *     restauration. Le lecteur atterrissait en haut d'une carte pleine hauteur.
+ *
+ *     Le gate mesure le FOCUS, jamais le défilement : la hauteur d'un `<main>`
+ *     dépend de la charge servie, et la publication de ce gate n'a pas de
+ *     média — un `scrollTop` attendu non nul y serait vacant ou faussement
+ *     rouge, selon la taille du texte du jour. Le focus, lui, est la moitié
+ *     qui ne dépend d'aucune hauteur, et c'est celle qui porte la valeur
+ *     d'accessibilité : la feuille iOS prend le focus en s'ouvrant, l'ancre du
+ *     web doit en faire autant. **Et la contre-épreuve est dans le gate** :
+ *     la MÊME adresse SANS fragment laisse le focus où il est — sans elle,
+ *     une page qui saisirait toujours le fil passerait à l'identique.
  *
  * Et il PRODUIT les captures de recette (`CAPTURE_DIR`) : sans elles, les
  * images de l'écran étaient prises par un script ad hoc jamais versé — la
@@ -356,9 +371,21 @@ async function runScheme({ browser, base, scheme, check }) {
 
   await page.route(isPostDetail, (route) => json(route, envelope(POST)));
 
+  // ------------------------------------------- 0. l'ancre dépose sur le fil
+  const focusOnThread = async () => {
+    await page.waitForSelector(`[data-comment-row="${OTHER}"]`);
+    await page.waitForTimeout(200);
+    return page.evaluate(() => document.activeElement?.getAttribute('data-comment-thread') ?? null);
+  };
+
+  await page.goto(`${base}/post/${POST_ID}#commentaires`, { waitUntil: 'load' });
+  const ancre = await focusOnThread();
+  check(ancre === POST_ID, say(`arriver par l'ancre dépose le lecteur SUR le fil — focus sur ${JSON.stringify(ancre)}`));
+
   await page.goto(`${base}/post/${POST_ID}`, { waitUntil: 'load' });
-  await page.waitForSelector(`[data-comment-row="${OTHER}"]`);
-  await page.waitForTimeout(200);
+  const sansAncre = await focusOnThread();
+  check(sansAncre === null, say(`la MÊME adresse SANS ancre ne saisit RIEN — focus sur ${JSON.stringify(sansAncre)}`));
+
   await capture(page, `feed.post-comments.${scheme}`);
 
   // ------------------------------------------------ 1. qui a le droit de quoi
