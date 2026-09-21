@@ -241,7 +241,7 @@ const GATES_PAR_CHAINE = {
 const SYNCHRO = {
   type: 'object', additionalProperties: false, required: ['pret', 'etat'],
   properties: {
-    pret: { type: 'boolean' },
+    pret: { type: 'boolean', description: 'false SEULEMENT si un worktree manque, si origin est injoignable ou si un conflit de fusion demande un arbitrage — jamais parce qu un worktree est sur une branche lot/* ou porte un arbre sale' },
     etat: { type: 'string', description: 'FACTUEL : commandes et sorties (sha de origin/dev, état des trois worktrees, dist de shared)' },
     sha_dev: { type: 'string' },
     ci_dev: { type: 'string', description: 'le verdict CI à la tête de dev : vert / rouge (quels jobs) / en cours' },
@@ -397,11 +397,18 @@ TA MISSION — PRÉPARER LES TROIS WORKTREES DE CHAÎNE ET RELEVER CE QUE LES AU
 Tu ne modifies aucun fichier de production.
 
 Pour CHACUN des trois worktrees — ${REPO_GW} (gateway), ${REPO_WEB} (web), ${REPO_IOS} (ios) :
-1. \`cd <worktree> && git branch --show-current && git status --short | head\` — l'arbre doit être propre ;
-   s'il est sale de ton fait, dis-le, ne stash rien.
+1. \`cd <worktree> && git branch --show-current && git status --short | head\`. Un worktree de chaîne sur une
+   branche \`lot/*\` est NORMAL (les lots y basculent) : ne change pas de branche. Un arbre SALE est le reste
+   d'un tour interrompu : COMMITE-LE sur la branche courante (\`git add -A apps packages services && git commit -m "wip(<chaîne>): reprise — état laissé par un tour interrompu (Refs #<n si connu>)"\`,
+   fin de message EXACTEMENT « ${ATTRIBUTION} ») et POUSSE-LE (\`git push origin HEAD\`) — jamais de stash, jamais de
+   \`checkout -- .\`. Ce n'est PAS une raison de rendre pret=false.
 2. \`git fetch origin ${BASE}\` (4 essais sur échec réseau : 2 s, 4 s, 8 s, 16 s).
-3. \`git merge origin/${BASE}\` sur la branche de chaîne (JAMAIS rebase) — la branche de chaîne n'est qu'un
-   socle : chaque lot partira de \`origin/${BASE}\` sur sa propre branche.
+3. Si la branche courante est la branche de CHAÎNE (\`chaine/*\`) : \`git merge origin/${BASE}\` (JAMAIS rebase).
+   Si c'est une branche \`lot/*\` : ne fusionne rien, le lot s'en charge. Chaque lot partira de \`origin/${BASE}\`
+   ou reprendra sa branche.
+   ATTENTION au sens d'un diff : \`git diff A..origin/${BASE}\` liste comme « supprimé » ce que A porte et que
+   ${BASE} n'a PAS ENCORE — c'est le travail du lot, pas un retrait de ${BASE}. Lis \`git log origin/${BASE} -- <fichier>\`
+   avant d'annoncer que ${BASE} a retiré quelque chose.
 4. \`ls packages/shared/dist | head -3\` et \`ls apps/web-v2/node_modules | wc -l\` : si absent,
    \`bun install --ignore-scripts\`, puis \`cd packages/shared && npx prisma generate --generator client && bun run build\`.
    Si \`git diff --stat HEAD@{1}..HEAD -- packages/shared\` montre du mouvement, rebâtis shared.
