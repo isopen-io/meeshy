@@ -4,8 +4,9 @@ import { describe, expect, test } from 'bun:test';
 import { FEED_QUERY_KEY } from './feed';
 import type { FeedInfiniteData, FeedPost } from './feed-pages';
 import { FEED_NEW_COUNT_KEY } from './feed-new-count';
-import { applyPostCreated, applyPostDeleted, applyPostUpdated } from './feed-realtime';
+import { applyPostCreated, applyPostDeleted, applyPostReactionEvent, applyPostUpdated } from './feed-realtime';
 import { postQueryKey } from './publication-detail';
+import { REELS_QUERY_ROOT, reelsQueryKey } from './reels';
 
 /**
  * **LE FLUX APPREND CE QUI ARRIVE** (#7182) — `post:created`, `post:updated`
@@ -274,5 +275,117 @@ describe('`post:deleted` — la publication supprimée DISPARAÎT', () => {
     applyPostDeleted(queryClient, { postId: 'p-inconnu' });
 
     expect(cartes(queryClient).map((p) => p.id)).toEqual(['p1']);
+  });
+
+  /**
+   * **W8 (#7227) — LES RÉELS APPRENNENT LA SUPPRESSION.** Exactement le
+   * périmètre qu'iOS observe (`ReelsViewModel.swift:169-183`, `postDeleted`
+   * SEUL parmi les événements de publication) : un réel supprimé disparaît de
+   * TOUTES les racines `REELS_QUERY_ROOT` en cache, quel que soit le `seed`.
+   */
+  test('elle quitte aussi les RÉELS — toutes les graines à la fois', () => {
+    const queryClient = clientAvec([post({ id: 'p1' })]);
+    queryClient.setQueryData(reelsQueryKey(), cacheAvec([post({ id: 'p1' }), post({ id: 'p2' })]));
+    queryClient.setQueryData(reelsQueryKey('p9-seed'), cacheAvec([post({ id: 'p1' })]));
+
+    applyPostDeleted(queryClient, { postId: 'p1' });
+
+    const sansGraine = queryClient.getQueryData<FeedInfiniteData>(reelsQueryKey())?.pages[0]?.posts;
+    const avecGraine = queryClient.getQueryData<FeedInfiniteData>(reelsQueryKey('p9-seed'))?.pages[0]?.posts;
+    expect(sansGraine?.map((p) => p.id)).toEqual(['p2']);
+    expect(avecGraine?.map((p) => p.id)).toEqual([]);
+  });
+
+  test('un fil de Réels absent du cache n’est pas fabriqué', () => {
+    const queryClient = clientAvec([post({ id: 'p1' })]);
+
+    expect(() => applyPostDeleted(queryClient, { postId: 'p1' })).not.toThrow();
+    expect(queryClient.getQueryData(REELS_QUERY_ROOT)).toBeUndefined();
+  });
+});
+
+/**
+ * **`post:reaction-added` / `post:reaction-removed` (#7227)** — GARDÉS au
+ * seul ❤️, miroir EXACT d'iOS (`FeedView.swift:1307-1325`) : le ❤️ sur un
+ * POST/REEL part en pratique par `post:liked`/`post:unliked`
+ * (`PostReactionHandler.ts:106-123`), donc ce chemin est la protection contre
+ * un rejeu — pas la voie nominale. Les emojis NON-❤️ n'ont AUCUN champ côté
+ * `FeedPost` (`reactionSummary`/`currentUserReactions` n'existent que sur
+ * `StoryFeedPost`/`PostComment`) : leur donner un effet inventerait un champ.
+ */
+describe('`post:reaction-added` / `post:reaction-removed` — GARDÉS au ❤️ (#7227)', () => {
+  const reactionEvent = (patch: Partial<{
+    postId: string;
+    userId: string;
+    emoji: string;
+    action: 'add' | 'remove';
+    aggregation: { emoji: string; count: number };
+  }> = {}) => ({
+    postId: 'p1',
+    userId: 'u-other',
+    emoji: '❤️',
+    action: 'add' as const,
+    aggregation: { emoji: '❤️', count: 5 },
+    timestamp: '2026-09-21T10:00:00.000Z',
+    ...patch,
+  });
+
+  test('une charge MALFORMÉE ne change rien, et ne lève pas', () => {
+    const queryClient = clientAvec([post({ id: 'p1', likeCount: 3 })]);
+
+    for (const charge of [null, {}, { postId: 'p1' }, { postId: 'p1', action: 'add', aggregation: {} }]) {
+      expect(() => applyPostReactionEvent(queryClient, charge, 'u-viewer')).not.toThrow();
+    }
+    expect(cartes(queryClient)[0]?.likeCount).toBe(3);
+  });
+
+  test('un emoji NON-❤️ ne change rien — aucun champ ne le porte', () => {
+    const queryClient = clientAvec([post({ id: 'p1', likeCount: 3, isLikedByMe: false })]);
+
+    applyPostReactionEvent(queryClient, reactionEvent({ emoji: '👏', aggregation: { emoji: '👏', count: 9 } }), 'u-viewer');
+
+    expect(cartes(queryClient)[0]?.likeCount).toBe(3);
+    expect(cartes(queryClient)[0]?.isLikedByMe).toBe(false);
+  });
+
+  test('❤️ d’un AUTRE lecteur pose le compte servi, sans remplir mon cœur', () => {
+    const queryClient = clientAvec([post({ id: 'p1', likeCount: 3, isLikedByMe: false })]);
+
+    applyPostReactionEvent(queryClient, reactionEvent({ userId: 'u-other', action: 'add' }), 'u-viewer');
+
+    expect(cartes(queryClient)[0]?.likeCount).toBe(5);
+    expect(cartes(queryClient)[0]?.isLikedByMe).toBe(false);
+  });
+
+  test('❤️ du LECTEUR (autre appareil) remplit le cœur ET pose le compte servi', () => {
+    const queryClient = clientAvec([post({ id: 'p1', likeCount: 3, isLikedByMe: false })]);
+    queryClient.setQueryData(postQueryKey('p1'), post({ id: 'p1', likeCount: 3, isLikedByMe: false }));
+    queryClient.setQueryData(reelsQueryKey(), cacheAvec([post({ id: 'p1', likeCount: 3, isLikedByMe: false })]));
+
+    applyPostReactionEvent(
+      queryClient,
+      reactionEvent({ userId: 'u-viewer', action: 'add', aggregation: { emoji: '❤️', count: 4 } }),
+      'u-viewer',
+    );
+
+    expect(cartes(queryClient)[0]?.isLikedByMe).toBe(true);
+    expect(cartes(queryClient)[0]?.likeCount).toBe(4);
+    expect(queryClient.getQueryData<FeedPost>(postQueryKey('p1'))?.isLikedByMe).toBe(true);
+    expect(queryClient.getQueryData<FeedPost>(postQueryKey('p1'))?.likeCount).toBe(4);
+    expect(queryClient.getQueryData<FeedInfiniteData>(reelsQueryKey())?.pages[0]?.posts[0]?.isLikedByMe).toBe(true);
+    expect(queryClient.getQueryData<FeedInfiniteData>(reelsQueryKey())?.pages[0]?.posts[0]?.likeCount).toBe(4);
+  });
+
+  test('un `action: remove` du lecteur vide le cœur', () => {
+    const queryClient = clientAvec([post({ id: 'p1', likeCount: 4, isLikedByMe: true })]);
+
+    applyPostReactionEvent(
+      queryClient,
+      reactionEvent({ userId: 'u-viewer', action: 'remove', aggregation: { emoji: '❤️', count: 3 } }),
+      'u-viewer',
+    );
+
+    expect(cartes(queryClient)[0]?.isLikedByMe).toBe(false);
+    expect(cartes(queryClient)[0]?.likeCount).toBe(3);
   });
 });
