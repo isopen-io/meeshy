@@ -1,3 +1,4 @@
+import { useAppBadge } from '@/lib/view/use-app-badge';
 import { lazy, Suspense, useEffect, type ReactNode } from 'react';
 
 import { useAppUpdateAnnounced } from '@/lib/app-update/pending-store';
@@ -106,6 +107,8 @@ export default function Shell({ children }: { children: ReactNode }) {
   const majAnnoncee = useAppUpdateAnnounced();
   const routeKey = useRoute().key;
   const menusArmes = showsFloatingMenus(routeKey);
+
+  useAppBadge();
 
   /* APRÈS le premier pixel, pendant qu'on est encore en ligne. L'effet ne
      s'exécute pas au rendu serveur, donc le préchauffage institutionnel n'en

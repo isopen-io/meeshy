@@ -1,4 +1,7 @@
+import { useEffect } from 'react';
+
 import type { Conversation } from '@/lib/api/types';
+import { useConversationsSnapshot } from '@/lib/api/query';
 
 /**
  * Compte le nombre de conversations non lues
@@ -56,9 +59,16 @@ export function updateAppBadge(
 
 /**
  * Hook pour mettre a jour le badge de l'icone et le titre du document
- * en fonction du nombre de conversations non lues
+ * en fonction du nombre de conversations non lues.
+ *
+ * Derive du cache des conversations et met a jour en temps reel quand
+ * le cache change (via conversation:unread-updated ou autre).
  */
-export function useAppBadge(conversations: readonly Conversation[] | undefined): void {
-  const count = countUnreadConversations(conversations);
-  updateAppBadge(count);
+export function useAppBadge(): void {
+  const conversations = useConversationsSnapshot();
+
+  useEffect(() => {
+    const count = countUnreadConversations(conversations);
+    updateAppBadge(count);
+  }, [conversations]);
 }
