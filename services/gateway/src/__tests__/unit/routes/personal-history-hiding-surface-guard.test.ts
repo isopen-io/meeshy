@@ -289,7 +289,14 @@ const SERVICES_DIR = join(__dirname, '../../../services');
  * que les routes : applique, ou exempt avec sa raison.
  */
 const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
-  'MessageReadStatusService.ts': { kind: 'applies', reads: 7, applications: 2 },
+  // 7 → 5 lectures, 2 → 1 application (#7199) : les DEUX compteurs batchés
+  // (liste et push temps réel) ne lisent plus `prisma.message` eux-mêmes — ils
+  // délèguent au calcul partagé `unreadCountsCore.ts`, déclaré ci-dessous.
+  // Aucune lecture n'a disparu, elle a changé de fichier ; et l'application
+  // TEXTUELLE qui s'en va (`applyPersonalHistoryHiding` sur le chemin de la
+  // liste) est remplacée par la fusion EN MÉMOIRE du cutoff dans le plancher,
+  // exigée par `IN_MEMORY_HIDING_SURFACES` sur le fichier qui la porte.
+  'MessageReadStatusService.ts': { kind: 'applies', reads: 5, applications: 1 },
 
   /**
    * #5759 — les succès de « parole » et « retouche ». Trois lectures, toutes
@@ -397,6 +404,17 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
       "dont l'id est déjà connu, jamais leur contenu ni leur expéditeur. Rien à " +
       'masquer pour un lecteur qui ne reçoit aucun texte.',
   },
+
+  /**
+   * #7199 — le calcul de non-lu, extrait de `MessageReadStatusService.ts` pour
+   * que la LISTE et le PUSH temps réel comptent par la même implémentation.
+   * Sa lecture unique sert les deux badges, donc elle doit masquer : mais elle
+   * ne peut pas le faire par un `where`, pour la même raison que
+   * `ConversationBridgeService.ts` — UNE requête sert N lecteurs, et le
+   * masquage est personnel. D'où `applications: 0` et deux marqueurs EN
+   * MÉMOIRE ci-dessous, seule forme que le balayage puisse prouver ici.
+   */
+  'unreadCountsCore.ts': { kind: 'applies', reads: 1, applications: 0 },
 };
 
 /**
@@ -409,7 +427,31 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
  * imbriqués plus bas).
  */
 const IN_MEMORY_HIDING_SURFACES: Record<string, readonly string[]> = {
-  'MessageReadStatusService.ts': ['loadPersonalHistoryHidingByUser(', 'exclusiveFloorMsFor('],
+  /**
+   * #7199 — `exclusiveFloorMsFor(` a suivi le calcul dans `unreadCountsCore.ts`
+   * (déclaré juste en dessous). Ce qui reste ici est ce que ce fichier fait
+   * encore lui-même : CHARGER le masquage de chaque lecteur, et le REMETTRE au
+   * calcul partagé. `unreadFloorFor(` tombe avec cette remise — le retirer, ou
+   * l'appeler sans son troisième argument, c'est compter un badge qui ignore
+   * l'historique effacé.
+   */
+  'MessageReadStatusService.ts': [
+    'loadPersonalHistoryHidingByUser(',
+    'loadPersonalHistoryHidingByConversation(',
+    'unreadFloorFor(',
+  ],
+
+  /**
+   * Le calcul partagé lui-même. Ses DEUX coupes personnelles sont exigées
+   * séparément parce qu'elles se perdent séparément, exactement comme pour
+   * `ConversationBridgeService.ts` : `exclusiveFloorMsFor(` fond la coupure
+   * d'historique dans le plancher de lecture, `!hidden.has(` écarte un par un
+   * les messages effacés pour soi. `!hidden.has(` et non `hiddenMessageIds` :
+   * le nom seul survivrait à la suppression du filtre (il reste porté par le
+   * type et par la CONSTRUCTION de l'ensemble) — un marqueur doit tomber avec
+   * ce qu'il garde.
+   */
+  'unreadCountsCore.ts': ['exclusiveFloorMsFor(', '!hidden.has('],
 
   /**
    * La passe par LECTEURS de `buildBridgeDataForViewers` (REV-5/B2) a la MÊME

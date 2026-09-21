@@ -166,7 +166,11 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // par exhaustivité avec #6516, qui l'énumérait explicitement.)
   'message-translation/EncryptionHelper.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'message-translation/MessageTranslationService.ts': { kind: 'exempt', reads: 8, why: DOES_NOT_SELECT_SENDER },
-  'MessageReadStatusService.ts': { kind: 'exempt', reads: 12, why: DOES_NOT_SELECT_SENDER },
+  // 12 → 11 (#7199) : le calcul de non-lu a QUITTÉ ce fichier pour
+  // `unreadCountsCore.ts` (déclaré plus bas), afin que la liste et le push
+  // temps réel comptent par la même implémentation. Aucune lecture n'a
+  // disparu : elle a changé de fichier.
+  'MessageReadStatusService.ts': { kind: 'exempt', reads: 11, why: DOES_NOT_SELECT_SENDER },
   'messaging/anonymizeDeletedAccountMessages.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #6601 — la garde de citation : `{ select: { id: true, conversationId: true, deletedAt: true } }`,
   // jamais `sender`. Elle lie le message cité à la conversation de l'envoi ;
@@ -182,6 +186,10 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   'notifications/reactionNotify.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'ReactionService.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
   'resolveVisibleLastMessage.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #7199 — le calcul de non-lu partagé. Sa lecture unique projette le SCALAIRE
+  // `senderId` (pour soustraire les messages du lecteur lui-même), jamais la
+  // relation `sender` : un expéditeur disparu n'entre dans aucune de ses branches.
+  'unreadCountsCore.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
 
   // #6501 — balayage de rétention SANS lecteur, portée GLOBALE par
   // construction (`expiresAt` à travers toute la base, jamais une seule
