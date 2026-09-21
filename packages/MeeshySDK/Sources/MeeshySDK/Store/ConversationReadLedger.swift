@@ -275,7 +275,8 @@ public final class ConversationReadLedger: @unchecked Sendable {
             return entries.reduce(0) { acc, element in
                 if excludingOpen, element.key == openId { return acc }
                 if excludingMuted, element.value.isMuted { return acc }
-                return acc + max(0, element.value.unreadCount)
+                // Badge counts conversations (not summing messages) — D-L1 #7236
+                return (element.value.unreadCount > 0) ? acc + 1 : acc
             }
         }
     }
