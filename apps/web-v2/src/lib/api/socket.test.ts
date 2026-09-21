@@ -11,6 +11,7 @@ import { createOutboxStore, entriesOf } from '@/lib/send/outbox-store';
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
 import { messagesQueryKey } from './messages';
 import type { MessagesInfiniteData } from './messages-pages';
+import { attachmentStatusDetailsQueryKey } from './attachments';
 import { createRealtimeConnection, type RealtimeDeps } from './socket';
 import { FEED_QUERY_KEY } from './feed';
 import type { FeedInfiniteData, FeedPost } from './feed-pages';
@@ -931,6 +932,55 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
       | undefined;
     expect(served?.transcription?.text).toBe('Hola');
     expect(fetchCount).toBe(0);
+  });
+
+  /**
+   * `attachment-status:updated` (#7226, W7) — LA FEUILLE « INFOS DU
+   * MESSAGE » OUVERTE REFETCH SANS QU'ON LA ROUVRE.
+   *
+   * L'ÉPREUVE DE CE TÉMOIN N'EST PAS SON VERT mais sa MUTATION : retirer
+   * `socket.on(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, …)` doit le faire
+   * TOMBER.
+   */
+  test('`attachment-status:updated` est ÉCOUTÉ : la query de la pièce est invalidée', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    const key = attachmentStatusDetailsQueryKey('att-1');
+    queryClient.setQueryData(key, [{ participantId: 'p1' }]);
+
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+    socket.fire(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, {
+      attachmentId: 'att-1',
+      messageId: 'm-1',
+      conversationId: 'c-a',
+      userId: 'u-autre',
+      action: 'listened',
+      updatedAt: '2026-09-21T10:00:00.000Z',
+    });
+
+    expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
+  });
+
+  test('`attachment-status:updated` — un payload SANS `attachmentId` n’invalide rien', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    const key = attachmentStatusDetailsQueryKey('att-1');
+    queryClient.setQueryData(key, [{ participantId: 'p1' }]);
+
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+    socket.fire(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, { messageId: 'm-1' });
+
+    expect(queryClient.getQueryState(key)?.isInvalidated).toBe(false);
+  });
+
+  test('`destroy` démonte AUSSI `attachment-status:updated`', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    const key = attachmentStatusDetailsQueryKey('att-1');
+    queryClient.setQueryData(key, [{ participantId: 'p1' }]);
+
+    const connection = createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+    connection.destroy();
+    socket.fire(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, { attachmentId: 'att-1' });
+
+    expect(queryClient.getQueryState(key)?.isInvalidated).toBe(false);
   });
 
   /**

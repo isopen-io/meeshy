@@ -14,6 +14,7 @@ import type { OutboxState } from '@/lib/send/outbox-store';
 import { applyMediaCaptionTranslation, applyPostToggle, applyServedCount, type MediaCaptionTranslationUpdate } from '@/lib/feed/interactions';
 import { decodeNotification } from '@/lib/notifications/record';
 
+import { attachmentStatusDetailsQueryKey } from './attachments';
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
 import { FEED_QUERY_KEY } from './feed';
 import { messagesQueryKey } from './messages';
@@ -131,6 +132,18 @@ function isMediaCaptionTranslationEvent(payload: unknown): payload is MediaCapti
     typeof t.createdAt === 'string' &&
     (t.confidenceScore === undefined || isFiniteNumber(t.confidenceScore))
   );
+}
+
+/** `AttachmentStatusUpdatedEventData` (`@meeshy/shared/types/socketio-events/
+ * attachment.ts`), réduite au SEUL champ que la feuille « Infos du message »
+ * (#7226) doit router : `attachmentId`, qui nomme la query à invalider. Les
+ * autres champs (`action`, `playPositionMs`…) sont déjà dans la ligne que le
+ * REFETCH ramènera — les relire ici doublerait la source de vérité. */
+type AttachmentStatusEvent = { readonly attachmentId: string };
+
+function isAttachmentStatusEvent(payload: unknown): payload is AttachmentStatusEvent {
+  if (typeof payload !== 'object' || payload === null) return false;
+  return typeof (payload as Record<string, unknown>).attachmentId === 'string';
 }
 
 export type RealtimeSessionInfo = {
@@ -320,6 +333,26 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   const onAttachmentUpdated = (payload: unknown): void => {
     if (!isAttachmentUpdated(payload)) return;
     applyMessageAttachmentUpdated(deps.queryClient, payload);
+  };
+
+  /**
+   * `attachment-status:updated` (#7226, W7) — LA FEUILLE « INFOS DU MESSAGE »
+   * SUIT UNE OUVERTURE/UN TÉLÉCHARGEMENT/UNE ÉCOUTE EN DIRECT.
+   *
+   * Émis par `services/gateway/src/routes/messages-writes.ts:717` après
+   * `listened`/`watched`/`viewed`/`downloaded`. La feuille lit
+   * `GET /attachments/:id/status-details` via `useQuery`
+   * (`attachmentStatusDetailsQueryKey`, `api/attachments.ts`) ; ce module ne
+   * FUSIONNE rien dans la ligne (la forme paginée, par participant, ne se
+   * met pas à jour champ par champ sans risquer de désynchroniser `Nx` et la
+   * barre de progression) — il INVALIDE la query, même idiome que
+   * `onUnreadUpdated`/`onFriendshipChanged` plus bas : le prochain rendu de
+   * la feuille OUVERTE refetch, une feuille FERMÉE ne refetch rien (React
+   * Query n'interroge que les observateurs actifs).
+   */
+  const onAttachmentStatusUpdated = (payload: unknown): void => {
+    if (!isAttachmentStatusEvent(payload)) return;
+    void deps.queryClient.invalidateQueries({ queryKey: attachmentStatusDetailsQueryKey(payload.attachmentId) });
   };
 
   /**
@@ -609,6 +642,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_NEW, onConversationNew);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_TRANSLATION, onMessageTranslation);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
+  socket.on<unknown>(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, onAttachmentStatusUpdated);
   socket.on<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
   socket.on<unknown>(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, onPendingMessagesDelivered);
   socket.on<unknown>(SERVER_EVENTS.COMMENT_ADDED, onCommentAdded);
@@ -666,6 +700,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_UPDATED, onConversationUpdated);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_TRANSLATION, onMessageTranslation);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
+      socket.off<unknown>(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, onAttachmentStatusUpdated);
       socket.off<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
       socket.off<unknown>(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, onPendingMessagesDelivered);
       socket.off<unknown>(SERVER_EVENTS.COMMENT_ADDED, onCommentAdded);

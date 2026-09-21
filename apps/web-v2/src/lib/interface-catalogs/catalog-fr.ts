@@ -902,6 +902,25 @@ const fr = {
 
   'thread.unread-separator.one': '{count} message non lu',
   'thread.unread-separator.other': '{count} messages non lus',
+  'message-detail.info.title': 'Infos du message',
+  'message-detail.received-by': 'Reçu par',
+  'message-detail.read-by': 'Vu par',
+  'message-detail.not-yet': 'Pas encore',
+  'message-detail.received-by.empty': 'Aucune confirmation de distribution',
+  'message-detail.read-by.empty': 'Personne n’a encore lu ce message',
+  'message-detail.not-yet.empty': 'Tout le monde a reçu le message',
+  'message-detail.attachment.opens.one': '{count} ouverture',
+  'message-detail.attachment.opens.other': '{count} ouvertures',
+  'message-detail.attachment.downloads.one': '{count} téléchargement',
+  'message-detail.attachment.downloads.other': '{count} téléchargements',
+  'message-detail.attachment.listened-until': 'Écouté jusqu’à {time}',
+  'message-detail.attachment.watched-until': 'Regardé jusqu’à {time}',
+  'message-detail.attachment.complete': 'Terminé',
+  'message-detail.attachment.listen.empty': 'Pas encore écouté',
+  'message-detail.attachment.watch.empty': 'Pas encore regardé',
+  'message-detail.loading': 'Chargement…',
+  'message-detail.load-error': 'Impossible de charger ces informations',
+  'message-detail.retry': 'Réessayer',
 
 } as const;
 

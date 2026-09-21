@@ -12,6 +12,7 @@ import {
 import { useStore } from 'zustand/react';
 
 import { Avatar } from '@/components/avatar';
+import { PersonName } from '@/components/person-name';
 import { Glyph } from '@/components/glyph';
 import { STORY_ACTION_RAIL_CORRIDOR, StoryActionRail, type StoryActionRailHandlers } from '@/components/story-action-rail';
 import { apiDeps } from '@/lib/api/deps';
@@ -890,16 +891,30 @@ export default function StoryScreen() {
                   tuile du rail qui a ouvert ce lecteur (`story-rail.tsx`) :
                   passer d'un visage à des initiales en ouvrant la story
                   serait un changement d'identité à mi-geste. */}
+              {/* L'IDENTITÉ MÈNE AU PROFIL (#7241) — mais PAS sur sa propre
+                  story : la fiche de soi n'offre aucun geste relationnel, et
+                  `group.isMine` est la seule information qui le dit ici. Le
+                  pseudo vient de `group.author.username`, déjà lu par
+                  `authorLabel` juste au-dessus. */}
               <Avatar
                 initials={initialsOf(authorLabel(group))}
                 color="var(--color-ios-brand)"
                 size={32}
+                name={authorLabel(group)}
                 {...(authorPhoto === undefined ? {} : { src: authorPhoto })}
+                {...(!group.isMine && typeof group.author?.username === 'string' && group.author.username !== ''
+                  ? { profileUsername: group.author.username }
+                  : {})}
               />
               <div className="flex min-w-0 flex-1 items-baseline gap-2">
-                <span className="truncate text-body font-semibold" style={{ color: '#fff' }}>
+                <PersonName
+                  name={authorLabel(group)}
+                  username={group.isMine ? undefined : group.author?.username}
+                  className="truncate text-body font-semibold"
+                  style={{ color: '#fff' }}
+                >
                   {authorLabel(group)}
-                </span>
+                </PersonName>
                 <span className="shrink-0 text-check" style={{ color: 'rgba(255,255,255,0.75)' }}>
                   {shortRelativeTime(new Date(currentStory.createdAt), new Date(), reader.locale)}
                 </span>

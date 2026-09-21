@@ -8,6 +8,7 @@ import { attachmentSrc } from '@/lib/api/media-url';
 import type { UserPresenceStatus } from '@/lib/api/types';
 import { mediaImageCrossOrigin } from '@/lib/net/api-runtime-cache';
 import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
+import { identityTarget } from '@/lib/view/identity-target';
 import { railRingBox, railStroke } from '@/components/rail-tile';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -285,24 +286,31 @@ export function Avatar({
     </span>
   );
 
-  /* L'ANNEAU PRIME SUR LE PROFIL (#7185) — un avatar ne peut pas mener à deux
-     endroits, et l'anneau est ce que le lecteur VOIT : il annonce ce qu'il
-     ouvre. Même ordre que sur iOS et que les applications que nos lecteurs
-     connaissent.
+  /* LA DESTINATION VIENT DE LA LOI PARTAGÉE (#7241) — `identityTarget`, la
+     MÊME que celle du NOM (`components/person-name.tsx`). L'anneau y prime sur
+     le profil parce qu'il est VISIBLE : il annonce ce qu'il ouvre. Deux
+     décisions parallèles se mettraient à dériver, et rien ne rougirait quand
+     un avatar ouvre une story pendant que le nom juste à côté ouvre un profil.
 
      DEUX `<Link>` PLUTÔT QU'UN PARAMÉTRÉ, et c'est le typage du routeur qui
      l'impose : `to` et `params` y sont CORRÉLÉS, si bien qu'une union
      `{ post } | { username }` ne satisfait aucune des deux routes. Le forcer
      par un cast aurait rendu une adresse fausse indétectable. */
+  const cible = identityTarget({
+    ...(profileUsername === undefined ? {} : { username: profileUsername }),
+    ...(storyRing === undefined ? {} : { storyRing }),
+  });
+  if (cible === null) return corps;
+
   const sizeVar = { '--avatar-size': `${size}px` } as CSSProperties;
   const nomme = (cle: 'a11y.avatar.story' | 'a11y.avatar.profile'): string =>
     translate(currentInterfaceLanguage(), cle, { name: name ?? profileUsername ?? '' });
 
-  if (storyRing !== undefined) {
+  if (cible.kind === 'story') {
     return (
       <Link
         to="story"
-        params={{ post: storyRing.entryStoryId }}
+        params={{ post: cible.post }}
         className="avatar-profile-link"
         style={sizeVar}
         aria-label={nomme('a11y.avatar.story')}
@@ -312,8 +320,6 @@ export function Avatar({
     );
   }
 
-  if (profileUsername === undefined || profileUsername.length === 0) return corps;
-
   /* LE LIEN SE NOMME, ET IL NOMME CE QU'IL OUVRE : un lien dont le seul contenu
      est une image décorative est annoncé « lien » et rien d'autre —
      l'utilisateur entend une destination sans savoir laquelle. Et « voir le
@@ -321,7 +327,7 @@ export function Avatar({
   return (
     <Link
       to="userProfile"
-      params={{ username: profileUsername }}
+      params={{ username: cible.username }}
       className="avatar-profile-link"
       style={sizeVar}
       aria-label={nomme('a11y.avatar.profile')}

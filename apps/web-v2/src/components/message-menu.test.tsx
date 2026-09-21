@@ -5,6 +5,7 @@ import { useState } from 'react';
 
 import { messageMenuItems, translationChoices } from '@/lib/view/message-actions';
 import { useLongPress } from '@/lib/view/long-press';
+import { pinToBottom } from '@/lib/view/pin-to-bottom';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { MessageMenu, type MessageMenuTarget } from './message-menu';
@@ -478,5 +479,110 @@ describe('MessageMenu — le sujet est nommé, le clone est neutralisé (revue #
     });
     const host = document.querySelector('[data-message-menu-preview-host]')!;
     expect(host.hasAttribute('inert')).toBe(true);
+  });
+});
+
+/**
+ * LE FIL SE RÉ-ANCRE TOUT SEUL, ET LE MENU DOIT TENIR (#7242).
+ *
+ * Mesuré au navigateur sur `/c/c-deploiement`, menu ouvert : la cellule de
+ * frappe apparaît (`use-thread-typing.ts`, un `typing:start` suffit), le fil
+ * grandit de 30 px, `pinToBottom` le ré-ancre en bas — et le `scroll` NATIF
+ * que cette écriture provoque démontait le portail, treize millisecondes
+ * après l'ouverture. Le lecteur visait une entrée ; le menu disparaissait
+ * sans qu'il ait rien fait.
+ *
+ * Le témoin FORCE la fenêtre : il ouvre le menu D'ABORD, puis joue l'image
+ * d'ancrage et le `scroll` que le navigateur livre ENSUITE — jamais les deux
+ * dans le même tour de rendu, où le défaut est invisible.
+ *
+ * happy-dom n'émet aucun `scroll` pour une écriture de `scrollTop` : le
+ * témoin le DISPATCHE, exactement comme le navigateur le livre (en capture,
+ * cible = le défileur). C'est la SEULE chose qu'il simule — la déclaration,
+ * elle, vient du VRAI `pinToBottom`.
+ */
+describe('MessageMenu — un défilement de l’APPLICATION ne ferme pas le menu', () => {
+  /** `requestAnimationFrame` bouchonné — même patron que `pin-to-bottom.test.ts` :
+   * les images se jouent À LA MAIN, l'écriture devient observable. */
+  const frameQueue = () => {
+    const pending = new Map<number, FrameRequestCallback>();
+    let next = 1;
+    return {
+      requestFrame: (callback: FrameRequestCallback) => {
+        const id = next;
+        next += 1;
+        pending.set(id, callback);
+        return id;
+      },
+      cancelFrame: (id: number) => {
+        pending.delete(id);
+      },
+      run: () => {
+        const entries = [...pending.entries()];
+        pending.clear();
+        for (const [, callback] of entries) callback(0);
+      },
+    };
+  };
+
+  const openMenu = (el: HTMLDivElement) => {
+    act(() => {
+      row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    });
+  };
+
+  /** Le défileur du fil, HORS du portail — `useRovingMenu` écoute `scroll`
+   * en CAPTURE sur `document`, exactement comme le navigateur le livre. */
+  const threadScroller = (): HTMLElement => {
+    const element = document.createElement('main');
+    document.body.appendChild(element);
+    return element;
+  };
+
+  test('l’ancrage bas (quelqu’un se met à écrire) laisse le menu MONTÉ', () => {
+    const el = mount();
+    openMenu(el);
+    expect(document.querySelectorAll('[role="menu"]').length).toBe(1);
+
+    const scroller = threadScroller();
+    const queue = frameQueue();
+    act(() => {
+      pinToBottom(scroller, { frames: 1, requestFrame: queue.requestFrame, cancelFrame: queue.cancelFrame });
+      queue.run();
+      scroller.dispatchEvent(new Event('scroll'));
+    });
+
+    expect(document.querySelectorAll('[role="menu"]').length).toBe(1);
+    scroller.remove();
+  });
+
+  test('un défilement du LECTEUR, lui, ferme le menu', () => {
+    const el = mount();
+    openMenu(el);
+    const scroller = threadScroller();
+    act(() => {
+      scroller.dispatchEvent(new Event('scroll'));
+    });
+    expect(document.querySelectorAll('[role="menu"]').length).toBe(0);
+    scroller.remove();
+  });
+
+  test('la déclaration se CONSOMME — le geste d’APRÈS referme bien le menu', () => {
+    const el = mount();
+    openMenu(el);
+    const scroller = threadScroller();
+    const queue = frameQueue();
+    act(() => {
+      pinToBottom(scroller, { frames: 1, requestFrame: queue.requestFrame, cancelFrame: queue.cancelFrame });
+      queue.run();
+      scroller.dispatchEvent(new Event('scroll'));
+    });
+    expect(document.querySelectorAll('[role="menu"]').length).toBe(1);
+
+    act(() => {
+      scroller.dispatchEvent(new Event('scroll'));
+    });
+    expect(document.querySelectorAll('[role="menu"]').length).toBe(0);
+    scroller.remove();
   });
 });

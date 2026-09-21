@@ -828,6 +828,25 @@ const pt = {
 
   'thread.unread-separator.one': '{count} mensagem não lida',
   'thread.unread-separator.other': '{count} mensagens não lidas',
+  'message-detail.info.title': 'Informações da mensagem',
+  'message-detail.received-by': 'Recebido por',
+  'message-detail.read-by': 'Lido por',
+  'message-detail.not-yet': 'Ainda não',
+  'message-detail.received-by.empty': 'Ainda sem confirmação de entrega',
+  'message-detail.read-by.empty': 'Ninguém leu esta mensagem ainda',
+  'message-detail.not-yet.empty': 'Todos receberam a mensagem',
+  'message-detail.attachment.opens.one': '{count} abertura',
+  'message-detail.attachment.opens.other': '{count} aberturas',
+  'message-detail.attachment.downloads.one': '{count} download',
+  'message-detail.attachment.downloads.other': '{count} downloads',
+  'message-detail.attachment.listened-until': 'Ouvido até {time}',
+  'message-detail.attachment.watched-until': 'Assistido até {time}',
+  'message-detail.attachment.complete': 'Completo',
+  'message-detail.attachment.listen.empty': 'Ainda não ouvido',
+  'message-detail.attachment.watch.empty': 'Ainda não assistido',
+  'message-detail.loading': 'Carregando…',
+  'message-detail.load-error': 'Não foi possível carregar estas informações',
+  'message-detail.retry': 'Tentar novamente',
 
 } satisfies InterfaceCatalog;
 
