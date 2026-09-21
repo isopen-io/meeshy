@@ -237,6 +237,52 @@ struct ConversationReadLedgerTotalTests {
                 "ouvrir a mis la ligne à zéro : les deux bornes disent le même nombre")
     }
 
+    // MARK: - D-L1 (#7236) — le badge d'icône compte des CONVERSATIONS
+
+    /// Le témoin DISCRIMINANT : il ne peut pas verdir sur une somme. Trois
+    /// conversations non lues dont une à douze messages — la somme dirait 14,
+    /// le compte dit 3.
+    @Test("Le compte de conversations ne somme pas les messages")
+    func conversationTotalCountsConversationsNotMessages() {
+        let ledger = makeLedger([row("a", 12), row("b", 1), row("c", 1)])
+        #expect(ledger.conversationUnreadTotal(excludingOpen: false) == 3)
+        #expect(ledger.total(excludingOpen: false, excludingMuted: false) == 14,
+                "la somme des messages reste servie à qui la demande")
+    }
+
+    /// Le critère de #7236, à la lettre : trois conversations dont une muette
+    /// et une à douze messages ⇒ badge 2.
+    @Test("Trois conversations dont une muette et une à douze messages ⇒ 2")
+    func conversationTotalExcludesMuted() {
+        let ledger = makeLedger([row("a", 12), row("b", 1), row("c", 4, muted: true)])
+        #expect(ledger.conversationUnreadTotal(excludingOpen: false) == 2)
+    }
+
+    /// Une conversation à zéro non-lu ne pèse rien — sans quoi le badge
+    /// compterait les conversations TOUT COURT.
+    @Test("Une conversation lue ne compte pas")
+    func conversationTotalIgnoresReadRows() {
+        let ledger = makeLedger([row("a", 3), row("b", 0), row("c", 2)])
+        #expect(ledger.conversationUnreadTotal(excludingOpen: false) == 2)
+    }
+
+    /// La conversation AFFICHÉE ne pèse pas sur l'icône, et elle ne le peut
+    /// pas : ouvrir la lit en rang 1, y compris contre un instantané serveur
+    /// qui la dit encore non lue. Le témoin le prouve des DEUX côtés de la
+    /// borne — c'est la forme du témoin jumeau sur la somme, et la raison est
+    /// la même : `excludingOpen` reste déclaré par la surface, mais le
+    /// registre n'a plus rien à en retrancher.
+    @Test("La conversation affichée ne compte jamais")
+    func conversationTotalNeverCountsTheOpenOne() {
+        let ledger = makeLedger([row("a", 2), row("b", 3)])
+        ledger.apply(.localOpen(conversationId: "a"))
+        ledger.apply(.snapshot(rows: [row("a", 5), row("b", 3)], source: .server))
+        #expect(ledger.state(for: "a")?.unreadCount == 0,
+                "ouvrir, c'est lire — même un instantané serveur ne la rallume pas")
+        #expect(ledger.conversationUnreadTotal(excludingOpen: true) == 1)
+        #expect(ledger.conversationUnreadTotal(excludingOpen: false) == 1)
+    }
+
     @Test("Le registre ne tient qu'UN openConversationId")
     func singleOpenConversationId() {
         let ledger = makeLedger([row("a", 1), row("b", 1)])
