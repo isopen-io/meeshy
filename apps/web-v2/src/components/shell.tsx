@@ -1,4 +1,3 @@
-import { useAppBadge } from '@/lib/view/use-app-badge';
 import { lazy, Suspense, useEffect, type ReactNode } from 'react';
 
 import { useAppUpdateAnnounced } from '@/lib/app-update/pending-store';
@@ -102,13 +101,23 @@ const chargerBanniereMaj = () =>
   }));
 const AppUpdateBanner = lazy(chargerBanniereMaj);
 
+/**
+ * ...ET LE BADGE DE NON-LUS (W4, #7221), quatrième exception — la seule qui ne
+ * peint aucun pixel. D-L1 : le titre de l'onglet et `navigator.setAppBadge`
+ * portent le nombre de CONVERSATIONS non lues, hors muettes. Il vit dans la
+ * coquille parce qu'elle est le seul composant présent sur TOUTES les routes
+ * (un badge accroché à la Lentille disparaîtrait dès qu'on ouvre un fil), et
+ * À LA DEMANDE parce qu'il lit le cache des conversations — voir
+ * `components/app-badge.tsx` pour la mesure qui l'a sorti du socle.
+ */
+const chargerBadge = () => import('./app-badge').then((m) => ({ default: m.AppBadge }));
+const AppBadge = lazy(chargerBadge);
+
 export default function Shell({ children }: { children: ReactNode }) {
   const pastilleArmee = useSyncPillArmed();
   const majAnnoncee = useAppUpdateAnnounced();
   const routeKey = useRoute().key;
   const menusArmes = showsFloatingMenus(routeKey);
-
-  useAppBadge();
 
   /* APRÈS le premier pixel, pendant qu'on est encore en ligne. L'effet ne
      s'exécute pas au rendu serveur, donc le préchauffage institutionnel n'en
@@ -135,6 +144,12 @@ export default function Shell({ children }: { children: ReactNode }) {
           <SyncPill />
         </Suspense>
       ) : null}
+      {/* Aucun pixel, aucune garde de route : le badge vaut sur toutes les
+          routes, et il n'émet aucune requête (`useConversationsSnapshot`
+          observe le cache, `enabled: false`). */}
+      <Suspense fallback={null}>
+        <AppBadge />
+      </Suspense>
       {majAnnoncee ? (
         <Suspense fallback={null}>
           <AppUpdateBanner />
