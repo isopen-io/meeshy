@@ -2,6 +2,7 @@ import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
 import { useCallback, useState } from 'react';
 
 import { Avatar } from './avatar';
+import { PersonName } from './person-name';
 import { FeedCarouselChrome, FeedCarouselDots } from './feed-carousel-chrome';
 import { FeedMediaMosaic } from './feed-media-mosaic';
 import { FeedMediaSurface } from './feed-media-surface';
@@ -260,9 +261,16 @@ function FeedPostHeader({ model, storyRing, mood }: { readonly model: FeedCardMo
         {/* L'HEURE QUALIFIE L'AUTEUR — même ligne, miroir
             `FeedPostCard+Header.swift:51-60`. */}
         <div className="flex items-baseline gap-1.5">
-          <span className="truncate text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-            {model.author.name}
-          </span>
+          {/* LE NOM MÈNE OÙ L'AVATAR MÈNE (#7241) — y compris l'anneau de
+              story, qui PRIME sur le profil : c'est `identityTarget` qui le
+              tranche, une fois, pour les deux moitiés de l'identité. */}
+          <PersonName
+            name={model.author.name}
+            username={model.author.username}
+            {...(storyRing === undefined ? {} : { storyRing })}
+            className="truncate text-body font-semibold"
+            style={{ color: 'var(--color-ios-ink)' }}
+          />
           <span className="shrink-0 text-check" style={{ color: 'var(--color-ios-ink-3)' }}>
             {model.relativeTime}
           </span>
