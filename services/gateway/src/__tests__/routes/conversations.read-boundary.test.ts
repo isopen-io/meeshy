@@ -22,6 +22,8 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 const USER_ID = '507f1f77bcf86cd799439001';
 const CONV_ID = '507f1f77bcf86cd799439101';
 const PARTICIPANT_ID = '507f1f77bcf86cd799439201';
+const OTHER_CONV_ID = '507f1f77bcf86cd799439102';
+const OTHER_PARTICIPANT_ID = '507f1f77bcf86cd799439202';
 const LAST_READ_MESSAGE_ID = '507f1f77bcf86cd799439301';
 
 jest.mock('../../utils/logger-enhanced', () => ({
@@ -63,6 +65,25 @@ jest.mock('../../routes/conversations/utils/access-control', () => ({
   resolveCallerParticipant: (...args: any[]) => mockResolveCallerParticipant(...args),
 }));
 
+function makeSelfParticipant(participantId: string, conversationId: string) {
+  return {
+    id: participantId,
+    conversationId,
+    userId: USER_ID,
+    type: 'user',
+    displayName: 'Moi',
+    avatar: null,
+    role: 'member',
+    language: 'fr',
+    nickname: null,
+    joinedAt: new Date('2026-01-01T00:00:00Z'),
+    isActive: true,
+    isOnline: true,
+    lastActiveAt: null,
+    user: { id: USER_ID, username: 'moi', displayName: 'Moi', firstName: null, lastName: null, isOnline: true, lastActiveAt: null },
+  };
+}
+
 function makeListConversation(overrides: Record<string, unknown> = {}) {
   return {
     id: CONV_ID,
@@ -78,24 +99,7 @@ function makeListConversation(overrides: Record<string, unknown> = {}) {
     communityId: null,
     _count: { participants: 2 },
     isAnnouncementChannel: false,
-    participants: [
-      {
-        id: PARTICIPANT_ID,
-        conversationId: CONV_ID,
-        userId: USER_ID,
-        type: 'user',
-        displayName: 'Moi',
-        avatar: null,
-        role: 'member',
-        language: 'fr',
-        nickname: null,
-        joinedAt: new Date('2026-01-01T00:00:00Z'),
-        isActive: true,
-        isOnline: true,
-        lastActiveAt: null,
-        user: { id: USER_ID, username: 'moi', displayName: 'Moi', firstName: null, lastName: null, isOnline: true, lastActiveAt: null },
-      },
-    ],
+    participants: [makeSelfParticipant(PARTICIPANT_ID, CONV_ID)],
     userPreferences: [],
     messages: [],
     ...overrides,
@@ -211,6 +215,72 @@ describe('frontière de lecture — GET /conversations (#7198)', () => {
     expect(mockBuildBridgeData).toHaveBeenCalledTimes(1);
 
     await app.close();
+  });
+
+  it('borne la lecture du curseur au NOMBRE de participants demandés — jamais un findMany nu', async () => {
+    // #7216 — `unbounded-findmany-guard` interdit un `findMany` sans `take` ni
+    // `skip` sous `routes/`. La borne n'est pas prudentielle : un
+    // `Participant.id` n'appartient qu'à UNE conversation et
+    // `ConversationReadCursor` est unique par `[conversationId, participantId]`,
+    // donc `take === participantIds.length` est le nombre EXACT de lignes que
+    // la requête peut rendre. Le témoin le prouve par la requête émise, pas en
+    // relisant la source — un témoin de source verdirait sur un correctif
+    // annulé.
+    const prisma = makeListPrisma([
+      makeListConversation(),
+      makeListConversation({ id: OTHER_CONV_ID, identifier: 'conv-b', participants: [makeSelfParticipant(OTHER_PARTICIPANT_ID, OTHER_CONV_ID)] }),
+    ]);
+    const app = await buildApp(prisma);
+
+    await app.inject({ method: 'GET', url: '/conversations', headers: { authorization: 'Bearer x' } });
+
+    expect(prisma.conversationReadCursor.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { participantId: { in: [PARTICIPANT_ID, OTHER_PARTICIPANT_ID] } },
+        take: 2,
+      })
+    );
+
+    await app.close();
+  });
+});
+
+describe('la borne suit le NOMBRE d’ids, elle n’est pas une constante (#7216)', () => {
+  const makeCursorPrisma = () => ({
+    conversationReadCursor: { findMany: jest.fn<any>(async () => []) },
+  });
+
+  it('un seul id demandé ⇒ take 1 (le chemin du détail)', async () => {
+    const { loadReadCursorBoundaries } = await import('../../routes/conversations/read-cursor-projection');
+    const prisma = makeCursorPrisma();
+
+    await loadReadCursorBoundaries(prisma as unknown as PrismaClient, [PARTICIPANT_ID]);
+
+    expect(prisma.conversationReadCursor.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ take: 1 })
+    );
+  });
+
+  it('cent ids demandés ⇒ take 100 — la borne ne plafonne pas une page légitime', async () => {
+    const { loadReadCursorBoundaries } = await import('../../routes/conversations/read-cursor-projection');
+    const prisma = makeCursorPrisma();
+    const ids = Array.from({ length: 100 }, (_, i) => `5f${String(i).padStart(22, '0')}`);
+
+    await loadReadCursorBoundaries(prisma as unknown as PrismaClient, ids);
+
+    expect(prisma.conversationReadCursor.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ take: 100 })
+    );
+  });
+
+  it("aucun id ⇒ AUCUNE requête (une borne de zéro serait une requête pour rien)", async () => {
+    const { loadReadCursorBoundaries } = await import('../../routes/conversations/read-cursor-projection');
+    const prisma = makeCursorPrisma();
+
+    const boundaries = await loadReadCursorBoundaries(prisma as unknown as PrismaClient, []);
+
+    expect(prisma.conversationReadCursor.findMany).not.toHaveBeenCalled();
+    expect(boundaries.size).toBe(0);
   });
 });
 
