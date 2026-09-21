@@ -1,5 +1,4 @@
-import { useRef } from 'react';
-import { act } from 'react';
+import { act, useRef } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 

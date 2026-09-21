@@ -361,11 +361,17 @@ async function runScheme({ browser, base, scheme, check }) {
     },
   );
 
+  /** Ce que le fil SERT — le corpus, rien, ou une passerelle en panne. Les
+   * deux derniers sont les états que la liste doit DESSINER (#7113). */
+  let listPlan = { kind: 'ok' };
+
   await page.route(isCommentsList, async (route) => {
     if (route.request().method() !== 'GET') {
       sent.push({ method: route.request().method(), path: new URL(route.request().url()).pathname });
       return json(route, envelope(COMMENTS[0]), 201);
     }
+    if (listPlan.kind === 'empty') return json(route, envelope([], { limit: 20, hasMore: false, nextCursor: null }));
+    if (listPlan.kind === 'down') return refusal(route, 500, 'INTERNAL', 'Gateway failure');
     return json(route, envelope(COMMENTS, { limit: 20, hasMore: false, nextCursor: null }));
   });
 
@@ -949,7 +955,68 @@ async function runScheme({ browser, base, scheme, check }) {
     say(`SUPPRIMER passe le focus à la rangée suivante, ou au fil à défaut — ${JSON.stringify(focusApresSuppression)}`),
   );
 
-  // ------------------------------------------------ 9. aucune erreur de page
+  // -------------------------- 9. les états VIDE et EN PANNE sont DESSINÉS
+  /**
+   * UN ÉCRAN BLANC N'EST PAS UN ÉTAT. Les quatre états de la liste ont leurs
+   * témoins unitaires (`comment-list.test.tsx`), qui prouvent la BRANCHE ;
+   * aucun ne prouve qu'elle se PEINT — un état dessiné dans un fichier que
+   * personne ne monte ne rougit nulle part. Ces deux passes les montent pour
+   * de vrai, et produisent au passage les captures de recette que les états
+   * heureux ne peuvent pas donner.
+   *
+   * L'état VIDE n'est PAS une alerte, et l'état EN PANNE en est une : les
+   * confondre ferait annoncer une erreur à qui ouvre un fil neuf. Le verdict
+   * porte donc sur le rôle autant que sur la présence.
+   */
+  /* DÉMARRAGE À FROID, DÉLIBÉRÉMENT. Le client de requêtes PERSISTE son cache
+     (`meeshy.query-cache`) et le réhydrate au démarrage : après les passes
+     ci-dessus, un rechargement repeint les trois rangées déjà lues et la liste
+     n'est JAMAIS vide. C'est la doctrine cache-first qui parle, pas un défaut
+     — le vide et la panne sont par nature des états de démarrage à froid, et
+     la branche chaude a son propre témoin (« une relecture EN FOND sur une
+     liste peuplée ne détruit rien »). La SESSION reste : on mesure un fil sans
+     réponse, jamais un visiteur déconnecté. */
+  await context.addInitScript(() => {
+    window.localStorage.removeItem('meeshy.query-cache');
+  });
+
+  listPlan = { kind: 'empty' };
+  await page.goto(`${base}/post/${POST_ID}`, { waitUntil: 'load' });
+  await page.waitForSelector('[data-comment-state="empty"]');
+  const vide = await page.evaluate(() => {
+    const bloc = document.querySelector('[data-comment-state="empty"]');
+    return {
+      texte: (bloc?.textContent ?? '').trim(),
+      alerte: bloc?.getAttribute('role') === 'alert',
+      rangees: document.querySelectorAll('[data-comment-row]').length,
+      composeur: document.querySelector('[data-comment-composer]') !== null,
+    };
+  });
+  check(vide.rangees === 0 && vide.texte.length > 0, say(`fil VIDE : un titre et une invitation, pas un blanc — ${JSON.stringify(vide.texte)}`));
+  check(!vide.alerte, say(`… et ce n'est PAS une alerte — un fil neuf n'est pas une panne (role alert : ${vide.alerte})`));
+  check(vide.composeur, say(`… le composeur reste offert : c'est là qu'on écrit le premier — ${vide.composeur}`));
+  await page.waitForTimeout(200);
+  await capture(page, `feed.post-comments-empty.${scheme}`);
+
+  listPlan = { kind: 'down' };
+  await page.goto(`${base}/post/${POST_ID}`, { waitUntil: 'load' });
+  await page.waitForSelector('[data-comment-state="error"]');
+  const panne = await page.evaluate(() => {
+    const bloc = document.querySelector('[data-comment-state="error"]');
+    const retry = bloc?.querySelector('[data-comment-retry]');
+    return {
+      texte: (bloc?.textContent ?? '').trim(),
+      alerte: bloc?.getAttribute('role') === 'alert',
+      retry: retry !== null && retry !== undefined,
+      hauteurRetry: retry === null || retry === undefined ? 0 : Math.round(retry.getBoundingClientRect().height),
+    };
+  });
+  check(panne.alerte, say(`fil EN PANNE : annoncé en ALERTE — ${JSON.stringify(panne.texte)}`));
+  check(panne.retry && panne.hauteurRetry >= 44, say(`… avec un « Réessayer » atteignable — ${JSON.stringify(panne)}`));
+  await page.waitForTimeout(200);
+  await capture(page, `feed.post-comments-error.${scheme}`);
+
+  // ----------------------------------------------- 10. aucune erreur de page
   check(errors.length === 0, say(`aucune erreur de page — ${JSON.stringify(errors)}`));
   await context.close();
 }
