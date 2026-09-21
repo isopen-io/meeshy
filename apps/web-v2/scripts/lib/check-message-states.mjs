@@ -303,7 +303,46 @@ export async function checkMessageStates({ browser, BASE, expect, setScheme, AA_
   const placeLink = rowOf('st-place').locator('a[href^="https://maps.apple.com/"]');
   expect((await placeLink.count()) > 0, `${label} st-place : un lien vers maps.apple.com`);
   expect((await placeLink.getAttribute('target')) === '_blank', `${label} st-place : target="_blank"`);
-  expect((await placeLink.getAttribute('aria-label')) === 'Position : Tour Eiffel', `${label} st-place : aria-label composé`);
+  /**
+   * L'ATTENDU EST LA COMPOSITION, PAS LA LANGUE (#7328).
+   *
+   * Cette ligne attendait la CHAÎNE FRANÇAISE `'Position : Tour Eiffel'`.
+   * `launchChromium`/`newContext` ne posent aucune `locale` : le Chromium de
+   * Playwright est `en-US` par DÉFAUT, ici comme en CI (mesuré :
+   * `navigator.language === 'en-US'`, `document.documentElement.lang === 'en'`).
+   * Ce gate a donc TOUJOURS tourné en anglais — et il était vert parce que le
+   * libellé de la carte était EN DUR en français. Il ne mesurait pas la
+   * composition : il mesurait que le produit n'était pas traduit. Les deux
+   * étaient indiscernables tant que le défaut existait.
+   *
+   * Ce qu'il garde vraiment tient en trois faits, et aucun ne parle français :
+   *   1. le lien a un nom accessible NON VIDE (un lien anonyme n'est pas
+   *      atteignable au lecteur d'écran) ;
+   *   2. ce nom est COMPOSÉ À PARTIR DE LA DONNÉE — il contient le nom du lieu
+   *      du fixture, « Tour Eiffel », qui est un nom propre : la donnée, pas
+   *      un libellé, donc identique dans les sept catalogues ;
+   *   3. il ne se RÉDUIT pas à ce nom — il y a bien un qualifiant autour
+   *      (« Position : … », « Location: … »), ce que le mot « composé » dit.
+   *
+   * Et un quatrième, que l'ancienne écriture ne pouvait pas porter : le nom
+   * ne doit pas être un IDENTIFIANT de catalogue. Une clé absente d'une langue
+   * rend sa clé telle quelle — un `aria-label` valant « message.location.a11y »
+   * aurait satisfait 1 à 3 sans rien annoncer à personne.
+   *
+   * LA VALEUR OBTENUE EST IMPRIMÉE. L'ancienne ligne n'en disait rien : son
+   * échec ne permettait pas de distinguer « mauvaise composition » de « autre
+   * langue », et il a fallu sonder le navigateur pour le savoir.
+   */
+  const placeLabel = await placeLink.getAttribute('aria-label');
+  const placeName = 'Tour Eiffel';
+  expect(
+    typeof placeLabel === 'string' &&
+      placeLabel.trim() !== '' &&
+      placeLabel.includes(placeName) &&
+      placeLabel.trim() !== placeName &&
+      !placeLabel.includes('message.location'),
+    `${label} st-place : aria-label composé (obtenu ${JSON.stringify(placeLabel)})`,
+  );
   /* « OUVRIR DANS PLANS » TIENT L'AA (revue-correction #5936, défaut majeur
      5) — c'est la SEULE affordance qui dit que la carte s'ouvre, servie en
      `--color-ios-ink` (l'encre PLEINE, jamais l'accent de conversation, qui

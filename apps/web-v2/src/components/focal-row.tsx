@@ -496,7 +496,7 @@ export const FocalRow = memo(function FocalRow({
           {...(displayLanguage !== undefined ? { displayLanguage } : {})}
         />
       ) : null}
-      {sharedPlace !== null ? <LocationCard place={sharedPlace} accent="var(--accent)" /> : null}
+      {sharedPlace !== null ? <LocationCard place={sharedPlace} accent="var(--accent)" language={currentInterfaceLanguage()} /> : null}
 
       {body.kind === 'sticker' ? (
         <StickerArtwork sticker={body.sticker} picture={body.picture} side={STICKER_SIDE} />

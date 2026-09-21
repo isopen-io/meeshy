@@ -895,6 +895,9 @@ const pt = {
   'composer.location.chip': 'LOCAL',
   'composer.location.unknown': 'Local desconhecido',
   'composer.location.remove': 'Remover a localização',
+  'message.location.shared': 'Localização compartilhada',
+  'message.location.open': 'Abrir no Mapas',
+  'message.location.a11y': 'Localização: {place}',
 
 } satisfies InterfaceCatalog;
 

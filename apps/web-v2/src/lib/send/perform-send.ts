@@ -58,9 +58,13 @@ export type Draft = {
    * LE LIEU PARTAGÉ (#7280) — ce que la tuile « Position » du tiroir a
    * obtenu du navigateur. `undefined` ⇒ clé `location` ABSENTE du corps,
    * jamais `null` posé (même discipline que `content`/`replyToId`/la
-   * protection). Il est rangé sur l'ENTRÉE d'outbox, jamais sur le
-   * `LocalMessage` : le `Message` du domaine vient de `@meeshy/shared`, que
-   * la passerelle HISSE, et qu'un client ne compose pas.
+   * protection).
+   *
+   * IL VOYAGE SUR LE `LocalMessage` (#7328), plus sur l'entrée d'outbox à
+   * côté de lui : c'est ce que la bulle rend (`placeOf`), ce que la reprise
+   * relit (`entry.message` est repris tel quel) et ce que `bodyOf` envoie —
+   * une source, trois lecteurs. Rangé à côté du message, il était invisible à
+   * son expéditeur (voir le doc-comment de `LocalMessage.location`).
    */
   readonly place?: SharedPlace;
 };
@@ -151,12 +155,7 @@ function protectionBodyOf(message: LocalMessage): Pick<SendMessageBody, 'isBlurr
   };
 }
 
-function bodyOf(
-  message: LocalMessage,
-  attachmentIds: readonly string[],
-  /** LE LIEU VIENT DE L'ENTRÉE, PAS DU MESSAGE (#7280) — voir `Draft.place`. */
-  place: SharedPlace | undefined,
-): SendMessageBody {
+function bodyOf(message: LocalMessage, attachmentIds: readonly string[]): SendMessageBody {
   const declared = declaredAttachmentType(message.messageType);
   return {
     ...(message.content.trim().length > 0 ? { content: message.content } : {}),
@@ -165,7 +164,11 @@ function bodyOf(
     ...(declared === undefined ? {} : { messageType: declared }),
     ...(attachmentIds.length > 0 ? { attachmentIds } : {}),
     ...(message.replyToId === undefined ? {} : { replyToId: message.replyToId }),
-    ...(place === undefined ? {} : { location: place }),
+    /* LE LIEU SE RELIT SUR LE MESSAGE (#7328), comme la protection deux lignes
+       plus bas — un seul site de vérité entre ce qui s'affiche et ce qui part.
+       `retrySend` reprend `entry.message` tel quel : le lieu survit au renvoi
+       sans qu'aucune relecture d'entrée ne le rattrape. */
+    ...(message.location === undefined ? {} : { location: message.location }),
     ...protectionBodyOf(message),
   };
 }
@@ -302,20 +305,11 @@ async function attempt(params: {
   const attachmentIds = await uploadPhase(params);
   if (attachmentIds === null) return; // markFailed déjà posé par uploadPhase.
 
-  /* LE LIEU SE RELIT SUR L'ENTRÉE À CHAQUE TENTATIVE (#7280) — `retrySend`
-     ne reçoit qu'un `clientMessageId` et reprend `entry.message` tel quel ;
-     un lieu porté par le seul appel initial disparaîtrait au premier renvoi,
-     sans un mot, exactement comme la pièce jointe amputée qu'`uploadPhase`
-     refuse. */
-  const place = entriesOf(deps.outbox.getState(), conversationId).find(
-    (e) => e.message.clientMessageId === message.clientMessageId,
-  )?.place;
-
   const result = await sendMessage({
     source: deps.source,
     transport: deps.transport,
     conversationId,
-    body: bodyOf(message, attachmentIds, place),
+    body: bodyOf(message, attachmentIds),
   });
 
   if (!result.ok) {
@@ -382,6 +376,7 @@ export async function performSend(params: {
     ...(draft.replyTo === undefined ? {} : { replyTo: draft.replyTo }),
     ...(draft.attachments === undefined || draft.attachments.length === 0 ? {} : { attachments: draft.attachments }),
     ...(draft.protection === undefined ? {} : { protection: draft.protection }),
+    ...(draft.place === undefined ? {} : { place: draft.place }),
     now: new Date(nowMs),
   });
 
@@ -393,7 +388,6 @@ export async function performSend(params: {
     ...(draft.attachments === undefined || draft.attachments.length === 0
       ? {}
       : { upload: { files: draft.attachments } }),
-    ...(draft.place === undefined ? {} : { place: draft.place }),
   });
 
   if (!deps.online) return; // hors ligne (D-16) : aucun appel.
