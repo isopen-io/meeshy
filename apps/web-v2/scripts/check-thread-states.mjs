@@ -642,13 +642,20 @@ await checkProtectionStates({ browser, BASE, expect });
 
   const plus = composerPage.getByRole('button', { name: 'Ouvrir le menu des pièces jointes' });
   expect((await plus.count()) === 1, 'le composeur offre la porte des pièces jointes');
-  const tilesBefore = await composerPage.locator('[role="group"][aria-label="Types de pièces jointes"]').count();
+  /* L'ANCRE, PAS LE LIBELLÉ (#7280) — ce gate désignait le panneau par son
+     `aria-label` français en dur. Depuis que les sept sources viennent du
+     catalogue (#6310), ce libellé vaut « Attachment types » sur un Chromium
+     en anglais, qui est celui de la CI : la garde reconnaissait par un NOM
+     qu'un lot venait de rendre traduisible. `data-composer-panel` ne se
+     traduit pas. */
+  const panel = '[data-composer-panel]';
+  const tilesBefore = await composerPage.locator(panel).count();
   await plus.click();
   // C'EST L'`import()` DIFFÉRÉ DE LA LEÇON 590 (#7054) : le tiroir est chargé
   // en chunk `lazy(…)` (`ComposerTray`), donc son montage n'est pas une
   // micro-tâche — on attend le FAIT (le panneau attaché), jamais un délai.
-  await awaitFact(composerPage.locator('[role="group"][aria-label="Types de pièces jointes"]'));
-  const tilesAfter = await composerPage.locator('[role="group"][aria-label="Types de pièces jointes"]').count();
+  await awaitFact(composerPage.locator(panel));
+  const tilesAfter = await composerPage.locator(panel).count();
   expect(tilesBefore === 0 && tilesAfter === 1, 'le « + » OUVRE le tiroir (le geste a un effet, loi 4)');
 
   const inertOpen = await inertInComposer();
@@ -656,7 +663,7 @@ await checkProtectionStates({ browser, BASE, expect });
 
   // Les tuiles portent une cible d'au moins 44 px (dimension 5).
   const smallTargets = await composerPage.evaluate(() => {
-    const panel = document.querySelector('[role="group"][aria-label="Types de pièces jointes"]');
+    const panel = document.querySelector('[data-composer-panel]');
     if (panel === null) return ['aucun panneau'];
     return Array.from(panel.querySelectorAll('label, button'))
       .map((el) => ({ name: el.getAttribute('aria-label') ?? el.textContent, box: el.getBoundingClientRect() }))

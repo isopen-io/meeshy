@@ -864,6 +864,30 @@ const ar = {
   'download.web': 'افتح Meeshy في المتصفح',
   'download.otherPlatforms': 'على أندرويد وعلى الحاسوب، يعمل Meeshy مباشرة في المتصفح.',
 
+  /* LES SOURCES DU COMPOSEUR (#7280) — miroir de `composer.attach.*` d'iOS. */
+  'composer.attach.group': 'أنواع المرفقات',
+  'composer.attach.handle': 'مقبض اللوحة',
+  'composer.attach.photo': 'الصور',
+  'composer.attach.photo.action': 'اختيار صور',
+  'composer.attach.camera': 'الكاميرا',
+  'composer.attach.camera.action': 'التقاط صورة',
+  'composer.attach.file': 'ملف',
+  'composer.attach.file.action': 'اختيار ملف',
+  'composer.attach.location': 'الموقع',
+  'composer.attach.location.action': 'مشاركة موقعي',
+  'composer.attach.voice': 'صوت',
+  'composer.attach.voice.action': 'تسجيل رسالة صوتية',
+  'composer.attach.emoji': 'الرموز التعبيرية',
+  'composer.attach.emoji.action': 'إدراج رمز تعبيري',
+  'composer.emoji.title': 'إدراج رمز تعبيري',
+  'composer.location.locating': 'جارٍ تحديد موقعك…',
+  'composer.location.denied': 'تم رفض الموقع — اسمح به من الإعدادات',
+  'composer.location.unavailable': 'الموقع غير متاح في هذا المتصفح',
+  'composer.location.failed': 'تعذّر تحديد الموقع — أعد المحاولة',
+  'composer.location.chip': 'موقع',
+  'composer.location.unknown': 'مكان غير معروف',
+  'composer.location.remove': 'إزالة الموقع',
+
 } satisfies InterfaceCatalog;
 
 export default ar;

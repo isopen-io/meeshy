@@ -4,6 +4,8 @@ import { unwrap } from './client';
 import type { ConversationsDeps } from './conversations';
 import { hasOlderMessagesOf, messagesOf, recordSentMessage } from './fixtures';
 import type { ApiResult, HttpTransport } from './http';
+import type { SharedPlace } from '@/lib/send/shared-place';
+
 import { nextMessagesCursor, pageOfMessages, threadWindowOf } from './messages-pages';
 import type { MessagesInfiniteData, MessagesPage, MessagesPageParam } from './messages-pages';
 import type { Message } from './types';
@@ -355,6 +357,16 @@ export type SendMessageBody = {
   readonly expiresAt?: string;
   readonly effectFlags?: number;
   readonly isViewOnce?: boolean;
+  /**
+   * LE LIEU PARTAGÉ (#7280) — champ DÉDIÉ, jamais fusionné dans un
+   * `metadata` brut : cette enveloppe porte des champs à autorité serveur
+   * qu'un passthrough permettrait de forger (`MessageRequest.location`,
+   * `packages/shared/types/messaging.ts:171-175`). La validation STRICTE
+   * (bornes des coordonnées, longueur des textes) vit côté passerelle
+   * (`services/gateway/src/services/location/sharedPlace.ts`), jamais ici —
+   * ce port n'en produit que la forme acceptée (`send/shared-place.ts`).
+   */
+  readonly location?: SharedPlace;
 };
 
 /**

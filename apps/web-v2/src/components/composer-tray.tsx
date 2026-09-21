@@ -1,12 +1,13 @@
-import type { ReactNode } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import type { ParticipantPermissions } from '@meeshy/shared/types/participant';
-
+import { ComposerAttachmentPanel, type ComposerAttachmentPanelProps } from './composer-attachment-panel';
 import { Glyph, GlyphSvg } from './glyph';
 import { COMPOSER_GLYPHS } from './glyphs-composer';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { previewUrlFor } from '@/lib/send/attachment-preview-url';
-import { mayAttach, type PendingAttachment } from '@/lib/send/attachments';
+import { type PendingAttachment } from '@/lib/send/attachments';
+import type { SharedPlace } from '@/lib/send/shared-place';
 import { MIN_SENDABLE_DURATION_MS, type RecorderState } from '@/lib/view/use-recorder';
 import { interpolatedLevel, waveformBarCount } from '@/lib/view/waveform';
 
@@ -47,15 +48,14 @@ export type ComposerTrayProps =
       readonly pending: readonly PendingAttachment[];
       readonly onRemove: (localId: string) => void;
       readonly notice: ComposerNotice | null;
+      /** LE LIEU ATTACHÉ (#7280) — `null` quand aucun. Il se rend AU-DESSUS
+       * de la rangée, avec tout ce qui DÉCRIT le message à partir (citation,
+       * pièces, avertissement) : iOS y pose la même puce
+       * (`composer.chip.kind.location`). */
+      readonly place: SharedPlace | null;
+      readonly onRemovePlace: () => void;
     }
-  | {
-      readonly variant: 'panel';
-      readonly onPickPhotos: (files: FileList | null) => void;
-      readonly onPickFile: (files: FileList | null) => void;
-      readonly onStartVoice: () => void;
-      readonly canRecord: boolean;
-      readonly rights?: ParticipantPermissions;
-    };
+  | ({ readonly variant: 'panel' } & ComposerAttachmentPanelProps);
 
 /**
  * CE QUE LE COMPOSEUR A REFUSÉ, ET LA SORTIE (revue-correction #5668) — un
@@ -249,121 +249,6 @@ function RecordingBar({
   );
 }
 
-const TILE_SIZE = 58;
-
-function Tile({
-  label,
-  color,
-  children,
-}: {
-  readonly label: string;
-  readonly color: string;
-  readonly children: ReactNode;
-}) {
-  return (
-    <>
-      <span
-        className="grid place-items-center rounded-full text-white shadow-sm"
-        style={{
-          width: TILE_SIZE,
-          height: TILE_SIZE,
-          background: `linear-gradient(135deg, ${color}, color-mix(in srgb, ${color} 70%, transparent))`,
-        }}
-      >
-        {children}
-      </span>
-      <span className="text-check">{label}</span>
-    </>
-  );
-}
-
-function AttachmentPanel({
-  onPickPhotos,
-  onPickFile,
-  onStartVoice,
-  canRecord,
-  rights,
-}: {
-  readonly onPickPhotos: (files: FileList | null) => void;
-  readonly onPickFile: (files: FileList | null) => void;
-  readonly onStartVoice: () => void;
-  readonly canRecord: boolean;
-  readonly rights?: ParticipantPermissions;
-}) {
-  // LOI 4 — une tuile n'existe QUE si son geste a un effet : sans droit (ou,
-  // pour le vocal, sans moteur d'enregistrement dans ce navigateur), elle ne
-  // se rend PAS, jamais grisée. Le droit se lit par le MÊME chemin que celui
-  // qu'appliquera la passerelle (`mayAttach`, miroir
-  // `attachmentSendRightForMimeType`) — jamais une seconde table écrite ici.
-  const canImages = mayAttach(rights, 'image/*');
-  const canFiles = mayAttach(rights, 'application/octet-stream');
-  const canAudios = canRecord && mayAttach(rights, 'audio/*');
-
-  return (
-    <div role="group" aria-label="Types de pièces jointes" style={{ paddingInline: 18, paddingBlock: 12 }}>
-      {/* La POIGNÉE du panneau iOS (`+Attachments.swift`, en tête du
-          carrousel) : purement décorative, elle dit « ceci est un tiroir ». */}
-      <span
-        aria-hidden
-        className="mx-auto mb-3 block h-1 w-9 rounded-full"
-        style={{ backgroundColor: 'color-mix(in srgb, var(--accent) 35%, transparent)' }}
-      />
-      <div className="flex gap-3.5">
-        {canImages ? (
-          <label className="flex flex-col items-center gap-1.5" style={{ width: TILE_SIZE + 8 }}>
-            <Tile label="Photos" color="var(--ios-tile-photo)">
-              <Glyph name="image" size={26} />
-            </Tile>
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              className="sr-only"
-              aria-label="Choisir des photos"
-              onChange={(e) => {
-                onPickPhotos(e.currentTarget.files);
-                e.currentTarget.value = '';
-              }}
-            />
-          </label>
-        ) : null}
-
-        {canFiles ? (
-          <label className="flex flex-col items-center gap-1.5" style={{ width: TILE_SIZE + 8 }}>
-            <Tile label="Fichier" color="var(--ios-tile-file)">
-              <Glyph name="file" size={26} />
-            </Tile>
-            <input
-              type="file"
-              multiple
-              className="sr-only"
-              aria-label="Choisir un fichier"
-              onChange={(e) => {
-                onPickFile(e.currentTarget.files);
-                e.currentTarget.value = '';
-              }}
-            />
-          </label>
-        ) : null}
-
-        {canAudios ? (
-          <button
-            type="button"
-            onClick={onStartVoice}
-            className="flex flex-col items-center gap-1.5"
-            style={{ width: TILE_SIZE + 8 }}
-            aria-label="Enregistrer un message vocal"
-          >
-            <Tile label="Vocal" color="var(--ios-tile-voice)">
-              <Glyph name="microphone" size={26} />
-            </Tile>
-          </button>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
 function PreviewTile({ attachment, onRemove }: { readonly attachment: PendingAttachment; readonly onRemove: () => void }) {
   /**
    * UN URL D'OBJET PAR PIÈCE, PARTAGÉ AVEC LA BULLE OPTIMISTE (défaut 7,
@@ -483,6 +368,58 @@ function NoticeBanner({ notice }: { readonly notice: ComposerNotice }) {
   );
 }
 
+/**
+ * LA PUCE DU LIEU ATTACHÉ (#7280) — miroir de la puce « LIEU » d'iOS
+ * (`composer.chip.kind.location`), posée au-dessus de la rangée avec les
+ * pièces en attente.
+ *
+ * ELLE MONTRE DES COORDONNÉES, PAS UN NOM — et c'est délibéré : le web n'a
+ * aucun géocodeur inverse dans ce lot, et afficher « Lieu inconnu » sur une
+ * position parfaitement connue serait dire le contraire de ce qui part. Les
+ * coordonnées sont formatées par la LANGUE D'INTERFACE (`Intl.NumberFormat`) :
+ * le français écrit « 48,8566 », l'anglais « 48.8566 », et concaténer un
+ * `toFixed()` aurait servi le point décimal aux sept langues.
+ *
+ * LE RETRAIT EST UNE CIBLE DE 44 px (dimension 5) contenant un badge de
+ * 18 px — la MÊME anatomie que `PreviewTile`, jamais un bouton de la taille
+ * de son dessin.
+ */
+function PlaceChip({ place, onRemove }: { readonly place: SharedPlace; readonly onRemove: () => void }) {
+  const language = currentInterfaceLanguage();
+  const coordinate = new Intl.NumberFormat(language, { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+  return (
+    <div
+      data-composer-place
+      className="mx-3 mb-1 flex items-center gap-2 rounded-quote px-2.5 py-2"
+      style={{ backgroundColor: 'var(--color-ios-card)' }}
+    >
+      <GlyphSvg glyph={COMPOSER_GLYPHS.mapPin} size={16} style={{ color: 'var(--ios-tile-location)' }} />
+      <span className="min-w-0 flex-1 text-title">
+        <span className="font-semibold" style={{ color: 'var(--ios-tile-location)' }}>
+          {translate(language, 'composer.location.chip')}{' '}
+        </span>
+        <span className="tabular-nums" style={{ color: 'var(--color-ios-ink-2)' }}>
+          {coordinate.format(place.latitude)} · {coordinate.format(place.longitude)}
+        </span>
+      </span>
+      <button
+        type="button"
+        onClick={onRemove}
+        className="grid size-11 shrink-0 place-items-center"
+        aria-label={translate(language, 'composer.location.remove')}
+      >
+        <span
+          className="grid size-[18px] place-items-center rounded-full text-white"
+          style={{ backgroundColor: 'var(--color-error)' }}
+          aria-hidden
+        >
+          <Glyph name="x" size={10} />
+        </span>
+      </button>
+    </div>
+  );
+}
+
 export default function ComposerTray(props: ComposerTrayProps) {
   if (props.variant === 'recording-bar') {
     return (
@@ -496,20 +433,14 @@ export default function ComposerTray(props: ComposerTrayProps) {
   }
 
   if (props.variant === 'panel') {
-    return (
-      <AttachmentPanel
-        onPickPhotos={props.onPickPhotos}
-        onPickFile={props.onPickFile}
-        onStartVoice={props.onStartVoice}
-        canRecord={props.canRecord}
-        {...(props.rights === undefined ? {} : { rights: props.rights })}
-      />
-    );
+    const { variant: _variant, ...panel } = props;
+    return <ComposerAttachmentPanel {...panel} />;
   }
 
   return (
     <>
       {props.pending.length > 0 ? <PreviewStrip pending={props.pending} onRemove={props.onRemove} /> : null}
+      {props.place !== null ? <PlaceChip place={props.place} onRemove={props.onRemovePlace} /> : null}
       {props.notice !== null ? <NoticeBanner notice={props.notice} /> : null}
     </>
   );

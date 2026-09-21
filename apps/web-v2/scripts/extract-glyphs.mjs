@@ -307,16 +307,25 @@ emit({
 });
 
 /**
- * LE JEU D'ECRAN DU TIROIR DU COMPOSEUR (#5668) — `stop` (le bouton
- * « Arreter et ajouter aux pieces jointes » de la barre d'enregistrement).
- * `image`, `file`, `microphone` et `x` (tuiles, aperçu, annuler) restent au
- * SOCLE : ils y sont deja pour d'autres usages (rangee du composeur, blocs de
- * message), les dupliquer ici paierait leurs octets deux fois. Charge avec le
+ * LE JEU D'ECRAN DU TIROIR DU COMPOSEUR (#5668, etendu #7280) — `stop` (le
+ * bouton « Arreter et ajouter aux pieces jointes » de la barre
+ * d'enregistrement), `camera` et `map-pin` (les tuiles « Camera » et
+ * « Position », #7280).
+ * `image`, `file`, `microphone`, `smiley` et `x` (tuiles, aperçu, annuler)
+ * restent au SOCLE : ils y sont deja pour d'autres usages (rangee du
+ * composeur, blocs de message), les dupliquer ici paierait leurs octets deux
+ * fois. Charge avec le
  * chunk `composer-tray` (#5668, § 7 de la specification), jamais dans le
  * socle ni dans le chunk du fil : la barre d'enregistrement n'entre qu'au
  * premier tap sur le micro ou le "+".
  */
-const COMPOSER = ['stop'];
+const COMPOSER = ['stop', 'camera', 'map-pin'];
+
+/* AVERTISSEMENT (#7280) — `glyphs-feed.ts` porte un `mapPin` AJOUTÉ À LA MAIN
+   (#6901), que ce script ne connaît pas : le relancer le SUPPRIME. Avant de
+   committer une regeneration, verifier `git diff src/components/glyphs-*.ts`
+   et ne garder que les jeux qu'on voulait toucher — ou ajouter `map-pin` a
+   FEED, ce qui ferait perdre son doc-comment. */
 
 emit({
   ids: COMPOSER,

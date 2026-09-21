@@ -949,6 +949,36 @@ const fr = {
   'download.web': 'Ouvrir Meeshy dans le navigateur',
   'download.otherPlatforms': 'Sur Android et sur ordinateur, Meeshy s’utilise directement dans le navigateur.',
 
+  /* LES SOURCES DU COMPOSEUR (#7280) — le panneau de pièces jointes du fil.
+     Les libellés et les gestes annoncés reprennent le catalogue d'iOS
+     (`composer.attach.*`, `apps/ios/Meeshy/Localizable.xcstrings`), qui fait
+     foi : même mot, même ordre, même icône (dimension 6). Les trois premiers
+     (Photos / Fichier / Vocal) vivaient EN DUR dans `composer-tray.tsx` — ils
+     sont remontés ici par le lot qui en ajoute quatre, plutôt que d'y répandre
+     la dette (#6310). */
+  'composer.attach.group': 'Types de pièces jointes',
+  'composer.attach.handle': 'Poignée du panneau',
+  'composer.attach.photo': 'Photos',
+  'composer.attach.photo.action': 'Choisir des photos',
+  'composer.attach.camera': 'Caméra',
+  'composer.attach.camera.action': 'Prendre une photo',
+  'composer.attach.file': 'Fichier',
+  'composer.attach.file.action': 'Choisir un fichier',
+  'composer.attach.location': 'Position',
+  'composer.attach.location.action': 'Partager ma position',
+  'composer.attach.voice': 'Vocal',
+  'composer.attach.voice.action': 'Enregistrer un message vocal',
+  'composer.attach.emoji': 'Emoji',
+  'composer.attach.emoji.action': 'Insérer un emoji',
+  'composer.emoji.title': 'Insérer un emoji',
+  'composer.location.locating': 'Recherche de votre position…',
+  'composer.location.denied': 'Position refusée — autorisez-la dans les réglages',
+  'composer.location.unavailable': 'Position indisponible sur ce navigateur',
+  'composer.location.failed': 'Position introuvable — réessayez',
+  'composer.location.chip': 'LIEU',
+  'composer.location.unknown': 'Lieu inconnu',
+  'composer.location.remove': 'Retirer la position',
+
 } as const;
 
 export default fr;

@@ -5,6 +5,7 @@ import type { LocalDelivery } from '@/lib/view/message';
 
 import type { PendingAttachment } from './attachments';
 import type { LocalMessage } from './local-message';
+import type { SharedPlace } from './shared-place';
 
 /**
  * L'OUTBOX (#5813, étape 4) — le magasin qui porte un envoi tant que le
@@ -38,6 +39,15 @@ export type OutboxEntry = {
     readonly files: readonly PendingAttachment[];
     readonly attachmentIds?: readonly string[];
   };
+  /**
+   * LE LIEU PARTAGÉ DE CETTE ENTRÉE (#7280) — absent pour un envoi sans
+   * position. Il vit ICI, et non sur `message`, parce que le `Message` du
+   * domaine est celui de `@meeshy/shared` : la passerelle le HISSE au niveau
+   * racine sur ses projections (`hoistLocationOnto`), mais le client ne le
+   * COMPOSE pas — il l'ENVOIE. Le porter sur l'entrée le rend disponible à
+   * `retrySend`, qui relit l'entrée et jamais le composeur (déjà vidé).
+   */
+  readonly place?: SharedPlace;
 };
 
 export type OutboxState = {
