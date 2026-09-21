@@ -178,6 +178,11 @@ export default function PostDetailScreen() {
         {model !== undefined ? (
           <FeedPostCard
             model={model}
+            /* LA FICHE NE MÈNE PAS À ELLE-MÊME (#7284) — cet écran EST la
+               destination du geste d'ouverture ; l'y poser ajouterait un tour
+               de clavier vers la page courante. C'est le SEUL hôte de la carte
+               qui le déclare, et `routes/post-card-hosts.test.ts` le garde. */
+            isDetail
             onGesture={onGesture}
             onShare={onShare}
             onComment={onComment}

@@ -106,6 +106,10 @@ const fr = {
   'feed.post.see_less': 'voir moins',
   'feed.post.reel.chip': 'Réel',
   'feed.post.reel.of': 'Réel de {author}',
+  /* OUVRIR LA PUBLICATION (#7284) — le nom accessible DIT sa destination :
+     « Ouvrir » seul laisserait le lecteur d'écran deviner de quelle carte
+     il s'agit dans un fil qui en aligne vingt. */
+  'feed.post.open': 'Ouvrir la publication de {author}',
   'feed.error.title': 'Impossible de charger le fil',
   'feed.error.body': 'Réessayez dans un instant.',
   'feed.offline.title': 'Hors ligne',

@@ -77,6 +77,7 @@ const it = {
   'feed.post.see_less': 'mostra meno',
   'feed.post.reel.chip': 'Reel',
   'feed.post.reel.of': 'Reel di {author}',
+  'feed.post.open': 'Apri il post di {author}',
   'feed.error.title': 'Impossibile caricare il feed',
   'feed.error.body': 'Riprova tra un momento.',
   'feed.offline.title': 'Offline',

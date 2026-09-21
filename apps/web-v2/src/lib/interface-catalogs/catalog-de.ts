@@ -77,6 +77,7 @@ const de = {
   'feed.post.see_less': 'weniger anzeigen',
   'feed.post.reel.chip': 'Reel',
   'feed.post.reel.of': 'Reel von {author}',
+  'feed.post.open': 'Beitrag von {author} öffnen',
   'feed.error.title': 'Feed konnte nicht geladen werden',
   'feed.error.body': 'Versuche es gleich noch einmal.',
   'feed.offline.title': 'Offline',

@@ -1,5 +1,5 @@
 import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
-import { useCallback, useState } from 'react';
+import { useCallback, useState, type ReactNode } from 'react';
 
 import { Avatar } from './avatar';
 import { PersonName } from './person-name';
@@ -475,6 +475,83 @@ type SceneHosts = {
 };
 
 /**
+ * **LA ZONE QUI OUVRE LA PUBLICATION** (#7284) — l'EN-TÊTE et le TEXTE, rien
+ * d'autre : c'est la zone tappable d'iOS au pixel près (`FeedPostCard.swift`,
+ * le `VStack` qui porte `.contentShape(Rectangle()).onTapGesture { onTapPost?(post) }`
+ * autour de `authorHeader` et du corps de texte).
+ *
+ * La fiche `/post/$post` existait, complète et routée, et RIEN dans le fil n'y
+ * menait : le seul lien du dépôt vivait dans `notification-row.tsx`. Une liste
+ * sans son lien rend sa fiche inatteignable, et aucun gate ne le voit — les
+ * témoins de la route passent, ceux de la carte passent, et le produit est
+ * cassé entre les deux.
+ *
+ * **CE QUI RESTE DEHORS, ET POURQUOI.** iOS sort chaque autre surface du geste,
+ * en l'écrivant : la scène ouvre le PLEIN ÉCRAN (directive porteur 2026-09-05
+ * — « la scène EST le contenu : la toucher demande à la voir en grand, pas à
+ * lire ses commentaires »), le média a « its own fullscreen gesture », la
+ * rangée d'actions est « not inside the tap target ». Une carte entièrement
+ * cliquable les AVALERAIT toutes.
+ *
+ * **LE LIEN PASSE SOUS, LE CONTENU LAISSE TRAVERSER.** Un `<a>` englobant est
+ * exclu : il serait invalide (l'avatar, le nom, les mentions et les hashtags
+ * sont DÉJÀ des `<Link>`) et il avalerait ses propres cibles — le défaut que
+ * #7251 vient de corriger sur la rangée de conversation. La géométrie retenue
+ * est celle du RÉEL, quinze lignes plus haut dans ce fichier : le lien couvre
+ * la zone SOUS le contenu, le contenu est `pointer-events-none` et ses cibles
+ * internes ré-arment le clic. Aucune d'elles n'est donc descendante du lien —
+ * c'est ce que les témoins mesurent, et non la seule présence d'un `href`.
+ *
+ * `isDetail` — **LA FICHE NE MÈNE PAS À ELLE-MÊME.** `routes/post.tsx` monte
+ * cette même carte sur le détail ; un lien vers la page courante y serait un
+ * tour de clavier de plus qui ne va nulle part. Le défaut par DÉFAUT est le
+ * lien PRÉSENT : un hôte qui arrive demain l'obtient sans rien câbler, là où
+ * un rappel à passer se serait oublié — c'est exactement ce qui est arrivé
+ * deux fois à `onComment` (#7113, `routes/post-card-hosts.test.ts`).
+ */
+function FeedPostOpenZone({
+  postId,
+  author,
+  isDetail,
+  children,
+}: {
+  readonly postId: string;
+  readonly author: string;
+  readonly isDetail: boolean;
+  readonly children: ReactNode;
+}) {
+  const language = currentInterfaceLanguage();
+  if (isDetail) {
+    return (
+      <div className="flex flex-col gap-2" data-feed-post-open-zone>
+        {children}
+      </div>
+    );
+  }
+  return (
+    <div className="relative" data-feed-post-open-zone>
+      <Link
+        to="post"
+        params={{ post: postId }}
+        aria-label={translate(language, 'feed.post.open', { author })}
+        draggable={false}
+        data-feed-post-open
+        className="absolute inset-0 focus-visible:outline-2 focus-visible:-outline-offset-2"
+        style={{ borderRadius: 18, minHeight: 44, outlineColor: 'var(--color-ios-brand)' }}
+      >
+        {null}
+      </Link>
+      <div
+        data-feed-post-open-through
+        className="pointer-events-none flex flex-col gap-2 [&_a]:pointer-events-auto [&_button]:pointer-events-auto"
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/**
  * LE VISUEL D'UN POST (D-78, #6898) — LA SCÈNE d'abord (`model.scene`), le
  * MÉDIA en repli (`model.media`, D-70) quand `storyEffects` est absent,
  * invalide, ou `v < 3`. La forme (mono-scène / carrousel / mosaïque) suit
@@ -568,7 +645,7 @@ function FeedPostVisual({
   );
 }
 
-export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerScene, storyRing, mood, ...hosts }: { readonly model: FeedCardModel; readonly storyRing?: AuthorStoryRing; readonly mood?: string } & CardHosts & SceneHosts) {
+export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerScene, storyRing, mood, isDetail = false, ...hosts }: { readonly model: FeedCardModel; readonly storyRing?: AuthorStoryRing; readonly mood?: string; readonly isDetail?: boolean } & CardHosts & SceneHosts) {
   // La lecture est une VALEUR REÇUE du magasin d'élection (#6898 § 5.3) —
   // JAMAIS un état local : seules les deux cartes dont le booléen bascule se
   // re-rendent (Zero Unnecessary Re-render).
@@ -596,8 +673,10 @@ export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerS
          incapable de dire de quelle publication il parle. */
       data-feed-card-id={model.id}
     >
-      <FeedPostHeader model={model} {...(storyRing === undefined ? {} : { storyRing })} {...(mood === undefined ? {} : { mood })} />
-      {bodyText !== undefined ? <FeedPostText text={bodyText} mentions={model.validatedMentions} /> : null}
+      <FeedPostOpenZone postId={model.id} author={model.author.name} isDetail={isDetail}>
+        <FeedPostHeader model={model} {...(storyRing === undefined ? {} : { storyRing })} {...(mood === undefined ? {} : { mood })} />
+        {bodyText !== undefined ? <FeedPostText text={bodyText} mentions={model.validatedMentions} /> : null}
+      </FeedPostOpenZone>
       {/* Un post à SCÈNES SANS média (cas réel, § 3 de la spécification) ne
           doit plus rester nu sous son texte (D-78) : la condition porte donc
           sur `model.scene` autant que sur `model.media.length`. */}
