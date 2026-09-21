@@ -74,6 +74,28 @@
  *   marqué EN MÉMOIRE après un `message:deleted` reste à la charge de
  *   l'appelant, qui est seul à savoir ce qu'il garde dans son tableau.
  *
+ * `unreadCountHint` (#7351, V3, web-v2 seulement pour l'instant — dette
+ * consignée pour I1, le mirror Swift ne le porte pas encore) — LE REPLI
+ * SERVEUR quand AUCUN des trois rangs n'existe (`boundaryTime === null`) :
+ * un lecteur qui ouvre `GET /conversations/:id` en tout premier (deep link,
+ * notification) sur une conversation JAMAIS ouverte n'a ni cursor ni
+ * `joinedAt` (servi par la LISTE seule) — les trois rangs sont absents alors
+ * que le serveur SAIT, par `unreadCount`, que des messages sont non lus.
+ * Sans ce repli, l'absence locale de rang ferait passer un fil réellement
+ * non lu pour lu, l'inverse de D-L2 (2026-09-21). Deux règles, dans cet
+ * ordre, avant même de calculer `boundaryTime` :
+ * 1. `unreadCountHint === 0` ⇒ `null` IMMÉDIATEMENT — cet aveu serveur prime
+ *    sur un cursor LOCAL potentiellement périmé (cache de détail pas encore
+ *    repatché après un `markCaughtUp` récent, #7351 critère 2).
+ * 2. `boundaryTime === null` (ni cursor, ni `joinedAt`) et
+ *    `unreadCountHint` positif ⇒ élire les DERNIERS `unreadCountHint`
+ *    candidats (jamais les premiers — ce serait rejouer le « 4 812 non-lus »
+ *    que l'absence de repli laissait faire côté appelant). Une fenêtre plus
+ *    courte que le hint rend tous les candidats chargés non lus, cohérent
+ *    avec la borne déjà documentée : `unreadCount` compte la fenêtre reçue.
+ * Ignoré dès qu'un rang chronologique existe : les rangs 1-3 restent seuls
+ * maîtres du calcul normal.
+ *
  * La fonction trie une COPIE de `messages` (immutabilité, et les deux points
  * d'entrée possibles — page REST, page rejouée depuis un socket — ne
  * garantissent pas le même ordre). À `createdAt` ÉGAL, l'`id` départage :
@@ -97,6 +119,9 @@ export type FirstUnreadBoundaryParams = {
   /** Entrée du lecteur dans la conversation — 3e et dernier rang de la frontière. */
   readonly joinedAt?: Date | null;
   readonly viewerId: string;
+  /** Le compte AUTORITATIF du serveur (`Conversation.unreadCount`) — voir le
+   * doc-comment de tête, § `unreadCountHint`. */
+  readonly unreadCountHint?: number;
 };
 
 export type FirstUnreadBoundaryResult = {
@@ -116,15 +141,36 @@ function byCreatedAtThenId(
 export function firstUnreadBoundary(
   params: FirstUnreadBoundaryParams
 ): FirstUnreadBoundaryResult | null {
-  const { messages, lastReadMessageId, lastReadAt, lastReadMessageCreatedAt, joinedAt, viewerId } =
-    params;
+  const {
+    messages,
+    lastReadMessageId,
+    lastReadAt,
+    lastReadMessageCreatedAt,
+    joinedAt,
+    viewerId,
+    unreadCountHint,
+  } = params;
+
+  if (unreadCountHint === 0) return null;
+
   const boundaryTime = lastReadMessageCreatedAt ?? lastReadAt ?? joinedAt ?? null;
 
-  const candidates = messages
+  const otherMessages = messages
     .filter((message) => message.senderId !== viewerId)
     .filter((message) => message.id !== lastReadMessageId)
-    .filter((message) => boundaryTime === null || message.createdAt.getTime() > boundaryTime.getTime())
     .sort(byCreatedAtThenId);
+
+  if (boundaryTime === null && unreadCountHint !== undefined && unreadCountHint > 0) {
+    const start = Math.max(0, otherMessages.length - unreadCountHint);
+    const candidates = otherMessages.slice(start);
+    const first = candidates[0];
+    if (!first) return null;
+    return { firstUnreadId: first.id, unreadCount: candidates.length };
+  }
+
+  const candidates = otherMessages.filter(
+    (message) => boundaryTime === null || message.createdAt.getTime() > boundaryTime.getTime(),
+  );
 
   const first = candidates[0];
   if (!first) return null;
