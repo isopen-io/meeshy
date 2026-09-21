@@ -20,9 +20,11 @@ import {
   ANONYMOUS,
   CONV_A,
   CONV_B,
+  HOUR_MS,
   MSG_1,
   USER_ID,
   buildApp,
+  fromHarnessNow,
   makePrisma,
   makeStore,
   messageRow,
@@ -166,7 +168,7 @@ describe('PUT — règle 2 : supprimé, expiré, vue unique', () => {
   });
 
   it('rend 404 sur un message éphémère EXPIRÉ', async () => {
-    const store = readableStore({ messages: [messageRow({ expiresAt: new Date('2026-09-21T11:00:00.000Z') })] });
+    const store = readableStore({ messages: [messageRow({ expiresAt: fromHarnessNow(-HOUR_MS) })] });
     const { res } = await put(store, MSG_1);
 
     expect(res.statusCode).toBe(404);

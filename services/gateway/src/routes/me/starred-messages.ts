@@ -58,6 +58,18 @@ import {
 type StarParamsRequest = FastifyRequest<{ Params: { messageId: string } }>;
 
 /**
+ * L'HORLOGE est injectable, et c'est une nécessité de contrat, pas une
+ * commodité : trois verdicts du favori se jugent contre « maintenant » — un
+ * éphémère expiré sort, un éphémère vivant est un placeholder, un lien de
+ * partage échu ferme la porte. Un témoin qui fige une date future ABSOLUE
+ * contre l'horloge murale devient faux le jour où cette date passe. La table
+ * des routes monte ce module sans option : la production lit l'horloge réelle.
+ */
+export type MeStarredMessagesRoutesOptions = {
+  readonly now?: () => Date;
+};
+
+/**
  * Le lecteur INSCRIT, ou `null`. `authenticate` refuse déjà les invités ; ce
  * second contrôle rend la route sûre même montée derrière une garde plus
  * permissive.
@@ -68,9 +80,13 @@ function registeredReaderId(request: FastifyRequest): string | null {
   return authContext.registeredUser?.id ?? null;
 }
 
-export async function meStarredMessagesRoutes(fastify: FastifyInstance) {
-  const writer = new MessageStarWriter(fastify.prisma);
-  const reader = new StarredMessagesReader(fastify.prisma);
+export async function meStarredMessagesRoutes(
+  fastify: FastifyInstance,
+  options: MeStarredMessagesRoutesOptions = {},
+) {
+  const now = options.now ?? (() => new Date());
+  const writer = new MessageStarWriter(fastify.prisma, now);
+  const reader = new StarredMessagesReader(fastify.prisma, now);
 
   fastify.get(
     '/starred-messages',

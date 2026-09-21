@@ -20,10 +20,13 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
 }));
 
 import {
+  DAY_MS,
+  HOUR_MS,
   MSG_1,
   MSG_2,
   buildApp,
   conversationRow,
+  fromHarnessNow,
   makePrisma,
   makeStore,
   messageRow,
@@ -50,9 +53,9 @@ function linkStore(options: { readonly link: Record<string, unknown>; readonly p
   });
 }
 
-const EXPIRED = { allowViewHistory: true, expiresAt: new Date('2026-09-21T11:00:00.000Z') };
+const EXPIRED = { allowViewHistory: true, expiresAt: fromHarnessNow(-HOUR_MS) };
 const HISTORY_CLOSED = { allowViewHistory: false, expiresAt: null };
-const HISTORY_OPEN = { allowViewHistory: true, expiresAt: new Date('2026-12-31T00:00:00.000Z') };
+const HISTORY_OPEN = { allowViewHistory: true, expiresAt: fromHarnessNow(100 * DAY_MS) };
 
 async function put(store: Store, messageId: string) {
   const app = await buildApp(makePrisma(store));

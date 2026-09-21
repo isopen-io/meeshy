@@ -26,6 +26,21 @@ export const MSG_1 = '68b000000000000000000101';
 export const MSG_2 = '68b000000000000000000102';
 export const MSG_3 = '68b000000000000000000103';
 
+/**
+ * L'horloge de TOUS les témoins du favori — injectée dans la route et dans la
+ * fausse base, jamais lue au mur. Les fixtures datent leurs lignes par rapport
+ * à elle (« éphémère vivant » = une expiration postérieure à cet instant) : un
+ * témoin qui comparerait une date absolue à l'horloge réelle rougirait le jour
+ * où cette date passe.
+ */
+export const HARNESS_NOW = new Date('2026-09-21T12:00:00.000Z');
+
+export const HOUR_MS = 60 * 60 * 1000;
+export const DAY_MS = 24 * HOUR_MS;
+
+/** Un instant RELATIF à l'horloge des témoins — négatif = passé, positif = futur. */
+export const fromHarnessNow = (offsetMs: number): Date => new Date(HARNESS_NOW.getTime() + offsetMs);
+
 type Row = Record<string, unknown>;
 type Where = Record<string, unknown>;
 
@@ -132,7 +147,7 @@ function idFactory(prefix: string): () => string {
 
 export function makePrisma(store: Store, options: { now?: () => Date } = {}) {
   const nextStarId = idFactory('68c0');
-  const now = options.now ?? (() => new Date('2026-09-21T12:00:00.000Z'));
+  const now = options.now ?? (() => HARNESS_NOW);
   const withMessage = (row: Row): Row => ({ ...row, message: store.messages.find((m) => m.id === row.messageId) ?? null });
 
   return {
@@ -198,7 +213,7 @@ export const ANONYMOUS = {
 
 export async function buildApp(
   prisma: object,
-  options: { authContext?: Row; emitted?: Emitted[] } = {},
+  options: { authContext?: Row; emitted?: Emitted[]; now?: () => Date } = {},
 ): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   const emitted = options.emitted ?? [];
@@ -216,7 +231,7 @@ export async function buildApp(
     (request as unknown as Row).authContext = options.authContext ?? REGISTERED;
     (request as unknown as Row).auth = { userId: (options.authContext ?? REGISTERED).userId, isAuthenticated: true };
   });
-  await app.register(meStarredMessagesRoutes);
+  await app.register(meStarredMessagesRoutes, { now: options.now ?? (() => HARNESS_NOW) });
   await app.ready();
   return app;
 }

@@ -22,6 +22,8 @@ import {
   CONV_A,
   CONV_B,
   CONV_DIRECT,
+  DAY_MS,
+  HOUR_MS,
   MSG_1,
   MSG_2,
   MSG_3,
@@ -30,6 +32,7 @@ import {
   attachmentRow,
   buildApp,
   conversationRow,
+  fromHarnessNow,
   makePrisma,
   makeStore,
   messageRow,
@@ -239,7 +242,7 @@ describe('GET — règle 1 : la participation COURANTE décide, l’étoile rest
 describe('GET — règle 2 : supprimé, expiré ou vue unique SORT de la liste', () => {
   const cases: Array<[string, Record<string, unknown>]> = [
     ['supprimé pour tous', { deletedAt: new Date('2026-09-21T00:00:00.000Z') }],
-    ['éphémère expiré', { expiresAt: new Date('2026-09-21T11:00:00.000Z') }],
+    ['éphémère expiré', { expiresAt: fromHarnessNow(-HOUR_MS) }],
     ['à vue unique (booléen)', { isViewOnce: true }],
     ['à vue unique (bit effectFlags seul)', { effectFlags: MESSAGE_EFFECT_FLAGS.VIEW_ONCE }],
   ];
@@ -263,7 +266,7 @@ describe('GET — règle 3 : flouté, chiffré ou éphémère vivant = PLACEHOLD
   const cases: Array<[string, Record<string, unknown>]> = [
     ['flouté', { isBlurred: true }],
     ['chiffré', { isEncrypted: true }],
-    ['éphémère encore vivant', { expiresAt: new Date('2026-09-22T12:00:00.000Z') }],
+    ['éphémère encore vivant', { expiresAt: fromHarnessNow(DAY_MS) }],
     ['flouté par le seul bit effectFlags', { effectFlags: MESSAGE_EFFECT_FLAGS.BLURRED }],
   ];
 
