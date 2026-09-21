@@ -168,7 +168,8 @@ describe('ROUTE_TABLE (#4278)', () => {
     // /api/v1/me/starred-messages/:messageId`, puis `GET
     // /api/v1/me/starred-messages` dans le même module). Aucun alias, aucune
     // route retirée ni renommée. Vérifié : le manifeste régénéré passe de 572
-    // à 574 routes au lot de l'écriture, soit exactement ces deux-là.
+    // à 574 routes au lot de l'écriture, soit exactement ces deux-là, puis de
+    // 574 à 575 au lot de la liste, soit exactement le `GET`.
     expect(ROUTE_TABLE.length).toBe(67);
   });
 });

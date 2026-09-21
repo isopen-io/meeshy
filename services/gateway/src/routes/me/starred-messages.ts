@@ -1,6 +1,7 @@
 /**
  * Le favori de message — `/me/starred-messages` (#7377).
  *
+ *   - `GET    /me/starred-messages` rend la liste, la plus récente d'abord ;
  *   - `PUT    /me/starred-messages/:messageId` pose l'étoile (idempotent) ;
  *   - `DELETE /me/starred-messages/:messageId` la retire (idempotent).
  *
@@ -24,15 +25,18 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import type { CursorPaginationMeta } from '@meeshy/shared/types/api-responses';
 import {
   MESSAGE_STAR_ERROR_CODES,
   starMessageParamsSchema,
+  starredMessagesQuerySchema,
   type MessageStarPlacedResult,
   type MessageStarRemovedResult,
 } from '@meeshy/shared/types/message-star';
 
 import { isRegisteredUser, type UnifiedAuthRequest } from '../../middleware/auth';
 import { MessageStarWriter } from '../../services/messaging/messageStars/MessageStarWriter';
+import { StarredMessagesReader } from '../../services/messaging/messageStars/StarredMessagesReader';
 import { broadcastToUser } from '../../utils/socket-broadcast';
 import { logError } from '../../utils/logger';
 import {
@@ -47,6 +51,8 @@ import {
   messageStarPlacedResponseSchema,
   messageStarRemovedResponseSchema,
   starMessageParamsJsonSchema,
+  starredMessagesListResponseSchema,
+  starredMessagesQueryJsonSchema,
 } from './starred-messages-schemas';
 
 type StarParamsRequest = FastifyRequest<{ Params: { messageId: string } }>;
@@ -64,6 +70,61 @@ function registeredReaderId(request: FastifyRequest): string | null {
 
 export async function meStarredMessagesRoutes(fastify: FastifyInstance) {
   const writer = new MessageStarWriter(fastify.prisma);
+  const reader = new StarredMessagesReader(fastify.prisma);
+
+  fastify.get(
+    '/starred-messages',
+    {
+      onRequest: [fastify.authenticate],
+      schema: {
+        description:
+          'Liste des messages mis en favori par le lecteur (#7377), la plus récente étoile d’abord, paginée par ' +
+          'keyset opaque. Chaque ligne sert le message VIVANT (texte original, langue, traductions, aperçu des ' +
+          'pièces jointes), son auteur et sa conversation. Ne sert que les conversations dont le lecteur est ' +
+          'participant actif ; un message supprimé, expiré ou à vue unique sort de la liste ; un message flouté, ' +
+          'chiffré ou éphémère vivant est servi en placeholder (isProtected). Une page peut compter moins de ' +
+          '`limit` lignes : continuer tant que `hasMore` est vrai.',
+        tags: ['me', 'messages'],
+        summary: 'List starred messages',
+        querystring: starredMessagesQueryJsonSchema,
+        response: {
+          200: starredMessagesListResponseSchema,
+          400: errorResponseSchema,
+          401: errorResponseSchema,
+          403: errorResponseSchema,
+          500: errorResponseSchema,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const userId = registeredReaderId(request);
+      if (!userId) {
+        return sendForbidden(reply, 'Registered user required', { code: 'REGISTERED_USER_REQUIRED' });
+      }
+      const query = starredMessagesQuerySchema.safeParse(request.query);
+      if (!query.success) {
+        return sendBadRequest(reply, 'Invalid query', { code: 'VALIDATION_ERROR' });
+      }
+
+      try {
+        const outcome = await reader.list(userId, query.data);
+        if (outcome.kind === 'invalid-cursor') {
+          return sendBadRequest(reply, 'Invalid cursor', { code: 'INVALID_CURSOR' });
+        }
+        const pagination: CursorPaginationMeta = {
+          limit: query.data.limit,
+          hasMore: outcome.hasMore,
+          nextCursor: outcome.nextCursor,
+          form: 'keyset',
+        };
+        reply.header('Cache-Control', 'private, no-cache');
+        return sendSuccess(reply, outcome.items, { pagination });
+      } catch (error) {
+        logError(fastify.log, '[GET /me/starred-messages]', error);
+        return sendInternalError(reply, 'Error listing starred messages');
+      }
+    },
+  );
 
   fastify.put(
     '/starred-messages/:messageId',
