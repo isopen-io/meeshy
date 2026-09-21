@@ -131,16 +131,12 @@ function ReceiptPeopleSections({
   readonly lang: InterfaceLanguage;
 }) {
   const { readBy, receivedBy, notYet } = receiptCategoriesOf(people);
+  // ORDRE iOS — `ViewsFilter.filters = [.sent, .delivered, .read, .notSeen]`
+  // (`MessageViewsDetailView.swift:67`) : DISTRIBUÉ avant VU avant PAS VU.
+  // C'est aussi l'ordre que le critère du lot énonce (« Reçu par / Vu par /
+  // Pas encore »).
   return (
     <>
-      <PersonSection
-        title={translate(lang, 'message-detail.read-by')}
-        empty={translate(lang, 'message-detail.read-by.empty')}
-        people={readBy}
-        glyph="checks"
-        tint="var(--color-read)"
-        section="read-by"
-      />
       <PersonSection
         title={translate(lang, 'message-detail.received-by')}
         empty={translate(lang, 'message-detail.received-by.empty')}
@@ -148,6 +144,14 @@ function ReceiptPeopleSections({
         glyph="check"
         tint="var(--color-ios-ink-3)"
         section="received-by"
+      />
+      <PersonSection
+        title={translate(lang, 'message-detail.read-by')}
+        empty={translate(lang, 'message-detail.read-by.empty')}
+        people={readBy}
+        glyph="checks"
+        tint="var(--color-read)"
+        section="read-by"
       />
       <PersonSection
         title={translate(lang, 'message-detail.not-yet')}
