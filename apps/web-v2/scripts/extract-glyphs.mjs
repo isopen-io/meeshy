@@ -604,6 +604,11 @@ const SETTINGS = [
   'sign-out',
   'arrow-square-out',
   'caret-right',
+  /* LES PUBLICATIONS ENREGISTREES (#7286) — la rangee « Outils » des reglages,
+     miroir du `bookmark.fill` d'iOS (`SettingsView.swift`). Le jeu du FLUX le
+     porte deja, mais le tirer d'ici ferait entrer toute sa table dans le chunk
+     des reglages pour un seul trace. */
+  'bookmark-fill',
 ];
 
 emit({

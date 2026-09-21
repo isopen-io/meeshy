@@ -318,6 +318,28 @@ describe('les outils', () => {
   test('la progression mène à son écran', () => {
     expect(linkTo(dom(<ToolsSection language="fr" />), '/me/progression')?.textContent).toContain('Progression');
   });
+
+  /**
+   * **LA PORTE DES PUBLICATIONS ENREGISTRÉES** (#7286) — iOS la pose dans
+   * « Outils » (`SettingsView.swift`, `meeshyToolsSection`, `bookmark.fill`),
+   * juste après les messages favoris et avant les statistiques. Le web n'en
+   * avait AUCUNE : on enregistrait, et l'effet du geste restait invisible
+   * pour toujours à celui qui le faisait.
+   *
+   * Ce témoin ne mesure pas le libellé seul — il mesure que la rangée MÈNE
+   * quelque part. Une rangée sans adresse serait le contrôle qui ment (loi 4),
+   * exactement le défaut que l'issue nomme un cran plus bas.
+   */
+  test('les publications enregistrées ont leur rangée, et elle MÈNE à l’écran', () => {
+    const rangee = linkTo(dom(<ToolsSection language="fr" />), '/me/bookmarks');
+    expect(rangee?.textContent).toContain('Publications enregistrées');
+  });
+
+  test('elle arrive AVANT la progression — l’ordre d’iOS, pas l’ordre d’arrivée', () => {
+    const html = renderToStaticMarkup(<ToolsSection language="fr" />);
+    expect(html.indexOf('/me/bookmarks')).toBeGreaterThan(-1);
+    expect(html.indexOf('/me/bookmarks')).toBeLessThan(html.indexOf('/me/progression'));
+  });
 });
 
 describe('à propos', () => {

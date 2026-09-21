@@ -498,6 +498,19 @@ export function AppearanceSection({
 export function ToolsSection({ language, showAdmin = false }: { readonly language: InterfaceLanguage; readonly showAdmin?: boolean }) {
   return (
     <GroupedSection id="settings-tools" title={upper(language, 'settings.section.tools')} icon={SECTION_ICON({ set: 'ecran', name: 'wrench' })}>
+      {/* LES PUBLICATIONS ENREGISTRÉES (#7286) — iOS pose cette rangée dans
+          « Outils » (`SettingsView.swift`, `meeshyToolsSection`, `bookmark.fill`,
+          teinte indigo), AVANT les statistiques. Le web n'avait aucune porte :
+          on enregistrait, et l'effet du geste restait invisible pour toujours à
+          celui qui le faisait. Elle arrive donc en tête de la section, à la
+          place qu'iOS lui donne — pas à la fin, par ordre d'arrivée. */}
+      <Link to="bookmarks" data-settings-bookmarks className={ROW_CLASS} style={ROW_STYLE}>
+        <RowIcon tint="var(--ios-indigo-400)">
+          <GlyphSvg glyph={SETTINGS_GLYPHS.bookmarkFill} size={15} />
+        </RowIcon>
+        <RowText label={translate(language, 'settings.tools.bookmarks')} />
+        <Chevron />
+      </Link>
       <Link to="progression" data-settings-progression className={ROW_CLASS} style={ROW_STYLE}>
         <RowIcon tint="var(--color-warning)">
           <Glyph name="trophy" size={15} />
