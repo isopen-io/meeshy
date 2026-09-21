@@ -1,9 +1,11 @@
 import type { FeedInfiniteData, FeedPage, FeedPost } from '@/lib/api/feed-pages';
 
+import { dropCardPost } from './interactions';
+
 /**
  * **LE CORPUS DES ENREGISTRÉES EST UNE APPARTENANCE, PAS UN DRAPEAU** (#7286).
  *
- * `applyPostToggle` (`interactions.ts`) bascule `isBookmarkedByMe` là où la
+ * `togglePost` (`interactions.ts`) bascule `isBookmarkedByMe` là où la
  * publication est DÉJÀ servie. C'est la bonne loi pour le Flux, les Réels et
  * la fiche : retirer un signet y laisse la carte en place, éteinte. Sur
  * l'écran des publications ENREGISTRÉES, la même bascule rendrait une ligne
@@ -49,17 +51,12 @@ const rebuilt = (
   return pages.every((page, i) => page === data.pages[i]) ? data : { ...data, pages };
 };
 
-/** RETIRER — la ligne part de TOUTES les pages : un curseur qui chevauche peut
- * servir la même publication deux fois, et n'en ôter qu'une la ferait
- * réapparaître au premier aplatissement. */
+/** RETIRER — la ligne part de TOUTES les pages, par le parcours UNIQUE des
+ * caisses de cartes (`dropCardPost`) : un curseur qui chevauche peut servir
+ * la même publication deux fois, et n'en ôter qu'une la ferait réapparaître au
+ * premier aplatissement. */
 export function withoutBookmark(data: FeedInfiniteData | undefined, postId: string): FeedInfiniteData | undefined {
-  return rebuilt(
-    data,
-    data?.pages.map((page) => {
-      const posts = page.posts.filter((post) => post.id !== postId);
-      return posts.length === page.posts.length ? page : { ...page, posts };
-    }),
-  );
+  return dropCardPost(data, postId);
 }
 
 /**

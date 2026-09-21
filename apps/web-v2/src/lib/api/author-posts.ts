@@ -1,3 +1,4 @@
+import { AUTHOR_POSTS_QUERY_ROOT } from './card-caches';
 import { unwrap } from './client';
 import type { DataSource } from './config';
 import {
@@ -44,7 +45,9 @@ export type AuthorPostsDeps = { readonly source: DataSource; readonly transport:
 /** La limite par défaut de la route (`LimiteSchema`, `feed.ts:171`) : 1..50, 20 par défaut. */
 export const AUTHOR_POSTS_PAGE_SIZE = 20;
 
-export const authorPostsQueryKey = (authorId: string) => ['author-posts', authorId] as const;
+/** La racine vit au REGISTRE des caisses de cartes (`card-caches.ts`, #7341),
+ * même raison que `hashtagQueryKey`. */
+export const authorPostsQueryKey = (authorId: string) => [...AUTHOR_POSTS_QUERY_ROOT, authorId] as const;
 
 const RawPagination = (raw: unknown): FeedPagination => {
   const wire = (raw ?? {}) as { readonly limit?: unknown; readonly hasMore?: unknown; readonly nextCursor?: unknown };
