@@ -3885,7 +3885,13 @@ model MessageStar {
   user    User    @relation("UserMessageStars", fields: [userId], references: [id])
 
   @@unique([userId, messageId])
-  @@index([userId, createdAt])
+  // La liste trie par `(createdAt desc, id desc)` : l'index couvre le keyset
+  // entier, départage compris.
+  @@index([userId, createdAt, id])
+  // La cascade émulée de `onDelete: Cascade` (Prisma sur Mongo) retrouve les
+  // étoiles d'un message par `messageId` seul — sans cet index, chaque
+  // suppression de message balaie la collection.
+  @@index([messageId])
 }
 
 /// Bookmark/sauvegarde d'un post

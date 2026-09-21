@@ -393,6 +393,21 @@ describe('GET — pagination keyset sur l’ÉTOILE', () => {
     expect(body.code).toBe('INVALID_CURSOR');
   });
 
+  it('au-delà du plafond de 5000 participations, garde les plus RÉCENTES — un ensemble déterministe', async () => {
+    const recent = Array.from({ length: 5000 }, (_, i) =>
+      participantRow({
+        id: `68f0${String(i).padStart(20, '0')}`,
+        conversationId: `68a0${String(i).padStart(20, '0')}`,
+        joinedAt: new Date(Date.UTC(2026, 8, 1) + i * 1000),
+      }),
+    );
+    const oldest = participantRow({ joinedAt: new Date('2020-01-01T00:00:00.000Z') });
+    const store = oneStarStore({ participants: [oldest, ...recent] });
+    const { body } = await list(store);
+
+    expect(body.data).toEqual([]);
+  });
+
   it("refuse un curseur FORGÉ dont l'id n'est pas un ObjectId : 400, jamais un 500 de Prisma", async () => {
     const forged = Buffer.from(JSON.stringify({ createdAt: '2026-09-21T00:00:00.000Z', id: 'x' })).toString('base64url');
     const { res, body } = await list(threeStarsStore(), `?cursor=${forged}`);

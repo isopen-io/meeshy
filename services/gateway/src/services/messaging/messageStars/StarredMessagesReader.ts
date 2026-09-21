@@ -45,7 +45,10 @@ import { readableByReader, starredMessageVerdict } from './starredMessageVerdict
 
 /**
  * Plafond de PROTECTION des participations lues, jamais une pagination produit
- * — même borne et même raison que `routes/attachments/search.ts`.
+ * — même borne et même raison que `routes/attachments/search.ts`. Au-delà,
+ * l'ensemble reste DÉTERMINISTE : les participations les plus récentes sont
+ * gardées (`orderBy` ci-dessous), jamais un sous-ensemble laissé à l'ordre
+ * naturel de la collection, qui changerait d'un appel à l'autre.
  */
 const MEMBERSHIPS_READ_CAP = 5000;
 
@@ -83,6 +86,7 @@ export class StarredMessagesReader {
     const memberships = await this.prisma.participant.findMany({
       where: { userId, isActive: true, ...unsetOrNull('bannedAt') },
       select: { conversationId: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT },
+      orderBy: [{ joinedAt: 'desc' }, { id: 'desc' }],
       take: MEMBERSHIPS_READ_CAP,
     });
     if (memberships.length === 0) return EMPTY_PAGE;
