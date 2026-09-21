@@ -93,6 +93,8 @@ const pt = {
   'feed.newPosts.one': '{count} nova publicação',
   'feed.newPosts.other': '{count} novas publicações',
   'a11y.avatar.profile': 'Ver o perfil de {name}',
+  'a11y.avatar.story': 'Ver a story de {name}',
+  'userProfile.self.edit': 'Editar o meu perfil',
   'feed.like.error': 'Erro ao curtir a publicação',
   'post.bookmark.error': 'Não foi possível salvar',
   'feed.gesture.pending': 'Ação não confirmada — offline',

@@ -89,6 +89,8 @@ const ar = {
   'feed.newPosts.one': 'منشور جديد {count}',
   'feed.newPosts.other': 'منشورات جديدة {count}',
   'a11y.avatar.profile': 'عرض الملف الشخصي لـ {name}',
+  'a11y.avatar.story': 'عرض قصة {name}',
+  'userProfile.self.edit': 'تعديل ملفي الشخصي',
   'feed.like.error': 'تعذّر الإعجاب بالمنشور',
   'post.bookmark.error': 'تعذّر الحفظ',
   'feed.gesture.pending': 'لم يتم تأكيد الإجراء — غير متصل',

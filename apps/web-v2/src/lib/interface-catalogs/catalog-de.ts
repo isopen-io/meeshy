@@ -89,6 +89,8 @@ const de = {
   'feed.newPosts.one': '{count} neuer Beitrag',
   'feed.newPosts.other': '{count} neue Beiträge',
   'a11y.avatar.profile': 'Profil von {name} ansehen',
+  'a11y.avatar.story': 'Story von {name} ansehen',
+  'userProfile.self.edit': 'Mein Profil bearbeiten',
   'feed.like.error': 'Fehler beim Liken des Beitrags',
   'post.bookmark.error': 'Speichern fehlgeschlagen',
   'feed.gesture.pending': 'Aktion nicht bestätigt — offline',

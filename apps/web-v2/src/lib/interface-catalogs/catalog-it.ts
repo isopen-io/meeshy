@@ -89,6 +89,8 @@ const it = {
   'feed.newPosts.one': '{count} nuova pubblicazione',
   'feed.newPosts.other': '{count} nuove pubblicazioni',
   'a11y.avatar.profile': 'Vedi il profilo di {name}',
+  'a11y.avatar.story': 'Vedi la storia di {name}',
+  'userProfile.self.edit': 'Modifica il mio profilo',
   'feed.like.error': 'Errore nel mettere Mi piace',
   'post.bookmark.error': 'Salvataggio non riuscito',
   'feed.gesture.pending': 'Azione non confermata — offline',
