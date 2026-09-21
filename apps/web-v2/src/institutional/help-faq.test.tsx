@@ -25,9 +25,12 @@ import { InstitutionalPage } from './page';
  * utilisateur qui a DÉJÀ un problème.
  *
  * Ce témoin garde les quatre propriétés dont dépend « la page s'ouvre » :
- * déclarée à la source unique, non masquée par la coquille, servie par nginx,
- * lisible SANS COMPTE. Chacune se casse silencieusement — une page écrite sur
- * le disque que personne ne sert rend un 200 qui a l'air vivant.
+ * déclarée à la SOURCE UNIQUE, non masquée par la coquille, énumérée par les
+ * DEUX miroirs qui ne peuvent pas importer cette source (`nginx.conf` et
+ * `sw-institutional.js`), lisible SANS COMPTE. Chacune se casse en silence —
+ * une page écrite sur le disque que personne ne sert rend un 200 qui a l'air
+ * vivant, et un miroir oublié la fait repartir sur le réseau à chaque visite
+ * sans rien casser de visible (c'est ce que le second miroir a coûté, #7287).
  */
 
 const NGINX = readFileSync(new URL('../../nginx.conf', import.meta.url), 'utf8');
