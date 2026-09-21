@@ -17,8 +17,8 @@ import { REELS_QUERY_ROOT } from './reels-query-key';
  * Six écrans montent la MÊME carte (`FeedPostCard`), et chacun la peint depuis
  * SA caisse : le Flux, les Réels, les enregistrées, la page d'un hashtag, les
  * publications d'un profil, et la fiche `/post/$post`. Tout ce qui change une
- * carte — un cœur, un signet, un compteur, une modification, une suppression —
- * doit atteindre CHACUNE de ces caisses, sans quoi l'écran qui lit la caisse
+ * carte — un cœur, un signet, un compteur, une modification, une suppression,
+ * une traduction livrée en direct — doit atteindre CHACUNE de ces caisses, sans quoi l'écran qui lit la caisse
  * oubliée montre un contrôle inerte : la requête part, la carte ne bouge pas.
  *
  * La liste vivait RECOPIÉE à trois sites (`feed-gestures.ts#setOn`,
@@ -53,6 +53,12 @@ type CardList = {
    * câble (`ReelsViewModel.swift:95-183` : `postLiked`, `postUnliked`,
    * `postBookmarked`, `postDeleted`) —, jamais une relecture ni un contenu
    * neuf (`postUpdated` n'y est pas câblé).
+   *
+   * Une TRADUCTION livrée en direct (#7383, #7382) n'est pas un contenu
+   * neuf : elle sert au lecteur le MÊME texte dans sa langue, et ne touche
+   * pas l'ordre du fil. Elle passe donc par `updateCardPost` (iOS la pose
+   * dans toutes ses caisses, pager des Réels compris —
+   * `FeedViewModel.swift`, `feedCache.patchEverywhere`).
    */
   readonly frozen: boolean;
 };
@@ -96,23 +102,61 @@ const writeLists = (queryClient: QueryClient, lists: readonly CardList[], update
 const cardsOf = (queryClient: QueryClient, lists: readonly CardList[]) =>
   lists.flatMap((list) => queryClient.getQueriesData<CardPages>(filtersOf(list)));
 
-const holds = (data: CardPages | undefined, postId: string): boolean =>
-  data?.pages.some((page) => page.posts.some((post) => post.id === postId)) === true;
+const cardIn = (data: CardPages | undefined, postId: string): FeedPost | undefined =>
+  data?.pages.flatMap((page) => page.posts).find((post) => post.id === postId);
+
+const holds = (data: CardPages | undefined, postId: string): boolean => cardIn(data, postId) !== undefined;
+
+/** Une carte TROUVÉE, et la date à laquelle sa caisse l'a reçue. */
+export type CachedCard = { readonly post: FeedPost; readonly updatedAt: number };
+
+const datedIn = (queryClient: QueryClient, queryKey: QueryKey, post: FeedPost | undefined): readonly CachedCard[] =>
+  post === undefined ? [] : [{ post, updatedAt: queryClient.getQueryState(queryKey)?.dataUpdatedAt ?? 0 }];
 
 /**
- * LA CARTE TELLE QU'UN ÉCRAN LA MONTRE — l'état « AVANT » d'un geste. Une
- * publication peut n'être peinte QUE par un écran : enregistrée il y a trois
- * jours (#7286), trouvée sous un hashtag, ouverte sur un profil. N'y lire
- * qu'une caisse déduisait « pas aimée » et envoyait `POST` sur le geste qui
- * voulait RETIRER. La fiche vient en dernier : un lien DIRECT n'a rempli
- * qu'elle.
+ * LA CARTE TELLE QU'UN ÉCRAN LA MONTRE, ET SA DATE — la SEULE recherche d'une
+ * carte à travers les caisses. Une publication peut n'être peinte QUE par un
+ * écran : enregistrée il y a trois jours (#7286), trouvée sous un hashtag,
+ * ouverte sur un profil. N'y lire qu'une caisse déduisait « pas aimée » et
+ * envoyait `POST` sur le geste qui voulait RETIRER (#7341), et ouvrait la
+ * fiche sur un squelette alors que l'écran précédent AFFICHAIT la carte
+ * (#7384). La fiche vient en dernier : un lien DIRECT n'a rempli qu'elle.
+ *
+ * La DATE est celle de la caisse qui a FOURNI la carte : un écran qui s'en
+ * amorce la déclare comme la sienne (`initialDataUpdatedAt`), et sa règle de
+ * fraîcheur juge alors l'âge réel de la donnée, pas l'instant de l'ouverture.
  */
+export function findCachedCard(queryClient: QueryClient, postId: string): CachedCard | undefined {
+  const detailKey = postQueryKey(postId);
+  const [listed] = cardsOf(queryClient, CARD_LISTS).flatMap(([queryKey, data]) => datedIn(queryClient, queryKey, cardIn(data, postId)));
+  return listed ?? datedIn(queryClient, detailKey, queryClient.getQueryData<FeedPost>(detailKey))[0];
+}
+
+/** L'état « AVANT » d'un geste — la carte seule, sans sa date. */
 export function findCardPost(queryClient: QueryClient, postId: string): FeedPost | undefined {
-  const listed = cardsOf(queryClient, CARD_LISTS)
-    .flatMap(([, data]) => data?.pages ?? [])
-    .flatMap((page) => page.posts)
-    .find((post) => post.id === postId);
-  return listed ?? queryClient.getQueryData<FeedPost>(postQueryKey(postId));
+  return findCachedCard(queryClient, postId)?.post;
+}
+
+/**
+ * **OUVRIR UNE PUBLICATION DÉJÀ PEINTE LA PEINT TOUT DE SUITE** (#7384) — ce
+ * qu'un écran qui OUVRE une publication (la fiche `usePost`, la graine du
+ * lecteur des Réels) répand dans sa requête `postQueryKey` : la carte de
+ * N'IMPORTE QUELLE caisse du registre, datée de cette caisse. Sa requête naît
+ * alors RÉUSSIE — jamais de squelette sur une carte que l'écran précédent
+ * montrait — et sa règle de fraîcheur décide seule de la relecture en fond.
+ *
+ * Aucune caisse ne la porte (lien direct, notification d'une publication
+ * jamais vue) : `undefined`, la requête naît en attente et le squelette est
+ * juste. Rien n'est inventé.
+ *
+ * Les deux fonctions sont appelées par TanStack dans le MÊME tour synchrone
+ * (`getDefaultState`), sur le même cache : elles trouvent la même carte.
+ */
+export function cachedCardSeed(queryClient: QueryClient, postId: string) {
+  return {
+    initialData: (): FeedPost | undefined => findCachedCard(queryClient, postId)?.post,
+    initialDataUpdatedAt: (): number | undefined => findCachedCard(queryClient, postId)?.updatedAt,
+  };
 }
 
 const writeCard = (queryClient: QueryClient, lists: readonly CardList[], postId: string, apply: (post: FeedPost) => FeedPost): void => {
