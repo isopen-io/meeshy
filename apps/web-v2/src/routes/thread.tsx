@@ -640,6 +640,7 @@ export default function ThreadScreen() {
     conversationId,
     placed,
     unreadBoundary,
+    ready: threadData.status === 'success',
     virtualizer,
     onProgrammaticScroll: scene.noteProgrammaticScroll,
   });

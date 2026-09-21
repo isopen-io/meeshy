@@ -43,16 +43,32 @@ export function useThreadOpenScroll(input: {
   readonly conversationId: string;
   readonly placed: readonly PlacedLike[];
   readonly unreadBoundary: UnreadBoundarySnapshot;
+  /**
+   * `ready` — LE CADRE DE DÉFILEMENT EST-IL MONTÉ ? (`threadData.status ===
+   * 'success'`, la MÊME condition que le garde-fou de rendu de
+   * `routes/thread.tsx` : en deçà, l'écran rend `<ThreadSkeleton />` et
+   * `scroller.current` est `null`.)
+   *
+   * **Pourquoi c'est une DÉPENDANCE et pas seulement une garde** (défaut
+   * trouvé en revue de W3) : `useThreadData` compose DEUX requêtes
+   * indépendantes, et rien ne dit laquelle répond la première. Quand les
+   * MESSAGES arrivent avant la CONVERSATION, `lastMessageId` est déjà défini
+   * pendant les rendus du squelette — l'effet s'y exécutait, repartait
+   * aussitôt (`scroller.current === null`) et ne se rejouait JAMAIS, sa
+   * seule dépendance étant la queue du fil. Le fil s'ouvrait alors en HAUT
+   * de la fenêtre virtualisée : ni sur le séparateur (D-L2), ni en bas.
+   */
+  readonly ready: boolean;
   readonly virtualizer: Pick<Virtualizer<HTMLElement, Element>, 'scrollToIndex'>;
   readonly onProgrammaticScroll: () => void;
 }): void {
-  const { scroller, conversationId, placed, unreadBoundary, virtualizer, onProgrammaticScroll } = input;
+  const { scroller, conversationId, placed, unreadBoundary, ready, virtualizer, onProgrammaticScroll } = input;
   const lastMessageId = placed[placed.length - 1]?.message.id;
   const openedFor = useRef<string | null>(null);
 
   useEffect(() => {
     const el = scroller.current;
-    if (el === null || lastMessageId === undefined) return;
+    if (!ready || el === null || lastMessageId === undefined) return;
 
     const isInitialOpen = openedFor.current !== conversationId;
     openedFor.current = conversationId;
@@ -78,8 +94,10 @@ export function useThreadOpenScroll(input: {
         el.removeEventListener(event, release);
       }
     };
-    // Volontairement sur la seule QUEUE du fil (#6972) : se ré-ancrer à
-    // chaque rendu empêcherait l'utilisateur de remonter son historique.
+    // Volontairement sur la seule QUEUE du fil (#6972) — PLUS `ready`, qui
+    // ne bascule qu'UNE fois par fil (voir son doc-comment ci-dessus) : se
+    // ré-ancrer à chaque rendu empêcherait l'utilisateur de remonter son
+    // historique.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lastMessageId]);
+  }, [lastMessageId, ready]);
 }

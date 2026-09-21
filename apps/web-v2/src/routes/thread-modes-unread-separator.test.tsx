@@ -107,6 +107,16 @@ const SCENE: ThreadScene = { elected: null, noteProgrammaticScroll: () => {} } a
 const MESSAGES = [messageOf('m-1', 1), messageOf('m-2', 2), messageOf('m-3', 3)];
 const PLACED = MESSAGES.map(placeOf);
 
+/**
+ * `ACCENT_DE_CONVERSATION` — une teinte qui n'est PAS le jeton primaire, et
+ * c'est le point du témoin de D-L3 : monté sans `accent`, `ThreadModes`
+ * retombe sur `var(--color-ios-brand)` par DÉFAUT, et un séparateur qui
+ * servirait l'accent rendrait alors exactement la même couleur que le jeton
+ * primaire — la dimension que la décision gouverne ne VARIERAIT pas, et le
+ * témoin resterait vert sur la faute qu'il prétend interdire.
+ */
+const ACCENT_DE_CONVERSATION = 'var(--color-accent-de-cette-conversation)';
+
 const monte = async (mode: ConversationReadingMode, unreadSeparatorMessageId: string | null) =>
   mounter.mount(
     <ThreadModes
@@ -122,6 +132,7 @@ const monte = async (mode: ConversationReadingMode, unreadSeparatorMessageId: st
       expiredIds={new Set()}
       jumpToMessage={() => {}}
       typists={[]}
+      accent={ACCENT_DE_CONVERSATION}
       unreadSeparatorMessageId={unreadSeparatorMessageId}
       unreadCount={unreadSeparatorMessageId === null ? 0 : 2}
     />,
@@ -151,6 +162,7 @@ describe('le séparateur de non-lus, monté sur le chemin produit', () => {
     const host = await monte('bubbles', 'm-2');
     const pill = host.querySelector<HTMLElement>('[data-unread-separator] span');
     expect(pill?.style.backgroundColor).toBe('var(--color-ios-brand)');
+    expect(pill?.style.backgroundColor).not.toBe(ACCENT_DE_CONVERSATION);
   });
 
   test('même comportement sur la peau Focal', async () => {
