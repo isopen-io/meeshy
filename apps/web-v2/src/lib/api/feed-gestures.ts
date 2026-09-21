@@ -1,17 +1,15 @@
 import type { QueryClient } from '@tanstack/react-query';
 
 import { bookmarkSlotOf, withBookmark, withoutBookmark, type BookmarkSlot } from '@/lib/feed/bookmark-membership';
-import { applyPostToggle, applyServedCount, togglePost, withServedCount, type PostToggleKind } from '@/lib/feed/interactions';
+import { togglePost, withServedCount, type PostToggleKind } from '@/lib/feed/interactions';
 
 import { BOOKMARKS_QUERY_KEY } from './bookmarked-posts';
+import { findCardPost, invalidateCardPost, updateCardPost, writeCardCache } from './card-caches';
 import { newClientMessageId } from './client-message-id';
 import type { DataSource } from './config';
-import { FEED_QUERY_KEY } from './feed';
 import type { FeedInfiniteData, FeedPost } from './feed-pages';
 import type { ApiResult, HttpTransport } from './http';
 import { outcomeOf } from './outcome';
-import { postQueryKey } from './publication-detail';
-import { REELS_QUERY_ROOT } from './reels';
 
 /**
  * LE PORT DES GESTES D'UNE PUBLICATION (#6278) — aimer et enregistrer, le
@@ -26,12 +24,15 @@ import { REELS_QUERY_ROOT } from './reels';
  * - ENREGISTRER : `POST|DELETE /api/v1/posts/:postId/bookmark`
  *   (`bookmarks.ts:32,90`), qui rend le `bookmarkCount` ABSOLU.
  *
- * **LA QUATRIÈME CAISSE** (#7286) — le corpus des publications ENREGISTRÉES
- * (`BOOKMARKS_QUERY_KEY`). Les trois autres (Flux, Réels, fiche) sont des
- * surfaces où la carte RESTE quand le signet s'éteint ; celle-ci est AUSSI un
- * corpus d'APPARTENANCE. Pour AIMER, elle bascule comme les trois autres
- * (`applyPostToggle`) — son écran peint ses cartes depuis elle. Pour
- * ENREGISTRER, `setOn` la gouverne par `bookmark-membership.ts` : retirer ÔTE
+ * **LES CAISSES QU'IL ÉCRIT NE SONT PAS NOMMÉES ICI** (#7341) : le registre
+ * `card-caches.ts` les tient — le Flux, les Réels, les enregistrées, la page
+ * d'un hashtag, les publications d'un profil, la fiche. Ce fichier en a
+ * RECOPIÉ la liste jusqu'à #7341, et la recopie ne connaissait ni le hashtag
+ * ni le profil : le cœur y partait au serveur et la carte ne bougeait pas.
+ *
+ * **LE CORPUS DES ENREGISTRÉES EST AUSSI UNE APPARTENANCE** (#7286). Pour
+ * AIMER, sa carte bascule comme toutes les autres. Pour ENREGISTRER, `setOn`
+ * gouverne EN PLUS sa composition par `bookmark-membership.ts` : retirer ÔTE
  * la ligne, et le retour en arrière lui REND SA PLACE — la `BookmarkSlot` est
  * relevée AVANT l'écriture optimiste, par ligne et jamais par instantané de
  * la liste (deux gestes concurrents sur deux publications s'annuleraient
@@ -84,9 +85,6 @@ const inFlight = new Set<string>();
 
 const newClientMutationId = (): string => newClientMessageId().replace(/^cid_/, 'cmid_');
 
-const findPost = (data: FeedInfiniteData | undefined, postId: string): FeedPost | undefined =>
-  data?.pages.flatMap((page) => page.posts).find((p) => p.id === postId);
-
 const isOn = (post: FeedPost | undefined, kind: PostToggleKind): boolean =>
   kind === 'like' ? post?.isLikedByMe === true : post?.isBookmarkedByMe === true;
 
@@ -118,27 +116,13 @@ export async function performPostGesture(params: {
   const flightKey = `${kind}:${postId}`;
   if (inFlight.has(flightKey)) return { ok: true };
 
-  /* Le fil d'abord, le détail sinon : un lien DIRECT vers `/post/:id` n'a
-     jamais rempli le fil, et n'y lire que lui verrait « pas aimé » sur un post
-     déjà aimé. Les DEUX caches basculent ensemble — la même publication ne
-     peut pas porter deux cœurs selon l'écran qui la montre. */
-  /* LES FILS DE RÉELS (#6457) suivent le même geste : un réel servi par le fil
-     d'affinité n'est pas forcément dans le Flux, et le lecteur des Réels peint
-     depuis ses propres pages — toutes les graines, une seule racine. */
-  /* LES ENREGISTRÉES SONT UNE SOURCE D'ÉTAT, PAS SEULEMENT UNE CIBLE (#7286) :
-     l'écran des publications enregistrées se lit par SA propre requête, et une
-     publication peut n'y être QUE là — on l'a enregistrée il y a trois jours,
-     le Flux ne la sert plus. N'y lire que le Flux, les Réels et la fiche
-     déduisait alors « pas enregistrée » et envoyait un `POST` (ajouter) sur le
-     geste qui voulait RETIRER : le signet revenait, la ligne restait. */
-  const known =
-    findPost(deps.queryClient.getQueryData<FeedInfiniteData>(FEED_QUERY_KEY), postId) ??
-    deps.queryClient
-      .getQueriesData<FeedInfiniteData>({ queryKey: REELS_QUERY_ROOT })
-      .map(([, data]) => findPost(data, postId))
-      .find((post) => post !== undefined) ??
-    findPost(deps.queryClient.getQueryData<FeedInfiniteData>(BOOKMARKS_QUERY_KEY), postId) ??
-    deps.queryClient.getQueryData<FeedPost>(postQueryKey(postId));
+  /* L'ÉTAT « AVANT » SE LIT LÀ OÙ LA CARTE EST PEINTE (`findCardPost`) — sur
+     N'IMPORTE QUEL écran qui la montre, la fiche en dernier. Une publication
+     peut n'être QUE sur l'écran où le geste a lieu : enregistrée il y a trois
+     jours (#7286), trouvée sous un hashtag ou sur un profil (#7341). N'y lire
+     qu'une caisse déduisait « pas aimée » et envoyait un `POST` (ajouter) sur
+     le geste qui voulait RETIRER. */
+  const known = findCardPost(deps.queryClient, postId);
   const on = !isOn(known, kind);
   /* LA PLACE DE LA LIGNE DANS LE CORPUS ENREGISTRÉ, relevée AVANT l'optimiste :
      après, la ligne n'y est plus. Absente du corpus (on enregistre depuis le
@@ -150,17 +134,13 @@ export async function performPostGesture(params: {
       ? null
       : (bookmarkSlotOf(deps.queryClient.getQueryData<FeedInfiniteData>(BOOKMARKS_QUERY_KEY), postId) ??
         (known === undefined ? null : { post: togglePost(known, { postId, kind, on: true }), page: 0, index: 0 }));
-  /* LE CORPUS DES ENREGISTRÉES EST AUSSI UNE SURFACE DE CARTE : son écran peint
-     ses cartes depuis SA caisse. Pour AIMER, il bascule comme les trois autres
-     — sans quoi le cœur tapé sur cet écran partait au serveur et la carte ne
-     bougeait pas. Pour ENREGISTRER, c'est l'APPARTENANCE qui change. */
+  /* CHAQUE CAISSE QUI MONTRE LA CARTE BASCULE, UNE FOIS — puis, pour
+     ENREGISTRER, le corpus des enregistrées change d'APPARTENANCE. */
   const setOn = (value: boolean) => {
     const change = { postId, kind, on: value };
-    deps.queryClient.setQueryData<FeedInfiniteData>(FEED_QUERY_KEY, (data) => applyPostToggle(data, change));
-    deps.queryClient.setQueriesData<FeedInfiniteData>({ queryKey: REELS_QUERY_ROOT }, (data) => applyPostToggle(data, change));
-    deps.queryClient.setQueryData<FeedPost>(postQueryKey(postId), (post) => (post === undefined ? post : togglePost(post, change)));
-    deps.queryClient.setQueryData<FeedInfiniteData>(BOOKMARKS_QUERY_KEY, (data) => {
-      if (kind === 'like') return applyPostToggle(data, change);
+    updateCardPost(deps.queryClient, postId, (post) => togglePost(post, change));
+    if (kind !== 'bookmark') return;
+    writeCardCache<FeedInfiniteData>(deps.queryClient, BOOKMARKS_QUERY_KEY, (data) => {
       if (!value) return withoutBookmark(data, postId);
       return slot === null ? data : withBookmark(data, slot);
     });
@@ -176,10 +156,7 @@ export async function performPostGesture(params: {
       const count = kind === 'bookmark' ? servedBookmarkCount(result.data) : undefined;
       if (count !== undefined) {
         const served = { postId, kind, count };
-        deps.queryClient.setQueryData<FeedInfiniteData>(FEED_QUERY_KEY, (data) => applyServedCount(data, served));
-        deps.queryClient.setQueriesData<FeedInfiniteData>({ queryKey: REELS_QUERY_ROOT }, (data) => applyServedCount(data, served));
-        deps.queryClient.setQueryData<FeedPost>(postQueryKey(postId), (post) => (post === undefined ? post : withServedCount(post, served)));
-        deps.queryClient.setQueryData<FeedInfiniteData>(BOOKMARKS_QUERY_KEY, (data) => applyServedCount(data, served));
+        updateCardPost(deps.queryClient, postId, (post) => withServedCount(post, served));
       }
       return { ok: true };
     }
@@ -188,9 +165,7 @@ export async function performPostGesture(params: {
 
     setOn(!on);
     if (kind === 'like' && result.status === 409) {
-      void deps.queryClient.invalidateQueries({ queryKey: FEED_QUERY_KEY });
-      void deps.queryClient.invalidateQueries({ queryKey: postQueryKey(postId) });
-      void deps.queryClient.invalidateQueries({ queryKey: BOOKMARKS_QUERY_KEY });
+      invalidateCardPost(deps.queryClient, postId);
       return { ok: true };
     }
     return { ok: false, message: kind === 'like' ? LIKE_FAILED_MESSAGE : BOOKMARK_FAILED_MESSAGE };

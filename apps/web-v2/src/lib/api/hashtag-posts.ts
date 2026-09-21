@@ -1,3 +1,4 @@
+import { HASHTAG_QUERY_ROOT } from './card-caches';
 import { unwrap } from './client';
 import type { DataSource } from './config';
 import { CANVAS_CAPS_HEADERS, type FeedPost } from './feed-pages';
@@ -37,7 +38,10 @@ export const HASHTAG_PAGE_SIZE = 20;
  * rogné — une seule forme de clé de cache pour `#Projet` et `#projet`. */
 export const normalizeHashtag = (raw: string): string => raw.trim().toLowerCase().replace(/^#/, '');
 
-export const hashtagQueryKey = (tag: string) => ['hashtag', normalizeHashtag(tag)] as const;
+/** La racine vit au REGISTRE des caisses de cartes (`card-caches.ts`, #7341) :
+ * c'est lui que le geste et les échos parcourent, et une clé construite
+ * ailleurs pourrait s'en écarter sans qu'aucune écriture ne l'atteigne. */
+export const hashtagQueryKey = (tag: string) => [...HASHTAG_QUERY_ROOT, normalizeHashtag(tag)] as const;
 
 export type HashtagPage = { readonly posts: readonly FeedPost[]; readonly nextCursor: number | null };
 

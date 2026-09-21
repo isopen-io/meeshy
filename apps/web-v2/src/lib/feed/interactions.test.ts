@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import type { FeedInfiniteData, FeedPost } from '@/lib/api/feed-pages';
 
 import { resolveFeedCardModel } from './card-model';
-import { applyMediaCaptionTranslation, applyPostToggle, applyServedCount } from './interactions';
+import { applyMediaCaptionTranslation, mapCardPosts, togglePost, withServedCount, type PostToggle, type ServedCount } from './interactions';
 
 const NOW = new Date('2026-09-13T12:00:00.000Z');
 
@@ -13,6 +13,13 @@ const post = (partial: Partial<FeedPost>): FeedPost => ({
   createdAt: '2026-09-13T11:55:00.000Z',
   ...partial,
 });
+
+/** Une loi de CARTE portée à travers les pages par le parcours unique — ce que
+ * le registre des caisses (`lib/api/card-caches.ts`) applique à chaque écran. */
+const applyPostToggle = (data: FeedInfiniteData | undefined, change: PostToggle) =>
+  mapCardPosts(data, (post) => togglePost(post, change));
+const applyServedCount = (data: FeedInfiniteData | undefined, served: ServedCount) =>
+  mapCardPosts(data, (post) => withServedCount(post, served));
 
 const pagesOf = (...pages: readonly (readonly FeedPost[])[]): FeedInfiniteData => ({
   pages: pages.map((posts) => ({ posts, pagination: { limit: 20, hasMore: false, nextCursor: null } })),
@@ -45,7 +52,7 @@ describe('resolveFeedCardModel — l’état PROPRE AU LECTEUR voyage jusqu’à
   });
 });
 
-describe('applyPostToggle — le geste optimiste, IMMUABLE, sur le cache paginé du fil', () => {
+describe('togglePost × mapCardPosts — le geste optimiste, IMMUABLE, sur une caisse paginée', () => {
   test('aimer un post pas encore aimé ⇒ cœur plein ET compte +1', () => {
     const next = applyPostToggle(pagesOf([post({ isLikedByMe: false, likeCount: 14 })]), { postId: 'p1', kind: 'like', on: true });
     expect(gestureStateOf(next, 'p1')).toEqual({ isLikedByMe: true, likeCount: 15 });
@@ -107,7 +114,7 @@ describe('applyPostToggle — le geste optimiste, IMMUABLE, sur le cache paginé
   });
 });
 
-describe('applyServedCount — un compte SERVI remplace l’estimation, partage compris (#6278)', () => {
+describe('withServedCount × mapCardPosts — un compte SERVI remplace l’estimation, partage compris (#6278)', () => {
   test('le compte de partages servi entre au cache, sans toucher aux autres', () => {
     const next = applyServedCount(pagesOf([post({ shareCount: 2, likeCount: 5 })]), { postId: 'p1', kind: 'share', count: 7 });
     const found = next?.pages[0]?.posts[0];
