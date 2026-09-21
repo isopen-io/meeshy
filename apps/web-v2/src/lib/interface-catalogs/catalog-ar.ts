@@ -823,6 +823,8 @@ const ar = {
 
   'admin.title': 'الإدارة',
 
+  'thread.unread-separator.one': '{count} رسالة غير مقروءة',
+  'thread.unread-separator.other': '{count} رسائل غير مقروءة',
   'message-detail.info.title': 'معلومات الرسالة',
   'message-detail.received-by': 'استلمها',
   'message-detail.read-by': 'قرأها',

@@ -826,6 +826,8 @@ const de = {
 
   'admin.title': 'Verwaltung',
 
+  'thread.unread-separator.one': '{count} ungelesene Nachricht',
+  'thread.unread-separator.other': '{count} ungelesene Nachrichten',
   'message-detail.info.title': 'Nachrichteninfo',
   'message-detail.received-by': 'Erhalten von',
   'message-detail.read-by': 'Gelesen von',

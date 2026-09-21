@@ -830,6 +830,8 @@ const pt = {
 
   'admin.title': 'Administração',
 
+  'thread.unread-separator.one': '{count} mensagem não lida',
+  'thread.unread-separator.other': '{count} mensagens não lidas',
   'message-detail.info.title': 'Informações da mensagem',
   'message-detail.received-by': 'Recebido por',
   'message-detail.read-by': 'Lido por',

@@ -152,6 +152,13 @@ describe('GET /conversations — attache du pont ✦ (G-123)', () => {
     mockBuildBridgeData.mockResolvedValue(new Map([[CONV_A, { bridge, lastReadAt }]]));
 
     const prisma = makePrisma([makeConversation()]);
+    // #7198 — `lastReadAt` vient désormais de la frontière de lecture
+    // (`conversationReadCursor`), servie INCONDITIONNELLEMENT, pas de
+    // l'entrée du pont (qui ne porte plus ce champ) : le curseur doit exister
+    // pour que la valeur survive jusqu'au payload.
+    prisma.conversationReadCursor.findMany.mockResolvedValue([
+      { participantId: PARTICIPANT_A, lastReadMessageId: null, lastReadAt, lastReadMessageCreatedAt: null },
+    ]);
     const app = await buildApp(prisma);
 
     const res = await app.inject({ method: 'GET', url: '/conversations', headers: { authorization: 'Bearer x' } });
@@ -335,10 +342,11 @@ describe('GET /conversations — attache du pont ✦ (G-123)', () => {
 
       await app.inject({ method: 'GET', url: '/conversations', headers: { authorization: 'Bearer x' } });
 
-      // Sélection étendue : le service a aussi besoin de `lastReadMessageCreatedAt`.
+      // Sélection étendue : #7198 y ajoute `lastReadMessageId`, servi à la
+      // frontière de lecture (la LISTE, pas seulement le pont).
       expect(prisma.conversationReadCursor.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          select: { participantId: true, lastReadAt: true, lastReadMessageCreatedAt: true },
+          select: { participantId: true, lastReadMessageId: true, lastReadAt: true, lastReadMessageCreatedAt: true },
         })
       );
       const callArgs = mockBuildBridgeData.mock.calls[0][0] as {

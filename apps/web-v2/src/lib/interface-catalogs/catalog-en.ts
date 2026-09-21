@@ -826,6 +826,8 @@ const en = {
 
   'admin.title': 'Administration',
 
+  'thread.unread-separator.one': '{count} unread message',
+  'thread.unread-separator.other': '{count} unread messages',
   'message-detail.info.title': 'Message info',
   'message-detail.received-by': 'Received by',
   'message-detail.read-by': 'Read by',

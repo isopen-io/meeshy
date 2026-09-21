@@ -22,6 +22,7 @@ import { generateDefaultConversationTitle } from '@meeshy/shared/utils/conversat
 import { canViewExactMemberCount, presentMemberCount } from '@meeshy/shared/utils/member-visibility';
 import type { ConversationParams } from './types';
 import { conversationDetailInclude } from './core-selects';
+import { loadReadCursorBoundaries } from './read-cursor-projection';
 import {
   parseStrictFieldList,
   selectForFields,
@@ -191,6 +192,13 @@ export const CONVERSATION_DETAIL_SERVED_FIELDS = [
   'memberCount',
   'unreadCount',
   'currentUserRole',
+  // La frontière de lecture du lecteur (#7198), jumelle de celle que la
+  // LISTE sert désormais inconditionnellement — même curseur
+  // (`ConversationReadCursor`), même coût (`veutParticipantAppelant`
+  // ci-dessous, partagé avec `unreadCount`/`currentUserRole`).
+  'lastReadMessageId',
+  'lastReadAt',
+  'lastReadMessageCreatedAt',
 ] as const;
 
 /**
@@ -218,6 +226,9 @@ export const conversationDetailPlan: ColumnPlan<typeof conversationDetailColumns
     memberCount: ['_count'],
     unreadCount: [],
     currentUserRole: [],
+    lastReadMessageId: [],
+    lastReadAt: [],
+    lastReadMessageCreatedAt: [],
   },
 };
 
@@ -335,6 +346,10 @@ export function registerConversationDetailRoute(
       const sertEffectif = isFieldServed(champs, 'memberCount');
       const sertRang = isFieldServed(champs, 'currentUserRole');
       const sertNonLus = isFieldServed(champs, 'unreadCount');
+      const sertMessageLu = isFieldServed(champs, 'lastReadMessageId');
+      const sertDerniereLecture = isFieldServed(champs, 'lastReadAt');
+      const sertHorlogeMessageLu = isFieldServed(champs, 'lastReadMessageCreatedAt');
+      const sertFrontiereLecture = sertMessageLu || sertDerniereLecture || sertHorlogeMessageLu;
 
       // Résoudre l'ID de conversation réel
       const conversationId = await resolveConversationId(prisma, id);
@@ -392,20 +407,25 @@ export function registerConversationDetailRoute(
       // aveugle dans le seul cas où le plafond joue. Le participant appelant est
       // déjà résolu ici pour le compteur de non-lus — il porte le rôle avec lui.
       let callerConversationRole: string | null = null;
+      // La frontière de lecture du lecteur (#7198), jumelle de la liste —
+      // ABSENTE (jamais `null`) sans curseur, comme `unreadCount` ci-dessus
+      // se garde d'affirmer 0 par fabrication au-delà de son propre défaut.
+      let readCursorBoundary: { lastReadMessageId: string | null; lastReadAt: Date | null; lastReadMessageCreatedAt: Date | null } | null = null;
       /**
        * LES DEUX AGRÉGATIONS DE CETTE ROUTE, ET LEUR PRIX (#4173, critère 4).
        *
        * `resolveCallerParticipant` est un `findFirst` ; `getUnreadCount` en
        * ajoute deux à trois (curseur de lecture, participant, comptage). Aucune
        * n'est nécessaire à une lecture qui ne sert ni le rang, ni l'effectif
-       * PRÉSENTÉ (dont le plafond dépend du rang), ni les non-lus — et un
-       * appelant qui ne les demande pas ne doit pas les payer.
+       * PRÉSENTÉ (dont le plafond dépend du rang), ni les non-lus, ni la
+       * frontière de lecture (#7198) — et un appelant qui ne les demande pas
+       * ne doit pas les payer.
        *
        * Le témoin de ce point compte les APPELS au double Prisma : « non servi »
        * et « non calculé » sont deux propriétés distinctes, et seule la seconde
        * économise quelque chose en amont.
        */
-      const veutParticipantAppelant = sertRang || sertEffectif || sertNonLus;
+      const veutParticipantAppelant = sertRang || sertEffectif || sertNonLus || sertFrontiereLecture;
       try {
         const participant = veutParticipantAppelant
           ? await resolveCallerParticipant(prisma, authRequest.authContext, conversationId)
@@ -416,6 +436,10 @@ export function registerConversationDetailRoute(
             const { MessageReadStatusService } = await import('../../services/MessageReadStatusService.js');
             const readStatusService = new MessageReadStatusService(prisma);
             unreadCount = await readStatusService.getUnreadCount(participant.id, conversationId);
+          }
+          if (sertFrontiereLecture) {
+            const boundaries = await loadReadCursorBoundaries(prisma, [participant.id]);
+            readCursorBoundary = boundaries.get(participant.id) ?? null;
           }
         }
       } catch (unreadError) {
@@ -509,6 +533,16 @@ export function registerConversationDetailRoute(
       // ligne de liste : une seule notion, un seul nom.
       if (sertRang) charge.currentUserRole = callerConversationRole;
       if (sertNonLus) charge.unreadCount = unreadCount;
+      // ABSENTES (jamais `null`) sans curseur — REV-4, même règle que la liste.
+      if (sertMessageLu && readCursorBoundary?.lastReadMessageId) {
+        charge.lastReadMessageId = readCursorBoundary.lastReadMessageId;
+      }
+      if (sertDerniereLecture && readCursorBoundary?.lastReadAt) {
+        charge.lastReadAt = readCursorBoundary.lastReadAt;
+      }
+      if (sertHorlogeMessageLu && readCursorBoundary?.lastReadMessageCreatedAt) {
+        charge.lastReadMessageCreatedAt = readCursorBoundary.lastReadMessageCreatedAt;
+      }
 
       return sendSuccess(reply, restrictFields(charge, champs, CONVERSATION_DETAIL_PINNED));
 
