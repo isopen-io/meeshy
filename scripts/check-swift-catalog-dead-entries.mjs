@@ -235,7 +235,15 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 //
 // Valeur MESURÉE sur l'arbre fusionné avec le dev qui porte déjà #6861, comme
 // la note de résolution ci-dessus l'impose — jamais additionnée.
-const BASELINE_DEAD_ENTRIES = 260;
+// 260 → 262 (#7377) : `MeEndpoint.starredMessages` et
+// `MeEndpoint.starredMessagesByMessageId` — la liste et l'écriture du favori de
+// message. Mortes à la naissance PAR CONSTRUCTION : #7377 livre la moitié
+// SERVEUR seule, et ces entrées sont GÉNÉRÉES depuis `route-manifest.json` au
+// moment où la route est montée — les retirer est impossible, elles
+// reviendraient à la prochaine régénération. Leur appelant Swift est #7379
+// (`StarredMessagesStore` passe du stockage local au contrat serveur). Valeur
+// MESURÉE sur l'arbre fusionné avec le dev du 2026-09-21.
+const BASELINE_DEAD_ENTRIES = 262;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

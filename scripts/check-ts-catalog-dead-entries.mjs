@@ -306,7 +306,17 @@ export const parseCatalogBlock = (blockLines) => {
 //
 // Valeur MESURÉE sur l'arbre fusionné avec le dev qui porte déjà #6861, comme
 // la note de résolution ci-dessus l'impose — jamais additionnée.
-const BASELINE_DEAD_ENTRIES = 282;
+// 282 → 284 (#7377) : `me.starredMessages` (`GET /me/starred-messages`) et
+// `me.starredMessagesByMessageId` (`PUT`/`DELETE
+// /me/starred-messages/:messageId`) — la liste et l'écriture du favori de
+// message. Mortes à la naissance PAR CONSTRUCTION : #7377 livre la moitié
+// SERVEUR seule, et les entrées sont GÉNÉRÉES depuis le manifeste au moment où
+// la route est montée, avant qu'aucun client ne l'appelle. Leurs appelants
+// sont suivis : #7378 (le geste web) et #7286 (l'écran web) côté `apps/web-v2`
+// — que ce script ne balaie pas, voir la note sur
+// `posts.mediaByMediaIdCaptionTranslate` —, et #7379 côté iOS (catalogue
+// Swift). Valeur MESURÉE sur l'arbre fusionné avec le dev du 2026-09-21.
+const BASELINE_DEAD_ENTRIES = 284;
 
 export const readWorld = (root) => {
   const source = readFileSync(join(root, CATALOG_FILE), 'utf8');
