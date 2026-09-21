@@ -670,7 +670,7 @@ describe('PostFeedService.getStories', () => {
     const service = new PostFeedService(mockPrisma);
     const result = await service.getStories('user-1', {
       updatedSince: new Date('2026-07-03T10:00:00Z'),
-      cursor: encodeCursor(new Date('2026-07-03T09:00:00Z'), 'story-9'),
+      cursor: encodeCursor(new Date('2026-07-03T09:00:00Z'), '68e000000000000000000009'),
     });
 
     expect(mockPostFindMany).toHaveBeenCalledTimes(1);
@@ -755,7 +755,7 @@ describe('PostFeedService.getStories', () => {
   it('adds a keyset filter and tiebreaker ordering when a cursor is provided (G1c)', async () => {
     mockPostFindMany.mockResolvedValue([]);
     const service = new PostFeedService(mockPrisma);
-    const anchor = makePost('s-anchor', { type: 'STORY' });
+    const anchor = makePost('68e0000000000000000000a0', { type: 'STORY' });
 
     // Round-trip a real cursor (same encoder the service hands out).
     const first = await service.getStories('user-1');
@@ -769,7 +769,7 @@ describe('PostFeedService.getStories', () => {
 
   it('returns hasMore + nextCursor when more stories exist than the limit (G1c)', async () => {
     const rows = Array.from({ length: 3 }, (_, i) =>
-      makePost(`s-page-${i}`, { type: 'STORY', createdAt: new Date(Date.UTC(2025, 0, 10 - i)) }));
+      makePost(`68e00000000000000000010${i}`, { type: 'STORY', createdAt: new Date(Date.UTC(2025, 0, 10 - i)) }));
     mockPostFindMany.mockResolvedValue(rows);
     mockPostViewFindMany.mockResolvedValue([]);
     mockPostReactionFindMany.mockResolvedValue([]);
@@ -780,7 +780,7 @@ describe('PostFeedService.getStories', () => {
     expect(result.items).toHaveLength(2);
     expect(result.hasMore).toBe(true);
     const decoded = decodeCursor(result.nextCursor as string);
-    expect(decoded?.id).toBe('s-page-1');
+    expect(decoded?.id).toBe('68e000000000000000000101');
   });
 
   it('first page without cursor keeps the historic 50 cap and take limit+1 (G1c)', async () => {
@@ -1171,7 +1171,7 @@ describe('PostFeedService.getFeed — intent/interest ranking', () => {
     // cursor must still track the chronological boundary so the next page does
     // not skip or duplicate. With limit=1 the window is the single newest post;
     // the higher-scoring older reel must surface on the *next* page, not vanish.
-    const newer = makePost('newer-1', { type: 'POST', createdAt: new Date('2026-06-02T00:00:00Z') });
+    const newer = makePost('68e0000000000000000000b1', { type: 'POST', createdAt: new Date('2026-06-02T00:00:00Z') });
     const olderReel = makePost('older-reel', {
       type: 'REEL',
       viewCount: 9999,
@@ -1183,10 +1183,10 @@ describe('PostFeedService.getFeed — intent/interest ranking', () => {
     const service = new PostFeedService(mockPrisma);
     const result = await service.getFeed('user-1', undefined, 1);
 
-    expect(rankById(result.items)).toEqual(['newer-1']);
+    expect(rankById(result.items)).toEqual(['68e0000000000000000000b1']);
     expect(result.hasMore).toBe(true);
     const decoded = decodeCursor(result.nextCursor as string);
-    expect(decoded?.id).toBe('newer-1');
+    expect(decoded?.id).toBe('68e0000000000000000000b1');
   });
 });
 
@@ -1443,7 +1443,7 @@ describe('PostFeedService.getReels — chronological cursor', () => {
     commentCount: 0,
     viewCount: 0,
   });
-  const rMid = makePost('r-mid', {
+  const rMid = makePost('68e0000000000000000000c2', {
     type: 'REEL',
     createdAt: new Date('2025-03-02T00:00:00Z'),
     commentCount: 1000,
@@ -1464,13 +1464,13 @@ describe('PostFeedService.getReels — chronological cursor', () => {
 
     // Scoring still reorders the DISPLAY: r-mid has heavy engagement and
     // outscores the fresher-but-empty r-new, so it renders first.
-    expect(result.items.map((p: any) => p.id)).toEqual(['r-mid', 'r-new']);
+    expect(result.items.map((p: any) => p.id)).toEqual(['68e0000000000000000000c2', 'r-new']);
 
     // But the cursor is the chronological boundary of the shown window (r-mid,
     // the oldest of the two shown) — NOT the score-sorted last item (r-new).
     expect(result.hasMore).toBe(true);
     const decoded = decodeCursor(result.nextCursor as string);
-    expect(decoded?.id).toBe('r-mid');
+    expect(decoded?.id).toBe('68e0000000000000000000c2');
     expect(decoded?.createdAt).toBe(rMid.createdAt.toISOString());
     // Guard against the reintroduced bug: never the newest (r-new) reel.
     expect(decoded?.createdAt).not.toBe(rNew.createdAt.toISOString());

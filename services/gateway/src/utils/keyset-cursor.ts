@@ -12,6 +12,8 @@
  * changent pas d'import, et il n'existe toujours qu'une implémentation.
  */
 
+import { isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
+
 export interface CursorData {
   createdAt: string;
   id: string;
@@ -38,6 +40,13 @@ export function decodeCursor(cursor: string): CursorData | null {
     // entrée contrôlée par l'appelant. On RECONSTRUIT `{ createdAt, id }` plutôt
     // que de renvoyer `data` tel quel, pour ne jamais laisser filer une clé
     // excédentaire vers un consommateur en aval.
+    //
+    // Le TYPE ne suffit pas pour `id` (#7377) : il part dans un `where` sur une
+    // colonne `@db.ObjectId`, où une chaîne qui n'est pas un ObjectId fait
+    // lever P2023 « Malformed ObjectID » — un 500 sur un curseur forgé, là où
+    // la route promet un refus. Tous les curseurs que `encodeCursor` produit
+    // portent l'id d'une ligne Mongo : exiger un ObjectId ne refuse aucun
+    // curseur légitime.
     if (
       typeof data === 'object' &&
       data !== null &&
@@ -46,6 +55,7 @@ export function decodeCursor(cursor: string): CursorData | null {
     ) {
       const { createdAt, id } = data as CursorData;
       if (Number.isNaN(new Date(createdAt).getTime())) return null;
+      if (!isValidMongoId(id)) return null;
       return { createdAt, id };
     }
     return null;

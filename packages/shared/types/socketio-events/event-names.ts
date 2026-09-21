@@ -386,6 +386,16 @@ export const SERVER_EVENTS = {
   MESSAGE_PINNED: 'message:pinned',
   MESSAGE_UNPINNED: 'message:unpinned',
 
+  /**
+   * Étoile PERSONNELLE posée ou retirée sur un message (#7377) — émis par
+   * `PUT`/`DELETE /me/starred-messages/:messageId` vers la room `user:<id>` du
+   * lecteur SEULEMENT, pour que ses autres appareils suivent. Motif de
+   * `post:bookmarked` : un nom, un booléen. Ne porte AUCUN contenu du message :
+   * un appareil qui le reçoit recharge sa liste, qui applique les règles de
+   * ce qui a le droit d'être servi.
+   */
+  MESSAGE_STARRED: 'message:starred',
+
   // --- Delivery queue ---
   PENDING_MESSAGES_DELIVERED: 'message:pending-delivered',
 

@@ -126,6 +126,7 @@ import { meConsentsRoutes } from './me/consents';
 import { meTermsRoutes } from './me/terms';
 import { meEngagementRoutes } from './me/engagement';
 import { meMeeshRoutes } from './me/meesh';
+import { meStarredMessagesRoutes } from './me/starred-messages';
 import { accountDeletionRoutes } from './account-deletion';
 import { directoryAvailabilityRoutes } from './directory/availability';
 import { directoryPeopleRoutes } from './directory/people';
@@ -289,6 +290,10 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   // au-dessus.
   { name: 'me-engagement', prefix: `${API_PREFIX}/me`, module: meEngagementRoutes },
   { name: 'me-meesh', prefix: `${API_PREFIX}/me`, module: meMeeshRoutes },
+  // Le favori de message (#7377) — l'étoile PERSONNELLE d'un lecteur, sa
+  // liste et sa pose/son retrait. Montage AUTONOME, même patron que
+  // `me-engagement` juste au-dessus.
+  { name: 'me-starred-messages', prefix: `${API_PREFIX}/me`, module: meStarredMessagesRoutes },
   { name: 'account-deletion', prefix: `${API_PREFIX}/account/deletion`, module: accountDeletionRoutes },
   { name: 'directory-availability', prefix: `${API_PREFIX}/directory`, module: directoryAvailabilityRoutes },
   { name: 'directory-people', prefix: `${API_PREFIX}/directory`, module: directoryPeopleRoutes },
