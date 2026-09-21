@@ -100,22 +100,73 @@ extension MessageListViewController {
     }
 
     /// Scrolle SUR le séparateur (D-L2) une fois qu'il est entré dans le
-    /// snapshot. Différé d'un tour de boucle principale : `applySnapshot`
-    /// applique le diff de façon asynchrone (commentaire de
-    /// `applyToDataSource`, § « Scroll in the apply completion handler ») —
-    /// sans ce délai, `dataSource.indexPath(for:)` viserait un item pas
-    /// encore matérialisé. Non animé, comme le reste des positions
-    /// d'ouverture (`scrollToBottom(animated: false)` à froid).
-    private func revealFrozenUnreadSeparator() {
+    /// snapshot, puis REND LA SCÈNE au verrou.
+    ///
+    /// Trois choses qu'un `scrollToItem` nu ne fait pas, et que tout autre
+    /// défilement VOULU de ce contrôleur fait :
+    ///
+    /// 1. **Il re-vise.** `scrollToItem` calcule son offset sur des hauteurs
+    ///    ESTIMÉES. À l'OUVERTURE, aucune cellule autour de la cible n'est
+    ///    réalisée : l'écart estimé/réel y est MAXIMAL — le même constat qui
+    ///    a fait naître la visée vérifiée de `scrollToMessage`
+    ///    (`beginVerifiedScroll`, « le saut au mauvais emplacement le plus
+    ///    visible »). Une seconde passe, au tour suivant, vise des attributs
+    ///    FRAIS.
+    /// 2. **Il rend la scène au verrou.** `isIntentionalProgrammaticScroll`
+    ///    retombe au tour SUIVANT — jamais dans la foulée de `scrollToItem`,
+    ///    dont le `scrollViewDidScroll` synchrone précède le layout — et
+    ///    l'ancre du verrou de scène ADOPTE alors la position atteinte
+    ///    (`captureSceneLockAnchor`). Sans cet épilogue, la première
+    ///    correction self-sizing retombait sur `enforceSceneLock`, qui
+    ///    restaurait l'ancre du BAS et renvoyait le lecteur tout en bas :
+    ///    exactement le défaut que D-L2 existe pour éviter. Épilogue
+    ///    identique à `scrollToBottom(animated: false)`, posé là par la même
+    ///    revue adversariale (2026-08-18).
+    /// 3. **Il cède au doigt.** La scène n'appartient qu'au doigt : un geste
+    ///    déjà en cours (fil lent à charger, frontière gelée en retard)
+    ///    annule la révélation au lieu de la voler.
+    ///
+    /// Non animé, comme le reste des positions d'ouverture.
+    private func revealFrozenUnreadSeparator(passesRemaining: Int = 1) {
         guard let boundary = frozenUnreadSeparator else { return }
         DispatchQueue.main.async { [weak self] in
-            guard let self,
+            guard let self else { return }
+            guard !self.collectionView.isDragging,
+                  !self.collectionView.isTracking,
+                  !self.collectionView.isDecelerating,
                   let indexPath = self.dataSource.indexPath(
                     for: .firstUnreadSeparator(afterLocalId: boundary.localId)
-                  ) else { return }
+                  ),
+                  // L'index vient du SNAPSHOT, qui peut être en avance sur ce
+                  // que la collection view a INGÉRÉ — même garde que
+                  // `beginVerifiedScroll` : viser un item pas encore
+                  // matérialisé lève une NSInternalInconsistencyException.
+                  indexPath.item < self.collectionView.numberOfItems(inSection: 0)
+            else {
+                self.endUnreadSeparatorReveal()
+                return
+            }
             self.isIntentionalProgrammaticScroll = true
             self.collectionView.scrollToItem(at: indexPath, at: .centeredVertically, animated: false)
+            if passesRemaining > 0 {
+                self.revealFrozenUnreadSeparator(passesRemaining: passesRemaining - 1)
+            } else {
+                self.endUnreadSeparatorReveal()
+            }
+        }
+    }
+
+    /// L'épilogue commun de la révélation : au tour suivant — layout posé,
+    /// hauteurs réelles — le drapeau retombe et le verrou de scène ADOPTE la
+    /// position atteinte. Appelé aussi quand la révélation renonce (doigt en
+    /// cours, cible pas encore matérialisée) : un drapeau qui fuirait à
+    /// `true` désarmerait le verrou pour toute la session (filet de la revue
+    /// adversariale 2026-08-18, `settleAtRest`).
+    private func endUnreadSeparatorReveal() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
             self.isIntentionalProgrammaticScroll = false
+            self.captureSceneLockAnchor()
         }
     }
 }

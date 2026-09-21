@@ -215,6 +215,75 @@ final class MessageListViewControllerTests: XCTestCase {
         )
     }
 
+    /// **Le séparateur atteint le PIXEL, pas seulement le tableau d'items.**
+    ///
+    /// `itemsWithUnreadSeparator` est une fonction pure : ses trois témoins
+    /// ci-dessus prouvent la LOI de position, aucun ne prouve que
+    /// `applySnapshot` l'appelle — retirer l'appel les laisserait tous verts
+    /// pendant que le fil n'afficherait plus rien. Ce témoin-ci interroge la
+    /// source de données APPLIQUÉE : c'est elle qui décide s'il existe une
+    /// cellule.
+    func test_frontiereGelee_leSeparateurEntreDansLaSourceDeDonnees() async throws {
+        let store = try await makeSeededStore(count: 6)
+        let vc = makeSUT(store: store)
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = vc
+        window.makeKeyAndVisible()
+        vc.view.layoutIfNeeded()
+
+        let vm = try await makeConversationViewModel()
+        vc.conversationViewModel = vm
+        vm.unreadSeparatorCount = 3
+        vm.firstUnreadMessageId = "m4"
+        try await Task.sleep(for: .milliseconds(120))
+
+        let applique = vc.focalDataSourceForTesting?.snapshot().itemIdentifiers ?? []
+        XCTAssertTrue(
+            applique.contains(.firstUnreadSeparator(afterLocalId: "m4")),
+            "la frontière gelée doit produire une CELLULE dans la source de données appliquée — sinon le séparateur n'existe que dans un tableau que personne ne rend"
+        )
+    }
+
+    /// **D-L2 — une conversation à non-lus s'OUVRE sur le séparateur**, pas
+    /// en bas. Le témoin lit l'OFFSET, la seule chose que l'utilisateur voit :
+    /// dans le flux inversé, le bas du fil est `contentOffset.y == 0`.
+    ///
+    /// Il couvre aussi l'ÉPILOGUE du défilement voulu : une fois la scène
+    /// rendue au verrou, un tour de `scrollViewDidScroll` ne doit pas
+    /// restaurer l'ancre du BAS — sans l'adoption de la nouvelle ancre, le
+    /// lecteur repartait tout en bas à la première correction self-sizing.
+    func test_frontiereGelee_ouvreSurLeSeparateurEtLeVerrouAdopteLaPosition() async throws {
+        let store = try await makeSeededStore(count: 60)
+        let vc = makeSUT(store: store)
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = vc
+        window.makeKeyAndVisible()
+        vc.view.layoutIfNeeded()
+
+        let vm = try await makeConversationViewModel()
+        vc.conversationViewModel = vm
+        vm.unreadSeparatorCount = 2
+        vm.firstUnreadMessageId = "m3"
+        try await Task.sleep(for: .milliseconds(300))
+
+        let cv = try XCTUnwrap(vc.focalCollectionViewForTesting)
+        let pose = cv.contentOffset.y
+        XCTAssertGreaterThan(
+            pose, 0,
+            "D-L2 : l'ouverture doit se poser SUR le séparateur — rester à l'offset 0, c'est rester en bas"
+        )
+        XCTAssertFalse(
+            vc.isIntentionalProgrammaticScroll,
+            "le drapeau de défilement voulu doit RETOMBER : fuir à true désarme le verrou de scène pour toute la session"
+        )
+
+        vc.scrollViewDidScroll(cv)
+        XCTAssertEqual(
+            cv.contentOffset.y, pose, accuracy: 2,
+            "le verrou de scène doit avoir ADOPTÉ la position du séparateur, jamais restaurer l'ancre du bas"
+        )
+    }
+
     // MARK: - Helpers
 
     private func makeEmptyStore() throws -> MessageStore {
@@ -230,12 +299,14 @@ final class MessageListViewControllerTests: XCTestCase {
     /// corpus complet. Mêmes champs que `PerfMessageRecordFactory.make`
     /// (`MessageListPerformanceTests.swift`, `private` à son fichier — non
     /// réutilisable ici).
-    private func makeSeededStore() async throws -> MessageStore {
+    private func makeSeededStore(count: Int = 1) async throws -> MessageStore {
         let pool = try DatabaseQueue()
         try MessageDatabaseMigrations.runAll(on: pool)
+        let t0 = Date(timeIntervalSince1970: 1_726_000_000)
         try await pool.write { db in
+            for i in 1...count {
             let record = MessageRecord(
-                localId: "m1", serverId: "server_m1",
+                localId: "m\(i)", serverId: "server_m\(i)",
                 conversationId: "c1", senderId: "user_other",
                 content: "Bonjour", originalLanguage: "fr",
                 messageType: "text", messageSource: "user", contentType: "text",
@@ -252,8 +323,8 @@ final class MessageListViewControllerTests: XCTestCase {
                 senderColor: nil, senderAvatarURL: nil,
                 deliveredCount: 1, readCount: 0,
                 deliveredToAllAt: nil, readByAllAt: nil,
-                createdAt: Date(), sentAt: nil,
-                deliveredAt: nil, readAt: nil, updatedAt: Date(),
+                createdAt: t0.addingTimeInterval(Double(i)), sentAt: nil,
+                deliveredAt: nil, readAt: nil, updatedAt: t0,
                 attachmentsJson: nil, reactionsJson: nil,
                 reactionCount: 0, currentUserReactionsJson: nil,
                 mentionedUsersJson: nil,
@@ -264,6 +335,7 @@ final class MessageListViewControllerTests: XCTestCase {
                 changeVersion: 0
             )
             try record.insert(db)
+            }
         }
         let persistence = MessagePersistenceActor(dbWriter: pool)
         let store = MessageStore(conversationId: "c1", persistence: persistence)

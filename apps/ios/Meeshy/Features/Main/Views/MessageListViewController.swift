@@ -973,9 +973,13 @@ final class MessageListViewController: UIViewController {
             // R-d : marqueur de tête, jamais un jour — même traitement que
             // le typing (aucune sticky day label à en tirer).
             topDayStart = nil
-        case .firstUnreadSeparator:
-            // Séparateur de non-lus (#7222) : pas un jour, même traitement.
-            topDayStart = nil
+        case .firstUnreadSeparator(let afterLocalId):
+            // Séparateur de non-lus (#7222) : il n'EST pas un jour mais il en
+            // SURPLOMBE un — celui du message qu'il annonce. Rendre `nil`
+            // ÉTEIGNAIT la pilule le temps qu'il traverse la tête de l'écran,
+            // au beau milieu du geste d'ouverture.
+            topDayStart = store.message(for: afterLocalId)
+                .map { calendar.startOfDay(for: $0.createdAt) }
         }
         guard let dayStart = topDayStart else {
             stickyDayState.label = nil
@@ -2336,7 +2340,11 @@ final class MessageListViewController: UIViewController {
     /// `visibleIndexPaths` : l'inventaire déjà lu par l'appelant du tour de
     /// frame (`scrollViewDidScroll`) — `nil` ⇒ lecture interne, pour les
     /// appels hors défilement (`scrollToBottom`, `settleAtRest`).
-    private func captureSceneLockAnchor(visibleIndexPaths: [IndexPath]? = nil) {
+    // `internal` (pas `private`) depuis `+UnreadSeparator.swift` (#7222) :
+    // tout défilement VOULU rend la scène au verrou en faisant ADOPTER à
+    // l'ancre la position atteinte — même raison de portée que `isDark` et
+    // `applySnapshot` plus haut (`private` porte sur le FICHIER en Swift).
+    func captureSceneLockAnchor(visibleIndexPaths: [IndexPath]? = nil) {
         // Appelé à CHAQUE frame de défilement : une seule lecture d'attributs
         // par cellule visible (le `max(by:)` en relisait deux par comparaison,
         // soit ~2·n·log n par frame — audit fluidité 2026-08-21).
