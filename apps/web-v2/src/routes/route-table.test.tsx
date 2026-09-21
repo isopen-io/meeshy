@@ -179,3 +179,42 @@ describe('NotFound — ce qu’il dit vient du catalogue (#6341)', () => {
     ).not.toThrow();
   });
 });
+
+/**
+ * L'ADRESSE D'UN RÉEL PARTAGÉ (#7298) — `/reel/:postId`.
+ *
+ * Elle n'est pas une adresse de plus : la PASSERELLE la grave dans chaque lien
+ * de partage de réel (`PostService.shareWithTrackingLink`, `originalUrl =
+ * <base>/reel/<id>`), et `/l/:token` y envoie le lecteur par un
+ * `location.replace` — une navigation ENTIÈRE, pas un lien interne. Non servie,
+ * elle tombait sur `NotFound` pour tous les liens déjà émis, et il s'en
+ * fabriquait un de plus à chaque partage.
+ *
+ * Le témoin interroge l'ADRESSE, jamais la clé : il demande à la table entière
+ * qui l'apparie. Écrit `ROUTES.reel.pattern`, il aurait mesuré une entrée dont
+ * le nom est libre ; écrit ainsi, il tombe dès que PLUS AUCUNE route ne sert
+ * `/reel/<id>` — ce qui est exactement le défaut.
+ */
+describe('ROUTES — l’adresse d’un réel partagé (#7298)', () => {
+  const servedBy = (path: string) =>
+    Object.values(ROUTES).filter((route) => match(compile(route.pattern), path) !== null);
+
+  test('/reel/<id> est SERVIE, par une route et une seule', () => {
+    const served = servedBy('/reel/507f1f77bcf86cd799439011');
+    expect(served).toHaveLength(1);
+    expect(match(compile(served[0]!.pattern), '/reel/507f1f77bcf86cd799439011')).toEqual({
+      post: '507f1f77bcf86cd799439011',
+    });
+  });
+
+  test('elle ouvre le MÊME écran que /reels — un seul import(), jamais deux lecteurs à faire diverger', () => {
+    expect(servedBy('/reel/abc123')[0]!.screen).toBe(ROUTES.reels.screen);
+  });
+
+  test('/reels garde son adresse, et /reel sans identifiant n’en est pas une', () => {
+    expect(servedBy('/reels')).toHaveLength(1);
+    expect(servedBy('/reels')[0]!.pattern).toBe('/reels');
+    expect(servedBy('/reel')).toHaveLength(0);
+    expect(servedBy('/reel/')).toHaveLength(0);
+  });
+});

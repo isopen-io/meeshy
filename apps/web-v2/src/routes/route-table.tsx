@@ -13,6 +13,11 @@ import { createRouter } from '@/lib/router';
 /* LE DÉTAIL D'UNE PUBLICATION (#6278) — UN seul `import()` pour ses DEUX
    adresses, pour qu'elles ne puissent jamais diverger d'écran. */
 const publicationScreen = () => import('@/routes/post');
+/* LE LECTEUR DE RÉELS (#7298) — UN seul `import()` pour ses DEUX adresses, la
+   liste (`/reels`) et le réel NOMMÉ (`/reel/:postId`), pour qu'elles ne
+   puissent jamais diverger d'écran. Même discipline que la publication
+   ci-dessus. */
+const reelsScreen = () => import('@/routes/reels');
 
 /* L'ADMINISTRATION DE LA v2 — UN seul `import()` pour ses DEUX adresses
    (`/adm` et, le temps du pont, `/admin`), pour qu'elles ne puissent jamais
@@ -167,7 +172,22 @@ export const ROUTES = {
      (un réel touché dans le Flux, `?seed=<id>`) et `presentFresh()` (le bouton
      de l'en-tête du Flux, sans graine). Une seule adresse pour les deux
      intentions, comme `/stories`. Adresse NEUVE : le legacy n'a pas de Réels. */
-  reels: { pattern: '/reels', screen: () => import('@/routes/reels') },
+  reels: { pattern: '/reels', screen: reelsScreen },
+  /* UN RÉEL PARTAGÉ (#7298) — `/reel/:postId` est l'adresse que la PASSERELLE
+     grave dans chaque lien de partage de réel (`PostService.shareWithTrackingLink`,
+     `originalUrl = <base>/reel/<id>`) et que le legacy sert déjà
+     (`apps/web/app/reel/[postId]`, D-5). La v2 ne la servait pas : `/l/:token`
+     y envoyait le lecteur par un `location.replace`, et TOUS les liens de réel
+     déjà émis — comme chaque nouveau partage — tombaient sur « adresse
+     inconnue ».
+
+     C'est une ADRESSE, pas une redirection vers `/reels?seed=`. Un réel
+     partagé a la même dignité qu'une story partagée, son adresse se recopie
+     telle quelle, et le lecteur s'ouvre sans la seconde navigation qu'une
+     redirection ajouterait sur le premier écran que voit le destinataire.
+     `reelSeedOf` (`lib/reels/thread.ts`) lit la graine du CHEMIN comme il lit
+     `?seed=` — un seul site pour les deux portes. */
+  reel: { pattern: '/reel/$post', screen: reelsScreen },
   /* LE DÉTAIL D'UNE PUBLICATION (#6278, D-48, D-49) — `/post/$post` est
      l'adresse que la passerelle range dans ses liens suivis
      (`PostService.ts:1742`) et que le legacy sert (`apps/web/app/post/[postId]`,
