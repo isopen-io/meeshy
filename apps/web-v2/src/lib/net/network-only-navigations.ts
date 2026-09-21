@@ -44,7 +44,7 @@ export const NETWORK_ONLY_NAVIGATIONS: readonly RegExp[] = [
   /^\/u\/[^/?#]+\/[^/?#]/,
   /^\/users\//,
   /^\/\.well-known\//,
-  /^\/(?:robots\.txt|sitemap\.xml|manifest\.json|firebase-messaging-sw\.js|android-chrome-512x512\.png)(?:\?|$)/,
+  /^\/(?:robots\.txt|sitemap\.xml|manifest\.json|android-chrome-512x512\.png)(?:\?|$)/,
   /* La RACINE parrainée, et elle seule : nginx route sur le chemin, et c'est
      la seule adresse dont la redirection dépend de la requête. */
   /^\/\?(?:[^#]*&)?affiliate=/,

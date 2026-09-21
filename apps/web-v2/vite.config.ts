@@ -252,9 +252,14 @@ const prerenderInstitutionalPages = (): Plugin => {
  *
  *  - `sw-institutional.js` ramène `/about/` sur `/about` (#5554) ;
  *  - `sw-legacy-purge.js` efface, à l'activation, les caches `meeshy-cache-*`
- *    que le service worker du legacy a laissés sur l'origine (#6702).
+ *    que le service worker du legacy a laissés sur l'origine (#6702) ;
+ *  - `sw-push.js` porte les écouteurs `push` et `notificationclick` (#7305) —
+ *    le worker généré n'en avait AUCUN, pendant que la passerelle composait
+ *    déjà toute la charge web (`PushNotificationService`, branche
+ *    `platform === 'web'`). Une SEULE ligne l'accroche aux deux régimes :
+ *    l'`importScripts` de la variante A, et son retrait de la coque.
  */
-const SERVICE_WORKER_SCRIPTS = ['sw-institutional.js', 'sw-legacy-purge.js'] as const;
+const SERVICE_WORKER_SCRIPTS = ['sw-institutional.js', 'sw-legacy-purge.js', 'sw-push.js'] as const;
 
 /**
  * LES SCRIPTS DU SERVICE WORKER N'ENTRENT PAS DANS LA COQUE (#5604,
@@ -507,13 +512,18 @@ export default defineConfig({
                * ne croise pas les `/`, donc l'`index.html` de la racine — la
                * coquille de l'application — n'est PAS exclu.
                *
-               * Deux SERVICE WORKERS n'y entrent pas non plus (#6702) : le
-               * worker FCM du push web (`firebase-messaging-sw.js`), que le
-               * navigateur inscrit lui-même sous sa propre portée, et
-               * `sw-legacy-purge.js`, chargé par `importScripts` — le
-               * navigateur garde déjà les scripts importés avec le worker. Les
-               * précacher ferait payer leurs octets une seconde fois, à chaque
-               * installation, pour une copie que personne ne lit.
+               * Deux SCRIPTS IMPORTÉS n'y entrent pas non plus (#6702,
+               * étendu #7305) : `sw-legacy-purge.js` et `sw-push.js`, tous
+               * deux chargés par `importScripts` — le navigateur garde déjà
+               * les scripts importés avec le worker. Les précacher ferait
+               * payer leurs octets une seconde fois, à chaque installation,
+               * pour une copie que personne ne lit.
+               *
+               * La troisième entrée de cette liste était le worker FCM du
+               * legacy (`firebase-messaging-sw.js`), SUPPRIMÉ par #7305 : rien
+               * ne l'inscrivait dans la v2, et ses trois destinations
+               * (`/conversations/<id>`, `/mood`, `/reel`) n'existent dans
+               * aucune table de routes d'ici.
                *
                * LES POLICES DE STORY (#6951) — `globPatterns` nomme `woff2`, et
                * ce motif ne coûtait rien tant qu'aucune police n'existait. Les
@@ -540,8 +550,8 @@ export default defineConfig({
                */
               globIgnores: [
                 '*/index.html',
-                'firebase-messaging-sw.js',
                 'sw-legacy-purge.js',
+                'sw-push.js',
                 'assets/*.woff2',
               ],
               /**
