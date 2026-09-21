@@ -162,7 +162,14 @@ describe('ROUTE_TABLE (#4278)', () => {
     // débitables — action MANUELLE, atomique, idempotente par `requestId`).
     // Aucun alias, aucune route retirée ni renommée. Vérifié : le manifeste
     // régénéré passe de 556 à 557 routes, soit exactement celle-là.
-    expect(ROUTE_TABLE.length).toBe(66);
+    //
+    // 66 → 67 le 2026-09-21 (#7377) : entrée `me-starred-messages`, les
+    // adresses NEUVES du favori de message (`PUT`/`DELETE
+    // /api/v1/me/starred-messages/:messageId`, puis `GET
+    // /api/v1/me/starred-messages` dans le même module). Aucun alias, aucune
+    // route retirée ni renommée. Vérifié : le manifeste régénéré passe de 572
+    // à 574 routes au lot de l'écriture, soit exactement ces deux-là.
+    expect(ROUTE_TABLE.length).toBe(67);
   });
 });
 

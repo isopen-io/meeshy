@@ -184,6 +184,18 @@ export interface MessageUnpinnedEventData {
   readonly conversationId: string;
 }
 
+/**
+ * Charge de `message:starred` (#7377) — l'état de l'étoile PERSONNELLE du
+ * destinataire, après écriture. `starredAt` (ISO 8601) est la date de pose,
+ * `null` quand `starred` vaut `false`.
+ */
+export interface MessageStarredEventData {
+  readonly messageId: string;
+  readonly conversationId: string;
+  readonly starred: boolean;
+  readonly starredAt: string | null;
+}
+
 export interface MentionCreatedEventData {
   readonly messageId: string;
   readonly conversationId: string;
