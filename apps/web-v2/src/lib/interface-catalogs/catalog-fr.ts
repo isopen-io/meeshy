@@ -548,6 +548,11 @@ const fr = {
   'userProfile.loading': 'Chargement du profil',
   'userProfile.section.publications': 'PUBLICATIONS',
   'userProfile.section.relation': 'CONNEXION',
+  'userProfile.section.conversations': 'CONVERSATIONS',
+  'userProfile.conversations.empty': 'Aucune conversation en commun',
+  'userProfile.conversations.emptyBody': 'Rien ne vous relie encore — « Écrire » ouvre la première.',
+  'userProfile.conversations.error': 'Impossible de charger les conversations',
+  'userProfile.conversations.loading': 'Chargement des conversations',
   'userProfile.refused.title': 'Ce profil n’est pas accessible',
   'userProfile.refused.body': 'Il n’existe pas, ou vous n’y avez pas accès.',
   'userProfile.throttled.title': 'Trop de demandes',
@@ -920,6 +925,16 @@ const fr = {
   'message-detail.loading': 'Chargement…',
   'message-detail.load-error': 'Impossible de charger ces informations',
   'message-detail.retry': 'Réessayer',
+
+  /* `/download` — L'INVITATION REÇUE PAR SMS (#7297). Ce que la page PROMET
+     est ce que le produit tient : la fiche App Store, qui existe, et le web,
+     que meeshy.me sert aujourd'hui. Aucune mention du Play Store tant que la
+     coque Android n'est pas publiée. */
+  'download.title': 'Téléchargez Meeshy',
+  'download.body': 'Écrivez dans votre langue, lisez dans la vôtre : Meeshy traduit chaque message au passage.',
+  'download.appStore': 'Télécharger dans l’App Store',
+  'download.web': 'Ouvrir Meeshy dans le navigateur',
+  'download.otherPlatforms': 'Sur Android et sur ordinateur, Meeshy s’utilise directement dans le navigateur.',
 
 } as const;
 

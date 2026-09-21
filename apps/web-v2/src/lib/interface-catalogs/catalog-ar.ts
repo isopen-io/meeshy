@@ -503,6 +503,11 @@ const ar = {
   'userProfile.loading': 'جارٍ تحميل الملف الشخصي',
   'userProfile.section.publications': 'المنشورات',
   'userProfile.section.relation': 'الاتصال',
+  'userProfile.section.conversations': 'المحادثات',
+  'userProfile.conversations.empty': 'لا توجد محادثة مشتركة',
+  'userProfile.conversations.emptyBody': 'لا شيء يجمعكما بعد — «اكتب» يفتح المحادثة الأولى.',
+  'userProfile.conversations.error': 'تعذّر تحميل المحادثات',
+  'userProfile.conversations.loading': 'جارٍ تحميل المحادثات',
   'userProfile.refused.title': 'هذا الملف الشخصي غير متاح',
   'userProfile.refused.body': 'إما أنه غير موجود، أو لا تملك صلاحية الوصول إليه.',
   'userProfile.throttled.title': 'طلبات كثيرة جدًا',
@@ -839,6 +844,12 @@ const ar = {
   'message-detail.loading': 'جارٍ التحميل…',
   'message-detail.load-error': 'تعذر تحميل هذه المعلومات',
   'message-detail.retry': 'إعادة المحاولة',
+
+  'download.title': 'نزّل Meeshy',
+  'download.body': 'اكتب بلغتك واقرأ بلغتك: يترجم Meeshy كل رسالة في الطريق.',
+  'download.appStore': 'التنزيل من App Store',
+  'download.web': 'افتح Meeshy في المتصفح',
+  'download.otherPlatforms': 'على أندرويد وعلى الحاسوب، يعمل Meeshy مباشرة في المتصفح.',
 
 } satisfies InterfaceCatalog;
 

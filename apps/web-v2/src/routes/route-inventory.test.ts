@@ -52,12 +52,17 @@ describe('l’inventaire de parité voit ce que le routeur déclare', () => {
     expect(() => screenRoutes('export const ROUTES = new Map();')).toThrow(/route-table\.tsx/);
   });
 
-  test('les cinq documents pré-rendus comptent, eux que ROUTES ne porte pas', () => {
+  test('les sept documents pré-rendus comptent, eux que ROUTES ne porte pas', () => {
     const inventaire = v31Routes();
     for (const url of institutionalRoutes()) {
       expect(inventaire).toContainEqual({ url, kind: 'document' });
     }
-    expect(inventaire.filter((r) => r.kind === 'document')).toHaveLength(5);
+    /* LE NOMBRE EST ÉCRIT, et c'est délibéré : le comparer à
+       `institutionalRoutes().length` serait tautologique — les deux viennent
+       de la même source, et une famille de documents qui disparaîtrait en
+       silence passerait. Sept depuis #7287 (`/help` et `/faq`, les deux
+       adresses que l'app publiée ouvre). */
+    expect(inventaire.filter((r) => r.kind === 'document')).toHaveLength(7);
   });
 
   test('les motifs du routeur maison sont rendus dans la forme du legacy', () => {

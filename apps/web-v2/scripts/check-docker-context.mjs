@@ -7,7 +7,7 @@
  * règle générique et justifiée : aucune image n'a besoin de l'outillage du
  * monorepo. Mais la construction de CETTE application en dépend :
  * `vite.config.ts` importe `scripts/lib/institutional-routes.mjs` (la
- * source unique des cinq adresses) et son greffon lance
+ * source unique des sept adresses) et son greffon lance
  * `scripts/prerender-institutional.tsx`.
  *
  * Le dépôt a DÉJÀ payé ce défaut une fois, sur l'autre application (#4627), et

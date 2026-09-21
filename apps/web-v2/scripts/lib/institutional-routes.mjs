@@ -1,5 +1,5 @@
 /**
- * LES CINQ ADRESSES INSTITUTIONNELLES, déclarées UNE fois.
+ * LES SEPT ADRESSES INSTITUTIONNELLES, déclarées UNE fois.
  *
  * Trois consommateurs les lisent, et c'est la raison d'être de ce fichier :
  *
@@ -13,8 +13,16 @@
  * que le service worker ne connaissait pas, et personne ne s'en apercevait
  * parce que chaque moitié était juste de son côté. Une liste écrite deux fois
  * est une liste qui finira par dire deux choses.
+ *
+ * UN QUATRIÈME CONSOMMATEUR N'IMPORTE PAS CE FICHIER et ne le peut pas :
+ * `nginx.conf` énumère ces mêmes adresses dans un `location ~` pour leur poser
+ * leur en-tête de cache, en CONFIGURATION, hors de tout module. Ce miroir-là
+ * n'avait aucun témoin — une page ajoutée ici et oubliée là-bas reste servie
+ * par le `location /` générique, donc perd son en-tête SANS rien casser de
+ * visible. `src/institutional/help-faq.test.tsx` confronte désormais les deux
+ * (#7287).
  */
-export const INSTITUTIONAL_ROUTES = ['about', 'contact', 'partners', 'privacy', 'terms'];
+export const INSTITUTIONAL_ROUTES = ['about', 'contact', 'faq', 'help', 'partners', 'privacy', 'terms'];
 
 /**
  * Les DEUX formes de chaque adresse, parce que les deux sont servies : sans

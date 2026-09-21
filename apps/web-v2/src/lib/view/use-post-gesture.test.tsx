@@ -106,3 +106,60 @@ describe('usePostGesture — l’annonce suit la langue d’interface (#6488)', 
     expect(liveOf(el)).toBe('Lien copié — il ne reste qu’à le coller.');
   });
 });
+
+/**
+ * **COMMENTER EST LE TROISIÈME GESTE DE LA RANGÉE** (#7113) — il vivait en
+ * DEUX copies chez les hôtes (`feed.tsx`, `user-profile.tsx`), chacune
+ * réécrivant la même adresse, pendant que les deux autres écrans qui montent
+ * la carte n'en avaient aucune. Une intention recopiée chez ses appelants est
+ * une intention qu'un appelant oublie : c'est arrivé deux fois.
+ *
+ * Il rejoint donc `onGesture` et `onShare` dans le seul hôte des gestes d'une
+ * publication — et tout écran qui monte la carte le reçoit en le
+ * DÉSTRUCTURANT, plutôt qu'en le réécrivant.
+ *
+ * Ce témoin mesure l'ADRESSE, là où la garde d'inventaire
+ * (`routes/post-card-hosts.test.ts`) mesure QUI l'offre. L'une sans l'autre
+ * laisserait passer soit un écran muet, soit un bouton qui mène ailleurs.
+ */
+describe('usePostGesture — commenter conduit au fil, à son ancre (#7113)', () => {
+  function CommentHarness({ postId }: { readonly postId: string }) {
+    const { onComment } = usePostGesture();
+    return <button type="button" data-comment onClick={() => onComment(postId)} />;
+  }
+
+  /** `navigate` écrit par `history.pushState` — on écoute l'API que le routeur
+   * appelle vraiment, plutôt qu'un substitut du routeur lui-même. */
+  function adresseDuTap(postId: string): string {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(<CommentHarness postId={postId} />);
+    });
+    const natif = window.history.pushState.bind(window.history);
+    const vues: string[] = [];
+    window.history.pushState = ((..._args: readonly unknown[]) => {
+      vues.push(String(_args[2]));
+    }) as unknown as typeof window.history.pushState;
+    try {
+      act(() => {
+        container.querySelector<HTMLButtonElement>('[data-comment]')!.click();
+      });
+    } finally {
+      window.history.pushState = natif;
+    }
+    return vues.join(' | ');
+  }
+
+  test('le tap mène au DÉTAIL de CETTE publication, ancré sur les commentaires', () => {
+    expect(adresseDuTap('p1')).toBe('/post/p1#commentaires');
+  });
+
+  /* L'identifiant n'est pas décoratif : une adresse qui ignorerait le sien
+     ouvrirait le fil d'une AUTRE publication, ce que le témoin ci-dessus ne
+     distingue pas à lui seul. */
+  test('une autre publication mène à SON fil', () => {
+    expect(adresseDuTap('p2')).toBe('/post/p2#commentaires');
+  });
+});

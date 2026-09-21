@@ -8,7 +8,7 @@ import type { ContentPage } from './type';
  * `print` n'entre pas, pour la raison donnée dans `app/terms/contenu.ts` : un
  * bouton d'impression sur une page sans JavaScript serait inerte.
  * `footer.home` non plus — le retour à l'accueil est porté par l'en-tête de
- * chrome, à la même place sur les cinq pages, et le répéter en bas dédoublerait
+ * chrome, à la même place sur les sept pages, et le répéter en bas dédoublerait
  * un repère.
  *
  * ET AUCUNE ACCROCHE. Le catalogue n'en porte pas — la page legacy affiche son

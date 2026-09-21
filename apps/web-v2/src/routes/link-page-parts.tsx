@@ -130,6 +130,37 @@ export function ActionButton({
   );
 }
 
+/**
+ * UN GESTE QUI SORT DU SITE (#7297) — la fiche d'une boutique d'applications.
+ *
+ * Même géométrie et même teinte que `ActionButton` / `ActionLink` : sur ces
+ * pages, ce qui a l'air d'un geste EST un geste, qu'il reste dans Meeshy ou
+ * non. `rel="noopener noreferrer"` parce que la cible est un site TIERS —
+ * `target="_blank"` sans lui laisse à la page ouverte une référence
+ * manipulable sur l'onglet d'origine, et fuite l'adresse d'où l'on vient.
+ */
+export function ActionAnchor({
+  href,
+  tone = 'primary',
+  children,
+}: {
+  readonly href: string;
+  readonly tone?: ActionTone;
+  readonly children: string;
+}) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={ACTION_CLASS}
+      style={{ ...ACTION_FILL[tone], minHeight: ACTION_HEIGHT }}
+    >
+      {children}
+    </a>
+  );
+}
+
 /** Les seules destinations qu'une page de lien propose : l'accueil, la connexion, les réglages. */
 export type LinkDestination = 'list' | 'login' | 'settings';
 

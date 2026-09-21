@@ -75,7 +75,7 @@
   "dependencies": {
     "@meeshy/shared": "workspace:*",
     "@tanstack/react-query": "5.102.8",
-    "@tanstack/react-virtual": "3.14.10",
+    "@tanstack/react-virtual": "3.14.13",
     "preact": "10.29.8",
     "socket.io-client": "4.8.3",
     "zod": "4.4.3",

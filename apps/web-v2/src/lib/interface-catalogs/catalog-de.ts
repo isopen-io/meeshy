@@ -505,6 +505,11 @@ const de = {
   'userProfile.loading': 'Profil wird geladen',
   'userProfile.section.publications': 'BEITRÄGE',
   'userProfile.section.relation': 'VERBINDUNG',
+  'userProfile.section.conversations': 'UNTERHALTUNGEN',
+  'userProfile.conversations.empty': 'Keine gemeinsame Unterhaltung',
+  'userProfile.conversations.emptyBody': 'Noch verbindet euch nichts – „Schreiben“ eröffnet die erste.',
+  'userProfile.conversations.error': 'Unterhaltungen konnten nicht geladen werden',
+  'userProfile.conversations.loading': 'Unterhaltungen werden geladen',
   'userProfile.refused.title': 'Dieses Profil ist nicht verfügbar',
   'userProfile.refused.body': 'Es existiert nicht, oder Sie haben keinen Zugriff darauf.',
   'userProfile.throttled.title': 'Zu viele Anfragen',
@@ -842,6 +847,12 @@ const de = {
   'message-detail.loading': 'Wird geladen…',
   'message-detail.load-error': 'Diese Informationen konnten nicht geladen werden',
   'message-detail.retry': 'Erneut versuchen',
+
+  'download.title': 'Meeshy holen',
+  'download.body': 'Schreibe in deiner Sprache und lies in deiner: Meeshy übersetzt jede Nachricht unterwegs.',
+  'download.appStore': 'Laden im App Store',
+  'download.web': 'Meeshy im Browser öffnen',
+  'download.otherPlatforms': 'Auf Android und am Computer läuft Meeshy direkt im Browser.',
 
 } satisfies InterfaceCatalog;
 

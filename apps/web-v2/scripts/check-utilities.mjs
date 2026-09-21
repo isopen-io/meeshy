@@ -21,13 +21,13 @@
  *
  * PAR FEUILLE, PAS EN BLOC (revue de #5606, défaut 2) — la première version
  * concaténait les DEUX feuilles produites (`index-*.css`, l'application ;
- * `institutional-*.css`, les cinq pages précachées — deux entrées CSS
+ * `institutional-*.css`, les sept pages précachées — deux entrées CSS
  * DISTINCTES et STABLES, `vite.config.ts` § `rollupOptions.input`) avant de
  * comparer. `text-body`, `text-secondary`, `text-screen`, `text-thread` et
  * `text-brand` sont morts dans `institutional-*.css` (son `@theme` ne les
  * déclarait pas) et vivants dans `index-*.css` (celui de l'application) : la
  * concaténation faisait gagner le second, et ce gate rendait vert un texte
- * institutionnel rendu à la taille du corps sur les cinq pages. Chaque groupe
+ * institutionnel rendu à la taille du corps sur les sept pages. Chaque groupe
  * de sources est donc comparé à SA SEULE feuille — `src/institutional/**` à
  * `institutional-*.css`, le reste de `src/` à `index-*.css` — et un fichier
  * qui n'appartient à aucun groupe connu fait échouer le gate plutôt que de se
@@ -47,7 +47,7 @@
  * déclarés par le thème de CHAQUE groupe et exige que la règle compilée de
  * `text-<rôle>` contienne `font-size` — sinon le rôle est SILENCIEUSEMENT
  * réduit à sa seule couleur, exactement le défaut qui a échappé au premier
- * passage de ce gate sur les cinq pages institutionnelles.
+ * passage de ce gate sur les sept pages institutionnelles.
  */
 import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
