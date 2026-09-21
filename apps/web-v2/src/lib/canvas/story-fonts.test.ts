@@ -121,4 +121,19 @@ describe('les treize familles d’iOS qui exigent une police embarquée', () => 
       expect(['OFL-1.1', 'Apache-2.0']).toContain(STORY_FONT_FAMILIES[style].licence);
     }
   });
+
+  /**
+   * L'AVIS DE LICENCE EST LA CONDITION DE LA REDISTRIBUTION — OFL 1.1 comme
+   * Apache 2.0 la posent. Une police ajoutée sans sa ligne dans `NOTICE.md`
+   * n'est pas un oubli de documentation : c'est une redistribution hors
+   * licence, et c'est le genre de manque qu'aucun gate de poids ne verrait.
+   */
+  test('le NOTICE couvre chaque police servie', () => {
+    const notice = readFileSync(join(STYLES_DIR, 'fonts', 'NOTICE.md'), 'utf8');
+    const absents = STORY_FONT_STYLES.filter((style) => {
+      const { css, file, licence } = STORY_FONT_FAMILIES[style];
+      return !notice.includes(css) || !notice.includes(file) || !notice.includes(licence.replace('-', ' '));
+    });
+    expect(absents).toEqual([]);
+  });
 });

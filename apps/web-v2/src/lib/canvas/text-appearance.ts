@@ -85,6 +85,11 @@ const FREE_STYLES: Record<'bold' | 'neon' | 'classic' | 'italic' | 'typewriter',
  * déclare 700 pour `note` parce que sa police EST Noteworthy-**Bold**, et
  * réclamer 700 d'un substitut qui n'a que du 400 ferait graisser le glyphe
  * par le navigateur — un faux gras que personne n'a dessiné. */
+/* L'assertion est celle d'`Object.fromEntries`, qui rend un index de chaînes
+ * quelle que soit la précision du tableau d'entrée. Elle ne se garde pas
+ * toute seule — une famille absente satisferait encore le type — et c'est
+ * `story-compose-styles.test.ts` qui ferme le trou, en comptant à l'exécution
+ * les TREIZE familles dont la pile porte le repli natif. */
 const EMBEDDED_STYLES = Object.fromEntries(
   STORY_FONT_STYLES.map((style) => [style, { family: storyFontStack(style), weight: STORY_FONT_FAMILIES[style].weight }]),
 ) as Record<StoryFontStyle, StyleLook>;

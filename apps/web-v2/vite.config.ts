@@ -514,8 +514,36 @@ export default defineConfig({
                * navigateur garde déjà les scripts importés avec le worker. Les
                * précacher ferait payer leurs octets une seconde fois, à chaque
                * installation, pour une copie que personne ne lit.
+               *
+               * LES POLICES DE STORY (#6951) — `globPatterns` nomme `woff2`, et
+               * ce motif ne coûtait rien tant qu'aucune police n'existait. Les
+               * treize familles de `src/styles/story-fonts.css` sont arrivées
+               * DANS ce motif : mesuré, Workbox inscrivait les treize fichiers
+               * au manifeste et chaque visiteur téléchargeait **247 Ko à
+               * l'INSTALLATION** — plus de quatre fois la première peinture
+               * entière — pour des polices que la plupart des lecteurs ne
+               * verront jamais.
+               *
+               * Tout l'intérêt d'une `@font-face` est que son coût soit
+               * CONDITIONNEL : le navigateur ne demande le fichier que pour
+               * peindre un caractère de son `unicode-range`. Le précache le
+               * rendait inconditionnel, c'est-à-dire qu'il ANNULAIT la
+               * mécanique même sur laquelle le budget de ce lot repose.
+               * `scripts/measure-weight.mjs` compte les `.woff2` du manifeste
+               * produit et rougit au premier — la garde est sur le `sw.js` qui
+               * PART, pas sur cette ligne.
+               *
+               * Conséquence assumée : une story ouverte HORS LIGNE et jamais
+               * vue en ligne rend son texte dans la police système. C'est le
+               * repli que ce lot tient partout (`story-fonts.ts`), et il est
+               * préférable à 247 Ko payés par tous pour le cas rare.
                */
-              globIgnores: ['*/index.html', 'firebase-messaging-sw.js', 'sw-legacy-purge.js'],
+              globIgnores: [
+                '*/index.html',
+                'firebase-messaging-sw.js',
+                'sw-legacy-purge.js',
+                'assets/*.woff2',
+              ],
               /**
                * Chargés EN TÊTE du service worker généré, donc leurs écouteurs
                * passent avant ceux de Workbox (`SERVICE_WORKER_SCRIPTS`).

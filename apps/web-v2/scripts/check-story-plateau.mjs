@@ -198,6 +198,73 @@ if (painted !== null) {
   check(painted.lang === 'en', `la langue de l’objet n’est pas portée par le texte peint — ${painted.lang}`);
 }
 
+/* ── 3 bis. LES TREIZE FAMILLES À POLICE EMBARQUÉE SONT-ELLES PEINTES ? (#6951) ──
+   La table est LUE à sa source (`lib/canvas/story-fonts.ts`), jamais recopiée
+   ici : une jumelle de treize lignes aurait divergé au premier remplacement de
+   police, et c'est exactement le cas que ce gate doit attraper.
+
+   Trois questions, parce que « servie » en recouvre trois :
+   · la famille est-elle APPLIQUÉE au texte peint (`getComputedStyle`) ?
+   · le REPLI derrière elle est-il la pile native — jamais un générique qui
+     ferait croire que le fichier a chargé ?
+   · le FICHIER est-il réellement servi et lisible (`document.fonts.check`
+     après un `load` explicite) ? Une `@font-face` dont l'URL casse laisse un
+     `fontFamily` parfaitement conforme : la chaîne ne dit rien du fichier. */
+const FONT_TABLE = [
+  ...(await readFile(join(ROOT, 'src/lib/canvas/story-fonts.ts'), 'utf8')).matchAll(
+    /^ {2}(\w+): \{ ios: '[^']*', css: '([^']*)'/gm,
+  ),
+].map((m) => ({ style: m[1], css: m[2] }));
+check(FONT_TABLE.length === 13, `la table des polices rend ${FONT_TABLE.length} familles — attendu 13`);
+
+const familyWidths = [];
+for (const { style, css } of FONT_TABLE) {
+  await pick('style', style);
+  const seen = await page.evaluate(async (family) => {
+    const el = document.querySelector('[data-scene-object-id="text-2"] [data-scene-text]');
+    if (el === null) return null;
+    /* `document.fonts.load` REJETTE sur un fichier absent ou illisible, et une
+       exception ici tuerait le gate entier au lieu de nommer la famille
+       fautive — mesuré en falsifiant ce témoin (fichier corrompu : le gate
+       rendait « uncaughtException : NetworkError », sans dire laquelle). Un
+       gate qui plante n'est pas un gate qui accuse. */
+    const loaded = await document.fonts.load(`16px "${family}"`, 'Bonjour').then(
+      () => document.fonts.check(`16px "${family}"`),
+      () => false,
+    );
+    return {
+      fontFamily: getComputedStyle(el).fontFamily,
+      loaded,
+      width: Math.round(el.getBoundingClientRect().width * 100) / 100,
+    };
+  }, css);
+  check(seen !== null, `« ${style} » : aucun texte peint`);
+  if (seen === null) continue;
+  familyWidths.push(seen.width);
+  /* Le navigateur normalise les guillemets et l'espace ; on compare donc sur
+     le NOM et sur la présence du repli, pas sur la chaîne caractère à caractère. */
+  check(seen.fontFamily.includes(css), `« ${style} » n’est pas peinte par ${css} — ${seen.fontFamily}`);
+  check(
+    /-apple-system|BlinkMacSystemFont|system-ui|sans-serif/.test(seen.fontFamily),
+    `« ${style} » n’a pas la pile NATIVE derrière elle — ${seen.fontFamily}`,
+  );
+  check(
+    !/(^|,)\s*(cursive|fantasy|serif|monospace)\s*$/.test(seen.fontFamily.replace(/sans-serif\s*$/, '')),
+    `« ${style} » retombe sur un générique, qui ferait croire à la bonne famille — ${seen.fontFamily}`,
+  );
+  check(seen.loaded, `le FICHIER de « ${style} » (${css}) n’est pas servi ou pas lisible — @font-face conforme, police absente`);
+}
+/* Le seuil n'est pas treize : deux dessins peuvent rendre la même chasse sur
+   un mot de sept lettres, et un gate qui rougit pour une coïncidence ne dit
+   plus rien. Ce qu'il attrape est le cas RÉEL — aucune police n'a chargé, donc
+   les treize largeurs sont celles de la police système, et l'ensemble vaut 1. */
+check(
+  new Set(familyWidths).size >= 10,
+  `les treize familles rendent ${new Set(familyWidths).size} largeur(s) distincte(s) — aucune police ne peint réellement`,
+);
+/* On rend le plateau à l'état que la suite du gate publie. */
+await pick('style', 'typewriter');
+
 /* ── 4. DÉPLACER au POINTEUR, puis TOURNER et AGRANDIR au CLAVIER ────────── */
 const moveBox = await page.evaluate(() => {
   const el = document.querySelector('[data-story-object-move]');
@@ -306,6 +373,7 @@ if (failures.length > 0) {
 }
 console.log(
   `check-story-plateau : vert — ${invariants} invariants : deux objets texte posés, celui-ci déplacé au POINTEUR puis tourné et ` +
-    'agrandi au CLAVIER, sa langue et son style choisis ET PEINTS, un son placé sur la scène, une légende écrite — et CHACUNE de ces ' +
+    'agrandi au CLAVIER, sa langue et son style choisis ET PEINTS, les TREIZE familles à police embarquée peintes par leur ' +
+    'propre fichier avec la pile native derrière elles (#6951), un son placé sur la scène, une légende écrite — et CHACUNE de ces ' +
     'valeurs relue dans le corps de POST /api/v1/posts, un objet non sélectionné restant intact.',
 );
