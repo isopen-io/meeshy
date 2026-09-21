@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
-import { uploadAttachments } from './attachments';
+import { reportAttachmentStatus, uploadAttachments } from './attachments';
 import { createHttpTransport } from './http';
 import { resetUploadedAttachmentsForTests } from './fixtures';
 
@@ -124,5 +124,57 @@ describe('uploadAttachments — le délai de garde', () => {
     await uploadAttachments({ source: 'gateway', transport, pending: [{ file: file('a.png', 'image/png') }] });
     await new Promise((resolve) => setTimeout(resolve, 5));
     expect(calls[0]?.init.signal?.aborted).toBe(false);
+  });
+});
+
+/**
+ * `reportAttachmentStatus` — LE PORT DU RAPPORT DE CONSOMMATION (#7225).
+ *
+ * Route RÉELLE, citée : `POST /api/v1/attachments/:attachmentId/status`
+ * (`services/gateway/src/routes/messages-writes.ts:588-608`), corps validé
+ * par `AttachmentStatusBodySchema`
+ * (`services/gateway/src/validation/messages-schemas.ts:212-251`).
+ */
+describe('reportAttachmentStatus — le port serveur (#7225)', () => {
+  test('POST /api/v1/attachments/:id/status, corps EXACT — action, positions, durée, complétion, segments', async () => {
+    const { impl, calls } = fakeFetch({ status: 200, body: { success: true, data: {} } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+
+    const result = await reportAttachmentStatus({
+      source: 'gateway',
+      transport,
+      attachmentId: 'att-1',
+      report: {
+        action: 'listened',
+        playPositionMs: 4200,
+        durationMs: 12000,
+        complete: false,
+        stretches: [{ startMs: 0, endMs: 4200, endedBy: 'pause' }],
+      },
+    });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.url).toBe('/api/v1/attachments/att-1/status');
+    expect(calls[0]?.init.method).toBe('POST');
+    const body = JSON.parse(String(calls[0]?.init.body));
+    expect(body).toEqual({
+      action: 'listened',
+      playPositionMs: 4200,
+      durationMs: 12000,
+      complete: false,
+      stretches: [{ startMs: 0, endMs: 4200, endedBy: 'pause' }],
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  test('source fixtures : aucun appel réseau', async () => {
+    const transport = createHttpTransport({ base: '' });
+    const result = await reportAttachmentStatus({
+      source: 'fixtures',
+      transport,
+      attachmentId: 'att-1',
+      report: { action: 'watched', complete: true },
+    });
+    expect(result.ok).toBe(true);
   });
 });

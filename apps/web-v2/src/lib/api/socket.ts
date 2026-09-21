@@ -16,6 +16,7 @@ import { decodeNotification } from '@/lib/notifications/record';
 
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
 import { FEED_QUERY_KEY } from './feed';
+import { messagesQueryKey } from './messages';
 import { applyPostCreated, applyPostDeleted, applyPostReactionEvent, applyPostUpdated, applyServedLike } from './feed-realtime';
 import type { FeedInfiniteData } from './feed-pages';
 import { FRIENDS_QUERY_PREFIX } from './friends-keys';
@@ -35,10 +36,12 @@ import {
   applyMessageAttachmentUpdated,
   applyMessageNew,
   applyMessageTranslation,
+  applyReadStatusUpdated,
   isAttachmentUpdated,
   isConversationUnreadUpdated,
   isConversationUpdated,
   isMessageTranslationEvent,
+  isReadStatusUpdated,
   isSocketMessage,
 } from './realtime-apply';
 import { STORY_TRAY_QUERY_KEY } from './stories';
@@ -74,6 +77,24 @@ function isPostLikeEvent(payload: unknown): payload is PostLikeEvent {
   if (typeof payload !== 'object' || payload === null) return false;
   const p = payload as Record<string, unknown>;
   return typeof p.postId === 'string' && typeof p.userId === 'string' && isFiniteNumber(p.likeCount);
+}
+
+/**
+ * `message:pending-delivered` (#7223) — charge INLINE, aucun type exporté
+ * (`packages/shared/types/socketio-events/event-maps.ts:382` : `{ count:
+ * number; conversationIds: string[] }`), motif `PostLikeEvent` ci-dessous :
+ * une garde LOCALE plutôt qu'un import qui n'existe pas dans `@meeshy/shared`.
+ */
+type PendingMessagesDeliveredEvent = { readonly count: number; readonly conversationIds: readonly string[] };
+
+function isPendingMessagesDeliveredEvent(payload: unknown): payload is PendingMessagesDeliveredEvent {
+  if (typeof payload !== 'object' || payload === null) return false;
+  const p = payload as Record<string, unknown>;
+  return (
+    isFiniteNumber(p.count) &&
+    Array.isArray(p.conversationIds) &&
+    p.conversationIds.every((id) => typeof id === 'string')
+  );
 }
 
 /** `PostBookmarkedEventData` — PERSONNEL (émis aux seuls sockets de l'auteur
@@ -299,6 +320,32 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   const onAttachmentUpdated = (payload: unknown): void => {
     if (!isAttachmentUpdated(payload)) return;
     applyMessageAttachmentUpdated(deps.queryClient, payload);
+  };
+
+  /**
+   * `read-status:updated` (#7223) — LES COCHES ✓✓ D'UN MESSAGE ENVOYÉ
+   * BOUGENT EN DIRECT quand le destinataire reçoit ou lit. La règle
+   * (cible le dernier message du fil, tous-ou-rien en groupe conservé) vit
+   * dans `realtime-apply.ts` (D-40) : cette ligne la BRANCHE.
+   */
+  const onReadStatusUpdated = (payload: unknown): void => {
+    if (!isReadStatusUpdated(payload)) return;
+    applyReadStatusUpdated(deps.queryClient, payload);
+  };
+
+  /**
+   * `message:pending-delivered` (#7223) — la charge ne porte AUCUN compteur
+   * par message (`{count, conversationIds}`) : ce puits INVALIDE les fils
+   * NOMMÉS plutôt que d'inventer des compteurs qu'elle ne transporte pas
+   * (doc-comment `MeeshySocketIOManager.ts:826-846` — « invalider les
+   * messages des conversations nommées »). La prochaine lecture de
+   * `GET …/messages` sert les compteurs réels.
+   */
+  const onPendingMessagesDelivered = (payload: unknown): void => {
+    if (!isPendingMessagesDeliveredEvent(payload)) return;
+    for (const conversationId of payload.conversationIds) {
+      void deps.queryClient.invalidateQueries({ queryKey: messagesQueryKey(conversationId) });
+    }
   };
 
   /**
@@ -629,6 +676,8 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_NEW, onConversationNew);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_TRANSLATION, onMessageTranslation);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
+  socket.on<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
+  socket.on<unknown>(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, onPendingMessagesDelivered);
   socket.on<unknown>(SERVER_EVENTS.COMMENT_ADDED, onCommentAdded);
   socket.on<unknown>(SERVER_EVENTS.COMMENT_UPDATED, onCommentUpdated);
   socket.on<unknown>(SERVER_EVENTS.COMMENT_DELETED, onCommentDeleted);
@@ -692,6 +741,8 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_UPDATED, onConversationUpdated);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_TRANSLATION, onMessageTranslation);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
+      socket.off<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
+      socket.off<unknown>(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, onPendingMessagesDelivered);
       socket.off<unknown>(SERVER_EVENTS.COMMENT_ADDED, onCommentAdded);
       socket.off<unknown>(SERVER_EVENTS.COMMENT_UPDATED, onCommentUpdated);
       socket.off<unknown>(SERVER_EVENTS.COMMENT_DELETED, onCommentDeleted);
