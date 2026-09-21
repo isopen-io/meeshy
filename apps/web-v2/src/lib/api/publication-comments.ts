@@ -11,7 +11,7 @@ import type {
 
 import { shiftedCount, withCommentCount } from '@/lib/feed/interactions';
 
-import { updateCardPost } from './card-caches';
+import { updateCardPost, writeCardCache } from './card-caches';
 import { newClientMessageId } from './client-message-id';
 import type { DataSource } from './config';
 import type { FeedAuthor, FeedMedia } from './feed-pages';
@@ -19,6 +19,7 @@ import type { ApiResult, HttpTransport } from './http';
 import { outcomeOf } from './outcome';
 import { postQueryKey } from './publication-detail';
 import { STORY_FEED_QUERY_KEY, storyPostQueryKey, type StoryFeedPost } from './stories';
+import { mergedTranslations, nonEmpty, translationDeliveryOf } from './translation-delivery';
 
 /**
  * **LE PORT DES COMMENTAIRES D'UNE PUBLICATION** — le fil de commentaires que
@@ -694,5 +695,65 @@ export function applyCommentLikeEvent(queryClient: QueryClient, payload: unknown
     mapAllPages(d, (comments) =>
       comments.map((c) => (c.id === commentId ? { ...c, likeCount, ...(byViewer ? { isLikedByMe: liked } : {}) } : c)),
     ),
+  );
+}
+
+/* ------------------------------------------------------------------ #7394 --
+ * **`comment:translation-updated` : UN COMMENTAIRE TRADUIT EN DIRECT BASCULE
+ * DANS LA LANGUE DU LECTEUR.**
+ *
+ * La passerelle le diffuse dès que NLLB livre la traduction d'un commentaire
+ * (`PostTranslationService.handleCommentTranslationCompleted` →
+ * `SocialEventsHandler.broadcastCommentTranslationUpdated`), sous la forme
+ * `CommentTranslationUpdatedEventData` : `postId` (la publication qui PORTE le
+ * commentaire), `commentId`, `language`, `translation`. iOS l'écoute sur le
+ * Flux, la fiche, la feuille de commentaires et le lecteur de stories
+ * (`FeedViewModel.applyCommentTranslation` et ses jumelles) ; web-v2 ne
+ * l'écoutait NULLE PART — mesuré avant ce lot, comme `comment:added` (#7151).
+ * -------------------------------------------------------------------------- */
+
+/**
+ * **LA LOI RANGE, LE RÉSOLVEUR ÉLIT** — la traduction entre dans
+ * `PostComment.translations`, à sa langue, sans doublon (`mergedTranslations`,
+ * le site UNIQUE partagé avec la publication et la légende). Ce que la rangée
+ * PEINT est redescendu à chaque rendu par `resolveFeedText` (`comment-row.tsx`),
+ * qui parcourt le prisme dans l'ordre et fait concourir la langue d'origine à
+ * SON rang : une traduction de rang 2 fait basculer un commentaire écrit hors
+ * du prisme, une traduction hors du prisme est rangée sans rien changer.
+ *
+ * iOS ne tient qu'UNE traduction par commentaire (`translatedContent`) et
+ * garde donc l'arrivée à la main (« première arrivée dans le prisme, si
+ * l'original n'est pas mieux classé ») — son doc-comment avoue que l'ordre
+ * d'arrivée entre deux traductions reste non résolu. Web-v2 tient la CARTE
+ * que la passerelle persiste et sert (`translations.<langue>`), comme pour une
+ * publication : la prochaine lecture du fil rendrait exactement ce que la
+ * fusion vient de ranger, et le rang reste l'affaire du résolveur.
+ *
+ * **UNE SEULE CAISSE, DEUX HÔTES** — `commentsQueryKey(postId)`, sur TOUTES
+ * ses pages : la fiche (`routes/post.tsx`) et la feuille du lecteur de
+ * stories (`story-comments-sheet.tsx`) montent la même surface
+ * (`CommentThread`) sur le même cache. Aucune carte ne peint de commentaire
+ * (`FeedPost` ne déclare pas `comments`), et web-v2 n'a pas de caisse de
+ * réponses imbriquées (#7118) : une réponse n'y entre que par `comment:added`,
+ * à plat, où cette loi la trouve par son id comme n'importe quelle rangée. Le
+ * jour où une caisse de réponses naîtra, elle devra être parcourue ICI.
+ *
+ * **UNE RÉÉCRITURE QUI NE CHANGE RIEN N'EST PAS ÉCRITE** (`writeCardCache`) :
+ * un commentaire absent du fil, un fil jamais ouvert, une rediffusion du même
+ * texte — la caisse reste la même référence, ET une caisse périmée le reste
+ * (#7385, #7399).
+ */
+export function applyCommentTranslation(queryClient: QueryClient, payload: unknown): void {
+  const delivery = translationDeliveryOf(payload);
+  const p = typeof payload === 'object' && payload !== null ? (payload as Record<string, unknown>) : {};
+  const { postId, commentId } = p;
+  if (delivery === null || !nonEmpty(postId) || !nonEmpty(commentId)) return;
+
+  writeCardCache<CommentInfiniteData>(queryClient, commentsQueryKey(postId), (data) =>
+    mapAllPages(data, (comments) => {
+      const held = comments.find((c) => c.id === commentId);
+      const translations = held === undefined ? null : mergedTranslations(held.translations, delivery);
+      return translations === null ? comments : comments.map((c) => (c === held ? { ...c, translations } : c));
+    }),
   );
 }

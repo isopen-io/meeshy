@@ -424,6 +424,21 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   const onCommentUnliked = onCommentLikeChanged(false);
 
   /**
+   * `comment:translation-updated` (#7394) — LE PRISME SUIT LE PIPELINE EN
+   * DIRECT SUR UN COMMENTAIRE, jumeau de `post:translation-updated` (#7383).
+   * Il n'était écouté NULLE PART : un commentaire écrit hors de la langue du
+   * lecteur restait dans celle de son auteur jusqu'à la relecture du fil. La
+   * loi (garde de forme, fusion par langue, caisse du fil) vit avec le cache
+   * dans `publication-comments.ts` ; cette ligne ne fait que BRANCHER, par
+   * `import()` comme ses quatre voisines (D-98).
+   */
+  const onCommentTranslationUpdated = (payload: unknown): void => {
+    void import('./publication-comments').then(({ applyCommentTranslation }) => {
+      applyCommentTranslation(deps.queryClient, payload);
+    });
+  };
+
+  /**
    * `story:reacted` / `story:unreacted` (#7227, W8) — LE RAIL SUIT LES
    * RÉACTIONS EN DIRECT. La règle (compte ABSOLU, garde « jamais le cœur
    * d'un autre ») vit dans `reaction-realtime.ts` — SÉPARÉ de
@@ -716,6 +731,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.COMMENT_DELETED, onCommentDeleted);
   socket.on<unknown>(SERVER_EVENTS.COMMENT_LIKED, onCommentLiked);
   socket.on<unknown>(SERVER_EVENTS.COMMENT_UNLIKED, onCommentUnliked);
+  socket.on<unknown>(SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED, onCommentTranslationUpdated);
   socket.on<unknown>(SERVER_EVENTS.STORY_CREATED, onStoryChanged);
   socket.on<unknown>(SERVER_EVENTS.STORY_UPDATED, onStoryChanged);
   socket.on<unknown>(SERVER_EVENTS.STORY_DELETED, onStoryChanged);
@@ -783,6 +799,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.COMMENT_DELETED, onCommentDeleted);
       socket.off<unknown>(SERVER_EVENTS.COMMENT_LIKED, onCommentLiked);
       socket.off<unknown>(SERVER_EVENTS.COMMENT_UNLIKED, onCommentUnliked);
+      socket.off<unknown>(SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED, onCommentTranslationUpdated);
       socket.off<unknown>(SERVER_EVENTS.POST_CREATED, onPostCreated);
       socket.off<unknown>(SERVER_EVENTS.POST_UPDATED, onPostUpdated);
       socket.off<unknown>(SERVER_EVENTS.POST_DELETED, onPostDeleted);
