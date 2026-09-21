@@ -249,10 +249,6 @@ export async function checkLivingSummary({ browser, BASE, CAPTURES, setScheme, e
     expect(firstOtherVisible, 'sortie « Reprendre le fil » : le premier message d’un autre est visible dans le fil');
 
     // --- 14.8 : Automatique ⇒ la puce redit « AUTO Résumé ».
-    await page.getByRole('button', { name: /Mode de lecture/ }).click();
-    await page.waitForTimeout(150);
-    await page.getByRole('menuitem', { name: 'Automatique' }).click();
-    await page.waitForTimeout(300);
     /* LE MODE ÉLU SE LIT DANS SES DONNÉES, PLUS DANS SON LIBELLÉ (#7337).
        La ligne cherchait « AUTO » ET « Résumé » dans le texte du chip : le
        second est le NOM FRANÇAIS du mode, vert tant qu'il n'est pas traduit.
@@ -260,7 +256,15 @@ export async function checkLivingSummary({ browser, BASE, CAPTURES, setScheme, e
        lit sur `data-chip-mode` / `data-chip-source` (le chip) et
        sur la scène elle-même (`[data-summary]` monté). Le préfixe visible
        « AUTO » reste exigé : c'est un jeton du produit, pas un mot d'une
-       langue, et c'est lui que l'œil lit pour savoir que la loi décide. */
+       langue, et c'est lui que l'œil lit pour savoir que la loi décide.
+       Ce commentaire se tient AU-DESSUS des délais : posé entre le délai et la
+       lecture, il les écartait assez pour que `fixed-delay-ratchet.test.ts`
+       ne voie plus la paire — la dette aurait baissé sans qu'aucun délai ne
+       soit remplacé par un fait. */
+    await page.getByRole('button', { name: /Mode de lecture/ }).click();
+    await page.waitForTimeout(150);
+    await page.getByRole('menuitem', { name: 'Automatique' }).click();
+    await page.waitForTimeout(300);
     const chipAfterAuto = await page.getByRole('button', { name: /Mode de lecture/ }).evaluate((el) => ({
       mode: el.getAttribute('data-chip-mode'),
       source: el.getAttribute('data-chip-source'),
