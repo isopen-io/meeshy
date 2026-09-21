@@ -61,7 +61,11 @@ export type ProfileRelation =
   | { readonly kind: 'pendingReceived'; readonly request: FriendRequestRecord | null }
   | { readonly kind: 'none' };
 
-export const PROFILE_ACTION_KINDS = ['add', 'accept', 'reject', 'cancel', 'write', 'block', 'unblock'] as const;
+/* `report` est entré au 2026-09-21 (#7187) — le port `POST /api/v1/reports`
+   existait côté passerelle et n'avait AUCUN appelant. Il se range ici plutôt
+   qu'à côté : la fiche a UNE loi qui décide de ses actions, et un bouton posé
+   hors d'elle serait le doublon qu'elle existe pour empêcher. */
+export const PROFILE_ACTION_KINDS = ['add', 'accept', 'reject', 'cancel', 'write', 'block', 'unblock', 'report'] as const;
 export type ProfileActionKind = (typeof PROFILE_ACTION_KINDS)[number];
 
 export function relationFromServed(params: {
@@ -102,17 +106,20 @@ export function bucketNeededFor(served: ServedRelation): FriendRequestBucket | n
  */
 export function actionsFor(relation: ProfileRelation): readonly ProfileActionKind[] {
   switch (relation.kind) {
+    /* SIGNALER EST OFFERT PARTOUT SAUF SUR SOI (#7187) — y compris sur un
+       compte qu'on a BLOQUÉ : bloquer met fin au contact, signaler prévient la
+       modération, et l'un n'a jamais valu l'autre. */
     case 'self':
       return [];
     case 'blocked':
-      return ['unblock'];
+      return ['unblock', 'report'];
     case 'friend':
-      return ['write', 'block'];
+      return ['write', 'block', 'report'];
     case 'pendingSent':
-      return ['cancel', 'write', 'block'];
+      return ['cancel', 'write', 'block', 'report'];
     case 'pendingReceived':
-      return ['accept', 'reject', 'write', 'block'];
+      return ['accept', 'reject', 'write', 'block', 'report'];
     case 'none':
-      return ['add', 'write', 'block'];
+      return ['add', 'write', 'block', 'report'];
   }
 }

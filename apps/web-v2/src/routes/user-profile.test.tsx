@@ -95,10 +95,13 @@ describe('les trois blocs arrivent ensemble', () => {
     expect([...el.querySelectorAll('[data-feed-card-id]')].length).toBeGreaterThan(0);
   });
 
-  test('la relation servie « aucune » offre Ajouter, Écrire, Bloquer', async () => {
+  /* `report` a rejoint la liste au 2026-09-21 (#7187) — le port existait sans
+     appelant. L'inventaire reste EXHAUSTIF et ORDONNÉ : c'est lui qui dirait
+     qu'une action a disparu, ou qu'une s'est glissée sans décision. */
+  test('la relation servie « aucune » offre Ajouter, Écrire, Bloquer, Signaler', async () => {
     const el = await mount('kwame-mensah');
     expect(el.querySelector('[data-profile-relation]')?.getAttribute('data-profile-relation')).toBe('none');
-    expect([...el.querySelectorAll('[data-profile-action]')].map((n) => n.getAttribute('data-profile-action'))).toEqual(['add', 'write', 'block']);
+    expect([...el.querySelectorAll('[data-profile-action]')].map((n) => n.getAttribute('data-profile-action'))).toEqual(['add', 'write', 'block', 'report']);
   });
 });
 
@@ -153,6 +156,7 @@ describe('une demande REÇUE', () => {
       'reject',
       'write',
       'block',
+      'report',
     ]);
     expect(text(el.querySelector('[data-profile-context]'))).toContain('Amina Diallo');
   });
@@ -389,3 +393,105 @@ describe('« Charger plus »', () => {
   });
 });
 
+/**
+ * **LES DEUX GESTES QUI MANQUAIENT À LA FICHE** (#7188).
+ *
+ * Le relevé d'ouverture avait trouvé la fiche SAINE — aucun contrôle inerte,
+ * la loi 4 tenue partout, et même mieux que sur iOS (la tuile « Stories » y est
+ * un bouton mort, ici un `<span>`). Ce qui manquait n'était donc pas à
+ * réparer, mais à AJOUTER.
+ */
+describe('la fiche rend les gestes qui lui manquaient (#7188)', () => {
+  /**
+   * COMMENTER — le compteur retombait en `<span>` muet parce que l'hôte ne
+   * passait pas `onComment` (`feed-post-card.tsx:154-162`) : conforme à la
+   * loi 4, un bouton sans effet mentirait — mais la fonction MANQUAIT, alors
+   * que le Flux la sert depuis toujours et que `/post/$post` est routé.
+   *
+   * Le témoin interroge le BOUTON plutôt que le handler : c'est l'effet qui
+   * compte, et le dépôt a déjà payé une zone cliquable sans effet (cycle 123).
+   */
+  test('le compteur de commentaires d’une publication est un bouton', async () => {
+    const el = await mount('kwame-mensah');
+
+    expect(el.querySelector('[data-feed-gesture="comment"]')).not.toBe(null);
+  });
+
+  /**
+   * SA PROPRE FICHE MÈNE À SON ÉDITION. Masquer les gestes relationnels sur soi
+   * est juste — on ne s'ajoute pas en ami — mais rien n'était mis à la place :
+   * aucun chemin vers `/me`, donc un cul-de-sac.
+   */
+  test('sur sa propre fiche, un chemin mène à l’édition', async () => {
+    const el = await mount('vous');
+
+    const lien = el.querySelector('[data-profile-self] a');
+    expect(lien).not.toBe(null);
+    expect(lien?.getAttribute('href')).toBe('/me');
+    expect(text(lien)).toBe('Modifier mon profil');
+  });
+
+  /**
+   * LE CONTRE-TÉMOIN — sans lui, on pourrait poser l'entrée d'édition sur
+   * TOUTES les fiches, et proposer à chacun de modifier le profil d'un autre.
+   */
+  test('sur la fiche d’un tiers, aucune entrée d’édition', async () => {
+    const el = await mount('kwame-mensah');
+
+    expect(el.querySelector('[data-profile-self]')).toBe(null);
+  });
+});
+
+/**
+ * **LE BOUTON OUVRE VRAIMENT LA FEUILLE** (#7187).
+ *
+ * Les témoins du port (`lib/api/reports.test.ts`) prouvent que la RÈGLE est
+ * juste ; les inventaires d'actions prouvent que le bouton EXISTE. Aucun des
+ * deux ne prouve que le bouton OUVRE quelque chose — et c'est précisément la
+ * distance que ce dépôt a payée cinq fois cette semaine : un mécanisme écrit,
+ * testé, et que rien n'active.
+ *
+ * Ce témoin a été ajouté APRÈS coup, en relisant le lot : il manquait, et rien
+ * ne l'aurait dit.
+ */
+describe('signaler ouvre la feuille des motifs (#7187)', () => {
+  test('aucune feuille tant qu’on n’a pas demandé à signaler', async () => {
+    const el = await mount('kwame-mensah');
+
+    expect(el.querySelector('[data-report-reason]')).toBe(null);
+  });
+
+  test('le bouton « Signaler » la fait apparaître, avec les HUIT motifs', async () => {
+    const el = await mount('kwame-mensah');
+
+    const bouton = el.querySelector<HTMLButtonElement>('[data-profile-action="report"]');
+    expect(bouton).not.toBe(null);
+    await act(async () => bouton?.click());
+    await settle();
+
+    const motifs = [...document.querySelectorAll('[data-report-reason]')].map((n) =>
+      n.getAttribute('data-report-reason'),
+    );
+    expect(motifs).toEqual([
+      'spam',
+      'inappropriate',
+      'harassment',
+      'violence',
+      'hate_speech',
+      'fake_profile',
+      'impersonation',
+      'other',
+    ]);
+  });
+
+  /** ET ELLE EXPLIQUE CE QU'ELLE FAIT : une liste de motifs sans phrase laisse
+      deviner à qui va le signalement, et ce qu'il déclenche. */
+  test('elle dit à qui le signalement s’adresse', async () => {
+    const el = await mount('kwame-mensah');
+
+    await act(async () => el.querySelector<HTMLButtonElement>('[data-profile-action="report"]')?.click());
+    await settle();
+
+    expect(text(document.querySelector('[data-report-body]'))).toContain('modération');
+  });
+});

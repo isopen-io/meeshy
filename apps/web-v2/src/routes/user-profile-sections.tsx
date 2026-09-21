@@ -1,6 +1,7 @@
 import { memo, type ReactNode } from 'react';
 
 import { Glyph, GlyphSvg } from '@/components/glyph';
+import { Link } from '@/routes/route-table';
 import { GroupedSection, SECTION_CARD_STYLE } from '@/components/grouped-section';
 import { FEED_GLYPHS } from '@/components/glyphs-feed';
 import { PROFILE_GLYPHS } from '@/components/glyphs-profile';
@@ -139,6 +140,32 @@ export function ProfileBlockedCard({
         {translate(language, 'userProfile.blocked.body')}
       </p>
       <ActionButton language={language} kind="unblock" name={name} disabled={busy || !online} onAction={onAction} />
+    </div>
+  );
+}
+
+/**
+ * **SA PROPRE FICHE MÈNE À SON ÉDITION** (#7188).
+ *
+ * Masquer les gestes relationnels sur soi est juste — on ne s'ajoute pas en
+ * ami, miroir d'iOS (`UserProfileSheet+DetailsTab.swift:23`) — mais rien
+ * n'était mis à la place : `/u/<mon-pseudo>` n'offrait AUCUN geste, et aucun
+ * chemin vers `/me`. Un écran qui montre son propre profil sans mener à son
+ * édition est un cul-de-sac.
+ *
+ * Un `<Link>` et non un bouton : la destination est une ADRESSE, et le lecteur
+ * doit pouvoir l'ouvrir dans un onglet, la copier, y revenir.
+ */
+export function ProfileSelfSection({ language }: { readonly language: InterfaceLanguage }) {
+  return (
+    <div data-profile-self className="grid gap-2 rounded-card px-3.5 py-3.5" style={SECTION_CARD_STYLE}>
+      <Link
+        to="profile"
+        className="grid place-items-center rounded-chip text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
+        style={{ minHeight: 44, color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
+      >
+        {translate(language, 'userProfile.self.edit')}
+      </Link>
     </div>
   );
 }
