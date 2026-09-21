@@ -4,18 +4,10 @@ import { withoutBookmark } from '@/lib/feed/bookmark-membership';
 import { togglePost, withServedCount } from '@/lib/feed/interactions';
 
 import { BOOKMARKS_QUERY_KEY } from './bookmarked-posts';
+import { removeCardPost, replaceCardContent, updateCardPost, writeCardCache } from './card-caches';
 import { FEED_QUERY_KEY } from './feed';
 import { bumpNewPostCount } from './feed-new-count';
 import type { FeedInfiniteData, FeedPost } from './feed-pages';
-import { postQueryKey } from './publication-detail';
-/* `./reels-query-key`, jamais `./reels` — ce module est atteint par `socket.ts`
- * (le chunk `realtime`, chargé en `import()` APRÈS la première peinture) EN
- * PLUS de la route `/reels` (chemin synchrone) ; importer le port ENTIER des
- * réels depuis ce second chemin en fait un module partagé entre deux chunks
- * async, que Rollup extrait sous un nom qui COLLISIONNE avec le chunk de la
- * route (`budgets.json › on_demand_chunks.reels`, qui SOMME tout fichier du
- * motif) — voir le doc-comment de `reels-query-key.ts`. */
-import { REELS_QUERY_ROOT } from './reels-query-key';
 
 /**
  * LE TEMPS RÉEL DU FLUX (#7182) — `post:created`, `post:updated`,
@@ -90,8 +82,9 @@ const merged = (incoming: FeedPost, held: FeedPost): FeedPost => ({
   ...(held.isBookmarkedByMe == null ? {} : { isBookmarkedByMe: held.isBookmarkedByMe }),
 });
 
-/** UN SEUL parcours de pages pour les trois lois — insérer, remplacer, retirer
- *  ne diffèrent que par ce qu'elles font d'une liste de cartes. */
+/** Le parcours des pages du FLUX SEUL, pour `post:created` : insérer en tête
+ *  et réconcilier par cmid n'ont de sens que là. Tout ce qui change une carte
+ *  sur CHAQUE écran qui la montre passe par le registre (`card-caches.ts`). */
 const mapPosts = (
   data: FeedInfiniteData | undefined,
   update: (posts: readonly FeedPost[], pageIndex: number) => readonly FeedPost[],
@@ -145,46 +138,39 @@ export function applyPostCreated(queryClient: QueryClient, payload: unknown): vo
 }
 
 /**
- * `post:updated` — REMPLACER, jamais insérer. Une publication hors du fil
- * (hors audience, jamais chargée) ne s'y invite pas par sa modification. Le
- * DÉTAIL suit dans le même mouvement : la même publication ne peut pas porter
- * deux textes selon l'écran qui la montre.
+ * `post:updated` — REMPLACER, jamais insérer. Une publication hors d'un écran
+ * (hors audience, jamais chargée) ne s'y invite pas par sa modification.
+ * Chaque écran qui la MONTRE suit dans le même mouvement (`replaceCardContent`,
+ * le registre des caisses de cartes) : le Flux, la fiche, les enregistrées, la
+ * page d'un hashtag, le profil de son auteur (#7341, miroir de
+ * `ProfileUserPostsList.swift`, qui écoute `postUpdated`) — la même
+ * publication ne peut pas porter deux textes selon l'écran qui la montre.
+ * Jamais le fil GELÉ des Réels, qu'iOS ne câble pas sur `postUpdated`.
  */
 export function applyPostUpdated(queryClient: QueryClient, payload: unknown): void {
   const incoming = postOf(payload);
   if (incoming === null) return;
 
-  queryClient.setQueryData<FeedInfiniteData>(FEED_QUERY_KEY, (data) =>
-    mapPosts(data, (posts) => posts.map((held) => (held.id === incoming.id ? merged(incoming, held) : held))),
-  );
-  queryClient.setQueryData<FeedPost>(postQueryKey(incoming.id), (held) =>
-    held === undefined ? held : merged(incoming, held),
-  );
+  replaceCardContent(queryClient, incoming.id, (held) => merged(incoming, held));
 }
 
 /**
- * `post:deleted` — elle quitte le fil, le détail, ET LES RÉELS (#7227, W8).
+ * `post:deleted` — elle quitte TOUS les écrans qui la montrent, Réels compris
+ * (#7227, W8 ; #7341 pour le hashtag, le profil et les enregistrées).
  *
- * Exactement le périmètre qu'iOS observe (`ReelsViewModel.swift:169-183`,
- * `postDeleted` SEUL parmi les événements de publication — ni `postCreated`
- * ni `postUpdated` n'y sont câblés) : le fil des Réels est un fil
- * D'AFFINITÉ résolu par le serveur, y insérer une carte créée côté client
- * inventerait un tri que le serveur n'a pas décidé. La suppression, elle, ne
- * trie rien — elle retire une carte que TOUT client doit cesser de montrer.
- *
- * `setQueriesData` avec la RACINE (`REELS_QUERY_ROOT`) atteint toutes les
- * graines en cache à la fois (TanStack compare les clés par préfixe).
+ * Le fil des Réels la perd aussi — exactement le périmètre qu'iOS observe
+ * (`ReelsViewModel.swift:169-183`, `postDeleted` SEUL parmi les événements de
+ * publication) : le fil des Réels est un fil D'AFFINITÉ résolu par le serveur,
+ * y insérer une carte créée côté client inventerait un tri que le serveur n'a
+ * pas décidé. La suppression, elle, ne trie rien — elle retire une carte que
+ * TOUT écran doit cesser de montrer. Les caisses parcourues sont celles du
+ * registre (`removeCardPost`, `card-caches.ts`), toutes graines comprises.
  */
 export function applyPostDeleted(queryClient: QueryClient, payload: unknown): void {
   const postId = objectOf(payload)?.postId;
   if (typeof postId !== 'string') return;
 
-  const removeFromPages = (data: FeedInfiniteData | undefined) =>
-    mapPosts(data, (posts) => posts.filter((held) => held.id !== postId));
-
-  queryClient.setQueryData<FeedInfiniteData>(FEED_QUERY_KEY, removeFromPages);
-  queryClient.setQueriesData<FeedInfiniteData>({ queryKey: REELS_QUERY_ROOT }, removeFromPages);
-  queryClient.removeQueries({ queryKey: postQueryKey(postId) });
+  removeCardPost(queryClient, postId);
 }
 
 /**
@@ -222,41 +208,23 @@ function isPostReactionEvent(payload: unknown): payload is {
 }
 
 /**
- * **LE ❤️ SERVI SE POSE AUX TROIS CAISSES, UNE SEULE FOIS** (revue-correction
- * W8, #7227) — le Flux, TOUTES les graines de Réels, et la FICHE
- * `/post/$post`. Site UNIQUE, partagé par les DEUX voies que la passerelle
+ * **LE ❤️ SERVI SE POSE À CHAQUE CAISSE QUI MONTRE LA CARTE, UNE SEULE FOIS**
+ * (revue-correction W8, #7227 ; #7341) — le Flux, TOUTES les graines de
+ * Réels, les enregistrées, la page d'un hashtag, le profil de l'auteur, la
+ * fiche : le registre `card-caches.ts` les tient, et c'est `updateCardPost`
+ * qui les parcourt. Site UNIQUE, partagé par les DEUX voies que la passerelle
  * emprunte pour un cœur : `post:liked`/`post:unliked`
  * (`socket.ts#onPostLikeChanged`, la voie NOMINALE d'un POST/REEL) et
  * `post:reaction-added`/`post:reaction-removed` (ci-dessous).
  *
- * La fiche était la caisse manquante : le geste LOCAL l'écrit
- * (`feed-gestures.ts:127,142`), la jumelle `post:reaction-*` l'écrivait, et
- * la voie nominale la sautait — une fiche ouverte gardait l'ancien chiffre
- * pendant que le Flux bougeait dans son dos. Deux boucles recopiées avaient
- * commencé à diverger ; il n'y en a plus qu'une.
+ * Cette énumération a été RECOPIÉE ici jusqu'à #7341, et la recopie a divergé
+ * deux fois : la fiche a manqué (#7227), puis le hashtag et le profil — un
+ * cœur posé depuis un autre appareil n'y arrivait jamais.
  *
  * `isLikedByMe` ne bascule que pour le geste du LECTEUR (un autre de SES
  * appareils) — le cœur d'un autre ne remplit jamais le mien ; le compte, lui,
  * est ABSOLU et remplace toujours l'estimation optimiste.
  */
-/**
- * **LES QUATRE CAISSES D'UNE CARTE, ÉNUMÉRÉES UNE SEULE FOIS** — le Flux,
- * TOUTES les graines de Réels, la fiche `/post/$post`, et le corpus des
- * publications ENREGISTRÉES (#7286), dont l'écran peint ses cartes depuis sa
- * propre requête : sans lui, un cœur posé ailleurs n'y arrivait jamais. Chaque
- * loi servie (`post:liked`, `post:bookmarked`, `post:reaction-*`) dit ce
- * qu'elle fait D'UNE carte ; d'où elle le fait se lit ici, et nulle part
- * ailleurs. C'est la recopie de cette boucle qui a fait diverger les caisses
- * deux fois.
- */
-function applyToPostCaches(queryClient: QueryClient, postId: string, applyToPost: (post: FeedPost) => FeedPost): void {
-  const applyToPages = (data: FeedInfiniteData | undefined) => mapPosts(data, (posts) => posts.map(applyToPost));
-  queryClient.setQueryData<FeedInfiniteData>(FEED_QUERY_KEY, applyToPages);
-  queryClient.setQueriesData<FeedInfiniteData>({ queryKey: REELS_QUERY_ROOT }, applyToPages);
-  queryClient.setQueryData<FeedPost>(postQueryKey(postId), (post) => (post === undefined ? post : applyToPost(post)));
-  queryClient.setQueryData<FeedInfiniteData>(BOOKMARKS_QUERY_KEY, applyToPages);
-}
-
 export function applyServedLike(
   queryClient: QueryClient,
   change: { readonly postId: string; readonly on: boolean; readonly byViewer: boolean; readonly likeCount: number },
@@ -265,19 +233,18 @@ export function applyServedLike(
   const toggle = { postId, kind: 'like' as const, on: change.on };
   const served = { postId, kind: 'like' as const, count: change.likeCount };
 
-  applyToPostCaches(queryClient, postId, (post) =>
-    post.id !== postId ? post : withServedCount(change.byViewer ? togglePost(post, toggle) : post, served),
-  );
+  updateCardPost(queryClient, postId, (post) => withServedCount(change.byViewer ? togglePost(post, toggle) : post, served));
 }
 
 /**
- * **LE FAVORI SERVI SE POSE AUX MÊMES TROIS CAISSES** (revue-correction W8,
- * #7227) — `post:bookmarked` n'écrivait QUE le Flux, pendant que le geste
- * LOCAL tient les trois depuis #6457 (`feed-gestures.ts#performPostGesture`,
- * `setOn`) et qu'iOS réconcilie aussi son pager de Réels
- * (`ReelsViewModel.swift:139-163`, `applyServerBookmark`). La divergence se
- * voyait là où aucun geste local ne l'avait masquée : un favori posé depuis
- * un AUTRE appareil n'atteignait ni le pager ni la fiche.
+ * **LE FAVORI SERVI SE POSE AUX MÊMES CAISSES QUE LE CŒUR** (revue-correction
+ * W8, #7227 ; #7341) — `post:bookmarked` n'écrivait QUE le Flux, pendant que
+ * le geste LOCAL tenait plusieurs caisses (`feed-gestures.ts`, `setOn`) et
+ * qu'iOS réconcilie aussi son pager de Réels (`ReelsViewModel.swift:139-163`,
+ * `applyServerBookmark`) et les publications d'un profil
+ * (`ProfileUserPostsList.swift`). La divergence se voyait là où aucun geste
+ * local ne l'avait masquée : un favori posé depuis un AUTRE appareil
+ * n'atteignait ni le pager, ni la fiche, ni un hashtag, ni un profil.
  *
  * **PAS DE GARDE `byViewer` ICI, ET C'EST MESURÉ** : le favori est PERSONNEL
  * — la passerelle n'émet l'événement que vers la feed room de son auteur
@@ -292,15 +259,14 @@ export function applyServedBookmark(
   const { postId, bookmarkCount } = change;
   const toggle = { postId, kind: 'bookmark' as const, on: change.on };
 
-  applyToPostCaches(queryClient, postId, (post) => {
-    if (post.id !== postId) return post;
+  updateCardPost(queryClient, postId, (post) => {
     const toggled = togglePost(post, toggle);
     return bookmarkCount === undefined ? toggled : withServedCount(toggled, { postId, kind: 'bookmark', count: bookmarkCount });
   });
 
   /**
    * **LE CORPUS DES ENREGISTRÉES EST AUSSI UNE APPARTENANCE** (#7286) —
-   * `applyToPostCaches` vient d'y basculer le champ comme sur toute carte ;
+   * `updateCardPost` vient d'y basculer le champ comme sur toute carte ;
    * pour le SIGNET, c'est en plus la composition du corpus qui change.
    *
    * RETIRER ôte la ligne sur-le-champ : la laisser basculée garderait, dans la
@@ -318,7 +284,7 @@ export function applyServedBookmark(
     void queryClient.invalidateQueries({ queryKey: BOOKMARKS_QUERY_KEY });
     return;
   }
-  queryClient.setQueryData<FeedInfiniteData>(BOOKMARKS_QUERY_KEY, (data) => withoutBookmark(data, postId));
+  writeCardCache<FeedInfiniteData>(queryClient, BOOKMARKS_QUERY_KEY, (data) => withoutBookmark(data, postId));
 }
 
 export function applyPostReactionEvent(queryClient: QueryClient, payload: unknown, viewerId: string): void {

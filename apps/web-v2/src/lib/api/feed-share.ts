@@ -1,10 +1,9 @@
 import type { QueryClient } from '@tanstack/react-query';
 
-import { applyServedCount } from '@/lib/feed/interactions';
+import { withServedCount } from '@/lib/feed/interactions';
 
+import { updateCardPost } from './card-caches';
 import type { DataSource } from './config';
-import { FEED_QUERY_KEY } from './feed';
-import type { FeedInfiniteData } from './feed-pages';
 import type { HttpTransport } from './http';
 
 /**
@@ -18,7 +17,9 @@ import type { HttpTransport } from './http';
  * Rien n'est écrit d'avance, donc rien ne se défait : un refus ou une panne
  * laisse le compte tel quel et rend `false` — le lien, lui, est déjà chez son
  * destinataire, et un compteur manqué ne mérite pas d'annonce. Le compte
- * ABSOLU servi remplace celui du fil (`applyServedCount`).
+ * ABSOLU servi remplace celui de CHAQUE écran qui montre la carte
+ * (`updateCardPost`, #7341) : on partage aussi depuis un hashtag, un profil,
+ * les Réels ou la fiche, et le Flux seul était écrit.
  */
 export type FeedShareDeps = {
   readonly source: DataSource;
@@ -37,9 +38,7 @@ export async function recordPostShare(params: { readonly postId: string; readonl
 
   const count = (result.data as { readonly shareCount?: unknown } | null)?.shareCount;
   if (typeof count === 'number' && Number.isFinite(count)) {
-    deps.queryClient.setQueryData<FeedInfiniteData>(FEED_QUERY_KEY, (data) =>
-      applyServedCount(data, { postId, kind: 'share', count }),
-    );
+    updateCardPost(deps.queryClient, postId, (post) => withServedCount(post, { postId, kind: 'share', count }));
   }
   return true;
 }

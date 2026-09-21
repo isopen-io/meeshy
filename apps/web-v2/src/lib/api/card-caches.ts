@@ -1,0 +1,157 @@
+import type { QueryClient, QueryKey } from '@tanstack/react-query';
+
+import { dropCardPost, mapCardPosts, type CardPages } from '@/lib/feed/interactions';
+
+import { BOOKMARKS_QUERY_KEY } from './bookmarked-posts';
+import { FEED_QUERY_KEY } from './feed';
+import type { FeedPost } from './feed-pages';
+import { postQueryKey } from './publication-detail';
+/* `./reels-query-key`, jamais `./reels` : ce module est atteint par le chunk
+ * `realtime` (via `feed-realtime.ts` et `publication-comments.ts`) — voir le
+ * doc-comment de `reels-query-key.ts`. */
+import { REELS_QUERY_ROOT } from './reels-query-key';
+
+/**
+ * **LE REGISTRE DES CAISSES QUI PEIGNENT UNE CARTE DE PUBLICATION** (#7341).
+ *
+ * Six écrans montent la MÊME carte (`FeedPostCard`), et chacun la peint depuis
+ * SA caisse : le Flux, les Réels, les enregistrées, la page d'un hashtag, les
+ * publications d'un profil, et la fiche `/post/$post`. Tout ce qui change une
+ * carte — un cœur, un signet, un compteur, une modification, une suppression —
+ * doit atteindre CHACUNE de ces caisses, sans quoi l'écran qui lit la caisse
+ * oubliée montre un contrôle inerte : la requête part, la carte ne bouge pas.
+ *
+ * La liste vivait RECOPIÉE à trois sites (`feed-gestures.ts#setOn`,
+ * `feed-realtime.ts#applyToPostCaches`, `publication-comments.ts`), et chaque
+ * recopie avait sa propre longueur : le hashtag et le profil n'étaient dans
+ * aucune, les enregistrées manquaient aux compteurs de commentaires. Elle vit
+ * ICI, et ces sites la LISENT — un écran qui peint une carte depuis une caisse
+ * absente de cette liste est un défaut de CE fichier, pas de ses appelants.
+ *
+ * **HASHTAG ET PROFIL DÉCLARENT LEUR RACINE ICI**, pas dans leur port : ce
+ * registre est atteint par le chunk `realtime` et par le geste, et y tirer
+ * `hashtag-posts.ts` ou `author-posts.ts` y porterait leur code réseau. Les
+ * ports construisent leur clé DEPUIS ces racines, donc elles ne peuvent pas
+ * diverger (même raison de poids que `reels-query-key.ts`).
+ */
+export const HASHTAG_QUERY_ROOT = ['hashtag'] as const;
+export const AUTHOR_POSTS_QUERY_ROOT = ['author-posts'] as const;
+
+type CardList = {
+  readonly queryKey: QueryKey;
+  /**
+   * `exact` quand la racine est PARTAGÉE avec une requête qui ne tient pas de
+   * cartes : `['feed', 'new-count']` est un ENTIER (`feed-new-count.ts`), et
+   * TanStack compare les clés par préfixe. Sans cette borne, la première
+   * écriture lèverait sur `data.pages`.
+   */
+  readonly exact: boolean;
+  /**
+   * **LE FIL DES RÉELS EST COMPOSÉ À L'OUVERTURE** (D-66) : son ordre est
+   * gelé, il ne se relit ni au focus ni à la reconnexion. Il reçoit donc
+   * l'état du LECTEUR, les compteurs et les retraits — exactement ce qu'iOS y
+   * câble (`ReelsViewModel.swift:95-183` : `postLiked`, `postUnliked`,
+   * `postBookmarked`, `postDeleted`) —, jamais une relecture ni un contenu
+   * neuf (`postUpdated` n'y est pas câblé).
+   */
+  readonly frozen: boolean;
+};
+
+const CARD_LISTS: readonly CardList[] = [
+  { queryKey: FEED_QUERY_KEY, exact: true, frozen: false },
+  { queryKey: REELS_QUERY_ROOT, exact: false, frozen: true },
+  { queryKey: BOOKMARKS_QUERY_KEY, exact: true, frozen: false },
+  { queryKey: HASHTAG_QUERY_ROOT, exact: false, frozen: false },
+  { queryKey: AUTHOR_POSTS_QUERY_ROOT, exact: false, frozen: false },
+];
+
+const UNFROZEN_LISTS = CARD_LISTS.filter((list) => !list.frozen);
+
+const filtersOf = (list: CardList) => ({ queryKey: list.queryKey, exact: list.exact });
+
+/**
+ * **UNE CAISSE QUE LA LOI NE CHANGE PAS N'EST PAS RÉÉCRITE.** Réécrire une
+ * donnée IDENTIQUE n'est pas neutre chez TanStack : `setQueryData` pose
+ * `isInvalidated: false` et une date neuve (`successState`, query-core). Une
+ * caisse qu'un écho venait de rendre PÉRIMÉE — les enregistrées après un
+ * `post:bookmarked` — redevenait fraîche au premier geste posé sur une AUTRE
+ * publication, et son écran s'ouvrait sans relire. Rendre `undefined` à
+ * l'updater est le « rien à écrire » de TanStack.
+ */
+const unlessSame =
+  <T>(update: (data: T | undefined) => T | undefined) =>
+  (data: T | undefined): T | undefined => {
+    const next = update(data);
+    return next === data ? undefined : next;
+  };
+
+export function writeCardCache<T>(queryClient: QueryClient, queryKey: QueryKey, update: (data: T | undefined) => T | undefined): void {
+  queryClient.setQueryData<T>(queryKey, unlessSame(update));
+}
+
+const writeLists = (queryClient: QueryClient, lists: readonly CardList[], update: (data: CardPages | undefined) => CardPages | undefined): void => {
+  lists.forEach((list) => queryClient.setQueriesData<CardPages>(filtersOf(list), unlessSame(update)));
+};
+
+const cardsOf = (queryClient: QueryClient, lists: readonly CardList[]) =>
+  lists.flatMap((list) => queryClient.getQueriesData<CardPages>(filtersOf(list)));
+
+const holds = (data: CardPages | undefined, postId: string): boolean =>
+  data?.pages.some((page) => page.posts.some((post) => post.id === postId)) === true;
+
+/**
+ * LA CARTE TELLE QU'UN ÉCRAN LA MONTRE — l'état « AVANT » d'un geste. Une
+ * publication peut n'être peinte QUE par un écran : enregistrée il y a trois
+ * jours (#7286), trouvée sous un hashtag, ouverte sur un profil. N'y lire
+ * qu'une caisse déduisait « pas aimée » et envoyait `POST` sur le geste qui
+ * voulait RETIRER. La fiche vient en dernier : un lien DIRECT n'a rempli
+ * qu'elle.
+ */
+export function findCardPost(queryClient: QueryClient, postId: string): FeedPost | undefined {
+  const listed = cardsOf(queryClient, CARD_LISTS)
+    .flatMap(([, data]) => data?.pages ?? [])
+    .flatMap((page) => page.posts)
+    .find((post) => post.id === postId);
+  return listed ?? queryClient.getQueryData<FeedPost>(postQueryKey(postId));
+}
+
+const writeCard = (queryClient: QueryClient, lists: readonly CardList[], postId: string, apply: (post: FeedPost) => FeedPost): void => {
+  const update = (post: FeedPost) => (post.id === postId ? apply(post) : post);
+  writeLists(queryClient, lists, (data) => mapCardPosts(data, update));
+  writeCardCache<FeedPost>(queryClient, postQueryKey(postId), (post) => (post === undefined ? post : apply(post)));
+};
+
+/**
+ * L'ÉTAT DU LECTEUR ET LES COMPTEURS — un cœur, un signet, un compte servi, un
+ * commentaire, un partage. La loi ne reçoit que la carte VISÉE ; chaque caisse
+ * qui la montre bascule UNE fois (la même publication ne peut pas porter deux
+ * cœurs selon l'écran qui la montre), et celles qui ne la montrent pas restent
+ * intactes.
+ */
+export function updateCardPost(queryClient: QueryClient, postId: string, apply: (post: FeedPost) => FeedPost): void {
+  writeCard(queryClient, CARD_LISTS, postId, apply);
+}
+
+/** LE CONTENU que l'auteur a écrit (`post:updated`) — partout, sauf le fil
+ * GELÉ des Réels (voir `frozen`). */
+export function replaceCardContent(queryClient: QueryClient, postId: string, apply: (post: FeedPost) => FeedPost): void {
+  writeCard(queryClient, UNFROZEN_LISTS, postId, apply);
+}
+
+/** LA CARTE QUITTE TOUS LES ÉCRANS (`post:deleted`), les Réels compris. */
+export function removeCardPost(queryClient: QueryClient, postId: string): void {
+  writeLists(queryClient, CARD_LISTS, (data) => dropCardPost(data, postId));
+  queryClient.removeQueries({ queryKey: postQueryKey(postId) });
+}
+
+/**
+ * LES CAISSES QUI MONTRENT LA CARTE SONT PÉRIMÉES (un 409 sur « aimer » : le
+ * lecteur avait déjà réagi ailleurs) — celles-là seulement, et jamais le fil
+ * GELÉ des Réels, que le retour en arrière a déjà remis.
+ */
+export function invalidateCardPost(queryClient: QueryClient, postId: string): void {
+  cardsOf(queryClient, UNFROZEN_LISTS)
+    .filter(([, data]) => holds(data, postId))
+    .forEach(([queryKey]) => void queryClient.invalidateQueries({ queryKey, exact: true }));
+  void queryClient.invalidateQueries({ queryKey: postQueryKey(postId) });
+}
