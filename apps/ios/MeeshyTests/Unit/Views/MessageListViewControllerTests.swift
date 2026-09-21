@@ -115,6 +115,106 @@ final class MessageListViewControllerTests: XCTestCase {
         XCTAssertNil(vc.scrollSettleTargetForTesting)
     }
 
+    // MARK: - Séparateur de premier non-lu (#7222, D-L1..3)
+
+    /// La loi de POSITIONNEMENT : « après » en INDEX du tableau place l'item
+    /// plus HAUT à l'écran (le flux est inversé) — donc juste AU-DESSUS du
+    /// premier message non lu, jamais en dessous. Même règle que
+    /// `.dayHeader` (`MessageListSnapshotPrep`).
+    func test_itemsWithUnreadSeparator_insertsRightAfterTheFrozenTargetMessage() throws {
+        let store = try makeEmptyStore()
+        let vc = makeSUT(store: store)
+        vc.frozenUnreadSeparator = UnreadSeparatorBoundary(localId: "m2", count: 3)
+
+        let items: [MessageListItem] = [
+            .message(localId: "m3"), .message(localId: "m2"), .message(localId: "m1")
+        ]
+        let result = vc.itemsWithUnreadSeparator(items)
+
+        XCTAssertEqual(result, [
+            .message(localId: "m3"),
+            .message(localId: "m2"),
+            .firstUnreadSeparator(afterLocalId: "m2"),
+            .message(localId: "m1")
+        ])
+    }
+
+    /// Sans frontière gelée (fil sans non-lus, ou pas encore résolue) :
+    /// `items` ressort BIT-À-BIT IDENTIQUE — jamais de séparateur fantôme.
+    func test_itemsWithUnreadSeparator_noFrozenBoundary_returnsItemsUnchanged() throws {
+        let store = try makeEmptyStore()
+        let vc = makeSUT(store: store)
+        XCTAssertNil(vc.frozenUnreadSeparator)
+
+        let items: [MessageListItem] = [.message(localId: "m1"), .message(localId: "m2")]
+        XCTAssertEqual(vc.itemsWithUnreadSeparator(items), items)
+    }
+
+    /// Le message-cible gelé est HORS de la fenêtre courante (page plus
+    /// ancienne pas encore chargée) : un item introuvable ne serait jamais
+    /// matérialisé et casserait le diff — `items` ressort inchangé plutôt
+    /// que d'insérer un séparateur orphelin.
+    func test_itemsWithUnreadSeparator_targetAbsentFromWindow_returnsItemsUnchanged() throws {
+        let store = try makeEmptyStore()
+        let vc = makeSUT(store: store)
+        vc.frozenUnreadSeparator = UnreadSeparatorBoundary(localId: "does-not-exist", count: 1)
+
+        let items: [MessageListItem] = [.message(localId: "m1"), .message(localId: "m2")]
+        XCTAssertEqual(vc.itemsWithUnreadSeparator(items), items)
+    }
+
+    /// **La frontière RÉELLE, pas la fausse position arithmétique.** Le
+    /// ViewModel publie `firstUnreadMessageId` (posé par
+    /// `FirstUnreadBoundary.resolve`, S1) — le contrôleur le CAPTURE en gelant
+    /// `frozenUnreadSeparator`, avec le COMPTE affiché au même geste.
+    func test_conversationViewModel_publishesFirstUnread_freezesBoundaryWithItsCount() async throws {
+        let store = try makeEmptyStore()
+        let vc = makeSUT(store: store)
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = vc
+        window.makeKeyAndVisible()
+        vc.view.layoutIfNeeded()
+
+        let vm = try await makeConversationViewModel()
+        vc.conversationViewModel = vm
+        XCTAssertNil(vc.frozenUnreadSeparator, "rien à geler avant que le ViewModel ne publie une frontière")
+
+        vm.unreadSeparatorCount = 4
+        vm.firstUnreadMessageId = "m7"
+        try await Task.sleep(for: .milliseconds(50))
+
+        XCTAssertEqual(vc.frozenUnreadSeparator, UnreadSeparatorBoundary(localId: "m7", count: 4))
+    }
+
+    /// La frontière ne se gèle qu'UNE fois : un second message non lu publié
+    /// plus tard (nouvel arrivant pendant que le fil est ouvert) ne DOIT PAS
+    /// faire bouger un séparateur déjà posé sous les yeux du lecteur — c'est
+    /// la pastille flottante `pendingUnreadCount` qui porte le VIVANT.
+    func test_conversationViewModel_secondFirstUnreadPublish_doesNotUnfreezeTheBoundary() async throws {
+        let store = try makeEmptyStore()
+        let vc = makeSUT(store: store)
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = vc
+        window.makeKeyAndVisible()
+        vc.view.layoutIfNeeded()
+
+        let vm = try await makeConversationViewModel()
+        vc.conversationViewModel = vm
+        vm.unreadSeparatorCount = 2
+        vm.firstUnreadMessageId = "m3"
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(vc.frozenUnreadSeparator, UnreadSeparatorBoundary(localId: "m3", count: 2))
+
+        vm.unreadSeparatorCount = 9
+        vm.firstUnreadMessageId = "m9"
+        try await Task.sleep(for: .milliseconds(50))
+
+        XCTAssertEqual(
+            vc.frozenUnreadSeparator, UnreadSeparatorBoundary(localId: "m3", count: 2),
+            "la frontière déjà gelée ne doit pas être remplacée par une publication ultérieure"
+        )
+    }
+
     // MARK: - Helpers
 
     private func makeEmptyStore() throws -> MessageStore {

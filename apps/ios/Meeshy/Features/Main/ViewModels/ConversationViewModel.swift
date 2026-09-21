@@ -259,6 +259,11 @@ class ConversationViewModel: ObservableObject {
 
     /// ID of the first unread message (set once after initial load, cleared on scroll to bottom)
     @Published var firstUnreadMessageId: String?
+    /// Le compte affiché par le séparateur « N messages non lus » (#7222) —
+    /// gelé EN MÊME TEMPS que `firstUnreadMessageId`, jamais recalculé seul
+    /// (une désynchronisation servirait un libellé qui ne décrit plus la
+    /// position). Source : `FirstUnreadBoundary.Result.unreadCount`.
+    @Published var unreadSeparatorCount: Int = 0
 
     /// True during programmatic scrolls (initial load, send, scroll-to-bottom tap)
     /// When true, onAppear prefetch triggers are suppressed.
@@ -429,6 +434,16 @@ class ConversationViewModel: ObservableObject {
 
     let conversationId: String
     let memberJoinedAt: Date?
+    /// La frontière de lecture (#7198, #7222) — reprise SYNCHRONE de la ligne
+    /// de liste qui a ouvert ce fil (`ConversationView.init`, même idiome que
+    /// `memberJoinedAt`), jamais de `currentConversation` (hydraté par un
+    /// `Task` non attendu — une dépendance à son instant de résolution
+    /// aurait couru contre `loadMessages()`). `lastReadMessageCreatedAt` est
+    /// le rang 1 de `FirstUnreadBoundary.resolve` ; `lastReadAt` son rang 2
+    /// (« à défaut »), `memberJoinedAt` le rang 3.
+    let lastReadMessageId: String?
+    let lastReadAt: Date?
+    let lastReadMessageCreatedAt: Date?
     let isDirect: Bool
     let participantUserId: String?
     let initialUnreadCount: Int
@@ -541,6 +556,9 @@ class ConversationViewModel: ObservableObject {
         isDirect: Bool = false,
         participantUserId: String? = nil,
         memberJoinedAt: Date? = nil,
+        lastReadMessageId: String? = nil,
+        lastReadAt: Date? = nil,
+        lastReadMessageCreatedAt: Date? = nil,
         closedAt: Date? = nil,
         anonymousSession: AnonymousSessionContext? = nil,
         authManager: AuthManaging = AuthManager.shared,
@@ -565,6 +583,9 @@ class ConversationViewModel: ObservableObject {
         self.attachmentTranslationService = attachmentTranslationService
         self.conversationId = conversationId
         self.memberJoinedAt = memberJoinedAt
+        self.lastReadMessageId = lastReadMessageId
+        self.lastReadAt = lastReadAt
+        self.lastReadMessageCreatedAt = lastReadMessageCreatedAt
         self.initialUnreadCount = unreadCount
         self.isDirect = isDirect
         self.participantUserId = participantUserId

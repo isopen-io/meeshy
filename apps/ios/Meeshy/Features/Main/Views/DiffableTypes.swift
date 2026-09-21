@@ -25,6 +25,14 @@ nonisolated enum MessageListItem: Hashable, Sendable {
     /// ni au pass de perspective (§4.8 : « cellule sans localId ne peut pas
     /// être élue »).
     case conversationStart
+    /// Séparateur « N messages non lus » en couleur PRIMAIRE (D-L1..3, #7222)
+    /// — posé UNE fois à l'ouverture par `MessageListViewController+
+    /// UnreadSeparator.swift` sur la frontière que `FirstUnreadBoundary`
+    /// (S1) élit. `afterLocalId` (le `localId` du PREMIER message non lu)
+    /// est l'IDENTITÉ stable de l'item, même idiome que `dayHeader(dayStart:)`
+    /// : le compte affiché n'est jamais porté par l'item, il est lu depuis
+    /// l'état gelé du contrôleur à la configuration de la cellule.
+    case firstUnreadSeparator(afterLocalId: String)
 }
 
 nonisolated enum FeedListSection: Hashable, Sendable { case main }
