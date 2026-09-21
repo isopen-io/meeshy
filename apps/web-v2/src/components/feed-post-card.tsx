@@ -2,6 +2,7 @@ import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
 import { useCallback, useState } from 'react';
 
 import { Avatar } from './avatar';
+import { PersonName } from './person-name';
 import { FeedCarouselChrome, FeedCarouselDots } from './feed-carousel-chrome';
 import { FeedMediaMosaic } from './feed-media-mosaic';
 import { FeedMediaSurface } from './feed-media-surface';
@@ -240,7 +241,7 @@ function FeedMediaCarousel({ media, accent }: { readonly media: readonly FeedCar
   );
 }
 
-function FeedPostHeader({ model, storyRing }: { readonly model: FeedCardModel; readonly storyRing?: AuthorStoryRing }) {
+function FeedPostHeader({ model, storyRing, mood }: { readonly model: FeedCardModel; readonly storyRing?: AuthorStoryRing; readonly mood?: string }) {
   return (
     <div className="flex items-center gap-2.5 px-3 pt-3">
       {/* L'AVATAR OUVRE LE PROFIL (#6396). Posé ICI et pas sur la variante
@@ -254,14 +255,22 @@ function FeedPostHeader({ model, storyRing }: { readonly model: FeedCardModel; r
         {...(model.author.avatarSrc !== undefined ? { src: model.author.avatarSrc } : {})}
         {...(model.author.username !== undefined ? { profileUsername: model.author.username } : {})}
         {...(storyRing === undefined ? {} : { storyRing })}
+        {...(mood === undefined ? {} : { mood })}
       />
       <div className="flex min-w-0 flex-col">
         {/* L'HEURE QUALIFIE L'AUTEUR — même ligne, miroir
             `FeedPostCard+Header.swift:51-60`. */}
         <div className="flex items-baseline gap-1.5">
-          <span className="truncate text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-            {model.author.name}
-          </span>
+          {/* LE NOM MÈNE OÙ L'AVATAR MÈNE (#7241) — y compris l'anneau de
+              story, qui PRIME sur le profil : c'est `identityTarget` qui le
+              tranche, une fois, pour les deux moitiés de l'identité. */}
+          <PersonName
+            name={model.author.name}
+            username={model.author.username}
+            {...(storyRing === undefined ? {} : { storyRing })}
+            className="truncate text-body font-semibold"
+            style={{ color: 'var(--color-ios-ink)' }}
+          />
           <span className="shrink-0 text-check" style={{ color: 'var(--color-ios-ink-3)' }}>
             {model.relativeTime}
           </span>
@@ -559,7 +568,7 @@ function FeedPostVisual({
   );
 }
 
-export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerScene, storyRing, ...hosts }: { readonly model: FeedCardModel; readonly storyRing?: AuthorStoryRing } & CardHosts & SceneHosts) {
+export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerScene, storyRing, mood, ...hosts }: { readonly model: FeedCardModel; readonly storyRing?: AuthorStoryRing; readonly mood?: string } & CardHosts & SceneHosts) {
   // La lecture est une VALEUR REÇUE du magasin d'élection (#6898 § 5.3) —
   // JAMAIS un état local : seules les deux cartes dont le booléen bascule se
   // re-rendent (Zero Unnecessary Re-render).
@@ -587,7 +596,7 @@ export function FeedPostCard({ model, preferredLanguages, onOpenScene, registerS
          incapable de dire de quelle publication il parle. */
       data-feed-card-id={model.id}
     >
-      <FeedPostHeader model={model} {...(storyRing === undefined ? {} : { storyRing })} />
+      <FeedPostHeader model={model} {...(storyRing === undefined ? {} : { storyRing })} {...(mood === undefined ? {} : { mood })} />
       {bodyText !== undefined ? <FeedPostText text={bodyText} mentions={model.validatedMentions} /> : null}
       {/* Un post à SCÈNES SANS média (cas réel, § 3 de la spécification) ne
           doit plus rester nu sous son texte (D-78) : la condition porte donc

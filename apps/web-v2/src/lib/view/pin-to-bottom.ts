@@ -19,7 +19,16 @@
  * `scrollTop = scrollHeight` est CLAMPÉ par le navigateur à
  * `scrollHeight − clientHeight` : c'est le bas EXACT, sans arithmétique de
  * notre côté.
+ *
+ * ET CHAQUE IMAGE DÉCLARE SON ÉCRITURE (`markProgrammaticScroll`,
+ * `programmatic-scroll.ts`) : le `scroll` natif qu'elle provoque est le
+ * NÔTRE, pas un geste. La déclaration se pose ICI, à l'unique ligne qui
+ * écrit `scrollTop`, jamais chez les appelants — ils sont trois, la règle
+ * est une. La position est RELUE après l'écriture : c'est celle que le
+ * navigateur a clampée, donc celle qu'il rapportera.
  */
+import { markProgrammaticScroll } from './programmatic-scroll';
+
 export type PinToBottomHandle = () => void;
 
 /**
@@ -54,6 +63,7 @@ export function pinToBottom(
     if (!armed) return;
     if (done === 0) onFirstFrame?.();
     element.scrollTop = element.scrollHeight;
+    markProgrammaticScroll(element, element.scrollTop);
     done += 1;
     if (done < frames) handle = requestFrame(step);
   };

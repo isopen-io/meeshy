@@ -73,8 +73,30 @@ function VoiceAttachment({
   // `tracksTime` est OPT-IN : sans lui `position`/`duration` restent à 0 et une
   // tuile du fil ne paie rien. Le vocal en a besoin — le karaoké et le parcours
   // au doigt lisent tous deux la position.
-  const { status, progress, toggle, bind, position, duration, seek, rate, setRate } =
-    useMediaPlayback({ attachmentId: attachment.id, tracksTime: true });
+  //
+  // `report` (#7225, W6) : REPRISE au montage depuis la consommation SERVIE
+  // (`currentUserConsumption`), et RAPPORT au serveur à la pause, au saut, à
+  // la fin et au démontage — le hook porte la reprise, le throttle 5 s et le
+  // tracker de segments, ce widget ne fait que lui donner ce qu'il connaît.
+  const consumption = attachment.currentUserConsumption;
+  const { status, progress, toggle, bind, position, duration, seek, rate, setRate, reportedFraction } =
+    useMediaPlayback({
+      attachmentId: attachment.id,
+      tracksTime: true,
+      report: {
+        kind: 'listened',
+        // LA PISTE ÉLUE EST CE QUI A ÉTÉ ÉCOUTÉ (revue #7225) — une piste
+        // traduite est une écoute d'une AUTRE version du contenu, et le
+        // serveur la stocke comme telle. Sans ce champ, une écoute en
+        // français était comptée sur l'original anglais (Prisme : « qu'est-ce
+        // qui part À CÔTÉ de ce qu'on vient de résoudre ? »).
+        language: track.language,
+        ...(attachment.duration !== undefined ? { durationMs: attachment.duration } : {}),
+        ...(consumption != null
+          ? { resume: { positionMs: consumption.lastPlayPositionMs, complete: consumption.listenedComplete } }
+          : {}),
+      },
+    });
   const uiLanguage = currentInterfaceLanguage();
 
   /*
@@ -108,18 +130,23 @@ function VoiceAttachment({
   const waves = waveformOf(attachment);
   // `duration` voyage en MILLISECONDES sur la charge du dépôt.
   const seconds = Math.round((attachment.duration ?? 0) / 1000);
-  const consumption = attachment.currentUserConsumption;
   const servedFraction =
     consumption?.listenedComplete === true
       ? 1
       : consumption?.lastPlayPositionMs != null && attachment.duration
         ? consumption.lastPlayPositionMs / attachment.duration
         : 0;
+  // LA BARRE AU REPOS REFLÈTE CE QUI EST RAPPORTÉ (#7225) — `reportedFraction`
+  // grandit dès qu'un rapport PART (optimistic update, CLAUDE.md § Instant
+  // App), SANS attendre qu'un nouvel `attachment` revienne du serveur. `Math.max`
+  // avec la valeur SERVIE : jamais de recul, l'une ou l'autre source peut être
+  // la plus fraîche selon qui a parlé en dernier.
+  const restingFraction = Math.max(servedFraction, reportedFraction);
   // La teinte de l'onde AU REPOS suit la fraction SERVIE ; EN LECTURE, la
   // progression VIVANTE prend le relais — jamais l'inverse (miroir
   // `MediaConsumptionStore`, `:1445-1451`).
-  const tintFraction = Math.max(progress, servedFraction);
-  const consumptionPercent = consumptionPercentOf(servedFraction);
+  const tintFraction = Math.max(progress, restingFraction);
+  const consumptionPercent = consumptionPercentOf(restingFraction);
   // Masquée sous 1 % (`MediaConsumptionProgressBar.swift:26`).
   const showsConsumptionBar = consumptionPercent >= 1;
 

@@ -14,8 +14,10 @@ import type { OutboxState } from '@/lib/send/outbox-store';
 import { applyMediaCaptionTranslation, applyPostToggle, applyServedCount, type MediaCaptionTranslationUpdate } from '@/lib/feed/interactions';
 import { decodeNotification } from '@/lib/notifications/record';
 
+import { attachmentStatusDetailsQueryKey } from './attachments';
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
 import { FEED_QUERY_KEY } from './feed';
+import { messagesQueryKey } from './messages';
 import { applyPostCreated, applyPostDeleted, applyPostUpdated } from './feed-realtime';
 import type { FeedInfiniteData } from './feed-pages';
 import { FRIENDS_QUERY_PREFIX } from './friends-keys';
@@ -35,10 +37,12 @@ import {
   applyMessageAttachmentUpdated,
   applyMessageNew,
   applyMessageTranslation,
+  applyReadStatusUpdated,
   isAttachmentUpdated,
   isConversationUnreadUpdated,
   isConversationUpdated,
   isMessageTranslationEvent,
+  isReadStatusUpdated,
   isSocketMessage,
 } from './realtime-apply';
 import { STORY_TRAY_QUERY_KEY } from './stories';
@@ -76,6 +80,24 @@ function isPostLikeEvent(payload: unknown): payload is PostLikeEvent {
   return typeof p.postId === 'string' && typeof p.userId === 'string' && isFiniteNumber(p.likeCount);
 }
 
+/**
+ * `message:pending-delivered` (#7223) — charge INLINE, aucun type exporté
+ * (`packages/shared/types/socketio-events/event-maps.ts:382` : `{ count:
+ * number; conversationIds: string[] }`), motif `PostLikeEvent` ci-dessous :
+ * une garde LOCALE plutôt qu'un import qui n'existe pas dans `@meeshy/shared`.
+ */
+type PendingMessagesDeliveredEvent = { readonly count: number; readonly conversationIds: readonly string[] };
+
+function isPendingMessagesDeliveredEvent(payload: unknown): payload is PendingMessagesDeliveredEvent {
+  if (typeof payload !== 'object' || payload === null) return false;
+  const p = payload as Record<string, unknown>;
+  return (
+    isFiniteNumber(p.count) &&
+    Array.isArray(p.conversationIds) &&
+    p.conversationIds.every((id) => typeof id === 'string')
+  );
+}
+
 /** `PostBookmarkedEventData` — PERSONNEL (émis aux seuls sockets de l'auteur
  * du geste), donc `bookmarked` décrit toujours le lecteur. */
 type PostBookmarkEvent = { readonly postId: string; readonly bookmarked: boolean; readonly bookmarkCount?: number };
@@ -110,6 +132,18 @@ function isMediaCaptionTranslationEvent(payload: unknown): payload is MediaCapti
     typeof t.createdAt === 'string' &&
     (t.confidenceScore === undefined || isFiniteNumber(t.confidenceScore))
   );
+}
+
+/** `AttachmentStatusUpdatedEventData` (`@meeshy/shared/types/socketio-events/
+ * attachment.ts`), réduite au SEUL champ que la feuille « Infos du message »
+ * (#7226) doit router : `attachmentId`, qui nomme la query à invalider. Les
+ * autres champs (`action`, `playPositionMs`…) sont déjà dans la ligne que le
+ * REFETCH ramènera — les relire ici doublerait la source de vérité. */
+type AttachmentStatusEvent = { readonly attachmentId: string };
+
+function isAttachmentStatusEvent(payload: unknown): payload is AttachmentStatusEvent {
+  if (typeof payload !== 'object' || payload === null) return false;
+  return typeof (payload as Record<string, unknown>).attachmentId === 'string';
 }
 
 export type RealtimeSessionInfo = {
@@ -299,6 +333,52 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   const onAttachmentUpdated = (payload: unknown): void => {
     if (!isAttachmentUpdated(payload)) return;
     applyMessageAttachmentUpdated(deps.queryClient, payload);
+  };
+
+  /**
+   * `attachment-status:updated` (#7226, W7) — LA FEUILLE « INFOS DU MESSAGE »
+   * SUIT UNE OUVERTURE/UN TÉLÉCHARGEMENT/UNE ÉCOUTE EN DIRECT.
+   *
+   * Émis par `services/gateway/src/routes/messages-writes.ts:717` après
+   * `listened`/`watched`/`viewed`/`downloaded`. La feuille lit
+   * `GET /attachments/:id/status-details` via `useQuery`
+   * (`attachmentStatusDetailsQueryKey`, `api/attachments.ts`) ; ce module ne
+   * FUSIONNE rien dans la ligne (la forme paginée, par participant, ne se
+   * met pas à jour champ par champ sans risquer de désynchroniser `Nx` et la
+   * barre de progression) — il INVALIDE la query, même idiome que
+   * `onUnreadUpdated`/`onFriendshipChanged` plus bas : le prochain rendu de
+   * la feuille OUVERTE refetch, une feuille FERMÉE ne refetch rien (React
+   * Query n'interroge que les observateurs actifs).
+   */
+  const onAttachmentStatusUpdated = (payload: unknown): void => {
+    if (!isAttachmentStatusEvent(payload)) return;
+    void deps.queryClient.invalidateQueries({ queryKey: attachmentStatusDetailsQueryKey(payload.attachmentId) });
+  };
+
+  /**
+   * `read-status:updated` (#7223) — LES COCHES ✓✓ D'UN MESSAGE ENVOYÉ
+   * BOUGENT EN DIRECT quand le destinataire reçoit ou lit. La règle
+   * (cible le dernier message du fil, tous-ou-rien en groupe conservé) vit
+   * dans `realtime-apply.ts` (D-40) : cette ligne la BRANCHE.
+   */
+  const onReadStatusUpdated = (payload: unknown): void => {
+    if (!isReadStatusUpdated(payload)) return;
+    applyReadStatusUpdated(deps.queryClient, payload);
+  };
+
+  /**
+   * `message:pending-delivered` (#7223) — la charge ne porte AUCUN compteur
+   * par message (`{count, conversationIds}`) : ce puits INVALIDE les fils
+   * NOMMÉS plutôt que d'inventer des compteurs qu'elle ne transporte pas
+   * (doc-comment `MeeshySocketIOManager.ts:826-846` — « invalider les
+   * messages des conversations nommées »). La prochaine lecture de
+   * `GET …/messages` sert les compteurs réels.
+   */
+  const onPendingMessagesDelivered = (payload: unknown): void => {
+    if (!isPendingMessagesDeliveredEvent(payload)) return;
+    for (const conversationId of payload.conversationIds) {
+      void deps.queryClient.invalidateQueries({ queryKey: messagesQueryKey(conversationId) });
+    }
   };
 
   /**
@@ -562,6 +642,9 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_NEW, onConversationNew);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_TRANSLATION, onMessageTranslation);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
+  socket.on<unknown>(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, onAttachmentStatusUpdated);
+  socket.on<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
+  socket.on<unknown>(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, onPendingMessagesDelivered);
   socket.on<unknown>(SERVER_EVENTS.COMMENT_ADDED, onCommentAdded);
   socket.on<unknown>(SERVER_EVENTS.STORY_CREATED, onStoryChanged);
   socket.on<unknown>(SERVER_EVENTS.STORY_UPDATED, onStoryChanged);
@@ -617,6 +700,9 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_UPDATED, onConversationUpdated);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_TRANSLATION, onMessageTranslation);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
+      socket.off<unknown>(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, onAttachmentStatusUpdated);
+      socket.off<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
+      socket.off<unknown>(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, onPendingMessagesDelivered);
       socket.off<unknown>(SERVER_EVENTS.COMMENT_ADDED, onCommentAdded);
       socket.off<unknown>(SERVER_EVENTS.POST_CREATED, onPostCreated);
       socket.off<unknown>(SERVER_EVENTS.POST_UPDATED, onPostUpdated);

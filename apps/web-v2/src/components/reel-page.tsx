@@ -2,6 +2,7 @@ import { lazy, Suspense, useState } from 'react';
 import type { UIEvent } from 'react';
 
 import { Avatar } from './avatar';
+import { PersonName } from './person-name';
 import { Glyph, GlyphSvg } from './glyph';
 import { FEED_GLYPHS } from './glyphs-feed';
 import { MEDIA_TRANSPORT_GLYPHS } from './glyphs-media-transport';
@@ -394,11 +395,28 @@ export function ReelPage(props: ReelPageProps) {
       />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end gap-3 ps-4 pe-3" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 20px)' }}>
         <div className="flex min-w-0 flex-1 flex-col gap-2 pb-1">
-          <div className="flex min-w-0 items-center gap-2">
-            <Avatar initials={model.author.initials} color={model.author.accentColor} size={36} {...(model.author.avatarSrc !== undefined ? { src: model.author.avatarSrc } : {})} />
-            <span data-reel-author className="truncate text-body font-semibold text-white" style={{ textShadow: TEXT_SHADOW }}>
-              {model.author.name}
-            </span>
+          {/* L'IDENTITÉ REPREND LE POINTEUR (#7241). Le scrim est
+              `pointer-events-none` pour que le pager garde ses gestes —
+              défilement vertical, tap pour le son ; seuls l'avatar et le nom le
+              REPRENNENT, sur leur propre surface. Le reste du bandeau continue
+              de laisser passer, donc aucun geste du lecteur n'est volé. */}
+          <div className="pointer-events-auto flex min-w-0 items-center gap-2">
+            <Avatar
+              initials={model.author.initials}
+              color={model.author.accentColor}
+              size={36}
+              name={model.author.name}
+              {...(model.author.avatarSrc !== undefined ? { src: model.author.avatarSrc } : {})}
+              {...(model.author.username !== undefined ? { profileUsername: model.author.username } : {})}
+            />
+            <PersonName
+              name={model.author.name}
+              username={model.author.username}
+              className="truncate text-body font-semibold text-white"
+              style={{ textShadow: TEXT_SHADOW }}
+            >
+              <span data-reel-author>{model.author.name}</span>
+            </PersonName>
             <span className="shrink-0 text-check text-white" style={{ textShadow: TEXT_SHADOW }}>
               {model.relativeTime}
             </span>

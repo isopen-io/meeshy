@@ -25,13 +25,10 @@ import { ThreadHeader } from '@/components/thread-header';
 import { DayPill, ScrollToBottomButton } from '@/components/thread-chrome';
 import { TypingDots } from '@/components/typing-dots';
 import { ThreadError, ThreadRefused, ThreadSkeleton } from '@/components/thread-states';
-import { apiConfig } from '@/lib/api/config';
 import { apiDeps } from '@/lib/api/deps';
-import { recordViewOnceConsumption } from '@/lib/api/fixtures';
-import { patchThreadMessages } from '@/lib/api/messages';
 import { useConversationsSnapshot, useThreadData } from '@/lib/api/query';
 import { markCaughtUp } from '@/lib/api/receipts';
-import { applyConsumption } from '@/lib/api/view-once';
+import { consumeViewOnceOptimistic } from '@/lib/api/view-once';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
 import { accentOf, withAccent } from '@/lib/accent';
@@ -170,16 +167,15 @@ export default function ThreadScreen() {
    * intervalle (`memo`), il ne remonte que l'INSTANT d'expiration, jamais un
    * `setInterval` porté par la rangée elle-même.
    *
-   * `consume` (#5650, §5 étape 10) — écrit désormais dans le CACHE de
-   * requêtes (`queryClient.setQueryData(messagesQueryKey(conversationId), …)`),
-   * jamais un état local : `threadData.messages` (dérivé du MÊME cache par
-   * `select`) reflète la consommation au rendu SUIVANT, sans second état à
-   * tenir synchronisé. En source `fixtures`, `recordViewOnceConsumption`
-   * fait survivre la consommation à un aller-retour vers `/` (la couche de
-   * données est le seul endroit qui survit au démontage) ; en `gateway`,
-   * c'est le port `consumeViewOnce` (`lib/api/view-once.ts`) qui écrira la
-   * confirmation serveur — HORS PÉRIMÈTRE de ce diff (l'écriture cache
-   * suffit pour la session courante).
+   * `consume` (#5650, §5 étape 10 ; #7224) — DÉLÈGUE : la loi entière vit
+   * dans `consumeViewOnceOptimistic` (`lib/api/view-once.ts`), qui écrit la
+   * consommation au CACHE de requêtes avant tout réseau, la DIT au serveur
+   * (`POST …/messages/:messageId/consume`) et la défait sur un refus
+   * permanent. `threadData.messages` (dérivé du MÊME cache par `select`)
+   * reflète l'écriture au rendu suivant, sans second état à tenir
+   * synchronisé ; cet écran n'en garde que la garde HORS LIGNE, la seule
+   * moitié qui soit à lui (`online`, D-16 — une révélation dont la
+   * confirmation ne peut pas partir ne s'accorde pas).
    */
   const [expiredIds, setExpiredIds] = useState<ReadonlySet<string>>(new Set());
   const onEphemeralExpired = useCallback((messageId: string) => {
@@ -188,14 +184,7 @@ export default function ThreadScreen() {
   const consume = useCallback(
     async (messageId: string): Promise<boolean> => {
       if (!online) return false;
-      if (__FIXTURES__ && apiConfig.source === 'fixtures') recordViewOnceConsumption(messageId);
-      /* `patchThreadMessages` (#6972, étape 1) — le SITE UNIQUE qui patche un
-         fil (`lib/api/messages.ts`) : cet écran ne recopie plus la forme de la
-         page, qui est devenue `InfiniteData` à l'étape 2. */
-      patchThreadMessages(queryClient, conversationId, (messages) =>
-        applyConsumption(messages, { messageId, viewOnceCount: 1 }),
-      );
-      return true;
+      return consumeViewOnceOptimistic({ conversationId, messageId, deps: { ...apiDeps, queryClient } });
     },
     [online, queryClient, conversationId],
   );
@@ -1147,6 +1136,9 @@ export default function ThreadScreen() {
             sentAt={new Date(detailMessage.createdAt)}
             delivery={isMineOf(detailMessage, viewer.id ?? '') ? deliveryStatusOf(detailMessage) : null}
             locale={readerLocale}
+            conversationId={conversationId}
+            messageId={detailMessage.id}
+            attachments={detailMessage.attachments ?? []}
             onPickLanguage={(code) => {
               messageMenu.onPickLanguage(detailFor, code);
               messageMenu.setDetailFor(null);

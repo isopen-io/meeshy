@@ -89,7 +89,25 @@ export function VideoTile({
   readonly solo: boolean;
   readonly onExpand: () => void;
 }) {
-  const { status, progress, toggle, bind } = useMediaPlayback({ attachmentId: attachment.id });
+  /**
+   * `report` (#7225, W6) — LA VIDÉO AUSSI reprend et rapporte : le lot est
+   * nommé « un audio OU UNE VIDÉO reprend là où on l'avait laissé », et le
+   * verbe du wire pour une vidéo est `watched` (`AttachmentStatusBodySchema`,
+   * `services/gateway/src/validation/messages-schemas.ts:212-251`), servi par
+   * `lastWatchPositionMs`/`watchedComplete` — JAMAIS les champs audio, qui
+   * vivent à côté d'eux sur le même objet.
+   */
+  const consumption = attachment.currentUserConsumption;
+  const { status, progress, toggle, bind } = useMediaPlayback({
+    attachmentId: attachment.id,
+    report: {
+      kind: 'watched',
+      ...(attachment.duration !== undefined ? { durationMs: attachment.duration } : {}),
+      ...(consumption != null
+        ? { resume: { positionMs: consumption.lastWatchPositionMs, complete: consumption.watchedComplete } }
+        : {}),
+    },
+  });
 
   if (attachment.fileUrl === '') return <VideoFallback attachment={attachment} />;
 
