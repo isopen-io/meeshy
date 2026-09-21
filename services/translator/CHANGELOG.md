@@ -1,5 +1,76 @@
 # @meeshy/translator
 
+## 1.64.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - l'identité SORT de la région couverte — l'heure relative devient la porte de la publication (Refs #7284)
+  - un lien ré-armé qu'un calque RECOUVRE reste inatteignable — l'ordre de peinture, pas seulement pointer-events (Refs #7284)
+  - l'invariant du lieu mesure la COMPOSITION du nom accessible, plus sa langue
+  - le badge d'icône compte les conversations sans écraser la somme des messages — run test (Refs #7236)
+  - un lieu envoyé depuis le web apparaît dans le fil de son expéditeur
+  - toucher une publication du fil ouvre sa fiche, sans avaler ses cibles (Closes #7284)
+  - badge d'icône compte les conversations non lues, pas la somme des messages (I5 #7236)
+  - Échap ferme le menu dès l'instant où il paraît, sans attendre une image
+  - un PDF compte ses ouvertures comme une image, et « Vu par » les montre — run test
+  - la story ouverte par LIEN apprend elle aussi, et le favori servi atteint les Réels
+  - le composeur du fil offre Caméra, Position et Emoji, et ses sept libellés viennent du catalogue (Refs #7280)
+  - une humeur partagée ouvre l'humeur, au lieu de « adresse inconnue »
+  - le service worker inscrit reçoit un push, le montre, et le tap arrive à la bonne adresse
+  - « Rejoins-moi sur Meeshy » mène désormais quelque part
+  - les ouvertures d'une image ou d'un document s'affichent dans « Vu par »
+  - un réel partagé ouvre le réel, au lieu de « adresse inconnue »
+  - la forme à barre finale de /help et /faq ne repart plus sur le réseau
+  - « Centre d'aide » et « FAQ » de l'app publiée ouvrent une page qui existe
+  - le plafond du chunk du profil public est remesuré sur l'écran d'aujourd'hui, pas sur celui d'hier
+  - la fiche publique dit où vous vous êtes déjà parlé
+  - l'invariant de l'ancre attend le FAIT, jamais un délai — le cliquet reste à 123
+  - le compteur de commentaires mène au fil depuis les QUATRE écrans qui montent la carte
+  - la fiche reçoit l'identifiant de la demande, et ne charge plus de panier pour l'obtenir
+  - l'ancre des commentaires a un seul nom, et arriver dessus amène le fil sous les yeux
+  - le rail agit AUSSI sur la story ouverte par lien — le cœur et la pastille n'étaient plus que du décor (Closes #7120)
+  - la consommation servie rejoint le moteur vidéo par la clé de l'audio, pas par le chargement — run test (Refs #7212)
+  - le séparateur de non-lus rend la scène au verrou, et deux gardes redeviennent vertes — run test (Refs #7222)
+  - le fil porte « N messages non lus » en primaire et s'ouvre dessus — run test (Closes #7222)
+  - le fil s'ouvre sur le séparateur même quand les MESSAGES répondent avant la CONVERSATION (Refs #7202)
+  - un fil SANS AUCUN signal de lecture n'invente plus une frontière
+  - la reprise servie ATTEINT la lecture, et la vidéo la reçoit aussi — run test (Refs #7212)
+  - le fil s'ouvre SUR « — N messages non lus — », en couleur primaire
+  - un vocal écouté à 80 % sur l'iPhone reprend à 80 % sur l'iPad — run test
+  - le menu d'un message tient pendant que le fil se ré-ancre sous lui (Closes #7242)
+  - l'édition d'un commentaire ne vide plus le cœur de ses lecteurs, et le ❤️ servi atteint la fiche
+  - les Réels apprennent ce que le Flux apprend, et les réactions arrivent en direct
+  - le titre d'onglet et le badge PWA portent les conversations non lues (W4, #7221) (#7237)
+  - les coches ✓✓ d'un message bougent en direct (Closes #7223) (#7235)
+  - les trois sections d'« Infos du message » suivent l'ordre iOS — distribué, vu, pas encore
+  - la fiche « Infos du message » ne s'ouvre plus sur un message que le serveur ne connaît pas
+  - la barre de progression d'une écoute porte son rôle ARIA
+  - la feuille « Plus… » montre qui a reçu, vu, écouté, ouvert
+  - la feuille « Infos du message » suit attachment-status:updated
+  - les accusés nominatifs et le détail d'une pièce sont servis
+  - la fiche de profil commente ses publications, et la sienne mène à son édition (Refs #7188) (#7233)
+  - l'avatar porte l'humeur du moment, et masque alors la présence (Closes #7186) (#7231)
+  - le premier non-lu descend le MÊME plancher que le serveur, et chaque règle a enfin son témoin — run test (Refs #7215)
+  - l'avatar porte l'anneau de story de son utilisateur, et l'ouvre (Closes #7185) (#7197)
+  - le fil marque la conversation lue sans geste (Closes #7201) (#7213)
+  - la cible d'un avatar-lien grandit sa BOÎTE, pas seulement sa peinture (Refs #6396)
+  - le SECOND pool de base écoute enfin la suspension, et un réveil d'arrière-plan cesse d'écrire dans le vide — run test (Refs #7160)
+  - le placeholder du composeur tient AA — la densité du verre passe à 94 % (Closes #7178)
+  - les pièces du profil public se rangent par RESPONSABILITÉ, avant d'en accueillir une de plus (Refs #7152) (#7181)
+  - l'avatar d'un commentaire et d'une personne de la découverte ouvre son profil (Refs #6396)
+  - l'avatar ouvre le profil — la capacité vit dans le composant (Refs #6396)
+  - le badge de G3 suit le comptage de messages que G2 a déplacé
+  - la projection du curseur de lecture BORNE sa requête, et la garde des findMany nus redevient un cliquet
+  - le badge compte le non-lu que la LISTE calcule, pas un champ jamais incrémenté
+  - les témoins de badge quittent un fichier déjà hors budget
+  - aps.badge compte les conversations non lues, comme l'app
+  - l'auteur d'un message n'apparaît plus dans ses propres « Reçu par » / « Vu par »
+  - la frontière de lecture est servie par la liste et le détail (Refs #7198)
+  - la feuille « Infos du message » parle les sept langues
+  - la loi du premier non-lu est UNE fonction, avec son miroir Swift (Refs #7215)
+
 ## 1.63.0
 
 ### Minor Changes
