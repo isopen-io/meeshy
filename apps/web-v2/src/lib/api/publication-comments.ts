@@ -551,16 +551,48 @@ export function isCommentUpdated(payload: unknown): payload is CommentUpdatedEve
   return typeof c.id === 'string' && typeof c.content === 'string' && typeof c.createdAt === 'string';
 }
 
+/**
+ * **CE QUI APPARTIENT AU LECTEUR NE VIENT PAS DU SERVEUR** — jumelle EXACTE
+ * de `feed-realtime.ts#merged` pour les PUBLICATIONS, et pour la même raison :
+ * `comment:updated` est diffusé à TOUT le fil, donc sa charge ne peut pas
+ * porter juste pour chacun ce qui se lit PAR LECTEUR. C'est mesuré, pas
+ * supposé — `PostCommentService.getCommentAsUpdateResult`
+ * (`services/gateway/src/services/PostCommentService.ts:375-399`, la relecture
+ * que la route PATCH diffuse) sélectionne `likeCount` mais NI `isLikedByMe`
+ * NI `currentUserReactions`.
+ *
+ * Sans cette préservation, un auteur corrigeant une faute de frappe vidait le
+ * cœur de tous ceux qui avaient aimé son commentaire.
+ *
+ * Spread CONDITIONNEL, jamais `a ?? b` : sous `exactOptionalPropertyTypes`,
+ * poser explicitement `undefined` sur une propriété optionnelle est un défaut
+ * de type. La comparaison est `== null` pour couvrir les deux formes
+ * d'absence ; un `false` TENU est une réponse du lecteur (« je n'aime pas »),
+ * pas une absence, et il survit. Les COMPTEURS, eux, ne sont pas préservés —
+ * `likeCount` est un agrégat que le serveur tient mieux que nous.
+ */
+const mergedComment = (incoming: PostComment, held: PostComment): PostComment => ({
+  ...incoming,
+  ...(held.isLikedByMe == null ? {} : { isLikedByMe: held.isLikedByMe }),
+  ...(held.currentUserReactions == null ? {} : { currentUserReactions: held.currentUserReactions }),
+});
+
 /** L'ÉDITION REMPLACE LA LIGNE EN PLACE, sur TOUTES les pages — une
  * publication éditée ne trie rien, `mapAllPages` suffit là où `mapFirstPage`
- * ne visait que l'insertion. Une liste jamais ouverte n'est pas fabriquée. */
+ * ne visait que l'insertion. Une page qui ne PORTE pas la ligne éditée garde
+ * son IDENTITÉ (la liste ne se re-rend pas en entier) ; une liste jamais
+ * ouverte n'est pas fabriquée. */
 export function applyCommentUpdated(queryClient: QueryClient, payload: unknown): void {
   if (!isCommentUpdated(payload)) return;
   const key = commentsQueryKey(payload.postId);
   if (queryClient.getQueryData<CommentInfiniteData>(key) === undefined) return;
   const updated = commentFromSocket(payload.comment);
   queryClient.setQueryData<CommentInfiniteData>(key, (d) =>
-    mapAllPages(d, (comments) => comments.map((c) => (c.id === updated.id ? updated : c))),
+    mapAllPages(d, (comments) =>
+      comments.some((c) => c.id === updated.id)
+        ? comments.map((c) => (c.id === updated.id ? mergedComment(updated, c) : c))
+        : comments,
+    ),
   );
 }
 

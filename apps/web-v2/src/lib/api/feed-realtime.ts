@@ -210,22 +210,50 @@ function isPostReactionEvent(payload: unknown): payload is {
   return typeof count === 'number' && Number.isFinite(count);
 }
 
-export function applyPostReactionEvent(queryClient: QueryClient, payload: unknown, viewerId: string): void {
-  if (!isPostReactionEvent(payload)) return;
-  if (payload.emoji !== HEART_EMOJI) return;
-
-  const { postId } = payload;
-  const on = payload.action === 'add';
-  const byViewer = payload.userId === viewerId;
-  const change = { postId, kind: 'like' as const, on };
-  const served = { postId, kind: 'like' as const, count: payload.aggregation.count };
+/**
+ * **LE ❤️ SERVI SE POSE AUX TROIS CAISSES, UNE SEULE FOIS** (revue-correction
+ * W8, #7227) — le Flux, TOUTES les graines de Réels, et la FICHE
+ * `/post/$post`. Site UNIQUE, partagé par les DEUX voies que la passerelle
+ * emprunte pour un cœur : `post:liked`/`post:unliked`
+ * (`socket.ts#onPostLikeChanged`, la voie NOMINALE d'un POST/REEL) et
+ * `post:reaction-added`/`post:reaction-removed` (ci-dessous).
+ *
+ * La fiche était la caisse manquante : le geste LOCAL l'écrit
+ * (`feed-gestures.ts:127,142`), la jumelle `post:reaction-*` l'écrivait, et
+ * la voie nominale la sautait — une fiche ouverte gardait l'ancien chiffre
+ * pendant que le Flux bougeait dans son dos. Deux boucles recopiées avaient
+ * commencé à diverger ; il n'y en a plus qu'une.
+ *
+ * `isLikedByMe` ne bascule que pour le geste du LECTEUR (un autre de SES
+ * appareils) — le cœur d'un autre ne remplit jamais le mien ; le compte, lui,
+ * est ABSOLU et remplace toujours l'estimation optimiste.
+ */
+export function applyServedLike(
+  queryClient: QueryClient,
+  change: { readonly postId: string; readonly on: boolean; readonly byViewer: boolean; readonly likeCount: number },
+): void {
+  const { postId } = change;
+  const toggle = { postId, kind: 'like' as const, on: change.on };
+  const served = { postId, kind: 'like' as const, count: change.likeCount };
 
   const applyToPost = (post: FeedPost): FeedPost =>
-    post.id !== postId ? post : withServedCount(byViewer ? togglePost(post, change) : post, served);
+    post.id !== postId ? post : withServedCount(change.byViewer ? togglePost(post, toggle) : post, served);
 
   const applyToPages = (data: FeedInfiniteData | undefined) => mapPosts(data, (posts) => posts.map(applyToPost));
 
   queryClient.setQueryData<FeedInfiniteData>(FEED_QUERY_KEY, applyToPages);
   queryClient.setQueriesData<FeedInfiniteData>({ queryKey: REELS_QUERY_ROOT }, applyToPages);
   queryClient.setQueryData<FeedPost>(postQueryKey(postId), (post) => (post === undefined ? post : applyToPost(post)));
+}
+
+export function applyPostReactionEvent(queryClient: QueryClient, payload: unknown, viewerId: string): void {
+  if (!isPostReactionEvent(payload)) return;
+  if (payload.emoji !== HEART_EMOJI) return;
+
+  applyServedLike(queryClient, {
+    postId: payload.postId,
+    on: payload.action === 'add',
+    byViewer: payload.userId === viewerId,
+    likeCount: payload.aggregation.count,
+  });
 }

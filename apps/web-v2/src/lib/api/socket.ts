@@ -16,11 +16,10 @@ import { decodeNotification } from '@/lib/notifications/record';
 
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
 import { FEED_QUERY_KEY } from './feed';
-import { applyPostCreated, applyPostDeleted, applyPostReactionEvent, applyPostUpdated } from './feed-realtime';
+import { applyPostCreated, applyPostDeleted, applyPostReactionEvent, applyPostUpdated, applyServedLike } from './feed-realtime';
 import type { FeedInfiniteData } from './feed-pages';
 import { FRIENDS_QUERY_PREFIX } from './friends-keys';
 import { PUBLIC_PROFILE_QUERY_PREFIX } from './public-profile';
-import { REELS_QUERY_ROOT } from './reels';
 import { NOTIFICATION_COUNTS_QUERY_KEY, NOTIFICATION_LISTS_KEY } from './notifications';
 import {
   applyNotificationCounts,
@@ -399,11 +398,13 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
    * LECTEUR (un autre de ses appareils) — le « j'aime » d'un autre ne remplit
    * jamais son cœur. Miroir `FeedView.swift:1331-1357`.
    *
-   * **ET LES RÉELS (#7227, W8)** — la MÊME carte, servie par un fil de Réels
-   * (`ReelsViewModel.swift:117-128` : SEULS les likes et la suppression y
-   * sont câblés, jamais `postCreated`/`postUpdated`). `setQueriesData` sur la
-   * RACINE (`REELS_QUERY_ROOT`) atteint toutes les graines en cache à la
-   * fois.
+   * **ET LES RÉELS, ET LA FICHE (#7227, W8)** — la MÊME carte, servie par un
+   * fil de Réels (`ReelsViewModel.swift:117-128` : SEULS les likes et la
+   * suppression y sont câblés, jamais `postCreated`/`postUpdated`) ou par
+   * `/post/$post`. Les trois caisses vivent dans `feed-realtime.ts#applyServedLike`,
+   * site UNIQUE partagé avec `post:reaction-added`/`post:reaction-removed` :
+   * cet écouteur ne tient que le branchement (D-98), et deux boucles
+   * recopiées ne peuvent plus diverger d'une caisse.
    */
   const updateFeed = (update: (data: FeedInfiniteData | undefined) => FeedInfiniteData | undefined): void => {
     deps.queryClient.setQueryData<FeedInfiniteData>(FEED_QUERY_KEY, update);
@@ -413,16 +414,12 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
     (on: boolean) =>
     (payload: unknown): void => {
       if (!isPostLikeEvent(payload)) return;
-      const { postId, likeCount } = payload;
-      const byViewer = payload.userId === deps.viewerId();
-      const update = (data: FeedInfiniteData | undefined) =>
-        applyServedCount(byViewer ? applyPostToggle(data, { postId, kind: 'like', on }) : data, {
-          postId,
-          kind: 'like',
-          count: likeCount,
-        });
-      updateFeed(update);
-      deps.queryClient.setQueriesData<FeedInfiniteData>({ queryKey: REELS_QUERY_ROOT }, update);
+      applyServedLike(deps.queryClient, {
+        postId: payload.postId,
+        on,
+        byViewer: payload.userId === deps.viewerId(),
+        likeCount: payload.likeCount,
+      });
     };
   const onPostLiked = onPostLikeChanged(true);
   const onPostUnliked = onPostLikeChanged(false);

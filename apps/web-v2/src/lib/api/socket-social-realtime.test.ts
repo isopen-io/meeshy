@@ -10,6 +10,7 @@ import { createOutboxStore } from '@/lib/send/outbox-store';
 import { FEED_QUERY_KEY } from './feed';
 import type { FeedInfiniteData, FeedPost } from './feed-pages';
 import { commentsQueryKey } from './publication-comments';
+import { postQueryKey } from './publication-detail';
 import { reelsQueryKey } from './reels';
 import { createRealtimeConnection, type RealtimeDeps } from './socket';
 import { STORY_FEED_QUERY_KEY, type StoryFeedPost } from './stories';
@@ -144,6 +145,38 @@ describe('`post:liked` / `post:unliked` écrivent AUSSI les RÉELS (#7227)', () 
     const reel = queryClient.getQueryData<FeedInfiniteData>(reelsQueryKey('seed-r'))?.pages[0]?.posts[0];
     expect(reel?.isLikedByMe).toBe(true);
     expect(reel?.likeCount).toBe(4);
+  });
+
+  /**
+   * **LA FICHE `/post/$post` EST UNE CAISSE COMME LES AUTRES** (revue-correction
+   * W8, #7227) — le geste LOCAL l'écrit depuis toujours
+   * (`feed-gestures.ts:127,142`) et la jumelle `post:reaction-*` de ce lot
+   * l'écrit aussi (`feed-realtime.ts#applyPostReactionEvent`) ; `post:liked` /
+   * `post:unliked` — la voie NOMINALE du ❤️ sur un POST/REEL
+   * (`PostReactionHandler.ts:106-123`, qui ne ré-émet PAS `post:reaction-*`
+   * pour le cœur) — la sautait. Une fiche ouverte gardait donc l'ancien
+   * chiffre pendant que le Flux et les Réels bougeaient dans son dos.
+   */
+  test("`post:liked` d\u2019un AUTRE pose le compte servi sur la FICHE ouverte", () => {
+    const { deps, socket, queryClient } = buildDeps();
+    queryClient.setQueryData<FeedPost>(postQueryKey('p-1'), { id: 'p-1', type: 'POST', createdAt: '2026-09-21T10:00:00.000Z', likeCount: 3, isLikedByMe: false });
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.POST_LIKED, { postId: 'p-1', userId: 'u-other', emoji: '\u2764\ufe0f', likeCount: 7, reactionSummary: {} });
+
+    expect(queryClient.getQueryData<FeedPost>(postQueryKey('p-1'))?.likeCount).toBe(7);
+    expect(queryClient.getQueryData<FeedPost>(postQueryKey('p-1'))?.isLikedByMe).toBe(false);
+  });
+
+  test("`post:unliked` DU LECTEUR vide le c\u0153ur de la FICHE", () => {
+    const { deps, socket, queryClient } = buildDeps();
+    queryClient.setQueryData<FeedPost>(postQueryKey('p-1'), { id: 'p-1', type: 'POST', createdAt: '2026-09-21T10:00:00.000Z', likeCount: 4, isLikedByMe: true });
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.POST_UNLIKED, { postId: 'p-1', userId: 'u-viewer', emoji: '\u2764\ufe0f', likeCount: 3, reactionSummary: {} });
+
+    expect(queryClient.getQueryData<FeedPost>(postQueryKey('p-1'))?.isLikedByMe).toBe(false);
+    expect(queryClient.getQueryData<FeedPost>(postQueryKey('p-1'))?.likeCount).toBe(3);
   });
 
   test('le FLUX bouge toujours, exactement comme avant ce lot', () => {

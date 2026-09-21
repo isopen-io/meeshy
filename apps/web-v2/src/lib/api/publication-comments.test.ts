@@ -487,3 +487,59 @@ describe('setCommentCountServed — le jumeau ABSOLU de `shiftCommentCount` (del
     expect(queryClient.getQueryData(FEED_QUERY_KEY)).toBe(data);
   });
 });
+
+/**
+ * **CE QUI APPARTIENT AU LECTEUR NE VIENT PAS DU SERVEUR** (revue-correction
+ * W8, #7227) — la loi est déjà écrite pour les PUBLICATIONS
+ * (`feed-realtime.ts#merged`, « un auteur corrigeant une faute de frappe
+ * dé-remplirait le cœur de tous ceux qui avaient aimé »), et
+ * `comment:updated` la rejouait à l'envers sur les COMMENTAIRES.
+ *
+ * La charge diffusée est MESURÉE : `PostCommentService.getCommentAsUpdateResult`
+ * (`services/gateway/src/services/PostCommentService.ts:375-399`) sélectionne
+ * `likeCount` mais NI `isLikedByMe` NI `currentUserReactions` — un événement
+ * envoyé à tout le fil ne peut pas les porter justes pour chacun. Remplacer la
+ * rangée EN BLOC effaçait donc le cœur de chaque lecteur à chaque édition.
+ */
+describe('applyCommentUpdated — l’édition d’un AUTRE ne touche pas ce qui est MIEN', () => {
+  test('mon cœur SURVIT à l’édition — la charge ne le porte pas', () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(commentsQueryKey('p1'), pageData([comment('c1', { content: 'avant', likeCount: 5, isLikedByMe: true })]));
+
+    applyCommentUpdated(queryClient, { postId: 'p1', comment: comment('c1', { content: 'après édition', likeCount: 5 }) });
+
+    const row = flattenCommentPages(queryClient.getQueryData(commentsQueryKey('p1')))[0];
+    expect(row?.content).toBe('après édition');
+    expect(row?.isLikedByMe).toBe(true);
+  });
+
+  test('un `false` TENU est une réponse du lecteur, pas une absence — il survit aussi', () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(commentsQueryKey('p1'), pageData([comment('c1', { isLikedByMe: false })]));
+
+    applyCommentUpdated(queryClient, { postId: 'p1', comment: comment('c1', { content: 'corrigé' }) });
+
+    expect(flattenCommentPages(queryClient.getQueryData(commentsQueryKey('p1')))[0]?.isLikedByMe).toBe(false);
+  });
+
+  test('mes réactions emoji survivent elles aussi', () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(commentsQueryKey('p1'), pageData([comment('c1', { currentUserReactions: ['🔥'] })]));
+
+    applyCommentUpdated(queryClient, { postId: 'p1', comment: comment('c1', { content: 'corrigé' }) });
+
+    expect(flattenCommentPages(queryClient.getQueryData(commentsQueryKey('p1')))[0]?.currentUserReactions).toEqual(['🔥']);
+  });
+
+  test('une page SANS la ligne éditée garde son IDENTITÉ — elle ne se re-rend pas', () => {
+    const queryClient = new QueryClient();
+    const data = pageData([comment('c1')], [comment('c2', { content: 'avant' })]);
+    queryClient.setQueryData(commentsQueryKey('p1'), data);
+
+    applyCommentUpdated(queryClient, { postId: 'p1', comment: comment('c2', { content: 'après' }) });
+
+    const après = queryClient.getQueryData<CommentInfiniteData>(commentsQueryKey('p1'));
+    expect(après?.pages[0]).toBe(data.pages[0]);
+    expect(après?.pages[1]).not.toBe(data.pages[1]);
+  });
+});

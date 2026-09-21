@@ -35,6 +35,19 @@ import { STORY_FEED_QUERY_KEY, type StoryFeedPost } from './stories';
  *    autre de SES appareils) : l'événement est diffusé à TOUT le monde, et le
  *    cœur d'un AUTRE ne doit jamais remplir le mien (même garde que
  *    `post:liked`, `feed/interactions.ts#togglePost`).
+ *
+ * **`likeCount` SE POSE SUR `reactionCount`, ET CE SONT DEUX COLONNES**
+ * (revue-correction W8, #7227) — `Post.likeCount` et `Post.reactionCount`
+ * (`schema.prisma:3443,3456`) sont distinctes, et la voie qui ÉMET
+ * `story:reacted`/`story:unreacted` — `POST|DELETE /posts/:id/like`,
+ * `PostService.likePost`/`unlikePost` — n'écrit QUE `likeCount` ; seule la
+ * voie socket `post:reaction-add` (`PostReactionService:357`) les synchronise.
+ * Le rail affiche pourtant `reactionCount` (`stories.ts:224`, peint par
+ * `routes/story.tsx:970`). On pose ici le compte DIFFUSÉ parce qu'il est le
+ * seul VRAI — il compte les lignes `PostReaction` relues — pendant que la
+ * colonne servie au chargement peut être en retard. **La divergence est
+ * SERVEUR, pas cliente** : l'aligner demande que `likePost` écrive aussi
+ * `reactionCount`, ce qui est un lot de passerelle, pas de ce lot.
  */
 export function applyServedStoryReaction<T extends StoryReactionSubject>(
   story: T,

@@ -389,3 +389,40 @@ describe('`post:reaction-added` / `post:reaction-removed` — GARDÉS au ❤️ 
     expect(cartes(queryClient)[0]?.likeCount).toBe(3);
   });
 });
+
+/**
+ * **ZÉRO RE-RENDU INUTILE, SUR LE NOUVEL ÉVENTAIL (revue-correction W8, #7227)**
+ * — depuis que `applyPostDeleted` et `applyPostReactionEvent` ÉVENTENT sur
+ * `REELS_QUERY_ROOT`, chaque événement touche TOUTES les graines de Réels en
+ * cache, et non plus une seule racine. Un écran de Réels qui se re-rendrait à
+ * chaque suppression d'une publication qu'il ne montre PAS serait le prix de
+ * cet éventail — ces deux témoins disent qu'il ne se paie pas.
+ */
+describe('les graines de Réels que rien ne touche gardent leur IDENTITÉ (#7227)', () => {
+  test('`post:deleted` d’un id inconnu laisse le Flux ET les Réels INTACTS — même référence', () => {
+    const queryClient = new QueryClient();
+    const flux = cacheAvec([post({ id: 'p1' })]);
+    const reels = cacheAvec([post({ id: 'p2' })]);
+    queryClient.setQueryData(FEED_QUERY_KEY, flux);
+    queryClient.setQueryData(reelsQueryKey('graine'), reels);
+
+    applyPostDeleted(queryClient, { postId: 'p-inconnu' });
+
+    expect(queryClient.getQueryData(FEED_QUERY_KEY)).toBe(flux);
+    expect(queryClient.getQueryData(reelsQueryKey('graine'))).toBe(reels);
+  });
+
+  test('`post:reaction-added` sur une carte ABSENTE d’une graine la laisse INTACTE', () => {
+    const queryClient = new QueryClient();
+    const reels = cacheAvec([post({ id: 'p-ailleurs', likeCount: 1 })]);
+    queryClient.setQueryData(reelsQueryKey('graine'), reels);
+
+    applyPostReactionEvent(
+      queryClient,
+      { postId: 'p1', userId: 'u-other', emoji: '❤️', action: 'add', aggregation: { emoji: '❤️', count: 9 }, timestamp: '2026-09-21T10:00:00.000Z' },
+      'u-viewer',
+    );
+
+    expect(queryClient.getQueryData(reelsQueryKey('graine'))).toBe(reels);
+  });
+});
