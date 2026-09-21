@@ -16,7 +16,7 @@ import {
 import { isWithinDnd } from '@meeshy/shared/utils/notification-dnd';
 import { enhancedLogger, performanceLogger } from '../utils/logger-enhanced';
 import { CircuitBreaker, circuitBreakerManager } from '../utils/circuitBreaker';
-import { webPushTopic } from '../utils/web-push-topic';
+import { webPushConfig } from './web-push-config';
 import {
   isNotificationRevocationPush,
   NOTIFICATION_REVOCATION_TTL_MS,
@@ -656,35 +656,7 @@ export class PushNotificationService {
               },
             };
       } else if (tokenRecord.platform === 'web' && !dataOnly) {
-        const link = payload.link || (payload.data?.conversationId ? `/conversations/${payload.data.conversationId}` : undefined);
-        message.webpush = {
-          notification: {
-            title: payload.title,
-            body: payload.body,
-            icon: '/android-chrome-192x192.png',
-            badge: '/badge-72x72.png',
-            // GW8 — `muted` (= `soundEnabled:false`) : la bannière reste
-            // VISIBLE, sans son. Miroir web de l'omission de `sound` côté
-            // APNs et Android ; rien à voir avec `payload.silent` (push
-            // background invisible), qui rend le message `dataOnly` et ne
-            // passe pas par cette branche.
-            ...(payload.muted ? { silent: true } : {}),
-            // `tag` est l'analogue web de `aps['thread-id']` : la bannière la
-            // plus récente d'une conversation remplace la précédente. Une
-            // remplaçante n'alerte qu'avec `renotify` — sans lui, chaque
-            // message après le premier arriverait en silence et sans bannière
-            // chez tout worker qui affiche ce bloc tel quel (SDK Firebase de
-            // l'ancien worker). `renotify` ne voyage JAMAIS sans `tag` : la
-            // paire lève un TypeError dans `showNotification`.
-            // `groupNotifications:false` a retiré `threadId` au chokepoint.
-            ...(payload.threadId ? { tag: payload.threadId, renotify: true } : {}),
-          },
-          ...(link && {
-            fcmOptions: {
-              link
-            }
-          })
-        };
+        message.webpush = webPushConfig(payload);
       }
 
       if (payload.collapseId) {
@@ -696,16 +668,6 @@ export class PushNotificationService {
           message.apns.headers = {
             ...message.apns.headers,
             'apns-collapse-id': payload.collapseId,
-          };
-        }
-        // Le pendant web : l'en-tête `Topic` du protocole Web Push (RFC 8030
-        // § 5.4) — un message non remis est remplacé par le suivant de même
-        // sujet. `webPushTopic` tient la grammaire de la RFC, dont l'écart
-        // coûte le message entier (400).
-        if (message.webpush) {
-          message.webpush.headers = {
-            ...message.webpush.headers,
-            Topic: webPushTopic(payload.collapseId),
           };
         }
       }

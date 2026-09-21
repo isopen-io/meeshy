@@ -120,7 +120,7 @@ const DETTE_HERITEE: Readonly<Record<string, number>> = {
   'services/AuthService.ts': 1324,
   'services/MentionService.ts': 1235,
   'services/messaging/MessageProcessor.ts': 1110,
-  'services/PushNotificationService.ts': 1053,
+  'services/PushNotificationService.ts': 1041,
   'dma-interoperability/signal-protocol/SignalProtocolEngine.ts': 1027,
   'services/AudioTranslateService.ts': 1017,
 };

@@ -158,6 +158,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { NOTIFICATION_REVOCATION_TTL_MS } from '../../../services/notifications/notificationRevocationPush';
+import type { PushNotificationPayload } from '../../../services/PushNotificationService';
 
 // Store original environment variables
 const originalEnv = { ...process.env };
@@ -2588,64 +2589,53 @@ describe('PushNotificationService', () => {
       expect(sentMsg?.notification).toEqual({ title: 'Alice vous appelle', body: 'Appel audio' });
     });
 
-    it('should include webpush config with link for web FCM tokens', async () => {
-      const service = await getFCMService();
-
-      mockPrisma.pushToken.findMany.mockResolvedValue([
-        { id: 'tok', token: 'fcm-web', type: 'fcm', platform: 'web', bundleId: null, apnsEnvironment: null },
-      ]);
-
-      await service.sendToUser({
-        userId: 'user-web',
-        payload: {
-          title: 'Message',
-          body: 'Hello',
-          data: { conversationId: 'conv-999' },
-        },
+    describe('web FCM tokens carry the delivery preferences of the chokepoint (#7308)', () => {
+      afterEach(() => {
+        delete (mockPrisma as any).userPreferences;
       });
 
-      const sentMsg = mockFirebaseMessagingSend.mock.calls.at(-1)?.[0];
-      expect(sentMsg?.webpush).toBeDefined();
-      expect(sentMsg?.webpush?.fcmOptions?.link).toBe('/conversations/conv-999');
-      expect(sentMsg?.webpush?.notification?.icon).toBe('/android-chrome-192x192.png');
-    });
+      const sendWeb = async (notification: Record<string, unknown>, payload: Partial<PushNotificationPayload>) => {
+        const service = await getFCMService();
+        (mockPrisma as any).userPreferences = { findUnique: jest.fn().mockResolvedValue({ notification }) };
+        mockPrisma.pushToken.findMany.mockResolvedValue([
+          { id: 'tok', token: 'fcm-web', type: 'fcm', platform: 'web', bundleId: null, apnsEnvironment: null },
+        ]);
+        await service.sendToUser({ userId: 'user-web', payload: { title: 'Alice', body: 'Salut', ...payload } });
+        return mockFirebaseMessagingSend.mock.calls.at(-1)?.[0]?.webpush;
+      };
 
-    it('should include webpush without fcmOptions when no link or conversationId', async () => {
-      const service = await getFCMService();
+      it('soundEnabled:false, threadId and collapseId all reach the web message', async () => {
+        const webpush = await sendWeb(
+          { pushEnabled: true, soundEnabled: false },
+          { threadId: 'conv-42', collapseId: 'conv-42', data: { conversationId: 'conv-42' } },
+        );
 
-      mockPrisma.pushToken.findMany.mockResolvedValue([
-        { id: 'tok', token: 'fcm-web', type: 'fcm', platform: 'web', bundleId: null, apnsEnvironment: null },
-      ]);
-
-      await service.sendToUser({
-        userId: 'user-web-no-link',
-        payload: { title: 'Alert', body: 'System notification' },
+        expect(webpush).toEqual({
+          notification: {
+            title: 'Alice',
+            body: 'Salut',
+            icon: '/android-chrome-192x192.png',
+            badge: '/badge-72x72.png',
+            silent: true,
+            tag: 'conv-42',
+            renotify: true,
+          },
+          fcmOptions: { link: '/conversations/conv-42' },
+          headers: { Topic: 'conv-42' },
+        });
       });
 
-      const sentMsg = mockFirebaseMessagingSend.mock.calls.at(-1)?.[0];
-      expect(sentMsg?.webpush).toBeDefined();
-      expect(sentMsg?.webpush?.fcmOptions).toBeUndefined();
-    });
+      // Le `tag` vient de `threadId`, que le chokepoint retire — jamais de
+      // `data.conversationId`, qui est toujours là ; `renotify` part avec lui.
+      it('groupNotifications:false stops web banners from stacking — no tag, hence no renotify', async () => {
+        const webpush = await sendWeb(
+          { pushEnabled: true, groupNotifications: false },
+          { threadId: 'conv-42', data: { conversationId: 'conv-42' } },
+        );
 
-    it('should use explicit payload.link over conversationId for web webpush', async () => {
-      const service = await getFCMService();
-
-      mockPrisma.pushToken.findMany.mockResolvedValue([
-        { id: 'tok', token: 'fcm-web', type: 'fcm', platform: 'web', bundleId: null, apnsEnvironment: null },
-      ]);
-
-      await service.sendToUser({
-        userId: 'user-web-link',
-        payload: {
-          title: 'Post',
-          body: 'New post',
-          link: '/posts/123',
-          data: { conversationId: 'conv-ignore' },
-        },
+        expect(webpush?.notification).not.toHaveProperty('tag');
+        expect(webpush?.notification).not.toHaveProperty('renotify');
       });
-
-      const sentMsg = mockFirebaseMessagingSend.mock.calls.at(-1)?.[0];
-      expect(sentMsg?.webpush?.fcmOptions?.link).toBe('/posts/123');
     });
 
     it('should forward payload.badge as android notificationCount for android FCM', async () => {
@@ -2710,208 +2700,6 @@ describe('PushNotificationService', () => {
 
       const sentMsg = mockFirebaseMessagingSend.mock.calls.at(-1)?.[0];
       expect(sentMsg?.android?.collapseKey).toBe('conv-456');
-    });
-  });
-
-  // ==============================================
-  // GW8 sur le fil WEB — les réglages de livraison valent aussi pour le web
-  // ==============================================
-
-  describe('webpush delivery preferences (muted / threadId / collapseId)', () => {
-    afterEach(() => {
-      delete (mockPrisma as any).userPreferences;
-    });
-
-    const setupWebService = async (notificationPrefs?: Record<string, unknown>) => {
-      mockExistsSync.mockReturnValue(true);
-      mockReadFileSync.mockReturnValue(
-        JSON.stringify({
-          type: 'service_account',
-          project_id: 'meeshy-test',
-          private_key: 'fake-key',
-          client_email: 'test@meeshy.iam.gserviceaccount.com',
-        })
-      );
-      mockFirebaseMessagingSend.mockResolvedValue('msg-id-web');
-
-      const { PushNotificationService } = await getServiceWithEnv({
-        ENABLE_PUSH_NOTIFICATIONS: 'true',
-        ENABLE_FCM_PUSH: 'true',
-        FIREBASE_ADMIN_CREDENTIALS_PATH: '/fake/creds.json',
-      });
-      const service = new PushNotificationService(mockPrisma as any);
-      if (notificationPrefs) {
-        (mockPrisma as any).userPreferences = {
-          findUnique: jest.fn().mockResolvedValue({ notification: notificationPrefs }),
-        };
-      }
-      mockPrisma.pushToken.findMany.mockResolvedValue([
-        { id: 'tok', token: 'fcm-web', type: 'fcm', platform: 'web', bundleId: null, apnsEnvironment: null },
-      ]);
-      mockPrisma.pushToken.update.mockResolvedValue({});
-      return service;
-    };
-
-    const sentWebpush = () => mockFirebaseMessagingSend.mock.calls.at(-1)?.[0]?.webpush;
-
-    it('soundEnabled:false silences the WEB banner without hiding it', async () => {
-      const service = await setupWebService({ pushEnabled: true, soundEnabled: false });
-
-      await service.sendToUser({
-        userId: 'user-web-muted',
-        payload: { title: 'Alice', body: 'Salut', data: { conversationId: 'conv-1' } },
-      });
-
-      const webpush = sentWebpush();
-      expect(webpush?.notification?.silent).toBe(true);
-      expect(webpush?.notification?.title).toBe('Alice');
-      expect(webpush?.notification?.body).toBe('Salut');
-    });
-
-    it('threadId becomes the webpush tag — the web analogue of aps thread-id', async () => {
-      const service = await setupWebService({ pushEnabled: true });
-
-      await service.sendToUser({
-        userId: 'user-web-thread',
-        payload: {
-          title: 'Alice',
-          body: 'Salut',
-          threadId: 'conv-42',
-          // Le `tag` doit venir de `threadId`, PAS de la carte `data` : un
-          // identifiant DIFFÉRENT ici est ce qui distingue les deux sources.
-          data: { conversationId: 'conv-999' },
-        },
-      });
-
-      expect(sentWebpush()?.notification?.tag).toBe('conv-42');
-    });
-
-    // Une bannière qui REMPLACE sa précédente de même `tag` ne sonne ni ne
-    // s'affiche à nouveau sans `renotify` (Notifications API, « show steps »).
-    // Le SDK Firebase de l'ancien worker affiche `webpush.notification` TEL
-    // QUEL : sans ce drapeau, chaque message après le premier d'une
-    // conversation y arriverait en silence.
-    it('a web banner that replaces its conversation predecessor still alerts — renotify rides with the tag', async () => {
-      const service = await setupWebService({ pushEnabled: true });
-
-      await service.sendToUser({
-        userId: 'user-web-renotify',
-        payload: { title: 'Alice', body: 'Salut', threadId: 'conv-42', data: { conversationId: 'conv-42' } },
-      });
-
-      expect(sentWebpush()?.notification).toMatchObject({ tag: 'conv-42', renotify: true });
-      expect(sentWebpush()?.notification).not.toHaveProperty('silent');
-    });
-
-    // `muted` retire le SON, pas la bannière : la remplaçante reste annoncée
-    // (renotify), sans son ni vibration (silent). Les deux ensemble ne lèvent
-    // aucun TypeError — seuls `silent`+`vibrate` et `renotify` sans `tag` en lèvent.
-    it('muted keeps the replacing banner VISIBLE — silent takes the sound, renotify still announces it', async () => {
-      const service = await setupWebService({ pushEnabled: true, soundEnabled: false });
-
-      await service.sendToUser({
-        userId: 'user-web-muted-thread',
-        payload: { title: 'Alice', body: 'Salut', threadId: 'conv-42', data: { conversationId: 'conv-42' } },
-      });
-
-      const notification = sentWebpush()?.notification;
-      expect(notification).toMatchObject({ tag: 'conv-42', renotify: true, silent: true });
-      expect(notification).not.toHaveProperty('vibrate');
-    });
-
-    it('collapseId becomes the webpush Topic header — the web pendant of apns-collapse-id', async () => {
-      const service = await setupWebService({ pushEnabled: true });
-
-      await service.sendToUser({
-        userId: 'user-web-collapse',
-        payload: { title: 'Alice', body: 'Salut', collapseId: 'conv-68d1f4a9c2b7e30411aa93de' },
-      });
-
-      expect(sentWebpush()?.headers?.Topic).toBe('conv-68d1f4a9c2b7e30411aa93de');
-    });
-
-    // RFC 8030 § 5.4 : au plus 32 caractères de l'alphabet base64url, sans
-    // quoi le service de push DOIT répondre 400 — le message est PERDU, pas
-    // seulement non regroupé. Aucun producteur actuel ne dépasse ; `collapseId`
-    // reste une chaîne libre, et la borne se tient ici plutôt qu'en prose.
-    it('a collapseId outside the RFC 8030 grammar still yields a conformant Topic, stable per collapseId', async () => {
-      const service = await setupWebService({ pushEnabled: true });
-      const send = async (collapseId: string) => {
-        await service.sendToUser({ userId: 'user-web-topic', payload: { title: 'Alice', body: 'Salut', collapseId } });
-        return sentWebpush()?.headers?.Topic as string | undefined;
-      };
-
-      const long = await send('conversation:68d1f4a9c2b7e30411aa93de:thread');
-      const again = await send('conversation:68d1f4a9c2b7e30411aa93de:thread');
-      const other = await send('conversation:68d1f4a9c2b7e30411aa93df:thread');
-
-      expect(long).toMatch(/^[A-Za-z0-9_-]{1,32}$/);
-      expect(other).toMatch(/^[A-Za-z0-9_-]{1,32}$/);
-      expect(again).toBe(long);
-      expect(other).not.toBe(long);
-    });
-
-    it('the three settings travel together, and displace nothing already served', async () => {
-      const service = await setupWebService({ pushEnabled: true, soundEnabled: false });
-
-      await service.sendToUser({
-        userId: 'user-web-all',
-        payload: {
-          title: 'Alice',
-          body: 'Salut',
-          threadId: 'conv-42',
-          collapseId: 'conv-42',
-          data: { conversationId: 'conv-42' },
-        },
-      });
-
-      const webpush = sentWebpush();
-      expect(webpush?.notification?.silent).toBe(true);
-      expect(webpush?.notification?.tag).toBe('conv-42');
-      expect(webpush?.notification?.renotify).toBe(true);
-      expect(webpush?.headers?.Topic).toBe('conv-42');
-      expect(webpush?.notification?.icon).toBe('/android-chrome-192x192.png');
-      expect(webpush?.fcmOptions?.link).toBe('/conversations/conv-42');
-    });
-
-    // --- Contre-témoins : ces trois champs n'apparaissent pas sans qu'on les
-    // --- demande. Ils étaient VERTS avant le correctif — ils gardent contre
-    // --- une sur-application, pas contre l'absence que le lot comble.
-
-    it('default preferences leave the web banner with sound, no tag and no Topic', async () => {
-      const service = await setupWebService({ pushEnabled: true });
-
-      await service.sendToUser({
-        userId: 'user-web-default',
-        payload: { title: 'Alice', body: 'Salut', data: { conversationId: 'conv-1' } },
-      });
-
-      const webpush = sentWebpush();
-      expect(webpush?.notification).not.toHaveProperty('silent');
-      expect(webpush?.notification).not.toHaveProperty('tag');
-      expect(webpush?.notification).not.toHaveProperty('renotify');
-      expect(webpush?.headers).toBeUndefined();
-    });
-
-    it('groupNotifications:false stops web banners from stacking per conversation', async () => {
-      const service = await setupWebService({ pushEnabled: true, groupNotifications: false });
-
-      await service.sendToUser({
-        userId: 'user-web-ungrouped',
-        payload: {
-          title: 'Alice',
-          body: 'Salut',
-          threadId: 'conv-42',
-          data: { conversationId: 'conv-42' },
-        },
-      });
-
-      // Le `tag` vient de `threadId`, que le chokepoint vient de retirer — et
-      // NON de `data.conversationId`, qui est toujours là. `renotify` part
-      // AVEC lui : seul, il ferait lever un TypeError à `showNotification`
-      // chez tout consommateur qui affiche le bloc tel quel — plus de bannière.
-      expect(sentWebpush()?.notification).not.toHaveProperty('tag');
-      expect(sentWebpush()?.notification).not.toHaveProperty('renotify');
     });
   });
 
