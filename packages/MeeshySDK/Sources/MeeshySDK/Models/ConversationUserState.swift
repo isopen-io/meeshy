@@ -20,6 +20,17 @@ public struct ConversationUserState: Codable, Hashable, Sendable {
     public var unreadCount: Int
     public var lastReadAt: Date?
     public var lastDeliveredAt: Date?
+    /// Dernier message lu par le lecteur (#7198/#7222) — le curseur SERVEUR,
+    /// distinct de `lastReadAt` (l'horloge de l'ACTION de lecture) : c'est lui
+    /// que `FirstUnreadBoundary.resolve` EXCLUT explicitement des candidats
+    /// (défense contre un décalage d'horloge entre le curseur et la fenêtre
+    /// chargée). `nil` sans curseur connu — jamais fabriqué.
+    public var lastReadMessageId: String?
+    /// `createdAt` de `lastReadMessageId` — la clé CHRONOLOGIQUE du curseur,
+    /// rang 1 de `FirstUnreadBoundary.resolve` (avant `lastReadAt`, avant
+    /// `joinedAt`). Servie par G1 (`packages/shared/utils/first-unread.ts`
+    /// doc-comment, § rangs) — voir son doc-comment pour la loi complète.
+    public var lastReadMessageCreatedAt: Date?
 
     // MARK: - Notification preferences
 
@@ -76,6 +87,8 @@ public struct ConversationUserState: Codable, Hashable, Sendable {
         unreadCount: Int = 0,
         lastReadAt: Date? = nil,
         lastDeliveredAt: Date? = nil,
+        lastReadMessageId: String? = nil,
+        lastReadMessageCreatedAt: Date? = nil,
         isPinned: Bool = false,
         isMuted: Bool = false,
         mentionsOnly: Bool = false,
@@ -97,6 +110,8 @@ public struct ConversationUserState: Codable, Hashable, Sendable {
         self.unreadCount = unreadCount
         self.lastReadAt = lastReadAt
         self.lastDeliveredAt = lastDeliveredAt
+        self.lastReadMessageId = lastReadMessageId
+        self.lastReadMessageCreatedAt = lastReadMessageCreatedAt
         self.isPinned = isPinned
         self.isMuted = isMuted
         self.mentionsOnly = mentionsOnly
@@ -180,6 +195,8 @@ public struct ConversationUserState: Codable, Hashable, Sendable {
             unreadCount: try c.decodeIfPresent(Int.self, forKey: .unreadCount) ?? 0,
             lastReadAt: try c.decodeIfPresent(Date.self, forKey: .lastReadAt),
             lastDeliveredAt: try c.decodeIfPresent(Date.self, forKey: .lastDeliveredAt),
+            lastReadMessageId: try c.decodeIfPresent(String.self, forKey: .lastReadMessageId),
+            lastReadMessageCreatedAt: try c.decodeIfPresent(Date.self, forKey: .lastReadMessageCreatedAt),
             isPinned: try c.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false,
             isMuted: try c.decodeIfPresent(Bool.self, forKey: .isMuted) ?? false,
             mentionsOnly: try c.decodeIfPresent(Bool.self, forKey: .mentionsOnly) ?? false,

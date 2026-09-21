@@ -312,7 +312,11 @@ final class ConversationSelectionGuardTests: XCTestCase {
 
     func test_deferredReconfigure_accumulatesItemsScope_ratherThanDroppingIt() throws {
         let code = try source("Features/Main/Views/MessageListViewController.swift")
-        guard let fn = body(of: "private func applySnapshot(reconfigure: SnapshotReconfigureScope = .changedRecords) {", in: code) else {
+        // L'ancre porte sur la SIGNATURE, jamais sur sa PORTÉE : `applySnapshot`
+        // est passée de `private` à `internal` au #7222 (le cluster
+        // `+UnreadSeparator` rejoue la pose), et une ancre qui citait
+        // `private func …` a rougi sur un changement qui ne la concernait pas.
+        guard let fn = body(of: "func applySnapshot(reconfigure: SnapshotReconfigureScope = .changedRecords) {", in: code) else {
             return XCTFail("`applySnapshot` introuvable — la garde ne mesurerait rien.")
         }
         guard let deferBlock = body(of: "if isDeferringReconfigure {", in: fn) else {
