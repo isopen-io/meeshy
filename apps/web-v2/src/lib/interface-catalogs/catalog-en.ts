@@ -911,6 +911,30 @@ const en = {
   'message.location.open': 'Open in Maps',
   'message.location.a11y': 'Location: {place}',
 
+  /* LES LIBELLÉS D'ÉTAT DU FIL (#7337) — voir `catalog-fr.ts` pour la règle. */
+  'message.forwarded': 'Forwarded',
+  'message.forwarded.fromGroup': 'Forwarded from {name}',
+  'message.forwarded.fromPerson': 'Forwarded from {name}',
+  'message.send.failed': 'Not sent',
+  'message.send.failed.reason': 'Not sent — {reason}',
+  'message.send.retry': 'Try again',
+  'announce.messageNotSent': 'Message not sent',
+  'announce.messageNotSent.reason': 'Message not sent — {reason}',
+  'message.deleted': 'Message deleted',
+  'message.burned': 'Seen and deleted',
+  'message.burned.a11y': 'Message seen and deleted',
+  'message.expired.a11y': 'Ephemeral message expired',
+  'message.withheld': 'Content withheld',
+  'message.withheld.a11y': 'Content withheld: this message exists and is not shown',
+  'message.veiled': 'Hidden content',
+  'message.veiled.hint': 'Tap to reveal the content',
+  'message.veiled.viewOnce': 'View once',
+  'message.veiled.error': 'Can’t reveal this right now',
+  'attachment.protected.image': 'Protected photo',
+  'attachment.protected.video': 'Protected video',
+  'attachment.protected.audio': 'Protected voice message',
+  'attachment.protected.file': 'Protected attachment',
+
 } satisfies InterfaceCatalog;
 
 export default en;

@@ -55,7 +55,7 @@ const attachment = (partial: Partial<Attachment> = {}): Attachment =>
  */
 describe('composeMessageLabel — l’ordre iOS', () => {
   test('reçu, citation, texte, médias, heure, modifié, épinglé, réactions', () => {
-    const label = composeMessageLabel({ protection: 'standard',
+    const label = composeMessageLabel({ language: 'fr', protection: 'standard',
       message: message({
         replyTo: message({ id: 'q1', sender: senderOf('Amina Diallo') }),
         isEdited: true,
@@ -72,7 +72,7 @@ describe('composeMessageLabel — l’ordre iOS', () => {
   });
 
   test('un message à SOI : le nom est ABSENT, l’accusé est présent', () => {
-    const label = composeMessageLabel({ protection: 'standard',
+    const label = composeMessageLabel({ language: 'fr', protection: 'standard',
       message: message(),
       isMine: true,
       servedText: 'Bonjour',
@@ -84,7 +84,7 @@ describe('composeMessageLabel — l’ordre iOS', () => {
   });
 
   test('un envoi ÉCHOUÉ (`delivery: null`) ne porte AUCUN mot d’accusé', () => {
-    const label = composeMessageLabel({ protection: 'standard',
+    const label = composeMessageLabel({ language: 'fr', protection: 'standard',
       message: message(),
       isMine: true,
       servedText: 'Bonjour',
@@ -95,7 +95,7 @@ describe('composeMessageLabel — l’ordre iOS', () => {
   });
 
   test('sans sender connu, sur un message d’autrui : « expéditeur inconnu » absent du libellé racine, mais présent en citation', () => {
-    const label = composeMessageLabel({ protection: 'standard',
+    const label = composeMessageLabel({ language: 'fr', protection: 'standard',
       message: messageWithoutSender({ replyTo: messageWithoutSender({ id: 'q2' }) }),
       isMine: false,
       servedText: 'Bonjour',
@@ -109,7 +109,7 @@ describe('composeMessageLabel — l’ordre iOS', () => {
   });
 
   test('éphémère : le badge apparaît quand `expiresAt` est posé', () => {
-    const label = composeMessageLabel({ protection: 'standard',
+    const label = composeMessageLabel({ language: 'fr', protection: 'standard',
       message: message({ expiresAt: new Date('2026-09-10T10:00:00.000Z') }),
       isMine: false,
       servedText: 'Bonjour',
@@ -120,7 +120,7 @@ describe('composeMessageLabel — l’ordre iOS', () => {
   });
 
   test('un texte SERVI vide (média-seul) n’ajoute AUCUN segment texte vide', () => {
-    const label = composeMessageLabel({ protection: 'standard',
+    const label = composeMessageLabel({ language: 'fr', protection: 'standard',
       message: message({ attachments: [attachment({ mimeType: 'video/mp4' })] }),
       isMine: false,
       servedText: '',
@@ -131,7 +131,7 @@ describe('composeMessageLabel — l’ordre iOS', () => {
   });
 
   test('des réactions à ZÉRO sont filtrées (compte retombé à zéro après retrait)', () => {
-    const label = composeMessageLabel({ protection: 'standard',
+    const label = composeMessageLabel({ language: 'fr', protection: 'standard',
       message: message({ reactionSummary: { '👍': 0 } }),
       isMine: false,
       servedText: 'Bonjour',
@@ -154,7 +154,7 @@ describe('composeMessageLabel — la protection', () => {
   const SECRET = 'Le code du coffre est 4817-2290.';
 
   test('voilé : le texte servi ne fuit JAMAIS, le placeholder le remplace', () => {
-    const label = composeMessageLabel({
+    const label = composeMessageLabel({ language: 'fr',
       message: message({ isBlurred: true, content: SECRET }),
       isMine: false,
       servedText: SECRET,
@@ -166,7 +166,7 @@ describe('composeMessageLabel — la protection', () => {
   });
 
   test('voilé : l inventaire des pièces jointes ne fuit pas non plus', () => {
-    const label = composeMessageLabel({
+    const label = composeMessageLabel({ language: 'fr',
       message: message({ isViewOnce: true, attachments: [attachment()] }),
       isMine: false,
       servedText: '',
@@ -183,7 +183,7 @@ describe('composeMessageLabel — la protection', () => {
       ['expired', 'Message éphémère expiré'],
     ] as const;
     for (const [protection, expected] of cases) {
-      const label = composeMessageLabel({
+      const label = composeMessageLabel({ language: 'fr',
         message: message({ content: SECRET, attachments: [attachment()] }),
         isMine: false,
         servedText: SECRET,
@@ -195,7 +195,7 @@ describe('composeMessageLabel — la protection', () => {
   });
 
   test('standard : le libellé reste celui de la spécification, inchangé', () => {
-    const label = composeMessageLabel({
+    const label = composeMessageLabel({ language: 'fr',
       message: message(),
       isMine: false,
       servedText: 'Bonjour',
@@ -224,7 +224,7 @@ describe('composeMessageLabel — la citation suit ce que la rangée PEINT (#709
   const quoted = () => message({ id: 'q1', sender: senderOf('Amina Diallo'), content: 'Le RDV est à 18h' });
 
   test('RETENU : la rangée rend un constat, pas un `Quote` — le libellé ne prononce aucune citation', () => {
-    const label = composeMessageLabel({
+    const label = composeMessageLabel({ language: 'fr',
       message: message({ replyTo: quoted() }),
       isMine: false,
       servedText: '',
@@ -238,7 +238,7 @@ describe('composeMessageLabel — la citation suit ce que la rangée PEINT (#709
   });
 
   test('RETENU sur une réponse à une STORY : « réponse à sa story » ne se prononce pas non plus', () => {
-    const label = composeMessageLabel({
+    const label = composeMessageLabel({ language: 'fr',
       message: message({
         storyReplyToId: 's1',
         metadata: { postReplyTo: { id: 's1', previewText: 'Le lac', createdAt: '2026-09-10T08:00:00.000Z' } },
@@ -253,7 +253,7 @@ describe('composeMessageLabel — la citation suit ce que la rangée PEINT (#709
   });
 
   test('VOILÉ AU REPOS : le substitut est seul — la citation n’est ni peinte ni prononcée', () => {
-    const label = composeMessageLabel({
+    const label = composeMessageLabel({ language: 'fr',
       message: message({ isBlurred: true, replyTo: quoted() }),
       isMine: false,
       servedText: 'Bonjour',
@@ -268,7 +268,7 @@ describe('composeMessageLabel — la citation suit ce que la rangée PEINT (#709
 
   /** LA CONTRE-ÉPREUVE — verte AVANT comme APRÈS le correctif. */
   test('VOILÉ RÉVÉLÉ : la rangée monte ses enfants, donc le libellé REPREND la citation', () => {
-    const label = composeMessageLabel({
+    const label = composeMessageLabel({ language: 'fr',
       message: message({ isBlurred: true, replyTo: quoted() }),
       isMine: false,
       servedText: 'Bonjour',
@@ -280,7 +280,7 @@ describe('composeMessageLabel — la citation suit ce que la rangée PEINT (#709
   });
 
   test('STANDARD : rien ne change — la citation reste prononcée', () => {
-    const label = composeMessageLabel({
+    const label = composeMessageLabel({ language: 'fr',
       message: message({ replyTo: quoted() }),
       isMine: false,
       servedText: 'Bonjour',
@@ -302,7 +302,7 @@ describe('composeMessageLabel — la citation suit ce que la rangée PEINT (#709
  */
 describe('composeMessageLabel — « Sans compte »', () => {
   test('un participant anonymous porte « Sans compte » AVANT son nom', () => {
-    const label = composeMessageLabel({ protection: 'standard',
+    const label = composeMessageLabel({ language: 'fr', protection: 'standard',
       message: message({ sender: senderOf('Invité', 'anonymous') }),
       isMine: false,
       servedText: 'Bonjour',
@@ -313,7 +313,7 @@ describe('composeMessageLabel — « Sans compte »', () => {
   });
 
   test('un participant `user` ordinaire ne porte JAMAIS « Sans compte »', () => {
-    const label = composeMessageLabel({ protection: 'standard',
+    const label = composeMessageLabel({ language: 'fr', protection: 'standard',
       message: message(),
       isMine: false,
       servedText: 'Bonjour',
@@ -327,7 +327,7 @@ describe('composeMessageLabel — « Sans compte »', () => {
     // Cas impossible en pratique (on n'est jamais anonyme de soi-même), mais
     // la garde `!isMine` doit tenir : le segment ne doit dépendre que de
     // `isMine`, jamais uniquement du type du sender.
-    const label = composeMessageLabel({ protection: 'standard',
+    const label = composeMessageLabel({ language: 'fr', protection: 'standard',
       message: message({ sender: senderOf('Invité', 'anonymous') }),
       isMine: true,
       servedText: 'Bonjour',
@@ -346,7 +346,7 @@ describe('composeMessageLabel — « Sans compte »', () => {
  */
 describe('composeMessageLabel — les états du lot (#5936)', () => {
   test('système : le libellé est le TEXTE de la notice seul, jamais l’auteur', () => {
-    const label = composeMessageLabel({
+    const label = composeMessageLabel({ language: 'fr',
       message: message({
         messageType: 'system',
         messageSource: 'system',
@@ -362,7 +362,7 @@ describe('composeMessageLabel — les états du lot (#5936)', () => {
   });
 
   test('sticker : un segment « sticker 🔥 » remplace le texte', () => {
-    const label = composeMessageLabel({
+    const label = composeMessageLabel({ language: 'fr',
       message: message({ content: '🔥', metadata: { sticker: { emoji: '🔥' } } }),
       isMine: false,
       servedText: '🔥',
@@ -373,7 +373,7 @@ describe('composeMessageLabel — les états du lot (#5936)', () => {
   });
 
   test('lieu : « Position : Tour Eiffel » après les pièces jointes', () => {
-    const label = composeMessageLabel({
+    const label = composeMessageLabel({ language: 'fr',
       message: message({
         content: '',
         messageType: 'location',
@@ -392,7 +392,7 @@ describe('composeMessageLabel — les états du lot (#5936)', () => {
   });
 
   test('story citée : « réponse à sa story » remplace « réponse à X »', () => {
-    const label = composeMessageLabel({
+    const label = composeMessageLabel({ language: 'fr',
       message: message({
         storyReplyToId: 'p1',
         metadata: { postReplyTo: { id: 'p1', type: 'STORY', moodEmoji: null, previewText: '', thumbnailUrl: null, createdAt: '' } },
@@ -407,7 +407,7 @@ describe('composeMessageLabel — les états du lot (#5936)', () => {
   });
 
   test('transféré : « transféré depuis Salon » après « épinglé »', () => {
-    const label = composeMessageLabel({
+    const label = composeMessageLabel({ language: 'fr',
       message: message({
         pinnedAt: new Date('2026-09-10T09:00:00.000Z'),
         forwardedFromId: 'm-far',
@@ -425,7 +425,7 @@ describe('composeMessageLabel — les états du lot (#5936)', () => {
   });
 
   test('emoji seul : le texte brut, jamais une traduction', () => {
-    const label = composeMessageLabel({
+    const label = composeMessageLabel({ language: 'fr',
       message: message({ content: '👍' }),
       isMine: false,
       servedText: 'pouce levé',
@@ -445,7 +445,7 @@ describe('composeMessageLabel — les états du lot (#5936)', () => {
  */
 describe('composeMessageLabel — les effets décoratifs (#6175)', () => {
   test('aucun effet ⇒ aucun segment « effets »', () => {
-    const label = composeMessageLabel({
+    const label = composeMessageLabel({ language: 'fr',
       message: message({}),
       isMine: false,
       servedText: 'Bonjour',
@@ -456,7 +456,7 @@ describe('composeMessageLabel — les effets décoratifs (#6175)', () => {
   });
 
   test('un bit de cycle de vie seul (BLURRED) ⇒ aucun segment « effets »', () => {
-    const label = composeMessageLabel({
+    const label = composeMessageLabel({ language: 'fr',
       message: message({ effectFlags: MESSAGE_EFFECT_FLAGS.BLURRED }),
       isMine: false,
       servedText: 'Bonjour',
@@ -467,7 +467,7 @@ describe('composeMessageLabel — les effets décoratifs (#6175)', () => {
   });
 
   test('CONFETTI actif ⇒ « effets : confettis », après « éphémère »', () => {
-    const label = composeMessageLabel({
+    const label = composeMessageLabel({ language: 'fr',
       message: message({
         effectFlags: MESSAGE_EFFECT_FLAGS.CONFETTI,
         expiresAt: new Date('2026-09-10T09:10:00.000Z'),
@@ -484,7 +484,7 @@ describe('composeMessageLabel — les effets décoratifs (#6175)', () => {
   });
 
   test('deux effets ⇒ joints par une virgule, dans l’ordre iOS', () => {
-    const label = composeMessageLabel({
+    const label = composeMessageLabel({ language: 'fr',
       message: message({ effectFlags: MESSAGE_EFFECT_FLAGS.SPARKLE | MESSAGE_EFFECT_FLAGS.SHAKE }),
       isMine: false,
       servedText: 'Bonjour',

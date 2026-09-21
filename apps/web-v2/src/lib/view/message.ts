@@ -3,6 +3,7 @@ import { transcriptTranslationTexts } from '@meeshy/shared/types/attachment-audi
 
 import { servedTranscript, type Served } from '@/lib/api/prism';
 import type { Attachment, Message } from '@/lib/api/types';
+import type { InterfaceCatalogKey } from '@/lib/i18n-catalog';
 
 /**
  * CE QUE LA VUE DÉRIVE D'UN MESSAGE.
@@ -90,6 +91,26 @@ export const checkStatusOf = (message: Message, local: LocalDelivery | undefined
   if (local === 'pending') return 'pending';
   return deliveryOf(message);
 };
+
+/**
+ * LE TYPE D'UNE PIÈCE → SA CLÉ DE CATALOGUE (#7337) — le libellé d'un
+ * substitut de pièce protégée. SITE UNIQUE, partagé par la tuile
+ * (`MaskedAttachment`) et par la page plein cadre (`ViewerMaskedPage`,
+ * `media-viewer.tsx`) : les deux disaient la même chose en dur, en français,
+ * et « un second vocabulaire ferait dire deux choses différentes à l'œil et à
+ * l'oreille pour un même état » (doc-comment de `PROTECTED_LABEL_KEY`).
+ *
+ * Il vit ICI, à côté de `kindOf` qui l'indexe, et non chez l'un des deux
+ * composants : un `import` de l'un vers l'autre ferait entrer la tuile et ses
+ * dépendances dans le chunk de la visionneuse, pour une table de quatre
+ * chaînes.
+ */
+export const PROTECTED_ATTACHMENT_KEY = {
+  image: 'attachment.protected.image',
+  video: 'attachment.protected.video',
+  audio: 'attachment.protected.audio',
+  file: 'attachment.protected.file',
+} as const satisfies Readonly<Record<'image' | 'audio' | 'video' | 'file', InterfaceCatalogKey>>;
 
 /**
  * La CATÉGORIE d'une pièce jointe, déduite de son type MIME par la fonction du

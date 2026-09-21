@@ -1,6 +1,8 @@
 import type { Attachment } from '@/lib/api/types';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { TRANSCRIPT_TEXT_OPACITY } from '@/lib/reading-mode/metrics';
-import { kindOf } from '@/lib/view/message';
+import { PROTECTED_ATTACHMENT_KEY, kindOf } from '@/lib/view/message';
 
 import { Glyph } from './glyph';
 
@@ -34,7 +36,25 @@ const MASKED_TILE_SIZE = 140;
 
 export function MaskedAttachment({ attachment, fill = false }: { readonly attachment: Attachment; readonly fill?: boolean }) {
   const kind = kindOf(attachment);
-  const libelle = kind === 'audio' ? 'Vocal protégé' : kind === 'image' ? 'Photo protégée' : 'Pièce protégée';
+  /* LE VOILE DIT SA NATURE, DANS LA LANGUE DU LECTEUR (#7337) — les trois
+     libellés étaient EN DUR, en français, sur un substitut servi en sept
+     langues. La langue se LIT ici : cette feuille est montée par la grille,
+     par `Attachments` et par la lecture souveraine, dont aucune ne transporte
+     de langue d'interface (§ doc-comment de `ProtectionNotice`).
+
+     `video` RETOMBE SUR `file`, exactement comme avant ce lot : une vidéo
+     masquée dit « Pièce protégée » dans la tuile et « Vidéo protégée » en
+     plein cadre (`ViewerMaskedPage`). C'est un ÉCART de vocabulaire, pas une
+     question de langue — le corriger changerait ce qui s'AFFICHE, ce qu'un lot
+     d'internationalisation n'a pas à faire. Suivi : #7339. */
+  const libelle = translate(
+    currentInterfaceLanguage(),
+    kind === 'audio'
+      ? PROTECTED_ATTACHMENT_KEY.audio
+      : kind === 'image'
+        ? PROTECTED_ATTACHMENT_KEY.image
+        : PROTECTED_ATTACHMENT_KEY.file,
+  );
   const glyphe = kind === 'audio' ? 'microphone' : kind === 'image' ? 'image' : 'file';
 
   return (

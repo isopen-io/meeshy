@@ -1008,6 +1008,42 @@ const fr = {
   'message.location.open': 'Ouvrir dans Plans',
   'message.location.a11y': 'Position : {place}',
 
+  /* LES LIBELLÉS D'ÉTAT DU FIL (#7337) — le transfert, l'échec d'envoi, les
+     tombstones et les substituts de pièce protégée. Ils étaient EN DUR, en
+     français, sur des surfaces servies en SEPT langues : un lecteur anglophone,
+     arabophone ou lusophone lisait du français sur les états les plus
+     anxiogènes de l'application. D-13 ne les couvre pas — elle EXCLUT
+     explicitement « les textes affichés à l'utilisateur, qui relèvent de
+     l'internationalisation, pas du nommage ».
+
+     Valeurs reprises du catalogue iOS là où il en a une : `bubble.meta.forwarded`,
+     `bubble.meta.forwarded.fromGroup`, `bubble.meta.forwarded.from`,
+     `bubble.system.deleted`, `bubble.system.burned`, `bubble.system.burned.a11y`,
+     `bubble.media.masked`, `bubble.media.viewOnce`, `common.retry`,
+     `sync.pill.failed.message` (l'annonce au lecteur d'écran). */
+  'message.forwarded': 'Transféré',
+  'message.forwarded.fromGroup': 'Transféré depuis {name}',
+  'message.forwarded.fromPerson': 'Transféré de {name}',
+  'message.send.failed': 'Non envoyé',
+  'message.send.failed.reason': 'Non envoyé — {reason}',
+  'message.send.retry': 'Réessayer',
+  'announce.messageNotSent': 'Message non envoyé',
+  'announce.messageNotSent.reason': 'Message non envoyé — {reason}',
+  'message.deleted': 'Message supprimé',
+  'message.burned': 'Vu et supprimé',
+  'message.burned.a11y': 'Message vu et supprimé',
+  'message.expired.a11y': 'Message éphémère expiré',
+  'message.withheld': 'Contenu retenu',
+  'message.withheld.a11y': 'Contenu retenu : ce message existe et ne se montre pas',
+  'message.veiled': 'Contenu masqué',
+  'message.veiled.hint': 'Toucher pour révéler le contenu',
+  'message.veiled.viewOnce': 'Voir une fois',
+  'message.veiled.error': 'Révélation impossible pour l’instant',
+  'attachment.protected.image': 'Photo protégée',
+  'attachment.protected.video': 'Vidéo protégée',
+  'attachment.protected.audio': 'Vocal protégé',
+  'attachment.protected.file': 'Pièce protégée',
+
 } as const;
 
 export default fr;

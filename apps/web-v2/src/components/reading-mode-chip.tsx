@@ -125,6 +125,12 @@ export function ReadingModeChip({
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={`Mode de lecture : ${label}`}
+        /* LE MODE ET SA SOURCE, en données (#7337) : un gate qui les lisait
+           dans « AUTO Résumé » mesurait le français du libellé, pas le mode.
+           Jamais `data-reading-mode` : c'est la marque d'une RANGÉE plate
+           (`focal-row.tsx`), que gates et menu cherchent par `closest`. */
+        data-chip-mode={rows.find((row) => row.isCurrent)?.mode}
+        data-chip-source={isAuto ? 'auto' : 'chosen'}
         /* HAUTEUR 44 px, LARGEUR au contenu — et non `size-11` : la capsule
            « AUTO Focal » fait 81 px de large, elle DÉBORDAIT donc de 18 px de
            chaque côté d'une boîte de 44 et recouvrait le bouton « Appeler »,

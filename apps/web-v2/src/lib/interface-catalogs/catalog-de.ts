@@ -911,6 +911,30 @@ const de = {
   'message.location.open': 'In Karten öffnen',
   'message.location.a11y': 'Standort: {place}',
 
+  /* LES LIBELLÉS D'ÉTAT DU FIL (#7337) — voir `catalog-fr.ts` pour la règle. */
+  'message.forwarded': 'Weitergeleitet',
+  'message.forwarded.fromGroup': 'Weitergeleitet aus {name}',
+  'message.forwarded.fromPerson': 'Weitergeleitet von {name}',
+  'message.send.failed': 'Nicht gesendet',
+  'message.send.failed.reason': 'Nicht gesendet — {reason}',
+  'message.send.retry': 'Erneut versuchen',
+  'announce.messageNotSent': 'Nachricht nicht gesendet',
+  'announce.messageNotSent.reason': 'Nachricht nicht gesendet — {reason}',
+  'message.deleted': 'Nachricht gelöscht',
+  'message.burned': 'Gesehen und gelöscht',
+  'message.burned.a11y': 'Nachricht gesehen und gelöscht',
+  'message.expired.a11y': 'Flüchtige Nachricht abgelaufen',
+  'message.withheld': 'Inhalt zurückgehalten',
+  'message.withheld.a11y': 'Inhalt zurückgehalten: Diese Nachricht existiert und wird nicht angezeigt',
+  'message.veiled': 'Ausgeblendeter Inhalt',
+  'message.veiled.hint': 'Tippen, um den Inhalt anzuzeigen',
+  'message.veiled.viewOnce': 'Einmal ansehen',
+  'message.veiled.error': 'Anzeigen derzeit nicht möglich',
+  'attachment.protected.image': 'Geschütztes Foto',
+  'attachment.protected.video': 'Geschütztes Video',
+  'attachment.protected.audio': 'Geschützte Sprachnachricht',
+  'attachment.protected.file': 'Geschützter Anhang',
+
 } satisfies InterfaceCatalog;
 
 export default de;

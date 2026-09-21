@@ -1,6 +1,8 @@
 import { parseJoinNotice } from '@meeshy/shared/utils/join-notice';
 
 import type { Message } from '@/lib/api/types';
+import { translate } from '@/lib/i18n-catalog';
+import type { InterfaceLanguage } from '@/lib/interface-language';
 import { metadataOf } from './message-metadata';
 
 /**
@@ -139,15 +141,30 @@ export function forwardAttributionOf(
   return name === null ? { kind: 'anonymous' } : { kind: 'group', name };
 }
 
-/** `BubbleMetaBadges.swift:126-135` — libellés français (la prose du dépôt reste en français, D-13). */
-export function forwardLabelOf(attribution: ForwardAttribution): string {
+/**
+ * `BubbleMetaBadges.swift:126-135` — LE LIBELLÉ VIENT DU CATALOGUE (#7337).
+ *
+ * Il était EN DUR, en français, sous un doc-comment qui invoquait D-13 à
+ * CONTRESENS : « la prose du dépôt reste en français, D-13 ». D-13 dit
+ * l'inverse (`apps/web-v2/decisions.md`, § D-13) — la prose qui reste en
+ * français, ce sont « commentaires, messages de gate, documents de décision,
+ * messages de commit », et la phrase se termine par « — et les textes
+ * affichés à l'utilisateur, QUI RELÈVENT DE L'INTERNATIONALISATION, pas du
+ * nommage ». La décision EXCLUT ce cas ; le commentaire l'appelait à son
+ * secours. Sans cette correction, la règle se re-justifiait toute seule au
+ * lot suivant.
+ *
+ * Les trois valeurs sont celles du catalogue iOS — `bubble.meta.forwarded`,
+ * `bubble.meta.forwarded.fromGroup`, `bubble.meta.forwarded.from`.
+ */
+export function forwardLabelOf(attribution: ForwardAttribution, language: InterfaceLanguage): string {
   switch (attribution.kind) {
     case 'group':
-      return `Transféré depuis ${attribution.name}`;
+      return translate(language, 'message.forwarded.fromGroup', { name: attribution.name });
     case 'person':
-      return `Transféré de ${attribution.name}`;
+      return translate(language, 'message.forwarded.fromPerson', { name: attribution.name });
     case 'anonymous':
-      return 'Transféré';
+      return translate(language, 'message.forwarded');
   }
 }
 

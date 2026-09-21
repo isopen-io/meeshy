@@ -6,6 +6,8 @@ import { time } from '@/lib/grouping';
 import { activeDecorativeEffects } from '@/lib/effects';
 import { rendersContent, type ProtectionKind, type RevealPhase } from '@/lib/reading-mode/protection';
 import type { Attachment, Message } from '@/lib/api/types';
+import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
+import type { InterfaceLanguage } from '@/lib/interface-language';
 
 /**
  * LE LIBELLÉ D'ACCESSIBILITÉ D'UN MESSAGE — SITE UNIQUE, partagé par la
@@ -52,24 +54,27 @@ import type { Attachment, Message } from '@/lib/api/types';
  * vocabulaire ferait dire deux choses différentes à l'œil et à l'oreille
  * pour un même état.
  */
-const PROTECTED_LABEL: Readonly<Record<Exclude<ProtectionKind, 'standard'> | 'withheld', string>> = {
-  deleted: 'Message supprimé',
-  burned: 'Message vu et supprimé',
-  expired: 'Message éphémère expiré',
-  veiled: 'Contenu masqué',
+const PROTECTED_LABEL_KEY = {
+  deleted: 'message.deleted',
+  burned: 'message.burned.a11y',
+  expired: 'message.expired.a11y',
+  veiled: 'message.veiled',
   /** Le contenu N'EST PAS dans la charge — voir `ProtectedContent.revealable`
    * (#6862). Distinct de `veiled`, où le texte est là et se révèle : annoncer
    * « masqué » ferait attendre un geste qui n'existe pas. */
-  withheld: 'Contenu retenu',
-};
+  withheld: 'message.withheld',
+} as const satisfies Readonly<Record<Exclude<ProtectionKind, 'standard'> | 'withheld', InterfaceCatalogKey>>;
 
 const pluralize = (count: number, singular: string, plural: string): string =>
   `${count} ${count === 1 ? singular : plural}`;
 
 /** Minuscule le PREMIER caractère seul — un nom de groupe transféré (« Salon »)
- * ne doit pas perdre sa majuscule au milieu de la phrase. */
-const lowerFirst = (text: string): string =>
-  text.length === 0 ? text : text.charAt(0).toLocaleLowerCase('fr-FR') + text.slice(1);
+ * ne doit pas perdre sa majuscule au milieu de la phrase. La casse se plie à
+ * la LANGUE du libellé (#7337), jamais au français : `toLocaleLowerCase` n'a
+ * de règle propre qu'en turc, mais poser `'fr-FR'` sur un texte allemand ou
+ * arabe déclarait une langue que ce texte n'a pas. */
+const lowerFirst = (text: string, language: InterfaceLanguage): string =>
+  text.length === 0 ? text : text.charAt(0).toLocaleLowerCase(language) + text.slice(1);
 
 /**
  * Compte les pièces jointes PAR CATÉGORIE, dans l'ordre iOS : images, vidéos,
@@ -158,6 +163,18 @@ export type MessageLabelInput = {
    * la branche fermée, jamais ouverte par défaut (fail-closed).
    */
   readonly phase?: RevealPhase;
+  /**
+   * LA LANGUE D'INTERFACE (#7337) — celle du LECTEUR, jamais celle du
+   * contenu : ce libellé est de l'interface (tombstone, badge de transfert),
+   * pas du message. `thread-modes.tsx` la lit une fois par rendu de liste
+   * (`currentInterfaceLanguage()`), jamais une fois par rangée.
+   *
+   * ELLE EST OBLIGATOIRE, et c'est la même discipline que `protection`
+   * ci-dessus : un défaut silencieux ferait servir une langue au premier
+   * appelant qui l'oublie, et le défaut serait invisible — le français
+   * s'affiche « correctement » pour qui le parle.
+   */
+  readonly language: InterfaceLanguage;
 };
 
 /**
@@ -170,6 +187,7 @@ export function composeMessageLabel({
   servedText,
   delivery,
   protection,
+  language,
   contentWithheld = false,
   phase = { phase: 'hidden' },
 }: MessageLabelInput): string {
@@ -190,7 +208,7 @@ export function composeMessageLabel({
    * que la rangée ne montre pas.
    */
   if (protection === 'deleted' || protection === 'burned' || protection === 'expired') {
-    return PROTECTED_LABEL[protection];
+    return translate(language, PROTECTED_LABEL_KEY[protection]);
   }
 
   const segments: string[] = [];
@@ -229,9 +247,9 @@ export function composeMessageLabel({
    * été retenu » s'annonçaient d'une seule phrase.
    */
   if (contentWithheld) {
-    segments.push(PROTECTED_LABEL.withheld, ...attachmentSegments(message.attachments));
+    segments.push(translate(language, PROTECTED_LABEL_KEY.withheld), ...attachmentSegments(message.attachments));
   } else if (!rendersContent(protection, phase)) {
-    segments.push(PROTECTED_LABEL.veiled);
+    segments.push(translate(language, PROTECTED_LABEL_KEY.veiled));
   } else {
     /**
      * LA CITATION EST UN ENFANT DE LA RANGÉE, DONC ELLE SUIT SA MATRICE
@@ -292,7 +310,7 @@ export function composeMessageLabel({
    * l'entend aussi.
    */
   const attribution = forwardAttributionOf(message);
-  if (attribution !== null) segments.push(lowerFirst(forwardLabelOf(attribution)));
+  if (attribution !== null) segments.push(lowerFirst(forwardLabelOf(attribution, language), language));
   if (message.expiresAt !== undefined) segments.push('éphémère');
 
   /**
