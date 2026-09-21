@@ -156,6 +156,18 @@ function LensRowImpl({
   const group = isGroup(conversation);
   const title = titleOf(conversation, viewerId);
   const photo = avatarOf(conversation, viewerId);
+  /**
+   * LE PSEUDO DU PAIR (#7241) — dérivé ICI, à côté de `photo` et pour la même
+   * raison : `peerOf` ne rend l'autre que sur un DIRECT (§ doc-comment), donc
+   * un GROUPE n'a pas de personne à ouvrir, et un participant ANONYME n'a pas
+   * de compte (`Participant.user` absent). `identityTarget` range ces deux
+   * absences sous la même cible nulle ; on la calcule une fois plutôt que de
+   * la redemander dans le rendu.
+   */
+  const peerHandle = ((): string | undefined => {
+    const handle = peerOf(conversation, viewerId)?.user?.username;
+    return typeof handle === 'string' && handle !== '' ? handle : undefined;
+  })();
   const accent = accentOf(conversation);
   const at = conversation.lastMessageAt ?? conversation.lastMessage?.createdAt;
 
@@ -267,9 +279,22 @@ function LensRowImpl({
        */
       style={{ height: ROW_HEIGHT, flexShrink: 0, position: 'relative' }}
     >
-      <Link
-        to="thread"
-        params={{ conversation: conversation.id }}
+      {/*
+        **L'ENVELOPPE N'EST PLUS UN LIEN** (#7241, directive porteur du
+        2026-09-21 : « même comportement quand on touche un pseudo ou un
+        avatar »). Un `<a>` ne peut pas en contenir un autre, et l'avatar doit
+        désormais porter sa propre destination — la rangée ENTIÈRE ne pouvait
+        donc plus être le lien vers le fil. Le lien descend d'un cran, sur la
+        COLONNE DE TEXTE ; l'avatar devient son frère.
+
+        C'est l'arbitrage d'iOS, pas une invention de ce lot :
+        `LentilleConversationRow.swift:843` pose
+        `onTap: isDirect ? onViewProfile : onViewConversationInfo` — sur un
+        DIRECT, toucher l'avatar ouvre la FICHE de l'autre ; ailleurs, il
+        continue d'ouvrir la conversation. La rangée garde son geste dominant
+        (le fil) sur toute la surface du texte, qui en est l'essentiel.
+      */}
+      <div
         /*
          * `pr-12` (48px) et non `px-3` des deux côtés : `RowActions`
          * (frère ci-dessous, `position: absolute`, ancré `right-2` sur le
@@ -311,17 +336,50 @@ function LensRowImpl({
             `resolveParticipantAvatar`. Cette rangée appelait déjà
             `peerOf(...)` juste en dessous pour la PRÉSENCE : la donnée était
             là, sur la même ligne, et la photo n'était pas servie. */}
-        <Avatar
-          initials={initialsOf(title)}
-          color={accent}
-          size={44}
-          name={title}
-          opacity={chromeFade}
-          {...(photo === undefined ? {} : { src: photo })}
-          {...(group ? {} : { presence: typist === undefined ? presenceOf(peerOf(conversation, viewerId)) : 'online' })}
-        />
+        {/* LE PSEUDO DU PAIR, quand il y en a un : `peerOf` ne rend l'autre
+            que sur un DIRECT, et un participant ANONYME n'a pas de compte —
+            `identityTarget` range les deux cas sous la même absence de cible,
+            et l'avatar ne paraît alors pas tapable (loi 4). */}
+        {peerHandle === undefined ? (
+          /* GROUPE (ou pair sans compte) : l'avatar garde EXACTEMENT le geste
+             d'avant — il ouvre le fil. Le lien est un DOUBLON de celui du
+             texte, donc il sort de l'ordre de lecture et du parcours clavier :
+             deux liens de même nom à la file se lisent deux fois. */
+          <Link
+            to="thread"
+            params={{ conversation: conversation.id }}
+            className="flex shrink-0"
+            aria-hidden
+            tabIndex={-1}
+          >
+            <Avatar
+              initials={initialsOf(title)}
+              color={accent}
+              size={44}
+              name={title}
+              opacity={chromeFade}
+              {...(photo === undefined ? {} : { src: photo })}
+              {...(group ? {} : { presence: typist === undefined ? presenceOf(peerOf(conversation, viewerId)) : 'online' })}
+            />
+          </Link>
+        ) : (
+          <Avatar
+            initials={initialsOf(title)}
+            color={accent}
+            size={44}
+            name={title}
+            opacity={chromeFade}
+            profileUsername={peerHandle}
+            {...(photo === undefined ? {} : { src: photo })}
+            {...(group ? {} : { presence: typist === undefined ? presenceOf(peerOf(conversation, viewerId)) : 'online' })}
+          />
+        )}
 
-        <span className="flex min-w-0 flex-1 flex-col justify-center">
+        <Link
+          to="thread"
+          params={{ conversation: conversation.id }}
+          className="flex min-w-0 flex-1 flex-col justify-center"
+        >
           {/*
             LE SUPPLÉMENT, premier volet : la catégorie et les étiquettes. Il est
             RENDU en permanence et masqué par l'opacité — le monter et le
@@ -570,8 +628,8 @@ function LensRowImpl({
               </span>
             )}
           </span>
-        </span>
-      </Link>
+        </Link>
+      </div>
 
       <RowActions
         flags={flags}
