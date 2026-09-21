@@ -843,6 +843,30 @@ const de = {
   'message-detail.load-error': 'Diese Informationen konnten nicht geladen werden',
   'message-detail.retry': 'Erneut versuchen',
 
+  /* LES SOURCES DU COMPOSEUR (#7280) — miroir de `composer.attach.*` d'iOS. */
+  'composer.attach.group': 'Anhangstypen',
+  'composer.attach.handle': 'Bedienleiste',
+  'composer.attach.photo': 'Fotos',
+  'composer.attach.photo.action': 'Fotos auswählen',
+  'composer.attach.camera': 'Kamera',
+  'composer.attach.camera.action': 'Foto aufnehmen',
+  'composer.attach.file': 'Datei',
+  'composer.attach.file.action': 'Datei auswählen',
+  'composer.attach.location': 'Standort',
+  'composer.attach.location.action': 'Meinen Standort teilen',
+  'composer.attach.voice': 'Sprache',
+  'composer.attach.voice.action': 'Sprachnachricht aufnehmen',
+  'composer.attach.emoji': 'Emoji',
+  'composer.attach.emoji.action': 'Emoji einfügen',
+  'composer.emoji.title': 'Emoji einfügen',
+  'composer.location.locating': 'Standort wird gesucht…',
+  'composer.location.denied': 'Standort verweigert — in den Einstellungen erlauben',
+  'composer.location.unavailable': 'Standort in diesem Browser nicht verfügbar',
+  'composer.location.failed': 'Standort nicht gefunden — erneut versuchen',
+  'composer.location.chip': 'ORT',
+  'composer.location.unknown': 'Unbekannter Ort',
+  'composer.location.remove': 'Standort entfernen',
+
 } satisfies InterfaceCatalog;
 
 export default de;

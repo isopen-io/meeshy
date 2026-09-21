@@ -199,15 +199,20 @@ const HORS_TABLE_IOS = [
   ['--ios-text-summary-counts', '14px', 'Focal/Summary/LivingSummaryView.swift:68 — relative(14, .semibold), « N messages · P personnes »'],
   ['--ios-text-summary-partial', '12px', 'Focal/Summary/LivingSummaryView.swift:73 — relative(12, .medium), « Sur les N derniers messages »'],
   /**
-   * LES TUILES DU TIROIR DU COMPOSEUR (#5668) — trois littéraux Swift, pas de
-   * l'indigo de marque : `UniversalComposerBar+Attachments.swift:250-278`
-   * pose `color: "9B59B6"` (photo) / `"45B7D1"` (fichier) / `"E74C3C"`
-   * (vocal) sur `CarouselTile`, hors de toute table `MeeshyColors` — mêmes
-   * dans les deux schémas (aucune branche claire/sombre dans Swift).
+   * LES TUILES DU TIROIR DU COMPOSEUR (#5668, étendu #7280) — des littéraux
+   * Swift, pas de l'indigo de marque : `UniversalComposerBar+Attachments.swift:246-298`
+   * pose `color:` sur chaque `CarouselTile`, hors de toute table
+   * `MeeshyColors` — mêmes dans les deux schémas (aucune branche
+   * claire/sombre dans Swift). Le web servait trois des sept sources ; les
+   * quatre autres apportent leur couleur depuis la MÊME ligne Swift, jamais
+   * une teinte choisie côté web.
    */
   ['--ios-tile-photo', '#9B59B6', 'UniversalComposerBar+Attachments.swift:250 — CarouselTile(id: "photo").color'],
+  ['--ios-tile-camera', '#F8B500', 'UniversalComposerBar+Attachments.swift:256 — CarouselTile(id: "camera").color'],
   ['--ios-tile-file', '#45B7D1', 'UniversalComposerBar+Attachments.swift:262 — CarouselTile(id: "file").color'],
+  ['--ios-tile-location', '#2ECC71', 'UniversalComposerBar+Attachments.swift:268 — CarouselTile(id: "location").color'],
   ['--ios-tile-voice', '#E74C3C', 'UniversalComposerBar+Attachments.swift:274 — CarouselTile(id: "voice").color'],
+  ['--ios-tile-emoji', '#FF9F43', 'UniversalComposerBar+Attachments.swift:285 — CarouselTile(id: "emoji").color'],
   /**
    * L'ENCRE DE LA BARRE D'ENREGISTREMENT EN SCHÉMA SOMBRE (#5668,
    * revue-correction) — `UniversalComposerBar+Recording.swift:148` pose

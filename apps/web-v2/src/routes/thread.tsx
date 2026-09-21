@@ -58,6 +58,7 @@ import { readingModeScopeOf } from '@/lib/reading-mode/scope';
 import { draftStore } from '@/lib/send/draft-store';
 import type { PendingAttachment } from '@/lib/send/attachments';
 import type { ComposeProtection } from '@/lib/send/compose-protection';
+import type { SharedPlace } from '@/lib/send/shared-place';
 import { useThreadDraft } from '@/lib/view/use-draft';
 import { useThreadScene } from '@/lib/reading-mode/scene';
 import { chromeStyleVars, sceneStyleVars } from '@/lib/reading-mode/metrics';
@@ -679,11 +680,13 @@ export default function ThreadScreen() {
       attachments,
       language,
       protection,
+      place,
     }: {
       text: string;
       attachments: readonly PendingAttachment[];
       language: string;
       protection: ComposeProtection;
+      place: SharedPlace | null;
     }) => {
       /* LE MESSAGE CITÉ ENTIER, PAS SON SEUL IDENTIFIANT
          (revue-correction #5813, défaut majeur 6) — `replyToMessage`
@@ -697,7 +700,11 @@ export default function ThreadScreen() {
          `protection` (#6175) — éphémère / flou / effets choisis par
          la rangée haute, composée en champs `Message` par
          `localMessageOf` (`protectionFieldsOf`). */
-      send(text, attachments, replyToMessage ?? null, language, protection);
+      /* `place` (#7280) — le lieu que la tuile « Position » a obtenu ; il
+         part dans un champ `location` DÉDIÉ du corps, que la passerelle
+         valide seule (`parseSharedPlace`) avant de l'écrire dans
+         `Message.metadata.location`. */
+      send(text, attachments, replyToMessage ?? null, language, protection, place);
       setReplyTarget(null);
     },
     [send, replyToMessage, setReplyTarget],

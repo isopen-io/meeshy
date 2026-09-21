@@ -102,8 +102,11 @@
   --ios-text-summary-counts: 14px; /* Focal/Summary/LivingSummaryView.swift:68 — relative(14, .semibold), « N messages · P personnes » */
   --ios-text-summary-partial: 12px; /* Focal/Summary/LivingSummaryView.swift:73 — relative(12, .medium), « Sur les N derniers messages » */
   --ios-tile-photo: #9B59B6; /* UniversalComposerBar+Attachments.swift:250 — CarouselTile(id: "photo").color */
+  --ios-tile-camera: #F8B500; /* UniversalComposerBar+Attachments.swift:256 — CarouselTile(id: "camera").color */
   --ios-tile-file: #45B7D1; /* UniversalComposerBar+Attachments.swift:262 — CarouselTile(id: "file").color */
+  --ios-tile-location: #2ECC71; /* UniversalComposerBar+Attachments.swift:268 — CarouselTile(id: "location").color */
   --ios-tile-voice: #E74C3C; /* UniversalComposerBar+Attachments.swift:274 — CarouselTile(id: "voice").color */
+  --ios-tile-emoji: #FF9F43; /* UniversalComposerBar+Attachments.swift:285 — CarouselTile(id: "emoji").color */
   --ios-recording-ink-dark: #FFFFFF; /* UniversalComposerBar+Recording.swift:148 — waveformColor = isDark ? "FFFFFF" : accentColor */
   --ios-bubble-other-opacity: 28%; /* BubbleBackground.swift — other.opacity(isDark ? 0.28 : 0.16) */
   --ios-bubble-other-hairline-opacity: 34%; /* BubbleBackground.swift — strokeBorder(isDark ? 0.34 : 0.26) */

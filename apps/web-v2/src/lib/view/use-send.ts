@@ -9,6 +9,7 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import type { PendingAttachment } from '@/lib/send/attachments';
 import { NO_PROTECTION, type ComposeProtection } from '@/lib/send/compose-protection';
+import type { SharedPlace } from '@/lib/send/shared-place';
 import { confirmedCountOf, entriesOf, outboxStore } from '@/lib/send/outbox-store';
 import { sendFailureReason } from '@/lib/send/failure-reason';
 
@@ -81,6 +82,9 @@ export function useSend(params: {
      * appelants historiques (qui ne connaissent pas encore la rangée haute)
      * continuent d'envoyer sans rien changer. */
     protection?: ComposeProtection,
+    /** LE LIEU PARTAGÉ (#7280) — `null` (le défaut) ⇒ aucune clé `location`
+     * sur le corps ; les appelants historiques ne changent rien. */
+    place?: SharedPlace | null,
   ) => void;
   readonly retry: (messageId: string) => void;
 } {
@@ -120,6 +124,7 @@ export function useSend(params: {
       replyTo: Message | null,
       language: string,
       protection: ComposeProtection = NO_PROTECTION,
+      place: SharedPlace | null = null,
     ) => {
       void sendAction({
         conversationId,
@@ -136,6 +141,7 @@ export function useSend(params: {
              défauts), mais un garde qui ne garde rien ment sur le brouillon
              que `outbox-store` conserve. */
           ...(Object.keys(protection).length === 0 ? {} : { protection }),
+          ...(place === null ? {} : { place }),
         },
         viewerId,
         ...(sender === undefined ? {} : { sender }),
