@@ -900,6 +900,9 @@ const fr = {
 
   'admin.title': 'Administration',
 
+  'thread.unread-separator.one': '{count} message non lu',
+  'thread.unread-separator.other': '{count} messages non lus',
+
 } as const;
 
 export default fr;

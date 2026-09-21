@@ -822,6 +822,9 @@ const en = {
 
   'admin.title': 'Administration',
 
+  'thread.unread-separator.one': '{count} unread message',
+  'thread.unread-separator.other': '{count} unread messages',
+
 } satisfies InterfaceCatalog;
 
 export default en;

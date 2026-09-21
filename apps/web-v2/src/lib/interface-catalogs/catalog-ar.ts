@@ -819,6 +819,9 @@ const ar = {
 
   'admin.title': 'الإدارة',
 
+  'thread.unread-separator.one': '{count} رسالة غير مقروءة',
+  'thread.unread-separator.other': '{count} رسائل غير مقروءة',
+
 } satisfies InterfaceCatalog;
 
 export default ar;

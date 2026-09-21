@@ -826,6 +826,9 @@ const pt = {
 
   'admin.title': 'Administração',
 
+  'thread.unread-separator.one': '{count} mensagem não lida',
+  'thread.unread-separator.other': '{count} mensagens não lidas',
+
 } satisfies InterfaceCatalog;
 
 export default pt;

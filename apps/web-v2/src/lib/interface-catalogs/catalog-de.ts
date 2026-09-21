@@ -822,6 +822,9 @@ const de = {
 
   'admin.title': 'Verwaltung',
 
+  'thread.unread-separator.one': '{count} ungelesene Nachricht',
+  'thread.unread-separator.other': '{count} ungelesene Nachrichten',
+
 } satisfies InterfaceCatalog;
 
 export default de;

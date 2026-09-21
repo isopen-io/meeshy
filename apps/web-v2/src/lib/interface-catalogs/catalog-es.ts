@@ -822,6 +822,9 @@ const es = {
 
   'admin.title': 'Administración',
 
+  'thread.unread-separator.one': '{count} mensaje no leído',
+  'thread.unread-separator.other': '{count} mensajes no leídos',
+
 } satisfies InterfaceCatalog;
 
 export default es;
