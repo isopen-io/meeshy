@@ -31,6 +31,7 @@ import { InstitutionalPage } from './page';
  */
 
 const NGINX = readFileSync(new URL('../../nginx.conf', import.meta.url), 'utf8');
+const SW = readFileSync(new URL('../../public/sw-institutional.js', import.meta.url), 'utf8');
 
 describe('les deux adresses que l’app publiée ouvre sont servies', () => {
   test('« help » et « faq » sont déclarées à la SOURCE UNIQUE des adresses institutionnelles', () => {
@@ -54,19 +55,40 @@ describe('les deux adresses que l’app publiée ouvre sont servies', () => {
     expect(INSTITUTIONAL_PATTERN.test('/help-me')).toBe(false);
   });
 
-  test('nginx sert CHAQUE adresse de la source unique — le miroir écrit à la main ne diverge pas', () => {
-    /* LA LISTE DE NGINX EST UN MIROIR TENU À LA MAIN, et ce dépôt a déjà payé
-       une divergence de liste (`institutional-routes.mjs` § « Les trois listes
-       ont divergé une fois »). Celle-ci n'avait aucun témoin : une page ajoutée
-       à la source unique et oubliée dans `nginx.conf` perd son en-tête de cache
-       sans que rien ne rougisse — elle reste servie par le `location /`
-       générique, donc le défaut est INVISIBLE jusqu'au jour où il compte. */
-    const declaration = /location ~ \^\/\(([a-z|]+)\)\(\\\.html\|\/\)\?\$/.exec(NGINX);
-    // Le bloc ABSENT est un échec NOMMÉ, jamais une liste vide comparée à une
-    // liste vide — c'est la forme de témoin qui verdit sur le fichier disparu.
-    expect(declaration).not.toBeNull();
-    expect(declaration![1]!.split('|').sort()).toEqual([...INSTITUTIONAL_ROUTES].sort());
-  });
+  /* LES DEUX MIROIRS QUI NE PEUVENT PAS IMPORTER LA SOURCE UNIQUE.
+     `institutional-routes.mjs` énumère ses TROIS consommateurs — tous des
+     modules, tous à jour par construction. Ces deux-ci ne sont pas des
+     modules : `nginx.conf` est de la CONFIGURATION, `sw-institutional.js` est
+     servi tel quel depuis `public/` et chargé par `importScripts`. Ni l'un ni
+     l'autre ne peut importer quoi que ce soit, donc les deux recopient la
+     liste — et aucun des deux n'avait de témoin.
+
+     Ce dépôt a DÉJÀ payé une divergence de cette liste (`institutional-routes
+     .mjs` § « Les trois listes ont divergé une fois »), et #7287 en a payé une
+     seconde sur le second miroir : `/help/` et `/faq/` repartaient chercher
+     leur document SUR LE RÉSEAU à chaque visite, pendant que les cinq autres
+     coûtaient zéro requête. La page s'affichait, avec le bon titre — seul
+     `check-institutional.mjs`, qui compte les requêtes sur un navigateur réel,
+     l'a vu. Les deux cas de table ci-dessous ferment la porte AVANT ce gate. */
+  const miroirs: readonly { readonly nom: string; readonly source: string; readonly motif: RegExp }[] = [
+    { nom: 'nginx.conf', source: NGINX, motif: /location ~ \^\/\(([a-z|]+)\)\(\\\.html\|\/\)\?\$/ },
+    { nom: 'sw-institutional.js', source: SW, motif: /const INSTITUTIONAL_ROUTES = \[([^\]]+)\]/ },
+  ];
+
+  for (const { nom, source, motif } of miroirs) {
+    test(`${nom} énumère CHAQUE adresse de la source unique — le miroir ne diverge pas`, () => {
+      const declaration = motif.exec(source);
+      // La déclaration ABSENTE est un échec NOMMÉ, jamais une liste vide
+      // comparée à une liste vide : c'est la forme de témoin qui verdit sur le
+      // fichier disparu ou renommé.
+      expect(declaration).not.toBeNull();
+      const listed = (declaration?.[1] ?? '')
+        .split(/[|,]/)
+        .map((r) => r.trim().replace(/^'|'$/g, ''))
+        .filter((r) => r !== '');
+      expect(listed.sort()).toEqual([...INSTITUTIONAL_ROUTES].sort());
+    });
+  }
 
   test('elles sont lisibles SANS COMPTE — aucune n’est une route de l’application', () => {
     // Un document pré-rendu ne traverse pas la garde de session : il est servi
