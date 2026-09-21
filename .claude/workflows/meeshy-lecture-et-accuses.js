@@ -162,7 +162,9 @@ Bash : PRÉFIXE CHAQUE commande, SANS EXCEPTION, par \`cd ${REPO_PAR_CHAINE[chai
 un AUTRE clone du même dépôt, occupé par d'autres sessions : ce que tu y lirais est faux, ce que tu y
 écrirais détruirait le travail d'un autre. Première commande de ta mission, littéralement :
 \`cd ${REPO_PAR_CHAINE[chaine]} && git branch --show-current && git rev-parse --short HEAD\`.
-NE CRÉE PAS de worktree, NE POUSSE JAMAIS sur \`${BASE}\` directement, et NE FUSIONNE JAMAIS une PR :
+NE CRÉE PAS de worktree, NE SUPPRIME JAMAIS un worktree (\`git worktree remove\` / \`prune\` INTERDITS — un agent
+a détruit le worktree gateway de ce chantier en voulant « prouver un rouge », et deux lots ont échoué derrière
+lui), NE CLONE RIEN dans /tmp, NE POUSSE JAMAIS sur \`${BASE}\` directement, et NE FUSIONNE JAMAIS une PR :
 \`gh pr merge\` est INTERDIT sous TOUTES ses formes (\`--auto\`, \`--squash\`, \`--merge\`, \`--rebase\`,
 \`--admin\`) pour tout agent de ce chantier${AUTO_MERGE ? ", sauf l'agent de LIVRAISON du tour, qui fusionne UNE PR au VERT de ses checks par `gh pr merge <n> --merge` — jamais `--auto`, qui fusionne sur-le-champ ici, faute de protection de branche" :' — sans exception ce tour : une session voisine tient le verdict CI de `' + BASE + '` et demande que sa tête ne bouge pas'}.
 Sur ce dépôt \`--auto\` fusionne IMMÉDIATEMENT quand aucun check n'est requis : un agent l'a fait sur #7213 et
