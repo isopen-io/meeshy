@@ -1146,4 +1146,90 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
       'p-1',
     ]);
   });
+
+  /**
+   * `read-status:updated` (#7223) — LES COCHES ✓✓ BOUGENT EN DIRECT.
+   *
+   * La règle (garde de forme, cible le dernier message, tous-ou-rien) est
+   * PROUVÉE en isolation dans `realtime-apply.test.ts` ; ce témoin prouve
+   * qu'elle est BRANCHÉE (motif `comment:added` ci-dessus, § doc-comment).
+   */
+  test('`read-status:updated` est ÉCOUTÉ : la coche du dernier message avance', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    queryClient.setQueryData(
+      messagesQueryKey('c-a'),
+      threadPages([{ ...socketMessage({ id: 'm-1' }), deliveredCount: 0, readCount: 0 } as unknown as Message]),
+    );
+
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+    socket.fire(SERVER_EVENTS.READ_STATUS_UPDATED, {
+      conversationId: 'c-a',
+      participantId: 'p-1',
+      userId: 'u-other',
+      type: 'read',
+      updatedAt: '2026-09-21T10:00:00.000Z',
+      summary: { totalMembers: 1, deliveredCount: 1, readCount: 1 },
+    });
+
+    const patched = threadOf(queryClient, 'c-a')?.messages[0];
+    expect(patched?.deliveredCount).toBe(1);
+    expect(patched?.readCount).toBe(1);
+  });
+
+  test('`destroy` démonte AUSSI `read-status:updated`', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    queryClient.setQueryData(
+      messagesQueryKey('c-a'),
+      threadPages([{ ...socketMessage({ id: 'm-1' }), deliveredCount: 0, readCount: 0 } as unknown as Message]),
+    );
+
+    const connection = createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+    connection.destroy();
+    socket.fire(SERVER_EVENTS.READ_STATUS_UPDATED, {
+      conversationId: 'c-a',
+      participantId: 'p-1',
+      userId: 'u-other',
+      type: 'read',
+      updatedAt: '2026-09-21T10:00:00.000Z',
+      summary: { totalMembers: 1, deliveredCount: 1, readCount: 1 },
+    });
+
+    const untouched = threadOf(queryClient, 'c-a')?.messages[0];
+    expect(untouched?.deliveredCount).toBe(0);
+    expect(untouched?.readCount).toBe(0);
+  });
+
+  /**
+   * `message:pending-delivered` (#7223) — la charge ne porte PAS de compteur
+   * par message (`{count, conversationIds}`,
+   * `packages/shared/types/socketio-events/event-maps.ts:382`) : ce puits
+   * INVALIDE les fils nommés plutôt que d'inventer des compteurs qu'elle ne
+   * transporte pas (§ 2 de `W2.md`, doc-comment
+   * `MeeshySocketIOManager.ts:826-846`) — la prochaine lecture sert les
+   * compteurs réels.
+   */
+  test('`message:pending-delivered` invalide les fils NOMMÉS', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    queryClient.setQueryData(messagesQueryKey('c-a'), threadPages([socketMessage({ id: 'm-1' }) as unknown as Message]));
+    queryClient.setQueryData(messagesQueryKey('c-b'), threadPages([socketMessage({ id: 'm-2' }) as unknown as Message]));
+
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+    socket.fire(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, { count: 1, conversationIds: ['c-a'] });
+
+    expect(queryClient.getQueryState(messagesQueryKey('c-a'))?.isInvalidated).toBe(true);
+    /* SEULE la conversation NOMMÉE est invalidée — une conversation absente
+       de `conversationIds` n'a rien à relire. */
+    expect(queryClient.getQueryState(messagesQueryKey('c-b'))?.isInvalidated).toBe(false);
+  });
+
+  test('`destroy` démonte AUSSI `message:pending-delivered`', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    queryClient.setQueryData(messagesQueryKey('c-a'), threadPages([socketMessage({ id: 'm-1' }) as unknown as Message]));
+
+    const connection = createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+    connection.destroy();
+    socket.fire(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, { count: 1, conversationIds: ['c-a'] });
+
+    expect(queryClient.getQueryState(messagesQueryKey('c-a'))?.isInvalidated).toBe(false);
+  });
 });

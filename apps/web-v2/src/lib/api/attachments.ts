@@ -64,6 +64,48 @@ function formDataOf(pending: readonly PendingUpload[]): FormData {
  */
 const UPLOAD_TIMEOUT_MS = 1_200_000;
 
+/**
+ * LE PORT DU RAPPORT DE CONSOMMATION (#7225, W6) — route RÉELLE :
+ * `POST /api/v1/attachments/:attachmentId/status`
+ * (`services/gateway/src/routes/messages-writes.ts:588-608`), corps validé
+ * par `AttachmentStatusBodySchema`
+ * (`services/gateway/src/validation/messages-schemas.ts:212-251`).
+ *
+ * `stretches` reprend la forme EXACTE que le schéma valide
+ * (`startMs`/`endMs`/`endedBy`) — le tracker qui les PRODUIT vit dans
+ * `use-media-playback.ts` (co-localisé avec la lecture, § du fichier), ce
+ * port ne fait que composer la requête.
+ */
+export type PlaybackStretch = {
+  readonly startMs: number;
+  readonly endMs: number;
+  readonly endedBy: 'pause' | 'seek' | 'muted' | 'completed' | 'dismissed' | 'superseded';
+};
+
+export type AttachmentStatusReport = {
+  /** 'listened' pour un vocal, 'watched' pour une vidéo — les deux seuls
+   * verbes que ce lot émet (`viewed`/`downloaded` restent hors périmètre). */
+  readonly action: 'listened' | 'watched';
+  readonly playPositionMs?: number;
+  readonly durationMs?: number;
+  readonly complete?: boolean;
+  readonly stretches?: readonly PlaybackStretch[];
+  readonly language?: string;
+};
+
+export function reportAttachmentStatus(
+  params: ConversationsDeps & { readonly attachmentId: string; readonly report: AttachmentStatusReport },
+): Promise<ApiResult<unknown>> {
+  if (__FIXTURES__ && params.source === 'fixtures') {
+    return Promise.resolve({ ok: true, data: undefined });
+  }
+  return params.transport.request<unknown>({
+    method: 'POST',
+    path: `/api/v1/attachments/${params.attachmentId}/status`,
+    body: params.report,
+  });
+}
+
 export async function uploadAttachments(
   params: ConversationsDeps & { readonly pending: readonly PendingUpload[]; readonly signal?: AbortSignal },
 ): Promise<ApiResult<{ readonly attachments: readonly Attachment[] }>> {

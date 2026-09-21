@@ -42,15 +42,32 @@ export const isMineOf = (message: Message, viewerId: string): boolean => message
  *
  * `recipientCount` ABSENT (charge construite par socket) ⇒ on retombe sur les
  * horloges dénormalisées, seule source qui ne suppose pas de dénominateur.
+ *
+ * **L'ORDRE EST CELUI DES PALIERS, PAS CELUI DES SOURCES (#7223).** Chaque
+ * palier consulte SES DEUX preuves — l'horloge « à tous » et les compteurs —
+ * avant que le palier du dessous soit seulement regardé, exactement comme le
+ * résolveur qui fait foi (D-1, `DeliveryStatusResolver.resolve`,
+ * `packages/MeeshySDK/Sources/MeeshySDK/Models/DeliveryStatusResolver.swift` :
+ * `readByAllAt != nil || readCount >= recipientCount`, PUIS `deliveredToAllAt
+ * != nil || delivered >= recipientCount`).
+ *
+ * Ranger `deliveredToAllAt` avant tout compteur — ce que faisait ce site —
+ * COURT-CIRCUITAIT la lecture : `GET /conversations/:id/messages` sert cette
+ * horloge CALCULÉE dès que la distribution est complète
+ * (`routes/conversations/messages-list-query.ts:663`), donc tout message du
+ * fil la porte bien avant d'être lu, et les compteurs qu'un
+ * `read-status:updated` vient de poser n'atteignaient plus aucun pixel. Les
+ * deux sources ne se contredisent jamais quand elles viennent de la même
+ * lecture REST ; quand elles divergent, c'est que les compteurs sont les plus
+ * FRAIS — ce sont eux que le temps réel rafraîchit.
  */
 export const deliveryOf = (message: Message): Delivery => {
-  if (message.readByAllAt !== undefined) return 'read';
-  if (message.deliveredToAllAt !== undefined) return 'delivered';
+  const recipients = message.recipientCount ?? 0;
+  const countsAreConclusive = recipients > 0;
 
-  const recipients = message.recipientCount;
-  if (recipients !== undefined && recipients > 0) {
-    if (message.readCount >= recipients) return 'read';
-    if (message.deliveredCount >= recipients) return 'delivered';
+  if (message.readByAllAt !== undefined || (countsAreConclusive && message.readCount >= recipients)) return 'read';
+  if (message.deliveredToAllAt !== undefined || (countsAreConclusive && message.deliveredCount >= recipients)) {
+    return 'delivered';
   }
   return message.deliveredCount > 0 ? 'delivered' : 'sent';
 };

@@ -7,7 +7,7 @@ import type {
   ConversationUpdatedEventData,
   LastMessagePreviewAttachment,
 } from '@meeshy/shared/types/socketio-events/conversation';
-import type { SocketIOMessage } from '@meeshy/shared/types/socketio-events/message';
+import type { ReadStatusUpdatedEventData, SocketIOMessage } from '@meeshy/shared/types/socketio-events/message';
 import type { TranslationEvent } from '@meeshy/shared/types/socketio-events/translation';
 import { maskedAttachment, raisedAttachmentProtection } from '@meeshy/shared/utils/attachment-protection';
 import { buildTranslationRecord } from '@meeshy/shared/utils/conversation-helpers';
@@ -16,7 +16,13 @@ import type { ConversationStoreState } from '@/lib/conversation-store';
 import type { OutboxState } from '@/lib/send/outbox-store';
 
 import { patchConversation } from './conversations';
-import { cachedThreadConversationIds, findCachedThreadMessage, patchThreadMessages, upsertThreadMessage } from './messages';
+import {
+  cachedThreadConversationIds,
+  findCachedThreadMessage,
+  latestCachedThreadMessage,
+  patchThreadMessages,
+  upsertThreadMessage,
+} from './messages';
 import type { Attachment, Conversation, Message, Participant } from './types';
 
 /**
@@ -655,5 +661,80 @@ export function applyMessageAttachmentUpdated(queryClient: QueryClient, data: At
 
   patchThreadMessages(queryClient, data.conversationId, (messages) =>
     messages.map((m) => (m.id === data.messageId ? next : m)),
+  );
+}
+
+/**
+ * Garde de FORME pour `read-status:updated` (#7223), motif
+ * `isConversationUnreadUpdated` : ne valide QUE les champs qu'
+ * `applyReadStatusUpdated` consomme — `conversationId` et les trois compteurs
+ * RÉELS de `ReadStatusSummary` (`packages/shared/types/socketio-events/
+ * message.ts:31-37` — `totalMembers`/`deliveredCount`/`readCount`, PAS les
+ * noms du libellé du lot). `participantId`/`userId`/`type`/`updatedAt` ne
+ * sont pas vérifiés ici : ce puits les ignore, et les DEUX audiences de
+ * `broadcastReadStatus` (l'éventail de la conversation, la room personnelle
+ * de l'acteur) partagent `conversationId` + `summary` (doc-comment
+ * `services/gateway/src/socketio/broadcastReadStatus.ts:98-118`).
+ */
+export function isReadStatusUpdated(payload: unknown): payload is ReadStatusUpdatedEventData {
+  if (typeof payload !== 'object' || payload === null) return false;
+  const p = payload as Record<string, unknown>;
+  if (typeof p.conversationId !== 'string') return false;
+  const summary = p.summary;
+  if (typeof summary !== 'object' || summary === null) return false;
+  const s = summary as Record<string, unknown>;
+  return (
+    typeof s.totalMembers === 'number' &&
+    typeof s.deliveredCount === 'number' &&
+    typeof s.readCount === 'number'
+  );
+}
+
+/**
+ * `applyReadStatusUpdated` — LE PUITS DE `read-status:updated` (#7223) : LES
+ * COCHES ✓✓ D'UN MESSAGE ENVOYÉ BOUGENT EN DIRECT.
+ *
+ * La charge ne nomme AUCUN message : `summary` décrit le DERNIER message NON
+ * SUPPRIMÉ de la conversation
+ * (`MessageReadStatusService.getLatestMessageSummary`,
+ * `services/gateway/src/services/MessageReadStatusService.ts:2530-2560`).
+ * Cette fonction cible donc `latestCachedThreadMessage` — le message le plus
+ * récent du fil EN CACHE, motif `applyMessageAttachmentUpdated` ci-dessus
+ * (« le fil n'est pas OUVERT ⇒ rien à peindre localement, le prochain
+ * `GET …/messages` sert le résumé exact »).
+ *
+ * `deliveredToAllAt`/`readByAllAt` — les deux horodatages FIGÉS que
+ * `deliveryOf` (`lib/view/message.ts`) consulte à chaque palier — ne sont PAS
+ * posés ici : la charge ne les porte pas, et les inventer depuis un événement
+ * qui ne les affirme pas serait une horloge fabriquée. Ce sont les COMPTEURS
+ * que ce puits rafraîchit, et `deliveryOf` les tranche palier par palier
+ * (#7223, revue-correction W2 : l'horloge « distribué à tous » ne court-
+ * circuite plus le palier LU). TOUS-OU-RIEN EN GROUPE conservé — la règle vit
+ * dans `view/message.ts`, ce puits ne la réécrit pas.
+ */
+export function applyReadStatusUpdated(queryClient: QueryClient, data: ReadStatusUpdatedEventData): void {
+  const { summary } = data;
+  /* UN RÉSUMÉ SANS DESTINATAIRE N'AFFIRME RIEN (revue-correction W2).
+     `getLatestMessageSummary` rend `{0, 0, 0}` sur son chemin d'ERREUR comme
+     sur une conversation vide (`MessageReadStatusService.ts`, `catch`) —
+     appliquer ces zéros écraserait les compteurs servis par
+     `GET …/messages` et ferait RÉGRESSER la coche d'un cran. Le cas
+     LÉGITIME du dénominateur nul (tous les destinataires ont tu leurs
+     accusés) porte de toute façon les mêmes zéros que la liste : ne rien
+     peindre ne perd aucune information. */
+  if (summary.totalMembers <= 0) return;
+
+  const target = latestCachedThreadMessage(queryClient, data.conversationId);
+  if (target === undefined) return;
+
+  const next: Message = {
+    ...target,
+    deliveredCount: summary.deliveredCount,
+    readCount: summary.readCount,
+    recipientCount: summary.totalMembers,
+  };
+
+  patchThreadMessages(queryClient, data.conversationId, (messages) =>
+    messages.map((m) => (m.id === target.id ? next : m)),
   );
 }
