@@ -2,7 +2,7 @@ import type { QueryClient } from '@tanstack/react-query';
 
 import type { StoryReactionPlan, StoryReactionSubject } from '@/lib/stories/reaction';
 
-import { STORY_FEED_QUERY_KEY, type StoryFeedPost } from './stories';
+import { STORY_FEED_QUERY_KEY, storyPostQueryKey, type StoryFeedPost } from './stories';
 
 /**
  * **`story:reacted` / `story:unreacted` — LE RAIL SUIT EN DIRECT (#7227,
@@ -93,6 +93,19 @@ export function isStoryReactionEvent(
  * L'APPLICATION — une charge invalide ne change rien et ne lève pas
  * (`socket.ts` route, il ne juge pas) ; un corpus jamais chargé n'est pas
  * fabriqué (même discipline que `applyCommentAdded`, `publication-comments.ts`).
+ *
+ * **LES DEUX CACHES, EN UN GESTE** (revue-correction W8, #7227) — une story
+ * vit dans le corpus du plateau (`STORY_FEED_QUERY_KEY`, les 50 plus
+ * récentes) OU dans la TROISIÈME MARCHE de la cascade (`storyPostQueryKey`,
+ * celle qu'on atteint par LIEN), parfois les deux. Le port du GESTE tient
+ * déjà les deux depuis #7120 (`story-reactions.ts#applyStoryReactionEverywhere`,
+ * dont le doc-comment nomme le prix de n'en tenir qu'un : « la requête
+ * partait, la passerelle enregistrait, **et l'écran ne bougeait pas d'un
+ * pixel** ») ; sa jumelle SERVIE n'en connaissait qu'un, et le rail d'une
+ * story de lien restait au chiffre d'avant pendant que les autres bougeaient.
+ *
+ * L'updater qui rend sa donnée INCHANGÉE fait renoncer `setQueryData` : un
+ * cache qui n'a pas cette story n'en reçoit pas une.
  */
 export function applyStoryReactionEvent(
   queryClient: QueryClient,
@@ -100,17 +113,17 @@ export function applyStoryReactionEvent(
   params: { readonly viewerId: string; readonly plan: StoryReactionPlan },
 ): void {
   if (!isStoryReactionEvent(payload)) return;
+  const change = {
+    storyId: payload.storyId,
+    emoji: payload.emoji,
+    likeCount: payload.likeCount,
+    plan: params.plan,
+    byViewer: payload.userId === params.viewerId,
+  };
   queryClient.setQueryData<readonly StoryFeedPost[]>(STORY_FEED_QUERY_KEY, (stories) =>
-    stories === undefined
-      ? stories
-      : stories.map((s) =>
-          applyServedStoryReaction(s, {
-            storyId: payload.storyId,
-            emoji: payload.emoji,
-            likeCount: payload.likeCount,
-            plan: params.plan,
-            byViewer: payload.userId === params.viewerId,
-          }),
-        ),
+    stories === undefined ? stories : stories.map((s) => applyServedStoryReaction(s, change)),
+  );
+  queryClient.setQueryData<StoryFeedPost>(storyPostQueryKey(change.storyId), (story) =>
+    story === undefined ? story : applyServedStoryReaction(story, change),
   );
 }

@@ -612,3 +612,82 @@ describe('le compteur bouge AUSSI sur la story ouverte par LIEN — `storyPostQu
     expect(queryClient.getQueryData(storyPostQueryKey('p-du-flux'))).toBeUndefined();
   });
 });
+
+/**
+ * **LE JUMEAU ABSOLU DOIT TENIR LES MÊMES CAISSES QUE LE JUMEAU DELTA**
+ * (revue-correction W8, #7227). `setCommentCountServed` a été écrit comme
+ * « la jumelle de `shiftCommentCount` », et son doc-comment en annonçait
+ * QUATRE — le chiffre du TITRE de `shiftCommentCount`, resté au compte
+ * d'avant #7120 pendant que son ÉNUMÉRATION en porte CINQ. La cinquième,
+ * `storyPostQueryKey`, est justement celle qu'aucune des quatre autres
+ * n'atteint : une story ouverte par LIEN, hors des 50 plus récentes, n'est
+ * QUE là (`routes/story.tsx` la tient de `useStoryPost` et la fusionne dans
+ * ses groupes ; le rail peint sa pastille depuis ce cache).
+ *
+ * Symptôme sans ce témoin : quelqu'un supprime son commentaire sous la story
+ * qu'on regarde par lien, la ligne disparaît du fil, **et la pastille du rail
+ * reste au chiffre d'avant** — exactement le défaut que #7120 avait payé sur
+ * la voie ADDITIVE, rejoué sur la voie SERVIE.
+ *
+ * Un TITRE se recompte, il ne se cite pas : c'est l'énumération qui fait foi.
+ */
+describe('setCommentCountServed — la CINQUIÈME caisse, la story ouverte par LIEN', () => {
+  test('pose le compte ABSOLU sur `storyPostQueryKey`', () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(storyPostQueryKey('st-lien'), story('st-lien', 3));
+
+    setCommentCountServed(queryClient, 'st-lien', 9);
+
+    expect(railLinkCountOf(queryClient, 'st-lien')).toBe(9);
+  });
+
+  test('`comment:deleted` sur une story de lien redescend la pastille du rail', () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(storyPostQueryKey('st-lien'), story('st-lien', 4));
+    queryClient.setQueryData(commentsQueryKey('st-lien'), pageData([comment('c1')]));
+
+    applyCommentDeleted(queryClient, { postId: 'st-lien', commentId: 'c1', commentCount: 3 });
+
+    expect(railLinkCountOf(queryClient, 'st-lien')).toBe(3);
+    expect(flattenCommentPages(queryClient.getQueryData(commentsQueryKey('st-lien')))).toEqual([]);
+  });
+
+  test('une story que ce cache ne porte PAS n’y est pas fabriquée', () => {
+    const queryClient = new QueryClient();
+
+    setCommentCountServed(queryClient, 'p-du-flux', 2);
+
+    expect(queryClient.getQueryData(storyPostQueryKey('p-du-flux'))).toBeUndefined();
+  });
+});
+
+/**
+ * **UNE GARDE QUI LAISSE PASSER CE QU'ELLE VA DÉPLIER NE GARDE RIEN**
+ * (revue-correction W8, #7227) — `isCommentDeleted` déclarait la charge
+ * conforme à `CommentDeletedEventData` sans jamais regarder
+ * `deletedCommentIds`, que `applyCommentDeleted` DÉPLIE aussitôt
+ * (`[...payload.deletedCommentIds ?? []]`). Une charge d'une version voisine
+ * portant autre chose qu'un tableau levait donc un `TypeError` — dans un
+ * `import().then()`, soit un rejet non intercepté, alors que le module
+ * promet l'inverse : « une charge invalide ne change rien et ne lève pas ».
+ */
+describe('isCommentDeleted — ce que la garde DÉPLIE, elle doit le vérifier', () => {
+  test('refuse un `deletedCommentIds` qui n’est pas un tableau de chaînes', () => {
+    const base = { postId: 'p1', commentId: 'c1', commentCount: 0 };
+    expect(isCommentDeleted({ ...base, deletedCommentIds: ['c1', 'c2'] })).toBe(true);
+    expect(isCommentDeleted({ ...base, deletedCommentIds: undefined })).toBe(true);
+    for (const charge of [7, 'c1', { 0: 'c1' }, ['c1', 9], null]) {
+      expect(isCommentDeleted({ ...base, deletedCommentIds: charge })).toBe(false);
+    }
+  });
+
+  test('une charge dont `deletedCommentIds` est malformé ne lève pas et ne change rien', () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(commentsQueryKey('p1'), pageData([comment('c1')]));
+
+    expect(() =>
+      applyCommentDeleted(queryClient, { postId: 'p1', commentId: 'c1', commentCount: 0, deletedCommentIds: 7 }),
+    ).not.toThrow();
+    expect(flattenCommentPages(queryClient.getQueryData(commentsQueryKey('p1'))).map((c) => c.id)).toEqual(['c1']);
+  });
+});

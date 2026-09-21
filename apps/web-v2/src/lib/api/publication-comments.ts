@@ -230,7 +230,10 @@ export function dropComment(data: CommentInfiniteData | undefined, tempId: strin
  * commentaire, et revient avec lui : sans cela, un refus laisserait un
  * compteur menteur derrière un fil vide.
  *
- * **IL Y A QUATRE CAISSES, ET LE DOC-COMMENT N'EN A CONNU QU'UNE, PUIS DEUX.**
+ * **IL Y A CINQ CAISSES, ET LE DOC-COMMENT N'EN A CONNU QU'UNE, PUIS DEUX.**
+ * (Le titre disait QUATRE pendant que l'énumération en portait cinq depuis
+ * #7120 ; un chiffre de titre se RECOMPTE, il ne se cite pas — la jumelle
+ * `setCommentCountServed` l'a cité et a perdu la cinquième, #7227.)
  * Chacune a été trouvée en demandant, non pas « qui calcule ce compte ? », mais
  * **« qui l'AFFICHE ? »** — et la réponse a changé trois fois :
  *
@@ -619,17 +622,32 @@ export function applyCommentUpdated(queryClient: QueryClient, payload: unknown):
 export function isCommentDeleted(payload: unknown): payload is CommentDeletedEventData {
   if (typeof payload !== 'object' || payload === null) return false;
   const p = payload as Record<string, unknown>;
-  return typeof p.postId === 'string' && typeof p.commentId === 'string' && typeof p.commentCount === 'number';
+  if (typeof p.postId !== 'string' || typeof p.commentId !== 'string' || typeof p.commentCount !== 'number') return false;
+  /* CE QU'ELLE DÉPLIE, ELLE LE VÉRIFIE (revue-correction W8) : `applyCommentDeleted`
+     fait `[...deletedCommentIds ?? []]`, et un champ qui n'est pas itérable y
+     levait un `TypeError` — dans un `import().then()`, un rejet non intercepté,
+     alors que ce module promet qu'une charge invalide « ne change rien et ne
+     lève pas ». Le champ est OPTIONNEL (additif, cf. son doc-comment partagé) :
+     absent ⇒ conforme ; présent ⇒ tableau de chaînes, ou rien. */
+  if (p.deletedCommentIds === undefined) return true;
+  return Array.isArray(p.deletedCommentIds) && p.deletedCommentIds.every((id) => typeof id === 'string');
 }
 
 /**
  * **LE JUMEAU ABSOLU DE `shiftCommentCount`** — celui-ci REÇOIT le compte
  * plutôt que de le calculer par delta : un `comment:deleted` porte déjà le
  * total serveur, et un client qui redériverait un delta depuis une liste
- * PARTIELLE (page non chargée) diverge. Mêmes QUATRE caisses (doc-comment de
- * `shiftCommentCount`), y compris `REELS_QUERY_ROOT` (#7227) — la même carte
- * servie par un fil de Réels doit porter le même total que sa jumelle du
- * Flux.
+ * PARTIELLE (page non chargée) diverge.
+ *
+ * **LES MÊMES CINQ CAISSES que son jumeau DELTA**, sans exception — c'est
+ * l'ÉNUMÉRATION du doc-comment de `shiftCommentCount` qui fait foi, jamais
+ * son titre (resté au compte d'avant #7120). La cinquième,
+ * `storyPostQueryKey`, est justement celle qu'aucune des quatre autres
+ * n'atteint : une story ouverte par LIEN, hors des 50 plus récentes, n'est
+ * QUE là. Sans elle (revue-correction W8, #7227), quelqu'un supprimait son
+ * commentaire sous la story qu'on regarde par lien, la ligne quittait le fil,
+ * **et la pastille du rail restait au chiffre d'avant** — le défaut que
+ * #7120 avait payé sur la voie ADDITIVE, rejoué sur la voie SERVIE.
  */
 export function setCommentCountServed(queryClient: QueryClient, postId: string, count: number): void {
   const withServed = (data: FeedInfiniteData | undefined): FeedInfiniteData | undefined => {
@@ -650,6 +668,9 @@ export function setCommentCountServed(queryClient: QueryClient, postId: string, 
     if (!stories.some((s) => s.id === postId)) return stories;
     return stories.map((s) => (s.id === postId ? { ...s, commentCount: count } : s));
   });
+  queryClient.setQueryData<StoryFeedPost>(storyPostQueryKey(postId), (story) =>
+    story === undefined || story.commentCount === count ? story : { ...story, commentCount: count },
+  );
 }
 
 /**

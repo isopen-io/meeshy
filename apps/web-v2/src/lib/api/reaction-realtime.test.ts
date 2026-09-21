@@ -1,7 +1,7 @@
 import { QueryClient } from '@tanstack/react-query';
 import { describe, expect, test } from 'bun:test';
 
-import { STORY_FEED_QUERY_KEY, type StoryFeedPost } from './stories';
+import { STORY_FEED_QUERY_KEY, storyPostQueryKey, type StoryFeedPost } from './stories';
 import { applyServedStoryReaction, applyStoryReactionEvent, isStoryReactionEvent } from './reaction-realtime';
 
 /**
@@ -127,5 +127,62 @@ describe('applyStoryReactionEvent — application PURE sur STORY_FEED_QUERY_KEY'
       ),
     ).not.toThrow();
     expect(queryClient.getQueryData(STORY_FEED_QUERY_KEY)).toBeUndefined();
+  });
+});
+
+/**
+ * **LA STORY OUVERTE PAR LIEN VIT DANS UN AUTRE CACHE** (revue-correction W8,
+ * #7227). Le port du GESTE le sait depuis #7120 et pose son optimiste sur les
+ * DEUX caches en un mouvement (`story-reactions.ts#applyStoryReactionEverywhere`,
+ * dont le doc-comment nomme le défaut : « la requête partait, la passerelle
+ * enregistrait, et l'écran ne bougeait pas d'un pixel »). La jumelle SERVIE
+ * n'en connaissait qu'un.
+ *
+ * Symptôme : on regarde une story atteinte par LIEN (hors des 50 plus
+ * récentes du corpus, donc absente de `STORY_FEED_QUERY_KEY` — le lecteur la
+ * tient de `useStoryPost` et la FUSIONNE dans ses groupes, `routes/story.tsx`),
+ * quelqu'un y réagit, **et le compte du rail ne bouge pas** ; notre propre
+ * réaction posée depuis un autre appareil n'y remplit pas le cœur non plus.
+ */
+describe('applyStoryReactionEvent — la TROISIÈME MARCHE, `storyPostQueryKey`', () => {
+  test('un lecteur AUTRE pose le compte servi sur la story de LIEN', () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(storyPostQueryKey('st-lien'), story('st-lien', [], 2));
+
+    applyStoryReactionEvent(
+      queryClient,
+      { storyId: 'st-lien', userId: 'u-other', emoji: HEART, likeCount: 6, reactionSummary: {} },
+      { viewerId: 'u-viewer', plan: 'add' },
+    );
+
+    const servie = queryClient.getQueryData<StoryFeedPost>(storyPostQueryKey('st-lien'));
+    expect(servie?.reactionCount).toBe(6);
+    expect(servie?.currentUserReactions ?? []).toEqual([]);
+  });
+
+  test('MA réaction (autre appareil) y remplit le cœur AUSSI', () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(storyPostQueryKey('st-lien'), story('st-lien', [], 2));
+
+    applyStoryReactionEvent(
+      queryClient,
+      { storyId: 'st-lien', userId: 'u-viewer', emoji: HEART, likeCount: 3, reactionSummary: {} },
+      { viewerId: 'u-viewer', plan: 'add' },
+    );
+
+    expect(queryClient.getQueryData<StoryFeedPost>(storyPostQueryKey('st-lien'))?.currentUserReactions).toEqual([HEART]);
+  });
+
+  test('une story que ce cache ne porte PAS n’y est pas fabriquée', () => {
+    const queryClient = seeded([story('st-1', [], 2)]);
+
+    applyStoryReactionEvent(
+      queryClient,
+      { storyId: 'st-1', userId: 'u-other', emoji: HEART, likeCount: 5, reactionSummary: {} },
+      { viewerId: 'u-viewer', plan: 'add' },
+    );
+
+    expect(queryClient.getQueryData(storyPostQueryKey('st-1'))).toBeUndefined();
+    expect(cached(queryClient)?.reactionCount).toBe(5);
   });
 });

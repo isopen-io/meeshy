@@ -24,10 +24,12 @@ import { REELS_QUERY_ROOT } from './reels-query-key';
  * `comment:added`).
  *
  * Un module d'APPLICATEURS : il ne tient aucune requête, seulement les lois de
- * mise à jour. `socket.ts` l'atteint par `import()` — MESURÉ, un import
- * statique portait le chunk `realtime` à 5,01 Ko pour un plafond de 5. La CLÉ
- * du compteur vit à part (`feed-new-count.ts`) pour la raison symétrique :
- * l'écran qui l'affiche n'a pas à payer les lois qui l'alimentent.
+ * mise à jour. `socket.ts` l'atteint par un import STATIQUE, et c'est MESURÉ :
+ * ce module ne tirant aucune requête, le rendre différé coûtait PLUS que
+ * lui-même (5,10 Ko contre 5,01 pour le chunk `realtime`, plafond 5 — trois
+ * `import()` et leur table de dépendances). La CLÉ du compteur vit à part
+ * (`feed-new-count.ts`) pour la raison symétrique : l'écran qui l'affiche n'a
+ * pas à payer les lois qui l'alimentent.
  *
  * La doctrine est celle d'iOS (`FeedViewModel.swift:1464-1500`), pas une
  * invention locale ; chaque loi ci-dessous cite la ligne qui la porte.
@@ -235,6 +237,20 @@ function isPostReactionEvent(payload: unknown): payload is {
  * appareils) — le cœur d'un autre ne remplit jamais le mien ; le compte, lui,
  * est ABSOLU et remplace toujours l'estimation optimiste.
  */
+/**
+ * **LES TROIS CAISSES D'UNE CARTE, ÉNUMÉRÉES UNE SEULE FOIS** — le Flux,
+ * TOUTES les graines de Réels, la fiche `/post/$post`. Chaque loi servie
+ * (`post:liked`, `post:bookmarked`, `post:reaction-*`) dit ce qu'elle fait
+ * D'UNE carte ; d'où elle le fait se lit ici, et nulle part ailleurs. C'est
+ * la recopie de cette boucle qui a fait diverger les caisses deux fois.
+ */
+function applyToPostCaches(queryClient: QueryClient, postId: string, applyToPost: (post: FeedPost) => FeedPost): void {
+  const applyToPages = (data: FeedInfiniteData | undefined) => mapPosts(data, (posts) => posts.map(applyToPost));
+  queryClient.setQueryData<FeedInfiniteData>(FEED_QUERY_KEY, applyToPages);
+  queryClient.setQueriesData<FeedInfiniteData>({ queryKey: REELS_QUERY_ROOT }, applyToPages);
+  queryClient.setQueryData<FeedPost>(postQueryKey(postId), (post) => (post === undefined ? post : applyToPost(post)));
+}
+
 export function applyServedLike(
   queryClient: QueryClient,
   change: { readonly postId: string; readonly on: boolean; readonly byViewer: boolean; readonly likeCount: number },
@@ -243,14 +259,38 @@ export function applyServedLike(
   const toggle = { postId, kind: 'like' as const, on: change.on };
   const served = { postId, kind: 'like' as const, count: change.likeCount };
 
-  const applyToPost = (post: FeedPost): FeedPost =>
-    post.id !== postId ? post : withServedCount(change.byViewer ? togglePost(post, toggle) : post, served);
+  applyToPostCaches(queryClient, postId, (post) =>
+    post.id !== postId ? post : withServedCount(change.byViewer ? togglePost(post, toggle) : post, served),
+  );
+}
 
-  const applyToPages = (data: FeedInfiniteData | undefined) => mapPosts(data, (posts) => posts.map(applyToPost));
+/**
+ * **LE FAVORI SERVI SE POSE AUX MÊMES TROIS CAISSES** (revue-correction W8,
+ * #7227) — `post:bookmarked` n'écrivait QUE le Flux, pendant que le geste
+ * LOCAL tient les trois depuis #6457 (`feed-gestures.ts#performPostGesture`,
+ * `setOn`) et qu'iOS réconcilie aussi son pager de Réels
+ * (`ReelsViewModel.swift:139-163`, `applyServerBookmark`). La divergence se
+ * voyait là où aucun geste local ne l'avait masquée : un favori posé depuis
+ * un AUTRE appareil n'atteignait ni le pager ni la fiche.
+ *
+ * **PAS DE GARDE `byViewer` ICI, ET C'EST MESURÉ** : le favori est PERSONNEL
+ * — la passerelle n'émet l'événement que vers la feed room de son auteur
+ * (`emitToUser`, doc-comment de `subscribeToBookmarkEvents`) —, donc tout
+ * écho reçu est le nôtre. `bookmarkCount` est OPTIONNEL sur le fil : absent,
+ * on bascule le signet sans inventer de chiffre.
+ */
+export function applyServedBookmark(
+  queryClient: QueryClient,
+  change: { readonly postId: string; readonly on: boolean; readonly bookmarkCount?: number | undefined },
+): void {
+  const { postId, bookmarkCount } = change;
+  const toggle = { postId, kind: 'bookmark' as const, on: change.on };
 
-  queryClient.setQueryData<FeedInfiniteData>(FEED_QUERY_KEY, applyToPages);
-  queryClient.setQueriesData<FeedInfiniteData>({ queryKey: REELS_QUERY_ROOT }, applyToPages);
-  queryClient.setQueryData<FeedPost>(postQueryKey(postId), (post) => (post === undefined ? post : applyToPost(post)));
+  applyToPostCaches(queryClient, postId, (post) => {
+    if (post.id !== postId) return post;
+    const toggled = togglePost(post, toggle);
+    return bookmarkCount === undefined ? toggled : withServedCount(toggled, { postId, kind: 'bookmark', count: bookmarkCount });
+  });
 }
 
 export function applyPostReactionEvent(queryClient: QueryClient, payload: unknown, viewerId: string): void {

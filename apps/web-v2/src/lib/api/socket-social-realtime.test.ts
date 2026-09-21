@@ -359,3 +359,79 @@ describe('`post:reaction-added` / `post:reaction-removed` sont ÉCOUTÉS, GARDÉ
     expect(queryClient.getQueryData<FeedInfiniteData>(FEED_QUERY_KEY)?.pages[0]?.posts[0]?.likeCount).toBe(2);
   });
 });
+
+/**
+ * **`post:bookmarked` — LA TROISIÈME LOI QUE LES RÉELS APPRENNENT**
+ * (revue-correction W8, #7227). Le périmètre iOS que ce lot reproduit cite
+ * QUATRE événements pour le pager de Réels — `postLiked`, `postUnliked`,
+ * **`postBookmarked`**, `postDeleted` (`ReelsViewModel.swift:95-183`,
+ * `subscribeToBookmarkEvents` → `applyServerBookmark`) — et le web n'en avait
+ * câblé que trois : l'écho du favori n'écrivait QUE `FEED_QUERY_KEY`.
+ *
+ * Le geste LOCAL, lui, tient les trois caisses depuis #6457
+ * (`feed-gestures.ts#performPostGesture`, `setOn`). La divergence se voit
+ * donc là où il n'y a PAS de geste local : un favori posé depuis un AUTRE
+ * appareil (ou depuis le Flux, sur une carte que les Réels tiennent aussi)
+ * n'atteignait ni le pager ni la fiche — et le `bookmarkCount` ABSOLU que
+ * l'écho porte n'y arrivait jamais.
+ */
+describe('`post:bookmarked` écrit AUSSI les RÉELS et la FICHE (#7227)', () => {
+  test('un favori posé ailleurs remplit le signet du pager de Réels, avec son compte servi', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    queryClient.setQueryData(reelsQueryKey('seed-r'), feedWith({ isBookmarkedByMe: false, bookmarkCount: 2 }));
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.POST_BOOKMARKED, { postId: 'p-1', bookmarked: true, bookmarkCount: 3 });
+
+    const reel = queryClient.getQueryData<FeedInfiniteData>(reelsQueryKey('seed-r'))?.pages[0]?.posts[0];
+    expect(reel?.isBookmarkedByMe).toBe(true);
+    expect(reel?.bookmarkCount).toBe(3);
+  });
+
+  test('la FICHE ouverte apprend le retrait du favori', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    queryClient.setQueryData<FeedPost>(postQueryKey('p-1'), {
+      id: 'p-1',
+      type: 'POST',
+      createdAt: '2026-09-21T10:00:00.000Z',
+      isBookmarkedByMe: true,
+      bookmarkCount: 4,
+    });
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.POST_BOOKMARKED, { postId: 'p-1', bookmarked: false, bookmarkCount: 3 });
+
+    const fiche = queryClient.getQueryData<FeedPost>(postQueryKey('p-1'));
+    expect(fiche?.isBookmarkedByMe).toBe(false);
+    expect(fiche?.bookmarkCount).toBe(3);
+  });
+
+  test('le FLUX bouge toujours, exactement comme avant ce lot', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    queryClient.setQueryData(FEED_QUERY_KEY, feedWith({ isBookmarkedByMe: false, bookmarkCount: 1 }));
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.POST_BOOKMARKED, { postId: 'p-1', bookmarked: true, bookmarkCount: 2 });
+
+    const post = queryClient.getQueryData<FeedInfiniteData>(FEED_QUERY_KEY)?.pages[0]?.posts[0];
+    expect(post?.isBookmarkedByMe).toBe(true);
+    expect(post?.bookmarkCount).toBe(2);
+  });
+
+  /* Un écho SANS `bookmarkCount` (passerelle plus ancienne) bascule le signet
+     et DÉCALE le compte d'un cran — la loi d'avant ce lot, inchangée : c'est
+     `togglePost` qui la tient, et elle est IDEMPOTENTE (un second écho sur un
+     signet déjà posé rend la MÊME carte, donc le compte ne dérive pas). */
+  test('un écho SANS compte servi bascule le signet, une seule fois', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    queryClient.setQueryData(reelsQueryKey(), feedWith({ isBookmarkedByMe: false, bookmarkCount: 5 }));
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.POST_BOOKMARKED, { postId: 'p-1', bookmarked: true });
+    socket.fire(SERVER_EVENTS.POST_BOOKMARKED, { postId: 'p-1', bookmarked: true });
+
+    const reel = queryClient.getQueryData<FeedInfiniteData>(reelsQueryKey())?.pages[0]?.posts[0];
+    expect(reel?.isBookmarkedByMe).toBe(true);
+    expect(reel?.bookmarkCount).toBe(6);
+  });
+});

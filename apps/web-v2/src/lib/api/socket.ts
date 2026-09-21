@@ -11,14 +11,14 @@ import type { TypingActionData, TypingEvent } from '@meeshy/shared/types/socketi
 import type { ConversationStoreState } from '@/lib/conversation-store';
 import type { SocketClient, SocketFactory } from '@/lib/net/socket';
 import type { OutboxState } from '@/lib/send/outbox-store';
-import { applyMediaCaptionTranslation, applyPostToggle, applyServedCount, type MediaCaptionTranslationUpdate } from '@/lib/feed/interactions';
+import { applyMediaCaptionTranslation, type MediaCaptionTranslationUpdate } from '@/lib/feed/interactions';
 import { decodeNotification } from '@/lib/notifications/record';
 
 import { attachmentStatusDetailsQueryKey } from './attachments';
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
 import { FEED_QUERY_KEY } from './feed';
 import { messagesQueryKey } from './messages';
-import { applyPostCreated, applyPostDeleted, applyPostReactionEvent, applyPostUpdated, applyServedLike } from './feed-realtime';
+import { applyPostCreated, applyPostDeleted, applyPostReactionEvent, applyPostUpdated, applyServedBookmark, applyServedLike } from './feed-realtime';
 import type { FeedInfiniteData } from './feed-pages';
 import { FRIENDS_QUERY_PREFIX } from './friends-keys';
 import { PUBLIC_PROFILE_QUERY_PREFIX } from './public-profile';
@@ -530,12 +530,21 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
     applyPostDeleted(deps.queryClient, payload);
   };
 
+  /**
+   * `post:bookmarked` — **ET LES RÉELS, ET LA FICHE (#7227, W8)**. Cet écho
+   * n'écrivait que le Flux pendant que le geste LOCAL tenait les trois
+   * caisses (`feed-gestures.ts#performPostGesture`) et qu'iOS réconcilie son
+   * pager (`ReelsViewModel.swift:139-163`) : un favori posé depuis un AUTRE
+   * appareil n'atteignait ni le pager ni la fiche. Les trois caisses vivent
+   * dans `feed-realtime.ts#applyServedBookmark`, à côté de leurs jumelles du
+   * cœur — cet écouteur ne tient que le branchement (D-98).
+   */
   const onPostBookmarked = (payload: unknown): void => {
     if (!isPostBookmarkEvent(payload)) return;
-    const { postId, bookmarked, bookmarkCount } = payload;
-    updateFeed((data) => {
-      const toggled = applyPostToggle(data, { postId, kind: 'bookmark', on: bookmarked });
-      return bookmarkCount === undefined ? toggled : applyServedCount(toggled, { postId, kind: 'bookmark', count: bookmarkCount });
+    applyServedBookmark(deps.queryClient, {
+      postId: payload.postId,
+      on: payload.bookmarked,
+      bookmarkCount: payload.bookmarkCount,
     });
   };
 
