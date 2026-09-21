@@ -188,18 +188,21 @@ describe('les conversations en commun', () => {
   test('sur SA PROPRE fiche, la section n’est pas montée — et la question ne part pas', async () => {
     const el = await mount('vous');
     expect(el.querySelector('[data-profile-conversations]')).toBeNull();
-    /* Le module n'est PAS MONTÉ, donc son `useQuery` n'existe pas : TanStack
-       ne crée même pas l'entrée. C'est la preuve la plus forte, et elle n'est
-       vraie que parce que la section est chargée à la demande — un
-       `enabled: false` chez l'hôte aurait laissé un observateur au repos ET
-       payé le module. */
-    expect(appQueryClient.getQueryState(sharedConversationsQueryKey(VIEWER_ID))).toBeUndefined();
+    /* L'observateur EXISTE — un hook ne se monte pas sous condition — mais la
+       question n'est jamais POSÉE : `dataUpdateCount` à 0 et `fetchStatus` au
+       repos, la forme exacte que le témoin des publications d'un compte bloqué
+       emploie déjà. */
+    const etat = appQueryClient.getQueryState(sharedConversationsQueryKey(VIEWER_ID));
+    expect(etat?.dataUpdateCount ?? 0).toBe(0);
+    expect(etat?.fetchStatus ?? 'idle').toBe('idle');
   });
 
   test('sur un compte BLOQUÉ, aucune conversation n’est servie', async () => {
     const el = await mount('yann.legoff');
     expect(el.querySelector('[data-profile-conversations]')).toBeNull();
-    expect(appQueryClient.getQueryState(sharedConversationsQueryKey('u-yann'))).toBeUndefined();
+    const etat = appQueryClient.getQueryState(sharedConversationsQueryKey('u-yann'));
+    expect(etat?.dataUpdateCount ?? 0).toBe(0);
+    expect(etat?.fetchStatus ?? 'idle').toBe('idle');
   });
 });
 
