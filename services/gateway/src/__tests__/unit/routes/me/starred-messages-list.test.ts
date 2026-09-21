@@ -393,6 +393,14 @@ describe('GET — pagination keyset sur l’ÉTOILE', () => {
     expect(body.code).toBe('INVALID_CURSOR');
   });
 
+  it("refuse un curseur FORGÉ dont l'id n'est pas un ObjectId : 400, jamais un 500 de Prisma", async () => {
+    const forged = Buffer.from(JSON.stringify({ createdAt: '2026-09-21T00:00:00.000Z', id: 'x' })).toString('base64url');
+    const { res, body } = await list(threeStarsStore(), `?cursor=${forged}`);
+
+    expect(res.statusCode).toBe(400);
+    expect(body.code).toBe('INVALID_CURSOR');
+  });
+
   it.each(['0', '51', 'abc'])('refuse la limite %s', async (limit) => {
     const { res } = await list(threeStarsStore(), `?limit=${limit}`);
 

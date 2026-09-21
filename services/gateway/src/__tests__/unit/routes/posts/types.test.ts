@@ -83,9 +83,9 @@ describe('decodeCursor', () => {
   });
 
   it('returns the decoded data when cursor is valid', () => {
-    const cursor = encodeCursor('2024-03-20T08:00:00.000Z', 'test-id-123');
+    const cursor = encodeCursor('2024-03-20T08:00:00.000Z', '507f1f77bcf86cd799439123');
     const result = decodeCursor(cursor);
-    expect(result).toEqual({ createdAt: '2024-03-20T08:00:00.000Z', id: 'test-id-123' });
+    expect(result).toEqual({ createdAt: '2024-03-20T08:00:00.000Z', id: '507f1f77bcf86cd799439123' });
   });
 
   // ── Confusion de TYPE (durcissement 2026-08-24) ─────────────────────────────
@@ -127,9 +127,9 @@ describe('decodeCursor', () => {
 
   it('strips extra attacker-controlled keys, returning only createdAt and id', () => {
     const crafted = Buffer.from(
-      JSON.stringify({ createdAt: '2024-03-20T08:00:00.000Z', id: 'test-id-123', evil: 'ignored' }),
+      JSON.stringify({ createdAt: '2024-03-20T08:00:00.000Z', id: '507f1f77bcf86cd799439123', evil: 'ignored' }),
     ).toString('base64url');
-    expect(decodeCursor(crafted)).toEqual({ createdAt: '2024-03-20T08:00:00.000Z', id: 'test-id-123' });
+    expect(decodeCursor(crafted)).toEqual({ createdAt: '2024-03-20T08:00:00.000Z', id: '507f1f77bcf86cd799439123' });
   });
 });
 
