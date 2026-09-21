@@ -45,19 +45,18 @@ export async function loadPost(
 /**
  * **CINQ MINUTES DE FRAÎCHEUR** (#6974) — une publication est un objet PUBLIÉ :
  * son texte, ses médias et son auteur ne changent plus. Ce qui bouge — les
- * compteurs et l'état du lecteur — est déjà tenu SANS relecture :
- * `feed-gestures.ts:127` et `:142` écrivent cette clé-là (jamais seulement
- * celle du fil) pour aimer, enregistrer et le compte servi, `:152` l'invalide
- * quand la passerelle refuse. Le défaut de l'application (30 s,
+ * compteurs et l'état du lecteur — est déjà tenu SANS relecture : le
+ * registre des caisses de cartes (`card-caches.ts`, #7341) écrit cette
+ * clé-là avec toutes les autres pour aimer, enregistrer, commenter, partager
+ * et le compte servi, et l'invalide quand la passerelle refuse
+ * (`invalidateCardPost`). Le défaut de l'application (30 s,
  * `query-client.ts:234`) relisait donc la publication entière à chaque retour
  * de focus.
  *
- * **Ce que la fenêtre coûte, dit à voix haute** : le socket porte bien
- * `post:liked`, `:unliked` et `:bookmarked`, mais ses trois gestionnaires
- * n'écrivent QUE `FEED_QUERY_KEY` (`socket.ts:303`, via `updateFeed`) — jamais
- * `['posts', id]`. Les compteurs d'une publication ouverte hors du fil peuvent
- * donc afficher jusqu'à cinq minutes de retard ; brancher ces trois
- * gestionnaires sur la clé du détail est un lot à part.
+ * **Ce que la fenêtre coûte** : depuis #7227, `post:liked`, `:unliked` et
+ * `:bookmarked` écrivent cette clé aussi (`feed-realtime.ts`, par le
+ * registre) ; seule une modification que la passerelle ne DIFFUSE pas peut
+ * attendre la fenêtre.
  *
  * **La fenêtre est neutralisée dans `usePost`, et c'est assumé** :
  * `query.ts:206` repose `staleTime: 0` APRÈS avoir répandu cette fabrique —

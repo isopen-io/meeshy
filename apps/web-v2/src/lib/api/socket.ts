@@ -482,10 +482,12 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
    * **ET LES RÉELS, ET LA FICHE (#7227, W8)** — la MÊME carte, servie par un
    * fil de Réels (`ReelsViewModel.swift:117-128` : SEULS les likes et la
    * suppression y sont câblés, jamais `postCreated`/`postUpdated`) ou par
-   * `/post/$post`. Les trois caisses vivent dans `feed-realtime.ts#applyServedLike`,
-   * site UNIQUE partagé avec `post:reaction-added`/`post:reaction-removed` :
-   * cet écouteur ne tient que le branchement (D-98), et deux boucles
-   * recopiées ne peuvent plus diverger d'une caisse.
+   * `/post/$post`. Les caisses vivent au registre (`card-caches.ts`, #7341 :
+   * le hashtag, le profil et les enregistrées aussi), atteint par
+   * `feed-realtime.ts#applyServedLike`, site UNIQUE partagé avec
+   * `post:reaction-added`/`post:reaction-removed` : cet écouteur ne tient que
+   * le branchement (D-98), et deux boucles recopiées ne peuvent plus diverger
+   * d'une caisse.
    */
   const updateFeed = (update: (data: FeedInfiniteData | undefined) => FeedInfiniteData | undefined): void => {
     deps.queryClient.setQueryData<FeedInfiniteData>(FEED_QUERY_KEY, update);
@@ -533,12 +535,13 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
 
   /**
    * `post:bookmarked` — **ET LES RÉELS, ET LA FICHE (#7227, W8)**. Cet écho
-   * n'écrivait que le Flux pendant que le geste LOCAL tenait les trois
+   * n'écrivait que le Flux pendant que le geste LOCAL tenait plusieurs
    * caisses (`feed-gestures.ts#performPostGesture`) et qu'iOS réconcilie son
    * pager (`ReelsViewModel.swift:139-163`) : un favori posé depuis un AUTRE
-   * appareil n'atteignait ni le pager ni la fiche. Les trois caisses vivent
-   * dans `feed-realtime.ts#applyServedBookmark`, à côté de leurs jumelles du
-   * cœur — cet écouteur ne tient que le branchement (D-98).
+   * appareil n'atteignait ni le pager ni la fiche. Les caisses vivent au
+   * registre (`card-caches.ts`, #7341), atteint par
+   * `feed-realtime.ts#applyServedBookmark`, à côté de ses jumelles du cœur —
+   * cet écouteur ne tient que le branchement (D-98).
    */
   const onPostBookmarked = (payload: unknown): void => {
     if (!isPostBookmarkEvent(payload)) return;
