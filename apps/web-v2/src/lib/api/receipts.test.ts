@@ -2,7 +2,7 @@ import { QueryClient } from '@tanstack/react-query';
 import { createStore } from 'zustand/vanilla';
 import { describe, expect, test } from 'bun:test';
 
-import { markCaughtUp, pushReadReceipt } from './receipts';
+import { fetchMessageReceiptsPeople, markCaughtUp, pushReadReceipt } from './receipts';
 import { CONVERSATIONS_QUERY_KEY, findCachedConversation } from './conversations';
 import { createHttpTransport } from './http';
 import { effectiveUnreadOf, type ConversationStoreState } from '@/lib/conversation-store';
@@ -147,6 +147,73 @@ describe('markCaughtUp — panne réseau / 5xx (TRANSITOIRE)', () => {
     await markCaughtUp({ conversationId: 'c1', caughtUpToMessageId: 'm9', deps: { source: 'gateway', transport, store, queryClient } });
 
     expect(effectiveUnreadOf(c, store.getState().overrides)).toBe(0);
+  });
+});
+
+describe('fetchMessageReceiptsPeople — gateway', () => {
+  test('GET /api/v1/conversations/:id/receipts?detail=people&messageIds=<id>', async () => {
+    const calls: { readonly url: string; readonly init: RequestInit }[] = [];
+    const impl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ url: String(input), init: init ?? {} });
+      return new Response(
+        JSON.stringify({
+          success: true,
+          data: {
+            detail: 'people',
+            messageIds: ['m9'],
+            people: [
+              { participantId: 'p1', displayName: 'Alice', avatar: null, deliveredAt: '2026-09-21T10:00:00.000Z', receivedAt: '2026-09-21T10:00:05.000Z', readAt: '2026-09-21T10:00:30.000Z', readDevice: null },
+            ],
+            pagination: { total: 1, limit: 50, offset: 0, hasMore: false, nextCursor: null },
+          },
+        }),
+        { status: 200 },
+      );
+    }) as typeof fetch;
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+
+    const result = await fetchMessageReceiptsPeople({ source: 'gateway', transport, conversationId: 'c1', messageId: 'm9' });
+
+    expect(calls[0]?.url).toBe('/api/v1/conversations/c1/receipts?detail=people&messageIds=m9');
+    expect(calls[0]?.init.method).toBe('GET');
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.people).toHaveLength(1);
+      expect(result.data.people[0]?.readAt).toBe('2026-09-21T10:00:30.000Z');
+    }
+  });
+
+  test('404 (message hors conversation) propagé tel quel', async () => {
+    const impl = (async () => new Response(JSON.stringify({ success: false, error: 'Message non trouvé' }), { status: 404 })) as typeof fetch;
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+
+    const result = await fetchMessageReceiptsPeople({ source: 'gateway', transport, conversationId: 'c1', messageId: 'm9' });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.status).toBe(404);
+  });
+});
+
+describe('fetchMessageReceiptsPeople — fixtures', () => {
+  test('dérivée déterministe de CONVERSATIONS, aucun appel réseau', async () => {
+    let called = false;
+    const impl = (async () => {
+      called = true;
+      return new Response(null, { status: 200 });
+    }) as typeof fetch;
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+
+    const result = await fetchMessageReceiptsPeople({ source: 'fixtures', transport, conversationId: 'c-deploiement', messageId: 'm9' });
+
+    expect(called).toBe(false);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data.people.length).toBeGreaterThan(0);
+      // Même conversation ⇒ même liste au second appel (déterministe).
+      void fetchMessageReceiptsPeople({ source: 'fixtures', transport, conversationId: 'c-deploiement', messageId: 'm9' }).then((second) => {
+        if (second.ok) expect(second.data.people).toEqual(result.data.people);
+      });
+    }
   });
 });
 

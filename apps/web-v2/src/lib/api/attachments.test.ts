@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
-import { uploadAttachments } from './attachments';
+import { fetchAttachmentStatusDetails, uploadAttachments } from './attachments';
 import { createHttpTransport } from './http';
 import { resetUploadedAttachmentsForTests } from './fixtures';
 
@@ -114,6 +114,77 @@ describe('uploadAttachments — gateway', () => {
  * Ce port pose donc SON délai, et le témoin le mesure par le SIGNAL composé —
  * un transport réglé à 1 ms devrait avoir avorté l'appel, il ne l'a pas.
  */
+describe('fetchAttachmentStatusDetails — gateway', () => {
+  test('GET /api/v1/attachments/:id/status-details, data = tableau, pagination À LA RACINE', async () => {
+    const { impl, calls } = fakeFetch({
+      status: 200,
+      body: {
+        success: true,
+        data: [
+          {
+            participantId: 'p1',
+            username: 'Alice',
+            avatar: null,
+            viewedAt: null,
+            downloadedAt: null,
+            listenedAt: '2026-09-21T10:00:00.000Z',
+            watchedAt: null,
+            listenCount: 2,
+            watchCount: 0,
+            listenedComplete: false,
+            watchedComplete: false,
+            lastPlayPositionMs: 4000,
+            lastWatchPositionMs: null,
+            viewCount: 0,
+            viewedLanguages: [],
+          },
+        ],
+        pagination: { total: 1, limit: 20, offset: 0, hasMore: false },
+      },
+    });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+
+    const result = await fetchAttachmentStatusDetails({ source: 'gateway', transport, attachmentId: 'att-1' });
+
+    expect(calls[0]?.url).toBe('/api/v1/attachments/att-1/status-details');
+    expect(calls[0]?.init.method).toBe('GET');
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0]?.listenCount).toBe(2);
+      expect(result.pagination?.total).toBe(1);
+    }
+  });
+
+  test('offset/limit/filter partent en querystring quand fournis', async () => {
+    const { impl, calls } = fakeFetch({ status: 200, body: { success: true, data: [], pagination: { total: 0, limit: 5, offset: 10, hasMore: false } } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+
+    await fetchAttachmentStatusDetails({ source: 'gateway', transport, attachmentId: 'att-1', offset: 10, limit: 5, filter: 'listened' });
+
+    expect(calls[0]?.url).toBe('/api/v1/attachments/att-1/status-details?offset=10&limit=5&filter=listened');
+  });
+});
+
+describe('fetchAttachmentStatusDetails — fixtures', () => {
+  test('dérivée déterministe de attachmentId, aucun appel réseau', async () => {
+    let called = false;
+    const impl = (async () => {
+      called = true;
+      return new Response(null, { status: 200 });
+    }) as typeof fetch;
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+
+    const first = await fetchAttachmentStatusDetails({ source: 'fixtures', transport, attachmentId: 'att-voix-1' });
+    const second = await fetchAttachmentStatusDetails({ source: 'fixtures', transport, attachmentId: 'att-voix-1' });
+
+    expect(called).toBe(false);
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    if (first.ok && second.ok) expect(first.data).toEqual(second.data);
+  });
+});
+
 describe('uploadAttachments — le délai de garde', () => {
   test('le délai du transport (ici 1 ms) NE s’applique pas au téléversement', async () => {
     const { impl, calls } = fakeFetch({
