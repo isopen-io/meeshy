@@ -709,6 +709,13 @@ export function applyMessageAttachmentUpdated(queryClient: QueryClient, data: At
  * la passerelle actuelle ne le pose pas encore — mais quand IL EST PRÉSENT,
  * une forme mal typée est rejetée FAIL-CLOSED comme le reste de la garde,
  * jamais laissée traverser en silence.
+ *
+ * **Et la CHAÎNE VIDE est une forme mal typée** (revue-correction W2) : aucun
+ * `Message.id` n'est vide, et `''` ne retombe PAS dans le repli « la charge
+ * ne nomme aucun message » — `applyReadStatusUpdated` distingue le repli par
+ * `=== undefined`, donc `''` prenait la branche NOMMÉE, n'appariait aucune
+ * rangée et se taisait. Un événement cassé devenait un no-op silencieux, ce
+ * que cette garde existe précisément pour empêcher.
  */
 export function isReadStatusUpdated(payload: unknown): payload is ReadStatusUpdatedEventData {
   if (typeof payload !== 'object' || payload === null) return false;
@@ -721,7 +728,7 @@ export function isReadStatusUpdated(payload: unknown): payload is ReadStatusUpda
     typeof s.totalMembers === 'number' &&
     typeof s.deliveredCount === 'number' &&
     typeof s.readCount === 'number' &&
-    (s.messageId === undefined || typeof s.messageId === 'string')
+    (s.messageId === undefined || (typeof s.messageId === 'string' && s.messageId.length > 0))
   );
 }
 

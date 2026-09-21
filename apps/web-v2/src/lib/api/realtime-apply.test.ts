@@ -886,6 +886,22 @@ describe('isReadStatusUpdated (#7223) — décodage FAIL-CLOSED', () => {
       }),
     ).toBe(false);
   });
+
+  /* `messageId: ''` — la forme que le TYPE seul ne distingue pas (#7348,
+     revue-correction). Elle est mal formée au même titre qu'un nombre : aucun
+     `Message.id` n'est vide. Laissée passer, elle ne tombait pas dans le REPLI
+     « la charge ne nomme aucun message » — elle prenait la branche NOMMÉE,
+     n'appariait rien, et se taisait : le puits devenait un no-op SILENCIEUX
+     sur un événement cassé, exactement ce que le doc-comment de cette garde
+     dit ne jamais faire. Une garde qui ANNONCE fail-closed doit l'être. */
+  test('`summary.messageId` VIDE ⇒ rejetée, jamais un no-op silencieux', () => {
+    expect(
+      isReadStatusUpdated({
+        conversationId: 'c-a',
+        summary: { totalMembers: 1, deliveredCount: 1, readCount: 1, messageId: '' },
+      }),
+    ).toBe(false);
+  });
 });
 
 /**

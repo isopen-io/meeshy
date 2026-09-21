@@ -356,10 +356,11 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   };
 
   /**
-   * `read-status:updated` (#7223) — LES COCHES ✓✓ D'UN MESSAGE ENVOYÉ
-   * BOUGENT EN DIRECT quand le destinataire reçoit ou lit. La règle
-   * (cible le dernier message du fil, tous-ou-rien en groupe conservé) vit
-   * dans `realtime-apply.ts` (D-40) : cette ligne la BRANCHE.
+   * `read-status:updated` (#7223, #7348) — LES COCHES ✓✓ D'UN MESSAGE ENVOYÉ
+   * BOUGENT EN DIRECT quand le destinataire reçoit ou lit. La règle (cible le
+   * message que `summary.messageId` NOMME ; à défaut de nom — passerelle
+   * pré-G-5/#7347 — le dernier message du fil ; tous-ou-rien en groupe
+   * conservé) vit dans `realtime-apply.ts` (D-40) : cette ligne la BRANCHE.
    */
   const onReadStatusUpdated = (payload: unknown): void => {
     if (!isReadStatusUpdated(payload)) return;

@@ -45,6 +45,35 @@ export interface MessageExpiredEventData {
  * RIEN casser côté émetteur tant que G-5 n'a pas basculé : un champ requis
  * aurait fait échouer la compilation de `broadcastReadStatus.ts`, qui ne le
  * pose pas encore.
+ *
+ * ── LA FORME EST ARRÊTÉE ICI, ET G-5 LA SUIT (revue-correction W2) ─────────
+ *
+ * Le critère de fin écrit sur #7347 dit « la charge porte les `messageIds`
+ * figés et, PAR MESSAGE, `deliveredCount`/`readCount`/`readByAllAt` » — au
+ * PLURIEL, ce qui se lit aussi comme UN événement portant un TABLEAU. Ce
+ * n'est PAS la forme retenue, et l'écart doit se lire depuis le type plutôt
+ * que se découvrir à la fusion de G-5 :
+ *
+ *   - **un événement PAR message, chacun nommant le sien** (`messageId`
+ *     SINGULIER sur le résumé). C'est ce que dit l'autre moitié du même
+ *     critère — « rafale M1 M2 M3 lue ⇒ TROIS RÉSUMÉS, pas un » — et c'est
+ *     la seule forme RÉTROCOMPATIBLE : `summary` est un OBJET que les trois
+ *     décodeurs lisent déjà (web `isReadStatusUpdated`, iOS
+ *     `ReadStatusSummary` dans `MessageSocketManager.swift`, Kotlin gelé) ;
+ *     le muer en tableau casserait les trois d'un coup, un champ optionnel
+ *     de plus n'en casse aucun ;
+ *   - **l'id vit SUR le résumé, pas à la racine de l'événement.** Ce résumé
+ *     n'a jamais décrit « la conversation » : il décrit LE message que
+ *     `getLatestMessageSummary` vient d'élire. L'id est donc le qualifiant
+ *     des trois compteurs, et voyage avec eux — les séparer rouvrirait la
+ *     forme d'angle mort du cycle 126 (un champ qui QUALIFIE une valeur,
+ *     posé ailleurs qu'elle, se perd au premier relais qui recopie).
+ *
+ * Reste à trancher POUR G-5, et non ici : `readByAllAt` (troisième membre du
+ * critère de #7347) n'est PAS sur ce résumé. `applyReadStatusUpdated` côté
+ * web refuse aujourd'hui d'inventer cette horloge faute de la recevoir ; si
+ * G-5 la met sur le fil, elle rejoint ce type et son consommateur web dans
+ * le MÊME lot, jamais l'un sans l'autre.
  */
 export interface ReadStatusSummary {
   readonly totalMembers: number;
