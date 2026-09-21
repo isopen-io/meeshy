@@ -5,8 +5,8 @@ import MeeshySDK
 /// montre (#7228).
 ///
 /// La règle vit ici, hors de `MessageViewsDetailView`, pour trois raisons :
-/// elle s'exerce sans SwiftUI ; la vue est à 1 144 lignes et le budget du
-/// dépôt est 1 000–1 200, donc on extrait avant d'ajouter ; et il n'y a
+/// elle s'exerce sans SwiftUI ; la vue frôle le plafond du budget du
+/// dépôt (1 000–1 200 lignes), donc on extrait avant d'ajouter ; et il n'y a
 /// qu'UN site qui décide — la vue rend, elle ne tranche plus.
 ///
 /// Avant ce lot, `loadAttachmentStatuses()` ne chargeait que les médias à
