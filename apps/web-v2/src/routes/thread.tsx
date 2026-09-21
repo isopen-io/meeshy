@@ -28,10 +28,11 @@ import { ThreadError, ThreadRefused, ThreadSkeleton } from '@/components/thread-
 import { apiConfig } from '@/lib/api/config';
 import { apiDeps } from '@/lib/api/deps';
 import { recordViewOnceConsumption } from '@/lib/api/fixtures';
-import { patchThreadMessages } from '@/lib/api/messages';
+import { messagesQueryKey, patchThreadMessages } from '@/lib/api/messages';
 import { useConversationsSnapshot, useThreadData } from '@/lib/api/query';
 import { markCaughtUp } from '@/lib/api/receipts';
-import { applyConsumption } from '@/lib/api/view-once';
+import { applyConsumption, consumeViewOnce } from '@/lib/api/view-once';
+import { outcomeOf } from '@/lib/api/outcome';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
 import { accentOf, withAccent } from '@/lib/accent';
@@ -188,13 +189,32 @@ export default function ThreadScreen() {
   const consume = useCallback(
     async (messageId: string): Promise<boolean> => {
       if (!online) return false;
-      if (__FIXTURES__ && apiConfig.source === 'fixtures') recordViewOnceConsumption(messageId);
+      if (__FIXTURES__ && apiConfig.source === 'fixtures') {
+        recordViewOnceConsumption(messageId);
+        return true;
+      }
       /* `patchThreadMessages` (#6972, étape 1) — le SITE UNIQUE qui patche un
          fil (`lib/api/messages.ts`) : cet écran ne recopie plus la forme de la
-         page, qui est devenue `InfiniteData` à l'étape 2. */
+         page, qui est devenue `InfiniteData` à l'étape 2.
+
+         W5 (#7224) — optimistic update : appliquer la consommation localement
+         IMMÉDIATEMENT, puis confirmer au serveur. Sur ERREUR PERMANENTE, rollback.
+         Les erreurs transitoires (réseau, 429, 5xx) laissent l'optimistic update
+         en place (critère #5813, même discipline que `markCaughtUp`). */
+      const previousMessages = queryClient.getQueryData(messagesQueryKey(conversationId));
       patchThreadMessages(queryClient, conversationId, (messages) =>
         applyConsumption(messages, { messageId, viewOnceCount: 1 }),
       );
+      const result = await consumeViewOnce(apiDeps.transport, { conversationId, messageId });
+      const outcome = outcomeOf(result);
+      if (outcome === 'permanent') {
+        /* Erreur permanente (4xx sauf 408/425/429) : rollback. */
+        if (previousMessages !== undefined) {
+          queryClient.setQueryData(messagesQueryKey(conversationId), previousMessages);
+        }
+        return false;
+      }
+      /* Succès ou erreur transitoire : laisser l'optimistic update. */
       return true;
     },
     [online, queryClient, conversationId],
