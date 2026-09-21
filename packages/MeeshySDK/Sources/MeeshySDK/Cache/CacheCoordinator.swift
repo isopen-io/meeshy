@@ -1,9 +1,7 @@
 import Foundation
 import Combine
 import GRDB
-#if canImport(UIKit)
 import UIKit
-#endif
 #if canImport(BackgroundTasks)
 import BackgroundTasks
 #endif

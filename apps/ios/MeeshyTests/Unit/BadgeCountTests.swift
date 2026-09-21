@@ -1,108 +1,142 @@
 import XCTest
 import MeeshySDK
 
-/// Tests that the badge counts conversations, not messages (I5 #7236)
+/// **D-L1 (#7236) — le badge d'icône compte des CONVERSATIONS non lues, hors
+/// muettes, jamais la somme de leurs messages.**
 ///
-/// The badge should display the count of unread conversations (excluding muted ones),
-/// not the total sum of unread messages across all conversations.
-/// This aligns with iPhone and WhatsApp behavior.
+/// Le témoin vit au niveau de l'APP parce que c'est la question qui manquait :
+/// le registre sait compter, mais **qui AFFICHE ce qu'il compte ?** La valeur
+/// rendue à l'icône est `NotificationCoordinator.badgeTotal` ; c'est donc elle
+/// qu'on mesure, à travers le chemin nominal (une liste de conversations
+/// republiée), et pas la fonction du registre prise à part — celle-là a ses
+/// propres témoins dans le paquet.
+///
+/// Le nombre doit être le MÊME que celui que le serveur pousse dans
+/// `aps.badge` (`computeConversationUnreadBadge`, gateway G3 #7218) : app
+/// fermée et app au premier plan ne peuvent pas afficher deux chiffres pour un
+/// état identique.
+@MainActor
 final class BadgeCountTests: XCTestCase {
 
-    private func makeLedger(_ rows: [ConversationReadRow]) -> ConversationReadLedger {
-        let ledger = ConversationReadLedger()
-        ledger.apply(.snapshot(rows: rows, source: .server))
-        return ledger
+    private var createdSuiteNames: [String] = []
+
+    override func tearDown() {
+        for suite in createdSuiteNames {
+            UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
+        }
+        createdSuiteNames.removeAll()
+        super.tearDown()
     }
 
-    private func row(_ id: String, _ count: Int, muted: Bool = false) -> ConversationReadRow {
-        ConversationReadRow(conversationId: id, unreadCount: count, isMuted: muted)
+    /// Un registre NEUF par coordinateur : la production partage `.shared`,
+    /// deux tests qui se le partageraient hériteraient l'un de l'état de
+    /// l'autre et l'ordre d'exécution déciderait du verdict.
+    private func makeCoordinator() -> NotificationCoordinator {
+        makeCoordinator(writer: RecordingBadgeWriter()).0
     }
 
-    /// Test: Badge should count conversations, not sum messages
-    /// Scenario: 3 conversations with 2, 5, 3 unread messages
-    /// Expected (current): 10 (sum of all unread messages)
-    /// Expected (I5):      3 (count of unread conversations)
-    func testBadgeCountsConversationsNotMessages() {
-        let ledger = makeLedger([
-            row("a", 2),      // 2 messages unread
-            row("b", 5),      // 5 messages unread
-            row("c", 3)       // 3 messages unread
-        ])
-        // I5: total should be 3 (count of conversations), not 10 (sum of messages)
-        let badgeTotal = ledger.total(excludingOpen: false, excludingMuted: false)
-        XCTAssertEqual(badgeTotal, 3, "Badge should count 3 conversations, not sum 10 messages")
+    /// L'écrivain de badge est TOUJOURS un double : le vrai passerait par
+    /// `UNUserNotificationCenter` et poserait un badge sur l'hôte de test.
+    private func makeCoordinator(
+        writer: RecordingBadgeWriter
+    ) -> (NotificationCoordinator, String) {
+        let suite = "group.test.meeshy.badge.\(UUID().uuidString)"
+        createdSuiteNames.append(suite)
+        UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
+        let coordinator = NotificationCoordinator(
+            badgeWriter: writer,
+            appGroupSuiteName: suite,
+            badgeEnabledProvider: { true },
+            openConversationIdProvider: { nil },
+            ledger: ConversationReadLedger()
+        )
+        return (coordinator, suite)
     }
 
-    /// Test: Badge should exclude muted conversations
-    /// Scenario: 2 unread conversations + 1 muted conversation with 5 unread messages
-    /// Expected (current): 5 (2 + 5, counting all)
-    /// Expected (I5):      2 (count of unread non-muted conversations)
-    func testBadgeExcludesMutedConversations() {
-        let ledger = makeLedger([
-            row("a", 2),              // unread
-            row("b", 5, muted: true), // muted, excluded from badge
-            row("c", 3)               // unread
-        ])
-        let badgeTotal = ledger.total(excludingOpen: false, excludingMuted: true)
-        XCTAssertEqual(badgeTotal, 2, "Badge should count 2 unread non-muted conversations")
+    private func conversation(_ id: String, unread: Int, muted: Bool = false) -> MeeshyConversation {
+        MeeshyConversation(
+            id: id,
+            identifier: id,
+            type: .direct,
+            title: "Conv \(id)",
+            unreadCount: unread,
+            isMuted: muted
+        )
     }
 
-    /// Test: Badge should only count conversations with unreadCount > 0
-    /// Scenario: 2 conversations with messages, 1 fully read
-    /// Expected: count only the 2 with unread messages
-    func testBadgeOnlyCountsNonZeroUnread() {
-        let ledger = makeLedger([
-            row("a", 2),   // unread
-            row("b", 0),   // fully read, should not count
-            row("c", 1)    // unread
-        ])
-        let badgeTotal = ledger.total(excludingOpen: false, excludingMuted: false)
-        XCTAssertEqual(badgeTotal, 2, "Badge should count only conversations with unreadCount > 0")
-    }
+    /// Le critère de #7236, à la lettre : trois conversations dont une muette
+    /// et une à douze messages ⇒ badge **2**. Le témoin ne peut pas verdir sur
+    /// une somme — elle dirait 17.
+    func test_badgeTotal_countsConversations_notMessages() {
+        let sut = makeCoordinator()
 
-    /// Test: Badge should exclude the open conversation
-    /// Scenario: 3 conversations, one is open (viewing it reads it immediately)
-    /// Expected: count only the 2 non-open conversations
-    func testBadgeExcludesOpenConversation() {
-        let ledger = makeLedger([
-            row("a", 2),
-            row("b", 5),
-            row("c", 3)
-        ])
-        ledger.apply(.localOpen(conversationId: "b"))
-        let badgeTotal = ledger.total(excludingOpen: true, excludingMuted: false)
-        XCTAssertEqual(badgeTotal, 2, "Badge should exclude the open conversation 'b'")
-    }
-
-    /// Test: Badge should exclude both muted and open conversations
-    /// Scenario: 3 conversations, one muted, one open
-    /// Expected: count only the remaining unread conversation
-    func testBadgeExcludesBothMutedAndOpen() {
-        let ledger = makeLedger([
-            row("a", 2),              // unread, not muted, not open → count
-            row("b", 5, muted: true), // muted → exclude
-            row("c", 3)               // unread but open → exclude
-        ])
-        ledger.apply(.localOpen(conversationId: "c"))
-        let badgeTotal = ledger.total(excludingOpen: true, excludingMuted: true)
-        XCTAssertEqual(badgeTotal, 1, "Badge should count only 'a' (not muted, not open)")
-    }
-
-    /// Test: NotificationCoordinator.badgeTotal reads from ConversationReadLedger
-    /// This ensures the badge icon reflects the ledger's conversation count
-    func testNotificationCoordinatorBadgeTotal() {
-        let coordinator = NotificationCoordinator.shared
-
-        // Set up a mock ledger state
-        let ledger = makeLedger([
-            row("conv1", 1),
-            row("conv2", 2),
-            row("conv3", 1, muted: true)  // muted, should not count toward badge
+        sut.registerConversations([
+            conversation("c1", unread: 12),
+            conversation("c2", unread: 1),
+            conversation("c3", unread: 4, muted: true)
         ])
 
-        // The coordinator should read from ledger.total(excludingOpen: true, excludingMuted: true)
-        // Expected: 2 conversations (conv1, conv2 are unread and not muted)
-        let expectedBadge = ledger.total(excludingOpen: true, excludingMuted: true)
-        XCTAssertEqual(expectedBadge, 2, "Ledger should count 2 unread non-muted conversations")
+        XCTAssertEqual(
+            sut.badgeTotal, 2,
+            "deux conversations non lues : la muette ne compte pas, et celle à douze " +
+            "messages pèse UN — la somme (17) n'est pas ce que l'icône montre"
+        )
+    }
+
+    /// La pastille de LIGNE, elle, garde sa somme de messages : le badge
+    /// d'icône change de question, pas la liste.
+    func test_rowCount_keepsItsMessageSum() {
+        let sut = makeCoordinator()
+
+        sut.registerConversations([conversation("c1", unread: 12)])
+
+        XCTAssertEqual(sut.conversationUnreadCounts["c1"], 12)
+        XCTAssertEqual(sut.badgeTotal, 1)
+    }
+
+    /// Une conversation entièrement lue ne pèse rien — sans quoi le badge
+    /// compterait les conversations TOUT COURT.
+    func test_badgeTotal_ignoresFullyReadConversations() {
+        let sut = makeCoordinator()
+
+        sut.registerConversations([
+            conversation("c1", unread: 3),
+            conversation("c2", unread: 0)
+        ])
+
+        XCTAssertEqual(sut.badgeTotal, 1)
+    }
+
+    /// Ce que l'icône REÇOIT, et pas seulement ce que le coordinateur calcule :
+    /// `syncNow` écrit le même compte dans l'écrivain de badge et dans le
+    /// miroir App Group que lit le widget.
+    func test_syncNow_writesTheConversationCountToTheIcon() async {
+        let writer = RecordingBadgeWriter()
+        let (sut, suite) = makeCoordinator(writer: writer)
+
+        sut.registerConversations([
+            conversation("c1", unread: 12),
+            conversation("c2", unread: 1),
+            conversation("c3", unread: 4, muted: true)
+        ])
+        await sut.syncNow()
+
+        XCTAssertEqual(writer.writes.last, 2, "l'icône reçoit le compte de conversations")
+        XCTAssertEqual(
+            UserDefaults(suiteName: suite)?.integer(forKey: "unread_count"), 2,
+            "le miroir App Group porte le MÊME nombre que l'aps.badge du serveur"
+        )
+    }
+}
+
+/// Écrivain de badge à double : enregistre ce qui part vers l'icône sans
+/// toucher au badge réel du simulateur.
+private final class RecordingBadgeWriter: NotificationBadgeWriting, @unchecked Sendable {
+    private let lock = NSLock()
+    private var recorded: [Int] = []
+    var writes: [Int] { lock.withLock { recorded } }
+
+    func setBadgeCount(_ count: Int) async {
+        lock.withLock { recorded.append(count) }
     }
 }

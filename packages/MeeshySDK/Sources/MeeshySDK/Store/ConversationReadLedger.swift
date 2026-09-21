@@ -275,8 +275,40 @@ public final class ConversationReadLedger: @unchecked Sendable {
             return entries.reduce(0) { acc, element in
                 if excludingOpen, element.key == openId { return acc }
                 if excludingMuted, element.value.isMuted { return acc }
-                // Badge counts conversations (not summing messages) — D-L1 #7236
-                return (element.value.unreadCount > 0) ? acc + 1 : acc
+                return acc + max(0, element.value.unreadCount)
+            }
+        }
+    }
+
+    /// **Le compte de CONVERSATIONS non lues** — D-L1 (#7236) : le badge
+    /// d'icône compte les conversations, jamais la somme de leurs messages.
+    /// Une conversation à douze messages non lus pèse UN.
+    ///
+    /// Jumelle de `total(excludingOpen:excludingMuted:)`, et surtout pas son
+    /// remplaçante : les deux nombres coexistent parce que deux surfaces
+    /// posent deux questions. Une pastille de LIGNE, un indicateur « combien
+    /// de messages m'attendent » comptent des MESSAGES ; l'icône d'app et le
+    /// miroir App Group comptent des CONVERSATIONS. Écraser la somme aurait
+    /// fait dire à toutes les surfaces ce que seule l'icône demande.
+    ///
+    /// Les conversations muettes sortent TOUJOURS — la borne n'est pas
+    /// offerte, parce que D-L1 ne la rend pas facultative : c'est la même
+    /// borne, au même rang, que le producteur SERVEUR de ce nombre
+    /// (`computeConversationUnreadBadge`, gateway G3 #7218), et deux formules
+    /// qui divergeraient feraient clignoter l'icône entre le nombre poussé par
+    /// APNs et celui recalculé au premier plan.
+    ///
+    /// `excludingOpen` reste DÉCLARÉ par la surface : la conversation affichée
+    /// est lue côté client dans le tour de boucle de son ouverture, ce que le
+    /// serveur ne peut pas savoir — c'est le seul écart assumé avec lui, et il
+    /// converge dès que l'accusé de lecture remonte.
+    public func conversationUnreadTotal(excludingOpen: Bool) -> Int {
+        stateQueue.sync {
+            let openId = _openConversationId
+            return entries.reduce(0) { acc, element in
+                if excludingOpen, element.key == openId { return acc }
+                if element.value.isMuted { return acc }
+                return element.value.unreadCount > 0 ? acc + 1 : acc
             }
         }
     }
