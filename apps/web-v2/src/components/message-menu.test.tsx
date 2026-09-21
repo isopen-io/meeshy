@@ -539,8 +539,22 @@ describe('MessageMenu — un défilement de l’APPLICATION ne ferme pas le menu
     return element;
   };
 
+  /**
+   * LE DÉPLACEMENT DE L'ANCRE SE POSE (#7293) — happy-dom rend un rectangle
+   * NUL pour tout élément, donc la grandeur que la règle LIT ne varie jamais
+   * toute seule ici. Un défilement du lecteur emporte la rangée : le témoin
+   * doit donc le DIRE, sinon il mesure une immobilité de banc plutôt que le
+   * geste qu'il nomme. C'est la même discipline que `frameQueue` au-dessus —
+   * ce que le navigateur fournit, le banc le fournit à la main.
+   */
+  const anchorAt = (el: HTMLDivElement, top: number) => {
+    row(el).getBoundingClientRect = () =>
+      ({ top, bottom: top + 40, left: 0, right: 200, width: 200, height: 40, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
+  };
+
   test('l’ancrage bas (quelqu’un se met à écrire) laisse le menu MONTÉ', () => {
     const el = mount();
+    anchorAt(el, 400);
     openMenu(el);
     expect(document.querySelectorAll('[role="menu"]').length).toBe(1);
 
@@ -549,6 +563,9 @@ describe('MessageMenu — un défilement de l’APPLICATION ne ferme pas le menu
     act(() => {
       pinToBottom(scroller, { frames: 1, requestFrame: queue.requestFrame, cancelFrame: queue.cancelFrame });
       queue.run();
+      // L'ancrage EMPORTE la rangée : sans ce déplacement, le témoin
+      // passerait par immobilité et non par la déclaration qu'il mesure.
+      anchorAt(el, 280);
       scroller.dispatchEvent(new Event('scroll'));
     });
 
@@ -558,9 +575,11 @@ describe('MessageMenu — un défilement de l’APPLICATION ne ferme pas le menu
 
   test('un défilement du LECTEUR, lui, ferme le menu', () => {
     const el = mount();
+    anchorAt(el, 400);
     openMenu(el);
     const scroller = threadScroller();
     act(() => {
+      anchorAt(el, 120);
       scroller.dispatchEvent(new Event('scroll'));
     });
     expect(document.querySelectorAll('[role="menu"]').length).toBe(0);
@@ -569,20 +588,42 @@ describe('MessageMenu — un défilement de l’APPLICATION ne ferme pas le menu
 
   test('la déclaration se CONSOMME — le geste d’APRÈS referme bien le menu', () => {
     const el = mount();
+    anchorAt(el, 400);
     openMenu(el);
     const scroller = threadScroller();
     const queue = frameQueue();
     act(() => {
       pinToBottom(scroller, { frames: 1, requestFrame: queue.requestFrame, cancelFrame: queue.cancelFrame });
       queue.run();
+      anchorAt(el, 280);
       scroller.dispatchEvent(new Event('scroll'));
     });
     expect(document.querySelectorAll('[role="menu"]').length).toBe(1);
 
     act(() => {
+      anchorAt(el, 160);
       scroller.dispatchEvent(new Event('scroll'));
     });
     expect(document.querySelectorAll('[role="menu"]').length).toBe(0);
+    scroller.remove();
+  });
+
+  /**
+   * #7293 — L'ÉVÉNEMENT EN VOL. Amener une rangée en vue PUIS l'ouvrir pose
+   * un `scroll` que le navigateur livre à l'image SUIVANTE, donc APRÈS le
+   * commit du menu. Il ne vient pas de l'application (rien à déclarer) et il
+   * ne dit rien de neuf : l'ancre est déjà là où le placement l'a mesurée.
+   * Le fermer là-dessus faisait disparaître le cluster avant d'être regardé.
+   */
+  test('un défilement EN VOL, qui ne déplace pas l’ancre, laisse le menu MONTÉ', () => {
+    const el = mount();
+    anchorAt(el, 400);
+    openMenu(el);
+    const scroller = threadScroller();
+    act(() => {
+      scroller.dispatchEvent(new Event('scroll'));
+    });
+    expect(document.querySelectorAll('[role="menu"]').length).toBe(1);
     scroller.remove();
   });
 });

@@ -54,7 +54,10 @@ final class AudioMainThreadAndPlayheadTests: XCTestCase {
     /// et la garde le tient par la SOURCE, faute d'un fil observable depuis un
     /// témoin.
     func test_playLocal_readsItsBytesOffTheMainActor() throws {
-        let source = try sdkSource("Sources/MeeshyUI/Media/AudioPlayerView.swift")
+        // #7212 — `playLocal` a suivi le MOTEUR dans son propre fichier quand
+        // `AudioPlayerView.swift` a été ramené sous le budget. Une garde indexée
+        // par FICHIER suit son hôte, elle ne le devine pas.
+        let source = try sdkSource("Sources/MeeshyUI/Media/AudioPlaybackManager.swift")
 
         XCTAssertFalse(
             source.contains("let data = try Data(contentsOf: url)"),

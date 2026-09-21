@@ -154,6 +154,26 @@ if (!__SHELL__ && import.meta.env.PROD && 'serviceWorker' in navigator) {
     void import('@/lib/app-update/service-worker').then(({ appUpdateController }) =>
       appUpdateController().register(),
     );
+    /**
+     * ET LE WORKER ZOMBIE DU PUSH LEGACY SE DÉSINSCRIT (#7305). `meeshy.me`
+     * sert la v2 depuis le 2026-09-15 ; tout navigateur qui a connu le legacy
+     * garde une inscription VIVANTE de `/firebase-messaging-sw.js` sous sa
+     * PROPRE portée, que la substitution de `/sw.js` ne touche pas. Sans ce
+     * retrait, le même message lèverait DEUX bannières — dont une composée
+     * avec des routes qui n'existent plus (D-11). Idempotent et silencieux :
+     * rien ici ne conditionne le démarrage de l'application, d'où l'absence
+     * de `then`.
+     */
+    void import('@/lib/app-update/legacy-push-worker').then(({ purgeLegacyPushWorkers }) => purgeLegacyPushWorkers());
+    /**
+     * ET LE TAP D'UNE BANNIÈRE ABOUTIT (#7305). `sw-push.js` focalise un
+     * client déjà ouvert plutôt que d'ouvrir un second onglet, puis lui remet
+     * l'adresse : sans cet écouteur, le tap ramènerait l'onglet au premier
+     * plan et l'y laisserait — un contrôle qui ment (loi 4).
+     */
+    void import('@/lib/notifications/tap-navigation').then(({ listenNotificationTapsInBrowser }) =>
+      listenNotificationTapsInBrowser(),
+    );
   };
   if (document.readyState === 'complete') inscrire();
   else window.addEventListener('load', inscrire, { once: true });
