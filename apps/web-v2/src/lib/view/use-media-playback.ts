@@ -86,6 +86,11 @@ export type MediaPlaybackReport = {
   /** La consommation SERVIE — pour la reprise. Absent/`positionMs: null` :
    * rien à reprendre, `complete: true` : on repart de zéro (rien à rejouer). */
   readonly resume?: { readonly positionMs: number | null; readonly complete: boolean };
+  /** La langue de la PISTE consommée — une piste traduite est une écoute
+   * d'une AUTRE version du contenu, et le serveur la stocke comme telle
+   * (`AttachmentStatusBodySchema.language`). Omise si vide : le wire exige
+   * deux caractères, et un `language: ''` ferait rejeter le rapport ENTIER. */
+  readonly language?: string;
   /** INJECTABLE pour les témoins — `apiDeps` (singleton réel) par défaut,
    * même patron que `coordinator ?? mediaCoordinator`. */
   readonly deps?: ConversationsDeps;
@@ -95,6 +100,57 @@ export type MediaPlaybackReport = {
  * DEUX signaux TERMINAUX (fin, démontage), qui doivent toujours atteindre le
  * serveur : un vocal de 3 s ne finirait sinon jamais `complete`. */
 const REPORT_THROTTLE_MS = 5_000;
+
+/**
+ * LE PLAFOND DU WIRE, TENU CÔTÉ CLIENT (revue #7225).
+ *
+ * `AttachmentStatusBodySchema.stretches` est `.max(50)` : un corps de 51
+ * segments est rejeté ENTIER en `400`, `complete` compris. Et le parcours au
+ * doigt en produit des dizaines par seconde — `onPointerMove`
+ * (`attachment-blocks.tsx`) appelle `seek` à chaque image du geste, et la
+ * lecture ayant avancé entre deux images, chaque saut clôt un segment réel.
+ * Un geste d'une seconde suffisait donc à faire perdre le rapport FINAL,
+ * celui qui porte `complete`.
+ *
+ * Le plafond vaut celui du serveur (`MAX_TRACE_STRETCHES`,
+ * `services/gateway/src/utils/playback-trace.ts`) et se réduit de la MÊME
+ * façon : on sacrifie les écoutes les plus COURTES, l'ordre chronologique des
+ * rescapées est préservé. Une trace plafonnée sous-estime ce qui a été
+ * écouté ; elle n'invente jamais une écoute.
+ */
+const MAX_REPORT_STRETCHES = 50;
+
+function capStretches(stretches: readonly PlaybackStretch[]): readonly PlaybackStretch[] {
+  if (stretches.length <= MAX_REPORT_STRETCHES) return stretches;
+  const kept = new Set(
+    stretches
+      .map((stretch, index) => ({ index, duration: stretch.endMs - stretch.startMs }))
+      .sort((a, b) => b.duration - a.duration || a.index - b.index)
+      .slice(0, MAX_REPORT_STRETCHES)
+      .map((entry) => entry.index),
+  );
+  return stretches.filter((_, index) => kept.has(index));
+}
+
+/**
+ * Sous une seconde, reprendre et repartir de zéro sont indiscernables — et
+ * « reprendre » coûte alors une surprise pour rien. MÊME règle de PRODUIT que
+ * `resumePositionSeconds` (`apps/web/hooks/use-media-consumption-reporter.ts`,
+ * exportée là-bas pour être éprouvée seule) et que la reprise iOS.
+ */
+const MIN_RESUME_MS = 1_000;
+
+function resumeSeconds(resume: MediaPlaybackReport['resume']): number | null {
+  if (resume === undefined || resume.complete) return null;
+  const positionMs = resume.positionMs;
+  if (positionMs === null || !Number.isFinite(positionMs) || positionMs < MIN_RESUME_MS) return null;
+  return positionMs / 1000;
+}
+
+/** Le wire exige deux caractères (`wireLanguageCode`) : une piste sans langue
+ * déclarée n'en envoie aucune plutôt que de faire rejeter tout le rapport. */
+const reportableLanguage = (language: string | undefined): string | undefined =>
+  language !== undefined && language.trim().length >= 2 ? language : undefined;
 
 /**
  * LA TRACE DES ÉCOUTES CONTINUES (miroir `PlaybackStretchTracker.swift`,
@@ -241,7 +297,7 @@ export function useMediaPlayback(params: {
       if (tracker === null) return;
       const now = Date.now();
       if (!options.force && now - lastReportAtRef.current < REPORT_THROTTLE_MS) return;
-      const stretches = tracker.drain();
+      const stretches = capStretches(tracker.drain());
       if (stretches.length === 0 && !options.complete) return;
       lastReportAtRef.current = now;
       const known = knownDuration(options.element);
@@ -249,6 +305,7 @@ export function useMediaPlayback(params: {
       const fraction = durationMs !== undefined && durationMs > 0 ? options.positionMs / durationMs : 0;
       recordConsumption(fraction, options.complete);
       const deps = reportConfig.deps ?? apiDeps;
+      const language = reportableLanguage(reportConfig.language);
       void reportAttachmentStatus({
         ...deps,
         attachmentId,
@@ -258,6 +315,7 @@ export function useMediaPlayback(params: {
           complete: options.complete,
           ...(durationMs !== undefined ? { durationMs } : {}),
           ...(stretches.length > 0 ? { stretches } : {}),
+          ...(language !== undefined ? { language } : {}),
         },
       }).catch(() => {
         // Best effort — une trame perdue rejoint la suivante (le tracker
@@ -335,11 +393,11 @@ export function useMediaPlayback(params: {
       // avant tout chargement fait retenir la position au navigateur pour
       // quand les métadonnées arrivent (mesuré Chrome/Firefox/Safari — c'est
       // le comportement que HTML5 décrit pour un `seek` avant `HAVE_METADATA`).
-      const resume = reportRef.current?.resume;
-      if (!appliedResumeRef.current && resume?.positionMs != null && resume.positionMs > 0 && !resume.complete) {
+      const resumeAt = resumeSeconds(reportRef.current?.resume);
+      if (!appliedResumeRef.current && resumeAt !== null) {
         appliedResumeRef.current = true;
         try {
-          element.currentTime = resume.positionMs / 1000;
+          element.currentTime = resumeAt;
         } catch {
           // best effort — un navigateur qui refuse le seek pré-chargement
           // rejouera depuis 0, dégradation gracieuse plutôt que crash.

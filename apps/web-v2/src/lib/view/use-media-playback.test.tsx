@@ -45,6 +45,7 @@ type HarnessReport = {
   readonly kind: 'listened' | 'watched';
   readonly durationMs?: number;
   readonly resume?: { readonly positionMs: number | null; readonly complete: boolean };
+  readonly language?: string;
   readonly deps: ConversationsDeps;
 };
 
@@ -738,5 +739,135 @@ describe('useMediaPlayback — rapport au serveur, throttlé (#7225)', () => {
 
     expect(Number(attr(el, 'data-reported-fraction'))).toBeCloseTo(0.5, 5);
     expect(attr(el, 'data-reported-complete')).toBe('false');
+  });
+});
+
+/**
+ * LES FRONTIÈRES ET LES BORNES DU RAPPORT (revue #7225) — trois lignes du
+ * critère de fin qui n'avaient pas de témoin, et deux bornes que le WIRE
+ * impose (`AttachmentStatusBodySchema`,
+ * `services/gateway/src/validation/messages-schemas.ts:212-251`) : un corps
+ * qui les dépasse est rejeté ENTIER en `400`, `complete` compris.
+ */
+describe('useMediaPlayback — les frontières et les bornes du rapport (#7225)', () => {
+  test('saut pendant la lecture : un rapport part, segment « seek »', async () => {
+    const coordinator = createMediaCoordinator();
+    const { deps, calls } = fakeReportDeps();
+    let playback!: MediaPlayback;
+    const el = mount({ onReady: (p) => (playback = p), attachmentId: 'att-9', coordinator, report: { kind: 'listened', deps } });
+    const media = mediaOf(el);
+    stubMedia(media);
+    setMediaTime(media, { duration: 60 });
+
+    await act(async () => {
+      playback.toggle();
+      await Promise.resolve();
+    });
+    setMediaTime(media, { currentTime: 3 });
+
+    await act(async () => {
+      playback.seek(30);
+    });
+
+    expect(calls).toHaveLength(1);
+    const body = bodyOf(calls[0]!);
+    expect(body.playPositionMs).toBe(30_000);
+    expect(body.stretches).toEqual([{ startMs: 0, endMs: 3_000, endedBy: 'seek' }]);
+  });
+
+  test('parcours au doigt prolongé : le rapport ne dépasse JAMAIS 50 segments', async () => {
+    const coordinator = createMediaCoordinator();
+    const { deps, calls } = fakeReportDeps();
+    let playback!: MediaPlayback;
+    const el = mount({ onReady: (p) => (playback = p), attachmentId: 'att-9', coordinator, report: { kind: 'listened', deps } });
+    const media = mediaOf(el);
+    stubMedia(media);
+    setMediaTime(media, { duration: 300 });
+
+    await act(async () => {
+      playback.toggle();
+      await Promise.resolve();
+    });
+
+    // `onPointerMove` (`attachment-blocks.tsx`) appelle `seek` à CHAQUE image
+    // du geste : la lecture ayant avancé entre deux images, chaque saut clôt
+    // un segment réel. Quatre-vingts images, c'est un peu plus d'une seconde
+    // de parcours au doigt.
+    await act(async () => {
+      for (let i = 0; i < 80; i += 1) {
+        setMediaTime(media, { currentTime: i + 0.02 });
+        playback.seek(i + 1);
+      }
+    });
+
+    await act(async () => {
+      setMediaTime(media, { currentTime: 300 });
+      media.dispatchEvent(new Event('ended'));
+    });
+
+    const last = bodyOf(calls[calls.length - 1]!);
+    expect(last.complete).toBe(true);
+    const stretches = last.stretches as readonly { readonly startMs: number }[];
+    expect(stretches.length).toBeLessThanOrEqual(50);
+    // L'ordre CHRONOLOGIQUE des rescapées est préservé — même règle que
+    // `capTrace` (`services/gateway/src/utils/playback-trace.ts`).
+    expect([...stretches].sort((a, b) => a.startMs - b.startMs)).toEqual([...stretches]);
+  });
+
+  test('la langue de la piste consommée voyage avec le rapport', async () => {
+    const coordinator = createMediaCoordinator();
+    const { deps, calls } = fakeReportDeps();
+    let playback!: MediaPlayback;
+    const el = mount({ onReady: (p) => (playback = p), attachmentId: 'att-9', coordinator, report: { kind: 'listened', language: 'fr', deps } });
+    const media = mediaOf(el);
+    stubMedia(media);
+    setMediaTime(media, { duration: 60 });
+
+    await act(async () => {
+      playback.toggle();
+      await Promise.resolve();
+    });
+    setMediaTime(media, { currentTime: 3 });
+    await act(async () => {
+      playback.toggle();
+      await Promise.resolve();
+    });
+
+    expect(bodyOf(calls[0]!).language).toBe('fr');
+  });
+
+  test('piste sans langue déclarée : le champ ne part pas (le wire exige deux caractères)', async () => {
+    const coordinator = createMediaCoordinator();
+    const { deps, calls } = fakeReportDeps();
+    let playback!: MediaPlayback;
+    const el = mount({ onReady: (p) => (playback = p), attachmentId: 'att-9', coordinator, report: { kind: 'listened', language: '', deps } });
+    const media = mediaOf(el);
+    stubMedia(media);
+    setMediaTime(media, { duration: 60 });
+
+    await act(async () => {
+      playback.toggle();
+      await Promise.resolve();
+    });
+    setMediaTime(media, { currentTime: 3 });
+    await act(async () => {
+      playback.toggle();
+      await Promise.resolve();
+    });
+
+    expect(Object.keys(bodyOf(calls[0]!))).not.toContain('language');
+  });
+
+  test('reprise sous une seconde : aucun seek (reprendre et repartir de zéro sont indiscernables)', async () => {
+    const coordinator = createMediaCoordinator();
+    const { deps } = fakeReportDeps();
+    const el = mount({
+      onReady: () => {},
+      attachmentId: 'a',
+      coordinator,
+      report: { kind: 'listened', resume: { positionMs: 400, complete: false }, deps },
+    });
+
+    expect(mediaOf(el).currentTime).toBe(0);
   });
 });

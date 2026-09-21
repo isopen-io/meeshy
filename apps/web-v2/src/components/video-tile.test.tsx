@@ -188,3 +188,42 @@ describe('VideoFallback (D-42, déménagé #6221)', () => {
     expect(container.textContent).toContain('0:07');
   });
 });
+
+/**
+ * LA VIDÉO REPREND LÀ OÙ ON L'AVAIT LAISSÉE (#7225, W6 — revue).
+ *
+ * Le lot ne câblait que le VOCAL : la vidéo, pourtant nommée dans le résultat
+ * attendu du lot, repartait de zéro et ne rapportait rien. Le témoin interroge
+ * ce que l'utilisateur VOIT — la position réelle de l'élément — et non la
+ * présence d'un appel.
+ */
+describe('VideoTile — la reprise de lecture (#7225)', () => {
+  const watchedTo = (positionMs: number | null, complete: boolean): Attachment => ({
+    ...video,
+    currentUserConsumption: {
+      lastPlayPositionMs: null,
+      listenedComplete: false,
+      lastWatchPositionMs: positionMs,
+      watchedComplete: complete,
+    },
+  });
+
+  test('une vidéo vue jusqu’à 4 s reprend à 4 s', () => {
+    const el = mount(watchedTo(4_000, false), true, () => {});
+    expect(el.querySelector('video')!.currentTime).toBe(4);
+  });
+
+  test('une vidéo déjà terminée repart de zéro (rien à rejouer)', () => {
+    const el = mount(watchedTo(6_500, true), true, () => {});
+    expect(el.querySelector('video')!.currentTime).toBe(0);
+  });
+
+  test('la position AUDIO ne sert jamais de reprise à une vidéo', () => {
+    const el = mount(
+      { ...video, currentUserConsumption: { lastPlayPositionMs: 5_000, listenedComplete: false, lastWatchPositionMs: null, watchedComplete: false } },
+      true,
+      () => {},
+    );
+    expect(el.querySelector('video')!.currentTime).toBe(0);
+  });
+});

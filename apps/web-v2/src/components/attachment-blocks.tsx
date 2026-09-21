@@ -85,6 +85,12 @@ function VoiceAttachment({
       tracksTime: true,
       report: {
         kind: 'listened',
+        // LA PISTE ÉLUE EST CE QUI A ÉTÉ ÉCOUTÉ (revue #7225) — une piste
+        // traduite est une écoute d'une AUTRE version du contenu, et le
+        // serveur la stocke comme telle. Sans ce champ, une écoute en
+        // français était comptée sur l'original anglais (Prisme : « qu'est-ce
+        // qui part À CÔTÉ de ce qu'on vient de résoudre ? »).
+        language: track.language,
         ...(attachment.duration !== undefined ? { durationMs: attachment.duration } : {}),
         ...(consumption != null
           ? { resume: { positionMs: consumption.lastPlayPositionMs, complete: consumption.listenedComplete } }

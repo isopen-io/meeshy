@@ -264,7 +264,22 @@ function ViewerVideoPage({
   readonly corridorSlot: HTMLElement | null;
   readonly language: InterfaceLanguage;
 }) {
-  const playback = useMediaPlayback({ attachmentId: attachment.id, tracksTime: true });
+  /** `report` (#7225, W6) — la visionneuse est l'écran où une vidéo se
+   * REGARDE vraiment : c'est là que la reprise se voit et que la progression
+   * doit remonter. Même verbe et mêmes champs que la tuile du fil
+   * (`video-tile.tsx`) : `watched`, `lastWatchPositionMs`/`watchedComplete`. */
+  const consumption = attachment.currentUserConsumption;
+  const playback = useMediaPlayback({
+    attachmentId: attachment.id,
+    tracksTime: true,
+    report: {
+      kind: 'watched',
+      ...(attachment.duration !== undefined ? { durationMs: attachment.duration } : {}),
+      ...(consumption != null
+        ? { resume: { positionMs: consumption.lastWatchPositionMs, complete: consumption.watchedComplete } }
+        : {}),
+    },
+  });
   const { status, toggle, bind } = playback;
   const statusRef = useRef(status);
   statusRef.current = status;
