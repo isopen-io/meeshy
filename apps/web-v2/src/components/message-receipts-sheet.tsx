@@ -303,7 +303,15 @@ function PlaybackRow({
           {row.username}
         </p>
         {!complete && fraction > 0 ? (
-          <div className="mt-1 h-1 rounded-full" style={{ backgroundColor: 'var(--color-hairline)' }}>
+          <div
+            className="mt-1 h-1 rounded-full"
+            style={{ backgroundColor: 'var(--color-hairline)' }}
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(fraction * 100)}
+            aria-label={row.username}
+          >
             <div className="h-1 rounded-full" style={{ width: `${fraction * 100}%`, backgroundColor: 'var(--color-primary)' }} />
           </div>
         ) : null}
