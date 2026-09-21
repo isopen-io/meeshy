@@ -1,5 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 
+import type { PostTranslationUpdatedEventData } from '@meeshy/shared/types/post';
+
 import { withoutBookmark } from '@/lib/feed/bookmark-membership';
 import { togglePost, withServedCount } from '@/lib/feed/interactions';
 
@@ -296,5 +298,96 @@ export function applyPostReactionEvent(queryClient: QueryClient, payload: unknow
     on: payload.action === 'add',
     byViewer: payload.userId === viewerId,
     likeCount: payload.aggregation.count,
+  });
+}
+
+/**
+ * **LES TRADUCTIONS LIVRÉES EN DIRECT** (#7383, #7382) — le pipeline NLLB
+ * livre UNE traduction d'UN contenu, jamais la carte entière :
+ * `post:translation-updated` pour `Post.content`,
+ * `media:caption-translation-updated` pour `PostMedia.caption`. Les deux
+ * charges partagent la forme `{ postId, language, translation }`
+ * (`packages/shared/types/post.ts`), et `postId` est OBLIGATOIRE sur les deux
+ * depuis leur naissance — la passerelle le résout même pour un média de
+ * commentaire (`MediaCaptionTranslationService.ts`, l'audience en dépend).
+ *
+ * **LA LOI NE FAIT QUE RANGER, ELLE N'ÉLIT RIEN.** La traduction entre dans la
+ * carte de SON contenu, à sa langue ; ce que le lecteur voit est redescendu à
+ * chaque peinture par le résolveur du web-v2 (`resolveFeedCardModel` →
+ * `served()` → `resolvePrismTranslation`), qui parcourt le prisme dans l'ordre
+ * et fait concourir la langue d'origine à SON rang. Une traduction de rang 2
+ * fait donc basculer une publication écrite hors du prisme ; une traduction
+ * hors du prisme est rangée sans rien changer ; et aucune « dernière reçue »
+ * ne détrône un rang supérieur — miroir de `FeedViewModel.applyPostTranslation`
+ * (iOS, #6531), qui fusionne puis re-résout.
+ *
+ * **CHAQUE ÉCRAN QUI MONTRE LA CARTE LA REÇOIT** — le registre
+ * (`updateCardPost`, `card-caches.ts`), Réels compris : une traduction ne
+ * compose pas l'ordre du fil gelé, elle sert au lecteur le MÊME contenu dans
+ * sa langue (iOS : `feedCache.patchEverywhere`, pager des Réels compris).
+ */
+type TranslationEntry = PostTranslationUpdatedEventData['translation'];
+
+type TranslationDelivery = { readonly postId: string; readonly language: string; readonly translation: TranslationEntry };
+
+const nonEmpty = (value: unknown): value is string => typeof value === 'string' && value !== '';
+
+const translationOf = (value: unknown): TranslationEntry | null => {
+  const t = objectOf(value);
+  if (t === null || typeof t.text !== 'string' || typeof t.translationModel !== 'string' || typeof t.createdAt !== 'string') return null;
+  const confidence = t.confidenceScore;
+  return confidence === undefined || (typeof confidence === 'number' && Number.isFinite(confidence)) ? (t as TranslationEntry) : null;
+};
+
+const deliveryOf = (payload: unknown): TranslationDelivery | null => {
+  const p = objectOf(payload);
+  const translation = translationOf(p?.translation);
+  if (translation === null || !nonEmpty(p?.postId) || !nonEmpty(p?.language)) return null;
+  return { postId: p.postId, language: p.language, translation };
+};
+
+/**
+ * LA FUSION PAR LANGUE, SITE UNIQUE des deux cartes — qui ne se mélangent
+ * jamais : l'appelant remet LA carte du contenu visé (`Post.translations` OU
+ * `PostMedia.captionTranslations`, jamais `alt`, dont la traduction a sa
+ * propre carte). Une langue déjà tenue est REMPLACÉE, jamais doublée.
+ *
+ * `null` quand cette langue porte déjà ce texte : rien de ce que le lecteur
+ * verrait ne change (une rediffusion à la reconnexion), la carte reste la
+ * MÊME référence, et le registre ne réécrit aucune caisse.
+ */
+const mergedTranslations = (held: unknown, { language, translation }: TranslationDelivery): Record<string, unknown> | null => {
+  const record = Array.isArray(held) ? {} : (objectOf(held) ?? {});
+  return objectOf(record[language])?.text === translation.text ? null : { ...record, [language]: translation };
+};
+
+/** `post:translation-updated` — le TEXTE de la publication (#7383). */
+export function applyPostTranslation(queryClient: QueryClient, payload: unknown): void {
+  const delivery = deliveryOf(payload);
+  if (delivery === null) return;
+
+  updateCardPost(queryClient, delivery.postId, (post) => {
+    const translations = mergedTranslations(post.translations, delivery);
+    return translations === null ? post : { ...post, translations };
+  });
+}
+
+/**
+ * `media:caption-translation-updated` — la LÉGENDE d'un média (#7382, #6280).
+ * Le média se retrouve par `mediaId` DANS la publication que `postId` nomme.
+ * Un média de COMMENTAIRE (`commentId` présent) voyage avec le `postId` de la
+ * publication qui porte le commentaire : aucune carte ne le tient, donc rien
+ * n'est parcouru.
+ */
+export function applyMediaCaptionTranslation(queryClient: QueryClient, payload: unknown): void {
+  const delivery = deliveryOf(payload);
+  const mediaId = objectOf(payload)?.mediaId;
+  if (delivery === null || !nonEmpty(mediaId) || typeof objectOf(payload)?.commentId === 'string') return;
+
+  updateCardPost(queryClient, delivery.postId, (post) => {
+    const media = post.media ?? [];
+    const held = media.find((m) => m.id === mediaId);
+    const captionTranslations = held === undefined ? null : mergedTranslations(held.captionTranslations, delivery);
+    return captionTranslations === null ? post : { ...post, media: media.map((m) => (m === held ? { ...m, captionTranslations } : m)) };
   });
 }
