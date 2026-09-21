@@ -199,7 +199,10 @@ struct ReelFeedVideoSurface: View {
             return
         }
         if manager.activeURL != attachment.fileUrl {
-            manager.load(urlString: attachment.fileUrl, attachmentId: media.id)
+            manager.load(
+                urlString: attachment.fileUrl,
+                attachmentId: media.id,
+                servedConsumption: attachment.currentUserConsumption)
         }
         updateEngineOwnership(true)
         // Loop DOIT être (ré)affirmé APRÈS `load()` : `load()` appelle `cleanup()`

@@ -213,7 +213,10 @@ struct ReelVideoView: View {
         // l'abonnement `CallManager.$callState` dans `ReelsPlayerView`.
         guard isActive, ready, !MediaSessionCoordinator.shared.isCallActive else { return }
         if manager.activeURL != attachment.fileUrl {
-            manager.load(urlString: attachment.fileUrl, attachmentId: media.id)
+            manager.load(
+                urlString: attachment.fileUrl,
+                attachmentId: media.id,
+                servedConsumption: attachment.currentUserConsumption)
         }
         publishConsumedLanguage()
         // Le viewer plein écran joue TOUJOURS avec le son. La surface de fond du

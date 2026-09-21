@@ -383,7 +383,10 @@ internal struct _InlineRenderer: View {
         // `nil` before the new value could apply. Passing it as a parameter
         // (applied AFTER `cleanup()`) is what keeps `reportWatchProgress`
         // firing. See `SharedAVPlayerManagerAttachmentTrackingTests`.
-        manager.load(urlString: player.attachment.fileUrl, attachmentId: player.attachment.id)
+        manager.load(
+            urlString: player.attachment.fileUrl,
+            attachmentId: player.attachment.id,
+            servedConsumption: player.attachment.currentUserConsumption)
         manager.play()
         scheduleControlsHide()
     }
@@ -792,7 +795,10 @@ internal struct _FullscreenRenderer: View {
     /// Shared by the initial mount and the retry button so they can never
     /// diverge into two different failure behaviours.
     private func attemptLoad() {
-        manager.load(urlString: player.attachment.fileUrl, attachmentId: player.attachment.id)
+        manager.load(
+            urlString: player.attachment.fileUrl,
+            attachmentId: player.attachment.id,
+            servedConsumption: player.attachment.currentUserConsumption)
         if manager.player == nil {
             loadFailed = true
         } else {

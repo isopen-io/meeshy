@@ -109,6 +109,12 @@ public final class SharedAVPlayerManager: ObservableObject {
     /// la surface, qui seule la connaît ; le moteur ne lit aucun singleton.
     public var consumedLanguageProvider: (() -> String?)?
 
+    /// La consommation SERVIE pour la pièce jointe CHARGÉE, remise par
+    /// `load(urlString:attachmentId:servedConsumption:)` — le moteur ne lit
+    /// aucun modèle lui-même (pureté SDK). `cleanup()` ne l'efface pas : `load`
+    /// la repose à chaque chargement, y compris à `nil`.
+    private var servedConsumption: MeeshyMediaConsumption?
+
     private var positionMs: Int { currentTime.isNaN ? 0 : max(0, Int(currentTime * 1000)) }
     /// Last `currentTime` (s) at which an engagement heartbeat fired. Instance-scoped
     /// (was a `var` captured inside the time-observer closure) so the observer block
@@ -127,11 +133,20 @@ public final class SharedAVPlayerManager: ObservableObject {
 
     // MARK: - Load
 
-    public func load(urlString: String, attachmentId: String? = nil) {
+    /// `servedConsumption` — la consommation que la passerelle sert pour cette
+    /// pièce jointe (#7212). Elle voyage AVEC l'identifiant qu'elle qualifie,
+    /// par le même paramètre : un champ posé séparément resterait celui de la
+    /// vidéo PRÉCÉDENTE dès que ce moteur partagé change de piste.
+    public func load(
+        urlString: String,
+        attachmentId: String? = nil,
+        servedConsumption: MeeshyMediaConsumption? = nil
+    ) {
         guard !urlString.isEmpty else { return }
         guard urlString != activeURL else { return }
 
         cleanup()
+        self.servedConsumption = servedConsumption
         // Posé APRÈS `cleanup()` (qui le remet à `nil`) : tous les appelants
         // posaient auparavant `manager.attachmentId` AVANT `load()`, donc
         // `cleanup()` l'effaçait silencieusement à chaque chargement et
@@ -497,11 +512,21 @@ public final class SharedAVPlayerManager: ObservableObject {
     /// Called once per `load()` from the `duration` publisher sink, guarded by
     /// `hasAppliedResumeThisLoad` — AVFoundation republishes `duration` more
     /// than once while the item loads.
+    ///
+    /// #7212 — la position servie par la passerelle comble l'ABSENCE locale, par
+    /// la MÊME fonction que la vignette interroge pour teindre sa barre
+    /// (`MediaResumeResolver`), et sur la paire de champs du médium VIDÉO
+    /// (`lastWatchPositionMs` / `watchedComplete`).
     private func applyResumePositionIfAvailable() {
         guard !hasAppliedResumeThisLoad, duration > 0, let attId = attachmentId else { return }
         hasAppliedResumeThisLoad = true
-        guard let saved = VideoPlaybackPositionStore.shared.position(for: attId),
-              Self.isResumable(saved, totalDuration: duration) else { return }
+        guard let saved = MediaResumeResolver.resumePosition(
+            localPositionSeconds: VideoPlaybackPositionStore.shared.position(for: attId),
+            servedConsumption: servedConsumption,
+            medium: .video,
+            totalDuration: duration,
+            isEligible: Self.isResumable)
+        else { return }
         seek(to: saved)
     }
 

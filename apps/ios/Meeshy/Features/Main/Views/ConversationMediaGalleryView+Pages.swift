@@ -643,7 +643,10 @@ struct GalleryVideoPage: View, Equatable {
             guard isActive, isWindowed, isReadyForAutoplay,
                   videoManagerActiveURL != attachment.fileUrl else { return }
             videoManager.isForceMuted = false
-            videoManager.load(urlString: attachment.fileUrl, attachmentId: attachment.id.isEmpty ? nil : attachment.id)
+            videoManager.load(
+                urlString: attachment.fileUrl,
+                attachmentId: attachment.id.isEmpty ? nil : attachment.id,
+                servedConsumption: attachment.currentUserConsumption)
             videoManager.play()
             onCacheActivation()
         }
@@ -783,7 +786,10 @@ struct GalleryVideoPage: View, Equatable {
                 // activé (elle le relâche normalement d'elle-même en perdant
                 // l'activité), on ne veut jamais en hériter silencieusement ici.
                 videoManager.isForceMuted = false
-                videoManager.load(urlString: attachment.fileUrl, attachmentId: attachment.id.isEmpty ? nil : attachment.id)
+                videoManager.load(
+                urlString: attachment.fileUrl,
+                attachmentId: attachment.id.isEmpty ? nil : attachment.id,
+                servedConsumption: attachment.currentUserConsumption)
                 videoManager.play()
                 onCacheActivation()
                 HapticFeedback.light()

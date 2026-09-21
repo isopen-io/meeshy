@@ -475,7 +475,11 @@ fileprivate struct BubbleGridCell: View {
                 )
             }
             .overlay(alignment: .bottom) {
-                MediaConsumptionProgressBar(attachmentId: attachment.id, accentHex: contactColor)
+                MediaConsumptionProgressBar(
+                    attachmentId: attachment.id,
+                    accentHex: contactColor,
+                    servedConsumption: attachment.currentUserConsumption,
+                    totalDuration: Double(attachment.duration ?? 0) / 1000.0)
             }
             overflowOverlay
             viewCountBadge
@@ -1009,7 +1013,11 @@ struct BubbleCarouselView: View {
             )
         }
         .overlay(alignment: .bottom) {
-            MediaConsumptionProgressBar(attachmentId: attachment.id, accentHex: contactColor)
+            MediaConsumptionProgressBar(
+                    attachmentId: attachment.id,
+                    accentHex: contactColor,
+                    servedConsumption: attachment.currentUserConsumption,
+                    totalDuration: Double(attachment.duration ?? 0) / 1000.0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
