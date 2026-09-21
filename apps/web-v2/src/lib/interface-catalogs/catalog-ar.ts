@@ -77,6 +77,7 @@ const ar = {
   'feed.post.see_less': 'عرض أقل',
   'feed.post.reel.chip': 'ريل',
   'feed.post.reel.of': 'ريل {author}',
+  'feed.post.open': 'فتح منشور {author}',
   'feed.error.title': 'تعذّر تحميل التدفق',
   'feed.error.body': 'أعد المحاولة بعد لحظة.',
   'feed.offline.title': 'غير متصل',

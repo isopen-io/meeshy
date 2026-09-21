@@ -77,6 +77,7 @@ const es = {
   'feed.post.see_less': 'ver menos',
   'feed.post.reel.chip': 'Reel',
   'feed.post.reel.of': 'Reel de {author}',
+  'feed.post.open': 'Abrir la publicación de {author}',
   'feed.error.title': 'No se pudo cargar el feed',
   'feed.error.body': 'Inténtalo de nuevo en un momento.',
   'feed.offline.title': 'Sin conexión',

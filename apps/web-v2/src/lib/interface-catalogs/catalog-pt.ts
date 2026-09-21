@@ -81,6 +81,7 @@ const pt = {
   'feed.post.see_less': 'ver menos',
   'feed.post.reel.chip': 'Reel',
   'feed.post.reel.of': 'Reel de {author}',
+  'feed.post.open': 'Abrir a publicação de {author}',
   'feed.error.title': 'Não foi possível carregar o feed',
   'feed.error.body': 'Tente novamente em instantes.',
   'feed.offline.title': 'Sem conexão',

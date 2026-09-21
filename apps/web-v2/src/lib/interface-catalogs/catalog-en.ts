@@ -77,6 +77,7 @@ const en = {
   'feed.post.see_less': 'show less',
   'feed.post.reel.chip': 'Reel',
   'feed.post.reel.of': 'Reel by {author}',
+  'feed.post.open': 'Open {author}’s post',
   'feed.error.title': 'Couldn’t load the feed',
   'feed.error.body': 'Try again in a moment.',
   'feed.offline.title': 'Offline',
