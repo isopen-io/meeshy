@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /** @jsxImportSource preact */
 /**
- * PRÉCHAUFFE les cinq pages institutionnelles en HTML STATIQUE.
+ * PRÉCHAUFFE les sept pages institutionnelles en HTML STATIQUE.
  *
  * Pourquoi elles ne sont pas des routes de l'application :
  *
@@ -34,6 +34,8 @@ import budgets from '../budgets.json';
 import { InstitutionalPage } from '../src/institutional/page';
 import { PAGE_ABOUT } from '../src/institutional/about';
 import { PAGE_CONTACT } from '../src/institutional/contact';
+import { PAGE_FAQ } from '../src/institutional/faq';
+import { PAGE_HELP } from '../src/institutional/help';
 import { PAGE_PARTNERS } from '../src/institutional/partners';
 import { PAGE_PRIVACY } from '../src/institutional/privacy';
 import { PAGE_TERMS } from '../src/institutional/terms';
@@ -73,6 +75,10 @@ const INSTITUTIONAL_PAGE_BUDGET_KB = budgets.institutional_page.kb.value;
 const PAGES: readonly { readonly route: string; readonly page: ContentPage }[] = [
   { route: 'about', page: PAGE_ABOUT },
   { route: 'contact', page: PAGE_CONTACT },
+  /* LES DEUX ADRESSES DU BINAIRE DÉJÀ DISTRIBUÉ (#7287) — `SupportView.swift`
+     les ouvre depuis l'App Store, et elles rendaient « adresse inconnue ». */
+  { route: 'faq', page: PAGE_FAQ },
+  { route: 'help', page: PAGE_HELP },
   { route: 'partners', page: PAGE_PARTNERS },
   { route: 'privacy', page: PAGE_PRIVACY },
   { route: 'terms', page: PAGE_TERMS },
@@ -285,7 +291,7 @@ for (const { route, page } of PAGES) {
       `${requests} requête${requests > 1 ? 's' : ''} · 0 script`,
   );
 }
-console.log(`  ${' '.repeat(10)}${String(Math.round((total / 1024) * 100) / 100).padStart(6)} Ko pour les cinq\n`);
+console.log(`  ${' '.repeat(10)}${String(Math.round((total / 1024) * 100) / 100).padStart(6)} Ko pour les ${PAGES.length}\n`);
 
 /**
  * LE GATE (revue de #5606, défaut 3) — un dépassement rend le script en
