@@ -3518,3 +3518,30 @@ jamais un `<span>` stylé.
 **La règle générale** : une règle d'accessibilité qui ne s'applique qu'à une peau
 n'est pas une règle, c'est un accident. Un témoin qui ne joue qu'une peau ne peut
 pas le voir — c'est en jouant les DEUX que celui-ci est tombé.
+
+## D-104 — Le badge d'icône compte les conversations non lues, jamais les messages ; la divergence avec iOS se documente, elle ne se corrige pas ici (2026-09-21, #7221)
+
+D-L1 (`docs/superpowers/specs/2026-09-21-lecture-et-accuses-design.md` § 3) :
+« le badge d'icône compte les CONVERSATIONS non lues (hors muettes), comme
+l'app iOS et comme WhatsApp ». `countUnreadConversations`
+(`src/lib/view/use-app-badge.ts`) l'applique à la lettre : une conversation
+avec des non-lus pèse **1**, quel que soit son nombre de messages — le
+compte se déduit d'`effectiveUnreadOf`/`effectiveFlagsOf`
+(`lib/conversation-store.ts:121-129`), les mêmes lois que la Lentille, jamais
+relues en parallèle (un second compte y désynchroniserait l'optimiste).
+
+**La revue a trouvé que le code iOS de référence ne fait pas ce que D-L1 lui
+prête** : `ConversationReadLedger.total(excludingOpen:excludingMuted:)`
+(`packages/MeeshySDK/…/Store/ConversationReadLedger.swift:275-279`) **somme les
+messages non lus**, pas les conversations — alors que son propre
+doc-comment (`NotificationCoordinator.recomputeTotal:395-398`) dit
+« comptent les AUTRES conversations ». Le relevé § 2 du document de chantier
+répète l'affirmation du doc-comment, pas ce que le code fait.
+
+**Cette divergence reste HORS PÉRIMÈTRE de W4** (web-v2 seul) : elle
+engage la chaîne iOS (I1, #7222) et G3 (#7218, `aps.badge`), qu'un
+arbitrage tranchera une seule fois pour les trois. Issue #7236, label
+`décision-produit`, ouverte pour que I1 et G3 ne gravent pas chacun sa
+propre formule avant que le porteur choisisse. web-v2 reste conforme à
+D-L1 tel qu'écrit ; le jour où l'arbitrage change D-L1, ce fichier et
+`use-app-badge.ts` se corrigent ensemble.
