@@ -65,7 +65,7 @@ jest.mock('@meeshy/shared/prisma/client', () => {
     },
     message: {
       findUnique: jest.fn(),
-      count: jest.fn(),
+      findMany: jest.fn(),
     },
     postMedia: {
       findFirst: jest.fn(),
@@ -221,10 +221,18 @@ describe('NotificationService — badge du push (F1 ; D-L1, #7218 : conversation
         ? fixtures.filter((f) => f.isMuted).map((f) => ({ conversationId: f.conversationId }))
         : []
     );
+    // #7199 (G2) — `computeUnreadCounts` (`unreadCountsCore.ts`) compte
+    // désormais par `message.findMany` borné par le plancher, plus par
+    // `message.count` par conversation.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (prisma.message.count as jest.Mock).mockImplementation(async ({ where }: any) =>
-      byConversation.get(where.conversationId)?.unreadMessages ?? 0
-    );
+    (prisma.message.findMany as jest.Mock).mockImplementation(async ({ where }: any) => {
+      const unreadMessages = byConversation.get(where.conversationId)?.unreadMessages ?? 0;
+      return Array.from({ length: unreadMessages }, (_, i) => ({
+        id: `${where.conversationId}-msg-${i}`,
+        createdAt: new Date(`2026-09-21T00:00:${String(i).padStart(2, '0')}.000Z`),
+        senderId: 'someone-else',
+      }));
+    });
   }
 
   beforeEach(() => {
@@ -314,10 +322,15 @@ describe('NotificationService — badge du push (F1 ; D-L1, #7218 : conversation
   it('test_push_omitsBadge_whenUnreadCountingFails_ratherThanWipingTheIcon', async () => {
     // Le comptage avale sa panne et rendrait une carte VIDE : servir `badge: 0`
     // EFFACERAIT l'icône d'un destinataire qui a des non-lus. Le badge est omis.
+    //
+    // Depuis #7199 (G2), une panne DANS `computeUnreadCounts` (le comptage
+    // message par message) est avalée à CE niveau et rend des zéros — elle ne
+    // remonte plus jusqu'ici (écart consigné, `decisions.md`). La panne qui
+    // remonte encore est celle de la lecture des curseurs.
     seedConversations([
       { conversationId: 'conv-a', participantId: 'participant-a', unreadMessages: 3 },
     ]);
-    (prisma.message.count as jest.Mock).mockRejectedValue(new Error('db down'));
+    (prisma.conversationReadCursor.findMany as jest.Mock).mockRejectedValue(new Error('db down'));
 
     const payload = await sendMessageNotification();
     expect(payload.badge).toBeUndefined();

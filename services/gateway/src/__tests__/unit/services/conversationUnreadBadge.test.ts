@@ -87,10 +87,23 @@ function makePrisma(fixtures: readonly ConversationFixture[]) {
         }),
       },
       userMessageDeletion: { findMany: jest.fn(async () => []) },
+      // #7199 (G2) a fait de `computeUnreadCounts` (`unreadCountsCore.ts`) le
+      // site UNIQUE du calcul : un `message.findMany` borné par le plancher,
+      // compté en mémoire — plus le `message.count` par conversation d'avant
+      // le merge. Le faux Prisma modélise donc désormais le MÊME contrat que
+      // la liste et le push temps réel.
       message: {
-        count: jest.fn(async ({ where }: { where: Where }) => {
-          counted.push(where.conversationId);
-          return byConversation.get(where.conversationId)?.unreadMessages ?? 0;
+        findMany: jest.fn(async ({ where }: { where: Where }) => {
+          const conversationId = where.conversationId as string;
+          counted.push(conversationId);
+          const unreadMessages = byConversation.get(conversationId)?.unreadMessages ?? 0;
+          return Array.from({ length: unreadMessages }, (_, i) => ({
+            id: `${conversationId}-msg-${i}`,
+            // Postérieurs au curseur (2026-09-20) — c'est le plancher que
+            // `where.createdAt.gt` exprime déjà côté appelant.
+            createdAt: new Date(`2026-09-21T00:00:${String(i).padStart(2, '0')}.000Z`),
+            senderId: 'someone-else',
+          }));
         }),
       },
     },
@@ -163,7 +176,7 @@ describe('computeConversationUnreadBadge — cas vide et panne', () => {
     const { prisma } = makePrisma([]);
 
     await expect(badgeOf(prisma)).resolves.toBe(0);
-    expect(prisma.message.count).not.toHaveBeenCalled();
+    expect(prisma.message.findMany).not.toHaveBeenCalled();
   });
 
   it('test_returnsZero_whenEveryConversationIsRead', async () => {
@@ -186,10 +199,17 @@ describe('computeConversationUnreadBadge — cas vide et panne', () => {
   it('test_throws_whenUnreadCountsAreUnavailable_soTheCallerOmitsTheBadge', async () => {
     // `getUnreadCountsForUser` avale sa panne et rend une Map VIDE. Servir 0
     // EFFACERAIT l'icône du destinataire : on lève, l'appelant omet le badge.
+    //
+    // Depuis #7199 (G2), `computeUnreadCounts` (le comptage message par
+    // message) avale SA PROPRE panne et rend des zéros — une panne à CE
+    // niveau ne remonte donc plus jusqu'ici (écart consigné, voir
+    // `decisions.md`). Le chemin qui remonte encore est la lecture des
+    // curseurs, faite par `getUnreadCountsForUser` lui-même, hors du
+    // périmètre que `computeUnreadCounts` protège.
     const { prisma } = makePrisma([
       { conversationId: 'conv-a', participantId: 'participant-a', unreadMessages: 3 },
     ]);
-    prisma.message.count.mockRejectedValue(new Error('db down'));
+    (prisma.conversationReadCursor.findMany as jest.Mock).mockRejectedValue(new Error('db down'));
 
     await expect(badgeOf(prisma)).rejects.toThrow();
   });
