@@ -4,7 +4,7 @@ import { decodeCursor, encodeCursor } from '../routes/posts/types';
 import { authorSelect, postInclude, postMentionInclude, storyPostInclude, trayStorySelect, NOT_DELETED } from './posts/postIncludes';
 import { withMentions, type WireReader } from './posts/postReferences';
 import { EPHEMERAL_AUTHOR_ARCHIVE_MS } from './posts/ephemeralPosts';
-import { isEphemeralPostType } from './posts/postVisibility';
+import { likedFromReactions, withViewerPostState } from './posts/viewerPostState';
 import { buildFeedVisibilityFilter } from './posts/feedVisibility';
 import {
   reelAffinityScore,
@@ -221,20 +221,10 @@ export class PostFeedService {
     scored.sort((a, b) => b.score - a.score);
     const items = scored;
 
-    const postIds = items.map((s) => s.post.id);
-    const [userReactionsMap, personalFlags] = postIds.length > 0
-      ? await Promise.all([
-          this.resolveUserReactionsMap(userId, items.map((s) => s.post)),
-          this.resolvePersonalFlags(userId, postIds),
-        ])
-      : [new Map<string, string[]>(), { bookmarkedIds: new Set<string>(), repostedIds: new Set<string>() }];
+    const withState = await withViewerPostState(this.prisma, userId, items.map((s) => s.post));
 
     return {
-      items: items.map((s) => withMentions(hoistLocationDeep({
-        ...this.enrichWithLikeStatus(s.post, userReactionsMap.get(s.post.id) ?? []),
-        currentUserReactions: userReactionsMap.get(s.post.id) ?? [],
-        ...this.personalFlagsFor(s.post.id, personalFlags),
-      }), reader)),
+      items: withState.map((post) => withMentions(hoistLocationDeep(post), reader)),
       nextCursor,
       hasMore,
     };
@@ -748,21 +738,12 @@ export class PostFeedService {
 
   /** Enrichit des réels avec l'état viewer (réactions + like + favori). */
   private async enrichReelsForViewer(items: any[], viewerUserId: string, reader?: WireReader) {
-    if (items.length === 0) return [];
-    const postIds = items.map((p) => p.id);
-    // Aligné sur `getFeed` PAR LE MÊME HELPER, et non par une recopie : la
+    // Aligné sur `getFeed` PAR LA MÊME FONCTION, et non par une recopie : la
     // version précédente disait déjà « aligné sur getFeed » tout en n'exposant
     // que `isBookmarkedByMe` — le rail du reel viewer ne pouvait donc pas
     // savoir que le lecteur avait déjà reposté.
-    const [userReactionsMap, personalFlags] = await Promise.all([
-      this.resolveUserReactionsMap(viewerUserId, items),
-      this.resolvePersonalFlags(viewerUserId, postIds),
-    ]);
-    return items.map((p) => withMentions(hoistLocationDeep({
-      ...this.enrichWithLikeStatus(p, userReactionsMap.get(p.id) ?? []),
-      currentUserReactions: userReactionsMap.get(p.id) ?? [],
-      ...this.personalFlagsFor(p.id, personalFlags),
-    }), reader));
+    const withState = await withViewerPostState(this.prisma, viewerUserId, items);
+    return withState.map((p) => withMentions(hoistLocationDeep(p), reader));
   }
 
   /**
@@ -919,31 +900,10 @@ export class PostFeedService {
       ? encodeCursor(items[items.length - 1].createdAt, items[items.length - 1].id)
       : null;
 
-    const noFlags = { bookmarkedIds: new Set<string>(), repostedIds: new Set<string>() };
-
-    if (!viewerUserId || items.length === 0) {
-      return {
-        items: items.map((p) => withMentions(hoistLocationDeep({
-          ...p,
-          currentUserReactions: [] as string[],
-          ...this.personalFlagsFor(p.id, noFlags),
-        }), reader)),
-        nextCursor,
-        hasMore,
-      };
-    }
-
-    const [userReactionsMap, personalFlags] = await Promise.all([
-      this.resolveUserReactionsMap(viewerUserId, items),
-      this.resolvePersonalFlags(viewerUserId, items.map((p) => p.id)),
-    ]);
+    const withState = await withViewerPostState(this.prisma, viewerUserId, items);
 
     return {
-      items: items.map((p) => withMentions(hoistLocationDeep({
-        ...this.enrichWithLikeStatus(p, userReactionsMap.get(p.id) ?? []),
-        currentUserReactions: userReactionsMap.get(p.id) ?? [],
-        ...this.personalFlagsFor(p.id, personalFlags),
-      }), reader)),
+      items: withState.map((p) => withMentions(hoistLocationDeep(p), reader)),
       nextCursor,
       hasMore,
     };
@@ -985,29 +945,10 @@ export class PostFeedService {
       ? encodeCursor(items[items.length - 1].createdAt, items[items.length - 1].id)
       : null;
 
-    if (!viewerUserId || items.length === 0) {
-      return {
-        items: items.map((p) => withMentions(hoistLocationDeep({
-          ...p,
-          currentUserReactions: [] as string[],
-          ...this.personalFlagsFor(p.id, { bookmarkedIds: new Set<string>(), repostedIds: new Set<string>() }),
-        }), reader)),
-        nextCursor,
-        hasMore,
-      };
-    }
-
-    const [communityReactionsMap, communityFlags] = await Promise.all([
-      this.resolveUserReactionsMap(viewerUserId, items),
-      this.resolvePersonalFlags(viewerUserId, items.map((p) => p.id)),
-    ]);
+    const withState = await withViewerPostState(this.prisma, viewerUserId, items);
 
     return {
-      items: items.map((p) => withMentions(hoistLocationDeep({
-        ...this.enrichWithLikeStatus(p, communityReactionsMap.get(p.id) ?? []),
-        currentUserReactions: communityReactionsMap.get(p.id) ?? [],
-        ...this.personalFlagsFor(p.id, communityFlags),
-      }), reader)),
+      items: withState.map((p) => withMentions(hoistLocationDeep(p), reader)),
       nextCursor,
       hasMore,
     };
@@ -1043,20 +984,15 @@ export class PostFeedService {
       : null;
 
     const posts = items.map((b) => b.post).filter((p) => p && !p.deletedAt);
-    const [bookmarkReactionsMap, bookmarkFlags] = await Promise.all([
-      this.resolveUserReactionsMap(userId, posts),
-      this.resolvePersonalFlags(userId, posts.map((p) => p.id)),
-    ]);
+    const withState = await withViewerPostState(this.prisma, userId, posts);
 
     return {
       // `isBookmarkedByMe: true` sans condition : la liste EST construite depuis
       // la table des favoris du lecteur. Servi explicitement quand même — un
       // client qui ne reçoit pas le champ le décode `false` et rendait l'écran
       // des favoris avec des signets ÉTEINTS. `isLikedByMe` manquait de même.
-      items: posts.map((p) => withMentions(hoistLocationDeep({
-        ...this.enrichWithLikeStatus(p, bookmarkReactionsMap.get(p.id) ?? []),
-        currentUserReactions: bookmarkReactionsMap.get(p.id) ?? [],
-        ...this.personalFlagsFor(p.id, bookmarkFlags),
+      items: withState.map((p) => withMentions(hoistLocationDeep({
+        ...p,
         isBookmarkedByMe: true,
       }), reader)),
       nextCursor,
@@ -1067,65 +1003,6 @@ export class PostFeedService {
   // ============================================
   // PRIVATE HELPERS
   // ============================================
-
-  /**
-   * Flags d'action PERSONNELS d'un lot de posts : le favori et le repost DU
-   * LECTEUR.
-   *
-   * `isLikedByMe` / `isBookmarkedByMe` / `isRepostedByMe` ne décrivent pas le
-   * post — ils décrivent la relation du lecteur AU post. Ils n'ont donc de sens
-   * que servis ENSEMBLE : un client qui en reçoit un et pas les autres décode
-   * les absents en `false` (SDK : `isBookmarkedByMe ?? false`) et affiche
-   * « pas en favori » d'un post qui l'est.
-   *
-   * Ce helper existe parce que la recopie de ces deux requêtes a produit la
-   * divergence : le 2026-08-25, sur six méthodes servant des posts, seule
-   * `getFeed` posait les trois flags. L'onglet Posts d'un profil n'annonçait ni
-   * favori ni repost, et `getBookmarks` — la liste des favoris — ne disait pas
-   * que ses propres posts étaient en favori. Toute nouvelle méthode servant des
-   * posts passe par ici ; aucune ne réécrit la paire de requêtes.
-   */
-  private async resolvePersonalFlags(
-    viewerUserId: string | undefined,
-    postIds: string[],
-  ): Promise<{ bookmarkedIds: Set<string>; repostedIds: Set<string> }> {
-    if (!viewerUserId || postIds.length === 0) {
-      return { bookmarkedIds: new Set(), repostedIds: new Set() };
-    }
-
-    const [userBookmarks, userReposts] = await Promise.all([
-      this.prisma.postBookmark.findMany({
-        where: { userId: viewerUserId, postId: { in: postIds } },
-        select: { postId: true },
-      }),
-      // Un repost = un post dont le `repostOfId` est dans le lot ET dont
-      // l'auteur est le lecteur.
-      this.prisma.post.findMany({
-        where: { authorId: viewerUserId, repostOfId: { in: postIds }, deletedAt: NOT_DELETED },
-        select: { repostOfId: true },
-      }),
-    ]);
-
-    return {
-      bookmarkedIds: new Set(userBookmarks.map((b) => b.postId)),
-      repostedIds: new Set(userReposts.map((r) => r.repostOfId).filter(Boolean) as string[]),
-    };
-  }
-
-  /**
-   * Projection des flags personnels sur UN post. Rend toujours les deux clés —
-   * `false` explicite, jamais une clé absente : c'est l'absence, pas la valeur,
-   * qui faisait mentir le client.
-   */
-  private personalFlagsFor(
-    postId: string,
-    flags: { bookmarkedIds: Set<string>; repostedIds: Set<string> },
-  ): { isBookmarkedByMe: boolean; isRepostedByMe: boolean } {
-    return {
-      isBookmarkedByMe: flags.bookmarkedIds.has(postId),
-      isRepostedByMe: flags.repostedIds.has(postId),
-    };
-  }
 
   private async getDirectConversationContactIds(userId: string): Promise<string[]> {
     const cacheKey = `feed:contacts:${userId}`;
@@ -1188,12 +1065,10 @@ export class PostFeedService {
     }
   }
 
-  /// `isLikedByMe` dérive de la table `PostReaction` (via `currentUserReactions`),
-  /// PAS du Json legacy `post.reactions` (jamais mis à jour par le chemin socket →
-  /// `isLikedByMe` était faux après un like socket, et iOS lit `isLiked = isLikedByMe`).
-  /// Source UNIQUE et alignée avec `currentUserReactions` que les surfaces lisent.
+  /// Stories : `isLikedByMe` suit la règle des listes (`likedFromReactions`,
+  /// `posts/viewerPostState.ts`) — la table `PostReaction`, jamais le Json legacy.
   private enrichWithLikeStatus(post: any, currentUserReactions: string[]) {
-    return { ...post, isLikedByMe: currentUserReactions.length > 0 };
+    return { ...post, isLikedByMe: likedFromReactions(currentUserReactions) };
   }
 
   /**
@@ -1228,72 +1103,6 @@ export class PostFeedService {
     if (authorIds.length === 0) return new Map();
 
     return getPresenceVisibilityService(this.prisma).resolveForTargets(viewer, authorIds);
-  }
-
-  /**
-   * Réactions du viewer par post AFFICHÉ, en redirigeant vers la RACINE pour
-   * un repost SIMPLE (chantier reposts cohérents & watermark, tâche 9) :
-   * `isLikedByMe`/`currentUserReactions` d'un repost `isQuote:false`
-   * reflètent l'état de l'utilisateur sur l'ORIGINAL
-   * (`originalRepostOfId ?? repostOfId`), jamais sur le repost lui-même — un
-   * repost simple n'a pas de vie sociale propre. Une citation garde son
-   * propre état.
-   *
-   * Factorisé pour que les CINQ surfaces qui exposent ces flags (feed, réel
-   * viewer, profil, communauté, favoris) appliquent EXACTEMENT la même
-   * règle — celle dont dérive déjà `PostService.getPostById`, l'autre
-   * chemin d'enrichissement gateway (mémoire projet « flags perso post = 2
-   * chemins »). Deux reposts distincts du même original convergent
-   * naturellement sur la même racine, donc affichent la même réaction —
-   * même invariant d'idempotence que l'écriture (like/unlike).
-   *
-   * EXCLUSION ÉPHÉMÈRE (review task-9, critique #1, même garde que
-   * `PostService.getPostById` et `resolveRedirectTarget` dans
-   * postVisibility.ts) : quand `repostOf.type` est STORY/STATUS, ce repost
-   * garde SA PROPRE réaction — sinon lecture (ce flag) et écriture
-   * (like/unlike désormais posés sur le repost lui-même) divergeraient.
-   * `repostOf.type` est déjà chargé par `feedPostInclude` (= `postInclude`)
-   * sur les 5 surfaces appelantes — aucune requête supplémentaire.
-   */
-  private async resolveUserReactionsMap(
-    viewerUserId: string,
-    posts: ReadonlyArray<{
-      id: string;
-      isQuote?: boolean;
-      repostOfId?: string | null;
-      originalRepostOfId?: string | null;
-      repostOf?: { type?: string | null } | null;
-    }>,
-  ): Promise<Map<string, string[]>> {
-    if (posts.length === 0) return new Map();
-
-    const targetIdByPostId = new Map<string, string>();
-    for (const post of posts) {
-      const repostRootIsEphemeral = post.repostOf != null
-        && post.repostOf.type != null
-        && isEphemeralPostType(post.repostOf.type as PostType);
-      const isSimpleRepost = !post.isQuote && Boolean(post.repostOfId) && !repostRootIsEphemeral;
-      targetIdByPostId.set(post.id, isSimpleRepost ? (post.originalRepostOfId ?? post.repostOfId!) : post.id);
-    }
-
-    const targetIds = [...new Set(targetIdByPostId.values())];
-    const reactions = await this.prisma.postReaction.findMany({
-      where: { userId: viewerUserId, postId: { in: targetIds } },
-      select: { postId: true, emoji: true },
-    });
-
-    const byTargetId = new Map<string, string[]>();
-    for (const r of reactions) {
-      const list = byTargetId.get(r.postId) ?? [];
-      list.push(r.emoji);
-      byTargetId.set(r.postId, list);
-    }
-
-    const result = new Map<string, string[]>();
-    for (const post of posts) {
-      result.set(post.id, byTargetId.get(targetIdByPostId.get(post.id)!) ?? []);
-    }
-    return result;
   }
 
   private affinityScore(authorId: string, viewerId: string, friendIds: string[]): number {
