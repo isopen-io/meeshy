@@ -1462,22 +1462,26 @@ public struct AudioPlayerView: View {
     /// the same count so cache keys and indices line up.
     private var waveformBarCount: Int { context.isCompact ? 48 : 72 }
 
-    /// Persisted "at-rest" consumption fraction (0...1) for this attachment —
-    /// drives the waveform tint BEFORE playback starts so a half- or
-    /// fully-listened voice note reads at a glance. Pure store read; the player
-    /// engine owns the live `progress`.
+    /// Persisted "at-rest" consumption fraction (0...1) — drives the waveform
+    /// tint BEFORE playback starts. Local wins; server fills the gap only
+    /// when local has nothing (#7212 multi-device rehydration) — see
+    /// `AudioResumeResolver`.
     private var restingProgress: Double {
-        MediaConsumptionStore.shared.fraction(for: attachment.id) ?? 0
+        AudioResumeResolver.restingFraction(
+            localFraction: MediaConsumptionStore.shared.fraction(for: attachment.id),
+            serverConsumption: attachment.currentUserConsumption,
+            totalDuration: estimatedDuration)
     }
 
-    /// The stored resume point for this attachment, but ONLY when playback
-    /// would honor it — see `AudioPlaybackManager.isResumable`. Filtering here
-    /// keeps the timecode from advertising a position the engine ignores.
+    /// The resume point, filtered so the timecode never advertises a position
+    /// playback would ignore. Local wins; server fills the gap only when local
+    /// has nothing (#7212) — see `AudioResumeResolver`.
     private var eligibleResumePosition: TimeInterval? {
-        guard let saved = AudioPlaybackPositionStore.shared.position(for: attachment.id),
-              AudioPlaybackManager.isResumable(saved, totalDuration: estimatedDuration)
-        else { return nil }
-        return saved
+        AudioResumeResolver.resumePosition(
+            localPositionSeconds: AudioPlaybackPositionStore.shared.position(for: attachment.id),
+            serverConsumption: attachment.currentUserConsumption,
+            totalDuration: estimatedDuration,
+            isEligible: AudioPlaybackManager.isResumable)
     }
 
     private var displayedProgress: AudioProgressDisplay {
