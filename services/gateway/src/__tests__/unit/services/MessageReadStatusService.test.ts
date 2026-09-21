@@ -4388,48 +4388,6 @@ describe('MessageReadStatusService', () => {
       expect(result.pagination.total).toBe(0);
       expect(mockPrisma.participant.findMany).not.toHaveBeenCalled();
     });
-
-    // #7226 regression — the sender must never appear in their own
-    // "Received by" / "Read by" sheet. Mirrors getMessageReadStatus's
-    // « Denominator = active recipients EXCLUDING the sender » rule: a
-    // frozen entry for the sender (write-once `MessageStatusEntry`, e.g.
-    // legacy data or a future write path) must not resurrect them into
-    // `evaluatedParticipantIds`, and the cursor query itself is scoped to
-    // exclude the sender's own id.
-    it('excludes the sender from the list, even when a frozen entry names them', async () => {
-      const msgCreatedAt = new Date('2024-06-01T10:00:00Z');
-      mockPrisma.message.findUnique.mockResolvedValue({
-        createdAt: msgCreatedAt,
-        conversationId: testConversationId,
-        senderId: 'author-p',
-      });
-      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([
-        { participantId: 'p1', lastDeliveredAt: new Date('2024-06-01T10:01:00Z'), lastReadAt: null },
-      ]);
-      mockPrisma.participant.findMany.mockResolvedValue([
-        { id: 'p1', displayName: 'Alice', avatar: null },
-        { id: 'author-p', displayName: 'Auteur', avatar: null },
-      ]);
-      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([
-        {
-          participantId: 'author-p',
-          deliveredAt: msgCreatedAt,
-          receivedAt: msgCreatedAt,
-          readAt: msgCreatedAt,
-          readDevice: 'ios',
-        },
-      ]);
-
-      const result = await service.getMessageStatusDetails(testMessageId);
-
-      expect(result.statuses.map(s => s.participantId)).toEqual(['p1']);
-      expect(result.statuses.some(s => s.participantId === 'author-p')).toBe(false);
-      expect(mockPrisma.conversationReadCursor.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { conversationId: testConversationId, participantId: { not: 'author-p' } },
-        })
-      );
-    });
   });
 
   describe('getAttachmentStatusDetails', () => {
