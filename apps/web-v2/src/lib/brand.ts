@@ -3,7 +3,7 @@
  * agnostiques du runtime.
  *
  * TS pur : aucun JSX, aucun import de `preact`/`react`. C'est ce que TOUT
- * consommateur — les cinq pages institutionnelles aujourd'hui
+ * consommateur — les sept pages institutionnelles aujourd'hui
  * (`src/institutional/brand-signature.tsx`, `src/institutional/page.tsx`),
  * l'écran de connexion demain — importe plutôt que de recopier un chemin ou
  * un libellé. Reprend `BrandSignature.swift`
