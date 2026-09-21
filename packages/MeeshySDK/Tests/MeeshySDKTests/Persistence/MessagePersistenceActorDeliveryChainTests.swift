@@ -45,6 +45,8 @@ final class MessagePersistenceActorDeliveryChainTests: XCTestCase {
 
         let afterDelivered = try actor.messages(for: "conv_chain", limit: 10).first
         XCTAssertEqual(afterDelivered?.state, .delivered, "the first event must advance sent → delivered")
+        assertSameInstant(afterDelivered?.deliveredAt, deliveredAt,
+            "the first event must stamp the distribution instant")
 
         let readAt = deliveredAt.addingTimeInterval(1)
         await actor.bufferBatchDelivery(conversationId: "conv_chain", event: .readBy(userId: "peer", at: readAt))
@@ -55,6 +57,14 @@ final class MessagePersistenceActorDeliveryChainTests: XCTestCase {
             "a message already .delivered must still advance to .read on the next event — " +
             "batchDeliverySync must not silently drop rows past .sent")
         XCTAssertNotNil(afterRead?.readAt, "readAt must be stamped by the second transition")
+        // Ce qui part À CÔTÉ du palier : la machine reconstruite pour le SECOND
+        // événement ne connaît que `readAt`. Assignée telle quelle, elle
+        // EFFAÇAIT l'instant de distribution que le premier événement venait de
+        // graver — une ligne « lue » sans jamais avoir été « distribuée ». Le
+        // chemin à un seul message (`applyEvent`) sème la machine et réassigne
+        // en repli ; celui-ci doit faire pareil.
+        assertSameInstant(afterRead?.deliveredAt, deliveredAt,
+            "advancing delivered → read must PRESERVE the delivery instant, not blank it")
     }
 
     /// Rafale : trois messages de la même conversation, tous `.sent`, reçoivent
@@ -93,6 +103,24 @@ final class MessagePersistenceActorDeliveryChainTests: XCTestCase {
             "every row of the burst must advance to .read on the second event, " +
             "not just the ones batchDeliverySync's stale filter still sees")
         XCTAssertTrue(afterRead.allSatisfy { $0.readAt != nil })
+        for record in afterRead {
+            assertSameInstant(record.deliveredAt, deliveredAt,
+                "the second event must not blank the delivery instant of the burst")
+        }
+    }
+
+    /// GRDB round-trips a `Date` through SQLite at second resolution: two
+    /// instants that name the same moment are not `==`. Comparer les objets
+    /// ferait rougir une garde JUSTE — on compare le moment.
+    private func assertSameInstant(
+        _ actual: Date?, _ expected: Date, _ message: String,
+        file: StaticString = #filePath, line: UInt = #line
+    ) {
+        guard let actual else {
+            return XCTFail(message + " (nil)", file: file, line: line)
+        }
+        XCTAssertEqual(actual.timeIntervalSince1970, expected.timeIntervalSince1970,
+                       accuracy: 1.0, message, file: file, line: line)
     }
 
     /// The write processor drains the buffered op asynchronously (AsyncStream).

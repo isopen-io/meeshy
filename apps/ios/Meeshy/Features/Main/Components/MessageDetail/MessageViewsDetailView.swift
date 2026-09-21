@@ -529,7 +529,7 @@ struct MessageViewsDetailView: View {
 
     private func viewsDeliveredContent(accent: Color) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            if isLoadingReadStatus {
+            if showsReadStatusSpinner {
                 loadingIndicator(accent: accent)
             } else if let status = readStatusData {
                 if status.receivedBy.isEmpty {
@@ -565,7 +565,7 @@ struct MessageViewsDetailView: View {
 
     private func viewsReadContent(accent: Color) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            if isLoadingReadStatus {
+            if showsReadStatusSpinner {
                 loadingIndicator(accent: accent)
             } else if let status = readStatusData {
                 if status.readBy.isEmpty {
@@ -601,7 +601,7 @@ struct MessageViewsDetailView: View {
 
     private func viewsNotSeenContent(accent: Color) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            if isLoadingReadStatus {
+            if showsReadStatusSpinner {
                 loadingIndicator(accent: accent)
             } else if let status = readStatusData {
                 let notSeen = status.notSeenBy ?? []
@@ -1022,21 +1022,17 @@ struct MessageViewsDetailView: View {
             .sendAttempts(messageId: message.id)) ?? []
     }
 
-    /// Pure guard deciding whether `loadReadStatus` should actually issue a
-    /// request — extracted (I3, #7349) so it is testable without mounting the
-    /// SwiftUI view, mirroring `positionFraction` in this same file. `force`
-    /// is what lets a live `read-status:updated` refresh a sheet that already
-    /// has data; without it the sheet could only ever load once, at
-    /// `onAppear`, and stayed frozen for as long as it remained open.
-    static func shouldFetchReadStatus(
-        hasExisting: Bool, isLoading: Bool, force: Bool, hasServerId: Bool
-    ) -> Bool {
-        guard hasServerId, !isLoading else { return false }
-        return force || !hasExisting
+    /// Les deux règles pures — « faut-il repartir au réseau » et « le spinner
+    /// a-t-il le droit de remplacer ce qui est à l'écran » — vivent dans
+    /// `MessageViewsReadStatusRules`, éprouvables sans monter SwiftUI.
+    private var showsReadStatusSpinner: Bool {
+        MessageViewsReadStatusRules.showsSpinner(
+            isLoading: isLoadingReadStatus, hasExisting: readStatusData != nil
+        )
     }
 
     private func loadReadStatus(force: Bool = false) async {
-        guard Self.shouldFetchReadStatus(
+        guard MessageViewsReadStatusRules.shouldFetch(
             hasExisting: readStatusData != nil,
             isLoading: isLoadingReadStatus,
             force: force,

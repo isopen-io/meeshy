@@ -690,14 +690,27 @@ public actor MessagePersistenceActor {
             var didChange = false
             for var record in records {
                 if let frontier, record.createdAt > frontier { continue }
+                // Les horodatages déjà gravés sont SEMÉS dans la machine, et
+                // réassignés en repli — exactement comme le chemin à un seul
+                // message (`applyEvent`, plus haut dans ce fichier). Tant que
+                // la requête s'arrêtait à `.sending`/`.sent`, aucune ligne
+                // portant déjà un `deliveredAt` ne lui parvenait et la
+                // divergence entre les deux jumeaux ne coûtait rien ; en
+                // ouvrant `.delivered`, le second événement (`.readBy`)
+                // rendait une machine dont `deliveredAt` est nil et EFFAÇAIT
+                // l'instant de distribution d'une ligne qui venait de
+                // l'obtenir. C'est ce qui part À CÔTÉ du palier qu'on corrige.
                 var machine = MessageStateMachine(
                     state: record.state, retryCount: record.retryCount,
-                    serverId: record.serverId
+                    serverId: record.serverId,
+                    lastError: record.lastError,
+                    deliveredAt: record.deliveredAt,
+                    readAt: record.readAt
                 )
                 if let _ = machine.apply(event) {
                     record.state = machine.state
-                    record.deliveredAt = machine.deliveredAt
-                    record.readAt = machine.readAt
+                    record.deliveredAt = machine.deliveredAt ?? record.deliveredAt
+                    record.readAt = machine.readAt ?? record.readAt
                     // The caller (ConversationSocketHandler) only feeds this batch
                     // a delivered/read event once the WHOLE group has received /
                     // read (all-or-nothing). This path advances `state` but does
