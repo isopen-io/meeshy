@@ -7,6 +7,7 @@ import { conversationStore } from '@/lib/conversation-store';
 import type { SocketClient, SocketFactory, SocketHandler } from '@/lib/net/socket';
 import { createOutboxStore } from '@/lib/send/outbox-store';
 
+import { BOOKMARKS_QUERY_KEY } from './bookmarked-posts';
 import { FEED_QUERY_KEY } from './feed';
 import type { FeedInfiniteData, FeedPost } from './feed-pages';
 import { commentsQueryKey } from './publication-comments';
@@ -177,6 +178,56 @@ describe('`post:liked` / `post:unliked` écrivent AUSSI les RÉELS (#7227)', () 
 
     expect(queryClient.getQueryData<FeedPost>(postQueryKey('p-1'))?.isLikedByMe).toBe(false);
     expect(queryClient.getQueryData<FeedPost>(postQueryKey('p-1'))?.likeCount).toBe(3);
+  });
+
+  /**
+   * **LA QUATRIÈME CAISSE** (#7286) — le corpus des ENREGISTRÉES. Un retrait
+   * venu d'un AUTRE appareil doit ÔTER la ligne de l'écran ouvert : la
+   * basculer y laisserait une publication qui n'est plus enregistrée dans la
+   * liste des publications enregistrées.
+   */
+  test('un RETRAIT venu d’ailleurs ôte la ligne du corpus des enregistrées', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    queryClient.setQueryData(BOOKMARKS_QUERY_KEY, feedWith({ isBookmarkedByMe: true, bookmarkCount: 4 }));
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.POST_BOOKMARKED, { postId: 'p-1', bookmarked: false, bookmarkCount: 3 });
+
+    expect(queryClient.getQueryData<FeedInfiniteData>(BOOKMARKS_QUERY_KEY)?.pages[0]?.posts).toEqual([]);
+  });
+
+  /**
+   * ENREGISTRER venu d'ailleurs : la PLACE de la ligne dépend de
+   * `PostBookmark.createdAt`, que la charge ne porte pas — le corpus est
+   * rendu PÉRIMÉ, jamais deviné. Sans ce témoin, un enregistrement fait sur
+   * un autre appareil n'apparaissait sur l'écran qu'à la prochaine
+   * péremption naturelle.
+   */
+  test('un ENREGISTREMENT venu d’ailleurs rend le corpus des enregistrées périmé', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    queryClient.setQueryData(BOOKMARKS_QUERY_KEY, feedWith({ id: 'p-0', isBookmarkedByMe: true }));
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.POST_BOOKMARKED, { postId: 'p-1', bookmarked: true, bookmarkCount: 1 });
+
+    expect(queryClient.getQueryState(BOOKMARKS_QUERY_KEY)?.isInvalidated).toBe(true);
+  });
+
+  /**
+   * L'écran des enregistrées peint ses cartes depuis SA caisse : un cœur posé
+   * depuis un autre appareil — ou par un autre lecteur — doit y arriver comme
+   * il arrive au Flux, aux Réels et à la fiche.
+   */
+  test('`post:liked` atteint AUSSI la carte de l’écran des enregistrées', () => {
+    const { deps, socket, queryClient } = buildDeps();
+    queryClient.setQueryData(BOOKMARKS_QUERY_KEY, feedWith({ isBookmarkedByMe: true, isLikedByMe: false, likeCount: 3 }));
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+
+    socket.fire(SERVER_EVENTS.POST_LIKED, { postId: 'p-1', userId: 'u-viewer', emoji: '❤️', likeCount: 4, reactionSummary: {} });
+
+    const line = queryClient.getQueryData<FeedInfiniteData>(BOOKMARKS_QUERY_KEY)?.pages[0]?.posts[0];
+    expect(line?.isLikedByMe).toBe(true);
+    expect(line?.likeCount).toBe(4);
   });
 
   test('le FLUX bouge toujours, exactement comme avant ce lot', () => {
