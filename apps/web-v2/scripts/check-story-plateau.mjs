@@ -127,6 +127,25 @@ const page = await context.newPage();
 const pageErrors = [];
 page.on('pageerror', (e) => pageErrors.push(String(e)));
 
+/**
+ * LE LEVIER QUI A FALSIFIÉ L'HYPOTHÈSE DE COURSE (#6951).
+ *
+ * `MEESHY_FONT_DELAY_MS=2500 node scripts/check-story-plateau.mjs` retarde
+ * CHAQUE `.woff2` : c'est la machine froide, en une variable. Il reste ici
+ * parce qu'une hypothèse de course ne se réfute pas une fois pour toutes —
+ * elle se REJOUE, et sans ce levier il faudrait réinventer l'expérience.
+ *
+ * Ce qu'il a rendu : largeurs identiques au centième, gate vert. La lenteur
+ * n'était pas la cause, et `await document.fonts.load(…)` suffit.
+ */
+if (process.env.MEESHY_FONT_DELAY_MS) {
+  const delai = Number(process.env.MEESHY_FONT_DELAY_MS);
+  await page.route('**/*.woff2', async (route) => {
+    await new Promise((r) => setTimeout(r, delai));
+    await route.continue();
+  });
+}
+
 await page.goto(`${BASE}/stories/new`, { waitUntil: 'load' });
 await page.waitForSelector('[data-story-studio]', { timeout: 15000 });
 await page.waitForSelector('[data-scene-player]', { timeout: 15000 });
@@ -203,13 +222,57 @@ if (painted !== null) {
    ici : une jumelle de treize lignes aurait divergé au premier remplacement de
    police, et c'est exactement le cas que ce gate doit attraper.
 
-   Trois questions, parce que « servie » en recouvre trois :
+   Quatre questions, parce que « servie » en recouvre quatre :
    · la famille est-elle APPLIQUÉE au texte peint (`getComputedStyle`) ?
    · le REPLI derrière elle est-il la pile native — jamais un générique qui
      ferait croire que le fichier a chargé ?
-   · le FICHIER est-il réellement servi et lisible (`document.fonts.check`
-     après un `load` explicite) ? Une `@font-face` dont l'URL casse laisse un
-     `fontFamily` parfaitement conforme : la chaîne ne dit rien du fichier. */
+   · le FICHIER est-il servi et lisible (`document.fonts.check` après un `load`
+     explicite) ? Une `@font-face` dont l'URL casse laisse un `fontFamily`
+     parfaitement conforme : la chaîne ne dit rien du fichier.
+   · et ses GLYPHES diffèrent-ils de ceux du système ? C'est la seule question
+     dont la réponse soit un PIXEL.
+
+   ## CE QU'IL NE FAUT PAS MESURER : la boîte du texte peint
+
+   La première forme lisait `el.getBoundingClientRect().width` et exigeait que
+   les treize largeurs soient distinctes. **Verte ici, rouge en intégration
+   continue** — « 9 largeur(s) distinctes » — sur un gate dont les 108 autres
+   invariants passaient, `document.fonts.check` compris : les polices étaient
+   donc bien chargées ET appliquées, et l'hypothèse d'une course a été
+   FALSIFIÉE (rejouée avec 1500 ms de délai sur chaque `.woff2`, elle rend des
+   largeurs identiques au millième près).
+
+   La cause est la MESURE, et voici exactement ce qui est ÉTABLI — le reste
+   est resté hypothèse, donc n'est pas écrit comme un fait :
+   · ce n'est pas une course. Rejoué avec 1500 puis 2500 ms de délai injecté
+     sur chaque `.woff2` (`MEESHY_FONT_DELAY_MS`, plus bas), le gate rend des
+     largeurs IDENTIQUES au centième et reste vert ;
+   · les polices étaient bien chargées ET appliquées en intégration continue :
+     un seul échec sur 109, donc les treize `document.fonts.check` et les
+     treize familles calculées passaient ;
+   · la quantité mesurée était une BOÎTE mise en page — taille en `cqw` (donc
+     fonction de la largeur du conteneur), `max-width: 85cqw`, retour à la
+     ligne —, rendue ici à 13,4 px, les treize boîtes tenant entre 21 et
+     43 px, avec des écarts descendant à 0,17 px pour un arrondi au centième ;
+   · ce n'est PAS le plafond de 85cqw : la boîte ET le plafond sont tous deux
+     proportionnels à la largeur du conteneur, donc leur rapport ne dépend pas
+     de la géométrie — le plafond ne mordrait qu'à partir d'une encre de
+     956 px là où la plus large mesurée est 320,77 px. Cette piste a été
+     calculée puis ABANDONNÉE, pas retenue faute de mieux.
+
+   Ce qui reste — une boîte de treize valeurs séparées par un sixième de pixel,
+   dont la valeur dépend de la géométrie de la machine — suffit à condamner la
+   mesure sans qu'on ait besoin de nommer le mécanisme exact : **un verdict ne
+   doit pas reposer sur une quantité dont on ne sait pas dire ce qui la fait
+   bouger.** La boîte reste RELEVÉE au journal (ci-dessous) pour que la
+   prochaine occurrence, elle, soit lisible.
+
+   On mesure donc l'ENCRE : la même chaîne, à une taille FIXE, hors flux, sans
+   retour à la ligne — indépendante du conteneur, du `cqw`, du plafond et de
+   la mise en page. Et on la compare à la pile SYSTÈME seule, famille par
+   famille : un fichier qui n'a pas chargé retombe sur cette même pile et rend
+   la même encre, ce qui NOMME la famille fautive au lieu de rendre un compte
+   agrégé. */
 const FONT_TABLE = [
   ...(await readFile(join(ROOT, 'src/lib/canvas/story-fonts.ts'), 'utf8')).matchAll(
     /^ {2}(\w+): \{ ios: '[^']*', css: '([^']*)'/gm,
@@ -217,10 +280,14 @@ const FONT_TABLE = [
 ].map((m) => ({ style: m[1], css: m[2] }));
 check(FONT_TABLE.length === 13, `la table des polices rend ${FONT_TABLE.length} familles — attendu 13`);
 
-const familyWidths = [];
+/** La taille de la sonde : assez grande pour qu'un dixième de pixel de
+ * différence de chasse se voie, et FIXE — c'est ce qui la rend insensible à
+ * la géométrie de l'écran qui l'accueille. */
+const INK_PX = 100;
+const familyInks = [];
 for (const { style, css } of FONT_TABLE) {
   await pick('style', style);
-  const seen = await page.evaluate(async (family) => {
+  const seen = await page.evaluate(async ({ family, inkPx }) => {
     const el = document.querySelector('[data-scene-object-id="text-2"] [data-scene-text]');
     if (el === null) return null;
     /* `document.fonts.load` REJETTE sur un fichier absent ou illisible, et une
@@ -232,15 +299,40 @@ for (const { style, css } of FONT_TABLE) {
       () => document.fonts.check(`16px "${family}"`),
       () => false,
     );
+    /* Hors flux, sans retour à la ligne, à taille fixe : aucune entrée de
+       mise en page ne peut la déplacer — ni le conteneur, ni le plafond. */
+    const encre = (stack) => {
+      const sonde = document.createElement('span');
+      sonde.textContent = el.textContent;
+      sonde.style.cssText = `position:absolute;left:-9999px;top:0;white-space:pre;font-size:${inkPx}px;font-family:${stack}`;
+      document.body.appendChild(sonde);
+      const largeur = Math.round(sonde.getBoundingClientRect().width * 100) / 100;
+      sonde.remove();
+      return largeur;
+    };
     return {
       fontFamily: getComputedStyle(el).fontFamily,
       loaded,
-      width: Math.round(el.getBoundingClientRect().width * 100) / 100,
+      ink: encre(`'${family}', var(--font-native)`),
+      system: encre('var(--font-native)'),
+      /* La BOÎTE n'est plus un invariant — elle reste RELEVÉE : c'est elle qui
+         a rendu un verdict différent ici et en intégration continue, et son
+         journal est la seule façon de savoir, le jour où ça recommence, quelle
+         géométrie la machine avait. Une mesure qu'on retire d'un verdict ne se
+         retire pas du journal. */
+      box: Math.round(el.getBoundingClientRect().width * 100) / 100,
+      fontSize: getComputedStyle(el).fontSize,
     };
-  }, css);
+  }, { family: css, inkPx: INK_PX });
+  if (seen !== null) {
+    console.log(
+      `  encre ${style.padEnd(12)} ${css.padEnd(18)} ${String(seen.ink).padStart(7)}px contre ${seen.system}px systeme` +
+        ` (a ${INK_PX}px) · boite peinte ${seen.box}px a ${seen.fontSize}`,
+    );
+  }
   check(seen !== null, `« ${style} » : aucun texte peint`);
   if (seen === null) continue;
-  familyWidths.push(seen.width);
+  familyInks.push(seen.ink);
   /* Le navigateur normalise les guillemets et l'espace ; on compare donc sur
      le NOM et sur la présence du repli, pas sur la chaîne caractère à caractère. */
   check(seen.fontFamily.includes(css), `« ${style} » n’est pas peinte par ${css} — ${seen.fontFamily}`);
@@ -253,14 +345,21 @@ for (const { style, css } of FONT_TABLE) {
     `« ${style} » retombe sur un générique, qui ferait croire à la bonne famille — ${seen.fontFamily}`,
   );
   check(seen.loaded, `le FICHIER de « ${style} » (${css}) n’est pas servi ou pas lisible — @font-face conforme, police absente`);
+  /* LE PIXEL, famille par famille. Un fichier absent retombe sur la pile
+     native, qui est le second terme de la sonde : son encre vaut alors
+     EXACTEMENT celle du système, et c'est cette égalité qui accuse. */
+  check(
+    seen.ink !== seen.system,
+    `« ${style} » (${css}) peint les MÊMES glyphes que la police système — ${seen.ink}px contre ${seen.system}px à ${INK_PX}px : la famille est nommée, pas appliquée`,
+  );
 }
-/* Le seuil n'est pas treize : deux dessins peuvent rendre la même chasse sur
-   un mot de sept lettres, et un gate qui rougit pour une coïncidence ne dit
-   plus rien. Ce qu'il attrape est le cas RÉEL — aucune police n'a chargé, donc
-   les treize largeurs sont celles de la police système, et l'ensemble vaut 1. */
+/* L'encre étant mesurée hors mise en page, deux familles ne peuvent plus
+   coïncider par PLAFONNEMENT — seulement en étant métriquement identiques,
+   c'est-à-dire en pointant le même fichier. Le compte attendu est donc
+   TREIZE, et non un seuil. */
 check(
-  new Set(familyWidths).size >= 10,
-  `les treize familles rendent ${new Set(familyWidths).size} largeur(s) distincte(s) — aucune police ne peint réellement`,
+  new Set(familyInks).size === FONT_TABLE.length,
+  `les treize familles rendent ${new Set(familyInks).size} encre(s) distincte(s) — deux familles partagent le même dessin`,
 );
 /* On rend le plateau à l'état que la suite du gate publie. */
 await pick('style', 'typewriter');
