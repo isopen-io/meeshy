@@ -426,6 +426,7 @@ Puis, depuis ${REPO_WEB} :
    de moins de 72 h ; \`git worktree list\` (les worktrees .claude/worktrees/agent-* d'autres sessions).
    Une PR ou une branche vivante qui touche lecture / non-lu / receipts / badge / notifications /
    consommation média / temps réel social TIENT son sujet : rends-la dans tenus_ailleurs avec la preuve
+   — SAUF les branches lot/<clé>-<n> et leurs PR : elles sont CE chantier (poussées par un tour précédent), jamais « tenues ailleurs »
    et les clés de lots à éviter parmi : ${lotsDuTour.map((l) => l.cle).join(', ')}.
    Cas connu : la branche claude/ios-registre-lecture-6997 (2026-09-18) tient #6997 — dis si elle est
    déjà dans origin/${BASE} (\`git merge-base --is-ancestor <sha> origin/${BASE}\`).
@@ -440,7 +441,10 @@ Sois FACTUEL : etat cite les commandes et leurs sorties.`,
     break
   }
   const TENUS = Array.isArray(synchro.tenus_ailleurs) ? synchro.tenus_ailleurs : []
-  const CLES_TENUES = new Set(TENUS.flatMap((t) => Array.isArray(t.lots_a_eviter) ? t.lots_a_eviter : []))
+  // Une branche lot/<clé>-<n> ou sa PR est CE chantier (un tour précédent l'a poussée) : elle n'écarte jamais son lot —
+  // le cadrage la classe en-pr (PR ouverte) ou deja-livre (fusionnée). Seuls les sujets ÉTRANGERS écartent.
+  const estDuChantier = (t) => /\blot\/[a-z]\d-\d+/.test(`${t.quoi || ''} ${t.preuve || ''}`)
+  const CLES_TENUES = new Set(TENUS.filter((t) => !estDuChantier(t)).flatMap((t) => Array.isArray(t.lots_a_eviter) ? t.lots_a_eviter : []))
   log(`${BASE} à ${synchro.sha_dev || '?'} (CI : ${synchro.ci_dev || '?'}) — ${TENUS.length} sujets tenus ailleurs${CLES_TENUES.size ? ` (lots écartés : ${[...CLES_TENUES].join(', ')})` : ''}`)
   const RELEVE = TENUS.length
     ? `CE QUE D'AUTRES SESSIONS TIENNENT — n'y touche pas :\n${TENUS.map((t) => `- ${t.quoi} (preuve : ${t.preuve})`).join('\n')}\n`
