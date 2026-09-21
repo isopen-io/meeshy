@@ -12,6 +12,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { unsetOrNull } from '../../../utils/prisma-unset';
 import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloor } from '../../historyFloor';
 import { loadPersonalHistoryHiding } from '../../personalHistoryFilter';
+import { shareLinkHasExpired } from '../../shareLinkReadGate';
 import { readableByReader, starredMessageVerdict } from './starredMessageVerdict';
 
 /** Ce que la pose rend — la route en dérive le statut, jamais l'inverse. */
@@ -66,11 +67,23 @@ export class MessageStarWriter {
     });
     if (!participation) return NOT_FOUND;
 
-    const verdict = starredMessageVerdict(message, this.now());
+    const now = this.now();
+    const verdict = starredMessageVerdict(message, now);
     if (verdict === 'gone') return NOT_FOUND;
 
+    // Un lien de partage ÉCHU ferme la lecture — la même porte que le fil
+    // (`shareLinkReadGate.ts`). Le lien lu sert ensuite au plancher, qui n'a
+    // pas à le relire.
+    const link = participation.shareLinkId
+      ? await this.prisma.conversationShareLink.findUnique({
+          where: { id: participation.shareLinkId },
+          select: { id: true, allowViewHistory: true, expiresAt: true },
+        })
+      : null;
+    if (shareLinkHasExpired(link, now)) return NOT_FOUND;
+
     const [floor, hiding] = await Promise.all([
-      loadHistoryFloor(this.prisma, participation),
+      loadHistoryFloor(this.prisma, participation, { link }),
       loadPersonalHistoryHiding(this.prisma, { userId, conversationId: message.conversationId }),
     ]);
     if (!readableByReader(message, { floor, hiding })) return NOT_FOUND;

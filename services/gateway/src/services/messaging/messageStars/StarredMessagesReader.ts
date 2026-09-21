@@ -9,7 +9,10 @@
  *      (`MessageStar.conversationId`), pour que quitter une conversation ne
  *      raccourcisse pas les pages. L'étoile n'est jamais effacée.
  *   2. Plancher d'historique — `loadHistoryFloorsOrFail`, fail-CLOSED : une
- *      conversation dont le plancher est illisible sort de l'ensemble.
+ *      conversation dont le plancher est illisible sort de l'ensemble. Et la
+ *      PORTE du lien de partage (`shareLinkReadGate.ts`, celle du fil) : une
+ *      conversation entrée par un lien ÉCHU sort de l'ensemble, fail-CLOSED
+ *      elle aussi.
  *   3. Masquage personnel — `loadPersonalHistoryHidingByConversation`, appliqué
  *      APRÈS le keyset, comme `/sync` (une courtoisie : illisible ⇒ on sert).
  *   4. Le verdict du message (règles 2 et 3) — `starredMessageVerdict`, le
@@ -29,6 +32,7 @@ import { decodeCursor, encodeCursor, keysetBeforeClause } from '../../../utils/k
 import { unsetOrNull } from '../../../utils/prisma-unset';
 import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloorsOrFail } from '../../historyFloor';
 import { NO_PERSONAL_HIDING, loadPersonalHistoryHidingByConversation } from '../../personalHistoryFilter';
+import { loadExpiredShareLinkConversationIds } from '../../shareLinkReadGate';
 import { withOrphanedSenderRepair } from '../withOrphanedSenderRepair';
 import {
   STARRED_CONVERSATION_SELECT,
@@ -83,8 +87,12 @@ export class StarredMessagesReader {
     });
     if (memberships.length === 0) return EMPTY_PAGE;
 
-    const { floors, unreadableConversationIds } = await loadHistoryFloorsOrFail(this.prisma, memberships);
-    const unreadable = new Set(unreadableConversationIds);
+    const now = this.now();
+    const [{ floors, unreadableConversationIds }, closedByLink] = await Promise.all([
+      loadHistoryFloorsOrFail(this.prisma, memberships),
+      loadExpiredShareLinkConversationIds(this.prisma, memberships, now),
+    ]);
+    const unreadable = new Set([...unreadableConversationIds, ...closedByLink]);
     const readableConversationIds = unique(memberships.map((m) => m.conversationId)).filter((id) => !unreadable.has(id));
     if (readableConversationIds.length === 0) return EMPTY_PAGE;
 
@@ -128,7 +136,6 @@ export class StarredMessagesReader {
 
     const messagesById = new Map(messages.map((message) => [message.id, message]));
     const conversationsById = new Map(conversations.map((conversation) => [conversation.id, conversation]));
-    const now = this.now();
 
     const items = page.flatMap((star): StarredMessageItem[] => {
       const message = messagesById.get(star.messageId);

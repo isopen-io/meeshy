@@ -21,6 +21,7 @@ import {
   applyHistoryFloor,
   historyFloorFor
 } from '../../services/historyFloor';
+import { shareLinkHasExpired } from '../../services/shareLinkReadGate';
 import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import {
@@ -302,7 +303,7 @@ export function registerMessagesListRoute(
             select: { allowViewHistory: true, expiresAt: true }
           })
         : null;
-      if (shareLink?.expiresAt && new Date(shareLink.expiresAt) < new Date()) {
+      if (shareLinkHasExpired(shareLink)) {
         return sendForbidden(reply, 'This share link has expired', { code: 'SHARE_LINK_EXPIRED' });
       }
       // Le plancher vaut pour TOUT participant, lien ou non : un membre ajouté
