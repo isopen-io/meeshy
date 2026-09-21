@@ -1,7 +1,9 @@
 import type { QueryClient } from '@tanstack/react-query';
 
+import { withoutBookmark } from '@/lib/feed/bookmark-membership';
 import { togglePost, withServedCount } from '@/lib/feed/interactions';
 
+import { BOOKMARKS_QUERY_KEY } from './bookmarked-posts';
 import { FEED_QUERY_KEY } from './feed';
 import { bumpNewPostCount } from './feed-new-count';
 import type { FeedInfiniteData, FeedPost } from './feed-pages';
@@ -238,17 +240,21 @@ function isPostReactionEvent(payload: unknown): payload is {
  * est ABSOLU et remplace toujours l'estimation optimiste.
  */
 /**
- * **LES TROIS CAISSES D'UNE CARTE, ÉNUMÉRÉES UNE SEULE FOIS** — le Flux,
- * TOUTES les graines de Réels, la fiche `/post/$post`. Chaque loi servie
- * (`post:liked`, `post:bookmarked`, `post:reaction-*`) dit ce qu'elle fait
- * D'UNE carte ; d'où elle le fait se lit ici, et nulle part ailleurs. C'est
- * la recopie de cette boucle qui a fait diverger les caisses deux fois.
+ * **LES QUATRE CAISSES D'UNE CARTE, ÉNUMÉRÉES UNE SEULE FOIS** — le Flux,
+ * TOUTES les graines de Réels, la fiche `/post/$post`, et le corpus des
+ * publications ENREGISTRÉES (#7286), dont l'écran peint ses cartes depuis sa
+ * propre requête : sans lui, un cœur posé ailleurs n'y arrivait jamais. Chaque
+ * loi servie (`post:liked`, `post:bookmarked`, `post:reaction-*`) dit ce
+ * qu'elle fait D'UNE carte ; d'où elle le fait se lit ici, et nulle part
+ * ailleurs. C'est la recopie de cette boucle qui a fait diverger les caisses
+ * deux fois.
  */
 function applyToPostCaches(queryClient: QueryClient, postId: string, applyToPost: (post: FeedPost) => FeedPost): void {
   const applyToPages = (data: FeedInfiniteData | undefined) => mapPosts(data, (posts) => posts.map(applyToPost));
   queryClient.setQueryData<FeedInfiniteData>(FEED_QUERY_KEY, applyToPages);
   queryClient.setQueriesData<FeedInfiniteData>({ queryKey: REELS_QUERY_ROOT }, applyToPages);
   queryClient.setQueryData<FeedPost>(postQueryKey(postId), (post) => (post === undefined ? post : applyToPost(post)));
+  queryClient.setQueryData<FeedInfiniteData>(BOOKMARKS_QUERY_KEY, applyToPages);
 }
 
 export function applyServedLike(
@@ -291,6 +297,28 @@ export function applyServedBookmark(
     const toggled = togglePost(post, toggle);
     return bookmarkCount === undefined ? toggled : withServedCount(toggled, { postId, kind: 'bookmark', count: bookmarkCount });
   });
+
+  /**
+   * **LE CORPUS DES ENREGISTRÉES EST AUSSI UNE APPARTENANCE** (#7286) —
+   * `applyToPostCaches` vient d'y basculer le champ comme sur toute carte ;
+   * pour le SIGNET, c'est en plus la composition du corpus qui change.
+   *
+   * RETIRER ôte la ligne sur-le-champ : la laisser basculée garderait, dans la
+   * liste des publications enregistrées, une publication qui ne l'est plus.
+   *
+   * ENREGISTRER INVALIDE plutôt que d'insérer, et c'est la seule des deux
+   * directions où l'écho en sait moins que le serveur : la PLACE d'une ligne
+   * dépend de `PostBookmark.createdAt`, que la charge ne porte pas. Une
+   * insertion en tête serait juste neuf fois sur dix et fausse la dixième,
+   * pour un corpus qu'un seul aller-retour rend exactement. `invalidateQueries`
+   * ne refait la requête que si l'écran est MONTÉ ; sinon il marque périmé, et
+   * le geste local a déjà posé la ligne au bon endroit.
+   */
+  if (change.on) {
+    void queryClient.invalidateQueries({ queryKey: BOOKMARKS_QUERY_KEY });
+    return;
+  }
+  queryClient.setQueryData<FeedInfiniteData>(BOOKMARKS_QUERY_KEY, (data) => withoutBookmark(data, postId));
 }
 
 export function applyPostReactionEvent(queryClient: QueryClient, payload: unknown, viewerId: string): void {

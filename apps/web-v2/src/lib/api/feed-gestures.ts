@@ -1,7 +1,9 @@
 import type { QueryClient } from '@tanstack/react-query';
 
+import { bookmarkSlotOf, withBookmark, withoutBookmark, type BookmarkSlot } from '@/lib/feed/bookmark-membership';
 import { applyPostToggle, applyServedCount, togglePost, withServedCount, type PostToggleKind } from '@/lib/feed/interactions';
 
+import { BOOKMARKS_QUERY_KEY } from './bookmarked-posts';
 import { newClientMessageId } from './client-message-id';
 import type { DataSource } from './config';
 import { FEED_QUERY_KEY } from './feed';
@@ -23,6 +25,17 @@ import { REELS_QUERY_ROOT } from './reels';
  *   un rejeu ne diffuse ni ne notifie deux fois (#6293).
  * - ENREGISTRER : `POST|DELETE /api/v1/posts/:postId/bookmark`
  *   (`bookmarks.ts:32,90`), qui rend le `bookmarkCount` ABSOLU.
+ *
+ * **LA QUATRIÈME CAISSE** (#7286) — le corpus des publications ENREGISTRÉES
+ * (`BOOKMARKS_QUERY_KEY`). Les trois autres (Flux, Réels, fiche) sont des
+ * surfaces où la carte RESTE quand le signet s'éteint ; celle-ci est AUSSI un
+ * corpus d'APPARTENANCE. Pour AIMER, elle bascule comme les trois autres
+ * (`applyPostToggle`) — son écran peint ses cartes depuis elle. Pour
+ * ENREGISTRER, `setOn` la gouverne par `bookmark-membership.ts` : retirer ÔTE
+ * la ligne, et le retour en arrière lui REND SA PLACE — la `BookmarkSlot` est
+ * relevée AVANT l'écriture optimiste, par ligne et jamais par instantané de
+ * la liste (deux gestes concurrents sur deux publications s'annuleraient
+ * l'un l'autre).
  *
  * LES ISSUES :
  * - succès : l'optimiste reflète déjà la réalité ; un compte servi le remplace.
@@ -112,19 +125,45 @@ export async function performPostGesture(params: {
   /* LES FILS DE RÉELS (#6457) suivent le même geste : un réel servi par le fil
      d'affinité n'est pas forcément dans le Flux, et le lecteur des Réels peint
      depuis ses propres pages — toutes les graines, une seule racine. */
+  /* LES ENREGISTRÉES SONT UNE SOURCE D'ÉTAT, PAS SEULEMENT UNE CIBLE (#7286) :
+     l'écran des publications enregistrées se lit par SA propre requête, et une
+     publication peut n'y être QUE là — on l'a enregistrée il y a trois jours,
+     le Flux ne la sert plus. N'y lire que le Flux, les Réels et la fiche
+     déduisait alors « pas enregistrée » et envoyait un `POST` (ajouter) sur le
+     geste qui voulait RETIRER : le signet revenait, la ligne restait. */
   const known =
     findPost(deps.queryClient.getQueryData<FeedInfiniteData>(FEED_QUERY_KEY), postId) ??
     deps.queryClient
       .getQueriesData<FeedInfiniteData>({ queryKey: REELS_QUERY_ROOT })
       .map(([, data]) => findPost(data, postId))
       .find((post) => post !== undefined) ??
+    findPost(deps.queryClient.getQueryData<FeedInfiniteData>(BOOKMARKS_QUERY_KEY), postId) ??
     deps.queryClient.getQueryData<FeedPost>(postQueryKey(postId));
   const on = !isOn(known, kind);
+  /* LA PLACE DE LA LIGNE DANS LE CORPUS ENREGISTRÉ, relevée AVANT l'optimiste :
+     après, la ligne n'y est plus. Absente du corpus (on enregistre depuis le
+     Flux), la place est la TÊTE — un enregistrement neuf est le plus récent —,
+     et la ligne posée est la carte DÉJÀ basculée : même signet, même compteur
+     que celle du Flux, jamais deux chiffres pour une publication. */
+  const slot: BookmarkSlot | null =
+    kind !== 'bookmark'
+      ? null
+      : (bookmarkSlotOf(deps.queryClient.getQueryData<FeedInfiniteData>(BOOKMARKS_QUERY_KEY), postId) ??
+        (known === undefined ? null : { post: togglePost(known, { postId, kind, on: true }), page: 0, index: 0 }));
+  /* LE CORPUS DES ENREGISTRÉES EST AUSSI UNE SURFACE DE CARTE : son écran peint
+     ses cartes depuis SA caisse. Pour AIMER, il bascule comme les trois autres
+     — sans quoi le cœur tapé sur cet écran partait au serveur et la carte ne
+     bougeait pas. Pour ENREGISTRER, c'est l'APPARTENANCE qui change. */
   const setOn = (value: boolean) => {
     const change = { postId, kind, on: value };
     deps.queryClient.setQueryData<FeedInfiniteData>(FEED_QUERY_KEY, (data) => applyPostToggle(data, change));
     deps.queryClient.setQueriesData<FeedInfiniteData>({ queryKey: REELS_QUERY_ROOT }, (data) => applyPostToggle(data, change));
     deps.queryClient.setQueryData<FeedPost>(postQueryKey(postId), (post) => (post === undefined ? post : togglePost(post, change)));
+    deps.queryClient.setQueryData<FeedInfiniteData>(BOOKMARKS_QUERY_KEY, (data) => {
+      if (kind === 'like') return applyPostToggle(data, change);
+      if (!value) return withoutBookmark(data, postId);
+      return slot === null ? data : withBookmark(data, slot);
+    });
   };
 
   setOn(on);
@@ -140,6 +179,7 @@ export async function performPostGesture(params: {
         deps.queryClient.setQueryData<FeedInfiniteData>(FEED_QUERY_KEY, (data) => applyServedCount(data, served));
         deps.queryClient.setQueriesData<FeedInfiniteData>({ queryKey: REELS_QUERY_ROOT }, (data) => applyServedCount(data, served));
         deps.queryClient.setQueryData<FeedPost>(postQueryKey(postId), (post) => (post === undefined ? post : withServedCount(post, served)));
+        deps.queryClient.setQueryData<FeedInfiniteData>(BOOKMARKS_QUERY_KEY, (data) => applyServedCount(data, served));
       }
       return { ok: true };
     }
@@ -150,6 +190,7 @@ export async function performPostGesture(params: {
     if (kind === 'like' && result.status === 409) {
       void deps.queryClient.invalidateQueries({ queryKey: FEED_QUERY_KEY });
       void deps.queryClient.invalidateQueries({ queryKey: postQueryKey(postId) });
+      void deps.queryClient.invalidateQueries({ queryKey: BOOKMARKS_QUERY_KEY });
       return { ok: true };
     }
     return { ok: false, message: kind === 'like' ? LIKE_FAILED_MESSAGE : BOOKMARK_FAILED_MESSAGE };
