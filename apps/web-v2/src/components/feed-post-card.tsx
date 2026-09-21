@@ -502,6 +502,22 @@ type SceneHosts = {
  * internes ré-arment le clic. Aucune d'elles n'est donc descendante du lien —
  * c'est ce que les témoins mesurent, et non la seule présence d'un `href`.
  *
+ * **ET « SOUS » EST UNE QUESTION D'ORDRE DE PEINTURE, PAS D'ORDRE DU DOCUMENT.**
+ * `pointer-events-auto` ne suffit PAS : un élément ré-armé qu'un calque
+ * recouvre reste inatteignable. Un `position: absolute` peint à l'étape 8 de
+ * l'ordre de peinture CSS, le contenu en flux normal aux étapes 4 à 7 — le
+ * lien était donc AU-DESSUS, et volait toute cible qui n'était pas elle-même
+ * positionnée. L'avatar y échappait par accident (`avatar-root relative`,
+ * `avatar.tsx:183`) ; le NOM, un `<Link>` nu, était vole. Mesuré par
+ * `check-profile.mjs` : « aucun contrôle volé à son centre au repos » —
+ * « Voir le profil de … », 25,5 px, `par: "A"`.
+ *
+ * D'où `relative z-[1]` sur l'enveloppe : elle passe AU-DESSUS du lien avec
+ * tous ses descendants, tout en restant TRANSPARENTE au doigt
+ * (`pointer-events-none`), si bien que le texte tombe toujours sur le lien et
+ * que les cibles ré-armées gagnent. UN seul élément positionné plutôt qu'un
+ * par cible : le jour où la carte gagne un contrôle, il est couvert d'office.
+ *
  * `isDetail` — **LA FICHE NE MÈNE PAS À ELLE-MÊME.** `routes/post.tsx` monte
  * cette même carte sur le détail ; un lien vers la page courante y serait un
  * tour de clavier de plus qui ne va nulle part. Le défaut par DÉFAUT est le
@@ -543,7 +559,7 @@ function FeedPostOpenZone({
       </Link>
       <div
         data-feed-post-open-through
-        className="pointer-events-none flex flex-col gap-2 [&_a]:pointer-events-auto [&_button]:pointer-events-auto"
+        className="pointer-events-none relative z-[1] flex flex-col gap-2 [&_a]:pointer-events-auto [&_button]:pointer-events-auto"
       >
         {children}
       </div>

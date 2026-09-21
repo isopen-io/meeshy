@@ -167,19 +167,37 @@ describe('FeedPostCard — toucher la publication ouvre sa fiche', () => {
 
 describe('FeedPostCard — aucune cible interne n’est avalée par le nouveau geste', () => {
   /**
-   * CE QUI REND LA GÉOMÉTRIE POSSIBLE, et qui n'a aucun autre témoin : le lien
-   * passe SOUS le contenu, le contenu laisse le doigt le traverser, et ses
-   * cibles internes le ré-arment. C'est le motif du RÉEL, déjà en place dans
-   * ce fichier — sans le ré-armement, une mention serait rendue, atteignable
-   * au clavier, et MORTE au doigt.
+   * CE QUI REND LA GÉOMÉTRIE POSSIBLE, et qui n'a aucun autre témoin ICI : le
+   * lien passe SOUS le contenu, le contenu laisse le doigt le traverser, et
+   * ses cibles internes le ré-arment. Sans le ré-armement, une mention serait
+   * rendue, atteignable au clavier, et MORTE au doigt.
+   *
+   * **`relative z-[1]` EST LA MOITIÉ QUI MANQUAIT, et elle a coûté un rouge.**
+   * `pointer-events-auto` ne suffit pas : un élément ré-armé qu'un calque
+   * RECOUVRE reste inatteignable. Le lien est `position: absolute` — étape 8
+   * de l'ordre de peinture CSS — et le contenu en flux normal aux étapes 4 à
+   * 7 : le lien était donc AU-DESSUS et volait toute cible qui n'était pas
+   * elle-même positionnée. L'avatar y échappait PAR ACCIDENT (son enveloppe
+   * porte déjà `relative`, `avatar.tsx:183`) ; le NOM, un `<Link>` nu, était
+   * volé — et c'est pour ça que ma vérification au navigateur, qui sondait
+   * l'avatar, ne l'a pas vu. `check-profile.mjs` l'a vu : « aucun contrôle
+   * volé à son centre au repos », « Voir le profil de … », 25,5 px, `par: "A"`.
+   *
+   * Ce témoin-ci ne peut pas mesurer un clic RÉEL — happy-dom ne fait aucun
+   * test de recouvrement. Il garde donc la CAUSE, pour qu'un lot qui allège
+   * ces classes sache ce qu'il retire ; la PREUVE, elle, est au navigateur
+   * (`check-profile.mjs`, rouge sans cette ligne, vert avec).
    */
-  test('la zone laisse traverser le doigt, et ses cibles internes le ré-arment', () => {
+  test('la zone laisse traverser le doigt, ré-arme ses cibles, et les peint AU-DESSUS du lien', () => {
     monte(basePost({ content: 'x', originalLanguage: 'fr' }));
 
     const traversee = container.querySelector<HTMLElement>('[data-feed-post-open-through]');
     expect(traversee?.className).toContain('pointer-events-none');
     expect(traversee?.className).toContain('[&_a]:pointer-events-auto');
     expect(traversee?.className).toContain('[&_button]:pointer-events-auto');
+    /* L'ORDRE DE PEINTURE, sans quoi les trois classes ci-dessus sont inertes. */
+    expect(traversee?.className).toContain('relative');
+    expect(traversee?.className).toContain('z-[1]');
   });
 
   test('l’avatar mène toujours au profil de l’auteur', () => {
