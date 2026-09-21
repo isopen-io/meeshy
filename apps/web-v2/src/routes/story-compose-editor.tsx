@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { hexColorCss } from '@/lib/canvas/background';
-import { sceneTextAppearance } from '@/lib/canvas/text-appearance';
+import { SERVED_TEXT_STYLES, sceneTextAppearance } from '@/lib/canvas/text-appearance';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { StudioPose } from '@/lib/stories/studio-pose';
@@ -20,21 +20,47 @@ import { StudioChip } from './story-compose-parts';
  * POSE, qu'iOS confie au pincement à deux doigts et que le web doit rendre
  * atteignable au clavier (dimension 5).
  *
- * **Ce que ce rail NE sert PAS, et pourquoi** : treize des dix-huit familles
- * de `StoryTextStyle` nomment une police EMBARQUÉE dans l'app iOS. Le poids
- * de première peinture est déjà au-dessus de son plafond (#6940), donc ce lot
- * ne télécharge aucun fichier de police : cinq familles passent (système,
- * Georgia, Courier), les autres attendent leur budget — une issue de suivi.
+ * **Les DIX-HUIT familles de `StoryTextStyle` y sont** depuis #6951 : les cinq
+ * à coût nul, et les treize qu'iOS rend par une police embarquée, désormais
+ * peintes par un substitut redistribuable chargé à la demande
+ * (`lib/canvas/story-fonts.ts`). La pastille se peint dans sa propre famille,
+ * donc une police qui n'arrive pas SE VOIT — la pastille reste sur la pile
+ * native, comme le texte de la scène.
  */
 
-/** Les cinq familles servies et leur clé de libellé. */
-const STYLES = [
-  { id: 'bold', key: 'story.studio.style.bold' },
-  { id: 'neon', key: 'story.studio.style.neon' },
-  { id: 'classic', key: 'story.studio.style.classic' },
-  { id: 'italic', key: 'story.studio.style.italic' },
-  { id: 'typewriter', key: 'story.studio.style.typewriter' },
-] as const satisfies readonly { readonly id: StudioTextLayer['style']; readonly key: InterfaceCatalogKey }[];
+/**
+ * Une clé de libellé par famille SERVIE. `satisfies Record<ServedTextStyle, …>`
+ * en fait un INVENTAIRE que la compilation tient : offrir une famille que le
+ * moteur ne peint pas, ou peindre une famille que le rail n'offre pas, sont
+ * les deux moitiés du même défaut — « une famille à moitié servie est pire
+ * que son absence » (#6951). `story-compose-styles.test.ts` le redit à
+ * l'exécution, les deux gates couvrant des ensembles disjoints.
+ */
+export const STUDIO_STYLE_KEYS = {
+  bold: 'story.studio.style.bold',
+  neon: 'story.studio.style.neon',
+  typewriter: 'story.studio.style.typewriter',
+  handwriting: 'story.studio.style.handwriting',
+  classic: 'story.studio.style.classic',
+  calligraphy: 'story.studio.style.calligraphy',
+  cartoon: 'story.studio.style.cartoon',
+  futuristic: 'story.studio.style.futuristic',
+  fantasy: 'story.studio.style.fantasy',
+  curve: 'story.studio.style.curve',
+  tag: 'story.studio.style.tag',
+  italic: 'story.studio.style.italic',
+  retro: 'story.studio.style.retro',
+  elegant: 'story.studio.style.elegant',
+  poster: 'story.studio.style.poster',
+  bubble: 'story.studio.style.bubble',
+  note: 'story.studio.style.note',
+  brush: 'story.studio.style.brush',
+} as const satisfies Record<StudioTextLayer['style'], InterfaceCatalogKey>;
+
+/** L'ordre des pastilles est celui des pickers iOS (`StoryTextStyle.allCases`,
+ * projeté par `SERVED_TEXT_STYLES`) — jamais celui de l'objet ci-dessus, dont
+ * la forme sert l'inventaire et pas l'affichage. */
+const STYLES = SERVED_TEXT_STYLES.map((id) => ({ id, key: STUDIO_STYLE_KEYS[id] }));
 
 /** Six effets NOMMÉS sur les vingt-cinq de la table (`text-effect.ts`) — un
  * nom traduit par effet coûte sept lignes de catalogue, et six couvrent les

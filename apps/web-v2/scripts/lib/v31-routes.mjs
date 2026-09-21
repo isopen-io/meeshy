@@ -12,7 +12,7 @@
  * DEUX FAMILLES, et il faut les deux — la seconde n'est dans aucune table :
  *
  *   1. les ÉCRANS de `ROUTES`, servis par le routeur de l'application ;
- *   2. les cinq DOCUMENTS institutionnels, PRÉ-RENDUS à la construction et
+ *   2. les sept DOCUMENTS institutionnels, PRÉ-RENDUS à la construction et
  *      servis en dehors du routeur (`INSTITUTIONAL_ROUTES`) — ils portent
  *      l'essentiel des adresses publiques d'aujourd'hui, et les compter avec
  *      les écrans est le seul moyen de comparer la v3.1 au legacy, dont
@@ -58,7 +58,7 @@ export function screenRoutes(source = readFileSync(join(V31, 'src/routes/route-t
   return [...literal[1].matchAll(/pattern:\s*'([^']+)'/g)].map(([, p]) => normalizePattern(p));
 }
 
-/** Les cinq documents pré-rendus, sous la forme sans barre finale que l'inventaire compare. */
+/** Les sept documents pré-rendus, sous la forme sans barre finale que l'inventaire compare. */
 export const institutionalRoutes = () => INSTITUTIONAL_ROUTES.map((r) => `/${r}`);
 
 /**

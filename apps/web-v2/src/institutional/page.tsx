@@ -19,7 +19,7 @@ import type { Block, Card, FramedRow, ContentPage, Section } from './type';
 /**
  * LE RENDU DES CINQ PAGES INSTITUTIONNELLES.
  *
- * Un composant, cinq contenus. Ces pages sont PRÉCHAUFFÉES en HTML statique
+ * Un composant, sept contenus. Ces pages sont PRÉCHAUFFÉES en HTML statique
  * (`scripts/prerender-institutional.tsx`) : elles ne montent aucun composant
  * client, n'embarquent aucun script, et ne paient donc pas un octet du socle
  * applicatif. C'est ce que #5554 demande, et c'est aussi ce qui en fait le
