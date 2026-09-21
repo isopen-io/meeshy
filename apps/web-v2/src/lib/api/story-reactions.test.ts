@@ -2,12 +2,13 @@ import { QueryClient } from '@tanstack/react-query';
 import { describe, expect, test } from 'bun:test';
 
 import type { ApiResult, HttpRequest, HttpTransport } from './http';
-import { STORY_FEED_QUERY_KEY, type StoryFeedPost } from './stories';
+import { STORY_FEED_QUERY_KEY, storyPostQueryKey, type StoryFeedPost } from './stories';
 import {
   STORY_REACTION_FAILED,
   STORY_REACTION_PENDING,
   performStoryReaction,
   storyReactionAnnouncement,
+  viewerReactedToStory,
   type StoryReactionDeps,
 } from './story-reactions';
 
@@ -236,5 +237,93 @@ describe('storyReactionAnnouncement — ce qu’il faut dire, et quand se taire'
   test('une pose NON CONFIRMÉE et un refus s’ANNONCENT, chacun par SA clé', () => {
     expect(storyReactionAnnouncement({ ok: true, notice: STORY_REACTION_PENDING })).toBe(STORY_REACTION_PENDING);
     expect(storyReactionAnnouncement({ ok: false, message: STORY_REACTION_FAILED })).toBe(STORY_REACTION_FAILED);
+  });
+});
+
+/**
+ * **LA STORY ATTEINTE PAR LIEN** — le corpus du plateau ne sert que les 50
+ * plus récentes ; une story partagée hors de cette fenêtre arrive par la
+ * TROISIÈME MARCHE de la cascade (`useStoryPost`, `storyPostQueryKey`), un
+ * cache SÉPARÉ que le lecteur affiche exactement comme les autres
+ * (`routes/story.tsx` fusionne `fallback.data` dans ses groupes).
+ *
+ * Le port ne connaissait que `STORY_FEED_QUERY_KEY`. Sur CETTE story, donc :
+ * l'optimiste tombait dans le vide (`applyStoryReaction` sur un corpus qui ne
+ * la contient pas rend la MÊME liste), l'état du lecteur était lu comme
+ * ABSENT — donc chaque tap repartait en `add`, le retrait devenant
+ * impossible — et le rollback d'un refus permanent ne défaisait rien.
+ *
+ * Le cœur du rail EXISTAIT et n'avait AUCUN EFFET : la requête partait, la
+ * passerelle enregistrait, et l'écran ne bougeait pas d'un pixel. C'est la
+ * loi 4 prise en défaut par un CACHE, pas par une branche manquante —
+ * « suivre une donnée jusqu'à son consommateur s'arrête un cran trop tôt :
+ * la suivre jusqu'au PIXEL ».
+ */
+const seededPost = (queryClient: QueryClient, post: StoryFeedPost): QueryClient => {
+  queryClient.setQueryData(storyPostQueryKey(post.id), post);
+  return queryClient;
+};
+
+const cachedPost = (queryClient: QueryClient, id: string): StoryFeedPost | undefined =>
+  queryClient.getQueryData<StoryFeedPost>(storyPostQueryKey(id));
+
+describe('performStoryReaction — la story atteinte par LIEN, hors du corpus du plateau', () => {
+  test('le cœur et le compte basculent sur le cache de la TROISIÈME MARCHE', async () => {
+    const queryClient = seeded([story({ id: 'st-autre' })]);
+    seededPost(queryClient, story({ id: 'st-lien', currentUserReactions: [], reactionCount: 4 }));
+    const { transport } = scripted(() => Promise.resolve({ ok: true, status: 201, data: {} }));
+
+    await performStoryReaction({ storyId: 'st-lien', deps: deps(queryClient, transport) });
+
+    expect(cachedPost(queryClient, 'st-lien')?.currentUserReactions).toEqual([HEART]);
+    expect(cachedPost(queryClient, 'st-lien')?.reactionCount).toBe(5);
+  });
+
+  test('le SECOND tap RETIRE — l’état du lecteur se lit sur le cache qui le PORTE', async () => {
+    const queryClient = seededPost(new QueryClient(), story({ id: 'st-lien', currentUserReactions: [HEART], reactionCount: 4 }));
+    const { requests, transport } = scripted(() => Promise.resolve({ ok: true, status: 200, data: {} }));
+
+    await performStoryReaction({ storyId: 'st-lien', deps: deps(queryClient, transport) });
+
+    /* Sans cette lecture, `mine` ressortait VIDE et le plan repartait en
+       `add` : un POST de plus, un cœur qu’on ne peut plus éteindre. */
+    expect(requests[0]?.method).toBe('DELETE');
+    expect(cachedPost(queryClient, 'st-lien')?.currentUserReactions).toEqual([]);
+    expect(cachedPost(queryClient, 'st-lien')?.reactionCount).toBe(3);
+  });
+
+  test('un refus PERMANENT défait l’optimiste sur ce cache-là aussi', async () => {
+    const queryClient = seededPost(new QueryClient(), story({ id: 'st-lien', currentUserReactions: [], reactionCount: 4 }));
+    let release: (r: ApiResult<unknown>) => void = () => undefined;
+    const { transport } = scripted(() => new Promise((resolve) => (release = resolve)));
+
+    const vol = performStoryReaction({ storyId: 'st-lien', deps: deps(queryClient, transport) });
+
+    /* L’optimiste EST posé — sans ce relevé À MI-VOL, le témoin verdirait
+       sur un cache que rien n’a jamais touché (une dimension qu’aucun
+       témoin ne fait VARIER est absente, pas testée). */
+    expect(cachedPost(queryClient, 'st-lien')?.reactionCount).toBe(5);
+
+    release({ ok: false, status: 403, error: 'Forbidden' });
+    expect(await vol).toEqual({ ok: false, message: STORY_REACTION_FAILED });
+    expect(cachedPost(queryClient, 'st-lien')?.currentUserReactions).toEqual([]);
+    expect(cachedPost(queryClient, 'st-lien')?.reactionCount).toBe(4);
+  });
+
+  test('une story présente dans les DEUX caches y bascule des DEUX côtés — jamais un cœur plein d’un côté et vide de l’autre', async () => {
+    const queryClient = seeded([story({ id: 'st-deux', currentUserReactions: [], reactionCount: 7 })]);
+    seededPost(queryClient, story({ id: 'st-deux', currentUserReactions: [], reactionCount: 7 }));
+    const { transport } = scripted(() => Promise.resolve({ ok: true, status: 201, data: {} }));
+
+    await performStoryReaction({ storyId: 'st-deux', deps: deps(queryClient, transport) });
+
+    expect(cached(queryClient, 'st-deux')?.reactionCount).toBe(8);
+    expect(cachedPost(queryClient, 'st-deux')?.reactionCount).toBe(8);
+  });
+
+  test('viewerReactedToStory voit la story du LIEN — le rail peint son cœur depuis la MÊME lecture que le geste', () => {
+    const queryClient = seededPost(new QueryClient(), story({ id: 'st-lien', currentUserReactions: [HEART] }));
+    expect(viewerReactedToStory(queryClient, 'st-lien')).toBe(true);
+    expect(viewerReactedToStory(queryClient, 'st-absente')).toBe(false);
   });
 });

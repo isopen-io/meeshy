@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
+import type { FriendRequestRecord } from '@/lib/api/friend-requests';
 import type { PublicProfileStats } from '@/lib/api/public-profile';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import type { ProfileRelation } from '@/lib/profile/relation';
@@ -152,11 +153,23 @@ describe('ProfilePostsEmpty — le vide d’un FILTRE n’est pas le vide d’un
   });
 });
 
+/** La ligne servie par `relationRequestId`, telle que `pendingRequestFrom` la
+ * bâtit (#7122). */
+const PENDING_ROW: FriendRequestRecord = {
+  id: 'fr-1',
+  senderId: 'u-kwame',
+  receiverId: 'u-me',
+  status: 'pending',
+  message: null,
+  createdAt: '2026-09-21T09:00:00.000Z',
+  sender: null,
+  receiver: null,
+};
+
 const relationSection = (params: {
   readonly relation: ProfileRelation;
   readonly signedIn?: boolean;
   readonly online?: boolean;
-  readonly awaitingRequest?: boolean;
 }) =>
   parse(
     renderToStaticMarkup(
@@ -167,7 +180,6 @@ const relationSection = (params: {
         name="Kwame Mensah"
         signedIn={params.signedIn ?? true}
         online={params.online ?? true}
-        awaitingRequest={params.awaitingRequest ?? false}
         busy={false}
         onAction={noop}
         onSignIn={noop}
@@ -188,11 +200,24 @@ describe('ProfileRelationSection — un contrôle existe s’il a un effet', () 
     expect([...el.querySelectorAll('[data-profile-action]')].map((n) => n.getAttribute('data-profile-action'))).toEqual(['add', 'write', 'block', 'report']);
   });
 
-  test('une demande REÇUE explique de quoi il s’agit, et offre accepter / refuser', () => {
-    const el = relationSection({ relation: { kind: 'pendingReceived', request: null }, awaitingRequest: true });
-    expect(el.querySelector('[data-profile-context]')?.textContent).toContain('en attente');
-    expect(el.querySelector('[data-profile-action="accept"]')?.hasAttribute('disabled')).toBe(true);
-    /* « Écrire » et « Bloquer » n'attendent AUCUNE ligne : ils restent actifs. */
+  /* AMENDÉ PAR #7122 — la ligne de la demande arrive AVEC l'identité, et ce
+     témoin mesurait l'attente du panier. Ce qui est gardé maintenant : la
+     bannière dit de quoi il s'agit, et les trois gestes sont ARMÉS d'emblée. */
+  test('une demande REÇUE explique de quoi il s’agit, et offre accepter / refuser ARMÉS', () => {
+    const el = relationSection({ relation: { kind: 'pendingReceived', request: PENDING_ROW } });
+    expect(el.querySelector('[data-profile-context]')?.textContent).toContain('Kwame Mensah');
+    expect(el.querySelector('[data-profile-action="accept"]')?.hasAttribute('disabled')).toBe(false);
+    expect(el.querySelector('[data-profile-action="reject"]')?.hasAttribute('disabled')).toBe(false);
+    expect(el.querySelector('[data-profile-action="write"]')?.hasAttribute('disabled')).toBe(false);
+  });
+
+  /* SANS SA LIGNE, LE GESTE N'EXISTE PAS — il n'est plus grisé (#7122) :
+     il n'y a plus d'attente au bout de laquelle il s'armerait. */
+  test('sans la ligne de la demande, ni « Accepter » ni « Refuser » ne sont peints', () => {
+    const el = relationSection({ relation: { kind: 'pendingReceived', request: null } });
+    expect(el.querySelector('[data-profile-context]')?.textContent).toContain('Kwame Mensah');
+    expect(el.querySelector('[data-profile-action="accept"]')).toBeNull();
+    expect(el.querySelector('[data-profile-action="reject"]')).toBeNull();
     expect(el.querySelector('[data-profile-action="write"]')?.hasAttribute('disabled')).toBe(false);
   });
 

@@ -66,6 +66,49 @@ describe('decodeConversation', () => {
     expect('currentUserJoinedAt' in decoded).toBe(false);
   });
 
+  /**
+   * LA FRONTIÈRE DE LECTURE DU LECTEUR (#7198/#7202, W3) — `lastReadAt` et
+   * `lastReadMessageCreatedAt` traversaient BRUTS (chaîne ISO), malgré un
+   * type déclarant `Date` : aucun consommateur n'existait avant W3 pour le
+   * remarquer (`grep '\.lastReadAt\b'` ne rendait rien hors `decode.ts`).
+   * `lastReadMessageId` est une chaîne : `sansNull` suffit, aucun décodage de
+   * date à lui appliquer.
+   */
+  test('revit lastReadAt et lastReadMessageCreatedAt en Date ; lastReadMessageId traverse en chaîne', () => {
+    const withReadCursor: Conversation = {
+      ...base,
+      lastReadMessageId: 'm-42',
+      lastReadAt: '2026-09-21T09:00:00.000Z' as unknown as Date,
+      lastReadMessageCreatedAt: '2026-09-21T08:55:00.000Z' as unknown as Date,
+    };
+    const decoded = decodeConversation(withReadCursor);
+    expect(decoded.lastReadMessageId).toBe('m-42');
+    expect(decoded.lastReadAt).toBeInstanceOf(Date);
+    expect(decoded.lastReadAt?.toISOString()).toBe('2026-09-21T09:00:00.000Z');
+    expect(decoded.lastReadMessageCreatedAt).toBeInstanceOf(Date);
+    expect(decoded.lastReadMessageCreatedAt?.toISOString()).toBe('2026-09-21T08:55:00.000Z');
+  });
+
+  test('lastReadAt/lastReadMessageCreatedAt servis `null` ⇒ ABSENTS, jamais `null` (REV-4)', () => {
+    const withNullReadCursor: Conversation = {
+      ...base,
+      lastReadMessageId: null as unknown as string,
+      lastReadAt: null as unknown as Date,
+      lastReadMessageCreatedAt: null as unknown as Date,
+    };
+    const decoded = decodeConversation(withNullReadCursor);
+    expect('lastReadMessageId' in decoded).toBe(false);
+    expect('lastReadAt' in decoded).toBe(false);
+    expect('lastReadMessageCreatedAt' in decoded).toBe(false);
+  });
+
+  test('la frontière de lecture ABSENTE reste absente (conversation jamais ouverte)', () => {
+    const decoded = decodeConversation(base);
+    expect('lastReadMessageId' in decoded).toBe(false);
+    expect('lastReadAt' in decoded).toBe(false);
+    expect('lastReadMessageCreatedAt' in decoded).toBe(false);
+  });
+
   test('décode aussi lastMessage.createdAt quand présent', () => {
     const withLastMessage: Conversation = {
       ...base,

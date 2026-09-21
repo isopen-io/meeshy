@@ -32,6 +32,15 @@ const READ_CURSOR_SELECT = {
  * passe un tableau à une entrée, la liste toute sa page). Un `participantId`
  * sans ligne de curseur (jamais ouverte) est simplement ABSENT de la map
  * rendue : l'absence ne se fabrique jamais (REV-4).
+ *
+ * La borne est le NOMBRE D'IDS DEMANDÉS, et elle est EXACTE, pas prudentielle :
+ * `ConversationReadCursor` est unique par `[conversationId, participantId]`
+ * (schéma) et un `Participant.id` n'appartient qu'à UNE conversation — il ne
+ * peut donc exister qu'une ligne par id passé. `take` ne tronque jamais une
+ * lecture légitime ; il empêche seulement que l'appel reste NU, c'est-à-dire
+ * qu'il rende un jour plus de lignes que ce que l'appelant a nommé. La page de
+ * la liste est elle-même plafonnée à `CONVERSATION_LIST_PAGINATION.maxLimit`,
+ * le détail passe UN id : la requête ne peut pas grossir par ses appelants.
  */
 export async function loadReadCursorBoundaries(
   prisma: PrismaClient,
@@ -42,7 +51,8 @@ export async function loadReadCursorBoundaries(
 
   const cursors = await prisma.conversationReadCursor.findMany({
     where: { participantId: { in: [...participantIds] } },
-    select: READ_CURSOR_SELECT
+    select: READ_CURSOR_SELECT,
+    take: participantIds.length
   });
   for (const cursor of cursors) {
     boundaries.set(cursor.participantId, {

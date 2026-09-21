@@ -533,7 +533,6 @@ const pt = {
   'userProfile.stat.filterClear': 'Mostrar tudo',
   'userProfile.context.received': '{name} quer ligar-se a si. Aceite para trocar mensagens.',
   'userProfile.context.sent': 'Enviou um pedido de ligação a {name}. A aguardar resposta.',
-  'userProfile.context.pending': 'O pedido está pendente. A carregar…',
   'userProfile.action.write': 'Escrever',
   'userProfile.action.writeLabel': 'Escrever a {name}',
   'userProfile.action.block': 'Bloquear',
@@ -826,6 +825,8 @@ const pt = {
 
   'admin.title': 'Administração',
 
+  'thread.unread-separator.one': '{count} mensagem não lida',
+  'thread.unread-separator.other': '{count} mensagens não lidas',
   'message-detail.info.title': 'Informações da mensagem',
   'message-detail.received-by': 'Recebido por',
   'message-detail.read-by': 'Lido por',

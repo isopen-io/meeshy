@@ -529,7 +529,6 @@ const es = {
   'userProfile.stat.filterClear': 'Mostrar todo',
   'userProfile.context.received': '{name} quiere conectar contigo. Acepta para intercambiar mensajes.',
   'userProfile.context.sent': 'Enviaste una solicitud de conexión a {name}. A la espera de su respuesta.',
-  'userProfile.context.pending': 'La solicitud está pendiente. Cargándola…',
   'userProfile.action.write': 'Escribir',
   'userProfile.action.writeLabel': 'Escribir a {name}',
   'userProfile.action.block': 'Bloquear',
@@ -822,6 +821,8 @@ const es = {
 
   'admin.title': 'Administración',
 
+  'thread.unread-separator.one': '{count} mensaje no leído',
+  'thread.unread-separator.other': '{count} mensajes no leídos',
   'message-detail.info.title': 'Información del mensaje',
   'message-detail.received-by': 'Recibido por',
   'message-detail.read-by': 'Leído por',

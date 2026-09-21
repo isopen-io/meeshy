@@ -527,7 +527,6 @@ const ar = {
   'userProfile.stat.filterClear': 'عرض الكل',
   'userProfile.context.received': 'يريد {name} التواصل معك. اقبل لتبادل الرسائل.',
   'userProfile.context.sent': 'أرسلت طلب اتصال إلى {name}. في انتظار الرد.',
-  'userProfile.context.pending': 'الطلب قيد الانتظار. جارٍ تحميله…',
   'userProfile.action.write': 'مراسلة',
   'userProfile.action.writeLabel': 'مراسلة {name}',
   'userProfile.action.block': 'حظر',
@@ -819,6 +818,8 @@ const ar = {
 
   'admin.title': 'الإدارة',
 
+  'thread.unread-separator.one': '{count} رسالة غير مقروءة',
+  'thread.unread-separator.other': '{count} رسائل غير مقروءة',
   'message-detail.info.title': 'معلومات الرسالة',
   'message-detail.received-by': 'استلمها',
   'message-detail.read-by': 'قرأها',

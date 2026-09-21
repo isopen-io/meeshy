@@ -419,6 +419,23 @@ export interface Conversation {
    * `MeeshyConversation.userState.lastReadAt` côté iOS.
    */
   readonly lastReadAt?: Date;
+  /**
+   * La frontière de lecture ENTIÈRE (#7198, G1) — `lastReadMessageId` et
+   * `lastReadMessageCreatedAt` complètent `lastReadAt` ci-dessus, servis
+   * INCONDITIONNELLEMENT par la liste ET le détail de conversation
+   * (`services/gateway/src/routes/conversations/read-cursor-projection.ts`,
+   * `core-list.ts:884-892`, `core-detail.ts:537-544`) et déjà déclarés côté
+   * schéma de réponse (`api-schemas/conversation.ts:261-265`) — ABSENTS ici
+   * jusqu'à #7202 (W3), premier consommateur côté client de ce triplet.
+   * `lastReadMessageCreatedAt` est la clé CHRONOLOGIQUE (voir le
+   * doc-comment de `ConversationReadCursor.lastReadMessageCreatedAt`
+   * ci-dessous pour la raison de la préférer à `lastReadAt`, qui n'est que
+   * l'horloge de l'ACTION de lecture). Les deux : ABSENTS sans curseur,
+   * jamais fabriqués. Base de `firstUnreadBoundary()`
+   * (`packages/shared/utils/first-unread.ts`, S1).
+   */
+  readonly lastReadMessageId?: string;
+  readonly lastReadMessageCreatedAt?: Date;
 
   // ===== E2EE / ENCRYPTION =====
   readonly encryptionMode?: EncryptionMode;

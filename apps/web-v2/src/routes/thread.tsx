@@ -62,11 +62,12 @@ import { useThreadDraft } from '@/lib/view/use-draft';
 import { useThreadScene } from '@/lib/reading-mode/scene';
 import { chromeStyleVars, sceneStyleVars } from '@/lib/reading-mode/metrics';
 import { backdropStyleVars } from '@/lib/view/thread-backdrop';
-import { BOTTOM_ANCHOR_FRAMES, pinToBottom } from '@/lib/view/pin-to-bottom';
 import { useThreadChromeSignals } from '@/lib/view/use-thread-chrome-signals';
 import { useThreadInsets } from '@/lib/view/use-thread-insets';
 import { THREAD_ROW_ESTIMATE, useOlderMessages } from '@/lib/view/use-older-messages';
 import { useReadTracking } from '@/lib/view/use-read-tracking';
+import { useUnreadBoundary } from '@/lib/view/unread-boundary';
+import { useThreadOpenScroll } from '@/lib/view/use-thread-open-scroll';
 import { ThreadModes } from './thread-modes';
 
 /**
@@ -612,60 +613,37 @@ export default function ThreadScreen() {
   });
 
   /**
-   * UN FIL S'OUVRE EN BAS. Sur le dernier message, pas sur le premier — et
-   * `align: 'end'` plutôt qu'un `scrollTop = scrollHeight`, qui serait faux
-   * tant que les hauteurs réelles ne sont pas mesurées.
-   *
-   * **SUR L'IDENTITÉ DE LA QUEUE, PLUS SUR LE COMPTE** (#6972). Cet effet
-   * dépendait de `placed.length` — donc il se rejouait à CHAQUE page
-   * d'historique insérée, et ses vingt images de `scrollTop = scrollHeight`
-   * ramenaient le fil tout en bas juste après que l'ancrage venait de le
-   * tenir en place. Le lecteur qui remontait son historique aurait été
-   * renvoyé au présent par le geste même qui devait le servir.
-   *
-   * L'identité du DERNIER message dit ce que le compte voulait dire : elle
-   * change quand un message arrive ou disparaît en queue (re-ancrer est
-   * juste), elle NE change pas quand l'historique s'insère en tête
-   * (re-ancrer serait faux).
+   * LE PREMIER NON-LU, GELÉ POUR LA SESSION (#7202, S1/D-L2/D-L3) — la loi
+   * (gel + calcul) vit dans `lib/view/unread-boundary.ts`, ce hook n'en est
+   * que la GLUE ; `threadData.status === 'success'` (jamais
+   * `messages.length > 0`) évite de figer `null` à tort si `conversation`
+   * résout avant `messages` (doc-comment complet là-bas).
    */
-  const lastMessageId = placed[placed.length - 1]?.message.id;
-  useEffect(() => {
-    const el = scroller.current;
-    if (el === null || lastMessageId === undefined) return;
+  const unreadBoundary = useUnreadBoundary({
+    conversationId,
+    ready: threadData.status === 'success',
+    conversation,
+    confirmedMessages: threadData.messages,
+    viewerId: viewer.id ?? '',
+  });
 
-    /**
-     * UN SEUL `scrollToIndex` NE SUFFIT PAS, et c'est mesuré : il vise le bas
-     * d'une hauteur ESTIMÉE, puis les cellules réellement montées se mesurent
-     * et la hauteur totale change sous lui. Le témoin voyait alors un fil
-     * « en bas » où le dernier message n'était pas rendu.
-     *
-     * On se RÉ-ANCRE donc sur quelques images, le temps que les mesures
-     * convergent — et on abandonne à la PREMIÈRE intention de l'utilisateur.
-     * Sans ce désarmement, remonter son historique dans la demi-seconde qui
-     * suit l'ouverture serait impossible : le fil reviendrait en bas sous le
-     * doigt, ce qui est pire que de s'ouvrir au mauvais endroit.
-     */
-    // ANNONCE au premier pin : l'ancrage en bas ne doit ni révéler ni armer
-    // la scène du fil (§5.8 de la spécification #5648) — l'unique intention
-    // qui le RELÂCHE (`release`, mêmes écouteurs) rouvre la scène par le même
-    // événement, sans course possible entre les deux effets.
-    //
-    // La loi elle-même vit dans `lib/view/pin-to-bottom.ts` (#5774, revue) :
-    // le bouton « revenir en bas » demande EXACTEMENT le même geste, et deux
-    // formulations pour un seul geste sont une jumelle.
-    const release = pinToBottom(el, { frames: BOTTOM_ANCHOR_FRAMES, onFirstFrame: scene.noteProgrammaticScroll });
-    for (const event of ['wheel', 'touchstart', 'keydown'] as const) {
-      el.addEventListener(event, release, { passive: true });
-    }
-    return () => {
-      release();
-      for (const event of ['wheel', 'touchstart', 'keydown'] as const) {
-        el.removeEventListener(event, release);
-      }
-    };
-    // Volontairement sur la seule QUEUE du fil : se ré-ancrer à chaque rendu
-    // empêcherait l'utilisateur de remonter son historique.
-  }, [lastMessageId]);
+  /**
+   * UN FIL S'OUVRE EN BAS — SAUF sur le séparateur de non-lus, TOUJOURS, à
+   * l'ouverture (D-L2). La loi (décision pure + ancrage DOM/virtualiseur)
+   * vit dans `lib/view/use-thread-open-scroll.ts` (#6972, étendu #7202) :
+   * extraite d'ici pour le budget de taille de ce fichier (CLAUDE.md § Code
+   * Style) et pour que la loi du séparateur ait son propre fichier, comme
+   * demandé par le cadrage de W3.
+   */
+  useThreadOpenScroll({
+    scroller,
+    conversationId,
+    placed,
+    unreadBoundary,
+    ready: threadData.status === 'success',
+    virtualizer,
+    onProgrammaticScroll: scene.noteProgrammaticScroll,
+  });
 
   /**
    * LA CITATION DU COMPOSEUR PRÉ-ADRESSÉ (#5695, écart 8 ; revue-correction
@@ -917,6 +895,8 @@ export default function ThreadScreen() {
           accent={accent}
           older={{ state: older.state, sentinelRef: older.sentinelRef }}
           readTrackingSentinelRef={readTracking.sentinelRef}
+          unreadSeparatorMessageId={unreadBoundary?.firstUnreadId ?? null}
+          unreadCount={unreadBoundary?.unreadCount ?? 0}
         />
       </main>
       {/*

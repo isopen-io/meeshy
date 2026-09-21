@@ -529,7 +529,6 @@ const en = {
   'userProfile.stat.filterClear': 'Show all',
   'userProfile.context.received': '{name} would like to connect with you. Accept to exchange messages.',
   'userProfile.context.sent': 'You sent a connection request to {name}. Waiting for their answer.',
-  'userProfile.context.pending': 'The request is pending. Loading it…',
   'userProfile.action.write': 'Message',
   'userProfile.action.writeLabel': 'Message {name}',
   'userProfile.action.block': 'Block',
@@ -822,6 +821,8 @@ const en = {
 
   'admin.title': 'Administration',
 
+  'thread.unread-separator.one': '{count} unread message',
+  'thread.unread-separator.other': '{count} unread messages',
   'message-detail.info.title': 'Message info',
   'message-detail.received-by': 'Received by',
   'message-detail.read-by': 'Read by',

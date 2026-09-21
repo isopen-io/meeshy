@@ -46,6 +46,7 @@ import { directoryPersonRoutes } from '../../../../routes/directory/person';
 const PREFIXE = '/api/v1';
 const CIBLE = '507f1f77bcf86cd799439011';
 const TIERS = '507f1f77bcf86cd799439022';
+const AUTRE = '507f1f77bcf86cd799439033';
 
 /** Les six que le lot retire de la surface publique. */
 const PRIVES_DE_PROFIL = [
@@ -71,7 +72,43 @@ const PRIVES_DE_STATS = [
  * deux interrogations de `user.findFirst` qui le porte. Un double qui rendrait
  * la ligne de profil à cette requête-là dirait « bloqué » sur toute fiche.
  */
-function prismaDouble(bloquesParLeLecteur: readonly string[] = []) {
+/** Une ligne de `friendRequest`, telle que la table la porte. */
+type LigneDemande = {
+  readonly id: string;
+  readonly status: string;
+  readonly senderId: string;
+  readonly receiverId: string;
+};
+
+/**
+ * LA BORNE DE LECTURE EST APPLIQUÉE PAR LE DOUBLE, jamais ignorée par lui.
+ *
+ * Un faux Prisma qui rend sa ligne quelle que soit la requête accepte aussi
+ * une requête SANS `where` : le témoin de confidentialité serait alors vert
+ * sur une route qui lit la table entière. Ici la clause `OR` est ÉVALUÉE —
+ * retirer la borne de `relationAvec` fait remonter la ligne d'un tiers, et le
+ * témoin tombe.
+ */
+const repondALaBorne = (where: unknown, ligne: LigneDemande): boolean => {
+  const clauses = (where as { OR?: readonly { senderId?: string; receiverId?: string }[] } | undefined)?.OR;
+  if (clauses === undefined) return true;
+  return clauses.some((clause) => clause.senderId === ligne.senderId && clause.receiverId === ligne.receiverId);
+};
+
+/**
+ * LE DOUBLE HONORE AUSSI LE `select`.
+ *
+ * Un faux qui rend la ligne ENTIÈRE porte `id` même quand la route ne le
+ * demande pas : le témoin verdirait sur un `select` qui jette l'identifiant,
+ * c'est-à-dire sur le défaut même que ce lot corrige.
+ */
+const projete = (ligne: LigneDemande, select: unknown): Partial<LigneDemande> => {
+  const demande = select as Readonly<Record<string, boolean>> | undefined;
+  if (demande === undefined) return ligne;
+  return Object.fromEntries(Object.entries(ligne).filter(([cle]) => demande[cle] === true));
+};
+
+function prismaDouble(bloquesParLeLecteur: readonly string[] = [], demandes: readonly LigneDemande[] = []) {
   return {
     user: {
       // La ligne rend PLUS que la projection publique — c'est le point : si le
@@ -109,7 +146,10 @@ function prismaDouble(bloquesParLeLecteur: readonly string[] = []) {
     participant: { count: jest.fn<any>(async () => 12) },
     friendRequest: {
       count: jest.fn<any>(async () => 3),
-      findFirst: jest.fn<any>(async () => null),
+      findFirst: jest.fn<any>(async (args?: any) => {
+        const ligne = demandes.find((candidate) => repondALaBorne(args?.where, candidate));
+        return ligne === undefined ? null : projete(ligne, args?.select);
+      }),
     },
     post: { count: jest.fn<any>(async () => 7) },
   };
@@ -118,10 +158,11 @@ function prismaDouble(bloquesParLeLecteur: readonly string[] = []) {
 async function monter(
   viewerId: string | null,
   role = 'USER',
-  bloquesParLeLecteur: readonly string[] = []
+  bloquesParLeLecteur: readonly string[] = [],
+  demandes: readonly LigneDemande[] = []
 ): Promise<FastifyInstance> {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
-  app.decorate('prisma', prismaDouble(bloquesParLeLecteur) as never);
+  app.decorate('prisma', prismaDouble(bloquesParLeLecteur, demandes) as never);
   (app as unknown as { redis?: unknown }).redis = undefined;
   // `getOptionalAuth` construit son middleware depuis `fastify.prisma` ; on lui
   // substitue une identité posée directement, comme le font les autres témoins
@@ -417,6 +458,127 @@ describe('`blockedByViewer` — le blocage répond par SUJET (#7125)', () => {
 
     expect(data.blockedByViewer).toBe(false);
     expect(data.isSelf).toBe(true);
+    await app.close();
+  });
+});
+
+/**
+ * **LA FICHE REÇOIT L'IDENTIFIANT QU'ELLE DOIT ENVOYER** (#7122).
+ *
+ * `relationAvec` lisait `{ status, senderId }` et JETAIT `id`. Un écran qui
+ * affiche « Accepter » / « Refuser » / « Annuler » depuis cette charge n'avait
+ * donc rien à envoyer à `PATCH /directory/friend-requests/:id` : il chargeait
+ * le panier correspondant pour retrouver la ligne, et les trois gestes
+ * restaient désactivés tant qu'il était en vol. Un aller-retour pour un champ
+ * déjà chargé, sur une route dont le doc-comment dit qu'elle existe pour les
+ * fondre en un.
+ *
+ * **CE QUE `relationRequestId` N'AJOUTE PAS : une surface de lecture.** La
+ * requête est INCHANGÉE — même `where`, même ligne, une colonne de plus dans
+ * le `select`. L'identifiant ne peut donc atteindre que quelqu'un qui est
+ * PARTIE à la demande, et c'est ce que le second témoin garde : le double
+ * ÉVALUE la clause `OR`, si bien que retirer la borne fait remonter la ligne
+ * d'un tiers et fait tomber le témoin.
+ */
+describe('`relationRequestId` — l’identifiant de la demande en cours (#7122)', () => {
+  const RECUE: LigneDemande = { id: '607f1f77bcf86cd7994390aa', status: 'pending', senderId: CIBLE, receiverId: TIERS };
+  const ENVOYEE: LigneDemande = { id: '607f1f77bcf86cd7994390bb', status: 'pending', senderId: TIERS, receiverId: CIBLE };
+  const AMITIE: LigneDemande = { id: '607f1f77bcf86cd7994390cc', status: 'accepted', senderId: CIBLE, receiverId: TIERS };
+
+  const relationDe = async (
+    viewerId: string | null,
+    demandes: readonly LigneDemande[],
+  ): Promise<Record<string, unknown>> => {
+    const app = await monter(viewerId, 'USER', [], demandes);
+    const data = (await lire(app, '?expand=relation')).json().data as Record<string, unknown>;
+    await app.close();
+    return data;
+  };
+
+  it('une demande REÇUE sert l’identifiant de sa ligne', async () => {
+    const data = await relationDe(TIERS, [RECUE]);
+
+    expect(data.relation).toBe('pending_received');
+    expect(data.relationRequestId).toBe(RECUE.id);
+  });
+
+  it('une demande ENVOYÉE sert l’identifiant de sa ligne', async () => {
+    const data = await relationDe(TIERS, [ENVOYEE]);
+
+    expect(data.relation).toBe('pending_sent');
+    expect(data.relationRequestId).toBe(ENVOYEE.id);
+  });
+
+  it('`friend` ne sert AUCUN identifiant — il n’y a plus rien à accepter', async () => {
+    const data = await relationDe(TIERS, [AMITIE]);
+
+    expect(data.relation).toBe('friend');
+    expect(data.relationRequestId).toBeNull();
+  });
+
+  it('`none` sert `null`, jamais l’absence du champ', async () => {
+    const data = await relationDe(TIERS, []);
+
+    expect(data.relation).toBe('none');
+    // `null` et « champ absent » se lisent pareil en JavaScript, et c'est
+    // l'ambiguïté qui ferait retomber l'écran sur le panier.
+    expect('relationRequestId' in data).toBe(true);
+    expect(data.relationRequestId).toBeNull();
+  });
+
+  it('sur SOI, `null` — et aucune demande n’est même interrogée', async () => {
+    const app = await monter(CIBLE, 'USER', [], [RECUE]);
+
+    const data = (await lire(app, '?expand=relation')).json().data as Record<string, unknown>;
+
+    expect(data.isSelf).toBe(true);
+    expect(data.relationRequestId).toBeNull();
+    const interrogations = (app as unknown as { prisma: { friendRequest: { findFirst: { mock: { calls: unknown[][] } } } } })
+      .prisma.friendRequest.findFirst.mock.calls;
+    expect(interrogations).toHaveLength(0);
+    await app.close();
+  });
+
+  it('sans `expand=relation`, le champ ne part pas', async () => {
+    const app = await monter(TIERS, 'USER', [], [RECUE]);
+
+    const data = (await lire(app)).json().data as Record<string, unknown>;
+
+    expect('relationRequestId' in data).toBe(false);
+    await app.close();
+  });
+
+  /**
+   * **LE TÉMOIN QUI PORTE L'ISSUE.** Un identifiant de demande nomme deux
+   * personnes ; le servir à un tiers lui apprendrait qu'une demande EXISTE
+   * entre deux comptes qui ne le regardent pas — et lui donnerait de quoi la
+   * PATCHER. La lecture est bornée aux deux couples (`viewer → cible`,
+   * `cible → viewer`) ; ce témoin garde la borne, il ne la suppose pas.
+   */
+  it('aucun identifiant ne part vers un lecteur qui n’est PAS partie à la demande', async () => {
+    const entreTiers: LigneDemande = { id: '607f1f77bcf86cd7994390dd', status: 'pending', senderId: CIBLE, receiverId: AUTRE };
+
+    const data = await relationDe(TIERS, [entreTiers]);
+
+    // Le double évalue la clause `OR` : sans la borne, cette ligne remonterait
+    // et les deux attentes ci-dessous tomberaient ensemble.
+    expect(data.relation).toBe('none');
+    expect(data.relationRequestId).toBeNull();
+  });
+
+  it('la borne NOMME les deux parties dans chacune de ses deux branches', async () => {
+    const app = await monter(TIERS, 'USER', [], [RECUE]);
+
+    await lire(app, '?expand=relation');
+
+    const [premier] = (app as unknown as { prisma: { friendRequest: { findFirst: { mock: { calls: unknown[][] } } } } })
+      .prisma.friendRequest.findFirst.mock.calls;
+    const where = (premier?.[0] as { where?: { OR?: readonly Record<string, string>[] } } | undefined)?.where;
+
+    expect(where?.OR).toEqual([
+      { senderId: TIERS, receiverId: CIBLE },
+      { senderId: CIBLE, receiverId: TIERS },
+    ]);
     await app.close();
   });
 });
