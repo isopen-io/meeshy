@@ -6,6 +6,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { authorPostsQueryKey } from '@/lib/api/author-posts';
 import { BLOCKED_USERS_QUERY_KEY } from '@/lib/api/blocks';
 import { VIEWER_ID } from '@/lib/api/fixtures';
+import { friendRequestsQueryKey } from '@/lib/api/friend-requests';
 import { fixtureAuthorPosts } from '@/lib/api/fixtures-rich-text';
 import { sharedConversationsQueryKey } from '@/lib/api/shared-conversations';
 import { appQueryClient } from '@/lib/api/query-client';
@@ -187,21 +188,47 @@ describe('les conversations en commun', () => {
   test('sur SA PROPRE fiche, la section n’est pas montée — et la question ne part pas', async () => {
     const el = await mount('vous');
     expect(el.querySelector('[data-profile-conversations]')).toBeNull();
-    /* L'observateur EXISTE — un hook ne se monte pas sous condition — mais la
-       question n'est jamais POSÉE : `dataUpdateCount` à 0 et `fetchStatus` au
-       repos, la forme exacte que le témoin des publications d'un compte bloqué
-       emploie déjà. */
-    const etat = appQueryClient.getQueryState(sharedConversationsQueryKey(VIEWER_ID));
-    expect(etat?.dataUpdateCount ?? 0).toBe(0);
-    expect(etat?.fetchStatus ?? 'idle').toBe('idle');
+    /* Le module n'est PAS MONTÉ, donc son `useQuery` n'existe pas : TanStack
+       ne crée même pas l'entrée. C'est la preuve la plus forte, et elle n'est
+       vraie que parce que la section est chargée à la demande — un
+       `enabled: false` chez l'hôte aurait laissé un observateur au repos ET
+       payé le module. */
+    expect(appQueryClient.getQueryState(sharedConversationsQueryKey(VIEWER_ID))).toBeUndefined();
   });
 
   test('sur un compte BLOQUÉ, aucune conversation n’est servie', async () => {
     const el = await mount('yann.legoff');
     expect(el.querySelector('[data-profile-conversations]')).toBeNull();
-    const etat = appQueryClient.getQueryState(sharedConversationsQueryKey('u-yann'));
-    expect(etat?.dataUpdateCount ?? 0).toBe(0);
-    expect(etat?.fetchStatus ?? 'idle').toBe('idle');
+    expect(appQueryClient.getQueryState(sharedConversationsQueryKey('u-yann'))).toBeUndefined();
+  });
+});
+
+/**
+ * **L'IDENTIFIANT DE LA DEMANDE ARRIVE AVEC L'IDENTITÉ** (#7122) — la fiche
+ * chargeait le panier `GET /directory/friend-requests?direction=…` pour
+ * retrouver la ligne que « Accepter » doit patcher, et désarmait ses trois
+ * gestes tant qu'il était en vol. La passerelle sert `relationRequestId` sur
+ * `expand=relation` : il n'y a plus de panier, plus de fenêtre, et les gestes
+ * sont armés au premier rendu.
+ *
+ * C'est la forme EXACTE du lot #7125 une dimension plus loin — le blocage
+ * avait quitté son panier, la ligne de demande quitte le sien.
+ */
+describe('la ligne de la demande, lue sur le FIL', () => {
+  test('les gestes sont armés d’emblée — aucun n’attend sa ligne', async () => {
+    const el = await mount('amina.diallo');
+    const accept = el.querySelector('[data-profile-action="accept"]');
+    expect(accept).not.toBeNull();
+    expect((accept as HTMLButtonElement | null)?.disabled).toBe(false);
+  });
+
+  test('aucune page du panier des demandes n’a été servie', async () => {
+    await mount('amina.diallo');
+    /* Sans observateur, TanStack ne crée même pas l'entrée : l'ABSENCE d'état
+       est la preuve, là où un compteur de pages mesurerait le drainage plutôt
+       que sa disparition (même témoin que pour le panier des bloqués). */
+    expect(appQueryClient.getQueryState(friendRequestsQueryKey('received'))).toBeUndefined();
+    expect(appQueryClient.getQueryState(friendRequestsQueryKey('sent'))).toBeUndefined();
   });
 });
 

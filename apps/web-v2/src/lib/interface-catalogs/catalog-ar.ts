@@ -532,7 +532,6 @@ const ar = {
   'userProfile.stat.filterClear': 'عرض الكل',
   'userProfile.context.received': 'يريد {name} التواصل معك. اقبل لتبادل الرسائل.',
   'userProfile.context.sent': 'أرسلت طلب اتصال إلى {name}. في انتظار الرد.',
-  'userProfile.context.pending': 'الطلب قيد الانتظار. جارٍ تحميله…',
   'userProfile.action.write': 'مراسلة',
   'userProfile.action.writeLabel': 'مراسلة {name}',
   'userProfile.action.block': 'حظر',

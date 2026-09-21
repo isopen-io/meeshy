@@ -126,6 +126,27 @@ describe('decodeServedRelation', () => {
 });
 
 describe('decodePublicProfileView', () => {
+  /**
+   * **L'IDENTIFIANT DE LA DEMANDE VOYAGE AVEC LA RELATION** (#7122) — sans lui,
+   * « Accepter » / « Refuser » / « Annuler » n'ont rien à envoyer à
+   * `PATCH /directory/friend-requests/:id`, et l'écran doit aller chercher la
+   * ligne dans un panier. Il est servi à côté de `relation`, jamais dedans :
+   * une relation en attente et l'identifiant de SA ligne sont deux questions.
+   */
+  test('`relationRequestId` est décodé tel quel quand la passerelle le sert', () => {
+    const view = decodePublicProfileView({ ...WIRE_THIRD_PARTY, relation: 'pending_received', relationRequestId: 'fr-42' });
+    expect(view?.relationRequestId).toBe('fr-42');
+  });
+
+  test('absent, vide ou d’un autre type, il vaut `null` — aucun identifiant fabriqué', () => {
+    // Même idiome qu'`isSelf` et `blockedByViewer` : une passerelle plus
+    // ancienne ne fabrique pas un geste qui partirait dans le vide.
+    expect(decodePublicProfileView(WIRE_THIRD_PARTY)?.relationRequestId).toBeNull();
+    expect(decodePublicProfileView({ ...WIRE_THIRD_PARTY, relationRequestId: null })?.relationRequestId).toBeNull();
+    expect(decodePublicProfileView({ ...WIRE_THIRD_PARTY, relationRequestId: '   ' })?.relationRequestId).toBeNull();
+    expect(decodePublicProfileView({ ...WIRE_THIRD_PARTY, relationRequestId: 42 })?.relationRequestId).toBeNull();
+  });
+
   test('la vue porte le profil, les statistiques, la relation et `isSelf`', () => {
     const view = decodePublicProfileView({ ...WIRE_THIRD_PARTY, relation: 'pending_received', isSelf: false });
     expect(view?.relation).toBe('pending_received');

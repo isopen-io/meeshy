@@ -585,7 +585,6 @@ const fr = {
   'userProfile.stat.filterClear': 'Tout afficher',
   'userProfile.context.received': '{name} souhaite entrer en contact avec vous. Acceptez pour échanger des messages.',
   'userProfile.context.sent': 'Vous avez envoyé une demande de connexion à {name}. En attente de sa réponse.',
-  'userProfile.context.pending': 'La demande est en attente. Elle se charge…',
   'userProfile.action.write': 'Écrire',
   'userProfile.action.writeLabel': 'Écrire à {name}',
   'userProfile.action.block': 'Bloquer',

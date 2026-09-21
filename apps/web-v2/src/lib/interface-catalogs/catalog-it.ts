@@ -534,7 +534,6 @@ const it = {
   'userProfile.stat.filterClear': 'Mostra tutto',
   'userProfile.context.received': '{name} vuole entrare in contatto con te. Accetta per scambiare messaggi.',
   'userProfile.context.sent': 'Hai inviato una richiesta di connessione a {name}. In attesa di risposta.',
-  'userProfile.context.pending': 'La richiesta è in sospeso. Caricamento…',
   'userProfile.action.write': 'Scrivere',
   'userProfile.action.writeLabel': 'Scrivere a {name}',
   'userProfile.action.block': 'Bloccare',

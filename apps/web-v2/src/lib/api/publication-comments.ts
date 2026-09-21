@@ -12,7 +12,7 @@ import type { ApiResult, HttpTransport } from './http';
 import { outcomeOf } from './outcome';
 import { postQueryKey } from './publication-detail';
 import { REELS_QUERY_ROOT } from './reels';
-import { STORY_FEED_QUERY_KEY, type StoryFeedPost } from './stories';
+import { STORY_FEED_QUERY_KEY, storyPostQueryKey, type StoryFeedPost } from './stories';
 
 /**
  * **LE PORT DES COMMENTAIRES D'UNE PUBLICATION** — le fil de commentaires que
@@ -211,13 +211,25 @@ export function dropComment(data: CommentInfiniteData | undefined, tempId: strin
  *  3. `FEED_QUERY_KEY` — la rangée de statistiques d'une carte du Flux
  *     (`feed-post-card.tsx:75`) ;
  *  4. `REELS_QUERY_ROOT` — la MÊME carte servie par un fil de Réels, qui peint
- *     depuis ses propres pages (#6457).
+ *     depuis ses propres pages (#6457) ;
+ *  5. `storyPostQueryKey(postId)` — la TROISIÈME MARCHE du lecteur de stories
+ *     (#7120). Une story ouverte par LIEN, hors des 50 plus récentes, n'est
+ *     dans AUCUNE des quatre autres : le lecteur la tient de `useStoryPost` et
+ *     la fusionne dans ses groupes (`routes/story.tsx`). Son rail peint donc sa
+ *     pastille depuis ce cache — et la caisse 2 ne l'atteint pas, `postQueryKey`
+ *     valant `['posts', id]` quand celle-ci vaut `['stories', 'post', id]`.
  *
- * Les deux dernières manquaient (#7135) : on supprimait son commentaire depuis
- * la fiche, on revenait au fil, et la carte affichait toujours l'ancien compte.
- * `feed-gestures.ts` avait déjà tranché pour le cœur — « la même publication ne
- * peut pas porter deux cœurs selon l'écran qui la montre » — et le compteur de
- * commentaires n'avait pas suivi.
+ * Les trois dernières manquaient (#7135, puis #7120) : on supprimait son
+ * commentaire depuis la fiche, on revenait au fil, et la carte affichait
+ * toujours l'ancien compte ; on commentait la story d'un lien, et la pastille
+ * du rail restait au chiffre d'avant. `feed-gestures.ts` avait déjà tranché
+ * pour le cœur — « la même publication ne peut pas porter deux cœurs selon
+ * l'écran qui la montre » — et le compteur de commentaires n'avait pas suivi.
+ *
+ * **L'énumération porte DEUX affirmations, et c'est la seconde qui a cédé
+ * quatre fois** : « ces caisses appliquent la règle » se vérifie ; « ce sont
+ * les caisses où la règle s'applique » ne se vérifie qu'en demandant, pour un
+ * ÉCRAN de plus, d'où il lit son compte.
  *
  * **La règle elle-même vit dans `lib/feed/interactions.ts`**, à côté de
  * `applyPostToggle` : c'est le site unique de « comment une page de fil
@@ -237,6 +249,9 @@ export function shiftCommentCount(queryClient: QueryClient, postId: string, delt
     if (!stories.some((s) => s.id === postId)) return stories;
     return stories.map((s) => (s.id === postId ? { ...s, commentCount: shiftedCount(s.commentCount, delta) } : s));
   });
+  queryClient.setQueryData<StoryFeedPost>(storyPostQueryKey(postId), (story) =>
+    story === undefined ? story : { ...story, commentCount: shiftedCount(story.commentCount, delta) },
+  );
 }
 
 /** Une CLÉ de catalogue, jamais un texte déjà traduit — seule la surface qui

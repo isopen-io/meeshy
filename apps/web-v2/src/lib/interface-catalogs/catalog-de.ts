@@ -534,7 +534,6 @@ const de = {
   'userProfile.stat.filterClear': 'Alle anzeigen',
   'userProfile.context.received': '{name} möchte sich mit Ihnen verbinden. Nehmen Sie an, um Nachrichten auszutauschen.',
   'userProfile.context.sent': 'Sie haben {name} eine Verbindungsanfrage gesendet. Warten auf Antwort.',
-  'userProfile.context.pending': 'Die Anfrage ist offen. Sie wird geladen…',
   'userProfile.action.write': 'Schreiben',
   'userProfile.action.writeLabel': '{name} schreiben',
   'userProfile.action.block': 'Blockieren',
