@@ -181,6 +181,21 @@ export const ROUTES = {
      plutôt que de planter sur un lien périmé. */
   post: { pattern: '/post/$post', screen: publicationScreen },
   postDeepLink: { pattern: '/feeds/post/$post', screen: publicationScreen },
+  /* UNE HUMEUR PARTAGÉE (#7313) — la TROISIÈME porte du même écran, et la
+     DERNIÈRE des quatre adresses que `PostService.shareWithTrackingLink`
+     compose (`{ POST: 'post', REEL: 'reel', STORY: 'story', STATUS: 'mood' }`).
+     `/post` et `/story` étaient servies, `/reel` l'est par #7298 ; `/mood` ne
+     l'était pas, et `/l/:token` y envoyait le destinataire par un
+     `location.replace` — chaque partage d'humeur fabriquait un lien mort.
+
+     UN ALIAS, pas un écran, et le legacy le déclare en toutes lettres :
+     `apps/web/app/mood/[postId]/page.tsx` est un `export { default } from
+     '@/app/feeds/post/[postId]/page'`. Le client de la v2 le confirme de son
+     côté — il « ne distingue que REEL du reste » (`lib/api/feed-pages.ts`), et
+     le détail d'une publication n'a aucune branche sur `type`. Une humeur EST
+     une publication ; lui écrire un second lecteur en ferait une jumelle à
+     faire diverger. D'où le MÊME `import()` que ses deux sœurs. */
+  mood: { pattern: '/mood/$post', screen: publicationScreen },
   /* LE PROFIL PUBLIC DE QUELQU'UN et LES PUBLICATIONS D'UN MOT-CLÉ (#7032) —
      les DEUX adresses que le texte enrichi vise, et elles arrivent AVANT les
      liens qui les visent : une mention qui tomberait sur « adresse inconnue »
