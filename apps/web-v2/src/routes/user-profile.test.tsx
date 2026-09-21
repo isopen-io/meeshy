@@ -95,10 +95,13 @@ describe('les trois blocs arrivent ensemble', () => {
     expect([...el.querySelectorAll('[data-feed-card-id]')].length).toBeGreaterThan(0);
   });
 
-  test('la relation servie « aucune » offre Ajouter, Écrire, Bloquer', async () => {
+  /* `report` a rejoint la liste au 2026-09-21 (#7187) — le port existait sans
+     appelant. L'inventaire reste EXHAUSTIF et ORDONNÉ : c'est lui qui dirait
+     qu'une action a disparu, ou qu'une s'est glissée sans décision. */
+  test('la relation servie « aucune » offre Ajouter, Écrire, Bloquer, Signaler', async () => {
     const el = await mount('kwame-mensah');
     expect(el.querySelector('[data-profile-relation]')?.getAttribute('data-profile-relation')).toBe('none');
-    expect([...el.querySelectorAll('[data-profile-action]')].map((n) => n.getAttribute('data-profile-action'))).toEqual(['add', 'write', 'block']);
+    expect([...el.querySelectorAll('[data-profile-action]')].map((n) => n.getAttribute('data-profile-action'))).toEqual(['add', 'write', 'block', 'report']);
   });
 });
 
@@ -153,6 +156,7 @@ describe('une demande REÇUE', () => {
       'reject',
       'write',
       'block',
+      'report',
     ]);
     expect(text(el.querySelector('[data-profile-context]'))).toContain('Amina Diallo');
   });
@@ -435,5 +439,59 @@ describe('la fiche rend les gestes qui lui manquaient (#7188)', () => {
     const el = await mount('kwame-mensah');
 
     expect(el.querySelector('[data-profile-self]')).toBe(null);
+  });
+});
+
+/**
+ * **LE BOUTON OUVRE VRAIMENT LA FEUILLE** (#7187).
+ *
+ * Les témoins du port (`lib/api/reports.test.ts`) prouvent que la RÈGLE est
+ * juste ; les inventaires d'actions prouvent que le bouton EXISTE. Aucun des
+ * deux ne prouve que le bouton OUVRE quelque chose — et c'est précisément la
+ * distance que ce dépôt a payée cinq fois cette semaine : un mécanisme écrit,
+ * testé, et que rien n'active.
+ *
+ * Ce témoin a été ajouté APRÈS coup, en relisant le lot : il manquait, et rien
+ * ne l'aurait dit.
+ */
+describe('signaler ouvre la feuille des motifs (#7187)', () => {
+  test('aucune feuille tant qu’on n’a pas demandé à signaler', async () => {
+    const el = await mount('kwame-mensah');
+
+    expect(el.querySelector('[data-report-reason]')).toBe(null);
+  });
+
+  test('le bouton « Signaler » la fait apparaître, avec les HUIT motifs', async () => {
+    const el = await mount('kwame-mensah');
+
+    const bouton = el.querySelector<HTMLButtonElement>('[data-profile-action="report"]');
+    expect(bouton).not.toBe(null);
+    await act(async () => bouton?.click());
+    await settle();
+
+    const motifs = [...document.querySelectorAll('[data-report-reason]')].map((n) =>
+      n.getAttribute('data-report-reason'),
+    );
+    expect(motifs).toEqual([
+      'spam',
+      'inappropriate',
+      'harassment',
+      'violence',
+      'hate_speech',
+      'fake_profile',
+      'impersonation',
+      'other',
+    ]);
+  });
+
+  /** ET ELLE EXPLIQUE CE QU'ELLE FAIT : une liste de motifs sans phrase laisse
+      deviner à qui va le signalement, et ce qu'il déclenche. */
+  test('elle dit à qui le signalement s’adresse', async () => {
+    const el = await mount('kwame-mensah');
+
+    await act(async () => el.querySelector<HTMLButtonElement>('[data-profile-action="report"]')?.click());
+    await settle();
+
+    expect(text(document.querySelector('[data-report-body]'))).toContain('modération');
   });
 });

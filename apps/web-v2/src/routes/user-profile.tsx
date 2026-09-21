@@ -38,6 +38,8 @@ import { useMinute } from '@/lib/view/use-minute';
 import { usePostGesture } from '@/lib/view/use-post-gesture';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { Link, href, navigate } from '@/routes/route-table';
+import { ReportSheet } from '@/components/report-sheet';
+import { reportUser, type ReportReason } from '@/lib/api/reports';
 import { ProfileHero } from '@/routes/user-profile-header';
 import {
   ProfileBlockedCard,
@@ -119,6 +121,10 @@ const ANNOUNCE = {
   block: { done: 'userProfile.announce.blocked', failed: 'userProfile.announce.blockFailed' },
   unblock: { done: 'discover.announce.unblocked', failed: 'discover.announce.unblockFailed' },
   write: { done: null, failed: 'userProfile.announce.writeFailed' },
+  /* SIGNALER a ses PROPRES annonces (#7187) : « envoyé » n'est pas « ajouté »,
+     et son refus le plus fréquent — le DÉBIT — n'est pas un échec. Les trois
+     issues sont distinctes chez le port (`ReportOutcome`) et le restent ici. */
+  report: { done: 'report.done', failed: 'report.failed' },
 } as const satisfies Readonly<Record<ProfileActionKind, { readonly done: InterfaceCatalogKey | null; readonly failed: InterfaceCatalogKey }>>;
 
 function ProfileHeaderBar({ title }: { readonly title: string }) {
@@ -306,6 +312,11 @@ export function UserProfileView({ username }: { readonly username: string }) {
         });
         return;
       }
+      if (kind === 'report') {
+        setBusy(false);
+        setReporting(true);
+        return;
+      }
       if (kind === 'add') return void performSendRequest({ person: summary, deps }).then(settle);
       if (kind === 'block') return void performBlock({ person: summary, deps }).then(settle);
       if (kind === 'unblock') return void performUnblock({ person: summary, deps }).then(settle);
@@ -317,6 +328,39 @@ export function UserProfileView({ username }: { readonly username: string }) {
       void performRespondToRequest({ request: pendingRequest, action, deps }).then(settle);
     },
     [busy, deps, pendingRequest, person, report],
+  );
+
+  /**
+   * SIGNALER OUVRE UNE FEUILLE, IL N'ENVOIE PAS (#7187) — choisir un motif EST
+   * la confirmation, et il n'y en a pas de seconde : un « êtes-vous sûr ? »
+   * par-dessus ferait payer deux gestes pour une action qu'on abandonne déjà
+   * en fermant la feuille.
+   *
+   * L'issue `throttled` a son PROPRE message, distinct de l'échec : la
+   * passerelle pose trois limiteurs sur cette route, et dire « échoué » à
+   * quelqu'un qui vient de signaler un harcèlement l'enverrait recommencer —
+   * le limiteur le refuserait encore.
+   */
+  const [reporting, setReporting] = useState(false);
+
+  const onPickReason = useCallback(
+    (reason: ReportReason) => {
+      const cible = person;
+      if (cible === null || cible === undefined) return;
+      setBusy(true);
+      void reportUser({ userId: cible.id, reason, deps: apiDeps }).then((outcome) => {
+        setBusy(false);
+        setReporting(false);
+        /* LES TROIS ISSUES SE DISENT DIFFÉREMMENT, et le TON suit : seul un
+           succès est « neutre ». Un débit annoncé comme une erreur laisserait
+           croire à un échec ce qui n'est qu'un « pas maintenant ». */
+        if (outcome === 'offline') return announce(translate(language, 'discover.announce.offline'), 'error');
+        if (outcome === 'throttled') return announce(translate(language, 'report.throttled'), 'error');
+        if (outcome === 'done') return announce(translate(language, 'report.done'), 'neutral');
+        announce(translate(language, 'report.failed'), 'error');
+      });
+    },
+    [announce, language, person],
   );
 
   const onFilter = useCallback((tap: ProfilePostsFilterTap) => setFilter((current) => toggledFilter(current, tap)), []);
@@ -498,6 +542,9 @@ export function UserProfileView({ username }: { readonly username: string }) {
         tone={actionAnnouncement === '' ? 'neutral' : actionTone}
         marker="profile"
       />
+      {reporting && person !== null ? (
+        <ReportSheet name={name} busy={busy} onPick={onPickReason} onClose={() => setReporting(false)} />
+      ) : null}
     </div>
   );
 }
