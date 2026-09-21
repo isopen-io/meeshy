@@ -8,7 +8,7 @@ import { InstitutionalPage } from './page';
 /**
  * LES PAGES INSTITUTIONNELLES SERVENT LE LOGO ET LA SIGNATURE (#5606).
  *
- * `InstitutionalPage` est le rendu partagé des cinq pages — un seul test
+ * `InstitutionalPage` est le rendu partagé des sept pages — un seul test
  * suffit à prouver « au moins un écran » (§ critère de fin, ligne 2) ; les
  * quatre autres contenus (`contact.ts`, `partners.ts`, `privacy.ts`,
  * `terms.ts`) traversent exactement le même composant.

@@ -28,6 +28,35 @@ export type ReelPlaybackIntent = 'play' | 'pause';
 
 const isReel = (post: FeedPost): boolean => post.type === 'REEL';
 
+/**
+ * LA GRAINE D'UN LECTEUR OUVERT SUR UN RÉEL NOMMÉ (#7298) — PURE, et le SITE
+ * UNIQUE qui la lit.
+ *
+ * Le lecteur a DEUX portes pour un même réel : `/reels?seed=<id>`, celle du
+ * Flux (miroir `present(posts:startId:)`), et `/reel/<id>`, l'adresse que la
+ * PASSERELLE grave dans chaque lien de partage
+ * (`PostService.shareWithTrackingLink`) et que `/l/:token` ouvre par une
+ * navigation entière. Les deux nomment la même chose ; les lire à deux
+ * endroits les ferait diverger au premier correctif porté à l'un des deux.
+ *
+ * Le CHEMIN l'emporte : il est la partie de l'adresse qui NOMME le réel, là où
+ * `?seed=` n'est qu'un paramètre — et `/reel/<id>?seed=<autre>`, forme qu'un
+ * partage recollé peut produire, doit ouvrir le réel de son chemin.
+ *
+ * Une chaîne VIDE rend `undefined`, jamais `''` : l'écran cherche une graine
+ * inconnue par un `GET /posts/<id>` (`postQueryOptions`), et `''` y partirait
+ * en requête sans identifiant.
+ */
+export function reelSeedOf(params: {
+  readonly params: Readonly<Record<string, string>>;
+  readonly search: URLSearchParams;
+}): string | undefined {
+  const fromPath = params.params.post;
+  if (fromPath !== undefined && fromPath !== '') return fromPath;
+  const fromSearch = params.search.get('seed');
+  return fromSearch !== null && fromSearch !== '' ? fromSearch : undefined;
+}
+
 export function entryReelIds(params: { readonly seedId?: string; readonly feedPosts: readonly FeedPost[] }): readonly string[] {
   const feedIds = params.feedPosts.filter(isReel).map((p) => p.id);
   const head = params.seedId === undefined ? [] : [params.seedId];

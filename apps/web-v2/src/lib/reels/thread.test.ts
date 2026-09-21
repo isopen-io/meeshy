@@ -10,6 +10,7 @@ import {
   neighborIndex,
   pageModeOf,
   playbackIntentOf,
+  reelSeedOf,
   reelDisplayOf,
   shouldLoadMoreReels,
 } from './thread';
@@ -155,5 +156,34 @@ describe('shouldLoadMoreReels — la suite se demande avant la fin, comme `loadM
     expect(shouldLoadMoreReels({ activeIndex: 7, count: 10 })).toBe(true);
     expect(shouldLoadMoreReels({ activeIndex: 0, count: 2 })).toBe(true);
     expect(shouldLoadMoreReels({ activeIndex: 0, count: 0 })).toBe(false);
+  });
+});
+
+/**
+ * LA GRAINE, D'OÙ QU'ELLE VIENNE (#7298) — le lecteur s'ouvre sur un réel
+ * NOMMÉ par deux portes : `/reels?seed=<id>` (un réel touché dans le Flux) et
+ * `/reel/<id>` (le lien que la passerelle grave à chaque partage). Une seule
+ * loi les lit, pour qu'aucune des deux ne puisse s'ouvrir sur un autre réel
+ * que celui qu'on a nommé.
+ */
+describe('reelSeedOf — les deux portes d’un réel nommé', () => {
+  const noSearch = new URLSearchParams();
+
+  test('le paramètre de chemin de `/reel/<id>` est la graine', () => {
+    expect(reelSeedOf({ params: { post: 'r7' }, search: noSearch })).toBe('r7');
+  });
+
+  test('`?seed=` reste la graine sur `/reels`', () => {
+    expect(reelSeedOf({ params: {}, search: new URLSearchParams('seed=r9') })).toBe('r9');
+  });
+
+  test('le CHEMIN l’emporte sur la recherche — c’est lui qui NOMME l’adresse', () => {
+    expect(reelSeedOf({ params: { post: 'r7' }, search: new URLSearchParams('seed=r9') })).toBe('r7');
+  });
+
+  test('sans graine, `undefined` — jamais une chaîne vide, qui ferait chercher un réel sans identifiant', () => {
+    expect(reelSeedOf({ params: {}, search: noSearch })).toBeUndefined();
+    expect(reelSeedOf({ params: { post: '' }, search: noSearch })).toBeUndefined();
+    expect(reelSeedOf({ params: {}, search: new URLSearchParams('seed=') })).toBeUndefined();
   });
 });

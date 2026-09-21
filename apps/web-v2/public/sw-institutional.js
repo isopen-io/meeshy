@@ -1,6 +1,6 @@
 /**
  * RAMÈNE LA FORME À BARRE FINALE SUR LA FORME CANONIQUE, dans le service
- * worker, pour que les cinq pages institutionnelles ne soient mises en cache
+ * worker, pour que les sept pages institutionnelles ne soient mises en cache
  * QU'UNE fois.
  *
  * LE PROBLÈME, MESURÉ. Le préchauffage écrit chaque page dans ses deux formes —
@@ -34,7 +34,27 @@
  * le premier sur les adresses qu'il revendique, et il laisse passer tout le
  * reste sans y toucher.
  */
-const INSTITUTIONAL_ROUTES = ['about', 'contact', 'partners', 'privacy', 'terms'];
+/**
+ * LA LISTE EST UN MIROIR, et elle ne peut pas être autre chose.
+ *
+ * `scripts/lib/institutional-routes.mjs` est la source unique de ces adresses,
+ * mais ce fichier-ci est servi TEL QUEL depuis `public/` et chargé par
+ * `importScripts` : il n'est pas un module, il ne passe pas par le bundler, et
+ * il ne peut donc rien importer. Même situation que le `location ~` de
+ * `nginx.conf`, qui est de la configuration.
+ *
+ * CE QUE L'OUBLI COÛTE, mesuré (#7287) : une page ajoutée à la source unique et
+ * pas ici n'est plus ramenée sur sa forme canonique, donc sa forme à barre
+ * finale sort du précache et repart chercher `<page>/index.html` SUR LE RÉSEAU
+ * à chaque visite. Le relevé de `check-institutional.mjs` l'a montré à
+ * l'ajout de `/help` et `/faq` — « 1 requête RÉSEAU en visite 2 » là où les
+ * cinq autres en coûtaient zéro. Rien d'autre ne rougissait : la page
+ * s'affichait, avec le bon titre.
+ *
+ * `src/institutional/help-faq.test.tsx` confronte désormais cette liste à la
+ * source unique, comme celle de nginx.
+ */
+const INSTITUTIONAL_ROUTES = ['about', 'contact', 'faq', 'help', 'partners', 'privacy', 'terms'];
 
 const TRAILING_SLASH = new RegExp(`^/(${INSTITUTIONAL_ROUTES.join('|')})/$`);
 
