@@ -157,3 +157,163 @@ describe('#7345 — POST /conversations/:id/receipts {type:"read"} sur des messa
     }
   });
 });
+
+/**
+ * LA SÉQUENCE RÉELLE — livré PUIS lu, jamais lu d'emblée.
+ *
+ * Le bloc ci-dessus part d'une base où `MessageStatusEntry` est VIDE : le gel
+ * `readAt` passe alors par `createMany`, et n'exerce jamais sa seconde moitié,
+ * le `updateMany` write-once. Or #7345 décrit l'inverse — sur staging, les
+ * accusés de REMISE étaient déjà gravés (`deliveredAt`/`receivedAt`,
+ * `deliveredCount: 1`) quand B a marqué lu. C'est TOUJOURS l'ordre de la vraie
+ * vie : un message est livré avant d'être lu.
+ *
+ * Dans cet ordre, deux documents Mongo n'ont PAS la colonne que la lecture
+ * interroge — Prisma n'écrit pas une colonne optionnelle qu'on ne lui donne
+ * pas au `create` (`utils/prisma-unset.ts`) :
+ *
+ *   `MessageStatusEntry` créé par la livraison → AUCUNE clé `readAt`
+ *   `ConversationReadCursor` créé par la livraison → AUCUNE clé `lastRead*`
+ *
+ * et les deux lectures qui les gouvernent s'écrivaient `{ readAt: null }` /
+ * `{ lastReadMessageId: null }`, des ÉGALITÉS, qui n'apparient pas l'absence.
+ * D'où les quatre symptômes de #7345 d'un coup : `markedCount: 0`,
+ * `readCount: 0`, `lastReadMessageId: null`, `unreadCount` qui ne retombe pas.
+ */
+describe('#7345 — livré PUIS lu : la séquence de la vraie vie', () => {
+  let store: FakePrismaStore;
+  let participantA: string;
+  let participantB: string;
+  let messageIds: string[];
+
+  beforeEach(() => {
+    store = new FakePrismaStore();
+    participantA = nextFakeObjectId();
+    participantB = nextFakeObjectId();
+    seedParticipant(store, { id: participantA, userId: SENDER_USER_ID });
+    seedParticipant(store, { id: participantB, userId: READER_USER_ID });
+
+    const base = new Date('2026-09-20T10:00:00Z').getTime();
+    messageIds = Array.from({ length: 5 }, (_, i) =>
+      seedMessageFromSender(store, participantA, new Date(base + i * 1000))
+    );
+  });
+
+  /** L'accusé de REMISE, par la VRAIE porte — jamais des lignes posées à la main. */
+  async function acknowledgeDelivery(app: FastifyInstance): Promise<void> {
+    const response = await app.inject({
+      method: 'POST',
+      url: `/conversations/${CONVERSATION_ID}/receipts`,
+      headers: AUTH,
+      payload: { type: 'received' },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data.markedCount).toBe(5);
+  }
+
+  it('fige `readAt` sur des entrées créées par la LIVRAISON : markedCount = 5', async () => {
+    const app = await buildApp(store);
+    await acknowledgeDelivery(app);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/conversations/${CONVERSATION_ID}/receipts`,
+      headers: AUTH,
+      payload: { type: 'read', messageIds },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data).toEqual({ type: 'read', markedCount: 5, unreadCount: 0 });
+  });
+
+  it('avance le curseur de LECTURE d’un curseur qui ne porte que ses colonnes de livraison', async () => {
+    const app = await buildApp(store);
+    await acknowledgeDelivery(app);
+
+    await app.inject({
+      method: 'POST',
+      url: `/conversations/${CONVERSATION_ID}/receipts`,
+      headers: AUTH,
+      payload: { type: 'read', messageIds },
+    });
+
+    const [cursor] = store.rows('conversationReadCursor').filter(
+      (row) => row.participantId === participantB && row.conversationId === CONVERSATION_ID
+    );
+    expect(cursor?.lastReadMessageId).toBe(messageIds[4]);
+    expect(cursor?.lastReadAt).toBeInstanceOf(Date);
+  });
+
+  it('rend readCount = 1 sur chacun des 5 messages déjà livrés', async () => {
+    const app = await buildApp(store);
+    await acknowledgeDelivery(app);
+
+    await app.inject({
+      method: 'POST',
+      url: `/conversations/${CONVERSATION_ID}/receipts`,
+      headers: AUTH,
+      payload: { type: 'read', messageIds },
+    });
+
+    const summaryResponse = await app.inject({
+      method: 'GET',
+      url: `/conversations/${CONVERSATION_ID}/receipts?detail=summary&messageIds=${messageIds.join(',')}`,
+      headers: AUTH,
+    });
+
+    const { summary } = summaryResponse.json().data as {
+      summary: Record<string, { readCount: number; readByAllAt: string | null }>;
+    };
+    for (const id of messageIds) {
+      expect(summary[id].readCount).toBe(1);
+      expect(summary[id].readByAllAt).not.toBeNull();
+    }
+  });
+});
+
+/**
+ * L'autre moitié du même prédicat — et la seule que la discipline d'ÉCRITURE ne
+ * peut PAS sauver.
+ *
+ * Écrire désormais les colonnes de l'autre moitié à `null` rend exactes les
+ * lignes À VENIR ; les lignes DÉJÀ EN BASE, elles, gardent leur colonne
+ * absente pour toujours. Ce témoin en pose une telle quelle — la forme que
+ * l'ancien `createMany` produisait — et vérifie que l'accusé de REMISE la
+ * complète quand même. Seul `unsetOrNull` l'apparie.
+ */
+describe('#7345 — une entrée HÉRITÉE, sans la colonne de l’autre moitié', () => {
+  it('complète `deliveredAt` sur des entrées que seule la LECTURE avait créées', async () => {
+    const store = new FakePrismaStore();
+    const participantA = nextFakeObjectId();
+    const participantB = nextFakeObjectId();
+    seedParticipant(store, { id: participantA, userId: SENDER_USER_ID });
+    seedParticipant(store, { id: participantB, userId: READER_USER_ID });
+
+    const base = new Date('2026-09-20T10:00:00Z').getTime();
+    const messageIds = Array.from({ length: 5 }, (_, i) =>
+      seedMessageFromSender(store, participantA, new Date(base + i * 1000))
+    );
+
+    // La forme HÉRITÉE : `readAt` gravé, et AUCUNE clé `deliveredAt`.
+    for (const messageId of messageIds) {
+      store.seed('messageStatusEntry', {
+        id: nextFakeObjectId(),
+        messageId,
+        conversationId: CONVERSATION_ID,
+        participantId: participantB,
+        readAt: new Date(base + 60_000),
+      });
+    }
+
+    const app = await buildApp(store);
+    const response = await app.inject({
+      method: 'POST',
+      url: `/conversations/${CONVERSATION_ID}/receipts`,
+      headers: AUTH,
+      payload: { type: 'received' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data.markedCount).toBe(5);
+  });
+});

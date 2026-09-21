@@ -23,7 +23,7 @@
 type Where = Record<string, unknown>;
 
 const OPERATOR_KEYS = new Set([
-  'not', 'in', 'notIn', 'gt', 'gte', 'lt', 'lte', 'equals', 'contains', 'mode',
+  'not', 'in', 'notIn', 'gt', 'gte', 'lt', 'lte', 'equals', 'contains', 'mode', 'isSet',
 ]);
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
@@ -58,10 +58,24 @@ function flattenWhere(where?: Where | null): Where {
 const toComparable = (value: unknown): number | string =>
   value instanceof Date ? value.getTime() : (value as number | string);
 
+/**
+ * ABSENT n'est pas `null` — la règle de MongoDB, et le piège que ce dépôt a
+ * payé quatre fois en production (`utils/prisma-unset.ts`). Prisma n'écrit pas
+ * les colonnes optionnelles qu'on ne lui donne pas au `create` : une entrée
+ * créée par la LIVRAISON n'a pas de clé `readAt` du tout, et le filtre
+ * d'égalité `{ readAt: null }` ne l'apparie PAS. Un double qui apparierait les
+ * deux états rendrait VERT un chemin rouge en production — exactement ce qui
+ * s'est produit sur #7345, où le témoin de bout en bout ne voyait pas le
+ * `updateMany` write-once rater ses cinq lignes.
+ *
+ * `{ champ: { isSet: false } }` est l'autre moitié du prédicat `unsetOrNull` :
+ * elle, et elle seule, apparie l'absence.
+ */
 function matchCondition(value: unknown, condition: unknown): boolean {
-  if (condition === null) return value === null || value === undefined;
+  if (condition === null) return value === null;
   if (condition instanceof Date) return value instanceof Date && value.getTime() === condition.getTime();
   if (isPlainObject(condition)) {
+    if ('isSet' in condition) return condition.isSet === true ? value !== undefined : value === undefined;
     if ('not' in condition) {
       const negated = condition.not;
       if (negated === null) return value !== null && value !== undefined;
@@ -110,6 +124,27 @@ function sortRows<T extends Record<string, unknown>>(rows: T[], orderBy?: Record
   return direction === 'desc' ? sorted.reverse() : sorted;
 }
 
+/**
+ * `select` PROJETTE, et une colonne absente du document ressort `null` — pas
+ * `undefined`. C'est ce que rend le client Prisma, et c'est ce qui rend le
+ * piège de #7345 si difficile à voir : côté JS la colonne a l'air d'un `null`
+ * ordinaire, côté requête elle n'existe pas. Un double qui rendrait `undefined`
+ * ferait échouer le code au MAUVAIS endroit (le filtre JS au lieu du `where`),
+ * donc prouverait le bon symptôme par le mauvais mécanisme.
+ */
+function project<T extends Record<string, unknown>>(
+  row: T,
+  select?: Record<string, boolean>
+): Record<string, unknown> {
+  if (!select) return { ...row };
+  const projected: Record<string, unknown> = {};
+  for (const [field, wanted] of Object.entries(select)) {
+    if (wanted !== true) continue;
+    projected[field] = row[field] ?? null;
+  }
+  return projected;
+}
+
 let idCounter = 1;
 /** Un id de la forme d'un ObjectId Mongo — `OBJECT_ID_RE` du service le vérifie. */
 export const nextFakeObjectId = (): string => (idCounter++).toString(16).padStart(24, '0');
@@ -117,20 +152,29 @@ export const nextFakeObjectId = (): string => (idCounter++).toString(16).padStar
 class FakeModel {
   constructor(private readonly rows: Record<string, unknown>[]) {}
 
-  async findFirst(args: { where?: Where; orderBy?: Record<string, 'asc' | 'desc'> } = {}) {
+  async findFirst(
+    args: { where?: Where; orderBy?: Record<string, 'asc' | 'desc'>; select?: Record<string, boolean> } = {}
+  ) {
     const matched = sortRows(this.rows.filter((r) => matchesWhere(r, flattenWhere(args.where))), args.orderBy);
-    return matched[0] ? { ...matched[0] } : null;
+    return matched[0] ? project(matched[0], args.select) : null;
   }
 
-  async findUnique(args: { where?: Where } = {}) {
+  async findUnique(args: { where?: Where; select?: Record<string, boolean> } = {}) {
     const found = this.rows.find((r) => matchesWhere(r, flattenWhere(args.where)));
-    return found ? { ...found } : null;
+    return found ? project(found, args.select) : null;
   }
 
-  async findMany(args: { where?: Where; orderBy?: Record<string, 'asc' | 'desc'>; take?: number } = {}) {
+  async findMany(
+    args: {
+      where?: Where;
+      orderBy?: Record<string, 'asc' | 'desc'>;
+      take?: number;
+      select?: Record<string, boolean>;
+    } = {}
+  ) {
     let matched = sortRows(this.rows.filter((r) => matchesWhere(r, flattenWhere(args.where))), args.orderBy);
     if (typeof args.take === 'number') matched = matched.slice(0, args.take);
-    return matched.map((r) => ({ ...r }));
+    return matched.map((r) => project(r, args.select));
   }
 
   async count(args: { where?: Where } = {}) {

@@ -447,7 +447,9 @@ describe('MessageReadStatusService', () => {
         where: {
           participantId: testParticipantId,
           conversationId: testConversationId,
-          OR: [{ lastDeliveredMessageId: null }, { lastDeliveredMessageId: { lt: testMessageId } }]
+          // « Rien d'enregistré » = ABSENT ou `null` : une ligne de curseur née de
+          // l'autre moitié n'a pas la colonne du tout (#7345, `utils/prisma-unset.ts`).
+          OR: [{ OR: [{ lastDeliveredMessageId: null }, { lastDeliveredMessageId: { isSet: false } }] }, { lastDeliveredMessageId: { lt: testMessageId } }]
         },
         data: expect.objectContaining({
           lastDeliveredMessageId: testMessageId,
@@ -592,11 +594,13 @@ describe('MessageReadStatusService', () => {
 
       mockPrisma.conversationReadCursor.updateMany.mockImplementation(async ({ where, data }: any) => {
         if (!row) return { count: 0 };
-        const guardPasses: boolean = where.OR?.some((clause: any) =>
-          clause.lastDeliveredMessageId === null
-            ? false
-            : row!.lastDeliveredMessageId < clause.lastDeliveredMessageId.lt
-        ) ?? true;
+        const guardPasses: boolean = where.OR?.some((clause: any) => {
+          // Une clause « rien d'enregistré » porte son PROPRE `OR`
+          // (`unsetOrNull` : `null` OU colonne absente). Ici la ligne existe et
+          // porte toujours son id, donc cette branche ne passe jamais.
+          if (clause.OR) return false;
+          return row!.lastDeliveredMessageId < clause.lastDeliveredMessageId.lt;
+        }) ?? true;
         if (!guardPasses) return { count: 0 };
         row = { lastDeliveredMessageId: data.lastDeliveredMessageId };
         return { count: 1 };
@@ -636,8 +640,8 @@ describe('MessageReadStatusService', () => {
         })
       ).toEqual({
         OR: [
-          { lastDeliveredMessageCreatedAt: null, lastDeliveredMessageId: null },
-          { lastDeliveredMessageCreatedAt: null, lastDeliveredMessageId: { lt: objectIdA } },
+          { AND: [{ OR: [{ lastDeliveredMessageCreatedAt: null }, { lastDeliveredMessageCreatedAt: { isSet: false } }] }, { OR: [{ lastDeliveredMessageId: null }, { lastDeliveredMessageId: { isSet: false } }] }] },
+          { AND: [{ OR: [{ lastDeliveredMessageCreatedAt: null }, { lastDeliveredMessageCreatedAt: { isSet: false } }] }, { lastDeliveredMessageId: { lt: objectIdA } }] },
           { lastDeliveredMessageCreatedAt: { lt: createdAt } },
         ],
       });
@@ -652,7 +656,7 @@ describe('MessageReadStatusService', () => {
           messageCreatedAt: null,
         })
       ).toEqual({
-        OR: [{ lastReadMessageId: null }, { lastReadMessageId: { lt: objectIdA } }],
+        OR: [{ OR: [{ lastReadMessageId: null }, { lastReadMessageId: { isSet: false } }] }, { lastReadMessageId: { lt: objectIdA } }],
       });
     });
 
@@ -773,7 +777,7 @@ describe('MessageReadStatusService', () => {
         where: {
           participantId: testParticipantId,
           conversationId: testConversationId,
-          OR: [{ lastReadMessageId: null }, { lastReadMessageId: { lt: testMessageId } }]
+          OR: [{ OR: [{ lastReadMessageId: null }, { lastReadMessageId: { isSet: false } }] }, { lastReadMessageId: { lt: testMessageId } }]
         },
         data: expect.objectContaining({
           lastReadMessageId: testMessageId,
@@ -1426,7 +1430,9 @@ describe('MessageReadStatusService', () => {
       // No create (entry exists); update only the null readAt field.
       expect(mockPrisma.messageStatusEntry.createMany).not.toHaveBeenCalled();
       expect(mockPrisma.messageStatusEntry.updateMany).toHaveBeenCalledWith({
-        where: { messageId: { in: [testMessageId] }, participantId: testParticipantId, readAt: null },
+        // Le write-once apparie l'ABSENCE autant que le `null` : l'entrée vient
+        // de la livraison, qui n'a jamais nommé `readAt` (#7345).
+        where: { messageId: { in: [testMessageId] }, participantId: testParticipantId, ...{ OR: [{ readAt: null }, { readAt: { isSet: false } }] } },
         data: { readAt: expect.any(Date) }
       });
     });
