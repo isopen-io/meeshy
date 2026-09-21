@@ -20,7 +20,7 @@ import {
   type FriendActionDeps,
   type FriendActionOutcome,
 } from '@/lib/api/friend-actions';
-import { flattenFriendRequests, friendRequestsQueryOptions, type PersonSummary } from '@/lib/api/friend-requests';
+import type { PersonSummary } from '@/lib/api/friend-requests';
 import { publicProfileQueryOptions } from '@/lib/api/public-profile';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
@@ -30,7 +30,7 @@ import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interfac
 import { useOnline } from '@/lib/net/online';
 import { failureMayRetry, profileFailureOf, type ProfileFailure } from '@/lib/profile/failure';
 import { filterPosts, showsEmptyState, toggledFilter, type ProfilePostsFilter, type ProfilePostsFilterTap } from '@/lib/profile/posts-filter';
-import { actionsFor, bucketNeededFor, relationFromServed, type ProfileActionKind } from '@/lib/profile/relation';
+import { actionsFor, pendingRequestFrom, relationFromServed, type ProfileActionKind } from '@/lib/profile/relation';
 import { useParams } from '@/lib/router';
 import { announcementToneOf } from '@/lib/view/announcement-tone';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
@@ -74,12 +74,11 @@ import {
  * (`PostFeedService.ts:869`), et elle est donc gardée par `enabled` plutôt que
  * lancée sur un identifiant fabriqué depuis l'adresse.
  *
- * **ZÉRO REQUÊTE DE PLUS DANS LE CAS NOMINAL** : le panier des demandes n'est
- * chargé que si la relation est EN ATTENTE (`bucketNeededFor`) — la passerelle
- * ne sert pas l'identifiant de la demande, et Accepter / Refuser / Annuler en
- * ont besoin. Issue gateway compagnon : `relationRequestId` sur
- * `expand=relation`. **Le panier des BLOQUÉS, lui, n'est plus chargé du tout**
- * (#7125) : `blockedByViewer` arrive sur le même fil que l'identité.
+ * **PLUS AUCUN PANIER DERRIÈRE CETTE FICHE** (#7125 puis #7122). Le panier des
+ * BLOQUÉS avait disparu le premier — `blockedByViewer` arrive sur le fil de
+ * l'identité. Celui des DEMANDES a suivi : `relationRequestId` porte
+ * l'identifiant qu'Accepter / Refuser / Annuler doivent envoyer, si bien que
+ * les trois gestes sont armés au premier rendu au lieu d'attendre une ligne.
  *
  * **MÊME CARTE QUE LE FIL, MÊME MODÈLE** — `resolveFeedCardModel` et
  * `FeedPostCard`, jamais une seconde peau : le Prisme, l'accent et la géométrie
@@ -220,16 +219,25 @@ export function UserProfileView({ username }: { readonly username: string }) {
    */
   const blocked = view.data?.blockedByViewer === true;
 
-  const bucket = bucketNeededFor(served);
-  const requests = useInfiniteQuery(
-    { ...friendRequestsQueryOptions(apiDeps, bucket ?? 'received'), enabled: signedIn && bucket !== null },
-    appQueryClient,
+  /**
+   * **LA LIGNE SE BÂTIT DEPUIS LE FIL** (#7122) — elle se CHERCHAIT dans le
+   * panier des demandes, chargé dès que la relation était en attente, et les
+   * trois gestes restaient désarmés tant qu'il était en vol. La passerelle
+   * sert l'identifiant avec l'identité ; le reste de la ligne se déduit du
+   * SENS de la demande et du sujet de l'écran (`pendingRequestFrom`).
+   */
+  const pendingRequest = useMemo(
+    () =>
+      person === undefined
+        ? null
+        : pendingRequestFrom({
+            served,
+            requestId: view.data?.relationRequestId ?? null,
+            person: { id: person.id, username: person.username, displayName: person.displayName, avatar: person.avatar },
+            viewerId,
+          }),
+    [person, served, view.data?.relationRequestId, viewerId],
   );
-  const pendingRequest = useMemo(() => {
-    if (person === undefined || bucket === null) return null;
-    const rows = flattenFriendRequests(requests.data);
-    return rows.find((row) => (bucket === 'received' ? row.senderId === person.id : row.receiverId === person.id)) ?? null;
-  }, [bucket, person, requests.data]);
 
   const relation = relationFromServed({ served, blocked, request: pendingRequest });
   const actions = actionsFor(relation);
@@ -424,8 +432,6 @@ export function UserProfileView({ username }: { readonly username: string }) {
        alors aucune. */
   }, [announce, cardsNow, language, models, posts.isFetchingNextPage]);
 
-  const awaitingRequest = bucket !== null && pendingRequest === null;
-
   return (
     /* L'ATTRIBUT NE PORTE QUE CE QUI EST SERVI (#7083, D-6) — il portait le
        handle DEMANDÉ, donc un profil refusé le répétait dans le document :
@@ -462,7 +468,6 @@ export function UserProfileView({ username }: { readonly username: string }) {
                     name={name}
                     signedIn={signedIn}
                     online={online}
-                    awaitingRequest={awaitingRequest}
                     busy={busy}
                     onAction={onAction}
                     onSignIn={onSignIn}

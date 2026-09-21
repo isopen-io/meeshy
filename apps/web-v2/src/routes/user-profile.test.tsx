@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 
 import { authorPostsQueryKey } from '@/lib/api/author-posts';
 import { BLOCKED_USERS_QUERY_KEY } from '@/lib/api/blocks';
+import { friendRequestsQueryKey } from '@/lib/api/friend-requests';
 import { fixtureAuthorPosts } from '@/lib/api/fixtures-rich-text';
 import { appQueryClient } from '@/lib/api/query-client';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
@@ -159,6 +160,35 @@ describe('une demande REÇUE', () => {
       'report',
     ]);
     expect(text(el.querySelector('[data-profile-context]'))).toContain('Amina Diallo');
+  });
+});
+
+/**
+ * **L'IDENTIFIANT DE LA DEMANDE ARRIVE AVEC L'IDENTITÉ** (#7122) — la fiche
+ * chargeait le panier `GET /directory/friend-requests?direction=…` pour
+ * retrouver la ligne que « Accepter » doit patcher, et désarmait ses trois
+ * gestes tant qu'il était en vol. La passerelle sert `relationRequestId` sur
+ * `expand=relation` : il n'y a plus de panier, plus de fenêtre, et les gestes
+ * sont armés au premier rendu.
+ *
+ * C'est la forme EXACTE du lot #7125 une dimension plus loin — le blocage
+ * avait quitté son panier, la ligne de demande quitte le sien.
+ */
+describe('la ligne de la demande, lue sur le FIL', () => {
+  test('les gestes sont armés d’emblée — aucun n’attend sa ligne', async () => {
+    const el = await mount('amina.diallo');
+    const accept = el.querySelector('[data-profile-action="accept"]');
+    expect(accept).not.toBeNull();
+    expect((accept as HTMLButtonElement | null)?.disabled).toBe(false);
+  });
+
+  test('aucune page du panier des demandes n’a été servie', async () => {
+    await mount('amina.diallo');
+    /* Sans observateur, TanStack ne crée même pas l'entrée : l'ABSENCE d'état
+       est la preuve, là où un compteur de pages mesurerait le drainage plutôt
+       que sa disparition (même témoin que pour le panier des bloqués). */
+    expect(appQueryClient.getQueryState(friendRequestsQueryKey('received'))).toBeUndefined();
+    expect(appQueryClient.getQueryState(friendRequestsQueryKey('sent'))).toBeUndefined();
   });
 });
 

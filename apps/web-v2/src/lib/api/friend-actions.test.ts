@@ -214,6 +214,7 @@ const profileView = (person: PersonSummary, relation: ServedRelation): PublicPro
   relation,
   isSelf: false,
   blockedByViewer: false,
+  relationRequestId: null,
 });
 
 const relationIn = (queryClient: QueryClient, handle: string): ServedRelation | undefined =>
@@ -221,6 +222,9 @@ const relationIn = (queryClient: QueryClient, handle: string): ServedRelation | 
 
 const blockedIn = (queryClient: QueryClient, handle: string): boolean | undefined =>
   queryClient.getQueryData<PublicProfileView>(publicProfileQueryKey(handle))?.blockedByViewer;
+
+const requestIdIn = (queryClient: QueryClient, handle: string): string | null | undefined =>
+  queryClient.getQueryData<PublicProfileView>(publicProfileQueryKey(handle))?.relationRequestId;
 
 describe('les gestes relationnels patchent la fiche de profil, optimistes et réversibles', () => {
   test('« Ajouter » passe la fiche à « en attente » AVANT la réponse, et un refus l’y ramène', async () => {
@@ -384,5 +388,53 @@ describe('bloquer et débloquer atteignent la fiche de profil', () => {
     h.release();
     expect(await outcome).toBe('failed');
     expect(blockedIn(h.queryClient, 'ada')).toBe(true);
+  });
+});
+
+/**
+ * **LA FICHE PORTE L'IDENTIFIANT QU'ELLE DOIT ENVOYER, GESTE COMPRIS** (#7122).
+ *
+ * La fiche ne lit plus de panier : son SEUL état relationnel est ce que
+ * `relation` et `relationRequestId` disent. Un geste optimiste qui écrirait
+ * l'un sans l'autre rendrait « Annuler » inatteignable juste après « Ajouter »
+ * — le contrôle mort que la loi 4 interdit, et la forme exacte du défaut que
+ * `patchProfileBlocked` a déjà fermé un cache plus loin.
+ */
+describe('l’identifiant de la demande suit les gestes sur la fiche (#7122)', () => {
+  test('« Ajouter » pose un identifiant PROVISOIRE, puis celui de la passerelle', async () => {
+    const h = harness({ status: 201, body: { success: true, data: { id: 'fr-neuve', senderId: viewer.id, receiverId: ada.id, status: 'pending', message: null, createdAt: '2026-09-21T09:00:00.000Z' } } });
+    h.queryClient.setQueryData(publicProfileQueryKey('ada'), profileView(ada, 'none'));
+
+    const outcome = performSendRequest({ person: ada, deps: h.deps });
+    /* PENDANT le vol : l'identifiant provisoire, que `isProvisional` reconnaît
+       — « Annuler » est offert et sait attendre l'enregistrement. */
+    expect(requestIdIn(h.queryClient, 'ada')).toBe('optimiste:u-ada');
+    h.release();
+    expect(await outcome).toBe('done');
+    expect(requestIdIn(h.queryClient, 'ada')).toBe('fr-neuve');
+  });
+
+  test('un refus d’« Ajouter » remet la fiche à son néant, identifiant compris', async () => {
+    const h = harness(refused);
+    h.queryClient.setQueryData(publicProfileQueryKey('ada'), profileView(ada, 'none'));
+
+    const outcome = performSendRequest({ person: ada, deps: h.deps });
+    h.release();
+    expect(await outcome).toBe('failed');
+    expect(relationIn(h.queryClient, 'ada')).toBe('none');
+    expect(requestIdIn(h.queryClient, 'ada')).toBeNull();
+  });
+
+  test('« Accepter » retire l’identifiant : il n’y a plus rien à patcher', async () => {
+    const h = harness({ status: 200, body: { success: true, data: null } });
+    h.queryClient.setQueryData(friendRequestsQueryKey('received'), pages(request('f-ada', ada)));
+    h.queryClient.setQueryData(friendRequestsQueryKey('accepted'), pages());
+    h.queryClient.setQueryData(publicProfileQueryKey('ada'), { ...profileView(ada, 'pending_received'), relationRequestId: 'f-ada' });
+
+    const outcome = performRespondToRequest({ request: request('f-ada', ada), action: 'accept', deps: h.deps });
+    expect(relationIn(h.queryClient, 'ada')).toBe('friend');
+    expect(requestIdIn(h.queryClient, 'ada')).toBeNull();
+    h.release();
+    expect(await outcome).toBe('done');
   });
 });

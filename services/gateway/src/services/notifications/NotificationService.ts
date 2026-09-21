@@ -45,6 +45,7 @@ import { sanitizeNotificationInputs, persistedNotificationTitle } from './saniti
 import { SecuritySanitizer } from '../../utils/sanitize';
 import { truncateByCodePoints } from '../../utils/truncate-text';
 import { filterMutedRecipients } from './mutedRecipients';
+import { computeConversationUnreadBadge } from './conversationUnreadBadge';
 import { retractedNotificationOf, type RetractedNotification } from './retractedNotifications';
 import { sendNotificationRevocationPushes } from './notificationRevocationPush';
 import { visibleNotificationsWhere } from './visibleNotificationsWhere';
@@ -1026,18 +1027,14 @@ export class NotificationService {
             ? truncateByCodePoints(params.content, 200)
             : notificationString(await recipientLang(), 'push.private');
 
-          // F1 — app fermée, le badge d'icône iOS et le widget ne vivent QUE
-          // par le payload push : embarquer le même compte unread que
-          // `notification:counts` (même source → même sémantique, pas de
-          // flicker au recale foreground). `badge` pilote `aps.badge`
-          // nativement ; `data.unreadCount` (string) alimente le miroir App
-          // Group écrit par la NSE pour le widget. Best-effort : sur échec
-          // du count, le push part sans badge (comportement historique).
+          // F1/D-L1 (#7218) — badge d'icône = CONVERSATIONS non lues (hors
+          // muettes), comme iOS/web-v2 ; `computeConversationUnreadBadge`.
+          // La cloche (`notification:counts`) reste sur les notifications.
+          // `data.unreadCount` alimente le miroir App Group de la NSE.
+          // Best-effort : échec ⇒ push sans badge (comportement historique).
           let unreadBadge: number | undefined;
           try {
-            const count = await this.prisma.notification.count({
-              where: visibleNotificationsWhere({ userId: params.userId, unreadOnly: true }),
-            });
+            const count = await computeConversationUnreadBadge(this.prisma, params.userId);
             if (typeof count === 'number') unreadBadge = count;
           } catch {
             unreadBadge = undefined;
@@ -4299,11 +4296,11 @@ export class NotificationService {
       ? (messageId ? `/conversations/${conversationId}?messageId=${messageId}` : `/conversations/${conversationId}`)
       : undefined;
 
+    // D-L1 (#7218) — même projection que le push de création (conversations
+    // non lues, hors muettes) ; voir `computeConversationUnreadBadge`.
     let unreadBadge: number | undefined;
     try {
-      const count = await this.prisma.notification.count({
-        where: visibleNotificationsWhere({ userId, unreadOnly: true }),
-      });
+      const count = await computeConversationUnreadBadge(this.prisma, userId);
       if (typeof count === 'number') unreadBadge = count;
     } catch {
       unreadBadge = undefined;

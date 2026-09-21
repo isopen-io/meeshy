@@ -3327,7 +3327,11 @@ Captures : `.cache/web-v2-workflow/recette/stories/coque-{ios,android}-0{1,2,3}-
 
 **Le blocage n'entre PAS sur le fil.** `relationAvec` (`person.ts:72-93`) n'a pas de valeur `blocked` — bloquer n'efface pas la ligne d'amitié, et le serveur continue de servir `friend` ou `none`. Écrire `'blocked'` dans `relation` inventerait une sixième valeur que la revalidation suivante effacerait : un geste qui « marche » puis se défait tout seul. Le blocage se lit dans `BLOCKED_USERS_QUERY_KEY`, la MÊME source que « Découvrir », que `performBlock`/`performUnblock` écrivent au geste.
 
-**L'identifiant de la demande en cours manque au fil, et on ne l'invente pas.** `relationAvec` lit `{ status, senderId }` et jette `id`. Accepter / Refuser / Annuler en ont besoin : tant que l'issue gateway compagnon (`relationRequestId` sur `expand=relation`) n'est pas livrée, l'écran charge le SEUL panier utile, et **seulement** quand la relation est en attente (`bucketNeededFor`) — coût nominal ZÉRO requête de plus. Tant que la ligne n'est pas là, le geste est DÉSACTIVÉ et la bannière de contexte le dit : jamais un bouton qui n'aurait rien à envoyer.
+~~**L'identifiant de la demande en cours manque au fil, et on ne l'invente pas.**~~ **AMENDÉ PAR #7122 — l'identifiant est SERVI, et il ne reste plus un seul panier derrière cette fiche.** `relationAvec` lisait `{ status, senderId }` et jetait `id` ; l'écran chargeait donc le panier `GET /directory/friend-requests?direction=…&status=pending` dès que la relation était en attente, et désarmait Accepter / Refuser / Annuler le temps du vol — un aller-retour de plus, sur la route dont le doc-comment dit qu'elle existe pour les fondre en un, pour une colonne que la ligne PORTAIT déjà.
+
+La passerelle sert `relationRequestId` sur `expand=relation` (`services/gateway/src/routes/directory/person.ts`) : l'`id` de la ligne `friendRequest` quand la relation est `pending_sent` ou `pending_received`, **`null` sinon — jamais l'absence du champ**, `null` et « clé absente » se lisant pareil en JavaScript. **La surface de lecture ne bouge pas d'un pouce** : même `where`, même ligne, une colonne de plus dans le `select` — un identifiant de demande n'atteint donc que ses DEUX parties, et le témoin qui le garde ÉVALUE la clause plutôt que de supposer la borne (retirer le `where` le fait tomber).
+
+Côté client, `bucketNeededFor` et la requête qu'il gardait ont disparu, l'état « geste en attente de sa ligne » avec eux : `pendingRequestFrom` (`lib/profile/relation.ts`) bâtit la ligne depuis le FIL — le sens de la demande se lit sur `relation`, les deux parties sur le sujet de l'écran et le lecteur. **`createdAt` n'est pas sur le fil et c'est assumé** : il ne sert qu'à l'insertion optimiste dans le panier des acceptées, que la réponse de la passerelle remplace aussitôt — le même arbitrage que la ligne provisoire de `performSendRequest`. **Et le geste optimiste écrit les DEUX champs** (`patchProfileRelations`) : « Ajouter » pose l'identifiant PROVISOIRE, puis celui de la passerelle ; accepter, refuser, annuler l'éteignent. Sans cela, « Annuler » aurait disparu juste après « Ajouter » — le contrôle absent au lieu du contrôle mort, mais le même geste perdu. **Un identifiant tout de même absent (passerelle plus ancienne) ne GRISE plus le geste : il ne l'OFFRE pas** (`actionsFor`), parce qu'il n'y a plus d'attente au bout de laquelle il s'armerait.
 
 **Les gestes patchent TOUTE entrée de profil qui porte l'identifiant touché.** La fiche est mise en cache par HANDLE, et une même personne y entre sous plusieurs clés (son pseudo depuis une mention, son identifiant depuis une notification). Le patch et son retour arrière vivent dans `friend-actions.ts` — le site UNIQUE des gestes d'amitié — jamais dans l'écran : un second site aurait fait diverger la pastille de « Découvrir » et la fiche au premier geste.
 
@@ -3545,3 +3549,43 @@ arbitrage tranchera une seule fois pour les trois. Issue #7236, label
 propre formule avant que le porteur choisisse. web-v2 reste conforme à
 D-L1 tel qu'écrit ; le jour où l'arbitrage change D-L1, ce fichier et
 `use-app-badge.ts` se corrigent ensemble.
+
+## D-105 — Le fil s'ouvre sur « — N messages non lus — », en couleur primaire ; deux bornes du signal restent ouvertes (2026-09-21, #7202)
+
+D-L1/D-L2/D-L3 (`docs/superpowers/specs/2026-09-21-lecture-et-accuses-design.md`
+§ 3) : le fil s'ouvre TOUJOURS sur le séparateur de non-lus quand il y en a,
+le séparateur porte la teinte PRIMAIRE (jamais une couleur neutre), et
+l'ouverture ne se rejoue pas au fil de la session (D-L2 gouverne l'ouverture,
+pas les arrivées en direct — celles-ci restent la loi de `pin-to-bottom.ts`
+et `unread-below.ts`, D-33). `unreadBoundaryOf` (`lib/view/unread-boundary.ts`)
+compose une garde devant `firstUnreadBoundary` (S1, #7215) : zéro signal de
+lecture ⇒ pas de frontière plutôt que « tout est non lu depuis toujours » —
+un seul signal, quel qu'il soit, suffit à laisser la loi partagée trancher.
+`threadOpenScrollDecision` (`lib/view/unread-separator.ts`) décide du saut ;
+`<UnreadSeparator>` rend le libellé pluriel (`thread.unread-separator.one`/
+`.other`) dans les sept langues.
+
+**Deux bornes assumées, non corrigées dans ce lot, chacune une issue
+compagnon (même milestone)** :
+
+1. **#7272 — la fenêtre chargée.** `useMessages` ne sert que les 50 derniers
+   messages ; si `firstUnreadId` n'y est pas, `threadOpenScrollDecision`
+   replie sur l'ancrage en bas, SANS séparateur ni indication — cas nominal
+   au-delà de ~50 non-lus. Trois familles de correctif possibles (pagination
+   vers le haut, pastille ancrée en haut qui pagine au toucher, ou borne
+   assumée à écrire explicitement dans D-L2) : aucune n'est mineure, un
+   arbitrage produit tranche avant qu'un lot l'attaque.
+2. **#7273 — le détail ne sert pas `currentUserJoinedAt`.** Une conversation
+   JAMAIS ouverte n'a aucun `ConversationReadCursor` ; `GET
+   /conversations/:id` ne sert alors aucun des trois signaux du curseur, et
+   `currentUserJoinedAt` (le quatrième) est réservé à la liste (`GET
+   /conversations`). Les quatre signaux manquent à la fois pour ce chemin de
+   production légitime — la garde du zéro-signal (ci-dessus, #7215/#7202)
+   est nécessaire pour ne pas fabriquer une fausse frontière, mais son effet
+   de bord retire aussi le séparateur au cas où D-L2 sert le plus : une
+   conversation réellement jamais ouverte.
+
+Dimensions mûres : 6 (cohérence — même teinte primaire que le reste du
+prisme de lecture), 7 (ouverture sans geste), 9 (sept langues), 11 (loi
+UNIQUE `unreadBoundaryOf`/`threadOpenScrollDecision`, témoins dédiés).
+Dimension 13 (complétude) restante : les deux bornes ci-dessus.

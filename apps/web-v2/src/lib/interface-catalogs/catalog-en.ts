@@ -529,7 +529,6 @@ const en = {
   'userProfile.stat.filterClear': 'Show all',
   'userProfile.context.received': '{name} would like to connect with you. Accept to exchange messages.',
   'userProfile.context.sent': 'You sent a connection request to {name}. Waiting for their answer.',
-  'userProfile.context.pending': 'The request is pending. Loading it…',
   'userProfile.action.write': 'Message',
   'userProfile.action.writeLabel': 'Message {name}',
   'userProfile.action.block': 'Block',
@@ -821,6 +820,28 @@ const en = {
   'feed.action.comment': 'Comment',
 
   'admin.title': 'Administration',
+
+  'thread.unread-separator.one': '{count} unread message',
+  'thread.unread-separator.other': '{count} unread messages',
+  'message-detail.info.title': 'Message info',
+  'message-detail.received-by': 'Received by',
+  'message-detail.read-by': 'Read by',
+  'message-detail.not-yet': 'Not yet',
+  'message-detail.received-by.empty': 'No delivery confirmation yet',
+  'message-detail.read-by.empty': 'No one has read this message yet',
+  'message-detail.not-yet.empty': 'Everyone has received the message',
+  'message-detail.attachment.opens.one': '{count} open',
+  'message-detail.attachment.opens.other': '{count} opens',
+  'message-detail.attachment.downloads.one': '{count} download',
+  'message-detail.attachment.downloads.other': '{count} downloads',
+  'message-detail.attachment.listened-until': 'Listened up to {time}',
+  'message-detail.attachment.watched-until': 'Watched up to {time}',
+  'message-detail.attachment.complete': 'Complete',
+  'message-detail.attachment.listen.empty': 'Not listened to yet',
+  'message-detail.attachment.watch.empty': 'Not watched yet',
+  'message-detail.loading': 'Loading…',
+  'message-detail.load-error': 'Couldn’t load this information',
+  'message-detail.retry': 'Retry',
 
 } satisfies InterfaceCatalog;
 

@@ -24,6 +24,7 @@ import {
 } from './fixtures-base';
 import { CATCHUP_CONVERSATION, CATCHUP_CONVERSATION_ID, CATCHUP_MESSAGES } from './fixtures-catchup';
 import { LIVE_CONVERSATION, LIVE_CONVERSATION_ID, LIVE_MESSAGES } from './fixtures-live';
+import { UNREAD_CONVERSATION, UNREAD_CONVERSATION_ID, UNREAD_MESSAGES } from './fixtures-unread';
 import { PAGINATION_CONVERSATIONS } from './fixtures-pagination';
 import { MEDIA_CONVERSATION, MEDIA_CONVERSATION_ID, MEDIA_MESSAGES } from './fixtures-media';
 import { STATES_CONVERSATION, STATES_CONVERSATION_ID, STATES_MESSAGES } from './fixtures-states';
@@ -776,7 +777,7 @@ export function resetSurgedConversationsForTests(): void {
  * ADRESSE et dont aucune liste n'a besoin. Y ajouter une entrée ne déplace
  * AUCUN compte ; l'ajouter à `CONVERSATIONS` les déplace TOUS.
  */
-const OFF_LIST_CONVERSATIONS: readonly Conversation[] = [RICH_TEXT_CONVERSATION, RICH_TEXT_DIRECT];
+const OFF_LIST_CONVERSATIONS: readonly Conversation[] = [RICH_TEXT_CONVERSATION, RICH_TEXT_DIRECT, UNREAD_CONVERSATION];
 
 /**
  * LA LECTURE PAR IDENTIFIANT — la liste servie D'ABORD (corpus figé +
@@ -965,6 +966,7 @@ export const messagesOf = (conversationId: string): readonly Message[] => {
   if (conversationId === RICH_TEXT_CONVERSATION_ID) return withSent(conversationId, withConsumption(RICH_TEXT_MESSAGES));
   if (conversationId === RICH_TEXT_DIRECT_ID) return withSent(conversationId, withConsumption(RICH_TEXT_DIRECT_MESSAGES));
   if (conversationId === LIVE_CONVERSATION_ID) return withSent(conversationId, withConsumption(LIVE_MESSAGES));
+  if (conversationId === UNREAD_CONVERSATION_ID) return withSent(conversationId, withConsumption(UNREAD_MESSAGES));
   const last = CONVERSATIONS.find((c) => c.id === conversationId)?.lastMessage;
   return withSent(conversationId, last === undefined ? [] : withConsumption([last]));
 };

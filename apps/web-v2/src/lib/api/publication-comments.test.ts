@@ -4,8 +4,8 @@ import { describe, expect, test } from 'bun:test';
 import { FEED_QUERY_KEY } from './feed';
 import type { FeedInfiniteData, FeedPost } from './feed-pages';
 import { postQueryKey } from './publication-detail';
-import { REELS_QUERY_ROOT, reelsQueryKey } from './reels';
-import { STORY_FEED_QUERY_KEY, type StoryFeedPost } from './stories';
+import { REELS_QUERY_ROOT, reelsQueryKey } from './reels-query-key';
+import { STORY_FEED_QUERY_KEY, storyPostQueryKey, type StoryFeedPost } from './stories';
 import {
   COMMENTS_PAGE_SIZE,
   COMMENT_FAILED_MESSAGE,
@@ -541,5 +541,74 @@ describe('applyCommentUpdated — l’édition d’un AUTRE ne touche pas ce qui
     const après = queryClient.getQueryData<CommentInfiniteData>(commentsQueryKey('p1'));
     expect(après?.pages[0]).toBe(data.pages[0]);
     expect(après?.pages[1]).not.toBe(data.pages[1]);
+  });
+});
+
+/**
+ * **LA CINQUIÈME CAISSE** — `storyPostQueryKey`, le cache de la TROISIÈME
+ * MARCHE du lecteur de stories. Le doc-comment de `shiftCommentCount` en
+ * énumérait QUATRE, trouvées l'une après l'autre en demandant « qui
+ * l'AFFICHE ? ». La réponse a changé une fois de plus : une story ouverte par
+ * LIEN, hors des 50 plus récentes, n'est dans AUCUN des quatre — le lecteur
+ * la tient de `useStoryPost` et la fusionne dans ses groupes
+ * (`routes/story.tsx`). Le rail peint donc sa pastille depuis ce cache-là.
+ *
+ * Symptôme, identique à celui que #7112 a corrigé un cache plus haut : on
+ * commente la story d'un lien, la ligne apparaît dans le fil, et la pastille
+ * du rail reste au chiffre d'avant — puis y reste à la fermeture du fil.
+ */
+const railLinkCountOf = (queryClient: QueryClient, storyId: string): number | null | undefined =>
+  queryClient.getQueryData<StoryFeedPost>(storyPostQueryKey(storyId))?.commentCount;
+
+describe('le compteur bouge AUSSI sur la story ouverte par LIEN — `storyPostQueryKey`', () => {
+  test('commenter une story de lien monte la pastille que le rail lit', async () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(storyPostQueryKey('st-lien'), story('st-lien', 3));
+    const { transport } = transportOf({ ok: true, data: comment('c-served') });
+
+    await performComment({
+      postId: 'st-lien',
+      content: 'joli',
+      author,
+      deps: { source: 'gateway', transport: transport as never, queryClient },
+    });
+
+    expect(railLinkCountOf(queryClient, 'st-lien')).toBe(4);
+  });
+
+  test('un REFUS PERMANENT y redescend le compteur comme ailleurs', async () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(storyPostQueryKey('st-lien'), story('st-lien', 3));
+    let refuse: (r: unknown) => void = () => undefined;
+    const transport = { request: () => new Promise((resolve) => (refuse = resolve)) };
+
+    const vol = performComment({
+      postId: 'st-lien',
+      content: 'joli',
+      author,
+      deps: { source: 'gateway', transport: transport as never, queryClient },
+    });
+
+    /* L'optimiste EST posé — sans ce relevé À MI-VOL, le témoin verdirait sur
+       un cache que rien n'a jamais touché. */
+    expect(railLinkCountOf(queryClient, 'st-lien')).toBe(4);
+
+    refuse({ ok: false, status: 403, error: 'refus' });
+    expect(await vol).toEqual({ ok: false, message: COMMENT_FAILED_MESSAGE });
+    expect(railLinkCountOf(queryClient, 'st-lien')).toBe(3);
+  });
+
+  test('une publication que ce cache ne porte PAS n’y fabrique aucune ligne', async () => {
+    const queryClient = new QueryClient();
+    const { transport } = transportOf({ ok: true, data: comment('c-served') });
+
+    await performComment({
+      postId: 'p-du-flux',
+      content: 'ailleurs',
+      author,
+      deps: { source: 'gateway', transport: transport as never, queryClient },
+    });
+
+    expect(queryClient.getQueryData(storyPostQueryKey('p-du-flux'))).toBeUndefined();
   });
 });

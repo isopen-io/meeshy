@@ -32,6 +32,14 @@ const SCREENS = [
   { name: 'thread-protected', path: '/c/c-protection' },
   /** LE RÉSUMÉ VIVANT (#5695, D-21) — le SEUL corpus qui ATTEINT `summary`. */
   { name: 'thread-summary', path: '/c/c-rattrapage' },
+  /**
+   * LE SÉPARATEUR DE NON-LUS (#7202, W3, D-L2/D-L3) — corpus DÉDIÉ, HORS
+   * LISTE (`c-non-lus`, `fixtures-unread.ts`) : `c-deploiement` porte un
+   * `unreadCount` mais aucune frontière de lecture, et lui en poser une
+   * romprait `check-thread-virtualization.mjs` §2 (« le fil s'ouvre EN
+   * BAS », mesuré sur cette conversation précise).
+   */
+  { name: 'thread-unread-separator', path: '/c/c-non-lus' },
   /** LES QUATRE PORTES D'ENTRÉE (#5816) — capturées SANS session : `/welcome`
       renvoie vers `/` dès qu'il y en a une, et c'est précisément l'écran du
       visiteur qu'on veut voir. `/auth/magic-link` est ici dans son état de

@@ -433,6 +433,32 @@ export async function checkThreadMedia({ browser, BASE, expect, setScheme, AA_TH
       ` · image : ${JSON.stringify(imageState)}`,
   );
 
+  // (c ter) LA BARRE DE CONSOMMATION SE MESURE AVANT TOUTE LECTURE (#7243).
+  //
+  //         Ces deux témoins disent ce que le SERVEUR a servi — « 33,3 %
+  //         servis » sur DE, `currentUserConsumption: null` sur EN. Ils
+  //         vivaient sous (g), APRÈS que (d) a mis le vocal EN en lecture et
+  //         que (f) l'a mis en pause : depuis #7225, la barre AU REPOS reflète
+  //         aussi le rapport LOCAL (`recordConsumption`,
+  //         `lib/view/use-media-playback.ts`) — un optimistic update assumé.
+  //         Le témoin EN mesurait donc l'écoute que le gate venait lui-même de
+  //         faire, et pas ce qu'il NOMME.
+  //
+  //         Sa couleur dépendait alors de la vitesse de la machine : le clip
+  //         dure 2,00 s, et (d)→(f) prend 0,2 s à froid (0 % joué, aucune
+  //         barre, vert) mais franchit les 2 s sous charge (100 % joué, barre
+  //         posée, rouge) — mesuré au navigateur, run `35562176074` du job
+  //         « Peaux web-v2 ». Un témoin dont le verdict se décide à l'horloge
+  //         ne mesure pas la règle qu'il énonce.
+  expect(
+    (await attachmentOf(MEDIA_VOICE_DE_ATTACHMENT_ID).locator('[data-consumption]').count()) > 0,
+    `[${skin}/${scheme}] la barre de consommation existe sur le témoin DE (currentUserConsumption servi)`,
+  );
+  expect(
+    (await attachmentOf(MEDIA_VOICE_EN_ATTACHMENT_ID).locator('[data-consumption]').count()) === 0,
+    `[${skin}/${scheme}] aucune barre de consommation sur le témoin EN (currentUserConsumption null)`,
+  );
+
   // (d) l'effet : cliquer « Lire l'audio » bascule RÉELLEMENT `audio.paused`.
   const enAudio = attachmentOf(MEDIA_VOICE_EN_ATTACHMENT_ID).locator('audio');
   const enButton = attachmentOf(MEDIA_VOICE_EN_ATTACHMENT_ID).locator('button').first();
@@ -524,16 +550,6 @@ export async function checkThreadMedia({ browser, BASE, expect, setScheme, AA_TH
     MEDIA_VOICE_EN_ATTACHMENT_ID,
   );
   expect(true, `[${skin}/${scheme}] jouer le témoin DE met le témoin EN en pause — un seul vocal à la fois`);
-
-  // (g) la barre de consommation : présente sur DE (33,3 % servis), absente sur EN.
-  expect(
-    (await attachmentOf(MEDIA_VOICE_DE_ATTACHMENT_ID).locator('[data-consumption]').count()) > 0,
-    `[${skin}/${scheme}] la barre de consommation existe sur le témoin DE (currentUserConsumption servi)`,
-  );
-  expect(
-    (await attachmentOf(MEDIA_VOICE_EN_ATTACHMENT_ID).locator('[data-consumption]').count()) === 0,
-    `[${skin}/${scheme}] aucune barre de consommation sur le témoin EN (currentUserConsumption null)`,
-  );
 
   // (h) aucune annonce parasite : la lecture ne touche pas `[aria-live]`.
   const liveBefore = await mediaPage.locator('[aria-live="polite"]').innerText().catch(() => '');
