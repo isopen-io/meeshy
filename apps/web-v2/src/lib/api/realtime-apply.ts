@@ -694,16 +694,21 @@ export function applyMessageAttachmentUpdated(queryClient: QueryClient, data: At
 }
 
 /**
- * Garde de FORME pour `read-status:updated` (#7223), motif
+ * Garde de FORME pour `read-status:updated` (#7223, #7348), motif
  * `isConversationUnreadUpdated` : ne valide QUE les champs qu'
- * `applyReadStatusUpdated` consomme — `conversationId` et les trois compteurs
+ * `applyReadStatusUpdated` consomme — `conversationId` et les compteurs
  * RÉELS de `ReadStatusSummary` (`packages/shared/types/socketio-events/
- * message.ts:31-37` — `totalMembers`/`deliveredCount`/`readCount`, PAS les
+ * message.ts` — `totalMembers`/`deliveredCount`/`readCount`, PAS les
  * noms du libellé du lot). `participantId`/`userId`/`type`/`updatedAt` ne
  * sont pas vérifiés ici : ce puits les ignore, et les DEUX audiences de
  * `broadcastReadStatus` (l'éventail de la conversation, la room personnelle
  * de l'acteur) partagent `conversationId` + `summary` (doc-comment
  * `services/gateway/src/socketio/broadcastReadStatus.ts:98-118`).
+ *
+ * `summary.messageId` (#7348, contrat G-5/#7347 anticipé) est OPTIONNEL —
+ * la passerelle actuelle ne le pose pas encore — mais quand IL EST PRÉSENT,
+ * une forme mal typée est rejetée FAIL-CLOSED comme le reste de la garde,
+ * jamais laissée traverser en silence.
  */
 export function isReadStatusUpdated(payload: unknown): payload is ReadStatusUpdatedEventData {
   if (typeof payload !== 'object' || payload === null) return false;
@@ -715,22 +720,34 @@ export function isReadStatusUpdated(payload: unknown): payload is ReadStatusUpda
   return (
     typeof s.totalMembers === 'number' &&
     typeof s.deliveredCount === 'number' &&
-    typeof s.readCount === 'number'
+    typeof s.readCount === 'number' &&
+    (s.messageId === undefined || typeof s.messageId === 'string')
   );
 }
 
 /**
- * `applyReadStatusUpdated` — LE PUITS DE `read-status:updated` (#7223) : LES
- * COCHES ✓✓ D'UN MESSAGE ENVOYÉ BOUGENT EN DIRECT.
+ * `applyReadStatusUpdated` — LE PUITS DE `read-status:updated` (#7223,
+ * #7348) : LES COCHES ✓✓ D'UN MESSAGE ENVOYÉ BOUGENT EN DIRECT.
  *
- * La charge ne nomme AUCUN message : `summary` décrit le DERNIER message NON
+ * **`summary.messageId` PRÉSENT (#7348, contrat G-5/#7347 anticipé)** : la
+ * charge nomme désormais LE message qu'elle décrit — cette fonction cible
+ * `findCachedThreadMessage` par cet id, qu'il soit ou non le plus récent du
+ * fil. C'est la correction du défaut relevé le 2026-09-21 : dans une rafale
+ * de lecture sur trois messages de trois auteurs (M1, M2, M3), la passerelle
+ * émettra un résumé PAR message — trois événements, chacun ne devant patcher
+ * QUE sa ligne, jamais rétrograder les deux autres au silence.
+ *
+ * **`summary.messageId` ABSENT (repli — passerelle pré-G5)** : la charge ne
+ * nomme encore aucun message — `summary` décrit alors le DERNIER message NON
  * SUPPRIMÉ de la conversation
  * (`MessageReadStatusService.getLatestMessageSummary`,
- * `services/gateway/src/services/MessageReadStatusService.ts:2530-2560`).
- * Cette fonction cible donc `latestCachedThreadMessage` — le message le plus
- * récent du fil EN CACHE, motif `applyMessageAttachmentUpdated` ci-dessus
+ * `services/gateway/src/services/MessageReadStatusService.ts:2530-2560`) —
+ * et cette fonction retombe sur `latestCachedThreadMessage`, le comportement
+ * `#7223` d'origine, motif `applyMessageAttachmentUpdated` ci-dessus
  * (« le fil n'est pas OUVERT ⇒ rien à peindre localement, le prochain
- * `GET …/messages` sert le résumé exact »).
+ * `GET …/messages` sert le résumé exact »). Un `messageId` qui ne correspond
+ * à AUCUNE rangée en cache (fil partiellement chargé) est un NO-OP, même
+ * motif — jamais un repli silencieux sur un AUTRE message.
  *
  * `deliveredToAllAt`/`readByAllAt` — les deux horodatages FIGÉS que
  * `deliveryOf` (`lib/view/message.ts`) consulte à chaque palier — ne sont PAS
@@ -753,7 +770,10 @@ export function applyReadStatusUpdated(queryClient: QueryClient, data: ReadStatu
      peindre ne perd aucune information. */
   if (summary.totalMembers <= 0) return;
 
-  const target = latestCachedThreadMessage(queryClient, data.conversationId);
+  const target =
+    summary.messageId !== undefined
+      ? findCachedThreadMessage(queryClient, data.conversationId, summary.messageId)
+      : latestCachedThreadMessage(queryClient, data.conversationId);
   if (target === undefined) return;
 
   const next: Message = {

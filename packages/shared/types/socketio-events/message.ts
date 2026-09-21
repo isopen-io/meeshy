@@ -31,11 +31,26 @@ export interface MessageExpiredEventData {
 
 /**
  * Résumé des statuts de lecture pour enrichir les événements temps réel
+ *
+ * `messageId` — OPTIONNEL (#7347/G-5, contrat codé par anticipation depuis
+ * #7348 : la branche `lot/g5-7347` n'existait pas encore côté web à
+ * l'écriture de ce champ). Aujourd'hui `broadcastReadStatus.ts` calcule ce
+ * résumé pour le DERNIER message non supprimé de la conversation
+ * (`MessageReadStatusService.getLatestMessageSummary`) et ne pose pas ce
+ * champ ; un client applique alors le résumé au message le plus RÉCENT de
+ * son cache (repli historique #7223). Une fois G-5 livré, la passerelle
+ * émettra UN résumé PAR message affecté, chacun nommant le sien — une
+ * rafale de lecture sur trois messages de trois auteurs distincts produit
+ * alors trois résumés, pas un agrégé sur le seul dernier. Optionnel pour ne
+ * RIEN casser côté émetteur tant que G-5 n'a pas basculé : un champ requis
+ * aurait fait échouer la compilation de `broadcastReadStatus.ts`, qui ne le
+ * pose pas encore.
  */
 export interface ReadStatusSummary {
   readonly totalMembers: number;
   readonly deliveredCount: number;
   readonly readCount: number;
+  readonly messageId?: string;
 }
 
 /**
