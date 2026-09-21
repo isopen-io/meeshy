@@ -44,7 +44,10 @@ final class MessageListViewController: UIViewController {
     private let currentUserId: String
     private var accentColor: String
     private let isDirect: Bool
-    private var isDark: Bool
+    // `internal` (pas `private`) depuis `+UnreadSeparator.swift` (#7222) :
+    // `private` est de portée FICHIER en Swift, même raison que
+    // `cancellables`/`lastTypingRosterFingerprint` (#4944).
+    var isDark: Bool
     private let router: Router
     private let storyViewModel: StoryViewModel
     private let statusViewModel: StatusViewModel
@@ -970,6 +973,13 @@ final class MessageListViewController: UIViewController {
             // R-d : marqueur de tête, jamais un jour — même traitement que
             // le typing (aucune sticky day label à en tirer).
             topDayStart = nil
+        case .firstUnreadSeparator(let afterLocalId):
+            // Séparateur de non-lus (#7222) : il n'EST pas un jour mais il en
+            // SURPLOMBE un — celui du message qu'il annonce. Rendre `nil`
+            // ÉTEIGNAIT la pilule le temps qu'il traverse la tête de l'écran,
+            // au beau milieu du geste d'ouverture.
+            topDayStart = store.message(for: afterLocalId)
+                .map { calendar.startOfDay(for: $0.createdAt) }
         }
         guard let dayStart = topDayStart else {
             stickyDayState.label = nil
@@ -1889,6 +1899,10 @@ final class MessageListViewController: UIViewController {
             FocalScrollPerspective.hideFocusCard(in: cell.contentView)
         }
 
+        // Séparateur de premier non-lu (#7222) — cluster dédié, voir
+        // `MessageListViewController+UnreadSeparator.swift`.
+        let unreadSeparatorRegistration = makeUnreadSeparatorRegistration()
+
         dataSource = UICollectionViewDiffableDataSource(collectionView: collectionView) { cv, indexPath, item in
             switch item {
             case .message:
@@ -1899,6 +1913,8 @@ final class MessageListViewController: UIViewController {
                 return cv.dequeueConfiguredReusableCell(using: typingRegistration, for: indexPath, item: item)
             case .conversationStart:
                 return cv.dequeueConfiguredReusableCell(using: startRegistration, for: indexPath, item: item)
+            case .firstUnreadSeparator:
+                return cv.dequeueConfiguredReusableCell(using: unreadSeparatorRegistration, for: indexPath, item: item)
             }
         }
     }
@@ -1922,7 +1938,11 @@ final class MessageListViewController: UIViewController {
     /// globale est arrivée pendant le geste.
     private var deferredReconfigureScope: SnapshotReconfigureScope = .changedRecords
 
-    private func applySnapshot(reconfigure: SnapshotReconfigureScope = .changedRecords) {
+    // `internal` (pas `private`) depuis `+UnreadSeparator.swift` (#7222), qui
+    // rejoue la pose au premier gel de frontière (`bindUnreadSeparator`) —
+    // même raison que `isDark`/`cancellables` plus haut : `private` est de
+    // portée FICHIER.
+    func applySnapshot(reconfigure: SnapshotReconfigureScope = .changedRecords) {
         // VEILLE (#3947) — on sort AVANT la construction, pas seulement
         // avant l'application : c'est la PRÉPA qui coûte (O(n) reversed +
         // map + groupByDay + reconstruction de la carte serverId), et elle
@@ -1969,7 +1989,11 @@ final class MessageListViewController: UIViewController {
         // the inverted layout, just below the newest message. A live message
         // then inserts at index 1 and pushes the conversation up naturally.
         let showTyping = !(conversationViewModel?.typingParticipants.isEmpty ?? true)
-        let items: [MessageListItem] = showTyping ? [.typingIndicator] + bodyItems : bodyItems
+        // Séparateur de premier non-lu (#7222) — inséré APRÈS le typing/day
+        // composé, voir `itemsWithUnreadSeparator` (+UnreadSeparator.swift).
+        let items: [MessageListItem] = itemsWithUnreadSeparator(
+            showTyping ? [.typingIndicator] + bodyItems : bodyItems
+        )
         // RETRAIT FOCAL iOS (2026-08-18) : `.conversationStart` vivait dans
         // l'espace réservé par l'inset de tête du mode Focal — plus jamais
         // appendé (registration conservée, inerte).
@@ -2220,7 +2244,15 @@ final class MessageListViewController: UIViewController {
 
     /// Vrai pendant un défilement programmatique VOULU (saut recherche/
     /// citation, slow-scroll de recherche) — le verrou laisse faire.
-    private var isIntentionalProgrammaticScroll = false
+    /// `internal` depuis `+UnreadSeparator.swift` (#7222) : même raison que
+    /// `isDark` juste au-dessus.
+    var isIntentionalProgrammaticScroll = false
+
+    /// La frontière gelée du séparateur de premier non-lu (#7222) — voir
+    /// `MessageListViewController+UnreadSeparator.swift`. `internal`, pas
+    /// `private` : ce fichier est hors du budget 1000-1200 lignes, la
+    /// logique vit dans son extension dédiée.
+    var frozenUnreadSeparator: UnreadSeparatorBoundary?
 
     // MARK: - Visée vérifiée (saut vers un message)
 
@@ -2308,7 +2340,11 @@ final class MessageListViewController: UIViewController {
     /// `visibleIndexPaths` : l'inventaire déjà lu par l'appelant du tour de
     /// frame (`scrollViewDidScroll`) — `nil` ⇒ lecture interne, pour les
     /// appels hors défilement (`scrollToBottom`, `settleAtRest`).
-    private func captureSceneLockAnchor(visibleIndexPaths: [IndexPath]? = nil) {
+    // `internal` (pas `private`) depuis `+UnreadSeparator.swift` (#7222) :
+    // tout défilement VOULU rend la scène au verrou en faisant ADOPTER à
+    // l'ancre la position atteinte — même raison de portée que `isDark` et
+    // `applySnapshot` plus haut (`private` porte sur le FICHIER en Swift).
+    func captureSceneLockAnchor(visibleIndexPaths: [IndexPath]? = nil) {
         // Appelé à CHAQUE frame de défilement : une seule lecture d'attributs
         // par cellule visible (le `max(by:)` en relisait deux par comparaison,
         // soit ~2·n·log n par frame — audit fluidité 2026-08-21).
@@ -2384,6 +2420,10 @@ final class MessageListViewController: UIViewController {
         // re-renders with the fresh snapped inputs (the Equatable gate sees
         // them change and lets the body re-run).
         observePerMessageDictionary(vm.$bubbleLanguageSelections, initial: vm.bubbleLanguageSelections)
+
+        // Séparateur de premier non-lu (D-L1..3, #7222) — voir
+        // `MessageListViewController+UnreadSeparator.swift`.
+        bindUnreadSeparator(vm)
 
         vm.$preferredLanguageRevision
             .receive(on: DispatchQueue.main)
@@ -3289,7 +3329,7 @@ extension MessageListViewController {
         case .message(let localId):
             id = localId
             isMessage = true
-        case .dayHeader, .typingIndicator, .conversationStart:
+        case .dayHeader, .typingIndicator, .conversationStart, .firstUnreadSeparator:
             id = "\(indexPath.item)"
             isMessage = false
         }

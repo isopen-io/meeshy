@@ -27,6 +27,7 @@ import { useFocalLoupe } from '@/lib/view/use-focal-loupe';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 import { Avatar } from './avatar';
+import { PersonName } from './person-name';
 import { Attachments } from './attachment-blocks';
 import { FocusCard, FocusIdentity, FocusStamp, FocusStrip } from './focal-focus-overlays';
 import { GlyphSvg } from './glyph';
@@ -374,6 +375,11 @@ export const FocalRow = memo(function FocalRow({
      (D-7) : elle est vue à chaque message de chaque conversation. */
   const senderPhoto = participantAvatarOf(message.sender);
   const senderName = isMine ? 'Vous' : senderAvatarName;
+  /* LE PSEUDO DE L'EXPÉDITEUR (#7241) — sous `sender.user.username`, jamais à
+     la racine du participant. `undefined` sur soi : on n'ouvre pas SON profil
+     depuis son propre message, la fiche de soi n'offre aucun geste relationnel
+     (`user-profile.tsx`, `isSelf`). */
+  const senderHandle = isMine ? undefined : message.sender?.user?.username;
   /* LA COULEUR DU NOM DE SOI — un jeton GÉNÉRÉ, pas l'encre primaire
    * (revue #5935, défaut majeur 2, SOLDÉ). `FocalIdentityHeader.swift:90-92`
    * peint le nom de SOI en `MeeshyColors.indigo500` ; servi TEL QUEL sur la
@@ -490,7 +496,7 @@ export const FocalRow = memo(function FocalRow({
           {...(displayLanguage !== undefined ? { displayLanguage } : {})}
         />
       ) : null}
-      {sharedPlace !== null ? <LocationCard place={sharedPlace} accent="var(--accent)" /> : null}
+      {sharedPlace !== null ? <LocationCard place={sharedPlace} accent="var(--accent)" language={currentInterfaceLanguage()} /> : null}
 
       {body.kind === 'sticker' ? (
         <StickerArtwork sticker={body.sticker} picture={body.picture} side={STICKER_SIDE} />
@@ -610,6 +616,14 @@ export const FocalRow = memo(function FocalRow({
             color="var(--accent)"
             size={AVATAR_SIZE}
             {...(senderPhoto === undefined ? {} : { src: senderPhoto })}
+            /* `name` VOYAGE AVEC `profileUsername`, jamais seul : il ne sert
+               ici qu'à NOMMER le lien (« Voir le profil de … »). Posé
+               inconditionnellement, il ferait écrire le nom dans l'`aria-label`
+               des initiales — un SECOND libellé que #5935 a précisément retiré
+               de cette rangée, et que trois témoins tiennent. */
+            {...(typeof senderHandle === 'string' && senderHandle !== ''
+              ? { profileUsername: senderHandle, name: senderAvatarName }
+              : {})}
             presence={presenceOf(message.sender, nowMs)}
           />
         ) : null}
@@ -699,9 +713,19 @@ export const FocalRow = memo(function FocalRow({
                 style={{ width: '0.8em', height: '0.8em', color: 'var(--ios-purple-500)' }}
               />
             ) : null}
-            <span className="text-title font-extrabold" style={{ color: senderNameColor }}>
+            {/* `redundant` — cette ligne est `aria-hidden` (voir juste au-dessus) :
+                un lien focalisable dans un sous-arbre masqué recevrait le focus
+                sans jamais s'annoncer. L'AVATAR, hors du masque, porte le
+                chemin annoncé. */}
+            <PersonName
+              name={senderName}
+              username={senderHandle}
+              redundant
+              className="text-title font-extrabold"
+              style={{ color: senderNameColor }}
+            >
               {senderName}
-            </span>
+            </PersonName>
           </div>
         ) : null}
 

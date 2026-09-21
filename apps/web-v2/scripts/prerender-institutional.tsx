@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /** @jsxImportSource preact */
 /**
- * PRÉCHAUFFE les cinq pages institutionnelles en HTML STATIQUE.
+ * PRÉCHAUFFE les sept pages institutionnelles en HTML STATIQUE.
  *
  * Pourquoi elles ne sont pas des routes de l'application :
  *
@@ -11,7 +11,7 @@
  *    exactement la dépense que ce produit refuse.
  * 2. **Les métadonnées.** Une application à page unique sert UN document : son
  *    `<title>` et ses `og:` sont les mêmes pour toutes les adresses. Or ces
- *    cinq pages sont précisément celles que les moteurs et les plateformes de
+ *    sept pages sont précisément celles que les moteurs et les plateformes de
  *    partage lisent. Un `<title>` posé par JavaScript arrive après le robot.
  *
  * Le résultat est un fichier par page : HTML + sa feuille INLINÉE + zéro
@@ -34,6 +34,8 @@ import budgets from '../budgets.json';
 import { InstitutionalPage } from '../src/institutional/page';
 import { PAGE_ABOUT } from '../src/institutional/about';
 import { PAGE_CONTACT } from '../src/institutional/contact';
+import { PAGE_FAQ } from '../src/institutional/faq';
+import { PAGE_HELP } from '../src/institutional/help';
 import { PAGE_PARTNERS } from '../src/institutional/partners';
 import { PAGE_PRIVACY } from '../src/institutional/privacy';
 import { PAGE_TERMS } from '../src/institutional/terms';
@@ -73,6 +75,10 @@ const INSTITUTIONAL_PAGE_BUDGET_KB = budgets.institutional_page.kb.value;
 const PAGES: readonly { readonly route: string; readonly page: ContentPage }[] = [
   { route: 'about', page: PAGE_ABOUT },
   { route: 'contact', page: PAGE_CONTACT },
+  /* LES DEUX ADRESSES DU BINAIRE DÉJÀ DISTRIBUÉ (#7287) — `SupportView.swift`
+     les ouvre depuis l'App Store, et elles rendaient « adresse inconnue ». */
+  { route: 'faq', page: PAGE_FAQ },
+  { route: 'help', page: PAGE_HELP },
   { route: 'partners', page: PAGE_PARTNERS },
   { route: 'privacy', page: PAGE_PRIVACY },
   { route: 'terms', page: PAGE_TERMS },
@@ -93,13 +99,13 @@ const ORIGIN = process.env.MEESHY_PUBLIC_ORIGIN ?? 'https://meeshy.me';
  * La feuille DÉDIÉE à ces pages — pas celle de l'application.
  *
  * Vite en produit deux (voir `vite.config.ts`) : `index-*.css` porte toute
- * l'application, `institutional-*.css` ne porte que ce que ces cinq pages
+ * l'application, `institutional-*.css` ne porte que ce que ces sept pages
  * rendent. Inliner la première leur ferait transporter les styles de la liste,
- * du fil et du composeur — mesuré, 2,1 Ko gzip de trop par page, payés cinq
+ * du fil et du composeur — mesuré, 2,1 Ko gzip de trop par page, payés sept
  * fois et jamais mis en cache.
  *
  * L'échec est BRUYANT si le fichier manque : une feuille silencieusement
- * absente rendrait cinq pages de texte brut, servies en 200.
+ * absente rendrait sept pages de texte brut, servies en 200.
  */
 function producedSheet(): string {
   const assets = join(DIST, 'assets');
@@ -285,12 +291,12 @@ for (const { route, page } of PAGES) {
       `${requests} requête${requests > 1 ? 's' : ''} · 0 script`,
   );
 }
-console.log(`  ${' '.repeat(10)}${String(Math.round((total / 1024) * 100) / 100).padStart(6)} Ko pour les cinq\n`);
+console.log(`  ${' '.repeat(10)}${String(Math.round((total / 1024) * 100) / 100).padStart(6)} Ko pour les ${PAGES.length}\n`);
 
 /**
  * LE GATE (revue de #5606, défaut 3) — un dépassement rend le script en
  * erreur, comme `scripts/measure-weight.mjs` le fait déjà pour la première
- * peinture de l'application. Après l'affichage des cinq lignes : le rapport
+ * peinture de l'application. Après l'affichage des sept lignes : le rapport
  * complet sert de preuve même quand une seule page dépasse.
  */
 if (overBudget.length > 0) {

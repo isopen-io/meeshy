@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import type { NotificationRecord } from './record';
-import { notificationTarget } from './target';
+import { notificationTarget, pushTapTarget, resolveTarget } from './target';
 
 /**
  * OÙ MÈNE UNE NOTIFICATION (#6288) — miroir de `NotificationContentRouter`
@@ -114,5 +114,93 @@ describe('les autres familles', () => {
 
   test('un type sans destination rend toujours null — la table ne se remplit pas en silence', () => {
     expect(notificationTarget(record({ type: 'un_type_sans_ecran' }))).toBeNull();
+  });
+});
+
+/**
+ * LE NOYAU PUR, ET LA DESTINATION D'UN TAP DE BANNIÈRE (#7305).
+ *
+ * `notificationTarget()` lit une LIGNE de la cloche ; la charge d'un push
+ * porte les MÊMES clés, mais en chaînes plates dont `''` vaut absence
+ * (`NotificationService`, carte `data`). Le lot extrait donc le noyau plutôt
+ * que d'écrire une seconde table — c'est exactement le défaut que portait
+ * `firebase-messaging-sw.js`, dérivé sur trois routes sur trois.
+ *
+ * **Deux sorties, une seule loi.** La cloche rend `null` quand le web n'a pas
+ * la destination (loi 4 : un contrôle qui ment est pire qu'un contrôle
+ * absent). Un TAP, lui, doit toujours atterrir : `pushTapTarget()` replie sur
+ * `notifications`. La divergence est délibérée, et c'est la SEULE.
+ */
+describe('resolveTarget — le noyau que la charge du push consomme', () => {
+  test('une chaîne VIDE vaut absence, jamais un identifiant', () => {
+    expect(resolveTarget({ type: 'un_type_sans_ecran', conversationId: '', postId: '', friendRequestId: '', route: '' })).toBeNull();
+  });
+
+  test('la conversation ouvre le fil', () => {
+    expect(resolveTarget({ type: 'new_message', conversationId: 'abc' })).toEqual({
+      route: 'thread',
+      params: { conversation: 'abc' },
+    });
+  });
+
+  test('`postType` décide de la surface, le type ne décide de rien', () => {
+    expect(resolveTarget({ type: 'story_thread_reply', postId: 'p1', postType: 'REEL' })).toEqual({
+      route: 'post',
+      params: { post: 'p1' },
+    });
+    expect(resolveTarget({ type: 'story_thread_reply', postId: 'p1', postType: 'STORY' })).toEqual({
+      route: 'story',
+      params: { post: 'p1' },
+    });
+  });
+
+  test('`contentType` sert de repli au discriminant, comme pour la cloche', () => {
+    expect(resolveTarget({ type: 'friend_new_story', postId: 'p1', contentType: 'MOOD' })).toEqual({
+      route: 'story',
+      params: { post: 'p1' },
+    });
+  });
+
+  /* Le web n'a AUCUNE route de demandes d'ami : elles vivent dans l'onglet
+     « Demandes » de `/discover`. La cloche y allait déjà PAR LE TYPE ; un push
+     porte l'identifiant, et une famille de types qui s'élargit côté serveur ne
+     doit pas faire retomber le tap dans le repli. */
+  test('un `friendRequestId` ouvre la découverte, même sur un type que la table ne connaît pas', () => {
+    expect(resolveTarget({ type: 'un_type_de_demande_inconnu', friendRequestId: 'fr1' })).toEqual({
+      route: 'discover',
+      search: { onglet: 'requests', demandes: 'received' },
+    });
+  });
+
+  /* L'indice de route est posé par la passerelle pour les notifications de
+     réengagement, qui ne portent NI conversation NI contenu social — son
+     commentaire le dit. Il prime donc sur toute DÉDUCTION par type, et cède
+     devant une entité, qui est le contenu lui-même. */
+  test('l’indice `route` du serveur prime sur la déduction par type', () => {
+    expect(resolveTarget({ type: 'login_new_device', route: 'progression' })).toEqual({ route: 'progression' });
+  });
+
+  test('une entité prime sur l’indice `route` — le serveur ne le pose que faute d’entité', () => {
+    expect(resolveTarget({ type: 'new_message', conversationId: 'abc', route: 'progression' })).toEqual({
+      route: 'thread',
+      params: { conversation: 'abc' },
+    });
+  });
+
+  test('un indice de route INCONNU ne fabrique pas d’adresse', () => {
+    expect(resolveTarget({ type: 'un_type_sans_ecran', route: '/mood' })).toBeNull();
+  });
+});
+
+describe('pushTapTarget — un tap atterrit toujours', () => {
+  test('sans destination, le tap ouvre la liste des notifications', () => {
+    expect(pushTapTarget({ type: 'un_type_sans_ecran' })).toEqual({ route: 'notifications' });
+  });
+
+  test('avec destination, c’est la même que celle de la cloche', () => {
+    expect(pushTapTarget({ type: 'new_message', conversationId: 'abc' })).toEqual({
+      route: 'thread',
+      params: { conversation: 'abc' },
+    });
   });
 });

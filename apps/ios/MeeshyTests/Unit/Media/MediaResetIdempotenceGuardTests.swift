@@ -36,7 +36,9 @@ final class MediaResetIdempotenceGuardTests: XCTestCase {
     /// Les deux premiers sont les corrigés de #6977, les trois suivants ceux de
     /// #7005 — la garde existe pour que le sixième naisse gardé.
     private static let inventaire: [(chemin: String, fonction: String)] = [
-        ("packages/MeeshySDK/Sources/MeeshyUI/Media/AudioPlayerView.swift", "resetState"),
+        // #7212 — le MOTEUR a quitté `AudioPlayerView.swift` (1 806 lignes, hors
+        // budget) pour son propre fichier. La garde suit l'hôte, elle ne le devine pas.
+        ("packages/MeeshySDK/Sources/MeeshyUI/Media/AudioPlaybackManager.swift", "resetState"),
         ("packages/MeeshySDK/Sources/MeeshyUI/Media/SharedAVPlayerManager.swift", "cleanup"),
         ("packages/MeeshySDK/Sources/MeeshyUI/Media/AudioTrimPreviewPlayer.swift", "stop"),
         ("packages/MeeshySDK/Sources/MeeshyUI/Story/StoryVideoPlayerView.swift", "teardown"),

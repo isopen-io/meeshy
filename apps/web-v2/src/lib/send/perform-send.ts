@@ -11,6 +11,7 @@ import type { Message, Participant } from '@/lib/api/types';
 import { messageTypeOfPending, type PendingAttachment } from './attachments';
 import type { ComposeProtection } from './compose-protection';
 import { confirmedMessageOf, localMessageOf, type LocalMessage } from './local-message';
+import type { SharedPlace } from './shared-place';
 import { entriesOf, type OutboxState } from './outbox-store';
 
 /**
@@ -53,6 +54,19 @@ export type Draft = {
    * de ce module continuent de passer sans cette clé).
    */
   readonly protection?: ComposeProtection;
+  /**
+   * LE LIEU PARTAGÉ (#7280) — ce que la tuile « Position » du tiroir a
+   * obtenu du navigateur. `undefined` ⇒ clé `location` ABSENTE du corps,
+   * jamais `null` posé (même discipline que `content`/`replyToId`/la
+   * protection).
+   *
+   * IL VOYAGE SUR LE `LocalMessage` (#7328), plus sur l'entrée d'outbox à
+   * côté de lui : c'est ce que la bulle rend (`placeOf`), ce que la reprise
+   * relit (`entry.message` est repris tel quel) et ce que `bodyOf` envoie —
+   * une source, trois lecteurs. Rangé à côté du message, il était invisible à
+   * son expéditeur (voir le doc-comment de `LocalMessage.location`).
+   */
+  readonly place?: SharedPlace;
 };
 
 /**
@@ -150,6 +164,11 @@ function bodyOf(message: LocalMessage, attachmentIds: readonly string[]): SendMe
     ...(declared === undefined ? {} : { messageType: declared }),
     ...(attachmentIds.length > 0 ? { attachmentIds } : {}),
     ...(message.replyToId === undefined ? {} : { replyToId: message.replyToId }),
+    /* LE LIEU SE RELIT SUR LE MESSAGE (#7328), comme la protection deux lignes
+       plus bas — un seul site de vérité entre ce qui s'affiche et ce qui part.
+       `retrySend` reprend `entry.message` tel quel : le lieu survit au renvoi
+       sans qu'aucune relecture d'entrée ne le rattrape. */
+    ...(message.location === undefined ? {} : { location: message.location }),
     ...protectionBodyOf(message),
   };
 }
@@ -357,6 +376,7 @@ export async function performSend(params: {
     ...(draft.replyTo === undefined ? {} : { replyTo: draft.replyTo }),
     ...(draft.attachments === undefined || draft.attachments.length === 0 ? {} : { attachments: draft.attachments }),
     ...(draft.protection === undefined ? {} : { protection: draft.protection }),
+    ...(draft.place === undefined ? {} : { place: draft.place }),
     now: new Date(nowMs),
   });
 

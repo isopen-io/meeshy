@@ -10,7 +10,7 @@
  *   · `src/bun-test.d.ts` déclare le module `bun:test` — jamais commité depuis
  *     la création de l'application ;
  *   · `scripts/lib/institutional-routes.d.mts` type la source unique des
- *     cinq adresses — jamais commité non plus.
+ *     sept adresses — jamais commité non plus.
  *
  * Les deux sont apparus d'un coup, en quatre TS2307/TS7016, à la PREMIÈRE
  * exécution où la CI type-checkait cette application.

@@ -150,7 +150,9 @@ final class MessageListDataSourceQuiescenceTests: XCTestCase {
     /// `groupByDay` + carte `serverId`). Sortir seulement à l'entonnoir
     /// l'aurait payée à chaque événement.
     func test_applySnapshotSortAvantSaConstruction() throws {
-        let body = try Self.body(of: "private func applySnapshot(", in: Self.stripped(
+        // Ancre sur la SIGNATURE, jamais sur sa PORTÉE (#7222 : `applySnapshot`
+        // est passée `internal` — voir `ConversationSelectionGuardTests`).
+        let body = try Self.body(of: "func applySnapshot(", in: Self.stripped(
             "Meeshy/Features/Main/Views/MessageListViewController.swift"))
         let garde = try XCTUnwrap(body.range(of: "guard rendersThread else { return }"))
         let prepa = try XCTUnwrap(body.range(of: "store.messages.reversed()"))

@@ -76,9 +76,23 @@ const profileKeysFor = (queryClient: QueryClient, userId: string): readonly Quer
     .filter(([, data]) => data?.profile.id === userId)
     .map(([key]) => key);
 
-const patchProfileRelations = (queryClient: QueryClient, userId: string, relation: ServedRelation): void => {
+/**
+ * **LA RELATION ET SA LIGNE S'ÉCRIVENT ENSEMBLE** (#7122) — la fiche ne lit
+ * plus de panier : `relation` et `relationRequestId` SONT son état relationnel
+ * entier. Patcher l'un sans l'autre rendrait « Annuler » inatteignable juste
+ * après « Ajouter » — le contrôle absent, au lieu du contrôle mort, mais le
+ * même geste perdu (loi 4).
+ */
+const patchProfileRelations = (
+  queryClient: QueryClient,
+  userId: string,
+  relation: ServedRelation,
+  relationRequestId: string | null,
+): void => {
   profileKeysFor(queryClient, userId).forEach((key) => {
-    queryClient.setQueryData<PublicProfileView>(key, (view) => (view === undefined ? view : { ...view, relation }));
+    queryClient.setQueryData<PublicProfileView>(key, (view) =>
+      view === undefined ? view : { ...view, relation, relationRequestId },
+    );
   });
 };
 
@@ -192,7 +206,9 @@ export function performRespondToRequest({
     const otherId = action === 'cancel' ? request.receiverId : request.senderId;
     const snapshot = relationalSnapshot(deps.queryClient, otherId, [friendRequestsQueryKey(from), friendRequestsQueryKey('accepted')]);
     update(deps.queryClient, from, (data) => withoutRequest(data, request.id));
-    patchProfileRelations(deps.queryClient, otherId, action === 'accept' ? 'friend' : 'none');
+    /* Accepter, refuser, annuler ÉTEIGNENT la ligne : il n'y a plus rien à
+       patcher, et un identifiant survivant offrirait un geste sans objet. */
+    patchProfileRelations(deps.queryClient, otherId, action === 'accept' ? 'friend' : 'none', null);
     if (action === 'accept') {
       update(deps.queryClient, 'accepted', (data) => withRequestFirst(data, { ...request, status: 'accepted' }, request.id));
     }
@@ -215,8 +231,11 @@ export function performSendRequest({ person, deps }: { readonly person: PersonSu
   return once(`send:${person.id}`, async () => {
     if (!deps.isOnline()) return 'offline';
     const snapshot = relationalSnapshot(deps.queryClient, person.id, [friendRequestsQueryKey('sent')]);
-    patchProfileRelations(deps.queryClient, person.id, 'pending_sent');
     const placeholderId = optimisticRequestId(person.id);
+    /* La fiche reçoit l'identifiant PROVISOIRE, celui que `isProvisional`
+       reconnaît : « Annuler » est donc offert pendant le vol et sait attendre
+       l'enregistrement, au lieu de disparaître le temps de la requête. */
+    patchProfileRelations(deps.queryClient, person.id, 'pending_sent', placeholderId);
     const placeholder: FriendRequestRecord = {
       id: placeholderId,
       senderId: deps.viewerId() ?? '',
@@ -235,6 +254,7 @@ export function performSendRequest({ person, deps }: { readonly person: PersonSu
       return 'failed';
     }
     update(deps.queryClient, 'sent', (data) => withRequestFirst(data, { ...result.data, receiver: result.data.receiver ?? person }, placeholderId));
+    patchProfileRelations(deps.queryClient, person.id, 'pending_sent', result.data.id);
     return 'done';
   });
 }

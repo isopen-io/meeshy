@@ -7,6 +7,7 @@ import { Bubble } from '@/components/bubble';
 import { FocalRow } from '@/components/focal-row';
 import { SummarySkeleton } from '@/components/summary/summary-skeleton';
 import { TypingRosterCell } from '@/components/typing-roster-cell';
+import { UnreadSeparator } from '@/components/unread-separator';
 import type { RevealPhase } from '@/lib/reading-mode/protection';
 import { RevealPhaseChannel } from '@/lib/reading-mode/reveal-phase-channel';
 import type { ListPaginationState } from '@/lib/lens/pagination';
@@ -15,9 +16,11 @@ import type { TypingEntry } from '@/lib/api/typing-store';
 import type { Viewer } from '@/lib/api/viewer';
 import { dayLabel, type PlacedMessage } from '@/lib/grouping';
 import type { ConversationEpisode, FaceRampEntry } from '@/lib/summary/types';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import type { useLongPress } from '@/lib/view/long-press';
 import { checkStatusOf, isMineOf } from '@/lib/view/message';
 import type { LocalDelivery } from '@/lib/view/message';
+import { unreadSeparatorLabel } from '@/lib/view/unread-separator';
 import { composeMessageLabel } from '@/lib/view/message-a11y-label';
 import { isSystemMessage } from '@/lib/view/message-badges';
 import { served } from '@/lib/api/prism';
@@ -150,6 +153,8 @@ export function ThreadModes({
   accent = 'var(--color-ios-brand)',
   older,
   readTrackingSentinelRef,
+  unreadSeparatorMessageId = null,
+  unreadCount = 0,
 }: {
   readonly mode: ConversationReadingMode;
   readonly viewer: Viewer;
@@ -252,6 +257,17 @@ export function ThreadModes({
    * doit accuser la lecture de PERSONNE.
    */
   readonly readTrackingSentinelRef?: (node: Element | null) => void;
+  /**
+   * LE SÉPARATEUR DE NON-LUS (#7202, D-L2/D-L3) — l'id du message qui OUVRE
+   * la frontière (`firstUnreadBoundary().firstUnreadId`, gelé pour la
+   * session par `useUnreadBoundary`, `lib/view/unread-boundary.ts`) : `null`
+   * ⇒ aucun séparateur, même patron « capacité absente ⇒ rien monté » que
+   * `older`/`readTrackingSentinelRef` ci-dessus — la lecture souveraine de
+   * l'administration ne doit exposer la frontière de lecture de PERSONNE.
+   */
+  readonly unreadSeparatorMessageId?: string | null;
+  /** Le compte affiché par le séparateur — sans effet si `unreadSeparatorMessageId` est `null`. */
+  readonly unreadCount?: number;
 }) {
   const viewerId = viewer.id ?? '';
 
@@ -484,6 +500,9 @@ export function ThreadModes({
                     {dayLabel(p.message.createdAt, { locale: readerLocale })}
                   </span>
                 </div>
+              ) : null}
+              {p.message.id === unreadSeparatorMessageId ? (
+                <UnreadSeparator label={unreadSeparatorLabel(currentInterfaceLanguage(), unreadCount)} />
               ) : null}
               {/* LE MODE DE LECTURE (#5566) : `focal`/`script` rendent la
                   rangée plate, `bubbles` reste la bulle historique — D-7,

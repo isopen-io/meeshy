@@ -52,7 +52,6 @@ export const ProfileRelationSection = memo(function ProfileRelationSection({
   name,
   signedIn,
   online,
-  awaitingRequest,
   busy,
   onAction,
   onSignIn,
@@ -63,12 +62,10 @@ export const ProfileRelationSection = memo(function ProfileRelationSection({
   readonly name: string;
   readonly signedIn: boolean;
   readonly online: boolean;
-  readonly awaitingRequest: boolean;
   readonly busy: boolean;
   readonly onAction: (kind: ProfileActionKind) => void;
   readonly onSignIn: () => void;
 }) {
-  const needsRequest = (kind: ProfileActionKind): boolean => kind === 'accept' || kind === 'reject' || kind === 'cancel';
   return (
     <GroupedSection
       id="user-profile-relation"
@@ -86,7 +83,7 @@ export const ProfileRelationSection = memo(function ProfileRelationSection({
                 language={language}
                 kind={kind}
                 name={name}
-                disabled={busy || !online || (awaitingRequest && needsRequest(kind))}
+                disabled={busy || !online}
                 onAction={onAction}
               />
             ))}

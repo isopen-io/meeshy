@@ -214,6 +214,9 @@ struct ReelVideoView: View {
         guard isActive, ready, !MediaSessionCoordinator.shared.isCallActive else { return }
         if manager.activeURL != attachment.fileUrl {
             manager.load(urlString: attachment.fileUrl, attachmentId: media.id)
+            // Reposée APRÈS `load()` — qui appelle `cleanup()` — et clé par la
+            // pièce jointe qu'elle qualifie : ce moteur est partagé (#7212).
+            manager.setServedConsumption(attachment.currentUserConsumption, for: media.id)
         }
         publishConsumedLanguage()
         // Le viewer plein écran joue TOUJOURS avec le son. La surface de fond du

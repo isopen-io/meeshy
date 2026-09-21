@@ -101,6 +101,23 @@ export type PublicProfileView = {
   readonly relation: ServedRelation;
   readonly isSelf: boolean;
   readonly blockedByViewer: boolean;
+  /**
+   * **L'IDENTIFIANT QUE LA FICHE DOIT ENVOYER** (#7122) — l'`id` de la ligne
+   * `friendRequest` quand `relation` est en attente, `null` sinon.
+   *
+   * Il voyage à CÔTÉ de `relation` pour la même raison que `blockedByViewer` :
+   * « une demande est en attente » et « voici sa ligne » sont deux questions,
+   * et une seule d'elles survit à l'acceptation. Sans lui, « Accepter » /
+   * « Refuser » / « Annuler » n'avaient rien à envoyer à
+   * `PATCH /directory/friend-requests/:id` et l'écran devait charger le panier
+   * correspondant pour retrouver la ligne — un aller-retour de plus, et trois
+   * gestes désarmés le temps du vol.
+   *
+   * La passerelle ne l'élargit d'AUCUNE lecture : même `where`, même ligne,
+   * une colonne de plus dans le `select` (`routes/directory/person.ts`). Un
+   * identifiant de demande n'atteint donc que ses deux parties.
+   */
+  readonly relationRequestId: string | null;
 };
 
 /** Le PRÉFIXE de la famille — `friend-actions.ts` l'importe pour patcher
@@ -181,6 +198,9 @@ export function decodePublicProfileView(raw: unknown): PublicProfileView | null 
        au-dessus : un champ absent (passerelle plus ancienne) ou d'un autre
        type ne fabrique pas un état que personne n'a mesuré. */
     blockedByViewer: wire.blockedByViewer === true,
+    /* Même idiome, même raison : un identifiant fabriqué enverrait un `PATCH`
+       dans le vide. `null` ⇒ le geste n'est pas offert, il n'est pas grisé. */
+    relationRequestId: typeof wire.relationRequestId === 'string' ? textOrNull(wire.relationRequestId) : null,
   };
 }
 

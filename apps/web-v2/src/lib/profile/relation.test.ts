@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import type { FriendRequestRecord } from '@/lib/api/friend-requests';
 
-import { actionsFor, bucketNeededFor, relationFromServed } from './relation';
+import { actionsFor, pendingRequestFrom, relationFromServed } from './relation';
 
 /**
  * LA LOI DE L'ÉTAT RELATIONNEL DU PROFIL (#7083) — pure, sans DOM ni requête.
@@ -56,13 +56,56 @@ describe('relationFromServed', () => {
   });
 });
 
-describe('bucketNeededFor', () => {
-  test('SEULE une relation en attente coûte un panier — zéro requête de plus dans le cas nominal', () => {
-    expect(bucketNeededFor('pending_received')).toBe('received');
-    expect(bucketNeededFor('pending_sent')).toBe('sent');
-    expect(bucketNeededFor('none')).toBeNull();
-    expect(bucketNeededFor('friend')).toBeNull();
-    expect(bucketNeededFor('self')).toBeNull();
+/**
+ * **LA LIGNE SE BÂTIT DEPUIS LE FIL, PLUS DEPUIS UN PANIER** (#7122) — la
+ * passerelle sert `relationRequestId` avec `expand=relation` ; l'écran n'a
+ * plus à charger `GET /directory/friend-requests` pour retrouver l'identifiant
+ * qu'il doit envoyer, ni à désarmer ses trois gestes le temps du vol.
+ */
+describe('pendingRequestFrom', () => {
+  const person = { id: 'u-other', username: 'other', displayName: 'Other', avatar: null };
+
+  test('une demande REÇUE nomme l’autre en EXPÉDITEUR, le lecteur en destinataire', () => {
+    const row = pendingRequestFrom({ served: 'pending_received', requestId: 'fr-1', person, viewerId: 'u-viewer' });
+    expect(row?.id).toBe('fr-1');
+    expect(row?.senderId).toBe('u-other');
+    expect(row?.receiverId).toBe('u-viewer');
+    expect(row?.status).toBe('pending');
+    expect(row?.sender).toEqual(person);
+  });
+
+  test('une demande ENVOYÉE inverse les deux parties', () => {
+    const row = pendingRequestFrom({ served: 'pending_sent', requestId: 'fr-2', person, viewerId: 'u-viewer' });
+    expect(row?.senderId).toBe('u-viewer');
+    expect(row?.receiverId).toBe('u-other');
+    expect(row?.receiver).toEqual(person);
+  });
+
+  test('hors attente, AUCUNE ligne — un identifiant servi par erreur n’en fabrique pas une', () => {
+    for (const served of ['friend', 'none', 'self'] as const) {
+      expect(pendingRequestFrom({ served, requestId: 'fr-3', person, viewerId: 'u-viewer' })).toBeNull();
+    }
+  });
+
+  test('sans identifiant, AUCUNE ligne — le geste ne part pas dans le vide', () => {
+    expect(pendingRequestFrom({ served: 'pending_received', requestId: null, person, viewerId: 'u-viewer' })).toBeNull();
+  });
+});
+
+/**
+ * **UN GESTE SANS SA LIGNE N'EST PAS OFFERT** (#7122) — il l'était, DÉSACTIVÉ,
+ * le temps qu'un panier arrive. Le panier a disparu : ce qui reste est le cas
+ * d'une passerelle qui ne sert pas encore `relationRequestId`, et un bouton
+ * qui ne pourrait alors QUE échouer est un contrôle qui ment (loi 4). La
+ * bannière de contexte, elle, continue de dire de quoi il s'agit.
+ */
+describe('actionsFor sans la ligne de la demande', () => {
+  test('« Accepter » et « Refuser » ne sont pas offerts sans leur ligne', () => {
+    expect(actionsFor({ kind: 'pendingReceived', request: null })).toEqual(['write', 'block', 'report']);
+  });
+
+  test('« Annuler » non plus', () => {
+    expect(actionsFor({ kind: 'pendingSent', request: null })).toEqual(['write', 'block', 'report']);
   });
 });
 
@@ -82,9 +125,14 @@ describe('actionsFor', () => {
     expect(actionsFor({ kind: 'pendingReceived', request: request('r2') })).toEqual(['accept', 'reject', 'write', 'block', 'report']);
   });
 
-  test('l’identifiant manquant ne RETIRE pas un geste — il le laisse en attente, le rendu s’en charge', () => {
-    expect(actionsFor({ kind: 'pendingReceived', request: null })).toEqual(['accept', 'reject', 'write', 'block', 'report']);
-  });
+  /* AMENDÉ PAR #7122 — la propriété gardée ici a CHANGÉ, et il faut dire
+     laquelle. Ce témoin mesurait « l'identifiant manquant ne retire pas un
+     geste, le rendu le désactive » : c'était juste tant qu'un panier était en
+     VOL — l'attente finissait, et le bouton s'armait. La passerelle sert
+     maintenant `relationRequestId` avec l'identité : il n'y a plus d'attente,
+     et un identifiant absent ne le sera JAMAIS moins. Un bouton qui ne peut
+     que échouer n'est pas offert (loi 4). Le témoin vit désormais dans
+     « actionsFor sans la ligne de la demande » ci-dessus. */
 
   test('« Renvoyer la demande » d’iOS n’est PAS repris — « Annuler » puis « Ajouter » donne le même résultat', () => {
     expect(actionsFor({ kind: 'pendingSent', request: request('r1') })).not.toContain('resend');

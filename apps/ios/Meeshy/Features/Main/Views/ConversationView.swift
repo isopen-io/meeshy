@@ -507,6 +507,13 @@ struct ConversationView: View {
             isDirect: conversation?.type == .direct,
             participantUserId: conversation?.participantUserId,
             memberJoinedAt: conversation?.currentUserJoinedAt,
+            // Frontière de lecture (#7198/#7222) — reprise SYNCHRONE de la
+            // ligne de liste qui ouvre ce fil, même idiome que
+            // `memberJoinedAt` juste au-dessus (voir le doc-comment de ces
+            // trois champs sur `ConversationViewModel`).
+            lastReadMessageId: conversation?.userState.lastReadMessageId,
+            lastReadAt: conversation?.userState.lastReadAt,
+            lastReadMessageCreatedAt: conversation?.userState.lastReadMessageCreatedAt,
             closedAt: conversation?.closedAt,
             anonymousSession: anonymousSession
         )
@@ -1867,7 +1874,11 @@ struct ConversationView: View {
                     },
                     onResumeThread: {
                         readingModeController.select(.script)
-                        if let firstUnread = viewModel.messages.first(where: { !$0.isMe })?.id {
+                        // La VRAIE frontière (#7222), pas « le premier message
+                        // d'autrui » : `firstUnreadMessageId` est posé par
+                        // `FirstUnreadBoundary.resolve` sur le curseur de
+                        // lecture, pas sur l'auteur.
+                        if let firstUnread = viewModel.firstUnreadMessageId {
                             scrollState.scrollToMessageId = firstUnread
                             scrollState.scrollToMessageTrigger += 1
                         }

@@ -127,7 +127,7 @@ describe('NETWORK_ONLY_NAVIGATIONS — ce que nginx redirige ou sert', () => {
   });
 
   test('les fichiers exacts atteignent le réseau', () => {
-    for (const address of ['/robots.txt', '/sitemap.xml', '/manifest.json', '/firebase-messaging-sw.js', '/android-chrome-512x512.png']) {
+    for (const address of ['/robots.txt', '/sitemap.xml', '/manifest.json', '/android-chrome-512x512.png']) {
       expect({ address, refused: refused(address) }).toEqual({ address, refused: true });
     }
   });

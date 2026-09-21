@@ -720,6 +720,8 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
 
         // New per-user wire keys (introduced in Phase 2)
         case lastReadAt, lastDeliveredAt
+        // La frontière de lecture servie par G1 (#7198, #7222).
+        case lastReadMessageId, lastReadMessageCreatedAt
         case deletedForUserAt, clearHistoryBefore
         case orderInCategory
         case userStateTags
@@ -802,6 +804,8 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
             unreadCount: try c.decodeIfPresent(Int.self, forKey: .unreadCount) ?? 0,
             lastReadAt: try c.decodeIfPresent(Date.self, forKey: .lastReadAt),
             lastDeliveredAt: try c.decodeIfPresent(Date.self, forKey: .lastDeliveredAt),
+            lastReadMessageId: try c.decodeIfPresent(String.self, forKey: .lastReadMessageId),
+            lastReadMessageCreatedAt: try c.decodeIfPresent(Date.self, forKey: .lastReadMessageCreatedAt),
             isPinned: try c.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false,
             isMuted: try c.decodeIfPresent(Bool.self, forKey: .isMuted) ?? false,
             mentionsOnly: try c.decodeIfPresent(Bool.self, forKey: .mentionsOnly) ?? false,
@@ -888,6 +892,8 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
 
         try c.encodeIfPresent(userState.lastReadAt, forKey: .lastReadAt)
         try c.encodeIfPresent(userState.lastDeliveredAt, forKey: .lastDeliveredAt)
+        try c.encodeIfPresent(userState.lastReadMessageId, forKey: .lastReadMessageId)
+        try c.encodeIfPresent(userState.lastReadMessageCreatedAt, forKey: .lastReadMessageCreatedAt)
         try c.encodeIfPresent(userState.deletedForUserAt, forKey: .deletedForUserAt)
         try c.encodeIfPresent(userState.clearHistoryBefore, forKey: .clearHistoryBefore)
         try c.encodeIfPresent(userState.orderInCategory, forKey: .orderInCategory)

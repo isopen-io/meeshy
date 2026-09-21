@@ -1,5 +1,7 @@
-import { describe, expect, test } from 'bun:test';
+import { beforeAll, describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
+
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 
 import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
 
@@ -86,9 +88,20 @@ describe('StickerArtwork — la priorité de RenderSource.resolve', () => {
 });
 
 describe('LocationCard — le libellé d’action tient AA (défaut majeur 5)', () => {
+  /* LE LIBELLÉ VIENT DU CATALOGUE DEPUIS #7328 — il était en dur, en français,
+     sur une surface servie en sept langues. La règle de CONTRASTE mesurée ici
+     ne change pas ; seule sa source. */
+  beforeAll(async () => {
+    await loadInterfaceCatalog('fr');
+  });
+
   test('« Ouvrir dans Plans » n’est jamais servi en accent — l’accent de conversation n’est pas un jeton de texte', () => {
     const html = renderToStaticMarkup(
-      <LocationCard place={{ latitude: 48.85, longitude: 2.29, name: 'Tour Eiffel', address: null }} accent="#46bdca" />,
+      <LocationCard
+        place={{ latitude: 48.85, longitude: 2.29, name: 'Tour Eiffel', address: null }}
+        accent="#46bdca"
+        language="fr"
+      />,
     );
     expect(html).toContain('Ouvrir dans Plans');
     /* Le GLYPHE reste teinté à l'accent (élément non-textuel, `--color-ios-

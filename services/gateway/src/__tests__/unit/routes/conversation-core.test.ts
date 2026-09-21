@@ -207,6 +207,7 @@ const makePrisma = (): any => ({
     update: jest.fn(),
     count: jest.fn().mockResolvedValue(0),
   },
+  conversationReadCursor: { findMany: jest.fn().mockResolvedValue([]) },
   message: {
     findFirst: jest.fn().mockResolvedValue(null),
     findMany: jest.fn().mockResolvedValue([]),

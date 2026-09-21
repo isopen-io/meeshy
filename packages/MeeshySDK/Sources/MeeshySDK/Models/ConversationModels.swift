@@ -193,6 +193,15 @@ public struct APIConversation: Decodable, Sendable {
     public let encryptionMode: String?
     public let currentUserRole: String?
     public let currentUserJoinedAt: Date?
+    /// La frontière de lecture du lecteur (#7198, #7222) — servie
+    /// INCONDITIONNELLEMENT par `GET /conversations` (minimal) et
+    /// `GET /conversations/:id` (détail), depuis `ConversationReadCursor`.
+    /// `nil` sans curseur connu — jamais fabriqué (REV-4). Rang 1 de
+    /// `FirstUnreadBoundary.resolve` : la clé CHRONOLOGIQUE du curseur.
+    public let lastReadMessageCreatedAt: Date?
+    /// Dernier message lu par le lecteur — le curseur SERVEUR (voir
+    /// `ConversationUserState.lastReadMessageId`).
+    public let lastReadMessageId: String?
     public let createdAt: Date
     public let closedAt: Date?
     public let closedBy: String?
@@ -214,7 +223,9 @@ public struct APIConversation: Decodable, Sendable {
         currentUserRole: String? = nil, currentUserJoinedAt: Date? = nil,
         createdAt: Date,
         closedAt: Date? = nil, closedBy: String? = nil,
-        isMember: Bool? = nil
+        isMember: Bool? = nil,
+        lastReadMessageId: String? = nil,
+        lastReadMessageCreatedAt: Date? = nil
     ) {
         self.id = id; self.type = type; self.identifier = identifier; self.title = title
         self.description = description; self.avatar = avatar; self.banner = banner
@@ -233,6 +244,8 @@ public struct APIConversation: Decodable, Sendable {
         self.createdAt = createdAt
         self.closedAt = closedAt; self.closedBy = closedBy
         self.isMember = isMember
+        self.lastReadMessageId = lastReadMessageId
+        self.lastReadMessageCreatedAt = lastReadMessageCreatedAt
     }
 }
 
@@ -451,6 +464,14 @@ extension APIConversation {
             )
         }
         conversation.lastMessageOriginalLanguage = lastMessageOriginalLanguage
+
+        // La frontière de lecture (#7198, #7222) — même idiome que la Prisme
+        // ci-dessus : arrivée après l'init memberwise, projetée post-init pour
+        // ne pas élargir CHAQUE appelant. `lastReadAt` (l'horloge de l'ACTION,
+        // locale) N'EST PAS écrasé ici : voir `ConversationSyncEngine+Ecritures
+        // .reconcileUnread`, qui en reste l'UNIQUE loi de fusion.
+        conversation.userState.lastReadMessageId = lastReadMessageId
+        conversation.userState.lastReadMessageCreatedAt = lastReadMessageCreatedAt
 
         return conversation
     }

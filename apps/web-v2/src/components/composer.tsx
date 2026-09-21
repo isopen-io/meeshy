@@ -21,7 +21,9 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 import type { ComposerDraftReport } from '@/lib/view/use-draft';
 import { useComposeLanguage } from '@/lib/view/use-compose-language';
 import { useSentiment } from '@/lib/view/use-sentiment';
+import type { SharedPlace } from '@/lib/send/shared-place';
 import { QUICK_REACTIONS } from '@/lib/view/message-actions';
+import { locationSupported, useLocationRequest } from '@/lib/view/use-location-request';
 import { recordingSupported, useRecorder } from '@/lib/view/use-recorder';
 
 /**
@@ -62,6 +64,16 @@ const LanguageSheet = lazy(() => import('./language-sheet').then((m) => ({ defau
  */
 
 const ComposerTray = lazy(() => import('./composer-tray'));
+
+/**
+ * LA PALETTE D'EMOJIS, CHARGÉE À LA DEMANDE (#7280) — même discipline que
+ * `LanguageSheet` et `EffectsSheet` : la grille des vingt (`EmojiGrid`,
+ * SEULE liste du dépôt) et la feuille qui la porte n'entrent dans aucun
+ * chunk tant qu'on n'a pas touché la tuile « Emoji ».
+ */
+const ComposerEmojiSheet = lazy(() =>
+  import('./composer-emoji-sheet').then((m) => ({ default: m.ComposerEmojiSheet })),
+);
 
 /**
  * LES DEUX EMOJIS D'ENVOI RAPIDE — la TÊTE de la liste que le dépôt tient
@@ -121,6 +133,11 @@ export const Composer = memo(function Composer({
     /** LA PROTECTION CHOISIE (#6175) — éphémère / flou / effets décoratifs,
      * composée par la rangée haute. `{}` quand rien n'est armé. */
     protection: ComposeProtection;
+    /** LE LIEU PARTAGÉ (#7280) — ce que la tuile « Position » a obtenu du
+     * navigateur, `null` quand aucun n'est attaché. Il part dans un champ
+     * `location` DÉDIÉ du corps (`perform-send.ts § bodyOf`), jamais fusionné
+     * dans un `metadata` brut. */
+    place: SharedPlace | null;
   }) => void;
   /**
    * LA SORTIE DE FRAPPE (#5793) — appelée à CHAQUE changement du champ
@@ -172,8 +189,17 @@ export const Composer = memo(function Composer({
    * hook : les deux se rendent au MÊME endroit (`ComposerNotice`). */
   const [fileRefusal, setFileRefusal] = useState<string | null>(null);
   const recorder = useRecorder();
+  /** LA POSITION (#7280) — le hook possède l'état de la DEMANDE (refus,
+   * recherche, panne) ET le lieu obtenu, exactement comme `useRecorder`
+   * possède l'état du micro et le vocal qu'il rend. */
+  const locator = useLocationRequest();
+  const [emojiSheetOpen, setEmojiSheetOpen] = useState(false);
   const field = useRef<HTMLTextAreaElement>(null);
-  const sendTarget = text.trim().length > 0 || pending.length > 0;
+  /* UN LIEU SEUL SUFFIT À ENVOYER — comme une pièce jointe seule. Sans lui
+     dans cette somme, partager sa position aurait demandé d'écrire un mot,
+     et le bouton d'envoi serait resté invisible sur un composeur qui porte
+     pourtant quelque chose (loi 4, vue depuis l'autre bout). */
+  const sendTarget = text.trim().length > 0 || pending.length > 0 || locator.place !== null;
   const hasReply = replyTo !== undefined;
   const isRecording = recorder.state.status === 'recording';
 
@@ -252,11 +278,39 @@ export const Composer = memo(function Composer({
    * « le micro n'est PAS rendu ». Les deux gardes sont la MÊME question.
    */
   const canRecord = recordingSupported() && mayAttach(rights, 'audio/*');
-  const canAttachAnything =
-    canRecord || mayAttach(rights, 'image/*') || mayAttach(rights, 'application/octet-stream');
+  /* LA MÊME QUESTION POSÉE À LA POSITION — un navigateur sans
+     `navigator.geolocation` (contexte non sécurisé, moteur ancien) n'a
+     AUCUNE porte à montrer. Le panneau, lui, existe toujours : la tuile
+     « Emoji » n'a besoin d'aucun droit ni d'aucun moteur. */
+  const canLocate = locationSupported();
+
+  /** La langue d'INTERFACE, lue UNE fois par rendu — les libellés de ce
+   * composant la partagent tous (`interface-language.ts`), et la relire à
+   * chaque appel toucherait `document.documentElement` autant de fois. */
+  const uiLanguage = currentInterfaceLanguage();
+
+  /* CE QUE LA POSITION A REFUSÉ, DIT À LA MÊME PLACE QUE LE RESTE (#7280) —
+     un second bandeau propre à la position se serait empilé sur celui du
+     micro ; `ComposerNotice` est l'emplacement UNIQUE, et il porte déjà le
+     couple « cause + moyen de rejouer ». `unsupported` n'offre PAS de
+     « Réessayer » : un navigateur sans géolocalisation ne l'acquiert pas
+     entre deux taps, et promettre un rejeu impossible est la forme que
+     `NoticeBanner` interdit explicitement (loi 4). `locating` n'a pas de
+     sortie non plus — elle DIT l'attente, et elle se résout seule. */
+  const locationNotice: ComposerNotice | null =
+    locator.state.status === 'locating'
+      ? { message: translate(uiLanguage, 'composer.location.locating'), onDismiss: locator.dismiss }
+      : locator.state.status === 'denied'
+        ? { message: translate(uiLanguage, 'composer.location.denied'), onRetry: locator.request, onDismiss: locator.dismiss }
+        : locator.state.status === 'failed'
+          ? { message: translate(uiLanguage, 'composer.location.failed'), onRetry: locator.request, onDismiss: locator.dismiss }
+          : locator.state.status === 'unsupported'
+            ? { message: translate(uiLanguage, 'composer.location.unavailable'), onDismiss: locator.dismiss }
+            : null;
 
   const notice: ComposerNotice | null =
-    fileRefusal !== null
+    locationNotice ??
+    (fileRefusal !== null
       ? { message: fileRefusal, onDismiss: () => setFileRefusal(null) }
       : recorder.state.status === 'refused'
         ? {
@@ -271,9 +325,9 @@ export const Composer = memo(function Composer({
           }
         : recorder.state.status === 'unsupported'
           ? { message: 'Micro indisponible sur ce navigateur', onDismiss: recorder.reset }
-          : null;
+          : null);
 
-  const showAbove = pending.length > 0 || notice !== null;
+  const showAbove = pending.length > 0 || notice !== null || locator.place !== null;
 
   /**
    * « COMPOSER » MET LE CURSEUR DANS LE CHAMP (revue #5814, défaut majeur
@@ -328,17 +382,22 @@ export const Composer = memo(function Composer({
     setEphemeralPickerOpen(false);
     setBlurred(false);
     setEffectFlags(0);
+    /* LE LIEU NE SURVIT PAS AU MESSAGE QUI VIENT DE PARTIR (#7280) — même
+       règle que la protection, et pour la même raison : il DÉCRIT ce
+       message-là. Le garder attacherait la position d'il y a dix minutes au
+       message suivant, sans que rien ne le dise. */
+    locator.clear();
   };
 
   const send = (value: string, attachments: readonly PendingAttachment[] = pending) => {
     const own = value.trim();
-    if (!own && attachments.length === 0) return;
+    if (!own && attachments.length === 0 && locator.place === null) return;
     const keepFocus = document.activeElement === field.current;
     // LA VALEUR AFFICHÉE EST CELLE QUI PART (#5828, Q2) — capturée AVANT
     // `resetAfterSend`, qui vide le texte et donc changerait ce que
     // `compose.language` rendrait si on le relisait après.
     const language = compose.language;
-    onSend({ text: own, attachments, language, protection });
+    onSend({ text: own, attachments, language, protection, place: locator.place });
     compose.noteSent(); // Le choix cesse d'être ÉPINGLÉ, mais reste COLLANT (Q3).
     resetAfterSend({ keepFocus });
   };
@@ -358,6 +417,40 @@ export const Composer = memo(function Composer({
     setFileRefusal(outcome.refusal ?? null);
     setPending(outcome.list);
     setPanelOpen(false);
+  };
+
+  /**
+   * INSÉRER UN EMOJI AU CURSEUR (#7280) — la tuile « Emoji » d'iOS
+   * (`composer.attach.emoji`) n'ATTACHE rien : elle écrit dans le TEXTE en
+   * cours (`onRequestTextEmoji` → `injectedEmoji`,
+   * `ConversationView+Composer.swift:185-189`). C'est ce qui la distingue de
+   * « Sticker », qui compose un MESSAGE à elle seule.
+   *
+   * AU CURSEUR, jamais en fin de champ : quelqu'un qui revient corriger un
+   * mot au milieu de sa phrase et touche un emoji s'attend à le voir là où
+   * il regarde. `selectionStart`/`selectionEnd` absents (champ jamais
+   * focalisé) ⇒ fin du texte, le cas nominal.
+   */
+  const insertEmoji = (emoji: string) => {
+    const el = field.current;
+    const start = el?.selectionStart ?? text.length;
+    const end = el?.selectionEnd ?? text.length;
+    const next = `${text.slice(0, start)}${emoji}${text.slice(end)}`;
+    setText(next);
+    onTextChange?.(next);
+    compose.setText(next);
+    setEmojiSheetOpen(false);
+    /* LE CURSEUR SUIT L'EMOJI — sans ce rappel, il retombait au DÉBUT du
+       champ (React réécrit `value`, le navigateur remet la sélection à 0) et
+       le mot suivant s'écrivait avant la phrase. Différé d'un tour : la
+       valeur n'est posée sur le nœud qu'après le rendu. */
+    queueMicrotask(() => {
+      const after = field.current;
+      if (after === null) return;
+      const caret = start + emoji.length;
+      after.focus();
+      after.setSelectionRange(caret, caret);
+    });
   };
 
   /**
@@ -433,7 +526,14 @@ export const Composer = memo(function Composer({
           champ et le bord de l'écran. */}
       {showAbove ? (
         <Suspense fallback={null}>
-          <ComposerTray variant="above" pending={pending} onRemove={removeAttachment} notice={notice} />
+          <ComposerTray
+            variant="above"
+            pending={pending}
+            onRemove={removeAttachment}
+            notice={notice}
+            place={locator.place}
+            onRemovePlace={locator.clear}
+          />
         </Suspense>
       ) : null}
 
@@ -495,6 +595,12 @@ export const Composer = memo(function Composer({
         </Suspense>
       ) : null}
 
+      {emojiSheetOpen ? (
+        <Suspense fallback={null}>
+          <ComposerEmojiSheet onPick={insertEmoji} onClose={() => setEmojiSheetOpen(false)} />
+        </Suspense>
+      ) : null}
+
       {effectsSheetOpen ? (
         <Suspense fallback={null}>
           <EffectsSheet flags={effectFlags} onChange={setEffectFlags} onClose={() => setEffectsSheetOpen(false)} />
@@ -513,24 +619,31 @@ export const Composer = memo(function Composer({
         </Suspense>
       ) : (
         <div className="flex items-end gap-3 px-3 py-2.5">
-          {/* AUCUNE TUILE PERMISE ⇒ AUCUN « + » (loi 4) — un panneau vide est
-              une porte qui s'ouvre sur un mur. `resolvedShowAttachment` fait
-              la même chose côté iOS (`+Layout.swift:216`). */}
-          {canAttachAnything ? (
-            <button
-              type="button"
-              onClick={() => setPanelOpen((v) => !v)}
-              className="grid size-11 shrink-0 place-items-center rounded-chip transition-transform"
-              style={{
-                backgroundColor: 'color-mix(in srgb, var(--accent) 10%, transparent)',
-                border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
-                color: 'var(--accent)',
-              }}
-              aria-label={panelOpen ? 'Fermer le menu des pièces jointes' : 'Ouvrir le menu des pièces jointes'}
-            >
-              <Glyph name={panelOpen ? 'x' : 'plus'} size={20} />
-            </button>
-          ) : null}
+          {/* LE PANNEAU N'EST PLUS JAMAIS VIDE, DONC LE « + » NE S'EFFACE PLUS
+              (#7280) — la garde qui vivait ici (`canAttachAnything`)
+              l'empêchait d'ouvrir un mur : sans droit d'image, de fichier ni
+              d'audio, les trois tuiles disparaissaient et le panneau ne
+              montrait rien. « Emoji » change cette arithmétique — elle
+              n'attache RIEN, elle insère dans le texte, donc elle n'exige ni
+              droit d'envoi ni moteur navigateur, et elle est toujours là.
+              La garde est RETIRÉE, pas neutralisée en `true` : un prédicat
+              qui ne peut plus être faux est un contrôle qui ment sur ce
+              qu'il garde. Le jour où « Emoji » se garde à son tour (un
+              droit, un réglage), c'est ce commentaire qu'il faut relire — et
+              la garde qu'il faut rendre. */}
+          <button
+            type="button"
+            onClick={() => setPanelOpen((v) => !v)}
+            className="grid size-11 shrink-0 place-items-center rounded-chip transition-transform"
+            style={{
+              backgroundColor: 'color-mix(in srgb, var(--accent) 10%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
+              color: 'var(--accent)',
+            }}
+            aria-label={panelOpen ? 'Fermer le menu des pièces jointes' : 'Ouvrir le menu des pièces jointes'}
+          >
+            <Glyph name={panelOpen ? 'x' : 'plus'} size={20} />
+          </button>
 
           <div
             className="flex min-w-0 flex-1 items-end transition-all"
@@ -638,12 +751,26 @@ export const Composer = memo(function Composer({
           <ComposerTray
             variant="panel"
             onPickPhotos={addFiles}
+            /* LA CAMÉRA REND DES FICHIERS, exactement comme la photothèque —
+               `capture` ne change que la SOURCE, jamais ce qui revient : le
+               même `addFiles` applique les mêmes droits, les mêmes bornes de
+               taille et le même refus DIT (`acceptPendingFiles`). */
+            onPickCamera={addFiles}
             onPickFile={addFiles}
+            onRequestLocation={() => {
+              setPanelOpen(false);
+              locator.request();
+            }}
+            onRequestEmoji={() => {
+              setPanelOpen(false);
+              setEmojiSheetOpen(true);
+            }}
             onStartVoice={() => {
               setPanelOpen(false);
               recorder.start();
             }}
             canRecord={canRecord}
+            canLocate={canLocate}
             {...(rights === undefined ? {} : { rights })}
           />
         </Suspense>

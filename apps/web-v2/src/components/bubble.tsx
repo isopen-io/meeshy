@@ -13,6 +13,7 @@ import { BUBBLE_STICKER_SIDE } from '@/lib/reading-mode/metrics';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 import { Avatar } from './avatar';
+import { PersonName } from './person-name';
 import { Attachments } from './attachment-blocks';
 import { EmojiOnly, LocationCard, StickerArtwork, StoryCitationCard } from './message-body-blocks';
 import { EphemeralBadge, ProtectedContent, ProtectionNotice } from './protected-content';
@@ -311,7 +312,7 @@ export function Bubble({
         />
       ) : null}
       {/* Le lieu est HÉBERGÉ dans la boîte (`BubbleContentBuilder.swift:134-137`). */}
-      {sharedPlace !== null ? <LocationCard place={sharedPlace} accent="var(--accent)" /> : null}
+      {sharedPlace !== null ? <LocationCard place={sharedPlace} accent="var(--accent)" language={currentInterfaceLanguage()} /> : null}
 
       {body.kind === 'sticker' ? (
         <StickerArtwork sticker={body.sticker} picture={body.picture} side={BUBBLE_STICKER_SIDE} />
@@ -565,6 +566,15 @@ export function Bubble({
                   color="var(--accent)"
                   size={32}
                   name={message.sender?.displayName ?? ''}
+                  /* L'IDENTITÉ MÈNE AU PROFIL (#7241). Le pseudo vit sous
+                     `sender.user.username`, JAMAIS à la racine du participant
+                     (`packages/shared/types/participant.ts:113`) — et il est
+                     bien SERVI : `MessagingService.ts:175` pose
+                     `username: true`. Absent (participant anonyme), l'avatar
+                     reste muet plutôt que d'ouvrir `/u/`. */
+                  {...(typeof message.sender?.user?.username === 'string' && message.sender.user.username !== ''
+                    ? { profileUsername: message.sender.user.username }
+                    : {})}
                   /* LA PHOTO DE L'EXPÉDITEUR (#6975), par la MÊME loi que la
                      rangée plate — les deux tenues du même message ne peuvent
                      pas servir deux visages différents. */
@@ -578,9 +588,16 @@ export function Bubble({
               ) : null}
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                 {showsIdentity ? (
-                  <span className="text-title font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-                    {message.sender?.displayName ?? ''}
-                  </span>
+                  /* LE NOM MÈNE OÙ L'AVATAR MÈNE (#7241) — même loi
+                     (`identityTarget`), jamais une seconde décision. Sans
+                     pseudo, `PersonName` rend exactement le `<span>` qu'il
+                     remplace. */
+                  <PersonName
+                    name={message.sender?.displayName ?? ''}
+                    username={message.sender?.user?.username}
+                    className="text-title font-semibold"
+                    style={{ color: 'var(--color-ios-ink)' }}
+                  />
                 ) : null}
                 <div className="flex items-center gap-1">
                   {/* PrismPastille/Flags N'APPARAISSENT QUE quand la loi du pied

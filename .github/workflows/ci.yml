@@ -297,6 +297,15 @@ jobs:
           # le disque » était annoncée par `vite.config.ts` sans être appliquée
           # par `dist/sw.js`. Lit `dist/sw.js`, donc après le build ci-dessus.
           node scripts/check-sw-api-cache.mjs
+          # #7305 — le service worker porte enfin `push`/`notificationclick`,
+          # et sa table de destinations est un JUMEAU (un script classique
+          # chargé par `importScripts` ne peut importer aucun module TS). Ce
+          # gate compare le jumeau à `target.ts` ET aux motifs de
+          # `route-table.tsx`, puis le fait DÉCIDER. Il lit aussi `dist/`,
+          # donc il vient après le build ci-dessus. Le fichier qu'il remplace,
+          # `firebase-messaging-sw.js`, portait la bonne règle en commentaire
+          # et avait quand même dérivé sur trois routes sur trois.
+          node scripts/check-push-target-parity.mjs
           # #5910 — maillon du composite `bun run gate` qui ne s'exécutait
           # NULLE PART. Il lit `dist/index.html`, donc il vient après le build
           # ci-dessus ; il n'ouvre aucun navigateur, donc il a sa place ici et
@@ -1932,7 +1941,7 @@ jobs:
           severity: 'CRITICAL,HIGH'
 
       - name: Upload results
-        uses: github/codeql-action/upload-sarif@v4.38.0
+        uses: github/codeql-action/upload-sarif@v4.38.1
         if: always()
         continue-on-error: true
         with:

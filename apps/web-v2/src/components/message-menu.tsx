@@ -172,6 +172,12 @@ export function MessageMenu({
    * qu'il vient d'écrire (`markProgrammaticScroll`), et la lecture la
    * CONSOMME — un seul `scroll` par écriture, donc le geste d'après referme
    * bien le menu.
+   *
+   * L'ÉVÉNEMENT ARRIVE DÉJÀ FILTRÉ (#7293) : `useRovingMenu` ne transmet que
+   * les `scroll` qui ont RÉELLEMENT déplacé l'ancre, ce qui écarte ceux qui
+   * étaient en vol au moment où le menu s'est ouvert. Restent ici les
+   * défilements qui bougent la rangée — et parmi eux, ceux que
+   * l'application a écrits elle-même.
    */
   const onScrollAway = (event: Event) => {
     if (isProgrammaticScroll(event.target)) return;
@@ -181,6 +187,10 @@ export function MessageMenu({
   const roving = useRovingMenu({
     itemCount: RAIL_ITEM_COUNT + listRows,
     returnFocusTo: () => target.element,
+    /* L'ANCRE DU MENU EST LA RANGÉE, pas un bouton déclencheur : c'est elle
+       que `useRovingMenu` interroge pour savoir si un `scroll` a réellement
+       bougé quelque chose (#7293, § « un défilement déjà acquis »). */
+    anchor: () => target.element,
     onScroll: onScrollAway,
     onResize: onClose,
     initialOpen: true,

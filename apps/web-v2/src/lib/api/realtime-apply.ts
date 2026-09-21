@@ -74,6 +74,11 @@ export function isSocketMessage(payload: unknown): payload is SocketIOMessage {
  */
 export function rawMessageFromSocket(raw: SocketIOMessage): Message & { readonly clientMessageId?: string } {
   const sender = raw.sender;
+  /* `postReplyTo` n'est pas déclaré sur `SocketIOMessage` alors que la
+     passerelle le sert hissé — même écart que `Message.location` côté
+     `@meeshy/shared` (§ « ce qui reste », #7328). Lu comme la donnée non typée
+     qu'il est, jamais redéclaré. */
+  const rawPostReplyTo = (raw as { readonly postReplyTo?: unknown }).postReplyTo;
   return {
     id: raw.id,
     conversationId: raw.conversationId,
@@ -109,6 +114,30 @@ export function rawMessageFromSocket(raw: SocketIOMessage): Message & { readonly
     ...(sender !== undefined ? { sender: sender as unknown as Participant } : {}),
     ...(Array.isArray(raw.attachments) ? { attachments: raw.attachments as unknown as Message['attachments'] } : {}),
     ...(raw.clientMessageId !== undefined ? { clientMessageId: raw.clientMessageId } : {}),
+    /**
+     * LES TROIS CHAMPS HISSÉS (#7328) — `location`, `sticker`, `postReplyTo`.
+     *
+     * `HoistedFields` (`lib/view/message-body.ts`) les nomme tous les trois et
+     * `placeOf`/`stickerOf`/`storyCitationOf` les lisent À LA RACINE D'ABORD,
+     * précisément parce que la charge `message:new` NE PORTE PAS `metadata`
+     * (le doc-comment de ce type le dit, lu ligne à ligne sur
+     * `messageNewPayload.ts`). Cette énumération, elle, les JETAIT : trois lois
+     * justes rendues inatteignables une couche plus haut, par le décodeur qui
+     * les alimente.
+     *
+     * Le lieu était le plus visible des trois — son EXPÉDITEUR ne le voyait
+     * jamais apparaître, l'écho socket de son propre envoi (celui qui PROMEUT
+     * la rangée optimiste, D-11/D-28) arrivant amputé. « Qui AFFICHE ce qu'on
+     * élit » a une jumelle : qui ALIMENTE ce qu'on affiche.
+     *
+     * AUCUNE VALIDATION ICI, et c'est délibéré : les trois lois de lecture
+     * portent déjà leurs bornes (coordonnées, énumération d'animation, forme
+     * de l'instantané) et rejettent ce qui n'en est pas. Une seconde garde ici
+     * serait une jumelle qui dériverait.
+     */
+    ...(raw.location === undefined || raw.location === null ? {} : { location: raw.location }),
+    ...(raw.sticker === undefined || raw.sticker === null ? {} : { sticker: raw.sticker }),
+    ...(rawPostReplyTo === undefined || rawPostReplyTo === null ? {} : { postReplyTo: rawPostReplyTo }),
   } as unknown as Message & { readonly clientMessageId?: string };
 }
 

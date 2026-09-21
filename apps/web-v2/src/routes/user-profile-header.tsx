@@ -224,13 +224,12 @@ const CONTEXT_KEY = {
 export function ContextBanner({ language, relation, name }: { readonly language: InterfaceLanguage; readonly relation: ProfileRelation; readonly name: string }) {
   if (relation.kind !== 'pendingReceived' && relation.kind !== 'pendingSent') return null;
   const key = CONTEXT_KEY[relation.kind];
-  const waiting = relation.request === null;
   return (
     <p data-profile-context className="flex items-start gap-2 rounded-card px-3.5 py-3 text-caption" style={{ ...SECTION_CARD_STYLE, color: INK_2 }}>
       <span aria-hidden="true" className="pt-0.5" style={{ color: BRAND }}>
         <GlyphSvg glyph={PROFILE_GLYPHS.userPlus} size={14} />
       </span>
-      {waiting ? translate(language, 'userProfile.context.pending') : translate(language, key, { name })}
+      {translate(language, key, { name })}
     </p>
   );
 }
@@ -244,7 +243,9 @@ export function ContextBanner({ language, relation, name }: { readonly language:
  * **un lecteur sans session y voit une INVITATION à se connecter**, jamais un
  * bouton désactivé : un contrôle inerte est un contrôle qui ment.
  *
- * **Tant que l'identifiant de la demande manque**, les gestes d'une relation en
- * attente sont DÉSACTIVÉS et la bannière le dit — le panier est en vol, et un
- * bouton qui n'aurait rien à envoyer mentirait de la même façon.
+ * **L'identifiant de la demande arrive AVEC l'identité** (#7122,
+ * `relationRequestId`) : les gestes d'une relation en attente sont armés au
+ * premier rendu, il n'y a plus de panier en vol ni d'état « en attente de sa
+ * ligne ». S'il manquait tout de même, `actionsFor` n'offre pas les gestes qui
+ * l'exigent — un bouton qui n'aurait rien à envoyer mentirait de la même façon.
  */

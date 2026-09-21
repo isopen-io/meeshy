@@ -219,13 +219,41 @@ extension ConversationViewModel {
             return
         }
 
-        // Calculate first unread message position
-        if initialUnreadCount > 0 && messages.count >= initialUnreadCount {
-            let unreadStartIndex = messages.count - initialUnreadCount
-            let candidate = messages[unreadStartIndex]
-            if !candidate.isMe {
-                firstUnreadMessageId = candidate.id
-            }
+        // La frontière du premier non-lu (#7198/#7222) — la LOI partagée
+        // (`FirstUnreadBoundary.resolve`, miroir de
+        // `packages/shared/utils/first-unread.ts`), jamais la position
+        // ARITHMÉTIQUE `count - unreadCount` qu'elle remplace : celle-ci
+        // ignorait le curseur SERVEUR, comptait les messages de l'AUTEUR et
+        // se déréglait dès qu'un message était supprimé de la fenêtre.
+        // `firstUnreadMessageId` et `unreadSeparatorCount` sont gelés
+        // ENSEMBLE, dans le MÊME geste — jamais l'un sans l'autre, sinon le
+        // séparateur affiche un compte qui ne décrit plus sa position.
+        //
+        // `messageStore.domainMessages(currentUserId:)`, PAS `messages` : le
+        // `@Published var messages` de ce ViewModel n'est peuplé que par
+        // `subscribeToMessageStore()`, qui DIFFÈRE la mutation d'un tour de
+        // boucle (`DispatchQueue.main.async`, pour ne jamais publier au
+        // milieu d'un rendu SwiftUI). Ici, aucun `await` ne sépare
+        // `messageStore.apply(records:)` (plus haut) de cette ligne sur le
+        // chemin « GRDB non vide, revalidation en tâche de fond » — lire
+        // `messages` y verrait encore la fenêtre d'AVANT cette ouverture.
+        // `domainMessages` est la source SYNCHRONE que cette même
+        // souscription projette : la lire directement élimine la course.
+        if let boundary = FirstUnreadBoundary.resolve(
+            messages: messageStore.domainMessages(currentUserId: currentUserId).map {
+                FirstUnreadCandidateMessage(id: $0.id, senderId: $0.senderId, createdAt: $0.createdAt)
+            },
+            lastReadMessageId: lastReadMessageId,
+            lastReadAt: lastReadAt,
+            lastReadMessageCreatedAt: lastReadMessageCreatedAt,
+            joinedAt: memberJoinedAt,
+            viewerId: currentUserId
+        ) {
+            firstUnreadMessageId = boundary.firstUnreadId
+            unreadSeparatorCount = boundary.unreadCount
+        } else {
+            firstUnreadMessageId = nil
+            unreadSeparatorCount = 0
         }
 
         // Arm socket subscriptions now that messages are loaded — deferred

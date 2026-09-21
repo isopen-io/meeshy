@@ -106,6 +106,10 @@ const fr = {
   'feed.post.see_less': 'voir moins',
   'feed.post.reel.chip': 'Réel',
   'feed.post.reel.of': 'Réel de {author}',
+  /* OUVRIR LA PUBLICATION (#7284) — le nom accessible DIT sa destination :
+     « Ouvrir » seul laisserait le lecteur d'écran deviner de quelle carte
+     il s'agit dans un fil qui en aligne vingt. */
+  'feed.post.open': 'Ouvrir la publication de {author}',
   'feed.error.title': 'Impossible de charger le fil',
   'feed.error.body': 'Réessayez dans un instant.',
   'feed.offline.title': 'Hors ligne',
@@ -548,6 +552,11 @@ const fr = {
   'userProfile.loading': 'Chargement du profil',
   'userProfile.section.publications': 'PUBLICATIONS',
   'userProfile.section.relation': 'CONNEXION',
+  'userProfile.section.conversations': 'CONVERSATIONS',
+  'userProfile.conversations.empty': 'Aucune conversation en commun',
+  'userProfile.conversations.emptyBody': 'Rien ne vous relie encore — « Écrire » ouvre la première.',
+  'userProfile.conversations.error': 'Impossible de charger les conversations',
+  'userProfile.conversations.loading': 'Chargement des conversations',
   'userProfile.refused.title': 'Ce profil n’est pas accessible',
   'userProfile.refused.body': 'Il n’existe pas, ou vous n’y avez pas accès.',
   'userProfile.throttled.title': 'Trop de demandes',
@@ -580,7 +589,6 @@ const fr = {
   'userProfile.stat.filterClear': 'Tout afficher',
   'userProfile.context.received': '{name} souhaite entrer en contact avec vous. Acceptez pour échanger des messages.',
   'userProfile.context.sent': 'Vous avez envoyé une demande de connexion à {name}. En attente de sa réponse.',
-  'userProfile.context.pending': 'La demande est en attente. Elle se charge…',
   'userProfile.action.write': 'Écrire',
   'userProfile.action.writeLabel': 'Écrire à {name}',
   'userProfile.action.block': 'Bloquer',
@@ -789,6 +797,19 @@ const fr = {
   'story.studio.style.classic': 'Classique',
   'story.studio.style.italic': 'Italique',
   'story.studio.style.typewriter': 'Machine',
+  'story.studio.style.handwriting': 'Manuscrit',
+  'story.studio.style.calligraphy': 'Calligraphie',
+  'story.studio.style.cartoon': 'Cartoon',
+  'story.studio.style.futuristic': 'Futuriste',
+  'story.studio.style.fantasy': 'Fantaisie',
+  'story.studio.style.curve': 'Courbe',
+  'story.studio.style.tag': 'Tag',
+  'story.studio.style.retro': 'Rétro',
+  'story.studio.style.elegant': 'Élégant',
+  'story.studio.style.poster': 'Affiche',
+  'story.studio.style.bubble': 'Bulle',
+  'story.studio.style.note': 'Note',
+  'story.studio.style.brush': 'Pinceau',
   'story.studio.effect.glow': 'Lueur',
   'story.studio.effect.neon': 'Néon',
   'story.studio.effect.outline': 'Contour',
@@ -899,6 +920,77 @@ const fr = {
   'feed.action.comment': 'Commenter',
 
   'admin.title': 'Administration',
+
+  'thread.unread-separator.one': '{count} message non lu',
+  'thread.unread-separator.other': '{count} messages non lus',
+  'message-detail.info.title': 'Infos du message',
+  'message-detail.received-by': 'Reçu par',
+  'message-detail.read-by': 'Vu par',
+  'message-detail.not-yet': 'Pas encore',
+  'message-detail.received-by.empty': 'Aucune confirmation de distribution',
+  'message-detail.read-by.empty': 'Personne n’a encore lu ce message',
+  'message-detail.not-yet.empty': 'Tout le monde a reçu le message',
+  'message-detail.attachment.opens.one': '{count} ouverture',
+  'message-detail.attachment.opens.other': '{count} ouvertures',
+  'message-detail.attachment.downloads.one': '{count} téléchargement',
+  'message-detail.attachment.downloads.other': '{count} téléchargements',
+  'message-detail.attachment.listened-until': 'Écouté jusqu’à {time}',
+  'message-detail.attachment.watched-until': 'Regardé jusqu’à {time}',
+  'message-detail.attachment.complete': 'Terminé',
+  'message-detail.attachment.listen.empty': 'Pas encore écouté',
+  'message-detail.attachment.watch.empty': 'Pas encore regardé',
+  'message-detail.loading': 'Chargement…',
+  'message-detail.load-error': 'Impossible de charger ces informations',
+  'message-detail.retry': 'Réessayer',
+
+  /* `/download` — L'INVITATION REÇUE PAR SMS (#7297). Ce que la page PROMET
+     est ce que le produit tient : la fiche App Store, qui existe, et le web,
+     que meeshy.me sert aujourd'hui. Aucune mention du Play Store tant que la
+     coque Android n'est pas publiée. */
+  'download.title': 'Téléchargez Meeshy',
+  'download.body': 'Écrivez dans votre langue, lisez dans la vôtre : Meeshy traduit chaque message au passage.',
+  'download.appStore': 'Télécharger dans l’App Store',
+  'download.web': 'Ouvrir Meeshy dans le navigateur',
+  'download.otherPlatforms': 'Sur Android et sur ordinateur, Meeshy s’utilise directement dans le navigateur.',
+
+  /* LES SOURCES DU COMPOSEUR (#7280) — le panneau de pièces jointes du fil.
+     Les libellés et les gestes annoncés reprennent le catalogue d'iOS
+     (`composer.attach.*`, `apps/ios/Meeshy/Localizable.xcstrings`), qui fait
+     foi : même mot, même ordre, même icône (dimension 6). Les trois premiers
+     (Photos / Fichier / Vocal) vivaient EN DUR dans `composer-tray.tsx` — ils
+     sont remontés ici par le lot qui en ajoute quatre, plutôt que d'y répandre
+     la dette (#6310). */
+  'composer.attach.group': 'Types de pièces jointes',
+  'composer.attach.handle': 'Poignée du panneau',
+  'composer.attach.photo': 'Photos',
+  'composer.attach.photo.action': 'Choisir des photos',
+  'composer.attach.camera': 'Caméra',
+  'composer.attach.camera.action': 'Prendre une photo',
+  'composer.attach.file': 'Fichier',
+  'composer.attach.file.action': 'Choisir un fichier',
+  'composer.attach.location': 'Position',
+  'composer.attach.location.action': 'Partager ma position',
+  'composer.attach.voice': 'Vocal',
+  'composer.attach.voice.action': 'Enregistrer un message vocal',
+  'composer.attach.emoji': 'Emoji',
+  'composer.attach.emoji.action': 'Insérer un emoji',
+  'composer.emoji.title': 'Insérer un emoji',
+  'composer.location.locating': 'Recherche de votre position…',
+  'composer.location.denied': 'Position refusée — autorisez-la dans les réglages',
+  'composer.location.unavailable': 'Position indisponible sur ce navigateur',
+  'composer.location.failed': 'Position introuvable — réessayez',
+  'composer.location.chip': 'LIEU',
+  'composer.location.unknown': 'Lieu inconnu',
+  'composer.location.remove': 'Retirer la position',
+
+  /* LA BULLE D'UN LIEU (#7328) — valeurs reprises du catalogue iOS
+     (`MeeshyUI/Resources/Localizable.xcstrings` : `location.shared`,
+     `location.fullscreen.openInMaps`, `location.a11y.label`), la référence de
+     cette bulle. `{place}` reçoit le nom du lieu, ou `message.location.shared`
+     quand il n'y en a pas — le cas NOMINAL du web, sans géocodeur inverse. */
+  'message.location.shared': 'Position partagée',
+  'message.location.open': 'Ouvrir dans Plans',
+  'message.location.a11y': 'Position : {place}',
 
 } as const;
 

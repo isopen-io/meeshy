@@ -6,7 +6,7 @@ import os
 // MARK: - Views Sub-Filter
 
 private enum ViewsFilter: String, CaseIterable, Identifiable {
-    case sent, delivered, read, notSeen, listened, watched
+    case sent, delivered, read, notSeen, listened, watched, opened
 
     var id: String { rawValue }
 
@@ -18,6 +18,7 @@ private enum ViewsFilter: String, CaseIterable, Identifiable {
         case .notSeen: return String(localized: "message-detail.views.not-seen", defaultValue: "Non vu", bundle: .main)
         case .listened: return String(localized: "message-detail.views.listened", defaultValue: "Écouté", bundle: .main)
         case .watched: return String(localized: "message-detail.views.watched", defaultValue: "Vu", bundle: .main)
+        case .opened: return String(localized: "message-detail.views.opened", defaultValue: "Ouvert", bundle: .main)
         }
     }
 
@@ -29,6 +30,27 @@ private enum ViewsFilter: String, CaseIterable, Identifiable {
         case .notSeen: return "eye.slash.fill"
         case .listened: return "headphones"
         case .watched: return "play.rectangle.fill"
+        case .opened: return "doc.viewfinder"
+        }
+    }
+
+    /// La famille de consommation que cet onglet montre, s'il en montre une.
+    /// Les quatre onglets de statut TEXTE (envoyé, distribué, lu, pas vu)
+    /// n'en ont aucune.
+    var family: MediaConsumptionFamily? {
+        switch self {
+        case .listened: return .listened
+        case .watched: return .watched
+        case .opened: return .opened
+        default: return nil
+        }
+    }
+
+    init(family: MediaConsumptionFamily) {
+        switch family {
+        case .listened: self = .listened
+        case .watched: self = .watched
+        case .opened: self = .opened
         }
     }
 }
@@ -64,12 +86,11 @@ struct MessageViewsDetailView: View {
     @State private var sendAttempts: [SendAttemptRecord] = []
 
     private var availableViewsFilters: [ViewsFilter] {
-        var filters: [ViewsFilter] = [.sent, .delivered, .read, .notSeen]
-        let hasAudio = message.attachments.contains { AttachmentKind(mimeType: $0.mimeType) == .audio }
-        let hasVideo = message.attachments.contains { AttachmentKind(mimeType: $0.mimeType) == .video }
-        if hasAudio { filters.append(.listened) }
-        if hasVideo { filters.append(.watched) }
-        return filters
+        // #7228 — un onglet par famille de consommation PRÉSENTE. La partition
+        // est celle de `MediaConsumptionFamily` : audio, vidéo, et tout le
+        // reste, qui s'OUVRE (image, PDF, tableur, présentation, archive…).
+        let families = MessageViewsConsumption.families(in: message.attachments)
+        return [.sent, .delivered, .read, .notSeen] + families.map(ViewsFilter.init(family:))
     }
 
     var body: some View {
@@ -114,6 +135,8 @@ struct MessageViewsDetailView: View {
                     viewsListenedContent(accent: accent)
                 case .watched:
                     viewsWatchedContent(accent: accent)
+                case .opened:
+                    viewsOpenedContent(accent: accent)
                 }
             }
             .id(viewsFilter)
@@ -134,13 +157,14 @@ struct MessageViewsDetailView: View {
         case .delivered: count = readStatusData?.receivedCount
         case .read: count = readStatusData?.readCount
         case .notSeen: count = readStatusData?.notSeenCount
-        case .listened:
-            let audioIds = message.attachments.filter { AttachmentKind(mimeType: $0.mimeType) == .audio }.map(\.id)
-            count = audioIds.reduce(0) { $0 + (attachmentStatuses[$1]?.count ?? 0) }
-        case .watched:
-            let videoIds = message.attachments.filter { AttachmentKind(mimeType: $0.mimeType) == .video }.map(\.id)
-            count = videoIds.reduce(0) { $0 + (attachmentStatuses[$1]?.count ?? 0) }
-        default: break
+        default:
+            // Les trois onglets de consommation comptent les participants de
+            // LEUR famille ; les autres n'en ont pas et restent sans pastille.
+            if let family = filter.family {
+                count = MessageViewsConsumption
+                    .attachments(message.attachments, in: family)
+                    .reduce(0) { $0 + (attachmentStatuses[$1.id]?.count ?? 0) }
+            }
         }
 
         return Button {
@@ -597,51 +621,70 @@ struct MessageViewsDetailView: View {
         }
     }
 
-    // MARK: - Écouté (Listened) — Per-Audio Attachment
+    // MARK: - Consommation par pièce jointe (écoutée / visionnée / ouverte)
 
     private func viewsListenedContent(accent: Color) -> some View {
-        let audioAttachments = message.attachments.filter { AttachmentKind(mimeType: $0.mimeType) == .audio }
+        consumptionContent(family: .listened, accent: accent)
+    }
+
+    private func viewsWatchedContent(accent: Color) -> some View {
+        consumptionContent(family: .watched, accent: accent)
+    }
+
+    private func viewsOpenedContent(accent: Color) -> some View {
+        consumptionContent(family: .opened, accent: accent)
+    }
+
+    /// Une carte par pièce jointe de la famille. UNE fonction pour les trois
+    /// onglets (#7228) : les trois corps recopiés divergeaient — seul celui de
+    /// l'audio savait dire « Nx », et aucun ne montrait les téléchargements.
+    private func consumptionContent(family: MediaConsumptionFamily, accent: Color) -> some View {
+        let attachments = MessageViewsConsumption.attachments(message.attachments, in: family)
 
         return VStack(alignment: .leading, spacing: 14) {
             if isLoadingAttachmentStatuses {
                 loadingIndicator(accent: accent)
+            } else if attachments.isEmpty {
+                emptyStateView(icon: Self.emptyIcon(for: family), text: Self.emptyLabel(for: family), accent: accent)
             } else {
-                ForEach(audioAttachments) { attachment in
-                    mediaConsumptionCard(
-                        attachment: attachment,
-                        isAudio: true,
-                        accent: accent
-                    )
-                }
-
-                if audioAttachments.isEmpty {
-                    emptyStateView(icon: "headphones", text: String(localized: "message-detail.views.audio.empty", defaultValue: "Aucun audio attaché", bundle: .main), accent: accent)
+                ForEach(attachments) { attachment in
+                    mediaConsumptionCard(attachment: attachment, family: family, accent: accent)
                 }
             }
         }
     }
 
-    // MARK: - Vu (Watched) — Per-Video Attachment
+    private static func emptyIcon(for family: MediaConsumptionFamily) -> String {
+        switch family {
+        case .listened: return "headphones"
+        case .watched: return "play.rectangle"
+        case .opened: return "doc.viewfinder"
+        }
+    }
 
-    private func viewsWatchedContent(accent: Color) -> some View {
-        let videoAttachments = message.attachments.filter { AttachmentKind(mimeType: $0.mimeType) == .video }
+    private static func emptyLabel(for family: MediaConsumptionFamily) -> String {
+        switch family {
+        case .listened:
+            return String(localized: "message-detail.views.audio.empty", defaultValue: "Aucun audio attaché", bundle: .main)
+        case .watched:
+            return String(localized: "message-detail.views.video.empty", defaultValue: "Aucune vidéo attachée", bundle: .main)
+        case .opened:
+            return String(localized: "message-detail.views.opened.empty", defaultValue: "Aucune image ni document attaché", bundle: .main)
+        }
+    }
 
-        return VStack(alignment: .leading, spacing: 14) {
-            if isLoadingAttachmentStatuses {
-                loadingIndicator(accent: accent)
-            } else {
-                ForEach(videoAttachments) { attachment in
-                    mediaConsumptionCard(
-                        attachment: attachment,
-                        isAudio: false,
-                        accent: accent
-                    )
-                }
-
-                if videoAttachments.isEmpty {
-                    emptyStateView(icon: "play.rectangle", text: String(localized: "message-detail.views.video.empty", defaultValue: "Aucune vidéo attachée", bundle: .main), accent: accent)
-                }
-            }
+    /// « Personne n'a encore … » — le verbe suit la famille, et il est
+    /// LOCALISÉ : les deux libellés d'origine étaient des littéraux français
+    /// sans accents (« Pas encore ecoute »), donc servis tels quels aux sept
+    /// langues.
+    private static func notConsumedLabel(for family: MediaConsumptionFamily) -> String {
+        switch family {
+        case .listened:
+            return String(localized: "message-detail.views.not-listened", defaultValue: "Pas encore écouté", bundle: .main)
+        case .watched:
+            return String(localized: "message-detail.views.not-watched", defaultValue: "Pas encore visionné", bundle: .main)
+        case .opened:
+            return String(localized: "message-detail.views.not-opened", defaultValue: "Pas encore ouvert", bundle: .main)
         }
     }
 
@@ -720,9 +763,15 @@ struct MessageViewsDetailView: View {
         .padding(.horizontal, 4)
     }
 
-    private func mediaConsumptionCard(attachment: MessageAttachment, isAudio: Bool, accent: Color) -> some View {
+    /// #7228 — la famille est PASSÉE, plus devinée depuis un booléen `isAudio`
+    /// que la vidéo et l'image partageaient déjà à contresens.
+    private func mediaConsumptionCard(attachment: MessageAttachment, family: MediaConsumptionFamily, accent: Color) -> some View {
         let users = attachmentStatuses[attachment.id] ?? []
-        let icon = isAudio ? "waveform" : "film"
+        let kind = AttachmentKind(mimeType: attachment.mimeType)
+        // Audio et vidéo gardent leurs glyphes historiques ; tout le reste tire
+        // le sien d'`AttachmentKind.sfSymbolName`, seule source des glyphes de
+        // pièce jointe du dépôt (un PDF n'est pas un document Word).
+        let icon = family == .listened ? "waveform" : family == .watched ? "film" : kind.sfSymbolName
         let name = attachment.originalName.isEmpty ? attachment.fileName : attachment.originalName
 
         return VStack(alignment: .leading, spacing: 10) {
@@ -761,18 +810,17 @@ struct MessageViewsDetailView: View {
             }
 
             if users.isEmpty {
-                Text(isAudio ? "Pas encore ecoute" : "Pas encore visionne")
+                Text(Self.notConsumedLabel(for: family))
                     .font(.caption)
                     .foregroundColor(theme.textMuted)
                     .padding(.vertical, 4)
             } else {
                 // User consumption rows
                 ForEach(Array(users.enumerated()), id: \.element.id) { index, user in
-                    let listenDate = isAudio ? user.listenedAt : user.watchedAt
-                    let isComplete = isAudio ? (user.listenedComplete ?? false) : (user.watchedComplete ?? false)
-                    let positionMs = isAudio ? user.lastPlayPositionMs : user.lastWatchPositionMs
-                    let count = isAudio ? user.listenCount : user.watchCount
-                    let fraction = Self.positionFraction(positionMs: positionMs, complete: isComplete, durationMs: attachment.duration)
+                    let reading = MessageViewsConsumption.reading(for: user, in: family)
+                    let fraction = family.showsProgress
+                        ? Self.positionFraction(positionMs: reading.positionMs, complete: reading.isComplete, durationMs: attachment.duration)
+                        : 0
 
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 10) {
@@ -788,7 +836,7 @@ struct MessageViewsDetailView: View {
                                     .font(.caption.weight(.medium))
                                     .foregroundColor(theme.textPrimary)
 
-                                if let date = listenDate {
+                                if let date = reading.consumedAt {
                                     Text(relativeDate(date))
                                         .font(.caption2)
                                         .foregroundColor(theme.textMuted)
@@ -797,8 +845,10 @@ struct MessageViewsDetailView: View {
 
                             Spacer()
 
-                            // Play count badge
-                            if let c = count, c > 1 {
+                            // Compteur de consommations — écoutes, visionnages
+                            // ou OUVERTURES (`viewCount`, servi par la
+                            // passerelle et jeté par le décodeur avant #7228).
+                            if let c = reading.count, c > 1 {
                                 Text("\(c)x")
                                     .font(.system(.caption2, design: .monospaced).weight(.bold))
                                     .foregroundColor(accent.opacity(0.8))
@@ -809,33 +859,54 @@ struct MessageViewsDetailView: View {
                                     )
                             }
 
-                            // Completion status
-                            if isComplete {
+                            // Téléchargement — servi pour toutes les familles
+                            // et affiché nulle part avant #7228. Il occupe la
+                            // place que la progression laisse libre sur ce qui
+                            // n'a pas de piste.
+                            if let downloadedAt = reading.downloadedAt {
                                 HStack(spacing: 3) {
-                                    Image(systemName: "checkmark.circle.fill")
+                                    Image(systemName: "arrow.down.circle.fill")
                                         .font(.caption2)
-                                    Text(String(localized: "message-detail.complete", defaultValue: "complet", bundle: .main))
+                                    Text(relativeDate(downloadedAt))
                                         .font(.caption2.weight(.semibold))
                                 }
-                                .foregroundColor(MeeshyColors.success)
-                            } else if let pos = positionMs, pos > 0 {
-                                Text(formatDuration(pos / 1000))
-                                    .font(.system(.caption2, design: .monospaced).weight(.semibold))
-                                    .foregroundColor(theme.textMuted)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(
-                                        Capsule()
-                                            .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
+                                .foregroundColor(theme.textMuted)
+                                .accessibilityElement(children: .combine)
+                                .accessibilityLabel(
+                                    String(
+                                        format: String(localized: "message-detail.views.downloaded.a11y", defaultValue: "Téléchargé %@", bundle: .main),
+                                        relativeDate(downloadedAt)
                                     )
+                                )
+                            }
+
+                            // Progression — seulement pour un média à piste.
+                            if family.showsProgress {
+                                if reading.isComplete {
+                                    HStack(spacing: 3) {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .font(.caption2)
+                                        Text(String(localized: "message-detail.complete", defaultValue: "complet", bundle: .main))
+                                            .font(.caption2.weight(.semibold))
+                                    }
+                                    .foregroundColor(MeeshyColors.success)
+                                } else if let pos = reading.positionMs, pos > 0 {
+                                    Text(formatDuration(pos / 1000))
+                                        .font(.system(.caption2, design: .monospaced).weight(.semibold))
+                                        .foregroundColor(theme.textMuted)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(
+                                            Capsule()
+                                                .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
+                                        )
+                                }
                             }
                         }
 
-                        // Live playback progress — real-time position pushed via
-                        // `attachment-status:updated` (percentage/playPositionMs)
-                        // lands here through `attachmentStatuses` reload, same as
-                        // the mm:ss chip above.
-                        if !isComplete, fraction > 0 {
+                        // La barre ne s'affiche que pour un média à piste : une
+                        // image ouverte n'est ni « à 40 % » ni « complète ».
+                        if family.showsProgress, !reading.isComplete, fraction > 0 {
                             HStack(spacing: 6) {
                                 ProgressView(value: fraction)
                                     .progressViewStyle(.linear)
@@ -960,22 +1031,39 @@ struct MessageViewsDetailView: View {
         }
     }
 
+    /// #7228 — TOUTES les pièces jointes, plus seulement les médias à piste :
+    /// une image et un document ont des ouvertures et des téléchargements à
+    /// montrer. La boucle SÉRIELLE d'origine coûtait alors un aller-retour par
+    /// photo — dix photos, dix attentes en file derrière un seul spinner — et
+    /// écrivait l'état dix fois, donc dix rendus. Les appels partent ensemble,
+    /// et `attachmentStatuses` n'est écrit QU'UNE fois.
     private func loadAttachmentStatuses() async {
-        let mediaAttachments = message.attachments.filter {
-            AttachmentKind(mimeType: $0.mimeType).hasTimebasedTrack
-        }
-        guard !mediaAttachments.isEmpty, !isLoadingAttachmentStatuses else { return }
+        let targets = MessageViewsConsumption.statusTargets(in: message.attachments)
+        guard !targets.isEmpty, !isLoadingAttachmentStatuses else { return }
         isLoadingAttachmentStatuses = true
         defer { isLoadingAttachmentStatuses = false }
 
-        for attachment in mediaAttachments {
-            do {
-                let statuses = try await AttachmentService.shared.getStatusDetails(attachmentId: attachment.id)
-                attachmentStatuses[attachment.id] = statuses
-            } catch {
-                Logger.network.error("attachment status fetch failed for \(attachment.id): \(error.localizedDescription)")
+        let loaded = await withTaskGroup(of: (String, [AttachmentStatusUser])?.self) { group in
+            for attachment in targets {
+                group.addTask {
+                    do {
+                        let statuses = try await AttachmentService.shared.getStatusDetails(attachmentId: attachment.id)
+                        return (attachment.id, statuses)
+                    } catch {
+                        Logger.network.error("attachment status fetch failed for \(attachment.id): \(error.localizedDescription)")
+                        return nil
+                    }
+                }
             }
+            var accumulated: [String: [AttachmentStatusUser]] = [:]
+            for await result in group {
+                guard let result else { continue }
+                accumulated[result.0] = result.1
+            }
+            return accumulated
         }
+
+        attachmentStatuses.merge(loaded) { _, fresh in fresh }
     }
 
     // MARK: - Helpers

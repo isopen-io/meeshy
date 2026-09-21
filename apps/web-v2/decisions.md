@@ -3066,11 +3066,63 @@ Les deux sont à relever, pas à corriger ici : un lot de rail qui « réparerai
 
 **Et la cause est MESURÉE, pas déduite** (#6950) : deux runs de la suite complète, même arbre, même diff, à quelques minutes d'écart — **250 s machine chargée ⇒ 5 173 pass / 2 fail** ; **32 s machine libre ⇒ 5 286 pass / 0 fail**. À 32 s le témoin reste sous le seuil des 2 minutes, à 250 s il l'a franchi avant d'être atteint. Les deux échecs sont donc une fonction de la CHARGE, et ils passeront au rouge définitif le jour où la suite dépassera 2 minutes en CI. **Un rouge qui disparaît sur une machine libre n'est pas un rouge résolu** — c'est un témoin dont la borne a cessé de mesurer ce qu'il annonce.
 
-## D-84 — Le studio de story est un PLATEAU : plusieurs objets, des gestes, et AUCUNE police web (#6943, #6944)
+## D-84 — Le studio de story est un PLATEAU : plusieurs objets, des gestes, et treize polices chargées à la demande (#6943, #6944, #6951)
+
+> **AMENDÉ LE 2026-09-21 PAR #6951 — « aucune police web » n'est plus vrai, et l'arbitrage qui le posait était fondé sur la MAUVAISE raison.** Les dix-huit familles sont désormais servies. Ce que la section « L'arbitrage qui gouverne tout le reste » dit ci-dessous reste l'histoire exacte de #6943, et se lit désormais avec cet amendement. La suite de D-84 — le plateau, les gestes, la géographie, la légende — est INCHANGÉE.
+>
+> ### Ce que la mesure a corrigé dans l'arbitrage
+>
+> #6943 a différé les treize familles pour une raison de **budget**. La raison était réelle mais pas la principale : **les treize polices d'iOS sont TOUTES propriétaires** — Zapfino et Snell Roundhand (Linotype), Papyrus, Marker Felt, American Typewriter et Bradley Hand (ITC/Letraset), Didot, Futura Condensed, Avenir Next Condensed, Arial Rounded MT (Monotype/Linotype), Chalkboard SE et Noteworthy (Apple), Savoye LET (Letraset). Une application iOS a le droit de les UTILISER, parce qu'elles sont sur l'appareil ; un serveur web n'a le droit de les SERVIR à personne. **Aucun budget n'aurait débloqué ce lot** : « attendre leur budget » désignait un obstacle qui n'était pas celui qui bloquait.
+>
+> **Décision** — chaque famille reçoit un **substitut de même caractère, redistribuable** (OFL 1.1 ou Apache 2.0), sous-ensemblé au latin. Ce n'est pas la police d'iOS ; c'est sa famille. L'auteur qui écrit en `calligraphy` voulait une calligraphie, et le web en rend une — là où il ne rendait, jusqu'ici, rien du tout. La table, la provenance vérifiable et les licences : `src/lib/canvas/story-fonts.ts` et `src/styles/fonts/NOTICE.md`.
+>
+> | famille | police iOS | substitut servi | octets |
+> |---|---|---|---|
+> | `handwriting` | SnellRoundhand | Parisienne 400 | 22 332 |
+> | `calligraphy` | Zapfino | Italianno 400 | 25 292 |
+> | `cartoon` | ChalkboardSE-Bold | Comic Neue 700 | 12 800 |
+> | `futuristic` | Futura-CondensedExtraBold | Saira Condensed 800 | 12 060 |
+> | `fantasy` | Papyrus | Metamorphous 400 | 13 876 |
+> | `curve` | SavoyeLetPlain | Tangerine 400 | 16 248 |
+> | `tag` | MarkerFelt-Wide | Permanent Marker 400 | 29 296 |
+> | `retro` | AmericanTypewriter | Cutive 400 | 15 332 |
+> | `elegant` | Didot | Prata 400 | 11 916 |
+> | `poster` | AvenirNextCondensed-Heavy | Anton 400 | 12 004 |
+> | `bubble` | ArialRoundedMTBold | Fredoka 600 | 16 464 |
+> | `note` | Noteworthy-Bold | Patrick Hand 400 | 14 224 |
+> | `brush` | BradleyHandITCTT-Bold | Caveat 700 | 51 068 |
+>
+> ### Le poids : conditionnel par NATURE, et c'est ce qu'on garde
+>
+> 252 912 octets pour les treize, **et aucun lecteur ne les paie ensemble.** Une `@font-face` ne coûte que ses lignes de CSS tant qu'aucun caractère de son `unicode-range` n'est peint : mesuré, la feuille entière pèse **554 octets gzip -9**. Un lecteur qui n'ouvre aucune story ne télécharge rien ; celui qui en ouvre une en `handwriting` paie 22 Ko, une fois. Médiane par famille : 15 332 octets.
+>
+> **La première peinture ne bouge pas : 49,55 Ko pour un plafond de 90** (49,53 avant le lot ; les 0,02 Ko sont le nom d'un chunk, pas une police). `interface_catalogs` 75,03 → 76 Ko pour un plafond de 141 — les treize libellés payés sept fois.
+>
+> Les TROIS façons de rendre ce coût inconditionnel sont gardées par `measure-weight.mjs`, parce qu'aucune ne se voit dans un plafond :
+> 1. une `@font-face` qui atteint la feuille CRITIQUE ;
+> 2. **le précache du service worker** — et c'est le défaut que le gate a réellement attrapé : `globPatterns` nommait `woff2` depuis toujours, un motif qui ne coûtait rien tant qu'aucune police n'existait. Les treize sont arrivées DANS ce motif, et Workbox les inscrivait au manifeste : **247 Ko téléchargés à l'INSTALLATION par chaque visiteur, plus de quatre fois la première peinture entière**, pour des polices que la plupart ne verront jamais. Un précache ANNULE la mécanique même sur laquelle ce budget repose. Exclusion : `vite.config.ts › globIgnores`, gardée sur le `sw.js` PRODUIT et non sur la ligne de config ;
+> 3. un fichier qui disparaît ou change sans que personne ne le dise — d'où un cliquet **exact** (`budgets.json › story_fonts.bytes`), sans la marge que les chunks voisins portent : un chunk grossit à chaque ligne de code, un BINAIRE ne dérive pas. Le seul geste qui bouge ce nombre est une substitution délibérée, et une marge la laisserait passer en silence.
+>
+> ### Le repli ne ment pas
+>
+> Derrière chaque famille vient **la pile NATIVE et rien d'autre** (`storyFontStack`) — jamais `cursive`, `fantasy` ou `serif`, qui rendraient une police d'allure voisine et feraient croire que le fichier a chargé. `font-display: swap` : le texte est peint tout de suite dans la police système, puis échangé ; si le fichier n'arrive jamais, le rendu est exactement celui d'avant ce lot. `block` laisserait le texte invisible jusqu'à trois secondes, `optional` renoncerait à la police pour toute la première visite — les deux ont été écartés, pas oubliés.
+>
+> ### Ce qui N'EST PAS servi, et il faut le dire
+>
+> - **L'ARABE.** Aucun des treize substituts ne le dessine — les polices d'iOS non plus. Un texte arabe reste peint par la police système, et son `unicode-range` garantit qu'il ne télécharge même pas le fichier. C'est la seule des sept langues qui ne reçoit pas la typographie de l'auteur.
+> - **La FIDÉLITÉ au dessin d'iOS.** Un substitut rend la FAMILLE, pas la police : une story composée sur iPhone en `calligraphy` ne s'affiche pas identiquement sur le web. C'est irréductible tant que ces polices sont propriétaires, et c'est la seule dimension typographique qui reste divergente.
+> - **La graisse déclarée par iOS.** `StoryTextStyle.fontWeight` dit 700 pour `note` parce que sa police EST Noteworthy-**Bold** ; réclamer 700 d'un substitut qui n'a que du 400 ferait graisser le glyphe par le navigateur — un faux gras que personne n'a dessiné. La graisse servie est celle du FICHIER. Un `fontWeight` explicite de l'auteur reste honoré, inchangé.
+> - **Hors ligne.** Une story jamais vue en ligne rend son texte dans la police système : les fichiers sont hors du précache (point 2 ci-dessus). Arbitrage assumé — le repli est propre, et 247 Ko payés par tous pour ce cas ne le sont pas.
+>
+> ### Où les preuves vivent
+>
+> `story-fonts.test.ts` tient l'inventaire (une face par famille, le fichier de la table, le poids EXACT de chaque fichier, `swap`, `unicode-range`, le repli, le NOTICE) ; `story-compose-styles.test.ts` tient l'égalité **offert = peint** — « une famille à moitié servie est pire que son absence » ; `check-story-plateau.mjs` le prouve au NAVIGATEUR, famille par famille, sur le `getComputedStyle().fontFamily` du texte rendu ET sur `document.fonts.check` — parce qu'une `@font-face` dont l'URL casse laisse une chaîne parfaitement conforme. **Ce dernier témoin a été falsifié avant d'être cru** : un fichier corrompu le faisait mourir en `uncaughtException` sans nommer la famille, ce que la falsification a corrigé — un gate qui plante n'est pas un gate qui accuse.
+
+### L'arbitrage initial de #6943, conservé pour l'histoire
 
 **Décision** — le studio livré par #6900 avait trois valeurs (un fond, un son de fond, UN texte d'`id` littéral `'text'`). Il porte désormais **N objets texte**, chacun avec sa **pose**, sa **langue** et son **style** ; **deux** portes visuelles (le fond, et un **calque** d'avant-plan en `plane: 'fg'`) ; **un son** dont le plan décide du rôle ; et une **légende par média**. La directive porteur du 2026-09-17 nommait ces cinq manques.
 
-### L'arbitrage qui gouverne tout le reste : aucune police web
+### L'arbitrage qui gouverne tout le reste : aucune police web — PÉRIMÉ, voir l'amendement #6951 en tête de D-84
 
 **Depuis #4850, un `textStyle` ne choisit QU'UNE POLICE** — ni couleur, ni fond, ni contour, ni lueur. Et seize des dix-huit familles de `StoryTextStyle.swift` nomment une police **embarquée dans l'app iOS** (Zapfino, Papyrus, Noteworthy, SnellRoundhand…). Les reproduire sur le web veut dire charger des WOFF2, et le poids de première peinture est déjà au-dessus de son plafond. **Ce lot ne télécharge aucun octet de police** : cinq familles sont servies parce qu'elles n'en exigent aucune — `bold` et `neon` (les DEUX qu'iOS rend déjà sur la police système, `fontName == nil`), `classic` et `italic` (Georgia), `typewriter` (Courier). Les treize autres attendent leur budget, une issue de suivi.
 
@@ -3115,7 +3167,7 @@ Et le commentaire de `stories-publish.ts` qui documentait `content` comme « **L
 
 ### Ce que ce lot NE fait PAS, assumé
 
-Un seul fond et un seul calque (pas N visuels) ; un seul son ; six effets NOMMÉS sur vingt-cinq et huit couleurs sur quatorze (une clé traduite se paie sept fois — les dix-neuf autres effets restent LISIBLES d'un document venu d'iOS, que le moteur peint déjà, ils ne sont simplement pas PROPOSÉS) ; treize familles typographiques ; les formes de cadre `diamond`/`cloud`/`speech` (un tracé SVG) ; `glass` (un compositing par texte, question produit ouverte depuis #6901) ; le pincement à deux doigts ; l'appui long ouvrant un menu contextuel d'objet (`StoryCanvasContextAction`, sept entrées) ; la timeline d'un objet. Chacun une issue de suivi.
+Un seul fond et un seul calque (pas N visuels) ; un seul son ; six effets NOMMÉS sur vingt-cinq et huit couleurs sur quatorze (une clé traduite se paie sept fois — les dix-neuf autres effets restent LISIBLES d'un document venu d'iOS, que le moteur peint déjà, ils ne sont simplement pas PROPOSÉS) ; ~~treize familles typographiques~~ (SOLDÉ par #6951, voir l'amendement en tête) ; les formes de cadre `diamond`/`cloud`/`speech` (un tracé SVG) ; `glass` (un compositing par texte, question produit ouverte depuis #6901) ; le pincement à deux doigts ; l'appui long ouvrant un menu contextuel d'objet (`StoryCanvasContextAction`, sept entrées) ; la timeline d'un objet. Chacun une issue de suivi.
 
 ---
 
@@ -3321,13 +3373,19 @@ Captures : `.cache/web-v2-workflow/recette/stories/coque-{ios,android}-0{1,2,3}-
 
 **UN aller-retour, pas trois.** `?expand=stats,relation` (`services/gateway/src/routes/directory/person.ts:170`, `:279-294`) sert l'identité, les onze compteurs et l'état relationnel ensemble — le doc-comment de la route dit qu'elle existe pour ça. Le port ne demande **jamais** `presence` : `isOnline`/`lastActiveAt` ne sont servis qu'à un ami accepté (loi du 2026-08-25), et le décodeur ne les lit pas — un client qui ne décode rien ne peut pas fabriquer un point vert. `PUBLIC_PROFILE_STALE_TIME` descend de 5 min à **60 s**, la fenêtre que la route DÉCLARE (`Cache-Control: max-age=60`) : la charge ne porte plus une identité seule, mais une RELATION qu'un tiers peut changer.
 
-**Sections empilées, pas les trois onglets d'iOS.** (a) L'onglet « Conversations » est hors périmètre, et une barre à trois onglets dont un ne mène nulle part est un contrôle qui ment (loi 4) ; (b) `/me` a posé l'idiome `<section aria-labelledby>` dans la v3.1, et deux profils qui se feuilletteraient différemment feraient sentir un changement d'application (dimension 6) ; (c) iOS porte des onglets parce que sa fiche est une `sheet` sans place — la route web est une page pleine. **La barre d'onglets revient AVEC l'onglet Conversations**, jamais avant.
+**Sections empilées, pas les trois onglets d'iOS.** (a) L'onglet « Conversations » est hors périmètre, et une barre à trois onglets dont un ne mène nulle part est un contrôle qui ment (loi 4) ; (b) `/me` a posé l'idiome `<section aria-labelledby>` dans la v3.1, et deux profils qui se feuilletteraient différemment feraient sentir un changement d'application (dimension 6) ; (c) iOS porte des onglets parce que sa fiche est une `sheet` sans place — la route web est une page pleine.
+
+**AMENDÉ PAR #7124 — Conversations est arrivé, et la barre NE vient PAS avec.** La raison (a) tombe : l'onglet existe, et une barre à trois onglets mènerait désormais quelque part trois fois. Les raisons (b) et (c) tiennent, et elles sont STRUCTURELLES — elles ne dépendaient pas du périmètre. S'y ajoute ce que le lot a mesuré en le lisant : la barre d'iOS est INDISSOCIABLE de la chorégraphie qui l'ÉPINGLE sous un en-tête repliable (`pinnedTabBar`, `+Header.swift:204-230`, qui prend `offset` en argument et se décale de `ProfileHeaderMetrics.collapsedBar × progress`), et cette chorégraphie est un lot à part. Poser la barre sans son épinglage livrerait une moitié que l'autre lot réécrirait. **« Ce que vous partagez déjà » est donc une QUATRIÈME section empilée**, entre les publications et les compteurs : elle répond à « où nous sommes-nous déjà parlé ? », une question de relation, pas de mesure.
 
 **UN COMPTEUR ABSENT N'EST PAS UN COMPTEUR À ZÉRO — écart ASSUMÉ avec iOS.** `servedUserStats` (`routes/user-stats.ts:220-225`, `:245-251`) SUPPRIME quatre compteurs pour un lecteur tiers ; iOS les décode en `Int` et la fiche d'autrui annonce « 0 Messages, 0 Traductions », une valeur FAUSSE présentée comme mesurée. La v3.1 décode chaque compteur en `number | null` et ne peint QUE ce qui est servi ; `0` servi et `null` absent sont les deux moitiés du seuil, tenues par `user-profile-sections.test.tsx`. Une issue compagnon porte l'écart côté iOS.
 
 **Le blocage n'entre PAS sur le fil.** `relationAvec` (`person.ts:72-93`) n'a pas de valeur `blocked` — bloquer n'efface pas la ligne d'amitié, et le serveur continue de servir `friend` ou `none`. Écrire `'blocked'` dans `relation` inventerait une sixième valeur que la revalidation suivante effacerait : un geste qui « marche » puis se défait tout seul. Le blocage se lit dans `BLOCKED_USERS_QUERY_KEY`, la MÊME source que « Découvrir », que `performBlock`/`performUnblock` écrivent au geste.
 
-**L'identifiant de la demande en cours manque au fil, et on ne l'invente pas.** `relationAvec` lit `{ status, senderId }` et jette `id`. Accepter / Refuser / Annuler en ont besoin : tant que l'issue gateway compagnon (`relationRequestId` sur `expand=relation`) n'est pas livrée, l'écran charge le SEUL panier utile, et **seulement** quand la relation est en attente (`bucketNeededFor`) — coût nominal ZÉRO requête de plus. Tant que la ligne n'est pas là, le geste est DÉSACTIVÉ et la bannière de contexte le dit : jamais un bouton qui n'aurait rien à envoyer.
+~~**L'identifiant de la demande en cours manque au fil, et on ne l'invente pas.**~~ **AMENDÉ PAR #7122 — l'identifiant est SERVI, et il ne reste plus un seul panier derrière cette fiche.** `relationAvec` lisait `{ status, senderId }` et jetait `id` ; l'écran chargeait donc le panier `GET /directory/friend-requests?direction=…&status=pending` dès que la relation était en attente, et désarmait Accepter / Refuser / Annuler le temps du vol — un aller-retour de plus, sur la route dont le doc-comment dit qu'elle existe pour les fondre en un, pour une colonne que la ligne PORTAIT déjà.
+
+La passerelle sert `relationRequestId` sur `expand=relation` (`services/gateway/src/routes/directory/person.ts`) : l'`id` de la ligne `friendRequest` quand la relation est `pending_sent` ou `pending_received`, **`null` sinon — jamais l'absence du champ**, `null` et « clé absente » se lisant pareil en JavaScript. **La surface de lecture ne bouge pas d'un pouce** : même `where`, même ligne, une colonne de plus dans le `select` — un identifiant de demande n'atteint donc que ses DEUX parties, et le témoin qui le garde ÉVALUE la clause plutôt que de supposer la borne (retirer le `where` le fait tomber).
+
+Côté client, `bucketNeededFor` et la requête qu'il gardait ont disparu, l'état « geste en attente de sa ligne » avec eux : `pendingRequestFrom` (`lib/profile/relation.ts`) bâtit la ligne depuis le FIL — le sens de la demande se lit sur `relation`, les deux parties sur le sujet de l'écran et le lecteur. **`createdAt` n'est pas sur le fil et c'est assumé** : il ne sert qu'à l'insertion optimiste dans le panier des acceptées, que la réponse de la passerelle remplace aussitôt — le même arbitrage que la ligne provisoire de `performSendRequest`. **Et le geste optimiste écrit les DEUX champs** (`patchProfileRelations`) : « Ajouter » pose l'identifiant PROVISOIRE, puis celui de la passerelle ; accepter, refuser, annuler l'éteignent. Sans cela, « Annuler » aurait disparu juste après « Ajouter » — le contrôle absent au lieu du contrôle mort, mais le même geste perdu. **Un identifiant tout de même absent (passerelle plus ancienne) ne GRISE plus le geste : il ne l'OFFRE pas** (`actionsFor`), parce qu'il n'y a plus d'attente au bout de laquelle il s'armerait.
 
 **Les gestes patchent TOUTE entrée de profil qui porte l'identifiant touché.** La fiche est mise en cache par HANDLE, et une même personne y entre sous plusieurs clés (son pseudo depuis une mention, son identifiant depuis une notification). Le patch et son retour arrière vivent dans `friend-actions.ts` — le site UNIQUE des gestes d'amitié — jamais dans l'écran : un second site aurait fait diverger la pastille de « Découvrir » et la fiche au premier geste.
 
@@ -3335,7 +3393,7 @@ Captures : `.cache/web-v2-workflow/recette/stories/coque-{ios,android}-0{1,2,3}-
 
 **Trois écarts de STYLE, chacun mesuré.** Le `@pseudo` est teinté par l'ENCRE DE MARQUE, pas par l'accent dérivé de l'identifiant (`authorAccentColor` prend n'importe quelle teinte : 4,22 mesuré en sombre, sous AA) — l'accent reste peint là où il ne porte aucun texte, le dégradé de bannière et l'avatar. Un bouton PLEIN se peint sur `--ios-indigo-600` et son texte est blanc (`--color-ios-brand` rendait 4,47, sous AA dans les deux schémas). La tuile « Stories » affiche son compte et **n'est pas un bouton** : iOS l'ouvre parce qu'il a l'écran, la v3.1 ne l'a pas.
 
-**Différé, chacun sous son issue compagnon** : l'en-tête qui se replie et sa barre compacte, l'onglet Conversations, la carte Voix, « Signaler », la bannière en plein écran, et « Renvoyer la demande » (`resendRequest` supprime puis recrée — il repart le débit de la cible et perd la trace de la demande initiale ; « Annuler » puis « Ajouter » donne le même résultat en deux gestes explicites).
+**Différé, chacun sous son issue compagnon** (#7124 ; l'onglet Conversations est LIVRÉ, « Signaler » aussi — #7187) : l'en-tête qui se replie et sa barre compacte, la carte Voix, la bannière en plein écran, et « Renvoyer la demande » (`resendRequest` supprime puis recrée — il repart le débit de la cible et perd la trace de la demande initiale ; « Annuler » puis « Ajouter » donne le même résultat en deux gestes explicites).
 
 **CE QUE LA REVUE A CORRIGÉ, et la loi que chaque correctif écrit.**
 
@@ -3545,3 +3603,61 @@ arbitrage tranchera une seule fois pour les trois. Issue #7236, label
 propre formule avant que le porteur choisisse. web-v2 reste conforme à
 D-L1 tel qu'écrit ; le jour où l'arbitrage change D-L1, ce fichier et
 `use-app-badge.ts` se corrigent ensemble.
+
+## D-105 — Le fil s'ouvre sur « — N messages non lus — », en couleur primaire ; deux bornes du signal restent ouvertes (2026-09-21, #7202)
+
+D-L1/D-L2/D-L3 (`docs/superpowers/specs/2026-09-21-lecture-et-accuses-design.md`
+§ 3) : le fil s'ouvre TOUJOURS sur le séparateur de non-lus quand il y en a,
+le séparateur porte la teinte PRIMAIRE (jamais une couleur neutre), et
+l'ouverture ne se rejoue pas au fil de la session (D-L2 gouverne l'ouverture,
+pas les arrivées en direct — celles-ci restent la loi de `pin-to-bottom.ts`
+et `unread-below.ts`, D-33). `unreadBoundaryOf` (`lib/view/unread-boundary.ts`)
+compose une garde devant `firstUnreadBoundary` (S1, #7215) : zéro signal de
+lecture ⇒ pas de frontière plutôt que « tout est non lu depuis toujours » —
+un seul signal, quel qu'il soit, suffit à laisser la loi partagée trancher.
+`threadOpenScrollDecision` (`lib/view/unread-separator.ts`) décide du saut ;
+`<UnreadSeparator>` rend le libellé pluriel (`thread.unread-separator.one`/
+`.other`) dans les sept langues.
+
+**Deux bornes assumées, non corrigées dans ce lot, chacune une issue
+compagnon (même milestone)** :
+
+1. **#7272 — la fenêtre chargée.** `useMessages` ne sert que les 50 derniers
+   messages ; si `firstUnreadId` n'y est pas, `threadOpenScrollDecision`
+   replie sur l'ancrage en bas, SANS séparateur ni indication — cas nominal
+   au-delà de ~50 non-lus. Trois familles de correctif possibles (pagination
+   vers le haut, pastille ancrée en haut qui pagine au toucher, ou borne
+   assumée à écrire explicitement dans D-L2) : aucune n'est mineure, un
+   arbitrage produit tranche avant qu'un lot l'attaque.
+2. **#7273 — le détail ne sert pas `currentUserJoinedAt`.** Une conversation
+   JAMAIS ouverte n'a aucun `ConversationReadCursor` ; `GET
+   /conversations/:id` ne sert alors aucun des trois signaux du curseur, et
+   `currentUserJoinedAt` (le quatrième) est réservé à la liste (`GET
+   /conversations`). Les quatre signaux manquent à la fois pour ce chemin de
+   production légitime — la garde du zéro-signal (ci-dessus, #7215/#7202)
+   est nécessaire pour ne pas fabriquer une fausse frontière, mais son effet
+   de bord retire aussi le séparateur au cas où D-L2 sert le plus : une
+   conversation réellement jamais ouverte.
+
+Dimensions mûres : 6 (cohérence — même teinte primaire que le reste du
+prisme de lecture), 7 (ouverture sans geste), 9 (sept langues), 11 (loi
+UNIQUE `unreadBoundaryOf`/`threadOpenScrollDecision`, témoins dédiés).
+Dimension 13 (complétude) restante : les deux bornes ci-dessus.
+
+## D-106 — Les conversations en commun : un port BORNÉ, hors de la famille de la Lentille (2026-09-21, #7124)
+
+**Aucune route à écrire.** `GET /api/v1/conversations?withUserId=<id>&limit=50` rend les conversations dont le LECTEUR **et** le sujet sont tous deux membres actifs (`services/gateway/src/routes/conversations/core-list.ts:193-210`) — le filtre qu'iOS appelle depuis le premier jour (`ConversationService.listSharedWith`, `UserProfileSheet.swift:325`). Le web ne fait que le nommer.
+
+**Un module à part, `lib/api/shared-conversations.ts`, et pas `conversations.ts`.** La QUESTION n'est pas la même. `conversations.ts` sert LA Lentille : une liste paginée, persistée, revalidée par le temps réel, dont la clé de cache est la vie entière de l'écran d'accueil. Celle-ci est une lecture BORNÉE, portée par un SUJET. Sa clé est `['profile', 'shared-conversations', <id>]` — **hors** de la famille `['conversations']`, sans quoi une invalidation de la Lentille rejouerait autant de requêtes que de fiches visitées.
+
+**Pas de pagination, et c'est une décision.** iOS demande cinquante lignes et s'arrête ; le nombre de conversations partagées avec UNE personne est petit par construction. Un « Charger plus » promettrait une profondeur que la question n'a pas.
+
+**Trois écarts assumés avec l'onglet d'iOS.** (1) Le bouton « Envoyer un message » n'est pas repris — la fiche l'offre déjà (« Écrire », section CONNEXION), et iOS le répète parce que ses onglets se cachent l'un l'autre ; deux boutons pour un geste sont le doublon que D-11 interdit. (2) Une rangée est un `<Link>`, pas une zone tapable : la destination est une ADRESSE, qu'on doit pouvoir ouvrir dans un onglet et copier. (3) Aucune rangée grisée « interactions désactivées » — la fiche d'un compte bloqué ne monte pas la section du tout, là où iOS la rend à 35 % d'opacité ; un contenu à 35 % reste du contenu servi.
+
+**L'APERÇU du dernier message n'est pas peint**, et c'est délibéré : il demanderait la descente du Prisme, l'horloge, la sourdine, les coches — la ligne de la Lentille entière. iOS ne peint que l'avatar et le nom.
+
+**LE PLAFOND DE POIDS DU CHUNK MONTE, ET C'EST LE DÉCOUPAGE QUI A ÉTÉ REFUSÉ.** La section porte le chunk `user_profile` de **6,68 à 7,36 Ko** gzip -9 (7 535 o, mesurés par `scripts/measure-weight.mjs` sur l’arbre fusionné sur `origin/dev` 3248baddc6), au-delà du plafond de 7. La piste évidente — sortir la section en `lazy(() => import(…))` — a été **implémentée et mesurée** plutôt qu'écartée par principe : elle marche (`user_profile` retombe à 7,25 Ko, un `user-profile-conversations-<hash>.js` de 1,5 Ko apparaît) et **elle ne paie pas**. Cet écran EST DÉJÀ un chunk à la demande : le découpage n'économise rien à la première peinture et ajoute un **aller-retour** au moment où la section s'affiche. Sur le préréglage réseau du dépôt (`budgets.json § network.profile`, Fast 3G : 188 743 bps, 562,5 ms de latence), 0,68 Ko de plus dans un chunk déjà demandé coûte quelques millisecondes ; un aller-retour de plus en coûte cinq cents — **on dégraderait la dimension 2 au nom de la dimension 2**. Le plafond passe donc à **9** (7,36 arrondi au Ko supérieur, + 1 Ko de marge — la discipline que `profile` et `discover` suivent), et le champ `source` est **réécrit en entier** : son statut était `CIBLE — MESURÉE PAR #7083, NON ARBITRÉE`, c'est-à-dire la photographie d'un écran à TROIS sections, et elle nommait encore `lib/api/author-posts.ts` que le chunk ne porte plus (il vit dans `feed`) tout en ignorant les trois pièces extraites par #7152. **Un budget dont la justification décrit un état périmé est pire qu'un budget faux : il fait croire qu'il a été pensé.**
+
+**Piège MESURÉ pendant l'essai de découpage, consigné pour qui le rejouerait** : un `import` **statique** vers le module différé — ici le squelette d'attente du `Suspense`, que l'hôte doit rendre — le **ramène dans le chunk de l'hôte** et laisse à sa place un **talon de 145 octets**. Le chunk apparaît dans le relevé, le gate voit deux fichiers, et rien n'a maigri d'un octet. Le squelette d'attente doit vivre chez l'HÔTE (`user-profile-states.tsx`), jamais dans le module qu'il attend.
+
+**Le lecteur de la LIGNE n'est pas celui du GESTE.** `titleOf` a besoin d'un identifiant pour savoir qui est « l'autre » dans un direct ; lui passer la chaîne vide fait de la PREMIÈRE partie l'autre — mesuré au navigateur : la rangée de `/c/c-direct-kwame` portait « Vous ». L'écran résout donc `resolveViewer({ source, session })` — le site unique, fixtures comprises, que la Lentille et le fil emploient déjà — pour la RANGÉE, et garde `viewerId` (l'identité de COMPTE, `null` sans session) pour les gestes, qui ne doivent rien inventer. **Un témoin de pièce ne peut pas voir quelle identité l'ÉCRAN sert au composant** : c'est `check-profile.mjs` qui l'attrape, et il le mesure désormais explicitement.

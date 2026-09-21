@@ -44,6 +44,11 @@
  * un fil, le refus qui ne répète pas le pseudo demandé, l'atteignabilité et le
  * contraste AA.
  *
+ * TROISIÈME PASSE (#7124) — CE QUE VOUS PARTAGEZ DÉJÀ : la section
+ * Conversations (l'onglet `listSharedWith` d'iOS) est peinte, chaque rangée
+ * est une ADRESSE nommée qui fait 44 de haut, et celle du haut OUVRE VRAIMENT
+ * son fil — la loi 4 se mesure à l'effet, jamais à la présence d'un `href`.
+ *
  * CE QUE CE GATE NE PEUT PAS PROUVER, et qui doit être dit : le chemin SERVICE
  * WORKER (rechargement à FROID hors ligne). `startDistServer(DIST, {
  * serviceWorker: false })` sert le `dist` SANS coquille. Cette moitié est
@@ -117,6 +122,20 @@ const REACH = {
  * « inline » de WCAG 2.5.8, pas une tolérance. L'atteignabilité (`ok`), elle,
  * est mesurée pour TOUS : un lien de prose volé par un disque flottant reste
  * un défaut.
+ *
+ * `href` sert la SECONDE exception de la même clause — « Equivalent » : une
+ * cible sous le plancher est admise quand la MÊME fonction est atteignable par
+ * un autre contrôle de la page qui, lui, tient les 44 px. C'est exactement la
+ * forme que #7241 a posée : le NOM d'une personne mène où mène son AVATAR, et
+ * l'avatar est un carré de 44 px collé à lui. Grandir le nom à 44 px de haut
+ * couvrirait l'horodatage au-dessus et le texte en dessous — on remplacerait
+ * une cible étroite par une cible qui VOLE ses voisines.
+ *
+ * **Et l'équivalence se MESURE, elle ne se déclare pas.** Un attribut posé sur
+ * le lien dirait qu'un jumeau existe sans l'avoir jamais vu ; le gate cherche
+ * donc, dans ce qu'il vient de relever, un contrôle de MÊME `href` qui tient le
+ * plancher. Le jour où l'avatar cesse d'être rendu à côté du nom, l'exemption
+ * disparaît d'elle-même et ce gate rougit.
  */
 const reachScrolled = async (page) => {
   const count = await page.$$eval('#contenu a, #contenu button', (els) => els.length);
@@ -133,6 +152,7 @@ const reachScrolled = async (page) => {
           nom: el.getAttribute('aria-label') ?? (el.textContent ?? '').trim().slice(0, 40),
           ok: hit !== null && (hit === el || el.contains(hit)),
           hauteur: r.height,
+          href: el.getAttribute('href'),
           enProse: el.closest('[data-rich-text]') !== null,
         };
       }, i),
@@ -364,10 +384,46 @@ try {
       check((await page.$('[data-user-banner]')) !== null, `${label} : /u/ porte sa bannière`);
       const publicSections = await page.$$eval('#contenu section h2', (els) => els.map((el) => (el.textContent ?? '').trim()));
       check(
-        JSON.stringify(publicSections) === JSON.stringify(['CONNEXION', 'PUBLICATIONS', 'STATISTIQUES']),
-        `${label} : les trois blocs, dans l'ordre (${JSON.stringify(publicSections)})`,
+        JSON.stringify(publicSections) === JSON.stringify(['CONNEXION', 'PUBLICATIONS', 'CONVERSATIONS', 'STATISTIQUES']),
+        `${label} : les quatre blocs, dans l'ordre (${JSON.stringify(publicSections)})`,
       );
       await capture(page, `profil-public-${scheme}-${width}x${height}`);
+
+      // ------------------------------------------------ 9 bis. CE QUE VOUS PARTAGEZ DÉJÀ (#7124)
+      /* L'onglet Conversations d'iOS (`listSharedWith`), rendu en SECTION.
+         Ce qu'aucun témoin `bun test` ne peut dire : que la rangée est
+         ATTEIGNABLE dans un navigateur réel et qu'elle MÈNE quelque part —
+         la loi 4 se mesure à l'effet, pas à la présence d'un `href`. */
+      await page.waitForSelector('[data-profile-conversation]');
+      const partagees = await page.$$eval('[data-profile-conversation] a', (els) =>
+        els.map((el) => ({ href: el.getAttribute('href'), texte: (el.textContent ?? '').trim(), hauteur: Math.round(el.getBoundingClientRect().height) })),
+      );
+      check(partagees.length > 0, `${label} : /u/ — les conversations en commun sont peintes (${partagees.length})`);
+      /* LA RANGÉE PORTE LE NOM DE L'AUTRE, jamais « Vous » — `titleOf` prend
+         le lecteur en argument, et lui passer la chaîne vide faisait de la
+         PREMIÈRE partie « l'autre » : un direct s'intitulait du nom du lecteur
+         lui-même. Mesuré ici avant tout autre chose, parce qu'aucun témoin de
+         pièce ne peut voir quelle identité l'ÉCRAN sert au composant. */
+      check(
+        partagees.every((r) => (r.href ?? '').startsWith('/c/') && r.texte !== '' && !r.texte.includes('Vous')),
+        `${label} : /u/ — chaque rangée est une ADRESSE nommée, et elle nomme L'AUTRE — ${JSON.stringify(partagees)}`,
+      );
+      check(
+        partagees.every((r) => r.hauteur >= TAP_FLOOR),
+        `${label} : /u/ — chaque rangée fait ${TAP_FLOOR} de haut — ${JSON.stringify(partagees.map((r) => r.hauteur))}`,
+      );
+      /* ELLE MÈNE VRAIMENT : le fil s'ouvre. Un `href` juste au-dessus d'une
+         route qui refuserait serait le contrôle qui ment sous une autre
+         forme. On revient ensuite à la fiche, que la suite du gate mesure. */
+      const premierPartage = partagees[0]?.href ?? null;
+      await page.click(`[data-profile-conversation] a[href="${premierPartage}"]`);
+      const filOuvert = await page
+        .waitForFunction((chemin) => window.location.pathname === chemin, premierPartage, { timeout: 3000 })
+        .then(() => page.waitForSelector('main', { timeout: 5000 }))
+        .then(() => true, () => false);
+      check(filOuvert, `${label} : /u/ — une conversation partagée OUVRE son fil (${premierPartage})`);
+      await page.goto(`${BASE}/u/kwame-mensah`, { waitUntil: 'load' });
+      await page.waitForSelector('[data-profile-posts] [data-feed-card-id]');
 
       // ------------------------------------------------ 10. le bandeau, et ce qu'il NE dit pas
       const band = await page.$$eval('[data-profile-tile]', (els) =>
@@ -497,7 +553,16 @@ try {
       const publicBlocked = publicRest.controls.filter((c) => !c.ok);
       check(publicBlocked.length === 0, `${label} : /u/ — aucun contrôle volé à son centre au repos — ${JSON.stringify(publicBlocked)}`);
       const publicScrolled = await reachScrolled(page);
-      const publicUnreachable = publicScrolled.filter((c) => !c.ok || (!c.enProse && c.hauteur < TAP_FLOOR));
+      /* LES DESTINATIONS QUI ONT DÉJÀ UNE GRANDE PORTE — mesurées sur le
+         relevé lui-même, jamais déclarées (voir `reachScrolled`). */
+      const grandesPortes = new Set(
+        publicScrolled.filter((c) => c.hauteur >= TAP_FLOOR && c.href !== null).map((c) => c.href),
+      );
+      const publicUnreachable = publicScrolled.filter(
+        (c) =>
+          !c.ok ||
+          (!c.enProse && c.hauteur < TAP_FLOOR && !(c.href !== null && grandesPortes.has(c.href))),
+      );
       check(
         publicScrolled.length >= 6 && publicUnreachable.length === 0,
         `${label} : /u/ — chaque contrôle s'atteint et fait ${TAP_FLOOR} de haut (${publicScrolled.length}) — ${JSON.stringify(publicUnreachable)}`,
@@ -520,6 +585,10 @@ try {
         chargerPlus: chargerPlusInk,
         bloquer: await contrastOf(page, '[data-profile-action="block"]'),
         membreDepuis: await contrastOf(page, '[data-profile-member-since]'),
+        /* LA LISTE SE RELIT QUAND UNE SURFACE S'AJOUTE (#7083, revue) — la
+           section Conversations entre ici le jour où elle entre à l'écran,
+           sans quoi elle serait la prochaine encre jamais regardée. */
+        conversationPartagee: await contrastOf(page, '[data-profile-conversation] span'),
       };
       const publicFaibles = Object.entries(publicInks).filter(([, ratio]) => ratio === null || ratio < WCAG_AA);
       check(publicFaibles.length === 0, `${label} : /u/ — chaque texte tient AA — ${JSON.stringify(publicInks)}`);

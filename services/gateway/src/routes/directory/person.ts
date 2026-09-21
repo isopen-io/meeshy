@@ -83,14 +83,43 @@ const EXPANSIONS: readonly Expansion[] = ['stats', 'presence', 'relation'] as co
  * paginé à cent lignes. Au-delà de la centième personne bloquée, sa fiche
  * s'ouvrait entière (#7125) : du contenu masqué redevenait visible par le seul
  * effet du rang. La passerelle répond désormais PAR SUJET.
+ *
+ * ## `relationRequestId` — l'identifiant que la fiche doit ENVOYER (#7122)
+ *
+ * Dire « une demande est en attente » sans dire LAQUELLE oblige le client à
+ * retrouver la ligne ailleurs : le profil de la v3.1 chargeait le panier
+ * `GET /directory/friend-requests?direction=…&status=pending` et laissait
+ * « Accepter » / « Refuser » / « Annuler » désactivés tant qu'il était en vol.
+ * Un aller-retour de plus, sur la route dont le doc-comment dit qu'elle existe
+ * pour les fondre en un — pour une colonne que la ligne PORTE déjà.
+ *
+ * **La surface de lecture ne bouge pas d'un pouce** : même `where`, même
+ * ligne, une colonne de plus dans le `select`. La borne — les deux couples
+ * `(viewer, cible)` — est ce qui garantit qu'un identifiant de demande
+ * n'atteint que ses DEUX parties ; elle est gardée par un témoin qui évalue la
+ * clause, et non par la relecture de ce commentaire.
+ *
+ * **`null` hors attente, jamais l'absence du champ** : `null` et « clé
+ * absente » se lisent pareil en JavaScript, et c'est l'ambiguïté qui ferait
+ * retomber un client sur le panier. Une amitié ACCEPTÉE porte pourtant encore
+ * sa ligne — servir son identifiant offrirait un `PATCH` qui n'a plus de sens.
  */
+type RelationServie = {
+  readonly relation: string;
+  readonly isSelf: boolean;
+  readonly blockedByViewer: boolean;
+  readonly relationRequestId: string | null;
+};
+
+const SANS_RELATION: RelationServie = { relation: 'none', isSelf: false, blockedByViewer: false, relationRequestId: null };
+
 async function relationAvec(
   fastify: FastifyInstance,
   viewerId: string | undefined,
   cibleId: string
-): Promise<{ relation: string; isSelf: boolean; blockedByViewer: boolean }> {
-  if (!viewerId) return { relation: 'none', isSelf: false, blockedByViewer: false };
-  if (viewerId === cibleId) return { relation: 'self', isSelf: true, blockedByViewer: false };
+): Promise<RelationServie> {
+  if (!viewerId) return SANS_RELATION;
+  if (viewerId === cibleId) return { ...SANS_RELATION, relation: 'self', isSelf: true };
 
   /* Les deux questions sont INDÉPENDANTES — les sérialiser doublerait la
      latence de l'expansion la plus chère de la route pour rien. */
@@ -102,7 +131,7 @@ async function relationAvec(
           { senderId: cibleId, receiverId: viewerId },
         ],
       },
-      select: { status: true, senderId: true },
+      select: { id: true, status: true, senderId: true },
     }),
     hasBlocked(fastify.prisma, viewerId, cibleId),
   ]);
@@ -114,7 +143,9 @@ async function relationAvec(
     return lien.senderId === viewerId ? 'pending_sent' : 'pending_received';
   })();
 
-  return { relation: fil, isSelf: false, blockedByViewer };
+  const enAttente = fil === 'pending_sent' || fil === 'pending_received';
+
+  return { relation: fil, isSelf: false, blockedByViewer, relationRequestId: enAttente && lien ? lien.id : null };
 }
 
 /**
@@ -267,6 +298,9 @@ export async function directoryPersonRoutes(fastify: FastifyInstance) {
                 relation: { type: 'string' },
                 isSelf: { type: 'boolean' },
                 blockedByViewer: { type: 'boolean' },
+                // `nullable` parce que `null` est une RÉPONSE ici — « aucune
+                // demande à envoyer » — et non l'absence d'un champ.
+                relationRequestId: { type: 'string', nullable: true },
               },
             },
           },
@@ -372,6 +406,6 @@ export async function directoryPersonRoutes(fastify: FastifyInstance) {
 function epinglesServis(demande: ReadonlySet<Expansion>): readonly string[] {
   const epingles = ['id'];
   if (demande.has('stats')) epingles.push('stats');
-  if (demande.has('relation')) epingles.push('relation', 'isSelf', 'blockedByViewer');
+  if (demande.has('relation')) epingles.push('relation', 'isSelf', 'blockedByViewer', 'relationRequestId');
   return epingles;
 }
