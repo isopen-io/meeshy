@@ -9,19 +9,15 @@ import type {
   PostComment as SharedPostComment,
 } from '@meeshy/shared/types/post';
 
-import { applyCommentCount, shiftedCount, withCommentCount } from '@/lib/feed/interactions';
+import { shiftedCount, withCommentCount } from '@/lib/feed/interactions';
 
+import { updateCardPost } from './card-caches';
 import { newClientMessageId } from './client-message-id';
 import type { DataSource } from './config';
-import { FEED_QUERY_KEY } from './feed';
-import type { FeedAuthor, FeedInfiniteData, FeedMedia, FeedPost } from './feed-pages';
+import type { FeedAuthor, FeedMedia } from './feed-pages';
 import type { ApiResult, HttpTransport } from './http';
 import { outcomeOf } from './outcome';
 import { postQueryKey } from './publication-detail';
-/* `./reels-query-key`, jamais `./reels` — ce module est atteint par
- * `socket.ts` (le chunk `realtime`, async) ; voir le doc-comment de
- * `reels-query-key.ts` (motif exact : `feed-realtime.ts`). */
-import { REELS_QUERY_ROOT } from './reels-query-key';
 import { STORY_FEED_QUERY_KEY, storyPostQueryKey, type StoryFeedPost } from './stories';
 
 /**
@@ -230,53 +226,39 @@ export function dropComment(data: CommentInfiniteData | undefined, tempId: strin
  * commentaire, et revient avec lui : sans cela, un refus laisserait un
  * compteur menteur derrière un fil vide.
  *
- * **IL Y A CINQ CAISSES, ET LE DOC-COMMENT N'EN A CONNU QU'UNE, PUIS DEUX.**
- * (Le titre disait QUATRE pendant que l'énumération en portait cinq depuis
- * #7120 ; un chiffre de titre se RECOMPTE, il ne se cite pas — la jumelle
- * `setCommentCountServed` l'a cité et a perdu la cinquième, #7227.)
- * Chacune a été trouvée en demandant, non pas « qui calcule ce compte ? », mais
- * **« qui l'AFFICHE ? »** — et la réponse a changé trois fois :
+ * **DEUX FAMILLES DE CAISSES — et leur énumération a cédé à chaque écran
+ * NOUVEAU.** Chacune a été trouvée en demandant, non pas « qui calcule ce
+ * compte ? », mais **« qui l'AFFICHE ? »** :
  *
- *  1. `postQueryKey(postId)` — la fiche `/post/$post` ;
- *  2. `STORY_FEED_QUERY_KEY` — la pastille du rail du lecteur de stories
- *     (#7112 : on commentait une story, la ligne apparaissait, la pastille
- *     restait au chiffre d'avant) ;
- *  3. `FEED_QUERY_KEY` — la rangée de statistiques d'une carte du Flux
- *     (`feed-post-card.tsx:75`) ;
- *  4. `REELS_QUERY_ROOT` — la MÊME carte servie par un fil de Réels, qui peint
- *     depuis ses propres pages (#6457) ;
- *  5. `storyPostQueryKey(postId)` — la TROISIÈME MARCHE du lecteur de stories
- *     (#7120). Une story ouverte par LIEN, hors des 50 plus récentes, n'est
- *     dans AUCUNE des quatre autres : le lecteur la tient de `useStoryPost` et
- *     la fusionne dans ses groupes (`routes/story.tsx`). Son rail peint donc sa
- *     pastille depuis ce cache — et la caisse 2 ne l'atteint pas, `postQueryKey`
- *     valant `['posts', id]` quand celle-ci vaut `['stories', 'post', id]`.
+ *  - **les caisses qui peignent une CARTE de publication** — le Flux, les
+ *    Réels, les enregistrées, la page d'un hashtag, les publications d'un
+ *    profil, la fiche `/post/$post`. Elles ne sont plus nommées ici : le
+ *    registre `card-caches.ts` les tient (#7341), et `updateCardPost` les
+ *    parcourt. Cette énumération les RECOPIAIT, et la recopie a perdu tour à
+ *    tour le Flux et les Réels (#7135), puis n'a jamais connu les
+ *    enregistrées, le hashtag ni le profil (#7341) : on commentait depuis la
+ *    fiche, on revenait à l'écran, et la carte affichait l'ancien compte ;
+ *  - **les caisses du lecteur de STORIES**, d'une autre forme
+ *    (`StoryFeedPost`, pas de pages) et qu'aucune carte de publication ne
+ *    lit : `STORY_FEED_QUERY_KEY` — la pastille du rail (#7112) — et
+ *    `storyPostQueryKey(postId)`, la TROISIÈME MARCHE du lecteur (#7120) : une
+ *    story ouverte par LIEN, hors des 50 plus récentes, n'est QUE là, et
+ *    `postQueryKey` vaut `['posts', id]` quand celle-ci vaut
+ *    `['stories', 'post', id]`.
  *
- * Les trois dernières manquaient (#7135, puis #7120) : on supprimait son
- * commentaire depuis la fiche, on revenait au fil, et la carte affichait
- * toujours l'ancien compte ; on commentait la story d'un lien, et la pastille
- * du rail restait au chiffre d'avant. `feed-gestures.ts` avait déjà tranché
- * pour le cœur — « la même publication ne peut pas porter deux cœurs selon
- * l'écran qui la montre » — et le compteur de commentaires n'avait pas suivi.
+ * **L'énumération porte DEUX affirmations, et c'est la seconde qui a cédé** :
+ * « ces caisses appliquent la règle » se vérifie ; « ce sont les caisses où la
+ * règle s'applique » ne se vérifie qu'en demandant, pour un ÉCRAN de plus,
+ * d'où il lit son compte.
  *
- * **L'énumération porte DEUX affirmations, et c'est la seconde qui a cédé
- * quatre fois** : « ces caisses appliquent la règle » se vérifie ; « ce sont
- * les caisses où la règle s'applique » ne se vérifie qu'en demandant, pour un
- * ÉCRAN de plus, d'où il lit son compte.
- *
- * **La règle elle-même vit dans `lib/feed/interactions.ts`**, à côté de
- * `applyPostToggle` : c'est le site unique de « comment une page de fil
- * bascule », et la borne basse (`shiftedCount`) y est écrite une seule fois —
- * la leçon que `PostLikeMutation.swift` a coûtée à iOS. Ici, seule
- * l'énumération des caisses. Un post absent d'une racine y est laissé tel quel.
+ * **La règle elle-même vit dans `lib/feed/interactions.ts`** (`withCommentCount`,
+ * `shiftedCount`) : la borne basse y est écrite une seule fois — la leçon que
+ * `PostLikeMutation.swift` a coûtée à iOS. Un post absent d'une caisse y est
+ * laissé tel quel.
  */
 export function shiftCommentCount(queryClient: QueryClient, postId: string, delta: 1 | -1): void {
   const change = { postId, delta };
-  queryClient.setQueryData<FeedInfiniteData>(FEED_QUERY_KEY, (data) => applyCommentCount(data, change));
-  queryClient.setQueriesData<FeedInfiniteData>({ queryKey: REELS_QUERY_ROOT }, (data) => applyCommentCount(data, change));
-  queryClient.setQueryData<FeedPost>(postQueryKey(postId), (post) =>
-    post === undefined ? post : withCommentCount(post, change),
-  );
+  updateCardPost(queryClient, postId, (post) => withCommentCount(post, change));
   queryClient.setQueryData<readonly StoryFeedPost[]>(STORY_FEED_QUERY_KEY, (stories) => {
     if (stories === undefined) return stories;
     if (!stories.some((s) => s.id === postId)) return stories;
@@ -523,7 +505,7 @@ const optimisticIdOf = (clientMutationId: string | undefined): string | undefine
  *    Le compteur a déjà été bougé quand on l'a posée : le toucher une seconde
  *    fois le ferait dériver.
  * 3. sinon ⇒ insertion, et le compteur suit (`shiftCommentCount`, le site
- *    unique qui tient les QUATRE caisses).
+ *    unique qui tient TOUTES les caisses qui l'affichent).
  *
  * Un post dont aucune liste n'est ouverte n'a rien à mettre à jour — ce n'est
  * pas une erreur, et lever y casserait l'écran d'à côté.
@@ -639,30 +621,17 @@ export function isCommentDeleted(payload: unknown): payload is CommentDeletedEve
  * total serveur, et un client qui redériverait un delta depuis une liste
  * PARTIELLE (page non chargée) diverge.
  *
- * **LES MÊMES CINQ CAISSES que son jumeau DELTA**, sans exception — c'est
- * l'ÉNUMÉRATION du doc-comment de `shiftCommentCount` qui fait foi, jamais
- * son titre (resté au compte d'avant #7120). La cinquième,
- * `storyPostQueryKey`, est justement celle qu'aucune des quatre autres
- * n'atteint : une story ouverte par LIEN, hors des 50 plus récentes, n'est
- * QUE là. Sans elle (revue-correction W8, #7227), quelqu'un supprimait son
- * commentaire sous la story qu'on regarde par lien, la ligne quittait le fil,
- * **et la pastille du rail restait au chiffre d'avant** — le défaut que
- * #7120 avait payé sur la voie ADDITIVE, rejoué sur la voie SERVIE.
+ * **LES MÊMES CAISSES que son jumeau DELTA**, sans exception — les caisses
+ * de CARTES par le registre (`updateCardPost`), puis les deux du lecteur de
+ * stories. `storyPostQueryKey` est justement celle qu'aucune autre n'atteint :
+ * une story ouverte par LIEN, hors des 50 plus récentes, n'est QUE là. Sans
+ * elle (revue-correction W8, #7227), quelqu'un supprimait son commentaire sous
+ * la story qu'on regarde par lien, la ligne quittait le fil, **et la pastille
+ * du rail restait au chiffre d'avant** — le défaut que #7120 avait payé sur la
+ * voie ADDITIVE, rejoué sur la voie SERVIE.
  */
 export function setCommentCountServed(queryClient: QueryClient, postId: string, count: number): void {
-  const withServed = (data: FeedInfiniteData | undefined): FeedInfiniteData | undefined => {
-    if (data === undefined) return data;
-    const pages = data.pages.map((page) => {
-      const posts = page.posts.map((p) => (p.id === postId && p.commentCount !== count ? { ...p, commentCount: count } : p));
-      return posts.every((p, i) => p === page.posts[i]) ? page : { ...page, posts };
-    });
-    return pages.every((pg, i) => pg === data.pages[i]) ? data : { ...data, pages };
-  };
-  queryClient.setQueryData<FeedInfiniteData>(FEED_QUERY_KEY, withServed);
-  queryClient.setQueriesData<FeedInfiniteData>({ queryKey: REELS_QUERY_ROOT }, withServed);
-  queryClient.setQueryData<FeedPost>(postQueryKey(postId), (post) =>
-    post === undefined || post.commentCount === count ? post : { ...post, commentCount: count },
-  );
+  updateCardPost(queryClient, postId, (post) => (post.commentCount === count ? post : { ...post, commentCount: count }));
   queryClient.setQueryData<readonly StoryFeedPost[]>(STORY_FEED_QUERY_KEY, (stories) => {
     if (stories === undefined) return stories;
     if (!stories.some((s) => s.id === postId)) return stories;
@@ -675,9 +644,10 @@ export function setCommentCountServed(queryClient: QueryClient, postId: string, 
 
 /**
  * LA CIBLE ET SES DESCENDANTS NOMMÉS QUITTENT LE FIL, sur TOUTES les pages ;
- * le compte SERVI se pose aux quatre caisses INCONDITIONNELLEMENT — même si
- * la liste de commentaires n'est pas ouverte, la carte du Flux, des Réels,
- * de la fiche ou du rail doit rester juste. `deletedCommentIds` porte le
+ * le compte SERVI se pose à chaque caisse qui l'affiche INCONDITIONNELLEMENT
+ * (`setCommentCountServed`) — même si la liste de commentaires n'est pas
+ * ouverte, la carte de chaque écran et la pastille du rail doivent rester
+ * justes. `deletedCommentIds` porte le
  * sous-arbre entier (soft-delete côté serveur) ; web n'a pas de réponses
  * imbriquées (pas de route `replies`), donc un id de réponse n'y trouve
  * simplement rien à retirer — sans effet, jamais une erreur.

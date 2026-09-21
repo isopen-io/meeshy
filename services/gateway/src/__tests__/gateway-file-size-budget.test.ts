@@ -103,10 +103,12 @@ const MAX_LINES = 1000;
  * `member_joined`, cinquième éventail de même forme) sont partis vers
  * `notification-preview.ts`, `push-header.ts`, `post-media-thumbnail.ts` et
  * `fanout/*.ts`, dans le même dossier — la mesure descend, jamais un fichier
- * ne quitte la classe elle-même.
+ * ne quitte la classe elle-même. Puis 4494 → 4477 (#7342, 2026-09-21) : la
+ * carte `data` du push reproduit est partie vers `reproducedNotificationPush.ts`
+ * avant d'y recevoir son marqueur — le fichier mesurait 4490.
  */
 const DETTE_HERITEE: Readonly<Record<string, number>> = {
-  'services/notifications/NotificationService.ts': 4494,
+  'services/notifications/NotificationService.ts': 4477,
   'socketio/CallEventsHandler.ts': 5181,
   'socketio/MeeshySocketIOManager.ts': 3816,
   'services/message-translation/MessageTranslationService.ts': 3303,

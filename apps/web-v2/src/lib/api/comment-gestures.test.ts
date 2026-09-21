@@ -752,7 +752,7 @@ describe('le compteur de commentaires bascule dans TOUS les caches qui le montre
     expect(threeCounts(queryClient)).toEqual({ feed: 8, reels: 8, detail: 8 });
   });
 
-  /** LA LIGNE QU'ON OUBLIE — `applyPostToggle` opère sur des pages EXISTANTES ;
+  /** LA LIGNE QU'ON OUBLIE — `mapCardPosts` opère sur des pages EXISTANTES ;
    * « incrémenter partout » sans cette garde ferait apparaître une ligne
    * fantôme dans un cache qui n'a jamais servi ce post. */
   test('une publication ABSENTE d’une racine n’y crée rien', async () => {

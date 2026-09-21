@@ -55,6 +55,7 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { NotificationService } from '../../../services/notifications/NotificationService';
 import { retractReactionNotifications } from '../../../services/notifications/retractReactionNotifications';
 import { retractMessageNotifications } from '../../../services/messaging/retractMessageNotifications';
+import { REPRODUCED_PUSH_FIELD, REPRODUCED_PUSH_VALUE } from '@meeshy/shared/types/reproduced-notification-push';
 
 const AUTHOR_ID = '64a000000000000000000001';
 const MENTIONED_ID = '64a000000000000000000002';
@@ -289,6 +290,25 @@ describe('NotificationService — push de révocation des bannières déjà livr
       // préférences — `PushNotificationService` applique DND et `pushEnabled`.
       expect(replacement.payload.silent).toBeUndefined();
       expect(replacement.bypassDnd).toBeUndefined();
+    });
+
+    /* Le web ne reçoit pas la révocation (#7308) : son worker prenait la
+       version d'après pour un doublon de la bannière d'avant, et l'écartait
+       (#7342). Le remplacement DÉCLARE qu'il corrige — la révocation, elle,
+       n'a rien à déclarer. */
+    it('le remplacement se DÉCLARE correction, pour le web qui ne reçoit pas la révocation', async () => {
+      prisma.notification.findUnique.mockResolvedValue(
+        makeRawNotification({ content: 'Rendez-vous à 18h finalement' })
+      );
+
+      await service.announceNotificationsReproduced([{ id: NOTIF_ID, userId: AUTHOR_ID }]);
+      await service.flushPendingRevocations();
+
+      const [revocation, replacement] = pushCalls();
+      expect({
+        revocation: revocation?.payload.data[REPRODUCED_PUSH_FIELD],
+        replacement: replacement?.payload.data[REPRODUCED_PUSH_FIELD],
+      }).toEqual({ revocation: undefined, replacement: REPRODUCED_PUSH_VALUE });
     });
 
     it('ne pousse aucun remplacement pour une ligne disparue entre la réécriture et l’annonce', async () => {

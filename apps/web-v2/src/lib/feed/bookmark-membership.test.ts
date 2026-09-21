@@ -7,7 +7,7 @@ import { bookmarkSlotOf, withBookmark, withoutBookmark } from './bookmark-member
 /**
  * **LE CORPUS DES ENREGISTRÉES EST UNE APPARTENANCE, PAS UN DRAPEAU** (#7286).
  *
- * `applyPostToggle` sait basculer `isBookmarkedByMe` là où la publication est
+ * `togglePost` sait basculer `isBookmarkedByMe` là où la publication est
  * DÉJÀ servie — c'est juste pour le Flux, les Réels et la fiche, où retirer un
  * signet laisse la carte en place, éteinte. Sur l'écran des enregistrées, la
  * même bascule rendrait une ligne QUI N'A PLUS DE RAISON D'Y ÊTRE : le corpus
