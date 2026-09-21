@@ -154,6 +154,9 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // orphelin l'a suivie. `MessageProcessor.ts` ne lit plus `Message` du tout.
   'messaging/messageDedupProjection.ts': { kind: 'applies', reads: 1, applications: 1 },
   'messaging/MessagingService.ts': { kind: 'applies', reads: 1, applications: 1 },
+  // #7377 — la liste des favoris de message charge `sender` pour chaque ligne
+  // servie ; sa portée est connue (les conversations des étoiles de la page).
+  'messaging/messageStars/StarredMessagesReader.ts': { kind: 'applies', reads: 1, applications: 1 },
 
   'AttachmentReactionService.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'attachments/attachmentReadVerdict.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
@@ -181,6 +184,10 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   'messaging/messageMentions.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/messageNotificationFanOut.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
   'messaging/messageRemovalEffects.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #7377 — la pose d'une étoile : `STAR_ADMISSION_MESSAGE_SELECT`, les seules
+  // colonnes du verdict (identifiant, conversation, type, dates, protection),
+  // jamais `sender`.
+  'messaging/messageStars/MessageStarWriter.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'messaging/reproduceEditedMessageNotifications.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'notifications/NotificationService.ts': { kind: 'exempt', reads: 3, why: DOES_NOT_SELECT_SENDER },
   'notifications/reactionNotify.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },

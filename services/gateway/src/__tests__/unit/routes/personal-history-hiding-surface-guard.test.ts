@@ -415,6 +415,16 @@ const SERVICE_LAYER_SURFACES: Record<string, Classification> = {
    * MÉMOIRE ci-dessous, seule forme que le balayage puisse prouver ici.
    */
   'unreadCountsCore.ts': { kind: 'applies', reads: 1, applications: 0 },
+
+  /**
+   * #7377 — la liste des favoris de message. Sa lecture unique charge les
+   * messages étoilés d'une page qui traverse PLUSIEURS conversations :
+   * `applyPersonalHistoryHiding` ne merge qu'un SEUL `where`, d'où
+   * `applications: 0` et le masquage appliqué EN MÉMOIRE, conversation par
+   * conversation, après le keyset — même forme que `sync/messages.ts`. Les
+   * marqueurs de `IN_MEMORY_HIDING_SURFACES` ci-dessous en sont la preuve.
+   */
+  'messaging/messageStars/StarredMessagesReader.ts': { kind: 'applies', reads: 1, applications: 0 },
 };
 
 /**
@@ -452,6 +462,22 @@ const IN_MEMORY_HIDING_SURFACES: Record<string, readonly string[]> = {
    * ce qu'il garde.
    */
   'unreadCountsCore.ts': ['exclusiveFloorMsFor(', '!hidden.has('],
+
+  /**
+   * #7377 — la liste des favoris CHARGE le masquage de chaque conversation de
+   * la page et le remet au verdict de lecture ; le verdict porte les deux
+   * coupes, exigées séparément parce qu'elles se perdent séparément : les
+   * messages retirés un par un (`hiddenMessageIds.includes(`) et l'historique
+   * effacé (`clearHistoryBefore`, comparé en `gte` comme le `where` partagé).
+   */
+  'messaging/messageStars/StarredMessagesReader.ts': [
+    'loadPersonalHistoryHidingByConversation(',
+    'readableByReader(',
+  ],
+  'messaging/messageStars/starredMessageVerdict.ts': [
+    'reader.hiding.hiddenMessageIds.includes(',
+    'const cutoff = reader.hiding.clearHistoryBefore;',
+  ],
 
   /**
    * La passe par LECTEURS de `buildBridgeDataForViewers` (REV-5/B2) a la MÊME

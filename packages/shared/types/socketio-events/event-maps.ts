@@ -158,6 +158,7 @@ import type {
   MessageSendData,
   MessageSendResponseData,
   MessageSendWithAttachmentsData,
+  MessageStarredEventData,
   MessageUnpinnedEventData,
   ReadStatusUpdatedEventData,
   SocketIOMessage,
@@ -277,6 +278,9 @@ export interface ServerToClientEvents {
   // Message pinning
   [SERVER_EVENTS.MESSAGE_PINNED]: (data: MessagePinnedEventData) => void;
   [SERVER_EVENTS.MESSAGE_UNPINNED]: (data: MessageUnpinnedEventData) => void;
+
+  // Favori de message — room personnelle du lecteur (#7377)
+  [SERVER_EVENTS.MESSAGE_STARRED]: (data: MessageStarredEventData) => void;
 
   // Location sharing
   [SERVER_EVENTS.LOCATION_LIVE_STARTED]: (data: LocationLiveStartedEventData) => void;
