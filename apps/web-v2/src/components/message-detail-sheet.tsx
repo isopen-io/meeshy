@@ -2,6 +2,8 @@ import { flag, languageName } from '@/lib/languages';
 import type { Attachment } from '@/lib/api/types';
 import type { TranslationChoice } from '@/lib/view/message-actions';
 
+import { hasServerMessageId } from '@/lib/view/message-receipts';
+
 import { MessageReceiptsSheet } from './message-receipts-sheet';
 import { STATUS_LABEL } from './message-blocks';
 import type { Delivery } from '@/lib/view/message';
@@ -22,6 +24,11 @@ import { Sheet } from './sheet';
  * mien », déjà posé par l'appelant (`isMineOf`, `thread.tsx`). Un message
  * REÇU n'a pas d'accusé nominatif à lire sur lui-même — la feuille ne fait
  * aucune requête pour lui, exactement comme `STATUS_LABEL` ne peint rien.
+ * SECONDE moitié de la garde, `hasServerMessageId` : un message encore
+ * OPTIMISTE porte son `clientMessageId` (`cid_…`) et n'existe pas côté
+ * serveur — `delivery` vaut pourtant « envoyé » pour lui (`deliveryOf` lit
+ * `deliveredCount: 0` ainsi). iOS pose exactement cette garde avant
+ * `loadReadStatus()` (`MessageViewsDetailView.swift:943`).
  */
 export function MessageDetailSheet({
   choices,
@@ -98,7 +105,7 @@ export function MessageDetailSheet({
         {delivery !== null ? <span style={{ color: 'var(--color-ios-ink-2)' }}> · {STATUS_LABEL[delivery]}</span> : null}
       </li>
 
-      {delivery !== null ? (
+      {delivery !== null && hasServerMessageId(messageId) ? (
         <MessageReceiptsSheet conversationId={conversationId} messageId={messageId} attachments={attachments} />
       ) : null}
     </Sheet>

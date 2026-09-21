@@ -1,8 +1,5 @@
-import { messageTypeFromMimeTypes } from '@meeshy/shared/utils/attachment-message-type';
-
 import type { AttachmentStatusRow } from '@/lib/api/attachments';
 import type { ReceiptPersonRow } from '@/lib/api/receipts';
-import type { Attachment } from '@/lib/api/types';
 
 /**
  * LA FICHE « INFOS DU MESSAGE » — LOIS PURES (#7226, W7). Aucun réseau,
@@ -28,15 +25,31 @@ export type ReceiptCategories = {
  * `message-detail-sheet.tsx`).
  */
 export function receiptCategoriesOf(people: readonly ReceiptPersonRow[]): ReceiptCategories {
-  const readBy: ReceiptPersonRow[] = [];
-  const receivedBy: ReceiptPersonRow[] = [];
-  const notYet: ReceiptPersonRow[] = [];
-  for (const person of people) {
-    if (person.readAt !== null) readBy.push(person);
-    else if (person.receivedAt !== null) receivedBy.push(person);
-    else notYet.push(person);
-  }
-  return { readBy, receivedBy, notYet };
+  return {
+    readBy: people.filter((person) => person.readAt !== null),
+    receivedBy: people.filter((person) => person.readAt === null && person.receivedAt !== null),
+    notYet: people.filter((person) => person.readAt === null && person.receivedAt === null),
+  };
+}
+
+/**
+ * UN MESSAGE ENCORE OPTIMISTE N'A RIEN À RACONTER — miroir de
+ * `MessageViewsDetailView.messageHasServerId`
+ * (`apps/ios/Meeshy/Features/Main/Components/MessageDetail/
+ * MessageViewsDetailView.swift:927-933`), qui garde `loadReadStatus()` par
+ * la MÊME question. Tant que l'envoi n'est pas confirmé, `Message.id` EST
+ * `clientMessageId` (`cid_<uuid>`, `api/client-message-id.ts`) : aucune
+ * ligne de la base ne porte cet identifiant, et
+ * `GET /conversations/:id/receipts?detail=people&messageIds=cid_…` se fait
+ * refuser par la validation ObjectId de la passerelle
+ * (`resolveRequestedMessageIds`, `routes/conversations/receipts.ts`). Sans
+ * cette garde, ouvrir « Plus… » sur le message qu'on vient d'envoyer
+ * lançait une requête vouée au 400 puis peignait « Impossible de charger
+ * ces informations » — un ÉCHEC affiché là où il n'y a, simplement, encore
+ * rien à lire.
+ */
+export function hasServerMessageId(messageId: string): boolean {
+  return /^[0-9a-f]{24}$/i.test(messageId);
 }
 
 export type AttachmentAggregate = {
@@ -73,12 +86,6 @@ export function positionFraction(params: {
   if (params.durationMs === undefined || params.durationMs <= 0) return 0;
   if (params.positionMs === null) return 0;
   return Math.min(1, Math.max(0, params.positionMs / params.durationMs));
-}
-
-/** Classe UNE pièce jointe — SSOT partagée (`attachment-message-type.ts`),
- * jamais une relecture manuelle de `mimeType`. */
-export function attachmentKindOf(attachment: Pick<Attachment, 'mimeType'>): 'image' | 'audio' | 'video' | 'file' {
-  return messageTypeFromMimeTypes([attachment.mimeType]) ?? 'file';
 }
 
 /** Le badge « Nx » — n'apparaît qu'à partir de DEUX écoutes/visionnages

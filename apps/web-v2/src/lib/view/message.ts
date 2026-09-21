@@ -81,7 +81,7 @@ export const checkStatusOf = (message: Message, local: LocalDelivery | undefined
  * une même pièce, et c'est le genre d'écart qui ne se voit que sur un format
  * rare.
  */
-export const kindOf = (attachment: Attachment): 'image' | 'audio' | 'video' | 'file' =>
+export const kindOf = (attachment: Pick<Attachment, 'mimeType'>): 'image' | 'audio' | 'video' | 'file' =>
   messageTypeFromMimeTypes([attachment.mimeType]) ?? 'file';
 
 /** Les traductions d'un message, ramenées à ce qu'une puce de langue affiche. */

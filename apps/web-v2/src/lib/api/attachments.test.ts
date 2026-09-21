@@ -146,7 +146,10 @@ describe('fetchAttachmentStatusDetails — gateway', () => {
 
     const result = await fetchAttachmentStatusDetails({ source: 'gateway', transport, attachmentId: 'att-1' });
 
-    expect(calls[0]?.url).toBe('/api/v1/attachments/att-1/status-details');
+    // `limit` PART TOUJOURS, au plafond de la route : la feuille somme les
+    // lignes servies, une page de vingt fausserait « ouvertures » /
+    // « téléchargements » dès le vingt-et-unième consommateur.
+    expect(calls[0]?.url).toBe('/api/v1/attachments/att-1/status-details?limit=100');
     expect(calls[0]?.init.method).toBe('GET');
     expect(result.ok).toBe(true);
     if (result.ok) {

@@ -5,7 +5,7 @@ import type { ReceiptPersonRow } from '@/lib/api/receipts';
 
 import {
   attachmentAggregateOf,
-  attachmentKindOf,
+  hasServerMessageId,
   playCountLabel,
   positionFraction,
   receiptCategoriesOf,
@@ -107,18 +107,19 @@ describe('positionFraction — mirroir de MessageViewsDetailView.positionFractio
   });
 });
 
-describe('attachmentKindOf', () => {
-  const cases: readonly (readonly [string, 'audio' | 'video' | 'image' | 'file'])[] = [
-    ['audio/webm', 'audio'],
-    ['video/mp4', 'video'],
-    ['image/png', 'image'],
-    ['application/pdf', 'file'],
-  ];
-  for (const [mimeType, kind] of cases) {
-    test(`${mimeType} ⇒ ${kind}`, () => {
-      expect(attachmentKindOf({ mimeType })).toBe(kind);
-    });
-  }
+describe('hasServerMessageId — la garde du message encore OPTIMISTE', () => {
+  test('un ObjectId (24 hex) ⇒ lisible côté serveur', () => {
+    expect(hasServerMessageId('66f0a1b2c3d4e5f6a7b8c9d0')).toBe(true);
+  });
+
+  test('un clientMessageId `cid_…` ⇒ AUCUNE requête ne doit partir', () => {
+    expect(hasServerMessageId('cid_2f1c8b0e-4a6d-4c11-9b5e-0f9a7c3d2e18')).toBe(false);
+  });
+
+  test('une chaîne vide ou tronquée ⇒ faux', () => {
+    expect(hasServerMessageId('')).toBe(false);
+    expect(hasServerMessageId('66f0a1b2c3d4e5f6a7b8c9')).toBe(false);
+  });
 });
 
 describe('playCountLabel', () => {

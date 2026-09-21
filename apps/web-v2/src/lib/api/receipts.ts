@@ -167,7 +167,12 @@ export async function fetchMessageReceiptsPeople(
       },
     };
   }
-  const query = new URLSearchParams({ detail: 'people', messageIds: params.messageId });
+  // `limit` EXPLICITE au maximum de la route (`RECEIPTS_PEOPLE_MAX_LIMIT`,
+  // `routes/conversations/receipts-contracts.ts:42`) : le défaut de la
+  // passerelle est 20, et la feuille AGRÈGE ce qu'elle reçoit (trois
+  // sections nominatives) sans lire `hasMore` — une conversation de plus de
+  // vingt membres aurait donc affiché une liste tronquée SANS le dire.
+  const query = new URLSearchParams({ detail: 'people', messageIds: params.messageId, limit: '100' });
   return params.transport.request<ReceiptsPeoplePayload>({
     method: 'GET',
     path: `/api/v1/conversations/${params.conversationId}/receipts?${query.toString()}`,

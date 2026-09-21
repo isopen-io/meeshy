@@ -165,9 +165,14 @@ export async function fetchAttachmentStatusDetails(
     const statuses = attachmentStatusFixtureOf(params.attachmentId);
     return { ok: true, data: statuses, pagination: { total: statuses.length, limit: 20, offset: 0, hasMore: false } };
   }
+  // Même raison que `fetchMessageReceiptsPeople` : les agrégats « ouvertures »
+  // et « téléchargements » se SOMMENT sur les lignes servies, donc une page de
+  // vingt (le défaut de la route, `messages-reads.ts:585`) donnerait un total
+  // FAUX dès le vingt-et-unième consommateur. 100 est le plafond de la route
+  // (`validatePagination(…, { maxLimit: 100 })`).
   const query = new URLSearchParams({
     ...(params.offset !== undefined ? { offset: String(params.offset) } : {}),
-    ...(params.limit !== undefined ? { limit: String(params.limit) } : {}),
+    limit: String(params.limit ?? 100),
     ...(params.filter !== undefined ? { filter: params.filter } : {}),
   });
   const search = query.toString();

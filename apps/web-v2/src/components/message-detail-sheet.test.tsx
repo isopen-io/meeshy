@@ -34,7 +34,9 @@ afterEach(() => {
   appQueryClient.clear();
 });
 
-async function mountSheet(delivery: 'sent' | null) {
+const SERVER_MESSAGE_ID = '66f0a1b2c3d4e5f6a7b8c9d0';
+
+async function mountSheet(delivery: 'sent' | null, messageId: string = SERVER_MESSAGE_ID) {
   return mounter.mount(
     <QueryClientProvider client={appQueryClient}>
       <MessageDetailSheet
@@ -44,7 +46,7 @@ async function mountSheet(delivery: 'sent' | null) {
         delivery={delivery}
         locale="fr-FR"
         conversationId="c-deploiement"
-        messageId="m-x"
+        messageId={messageId}
         attachments={[]}
         onPickLanguage={() => undefined}
         onClose={() => undefined}
@@ -61,6 +63,20 @@ describe('MessageDetailSheet — la garde de « Infos du message »', () => {
 
   test('message REÇU (delivery nul) ⇒ AUCUNE section, aucune requête engagée', async () => {
     const host = await mountSheet(null);
+    expect(host.querySelector('[data-message-receipts-title]')).toBe(null);
+  });
+
+  /**
+   * LA SECONDE MOITIÉ DE LA GARDE — un message ENCORE OPTIMISTE porte son
+   * `clientMessageId` (`cid_…`) et n'existe pas côté serveur, alors que
+   * `deliveryOf` le rend « envoyé » (`deliveredCount: 0` ⇒ `'sent'`). Sans
+   * `hasServerMessageId`, ouvrir « Plus… » juste après l'envoi lançait un
+   * `GET …/receipts?detail=people&messageIds=cid_…` voué au 400, puis
+   * peignait « Impossible de charger ces informations ». iOS pose la même
+   * garde (`MessageViewsDetailView.swift:943`).
+   */
+  test('message ENVOYÉ mais encore OPTIMISTE (`cid_…`) ⇒ aucune section', async () => {
+    const host = await mountSheet('sent', 'cid_2f1c8b0e-4a6d-4c11-9b5e-0f9a7c3d2e18');
     expect(host.querySelector('[data-message-receipts-title]')).toBe(null);
   });
 });

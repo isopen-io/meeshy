@@ -174,7 +174,7 @@ describe('fetchMessageReceiptsPeople — gateway', () => {
 
     const result = await fetchMessageReceiptsPeople({ source: 'gateway', transport, conversationId: 'c1', messageId: 'm9' });
 
-    expect(calls[0]?.url).toBe('/api/v1/conversations/c1/receipts?detail=people&messageIds=m9');
+    expect(calls[0]?.url).toBe('/api/v1/conversations/c1/receipts?detail=people&messageIds=m9&limit=100');
     expect(calls[0]?.init.method).toBe('GET');
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -209,10 +209,12 @@ describe('fetchMessageReceiptsPeople — fixtures', () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.data.people.length).toBeGreaterThan(0);
-      // Même conversation ⇒ même liste au second appel (déterministe).
-      void fetchMessageReceiptsPeople({ source: 'fixtures', transport, conversationId: 'c-deploiement', messageId: 'm9' }).then((second) => {
-        if (second.ok) expect(second.data.people).toEqual(result.data.people);
-      });
+      // Même conversation ⇒ même liste au second appel (déterministe). ATTENDU,
+      // pas lancé : une assertion posée dans un `.then()` flottant s'exécute
+      // APRÈS la fin du test et ne peut plus le faire rougir.
+      const second = await fetchMessageReceiptsPeople({ source: 'fixtures', transport, conversationId: 'c-deploiement', messageId: 'm9' });
+      expect(second.ok).toBe(true);
+      if (second.ok) expect(second.data.people).toEqual(result.data.people);
     }
   });
 });

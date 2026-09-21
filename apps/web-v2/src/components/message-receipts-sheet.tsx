@@ -9,10 +9,10 @@ import type { Attachment } from '@/lib/api/types';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { initialsOf } from '@/lib/view/conversation';
-import { formatMediaTime } from '@/lib/view/media-transport';
+import { attachmentDurationLabel, formatMediaTime } from '@/lib/view/media-transport';
+import { kindOf } from '@/lib/view/message';
 import {
   attachmentAggregateOf,
-  attachmentKindOf,
   playCountLabel,
   positionFraction,
   receiptCategoriesOf,
@@ -91,8 +91,17 @@ export function MessageReceiptsSheet({
           {translate(lang, 'message-detail.loading')}
         </li>
       ) : peopleQuery.isError ? (
-        <li className="px-4 pb-3 text-body" style={{ color: 'var(--color-ios-ink-3)' }} data-message-receipts-error>
-          {translate(lang, 'message-detail.load-error')}
+        <li className="flex items-center gap-3 px-4 pb-3 text-body" style={{ color: 'var(--color-ios-ink-3)' }} data-message-receipts-error>
+          <span className="flex-1">{translate(lang, 'message-detail.load-error')}</span>
+          <button
+            type="button"
+            className="rounded-full px-3 font-semibold"
+            style={{ minHeight: 44, color: 'var(--color-primary)' }}
+            onClick={() => void peopleQuery.refetch()}
+            data-message-receipts-retry
+          >
+            {translate(lang, 'message-detail.retry')}
+          </button>
         </li>
       ) : (
         <ReceiptPeopleSections people={peopleQuery.data ?? []} lang={lang} />
@@ -216,10 +225,10 @@ function AttachmentReceiptCard({
   readonly isLoading: boolean;
   readonly lang: InterfaceLanguage;
 }) {
-  const kind = attachmentKindOf(attachment);
+  const kind = kindOf(attachment);
   const { opens, downloads } = attachmentAggregateOf(rows);
   const name = attachment.title !== undefined && attachment.title.length > 0 ? attachment.title : attachment.originalName;
-  const durationLabel = attachment.duration !== undefined && attachment.duration > 0 ? formatMediaTime(attachment.duration / 1000) : null;
+  const durationLabel = attachmentDurationLabel(attachment.duration);
   const isTimebased = kind === 'audio' || kind === 'video';
   const kindGlyph: GlyphName = kind === 'audio' ? 'microphone' : kind === 'video' ? 'fillPlay' : kind === 'image' ? 'image' : 'file';
 
@@ -311,6 +320,15 @@ function PlaybackRow({
             aria-valuemax={100}
             aria-valuenow={Math.round(fraction * 100)}
             aria-label={row.username}
+            {...(positionLabel === null
+              ? {}
+              : {
+                  'aria-valuetext': translate(
+                    lang,
+                    kind === 'audio' ? 'message-detail.attachment.listened-until' : 'message-detail.attachment.watched-until',
+                    { time: positionLabel },
+                  ),
+                })}
           >
             <div className="h-1 rounded-full" style={{ width: `${fraction * 100}%`, backgroundColor: 'var(--color-primary)' }} />
           </div>
