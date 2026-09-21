@@ -58,12 +58,14 @@ export async function loadPost(
  * registre) ; seule une modification que la passerelle ne DIFFUSE pas peut
  * attendre la fenêtre.
  *
- * **La fenêtre est neutralisée dans `usePost`, et c'est assumé** :
- * `query.ts:206` repose `staleTime: 0` APRÈS avoir répandu cette fabrique —
- * cache-first par `initialData` (la carte déjà reçue par le fil, datée du
- * fil), revalidation en fond, justifié par son propre doc-comment et hors
- * périmètre de #6974. La valeur ci-dessous gouverne donc la GRAINE des Réels
- * (`routes/reels.tsx:167`, qui ne repose rien), et tout consommateur à venir.
+ * **La fenêtre est neutralisée dans `usePost`, et c'est assumé** : `usePost`
+ * (`query.ts`) repose `staleTime: 0` APRÈS avoir répandu cette fabrique —
+ * cache-first par `initialData` (la carte de n'importe quelle caisse du
+ * registre, datée de sa caisse — `cachedCardSeed`, #7384), revalidation en
+ * fond, justifié par son propre doc-comment et hors périmètre de #6974. La
+ * valeur ci-dessous gouverne donc la GRAINE des Réels (`routes/reels.tsx`, qui
+ * ne repose rien : une graine amorcée d'une caisse de moins de cinq minutes
+ * n'est pas relue), et tout consommateur à venir.
  */
 export const PUBLICATION_STALE_TIME = 5 * 60_000;
 

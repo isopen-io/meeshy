@@ -1,9 +1,10 @@
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { FEED_GLYPHS } from '@/components/glyphs-feed';
 import { ReelPage } from '@/components/reel-page';
+import { cachedCardSeed } from '@/lib/api/card-caches';
 import { apiDeps } from '@/lib/api/deps';
 import { feedQuery } from '@/lib/api/feed';
 import type { FeedPost } from '@/lib/api/feed-pages';
@@ -26,12 +27,13 @@ import { href, navigate } from '@/routes/route-table';
  * LES RÉELS (#6457) — miroir de `ReelsPlayerView` et `ReelsViewModel` (iOS) :
  * un pager VERTICAL plein écran, un réel à la fois.
  *
- * - **Ouverture instantanée** : les réels déjà reçus par le Flux (et la graine,
- *   si le détail d'une publication l'a déjà lue) se peignent au premier rendu,
- *   sans requête ; le fil de la passerelle (`scope=reels`, affinité à la graine)
- *   s'ajoute DERRIÈRE. Un squelette n'apparaît qu'à cache vide, ou le temps de
- *   lire une graine inconnue (lien profond) — la poser après coup en tête
- *   déplacerait le réel regardé.
+ * - **Ouverture instantanée** : les réels déjà reçus par le Flux, et la graine
+ *   dès qu'une caisse du registre la porte (`card-caches.ts` : hashtag, profil,
+ *   enregistrées, fiche — #7384), se peignent au premier rendu ; le fil de la
+ *   passerelle (`scope=reels`, affinité à la graine) s'ajoute DERRIÈRE. Un
+ *   squelette n'apparaît qu'à cache vide, ou le temps de lire une graine
+ *   inconnue (lien profond) — la poser après coup en tête déplacerait le réel
+ *   regardé.
  * - **Le défilement est celui du navigateur** : `scroll-snap` obligatoire, un
  *   arrêt par réel (`snap-always`). Le geste reste sur le compositeur — aucun
  *   suivi du doigt réécrit en JavaScript, aucune transition qui l'amortit. Le
@@ -162,13 +164,21 @@ export default function ReelsScreen() {
 
   /* Le Flux est OBSERVÉ, jamais rechargé d'ici : ses réels ouvrent le lecteur,
      et ses bascules (aimer, enregistrer) s'y reflètent. */
+  const queryClient = useQueryClient();
   const feed = useInfiniteQuery({ ...feedQuery(apiDeps), enabled: false });
   const feedPosts = feed.data ?? EMPTY_POSTS;
   const [entryIds] = useState(() => entryReelIds({ ...(seed !== undefined ? { seedId: seed } : {}), feedPosts }));
-  const seedCached = seed !== undefined && feedPosts.some((post) => post.id === seed);
+  /* LA GRAINE EST CONNUE DE TOUTE CAISSE QUI LA PEINT (#7384) — le Flux, un
+     hashtag, un profil, les enregistrées, la fiche : la MÊME recherche que la
+     fiche (`cachedCardSeed`), datée de sa caisse. La requête naît alors
+     réussie, et sa fraîcheur (`PUBLICATION_STALE_TIME`) juge l'âge RÉEL de la
+     carte : récente, aucune relecture ; ancienne, une relecture en fond, sous
+     le réel déjà peint. Une graine qu'aucune caisse ne porte (lien profond) se
+     lit, et le squelette tient le temps de la lire. */
   const seedPost = useQuery({
     ...postQueryOptions({ ...apiDeps, postId: seed ?? '' }),
-    enabled: seed !== undefined && !seedCached,
+    ...cachedCardSeed(queryClient, seed ?? ''),
+    enabled: seed !== undefined,
     retry: false,
   });
   const reels = useInfiniteQuery(reelsQuery(apiDeps, seed));
