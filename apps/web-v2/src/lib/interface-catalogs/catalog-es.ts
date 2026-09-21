@@ -90,6 +90,7 @@ const es = {
   'feed.newPosts.other': '{count} publicaciones nuevas',
   'a11y.avatar.profile': 'Ver el perfil de {name}',
   'a11y.avatar.story': 'Ver la historia de {name}',
+  'userProfile.self.edit': 'Editar mi perfil',
   'feed.like.error': 'Error al dar me gusta',
   'post.bookmark.error': 'No se pudo guardar',
   'feed.gesture.pending': 'Acción no confirmada — sin conexión',

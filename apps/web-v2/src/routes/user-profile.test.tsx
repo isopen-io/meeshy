@@ -389,3 +389,51 @@ describe('« Charger plus »', () => {
   });
 });
 
+/**
+ * **LES DEUX GESTES QUI MANQUAIENT À LA FICHE** (#7188).
+ *
+ * Le relevé d'ouverture avait trouvé la fiche SAINE — aucun contrôle inerte,
+ * la loi 4 tenue partout, et même mieux que sur iOS (la tuile « Stories » y est
+ * un bouton mort, ici un `<span>`). Ce qui manquait n'était donc pas à
+ * réparer, mais à AJOUTER.
+ */
+describe('la fiche rend les gestes qui lui manquaient (#7188)', () => {
+  /**
+   * COMMENTER — le compteur retombait en `<span>` muet parce que l'hôte ne
+   * passait pas `onComment` (`feed-post-card.tsx:154-162`) : conforme à la
+   * loi 4, un bouton sans effet mentirait — mais la fonction MANQUAIT, alors
+   * que le Flux la sert depuis toujours et que `/post/$post` est routé.
+   *
+   * Le témoin interroge le BOUTON plutôt que le handler : c'est l'effet qui
+   * compte, et le dépôt a déjà payé une zone cliquable sans effet (cycle 123).
+   */
+  test('le compteur de commentaires d’une publication est un bouton', async () => {
+    const el = await mount('kwame-mensah');
+
+    expect(el.querySelector('[data-feed-gesture="comment"]')).not.toBe(null);
+  });
+
+  /**
+   * SA PROPRE FICHE MÈNE À SON ÉDITION. Masquer les gestes relationnels sur soi
+   * est juste — on ne s'ajoute pas en ami — mais rien n'était mis à la place :
+   * aucun chemin vers `/me`, donc un cul-de-sac.
+   */
+  test('sur sa propre fiche, un chemin mène à l’édition', async () => {
+    const el = await mount('vous');
+
+    const lien = el.querySelector('[data-profile-self] a');
+    expect(lien).not.toBe(null);
+    expect(lien?.getAttribute('href')).toBe('/me');
+    expect(text(lien)).toBe('Modifier mon profil');
+  });
+
+  /**
+   * LE CONTRE-TÉMOIN — sans lui, on pourrait poser l'entrée d'édition sur
+   * TOUTES les fiches, et proposer à chacun de modifier le profil d'un autre.
+   */
+  test('sur la fiche d’un tiers, aucune entrée d’édition', async () => {
+    const el = await mount('kwame-mensah');
+
+    expect(el.querySelector('[data-profile-self]')).toBe(null);
+  });
+});
