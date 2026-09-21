@@ -71,7 +71,7 @@ datasets==5.0.1
 # ==0.1.97 (metadata PyPI d'espnet) ; un uv pip compile confirmerait le conflit.
 huggingface_hub==1.31.0
 safetensors==0.8.0
-peft==0.20.0
+peft==0.21.0
 # PIN EXACT — comme toute lib ML de ce fichier. Le service tourne SCIEMMENT sur
 # transformers 5.x : la task « translation » a disparu du PIPELINE_REGISTRY en 5.0
 # et NLLB passe depuis par un wrapper maison (cf. TRANSFORMERS_V5_MIGRATION.md).
