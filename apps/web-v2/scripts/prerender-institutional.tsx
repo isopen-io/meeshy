@@ -11,7 +11,7 @@
  *    exactement la dépense que ce produit refuse.
  * 2. **Les métadonnées.** Une application à page unique sert UN document : son
  *    `<title>` et ses `og:` sont les mêmes pour toutes les adresses. Or ces
- *    cinq pages sont précisément celles que les moteurs et les plateformes de
+ *    sept pages sont précisément celles que les moteurs et les plateformes de
  *    partage lisent. Un `<title>` posé par JavaScript arrive après le robot.
  *
  * Le résultat est un fichier par page : HTML + sa feuille INLINÉE + zéro
@@ -99,13 +99,13 @@ const ORIGIN = process.env.MEESHY_PUBLIC_ORIGIN ?? 'https://meeshy.me';
  * La feuille DÉDIÉE à ces pages — pas celle de l'application.
  *
  * Vite en produit deux (voir `vite.config.ts`) : `index-*.css` porte toute
- * l'application, `institutional-*.css` ne porte que ce que ces cinq pages
+ * l'application, `institutional-*.css` ne porte que ce que ces sept pages
  * rendent. Inliner la première leur ferait transporter les styles de la liste,
- * du fil et du composeur — mesuré, 2,1 Ko gzip de trop par page, payés cinq
+ * du fil et du composeur — mesuré, 2,1 Ko gzip de trop par page, payés sept
  * fois et jamais mis en cache.
  *
  * L'échec est BRUYANT si le fichier manque : une feuille silencieusement
- * absente rendrait cinq pages de texte brut, servies en 200.
+ * absente rendrait sept pages de texte brut, servies en 200.
  */
 function producedSheet(): string {
   const assets = join(DIST, 'assets');
@@ -296,7 +296,7 @@ console.log(`  ${' '.repeat(10)}${String(Math.round((total / 1024) * 100) / 100)
 /**
  * LE GATE (revue de #5606, défaut 3) — un dépassement rend le script en
  * erreur, comme `scripts/measure-weight.mjs` le fait déjà pour la première
- * peinture de l'application. Après l'affichage des cinq lignes : le rapport
+ * peinture de l'application. Après l'affichage des sept lignes : le rapport
  * complet sert de preuve même quand une seule page dépasse.
  */
 if (overBudget.length > 0) {
