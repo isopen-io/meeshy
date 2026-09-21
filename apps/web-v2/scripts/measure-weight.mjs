@@ -12,7 +12,7 @@
  *   node scripts/measure-weight.mjs [--dist <chemin>] [--json] [--ratchet]
  */
 import { gzipSync } from 'node:zlib';
-import { readFileSync, readdirSync, existsSync, writeFileSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync, statSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -65,12 +65,17 @@ const documentGzip = gzipSync(Buffer.from(index), { level: 9 }).length;
 
 // Tout le reste du repertoire : les ecrans a la demande.
 const allAssets = [];
+/** Les polices sont relevees dans la MEME traversee, mais a part : une police
+ * n'est pas un MODULE (aucun chunk ne l'importe), et elle se mesure en octets
+ * BRUTS — voir plus bas. Deux traversees auraient fini par diverger. */
+const fontFiles = [];
 const walk = (dir, prefix = '') => {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const path = join(dir, entry.name);
     const relatif = prefix ? `${prefix}/${entry.name}` : entry.name;
     if (entry.isDirectory()) walk(path, relatif);
     else if (/\.(js|css)$/.test(entry.name)) allAssets.push({ file: relatif, gzip: gz(path) });
+    else if (entry.name.endsWith('.woff2')) fontFiles.push({ file: relatif, bytes: statSync(path).size });
   }
 };
 walk(dist);
@@ -102,6 +107,62 @@ const budgets = JSON.parse(readFileSync(BUDGETS_PATH, 'utf8'));
 const profile = budgets.network.profile;
 /** Le temps de TELECHARGEMENT seul, hors latence — un plancher, jamais un LCP. */
 const seconds = (bytes) => Math.round(((bytes * 8) / profile.download_bps) * 100) / 100;
+
+/**
+ * LES POLICES DES STORIES (#6951) — mesurées en octets BRUTS, et c'est une
+ * correction, pas une approximation : un WOFF2 porte déjà sa compression
+ * (Brotli), et le regzipper l'ALOURDIT. Mesuré sur les treize familles, le
+ * gzip -9 rend plus d'octets que le fichier lui-même — une somme en gzip
+ * dirait donc un poids que personne ne télécharge.
+ *
+ * Elles ne passent pas par `allAssets` (qui ne collecte que `.js` et `.css`)
+ * parce qu'une police n'est pas un MODULE : aucun chunk ne l'importe, c'est
+ * le navigateur qui la demande quand un caractère de son `unicode-range` doit
+ * être peint. Son coût est donc conditionnel par nature, et les TROIS gardes
+ * ci-dessous portent sur les trois façons de le rendre inconditionnel :
+ * la faire entrer dans la feuille CRITIQUE, la faire PRÉCACHER par le service
+ * worker, ou en ajouter une sans le dire.
+ */
+const fontsSpec = budgets.story_fonts ?? {};
+const fontPattern = new RegExp(fontsSpec.pattern ?? '^$');
+
+const storyFonts = fontFiles.filter((f) => fontPattern.test(f.file));
+const storyFontsBytes = storyFonts.reduce((s, f) => s + f.bytes, 0);
+const fontFailures = [];
+
+const declaredFiles = fontsSpec.files?.value;
+if (typeof declaredFiles === 'number' && storyFonts.length !== declaredFiles) {
+  fontFailures.push(
+    `  INVENTAIRE : ${storyFonts.length} police(s) produite(s), ${declaredFiles} declaree(s)` +
+      ` (budgets.json › story_fonts.files) — une famille de moins, c'est une famille que le studio propose et que personne ne peint`,
+  );
+}
+const declaredBytes = fontsSpec.bytes?.value;
+if (typeof declaredBytes === 'number' && storyFontsBytes !== declaredBytes) {
+  fontFailures.push(
+    `  CLIQUET : ${storyFontsBytes} octets de polices, ${declaredBytes} declares (budgets.json › story_fonts.bytes)` +
+      ` — un binaire ne DERIVE pas, donc cet ecart est une SUBSTITUTION : la rouvrir est le geste attendu, pas la contourner`,
+  );
+}
+
+/** Une `@font-face` dans un fichier CRITIQUE ferait payer sa regle a tous les
+ * lecteurs, et rapprocherait la police d'un telechargement au premier pixel. */
+const criticalFontFaces = critical
+  .filter((c) => c.file.endsWith('.css'))
+  .filter((c) => readFileSync(join(dist, c.file), 'utf8').includes('@font-face'))
+  .map((c) => c.file);
+
+/**
+ * ET LE PRECACHE, qui est la facon la plus chere de se tromper : `globPatterns`
+ * nommait `woff2`, donc Workbox inscrivait les TREIZE fichiers au manifeste et
+ * chaque visiteur les telechargeait A L'INSTALLATION — 247 Ko, plus de quatre
+ * fois la premiere peinture entiere, pour des polices que la plupart des
+ * lecteurs ne verront jamais. Mesure du defaut avant correction : 13 entrees.
+ */
+const swPath = join(dist, 'sw.js');
+const precachedFonts = existsSync(swPath)
+  ? [...readFileSync(swPath, 'utf8').matchAll(/"([^"]+\.woff2)"/g)].map((m) => m[1])
+  : [];
 
 /**
  * LES CHUNKS À LA DEMANDE, PAR NOM (#5695) — chaque entrée de
@@ -180,6 +241,11 @@ const measure = {
   on_demand_gzip_9_bytes: onDemand.reduce((s, a) => s + a.gzip, 0),
   critical_detail: Object.fromEntries(critical.map((c) => [c.file, c.gzip])),
   on_demand_detail: onDemandChunks,
+  /** En octets BRUTS : un WOFF2 est deja compresse, le regzipper l'alourdit. */
+  story_fonts_bytes: storyFontsBytes,
+  story_fonts_files: storyFonts.length,
+  story_fonts_precached: precachedFonts.length,
+  story_fonts_detail: Object.fromEntries(storyFonts.map((f) => [f.file, f.bytes])),
 };
 
 if (asJson) {
@@ -196,6 +262,10 @@ if (asJson) {
   for (const [name, detail] of Object.entries(onDemandChunks)) {
     console.log(`    ${String(detail.kb).padStart(6)} Ko  chunk « ${name} » (${detail.files.length} fichier(s))`);
   }
+  console.log(
+    `\n  ${String(kb(storyFontsBytes)).padStart(6)} Ko  polices de story (${storyFonts.length} familles, octets BRUTS)` +
+      ` — jamais toutes chez un meme lecteur : le navigateur n'en demande une que pour peindre un caractere de son unicode-range\n`,
+  );
 }
 
 const cap = budgets.first_paint?.kb?.value;
@@ -212,6 +282,28 @@ if (typeof cap === 'number') {
 
 if (onDemandChunkFailures.length > 0) {
   console.error(`\n${onDemandChunkFailures.join('\n')}\n`);
+  rc = 1;
+}
+
+if (fontFailures.length > 0) {
+  console.error(`\n${fontFailures.join('\n')}\n`);
+  rc = 1;
+}
+
+if (criticalFontFaces.length > 0) {
+  console.error(
+    `\n  UNE @font-face A ATTEINT LA FEUILLE CRITIQUE : ${criticalFontFaces.join(', ')} — les polices de story vivent` +
+      ` avec le chunk qui les NOMME (src/styles/story-fonts.css, importe par lib/canvas/text-appearance.ts), jamais dans le socle (#6951)\n`,
+  );
+  rc = 1;
+}
+
+if (precachedFonts.length > 0) {
+  console.error(
+    `\n  LE SERVICE WORKER PRECACHE ${precachedFonts.length} POLICE(S) : ${precachedFonts.slice(0, 3).join(', ')}…` +
+      ` — chaque visiteur les telechargerait A L'INSTALLATION, qu'il ouvre une story ou non.` +
+      ` Les exclure par globIgnores (vite.config.ts), c'est ce qui rend leur cout CONDITIONNEL (#6951)\n`,
+  );
   rc = 1;
 }
 

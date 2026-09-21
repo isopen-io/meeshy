@@ -69,7 +69,24 @@ const DEPENDENCY_FIELDS = [
 
 const INSTALLED_FIELDS = ['dependencies', 'devDependencies'];
 
-const TRACKED_PACKAGES = ['react', 'react-dom', 'idb-keyval', '@playwright/test'];
+// Ce que cette liste NOMME, la garde le protege ; le reste passe (#7294). Le
+// lot #7277 a produit DEUX duplications de meme nature : celle de
+// `@playwright/test` a fait rougir la CI parce qu'il etait inscrit ici, celle
+// du virtualiseur est passee sans un mot. La difference n'etait pas une
+// difference de danger, c'etait une difference d'inscription.
+//
+// Le critere d'entree, ecrit ici parce qu'il n'existait nulle part : un paquet
+// entre dans cette liste quand DEUX copies de lui ne se valent pas une seule —
+// parce qu'il porte un etat de module (React et son rendu), un cache partage
+// (`idb-keyval`), un binaire telecharge (`@playwright/test`), ou l'etat de
+// defilement d'une liste (`@tanstack/react-virtual`).
+const TRACKED_PACKAGES = [
+  'react',
+  'react-dom',
+  'idb-keyval',
+  '@playwright/test',
+  '@tanstack/react-virtual',
+];
 
 // Épingles de `overrides` posées SOUS une portée qu'un workspace déclare. Les
 // monter change ce qui est installé pour tous les consommateurs transitifs :
