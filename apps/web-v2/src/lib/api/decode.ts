@@ -300,6 +300,17 @@ export function decodeConversation(raw: Conversation): Conversation {
     updatedAt: toDate(raw.updatedAt),
     ...dateFieldOf('lastMessageAt', raw.lastMessageAt),
     ...dateFieldOf('currentUserJoinedAt', raw.currentUserJoinedAt),
+    /**
+     * LA FRONTIÈRE DE LECTURE (#7198/#7202, W3) — `lastReadAt` et
+     * `lastReadMessageCreatedAt` traversaient BRUTS (chaîne ISO) avant ce
+     * lot : `...sansNull(rest, …)` trois lignes plus haut ne DÉCODE rien,
+     * il ne fait que retirer les `null`. Même patron que `lastMessageAt` /
+     * `currentUserJoinedAt` ci-dessus : re-décodées ICI, elles ÉCRASENT la
+     * version brute que `rest` avait déjà posée. `lastReadMessageId` est une
+     * chaîne — `sansNull` lui suffit, aucun `dateFieldOf` à lui appliquer.
+     */
+    ...dateFieldOf('lastReadAt', raw.lastReadAt),
+    ...dateFieldOf('lastReadMessageCreatedAt', raw.lastReadMessageCreatedAt),
   };
 }
 

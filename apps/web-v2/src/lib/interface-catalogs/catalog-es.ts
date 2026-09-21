@@ -821,6 +821,8 @@ const es = {
 
   'admin.title': 'Administración',
 
+  'thread.unread-separator.one': '{count} mensaje no leído',
+  'thread.unread-separator.other': '{count} mensajes no leídos',
   'message-detail.info.title': 'Información del mensaje',
   'message-detail.received-by': 'Recibido por',
   'message-detail.read-by': 'Leído por',

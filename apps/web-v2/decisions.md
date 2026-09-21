@@ -3549,3 +3549,43 @@ arbitrage tranchera une seule fois pour les trois. Issue #7236, label
 propre formule avant que le porteur choisisse. web-v2 reste conforme à
 D-L1 tel qu'écrit ; le jour où l'arbitrage change D-L1, ce fichier et
 `use-app-badge.ts` se corrigent ensemble.
+
+## D-105 — Le fil s'ouvre sur « — N messages non lus — », en couleur primaire ; deux bornes du signal restent ouvertes (2026-09-21, #7202)
+
+D-L1/D-L2/D-L3 (`docs/superpowers/specs/2026-09-21-lecture-et-accuses-design.md`
+§ 3) : le fil s'ouvre TOUJOURS sur le séparateur de non-lus quand il y en a,
+le séparateur porte la teinte PRIMAIRE (jamais une couleur neutre), et
+l'ouverture ne se rejoue pas au fil de la session (D-L2 gouverne l'ouverture,
+pas les arrivées en direct — celles-ci restent la loi de `pin-to-bottom.ts`
+et `unread-below.ts`, D-33). `unreadBoundaryOf` (`lib/view/unread-boundary.ts`)
+compose une garde devant `firstUnreadBoundary` (S1, #7215) : zéro signal de
+lecture ⇒ pas de frontière plutôt que « tout est non lu depuis toujours » —
+un seul signal, quel qu'il soit, suffit à laisser la loi partagée trancher.
+`threadOpenScrollDecision` (`lib/view/unread-separator.ts`) décide du saut ;
+`<UnreadSeparator>` rend le libellé pluriel (`thread.unread-separator.one`/
+`.other`) dans les sept langues.
+
+**Deux bornes assumées, non corrigées dans ce lot, chacune une issue
+compagnon (même milestone)** :
+
+1. **#7272 — la fenêtre chargée.** `useMessages` ne sert que les 50 derniers
+   messages ; si `firstUnreadId` n'y est pas, `threadOpenScrollDecision`
+   replie sur l'ancrage en bas, SANS séparateur ni indication — cas nominal
+   au-delà de ~50 non-lus. Trois familles de correctif possibles (pagination
+   vers le haut, pastille ancrée en haut qui pagine au toucher, ou borne
+   assumée à écrire explicitement dans D-L2) : aucune n'est mineure, un
+   arbitrage produit tranche avant qu'un lot l'attaque.
+2. **#7273 — le détail ne sert pas `currentUserJoinedAt`.** Une conversation
+   JAMAIS ouverte n'a aucun `ConversationReadCursor` ; `GET
+   /conversations/:id` ne sert alors aucun des trois signaux du curseur, et
+   `currentUserJoinedAt` (le quatrième) est réservé à la liste (`GET
+   /conversations`). Les quatre signaux manquent à la fois pour ce chemin de
+   production légitime — la garde du zéro-signal (ci-dessus, #7215/#7202)
+   est nécessaire pour ne pas fabriquer une fausse frontière, mais son effet
+   de bord retire aussi le séparateur au cas où D-L2 sert le plus : une
+   conversation réellement jamais ouverte.
+
+Dimensions mûres : 6 (cohérence — même teinte primaire que le reste du
+prisme de lecture), 7 (ouverture sans geste), 9 (sept langues), 11 (loi
+UNIQUE `unreadBoundaryOf`/`threadOpenScrollDecision`, témoins dédiés).
+Dimension 13 (complétude) restante : les deux bornes ci-dessus.
