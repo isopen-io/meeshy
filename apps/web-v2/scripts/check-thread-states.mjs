@@ -246,6 +246,61 @@ await checkProtectionStates({ browser, BASE, expect });
     'Échap rend le focus à la rangée qui a ouvert le menu',
   );
 
+  /**
+   * 6.3 bis — ÉCHAP TENU DANS LA TÂCHE QUI MONTE LE MENU (#7293).
+   *
+   * POURQUOI CE SECOND TÉMOIN, alors que le 6.3 mesure la même phrase. Le
+   * 6.3 presse Échap quatre allers-retours Playwright après l'ouverture : il
+   * laisse donc passer une image, et sur une machine au repos l'image arrive
+   * en quatorze millisecondes. Le défaut, lui, vit AVANT cette image — sous
+   * `preact/compat`, les sorties du menu (Échap, appui hors du menu) étaient
+   * posées par un effet PASSIF, différé par un `requestAnimationFrame` et
+   * garanti seulement par un `setTimeout` de 100 ms. Entre le commit et
+   * l'image, le menu est visible et SOURD : la touche n'est pas retardée,
+   * elle est perdue, et le menu ne se referme plus jamais. `dev` en rendait
+   * les DEUX témoins d'Échap rouges pendant que le 6.3 passait 3 fois sur 3
+   * à froid en local — vert-à-froid + rouge-à-chaud sur le même invariant
+   * n'est pas un flottement, c'est une COURSE.
+   *
+   * ON N'OUVRE PAS LA FENÊTRE PAR LA CHARGE, ON LA VISE PAR L'ORDRE. Le
+   * geste et la touche partent de la MÊME tâche : l'attente du portail passe
+   * par un `MutationObserver`, dont les rappels sont des MICROTÂCHES —
+   * aucune image ne peut s'intercaler, par construction et non par pari sur
+   * une vitesse. Aucune horloge ici : c'est ce qui rend ce témoin
+   * reproductible sur n'importe quelle machine.
+   */
+  const heldEscape = await menuPage.evaluate(async () => {
+    const row = document.querySelectorAll('[data-row]')[2];
+    if (row === undefined) return null;
+    row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    await new Promise((resolve) => {
+      if (document.querySelector('[role="menu"]') !== null) return resolve();
+      const observer = new MutationObserver(() => {
+        if (document.querySelector('[role="menu"]') === null) return;
+        observer.disconnect();
+        resolve();
+      });
+      observer.observe(document.documentElement, { childList: true, subtree: true });
+    });
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    return { opened: document.querySelectorAll('[role="menu"]').length };
+  });
+  expect(heldEscape !== null && heldEscape.opened === 1, 'le clic droit synthétique monte le menu dans sa propre tâche');
+  await awaitFact(cluster, { state: 'detached' });
+  expect((await cluster.count()) === 0, "Échap ferme le menu dès la tâche qui le monte, sans attendre une image");
+  expect(
+    await menuPage.evaluate(() => document.activeElement?.hasAttribute('data-row') === true),
+    "Échap rend le focus à la rangée dès la tâche qui monte le menu",
+  );
+  /* Le verdict est PRIS ; on rend la page à l'état que la suite attend (menu
+     fermé, focus sur la rangée) même quand le témoin ci-dessus est tombé,
+     pour que le § 6.4 mesure son propre geste et non ce résidu. */
+  if ((await cluster.count()) !== 0) {
+    await menuPage.keyboard.press('Escape');
+    await awaitFact(cluster, { state: 'detached' });
+    await menuPage.locator('[data-row]').nth(2).focus();
+  }
+
   // 6.4 — LA TOUCHE MENU (Shift+F10) ouvre le MÊME menu depuis le clavier.
   await menuPage.keyboard.press('Shift+F10');
   await awaitFact(cluster);
