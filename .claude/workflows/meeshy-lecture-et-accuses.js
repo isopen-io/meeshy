@@ -210,9 +210,9 @@ const GATES_PAR_CHAINE = {
   (le gateway lit shared/dist : rebâtir AVANT de rejouer le gateway).
 - prérequis si un import Prisma manque : \`cd ${REPO_GW}/packages/shared && npx prisma generate --generator client\`.
 - avant la PR : \`cd ${REPO_GW}/services/gateway && bun run test 2>&1 | tail -30\` (complet, ~15 min ; rends
-  la SORTIE tronquée, jamais un résumé). Un rouge PRÉEXISTANT (déjà rouge sur origin/${BASE}, prouvé par
-  \`git stash\`-free : rejoue le même fichier sur un checkout temporaire de origin/${BASE} dans un
-  répertoire /tmp, ou lis le run CI de ${BASE}) n'arrête pas la livraison : il se DIT dans la PR.`,
+  la SORTIE tronquée, jamais un résumé). Un rouge PRÉEXISTANT (déjà rouge sur origin/${BASE}, prouvé en LISANT
+  le run CI de ${BASE} : \`gh run list --branch ${BASE} --limit 5\`, \`gh run view <id> --log-failed | grep <suite>\` — JAMAIS par
+  un clone ou un checkout temporaire, JAMAIS en touchant aux worktrees) n'arrête pas la livraison : il se DIT dans la PR.`,
   web: `GATES WEB-V2 (${REPO_WEB}) :
 - rapides, à chaque étape : \`cd ${REPO_WEB}/apps/web-v2 && bun run type-check && bun test 2>&1 | tail -15\`.
   ATTENTION : \`bun test\` n'applique AUCUN typage — un témoin vert sans type-check ne prouve rien.
