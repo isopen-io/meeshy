@@ -38,7 +38,7 @@ import { usePullToRefresh } from '@/lib/view/use-pull-to-refresh';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { useScrollportMemory } from '@/lib/view/use-scrollport-memory';
 import { useStoryRailProps } from '@/lib/view/use-story-rail';
-import { Link, href, navigate } from '@/routes/route-table';
+import { Link } from '@/routes/route-table';
 
 /**
  * LE FIL DES PUBLICATIONS (#5893, #6104, #6277) — destination du bouton
@@ -283,19 +283,11 @@ export default function FeedScreen() {
     [posts, readerLanguages, minute],
   );
 
-  /** LE DÉFILEMENT INFINI (miroir de la Lentille, `lib/view/use-load-more-sentinel.ts`
-   * — « le fil réutilisera ce hook tel quel »). ARMÉ au seul état `idle`, et
-   * seulement s'il y a déjà des cartes : une liste vide ne doit rien charger
-   * en boucle (même garde que `conversations.tsx`). */
-  const { announcement, onGesture, onShare } = usePostGesture();
-  /* COMMENTER DEPUIS LE FIL — le compteur conduit au DÉTAIL de la
-     publication, à son ancre de commentaires (`routes/post.tsx`
-     § `#commentaires`). iOS ouvre une couche (`FeedCommentsSheet`) ; le web
-     a déjà une route pour cette publication, et y mener garde UNE adresse
-     partageable pour un fil — jamais un état modal sans URL. */
-  const openComments = useCallback((postId: string) => {
-    navigate(`${href('post', { post: postId })}#commentaires`);
-  }, []);
+  /* COMMENTER DEPUIS LE FIL — `onComment` vient du MÊME hôte que les deux
+     autres gestes de la rangée (`use-post-gesture.ts`) : l'adresse du fil
+     s'écrit une seule fois pour les quatre écrans qui montent la carte. Elle
+     était recopiée ici, et deux de ces écrans l'avaient oubliée. */
+  const { announcement, onGesture, onShare, onComment } = usePostGesture();
 
   // L'ÉLECTION DE LA SCÈNE QUI JOUE (#6898 § 5.3) — UN SEUL
   // `IntersectionObserver`, posé ici, pour toutes les cartes du fil.
@@ -307,6 +299,10 @@ export default function FeedScreen() {
   // résolution, D-14).
   const sceneGallery = useSceneGallery();
 
+  /** LE DÉFILEMENT INFINI (miroir de la Lentille, `lib/view/use-load-more-sentinel.ts`
+   * — « le fil réutilisera ce hook tel quel »). ARMÉ au seul état `idle`, et
+   * seulement s'il y a déjà des cartes : une liste vide ne doit rien charger
+   * en boucle (même garde que `conversations.tsx`). */
   const { observe: observeTail } = useLoadMoreSentinel({
     root: frame,
     rootMargin: loadMoreRootMargin(FEED_ROW_HEIGHT_ESTIMATE),
@@ -364,7 +360,7 @@ export default function FeedScreen() {
                   })()}
                   onGesture={onGesture}
                   onShare={onShare}
-                  onComment={openComments}
+                  onComment={onComment}
                   preferredLanguages={readerLanguages}
                   onOpenScene={sceneGallery.onOpenScene}
                   registerScene={registerScene}

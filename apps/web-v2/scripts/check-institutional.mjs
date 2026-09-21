@@ -19,7 +19,7 @@
  * peinture (elle n'installe le service worker qu'à la fin), ni à l'œil (il faut
  * revenir). Il fallait un navigateur RÉEL et une DEUXIÈME visite.
  *
- * CE QU'IL MESURE, pour chacune des cinq adresses et dans les deux formes
+ * CE QU'IL MESURE, pour chacune des sept adresses et dans les deux formes
  * qu'elles servent (`/about` et `/about/`) :
  *
  *   1. le document servi est bien le sien — son titre, son h1 ;
