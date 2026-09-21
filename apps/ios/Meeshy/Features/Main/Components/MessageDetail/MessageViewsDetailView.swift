@@ -6,7 +6,7 @@ import os
 // MARK: - Views Sub-Filter
 
 private enum ViewsFilter: String, CaseIterable, Identifiable {
-    case sent, delivered, read, notSeen, listened, watched
+    case sent, delivered, read, notSeen, listened, watched, viewed
 
     var id: String { rawValue }
 
@@ -18,6 +18,7 @@ private enum ViewsFilter: String, CaseIterable, Identifiable {
         case .notSeen: return String(localized: "message-detail.views.not-seen", defaultValue: "Non vu", bundle: .main)
         case .listened: return String(localized: "message-detail.views.listened", defaultValue: "Écouté", bundle: .main)
         case .watched: return String(localized: "message-detail.views.watched", defaultValue: "Vu", bundle: .main)
+        case .viewed: return String(localized: "message-detail.views.viewed", defaultValue: "Vu", bundle: .main)
         }
     }
 
@@ -29,6 +30,7 @@ private enum ViewsFilter: String, CaseIterable, Identifiable {
         case .notSeen: return "eye.slash.fill"
         case .listened: return "headphones"
         case .watched: return "play.rectangle.fill"
+        case .viewed: return "photo.stack"
         }
     }
 }
@@ -67,8 +69,12 @@ struct MessageViewsDetailView: View {
         var filters: [ViewsFilter] = [.sent, .delivered, .read, .notSeen]
         let hasAudio = message.attachments.contains { AttachmentKind(mimeType: $0.mimeType) == .audio }
         let hasVideo = message.attachments.contains { AttachmentKind(mimeType: $0.mimeType) == .video }
+        // Lot I2 (#7228) — ajouter le filtre .viewed si des images/documents existent
+        let hasImages = message.attachments.contains { AttachmentKind(mimeType: $0.mimeType) == .image }
+        let hasDocuments = message.attachments.contains { AttachmentKind(mimeType: $0.mimeType) == .document }
         if hasAudio { filters.append(.listened) }
         if hasVideo { filters.append(.watched) }
+        if hasImages || hasDocuments { filters.append(.viewed) }
         return filters
     }
 
@@ -114,6 +120,8 @@ struct MessageViewsDetailView: View {
                     viewsListenedContent(accent: accent)
                 case .watched:
                     viewsWatchedContent(accent: accent)
+                case .viewed:
+                    viewsViewedContent(accent: accent)
                 }
             }
             .id(viewsFilter)
@@ -140,6 +148,13 @@ struct MessageViewsDetailView: View {
         case .watched:
             let videoIds = message.attachments.filter { AttachmentKind(mimeType: $0.mimeType) == .video }.map(\.id)
             count = videoIds.reduce(0) { $0 + (attachmentStatuses[$1]?.count ?? 0) }
+        case .viewed:
+            // Lot I2 (#7228) — compter les vues pour images et documents
+            let viewedIds = message.attachments.filter { kind in
+                let k = AttachmentKind(mimeType: kind.mimeType)
+                return k == .image || k == .document
+            }.map(\.id)
+            count = viewedIds.reduce(0) { $0 + (attachmentStatuses[$1]?.count ?? 0) }
         default: break
         }
 
@@ -645,6 +660,35 @@ struct MessageViewsDetailView: View {
         }
     }
 
+    // MARK: - Vu (Viewed) — Per-Image/Document Attachment (Lot I2 #7228)
+
+    private func viewsViewedContent(accent: Color) -> some View {
+        // Lot I2 (#7228) — afficher images et documents dans un onglet séparé,
+        // similaire à audio/vidéo, sans barre de progression.
+        let viewedAttachments = message.attachments.filter { attachment in
+            let kind = AttachmentKind(mimeType: attachment.mimeType)
+            return kind == .image || kind == .document
+        }
+
+        return VStack(alignment: .leading, spacing: 14) {
+            if isLoadingAttachmentStatuses {
+                loadingIndicator(accent: accent)
+            } else {
+                ForEach(viewedAttachments) { attachment in
+                    mediaConsumptionCard(
+                        attachment: attachment,
+                        isAudio: false,
+                        accent: accent
+                    )
+                }
+
+                if viewedAttachments.isEmpty {
+                    emptyStateView(icon: "photo.stack", text: String(localized: "message-detail.views.viewed.empty", defaultValue: "Aucune image ou document attaché", bundle: .main), accent: accent)
+                }
+            }
+        }
+    }
+
     // MARK: - Shared Views Components
 
     private func timelineBanner(icon: String, text: String, detail: String, count: String? = nil, accent: Color) -> some View {
@@ -722,8 +766,11 @@ struct MessageViewsDetailView: View {
 
     private func mediaConsumptionCard(attachment: MessageAttachment, isAudio: Bool, accent: Color) -> some View {
         let users = attachmentStatuses[attachment.id] ?? []
-        let icon = isAudio ? "waveform" : "film"
+        let kind = AttachmentKind(mimeType: attachment.mimeType)
+        // Lot I2 (#7228) — adapter icon et comportement selon le type d'attachement
+        let icon = kind == .audio ? "waveform" : kind == .video ? "film" : kind == .image ? "photo" : "doc"
         let name = attachment.originalName.isEmpty ? attachment.fileName : attachment.originalName
+        let hasTimebasedTrack = kind.hasTimebasedTrack
 
         return VStack(alignment: .leading, spacing: 10) {
             // Attachment header
@@ -761,18 +808,44 @@ struct MessageViewsDetailView: View {
             }
 
             if users.isEmpty {
-                Text(isAudio ? "Pas encore ecoute" : "Pas encore visionne")
+                let emptyMessage = kind == .audio ? "Pas encore ecoute" : "Pas encore visionne"
+                Text(emptyMessage)
                     .font(.caption)
                     .foregroundColor(theme.textMuted)
                     .padding(.vertical, 4)
             } else {
                 // User consumption rows
                 ForEach(Array(users.enumerated()), id: \.element.id) { index, user in
-                    let listenDate = isAudio ? user.listenedAt : user.watchedAt
-                    let isComplete = isAudio ? (user.listenedComplete ?? false) : (user.watchedComplete ?? false)
-                    let positionMs = isAudio ? user.lastPlayPositionMs : user.lastWatchPositionMs
-                    let count = isAudio ? user.listenCount : user.watchCount
-                    let fraction = Self.positionFraction(positionMs: positionMs, complete: isComplete, durationMs: attachment.duration)
+                    // Lot I2 (#7228) — extraire la date appropriée selon le type d'attachement
+                    let viewDate: Date? = {
+                        switch kind {
+                        case .audio: return user.listenedAt
+                        case .video: return user.watchedAt
+                        default: return user.viewedAt // image, document, etc.
+                        }
+                    }()
+                    let isComplete: Bool = {
+                        switch kind {
+                        case .audio: return user.listenedComplete ?? false
+                        case .video: return user.watchedComplete ?? false
+                        default: return false
+                        }
+                    }()
+                    let positionMs: Int? = {
+                        switch kind {
+                        case .audio: return user.lastPlayPositionMs
+                        case .video: return user.lastWatchPositionMs
+                        default: return nil
+                        }
+                    }()
+                    let playCount: Int? = {
+                        switch kind {
+                        case .audio: return user.listenCount
+                        case .video: return user.watchCount
+                        default: return nil
+                        }
+                    }()
+                    let fraction = hasTimebasedTrack ? Self.positionFraction(positionMs: positionMs, complete: isComplete, durationMs: attachment.duration) : 0
 
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 10) {
@@ -788,7 +861,7 @@ struct MessageViewsDetailView: View {
                                     .font(.caption.weight(.medium))
                                     .foregroundColor(theme.textPrimary)
 
-                                if let date = listenDate {
+                                if let date = viewDate {
                                     Text(relativeDate(date))
                                         .font(.caption2)
                                         .foregroundColor(theme.textMuted)
@@ -797,8 +870,8 @@ struct MessageViewsDetailView: View {
 
                             Spacer()
 
-                            // Play count badge
-                            if let c = count, c > 1 {
+                            // Play count badge (only for audio/video)
+                            if let c = playCount, c > 1 {
                                 Text("\(c)x")
                                     .font(.system(.caption2, design: .monospaced).weight(.bold))
                                     .foregroundColor(accent.opacity(0.8))
@@ -809,33 +882,34 @@ struct MessageViewsDetailView: View {
                                     )
                             }
 
-                            // Completion status
-                            if isComplete {
-                                HStack(spacing: 3) {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .font(.caption2)
-                                    Text(String(localized: "message-detail.complete", defaultValue: "complet", bundle: .main))
-                                        .font(.caption2.weight(.semibold))
+                            // Completion status (only for audio/video)
+                            if hasTimebasedTrack {
+                                if isComplete {
+                                    HStack(spacing: 3) {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .font(.caption2)
+                                        Text(String(localized: "message-detail.complete", defaultValue: "complet", bundle: .main))
+                                            .font(.caption2.weight(.semibold))
+                                    }
+                                    .foregroundColor(MeeshyColors.success)
+                                } else if let pos = positionMs, pos > 0 {
+                                    Text(formatDuration(pos / 1000))
+                                        .font(.system(.caption2, design: .monospaced).weight(.semibold))
+                                        .foregroundColor(theme.textMuted)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(
+                                            Capsule()
+                                                .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
+                                        )
                                 }
-                                .foregroundColor(MeeshyColors.success)
-                            } else if let pos = positionMs, pos > 0 {
-                                Text(formatDuration(pos / 1000))
-                                    .font(.system(.caption2, design: .monospaced).weight(.semibold))
-                                    .foregroundColor(theme.textMuted)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(
-                                        Capsule()
-                                            .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
-                                    )
                             }
                         }
 
-                        // Live playback progress — real-time position pushed via
-                        // `attachment-status:updated` (percentage/playPositionMs)
-                        // lands here through `attachmentStatuses` reload, same as
-                        // the mm:ss chip above.
-                        if !isComplete, fraction > 0 {
+                        // Lot I2 (#7228) — afficher la barre de progression SEULEMENT
+                        // pour audio/vidéo (médias à piste). Pour images/documents,
+                        // rien ne s'affiche ici (pas de progression).
+                        if hasTimebasedTrack, !isComplete, fraction > 0 {
                             HStack(spacing: 6) {
                                 ProgressView(value: fraction)
                                     .progressViewStyle(.linear)
@@ -961,9 +1035,11 @@ struct MessageViewsDetailView: View {
     }
 
     private func loadAttachmentStatuses() async {
-        let mediaAttachments = message.attachments.filter {
-            AttachmentKind(mimeType: $0.mimeType).hasTimebasedTrack
-        }
+        // Lot I2 (#7228) — charger les statuts pour TOUS les attachments (image,
+        // document, audio, vidéo). Avant : filtre sur hasTimebasedTrack excluait
+        // images et documents. Désormais, tous les attachments peuvent montrer
+        // leurs statuts de vue / téléchargement / écoute / visionnage.
+        let mediaAttachments = message.attachments
         guard !mediaAttachments.isEmpty, !isLoadingAttachmentStatuses else { return }
         isLoadingAttachmentStatuses = true
         defer { isLoadingAttachmentStatuses = false }
