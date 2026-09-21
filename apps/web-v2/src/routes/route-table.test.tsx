@@ -179,3 +179,61 @@ describe('NotFound — ce qu’il dit vient du catalogue (#6341)', () => {
     ).not.toThrow();
   });
 });
+
+/**
+ * L'ADRESSE D'UNE HUMEUR PARTAGÉE (#7313) — `/mood/:postId`.
+ *
+ * DERNIÈRE des quatre adresses que `PostService.shareWithTrackingLink` compose
+ * (`{ POST: 'post', REEL: 'reel', STORY: 'story', STATUS: 'mood' }`) et la
+ * dernière à tomber : `/post` et `/story` étaient servies, `/reel` l'est depuis
+ * #7298. Comme pour le réel, `/l/:token` y envoie le lecteur par un
+ * `location.replace` — une navigation ENTIÈRE — et chaque partage d'humeur
+ * fabriquait un lien mort de plus.
+ *
+ * C'est un ALIAS, pas un écran : le legacy le déclare en toutes lettres
+ * (`apps/web/app/mood/[postId]/page.tsx` est un `export { default } from
+ * '@/app/feeds/post/[postId]/page'`), et le client de la v2 « ne distingue que
+ * REEL du reste » (`lib/api/feed-pages.ts`) — une humeur EST une publication.
+ * D'où la TROISIÈME porte sur `publicationScreen`, jamais une jumelle.
+ *
+ * Le témoin interroge l'ADRESSE, jamais la clé : il tombe dès que plus aucune
+ * route ne sert `/mood/<id>`.
+ */
+describe('ROUTES — l’adresse d’une humeur partagée (#7313)', () => {
+  const servedBy = (path: string) =>
+    Object.values(ROUTES).filter((route) => match(compile(route.pattern), path) !== null);
+
+  test('/mood/<id> est SERVIE, par une route et une seule', () => {
+    const served = servedBy('/mood/507f1f77bcf86cd799439011');
+    expect(served).toHaveLength(1);
+    expect(match(compile(served[0]!.pattern), '/mood/507f1f77bcf86cd799439011')).toEqual({
+      post: '507f1f77bcf86cd799439011',
+    });
+  });
+
+  test('elle ouvre le MÊME écran que /post et /feeds/post — trois portes, un écran', () => {
+    expect(servedBy('/mood/abc123')[0]!.screen).toBe(ROUTES.post.screen);
+    expect(ROUTES.postDeepLink.screen).toBe(ROUTES.post.screen);
+  });
+
+  test('/mood sans identifiant n’est pas une adresse', () => {
+    expect(servedBy('/mood')).toHaveLength(0);
+    expect(servedBy('/mood/')).toHaveLength(0);
+  });
+
+  /**
+   * LES TROIS QUE CE LOT PEUT TENIR. La quatrième — `/reel/<id>` — est servie
+   * par #7298 (PR #7314), sur une branche SŒUR partie du même `dev` : un témoin
+   * qui les nommerait toutes les quatre serait ROUGE dans celui des deux lots
+   * qui arrive en premier, quel qu'il soit. Le témoin qui clôt la famille des
+   * quatre `webPath` de `PostService.shareWithTrackingLink` se pose donc une
+   * fois les DEUX sur `dev`, pas avant.
+   */
+  test('/post, /story et /mood servent la même publication, quelle que soit la porte', () => {
+    for (const path of ['/post/abc123', '/feeds/post/abc123', '/mood/abc123']) {
+      expect(servedBy(path)).toHaveLength(1);
+      expect(servedBy(path)[0]!.screen).toBe(ROUTES.post.screen);
+    }
+    expect(servedBy('/story/abc123')).toHaveLength(1);
+  });
+});
