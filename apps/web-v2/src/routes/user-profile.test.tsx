@@ -95,10 +95,13 @@ describe('les trois blocs arrivent ensemble', () => {
     expect([...el.querySelectorAll('[data-feed-card-id]')].length).toBeGreaterThan(0);
   });
 
-  test('la relation servie « aucune » offre Ajouter, Écrire, Bloquer', async () => {
+  /* `report` a rejoint la liste au 2026-09-21 (#7187) — le port existait sans
+     appelant. L'inventaire reste EXHAUSTIF et ORDONNÉ : c'est lui qui dirait
+     qu'une action a disparu, ou qu'une s'est glissée sans décision. */
+  test('la relation servie « aucune » offre Ajouter, Écrire, Bloquer, Signaler', async () => {
     const el = await mount('kwame-mensah');
     expect(el.querySelector('[data-profile-relation]')?.getAttribute('data-profile-relation')).toBe('none');
-    expect([...el.querySelectorAll('[data-profile-action]')].map((n) => n.getAttribute('data-profile-action'))).toEqual(['add', 'write', 'block']);
+    expect([...el.querySelectorAll('[data-profile-action]')].map((n) => n.getAttribute('data-profile-action'))).toEqual(['add', 'write', 'block', 'report']);
   });
 });
 
@@ -153,6 +156,7 @@ describe('une demande REÇUE', () => {
       'reject',
       'write',
       'block',
+      'report',
     ]);
     expect(text(el.querySelector('[data-profile-context]'))).toContain('Amina Diallo');
   });

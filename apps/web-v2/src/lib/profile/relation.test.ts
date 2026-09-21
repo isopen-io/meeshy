@@ -66,18 +66,24 @@ describe('bucketNeededFor', () => {
   });
 });
 
+/* AMENDÉ PAR #7187 — `report` a rejoint chaque état SAUF `self` : le port
+   `POST /api/v1/reports` existait côté passerelle et n'avait aucun appelant.
+   Y compris sur un compte BLOQUÉ : bloquer met fin au contact, signaler
+   prévient la modération, et l'un n'a jamais valu l'autre.
+   Ces témoins restent EXHAUSTIFS et ORDONNÉS — c'est ce qui leur permet de
+   dire qu'un geste a disparu, ou qu'un s'est glissé sans décision. */
 describe('actionsFor', () => {
   test('chaque état offre exactement les gestes d’iOS, « Écrire » en plus', () => {
     expect(actionsFor({ kind: 'self' })).toEqual([]);
-    expect(actionsFor({ kind: 'blocked' })).toEqual(['unblock']);
-    expect(actionsFor({ kind: 'friend' })).toEqual(['write', 'block']);
-    expect(actionsFor({ kind: 'none' })).toEqual(['add', 'write', 'block']);
-    expect(actionsFor({ kind: 'pendingSent', request: request('r1') })).toEqual(['cancel', 'write', 'block']);
-    expect(actionsFor({ kind: 'pendingReceived', request: request('r2') })).toEqual(['accept', 'reject', 'write', 'block']);
+    expect(actionsFor({ kind: 'blocked' })).toEqual(['unblock', 'report']);
+    expect(actionsFor({ kind: 'friend' })).toEqual(['write', 'block', 'report']);
+    expect(actionsFor({ kind: 'none' })).toEqual(['add', 'write', 'block', 'report']);
+    expect(actionsFor({ kind: 'pendingSent', request: request('r1') })).toEqual(['cancel', 'write', 'block', 'report']);
+    expect(actionsFor({ kind: 'pendingReceived', request: request('r2') })).toEqual(['accept', 'reject', 'write', 'block', 'report']);
   });
 
   test('l’identifiant manquant ne RETIRE pas un geste — il le laisse en attente, le rendu s’en charge', () => {
-    expect(actionsFor({ kind: 'pendingReceived', request: null })).toEqual(['accept', 'reject', 'write', 'block']);
+    expect(actionsFor({ kind: 'pendingReceived', request: null })).toEqual(['accept', 'reject', 'write', 'block', 'report']);
   });
 
   test('« Renvoyer la demande » d’iOS n’est PAS repris — « Annuler » puis « Ajouter » donne le même résultat', () => {

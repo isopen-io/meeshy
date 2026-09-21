@@ -99,6 +99,7 @@ const ACTIONS = {
   write: { aria: 'userProfile.action.writeLabel', tone: 'brand' },
   block: { aria: 'userProfile.action.blockLabel', tone: 'danger' },
   unblock: { aria: 'discover.blocked.unblockLabel', tone: 'warning' },
+  report: { aria: 'report.action', tone: 'danger' },
 } as const satisfies Readonly<Record<ProfileActionKind, { readonly aria: InterfaceCatalogKey; readonly tone: ActionTone }>>;
 
 /**
@@ -116,7 +117,8 @@ const PLAIN_LABEL = {
   write: 'userProfile.action.write',
   block: 'userProfile.action.block',
   unblock: 'discover.blocked.unblock',
-} as const satisfies Readonly<Record<'add' | 'write' | 'block' | 'unblock', InterfaceCatalogKey>>;
+  report: 'report.action',
+} as const satisfies Readonly<Record<'add' | 'write' | 'block' | 'unblock' | 'report', InterfaceCatalogKey>>;
 
 /* Accepter, refuser et annuler nomment la personne : iOS écrit « Accepter la
    connexion » ; la v3.1 réutilise les libellés déjà traduits de « Découvrir ». */
@@ -142,6 +144,7 @@ const ACTION_GLYPH: Readonly<Record<ProfileActionKind, ReactNode>> = {
   write: <GlyphSvg glyph={PROFILE_GLYPHS.envelopeSimple} size={14} />,
   block: <GlyphSvg glyph={DISCOVER_GLYPHS.handPalm} size={14} />,
   unblock: <GlyphSvg glyph={DISCOVER_GLYPHS.handPalm} size={14} />,
+  report: <Glyph name="warningCircle" size={14} />,
 };
 
 /**
