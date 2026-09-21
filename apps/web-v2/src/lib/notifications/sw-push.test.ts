@@ -100,6 +100,15 @@ function mount({ clients = [] as ClientStub[], already = [] as Record<string, un
     registration: {
       getNotifications: async () => existing,
       showNotification: async (title: string, options: Record<string, unknown>) => {
+        /* Les deux TypeError de « create a notification » (Notifications API) :
+           le bouchon refuse ce que le navigateur refuserait, et la bannière
+           qu'il refuse n'est jamais montrée. */
+        if (options['silent'] === true && options['vibrate'] !== undefined) {
+          throw new TypeError('silent ne se combine pas avec vibrate');
+        }
+        if (options['renotify'] === true && (typeof options['tag'] !== 'string' || options['tag'] === '')) {
+          throw new TypeError('renotify exige un tag non vide');
+        }
         shown.push({ title, options });
       },
     },
@@ -164,12 +173,86 @@ describe('le worker n’affiche une bannière que si personne ne regarde (D-11)'
     expect(worker.shown.length).toBe(1);
   });
 
-  test('la conversation REGROUPE les bannières ; à défaut, la notification', async () => {
+});
+
+/**
+ * LE SON COUPÉ ET L'EMPILEMENT CHOISIS PAR LE LECTEUR (#7308).
+ *
+ * La passerelle les calcule au chokepoint des préférences et les pose dans
+ * `webpush.notification` : `silent` pour `soundEnabled:false`, `tag` pour
+ * l'empilement par conversation — et PAS de `tag` quand le lecteur a choisi
+ * `groupNotifications:false`. Un worker qui ne les lit pas les rend inertes :
+ * le serveur aurait corrigé personne.
+ */
+const composed = (notification: Record<string, unknown>, data: Record<string, unknown>) => ({
+  notification: { title: 'Awa', body: 'Bonjour', ...notification },
+  data,
+});
+
+describe('le son coupé et l’empilement choisis par le lecteur valent aussi sur le web (#7308)', () => {
+  test('le son coupé coupe le son de la bannière — elle reste affichée', async () => {
     const worker = mount();
-    await worker.dispatch('push', push(banner({ notificationId: 'n1', conversationId: 'abc' })));
-    const solo = mount();
-    await solo.dispatch('push', push(banner({ notificationId: 'n2' })));
-    expect([worker.shown[0]?.options['tag'], solo.shown[0]?.options['tag']]).toEqual(['abc', 'n2']);
+    await worker.dispatch('push', push(composed({ silent: true }, { notificationId: 'n1', conversationId: 'abc' })));
+    expect(worker.shown.map((n) => [n.title, n.options['silent']])).toEqual([['Awa', true]]);
+  });
+
+  test('sans son coupé, la bannière sonne', async () => {
+    const worker = mount();
+    await worker.dispatch('push', push(composed({}, { notificationId: 'n1', conversationId: 'abc' })));
+    expect(worker.shown[0]?.options['silent']).not.toBe(true);
+  });
+
+  test('le tag du SERVEUR regroupe les bannières d’une conversation', async () => {
+    const worker = mount();
+    await worker.dispatch('push', push(composed({ tag: 'conv-42' }, { notificationId: 'n1', conversationId: 'abc' })));
+    expect(worker.shown[0]?.options['tag']).toBe('conv-42');
+  });
+
+  /* `groupNotifications:false` : la passerelle retire le tag. Se rabattre sur
+     `conversationId` empilerait quand même — le réglage resterait ignoré. */
+  test('sans tag du serveur, chaque bannière garde la sienne — même dans une conversation', async () => {
+    const worker = mount();
+    await worker.dispatch('push', push(composed({}, { notificationId: 'n1', conversationId: 'abc' })));
+    await worker.dispatch('push', push(composed({}, { notificationId: 'n2', conversationId: 'abc' })));
+    expect(worker.shown.map((n) => n.options['tag'])).toEqual(['n1', 'n2']);
+  });
+
+  /* Une bannière qui REMPLACE une autre de même tag n'alerte qu'avec
+     `renotify` (« show steps »). Sans lui, chaque message après le premier
+     d'une conversation arriverait sans son ni annonce. */
+  test('une bannière qui en remplace une autre de même tag alerte encore', async () => {
+    const worker = mount();
+    await worker.dispatch('push', push(composed({ tag: 'conv-42' }, { notificationId: 'n1', conversationId: 'abc' })));
+    expect(worker.shown[0]?.options['renotify']).toBe(true);
+  });
+
+  /* Muette ne veut pas dire cachée : `silent` retire le son et la vibration,
+     `renotify` garde l'annonce. La paire est licite — seuls `silent`+`vibrate`
+     et `renotify` sans tag lèvent un TypeError. */
+  test('une bannière muette qui en remplace une autre est annoncée, sans son', async () => {
+    const worker = mount();
+    await worker.dispatch('push', push(composed({ tag: 'conv-42', silent: true }, { notificationId: 'n1' })));
+    expect({ renotify: worker.shown[0]?.options['renotify'], silent: worker.shown[0]?.options['silent'] }).toEqual({
+      renotify: true,
+      silent: true,
+    });
+  });
+
+  test('aucune combinaison de la charge ne fait refuser la bannière par le navigateur', async () => {
+    const cases = [true, false].flatMap((silent) =>
+      [undefined, '', 'conv-42'].flatMap((tag) =>
+        [undefined, 'n1'].map((notificationId) => ({ silent, tag, notificationId })),
+      ),
+    );
+    const worker = mount();
+    for (const { silent, tag, notificationId } of cases) {
+      await worker.dispatch(
+        'push',
+        push(composed({ ...(silent ? { silent } : {}), ...(tag === undefined ? {} : { tag }) }, notificationId ? { notificationId } : {})),
+      );
+    }
+    expect(worker.shown.length).toBe(cases.length);
+    expect(worker.shown.filter((n) => 'vibrate' in n.options)).toEqual([]);
   });
 });
 

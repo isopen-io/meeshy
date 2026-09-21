@@ -137,7 +137,7 @@ const DETTE_HERITEE: Readonly<Record<string, number>> = {
   '__tests__/unit/handlers/MessageHandler.core.test.ts': 4263,
   '__tests__/unit/routes/conversation-core.test.ts': 4020,
   '__tests__/unit/routes/conversation-messages-advanced.test.ts': 3556,
-  '__tests__/unit/services/PushNotificationService.test.ts': 3290,
+  '__tests__/unit/services/PushNotificationService.test.ts': 3280,
   'socketio/handlers/__tests__/MessageHandler.test.ts': 3083,
   '__tests__/unit/services/MessagingService.test.ts': 3011,
   '__tests__/unit/routes/participants.test.ts': 2938,
