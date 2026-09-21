@@ -1006,8 +1006,11 @@ final class ConversationSocketHandlerTests: XCTestCase {
         sut.persistence = actor
         _ = delegate
 
-        // Seed two own-messages in `.sent` state — bufferBatchDelivery only
-        // applies to rows in .sending or .sent states (per actor implementation).
+        // Seed two own-messages in `.sent` state — bufferBatchDelivery applies
+        // to rows in .sending/.sent/.delivered (I3, #7349: .delivered stayed
+        // in scope so a message can still advance to .read after a prior
+        // delivered batch — see MessagePersistenceActorDeliveryChainTests for
+        // the delivered-then-read regression this used to miss).
         let msgDate = Date()
         var record1 = makeSeedRecord(localId: "msg1", senderId: currentUserId, content: "First")
         record1.state = .sent

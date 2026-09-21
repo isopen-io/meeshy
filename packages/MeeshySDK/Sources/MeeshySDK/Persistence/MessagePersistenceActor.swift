@@ -670,9 +670,20 @@ public actor MessagePersistenceActor {
             }
         }()
         return try dbWriter.write { db -> Bool in
+            // I3 (#7349) — `.delivered` MUST stay in this list. `MessageStateMachine`
+            // supports `.delivered → .read` on `.readBy` (a message is routinely
+            // delivered-to-all before it is read-by-all), but a query that only
+            // looked at `.sending`/`.sent` could never SEE a row once the first
+            // (delivered) batch had already advanced it — the row fell out of
+            // every future call, and a second, later "everyone has read it" event
+            // had nothing left to act on. The bubble stayed on a single grey check
+            // forever, with no gesture able to unstick it. `.read` is excluded on
+            // purpose: it is terminal, and `MessageStateMachine.apply` has no
+            // transition out of it anyway.
             let records = try MessageRecord
                 .filter(Column("conversationId") == conversationId)
-                .filter([MessageState.sending.rawValue, MessageState.sent.rawValue]
+                .filter([MessageState.sending.rawValue, MessageState.sent.rawValue,
+                         MessageState.delivered.rawValue]
                     .contains(Column("state")))
                 .fetchAll(db)
 

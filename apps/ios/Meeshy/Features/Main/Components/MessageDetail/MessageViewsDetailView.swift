@@ -102,6 +102,19 @@ struct MessageViewsDetailView: View {
                     await loadAttachmentStatuses()
                 }
             }
+            // I3 (#7349) — la fiche ne se rechargeait qu'à l'ouverture ;
+            // `read-status:updated` pour cette conversation la relance en
+            // direct, sans qu'il faille la refermer puis la rouvrir. Même
+            // idiome que `MessageTranscriptionDetailView` dans ce même
+            // dossier (`.onReceive(MessageSocketManager.shared.<event>
+            // .filter { ... })`).
+            .onReceive(
+                MessageSocketManager.shared.readStatusUpdated
+                    .filter { $0.conversationId == conversationId }
+                    .receive(on: DispatchQueue.main)
+            ) { _ in
+                Task { await loadReadStatus(force: true) }
+            }
     }
 
     // MARK: - Views Tab Content (Premium Redesign)
@@ -1009,9 +1022,26 @@ struct MessageViewsDetailView: View {
             .sendAttempts(messageId: message.id)) ?? []
     }
 
-    private func loadReadStatus() async {
-        guard readStatusData == nil, !isLoadingReadStatus else { return }
-        guard messageHasServerId else { return }
+    /// Pure guard deciding whether `loadReadStatus` should actually issue a
+    /// request — extracted (I3, #7349) so it is testable without mounting the
+    /// SwiftUI view, mirroring `positionFraction` in this same file. `force`
+    /// is what lets a live `read-status:updated` refresh a sheet that already
+    /// has data; without it the sheet could only ever load once, at
+    /// `onAppear`, and stayed frozen for as long as it remained open.
+    static func shouldFetchReadStatus(
+        hasExisting: Bool, isLoading: Bool, force: Bool, hasServerId: Bool
+    ) -> Bool {
+        guard hasServerId, !isLoading else { return false }
+        return force || !hasExisting
+    }
+
+    private func loadReadStatus(force: Bool = false) async {
+        guard Self.shouldFetchReadStatus(
+            hasExisting: readStatusData != nil,
+            isLoading: isLoadingReadStatus,
+            force: force,
+            hasServerId: messageHasServerId
+        ) else { return }
         isLoadingReadStatus = true
         readStatusError = nil
         defer { isLoadingReadStatus = false }
