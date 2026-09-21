@@ -243,6 +243,12 @@ const RICH_AUTHOR: FeedAuthor = { id: 'u-feed-nour', displayName: 'Nour Ben Ali'
  * LA PUBLICATION, où le hashtag EST cliquable — la différence de traitement
  * entre les deux surfaces est ce que le gate mesure, et elle n'est mesurable
  * que si les deux corpus portent le MÊME motif.
+ *
+ * L'ÉTAT DU LECTEUR est servi comme la passerelle le sert depuis #7396 : les
+ * trois clés, explicites, sur chaque publication — la première aimée par le
+ * lecteur (l'un des trois cœurs de `likeCount`). Leur ABSENCE n'est plus le
+ * cas nominal d'un hashtag ; une carte partielle reste un cas à part
+ * (`routes/publication-opening.test.tsx`).
  */
 export const RICH_TEXT_POSTS: readonly FeedPost[] = [
   {
@@ -258,6 +264,9 @@ export const RICH_TEXT_POSTS: readonly FeedPost[] = [
     repostCount: 0,
     bookmarkCount: 0,
     shareCount: 0,
+    isLikedByMe: true,
+    isBookmarkedByMe: false,
+    isRepostedByMe: false,
   },
   {
     id: 'post-texte-enrichi-2',
@@ -272,6 +281,9 @@ export const RICH_TEXT_POSTS: readonly FeedPost[] = [
     repostCount: 0,
     bookmarkCount: 0,
     shareCount: 0,
+    isLikedByMe: false,
+    isBookmarkedByMe: false,
+    isRepostedByMe: false,
   },
 ];
 

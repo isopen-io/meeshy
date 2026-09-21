@@ -39,6 +39,12 @@ function basePrisma(overrides: Record<string, unknown> = {}) {
     communityMember: {
       findMany: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([]),
     },
+    postReaction: {
+      findMany: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([]),
+    },
+    postBookmark: {
+      findMany: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([]),
+    },
     ...overrides,
   } as unknown as import('@meeshy/shared/prisma/client').PrismaClient & {
     hashtag: { findUnique: jest.Mock; findMany: jest.Mock };
