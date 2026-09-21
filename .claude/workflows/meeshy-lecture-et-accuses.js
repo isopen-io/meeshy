@@ -3,7 +3,7 @@ export const meta = {
   description:
     'Lecture / non-lecture (notifications, conversations, messages, separateur « messages non lus » en couleur primaire) et accuses + progression media (emis, recu, vu, ouvertures, audio/video lus jusqu ou) — sur iOS ET web-v2, trois chaines paralleles (gateway, web-v2, iOS) en lots TDD, revue-correction opus, PR auto-merge vers dev, validation a deux comptes sur staging (Chrome + simulateur), en boucle jusqu a un etat acceptable — sonnet DEVELOPPE, haiku fait le MECANIQUE, opus RELIT, CORRIGE, VALIDE et LIVRE',
   whenToUse:
-    "Lancer un tour du chantier « lecture et accuses » (directive porteur 2026-09-21, spec docs/superpowers/specs/2026-09-21-lecture-et-accuses-design.md). Args : { repo_web, repo_gw, repo_ios, base, date, attribution, tours, lots, sauter, sim_native, sim_coque, valider, livrer_main, modeles }.",
+    "Lancer un tour du chantier « lecture et accuses » (directive porteur 2026-09-21, spec docs/superpowers/specs/2026-09-21-lecture-et-accuses-design.md). Args : { repo_web, repo_gw, repo_ios, repo_principal, base, date, attribution, tours, lots, sauter, sim_native, sim_coque, valider, livrer_main, modeles }.",
   phases: [
     { title: 'Synchroniser', detail: 'fetch origin/dev dans les trois worktrees de chaine, releve de ce que les autres sessions tiennent', model: 'sonnet' },
     { title: 'Cadrer', detail: 'chaque lot verifie contre l arbre VIVANT : deja livre, tenu ailleurs, ou a faire', model: 'sonnet' },
@@ -43,6 +43,8 @@ const SIM_NATIVE = typeof A.sim_native === 'string' && A.sim_native ? A.sim_nati
 const SIM_COQUE = typeof A.sim_coque === 'string' && A.sim_coque ? A.sim_coque : '138B8B8D-0B3B-44E5-98B0-B62723B884BC'
 const SCRATCH = `${REPO_WEB}/.cache/lecture-workflow` // .cache est gitignore
 // La spec et ce script vivent sur feat/lecture-et-accuses, dans un worktree qui NE CHANGE JAMAIS de branche.
+// Le clone principal : seul détenteur des fichiers gitignorés (comptes de recette). On y LIT, jamais on n'y écrit.
+const REPO_PRINCIPAL = typeof A.repo_principal === 'string' && A.repo_principal ? A.repo_principal : '/Users/smpceo/Documents/v2_meeshy'
 const REPO_SPEC = typeof A.repo_spec === 'string' && A.repo_spec ? A.repo_spec : '/Users/smpceo/Documents/v2_meeshy-lecture-spec'
 const SPEC = `${REPO_SPEC}/docs/superpowers/specs/2026-09-21-lecture-et-accuses-design.md`
 
@@ -733,7 +735,7 @@ A. FUSIONNER AU VERT, PUIS ATTENDRE LE DÉPLOIEMENT (jamais de push sur ${BASE},
    ne porte pas les lots fusionnés, la recette ne prouve rien : dis-le et arrête-toi là (acceptable=false).
 
 B. LES DEUX COMPTES ET LES DEUX SURFACES :
-- Compte A = Demo : nom d'utilisateur dans ${REPO_WEB}/apps/ios/fastlane/.env (DEMO_USER, DEMO_PASSWORD) — lis
+- Compte A = Demo : nom d'utilisateur dans ${REPO_PRINCIPAL}/apps/ios/fastlane/.env (DEMO_USER, DEMO_PASSWORD — fichier gitignoré, présent dans le SEUL clone principal, jamais dans un worktree) — lis
   le fichier, N'IMPRIME JAMAIS le mot de passe. Compte B : cherche un second compte de recette sur staging
   (\`POST https://gate.staging.meeshy.me/api/v1/auth/login\`) parmi ceux que le README ou tasks/ documentent ;
   à défaut, crée \`recette-lecture\` par \`POST /api/v1/auth/register\` (lis le schéma dans routes/auth) avec un
