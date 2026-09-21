@@ -65,13 +65,17 @@ jest.mock('@meeshy/shared/prisma/client', () => {
     },
     message: {
       findUnique: jest.fn(),
+      count: jest.fn(),
     },
     postMedia: {
       findFirst: jest.fn(),
     },
-    // G3 (#7218, D-L1) — les trois tables que `computeConversationUnreadBadge`
-    // lit : les participations actives du destinataire, le curseur de lecture
-    // par conversation (`unreadCount > 0`), et le mute par conversation.
+    // G3 (#7218, D-L1) — les tables que la chaîne du badge lit : les
+    // participations actives du destinataire, les curseurs de lecture, le
+    // mute par conversation, le masquage personnel, et le COMPTAGE des
+    // messages postérieurs au curseur — c'est lui, jamais le champ
+    // dénormalisé `ConversationReadCursor.unreadCount`, qui dit le non-lu
+    // (voir `conversationUnreadBadge.ts`).
     userConversationPreferences: {
       findMany: jest.fn().mockResolvedValue([]),
     },
@@ -79,6 +83,9 @@ jest.mock('@meeshy/shared/prisma/client', () => {
       findMany: jest.fn().mockResolvedValue([]),
     },
     conversationReadCursor: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    userMessageDeletion: {
       findMany: jest.fn().mockResolvedValue([]),
     },
   };
@@ -111,6 +118,15 @@ jest.mock('../../../utils/logger', () => ({
 }));
 
 jest.mock('../../../utils/logger-enhanced', () => ({
+  // `enhancedLogger.child(...)` : réclamé au CHARGEMENT par la chaîne de
+  // comptage du non-lu (`MessageReadStatusService` →
+  // `MessageMediaConsumptionService`). Sans lui, le badge partait silencieusement
+  // absent — le repli best-effort avalait une panne de MOCK.
+  enhancedLogger: {
+    child: jest.fn(() => ({
+      info: jest.fn(), debug: jest.fn(), warn: jest.fn(), error: jest.fn(),
+    })),
+  },
   notificationLogger: {
     info: jest.fn(),
     debug: jest.fn(),
@@ -150,6 +166,14 @@ function makeNotif() {
 
 type PushPayload = { title: string; body: string; badge?: number; data?: Record<string, string> };
 
+type ConversationFixture = {
+  readonly conversationId: string;
+  readonly participantId: string;
+  /** Messages d'autrui postérieurs au curseur — le VRAI non-lu de la liste. */
+  readonly unreadMessages: number;
+  readonly isMuted?: boolean;
+};
+
 describe('NotificationService — badge du push (F1 ; D-L1, #7218 : conversations non lues)', () => {
   let service: NotificationService;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -159,6 +183,48 @@ describe('NotificationService — badge du push (F1 ; D-L1, #7218 : conversation
   function lastPushPayload(): PushPayload {
     const calls = sendToUser.mock.calls as Array<[{ payload: PushPayload }]>;
     return calls[calls.length - 1][0].payload;
+  }
+
+  /**
+   * Sème la BASE telle qu'elle est : des messages non lus, et des curseurs
+   * dont `unreadCount` vaut `0` — le dépôt ne l'incrémente nulle part à
+   * l'arrivée d'un message. Un badge qui lirait ce champ rendrait `0` ici,
+   * comme il le ferait en production.
+   */
+  function seedConversations(fixtures: readonly ConversationFixture[]): void {
+    const byConversation = new Map(fixtures.map((f) => [f.conversationId, f]));
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (prisma.participant.findMany as jest.Mock).mockImplementation(async ({ where }: any) =>
+      fixtures
+        .filter((f) =>
+          where?.conversationId?.in ? where.conversationId.in.includes(f.conversationId) : true
+        )
+        .map((f) => ({
+          id: f.participantId,
+          userId: RECIPIENT_ID,
+          conversationId: f.conversationId,
+          joinedAt: null,
+        }))
+    );
+    (prisma.conversationReadCursor.findMany as jest.Mock).mockImplementation(async () =>
+      fixtures.map((f) => ({
+        participantId: f.participantId,
+        lastReadAt: new Date('2026-09-20T00:00:00.000Z'),
+        lastReadMessageCreatedAt: new Date('2026-09-20T00:00:00.000Z'),
+        unreadCount: 0,
+      }))
+    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (prisma.userConversationPreferences.findMany as jest.Mock).mockImplementation(async ({ where }: any) =>
+      where?.isMuted === true
+        ? fixtures.filter((f) => f.isMuted).map((f) => ({ conversationId: f.conversationId }))
+        : []
+    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (prisma.message.count as jest.Mock).mockImplementation(async ({ where }: any) =>
+      byConversation.get(where.conversationId)?.unreadMessages ?? 0
+    );
   }
 
   beforeEach(() => {
@@ -178,6 +244,7 @@ describe('NotificationService — badge du push (F1 ; D-L1, #7218 : conversation
     (prisma.userPreferences.findUnique as jest.Mock).mockResolvedValue(null);
     (prisma.notification.count as jest.Mock).mockResolvedValue(0);
     (prisma.notification.create as jest.Mock).mockResolvedValue(makeNotif());
+    (prisma.userMessageDeletion.findMany as jest.Mock).mockResolvedValue([]);
     (prisma.message.findUnique as jest.Mock).mockResolvedValue({
       deletedAt: null,
       expiresAt: null,
@@ -187,6 +254,7 @@ describe('NotificationService — badge du push (F1 ; D-L1, #7218 : conversation
     (prisma.user.findUnique as jest.Mock).mockResolvedValue({
       username: 'alice', displayName: 'Alice Martin', avatar: null,
     });
+    seedConversations([]);
   });
 
   async function sendMessageNotification(): Promise<PushPayload> {
@@ -201,13 +269,14 @@ describe('NotificationService — badge du push (F1 ; D-L1, #7218 : conversation
   }
 
   it('test_push_carriesUnreadBadge_asConversationCount_notMessageCount', async () => {
-    // Sept conversations distinctes, chacune avec au moins un non-lu — D-L1 :
-    // le badge compte les CONVERSATIONS, jamais leur nombre de messages.
-    (prisma.participant.findMany as jest.Mock).mockResolvedValueOnce(
-      Array.from({ length: 7 }, (_, i) => ({ id: `participant-${i}`, conversationId: `conv-${i}` }))
-    );
-    (prisma.conversationReadCursor.findMany as jest.Mock).mockResolvedValueOnce(
-      Array.from({ length: 7 }, (_, i) => ({ conversationId: `conv-${i}` }))
+    // Sept conversations non lues, dont une à quarante messages — D-L1 : le
+    // badge vaut 7, jamais la somme des messages.
+    seedConversations(
+      Array.from({ length: 7 }, (_, i) => ({
+        conversationId: `conv-${i}`,
+        participantId: `participant-${i}`,
+        unreadMessages: i === 0 ? 40 : 1,
+      }))
     );
 
     const payload = await sendMessageNotification();
@@ -215,25 +284,26 @@ describe('NotificationService — badge du push (F1 ; D-L1, #7218 : conversation
     expect(payload.data?.unreadCount).toBe('7');
   });
 
-  it('test_push_excludesMutedConversation_fromBadge', async () => {
-    (prisma.participant.findMany as jest.Mock).mockResolvedValueOnce([
-      { id: 'participant-open', conversationId: 'conv-open' },
-      { id: 'participant-muted', conversationId: 'conv-muted' },
-    ]);
-    (prisma.conversationReadCursor.findMany as jest.Mock).mockResolvedValueOnce([
-      { conversationId: 'conv-open' },
-      { conversationId: 'conv-muted' },
-    ]);
-    (prisma.userConversationPreferences.findMany as jest.Mock).mockResolvedValueOnce([
-      { conversationId: 'conv-muted' },
+  it('test_push_countsOnlyConversationsThatStillHaveUnreadMessages', async () => {
+    seedConversations([
+      { conversationId: 'conv-unread', participantId: 'participant-unread', unreadMessages: 2 },
+      { conversationId: 'conv-read', participantId: 'participant-read', unreadMessages: 0 },
     ]);
 
-    const payload = await sendMessageNotification();
-    expect(payload.badge).toBe(1);
+    expect((await sendMessageNotification()).badge).toBe(1);
+  });
+
+  it('test_push_excludesMutedConversation_fromBadge', async () => {
+    seedConversations([
+      { conversationId: 'conv-open', participantId: 'participant-open', unreadMessages: 1 },
+      { conversationId: 'conv-muted', participantId: 'participant-muted', unreadMessages: 9, isMuted: true },
+    ]);
+
+    expect((await sendMessageNotification()).badge).toBe(1);
   });
 
   it('test_push_omitsBadge_whenParticipantLookupUnavailable_bestEffort', async () => {
-    (prisma.participant.findMany as jest.Mock).mockRejectedValueOnce(new Error('db down'));
+    (prisma.participant.findMany as jest.Mock).mockRejectedValue(new Error('db down'));
 
     const payload = await sendMessageNotification();
     expect(payload.badge).toBeUndefined();
@@ -241,12 +311,58 @@ describe('NotificationService — badge du push (F1 ; D-L1, #7218 : conversation
     expect(sendToUser).toHaveBeenCalledTimes(1);
   });
 
+  it('test_push_omitsBadge_whenUnreadCountingFails_ratherThanWipingTheIcon', async () => {
+    // Le comptage avale sa panne et rendrait une carte VIDE : servir `badge: 0`
+    // EFFACERAIT l'icône d'un destinataire qui a des non-lus. Le badge est omis.
+    seedConversations([
+      { conversationId: 'conv-a', participantId: 'participant-a', unreadMessages: 3 },
+    ]);
+    (prisma.message.count as jest.Mock).mockRejectedValue(new Error('db down'));
+
+    const payload = await sendMessageNotification();
+    expect(payload.badge).toBeUndefined();
+    expect(payload.data?.unreadCount).toBeUndefined();
+    expect(sendToUser).toHaveBeenCalledTimes(1);
+  });
+
+  it('test_reproducedPush_afterRevocation_carriesTheSameConversationBadge', async () => {
+    // Le SECOND site du badge : le push nominal qui remplace une bannière
+    // révoquée (`announceNotificationsReproduced` → `pushReproducedNotification`).
+    // Il doit porter la MÊME projection que le push de création — sans quoi
+    // une simple édition de message recalerait l'icône sur un autre nombre.
+    seedConversations([
+      { conversationId: 'conv-a', participantId: 'participant-a', unreadMessages: 2 },
+      { conversationId: 'conv-b', participantId: 'participant-b', unreadMessages: 1 },
+    ]);
+    (prisma.notification.findUnique as jest.Mock).mockResolvedValue({
+      ...makeNotif(),
+      type: 'new_message',
+      title: null,
+      subtitle: null,
+      content: 'Salut, corrigé !',
+      context: { conversationId: 'conv-a', messageId: MESSAGE_ID },
+      delivery: { pushSent: true },
+    });
+
+    await service.announceNotificationsReproduced([{ id: 'notif-msg-1', userId: RECIPIENT_ID }]);
+    // La file d'appareil est une chaîne de promesses — on la laisse se vider.
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const reproduced = (sendToUser.mock.calls as Array<[{ payload: PushPayload }]>)
+      .map(([call]) => call.payload)
+      .filter((payload) => payload.badge !== undefined);
+    expect(reproduced.length).toBeGreaterThan(0);
+    expect(reproduced[reproduced.length - 1].badge).toBe(2);
+  });
+
   it('test_aFriendRequestNotification_doesNotIncrementTheBadge_anUnreadMessageDoes', async () => {
-    // Une demande d'ami : `createFriendRequestNotification` (context =
-    // `{ friendRequestId }`, aucun Participant/ConversationReadCursor posé) —
-    // la cloche (`notification:counts`) en parle, jamais le badge de
-    // conversations (D-L1).
-    (prisma.participant.findMany as jest.Mock).mockResolvedValueOnce([]);
+    // Deux conversations non lues : le badge vaut 2 et la demande d'ami ne le
+    // fait PAS bouger — elle ne parle qu'à la cloche (`notification:counts`).
+    seedConversations([
+      { conversationId: 'conv-a', participantId: 'participant-a', unreadMessages: 1 },
+      { conversationId: 'conv-b', participantId: 'participant-b', unreadMessages: 5 },
+    ]);
 
     await service.createFriendRequestNotification({
       recipientUserId: RECIPIENT_ID,
@@ -254,19 +370,15 @@ describe('NotificationService — badge du push (F1 ; D-L1, #7218 : conversation
       friendRequestId: 'friend-request-1',
     });
 
-    expect(lastPushPayload().badge).toBe(0);
+    expect(lastPushPayload().badge).toBe(2);
 
-    // Le MÊME destinataire reçoit ensuite un message dans une conversation où
-    // il a un non-lu : le badge passe à 1 — c'est bien la conversation, pas
-    // la notification sociale, qui le fait bouger.
-    (prisma.participant.findMany as jest.Mock).mockResolvedValueOnce([
-      { id: 'participant-a', conversationId: CONVERSATION_ID },
-    ]);
-    (prisma.conversationReadCursor.findMany as jest.Mock).mockResolvedValueOnce([
-      { conversationId: CONVERSATION_ID },
+    // Un message non lu dans une TROISIÈME conversation, lui, l'incrémente.
+    seedConversations([
+      { conversationId: 'conv-a', participantId: 'participant-a', unreadMessages: 1 },
+      { conversationId: 'conv-b', participantId: 'participant-b', unreadMessages: 5 },
+      { conversationId: CONVERSATION_ID, participantId: 'participant-c', unreadMessages: 1 },
     ]);
 
-    const payload = await sendMessageNotification();
-    expect(payload.badge).toBe(1);
+    expect((await sendMessageNotification()).badge).toBe(3);
   });
 });
