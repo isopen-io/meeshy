@@ -49,15 +49,22 @@ public final class NotificationCoordinator: ObservableObject {
 
     // MARK: - Published State
 
-    /// Total of unread messages across every conversation. Drives the app icon badge
-    /// and the widget's unread count.
+    /// Nombre de CONVERSATIONS non lues, hors muettes et hors conversation
+    /// affichée. Alimente le badge d'icône et le compteur du widget.
+    ///
+    /// **D-L1 (#7236) : on compte des conversations, jamais la somme de leurs
+    /// messages.** Une conversation à douze messages non lus pèse UN — comme
+    /// WhatsApp, et surtout comme l'`aps.badge` que le serveur pousse
+    /// (`computeConversationUnreadBadge`, G3 #7218). Deux formules faisaient
+    /// clignoter l'icône : le nombre arrivait par la push, puis le premier
+    /// plan le remplaçait par un autre, plus grand, pour un état identique.
     ///
     /// **Projection du registre de lecture, plus une copie** (#6998). Ce
     /// coordinateur tenait sa propre carte `conversationId → Int` et sa propre
     /// formule de total — la cinquième copie du non-lu, et la deuxième des
     /// trois formules qui coexistaient (le moteur excluait la conversation
     /// ouverte, celle-ci les muettes, le ViewModel n'excluait rien). Le nombre
-    /// vient désormais de `ConversationReadLedger.total(excludingOpen:excludingMuted:)`,
+    /// vient désormais de `ConversationReadLedger.conversationUnreadTotal(excludingOpen:)`,
     /// qui est le seul à le calculer ; `@Published` reste pour les abonnés.
     @Published public private(set) var conversationUnreadTotal: Int = 0
 
@@ -396,8 +403,12 @@ public final class NotificationCoordinator: ObservableObject {
     /// jamais les muettes. **Une seule formule, et elle n'est plus ici** : elle
     /// est au registre, qui la sert à toutes les surfaces avec les bornes que
     /// chacune DÉCLARE.
+    ///
+    /// Ce qu'on compte ici, ce sont des CONVERSATIONS (D-L1, #7236) : la somme
+    /// des messages reste au registre pour les surfaces qui la montrent, elle
+    /// n'est simplement pas ce que l'icône dit.
     private func recomputeTotal() {
-        let total = ledger.total(excludingOpen: true, excludingMuted: true)
+        let total = ledger.conversationUnreadTotal(excludingOpen: true)
         if total != conversationUnreadTotal {
             conversationUnreadTotal = total
         }

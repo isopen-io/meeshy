@@ -258,19 +258,22 @@ struct CheckNotificationsIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog & ShowsSnippetView {
-        // Load unread count from shared container
-        let unreadCount = getUnreadCount()
+        // Ce que porte `unread_count` de l'App Group est un compte de
+        // CONVERSATIONS non lues, hors muettes (D-L1, #7236) — le même nombre
+        // que l'`aps.badge` du serveur et que l'icône d'app. Le dire
+        // « messages » ferait mentir le seul chiffre que Siri prononce.
+        let unreadConversations = getUnreadCount()
 
-        if unreadCount == 0 {
+        if unreadConversations == 0 {
             return .result(
-                dialog: "You have no unread messages",
+                dialog: "You have no unread conversations",
                 view: NotificationCheckView(unreadCount: 0, recentMessages: [])
             )
         } else {
             let recentMessages = getRecentUnreadMessages()
             return .result(
-                dialog: "You have \(unreadCount) unread message\(unreadCount == 1 ? "" : "s")",
-                view: NotificationCheckView(unreadCount: unreadCount, recentMessages: recentMessages)
+                dialog: "You have \(unreadConversations) unread conversation\(unreadConversations == 1 ? "" : "s")",
+                view: NotificationCheckView(unreadCount: unreadConversations, recentMessages: recentMessages)
             )
         }
     }
