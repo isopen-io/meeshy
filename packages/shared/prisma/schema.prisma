@@ -402,6 +402,7 @@ model User {
   postViews          PostView[]        @relation("UserPostViews")
   postImpressions    PostImpression[]  @relation("UserPostImpressions")
   postBookmarks      PostBookmark[]    @relation("UserPostBookmarks")
+  messageStars       MessageStar[]     @relation("UserMessageStars")
   postMediaDownloads PostMediaDownload[] @relation("UserPostMediaDownloads")
   postEngagements    PostEngagement[]  @relation("UserPostEngagements")
 
@@ -935,6 +936,9 @@ model Message {
 
   // Per-user deletions ("delete for me" feature)
   userDeletions UserMessageDeletion[]
+
+  // Étoiles PERSONNELLES posées sur ce message (#7377) — voir `MessageStar`.
+  stars MessageStar[]
 
   // Phase 4 §6.2 — compound index on (conversationId, clientMessageId)
   // for the dedup `findFirst` query path. The unique-ness constraint
@@ -3859,6 +3863,29 @@ model PostEngagement {
   @@index([postId])
   @@index([userId])
   @@index([postId, createdAt])
+}
+
+/// Étoile PERSONNELLE d'un lecteur sur un message (#7377) — le favori de
+/// message, jamais l'épingle (`Message.pinnedAt`, commune à la conversation).
+///
+/// Calque de `PostBookmark`. `conversationId` est une COPIE immuable de
+/// `Message.conversationId`, écrite par le serveur depuis la ligne du message
+/// (un message ne change jamais de conversation) : elle permet à la liste de
+/// filtrer la participation COURANTE dans la requête. L'étoile survit au départ
+/// de la conversation ; c'est la LECTURE qui la retire (voir
+/// `services/gateway/decisions.md`, § « Le favori de message »).
+model MessageStar {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId         String   @db.ObjectId
+  messageId      String   @db.ObjectId
+  conversationId String   @db.ObjectId
+  createdAt      DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation("UserMessageStars", fields: [userId], references: [id])
+
+  @@unique([userId, messageId])
+  @@index([userId, createdAt])
 }
 
 /// Bookmark/sauvegarde d'un post
