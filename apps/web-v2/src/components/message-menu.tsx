@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { flag, languageName } from '@/lib/languages';
 import { placeMessageMenuCluster } from '@/lib/view/popover';
 import { safeAreaInsets } from '@/lib/view/safe-area';
+import { isProgrammaticScroll } from '@/lib/view/programmatic-scroll';
 import { useRovingMenu } from '@/lib/view/roving-menu';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import {
@@ -156,10 +157,31 @@ export function MessageMenu({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [panel]);
 
+  /**
+   * LE FIL QUI SE RÉ-ANCRE TOUT SEUL NE FERME PAS CE MENU (#7242).
+   *
+   * Un `scroll` du LECTEUR emporte la rangée sous le cluster : on ferme.
+   * Un `scroll` que l'APPLICATION vient d'écrire — l'ancrage bas quand un
+   * correspondant se met à écrire (`use-thread-typing.ts`), l'ancrage
+   * d'ouverture du fil (`routes/thread.tsx`) — n'est l'intention de
+   * personne, et le menu disparaissait pendant qu'on visait une entrée.
+   * Mesuré sur `/c/c-deploiement` : treize millisecondes de vie sous charge,
+   * `check-thread-states.mjs` § 6.2 rouge (« aucun cluster »).
+   *
+   * La distinction n'est pas devinée ici : `pinToBottom` DÉCLARE la position
+   * qu'il vient d'écrire (`markProgrammaticScroll`), et la lecture la
+   * CONSOMME — un seul `scroll` par écriture, donc le geste d'après referme
+   * bien le menu.
+   */
+  const onScrollAway = (event: Event) => {
+    if (isProgrammaticScroll(event.target)) return;
+    onClose();
+  };
+
   const roving = useRovingMenu({
     itemCount: RAIL_ITEM_COUNT + listRows,
     returnFocusTo: () => target.element,
-    onScroll: onClose,
+    onScroll: onScrollAway,
     onResize: onClose,
     initialOpen: true,
   });
