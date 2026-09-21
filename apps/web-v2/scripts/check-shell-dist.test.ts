@@ -86,7 +86,7 @@ describe('auditShellDist — les quatre clauses du contrat de la variante B', ()
  * dur : les quatre clauses ci-dessus, toutes bâties sur `index.html` seul,
  * ne pouvaient pas le voir.
  */
-describe('auditShellDist — les cinq pages institutionnelles sont dans CE dist (#5812, élargit #5821)', () => {
+describe('auditShellDist — les sept pages institutionnelles sont dans CE dist (#5812, élargit #5821)', () => {
   test('un dist SANS aucune page institutionnelle est refusé — ROUGE', () => {
     const sansInstitutionnel = FICHIERS_CONFORMES.filter((f) => !f.includes('/index.html') || f === 'dist-capacitor/index.html');
     const violations = auditShellDist(CONFORME, sansInstitutionnel);
@@ -104,7 +104,7 @@ describe('auditShellDist — les cinq pages institutionnelles sont dans CE dist 
     expect(violations[0].includes('about')).toBe(false);
   });
 
-  test('un dist complet (les cinq pages) ne rend aucune violation de cette clause', () => {
+  test('un dist complet (les sept pages) ne rend aucune violation de cette clause', () => {
     const violations = auditShellDist(CONFORME, FICHIERS_CONFORMES);
     expect(violations.some((v: string) => v.includes('institutionnelle'))).toBe(false);
   });

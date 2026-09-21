@@ -1,4 +1,7 @@
+import '@/styles/story-fonts.css';
+
 import { hexColorCss } from './background';
+import { STORY_FONT_FAMILIES, STORY_FONT_STYLES, type StoryFontStyle, storyFontStack } from './story-fonts';
 import { FLAT_TEXT_SHADOW, parseTextEffect, textEffectShadow } from './text-effect';
 
 /**
@@ -9,14 +12,13 @@ import { FLAT_TEXT_SHADOW, parseTextEffect, textEffectShadow } from './text-effe
  * qu'il ne sert pas est PIRE qu'une surface non câblée » (CLAUDE.md § Prisme,
  * cycle 123).
  *
- * **L'arbitrage de ce lot : aucune police web.** Les dix-huit familles de
- * `StoryTextStyle.swift` ne choisissent QUE des polices (depuis #4850), et
- * seize d'entre elles nomment une police embarquée iOS. Le poids de première
- * peinture est déjà au-dessus de son plafond (#6940), donc **rien n'est
- * téléchargé** : cinq familles sont SERVIES parce qu'elles n'exigent aucun
- * fichier, les treize autres restent sur la police système — jamais un repli
- * serif qui ferait croire à la bonne famille. Elles attendent leur budget,
- * une issue de suivi.
+ * **LES DIX-HUIT FAMILLES SONT SERVIES** (#6951, qui solde l'arbitrage de
+ * #6943). Cinq ne coûtent aucun octet — police système, Georgia, Courier ; les
+ * treize autres, qu'iOS rend par une police EMBARQUÉE et propriétaire, sont
+ * peintes par un substitut redistribuable que `story-fonts.ts` déclare et que
+ * `story-fonts.css` charge À LA DEMANDE. Derrière chaque famille vient la pile
+ * NATIVE et rien d'autre : un fichier qui n'arrive pas rend la police système,
+ * jamais un serif de repli qui ferait croire à la bonne famille.
  *
  * Tout le reste du vocabulaire iOS passe à coût nul, et il y est entier :
  * l'axe EFFET (`text-effect.ts`, vingt-cinq ombres en `em`), la couleur, la
@@ -41,22 +43,58 @@ export type SceneTextAppearance = {
 
 type TextPayload = Readonly<Record<string, unknown>>;
 
-/** Les familles qui ne coûtent AUCUN octet — police système, ou pile
- * web-safe présente sur les plateformes courantes. L'ordre est celui des
- * pickers iOS (`StoryTextStyle.allCases`), réduit à ce qui se sert. */
-export const SERVED_TEXT_STYLES = ['bold', 'neon', 'classic', 'italic', 'typewriter'] as const;
+/** Les DIX-HUIT familles, dans l'ordre des pickers iOS
+ * (`StoryTextStyle.allCases`) — l'ordre est le contrat, insérer au milieu
+ * déplacerait les habitudes. */
+export const SERVED_TEXT_STYLES = [
+  'bold',
+  'neon',
+  'typewriter',
+  'handwriting',
+  'classic',
+  'calligraphy',
+  'cartoon',
+  'futuristic',
+  'fantasy',
+  'curve',
+  'tag',
+  'italic',
+  'retro',
+  'elegant',
+  'poster',
+  'bubble',
+  'note',
+  'brush',
+] as const;
 export type ServedTextStyle = (typeof SERVED_TEXT_STYLES)[number];
 
-/** Nom PostScript iOS → pile web équivalente + graisse, `undefined` pour la
- * police système. `bold` et `neon` sont les DEUX familles qu'iOS rend déjà
- * sans police embarquée (`fontName == nil`). */
-const STYLE_TABLE: Record<ServedTextStyle, { readonly family?: string; readonly weight: number; readonly italic?: true }> = {
+type StyleLook = { readonly family?: string; readonly weight: number; readonly italic?: true };
+
+/** Les CINQ à coût nul. `bold` et `neon` sont celles qu'iOS rend déjà sans
+ * police embarquée (`fontName == nil`) ; les trois autres nomment une pile
+ * web-safe présente sur les plateformes courantes. */
+const FREE_STYLES: Record<'bold' | 'neon' | 'classic' | 'italic' | 'typewriter', StyleLook> = {
   bold: { weight: 800 },
   neon: { weight: 600 },
   classic: { family: 'Georgia, "Times New Roman", serif', weight: 500 },
   italic: { family: 'Georgia, "Times New Roman", serif', weight: 400, italic: true },
   typewriter: { family: '"Courier New", Courier, monospace', weight: 400 },
 };
+
+/** La graisse vient du FICHIER, jamais de `StoryTextStyle.fontWeight` : iOS
+ * déclare 700 pour `note` parce que sa police EST Noteworthy-**Bold**, et
+ * réclamer 700 d'un substitut qui n'a que du 400 ferait graisser le glyphe
+ * par le navigateur — un faux gras que personne n'a dessiné. */
+/* L'assertion est celle d'`Object.fromEntries`, qui rend un index de chaînes
+ * quelle que soit la précision du tableau d'entrée. Elle ne se garde pas
+ * toute seule — une famille absente satisferait encore le type — et c'est
+ * `story-compose-styles.test.ts` qui ferme le trou, en comptant à l'exécution
+ * les TREIZE familles dont la pile porte le repli natif. */
+const EMBEDDED_STYLES = Object.fromEntries(
+  STORY_FONT_STYLES.map((style) => [style, { family: storyFontStack(style), weight: STORY_FONT_FAMILIES[style].weight }]),
+) as Record<StoryFontStyle, StyleLook>;
+
+const STYLE_TABLE: Record<ServedTextStyle, StyleLook> = { ...FREE_STYLES, ...EMBEDDED_STYLES };
 
 /** `StoryTextWeight` (`StoryTextObject.swift`) → graisse CSS. */
 const WEIGHT_TABLE: Record<string, number> = { thin: 200, normal: 400, semibold: 600, bold: 800 };

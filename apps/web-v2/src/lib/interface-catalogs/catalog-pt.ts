@@ -740,6 +740,19 @@ const pt = {
   'story.studio.style.classic': 'Clássico',
   'story.studio.style.italic': 'Itálico',
   'story.studio.style.typewriter': 'Máquina',
+  'story.studio.style.handwriting': 'Manuscrita',
+  'story.studio.style.calligraphy': 'Caligrafia',
+  'story.studio.style.cartoon': 'Cartoon',
+  'story.studio.style.futuristic': 'Futurista',
+  'story.studio.style.fantasy': 'Fantasia',
+  'story.studio.style.curve': 'Curva',
+  'story.studio.style.tag': 'Grafite',
+  'story.studio.style.retro': 'Retrô',
+  'story.studio.style.elegant': 'Elegante',
+  'story.studio.style.poster': 'Cartaz',
+  'story.studio.style.bubble': 'Bolha',
+  'story.studio.style.note': 'Nota',
+  'story.studio.style.brush': 'Pincel',
   'story.studio.effect.glow': 'Brilho',
   'story.studio.effect.neon': 'Néon',
   'story.studio.effect.outline': 'Contorno',
@@ -851,6 +864,12 @@ const pt = {
   'message-detail.loading': 'Carregando…',
   'message-detail.load-error': 'Não foi possível carregar estas informações',
   'message-detail.retry': 'Tentar novamente',
+
+  'download.title': 'Baixe o Meeshy',
+  'download.body': 'Escreva no seu idioma e leia no seu: o Meeshy traduz cada mensagem no caminho.',
+  'download.appStore': 'Baixar na App Store',
+  'download.web': 'Abrir o Meeshy no navegador',
+  'download.otherPlatforms': 'No Android e no computador, o Meeshy funciona direto no navegador.',
 
 } satisfies InterfaceCatalog;
 

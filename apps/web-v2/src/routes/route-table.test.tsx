@@ -181,6 +181,45 @@ describe('NotFound — ce qu’il dit vient du catalogue (#6341)', () => {
 });
 
 /**
+ * L'ADRESSE D'UN RÉEL PARTAGÉ (#7298) — `/reel/:postId`.
+ *
+ * Elle n'est pas une adresse de plus : la PASSERELLE la grave dans chaque lien
+ * de partage de réel (`PostService.shareWithTrackingLink`, `originalUrl =
+ * <base>/reel/<id>`), et `/l/:token` y envoie le lecteur par un
+ * `location.replace` — une navigation ENTIÈRE, pas un lien interne. Non servie,
+ * elle tombait sur `NotFound` pour tous les liens déjà émis, et il s'en
+ * fabriquait un de plus à chaque partage.
+ *
+ * Le témoin interroge l'ADRESSE, jamais la clé : il demande à la table entière
+ * qui l'apparie. Écrit `ROUTES.reel.pattern`, il aurait mesuré une entrée dont
+ * le nom est libre ; écrit ainsi, il tombe dès que PLUS AUCUNE route ne sert
+ * `/reel/<id>` — ce qui est exactement le défaut.
+ */
+describe('ROUTES — l’adresse d’un réel partagé (#7298)', () => {
+  const servedBy = (path: string) =>
+    Object.values(ROUTES).filter((route) => match(compile(route.pattern), path) !== null);
+
+  test('/reel/<id> est SERVIE, par une route et une seule', () => {
+    const served = servedBy('/reel/507f1f77bcf86cd799439011');
+    expect(served).toHaveLength(1);
+    expect(match(compile(served[0]!.pattern), '/reel/507f1f77bcf86cd799439011')).toEqual({
+      post: '507f1f77bcf86cd799439011',
+    });
+  });
+
+  test('elle ouvre le MÊME écran que /reels — un seul import(), jamais deux lecteurs à faire diverger', () => {
+    expect(servedBy('/reel/abc123')[0]!.screen).toBe(ROUTES.reels.screen);
+  });
+
+  test('/reels garde son adresse, et /reel sans identifiant n’en est pas une', () => {
+    expect(servedBy('/reels')).toHaveLength(1);
+    expect(servedBy('/reels')[0]!.pattern).toBe('/reels');
+    expect(servedBy('/reel')).toHaveLength(0);
+    expect(servedBy('/reel/')).toHaveLength(0);
+  });
+});
+
+/**
  * L'ADRESSE D'UNE HUMEUR PARTAGÉE (#7313) — `/mood/:postId`.
  *
  * DERNIÈRE des quatre adresses que `PostService.shareWithTrackingLink` compose
@@ -220,20 +259,32 @@ describe('ROUTES — l’adresse d’une humeur partagée (#7313)', () => {
     expect(servedBy('/mood')).toHaveLength(0);
     expect(servedBy('/mood/')).toHaveLength(0);
   });
+});
 
-  /**
-   * LES TROIS QUE CE LOT PEUT TENIR. La quatrième — `/reel/<id>` — est servie
-   * par #7298 (PR #7314), sur une branche SŒUR partie du même `dev` : un témoin
-   * qui les nommerait toutes les quatre serait ROUGE dans celui des deux lots
-   * qui arrive en premier, quel qu'il soit. Le témoin qui clôt la famille des
-   * quatre `webPath` de `PostService.shareWithTrackingLink` se pose donc une
-   * fois les DEUX sur `dev`, pas avant.
-   */
-  test('/post, /story et /mood servent la même publication, quelle que soit la porte', () => {
-    for (const path of ['/post/abc123', '/feeds/post/abc123', '/mood/abc123']) {
-      expect(servedBy(path)).toHaveLength(1);
-      expect(servedBy(path)[0]!.screen).toBe(ROUTES.post.screen);
-    }
-    expect(servedBy('/story/abc123')).toHaveLength(1);
+/**
+ * `/download` — L'ADRESSE DE L'INVITATION (#7297).
+ *
+ * L'app publiée l'envoie par SMS (`DiscoverViewModel.swift:285`,
+ * `PhonebookViewModel.swift:282`, gardée côté iOS par
+ * `DiscoverViewModelTests.swift:271`) : elle est dans un binaire déjà
+ * distribué, elle ne se corrige pas côté iOS, et c'est la PREMIÈRE chose que
+ * voit quelqu'un qui ne connaît pas encore Meeshy. Non servie, elle tombait
+ * sur `NotFound`.
+ *
+ * Le témoin interroge l'ADRESSE, jamais la clé — il tombe dès que plus aucune
+ * route ne sert `/download`, ce qui est exactement le défaut.
+ */
+describe('ROUTES — l’adresse de l’invitation (#7297)', () => {
+  const servedBy = (path: string) =>
+    Object.values(ROUTES).filter((route) => match(compile(route.pattern), path) !== null);
+
+  test('/download est SERVIE, par une route et une seule', () => {
+    const served = servedBy('/download');
+    expect(served).toHaveLength(1);
+    expect(match(compile(served[0]!.pattern), '/download')).toEqual({});
+  });
+
+  test('elle est LITTÉRALE — elle n’avale pas `/download/<quelque-chose>`', () => {
+    expect(servedBy('/download/ios')).toHaveLength(0);
   });
 });

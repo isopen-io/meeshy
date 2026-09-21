@@ -3066,11 +3066,63 @@ Les deux sont à relever, pas à corriger ici : un lot de rail qui « réparerai
 
 **Et la cause est MESURÉE, pas déduite** (#6950) : deux runs de la suite complète, même arbre, même diff, à quelques minutes d'écart — **250 s machine chargée ⇒ 5 173 pass / 2 fail** ; **32 s machine libre ⇒ 5 286 pass / 0 fail**. À 32 s le témoin reste sous le seuil des 2 minutes, à 250 s il l'a franchi avant d'être atteint. Les deux échecs sont donc une fonction de la CHARGE, et ils passeront au rouge définitif le jour où la suite dépassera 2 minutes en CI. **Un rouge qui disparaît sur une machine libre n'est pas un rouge résolu** — c'est un témoin dont la borne a cessé de mesurer ce qu'il annonce.
 
-## D-84 — Le studio de story est un PLATEAU : plusieurs objets, des gestes, et AUCUNE police web (#6943, #6944)
+## D-84 — Le studio de story est un PLATEAU : plusieurs objets, des gestes, et treize polices chargées à la demande (#6943, #6944, #6951)
+
+> **AMENDÉ LE 2026-09-21 PAR #6951 — « aucune police web » n'est plus vrai, et l'arbitrage qui le posait était fondé sur la MAUVAISE raison.** Les dix-huit familles sont désormais servies. Ce que la section « L'arbitrage qui gouverne tout le reste » dit ci-dessous reste l'histoire exacte de #6943, et se lit désormais avec cet amendement. La suite de D-84 — le plateau, les gestes, la géographie, la légende — est INCHANGÉE.
+>
+> ### Ce que la mesure a corrigé dans l'arbitrage
+>
+> #6943 a différé les treize familles pour une raison de **budget**. La raison était réelle mais pas la principale : **les treize polices d'iOS sont TOUTES propriétaires** — Zapfino et Snell Roundhand (Linotype), Papyrus, Marker Felt, American Typewriter et Bradley Hand (ITC/Letraset), Didot, Futura Condensed, Avenir Next Condensed, Arial Rounded MT (Monotype/Linotype), Chalkboard SE et Noteworthy (Apple), Savoye LET (Letraset). Une application iOS a le droit de les UTILISER, parce qu'elles sont sur l'appareil ; un serveur web n'a le droit de les SERVIR à personne. **Aucun budget n'aurait débloqué ce lot** : « attendre leur budget » désignait un obstacle qui n'était pas celui qui bloquait.
+>
+> **Décision** — chaque famille reçoit un **substitut de même caractère, redistribuable** (OFL 1.1 ou Apache 2.0), sous-ensemblé au latin. Ce n'est pas la police d'iOS ; c'est sa famille. L'auteur qui écrit en `calligraphy` voulait une calligraphie, et le web en rend une — là où il ne rendait, jusqu'ici, rien du tout. La table, la provenance vérifiable et les licences : `src/lib/canvas/story-fonts.ts` et `src/styles/fonts/NOTICE.md`.
+>
+> | famille | police iOS | substitut servi | octets |
+> |---|---|---|---|
+> | `handwriting` | SnellRoundhand | Parisienne 400 | 22 332 |
+> | `calligraphy` | Zapfino | Italianno 400 | 25 292 |
+> | `cartoon` | ChalkboardSE-Bold | Comic Neue 700 | 12 800 |
+> | `futuristic` | Futura-CondensedExtraBold | Saira Condensed 800 | 12 060 |
+> | `fantasy` | Papyrus | Metamorphous 400 | 13 876 |
+> | `curve` | SavoyeLetPlain | Tangerine 400 | 16 248 |
+> | `tag` | MarkerFelt-Wide | Permanent Marker 400 | 29 296 |
+> | `retro` | AmericanTypewriter | Cutive 400 | 15 332 |
+> | `elegant` | Didot | Prata 400 | 11 916 |
+> | `poster` | AvenirNextCondensed-Heavy | Anton 400 | 12 004 |
+> | `bubble` | ArialRoundedMTBold | Fredoka 600 | 16 464 |
+> | `note` | Noteworthy-Bold | Patrick Hand 400 | 14 224 |
+> | `brush` | BradleyHandITCTT-Bold | Caveat 700 | 51 068 |
+>
+> ### Le poids : conditionnel par NATURE, et c'est ce qu'on garde
+>
+> 252 912 octets pour les treize, **et aucun lecteur ne les paie ensemble.** Une `@font-face` ne coûte que ses lignes de CSS tant qu'aucun caractère de son `unicode-range` n'est peint : mesuré, la feuille entière pèse **554 octets gzip -9**. Un lecteur qui n'ouvre aucune story ne télécharge rien ; celui qui en ouvre une en `handwriting` paie 22 Ko, une fois. Médiane par famille : 15 332 octets.
+>
+> **La première peinture ne bouge pas : 49,55 Ko pour un plafond de 90** (49,53 avant le lot ; les 0,02 Ko sont le nom d'un chunk, pas une police). `interface_catalogs` 75,03 → 76 Ko pour un plafond de 141 — les treize libellés payés sept fois.
+>
+> Les TROIS façons de rendre ce coût inconditionnel sont gardées par `measure-weight.mjs`, parce qu'aucune ne se voit dans un plafond :
+> 1. une `@font-face` qui atteint la feuille CRITIQUE ;
+> 2. **le précache du service worker** — et c'est le défaut que le gate a réellement attrapé : `globPatterns` nommait `woff2` depuis toujours, un motif qui ne coûtait rien tant qu'aucune police n'existait. Les treize sont arrivées DANS ce motif, et Workbox les inscrivait au manifeste : **247 Ko téléchargés à l'INSTALLATION par chaque visiteur, plus de quatre fois la première peinture entière**, pour des polices que la plupart ne verront jamais. Un précache ANNULE la mécanique même sur laquelle ce budget repose. Exclusion : `vite.config.ts › globIgnores`, gardée sur le `sw.js` PRODUIT et non sur la ligne de config ;
+> 3. un fichier qui disparaît ou change sans que personne ne le dise — d'où un cliquet **exact** (`budgets.json › story_fonts.bytes`), sans la marge que les chunks voisins portent : un chunk grossit à chaque ligne de code, un BINAIRE ne dérive pas. Le seul geste qui bouge ce nombre est une substitution délibérée, et une marge la laisserait passer en silence.
+>
+> ### Le repli ne ment pas
+>
+> Derrière chaque famille vient **la pile NATIVE et rien d'autre** (`storyFontStack`) — jamais `cursive`, `fantasy` ou `serif`, qui rendraient une police d'allure voisine et feraient croire que le fichier a chargé. `font-display: swap` : le texte est peint tout de suite dans la police système, puis échangé ; si le fichier n'arrive jamais, le rendu est exactement celui d'avant ce lot. `block` laisserait le texte invisible jusqu'à trois secondes, `optional` renoncerait à la police pour toute la première visite — les deux ont été écartés, pas oubliés.
+>
+> ### Ce qui N'EST PAS servi, et il faut le dire
+>
+> - **L'ARABE.** Aucun des treize substituts ne le dessine — les polices d'iOS non plus. Un texte arabe reste peint par la police système, et son `unicode-range` garantit qu'il ne télécharge même pas le fichier. C'est la seule des sept langues qui ne reçoit pas la typographie de l'auteur.
+> - **La FIDÉLITÉ au dessin d'iOS.** Un substitut rend la FAMILLE, pas la police : une story composée sur iPhone en `calligraphy` ne s'affiche pas identiquement sur le web. C'est irréductible tant que ces polices sont propriétaires, et c'est la seule dimension typographique qui reste divergente.
+> - **La graisse déclarée par iOS.** `StoryTextStyle.fontWeight` dit 700 pour `note` parce que sa police EST Noteworthy-**Bold** ; réclamer 700 d'un substitut qui n'a que du 400 ferait graisser le glyphe par le navigateur — un faux gras que personne n'a dessiné. La graisse servie est celle du FICHIER. Un `fontWeight` explicite de l'auteur reste honoré, inchangé.
+> - **Hors ligne.** Une story jamais vue en ligne rend son texte dans la police système : les fichiers sont hors du précache (point 2 ci-dessus). Arbitrage assumé — le repli est propre, et 247 Ko payés par tous pour ce cas ne le sont pas.
+>
+> ### Où les preuves vivent
+>
+> `story-fonts.test.ts` tient l'inventaire (une face par famille, le fichier de la table, le poids EXACT de chaque fichier, `swap`, `unicode-range`, le repli, le NOTICE) ; `story-compose-styles.test.ts` tient l'égalité **offert = peint** — « une famille à moitié servie est pire que son absence » ; `check-story-plateau.mjs` le prouve au NAVIGATEUR, famille par famille, sur le `getComputedStyle().fontFamily` du texte rendu ET sur `document.fonts.check` — parce qu'une `@font-face` dont l'URL casse laisse une chaîne parfaitement conforme. **Ce dernier témoin a été falsifié avant d'être cru** : un fichier corrompu le faisait mourir en `uncaughtException` sans nommer la famille, ce que la falsification a corrigé — un gate qui plante n'est pas un gate qui accuse.
+
+### L'arbitrage initial de #6943, conservé pour l'histoire
 
 **Décision** — le studio livré par #6900 avait trois valeurs (un fond, un son de fond, UN texte d'`id` littéral `'text'`). Il porte désormais **N objets texte**, chacun avec sa **pose**, sa **langue** et son **style** ; **deux** portes visuelles (le fond, et un **calque** d'avant-plan en `plane: 'fg'`) ; **un son** dont le plan décide du rôle ; et une **légende par média**. La directive porteur du 2026-09-17 nommait ces cinq manques.
 
-### L'arbitrage qui gouverne tout le reste : aucune police web
+### L'arbitrage qui gouverne tout le reste : aucune police web — PÉRIMÉ, voir l'amendement #6951 en tête de D-84
 
 **Depuis #4850, un `textStyle` ne choisit QU'UNE POLICE** — ni couleur, ni fond, ni contour, ni lueur. Et seize des dix-huit familles de `StoryTextStyle.swift` nomment une police **embarquée dans l'app iOS** (Zapfino, Papyrus, Noteworthy, SnellRoundhand…). Les reproduire sur le web veut dire charger des WOFF2, et le poids de première peinture est déjà au-dessus de son plafond. **Ce lot ne télécharge aucun octet de police** : cinq familles sont servies parce qu'elles n'en exigent aucune — `bold` et `neon` (les DEUX qu'iOS rend déjà sur la police système, `fontName == nil`), `classic` et `italic` (Georgia), `typewriter` (Courier). Les treize autres attendent leur budget, une issue de suivi.
 
@@ -3115,7 +3167,7 @@ Et le commentaire de `stories-publish.ts` qui documentait `content` comme « **L
 
 ### Ce que ce lot NE fait PAS, assumé
 
-Un seul fond et un seul calque (pas N visuels) ; un seul son ; six effets NOMMÉS sur vingt-cinq et huit couleurs sur quatorze (une clé traduite se paie sept fois — les dix-neuf autres effets restent LISIBLES d'un document venu d'iOS, que le moteur peint déjà, ils ne sont simplement pas PROPOSÉS) ; treize familles typographiques ; les formes de cadre `diamond`/`cloud`/`speech` (un tracé SVG) ; `glass` (un compositing par texte, question produit ouverte depuis #6901) ; le pincement à deux doigts ; l'appui long ouvrant un menu contextuel d'objet (`StoryCanvasContextAction`, sept entrées) ; la timeline d'un objet. Chacun une issue de suivi.
+Un seul fond et un seul calque (pas N visuels) ; un seul son ; six effets NOMMÉS sur vingt-cinq et huit couleurs sur quatorze (une clé traduite se paie sept fois — les dix-neuf autres effets restent LISIBLES d'un document venu d'iOS, que le moteur peint déjà, ils ne sont simplement pas PROPOSÉS) ; ~~treize familles typographiques~~ (SOLDÉ par #6951, voir l'amendement en tête) ; les formes de cadre `diamond`/`cloud`/`speech` (un tracé SVG) ; `glass` (un compositing par texte, question produit ouverte depuis #6901) ; le pincement à deux doigts ; l'appui long ouvrant un menu contextuel d'objet (`StoryCanvasContextAction`, sept entrées) ; la timeline d'un objet. Chacun une issue de suivi.
 
 ---
 

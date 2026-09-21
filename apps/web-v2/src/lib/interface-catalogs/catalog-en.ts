@@ -736,6 +736,19 @@ const en = {
   'story.studio.style.classic': 'Classic',
   'story.studio.style.italic': 'Italic',
   'story.studio.style.typewriter': 'Typewriter',
+  'story.studio.style.handwriting': 'Handwriting',
+  'story.studio.style.calligraphy': 'Calligraphy',
+  'story.studio.style.cartoon': 'Cartoon',
+  'story.studio.style.futuristic': 'Futuristic',
+  'story.studio.style.fantasy': 'Fantasy',
+  'story.studio.style.curve': 'Curve',
+  'story.studio.style.tag': 'Tag',
+  'story.studio.style.retro': 'Retro',
+  'story.studio.style.elegant': 'Elegant',
+  'story.studio.style.poster': 'Poster',
+  'story.studio.style.bubble': 'Bubble',
+  'story.studio.style.note': 'Note',
+  'story.studio.style.brush': 'Brush',
   'story.studio.effect.glow': 'Glow',
   'story.studio.effect.neon': 'Neon',
   'story.studio.effect.outline': 'Outline',
@@ -847,6 +860,12 @@ const en = {
   'message-detail.loading': 'Loading…',
   'message-detail.load-error': 'Couldn’t load this information',
   'message-detail.retry': 'Retry',
+
+  'download.title': 'Get Meeshy',
+  'download.body': 'Write in your language, read in yours: Meeshy translates every message on the way.',
+  'download.appStore': 'Download on the App Store',
+  'download.web': 'Open Meeshy in your browser',
+  'download.otherPlatforms': 'On Android and on a computer, Meeshy runs right in your browser.',
 
 } satisfies InterfaceCatalog;
 

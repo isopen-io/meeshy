@@ -736,6 +736,19 @@ const de = {
   'story.studio.style.classic': 'Klassisch',
   'story.studio.style.italic': 'Kursiv',
   'story.studio.style.typewriter': 'Schreibmaschine',
+  'story.studio.style.handwriting': 'Handschrift',
+  'story.studio.style.calligraphy': 'Kalligrafie',
+  'story.studio.style.cartoon': 'Comic',
+  'story.studio.style.futuristic': 'Futuristisch',
+  'story.studio.style.fantasy': 'Fantasy',
+  'story.studio.style.curve': 'Schwung',
+  'story.studio.style.tag': 'Graffiti',
+  'story.studio.style.retro': 'Retro',
+  'story.studio.style.elegant': 'Elegant',
+  'story.studio.style.poster': 'Plakat',
+  'story.studio.style.bubble': 'Blase',
+  'story.studio.style.note': 'Notiz',
+  'story.studio.style.brush': 'Pinsel',
   'story.studio.effect.glow': 'Leuchten',
   'story.studio.effect.neon': 'Neon',
   'story.studio.effect.outline': 'Kontur',
@@ -847,6 +860,12 @@ const de = {
   'message-detail.loading': 'Wird geladen…',
   'message-detail.load-error': 'Diese Informationen konnten nicht geladen werden',
   'message-detail.retry': 'Erneut versuchen',
+
+  'download.title': 'Meeshy holen',
+  'download.body': 'Schreibe in deiner Sprache und lies in deiner: Meeshy übersetzt jede Nachricht unterwegs.',
+  'download.appStore': 'Laden im App Store',
+  'download.web': 'Meeshy im Browser öffnen',
+  'download.otherPlatforms': 'Auf Android und am Computer läuft Meeshy direkt im Browser.',
 
 } satisfies InterfaceCatalog;
 

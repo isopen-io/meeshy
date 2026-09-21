@@ -733,6 +733,19 @@ const ar = {
   'story.studio.style.classic': 'كلاسيكي',
   'story.studio.style.italic': 'مائل',
   'story.studio.style.typewriter': 'آلة كاتبة',
+  'story.studio.style.handwriting': 'خط اليد',
+  'story.studio.style.calligraphy': 'خط منمق',
+  'story.studio.style.cartoon': 'كرتوني',
+  'story.studio.style.futuristic': 'مستقبلي',
+  'story.studio.style.fantasy': 'خيالي',
+  'story.studio.style.curve': 'منحني',
+  'story.studio.style.tag': 'غرافيتي',
+  'story.studio.style.retro': 'ريترو',
+  'story.studio.style.elegant': 'أنيق',
+  'story.studio.style.poster': 'ملصق',
+  'story.studio.style.bubble': 'فقاعة',
+  'story.studio.style.note': 'ملاحظة',
+  'story.studio.style.brush': 'فرشاة',
   'story.studio.effect.glow': 'توهج',
   'story.studio.effect.neon': 'نيون',
   'story.studio.effect.outline': 'حد خارجي',
@@ -844,6 +857,12 @@ const ar = {
   'message-detail.loading': 'جارٍ التحميل…',
   'message-detail.load-error': 'تعذر تحميل هذه المعلومات',
   'message-detail.retry': 'إعادة المحاولة',
+
+  'download.title': 'نزّل Meeshy',
+  'download.body': 'اكتب بلغتك واقرأ بلغتك: يترجم Meeshy كل رسالة في الطريق.',
+  'download.appStore': 'التنزيل من App Store',
+  'download.web': 'افتح Meeshy في المتصفح',
+  'download.otherPlatforms': 'على أندرويد وعلى الحاسوب، يعمل Meeshy مباشرة في المتصفح.',
 
 } satisfies InterfaceCatalog;
 
