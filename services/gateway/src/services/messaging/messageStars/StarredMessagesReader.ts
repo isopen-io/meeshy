@@ -14,6 +14,8 @@
  *      APRÈS le keyset, comme `/sync` (une courtoisie : illisible ⇒ on sert).
  *   4. Le verdict du message (règles 2 et 3) — `starredMessageVerdict`, le
  *      même que la pose d'une étoile.
+ *   5. Un expéditeur disparu répare la portée de la page et rejoue la lecture
+ *      (`withOrphanedSenderRepair`, #6501) au lieu de la rendre illisible.
  *
  * Les critères 2 à 4 se tranchent en mémoire, sur les lignes déjà chargées :
  * une page peut donc être COURTE. Le curseur avance sur la dernière étoile
@@ -27,6 +29,7 @@ import { decodeCursor, encodeCursor, keysetBeforeClause } from '../../../utils/k
 import { unsetOrNull } from '../../../utils/prisma-unset';
 import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloorsOrFail } from '../../historyFloor';
 import { NO_PERSONAL_HIDING, loadPersonalHistoryHidingByConversation } from '../../personalHistoryFilter';
+import { withOrphanedSenderRepair } from '../withOrphanedSenderRepair';
 import {
   STARRED_CONVERSATION_SELECT,
   STARRED_DIRECT_PEER_SELECT,
@@ -103,11 +106,17 @@ export class StarredMessagesReader {
 
     const conversationIds = unique(page.map((star) => star.conversationId));
     const [messages, conversations, hidingByConversation] = await Promise.all([
-      this.prisma.message.findMany({
-        where: { id: { in: page.map((star) => star.messageId) } },
-        select: STARRED_MESSAGE_SELECT,
-        take: page.length,
-      }),
+      // `sender` est une relation REQUISE : UN expéditeur disparu (#6501)
+      // ferait rejeter toute la page. La portée de la réparation est connue —
+      // les conversations des étoiles lues, les seules que cette lecture
+      // parcourt.
+      withOrphanedSenderRepair({ prisma: this.prisma, conversationIds }, () =>
+        this.prisma.message.findMany({
+          where: { id: { in: page.map((star) => star.messageId) } },
+          select: STARRED_MESSAGE_SELECT,
+          take: page.length,
+        }),
+      ),
       this.prisma.conversation.findMany({
         where: { id: { in: conversationIds } },
         select: STARRED_CONVERSATION_SELECT,

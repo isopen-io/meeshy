@@ -197,7 +197,7 @@ export const ANONYMOUS = {
 } as const;
 
 export async function buildApp(
-  prisma: ReturnType<typeof makePrisma>,
+  prisma: object,
   options: { authContext?: Row; emitted?: Emitted[] } = {},
 ): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
