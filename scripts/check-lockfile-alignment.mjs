@@ -144,6 +144,72 @@ const expandWorkspaceGlobs = (patterns, root) =>
       .sort();
   });
 
+/**
+ * **LE SECOND LOCKFILE** (#7303). Ce dépôt en porte DEUX : `bun.lock`, que la
+ * CI installe par défaut, et `pnpm-lock.yaml`, dont Turborepo dépend
+ * (`packageManager: pnpm@9.15.0`) et que le workflow prépare à chaque run.
+ * Le second n'était gardé par RIEN — et il a dérivé en silence : au
+ * 2026-09-21, il déclarait encore `vitest ^4.1.10` quand le manifeste disait
+ * `^5.0.0`, **un majeur entier de retard**, sans qu'aucun rouge ne l'ait
+ * jamais dit.
+ *
+ * On ne réécrit pas la question pour lui : c'est la MÊME — *chaque dépendance
+ * déclarée résout-elle dans la portée que son manifeste annonce ?* Seul le
+ * format diffère, et pnpm la rend plus directe que bun : il enregistre, à côté
+ * de chaque version résolue, le `specifier:` du manifeste AU MOMENT DE
+ * L'INSTALL. Une divergence entre ce champ et le manifeste EST la dérive, sans
+ * aucune inférence.
+ *
+ * Analyseur minimal plutôt qu'une dépendance YAML : la section `importers:`
+ * d'un lockfile v9 a une indentation strictement régulière (2 = répertoire,
+ * 4 = champ, 6 = paquet, 8 = `specifier`/`version`), et ajouter un paquet à la
+ * racine pour lire un fichier que cette garde surveille serait circulaire.
+ */
+const unquoteYaml = (value) =>
+  /^'.*'$/.test(value) || /^".*"$/.test(value) ? value.slice(1, -1) : value;
+
+const readPnpmImporters = (root) => {
+  const absolutePath = join(root, 'pnpm-lock.yaml');
+  if (!existsSync(absolutePath)) {
+    return null;
+  }
+  const importers = {};
+  let inside = false;
+  let directory = null;
+  let field = null;
+  let name = null;
+  for (const raw of readFileSync(absolutePath, 'utf8').split('\n')) {
+    if (/^importers:\s*$/.test(raw)) {
+      inside = true;
+      continue;
+    }
+    if (!inside) continue;
+    if (raw.trim() === '') continue;
+    if (/^\S/.test(raw)) break;
+    const indent = raw.length - raw.trimStart().length;
+    const text = raw.trim();
+    if (indent === 2 && text.endsWith(':')) {
+      directory = unquoteYaml(text.slice(0, -1));
+      importers[directory] = {};
+      field = null;
+      name = null;
+    } else if (indent === 4 && text.endsWith(':') && directory !== null) {
+      field = text.slice(0, -1);
+      importers[directory][field] = {};
+      name = null;
+    } else if (indent === 6 && text.endsWith(':') && field !== null) {
+      name = unquoteYaml(text.slice(0, -1));
+      importers[directory][field][name] = {};
+    } else if (indent === 8 && name !== null) {
+      const match = /^(specifier|version):\s*(.*)$/.exec(text);
+      if (match !== null) {
+        importers[directory][field][name][match[1]] = unquoteYaml(match[2].trim());
+      }
+    }
+  }
+  return importers;
+};
+
 const readWorld = (root) => {
   const rootManifest = readJson(join(root, 'package.json'));
   const patterns = Array.isArray(rootManifest.workspaces) ? rootManifest.workspaces : [];
@@ -154,7 +220,11 @@ const readWorld = (root) => {
       document: readJson(join(root, directory, 'package.json')),
     })),
   ];
-  return { manifests, lock: readJson(join(root, 'bun.lock'), stripTrailingCommas) };
+  return {
+    manifests,
+    lock: readJson(join(root, 'bun.lock'), stripTrailingCommas),
+    pnpm: readPnpmImporters(root),
+  };
 };
 
 const manifestPathOf = (directory) =>
@@ -416,6 +486,119 @@ const everyDeclaredLaggardStillLags = (world) => {
   );
 };
 
+/**
+ * LA MÊME QUESTION, POSÉE AU SECOND LOCKFILE (#7303).
+ *
+ * pnpm enregistre le `specifier:` du manifeste à côté de chaque version
+ * résolue. La dérive se lit donc SANS inférence : le champ enregistré n'est
+ * plus celui que le manifeste déclare. C'est exactement ce qui était vrai le
+ * 2026-09-21 pour `vitest` (lock `^4.1.10`, manifeste `^5.0.0`) et `fastify`,
+ * avant même le lot qui a élargi l'écart.
+ *
+ * `workspace:` est exclu comme ailleurs (`isInstallableRange`) : pnpm y écrit
+ * `link:…`, qui ne se compare à aucune portée sémantique.
+ */
+const pnpmImporterOf = (world, directory) =>
+  world.pnpm === null ? undefined : world.pnpm[directory === '' ? '.' : directory];
+
+/**
+ * DEUX SILENCES DE pnpm QUI SONT CORRECTS, et qu'il faut savoir avant de lire
+ * ce garde — les deux ont fait rougir cette sonde à tort le jour où elle a été
+ * écrite, et les deux ont été vérifiés dans le lockfile plutôt que devinés :
+ *
+ * 1. **un paquet déclaré dans DEUX champs n'est enregistré qu'une fois.**
+ *    `apps/web` déclare `dotenv` en `dependencies` (^17.4.2) ET en
+ *    `devDependencies` (^17.2.1) ; pnpm ne garde que le premier, ce qui est la
+ *    règle. On cherche donc le paquet dans TOUS les champs de l'importer avant
+ *    de le dire absent. (Que le manifeste se contredise est un défaut à part,
+ *    dans le legacy, et ce n'est pas à ce garde de le juger.)
+ * 2. **un workspace SANS dépendance JS n'a pas d'importer.**
+ *    `services/translator` (Python) et `packages/design-tokens` (généré) en
+ *    déclarent zéro. Un importer absent n'est donc un défaut que si le
+ *    manifeste demande quelque chose.
+ */
+const pnpmEntryOf = (importer, name) => {
+  for (const field of Object.keys(importer)) {
+    const bucket = importer[field];
+    if (isRecord(bucket) && isRecord(bucket[name])) {
+      return bucket[name];
+    }
+  }
+  return undefined;
+};
+
+/**
+ * LES PORTÉES QUE LE GESTIONNAIRE HONORE RÉELLEMENT — dédupliquées par nom,
+ * `INSTALLED_FIELDS` faisant foi dans son ordre (`dependencies` avant
+ * `devDependencies`). Ce n'est pas un confort : npm, pnpm et bun appliquent
+ * tous cette règle, et un lockfile n'enregistre donc qu'UNE portée par paquet.
+ * Comparer la seconde déclaration ferait rougir ce garde pour une divergence
+ * que le gestionnaire a, lui, déjà tranchée.
+ *
+ * Mesuré : `apps/web` déclare `dotenv` en `dependencies` (^17.4.2) ET en
+ * `devDependencies` (^17.2.1). La seconde est MORTE — elle n'installe rien et
+ * ment sur ce qui tourne. C'est un défaut de manifeste, pas de lockfile, et il
+ * a son propre suivi ; ce garde-ci mesure l'alignement, pas la cohérence
+ * interne d'un manifeste.
+ */
+const installableRangesOf = (document) => {
+  const seen = new Set();
+  return INSTALLED_FIELDS.flatMap((field) =>
+    Object.entries(rangesAt(document, field))
+      .filter(([, range]) => isInstallableRange(range))
+      .filter(([name]) => (seen.has(name) ? false : seen.add(name))),
+  );
+};
+
+const pnpmLockRepeatsTheRangesOfEachManifest = (world) =>
+  world.pnpm === null
+    ? []
+    : world.manifests.flatMap(({ directory, document }) => {
+        const declared = installableRangesOf(document);
+        const importer = pnpmImporterOf(world, directory);
+        if (importer === undefined) {
+          return declared.length === 0
+            ? []
+            : [`${manifestPathOf(directory)} : aucun importer dans pnpm-lock.yaml`];
+        }
+        return declared.flatMap(([name, range]) => {
+          const entry = pnpmEntryOf(importer, name);
+          if (entry === undefined) {
+            return [`${manifestPathOf(directory)} ${name}@${range} : absent de pnpm-lock.yaml`];
+          }
+          return entry.specifier === range || entry.specifier === undefined
+            ? []
+            : [
+                `${manifestPathOf(directory)} ${name} : déclare ${range}, pnpm-lock.yaml a enregistré ${entry.specifier}`,
+              ];
+        });
+      });
+
+/** La version que pnpm a figée, débarrassée de ses suffixes de pair
+ *  (`2.31.0(@types/node@26.1.1)`) — c'est la version installée qu'on compare. */
+const pnpmResolvedVersionOf = (entry) => {
+  const version = typeof entry.version === 'string' ? entry.version : undefined;
+  if (version === undefined) return undefined;
+  const cut = version.indexOf('(');
+  return cut === -1 ? version : version.slice(0, cut);
+};
+
+const everyPnpmDependencyResolvesInsideItsRange = (world) =>
+  world.pnpm === null
+    ? []
+    : world.manifests.flatMap(({ directory, document }) => {
+        const importer = pnpmImporterOf(world, directory);
+        if (importer === undefined) return [];
+        return installableRangesOf(document).flatMap(([name, range]) => {
+          const entry = pnpmEntryOf(importer, name);
+          if (entry === undefined) return [];
+          const version = pnpmResolvedVersionOf(entry);
+          return version === undefined || satisfies(version, range) !== false
+            ? []
+            : [`${manifestPathOf(directory)} ${name} : déclare ${range}, pnpm-lock.yaml résout ${version}`];
+        });
+      });
+
 const CHECKS = [
   ['chaque manifeste de workspace a son entrée dans bun.lock', everyWorkspaceOnDiskIsLocked],
   ['chaque workspace de bun.lock existe sur le disque', everyLockedWorkspaceIsOnDisk],
@@ -431,6 +614,11 @@ const CHECKS = [
   ['un paquet suivi satisfait chaque site déclarant', trackedPackagesSatisfyEverySite],
   ['aucun override non déclaré ne contredit un manifeste', noUndeclaredOverrideContradictsAManifest],
   ['chaque retard déclaré est encore un retard', everyDeclaredLaggardStillLags],
+  ['pnpm-lock.yaml recopie les portées de chaque manifeste', pnpmLockRepeatsTheRangesOfEachManifest],
+  [
+    'chaque dépendance directe résout dans la portée déclarée (pnpm)',
+    everyPnpmDependencyResolvesInsideItsRange,
+  ],
 ];
 
 const inspect = (world) =>
@@ -475,6 +663,33 @@ const versionEveryManifestWouldAccept = (world, name) => {
     null,
   );
   return (highest ?? [0, 0, 0]).join('.');
+};
+
+/**
+ * LA CIBLE DES SONDES pnpm, DÉRIVÉE — jamais un nom écrit en dur.
+ *
+ * Même raison que la version dérivée juste au-dessus (leçon 594) : un littéral
+ * encode l'état du dépôt le jour où la sonde est écrite, et le jour où ce
+ * paquet change de champ ou disparaît, la sonde devient AVEUGLE en silence.
+ * On prend donc la première dépendance qui soit À LA FOIS déclarée par un
+ * manifeste et enregistrée par `pnpm-lock.yaml` — s'il n'y en a aucune, il n'y
+ * a rien à mesurer.
+ */
+const firstPnpmProbeTarget = (world) => {
+  if (world.pnpm === null) return null;
+  for (const { directory, document } of world.manifests) {
+    const importer = pnpmImporterOf(world, directory);
+    if (importer === undefined) continue;
+    for (const [name] of installableRangesOf(document)) {
+      for (const field of Object.keys(importer)) {
+        const bucket = importer[field];
+        if (isRecord(bucket) && isRecord(bucket[name])) {
+          return { key: directory === '' ? '.' : directory, field, name };
+        }
+      }
+    }
+  }
+  return null;
 };
 
 const MUTATIONS = [
@@ -563,6 +778,33 @@ const MUTATIONS = [
     },
     'overrides postcss ne contredit plus aucun manifeste',
   ],
+  [
+    "une portée que pnpm-lock.yaml n'a pas suivie (la dérive de #7303)",
+    (world) => {
+      const target = firstPnpmProbeTarget(world);
+      if (target === null) return;
+      world.pnpm[target.key][target.field][target.name].specifier = '^0.0.0-sonde';
+    },
+    'pnpm-lock.yaml a enregistré',
+  ],
+  [
+    'une dépendance déclarée que pnpm-lock.yaml ne connaît pas',
+    (world) => {
+      const target = firstPnpmProbeTarget(world);
+      if (target === null) return;
+      delete world.pnpm[target.key][target.field][target.name];
+    },
+    'absent de pnpm-lock.yaml',
+  ],
+  [
+    'une version que pnpm-lock.yaml résout hors de la portée déclarée',
+    (world) => {
+      const target = firstPnpmProbeTarget(world);
+      if (target === null) return;
+      world.pnpm[target.key][target.field][target.name].version = '0.0.1';
+    },
+    'pnpm-lock.yaml résout',
+  ],
 ];
 
 // Le pendant positif de MUTATIONS : une divergence que ce garde doit TOLÉRER.
@@ -570,6 +812,7 @@ const MUTATIONS = [
 // `lockRepeatsTheIdentityOfEachManifest` de réintroduire `version` en
 // silence — #5740 redeviendrait rouge à chaque `chore(release)` sans qu'aucun
 // self-test ne le voie venir.
+
 const TOLERATED_MUTATIONS = [
   [
     'une version de manifeste que le lock ne suit pas (#5740 — aucune conséquence de résolution)',
@@ -613,13 +856,15 @@ const main = () => {
   if (failures.length > 0) {
     failures.forEach((failure) => console.error(failure));
     console.error(
-      `\n${failures.length} désalignement(s) entre bun.lock et les manifestes de workspace.`,
+      `\n${failures.length} désalignement(s) entre les lockfiles et les manifestes de workspace.`,
     );
-    console.error("Rejouer : bun install --ignore-scripts, puis committer bun.lock avec l'arbre qu'il décrit.");
+    console.error(
+      "Rejouer : bun install --ignore-scripts ET pnpm install --lockfile-only, puis committer LES DEUX lockfiles avec l'arbre qu'ils décrivent.",
+    );
     return 1;
   }
   console.log(
-    `bun.lock est aligné sur les ${world.manifests.length} manifestes de workspace déclarés par la racine.`,
+    `${world.pnpm === null ? 'bun.lock est aligné' : 'bun.lock ET pnpm-lock.yaml sont alignés'} sur les ${world.manifests.length} manifestes de workspace déclarés par la racine.`,
   );
   return 0;
 };
