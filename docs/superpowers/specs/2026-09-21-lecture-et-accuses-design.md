@@ -58,6 +58,7 @@ Date : 2026-09-21. Porteur : directive du 2026-09-21 (matin). Workflow : `.claud
 | I2 | Les ouvertures d'une image ou d'un document s'affichent dans « Vu par » | — |
 | W8 | Les Réels apprennent ce que le Flux apprend ; `story:reacted/unreacted`, `comment:updated/deleted/liked`, `post:reaction-*` mettent l'écran à jour | — |
 | I4 | #6997, #6999, #7000 sont vérifiées contre le code, closes avec preuve ou terminées | — |
+| I5 | Le badge d'icône iOS compte les CONVERSATIONS non lues, hors muettes — le même nombre que `aps.badge` (D-L1, Closes #7236 ; ajouté le 2026-09-21 après la revue de G3) | G3 |
 
 Trois chaînes parallèles, une par plateforme (worktree dédié chacune) ; à l'intérieur d'une chaîne,
 les lots sont séquentiels. Chaque lot : sa branche `lot/<clé>` depuis `origin/dev`, son issue, sa

@@ -144,6 +144,11 @@ const LOTS_PAR_DEFAUT = [
     critere: "MessageListViewController : une cellule séparateur en couleur PRIMAIRE (MeeshyColors, jamais l'accent) libellée dans les 7 langues, posée par FirstUnreadBoundary.resolve (S1) sur la frontière servie par G1 (ou, à défaut, sur userState.lastReadAt) ; l'ouverture d'une conversation avec non-lus scrolle SUR le séparateur (D-L2), sinon en bas ; onResumeThread (ConversationView.swift ~l.1869) cible le VRAI premier non-lu ; la pastille flottante « nouveaux messages » reste ; XCTest sur la loi et sur le positionnement ; captures clair/sombre au simulateur natif",
     existe: 'pastille flottante pendingUnreadCount ; scrollToBottom à l ouverture (~l.2201) ; faux firstUnread',
     depend: ['S1', 'G1'] },
+  { cle: 'I5', chaine: 'ios', famille: 'A', taille: 'developper', issue: 7236,
+    titre: "Le badge d'icône iOS compte les CONVERSATIONS non lues, hors muettes — le même nombre que le serveur pousse (D-L1)",
+    critere: "ConversationReadLedger.swift (~l.272-281, aujourd'hui une SOMME des unreadCount) expose conversationUnreadTotal = nombre d'entrées dont unreadCount > 0 et qui ne sont pas muettes, et NotificationCoordinator.recomputeTotal / badgeTotal (~l.77) lit CE compte : app fermée (aps.badge servi par G3, PR #7289) et app au premier plan affichent le MÊME nombre ; la pastille de l'onglet Conversations peut garder la somme des messages si elle la montre déjà, mais l'ICÔNE compte des conversations ; XCTest : trois conversations dont une muette et une à 12 messages ⇒ badge 2 ; commentaire de clôture sur #7236 (décision = D-L1) avec Closes #7236",
+    existe: "ConversationReadLedger.swift:272-281 somme les messages ; NotificationCoordinator.swift:77 badgeTotal ; web-v2 countUnreadConversations (use-app-badge.ts) et gateway computeConversationUnreadBadge (G3) comptent déjà des conversations",
+    depend: [] },
 ]
 
 const LOTS = (Array.isArray(A.lots) && A.lots.length ? A.lots : LOTS_PAR_DEFAUT).filter((l) => !SAUTER.has(l.cle))
