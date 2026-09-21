@@ -22,8 +22,10 @@ import {
 } from '@/lib/api/friend-actions';
 import type { PersonSummary } from '@/lib/api/friend-requests';
 import { publicProfileQueryOptions } from '@/lib/api/public-profile';
+import { sharedConversationsQueryOptions } from '@/lib/api/shared-conversations';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
+import { resolveViewer } from '@/lib/api/viewer';
 import { resolveFeedCardModel } from '@/lib/feed/card-model';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
@@ -40,6 +42,7 @@ import { useReaderLanguages } from '@/lib/view/use-reader';
 import { Link, href, navigate } from '@/routes/route-table';
 import { ReportSheet } from '@/components/report-sheet';
 import { reportUser, type ReportReason } from '@/lib/api/reports';
+import { ProfileConversationsSection } from '@/routes/user-profile-conversations';
 import { ProfileHero } from '@/routes/user-profile-header';
 import {
   ProfileBlockedCard,
@@ -192,6 +195,20 @@ export function UserProfileView({ username }: { readonly username: string }) {
   const [busy, setBusy] = useState(false);
 
   const viewerId = useStore(sessionStore, (state) => (state.session.status === 'authenticated' ? state.session.user.id : null));
+  /**
+   * **LE LECTEUR DE LA LIGNE, PAS CELUI DU GESTE** (#7124). `titleOf` a besoin
+   * d'un identifiant pour savoir QUI est « l'autre » dans un direct ; lui
+   * passer la chaîne vide fait de la première partie l'autre — et une rangée
+   * qui porte « Vous » là où elle devrait porter le nom du pair (MESURÉ au
+   * navigateur avant ce correctif : `VOVous` sur `/c/c-direct-kwame`).
+   *
+   * `resolveViewer` est le site UNIQUE qui rend cette identité, fixtures
+   * comprises — le MÊME que la Lentille (`conversations.tsx:427`) et le fil.
+   * `viewerId` ci-dessus reste ce qu'il est : l'identité de COMPTE, qui
+   * gouverne les gestes et ne doit rien inventer sous fixtures.
+   */
+  const session = useStore(sessionStore, (state) => state.session);
+  const rowViewerId = resolveViewer({ source: apiDeps.source, session }).id ?? '';
   /* Sous fixtures il n'y a pas de session : les gestes y restent mesurables,
      exactement comme `/me` le fait (`profile.tsx:132`). */
   const signedIn = apiDeps.source === 'fixtures' || viewerId !== null;
@@ -251,6 +268,27 @@ export function UserProfileView({ username }: { readonly username: string }) {
     {
       ...authorPostsInfiniteOptions({ ...apiDeps, authorId: person?.id ?? '' }),
       enabled: person !== undefined && showsContent,
+    },
+    appQueryClient,
+  );
+
+  /**
+   * **CE QUE VOUS PARTAGEZ DÉJÀ** (#7124) — `?withUserId=<id>`, le filtre que
+   * la passerelle sert depuis le premier jour d'iOS
+   * (`listSharedWith`, `UserProfileSheet.swift:325`). La question porte le
+   * SUJET : elle est gardée par `enabled` comme le listing des publications,
+   * parce qu'elle prend un `User.id` et non le pseudo de l'adresse.
+   *
+   * **Elle ne part PAS pour un lecteur sans session** (la route est en
+   * authentification requise pour le scope du lecteur) ni **sur sa propre
+   * fiche** — « les conversations en commun avec soi-même » n'est pas une
+   * question — ni **sur un compte bloqué**, dont la fiche ne rend aucun
+   * contenu.
+   */
+  const shared = useQuery(
+    {
+      ...sharedConversationsQueryOptions({ ...apiDeps, userId: person?.id ?? '' }),
+      enabled: person !== undefined && showsContent && signedIn && view.data?.isSelf !== true,
     },
     appQueryClient,
   );
@@ -510,6 +548,16 @@ export function UserProfileView({ username }: { readonly username: string }) {
                     ) : null}
                   </div>
                 </GroupedSection>
+                {view.data?.isSelf === true || !signedIn ? null : (
+                  <ProfileConversationsSection
+                    language={language}
+                    conversations={shared.data ?? []}
+                    viewerId={rowViewerId}
+                    loading={shared.isPending}
+                    failed={shared.isError}
+                    onRetry={() => void shared.refetch()}
+                  />
+                )}
                 <ProfileStatsSection
                   language={language}
                   stats={view.data?.stats ?? null}
