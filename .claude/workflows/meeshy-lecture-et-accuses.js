@@ -504,7 +504,7 @@ Tu es l'agent de LIVRAISON de ce tour : tu es le seul autorisé à fusionner, et
    Si mergeStateStatus est DIRTY/BEHIND : \`git fetch origin && git checkout <headRefName> && git merge origin/${BASE}\`
    (jamais rebase), résous en gardant les deux apports, rejoue les gates rapides de la plateforme, pousse.
 2. \`gh pr checks ${num} --watch --fail-fast\` (bloquant ; au plus ~45 min). Rends la sortie tronquée.
-3. TOUT VERT ⇒ \`gh pr merge ${num} --merge\` (JAMAIS --auto, JAMAIS --squash) puis \`gh pr view ${num} --json mergedAt,mergeCommit\`.
+3. Pour une PR iOS (branche d'un lot I<n>) : \`gh pr view ${num} --json headRefOid,commits -q '.commits[-1].messageHeadline'\` — si le sujet de la TÊTE ne contient pas « run test », le vert n'est qu'une compilation : pose un commit VIDE \`test(ios): … — run test (Refs #<issue>)\` sur la branche (par \`git commit-tree\` + \`git push origin <sha>:refs/heads/<branche>\`, sans checkout), puis REVIENS à l'étape 2 sur la nouvelle tête. TOUT VERT ⇒ \`gh pr merge ${num} --merge\` (JAMAIS --auto, JAMAIS --squash) puis \`gh pr view ${num} --json mergedAt,mergeCommit\`.
    UN ROUGE ⇒ ne fusionne pas ; lis le job (\`gh run view <id> --log-failed | tail -60\`) ; si le rouge est CAUSÉ
    par le lot, corrige-le en TDD sur la branche, pousse, et reprends à l'étape 2 (une fois) ; s'il est
    PRÉEXISTANT (le même job est rouge sur origin/${BASE}), fusionne quand même et DIS-LE dans un commentaire de la PR.
@@ -660,7 +660,7 @@ ${restants.length ? `RESTANTS (ils voyagent avec le lot et se DISENT dans la PR)
 3. \`git status --short\` : aucun artefact généré. Commit final qui ferme l'issue si le verdict n'est pas
    « a-refaire » : \`Closes #${num || 'n'}\` (JAMAIS \`Closes #0\` — si le lot n'a pas d'issue, \`Refs\` et dis-le)
    ${l.chaine === 'ios' ? '— SUJET avec « run test » ' : ''}; sinon \`wip(...)\` avec \`Refs\`, et dis pourquoi.
-4. \`git push -u origin ${fait.branche || branche}\` (4 essais sur échec réseau ; rejet non fast-forward ⇒ fetch + merge, jamais rebase).
+4. ${l.chaine === 'ios' ? 'AVANT de pousser : si le SUJET du commit de TÊTE ne contient pas « run test » (c\'est le cas dès que l\'étape 1 a produit un commit de fusion de ' + BASE + '), pose un commit VIDE `git commit --allow-empty -m "test(ios): <ce que la suite juge> — run test (Refs #' + (num || 'n') + ')"` — ios.yml n\'exécute MeeshyTests que sur ce sujet, un vert sans lui n\'est qu\'une compilation (2026-09-21, #7402). ' : ''}\`git push -u origin ${fait.branche || branche}\` (4 essais sur échec réseau ; rejet non fast-forward ⇒ fetch + merge, jamais rebase, puis RE-VÉRIFIE le sujet de la tête pour un lot iOS).
 5. LA PR : \`gh pr list --head ${fait.branche || branche} --state open\` ; si absente,
    \`gh pr create --base ${BASE} --title "<le titre du lot>" --body "<corps>"\` — corps : ce qui était absent,
    ce qui est livré fichier par fichier, les routes/événements consommés (fichier:ligne), les témoins, les
@@ -723,7 +723,8 @@ ${livres.map((r) => `- ${r.cle}${r.issue ? ` (#${r.issue})` : ''} : ${r.livraiso
 
 A. FUSIONNER AU VERT, PUIS ATTENDRE LE DÉPLOIEMENT (jamais de push sur ${BASE}, jamais \`--auto\`) :
 1. Pour chaque PR de lot encore ouverte (\`gh pr list --state open --search "head:lot/"\`) : \`gh pr checks <n> --watch --fail-fast\`
-   (bloquant, jusqu'au verdict, ~40 min au plus). TOUT VERT ⇒ \`gh pr merge <n> --merge\` puis
+   (bloquant, jusqu'au verdict, ~40 min au plus). Pour une PR iOS, un vert ne compte que si le SUJET du commit de
+   tête contient « run test » (sinon commit vide \`test(ios): … — run test\`, et on rattend). TOUT VERT ⇒ \`gh pr merge <n> --merge\` puis
    \`gh pr view <n> --json mergedAt\` → fusionnees. Une PR ROUGE : lis le job rouge
    (\`gh run view <id> --log-failed | tail -80\`) ; rouge PRÉEXISTANT (même job rouge sur origin/${BASE}) ⇒
    fusionne et dis-le ; rouge CAUSÉ par le lot ⇒ ne fusionne pas, rends-la dans non_fusionnees avec la
