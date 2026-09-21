@@ -1027,17 +1027,11 @@ export class NotificationService {
             ? truncateByCodePoints(params.content, 200)
             : notificationString(await recipientLang(), 'push.private');
 
-          // F1 — app fermée, le badge d'icône iOS et le widget ne vivent QUE
-          // par le payload push. **D-L1 (#7218, Closes #7001)** : `badge`
-          // compte les CONVERSATIONS non lues du destinataire (hors
-          // muettes), pas les notifications — même projection que
-          // `NotificationCoordinator.conversationUnreadTotal` sur iOS et que
-          // `countUnreadConversations` sur web-v2 (W4/#7221). La cloche
-          // (`notification:counts`) garde `visibleNotificationsWhere`,
-          // inchangé. `badge` pilote `aps.badge` nativement ; `data.unreadCount`
-          // (string) alimente le miroir App Group écrit par la NSE pour le
-          // widget. Best-effort : sur échec du calcul, le push part sans
-          // badge (comportement historique).
+          // F1/D-L1 (#7218) — badge d'icône = CONVERSATIONS non lues (hors
+          // muettes), comme iOS/web-v2 ; `computeConversationUnreadBadge`.
+          // La cloche (`notification:counts`) reste sur les notifications.
+          // `data.unreadCount` alimente le miroir App Group de la NSE.
+          // Best-effort : échec ⇒ push sans badge (comportement historique).
           let unreadBadge: number | undefined;
           try {
             const count = await computeConversationUnreadBadge(this.prisma, params.userId);
@@ -4302,8 +4296,8 @@ export class NotificationService {
       ? (messageId ? `/conversations/${conversationId}?messageId=${messageId}` : `/conversations/${conversationId}`)
       : undefined;
 
-    // D-L1 (#7218, Closes #7001) — même projection que le push de création :
-    // conversations non lues, hors muettes. Voir `computeConversationUnreadBadge`.
+    // D-L1 (#7218) — même projection que le push de création (conversations
+    // non lues, hors muettes) ; voir `computeConversationUnreadBadge`.
     let unreadBadge: number | undefined;
     try {
       const count = await computeConversationUnreadBadge(this.prisma, userId);

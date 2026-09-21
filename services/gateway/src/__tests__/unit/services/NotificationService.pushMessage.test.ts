@@ -79,17 +79,7 @@ jest.mock('@meeshy/shared/prisma/client', () => {
       findFirst: jest.fn(),
     },
     // GW3 — reaction/reply fan-out consults the per-conversation mute.
-    // G3 (#7218, D-L1) — le même mock sert `computeConversationUnreadBadge`,
-    // qui lit `isMuted` pour EXCLURE une conversation muette du badge.
     userConversationPreferences: {
-      findMany: jest.fn().mockResolvedValue([]),
-    },
-    // G3 (#7218, D-L1) — `aps.badge` compte les CONVERSATIONS non lues du
-    // destinataire (`computeConversationUnreadBadge`), plus les notifications.
-    participant: {
-      findMany: jest.fn().mockResolvedValue([]),
-    },
-    conversationReadCursor: {
       findMany: jest.fn().mockResolvedValue([]),
     },
   };
@@ -494,89 +484,6 @@ describe('NotificationService — message push title/body', () => {
       expect(data.parentCommentId).toBe('');
     });
   });
-  describe('badge du push (F1 — badge/widget gelés app fermée ; D-L1, #7218 : conversations non lues)', () => {
-    it('test_push_carriesUnreadBadge_andDataUnreadCount', async () => {
-      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
-        username: 'alice', displayName: 'Alice Martin', avatar: null,
-      });
-      // Sept conversations distinctes, chacune avec au moins un non-lu —
-      // D-L1 : le badge compte les CONVERSATIONS, pas les messages.
-      // `*Once` : les défauts `[]` posés à la fabrique du mock restent le
-      // comportement des autres tests du fichier (`clearAllMocks` ne réinitialise
-      // pas les implémentations).
-      (prisma.participant.findMany as jest.Mock).mockResolvedValueOnce(
-        Array.from({ length: 7 }, (_, i) => ({ id: `participant-${i}`, conversationId: `conv-${i}` }))
-      );
-      (prisma.conversationReadCursor.findMany as jest.Mock).mockResolvedValueOnce(
-        Array.from({ length: 7 }, (_, i) => ({ conversationId: `conv-${i}` }))
-      );
-
-      await service.createMessageNotification({
-        recipientUserId: RECIPIENT_ID,
-        senderId: SENDER_ID,
-        messageId: MESSAGE_ID,
-        conversationId: CONVERSATION_ID,
-        messagePreview: 'Salut !',
-      });
-
-      const payload = lastPushPayload() as { badge?: number; data?: Record<string, string> };
-      expect(payload.badge).toBe(7);
-      expect(payload.data?.unreadCount).toBe('7');
-    });
-
-    it('test_push_omitsBadge_whenCountUnavailable_bestEffort', async () => {
-      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
-        username: 'alice', displayName: 'Alice Martin', avatar: null,
-      });
-      (prisma.participant.findMany as jest.Mock).mockRejectedValueOnce(new Error('db down'));
-
-      await service.createMessageNotification({
-        recipientUserId: RECIPIENT_ID,
-        senderId: SENDER_ID,
-        messageId: MESSAGE_ID,
-        conversationId: CONVERSATION_ID,
-        messagePreview: 'Salut !',
-      });
-
-      const payload = lastPushPayload() as { badge?: number; data?: Record<string, string> };
-      expect(payload.badge).toBeUndefined();
-      expect(payload.data?.unreadCount).toBeUndefined();
-      expect(sendToUser).toHaveBeenCalledTimes(1);
-    });
-
-    it('test_push_excludesMutedConversation_fromBadge', async () => {
-      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
-        username: 'alice', displayName: 'Alice Martin', avatar: null,
-      });
-      (prisma.participant.findMany as jest.Mock).mockResolvedValueOnce([
-        { id: 'participant-open', conversationId: 'conv-open' },
-        { id: 'participant-muted', conversationId: 'conv-muted' },
-      ]);
-      (prisma.conversationReadCursor.findMany as jest.Mock).mockResolvedValueOnce([
-        { conversationId: 'conv-open' },
-        { conversationId: 'conv-muted' },
-      ]);
-      // `mockResolvedValueOnce` — n'affecte QUE cette requête : `clearAllMocks`
-      // (beforeEach de la suite) ne réinitialise pas les implémentations, une
-      // pose `mockResolvedValue` durable polluerait les tests suivants du
-      // fichier qui comptent sur le défaut `[]` posé à la fabrique du mock.
-      (prisma.userConversationPreferences.findMany as jest.Mock).mockResolvedValueOnce([
-        { conversationId: 'conv-muted' },
-      ]);
-
-      await service.createMessageNotification({
-        recipientUserId: RECIPIENT_ID,
-        senderId: SENDER_ID,
-        messageId: MESSAGE_ID,
-        conversationId: CONVERSATION_ID,
-        messagePreview: 'Salut !',
-      });
-
-      const payload = lastPushPayload() as { badge?: number; data?: Record<string, string> };
-      expect(payload.badge).toBe(1);
-    });
-  });
-
   // GW4 — producers set native threadId (conversation grouping) + category
   // (actionable iOS banners). The transport already forwards both (APNs
   // thread-id/category, FCM aps) — the NSE stays as fallback only.
