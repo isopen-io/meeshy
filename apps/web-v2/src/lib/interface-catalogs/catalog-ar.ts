@@ -819,6 +819,26 @@ const ar = {
 
   'admin.title': 'الإدارة',
 
+  'message-detail.info.title': 'معلومات الرسالة',
+  'message-detail.received-by': 'استلمها',
+  'message-detail.read-by': 'قرأها',
+  'message-detail.not-yet': 'لم يصل بعد',
+  'message-detail.received-by.empty': 'لا يوجد تأكيد تسليم بعد',
+  'message-detail.read-by.empty': 'لم يقرأ أحد هذه الرسالة بعد',
+  'message-detail.not-yet.empty': 'استلم الجميع الرسالة',
+  'message-detail.attachment.opens.one': '{count} فتحة',
+  'message-detail.attachment.opens.other': '{count} فتحات',
+  'message-detail.attachment.downloads.one': '{count} تنزيل',
+  'message-detail.attachment.downloads.other': '{count} تنزيلات',
+  'message-detail.attachment.listened-until': 'تم الاستماع حتى {time}',
+  'message-detail.attachment.watched-until': 'تمت المشاهدة حتى {time}',
+  'message-detail.attachment.complete': 'مكتمل',
+  'message-detail.attachment.listen.empty': 'لم يُستمع بعد',
+  'message-detail.attachment.watch.empty': 'لم تُشاهد بعد',
+  'message-detail.loading': 'جارٍ التحميل…',
+  'message-detail.load-error': 'تعذر تحميل هذه المعلومات',
+  'message-detail.retry': 'إعادة المحاولة',
+
 } satisfies InterfaceCatalog;
 
 export default ar;

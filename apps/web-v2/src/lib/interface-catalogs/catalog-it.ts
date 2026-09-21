@@ -822,6 +822,26 @@ const it = {
 
   'admin.title': 'Amministrazione',
 
+  'message-detail.info.title': 'Informazioni sul messaggio',
+  'message-detail.received-by': 'Ricevuto da',
+  'message-detail.read-by': 'Letto da',
+  'message-detail.not-yet': 'Non ancora',
+  'message-detail.received-by.empty': 'Nessuna conferma di consegna',
+  'message-detail.read-by.empty': 'Nessuno ha ancora letto questo messaggio',
+  'message-detail.not-yet.empty': 'Tutti hanno ricevuto il messaggio',
+  'message-detail.attachment.opens.one': '{count} apertura',
+  'message-detail.attachment.opens.other': '{count} aperture',
+  'message-detail.attachment.downloads.one': '{count} download',
+  'message-detail.attachment.downloads.other': '{count} download',
+  'message-detail.attachment.listened-until': 'Ascoltato fino a {time}',
+  'message-detail.attachment.watched-until': 'Guardato fino a {time}',
+  'message-detail.attachment.complete': 'Completo',
+  'message-detail.attachment.listen.empty': 'Non ancora ascoltato',
+  'message-detail.attachment.watch.empty': 'Non ancora guardato',
+  'message-detail.loading': 'Caricamento…',
+  'message-detail.load-error': 'Impossibile caricare queste informazioni',
+  'message-detail.retry': 'Riprova',
+
 } satisfies InterfaceCatalog;
 
 export default it;
