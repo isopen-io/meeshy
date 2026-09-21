@@ -843,6 +843,12 @@ const de = {
   'message-detail.load-error': 'Diese Informationen konnten nicht geladen werden',
   'message-detail.retry': 'Erneut versuchen',
 
+  'download.title': 'Meeshy holen',
+  'download.body': 'Schreibe in deiner Sprache und lies in deiner: Meeshy übersetzt jede Nachricht unterwegs.',
+  'download.appStore': 'Laden im App Store',
+  'download.web': 'Meeshy im Browser öffnen',
+  'download.otherPlatforms': 'Auf Android und am Computer läuft Meeshy direkt im Browser.',
+
 } satisfies InterfaceCatalog;
 
 export default de;

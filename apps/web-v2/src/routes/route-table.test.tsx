@@ -218,3 +218,31 @@ describe('ROUTES — l’adresse d’un réel partagé (#7298)', () => {
     expect(servedBy('/reel/')).toHaveLength(0);
   });
 });
+
+/**
+ * `/download` — L'ADRESSE DE L'INVITATION (#7297).
+ *
+ * L'app publiée l'envoie par SMS (`DiscoverViewModel.swift:285`,
+ * `PhonebookViewModel.swift:282`, gardée côté iOS par
+ * `DiscoverViewModelTests.swift:271`) : elle est dans un binaire déjà
+ * distribué, elle ne se corrige pas côté iOS, et c'est la PREMIÈRE chose que
+ * voit quelqu'un qui ne connaît pas encore Meeshy. Non servie, elle tombait
+ * sur `NotFound`.
+ *
+ * Le témoin interroge l'ADRESSE, jamais la clé — il tombe dès que plus aucune
+ * route ne sert `/download`, ce qui est exactement le défaut.
+ */
+describe('ROUTES — l’adresse de l’invitation (#7297)', () => {
+  const servedBy = (path: string) =>
+    Object.values(ROUTES).filter((route) => match(compile(route.pattern), path) !== null);
+
+  test('/download est SERVIE, par une route et une seule', () => {
+    const served = servedBy('/download');
+    expect(served).toHaveLength(1);
+    expect(match(compile(served[0]!.pattern), '/download')).toEqual({});
+  });
+
+  test('elle est LITTÉRALE — elle n’avale pas `/download/<quelque-chose>`', () => {
+    expect(servedBy('/download/ios')).toHaveLength(0);
+  });
+});

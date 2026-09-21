@@ -112,6 +112,16 @@ export const ROUTES = {
   /* L'ACCUEIL À DEUX PORTES (#5816) — soldé une fois par appareil
      (`welcomeStore`), miroir `WelcomeView.swift`. */
   welcome: { pattern: '/welcome', screen: () => import('@/routes/welcome') },
+  /* L'INVITATION REÇUE PAR SMS (#7297) — `/download` est l'adresse que l'app
+     PUBLIÉE envoie à quelqu'un qui ne connaît pas encore Meeshy
+     (`DiscoverViewModel.swift:285`, `PhonebookViewModel.swift:282`). Elle vit
+     dans un binaire déjà distribué : elle ne se corrige que d'ici, et jusqu'à
+     ce lot elle rendait « adresse inconnue » — le premier contact avec le
+     produit était une page d'erreur.
+
+     PUBLIQUE : `session-guard.ts` ne la range dans aucun ensemble, et c'est
+     tout le sujet — celui qui l'ouvre n'a pas de compte. */
+  download: { pattern: '/download', screen: () => import('@/routes/download') },
   /* LE LIEN MAGIQUE (#5816) — même adresse pour la SAISIE (`?token=` absent)
      et la VALIDATION du lien reçu par e-mail (`MagicLinkService.ts:548-549`
      vise exactement `/auth/magic-link?token=`) : `magic-link.tsx` distingue

@@ -921,6 +921,16 @@ const fr = {
   'message-detail.load-error': 'Impossible de charger ces informations',
   'message-detail.retry': 'Réessayer',
 
+  /* `/download` — L'INVITATION REÇUE PAR SMS (#7297). Ce que la page PROMET
+     est ce que le produit tient : la fiche App Store, qui existe, et le web,
+     que meeshy.me sert aujourd'hui. Aucune mention du Play Store tant que la
+     coque Android n'est pas publiée. */
+  'download.title': 'Téléchargez Meeshy',
+  'download.body': 'Écrivez dans votre langue, lisez dans la vôtre : Meeshy traduit chaque message au passage.',
+  'download.appStore': 'Télécharger dans l’App Store',
+  'download.web': 'Ouvrir Meeshy dans le navigateur',
+  'download.otherPlatforms': 'Sur Android et sur ordinateur, Meeshy s’utilise directement dans le navigateur.',
+
 } as const;
 
 export default fr;
