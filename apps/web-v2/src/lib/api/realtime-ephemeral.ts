@@ -6,6 +6,7 @@ import type {
   SocketIOMessage,
 } from '@meeshy/shared/types/socketio-events/message';
 
+import { DESTRUCTION_MS, announceDestruction } from '@/lib/view/ephemeral-destruction';
 import { forgetEphemeral, noteEphemeralReception, noteServedDeadline } from '@/lib/view/ephemeral-reception';
 
 import { patchThreadMessages } from './messages';
@@ -52,11 +53,37 @@ export function isMessageCountdownStartedEvent(payload: unknown): payload is Mes
  * NO-OP silencieux quand la conversation n'a pas de cache ou que le message
  * n'y figure pas — même motif que les autres puits.
  */
-export function applyMessageExpired(queryClient: QueryClient, data: MessageExpiredEventData): void {
-  forgetEphemeral(data.messageId);
-  patchThreadMessages(queryClient, data.conversationId, (messages) =>
-    messages.some((m) => m.id === data.messageId) ? messages.filter((m) => m.id !== data.messageId) : messages,
-  );
+export function applyMessageExpired(
+  queryClient: QueryClient,
+  data: MessageExpiredEventData,
+  schedule: (fn: () => void, ms: number) => void = (fn, ms) => {
+    setTimeout(fn, ms);
+  },
+): void {
+  /**
+   * **L'ANNONCE D'ABORD, LE RETRAIT ENSUITE** (#7468, travail 2). Retirer la
+   * ligne sur-le-champ faisait disparaître la rangée d'une image à l'autre :
+   * exactement le défaut que l'échéance locale vient de corriger, revenu par
+   * la porte du temps réel — et c'est le chemin qui DEVIENDRA le plus fréquent
+   * une fois #7451 fusionné, puisque la passerelle émettra alors `D(u)` pour
+   * chaque destinataire.
+   *
+   * Le fil ouvert reçoit l'annonce, peint la combustion, et la ligne s'en va
+   * quand l'effet est fini. Fil fermé : personne n'écoute, la ligne part
+   * `DESTRUCTION_MS` plus tard — un délai que rien ne montre.
+   *
+   * `forgetEphemeral` attend lui aussi la fin de la fenêtre : oublier la
+   * réception tout de suite rendrait l'échéance `awaiting-reception` pendant
+   * la combustion, et la puce repasserait « en attente » sur un message en
+   * train de brûler.
+   */
+  announceDestruction(data.messageId);
+  schedule(() => {
+    forgetEphemeral(data.messageId);
+    patchThreadMessages(queryClient, data.conversationId, (messages) =>
+      messages.some((m) => m.id === data.messageId) ? messages.filter((m) => m.id !== data.messageId) : messages,
+    );
+  }, DESTRUCTION_MS);
 }
 
 /**

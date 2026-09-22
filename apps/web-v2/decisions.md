@@ -3743,3 +3743,68 @@ Dimensions mûres : 4 (une horloge, zéro minuterie par bulle), 5 (sept langues,
 `aria-label` « éphémère, disparaît dans N »), 6 (un pictogramme par sens, en
 parité de vocabulaire avec le composeur), 11 (une règle, un chrome, un
 registre), 13 (les cinq modes énumérés, et le suivant).
+
+## D-109 — Le compteur d'un éphémère ne paraît que dans sa dernière minute, et sa destruction se voit (2026-09-22, #7468)
+
+Précision du porteur, arrivée pendant que la PR de D-108 était en vol :
+« l'éphémère est la flamme avec la configuration de durée par défaut ! Ce qu'il
+faudrait c'est d'afficher le compteur de l'éphémère dans la conversation
+uniquement quand on est déjà à 1 min et moins de sa destruction. Et sa
+destruction doit avoir un effet visuel si on est dans la conversation au moment
+de la destruction. »
+
+**Le seuil est une loi PARTAGÉE, pas un réglage de peau.**
+`ephemeralCounterVisible` (`@meeshy/shared/utils/ephemeral-deadline`) est la
+suite de la règle d'échéance : l'une dit QUAND, l'autre à partir de quand on
+l'ÉCRIT. iOS la reprend (#7467) ; un seuil recopié dans deux peaux divergerait
+au premier ajustement. Elle gouverne DEUX choses que rien d'autre ne relie — ce
+que l'œil voit, et ce qui s'abonne à l'horloge.
+
+**Deux régimes, un seul à la fois.** Au-delà de la minute, aucune horloge ne bat
+pour ce message : un SEUL `setTimeout` dort jusqu'au franchissement du seuil.
+Sous le seuil, l'horloge partagée reprend. Le passage se fait tout seul — le
+minuteur repose le reste, la fenêtre bascule, l'effet se rejoue dans l'autre
+régime.
+
+**L'œil est soulagé, jamais l'oreille.** Le libellé accessible donne TOUJOURS le
+temps restant. Privé des chiffres, un lecteur d'écran n'aurait aucun autre
+chemin vers l'échéance — et la flamme seule ne dit pas « dans douze minutes ».
+C'est aussi pourquoi les deux écritures diffèrent : `countdownDigits` rend
+`0:38` pour la puce, `formatRemaining` rend `38s` pour la voix.
+
+**La phase de destruction est PURE et SANS ÉTAT, et c'est ce qui ferme la
+course.** `destructionPhaseOf` (`lib/view/ephemeral-destruction.ts`) tranche
+entre `visible`, `destroying` et `gone` en comparant l'échéance à MAINTENANT.
+Entre l'échéance et le tic suivant de l'horloge, l'écran peut se rendre pour une
+raison étrangère — une frappe, un défilement qui bouge le virtualiseur. Une
+phase lue d'un ensemble alimenté par le seul rappel du chrome aurait coupé la
+rangée net à ce rendu-là, sans effet : le défaut même qu'on corrige. **Et passée
+la fenêtre, `gone` : on n'assiste pas à une destruction passée** — un fil
+rouvert des heures plus tard ne rejoue pas la combustion de chaque éphémère
+échu.
+
+**L'annonce précède le retrait, des deux côtés.** `message:expired` annonce la
+destruction sur-le-champ et ne retire la ligne du cache qu'après la fenêtre ;
+sinon la rangée disparaîtrait d'une image à l'autre, par le chemin qui
+deviendra le plus fréquent une fois #7451 fusionné. `forgetEphemeral` attend
+lui aussi : oublier la réception tout de suite ferait repasser la puce « en
+attente de réception » sur un message en train de brûler.
+
+**L'effet se pose sur le nœud de RANGÉE**, jamais dans une peau : `thread-modes`
+l'applique au `<div role="article">` qui enveloppe la rangée plate ET la bulle,
+si bien qu'un mode ajouté demain l'a sans rien câbler — même doctrine que le
+chrome de D-108.
+
+**Le repli des voisins vient de la GRILLE**, pas d'un `max-height` deviné :
+`grid-template-rows: 1fr → 0fr` anime une hauteur RÉELLE, que le
+`ResizeObserver` du virtualiseur suit à chaque image. Les rangées suivantes
+remontent à mesure, au lieu de sauter quand la ligne quitte la liste.
+
+**`prefers-reduced-motion` : un fondu, et rien d'autre** — pas même le repli.
+Un repli EST un mouvement, et c'est précisément ce que ce réglage demande
+d'éviter ; la rangée garde donc sa place jusqu'au retrait.
+
+Dimensions mûres : 4 (aucune horloge avant la dernière minute ; le repli suit le
+virtualiseur au lieu de le bousculer), 5 (le temps reste dit à l'oreille,
+`prefers-reduced-motion` honoré), 8 (la disparition se comprend), 13 (les cinq
+modes, par le nœud commun).
