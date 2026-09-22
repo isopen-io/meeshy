@@ -626,17 +626,18 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
     /// balayage ne doit jamais retarder l'affichage. Il ne touche QUE les
     /// bannières qui portent une échéance — une notification ordinaire n'est
     /// jamais retirée par ce chemin.
-    nonisolated static func sweepExpiredDeliveredBanners(
-        center: UNUserNotificationCenter = .current(),
-        now: Date = Date()
-    ) {
-        center.getDeliveredNotifications { delivered in
+    nonisolated static func sweepExpiredDeliveredBanners(now: Date = Date()) {
+        // Le centre est redemandé DANS la fermeture plutôt que capturé : une
+        // fermeture d'API système doit être `@Sendable`, et la capture d'un
+        // objet de framework y coûte une exception de concurrence pour rien —
+        // `current()` rend le même singleton.
+        UNUserNotificationCenter.current().getDeliveredNotifications { delivered in
             let entries = delivered.map {
                 (id: $0.request.identifier, userInfo: $0.request.content.userInfo)
             }
             let expired = EphemeralBannerDeadline.expiredIdentifiers(from: entries, now: now)
             guard !expired.isEmpty else { return }
-            center.removeDeliveredNotifications(withIdentifiers: expired)
+            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: expired)
         }
     }
 
