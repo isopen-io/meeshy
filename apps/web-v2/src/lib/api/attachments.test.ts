@@ -251,4 +251,26 @@ describe('reportAttachmentStatus — le port serveur (#7225)', () => {
     });
     expect(result.ok).toBe(true);
   });
+
+  /**
+   * `action: 'viewed'` (#7363, W6) — le SERVEUR l'accepte depuis toujours
+   * (`AttachmentStatusBodySchema`, `messages-schemas.ts:212`) ; seul le type
+   * CLIENT était resté étroit à `'listened' | 'watched'`.
+   */
+  test('action "viewed" (ouverture d’une image/d’un document) atteint le même port', async () => {
+    const { impl, calls } = fakeFetch({ status: 200, body: { success: true, data: {} } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+
+    const result = await reportAttachmentStatus({
+      source: 'gateway',
+      transport,
+      attachmentId: 'att-2',
+      report: { action: 'viewed', playPositionMs: 0, durationMs: 0, complete: true },
+    });
+
+    expect(calls[0]?.url).toBe('/api/v1/attachments/att-2/status');
+    const body = JSON.parse(String(calls[0]?.init.body));
+    expect(body).toEqual({ action: 'viewed', playPositionMs: 0, durationMs: 0, complete: true });
+    expect(result.ok).toBe(true);
+  });
 });

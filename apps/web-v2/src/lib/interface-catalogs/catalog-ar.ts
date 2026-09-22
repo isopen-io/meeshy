@@ -872,6 +872,8 @@ const ar = {
   'message-detail.attachment.complete': 'مكتمل',
   'message-detail.attachment.listen.empty': 'لم يُستمع بعد',
   'message-detail.attachment.watch.empty': 'لم تُشاهد بعد',
+  'message-detail.attachment.open': 'فتح {name}',
+  'message-detail.attachment.opened.empty': 'لم يُفتح بعد',
   'message-detail.loading': 'جارٍ التحميل…',
   'message-detail.load-error': 'تعذر تحميل هذه المعلومات',
   'message-detail.retry': 'إعادة المحاولة',

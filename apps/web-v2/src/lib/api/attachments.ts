@@ -83,9 +83,15 @@ export type PlaybackStretch = {
 };
 
 export type AttachmentStatusReport = {
-  /** 'listened' pour un vocal, 'watched' pour une vidéo — les deux seuls
-   * verbes que ce lot émet (`viewed`/`downloaded` restent hors périmètre). */
-  readonly action: 'listened' | 'watched';
+  /** 'listened' pour un vocal, 'watched' pour une vidéo, 'viewed' pour
+   * l'OUVERTURE d'une image ou d'un document (#7363, W6 — miroir
+   * `DocumentOpenReport.bodyForOpening`, `packages/MeeshySDK/Sources/
+   * MeeshyUI/Media/DocumentOpenReport.swift` : lire n'est pas enregistrer,
+   * jamais `'downloaded'` pour une simple ouverture), 'downloaded' pour un
+   * enregistrement EXPLICITE. Le serveur accepte les quatre depuis toujours
+   * (`AttachmentStatusBodySchema`, `messages-schemas.ts:212`) — seul ce
+   * type CLIENT était resté étroit. */
+  readonly action: 'listened' | 'watched' | 'viewed' | 'downloaded';
   readonly playPositionMs?: number;
   readonly durationMs?: number;
   readonly complete?: boolean;

@@ -875,6 +875,8 @@ const en = {
   'message-detail.attachment.complete': 'Complete',
   'message-detail.attachment.listen.empty': 'Not listened to yet',
   'message-detail.attachment.watch.empty': 'Not watched yet',
+  'message-detail.attachment.open': 'Open {name}',
+  'message-detail.attachment.opened.empty': 'Not opened yet',
   'message-detail.loading': 'Loading…',
   'message-detail.load-error': 'Couldn’t load this information',
   'message-detail.retry': 'Retry',

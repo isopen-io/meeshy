@@ -323,6 +323,7 @@ export function Bubble({
           fallbackLanguage={message.originalLanguage}
           carrier={mediaCarrierOf({ message, caption: rendered, senderAvatarUrl: senderPhoto })}
           mediaFrame="box"
+          isMine={isMine}
           {...(displayLanguage !== undefined ? { displayLanguage } : {})}
         />
       ) : null}
