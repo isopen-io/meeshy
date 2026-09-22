@@ -32,19 +32,18 @@ export interface MessageExpiredEventData {
 /**
  * Résumé des statuts de lecture pour enrichir les événements temps réel
  *
- * `messageId` — OPTIONNEL (#7347/G-5, contrat codé par anticipation depuis
- * #7348 : la branche `lot/g5-7347` n'existait pas encore côté web à
- * l'écriture de ce champ). Aujourd'hui `broadcastReadStatus.ts` calcule ce
- * résumé pour le DERNIER message non supprimé de la conversation
- * (`MessageReadStatusService.getLatestMessageSummary`) et ne pose pas ce
- * champ ; un client applique alors le résumé au message le plus RÉCENT de
- * son cache (repli historique #7223). Une fois G-5 livré, la passerelle
- * émettra UN résumé PAR message affecté, chacun nommant le sien — une
- * rafale de lecture sur trois messages de trois auteurs distincts produit
- * alors trois résumés, pas un agrégé sur le seul dernier. Optionnel pour ne
- * RIEN casser côté émetteur tant que G-5 n'a pas basculé : un champ requis
- * aurait fait échouer la compilation de `broadcastReadStatus.ts`, qui ne le
- * pose pas encore.
+ * `messageId` — OPTIONNEL, DÉSORMAIS POSÉ par G-5 (#7347) sur le chemin EXACT
+ * (`broadcastReadStatus.ts`, quand `applyReceipt` lui transmet le lot FIGÉ —
+ * `args.messageIds`) : la passerelle émet alors UN résumé PAR message affecté,
+ * chacun nommant le sien — une rafale de lecture sur trois messages de trois
+ * auteurs distincts produit trois résumés, pas un agrégé sur le seul dernier.
+ * Reste ABSENT sur le repli LEGACY (aucun lot exact connu, ou `type:
+ * 'received'`) : `broadcastReadStatus.ts` retombe alors sur
+ * `getLatestMessageSummary`, le DERNIER message non supprimé de la
+ * conversation, comme avant G-5 ; un client applique ce résumé au message le
+ * plus RÉCENT de son cache (repli historique #7223). Optionnel pour que les
+ * DEUX chemins compilent et se décodent sans erreur : un champ requis aurait
+ * cassé le repli legacy, qui ne le pose jamais.
  *
  * ── LA FORME EST ARRÊTÉE ICI, ET G-5 LA SUIT (revue-correction W2) ─────────
  *
@@ -59,7 +58,8 @@ export interface MessageExpiredEventData {
  *     critère — « rafale M1 M2 M3 lue ⇒ TROIS RÉSUMÉS, pas un » — et c'est
  *     la seule forme RÉTROCOMPATIBLE : `summary` est un OBJET que les trois
  *     décodeurs lisent déjà (web `isReadStatusUpdated`, iOS
- *     `ReadStatusSummary` dans `MessageSocketManager.swift`, Kotlin gelé) ;
+ *     `ReadStatusSummary` dans `Sockets/ReadStatusEvents.swift` — extrait de
+ *     `MessageSocketManager.swift` par G-5, budget de taille —, Kotlin gelé) ;
  *     le muer en tableau casserait les trois d'un coup, un champ optionnel
  *     de plus n'en casse aucun ;
  *   - **l'id vit SUR le résumé, pas à la racine de l'événement.** Ce résumé
@@ -69,17 +69,21 @@ export interface MessageExpiredEventData {
  *     forme d'angle mort du cycle 126 (un champ qui QUALIFIE une valeur,
  *     posé ailleurs qu'elle, se perd au premier relais qui recopie).
  *
- * Reste à trancher POUR G-5, et non ici : `readByAllAt` (troisième membre du
- * critère de #7347) n'est PAS sur ce résumé. `applyReadStatusUpdated` côté
- * web refuse aujourd'hui d'inventer cette horloge faute de la recevoir ; si
- * G-5 la met sur le fil, elle rejoint ce type et son consommateur web dans
- * le MÊME lot, jamais l'un sans l'autre.
+ * `readByAllAt` — TRANCHÉ par G-5 (#7347) : elle VOYAGE, calculée par le MÊME
+ * moteur que le REST (`MessageReadStatusService.getConversationReadStatuses`,
+ * qui rend déjà `{totalMembers, receivedCount, readCount, readByAllAt}` PAR
+ * message — celui que `GET …/receipts` sert déjà). `Date | null`, comme
+ * `lastReadAt` ci-dessous : `null` tant que le dernier destinataire actif n'a
+ * pas rattrapé CE message, une date figée dès qu'il l'a fait. Son
+ * consommateur web (`apps/web-v2/src/lib/api/realtime-apply.ts`) change dans
+ * le MÊME lot, comme promis ci-dessus — jamais l'un sans l'autre.
  */
 export interface ReadStatusSummary {
   readonly totalMembers: number;
   readonly deliveredCount: number;
   readonly readCount: number;
   readonly messageId?: string;
+  readonly readByAllAt?: Date | null;
 }
 
 /**

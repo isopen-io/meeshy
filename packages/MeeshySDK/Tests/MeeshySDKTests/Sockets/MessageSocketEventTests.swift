@@ -656,6 +656,38 @@ final class MessageSocketEventTests: XCTestCase {
         XCTAssertEqual(event.summary.totalMembers, 3)
         XCTAssertEqual(event.summary.deliveredCount, 2)
         XCTAssertEqual(event.summary.readCount, 1)
+        // Repli legacy (gateway pré-G5) : absents ⇒ `nil`, jamais une erreur
+        // de décodage — même contrat que web (`messageId`/`readByAllAt`
+        // optionnels, `ReadStatusSummary`, `packages/shared/types/
+        // socketio-events/message.ts`).
+        XCTAssertNil(event.summary.messageId)
+        XCTAssertNil(event.summary.readByAllAt)
+    }
+
+    /// G-5 (#7347) — le miroir Swift de `ReadStatusSummary` gagne
+    /// `messageId`/`readByAllAt`, mirroring le type partagé DANS LE MÊME LOT
+    /// (règle du dépôt : « type partagé + miroir Swift changent ensemble »).
+    func testReadStatusUpdateEventDecoding_withMessageIdAndReadByAllAt() throws {
+        let json = """
+        {
+            "conversationId": "c1",
+            "participantId": "p1",
+            "userId": "u1",
+            "type": "read",
+            "updatedAt": "2026-03-06T14:30:00.000Z",
+            "summary": {
+                "totalMembers": 2,
+                "deliveredCount": 2,
+                "readCount": 2,
+                "messageId": "m-1",
+                "readByAllAt": "2026-09-22T08:00:00.000Z"
+            }
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(ReadStatusUpdateEvent.self, from: json)
+        XCTAssertEqual(event.summary.messageId, "m-1")
+        XCTAssertNotNil(event.summary.readByAllAt)
     }
 
     // MARK: - AttachmentStatusUpdatedEvent

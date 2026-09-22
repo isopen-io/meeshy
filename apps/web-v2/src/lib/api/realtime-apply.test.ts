@@ -902,6 +902,52 @@ describe('isReadStatusUpdated (#7223) — décodage FAIL-CLOSED', () => {
       }),
     ).toBe(false);
   });
+
+  /* #7347 (G-5) — `summary.readByAllAt` : maintenant CONSOMMÉ par
+     `applyReadStatusUpdated`, donc VALIDÉ ici, même motif que `messageId`
+     ci-dessus. `null` (pas encore tout le monde) et l'ISO 8601 réelle
+     (`updatedAt` ci-dessus le montre : une `Date` voyage en CHAÎNE sur le
+     fil) sont acceptées ; une forme qui n'est ni l'un ni l'autre ⇒ rejetée. */
+  test('`summary.readByAllAt` ABSENT (repli legacy) est acceptée', () => {
+    expect(
+      isReadStatusUpdated({
+        conversationId: 'c-a',
+        summary: { totalMembers: 1, deliveredCount: 1, readCount: 1 },
+      }),
+    ).toBe(true);
+  });
+
+  test('`summary.readByAllAt: null` est acceptée', () => {
+    expect(
+      isReadStatusUpdated({
+        conversationId: 'c-a',
+        summary: { totalMembers: 1, deliveredCount: 1, readCount: 1, readByAllAt: null },
+      }),
+    ).toBe(true);
+  });
+
+  test('`summary.readByAllAt` en ISO 8601 (forme réelle sur le fil) est acceptée', () => {
+    expect(
+      isReadStatusUpdated({
+        conversationId: 'c-a',
+        summary: {
+          totalMembers: 1,
+          deliveredCount: 1,
+          readCount: 1,
+          readByAllAt: '2026-09-22T08:00:00.000Z',
+        },
+      }),
+    ).toBe(true);
+  });
+
+  test('`summary.readByAllAt` mal formé (nombre) ⇒ rejetée', () => {
+    expect(
+      isReadStatusUpdated({
+        conversationId: 'c-a',
+        summary: { totalMembers: 1, deliveredCount: 1, readCount: 1, readByAllAt: 42 },
+      }),
+    ).toBe(false);
+  });
 });
 
 /**
@@ -1005,6 +1051,65 @@ describe('applyReadStatusUpdated (#7223, #7348) — le puits de read-status:upda
     expect(messages?.find((m) => m.id === 'm-1')?.readCount).toBe(1);
     expect(messages?.find((m) => m.id === 'm-2')?.readCount).toBe(2);
     expect(messages?.find((m) => m.id === 'm-3')?.readCount).toBe(3);
+  });
+
+  test('#7347 (G-5) — `readByAllAt` PRÉSENT sur le résumé est posé sur le message ciblé', () => {
+    const client = new QueryClient();
+    const m1 = localMessage({ id: 'm-1' });
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([m1]));
+    const readByAllAt = new Date('2026-09-22T08:00:00.000Z');
+
+    applyReadStatusUpdated(client, {
+      conversationId: 'c-a',
+      participantId: 'p-1',
+      userId: 'u-1',
+      type: 'read',
+      updatedAt: new Date('2026-09-22T08:00:01.000Z'),
+      summary: { totalMembers: 1, deliveredCount: 1, readCount: 1, messageId: 'm-1', readByAllAt },
+    });
+
+    const patched = threadOf(client, 'c-a')?.messages.find((m) => m.id === 'm-1');
+    expect(patched?.readByAllAt).toEqual(readByAllAt);
+  });
+
+  test('#7347 (G-5) — `readByAllAt: null` (pas encore tout le monde) EFFACE une valeur déjà connue', () => {
+    const client = new QueryClient();
+    const m1 = localMessage({
+      id: 'm-1',
+      readByAllAt: new Date('2026-09-20T00:00:00.000Z'),
+    });
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([m1]));
+
+    applyReadStatusUpdated(client, {
+      conversationId: 'c-a',
+      participantId: 'p-1',
+      userId: 'u-1',
+      type: 'read',
+      updatedAt: new Date('2026-09-22T08:00:01.000Z'),
+      summary: { totalMembers: 2, deliveredCount: 2, readCount: 1, messageId: 'm-1', readByAllAt: null },
+    });
+
+    const patched = threadOf(client, 'c-a')?.messages.find((m) => m.id === 'm-1');
+    expect(patched?.readByAllAt).toBeUndefined();
+  });
+
+  test('#7347 (G-5) — `readByAllAt` ABSENT du résumé (repli legacy) ne touche PAS la valeur déjà connue', () => {
+    const client = new QueryClient();
+    const existing = new Date('2026-09-20T00:00:00.000Z');
+    const m1 = localMessage({ id: 'm-1', readByAllAt: existing });
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([m1]));
+
+    applyReadStatusUpdated(client, {
+      conversationId: 'c-a',
+      participantId: 'p-1',
+      userId: 'u-1',
+      type: 'read',
+      updatedAt: new Date('2026-09-22T08:00:01.000Z'),
+      summary: { totalMembers: 1, deliveredCount: 1, readCount: 1, messageId: 'm-1' },
+    });
+
+    const patched = threadOf(client, 'c-a')?.messages.find((m) => m.id === 'm-1');
+    expect(patched?.readByAllAt).toEqual(existing);
   });
 
   test('#7348 — `messageId` absent DU CACHE (fil incomplet) ⇒ NO-OP, aucune autre ligne n\'est touchée', () => {
