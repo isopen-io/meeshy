@@ -63,6 +63,11 @@ struct VideoAvailabilityResolver<Content: View>: View {
             downloader.start(attachment: attachment, onShare: nil)
         }
         .task(id: attachment.id) {
+            // Branché sur le registre partagé AVANT toute résolution : un
+            // téléchargement de cette vidéo lancé par une autre surface
+            // (galerie, autre cellule) s'affiche ici, et sa fin la rend
+            // « prête » sans re-télécharger (#7492).
+            downloader.observe(attachment)
             resolvedAvailability = await Self.resolveStatic(attachment)
             if case .needsDownload = resolvedAvailability,
                !downloader.isDownloading,
@@ -93,6 +98,14 @@ struct VideoAvailabilityResolver<Content: View>: View {
 
     /// Static resolver helper, testable without SwiftUI hosting.
     static func resolveStatic(_ attachment: MessageAttachment) async -> VideoAvailability {
+        await VideoAvailability.resting(for: attachment)
+    }
+}
+
+extension VideoAvailability {
+    /// La disponibilité AU REPOS d'une vidéo — fichier local ou cache vidéo.
+    /// Site UNIQUE (#7492) : la galerie plein écran en tenait une copie.
+    static func resting(for attachment: MessageAttachment) async -> VideoAvailability {
         let urlString = attachment.fileUrl
         if urlString.hasPrefix("file://") {
             let exists = FileManager.default.fileExists(atPath: URL(string: urlString)?.path ?? "")

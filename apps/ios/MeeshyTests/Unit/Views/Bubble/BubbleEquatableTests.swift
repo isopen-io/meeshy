@@ -251,6 +251,22 @@ final class BubbleReplyEqualityTests: XCTestCase {
             makeQuote(authorAvatarUrl: "https://cdn.meeshy.me/bob.jpg")
         )
     }
+
+    /// #7491 — la PEAU décide si l'avatar cité se dessine (bulle oui, rangée
+    /// plate non) : elle entre donc dans le `==`, sinon une cellule recyclée
+    /// d'un mode à l'autre garderait l'avatar de la peau précédente.
+    func test_bubbleQuotedReply_equality_seesTheHostingSkin() {
+        let reference = makeReply(authorAvatarUrl: nil).reference
+        let bubble = BubbleQuotedReply(
+            skin: .bubble, reply: reference, parentIsMe: false,
+            accentHex: "#4F46E5", isDark: false, mentionDisplayNames: [:]
+        )
+        let focal = BubbleQuotedReply(
+            skin: .focal, reply: reference, parentIsMe: false,
+            accentHex: "#4F46E5", isDark: false, mentionDisplayNames: [:]
+        )
+        XCTAssertNotEqual(bubble, focal)
+    }
 }
 
 // MARK: - BubbleContent.Attachments mutation-field equality (Task14)

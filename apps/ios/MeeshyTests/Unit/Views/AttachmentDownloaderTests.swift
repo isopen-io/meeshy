@@ -1,5 +1,6 @@
 import XCTest
 import SwiftUI
+import Combine
 import MeeshySDK
 import MeeshyUI
 @testable import Meeshy
@@ -99,6 +100,25 @@ final class AttachmentDownloaderTests: XCTestCase {
                       "The download badge must be hidden for local file:// media")
     }
 
+    /// #7492 — une vidéo n'a qu'UN composant de téléchargement : le bouton de
+    /// son lecteur. Le badge se posait par-dessus la même tuile.
+    func test_downloadBadge_forVideo_yieldsToThePlayer() {
+        let video = MeeshyMessageAttachment(
+            id: "att-vid-\(UUID().uuidString)",
+            mimeType: "video/mp4",
+            fileUrl: "https://cdn.example.com/clip.mp4",
+            uploadedBy: "user-test"
+        )
+        XCTAssertTrue(makeBadge(attachment: video, deliveryStatus: .sent).yieldsToThePlayer)
+        XCTAssertFalse(
+            makeBadge(
+                attachment: makeImageAttachment(fileUrl: "https://cdn.example.com/photo.jpg"),
+                deliveryStatus: .sent
+            ).yieldsToThePlayer,
+            "l'image n'a pas d'autre affordance de téléchargement : le badge reste le sien"
+        )
+    }
+
     func test_downloadBadge_forConfirmedServerMedia_isVisible() {
         let badge = makeBadge(
             attachment: makeImageAttachment(fileUrl: "https://cdn.example.com/photo.jpg"),
@@ -138,7 +158,7 @@ final class AttachmentDownloaderTests: XCTestCase {
             .deletingLastPathComponent()   // Unit/
             .deletingLastPathComponent()   // MeeshyTests/
             .deletingLastPathComponent()   // apps/ios/
-            .appendingPathComponent("Meeshy/Features/Main/Views/ConversationMediaViews.swift")
+            .appendingPathComponent("Meeshy/Features/Main/Views/AttachmentDownloadCenter.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
@@ -321,5 +341,110 @@ final class MediaAutoDownloadDecisionTests: XCTestCase {
             isCached: false, progress: 0, downloadedBytes: 0, totalBytes: 0,
             resting: .ready)
         XCTAssertEqual(a, .ready)
+    }
+}
+
+/// #7492 — UN téléchargement par média, partagé par toutes les surfaces qui le
+/// montrent. Chaque façade (`AttachmentDownloader`) observe la clé de cache de
+/// son média dans `AttachmentDownloadCenter` : deux surfaces voient la MÊME
+/// progression, finissent ensemble, et un média déjà sur disque ne repart
+/// jamais sur le réseau.
+@MainActor
+final class AttachmentDownloadCenterTests: XCTestCase {
+
+    private func makeVideo(fileUrl: String = "https://cdn.example.com/v-\(UUID().uuidString).mp4") -> MeeshyMessageAttachment {
+        MeeshyMessageAttachment(
+            id: "att-vid-\(UUID().uuidString)",
+            mimeType: "video/mp4",
+            fileUrl: fileUrl,
+            uploadedBy: "user-test"
+        )
+    }
+
+    private func makeSUT() -> (center: AttachmentDownloadCenter, bubble: AttachmentDownloader, gallery: AttachmentDownloader) {
+        let center = AttachmentDownloadCenter()
+        return (center, AttachmentDownloader(center: center), AttachmentDownloader(center: center))
+    }
+
+    func test_twoSurfacesOnTheSameMedia_showTheSameProgress() {
+        let (center, bubble, gallery) = makeSUT()
+        let video = makeVideo()
+        bubble.observe(video)
+        gallery.observe(video)
+        let key = AttachmentDownloadCenter.key(for: video.fileUrl)
+
+        center.publish(.progress(.init(downloadedBytes: 40, totalBytes: 100)), for: key)
+
+        XCTAssertTrue(bubble.isDownloading)
+        XCTAssertTrue(gallery.isDownloading)
+        XCTAssertEqual(bubble.progress, 0.4, accuracy: 0.001)
+        XCTAssertEqual(gallery.progress, 0.4, accuracy: 0.001)
+    }
+
+    func test_aDownloadFinishedElsewhere_marksEveryObserverCached() {
+        let (center, bubble, gallery) = makeSUT()
+        let video = makeVideo()
+        bubble.observe(video)
+        gallery.observe(video)
+        let key = AttachmentDownloadCenter.key(for: video.fileUrl)
+
+        center.publish(.progress(.init(downloadedBytes: 0, totalBytes: 100)), for: key)
+        center.publish(.finished(totalBytes: 100), for: key)
+
+        XCTAssertTrue(bubble.isCached, "la bulle doit passer à « prête » quand la galerie finit")
+        XCTAssertFalse(bubble.isDownloading)
+        XCTAssertTrue(gallery.isCached)
+    }
+
+    func test_aSurfaceMountedMidDownload_joinsTheRunningProgress() {
+        let (center, bubble, gallery) = makeSUT()
+        let video = makeVideo()
+        bubble.observe(video)
+        let key = AttachmentDownloadCenter.key(for: video.fileUrl)
+        center.publish(.progress(.init(downloadedBytes: 70, totalBytes: 100)), for: key)
+
+        gallery.observe(video)
+
+        XCTAssertTrue(gallery.isDownloading, "une surface montée en cours de route lit le téléchargement en cours")
+        XCTAssertEqual(gallery.progress, 0.7, accuracy: 0.001)
+    }
+
+    func test_anotherMediaEvent_neverLeaksIntoThisSurface() {
+        let (center, bubble, _) = makeSUT()
+        let video = makeVideo()
+        bubble.observe(video)
+
+        center.publish(.progress(.init(downloadedBytes: 10, totalBytes: 100)), for: "https://cdn.example.com/other.mp4")
+
+        XCTAssertFalse(bubble.isDownloading)
+    }
+
+    func test_cancelFromOneSurface_stopsTheDownloadEverywhere() {
+        let (_, bubble, gallery) = makeSUT()
+        let video = makeVideo(fileUrl: "https://cdn.example.invalid/v-\(UUID().uuidString).mp4")
+        gallery.observe(video)
+
+        bubble.start(attachment: video, onShare: nil)
+        XCTAssertTrue(gallery.isDownloading, "le téléchargement lancé par la bulle s'affiche dans la galerie")
+
+        gallery.cancel()
+
+        XCTAssertFalse(bubble.isDownloading)
+        XCTAssertFalse(gallery.isDownloading)
+    }
+
+    func test_start_onAMediaAlreadyOnDisk_finishesFromTheCache() async {
+        let (_, bubble, _) = makeSUT()
+        let video = makeVideo(fileUrl: "https://cdn.example.invalid/v-\(UUID().uuidString).mp4")
+        let key = AttachmentDownloadCenter.key(for: video.fileUrl)
+        await CacheCoordinator.shared.video.store(Data([0x00, 0x01, 0x02]), for: key)
+        let cached = expectation(description: "servi par le cache local, sans réseau")
+        let subscription = bubble.$isCached.first(where: { $0 }).sink { _ in cached.fulfill() }
+
+        bubble.start(attachment: video, onShare: nil)
+
+        await fulfillment(of: [cached], timeout: 5)
+        subscription.cancel()
+        await CacheCoordinator.shared.video.invalidate(for: key)
     }
 }
