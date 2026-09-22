@@ -503,6 +503,7 @@ export const FocalRow = memo(function FocalRow({
           fallbackLanguage={message.originalLanguage}
           carrier={mediaCarrierOf({ message, caption: rendered, senderAvatarUrl: senderPhoto })}
           mediaFrame="tiles"
+          isMine={isMine}
           {...(displayLanguage !== undefined ? { displayLanguage } : {})}
         />
       ) : null}
