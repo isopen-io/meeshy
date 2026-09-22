@@ -561,13 +561,6 @@ export default function ThreadScreen() {
     selectReadingMode('script');
     setPendingJump(episode.messageIds[0] ?? null);
   };
-  /**
-   * « Reprendre le fil » (#7351, V3) — vise `unreadBoundary` (déclaré plus
-   * bas, `useUnreadBoundary` — la fermeture lit sa valeur au CLIC, jamais à
-   * la définition), pas le premier message chargé d'autrui : la logique de
-   * repli est dans `resumeThreadTarget` (`lib/view/unread-boundary.ts`),
-   * testée séparément.
-   */
   const onResumeThread = () => {
     selectReadingMode('script');
     setPendingJump(resumeThreadTarget({ unreadBoundary, messages, viewerId: viewer.id ?? '' }));
