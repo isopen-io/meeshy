@@ -148,10 +148,10 @@ import type {
 import type {
   MentionCreatedEventData,
   MessageConsumedEventData,
-  MessageCountdownStartedEventData,
   MessageDeleteData,
   MessageDeletedEventData,
   MessageEditData,
+  MessageCountdownStartedEventData,
   MessageExpiredEventData,
   MessageHiddenForMeEventData,
   MessagePinnedEventData,

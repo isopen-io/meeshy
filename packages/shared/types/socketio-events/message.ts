@@ -30,24 +30,25 @@ export interface MessageExpiredEventData {
 }
 
 /**
- * Le décompte d'un éphémère a démarré pour UN destinataire (#7451).
+ * LE DÉCOMPTE D'UN ÉPHÉMÈRE COMMENCE (contrat du fil #7451, point 5) — émis à
+ * la PREMIÈRE réception d'un destinataire, jamais à l'envoi.
  *
- * `expiresAt` n'a pas la même signification selon la room qui le reçoit, et
- * c'est délibéré — les deux lecteurs ne posent pas la même question :
+ * `expiresAt` vaut `D(u) = réception(u) + ephemeralDuration` sur la room
+ * `user:<destinataire>`, et la plus TARDIVE des `D(u)` connues sur la room
+ * `user:<expéditeur>` — deux valeurs pour un même message, ce qui est la raison
+ * même pour laquelle cet événement est adressé par utilisateur et non diffusé
+ * en room de conversation (point 4).
  *
- *   - `user:<destinataire>` reçoit `D(u)`, l'échéance de CE destinataire. Ses
- *     autres appareils n'ont rien reçu et ne peuvent donc pas la dériver.
- *   - `user:<expéditeur>` reçoit la plus TARDIVE des échéances connues : sur son
- *     écran, le message vit tant qu'il vit pour quelqu'un.
+ * Le client compose ce qu'il AFFICHE avec `ephemeralDeadline()`
+ * (`utils/ephemeral-deadline.ts`) : cette valeur y entre comme échéance SERVIE,
+ * en concurrence avec sa réception locale, et c'est la plus PROCHE qui gagne.
  *
- * Il n'y a pas de champ « pour qui » : la room EST le destinataire. Un champ
- * `userId` serait, sur le fil de l'expéditeur, la liste de qui a reçu quoi et
- * quand — un accusé de réception nominatif que rien dans ce lot ne demande.
+ * @see MESSAGE_COUNTDOWN_STARTED
  */
 export interface MessageCountdownStartedEventData {
   readonly messageId: string;
   readonly conversationId: string;
-  /** ISO 8601 — l'échéance que CETTE room doit afficher. */
+  /** ISO 8601 — l'échéance de CE destinataire, ou celle de l'expéditeur. */
   readonly expiresAt: string;
 }
 

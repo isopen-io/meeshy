@@ -310,32 +310,25 @@ describe('MessagingService', () => {
 
       it('fait hériter la copie de la DURÉE éphémère de la source (#7451)', async () => {
         mockPrisma.message.findUnique.mockResolvedValue({
-          isViewOnce: false,
-          effectFlags: 0,
-          ephemeralDuration: 30,
+          isViewOnce: false, effectFlags: 0, ephemeralDuration: 30,
           createdAt: new Date('2026-08-12T11:00:00.000Z'),
           expiresAt: new Date('2026-08-19T11:00:00.000Z')
         });
 
         const before = Date.now();
-        const response = await service.handleMessage(
-          { ...validRequest, forwardedFromId },
-          testParticipantId
-        );
+        const response = await service.handleMessage({ ...validRequest, forwardedFromId }, testParticipantId);
         const after = Date.now();
 
         expect(response.success).toBe(true);
         const written = mockPrisma.message.create.mock.calls[0][0].data;
-        // Ce qui est HÉRITÉ est la durée, jamais une échéance : le décompte de
-        // la copie repartira de la réception de chacun de ses destinataires.
+        // Une DURÉE, jamais une échéance : le décompte repart de la réception.
         expect(written.ephemeralDuration).toBe(30);
-        // `expiresAt` en base est l'heure INTERNE de destruction — ici le
-        // plafond de rétention (#7450), personne n'ayant encore rien reçu.
+        // `expiresAt` en base = l'heure INTERNE de destruction : le plafond de
+        // rétention (#7450), personne n'ayant encore rien reçu.
         const SEPT_JOURS_MS = 7 * 24 * 60 * 60 * 1000;
         expect(written.expiresAt.getTime()).toBeGreaterThanOrEqual(before + SEPT_JOURS_MS);
         expect(written.expiresAt.getTime()).toBeLessThanOrEqual(after + SEPT_JOURS_MS);
-        // Le bit EPHEMERAL se déduit de la DURÉE dans `saveMessage` — sans lui
-        // les clients rendraient la copie comme un message ordinaire.
+        // Le bit EPHEMERAL se déduit de la DURÉE dans `saveMessage`.
         expect(written.effectFlags & 1).toBe(1);
       });
 

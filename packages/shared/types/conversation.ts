@@ -144,17 +144,21 @@ export interface Message {
 
   // ===== EXPIRATION =====
   /**
-   * Échéance SERVIE À CE LECTEUR pour un éphémère (#7451) : `D(lecteur)` pour un
-   * destinataire, la plus tardive des `D` connues pour l'expéditeur, absente tant
-   * qu'aucun décompte n'a démarré — et ABSENTE de `message:new`, qui est une
-   * diffusion de room. Ce n'est pas la colonne `Message.expiresAt`, devenue
-   * l'heure INTERNE de destruction.
+   * L'échéance SERVIE pour CE lecteur (contrat du fil #7451, point 3) :
+   * `réception(lecteur) + ephemeralDuration` pour un destinataire, la plus
+   * tardive des échéances connues pour l'expéditeur, `undefined` tant que
+   * personne n'a reçu. Sur `message:new`, elle est ABSENTE pour un éphémère
+   * (point 4) : une diffusion en room ne peut pas être différente par lecteur.
    */
   readonly expiresAt?: Date;
   /**
-   * Durée d'un éphémère, en secondes (#7451) — la même pour tout le monde, donc
-   * servie partout : REST, `message:new` et push. Le décompte d'un destinataire
-   * part de SA réception.
+   * LA DURÉE, en secondes entières — ce que le client ENVOIE, là où il posait
+   * jusqu'ici une échéance calculée au moment de l'envoi (directive porteur
+   * 2026-09-22 : un éphémère ne décompte qu'une fois REÇU). Servie partout :
+   * REST, `message:new` et push.
+   *
+   * Le client compose son échéance avec `ephemeralDeadline()`
+   * (`utils/ephemeral-deadline.ts`) — jamais en rejouant la règle sur place.
    */
   readonly ephemeralDuration?: number;
 

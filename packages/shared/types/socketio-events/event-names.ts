@@ -42,19 +42,16 @@ export const SERVER_EVENTS = {
    */
   MESSAGE_EXPIRED: 'message:expired',
   /**
-   * Le décompte d'un message éphémère vient de DÉMARRER pour un destinataire :
-   * il l'a reçu (#7451, directive porteur 2026-09-22).
+   * LE DÉCOMPTE D'UN ÉPHÉMÈRE A COMMENCÉ pour un lecteur (contrat du fil
+   * #7451, point 5) — émis à la PREMIÈRE réception d'un destinataire, vers
+   * `user:<destinataire>` (pour ses autres appareils) et vers
+   * `user:<expéditeur>` (la plus tardive des échéances connues).
    *
-   * Il n'existe pas parce que `message:new` aurait pu le porter — il ne le
-   * pouvait PAS. `message:new` est une diffusion de ROOM, identique pour tout
-   * le monde, et l'échéance d'un éphémère est PAR DESTINATAIRE (`D(u) =
-   * première réception par u + durée`). L'événement est donc adressé, jamais
-   * diffusé :
-   *
-   *   - vers `user:<destinataire>` — pour ses AUTRES appareils, qui n'ont rien
-   *     reçu et ne peuvent pas dériver l'échéance de leur horloge locale ;
-   *   - vers `user:<expéditeur>` — avec la plus TARDIVE des échéances connues,
-   *     la seule que son écran puisse afficher honnêtement.
+   * DISTINCT de `MESSAGE_EXPIRED`, qui dit la FIN : celui-ci pose l'échéance,
+   * celui-là retire le message. Un client qui n'en reçoit aucun n'est pas
+   * démuni — il retombe sur `réception locale + ephemeralDuration`
+   * (`utils/ephemeral-deadline.ts`), et c'est le cas nominal du temps réel,
+   * `message:new` ne portant pas d'`expiresAt` pour un éphémère (point 4).
    */
   MESSAGE_COUNTDOWN_STARTED: 'message:countdown-started',
   MESSAGE_TRANSLATION: 'message:translation',
@@ -537,6 +534,14 @@ export const SERVER_EVENTS = {
  *
  * Ce qui reste : le pipeline de traduction EN APPEL. Les trois noms sont
  * décodés côté clients et attendent le service qui les produira.
+ *
+ * `message:countdown-started` y a figuré le temps d'UN lot : le lot web-v2
+ * #7454 l'a déclaré et réservé pour que les trois clients n'écrivent pas le nom
+ * chacun de leur côté, en annonçant que la réservation tomberait dans le lot qui
+ * poserait l'émetteur. C'est celui-ci (#7451) : la passerelle l'émet depuis
+ * `socketio/ephemeralCountdownAnnouncer.ts`, à la première réception d'un
+ * destinataire — la garde du sens inverse (« keeps the reserved list free of
+ * channels the gateway now emits ») rougirait si la ligne y restait.
  */
 export const RESERVED_SERVER_EVENTS: ReadonlySet<string> = new Set<string>([
   SERVER_EVENTS.CALL_TRANSLATION_REQUESTED,
