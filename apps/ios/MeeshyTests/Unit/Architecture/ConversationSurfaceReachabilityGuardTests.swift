@@ -790,13 +790,35 @@ final class ComposerProtectionTravelsGuardTests: XCTestCase {
     /// éphémère et voit un message ordinaire — ni flamme, ni décompte, ni
     /// voile — jusqu'à la réconciliation serveur, ce qui se lit comme « la
     /// protection n'a pas été appliquée ».
+    /// **La sonde est BORNÉE au corps de `insertOptimisticMediaMessage`**, et
+    /// c'est le correctif d'un défaut de cette garde elle-même : écrite en
+    /// balayage de FICHIER, elle interdisait le littéral
+    /// `expiresAt: nil, effectFlags: 0` partout — alors que sa phrase ne parle
+    /// que de la bulle d'un MÉDIA. Le chemin HORS LIGNE porte le même littéral,
+    /// légitimement (voir plus bas), et la garde tombait donc sur du code
+    /// qu'elle n'a jamais prétendu décrire.
+    ///
+    /// > Une garde dont la SONDE est plus large que sa PHRASE finit par rougir
+    /// > pour du code qu'elle ne gouverne pas — et le réflexe est alors
+    /// > d'élargir le code au lieu de resserrer la sonde.
+    ///
+    /// **Pourquoi la ligne hors ligne reste telle quelle** : sa protection ne
+    /// voyage pas encore sur le fil (`OfflineQueueItem` ne porte aucun champ de
+    /// protection — #7507). Lui faire porter la flamme ici afficherait une
+    /// protection que le drain n'applique pas : « une protection annoncée et
+    /// non appliquée est pire que pas de protection » (relevé porteur). Les
+    /// deux moitiés partent ENSEMBLE, dans #7507, ou pas du tout.
     func test_laBulleOptimiste_porteLaProtection() throws {
         let send = try source(at: "Features/Main/ViewModels/ConversationViewModel+Send.swift")
-        XCTAssertFalse(send.contains("expiresAt: nil, effectFlags: 0"),
+        guard let insert = send.range(of: "func insertOptimisticMediaMessage") else {
+            return XCTFail("`insertOptimisticMediaMessage` introuvable — la pose optimiste d'un média a changé de nom")
+        }
+        let corps = String(send[insert.lowerBound...])
+        XCTAssertFalse(corps.contains("expiresAt: nil, effectFlags: 0"),
                        "La ligne optimiste d'un média ne doit plus naître sans protection.")
-        XCTAssertTrue(send.contains("expiresAt: protection.expiresAt(from: now)"),
+        XCTAssertTrue(corps.contains("expiresAt: protection.expiresAt(from: now)"),
                       "Elle doit dater son échéance depuis l'intention saisie au tap.")
-        XCTAssertTrue(send.contains("effectFlags: protection.lifecycleFlags.rawValue"),
+        XCTAssertTrue(corps.contains("effectFlags: protection.lifecycleFlags.rawValue"),
                       "Et porter les bits de cycle de vie correspondants.")
     }
 
