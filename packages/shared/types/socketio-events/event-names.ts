@@ -41,6 +41,22 @@ export const SERVER_EVENTS = {
    * apart (a toast, a distinct log line) can.
    */
   MESSAGE_EXPIRED: 'message:expired',
+  /**
+   * Le décompte d'un message éphémère vient de DÉMARRER pour un destinataire :
+   * il l'a reçu (#7451, directive porteur 2026-09-22).
+   *
+   * Il n'existe pas parce que `message:new` aurait pu le porter — il ne le
+   * pouvait PAS. `message:new` est une diffusion de ROOM, identique pour tout
+   * le monde, et l'échéance d'un éphémère est PAR DESTINATAIRE (`D(u) =
+   * première réception par u + durée`). L'événement est donc adressé, jamais
+   * diffusé :
+   *
+   *   - vers `user:<destinataire>` — pour ses AUTRES appareils, qui n'ont rien
+   *     reçu et ne peuvent pas dériver l'échéance de leur horloge locale ;
+   *   - vers `user:<expéditeur>` — avec la plus TARDIVE des échéances connues,
+   *     la seule que son écran puisse afficher honnêtement.
+   */
+  MESSAGE_COUNTDOWN_STARTED: 'message:countdown-started',
   MESSAGE_TRANSLATION: 'message:translation',
   // Pas de `MESSAGE_TRANSLATED` : la traduction d'un message voyage sous
   // `message:translation`, et sous ce nom seul. `message:translated` a été

@@ -30,6 +30,28 @@ export interface MessageExpiredEventData {
 }
 
 /**
+ * Le décompte d'un éphémère a démarré pour UN destinataire (#7451).
+ *
+ * `expiresAt` n'a pas la même signification selon la room qui le reçoit, et
+ * c'est délibéré — les deux lecteurs ne posent pas la même question :
+ *
+ *   - `user:<destinataire>` reçoit `D(u)`, l'échéance de CE destinataire. Ses
+ *     autres appareils n'ont rien reçu et ne peuvent donc pas la dériver.
+ *   - `user:<expéditeur>` reçoit la plus TARDIVE des échéances connues : sur son
+ *     écran, le message vit tant qu'il vit pour quelqu'un.
+ *
+ * Il n'y a pas de champ « pour qui » : la room EST le destinataire. Un champ
+ * `userId` serait, sur le fil de l'expéditeur, la liste de qui a reçu quoi et
+ * quand — un accusé de réception nominatif que rien dans ce lot ne demande.
+ */
+export interface MessageCountdownStartedEventData {
+  readonly messageId: string;
+  readonly conversationId: string;
+  /** ISO 8601 — l'échéance que CETTE room doit afficher. */
+  readonly expiresAt: string;
+}
+
+/**
  * Résumé des statuts de lecture pour enrichir les événements temps réel
  *
  * `messageId` — OPTIONNEL, DÉSORMAIS POSÉ par G-5 (#7347) sur le chemin EXACT
@@ -280,8 +302,17 @@ export interface MessageSendData {
    */
   readonly copyAttachmentsFromMessageId?: string;
   readonly isBlurred?: boolean;
-  /** ISO 8601 — la passerelle en recompose le bit EPHEMERAL. */
+  /**
+   * ISO 8601 — la passerelle en recompose le bit EPHEMERAL, et en DÉRIVE la
+   * durée pour un client déjà distribué qui ne sait envoyer que ça (#7451).
+   */
   readonly expiresAt?: string;
+  /**
+   * Durée d'un éphémère, en SECONDES (#7451). C'est elle que le client envoie
+   * désormais, et non une échéance : le décompte part de la RÉCEPTION de chaque
+   * destinataire, que seul le serveur connaît.
+   */
+  readonly ephemeralDuration?: number;
   readonly effectFlags?: number;
   readonly isViewOnce?: boolean;
   readonly maxViewOnceCount?: number;
@@ -348,6 +379,12 @@ export interface MessageSendWithAttachmentsData {
   readonly forwardedFromConversationId?: string;
   readonly isBlurred?: boolean;
   readonly expiresAt?: string;
+  /**
+   * Durée d'un éphémère, en SECONDES (#7451). C'est elle que le client envoie
+   * désormais, et non une échéance : le décompte part de la RÉCEPTION de chaque
+   * destinataire, que seul le serveur connaît.
+   */
+  readonly ephemeralDuration?: number;
   readonly effectFlags?: number;
   readonly isViewOnce?: boolean;
   readonly maxViewOnceCount?: number;
@@ -455,7 +492,15 @@ export interface SocketIOMessage {
   readonly isEdited?: boolean;
   readonly editedAt?: Date;
   readonly deletedAt?: Date;
+  /**
+   * ABSENT pour un éphémère (#7451) : `message:new` est une diffusion de ROOM et
+   * l'échéance d'un éphémère est par destinataire. Le client décompte depuis SA
+   * réception locale, et `message:countdown-started` lui porte l'échéance
+   * serveur dès qu'elle existe.
+   */
   readonly expiresAt?: Date;
+  /** La DURÉE d'un éphémère, en secondes — la même pour tout le monde (#7451). */
+  readonly ephemeralDuration?: number;
   readonly createdAt: Date;
   readonly updatedAt?: Date;
   readonly sender?: SocketIOMessageSender;

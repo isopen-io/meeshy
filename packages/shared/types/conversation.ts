@@ -143,7 +143,20 @@ export interface Message {
   readonly effectFlags?: number;
 
   // ===== EXPIRATION =====
+  /**
+   * Échéance SERVIE À CE LECTEUR pour un éphémère (#7451) : `D(lecteur)` pour un
+   * destinataire, la plus tardive des `D` connues pour l'expéditeur, absente tant
+   * qu'aucun décompte n'a démarré — et ABSENTE de `message:new`, qui est une
+   * diffusion de room. Ce n'est pas la colonne `Message.expiresAt`, devenue
+   * l'heure INTERNE de destruction.
+   */
   readonly expiresAt?: Date;
+  /**
+   * Durée d'un éphémère, en secondes (#7451) — la même pour tout le monde, donc
+   * servie partout : REST, `message:new` et push. Le décompte d'un destinataire
+   * part de SA réception.
+   */
+  readonly ephemeralDuration?: number;
 
   // ===== VIEW-ONCE & BLUR =====
   readonly isViewOnce: boolean;
