@@ -898,16 +898,30 @@ describe('Bubble — remet le carrier (auteur, date) à la visionneuse ouverte (
     act(() => {
       tile.click();
     });
-    // Le chunk `lazy()` résout en une microtask ; `Suspense` remonte au tour
-    // suivant — un SEUL `act(async)` vide laisse React rejouer les deux.
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
+    // `MediaViewer` est un CHUNK À LA DEMANDE — `lazy(() => import('./media-
+    // viewer'))`, `attachment-blocks.tsx:51`. Le coût de ce `import()` n'est
+    // PAS une constante : il ne se paie qu'au PREMIER importateur du process.
+    // Un seul tour de boucle suffisait donc quand un autre fichier avait déjà
+    // chargé le module, et pas quand celui-ci est le premier — c'est bun qui
+    // décide, en répartissant les fichiers. Attendre l'EFFET plutôt qu'une
+    // durée rend le témoin indépendant de cette répartition, sans lui retirer
+    // ses dents : la boucle est bornée, et un pied qui ne vient jamais fait
+    // tomber l'assertion ci-dessous comme avant.
+    const footerWithin = async (attempts: number): Promise<Element | null> => {
+      for (let attempt = 0; attempt < attempts; attempt += 1) {
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        });
+        // `MediaViewer` rend par `createPortal(…, document.body)` (§ media-
+        // viewer.tsx) — HORS de `container`, il faut donc interroger le
+        // DOCUMENT, pas la racine montée.
+        const found = document.querySelector('[data-viewer-footer]');
+        if (found) return found;
+      }
+      return null;
+    };
 
-    // `MediaViewer` rend par `createPortal(…, document.body)` (§ media-
-    // viewer.tsx) — HORS de `container`, il faut donc interroger le
-    // DOCUMENT, pas la racine montée.
-    const footer = document.querySelector('[data-viewer-footer]');
+    const footer = await footerWithin(50);
     expect(footer).not.toBeNull();
     expect(footer?.textContent).toContain('Kwame Mensah');
   });
