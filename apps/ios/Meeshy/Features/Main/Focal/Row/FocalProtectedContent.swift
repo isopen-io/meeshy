@@ -20,6 +20,7 @@ import MeeshyUI
 struct FocalProtectedContent<Content: View>: View {
     let isBlurred: Bool
     let isViewOnce: Bool
+    var isDark: Bool = false
     let messageId: String
     let onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)?
     @ViewBuilder let content: Content
@@ -47,14 +48,15 @@ struct FocalProtectedContent<Content: View>: View {
             }
     }
 
-    /// Même contrat d'interaction — et MÊMES clés i18n — que la bulle
-    /// (`BubbleStandardLayout:514-521`, un seul domicile i18n) : le contenu
-    /// flouté EST l'affordance, tap = révélation temporaire (5 s par défaut,
-    /// le contrôleur re-floute seul). `Button(.plain)` + `.contentShape`
-    /// plutôt qu'un `.onTapGesture` nu (contrainte dure §WS-4 : un geste nu
-    /// serait avalé par le long-press du conteneur).
+    /// Même contrat d'interaction — et MÊME composant — que la bulle : le
+    /// contenu voilé EST l'affordance, tap = révélation temporaire (5 s par
+    /// défaut, le contrôleur re-floute seul) ou consommation de la vue unique.
     private var revealAffordance: some View {
-        Button {
+        // #7452 — l'affordance est LA MÊME qu'en bulle (`ProtectedVeilAffordance`,
+        // MeeshyUI) : même libellé, même indice, même geste. Elle était
+        // dupliquée ici avec ses propres clés i18n, et ni l'une ni l'autre ne
+        // disait qu'une vue unique se CONSOMME au toucher.
+        ProtectedVeilAffordance(isViewOnce: isViewOnce, isDark: isDark) {
             HapticFeedback.medium()
             reveal.requestReveal(
                 request: BubbleBlurRevealLifecycle.RevealRequest(
@@ -63,12 +65,6 @@ struct FocalProtectedContent<Content: View>: View {
                 ),
                 consumeViewOnce: onConsumeViewOnce
             )
-        } label: {
-            Color.clear.contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(String(localized: "bubble.content.hidden", defaultValue: "Contenu masqué", bundle: .main))
-        .accessibilityHint(String(localized: "bubble.content.hidden.hint", defaultValue: "Toucher pour révéler le contenu", bundle: .main))
     }
 }

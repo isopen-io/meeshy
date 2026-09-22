@@ -3744,7 +3744,72 @@ Dimensions mûres : 4 (une horloge, zéro minuterie par bulle), 5 (sept langues,
 parité de vocabulaire avec le composeur), 11 (une règle, un chrome, un
 registre), 13 (les cinq modes énumérés, et le suivant).
 
-## D-109 — Le fil se lit dans une COLONNE bornée, et la borne n'est pas une media query (2026-09-22, #7449)
+## D-109 — Le compteur d'un éphémère ne paraît que dans sa dernière minute, et sa destruction se voit (2026-09-22, #7468)
+
+Précision du porteur, arrivée pendant que la PR de D-108 était en vol :
+« l'éphémère est la flamme avec la configuration de durée par défaut ! Ce qu'il
+faudrait c'est d'afficher le compteur de l'éphémère dans la conversation
+uniquement quand on est déjà à 1 min et moins de sa destruction. Et sa
+destruction doit avoir un effet visuel si on est dans la conversation au moment
+de la destruction. »
+
+**Le seuil est une loi PARTAGÉE, pas un réglage de peau.**
+`ephemeralCounterVisible` (`@meeshy/shared/utils/ephemeral-deadline`) est la
+suite de la règle d'échéance : l'une dit QUAND, l'autre à partir de quand on
+l'ÉCRIT. iOS la reprend (#7467) ; un seuil recopié dans deux peaux divergerait
+au premier ajustement. Elle gouverne DEUX choses que rien d'autre ne relie — ce
+que l'œil voit, et ce qui s'abonne à l'horloge.
+
+**Deux régimes, un seul à la fois.** Au-delà de la minute, aucune horloge ne bat
+pour ce message : un SEUL `setTimeout` dort jusqu'au franchissement du seuil.
+Sous le seuil, l'horloge partagée reprend. Le passage se fait tout seul — le
+minuteur repose le reste, la fenêtre bascule, l'effet se rejoue dans l'autre
+régime.
+
+**L'œil est soulagé, jamais l'oreille.** Le libellé accessible donne TOUJOURS le
+temps restant. Privé des chiffres, un lecteur d'écran n'aurait aucun autre
+chemin vers l'échéance — et la flamme seule ne dit pas « dans douze minutes ».
+C'est aussi pourquoi les deux écritures diffèrent : `countdownDigits` rend
+`0:38` pour la puce, `formatRemaining` rend `38s` pour la voix.
+
+**La phase de destruction est PURE et SANS ÉTAT, et c'est ce qui ferme la
+course.** `destructionPhaseOf` (`lib/view/ephemeral-destruction.ts`) tranche
+entre `visible`, `destroying` et `gone` en comparant l'échéance à MAINTENANT.
+Entre l'échéance et le tic suivant de l'horloge, l'écran peut se rendre pour une
+raison étrangère — une frappe, un défilement qui bouge le virtualiseur. Une
+phase lue d'un ensemble alimenté par le seul rappel du chrome aurait coupé la
+rangée net à ce rendu-là, sans effet : le défaut même qu'on corrige. **Et passée
+la fenêtre, `gone` : on n'assiste pas à une destruction passée** — un fil
+rouvert des heures plus tard ne rejoue pas la combustion de chaque éphémère
+échu.
+
+**L'annonce précède le retrait, des deux côtés.** `message:expired` annonce la
+destruction sur-le-champ et ne retire la ligne du cache qu'après la fenêtre ;
+sinon la rangée disparaîtrait d'une image à l'autre, par le chemin qui
+deviendra le plus fréquent une fois #7451 fusionné. `forgetEphemeral` attend
+lui aussi : oublier la réception tout de suite ferait repasser la puce « en
+attente de réception » sur un message en train de brûler.
+
+**L'effet se pose sur le nœud de RANGÉE**, jamais dans une peau : `thread-modes`
+l'applique au `<div role="article">` qui enveloppe la rangée plate ET la bulle,
+si bien qu'un mode ajouté demain l'a sans rien câbler — même doctrine que le
+chrome de D-108.
+
+**Le repli des voisins vient de la GRILLE**, pas d'un `max-height` deviné :
+`grid-template-rows: 1fr → 0fr` anime une hauteur RÉELLE, que le
+`ResizeObserver` du virtualiseur suit à chaque image. Les rangées suivantes
+remontent à mesure, au lieu de sauter quand la ligne quitte la liste.
+
+**`prefers-reduced-motion` : un fondu, et rien d'autre** — pas même le repli.
+Un repli EST un mouvement, et c'est précisément ce que ce réglage demande
+d'éviter ; la rangée garde donc sa place jusqu'au retrait.
+
+Dimensions mûres : 4 (aucune horloge avant la dernière minute ; le repli suit le
+virtualiseur au lieu de le bousculer), 5 (le temps reste dit à l'oreille,
+`prefers-reduced-motion` honoré), 8 (la disparition se comprend), 13 (les cinq
+modes, par le nœud commun).
+
+## D-110 — Le fil se lit dans une COLONNE bornée, et la borne n'est pas une media query (2026-09-22, #7449)
 
 **Le fait, mesuré.** `/feed` posait son scrollport en `flex-1 … px-3` sans aucune borne : à 1440 px, une carte de publication faisait **1416 px** de large. `/reels` étalait de même son pager 9:16 sur toute la largeur — la vidéo en `object-contain` au centre, le rail d'actions au bord opposé du regard. Aucun gate ne pouvait le voir : les trente-huit autres mesurent **390 × 844** et **320 × 568**, deux téléphones. **Un défaut qui ne se voit qu'au-delà des gabarits mesurés est invisible par construction** — d'où `scripts/check-feed-column.mjs`, qui ajoute 1440 × 900 au dépôt.
 
@@ -3762,7 +3827,7 @@ Conséquence de forme : le pied de pagination (`LensPaginationFooter`) rend ses 
 
 **Ce n'est PAS la géographie desktop** (#5418, deux colonnes liste + fil) : c'est une lecture réparée, pas un bureau dessiné. Le chantier de design reste entier.
 
-## D-110 — Publier depuis le fil : UNE adresse, deux formats, et un réel qui se REFUSE plutôt que de se dégrader (2026-09-22, #7449)
+## D-111 — Publier depuis le fil : UNE adresse, deux formats, et un réel qui se REFUSE plutôt que de se dégrader (2026-09-22, #7449)
 
 **Le fait.** `apps/web-v2` LISAIT le fil sans pouvoir l'alimenter : la table des routes n'offrait que `/stories/new` et `/status/new`. Aucune adresse ne créait de `Post.type = 'POST'` ni `'REEL'`, alors que la passerelle les sert depuis toujours. C'est pour cela que le doc-comment de `routes/feed.tsx` rangeait le « placeholder de composeur » d'iOS dans ce qui n'est PAS repris — un contrôle sans effet ne se dessine pas (loi 4). Ce lot lui donne son effet, donc sa porte.
 

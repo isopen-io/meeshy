@@ -121,7 +121,11 @@ export function resolveEphemeralDeadline(input: {
   });
 }
 
-/** `true` quand l'échéance est POSÉE et PASSÉE — la rangée ne se peint plus. */
-export function deadlineReached(deadline: EphemeralDeadline, now: number): boolean {
-  return deadline.state === 'scheduled' && deadline.expiresAtMs <= now;
-}
+/**
+ * `deadlineReached` A ÉTÉ RETIRÉE AU LOT #7468 — elle répondait « la rangée se
+ * peint-elle encore ? » par OUI ou NON, et il y a désormais TROIS réponses :
+ * visible, en destruction, partie. La question vit dans `destructionPhaseOf`
+ * (`lib/view/ephemeral-destruction.ts`), qui la tranche seule ; garder ici une
+ * seconde lecture de l'échéance aurait fait repartir la rangée sans effet au
+ * premier appelant qui l'aurait préférée.
+ */

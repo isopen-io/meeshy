@@ -163,8 +163,23 @@ export interface GatewayMessage {
   readonly isBlurred?: boolean;
   /** Bitfield for message effects (lifecycle, appearance, persistent) */
   readonly effectFlags?: number;
-  /** Date d'expiration pour messages éphémères */
+  /**
+   * Échéance SERVIE À CE LECTEUR pour un éphémère (#7451) : `D(lecteur)` pour un
+   * destinataire, la plus tardive des `D` connues pour l'expéditeur, absente
+   * tant qu'aucun décompte n'a démarré. Ce n'est PAS la colonne `Message.expiresAt`,
+   * qui porte l'heure interne de destruction. Pour un message non éphémère,
+   * c'est la grâce de vue unique, inchangée.
+   */
   readonly expiresAt?: Date;
+  /**
+   * Durée d'un message éphémère, en secondes (#7451).
+   *
+   * Servie PARTOUT — REST, `message:new`, push — parce qu'elle est la même pour
+   * tout le monde. `expiresAt`, lui, est par lecteur et n'accompagne jamais une
+   * diffusion de room : un client qui reçoit la durée sans échéance décompte
+   * depuis SA réception locale.
+   */
+  readonly ephemeralDuration?: number;
 
   // ===== ÉPINGLAGE =====
   /** Date à laquelle le message a été épinglé (null = non épinglé) */

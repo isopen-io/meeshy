@@ -1825,6 +1825,16 @@ struct ConversationView: View {
                         scrollState.scrollToMessageId = messageId
                         scrollState.scrollToMessageTrigger += 1
                     },
+                    // #7452 — MÊME canal que le Fil. Sans lui le voile d'une
+                    // vue unique ne se lèverait jamais en Rivière : le
+                    // contrôleur de révélation est fail-closed sur un message
+                    // qui exige l'accusé serveur.
+                    onConsumeViewOnce: { messageId, completion in
+                        Task {
+                            let success = await viewModel.consumeViewOnce(messageId: messageId)
+                            completion(success)
+                        }
+                    },
                     // #3901 — la Rivière ne rend jamais bulle par bulle
                     // (`MessageListViewController.rendersThread`), donc ne
                     // peut jamais faire avancer le curseur de lecture par le
@@ -1858,6 +1868,11 @@ struct ConversationView: View {
                     analysisProvider: isAnonymous ? nil : ConversationAnalysisService.shared,
                     conversationId: viewModel.conversationId,
                     isDark: isDark,
+                    // #7452 — les messages protégés encore vivants, recomposés
+                    // à chaque passe de ce corps (ils dérivent de
+                    // `viewModel.messages`). Le digest, lui, ne se recompose
+                    // jamais : c'est pourquoi il ne contient PLUS leur texte.
+                    protections: LivingSummaryProtections.entries(messages: viewModel.messages),
                     onReplyToPerson: { entry in
                         readingModeController.select(.script)
                         guard let targetId = entry.evidenceMessageIds.first,

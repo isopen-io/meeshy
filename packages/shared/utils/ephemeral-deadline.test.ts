@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { ephemeralDeadline } from './ephemeral-deadline';
+import {
+  EPHEMERAL_COUNTER_WINDOW_SECONDS,
+  ephemeralCounterVisible,
+  ephemeralDeadline,
+} from './ephemeral-deadline';
 
 /**
  * LA RÈGLE D'ÉCHÉANCE D'UN ÉPHÉMÈRE — contrat du fil #7451 point 6, témoins
@@ -103,5 +107,41 @@ describe('ephemeralDeadline', () => {
     expect(
       ephemeralDeadline({ isMine: false, ephemeralDuration: 30.4, receivedAtMs: RECEPTION }),
     ).toEqual({ state: 'scheduled', expiresAtMs: RECEPTION + 30 * SECOND });
+  });
+});
+
+/**
+ * **LE COMPTEUR NE PARAÎT QUE DANS LA DERNIÈRE MINUTE** (#7468) — précision du
+ * porteur : « afficher le compteur de l'éphémère dans la conversation
+ * uniquement quand on est déjà à 1 min et moins de sa destruction ».
+ *
+ * La FENÊTRE est une loi, pas un réglage de peau : les deux clients la
+ * partagent (#7467 côté iOS), et elle gouverne DEUX choses que rien d'autre ne
+ * relie — ce que l'œil voit (des chiffres ou la seule flamme) et ce qui
+ * s'abonne à l'horloge (rien, tant que le seuil n'est pas franchi).
+ */
+describe('ephemeralCounterVisible', () => {
+  it('cache le compteur au-delà de la dernière minute', () => {
+    expect(ephemeralCounterVisible(60 * SECOND + 1)).toBe(false);
+    expect(ephemeralCounterVisible(10 * 60 * SECOND)).toBe(false);
+  });
+
+  it('montre le compteur À la minute et en deçà — la borne est INCLUSE', () => {
+    expect(ephemeralCounterVisible(60 * SECOND)).toBe(true);
+    expect(ephemeralCounterVisible(1)).toBe(true);
+  });
+
+  /**
+   * Un reste NÉGATIF n'est pas « au-delà de la minute » : c'est une échéance
+   * passée. La lire comme « cache le compteur » remettrait la flamme nue sur un
+   * message en train de disparaître.
+   */
+  it('reste vrai sur une échéance déjà passée', () => {
+    expect(ephemeralCounterVisible(0)).toBe(true);
+    expect(ephemeralCounterVisible(-5 * SECOND)).toBe(true);
+  });
+
+  it('EPHEMERAL_COUNTER_WINDOW_SECONDS vaut la minute du porteur', () => {
+    expect(EPHEMERAL_COUNTER_WINDOW_SECONDS).toBe(60);
   });
 });

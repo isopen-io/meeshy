@@ -17,6 +17,7 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let messageEdited = PassthroughSubject<APIMessage, Never>()
     let messageDeleted = PassthroughSubject<MessageDeletedEvent, Never>()
     let messageExpired = PassthroughSubject<MessageExpiredEvent, Never>()
+    let messageCountdownStarted = PassthroughSubject<MessageCountdownStartedEvent, Never>()
     let messageHiddenForMe = PassthroughSubject<MessageHiddenForMeEvent, Never>()
     let messageRestoredForMe = PassthroughSubject<MessageRestoredForMeEvent, Never>()
     let messagePinned = PassthroughSubject<MessagePinnedEvent, Never>()

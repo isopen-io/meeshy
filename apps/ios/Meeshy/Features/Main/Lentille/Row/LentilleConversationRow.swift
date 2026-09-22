@@ -617,7 +617,7 @@ struct LentilleConversationRow: View {
         case .viewOnce:
             HStack(spacing: 4) {
                 senderLabel
-                Image(systemName: "flame")
+                Image(systemName: MessageProtectionSymbols.viewOnce)
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                     .foregroundColor(accent)
                 Text(String(localized: "conversation.summary.view_once"))
@@ -649,7 +649,7 @@ struct LentilleConversationRow: View {
             // colonne et tronquaient le message avant le bord.
             HStack(spacing: 4) {
                 if showEphemeralIcon {
-                    Image(systemName: "timer")
+                    Image(systemName: MessageProtectionSymbols.ephemeral)
                         .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                         .foregroundColor(accent)
                 }
@@ -662,7 +662,7 @@ struct LentilleConversationRow: View {
             let display = AttachmentDisplay.make(for: first.mimeType)
             HStack(spacing: 4) {
                 if showEphemeralIcon {
-                    Image(systemName: "timer")
+                    Image(systemName: MessageProtectionSymbols.ephemeral)
                         .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                         .foregroundColor(accent)
                 }

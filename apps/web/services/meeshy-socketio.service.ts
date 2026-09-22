@@ -22,6 +22,7 @@ import type {
   SocketIOResponse
 } from '@/types';
 import type { EncryptedPayload, EncryptionMode } from '@meeshy/shared/types/encryption';
+import type { MentionedUser } from '@meeshy/shared/types/mention';
 import type { AudioTranslationReadyEventData, ConversationJoinErrorEventData, LinkMessageNewEventData, MessageRestoredForMeEventData, ConversationUnreadUpdatedEventData } from '@meeshy/shared/types/socketio-events';
 
 import { SocketIOOrchestrator } from './socketio/orchestrator.service';
@@ -691,6 +692,14 @@ class MeeshySocketIOService {
       sender: sender,
       attachments: attachments.length > 0 ? attachments : undefined,
       validatedMentions: (socketMessage as any).validatedMentions || [],
+      // Le nom affiché derrière chaque `@pseudo`, résolu par `MessageHandler` et
+      // posé sur le broadcast. L'omettre faisait lire au destinataire le HANDLE
+      // en direct et le NOM après rechargement, pour le même message (#7458).
+      // Champ ABSENT plutôt que tableau vide quand rien n'est résolu — mêmes
+      // règles de présence conditionnelle que le transformer REST.
+      ...(Array.isArray((socketMessage as any).mentionedUsers) && (socketMessage as any).mentionedUsers.length > 0
+        ? { mentionedUsers: (socketMessage as any).mentionedUsers as readonly MentionedUser[] }
+        : {}),
       // Le broadcast gateway porte déjà ces champs (`MessageHandler` pose
       // `forwardedFromConversation` et `effectFlags`). Les omettre ici rendait
       // le badge « Transféré depuis {groupe} » mort sur le chemin temps réel et

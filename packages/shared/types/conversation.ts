@@ -5,6 +5,7 @@
 
 import type { SocketIOUser as User, MessageType } from './socketio-events.js';
 import type { Participant } from './participant.js';
+import type { MentionedUser } from './mention.js';
 import type { Attachment } from './attachment.js';
 import type { TranslationModel, MessageTranslation, MessageStatusEntry, UITranslationState, UITranslationStatus } from './message-types.js';
 import type { CallSummaryMetadata } from '../utils/call-summary.js';
@@ -208,6 +209,20 @@ export interface Message {
 
   // ===== MENTIONS =====
   readonly validatedMentions?: readonly string[];
+  /**
+   * Résolution serveur des `@pseudo` du contenu — le nom affiché de chaque
+   * personne mentionnée, pour que le client le rende SANS requête de plus.
+   *
+   * Le serveur la produit déjà sur les deux chemins d'arrivée d'un message : en
+   * REST dans `meta.mentionedUsers` de `GET /conversations/:id/messages`, et sur
+   * le message lui-même dans l'événement socket `message:new`. Les deux la
+   * posent ici, pour que la bulle n'ait qu'UNE forme à lire quelle que soit la
+   * provenance du message.
+   *
+   * @see MentionedUser
+   * @see mentionsToLinks — la carte change le LIBELLÉ du lien, jamais sa cible
+   */
+  readonly mentionedUsers?: readonly MentionedUser[];
 
   // ===== EXPEDITEUR =====
   readonly sender?: Participant;

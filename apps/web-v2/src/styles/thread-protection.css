@@ -163,3 +163,77 @@
 :root.light .protected-view-once-badge {
   --view-once-fill: 10%;
 }
+
+/**
+ * **LA COMBUSTION D'UN ÉPHÉMÈRE** (#7468) — précision du porteur : « sa
+ * destruction doit avoir un effet visuel si on est dans la conversation au
+ * moment de la destruction ».
+ *
+ * POSÉE SUR LE NŒUD DE RANGÉE, jamais dans une peau : `thread-modes.tsx`
+ * l'applique au `<div role="article">` qui enveloppe la rangée plate ET la
+ * bulle, si bien qu'un mode ajouté demain l'a sans rien câbler.
+ *
+ * LE REPLI DES VOISINS VIENT DE LA GRILLE, pas d'un `max-height` deviné :
+ * `grid-template-rows: 1fr → 0fr` anime une hauteur RÉELLE, que le
+ * `ResizeObserver` du virtualiseur suit à chaque image — les rangées
+ * suivantes remontent à mesure, au lieu de sauter quand la ligne quitte la
+ * liste. C'est aussi pourquoi la durée est la MÊME que `DESTRUCTION_MS`
+ * (`lib/view/ephemeral-destruction.ts`) : une animation plus longue que la
+ * fenêtre se ferait couper au milieu, une fenêtre plus longue laisserait une
+ * rangée vide à l'écran.
+ */
+.ephemeral-destroying {
+  --ephemeral-destruction-ms: 700ms;
+  display: grid;
+  grid-template-rows: 1fr;
+  overflow: hidden;
+  animation: ephemeral-burn var(--ephemeral-destruction-ms) ease-in forwards;
+  pointer-events: none;
+}
+
+/* `min-height: 0` — sans lui, l'enfant refuse de descendre sous sa hauteur
+   intrinsèque et la grille ne se replie pas. */
+.ephemeral-destroying > * {
+  min-height: 0;
+}
+
+@keyframes ephemeral-burn {
+  0% {
+    grid-template-rows: 1fr;
+    opacity: 1;
+    filter: none;
+  }
+  45% {
+    grid-template-rows: 1fr;
+    opacity: 0.55;
+    filter: blur(1.5px) saturate(1.7) brightness(1.2);
+  }
+  100% {
+    grid-template-rows: 0fr;
+    opacity: 0;
+    filter: blur(6px) saturate(2) brightness(1.4);
+  }
+}
+
+/**
+ * RÉDUCTION DES ANIMATIONS : « un simple fondu » (#7468, verbatim). Ni
+ * flou, ni saturation, ni repli — un repli EST un mouvement, et c'est
+ * précisément ce que ce réglage demande d'éviter. La rangée garde sa place
+ * jusqu'au retrait ; le fondu suffit à dire que quelque chose part.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .ephemeral-destroying {
+    display: block;
+    overflow: visible;
+    animation: ephemeral-fade var(--ephemeral-destruction-ms) linear forwards;
+  }
+
+  @keyframes ephemeral-fade {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+}
