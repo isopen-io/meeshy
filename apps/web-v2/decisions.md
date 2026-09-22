@@ -3685,7 +3685,66 @@ Dimension 13 (complétude) restante : les deux bornes ci-dessus.
 
 **À trancher côté iOS, pas ici** : exposer la même bascule en conversation (parité inverse). Le miroir Kotlin natif est gelé (directive 2026-09-16) et ne reçoit rien.
 
-## D-108 — Le fil se lit dans une COLONNE bornée, et la borne n'est pas une media query (2026-09-22, #7449)
+## D-108 — L'échéance d'un éphémère part de la RÉCEPTION, et un seul chrome la rend pour tous les modes (2026-09-22, #7454)
+
+Directive porteur 2026-09-22 : « les messages avec temps décompté ne doivent
+décompter que lorsque l'utilisateur l'a reçu », et « il est important de
+s'assurer que cette feature a un décompte en Script, Focal ou bulle **ou tout
+autre affichage plus tard** ». Contrat du fil : #7451.
+
+**La règle vit dans `packages/shared`, pas ici.** `ephemeralDeadline()`
+(`utils/ephemeral-deadline.ts`) retient la plus PROCHE de l'échéance SERVIE
+(`expiresAt` par lecteur sur REST, `message:countdown-started` sur le socket)
+et de la RÉCEPTION locale + `ephemeralDuration`. Jamais la plus tardive : des
+deux erreurs d'horloge possibles, une seule est acceptable — montrer le message
+un instant de MOINS que promis, jamais un instant de plus.
+
+**La réception, elle, ne peut pas y vivre** : c'est un état du client, et ses
+deux chemins (`message:new`, le rendu du fil) n'ont aucun ancêtre React commun
+— le socket vit hors de l'arbre. D'où un registre de module
+(`lib/view/ephemeral-reception.ts`), borné à 1 000 entrées, première-vue-gagne.
+Il est volontairement EN MÉMOIRE : un rechargement de page ne peut qu'ALLONGER
+l'échéance locale, et c'est exactement ce que la règle refuse de retenir dès
+que le serveur sert la sienne.
+
+**Un seul chrome, et il est OBLIGATOIRE au type.** `ProtectionChrome`
+(`components/protection-chrome.tsx`) rend le décompte ET la désignation de la
+vue unique ; `FocalRow` et `Bubble` déclarent `ephemeralDeadline` en prop
+REQUISE. Avant ce lot, chaque peau câblait son propre `EphemeralBadge` : un
+mode ajouté demain aurait eu un fil complet, aucun décompte, et aucun témoin
+rouge. `thread-modes-protection-chrome.test.tsx` énumère désormais
+`ConversationReadingModeSchema.options` — table exhaustive au TYPE, re-croisée
+à l'exécution parce que `bun test` n'applique aucun typage.
+
+**`river` n'a pas de peau à lui, et c'est ce qui rend la garde utile** :
+`ThreadModes` aiguille sur `usesFlatRow`, donc tout ce qui n'est ni `summary`
+ni plat retombe sur `<Bubble>` — un mode neuf y retombera pareillement, avec le
+chrome. `summary` porte l'autre moitié de la règle : un éphémère échu n'entre
+pas dans le corpus qu'il résume, sans quoi un texte DÉRIVÉ garderait en vie,
+sur le même écran, un message disparu du fil.
+
+**Deux pictogrammes, parce que deux sens.** Le dépôt se contredisait comme iOS
+(#7452) : `flame` désignait la VUE UNIQUE dans la liste et l'ÉPHÉMÈRE dans la
+bulle. Le vocabulaire retenu est celui du COMPOSEUR — là où l'utilisateur
+CHOISIT la protection : `flameFill` + rouge pour l'éphémère, `eye` + indigo
+pour la vue unique. Le libellé suit jusqu'à la CLÉ : la désignation lit
+`composer.viewOnce.label`, la chaîne même que la bascule affiche — une clé
+jumelle porterait aujourd'hui les mêmes sept traductions et divergerait au
+premier lot qui n'en relit qu'une.
+
+**UNE horloge.** `secondClock` (`lib/view/interval-clock.ts`) existait déjà ;
+`EphemeralBadge` ouvrait un `setInterval` par message affiché.
+
+**Ce que ce lot NE touche PAS : le chemin d'ENVOI.** Faire parler les clients
+en DURÉE plutôt qu'en échéance traverse le cliquet d'égalité de clés du
+gateway (`socket-event-schemas.ts`, § `SendDoorRatchet`) et appartient à
+#7451. Ici, seul ce qui REVIENT du serveur change.
+Dimensions mûres : 4 (une horloge, zéro minuterie par bulle), 5 (sept langues,
+`aria-label` « éphémère, disparaît dans N »), 6 (un pictogramme par sens, en
+parité de vocabulaire avec le composeur), 11 (une règle, un chrome, un
+registre), 13 (les cinq modes énumérés, et le suivant).
+
+## D-109 — Le fil se lit dans une COLONNE bornée, et la borne n'est pas une media query (2026-09-22, #7449)
 
 **Le fait, mesuré.** `/feed` posait son scrollport en `flex-1 … px-3` sans aucune borne : à 1440 px, une carte de publication faisait **1416 px** de large. `/reels` étalait de même son pager 9:16 sur toute la largeur — la vidéo en `object-contain` au centre, le rail d'actions au bord opposé du regard. Aucun gate ne pouvait le voir : les trente-huit autres mesurent **390 × 844** et **320 × 568**, deux téléphones. **Un défaut qui ne se voit qu'au-delà des gabarits mesurés est invisible par construction** — d'où `scripts/check-feed-column.mjs`, qui ajoute 1440 × 900 au dépôt.
 
@@ -3699,7 +3758,7 @@ Dimension 13 (complétude) restante : les deux bornes ci-dessus.
 
 **Ce n'est PAS la géographie desktop** (#5418, deux colonnes liste + fil) : c'est une lecture réparée, pas un bureau dessiné. Le chantier de design reste entier.
 
-## D-109 — Publier depuis le fil : UNE adresse, deux formats, et un réel qui se REFUSE plutôt que de se dégrader (2026-09-22, #7449)
+## D-110 — Publier depuis le fil : UNE adresse, deux formats, et un réel qui se REFUSE plutôt que de se dégrader (2026-09-22, #7449)
 
 **Le fait.** `apps/web-v2` LISAIT le fil sans pouvoir l'alimenter : la table des routes n'offrait que `/stories/new` et `/status/new`. Aucune adresse ne créait de `Post.type = 'POST'` ni `'REEL'`, alors que la passerelle les sert depuis toujours. C'est pour cela que le doc-comment de `routes/feed.tsx` rangeait le « placeholder de composeur » d'iOS dans ce qui n'est PAS repris — un contrôle sans effet ne se dessine pas (loi 4). Ce lot lui donne son effet, donc sa porte.
 
