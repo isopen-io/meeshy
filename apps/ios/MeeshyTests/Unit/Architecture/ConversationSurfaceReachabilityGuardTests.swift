@@ -743,3 +743,100 @@ final class ComposerViewOnceReachabilityGuardTests: XCTestCase {
                       "L'envoi doit LIRE l'état armé — sinon la bascule est une cible morte.")
     }
 }
+
+// MARK: - #7498 — la protection armée voyage avec TOUT ce qu'on envoie
+
+/// « Cela ne fonctionne que sur les textes » (recette 1.1.0).
+///
+/// Un tap produit souvent PLUSIEURS messages : un par groupe de pièces
+/// jointes, plus le texte en dernier. Les trois bascules étaient relues à
+/// chaque envoi et désarmées au PREMIER acquittement — tout ce qui suivait
+/// partait donc sans protection, la rangée pourtant allumée au tap.
+///
+/// Les témoins ci-dessous gardent la FORME qui rend ce défaut impossible,
+/// parce que la seule autre façon de le voir demande deux simulateurs et un
+/// envoi multi-pièces : une valeur saisie une fois, passée à chaque message,
+/// et une bulle optimiste qui la porte.
+final class ComposerProtectionTravelsGuardTests: XCTestCase {
+
+    private func source(at relativePath: String) throws -> String {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        return try String(contentsOf: root.appendingPathComponent("Meeshy/\(relativePath)"), encoding: .utf8)
+    }
+
+    /// Le désarmement se fait AU TAP, jamais à l'acquittement d'un message.
+    ///
+    /// C'est la moitié du défaut qui ne se voit dans aucune vue : à
+    /// l'acquittement, on est au bout d'UN message, et il en reste à partir.
+    func test_leDésarmement_seFaitAuTapEtPasÀLAcquittement() throws {
+        let send = try source(at: "Features/Main/ViewModels/ConversationViewModel+Send.swift")
+        XCTAssertTrue(send.contains("func consumeArmedProtection()"),
+                      "La saisie-et-désarmement doit être UNE fonction nommée, appelée par le tap.")
+
+        guard let finalize = send.range(of: "func finalizeSuccessfulSend") else {
+            return XCTFail("Impossible de localiser la finalisation d'un envoi acquitté.")
+        }
+        let après = String(send[finalize.upperBound...].prefix(3000))
+        XCTAssertFalse(après.contains("isViewOnceEnabled = false"),
+                       "Désarmer à l'acquittement laisse partir sans protection tout ce qui suit "
+                           + "le premier message du même tap.")
+        XCTAssertFalse(après.contains("isBlurEnabled = false"),
+                       "Idem pour le flou : un tap, un désarmement.")
+    }
+
+    /// La bulle optimiste PORTE la protection. Sans cela l'expéditeur envoie un
+    /// éphémère et voit un message ordinaire — ni flamme, ni décompte, ni
+    /// voile — jusqu'à la réconciliation serveur, ce qui se lit comme « la
+    /// protection n'a pas été appliquée ».
+    func test_laBulleOptimiste_porteLaProtection() throws {
+        let send = try source(at: "Features/Main/ViewModels/ConversationViewModel+Send.swift")
+        XCTAssertFalse(send.contains("expiresAt: nil, effectFlags: 0"),
+                       "La ligne optimiste d'un média ne doit plus naître sans protection.")
+        XCTAssertTrue(send.contains("expiresAt: protection.expiresAt(from: now)"),
+                      "Elle doit dater son échéance depuis l'intention saisie au tap.")
+        XCTAssertTrue(send.contains("effectFlags: protection.lifecycleFlags.rawValue"),
+                      "Et porter les bits de cycle de vie correspondants.")
+    }
+
+    /// **Aucun `insertOptimisticMediaMessage` sans protection NOMMÉE.** Le
+    /// paramètre n'a délibérément PAS de valeur par défaut : un défaut ferait
+    /// qu'un nouveau chemin d'envoi hériterait de « rien de protégé » en
+    /// silence, ce qui est exactement le défaut qu'on corrige.
+    func test_chaqueBulleOptimiste_nommeSaProtection() throws {
+        let send = try source(at: "Features/Main/ViewModels/ConversationViewModel+Send.swift")
+        XCTAssertTrue(send.contains("protection: MessageProtectionIntent\n"),
+                      "Le paramètre doit être NON optionnel et sans défaut.")
+
+        for chemin in ["Features/Main/Views/ConversationView+AttachmentHandlers.swift",
+                       "Features/Main/Views/ConversationView+Sticker.swift"] {
+            let src = try source(at: chemin)
+            let poses = src.components(separatedBy: "insertOptimisticMediaMessage(").count - 1
+            guard poses > 0 else { continue }
+            let nommées = src.components(separatedBy: "protection: protection").count - 1
+            XCTAssertGreaterThanOrEqual(
+                nommées, poses,
+                "\(chemin) pose \(poses) bulle(s) optimiste(s) : chacune doit nommer la protection "
+                    + "saisie au tap."
+            )
+        }
+    }
+
+    /// Le tap saisit la protection UNE fois, et chaque groupe de cet envoi la
+    /// reçoit. Le témoin compte : autant d'envois que de passages.
+    func test_leTap_saisitUneFoisEtSertTousLesGroupes() throws {
+        let src = try source(at: "Features/Main/Views/ConversationView+AttachmentHandlers.swift")
+        XCTAssertEqual(
+            src.components(separatedBy: "viewModel.consumeArmedProtection()").count - 1, 1,
+            "Une seule saisie par tap : deux saisies rendraient la seconde vide."
+        )
+        let envois = src.components(separatedBy: "viewModel.sendMessage(").count - 1
+        let servis = src.components(separatedBy: "protection: protection").count - 1
+        XCTAssertGreaterThanOrEqual(
+            servis, envois - 1,
+            "Chaque envoi de ce tap — média comme texte — doit recevoir la protection saisie. "
+                + "Le -1 tolère l'envoi de repli qui ne part pas d'un tap."
+        )
+    }
+}

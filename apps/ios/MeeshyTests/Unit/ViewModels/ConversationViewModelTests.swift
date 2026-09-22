@@ -807,7 +807,8 @@ final class ConversationViewModelTests: XCTestCase {
             attachments: [imageAttachment],
             messageType: .image,
             replyToId: nil,
-            originalLanguage: "es"
+            originalLanguage: "es",
+            protection: .none
         )
 
         // The helper writes via Task.detached — wait for the row to land.
@@ -860,7 +861,8 @@ final class ConversationViewModelTests: XCTestCase {
             content: "ma reponse",
             attachments: [],
             messageType: .text,
-            replyToId: "msg-quoted-001"
+            replyToId: "msg-quoted-001",
+            protection: .none
         )
 
         let record = await MessageStoreObservationHelper.awaitRecord(
@@ -1038,7 +1040,8 @@ final class ConversationViewModelTests: XCTestCase {
             attachments: [audioAttachment],
             messageType: .audio,
             replyToId: nil,
-            originalLanguage: "fr"
+            originalLanguage: "fr",
+            protection: .none
         )
 
         let surfaced = await MessageStoreObservationHelper.awaitMessage(in: sut) { $0.id == tempId }
@@ -1066,7 +1069,8 @@ final class ConversationViewModelTests: XCTestCase {
             attachments: [],
             messageType: .text,
             replyToId: nil,
-            originalLanguage: "en"
+            originalLanguage: "en",
+            protection: .none
         )
 
         let record = await MessageStoreObservationHelper.awaitRecord(

@@ -114,9 +114,32 @@ export class AttachmentService {
 
   // ==================== GESTION ATTACHMENTS ====================
 
+  /**
+   * Lie des pièces pré-uploadées à leur message — et leur fait porter SA
+   * protection (#7498).
+   *
+   * Les trois colonnes jumelles (`isViewOnce`, `isBlurred`, `effectFlags`)
+   * existent sur `MessageAttachment` depuis toujours et restaient à leur
+   * défaut : une photo envoyée sous « vue unique » était donc un message à vue
+   * unique portant une pièce jointe ORDINAIRE. Tout ce qui garde au niveau de
+   * la PIÈCE — `maskedAttachment` de l'éventail de notifications, le gate
+   * fail-closed de la traduction de légende — lisait `false` et laissait
+   * passer, pendant que la bulle, elle, affichait bien le voile.
+   *
+   * La protection ne se DÉDUIT pas du message à la lecture : deux niveaux la
+   * déclarent, et c'est au moment où le lien se fait qu'ils doivent être mis
+   * d'accord. Une pièce non liée n'a pas encore de protection à porter ; une
+   * pièce liée en a exactement une, celle de son message.
+   */
   async associateAttachmentsToMessage(
     attachmentIds: readonly string[],
-    messageId: string
+    messageId: string,
+    protection?: {
+      readonly isViewOnce?: boolean;
+      readonly isBlurred?: boolean;
+      readonly effectFlags?: number;
+      readonly maxViewOnceCount?: number | null;
+    }
   ): Promise<void> {
     await this.prisma.messageAttachment.updateMany({
       where: {
@@ -124,6 +147,13 @@ export class AttachmentService {
       },
       data: {
         messageId: messageId,
+        // Écrit seulement ce que le message DÉCLARE. Poser `false` en l'absence
+        // d'appelant renseigné écraserait la protection d'une pièce qui la
+        // porterait déjà par un autre chemin — un `undefined` laisse Prisma
+        // ne pas toucher la colonne.
+        ...(protection?.isViewOnce === undefined ? {} : { isViewOnce: protection.isViewOnce }),
+        ...(protection?.isBlurred === undefined ? {} : { isBlurred: protection.isBlurred }),
+        ...(protection?.effectFlags === undefined ? {} : { effectFlags: protection.effectFlags }),
       },
     });
   }
