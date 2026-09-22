@@ -104,11 +104,25 @@ function transportQuiAvance() {
 
 const tour = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
+/** LES OPTIONS RÉELLES DE `useMessages` (`query.ts`) — `staleTime: 0`,
+ * reposé AU HOOK, jamais dans la fabrique `messagesQuery`. Un témoin qui
+ * jouerait `messagesQuery` seule mesurerait un contrat que l'écran ne sert
+ * PAS : `useMessages` est un `useInfiniteQuery({ ...messagesQuery(...),
+ * staleTime: 0 })` (motif `usePost`/`useStoryFeed`), et c'est CETTE forme
+ * qu'un `InfiniteQueryObserver` doit rejouer pour mesurer ce que l'écran
+ * observe réellement. */
+function useMessagesOptions(
+  deps: { readonly source: 'gateway'; readonly transport: ReturnType<typeof createHttpTransport> },
+  conversationId: string,
+) {
+  return { ...messagesQuery(deps, conversationId), staleTime: 0 };
+}
+
 async function montePuisRegle(
   client: QueryClient,
   deps: { readonly source: 'gateway'; readonly transport: ReturnType<typeof createHttpTransport> },
 ) {
-  const observer = new InfiniteQueryObserver(client, messagesQuery(deps, 'c-a') as never);
+  const observer = new InfiniteQueryObserver(client, useMessagesOptions(deps, 'c-a') as never);
   const desabonner = observer.subscribe(() => undefined);
   const immediat = observer.getCurrentResult();
   for (let tours = 0; tours < 200; tours += 1) {
