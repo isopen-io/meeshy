@@ -217,7 +217,8 @@ public final class NotificationCoordinator: ObservableObject {
     //   applyConversationUnread(_:_:)  ← socket `conversation:unread-updated`
     //      AUTHORITATIVE. Server-driven, instant, always wins.
     //
-    //   markConversationRead(_:)       ← user opens the thread
+    //   markConversationRead(_:)       ← a REAL read (catch-up, gesture, push
+    //      quick action, widget) — never the mere opening (#7350).
     //      Optimistic local write. Also authoritative vs. seeding.
     //
     //   registerConversations(_:)      ← VM snapshot (cache / REST)
@@ -295,19 +296,26 @@ public final class NotificationCoordinator: ObservableObject {
     public func applyConversationUnread(conversationId: String, unreadCount: Int) {
         hasAuthoritativeSnapshot = true
         // Le gate « conversation ouverte » n'est plus posé ICI : il vit dans le
-        // registre, qui l'applique en RANG 1 à tout événement. Le coordinateur
-        // ne fait que lui dire quelle conversation est visible.
-        syncOpenConversation()
+        // registre, dont le RANG 1 est une projection de lecture (#7350). Le
+        // coordinateur ne fait que lui dire quelle conversation est visible.
+        let openChanged = syncOpenConversation()
         let before = ledger.state(for: conversationId)?.unreadCount
         ledger.apply(.serverUnread(conversationId: conversationId, unreadCount: unreadCount))
         // Idempotence : un compteur identique ne réveille pas le débounce, donc
-        // n'écrit ni le badge ni le widget.
-        guard ledger.state(for: conversationId)?.unreadCount != before else { return }
+        // n'écrit ni le badge ni le widget — SAUF si la conversation ouverte a
+        // changé. Ouvrir ne touche plus l'entrée (#7350), seul le curseur
+        // bouge : le total publié doit retirer (ou rendre) la conversation
+        // même quand son compte n'a pas bougé.
+        guard openChanged || ledger.state(for: conversationId)?.unreadCount != before else { return }
         recomputeTotal()
         scheduleSync()
     }
 
-    /// Mark a conversation as fully read locally — called when the user opens it.
+    /// Mark a conversation as fully read locally — on a REAL read (catch-up of
+    /// the present, « marquer comme lu », push quick action, widget), never on
+    /// the mere opening of the screen (#7350). The guard reads the ledger's
+    /// KNOWN count: an open conversation still carries what it has left to
+    /// read, and this is what must drop to zero.
     public func markConversationRead(_ conversationId: String) {
         guard let existing = ledger.state(for: conversationId)?.unreadCount, existing > 0 else { return }
         ledger.apply(.localMarkRead(conversationId: conversationId))
@@ -393,10 +401,12 @@ public final class NotificationCoordinator: ObservableObject {
     /// `NotificationToastManager.onConversationOpened`) reste à faire — c'est
     /// la suite de #6998, et c'est ce qui fera du registre le seul à le SAVOIR
     /// autant qu'il en est déjà le seul à le STOCKER.
-    private func syncOpenConversation() {
+    @discardableResult
+    private func syncOpenConversation() -> Bool {
         let visible = openConversationIdProvider()
-        guard ledger.openConversationId != visible else { return }
+        guard ledger.openConversationId != visible else { return false }
         ledger.apply(.localOpen(conversationId: visible))
+        return true
     }
 
     /// Le badge d'icône et le widget comptent les AUTRES conversations, et

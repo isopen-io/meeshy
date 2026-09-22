@@ -4,10 +4,13 @@ import type { StoreApi } from 'zustand/vanilla';
 import type { ConversationStoreState } from '@/lib/conversation-store';
 import type { Transport } from '../net/transport';
 import type { ConversationsDeps } from './conversations';
-import { patchConversation } from './conversations';
+import { patchConversation, patchConversationDetail } from './conversations';
+import { toDate } from './decode';
 import { conversationById } from './fixtures';
+import { findCachedThreadMessage } from './messages';
 import type { ApiResult } from './http';
 import { outcomeOf } from './outcome';
+import type { Conversation } from './types';
 
 /**
  * LA FRONTIÈRE DE LECTURE, ÉCRITE SANS GESTE (#7201, W1) — miroir de
@@ -53,6 +56,19 @@ export type MarkCaughtUpDeps = ConversationsDeps & {
  *
  * `source !== 'gateway'` (fixtures) : l'override optimiste reste posé, aucun
  * appel réseau ne part — même repli que `performRowAction`.
+ *
+ * **Les DEUX caches, confirmés ensemble** (#7351, V3) — `patchConversation`
+ * (la liste) ET `patchConversationDetail` (`conversationQueryKey`, le
+ * détail que `thread.tsx` relit). Sans le second, un rechargement après
+ * lecture réhydratait le détail persisté avec l'ANCIEN `unreadCount` —
+ * critère de fin #7351, « ce qui est lu ne redevient pas non lu ».
+ *
+ * **Le CURSEUR avance avec le compte** (revue-correction #7351) —
+ * `caughtUpConversation` ci-dessous. Poser `unreadCount: 0` seul laissait le
+ * curseur sur l'ancienne position : un fil rouvert sans refetch rendait non
+ * lus les messages lus, et un message arrivé ensuite par le socket
+ * (`upsertThreadMessage`, qui n'écrit pas la conversation) ne pouvait être
+ * distingué de ceux-là que par le curseur.
  */
 export async function markCaughtUp(params: {
   readonly conversationId: string;
@@ -79,8 +95,39 @@ export async function markCaughtUp(params: {
     store.getState().clearOverride(conversationId, ['unreadCount']);
     return;
   }
-  patchConversation(queryClient, conversationId, (c) => ({ ...c, unreadCount: 0 }));
+  const caughtUp = findCachedThreadMessage(queryClient, conversationId, caughtUpToMessageId);
+  const advance = (c: Conversation): Conversation =>
+    caughtUpConversation(c, {
+      messageId: caughtUpToMessageId,
+      messageCreatedAt: caughtUp === undefined ? undefined : toDate(caughtUp.createdAt),
+      readAt: new Date(),
+    });
+  patchConversation(queryClient, conversationId, advance);
+  patchConversationDetail(queryClient, conversationId, advance);
   store.getState().clearOverride(conversationId, ['unreadCount']);
+}
+
+/**
+ * `caughtUpConversation` — la conversation telle que le serveur la sert après
+ * `POST …/receipts { caughtUpToMessageId }` : compte à 0, curseur posé sur le
+ * message rattrapé (`lastReadMessageId`, et sa clé chronologique
+ * `lastReadMessageCreatedAt`, rang 1 de `firstUnreadBoundary`). Message
+ * absent du cache ⇒ sa date est inconnue : l'ancienne
+ * `lastReadMessageCreatedAt` est RETIRÉE (garder une date antérieure rendrait
+ * non lus les messages lus) et `lastReadAt`, rang 2, prend l'heure de lecture.
+ */
+export function caughtUpConversation(
+  conversation: Conversation,
+  cursor: { readonly messageId: string; readonly messageCreatedAt: Date | undefined; readonly readAt: Date },
+): Conversation {
+  const { lastReadMessageCreatedAt: _previous, ...rest } = conversation;
+  return {
+    ...rest,
+    unreadCount: 0,
+    lastReadMessageId: cursor.messageId,
+    lastReadAt: cursor.readAt,
+    ...(cursor.messageCreatedAt === undefined ? {} : { lastReadMessageCreatedAt: cursor.messageCreatedAt }),
+  };
 }
 
 /**

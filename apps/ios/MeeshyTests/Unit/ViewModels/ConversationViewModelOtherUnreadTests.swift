@@ -167,6 +167,75 @@ final class ConversationViewModelOtherUnreadTests: XCTestCase {
         XCTAssertEqual(sut.otherConversationsUnread, 0)
     }
 
+    // MARK: - Lecture partielle (#7350, I-2)
+
+    private func unreadFromOthers(count: Int) -> [Message] {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        return (0..<count).map { index in
+            let createdAt = start.addingTimeInterval(TimeInterval(index))
+            return Message(
+                id: String(format: "%024x", index + 1),
+                conversationId: testConversationId,
+                senderId: "000000000000000000000055",
+                content: "m\(index)",
+                createdAt: createdAt,
+                updatedAt: createdAt
+            )
+        }
+    }
+
+    /// Le critère de #7350 : 99 non-lus, 5 affichés ⇒ 94 confiés au moteur,
+    /// qui les redonnera à la ligne à la fermeture — jamais le 0 de l'ouverture.
+    func test_markAsRead_fiveOfNinetyNineSeen_leavesNinetyFourToRestore() {
+        let sut = makeSUT(currentConversationUnread: 99)
+        let window = unreadFromOthers(count: 99)
+        sut.messages = window
+
+        sut.markAsRead(messageIds: window.prefix(5).map(\.id))
+
+        XCTAssertEqual(mockSyncEngine.noteUnreadRemainingCalls.last?.conversationId, testConversationId)
+        XCTAssertEqual(mockSyncEngine.noteUnreadRemainingCalls.last?.remaining, 94)
+    }
+
+    /// Les lots s'ADDITIONNENT : le préfixe contigu se mesure sur tout ce qui a
+    /// été vu depuis l'ouverture, pas sur le seul dernier lot.
+    func test_markAsRead_successiveBatches_accumulateTheSeenPrefix() {
+        let sut = makeSUT(currentConversationUnread: 99)
+        let window = unreadFromOthers(count: 99)
+        sut.messages = window
+
+        sut.markAsRead(messageIds: window.prefix(5).map(\.id))
+        sut.markAsRead(messageIds: window.dropFirst(5).prefix(5).map(\.id))
+
+        XCTAssertEqual(mockSyncEngine.noteUnreadRemainingCalls.last?.remaining, 89)
+    }
+
+    /// Rattraper le présent déplace le curseur serveur jusqu'au message
+    /// rattrapé, même en ayant sauté le milieu du fil. Un message arrivé
+    /// ENSUITE sans être vu laisse 1 non-lu — pas le compte mesuré depuis la
+    /// frontière d'OUVERTURE, que le serveur a déjà passée.
+    func test_markAsRead_afterCatchingUp_anUnseenNewMessageLeavesOne() {
+        let sut = makeSUT(currentConversationUnread: 99)
+        let history = unreadFromOthers(count: 100)
+        sut.messages = Array(history.prefix(99))
+        sut.markAsRead(messageIds: history.prefix(5).map(\.id) + [history[98].id])
+
+        sut.messages = history
+        sut.markAsRead(messageIds: [history[50].id])
+
+        XCTAssertEqual(mockSyncEngine.noteUnreadRemainingCalls.last?.remaining, 1)
+    }
+
+    /// Ouvrir l'écran ne marque RIEN lu : ni frontière posée au moteur, ni
+    /// reste noté tant que rien n'a été affiché.
+    func test_start_marksNothingRead() async {
+        _ = makeSUT(currentConversationUnread: 99)
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(mockSyncEngine.markConversationReadLocallyCallCount, 0)
+        XCTAssertTrue(mockSyncEngine.noteUnreadRemainingCalls.isEmpty)
+    }
+
     private func makeInMemoryDBPool() throws -> DatabaseQueue {
         let db = try DatabaseQueue()
         try MessageDatabaseMigrations.runAll(on: db)

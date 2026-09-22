@@ -20,7 +20,7 @@ struct ConversationReadPrecedenceTests {
     func serverUnreadWinsOverLocal() {
         let current = ConversationReadEntry(unreadCount: 0)
         let next = ConversationReadPrecedence.resolve(
-            current, event: .serverUnread(conversationId: "c1", unreadCount: 7), isOpen: false
+            current, event: .serverUnread(conversationId: "c1", unreadCount: 7)
         )
         #expect(next.unreadCount == 7)
     }
@@ -29,8 +29,7 @@ struct ConversationReadPrecedenceTests {
     func serverUnreadIsClamped() {
         let next = ConversationReadPrecedence.resolve(
             ConversationReadEntry(unreadCount: 3),
-            event: .serverUnread(conversationId: "c1", unreadCount: -5),
-            isOpen: false
+            event: .serverUnread(conversationId: "c1", unreadCount: -5)
         )
         #expect(next.unreadCount == 0)
     }
@@ -42,8 +41,7 @@ struct ConversationReadPrecedenceTests {
         let current = ConversationReadEntry(unreadCount: 9, serverLastReadAt: t0)
         let next = ConversationReadPrecedence.resolve(
             current,
-            event: .serverReceipt(conversationId: "c1", unreadCount: 0, lastReadAt: t1),
-            isOpen: false
+            event: .serverReceipt(conversationId: "c1", unreadCount: 0, lastReadAt: t1)
         )
         #expect(next.serverLastReadAt == t1)
         #expect(next.unreadCount == 0)
@@ -57,8 +55,7 @@ struct ConversationReadPrecedenceTests {
         let current = ConversationReadEntry(unreadCount: 0, serverLastReadAt: t1)
         let next = ConversationReadPrecedence.resolve(
             current,
-            event: .serverReceipt(conversationId: "c1", unreadCount: 9, lastReadAt: t0),
-            isOpen: false
+            event: .serverReceipt(conversationId: "c1", unreadCount: 9, lastReadAt: t0)
         )
         #expect(next.serverLastReadAt == t1)
         #expect(next.unreadCount == 0)
@@ -69,8 +66,7 @@ struct ConversationReadPrecedenceTests {
         let current = ConversationReadEntry(unreadCount: 0, serverLastReadAt: t0)
         let next = ConversationReadPrecedence.resolve(
             current,
-            event: .serverReceipt(conversationId: "c1", unreadCount: 4, lastReadAt: t0),
-            isOpen: false
+            event: .serverReceipt(conversationId: "c1", unreadCount: 4, lastReadAt: t0)
         )
         #expect(next.unreadCount == 0)
     }
@@ -79,8 +75,7 @@ struct ConversationReadPrecedenceTests {
     func firstReceiptInstalls() {
         let next = ConversationReadPrecedence.resolve(
             ConversationReadEntry(unreadCount: 5),
-            event: .serverReceipt(conversationId: "c1", unreadCount: 0, lastReadAt: t0),
-            isOpen: false
+            event: .serverReceipt(conversationId: "c1", unreadCount: 0, lastReadAt: t0)
         )
         #expect(next.serverLastReadAt == t0)
         #expect(next.unreadCount == 0)
@@ -99,8 +94,7 @@ struct ConversationReadPrecedenceTests {
         let farFuture = Date().addingTimeInterval(3600)
         let next = ConversationReadPrecedence.resolve(
             ConversationReadEntry(unreadCount: 12),
-            event: .serverReceipt(conversationId: "c1", unreadCount: 0, lastReadAt: farFuture),
-            isOpen: false
+            event: .serverReceipt(conversationId: "c1", unreadCount: 0, lastReadAt: farFuture)
         )
         #expect(next.unreadCount == 0)
         #expect(next.serverLastReadAt == farFuture)
@@ -112,8 +106,7 @@ struct ConversationReadPrecedenceTests {
     func localMarkReadZeroes() {
         let next = ConversationReadPrecedence.resolve(
             ConversationReadEntry(unreadCount: 6),
-            event: .localMarkRead(conversationId: "c1"),
-            isOpen: false
+            event: .localMarkRead(conversationId: "c1")
         )
         #expect(next.unreadCount == 0)
     }
@@ -126,8 +119,7 @@ struct ConversationReadPrecedenceTests {
     func localMarkUnreadClearsTheFrontier() {
         let next = ConversationReadPrecedence.resolve(
             ConversationReadEntry(unreadCount: 0, serverLastReadAt: t1),
-            event: .localMarkUnread(conversationId: "c1"),
-            isOpen: false
+            event: .localMarkUnread(conversationId: "c1")
         )
         #expect(next.unreadCount == 1)
         #expect(next.serverLastReadAt == nil)
@@ -137,47 +129,14 @@ struct ConversationReadPrecedenceTests {
     func localMarkUnreadKeepsAnExistingCount() {
         let next = ConversationReadPrecedence.resolve(
             ConversationReadEntry(unreadCount: 5),
-            event: .localMarkUnread(conversationId: "c1"),
-            isOpen: false
+            event: .localMarkUnread(conversationId: "c1")
         )
         #expect(next.unreadCount == 5)
     }
 
-    // MARK: Rang 1 — la conversation ouverte écrase tout
-
-    /// Le rang 1 s'applique EN DERNIER, et le témoin le prouve sur l'événement
-    /// qui aurait le plus de titres à gagner : un compteur SERVEUR. Posé en
-    /// premier, il aurait été annulé par la ligne suivante.
-    @Test("La conversation OUVERTE reste à zéro, même sur un compteur serveur")
-    func openConversationBeatsTheServer() {
-        let next = ConversationReadPrecedence.resolve(
-            ConversationReadEntry(unreadCount: 0),
-            event: .serverUnread(conversationId: "c1", unreadCount: 11),
-            isOpen: true
-        )
-        #expect(next.unreadCount == 0)
-    }
-
-    @Test("…et même sur un accusé de lecture serveur au compteur non nul")
-    func openConversationBeatsAReceipt() {
-        let next = ConversationReadPrecedence.resolve(
-            ConversationReadEntry(unreadCount: 0),
-            event: .serverReceipt(conversationId: "c1", unreadCount: 4, lastReadAt: t1),
-            isOpen: true
-        )
-        #expect(next.unreadCount == 0)
-        #expect(next.serverLastReadAt == t1, "la frontière avance quand même : elle n'est pas un compteur")
-    }
-
-    @Test("…et même sur un geste « marquer non lu »")
-    func openConversationBeatsMarkUnread() {
-        let next = ConversationReadPrecedence.resolve(
-            ConversationReadEntry(unreadCount: 0),
-            event: .localMarkUnread(conversationId: "c1"),
-            isOpen: true
-        )
-        #expect(next.unreadCount == 0)
-    }
+    // Rang 1 — la conversation ouverte — n'est plus dans `resolve` : il se LIT
+    // (projection du registre) et ne s'écrit pas (#7350). Ses témoins sont
+    // dans `ConversationReadLedgerTotalTests`, au niveau du registre.
 
     // MARK: Les deux formes de niveau REGISTRE
 
@@ -185,10 +144,10 @@ struct ConversationReadPrecedenceTests {
     func setLevelEventsLeaveTheEntryAlone() {
         let current = ConversationReadEntry(unreadCount: 3, serverLastReadAt: t0, isMuted: true)
         #expect(ConversationReadPrecedence.resolve(
-            current, event: .localOpen(conversationId: "c1"), isOpen: false
+            current, event: .localOpen(conversationId: "c1")
         ) == current)
         #expect(ConversationReadPrecedence.resolve(
-            current, event: .snapshot(rows: [], source: .server), isOpen: false
+            current, event: .snapshot(rows: [], source: .server)
         ) == current)
     }
 }
@@ -233,8 +192,8 @@ struct ConversationReadLedgerTotalTests {
         ledger.apply(.serverUnread(conversationId: "b", unreadCount: 3))
         ledger.apply(.localOpen(conversationId: "a"))
         #expect(ledger.total(excludingOpen: true, excludingMuted: false) == 3)
-        #expect(ledger.total(excludingOpen: false, excludingMuted: false) == 3,
-                "ouvrir a mis la ligne à zéro : les deux bornes disent le même nombre")
+        #expect(ledger.total(excludingOpen: false, excludingMuted: false) == 5,
+                "ouvrir n'est pas lire (#7350) : la borne RETIRE la conversation affichée, elle ne l'a pas effacée")
     }
 
     // MARK: - D-L1 (#7236) — le badge d'icône compte des CONVERSATIONS
@@ -266,21 +225,19 @@ struct ConversationReadLedgerTotalTests {
         #expect(ledger.conversationUnreadTotal(excludingOpen: false) == 2)
     }
 
-    /// La conversation AFFICHÉE ne pèse pas sur l'icône, et elle ne le peut
-    /// pas : ouvrir la lit en rang 1, y compris contre un instantané serveur
-    /// qui la dit encore non lue. Le témoin le prouve des DEUX côtés de la
-    /// borne — c'est la forme du témoin jumeau sur la somme, et la raison est
-    /// la même : `excludingOpen` reste déclaré par la surface, mais le
-    /// registre n'a plus rien à en retrancher.
-    @Test("La conversation affichée ne compte jamais")
+    /// La conversation AFFICHÉE ne pèse pas sur l'icône : la surface la retire
+    /// (`excludingOpen`) et sa ligne se LIT à zéro — le rang 1 est une
+    /// projection. Mais le registre GARDE ce que le serveur dit d'elle
+    /// (#7350) : ouvrir n'est pas lire, et c'est ce compte que la fermeture
+    /// rend à l'icône.
+    @Test("La conversation affichée ne compte jamais sur l'icône")
     func conversationTotalNeverCountsTheOpenOne() {
         let ledger = makeLedger([row("a", 2), row("b", 3)])
         ledger.apply(.localOpen(conversationId: "a"))
         ledger.apply(.snapshot(rows: [row("a", 5), row("b", 3)], source: .server))
-        #expect(ledger.state(for: "a")?.unreadCount == 0,
-                "ouvrir, c'est lire — même un instantané serveur ne la rallume pas")
+        #expect(ledger.counts()["a"] == 0, "sa ligne se lit à zéro tant qu'elle est affichée")
+        #expect(ledger.state(for: "a")?.unreadCount == 5, "le registre sait ce qui reste à lire")
         #expect(ledger.conversationUnreadTotal(excludingOpen: true) == 1)
-        #expect(ledger.conversationUnreadTotal(excludingOpen: false) == 1)
     }
 
     @Test("Le registre ne tient qu'UN openConversationId")
@@ -296,15 +253,84 @@ struct ConversationReadLedgerTotalTests {
         #expect(ledger.openConversationId == nil)
     }
 
-    /// Refermer ne RESSUSCITE pas : le compteur reviendra du serveur s'il y a
-    /// lieu. Inventer un non-lu à la fermeture est exactement ce que fait
-    /// `ensureUnread`, et c'est la ligne « 1 » que ce lot supprime.
-    @Test("Refermer une conversation ne ressuscite aucun non-lu")
-    func closingNeverResurrects() {
+    /// #7350 (I-2) — ce témoin GARDAIT le défaut sous le nom « Refermer une
+    /// conversation ne ressuscite aucun non-lu » : il valait parce qu'OUVRIR
+    /// avait effacé le compte. Ouvrir n'est pas lire — refermer sans avoir
+    /// rien lu rend la conversation au badge, avec le compte qu'elle avait.
+    /// Rien n'est inventé : c'est le compte que le serveur a servi, pas le
+    /// « 1 » d'`ensureUnread` (#6998).
+    @Test("Refermer sans rien lire rend la conversation au badge")
+    func closingWithoutReadingCountsItAgain() {
         let ledger = makeLedger([row("a", 4)])
         ledger.apply(.localOpen(conversationId: "a"))
+        #expect(ledger.conversationUnreadTotal(excludingOpen: true) == 0)
         ledger.apply(.localOpen(conversationId: nil))
-        #expect(ledger.total(excludingOpen: true, excludingMuted: false) == 0)
+        #expect(ledger.state(for: "a")?.unreadCount == 4)
+        #expect(ledger.conversationUnreadTotal(excludingOpen: true) == 1)
+    }
+
+    /// Le parcours de la recette : 99 non-lus, 5 affichés, le serveur sert 94
+    /// PENDANT l'affichage. L'icône ne compte pas la conversation tant que
+    /// l'écran est ouvert, et la compte dès qu'il se ferme — l'API disait
+    /// « 1 conversation non lue » pendant que le badge affichait 0 (recette
+    /// 2026-09-21, étape 7).
+    @Test("Refermer après une lecture partielle garde le compte servi pendant l'affichage")
+    func closingAfterAPartialReadKeepsTheServedCount() {
+        let ledger = makeLedger([row("a", 99)])
+        ledger.apply(.localOpen(conversationId: "a"))
+        ledger.apply(.serverUnread(conversationId: "a", unreadCount: 94))
+        #expect(ledger.counts()["a"] == 0)
+        ledger.apply(.localOpen(conversationId: nil))
+        #expect(ledger.counts()["a"] == 94)
+        #expect(ledger.conversationUnreadTotal(excludingOpen: true) == 1)
+    }
+
+    /// La lecture COMPLÈTE tient : ce n'est pas l'ouverture qui éteint la
+    /// conversation, c'est le geste ou l'accusé qui le disent.
+    @Test("Refermer après une lecture complète laisse la conversation lue")
+    func closingAfterACompleteReadStaysRead() {
+        let ledger = makeLedger([row("a", 4)])
+        ledger.apply(.localOpen(conversationId: "a"))
+        ledger.apply(.localMarkRead(conversationId: "a"))
+        ledger.apply(.localOpen(conversationId: nil))
+        #expect(ledger.conversationUnreadTotal(excludingOpen: true) == 0)
+    }
+
+    // MARK: Rang 1 — une PROJECTION, jamais une écriture (#7350)
+
+    /// Le rang 1 écrivait son zéro DANS l'entrée : un compteur serveur reçu
+    /// pendant l'affichage était perdu, et la fermeture rendait 0. Il se LIT
+    /// désormais — la ligne affichée montre 0, l'entrée garde ce qui a été
+    /// servi.
+    @Test("La conversation OUVERTE se lit à zéro, même sur un compteur serveur — et le garde")
+    func openConversationReadsZeroButKeepsTheServedCount() {
+        let ledger = makeLedger([row("a", 0)])
+        ledger.apply(.localOpen(conversationId: "a"))
+        ledger.apply(.serverUnread(conversationId: "a", unreadCount: 11))
+        #expect(ledger.counts()["a"] == 0)
+        #expect(ledger.state(for: "a")?.unreadCount == 11)
+        #expect(ledger.state(for: "a")?.isOpen == true)
+    }
+
+    @Test("…et sur un accusé de lecture serveur, dont la frontière avance")
+    func openConversationReadsZeroOnAReceipt() {
+        let t1 = Date(timeIntervalSince1970: 1_700_000_100)
+        let ledger = makeLedger([row("a", 0)])
+        ledger.apply(.localOpen(conversationId: "a"))
+        ledger.apply(.serverReceipt(conversationId: "a", unreadCount: 4, lastReadAt: t1))
+        #expect(ledger.counts()["a"] == 0)
+        #expect(ledger.state(for: "a")?.unreadCount == 4)
+        #expect(ledger.state(for: "a")?.serverLastReadAt == t1, "la frontière avance : elle n'est pas un compteur")
+    }
+
+    @Test("…et sur un geste « marquer non lu », qui se voit à la fermeture")
+    func openConversationReadsZeroOnMarkUnread() {
+        let ledger = makeLedger([row("a", 0)])
+        ledger.apply(.localOpen(conversationId: "a"))
+        ledger.apply(.localMarkUnread(conversationId: "a"))
+        #expect(ledger.counts()["a"] == 0)
+        ledger.apply(.localOpen(conversationId: nil))
+        #expect(ledger.counts()["a"] == 1)
     }
 }
 
@@ -381,7 +407,8 @@ struct ConversationReadLedgerSnapshotTests {
         let ledger = ConversationReadLedger()
         ledger.apply(.localOpen(conversationId: "a"))
         ledger.apply(.snapshot(rows: [row("a", 8)], source: .server))
-        #expect(ledger.state(for: "a")?.unreadCount == 0)
+        #expect(ledger.counts()["a"] == 0, "la ligne affichée ne se rallume pas")
+        #expect(ledger.state(for: "a")?.unreadCount == 8, "…mais le registre garde ce que le serveur a servi (#7350)")
     }
 
     /// **Le rollback, sans septième cas.** `apply` rend l'entrée d'AVANT ; un
