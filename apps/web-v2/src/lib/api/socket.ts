@@ -55,6 +55,13 @@ import {
   isReadStatusUpdated,
   isSocketMessage,
 } from './realtime-apply';
+import {
+  applyMessageCountdownStarted,
+  applyMessageExpired,
+  isMessageCountdownStartedEvent,
+  isMessageExpiredEvent,
+  noteEphemeralDelivery,
+} from './realtime-ephemeral';
 import { STORY_TRAY_QUERY_KEY } from './stories';
 import { TYPING_SAFETY_TIMEOUT_MS, type TypingStoreApi } from './typing-store';
 
@@ -280,6 +287,9 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   const onMessageNew = (payload: unknown): void => {
     if (!isSocketMessage(payload)) return;
     applyMessageNew(deps.queryClient, deps.outbox, payload);
+    /* LE DÉCOMPTE PART D'ICI, PAS DU PREMIER PIXEL (#7454) — le fil peut être
+       fermé quand l'éphémère arrive ; c'est cet instant-là qui fait foi. */
+    noteEphemeralDelivery(payload, now());
 
     const candidates = new Set([payload.senderId, payload.sender?.userId].filter((id): id is string => id !== undefined));
     for (const userId of candidates) {
@@ -389,6 +399,26 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   const onMessageConsumed = (payload: unknown): void => {
     if (!isMessageConsumedEvent(payload)) return;
     applyMessageConsumed(deps.queryClient, payload);
+  };
+
+  /**
+   * L'ÉCHÉANCE D'UN ÉPHÉMÈRE, DES DEUX CÔTÉS (#7454) — `message:expired` la
+   * CONSOMME (le message quitte l'écran sur-le-champ), `message:countdown-
+   * started` la POSE. Les deux étaient absents : un message détruit par le
+   * serveur restait affiché jusqu'au prochain chargement du fil.
+   *
+   * Les deux puits vivent dans `realtime-ephemeral.ts` ; ici, seule la
+   * reconnaissance de la charge et le branchement — motif de tous les autres
+   * gestionnaires de ce fichier.
+   */
+  const onMessageExpired = (payload: unknown): void => {
+    if (!isMessageExpiredEvent(payload)) return;
+    applyMessageExpired(deps.queryClient, payload);
+  };
+
+  const onMessageCountdownStarted = (payload: unknown): void => {
+    if (!isMessageCountdownStartedEvent(payload)) return;
+    applyMessageCountdownStarted(payload);
   };
 
   /**
@@ -773,6 +803,8 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, onAttachmentStatusUpdated);
   socket.on<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_CONSUMED, onMessageConsumed);
+  socket.on<unknown>(SERVER_EVENTS.MESSAGE_EXPIRED, onMessageExpired);
+  socket.on<unknown>(SERVER_EVENTS.MESSAGE_COUNTDOWN_STARTED, onMessageCountdownStarted);
   socket.on<unknown>(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, onPendingMessagesDelivered);
   socket.on<unknown>(SERVER_EVENTS.COMMENT_ADDED, onCommentAdded);
   socket.on<unknown>(SERVER_EVENTS.COMMENT_UPDATED, onCommentUpdated);
@@ -843,6 +875,8 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, onAttachmentStatusUpdated);
       socket.off<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_CONSUMED, onMessageConsumed);
+      socket.off<unknown>(SERVER_EVENTS.MESSAGE_EXPIRED, onMessageExpired);
+      socket.off<unknown>(SERVER_EVENTS.MESSAGE_COUNTDOWN_STARTED, onMessageCountdownStarted);
       socket.off<unknown>(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, onPendingMessagesDelivered);
       socket.off<unknown>(SERVER_EVENTS.COMMENT_ADDED, onCommentAdded);
       socket.off<unknown>(SERVER_EVENTS.COMMENT_UPDATED, onCommentUpdated);

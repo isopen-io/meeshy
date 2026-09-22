@@ -336,25 +336,35 @@ function PlaybackRow({
           {row.username}
         </p>
         {!complete && fraction > 0 ? (
-          <div
-            className="mt-1 h-1 rounded-full"
-            style={{ backgroundColor: 'var(--color-hairline)' }}
-            role="progressbar"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={Math.round(fraction * 100)}
-            aria-label={row.username}
-            {...(positionLabel === null
-              ? {}
-              : {
-                  'aria-valuetext': translate(
-                    lang,
-                    kind === 'audio' ? 'message-detail.attachment.listened-until' : 'message-detail.attachment.watched-until',
-                    { time: positionLabel },
-                  ),
-                })}
-          >
-            <div className="h-1 rounded-full" style={{ width: `${fraction * 100}%`, backgroundColor: 'var(--color-primary)' }} />
+          <div className="mt-1 flex items-center gap-1">
+            <div
+              className="h-1 flex-1 rounded-full"
+              style={{ backgroundColor: 'var(--color-hairline)' }}
+              role="progressbar"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(fraction * 100)}
+              aria-label={row.username}
+              {...(positionLabel === null
+                ? {}
+                : {
+                    'aria-valuetext': translate(
+                      lang,
+                      kind === 'audio' ? 'message-detail.attachment.listened-until' : 'message-detail.attachment.watched-until',
+                      { time: positionLabel },
+                    ),
+                  })}
+            >
+              <div className="h-1 rounded-full" style={{ width: `${fraction * 100}%`, backgroundColor: 'var(--color-primary)' }} />
+            </div>
+            <span
+              className="text-mini text-right font-semibold tabular-nums"
+              style={{ color: 'var(--color-ios-ink-3)', minWidth: 30 }}
+              aria-hidden="true"
+              data-message-receipts-percent
+            >
+              {Math.round(fraction * 100)}%
+            </span>
           </div>
         ) : null}
       </div>

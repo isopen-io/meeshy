@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
-  ephemeralOf,
   formatRemaining,
   protectionOf,
   requiresConsume,
@@ -78,23 +77,7 @@ describe("protectionOf — le kind, dans l'ordre d'iOS", () => {
   });
 });
 
-describe('ephemeralOf / formatRemaining', () => {
-  test('expiresAt absent ⇒ none', () => {
-    expect(ephemeralOf(undefined, 1000)).toEqual({ state: 'none' });
-  });
-
-  test('expiresAt dans 7s ⇒ running(7)', () => {
-    expect(ephemeralOf(new Date(8000), 1000)).toEqual({ state: 'running', remainingSeconds: 7 });
-  });
-
-  test('expiresAt dans le passé ⇒ expired', () => {
-    expect(ephemeralOf(new Date(999), 1000)).toEqual({ state: 'expired' });
-  });
-
-  test('expiresAt === now ⇒ expired (le seuil est inclusif)', () => {
-    expect(ephemeralOf(new Date(1000), 1000)).toEqual({ state: 'expired' });
-  });
-
+describe('formatRemaining', () => {
   const FORMAT_CASES: readonly (readonly [number, string])[] = [
     [7, '7s'],
     [65, '1m 05s'],
