@@ -243,7 +243,7 @@ nonisolated enum NotificationPayloadHelpers {
     /// `messageId`, but they do not constitute message delivery to the recipient,
     /// so they are excluded and do not trigger receipts.
     nonisolated static let deliveryReceiptTypes: Set<String> = [
-        "new_message", "message_reply", "reply", "message_forwarded",
+        "new_message", "message_reply", "reply", "message_forwarded", "user_mentioned",
         "new_conversation", "new_conversation_direct", "new_conversation_group",
         "added_to_conversation"
     ]
