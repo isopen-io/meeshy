@@ -2,6 +2,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { Composer } from './composer';
 
@@ -28,8 +29,9 @@ import { Composer } from './composer';
 describe('Composer — la bascule « vue unique » (#7354)', () => {
   const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
-  beforeAll(() => {
+  beforeAll(async () => {
     ensureHappyDomRegistered();
+    await loadInterfaceCatalog('fr');
     globals.IS_REACT_ACT_ENVIRONMENT = true;
   });
 
