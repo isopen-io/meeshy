@@ -101,6 +101,10 @@ struct ConversationScrollState {
     var swipedMessageId: String? = nil
     var swipeOffset: CGFloat = 0
     var galleryStartAttachment: MessageAttachment? = nil
+    /// Les vues uniques OUVERTES dont la consommation attend la fermeture du
+    /// plein écran (#7499). État de VUE — il décrit ce qui est à l'écran, pas
+    /// une donnée du fil — donc il vit ici et non dans le ViewModel.
+    var pendingViewOnceConsumption = ViewOnceConsumption.Pending()
     var imageToPreview: UIImage? = nil
     var videoToPreview: URL? = nil
 
@@ -1676,6 +1680,14 @@ struct ConversationView: View {
                     // (`fileUrl`), sinon les deux se téléchargeaient ; puis on
                     // met la pièce jointe en scène pour la galerie.
                     GalleryPrewarm.warm(attachment)
+                    // #7499 — une vue unique s'OUVRE au toucher et se consomme
+                    // à la FERMETURE. On arme ici, la galerie consomme en se
+                    // refermant (`ConversationView+MediaGallery`). C'est le
+                    // seul endroit qui voie les deux : la bulle sait qu'on
+                    // ouvre, elle ne sait pas quand on sort.
+                    if attachment.isViewOnce {
+                        scrollState.pendingViewOnceConsumption.arm(attachment.messageId)
+                    }
                     scrollState.galleryStartAttachment = attachment
                 },
                 onConsumeViewOnce: { messageId, completion in

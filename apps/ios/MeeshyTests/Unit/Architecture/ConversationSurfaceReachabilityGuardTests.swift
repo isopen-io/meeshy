@@ -743,3 +743,66 @@ final class ComposerViewOnceReachabilityGuardTests: XCTestCase {
                       "L'envoi doit LIRE l'état armé — sinon la bascule est une cible morte.")
     }
 }
+
+// MARK: - #7499 — toucher un média à vue unique l'OUVRE ; la fermeture consomme
+
+/// « lorsqu'on tap pour afficher, ça supprime directement au lieu d'afficher le
+/// contenu en plein écran ! » — relevé du porteur, recette 1.1.0.
+///
+/// La garde est de FORME parce que l'autre façon de voir ce défaut est de
+/// perdre un média pour de bon : la consommation est irréversible, et un témoin
+/// qui l'exerce vraiment détruirait ce qu'il vérifie.
+final class ViewOnceOpensBeforeConsumingGuardTests: XCTestCase {
+
+    private func source(at relativePath: String) throws -> String {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        return try String(contentsOf: root.appendingPathComponent("Meeshy/\(relativePath)"), encoding: .utf8)
+    }
+
+    /// La révélation d'un média n'APPELLE PLUS la consommation.
+    ///
+    /// C'est le défaut lui-même : `handleReveal` appelait `onConsumeViewOnce`
+    /// avant d'afficher quoi que ce soit, puis révélait cinq secondes en
+    /// vignette. Le contenu était détruit sans avoir été montré.
+    func test_laRévélation_nAppellePlusLaConsommation() throws {
+        let grille = try source(at: "Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift")
+        guard let reveal = grille.range(of: "private func handleReveal()") else {
+            return XCTFail("Impossible de localiser la révélation d'un média.")
+        }
+        let corps = String(grille[reveal.upperBound...].prefix(1200))
+        XCTAssertFalse(corps.contains("onConsumeViewOnce?("),
+                       "Toucher un média à vue unique doit l'OUVRIR, pas le consommer.")
+        XCTAssertTrue(corps.contains("openFullscreen()"),
+                      "La révélation doit ouvrir le plein écran dans le même geste.")
+    }
+
+    /// Et la consommation part bien de la FERMETURE, depuis le seul site qui la
+    /// voie : l'hôte de la galerie. La bulle sait qu'on ouvre ; elle ne sait
+    /// pas quand on sort.
+    func test_laFermeture_consommeCeQuiAÉtéOuvert() throws {
+        let galerie = try source(at: "Features/Main/Views/ConversationView+MediaGallery.swift")
+        XCTAssertTrue(galerie.contains("onDismiss: handleGalleryDismiss"),
+                      "La fermeture du plein écran doit être observée par l'hôte.")
+        XCTAssertTrue(galerie.contains("pendingViewOnceConsumption.takeAll()"),
+                      "Elle doit consommer ce qui a été ouvert, et VIDER dans le même geste.")
+        XCTAssertTrue(galerie.contains("viewModel.consumeViewOnce(messageId:"),
+                      "La consommation reste l'appel serveur existant, déplacé — pas réécrit.")
+
+        let hôte = try source(at: "Features/Main/Views/ConversationView.swift")
+        XCTAssertTrue(hôte.contains("pendingViewOnceConsumption.arm(attachment.messageId)"),
+                      "L'ouverture arme la consommation, sur le chemin qui ouvre la galerie.")
+    }
+
+    /// **L'idempotence est la garde centrale**, et elle est portée par le type,
+    /// pas par la discipline des sites : le serveur COMPTE les ouvertures, donc
+    /// deux fermetures ne doivent brûler qu'un crédit.
+    func test_lAttente_estVidéeParLaLecture() throws {
+        var pending = ViewOnceConsumption.Pending()
+        pending.arm("msg-1")
+        pending.arm("msg-1")
+        XCTAssertEqual(pending.takeAll(), ["msg-1"])
+        XCTAssertTrue(pending.isEmpty, "La lecture vide l'attente — sinon la seconde sortie reconsomme.")
+    }
+}
