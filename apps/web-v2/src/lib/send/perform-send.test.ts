@@ -255,6 +255,46 @@ describe('performSend', () => {
     expect(page?.messages[0]?.id).toBe('m9');
   });
 
+  test('fusion champ par champ : accusé REST ne regresse pas ✓✓ à ✓ si socket a montré readCount plus haut', async () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(messagesQueryKey('c-a'), threadPages([]));
+    const outbox = createOutboxStore();
+
+    // Séquence :
+    // 1. Socket event `read-status:updated` arrive avec readCount=1, deliveredCount=1 (✓✓)
+    // 2. REST accusé arrive avec readCount=0, deliveredCount=0 (✓)
+    // La fusion doit garder les compteurs plus hauts : readCount=1, deliveredCount=1
+    const impl = (async (_url: RequestInfo | URL, init?: RequestInit) => {
+      const cid = JSON.parse(String(init?.body)).clientMessageId as string;
+      // Socket event simule un message avec des compteurs plus hauts
+      const messageFromSocket = { ...m1, id: 'm-sent', clientMessageId: cid, deliveredCount: 1, readCount: 1 } as Message;
+      queryClient.setQueryData(messagesQueryKey('c-a'), threadPages([messageFromSocket]));
+      // REST accusé retourne des compteurs plus bas (ou absents)
+      return new Response(JSON.stringify(ackBody('m-sent', cid, { deliveredCount: 0, readCount: 0 })), { status: 200 });
+    }) as typeof fetch;
+    const deps: SendDeps = {
+      source: 'gateway',
+      transport: createHttpTransport({ base: '', fetchImpl: impl }),
+      queryClient,
+      outbox,
+      online: true,
+    };
+
+    await performSend({
+      conversationId: 'c-a',
+      draft: { content: 'bonjour fusion', originalLanguage: 'fr' },
+      viewerId: 'u-viewer',
+      deps,
+    });
+
+    const page = threadOf(queryClient, 'c-a');
+    expect(page?.messages).toHaveLength(1);
+    expect(page?.messages[0]?.id).toBe('m-sent');
+    // Non-régression : les compteurs de socket ne doivent pas redescendre
+    expect(page?.messages[0]?.deliveredCount).toBe(1);
+    expect(page?.messages[0]?.readCount).toBe(1);
+  });
+
   test('4xx (403 USER_BLOCKED) : entrée failed, lastError.status/code posés, page toBe-identique', async () => {
     const { impl } = fakeFetch({ status: 403, body: { success: false, error: 'blocked', code: 'USER_BLOCKED' } });
     const queryClient = seededClient();

@@ -235,7 +235,21 @@ export function upsertThreadMessage(
       return {
         ...data,
         pages: data.pages.map((page, i) =>
-          i === host ? { ...page, messages: page.messages.map((m) => (matches(m) ? message : m)) } : page,
+          i === host
+            ? {
+                ...page,
+                messages: page.messages.map((m) =>
+                  matches(m)
+                    ? {
+                        ...m,
+                        ...message,
+                        deliveredCount: Math.max(m.deliveredCount ?? 0, message.deliveredCount ?? 0),
+                        readCount: Math.max(m.readCount ?? 0, message.readCount ?? 0),
+                      }
+                    : m,
+                ),
+              }
+            : page,
         ),
       };
     }
