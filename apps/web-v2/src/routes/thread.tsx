@@ -610,11 +610,15 @@ export default function ThreadScreen() {
       deps: { ...apiDeps, store: conversationStore, queryClient },
     });
   }, [queryClient]);
+  /** (W14 #7372) Une feuille de détail ou de réactions recouvre le fil :
+   * suspendre le suivi de lecture. */
+  const isModalOpen = messageMenu.detailFor !== null || messageMenu.reactionSheetFor !== null;
   const readTracking = useReadTracking({
     scroller,
     conversationId,
     lastMessageId: lastConfirmedMessageId,
     enabled: placed.length > 0,
+    isModalOpen,
     onMark: onMarkCaughtUp,
   });
 

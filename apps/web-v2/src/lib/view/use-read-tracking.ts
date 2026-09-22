@@ -53,9 +53,13 @@ export function useReadTracking(params: {
   /** `false` ⇒ AUCUN observateur n'est posé — un fil vide ne doit rien
    * observer (même garde que `useOlderMessages`, `rowCount`). */
   readonly enabled: boolean;
+  /** `true` ⇒ une feuille de détail ou de réactions est ouverte au-dessus du
+   * fil ; le suivi de lecture est suspendu en attendant que l'utilisateur
+   * la referme (W14 #7372). */
+  readonly isModalOpen?: boolean;
   readonly onMark: (conversationId: string, caughtUpToMessageId: string) => void;
 }): ReadTracking {
-  const { scroller, conversationId, lastMessageId, enabled, onMark } = params;
+  const { scroller, conversationId, lastMessageId, enabled, isModalOpen, onMark } = params;
 
   const [target, setTarget] = useState<Element | null>(null);
   const intersectingRef = useRef(false);
@@ -71,13 +75,14 @@ export function useReadTracking(params: {
   const attemptMark = useCallback(() => {
     if (!intersectingRef.current) return;
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+    if (isModalOpen) return;
     const conversation = conversationIdRef.current;
     const boundary = lastMessageIdRef.current;
     if (conversation === undefined || boundary === undefined) return;
     if (sentBoundaryRef.current === boundary) return;
     sentBoundaryRef.current = boundary;
     onMarkRef.current(conversation, boundary);
-  }, []);
+  }, [isModalOpen]);
 
   useEffect(() => {
     if (!enabled || target === null) return undefined;
