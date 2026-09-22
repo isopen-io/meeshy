@@ -2876,7 +2876,7 @@ describe('MessageReadStatusService', () => {
       // 1. First listen (partial)
       await service.markAudioAsListened(testParticipantId, testAttachmentId, {
         playPositionMs: 5000,
-        listenDurationMs: 5000,
+        stretches: [{ startMs: 0, endMs: 5000, endedBy: 'pause' }],
         complete: false
       });
 
@@ -2892,7 +2892,7 @@ describe('MessageReadStatusService', () => {
       // 2. Second listen (complete)
       await service.markAudioAsListened(testParticipantId, testAttachmentId, {
         playPositionMs: 10000,
-        listenDurationMs: 10000,
+        stretches: [{ startMs: 5000, endMs: 10000, endedBy: 'completed' }],
         complete: true
       });
 

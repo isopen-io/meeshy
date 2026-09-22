@@ -465,10 +465,15 @@ describe('POST /attachments/:attachmentId/status — watched action', () => {
       payload: { action: 'watched', complete: true, playPositionMs: 1000, durationMs: 5000 },
     });
     expect(res.statusCode).toBe(200);
+    // `durationMs` (5000, la durée de la PISTE — dénominateur de `percentage`
+    // sur le fil Socket.IO) n'est PAS repassé au service : celui-ci dérive la
+    // durée réellement écoutée de `stretches`, jamais de la durée de la piste
+    // répétée à chaque rapport par les clients (#7359).
     expect(mockMarkVideoAsWatched).toHaveBeenCalledWith(
       PART_ID, ATTACHMENT_ID,
-      expect.objectContaining({ watchPositionMs: 1000, watchDurationMs: 5000, complete: true })
+      expect.objectContaining({ watchPositionMs: 1000, complete: true })
     );
+    expect(mockMarkVideoAsWatched.mock.calls[0][2]).not.toHaveProperty('watchDurationMs');
   });
 });
 

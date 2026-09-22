@@ -19,6 +19,14 @@ export interface AttachmentStatusUpdatedEventData {
   readonly playPositionMs?: number;
   readonly durationMs?: number;
   readonly percentage?: number;
+  /**
+   * L'écoute/le visionnage SERVI a-t-il atteint la fin — jamais le rapport
+   * brut de CE message, mais la valeur collante tenue par
+   * `MessageMediaConsumptionService` (#7359) : une fois vrai, reste vrai.
+   * Absent pour les actions sans notion de progression (`viewed`,
+   * `downloaded`).
+   */
+  readonly complete?: boolean;
 }
 
 /**

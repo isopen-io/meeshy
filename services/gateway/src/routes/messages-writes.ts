@@ -647,20 +647,33 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
       const { MessageReadStatusService } = await import('../services/MessageReadStatusService.js');
       const readStatusService = new MessageReadStatusService(prisma);
 
+      // La position et le complet SERVIS (#7359) — la valeur la plus avancée
+      // / collante que le service vient d'écrire, jamais le rapport BRUT de
+      // CETTE requête. C'est elle, pas `playPositionMs`/`complete` du corps,
+      // que la diffusion Socket.IO ci-dessous doit annoncer : sinon une
+      // reprise à 10 % après une écoute à 80 % pousserait 10 % en direct,
+      // contredisant ce que la base vient de protéger.
+      let served: { position: number | null; complete: boolean } | undefined;
+
       switch (action) {
         case 'listened':
-          await readStatusService.markAudioAsListened(participant.id, attachmentId, {
+          // `durationMs` n'est JAMAIS passé au service : c'est la durée de la
+          // PISTE (dénominateur de `percentage` ci-dessous), identique à
+          // chaque rapport du même client — pas le temps réellement écouté
+          // depuis le rapport précédent. Le service dérive `totalListenDurationMs`
+          // de `stretches` lui-même (#7359) ; lui repasser `durationMs` ferait
+          // recompter la piste entière à chaque appel.
+          served = await readStatusService.markAudioAsListened(participant.id, attachmentId, {
             playPositionMs,
-            listenDurationMs: durationMs,
             complete,
             stretches,
             language
           });
           break;
         case 'watched':
-          await readStatusService.markVideoAsWatched(participant.id, attachmentId, {
+          // Même raison que `listened` ci-dessus.
+          served = await readStatusService.markVideoAsWatched(participant.id, attachmentId, {
             watchPositionMs: playPositionMs,
-            watchDurationMs: durationMs,
             complete,
             stretches,
             language
@@ -711,8 +724,16 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
               { userId, attachmentId, room: audience.room }
             );
           }
-          const percentage = playPositionMs !== undefined && durationMs !== undefined && durationMs > 0
-            ? Math.min(100, Math.round((playPositionMs / durationMs) * 100))
+          // La position SERVIE prime sur le rapport brut : `served` n'existe
+          // que pour `listened`/`watched` (les seules actions temporelles) et
+          // porte la valeur la plus avancée déjà protégée en base. Un double
+          // de service qui ne la rend pas (ancien contrat) replie sur le
+          // rapport brut — la route reste fonctionnelle, seule la garantie
+          // anti-régression dépend alors du service réel.
+          const servedPositionMs = served?.position ?? playPositionMs;
+          const percentage = servedPositionMs !== undefined && servedPositionMs !== null
+            && durationMs !== undefined && durationMs > 0
+            ? Math.min(100, Math.round((servedPositionMs / durationMs) * 100))
             : undefined;
           socketIOManager.getIO().to(audience.room).emit(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, {
             attachmentId,
@@ -721,9 +742,10 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
             userId,
             action,
             updatedAt: new Date(),
-            ...(playPositionMs !== undefined && { playPositionMs }),
+            ...(servedPositionMs !== undefined && servedPositionMs !== null && { playPositionMs: servedPositionMs }),
             ...(durationMs !== undefined && { durationMs }),
-            ...(percentage !== undefined && { percentage })
+            ...(percentage !== undefined && { percentage }),
+            ...(served !== undefined && { complete: served.complete })
           });
         }
       } catch (socketError) {
