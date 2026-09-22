@@ -174,6 +174,17 @@ if (!__SHELL__ && import.meta.env.PROD && 'serviceWorker' in navigator) {
     void import('@/lib/notifications/tap-navigation').then(({ listenNotificationTapsInBrowser }) =>
       listenNotificationTapsInBrowser(),
     );
+    /**
+     * ET LE WORKER PEUT ACCUSER LA REMISE D'UN PUSH, ONGLET FERMÉ (#7368,
+     * W4). `sw-push.js` (script classique) ne lit ni `localStorage` ni aucun
+     * module de `src/` : sans ce pont IndexedDB, posé dès que la session est
+     * connue, un push reçu avant la première ouverture de CETTE session
+     * trouverait le magasin vide et resterait « envoyé » jusqu'à
+     * reconnexion — exactement le symptôme du relevé.
+     */
+    void import('@/lib/notifications/delivery-receipt-credential').then(({ startDeliveryReceiptCredentialSync }) =>
+      startDeliveryReceiptCredentialSync(),
+    );
   };
   if (document.readyState === 'complete') inscrire();
   else window.addEventListener('load', inscrire, { once: true });
