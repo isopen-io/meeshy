@@ -2,9 +2,13 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import { appQueryClient } from '@/lib/api/query-client';
+import { apiDeps } from '@/lib/api/deps';
 import { attachmentDefaults } from '@/lib/api/fixtures-base';
+import { fetchMessageReceiptsPeople } from '@/lib/api/receipts';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import type { Attachment } from '@/lib/api/types';
+import { time } from '@/lib/grouping';
+import { receiptCategoriesOf } from '@/lib/view/message-receipts';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -144,5 +148,46 @@ describe('MessageReceiptsSheet — par pièce jointe', () => {
     const card = host.querySelector('[data-message-receipts-attachment="att-test-6"]');
     expect(card?.textContent ?? '').toContain('1 ouverture');
     expect(card?.querySelector('[data-message-receipts-playback]')).toBe(null);
+  });
+});
+
+/**
+ * « L'HEURE DE CHAQUE ACCUSÉ » (#7352, V4) — `receivedAt`/`readAt` sont
+ * SERVIS par `fetchMessageReceiptsPeople` (`api/receipts.ts:99-106`) depuis
+ * toujours, jamais RENDUS avant ce lot (relevé de l'issue,
+ * `message-receipts-sheet.tsx:198-215`). Réutilise `time()`
+ * (`lib/grouping.ts`), le même SSOT que l'horodatage de la bulle — aucun
+ * nouveau format.
+ *
+ * Les valeurs attendues viennent de la MÊME fonction que le composant lit
+ * (`fetchMessageReceiptsPeople` + `receiptCategoriesOf`), jamais d'une
+ * horloge recalculée à la main dans ce fichier : un témoin qui devinerait sa
+ * propre valeur mesurerait sa propre horloge, pas le rendu (leçon du dépôt,
+ * `tasks/lessons.md` — « un témoin qui fabrique son décodeur mesure le
+ * RUNTIME »).
+ */
+describe('MessageReceiptsSheet — l’heure de chaque accusé (#7352, V4)', () => {
+  test('« Vu par » porte l’heure de `readAt` ; « Reçu par » celle de `receivedAt` ; « Pas encore » n’en porte AUCUNE', async () => {
+    const result = await fetchMessageReceiptsPeople({ ...apiDeps, conversationId: 'c-deploiement', messageId: 'm-x' });
+    if (!result.ok) throw new Error('la fixture « c-deploiement » doit répondre `ok`');
+    const { readBy, receivedBy, notYet } = receiptCategoriesOf(result.data.people);
+    expect(readBy.length).toBeGreaterThan(0);
+    expect(receivedBy.length).toBeGreaterThan(0);
+    expect(notYet.length).toBeGreaterThan(0);
+
+    const host = await mountSheet({ conversationId: 'c-deploiement', messageId: 'm-x', attachments: [] });
+
+    for (const person of readBy) {
+      const row = host.querySelector(`[data-message-receipts-person="${person.participantId}"]`);
+      expect(row?.querySelector('[data-message-receipts-person-time]')?.textContent).toBe(time(person.readAt as string));
+    }
+    for (const person of receivedBy) {
+      const row = host.querySelector(`[data-message-receipts-person="${person.participantId}"]`);
+      expect(row?.querySelector('[data-message-receipts-person-time]')?.textContent).toBe(time(person.receivedAt as string));
+    }
+    for (const person of notYet) {
+      const row = host.querySelector(`[data-message-receipts-person="${person.participantId}"]`);
+      expect(row?.querySelector('[data-message-receipts-person-time]')).toBe(null);
+    }
   });
 });
