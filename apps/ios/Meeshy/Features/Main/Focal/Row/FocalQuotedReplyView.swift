@@ -40,28 +40,24 @@ import MeeshyUI
 /// les MÊMES que celles de `BubbleQuotedReply` — un seul domicile i18n,
 /// jamais dupliqué.
 ///
-/// **LOI DES ZONES** (directive produit 2026-08-24). Une citation n'offre que
-/// TROIS classes de zone tactile, et pas une de plus :
-/// 1. l'AVATAR de l'auteur cité → ouvre son profil (`onQuotedAuthorTap`) ;
-/// 2. la MINIATURE ou l'ICÔNE DE LECTURE → joue ou affiche le média EN PLEIN
-///    ÉCRAN (`onQuotedMediaTap`) ;
-/// 3. TOUT LE RESTE, LE NOM COMPRIS → retour au message cité
-///    (`jumpToOriginal`).
+/// **Le NOM seul, jamais l'avatar de l'auteur cité** (#7491, directive porteur
+/// 2026-09-22). Focal et script rendent cette MÊME rangée plate, qui pose déjà
+/// l'avatar de l'auteur de la rangée : un second avatar dans la citation
+/// empilait deux visages pour un seul message. La règle vit dans
+/// `QuotedReplyPresentation.showsAuthorAvatar(for:)` — seule la bulle, sans
+/// en-tête d'identité par message, garde l'avatar cité.
 ///
-/// Le NOM n'est plus une zone tactile propre : il retombe sous la zone 3
-/// (« il faut le moins de point actionnable pour permettre de pouvoir
-/// manipuler le message simplement »). Ce que le nom offrait, l'avatar le
-/// porte désormais — aucune capacité perdue, un point actionnable de moins,
-/// et une cible ronde à la cote `FocalMetrics.Avatar.size` là où une ligne de
-/// texte tronquée faisait un bouton de largeur imprévisible.
+/// **LOI DES ZONES** (directive produit 2026-08-24, relue au #7491). Sur
+/// cette peau, la citation n'offre que DEUX classes de zone tactile :
+/// - ZONE 2 — la MINIATURE ou l'ICÔNE DE LECTURE → joue ou affiche le média
+///   EN PLEIN ÉCRAN (`onQuotedMediaTap`) ;
+/// - ZONE 3 — TOUT LE RESTE, LE NOM COMPRIS → retour au message cité
+///   (`jumpToOriginal`).
 ///
-/// La zone 1 n'existe QUE si la citation désigne l'auteur d'un MESSAGE
-/// (`!reference.isStoryReply`) : une story ou une humeur citée porte
-/// `authorName == "Story"` (ou vide) et aucun avatar — il n'y a pas de
-/// personne à ouvrir, et l'hôte fabriquerait une fiche au nom de « Story ».
-/// Là où elle existe, l'avatar est dessiné MÊME sans URL (initiales
-/// colorées, repli natif de `MeeshyAvatar`) : la porte vers le profil ne
-/// dépend jamais de la présence d'une photo.
+/// La ZONE 1 (l'avatar → profil) n'existe que dans la bulle. La capacité
+/// n'est pas perdue ici : l'action VoiceOver nommée de la rangée
+/// (`FocalRow.quotedZoneAccessibilityActions`) l'offre toujours, et le message
+/// cité — atteint par la zone 3 — porte l'avatar de son auteur.
 ///
 /// **Corollaire du « moins de points actionnables » : une capacité = UN
 /// site.** Le glyphe de la ligne d'aperçu n'est la zone 2 que lorsqu'aucune
@@ -96,9 +92,6 @@ struct FocalQuotedReplyView: View, Equatable {
     let mentionDisplayNames: [String: String]
     var onReplyTap: ((String) -> Void)? = nil
     var onStoryReplyTap: ((String) -> Void)? = nil
-    /// ZONE 1 — tap sur l'AVATAR de l'auteur cité → profil (résolution hôte).
-    /// Le NOM ne la déclenche plus (LOI DES ZONES, doc de tête).
-    var onQuotedAuthorTap: ((ReplyReference) -> Void)? = nil
     /// ZONE 2 — tap sur la MINIATURE ou l'ICÔNE DE LECTURE → plein écran /
     /// lecture (résolution hôte ; repli hôte = saut à l'original).
     var onQuotedMediaTap: ((ReplyReference) -> Void)? = nil
@@ -118,9 +111,6 @@ struct FocalQuotedReplyView: View, Equatable {
     /// que le filet historique de `BubbleQuotedReply` (contrat Focal §0 :
     /// « couleur de l'auteur cité »).
     ///
-    /// Une SEULE teinte pour le filet ET les initiales de l'avatar : la
-    /// citation d'une même personne se reconnaît à sa couleur, quel que soit
-    /// l'élément qui la porte.
     private var authorHex: String {
         reference.isMe ? accentHex : reference.authorColor
     }
@@ -137,8 +127,7 @@ struct FocalQuotedReplyView: View, Equatable {
         ThemeManager.shared.textMuted
     }
 
-    /// NOM de l'auteur cité — celui dont l'avatar tire ses INITIALES. La
-    /// ponctuation du titre (« Alice : ») n'a rien à faire dans un monogramme.
+    /// NOM de l'auteur cité, avant la ponctuation du titre (« Alice : »).
     private var authorName: String {
         if reference.isMe { return String(localized: "bubble.reply.you", defaultValue: "Vous", bundle: .main) }
         if !reference.authorName.isEmpty { return reference.authorName }
@@ -228,14 +217,6 @@ struct FocalQuotedReplyView: View, Equatable {
             && (reference.attachmentType != nil || thumbnailURL != nil)
     }
 
-    /// ZONE 1 — la porte vers le profil. Absente sur une story ou une humeur
-    /// citée : `authorName` y vaut littéralement « Story » (ou reste vide) et
-    /// aucun avatar ne voyage avec le snapshot, l'hôte fabriquerait une fiche
-    /// à ce nom. Voir la LOI DES ZONES en tête de fichier.
-    private var showsAuthorGate: Bool {
-        !reference.isStoryReply
-    }
-
     /// Genre de la pièce jointe citée — résolu UNE fois : le glyphe et la
     /// question « ce glyphe est-il la zone média ? » la posent toutes deux.
     private var attachmentKind: AttachmentKind? {
@@ -279,13 +260,9 @@ struct FocalQuotedReplyView: View, Equatable {
                     previewLine
                         .lineLimit(QuotedReplyPresentation.previewLineLimit(for: .focal))
                 } else {
-                    HStack(alignment: .top, spacing: 5) {
-                        authorGate
-
-                        quotedFlow()
-                            .lineLimit(QuotedReplyPresentation.previewLineLimit(for: .focal))
-                            .tint(previewColor)
-                    }
+                    quotedFlow()
+                        .lineLimit(QuotedReplyPresentation.previewLineLimit(for: .focal))
+                        .tint(previewColor)
                 }
 
                 quotedThumbnail
@@ -308,18 +285,6 @@ struct FocalQuotedReplyView: View, Equatable {
         }
     }
 
-    /// Ligne d'identité de la citation : l'AVATAR (ZONE 1, seule porte vers
-    /// le profil) puis le NOM, désormais INERTE — un tap dessus traverse
-    /// jusqu'à la zone 3 et retourne au message cité.
-    ///
-    /// L'avatar est le composant partagé du dépôt (`MeeshyAvatar`), monté à
-    /// la cote nommée `FocalMetrics.Avatar.size` (jamais un littéral, garde
-    /// R15) et à qui l'on confie son propre `onTap` : il porte alors sa
-    /// forme de frappe CIRCULAIRE, son retour haptique et son libellé
-    /// d'accessibilité (`name`) — rien n'est redessiné ici.
-    ///
-    /// Pas de `presenceState`, de `storyState` ni de `moodEmoji` : une
-    /// citation est une trace figée du passé, pas une carte de présence.
     /// ZONE 2 — la miniature du média cité. **Sous l'auteur depuis #5103**,
     /// comme dans la bulle : la directive déplace la géographie commune aux
     /// trois peaux, elle ne l'abandonne pas (#4946).
@@ -374,39 +339,12 @@ struct FocalQuotedReplyView: View, Equatable {
         }
     }
 
-    /// ZONE 1 — l'avatar, seule porte vers le profil de l'auteur cité.
-    ///
-    /// Extraite de `titleLine` au #5103 parce que la branche STANDARD ne monte
-    /// plus cette ligne : elle fait couler le nom dans le paragraphe du texte.
-    /// Deux branches, une seule porte — la recopier en aurait fait deux à
-    /// tenir d'accord.
-    @ViewBuilder
-    private var authorGate: some View {
-        if showsAuthorGate {
-            MeeshyAvatar(
-                name: authorName,
-                context: .custom(FocalMetrics.Avatar.size),
-                accentColor: authorHex,
-                avatarURL: reference.authorAvatarUrl,
-                enablePulse: false,
-                isDark: isDark,
-                onTap: { onQuotedAuthorTap?(reference) }
-            )
-            .accessibilityAddTraits(.isButton)
-            .accessibilityHint(String(localized: "bubble.reply.author_hint", defaultValue: "Affiche le profil de l'auteur cité", bundle: .main))
-        }
-    }
-
     @ViewBuilder
     private var titleLine: some View {
-        HStack(spacing: 5) {
-            authorGate
-
-            Text(title)
-                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                .foregroundColor(titleColor)
-                .lineLimit(QuotedReplyPresentation.titleLineLimit)
-        }
+        Text(title)
+            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+            .foregroundColor(titleColor)
+            .lineLimit(QuotedReplyPresentation.titleLineLimit)
     }
 
     /// Glyphe de la ligne d'aperçu. ZONE 2 quand il est la SEULE affordance

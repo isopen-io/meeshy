@@ -168,8 +168,20 @@ final class FocalVoiceOverParityTests: XCTestCase {
         // parce que le temps restant peut glisser d'une seconde entre la
         // composition et l'assertion, et qu'une égalité stricte ferait un
         // témoin intermittent.
+        //
+        // #7513 — et la racine se prend dans le MÊME découpage que le libellé
+        // composé. « Message éphémère, disparaît dans 4 minutes » porte
+        // lui-même une virgule : la racine « tout ce qui précède le premier
+        // chiffre » CHEVAUCHE alors la césure de `components(separatedBy: ", ")`
+        // et ne préfixe plus AUCUNE part — `firstIndex {…}!` explosait, et le
+        // témoin tombait en signal trap plutôt qu'en assertion.
+        //
+        // > Chercher une sous-chaîne dans une liste issue d'un découpage exige
+        // > de la découper d'abord par le MÊME séparateur. Sinon la recherche
+        // > porte sur une forme que la liste ne peut pas contenir.
         let ephemeralSample = MessageProtectionChrome.accessibilityLabels(for: ephemeralDescriptor)[0]
-        let ephemeralStem = String(ephemeralSample.prefix { !$0.isNumber })
+        let ephemeralHead = ephemeralSample.components(separatedBy: ", ").first ?? ephemeralSample
+        let ephemeralStem = String(ephemeralHead.prefix { !$0.isNumber })
         XCTAssertFalse(ephemeralStem.isEmpty)
         let ephemeralIndex = parts.firstIndex { $0.hasPrefix(ephemeralStem) }!
         let reactionsIndex = parts.firstIndex { $0.contains("👍") }!

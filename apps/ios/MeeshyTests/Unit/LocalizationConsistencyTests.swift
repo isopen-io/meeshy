@@ -441,7 +441,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleFooter.swift",  // 8
         "apps/ios/Meeshy/Features/Main/Views/ConversationView+Header.swift",  // 8
         "apps/ios/Meeshy/Features/Main/Views/VideoFilterControlView.swift",  // 8
-        "apps/ios/Meeshy/Features/Main/Focal/Row/FocalQuotedReplyView.swift",  // 7
+        "apps/ios/Meeshy/Features/Main/Focal/Row/FocalQuotedReplyView.swift",  // 6
         "apps/ios/Meeshy/Features/Main/ViewModels/StatusViewModel.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleDeliveryCheck.swift",  // 7
         "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleQuotedReply.swift",  // 7

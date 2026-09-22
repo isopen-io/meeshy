@@ -51,9 +51,25 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
             code.contains("FocalProtectedContent("),
             "FocalRow doit envelopper son bloc contenu dans FocalProtectedContent — sans lui, un message protégé (isBlurred) s'affiche EN CLAIR en Focal (régression de confidentialité)"
         )
+        // #7452 a ÉLARGI ce montage de `isBlurred` à `requiresVeil`, et ce
+        // témoin exigeait encore l'ancien littéral — il est donc devenu rouge
+        // sur `dev` en refusant exactement la généralisation qui a corrigé un
+        // défaut de confidentialité : un TEXTE à vue unique s'affichait en
+        // clair, « Voir une fois » n'existant que sur les médias.
+        //
+        // La condition n'est pas affaiblie, elle est STRICTEMENT plus large :
+        // `MessageProtectionDescriptor.requiresVeil` rend
+        // `badges.contains(.viewOnce) || badges.contains(.blurred)`. Elle reste
+        // une valeur du MODÈLE — ce que ce témoin garde vraiment — et la
+        // branche conditionnelle subsiste, donc un message ordinaire ne paie
+        // toujours ni le `@StateObject` ni le modificateur.
+        //
+        // > Un témoin qui épingle le NOM d'un prédicat plutôt que sa
+        // > PROPRIÉTÉ vote contre toute généralisation de ce prédicat, y
+        // > compris celle qui répare un défaut.
         XCTAssertTrue(
-            code.contains("if content.isBlurred {"),
-            "le montage du wrapper est piloté par content.isBlurred (branche conditionnelle : un message ordinaire ne paie ni le @StateObject ni le modificateur) — la valeur du modèle, jamais un défaut"
+            code.contains("if content.requiresVeil {"),
+            "le montage du wrapper est piloté par content.requiresVeil (branche conditionnelle : un message ordinaire ne paie ni le @StateObject ni le modificateur) — la valeur du modèle, jamais un défaut"
         )
     }
 

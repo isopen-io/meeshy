@@ -1,0 +1,53 @@
+import { qualifiesAsReel, type ReelMediaLike } from '@meeshy/shared/utils/reel-composition';
+
+import type { StudioDraft, StudioVisualAsset } from './studio';
+
+/**
+ * **CE QUE LE STUDIO PUBLIE** (#7497, directive porteur 2026-09-22) — un seul
+ * composer pour la story, le post et le réel. Le format suit le POINT
+ * D'ENTRÉE (le rail des stories ouvre une story, la porte du fil un post ou
+ * un réel) ; le chevron de la capsule `[Publier la story | ▾]` en choisit un
+ * autre. Sans ce geste, la publication part au format indiqué.
+ *
+ * Miroir de `ComposerPublishMenuRule` / `ComposerPublishMenuCopy.publishTitle`
+ * (iOS, `ComposerPublishMenu.swift`).
+ */
+export type PublicationKind = 'STORY' | 'POST' | 'REEL';
+
+/** L'ordre du menu — celui d'iOS pour une porte de story : story, post, réel. */
+export const PUBLICATION_KINDS: readonly PublicationKind[] = ['STORY', 'POST', 'REEL'];
+
+const SEARCH_VALUES: Readonly<Record<PublicationKind, string>> = { STORY: 'story', POST: 'post', REEL: 'reel' };
+
+export const publicationSearchValue = (kind: PublicationKind): string => SEARCH_VALUES[kind];
+
+/** `?type=` choisit le format ; toute autre valeur rend celui de l'entrée. */
+export function publicationKindFromSearch(search: URLSearchParams, fallback: PublicationKind): PublicationKind {
+  const value = search.get('type');
+  return PUBLICATION_KINDS.find((kind) => SEARCH_VALUES[kind] === value) ?? fallback;
+}
+
+export type PublicationRefusal = 'reel-without-qualifying-media';
+
+const visualMedia = (asset: StudioVisualAsset | null): ReelMediaLike[] =>
+  asset === null ? [] : [{ mimeType: `${asset.mediaType}/*`, duration: asset.durationMs ?? null }];
+
+/** Les médias du plateau tels que la règle du réel les lit — la durée est
+ * celle MESURÉE sur le fichier local, jamais supposée. */
+export function studioReelMedia(draft: StudioDraft): ReelMediaLike[] {
+  return [
+    ...visualMedia(draft.background),
+    ...visualMedia(draft.overlay),
+    ...(draft.sound === null ? [] : [{ mimeType: 'audio/*', duration: draft.sound.durationMs ?? null }]),
+  ];
+}
+
+/**
+ * LE RÉEL SE REFUSE, IL NE SE DÉGRADE PAS — `qualifiesAsReel` est la règle
+ * SERVEUR (`packages/shared/utils/reel-composition.ts`) : sans elle côté
+ * client, la passerelle rétrograderait le réel en post sans un mot.
+ */
+export function studioPublishRefusal(draft: StudioDraft, kind: PublicationKind): PublicationRefusal | null {
+  if (kind !== 'REEL') return null;
+  return qualifiesAsReel(studioReelMedia(draft)) ? null : 'reel-without-qualifying-media';
+}

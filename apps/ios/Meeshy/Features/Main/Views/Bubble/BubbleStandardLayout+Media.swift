@@ -7,7 +7,6 @@
 //      - `visualMediaGrid` : 1/2/3/4+ grid layout dispatcher
 //      - `makeGridCell(_:overflowCount:solo:)` : cell factory
 //      - `carouselView` : façade instantiating `BubbleCarouselView`
-//      - `downloadBadge(_:)` : per-attachment download chip
 //      - `mediaWithReplyContainer(reply:)` : visual + quoted reply combo
 //
 //   2. Satellite structs (fileprivate / standalone) :
@@ -166,20 +165,6 @@ extension BubbleStandardLayout {
             isDark: isDark,
             containerWidth: gridMaxWidth,
             hasPlayingInlineVideo: hasPlayingInlineVideo
-        )
-    }
-
-    // MARK: - Download Badge (still used by extension callers — kept for backward compat)
-
-    func downloadBadge(_ attachment: MessageAttachment) -> some View {
-        DownloadBadgeView(
-            attachment: attachment,
-            accentColor: contactColor,
-            messageDeliveryStatus: message.deliveryStatus,
-            onShareFile: { url in
-                shareURL = url
-                showShareSheet = true
-            }
         )
     }
 
@@ -561,7 +546,6 @@ fileprivate struct BubbleGridCell: View {
                 attachment: attachment,
                 accentColor: contactColor,
                 messageDeliveryStatus: messageDeliveryStatus,
-                compact: attachment.type == .video,
                 onShareFile: { url in
                     shareURL = url
                     showShareSheet = true

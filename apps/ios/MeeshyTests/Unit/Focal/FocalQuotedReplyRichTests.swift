@@ -2,11 +2,11 @@ import XCTest
 import MeeshySDK
 @testable import Meeshy
 
-/// **LOI DES ZONES** (directive produit 2026-08-24) — une citation de la
-/// rangée plate n'offre que TROIS classes de zone tactile, et pas une de
-/// plus :
-/// 1. l'AVATAR de l'auteur cité → profil (`onQuotedAuthorTap`, résolution
-///    hôte) ;
+/// **LOI DES ZONES** (directive produit 2026-08-24, relue au #7491) — une
+/// citation de la rangée plate n'offre que DEUX classes de zone tactile. La
+/// ZONE 1 (l'AVATAR de l'auteur cité → profil) n'existe que dans la bulle :
+/// focal et script ne montrent que le NOM de l'auteur cité (#7491), et le
+/// profil reste offert par l'action VoiceOver nommée de la rangée.
 /// 2. la MINIATURE ou l'ICÔNE DE LECTURE → plein écran / lecture
 ///    (`onQuotedMediaTap`, résolution hôte) ;
 /// 3. TOUT LE RESTE, LE NOM COMPRIS → saut à l'original (comportement
@@ -130,7 +130,7 @@ final class FocalQuotedReplyRichTests: XCTestCase {
         // `quotedFlow()`, qui le fait couler avec le texte, et dans `titleLine`,
         // que seuls mood et story montent. `quotedFlow` étant déclaré AVANT,
         // la tranche partait de lui et avalait `quotedThumbnail` et
-        // `authorGate` — deux zones tactiles LÉGITIMES (2 et 1).
+        // `authorGate` — deux zones tactiles LÉGITIMES à l'époque (2 et 1).
         //
         // La garde rougissait donc sur un déplacement, pas sur une infraction.
         // Elle interroge maintenant les DEUX rendus du nom, chacun borné par sa
@@ -153,68 +153,34 @@ final class FocalQuotedReplyRichTests: XCTestCase {
         XCTAssertTrue(
             offenders.isEmpty,
             "le NOM de l'auteur cité a REPRIS une zone tactile propre [\(offenders.joined(separator: ", "))] — " +
-            "LOI DES ZONES 2026-08-24 : le nom retombe sous la zone 3 (retour au message cité), seul l'AVATAR " +
-            "ouvre le profil. « Le moins de point actionnable pour permettre de manipuler le message simplement. »"
+            "LOI DES ZONES 2026-08-24 : le nom retombe sous la zone 3 (retour au message cité). " +
+            "« Le moins de point actionnable pour permettre de manipuler le message simplement. »"
         )
     }
 
-    // MARK: - Zone 1 : l'avatar → profil
+    // MARK: - Zone 1 : absente de la rangée plate (#7491)
 
-    func test_loiDesZones_lAvatarEstLaSeulePorteVersLeProfil() throws {
+    /// **Focal et script : le NOM de l'auteur cité, jamais son avatar**
+    /// (directive porteur 2026-09-22). La rangée pose déjà l'avatar de SON
+    /// auteur ; celui de la citation empilait un second visage pour un seul
+    /// message. La règle vit dans `QuotedReplyPresentation.showsAuthorAvatar`,
+    /// et cette peau ne monte aucun avatar du tout.
+    func test_rangeePlate_laCitationNePorteQueLeNom_jamaisLAvatarDeLAuteurCite() throws {
         let code = try anchoredQuotedReplySource()
-        XCTAssertTrue(
-            code.contains("MeeshyAvatar("),
-            "la citation doit monter l'avatar PARTAGÉ du dépôt (MeeshyAvatar) — jamais un cercle redessiné sur place."
-        )
-        XCTAssertTrue(
-            code.contains("context: .custom(FocalMetrics.Avatar.size)"),
-            "l'avatar de la citation prend sa cote de FocalMetrics.Avatar.size — jamais un littéral (garde R15)."
-        )
-        XCTAssertTrue(
-            code.contains("onTap: { onQuotedAuthorTap?(reference) }"),
-            "l'avatar doit porter la ZONE 1 via son propre `onTap` — le composant fournit alors sa forme de frappe " +
-            "CIRCULAIRE et son haptique, au lieu d'un rectangle rapporté."
-        )
-        // Compté sur les DEUX formes d'appel — `f?(…)` et `f(…)`. Ne compter
-        // que l'optionnelle laissait un second site passer sous la garde dès
-        // qu'il déballait la fermeture avant de l'appeler (mutation d'épreuve
-        // du 2026-08-24).
-        let zone1Sites = code.components(separatedBy: "onQuotedAuthorTap?(").count - 1
-            + code.components(separatedBy: "onQuotedAuthorTap(").count - 1
-        XCTAssertEqual(
-            zone1Sites, 1,
-            "`onQuotedAuthorTap` doit être déclenché depuis UN SEUL site (l'avatar) — \(zone1Sites) trouvé(s). " +
-            "Deux sites = deux points actionnables pour une seule capacité, ce que la directive 2026-08-24 proscrit."
-        )
-        XCTAssertTrue(
-            code.contains("bubble.reply.author_hint"),
-            "la clé d'accessibilité du geste « ouvrir le profil » doit SUIVRE l'avatar. Elle n'a qu'un site " +
-            "d'usage dans tout le dépôt : la retirer d'ici en ferait une clé MORTE dans les sept catalogues."
-        )
-    }
-
-    /// L'anti-perte. `authorAvatarUrl` est `nil` à huit des douze sites de
-    /// construction (story, humeur, brouillon restauré) : si le rendu de
-    /// l'avatar était gardé par la présence de l'URL, la porte vers le profil
-    /// disparaîtrait précisément là où elle existait avant ce lot. Elle ne
-    /// dépend que du genre de citation, jamais d'une photo.
-    func test_loiDesZones_lAvatarSeDessineMemeSansURL_laPorteNeDependJamaisDUnePhoto() throws {
-        let code = try anchoredQuotedReplySource()
-        XCTAssertTrue(
-            code.contains("avatarURL: reference.authorAvatarUrl"),
-            "l'URL d'avatar est un PARAMÈTRE de l'avatar, jamais sa condition d'existence."
-        )
-        let gateSlice = try slice(of: code, from: "if showsAuthorGate", to: "MeeshyAvatar(")
         XCTAssertFalse(
-            gateSlice.contains("authorAvatarUrl"),
-            "l'avatar est gardé par l'URL de la photo — sans photo, plus aucune porte vers le profil. " +
-            "MeeshyAvatar retombe sur les initiales colorées : le rendu est INCONDITIONNEL."
+            code.contains("MeeshyAvatar("),
+            "la citation de la rangée plate (focal ET script) ne doit plus monter d'avatar : la rangée porte déjà " +
+            "celui de son auteur, deux visages pour un message (#7491). Le NOM seul identifie l'auteur cité."
+        )
+        XCTAssertFalse(
+            code.contains("onQuotedAuthorTap"),
+            "sans avatar, la citation n'a plus de ZONE 1 — un rappel déclaré sans site d'appel serait un fil mort."
         )
         XCTAssertTrue(
-            code.contains("!reference.isStoryReply"),
-            "la ZONE 1 n'existe que pour la citation d'un MESSAGE : une story ou une humeur citée porte " +
-            "`authorName == \"Story\"` (ou vide) et aucun avatar — l'hôte fabriquerait une fiche à ce nom."
+            code.contains("QuotedReplyPresentation.title(author: authorName)"),
+            "le NOM de l'auteur cité reste affiché, composé par la règle partagée (« Alice : »)."
         )
+        XCTAssertFalse(QuotedReplyPresentation.showsAuthorAvatar(for: .focal))
     }
 
     // MARK: - Zone 2 : le média → plein écran / lecture
@@ -304,7 +270,11 @@ final class FocalQuotedReplyRichTests: XCTestCase {
             "la MINIATURE elle-même doit être filtrée : sans cela, la vignette en clair d'une vidéo à vue " +
             "unique reste visible par tout le fil, à chaque relecture — le tap verrouillé n'y change rien."
         )
-        let gateSlice = try slice(of: code, from: "private var hasTappableMedia", to: "private var showsAuthorGate")
+        // L'ancre de fin est la déclaration SUIVANTE — `showsAuthorGate` la
+        // tenait jusqu'à ce que #7491 la retire, et la garde est alors devenue
+        // inopérante sans qu'aucune de ses assertions ne change. Une tranche
+        // bornée par le NOM d'un voisin dépend d'un lot qui ne la lira jamais.
+        let gateSlice = try slice(of: code, from: "private var hasTappableMedia", to: "private var attachmentKind")
         XCTAssertTrue(
             gateSlice.contains("quotedMediaIsProtected"),
             "la ZONE 2 ne doit pas être armée sur un média protégé : une icône de lecture au-dessus d'un verrou " +
@@ -405,12 +375,12 @@ final class FocalQuotedReplyRichTests: XCTestCase {
             partial + code.components(separatedBy: lexeme).count - 1
         }
         XCTAssertEqual(
-            total, 4,
-            "inventaire des zones tactiles de FocalQuotedReplyView : \(total) au lieu de 4. Les quatre SITES " +
-            "attendus sont (1) l'avatar → profil, (2) la miniature → plein écran, (3) le glyphe de la ligne " +
-            "d'aperçu → plein écran / lecture, (4) le bloc entier → retour au message cité. Les sites 2 et 3 " +
-            "s'excluent par construction (`glyphOpensTheMedia` exige `thumbnailURL == nil`) : à l'exécution une " +
-            "citation n'offre jamais plus de TROIS cibles, une par classe de la LOI DES ZONES."
+            total, 3,
+            "inventaire des zones tactiles de FocalQuotedReplyView : \(total) au lieu de 3. Les trois SITES " +
+            "attendus sont (1) la miniature → plein écran, (2) le glyphe de la ligne d'aperçu → plein écran / " +
+            "lecture, (3) le bloc entier → retour au message cité. Les sites 1 et 2 s'excluent par construction " +
+            "(`glyphOpensTheMedia` exige `thumbnailURL == nil`). Plus d'avatar → profil depuis #7491 : focal et " +
+            "script ne montrent que le NOM de l'auteur cité."
         )
     }
 
@@ -457,12 +427,8 @@ final class FocalQuotedReplyRichTests: XCTestCase {
 
     // MARK: - Câblage jusqu'à la rangée
 
-    func test_focalRow_passesBothCallbacksToTheQuotedReplyView() throws {
+    func test_focalRow_passesTheMediaCallbackToTheQuotedReplyView() throws {
         let code = try source("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
-        XCTAssertTrue(
-            code.contains("onQuotedAuthorTap: actions.onQuotedAuthorTap"),
-            "FocalRow doit transmettre onQuotedAuthorTap — sans ce fil, le tap de l'avatar est mort."
-        )
         XCTAssertTrue(
             code.contains("onQuotedMediaTap: actions.onQuotedMediaTap"),
             "FocalRow doit transmettre onQuotedMediaTap — sans ce fil, la vignette est décorative."
@@ -502,6 +468,13 @@ final class FocalQuotedReplyRichTests: XCTestCase {
             block.contains("onQuotedAuthorTap: onQuotedAuthorTap")
                 && block.contains("onQuotedMediaTap: onQuotedMediaTap"),
             "FocalAudioBlock doit les TRANSMETTRE à AudioMediaView, seul hôte de cette citation-là."
+        )
+        // #7491 — la citation d'un vocal suit la règle de la rangée plate :
+        // nom seul, sans avatar. Sans cette peau, la bulle y remettait le sien.
+        XCTAssertTrue(
+            block.contains("replySkin: .focal"),
+            "FocalAudioBlock doit déclarer la peau `.focal` à la citation qu'il héberge — sinon BubbleQuotedReply " +
+            "y dessine l'avatar de l'auteur cité, que focal et script ne montrent plus (#7491)."
         )
         // Et l'exclusion qui rend ce chemin nécessaire est toujours là : si
         // elle disparaissait, la citation serait rendue DEUX fois.

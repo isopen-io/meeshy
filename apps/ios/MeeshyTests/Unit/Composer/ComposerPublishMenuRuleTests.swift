@@ -19,93 +19,13 @@ final class ComposerPublishMenuRuleTests: XCTestCase {
 
     // MARK: - Fabriques
 
-    private func image(_ nom: String) -> ComposerDocumentMedia {
-        ComposerDocumentMedia(url: URL(fileURLWithPath: "/tmp/\(nom).jpg"), mimeType: "image/jpeg", durationMs: nil)
-    }
-
-    private func video(_ nom: String, ms: Int) -> ComposerDocumentMedia {
-        ComposerDocumentMedia(url: URL(fileURLWithPath: "/tmp/\(nom).mp4"), mimeType: "video/mp4", durationMs: ms)
-    }
-
-    private func son(_ nom: String) -> ComposerDocumentMedia {
-        ComposerDocumentMedia(url: URL(fileURLWithPath: "/tmp/\(nom).m4a"), mimeType: "audio/m4a", durationMs: 12_000)
-    }
-
-    private func slide(id: String, objets: [(id: String, kind: StoryMediaKind)] = [], texte: String? = nil) -> StorySlide {
+    private func slide(id: String, objets: [(id: String, kind: StoryMediaKind)] = []) -> StorySlide {
         var s = StorySlide()
         s.id = id
         s.effects.mediaObjects = objets.map {
             StoryMediaObject(id: $0.id, mediaURL: "file:///tmp/\($0.id)", kind: $0.kind, aspectRatio: 1.0)
         }
-        if let texte {
-            s.effects.textObjects = [StoryTextObject(id: "t-\(id)", text: texte, x: 0.5, y: 0.5)]
-        }
         return s
-    }
-
-    private func kinds(documentMedia: [ComposerDocumentMedia] = [],
-                       slides: [StorySlide] = [],
-                       slideImageIds: Set<String> = [],
-                       bridgedSources: Set<URL> = []) -> [FeedMediaType] {
-        ComposerPublishMenuRule.mediaKinds(slides: slides,
-                                           slideImageIds: slideImageIds,
-                                           documentMedia: documentMedia,
-                                           bridgedSources: bridgedSources)
-    }
-
-    // MARK: - QUAND le menu paraît — la directive, au mot près
-
-    func test_uneImage_publieDirectement_sansMenu() {
-        XCTAssertFalse(ComposerPublishMenuRule.offersMenu(mediaKinds: kinds(documentMedia: [image("a")])))
-    }
-
-    func test_deuxImages_ouvrentLeMenu() {
-        XCTAssertTrue(ComposerPublishMenuRule.offersMenu(
-            mediaKinds: kinds(documentMedia: [image("a"), image("b")])))
-    }
-
-    /// Ce n'est PAS `qualifiesAsReel` : celui-là exige 3 s de vidéo. Une vidéo
-    /// d'une seconde ne fait pas un réel, et elle ouvre pourtant le menu.
-    func test_uneVideoDUneSeconde_ouvreLeMenu() {
-        XCTAssertTrue(ComposerPublishMenuRule.offersMenu(
-            mediaKinds: kinds(documentMedia: [video("v", ms: 1_000)])))
-    }
-
-    /// …et l'audio ne compte pas, là où `qualifiesAsReel` le compte.
-    func test_unSonSeul_publieDirectement_sansMenu() {
-        XCTAssertFalse(ComposerPublishMenuRule.offersMenu(mediaKinds: kinds(documentMedia: [son("s")])))
-    }
-
-    func test_leTexteSeul_publieDirectement_sansMenu() {
-        XCTAssertFalse(ComposerPublishMenuRule.offersMenu(
-            mediaKinds: kinds(slides: [slide(id: "s1", texte: "bonjour")])))
-    }
-
-    /// « Toutes slides confondues » — le piège de `reelGate`, qui ne lit que la
-    /// slide courante.
-    func test_lesImages_seComptentToutesSlidesConfondues() {
-        let slides = [slide(id: "s1", objets: [("o1", .image)]),
-                      slide(id: "s2", objets: [("o2", .image)])]
-        XCTAssertTrue(ComposerPublishMenuRule.offersMenu(mediaKinds: kinds(slides: slides)))
-    }
-
-    /// L'image de FOND de l'atelier ne vit pas dans `effects` : elle est une
-    /// image comme une autre pour l'auteur qui l'a posée.
-    func test_lImageDeFondDUneSlide_compteCommeUneImage() {
-        let slides = [slide(id: "s1"), slide(id: "s2", objets: [("o2", .image)])]
-        XCTAssertTrue(ComposerPublishMenuRule.offersMenu(
-            mediaKinds: kinds(slides: slides, slideImageIds: ["s1"])))
-    }
-
-    /// Un média du document POSÉ sur la scène vit à deux endroits — la liste du
-    /// meuble et un objet de slide. Il ne compte qu'une fois : sans cela, une
-    /// seule photo ouvrirait le menu.
-    func test_unMediaDuDocumentPoseSurLaScene_neCompteQuUneFois() {
-        let photo = image("a")
-        let slides = [slide(id: "s1", objets: [("o1", .image)])]
-        let vus = kinds(documentMedia: [photo], slides: slides, bridgedSources: [photo.url])
-        XCTAssertEqual(vus, [.image])
-        XCTAssertFalse(ComposerPublishMenuRule.offersMenu(mediaKinds: vus))
     }
 
     // MARK: - CE QUE le menu offre
@@ -173,21 +93,31 @@ final class ComposerPublishMenuRuleTests: XCTestCase {
 
     // MARK: - Le menu entier : absent, ou un vrai choix
 
-    func test_leMenu_estAbsent_sansLaMatiereQuiLAppelle() {
-        XCTAssertNil(ComposerPublishMenuRule.menu(mediaKinds: [.image], candidates: candidats,
-                                                  offered: candidats, carriesMoreThanText: true,
-                                                  slideCount: 1, layoutsTravel: true))
+    /// #7497 — le chevron ne dépend plus de la matière : un texte seul, ouvert
+    /// en story, se publie aussi en post ou en réel par le chevron.
+    func test_leChevron_estPresent_memeSansMedia() throws {
+        let menu = try XCTUnwrap(ComposerPublishMenuRule.menu(candidates: candidats,
+                                                              offered: [.story, .post], carriesMoreThanText: false,
+                                                              slideCount: 1, layoutsTravel: true))
+        XCTAssertEqual(menu.map(\.format), candidats)
+    }
+
+    func test_laPartiePrincipale_nommeLeFormatDeLaPorte() {
+        XCTAssertNotNil(ComposerPublishMenuCopy.publishTitle(.story))
+        XCTAssertNotNil(ComposerPublishMenuCopy.publishTitle(.post))
+        XCTAssertNotNil(ComposerPublishMenuCopy.publishTitle(.reel))
+        XCTAssertNil(ComposerPublishMenuCopy.publishTitle(.status), "Le mood garde « Publier ».")
     }
 
     func test_leMenu_estAbsent_quandIlNOffreQuUnSeulChoix() {
-        XCTAssertNil(ComposerPublishMenuRule.menu(mediaKinds: [.image, .image], candidates: [.post],
+        XCTAssertNil(ComposerPublishMenuRule.menu(candidates: [.post],
                                                   offered: [.post], carriesMoreThanText: true,
                                                   slideCount: 1, layoutsTravel: true),
                      "Une entrée unique sans sous-menu est une affordance sans choix (loi 4).")
     }
 
     func test_leMenu_offreLesAgencements_memeAUnSeulFormat() throws {
-        let menu = try XCTUnwrap(ComposerPublishMenuRule.menu(mediaKinds: [.image, .image], candidates: [.post],
+        let menu = try XCTUnwrap(ComposerPublishMenuRule.menu(candidates: [.post],
                                                               offered: [.post], carriesMoreThanText: true,
                                                               slideCount: 2, layoutsTravel: true))
         XCTAssertEqual(menu.first?.layouts, ComposerMosaicChoice.ordered)
