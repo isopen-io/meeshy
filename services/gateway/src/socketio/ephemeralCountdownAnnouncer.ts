@@ -1,6 +1,7 @@
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { MessageCountdownStartedEventData } from '@meeshy/shared/types/socketio-events';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import type { ServerEmitIO } from './serverEmit';
 import type { StartedEphemeralCountdown } from '../services/messaging/ephemeralCountdown';
 
 const logger = enhancedLogger.child({ module: 'ephemeralCountdownAnnouncer' });
@@ -34,9 +35,13 @@ const logger = enhancedLogger.child({ module: 'ephemeralCountdownAnnouncer' });
  * bonne façon d'échouer — l'échéance est durable, l'annonce ne l'est pas.
  */
 
-export interface EphemeralCountdownIO {
-  to(room: string): { emit(event: string, data: MessageCountdownStartedEventData): void };
-}
+/**
+ * `ServerEmitIO`, jamais une porte réécrite : le couple `(événement, charge)`
+ * vient du contrat partagé (`serverEmit.ts`), sans quoi ce relais serait libre
+ * de porter sa charge sous un autre nom d'événement — ou n'importe quoi d'autre
+ * sous le bon.
+ */
+export type EphemeralCountdownIO = ServerEmitIO;
 
 let resolveIO: (() => EphemeralCountdownIO | null | undefined) | undefined;
 

@@ -1,7 +1,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
-import type { MessageExpiredEventData } from '@meeshy/shared/types/socketio-events';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import type { ServerEmitIO } from '../socketio/serverEmit';
 import { unsetOrNull } from '../utils/prisma-unset';
 import {
   retractMessageNotifications,
@@ -49,9 +49,8 @@ const log = enhancedLogger.child({ module: 'EphemeralRecipientExpiryService' });
  * SERVICE est une garde de lecture (`isEphemeralServable`), pas une écriture.
  */
 
-export interface EphemeralExpiryIO {
-  to(room: string): { emit(event: string, data: MessageExpiredEventData): void };
-}
+/** `ServerEmitIO`, jamais une porte réécrite — cf. `socketio/serverEmit.ts`. */
+export type EphemeralExpiryIO = ServerEmitIO;
 
 export interface EphemeralRecipientExpiryOptions {
   /** Échéances traitées par passe. */

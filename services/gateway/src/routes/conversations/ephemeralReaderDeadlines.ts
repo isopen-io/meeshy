@@ -5,6 +5,14 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 const logger = enhancedLogger.child({ module: 'ephemeralReaderDeadlines' });
 
 /**
+ * Plafond de la lecture d'échéances pour UNE page (#4165 : aucun `findMany` nu).
+ *
+ * Au-delà, les échéances manquantes sortent nulles — donc SANS décompte servi,
+ * jamais le décompte d'un autre lecteur. La porte échoue en montrant moins.
+ */
+const EPHEMERAL_DEADLINE_SCAN_CAP = 2000;
+
+/**
  * Les échéances d'éphémère d'UNE page de messages, résolues POUR LE LECTEUR
  * qui la demande (#7451).
  *
@@ -81,6 +89,11 @@ export async function loadEphemeralReaderDeadlines(
         ],
       },
       select: { messageId: true, participantId: true, ephemeralExpiresAt: true },
+      // Borné : une page sert au plus une centaine de messages, et seuls les
+      // destinataires dont le décompte a DÉMARRÉ ont une ligne appariée. Le
+      // plafond couvre donc largement le cas nominal tout en refusant qu'une
+      // conversation à des milliers de membres fasse payer la page entière.
+      take: EPHEMERAL_DEADLINE_SCAN_CAP,
     })) as Array<{ messageId: string; participantId: string; ephemeralExpiresAt: Date | null }>;
   } catch (err) {
     // Fermé par défaut : sans échéances, chaque éphémère est servi SANS

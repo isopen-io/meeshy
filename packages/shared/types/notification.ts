@@ -247,16 +247,9 @@ export interface NotificationContext extends NotificationAttachmentWire {
    *  bulle pré-persistée par la NSE porte le bon rendu.
    *  @see schema.prisma Message.messageType */
   readonly messageType?: string;
-  /**
-   * #7451 — la DURÉE d'un message éphémère, en secondes, et le bitfield de ses
-   * effets. Le push est le seul canal qui atteint un appareil ÉTEINT, donc le
-   * seul dont le destinataire n'a par construction pas encore « reçu » le
-   * message au sens du décompte : une échéance y serait fausse à l'instant même
-   * où elle part. La NSE recompose le décompte depuis SA réception locale.
-   * @see schema.prisma Message.ephemeralDuration
-   */
+  /** #7451 — durée d'un éphémère (s) + bitfield d'effets ; jamais d'échéance, fausse
+   *  par construction sur un canal qui atteint un appareil ÉTEINT. @see services/notifications/ephemeralPushFields.ts */
   readonly ephemeralDuration?: number;
-  /** #7451 — @see schema.prisma Message.effectFlags */
   readonly effectFlags?: number;
   /** GW5 — Prisme : traduction du message vers la langue résolue du
    *  destinataire quand elle existe déjà en DB au fan-out (tronquée à 200
