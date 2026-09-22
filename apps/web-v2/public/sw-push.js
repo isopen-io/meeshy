@@ -124,6 +124,132 @@ const NOTIFICATION_CLICKED_MESSAGE = 'NOTIFICATION_CLICKED';
 const REPRODUCED_PUSH_FIELD = 'reproduced';
 const REPRODUCED_PUSH_VALUE = 'true';
 
+/**
+ * L'ACCUSÉ DE REMISE (#7368, W4) — JUMEAU web de
+ * `NSEDataSync.postDeliveryReceipt` (`apps/ios/MeeshyNotificationExtension/NSEDataSync.swift:453-466`),
+ * appelé sans condition par `NotificationService.didReceive` (`NotificationService.swift:65`).
+ *
+ * SANS accusé, l'auteur reste bloqué sur une coche tant que ce destinataire
+ * n'a pas rouvert l'application — l'auto-livraison EN LIGNE de la passerelle
+ * ne part jamais pour un onglet fermé, une PWA suspendue ou une coque en
+ * arrière-plan (`services/gateway/src/routes/conversations/receipts.ts:292`,
+ * doc-comment de la porte iOS). C'est EXACTEMENT le symptôme du relevé
+ * (#7368 § Contexte) : « ✓ jusqu'à reconnexion ».
+ *
+ * `DELIVERY_RECEIPT_TYPES` est le JUMEAU de
+ * `NotificationPayloadHelpers.deliveryReceiptTypes`
+ * (`NotificationPayloadHelpers.swift:244-247`, dérivé de `messageArrivalTypes`
+ * `:224-226`) — les réactions et les événements sociaux portent un
+ * `messageId` (celui du message RÉAGI, pas remis) sans être une remise ; ils
+ * restent dehors.
+ */
+const DELIVERY_RECEIPT_TYPES = [
+  'new_message', 'message_reply', 'reply', 'message_forwarded', 'user_mentioned',
+  'new_conversation', 'new_conversation_direct', 'new_conversation_group',
+  'added_to_conversation',
+];
+
+/**
+ * JUMEAU des TROIS littéraux de `src/lib/notifications/delivery-receipt-credential.ts`
+ * — nom de base, magasin, clé. `sw-push.test.ts` écrit et lit au travers du
+ * MÊME double (`test-support/fake-indexed-db.ts`) que le module TS : c'est le
+ * témoin qui rougirait sur toute dérive entre les deux fichiers, aucun script
+ * classique ne pouvant importer l'autre (doctrine de l'en-tête de ce fichier).
+ */
+const CREDENTIAL_DB_NAME = 'meeshy-push';
+const CREDENTIAL_DB_VERSION = 1;
+const CREDENTIAL_STORE_NAME = 'credential';
+const CREDENTIAL_KEY = 'current';
+
+/**
+ * Lit le crédential posé par la page — `null` si absent, IndexedDB
+ * indisponible (portée privée, navigateur ancien) ou en échec : un accusé
+ * manqué se rattrape à la reconnexion, EXACTEMENT le comportement PRÉCÉDENT
+ * (#7368 § Contexte) — jamais une erreur qui empêcherait la bannière.
+ */
+function lireCredential() {
+  return new Promise((resolve) => {
+    if (typeof self.indexedDB === 'undefined') { resolve(null); return; }
+    let requete;
+    try {
+      requete = self.indexedDB.open(CREDENTIAL_DB_NAME, CREDENTIAL_DB_VERSION);
+    } catch {
+      resolve(null);
+      return;
+    }
+    requete.onupgradeneeded = () => {
+      const db = requete.result;
+      if (!db.objectStoreNames.contains(CREDENTIAL_STORE_NAME)) db.createObjectStore(CREDENTIAL_STORE_NAME);
+    };
+    requete.onerror = () => resolve(null);
+    requete.onsuccess = () => {
+      const db = requete.result;
+      if (!db.objectStoreNames.contains(CREDENTIAL_STORE_NAME)) {
+        db.close();
+        resolve(null);
+        return;
+      }
+      try {
+        const lecture = db.transaction(CREDENTIAL_STORE_NAME).objectStore(CREDENTIAL_STORE_NAME).get(CREDENTIAL_KEY);
+        lecture.onsuccess = () => {
+          db.close();
+          resolve(lecture.result || null);
+        };
+        lecture.onerror = () => {
+          db.close();
+          resolve(null);
+        };
+      } catch {
+        db.close();
+        resolve(null);
+      }
+    };
+  });
+}
+
+/** JUMEAU de `credentialHeaders()` (`src/lib/api/http.ts:215-219`) — les DEUX
+ * régimes, jamais mélangés : un compte enregistré parle en `Authorization`,
+ * un invité de lien en `X-Session-Token`. */
+function entetesCredential(credential) {
+  if (!credential) return null;
+  if (credential.kind === 'registered') return { Authorization: 'Bearer ' + credential.token };
+  if (credential.kind === 'anonymous') return { 'X-Session-Token': credential.sessionToken };
+  return null;
+}
+
+/**
+ * ACCUSE LA REMISE, SI CE PUSH EN ANNONCE UNE — fire-and-forget : un échec
+ * réseau ici laisse le message « envoyé » jusqu'à la reconnexion, le
+ * comportement PRÉCÉDENT, jamais une régression. Route CANONIQUE
+ * (`POST …/receipts`, `services/gateway/src/routes/conversations/receipts.ts:967`),
+ * pas l'alias en sursis `.../delivery-receipt`
+ * (`services/gateway/src/routes/message-read-status.ts:229`, `depreciee()`
+ * depuis le 2026-08-30) : un code neuf n'ouvre pas une porte déjà en sursis.
+ */
+async function accuserRemise(data) {
+  if (DELIVERY_RECEIPT_TYPES.indexOf(texte(data.type)) < 0) return;
+  const conversationId = texte(data.conversationId);
+  const messageId = texte(data.messageId);
+  if (conversationId === '' || messageId === '') return;
+
+  const stocke = await lireCredential();
+  if (stocke === null) return;
+  const entetes = entetesCredential(stocke.credential);
+  if (entetes === null) return;
+  const base = texte(stocke.apiBase);
+
+  try {
+    await self.fetch(base + '/api/v1/conversations/' + encodeURIComponent(conversationId) + '/receipts', {
+      method: 'POST',
+      headers: Object.assign({ 'Content-Type': 'application/json' }, entetes),
+      body: JSON.stringify({ type: 'delivered', messageIds: [messageId] }),
+      keepalive: true,
+    });
+  } catch {
+    /* Best-effort — voir doc-comment. */
+  }
+}
+
 /** L'icône de la bannière — un actif de l'application, jamais une URL de la charge. */
 const BANNER_ICON = '/android-chrome-192x192.png';
 const BANNER_BADGE = '/badge-72x72.png';
@@ -319,29 +445,40 @@ async function afficher(payload) {
   const data = objet(payload.data);
   const notification = objet(payload.notification);
 
-  poserBadge(data);
+  /* Démarré EN PARALLÈLE de la logique de bannière, jamais attendu avant —
+     un accusé de remise ne doit pas retarder ce que le lecteur VOIT. Le
+     `finally` couvre CHAQUE sortie (bannière montrée, corrigée, supprimée ou
+     tue) : `waitUntil` (l'appelant, § bas de fichier) ne tient le worker en
+     vie que pour la promesse qu'`afficher` rend, donc un accusé lancé sans
+     être attendu ici pourrait être tué avant sa fin. */
+  const accuse = accuserRemise(data);
+  try {
+    poserBadge(data);
 
-  const titre = texte(notification.title) || texte(data.title);
-  const corps = texte(notification.body) || texte(data.body);
-  /* Rien à dire : le worker se tait plutôt que d'écrire un libellé qu'aucun
-     catalogue ne porte. */
-  if (titre === '' && corps === '') return;
-  const banniere = titre === '' ? { titre: corps, corps: '' } : { titre: titre, corps: corps };
+    const titre = texte(notification.title) || texte(data.title);
+    const corps = texte(notification.body) || texte(data.body);
+    /* Rien à dire : le worker se tait plutôt que d'écrire un libellé qu'aucun
+       catalogue ne porte. */
+    if (titre === '' && corps === '') return;
+    const banniere = titre === '' ? { titre: corps, corps: '' } : { titre: titre, corps: corps };
 
-  /* D-11 point 1 — quelqu'un REGARDE l'application : le socket porte la
-     bannière in-app, une bannière système la doublerait. */
-  const ouvertes = await fenetres();
-  if (ouvertes.some((client) => client.visibilityState === 'visible')) return;
+    /* D-11 point 1 — quelqu'un REGARDE l'application : le socket porte la
+       bannière in-app, une bannière système la doublerait. */
+    const ouvertes = await fenetres();
+    if (ouvertes.some((client) => client.visibilityState === 'visible')) return;
 
-  if (texte(data[REPRODUCED_PUSH_FIELD]) === REPRODUCED_PUSH_VALUE) {
-    await corriger(banniere, notification, data);
-    return;
+    if (texte(data[REPRODUCED_PUSH_FIELD]) === REPRODUCED_PUSH_VALUE) {
+      await corriger(banniere, notification, data);
+      return;
+    }
+
+    /* D-11 point 4 — la course résiduelle entre le push et le socket. */
+    if ((await banniereAffichee(texte(data.notificationId))) !== null) return;
+
+    await montrer(banniere, notification, data);
+  } finally {
+    await accuse;
   }
-
-  /* D-11 point 4 — la course résiduelle entre le push et le socket. */
-  if ((await banniereAffichee(texte(data.notificationId))) !== null) return;
-
-  await montrer(banniere, notification, data);
 }
 
 async function ouvrir(data) {
