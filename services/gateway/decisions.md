@@ -2810,3 +2810,17 @@ relit sur ces deux sites.
 **Sites** : `routes/conversations/messages-read-status.ts` (garde + émission), `routes/conversations/messages.ts` (passe `socketIOHandler` à `registerMarkUnreadRoute`), `socketio/unreadBridgeField.ts` (ligne d'énumération).
 
 **Tests** : `mark-unread-after-reply-e2e.test.ts` (nouveau, dédié) ; `messages-routes.test.ts` réécrit ciblé (fichier déjà hors budget, aucun bloc ajouté) — la garde de course distingue désormais un message d'AUTRUI (blocage inchangé) d'un message du PARTICIPANT LUI-MÊME (rewind qui procède).
+
+## `EXACT_READ_TRACKING_SINCE` est armée par les compositions de staging et de production, pas seulement documentée (2026-09-22, #7356)
+
+**Le défaut (G-4 de l'audit lecture du 2026-09-21).** `MessageReadStatusService.caughtUpToMessageId` pose `lastReadAt = now` et `read-exactness.ts` compte alors tout comme lu dès que `EXACT_READ_TRACKING_SINCE` est absente — c'est le repli curseur voulu, mais il sert « lu » sur un message que le lecteur n'a jamais affiché. Le lot précédent avait câblé la loi et sa bascule par variable d'environnement (`bdd6236d7d`, `b802b21e3a`) et documenté la variable dans `.env.staging.template`, mais **aucune composition qui déploie ne la transmettait au conteneur** : `docker-compose.staging.yml` et `docker-compose.prod.yml` déclarent leur bloc `environment:` comme une liste EXPLICITE, sans `env_file`, donc poser la variable dans le `.env` de l'hôte n'atteignait jamais la passerelle. Staging et production tournaient donc, sans le savoir, sur le repli approximatif que la spec du 2026-07-24 disait déjà « mûr ».
+
+**La décision.** Les deux compositions posent désormais `EXACT_READ_TRACKING_SINCE=${EXACT_READ_TRACKING_SINCE-2026-09-22T00:00:00.000Z}` — la forme `-` (et non `:-`) : un hôte qui NE POSE RIEN reste armé sur la date par défaut, un hôte qui pose la variable VIDE désarme explicitement (retour au repli curseur) sans nouvelle image, et déplacer la bascule est un changement de valeur d'environnement, jamais un déploiement. `.env.staging.template` documente les deux gestes à côté de la variable.
+
+**Alternative rejetée** : faire dépendre `read-exactness.ts` d'une constante compilée plutôt que d'une variable d'environnement — écarté, la spec voulait explicitement pouvoir choisir le moment et revenir en arrière sans redéployer (`read-exactness-config.ts`), ce qu'une constante interdirait.
+
+**Conséquences** : un message créé après le 2026-09-22T00:00:00.000Z (heure serveur) n'est servi « lu » par un autre participant que si `readAt` a été posé par un affichage réel ; les messages antérieurs continuent de suivre le repli curseur, sans changement de comportement rétroactif.
+
+**Sites** : `services/gateway/src/config/read-exactness-config.ts`, `infrastructure/docker/compose/docker-compose.{staging,prod}.yml`, `infrastructure/docker/compose/.env.staging.template`.
+
+**Tests** : `exact-read-tracking-armed-on-deploy.test.ts` — rejoue ce que `docker compose config` remet au conteneur (13 assertions), gardé contre une régression qui retirerait la ligne des compositions ou reviendrait à la forme `:-` (qui empêcherait le désarmement sans nouvelle image).
