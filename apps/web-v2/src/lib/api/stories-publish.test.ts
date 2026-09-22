@@ -55,6 +55,18 @@ describe('publishStory — POST /api/v1/posts (core.ts:370-462)', () => {
     expect(body.storyEffects.v).toBe(3);
   });
 
+  test('le MÊME canevas part en POST ou en RÉEL quand le studio publie un autre format (#7497)', async () => {
+    const effects = buildStoryCanvasEffects({ texts: texts('Bonjour'), background: { source: BACKGROUND, mediaType: 'image' } })!;
+    for (const type of ['POST', 'REEL'] as const) {
+      const { impl, calls } = fakeFetch({ status: 201, body: { success: true, data: { id: 'post-1' } } });
+      const transport = createHttpTransport({ base: '', fetchImpl: impl });
+      await publishStory({ source: 'gateway', transport, type, storyEffects: effects, mediaIds: studioMediaIds({ background: BACKGROUND }) });
+      const body = JSON.parse(String(calls[0]!.init.body));
+      expect(body.type).toBe(type);
+      expect(body.storyEffects.v).toBe(3);
+    }
+  });
+
   test('un média RÉFÉRENCÉ mais absent de mediaIds ⇒ le port refuse, AUCUN appel réseau', async () => {
     const effects = buildStoryCanvasEffects({ texts: [], background: { source: BACKGROUND, mediaType: 'image' } })!;
     const { impl, calls } = fakeFetch({ status: 201, body: { success: true, data: { id: 'post-1' } } });

@@ -10,6 +10,8 @@ import { createStudioDraftStore, type StudioDraftStore } from '@/lib/stories/stu
 import { buttonNamed } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
+import type { PublicationKind } from '@/lib/stories/publication-kind';
+
 import StoryComposeScreen, { type StoryStudioDeps } from './story-compose';
 
 /**
@@ -78,13 +80,13 @@ async function flush(condition?: () => boolean): Promise<void> {
   }
 }
 
-function mount(deps: StoryStudioDeps): HTMLDivElement {
+function mount(deps: StoryStudioDeps, initialKind?: PublicationKind): HTMLDivElement {
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
   mounted.push({ root, container });
   act(() => {
-    root.render(<StoryComposeScreen deps={deps} />);
+    root.render(initialKind === undefined ? <StoryComposeScreen deps={deps} /> : <StoryComposeScreen deps={deps} initialKind={initialKind} />);
   });
   return container;
 }
@@ -502,7 +504,7 @@ describe('StoryComposeScreen — les états refus, hors-ligne et échec de mont�
     });
     await flush();
     expect(bench.posts).toHaveLength(0);
-    expect(publishButton(el)?.textContent).toBe('Publier');
+    expect(publishButton(el)?.textContent).toBe('Publier la story');
   });
 
   test('une image posée par la porte du SON est refusée, et rien ne part', async () => {
@@ -529,5 +531,57 @@ describe('StoryComposeScreen — les états refus, hors-ligne et échec de mont�
     await flush(() => el.querySelector('[data-asset-phase="ready"]') !== null);
     expect(el.querySelector('[data-asset-phase="ready"]')).not.toBeNull();
     expect(publishButton(el)?.disabled).toBe(false);
+  });
+});
+
+describe('StoryComposeScreen — le COMPOSER UNIQUE : `[Publier … | ▾]` (#7497)', () => {
+  const kindToggle = (host: ParentNode) => host.querySelector<HTMLButtonElement>('[data-publish-kind-toggle]');
+  const kindChoice = (kind: PublicationKind) => document.querySelector<HTMLButtonElement>(`[data-publish-kind-choice="${kind}"]`);
+
+  test('sans toucher au chevron, la story part comme indiqué — `type: STORY`, et la capsule le NOMME', async () => {
+    const bench = harness({});
+    const el = mount(bench.deps);
+    expect(publishButton(el)?.textContent).toBe('Publier la story');
+    typeText(el, 'Une story');
+    act(() => publishButton(el)!.click());
+    await flush(() => bench.posts.length > 0);
+    expect(bench.posts[0]?.type).toBe('STORY');
+  });
+
+  test('ouvert depuis la porte du fil, le studio publie un POST — le même canevas', async () => {
+    const bench = harness({});
+    const el = mount(bench.deps, 'POST');
+    expect(publishButton(el)?.textContent).toBe('Publier le post');
+    expect(el.querySelector('h1')?.textContent).toBe('Nouvelle publication');
+    typeText(el, 'Un post');
+    act(() => publishButton(el)!.click());
+    await flush(() => bench.posts.length > 0);
+    expect(bench.posts[0]?.type).toBe('POST');
+    expect((bench.posts[0]?.storyEffects as { v: number } | undefined)?.v).toBe(3);
+  });
+
+  test('le chevron offre les trois formats et PUBLIE au format choisi', async () => {
+    const bench = harness({});
+    const el = mount(bench.deps);
+    typeText(el, 'Finalement un post');
+    act(() => kindToggle(el)!.click());
+    expect(['STORY', 'POST', 'REEL'].map((kind) => kindChoice(kind as PublicationKind) !== null)).toEqual([true, true, true]);
+    act(() => kindChoice('POST')!.click());
+    await flush(() => bench.posts.length > 0);
+    expect(bench.posts).toHaveLength(1);
+    expect(bench.posts[0]?.type).toBe('POST');
+  });
+
+  test('un réel de texte seul se REFUSE en le disant — ni la capsule ni le menu ne le publient', async () => {
+    const bench = harness({});
+    const el = mount(bench.deps, 'REEL');
+    typeText(el, 'Un réel sans vidéo');
+    expect(el.querySelector('[data-publish-refusal]')?.getAttribute('data-publish-refusal')).toBe('reel-without-qualifying-media');
+    expect(publishButton(el)?.disabled).toBe(true);
+    act(() => kindToggle(el)!.click());
+    expect(kindChoice('REEL')?.getAttribute('aria-disabled')).toBe('true');
+    act(() => kindChoice('REEL')!.click());
+    await flush();
+    expect(bench.posts).toHaveLength(0);
   });
 });
