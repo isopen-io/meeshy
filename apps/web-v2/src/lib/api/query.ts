@@ -233,22 +233,12 @@ export function useConversation(id: string) {
  * `paginationStateOf` — la MÊME loi à quatre cas que la Lentille
  * (`lib/lens/pagination.ts`), lue côté écran.
  *
- * **`staleTime: 0` (#7353, lot V5)** — un fil n'est PAS une famille
- * quasi-immuable (`query-freshness.test.ts`, #6974) : c'est la donnée la plus
- * VIVANTE de l'application, un autre appareil ou un pair peut y écrire à tout
- * instant. Le défaut de `createAppQueryClient` (30 s, `query-client.ts:235`)
- * laissait passer une classe entière de rechargements : ceux qui suivent une
- * absence COURTE (quelques secondes — le cas nominal d'un `goto`, ou d'un
- * lecteur qui revient tout de suite après une notification) tombaient DANS la
- * fenêtre de fraîcheur, et rien ne revalidait alors que le serveur, lui, avait
- * avancé — le symptôme exact de la recette staging 2026-09-21 (3 messages
- * absents après un rechargement complet, présents côté serveur). Cache-first
- * reste entier (D-2, aucun spinner sur un cache non vide) : `staleTime: 0` ne
- * gouverne QUE la revalidation de fond, la MÊME doctrine que `useStoryFeed` /
- * `usePost` ci-dessus.
+ * **Fraîcheur** : `staleTime: 0` est porté par la FABRIQUE `messagesQuery`
+ * (`messages.ts`, #7353), jamais reposé ici — le témoin
+ * `thread-reload-freshness.test.ts` joue la fabrique, donc ce que l'écran sert.
  */
 export function useMessages(id: string) {
-  return useInfiniteQuery({ ...messagesQuery(apiDeps, id), staleTime: 0 });
+  return useInfiniteQuery(messagesQuery(apiDeps, id));
 }
 
 /** Référence STABLE — un `[]` écrit en ligne change d'identité à chaque
