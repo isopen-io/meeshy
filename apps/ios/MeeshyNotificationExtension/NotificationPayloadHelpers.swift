@@ -389,8 +389,14 @@ nonisolated enum NotificationPayloadHelpers {
         return UInt32(truncatingIfNeeded: raw)
     }
 
-    /// Le corps de la bannière d'un éphémère : « ⏳ Message éphémère ·
+    /// Le corps de la bannière d'un éphémère : « 🔥 Message éphémère ·
     /// disparaît à 14:32 ».
+    ///
+    /// **La FLAMME, et pas un sablier** (directive porteur 2026-09-22 :
+    /// « l'éphémère est la flamme »). C'est aussi le pictogramme que la
+    /// passerelle pose déjà dans ses placeholders protégés (« 🔥 💬 5min ») :
+    /// une bannière et une bulle qui parlent du même message ne peuvent pas
+    /// montrer deux images.
     ///
     /// **L'heure, pas une durée figée.** La passerelle compose « 🔥 💬 5min »
     /// une fois pour toutes ; ce texte est faux à la seconde où il s'affiche,
@@ -414,7 +420,7 @@ nonisolated enum NotificationPayloadHelpers {
         let time = formatter.string(from: deadline)
         let template = NSLocalizedString(
             "notification.ephemeral_message.deadline",
-            value: "⏳ Message éphémère · disparaît à %@",
+            value: "🔥 Message éphémère · disparaît à %@",
             comment: "Push body for an ephemeral message, carrying the local deadline time."
         )
         return String(format: template, time)

@@ -109,55 +109,55 @@
       }
     },
     "notification.ephemeral_message.deadline" : {
-      "comment" : "Push body for an ephemeral message, carrying the local deadline time (#7453).",
+      "comment" : "Push body for an ephemeral message, carrying the local deadline time (#7453). The flame is the ephemeral's pictogram (directive 2026-09-22).",
       "extractionState" : "manual",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "⏳ رسالة مؤقتة · تختفي عند %@"
+            "value" : "🔥 رسالة مؤقتة · تختفي عند %@"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "⏳ Kurzlebige Nachricht · verschwindet um %@"
+            "value" : "🔥 Kurzlebige Nachricht · verschwindet um %@"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "⏳ Ephemeral message · disappears at %@"
+            "value" : "🔥 Ephemeral message · disappears at %@"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "⏳ Mensaje efímero · desaparece a las %@"
+            "value" : "🔥 Mensaje efímero · desaparece a las %@"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "⏳ Message éphémère · disparaît à %@"
+            "value" : "🔥 Message éphémère · disparaît à %@"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "⏳ Messaggio effimero · scompare alle %@"
+            "value" : "🔥 Messaggio effimero · scompare alle %@"
           }
         },
         "pt" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "⏳ Mensagem efêmera · desaparece às %@"
+            "value" : "🔥 Mensagem efêmera · desaparece às %@"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "⏳ 限时消息 · %@ 后消失"
+            "value" : "🔥 限时消息 · %@ 后消失"
           }
         }
       }
