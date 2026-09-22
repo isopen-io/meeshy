@@ -2253,19 +2253,14 @@ export class MessageReadStatusService {
     const { offset = 0, limit = 20, filter = "all", viewerUserId, historyFloor = null } = options;
 
     try {
-      // #7357 — le plancher d'historique s'applique ICI, pas seulement dans le
-      // service. Un accusé de lecture est NOMINATIF (qui a lu, et quand) : c'est
-      // de l'historique au même titre que le texte du message, et un membre
-      // arrive après coup ne doit pas apprendre qui lisait avant lui.
+      // #7357 — même garde que `getMessageStatusDetails` (#4179). Un attachment
+      // orphelin (`messageId` nul) n'a pas d'historique à ouvrir : refusé.
       const attachment = await this.prisma.messageAttachment.findUnique({
         where: { id: attachmentId },
-        select: {
-          id: true,
-          message: { select: { createdAt: true } }
-        },
+        select: { message: { select: { createdAt: true } } },
       });
 
-      if (!attachment) throw new Error("Attachment not found");
+      if (!attachment?.message) throw new Error("Attachment not found");
       if (historyFloor && attachment.message.createdAt < historyFloor) {
         throw new Error("Attachment not found");
       }

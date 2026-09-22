@@ -549,6 +549,9 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
         conversationId: message.conversationId,
         reader: historyReaderFromAuthContext(authRequest.authContext),
       });
+      if (historyFloor && message.createdAt < historyFloor) {
+        return sendNotFound(reply, 'Message non trouvé ou accès non autorisé');
+      }
 
       const statusDetails = await readStatusService.getMessageStatusDetails(messageId, {
         offset: pageOffset,
@@ -586,9 +589,12 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
 
       // Vérifier que l'attachment existe et que l'utilisateur a accès
       const attachment = await prisma.messageAttachment.findFirst({
+        // `MessageAttachment` ne porte pas `deletedAt` : c'est le MESSAGE
+        // parent qui le porte (#7357). Un filtre sur l'attachment lui-même
+        // lève `PrismaClientValidationError` à chaque appel.
         where: {
           id: attachmentId,
-          deletedAt: null
+          message: { is: { deletedAt: null } }
         },
         include: {
           message: {
@@ -620,18 +626,17 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
       // SSOT guard: same string-schema pagination as the message variant above.
       const { offset: pageOffset, limit: pageLimit } = validatePagination(offset, limit, { defaultLimit: 20, maxLimit: 100 });
 
-      // #7357 — le plancher d'historique s'applique ICI, pas seulement dans le
-      // service. Un accusé de lecture est NOMINATIF (qui a lu, et quand) : c'est
-      // de l'historique au même titre que le texte du message, et un membre
-      // arrive après coup ne doit pas apprendre qui lisait avant lui. Le service
-      // sait déjà refuser — il accepte `historyFloor` depuis ce lot — mais tant
-      // que cette route ne le lui PASSE pas, la garde est écrite, testée, et
-      // n'atteint personne en production. Les deux autres lectures nominatives
-      // du même service le posent déjà ; celle-ci était la dernière sans.
+      // #7357 — même plancher que la porte du message : un accusé d'écoute est
+      // NOMINATIF, donc de l'historique. Refusé ICI par le même 404 qu'un id
+      // inconnu — le service lève aussi, mais son erreur sortirait en 500 et
+      // distinguerait « antérieur à ton arrivée » de « n'existe pas ».
       const historyFloor = await loadReaderHistoryFloor(prisma, {
         conversationId: attachment.message.conversationId,
         reader: historyReaderFromAuthContext(authRequest.authContext),
       });
+      if (historyFloor && attachment.message.createdAt < historyFloor) {
+        return sendNotFound(reply, 'Attachment non trouvé ou accès non autorisé');
+      }
 
       const statusDetails = await readStatusService.getAttachmentStatusDetails(attachmentId, {
         offset: pageOffset,

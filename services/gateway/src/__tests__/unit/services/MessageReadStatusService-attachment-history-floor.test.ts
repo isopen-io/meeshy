@@ -124,6 +124,14 @@ describe('#7357 — MessageReadStatusService.getAttachmentStatusDetails respecte
     expect(result.statuses).toHaveLength(0);
   });
 
+  it('rejette un attachment orphelin (sans message parent) avec "Attachment not found"', async () => {
+    mockPrisma.messageAttachment.findUnique.mockResolvedValue({ message: null });
+
+    await expect(
+      service.getAttachmentStatusDetails(ATTACHMENT_ID, { historyFloor: null })
+    ).rejects.toThrow('Attachment not found');
+  });
+
   it('rejette un attachment inexistant avec "Attachment not found"', async () => {
     mockPrisma.messageAttachment.findUnique.mockResolvedValue(null);
 
