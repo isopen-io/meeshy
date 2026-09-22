@@ -560,15 +560,6 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
 
     // MARK: - Delivery Receipt
 
-    /// Push types that mean "a new message was delivered to this recipient".
-    /// Reactions and social events also carry a `messageId`, but they do not
-    /// constitute message delivery, so they are excluded.
-    private static let deliveryReceiptTypes: Set<String> = [
-        "new_message", "message_reply", "reply", "message_forwarded",
-        "new_conversation", "new_conversation_direct", "new_conversation_group",
-        "added_to_conversation"
-    ]
-
     /// Acknowledge delivery of a push-delivered message to the gateway.
     ///
     /// For an OFFLINE recipient the gateway's online auto-delivery path never
@@ -586,7 +577,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
               !messageId.isEmpty, !conversationId.isEmpty else { return }
 
         let type = userInfo["type"] as? String ?? ""
-        guard Self.deliveryReceiptTypes.contains(type) else { return }
+        guard NotificationPayloadHelpers.isDeliveryReceiptType(type) else { return }
 
         NSEDataSync.postDeliveryReceipt(
             conversationId: conversationId,

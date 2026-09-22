@@ -218,11 +218,9 @@ nonisolated enum NotificationPayloadHelpers {
     /// message RÉAGI, que le destinataire a le plus souvent écrit lui-même.
     /// Son `senderId` est celui du RÉACTEUR.
     ///
-    /// La même distinction est déjà écrite trente lignes plus bas dans
-    /// `NotificationService`, sur `deliveryReceiptTypes` : « Reactions and
-    /// social events also carry a messageId, but they do not constitute
-    /// message delivery, so they are excluded ». Elle gardait l'accusé de
-    /// remise et pas l'écriture — la plus destructrice des deux.
+    /// La même distinction garde l'accusé de remise (`deliveryReceiptTypes`,
+    /// juste en dessous), qui se DÉRIVE de cet ensemble : une arrivée de
+    /// message est toujours une remise (#7364 — `user_mentioned` y manquait).
     nonisolated static let messageArrivalTypes: Set<String> = [
         "new_message", "message_reply", "reply", "message_forwarded", "user_mentioned"
     ]
@@ -233,6 +231,27 @@ nonisolated enum NotificationPayloadHelpers {
             return false
         }
         return messageArrivalTypes.contains(type)
+    }
+
+    /// Les types de push qui déclenchent l'accusé de remise hors ligne
+    /// (`POST …/messages/:messageId/delivery-receipt`).
+    ///
+    /// Toute ARRIVÉE de message en est une (`messageArrivalTypes`, dont il se
+    /// dérive — une seule table, donc aucune dérive possible), plus les pushs
+    /// de création et d'ajout à une conversation, qui l'accusaient déjà. Les
+    /// réactions et les événements sociaux portent un `messageId` sans être
+    /// une remise : ils restent dehors.
+    nonisolated static let deliveryReceiptTypes: Set<String> = messageArrivalTypes.union([
+        "new_conversation", "new_conversation_direct", "new_conversation_group",
+        "added_to_conversation"
+    ])
+
+    /// Ce push-type déclenche-t-il un accusé de remise ?
+    nonisolated static func isDeliveryReceiptType(_ type: String?) -> Bool {
+        guard let type = type?.trimmingCharacters(in: .whitespaces), !type.isEmpty else {
+            return false
+        }
+        return deliveryReceiptTypes.contains(type)
     }
 
     /// Ce que la NSE écrit dans la bulle pré-enregistrée, ou `nil` quand elle
