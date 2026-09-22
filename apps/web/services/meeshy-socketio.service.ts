@@ -660,6 +660,15 @@ class MeeshySocketIOService {
     // Resolve User ID from sender (senderId from gateway is a Participant ID)
     const resolvedSenderId = getSenderUserId(sender as Record<string, unknown>) || socketMessage.senderId || '';
 
+    // Le nom affiché derrière chaque `@pseudo`, résolu par `MessageHandler` et
+    // posé sur le broadcast. `SocketIOMessage` ne DÉCLARE pas ce champ : on le
+    // lit par une vue `unknown` étroite plutôt que par un `any`, qui rouvrirait
+    // la dette ESLint que le cliquet de `apps/web` interdit de faire remonter.
+    const rawMentionedUsers = (socketMessage as unknown as { mentionedUsers?: unknown }).mentionedUsers;
+    const mentionedUsers = Array.isArray(rawMentionedUsers) && rawMentionedUsers.length > 0
+      ? (rawMentionedUsers as readonly MentionedUser[])
+      : undefined;
+
     return {
       id: socketMessage.id,
       conversationId: socketMessage.conversationId,
@@ -692,14 +701,11 @@ class MeeshySocketIOService {
       sender: sender,
       attachments: attachments.length > 0 ? attachments : undefined,
       validatedMentions: (socketMessage as any).validatedMentions || [],
-      // Le nom affiché derrière chaque `@pseudo`, résolu par `MessageHandler` et
-      // posé sur le broadcast. L'omettre faisait lire au destinataire le HANDLE
-      // en direct et le NOM après rechargement, pour le même message (#7458).
-      // Champ ABSENT plutôt que tableau vide quand rien n'est résolu — mêmes
-      // règles de présence conditionnelle que le transformer REST.
-      ...(Array.isArray((socketMessage as any).mentionedUsers) && (socketMessage as any).mentionedUsers.length > 0
-        ? { mentionedUsers: (socketMessage as any).mentionedUsers as readonly MentionedUser[] }
-        : {}),
+      // L'omettre faisait lire au destinataire le HANDLE en direct et le NOM
+      // après rechargement, pour le même message (#7458). Champ ABSENT plutôt
+      // que tableau vide quand rien n'est résolu — mêmes règles de présence
+      // conditionnelle que le transformer REST.
+      ...(mentionedUsers ? { mentionedUsers } : {}),
       // Le broadcast gateway porte déjà ces champs (`MessageHandler` pose
       // `forwardedFromConversation` et `effectFlags`). Les omettre ici rendait
       // le badge « Transféré depuis {groupe} » mort sur le chemin temps réel et
