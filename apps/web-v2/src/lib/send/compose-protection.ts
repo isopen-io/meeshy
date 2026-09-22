@@ -11,14 +11,13 @@ import { DECORATIVE_EFFECTS } from '@/lib/effects';
  * bulle optimiste et le corps envoyé au serveur portent TOUJOURS la même
  * vérité (D-41 : ce qu'on envoie flouté se rend flouté chez soi).
  *
- * `viewOnce` n'a AUCUN contrôle dans la rangée haute d'une conversation
- * standard (`showViewOnce: previewMode`, réservé au composeur de
- * prévisualisation de notification, iOS) — la loi le porte quand même, fail
- * pour l'avenir et pour que le témoin de la charge (`perform-send.test.ts`)
- * puisse prouver que la loi ELLE-MÊME sait le composer, même sans bouton
- * (loi 4 : un CONTRÔLE sans effet ne se rend pas, mais une LOI sans contrôle
- * peut très bien exister — elle sert d'autres composeurs, `EffectsPickerView`
- * côté iOS).
+ * `viewOnce` a désormais un contrôle dans la rangée haute d'une conversation
+ * standard (#7354, V6 — décision RENVERSÉE : jusque-là réservé au composeur
+ * de prévisualisation de notification, iOS `showViewOnce: previewMode`),
+ * GATÉ côté `composer.tsx` sur la présence d'une pièce jointe IMAGE en
+ * attente (« envoie une IMAGE à vue unique », #7354) — cette LOI, elle,
+ * reste agnostique du contrôle qui l'arme (loi 4 : elle sert aussi
+ * `EffectsPickerView`/d'autres composeurs côté iOS, même sans bouton web).
  */
 export type ComposeProtection = {
   /** Durée en SECONDES avant expiration — `undefined` = pas d'éphémère.

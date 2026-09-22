@@ -1023,6 +1023,14 @@ const fr = {
   'composer.location.unknown': 'Lieu inconnu',
   'composer.location.remove': 'Retirer la position',
 
+  /* LA BASCULE « VUE UNIQUE » DE LA RANGÉE HAUTE (#7354, V6) — même famille
+     que `composer.attach.*` ci-dessus. Libellés repris du catalogue iOS
+     (`composer.viewonce.activate`/`.active`/`.label`,
+     `+Protections.swift:233-235`), la référence de cette bascule. */
+  'composer.viewOnce.activate': 'Activer le mode vue unique',
+  'composer.viewOnce.active': 'Mode vue unique actif',
+  'composer.viewOnce.label': 'Vue unique',
+
   /* LA BULLE D'UN LIEU (#7328) — valeurs reprises du catalogue iOS
      (`MeeshyUI/Resources/Localizable.xcstrings` : `location.shared`,
      `location.fullscreen.openInMaps`, `location.a11y.label`), la référence de

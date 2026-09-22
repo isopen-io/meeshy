@@ -3675,7 +3675,17 @@ Dimension 13 (complétude) restante : les deux bornes ci-dessus.
 
 **Le lecteur de la LIGNE n'est pas celui du GESTE.** `titleOf` a besoin d'un identifiant pour savoir qui est « l'autre » dans un direct ; lui passer la chaîne vide fait de la PREMIÈRE partie l'autre — mesuré au navigateur : la rangée de `/c/c-direct-kwame` portait « Vous ». L'écran résout donc `resolveViewer({ source, session })` — le site unique, fixtures comprises, que la Lentille et le fil emploient déjà — pour la RANGÉE, et garde `viewerId` (l'identité de COMPTE, `null` sans session) pour les gestes, qui ne doivent rien inventer. **Un témoin de pièce ne peut pas voir quelle identité l'ÉCRAN sert au composant** : c'est `check-profile.mjs` qui l'attrape, et il le mesure désormais explicitement.
 
-## D-107 — Le fil se lit dans une COLONNE bornée, et la borne n'est pas une media query (2026-09-22, #7449)
+## D-107 — « Vue unique » a une bascule dans le composeur de CONVERSATION, gatée sur une image en attente ; écart assumé avec iOS (2026-09-22, #7354)
+
+**iOS ne l'offre pas en conversation.** `UniversalComposerBar+Toolbar.swift:37-40` ne monte `viewOnceToggleButton` que si `showViewOnce`, et `ConversationView+Composer.swift:215` le pose à `previewMode` : le composeur de prévisualisation de notification seul. Le web suivait cette règle (`compose-protection.ts`, `composer.tsx`) : la LOI savait composer `isViewOnce`, aucun contrôle ne l'armait. Conséquence mesurée à la recette du 2026-09-21 : W5 (`consumeViewOnceOptimistic`, #7224) n'avait AUCUN chemin d'entrée depuis le web.
+
+**La forme retenue.** Le GESTE est celui d'iOS (`+Protections.swift:199-241` : capsule tapée, libellé « Vue unique » seulement une fois armée, teinte `indigo600` partagée avec « Flou », rang entre flou et effets) ; l'EMPLACEMENT diverge. La capsule n'existe que si une pièce jointe IMAGE est en attente — un texte marqué vue unique n'a aucun rendu qui le dise (loi 4) — et elle redescend si la dernière image part, et après chaque envoi. Glyphe : `eye` (Phosphor) pour `1.circle`, sans pendant dans le socle.
+
+**`message:consumed` est MONOTONE côté client.** L'événement et la réponse REST de la consommation voyagent sur deux canaux ; `applyMessageConsumed` (`realtime-apply.ts`) n'abaisse jamais `viewOnceCount`, sans quoi un événement en retard ramènerait une vue brûlée à `veiled` et la rouvrirait. Seul le rollback optimiste de `view-once.ts` abaisse le compte.
+
+**À trancher côté iOS, pas ici** : exposer la même bascule en conversation (parité inverse). Le miroir Kotlin natif est gelé (directive 2026-09-16) et ne reçoit rien.
+
+## D-108 — Le fil se lit dans une COLONNE bornée, et la borne n'est pas une media query (2026-09-22, #7449)
 
 **Le fait, mesuré.** `/feed` posait son scrollport en `flex-1 … px-3` sans aucune borne : à 1440 px, une carte de publication faisait **1416 px** de large. `/reels` étalait de même son pager 9:16 sur toute la largeur — la vidéo en `object-contain` au centre, le rail d'actions au bord opposé du regard. Aucun gate ne pouvait le voir : les trente-huit autres mesurent **390 × 844** et **320 × 568**, deux téléphones. **Un défaut qui ne se voit qu'au-delà des gabarits mesurés est invisible par construction** — d'où `scripts/check-feed-column.mjs`, qui ajoute 1440 × 900 au dépôt.
 
@@ -3689,7 +3699,7 @@ Dimension 13 (complétude) restante : les deux bornes ci-dessus.
 
 **Ce n'est PAS la géographie desktop** (#5418, deux colonnes liste + fil) : c'est une lecture réparée, pas un bureau dessiné. Le chantier de design reste entier.
 
-## D-108 — Publier depuis le fil : UNE adresse, deux formats, et un réel qui se REFUSE plutôt que de se dégrader (2026-09-22, #7449)
+## D-109 — Publier depuis le fil : UNE adresse, deux formats, et un réel qui se REFUSE plutôt que de se dégrader (2026-09-22, #7449)
 
 **Le fait.** `apps/web-v2` LISAIT le fil sans pouvoir l'alimenter : la table des routes n'offrait que `/stories/new` et `/status/new`. Aucune adresse ne créait de `Post.type = 'POST'` ni `'REEL'`, alors que la passerelle les sert depuis toujours. C'est pour cela que le doc-comment de `routes/feed.tsx` rangeait le « placeholder de composeur » d'iOS dans ce qui n'est PAS repris — un contrôle sans effet ne se dessine pas (loi 4). Ce lot lui donne son effet, donc sa porte.
 
