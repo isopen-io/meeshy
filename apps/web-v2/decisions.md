@@ -3684,3 +3684,62 @@ Dimension 13 (complétude) restante : les deux bornes ci-dessus.
 **`message:consumed` est MONOTONE côté client.** L'événement et la réponse REST de la consommation voyagent sur deux canaux ; `applyMessageConsumed` (`realtime-apply.ts`) n'abaisse jamais `viewOnceCount`, sans quoi un événement en retard ramènerait une vue brûlée à `veiled` et la rouvrirait. Seul le rollback optimiste de `view-once.ts` abaisse le compte.
 
 **À trancher côté iOS, pas ici** : exposer la même bascule en conversation (parité inverse). Le miroir Kotlin natif est gelé (directive 2026-09-16) et ne reçoit rien.
+
+## D-108 — L'échéance d'un éphémère part de la RÉCEPTION, et un seul chrome la rend pour tous les modes (2026-09-22, #7454)
+
+Directive porteur 2026-09-22 : « les messages avec temps décompté ne doivent
+décompter que lorsque l'utilisateur l'a reçu », et « il est important de
+s'assurer que cette feature a un décompte en Script, Focal ou bulle **ou tout
+autre affichage plus tard** ». Contrat du fil : #7451.
+
+**La règle vit dans `packages/shared`, pas ici.** `ephemeralDeadline()`
+(`utils/ephemeral-deadline.ts`) retient la plus PROCHE de l'échéance SERVIE
+(`expiresAt` par lecteur sur REST, `message:countdown-started` sur le socket)
+et de la RÉCEPTION locale + `ephemeralDuration`. Jamais la plus tardive : des
+deux erreurs d'horloge possibles, une seule est acceptable — montrer le message
+un instant de MOINS que promis, jamais un instant de plus.
+
+**La réception, elle, ne peut pas y vivre** : c'est un état du client, et ses
+deux chemins (`message:new`, le rendu du fil) n'ont aucun ancêtre React commun
+— le socket vit hors de l'arbre. D'où un registre de module
+(`lib/view/ephemeral-reception.ts`), borné à 1 000 entrées, première-vue-gagne.
+Il est volontairement EN MÉMOIRE : un rechargement de page ne peut qu'ALLONGER
+l'échéance locale, et c'est exactement ce que la règle refuse de retenir dès
+que le serveur sert la sienne.
+
+**Un seul chrome, et il est OBLIGATOIRE au type.** `ProtectionChrome`
+(`components/protection-chrome.tsx`) rend le décompte ET la désignation de la
+vue unique ; `FocalRow` et `Bubble` déclarent `ephemeralDeadline` en prop
+REQUISE. Avant ce lot, chaque peau câblait son propre `EphemeralBadge` : un
+mode ajouté demain aurait eu un fil complet, aucun décompte, et aucun témoin
+rouge. `thread-modes-protection-chrome.test.tsx` énumère désormais
+`ConversationReadingModeSchema.options` — table exhaustive au TYPE, re-croisée
+à l'exécution parce que `bun test` n'applique aucun typage.
+
+**`river` n'a pas de peau à lui, et c'est ce qui rend la garde utile** :
+`ThreadModes` aiguille sur `usesFlatRow`, donc tout ce qui n'est ni `summary`
+ni plat retombe sur `<Bubble>` — un mode neuf y retombera pareillement, avec le
+chrome. `summary` porte l'autre moitié de la règle : un éphémère échu n'entre
+pas dans le corpus qu'il résume, sans quoi un texte DÉRIVÉ garderait en vie,
+sur le même écran, un message disparu du fil.
+
+**Deux pictogrammes, parce que deux sens.** Le dépôt se contredisait comme iOS
+(#7452) : `flame` désignait la VUE UNIQUE dans la liste et l'ÉPHÉMÈRE dans la
+bulle. Le vocabulaire retenu est celui du COMPOSEUR — là où l'utilisateur
+CHOISIT la protection : `flameFill` + rouge pour l'éphémère, `eye` + indigo
+pour la vue unique. Le libellé suit jusqu'à la CLÉ : la désignation lit
+`composer.viewOnce.label`, la chaîne même que la bascule affiche — une clé
+jumelle porterait aujourd'hui les mêmes sept traductions et divergerait au
+premier lot qui n'en relit qu'une.
+
+**UNE horloge.** `secondClock` (`lib/view/interval-clock.ts`) existait déjà ;
+`EphemeralBadge` ouvrait un `setInterval` par message affiché.
+
+**Ce que ce lot NE touche PAS : le chemin d'ENVOI.** Faire parler les clients
+en DURÉE plutôt qu'en échéance traverse le cliquet d'égalité de clés du
+gateway (`socket-event-schemas.ts`, § `SendDoorRatchet`) et appartient à
+#7451. Ici, seul ce qui REVIENT du serveur change.
+Dimensions mûres : 4 (une horloge, zéro minuterie par bulle), 5 (sept langues,
+`aria-label` « éphémère, disparaît dans N »), 6 (un pictogramme par sens, en
+parité de vocabulaire avec le composeur), 11 (une règle, un chrome, un
+registre), 13 (les cinq modes énumérés, et le suivant).

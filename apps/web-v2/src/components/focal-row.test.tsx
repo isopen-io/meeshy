@@ -6,6 +6,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import type { EphemeralDeadline } from '@meeshy/shared/utils/ephemeral-deadline';
+
 import { FocalRow } from './focal-row';
 import { attachmentDefaults } from '@/lib/api/fixtures-base';
 import { messagesOf } from '@/lib/api/fixtures';
@@ -84,9 +86,24 @@ const render = (message: Message, opts: { tail?: boolean; head?: boolean; now?: 
       place={placeOf(message, opts.tail ?? true, opts.head ?? true)}
       languages={['fr', 'en']}
       viewerId="u-viewer"
+      ephemeralDeadline={{ state: 'none' }}
       onJumpToMessage={() => {}}
       onPickLanguage={() => {}}
       {...(opts.now ? { now: opts.now } : {})}
+    />,
+  );
+
+/** L'ÉCHÉANCE DESCENDUE PAR L'HÔTE (#7454) — voir le témoin qui la consomme. */
+const renderAvecEcheance = (message: Message, deadline: EphemeralDeadline) =>
+  renderToStaticMarkup(
+    <FocalRow
+      mode="focal"
+      place={placeOf(message, true, true)}
+      languages={['fr', 'en']}
+      viewerId="u-viewer"
+      ephemeralDeadline={deadline}
+      onJumpToMessage={() => {}}
+      onPickLanguage={() => {}}
     />,
   );
 
@@ -98,6 +115,7 @@ const renderSansPrise = (message: Message, opts: { elected?: boolean } = {}) =>
       place={placeOf(message, true, true)}
       languages={['fr', 'en']}
       viewerId="u-viewer"
+      ephemeralDeadline={{ state: 'none' }}
       onJumpToMessage={() => {}}
       {...(opts.elected === true ? { elected: true } : {})}
     />,
@@ -110,6 +128,7 @@ const renderRetenu = (message: Message) =>
       place={placeOf(message, true, true)}
       languages={['fr', 'en']}
       viewerId="u-viewer"
+      ephemeralDeadline={{ state: 'none' }}
       onJumpToMessage={() => {}}
       revealable={false}
     />,
@@ -236,13 +255,30 @@ describe('FocalRow — protection (D-23, #5676)', () => {
     expect(html).not.toContain('Vu et supprimé');
   });
 
-  test('éphémère dans 2 minutes : aria-label du badge « Message éphémère, expire dans 2m 00s »', () => {
-    const now = () => new Date('2026-09-08T09:00:00.000Z').getTime();
-    const html = render(
-      { ...BASE_MESSAGE, expiresAt: new Date('2026-09-08T09:02:00.000Z') },
-      { now },
-    );
-    expect(html).toContain('Message éphémère, expire dans 2m 00s');
+  /**
+   * L'ÉCHÉANCE VIENT DE L'HÔTE (#7454) — cette peau ne lit plus `expiresAt`
+   * pour décider d'un décompte : `resolveEphemeralDeadline` la compose chez
+   * `ThreadModes`, depuis la RÉCEPTION locale, et la descend ici. Le témoin la
+   * passe donc telle quelle, ce qui est aussi ce qui le rend déterministe.
+   */
+  test('échéance dans 2 minutes : aria-label « Message éphémère, disparaît dans 2m 00s »', () => {
+    /* L'ÉCHÉANCE EST RELATIVE À MAINTENANT, et elle doit l'être : le décompte
+       se lit sur l'horloge partagée, pas sur une horloge injectée — une date
+       fixe de 2026-09-08 serait déjà passée au moment du run. */
+    const html = renderAvecEcheance(BASE_MESSAGE, { state: 'scheduled', expiresAtMs: Date.now() + 120_500 });
+    expect(html).toContain('Message éphémère, disparaît dans 2m 00s');
+  });
+
+  test('l’EXPÉDITEUR sans échéance voit « en attente de réception », jamais un décompte', () => {
+    const html = renderAvecEcheance(BASE_MESSAGE, { state: 'awaiting-reception', durationSeconds: 120 });
+    expect(html).toContain('data-ephemeral="awaiting"');
+    expect(html).toContain('En attente de réception');
+  });
+
+  test('une VUE UNIQUE est nommée même SANS pièce jointe', () => {
+    const html = renderAvecEcheance({ ...BASE_MESSAGE, isViewOnce: true }, { state: 'none' });
+    expect(html).toContain('data-view-once');
+    expect(html).toContain('Vue unique');
   });
 
   test('un message voilé garde le NOM de l’expéditeur et une heure lisibles (le flou ne touche ni l’identité ni la méta)', () => {
@@ -304,6 +340,7 @@ const renderFailed = (props: { readonly sendFailureReason?: string; readonly onR
       place={placeOf({ ...BASE_MESSAGE, senderId: 'u-viewer', deliveredCount: 0, readCount: 0 })}
       languages={['fr', 'en']}
       viewerId="u-viewer"
+      ephemeralDeadline={{ state: 'none' }}
       onJumpToMessage={() => {}}
       localDelivery="failed"
       {...props}
@@ -366,6 +403,7 @@ describe('FocalRow — displayLanguage, myReactions, selected (#5814, T12)', () 
         place={placeOf(translated)}
         languages={['es', 'en']}
         viewerId="u-viewer"
+        ephemeralDeadline={{ state: 'none' }}
         onJumpToMessage={() => {}}
         {...extra}
       />,
@@ -436,7 +474,7 @@ describe('FocalRow — `lang` SUIT la langue servie après une traduction greff�
   const spanish: Message = { ...BASE_MESSAGE, originalLanguage: 'es', content: 'Hola, ¿todo bien?', translations: [] };
   const renderAt = (translations: Message['translations']) =>
     renderToStaticMarkup(
-      <FocalRow mode="focal" place={placeOf({ ...spanish, translations })} languages={['fr', 'en']} viewerId="u-viewer" onJumpToMessage={() => {}} />,
+      <FocalRow mode="focal" place={placeOf({ ...spanish, translations })} languages={['fr', 'en']} viewerId="u-viewer" ephemeralDeadline={{ state: 'none' }} onJumpToMessage={() => {}} />,
     );
 
   test('aucune traduction ⇒ lang="es", l’ORIGINAL', () => {
@@ -503,6 +541,7 @@ describe('FocalRow — retirer une réaction en tapant sa capsule (#5865)', () =
           place={placeOf(withReactions)}
           languages={['fr', 'en']}
           viewerId="u-viewer"
+          ephemeralDeadline={{ state: 'none' }}
           onJumpToMessage={() => {}}
           myReactions={['👍']}
           onReact={onReact}
@@ -726,6 +765,7 @@ describe('FocalRow — les états du message (#5936)', () => {
         place={placeOf(message)}
         languages={['fr', 'en']}
         viewerId="u-viewer"
+        ephemeralDeadline={{ state: 'none' }}
         onJumpToMessage={() => {}}
         {...(onOpenStory === undefined ? {} : { onOpenStory })}
       />,
@@ -932,6 +972,7 @@ describe('FocalRow — « modifié » d’un message ENVOYÉ reste lisible', () 
         place={placeOf({ ...BASE_MESSAGE, senderId: 'u-viewer', isEdited: true })}
         languages={['fr']}
         viewerId="u-viewer"
+        ephemeralDeadline={{ state: 'none' }}
         onJumpToMessage={() => {}}
       />,
     );

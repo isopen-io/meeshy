@@ -168,7 +168,7 @@ test('la table des modes couvre TOUTE l’énumération partagée', () => {
   }
 });
 
-describe.each(MODES_AVEC_RANGEES)('mode %s', (mode) => {
+for (const mode of MODES_AVEC_RANGEES) describe(`mode ${mode}`, () => {
   test('rend le DÉCOMPTE d’un éphémère reçu', async () => {
     const message = messageOf({ id: 'm-ephemere', ephemeralDuration: 600 });
     noteEphemeralReception('m-ephemere', Date.now());
