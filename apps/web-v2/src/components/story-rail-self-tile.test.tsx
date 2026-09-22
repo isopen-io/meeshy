@@ -7,9 +7,9 @@ import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { StoryRailSelfEntry } from '@/lib/view/story-rail-self';
 import type { StoryTrayGroup } from '@/lib/view/story-tray';
-import { MIN_TOUCH_TARGET } from './rail-tile';
+import { MIN_TOUCH_TARGET, RAIL_TILE_GRANDE } from './rail-tile';
 import { StoryRail } from './story-rail';
-import { MOOD_BADGE_PLACEHOLDER } from './story-rail-self-tile';
+import { MOOD_BADGE_PLACEHOLDER, selfBadgeDiameter } from './story-rail-self-tile';
 
 /**
  * **LES DEUX PORTES DE MA CELLULE** (#6150) — directive porteur du 2026-09-17 :
@@ -235,6 +235,34 @@ describe('deux pastilles sur un avatar — le piège d\'accessibilité', () => {
       const n = el.querySelector(prise) as HTMLElement | null;
       expect(n?.style.minWidth).toBe(`${MIN_TOUCH_TARGET}px`);
       expect(n?.style.minHeight).toBe(`${MIN_TOUCH_TARGET}px`);
+    }
+  });
+
+  /**
+   * **LA CIBLE N'EST PAS LE DISQUE** (#7449) — le défaut que ce fichier
+   * DÉCLARAIT sans l'appliquer : `width: badge` et `minWidth: 44` vivaient sur
+   * le MÊME élément, celui qui portait le fond, donc le minimum gagnait et le
+   * (+) était PEINT à 44 px sur un anneau de 94. Mesuré au navigateur avant
+   * correctif : 44×44.
+   *
+   * Le témoin interroge donc la boîte qui PEINT, distincte de celle qui se
+   * touche — et il vérifie que celle-ci ne porte plus aucun fond, sans quoi la
+   * séparation serait cosmétique.
+   */
+  test('le disque PEINT suit la loi de l’anneau, la cible reste à 44', () => {
+    const el = mount({ variant: 'grande', groups: [], self: self() });
+    const attendu = `${selfBadgeDiameter(RAIL_TILE_GRANDE)}px`;
+    for (const prise of ['[data-self-create-disc]', '[data-self-mood-disc]']) {
+      const n = el.querySelector(prise) as HTMLElement | null;
+      expect(n).not.toBeNull();
+      expect(n?.style.width).toBe(attendu);
+      expect(n?.style.height).toBe(attendu);
+      expect(n?.style.minWidth).toBe('');
+    }
+    for (const prise of ['[data-self-create]', '[data-self-mood]']) {
+      const n = el.querySelector(prise) as HTMLElement | null;
+      expect(n?.style.background).toBe('');
+      expect(n?.style.backgroundColor).toBe('');
     }
   });
 

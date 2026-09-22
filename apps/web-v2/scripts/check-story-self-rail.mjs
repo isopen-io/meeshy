@@ -95,6 +95,9 @@ const browser = await launchChromium();
 const CELL = 'li[data-story-self]';
 const CREATE = '[data-self-create]';
 const MOOD = '[data-self-mood]';
+/** Le DISQUE peint, distinct de la CIBLE ci-dessus (#7449). */
+const CREATE_DISC = '[data-self-create-disc]';
+const MOOD_DISC = '[data-self-mood-disc]';
 
 async function openList(context) {
   const page = await context.newPage();
@@ -179,6 +182,21 @@ async function runScheme({ colorScheme, locale, dir }) {
       `${tag} : l'humeur doit se toucher sur ${MIN_TARGET} px — ${round(humeur.width)}×${round(humeur.height)}`,
     );
     check(overlap(plus, humeur) === 0, `${tag} : les deux cibles se recouvrent sur ${overlap(plus, humeur)} px²`);
+
+    /* ── 2 bis. LA CIBLE N'EST PAS LE DISQUE (#7449) ────────────────────
+       `width: badge` et `minWidth: 44` vivaient sur le MÊME élément, celui qui
+       portait le fond : le minimum gagnait et le (+) était PEINT à 44 px sur
+       un anneau de 94 — presque la moitié du visage. Le doc-comment du
+       composant promettait pourtant « MESURE ~26, TOUCHE 44 » depuis toujours.
+       Un contrôle de CIBLE ne peut pas attraper ça : il mesure la même boîte,
+       et 44 est la réponse juste. Celui-ci mesure ce qui est PEINT. */
+    for (const [quoi, prise] of [['(+)', CREATE_DISC], ["l'humeur", MOOD_DISC]]) {
+      const disque = await boxOf(page, prise);
+      check(
+        disque !== null && disque.width < MIN_TARGET && disque.width >= 12,
+        `${tag} : le disque de ${quoi} n'est pas peint à SA taille (${disque === null ? 'absent' : round(disque.width)}, cible ${MIN_TARGET})`,
+      );
+    }
   }
 
   /* ── 3. DEUX LIBELLÉS DISTINCTS, ET AUCUN VIDE ────────────────────────── */

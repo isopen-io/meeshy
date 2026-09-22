@@ -86,6 +86,29 @@ const fr = {
   'status.compose.error': "Votre humeur n'a pas pu être publiée.",
   'status.compose.offline': 'Hors ligne — votre humeur partira au retour du réseau.',
 
+  /* PUBLIER DEPUIS LE FIL (#7449) — la porte de création de l'en-tête du Flux
+     et le composeur qu'elle ouvre (`routes/post-compose.tsx`). MINIMAL, même
+     discipline que l'humeur ci-dessus : un texte, des médias, un format, on
+     publie. `post.compose.refusal.reel` dit la règle de `qualifiesAsReel`
+     (`packages/shared/utils/reel-composition.ts`) plutôt que de la taire —
+     iOS refuse en la NOMMANT, le web fait pareil. */
+  'feed.header.create': 'Créer une publication ou un réel',
+  'feed.create.post': 'Publication',
+  'feed.create.reel': 'Réel',
+  'post.compose.title': 'Nouvelle publication',
+  'post.compose.format': 'Format',
+  'post.compose.text': 'Quoi de neuf ?',
+  'post.compose.media.add': 'Photo ou vidéo',
+  'post.compose.media.remove': 'Retirer ce média',
+  'post.compose.media.sending': 'Envoi…',
+  'post.compose.media.failed': 'Ce média n’a pas pu être envoyé.',
+  'post.compose.publish': 'Publier',
+  'post.compose.publishing': 'Publication…',
+  'post.compose.error': 'Votre publication n’a pas pu être publiée.',
+  'post.compose.offline': 'Hors ligne — publiez au retour du réseau.',
+  'post.compose.refusal.empty': 'Écrivez un mot ou ajoutez un média.',
+  'post.compose.refusal.reel': 'Un réel demande une vidéo ou un son d’au moins 3 secondes, ou au moins deux images.',
+
   /* LA CARTE DU FIL ET SES GESTES (#6488) — `FeedPostCard`, l'en-tête et les
      quatre états du Flux (`routes/feed.tsx`), et les échecs d'un geste
      (`lib/api/feed-gestures.ts`, `lib/feed/share-url.ts`) : tous écrits en
