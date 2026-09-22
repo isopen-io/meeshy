@@ -114,7 +114,10 @@ public struct MessageProtectionDescriptor: Equatable, Sendable {
 
         var badges: [Badge] = []
         switch ephemeralState {
-        case .running, .awaitingReception:
+        case .running, .imminent, .awaitingReception:
+            // `.running` et `.imminent` portent tous deux un badge : c'est le
+            // CHIFFRE qui distingue les deux, pas la présence de la flamme
+            // (#7467). Un éphémère s'annonce dès sa réception.
             badges.append(.ephemeral(ephemeralState))
         case .notEphemeral, .expired:
             break
