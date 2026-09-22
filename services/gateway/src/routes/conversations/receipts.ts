@@ -667,7 +667,8 @@ async function readPeople(
       deliveredAt: iso(row.deliveredAt),
       receivedAt: iso(row.receivedAt),
       readAt: iso(row.readAt),
-      readDevice: row.readDevice ?? null,
+      // readDevice should only be served to the viewer (#7358)
+      readDevice: row.participantId === reader.membership.id ? (row.readDevice ?? null) : null,
     }));
 
   const { total, limit: served, offset: from, hasMore } = page.pagination;
