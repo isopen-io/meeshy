@@ -368,21 +368,6 @@ struct BubbleStandardLayout: View {
     /// status sheet). The footer keeps its retry handler in every other case.
     static func footerShowsRetry(isFailedOutgoing: Bool) -> Bool { !isFailedOutgoing }
 
-    /// #7365 — statut RÉSOLU (`DeliveryStatusResolver`), pas le brut : « lu »
-    /// dès UN lecteur sur N sinon, faux en groupe.
-    private var deliveryStatusAccessibilityLabel: String {
-        switch content.meta.deliveryStatus {
-        case .sending: return "en cours d'envoi"
-        case .invisible: return "en cours d'envoi"
-        case .clock: return "en cours d'envoi"
-        case .slow: return "envoi lent"
-        case .sent: return "envoye"
-        case .delivered: return "distribue"
-        case .read: return "lu"
-        case .failed: return "echec d'envoi"
-        case nil: return ""
-        }
-    }
 
     private var reactionSummaries: [ReactionSummary] { content.reactions }
 
@@ -494,7 +479,7 @@ struct BubbleStandardLayout: View {
         ))
         parts.append(content.meta.timeString)
         if content.isMe {
-            parts.append(deliveryStatusAccessibilityLabel)
+            parts.append(MessageAccessibilityLabelComposer.deliveryStatusAccessibilityLabel(content.meta.deliveryStatus))
         }
         if content.editedAt != nil {
             parts.append(String(localized: "a11y.message.edited", bundle: .main))
@@ -1206,10 +1191,10 @@ struct BubbleStandardLayout: View {
             storyRing: senderStoryRingState
         ) : nil
 
-        // #7365 — statut RÉSOLU, pas le brut (voir la note ci-dessus).
+        // #7365 — statut RÉSOLU (tout-ou-rien en groupe), jamais le brut.
         let model = BubbleFooterModel.make(
             timeString: content.meta.timeString,
-            deliveryStatus: content.meta.deliveryStatus ?? message.deliveryStatus,
+            deliveryStatus: content.meta.deliveryStatus ?? .sent,
             isMe: content.isMe,
             isOnline: networkIsOnline,
             sender: sender,

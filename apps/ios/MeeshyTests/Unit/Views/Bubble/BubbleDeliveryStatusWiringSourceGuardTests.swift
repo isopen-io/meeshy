@@ -54,7 +54,8 @@ final class BubbleDeliveryStatusWiringSourceGuardTests: XCTestCase {
         let source = try strippedSource("Bubble/BubbleStandardLayout.swift")
 
         XCTAssertFalse(
-            source.contains("deliveryStatus: \(Self.rawRead),"),
+            source.contains("deliveryStatus: \(Self.rawRead)")
+                || source.contains("?? \(Self.rawRead)"),
             "`resolvedFooter()` repose `deliveryStatus: message.deliveryStatus,` — le footer "
             + "affiche à nouveau le statut BRUT, faux dès qu'un groupe a un lecteur sur N."
         )
@@ -70,25 +71,24 @@ final class BubbleDeliveryStatusWiringSourceGuardTests: XCTestCase {
         )
     }
 
-    // MARK: - VoiceOver (BubbleStandardLayout.deliveryStatusAccessibilityLabel)
+    // MARK: - VoiceOver (libellé de `MessageAccessibilityLabelComposer`, source unique)
 
     func test_accessibilityLabel_noLongerSwitchesOnRawDeliveryStatus() throws {
         let source = try strippedSource("Bubble/BubbleStandardLayout.swift")
 
         XCTAssertFalse(
             source.contains("switch \(Self.rawRead) {"),
-            "`deliveryStatusAccessibilityLabel` reswitch sur `message.deliveryStatus` — VoiceOver "
-            + "annoncerait « lu » pour 1 lecteur sur 10."
+            "La bulle reswitch sur `message.deliveryStatus` — VoiceOver annoncerait « lu » pour "
+            + "1 lecteur sur 10, et en français en dur."
         )
     }
 
-    func test_accessibilityLabel_switchesOnResolvedDeliveryStatus() throws {
+    func test_accessibilityLabel_usesTheComposerOnResolvedDeliveryStatus() throws {
         let source = try strippedSource("Bubble/BubbleStandardLayout.swift")
 
         XCTAssertTrue(
-            source.contains("switch \(Self.resolvedRead) {"),
-            "`deliveryStatusAccessibilityLabel` ne switch plus sur `content.meta.deliveryStatus` — "
-            + "VoiceOver doit annoncer le statut RÉSOLU, pas le brut."
+            source.contains("MessageAccessibilityLabelComposer.deliveryStatusAccessibilityLabel(\(Self.resolvedRead))"),
+            "La bulle ne délègue plus son libellé de livraison au composeur, sur le statut RÉSOLU."
         )
     }
 
@@ -98,7 +98,8 @@ final class BubbleDeliveryStatusWiringSourceGuardTests: XCTestCase {
         let source = try strippedSource("ThemedMessageBubble.swift")
 
         XCTAssertFalse(
-            source.contains("deliveryStatus: \(Self.rawRead),"),
+            source.contains("deliveryStatus: \(Self.rawRead)")
+                || source.contains("?? \(Self.rawRead)"),
             "`stickerLayout` repose `deliveryStatus: message.deliveryStatus,` — la coche d'un "
             + "sticker resterait fausse pour un groupe, alors que `content: BubbleContent` (déjà "
             + "résolu) est un paramètre de la fonction."

@@ -1106,12 +1106,15 @@ struct MessageViewsDetailView: View {
 
     // MARK: - Helpers
 
-    /// #7365 — résolu (`DeliveryStatusResolver`, tout-ou-rien pour un
-    /// groupe) plutôt que lu sur `message.deliveryStatus` brut ; extrait
-    /// dans `MessageViewsReadStatusRules` (même patron que
-    /// `shouldFetch`/`showsSpinner`, ce fichier restant sous le plafond).
+    /// #7365 — résolu comme la bulle (`MessageViewsReadStatusRules`).
     private var deliveryStatusLevel: Int {
-        MessageViewsReadStatusRules.deliveryStatusLevel(for: message)
+        MessageViewsReadStatusRules.deliveryStatusLevel(
+            for: message,
+            tally: readStatusData.map {
+                .init(recipientCount: $0.totalMembers, deliveredCount: $0.receivedCount, readCount: $0.readCount)
+            },
+            showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts
+        )
     }
 
     private func formatDateFR(_ date: Date) -> String {

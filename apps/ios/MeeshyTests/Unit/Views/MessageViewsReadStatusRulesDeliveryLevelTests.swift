@@ -32,12 +32,55 @@ final class MessageViewsReadStatusRulesDeliveryLevelTests: XCTestCase {
         XCTAssertEqual(MessageViewsReadStatusRules.deliveryStatusLevel(for: message), 3)
     }
 
-    /// Un groupe où 3 des 10 destinataires ont reçu (aucun n'a lu) affiche
-    /// « Distribué », pas « Envoyé » ni « Lu ».
-    func test_deliveryStatusLevel_partialGroupDelivery_isDelivered() {
+    /// Les 10 destinataires ont reçu, aucun n'a lu ⇒ « Distribué ».
+    func test_deliveryStatusLevel_allTenDeliveredNoneRead_isDelivered() {
         let message = makeMessage(deliveryStatus: .delivered, deliveredCount: 10, readCount: 0, recipientCount: 10)
 
         XCTAssertEqual(MessageViewsReadStatusRules.deliveryStatusLevel(for: message), 2)
+    }
+
+    /// Tout-ou-rien, palier d'en dessous : 3 destinataires sur 10 ont reçu ⇒
+    /// « Envoyé », comme la coche de la bulle — jamais « Distribué ».
+    func test_deliveryStatusLevel_threeOfTenDelivered_isSent() {
+        let message = makeMessage(deliveryStatus: .delivered, deliveredCount: 3, readCount: 0, recipientCount: 10)
+
+        XCTAssertEqual(MessageViewsReadStatusRules.deliveryStatusLevel(for: message), 1)
+    }
+
+    /// Une ligne d'origine socket ne porte pas de dénominateur
+    /// (`recipientCount == 0`) : seul, le brut ferait foi et dirait « Lu » pour
+    /// 1 lecteur sur 10. Le décompte servi par `GET /messages/:id/read-status`
+    /// (`totalMembers`, expéditeur exclu) que la fiche charge est le
+    /// dénominateur qui tranche.
+    func test_deliveryStatusLevel_socketRowWithServerTallyOneOfTen_isNotRead() {
+        let message = makeMessage(deliveryStatus: .read, readCount: 1, recipientCount: 0)
+        let tally = MessageViewsReadStatusRules.ReadStatusTally(
+            recipientCount: 10, deliveredCount: 10, readCount: 1
+        )
+
+        XCTAssertEqual(MessageViewsReadStatusRules.deliveryStatusLevel(for: message, tally: tally), 2)
+    }
+
+    /// Le décompte serveur, plus frais que la ligne locale, fait monter la
+    /// fiche à « Lu » quand tout le groupe a lu.
+    func test_deliveryStatusLevel_serverTallyAllRead_isRead() {
+        let message = makeMessage(deliveryStatus: .sent, readCount: 0, recipientCount: 10)
+        let tally = MessageViewsReadStatusRules.ReadStatusTally(
+            recipientCount: 10, deliveredCount: 10, readCount: 10
+        )
+
+        XCTAssertEqual(MessageViewsReadStatusRules.deliveryStatusLevel(for: message, tally: tally), 3)
+    }
+
+    /// Réciprocité — la même que la bulle (`BubbleContentBuilder`) : qui ne
+    /// partage pas ses accusés de lecture ne voit pas « Lu », la fiche pas
+    /// plus que la coche.
+    func test_deliveryStatusLevel_readReceiptsHidden_neverShowsRead() {
+        let message = makeMessage(deliveryStatus: .read, readCount: 10, recipientCount: 10)
+
+        XCTAssertEqual(
+            MessageViewsReadStatusRules.deliveryStatusLevel(for: message, showReadReceipts: false), 2
+        )
     }
 
     /// Conversation directe (`recipientCount <= 1`) : le statut brut reste
