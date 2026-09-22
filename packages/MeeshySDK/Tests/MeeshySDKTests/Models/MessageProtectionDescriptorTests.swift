@@ -78,26 +78,33 @@ struct MessageProtectionDescriptorTests {
         #expect(descriptor.badges.contains(.viewOnce))
     }
 
-    @Test("Le pictogramme de chaque sens est celui du composeur")
-    func test_symboles_reprennentLeVocabulaireDuComposeur() {
-        #expect(MessageProtectionSymbols.ephemeral == "hourglass")
+    /// La table arrêtée par la directive porteur du 2026-09-22 : « vue unique
+    /// c'est "1" cerclé plutôt, et l'œil représente le flou ! » — l'éphémère
+    /// restant la flamme.
+    @Test("Chaque protection a SON pictogramme, et c'est celui de la directive")
+    func test_symboles_suiventLaTableDuPorteur() {
+        #expect(MessageProtectionSymbols.ephemeral == "flame")
         #expect(MessageProtectionSymbols.viewOnce == "1.circle")
         #expect(MessageProtectionSymbols.blurred == "eye.slash")
     }
 
-    @Test("Aucun sens ne partage son pictogramme avec un autre")
+    /// **Deux protections n'en partagent aucun.** C'est la moitié de la règle
+    /// qui a réellement été violée : `flame` a désigné la VUE UNIQUE dans la
+    /// ligne de liste pendant qu'il désignait l'ÉPHÉMÈRE dans la bulle.
+    @Test("Aucun sens ne partage son pictogramme avec un autre, plein comme vide")
     func test_symboles_sontDistinctsDeuxÀDeux() {
-        let all = [
-            MessageProtectionSymbols.ephemeral,
-            MessageProtectionSymbols.viewOnce,
-            MessageProtectionSymbols.blurred,
-        ]
-        #expect(Set(all).count == all.count)
+        #expect(Set(MessageProtectionSymbols.all).count == MessageProtectionSymbols.all.count)
+        #expect(Set(MessageProtectionSymbols.allFilled).count == MessageProtectionSymbols.allFilled.count)
+        // Un pictogramme PLEIN ne doit pas non plus être le pictogramme VIDE
+        // d'un autre sens : l'état actif d'une protection se lirait comme
+        // l'état au repos d'une autre.
+        #expect(Set(MessageProtectionSymbols.all).isDisjoint(with: Set(MessageProtectionSymbols.allFilled)))
     }
 
     @Test("Le pictogramme rempli reste celui du même sens")
     func test_symbolesRemplis_dériventDuMêmeSens() {
         #expect(MessageProtectionSymbols.viewOnceFilled == "1.circle.fill")
-        #expect(MessageProtectionSymbols.ephemeralFilled == "hourglass")
+        #expect(MessageProtectionSymbols.ephemeralFilled == "flame.fill")
+        #expect(MessageProtectionSymbols.blurredFilled == "eye.slash.fill")
     }
 }

@@ -604,23 +604,48 @@ final class ReadingModeProtectionChromeGuardTests: XCTestCase {
 
     // MARK: - Un pictogramme par sens
 
-    func test_lesPictogrammesDeProtection_sontCeuxDuComposeur() throws {
-        // `flame` désignait la VUE UNIQUE dans la liste et l'ÉPHÉMÈRE dans la
-        // bulle : un même pictogramme pour deux sens, et aucun des deux
-        // n'était celui que l'utilisateur voit quand il CHOISIT la protection.
-        XCTAssertEqual(MessageProtectionSymbols.ephemeral, "hourglass")
+    /// **La table des trois protections, arrêtée par le porteur le 2026-09-22 :**
+    /// « vue unique c'est "1" cerclé plutôt, et l'œil représente le flou ! »,
+    /// l'éphémère restant la flamme.
+    ///
+    /// Le défaut réel n'était pas qu'un pictogramme soit laid : c'est que
+    /// `flame` désignait la VUE UNIQUE dans la ligne de liste pendant qu'il
+    /// désignait l'ÉPHÉMÈRE dans la bulle — un même dessin pour deux sens
+    /// opposés. Et le COMPOSEUR lui-même se contredisait : sa barre montrait
+    /// `flame.fill`, sa feuille d'effets `hourglass`, son état inactif
+    /// `timer.circle`. Trois images pour un sens, dans l'écran où
+    /// l'utilisateur apprend le vocabulaire.
+    func test_lesPictogrammesDeProtection_suiventLaTableDuPorteur() throws {
+        XCTAssertEqual(MessageProtectionSymbols.ephemeral, "flame")
         XCTAssertEqual(MessageProtectionSymbols.viewOnce, "1.circle")
         XCTAssertEqual(MessageProtectionSymbols.blurred, "eye.slash")
+    }
 
-        let composer = try source(at: "Features/Main/Components/EffectsPickerView.swift")
-        for symbol in [MessageProtectionSymbols.ephemeral,
-                       MessageProtectionSymbols.viewOnce,
-                       MessageProtectionSymbols.blurred] {
+    /// Les DEUX surfaces de CHOIX lisent la table, plutôt que de la recopier.
+    /// Un littéral y reviendrait sans rien faire rougir — c'est exactement
+    /// ainsi que la barre et la feuille ont divergé.
+    func test_lesSurfacesDeChoix_lisentLaTableEtNePeignentAucunLittéral() throws {
+        let surfaces = [
+            "Features/Main/Components/EffectsPickerView.swift",
+            "Features/Main/Components/UniversalComposerBar+Protections.swift",
+        ]
+        let bannedLiterals = ["\"flame\"", "\"flame.fill\"", "\"1.circle\"", "\"1.circle.fill\"",
+                              "\"eye.slash\"", "\"eye.slash.fill\"", "\"hourglass\"", "\"timer.circle\""]
+        for path in surfaces {
+            let code = try source(at: path)
             XCTAssertTrue(
-                composer.contains("\"\(symbol)\""),
-                "« \(symbol) » n'est plus le pictogramme du composeur. Le vocabulaire "
-                    + "d'AFFICHAGE est celui du CHOIX : les deux doivent bouger ensemble."
+                code.contains("MessageProtectionSymbols."),
+                "`\(path)` doit lire `MessageProtectionSymbols` : c'est là que l'utilisateur "
+                    + "APPREND le vocabulaire, et l'affichage doit dire la même chose."
             )
+            for literal in bannedLiterals {
+                XCTAssertFalse(
+                    code.contains(literal),
+                    "`\(path)` peint \(literal) à la main. La table est la source unique — "
+                        + "un littéral y revient sans rien faire rougir, et c'est ainsi que la "
+                        + "barre et la feuille du composeur ont fini par se contredire."
+                )
+            }
         }
     }
 }

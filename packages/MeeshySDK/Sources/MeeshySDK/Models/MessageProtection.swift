@@ -14,21 +14,33 @@ import Foundation
 /// — le même pictogramme pour deux sens opposés, et aucun des deux n'était
 /// celui du choix (`hourglass`, `1.circle`).
 public enum MessageProtectionSymbols {
-    /// Éphémère — le sablier du composeur (`EffectsPickerView`, section
-    /// « Comportement »).
-    public static let ephemeral = "hourglass"
-    /// Vue unique — le « 1 » cerclé du composeur
-    /// (`UniversalComposerBar+Protections`, `EffectsPickerView`).
+    /// Éphémère — **la FLAMME** (directive porteur 2026-09-22 : « l'éphémère
+    /// est la flamme avec la configuration de durée par défaut »).
+    ///
+    /// Le composeur se contredisait lui-même : sa BARRE montrait déjà
+    /// `flame.fill`, sa FEUILLE des effets montrait `hourglass`, et un
+    /// troisième glyphe — `timer.circle` — servait d'état inactif à la barre.
+    /// Trois images pour un sens, dans l'écran même où l'utilisateur apprend
+    /// le vocabulaire. #7452 avait suivi la feuille ; la directive tranche
+    /// pour la flamme, et les trois sites se réconcilient ici.
+    public static let ephemeral = "flame"
+    /// Vue unique — le « 1 » cerclé
+    /// (« vue unique c'est "1" cerclé plutôt », même directive).
     public static let viewOnce = "1.circle"
-    /// Flou — l'œil barré du composeur.
+    /// Flou — **l'ŒIL** (« et l'œil représente le flou »). Barré, comme au
+    /// composeur : c'est ce qui le distingue d'un œil de lecture.
     public static let blurred = "eye.slash"
 
-    /// Variante pleine, pour un état ACTIF. `hourglass` n'a pas de variante
-    /// `.fill` au catalogue SF Symbols : le sablier reste lui-même plutôt que
-    /// de changer de sens pour gagner un remplissage.
-    public static let ephemeralFilled = ephemeral
+    /// Variante pleine, pour un état ACTIF.
+    public static let ephemeralFilled = "flame.fill"
     public static let viewOnceFilled = "1.circle.fill"
     public static let blurredFilled = "eye.slash.fill"
+
+    /// **La table entière, pour les témoins.** Une garde qui énumère à la main
+    /// resterait verte en oubliant une protection ; celle-ci se lit ici, et
+    /// une quatrième protection devra s'y inscrire pour exister.
+    public static let all: [String] = [ephemeral, viewOnce, blurred]
+    public static let allFilled: [String] = [ephemeralFilled, viewOnceFilled, blurredFilled]
 }
 
 /// Ce qu'un message DÉSIGNE de sa protection, résolu une fois, hors de toute
