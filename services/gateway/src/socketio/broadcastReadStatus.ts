@@ -17,6 +17,25 @@ import { bridgeComputed, bridgeNotComputed } from './unreadBridgeField.js';
 export interface ReadStatusSummarySource {
   getLatestMessageSummary(conversationId: string): Promise<ReadStatusSummary>;
   getUnreadCount(participantId: string, conversationId: string): Promise<number>;
+  /**
+   * G-5 (#7347) — un résumé PAR message, pour l'arriéré FIGÉ d'un accusé exact
+   * (`args.messageIds`). Même moteur que `GET …/receipts`
+   * (`routes/conversations/receipts.ts`, `detail=summary`) :
+   * `MessageReadStatusService.getConversationReadStatuses` le satisfait déjà,
+   * sans qu'aucune ligne n'y soit ajoutée. Optionnel — un collaborateur qui ne
+   * l'implémente pas retombe simplement sur `getLatestMessageSummary`, jamais
+   * une erreur.
+   */
+  getConversationReadStatuses?(
+    conversationId: string,
+    messageIds: string[],
+    historyFloor: Date | null
+  ): Promise<
+    Map<
+      string,
+      { totalMembers: number; receivedCount: number; readCount: number; readByAllAt: Date | null }
+    >
+  >;
 }
 
 /** La préférence qui autorise — ou tait — l'accusé. `PrivacyPreferencesService`. */
@@ -77,6 +96,17 @@ export interface ReadStatusBroadcastArgs {
   userId: string;
   isAnonymous: boolean;
   type: 'read' | 'received';
+  /**
+   * G-5 (#7347) — le lot FIGÉ par CETTE écriture (`applyReceipt`'s `targeted`,
+   * le résultat VETTÉ de `vetReportedMessages`), jamais un lot simplement
+   * RAPPORTÉ. Présent ET non vide UNIQUEMENT sur `type: 'read'` en mode exact
+   * — en son absence (repli legacy, ou `type: 'received'`), le comportement
+   * D'AVANT ce lot est intact : un seul résumé agrégé sur le dernier message.
+   * Sa présence fait émettre UN `read-status:updated` PAR message, dans
+   * L'ORDRE fourni — jamais un agrégat qui rétrograderait au silence les
+   * messages qui ne sont pas le dernier de la conversation.
+   */
+  messageIds?: readonly string[];
 }
 
 /**
@@ -287,8 +317,43 @@ export async function broadcastReadStatus(
     return;
   }
 
-  const [summary, activeParticipants] = await Promise.all([
-    readStatusService.getLatestMessageSummary(args.conversationId),
+  // G-5 (#7347) — le lot EXACT gouverne la forme : présent (et non vide) sur un
+  // `read`, avec un collaborateur qui sait le résoudre par message, il fait
+  // rendre UN résumé PAR messageId, dans l'ordre fourni. Sinon, repli LEGACY —
+  // le comportement d'avant ce lot, intact : un seul résumé agrégé sur le
+  // dernier message de la conversation.
+  const exactMessageIds =
+    args.type === 'read' && args.messageIds && args.messageIds.length > 0 ? args.messageIds : null;
+
+  const buildSummaries = async (): Promise<readonly ReadStatusSummary[]> => {
+    if (!exactMessageIds || !readStatusService.getConversationReadStatuses) {
+      return [await readStatusService.getLatestMessageSummary(args.conversationId)];
+    }
+    const perMessage = await readStatusService.getConversationReadStatuses(
+      args.conversationId,
+      [...exactMessageIds],
+      null
+    );
+    // Un message que le moteur ne rend pas (supprimé entre le gel et la
+    // diffusion, ou lecture tombée) n'a pas de résumé : lui inventer des
+    // compteurs à zéro ferait régresser ses coches chez l'expéditeur.
+    return exactMessageIds.flatMap((messageId) => {
+      const row = perMessage.get(messageId);
+      if (!row) return [];
+      return [
+        {
+          messageId,
+          totalMembers: row.totalMembers,
+          deliveredCount: row.receivedCount,
+          readCount: row.readCount,
+          readByAllAt: row.readByAllAt,
+        },
+      ];
+    });
+  };
+
+  const [summaries, activeParticipants] = await Promise.all([
+    buildSummaries(),
     prisma.participant.findMany({
       where: { conversationId: args.conversationId, isActive: true },
       // `id` NOMME la room personnelle d'un participant sans ligne `User` —
@@ -297,37 +362,44 @@ export async function broadcastReadStatus(
     }),
   ]);
 
-  // Ce que TOUTE la conversation peut savoir : qui a lu, et où en est le résumé
-  // des coches. Rien qui décrive l'arriéré personnel de l'acteur.
-  const peerPayload: ReadStatusUpdatedEventData = {
-    conversationId: args.conversationId,
-    participantId: args.participantId,
-    userId: actorUserId,
-    type: args.type,
-    updatedAt: new Date(),
-    summary,
-  };
+  // Un `read-status:updated` PAR résumé — un seul tour de boucle sur le repli
+  // legacy (`summaries.length === 1`), autant que de messages figés en mode
+  // exact. Les DEUX audiences (éventail, room personnelle de l'acteur) sont
+  // servies pour CHAQUE résumé — jamais un agrégat qui rétrograderait au
+  // silence les messages qui ne sont pas le dernier de la conversation.
+  for (const summary of summaries) {
+    // Ce que TOUTE la conversation peut savoir : qui a lu, et où en est le
+    // résumé des coches. Rien qui décrive l'arriéré personnel de l'acteur.
+    const peerPayload: ReadStatusUpdatedEventData = {
+      conversationId: args.conversationId,
+      participantId: args.participantId,
+      userId: actorUserId,
+      type: args.type,
+      updatedAt: new Date(),
+      summary,
+    };
 
-  // L'acteur n'est retiré de l'éventail que lorsqu'il a une version à lui à
-  // recevoir : sur un `received`, les deux payloads seraient identiques et
-  // l'exclure lui coûterait l'événement sans rien protéger. Retirer sa room
-  // personnelle de la chaîne ne suffirait pas — la room de conversation le
-  // tient dès qu'il a le fil ouvert, et il recevrait alors les DEUX copies du
-  // seul événement où elles diffèrent.
-  emitToConversationParticipants({
-    io,
-    conversationId: args.conversationId,
-    participants: activeParticipants,
-    event: SERVER_EVENTS.READ_STATUS_UPDATED,
-    payload: peerPayload,
-    exceptRooms: actorReadSync ? [ROOMS.user(personalRoomKey)] : null,
-  });
+    // L'acteur n'est retiré de l'éventail que lorsqu'il a une version à lui à
+    // recevoir : sur un `received`, les deux payloads seraient identiques et
+    // l'exclure lui coûterait l'événement sans rien protéger. Retirer sa room
+    // personnelle de la chaîne ne suffirait pas — la room de conversation le
+    // tient dès qu'il a le fil ouvert, et il recevrait alors les DEUX copies
+    // du seul événement où elles diffèrent.
+    emitToConversationParticipants({
+      io,
+      conversationId: args.conversationId,
+      participants: activeParticipants,
+      event: SERVER_EVENTS.READ_STATUS_UPDATED,
+      payload: peerPayload,
+      exceptRooms: actorReadSync ? [ROOMS.user(personalRoomKey)] : null,
+    });
 
-  // La version de l'acteur, dans sa seule room personnelle — celle que toutes
-  // ses sessions ont rejointe à l'authentification, compte ou pas.
-  if (actorReadSync) {
-    const actorPayload: ReadStatusUpdatedEventData = { ...peerPayload, ...actorReadSync };
-    io.to(ROOMS.user(personalRoomKey)).emit(SERVER_EVENTS.READ_STATUS_UPDATED, actorPayload);
+    // La version de l'acteur, dans sa seule room personnelle — celle que
+    // toutes ses sessions ont rejointe à l'authentification, compte ou pas.
+    if (actorReadSync) {
+      const actorPayload: ReadStatusUpdatedEventData = { ...peerPayload, ...actorReadSync };
+      io.to(ROOMS.user(personalRoomKey)).emit(SERVER_EVENTS.READ_STATUS_UPDATED, actorPayload);
+    }
   }
 
   await emitUnreadUpdate();
