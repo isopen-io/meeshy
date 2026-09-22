@@ -113,6 +113,7 @@ const renderBubble = (msg: Message) =>
       languages={['fr', 'en']}
       isGrouped={false}
       viewerId={VIEWER_ID}
+      ephemeralDeadline={{ state: 'none' }}
       onJumpToMessage={() => {}}
       onPickLanguage={() => {}}
     />,
@@ -125,6 +126,7 @@ const renderFocal = (msg: Message) =>
       place={placeOf(msg)}
       languages={['fr', 'en']}
       viewerId={VIEWER_ID}
+      ephemeralDeadline={{ state: 'none' }}
       onJumpToMessage={() => {}}
       onPickLanguage={() => {}}
     />,

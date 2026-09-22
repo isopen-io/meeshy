@@ -30,15 +30,25 @@ export interface MessageExpiredEventData {
 }
 
 /**
- * L'échéance SERVIE d'un message éphémère, résolue pour le destinataire de
- * l'événement. @see MESSAGE_COUNTDOWN_STARTED
+ * LE DÉCOMPTE D'UN ÉPHÉMÈRE COMMENCE (contrat du fil #7451, point 5) — émis à
+ * la PREMIÈRE réception d'un destinataire, jamais à l'envoi.
  *
- * `expiresAt` est une date ISO 8601. Pour un destinataire c'est `D(u)` ; pour
- * l'expéditeur, la plus tardive des `D` connues.
+ * `expiresAt` vaut `D(u) = réception(u) + ephemeralDuration` sur la room
+ * `user:<destinataire>`, et la plus TARDIVE des `D(u)` connues sur la room
+ * `user:<expéditeur>` — deux valeurs pour un même message, ce qui est la raison
+ * même pour laquelle cet événement est adressé par utilisateur et non diffusé
+ * en room de conversation (point 4).
+ *
+ * Le client compose ce qu'il AFFICHE avec `ephemeralDeadline()`
+ * (`utils/ephemeral-deadline.ts`) : cette valeur y entre comme échéance SERVIE,
+ * en concurrence avec sa réception locale, et c'est la plus PROCHE qui gagne.
+ *
+ * @see MESSAGE_COUNTDOWN_STARTED
  */
 export interface MessageCountdownStartedEventData {
   readonly messageId: string;
   readonly conversationId: string;
+  /** ISO 8601 — l'échéance de CE destinataire, ou celle de l'expéditeur. */
   readonly expiresAt: string;
 }
 
@@ -293,7 +303,15 @@ export interface MessageSendData {
    */
   readonly copyAttachmentsFromMessageId?: string;
   readonly isBlurred?: boolean;
-  /** ISO 8601 — la passerelle en recompose le bit EPHEMERAL. */
+  /**
+   * ISO 8601 — la passerelle en recompose le bit EPHEMERAL.
+   *
+   * LE CHEMIN D'ENVOI RESTE INCHANGÉ PAR LE LOT web-v2 #7454 : c'est #7451 qui
+   * fera parler les clients en DURÉE (`ephemeralDuration`) plutôt qu'en
+   * échéance, des deux côtés du cliquet d'égalité de clés
+   * (`services/gateway/src/validation/socket-event-schemas.ts`, § SendDoorRatchet).
+   * Ce lot ne touche QUE ce qui REVIENT du serveur.
+   */
   readonly expiresAt?: string;
   readonly effectFlags?: number;
   readonly isViewOnce?: boolean;
@@ -360,6 +378,7 @@ export interface MessageSendWithAttachmentsData {
   readonly forwardedFromId?: string;
   readonly forwardedFromConversationId?: string;
   readonly isBlurred?: boolean;
+  /** Voir `MessageSendData.expiresAt` — chemin HÉRITÉ, la durée fait foi. */
   readonly expiresAt?: string;
   readonly effectFlags?: number;
   readonly isViewOnce?: boolean;
@@ -468,7 +487,15 @@ export interface SocketIOMessage {
   readonly isEdited?: boolean;
   readonly editedAt?: Date;
   readonly deletedAt?: Date;
+  /**
+   * ABSENT pour un éphémère (contrat #7451, point 4) : une diffusion en room
+   * ne peut pas porter une échéance différente par lecteur. Le client compose
+   * la sienne depuis `ephemeralDuration` et sa RÉCEPTION locale
+   * (`utils/ephemeral-deadline.ts`).
+   */
   readonly expiresAt?: Date;
+  /** Secondes entières, > 0 — servi partout : REST, `message:new` et push. */
+  readonly ephemeralDuration?: number;
   readonly createdAt: Date;
   readonly updatedAt?: Date;
   readonly sender?: SocketIOMessageSender;

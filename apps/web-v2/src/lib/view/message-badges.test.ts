@@ -12,8 +12,6 @@ beforeAll(async () => {
   await Promise.all([loadInterfaceCatalog('fr'), loadInterfaceCatalog('en')]);
 });
 
-const NOW = new Date('2026-09-10T10:00:00.000Z').getTime();
-
 const message = (partial: Partial<Message> = {}): Message =>
   ({
     id: 'm1',
@@ -44,9 +42,7 @@ describe('badgesOf — l’ordre iOS et rien d’autre', () => {
         forwardedFromId: 'm-far',
         forwardedFromConversation: { id: 'c-salon', title: 'Salon', type: 'public' },
         isEdited: true,
-      }),
-      NOW,
-    );
+      }));
 
     expect(badges).toEqual([
       { kind: 'pinned' },
@@ -56,10 +52,10 @@ describe('badgesOf — l’ordre iOS et rien d’autre', () => {
   });
 
   test('un message nu ne porte aucun badge', () => {
-    expect(badgesOf(message(), NOW)).toEqual([]);
+    expect(badgesOf(message())).toEqual([]);
   });
 
-  test('un `expiresAt` futur place l’éphémère en 3ᵉ position, AVANT « modifié »', () => {
+  test('l’ORDRE tient sans l’éphémère, qui a quitté cette loi (#7454)', () => {
     const badges = badgesOf(
       message({
         pinnedAt: new Date('2026-09-10T09:30:00.000Z'),
@@ -67,16 +63,22 @@ describe('badgesOf — l’ordre iOS et rien d’autre', () => {
         forwardedFromConversation: { id: 'c-salon', title: 'Salon', type: 'public' },
         expiresAt: new Date('2026-09-10T11:00:00.000Z'),
         isEdited: true,
-      }),
-      NOW,
-    );
+      }));
 
-    expect(badges.map((b) => b.kind)).toEqual(['pinned', 'forwarded', 'ephemeral', 'edited']);
+    expect(badges.map((b) => b.kind)).toEqual(['pinned', 'forwarded', 'edited']);
   });
 
-  test('un `expiresAt` déjà échu ne pose aucun badge éphémère', () => {
-    const badges = badgesOf(message({ expiresAt: new Date('2026-09-10T09:00:00.000Z') }), NOW);
-    expect(badges.some((b) => b.kind === 'ephemeral')).toBe(false);
+  /**
+   * `expiresAt` NE DIT PLUS qu'un message décompte (#7454) : sur `message:new`
+   * il est absent pour un éphémère, et l'échéance qui vaut se compose depuis la
+   * RÉCEPTION locale (`resolveEphemeralDeadline`). Cette loi ne doit donc plus
+   * en produire aucun badge — sinon la présence du badge et le calcul du
+   * décompte reposeraient sur deux conditions différentes.
+   */
+  test('aucun `expiresAt`, futur ou échu, ne pose de badge ici', () => {
+    for (const expiresAt of [new Date('2026-09-10T11:00:00.000Z'), new Date('2026-09-10T09:00:00.000Z')]) {
+      expect(badgesOf(message({ expiresAt })).map((b) => b.kind)).toEqual([]);
+    }
   });
 });
 
