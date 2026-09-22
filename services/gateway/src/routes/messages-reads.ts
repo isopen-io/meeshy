@@ -586,7 +586,10 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
 
       // Vérifier que l'attachment existe et que l'utilisateur a accès
       const attachment = await prisma.messageAttachment.findFirst({
-        where: { id: attachmentId },
+        where: {
+          id: attachmentId,
+          deletedAt: null
+        },
         include: {
           message: {
             include: {
@@ -616,13 +619,28 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
 
       // SSOT guard: same string-schema pagination as the message variant above.
       const { offset: pageOffset, limit: pageLimit } = validatePagination(offset, limit, { defaultLimit: 20, maxLimit: 100 });
+
+      // #7357 — le plancher d'historique s'applique ICI, pas seulement dans le
+      // service. Un accusé de lecture est NOMINATIF (qui a lu, et quand) : c'est
+      // de l'historique au même titre que le texte du message, et un membre
+      // arrive après coup ne doit pas apprendre qui lisait avant lui. Le service
+      // sait déjà refuser — il accepte `historyFloor` depuis ce lot — mais tant
+      // que cette route ne le lui PASSE pas, la garde est écrite, testée, et
+      // n'atteint personne en production. Les deux autres lectures nominatives
+      // du même service le posent déjà ; celle-ci était la dernière sans.
+      const historyFloor = await loadReaderHistoryFloor(prisma, {
+        conversationId: attachment.message.conversationId,
+        reader: historyReaderFromAuthContext(authRequest.authContext),
+      });
+
       const statusDetails = await readStatusService.getAttachmentStatusDetails(attachmentId, {
         offset: pageOffset,
         limit: pageLimit,
         filter,
         // Le lecteur reste visible à lui-même même s'il a désactivé ses
         // accusés — même convention que les cinq portes texte (#3907).
-        viewerUserId: userId
+        viewerUserId: userId,
+        historyFloor
       });
 
       return sendPaginatedSuccess(reply, statusDetails.statuses, statusDetails.pagination);
