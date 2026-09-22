@@ -1,5 +1,6 @@
 import type { CanvasV3 } from '@meeshy/shared/types/canvas-v3';
 
+import type { PublicationKind } from '@/lib/stories/publication-kind';
 import { unclaimedStoryMediaIds } from '@/lib/stories/story-document';
 
 import type { ConversationsDeps } from './conversations';
@@ -29,6 +30,13 @@ import type { ApiResult } from './http';
  * reste juge (`CANVAS_INVALID`, `core.ts:118-129`), et son refus se dit.
  */
 export type PublishStoryParams = ConversationsDeps & {
+  /**
+   * **LE FORMAT PUBLIÉ** (#7497) — le studio est le composer UNIQUE de la
+   * story, du post et du réel : le même canevas part sous le `type` que
+   * l'auteur publie. Absent ⇒ `STORY`. La passerelle pose la visibilité par
+   * défaut du format (`FRIENDS` pour une story, `PUBLIC` sinon, `core.ts`).
+   */
+  readonly type?: PublicationKind;
   /**
    * **LE CONTENU DE LA PUBLICATION** — `Post.content`, jamais « la légende »
    * (commentaire corrigé, #6944 : il DISAIT « LA LÉGENDE », et c'est
@@ -82,7 +90,7 @@ export async function publishStory(params: PublishStoryParams): Promise<ApiResul
     path: '/api/v1/posts',
     headers: CANVAS_CAPS_HEADERS,
     body: {
-      type: 'STORY',
+      type: params.type ?? 'STORY',
       ...(params.content !== undefined && params.content !== '' ? { content: params.content } : {}),
       ...(params.originalLanguage !== undefined ? { originalLanguage: params.originalLanguage } : {}),
       ...(params.mediaCaption !== undefined ? { mediaCaption: params.mediaCaption } : {}),

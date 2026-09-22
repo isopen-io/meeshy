@@ -461,8 +461,15 @@ extension MeeshyComposerHost {
             Image(systemName: "arrow.up")
                 .accessibilityHidden(true)
             if socleShowsLabels {
-                Text("composer.socle.publish", bundle: .main)
-                    .lineLimit(1)
+                // #7497 — la partie principale NOMME le format qui partira si
+                // l'auteur ne touche pas au chevron ; le mood garde « Publier ».
+                if let titre = ComposerPublishMenuCopy.publishTitle(selectedFormat) {
+                    Text(titre)
+                        .lineLimit(1)
+                } else {
+                    Text("composer.socle.publish", bundle: .main)
+                        .lineLimit(1)
+                }
             }
         }
         .font(.footnote.weight(.bold))
@@ -571,28 +578,46 @@ extension MeeshyComposerHost {
         }
     }
 
-    /// **La flèche du socle — un menu quand la composition appelle un choix**
-    /// (#6502). Plus d'une image ou au moins une vidéo : le menu propose le
-    /// format et, pour un post à plusieurs scènes, l'agencement. Sinon la flèche
-    /// publie directement au format d'ouverture. Les deux passent par le MÊME
-    /// habillage, qui porte le gate.
+    /// **La flèche du socle — une capsule SCINDÉE `[↑ Publier la story | ⌄]`**
+    /// (#7497, directive porteur 2026-09-22). La partie principale publie au
+    /// format de la porte, celui qu'elle nomme ; le chevron ouvre « Publier
+    /// comme » pour en choisir un autre (et, pour un post à plusieurs scènes,
+    /// l'agencement). Sans autre format à offrir, la capsule reste entière. Les
+    /// deux passent par le MÊME habillage, qui porte le gate.
     var publishButton: some View {
         publishCapsule(
-            Group {
+            HStack(spacing: 0) {
+                Button {
+                    performSoclePublish(ComposerPublishChoice(format: selectedFormat, layout: nil))
+                } label: {
+                    publishCapsuleLabel
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(ComposerPublishMenuCopy.publishTitle(selectedFormat)
+                                    ?? String(localized: "composer.socle.publish", bundle: .main))
                 if let entries = publishMenuEntries {
+                    Rectangle()
+                        .fill(Color.white.opacity(0.35))
+                        .frame(width: 1, height: 20)
+                        .accessibilityHidden(true)
                     ComposerPublishMenu(entries: entries, onPublish: { performSoclePublish($0) }) {
-                        publishCapsuleLabel
+                        publishChevronLabel
                     }
-                } else {
-                    Button {
-                        performSoclePublish(ComposerPublishChoice(format: selectedFormat, layout: nil))
-                    } label: {
-                        publishCapsuleLabel
-                    }
-                    .buttonStyle(.plain)
+                    .accessibilityLabel(ComposerPublishMenuCopy.title)
+                    .accessibilityHint(ComposerPublishMenuCopy.hint)
                 }
             }
+            .accessibilityElement(children: .contain)
         )
+    }
+
+    /// Le chevron — 44 pt de cible, comme la partie principale.
+    var publishChevronLabel: some View {
+        Image(systemName: "chevron.down")
+            .font(.footnote.weight(.bold))
+            .foregroundColor(.white)
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
     }
 
     /// **Les entrées du menu, ou `nil`** — la LECTURE de
@@ -605,11 +630,6 @@ extension MeeshyComposerHost {
     var publishMenuEntries: [ComposerPublishMenuRule.Entry]? {
         let fonds = Set(viewModel.slideImages.keys)
         return ComposerPublishMenuRule.menu(
-            mediaKinds: ComposerPublishMenuRule.mediaKinds(
-                slides: viewModel.slides,
-                slideImageIds: fonds,
-                documentMedia: documentLocalMedia,
-                bridgedSources: Set(documentMediaObjectIdBySource.keys)),
             candidates: ComposerProfile.profile(
                 for: intent.origin,
                 compositionQualifiesAsReel: true,

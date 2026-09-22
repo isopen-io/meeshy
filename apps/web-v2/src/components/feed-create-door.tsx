@@ -19,8 +19,9 @@ import { FEED_GLYPHS } from './glyphs-feed';
  * L'en-tête du Flux tient déjà un retour et « Lancer les Réels ». À 320 px,
  * une quatrième cible de 44 px mange le titre. Le menu ramène la création à UN
  * contrôle et garde le chemin nominal à deux gestes (dimension 7) — et le
- * format choisi ici reste RÉVERSIBLE dans le composeur, qui porte sa propre
- * bascule Publication ⇄ Réel : le menu pose une intention, il ne l'enferme pas.
+ * format choisi ici reste RÉVERSIBLE dans le composer unique (#7497), dont la
+ * capsule `[Publier … | ▾]` publie au format de la porte ou, par son chevron,
+ * en story, post ou réel : le menu pose une intention, il ne l'enferme pas.
  *
  * ## Pourquoi elle se pose À GAUCHE de « Lancer les Réels »
  *
