@@ -20,7 +20,9 @@ import { useRoute } from '@/lib/router';
 import { shortcutYieldsToTarget } from '@/lib/view/shortcut-scope';
 import { useMinute } from '@/lib/view/use-minute';
 import { usePostGesture } from '@/lib/view/use-post-gesture';
+import { usePublicationRoom } from '@/lib/view/use-publication-room';
 import { useReaderLanguages } from '@/lib/view/use-reader';
+import { useSettled } from '@/lib/view/use-settled';
 import { href, navigate } from '@/routes/route-table';
 
 /**
@@ -53,8 +55,23 @@ import { href, navigate } from '@/routes/route-table';
  *   cet écran s'y superposait (mesuré à la capture, 320 × 568) : un même état
  *   ne se dit qu'une fois, au même endroit que partout ailleurs. Seul le cache
  *   FROID a son état dessiné ici, parce qu'il n'y a alors rien d'autre à voir.
+ * - **UNE salle de publication, celle du réel où le lecteur S'ARRÊTE** (#7395,
+ *   #6485) — miroir de `ReelsViewModel.currentId` (iOS : quitter l'ancienne,
+ *   rejoindre la nouvelle, aucune pour les voisins préchargés). C'est elle qui
+ *   apporte au lecteur non ami de l'auteur la traduction du texte et les
+ *   comptes en direct. Un défilement d'un trait traverse plusieurs pages sans
+ *   s'y poser (`scroll-snap`, une image par page lue) : la salle attend que le
+ *   réel visible soit POSÉ (`REEL_ROOM_SETTLE_MS`). Chaque `post:join` et
+ *   `post:leave` puise dans le seau par utilisateur de la passerelle
+ *   (`PostReactionHandler`, 30 par minute, partagé avec les réactions) —
+ *   rejoindre les réels traversés le viderait pour rien.
  */
 const EMPTY_POSTS: readonly FeedPost[] = [];
+
+/** Assez long pour qu'un défilement d'un trait ne se pose sur aucune des pages
+ * qu'il traverse, assez court pour que la salle soit tenue bien avant la fin
+ * d'un réel. */
+const REEL_ROOM_SETTLE_MS = 400;
 
 const KEY_DIRECTION: Readonly<Record<string, 'next' | 'previous'>> = {
   ArrowDown: 'next',
@@ -199,6 +216,7 @@ export default function ReelsScreen() {
   const scroller = useRef<HTMLDivElement | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const active = Math.min(activeIndex, Math.max(0, count - 1));
+  usePublicationRoom(useSettled(models[active]?.id ?? '', REEL_ROOM_SETTLE_MS));
   const frame = useRef<number | null>(null);
   const onScroll = useCallback(() => {
     if (frame.current !== null) return;

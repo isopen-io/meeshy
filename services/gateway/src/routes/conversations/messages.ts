@@ -92,7 +92,7 @@ export function registerMessagesRoutes(
 
   registerSendMessageRoute(fastify, prisma, optionalAuth, getMessagingService, socketIOHandler);
 
-  registerMarkUnreadRoute(fastify, prisma, participantAuth);
+  registerMarkUnreadRoute(fastify, prisma, participantAuth, socketIOHandler);
 
   registerMessagePinRoutes(fastify, prisma, requiredAuth, socketIOHandler);
 
