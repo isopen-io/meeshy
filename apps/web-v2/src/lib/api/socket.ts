@@ -7,6 +7,7 @@ import type {
   AuthTokenExpiredEventData,
 } from '@meeshy/shared/types/socketio-events/auth';
 import type { TypingActionData, TypingEvent } from '@meeshy/shared/types/socketio-events/presence';
+import type { PostRoomActionData } from '@meeshy/shared/types/socketio-events/social';
 
 import type { ConversationStoreState } from '@/lib/conversation-store';
 import type { SocketClient, SocketFactory } from '@/lib/net/socket';
@@ -29,6 +30,7 @@ import {
 import { FRIENDS_QUERY_PREFIX } from './friends-keys';
 import { PUBLIC_PROFILE_QUERY_PREFIX } from './public-profile';
 import { NOTIFICATION_COUNTS_QUERY_KEY, NOTIFICATION_LISTS_KEY } from './notifications';
+import { bindPublicationRoomTransport } from './publication-rooms';
 import {
   applyNotificationCounts,
   applyNotificationDeleted,
@@ -66,6 +68,10 @@ import { TYPING_SAFETY_TIMEOUT_MS, type TypingStoreApi } from './typing-store';
  * `AuthHandler._joinUserConversations` (`AuthHandler.ts:855-890`) rejoint
  * TOUTES les rooms de participation à l'authentification elle-même — aucun
  * événement client n'est nécessaire (§ 1.4 point 3 de la spécification).
+ *
+ * Ce qu'il FAIT à la place pour les PUBLICATIONS : `post:join` / `post:leave`
+ * pour les salles que les écrans tiennent (`publication-rooms.ts`, #7395) — la
+ * passerelle ne peut pas deviner ce qu'un écran montre.
  */
 
 function isTypingEvent(payload: unknown): payload is TypingEvent {
@@ -200,6 +206,26 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   const socket = deps.socketFactory({
     base: deps.base,
     auth: { token: session.token, sessionToken: session.sessionToken },
+  });
+
+  /**
+   * LES SALLES DE PUBLICATION (#7395) — `publication-rooms.ts` tient le COMPTE (quels
+   * écrans tiennent quelle salle) ; la connexion ÉMET. Rien ne part sur un
+   * socket COUPÉ : `socket.io-client` tamponnerait l'émission et la viderait
+   * dès la reconnexion, AVANT que la passerelle ait réauthentifié le socket —
+   * `handleJoinPost` la refuserait (« User not authenticated ») et la salle
+   * resterait perdue. Le rejeu d'`onAuthenticated` s'en charge ; un `leave`
+   * sur un socket coupé n'a rien à quitter, la passerelle a déjà vidé ses
+   * salles.
+   */
+  const emitPostRoom = (event: typeof CLIENT_EVENTS.JOIN_POST | typeof CLIENT_EVENTS.LEAVE_POST, postId: string): void => {
+    if (!socket.connected) return;
+    const body: PostRoomActionData = { postId };
+    socket.emit(event, body);
+  };
+  const publicationRooms = bindPublicationRoomTransport({
+    join: (postId) => emitPostRoom(CLIENT_EVENTS.JOIN_POST, postId),
+    leave: (postId) => emitPostRoom(CLIENT_EVENTS.LEAVE_POST, postId),
   });
 
   /** Un minuteur de SÉCURITÉ par (conversation, frappeur) — REMIS À ZÉRO à
@@ -675,9 +701,16 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
    * La PREMIÈRE authentification ne rejoue rien : il n'y a pas de trou à
    * combler au démarrage, et invalider y doublerait la requête que l'écran
    * vient d'émettre.
+   *
+   * SAUF LES SALLES DE PUBLICATION (#7395), rejointes à CHAQUE
+   * authentification, la première comprise : un écran ouvert avant que la
+   * connexion ait fini de s'établir a demandé sa salle à un socket qui ne
+   * pouvait pas encore l'accepter, et une coupure a vidé côté passerelle
+   * toutes celles du socket précédent.
    */
   let authenticatedOnce = false;
   const onAuthenticated = (): void => {
+    publicationRooms.rejoin();
     if (!authenticatedOnce) {
       authenticatedOnce = true;
       return;
@@ -780,6 +813,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.emit(isTyping ? CLIENT_EVENTS.TYPING_START : CLIENT_EVENTS.TYPING_STOP, body);
     },
     destroy: () => {
+      publicationRooms.detach();
       for (const handle of typingTimers.values()) clearTimeoutFn(handle);
       typingTimers.clear();
       windowTarget?.removeEventListener('online', onOnline);
