@@ -109,7 +109,11 @@ const MAX_LINES = 1000;
  *
  * `services/PostFeedService.ts` : entrée 1401 → 1204 (#7396, 2026-09-21). L'état
  * du lecteur que cinq lectures recopiaient est parti vers
- * `posts/viewerPostState.ts`, où la page d'un hashtag le lit aussi.
+ * `posts/viewerPostState.ts`, où la page d'un hashtag le lit aussi. Puis
+ * 1204 → 1199 (#7406, 2026-09-22) : les humeurs lisent `statusPostSelect`.
+ *
+ * `services/PostService.ts` : entrée 2663 → 2628 (#7406, 2026-09-22) — le like
+ * et le retrait ne réécrivent plus le Json legacy `Post.reactions`.
  */
 const DETTE_HERITEE: Readonly<Record<string, number>> = {
   'services/notifications/NotificationService.ts': 4477,
@@ -118,11 +122,11 @@ const DETTE_HERITEE: Readonly<Record<string, number>> = {
   'services/message-translation/MessageTranslationService.ts': 3303,
   'services/MessageReadStatusService.ts': 3194,
   'services/CallService.ts': 3121,
-  'services/PostService.ts': 2663,
+  'services/PostService.ts': 2628,
   'socketio/handlers/MessageHandler.ts': 2336,
   'services/EmailService.ts': 1032,
   'server.ts': 1406,
-  'services/PostFeedService.ts': 1204,
+  'services/PostFeedService.ts': 1199,
   'services/AuthService.ts': 1324,
   'services/MentionService.ts': 1235,
   'services/messaging/MessageProcessor.ts': 1110,

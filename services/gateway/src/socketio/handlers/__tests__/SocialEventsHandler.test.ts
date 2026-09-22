@@ -86,7 +86,7 @@ function makePrisma(friendIds: string[] = [FRIEND_ID_1, FRIEND_ID_2]): PrismaCli
 
 function makeIo() {
   const emit = jest.fn<any>();
-  const ioTo = jest.fn<any>().mockReturnValue({ emit });
+  const ioTo = jest.fn<any>().mockReturnValue({ emit, except: jest.fn<any>().mockReturnValue({ emit }) });
   return {
     to: ioTo,
     _emit: emit,
@@ -266,8 +266,10 @@ describe('SocialEventsHandler', () => {
 
       const emitFn = io.to.mock.results[0].value.emit;
       const [event, payload] = (emitFn as jest.Mock<any>).mock.calls[0] as [string, unknown];
+      // La première émission va à un AMI : la publication, sans sa liste d'audience (#7407).
+      const { visibilityUserIds: _auteurSeul, ...servieAuxAmis } = post;
       expect(event).toBe('post:created');
-      expect(payload).toMatchObject({ post, clientMutationId });
+      expect(payload).toEqual({ post: servieAuxAmis, clientMutationId });
     });
 
     it('filters PRIVATE visibility — emits only to author', async () => {
