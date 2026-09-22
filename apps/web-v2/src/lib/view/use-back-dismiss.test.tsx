@@ -114,7 +114,7 @@ describe('useBackDismiss — le retour matériel ferme la COUCHE, pas l’écran
     expect(closed).toBe(true);
   });
 
-  test('fermée AUTREMENT (pas par le retour) ⇒ rend son entrée d’historique — un retour ULTÉRIEUR n’est pas avalé', () => {
+  test('fermée AUTREMENT (pas par le retour) ⇒ rend son entrée d’historique — un retour ULTÉRIEUR n’est pas avalé', async () => {
     let backCalls = 0;
     const originalBack = window.history.back.bind(window.history);
     window.history.back = () => {
@@ -125,6 +125,10 @@ describe('useBackDismiss — le retour matériel ferme la COUCHE, pas l’écran
       act(() => {
         root.render(<Harness open={false} onClose={() => {}} />);
       });
+      /* Le recul part au tour de micro-tâche qui suit le commit (#7415) : c'est
+         la fenêtre où une couche ouverte PAR LE MÊME GESTE peut adopter
+         l'entrée au lieu de la voir reculer sous elle. */
+      await Promise.resolve();
       expect(backCalls).toBe(1);
     } finally {
       window.history.back = originalBack;
@@ -170,6 +174,62 @@ describe('useBackDismiss — le retour matériel ferme la COUCHE, pas l’écran
       act(() => {
         root.render(<Harness open={false} onClose={() => {}} />);
       });
+      expect(backCalls).toBe(0);
+    } finally {
+      window.history.back = originalBack;
+    }
+  });
+
+  /**
+   * **UNE COUCHE QUI S'OUVRE DANS LE GESTE QUI EN FERME UNE AUTRE RESTE
+   * OUVERTE** (#7415) — « Plus… » dans le menu d'un message : le menu se ferme
+   * et la feuille s'ouvre dans le MÊME commit. L'ancien nettoyage du menu
+   * appelait `history.back()`, dont le `popstate` arrive APRÈS que la feuille a
+   * posé son entrée : la feuille le prenait pour un retour matériel et se
+   * refermait (mesuré dans Chromium : `dialog added`, puis `dialog removed` une
+   * milliseconde plus tard). Happy-dom n'émet pas ce `popstate` : le témoin
+   * rejoue le recul ASYNCHRONE du navigateur.
+   */
+  test('la couche ouverte par le geste qui ferme la précédente ADOPTE son entrée, et ne se referme pas (#7415)', async () => {
+    const originalBack = window.history.back.bind(window.history);
+    let backCalls = 0;
+    window.history.back = () => {
+      backCalls += 1;
+      setTimeout(() => window.dispatchEvent(new PopStateEvent('popstate')), 0);
+    };
+    const closed: string[] = [];
+    function Swap({ which }: { which: 'menu' | 'feuille' }) {
+      return which === 'menu' ? (
+        <Modal key="menu" onClose={() => closed.push('menu')} />
+      ) : (
+        <Modal key="feuille" onClose={() => closed.push('feuille')} />
+      );
+    }
+    try {
+      container = document.createElement('div');
+      document.body.appendChild(container);
+      root = createRoot(container);
+      act(() => {
+        root.render(<Swap which="menu" />);
+      });
+      const lengthWithMenu = window.history.length;
+      act(() => {
+        root.render(<Swap which="feuille" />);
+      });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+
+      expect(closed).toEqual([]);
+      expect(backCalls).toBe(0);
+      expect(window.history.length).toBe(lengthWithMenu);
+      const state = window.history.state as { readonly backDismiss?: unknown } | null;
+      expect(typeof state?.backDismiss === 'string' ? 'marquée' : 'sans marque').toBe('marquée');
+
+      act(() => {
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      });
+      expect(closed).toEqual(['feuille']);
       expect(backCalls).toBe(0);
     } finally {
       window.history.back = originalBack;

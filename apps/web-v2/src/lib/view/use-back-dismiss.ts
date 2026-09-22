@@ -38,8 +38,23 @@ import { useEffect, useLayoutEffect, useRef } from 'react';
  * en CI : `URL blank`, trois têtes de dev sur neuf). L'effet de mise en page
  * s'exécute avant que le navigateur ne rende la main : aucune image ne montre
  * la couche sans que le retour lui appartienne.
+ *
+ * **UNE COUCHE OUVERTE PAR LE GESTE QUI EN FERME UNE AUTRE ADOPTE SON ENTRÉE**
+ * (#7415). « Plus… » dans le menu d'un message : le menu se ferme et la
+ * feuille s'ouvre dans le MÊME commit. Le nettoyage du menu appelait
+ * `history.back()` sur-le-champ ; ce recul est ASYNCHRONE, et son `popstate`
+ * arrivait après que la feuille avait posé son entrée — elle le prenait pour
+ * un retour matériel et se refermait une milliseconde après s'être ouverte
+ * (mesuré dans Chromium). Le recul part donc au tour de micro-tâche qui suit
+ * le commit : une couche montée DANS ce commit trouve l'entrée encore
+ * courante, la reprend à son nom (`replaceState`) et annule le recul. Aucune
+ * entrée n'est ajoutée ni perdue, et le retour matériel ferme bien la
+ * nouvelle couche. Sans adoption, le recul part comme avant.
  */
 let nextMarker = 0;
+
+/** Les entrées RENDUES par une couche fermée, dont le recul attend la fin du commit. */
+const pendingReleases = new Set<string>();
 
 function carriesMarker(state: unknown, marker: string): boolean {
   return typeof state === 'object' && state !== null && (state as { readonly backDismiss?: unknown }).backDismiss === marker;
@@ -54,7 +69,13 @@ export function useBackDismiss(onClose: () => void): void {
   useLayoutEffect(() => {
     nextMarker += 1;
     const marker = `back-dismiss-${nextMarker}`;
-    window.history.pushState({ backDismiss: marker }, '');
+    const released = [...pendingReleases].find((candidate) => carriesMarker(window.history.state, candidate));
+    if (released === undefined) {
+      window.history.pushState({ backDismiss: marker }, '');
+    } else {
+      pendingReleases.delete(released);
+      window.history.replaceState({ backDismiss: marker }, '');
+    }
     let consumedByHistory = false;
     const onPopState = () => {
       consumedByHistory = true;
@@ -64,7 +85,12 @@ export function useBackDismiss(onClose: () => void): void {
 
     return () => {
       window.removeEventListener('popstate', onPopState);
-      if (!consumedByHistory && carriesMarker(window.history.state, marker)) window.history.back();
+      if (consumedByHistory || !carriesMarker(window.history.state, marker)) return;
+      pendingReleases.add(marker);
+      queueMicrotask(() => {
+        if (!pendingReleases.delete(marker)) return;
+        if (carriesMarker(window.history.state, marker)) window.history.back();
+      });
     };
   }, []);
 }
