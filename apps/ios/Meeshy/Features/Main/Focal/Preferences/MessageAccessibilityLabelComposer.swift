@@ -1,5 +1,6 @@
 import Foundation
 import MeeshySDK
+import MeeshyUI
 
 /// Réplique fidèle, en fonction PURE de `BubbleContent`, de
 /// `BubbleStandardLayout.messageAccessibilityLabel` — contrat
@@ -15,7 +16,7 @@ import MeeshySDK
 ///   livraison, que `BubbleStandardLayout` appelle aussi (#7365) : elle lit
 ///   `content.meta.deliveryStatus`, déjà RÉSOLU tout-ou-rien pour un groupe.
 ///   `nil` (message REÇU, jamais lu ici) se replie sur « en cours d'envoi ».
-/// - la mention éphémère se déclenche sur `content.ephemeral != nil`, pas
+/// - la mention de protection se déclenche sur `content.protection`, pas
 ///   `message.expiresAt` (indisponible ici). `BubbleStandardLayout` note que
 ///   son propre `content.ephemeral` peut être nil pour un message déjà
 ///   expiré — cette bulle-là masque alors le badge visuel MAIS resterait
@@ -82,9 +83,12 @@ enum MessageAccessibilityLabelComposer {
         if content.isPinned {
             parts.append(String(localized: "a11y.message.pinned", bundle: .main))
         }
-        if content.ephemeral != nil {
-            parts.append(String(localized: "a11y.message.ephemeral", bundle: .main))
-        }
+        // #7452 — la phrase de protection vient du SITE UNIQUE
+        // (`MessageProtectionChrome.accessibilityLabels`) : « Message
+        // éphémère, disparaît dans 4 minutes », « Vue unique ». L'ancienne
+        // ligne disait « Message éphémère » sans échéance, et ne disait RIEN
+        // d'une vue unique.
+        parts.append(contentsOf: MessageProtectionChrome.accessibilityLabels(for: content.protection))
 
         if !content.reactions.isEmpty {
             let reactionText = content.reactions.map { "\($0.emoji) \($0.count)" }.joined(separator: ", ")

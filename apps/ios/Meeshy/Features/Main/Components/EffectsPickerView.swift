@@ -63,9 +63,9 @@ struct EffectsPickerView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     effectSection(title: String(localized: "effects.section.behavior", defaultValue: "Comportement", bundle: .main), items: [
-                        (.ephemeral, "hourglass", String(localized: "effects.ephemeral", defaultValue: "Éphémère", bundle: .main)),
-                        (.blurred, "eye.slash", String(localized: "effects.blurred", defaultValue: "Flou", bundle: .main)),
-                        (.viewOnce, "1.circle", String(localized: "effects.view-once", defaultValue: "Vue unique", bundle: .main)),
+                        (.ephemeral, MessageProtectionSymbols.ephemeral, String(localized: "effects.ephemeral", defaultValue: "Éphémère", bundle: .main)),
+                        (.blurred, MessageProtectionSymbols.blurred, String(localized: "effects.blurred", defaultValue: "Flou", bundle: .main)),
+                        (.viewOnce, MessageProtectionSymbols.viewOnce, String(localized: "effects.view-once", defaultValue: "Vue unique", bundle: .main)),
                     ])
 
                     effectSection(title: String(localized: "effects.section.entry", defaultValue: "Animation d'entrée", bundle: .main), items: [

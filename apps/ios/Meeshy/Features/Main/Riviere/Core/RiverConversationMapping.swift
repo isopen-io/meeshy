@@ -271,6 +271,11 @@ nonisolated enum RiverConversationMapping {
                         audioHostsReply: false
                     ) ? reference : nil
                 },
+                // **#7452 — la protection, résolue par le site UNIQUE.**
+                // `MeeshyMessage.protection` porte la règle du contrat #7451 ;
+                // la rivière la PROJETTE comme la bulle et la rangée plate,
+                // sans réécrire d'arithmétique d'échéance.
+                protection: message.protection(),
                 identity: bubble.isSystem ? nil : RiverBubbleIdentity(
                     avatarURL: message.senderAvatarURL,
                     presence: presence(message),

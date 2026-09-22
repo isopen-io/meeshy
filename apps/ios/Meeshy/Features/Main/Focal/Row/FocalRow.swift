@@ -281,10 +281,18 @@ struct FocalRow: View {
             // l'écrasante majorité des messages n'a pas de flou et ne paie ni
             // le `@StateObject` ni le modificateur. `isBlurred` est stable
             // sur la vie du message, la branche ne bascule pas au recyclage.
-            if content.isBlurred {
+            //
+            // #7452 — **le voile couvre aussi la VUE UNIQUE, pas seulement le
+            // flou.** Un texte à vue unique s'affichait EN CLAIR, sans même
+            // une mention : le masquage ne lisait que `isBlurred`, et
+            // « Voir une fois » n'existait que sur les médias. Un message
+            // qu'on ne peut lire qu'une fois doit être un CHOIX, donc voilé
+            // jusqu'au toucher qui le consomme.
+            if content.requiresVeil {
                 FocalProtectedContent(
                     isBlurred: true,
                     isViewOnce: content.isViewOnce,
+                    isDark: input.isDark,
                     messageId: content.messageId,
                     onConsumeViewOnce: actions.onConsumeViewOnce
                 ) {
@@ -375,7 +383,7 @@ struct FocalRow: View {
 
     // MARK: - F-083ter (F11) — badges éphémère/épinglé/transféré
 
-    /// `content.isPinned`/`content.isForwarded`/`content.ephemeral` LUS et
+    /// `content.isPinned`/`content.isForwarded`/`content.protection` LUS et
     /// RENDUS (jusqu'ici seul le libellé VoiceOver les portait, F-080) —
     /// réutilise `BubblePinnedIndicator`/`BubbleForwardedIndicator` (§1.3,
     /// `internal`, vérifiés non `fileprivate`) TELS QUELS, et
@@ -402,9 +410,11 @@ struct FocalRow: View {
         if let attribution = content.forwardAttribution {
             BubbleForwardedIndicator(isMe: content.isMe, isDark: input.isDark, attribution: attribution)
         }
-        if let ephemeral = content.ephemeral {
-            FocalEphemeralBadge(expiresAt: ephemeral.expiresAt, isDark: input.isDark)
-        }
+        // #7452 — LE chrome de protection, partagé avec la bulle, la rivière
+        // et le résumé. `FocalEphemeralBadge` était une seconde implémentation
+        // du même badge, avec son propre minuteur de cellule.
+        MessageProtectionChrome(descriptor: content.protection, isDark: input.isDark)
+            .equatable()
     }
 
     // MARK: - F-083ter (F05) — réactions live en pilule plate méta

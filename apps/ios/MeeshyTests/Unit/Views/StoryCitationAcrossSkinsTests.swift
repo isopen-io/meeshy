@@ -47,7 +47,7 @@ final class StoryCitationAcrossSkinsTests: XCTestCase {
         BubbleContent(
             messageId: "m1", kind: .standard, text: nil, translation: nil,
             reply: reply.map { BubbleContent.Reply(reference: $0, isStory: isStory) },
-            attachments: .none, location: nil, ephemeral: nil, isBlurred: false,
+            attachments: .none, location: nil, protection: .unprotected, isBlurred: false,
             isViewOnce: false, isPinned: false, forwardAttribution: nil, editedAt: nil,
             isEditSaving: false, hasEditHistory: false, reactions: [],
             meta: BubbleContent.Meta(timeString: "10:41", deliveryStatus: nil),

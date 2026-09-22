@@ -58,7 +58,7 @@ final class BubbleContentMatrixTests: XCTestCase {
         XCTAssertNotNil(content.text)
         XCTAssertNil(content.reply)
         XCTAssertEqual(content.attachments, .none)
-        XCTAssertNil(content.ephemeral)
+        XCTAssertTrue(content.protection.isEmpty)
         XCTAssertNil(content.editedAt)
         XCTAssertTrue(content.reactions.isEmpty)
         XCTAssertNotNil(content.meta)

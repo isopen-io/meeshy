@@ -47,11 +47,21 @@ export const SERVER_EVENTS = {
    * `user:<destinataire>` (pour ses autres appareils) et vers
    * `user:<expéditeur>` (la plus tardive des échéances connues).
    *
+   * Il existe parce que `MESSAGE_NEW` ne PEUT PAS porter l'échéance d'un
+   * éphémère : c'est une diffusion en room, et l'échéance est résolue par
+   * lecteur — `D(u) = réception(u) + ephemeralDuration`. Un message de cinq
+   * minutes reçu quatre minutes après son envoi doit vivre cinq minutes chez
+   * son destinataire, pas une.
+   *
    * DISTINCT de `MESSAGE_EXPIRED`, qui dit la FIN : celui-ci pose l'échéance,
    * celui-là retire le message. Un client qui n'en reçoit aucun n'est pas
    * démuni — il retombe sur `réception locale + ephemeralDuration`
    * (`utils/ephemeral-deadline.ts`), et c'est le cas nominal du temps réel,
    * `message:new` ne portant pas d'`expiresAt` pour un éphémère (point 4).
+   *
+   * Un client ne REMPLACE jamais son échéance locale par celle-ci : les deux
+   * concourent et la plus PROCHE gagne. C'est une règle de sécurité — aucune
+   * des deux sources n'a le droit de PROLONGER la vie d'un message protégé.
    */
   MESSAGE_COUNTDOWN_STARTED: 'message:countdown-started',
   MESSAGE_TRANSLATION: 'message:translation',
