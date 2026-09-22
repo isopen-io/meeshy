@@ -800,6 +800,24 @@ final class ComposerProtectionTravelsGuardTests: XCTestCase {
                       "Et porter les bits de cycle de vie correspondants.")
     }
 
+    /// La ligne optimiste d'un TEXTE porte les DEUX axes, unis.
+    ///
+    /// Le serveur recompose ses bits depuis les colonnes déclarées ; la ligne
+    /// locale, elle, est lue telle quelle, et `MessageProtectionDescriptor` lit
+    /// les BITS pour la vue unique et le flou. Un texte armé « ① » n'avait donc
+    /// ni puce ni voile jusqu'à la réponse serveur. L'éphémère s'en sortait par
+    /// la porte de derrière — `expiresAt` suffit à le prouver — ce qui est
+    /// exactement ce qui a rendu ses deux voisins invisibles au relevé.
+    func test_laBulleOptimisteDUnTexte_unitLesDeuxAxes() throws {
+        let send = try source(at: "Features/Main/ViewModels/ConversationViewModel+Send.swift")
+        XCTAssertTrue(send.contains("func optimisticEffectFlags(_ intent: MessageProtectionIntent)"),
+                      "L'union des deux axes doit être UNE fonction nommée, pas un ternaire recopié.")
+        XCTAssertTrue(send.contains(".union(intent.lifecycleFlags)"),
+                      "Elle doit UNIR le cycle de vie, jamais le remplacer par l'axe apparition.")
+        XCTAssertFalse(send.contains("effectFlags: pendingEffects.hasAnyEffect ? pendingEffects.flags.rawValue : 0"),
+                       "Un record optimiste qui ne lit QUE `pendingEffects` perd la vue unique et le flou.")
+    }
+
     /// **Aucun `insertOptimisticMediaMessage` sans protection NOMMÉE.** Le
     /// paramètre n'a délibérément PAS de valeur par défaut : un défaut ferait
     /// qu'un nouveau chemin d'envoi hériterait de « rien de protégé » en

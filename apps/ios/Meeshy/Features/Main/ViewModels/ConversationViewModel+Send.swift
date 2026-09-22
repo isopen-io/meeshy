@@ -88,6 +88,22 @@ extension ConversationViewModel {
         return intent
     }
 
+    /// Les bits que la ligne OPTIMISTE doit porter : l'axe apparition/persistant
+    /// choisi au composeur, UNI à l'axe cycle de vie de la protection armée.
+    ///
+    /// Le serveur, lui, RECOMPOSE (`composeMessageEffectFlags`) depuis les
+    /// colonnes déclarées — la charge REST n'a donc rien à unir, et c'est
+    /// précisément ce qui a caché le défaut. La ligne LOCALE n'a pas cette
+    /// chance : elle est lue telle quelle par la bulle, et
+    /// `MessageProtectionDescriptor` lit les BITS pour la vue unique et le
+    /// flou. Sans cette union, un texte armé « ① » n'avait ni puce ni voile
+    /// jusqu'à la réponse serveur — l'éphémère s'en sortait par la porte de
+    /// derrière (`expiresAt` suffit à le prouver), ses deux voisins non.
+    func optimisticEffectFlags(_ intent: MessageProtectionIntent) -> MessageEffectFlags {
+        let apparence: MessageEffectFlags = pendingEffects.hasAnyEffect ? pendingEffects.flags : MessageEffectFlags(rawValue: 0)
+        return apparence.union(intent.lifecycleFlags)
+    }
+
     // MARK: - Délai de garde de l'envoi REST
 
     /// REST send timeout (seconds). Far below `APIClient.timeoutIntervalForRequest`
@@ -557,7 +573,7 @@ extension ConversationViewModel {
                 forwardedFromId: forwardedFromId,
                 forwardedFromConversationId: forwardedFromConversationId,
                 replyToJson: replyRef.flatMap { try? JSONEncoder().encode($0) }, forwardedFromJson: nil,
-                expiresAt: resolvedExpiresAt, effectFlags: pendingEffects.hasAnyEffect ? pendingEffects.flags.rawValue : 0,
+                expiresAt: resolvedExpiresAt, effectFlags: optimisticEffectFlags(intent).rawValue,
                 maxViewOnceCount: resolvedMaxViewOnceCount, viewOnceCount: 0,
                 isEdited: false, editedAt: nil, deletedAt: nil,
                 pinnedAt: nil, pinnedBy: nil,
