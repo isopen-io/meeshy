@@ -67,7 +67,7 @@ import { useThreadChromeSignals } from '@/lib/view/use-thread-chrome-signals';
 import { useThreadInsets } from '@/lib/view/use-thread-insets';
 import { THREAD_ROW_ESTIMATE, useOlderMessages } from '@/lib/view/use-older-messages';
 import { useReadTracking } from '@/lib/view/use-read-tracking';
-import { useUnreadBoundary } from '@/lib/view/unread-boundary';
+import { resumeThreadTarget, useUnreadBoundary } from '@/lib/view/unread-boundary';
 import { useThreadOpenScroll } from '@/lib/view/use-thread-open-scroll';
 import { ThreadModes } from './thread-modes';
 
@@ -563,7 +563,7 @@ export default function ThreadScreen() {
   };
   const onResumeThread = () => {
     selectReadingMode('script');
-    setPendingJump(messages.find((m) => m.senderId !== (viewer.id ?? ''))?.id ?? null);
+    setPendingJump(resumeThreadTarget({ unreadBoundary, messages, viewerId: viewer.id ?? '' }));
   };
 
   /**

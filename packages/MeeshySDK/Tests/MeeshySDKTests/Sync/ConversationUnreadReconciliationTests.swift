@@ -45,21 +45,51 @@ final class ConversationUnreadReconciliationTests: XCTestCase {
                        "l'utilisateur REGARDE cette conversation — tout compteur non nul est un mensonge visuel")
     }
 
-    func test_reconcileUnread_openConversation_stampsAReadFrontier() {
+    /// #7350 (I-2) — ce témoin GARDAIT le défaut : il exigeait qu'ouvrir une
+    /// conversation pose une frontière de lecture. Datée de l'ouverture, elle
+    /// arrivait toujours APRÈS le dernier message, et la règle 2 ramenait
+    /// ensuite à 0 tout instantané serveur — même « 94 encore non lus ».
+    func test_reconcileUnread_openConversation_doesNotStampAReadFrontier() {
         let incoming = makeConversation(unread: 4, lastMessageAt: t0)
 
         let result = ConversationSyncEngine.reconcileUnread(
-            incoming: incoming, local: nil, openConversationId: "conv-1"
+            incoming: incoming, local: nil, openConversationId: "conv-1",
+            now: t0.addingTimeInterval(60)
         )
 
-        XCTAssertNotNil(result.userState.lastReadAt,
-                        "sans frontière posée, le prochain instantané serveur re-injecterait le compteur")
-        XCTAssertGreaterThanOrEqual(result.userState.lastReadAt ?? .distantPast, t0)
+        XCTAssertEqual(result.userState.unreadCount, 0)
+        XCTAssertNil(result.userState.lastReadAt,
+                     "ouvrir n'est pas lire : le zéro de la conversation ouverte est TRANSITOIRE")
     }
 
     // MARK: - Frontière de lecture locale
 
-    func test_reconcileUnread_localReadAfterLastMessage_clampsServerCountToZero() {
+    /// #7350 (I-2) — le parcours de la recette : 99 non-lus, l'écran s'ouvre
+    /// (règle 1 pendant l'affichage), 5 messages sont vus, l'écran se ferme ;
+    /// le serveur annonce 94. Avant le correctif la règle 1 datait une
+    /// frontière de l'ouverture, et cet instantané retombait à 0.
+    func test_reconcileUnread_openedThenClosedWithoutCatchingUp_keepsHigherServerCount() {
+        let whileOpen = ConversationSyncEngine.reconcileUnread(
+            incoming: makeConversation(unread: 99, lastMessageAt: t0),
+            local: nil,
+            openConversationId: "conv-1",
+            now: t0.addingTimeInterval(30)
+        )
+
+        let afterClose = ConversationSyncEngine.reconcileUnread(
+            incoming: makeConversation(unread: 94, lastMessageAt: t0),
+            local: whileOpen,
+            openConversationId: nil,
+            now: t0.addingTimeInterval(60)
+        )
+
+        XCTAssertEqual(afterClose.userState.unreadCount, 94,
+                       "ouvrir l'écran sans avoir tout lu ne doit plus fabriquer une frontière qui masque un vrai non-lu serveur")
+    }
+
+    /// Une frontière GENUINE (lecture complète, accusé encore dans l'outbox)
+    /// protège toujours un instantané serveur en retard.
+    func test_reconcileUnread_genuineReadAfterLastMessage_clampsLaggingServerCount() {
         let local = makeConversation(unread: 0, lastMessageAt: t0, lastReadAt: t0.addingTimeInterval(5))
         let incoming = makeConversation(unread: 3, lastMessageAt: t0)
 
@@ -68,7 +98,7 @@ final class ConversationUnreadReconciliationTests: XCTestCase {
         )
 
         XCTAssertEqual(result.userState.unreadCount, 0,
-                       "la lecture locale est postérieure au dernier message connu du serveur : le compteur serveur est en retard")
+                       "la lecture réelle est postérieure au dernier message connu du serveur : le compteur serveur est en retard")
     }
 
     func test_reconcileUnread_newerMessageThanLocalRead_keepsServerCount() {
