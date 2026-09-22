@@ -247,6 +247,187 @@ describe('MessageReadStatusService', () => {
   });
 
   // ==============================================
+  // PROGRESSION SERVIE — anti-régression (#7359)
+  // ==============================================
+  //
+  // Critère de fin : écoute à 80 % puis reprise à 10 % ⇒ position SERVIE
+  // 80 %, complet inchangé, durée cumulée = temps joué. Les quatre témoins
+  // ci-dessous couvrent chaque clause, en audio ET en vidéo (même défaut,
+  // même correctif, symétrique).
+
+  describe('markAudioAsListened — la position et le complet SERVIS ne régressent jamais (#7359)', () => {
+    const anAudioAttachment = () => {
+      mockPrisma.messageAttachment.findUnique.mockResolvedValue({
+        id: testAttachmentId,
+        messageId: testMessageId,
+        mimeType: 'audio/mp3',
+        message: { conversationId: testConversationId, senderId: testParticipantId2 }
+      });
+      mockPrisma.attachmentStatusEntry.upsert.mockResolvedValue({});
+      mockPrisma.participant.count.mockResolvedValue(2);
+      mockPrisma.attachmentStatusEntry.count.mockResolvedValue(1);
+      mockPrisma.attachmentStatusEntry.findFirst.mockResolvedValue({ listenedAt: new Date() });
+      mockPrisma.messageAttachment.update.mockResolvedValue({});
+    };
+
+    const lastUpsert = () =>
+      mockPrisma.attachmentStatusEntry.upsert.mock.calls.at(-1)?.[0] as any;
+
+    it('une reprise à 10 % après une écoute à 80 % laisse la position SERVIE à 80 %', async () => {
+      anAudioAttachment();
+      mockPrisma.attachmentStatusEntry.findUnique.mockResolvedValue({
+        listenSegments: [],
+        viewedLanguages: [],
+        lastPlayPositionMs: 8000,
+        listenedComplete: false
+      });
+
+      await service.markAudioAsListened(testParticipantId, testAttachmentId, {
+        playPositionMs: 1000
+      });
+
+      expect(lastUpsert().update.lastPlayPositionMs).toBe(8000);
+    });
+
+    it('le complet ne redescend jamais — une réécoute partielle après un passage complet le garde', async () => {
+      anAudioAttachment();
+      mockPrisma.attachmentStatusEntry.findUnique.mockResolvedValue({
+        listenSegments: [],
+        viewedLanguages: [],
+        lastPlayPositionMs: 10000,
+        listenedComplete: true
+      });
+
+      await service.markAudioAsListened(testParticipantId, testAttachmentId, {
+        playPositionMs: 1000,
+        complete: false
+      });
+
+      expect(lastUpsert().update.listenedComplete).toBe(true);
+    });
+
+    it('la durée cumulée est le temps réellement joué, pas la position', async () => {
+      anAudioAttachment();
+      mockPrisma.attachmentStatusEntry.findUnique.mockResolvedValue({
+        listenSegments: [],
+        viewedLanguages: [],
+        lastPlayPositionMs: 8000,
+        listenedComplete: false
+      });
+
+      await service.markAudioAsListened(testParticipantId, testAttachmentId, {
+        playPositionMs: 1000,
+        listenDurationMs: 1000
+      });
+
+      expect(lastUpsert().update.totalListenDurationMs).toEqual({ increment: 1000 });
+    });
+
+    it('le retour de la méthode porte la position et le complet SERVIS, pas le rapport brut', async () => {
+      anAudioAttachment();
+      mockPrisma.attachmentStatusEntry.findUnique.mockResolvedValue({
+        listenSegments: [],
+        viewedLanguages: [],
+        lastPlayPositionMs: 8000,
+        listenedComplete: true
+      });
+
+      const served = await service.markAudioAsListened(testParticipantId, testAttachmentId, {
+        playPositionMs: 1000,
+        complete: false
+      });
+
+      expect(served).toEqual({ position: 8000, complete: true });
+    });
+
+    it('une position plus avancée que la précédente devient la position servie', async () => {
+      anAudioAttachment();
+      mockPrisma.attachmentStatusEntry.findUnique.mockResolvedValue({
+        listenSegments: [],
+        viewedLanguages: [],
+        lastPlayPositionMs: 8000,
+        listenedComplete: false
+      });
+
+      const served = await service.markAudioAsListened(testParticipantId, testAttachmentId, {
+        playPositionMs: 9000
+      });
+
+      expect(served.position).toBe(9000);
+      expect(lastUpsert().update.lastPlayPositionMs).toBe(9000);
+    });
+  });
+
+  describe('markVideoAsWatched — même anti-régression, symétrique (#7359)', () => {
+    const aVideoAttachment = () => {
+      mockPrisma.messageAttachment.findUnique.mockResolvedValue({
+        id: testAttachmentId,
+        messageId: testMessageId,
+        mimeType: 'video/mp4',
+        message: { conversationId: testConversationId, senderId: testParticipantId2 }
+      });
+      mockPrisma.attachmentStatusEntry.upsert.mockResolvedValue({});
+      mockPrisma.participant.count.mockResolvedValue(2);
+      mockPrisma.attachmentStatusEntry.count.mockResolvedValue(1);
+      mockPrisma.attachmentStatusEntry.findFirst.mockResolvedValue({ watchedAt: new Date() });
+      mockPrisma.messageAttachment.update.mockResolvedValue({});
+    };
+
+    const lastUpsert = () =>
+      mockPrisma.attachmentStatusEntry.upsert.mock.calls.at(-1)?.[0] as any;
+
+    it('une reprise à 10 % après un visionnage à 80 % laisse la position SERVIE à 80 %', async () => {
+      aVideoAttachment();
+      mockPrisma.attachmentStatusEntry.findUnique.mockResolvedValue({
+        watchSegments: [],
+        viewedLanguages: [],
+        lastWatchPositionMs: 8000,
+        watchedComplete: false
+      });
+
+      await service.markVideoAsWatched(testParticipantId, testAttachmentId, {
+        watchPositionMs: 1000
+      });
+
+      expect(lastUpsert().update.lastWatchPositionMs).toBe(8000);
+    });
+
+    it('le complet vidéo ne redescend jamais', async () => {
+      aVideoAttachment();
+      mockPrisma.attachmentStatusEntry.findUnique.mockResolvedValue({
+        watchSegments: [],
+        viewedLanguages: [],
+        lastWatchPositionMs: 10000,
+        watchedComplete: true
+      });
+
+      await service.markVideoAsWatched(testParticipantId, testAttachmentId, {
+        watchPositionMs: 1000,
+        complete: false
+      });
+
+      expect(lastUpsert().update.watchedComplete).toBe(true);
+    });
+
+    it('le retour porte la position et le complet SERVIS pour la vidéo aussi', async () => {
+      aVideoAttachment();
+      mockPrisma.attachmentStatusEntry.findUnique.mockResolvedValue({
+        watchSegments: [],
+        viewedLanguages: [],
+        lastWatchPositionMs: 8000,
+        watchedComplete: true
+      });
+
+      const served = await service.markVideoAsWatched(testParticipantId, testAttachmentId, {
+        watchPositionMs: 1000,
+        complete: false
+      });
+
+      expect(served).toEqual({ position: 8000, complete: true });
+    });
+  });
+
+  // ==============================================
   // TRACE DE L'INTERACTION ET PRISME LINGUISTIQUE
   // ==============================================
 
