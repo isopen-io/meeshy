@@ -487,7 +487,6 @@ struct FocalRow: View {
                     mentionDisplayNames: input.mentionDisplayNames,
                     onReplyTap: actions.onReplyTap,
                     onStoryReplyTap: actions.onStoryReplyTap,
-                    onQuotedAuthorTap: actions.onQuotedAuthorTap,
                     onQuotedMediaTap: actions.onQuotedMediaTap
                 )
                 // Le rail de la citation est une forme (souple en hauteur) :
@@ -1179,25 +1178,5 @@ struct FocalRow: View {
                     LanguageData.info(for: translation.originalLangCode.lowercased())?.nativeName ?? translation.originalLangCode
                 ))
         }
-    }
-}
-
-// MARK: - EquatableFocalRow — le gate de re-render
-
-/// Enveloppe la rangée pour le gate `.equatable()` — même topologie que
-/// `EquatableMessageBubble` (`ThemedMessageBubble.swift:481-491`, lue jamais
-/// modifiée). Le gate ne se pose JAMAIS sur `FocalRow` lui-même (contrat
-/// §WS-4 : régression documentée du 2026-05-25) — `FocalRow` n'est donc PAS
-/// `Equatable` ; seule cette enveloppe l'est, en comparant `row.input`
-/// (`FocalRowActions` en est exclu par construction, comme `FocalRowInput.==`
-/// ne le compare jamais).
-struct EquatableFocalRow: View {
-    let row: FocalRow
-    var body: some View { row }
-}
-
-extension EquatableFocalRow: @MainActor Equatable {
-    static func == (lhs: EquatableFocalRow, rhs: EquatableFocalRow) -> Bool {
-        lhs.row.input == rhs.row.input
     }
 }

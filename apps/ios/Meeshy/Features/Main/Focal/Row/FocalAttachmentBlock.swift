@@ -236,8 +236,7 @@ struct FocalGridCell: View {
                 DownloadBadgeView(
                     attachment: attachment,
                     accentColor: accentHex,
-                    messageDeliveryStatus: messageDeliveryStatus,
-                    compact: attachment.type == .video
+                    messageDeliveryStatus: messageDeliveryStatus
                 )
             }
         }

@@ -24,6 +24,8 @@ export type StudioDraftAssetRef = {
   /** L'empreinte de l'accusé TUS (§ 0, défaut 7) — RELUE telle quelle, jamais
    * remesurée : le fichier local n'existe plus après un rechargement. */
   readonly thumbHash?: string;
+  /** La durée mesurée du fichier local (#7497) — la règle du réel la relit. */
+  readonly durationMs?: number;
 };
 
 /** Une LÉGENDE de média conservée avec sa référence (#6944) — elle est le
@@ -79,7 +81,10 @@ const isRecord = (value: unknown): value is Record<string, unknown> => typeof va
 
 function isAssetRef(value: unknown): value is StudioDraftAssetRef {
   if (!isRecord(value) || typeof value.postMediaId !== 'string' || typeof value.fileUrl !== 'string') return false;
-  return value.thumbHash === undefined || typeof value.thumbHash === 'string';
+  return (
+    (value.thumbHash === undefined || typeof value.thumbHash === 'string') &&
+    (value.durationMs === undefined || typeof value.durationMs === 'number')
+  );
 }
 
 const isLayerSnapshot = (value: unknown): value is StudioTextLayerSnapshot =>

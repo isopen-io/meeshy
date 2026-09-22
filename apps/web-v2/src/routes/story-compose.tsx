@@ -10,6 +10,7 @@ import { protectedMediaDeps, type ProtectedMediaDeps } from '@/lib/api/protected
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
 import { STORIES_QUERY_PREFIX } from '@/lib/api/stories';
+import { refreshFeedAction } from '@/lib/api/query';
 import { publishStory } from '@/lib/api/stories-publish';
 import { useProtectedMediaSrc } from '@/lib/api/use-protected-media';
 import { backgroundCss } from '@/lib/canvas/background';
@@ -21,6 +22,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { storyMediaCaptionPayload } from '@/lib/stories/media-caption';
+import { studioPublishRefusal, type PublicationKind } from '@/lib/stories/publication-kind';
 import {
   buildPreviewCanvasDocument,
   buildStoryCanvasEffects,
@@ -40,6 +42,7 @@ import {
   studioFailureKey,
   studioSnapshotOf,
   withAddedText,
+  withMediaDuration,
   withSelected,
   withSound,
   withSoundPlane,
@@ -66,6 +69,7 @@ import { useComposeLanguage } from '@/lib/view/use-compose-language';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { MEDIA_TRANSPORT_GLYPHS } from '@/components/glyphs-media-transport';
+import { PublishSplitButton, publishTitleKey } from '@/components/publish-split-button';
 import { Link, href, navigate } from '@/routes/route-table';
 import { StudioObjectEditor } from '@/routes/story-compose-editor';
 import { LayerMark, SlidersMark, StudioAssetRow, StudioChip, StudioDoorButton, StudioRefusal, StudioSoundPlaneToggle } from '@/routes/story-compose-parts';
@@ -218,22 +222,48 @@ function measureAspectRatio(previewUrl: string, mediaType: StudioMediaKind): Pro
   });
 }
 
-export default function StoryComposeScreen({ deps = defaultStoryStudioDeps }: { readonly deps?: StoryStudioDeps } = {}) {
-  const session = useStore(sessionStore, (s) => s.session);
-  if (session.status === 'guest') {
-    return <StudioShell>{<StudioRefusal lang={currentInterfaceLanguage()} />}</StudioShell>;
-  }
-  const viewerId = session.status === 'authenticated' ? session.user.id : null;
-  return <StoryStudio key={viewerId ?? 'anonymous'} deps={deps} viewerId={viewerId} />;
+/** LA DURÉE DU FICHIER LOCAL (#7497) — connue SANS réseau, dès la
+ * sélection : c'est elle que la règle du réel compare à ses trois secondes.
+ * `null` sur tout échec de décodage — une durée inconnue ne qualifie jamais. */
+function measureDurationMs(previewUrl: string, element: 'video' | 'audio'): Promise<number | null> {
+  return new Promise((resolve) => {
+    const media = document.createElement(element);
+    media.preload = 'metadata';
+    media.onloadedmetadata = () => {
+      resolve(Number.isFinite(media.duration) && media.duration > 0 ? Math.round(media.duration * 1000) : null);
+    };
+    media.onerror = () => resolve(null);
+    media.src = previewUrl;
+  });
 }
 
-function StudioShell({ children }: { readonly children: ReactNode }) {
+const TITLE_KEY = { STORY: 'story.studio.title', POST: 'story.studio.title.post', REEL: 'story.studio.title.reel' } as const;
+
+/**
+ * LE COMPOSER UNIQUE de la story, du post et du réel (#7497) — `initialKind`
+ * est le format du POINT D'ENTRÉE (`/stories/new` ⇒ story, `/posts/new` ⇒
+ * post, `?type=` le précise) ; la capsule `[Publier … | ▾]` en choisit un
+ * autre au moment de publier.
+ */
+export default function StoryComposeScreen({
+  deps = defaultStoryStudioDeps,
+  initialKind = 'STORY',
+}: { readonly deps?: StoryStudioDeps; readonly initialKind?: PublicationKind } = {}) {
+  const session = useStore(sessionStore, (s) => s.session);
+  if (session.status === 'guest') {
+    return <StudioShell kind={initialKind}>{<StudioRefusal lang={currentInterfaceLanguage()} />}</StudioShell>;
+  }
+  const viewerId = session.status === 'authenticated' ? session.user.id : null;
+  return <StoryStudio key={viewerId ?? 'anonymous'} deps={deps} viewerId={viewerId} initialKind={initialKind} />;
+}
+
+function StudioShell({ kind, children }: { readonly kind: PublicationKind; readonly children: ReactNode }) {
   const lang = currentInterfaceLanguage();
   return (
     <main data-story-studio className="flex h-dvh flex-col overflow-hidden pt-safe" style={{ backgroundColor: 'var(--color-ios-surface)' }}>
       <header className="flex shrink-0 items-center gap-3 px-4 pt-3 pb-2">
         <Link
-          to="list"
+          to={kind === 'STORY' ? 'list' : 'feed'}
           aria-label={translate(lang, 'story.studio.cancel')}
           className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
           style={{ outlineColor: 'var(--color-ios-brand)', color: 'var(--color-ios-ink)' }}
@@ -241,7 +271,7 @@ function StudioShell({ children }: { readonly children: ReactNode }) {
           <Glyph name="x" size={18} />
         </Link>
         <h1 className="flex-1 text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-          {translate(lang, 'story.studio.title')}
+          {translate(lang, TITLE_KEY[kind])}
         </h1>
       </header>
       {children}
@@ -249,7 +279,15 @@ function StudioShell({ children }: { readonly children: ReactNode }) {
   );
 }
 
-function StoryStudio({ deps, viewerId }: { readonly deps: StoryStudioDeps; readonly viewerId: string | null }) {
+function StoryStudio({
+  deps,
+  viewerId,
+  initialKind,
+}: {
+  readonly deps: StoryStudioDeps;
+  readonly viewerId: string | null;
+  readonly initialKind: PublicationKind;
+}) {
   const lang = currentInterfaceLanguage();
   const reader = useReaderLanguages();
   const online = useOnline();
@@ -262,6 +300,10 @@ function StoryStudio({ deps, viewerId }: { readonly deps: StoryStudioDeps; reado
     preferred: reader.languages,
     ...(draft.language !== undefined ? { initialLanguage: draft.language } : {}),
   });
+  /** Le format que la partie principale publie — celui de l'entrée, puis le
+   * dernier que le chevron a choisi (une intention armée hors ligne, ou un
+   * échec, repart au format que l'auteur a DIT). */
+  const [kind, setKind] = useState<PublicationKind>(initialKind);
   const [publishing, setPublishing] = useState(false);
   const [awaitingNetwork, setAwaitingNetwork] = useState(false);
   const [publishFailure, setPublishFailure] = useState<StudioFailureKey | null>(null);
@@ -331,6 +373,9 @@ function StoryStudio({ deps, viewerId }: { readonly deps: StoryStudioDeps; reado
     if (door === 'sound') {
       revokeIfLocal(draft.sound?.previewUrl);
       setDraft((current) => withSound(current, { file, previewUrl, upload: uploading, plane: current.sound?.plane ?? 'background' }));
+      void measureDurationMs(previewUrl, 'audio').then((durationMs) => {
+        if (durationMs !== null) setDraft((current) => withMediaDuration(current, 'sound', previewUrl, durationMs));
+      });
     } else {
       revokeIfLocal((door === 'visual' ? draft.background : draft.overlay)?.previewUrl);
       const mediaType = studioMediaKindOf(file.type);
@@ -343,6 +388,11 @@ function StoryStudio({ deps, viewerId }: { readonly deps: StoryStudioDeps; reado
       void measureAspectRatio(previewUrl, mediaType).then((aspectRatio) => {
         if (aspectRatio !== null) setDraft((current) => withVisualAspectRatio(current, door, previewUrl, aspectRatio));
       });
+      if (mediaType === 'video') {
+        void measureDurationMs(previewUrl, 'video').then((durationMs) => {
+          if (durationMs !== null) setDraft((current) => withMediaDuration(current, door, previewUrl, durationMs));
+        });
+      }
     }
     startUpload(door, file);
   }
@@ -393,8 +443,10 @@ function StoryStudio({ deps, viewerId }: { readonly deps: StoryStudioDeps; reado
     [],
   );
 
-  async function publish() {
+  async function publish(chosen: PublicationKind = kind) {
     if (!canPublishStudioDraft(draft) || publishing) return;
+    if (studioPublishRefusal(draft, chosen) !== null) return;
+    setKind(chosen);
     if (!online) {
       setAwaitingNetwork(true);
       return;
@@ -469,6 +521,7 @@ function StoryStudio({ deps, viewerId }: { readonly deps: StoryStudioDeps; reado
 
     const result = await publishStory({
       ...deps.api,
+      type: chosen,
       ...(current.texts.some((layer) => layer.text.trim() !== '') ? { originalLanguage: language } : {}),
       ...(mediaCaption !== undefined ? { mediaCaption } : {}),
       storyEffects,
@@ -489,8 +542,15 @@ function StoryStudio({ deps, viewerId }: { readonly deps: StoryStudioDeps; reado
     revokeIfLocal(current.background?.previewUrl);
     revokeIfLocal(current.overlay?.previewUrl);
     revokeIfLocal(current.sound?.previewUrl);
-    await appQueryClient.invalidateQueries({ queryKey: STORIES_QUERY_PREFIX });
-    navigate(href('stories'));
+    if (chosen === 'STORY') {
+      await appQueryClient.invalidateQueries({ queryKey: STORIES_QUERY_PREFIX });
+      navigate(href('stories'));
+      return;
+    }
+    // Le rafraîchissement du fil ne retient pas la navigation, et son
+    // annulation (le cache vidé en route) n'est pas un échec de publication.
+    void refreshFeedAction().catch(() => undefined);
+    navigate(href('feed'), true);
   }
 
   const publishRef = useRef(publish);
@@ -620,11 +680,12 @@ function StoryStudio({ deps, viewerId }: { readonly deps: StoryStudioDeps; reado
   }, [remeasureText]);
 
   const canPublish = canPublishStudioDraft(draft);
+  const kindRefusal = studioPublishRefusal(draft, kind);
   const publishLabel = publishing
     ? translate(lang, 'story.studio.publishing')
     : awaitingNetwork
       ? translate(lang, 'story.studio.publish.waiting')
-      : translate(lang, 'story.studio.publish');
+      : translate(lang, publishTitleKey(kind));
 
   const objectName = (id: string): string =>
     id === 'overlay'
@@ -635,7 +696,7 @@ function StoryStudio({ deps, viewerId }: { readonly deps: StoryStudioDeps; reado
     selectedId === 'overlay' ? (draft.overlay?.pose ?? null) : (selectedLayer?.pose ?? null);
 
   return (
-    <StudioShell>
+    <StudioShell kind={kind}>
       {!online ? (
         <p role="status" className="shrink-0 px-4 pb-2 text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
           {translate(lang, 'story.studio.offline')}
@@ -889,6 +950,10 @@ function StoryStudio({ deps, viewerId }: { readonly deps: StoryStudioDeps; reado
               <p role="alert" style={{ color: 'var(--color-error)' }}>
                 {translate(lang, doorRefusal === 'sound' ? 'story.studio.refusal.door.sound' : 'story.studio.refusal.door.visual')}
               </p>
+            ) : kindRefusal !== null ? (
+              <p data-publish-refusal={kindRefusal} style={{ color: 'var(--color-ios-ink-2)' }}>
+                {translate(lang, 'story.studio.refusal.reel')}
+              </p>
             ) : publishFailure !== null ? (
               <p role="alert" style={{ color: 'var(--color-error)' }}>
                 {translate(lang, 'story.studio.error.publish')} {translate(lang, publishFailure)}
@@ -897,17 +962,18 @@ function StoryStudio({ deps, viewerId }: { readonly deps: StoryStudioDeps; reado
               <p style={{ color: 'var(--color-ios-ink-2)' }}>{translate(lang, 'story.studio.hint.duration')}</p>
             )}
           </div>
-          <button
-            type="button"
-            data-story-publish
-            onClick={() => void publish()}
-            disabled={!canPublish || publishing}
-            aria-busy={publishing || awaitingNetwork}
-            className="grid shrink-0 place-items-center rounded-chip px-5 text-body font-semibold text-white disabled:opacity-40"
-            style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}
-          >
-            {publishLabel}
-          </button>
+          <PublishSplitButton
+            language={lang}
+            kind={kind}
+            label={publishLabel}
+            disabled={!canPublish || publishing || kindRefusal !== null}
+            menuDisabled={!canPublish || publishing}
+            busy={publishing || awaitingNetwork}
+            refusalOf={(candidate) => (studioPublishRefusal(draft, candidate) === null ? null : translate(lang, 'story.studio.refusal.reel'))}
+            onPublish={(chosen) => {
+              void publish(chosen);
+            }}
+          />
         </div>
       </footer>
     </StudioShell>

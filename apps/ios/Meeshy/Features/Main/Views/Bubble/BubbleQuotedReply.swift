@@ -70,6 +70,11 @@ struct BubbleQuotedReply: View, Equatable {
     }
 
     var style: Style = .card
+    /// La peau qui HÉBERGE la citation. `.focal` quand le widget audio de la
+    /// rangée plate la monte (`FocalAudioBlock`) : elle y suit alors la règle
+    /// de la rangée — nom seul, sans avatar (#7491), et le budget de lignes
+    /// focal.
+    var skin: QuotedReplyPresentation.Skin = .bubble
     let reply: ReplyReference
     let parentIsMe: Bool
     let accentHex: String
@@ -103,6 +108,7 @@ struct BubbleQuotedReply: View, Equatable {
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.style == rhs.style &&
+        lhs.skin == rhs.skin &&
         lhs.parentIsMe == rhs.parentIsMe &&
         lhs.accentHex == rhs.accentHex &&
         lhs.isDark == rhs.isDark &&
@@ -257,7 +263,7 @@ struct BubbleQuotedReply: View, Equatable {
     /// QUATRE producteurs d'une citation de story ou d'humeur posent
     /// `isStoryReply: true` — un seul predicat suffit donc a les couvrir.
     private var showsAuthorGate: Bool {
-        !reply.isStoryReply
+        !reply.isStoryReply && QuotedReplyPresentation.showsAuthorAvatar(for: skin)
     }
 
     /// Le geste de la ZONE 1, ou `nil` s'il n'y a rien a declencher.
@@ -429,7 +435,7 @@ struct BubbleQuotedReply: View, Equatable {
         let coupe = QuotedReplyPresentation.wordTruncated(
             brut,
             maxCharacters: QuotedReplyPresentation.previewCharacterBudget(
-                for: .bubble, dynamicTypeSize: dynamicTypeSize))
+                for: skin, dynamicTypeSize: dynamicTypeSize))
 
         return Text(quotedTitle)
             .font(.caption.weight(.bold))
@@ -514,7 +520,7 @@ struct BubbleQuotedReply: View, Equatable {
                                 .lineLimit(QuotedReplyPresentation.titleLineLimit)
                         } else {
                             quotedFlow(previewColor: previewColor, nameColor: nameColor)
-                                .lineLimit(QuotedReplyPresentation.previewLineLimit(for: .bubble))
+                                .lineLimit(QuotedReplyPresentation.previewLineLimit(for: skin))
                                 .tint(previewColor)
                         }
 

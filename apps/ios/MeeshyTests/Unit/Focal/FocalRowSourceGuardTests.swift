@@ -74,15 +74,25 @@ final class FocalRowSourceGuardTests: XCTestCase {
     /// « Régression documentée du 2026-05-25 » (contrat §WS-4) : `FocalRow`
     /// ne doit PAS déclarer sa propre conformance `Equatable` — seule
     /// `EquatableFocalRow` (l'enveloppe) l'est.
+    ///
+    /// **La règle porte sur une TOPOLOGIE, pas sur un fichier.** L'enveloppe a
+    /// quitté `FocalRow.swift` pour `EquatableFocalRow.swift` quand le budget
+    /// de taille a imposé le découpage : la lire encore dans le fichier
+    /// d'origine ne prouvait plus son absence de conformance, seulement son
+    /// déménagement. Chaque moitié se lit donc là où elle vit — et `source(_:)`
+    /// jette si le fichier de l'enveloppe disparaît, ce qui garde la seconde
+    /// moitié aussi exigeante qu'avant.
     func test_focalRow_isNotItselfEquatable() throws {
-        let stripped = AppSourceGuard.stripComments(try source("FocalRow.swift"))
+        let row = AppSourceGuard.stripComments(try source("FocalRow.swift"))
         XCTAssertFalse(
-            stripped.contains("struct FocalRow: View, Equatable") || stripped.contains("struct FocalRow: Equatable"),
+            row.contains("struct FocalRow: View, Equatable") || row.contains("struct FocalRow: Equatable"),
             "FocalRow ne doit pas porter sa propre conformance Equatable — le gate vit sur EquatableFocalRow"
         )
-        XCTAssertTrue(stripped.contains("struct EquatableFocalRow"), "EquatableFocalRow doit exister (même topologie que EquatableMessageBubble)")
+
+        let wrapper = AppSourceGuard.stripComments(try source("EquatableFocalRow.swift"))
+        XCTAssertTrue(wrapper.contains("struct EquatableFocalRow"), "EquatableFocalRow doit exister (même topologie que EquatableMessageBubble)")
         XCTAssertTrue(
-            stripped.contains("lhs.row.input == rhs.row.input"),
+            wrapper.contains("lhs.row.input == rhs.row.input"),
             "EquatableFocalRow.== doit comparer row.input (FocalRowActions exclu, comme FocalRowInput l'exige)"
         )
     }

@@ -73,6 +73,21 @@ final class QuotedReplyPresentationTests: XCTestCase {
         XCTAssertEqual(QuotedReplyPresentation.previewLineLimit(for: .composer), 2)
     }
 
+    // MARK: - L'avatar de l'auteur cité, une peau à la fois (#7491)
+
+    /// La rangée plate (focal ET script) pose déjà l'avatar de l'auteur de la
+    /// RANGÉE ; un second avatar dans sa citation empilait deux visages pour un
+    /// seul message. Seule la bulle, qui n'a pas d'en-tête d'identité par
+    /// message, garde l'avatar de l'auteur cité.
+    func test_showsAuthorAvatar_onlyTheBubbleSkinDrawsIt() {
+        XCTAssertTrue(QuotedReplyPresentation.showsAuthorAvatar(for: .bubble))
+        XCTAssertFalse(
+            QuotedReplyPresentation.showsAuthorAvatar(for: .focal),
+            "focal et script rendent la même rangée plate : la citation n'y porte que le NOM de l'auteur cité"
+        )
+        XCTAssertFalse(QuotedReplyPresentation.showsAuthorAvatar(for: .composer))
+    }
+
     func test_titleLineLimit_isAlwaysOne_theAuthorNeverWraps() {
         XCTAssertEqual(QuotedReplyPresentation.titleLineLimit, 1)
     }
