@@ -251,7 +251,12 @@ class ConversationViewModel: ObservableObject {
     /// Rendu obsolète tout seul dès qu'un message plus récent arrive — la
     /// comparaison se fait sur le message le plus récent du moment.
     /// Cf. `caughtUpMessageId(seen:)`.
-    private var lastCaughtUpMessageId: String?
+    private(set) var lastCaughtUpMessageId: String?
+
+    /// Tout ce que l'observateur de visibilité a rapporté depuis l'ouverture
+    /// (#7350) — le préfixe contigu depuis la frontière s'y mesure, jamais sur
+    /// le seul dernier lot. Cf. `notePartialRead(seen:)`.
+    var seenServerMessageIds: Set<String> = []
 
     /// Detailed reaction data for a specific message (used by reaction detail sheet)
     @Published var reactionDetails: [ReactionGroup] = []
@@ -1015,7 +1020,9 @@ class ConversationViewModel: ObservableObject {
     /// - Parameter visibleIds: ce que la surface MONTRE, distinct de ce qu'elle
     ///   a vu assez longtemps (#3902). Vide ⇒ règle d'avant, à l'identique.
     func markAsRead(messageIds: [String]? = nil, visibleIds: [String] = []) {
-        sendReadReceipt(messageIds: messageIds, caughtUpId: caughtUpMessageId(seen: messageIds, visible: visibleIds))
+        let caughtUpId = caughtUpMessageId(seen: messageIds, visible: visibleIds)
+        if caughtUpId == nil, let messageIds { notePartialRead(seen: messageIds) }
+        sendReadReceipt(messageIds: messageIds, caughtUpId: caughtUpId)
     }
 
     /// Rattrapage HORS mode Bulles — Résumé Vivant, Rivière (#3901). Ces deux

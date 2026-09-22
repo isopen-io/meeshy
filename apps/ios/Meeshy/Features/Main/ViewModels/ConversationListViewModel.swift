@@ -2145,7 +2145,7 @@ class ConversationListViewModel: ObservableObject {
     /// `ConversationReadSignal` : le compteur affiché doit rester la propriété
     /// de `store.apply(.markAsRead)`, qui le remet à sa valeur d'avant sur un
     /// 4xx. Passer par le bus poserait un zéro hors du store, que le rollback
-    /// ne saurait plus reprendre. Les autres surfaces (ouverture d'écran,
+    /// ne saurait plus reprendre. Les autres surfaces (rattrapage du fil,
     /// quick-action push, widget) ne mutent rien côté serveur par ce chemin et
     /// utilisent le signal partagé.
     func markAsRead(conversationId: String) async {
@@ -2497,7 +2497,7 @@ class ConversationListViewModel: ObservableObject {
                 self.clearUnreadLocally(cid)
                 // Corrige le `ConversationStore` (RAM, tiers) : ce store
                 // n'apprend autrement jamais qu'une
-                // conversation vient d'être lue par CE chemin (ouverture,
+                // conversation vient d'être lue par CE chemin (rattrapage,
                 // quick-action push, widget — tous postent `.conversationMarkedRead`,
                 // aucun ne route vers `store.apply(.markAsRead, …)`). Sa
                 // prochaine republication — déclenchée par N'IMPORTE QUELLE
