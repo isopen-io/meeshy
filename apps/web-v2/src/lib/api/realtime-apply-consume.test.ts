@@ -117,4 +117,22 @@ describe('applyMessageConsumed — la bulle SUIT le direct (#7354)', () => {
     const messages = client.getQueryData<ReturnType<typeof threadPages>>(messagesQueryKey('c-a'))?.pages[0]?.messages;
     expect(messages?.find((m) => m.id === 'm-1')?.viewOnceCount).toBe(0);
   });
+
+  test('un événement EN RETARD ne fait jamais REDESCENDRE le compte — une vue brûlée ne se rouvre pas', () => {
+    const client = new QueryClient();
+    const burned = localMessage({ id: 'm-1', conversationId: 'c-a', isViewOnce: true, viewOnceCount: 2, maxViewOnceCount: 2 });
+    client.setQueryData(messagesQueryKey('c-a'), threadPages([burned]));
+
+    applyMessageConsumed(client, {
+      messageId: 'm-1',
+      conversationId: 'c-a',
+      userId: 'u-b',
+      viewOnceCount: 1,
+      maxViewOnceCount: 2,
+      isFullyConsumed: false,
+    });
+
+    const messages = client.getQueryData<ReturnType<typeof threadPages>>(messagesQueryKey('c-a'))?.pages[0]?.messages;
+    expect(messages?.find((m) => m.id === 'm-1')?.viewOnceCount).toBe(2);
+  });
 });

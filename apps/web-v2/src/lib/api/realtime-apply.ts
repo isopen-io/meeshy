@@ -871,11 +871,22 @@ export function isMessageConsumedEvent(payload: unknown): payload is MessageCons
  * `messages-view-once.ts:158-167`), donc chaque destinataire de la room —
  * l'expéditeur compris — voit `viewOnceCount` bouger SANS recharger le fil.
  *
+ * MONOTONE (revue V6) : le compte ne REDESCEND jamais. L'événement socket et
+ * la réponse REST de `consumeViewOnceOptimistic` voyagent sur deux canaux —
+ * un `message:consumed` EN RETARD (compte 1) arrivé après le compte servi (2)
+ * ramènerait une vue brûlée à `veiled` et la rouvrirait au remontage. Seul le
+ * rollback optimiste (`view-once.ts`) a le droit d'abaisser le compte ; il
+ * n'emprunte pas ce puits.
+ *
  * `patchThreadMessages` est un NO-OP silencieux si la conversation n'a pas
  * de cache (fil non ouvert) ou si `messageId` n'y figure pas
  * (`applyConsumption`, motif `.map` sans correspondance) — jamais une
  * exception, même motif que `applyReadStatusUpdated`.
  */
 export function applyMessageConsumed(queryClient: QueryClient, data: MessageConsumedEventData): void {
-  patchThreadMessages(queryClient, data.conversationId, (messages) => applyConsumption(messages, data));
+  patchThreadMessages(queryClient, data.conversationId, (messages) =>
+    messages.some((m) => m.id === data.messageId && (m.viewOnceCount ?? 0) < data.viewOnceCount)
+      ? applyConsumption(messages, data)
+      : messages,
+  );
 }
