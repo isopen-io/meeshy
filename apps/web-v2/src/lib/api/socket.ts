@@ -340,10 +340,11 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   };
 
   /**
-   * `read-status:updated` (#7223) — LES COCHES ✓✓ D'UN MESSAGE ENVOYÉ
-   * BOUGENT EN DIRECT quand le destinataire reçoit ou lit. La règle
-   * (cible le dernier message du fil, tous-ou-rien en groupe conservé) vit
-   * dans `realtime-apply.ts` (D-40) : cette ligne la BRANCHE.
+   * `read-status:updated` (#7223, #7348) — LES COCHES ✓✓ D'UN MESSAGE ENVOYÉ
+   * BOUGENT EN DIRECT quand le destinataire reçoit ou lit. La règle (cible le
+   * message que `summary.messageId` NOMME ; à défaut de nom — passerelle
+   * pré-G-5/#7347 — le dernier message du fil ; tous-ou-rien en groupe
+   * conservé) vit dans `realtime-apply.ts` (D-40) : cette ligne la BRANCHE.
    */
   const onReadStatusUpdated = (payload: unknown): void => {
     if (!isReadStatusUpdated(payload)) return;
@@ -421,6 +422,21 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
     };
   const onCommentLiked = onCommentLikeChanged(true);
   const onCommentUnliked = onCommentLikeChanged(false);
+
+  /**
+   * `comment:translation-updated` (#7394) — LE PRISME SUIT LE PIPELINE EN
+   * DIRECT SUR UN COMMENTAIRE, jumeau de `post:translation-updated` (#7383).
+   * Il n'était écouté NULLE PART : un commentaire écrit hors de la langue du
+   * lecteur restait dans celle de son auteur jusqu'à la relecture du fil. La
+   * loi (garde de forme, fusion par langue, caisse du fil) vit avec le cache
+   * dans `publication-comments.ts` ; cette ligne ne fait que BRANCHER, par
+   * `import()` comme ses quatre voisines (D-98).
+   */
+  const onCommentTranslationUpdated = (payload: unknown): void => {
+    void import('./publication-comments').then(({ applyCommentTranslation }) => {
+      applyCommentTranslation(deps.queryClient, payload);
+    });
+  };
 
   /**
    * `story:reacted` / `story:unreacted` (#7227, W8) — LE RAIL SUIT LES
@@ -715,6 +731,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.COMMENT_DELETED, onCommentDeleted);
   socket.on<unknown>(SERVER_EVENTS.COMMENT_LIKED, onCommentLiked);
   socket.on<unknown>(SERVER_EVENTS.COMMENT_UNLIKED, onCommentUnliked);
+  socket.on<unknown>(SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED, onCommentTranslationUpdated);
   socket.on<unknown>(SERVER_EVENTS.STORY_CREATED, onStoryChanged);
   socket.on<unknown>(SERVER_EVENTS.STORY_UPDATED, onStoryChanged);
   socket.on<unknown>(SERVER_EVENTS.STORY_DELETED, onStoryChanged);
@@ -782,6 +799,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.COMMENT_DELETED, onCommentDeleted);
       socket.off<unknown>(SERVER_EVENTS.COMMENT_LIKED, onCommentLiked);
       socket.off<unknown>(SERVER_EVENTS.COMMENT_UNLIKED, onCommentUnliked);
+      socket.off<unknown>(SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED, onCommentTranslationUpdated);
       socket.off<unknown>(SERVER_EVENTS.POST_CREATED, onPostCreated);
       socket.off<unknown>(SERVER_EVENTS.POST_UPDATED, onPostUpdated);
       socket.off<unknown>(SERVER_EVENTS.POST_DELETED, onPostDeleted);

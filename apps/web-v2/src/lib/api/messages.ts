@@ -156,11 +156,16 @@ export type { HttpTransport };
  *
  * `latestCachedThreadMessage` (#7223) rejoint les lectures pour la MÊME
  * raison que les quatre premiers accès : `applyReadStatusUpdated`
- * (`realtime-apply.ts`) a besoin du message le plus RÉCENT d'un fil — `
- * read-status:updated` ne nomme aucun message, il décrit le dernier de la
- * conversation (`MessageReadStatusService.getLatestMessageSummary`) — et ne
+ * (`realtime-apply.ts`) a besoin du message le plus RÉCENT d'un fil — et ne
  * doit pas réapprendre que `pages[0]` est la page la plus récente,
  * ASCENDANTE en interne.
+ *
+ * **CE REPLI N'EST PLUS LA RÈGLE NOMINALE (#7348).** `ReadStatusSummary`
+ * porte désormais `messageId?` : quand la charge NOMME son message, le puits
+ * cible `findCachedThreadMessage` ci-dessus, pas cette lecture-ci. Elle ne
+ * sert plus qu'à la passerelle qui ne pose pas encore ce champ (G-5/#7347 —
+ * `MessageReadStatusService.getLatestMessageSummary` décrit alors le dernier
+ * message non supprimé de la conversation, et il faut bien en désigner un).
  */
 
 /**

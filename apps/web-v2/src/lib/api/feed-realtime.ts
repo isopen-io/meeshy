@@ -1,7 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query';
 
-import type { PostTranslationUpdatedEventData } from '@meeshy/shared/types/post';
-
 import { withoutBookmark } from '@/lib/feed/bookmark-membership';
 import { togglePost, withServedCount } from '@/lib/feed/interactions';
 
@@ -10,6 +8,7 @@ import { removeCardPost, replaceCardContent, updateCardPost, writeCardCache } fr
 import { FEED_QUERY_KEY } from './feed';
 import { bumpNewPostCount } from './feed-new-count';
 import type { FeedInfiniteData, FeedPost } from './feed-pages';
+import { mergedTranslations, nonEmpty, translationDeliveryOf, type TranslationDelivery } from './translation-delivery';
 
 /**
  * LE TEMPS RÉEL DU FLUX (#7182) — `post:created`, `post:updated`,
@@ -326,39 +325,14 @@ export function applyPostReactionEvent(queryClient: QueryClient, payload: unknow
  * compose pas l'ordre du fil gelé, elle sert au lecteur le MÊME contenu dans
  * sa langue (iOS : `feedCache.patchEverywhere`, pager des Réels compris).
  */
-type TranslationEntry = PostTranslationUpdatedEventData['translation'];
+type PostDelivery = TranslationDelivery & { readonly postId: string };
 
-type TranslationDelivery = { readonly postId: string; readonly language: string; readonly translation: TranslationEntry };
-
-const nonEmpty = (value: unknown): value is string => typeof value === 'string' && value !== '';
-
-const translationOf = (value: unknown): TranslationEntry | null => {
-  const t = objectOf(value);
-  if (t === null || typeof t.text !== 'string' || typeof t.translationModel !== 'string' || typeof t.createdAt !== 'string') return null;
-  const confidence = t.confidenceScore;
-  return confidence === undefined || (typeof confidence === 'number' && Number.isFinite(confidence)) ? (t as TranslationEntry) : null;
-};
-
-const deliveryOf = (payload: unknown): TranslationDelivery | null => {
-  const p = objectOf(payload);
-  const translation = translationOf(p?.translation);
-  if (translation === null || !nonEmpty(p?.postId) || !nonEmpty(p?.language)) return null;
-  return { postId: p.postId, language: p.language, translation };
-};
-
-/**
- * LA FUSION PAR LANGUE, SITE UNIQUE des deux cartes — qui ne se mélangent
- * jamais : l'appelant remet LA carte du contenu visé (`Post.translations` OU
- * `PostMedia.captionTranslations`, jamais `alt`, dont la traduction a sa
- * propre carte). Une langue déjà tenue est REMPLACÉE, jamais doublée.
- *
- * `null` quand cette langue porte déjà ce texte : rien de ce que le lecteur
- * verrait ne change (une rediffusion à la reconnexion), la carte reste la
- * MÊME référence, et le registre ne réécrit aucune caisse.
- */
-const mergedTranslations = (held: unknown, { language, translation }: TranslationDelivery): Record<string, unknown> | null => {
-  const record = Array.isArray(held) ? {} : (objectOf(held) ?? {});
-  return objectOf(record[language])?.text === translation.text ? null : { ...record, [language]: translation };
+/** La paire vérifiée (`translation-delivery.ts`, site UNIQUE partagé avec la
+ * traduction d'un COMMENTAIRE, #7394), plus l'adresse de la publication. */
+const deliveryOf = (payload: unknown): PostDelivery | null => {
+  const delivery = translationDeliveryOf(payload);
+  const postId = objectOf(payload)?.postId;
+  return delivery === null || !nonEmpty(postId) ? null : { ...delivery, postId };
 };
 
 /** `post:translation-updated` — le TEXTE de la publication (#7383). */
