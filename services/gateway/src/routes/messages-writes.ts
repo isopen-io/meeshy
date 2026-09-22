@@ -48,6 +48,7 @@ import {
   sendError,
 } from '../utils/response.js';
 import { logger, type MessageParams, type MessagesRouteDeps } from './messages-shared';
+import { callerParticipantWhere } from './conversations/utils/access-control';
 import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from '../services/messaging/withOrphanedSenderRepair';
 
 interface UpdateMessageBody {
@@ -621,8 +622,9 @@ export function registerMessagesWriteRoutes(fastify: FastifyInstance, deps: Mess
                   participants: {
                     // `isActive: true` — même règle que la garde du message :
                     // un ancien membre ne lit plus, et n'écrit plus, les reçus
-                    // d'une conversation qu'il a quittée.
-                    where: { userId: userId, isActive: true },
+                    // d'une conversation qu'il a quittée. L'invité se trouve par
+                    // son `participantId` (#7358), jamais par `userId`.
+                    where: callerParticipantWhere(authRequest.authContext),
                     select: { id: true, userId: true }
                   }
                 }

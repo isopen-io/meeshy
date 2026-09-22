@@ -33,6 +33,8 @@ import {
   sendInternalError,
 } from '../utils/response.js';
 import { logger, type MessageParams, type MessagesRouteDeps } from './messages-shared';
+import { callerParticipantWhere } from './conversations/utils/access-control';
+import { readDeviceServedTo } from '../utils/read-device-visibility';
 import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from '../services/messaging/withOrphanedSenderRepair';
 
 /**
@@ -501,7 +503,6 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
       const { messageId } = request.params;
       const { offset = '0', limit = '20', filter = 'all' } = request.query;
       const authRequest = request as UnifiedAuthRequest;
-      const userId = authRequest.authContext.userId;
 
       // Vérifier que le message existe et que l'utilisateur a accès
       const message = await prisma.message.findFirst({
@@ -516,8 +517,9 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
                 // `isActive: true` : quitter une conversation en ferme aussi
                 // les accusés de lecture. La ligne `Participant` laissée
                 // derrière par un départ répondait encore ici.
-                where: { userId: userId, isActive: true },
-                select: { userId: true }
+                // L'invité se trouve par son `participantId` (#7358).
+                where: callerParticipantWhere(authRequest.authContext),
+                select: { id: true, userId: true }
               }
             }
           }
@@ -560,7 +562,13 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
         historyFloor
       });
 
-      return sendPaginatedSuccess(reply, statusDetails.statuses, statusDetails.pagination);
+      const viewerParticipantId = message.conversation.participants[0]?.id ?? null;
+      const statuses = statusDetails.statuses.map((row) => ({
+        ...row,
+        readDevice: readDeviceServedTo(row, viewerParticipantId),
+      }));
+
+      return sendPaginatedSuccess(reply, statuses, statusDetails.pagination);
 
     } catch (error) {
       logger.error('Error fetching message status details', error as Error);
@@ -604,8 +612,9 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
                   participants: {
                     // `isActive: true` — même règle que la garde du message :
                     // un ancien membre ne lit plus, et n'écrit plus, les reçus
-                    // d'une conversation qu'il a quittée.
-                    where: { userId: userId, isActive: true },
+                    // d'une conversation qu'il a quittée. L'invité se trouve par
+                    // son `participantId` (#7358), jamais par `userId`.
+                    where: callerParticipantWhere(authRequest.authContext),
                     select: { userId: true }
                   }
                 }
