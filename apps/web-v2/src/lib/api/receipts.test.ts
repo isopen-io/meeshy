@@ -19,6 +19,7 @@ import { effectiveUnreadOf, type ConversationStoreState } from '@/lib/conversati
 import { message, VIEWER_ID } from '@/lib/api/fixtures-base';
 import { unreadBoundaryOf } from '@/lib/view/unread-boundary';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { sessionStore } from './session';
 import type { Conversation, Message } from './types';
 
 /**
@@ -345,6 +346,122 @@ describe('markCaughtUp — rejeu à la reconnexion (#7367, W3)', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(calls).toEqual(['m9']);
+  });
+
+  /**
+   * TÉMOIN 6 (revue-correction #7367) — UN JOB PÉRIMÉ NE DOIT PAS RECULER LE
+   * CURSEUR. Une panne TRANSITOIRE (503) laisse un job pendant sans qu'aucun
+   * `offline` ne survienne : `navigator.onLine` reste `true`, le marquage
+   * SUIVANT passe. La file gardait pourtant l'ancienne frontière, et le
+   * premier `online` venu (une veille, un changement de wifi, des heures
+   * plus tard) la rejouait — `caughtUpConversation` réécrivait alors
+   * `lastReadMessageId` sur le message ANCIEN, rang 1 de
+   * `firstUnreadBoundary` : des messages déjà lus redevenaient non lus,
+   * exactement ce que le critère de #7351 interdit.
+   */
+  test('un marquage PLUS RÉCENT qui réussit retire le job périmé — la reconnexion ne fait plus reculer le curseur', async () => {
+    ensureHappyDomRegistered();
+
+    const c = conversation({ id: 'c1' });
+    const queryClient = seededClient([c]);
+    const store = freshStore();
+    const { transport, goOnline } = switchableTransport();
+
+    await markCaughtUp({ conversationId: 'c1', caughtUpToMessageId: 'm5', deps: { source: 'gateway', transport, store, queryClient } });
+    expect(readReceiptQueueSizeForTests()).toBe(1);
+
+    const calls: string[] = [];
+    goOnline(((_input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push(JSON.parse(String(init?.body)).caughtUpToMessageId);
+      return Promise.resolve(
+        new Response(JSON.stringify({ success: true, data: { type: 'read', markedCount: 1, unreadCount: 0 } }), { status: 200 }),
+      );
+    }) as unknown as typeof fetch);
+
+    await markCaughtUp({ conversationId: 'c1', caughtUpToMessageId: 'm9', deps: { source: 'gateway', transport, store, queryClient } });
+    expect(readReceiptQueueSizeForTests()).toBe(0);
+
+    window.dispatchEvent(new Event('online'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(calls).toEqual(['m9']);
+    expect(findCachedConversation(queryClient, 'c1')?.lastReadMessageId).toBe('m9');
+  });
+
+  /**
+   * TÉMOIN 7 (revue-correction #7367) — UN SUCCÈS EST UNE PREUVE DE RÉSEAU,
+   * et il draine la file. Une panne TRANSITOIRE (5xx, 429) n'est PAS une
+   * coupure : `navigator.onLine` ne bascule pas, donc aucun `online` ne
+   * viendra jamais, et le job attendait indéfiniment un événement qui
+   * n'arrive que sur une VRAIE reconnexion. Le premier marquage qui aboutit
+   * dit que la passerelle répond — c'est le signal le plus fort dont le
+   * client dispose.
+   */
+  test('un marquage qui réussit draine les jobs des AUTRES conversations restés en file', async () => {
+    ensureHappyDomRegistered();
+
+    const queryClient = seededClient([conversation({ id: 'c1' }), conversation({ id: 'c2' })]);
+    const store = freshStore();
+    const { transport, goOnline } = switchableTransport();
+
+    await markCaughtUp({ conversationId: 'c2', caughtUpToMessageId: 'm2', deps: { source: 'gateway', transport, store, queryClient } });
+    expect(readReceiptQueueSizeForTests()).toBe(1);
+
+    const calls: string[] = [];
+    goOnline(((input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push(`${String(input)}:${JSON.parse(String(init?.body)).caughtUpToMessageId}`);
+      return Promise.resolve(
+        new Response(JSON.stringify({ success: true, data: { type: 'read', markedCount: 1, unreadCount: 0 } }), { status: 200 }),
+      );
+    }) as unknown as typeof fetch);
+
+    await markCaughtUp({ conversationId: 'c1', caughtUpToMessageId: 'm9', deps: { source: 'gateway', transport, store, queryClient } });
+
+    expect(calls).toEqual(['/api/v1/conversations/c1/receipts:m9', '/api/v1/conversations/c2/receipts:m2']);
+    expect(readReceiptQueueSizeForTests()).toBe(0);
+    expect(findCachedConversation(queryClient, 'c2')?.lastReadMessageId).toBe('m2');
+  });
+
+  /**
+   * TÉMOIN 8 (revue-correction #7367) — LE JOB NE CHANGE PAS DE LECTEUR.
+   * La file est un singleton de MODULE et la déconnexion ne recharge PAS la
+   * page (`settings.tsx:198-199`, navigation SPA) : un job resté en attente
+   * repartait sous l'identité du lecteur SUIVANT, marquant lu pour lui une
+   * conversation partagée à une frontière qu'il n'a jamais atteinte.
+   */
+  test('un changement de session VIDE la file — aucun marquage ne repart sous l’identité du lecteur suivant', async () => {
+    ensureHappyDomRegistered();
+
+    sessionStore.getState().establish({
+      user: { id: 'u1', username: 'alice' },
+      token: 'jeton-a',
+      sessionToken: 'session-a',
+      expiresIn: 3600,
+    });
+
+    const c = conversation({ id: 'c1' });
+    const queryClient = seededClient([c]);
+    const store = freshStore();
+    const { transport, goOnline } = switchableTransport();
+
+    await markCaughtUp({ conversationId: 'c1', caughtUpToMessageId: 'm5', deps: { source: 'gateway', transport, store, queryClient } });
+    expect(readReceiptQueueSizeForTests()).toBe(1);
+
+    sessionStore.getState().clearSession();
+    expect(readReceiptQueueSizeForTests()).toBe(0);
+
+    const calls: string[] = [];
+    goOnline(((_input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push(JSON.parse(String(init?.body)).caughtUpToMessageId);
+      return Promise.resolve(new Response(JSON.stringify({ success: true, data: {} }), { status: 200 }));
+    }) as unknown as typeof fetch);
+
+    window.dispatchEvent(new Event('online'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(calls).toEqual([]);
   });
 });
 

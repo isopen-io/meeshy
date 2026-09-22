@@ -3,6 +3,7 @@ import type { StoreApi } from 'zustand/vanilla';
 
 import type { ConversationStoreState } from '@/lib/conversation-store';
 import { createOfflineQueue } from '@/lib/offline-queue';
+import { sessionStore, type SessionState } from './session';
 import type { Transport } from '../net/transport';
 import type { ConversationsDeps } from './conversations';
 import { patchConversation, patchConversationDetail } from './conversations';
@@ -87,8 +88,23 @@ export async function markCaughtUp(params: {
   const resolved = await attemptReadReceipt(job);
   if (!resolved) {
     ensureOnlineFlushListener();
+    ensureSessionWatch();
     readReceiptOfflineQueue.enqueue(conversationId, job);
+    return;
   }
+
+  // LE JOB EN ATTENTE DE CETTE CONVERSATION EST PÉRIMÉ (revue-correction
+  // #7367) — cette tentative-ci a tranché plus tard et plus loin : la
+  // rejouer reposerait une frontière ANTÉRIEURE sur `lastReadMessageId`
+  // (rang 1 de `firstUnreadBoundary`), rendant non lus des messages lus.
+  readReceiptOfflineQueue.remove(conversationId);
+
+  // UN SUCCÈS EST LA PREUVE QUE LA PASSERELLE RÉPOND, et c'est souvent la
+  // SEULE qu'on aura : une panne transitoire (5xx, 429) ne fait basculer
+  // aucun `offline`, donc l'événement `online` — la seule autre porte de
+  // sortie de la file — peut ne jamais venir. Les jobs des AUTRES
+  // conversations partent donc ici, dans leur ordre FIFO.
+  await readReceiptOfflineQueue.flush(attemptReadReceipt);
 }
 
 type PendingReadReceipt = {
@@ -155,6 +171,43 @@ const readReceiptOfflineQueue = createOfflineQueue<PendingReadReceipt>();
 const onOnlineFlush = (): void => {
   void readReceiptOfflineQueue.flush(attemptReadReceipt);
 };
+
+/**
+ * QUI EST LE LECTEUR DE CE JOB (revue-correction #7367) — la file est un
+ * singleton de MODULE, et une déconnexion ne recharge PAS la page
+ * (`settings.tsx:198-199` : `logout()` puis `navigate(href('login'))`, une
+ * navigation SPA). Un job resté en file survivait donc à la déconnexion,
+ * puis repartait sous l'identité du lecteur SUIVANT — marquant lu, pour
+ * lui, une conversation partagée à une frontière qu'il n'a jamais atteinte.
+ * C'est la question « qu'est-ce qui part À CÔTÉ ? » posée au TEMPS : ce que
+ * le job transporte, c'est l'intention d'un AUTRE lecteur.
+ */
+const viewerKeyOf = (session: SessionState): string | null => {
+  if (session.status === 'authenticated') return session.user.id;
+  if (session.status === 'guest') return session.sessionToken;
+  return null;
+};
+
+let watchedViewerKey: string | null | undefined;
+
+/**
+ * `ensureSessionWatch` — posé au premier échec, comme l'écouteur `online`
+ * juste au-dessus, et pour la même raison : rien à surveiller tant qu'aucun
+ * job n'attend. Un drapeau est ici nécessaire (`sessionStore.subscribe`
+ * n'est pas idempotent, contrairement à `addEventListener`) ; il ne peut pas
+ * se désynchroniser, le magasin de session étant l'UNIQUE instance de
+ * l'application (`api/session.ts`), jamais remplacée.
+ */
+function ensureSessionWatch(): void {
+  if (watchedViewerKey !== undefined) return;
+  watchedViewerKey = viewerKeyOf(sessionStore.getState().session);
+  sessionStore.subscribe((state) => {
+    const key = viewerKeyOf(state.session);
+    if (key === watchedViewerKey) return;
+    watchedViewerKey = key;
+    readReceiptOfflineQueue.clear();
+  });
+}
 
 /**
  * `ensureOnlineFlushListener` — posé au premier échec, jamais au chargement
