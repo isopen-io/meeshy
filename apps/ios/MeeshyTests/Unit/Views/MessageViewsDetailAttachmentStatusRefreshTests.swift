@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 @testable import Meeshy
 
 /// I4 (#7360) — the same defect I3 (#7349) fixed for the "Vu par" text
@@ -55,11 +56,44 @@ final class MessageViewsDetailAttachmentStatusRefreshTests: XCTestCase {
         XCTAssertTrue(body.contains("MessageSocketManager.shared.attachmentStatusUpdated"),
             "sans cet abonnement la fiche « Écouté » / « Vu » ne bouge qu'en la refermant — " +
             "c'est le critère de fin de #7360")
-        XCTAssertTrue(body.contains("$0.conversationId == conversationId"),
-            "l'événement est filtré par conversation : une fiche ne doit pas repartir " +
-            "au réseau pour le fil d'à côté")
+        XCTAssertTrue(body.contains("MessageViewsConsumption.refreshesCards("),
+            "le filtre est la règle testée ci-dessous, pas une condition réécrite dans la vue")
         XCTAssertTrue(body.contains("loadAttachmentStatuses()"),
             "le relais doit appeler la même fonction que `.onAppear` — " +
             "elle n'a pas de garde « déjà chargé », donc rien d'autre n'est requis pour rafraîchir")
+    }
+
+    // MARK: - La règle du relais (comportement)
+
+    private func makeEvent(messageId: String, conversationId: String) -> AttachmentStatusUpdatedEvent {
+        JSONStub.decode("""
+        {
+            "attachmentId":"att1",
+            "messageId":"\(messageId)",
+            "conversationId":"\(conversationId)",
+            "userId":"000000000000000000000002",
+            "action":"listened",
+            "updatedAt":"2099-12-31T23:59:59.000Z"
+        }
+        """)
+    }
+
+    func test_refreshesCards_forThisMessage_isTrue() {
+        XCTAssertTrue(MessageViewsConsumption.refreshesCards(
+            on: makeEvent(messageId: "msg1", conversationId: "conv1"),
+            messageId: "msg1", conversationId: "conv1"))
+    }
+
+    func test_refreshesCards_forAnotherMessageOfTheSameConversation_isFalse() {
+        XCTAssertFalse(MessageViewsConsumption.refreshesCards(
+            on: makeEvent(messageId: "msg2", conversationId: "conv1"),
+            messageId: "msg1", conversationId: "conv1"),
+            "une écoute d'un AUTRE vocal du fil ne doit pas renvoyer la fiche au réseau")
+    }
+
+    func test_refreshesCards_forAnotherConversation_isFalse() {
+        XCTAssertFalse(MessageViewsConsumption.refreshesCards(
+            on: makeEvent(messageId: "msg1", conversationId: "conv2"),
+            messageId: "msg1", conversationId: "conv1"))
     }
 }

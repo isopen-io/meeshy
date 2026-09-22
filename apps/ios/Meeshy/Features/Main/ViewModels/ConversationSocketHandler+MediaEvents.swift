@@ -89,9 +89,13 @@ extension ConversationSocketHandler {
                 // as "by all" there would be a worse defect than staying
                 // silent, so groups wait for #7359 — logged, not solved
                 // here.
+                // L'AUTEUR n'est jamais un destinataire : la passerelle
+                // l'exclut des deux côtés de « écouté par tous »
+                // (`MessageMediaConsumptionService.updateAttachmentComputedStatus`).
                 guard event.userId != userId,
                       let delegate = self.delegate,
                       let message = delegate.messages.first(where: { $0.id == event.messageId }),
+                      message.senderId != event.userId,
                       message.recipientCount == 1,
                       let attachment = message.attachments.first(where: { $0.id == event.attachmentId }),
                       let confirmedAt = event.updatedAt

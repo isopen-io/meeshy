@@ -214,4 +214,33 @@ final class ConversationSocketHandlerAttachmentConsumptionTests: XCTestCase {
         )
         _ = sut
     }
+
+    func test_attachmentStatusUpdated_authorListeningToOwnVoiceMessage_isNotCreditedByAll() async throws {
+        let (db, actor) = try makeDB()
+        let (sut, delegate, socket) = makeSUT()
+        sut.persistence = actor
+
+        let attachment = makeAudioAttachment()
+        try await actor.insertOptimistic(try makeRecord(messageId: "msg1", attachments: [attachment]))
+        let received = Message(
+            id: "msg1", conversationId: conversationId, senderId: otherUserId,
+            content: "", createdAt: Date(), updatedAt: Date(),
+            attachments: [attachment], deliveryStatus: .sent, isMe: false,
+            recipientCount: 1
+        )
+        delegate.messages = [received]
+        delegate.invalidateIndex()
+
+        socket.attachmentStatusUpdated.send(makeEvent(action: "listened", userId: otherUserId))
+
+        try await Task.sleep(nanoseconds: 400_000_000)
+
+        let updated = try await fetchAttachment(db: db, messageId: "msg1", attachmentId: "att1")
+        XCTAssertNil(
+            updated?.listenedByAllAt,
+            "l'AUTEUR qui réécoute son propre vocal n'est pas un destinataire : la passerelle " +
+            "l'exclut du « écouté par tous » (MessageMediaConsumptionService.updateAttachmentComputedStatus)"
+        )
+        _ = sut
+    }
 }
