@@ -276,27 +276,27 @@ struct MessageViewsDetailView: View {
 
             // Message meta info (merged from old Meta tab)
             VStack(spacing: 0) {
-                metaInfoRow(icon: "number", label: "ID", value: String(message.id.prefix(12)), accent: accent)
+                metaInfoRow(icon: "number", label: String(localized: "message-detail.meta.id", bundle: .main), value: String(message.id.prefix(12)), accent: accent)
                 metaDivider
-                metaInfoRow(icon: "bubble.left.fill", label: "Type", value: message.messageType.rawValue, accent: accent)
+                metaInfoRow(icon: "bubble.left.fill", label: String(localized: "message-detail.meta.type", bundle: .main), value: message.messageType.rawValue, accent: accent)
                 metaDivider
-                metaInfoRow(icon: "antenna.radiowaves.left.and.right", label: "Source", value: message.messageSource.rawValue, accent: accent)
+                metaInfoRow(icon: "antenna.radiowaves.left.and.right", label: String(localized: "message-detail.meta.source", bundle: .main), value: message.messageSource.rawValue, accent: accent)
                 metaDivider
-                metaInfoRow(icon: "globe", label: "Langue", value: message.originalLanguage.uppercased(), accent: accent)
+                metaInfoRow(icon: "globe", label: String(localized: "message-detail.meta.language", bundle: .main), value: message.originalLanguage.uppercased(), accent: accent)
                 metaDivider
                 metaInfoRow(
                     icon: "lock.shield.fill",
-                    label: "Chiffrement",
+                    label: String(localized: "message-detail.meta.encryption", bundle: .main),
                     value: message.isEncrypted
-                        ? "Oui" + (message.encryptionMode.map { " (\($0))" } ?? "")
-                        : "Non",
+                        ? String(localized: "message-detail.meta.encryption-yes", bundle: .main) + (message.encryptionMode.map { " (\($0))" } ?? "")
+                        : String(localized: "message-detail.meta.encryption-no", bundle: .main),
                     accent: accent,
                     valueColor: message.isEncrypted ? .green : nil
                 )
 
                 if message.isEdited {
                     metaDivider
-                    metaInfoRow(icon: "pencil", label: "Modifie", value: formatDateTimeFR(message.updatedAt), accent: accent, valueColor: .yellow)
+                    metaInfoRow(icon: "pencil", label: String(localized: "message-detail.meta.modified", bundle: .main), value: formatDateTimeFR(message.updatedAt), accent: accent, valueColor: .yellow)
                 }
 
                 if !message.attachments.isEmpty {
@@ -306,7 +306,7 @@ struct MessageViewsDetailView: View {
                     })
                     metaInfoRow(
                         icon: "paperclip",
-                        label: "Pieces jointes",
+                        label: String(localized: "message-detail.meta.attachments", bundle: .main),
                         value: "\(message.attachments.count) (\(types.sorted().joined(separator: ", ")))",
                         accent: accent
                     )
@@ -328,7 +328,7 @@ struct MessageViewsDetailView: View {
 
                 if let reply = message.replyTo {
                     metaDivider
-                    metaInfoRow(icon: "arrowshape.turn.up.left.fill", label: "Reponse a", value: reply.authorName, accent: accent)
+                    metaInfoRow(icon: "arrowshape.turn.up.left.fill", label: String(localized: "message-detail.meta.reply-to", bundle: .main), value: reply.authorName, accent: accent)
                 }
             }
             .background(
@@ -757,6 +757,19 @@ struct MessageViewsDetailView: View {
 
     private func userStatusRow(username: String, avatar: String?, date: Date?, accent: Color, index: Int, trailing: AnyView? = nil) -> some View {
         HStack(spacing: 10) {
+            // Checkmark indicating delivery/read status
+            if date != nil {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(accent)
+                    .frame(width: 16)
+                    .accessibilityHidden(true)
+            } else {
+                // Placeholder for alignment when no date
+                Color.clear.frame(width: 16)
+                    .accessibilityHidden(true)
+            }
+
             MeeshyAvatar(
                 name: username,
                 context: .userListItem,
@@ -784,8 +797,9 @@ struct MessageViewsDetailView: View {
                     .foregroundColor(theme.textMuted)
             }
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, 12)
         .padding(.horizontal, 4)
+        .frame(minHeight: 44)
     }
 
     /// #7228 — la famille est PASSÉE, plus devinée depuis un booléen `isAudio`
