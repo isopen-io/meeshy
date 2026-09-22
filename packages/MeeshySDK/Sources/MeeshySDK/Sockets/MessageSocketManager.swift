@@ -708,6 +708,24 @@ public struct ReadStatusSummary: Decodable, Sendable {
     public let readCount: Int
 }
 
+/// `message:pending-delivered` — la file hors-ligne d'un utilisateur vient
+/// d'être rejouée au reconnect. `count` ne compte que ce qui est réellement
+/// reparti ; `conversationIds` nomme les fils TOUCHÉS par le drain (rejeu
+/// réussi ou entrée perdue), pour qu'un client aille les resynchroniser.
+/// I3 (#7349) : iOS ne l'écoutait pas du tout (vérifié : aucune occurrence
+/// dans `apps/ios`/`packages/MeeshySDK` avant ce lot), alors que web-v2
+/// l'utilise déjà pour invalider ses listes de messages
+/// (`apps/web-v2/src/lib/api/socket.ts`).
+public struct PendingMessagesDeliveredEvent: Decodable, Sendable {
+    public let count: Int
+    public let conversationIds: [String]
+
+    public init(count: Int, conversationIds: [String]) {
+        self.count = count
+        self.conversationIds = conversationIds
+    }
+}
+
 public struct ReadStatusUpdateEvent: Decodable, Sendable {
     public let conversationId: String
     public let participantId: String
@@ -1706,6 +1724,8 @@ public protocol MessageSocketProviding: Sendable {
     /// sans attendre une transition d'état spontanée.
     var presenceSnapshotReceived: PassthroughSubject<PresenceSnapshotEvent, Never> { get }
     var readStatusUpdated: PassthroughSubject<ReadStatusUpdateEvent, Never> { get }
+    /// `message:pending-delivered` — voir `PendingMessagesDeliveredEvent`.
+    var pendingMessagesDelivered: PassthroughSubject<PendingMessagesDeliveredEvent, Never> { get }
     var attachmentStatusUpdated: PassthroughSubject<AttachmentStatusUpdatedEvent, Never> { get }
     /// `message:attachment-updated` — delta émis par le gateway après un
     /// enrichissement async (transcription Whisper, traduction audio NLLB+TTS).
@@ -2023,6 +2043,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     // Combine publishers — read status
     public let readStatusUpdated = PassthroughSubject<ReadStatusUpdateEvent, Never>()
+    public let pendingMessagesDelivered = PassthroughSubject<PendingMessagesDeliveredEvent, Never>()
 
     // Combine publishers — attachment status
     public let attachmentStatusUpdated = PassthroughSubject<AttachmentStatusUpdatedEvent, Never>()
@@ -3495,6 +3516,13 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             guard let self else { return }
             self.decode(AttachmentStatusUpdatedEvent.self, from: data) { [weak self] event in
                 self?.attachmentStatusUpdated.send(event)
+            }
+        }
+
+        socket.on("message:pending-delivered") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(PendingMessagesDeliveredEvent.self, from: data) { [weak self] event in
+                self?.pendingMessagesDelivered.send(event)
             }
         }
 

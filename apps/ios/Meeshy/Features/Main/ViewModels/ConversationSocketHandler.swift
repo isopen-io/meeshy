@@ -1011,6 +1011,20 @@ final class ConversationSocketHandler {
             }
             .store(in: &cancellables)
 
+        // I3 (#7349) — `message:pending-delivered`: this user's offline queue
+        // was just replayed by the gateway. iOS had no listener at all before
+        // this lot. Mirrors the existing reconnect/foreground resync path
+        // (`triggerSyncIfNeeded` → `delegate.syncMissedMessages()`), scoped to
+        // the conversation this handler owns — the same signal web-v2 uses to
+        // invalidate its own message list cache for the named conversations.
+        socketManager.pendingMessagesDelivered
+            .filter { $0.conversationIds.contains(convId) }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.triggerSyncIfNeeded()
+            }
+            .store(in: &cancellables)
+
         // Participant role updated
         socketManager.participantRoleUpdated
             .filter { $0.conversationId == convId }

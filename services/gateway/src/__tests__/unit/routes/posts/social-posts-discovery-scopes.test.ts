@@ -138,6 +138,10 @@ function makePrismaDouble(opts: {
     post: {
       findMany: jest.fn(async ({ where }: any) => posts.filter((p) => matchesWhere(p, where))),
     },
+    // L'état du lecteur (#7396) : aucun scénario de ce fichier n'aime ni
+    // n'enregistre — `hashtag-viewer-state.test.ts` porte ces témoins.
+    postReaction: { findMany: jest.fn(async () => []) },
+    postBookmark: { findMany: jest.fn(async () => []) },
     soundUsage: {
       // `take` et le curseur `createdAt.lt` sont HONORÉS, pour la raison
       // donnée sur `postHashtag` ci-dessus. La collection de test est déjà
