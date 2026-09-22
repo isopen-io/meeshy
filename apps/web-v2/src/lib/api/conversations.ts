@@ -198,6 +198,27 @@ export function patchConversation(
 }
 
 /**
+ * `patchConversationDetail` (#7351, V3) — le MIROIR de `patchConversation`
+ * ci-dessus, sur `conversationQueryKey(id)` (le cache de DÉTAIL) au lieu de
+ * la liste. Deux caches distincts portent la MÊME conversation
+ * (`conversationQuery` amorce le détail depuis la liste via `initialData`,
+ * mais les deux requêtes vivent ensuite sous des clés séparées, et
+ * `query-client.ts` persiste les DEUX telles quelles) : un appelant qui ne
+ * patcherait que la liste (comme `markCaughtUp` avant ce lot) laisse le
+ * détail — celui que `thread.tsx` relit à l'ouverture d'un fil — avec sa
+ * dernière valeur RÉSEAU, potentiellement périmée après un rechargement.
+ */
+export function patchConversationDetail(
+  queryClient: QueryClient,
+  conversationId: string,
+  updater: (conversation: Conversation) => Conversation,
+): void {
+  queryClient.setQueryData<Conversation>(conversationQueryKey(conversationId), (data) =>
+    data === undefined ? data : updater(data),
+  );
+}
+
+/**
  * `refreshConversations` — le TIRER : UNE requête, page 1 seule, curseur
  * remis à zéro. `pages: 1` fait REBÂTIR `InfiniteData` depuis `{ pages: [],
  * pageParams: [] }` (`infiniteQueryBehavior.ts:23-25,94-107` — la boucle

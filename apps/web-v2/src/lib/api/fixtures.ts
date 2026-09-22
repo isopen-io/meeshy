@@ -491,6 +491,12 @@ export const CONVERSATIONS: readonly Conversation[] = [
      * autres rangs vivent sur des participants de conversations DIRECTES.
      */
     avatar: portraitStandIn('#fbbf24', '#b45309', 'aucune'),
+    /**
+     * L'APPAREIL NEUF (#7351, D-L2) — 2 non-lus et AUCUN curseur de lecture :
+     * le fil que reçoit un appareil qui ne l'a jamais ouvert. Il s'ouvre sur
+     * « 2 messages non lus » (`unreadCountHint`, `first-unread.ts`), et
+     * `check-list-actions.mjs` bascule ce badge (2 → Lu → Non lu → 1).
+     */
     unreadCount: 2,
     lastMessage,
     lastMessageAt: lastMessage.createdAt,

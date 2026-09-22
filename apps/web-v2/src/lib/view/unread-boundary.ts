@@ -70,18 +70,31 @@ export function nextFrozenUnreadBoundary(params: {
  * s'ouvre en BAS, et un fil sans AUCUN signal s'ouvrait à la place à ~8 400 px
  * du bas.
  *
- * La garde : si les QUATRE signaux sont absents, on ne connaît RIEN de la
+ * La garde : si les CINQ signaux sont absents, on ne connaît RIEN de la
  * position de lecture — se comporter comme si tout était lu (frontière
  * `null`, ouverture en bas) est le défaut le plus sûr, jamais « tout est
  * non lu depuis toujours ». Un signal, même un seul, suffit à sortir de
  * cette garde et à laisser la loi partagée trancher normalement.
+ *
+ * **CINQUIÈME signal, `unreadCount` (#7351, V3, LE PROFIL NEUF)** — ajouté
+ * après les quatre premiers : `GET /conversations/:id` sert TOUJOURS
+ * `unreadCount` (aucune colonne, `core-detail.ts:193,227`) même quand aucun
+ * des quatre autres n'existe — le cas d'un lecteur qui ouvre un lien direct
+ * sur une conversation qu'il n'a JAMAIS ouverte (pas de cursor, et
+ * `currentUserJoinedAt` n'est servi que par la LISTE). Sans ce cinquième
+ * signal, ce cas précis retombait dans la garde ci-dessus et rendait `null`
+ * — l'inverse de D-L2, qui veut le séparateur DÈS qu'il existe des non-lus.
+ * `firstUnreadBoundary` sait déjà quoi faire de ce signal seul
+ * (`unreadCountHint`, voir son doc-comment) : élire les N DERNIERS
+ * candidats plutôt que d'inventer une frontière sur tout l'historique.
  */
 function hasAnyReadSignal(conversation: Conversation): boolean {
   return (
     conversation.lastReadMessageId !== undefined ||
     conversation.lastReadAt !== undefined ||
     conversation.lastReadMessageCreatedAt !== undefined ||
-    conversation.currentUserJoinedAt !== undefined
+    conversation.currentUserJoinedAt !== undefined ||
+    conversation.unreadCount !== undefined
   );
 }
 
@@ -105,7 +118,31 @@ export function unreadBoundaryOf(params: {
     lastReadMessageCreatedAt: conversation.lastReadMessageCreatedAt ?? null,
     joinedAt: conversation.currentUserJoinedAt === undefined ? null : toDate(conversation.currentUserJoinedAt),
     viewerId,
+    ...(conversation.unreadCount !== undefined ? { unreadCountHint: conversation.unreadCount } : {}),
   });
+}
+
+/**
+ * `resumeThreadTarget` (#7351, V3, critère de fin « Reprendre le fil cible
+ * firstUnreadBoundary ») — LOI PURE, isolée de React : `routes/thread.tsx`
+ * (`onResumeThread`) visait `messages.find((m) => m.senderId !==
+ * viewer.id)`, le premier message d'autrui de la fenêtre CHARGÉE, jamais la
+ * vraie frontière de lecture. Sur un fil paginé, ce premier message chargé
+ * peut être bien avant le premier non-lu réel — « Reprendre le fil »
+ * survolait alors des messages déjà lus avant d'atteindre le bon.
+ *
+ * Repli INCHANGÉ quand tout est lu (`unreadBoundary === null`) : le premier
+ * message d'autrui de la fenêtre chargée, comme avant ce lot — seul le cas
+ * « il existe un non-lu » change de cible.
+ */
+export function resumeThreadTarget(params: {
+  readonly unreadBoundary: UnreadBoundarySnapshot;
+  readonly messages: readonly { readonly id: string; readonly senderId: string }[];
+  readonly viewerId: string;
+}): string | null {
+  const { unreadBoundary, messages, viewerId } = params;
+  if (unreadBoundary !== null) return unreadBoundary.firstUnreadId;
+  return messages.find((m) => m.senderId !== viewerId)?.id ?? null;
 }
 
 export type UseUnreadBoundaryInput = {
