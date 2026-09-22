@@ -412,6 +412,20 @@ class ConversationViewModel: ObservableObject {
         let senderAvatarURL: String?
         let senderColor: String
         let sentAt: Date
+        /// #7362 — la galerie plein écran n'a aucune autre source pour savoir
+        /// qui a envoyé une pièce donnée ; c'est ce qui gouverne
+        /// `GalleryImageOpenReport` (jamais reporter sa propre image). Défaut
+        /// `false` : les galeries POST / COMMENTAIRE (`SocialMediaGalleryPresentation`,
+        /// `CommentMediaGallery`) construisent ce type sans connaître la
+        /// notion — elles ne reportent de toute façon aucune consommation
+        /// (`ConversationMediaGalleryView.reportsAttachmentConsumption`).
+        ///
+        /// `var`, pas `let` : un stored `let` porteur d'un initialiseur
+        /// littéral n'entre PAS dans l'init memberwise synthétisé (le
+        /// compilateur le traite comme fixé à la déclaration, pas comme un
+        /// défaut substituable) — seul un `var` avec défaut y ajoute un
+        /// paramètre substituable (SE-0242).
+        var isMe: Bool = false
     }
 
     var _mediaSenderInfoMap: [String: MediaSenderInfo]?

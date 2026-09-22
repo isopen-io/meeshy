@@ -201,11 +201,16 @@ extension ConversationViewModel {
         if let cached = _mediaSenderInfoMap { return cached }
         var map = [String: MediaSenderInfo](minimumCapacity: messages.count)
         for msg in messages {
-            let info = MediaSenderInfo(
+            // Qualifié explicitement : un `MediaSenderInfo` top-level homonyme
+            // existe (ConversationStateStore.swift, non utilisé ici) et la
+            // forme non qualifiée s'y résout côté ce fichier — #7362 l'a
+            // révélé en ajoutant `isMe`, absent de ce doublon.
+            let info = ConversationViewModel.MediaSenderInfo(
                 senderName: msg.senderName ?? "?",
                 senderAvatarURL: msg.senderAvatarURL,
                 senderColor: msg.senderColor ?? "#999",
-                sentAt: msg.createdAt
+                sentAt: msg.createdAt,
+                isMe: msg.isMe
             )
             for att in msg.attachments {
                 map[att.id] = info
