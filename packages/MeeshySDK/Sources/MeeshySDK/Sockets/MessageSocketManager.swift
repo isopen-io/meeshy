@@ -702,12 +702,6 @@ public struct TranscriptionFailedEvent: Codable, Sendable {
     public let taskId: String?
 }
 
-public struct ReadStatusSummary: Decodable, Sendable {
-    public let totalMembers: Int
-    public let deliveredCount: Int
-    public let readCount: Int
-}
-
 /// `message:pending-delivered` — la file hors-ligne d'un utilisateur vient
 /// d'être rejouée au reconnect. `count` ne compte que ce qui est réellement
 /// reparti ; `conversationIds` nomme les fils TOUCHÉS par le drain (rejeu
@@ -723,71 +717,6 @@ public struct PendingMessagesDeliveredEvent: Decodable, Sendable {
     public init(count: Int, conversationIds: [String]) {
         self.count = count
         self.conversationIds = conversationIds
-    }
-}
-
-public struct ReadStatusUpdateEvent: Decodable, Sendable {
-    public let conversationId: String
-    public let participantId: String
-    /// `User.id` of the actor, or `nil` when the actor is an ANONYMOUS
-    /// participant — they have no `User` row, so `participantId` is their only
-    /// identity. Expected on the automatic delivery receipt of a share-link
-    /// conversation, where anonymous participants are the dominant population.
-    /// Consumers comparing this against the current user (multi-device read
-    /// cursor sync) need no change: `nil` matches nobody, which is correct.
-    public let userId: String?
-    public let type: String
-    public let updatedAt: Date
-    public let summary: ReadStatusSummary
-    /// Read frontier of the ACTOR at broadcast time. Lets the actor's OTHER
-    /// devices sync their own read cursor (multi-device read sync). `nil` from
-    /// a pre-rollout gateway or when the actor has no cursor yet. A recipient
-    /// who is not the actor MUST ignore it. Read receipts are monotone, so a
-    /// client applies it only when strictly newer than its local cursor.
-    ///
-    /// The actor is `userId ?? participantId`, in that order. `userId` alone is
-    /// `nil` for a share-link guest, whose devices could then never recognise
-    /// themselves; `participantId` is non-nil for the whole population and
-    /// shared by every device of one identity. Same rule that names the
-    /// personal room. This client has no accountless session, so it matches on
-    /// `userId` only — the second branch stays unused here, and
-    /// `ConversationStoreSocketBridge` is correct as written.
-    ///
-    /// **Delivered ONLY in the copy addressed to the actor.** This field and
-    /// `unreadCount` describe a person, not the conversation — how far behind
-    /// they are on this thread, and when they last caught up. The gateway
-    /// therefore emits a `read` TWICE: one copy without them to the
-    /// conversation fan-out, one complete copy to the actor's personal room
-    /// (`user:<userId ?? participantId>`), which the fan-out excludes so no
-    /// socket receives both. Nothing changes for this client: a device of the
-    /// actor still joins that room at authentication and still receives the
-    /// pair. A device that is NOT the actor now simply never sees the values
-    /// its `event.userId == me` gate was already discarding.
-    public let lastReadAt: Date?
-    /// Server-authoritative unread count for the ACTOR after the action.
-    /// Same `userId ?? participantId` scoping as `lastReadAt`, and the same
-    /// addressing scope: the actor's copy, never the fan-out. `nil` from a
-    /// pre-rollout gateway.
-    public let unreadCount: Int?
-
-    public init(
-        conversationId: String,
-        participantId: String,
-        userId: String?,
-        type: String,
-        updatedAt: Date,
-        summary: ReadStatusSummary,
-        lastReadAt: Date? = nil,
-        unreadCount: Int? = nil
-    ) {
-        self.conversationId = conversationId
-        self.participantId = participantId
-        self.userId = userId
-        self.type = type
-        self.updatedAt = updatedAt
-        self.summary = summary
-        self.lastReadAt = lastReadAt
-        self.unreadCount = unreadCount
     }
 }
 

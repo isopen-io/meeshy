@@ -333,7 +333,7 @@ export class MeeshySocketIOManager {
     // d'instancier un doublon muet sans io.
     setSharedNotificationService(this.notificationService);
     this.mentionService = new MentionService(prisma);
-    this.messagingService = new MessagingService(prisma, this.translationService, this.notificationService);
+    this.messagingService = new MessagingService(prisma, this.translationService, this.notificationService, () => ({ io: this.io, prisma, readStatusService: this.readStatusService, privacyPreferencesService: this.privacyPreferencesService, bridgeService: this.bridgeService }));
     // RC-4 — construct the shared CallService BEFORE CallEventsHandler so both
     // it and AuthHandler observe the same in-memory ringingTimeouts/heartbeats/
     // backgroundedParticipants maps (previously two independent instances,

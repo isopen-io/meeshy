@@ -710,6 +710,12 @@ export function applyMessageAttachmentUpdated(queryClient: QueryClient, data: At
  * une forme mal typée est rejetée FAIL-CLOSED comme le reste de la garde,
  * jamais laissée traverser en silence.
  *
+ * `summary.readByAllAt` (#7347, G-5) — de même OPTIONNEL (repli legacy sans
+ * lot exact), et validé dès qu'il est CONSOMMÉ par `applyReadStatusUpdated`
+ * ci-dessous : `null` (pas encore tout le monde) ou une chaîne (l'ISO 8601
+ * réelle du fil — `updatedAt` voyage de la même façon) sont acceptées ; toute
+ * AUTRE forme (un nombre, un objet) est rejetée, même motif que `messageId`.
+ *
  * **Et la CHAÎNE VIDE est une forme mal typée** (revue-correction W2) : aucun
  * `Message.id` n'est vide, et `''` ne retombe PAS dans le repli « la charge
  * ne nomme aucun message » — `applyReadStatusUpdated` distingue le repli par
@@ -728,7 +734,8 @@ export function isReadStatusUpdated(payload: unknown): payload is ReadStatusUpda
     typeof s.totalMembers === 'number' &&
     typeof s.deliveredCount === 'number' &&
     typeof s.readCount === 'number' &&
-    (s.messageId === undefined || (typeof s.messageId === 'string' && s.messageId.length > 0))
+    (s.messageId === undefined || (typeof s.messageId === 'string' && s.messageId.length > 0)) &&
+    (s.readByAllAt === undefined || s.readByAllAt === null || typeof s.readByAllAt === 'string')
   );
 }
 
@@ -756,14 +763,25 @@ export function isReadStatusUpdated(payload: unknown): payload is ReadStatusUpda
  * à AUCUNE rangée en cache (fil partiellement chargé) est un NO-OP, même
  * motif — jamais un repli silencieux sur un AUTRE message.
  *
- * `deliveredToAllAt`/`readByAllAt` — les deux horodatages FIGÉS que
- * `deliveryOf` (`lib/view/message.ts`) consulte à chaque palier — ne sont PAS
- * posés ici : la charge ne les porte pas, et les inventer depuis un événement
- * qui ne les affirme pas serait une horloge fabriquée. Ce sont les COMPTEURS
- * que ce puits rafraîchit, et `deliveryOf` les tranche palier par palier
- * (#7223, revue-correction W2 : l'horloge « distribué à tous » ne court-
- * circuite plus le palier LU). TOUS-OU-RIEN EN GROUPE conservé — la règle vit
- * dans `view/message.ts`, ce puits ne la réécrit pas.
+ * `deliveredToAllAt` — l'horodatage FIGÉ que `deliveryOf` (`lib/view/message.ts`)
+ * consulte au palier LIVRÉ — n'est PAS posé ici : la charge ne le porte pas
+ * (`ReadStatusSummary` n'a que `readByAllAt`, cf. #7347/G-5), et l'inventer
+ * depuis un événement qui ne l'affirme pas serait une horloge fabriquée. C'est
+ * un COMPTEUR (`deliveredCount`) que ce puits rafraîchit pour ce palier, et
+ * `deliveryOf` le tranche palier par palier (#7223, revue-correction W2 :
+ * l'horloge « distribué à tous » ne court-circuite plus le palier LU).
+ * TOUS-OU-RIEN EN GROUPE conservé — la règle vit dans `view/message.ts`, ce
+ * puits ne la réécrit pas.
+ *
+ * `readByAllAt` (#7347, G-5), lui, EST posé ici quand le résumé l'AFFIRME —
+ * même moteur que le REST (`MessageReadStatusService.getConversationReadStatuses`,
+ * celui que `GET …/receipts` sert déjà) : `summary.readByAllAt` PRÉSENT
+ * (`Date` ou `null`) remplace la valeur connue, `undefined` (repli legacy —
+ * gateway pré-G5, ou résumé agrégé sans lot exact) ne la touche pas. Un
+ * `null` EFFACE une date déjà connue plutôt que de la préserver : le
+ * dénominateur peut grandir (nouveau participant) après que « tous ont lu »
+ * a été vrai, et ce résumé est SERVEUR-AUTORITATIF sur ce point précis, comme
+ * il l'est déjà pour `deliveredCount`/`readCount` ci-dessus.
  */
 export function applyReadStatusUpdated(queryClient: QueryClient, data: ReadStatusUpdatedEventData): void {
   const { summary } = data;
@@ -783,12 +801,24 @@ export function applyReadStatusUpdated(queryClient: QueryClient, data: ReadStatu
       : latestCachedThreadMessage(queryClient, data.conversationId);
   if (target === undefined) return;
 
-  const next: Message = {
+  const counters: Message = {
     ...target,
     deliveredCount: summary.deliveredCount,
     readCount: summary.readCount,
     recipientCount: summary.totalMembers,
   };
+  // `exactOptionalPropertyTypes` refuse `{ readByAllAt: undefined }` — un
+  // `null` de la charge EFFACE la date connue en RETIRANT la clé, jamais en
+  // lui assignant `undefined`.
+  let next: Message = counters;
+  if (summary.readByAllAt !== undefined) {
+    if (summary.readByAllAt === null) {
+      const { readByAllAt: _drop, ...rest } = counters;
+      next = rest;
+    } else {
+      next = { ...counters, readByAllAt: summary.readByAllAt };
+    }
+  }
 
   patchThreadMessages(queryClient, data.conversationId, (messages) =>
     messages.map((m) => (m.id === target.id ? next : m)),

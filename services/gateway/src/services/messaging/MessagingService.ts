@@ -35,6 +35,7 @@ import { getCachedParticipant, cacheParticipant } from '../../utils/participant-
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { withOrphanedSenderRepair } from './withOrphanedSenderRepair';
+import { announceSenderBacklogRead, type ReadBroadcastDepsProvider } from './senderBacklogRead';
 
 const logger = enhancedLogger.child({ module: 'MessagingService' });
 
@@ -47,7 +48,8 @@ export class MessagingService {
   constructor(
     private readonly prisma: PrismaClient,
     private readonly translationService: MessageTranslationService,
-    notificationService?: NotificationService
+    notificationService?: NotificationService,
+    private readonly readBroadcastDeps?: ReadBroadcastDepsProvider
   ) {
     this.validator = new MessageValidator(prisma);
     this.processor = new MessageProcessor(prisma, notificationService, translationService);
@@ -536,8 +538,21 @@ export class MessagingService {
         logger.error(`post-save ${effect} failed`, err as Error)
     });
 
+    // G-8 (#7347) — l'arriéré que la réponse marque lu se DIT à la
+    // conversation, message par message (`announceSenderBacklogRead`).
+    const frozenSince = new Date();
     void this.readStatusService
       .markMessagesAsRead(senderParticipantId, conversationId, message.id)
+      .then((frozenCount) =>
+        announceSenderBacklogRead({
+          depsProvider: this.readBroadcastDeps,
+          frozenCount,
+          frozenSince,
+          participantId: senderParticipantId,
+          conversationId,
+          senderUserId: saved.sender?.userId ?? null,
+        })
+      )
       .catch((err) =>
         logger.error('post-save markMessagesAsRead failed', err as Error)
       );

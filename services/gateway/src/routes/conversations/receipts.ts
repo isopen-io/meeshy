@@ -385,6 +385,12 @@ export async function applyReceipt(
         userId: actorKey,
         isAnonymous,
         type: params.type === 'read' ? 'read' : 'received',
+        // G-5 (#7347, G-8) — le lot RÉELLEMENT figé par CETTE écriture (le
+        // VETTÉ de `vetReportedMessages`, jamais le lot brut rapporté par le
+        // client) : `broadcastReadStatus` en tire un résumé PAR message.
+        // Réservé à `read` — `received`/`delivered` gardent leur repli
+        // agrégé, cf. sa doc-comment.
+        messageIds: params.type === 'read' ? targeted : undefined,
       }
     );
   } catch (error) {

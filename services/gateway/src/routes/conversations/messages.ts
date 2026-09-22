@@ -65,7 +65,8 @@ export function registerMessagesRoutes(
   // diffusion `read-status:updated`, la préférence `showReadReceipts` et le
   // pont ✦ (G-123) sont attachés là-bas, pour les cinq portes d'écriture à la
   // fois. Ce fichier n'en instancie plus aucun collaborateur en propre.
-  const receipts = receiptHandlers(receiptContext(fastify, prisma));
+  const receiptsCtx = receiptContext(fastify, prisma);
+  const receipts = receiptHandlers(receiptsCtx);
 
   // `MessagingService` is stateless across requests, so it is built once and
   // reused. The POST /messages handler previously re-imported the module and
@@ -77,10 +78,19 @@ export function registerMessagesRoutes(
   let messagingService: MessagingService | undefined;
   function getMessagingService(): MessagingService {
     if (!messagingService) {
+      // G-8 (#7347) — l'arriéré qu'une réponse marque lu se diffuse avec les
+      // MÊMES collaborateurs que les cinq portes d'accusés.
       messagingService = new MessagingService(
         prisma,
         translationService,
-        fastify.notificationService
+        fastify.notificationService,
+        () => ({
+          io: receiptsCtx.io(),
+          prisma,
+          readStatusService: receiptsCtx.readStatusService,
+          privacyPreferencesService: receiptsCtx.privacyPreferencesService,
+          bridgeService: receiptsCtx.bridgeService,
+        })
       );
     }
     return messagingService;
