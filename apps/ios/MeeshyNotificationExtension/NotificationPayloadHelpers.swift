@@ -276,6 +276,19 @@ nonisolated enum NotificationPayloadHelpers {
         let senderName: String?
         let senderUsername: String?
         let senderAvatarURL: String?
+        /// **L'échéance LOCALE d'un éphémère** (#7453), `maintenant + la durée
+        /// portée par le push` — jamais une échéance servie, que `message:new`
+        /// ne transporte plus pour un éphémère (contrat #7451 point 4).
+        ///
+        /// Ce champ valait `nil` en dur, et `effectFlags` valait `0` : la bulle
+        /// que la NSE pré-enregistre au démarrage à froid perdait toute sa
+        /// protection jusqu'à la synchro REST. Un éphémère s'y affichait donc
+        /// comme un message ordinaire, sans décompte, et une vue unique sans
+        /// voile — pendant les secondes où l'utilisateur ouvre justement
+        /// l'application depuis la bannière.
+        let expiresAt: Date?
+        /// Les drapeaux d'effet du message, tels que le push les porte.
+        let effectFlags: UInt32
     }
 
     /// Les valeurs que `MeeshyMessage.MessageType` sait rendre. Un type
@@ -338,8 +351,122 @@ nonisolated enum NotificationPayloadHelpers {
             senderName: nonEmptyString(userInfo["senderDisplayName"])
                 ?? nonEmptyString(userInfo["senderUsername"]),
             senderUsername: nonEmptyString(userInfo["senderUsername"]),
-            senderAvatarURL: nonEmptyString(userInfo["senderAvatar"])
+            senderAvatarURL: nonEmptyString(userInfo["senderAvatar"]),
+            expiresAt: ephemeralDeadline(userInfo: userInfo, now: now),
+            effectFlags: effectFlags(userInfo: userInfo)
         )
+    }
+
+    // MARK: - Éphémère (#7453)
+
+    /// L'échéance LOCALE d'un message éphémère : `now + ephemeralDuration`.
+    ///
+    /// **La durée, pas une échéance** (contrat du fil #7451 point 1) : le
+    /// serveur résout `D(u)` par lecteur, et le push — comme `message:new` —
+    /// ne peut donc pas porter une date valable pour tout le monde. L'appareil
+    /// compose la sienne avec l'instant où il REÇOIT, ce qui est exactement ce
+    /// que la directive demande : « les messages avec temps décompté ne
+    /// doivent décompter que lorsque l'utilisateur l'a reçu ».
+    ///
+    /// Le payload APNs voyage en `Record<string, string>` côté passerelle, mais
+    /// une charge JSON peut remonter un NOMBRE tel quel : les deux formes se
+    /// lisent, sans quoi l'échéance dépendrait du sérialiseur.
+    ///
+    /// Une durée nulle ou négative ne fabrique RIEN : elle signifierait « déjà
+    /// mort à la réception », ce qu'aucun producteur n'a le droit de dire par
+    /// omission.
+    nonisolated static func ephemeralDeadline(
+        userInfo: [AnyHashable: Any],
+        now: Date
+    ) -> Date? {
+        guard let seconds = intValue(userInfo["ephemeralDuration"]), seconds > 0 else { return nil }
+        return now.addingTimeInterval(TimeInterval(seconds))
+    }
+
+    /// Les drapeaux d'effet portés par le push, ou `0`.
+    nonisolated static func effectFlags(userInfo: [AnyHashable: Any]) -> UInt32 {
+        guard let raw = intValue(userInfo["effectFlags"]), raw > 0 else { return 0 }
+        return UInt32(truncatingIfNeeded: raw)
+    }
+
+    /// Le corps de la bannière d'un éphémère : « 🔥 Message éphémère ·
+    /// disparaît à 14:32 ».
+    ///
+    /// **La FLAMME, et pas un sablier** (directive porteur 2026-09-22 :
+    /// « l'éphémère est la flamme »). C'est aussi le pictogramme que la
+    /// passerelle pose déjà dans ses placeholders protégés (« 🔥 💬 5min ») :
+    /// une bannière et une bulle qui parlent du même message ne peuvent pas
+    /// montrer deux images.
+    ///
+    /// **L'heure, pas une durée figée.** La passerelle compose « 🔥 💬 5min »
+    /// une fois pour toutes ; ce texte est faux à la seconde où il s'affiche,
+    /// et il le reste sur l'écran verrouillé pendant que le message meurt.
+    /// iOS ne sait pas faire battre une seconde dans une bannière standard —
+    /// une HEURE, elle, ne se périme pas : elle dit la même chose à 14:30 et à
+    /// 14:31.
+    ///
+    /// L'heure est celle de l'APPAREIL, jamais celle du serveur : la bannière
+    /// se lit sur l'écran verrouillé, où aucun fuseau ne s'explique.
+    nonisolated static func ephemeralBody(
+        deadline: Date,
+        locale: Locale = .current,
+        timeZone: TimeZone = .current
+    ) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.timeZone = timeZone
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        let time = formatter.string(from: deadline)
+        let template = NSLocalizedString(
+            "notification.ephemeral_message.deadline",
+            value: "🔥 Message éphémère · disparaît à %@",
+            comment: "Push body for an ephemeral message, carrying the local deadline time."
+        )
+        return String(format: template, time)
+    }
+
+    /// **Le BALAYAGE des bannières délivrées n'est pas ici.** Il vit dans
+    /// `MeeshySDK.EphemeralBannerDeadline`, parce que ses trois chemins
+    /// d'exécution appartiennent à trois endroits — cette extension, le retour
+    /// de l'application au premier plan, et la réception de `message:expired` —
+    /// et qu'une règle recopiée trois fois diverge. Ce fichier n'en écrit que
+    /// la valeur, à l'arrivée du push.
+
+    /// Le corps servi pour un éphémère, ou `nil` quand il ne faut pas
+    /// réécrire.
+    ///
+    /// **Une VUE UNIQUE garde son libellé.** La bannière dit « Vue unique »
+    /// (clé `notification.view_once_message`, déjà servie par la passerelle),
+    /// et c'est la bonne information : ce qui compte pour ce message n'est pas
+    /// quand il meurt, c'est qu'on ne pourra le lire qu'une fois. Un éphémère
+    /// ORDINAIRE, lui, n'a rien d'autre à dire que son heure.
+    nonisolated static func ephemeralBodyOverride(
+        userInfo: [AnyHashable: Any],
+        deadline: Date,
+        locale: Locale = .current,
+        timeZone: TimeZone = .current
+    ) -> String? {
+        let flags = effectFlags(userInfo: userInfo)
+        let declaresViewOnce = flags & viewOnceFlagBit != 0
+            || nonEmptyString(userInfo["notificationLocKey"]) == "notification.view_once_message"
+        guard !declaresViewOnce else { return nil }
+        return ephemeralBody(deadline: deadline, locale: locale, timeZone: timeZone)
+    }
+
+    /// Bit `viewOnce` de `MessageEffectFlags` (axe 1, cycle de vie).
+    /// Écrit ici plutôt qu'importé : ce fichier ne dépend que de Foundation,
+    /// et c'est cette absence de dépendance qui le rend testable hors du
+    /// runtime de l'extension.
+    private nonisolated static let viewOnceFlagBit: UInt32 = 1 << 2
+
+    /// Un entier de payload, qu'il voyage en nombre ou en chaîne.
+    private nonisolated static func intValue(_ raw: Any?) -> Int? {
+        if let number = raw as? Int { return number }
+        if let number = raw as? Double { return Int(number) }
+        if let number = raw as? NSNumber { return number.intValue }
+        guard let text = nonEmptyString(raw) else { return nil }
+        return Int(text)
     }
 
     /// Une valeur de payload lue comme chaîne NON VIDE, ou `nil`.

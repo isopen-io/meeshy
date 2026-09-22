@@ -742,6 +742,12 @@ final class ConversationSocketHandler {
                     }
                 }
                 StarredMessagesStore.shared.remove(messageId: event.messageId)
+                // #7453 — le troisième chemin du balayage. Il est le seul à
+                // savoir qu'un message PRÉCIS vient de mourir, y compris
+                // pendant que l'application est à l'écran : ni la NSE (qui
+                // n'agit qu'à l'arrivée d'un push) ni le retour au premier
+                // plan ne couvrent ce cas.
+                Task { await NotificationActionHandler.sweepExpiredEphemeralBanners() }
             }
             .store(in: &cancellables)
 
