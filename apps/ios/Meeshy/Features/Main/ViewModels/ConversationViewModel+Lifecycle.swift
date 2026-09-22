@@ -172,25 +172,36 @@ extension ConversationViewModel {
         // Declare this conversation as currently visible so the sync engine
         // forces its `unreadCount` to 0 on every server broadcast (the user
         // IS reading it) and excludes it from the cross-conversation
-        // aggregator. Cleared in `deinit`.
+        // aggregator. Cleared in `deinit`. This is the TRANSIENT "I'm
+        // looking at it right now" view — it reverts on close, it does not
+        // stamp a persisted read frontier.
         syncEngine.setCurrentlyOpenConversation(conversationId)
-        // OUVRIR, C'EST LIRE — et ça se voit tout de suite.
+        // OUVRIR N'EST PLUS LIRE (#7350, I-2 — retiré le 2026-09-22).
         //
-        // Le moteur posait déjà cette règle (zéro + frontière) mais dans son
-        // cache SEUL, et de façon différée : les lignes @Published et le
-        // `ConversationStore` ne l'apprenaient que par le rechargement de
-        // cache débouncé à 200 ms — quand ils l'apprenaient. Le seul autre
-        // chemin qui les touchait, `markAsRead(messageIds:)`, est gaté par
-        // l'exactitude de lecture (`caughtUpMessageId`) : ouvrir une
-        // conversation à 99 non-lus sans en atteindre le bas ne le franchit
-        // jamais. Le store gardait donc 99, le cache disait 0, et la ligne
-        // affichait celui des deux qui avait publié en dernier — le
-        // va-et-vient que l'utilisateur voyait.
+        // Un appel à `ConversationReadSignal.markReadLocally` vivait ici,
+        // posant `unreadCount = 0` et `lastReadAt = Date()` sur les trois
+        // surfaces locales (badge/widget, `ConversationStore` RAM, cache
+        // disque) À CHAQUE OUVERTURE, avant même que `loadMessages()` charge
+        // la fenêtre ou établisse la frontière S1 (`FirstUnreadBoundary
+        // .resolve`). Il corrigeait un défaut de COHÉRENCE réel (le store
+        // gardait 99 le temps d'un rechargement de cache débouncé à 200 ms
+        // pendant que le cache disait déjà 0 — le va-et-vient que
+        // l'utilisateur voyait) en fabriquant un défaut plus grave : la
+        // frontière posée arrive TOUJOURS après le dernier message connu (on
+        // ouvre forcément APRÈS qu'il a été envoyé), donc `reconcileUnread`
+        // clampait à 0 tout instantané serveur ultérieur — y compris un « 94
+        // encore non lus » légitime après que seuls 5 des 99 messages aient
+        // réellement été affichés. Recette 2026-09-21 : l'API dit 1
+        // conversation non lue pendant que le badge affiche 0.
         //
-        // Rien n'est envoyé au serveur ici : l'accusé de lecture garde son
-        // exigence d'exactitude, il part par `markAsRead(messageIds:)` quand
-        // le lecteur a réellement rattrapé.
-        ConversationReadSignal.markReadLocally(conversationId, syncEngine: syncEngine)
+        // La frontière locale n'est plus posée qu'à une lecture RÉELLE :
+        // `sendReadReceipt` (ConversationViewModel.swift) l'écrit UNIQUEMENT
+        // quand le lot vu contient le message le plus récent
+        // (`caughtUpMessageId`), ou sur un geste explicite « marquer comme
+        // lu ». Le va-et-vient de cohérence que ce lot corrigeait reste
+        // fermé par `setCurrentlyOpenConversation` ci-dessus, qui montre déjà
+        // 0 pendant que l'écran est affiché — sans jamais persister de
+        // frontière au-delà de la fermeture.
         // Open side-effects (socket room join + active-conversation publish to
         // the notification singletons). Lives here — NOT in the handler's init
         // — so the throwaway VMs SwiftUI allocates on every parent
