@@ -3,18 +3,23 @@ import { amina, conversationDefaults, message, minutesAgo, viewer, VIEWER_ID } f
 
 /**
  * LE CORPUS « SÉPARATEUR DE NON-LUS » (#7202, W3, D-L2/D-L3) — un corpus
- * DÉDIÉ, HORS-LISTE (`OFF_LIST_CONVERSATIONS`, `fixtures.ts`), motif exact
- * `fixtures-live.ts` : `c-deploiement` porte déjà un `unreadCount: 2` mais
- * AUCUNE frontière de lecture (`lastReadMessageId`/`lastReadMessageCreatedAt`)
- * — lui en poser une romprait `check-thread-virtualization.mjs` §2
- * (« le fil s'ouvre EN BAS », mesuré littéralement sur CETTE conversation) et
- * les trois ouvertures de `check-thread-states.mjs`. Une conversation NEUVE,
- * hors liste, ne déplace ni ces gates ni `CONVERSATIONS.length`
+ * DÉDIÉ, HORS-LISTE (`OFF_LIST_CONVERSATIONS`, `fixtures.ts`) : une
+ * conversation NEUVE, hors liste, ne déplace ni les gates de
+ * virtualisation/états ni `CONVERSATIONS.length`
  * (`fixtures-pagination.test.ts`, qui le compte en dur).
  *
  * `nl-2` (le lecteur) EST la frontière : `nl-3` et `nl-4` (tous deux Amina)
  * suivent, ni l'un ni l'autre du lecteur — le séparateur s'ouvre donc devant
  * `nl-3` en annonçant deux non-lus.
+ *
+ * `c-deploiement` (`fixtures.ts`) est un corpus DIFFÉRENT et NE MODÉLISE
+ * PLUS un scénario de lecture depuis #7351 (V3) : il porte `unreadCount: 0`
+ * et aucun cursor, précisément pour rester au repos sur les gates de
+ * virtualisation/états qui l'ouvrent pour d'autres raisons. Le scénario
+ * « profil neuf » (aucun cursor, `unreadCount` positif servi quand même,
+ * `GET /conversations/:id` en accès direct) est couvert par les témoins
+ * unitaires de `lib/view/unread-boundary.test.ts`, qui construisent leur
+ * propre conversation minimale — pas besoin d'un second corpus ici.
  */
 
 export const UNREAD_CONVERSATION_ID = 'c-non-lus';

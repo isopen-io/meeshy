@@ -491,7 +491,25 @@ export const CONVERSATIONS: readonly Conversation[] = [
      * autres rangs vivent sur des participants de conversations DIRECTES.
      */
     avatar: portraitStandIn('#fbbf24', '#b45309', 'aucune'),
-    unreadCount: 2,
+    /**
+     * `unreadCount: 0` (#7351, V3) — cette conversation ne porte AUCUN
+     * cursor de lecture (`lastReadMessageId`/`lastReadAt`/
+     * `lastReadMessageCreatedAt`/`currentUserJoinedAt`, tous absents) :
+     * c'est le corpus des gates de VIRTUALISATION et d'ÉTATS
+     * (`check-thread-virtualization.mjs`, `check-thread-states.mjs`), pas
+     * un scénario de lecture. Avant #7351, elle portait `unreadCount: 2`
+     * SANS aucun signal — un état interne INCOHÉRENT (« 2 non-lus, mais
+     * rien ne dit depuis où ») que la garde du zéro-signal masquait en
+     * ouvrant quand même en bas. #7351 fait justement cesser de masquer ce
+     * cas (`unreadCountHint`, `packages/shared/utils/first-unread.ts`) :
+     * laisser `2` ferait maintenant s'ouvrir CETTE conversation sur son
+     * séparateur, déplaçant `distanceToBottom` du gate de virtualisation.
+     * Le scénario « profil neuf » dédié vit dans les témoins unitaires
+     * (`unread-boundary.test.ts`) et dans `UNREAD_CONVERSATION`
+     * (`fixtures-unread.ts`, cursor complet) — ni l'un ni l'autre n'a
+     * besoin de CE corpus-ci pour exister.
+     */
+    unreadCount: 0,
     lastMessage,
     lastMessageAt: lastMessage.createdAt,
     /**

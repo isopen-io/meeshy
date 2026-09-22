@@ -3,10 +3,26 @@ import { createStore } from 'zustand/vanilla';
 import { describe, expect, test } from 'bun:test';
 
 import { fetchMessageReceiptsPeople, markCaughtUp, pushReadReceipt } from './receipts';
-import { CONVERSATIONS_QUERY_KEY, findCachedConversation } from './conversations';
+import { CONVERSATIONS_QUERY_KEY, conversationQueryKey, findCachedConversation } from './conversations';
+import { createAppQueryClient, type StorageLike } from './query-client';
 import { createHttpTransport } from './http';
 import { effectiveUnreadOf, type ConversationStoreState } from '@/lib/conversation-store';
-import type { Conversation } from './types';
+import { message, VIEWER_ID } from '@/lib/api/fixtures-base';
+import { unreadBoundaryOf } from '@/lib/view/unread-boundary';
+import type { Conversation, Message } from './types';
+
+function fakeStorage(): StorageLike {
+  const raw = new Map<string, string>();
+  return {
+    getItem: (key) => raw.get(key) ?? null,
+    setItem: (key, value) => {
+      raw.set(key, value);
+    },
+    removeItem: (key) => {
+      raw.delete(key);
+    },
+  };
+}
 
 /** Même magasin FRAIS que `conversation-actions.test.ts::freshStore` — une
  * instance dédiée par test, jamais le singleton partagé. */
@@ -113,6 +129,28 @@ describe('markCaughtUp — 2xx', () => {
     const cached = findCachedConversation(queryClient, 'c1');
     expect(cached?.unreadCount).toBe(0);
     expect(store.getState().overrides['c1']?.unreadCount).toBeUndefined();
+  });
+
+  /**
+   * **LE CACHE DE DÉTAIL AUSSI** (#7351, V3, critère de fin « ce qui est lu
+   * ne redevient pas non lu ») — `thread.tsx` relit `conversationQueryKey`,
+   * jamais la liste, pour construire `unreadBoundary`. Avant ce lot,
+   * `markCaughtUp` ne patchait QUE `patchConversation` (la liste) : le
+   * détail gardait son `unreadCount` réseau d'origine.
+   */
+  test('le cache de DÉTAIL prend aussi unreadCount: 0 CONFIRMÉ', async () => {
+    const c = conversation({ id: 'c1', unreadCount: 3 });
+    const queryClient = seededClient([c]);
+    queryClient.setQueryData(conversationQueryKey('c1'), c);
+    const store = freshStore();
+    const transport = createHttpTransport({
+      base: '',
+      fetchImpl: fakeFetch({ status: 200, body: { success: true, data: { type: 'read', markedCount: 3, unreadCount: 0 } } }),
+    });
+
+    await markCaughtUp({ conversationId: 'c1', caughtUpToMessageId: 'm9', deps: { source: 'gateway', transport, store, queryClient } });
+
+    expect(queryClient.getQueryData<Conversation>(conversationQueryKey('c1'))?.unreadCount).toBe(0);
   });
 });
 
@@ -235,5 +273,72 @@ describe('markCaughtUp — source fixtures', () => {
 
     expect(called).toBe(false);
     expect(effectiveUnreadOf(c, store.getState().overrides)).toBe(0);
+  });
+});
+
+/**
+ * **LE CLIENT FROID** (#7351, V3) — round-trip RÉEL par `createAppQueryClient`
+ * (`query-client.ts`, même mécanique de persistance que la PWA : `dehydrate`/
+ * `hydrate` via `localStorage`), pas une simple relecture de `QueryClient` en
+ * mémoire. Scénario : un profil neuf ouvre un fil jamais lu
+ * (`unreadCount: 2`, aucun autre signal — le cas de #7351), lit jusqu'au
+ * bout (`markCaughtUp`), l'onglet se ferme (`persist()`, ce que `pagehide`
+ * déclenche) — puis se RECHARGE : un SECOND client, même stockage, même
+ * `buster`, doit voir un fil ENTIÈREMENT lu, jamais redevenu non lu.
+ */
+describe('markCaughtUp — client froid (rechargement réel, #7351)', () => {
+  const MESSAGES: readonly Message[] = [
+    message({
+      id: 'nl-a',
+      conversationId: 'c-froid',
+      senderId: 'u-autrui',
+      content: 'Premier message jamais lu',
+      originalLanguage: 'fr',
+      translations: [],
+      createdAt: new Date('2026-09-21T09:01:00.000Z'),
+    }),
+    message({
+      id: 'nl-b',
+      conversationId: 'c-froid',
+      senderId: 'u-autrui',
+      content: 'Second message jamais lu',
+      originalLanguage: 'fr',
+      translations: [],
+      createdAt: new Date('2026-09-21T09:02:00.000Z'),
+    }),
+  ];
+
+  test('après lecture + persist + rechargement : le détail rechargé rend une frontière NULLE, pas les deux messages à nouveau non lus', async () => {
+    const storage = fakeStorage();
+    const buster = '0.0.0-test:u-froid';
+
+    const clientAvant = createAppQueryClient({ storage, buster });
+    const conversationNeuve = conversation({ id: 'c-froid', unreadCount: 2 });
+    clientAvant.setQueryData(conversationQueryKey('c-froid'), conversationNeuve);
+
+    // Avant toute lecture : la frontière du profil neuf couvre les deux messages.
+    expect(unreadBoundaryOf({ conversation: conversationNeuve, messages: MESSAGES, viewerId: VIEWER_ID })).toEqual({
+      firstUnreadId: 'nl-a',
+      unreadCount: 2,
+    });
+
+    const store = freshStore();
+    const transport = createHttpTransport({
+      base: '',
+      fetchImpl: fakeFetch({ status: 200, body: { success: true, data: { type: 'read', markedCount: 2, unreadCount: 0 } } }),
+    });
+    await markCaughtUp({
+      conversationId: 'c-froid',
+      caughtUpToMessageId: 'nl-b',
+      deps: { source: 'gateway', transport, store, queryClient: clientAvant },
+    });
+    clientAvant.persist();
+
+    // Rechargement : un SECOND client, jamais vu la session précédente.
+    const clientApres = createAppQueryClient({ storage, buster });
+    const detailRecharge = clientApres.getQueryData<Conversation>(conversationQueryKey('c-froid'));
+
+    expect(detailRecharge?.unreadCount).toBe(0);
+    expect(unreadBoundaryOf({ conversation: detailRecharge!, messages: MESSAGES, viewerId: VIEWER_ID })).toBeNull();
   });
 });

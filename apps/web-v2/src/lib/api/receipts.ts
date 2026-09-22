@@ -4,7 +4,7 @@ import type { StoreApi } from 'zustand/vanilla';
 import type { ConversationStoreState } from '@/lib/conversation-store';
 import type { Transport } from '../net/transport';
 import type { ConversationsDeps } from './conversations';
-import { patchConversation } from './conversations';
+import { patchConversation, patchConversationDetail } from './conversations';
 import { conversationById } from './fixtures';
 import type { ApiResult } from './http';
 import { outcomeOf } from './outcome';
@@ -53,6 +53,12 @@ export type MarkCaughtUpDeps = ConversationsDeps & {
  *
  * `source !== 'gateway'` (fixtures) : l'override optimiste reste posé, aucun
  * appel réseau ne part — même repli que `performRowAction`.
+ *
+ * **Les DEUX caches, confirmés ensemble** (#7351, V3) — `patchConversation`
+ * (la liste) ET `patchConversationDetail` (`conversationQueryKey`, le
+ * détail que `thread.tsx` relit). Sans le second, un rechargement après
+ * lecture réhydratait le détail persisté avec l'ANCIEN `unreadCount` —
+ * critère de fin #7351, « ce qui est lu ne redevient pas non lu ».
  */
 export async function markCaughtUp(params: {
   readonly conversationId: string;
@@ -80,6 +86,7 @@ export async function markCaughtUp(params: {
     return;
   }
   patchConversation(queryClient, conversationId, (c) => ({ ...c, unreadCount: 0 }));
+  patchConversationDetail(queryClient, conversationId, (c) => ({ ...c, unreadCount: 0 }));
   store.getState().clearOverride(conversationId, ['unreadCount']);
 }
 

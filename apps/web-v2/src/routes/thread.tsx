@@ -67,7 +67,7 @@ import { useThreadChromeSignals } from '@/lib/view/use-thread-chrome-signals';
 import { useThreadInsets } from '@/lib/view/use-thread-insets';
 import { THREAD_ROW_ESTIMATE, useOlderMessages } from '@/lib/view/use-older-messages';
 import { useReadTracking } from '@/lib/view/use-read-tracking';
-import { useUnreadBoundary } from '@/lib/view/unread-boundary';
+import { resumeThreadTarget, useUnreadBoundary } from '@/lib/view/unread-boundary';
 import { useThreadOpenScroll } from '@/lib/view/use-thread-open-scroll';
 import { ThreadModes } from './thread-modes';
 
@@ -561,9 +561,16 @@ export default function ThreadScreen() {
     selectReadingMode('script');
     setPendingJump(episode.messageIds[0] ?? null);
   };
+  /**
+   * « Reprendre le fil » (#7351, V3) — vise `unreadBoundary` (déclaré plus
+   * bas, `useUnreadBoundary` — la fermeture lit sa valeur au CLIC, jamais à
+   * la définition), pas le premier message chargé d'autrui : la logique de
+   * repli est dans `resumeThreadTarget` (`lib/view/unread-boundary.ts`),
+   * testée séparément.
+   */
   const onResumeThread = () => {
     selectReadingMode('script');
-    setPendingJump(messages.find((m) => m.senderId !== (viewer.id ?? ''))?.id ?? null);
+    setPendingJump(resumeThreadTarget({ unreadBoundary, messages, viewerId: viewer.id ?? '' }));
   };
 
   /**

@@ -4,6 +4,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   CONVERSATIONS_QUERY_KEY,
   conversationQuery,
+  conversationQueryKey,
   conversationsInfiniteOptions,
   conversationsQuery,
   createDirectConversation,
@@ -11,6 +12,7 @@ import {
   loadConversation,
   loadConversationsPage,
   patchConversation,
+  patchConversationDetail,
   refreshConversations,
 } from './conversations';
 import type { ConversationsInfiniteData } from './conversations-pages';
@@ -405,6 +407,39 @@ describe('patchConversation', () => {
     const queryClient = new QueryClient();
     patchConversation(queryClient, 'c-a', (c) => c);
     expect(queryClient.getQueryData(CONVERSATIONS_QUERY_KEY)).toBeUndefined();
+  });
+});
+
+/**
+ * `patchConversationDetail` (#7351, V3) — le MIROIR de `patchConversation`,
+ * sur `conversationQueryKey(id)` au lieu de la liste. Site que `markCaughtUp`
+ * (`receipts.ts`) doit appeler EN PLUS de `patchConversation` : sans lui, le
+ * cache de DÉTAIL — celui que `thread.tsx` relit via `conversationQuery`, et
+ * que `query-client.ts` persiste tel quel sur disque — garde l'ancien
+ * `unreadCount` et un cursor DÉPASSÉ après un rechargement (critère de fin
+ * #7351 : « ce qui est lu ne redevient pas non lu »).
+ */
+describe('patchConversationDetail', () => {
+  test('patch la clé de DÉTAIL de cette conversation, laisse la LISTE intacte', () => {
+    const detail = { ...CONVERSATIONS[0]!, id: 'c-a', unreadCount: 2 };
+    const listRow = { ...CONVERSATIONS[0]!, id: 'c-a', unreadCount: 2 };
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(conversationQueryKey('c-a'), detail);
+    queryClient.setQueryData(
+      CONVERSATIONS_QUERY_KEY,
+      infiniteCacheOf([{ conversations: [listRow], pagination: { limit: 30, offset: 0, total: 1, hasMore: false }, cursorPagination: { limit: 30, hasMore: false, nextCursor: null } }]),
+    );
+
+    patchConversationDetail(queryClient, 'c-a', (c) => ({ ...c, unreadCount: 0 }));
+
+    expect(queryClient.getQueryData<typeof detail>(conversationQueryKey('c-a'))?.unreadCount).toBe(0);
+    expect(findCachedConversation(queryClient, 'c-a')?.unreadCount).toBe(2);
+  });
+
+  test('cache de détail absent ⇒ reste undefined, ne lève pas', () => {
+    const queryClient = new QueryClient();
+    expect(() => patchConversationDetail(queryClient, 'c-inconnue', (c) => c)).not.toThrow();
+    expect(queryClient.getQueryData(conversationQueryKey('c-inconnue'))).toBeUndefined();
   });
 });
 
