@@ -19,6 +19,7 @@ import type {
   ConversationType,
 } from '@meeshy/shared/types';
 import type { ConversationBridge } from '@meeshy/shared/types/conversation-bridge';
+import type { MentionedUser } from '@meeshy/shared/types/mention';
 import type {
   AttachmentTranscription,
   AttachmentTranslations,
@@ -317,7 +318,16 @@ export class TransformersService {
   /**
    * Transforme les données d'un message du backend vers le format frontend
    */
-  transformMessageData(backendMessage: unknown): Message {
+  /**
+   * @param options.mentionedUsers Résolution des `@pseudo` servie par la RÉPONSE
+   *   (`meta.mentionedUsers`), agrégée par le serveur pour la page entière — le
+   *   message lui-même ne la porte pas sur le chemin REST. Elle n'est retenue
+   *   que si le message n'apporte pas la sienne.
+   */
+  transformMessageData(
+    backendMessage: unknown,
+    options?: { readonly mentionedUsers?: readonly MentionedUser[] },
+  ): Message {
     const msg = backendMessage as Record<string, unknown>;
 
     // Vérifier le cache
@@ -385,6 +395,13 @@ export class TransformersService {
       ? msg.validatedMentions.map(m => String(m))
       : undefined;
 
+    // Le nom affiché derrière chaque `@pseudo`. Le champ reste ABSENT quand rien
+    // n'a été résolu : le rendu retombe alors sur le handle, au lieu de laisser
+    // croire à une résolution vide.
+    const mentionedUsers = Array.isArray(msg.mentionedUsers)
+      ? (msg.mentionedUsers as readonly MentionedUser[])
+      : options?.mentionedUsers;
+
     // Resolve the User ID for this message (for alignment: isOwnMessage checks)
     // senderId from DB is a Participant ID; the actual User ID comes from sender relation
     const senderUserId = getSenderUserId(sender as Record<string, unknown>) || senderId;
@@ -419,6 +436,7 @@ export class TransformersService {
       replyTo,
       attachments,
       validatedMentions,
+      ...(mentionedUsers && mentionedUsers.length > 0 ? { mentionedUsers } : {}),
       timestamp: createdAt,
       ...(msg.forwardedFromId ? { forwardedFromId: String(msg.forwardedFromId) } : {}),
       ...(msg.forwardedFromConversationId

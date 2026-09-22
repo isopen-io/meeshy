@@ -153,6 +153,31 @@ describe('la loi que le serveur applique couvre les trois formes protégées', (
     expect(resolveLastMessageSummaryKind({ expiresAt: '2026-09-11T13:00:00Z' }, maintenant)).toBe('ephemeralActive');
     expect(resolveLastMessageSummaryKind({}, maintenant)).toBe('standard');
   });
+
+  it("un ÉPHÉMÈRE ne se juge plus sur `expiresAt` : c'est l'heure interne de destruction (#7451)", () => {
+    // La colonne vaut le plafond de rétention (sept jours) tant que personne
+    // n'a reçu, puis le dernier décompte plus une heure. La lire comme une
+    // échéance affichait « actif » pendant sept jours, puis « expiré » d'un
+    // coup — l'inverse de ce que le lecteur voit dans le fil.
+    const destruction = '2026-09-18T12:00:00Z';
+    expect(
+      resolveLastMessageSummaryKind({ ephemeralDuration: 30, expiresAt: destruction }, maintenant),
+    ).toBe('ephemeralActive');
+
+    // Et même passée, elle ne prononce plus « expiré » : la mise hors de vue
+    // d'un éphémère appartient à `message:expired`, adressé au lecteur seul.
+    expect(
+      resolveLastMessageSummaryKind(
+        { ephemeralDuration: 30, expiresAt: '2026-09-11T11:00:00Z' },
+        maintenant,
+      ),
+    ).toBe('ephemeralActive');
+
+    // Les protections qui ne dépendent PAS de l'horloge gardent la main.
+    expect(
+      resolveLastMessageSummaryKind({ ephemeralDuration: 30, isViewOnce: true }, maintenant),
+    ).toBe('viewOnce');
+  });
 });
 
 afterAll(() => {

@@ -654,7 +654,7 @@ struct GlobalSearchView: View {
 
         case .viewOnce:
             HStack(spacing: 4) {
-                Image(systemName: "flame")
+                Image(systemName: MessageProtectionSymbols.viewOnce)
                     .font(MeeshyFont.relative(11, weight: .medium))
                 Text(String(localized: "conversation.summary.view_once", defaultValue: "1 message vue unique"))
                     .font(MeeshyFont.relative(13).italic())

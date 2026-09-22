@@ -105,6 +105,7 @@ describe('Bubble — la coche ouvre la fiche (#7352, V4)', () => {
           languages={['fr', 'en']}
           isGrouped
           viewerId="u-viewer"
+          ephemeralDeadline={{ state: 'none' }}
           onJumpToMessage={() => {}}
           {...(onOpenDetail === undefined ? {} : { onOpenDetail })}
         />,

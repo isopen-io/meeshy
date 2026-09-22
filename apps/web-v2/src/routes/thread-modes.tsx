@@ -27,6 +27,8 @@ import { served } from '@/lib/api/prism';
 import type { SelectionState } from '@/lib/view/selection';
 import { usesFlatRow } from '@/lib/reading-mode/decision';
 import { protectionOf } from '@/lib/reading-mode/protection';
+import { destructionPhaseOf } from '@/lib/view/ephemeral-destruction';
+import { resolveEphemeralDeadline } from '@/lib/view/ephemeral-reception';
 import type { ThreadScene } from '@/lib/reading-mode/scene';
 
 /**
@@ -38,6 +40,10 @@ import type { ThreadScene } from '@/lib/reading-mode/scene';
  * rendu en mode Résumé, exactement comme avant l'extraction.
  */
 const SummaryHost = lazy(() => import('@/components/summary/summary-host'));
+
+/** Aucune annonce de destruction — identité STABLE, pour ne pas refaire un
+ *  ensemble à chaque rendu de la liste. */
+const EMPTY_IDS: ReadonlySet<string> = new Set();
 
 /**
  * LE MONTAGE DES MODES — extrait de `routes/thread.tsx` (#5878) : au-delà de
@@ -132,6 +138,7 @@ export function ThreadModes({
   group,
   highlightedId,
   expiredIds,
+  destroyingIds = EMPTY_IDS,
   jumpToMessage,
   consume,
   onEphemeralExpired,
@@ -176,6 +183,17 @@ export function ThreadModes({
   readonly group: boolean;
   readonly highlightedId: string | null;
   readonly expiredIds: ReadonlySet<string>;
+  /**
+   * LES RANGÉES EN TRAIN DE BRÛLER (#7468) — une destruction ANNONCÉE, par le
+   * chrome qui vient d'atteindre l'échéance ou par `message:expired` reçu
+   * pendant l'affichage (`useEphemeralDestruction`). Elles se peignent ENCORE,
+   * le temps de l'effet ; c'est `expiredIds` qui les retire ensuite.
+   *
+   * ABSENTE ⇒ aucune annonce : la fenêtre sans état (`destructionPhaseOf`)
+   * suffit à faire brûler une échéance atteinte sous les yeux du lecteur, et
+   * une surface en lecture pure (l'administration) n'a rien à animer.
+   */
+  readonly destroyingIds?: ReadonlySet<string>;
   readonly jumpToMessage: (messageId: string) => void;
   /**
    * ## LES CAPACITÉS SONT OPTIONNELLES, ET UNE CAPACITÉ ABSENTE EST ABSENTE
@@ -321,7 +339,37 @@ export function ThreadModes({
     });
   }, []);
 
+  /**
+   * UNE LECTURE D'HORLOGE PAR RENDU DE LISTE — jamais une par rangée : la
+   * protection, l'échéance et le verdict d'expiration doivent tous trois
+   * répondre du MÊME instant, sans quoi une rangée pourrait se déclarer échue
+   * pour son chrome et vivante pour son voile.
+   *
+   * Déclarée AVANT le retour anticipé du mode Résumé, qui la lit aussi.
+   */
+  const renderNow = Date.now();
+
   if (mode === 'summary' && summary !== undefined) {
+    /**
+     * **UN ÉPHÉMÈRE N'Y SURVIT PAS À SON ÉCHÉANCE** (#7454, la moitié de la
+     * règle qui revient au Résumé). Ce mode ne rend aucune rangée de message :
+     * il rend un DIGEST — des comptes, des visages, des épisodes — et un texte
+     * DÉRIVÉ d'un message échu le garderait en vie après sa disparition du
+     * fil, sur le même écran, à un tap de distance.
+     *
+     * Le corpus est donc filtré AVANT d'entrer dans le résumé, par la MÊME
+     * règle que les rangées (`resolveEphemeralDeadline`) — pas par une seconde
+     * lecture de `expiresAt`.
+     */
+    const summaryMessages = summary.messages.filter(
+      (message) =>
+        destructionPhaseOf({
+          deadline: resolveEphemeralDeadline({ message, isMine: isMineOf(message, viewerId), now: renderNow }),
+          now: renderNow,
+          destroying: destroyingIds.has(message.id),
+          expired: expiredIds.has(message.id),
+        }) !== 'gone',
+    );
     return (
       /*
         LE RÉSUMÉ VIVANT (#5695) — SOUS l'en-tête (le `<main>` du fil est
@@ -335,7 +383,7 @@ export function ThreadModes({
       <Suspense fallback={<SummarySkeleton />}>
         <SummaryHost
           conversationId={summary.conversation.id}
-          messages={summary.messages}
+          messages={summaryMessages}
           participants={summary.conversation.participants}
           viewer={viewer}
           windowCoversUnread={summary.windowCoversUnread}
@@ -459,7 +507,35 @@ export function ThreadModes({
              (`FocalRow`/`Bubble`, `expired={expiredIds.has(...)}`) : sans
              elle, `aria-label` annonçait EN CLAIR le texte que la rangée
              floute ou remplace par un tombstone. */
-          const rowProtection = expiredIds.has(p.message.id) ? 'expired' : protectionOf(p.message, Date.now());
+          /**
+           * L'ÉCHÉANCE DE CE LECTEUR (#7454) — composée ICI, une fois par
+           * rangée, et descendue aux deux peaux. C'est le SEUL site du
+           * chantier qui appelle la règle : une peau qui la recalculerait
+           * serait la jumelle que `ephemeral-reception.ts` existe pour
+           * empêcher.
+           *
+           * Le VERDICT de retrait, lui, a changé au lot #7468 : ce n'est plus
+           * « l'échéance est passée » mais la PHASE, qui insère une fenêtre de
+           * destruction entre les deux (voir juste dessous).
+           */
+          const rowIsMine = isMineOf(p.message, viewerId);
+          const rowDeadline = resolveEphemeralDeadline({ message: p.message, isMine: rowIsMine, now: renderNow });
+          /**
+           * TROIS PHASES, UNE LOI (#7468) — `destructionPhaseOf` tranche entre
+           * « visible », « en destruction » et « partie », et elle le fait sans
+           * état : la fenêtre se lit de l'échéance et de `renderNow`, si bien
+           * qu'un rendu déclenché par n'importe quoi d'autre (une frappe, un
+           * défilement) rend le même verdict que le tic du chrome. C'est ce qui
+           * empêche la rangée d'être coupée net entre l'échéance et l'annonce.
+           */
+          const rowPhase = destructionPhaseOf({
+            deadline: rowDeadline,
+            now: renderNow,
+            destroying: destroyingIds.has(p.message.id),
+            expired: expiredIds.has(p.message.id),
+          });
+          const rowExpired = rowPhase === 'gone';
+          const rowProtection = rowExpired ? 'expired' : protectionOf(p.message, renderNow);
           /* LA PHASE DE RÉVÉLATION EST ALIMENTÉE (#7142) — elle vit SOUS ce
              nœud (`ProtectedContent`, `useState`) alors qu'`aria-label` se
              pose AU-DESSUS, sur `[data-row]` ; elle remonte par le canal
@@ -476,7 +552,7 @@ export function ThreadModes({
              occupe aucune entrée. */
           const rowLabel = composeMessageLabel({
             message: p.message,
-            isMine: isMineOf(p.message, viewerId),
+            isMine: rowIsMine,
             servedText: rowServed.text,
             delivery: checkStatusOf(p.message, rowDelivery),
             protection: rowProtection,
@@ -569,7 +645,16 @@ export function ThreadModes({
                   chaque rangée pour ne rien pouvoir faire. `data-row` reste
                   posé sans eux : c'est aussi le CANDIDAT d'élection de la
                   scène, qui n'a besoin d'aucun geste. */}
+              {/* L'EFFET DE DESTRUCTION SE POSE ICI (#7468), sur le nœud qui
+                  enveloppe LES DEUX peaux — jamais dans `FocalRow` ni dans
+                  `Bubble`, qui l'auraient alors câblé chacune et laissé le mode
+                  suivant sans rien. `.ephemeral-destroying` porte la combustion
+                  ET le repli de la hauteur (`grid-template-rows: 1fr → 0fr`),
+                  que le virtualiseur suit par son `ResizeObserver` : les
+                  voisins se resserrent à mesure, sans saut de liste. Avec
+                  `prefers-reduced-motion`, la feuille retombe sur un fondu. */}
               <div
+                {...(rowPhase === 'destroying' ? { 'data-destroying': '', className: 'ephemeral-destroying' } : {})}
                 {...(isSystemMessage(p.message) ? {} : { 'data-row': p.message.id })}
                 {...(isSystemMessage(p.message) || longPress === undefined ? {} : { tabIndex: 0, ...longPress })}
                 role="article"
@@ -588,7 +673,8 @@ export function ThreadModes({
                     onJumpToMessage={jumpToMessage}
                     highlighted={highlightedId === p.message.id}
                     elected={isElected}
-                    expired={expiredIds.has(p.message.id)}
+                    expired={rowExpired}
+                    ephemeralDeadline={rowDeadline}
                     revealable={!rowWithheld}
                     {...(consume === undefined ? {} : { onConsumeViewOnce: consume })}
                     {...(onEphemeralExpired === undefined ? {} : { onEphemeralExpired })}
@@ -611,7 +697,8 @@ export function ThreadModes({
                     viewerId={viewerId}
                     onJumpToMessage={jumpToMessage}
                     highlighted={highlightedId === p.message.id}
-                    expired={expiredIds.has(p.message.id)}
+                    expired={rowExpired}
+                    ephemeralDeadline={rowDeadline}
                     revealable={!rowWithheld}
                     {...(consume === undefined ? {} : { onConsumeViewOnce: consume })}
                     {...(onEphemeralExpired === undefined ? {} : { onEphemeralExpired })}

@@ -46,7 +46,21 @@ class ConversationViewModel: ObservableObject {
             _mentionDisplayNames = nil
             _mentionCandidates = nil
         }
+
+        // #7452 — l'unique réveil du fil se réarme ici, au seul endroit que
+        // TOUT changement de `messages` traverse (les deux pipelines, legacy et
+        // GRDB). Le retrait lui-même est toujours différé : voir
+        // `EphemeralExpiryCoordinator`.
+        refreshEphemeralExpirySchedule()
     }
+
+    /// L'ordonnanceur des disparitions d'éphémères — un réveil pour tout le
+    /// fil, jamais un minuteur par bulle (#7452).
+    lazy var ephemeralExpiry: EphemeralExpiryCoordinator = {
+        let coordinator = EphemeralExpiryCoordinator()
+        coordinator.onExpired = { [weak self] ids in self?.expireEphemeralsIfNeeded(ids) }
+        return coordinator
+    }()
 
     var _cachedLastReceivedIndex: IndexCache = .uncomputed
 

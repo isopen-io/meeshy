@@ -33,6 +33,28 @@ public struct MessageExpiredEvent: Decodable, Sendable {
     }
 }
 
+/// `message:countdown-started` — le gateway a enregistré la PREMIÈRE réception
+/// d'un destinataire et sert désormais une échéance pour ce lecteur (contrat du
+/// fil #7451, point 5).
+///
+/// L'événement existe parce que `message:new` ne PEUT PAS porter l'échéance
+/// d'un éphémère : c'est une diffusion en room, et l'échéance est résolue par
+/// LECTEUR (`D(u) = réception(u) + ephemeralDuration`). Il part donc vers la
+/// room `user:<destinataire>` — pour ses AUTRES appareils, qui n'ont pas vu
+/// l'arrivée — et vers `user:<expéditeur>`, avec la plus tardive des échéances
+/// connues, qui est la seule horloge qu'un envoi puisse afficher.
+public struct MessageCountdownStartedEvent: Decodable, Sendable {
+    public let messageId: String
+    public let conversationId: String
+    public let expiresAt: Date
+
+    public init(messageId: String, conversationId: String, expiresAt: Date) {
+        self.messageId = messageId
+        self.conversationId = conversationId
+        self.expiresAt = expiresAt
+    }
+}
+
 /// L'ADRESSE d'un message dont la visibilité PERSONNELLE vient de changer.
 ///
 /// Le couple, jamais le seul `messageId` : un lot de masquage traverse
@@ -1630,6 +1652,11 @@ public protocol MessageSocketProviding: Sendable {
     /// `messageHiddenForMe` : le consommateur (`ConversationSocketHandler`) ne
     /// détient qu'un `MessageSocketProviding`.
     var messageExpired: PassthroughSubject<MessageExpiredEvent, Never> { get }
+    /// `message:countdown-started` — l'échéance SERVIE d'un éphémère, résolue
+    /// pour CE lecteur. Dans le protocole pour la même raison que ses voisins :
+    /// le consommateur (`ConversationSocketHandler`) ne détient qu'un
+    /// `MessageSocketProviding`.
+    var messageCountdownStarted: PassthroughSubject<MessageCountdownStartedEvent, Never> { get }
     /// `message:hidden-for-me` — le canal de visibilité PERSONNELLE. Dans le
     /// protocole parce que le consommateur (`ConversationSocketHandler`) ne
     /// détient qu'un `MessageSocketProviding`.
@@ -1949,6 +1976,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public let messageEdited = PassthroughSubject<APIMessage, Never>()
     public let messageDeleted = PassthroughSubject<MessageDeletedEvent, Never>()
     public let messageExpired = PassthroughSubject<MessageExpiredEvent, Never>()
+    public let messageCountdownStarted = PassthroughSubject<MessageCountdownStartedEvent, Never>()
     public let messageHiddenForMe = PassthroughSubject<MessageHiddenForMeEvent, Never>()
     public let messageRestoredForMe = PassthroughSubject<MessageRestoredForMeEvent, Never>()
     public let messagePinned = PassthroughSubject<MessagePinnedEvent, Never>()
@@ -3218,6 +3246,19 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             guard let self else { return }
             self.decode(MessageExpiredEvent.self, from: data) { [weak self] event in
                 self?.messageExpired.send(event)
+            }
+        }
+
+        // L'échéance SERVIE d'un éphémère (#7451 point 5). Elle ne REMPLACE pas
+        // l'échéance locale : les deux concourent et la plus PROCHE gagne
+        // (`EphemeralDeadline.resolve`). C'est ce qui rend le client correct
+        // avant comme après la fusion du lot gateway — sans cet événement, il
+        // décompte depuis sa propre réception ; avec lui, il ne peut que
+        // raccourcir.
+        socket.on("message:countdown-started") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(MessageCountdownStartedEvent.self, from: data) { [weak self] event in
+                self?.messageCountdownStarted.send(event)
             }
         }
 

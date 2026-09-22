@@ -30,7 +30,6 @@ export type ForwardAttribution =
 export type MessageBadge =
   | { readonly kind: 'pinned' }
   | { readonly kind: 'forwarded'; readonly attribution: ForwardAttribution }
-  | { readonly kind: 'ephemeral'; readonly expiresAt: Date }
   | { readonly kind: 'edited' };
 
 /**
@@ -181,7 +180,7 @@ type BadgeFields = Pick<
  * décide de l'ordre complet d'un message — chaque peau choisit ensuite où
  * elle rend chaque élément.
  */
-export function badgesOf(message: BadgeFields, now: number): readonly MessageBadge[] {
+export function badgesOf(message: BadgeFields): readonly MessageBadge[] {
   const badges: MessageBadge[] = [];
 
   if (message.pinnedAt !== undefined) badges.push({ kind: 'pinned' });
@@ -189,27 +188,33 @@ export function badgesOf(message: BadgeFields, now: number): readonly MessageBad
   const attribution = forwardAttributionOf(message);
   if (attribution !== null) badges.push({ kind: 'forwarded', attribution });
 
-  if (message.expiresAt !== undefined && new Date(message.expiresAt).getTime() > now) {
-    badges.push({ kind: 'ephemeral', expiresAt: new Date(message.expiresAt) });
-  }
-
   if (message.isEdited) badges.push({ kind: 'edited' });
 
   return badges;
 }
 
 /**
- * L'ENTRÉE « ÉPHÉMÈRE » DE LA LOI, PAS UNE SECONDE LECTURE DE
- * `message.expiresAt` (revue #5936, défaut majeur 1) — `EphemeralBadge`
- * (`protected-content.tsx`) tient SON PROPRE minuteur (`ephemeralOf`, qui
- * distingue `running`/`expired`), mais la PRÉSENCE du badge et la `Date`
- * qu'il porte viennent d'ICI : les deux peaux ne relisent plus
- * `message.expiresAt` pour DÉCIDER de monter le badge, seulement pour
- * calculer son COMPTE À REBOURS — le même écart que `editedOf` ci-dessous.
+ * L'ÉPHÉMÈRE A QUITTÉ CETTE LOI (#7454) — et l'absence mérite d'être écrite,
+ * puisque #5936 l'y avait délibérément mis pour que l'ORDRE complet d'un
+ * message se décide à un seul site.
+ *
+ * La raison est que `expiresAt` ne DIT PLUS si un message décompte : pour un
+ * éphémère, `message:new` ne le porte pas du tout (contrat #7451, point 4), et
+ * l'échéance qui vaut est celle que compose `resolveEphemeralDeadline`
+ * (`lib/view/ephemeral-reception.ts`) depuis la RÉCEPTION locale. Garder ici
+ * une seconde lecture de `expiresAt` aurait fait exactement la jumelle
+ * divergente que le doc-comment d'origine voulait empêcher — un badge monté
+ * sur une condition, un décompte calculé sur une autre.
+ *
+ * Ce que cette loi ordonne reste vrai : le chrome de protection
+ * (`protection-chrome.tsx`) se peint entre les badges de tête et le corps,
+ * là où `ephemeral` se rangeait.
+ *
+ * `badgesOf` a perdu son paramètre `now` du même mouvement : l'éphémère était
+ * la seule entrée qui lisait une horloge. Le garder aurait été un paramètre
+ * mort, que `noUnusedParameters` refuse — et une invitation à recomposer ici
+ * une décision temporelle qui n'y vit plus.
  */
-export function ephemeralBadgeOf(badges: readonly MessageBadge[]): Extract<MessageBadge, { kind: 'ephemeral' }> | undefined {
-  return badges.find((badge): badge is Extract<MessageBadge, { kind: 'ephemeral' }> => badge.kind === 'ephemeral');
-}
 
 /**
  * « MODIFIÉ » EST-IL DANS LA SORTIE DE LA LOI ? (revue #5936, défaut majeur

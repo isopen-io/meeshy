@@ -5,6 +5,7 @@
 
 import type { SocketIOUser as User, MessageType } from './socketio-events.js';
 import type { Participant } from './participant.js';
+import type { MentionedUser } from './mention.js';
 import type { Attachment } from './attachment.js';
 import type { TranslationModel, MessageTranslation, MessageStatusEntry, UITranslationState, UITranslationStatus } from './message-types.js';
 import type { CallSummaryMetadata } from '../utils/call-summary.js';
@@ -143,7 +144,24 @@ export interface Message {
   readonly effectFlags?: number;
 
   // ===== EXPIRATION =====
+  /**
+   * L'échéance SERVIE pour CE lecteur (contrat du fil #7451, point 3) :
+   * `réception(lecteur) + ephemeralDuration` pour un destinataire, la plus
+   * tardive des échéances connues pour l'expéditeur, `undefined` tant que
+   * personne n'a reçu. Sur `message:new`, elle est ABSENTE pour un éphémère
+   * (point 4) : une diffusion en room ne peut pas être différente par lecteur.
+   */
   readonly expiresAt?: Date;
+  /**
+   * LA DURÉE, en secondes entières — ce que le client ENVOIE, là où il posait
+   * jusqu'ici une échéance calculée au moment de l'envoi (directive porteur
+   * 2026-09-22 : un éphémère ne décompte qu'une fois REÇU). Servie partout :
+   * REST, `message:new` et push.
+   *
+   * Le client compose son échéance avec `ephemeralDeadline()`
+   * (`utils/ephemeral-deadline.ts`) — jamais en rejouant la règle sur place.
+   */
+  readonly ephemeralDuration?: number;
 
   // ===== VIEW-ONCE & BLUR =====
   readonly isViewOnce: boolean;
@@ -191,6 +209,20 @@ export interface Message {
 
   // ===== MENTIONS =====
   readonly validatedMentions?: readonly string[];
+  /**
+   * Résolution serveur des `@pseudo` du contenu — le nom affiché de chaque
+   * personne mentionnée, pour que le client le rende SANS requête de plus.
+   *
+   * Le serveur la produit déjà sur les deux chemins d'arrivée d'un message : en
+   * REST dans `meta.mentionedUsers` de `GET /conversations/:id/messages`, et sur
+   * le message lui-même dans l'événement socket `message:new`. Les deux la
+   * posent ici, pour que la bulle n'ait qu'UNE forme à lire quelle que soit la
+   * provenance du message.
+   *
+   * @see MentionedUser
+   * @see mentionsToLinks — la carte change le LIBELLÉ du lien, jamais sa cible
+   */
+  readonly mentionedUsers?: readonly MentionedUser[];
 
   // ===== EXPEDITEUR =====
   readonly sender?: Participant;

@@ -1236,6 +1236,30 @@ model MessageStatusEntry {
   /// Whether view-once content was revealed/unblurred
   revealedAt   DateTime?
 
+  // ===== DÉCOMPTE ÉPHÉMÈRE (#7451) =====
+  /// `D(u)` — l'échéance de CE destinataire pour un message éphémère,
+  /// `première réception + Message.ephemeralDuration`, gravée write-once au
+  /// premier accusé de réception (directive porteur 2026-09-22 : « les messages
+  /// avec temps décompté ne doivent décompter que lorsque l'utilisateur l'a
+  /// reçu »).
+  ///
+  /// DÉNORMALISÉE alors qu'elle se dérive de `receivedAt` + la colonne du
+  /// message : c'est la clé de balayage. Sans elle, trouver les décomptes échus
+  /// demanderait de joindre `Message` pour CHAQUE entrée, à la minute. Le
+  /// CALCUL, lui, reste unique — `recipientEphemeralDeadline()`
+  /// (`packages/shared/utils/ephemeral-countdown.ts`) est son seul producteur.
+  ///
+  /// Nulle sur tout message non éphémère, et sur tout destinataire qui n'a
+  /// encore rien reçu.
+  ephemeralExpiresAt DateTime?
+  /// Quand l'échéance ci-dessus a été ANNONCÉE à ce destinataire —
+  /// `message:expired` vers sa room personnelle et retrait de ses notifications.
+  ///
+  /// Marqueur d'idempotence du balayage, jamais une échéance : les deux disent
+  /// des choses différentes (ce qui est PRÉVU / ce qui est FAIT) et un balayage
+  /// qui les confondrait rejouerait l'annonce à chaque passe.
+  ephemeralExpiredAt DateTime?
+
   // ===== LANGUE CONSULTÉE =====
   /// Codes des versions linguistiques dans lesquelles ce message a été lu.
   /// Union de la langue résolue au moment de la lecture et des bascules
@@ -1259,6 +1283,10 @@ model MessageStatusEntry {
   @@index([deliveredAt])
   @@index([conversationId, participantId, readAt]) // Comptage non-lus par participant dans une conversation
   @@index([participantId, conversationId]) // Historique lecture d'un participant toutes conversations
+  // #7451 — la clé du balayage des décomptes éphémères échus : « échéance
+  // passée ET annonce pas encore faite ». Sans elle, la passe à la minute
+  // balaierait toute la collection, dont 100 % des entrées non éphémères.
+  @@index([ephemeralExpiresAt, ephemeralExpiredAt])
 }
 
 /// Per-attachment status entry for each user

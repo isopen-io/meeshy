@@ -1,10 +1,8 @@
-import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import {
   BLUR_RADIUS_PX,
   REVEAL_ERROR_NOTICE_MS,
-  ephemeralOf,
-  formatRemaining,
   rendersContent,
   requiresConsume,
   reveal,
@@ -422,53 +420,3 @@ export function ProtectionNotice({
     </div>
   );
 }
-
-/**
- * LE BADGE ÉPHÉMÈRE — miroir de `BubbleEphemeralBadge`/`BubbleMetaBadges.swift:146-171`.
- * Tient SON PROPRE minuteur (1 s), s'arrête à l'expiration et au démontage —
- * `memo` : c'est LUI seul qui re-rend au tic, jamais la rangée qui le monte
- * (la promesse `memo` de `FocalRow`/`Bubble`).
- */
-export const EphemeralBadge = memo(function EphemeralBadge({
-  expiresAt,
-  now = defaultNow,
-  onExpired,
-}: {
-  readonly expiresAt: Date | string;
-  readonly now?: () => number;
-  readonly onExpired: () => void;
-}) {
-  const [remaining, setRemaining] = useState(() => ephemeralOf(expiresAt, now()));
-
-  useEffect(() => {
-    const state = ephemeralOf(expiresAt, now());
-    setRemaining(state);
-    if (state.state !== 'running') return;
-    const interval = setInterval(() => {
-      const next = ephemeralOf(expiresAt, now());
-      setRemaining(next);
-      if (next.state !== 'running') clearInterval(interval);
-    }, 1000);
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expiresAt]);
-
-  const onExpiredRef = useRef(onExpired);
-  onExpiredRef.current = onExpired;
-  useEffect(() => {
-    if (remaining.state === 'expired') onExpiredRef.current();
-  }, [remaining.state]);
-
-  if (remaining.state !== 'running') return null;
-  const label = formatRemaining(remaining.remainingSeconds);
-  return (
-    <span
-      data-ephemeral
-      className="protected-ephemeral-badge rounded-chip inline-flex items-center gap-1"
-      aria-label={`Message éphémère, expire dans ${label}`}
-    >
-      <Glyph name="flameFill" size={11} />
-      <span className="tabular-nums font-bold text-chip">{label}</span>
-    </span>
-  );
-});
