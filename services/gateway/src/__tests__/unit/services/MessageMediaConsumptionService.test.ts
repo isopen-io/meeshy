@@ -189,7 +189,7 @@ describe('MessageReadStatusService', () => {
 
       await service.markAudioAsListened(testParticipantId, testAttachmentId, {
         playPositionMs: 5000,
-        listenDurationMs: 10000,
+        stretches: [{ startMs: 0, endMs: 10000, endedBy: 'pause' }],
         complete: false
       });
 
@@ -317,7 +317,63 @@ describe('MessageReadStatusService', () => {
 
       await service.markAudioAsListened(testParticipantId, testAttachmentId, {
         playPositionMs: 1000,
-        listenDurationMs: 1000
+        stretches: [{ startMs: 0, endMs: 1000, endedBy: 'pause' }]
+      });
+
+      expect(lastUpsert().update.totalListenDurationMs).toEqual({ increment: 1000 });
+    });
+
+    it('la durée cumulée ignore la durée de la PISTE — un rapport sans écoute nouvelle n\'incrémente rien', async () => {
+      anAudioAttachment();
+      mockPrisma.attachmentStatusEntry.findUnique.mockResolvedValue({
+        listenSegments: [],
+        viewedLanguages: [],
+        lastPlayPositionMs: 8000,
+        listenedComplete: false
+      });
+
+      // Un rapport de position seule (pas d'écoute continue nouvelle à
+      // signaler, p. ex. juste une reprise) ne doit inventer aucune durée.
+      await service.markAudioAsListened(testParticipantId, testAttachmentId, {
+        playPositionMs: 8500
+      });
+
+      expect(lastUpsert().update.totalListenDurationMs).toBeUndefined();
+    });
+
+    it('deux rapports successifs cumulent la durée RÉELLEMENT écoutée de chacun, jamais la durée de la piste', async () => {
+      anAudioAttachment();
+
+      // Premier rapport : écoute continue de 0 à 8000 ms (80 % d'une piste de
+      // 10 s, dont la durée totale — 10000 ms — n'est JAMAIS passée au
+      // service : seule `stretches` compte.)
+      mockPrisma.attachmentStatusEntry.findUnique.mockResolvedValueOnce({
+        listenSegments: [],
+        viewedLanguages: [],
+        lastPlayPositionMs: null,
+        listenedComplete: false
+      });
+
+      await service.markAudioAsListened(testParticipantId, testAttachmentId, {
+        playPositionMs: 8000,
+        stretches: [{ startMs: 0, endMs: 8000, endedBy: 'pause' }]
+      });
+
+      expect(lastUpsert().create.totalListenDurationMs).toBe(8000);
+
+      // Deuxième rapport, après une reprise à 10 % : seule la NOUVELLE
+      // écoute continue (0 → 1000 ms, motif distinct) s'ajoute — jamais la
+      // durée totale de la piste rejouée à chaque rapport par les clients.
+      mockPrisma.attachmentStatusEntry.findUnique.mockResolvedValueOnce({
+        listenSegments: [{ startMs: 0, endMs: 8000, endedBy: 'pause' }],
+        viewedLanguages: [],
+        lastPlayPositionMs: 8000,
+        listenedComplete: false
+      });
+
+      await service.markAudioAsListened(testParticipantId, testAttachmentId, {
+        playPositionMs: 1000,
+        stretches: [{ startMs: 0, endMs: 1000, endedBy: 'seek' }]
       });
 
       expect(lastUpsert().update.totalListenDurationMs).toEqual({ increment: 1000 });
@@ -425,6 +481,38 @@ describe('MessageReadStatusService', () => {
 
       expect(served).toEqual({ position: 8000, complete: true });
     });
+
+    it('la durée cumulée vidéo cumule la durée RÉELLEMENT visionnée de chacun des deux rapports, jamais la durée de la piste', async () => {
+      aVideoAttachment();
+
+      mockPrisma.attachmentStatusEntry.findUnique.mockResolvedValueOnce({
+        watchSegments: [],
+        viewedLanguages: [],
+        lastWatchPositionMs: null,
+        watchedComplete: false
+      });
+
+      await service.markVideoAsWatched(testParticipantId, testAttachmentId, {
+        watchPositionMs: 8000,
+        stretches: [{ startMs: 0, endMs: 8000, endedBy: 'pause' }]
+      });
+
+      expect(lastUpsert().create.totalWatchDurationMs).toBe(8000);
+
+      mockPrisma.attachmentStatusEntry.findUnique.mockResolvedValueOnce({
+        watchSegments: [{ startMs: 0, endMs: 8000, endedBy: 'pause' }],
+        viewedLanguages: [],
+        lastWatchPositionMs: 8000,
+        watchedComplete: false
+      });
+
+      await service.markVideoAsWatched(testParticipantId, testAttachmentId, {
+        watchPositionMs: 1000,
+        stretches: [{ startMs: 0, endMs: 1000, endedBy: 'seek' }]
+      });
+
+      expect(lastUpsert().update.totalWatchDurationMs).toEqual({ increment: 1000 });
+    });
   });
 
   // ==============================================
@@ -490,6 +578,9 @@ describe('MessageReadStatusService', () => {
       });
 
       expect(lastUpsert().update.listenSegments).toHaveLength(1);
+      // Même rejeu, même durée déjà comptée : aucune inflation de
+      // `totalListenDurationMs` (#7359).
+      expect(lastUpsert().update.totalListenDurationMs).toBeUndefined();
     });
 
     it('écarte une écoute malformée sans perdre les valides', async () => {
@@ -684,7 +775,7 @@ describe('MessageReadStatusService', () => {
 
       await service.markVideoAsWatched(testParticipantId, testAttachmentId, {
         watchPositionMs: 30000,
-        watchDurationMs: 60000,
+        stretches: [{ startMs: 0, endMs: 60000, endedBy: 'completed' }],
         complete: true
       });
 
