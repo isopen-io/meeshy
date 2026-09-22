@@ -590,6 +590,14 @@ extension ConversationSyncEngine {
         // client overrides it to 0 for the open conversation because the
         // user IS reading it. This avoids the "11 → 75 then back to 0"
         // visual flicker when a stale server count momentarily lands.
+        //
+        // Ce zéro est un AFFICHAGE, pas une lecture (#7350) : le compte servi
+        // est ce qui reste vraiment non lu — un message arrivé sans être vu,
+        // ou l'arriéré après un accusé partiel. Il est retenu pour la
+        // fermeture, qui le rend à la ligne (`restoreUnreadOnClose`) ; sans
+        // lui, la liste redisait 0 pendant que le badge, qui suit le serveur,
+        // comptait la conversation. Ignoré si elle n'est pas ouverte.
+        noteUnreadRemaining(event.conversationId, event.unreadCount)
         let effectiveUnread = (event.conversationId == currentlyOpenConversationId)
             ? 0
             : event.unreadCount

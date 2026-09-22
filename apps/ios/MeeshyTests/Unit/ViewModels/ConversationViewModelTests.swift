@@ -303,11 +303,12 @@ final class ConversationViewModelTests: XCTestCase {
         // en faire un déclencheur de lecture viderait la pastille de
         // conversations que personne n'a ouvertes.
         //
-        // La lecture LOCALE a un seul déclencheur, `start()` (l'ouverture de
-        // l'écran), qui poste `.conversationMarkedRead` via
-        // `ConversationReadSignal` — voir
-        // `test_start_marksTheConversationReadLocally`. L'accusé de lecture
-        // SERVEUR, lui, garde son exigence d'exactitude
+        // La lecture LOCALE n'a plus AUCUN déclencheur à la simple ouverture
+        // depuis #7350 (I-2) — voir
+        // `test_start_doesNotMarkTheConversationReadLocally`. Seul un accusé
+        // de lecture EXACT ou un geste explicite postent
+        // `.conversationMarkedRead` via `ConversationReadSignal`. L'accusé de
+        // lecture SERVEUR, lui, garde son exigence d'exactitude
         // (`docs/superpowers/specs/2026-07-24-read-exactness-design.md`) : il
         // ne nomme que les messages réellement affichés, et ne part que par
         // `markAsRead(messageIds:)`.
@@ -1836,26 +1837,38 @@ final class ConversationViewModelTests: XCTestCase {
                      "le Prisme automatique reprend la main et sert l'ORIGINAL")
     }
 
-    // MARK: - Ouvrir, c'est lire (localement)
+    // MARK: - Ouvrir N'EST PLUS lire (localement) — #7350, I-2
 
-    /// Le moteur de sync ramenait déjà le compteur de la conversation ouverte à
-    /// zéro — mais dans son cache SEUL, et de façon différée. Les lignes
-    /// @Published de la liste et le `ConversationStore` ne l'apprenaient que par
-    /// le rechargement de cache débouncé, quand ils l'apprenaient : le seul
-    /// autre chemin qui les touchait est gaté par l'exactitude de lecture, que
-    /// l'ouverture d'une conversation à 99 non-lus sans en atteindre le bas ne
-    /// franchit jamais. Le store gardait donc 99, le cache disait 0, et la ligne
-    /// affichait celui des deux qui avait publié en dernier.
-    func test_start_marksTheConversationReadLocally() {
+    /// `start()` empilait `ConversationReadSignal.markReadLocally` à CHAQUE
+    /// ouverture — corrigeant un défaut de COHÉRENCE (le store gardait 99 le
+    /// temps d'un rechargement débouncé pendant que le cache disait déjà 0)
+    /// en fabriquant un défaut plus grave : la frontière posée, `lastReadAt =
+    /// Date()`, arrive TOUJOURS après le dernier message connu (on ouvre
+    /// forcément APRÈS qu'il a été envoyé), donc `reconcileUnread` clampait à
+    /// 0 tout instantané serveur ultérieur — y compris un « 94 encore non
+    /// lus » légitime après que 5 des 99 messages aient réellement été vus.
+    /// Recette 2026-09-21 : l'API dit 1 conversation non lue pendant que le
+    /// badge affiche 0.
+    ///
+    /// Ouvrir un écran n'est donc plus, à lui seul, une preuve de lecture.
+    /// Seul un accusé de lecture EXACT (`sendReadReceipt`, quand le lot vu
+    /// contient le message le plus récent — voir
+    /// `test_markAsRead_seenBatchContainsNewestMessage_clearsBadgeImmediately`
+    /// juste plus bas) ou un geste explicite « marquer comme lu » posent
+    /// encore cette frontière. `setCurrentlyOpenConversation` (appelé par
+    /// `start()`, INCHANGÉ) continue de montrer 0 le temps que l'écran reste
+    /// affiché — c'est la vue TRANSITOIRE, jamais une frontière persistée.
+    func test_start_doesNotMarkTheConversationReadLocally() {
         let expectedId = testConversationId
         let marked = expectation(forNotification: .conversationMarkedRead, object: nil) { notification in
             (notification.object as? String) == expectedId
         }
+        marked.isInverted = true
 
         // `makeSUT` appelle `start()`, comme le `.task` de la vue.
         let sut = makeSUT(unreadCount: 99)
 
-        wait(for: [marked], timeout: 1.0)
+        wait(for: [marked], timeout: 0.5)
         XCTAssertEqual(sut.conversationId, expectedId)
     }
 
