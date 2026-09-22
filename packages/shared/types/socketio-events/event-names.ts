@@ -542,23 +542,21 @@ export const SERVER_EVENTS = {
  * `call:already-answered`, `call:screen-capture-alert`) dont la passerelle
  * avait entre-temps implémenté l'émission.
  *
- * Ce qui reste : le pipeline de traduction EN APPEL (les trois noms sont
- * décodés côté clients et attendent le service qui les produira) et
- * `message:countdown-started`, réservé par le lot web-v2 #7454.
+ * Ce qui reste : le pipeline de traduction EN APPEL. Les trois noms sont
+ * décodés côté clients et attendent le service qui les produira.
  *
- * CE DERNIER EST RÉSERVÉ POUR UN LOT, PAS POUR UN SERVICE ABSENT, et c'est une
- * différence qui doit rester lisible : le contrat du fil est arrêté dans
- * #7451, que la session passerelle livre EN PARALLÈLE. Le nom est déclaré ICI,
- * une seule fois, pour que les trois clients ne l'écrivent pas chacun de leur
- * côté ; **la ligne ci-dessous sort de cette liste dans le lot qui pose
- * l'émetteur** (`MessageReadStatusService`, à la première réception d'un
- * destinataire) — la garde du sens inverse le rappellera d'elle-même.
+ * `message:countdown-started` y a figuré le temps d'UN lot : le lot web-v2
+ * #7454 l'a déclaré et réservé pour que les trois clients n'écrivent pas le nom
+ * chacun de leur côté, en annonçant que la réservation tomberait dans le lot qui
+ * poserait l'émetteur. C'est celui-ci (#7451) : la passerelle l'émet depuis
+ * `socketio/ephemeralCountdownAnnouncer.ts`, à la première réception d'un
+ * destinataire — la garde du sens inverse (« keeps the reserved list free of
+ * channels the gateway now emits ») rougirait si la ligne y restait.
  */
 export const RESERVED_SERVER_EVENTS: ReadonlySet<string> = new Set<string>([
   SERVER_EVENTS.CALL_TRANSLATION_REQUESTED,
   SERVER_EVENTS.CALL_TRANSLATION_ENABLED,
   SERVER_EVENTS.CALL_TRANSCRIPTION_RESULT,
-  SERVER_EVENTS.MESSAGE_COUNTDOWN_STARTED,
 ]);
 
 // Événements du client vers le serveur

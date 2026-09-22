@@ -45,6 +45,14 @@ export type MessagePrismSource = {
 export type MessageBannerSource = MessagePrismSource & {
   readonly createdAt: Date | null;
   readonly messageType: string | null;
+  /**
+   * #7451 — ce qui QUALIFIE une bulle ÉPHÉMÈRE, au même titre que l'horloge
+   * ci-dessus et pour la même raison (cycle 126) : ces champs ne composent
+   * AUCUNE chaîne, donc « qui compose ce texte ? » ne les trouve jamais. Sans
+   * eux, la bulle pré-enregistrée par la NSE ne sait pas qu'elle doit décompter.
+   */
+  readonly ephemeralDuration: number | null;
+  readonly effectFlags: number | null;
   readonly liveness: MessageLiveness;
 };
 
@@ -98,6 +106,8 @@ export const UNKNOWN_BANNER_SOURCE: MessageBannerSource = {
   ...EMPTY_PRISM_SOURCE,
   createdAt: null,
   messageType: null,
+  ephemeralDuration: null,
+  effectFlags: null,
   liveness: 'unknown',
 };
 

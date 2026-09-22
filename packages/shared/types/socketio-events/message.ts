@@ -306,13 +306,19 @@ export interface MessageSendData {
   /**
    * ISO 8601 — la passerelle en recompose le bit EPHEMERAL.
    *
-   * LE CHEMIN D'ENVOI RESTE INCHANGÉ PAR LE LOT web-v2 #7454 : c'est #7451 qui
-   * fera parler les clients en DURÉE (`ephemeralDuration`) plutôt qu'en
-   * échéance, des deux côtés du cliquet d'égalité de clés
+   * LE REPLI DES CLIENTS DÉJÀ DISTRIBUÉS, depuis #7451 : un client à jour
+   * envoie `ephemeralDuration` ci-dessous, et la passerelle DÉRIVE la durée de
+   * cette échéance pour ceux qui ne savent envoyer que ça. Les deux côtés du
+   * cliquet d'égalité de clés portent le champ
    * (`services/gateway/src/validation/socket-event-schemas.ts`, § SendDoorRatchet).
-   * Ce lot ne touche QUE ce qui REVIENT du serveur.
    */
   readonly expiresAt?: string;
+  /**
+   * Durée d'un éphémère, en SECONDES (#7451). C'est elle que le client envoie
+   * désormais, et non une échéance : le décompte part de la RÉCEPTION de chaque
+   * destinataire, que seul le serveur connaît.
+   */
+  readonly ephemeralDuration?: number;
   readonly effectFlags?: number;
   readonly isViewOnce?: boolean;
   readonly maxViewOnceCount?: number;
@@ -380,6 +386,12 @@ export interface MessageSendWithAttachmentsData {
   readonly isBlurred?: boolean;
   /** Voir `MessageSendData.expiresAt` — chemin HÉRITÉ, la durée fait foi. */
   readonly expiresAt?: string;
+  /**
+   * Durée d'un éphémère, en SECONDES (#7451). C'est elle que le client envoie
+   * désormais, et non une échéance : le décompte part de la RÉCEPTION de chaque
+   * destinataire, que seul le serveur connaît.
+   */
+  readonly ephemeralDuration?: number;
   readonly effectFlags?: number;
   readonly isViewOnce?: boolean;
   readonly maxViewOnceCount?: number;
@@ -491,7 +503,8 @@ export interface SocketIOMessage {
    * ABSENT pour un éphémère (contrat #7451, point 4) : une diffusion en room
    * ne peut pas porter une échéance différente par lecteur. Le client compose
    * la sienne depuis `ephemeralDuration` et sa RÉCEPTION locale
-   * (`utils/ephemeral-deadline.ts`).
+   * (`utils/ephemeral-deadline.ts`), et `message:countdown-started` lui porte
+   * l'échéance SERVEUR dès qu'elle existe — la passerelle l'émet depuis #7451.
    */
   readonly expiresAt?: Date;
   /** Secondes entières, > 0 — servi partout : REST, `message:new` et push. */
