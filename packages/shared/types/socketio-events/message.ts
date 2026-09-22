@@ -69,17 +69,21 @@ export interface MessageExpiredEventData {
  *     forme d'angle mort du cycle 126 (un champ qui QUALIFIE une valeur,
  *     posé ailleurs qu'elle, se perd au premier relais qui recopie).
  *
- * Reste à trancher POUR G-5, et non ici : `readByAllAt` (troisième membre du
- * critère de #7347) n'est PAS sur ce résumé. `applyReadStatusUpdated` côté
- * web refuse aujourd'hui d'inventer cette horloge faute de la recevoir ; si
- * G-5 la met sur le fil, elle rejoint ce type et son consommateur web dans
- * le MÊME lot, jamais l'un sans l'autre.
+ * `readByAllAt` — TRANCHÉ par G-5 (#7347) : elle VOYAGE, calculée par le MÊME
+ * moteur que le REST (`MessageReadStatusService.getConversationReadStatuses`,
+ * qui rend déjà `{totalMembers, receivedCount, readCount, readByAllAt}` PAR
+ * message — celui que `GET …/receipts` sert déjà). `Date | null`, comme
+ * `lastReadAt` ci-dessous : `null` tant que le dernier destinataire actif n'a
+ * pas rattrapé CE message, une date figée dès qu'il l'a fait. Son
+ * consommateur web (`apps/web-v2/src/lib/api/realtime-apply.ts`) change dans
+ * le MÊME lot, comme promis ci-dessus — jamais l'un sans l'autre.
  */
 export interface ReadStatusSummary {
   readonly totalMembers: number;
   readonly deliveredCount: number;
   readonly readCount: number;
   readonly messageId?: string;
+  readonly readByAllAt?: Date | null;
 }
 
 /**
