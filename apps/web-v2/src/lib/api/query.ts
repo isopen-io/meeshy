@@ -232,6 +232,10 @@ export function useConversation(id: string) {
  * `.isFetchingNextPage` / `.isFetchNextPageError` alimentent
  * `paginationStateOf` — la MÊME loi à quatre cas que la Lentille
  * (`lib/lens/pagination.ts`), lue côté écran.
+ *
+ * **Fraîcheur** : `staleTime: 0` est porté par la FABRIQUE `messagesQuery`
+ * (`messages.ts`, #7353), jamais reposé ici — le témoin
+ * `thread-reload-freshness.test.ts` joue la fabrique, donc ce que l'écran sert.
  */
 export function useMessages(id: string) {
   return useInfiniteQuery(messagesQuery(apiDeps, id));
