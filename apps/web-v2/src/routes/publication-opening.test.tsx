@@ -184,10 +184,12 @@ describe('stale-while-revalidate : la carte en cache tout de suite, la relecture
     expect(el.querySelector(`[data-feed-card-id="${POST_IMAGE_FR.id}"] img`)).not.toBeNull();
   });
 
-  /* LE CAS RÉEL D'UNE CARTE PARTIELLE : la liste d'un hashtag ne sert AUCUN
-     état du lecteur (`services/gateway/src/routes/posts/hashtag.ts`, #7396).
-     La carte amorcée montre ce que l'écran précédent montrait ; la relecture
-     de la fiche rend ce que la liste taisait. */
+  /* UNE CARTE PARTIELLE : jusqu'à #7396, la liste d'un hashtag ne servait
+     AUCUN état du lecteur. Elle le sert désormais (`viewerPostState.ts`, la
+     fonction du fil), mais une carte partielle reste possible — une page mise
+     en cache avant ce lot, une liste qui tait une clé. La carte amorcée montre
+     ce que l'écran précédent montrait ; la relecture de la fiche rend ce que
+     la liste taisait. */
   test('une carte de hashtag SANS l’état du lecteur : peinte telle quelle, puis la relecture allume le cœur', async () => {
     const { isLikedByMe, isBookmarkedByMe, isRepostedByMe, ...sansEtat } = REEL_MARKET_IMAGES;
     expect(isLikedByMe).toBe(true);

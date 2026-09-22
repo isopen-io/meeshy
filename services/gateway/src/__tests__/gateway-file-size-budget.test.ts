@@ -106,6 +106,10 @@ const MAX_LINES = 1000;
  * ne quitte la classe elle-même. Puis 4494 → 4477 (#7342, 2026-09-21) : la
  * carte `data` du push reproduit est partie vers `reproducedNotificationPush.ts`
  * avant d'y recevoir son marqueur — le fichier mesurait 4490.
+ *
+ * `services/PostFeedService.ts` : entrée 1401 → 1204 (#7396, 2026-09-21). L'état
+ * du lecteur que cinq lectures recopiaient est parti vers
+ * `posts/viewerPostState.ts`, où la page d'un hashtag le lit aussi.
  */
 const DETTE_HERITEE: Readonly<Record<string, number>> = {
   'services/notifications/NotificationService.ts': 4477,
@@ -118,7 +122,7 @@ const DETTE_HERITEE: Readonly<Record<string, number>> = {
   'socketio/handlers/MessageHandler.ts': 2336,
   'services/EmailService.ts': 1032,
   'server.ts': 1406,
-  'services/PostFeedService.ts': 1401,
+  'services/PostFeedService.ts': 1204,
   'services/AuthService.ts': 1324,
   'services/MentionService.ts': 1235,
   'services/messaging/MessageProcessor.ts': 1110,
