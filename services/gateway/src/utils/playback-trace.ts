@@ -131,16 +131,6 @@ function capTrace(trace: PlaybackStretch[], maxStretches: number): PlaybackStret
 }
 
 /**
- * Accumule un nouveau rapport à la suite de la trace connue.
- *
- * Une écoute strictement identique — mêmes bornes, même motif de fin — n'est
- * comptée qu'une fois. Une file d'attente hors-ligne peut re-poster son rapport
- * après une coupure réseau ; sans cette garde, « trois écoutes » deviendrait
- * « six » à la première reprise. Le risque inverse (deux écoutes réellement
- * distinctes tombant à la milliseconde près sur les mêmes bornes ET le même
- * motif) est négligeable devant celui du rejeu.
- */
-/**
  * Les entrées de `incoming` qui sont à la fois VALIDES et NOUVELLES — absentes
  * de `existing` par leur identité (bornes + motif de fin). Un rejeu de la file
  * hors-ligne (même rapport posté deux fois) ou un doublon à l'intérieur d'un
@@ -168,6 +158,16 @@ function acceptNewStretches(
   return accepted;
 }
 
+/**
+ * Accumule un nouveau rapport à la suite de la trace connue.
+ *
+ * Une écoute strictement identique — mêmes bornes, même motif de fin — n'est
+ * comptée qu'une fois. Une file d'attente hors-ligne peut re-poster son rapport
+ * après une coupure réseau ; sans cette garde, « trois écoutes » deviendrait
+ * « six » à la première reprise. Le risque inverse (deux écoutes réellement
+ * distinctes tombant à la milliseconde près sur les mêmes bornes ET le même
+ * motif) est négligeable devant celui du rejeu.
+ */
 export function appendPlaybackStretches(
   existing: readonly PlaybackStretch[],
   incoming: readonly unknown[],
