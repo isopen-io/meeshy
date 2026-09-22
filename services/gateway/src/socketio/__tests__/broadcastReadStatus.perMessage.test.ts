@@ -143,6 +143,20 @@ describe('broadcastReadStatus — un résumé PAR message figé (G-5, #7347)', (
     expect(personal.map((s: any) => s.payload.summary.messageId)).toEqual([M1, M2, M3]);
   });
 
+  it("n'émet AUCUN résumé pour un message que le moteur ne rend pas — jamais des compteurs à zéro inventés", async () => {
+    const { io, deps } = makeHarness({
+      perMessage: new Map([
+        [M1, { totalMembers: 2, receivedCount: 2, readCount: 2, readByAllAt: READ_BY_ALL_AT }],
+        [M3, { totalMembers: 2, receivedCount: 1, readCount: 0, readByAllAt: null }],
+      ]),
+    });
+
+    await broadcastReadStatus(deps as any, readArgs({ messageIds: [M1, M2, M3] }));
+
+    const fanOut = io._sendsFor(READ_STATUS_UPDATED).filter((s: any) => s.rooms.length > 1);
+    expect(fanOut.map((s: any) => s.payload.summary.messageId)).toEqual([M1, M3]);
+  });
+
   it("retombe sur l'agrégat LEGACY (un seul événement) quand aucun lot exact n'est fourni", async () => {
     const { io, deps } = makeHarness();
 

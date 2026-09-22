@@ -334,15 +334,21 @@ export async function broadcastReadStatus(
       [...exactMessageIds],
       null
     );
-    return exactMessageIds.map((messageId) => {
+    // Un message que le moteur ne rend pas (supprimé entre le gel et la
+    // diffusion, ou lecture tombée) n'a pas de résumé : lui inventer des
+    // compteurs à zéro ferait régresser ses coches chez l'expéditeur.
+    return exactMessageIds.flatMap((messageId) => {
       const row = perMessage.get(messageId);
-      return {
-        messageId,
-        totalMembers: row?.totalMembers ?? 0,
-        deliveredCount: row?.receivedCount ?? 0,
-        readCount: row?.readCount ?? 0,
-        readByAllAt: row?.readByAllAt ?? null,
-      };
+      if (!row) return [];
+      return [
+        {
+          messageId,
+          totalMembers: row.totalMembers,
+          deliveredCount: row.receivedCount,
+          readCount: row.readCount,
+          readByAllAt: row.readByAllAt,
+        },
+      ];
     });
   };
 

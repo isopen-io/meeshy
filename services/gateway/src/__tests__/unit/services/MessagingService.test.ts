@@ -2841,6 +2841,45 @@ describe('MessagingService - Edge Cases', () => {
       expect(response.success).toBe(true);
     });
 
+    it("diffuse l'arriéré que la réponse vient de marquer lu — un `read-status:updated` par message (G-8, #7347)", async () => {
+      mockPrisma.conversation.update.mockResolvedValue({});
+      mockMarkMessagesAsRead.mockResolvedValue(2);
+      const BACKLOG = ['507f1f77bcf86cd799439201', '507f1f77bcf86cd799439202'];
+      const emitted: Array<{ event: string; payload: any }> = [];
+      const chain = (): any => ({ to: chain, except: chain, emit: (event: string, payload: any) => emitted.push({ event, payload }) });
+      const entryFindMany = jest.fn().mockResolvedValue(BACKLOG.map((messageId) => ({ messageId })));
+      const withBroadcast = new MessagingService(
+        mockPrisma as unknown as PrismaClient,
+        mockTranslationService,
+        undefined,
+        () => ({
+          io: { to: chain } as any,
+          prisma: {
+            messageStatusEntry: { findMany: entryFindMany },
+            conversationReadCursor: { findUnique: jest.fn().mockResolvedValue(null) },
+            participant: { findMany: jest.fn().mockResolvedValue([{ id: 'peer-p', userId: 'peer-u' }]) },
+          } as any,
+          readStatusService: {
+            getLatestMessageSummary: jest.fn(),
+            getUnreadCount: jest.fn().mockResolvedValue(0),
+            getConversationReadStatuses: jest.fn().mockResolvedValue(
+              new Map(BACKLOG.map((id) => [id, { totalMembers: 1, receivedCount: 1, readCount: 1, readByAllAt: null }]))
+            ),
+          },
+          privacyPreferencesService: { shouldShowReadReceipts: jest.fn().mockResolvedValue(true) },
+        })
+      );
+
+      await withBroadcast.handleMessage({ conversationId: testConversationId, content: 'Hello' }, testParticipantId);
+      for (let i = 0; i < 20; i++) await new Promise((resolve) => setImmediate(resolve));
+
+      expect(entryFindMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ participantId: testParticipantId, conversationId: testConversationId }) })
+      );
+      const ids = emitted.filter((e) => e.event === 'read-status:updated').map((e) => e.payload.summary.messageId);
+      expect([...new Set(ids)]).toEqual(BACKLOG);
+    });
+
     it('logs error and still returns success when markMessagesAsRead fails (line 292)', async () => {
       mockPrisma.conversation.update.mockResolvedValue({});
       mockMarkMessagesAsRead.mockRejectedValue(new Error('read status fail'));
