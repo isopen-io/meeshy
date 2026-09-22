@@ -1,5 +1,7 @@
 import Foundation
+import UIKit
 import MeeshySDK
+import SwiftUI
 
 /// **Un seul réveil pour tout le fil** — l'ordonnanceur qui fait disparaître un
 /// éphémère à son échéance (#7452, dimension 4).
@@ -109,13 +111,69 @@ extension ConversationViewModel {
             ephemeralDeadlines.compactMap { $0.value <= now ? $0.key : nil }
         )
         guard !due.isEmpty else {
+            // **Le réveil du SEUIL** (#7467). Rien n'est échu : ce réveil-ci
+            // marque le passage sous la dernière minute, où la flamme gagne son
+            // compteur. Rien n'a changé dans la DONNÉE — c'est l'HORLOGE qui a
+            // bougé —, or une vue ne se reconstruit que si son entrée change.
+            // Réassigner la ligne telle quelle est donc le geste juste : il ne
+            // ment sur rien et fait re-résoudre `protection()` avec un `now`
+            // frais, qui rendra `.imminent` au lieu de `.running`.
+            restampMessagesEnteringLastMinute(now: now)
             refreshEphemeralExpirySchedule()
             return
         }
 
-        for id in due { EphemeralReceiptLedger.shared.forget(id) }
-        messages.removeAll { due.contains($0.id) }
-        refreshEphemeralExpirySchedule()
+        // **La destruction se VOIT** (#7467). Le message n'est pas retiré tout
+        // de suite : il passe d'abord par l'état EN DESTRUCTION, le temps que
+        // la combustion se joue. Retirer sans transition se lit comme un SAUT
+        // de liste — le lecteur croit avoir raté un défilement et cherche le
+        // message plus haut.
+        let fresh = due.filter { id in
+            guard let index = messageIndex(for: id) else { return false }
+            return !messages[index].isBurning
+        }
+        guard !fresh.isEmpty else {
+            // Déjà en combustion : le réveil suivant n'en rallume pas une
+            // seconde, et ne replanifie pas un second retrait.
+            refreshEphemeralExpirySchedule()
+            return
+        }
+
+        for id in fresh {
+            guard let index = messageIndex(for: id) else { continue }
+            messages[index].isBurning = true
+        }
+
+        let reduceMotion = UIAccessibility.isReduceMotionEnabled
+        let burning = Set(fresh)
+        Task { @MainActor [weak self] in
+            let duration = EphemeralBurn.duration(reduceMotion: reduceMotion)
+            try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
+            guard let self else { return }
+            for id in burning { EphemeralReceiptLedger.shared.forget(id) }
+            // Le repli des voisins est ANIMÉ : c'est la seconde moitié de
+            // l'effet — la combustion montre la destruction, le repli montre
+            // que la place est rendue.
+            withAnimation(.easeInOut(duration: 0.25)) {
+                self.messages.removeAll { burning.contains($0.id) }
+            }
+            self.refreshEphemeralExpirySchedule()
+        }
+    }
+
+    /// Réassigne les lignes qui viennent d'entrer dans leur dernière minute.
+    ///
+    /// Bornée aux messages CONCERNÉS — jamais la liste entière : réassigner
+    /// tout le fil à chaque réveil coûterait une reconstruction complète pour
+    /// un badge.
+    private func restampMessagesEnteringLastMinute(now: Date) {
+        for (id, deadline) in ephemeralDeadlines {
+            let remaining = deadline.timeIntervalSince(now)
+            guard remaining > 0, remaining <= EphemeralDeadline.countdownThreshold else { continue }
+            guard let index = messageIndex(for: id) else { continue }
+            let message = messages[index]
+            messages[index] = message
+        }
     }
 
     /// Réarme l'unique réveil du fil. Appelé à chaque changement de `messages`.

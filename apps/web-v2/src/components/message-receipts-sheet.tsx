@@ -14,6 +14,7 @@ import { time } from '@/lib/grouping';
 import { kindOf } from '@/lib/view/message';
 import {
   attachmentAggregateOf,
+  openedRowsOf,
   playCountLabel,
   positionFraction,
   receiptCategoriesOf,
@@ -254,6 +255,10 @@ function AttachmentReceiptCard({
   const name = attachment.title !== undefined && attachment.title.length > 0 ? attachment.title : attachment.originalName;
   const durationLabel = attachmentDurationLabel(attachment.duration);
   const isTimebased = kind === 'audio' || kind === 'video';
+  /** L'OUVERTURE (#7363, W6) — `image`/`file` seulement : `audio`/`video`
+   * restent sur `PlaybackRow` (progression, pas une simple ouverture). */
+  const isOpenable = kind === 'image' || kind === 'file';
+  const opened = isOpenable ? openedRowsOf(rows) : [];
   const kindGlyph: GlyphName = kind === 'audio' ? 'microphone' : kind === 'video' ? 'fillPlay' : kind === 'image' ? 'image' : 'file';
 
   return (
@@ -297,6 +302,14 @@ function AttachmentReceiptCard({
             {isTimebased
               ? rows.map((row) => <PlaybackRow key={row.participantId} row={row} kind={kind} durationMs={attachment.duration} lang={lang} />)
               : null}
+
+            {isOpenable && opened.length === 0 ? (
+              <p className="pt-2 text-mini" style={{ color: 'var(--color-ios-ink-3)' }}>
+                {translate(lang, 'message-detail.attachment.opened.empty')}
+              </p>
+            ) : null}
+
+            {isOpenable ? opened.map((row) => <OpenedRow key={row.participantId} row={row} />) : null}
           </>
         )}
       </div>
@@ -378,6 +391,43 @@ function PlaybackRow({
       ) : positionLabel !== null ? (
         <span className="text-mini" style={{ color: 'var(--color-ios-ink-3)' }}>
           {translate(lang, kind === 'audio' ? 'message-detail.attachment.listened-until' : 'message-detail.attachment.watched-until', { time: positionLabel })}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * QUI A OUVERT (#7363, W6) — miroir de `PlaybackRow`, réduit à ce qu'une
+ * image/un document PORTE : nom, heure de la dernière ouverture (`viewedAt`),
+ * badge « Nx » à partir de deux (`viewCount`, § `MessageViewsDetailView.
+ * swift:831`). Aucune barre de progression : « ouvert » n'est ni « à 40 % »
+ * ni « complet » (miroir `family.showsProgress === false` pour `.opened`).
+ */
+function OpenedRow({ row }: { readonly row: AttachmentStatusRow }) {
+  const playCount = playCountLabel(row.viewCount);
+  const openedAt = row.viewedAt !== null ? time(row.viewedAt) : null;
+
+  return (
+    <div className="flex items-center gap-2 pt-2" data-message-receipts-opened={row.participantId}>
+      <Avatar
+        initials={initialsOf(row.username)}
+        color={colorForName(row.username)}
+        size={24}
+        name={row.username}
+        {...(row.avatar === null || row.avatar === undefined ? {} : { src: row.avatar })}
+      />
+      <span className="min-w-0 flex-1 truncate text-mini" style={{ color: 'var(--color-ios-ink)' }}>
+        {row.username}
+      </span>
+      {playCount !== null ? (
+        <span className="text-mini" style={{ color: 'var(--color-ios-ink-3)' }}>
+          {playCount}
+        </span>
+      ) : null}
+      {openedAt !== null ? (
+        <span className="text-mini" style={{ color: 'var(--color-ios-ink-3)' }} data-message-receipts-opened-time>
+          {openedAt}
         </span>
       ) : null}
     </div>

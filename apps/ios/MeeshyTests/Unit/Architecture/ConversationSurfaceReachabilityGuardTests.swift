@@ -539,6 +539,44 @@ final class ReadingModeProtectionChromeGuardTests: XCTestCase {
         }
     }
 
+    // MARK: - La destruction se voit, dans les cinq modes (#7467)
+
+    func test_chaqueModeDeLecture_monteLaCombustionDUnÉphémère() throws {
+        // Un message qui disparaît d'une liste sans transition ne se lit pas
+        // comme une destruction : il se lit comme un SAUT — la liste se
+        // réorganise et le lecteur croit avoir raté un défilement. L'effet est
+        // donc une INFORMATION, pas un ornement, et il se doit d'exister
+        // partout où le message s'affiche.
+        for mode in ReadingModeOrchestrator.ConversationReadingMode.allCases {
+            let path = ReadingModeProtectionChrome.burnHostPath(for: mode)
+            let code = try source(at: path)
+            XCTAssertTrue(
+                code.contains(".ephemeralBurn(isBurning:"),
+                "Le mode « \(mode.rawValue) » retire un éphémère échu SANS le montrer. "
+                    + "`\(path)` doit poser `.ephemeralBurn(isBurning:…)` — le modificateur "
+                    + "lit lui-même « Réduire les animations », il n'y a rien d'autre à câbler."
+            )
+        }
+    }
+
+    /// La combustion ne se pose JAMAIS deux fois sur le même message : elle
+    /// doublerait l'opacité et l'échelle. En peau bulle, l'hôte est
+    /// `ThemedMessageBubble` (sticker compris) et non `BubbleStandardLayout`,
+    /// où vit le chrome — c'est pourquoi les deux tables existent.
+    func test_laCombustion_nEstPoséeQuUneFoisParPeau() throws {
+        for mode in ReadingModeOrchestrator.ConversationReadingMode.allCases {
+            let chromePath = ReadingModeProtectionChrome.rendererPath(for: mode)
+            let burnPath = ReadingModeProtectionChrome.burnHostPath(for: mode)
+            guard chromePath != burnPath else { continue }
+            let chromeCode = try source(at: chromePath)
+            XCTAssertFalse(
+                chromeCode.contains(".ephemeralBurn(isBurning:"),
+                "`\(chromePath)` ne doit pas poser la combustion : `\(burnPath)` la pose déjà "
+                    + "pour le mode « \(mode.rawValue) », et deux poses se multiplient."
+            )
+        }
+    }
+
     // MARK: - Plus aucun minuteur par cellule
 
     func test_aucuneCelluleNeFaitTournerSonPropreMinuteurÉphémère() throws {
