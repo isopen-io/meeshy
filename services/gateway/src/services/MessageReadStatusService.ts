@@ -14,7 +14,7 @@
  */
 
 import { PrismaClient } from "@meeshy/shared/prisma/client";
-import { MessageMediaConsumptionService } from './MessageMediaConsumptionService';
+import { MessageMediaConsumptionService, type MediaConsumptionServed } from './MessageMediaConsumptionService';
 // `withRetry` a suivi ses cinq appelants dans le module de consommation média
 // (#4605) ; le sixième, ici, l'importe. Le helper n'a pas de domaine — il
 // rejoue une transaction sur conflit d'écriture — donc il vit là où il sert le
@@ -2400,7 +2400,7 @@ export class MessageReadStatusService {
       /** Version linguistique consommée (piste traduite, transcription). */
       language?: string | null;
     }
-  ): Promise<void> {
+  ): Promise<MediaConsumptionServed> {
     return this.media.markAudioAsListened(participantId, attachmentId, options);
   }
 
@@ -2416,7 +2416,7 @@ export class MessageReadStatusService {
       /** Version linguistique consommée (sous-titres, piste doublée). */
       language?: string | null;
     }
-  ): Promise<void> {
+  ): Promise<MediaConsumptionServed> {
     return this.media.markVideoAsWatched(participantId, attachmentId, options);
   }
 

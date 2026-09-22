@@ -35,6 +35,42 @@ import { mergeViewedLanguages, MAX_VIEWED_LANGUAGES } from '../utils/viewed-lang
 
 const logger = enhancedLogger.child({ module: 'MessageReadStatusService' });
 
+/**
+ * Ce qu'une écoute/un visionnage SERT après un rapport — la position la plus
+ * avancée et le « complet » une fois atteint, jamais les valeurs brutes du
+ * rapport qui vient d'arriver. L'appelant (la route qui diffuse
+ * `attachment-status:updated`, #7359) en a besoin pour ne pas faire régresser
+ * en direct ce que le calcul vient de protéger en base.
+ */
+export type MediaConsumptionServed = {
+  readonly position: number | null;
+  readonly complete: boolean;
+};
+
+type FieldServed<T> = { readonly value: T; readonly changed: boolean };
+
+/**
+ * La position SERVIE ne régresse jamais : un seek arrière ou une réécoute
+ * partielle après un rapport plus avancé ne doivent pas faire redescendre ce
+ * que l'écran affiche. `next` absent (`undefined`) laisse le champ inchangé —
+ * même règle que le upsert Prisma d'origine, qu'aucun rapport ne force à
+ * écrire une valeur qu'il ne porte pas.
+ */
+function servePosition(previous: number | null, next: number | undefined): FieldServed<number | null> {
+  if (next === undefined) return { value: previous, changed: false };
+  return { value: previous === null ? next : Math.max(previous, next), changed: true };
+}
+
+/**
+ * Le « complet » SERVI est COLLANT : une fois vrai, il le reste — une
+ * réécoute partielle après un premier passage complet ne doit jamais
+ * l'effacer. `next` absent laisse le champ inchangé.
+ */
+function serveComplete(previous: boolean, next: boolean | undefined): FieldServed<boolean> {
+  if (next === undefined) return { value: previous, changed: false };
+  return { value: previous || next, changed: true };
+}
+
 // Helper pour retry des transactions en cas de deadlock (P2034)
 export async function withRetry<T>(
   operation: () => Promise<T>,
@@ -119,7 +155,7 @@ export class MessageMediaConsumptionService {
       /** Version linguistique consommée (piste traduite, transcription). */
       language?: string | null;
     }
-  ): Promise<void> {
+  ): Promise<MediaConsumptionServed> {
     try {
       const attachment = await this.prisma.messageAttachment.findUnique({
         where: { id: attachmentId },
@@ -136,7 +172,7 @@ export class MessageMediaConsumptionService {
 
       const now = new Date();
 
-      await withRetry(() =>
+      const served = await withRetry(() =>
         this.prisma.$transaction(async (tx) => {
           // La trace et l'ensemble des langues s'ACCUMULENT : il faut connaître
           // l'état courant pour y ajouter, ce qu'un upsert seul ne permet pas.
@@ -146,7 +182,12 @@ export class MessageMediaConsumptionService {
             where: {
               attachment_participant_status: { attachmentId, participantId },
             },
-            select: { listenSegments: true, viewedLanguages: true },
+            select: {
+              listenSegments: true,
+              viewedLanguages: true,
+              lastPlayPositionMs: true,
+              listenedComplete: true,
+            },
           });
 
           const trace = appendPlaybackStretches(
@@ -156,6 +197,21 @@ export class MessageMediaConsumptionService {
           const viewedLanguages = mergeViewedLanguages(
             previous?.viewedLanguages,
             options?.language
+          );
+
+          // La position et le « complet » SERVIS ne régressent jamais : un
+          // seek arrière ou une réécoute partielle après un premier passage
+          // complet ne doivent pas faire redescendre ce que les autres
+          // participants — et l'appelant, pour la diffusion Socket.IO —
+          // lisent comme progression. `undefined` (rapport sans position)
+          // laisse le champ inchangé, exactement comme avant #7359.
+          const servedPosition = servePosition(
+            previous?.lastPlayPositionMs ?? null,
+            options?.playPositionMs
+          );
+          const servedComplete = serveComplete(
+            previous?.listenedComplete ?? false,
+            options?.complete
           );
 
           await tx.attachmentStatusEntry.upsert({
@@ -169,28 +225,32 @@ export class MessageMediaConsumptionService {
               participantId,
               listenedAt: now,
               listenCount: 1,
-              lastPlayPositionMs: options?.playPositionMs,
+              lastPlayPositionMs: servedPosition.value ?? undefined,
               totalListenDurationMs: options?.listenDurationMs || 0,
-              listenedComplete: options?.complete || false,
+              listenedComplete: servedComplete.value,
               listenSegments: trace,
               viewedLanguages,
             },
             update: {
               listenedAt: now,
               listenCount: { increment: 1 },
-              lastPlayPositionMs: options?.playPositionMs,
+              lastPlayPositionMs: servedPosition.changed ? servedPosition.value : undefined,
               totalListenDurationMs: options?.listenDurationMs
                 ? { increment: options.listenDurationMs }
                 : undefined,
-              listenedComplete: options?.complete,
+              listenedComplete: servedComplete.changed ? servedComplete.value : undefined,
               listenSegments: trace,
               viewedLanguages,
             },
           });
+
+          return { position: servedPosition.value, complete: servedComplete.value };
         })
       );
 
       await this.updateAttachmentComputedStatus(attachmentId);
+
+      return served;
     } catch (error) {
       logger.error(
         "[MessageReadStatus] Error marking audio as listened:",
@@ -212,7 +272,7 @@ export class MessageMediaConsumptionService {
       /** Version linguistique consommée (sous-titres, piste doublée). */
       language?: string | null;
     }
-  ): Promise<void> {
+  ): Promise<MediaConsumptionServed> {
     try {
       const attachment = await this.prisma.messageAttachment.findUnique({
         where: { id: attachmentId },
@@ -229,7 +289,7 @@ export class MessageMediaConsumptionService {
 
       const now = new Date();
 
-      await withRetry(() =>
+      const served = await withRetry(() =>
         this.prisma.$transaction(async (tx) => {
           // Même raison que pour l'audio : la trace s'accumule, donc se lit
           // avant de s'écrire. Voir `markAudioAsListened`.
@@ -237,7 +297,12 @@ export class MessageMediaConsumptionService {
             where: {
               attachment_participant_status: { attachmentId, participantId },
             },
-            select: { watchSegments: true, viewedLanguages: true },
+            select: {
+              watchSegments: true,
+              viewedLanguages: true,
+              lastWatchPositionMs: true,
+              watchedComplete: true,
+            },
           });
 
           const trace = appendPlaybackStretches(
@@ -247,6 +312,17 @@ export class MessageMediaConsumptionService {
           const viewedLanguages = mergeViewedLanguages(
             previous?.viewedLanguages,
             options?.language
+          );
+
+          // Même anti-régression que l'audio : la position et le complet
+          // SERVIS ne redescendent jamais. Voir `markAudioAsListened`.
+          const servedPosition = servePosition(
+            previous?.lastWatchPositionMs ?? null,
+            options?.watchPositionMs
+          );
+          const servedComplete = serveComplete(
+            previous?.watchedComplete ?? false,
+            options?.complete
           );
 
           await tx.attachmentStatusEntry.upsert({
@@ -260,28 +336,32 @@ export class MessageMediaConsumptionService {
               participantId,
               watchedAt: now,
               watchCount: 1,
-              lastWatchPositionMs: options?.watchPositionMs,
+              lastWatchPositionMs: servedPosition.value ?? undefined,
               totalWatchDurationMs: options?.watchDurationMs || 0,
-              watchedComplete: options?.complete || false,
+              watchedComplete: servedComplete.value,
               watchSegments: trace,
               viewedLanguages,
             },
             update: {
               watchedAt: now,
               watchCount: { increment: 1 },
-              lastWatchPositionMs: options?.watchPositionMs,
+              lastWatchPositionMs: servedPosition.changed ? servedPosition.value : undefined,
               totalWatchDurationMs: options?.watchDurationMs
                 ? { increment: options.watchDurationMs }
                 : undefined,
-              watchedComplete: options?.complete,
+              watchedComplete: servedComplete.changed ? servedComplete.value : undefined,
               watchSegments: trace,
               viewedLanguages,
             },
           });
+
+          return { position: servedPosition.value, complete: servedComplete.value };
         })
       );
 
       await this.updateAttachmentComputedStatus(attachmentId);
+
+      return served;
     } catch (error) {
       logger.error(
         "[MessageReadStatus] Error marking video as watched:",
