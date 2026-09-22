@@ -46,9 +46,12 @@ describe('countUnreadConversations — D-L1 : des CONVERSATIONS, pas des message
     expect(countUnreadConversations([conversation({ unreadCount: 0 })], NO_OVERRIDES)).toBe(0);
   });
 
-  test('liste vide ou cache encore absent ⇒ 0', () => {
+  test('liste vide ⇒ 0', () => {
     expect(countUnreadConversations([], NO_OVERRIDES)).toBe(0);
-    expect(countUnreadConversations(undefined, NO_OVERRIDES)).toBe(0);
+  });
+
+  test('cache absent ⇒ undefined (pas de mise à jour du badge)', () => {
+    expect(countUnreadConversations(undefined, NO_OVERRIDES)).toBe(undefined);
   });
 });
 
@@ -163,5 +166,25 @@ describe('updateAppBadge — les deux surfaces du même nombre', () => {
     expect(() => updateAppBadge(0, { navigator, document: doc })).not.toThrow();
     await Promise.resolve();
     expect(doc.title).toBe('Meeshy');
+  });
+
+  /**
+   * Le titre de départ porte DÉJÀ un préfixe : un titre nu ne distinguerait
+   * pas « rien écrit » de « effacé », les deux rendant « Meeshy ». C'est le
+   * préfixe SURVIVANT qui prouve que le cache absent laisse les deux surfaces
+   * intactes.
+   */
+  test('undefined ⇒ ni setAppBadge ni clearAppBadge ni modification du titre', () => {
+    let setAppBadgeCalled = false;
+    let clearAppBadgeCalled = false;
+    const doc = { title: '(3) Meeshy' };
+    const navigator = {
+      setAppBadge: () => { setAppBadgeCalled = true; return Promise.resolve(); },
+      clearAppBadge: () => { clearAppBadgeCalled = true; return Promise.resolve(); },
+    };
+    updateAppBadge(undefined, { navigator, document: doc });
+    expect(setAppBadgeCalled).toBe(false);
+    expect(clearAppBadgeCalled).toBe(false);
+    expect(doc.title).toBe('(3) Meeshy');
   });
 });

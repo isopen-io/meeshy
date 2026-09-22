@@ -56,6 +56,18 @@ nonisolated enum QuotedReplyPresentation {
     /// illisible.
     static let detailsSeparator = "\u{00A0}\u{00B7}\u{00A0}"
 
+    /// L'avatar de l'auteur CITÉ ne se dessine que dans la BULLE (#7491). La
+    /// rangée plate (focal ET script) pose déjà l'avatar de l'auteur de la
+    /// rangée : un second visage dans sa citation en empilait deux pour un seul
+    /// message. Le bandeau du composeur n'en a jamais porté. Ailleurs, la
+    /// citation ne montre que le NOM.
+    static func showsAuthorAvatar(for skin: Skin) -> Bool {
+        switch skin {
+        case .bubble: return true
+        case .focal, .composer: return false
+        }
+    }
+
     /// Le budget de lignes de l'APERÇU, par peau. La bulle en offre trois (la
     /// citation y est la seule chose à lire avant le message) ; la rangée
     /// plate et le bandeau en offrent deux — jamais UNE, qui coupait la

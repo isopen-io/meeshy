@@ -83,3 +83,32 @@ describe('createOfflineQueue — FIFO générique (#7367, W3)', () => {
     expect(called).toBe(false);
   });
 });
+
+describe('createOfflineQueue.remove — le job périmé se retire (revue #7367)', () => {
+  test('remove sur une clé en attente la retire ; les autres gardent leur ordre', async () => {
+    const queue = createOfflineQueue<string>();
+    const ran: string[] = [];
+
+    queue.enqueue('a', 'premier');
+    queue.enqueue('b', 'second');
+    queue.remove('a');
+
+    expect(queue.size()).toBe(1);
+
+    await queue.flush(async (payload) => {
+      ran.push(payload);
+      return true;
+    });
+
+    expect(ran).toEqual(['second']);
+  });
+
+  test('remove sur une clé absente ne fait rien', () => {
+    const queue = createOfflineQueue<string>();
+    queue.enqueue('a', 'premier');
+
+    queue.remove('inconnue');
+
+    expect(queue.size()).toBe(1);
+  });
+});
